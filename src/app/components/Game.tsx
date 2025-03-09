@@ -88,11 +88,27 @@ const Game: React.FC = () => {
   // Sync with multiplayer game state if available
   useEffect(() => {
     if (isMultiplayer && multiplayerGameState) {
-      setState((prev) => ({
-        ...prev,
-        ...multiplayerGameState,
-        gameStarted: true
-      }));
+      // To avoid double processing combinations, we need to be careful
+      // when updating state from the server
+      setState((prev) => {
+        // If this update is a combination found by another player
+        if (multiplayerGameState.foundCombinations.length > prev.foundCombinations.length) {
+          console.log('Received new combinations from server - updating state directly');
+          
+          // We don't want any validation to happen here - just accept the server's state
+          return {
+            ...multiplayerGameState,
+            gameStarted: true
+          };
+        }
+        
+        // For other updates, merge the states
+        return {
+          ...prev,
+          ...multiplayerGameState,
+          gameStarted: true
+        };
+      });
     }
   }, [isMultiplayer, multiplayerGameState]);
 
@@ -162,7 +178,8 @@ const Game: React.FC = () => {
       );
 
       // In multiplayer mode, send card selection to server
-      if (isMultiplayer) {
+      // But only send selections, not valid combinations (those are handled separately)
+      if (isMultiplayer && newSelectedCards.length < 3) {
         selectMultiplayerCard(clickedCard.id, newBoard);
       }
 
@@ -171,7 +188,18 @@ const Game: React.FC = () => {
         const validationResult = isValidCombination(newSelectedCards);
         
         if (validationResult.isValid) {
-          return handleValidCombination(prev, newSelectedCards, newBoard);
+          // Process the valid combination locally first
+          const updatedState = handleValidCombination(prev, newSelectedCards, newBoard);
+          
+          // If the state was actually updated (not a duplicate combination)
+          // and we're in multiplayer mode, notify other players
+          if (isMultiplayer && updatedState !== prev) {
+            // Only send combination once from here, removed from handleValidCombination
+            console.log('Sending combination to server');
+            sendCombinationFound(updatedState);
+          }
+          
+          return updatedState;
         } else {
           // Invalid combination - provide feedback with detailed error message and deselect
           setTimeout(() => {
@@ -203,7 +231,20 @@ const Game: React.FC = () => {
     selectedCards: Card[], 
     currentBoard: Card[]
   ): GameState => {
+    // Add a simple debounce to prevent double calls
+    const selectedIds = selectedCards.map(card => card.id).sort().join(',');
+    const foundCombinationsIds = prevState.foundCombinations.map(combo => 
+      combo.map(card => card.id).sort().join(',')
+    );
+    
+    // If this exact combination was just processed, don't process it again
+    if (foundCombinationsIds.includes(selectedIds)) {
+      console.log('Skipping duplicate handleValidCombination call', { selectedCards });
+      return prevState;
+    }
+    
     console.log('handleValidCombination', { selectedCards, currentBoard });
+    
     // Remove selected cards from the board
     let newBoard = currentBoard.filter(card => 
       !selectedCards.some(selected => selected.id === card.id)
@@ -251,11 +292,6 @@ const Game: React.FC = () => {
           foundCombinations: [...prevState.foundCombinations, selectedCards],
           score: prevState.score + 1,
         };
-
-    // In multiplayer mode, notify others about the combination
-    if (isMultiplayer) {
-      sendCombinationFound(updatedGameState);
-    }
 
     return updatedGameState;
   };
