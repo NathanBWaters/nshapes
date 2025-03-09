@@ -7,6 +7,10 @@ import GameBoard from './GameBoard';
 import GameInfo from './GameInfo';
 import Tutorial from './Tutorial';
 import Notification from './Notification';
+import { useSocket } from '../context/SocketContext';
+import MultiplayerLobby from './MultiplayerLobby';
+import ScoreBoard from './ScoreBoard';
+import MultiplayerToggle from './MultiplayerToggle';
 
 const INITIAL_CARD_COUNT = 12;
 const MAX_BOARD_SIZE = 21;
@@ -32,6 +36,27 @@ const Game: React.FC = () => {
 
   const [hintCards, setHintCards] = useState<string[]>([]);
 
+  // Socket context for multiplayer
+  const {
+    isMultiplayer,
+    roomId, 
+    isHost,
+    gameState: multiplayerGameState,
+    startGame: startMultiplayerGame,
+    selectCard: selectMultiplayerCard,
+    combinationFound: sendCombinationFound,
+    addCards: sendAddCards,
+    showHint: sendShowHint,
+    hintCardIds 
+  } = useSocket();
+
+  // Use socket hint cards in multiplayer mode
+  useEffect(() => {
+    if (isMultiplayer && hintCardIds.length > 0) {
+      setHintCards(hintCardIds);
+    }
+  }, [isMultiplayer, hintCardIds]);
+
   // Initialize the game
   const initGame = useCallback(() => {
     const deck = shuffleDeck(createDeck());
@@ -51,21 +76,58 @@ const Game: React.FC = () => {
       hintUsed: false,
     });
 
-    setHintCards([]);
     setNotification(null);
+    setHintCards([]);
   }, []);
 
-  // Start the game when user clicks "New Game"
+  // Initialize the game when the component mounts
+  useEffect(() => {
+    initGame();
+  }, [initGame]);
+
+  // Sync with multiplayer game state if available
+  useEffect(() => {
+    if (isMultiplayer && multiplayerGameState) {
+      setState((prev) => ({
+        ...prev,
+        ...multiplayerGameState,
+        gameStarted: true
+      }));
+    }
+  }, [isMultiplayer, multiplayerGameState]);
+
+  // Start the game
   const startGame = () => {
-    setState(prev => ({
-      ...prev,
-      gameStarted: true,
-      startTime: Date.now(),
-    }));
-    setNotification({
-      message: 'Game started! Find Sets by selecting three cards.',
-      type: 'info',
-    });
+    // For multiplayer, only host can start the game
+    if (isMultiplayer) {
+      if (isHost) {
+        const initialGameState = {
+          ...state,
+          gameStarted: true,
+          startTime: Date.now(),
+        };
+        
+        setState(initialGameState);
+        startMultiplayerGame(initialGameState);
+        
+        setNotification({
+          message: 'Game started! Find combinations by selecting three cards.',
+          type: 'info',
+        });
+      }
+    } else {
+      // Single player mode
+      setState(prev => ({
+        ...prev,
+        gameStarted: true,
+        startTime: Date.now(),
+      }));
+      
+      setNotification({
+        message: 'Game started! Find valid combinations by selecting three cards.',
+        type: 'info',
+      });
+    }
   };
 
   // Handle card selection
@@ -98,6 +160,11 @@ const Game: React.FC = () => {
           ? { ...card, selected: !card.selected } 
           : card
       );
+
+      // In multiplayer mode, send card selection to server
+      if (isMultiplayer) {
+        selectMultiplayerCard(clickedCard.id, newBoard);
+      }
 
       if (newSelectedCards.length === 3) {
         // Check if the selected cards form a valid combination
@@ -136,6 +203,7 @@ const Game: React.FC = () => {
     selectedCards: Card[], 
     currentBoard: Card[]
   ): GameState => {
+    console.log('handleValidCombination', { selectedCards, currentBoard });
     // Remove selected cards from the board
     let newBoard = currentBoard.filter(card => 
       !selectedCards.some(selected => selected.id === card.id)
@@ -164,27 +232,32 @@ const Game: React.FC = () => {
     const allCombinations = findAllCombinations(newBoard);
     const isGameOver = newDeck.length === 0 && allCombinations.length === 0;
 
-    if (isGameOver) {
-      return {
-        ...prevState,
-        board: newBoard,
-        deck: newDeck,
-        selectedCards: [],
-        foundCombinations: [...prevState.foundCombinations, selectedCards],
-        score: prevState.score + 1,
-        gameEnded: true,
-        endTime: Date.now(),
-      };
+    const updatedGameState = isGameOver 
+      ? {
+          ...prevState,
+          board: newBoard,
+          deck: newDeck,
+          selectedCards: [],
+          foundCombinations: [...prevState.foundCombinations, selectedCards],
+          score: prevState.score + 1,
+          gameEnded: true,
+          endTime: Date.now(),
+        }
+      : {
+          ...prevState,
+          board: newBoard,
+          deck: newDeck,
+          selectedCards: [],
+          foundCombinations: [...prevState.foundCombinations, selectedCards],
+          score: prevState.score + 1,
+        };
+
+    // In multiplayer mode, notify others about the combination
+    if (isMultiplayer) {
+      sendCombinationFound(updatedGameState);
     }
 
-    return {
-      ...prevState,
-      board: newBoard,
-      deck: newDeck,
-      selectedCards: [],
-      foundCombinations: [...prevState.foundCombinations, selectedCards],
-      score: prevState.score + 1,
-    };
+    return updatedGameState;
   };
 
   // Add three more cards to the board
@@ -211,20 +284,34 @@ const Game: React.FC = () => {
 
       // Check if there are any valid combinations with the new cards
       if (findAllCombinations(newBoard).length === 0 && newDeck.length === 0) {
-        return {
+        const updatedGameState = {
           ...prev,
           board: newBoard,
           deck: newDeck,
           gameEnded: true,
           endTime: Date.now(),
         };
+        
+        // Update multiplayer state
+        if (isMultiplayer) {
+          sendAddCards(updatedGameState);
+        }
+        
+        return updatedGameState;
       }
 
-      return {
+      const updatedGameState = {
         ...prev,
         board: newBoard,
         deck: newDeck,
       };
+      
+      // Update multiplayer state
+      if (isMultiplayer) {
+        sendAddCards(updatedGameState);
+      }
+      
+      return updatedGameState;
     });
   };
 
@@ -242,23 +329,25 @@ const Game: React.FC = () => {
 
     // Get the first valid combination as a hint
     const hintCombination = allCombinations[0];
-    setHintCards(hintCombination.map(card => card.id));
+    const hintCardIds = hintCombination.map(card => card.id);
+    
+    setHintCards(hintCardIds);
     
     setState(prev => ({
       ...prev,
       hintUsed: true,
     }));
 
+    // In multiplayer, share hint with all players
+    if (isMultiplayer) {
+      sendShowHint(hintCardIds);
+    }
+
     setNotification({
       message: 'Hint: Look for a valid combination with these highlighted cards!',
       type: 'info',
     });
   };
-
-  // Initialize the game on component mount
-  useEffect(() => {
-    initGame();
-  }, [initGame]);
 
   // Check if there are any valid combinations in the current board
   useEffect(() => {
@@ -281,9 +370,33 @@ const Game: React.FC = () => {
     }
   }, [state.board, state.deck.length, state.gameStarted, state.gameEnded]);
 
+  // Multiplayer lobby handler
+  const handleMultiplayerGameStart = () => {
+    startGame();
+  };
+
+  // Render multiplayer lobby if in multiplayer mode and game not started
+  if (isMultiplayer && !state.gameStarted) {
+    // Using roomId in conditional render for multiplayer lobby
+    const showLobby = !roomId || (roomId && !state.gameStarted);
+    
+    return (
+      <div className="flex flex-col items-center max-w-4xl mx-auto p-4">
+        <h1 className="text-3xl md:text-4xl font-bold mb-6 text-center">NShapes</h1>
+        <MultiplayerToggle />
+        {showLobby && <MultiplayerLobby onStartGame={handleMultiplayerGameStart} />}
+        <div className="mt-8">
+          <Tutorial />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col items-center max-w-4xl mx-auto p-4">
       <h1 className="text-3xl md:text-4xl font-bold mb-6 text-center">NShapes</h1>
+      
+      {!state.gameStarted && !isMultiplayer && <MultiplayerToggle />}
       
       <GameInfo 
         score={state.score}
@@ -306,7 +419,9 @@ const Game: React.FC = () => {
         canAddCards={state.gameStarted && !state.gameEnded && state.deck.length > 0 && state.board.length < MAX_BOARD_SIZE}
       />
       
-      {!state.gameStarted && !state.gameEnded && (
+      {isMultiplayer && <ScoreBoard />}
+      
+      {!state.gameStarted && !state.gameEnded && !isMultiplayer && (
         <div className="my-6 text-center">
           <p className="mb-4">Welcome to the game of NShapes! Select three cards that form a valid combination.</p>
           <button
