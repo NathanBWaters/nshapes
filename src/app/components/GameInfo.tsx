@@ -13,7 +13,7 @@ interface GameInfoProps {
   onNewGame: () => void;
   onShowHint: () => void;
   onAddCards: () => void;
-  foundSetsCount: number;
+  foundCombinationsCount: number;
   hintAvailable: boolean;
   canAddCards: boolean;
 }
@@ -28,7 +28,7 @@ const GameInfo: React.FC<GameInfoProps> = ({
   onNewGame,
   onShowHint,
   onAddCards,
-  foundSetsCount,
+  foundCombinationsCount,
   hintAvailable,
   canAddCards,
 }) => {
@@ -59,7 +59,7 @@ const GameInfo: React.FC<GameInfoProps> = ({
       <div className="flex flex-col md:flex-row justify-between items-center mb-4">
         <div className="text-center md:text-left mb-4 md:mb-0">
           <h2 className="text-xl font-bold">Score: {score}</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Sets Found: {foundSetsCount}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Combinations Found: {foundCombinationsCount}</p>
         </div>
         
         <div className="flex flex-col items-center mb-4 md:mb-0">

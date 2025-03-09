@@ -17,7 +17,7 @@ export interface GameState {
   deck: Card[];
   board: Card[];
   selectedCards: Card[];
-  foundSets: Card[][];
+  foundCombinations: Card[][];
   score: number;
   gameStarted: boolean;
   gameEnded: boolean;

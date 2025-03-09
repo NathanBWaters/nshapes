@@ -1,39 +1,39 @@
-# Set Game
+# NShapes
 
-A digital implementation of the classic Set card game built with Next.js and React.
+A digital implementation of the classic NShapes card game built with Next.js and React.
 
 ## Game Rules
 
-In Set, players try to identify "sets" of three cards from a layout of cards on the table. Each card has four attributes:
+In NShapes, players try to identify valid combinations of three cards from a layout of cards on the table. Each card has four attributes:
 
 - **Shape**: Oval, Squiggle, or Diamond
 - **Color**: Red, Green, or Purple
 - **Number**: One, Two, or Three shapes
 - **Shading**: Solid, Striped, or Open
 
-A valid Set consists of three cards where each attribute is either ALL THE SAME or ALL DIFFERENT across all three cards.
+A valid combination consists of three cards where each attribute is either ALL THE SAME or ALL DIFFERENT across all three cards.
 
 ## Features
 
-- Complete implementation of Set game logic
+- Complete implementation of NShapes game logic
 - Interactive card selection
-- Automatic validation of Sets
+- Automatic validation of combinations
 - Scoring system
 - Timer to track gameplay duration
-- Hint system to help players find Sets
-- Option to add more cards when no Sets are visible
+- Hint system to help players find valid combinations
+- Option to add more cards when no valid combinations are visible
 - Responsive design that works on desktop and mobile devices
 - Dark mode support
 
 ## How to Play
 
 1. Click "Start Game" to begin
-2. Click three cards that you believe form a Set
+2. Click three cards that you believe form a valid combination
 3. If correct, the cards will be removed and replaced
 4. If incorrect, try again
 5. Use the "Hint" button if you're stuck
-6. Use "Add Cards" if no Sets are visible
-7. The game ends when no more Sets can be found or the deck is exhausted
+6. Use "Add Cards" if no valid combinations are visible
+7. The game ends when no more valid combinations can be found or the deck is exhausted
 
 ## Development
 

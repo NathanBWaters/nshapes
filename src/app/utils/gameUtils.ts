@@ -40,14 +40,15 @@ export const shuffleDeck = (deck: Card[]): Card[] => {
   return shuffled;
 };
 
-export interface SetValidationResult {
+export interface NShapesValidationResult {
   isValid: boolean;
   invalidAttributes: string[];
   errorMessage: string;
 }
 
-export const isValidSet = (cards: Card[]): SetValidationResult => {
-  const result: SetValidationResult = {
+// Check if three cards form a valid NShapes combination
+export const isValidCombination = (cards: Card[]): NShapesValidationResult => {
+  const result: NShapesValidationResult = {
     isValid: true,
     invalidAttributes: [],
     errorMessage: ''
@@ -57,7 +58,7 @@ export const isValidSet = (cards: Card[]): SetValidationResult => {
     return {
       isValid: false,
       invalidAttributes: ['count'],
-      errorMessage: 'A Set must consist of exactly 3 cards.'
+      errorMessage: 'A valid combination must consist of exactly 3 cards.'
     };
   }
   
@@ -124,31 +125,31 @@ export const isValidSet = (cards: Card[]): SetValidationResult => {
     });
     
     if (errorDetails.length === 1) {
-      result.errorMessage = `Not a valid Set: ${errorDetails[0]}.`;
+      result.errorMessage = `Not a valid combination: ${errorDetails[0]}.`;
     } else {
-      result.errorMessage = `Not a valid Set: ${errorDetails.join(', and ')}.`;
+      result.errorMessage = `Not a valid combination: ${errorDetails.join(', and ')}.`;
     }
   }
   
   return result;
 };
 
-// Find all valid Sets in the current board
-export const findAllSets = (board: Card[]): Card[][] => {
-  const validSets: Card[][] = [];
+// Find all valid combinations in the current board
+export const findAllCombinations = (board: Card[]): Card[][] => {
+  const validCombinations: Card[][] = [];
   
   for (let i = 0; i < board.length; i++) {
     for (let j = i + 1; j < board.length; j++) {
       for (let k = j + 1; k < board.length; k++) {
         const cards = [board[i], board[j], board[k]];
-        if (isValidSet(cards).isValid) {
-          validSets.push(cards);
+        if (isValidCombination(cards).isValid) {
+          validCombinations.push(cards);
         }
       }
     }
   }
   
-  return validSets;
+  return validCombinations;
 };
 
 // Format time in mm:ss format

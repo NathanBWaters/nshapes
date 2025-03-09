@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, GameState } from '../types';
-import { createDeck, shuffleDeck, isValidSet, findAllSets } from '../utils/gameUtils';
+import { createDeck, shuffleDeck, isValidCombination, findAllCombinations } from '../utils/gameUtils';
 import GameBoard from './GameBoard';
 import GameInfo from './GameInfo';
 import Tutorial from './Tutorial';
@@ -16,7 +16,7 @@ const Game: React.FC = () => {
     deck: [],
     board: [],
     selectedCards: [],
-    foundSets: [],
+    foundCombinations: [],
     score: 0,
     gameStarted: false,
     gameEnded: false,
@@ -42,7 +42,7 @@ const Game: React.FC = () => {
       deck: remainingDeck,
       board: initialBoard,
       selectedCards: [],
-      foundSets: [],
+      foundCombinations: [],
       score: 0,
       gameStarted: false,
       gameEnded: false,
@@ -100,13 +100,13 @@ const Game: React.FC = () => {
       );
 
       if (newSelectedCards.length === 3) {
-        // Check if the selected cards form a valid Set
-        const validationResult = isValidSet(newSelectedCards);
+        // Check if the selected cards form a valid combination
+        const validationResult = isValidCombination(newSelectedCards);
         
         if (validationResult.isValid) {
-          return handleValidSet(prev, newSelectedCards, newBoard);
+          return handleValidCombination(prev, newSelectedCards, newBoard);
         } else {
-          // Invalid Set - provide feedback with detailed error message and deselect
+          // Invalid combination - provide feedback with detailed error message and deselect
           setTimeout(() => {
             setNotification({
               message: validationResult.errorMessage,
@@ -130,8 +130,8 @@ const Game: React.FC = () => {
     });
   };
 
-  // Handle a valid Set being found
-  const handleValidSet = (
+  // Handle a valid combination being found
+  const handleValidCombination = (
     prevState: GameState, 
     selectedCards: Card[], 
     currentBoard: Card[]
@@ -156,13 +156,13 @@ const Game: React.FC = () => {
 
     // Show success notification
     setNotification({
-      message: 'You found a Set!',
+      message: 'You found a valid combination!',
       type: 'success',
     });
 
     // Check for game end conditions
-    const allSets = findAllSets(newBoard);
-    const isGameOver = newDeck.length === 0 && allSets.length === 0;
+    const allCombinations = findAllCombinations(newBoard);
+    const isGameOver = newDeck.length === 0 && allCombinations.length === 0;
 
     if (isGameOver) {
       return {
@@ -170,7 +170,7 @@ const Game: React.FC = () => {
         board: newBoard,
         deck: newDeck,
         selectedCards: [],
-        foundSets: [...prevState.foundSets, selectedCards],
+        foundCombinations: [...prevState.foundCombinations, selectedCards],
         score: prevState.score + 1,
         gameEnded: true,
         endTime: Date.now(),
@@ -182,7 +182,7 @@ const Game: React.FC = () => {
       board: newBoard,
       deck: newDeck,
       selectedCards: [],
-      foundSets: [...prevState.foundSets, selectedCards],
+      foundCombinations: [...prevState.foundCombinations, selectedCards],
       score: prevState.score + 1,
     };
   };
@@ -209,8 +209,8 @@ const Game: React.FC = () => {
         type: 'info',
       });
 
-      // Check if there are any Sets with the new cards
-      if (findAllSets(newBoard).length === 0 && newDeck.length === 0) {
+      // Check if there are any valid combinations with the new cards
+      if (findAllCombinations(newBoard).length === 0 && newDeck.length === 0) {
         return {
           ...prev,
           board: newBoard,
@@ -228,21 +228,21 @@ const Game: React.FC = () => {
     });
   };
 
-  // Provide a hint by highlighting a valid Set
+  // Provide a hint by highlighting a valid combination
   const handleShowHint = () => {
-    const allSets = findAllSets(state.board);
+    const allCombinations = findAllCombinations(state.board);
     
-    if (allSets.length === 0) {
+    if (allCombinations.length === 0) {
       setNotification({
-        message: 'No Sets available! Try adding more cards.',
+        message: 'No valid combinations available! Try adding more cards.',
         type: 'warning',
       });
       return;
     }
 
-    // Get the first valid Set as a hint
-    const hintSet = allSets[0];
-    setHintCards(hintSet.map(card => card.id));
+    // Get the first valid combination as a hint
+    const hintCombination = allCombinations[0];
+    setHintCards(hintCombination.map(card => card.id));
     
     setState(prev => ({
       ...prev,
@@ -250,7 +250,7 @@ const Game: React.FC = () => {
     }));
 
     setNotification({
-      message: 'Hint: Look for a Set with these highlighted cards!',
+      message: 'Hint: Look for a valid combination with these highlighted cards!',
       type: 'info',
     });
   };
@@ -260,13 +260,13 @@ const Game: React.FC = () => {
     initGame();
   }, [initGame]);
 
-  // Check if there are any valid Sets in the current board
+  // Check if there are any valid combinations in the current board
   useEffect(() => {
     if (state.gameStarted && !state.gameEnded && state.board.length > 0) {
-      const allSets = findAllSets(state.board);
+      const allCombinations = findAllCombinations(state.board);
       
-      if (allSets.length === 0 && state.deck.length === 0) {
-        // No Sets available and no cards left in deck - game over
+      if (allCombinations.length === 0 && state.deck.length === 0) {
+        // No valid combinations available and no cards left in deck - game over
         setState(prev => ({
           ...prev,
           gameEnded: true,
@@ -274,7 +274,7 @@ const Game: React.FC = () => {
         }));
         
         setNotification({
-          message: 'Game Over! No more Sets possible.',
+          message: 'Game Over! No more valid combinations possible.',
           type: 'info',
         });
       }
@@ -283,7 +283,7 @@ const Game: React.FC = () => {
 
   return (
     <div className="flex flex-col items-center max-w-4xl mx-auto p-4">
-      <h1 className="text-3xl md:text-4xl font-bold mb-6 text-center">Set Game</h1>
+      <h1 className="text-3xl md:text-4xl font-bold mb-6 text-center">NShapes</h1>
       
       <GameInfo 
         score={state.score}
@@ -301,14 +301,14 @@ const Game: React.FC = () => {
         }}
         onShowHint={handleShowHint}
         onAddCards={handleAddCards}
-        foundSetsCount={state.foundSets.length}
+        foundCombinationsCount={state.foundCombinations.length}
         hintAvailable={state.gameStarted && !state.gameEnded}
         canAddCards={state.gameStarted && !state.gameEnded && state.deck.length > 0 && state.board.length < MAX_BOARD_SIZE}
       />
       
       {!state.gameStarted && !state.gameEnded && (
         <div className="my-6 text-center">
-          <p className="mb-4">Welcome to the game of Set! Select three cards that form a Set.</p>
+          <p className="mb-4">Welcome to the game of NShapes! Select three cards that form a valid combination.</p>
           <button
             className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-lg"
             onClick={startGame}

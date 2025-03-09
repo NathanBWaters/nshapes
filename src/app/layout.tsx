@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Set Game",
-  description: "A digital version of the card game Set",
+  title: "NShapes",
+  description: "A digital version of the card game NShapes",
 };
 
 export default function RootLayout({
