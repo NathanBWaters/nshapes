@@ -1,12 +1,10 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { formatTime } from '../utils/gameUtils';
 
 interface GameInfoProps {
   score: number;
-  startTime: number | null;
-  endTime: number | null;
   gameStarted: boolean;
   gameEnded: boolean;
   cardsRemaining: number;
@@ -16,12 +14,13 @@ interface GameInfoProps {
   foundCombinationsCount: number;
   hintAvailable: boolean;
   canAddCards: boolean;
+  level: number;
+  targetScore: number;
+  remainingTime: number;
 }
 
 const GameInfo: React.FC<GameInfoProps> = ({
   score,
-  startTime,
-  endTime,
   gameStarted,
   gameEnded,
   cardsRemaining,
@@ -31,35 +30,35 @@ const GameInfo: React.FC<GameInfoProps> = ({
   foundCombinationsCount,
   hintAvailable,
   canAddCards,
+  level,
+  targetScore,
+  remainingTime,
 }) => {
-  const [currentTime, setCurrentTime] = useState<number>(0);
-
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-
-    if (gameStarted && !gameEnded && startTime) {
-      interval = setInterval(() => {
-        setCurrentTime(Date.now() - startTime);
-      }, 1000);
-    }
-
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [gameStarted, gameEnded, startTime]);
-
-  const displayTime = gameEnded && endTime && startTime
-    ? formatTime(endTime - startTime)
-    : gameStarted && startTime
-      ? formatTime(currentTime)
-      : '00:00';
+  const displayTime = gameEnded
+    ? '00:00'
+    : gameStarted
+      ? formatTime(remainingTime)
+      : '03:00';
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 w-full max-w-2xl">
       <div className="flex flex-col md:flex-row justify-between items-center mb-4">
         <div className="text-center md:text-left mb-4 md:mb-0">
-          <h2 className="text-xl font-bold">Score: {score}</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Combinations Found: {foundCombinationsCount}</p>
+          <h2 className="text-2xl font-bold text-gray-800 dark:text-white">
+            Level: {level} / {9}
+          </h2>
+          <p className="text-gray-600 dark:text-gray-300">
+            Score: {score} / {targetScore} needed
+          </p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Combinations Found: {foundCombinationsCount}
+          </p>
+        </div>
+        <div className="text-center">
+          <div className="text-3xl font-mono font-bold text-gray-800 dark:text-white">
+            {displayTime}
+          </div>
+          <p className="text-gray-600 dark:text-gray-300">Time Remaining</p>
         </div>
         
         <div className="flex flex-col items-center mb-4 md:mb-0">

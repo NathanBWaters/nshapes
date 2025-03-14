@@ -24,4 +24,8 @@ export interface GameState {
   startTime: number | null;
   endTime: number | null;
   hintUsed: boolean;
+  level: number;
+  targetScore: number;
+  remainingTime: number;
+  levelCompleted: boolean;
 } 

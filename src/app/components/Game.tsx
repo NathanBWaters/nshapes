@@ -14,6 +14,15 @@ import MultiplayerToggle from './MultiplayerToggle';
 
 const INITIAL_CARD_COUNT = 12;
 const MAX_BOARD_SIZE = 21;
+// Add Roguelike constants
+const STARTING_TIME_MS = 3 * 60 * 1000; // 3 minutes in milliseconds
+const MAX_LEVELS = 9;
+
+// Calculate target score based on level
+const getTargetScore = (level: number): number => {
+  // Level 1: 5 points, Level 9: 50 points, with linear progression
+  return Math.floor(5 + (level - 1) * (45 / (MAX_LEVELS - 1)));
+};
 
 const Game: React.FC = () => {
   const [state, setState] = useState<GameState>({
@@ -27,6 +36,11 @@ const Game: React.FC = () => {
     startTime: null,
     endTime: null,
     hintUsed: false,
+    // Roguelike properties
+    level: 1,
+    targetScore: getTargetScore(1),
+    remainingTime: STARTING_TIME_MS,
+    levelCompleted: false,
   });
 
   const [notification, setNotification] = useState<{
@@ -74,6 +88,11 @@ const Game: React.FC = () => {
       startTime: null,
       endTime: null,
       hintUsed: false,
+      // Roguelike properties
+      level: 1,
+      targetScore: getTargetScore(1),
+      remainingTime: STARTING_TIME_MS,
+      levelCompleted: false,
     });
 
     setNotification(null);
@@ -121,13 +140,17 @@ const Game: React.FC = () => {
           ...state,
           gameStarted: true,
           startTime: Date.now(),
+          level: 1,
+          targetScore: getTargetScore(1),
+          remainingTime: STARTING_TIME_MS,
+          levelCompleted: false,
         };
         
         setState(initialGameState);
         startMultiplayerGame(initialGameState);
         
         setNotification({
-          message: 'Game started! Find combinations by selecting three cards.',
+          message: `Level 1 started! Target: ${getTargetScore(1)} points. You have 3 minutes!`,
           type: 'info',
         });
       }
@@ -137,10 +160,14 @@ const Game: React.FC = () => {
         ...prev,
         gameStarted: true,
         startTime: Date.now(),
+        level: 1,
+        targetScore: getTargetScore(1),
+        remainingTime: STARTING_TIME_MS,
+        levelCompleted: false,
       }));
       
       setNotification({
-        message: 'Game started! Find valid combinations by selecting three cards.',
+        message: `Level 1 started! Target: ${getTargetScore(1)} points. You have 3 minutes!`,
         type: 'info',
       });
     }
@@ -271,18 +298,29 @@ const Game: React.FC = () => {
 
     // Check for game end conditions
     const allCombinations = findAllCombinations(newBoard);
-    const isGameOver = newDeck.length === 0 && allCombinations.length === 0;
+    const isGameOver = (newDeck.length === 0 && allCombinations.length === 0) || prevState.remainingTime <= 0;
+    
+    // Update score - In Roguelike mode, each valid combination gives 1 point
+    const newScore = prevState.score + 1;
+    
+    // Check if level is completed with this combination
+    const levelCompleted = newScore >= prevState.targetScore;
+    
+    // If game is in final level and level is completed, or no more combinations and cards, end game
+    const isFinalLevelComplete = levelCompleted && prevState.level === MAX_LEVELS;
+    const shouldEndGame = isGameOver || isFinalLevelComplete;
 
-    const updatedGameState = isGameOver 
+    const updatedGameState = shouldEndGame 
       ? {
           ...prevState,
           board: newBoard,
           deck: newDeck,
           selectedCards: [],
           foundCombinations: [...prevState.foundCombinations, selectedCards],
-          score: prevState.score + 1,
+          score: newScore,
           gameEnded: true,
           endTime: Date.now(),
+          levelCompleted: levelCompleted,
         }
       : {
           ...prevState,
@@ -290,7 +328,8 @@ const Game: React.FC = () => {
           deck: newDeck,
           selectedCards: [],
           foundCombinations: [...prevState.foundCombinations, selectedCards],
-          score: prevState.score + 1,
+          score: newScore,
+          levelCompleted: levelCompleted,
         };
 
     return updatedGameState;
@@ -385,6 +424,101 @@ const Game: React.FC = () => {
     });
   };
 
+  const updateTimer = useCallback(() => {
+    if (state.gameStarted && !state.gameEnded) {
+      setState(prevState => {
+        // If no time left, end the game
+        if (prevState.remainingTime <= 0) {
+          setNotification({
+            message: `Time's up! Game over at level ${prevState.level}!`,
+            type: 'error',
+          });
+          return {
+            ...prevState,
+            gameEnded: true,
+            endTime: Date.now(),
+          };
+        }
+        
+        // Check if level completed
+        if (prevState.score >= prevState.targetScore && !prevState.levelCompleted) {
+          if (prevState.level === MAX_LEVELS) {
+            // Player won the game
+            setNotification({
+              message: `Congratulations! You completed all ${MAX_LEVELS} levels!`,
+              type: 'success',
+            });
+            return {
+              ...prevState,
+              gameEnded: true,
+              endTime: Date.now(),
+              levelCompleted: true,
+            };
+          } else {
+            // Level completed but not the final level
+            setNotification({
+              message: `Level ${prevState.level} completed! Starting level ${prevState.level + 1}!`,
+              type: 'success',
+            });
+            return {
+              ...prevState,
+              levelCompleted: true,
+            };
+          }
+        }
+        
+        // Normal time update
+        return {
+          ...prevState,
+          remainingTime: Math.max(0, prevState.remainingTime - 1000),
+        };
+      });
+    }
+  }, [state.gameStarted, state.gameEnded, state.score, state.targetScore, state.level]);
+  
+  const progressToNextLevel = useCallback(() => {
+    if (state.levelCompleted && !state.gameEnded) {
+      const nextLevel = state.level + 1;
+      setState(prevState => ({
+        ...prevState,
+        level: nextLevel,
+        targetScore: getTargetScore(nextLevel),
+        remainingTime: STARTING_TIME_MS,
+        levelCompleted: false,
+        score: 0, // Reset score for the new level
+      }));
+      
+      setNotification({
+        message: `Level ${nextLevel} started! Target: ${getTargetScore(nextLevel)} points. You have 3 minutes!`,
+        type: 'info',
+      });
+    }
+  }, [state.levelCompleted, state.gameEnded, state.level]);
+
+  // Add a useEffect for the timer countdown
+  useEffect(() => {
+    let timerInterval: NodeJS.Timeout;
+    
+    if (state.gameStarted && !state.gameEnded) {
+      timerInterval = setInterval(updateTimer, 1000);
+    }
+    
+    return () => {
+      if (timerInterval) clearInterval(timerInterval);
+    };
+  }, [state.gameStarted, state.gameEnded, updateTimer]);
+  
+  // Add a useEffect to handle level progression
+  useEffect(() => {
+    if (state.levelCompleted && !state.gameEnded) {
+      const levelCompletionDelay = setTimeout(() => {
+        progressToNextLevel();
+      }, 2000); // Delay to show completion message
+      
+      return () => clearTimeout(levelCompletionDelay);
+    }
+  }, [state.levelCompleted, state.gameEnded, progressToNextLevel]);
+
   // Check if there are any valid combinations in the current board
   useEffect(() => {
     if (state.gameStarted && !state.gameEnded && state.board.length > 0) {
@@ -436,8 +570,6 @@ const Game: React.FC = () => {
       
       <GameInfo 
         score={state.score}
-        startTime={state.startTime}
-        endTime={state.endTime}
         gameStarted={state.gameStarted}
         gameEnded={state.gameEnded}
         cardsRemaining={state.deck.length}
@@ -453,6 +585,10 @@ const Game: React.FC = () => {
         foundCombinationsCount={state.foundCombinations.length}
         hintAvailable={state.gameStarted && !state.gameEnded}
         canAddCards={state.gameStarted && !state.gameEnded && state.deck.length > 0 && state.board.length < MAX_BOARD_SIZE}
+        // New Roguelike properties
+        level={state.level}
+        targetScore={state.targetScore}
+        remainingTime={state.remainingTime}
       />
       
       {isMultiplayer && <ScoreBoard />}
