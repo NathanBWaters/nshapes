@@ -1,31 +1,59 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, GameState } from '../types';
-import { createDeck, shuffleDeck, isValidCombination, findAllCombinations } from '../utils/gameUtils';
+import { Card, GameState, Enemy, Weapon, PlayerStats } from '../types';
+import { createDeck, shuffleArray, isValidCombination, findAllCombinations, generateGameBoard, formatTime } from '../utils/gameUtils';
+import { 
+  CHARACTERS, 
+  ENEMIES, 
+  ITEMS, 
+  WEAPONS, 
+  ROUND_REQUIREMENTS,
+  initializePlayer,
+  calculatePlayerTotalStats,
+  DEFAULT_PLAYER_STATS
+} from '../utils/gameDefinitions';
 import GameBoard from './GameBoard';
 import GameInfo from './GameInfo';
-import Tutorial from './Tutorial';
 import Notification from './Notification';
 import { useSocket } from '../context/SocketContext';
 import MultiplayerLobby from './MultiplayerLobby';
-import ScoreBoard from './ScoreBoard';
 import MultiplayerToggle from './MultiplayerToggle';
+import CharacterSelection from './CharacterSelection';
+import ItemShop from './ItemShop';
+import LevelUp from './LevelUp';
+import EnemySelection from './EnemySelection';
 
 const INITIAL_CARD_COUNT = 12;
 const MAX_BOARD_SIZE = 21;
-// Add Roguelike constants
-const STARTING_TIME_MS = 3 * 60 * 1000; // 3 minutes in milliseconds
-const MAX_LEVELS = 9;
+const BASE_REROLL_COST = 5;
 
-// Calculate target score based on level
-const getTargetScore = (level: number): number => {
-  // Level 1: 5 points, Level 9: 50 points, with linear progression
-  return Math.floor(5 + (level - 1) * (45 / (MAX_LEVELS - 1)));
+// Get round requirement
+const getRoundRequirement = (round: number) => {
+  return ROUND_REQUIREMENTS.find(r => r.round === round) || 
+         { round: 1, targetScore: 3, time: 30 };
+};
+
+// Helper function to check if an option is a weapon
+const isWeapon = (option: Partial<PlayerStats> | Weapon): option is Weapon => {
+  return 'name' in option && 'level' in option;
 };
 
 const Game: React.FC = () => {
+  // Character selection state
+  const [selectedCharacter, setSelectedCharacter] = useState<string | null>(null);
+  const [gamePhase, setGamePhase] = useState<
+    'character_select' | 
+    'round' | 
+    'loot' | 
+    'level_up' | 
+    'shop' | 
+    'enemy_select' |
+    'game_over'
+  >('character_select');
+  
   const [state, setState] = useState<GameState>({
+    // Core game
     deck: [],
     board: [],
     selectedCards: [],
@@ -36,11 +64,31 @@ const Game: React.FC = () => {
     startTime: null,
     endTime: null,
     hintUsed: false,
+    
     // Roguelike properties
-    level: 1,
-    targetScore: getTargetScore(1),
-    remainingTime: STARTING_TIME_MS,
-    levelCompleted: false,
+    round: 1,
+    targetScore: getRoundRequirement(1).targetScore,
+    remainingTime: getRoundRequirement(1).time,
+    roundCompleted: false,
+    
+    // Player
+    player: initializePlayer('player1', 'Player 1', 'Orange Tabby'),
+    
+    // Shop and upgrades
+    shopItems: [],
+    levelUpOptions: [],
+    rerollCost: BASE_REROLL_COST,
+    
+    // Enemy
+    currentEnemies: [],
+    selectedEnemy: null,
+    
+    // Loot and rewards
+    lootCrates: 0,
+    
+    // Co-op
+    isCoOp: false,
+    players: []
   });
 
   const [notification, setNotification] = useState<{
@@ -48,36 +96,32 @@ const Game: React.FC = () => {
     type: 'success' | 'error' | 'info' | 'warning';
   } | null>(null);
 
-  const [hintCards, setHintCards] = useState<string[]>([]);
-
   // Socket context for multiplayer
   const {
     isMultiplayer,
     roomId, 
     isHost,
-    gameState: multiplayerGameState,
     startGame: startMultiplayerGame,
     selectCard: selectMultiplayerCard,
     combinationFound: sendCombinationFound,
     addCards: sendAddCards,
-    showHint: sendShowHint,
-    hintCardIds 
+    showHint: sendShowHint
   } = useSocket();
 
-  // Use socket hint cards in multiplayer mode
-  useEffect(() => {
-    if (isMultiplayer && hintCardIds.length > 0) {
-      setHintCards(hintCardIds);
-    }
-  }, [isMultiplayer, hintCardIds]);
-
   // Initialize the game
-  const initGame = useCallback(() => {
-    const deck = shuffleDeck(createDeck());
-    const initialBoard = deck.slice(0, INITIAL_CARD_COUNT);
-    const remainingDeck = deck.slice(INITIAL_CARD_COUNT);
-
+  const initGame = useCallback((characterName: string) => {
+    // Generate initial board with modifiers based on difficulty
+    const initialBoard = generateGameBoard(INITIAL_CARD_COUNT, 1, 1);
+    const deck = shuffleArray(createDeck());
+    const remainingDeck = deck.filter(card => 
+      !initialBoard.some(boardCard => boardCard.id === card.id)
+    );
+    
+    // Get round 1 requirements
+    const roundReq = getRoundRequirement(1);
+    
     setState({
+      // Core game
       deck: remainingDeck,
       board: initialBoard,
       selectedCards: [],
@@ -88,537 +132,703 @@ const Game: React.FC = () => {
       startTime: null,
       endTime: null,
       hintUsed: false,
+      
       // Roguelike properties
-      level: 1,
-      targetScore: getTargetScore(1),
-      remainingTime: STARTING_TIME_MS,
-      levelCompleted: false,
+      round: 1,
+      targetScore: roundReq.targetScore,
+      remainingTime: roundReq.time,
+      roundCompleted: false,
+      
+      // Player
+      player: initializePlayer('player1', 'Player 1', characterName),
+      
+      // Shop and upgrades - to be filled during gameplay
+      shopItems: generateRandomShopItems(),
+      levelUpOptions: [],
+      rerollCost: BASE_REROLL_COST,
+      
+      // Enemy - to be selected during gameplay
+      currentEnemies: generateRandomEnemies(),
+      selectedEnemy: null,
+      
+      // Loot and rewards
+      lootCrates: 0,
+      
+      // Co-op
+      isCoOp: isMultiplayer,
+      players: []
     });
 
     setNotification(null);
-    setHintCards([]);
-  }, []);
+  }, [isMultiplayer]);
 
-  // Initialize the game when the component mounts
-  useEffect(() => {
-    initGame();
-  }, [initGame]);
-
-  // Sync with multiplayer game state if available
-  useEffect(() => {
-    if (isMultiplayer && multiplayerGameState) {
-      // To avoid double processing combinations, we need to be careful
-      // when updating state from the server
-      setState((prev) => {
-        // If this update is a combination found by another player
-        if (multiplayerGameState.foundCombinations.length > prev.foundCombinations.length) {
-          console.log('Received new combinations from server - updating state directly');
-          
-          // We don't want any validation to happen here - just accept the server's state
-          return {
-            ...multiplayerGameState,
-            gameStarted: true
-          };
+  // Generate 3 random enemies to choose from
+  const generateRandomEnemies = (): Enemy[] => {
+    const availableEnemies = [...ENEMIES];
+    const selectedEnemies: Enemy[] = [];
+    
+    for (let i = 0; i < 3; i++) {
+      if (availableEnemies.length === 0) break;
+      
+      const randomIndex = Math.floor(Math.random() * availableEnemies.length);
+      selectedEnemies.push(availableEnemies[randomIndex]);
+      availableEnemies.splice(randomIndex, 1);
+    }
+    
+    return selectedEnemies;
+  };
+  
+  // Generate random shop items
+  const generateRandomShopItems = () => {
+    const shopSize = 4 + (state?.player?.stats?.drawIncrease || 0);
+    const availableItems = [...ITEMS];
+    const selectedItems = [];
+    
+    const playerItems = state?.player?.items || [];
+    const playerItemNames = playerItems.map(item => item.name);
+    
+    // Filter out limited items the player already has
+    const filteredItems = availableItems.filter(item => {
+      if (item.limit === null) return true;
+      
+      // Count how many of this item the player already has
+      const count = playerItemNames.filter(name => name === item.name).length;
+      return count < item.limit;
+    });
+    
+    for (let i = 0; i < shopSize; i++) {
+      if (filteredItems.length === 0) break;
+      
+      const randomIndex = Math.floor(Math.random() * filteredItems.length);
+      selectedItems.push(filteredItems[randomIndex]);
+      filteredItems.splice(randomIndex, 1);
+    }
+    
+    return selectedItems;
+  };
+  
+  // Generate random level up options
+  const generateLevelUpOptions = () => {
+    const options: (Partial<PlayerStats> | Weapon)[] = [];
+    const optionsSize = 4 + (state.player.stats.drawIncrease || 0);
+    
+    // 70% chance to get stat upgrade, 30% chance to get weapon upgrade
+    for (let i = 0; i < optionsSize; i++) {
+      const roll = Math.random();
+      
+      if (roll < 0.7) {
+        // Generate a random stat upgrade
+        const statUpgrade: Partial<PlayerStats> = {};
+        
+        // Pick a random stat to upgrade
+        const availableStats = [
+          'damage', 'maxHealth', 'timeWarpPercent', 'fieldSize', 
+          'chanceOfFire', 'dodgePercent', 'criticalChance', 'luck'
+        ];
+        
+        const statIndex = Math.floor(Math.random() * availableStats.length);
+        const stat = availableStats[statIndex];
+        
+        // Set the upgrade amount based on the stat
+        if (stat === 'damage' || stat === 'maxHealth') {
+          statUpgrade[stat as keyof PlayerStats] = 1; // +1 flat increase
+        } else if (stat === 'fieldSize') {
+          statUpgrade[stat as keyof PlayerStats] = 2;
+        } else {
+          statUpgrade[stat as keyof PlayerStats] = 5; // +5% increase for percentage stats
         }
         
-        // For other updates, merge the states
-        return {
-          ...prev,
-          ...multiplayerGameState,
-          gameStarted: true
-        };
-      });
+        options.push(statUpgrade);
+      } else {
+        // Generate a weapon upgrade or new weapon
+        if (state.player.weapons.length < state.player.stats.maxWeapons) {
+          // Player can have a new weapon
+          const availableWeapons = WEAPONS.filter(weapon => 
+            !state.player.weapons.some(w => w.name === weapon.name)
+          );
+          
+          if (availableWeapons.length > 0) {
+            const randomIndex = Math.floor(Math.random() * availableWeapons.length);
+            options.push(availableWeapons[randomIndex]);
+          } else {
+            // All weapons already owned, upgrade a random one instead
+            const playerWeapons = state.player.weapons;
+            const weaponToUpgrade = playerWeapons[Math.floor(Math.random() * playerWeapons.length)];
+            
+            if (weaponToUpgrade.level < 4) {
+              const upgradedWeapon = {...weaponToUpgrade, level: weaponToUpgrade.level + 1};
+              options.push(upgradedWeapon);
+            } else {
+              // If all weapons are max level, add a stat upgrade instead
+              const statUpgrade: Partial<PlayerStats> = { damage: 1 };
+              options.push(statUpgrade);
+            }
+          }
+        } else {
+          // Max weapons reached, can only upgrade
+          const playerWeapons = state.player.weapons;
+          const upgradableWeapons = playerWeapons.filter(w => w.level < 4);
+          
+          if (upgradableWeapons.length > 0) {
+            const weaponToUpgrade = upgradableWeapons[Math.floor(Math.random() * upgradableWeapons.length)];
+            const upgradedWeapon = {...weaponToUpgrade, level: weaponToUpgrade.level + 1};
+            options.push(upgradedWeapon);
+          } else {
+            // If all weapons are max level, add a stat upgrade instead
+            const statUpgrade: Partial<PlayerStats> = { damage: 1 };
+            options.push(statUpgrade);
+          }
+        }
+      }
     }
-  }, [isMultiplayer, multiplayerGameState]);
+    
+    return options;
+  };
 
   // Start the game
   const startGame = () => {
-    // For multiplayer, only host can start the game
-    if (isMultiplayer) {
-      if (isHost) {
-        const initialGameState = {
-          ...state,
-          gameStarted: true,
-          startTime: Date.now(),
-          level: 1,
-          targetScore: getTargetScore(1),
-          remainingTime: STARTING_TIME_MS,
-          levelCompleted: false,
-        };
-        
-        setState(initialGameState);
-        startMultiplayerGame(initialGameState);
-        
+    if (!selectedCharacter) {
+      setNotification({
+        message: 'Please select a character first',
+        type: 'warning'
+      });
+      return;
+    }
+    
+    // Initialize the game with the selected character
+    initGame(selectedCharacter);
+    
+    setState(prevState => ({
+      ...prevState,
+      gameStarted: true,
+      startTime: Date.now()
+    }));
+    
+    // Start with enemy selection
+    setGamePhase('enemy_select');
+  };
+
+  // Handle character selection
+  const handleCharacterSelect = (characterName: string) => {
+    setSelectedCharacter(characterName);
+  };
+  
+  // Handle enemy selection
+  const handleEnemySelect = (enemy: Enemy) => {
+    setState(prevState => ({
+      ...prevState,
+      selectedEnemy: enemy
+    }));
+    
+    // Apply enemy effect to the game state
+    if (enemy.applyEffect) {
+      setState(prevState => enemy.applyEffect(prevState));
+    }
+    
+    // Start the round
+    setGamePhase('round');
+  };
+  
+  // Handle item purchase
+  const handleItemPurchase = (itemIndex: number) => {
+    const item = state.shopItems[itemIndex];
+    
+    if (state.player.stats.money < item.price) {
+      setNotification({
+        message: 'Not enough money to purchase this item',
+        type: 'error'
+      });
+      return;
+    }
+    
+    // Check if item has a limit and player already has max
+    if (item.limit !== null) {
+      const playerItemCount = state.player.items.filter(i => i.name === item.name).length;
+      if (playerItemCount >= item.limit) {
         setNotification({
-          message: `Level 1 started! Target: ${getTargetScore(1)} points. You have 3 minutes!`,
-          type: 'info',
+          message: 'You already have the maximum number of this item',
+          type: 'error'
         });
+        return;
+      }
+    }
+    
+    // Purchase the item
+    setState(prevState => ({
+      ...prevState,
+      player: {
+        ...prevState.player,
+        stats: {
+          ...prevState.player.stats,
+          money: prevState.player.stats.money - item.price
+        },
+        items: [...prevState.player.items, item]
+      },
+      // Remove the item from the shop
+      shopItems: prevState.shopItems.filter((_, index) => index !== itemIndex)
+    }));
+    
+    setNotification({
+      message: `Purchased ${item.name}!`,
+      type: 'success'
+    });
+  };
+  
+  // Handle shop reroll
+  const handleShopReroll = () => {
+    if (state.player.stats.money < state.rerollCost && state.player.stats.freeRerolls <= 0) {
+      setNotification({
+        message: 'Not enough money to reroll the shop',
+        type: 'error'
+      });
+      return;
+    }
+    
+    // Check if player has free rerolls
+    if (state.player.stats.freeRerolls > 0) {
+      setState(prevState => ({
+        ...prevState,
+        shopItems: generateRandomShopItems(),
+        player: {
+          ...prevState.player,
+          stats: {
+            ...prevState.player.stats,
+            freeRerolls: prevState.player.stats.freeRerolls - 1
+          }
+        }
+      }));
+    } else {
+      // Charge for the reroll
+      setState(prevState => ({
+        ...prevState,
+        shopItems: generateRandomShopItems(),
+        player: {
+          ...prevState.player,
+          stats: {
+            ...prevState.player.stats,
+            money: prevState.player.stats.money - prevState.rerollCost
+          }
+        },
+        rerollCost: prevState.rerollCost + 2 // Increase reroll cost
+      }));
+    }
+  };
+
+  // Handle level up selection
+  const handleLevelUpSelection = (optionIndex: number) => {
+    const option = state.levelUpOptions[optionIndex];
+    
+    // Check if the option is a weapon or a stat upgrade
+    if (isWeapon(option)) {
+      // It's a weapon
+      const existingWeaponIndex = state.player.weapons.findIndex(w => w.name === option.name);
+      
+      if (existingWeaponIndex >= 0) {
+        // Upgrading existing weapon
+        const updatedWeapons = [...state.player.weapons];
+        updatedWeapons[existingWeaponIndex] = option;
+        
+        setState(prevState => ({
+          ...prevState,
+          player: {
+            ...prevState.player,
+            weapons: updatedWeapons
+          }
+        }));
+      } else {
+        // Adding new weapon
+        setState(prevState => ({
+          ...prevState,
+          player: {
+            ...prevState.player,
+            weapons: [...prevState.player.weapons, option]
+          }
+        }));
       }
     } else {
-      // Single player mode
-      setState(prev => ({
-        ...prev,
-        gameStarted: true,
-        startTime: Date.now(),
-        level: 1,
-        targetScore: getTargetScore(1),
-        remainingTime: STARTING_TIME_MS,
-        levelCompleted: false,
+      // It's a stat upgrade
+      setState(prevState => ({
+        ...prevState,
+        player: {
+          ...prevState.player,
+          stats: {
+            ...prevState.player.stats,
+            ...option
+          }
+        }
       }));
-      
+    }
+    
+    // Continue to shop
+    setGamePhase('shop');
+  };
+  
+  // Handle level up reroll
+  const handleLevelUpReroll = () => {
+    if (state.player.stats.money < state.rerollCost && state.player.stats.freeRerolls <= 0) {
       setNotification({
-        message: `Level 1 started! Target: ${getTargetScore(1)} points. You have 3 minutes!`,
-        type: 'info',
+        message: 'Not enough money to reroll the level up options',
+        type: 'error'
       });
+      return;
+    }
+    
+    // Check if player has free rerolls
+    if (state.player.stats.freeRerolls > 0) {
+      setState(prevState => ({
+        ...prevState,
+        levelUpOptions: generateLevelUpOptions(),
+        player: {
+          ...prevState.player,
+          stats: {
+            ...prevState.player.stats,
+            freeRerolls: prevState.player.stats.freeRerolls - 1
+          }
+        }
+      }));
+    } else {
+      // Charge for the reroll
+      setState(prevState => ({
+        ...prevState,
+        levelUpOptions: generateLevelUpOptions(),
+        player: {
+          ...prevState.player,
+          stats: {
+            ...prevState.player.stats,
+            money: prevState.player.stats.money - prevState.rerollCost
+          }
+        },
+        rerollCost: prevState.rerollCost + 2 // Increase reroll cost
+      }));
     }
   };
 
   // Handle card selection
-  const handleCardClick = (clickedCard: Card) => {
-    if (state.gameEnded) return;
+  const handleCardClick = (card: Card) => {
+    if (state.gameEnded || !state.gameStarted) return;
     
-    // Start the game on first card click if not already started
-    if (!state.gameStarted) {
-      startGame();
-    }
-
-    // Clear hint highlighting when user selects a card
-    setHintCards([]);
-
-    setState(prev => {
-      const isSelected = prev.selectedCards.some(card => card.id === clickedCard.id);
-      let newSelectedCards: Card[];
-
-      if (isSelected) {
-        // Deselect if already selected
-        newSelectedCards = prev.selectedCards.filter(card => card.id !== clickedCard.id);
-      } else {
-        // Select the card
-        newSelectedCards = [...prev.selectedCards, clickedCard];
-      }
-
-      // Update the board to reflect selection state
-      const newBoard = prev.board.map(card => 
-        card.id === clickedCard.id 
-          ? { ...card, selected: !card.selected } 
-          : card
-      );
-
-      // In multiplayer mode, send card selection to server
-      // But only send selections, not valid combinations (those are handled separately)
-      if (isMultiplayer && newSelectedCards.length < 3) {
-        selectMultiplayerCard(clickedCard.id, newBoard);
-      }
-
-      if (newSelectedCards.length === 3) {
-        // Check if the selected cards form a valid combination
-        const validationResult = isValidCombination(newSelectedCards);
-        
-        if (validationResult.isValid) {
-          // Process the valid combination locally first
-          const updatedState = handleValidCombination(prev, newSelectedCards, newBoard);
-          
-          // If the state was actually updated (not a duplicate combination)
-          // and we're in multiplayer mode, notify other players
-          if (isMultiplayer && updatedState !== prev) {
-            // Only send combination once from here, removed from handleValidCombination
-            console.log('Sending combination to server');
-            sendCombinationFound(updatedState);
-          }
-          
-          return updatedState;
-        } else {
-          // Invalid combination - provide feedback with detailed error message and deselect
-          setTimeout(() => {
-            setNotification({
-              message: validationResult.errorMessage,
-              type: 'error',
-            });
-          }, 100);
-
-          return {
-            ...prev,
-            selectedCards: [],
-            board: newBoard.map(card => ({ ...card, selected: false })),
-          };
-        }
-      }
-
-      return {
-        ...prev,
-        selectedCards: newSelectedCards,
-        board: newBoard,
-      };
-    });
-  };
-
-  // Handle a valid combination being found
-  const handleValidCombination = (
-    prevState: GameState, 
-    selectedCards: Card[], 
-    currentBoard: Card[]
-  ): GameState => {
-    // Add a simple debounce to prevent double calls
-    const selectedIds = selectedCards.map(card => card.id).sort().join(',');
-    const foundCombinationsIds = prevState.foundCombinations.map(combo => 
-      combo.map(card => card.id).sort().join(',')
-    );
-    
-    // If this exact combination was just processed, don't process it again
-    if (foundCombinationsIds.includes(selectedIds)) {
-      console.log('Skipping duplicate handleValidCombination call', { selectedCards });
-      return prevState;
-    }
-    
-    console.log('handleValidCombination', { selectedCards, currentBoard });
-    
-    // Remove selected cards from the board
-    let newBoard = currentBoard.filter(card => 
-      !selectedCards.some(selected => selected.id === card.id)
-    );
-    
-    // Get new cards from the deck if available
-    const newCards: Card[] = [];
-    const newDeck = [...prevState.deck];
-    
-    // Only draw up to INITIAL_CARD_COUNT unless we've already added more
-    const targetBoardSize = Math.max(INITIAL_CARD_COUNT, prevState.board.length - 3);
-    
-    while (newBoard.length < targetBoardSize && newDeck.length > 0) {
-      const newCard = newDeck.shift()!;
-      newCards.push({ ...newCard, selected: false });
-      newBoard = [...newBoard, { ...newCard, selected: false }];
-    }
-
-    // Show success notification
-    setNotification({
-      message: 'You found a valid combination!',
-      type: 'success',
-    });
-
-    // Check for game end conditions
-    const allCombinations = findAllCombinations(newBoard);
-    const isGameOver = (newDeck.length === 0 && allCombinations.length === 0) || prevState.remainingTime <= 0;
-    
-    // Update score - In Roguelike mode, each valid combination gives 1 point
-    const newScore = prevState.score + 1;
-    
-    // Check if level is completed with this combination
-    const levelCompleted = newScore >= prevState.targetScore;
-    
-    // If game is in final level and level is completed, or no more combinations and cards, end game
-    const isFinalLevelComplete = levelCompleted && prevState.level === MAX_LEVELS;
-    const shouldEndGame = isGameOver || isFinalLevelComplete;
-
-    const updatedGameState = shouldEndGame 
-      ? {
-          ...prevState,
-          board: newBoard,
-          deck: newDeck,
-          selectedCards: [],
-          foundCombinations: [...prevState.foundCombinations, selectedCards],
-          score: newScore,
-          gameEnded: true,
-          endTime: Date.now(),
-          levelCompleted: levelCompleted,
-        }
-      : {
-          ...prevState,
-          board: newBoard,
-          deck: newDeck,
-          selectedCards: [],
-          foundCombinations: [...prevState.foundCombinations, selectedCards],
-          score: newScore,
-          levelCompleted: levelCompleted,
-        };
-
-    return updatedGameState;
-  };
-
-  // Add three more cards to the board
-  const handleAddCards = () => {
-    setState(prev => {
-      if (prev.deck.length === 0 || prev.board.length >= MAX_BOARD_SIZE) {
-        setNotification({
-          message: prev.deck.length === 0 
-            ? 'No more cards in the deck!' 
-            : 'Maximum board size reached!',
-          type: 'warning',
-        });
-        return prev;
-      }
-
-      const newCards = prev.deck.slice(0, 3);
-      const newDeck = prev.deck.slice(3);
-      const newBoard = [...prev.board, ...newCards.map(card => ({ ...card, selected: false }))];
-
-      setNotification({
-        message: 'Added three more cards to the board.',
-        type: 'info',
-      });
-
-      // Check if there are any valid combinations with the new cards
-      if (findAllCombinations(newBoard).length === 0 && newDeck.length === 0) {
-        const updatedGameState = {
-          ...prev,
-          board: newBoard,
-          deck: newDeck,
-          gameEnded: true,
-          endTime: Date.now(),
-        };
-        
-        // Update multiplayer state
-        if (isMultiplayer) {
-          sendAddCards(updatedGameState);
-        }
-        
-        return updatedGameState;
-      }
-
-      const updatedGameState = {
-        ...prev,
-        board: newBoard,
-        deck: newDeck,
-      };
-      
-      // Update multiplayer state
-      if (isMultiplayer) {
-        sendAddCards(updatedGameState);
-      }
-      
-      return updatedGameState;
-    });
-  };
-
-  // Provide a hint by highlighting a valid combination
-  const handleShowHint = () => {
-    const allCombinations = findAllCombinations(state.board);
-    
-    if (allCombinations.length === 0) {
-      setNotification({
-        message: 'No valid combinations available! Try adding more cards.',
-        type: 'warning',
-      });
+    // In multiplayer, send the selection to the server
+    if (isMultiplayer) {
+      selectMultiplayerCard(card.id);
       return;
     }
-
-    // Get the first valid combination as a hint
-    const hintCombination = allCombinations[0];
-    const hintCardIds = hintCombination.map(card => card.id);
     
-    setHintCards(hintCardIds);
-    
-    setState(prev => ({
-      ...prev,
-      hintUsed: true,
-    }));
-
-    // In multiplayer, share hint with all players
-    if (isMultiplayer) {
-      sendShowHint(hintCardIds);
-    }
-
-    setNotification({
-      message: 'Hint: Look for a valid combination with these highlighted cards!',
-      type: 'info',
-    });
-  };
-
-  const updateTimer = useCallback(() => {
-    if (state.gameStarted && !state.gameEnded) {
-      setState(prevState => {
-        // If no time left, end the game
-        if (prevState.remainingTime <= 0) {
-          setNotification({
-            message: `Time's up! Game over at level ${prevState.level}!`,
-            type: 'error',
-          });
-          return {
-            ...prevState,
-            gameEnded: true,
-            endTime: Date.now(),
-          };
-        }
-        
-        // Check if level completed
-        if (prevState.score >= prevState.targetScore && !prevState.levelCompleted) {
-          if (prevState.level === MAX_LEVELS) {
-            // Player won the game
-            setNotification({
-              message: `Congratulations! You completed all ${MAX_LEVELS} levels!`,
-              type: 'success',
-            });
-            return {
-              ...prevState,
-              gameEnded: true,
-              endTime: Date.now(),
-              levelCompleted: true,
-            };
-          } else {
-            // Level completed but not the final level
-            setNotification({
-              message: `Level ${prevState.level} completed! Starting level ${prevState.level + 1}!`,
-              type: 'success',
-            });
-            return {
-              ...prevState,
-              levelCompleted: true,
-            };
-          }
-        }
-        
-        // Normal time update
-        return {
-          ...prevState,
-          remainingTime: Math.max(0, prevState.remainingTime - 1000),
-        };
-      });
-    }
-  }, [state.gameStarted, state.gameEnded, state.score, state.targetScore, state.level]);
-  
-  const progressToNextLevel = useCallback(() => {
-    if (state.levelCompleted && !state.gameEnded) {
-      const nextLevel = state.level + 1;
+    // Check if card is already selected
+    if (state.selectedCards.some(c => c.id === card.id)) {
+      // Deselect the card
       setState(prevState => ({
         ...prevState,
-        level: nextLevel,
-        targetScore: getTargetScore(nextLevel),
-        remainingTime: STARTING_TIME_MS,
-        levelCompleted: false,
-        score: 0, // Reset score for the new level
+        selectedCards: prevState.selectedCards.filter(c => c.id !== card.id)
       }));
-      
-      setNotification({
-        message: `Level ${nextLevel} started! Target: ${getTargetScore(nextLevel)} points. You have 3 minutes!`,
-        type: 'info',
-      });
-    }
-  }, [state.levelCompleted, state.gameEnded, state.level]);
-
-  // Add a useEffect for the timer countdown
-  useEffect(() => {
-    let timerInterval: NodeJS.Timeout;
-    
-    if (state.gameStarted && !state.gameEnded) {
-      timerInterval = setInterval(updateTimer, 1000);
+      return;
     }
     
-    return () => {
-      if (timerInterval) clearInterval(timerInterval);
-    };
-  }, [state.gameStarted, state.gameEnded, updateTimer]);
+    // Add card to selection
+    const newSelectedCards = [...state.selectedCards, card];
+    
+    // If we have 3 cards selected, check if they form a valid set
+    if (newSelectedCards.length === 3) {
+      if (isValidCombination(newSelectedCards)) {
+        // Valid set found!
+        handleValidMatch(newSelectedCards);
+      } else {
+        // Invalid selection
+        handleInvalidMatch();
+      }
+    } else {
+      // Update selected cards
+      setState(prevState => ({
+        ...prevState,
+        selectedCards: newSelectedCards
+      }));
+    }
+  };
   
-  // Add a useEffect to handle level progression
-  useEffect(() => {
-    if (state.levelCompleted && !state.gameEnded) {
-      const levelCompletionDelay = setTimeout(() => {
-        progressToNextLevel();
-      }, 2000); // Delay to show completion message
-      
-      return () => clearTimeout(levelCompletionDelay);
+  // Handle valid match
+  const handleValidMatch = (cards: Card[]) => {
+    // In multiplayer, send the match to the server
+    if (isMultiplayer) {
+      sendCombinationFound(cards.map(c => c.id));
+      return;
     }
-  }, [state.levelCompleted, state.gameEnded, progressToNextLevel]);
-
-  // Check if there are any valid combinations in the current board
-  useEffect(() => {
-    if (state.gameStarted && !state.gameEnded && state.board.length > 0) {
-      const allCombinations = findAllCombinations(state.board);
+    
+    // Calculate points for this match
+    let pointsEarned = 1;
+    
+    // Add bonus points from card modifiers
+    cards.forEach(card => {
+      if (card.bonusPoints) {
+        pointsEarned += card.bonusPoints;
+      }
       
-      if (allCombinations.length === 0 && state.deck.length === 0) {
-        // No valid combinations available and no cards left in deck - game over
-        setState(prev => ({
-          ...prev,
-          gameEnded: true,
-          endTime: Date.now(),
+      // Handle other card modifiers
+      if (card.lootBox) {
+        // Add a loot crate
+        setState(prevState => ({
+          ...prevState,
+          lootCrates: prevState.lootCrates + 1
         }));
+      }
+      
+      if (card.bonusMoney && card.bonusMoney > 0) {
+        // Add bonus money
+        setState(prevState => ({
+          ...prevState,
+          player: {
+            ...prevState.player,
+            stats: {
+              ...prevState.player.stats,
+              money: prevState.player.stats.money + card.bonusMoney
+            }
+          }
+        }));
+      }
+      
+      if (card.healing) {
+        // Heal the player
+        setState(prevState => ({
+          ...prevState,
+          player: {
+            ...prevState.player,
+            stats: {
+              ...prevState.player.stats,
+              health: Math.min(
+                prevState.player.stats.health + 1, 
+                prevState.player.stats.maxHealth
+              )
+            }
+          }
+        }));
+      }
+    });
+    
+    // Add points to score
+    setState(prevState => ({
+      ...prevState,
+      score: prevState.score + pointsEarned,
+      selectedCards: [],
+      foundCombinations: [...prevState.foundCombinations, cards],
+    }));
+    
+    // Check if round is completed
+    if (state.score + pointsEarned >= state.targetScore) {
+      completeRound();
+    } else {
+      // Replace matched cards
+      replaceMatchedCards(cards);
+    }
+    
+    // Show notification
+    setNotification({
+      message: `Match found! +${pointsEarned} points`,
+      type: 'success'
+    });
+  };
+  
+  // Handle invalid match
+  const handleInvalidMatch = () => {
+    // Show notification
+    setNotification({
+      message: 'Not a valid match!',
+      type: 'error'
+    });
+    
+    // Clear selection after a short delay
+    setTimeout(() => {
+      setState(prevState => ({
+        ...prevState,
+        selectedCards: []
+      }));
+    }, 1000);
+  };
+  
+  // Replace matched cards
+  const replaceMatchedCards = (matchedCards: Card[]) => {
+    // Get new cards from the deck
+    const newCards: Card[] = [];
+    const remainingDeck = [...state.deck];
+    
+    for (let i = 0; i < matchedCards.length; i++) {
+      if (remainingDeck.length > 0) {
+        // Get a random card from the deck
+        const randomIndex = Math.floor(Math.random() * remainingDeck.length);
+        const newCard = remainingDeck[randomIndex];
         
-        setNotification({
-          message: 'Game Over! No more valid combinations possible.',
-          type: 'info',
+        // Add modifiers based on round and difficulty
+        const modifiedCard = generateGameBoard(1, state.round, state.round)[0];
+        
+        newCards.push({
+          ...newCard,
+          ...modifiedCard
         });
+        
+        // Remove the card from the deck
+        remainingDeck.splice(randomIndex, 1);
       }
     }
-  }, [state.board, state.deck.length, state.gameStarted, state.gameEnded]);
-
-  // Multiplayer lobby handler
-  const handleMultiplayerGameStart = () => {
-    startGame();
+    
+    // Replace matched cards with new ones
+    setState(prevState => {
+      const updatedBoard = prevState.board.map(card => {
+        if (matchedCards.some(c => c.id === card.id)) {
+          // Replace this card
+          if (newCards.length > 0) {
+            return newCards.shift()!;
+          }
+        }
+        return card;
+      });
+      
+      return {
+        ...prevState,
+        board: updatedBoard,
+        deck: remainingDeck
+      };
+    });
+    
+    // In multiplayer, send the new cards to the server
+    if (isMultiplayer && newCards.length > 0) {
+      sendAddCards(newCards.map(c => c.id));
+    }
+  };
+  
+  // Complete the current round
+  const completeRound = () => {
+    setState(prevState => ({
+      ...prevState,
+      roundCompleted: true,
+      gameEnded: false
+    }));
+    
+    // Move to level up phase
+    setGamePhase('level_up');
+    
+    // Generate level up options
+    setState(prevState => ({
+      ...prevState,
+      levelUpOptions: generateLevelUpOptions()
+    }));
+  };
+  
+  // Start the next round
+  const startNextRound = () => {
+    const nextRound = state.round + 1;
+    const roundReq = getRoundRequirement(nextRound);
+    
+    // Generate a new board with increased difficulty
+    const newBoard = generateGameBoard(
+      state.player.stats.fieldSize, 
+      nextRound, 
+      nextRound
+    );
+    
+    setState(prevState => ({
+      ...prevState,
+      round: nextRound,
+      targetScore: roundReq.targetScore,
+      remainingTime: roundReq.time,
+      score: 0,
+      board: newBoard,
+      selectedCards: [],
+      foundCombinations: [],
+      roundCompleted: false,
+      gameStarted: true,
+      currentEnemies: generateRandomEnemies()
+    }));
+    
+    // Move to enemy selection for the next round
+    setGamePhase('enemy_select');
   };
 
-  // Render multiplayer lobby if in multiplayer mode and game not started
-  if (isMultiplayer && !state.gameStarted) {
-    // Using roomId in conditional render for multiplayer lobby
-    const showLobby = !roomId || (roomId && !state.gameStarted);
-    
-    return (
-      <div className="flex flex-col items-center max-w-4xl mx-auto p-4">
-        <h1 className="text-3xl md:text-4xl font-bold mb-6 text-center">NShapes</h1>
-        <MultiplayerToggle />
-        {showLobby && <MultiplayerLobby onStartGame={handleMultiplayerGameStart} />}
-        <div className="mt-8">
-          <Tutorial />
-        </div>
-      </div>
-    );
-  }
+  // Render the appropriate game phase
+  const renderGamePhase = () => {
+    switch (gamePhase) {
+      case 'character_select':
+        return (
+          <CharacterSelection 
+            characters={CHARACTERS}
+            selectedCharacter={selectedCharacter}
+            onSelect={handleCharacterSelect}
+            onStart={startGame}
+          />
+        );
+        
+      case 'enemy_select':
+        return (
+          <EnemySelection
+            enemies={state.currentEnemies}
+            onSelect={handleEnemySelect}
+            round={state.round}
+          />
+        );
+        
+      case 'level_up':
+        return (
+          <LevelUp
+            options={state.levelUpOptions}
+            onSelect={handleLevelUpSelection}
+            onReroll={handleLevelUpReroll}
+            rerollCost={state.rerollCost}
+            playerMoney={state.player.stats.money}
+            freeRerolls={state.player.stats.freeRerolls}
+          />
+        );
+        
+      case 'shop':
+        return (
+          <ItemShop
+            items={state.shopItems}
+            playerMoney={state.player.stats.money}
+            onPurchase={handleItemPurchase}
+            onReroll={handleShopReroll}
+            rerollCost={state.rerollCost}
+            freeRerolls={state.player.stats.freeRerolls}
+            onContinue={startNextRound}
+          />
+        );
+        
+      case 'round':
+        return (
+          <div className="game-container">
+            <GameInfo
+              round={state.round}
+              score={state.score}
+              targetScore={state.targetScore}
+              time={state.remainingTime}
+              playerStats={calculatePlayerTotalStats(state.player)}
+            />
+            
+            <GameBoard
+              cards={state.board}
+              onMatch={handleValidMatch}
+              onInvalidSelection={handleInvalidMatch}
+              playerStats={calculatePlayerTotalStats(state.player)}
+              isPlayerTurn={true}
+            />
+          </div>
+        );
+        
+      case 'game_over':
+        return (
+          <div className="game-over">
+            <h2 className="text-2xl font-bold mb-4">Game Over</h2>
+            <p className="mb-4">You reached round {state.round}</p>
+            <button 
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg"
+              onClick={() => setGamePhase('character_select')}
+            >
+              Play Again
+            </button>
+          </div>
+        );
+        
+      default:
+        return null;
+    }
+  };
 
   return (
-    <div className="flex flex-col items-center max-w-4xl mx-auto p-4">
-      <h1 className="text-3xl md:text-4xl font-bold mb-6 text-center">NShapes</h1>
-      
-      {!state.gameStarted && !isMultiplayer && <MultiplayerToggle />}
-      
-      <GameInfo 
-        score={state.score}
-        gameStarted={state.gameStarted}
-        gameEnded={state.gameEnded}
-        cardsRemaining={state.deck.length}
-        onNewGame={() => {
-          initGame();
-          // Add slight delay before starting game
-          setTimeout(() => {
-            startGame();
-          }, 500);
-        }}
-        onShowHint={handleShowHint}
-        onAddCards={handleAddCards}
-        foundCombinationsCount={state.foundCombinations.length}
-        hintAvailable={state.gameStarted && !state.gameEnded}
-        canAddCards={state.gameStarted && !state.gameEnded && state.deck.length > 0 && state.board.length < MAX_BOARD_SIZE}
-        // New Roguelike properties
-        level={state.level}
-        targetScore={state.targetScore}
-        remainingTime={state.remainingTime}
-      />
-      
-      {isMultiplayer && <ScoreBoard />}
-      
-      {!state.gameStarted && !state.gameEnded && !isMultiplayer && (
-        <div className="my-6 text-center">
-          <p className="mb-4">Welcome to the game of NShapes! Select three cards that form a valid combination.</p>
-          <button
-            className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-lg"
-            onClick={startGame}
-          >
-            Start Game
-          </button>
-        </div>
-      )}
-      
-      <div className="my-6 w-full">
-        <GameBoard 
-          cards={state.board.map(card => ({
-            ...card,
-            selected: card.selected,
-            isHint: hintCards.includes(card.id)
-          }))}
-          onCardClick={handleCardClick}
-          disabled={state.gameEnded}
-        />
-      </div>
-      
-      <Tutorial />
-      
+    <div className="game-wrapper">
       {notification && (
         <Notification
           message={notification.message}
@@ -626,6 +836,20 @@ const Game: React.FC = () => {
           onClose={() => setNotification(null)}
         />
       )}
+      
+      {isMultiplayer && gamePhase === 'character_select' && (
+        <MultiplayerLobby
+          roomId={roomId}
+          isHost={isHost}
+          onStartGame={startMultiplayerGame}
+        />
+      )}
+      
+      {gamePhase === 'character_select' && (
+        <MultiplayerToggle />
+      )}
+      
+      {renderGamePhase()}
     </div>
   );
 };
