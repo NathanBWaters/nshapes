@@ -23,6 +23,8 @@ import CharacterSelection from './CharacterSelection';
 import ItemShop from './ItemShop';
 import LevelUp from './LevelUp';
 import EnemySelection from './EnemySelection';
+import StatsButton from './StatsButton';
+import RoundScoreboard from './RoundScoreboard';
 
 const INITIAL_CARD_COUNT = 12;
 const MAX_BOARD_SIZE = 21;
@@ -37,6 +39,13 @@ const getRoundRequirement = (round: number) => {
 // Helper function to check if an option is a weapon
 const isWeapon = (option: Partial<PlayerStats> | Weapon): option is Weapon => {
   return 'name' in option && 'level' in option;
+};
+
+// Calculate player level based on experience points
+const calculateLevel = (experience: number): number => {
+  // Simple level formula: level = floor(sqrt(experience/10))
+  // Level 1 requires 10 XP, Level 2 requires 40 XP, Level 3 requires 90 XP, etc.
+  return Math.floor(Math.sqrt(experience / 10));
 };
 
 const Game: React.FC = () => {
@@ -107,6 +116,98 @@ const Game: React.FC = () => {
     addCards: sendAddCards,
     showHint: sendShowHint
   } = useSocket();
+
+  // Function declarations
+  // Add an endGame function
+  const endGame = (victory: boolean) => {
+    setState(prevState => ({
+      ...prevState,
+      gameEnded: true,
+      endTime: Date.now()
+    }));
+
+    if (victory) {
+      setNotification({
+        message: 'Congratulations! You completed all rounds!',
+        type: 'success'
+      });
+    } else {
+      setNotification({
+        message: 'Game Over! You ran out of time.',
+        type: 'error'
+      });
+    }
+
+    setGamePhase('game_over');
+  };
+  
+  // Complete the current round
+  const completeRound = () => {
+    setState(prevState => ({
+      ...prevState,
+      roundCompleted: true,
+      gameEnded: false
+    }));
+    
+    // Move to level up phase
+    setGamePhase('level_up');
+    
+    // Generate level up options
+    setState(prevState => ({
+      ...prevState,
+      levelUpOptions: generateLevelUpOptions()
+    }));
+  };
+  
+  // Timer effect - countdown when in round phase
+  useEffect(() => {
+    let timerInterval: NodeJS.Timeout | null = null;
+
+    if (gamePhase === 'round' && state.gameStarted && !state.gameEnded && state.remainingTime > 0) {
+      // Start countdown timer
+      timerInterval = setInterval(() => {
+        setState(prevState => {
+          const newRemainingTime = prevState.remainingTime - 1;
+          
+          // Check if time has run out
+          if (newRemainingTime <= 0) {
+            // Time's up - check if player has met target score
+            if (prevState.score >= prevState.targetScore) {
+              // Success - move to next level
+              completeRound();
+            } else {
+              // Failure - game over
+              endGame(false);
+            }
+            
+            // Clear the interval
+            if (timerInterval) {
+              clearInterval(timerInterval);
+            }
+            
+            return {
+              ...prevState,
+              remainingTime: 0,
+              gameEnded: true
+            };
+          }
+          
+          // Normal time update
+          return {
+            ...prevState,
+            remainingTime: newRemainingTime
+          };
+        });
+      }, 1000);
+    }
+
+    // Cleanup timer on unmount or phase change
+    return () => {
+      if (timerInterval) {
+        clearInterval(timerInterval);
+      }
+    };
+  }, [gamePhase, state.gameStarted, state.gameEnded, completeRound, endGame]);
 
   // Initialize the game
   const initGame = useCallback((characterName: string) => {
@@ -317,7 +418,9 @@ const Game: React.FC = () => {
   const handleEnemySelect = (enemy: Enemy) => {
     setState(prevState => ({
       ...prevState,
-      selectedEnemy: enemy
+      selectedEnemy: enemy,
+      gameStarted: true, // Ensure game is started
+      startTime: Date.now() // Record start time
     }));
     
     // Apply enemy effect to the game state
@@ -553,7 +656,11 @@ const Game: React.FC = () => {
     }
     
     // Calculate points for this match
-    let pointsEarned = 1;
+    let pointsEarned = cards.length; // 1 point per card (typically 3)
+    
+    // Base rewards for finding a match
+    const experienceEarned = 1; // 1 experience point per match
+    let moneyEarned = cards.length; // 1 money per card in the match (typically 3)
     
     // Add bonus points from card modifiers
     cards.forEach(card => {
@@ -570,18 +677,9 @@ const Game: React.FC = () => {
         }));
       }
       
-      if (card.bonusMoney && card.bonusMoney > 0) {
-        // Add bonus money
-        setState(prevState => ({
-          ...prevState,
-          player: {
-            ...prevState.player,
-            stats: {
-              ...prevState.player.stats,
-              money: prevState.player.stats.money + card.bonusMoney
-            }
-          }
-        }));
+      if (card.bonusMoney) {
+        // Add bonus money from the card
+        moneyEarned += card.bonusMoney;
       }
       
       if (card.healing) {
@@ -602,27 +700,56 @@ const Game: React.FC = () => {
       }
     });
     
-    // Add points to score
-    setState(prevState => ({
-      ...prevState,
-      score: prevState.score + pointsEarned,
-      selectedCards: [],
-      foundCombinations: [...prevState.foundCombinations, cards],
-    }));
-    
-    // Check if round is completed
-    if (state.score + pointsEarned >= state.targetScore) {
-      completeRound();
-    } else {
-      // Replace matched cards
-      replaceMatchedCards(cards);
-    }
-    
-    // Show notification
-    setNotification({
-      message: `Match found! +${pointsEarned} points`,
-      type: 'success'
+    // Update experience, money, score, and mark cards as matched
+    setState(prevState => {
+      // Calculate experience with bonus percentage if applicable
+      const experienceMultiplier = 1 + (prevState.player.stats.experienceGainPercent || 0) / 100;
+      const totalExperienceGained = Math.floor(experienceEarned * experienceMultiplier);
+      
+      // Calculate new level based on experience
+      const currentExperience = prevState.player.stats.experience || 0;
+      const newExperience = currentExperience + totalExperienceGained;
+      const currentLevel = prevState.player.stats.level || 0;
+      const newLevel = calculateLevel(newExperience);
+      
+      // Check for level up
+      const hasLeveledUp = newLevel > currentLevel;
+      
+      // Update player stats
+      const updatedStats = {
+        ...prevState.player.stats,
+        experience: newExperience,
+        level: newLevel,
+        money: prevState.player.stats.money + moneyEarned
+      };
+      
+      // If the player leveled up, show a special notification
+      if (hasLeveledUp) {
+        setNotification({
+          message: `Match found! +${pointsEarned} points, +${totalExperienceGained} XP, +${moneyEarned} coins. LEVEL UP! You are now level ${newLevel}!`,
+          type: 'success'
+        });
+      } else {
+        setNotification({
+          message: `Match found! +${pointsEarned} points, +${totalExperienceGained} XP, +${moneyEarned} coins`,
+          type: 'success'
+        });
+      }
+      
+      return {
+        ...prevState,
+        score: prevState.score + pointsEarned,
+        selectedCards: [],
+        foundCombinations: [...prevState.foundCombinations, cards],
+        player: {
+          ...prevState.player,
+          stats: updatedStats
+        }
+      };
     });
+    
+    // Replace matched cards with new ones - don't check for round completion
+    replaceMatchedCards(cards);
   };
   
   // Handle invalid match
@@ -648,6 +775,24 @@ const Game: React.FC = () => {
     const newCards: Card[] = [];
     const remainingDeck = [...state.deck];
     
+    // Check if we have enough cards in the deck
+    if (remainingDeck.length < matchedCards.length) {
+      // Refill the deck if necessary
+      const additionalCards = createDeck();
+      for (const card of additionalCards) {
+        if (!remainingDeck.some(c => c.id === card.id) && 
+            !state.board.some(c => c.id === card.id)) {
+          remainingDeck.push(card);
+        }
+      }
+    }
+    
+    // Get the matched card indices from the board
+    const matchedIndices = matchedCards.map(matchedCard => 
+      state.board.findIndex(boardCard => boardCard.id === matchedCard.id)
+    );
+    
+    // Generate replacement cards
     for (let i = 0; i < matchedCards.length; i++) {
       if (remainingDeck.length > 0) {
         // Get a random card from the deck
@@ -655,11 +800,13 @@ const Game: React.FC = () => {
         const newCard = remainingDeck[randomIndex];
         
         // Add modifiers based on round and difficulty
-        const modifiedCard = generateGameBoard(1, state.round, state.round)[0];
+        const modifiers = generateGameBoard(1, state.round, state.round)[0];
         
+        // Create the new card with modifiers
         newCards.push({
           ...newCard,
-          ...modifiedCard
+          ...modifiers,
+          selected: false
         });
         
         // Remove the card from the deck
@@ -669,14 +816,14 @@ const Game: React.FC = () => {
     
     // Replace matched cards with new ones
     setState(prevState => {
-      const updatedBoard = prevState.board.map(card => {
-        if (matchedCards.some(c => c.id === card.id)) {
-          // Replace this card
-          if (newCards.length > 0) {
-            return newCards.shift()!;
-          }
+      // Create a new board array with replaced cards
+      const updatedBoard = [...prevState.board];
+      
+      // Replace each matched card with a new one
+      matchedIndices.forEach((index, i) => {
+        if (index !== -1 && i < newCards.length) {
+          updatedBoard[index] = newCards[i];
         }
-        return card;
       });
       
       return {
@@ -690,24 +837,6 @@ const Game: React.FC = () => {
     if (isMultiplayer && newCards.length > 0) {
       sendAddCards(newCards.map(c => c.id));
     }
-  };
-  
-  // Complete the current round
-  const completeRound = () => {
-    setState(prevState => ({
-      ...prevState,
-      roundCompleted: true,
-      gameEnded: false
-    }));
-    
-    // Move to level up phase
-    setGamePhase('level_up');
-    
-    // Generate level up options
-    setState(prevState => ({
-      ...prevState,
-      levelUpOptions: generateLevelUpOptions()
-    }));
   };
   
   // Start the next round
@@ -790,12 +919,21 @@ const Game: React.FC = () => {
       case 'round':
         return (
           <div className="game-container">
+            {state.gameStarted && !state.gameEnded && (
+              <StatsButton playerStats={calculatePlayerTotalStats(state.player)} />
+            )}
+            
             <GameInfo
               round={state.round}
               score={state.score}
               targetScore={state.targetScore}
               time={state.remainingTime}
               playerStats={calculatePlayerTotalStats(state.player)}
+            />
+            
+            <RoundScoreboard 
+              currentRound={state.round}
+              currentScore={state.score}
             />
             
             <GameBoard
@@ -810,15 +948,40 @@ const Game: React.FC = () => {
         
       case 'game_over':
         return (
-          <div className="game-over">
-            <h2 className="text-2xl font-bold mb-4">Game Over</h2>
-            <p className="mb-4">You reached round {state.round}</p>
-            <button 
-              className="px-4 py-2 bg-blue-500 text-white rounded-lg"
-              onClick={() => setGamePhase('character_select')}
-            >
-              Play Again
-            </button>
+          <div className="game-over p-6 bg-gray-100 rounded-lg shadow-md max-w-md mx-auto">
+            <h2 className="text-2xl font-bold mb-4 text-center">Game Over</h2>
+            
+            <div className="mb-4 text-center">
+              <p className="text-lg">You reached round {state.round}</p>
+              <p className="text-lg font-medium">Final Score: {state.score}</p>
+              <p className="text-lg">Target Score: {state.targetScore}</p>
+              
+              {state.score >= state.targetScore ? (
+                <div className="mt-2 text-green-600 font-bold">
+                  You beat the target score!
+                </div>
+              ) : (
+                <div className="mt-2 text-red-600 font-bold">
+                  You did not reach the target score
+                </div>
+              )}
+            </div>
+            
+            <div className="mb-4">
+              <RoundScoreboard 
+                currentRound={state.round}
+                currentScore={state.score}
+              />
+            </div>
+            
+            <div className="text-center">
+              <button 
+                className="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
+                onClick={() => setGamePhase('character_select')}
+              >
+                Play Again
+              </button>
+            </div>
           </div>
         );
         
@@ -829,6 +992,11 @@ const Game: React.FC = () => {
 
   return (
     <div className="game-wrapper">
+      {/* StatsButton - Show during gameplay phases */}
+      {gamePhase !== 'character_select' && gamePhase !== 'game_over' && state && state.player && (
+        <StatsButton playerStats={calculatePlayerTotalStats(state.player)} />
+      )}
+
       {notification && (
         <Notification
           message={notification.message}

@@ -4,6 +4,7 @@ import { Character, Enemy, Item, Weapon, PlayerStats, GameState, Player } from '
 export const DEFAULT_PLAYER_STATS: PlayerStats = {
   level: 0,
   money: 0,
+  experience: 0,
   experienceGainPercent: 100,
   luck: 0,
   maxWeapons: 3,

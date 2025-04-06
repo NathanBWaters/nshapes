@@ -93,6 +93,7 @@ export interface Character {
 export interface PlayerStats {
   level: number;
   money: number;
+  experience: number; // Total accumulated experience points
   experienceGainPercent: number;
   luck: number;
   maxWeapons: number;

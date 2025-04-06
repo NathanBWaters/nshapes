@@ -142,7 +142,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
   return (
     <div className="flex flex-col items-center w-full">
       <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 sm:gap-3 md:gap-4 p-2 sm:p-4 bg-gray-100 rounded-lg">
-        {cards.map(card => {
+        {cards.map((card, index) => {
           // Check if this card is selected
           const isSelected = selectedCards.some(c => c.id === card.id);
           // Check if this card is matched
@@ -159,7 +159,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
           
           return (
             <Card
-              key={card.id}
+              key={`${index}-${card.id}`}
               card={cardWithState}
               onClick={handleCardClick}
               disabled={isMatched || !isPlayerTurn || isProcessing}
