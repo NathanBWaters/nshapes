@@ -1,6 +1,5 @@
-"use client";
-
 import React from 'react';
+import { View, Text, Pressable, ScrollView } from 'react-native';
 import { Item } from '../types';
 
 interface ItemShopProps {
@@ -33,7 +32,7 @@ const ItemShop: React.FC<ItemShopProps> = ({
       default: return 'text-gray-600';
     }
   };
-  
+
   // Helper function to get border class based on item rarity
   const getItemBorderClass = (rarity: string): string => {
     switch (rarity) {
@@ -45,24 +44,25 @@ const ItemShop: React.FC<ItemShopProps> = ({
       default: return 'border-gray-300';
     }
   };
-  
+
   return (
-    <div className="item-shop p-4">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-2xl font-bold">Item Shop</h2>
-        <div className="money-display text-lg">
-          <span className="font-medium">Money:</span> {playerMoney} 💰
-        </div>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <ScrollView className="p-4">
+      <View className="flex-row justify-between items-center mb-4">
+        <Text className="text-2xl font-bold">Item Shop</Text>
+        <View className="flex-row items-center">
+          <Text className="font-medium">Money: </Text>
+          <Text>{playerMoney} 💰</Text>
+        </View>
+      </View>
+
+      <View className="flex-col gap-4">
         {items.map((item, index) => {
           // Format item effects for display
           const effects = Object.entries(item.effects).map(([key, value]) => {
             const formattedKey = key
               .replace(/([A-Z])/g, ' $1')
               .replace(/^./, str => str.toUpperCase());
-            
+
             let displayValue: string = '';
             if (typeof value === 'number') {
               displayValue = value > 0 ? `+${value}` : `${value}`;
@@ -72,16 +72,16 @@ const ItemShop: React.FC<ItemShopProps> = ({
             } else {
               displayValue = String(value);
             }
-            
+
             return `${formattedKey}: ${displayValue}`;
           });
-          
+
           // Format item drawbacks for display
           const drawbacks = Object.entries(item.drawbacks || {}).map(([key, value]) => {
             const formattedKey = key
               .replace(/([A-Z])/g, ' $1')
               .replace(/^./, str => str.toUpperCase());
-            
+
             let displayValue: string = '';
             if (typeof value === 'number') {
               displayValue = value > 0 ? `+${value}` : `${value}`;
@@ -91,96 +91,100 @@ const ItemShop: React.FC<ItemShopProps> = ({
             } else {
               displayValue = String(value);
             }
-            
+
             return `${formattedKey}: ${displayValue}`;
           });
-          
+
           const canAfford = playerMoney >= item.price;
-          
+
           return (
-            <div 
+            <View
               key={`${item.name}-${index}`}
-              className={`item-card p-4 border-2 ${getItemBorderClass(item.rarity)} rounded-lg ${canAfford ? 'hover:shadow-md' : 'opacity-60'}`}
+              className={`p-4 border-2 ${getItemBorderClass(item.rarity)} rounded-lg ${!canAfford ? 'opacity-60' : ''}`}
             >
-              <div className="flex justify-between items-start">
-                <h3 className={`font-bold ${getRarityColor(item.rarity)}`}>{item.name}</h3>
-                <div className="price-tag bg-yellow-100 px-2 py-1 rounded text-sm font-medium">
-                  {item.price} 💰
-                </div>
-              </div>
-              
-              <p className="text-sm text-gray-600 mt-2">{item.description}</p>
-              
+              <View className="flex-row justify-between items-start">
+                <Text className={`font-bold ${getRarityColor(item.rarity)}`}>{item.name}</Text>
+                <View className="bg-yellow-100 px-2 py-1 rounded">
+                  <Text className="text-sm font-medium">{item.price} 💰</Text>
+                </View>
+              </View>
+
+              <Text className="text-sm text-gray-600 mt-2">{item.description}</Text>
+
               {effects.length > 0 && (
-                <div className="mt-3">
-                  <h4 className="text-sm font-semibold text-green-700">Effects:</h4>
-                  <ul className="text-xs mt-1 space-y-1">
+                <View className="mt-3">
+                  <Text className="text-sm font-semibold text-green-700">Effects:</Text>
+                  <View className="mt-1">
                     {effects.map((effect, i) => (
-                      <li key={i} className="text-green-600">{effect}</li>
+                      <Text key={i} className="text-xs text-green-600">{effect}</Text>
                     ))}
-                  </ul>
-                </div>
+                  </View>
+                </View>
               )}
-              
+
               {drawbacks.length > 0 && (
-                <div className="mt-3">
-                  <h4 className="text-sm font-semibold text-red-700">Drawbacks:</h4>
-                  <ul className="text-xs mt-1 space-y-1">
+                <View className="mt-3">
+                  <Text className="text-sm font-semibold text-red-700">Drawbacks:</Text>
+                  <View className="mt-1">
                     {drawbacks.map((drawback, i) => (
-                      <li key={i} className="text-red-600">{drawback}</li>
+                      <Text key={i} className="text-xs text-red-600">{drawback}</Text>
                     ))}
-                  </ul>
-                </div>
+                  </View>
+                </View>
               )}
-              
-              <div className="mt-4">
-                <button
+
+              <View className="mt-4">
+                <Pressable
                   className={`w-full py-2 rounded-lg ${
-                    canAfford 
-                      ? 'bg-blue-500 hover:bg-blue-600 text-white' 
-                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    canAfford
+                      ? 'bg-blue-500'
+                      : 'bg-gray-300'
                   }`}
-                  onClick={() => canAfford && onPurchase(index)}
+                  onPress={() => canAfford && onPurchase(index)}
                   disabled={!canAfford}
                 >
-                  Purchase
-                </button>
-              </div>
-            </div>
+                  <Text className={`text-center font-medium ${canAfford ? 'text-white' : 'text-gray-500'}`}>
+                    Purchase
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
           );
         })}
-      </div>
-      
+      </View>
+
       {items.length === 0 && (
-        <div className="text-center py-8 text-gray-500">
-          No items available in the shop.
-        </div>
+        <View className="py-8">
+          <Text className="text-center text-gray-500">No items available in the shop.</Text>
+        </View>
       )}
-      
-      <div className="mt-6 flex justify-between">
-        <button
+
+      <View className="mt-6 flex-row justify-between">
+        <Pressable
           className={`px-4 py-2 rounded-lg ${
-            (playerMoney >= rerollCost || freeRerolls > 0) 
-              ? 'bg-purple-500 hover:bg-purple-600 text-white' 
-              : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            (playerMoney >= rerollCost || freeRerolls > 0)
+              ? 'bg-purple-500'
+              : 'bg-gray-300'
           }`}
-          onClick={onReroll}
+          onPress={onReroll}
           disabled={playerMoney < rerollCost && freeRerolls <= 0}
         >
-          {freeRerolls > 0 
-            ? `Reroll (${freeRerolls} free)` 
-            : `Reroll (${rerollCost} 💰)`}
-        </button>
-        
-        <button
-          className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg"
-          onClick={onContinue}
+          <Text className={`${(playerMoney >= rerollCost || freeRerolls > 0) ? 'text-white' : 'text-gray-500'}`}>
+            {freeRerolls > 0
+              ? `Reroll (${freeRerolls} free)`
+              : `Reroll (${rerollCost} 💰)`}
+          </Text>
+        </Pressable>
+
+        <Pressable
+          className="px-4 py-2 bg-green-500 rounded-lg"
+          onPress={onContinue}
         >
-          Continue to Next Round
-        </button>
-      </div>
-    </div>
+          <Text className="text-white">Continue to Next Round</Text>
+        </Pressable>
+      </View>
+    </ScrollView>
   );
 };
 
-export default ItemShop; 
+export default ItemShop;

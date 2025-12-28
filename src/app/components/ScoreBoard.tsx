@@ -1,45 +1,43 @@
-"use client";
-
 import React from 'react';
+import { View, Text } from 'react-native';
 import { useSocket } from '../context/SocketContext';
 
 const ScoreBoard: React.FC = () => {
   const { players, playerId } = useSocket();
-  
+
   if (players.length <= 1) {
     return null;
   }
-  
+
   return (
-    <div className="mb-4 bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 w-full max-w-2xl">
-      <h3 className="text-lg font-semibold mb-3">Player Scores</h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+    <View className="mb-4 bg-white rounded-lg shadow-md p-4 w-full max-w-2xl">
+      <Text className="text-lg font-semibold mb-3">Player Scores</Text>
+      <View className="flex-col gap-3">
         {players.map((player) => (
-          <div 
+          <View
             key={player.id}
-            className={`
-              flex justify-between items-center p-3 rounded-lg
-              ${player.id === playerId 
-                ? 'bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-800' 
-                : 'bg-gray-50 dark:bg-gray-700'
-              }
-            `}
+            className={`flex-row justify-between items-center p-3 rounded-lg ${
+              player.id === playerId
+                ? 'bg-blue-50 border border-blue-200'
+                : 'bg-gray-50'
+            }`}
           >
-            <div className="flex items-center">
-              <div className={`
-                w-3 h-3 rounded-full mr-2
-                ${player.id === playerId ? 'bg-blue-500' : 'bg-gray-400'}
-              `}></div>
-              <span className="font-medium">{player.name}</span>
-            </div>
-            <div className="bg-gray-100 dark:bg-gray-600 px-3 py-1 rounded-full font-semibold">
-              {player.score}
-            </div>
-          </div>
+            <View className="flex-row items-center">
+              <View
+                className={`w-3 h-3 rounded-full mr-2 ${
+                  player.id === playerId ? 'bg-blue-500' : 'bg-gray-400'
+                }`}
+              />
+              <Text className="font-medium">{player.name}</Text>
+            </View>
+            <View className="bg-gray-100 px-3 py-1 rounded-full">
+              <Text className="font-semibold">{player.score}</Text>
+            </View>
+          </View>
         ))}
-      </div>
-    </div>
+      </View>
+    </View>
   );
 };
 
-export default ScoreBoard; 
+export default ScoreBoard;

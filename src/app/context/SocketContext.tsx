@@ -29,6 +29,7 @@ interface SocketContextType {
   gameEnded: (finalGameState: GameState) => void;
   isMultiplayer: boolean;
   setIsMultiplayer: (value: boolean) => void;
+  toggleMultiplayer: (value: boolean) => void;
   errorMessage: string | null;
   hintCardIds: string[];
 }
@@ -249,6 +250,7 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     gameEnded,
     isMultiplayer,
     setIsMultiplayer,
+    toggleMultiplayer: setIsMultiplayer,
     errorMessage,
     hintCardIds
   };

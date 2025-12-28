@@ -1,6 +1,5 @@
-"use client";
-
 import React from 'react';
+import { View, Text, Pressable, ScrollView } from 'react-native';
 import { Character } from '../types';
 
 interface CharacterSelectionProps {
@@ -17,49 +16,51 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
   onStart
 }) => {
   return (
-    <div className="character-selection p-4">
-      <h2 className="text-2xl font-bold mb-4">Choose Your Character</h2>
-      
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <ScrollView className="p-4">
+      <Text className="text-2xl font-bold mb-4">Choose Your Character</Text>
+
+      <View className="flex-row flex-wrap gap-4">
         {characters.map(character => (
-          <div 
+          <Pressable
             key={character.name}
-            className={`character-card p-4 border-2 rounded-lg cursor-pointer transition-all ${
-              selectedCharacter === character.name 
-                ? 'border-blue-500 bg-blue-50 transform scale-105' 
-                : 'border-gray-300 hover:border-blue-300'
+            className={`p-4 border-2 rounded-lg w-[45%] ${
+              selectedCharacter === character.name
+                ? 'border-blue-500 bg-blue-50'
+                : 'border-gray-300'
             }`}
-            onClick={() => onSelect(character.name)}
+            onPress={() => onSelect(character.name)}
           >
-            <h3 className="font-bold text-lg">{character.name}</h3>
-            <p className="text-sm text-gray-600">{character.description}</p>
-            <div className="mt-2">
-              <p className="text-xs">Starting Weapon: {character.startingWeapon}</p>
-              <p className="text-xs">
-                Starting Items: {character.startingItems.length > 0 
-                  ? character.startingItems.join(', ') 
+            <Text className="font-bold text-lg">{character.name}</Text>
+            <Text className="text-sm text-gray-600">{character.description}</Text>
+            <View className="mt-2">
+              <Text className="text-xs">Starting Weapon: {character.startingWeapon}</Text>
+              <Text className="text-xs">
+                Starting Items: {character.startingItems.length > 0
+                  ? character.startingItems.join(', ')
                   : 'None'}
-              </p>
-            </div>
-          </div>
+              </Text>
+            </View>
+          </Pressable>
         ))}
-      </div>
-      
-      <div className="mt-6 flex justify-center">
-        <button
-          className={`px-6 py-3 rounded-lg font-bold ${
-            selectedCharacter 
-              ? 'bg-green-500 hover:bg-green-600 text-white' 
-              : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+      </View>
+
+      <View className="mt-6 items-center">
+        <Pressable
+          className={`px-6 py-3 rounded-lg ${
+            selectedCharacter
+              ? 'bg-green-500'
+              : 'bg-gray-300'
           }`}
-          onClick={onStart}
+          onPress={onStart}
           disabled={!selectedCharacter}
         >
-          Start Game
-        </button>
-      </div>
-    </div>
+          <Text className={`font-bold ${selectedCharacter ? 'text-white' : 'text-gray-500'}`}>
+            Start Game
+          </Text>
+        </Pressable>
+      </View>
+    </ScrollView>
   );
 };
 
-export default CharacterSelection; 
+export default CharacterSelection;

@@ -1,13 +1,12 @@
-"use client";
-
 import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, Pressable, ScrollView } from 'react-native';
 import { Card, GameState, Enemy, Weapon, PlayerStats } from '../types';
 import { createDeck, shuffleArray, isValidCombination, findAllCombinations, generateGameBoard, formatTime } from '../utils/gameUtils';
-import { 
-  CHARACTERS, 
-  ENEMIES, 
-  ITEMS, 
-  WEAPONS, 
+import {
+  CHARACTERS,
+  ENEMIES,
+  ITEMS,
+  WEAPONS,
   ROUND_REQUIREMENTS,
   initializePlayer,
   calculatePlayerTotalStats,
@@ -32,7 +31,7 @@ const BASE_REROLL_COST = 5;
 
 // Get round requirement
 const getRoundRequirement = (round: number) => {
-  return ROUND_REQUIREMENTS.find(r => r.round === round) || 
+  return ROUND_REQUIREMENTS.find(r => r.round === round) ||
          { round: 1, targetScore: 3, time: 30 };
 };
 
@@ -52,15 +51,15 @@ const Game: React.FC = () => {
   // Character selection state
   const [selectedCharacter, setSelectedCharacter] = useState<string | null>(null);
   const [gamePhase, setGamePhase] = useState<
-    'character_select' | 
-    'round' | 
-    'loot' | 
-    'level_up' | 
-    'shop' | 
+    'character_select' |
+    'round' |
+    'loot' |
+    'level_up' |
+    'shop' |
     'enemy_select' |
     'game_over'
   >('character_select');
-  
+
   const [state, setState] = useState<GameState>({
     // Core game
     deck: [],
@@ -73,28 +72,28 @@ const Game: React.FC = () => {
     startTime: null,
     endTime: null,
     hintUsed: false,
-    
+
     // Roguelike properties
     round: 1,
     targetScore: getRoundRequirement(1).targetScore,
     remainingTime: getRoundRequirement(1).time,
     roundCompleted: false,
-    
+
     // Player
     player: initializePlayer('player1', 'Player 1', 'Orange Tabby'),
-    
+
     // Shop and upgrades
     shopItems: [],
     levelUpOptions: [],
     rerollCost: BASE_REROLL_COST,
-    
+
     // Enemy
     currentEnemies: [],
     selectedEnemy: null,
-    
+
     // Loot and rewards
     lootCrates: 0,
-    
+
     // Co-op
     isCoOp: false,
     players: []
@@ -108,7 +107,7 @@ const Game: React.FC = () => {
   // Socket context for multiplayer
   const {
     isMultiplayer,
-    roomId, 
+    roomId,
     isHost,
     startGame: startMultiplayerGame,
     selectCard: selectMultiplayerCard,
@@ -140,7 +139,7 @@ const Game: React.FC = () => {
 
     setGamePhase('game_over');
   };
-  
+
   // Complete the current round
   const completeRound = () => {
     setState(prevState => ({
@@ -148,17 +147,17 @@ const Game: React.FC = () => {
       roundCompleted: true,
       gameEnded: false
     }));
-    
+
     // Move to level up phase
     setGamePhase('level_up');
-    
+
     // Generate level up options
     setState(prevState => ({
       ...prevState,
       levelUpOptions: generateLevelUpOptions()
     }));
   };
-  
+
   // Timer effect - countdown when in round phase
   useEffect(() => {
     let timerInterval: NodeJS.Timeout | null = null;
@@ -168,7 +167,7 @@ const Game: React.FC = () => {
       timerInterval = setInterval(() => {
         setState(prevState => {
           const newRemainingTime = prevState.remainingTime - 1;
-          
+
           // Check if time has run out
           if (newRemainingTime <= 0) {
             // Time's up - check if player has met target score
@@ -179,19 +178,19 @@ const Game: React.FC = () => {
               // Failure - game over
               endGame(false);
             }
-            
+
             // Clear the interval
             if (timerInterval) {
               clearInterval(timerInterval);
             }
-            
+
             return {
               ...prevState,
               remainingTime: 0,
               gameEnded: true
             };
           }
-          
+
           // Normal time update
           return {
             ...prevState,
@@ -214,13 +213,13 @@ const Game: React.FC = () => {
     // Generate initial board with modifiers based on difficulty
     const initialBoard = generateGameBoard(INITIAL_CARD_COUNT, 1, 1);
     const deck = shuffleArray(createDeck());
-    const remainingDeck = deck.filter(card => 
+    const remainingDeck = deck.filter(card =>
       !initialBoard.some(boardCard => boardCard.id === card.id)
     );
-    
+
     // Get round 1 requirements
     const roundReq = getRoundRequirement(1);
-    
+
     setState({
       // Core game
       deck: remainingDeck,
@@ -233,28 +232,28 @@ const Game: React.FC = () => {
       startTime: null,
       endTime: null,
       hintUsed: false,
-      
+
       // Roguelike properties
       round: 1,
       targetScore: roundReq.targetScore,
       remainingTime: roundReq.time,
       roundCompleted: false,
-      
+
       // Player
       player: initializePlayer('player1', 'Player 1', characterName),
-      
+
       // Shop and upgrades - to be filled during gameplay
       shopItems: generateRandomShopItems(),
       levelUpOptions: [],
       rerollCost: BASE_REROLL_COST,
-      
+
       // Enemy - to be selected during gameplay
       currentEnemies: generateRandomEnemies(),
       selectedEnemy: null,
-      
+
       // Loot and rewards
       lootCrates: 0,
-      
+
       // Co-op
       isCoOp: isMultiplayer,
       players: []
@@ -267,69 +266,69 @@ const Game: React.FC = () => {
   const generateRandomEnemies = (): Enemy[] => {
     const availableEnemies = [...ENEMIES];
     const selectedEnemies: Enemy[] = [];
-    
+
     for (let i = 0; i < 3; i++) {
       if (availableEnemies.length === 0) break;
-      
+
       const randomIndex = Math.floor(Math.random() * availableEnemies.length);
       selectedEnemies.push(availableEnemies[randomIndex]);
       availableEnemies.splice(randomIndex, 1);
     }
-    
+
     return selectedEnemies;
   };
-  
+
   // Generate random shop items
   const generateRandomShopItems = () => {
     const shopSize = 4 + (state?.player?.stats?.drawIncrease || 0);
     const availableItems = [...ITEMS];
     const selectedItems = [];
-    
+
     const playerItems = state?.player?.items || [];
     const playerItemNames = playerItems.map(item => item.name);
-    
+
     // Filter out limited items the player already has
     const filteredItems = availableItems.filter(item => {
       if (item.limit === null) return true;
-      
+
       // Count how many of this item the player already has
       const count = playerItemNames.filter(name => name === item.name).length;
       return count < item.limit;
     });
-    
+
     for (let i = 0; i < shopSize; i++) {
       if (filteredItems.length === 0) break;
-      
+
       const randomIndex = Math.floor(Math.random() * filteredItems.length);
       selectedItems.push(filteredItems[randomIndex]);
       filteredItems.splice(randomIndex, 1);
     }
-    
+
     return selectedItems;
   };
-  
+
   // Generate random level up options
   const generateLevelUpOptions = () => {
     const options: (Partial<PlayerStats> | Weapon)[] = [];
     const optionsSize = 4 + (state.player.stats.drawIncrease || 0);
-    
+
     // 70% chance to get stat upgrade, 30% chance to get weapon upgrade
     for (let i = 0; i < optionsSize; i++) {
       const roll = Math.random();
-      
+
       if (roll < 0.7) {
         // Generate a random stat upgrade
         const statUpgrade: Partial<PlayerStats> = {};
-        
+
         // Pick a random stat to upgrade
         const availableStats = [
-          'damage', 'maxHealth', 'timeWarpPercent', 'fieldSize', 
+          'damage', 'maxHealth', 'timeWarpPercent', 'fieldSize',
           'chanceOfFire', 'dodgePercent', 'criticalChance', 'luck'
         ];
-        
+
         const statIndex = Math.floor(Math.random() * availableStats.length);
         const stat = availableStats[statIndex];
-        
+
         // Set the upgrade amount based on the stat
         if (stat === 'damage' || stat === 'maxHealth') {
           statUpgrade[stat as keyof PlayerStats] = 1; // +1 flat increase
@@ -338,16 +337,16 @@ const Game: React.FC = () => {
         } else {
           statUpgrade[stat as keyof PlayerStats] = 5; // +5% increase for percentage stats
         }
-        
+
         options.push(statUpgrade);
       } else {
         // Generate a weapon upgrade or new weapon
         if (state.player.weapons.length < state.player.stats.maxWeapons) {
           // Player can have a new weapon
-          const availableWeapons = WEAPONS.filter(weapon => 
+          const availableWeapons = WEAPONS.filter(weapon =>
             !state.player.weapons.some(w => w.name === weapon.name)
           );
-          
+
           if (availableWeapons.length > 0) {
             const randomIndex = Math.floor(Math.random() * availableWeapons.length);
             options.push(availableWeapons[randomIndex]);
@@ -355,7 +354,7 @@ const Game: React.FC = () => {
             // All weapons already owned, upgrade a random one instead
             const playerWeapons = state.player.weapons;
             const weaponToUpgrade = playerWeapons[Math.floor(Math.random() * playerWeapons.length)];
-            
+
             if (weaponToUpgrade.level < 4) {
               const upgradedWeapon = {...weaponToUpgrade, level: weaponToUpgrade.level + 1};
               options.push(upgradedWeapon);
@@ -369,7 +368,7 @@ const Game: React.FC = () => {
           // Max weapons reached, can only upgrade
           const playerWeapons = state.player.weapons;
           const upgradableWeapons = playerWeapons.filter(w => w.level < 4);
-          
+
           if (upgradableWeapons.length > 0) {
             const weaponToUpgrade = upgradableWeapons[Math.floor(Math.random() * upgradableWeapons.length)];
             const upgradedWeapon = {...weaponToUpgrade, level: weaponToUpgrade.level + 1};
@@ -382,7 +381,7 @@ const Game: React.FC = () => {
         }
       }
     }
-    
+
     return options;
   };
 
@@ -395,16 +394,16 @@ const Game: React.FC = () => {
       });
       return;
     }
-    
+
     // Initialize the game with the selected character
     initGame(selectedCharacter);
-    
+
     setState(prevState => ({
       ...prevState,
       gameStarted: true,
       startTime: Date.now()
     }));
-    
+
     // Start with enemy selection
     setGamePhase('enemy_select');
   };
@@ -413,7 +412,7 @@ const Game: React.FC = () => {
   const handleCharacterSelect = (characterName: string) => {
     setSelectedCharacter(characterName);
   };
-  
+
   // Handle enemy selection
   const handleEnemySelect = (enemy: Enemy) => {
     setState(prevState => ({
@@ -422,20 +421,20 @@ const Game: React.FC = () => {
       gameStarted: true, // Ensure game is started
       startTime: Date.now() // Record start time
     }));
-    
+
     // Apply enemy effect to the game state
     if (enemy.applyEffect) {
       setState(prevState => enemy.applyEffect(prevState));
     }
-    
+
     // Start the round
     setGamePhase('round');
   };
-  
+
   // Handle item purchase
   const handleItemPurchase = (itemIndex: number) => {
     const item = state.shopItems[itemIndex];
-    
+
     if (state.player.stats.money < item.price) {
       setNotification({
         message: 'Not enough money to purchase this item',
@@ -443,7 +442,7 @@ const Game: React.FC = () => {
       });
       return;
     }
-    
+
     // Check if item has a limit and player already has max
     if (item.limit !== null) {
       const playerItemCount = state.player.items.filter(i => i.name === item.name).length;
@@ -455,7 +454,7 @@ const Game: React.FC = () => {
         return;
       }
     }
-    
+
     // Purchase the item
     setState(prevState => ({
       ...prevState,
@@ -470,13 +469,13 @@ const Game: React.FC = () => {
       // Remove the item from the shop
       shopItems: prevState.shopItems.filter((_, index) => index !== itemIndex)
     }));
-    
+
     setNotification({
       message: `Purchased ${item.name}!`,
       type: 'success'
     });
   };
-  
+
   // Handle shop reroll
   const handleShopReroll = () => {
     if (state.player.stats.money < state.rerollCost && state.player.stats.freeRerolls <= 0) {
@@ -486,7 +485,7 @@ const Game: React.FC = () => {
       });
       return;
     }
-    
+
     // Check if player has free rerolls
     if (state.player.stats.freeRerolls > 0) {
       setState(prevState => ({
@@ -520,17 +519,17 @@ const Game: React.FC = () => {
   // Handle level up selection
   const handleLevelUpSelection = (optionIndex: number) => {
     const option = state.levelUpOptions[optionIndex];
-    
+
     // Check if the option is a weapon or a stat upgrade
     if (isWeapon(option)) {
       // It's a weapon
       const existingWeaponIndex = state.player.weapons.findIndex(w => w.name === option.name);
-      
+
       if (existingWeaponIndex >= 0) {
         // Upgrading existing weapon
         const updatedWeapons = [...state.player.weapons];
         updatedWeapons[existingWeaponIndex] = option;
-        
+
         setState(prevState => ({
           ...prevState,
           player: {
@@ -561,11 +560,11 @@ const Game: React.FC = () => {
         }
       }));
     }
-    
+
     // Continue to shop
     setGamePhase('shop');
   };
-  
+
   // Handle level up reroll
   const handleLevelUpReroll = () => {
     if (state.player.stats.money < state.rerollCost && state.player.stats.freeRerolls <= 0) {
@@ -575,7 +574,7 @@ const Game: React.FC = () => {
       });
       return;
     }
-    
+
     // Check if player has free rerolls
     if (state.player.stats.freeRerolls > 0) {
       setState(prevState => ({
@@ -609,13 +608,13 @@ const Game: React.FC = () => {
   // Handle card selection
   const handleCardClick = (card: Card) => {
     if (state.gameEnded || !state.gameStarted) return;
-    
+
     // In multiplayer, send the selection to the server
     if (isMultiplayer) {
       selectMultiplayerCard(card.id);
       return;
     }
-    
+
     // Check if card is already selected
     if (state.selectedCards.some(c => c.id === card.id)) {
       // Deselect the card
@@ -625,10 +624,10 @@ const Game: React.FC = () => {
       }));
       return;
     }
-    
+
     // Add card to selection
     const newSelectedCards = [...state.selectedCards, card];
-    
+
     // If we have 3 cards selected, check if they form a valid set
     if (newSelectedCards.length === 3) {
       if (isValidCombination(newSelectedCards)) {
@@ -646,7 +645,7 @@ const Game: React.FC = () => {
       }));
     }
   };
-  
+
   // Handle valid match
   const handleValidMatch = (cards: Card[]) => {
     // In multiplayer, send the match to the server
@@ -654,20 +653,20 @@ const Game: React.FC = () => {
       sendCombinationFound(cards.map(c => c.id));
       return;
     }
-    
+
     // Calculate points for this match
     let pointsEarned = cards.length; // 1 point per card (typically 3)
-    
+
     // Base rewards for finding a match
     const experienceEarned = 1; // 1 experience point per match
     let moneyEarned = cards.length; // 1 money per card in the match (typically 3)
-    
+
     // Add bonus points from card modifiers
     cards.forEach(card => {
       if (card.bonusPoints) {
         pointsEarned += card.bonusPoints;
       }
-      
+
       // Handle other card modifiers
       if (card.lootBox) {
         // Add a loot crate
@@ -676,12 +675,12 @@ const Game: React.FC = () => {
           lootCrates: prevState.lootCrates + 1
         }));
       }
-      
+
       if (card.bonusMoney) {
         // Add bonus money from the card
         moneyEarned += card.bonusMoney;
       }
-      
+
       if (card.healing) {
         // Heal the player
         setState(prevState => ({
@@ -691,7 +690,7 @@ const Game: React.FC = () => {
             stats: {
               ...prevState.player.stats,
               health: Math.min(
-                prevState.player.stats.health + 1, 
+                prevState.player.stats.health + 1,
                 prevState.player.stats.maxHealth
               )
             }
@@ -699,22 +698,22 @@ const Game: React.FC = () => {
         }));
       }
     });
-    
+
     // Update experience, money, score, and mark cards as matched
     setState(prevState => {
       // Calculate experience with bonus percentage if applicable
       const experienceMultiplier = 1 + (prevState.player.stats.experienceGainPercent || 0) / 100;
       const totalExperienceGained = Math.floor(experienceEarned * experienceMultiplier);
-      
+
       // Calculate new level based on experience
       const currentExperience = prevState.player.stats.experience || 0;
       const newExperience = currentExperience + totalExperienceGained;
       const currentLevel = prevState.player.stats.level || 0;
       const newLevel = calculateLevel(newExperience);
-      
+
       // Check for level up
       const hasLeveledUp = newLevel > currentLevel;
-      
+
       // Update player stats
       const updatedStats = {
         ...prevState.player.stats,
@@ -722,7 +721,7 @@ const Game: React.FC = () => {
         level: newLevel,
         money: prevState.player.stats.money + moneyEarned
       };
-      
+
       // If the player leveled up, show a special notification
       if (hasLeveledUp) {
         setNotification({
@@ -735,7 +734,7 @@ const Game: React.FC = () => {
           type: 'success'
         });
       }
-      
+
       return {
         ...prevState,
         score: prevState.score + pointsEarned,
@@ -747,11 +746,11 @@ const Game: React.FC = () => {
         }
       };
     });
-    
+
     // Replace matched cards with new ones - don't check for round completion
     replaceMatchedCards(cards);
   };
-  
+
   // Handle invalid match
   const handleInvalidMatch = () => {
     // Show notification
@@ -759,7 +758,7 @@ const Game: React.FC = () => {
       message: 'Not a valid match!',
       type: 'error'
     });
-    
+
     // Clear selection after a short delay
     setTimeout(() => {
       setState(prevState => ({
@@ -768,89 +767,89 @@ const Game: React.FC = () => {
       }));
     }, 1000);
   };
-  
+
   // Replace matched cards
   const replaceMatchedCards = (matchedCards: Card[]) => {
     // Get new cards from the deck
     const newCards: Card[] = [];
     const remainingDeck = [...state.deck];
-    
+
     // Check if we have enough cards in the deck
     if (remainingDeck.length < matchedCards.length) {
       // Refill the deck if necessary
       const additionalCards = createDeck();
       for (const card of additionalCards) {
-        if (!remainingDeck.some(c => c.id === card.id) && 
+        if (!remainingDeck.some(c => c.id === card.id) &&
             !state.board.some(c => c.id === card.id)) {
           remainingDeck.push(card);
         }
       }
     }
-    
+
     // Get the matched card indices from the board
-    const matchedIndices = matchedCards.map(matchedCard => 
+    const matchedIndices = matchedCards.map(matchedCard =>
       state.board.findIndex(boardCard => boardCard.id === matchedCard.id)
     );
-    
+
     // Generate replacement cards
     for (let i = 0; i < matchedCards.length; i++) {
       if (remainingDeck.length > 0) {
         // Get a random card from the deck
         const randomIndex = Math.floor(Math.random() * remainingDeck.length);
         const newCard = remainingDeck[randomIndex];
-        
+
         // Add modifiers based on round and difficulty
         const modifiers = generateGameBoard(1, state.round, state.round)[0];
-        
+
         // Create the new card with modifiers
         newCards.push({
           ...newCard,
           ...modifiers,
           selected: false
         });
-        
+
         // Remove the card from the deck
         remainingDeck.splice(randomIndex, 1);
       }
     }
-    
+
     // Replace matched cards with new ones
     setState(prevState => {
       // Create a new board array with replaced cards
       const updatedBoard = [...prevState.board];
-      
+
       // Replace each matched card with a new one
       matchedIndices.forEach((index, i) => {
         if (index !== -1 && i < newCards.length) {
           updatedBoard[index] = newCards[i];
         }
       });
-      
+
       return {
         ...prevState,
         board: updatedBoard,
         deck: remainingDeck
       };
     });
-    
+
     // In multiplayer, send the new cards to the server
     if (isMultiplayer && newCards.length > 0) {
       sendAddCards(newCards.map(c => c.id));
     }
   };
-  
+
   // Start the next round
   const startNextRound = () => {
     const nextRound = state.round + 1;
     const roundReq = getRoundRequirement(nextRound);
-    
+
     // Generate a new board with increased difficulty
     const newBoard = generateGameBoard(
-      state.player.stats.fieldSize, 
-      nextRound, 
+      state.player.stats.fieldSize,
+      nextRound,
       nextRound
     );
-    
+
     setState(prevState => ({
       ...prevState,
       round: nextRound,
@@ -864,7 +863,7 @@ const Game: React.FC = () => {
       gameStarted: true,
       currentEnemies: generateRandomEnemies()
     }));
-    
+
     // Move to enemy selection for the next round
     setGamePhase('enemy_select');
   };
@@ -874,14 +873,14 @@ const Game: React.FC = () => {
     switch (gamePhase) {
       case 'character_select':
         return (
-          <CharacterSelection 
+          <CharacterSelection
             characters={CHARACTERS}
             selectedCharacter={selectedCharacter}
             onSelect={handleCharacterSelect}
             onStart={startGame}
           />
         );
-        
+
       case 'enemy_select':
         return (
           <EnemySelection
@@ -890,7 +889,7 @@ const Game: React.FC = () => {
             round={state.round}
           />
         );
-        
+
       case 'level_up':
         return (
           <LevelUp
@@ -902,7 +901,7 @@ const Game: React.FC = () => {
             freeRerolls={state.player.stats.freeRerolls}
           />
         );
-        
+
       case 'shop':
         return (
           <ItemShop
@@ -915,14 +914,14 @@ const Game: React.FC = () => {
             onContinue={startNextRound}
           />
         );
-        
+
       case 'round':
         return (
-          <div className="game-container">
+          <ScrollView className="flex-1">
             {state.gameStarted && !state.gameEnded && (
               <StatsButton playerStats={calculatePlayerTotalStats(state.player)} />
             )}
-            
+
             <GameInfo
               round={state.round}
               score={state.score}
@@ -930,12 +929,12 @@ const Game: React.FC = () => {
               time={state.remainingTime}
               playerStats={calculatePlayerTotalStats(state.player)}
             />
-            
-            <RoundScoreboard 
+
+            <RoundScoreboard
               currentRound={state.round}
               currentScore={state.score}
             />
-            
+
             <GameBoard
               cards={state.board}
               onMatch={handleValidMatch}
@@ -943,55 +942,55 @@ const Game: React.FC = () => {
               playerStats={calculatePlayerTotalStats(state.player)}
               isPlayerTurn={true}
             />
-          </div>
+          </ScrollView>
         );
-        
+
       case 'game_over':
         return (
-          <div className="game-over p-6 bg-gray-100 rounded-lg shadow-md max-w-md mx-auto">
-            <h2 className="text-2xl font-bold mb-4 text-center">Game Over</h2>
-            
-            <div className="mb-4 text-center">
-              <p className="text-lg">You reached round {state.round}</p>
-              <p className="text-lg font-medium">Final Score: {state.score}</p>
-              <p className="text-lg">Target Score: {state.targetScore}</p>
-              
+          <View className="p-6 bg-gray-100 rounded-lg shadow-md max-w-md mx-auto">
+            <Text className="text-2xl font-bold mb-4 text-center">Game Over</Text>
+
+            <View className="mb-4 items-center">
+              <Text className="text-lg">You reached round {state.round}</Text>
+              <Text className="text-lg font-medium">Final Score: {state.score}</Text>
+              <Text className="text-lg">Target Score: {state.targetScore}</Text>
+
               {state.score >= state.targetScore ? (
-                <div className="mt-2 text-green-600 font-bold">
+                <Text className="mt-2 text-green-600 font-bold">
                   You beat the target score!
-                </div>
+                </Text>
               ) : (
-                <div className="mt-2 text-red-600 font-bold">
+                <Text className="mt-2 text-red-600 font-bold">
                   You did not reach the target score
-                </div>
+                </Text>
               )}
-            </div>
-            
-            <div className="mb-4">
-              <RoundScoreboard 
+            </View>
+
+            <View className="mb-4">
+              <RoundScoreboard
                 currentRound={state.round}
                 currentScore={state.score}
               />
-            </div>
-            
-            <div className="text-center">
-              <button 
-                className="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
-                onClick={() => setGamePhase('character_select')}
+            </View>
+
+            <View className="items-center">
+              <Pressable
+                className="px-6 py-3 bg-blue-500 rounded-lg"
+                onPress={() => setGamePhase('character_select')}
               >
-                Play Again
-              </button>
-            </div>
-          </div>
+                <Text className="text-white font-medium">Play Again</Text>
+              </Pressable>
+            </View>
+          </View>
         );
-        
+
       default:
         return null;
     }
   };
 
   return (
-    <div className="game-wrapper">
+    <View className="flex-1">
       {/* StatsButton - Show during gameplay phases */}
       {gamePhase !== 'character_select' && gamePhase !== 'game_over' && state && state.player && (
         <StatsButton playerStats={calculatePlayerTotalStats(state.player)} />
@@ -1004,7 +1003,7 @@ const Game: React.FC = () => {
           onClose={() => setNotification(null)}
         />
       )}
-      
+
       {isMultiplayer && gamePhase === 'character_select' && (
         <MultiplayerLobby
           roomId={roomId}
@@ -1012,14 +1011,14 @@ const Game: React.FC = () => {
           onStartGame={startMultiplayerGame}
         />
       )}
-      
+
       {gamePhase === 'character_select' && (
         <MultiplayerToggle />
       )}
-      
+
       {renderGamePhase()}
-    </div>
+    </View>
   );
 };
 
-export default Game; 
+export default Game;

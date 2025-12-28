@@ -1,37 +1,40 @@
-"use client";
-
 import React from 'react';
+import { View, Text, Pressable } from 'react-native';
 import { useSocket } from '../context/SocketContext';
 
 const MultiplayerToggle: React.FC = () => {
   const { isMultiplayer, toggleMultiplayer } = useSocket();
-  
+
   return (
-    <div className="multiplayer-toggle flex justify-center my-4">
-      <div className="inline-flex items-center bg-gray-100 rounded-lg p-1">
-        <button
-          className={`px-4 py-2 rounded-md transition-colors ${
-            !isMultiplayer 
-              ? 'bg-blue-500 text-white' 
-              : 'text-gray-700 hover:bg-gray-200'
+    <View className="flex justify-center my-4">
+      <View className="flex-row items-center bg-gray-100 rounded-lg p-1">
+        <Pressable
+          className={`px-4 py-2 rounded-md ${
+            !isMultiplayer
+              ? 'bg-blue-500'
+              : ''
           }`}
-          onClick={() => toggleMultiplayer(false)}
+          onPress={() => toggleMultiplayer(false)}
         >
-          Single Player
-        </button>
-        <button
-          className={`px-4 py-2 rounded-md transition-colors ${
-            isMultiplayer 
-              ? 'bg-blue-500 text-white' 
-              : 'text-gray-700 hover:bg-gray-200'
+          <Text className={!isMultiplayer ? 'text-white' : 'text-gray-700'}>
+            Single Player
+          </Text>
+        </Pressable>
+        <Pressable
+          className={`px-4 py-2 rounded-md ${
+            isMultiplayer
+              ? 'bg-blue-500'
+              : ''
           }`}
-          onClick={() => toggleMultiplayer(true)}
+          onPress={() => toggleMultiplayer(true)}
         >
-          Multiplayer
-        </button>
-      </div>
-    </div>
+          <Text className={isMultiplayer ? 'text-white' : 'text-gray-700'}>
+            Multiplayer
+          </Text>
+        </Pressable>
+      </View>
+    </View>
   );
 };
 
-export default MultiplayerToggle; 
+export default MultiplayerToggle;

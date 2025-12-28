@@ -1,6 +1,5 @@
-"use client";
-
 import React, { useState } from 'react';
+import { View, Text, Pressable, Modal, ScrollView } from 'react-native';
 import { PlayerStats } from '../types';
 
 interface StatsButtonProps {
@@ -20,15 +19,15 @@ const StatsButton: React.FC<StatsButtonProps> = ({ playerStats }) => {
       'maxWeapons', 'holographicPercent'
     ],
     "Resources": [
-      'money', 'commerce', 'scavengingPercent', 
+      'money', 'commerce', 'scavengingPercent',
       'scavengeAmount', 'freeRerolls'
     ],
     "Offensive": [
-      'damage', 'damagePercent', 'criticalChance', 
+      'damage', 'damagePercent', 'criticalChance',
       'chanceOfFire', 'explosion', 'timeFreezePercent'
     ],
     "Defensive": [
-      'health', 'maxHealth', 'dodgePercent', 
+      'health', 'maxHealth', 'dodgePercent',
       'deflectPercent', 'dodgeAttackBackPercent'
     ],
     "Gameplay": [
@@ -37,16 +36,16 @@ const StatsButton: React.FC<StatsButtonProps> = ({ playerStats }) => {
       'mulligans'
     ]
   };
-  
+
   // Format stat for display
   const formatStat = (key: string, value: number | string) => {
     if (typeof value !== 'number') return value;
-    
+
     // For percentage stats, add % symbol
     if (key.toLowerCase().includes('percent')) {
       return `${value}%`;
     }
-    
+
     return value;
   };
 
@@ -60,65 +59,64 @@ const StatsButton: React.FC<StatsButtonProps> = ({ playerStats }) => {
   return (
     <>
       {/* Stats Button in top right corner */}
-      <button 
-        className="fixed top-4 right-4 z-30 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-full shadow-lg flex items-center"
-        onClick={openModal}
+      <Pressable
+        className="absolute top-4 right-4 z-30 bg-blue-500 py-2 px-4 rounded-full shadow-lg flex-row items-center"
+        onPress={openModal}
       >
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
-          <path fillRule="evenodd" d="M3 3a1 1 0 000 2h14a1 1 0 100-2H3zm0 6a1 1 0 000 2h9a1 1 0 100-2H3zm0 6a1 1 0 100 2h6a1 1 0 100-2H3z" clipRule="evenodd" />
-        </svg>
-        Stats
-      </button>
+        <Text className="text-white font-bold">Stats</Text>
+      </Pressable>
 
       {/* Stats Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold">Character Stats</h2>
-                <button 
-                  onClick={closeModal}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
+      <Modal
+        visible={isModalOpen}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={closeModal}
+      >
+        <View className="flex-1 bg-black/50 justify-center items-center p-4">
+          <View className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90%]">
+            <ScrollView className="p-6">
+              <View className="flex-row justify-between items-center mb-6">
+                <Text className="text-2xl font-bold">Character Stats</Text>
+                <Pressable onPress={closeModal}>
+                  <Text className="text-gray-500 text-2xl">✕</Text>
+                </Pressable>
+              </View>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <View className="flex-col gap-6">
                 {Object.entries(statCategories).map(([category, statKeys]) => (
-                  <div key={category} className="stat-category bg-gray-50 p-4 rounded-lg shadow">
-                    <h3 className="font-bold text-lg border-b border-gray-300 pb-2 mb-3 text-blue-600">{category}</h3>
-                    <ul className="space-y-2">
+                  <View key={category} className="bg-gray-50 p-4 rounded-lg shadow">
+                    <Text className="font-bold text-lg border-b border-gray-300 pb-2 mb-3 text-blue-600">
+                      {category}
+                    </Text>
+                    <View className="gap-2">
                       {statKeys.map(key => (
-                        <li key={key} className="flex justify-between items-center">
-                          <span className="text-gray-700">{formatKey(key)}</span>
-                          <span className="font-medium text-blue-700">
+                        <View key={key} className="flex-row justify-between items-center">
+                          <Text className="text-gray-700">{formatKey(key)}</Text>
+                          <Text className="font-medium text-blue-700">
                             {formatStat(key, playerStats[key as keyof PlayerStats] || 0)}
-                          </span>
-                        </li>
+                          </Text>
+                        </View>
                       ))}
-                    </ul>
-                  </div>
+                    </View>
+                  </View>
                 ))}
-              </div>
+              </View>
 
-              <div className="mt-6 text-center">
-                <button
-                  onClick={closeModal}
-                  className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded"
+              <View className="mt-6 items-center">
+                <Pressable
+                  onPress={closeModal}
+                  className="bg-blue-500 py-2 px-6 rounded"
                 >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+                  <Text className="text-white font-bold">Close</Text>
+                </Pressable>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 };
 
-export default StatsButton; 
+export default StatsButton;

@@ -1,6 +1,5 @@
-"use client";
-
 import React from 'react';
+import { View, Text, Pressable, ScrollView } from 'react-native';
 import { PlayerStats, Weapon } from '../types';
 
 interface LevelUpProps {
@@ -24,141 +23,127 @@ const LevelUp: React.FC<LevelUpProps> = ({
   const isWeapon = (option: Partial<PlayerStats> | Weapon): option is Weapon => {
     return 'name' in option && 'level' in option;
   };
-  
+
   // Format stat value for display
   const formatStatValue = (value: number | string | undefined): string => {
     if (value === undefined) return '';
-    
+
     if (typeof value === 'number') {
       return value > 0 ? `+${value}` : `${value}`;
     }
-    
+
     return String(value || '');
   };
-  
+
   return (
-    <div className="level-up p-4 text-white">
-      <h1 className="text-4xl font-bold mb-2 text-center">Level Up!</h1>
-      <p className="mb-8 text-center text-xl">Choose one upgrade to improve your character.</p>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <ScrollView className="p-4 bg-gray-900">
+      <Text className="text-4xl font-bold mb-2 text-center text-white">Level Up!</Text>
+      <Text className="mb-8 text-center text-xl text-white">Choose one upgrade to improve your character.</Text>
+
+      <View className="flex-col gap-6">
         {options.map((option, index) => {
           if (isWeapon(option)) {
             // Render weapon option
             return (
-              <div 
+              <Pressable
                 key={`weapon-${index}`}
-                className="option-card p-6 rounded-xl cursor-pointer transition-all relative bg-[#1a1b26] border-2 border-orange-500/50 flex flex-col min-h-[320px]"
-                style={{
-                  background: 'linear-gradient(to bottom, rgba(26, 27, 38, 0.95), rgba(26, 27, 38, 0.98))',
-                  boxShadow: '0 0 20px rgba(251, 146, 60, 0.1)'
-                }}
-                onClick={() => onSelect(index)}
+                className="p-6 rounded-xl bg-gray-800 border-2 border-orange-500/50"
+                onPress={() => onSelect(index)}
               >
-                <div className="flex-grow">
-                  <h3 className="font-bold text-xl">
-                    <span className="text-orange-400">{option.name}</span>
-                    <span className="text-orange-500/70"> (Level {option.level})</span>
-                  </h3>
-                  <p className="text-sm text-gray-300 mt-2">{option.description}</p>
-                  
-                  <div className="mt-4">
-                    <h4 className="text-lg font-semibold text-orange-400">Effects:</h4>
-                    <ul className="text-sm mt-2 space-y-1">
+                <View className="flex-1">
+                  <View className="flex-row items-center">
+                    <Text className="font-bold text-xl text-orange-400">{option.name}</Text>
+                    <Text className="text-orange-500/70 ml-1"> (Level {option.level})</Text>
+                  </View>
+                  <Text className="text-sm text-gray-300 mt-2">{option.description}</Text>
+
+                  <View className="mt-4">
+                    <Text className="text-lg font-semibold text-orange-400">Effects:</Text>
+                    <View className="mt-2 gap-1">
                       {Object.entries(option.effects).map(([key, value]) => {
                         const formattedKey = key
                           .replace(/([A-Z])/g, ' $1')
                           .replace(/^./, str => str.toUpperCase());
-                        
+
                         return (
-                          <li key={key} className="text-gray-300">
+                          <Text key={key} className="text-gray-300 text-sm">
                             {formattedKey}: {formatStatValue(value)}
-                          </li>
+                          </Text>
                         );
                       })}
-                    </ul>
-                  </div>
-                </div>
-                
-                <div className="mt-4">
-                  <button
-                    className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-semibold text-lg transition-colors"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onSelect(index);
-                    }}
-                  >
-                    Select Weapon
-                  </button>
-                </div>
-              </div>
+                    </View>
+                  </View>
+                </View>
+
+                <View className="mt-4">
+                  <View className="w-full py-3 bg-orange-500 rounded-lg">
+                    <Text className="text-white text-center font-semibold text-lg">
+                      Select Weapon
+                    </Text>
+                  </View>
+                </View>
+              </Pressable>
             );
           } else {
             // Render stat upgrade option
             return (
-              <div 
+              <Pressable
                 key={`stat-${index}`}
-                className="option-card p-6 rounded-xl cursor-pointer transition-all relative bg-[#1a1b26] border-2 border-blue-500/50 flex flex-col min-h-[320px]"
-                style={{
-                  background: 'linear-gradient(to bottom, rgba(26, 27, 38, 0.95), rgba(26, 27, 38, 0.98))',
-                  boxShadow: '0 0 20px rgba(59, 130, 246, 0.1)'
-                }}
-                onClick={() => onSelect(index)}
+                className="p-6 rounded-xl bg-gray-800 border-2 border-blue-500/50"
+                onPress={() => onSelect(index)}
               >
-                <div className="flex-grow">
-                  <h3 className="font-bold text-xl text-blue-400">Stat Upgrade</h3>
-                  
-                  <div className="mt-4">
-                    <ul className="text-sm space-y-2">
-                      {Object.entries(option).map(([key, value]) => {
-                        const formattedKey = key
-                          .replace(/([A-Z])/g, ' $1')
-                          .replace(/^./, str => str.toUpperCase());
-                        
-                        return (
-                          <li key={key} className="text-gray-300 font-medium">
-                            {formattedKey}: {formatStatValue(value)}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                </div>
-                
-                <div className="mt-4">
-                  <button
-                    className="w-full py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-semibold text-lg transition-colors"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onSelect(index);
-                    }}
-                  >
-                    Select Upgrade
-                  </button>
-                </div>
-              </div>
+                <View className="flex-1">
+                  <Text className="font-bold text-xl text-blue-400">Stat Upgrade</Text>
+
+                  <View className="mt-4 gap-2">
+                    {Object.entries(option).map(([key, value]) => {
+                      const formattedKey = key
+                        .replace(/([A-Z])/g, ' $1')
+                        .replace(/^./, str => str.toUpperCase());
+
+                      return (
+                        <Text key={key} className="text-gray-300 font-medium text-sm">
+                          {formattedKey}: {formatStatValue(value)}
+                        </Text>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                <View className="mt-4">
+                  <View className="w-full py-3 bg-blue-500 rounded-lg">
+                    <Text className="text-white text-center font-semibold text-lg">
+                      Select Upgrade
+                    </Text>
+                  </View>
+                </View>
+              </Pressable>
             );
           }
         })}
-      </div>
-      
-      <div className="mt-8 flex justify-center">
-        <button
-          className={`px-8 py-3 rounded-lg text-lg font-semibold transition-colors ${
-            (playerMoney >= rerollCost || freeRerolls > 0) 
-              ? 'bg-[#6366f1] hover:bg-[#5558e6] text-white' 
-              : 'bg-gray-700 text-gray-400 cursor-not-allowed'
+      </View>
+
+      <View className="mt-8 items-center pb-8">
+        <Pressable
+          className={`px-8 py-3 rounded-lg ${
+            (playerMoney >= rerollCost || freeRerolls > 0)
+              ? 'bg-indigo-500'
+              : 'bg-gray-700'
           }`}
-          onClick={onReroll}
+          onPress={onReroll}
           disabled={playerMoney < rerollCost && freeRerolls <= 0}
         >
-          {freeRerolls > 0 
-            ? `Reroll Options (${freeRerolls})` 
-            : `Reroll Options (${rerollCost})`}
-        </button>
-      </div>
-    </div>
+          <Text className={`text-lg font-semibold ${
+            (playerMoney >= rerollCost || freeRerolls > 0) ? 'text-white' : 'text-gray-400'
+          }`}>
+            {freeRerolls > 0
+              ? `Reroll Options (${freeRerolls})`
+              : `Reroll Options (${rerollCost})`}
+          </Text>
+        </Pressable>
+      </View>
+    </ScrollView>
   );
 };
 
-export default LevelUp; 
+export default LevelUp;
