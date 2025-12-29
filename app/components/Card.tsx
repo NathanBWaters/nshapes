@@ -184,12 +184,22 @@ const getShadingStyle = (shading: string, colorStyle: { backgroundColor: string 
     case 'solid':
       return { backgroundColor: colorStyle.backgroundColor };
     case 'striped':
-      return { backgroundColor: colorStyle.backgroundColor, opacity: 0.4 };
     case 'open':
       return { backgroundColor: 'transparent' };
     default:
       return { backgroundColor: 'transparent' };
   }
+};
+
+const renderStripes = (color: string) => {
+  const stripeColor = getColorStyle(color).backgroundColor;
+  return (
+    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, flexDirection: 'column', justifyContent: 'space-evenly', overflow: 'hidden' }}>
+      <View style={{ height: 1, backgroundColor: stripeColor }} />
+      <View style={{ height: 1, backgroundColor: stripeColor }} />
+      <View style={{ height: 1, backgroundColor: stripeColor }} />
+    </View>
+  );
 };
 
 const Oval: React.FC<ShapeProps> = ({ color, shading }) => {
@@ -202,8 +212,12 @@ const Oval: React.FC<ShapeProps> = ({ color, shading }) => {
       style={{
         borderColor: colorStyle.borderColor,
         ...shadingStyle,
+        position: 'relative',
+        overflow: 'hidden',
       }}
-    />
+    >
+      {shading === 'striped' && renderStripes(color)}
+    </View>
   );
 };
 
@@ -218,8 +232,12 @@ const Diamond: React.FC<ShapeProps> = ({ color, shading }) => {
         borderColor: colorStyle.borderColor,
         ...shadingStyle,
         transform: [{ rotate: '45deg' }],
+        position: 'relative',
+        overflow: 'hidden',
       }}
-    />
+    >
+      {shading === 'striped' && renderStripes(color)}
+    </View>
   );
 };
 
@@ -233,8 +251,12 @@ const Square: React.FC<ShapeProps> = ({ color, shading }) => {
       style={{
         borderColor: colorStyle.borderColor,
         ...shadingStyle,
+        position: 'relative',
+        overflow: 'hidden',
       }}
-    />
+    >
+      {shading === 'striped' && renderStripes(color)}
+    </View>
   );
 };
 

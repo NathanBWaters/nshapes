@@ -188,6 +188,26 @@ interface ShapeProps {
   shading: string;
 }
 
+const getStripeColor = (color: string) => {
+  switch (color) {
+    case 'red': return '#ef4444';
+    case 'green': return '#22c55e';
+    case 'purple': return '#a855f7';
+    default: return '#6b7280';
+  }
+};
+
+const renderStripes = (color: string) => {
+  const stripeColor = getStripeColor(color);
+  return (
+    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, flexDirection: 'column', justifyContent: 'space-evenly', overflow: 'hidden' }}>
+      <View style={{ height: 1, backgroundColor: stripeColor }} />
+      <View style={{ height: 1, backgroundColor: stripeColor }} />
+      <View style={{ height: 1, backgroundColor: stripeColor }} />
+    </View>
+  );
+};
+
 const Oval: React.FC<ShapeProps> = ({ color, shading }) => {
   const getColorClass = () => {
     switch (color) {
@@ -211,8 +231,10 @@ const Oval: React.FC<ShapeProps> = ({ color, shading }) => {
   return (
     <View
       className={`w-8 h-4 rounded-full border-2 ${getColorClass()}`}
-      style={{ backgroundColor: getBgColor() }}
-    />
+      style={{ backgroundColor: getBgColor(), position: 'relative', overflow: 'hidden' }}
+    >
+      {shading === 'striped' && renderStripes(color)}
+    </View>
   );
 };
 
@@ -239,8 +261,10 @@ const Diamond: React.FC<ShapeProps> = ({ color, shading }) => {
   return (
     <View
       className={`w-8 h-8 border-2 ${getColorClass()}`}
-      style={{ transform: [{ rotate: '45deg' }], backgroundColor: getBgColor() }}
-    />
+      style={{ transform: [{ rotate: '45deg' }], backgroundColor: getBgColor(), position: 'relative', overflow: 'hidden' }}
+    >
+      {shading === 'striped' && renderStripes(color)}
+    </View>
   );
 };
 
@@ -267,8 +291,10 @@ const Square: React.FC<ShapeProps> = ({ color, shading }) => {
   return (
     <View
       className={`w-8 h-8 border-2 ${getColorClass()}`}
-      style={{ backgroundColor: getBgColor() }}
-    />
+      style={{ backgroundColor: getBgColor(), position: 'relative', overflow: 'hidden' }}
+    >
+      {shading === 'striped' && renderStripes(color)}
+    </View>
   );
 };
 
