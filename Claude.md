@@ -37,25 +37,35 @@ NShapes combines the classic SET card matching game with roguelike progression m
 ## Project Structure
 
 ```
-src/
-├── app/
-│   ├── _layout.tsx      # Root navigation layout
-│   └── index.tsx        # App entry point
+app/                        # Expo Router routes only
+├── _layout.tsx             # Root navigation layout
+├── index.tsx               # App entry point (home screen)
+└── dev/
+    ├── _layout.tsx         # Dev routes layout
+    └── test.tsx            # Dev test page (/dev/test)
+
+src/                        # Shared code (imported via @/ alias)
 ├── components/
-│   ├── Game.tsx         # Main game controller
-│   ├── GameBoard.tsx    # Card display and selection
-│   ├── Card.tsx         # Individual card rendering
+│   ├── Game.tsx            # Main game controller
+│   ├── GameBoard.tsx       # Card display and selection
+│   ├── Card.tsx            # Individual card rendering
 │   ├── CharacterSelection.tsx
 │   ├── EnemySelection.tsx
 │   ├── LevelUp.tsx
 │   ├── ItemShop.tsx
 │   └── ...
 ├── context/
-│   └── SocketContext.tsx  # Multiplayer state management
-├── types.ts             # TypeScript interfaces
+│   └── SocketContext.tsx   # Multiplayer state management
+├── types.ts                # TypeScript interfaces
 └── utils/
     ├── gameDefinitions.ts  # Characters, enemies, items, weapons
     └── gameUtils.ts        # Card logic and validation
+```
+
+**Import Alias:** Use `@/` to import from `src/` (configured in `tsconfig.json`):
+```typescript
+import Game from "@/components/Game";
+import { Card } from "@/types";
 ```
 
 ## Development
@@ -75,6 +85,9 @@ npx expo run:android
 
 # Run web version locally
 npx expo start --web
+
+# Access dev test page (for testing game board in isolation)
+# http://localhost:8081/dev/test
 ```
 
 ## Web Deployment (GitHub Pages + PWA)
@@ -101,8 +114,8 @@ npm run build:web
 
 ### Configuration Notes
 
-- The app is configured with `baseUrl: "/nshapes"` for GitHub Pages subdirectory hosting
-- PWA manifest settings are in `app.json` under the `web` key
+- **Dynamic config:** `app.config.js` conditionally sets `baseUrl: "/nshapes"` only in production builds (for GitHub Pages). Local development uses no baseUrl so routes work at `localhost:8081/...`
+- PWA manifest settings are in `app.config.js` under the `web` key
 - GitHub Actions workflow is in `.github/workflows/deploy.yml`
 
 ## Game Flow
