@@ -148,36 +148,67 @@ const getBgColor = (color: string, shading: string) => {
   return getBorderColor(color);
 };
 
+const Stripes: React.FC<{ color: string; height: number }> = ({ color, height }) => {
+  const stripeHeight = 2;
+  const gap = 3;
+  const stripes = [];
+  for (let y = 0; y < height; y += stripeHeight + gap) {
+    stripes.push(
+      <View
+        key={y}
+        style={{
+          position: 'absolute',
+          top: y,
+          left: 0,
+          right: 0,
+          height: stripeHeight,
+          backgroundColor: color,
+        }}
+      />
+    );
+  }
+  return <>{stripes}</>;
+};
+
 const Oval: React.FC<ShapeProps> = ({ color, shading }) => {
+  const borderColor = getBorderColor(color);
   return (
     <View
       style={[
         styles.oval,
-        { borderColor: getBorderColor(color), backgroundColor: getBgColor(color, shading) }
+        { borderColor, backgroundColor: getBgColor(color, shading), overflow: 'hidden' }
       ]}
-    />
+    >
+      {shading === 'striped' && <Stripes color={borderColor} height={16} />}
+    </View>
   );
 };
 
 const Diamond: React.FC<ShapeProps> = ({ color, shading }) => {
+  const borderColor = getBorderColor(color);
   return (
     <View
       style={[
         styles.diamond,
-        { borderColor: getBorderColor(color), backgroundColor: getBgColor(color, shading) }
+        { borderColor, backgroundColor: getBgColor(color, shading), overflow: 'hidden' }
       ]}
-    />
+    >
+      {shading === 'striped' && <Stripes color={borderColor} height={24} />}
+    </View>
   );
 };
 
 const Squiggle: React.FC<ShapeProps> = ({ color, shading }) => {
+  const borderColor = getBorderColor(color);
   return (
     <View
       style={[
         styles.squiggle,
-        { borderColor: getBorderColor(color), backgroundColor: getBgColor(color, shading) }
+        { borderColor, backgroundColor: getBgColor(color, shading), overflow: 'hidden' }
       ]}
-    />
+    >
+      {shading === 'striped' && <Stripes color={borderColor} height={16} />}
+    </View>
   );
 };
 

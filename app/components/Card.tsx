@@ -179,65 +179,80 @@ const getColorStyle = (color: string) => {
   }
 };
 
-const getShadingStyle = (shading: string, colorStyle: { backgroundColor: string }) => {
-  switch (shading) {
-    case 'solid':
-      return { backgroundColor: colorStyle.backgroundColor };
-    case 'striped':
-      return { backgroundColor: colorStyle.backgroundColor, opacity: 0.4 };
-    case 'open':
-      return { backgroundColor: 'transparent' };
-    default:
-      return { backgroundColor: 'transparent' };
+const Stripes: React.FC<{ color: string; width: number; height: number }> = ({ color, width, height }) => {
+  const stripeHeight = 2;
+  const gap = 3;
+  const stripes = [];
+  for (let y = 0; y < height; y += stripeHeight + gap) {
+    stripes.push(
+      <View
+        key={y}
+        style={{
+          position: 'absolute',
+          top: y,
+          left: 0,
+          right: 0,
+          height: stripeHeight,
+          backgroundColor: color,
+        }}
+      />
+    );
   }
+  return <>{stripes}</>;
 };
 
 const Oval: React.FC<ShapeProps> = ({ color, shading }) => {
   const colorStyle = getColorStyle(color);
-  const shadingStyle = getShadingStyle(shading, colorStyle);
 
   return (
     <View
       className="w-8 h-4 rounded-full border-2"
       style={{
         borderColor: colorStyle.borderColor,
-        ...shadingStyle,
+        backgroundColor: shading === 'solid' ? colorStyle.backgroundColor : 'transparent',
+        overflow: 'hidden',
       }}
-    />
+    >
+      {shading === 'striped' && <Stripes color={colorStyle.backgroundColor} width={32} height={16} />}
+    </View>
   );
 };
 
 const Diamond: React.FC<ShapeProps> = ({ color, shading }) => {
   const colorStyle = getColorStyle(color);
-  const shadingStyle = getShadingStyle(shading, colorStyle);
 
   return (
     <View
       className="w-6 h-6 border-2"
       style={{
         borderColor: colorStyle.borderColor,
-        ...shadingStyle,
+        backgroundColor: shading === 'solid' ? colorStyle.backgroundColor : 'transparent',
         transform: [{ rotate: '45deg' }],
+        overflow: 'hidden',
       }}
-    />
+    >
+      {shading === 'striped' && <Stripes color={colorStyle.backgroundColor} width={24} height={24} />}
+    </View>
   );
 };
 
 const Squiggle: React.FC<ShapeProps> = ({ color, shading }) => {
   const colorStyle = getColorStyle(color);
-  const shadingStyle = getShadingStyle(shading, colorStyle);
 
   return (
     <View
       className="w-8 h-4 border-2"
       style={{
         borderColor: colorStyle.borderColor,
-        ...shadingStyle,
+        backgroundColor: shading === 'solid' ? colorStyle.backgroundColor : 'transparent',
         borderRadius: 8,
         borderTopLeftRadius: 16,
         borderBottomRightRadius: 16,
+        overflow: 'hidden',
       }}
-    />
+    >
+      {shading === 'striped' && <Stripes color={colorStyle.backgroundColor} width={32} height={16} />}
+    </View>
   );
 };
 

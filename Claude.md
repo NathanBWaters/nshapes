@@ -1,6 +1,6 @@
 # NShapes
 
-A roguelike deckbuilding match-three puzzle game for iOS and Android, built with Expo/React Native.
+A roguelike deckbuilding match-three puzzle game for iOS, Android, and Web, built with Expo/React Native.
 
 ## Game Overview
 
@@ -72,7 +72,38 @@ npx expo run:ios
 
 # Run on Android emulator
 npx expo run:android
+
+# Run web version locally
+npx expo start --web
 ```
+
+## Web Deployment (GitHub Pages + PWA)
+
+The game is deployed as a Progressive Web App (PWA) to GitHub Pages, allowing users to install it directly from the browser.
+
+**Live URL:** https://nathanbwaters.github.io/nshapes/
+
+### PWA Installation
+
+Users can install the game as a standalone app:
+- **iOS Safari:** Tap Share > "Add to Home Screen"
+- **Android Chrome:** Tap menu > "Install app" or "Add to Home Screen"
+- **Desktop Chrome/Edge:** Click install icon in address bar
+
+### Deployment
+
+Deployment happens automatically via GitHub Actions when pushing to the `main` branch.
+
+```bash
+# Manual web build (outputs to ./dist)
+npm run build:web
+```
+
+### Configuration Notes
+
+- The app is configured with `baseUrl: "/nshapes"` for GitHub Pages subdirectory hosting
+- PWA manifest settings are in `app.json` under the `web` key
+- GitHub Actions workflow is in `.github/workflows/deploy.yml`
 
 ## Game Flow
 

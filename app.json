@@ -27,14 +27,24 @@
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "name": "NShapes",
+      "shortName": "NShapes",
+      "description": "A roguelike deckbuilding match-three puzzle game",
+      "backgroundColor": "#ffffff",
+      "themeColor": "#000000",
+      "display": "standalone",
+      "orientation": "portrait",
+      "startUrl": "/nshapes/",
+      "scope": "/nshapes/"
     },
     "plugins": [
       "expo-router",
       "expo-asset"
     ],
     "experiments": {
-      "typedRoutes": true
+      "typedRoutes": true,
+      "baseUrl": "/nshapes"
     }
   }
 }

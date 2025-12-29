@@ -107,109 +107,109 @@ export const CHARACTERS: Character[] = [
       luck: -10,
     }
   },
-  {
-    name: 'Cow',
-    description: 'Healing-focused character',
-    startingWeapon: 'Bamboo',
-    startingItems: [],
-    baseStats: {
-      maxHealth: 1, // +1 max HP
-      health: 1, // +1 starting healing
-      damage: -0.15, // -15% damage
-    }
-  },
-  {
-    name: 'Tortoise',
-    description: 'Time-focused with slower time passage',
-    startingWeapon: 'Carrot',
-    startingItems: [],
-    baseStats: {
-      timeWarpPercent: 10, // Time moves 1.1× slower
-      // All time-based bonuses are 25% more potent
-      additionalPoints: -30, // -30% points at the end of each round
-    }
-  },
-  {
-    name: 'Chimp',
-    description: 'Can hold more weapons',
-    startingWeapon: 'Bamboo',
-    startingItems: [],
-    baseStats: {
-      maxWeapons: 1, // +1 weapon slot (4 total)
-      // Shop prices are +20%
-    }
-  },
-  {
-    name: 'Eagle',
-    description: 'Can remove duds from the field',
-    startingWeapon: 'Talon',
-    startingItems: [],
-    baseStats: {
-      // 25% chance on each successful match to permanently remove 1 Dud card
-      maxHealth: -1, // -1 starting max HP
-    }
-  },
-  {
-    name: 'Lemur',
-    description: 'Gets cheaper rerolls',
-    startingWeapon: 'Dirt',
-    startingItems: [],
-    baseStats: {
-      // Reroll cost is halved
-      luck: -10, // -10 starting Luck
-    }
-  },
-  {
-    name: 'Hedgehog',
-    description: 'Can automatically destroy spikes',
-    startingWeapon: 'Flint',
-    startingItems: [],
-    baseStats: {
-      // Luck-scaled chance to destroy Spikes cards
-      maxHealth: -1, // Starts with only 2 max HP
-    }
-  },
-  {
-    name: 'Armadillo',
-    description: 'Deflects damage back to cards',
-    startingWeapon: 'Bamboo',
-    startingItems: [],
-    baseStats: {
-      deflectPercent: 20, // +20% Deflect chance
-      maxHealth: -2, // -2 initial max HP
-    }
-  },
-  {
-    name: 'Raccoon',
-    description: 'Gets more crates but starts with duds',
-    startingWeapon: 'Dirt',
-    startingItems: [],
-    baseStats: {
-      // +5% chance that a match will drop a small crate
-      // deck starts with 10 duds
-    }
-  },
-  {
-    name: 'Polar Bear',
-    description: 'Can freeze a row of cards to add time',
-    startingWeapon: 'Carrot',
-    startingItems: [],
-    baseStats: {
-      // Once per round, "freeze" a row of cards for +10s to the timer
-      freeRerolls: -1, // -1 free reroll permanently
-    }
-  },
-  {
-    name: 'Chameleon',
-    description: 'Better chance of transforming field cards',
-    startingWeapon: 'Beak',
-    startingItems: [],
-    baseStats: {
-      // Cards that can transform field cards have an additional 30% chance of activating
-      mulligans: -2,
-      matchHints: -2,
-    }
-  },
+  // {
+  //   name: 'Cow',
+  //   description: 'Healing-focused character',
+  //   startingWeapon: 'Bamboo',
+  //   startingItems: [],
+  //   baseStats: {
+  //     maxHealth: 1, // +1 max HP
+  //     health: 1, // +1 starting healing
+  //     damage: -0.15, // -15% damage
+  //   }
+  // },
+  // {
+  //   name: 'Tortoise',
+  //   description: 'Time-focused with slower time passage',
+  //   startingWeapon: 'Carrot',
+  //   startingItems: [],
+  //   baseStats: {
+  //     timeWarpPercent: 10, // Time moves 1.1× slower
+  //     // All time-based bonuses are 25% more potent
+  //     additionalPoints: -30, // -30% points at the end of each round
+  //   }
+  // },
+  // {
+  //   name: 'Chimp',
+  //   description: 'Can hold more weapons',
+  //   startingWeapon: 'Bamboo',
+  //   startingItems: [],
+  //   baseStats: {
+  //     maxWeapons: 1, // +1 weapon slot (4 total)
+  //     // Shop prices are +20%
+  //   }
+  // },
+  // {
+  //   name: 'Eagle',
+  //   description: 'Can remove duds from the field',
+  //   startingWeapon: 'Talon',
+  //   startingItems: [],
+  //   baseStats: {
+  //     // 25% chance on each successful match to permanently remove 1 Dud card
+  //     maxHealth: -1, // -1 starting max HP
+  //   }
+  // },
+  // {
+  //   name: 'Lemur',
+  //   description: 'Gets cheaper rerolls',
+  //   startingWeapon: 'Dirt',
+  //   startingItems: [],
+  //   baseStats: {
+  //     // Reroll cost is halved
+  //     luck: -10, // -10 starting Luck
+  //   }
+  // },
+  // {
+  //   name: 'Hedgehog',
+  //   description: 'Can automatically destroy spikes',
+  //   startingWeapon: 'Flint',
+  //   startingItems: [],
+  //   baseStats: {
+  //     // Luck-scaled chance to destroy Spikes cards
+  //     maxHealth: -1, // Starts with only 2 max HP
+  //   }
+  // },
+  // {
+  //   name: 'Armadillo',
+  //   description: 'Deflects damage back to cards',
+  //   startingWeapon: 'Bamboo',
+  //   startingItems: [],
+  //   baseStats: {
+  //     deflectPercent: 20, // +20% Deflect chance
+  //     maxHealth: -2, // -2 initial max HP
+  //   }
+  // },
+  // {
+  //   name: 'Raccoon',
+  //   description: 'Gets more crates but starts with duds',
+  //   startingWeapon: 'Dirt',
+  //   startingItems: [],
+  //   baseStats: {
+  //     // +5% chance that a match will drop a small crate
+  //     // deck starts with 10 duds
+  //   }
+  // },
+  // {
+  //   name: 'Polar Bear',
+  //   description: 'Can freeze a row of cards to add time',
+  //   startingWeapon: 'Carrot',
+  //   startingItems: [],
+  //   baseStats: {
+  //     // Once per round, "freeze" a row of cards for +10s to the timer
+  //     freeRerolls: -1, // -1 free reroll permanently
+  //   }
+  // },
+  // {
+  //   name: 'Chameleon',
+  //   description: 'Better chance of transforming field cards',
+  //   startingWeapon: 'Beak',
+  //   startingItems: [],
+  //   baseStats: {
+  //     // Cards that can transform field cards have an additional 30% chance of activating
+  //     mulligans: -2,
+  //     matchHints: -2,
+  //   }
+  // },
 ];
 
 // Enemies
