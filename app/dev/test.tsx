@@ -23,6 +23,12 @@ export default function DevTest() {
   const [currentRound, setCurrentRound] = useState(1);
   const [notification, setNotification] = useState<string | null>(null);
 
+  // UI state for header stats
+  const [selectedCount, setSelectedCount] = useState(0);
+  const [hasActiveHint, setHasActiveHint] = useState(false);
+  const [hintTrigger, setHintTrigger] = useState(0);
+  const [clearHintTrigger, setClearHintTrigger] = useState(0);
+
   const [state, setState] = useState<GameState>(() => {
     const roundReq = getRoundRequirement(1);
     const initialBoard = generateGameBoard(INITIAL_CARD_COUNT, 1, 1);
@@ -268,23 +274,33 @@ export default function DevTest() {
       )}
 
       {/* Game Info */}
-      <GameInfo
-        round={state.round}
-        score={state.score}
-        targetScore={state.targetScore}
-        time={state.remainingTime}
-        totalTime={getRoundRequirement(state.round).time}
-        playerStats={playerStats}
-      />
+      <View className="h-[10%] px-2 py-1">
+        <GameInfo
+          round={state.round}
+          score={state.score}
+          targetScore={state.targetScore}
+          time={state.remainingTime}
+          totalTime={getRoundRequirement(state.round).time}
+          playerStats={playerStats}
+          selectedCount={selectedCount}
+          onHintPress={() => setHintTrigger(t => t + 1)}
+          onClearHint={() => setClearHintTrigger(t => t + 1)}
+          hasActiveHint={hasActiveHint}
+        />
+      </View>
 
       {/* Game Board */}
-      <View className="flex-1">
+      <View className="h-[90%]">
         <GameBoard
           cards={state.board}
           onMatch={handleValidMatch}
           onInvalidSelection={handleInvalidMatch}
           playerStats={playerStats}
           isPlayerTurn={true}
+          onSelectedCountChange={setSelectedCount}
+          onHintStateChange={setHasActiveHint}
+          triggerHint={hintTrigger > 0 ? hintTrigger : undefined}
+          triggerClearHint={clearHintTrigger > 0 ? clearHintTrigger : undefined}
         />
       </View>
 

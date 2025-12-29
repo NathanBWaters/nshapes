@@ -104,6 +104,12 @@ const Game: React.FC = () => {
     type: 'success' | 'error' | 'info' | 'warning';
   } | null>(null);
 
+  // UI state for header stats
+  const [selectedCount, setSelectedCount] = useState(0);
+  const [hasActiveHint, setHasActiveHint] = useState(false);
+  const [hintTrigger, setHintTrigger] = useState(0);
+  const [clearHintTrigger, setClearHintTrigger] = useState(0);
+
   // Socket context for multiplayer
   const {
     isMultiplayer,
@@ -168,24 +174,15 @@ const Game: React.FC = () => {
 
           // Check if time has run out
           if (newRemainingTime <= 0) {
-            // Time's up - check if player has met target score
-            if (prevState.score >= prevState.targetScore) {
-              // Success - move to next level
-              completeRound();
-            } else {
-              // Failure - game over
-              endGame(false);
-            }
-
             // Clear the interval
             if (timerInterval) {
               clearInterval(timerInterval);
             }
 
+            // Just update state - round completion handled by separate effect
             return {
               ...prevState,
-              remainingTime: 0,
-              gameEnded: true
+              remainingTime: 0
             };
           }
 
@@ -204,7 +201,20 @@ const Game: React.FC = () => {
         clearInterval(timerInterval);
       }
     };
-  }, [gamePhase, state.gameStarted, state.gameEnded, completeRound, endGame]);
+  }, [gamePhase, state.gameStarted, state.gameEnded]);
+
+  // Handle round completion when time runs out - separate from timer to avoid race conditions
+  useEffect(() => {
+    if (gamePhase === 'round' && state.gameStarted && !state.gameEnded && !state.roundCompleted && state.remainingTime === 0) {
+      if (state.score >= state.targetScore) {
+        // Success - move to next level
+        completeRound();
+      } else {
+        // Failure - game over
+        endGame(false);
+      }
+    }
+  }, [gamePhase, state.gameStarted, state.gameEnded, state.roundCompleted, state.remainingTime, state.score, state.targetScore, completeRound, endGame]);
 
   // Initialize the game
   const initGame = useCallback((characterName: string) => {
@@ -927,6 +937,10 @@ const Game: React.FC = () => {
                 time={state.remainingTime}
                 totalTime={getRoundRequirement(state.round).time}
                 playerStats={calculatePlayerTotalStats(state.player)}
+                selectedCount={selectedCount}
+                onHintPress={() => setHintTrigger(t => t + 1)}
+                onClearHint={() => setClearHintTrigger(t => t + 1)}
+                hasActiveHint={hasActiveHint}
               />
             </View>
 
@@ -938,6 +952,10 @@ const Game: React.FC = () => {
                 onInvalidSelection={handleInvalidMatch}
                 playerStats={calculatePlayerTotalStats(state.player)}
                 isPlayerTurn={true}
+                onSelectedCountChange={setSelectedCount}
+                onHintStateChange={setHasActiveHint}
+                triggerHint={hintTrigger > 0 ? hintTrigger : undefined}
+                triggerClearHint={clearHintTrigger > 0 ? clearHintTrigger : undefined}
               />
             </View>
           </View>
@@ -994,7 +1012,7 @@ const Game: React.FC = () => {
         <StatsButton playerStats={calculatePlayerTotalStats(state.player)} />
       )}
 
-      {notification && (
+      {notification && gamePhase !== 'round' && (
         <Notification
           message={notification.message}
           type={notification.type}
