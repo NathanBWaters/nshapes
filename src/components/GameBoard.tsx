@@ -1,19 +1,45 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet } from 'react-native';
-import { Card as CardType, PlayerStats } from '@/types';
+import { Card as CardType, PlayerStats, CardReward } from '@/types';
 import Card from './Card';
+import RewardReveal from './RewardReveal';
 
 interface GameBoardProps {
   cards: CardType[];
-  onMatch: (cards: CardType[]) => void;
+  onMatch: (cards: CardType[], rewards: CardReward[]) => void;
   onInvalidSelection: () => void;
   playerStats: PlayerStats;
   isPlayerTurn: boolean;
   onSelectedCountChange?: (count: number) => void;
   onHintStateChange?: (hasHint: boolean) => void;
-  triggerHint?: number; // Increment to trigger hint
-  triggerClearHint?: number; // Increment to clear hint
+  triggerHint?: number;
+  triggerClearHint?: number;
 }
+
+// Calculate rewards for a single card
+const calculateCardReward = (card: CardType): CardReward => {
+  const reward: CardReward = {
+    cardId: card.id,
+    points: 1,
+    money: 1,
+    experience: 1,
+  };
+
+  if (card.bonusPoints) {
+    reward.points = (reward.points || 0) + card.bonusPoints;
+  }
+  if (card.bonusMoney) {
+    reward.money = (reward.money || 0) + card.bonusMoney;
+  }
+  if (card.healing) {
+    reward.healing = 1;
+  }
+  if (card.lootBox) {
+    reward.lootBox = true;
+  }
+
+  return reward;
+};
 
 const GameBoard: React.FC<GameBoardProps> = ({
   cards,
@@ -30,6 +56,15 @@ const GameBoard: React.FC<GameBoardProps> = ({
   const [matchedCardIds, setMatchedCardIds] = useState<string[]>([]);
   const [hintCards, setHintCards] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Reward reveal state - managed internally
+  const [revealingRewards, setRevealingRewards] = useState<CardReward[]>([]);
+
+  // Create a map for quick reward lookup
+  const rewardsByCardId = new Map<string, CardReward>();
+  revealingRewards.forEach(reward => {
+    rewardsByCardId.set(reward.cardId, reward);
+  });
 
   // Split cards into rows of 3 for flex layout
   const COLUMNS = 3;
@@ -112,7 +147,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
   // Handle card click
   const handleCardClick = (card: CardType) => {
-    if (!isPlayerTurn || isProcessing) return;
+    if (!isPlayerTurn || isProcessing || revealingRewards.length > 0) return;
 
     // If card is already selected, deselect it
     if (selectedCards.some(c => c.id === card.id)) {
@@ -136,23 +171,30 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
       setTimeout(() => {
         if (isValidSet(newSelectedCards)) {
+          // Calculate rewards for each card
+          const rewards = newSelectedCards.map(c => calculateCardReward(c));
+
+          // Mark cards as matched and show rewards
           const newMatchedIds = [...matchedCardIds, ...newSelectedCards.map(c => c.id)];
           setMatchedCardIds(newMatchedIds);
-          onMatch(newSelectedCards);
+          setSelectedCards([]);
+          setRevealingRewards(rewards);
 
+          // After 1.5 seconds, notify parent and clear rewards
           setTimeout(() => {
-            setSelectedCards([]);
+            setRevealingRewards([]);
             setIsProcessing(false);
-          }, 500);
+            onMatch(newSelectedCards, rewards);
+          }, 1500);
         } else {
           onInvalidSelection();
 
           setTimeout(() => {
             setSelectedCards([]);
             setIsProcessing(false);
-          }, 1000);
+          }, 500);
         }
-      }, 300);
+      }, 200);
     }
   };
 
@@ -165,6 +207,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
               const isSelected = selectedCards.some(c => c.id === card.id);
               const isMatched = matchedCardIds.includes(card.id);
               const isHint = hintCards.includes(card.id);
+              const reward = rewardsByCardId.get(card.id);
 
               const cardWithState = {
                 ...card,
@@ -174,11 +217,16 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
               return (
                 <View key={`${rowIndex}-${colIndex}-${card.id}`} nativeID={`card-slot-${rowIndex}-${colIndex}`} style={styles.cardWrapper}>
-                  <Card
-                    card={cardWithState}
-                    onClick={handleCardClick}
-                    disabled={isMatched || !isPlayerTurn || isProcessing}
-                  />
+                  {/* Show reward instead of card when revealing */}
+                  {reward ? (
+                    <RewardReveal reward={reward} />
+                  ) : (
+                    <Card
+                      card={cardWithState}
+                      onClick={handleCardClick}
+                      disabled={isMatched || !isPlayerTurn || isProcessing}
+                    />
+                  )}
                 </View>
               );
             })}
@@ -210,6 +258,7 @@ const styles = StyleSheet.create({
     flex: 1,
     aspectRatio: 0.75,
     maxHeight: '100%',
+    position: 'relative',
   },
 });
 

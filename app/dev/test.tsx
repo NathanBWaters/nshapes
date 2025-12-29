@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Card, GameState, PlayerStats } from '@/types';
+import { Card, CardReward, GameState, PlayerStats } from '@/types';
 import { createDeck, shuffleArray, generateGameBoard, formatTime } from '@/utils/gameUtils';
 import {
   ROUND_REQUIREMENTS,
@@ -148,21 +148,25 @@ export default function DevTest() {
     setTimeout(() => setNotification(null), 1500);
   };
 
-  const handleValidMatch = (cards: Card[]) => {
-    const pointsEarned = cards.length;
+  const handleValidMatch = (cards: Card[], rewards: CardReward[]) => {
+    // Calculate totals from rewards
+    let totalPoints = 0;
+    let totalMoney = 0;
+
+    rewards.forEach(reward => {
+      totalPoints += reward.points || 0;
+      totalMoney += reward.money || 0;
+    });
 
     setState(prev => ({
       ...prev,
-      score: prev.score + pointsEarned,
+      score: prev.score + totalPoints,
       selectedCards: [],
       foundCombinations: [...prev.foundCombinations, cards],
     }));
 
     // Replace matched cards
     replaceMatchedCards(cards);
-
-    setNotification(`Match! +${pointsEarned} pts`);
-    setTimeout(() => setNotification(null), 1500);
   };
 
   const handleInvalidMatch = () => {

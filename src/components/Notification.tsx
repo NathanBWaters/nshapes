@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Animated } from 'react-native';
 
 interface NotificationProps {
   message: string;
@@ -12,59 +12,83 @@ const Notification: React.FC<NotificationProps> = ({
   message,
   type,
   onClose,
-  duration = 3000
+  duration = 1500
 }) => {
+  const opacity = React.useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
+    // Fade in
+    Animated.timing(opacity, {
+      toValue: 1,
+      duration: 150,
+      useNativeDriver: true,
+    }).start();
+
+    // Auto close after duration
     const timer = setTimeout(() => {
-      onClose();
+      // Fade out
+      Animated.timing(opacity, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }).start(() => {
+        onClose();
+      });
     }, duration);
 
     return () => clearTimeout(timer);
-  }, [message, duration, onClose]);
+  }, [message, duration, onClose, opacity]);
 
   const getTypeStyles = () => {
     switch (type) {
       case 'success':
-        return 'bg-green-100 border-l-4 border-green-500';
+        return styles.success;
       case 'error':
-        return 'bg-red-100 border-l-4 border-red-500';
+        return styles.error;
       case 'warning':
-        return 'bg-yellow-100 border-l-4 border-yellow-500';
+        return styles.warning;
       case 'info':
       default:
-        return 'bg-blue-100 border-l-4 border-blue-500';
-    }
-  };
-
-  const getTextColor = () => {
-    switch (type) {
-      case 'success':
-        return 'text-green-700';
-      case 'error':
-        return 'text-red-700';
-      case 'warning':
-        return 'text-yellow-700';
-      case 'info':
-      default:
-        return 'text-blue-700';
+        return styles.info;
     }
   };
 
   return (
-    <View className="absolute top-4 right-4 left-4 z-50">
-      <View className={`flex-row items-center p-4 rounded shadow-md ${getTypeStyles()}`}>
-        <View className="flex-1">
-          <Text className={getTextColor()}>{message}</Text>
-        </View>
-        <TouchableOpacity
-          onPress={onClose}
-          className="ml-4 p-1"
-        >
-          <Text className="text-gray-500 text-lg">✕</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+    <Animated.View style={[styles.container, getTypeStyles(), { opacity }]}>
+      <Text style={styles.text}>{message}</Text>
+    </Animated.View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    zIndex: 100,
+    maxWidth: 200,
+  },
+  text: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  success: {
+    backgroundColor: '#22c55e',
+  },
+  error: {
+    backgroundColor: '#ef4444',
+  },
+  warning: {
+    backgroundColor: '#f59e0b',
+  },
+  info: {
+    backgroundColor: '#3b82f6',
+  },
+});
 
 export default Notification;

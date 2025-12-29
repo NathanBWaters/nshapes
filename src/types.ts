@@ -11,7 +11,7 @@ export interface Card {
   shading: Shading;
   selected: boolean;
   isHint?: boolean;
-  
+
   // Field card modifiers
   health?: number; // Default: 1
   lootBox?: boolean;
@@ -31,6 +31,18 @@ export interface Card {
   selfHealing?: boolean;
   timedReward?: boolean;
   timedRewardAmount?: number;
+}
+
+// Rewards revealed when a card is matched
+export interface CardReward {
+  cardId: string;
+  points?: number;
+  money?: number;
+  experience?: number;
+  healing?: number;
+  lootBox?: boolean;
+  item?: string; // Future: item name/id
+  // Extensible: add more reward types here
 }
 
 export type CharacterName = 

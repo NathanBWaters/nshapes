@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
-import { Card, GameState, Enemy, Weapon, PlayerStats } from '@/types';
+import { Card, CardReward, GameState, Enemy, Weapon, PlayerStats } from '@/types';
 import { createDeck, shuffleArray, isValidCombination, findAllCombinations, generateGameBoard, formatTime } from '@/utils/gameUtils';
 import {
   CHARACTERS,
@@ -110,6 +110,10 @@ const Game: React.FC = () => {
   const [hintTrigger, setHintTrigger] = useState(0);
   const [clearHintTrigger, setClearHintTrigger] = useState(0);
 
+  // Game over reason
+  const [gameOverReason, setGameOverReason] = useState<string | null>(null);
+
+
   // Socket context for multiplayer
   const {
     isMultiplayer,
@@ -124,7 +128,7 @@ const Game: React.FC = () => {
 
   // Function declarations
   // Add an endGame function
-  const endGame = (victory: boolean) => {
+  const endGame = (victory: boolean, reason?: string) => {
     setState(prevState => ({
       ...prevState,
       gameEnded: true,
@@ -132,13 +136,16 @@ const Game: React.FC = () => {
     }));
 
     if (victory) {
+      setGameOverReason(null);
       setNotification({
         message: 'Congratulations! You completed all rounds!',
         type: 'success'
       });
     } else {
+      const lossReason = reason || 'You ran out of time.';
+      setGameOverReason(lossReason);
       setNotification({
-        message: 'Game Over! You ran out of time.',
+        message: `Game Over! ${lossReason}`,
         type: 'error'
       });
     }
@@ -656,126 +663,111 @@ const Game: React.FC = () => {
     }
   };
 
-  // Handle valid match
-  const handleValidMatch = (cards: Card[]) => {
+  // Handle valid match - receives cards and rewards from GameBoard after reveal
+  const handleValidMatch = (cards: Card[], rewards: CardReward[]) => {
     // In multiplayer, send the match to the server
     if (isMultiplayer) {
       sendCombinationFound(cards.map(c => c.id));
       return;
     }
 
-    // Calculate points for this match
-    let pointsEarned = cards.length; // 1 point per card (typically 3)
+    // Calculate totals from rewards
+    let totalPoints = 0;
+    let totalMoney = 0;
+    let totalExperience = 0;
+    let totalHealing = 0;
+    let lootCratesEarned = 0;
 
-    // Base rewards for finding a match
-    const experienceEarned = 1; // 1 experience point per match
-    let moneyEarned = cards.length; // 1 money per card in the match (typically 3)
-
-    // Add bonus points from card modifiers
-    cards.forEach(card => {
-      if (card.bonusPoints) {
-        pointsEarned += card.bonusPoints;
-      }
-
-      // Handle other card modifiers
-      if (card.lootBox) {
-        // Add a loot crate
-        setState(prevState => ({
-          ...prevState,
-          lootCrates: prevState.lootCrates + 1
-        }));
-      }
-
-      if (card.bonusMoney) {
-        // Add bonus money from the card
-        moneyEarned += card.bonusMoney;
-      }
-
-      if (card.healing) {
-        // Heal the player
-        setState(prevState => ({
-          ...prevState,
-          player: {
-            ...prevState.player,
-            stats: {
-              ...prevState.player.stats,
-              health: Math.min(
-                prevState.player.stats.health + 1,
-                prevState.player.stats.maxHealth
-              )
-            }
-          }
-        }));
-      }
+    rewards.forEach(reward => {
+      totalPoints += reward.points || 0;
+      totalMoney += reward.money || 0;
+      totalExperience += reward.experience || 0;
+      totalHealing += reward.healing || 0;
+      if (reward.lootBox) lootCratesEarned++;
     });
 
-    // Update experience, money, score, and mark cards as matched
+    // Update game state with rewards
     setState(prevState => {
-      // Calculate experience with bonus percentage if applicable
+      // Calculate experience with bonus percentage
       const experienceMultiplier = 1 + (prevState.player.stats.experienceGainPercent || 0) / 100;
-      const totalExperienceGained = Math.floor(experienceEarned * experienceMultiplier);
+      const adjustedExperience = Math.floor(totalExperience * experienceMultiplier);
 
-      // Calculate new level based on experience
+      // Calculate new level
       const currentExperience = prevState.player.stats.experience || 0;
-      const newExperience = currentExperience + totalExperienceGained;
+      const newExperience = currentExperience + adjustedExperience;
       const currentLevel = prevState.player.stats.level || 0;
       const newLevel = calculateLevel(newExperience);
-
-      // Check for level up
       const hasLeveledUp = newLevel > currentLevel;
 
-      // Update player stats
-      const updatedStats = {
-        ...prevState.player.stats,
-        experience: newExperience,
-        level: newLevel,
-        money: prevState.player.stats.money + moneyEarned
-      };
+      // Calculate new health (capped at max)
+      const newHealth = Math.min(
+        prevState.player.stats.health + totalHealing,
+        prevState.player.stats.maxHealth
+      );
 
-      // If the player leveled up, show a special notification
+      // Show notification only for level up
       if (hasLeveledUp) {
         setNotification({
-          message: `Match found! +${pointsEarned} points, +${totalExperienceGained} XP, +${moneyEarned} coins. LEVEL UP! You are now level ${newLevel}!`,
-          type: 'success'
-        });
-      } else {
-        setNotification({
-          message: `Match found! +${pointsEarned} points, +${totalExperienceGained} XP, +${moneyEarned} coins`,
+          message: `LEVEL UP! Now Lv${newLevel}`,
           type: 'success'
         });
       }
 
       return {
         ...prevState,
-        score: prevState.score + pointsEarned,
+        score: prevState.score + totalPoints,
         selectedCards: [],
         foundCombinations: [...prevState.foundCombinations, cards],
+        lootCrates: prevState.lootCrates + lootCratesEarned,
         player: {
           ...prevState.player,
-          stats: updatedStats
+          stats: {
+            ...prevState.player.stats,
+            experience: newExperience,
+            level: newLevel,
+            money: prevState.player.stats.money + totalMoney,
+            health: newHealth
+          }
         }
       };
     });
 
-    // Replace matched cards with new ones - don't check for round completion
+    // Replace matched cards with new ones
     replaceMatchedCards(cards);
   };
 
   // Handle invalid match
   const handleInvalidMatch = () => {
-    // Show notification
-    setNotification({
-      message: 'Not a valid match!',
-      type: 'error'
-    });
+    // Decrease health
+    setState(prevState => {
+      const newHealth = prevState.player.stats.health - 1;
 
-    // Clear selection after a short delay
-    setTimeout(() => {
-      setState(prevState => ({
+      // Check for game over
+      if (newHealth <= 0) {
+        // Delay the game over slightly so the state update completes
+        setTimeout(() => {
+          endGame(false, 'You ran out of health from invalid matches!');
+        }, 100);
+      } else {
+        // Show damage notification
+        setNotification({
+          message: `-1 ♥`,
+          type: 'error'
+        });
+      }
+
+      return {
         ...prevState,
-        selectedCards: []
-      }));
-    }, 1000);
+        selectedCards: [],
+        player: {
+          ...prevState.player,
+          stats: {
+            ...prevState.player.stats,
+            health: Math.max(0, newHealth)
+          }
+        }
+      };
+    });
   };
 
   // Replace matched cards
@@ -966,20 +958,27 @@ const Game: React.FC = () => {
           <View className="p-6 bg-gray-100 rounded-lg shadow-md max-w-md mx-auto">
             <Text className="text-2xl font-bold mb-4 text-center">Game Over</Text>
 
+            {/* Game over reason */}
+            {gameOverReason && (
+              <View className="mb-4 bg-red-100 border border-red-300 rounded-lg p-3">
+                <Text className="text-red-700 text-center font-medium">{gameOverReason}</Text>
+              </View>
+            )}
+
             <View className="mb-4 items-center">
               <Text className="text-lg">You reached round {state.round}</Text>
               <Text className="text-lg font-medium">Final Score: {state.score}</Text>
               <Text className="text-lg">Target Score: {state.targetScore}</Text>
 
-              {state.score >= state.targetScore ? (
+              {!gameOverReason && state.score >= state.targetScore ? (
                 <Text className="mt-2 text-green-600 font-bold">
                   You beat the target score!
                 </Text>
-              ) : (
+              ) : !gameOverReason ? (
                 <Text className="mt-2 text-red-600 font-bold">
                   You did not reach the target score
                 </Text>
-              )}
+              ) : null}
             </View>
 
             <View className="mb-4">
@@ -992,7 +991,10 @@ const Game: React.FC = () => {
             <View className="items-center">
               <TouchableOpacity
                 className="px-6 py-3 bg-blue-500 rounded-lg"
-                onPress={() => setGamePhase('character_select')}
+                onPress={() => {
+                  setGameOverReason(null);
+                  setGamePhase('character_select');
+                }}
               >
                 <Text className="text-white font-medium">Play Again</Text>
               </TouchableOpacity>
@@ -1012,7 +1014,7 @@ const Game: React.FC = () => {
         <StatsButton playerStats={calculatePlayerTotalStats(state.player)} />
       )}
 
-      {notification && gamePhase !== 'round' && (
+      {notification && (
         <Notification
           message={notification.message}
           type={notification.type}
