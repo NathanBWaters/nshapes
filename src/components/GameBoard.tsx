@@ -23,6 +23,13 @@ const GameBoard: React.FC<GameBoardProps> = ({
   const [hintCards, setHintCards] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // Split cards into rows of 3 for flex layout
+  const COLUMNS = 3;
+  const rows: CardType[][] = [];
+  for (let i = 0; i < cards.length; i += COLUMNS) {
+    rows.push(cards.slice(i, i + COLUMNS));
+  }
+
   // Reset selected cards when the board changes
   useEffect(() => {
     setSelectedCards([]);
@@ -139,63 +146,65 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
   // Render the game board
   return (
-    <View style={styles.container}>
-      <View style={styles.board}>
-        {cards.map((card, index) => {
-          // Check if this card is selected
-          const isSelected = selectedCards.some(c => c.id === card.id);
-          // Check if this card is matched
-          const isMatched = matchedCardIds.includes(card.id);
-          // Check if this card is part of a hint
-          const isHint = hintCards.includes(card.id);
+    <View nativeID="gameboard-container" style={styles.container}>
+      {/* Card grid using flex rows */}
+      <View nativeID="gameboard-grid" style={styles.board}>
+        {rows.map((row, rowIndex) => (
+          <View key={rowIndex} nativeID={`card-row-${rowIndex}`} style={styles.row}>
+            {row.map((card, colIndex) => {
+              const isSelected = selectedCards.some(c => c.id === card.id);
+              const isMatched = matchedCardIds.includes(card.id);
+              const isHint = hintCards.includes(card.id);
 
-          // Create a copy of the card with UI state
-          const cardWithState = {
-            ...card,
-            selected: isSelected,
-            isHint: isHint
-          };
+              const cardWithState = {
+                ...card,
+                selected: isSelected,
+                isHint: isHint
+              };
 
-          return (
-            <View key={`${index}-${card.id}`} style={styles.cardWrapper}>
-              <Card
-                card={cardWithState}
-                onClick={handleCardClick}
-                disabled={isMatched || !isPlayerTurn || isProcessing}
-              />
-            </View>
-          );
-        })}
+              return (
+                <View key={`${rowIndex}-${colIndex}-${card.id}`} nativeID={`card-slot-${rowIndex}-${colIndex}`} style={styles.cardWrapper}>
+                  <Card
+                    card={cardWithState}
+                    onClick={handleCardClick}
+                    disabled={isMatched || !isPlayerTurn || isProcessing}
+                  />
+                </View>
+              );
+            })}
+          </View>
+        ))}
       </View>
 
-      {/* Game controls */}
-      <View style={styles.controls}>
-        <TouchableOpacity
-          style={[
-            styles.button,
-            getHintsAvailable() > 0 ? styles.buttonEnabled : styles.buttonDisabled
-          ]}
-          onPress={findHint}
-          disabled={getHintsAvailable() <= 0 || !isPlayerTurn}
-        >
-          <Text style={getHintsAvailable() > 0 ? styles.buttonTextEnabled : styles.buttonTextDisabled}>
-            Hint ({getHintsAvailable()})
-          </Text>
-        </TouchableOpacity>
+      {/* Bottom bar with controls and indicator */}
+      <View nativeID="gameboard-bottombar" style={styles.bottomBar}>
+        <View style={styles.indicator}>
+          <Text style={styles.indicatorText}>{selectedCards.length}/3</Text>
+        </View>
 
-        {hintCards.length > 0 && (
+        <View style={styles.controls}>
           <TouchableOpacity
-            style={[styles.button, styles.buttonSecondary]}
-            onPress={clearHint}
+            style={[
+              styles.button,
+              getHintsAvailable() > 0 ? styles.buttonEnabled : styles.buttonDisabled
+            ]}
+            onPress={findHint}
+            disabled={getHintsAvailable() <= 0 || !isPlayerTurn}
           >
-            <Text style={styles.buttonTextEnabled}>Clear Hint</Text>
+            <Text style={getHintsAvailable() > 0 ? styles.buttonTextEnabled : styles.buttonTextDisabled}>
+              Hint ({getHintsAvailable()})
+            </Text>
           </TouchableOpacity>
-        )}
-      </View>
 
-      {/* Selected cards indicator */}
-      <View style={styles.indicator}>
-        <Text>Selected: {selectedCards.length}/3</Text>
+          {hintCards.length > 0 && (
+            <TouchableOpacity
+              style={[styles.button, styles.buttonSecondary]}
+              onPress={clearHint}
+            >
+              <Text style={styles.buttonTextEnabled}>Clear</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
     </View>
   );
@@ -203,51 +212,71 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
     flexDirection: 'column',
-    alignItems: 'center',
-    width: '100%',
   },
   board: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    padding: 16,
+    flex: 1,
+    flexDirection: 'column',
+    padding: 6,
     backgroundColor: '#f3f4f6',
-    borderRadius: 8,
-    justifyContent: 'center',
+  },
+  row: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 6,
   },
   cardWrapper: {
-    width: '30%',
+    flex: 1,
+    aspectRatio: 0.75,
+    maxHeight: '100%',
+  },
+  bottomBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#e5e7eb',
   },
   controls: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 16,
-    gap: 16,
+    gap: 8,
   },
   button: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 8,
+    borderRadius: 6,
   },
   buttonEnabled: {
     backgroundColor: '#3b82f6',
   },
   buttonDisabled: {
-    backgroundColor: '#d1d5db',
+    backgroundColor: '#9ca3af',
   },
   buttonSecondary: {
     backgroundColor: '#6b7280',
   },
   buttonTextEnabled: {
     color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   buttonTextDisabled: {
-    color: '#6b7280',
+    color: '#d1d5db',
+    fontSize: 14,
   },
   indicator: {
-    marginTop: 16,
-    alignItems: 'center',
+    backgroundColor: '#374151',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  indicatorText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#ffffff',
   },
 });
 

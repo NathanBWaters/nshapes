@@ -273,6 +273,7 @@ export default function DevTest() {
         score={state.score}
         targetScore={state.targetScore}
         time={state.remainingTime}
+        totalTime={getRoundRequirement(state.round).time}
         playerStats={playerStats}
       />
 

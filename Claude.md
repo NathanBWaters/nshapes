@@ -126,3 +126,35 @@ npm run build:web
 4. Level Up (choose upgrade)
 5. Item Shop (buy items)
 6. Repeat for 10 rounds
+
+## Game Board Layout
+
+The round phase uses a flex-based layout that adapts to all screen sizes (iOS, Web, Steam Deck):
+
+```
+┌──────────────────────────────────────┐
+│ Header (10%) - Round, Score, Timer   │
+├──────────────────────────────────────┤
+│ ┌────────┐ ┌────────┐ ┌────────┐    │
+│ │ Card 1 │ │ Card 2 │ │ Card 3 │ Row 1 (flex:1)
+│ └────────┘ └────────┘ └────────┘    │
+│ ┌────────┐ ┌────────┐ ┌────────┐    │
+│ │ Card 4 │ │ Card 5 │ │ Card 6 │ Row 2 (flex:1)
+│ └────────┘ └────────┘ └────────┘    │
+│ ┌────────┐ ┌────────┐ ┌────────┐    │
+│ │ Card 7 │ │ Card 8 │ │ Card 9 │ Row 3 (flex:1)
+│ └────────┘ └────────┘ └────────┘    │
+│ ┌────────┐ ┌────────┐ ┌────────┐    │
+│ │Card 10 │ │Card 11 │ │Card 12 │ Row 4 (flex:1)
+│ └────────┘ └────────┘ └────────┘    │
+├──────────────────────────────────────┤
+│ Bottom Bar - Selected count, Hints   │
+└──────────────────────────────────────┘
+```
+
+**Layout structure:**
+- Header: 10% height with round indicator, score progress bar, circular timer
+- Board: 90% height, pure flexbox with 4 rows of 3 cards each
+- Each row uses `flex: 1` to share vertical space equally
+- Each card uses `flex: 1` with `aspectRatio: 0.75` to maintain proportions
+- Card shapes scale dynamically based on screen width

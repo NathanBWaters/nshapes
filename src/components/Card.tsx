@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
 import { Card as CardType } from '@/types';
 
 interface CardProps {
@@ -9,7 +9,16 @@ interface CardProps {
 }
 
 const Card: React.FC<CardProps> = ({ card, onClick, disabled = false }) => {
+  const { width: screenWidth } = useWindowDimensions();
   const { shape, color, number, shading, selected, isHint } = card;
+
+  // Calculate shape size based on screen width
+  // With 3 columns at 31% width each, card is roughly screenWidth * 0.31
+  // Shapes should be about 55% of the card width
+  const cardWidth = screenWidth * 0.31;
+  const shapeWidth = Math.max(40, Math.min(cardWidth * 0.55, 80));
+  const shapeHeight = shapeWidth * 0.4; // Ovals and squiggles are wider than tall
+  const diamondSize = shapeWidth * 0.6; // Diamonds are square
 
   // Handle card modifiers
   const hasModifiers = card.health !== undefined && card.health > 1 ||
@@ -33,11 +42,11 @@ const Card: React.FC<CardProps> = ({ card, onClick, disabled = false }) => {
   const getShapeComponent = () => {
     switch (shape) {
       case 'oval':
-        return <Oval color={color} shading={shading} />;
+        return <Oval color={color} shading={shading} width={shapeWidth} height={shapeHeight} />;
       case 'squiggle':
-        return <Squiggle color={color} shading={shading} />;
+        return <Squiggle color={color} shading={shading} width={shapeWidth} height={shapeHeight} />;
       case 'diamond':
-        return <Diamond color={color} shading={shading} />;
+        return <Diamond color={color} shading={shading} width={diamondSize} height={diamondSize} />;
       default:
         return null;
     }
@@ -115,13 +124,14 @@ const Card: React.FC<CardProps> = ({ card, onClick, disabled = false }) => {
 
   return (
     <TouchableOpacity
+      nativeID={`card-${shape}-${color}-${number}-${shading}`}
       style={getCardStyle()}
       onPress={() => !disabled && !card.isDud && onClick(card)}
       disabled={disabled || card.isDud}
       activeOpacity={0.7}
     >
       {getModifierBadge()}
-      <View style={styles.shapesContainer}>
+      <View nativeID="card-shapes" style={styles.shapesContainer}>
         {shapes}
       </View>
     </TouchableOpacity>
@@ -132,6 +142,8 @@ const Card: React.FC<CardProps> = ({ card, onClick, disabled = false }) => {
 interface ShapeProps {
   color: string;
   shading: string;
+  width: number;
+  height: number;
 }
 
 const getBorderColor = (color: string) => {
@@ -148,20 +160,21 @@ const getBgColor = (color: string, shading: string) => {
   return getBorderColor(color);
 };
 
-const Stripes: React.FC<{ color: string; height: number }> = ({ color, height }) => {
-  const stripeHeight = 2;
-  const gap = 3;
+const Stripes: React.FC<{ color: string }> = ({ color }) => {
+  // Create stripes that fill the shape using percentage positioning
   const stripes = [];
-  for (let y = 0; y < height; y += stripeHeight + gap) {
+  const stripeCount = 5;
+  for (let i = 0; i < stripeCount; i++) {
+    const topPercent = (i / stripeCount) * 100;
     stripes.push(
       <View
-        key={y}
+        key={i}
         style={{
           position: 'absolute',
-          top: y,
+          top: `${topPercent}%`,
           left: 0,
           right: 0,
-          height: stripeHeight,
+          height: '12%',
           backgroundColor: color,
         }}
       />
@@ -170,44 +183,63 @@ const Stripes: React.FC<{ color: string; height: number }> = ({ color, height })
   return <>{stripes}</>;
 };
 
-const Oval: React.FC<ShapeProps> = ({ color, shading }) => {
+const Oval: React.FC<ShapeProps> = ({ color, shading, width, height }) => {
   const borderColor = getBorderColor(color);
   return (
     <View
-      style={[
-        styles.oval,
-        { borderColor, backgroundColor: getBgColor(color, shading), overflow: 'hidden' }
-      ]}
+      style={{
+        width,
+        height,
+        borderRadius: height / 2,
+        borderWidth: 3,
+        borderColor,
+        backgroundColor: getBgColor(color, shading),
+        overflow: 'hidden',
+      }}
     >
-      {shading === 'striped' && <Stripes color={borderColor} height={16} />}
+      {shading === 'striped' && <Stripes color={borderColor} />}
     </View>
   );
 };
 
-const Diamond: React.FC<ShapeProps> = ({ color, shading }) => {
+const Diamond: React.FC<ShapeProps> = ({ color, shading, width, height }) => {
   const borderColor = getBorderColor(color);
+  const size = Math.min(width, height);
   return (
     <View
-      style={[
-        styles.diamond,
-        { borderColor, backgroundColor: getBgColor(color, shading), overflow: 'hidden' }
-      ]}
+      style={{
+        width: size,
+        height: size,
+        borderWidth: 3,
+        borderColor,
+        backgroundColor: getBgColor(color, shading),
+        overflow: 'hidden',
+        transform: [{ rotate: '45deg' }],
+      }}
     >
-      {shading === 'striped' && <Stripes color={borderColor} height={24} />}
+      {shading === 'striped' && <Stripes color={borderColor} />}
     </View>
   );
 };
 
-const Squiggle: React.FC<ShapeProps> = ({ color, shading }) => {
+const Squiggle: React.FC<ShapeProps> = ({ color, shading, width, height }) => {
   const borderColor = getBorderColor(color);
   return (
     <View
-      style={[
-        styles.squiggle,
-        { borderColor, backgroundColor: getBgColor(color, shading), overflow: 'hidden' }
-      ]}
+      style={{
+        width,
+        height,
+        borderWidth: 3,
+        borderColor,
+        backgroundColor: getBgColor(color, shading),
+        overflow: 'hidden',
+        borderTopLeftRadius: height,
+        borderTopRightRadius: height / 4,
+        borderBottomLeftRadius: height / 4,
+        borderBottomRightRadius: height,
+      }}
     >
-      {shading === 'striped' && <Stripes color={borderColor} height={16} />}
+      {shading === 'striped' && <Stripes color={borderColor} />}
     </View>
   );
 };
@@ -218,13 +250,12 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 8,
+    padding: 4,
     borderRadius: 8,
     borderWidth: 2,
     borderColor: '#d1d5db',
     backgroundColor: '#ffffff',
     flex: 1,
-    aspectRatio: 0.75,
   },
   selected: {
     borderColor: '#3b82f6',
@@ -245,10 +276,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   shapesContainer: {
+    flex: 1,
     flexDirection: 'column',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
+    justifyContent: 'space-evenly',
+    width: '100%',
+    paddingVertical: 4,
   },
   badge: {
     position: 'absolute',
@@ -260,20 +293,20 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   badgeTopRight: {
-    top: 4,
-    right: 4,
+    top: 2,
+    right: 2,
   },
   badgeTopLeft: {
-    top: 4,
-    left: 4,
+    top: 2,
+    left: 2,
   },
   badgeBottomRight: {
-    bottom: 4,
-    right: 4,
+    bottom: 2,
+    right: 2,
   },
   badgeBottomLeft: {
-    bottom: 4,
-    left: 4,
+    bottom: 2,
+    left: 2,
   },
   badgeText: {
     color: '#ffffff',
@@ -282,27 +315,6 @@ const styles = StyleSheet.create({
   },
   badgeEmoji: {
     fontSize: 10,
-  },
-  oval: {
-    width: 32,
-    height: 16,
-    borderRadius: 8,
-    borderWidth: 2,
-  },
-  diamond: {
-    width: 24,
-    height: 24,
-    borderWidth: 2,
-    transform: [{ rotate: '45deg' }],
-  },
-  squiggle: {
-    width: 32,
-    height: 16,
-    borderWidth: 2,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 8,
-    borderBottomLeftRadius: 8,
-    borderBottomRightRadius: 16,
   },
 });
 

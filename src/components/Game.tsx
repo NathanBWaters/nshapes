@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { Card, GameState, Enemy, Weapon, PlayerStats } from '@/types';
 import { createDeck, shuffleArray, isValidCombination, findAllCombinations, generateGameBoard, formatTime } from '@/utils/gameUtils';
 import {
@@ -917,32 +917,30 @@ const Game: React.FC = () => {
 
       case 'round':
         return (
-          <ScrollView className="flex-1">
-            {state.gameStarted && !state.gameEnded && (
-              <StatsButton playerStats={calculatePlayerTotalStats(state.player)} />
-            )}
+          <View nativeID="round-screen" className="flex-1">
+            {/* Header area - 10% of screen */}
+            <View nativeID="round-header" className="h-[10%] px-2 py-1">
+              <GameInfo
+                round={state.round}
+                score={state.score}
+                targetScore={state.targetScore}
+                time={state.remainingTime}
+                totalTime={getRoundRequirement(state.round).time}
+                playerStats={calculatePlayerTotalStats(state.player)}
+              />
+            </View>
 
-            <GameInfo
-              round={state.round}
-              score={state.score}
-              targetScore={state.targetScore}
-              time={state.remainingTime}
-              playerStats={calculatePlayerTotalStats(state.player)}
-            />
-
-            <RoundScoreboard
-              currentRound={state.round}
-              currentScore={state.score}
-            />
-
-            <GameBoard
-              cards={state.board}
-              onMatch={handleValidMatch}
-              onInvalidSelection={handleInvalidMatch}
-              playerStats={calculatePlayerTotalStats(state.player)}
-              isPlayerTurn={true}
-            />
-          </ScrollView>
+            {/* Game board area - 90% of screen */}
+            <View nativeID="round-gameboard" className="h-[90%]">
+              <GameBoard
+                cards={state.board}
+                onMatch={handleValidMatch}
+                onInvalidSelection={handleInvalidMatch}
+                playerStats={calculatePlayerTotalStats(state.player)}
+                isPlayerTurn={true}
+              />
+            </View>
+          </View>
         );
 
       case 'game_over':
