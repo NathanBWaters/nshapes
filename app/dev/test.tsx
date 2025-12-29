@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Card, GameState, PlayerStats } from '../types';
-import { createDeck, shuffleArray, generateGameBoard, formatTime } from '../utils/gameUtils';
+import { Card, GameState, PlayerStats } from '@/types';
+import { createDeck, shuffleArray, generateGameBoard, formatTime } from '@/utils/gameUtils';
 import {
   ROUND_REQUIREMENTS,
   initializePlayer,
   calculatePlayerTotalStats,
-} from '../utils/gameDefinitions';
-import GameBoard from '../components/GameBoard';
-import GameInfo from '../components/GameInfo';
+} from '@/utils/gameDefinitions';
+import GameBoard from '@/components/GameBoard';
+import GameInfo from '@/components/GameInfo';
 
 const INITIAL_CARD_COUNT = 12;
 

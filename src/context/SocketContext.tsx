@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { GameState, Card } from '@/types';
+import { GameState, Card } from '../types';
 
 // Define socket context types
 interface Player {
@@ -27,7 +27,6 @@ interface SocketContextType {
   gameEnded: (finalGameState: GameState) => void;
   isMultiplayer: boolean;
   setIsMultiplayer: (value: boolean) => void;
-  toggleMultiplayer: (value: boolean) => void;
   errorMessage: string | null;
   hintCardIds: string[];
 }
@@ -54,17 +53,18 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       // Connect to the Socket.io server with fixed configuration
       try {
         console.log('Attempting to connect to Socket.io server...');
-        
+
+        // For React Native, you'll need to update this URL to your server's IP
         const newSocket = io('http://localhost:3000', {
             transports: ['websocket', 'polling'],
-            upgrade: true,  // Ensures upgrade from polling to WebSockets
-            forceNew: true, // Ensures a fresh connection each time
+            upgrade: true,
+            forceNew: true,
             reconnection: true,
             reconnectionAttempts: 5,
             reconnectionDelay: 2000,
-            timeout: 20000,  // Increase timeout further
+            timeout: 20000,
         });
-          
+
 
         // Set up socket event handlers
         newSocket.on('connect', () => {
@@ -103,13 +103,11 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
         newSocket.on('player-joined', ({ players }) => {
           setPlayers(players);
-          // Show notification about new player joined
           setErrorMessage(null);
         });
 
         newSocket.on('player-left', ({ players }) => {
           setPlayers(players);
-          // Show notification about player left
           setErrorMessage(null);
         });
 
@@ -148,7 +146,6 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         newSocket.on('game-over', ({ gameState, players }) => {
           setGameState(gameState);
           setPlayers(players);
-          // Show game over notification
         });
 
         newSocket.on('error', ({ message }) => {
@@ -157,14 +154,12 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
         setSocket(newSocket);
 
-        // Clean up on unmount
         return () => {
-        //   console.log('Cleaning up socket connection');
-        //   newSocket.disconnect();
+          // Cleanup handled elsewhere
         };
       } catch (error) {
         console.error('Failed to initialize socket connection:', error);
-        setErrorMessage('Failed to initialize socket connection. Check browser console for details.');
+        setErrorMessage('Failed to initialize socket connection. Check console for details.');
       }
     }
 
@@ -248,7 +243,6 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     gameEnded,
     isMultiplayer,
     setIsMultiplayer,
-    toggleMultiplayer: setIsMultiplayer,
     errorMessage,
     hintCardIds
   };
@@ -267,4 +261,4 @@ export const useSocket = (): SocketContextType => {
     throw new Error('useSocket must be used within a SocketProvider');
   }
   return context;
-}; 
+};

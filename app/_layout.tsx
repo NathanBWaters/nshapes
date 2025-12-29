@@ -2,7 +2,7 @@ import "../global.css";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { SocketProvider } from "@/app/context/SocketContext";
+import { SocketProvider } from "@/context/SocketContext";
 
 export default function RootLayout() {
   return (
