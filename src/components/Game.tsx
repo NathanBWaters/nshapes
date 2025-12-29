@@ -142,20 +142,18 @@ const Game: React.FC = () => {
 
   // Complete the current round
   const completeRound = () => {
+    // Generate options first, then update state
+    const options = generateLevelUpOptions();
+
     setState(prevState => ({
       ...prevState,
       roundCompleted: true,
-      gameEnded: false
+      gameEnded: false,
+      levelUpOptions: options
     }));
 
     // Move to level up phase
     setGamePhase('level_up');
-
-    // Generate level up options
-    setState(prevState => ({
-      ...prevState,
-      levelUpOptions: generateLevelUpOptions()
-    }));
   };
 
   // Timer effect - countdown when in round phase
@@ -310,7 +308,9 @@ const Game: React.FC = () => {
   // Generate random level up options
   const generateLevelUpOptions = () => {
     const options: (Partial<PlayerStats> | Weapon)[] = [];
-    const optionsSize = 4 + (state.player.stats.drawIncrease || 0);
+    const optionsSize = 4 + (state.player?.stats?.drawIncrease || 0);
+
+    console.log('[LevelUp] Generating', optionsSize, 'options');
 
     // 70% chance to get stat upgrade, 30% chance to get weapon upgrade
     for (let i = 0; i < optionsSize; i++) {
