@@ -19,7 +19,7 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
     <View className="flex-1">
       <Text className="text-2xl font-bold text-center mb-4 text-gray-900">Select Your Character</Text>
 
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
         <View className="flex-row flex-wrap justify-center gap-3 pb-4">
           {characters.map((character) => (
             <Pressable

@@ -34,7 +34,8 @@ jobs:
       - name: Build web app
         run: npx expo export --platform web
         env:
-          EXPO_PUBLIC_BASE_PATH: /nshapes
+          NODE_ENV: production
+          EXPO_BASE_URL: /nshapes
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

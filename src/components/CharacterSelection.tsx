@@ -16,7 +16,7 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
   onStart
 }) => {
   return (
-    <ScrollView className="p-4">
+    <ScrollView style={{ flex: 1 }} className="p-4">
       <Text className="text-2xl font-bold mb-4">Choose Your Character</Text>
 
       <View className="flex-row flex-wrap gap-4">
