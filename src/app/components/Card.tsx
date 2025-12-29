@@ -34,8 +34,8 @@ const Card: React.FC<CardProps> = ({ card, onClick, disabled = false }) => {
     switch (shape) {
       case 'oval':
         return <Oval color={color} shading={shading} />;
-      case 'squiggle':
-        return <Squiggle color={color} shading={shading} />;
+      case 'square':
+        return <Square color={color} shading={shading} />;
       case 'diamond':
         return <Diamond color={color} shading={shading} />;
       default:
@@ -244,7 +244,7 @@ const Diamond: React.FC<ShapeProps> = ({ color, shading }) => {
   );
 };
 
-const Squiggle: React.FC<ShapeProps> = ({ color, shading }) => {
+const Square: React.FC<ShapeProps> = ({ color, shading }) => {
   const getColorClass = () => {
     switch (color) {
       case 'red': return 'border-red-500';
@@ -266,14 +266,8 @@ const Squiggle: React.FC<ShapeProps> = ({ color, shading }) => {
 
   return (
     <View
-      className={`w-8 h-4 border-2 ${getColorClass()}`}
-      style={{
-        borderTopLeftRadius: 16,
-        borderTopRightRadius: 8,
-        borderBottomLeftRadius: 8,
-        borderBottomRightRadius: 16,
-        backgroundColor: getBgColor()
-      }}
+      className={`w-8 h-8 border-2 ${getColorClass()}`}
+      style={{ backgroundColor: getBgColor() }}
     />
   );
 };

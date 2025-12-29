@@ -19,7 +19,7 @@ const Tutorial: React.FC = () => {
           <Text className="text-xl font-semibold mb-2">Card Attributes</Text>
           <Text className="mb-4">Each card has four attributes:</Text>
           <View className="pl-6 mb-4">
-            <Text className="mb-1">• Shape: Oval, Squiggle, or Diamond</Text>
+            <Text className="mb-1">• Shape: Oval, Square, or Diamond</Text>
             <Text className="mb-1">• Color: Red, Green, or Purple</Text>
             <Text className="mb-1">• Number: One, Two, or Three shapes</Text>
             <Text className="mb-1">• Shading: Solid, Striped, or Open</Text>

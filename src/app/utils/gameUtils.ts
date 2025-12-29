@@ -2,7 +2,7 @@ import { Card, Shape, Color, Number, Shading } from '../types';
 
 // Create the complete deck of 81 cards
 export const createDeck = (): Card[] => {
-  const shapes: Shape[] = ['oval', 'squiggle', 'diamond'];
+  const shapes: Shape[] = ['oval', 'square', 'diamond'];
   const colors: Color[] = ['red', 'green', 'purple'];
   const numbers: Number[] = [1, 2, 3];
   const shadings: Shading[] = ['solid', 'striped', 'open'];
