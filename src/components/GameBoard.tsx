@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Pressable } from 'react-native';
-import { Card as CardType, PlayerStats } from '../types';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Card as CardType, PlayerStats } from '@/types';
 import Card from './Card';
 
 interface GameBoardProps {
@@ -139,8 +139,8 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
   // Render the game board
   return (
-    <View className="flex-col items-center w-full">
-      <View className="flex-row flex-wrap gap-2 p-4 bg-gray-100 rounded-lg justify-center">
+    <View style={styles.container}>
+      <View style={styles.board}>
         {cards.map((card, index) => {
           // Check if this card is selected
           const isSelected = selectedCards.some(c => c.id === card.id);
@@ -157,7 +157,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
           };
 
           return (
-            <View key={`${index}-${card.id}`} className="w-[30%] aspect-[3/4]">
+            <View key={`${index}-${card.id}`} style={styles.cardWrapper}>
               <Card
                 card={cardWithState}
                 onClick={handleCardClick}
@@ -169,37 +169,86 @@ const GameBoard: React.FC<GameBoardProps> = ({
       </View>
 
       {/* Game controls */}
-      <View className="flex-row justify-center mt-4 gap-4">
-        <Pressable
-          className={`px-4 py-2 rounded-lg ${
-            getHintsAvailable() > 0
-              ? 'bg-blue-500'
-              : 'bg-gray-300'
-          }`}
+      <View style={styles.controls}>
+        <TouchableOpacity
+          style={[
+            styles.button,
+            getHintsAvailable() > 0 ? styles.buttonEnabled : styles.buttonDisabled
+          ]}
           onPress={findHint}
           disabled={getHintsAvailable() <= 0 || !isPlayerTurn}
         >
-          <Text className={getHintsAvailable() > 0 ? 'text-white' : 'text-gray-500'}>
+          <Text style={getHintsAvailable() > 0 ? styles.buttonTextEnabled : styles.buttonTextDisabled}>
             Hint ({getHintsAvailable()})
           </Text>
-        </Pressable>
+        </TouchableOpacity>
 
         {hintCards.length > 0 && (
-          <Pressable
-            className="px-4 py-2 rounded-lg bg-gray-500"
+          <TouchableOpacity
+            style={[styles.button, styles.buttonSecondary]}
             onPress={clearHint}
           >
-            <Text className="text-white">Clear Hint</Text>
-          </Pressable>
+            <Text style={styles.buttonTextEnabled}>Clear Hint</Text>
+          </TouchableOpacity>
         )}
       </View>
 
       {/* Selected cards indicator */}
-      <View className="mt-4 items-center">
+      <View style={styles.indicator}>
         <Text>Selected: {selectedCards.length}/3</Text>
       </View>
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    width: '100%',
+  },
+  board: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    padding: 16,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+    justifyContent: 'center',
+  },
+  cardWrapper: {
+    width: '30%',
+  },
+  controls: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 16,
+    gap: 16,
+  },
+  button: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  buttonEnabled: {
+    backgroundColor: '#3b82f6',
+  },
+  buttonDisabled: {
+    backgroundColor: '#d1d5db',
+  },
+  buttonSecondary: {
+    backgroundColor: '#6b7280',
+  },
+  buttonTextEnabled: {
+    color: '#ffffff',
+  },
+  buttonTextDisabled: {
+    color: '#6b7280',
+  },
+  indicator: {
+    marginTop: 16,
+    alignItems: 'center',
+  },
+});
 
 export default GameBoard;

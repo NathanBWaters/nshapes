@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 
 const Tutorial: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
     <View className="mt-4">
-      <Pressable onPress={() => setIsOpen(!isOpen)}>
+      <TouchableOpacity onPress={() => setIsOpen(!isOpen)}>
         <Text className="text-blue-500 underline">
           {isOpen ? 'Hide Rules' : 'Show Rules'}
         </Text>
-      </Pressable>
+      </TouchableOpacity>
 
       {isOpen && (
         <ScrollView className="mt-4 p-6 bg-white rounded-lg shadow-lg">
@@ -54,12 +54,12 @@ const Tutorial: React.FC = () => {
             +1 point for each valid combination found. The game ends when no more valid combinations can be found or the deck is exhausted.
           </Text>
 
-          <Pressable
+          <TouchableOpacity
             className="px-4 py-2 bg-blue-500 rounded"
             onPress={() => setIsOpen(false)}
           >
             <Text className="text-white text-center">Got it!</Text>
-          </Pressable>
+          </TouchableOpacity>
         </ScrollView>
       )}
     </View>

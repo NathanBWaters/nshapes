@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, Pressable, Modal, ScrollView } from 'react-native';
-import { PlayerStats } from '../types';
+import { View, Text, TouchableOpacity, Modal, ScrollView } from 'react-native';
+import { PlayerStats } from '@/types';
 
 interface StatsButtonProps {
   playerStats: PlayerStats;
@@ -59,12 +59,12 @@ const StatsButton: React.FC<StatsButtonProps> = ({ playerStats }) => {
   return (
     <>
       {/* Stats Button in top right corner */}
-      <Pressable
+      <TouchableOpacity
         className="absolute top-4 right-4 z-30 bg-blue-500 py-2 px-4 rounded-full shadow-lg flex-row items-center"
         onPress={openModal}
       >
         <Text className="text-white font-bold">Stats</Text>
-      </Pressable>
+      </TouchableOpacity>
 
       {/* Stats Modal */}
       <Modal
@@ -78,9 +78,9 @@ const StatsButton: React.FC<StatsButtonProps> = ({ playerStats }) => {
             <ScrollView className="p-6">
               <View className="flex-row justify-between items-center mb-6">
                 <Text className="text-2xl font-bold">Character Stats</Text>
-                <Pressable onPress={closeModal}>
+                <TouchableOpacity onPress={closeModal}>
                   <Text className="text-gray-500 text-2xl">✕</Text>
-                </Pressable>
+                </TouchableOpacity>
               </View>
 
               <View className="flex-col gap-6">
@@ -104,12 +104,12 @@ const StatsButton: React.FC<StatsButtonProps> = ({ playerStats }) => {
               </View>
 
               <View className="mt-6 items-center">
-                <Pressable
+                <TouchableOpacity
                   onPress={closeModal}
                   className="bg-blue-500 py-2 px-6 rounded"
                 >
                   <Text className="text-white font-bold">Close</Text>
-                </Pressable>
+                </TouchableOpacity>
               </View>
             </ScrollView>
           </View>

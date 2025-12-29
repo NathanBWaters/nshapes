@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, Text, Pressable } from 'react-native';
-import { useSocket } from '../context/SocketContext';
+import { View, Text, TouchableOpacity } from 'react-native';
+import { useSocket } from '@/context/SocketContext';
 
 const MultiplayerToggle: React.FC = () => {
   const { isMultiplayer, toggleMultiplayer } = useSocket();
@@ -8,7 +8,7 @@ const MultiplayerToggle: React.FC = () => {
   return (
     <View className="flex justify-center my-4">
       <View className="flex-row items-center bg-gray-100 rounded-lg p-1">
-        <Pressable
+        <TouchableOpacity
           className={`px-4 py-2 rounded-md ${
             !isMultiplayer
               ? 'bg-blue-500'
@@ -19,8 +19,8 @@ const MultiplayerToggle: React.FC = () => {
           <Text className={!isMultiplayer ? 'text-white' : 'text-gray-700'}>
             Single Player
           </Text>
-        </Pressable>
-        <Pressable
+        </TouchableOpacity>
+        <TouchableOpacity
           className={`px-4 py-2 rounded-md ${
             isMultiplayer
               ? 'bg-blue-500'
@@ -31,7 +31,7 @@ const MultiplayerToggle: React.FC = () => {
           <Text className={isMultiplayer ? 'text-white' : 'text-gray-700'}>
             Multiplayer
           </Text>
-        </Pressable>
+        </TouchableOpacity>
       </View>
     </View>
   );

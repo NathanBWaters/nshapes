@@ -1,0 +1,73 @@
+appId: com.nshapes.app
+---
+# NShapes Gameplay Test Flow
+# This test will play through a basic game session
+
+# Wait for the app to fully load
+- launchApp
+
+# Wait for the main screen to appear
+- extendedWaitUntil:
+    visible: "NShapes"
+    timeout: 10000
+
+# Step 1: Choose Single Player mode
+- tapOn: "Single Player"
+
+# Step 2: Wait for character selection screen
+- extendedWaitUntil:
+    visible: "Choose Your Character"
+    timeout: 5000
+
+# Step 3: Tap on the first character (Orange Tabby is the first in the list)
+- tapOn: "Orange Tabby"
+
+# Step 4: Tap Start Game button
+- tapOn: "Start Game"
+
+# Step 5: Wait for enemy selection screen
+- extendedWaitUntil:
+    visible: "Choose Your Enemy"
+    timeout: 5000
+
+# Step 6: Select the first enemy by tapping "Fight This Enemy"
+- tapOn: "Fight This Enemy"
+
+# Step 7: Wait for game board to appear with the score indicator
+- extendedWaitUntil:
+    visible: "Selected:"
+    timeout: 5000
+
+# Step 8: Tap three cards randomly to attempt a match
+# Cards are arranged in a grid, tapping at different points in the card area
+# First card - left column
+- tapOn:
+    point: "20%,45%"
+
+# Small delay between taps
+- swipe:
+    start: "50%, 50%"
+    end: "50%, 50%"
+    duration: 200
+
+# Second card - middle column
+- tapOn:
+    point: "50%,45%"
+
+# Small delay
+- swipe:
+    start: "50%, 50%"
+    end: "50%, 50%"
+    duration: 200
+
+# Third card - right column
+- tapOn:
+    point: "80%,45%"
+
+# Wait for any animation to complete
+- extendedWaitUntil:
+    visible: "Selected:"
+    timeout: 3000
+
+# Verify the game is still running (selected indicator visible means game is active)
+- assertVisible: "Selected:"

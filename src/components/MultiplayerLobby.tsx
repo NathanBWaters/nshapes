@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 
 interface MultiplayerLobbyProps {
@@ -31,12 +31,12 @@ const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
           <View className="bg-white px-4 py-2 rounded-l-lg border border-gray-300">
             <Text className="font-mono text-lg">{roomId}</Text>
           </View>
-          <Pressable
+          <TouchableOpacity
             className="bg-blue-500 px-4 py-2 rounded-r-lg"
             onPress={copyRoomId}
           >
             <Text className="text-white">{copied ? 'Copied!' : 'Copy'}</Text>
-          </Pressable>
+          </TouchableOpacity>
         </View>
         <Text className="text-center text-sm text-gray-600 mt-2">
           Share this Room ID with your friends to let them join
@@ -53,12 +53,12 @@ const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
 
       {isHost && (
         <View className="items-center">
-          <Pressable
+          <TouchableOpacity
             className="bg-green-500 px-6 py-3 rounded-lg"
             onPress={onStartGame}
           >
             <Text className="text-white font-bold">Start Game</Text>
-          </Pressable>
+          </TouchableOpacity>
           <Text className="text-sm text-gray-600 mt-2 text-center">
             Click to start the game when all players have joined
           </Text>

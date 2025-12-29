@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 
 interface NotificationProps {
   message: string;
@@ -56,12 +56,12 @@ const Notification: React.FC<NotificationProps> = ({
         <View className="flex-1">
           <Text className={getTextColor()}>{message}</Text>
         </View>
-        <Pressable
+        <TouchableOpacity
           onPress={onClose}
           className="ml-4 p-1"
         >
           <Text className="text-gray-500 text-lg">✕</Text>
-        </Pressable>
+        </TouchableOpacity>
       </View>
     </View>
   );

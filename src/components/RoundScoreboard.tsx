@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
-import { ROUND_REQUIREMENTS } from '../utils/gameDefinitions';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { ROUND_REQUIREMENTS } from '@/utils/gameDefinitions';
 
 interface RoundScoreboardProps {
   currentRound: number;
@@ -24,7 +24,7 @@ const RoundScoreboard: React.FC<RoundScoreboardProps> = ({
     <View className="bg-gray-100 rounded-lg p-4 shadow-md mb-4">
       <View className="flex-row justify-between items-center mb-2">
         <Text className="text-lg font-bold">Round Progress</Text>
-        <Pressable
+        <TouchableOpacity
           className="flex-row items-center"
           onPress={() => setIsExpanded(!isExpanded)}
         >
@@ -34,7 +34,7 @@ const RoundScoreboard: React.FC<RoundScoreboardProps> = ({
           <Text className="text-blue-600 ml-1">
             {isExpanded ? '▲' : '▼'}
           </Text>
-        </Pressable>
+        </TouchableOpacity>
       </View>
 
       <View className="flex-row items-center mb-3">

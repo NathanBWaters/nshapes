@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
-import { Item } from '../types';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { Item } from '@/types';
 
 interface ItemShopProps {
   items: Item[];
@@ -134,7 +134,7 @@ const ItemShop: React.FC<ItemShopProps> = ({
               )}
 
               <View className="mt-4">
-                <Pressable
+                <TouchableOpacity
                   className={`w-full py-2 rounded-lg ${
                     canAfford
                       ? 'bg-blue-500'
@@ -146,7 +146,7 @@ const ItemShop: React.FC<ItemShopProps> = ({
                   <Text className={`text-center font-medium ${canAfford ? 'text-white' : 'text-gray-500'}`}>
                     Purchase
                   </Text>
-                </Pressable>
+                </TouchableOpacity>
               </View>
             </View>
           );
@@ -160,7 +160,7 @@ const ItemShop: React.FC<ItemShopProps> = ({
       )}
 
       <View className="mt-6 flex-row justify-between">
-        <Pressable
+        <TouchableOpacity
           className={`px-4 py-2 rounded-lg ${
             (playerMoney >= rerollCost || freeRerolls > 0)
               ? 'bg-purple-500'
@@ -174,14 +174,14 @@ const ItemShop: React.FC<ItemShopProps> = ({
               ? `Reroll (${freeRerolls} free)`
               : `Reroll (${rerollCost} 💰)`}
           </Text>
-        </Pressable>
+        </TouchableOpacity>
 
-        <Pressable
+        <TouchableOpacity
           className="px-4 py-2 bg-green-500 rounded-lg"
           onPress={onContinue}
         >
           <Text className="text-white">Continue to Next Round</Text>
-        </Pressable>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );

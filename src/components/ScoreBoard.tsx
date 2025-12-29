@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text } from 'react-native';
-import { useSocket } from '../context/SocketContext';
+import { useSocket } from '@/context/SocketContext';
 
 const ScoreBoard: React.FC = () => {
   const { players, playerId } = useSocket();

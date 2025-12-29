@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, Pressable } from 'react-native';
-import { PlayerStats } from '../types';
-import { formatTime } from '../utils/gameUtils';
+import { View, Text, TouchableOpacity } from 'react-native';
+import { PlayerStats } from '@/types';
+import { formatTime } from '@/utils/gameUtils';
 
 interface GameInfoProps {
   round: number;
@@ -88,14 +88,14 @@ const GameInfo: React.FC<GameInfoProps> = ({
       </View>
 
       <View className="mb-4">
-        <Pressable
+        <TouchableOpacity
           className="w-full py-2 bg-blue-500 rounded-md mb-2"
           onPress={() => setShowStats(!showStats)}
         >
           <Text className="text-white text-center">
             {showStats ? 'Hide' : 'Show'} Player Stats
           </Text>
-        </Pressable>
+        </TouchableOpacity>
       </View>
 
       {showStats && (

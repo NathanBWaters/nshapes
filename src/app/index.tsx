@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text } from 'react-native';
-import Game from './components/Game';
+import Game from '@/components/Game';
 
 export default function Home() {
   return (

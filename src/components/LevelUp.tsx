@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
-import { PlayerStats, Weapon } from '../types';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { PlayerStats, Weapon } from '@/types';
 
 interface LevelUpProps {
   options: (Partial<PlayerStats> | Weapon)[];
@@ -45,7 +45,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
           if (isWeapon(option)) {
             // Render weapon option
             return (
-              <Pressable
+              <TouchableOpacity
                 key={`weapon-${index}`}
                 className="p-6 rounded-xl bg-gray-800 border-2 border-orange-500/50"
                 onPress={() => onSelect(index)}
@@ -82,12 +82,12 @@ const LevelUp: React.FC<LevelUpProps> = ({
                     </Text>
                   </View>
                 </View>
-              </Pressable>
+              </TouchableOpacity>
             );
           } else {
             // Render stat upgrade option
             return (
-              <Pressable
+              <TouchableOpacity
                 key={`stat-${index}`}
                 className="p-6 rounded-xl bg-gray-800 border-2 border-blue-500/50"
                 onPress={() => onSelect(index)}
@@ -117,14 +117,14 @@ const LevelUp: React.FC<LevelUpProps> = ({
                     </Text>
                   </View>
                 </View>
-              </Pressable>
+              </TouchableOpacity>
             );
           }
         })}
       </View>
 
       <View className="mt-8 items-center pb-8">
-        <Pressable
+        <TouchableOpacity
           className={`px-8 py-3 rounded-lg ${
             (playerMoney >= rerollCost || freeRerolls > 0)
               ? 'bg-indigo-500'
@@ -140,7 +140,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
               ? `Reroll Options (${freeRerolls})`
               : `Reroll Options (${rerollCost})`}
           </Text>
-        </Pressable>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
-import { Card, GameState, Enemy, Weapon, PlayerStats } from '../types';
-import { createDeck, shuffleArray, isValidCombination, findAllCombinations, generateGameBoard, formatTime } from '../utils/gameUtils';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { Card, GameState, Enemy, Weapon, PlayerStats } from '@/types';
+import { createDeck, shuffleArray, isValidCombination, findAllCombinations, generateGameBoard, formatTime } from '@/utils/gameUtils';
 import {
   CHARACTERS,
   ENEMIES,
@@ -11,11 +11,11 @@ import {
   initializePlayer,
   calculatePlayerTotalStats,
   DEFAULT_PLAYER_STATS
-} from '../utils/gameDefinitions';
+} from '@/utils/gameDefinitions';
 import GameBoard from './GameBoard';
 import GameInfo from './GameInfo';
 import Notification from './Notification';
-import { useSocket } from '../context/SocketContext';
+import { useSocket } from '@/context/SocketContext';
 import MultiplayerLobby from './MultiplayerLobby';
 import MultiplayerToggle from './MultiplayerToggle';
 import CharacterSelection from './CharacterSelection';
@@ -974,12 +974,12 @@ const Game: React.FC = () => {
             </View>
 
             <View className="items-center">
-              <Pressable
+              <TouchableOpacity
                 className="px-6 py-3 bg-blue-500 rounded-lg"
                 onPress={() => setGamePhase('character_select')}
               >
                 <Text className="text-white font-medium">Play Again</Text>
-              </Pressable>
+              </TouchableOpacity>
             </View>
           </View>
         );

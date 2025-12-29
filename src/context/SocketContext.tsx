@@ -1,8 +1,6 @@
-"use client";
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { GameState, Card } from '../types';
+import { GameState, Card } from '@/types';
 
 // Define socket context types
 interface Player {

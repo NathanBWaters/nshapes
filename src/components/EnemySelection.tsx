@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
-import { Enemy } from '../types';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { Enemy } from '@/types';
 
 interface EnemySelectionProps {
   enemies: Enemy[];
@@ -19,7 +19,7 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
 
       <View className="flex-col gap-6">
         {enemies.map(enemy => (
-          <Pressable
+          <TouchableOpacity
             key={enemy.name}
             className="p-4 border-2 rounded-lg border-gray-300"
             onPress={() => onSelect(enemy)}
@@ -37,13 +37,13 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
               <Text className="text-xs mt-1">{enemy.reward}</Text>
             </View>
 
-            <Pressable
+            <TouchableOpacity
               className="mt-4 w-full py-2 bg-red-600 rounded-lg"
               onPress={() => onSelect(enemy)}
             >
               <Text className="text-white text-center font-medium">Fight This Enemy</Text>
-            </Pressable>
-          </Pressable>
+            </TouchableOpacity>
+          </TouchableOpacity>
         ))}
       </View>
     </ScrollView>

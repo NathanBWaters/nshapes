@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
-import { Character } from '../types';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { Character } from '@/types';
 
 interface CharacterSelectionProps {
   characters: Character[];
@@ -21,7 +21,7 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
 
       <View className="flex-row flex-wrap gap-4">
         {characters.map(character => (
-          <Pressable
+          <TouchableOpacity
             key={character.name}
             className={`p-4 border-2 rounded-lg w-[45%] ${
               selectedCharacter === character.name
@@ -40,12 +40,12 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
                   : 'None'}
               </Text>
             </View>
-          </Pressable>
+          </TouchableOpacity>
         ))}
       </View>
 
       <View className="mt-6 items-center">
-        <Pressable
+        <TouchableOpacity
           className={`px-6 py-3 rounded-lg ${
             selectedCharacter
               ? 'bg-green-500'
@@ -57,7 +57,7 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
           <Text className={`font-bold ${selectedCharacter ? 'text-white' : 'text-gray-500'}`}>
             Start Game
           </Text>
-        </Pressable>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
