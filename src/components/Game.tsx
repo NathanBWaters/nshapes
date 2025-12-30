@@ -1070,9 +1070,9 @@ const Game: React.FC = () => {
         />
       )}
 
-      {gamePhase === 'character_select' && (
+      {/* {gamePhase === 'character_select' && (
         <MultiplayerToggle />
-      )}
+      )} */}
 
       {renderGamePhase()}
     </View>

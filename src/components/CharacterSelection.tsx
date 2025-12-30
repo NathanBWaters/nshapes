@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, Pressable, StyleSheet } from 'react-native';
 import { Character } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { getWeaponByName } from '@/utils/gameDefinitions';
 import Icon from './Icon';
+
+// IMPORTANT: This game should NOT have scrollable screens.
+// All screens should fill the available height without requiring scrolling.
 
 interface CharacterSelectionProps {
   characters: Character[];
@@ -86,14 +89,10 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
         )}
       </View>
 
-      {/* Bottom Half - Options Grid */}
+      {/* Bottom Half - Options Grid (no scrolling - fills available space) */}
       <View style={styles.optionsSection}>
         <Text style={styles.optionsHeader}>Choose Your Character</Text>
-        <ScrollView
-          style={styles.optionsScroll}
-          contentContainerStyle={styles.optionsGrid}
-          showsVerticalScrollIndicator={false}
-        >
+        <View style={styles.optionsGrid}>
           {characters.map(character => {
             const isSelected = selectedCharacter === character.name;
 
@@ -123,7 +122,6 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
                       styles.optionText,
                       isSelected && styles.optionTextSelected,
                     ]}
-                    numberOfLines={1}
                   >
                     {character.name}
                   </Text>
@@ -131,7 +129,7 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
               </Pressable>
             );
           })}
-        </ScrollView>
+        </View>
       </View>
 
       {/* Action Button */}
@@ -284,11 +282,8 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 8,
   },
-  optionsScroll: {
-    flex: 1,
-  },
   optionsGrid: {
-    flexGrow: 1,
+    flex: 1,
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: 12,
@@ -304,18 +299,19 @@ const styles = StyleSheet.create({
     width: '31%',
     flexGrow: 1,
     flexBasis: '31%',
-    aspectRatio: 1,
-    padding: '10%',
+    padding: '3%',
   },
   optionIconArea: {
-    flex: 3,
+    flex: 2.5,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   optionNameArea: {
-    flex: 1,
+    flex: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   optionButtonSelected: {
     backgroundColor: COLORS.actionYellow,
