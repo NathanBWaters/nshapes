@@ -23,7 +23,6 @@ import CharacterSelection from './CharacterSelection';
 import ItemShop from './ItemShop';
 import LevelUp from './LevelUp';
 import EnemySelection from './EnemySelection';
-import StatsButton from './StatsButton';
 import RoundScoreboard from './RoundScoreboard';
 import RoundSummary from './RoundSummary';
 
@@ -34,7 +33,7 @@ const BASE_REROLL_COST = 5;
 // Get round requirement
 const getRoundRequirement = (round: number) => {
   return ROUND_REQUIREMENTS.find(r => r.round === round) ||
-         { round: 1, targetScore: 3, time: 30 };
+         { round: 1, targetScore: 3, time: 60 };
 };
 
 // Helper function to check if an option is a weapon
@@ -848,17 +847,35 @@ const Game: React.FC = () => {
       if (remainingDeck.length > 0) {
         // Get a random card from the deck
         const randomIndex = Math.floor(Math.random() * remainingDeck.length);
-        const newCard = remainingDeck[randomIndex];
+        const newCard = { ...remainingDeck[randomIndex], selected: false };
 
-        // Add modifiers based on round and difficulty
-        const modifiers = generateGameBoard(1, state.round, state.round)[0];
+        // Apply modifiers based on difficulty and round
+        const modifierChance = 0.05 * state.round + 0.02 * state.round;
 
-        // Create the new card with modifiers
-        newCards.push({
-          ...newCard,
-          ...modifiers,
-          selected: false
-        });
+        if (Math.random() < modifierChance * 0.7) {
+          newCard.health = Math.min(Math.floor(Math.random() * 3) + 2, 5);
+        }
+        if (Math.random() < modifierChance * 0.3) {
+          newCard.lootBox = true;
+        }
+        if (Math.random() < modifierChance * 0.5) {
+          newCard.bonusMoney = Math.floor(Math.random() * 5) + 1;
+        }
+        if (Math.random() < modifierChance * 0.5) {
+          newCard.bonusPoints = Math.floor(Math.random() * 3) + 1;
+        }
+        if (Math.random() < modifierChance * 0.25) {
+          newCard.healing = true;
+        }
+        if (Math.random() < modifierChance * 0.3) {
+          newCard.clover = true;
+        }
+        if (Math.random() < modifierChance * 0.4) {
+          newCard.timedReward = true;
+          newCard.timedRewardAmount = Math.floor(Math.random() * 5) + 3;
+        }
+
+        newCards.push(newCard);
 
         // Remove the card from the deck
         remainingDeck.splice(randomIndex, 1);
@@ -939,6 +956,7 @@ const Game: React.FC = () => {
             enemies={state.currentEnemies}
             onSelect={handleEnemySelect}
             round={state.round}
+            playerStats={calculatePlayerTotalStats(state.player)}
           />
         );
 
@@ -956,6 +974,7 @@ const Game: React.FC = () => {
             healingDone={roundStats.healingDone}
             didLevelUp={state.player.stats.level > roundStats.startLevel}
             onContinue={() => setGamePhase('level_up')}
+            playerStats={calculatePlayerTotalStats(state.player)}
           />
         );
 
@@ -968,6 +987,7 @@ const Game: React.FC = () => {
             rerollCost={state.rerollCost}
             playerMoney={state.player.stats.money}
             freeRerolls={state.player.stats.freeRerolls}
+            playerStats={calculatePlayerTotalStats(state.player)}
           />
         );
 
@@ -981,6 +1001,7 @@ const Game: React.FC = () => {
             rerollCost={state.rerollCost}
             freeRerolls={state.player.stats.freeRerolls}
             onContinue={startNextRound}
+            playerStats={calculatePlayerTotalStats(state.player)}
           />
         );
 
@@ -1098,11 +1119,6 @@ const Game: React.FC = () => {
 
   return (
     <View className="flex-1">
-      {/* StatsButton - Show during gameplay phases */}
-      {gamePhase !== 'character_select' && gamePhase !== 'game_over' && state && state.player && (
-        <StatsButton playerStats={calculatePlayerTotalStats(state.player)} />
-      )}
-
       {notification && (
         <Notification
           message={notification.message}

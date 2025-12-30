@@ -1,19 +1,22 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Pressable, StyleSheet } from 'react-native';
-import { Enemy } from '@/types';
+import { Enemy, PlayerStats } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import Icon from './Icon';
+import StatsButton from './StatsButton';
 
 interface EnemySelectionProps {
   enemies: Enemy[];
   onSelect: (enemy: Enemy) => void;
   round: number;
+  playerStats: PlayerStats;
 }
 
 const EnemySelection: React.FC<EnemySelectionProps> = ({
   enemies,
   onSelect,
-  round
+  round,
+  playerStats
 }) => {
   const [focusedIndex, setFocusedIndex] = useState<number>(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
@@ -27,6 +30,7 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
       {/* Eyebrow Banner */}
       <View style={styles.eyebrow}>
         <Text style={styles.eyebrowText}>Round {round} - Choose Enemy</Text>
+        <StatsButton playerStats={playerStats} />
       </View>
 
       {/* Top Half - Detail Focus */}
@@ -131,8 +135,10 @@ const styles = StyleSheet.create({
   eyebrow: {
     height: 40,
     backgroundColor: COLORS.actionYellow,
-    justifyContent: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.slateCharcoal,
   },

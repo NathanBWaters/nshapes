@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import { PlayerStats } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import Icon from './Icon';
+import StatsButton from './StatsButton';
 
 interface RoundSummaryProps {
   round: number;
@@ -15,6 +17,7 @@ interface RoundSummaryProps {
   healingDone: number;
   didLevelUp: boolean;
   onContinue: () => void;
+  playerStats: PlayerStats;
 }
 
 interface AwardTile {
@@ -67,6 +70,7 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
   healingDone,
   didLevelUp,
   onContinue,
+  playerStats,
 }) => {
   // Animation values for each award tile
   const tileAnimations = useRef(
@@ -184,6 +188,7 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
       {/* Eyebrow Banner */}
       <View style={styles.eyebrow}>
         <Text style={styles.eyebrowText}>ROUND {round} COMPLETE</Text>
+        <StatsButton playerStats={playerStats} />
       </View>
 
       <View style={styles.content}>
@@ -281,8 +286,10 @@ const styles = StyleSheet.create({
   eyebrow: {
     height: 48,
     backgroundColor: COLORS.logicTeal,
-    justifyContent: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: 16,
     borderBottomWidth: 2,
     borderBottomColor: COLORS.slateCharcoal,
   },

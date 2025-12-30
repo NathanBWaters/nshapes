@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Pressable, StyleSheet } from 'react-native';
-import { Item } from '@/types';
+import { Item, PlayerStats } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import Icon from './Icon';
+import StatsButton from './StatsButton';
 
 interface ItemShopProps {
   items: Item[];
@@ -12,6 +13,7 @@ interface ItemShopProps {
   rerollCost: number;
   freeRerolls: number;
   onContinue: () => void;
+  playerStats: PlayerStats;
 }
 
 // Rarity colors
@@ -32,7 +34,8 @@ const ItemShop: React.FC<ItemShopProps> = ({
   onReroll,
   rerollCost,
   freeRerolls,
-  onContinue
+  onContinue,
+  playerStats
 }) => {
   const [focusedIndex, setFocusedIndex] = useState<number>(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
@@ -65,8 +68,11 @@ const ItemShop: React.FC<ItemShopProps> = ({
       {/* Eyebrow Banner */}
       <View style={styles.eyebrow}>
         <Text style={styles.eyebrowText}>Item Shop</Text>
-        <View style={styles.moneyBadge}>
-          <Text style={styles.moneyText}>${playerMoney}</Text>
+        <View style={styles.eyebrowRight}>
+          <View style={styles.moneyBadge}>
+            <Text style={styles.moneyText}>${playerMoney}</Text>
+          </View>
+          <StatsButton playerStats={playerStats} />
         </View>
       </View>
 
@@ -239,7 +245,7 @@ const styles = StyleSheet.create({
     height: 40,
     backgroundColor: COLORS.actionYellow,
     flexDirection: 'row',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     alignItems: 'center',
     borderBottomWidth: 1,
     borderBottomColor: COLORS.slateCharcoal,
@@ -252,9 +258,12 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 2,
   },
+  eyebrowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   moneyBadge: {
-    position: 'absolute',
-    right: 16,
     backgroundColor: COLORS.deepOnyx,
     paddingHorizontal: 12,
     paddingVertical: 4,

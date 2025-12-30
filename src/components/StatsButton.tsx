@@ -117,27 +117,16 @@ const StatsButton: React.FC<StatsButtonProps> = ({ playerStats }) => {
 
 const styles = StyleSheet.create({
   statsButton: {
-    position: 'absolute',
-    top: 48,
-    right: 16,
-    zIndex: 30,
-    backgroundColor: COLORS.actionYellow,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    backgroundColor: COLORS.deepOnyx,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
     borderRadius: RADIUS.button,
-    borderWidth: 1,
-    borderColor: COLORS.slateCharcoal,
-    shadowColor: COLORS.deepOnyx,
-    shadowOffset: { width: 2, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 0,
-    elevation: 4,
   },
   statsButtonText: {
-    color: COLORS.slateCharcoal,
+    color: COLORS.canvasWhite,
     fontWeight: '700',
-    fontSize: 12,
-    letterSpacing: 1,
+    fontSize: 10,
+    letterSpacing: 0.5,
   },
   modalOverlay: {
     flex: 1,

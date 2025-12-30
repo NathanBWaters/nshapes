@@ -30,6 +30,7 @@ export default {
       bundler: "metro",
       output: "static",
       favicon: "./assets/favicon.png",
+      icon: "./assets/icon.png",
       name: "NShapes",
       shortName: "NShapes",
       description: "A roguelike deckbuilding match-three puzzle game",

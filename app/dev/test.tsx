@@ -15,7 +15,7 @@ const INITIAL_CARD_COUNT = 12;
 
 const getRoundRequirement = (round: number) => {
   return ROUND_REQUIREMENTS.find(r => r.round === round) ||
-         { round: 1, targetScore: 3, time: 30 };
+         { round: 1, targetScore: 3, time: 60 };
 };
 
 export default function DevTest() {

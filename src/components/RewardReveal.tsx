@@ -118,11 +118,11 @@ const RewardReveal: React.FC<RewardRevealProps> = ({ reward }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.deepOnyx,
+    backgroundColor: COLORS.canvasWhite,
     borderRadius: RADIUS.module,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: COLORS.slateCharcoal,
   },
   rewardsContainer: {

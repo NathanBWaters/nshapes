@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView, Pressable, StyleSheet } from 
 import { PlayerStats, Weapon } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import Icon, { STAT_ICONS } from './Icon';
+import StatsButton from './StatsButton';
 
 interface LevelUpProps {
   options: (Partial<PlayerStats> | Weapon)[];
@@ -11,6 +12,7 @@ interface LevelUpProps {
   rerollCost: number;
   playerMoney: number;
   freeRerolls: number;
+  playerStats: PlayerStats;
 }
 
 const LevelUp: React.FC<LevelUpProps> = ({
@@ -19,7 +21,8 @@ const LevelUp: React.FC<LevelUpProps> = ({
   onReroll,
   rerollCost,
   playerMoney,
-  freeRerolls
+  freeRerolls,
+  playerStats
 }) => {
   const [focusedIndex, setFocusedIndex] = useState<number>(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
@@ -73,6 +76,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
       {/* Eyebrow Banner */}
       <View style={styles.eyebrow}>
         <Text style={styles.eyebrowText}>Level Up!</Text>
+        <StatsButton playerStats={playerStats} />
       </View>
 
       {/* Top Half - Detail Focus */}
@@ -240,8 +244,10 @@ const styles = StyleSheet.create({
   eyebrow: {
     height: 40,
     backgroundColor: COLORS.actionYellow,
-    justifyContent: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.slateCharcoal,
   },

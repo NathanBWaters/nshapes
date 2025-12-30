@@ -145,11 +145,9 @@ export const generateGameBoard = (
   });
 };
 
-// Format time in MM:SS format
+// Format time in seconds
 export const formatTime = (seconds: number): string => {
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = Math.floor(seconds % 60);
-  return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+  return Math.floor(seconds).toString();
 };
 
 export interface NShapesValidationResult {

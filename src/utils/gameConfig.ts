@@ -144,24 +144,6 @@ export const CARD_MODIFIERS = {
 } as const;
 
 // =============================================================================
-// ROUND REQUIREMENTS
-// =============================================================================
-
-export const ROUND_REQUIREMENTS: { points: number; time: number }[] = [
-  { points: 0, time: 0 },    // Round 0 (unused, for 1-indexing)
-  { points: 3, time: 30 },   // Round 1
-  { points: 4, time: 30 },   // Round 2
-  { points: 6, time: 30 },   // Round 3
-  { points: 8, time: 30 },   // Round 4
-  { points: 10, time: 30 },  // Round 5
-  { points: 14, time: 30 },  // Round 6
-  { points: 20, time: 30 },  // Round 7
-  { points: 27, time: 30 },  // Round 8
-  { points: 35, time: 30 },  // Round 9
-  { points: 100, time: 60 }, // Round 10 (final)
-];
-
-// =============================================================================
 // HELPER FUNCTIONS
 // =============================================================================
 
@@ -173,12 +155,4 @@ export const getXPForLevel = (level: number): number => {
 /** Calculate level from total XP */
 export const getLevelFromXP = (experience: number): number => {
   return Math.floor(Math.sqrt(experience / LEVEL_UP.xpMultiplier));
-};
-
-/** Get round requirement by round number */
-export const getRoundRequirement = (round: number): { points: number; time: number } => {
-  if (round < 1 || round >= ROUND_REQUIREMENTS.length) {
-    return ROUND_REQUIREMENTS[ROUND_REQUIREMENTS.length - 1];
-  }
-  return ROUND_REQUIREMENTS[round];
 };

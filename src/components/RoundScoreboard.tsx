@@ -16,7 +16,7 @@ const RoundScoreboard: React.FC<RoundScoreboardProps> = ({
 
   // Get current round requirement
   const currentRequirement = ROUND_REQUIREMENTS.find(r => r.round === currentRound) ||
-    { round: currentRound, targetScore: 3, time: 30 };
+    { round: currentRound, targetScore: 3, time: 60 };
 
   // Calculate progress percentage
   const progressPercentage = Math.min((currentScore / currentRequirement.targetScore) * 100, 100);
