@@ -25,6 +25,7 @@ import LevelUp from './LevelUp';
 import EnemySelection from './EnemySelection';
 import StatsButton from './StatsButton';
 import RoundScoreboard from './RoundScoreboard';
+import RoundSummary from './RoundSummary';
 
 const INITIAL_CARD_COUNT = 12;
 const MAX_BOARD_SIZE = 21;
@@ -54,6 +55,7 @@ const Game: React.FC = () => {
   const [gamePhase, setGamePhase] = useState<
     'character_select' |
     'round' |
+    'round_summary' |
     'loot' |
     'level_up' |
     'shop' |
@@ -114,6 +116,16 @@ const Game: React.FC = () => {
   // Game over reason
   const [gameOverReason, setGameOverReason] = useState<string | null>(null);
 
+  // Per-round stats tracking (for round summary screen)
+  const [roundStats, setRoundStats] = useState({
+    moneyEarned: 0,
+    experienceEarned: 0,
+    hintsEarned: 0,
+    healingDone: 0,
+    lootBoxesEarned: 0,
+    startLevel: 0,
+  });
+
 
   // Socket context for multiplayer
   const {
@@ -166,8 +178,8 @@ const Game: React.FC = () => {
       levelUpOptions: options
     }));
 
-    // Move to level up phase
-    setGamePhase('level_up');
+    // Move to round summary phase (instead of directly to level_up)
+    setGamePhase('round_summary');
   };
 
   // Timer effect - countdown when in round phase
@@ -433,6 +445,16 @@ const Game: React.FC = () => {
 
   // Handle enemy selection
   const handleEnemySelect = (enemy: Enemy) => {
+    // Reset round stats and record starting level for round summary
+    setRoundStats({
+      moneyEarned: 0,
+      experienceEarned: 0,
+      hintsEarned: 0,
+      healingDone: 0,
+      lootBoxesEarned: 0,
+      startLevel: state.player.stats.level,
+    });
+
     setState(prevState => ({
       ...prevState,
       selectedEnemy: enemy,
@@ -689,12 +711,22 @@ const Game: React.FC = () => {
       if (reward.lootBox) lootCratesEarned++;
     });
 
+    // Calculate experience with bonus percentage
+    const experienceMultiplier = 1 + (state.player.stats.experienceGainPercent || 0) / 100;
+    const adjustedExperience = Math.floor(totalExperience * experienceMultiplier);
+
+    // Accumulate per-round stats for the round summary screen
+    setRoundStats(prev => ({
+      ...prev,
+      moneyEarned: prev.moneyEarned + totalMoney,
+      experienceEarned: prev.experienceEarned + adjustedExperience,
+      hintsEarned: prev.hintsEarned + totalHints,
+      healingDone: prev.healingDone + totalHealing,
+      lootBoxesEarned: prev.lootBoxesEarned + lootCratesEarned,
+    }));
+
     // Update game state with rewards
     setState(prevState => {
-      // Calculate experience with bonus percentage
-      const experienceMultiplier = 1 + (prevState.player.stats.experienceGainPercent || 0) / 100;
-      const adjustedExperience = Math.floor(totalExperience * experienceMultiplier);
-
       // Calculate new level
       const currentExperience = prevState.player.stats.experience || 0;
       const newExperience = currentExperience + adjustedExperience;
@@ -907,6 +939,23 @@ const Game: React.FC = () => {
             enemies={state.currentEnemies}
             onSelect={handleEnemySelect}
             round={state.round}
+          />
+        );
+
+      case 'round_summary':
+        return (
+          <RoundSummary
+            round={state.round}
+            matchCount={state.foundCombinations.length}
+            score={state.score}
+            targetScore={state.targetScore}
+            moneyEarned={roundStats.moneyEarned}
+            experienceEarned={roundStats.experienceEarned}
+            lootBoxes={roundStats.lootBoxesEarned}
+            hintsEarned={roundStats.hintsEarned}
+            healingDone={roundStats.healingDone}
+            didLevelUp={state.player.stats.level > roundStats.startLevel}
+            onContinue={() => setGamePhase('level_up')}
           />
         );
 

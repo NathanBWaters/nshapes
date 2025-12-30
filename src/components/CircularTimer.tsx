@@ -1,7 +1,10 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
+import ReAnimated, { useSharedValue, useAnimatedProps, withTiming, Easing } from 'react-native-reanimated';
 import { COLORS } from '@/utils/colors';
+
+const AnimatedCircle = ReAnimated.createAnimatedComponent(Circle);
 
 interface CircularTimerProps {
   currentTime: number; // Current remaining time in seconds
@@ -21,6 +24,26 @@ const CircularTimer: React.FC<CircularTimerProps> = ({
 
   // Calculate progress (0 to 1) - how much time REMAINS (starts full, empties as time runs out)
   const progress = isInfinite ? 1 : Math.min(Math.max(currentTime / totalTime, 0), 1);
+
+  // SVG circle calculations
+  const center = size / 2;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+
+  // Smooth animation for the progress circle
+  const animatedProgress = useSharedValue(progress);
+
+  useEffect(() => {
+    // Animate smoothly to the new progress value over 1 second (matching typical update interval)
+    animatedProgress.value = withTiming(progress, {
+      duration: 1000,
+      easing: Easing.linear,
+    });
+  }, [progress]);
+
+  const animatedProps = useAnimatedProps(() => ({
+    strokeDashoffset: circumference * (1 - animatedProgress.value),
+  }));
 
   // Animation for pulse effect when critical
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -59,15 +82,6 @@ const CircularTimer: React.FC<CircularTimerProps> = ({
 
   const progressColor = getProgressColor();
 
-  // SVG circle calculations
-  const center = size / 2;
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-
-  // strokeDashoffset: 0 = full circle, circumference = empty circle
-  // We want full when progress=1, empty when progress=0
-  const strokeDashoffset = circumference * (1 - progress);
-
   // Format the time display
   const formatDisplayTime = () => {
     if (isInfinite) return '∞';
@@ -100,8 +114,8 @@ const CircularTimer: React.FC<CircularTimerProps> = ({
           strokeWidth={strokeWidth}
           fill="none"
         />
-        {/* Progress circle */}
-        <Circle
+        {/* Progress circle - animated smoothly */}
+        <AnimatedCircle
           cx={center}
           cy={center}
           r={radius}
@@ -109,7 +123,7 @@ const CircularTimer: React.FC<CircularTimerProps> = ({
           strokeWidth={strokeWidth}
           fill="none"
           strokeDasharray={circumference}
-          strokeDashoffset={strokeDashoffset}
+          animatedProps={animatedProps}
           strokeLinecap="round"
           rotation={-90}
           origin={`${center}, ${center}`}
