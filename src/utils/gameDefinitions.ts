@@ -51,6 +51,7 @@ export const CHARACTERS: Character[] = [
     description: 'Uses multiple lives to get more Mulligans',
     startingWeapon: 'Bamboo',
     startingItems: [],
+    icon: 'lorc/cat',
     baseStats: {
       mulligans: 2,
       luck: -5,
@@ -62,6 +63,7 @@ export const CHARACTERS: Character[] = [
     description: 'Specializes in bomb and trap synergy',
     startingWeapon: 'Flint',
     startingItems: [],
+    icon: 'caro-asercion/fox',
     baseStats: {
       // +15% chance bombs appear and +10% chance bombs have better rewards
       fieldSize: -2,
@@ -72,6 +74,7 @@ export const CHARACTERS: Character[] = [
     description: 'Gets extra match hints and free rerolls',
     startingWeapon: 'Carrot',
     startingItems: [],
+    icon: 'delapouite/sitting-dog',
     baseStats: {
       matchHints: 2,
       freeRerolls: 1,
@@ -83,26 +86,29 @@ export const CHARACTERS: Character[] = [
     description: 'Money-focused with increased commerce',
     startingWeapon: 'Dirt',
     startingItems: [],
+    icon: 'delapouite/penguin',
     baseStats: {
       commerce: 5,
       experienceGainPercent: -10,
     }
   },
   {
-    name: 'Blue-Footed Boobie',
+    name: 'Pelican',
     description: 'Can make cards become fragile',
     startingWeapon: 'Beak',
     startingItems: [],
+    icon: 'delapouite/eating-pelican',
     baseStats: {
       // 5% chance any matched card becomes Fragile
       // 50% chance of discarding 1 coin each wave
     }
   },
   {
-    name: 'Meerkat',
+    name: 'Badger',
     description: 'Has a larger field view',
     startingWeapon: 'Hoe',
     startingItems: [],
+    icon: 'caro-asercion/badger',
     baseStats: {
       fieldSize: 2,
       luck: -10,
@@ -220,6 +226,7 @@ export const ENEMIES: Enemy[] = [
     description: 'If you draw a card with only 1 shape or 1 color, the field-draw stops immediately',
     effect: 'Stops field draw on single shape/color cards',
     reward: 'Permanently +1 Field Size if defeated',
+    icon: 'delapouite/jumping-dog',
     applyEffect: (gameState: GameState): GameState => {
       // Implementation would restrict the draw logic when a card with number 1 is drawn
       return gameState;
@@ -242,6 +249,7 @@ export const ENEMIES: Enemy[] = [
     description: '50% chance of +1 extra damage taken whenever you\'re hurt',
     effect: 'Increases damage received',
     reward: '+1 max HP permanently if defeated',
+    icon: 'lorc/jellyfish',
     applyEffect: (gameState: GameState): GameState => {
       // Implementation would add a 50% chance to increase damage taken
       return gameState;
@@ -265,6 +273,7 @@ export const ENEMIES: Enemy[] = [
     description: 'Lose your bottom row of the field',
     effect: 'Reduces available field space',
     reward: '+1 Field Size permanently if defeated',
+    icon: 'lorc/snake',
     applyEffect: (gameState: GameState): GameState => {
       // Implementation would reduce the active field size
       return {
@@ -297,6 +306,7 @@ export const ENEMIES: Enemy[] = [
     description: '10% of drawn cards have +1 HP',
     effect: 'Increases card health',
     reward: '10% chance to heal +1 each time you match for the rest of the game',
+    icon: 'delapouite/mammoth',
     applyEffect: (gameState: GameState): GameState => {
       // Implementation would add health to 10% of cards
       return gameState;
@@ -311,6 +321,7 @@ export const ENEMIES: Enemy[] = [
     description: 'Time moves 1.2× faster',
     effect: 'Speeds up time',
     reward: 'Time now moves 1.1× slower after victory',
+    icon: 'delapouite/rabbit',
     applyEffect: (gameState: GameState): GameState => {
       return {
         ...gameState,
@@ -345,6 +356,7 @@ export const WEAPONS: Weapon[] = [
     name: 'Flint',
     level: 1,
     description: '20% chance to start a fire on a card. This fire could spread. Dodge is decreased by 20%.',
+    icon: 'delapouite/flint-spark',
     effects: {
       chanceOfFire: 20,
       dodgePercent: -20
@@ -354,6 +366,7 @@ export const WEAPONS: Weapon[] = [
     name: 'Bamboo',
     level: 1,
     description: '20% to deal one extra damage to a field card.',
+    icon: 'delapouite/bamboo',
     effects: {
       damagePercent: 20
     }
@@ -362,6 +375,7 @@ export const WEAPONS: Weapon[] = [
     name: 'Carrot',
     level: 1,
     description: 'Slows time by 1.1x.',
+    icon: 'delapouite/carrot',
     effects: {
       timeWarpPercent: 10
     }
@@ -370,6 +384,7 @@ export const WEAPONS: Weapon[] = [
     name: 'Beak',
     level: 1,
     description: '10% chance to inflict fragile on a field card that you\'ve matched with.',
+    icon: 'lorc/bird-claw',
     effects: {
       // Special effect for inflicting fragile would be implemented in game logic
     }
@@ -378,6 +393,7 @@ export const WEAPONS: Weapon[] = [
     name: 'Dirt',
     level: 1,
     description: 'Increases field size by 1.',
+    icon: 'delapouite/stone-pile',
     effects: {
       fieldSize: 1
     }
@@ -386,6 +402,7 @@ export const WEAPONS: Weapon[] = [
     name: 'Talon',
     level: 1,
     description: '25% chance to remove bramble upon match. Get +1 coin on removal.',
+    icon: 'lorc/claw-slashes',
     effects: {
       // Special effect for removing bramble would be implemented in game logic
     }
@@ -394,6 +411,7 @@ export const WEAPONS: Weapon[] = [
     name: 'Hoe',
     level: 1,
     description: '10% chance to increase field size by 1 for the round on a match.',
+    icon: 'delapouite/rake',
     effects: {
       // Special effect for temporary field size increase would be implemented in game logic
     }
@@ -408,6 +426,7 @@ export const ITEMS: Item[] = [
     rarity: 'Tier 2',
     price: 12,
     limit: null, // unlimited
+    icon: 'lorc/field',
     effects: {
       fieldSize: 3,
       commerce: 1
@@ -422,6 +441,7 @@ export const ITEMS: Item[] = [
     rarity: 'Tier 3',
     price: 15,
     limit: 1,
+    icon: 'lorc/mirror-mirror',
     effects: {
       luck: 5
       // Special mirroring effect would be implemented in game logic
@@ -436,6 +456,7 @@ export const ITEMS: Item[] = [
     rarity: 'Tier 1',
     price: 6,
     limit: null,
+    icon: 'lorc/light-bulb',
     effects: {
       matchPossibilityHints: 1,
       dodgeAttackBackPercent: 5
@@ -450,6 +471,7 @@ export const ITEMS: Item[] = [
     rarity: 'Tier 1',
     price: 5,
     limit: null,
+    icon: 'delapouite/token',
     effects: {
       freeRerolls: 1,
       scavengingPercent: 2
@@ -464,6 +486,7 @@ export const ITEMS: Item[] = [
     rarity: 'Tier 1',
     price: 3,
     limit: 1,
+    icon: 'delapouite/sunglasses',
     effects: {
       holographicPercent: 15,
       damage: 1

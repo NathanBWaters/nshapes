@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Pressable, StyleSheet } from 'react-native';
 import { Enemy } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
+import Icon from './Icon';
 
 interface EnemySelectionProps {
   enemies: Enemy[];
@@ -32,9 +33,13 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
       <View style={styles.detailSection}>
         {focusedEnemy ? (
           <View style={styles.detailCard}>
-            {/* Enemy Preview */}
+            {/* Enemy Icon */}
             <View style={styles.previewArea}>
-              <Text style={styles.previewLabel}>{focusedEnemy.name}</Text>
+              {focusedEnemy.icon ? (
+                <Icon name={focusedEnemy.icon} size={48} color={COLORS.slateCharcoal} />
+              ) : (
+                <Text style={styles.previewLabel}>{focusedEnemy.name}</Text>
+              )}
             </View>
 
             {/* Enemy Info */}
@@ -78,6 +83,14 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
                   isFocused && styles.optionButtonSelected,
                 ]}
               >
+                {enemy.icon && (
+                  <Icon
+                    name={enemy.icon}
+                    size={32}
+                    color={COLORS.slateCharcoal}
+                    style={styles.optionIcon}
+                  />
+                )}
                 <Text
                   style={[
                     styles.optionText,
@@ -264,6 +277,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 12,
+    gap: 6,
+  },
+  optionIcon: {
+    marginBottom: 2,
   },
   optionButtonSelected: {
     backgroundColor: COLORS.actionYellow,

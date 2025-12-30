@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { Character } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
+import { getWeaponByName } from '@/utils/gameDefinitions';
+import Icon from './Icon';
 
 interface CharacterSelectionProps {
   characters: Character[];
@@ -40,9 +42,13 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
       <View style={styles.detailSection}>
         {selectedChar ? (
           <View style={styles.detailCard}>
-            {/* Character Preview Placeholder */}
+            {/* Character Icon */}
             <View style={styles.previewArea}>
-              <Text style={styles.previewText}>{selectedChar.name}</Text>
+              {selectedChar.icon ? (
+                <Icon name={selectedChar.icon} size={64} color={COLORS.slateCharcoal} />
+              ) : (
+                <Text style={styles.previewText}>{selectedChar.name}</Text>
+              )}
             </View>
 
             {/* Character Info */}
@@ -53,7 +59,15 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
             <View style={styles.statsRow}>
               <View style={styles.statBox}>
                 <Text style={styles.statLabel}>Weapon</Text>
-                <Text style={styles.statValue}>{selectedChar.startingWeapon}</Text>
+                <View style={styles.statValueRow}>
+                  {(() => {
+                    const weapon = getWeaponByName(selectedChar.startingWeapon);
+                    return weapon?.icon ? (
+                      <Icon name={weapon.icon} size={16} color={COLORS.slateCharcoal} />
+                    ) : null;
+                  })()}
+                  <Text style={styles.statValue}>{selectedChar.startingWeapon}</Text>
+                </View>
               </View>
               <View style={styles.statBox}>
                 <Text style={styles.statLabel}>Items</Text>
@@ -94,14 +108,26 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
                   isSelected && styles.optionButtonSelected,
                 ]}
               >
-                <Text
-                  style={[
-                    styles.optionText,
-                    isSelected && styles.optionTextSelected,
-                  ]}
-                >
-                  {character.name}
-                </Text>
+                <View style={styles.optionIconArea}>
+                  {character.icon && (
+                    <Icon
+                      name={character.icon}
+                      size={48}
+                      color={COLORS.slateCharcoal}
+                    />
+                  )}
+                </View>
+                <View style={styles.optionNameArea}>
+                  <Text
+                    style={[
+                      styles.optionText,
+                      isSelected && styles.optionTextSelected,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {character.name}
+                  </Text>
+                </View>
               </Pressable>
             );
           })}
@@ -219,6 +245,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'monospace',
   },
+  statValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   emptyDetail: {
     flex: 1,
     backgroundColor: COLORS.canvasWhite,
@@ -273,6 +304,16 @@ const styles = StyleSheet.create({
     width: '31%',
     flexGrow: 1,
     flexBasis: '31%',
+    aspectRatio: 1,
+    padding: '10%',
+  },
+  optionIconArea: {
+    flex: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  optionNameArea: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -283,8 +324,9 @@ const styles = StyleSheet.create({
   optionText: {
     color: COLORS.slateCharcoal,
     fontWeight: '600',
-    fontSize: 12,
+    fontSize: 11,
     textTransform: 'uppercase',
+    textAlign: 'center',
   },
   optionTextSelected: {
     fontWeight: '700',

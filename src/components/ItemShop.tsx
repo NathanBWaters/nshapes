@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { Item } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
+import Icon from './Icon';
 
 interface ItemShopProps {
   items: Item[];
@@ -73,9 +74,13 @@ const ItemShop: React.FC<ItemShopProps> = ({
       <View style={styles.detailSection}>
         {focusedItem ? (
           <View style={styles.detailCard}>
-            {/* Item Preview */}
+            {/* Item Icon */}
             <View style={[styles.previewArea, { borderColor: getRarityColor(focusedItem.rarity) }]}>
-              <Text style={styles.previewLabel}>{focusedItem.rarity}</Text>
+              {focusedItem.icon ? (
+                <Icon name={focusedItem.icon} size={32} color={COLORS.slateCharcoal} />
+              ) : (
+                <Text style={styles.previewLabel}>{focusedItem.rarity}</Text>
+              )}
               <View style={styles.priceBadge}>
                 <Text style={styles.priceBadgeText}>${focusedItem.price}</Text>
               </View>
@@ -161,6 +166,14 @@ const ItemShop: React.FC<ItemShopProps> = ({
                     !canAfford && styles.optionButtonUnaffordable,
                   ]}
                 >
+                  {item.icon && (
+                    <Icon
+                      name={item.icon}
+                      size={24}
+                      color={COLORS.slateCharcoal}
+                      style={styles.optionIcon}
+                    />
+                  )}
                   <View style={styles.optionHeader}>
                     <Text style={[styles.optionPrice, !canAfford && styles.optionPriceUnaffordable]}>
                       ${item.price}
@@ -447,6 +460,11 @@ const styles = StyleSheet.create({
     flexBasis: '48%',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 8,
+    gap: 2,
+  },
+  optionIcon: {
+    marginBottom: 2,
   },
   optionButtonSelected: {
     backgroundColor: COLORS.actionYellow,

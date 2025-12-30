@@ -1,10 +1,13 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import Svg, { Ellipse, Path, Polygon, Defs, Pattern, Rect } from 'react-native-svg';
 import { Card as CardType } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 
-// Shape sizing - adjust this to change all shape heights
-const SHAPE_SIZE = '50%';
+// SVG viewBox dimensions (1:2 width:height ratio)
+const SVG_WIDTH = 20;
+const SVG_HEIGHT = 40;
+const STROKE_WIDTH = 2;
 
 interface CardProps {
   card: CardType;
@@ -148,79 +151,99 @@ const getBorderColor = (color: string) => {
   }
 };
 
-const getBgColor = (color: string, shading: string) => {
-  if (shading !== 'solid') return 'transparent';
-  return getBorderColor(color);
-};
+// Stripe pattern for "striped" shading
+const StripesPattern: React.FC<{ id: string; color: string }> = ({ id, color }) => (
+  <Defs>
+    <Pattern id={id} patternUnits="userSpaceOnUse" width="4" height="4">
+      <Rect x="0" y="0" width="4" height="2" fill={color} />
+    </Pattern>
+  </Defs>
+);
 
-const Stripes: React.FC<{ color: string }> = ({ color }) => {
-  // Create stripes that fill the shape using percentage positioning
-  const stripes = [];
-  const stripeCount = 5;
-  for (let i = 0; i < stripeCount; i++) {
-    const topPercent = (i / stripeCount) * 100;
-    stripes.push(
-      <View
-        key={i}
-        style={{
-          position: 'absolute',
-          top: `${topPercent}%`,
-          left: 0,
-          right: 0,
-          height: '12%',
-          backgroundColor: color,
-        }}
-      />
-    );
-  }
-  return <>{stripes}</>;
+const getFill = (color: string, shading: string, patternId: string) => {
+  if (shading === 'solid') return getBorderColor(color);
+  if (shading === 'striped') return `url(#${patternId})`;
+  return 'transparent';
 };
 
 const Oval: React.FC<ShapeProps> = ({ color, shading }) => {
-  const borderColor = getBorderColor(color);
+  const strokeColor = getBorderColor(color);
+  const patternId = `stripes-oval-${color}`;
   return (
-    <View
-      nativeID="shape-oval"
-      style={[
-        styles.shapeBase,
-        styles.oval,
-        { height: SHAPE_SIZE, borderColor, backgroundColor: getBgColor(color, shading) }
-      ]}
+    <Svg
+      width="100%"
+      height="100%"
+      viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
+      preserveAspectRatio="xMidYMid meet"
     >
-      {shading === 'striped' && <Stripes color={borderColor} />}
-    </View>
+      {shading === 'striped' && <StripesPattern id={patternId} color={strokeColor} />}
+      <Ellipse
+        cx={SVG_WIDTH / 2}
+        cy={SVG_HEIGHT / 2}
+        rx={(SVG_WIDTH - STROKE_WIDTH) / 2}
+        ry={(SVG_HEIGHT - STROKE_WIDTH) / 2}
+        stroke={strokeColor}
+        strokeWidth={STROKE_WIDTH}
+        fill={getFill(color, shading, patternId)}
+      />
+    </Svg>
   );
 };
 
 const Diamond: React.FC<ShapeProps> = ({ color, shading }) => {
-  const borderColor = getBorderColor(color);
+  const strokeColor = getBorderColor(color);
+  const patternId = `stripes-diamond-${color}`;
+  // Diamond points: top, right, bottom, left
+  const points = `${SVG_WIDTH / 2},${STROKE_WIDTH} ${SVG_WIDTH - STROKE_WIDTH},${SVG_HEIGHT / 2} ${SVG_WIDTH / 2},${SVG_HEIGHT - STROKE_WIDTH} ${STROKE_WIDTH},${SVG_HEIGHT / 2}`;
   return (
-    <View
-      nativeID="shape-diamond"
-      style={[
-        styles.shapeBase,
-        styles.diamond,
-        { height: SHAPE_SIZE, borderColor, backgroundColor: getBgColor(color, shading) }
-      ]}
+    <Svg
+      width="100%"
+      height="100%"
+      viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
+      preserveAspectRatio="xMidYMid meet"
     >
-      {shading === 'striped' && <Stripes color={borderColor} />}
-    </View>
+      {shading === 'striped' && <StripesPattern id={patternId} color={strokeColor} />}
+      <Polygon
+        points={points}
+        stroke={strokeColor}
+        strokeWidth={STROKE_WIDTH}
+        fill={getFill(color, shading, patternId)}
+      />
+    </Svg>
   );
 };
 
 const Squiggle: React.FC<ShapeProps> = ({ color, shading }) => {
-  const borderColor = getBorderColor(color);
+  const strokeColor = getBorderColor(color);
+  const patternId = `stripes-squiggle-${color}`;
+  // S-curve squiggle path (scaled for 20x40 viewBox)
+  const d = `
+    M 3,5
+    C 0,10 0,17 6,20
+    C 12,23 12,30 9,35
+    Q 7,38 10,39
+    C 13,38 13,36 11,35
+    C 8,31 8,25 14,20
+    C 20,15 20,10 17,5
+    Q 15,2 12,2
+    Q 6,2 3,5
+    Z
+  `;
   return (
-    <View
-      nativeID="shape-squiggle"
-      style={[
-        styles.shapeBase,
-        styles.squiggle,
-        { height: SHAPE_SIZE, borderColor, backgroundColor: getBgColor(color, shading) }
-      ]}
+    <Svg
+      width="100%"
+      height="100%"
+      viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
+      preserveAspectRatio="xMidYMid meet"
     >
-      {shading === 'striped' && <Stripes color={borderColor} />}
-    </View>
+      {shading === 'striped' && <StripesPattern id={patternId} color={strokeColor} />}
+      <Path
+        d={d}
+        stroke={strokeColor}
+        strokeWidth={STROKE_WIDTH}
+        fill={getFill(color, shading, patternId)}
+      />
+    </Svg>
   );
 };
 
@@ -255,8 +278,8 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   shapeContainer: {
-    flex: 1,
-    height: '100%',
+    height: '80%',
+    width: '28%', // Sized to fit 3 shapes with spacing
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -266,25 +289,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-evenly',
     width: '100%',
-  },
-  shapeBase: {
-    borderWidth: 3,
-    overflow: 'hidden',
-  },
-  oval: {
-    aspectRatio: 0.6,
-    borderRadius: 999,
-  },
-  diamond: {
-    aspectRatio: 1,
-    transform: [{ rotate: '45deg' }],
-  },
-  squiggle: {
-    aspectRatio: 0.6,
-    borderTopLeftRadius: 999,
-    borderTopRightRadius: 4,
-    borderBottomLeftRadius: 4,
-    borderBottomRightRadius: 999,
   },
   badge: {
     position: 'absolute',

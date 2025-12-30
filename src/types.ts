@@ -46,10 +46,10 @@ export interface CardReward {
   // Extensible: add more reward types here
 }
 
-export type CharacterName = 
-  'Orange Tabby' | 'Sly Fox' | 'Corgi' | 'Emperor Penguin' | 
-  'Blue-Footed Boobie' | 'Meerkat' | 'Cow' | 'Tortoise' | 
-  'Chimp' | 'Eagle' | 'Lemur' | 'Hedgehog' | 
+export type CharacterName =
+  'Orange Tabby' | 'Sly Fox' | 'Corgi' | 'Emperor Penguin' |
+  'Pelican' | 'Badger' | 'Cow' | 'Tortoise' |
+  'Chimp' | 'Eagle' | 'Lemur' | 'Hedgehog' |
   'Armadillo' | 'Raccoon' | 'Polar Bear' | 'Chameleon';
 
 export type EnemyName = 
@@ -74,6 +74,7 @@ export interface Weapon {
   level: number; // 1-4
   description: string;
   effects: Partial<PlayerStats>;
+  icon?: string; // Icon path like "delapouite/bamboo"
 }
 
 export interface Item {
@@ -84,6 +85,7 @@ export interface Item {
   limit: number | null; // null means no limit
   effects: Partial<PlayerStats>;
   drawbacks: Partial<PlayerStats>;
+  icon?: string; // Icon path like "lorc/clover"
 }
 
 export interface Enemy {
@@ -91,6 +93,7 @@ export interface Enemy {
   description: string;
   effect: string;
   reward: string;
+  icon?: string; // Icon path like "lorc/jellyfish"
   applyEffect: (gameState: GameState) => GameState;
   applyReward: (gameState: GameState) => GameState;
 }
@@ -101,6 +104,7 @@ export interface Character {
   startingWeapon: WeaponName;
   startingItems: ItemName[];
   baseStats: Partial<PlayerStats>;
+  icon?: string; // Icon path like "lorc/cat"
 }
 
 export interface PlayerStats {

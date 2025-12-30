@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { PlayerStats, Weapon } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
+import Icon from './Icon';
 
 interface LevelUpProps {
   options: (Partial<PlayerStats> | Weapon)[];
@@ -82,7 +83,11 @@ const LevelUp: React.FC<LevelUpProps> = ({
               // Weapon Details
               <>
                 <View style={styles.previewArea}>
-                  <Text style={styles.previewLabel}>Weapon</Text>
+                  {focusedOption.icon ? (
+                    <Icon name={focusedOption.icon} size={32} color={COLORS.slateCharcoal} />
+                  ) : (
+                    <Text style={styles.previewLabel}>Weapon</Text>
+                  )}
                   <View style={styles.levelBadge}>
                     <Text style={styles.levelBadgeText}>LV {focusedOption.level}</Text>
                   </View>
@@ -171,6 +176,14 @@ const LevelUp: React.FC<LevelUpProps> = ({
                   isFocused && weapon && styles.optionButtonWeaponSelected,
                 ]}
               >
+                {weapon && (option as Weapon).icon && (
+                  <Icon
+                    name={(option as Weapon).icon!}
+                    size={24}
+                    color={COLORS.slateCharcoal}
+                    style={styles.optionIcon}
+                  />
+                )}
                 <Text style={styles.optionType}>{getOptionType(option)}</Text>
                 <Text
                   style={[
@@ -394,6 +407,11 @@ const styles = StyleSheet.create({
     flexBasis: '48%',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 8,
+    gap: 2,
+  },
+  optionIcon: {
+    marginBottom: 2,
   },
   optionButtonSelected: {
     backgroundColor: COLORS.actionYellow,
