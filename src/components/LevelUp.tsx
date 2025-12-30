@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { PlayerStats, Weapon } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
-import Icon from './Icon';
+import Icon, { STAT_ICONS } from './Icon';
 
 interface LevelUpProps {
   options: (Partial<PlayerStats> | Weapon)[];
@@ -110,7 +110,15 @@ const LevelUp: React.FC<LevelUpProps> = ({
               // Stat Upgrade Details
               <>
                 <View style={styles.previewArea}>
-                  <Text style={styles.previewLabel}>Stat Upgrade</Text>
+                  {(() => {
+                    const statKey = Object.keys(focusedOption)[0];
+                    const iconPath = STAT_ICONS[statKey];
+                    return iconPath ? (
+                      <Icon name={iconPath} size={32} color={COLORS.slateCharcoal} />
+                    ) : (
+                      <Text style={styles.previewLabel}>Stat Upgrade</Text>
+                    );
+                  })()}
                 </View>
 
                 <Text style={styles.detailName}>{getOptionName(focusedOption, displayedIndex!)}</Text>
@@ -176,14 +184,25 @@ const LevelUp: React.FC<LevelUpProps> = ({
                   isFocused && weapon && styles.optionButtonWeaponSelected,
                 ]}
               >
-                {weapon && (option as Weapon).icon && (
+                {weapon && (option as Weapon).icon ? (
                   <Icon
                     name={(option as Weapon).icon!}
                     size={24}
                     color={COLORS.slateCharcoal}
                     style={styles.optionIcon}
                   />
-                )}
+                ) : !weapon && (() => {
+                  const statKey = Object.keys(option)[0];
+                  const iconPath = STAT_ICONS[statKey];
+                  return iconPath ? (
+                    <Icon
+                      name={iconPath}
+                      size={24}
+                      color={COLORS.slateCharcoal}
+                      style={styles.optionIcon}
+                    />
+                  ) : null;
+                })()}
                 <Text style={styles.optionType}>{getOptionType(option)}</Text>
                 <Text
                   style={[

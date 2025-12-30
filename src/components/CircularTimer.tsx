@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
 import { COLORS } from '@/utils/colors';
 
 interface CircularTimerProps {
@@ -18,9 +19,8 @@ const CircularTimer: React.FC<CircularTimerProps> = ({
   // Handle infinite time (totalTime <= 0 or very large)
   const isInfinite = totalTime <= 0 || totalTime > 9999;
 
-  // Calculate progress (0 to 1) - how much time has ELAPSED (fills up clockwise as time passes)
-  const elapsed = totalTime - currentTime;
-  const progress = isInfinite ? 0 : Math.min(Math.max(elapsed / totalTime, 0), 1);
+  // Calculate progress (0 to 1) - how much time REMAINS (starts full, empties as time runs out)
+  const progress = isInfinite ? 1 : Math.min(Math.max(currentTime / totalTime, 0), 1);
 
   // Animation for pulse effect when critical
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -49,7 +49,7 @@ const CircularTimer: React.FC<CircularTimerProps> = ({
     }
   }, [isCritical]);
 
-  // Color based on time remaining - using style guide colors
+  // Color based on time remaining
   const getProgressColor = () => {
     if (isInfinite) return COLORS.slateCharcoal;
     if (currentTime <= 5) return COLORS.impactRed;
@@ -58,8 +58,15 @@ const CircularTimer: React.FC<CircularTimerProps> = ({
   };
 
   const progressColor = getProgressColor();
-  const bgColor = COLORS.paperBeige;
-  const innerSize = size - strokeWidth * 2;
+
+  // SVG circle calculations
+  const center = size / 2;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+
+  // strokeDashoffset: 0 = full circle, circumference = empty circle
+  // We want full when progress=1, empty when progress=0
+  const strokeDashoffset = circumference * (1 - progress);
 
   // Format the time display
   const formatDisplayTime = () => {
@@ -72,13 +79,6 @@ const CircularTimer: React.FC<CircularTimerProps> = ({
     return String(secs);
   };
 
-  // Calculate rotation for the two halves
-  // First half rotates 0-180 degrees (covers progress 0-0.5)
-  // Second half rotates 0-180 degrees (covers progress 0.5-1.0)
-  const firstHalfRotation = Math.min(progress * 2, 1) * 180;
-  const secondHalfRotation = Math.max((progress - 0.5) * 2, 0) * 180;
-  const showSecondHalf = progress > 0.5;
-
   return (
     <Animated.View
       style={[
@@ -90,86 +90,40 @@ const CircularTimer: React.FC<CircularTimerProps> = ({
         },
       ]}
     >
-      {/* Background ring */}
-      <View
-        style={[
-          styles.backgroundRing,
-          {
-            width: size,
-            height: size,
-            borderRadius: size / 2,
-            borderWidth: strokeWidth,
-            borderColor: bgColor,
-          },
-        ]}
-      />
-
-      {/* Right half container (first 180 degrees, progress 0-50%) */}
-      <View
-        style={[
-          styles.halfMask,
-          {
-            width: size / 2,
-            height: size,
-            left: size / 2,
-          },
-        ]}
-      >
-        <View
-          style={[
-            styles.halfCircle,
-            {
-              width: size,
-              height: size,
-              borderRadius: size / 2,
-              borderWidth: strokeWidth,
-              borderColor: progressColor,
-              borderLeftColor: 'transparent',
-              borderBottomColor: 'transparent',
-              left: -size / 2,
-              transform: [{ rotate: `${firstHalfRotation - 45}deg` }],
-            },
-          ]}
+      <Svg width={size} height={size}>
+        {/* Background circle (track) */}
+        <Circle
+          cx={center}
+          cy={center}
+          r={radius}
+          stroke={COLORS.paperBeige}
+          strokeWidth={strokeWidth}
+          fill="none"
         />
-      </View>
-
-      {/* Left half container (second 180 degrees, progress 50-100%) */}
-      <View
-        style={[
-          styles.halfMask,
-          {
-            width: size / 2,
-            height: size,
-            left: 0,
-          },
-        ]}
-      >
-        <View
-          style={[
-            styles.halfCircle,
-            {
-              width: size,
-              height: size,
-              borderRadius: size / 2,
-              borderWidth: strokeWidth,
-              borderColor: showSecondHalf ? progressColor : 'transparent',
-              borderRightColor: 'transparent',
-              borderTopColor: 'transparent',
-              left: 0,
-              transform: [{ rotate: `${secondHalfRotation - 45}deg` }],
-            },
-          ]}
+        {/* Progress circle */}
+        <Circle
+          cx={center}
+          cy={center}
+          r={radius}
+          stroke={progressColor}
+          strokeWidth={strokeWidth}
+          fill="none"
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          strokeLinecap="round"
+          rotation={-90}
+          origin={`${center}, ${center}`}
         />
-      </View>
+      </Svg>
 
       {/* Inner circle with time text */}
       <View
         style={[
           styles.innerCircle,
           {
-            width: innerSize,
-            height: innerSize,
-            borderRadius: innerSize / 2,
+            width: size - strokeWidth * 2 - 4,
+            height: size - strokeWidth * 2 - 4,
+            borderRadius: (size - strokeWidth * 2 - 4) / 2,
           },
         ]}
       >
@@ -196,17 +150,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  backgroundRing: {
-    position: 'absolute',
-  },
-  halfMask: {
-    position: 'absolute',
-    overflow: 'hidden',
-  },
-  halfCircle: {
-    position: 'absolute',
-  },
   innerCircle: {
+    position: 'absolute',
     backgroundColor: COLORS.canvasWhite,
     alignItems: 'center',
     justifyContent: 'center',
