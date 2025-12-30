@@ -1,9 +1,10 @@
 import { Character, Enemy, Item, Weapon, PlayerStats, GameState, Player } from '../types';
+import { STARTING_STATS } from './gameConfig';
 
-// Default player stats
+// Default player stats - uses values from gameConfig for easy tweaking
 export const DEFAULT_PLAYER_STATS: PlayerStats = {
   level: 0,
-  money: 0,
+  money: STARTING_STATS.money,
   experience: 0,
   experienceGainPercent: 100,
   luck: 0,
@@ -11,10 +12,10 @@ export const DEFAULT_PLAYER_STATS: PlayerStats = {
   commerce: 0,
   scavengingPercent: 0,
   scavengeAmount: 1,
-  health: 3,
-  maxHealth: 3,
-  fieldSize: 12,
-  freeRerolls: 0,
+  health: STARTING_STATS.health,
+  maxHealth: STARTING_STATS.maxHealth,
+  fieldSize: STARTING_STATS.fieldSize,
+  freeRerolls: STARTING_STATS.freeRerolls,
   drawIncrease: 0,
   drawIncreasePercent: 0,
   chanceOfFire: 0,
@@ -38,7 +39,7 @@ export const DEFAULT_PLAYER_STATS: PlayerStats = {
   criticalChance: 0,
   timeFreezePercent: 0,
   timeFreezeAmount: 15,
-  hints: 3, // Start with 3 hints
+  hints: STARTING_STATS.hints,
   // Co-op specific
   hintPasses: 0,
 };

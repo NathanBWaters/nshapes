@@ -63,6 +63,14 @@ const RewardReveal: React.FC<RewardRevealProps> = ({ reward }) => {
     });
   }
 
+  if (reward.hint && reward.hint > 0) {
+    rewardItems.push({
+      icon: '?',
+      value: `+${reward.hint} HINT`,
+      color: COLORS.actionYellow,
+    });
+  }
+
   if (reward.lootBox) {
     rewardItems.push({
       icon: '?',

@@ -677,6 +677,7 @@ const Game: React.FC = () => {
     let totalMoney = 0;
     let totalExperience = 0;
     let totalHealing = 0;
+    let totalHints = 0;
     let lootCratesEarned = 0;
 
     rewards.forEach(reward => {
@@ -684,6 +685,7 @@ const Game: React.FC = () => {
       totalMoney += reward.money || 0;
       totalExperience += reward.experience || 0;
       totalHealing += reward.healing || 0;
+      totalHints += reward.hint || 0;
       if (reward.lootBox) lootCratesEarned++;
     });
 
@@ -727,7 +729,8 @@ const Game: React.FC = () => {
             experience: newExperience,
             level: newLevel,
             money: prevState.player.stats.money + totalMoney,
-            health: newHealth
+            health: newHealth,
+            hints: prevState.player.stats.hints + totalHints
           }
         }
       };
@@ -769,6 +772,20 @@ const Game: React.FC = () => {
         }
       };
     });
+  };
+
+  // Handle using a hint (decrement hint count)
+  const handleUseHint = () => {
+    setState(prevState => ({
+      ...prevState,
+      player: {
+        ...prevState.player,
+        stats: {
+          ...prevState.player.stats,
+          hints: Math.max(0, prevState.player.stats.hints - 1)
+        }
+      }
+    }));
   };
 
   // Replace matched cards
@@ -947,6 +964,7 @@ const Game: React.FC = () => {
                 isPlayerTurn={true}
                 onSelectedCountChange={setSelectedCount}
                 onHintStateChange={setHasActiveHint}
+                onUseHint={handleUseHint}
                 triggerHint={hintTrigger > 0 ? hintTrigger : undefined}
                 triggerClearHint={clearHintTrigger > 0 ? clearHintTrigger : undefined}
               />

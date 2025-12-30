@@ -40,6 +40,7 @@ export interface CardReward {
   money?: number;
   experience?: number;
   healing?: number;
+  hint?: number;
   lootBox?: boolean;
   item?: string; // Future: item name/id
   // Extensible: add more reward types here

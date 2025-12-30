@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Card as CardType, PlayerStats, CardReward } from '@/types';
 import Card from './Card';
 import RewardReveal from './RewardReveal';
 import { COLORS } from '@/utils/colors';
+import { MATCH_REWARDS } from '@/utils/gameConfig';
 
 interface GameBoardProps {
   cards: CardType[];
@@ -13,6 +14,7 @@ interface GameBoardProps {
   isPlayerTurn: boolean;
   onSelectedCountChange?: (count: number) => void;
   onHintStateChange?: (hasHint: boolean) => void;
+  onUseHint?: () => void;
   triggerHint?: number;
   triggerClearHint?: number;
 }
@@ -21,9 +23,9 @@ interface GameBoardProps {
 const calculateCardReward = (card: CardType): CardReward => {
   const reward: CardReward = {
     cardId: card.id,
-    points: 1,
-    money: 1,
-    experience: 1,
+    points: MATCH_REWARDS.basePoints,
+    money: MATCH_REWARDS.baseMoney,
+    experience: MATCH_REWARDS.baseExperience,
   };
 
   if (card.bonusPoints) {
@@ -39,6 +41,11 @@ const calculateCardReward = (card: CardType): CardReward => {
     reward.lootBox = true;
   }
 
+  // Chance to get a hint
+  if (Math.random() < MATCH_REWARDS.hintDropChance) {
+    reward.hint = 1;
+  }
+
   return reward;
 };
 
@@ -50,6 +57,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
   isPlayerTurn,
   onSelectedCountChange,
   onHintStateChange,
+  onUseHint,
   triggerHint,
   triggerClearHint,
 }) => {
@@ -57,6 +65,10 @@ const GameBoard: React.FC<GameBoardProps> = ({
   const [matchedCardIds, setMatchedCardIds] = useState<string[]>([]);
   const [hintCards, setHintCards] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Use ref for hints to avoid stale closure issues
+  const hintsRef = useRef(playerStats.hints);
+  hintsRef.current = playerStats.hints;
 
   // Reward reveal state - managed internally
   const [revealingRewards, setRevealingRewards] = useState<CardReward[]>([]);
@@ -107,7 +119,8 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
   // Find a hint (a valid set on the board)
   const findHint = useCallback(() => {
-    const hintsAvailable = playerStats.hints !== undefined && playerStats.hints > 0;
+    // Use ref to get current hints value without causing re-renders
+    const hintsAvailable = hintsRef.current !== undefined && hintsRef.current > 0;
     if (!hintsAvailable) return;
 
     const availableCards = cards.filter(card => !matchedCardIds.includes(card.id));
@@ -118,6 +131,8 @@ const GameBoard: React.FC<GameBoardProps> = ({
           const potentialSet = [availableCards[i], availableCards[j], availableCards[k]];
           if (isValidSet(potentialSet)) {
             setHintCards(potentialSet.map(c => c.id));
+            // Decrement hint count when successfully showing a hint
+            onUseHint?.();
             return;
           }
         }
@@ -125,7 +140,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
     }
 
     console.log("No valid sets found on the board");
-  }, [cards, matchedCardIds, playerStats.hints]);
+  }, [cards, matchedCardIds, onUseHint]);
 
   // Clear hint
   const clearHint = useCallback(() => {

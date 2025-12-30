@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Pressable } from 'react-native';
+import { View, Text, TouchableOpacity, Pressable, StyleSheet } from 'react-native';
 import { Enemy } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 
@@ -14,239 +14,297 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
   onSelect,
   round
 }) => {
-  const [hoveredEnemy, setHoveredEnemy] = useState<string | null>(null);
+  const [focusedIndex, setFocusedIndex] = useState<number>(0);
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+
+  // Show hovered enemy if hovering, otherwise show focused
+  const displayedIndex = hoveredIndex !== null ? hoveredIndex : focusedIndex;
+  const focusedEnemy = enemies.length > 0 ? enemies[displayedIndex] : null;
 
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.paperBeige }}>
+    <View style={styles.container}>
       {/* Eyebrow Banner */}
-      <View
-        style={{
-          height: 40,
-          backgroundColor: COLORS.actionYellow,
-          justifyContent: 'center',
-          alignItems: 'center',
-          borderBottomWidth: 1,
-          borderBottomColor: COLORS.slateCharcoal,
-        }}
-      >
-        <Text
-          style={{
-            color: COLORS.deepOnyx,
-            fontWeight: '700',
-            fontSize: 14,
-            textTransform: 'uppercase',
-            letterSpacing: 2,
-          }}
-        >
-          Round {round} - Enemy Selection
-        </Text>
+      <View style={styles.eyebrow}>
+        <Text style={styles.eyebrowText}>Round {round} - Choose Enemy</Text>
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
-        {/* Section Header */}
-        <Text
-          style={{
-            color: COLORS.slateCharcoal,
-            fontWeight: '700',
-            fontSize: 24,
-            marginBottom: 8,
-            textTransform: 'uppercase',
-          }}
-        >
-          Choose Your Enemy
-        </Text>
-        <Text
-          style={{
-            color: COLORS.slateCharcoal,
-            fontWeight: '400',
-            fontSize: 14,
-            marginBottom: 20,
-            opacity: 0.7,
-          }}
-        >
-          Select an enemy to face this round. Each enemy has unique effects and rewards.
-        </Text>
+      {/* Top Half - Detail Focus */}
+      <View style={styles.detailSection}>
+        {focusedEnemy ? (
+          <View style={styles.detailCard}>
+            {/* Enemy Preview */}
+            <View style={styles.previewArea}>
+              <Text style={styles.previewLabel}>{focusedEnemy.name}</Text>
+            </View>
 
-        {/* Enemy Cards */}
-        <View style={{ gap: 16 }}>
-          {enemies.map(enemy => {
-            const isHovered = hoveredEnemy === enemy.name;
+            {/* Enemy Info */}
+            <Text style={styles.detailName}>{focusedEnemy.name}</Text>
+            <Text style={styles.detailDescription}>{focusedEnemy.description}</Text>
+
+            {/* Effect & Reward */}
+            <View style={styles.infoRow}>
+              <View style={[styles.infoBox, styles.infoBoxEffect]}>
+                <Text style={styles.infoLabelEffect}>Effect</Text>
+                <Text style={styles.infoText}>{focusedEnemy.effect}</Text>
+              </View>
+              <View style={[styles.infoBox, styles.infoBoxReward]}>
+                <Text style={styles.infoLabelReward}>Reward</Text>
+                <Text style={styles.infoText}>{focusedEnemy.reward}</Text>
+              </View>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.emptyDetail}>
+            <Text style={styles.emptyText}>No enemies available</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Bottom Half - Options Grid */}
+      <View style={styles.optionsSection}>
+        <Text style={styles.optionsHeader}>Select Your Opponent</Text>
+        <View style={styles.optionsGrid}>
+          {enemies.map((enemy, index) => {
+            const isFocused = focusedIndex === index;
 
             return (
               <Pressable
                 key={enemy.name}
-                onHoverIn={() => setHoveredEnemy(enemy.name)}
-                onHoverOut={() => setHoveredEnemy(null)}
-                style={{
-                  backgroundColor: COLORS.canvasWhite,
-                  borderRadius: RADIUS.module,
-                  borderWidth: 1,
-                  borderColor: COLORS.slateCharcoal,
-                  padding: 16,
-                  transform: [{ scale: isHovered ? 1.01 : 1 }],
-                  shadowColor: COLORS.deepOnyx,
-                  shadowOffset: { width: 0, height: isHovered ? 4 : 2 },
-                  shadowOpacity: isHovered ? 0.15 : 0.08,
-                  shadowRadius: isHovered ? 8 : 4,
-                  elevation: isHovered ? 4 : 2,
-                }}
+                onPress={() => setFocusedIndex(index)}
+                onHoverIn={() => setHoveredIndex(index)}
+                onHoverOut={() => setHoveredIndex(null)}
+                style={[
+                  styles.optionButton,
+                  isFocused && styles.optionButtonSelected,
+                ]}
               >
-                {/* Enemy Preview Area - Data Module style */}
-                <View
-                  style={{
-                    backgroundColor: COLORS.paperBeige,
-                    height: 60,
-                    borderRadius: 8,
-                    marginBottom: 12,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    borderWidth: 1,
-                    borderStyle: 'dashed',
-                    borderColor: COLORS.slateCharcoal,
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: COLORS.slateCharcoal,
-                      fontWeight: '700',
-                      fontSize: 14,
-                      textTransform: 'uppercase',
-                      letterSpacing: 1,
-                    }}
-                  >
-                    {enemy.name}
-                  </Text>
-                </View>
-
-                {/* Enemy Name Header */}
                 <Text
-                  style={{
-                    color: COLORS.slateCharcoal,
-                    fontWeight: '700',
-                    fontSize: 18,
-                    textTransform: 'uppercase',
-                    marginBottom: 4,
-                  }}
+                  style={[
+                    styles.optionText,
+                    isFocused && styles.optionTextSelected,
+                  ]}
+                  numberOfLines={2}
                 >
                   {enemy.name}
                 </Text>
-
-                {/* Description */}
-                <Text
-                  style={{
-                    color: COLORS.slateCharcoal,
-                    fontWeight: '400',
-                    fontSize: 13,
-                    lineHeight: 18,
-                    marginBottom: 12,
-                    opacity: 0.8,
-                  }}
-                >
-                  {enemy.description}
-                </Text>
-
-                {/* Effect and Reward in a row */}
-                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-                  {/* Effect Section */}
-                  <View
-                    style={{
-                      flex: 1,
-                      backgroundColor: COLORS.paperBeige,
-                      borderRadius: 8,
-                      padding: 10,
-                      borderWidth: 1,
-                      borderColor: COLORS.slateCharcoal,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: COLORS.impactOrange,
-                        fontWeight: '600',
-                        fontSize: 10,
-                        textTransform: 'uppercase',
-                        letterSpacing: 0.5,
-                        marginBottom: 4,
-                      }}
-                    >
-                      Effect
-                    </Text>
-                    <Text
-                      style={{
-                        color: COLORS.slateCharcoal,
-                        fontWeight: '400',
-                        fontSize: 12,
-                      }}
-                    >
-                      {enemy.effect}
-                    </Text>
-                  </View>
-
-                  {/* Reward Section */}
-                  <View
-                    style={{
-                      flex: 1,
-                      backgroundColor: COLORS.paperBeige,
-                      borderRadius: 8,
-                      padding: 10,
-                      borderWidth: 1,
-                      borderColor: COLORS.slateCharcoal,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: COLORS.logicTeal,
-                        fontWeight: '600',
-                        fontSize: 10,
-                        textTransform: 'uppercase',
-                        letterSpacing: 0.5,
-                        marginBottom: 4,
-                      }}
-                    >
-                      Reward
-                    </Text>
-                    <Text
-                      style={{
-                        color: COLORS.slateCharcoal,
-                        fontWeight: '400',
-                        fontSize: 12,
-                      }}
-                    >
-                      {enemy.reward}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Fight Button - Primary CTA style */}
-                <TouchableOpacity
-                  onPress={() => onSelect(enemy)}
-                  style={{
-                    backgroundColor: COLORS.actionYellow,
-                    borderWidth: 1,
-                    borderColor: COLORS.slateCharcoal,
-                    borderRadius: RADIUS.button,
-                    paddingVertical: 12,
-                    alignItems: 'center',
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: COLORS.slateCharcoal,
-                      fontWeight: '700',
-                      fontSize: 14,
-                      textTransform: 'uppercase',
-                      letterSpacing: 1,
-                    }}
-                  >
-                    Fight This Enemy
-                  </Text>
-                </TouchableOpacity>
               </Pressable>
             );
           })}
         </View>
-      </ScrollView>
+      </View>
+
+      {/* Action Button */}
+      <View style={styles.actionSection}>
+        <TouchableOpacity
+          onPress={() => focusedEnemy && onSelect(focusedEnemy)}
+          disabled={!focusedEnemy}
+          style={[
+            styles.actionButton,
+            !focusedEnemy && styles.actionButtonDisabled,
+          ]}
+        >
+          <Text style={styles.actionButtonText}>Fight</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.paperBeige,
+  },
+  eyebrow: {
+    height: 40,
+    backgroundColor: COLORS.actionYellow,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.slateCharcoal,
+  },
+  eyebrowText: {
+    color: COLORS.deepOnyx,
+    fontWeight: '700',
+    fontSize: 14,
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+  },
+  // Top Half - Detail Section
+  detailSection: {
+    flex: 1,
+    padding: 16,
+  },
+  detailCard: {
+    flex: 1,
+    backgroundColor: COLORS.canvasWhite,
+    borderRadius: RADIUS.module,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+    padding: 16,
+  },
+  previewArea: {
+    backgroundColor: COLORS.paperBeige,
+    height: 60,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: COLORS.slateCharcoal,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  previewLabel: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '700',
+    fontSize: 14,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  detailName: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '700',
+    fontSize: 20,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  detailDescription: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '400',
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 12,
+    opacity: 0.8,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  infoBox: {
+    flex: 1,
+    backgroundColor: COLORS.paperBeige,
+    borderRadius: 8,
+    padding: 10,
+    borderWidth: 1,
+  },
+  infoBoxEffect: {
+    borderColor: COLORS.impactOrange,
+  },
+  infoBoxReward: {
+    borderColor: COLORS.logicTeal,
+  },
+  infoLabelEffect: {
+    color: COLORS.impactOrange,
+    fontWeight: '600',
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  infoLabelReward: {
+    color: COLORS.logicTeal,
+    fontWeight: '600',
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  infoText: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '400',
+    fontSize: 12,
+  },
+  emptyDetail: {
+    flex: 1,
+    backgroundColor: COLORS.canvasWhite,
+    borderRadius: RADIUS.module,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: COLORS.slateCharcoal,
+    padding: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '400',
+    fontSize: 14,
+    opacity: 0.6,
+  },
+  // Bottom Half - Options Section
+  optionsSection: {
+    flex: 1,
+    backgroundColor: COLORS.canvasWhite,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.slateCharcoal,
+  },
+  optionsHeader: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '700',
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  optionsGrid: {
+    flex: 1,
+    flexDirection: 'row',
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+    gap: 8,
+  },
+  optionButton: {
+    flex: 1,
+    backgroundColor: COLORS.paperBeige,
+    borderRadius: RADIUS.button,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+  },
+  optionButtonSelected: {
+    backgroundColor: COLORS.actionYellow,
+    borderWidth: 2,
+  },
+  optionText: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '600',
+    fontSize: 12,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+  },
+  optionTextSelected: {
+    fontWeight: '700',
+  },
+  // Action Section
+  actionSection: {
+    padding: 16,
+    backgroundColor: COLORS.canvasWhite,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.slateCharcoal,
+  },
+  actionButton: {
+    backgroundColor: COLORS.actionYellow,
+    borderRadius: RADIUS.button,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  actionButtonDisabled: {
+    backgroundColor: COLORS.paperBeige,
+    opacity: 0.6,
+  },
+  actionButtonText: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '700',
+    fontSize: 16,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+});
 
 export default EnemySelection;
