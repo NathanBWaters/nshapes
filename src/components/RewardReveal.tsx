@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { CardReward } from '@/types';
+import { COLORS, RADIUS } from '@/utils/colors';
 
 interface RewardRevealProps {
   reward: CardReward;
@@ -32,9 +33,9 @@ const RewardReveal: React.FC<RewardRevealProps> = ({ reward }) => {
 
   if (reward.points && reward.points > 0) {
     rewardItems.push({
-      icon: '★',
+      icon: '*',
       value: `+${reward.points}`,
-      color: '#fbbf24', // Yellow/gold
+      color: COLORS.actionYellow,
     });
   }
 
@@ -42,39 +43,39 @@ const RewardReveal: React.FC<RewardRevealProps> = ({ reward }) => {
     rewardItems.push({
       icon: '$',
       value: `+${reward.money}`,
-      color: '#22c55e', // Green
+      color: COLORS.logicTeal,
     });
   }
 
   if (reward.experience && reward.experience > 0) {
     rewardItems.push({
-      icon: '✦',
-      value: `+${reward.experience}`,
-      color: '#a855f7', // Purple
+      icon: '+',
+      value: `${reward.experience}XP`,
+      color: COLORS.impactOrange,
     });
   }
 
   if (reward.healing && reward.healing > 0) {
     rewardItems.push({
-      icon: '♥',
-      value: `+${reward.healing}`,
-      color: '#ef4444', // Red
+      icon: '+',
+      value: `${reward.healing}HP`,
+      color: COLORS.impactRed,
     });
   }
 
   if (reward.lootBox) {
     rewardItems.push({
-      icon: '📦',
-      value: '',
-      color: '#f97316', // Orange
+      icon: '?',
+      value: 'LOOT',
+      color: COLORS.impactOrange,
     });
   }
 
   if (reward.item) {
     rewardItems.push({
-      icon: '🎁',
+      icon: '!',
       value: reward.item,
-      color: '#ec4899', // Pink
+      color: COLORS.logicTeal,
     });
   }
 
@@ -109,12 +110,12 @@ const RewardReveal: React.FC<RewardRevealProps> = ({ reward }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1f2937',
-    borderRadius: 8,
+    backgroundColor: COLORS.deepOnyx,
+    borderRadius: RADIUS.module,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#374151',
+    borderColor: COLORS.slateCharcoal,
   },
   rewardsContainer: {
     alignItems: 'center',
@@ -128,10 +129,12 @@ const styles = StyleSheet.create({
   rewardIcon: {
     fontSize: 18,
     fontWeight: '700',
+    fontFamily: 'monospace',
   },
   rewardValue: {
     fontSize: 14,
     fontWeight: '700',
+    fontFamily: 'monospace',
   },
 });
 

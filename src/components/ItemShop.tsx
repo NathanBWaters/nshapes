@@ -1,6 +1,7 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, Pressable } from 'react-native';
 import { Item } from '@/types';
+import { COLORS, RADIUS } from '@/utils/colors';
 
 interface ItemShopProps {
   items: Item[];
@@ -12,6 +13,22 @@ interface ItemShopProps {
   onContinue: () => void;
 }
 
+// Rarity colors based on style guide
+const getRarityColors = (rarity: string): { bg: string; text: string; border: string } => {
+  switch (rarity) {
+    case 'Tier 1':
+      return { bg: COLORS.paperBeige, text: COLORS.slateCharcoal, border: COLORS.slateCharcoal };
+    case 'Tier 2':
+      return { bg: '#E8F5E9', text: COLORS.logicTeal, border: COLORS.logicTeal };
+    case 'Tier 3':
+      return { bg: '#E3F2FD', text: '#1976D2', border: '#1976D2' };
+    case 'Tier 4':
+      return { bg: '#FFF3E0', text: COLORS.impactOrange, border: COLORS.impactOrange };
+    default:
+      return { bg: COLORS.paperBeige, text: COLORS.slateCharcoal, border: COLORS.slateCharcoal };
+  }
+};
+
 const ItemShop: React.FC<ItemShopProps> = ({
   items,
   playerMoney,
@@ -21,169 +38,405 @@ const ItemShop: React.FC<ItemShopProps> = ({
   freeRerolls,
   onContinue
 }) => {
-  // Helper function to get color based on item rarity
-  const getRarityColor = (rarity: string): string => {
-    switch (rarity) {
-      case 'Common': return 'text-gray-600';
-      case 'Uncommon': return 'text-green-600';
-      case 'Rare': return 'text-blue-600';
-      case 'Epic': return 'text-purple-600';
-      case 'Legendary': return 'text-orange-600';
-      default: return 'text-gray-600';
-    }
-  };
-
-  // Helper function to get border class based on item rarity
-  const getItemBorderClass = (rarity: string): string => {
-    switch (rarity) {
-      case 'Common': return 'border-gray-300';
-      case 'Uncommon': return 'border-green-300';
-      case 'Rare': return 'border-blue-300';
-      case 'Epic': return 'border-purple-300';
-      case 'Legendary': return 'border-orange-300';
-      default: return 'border-gray-300';
-    }
-  };
+  const [hoveredItem, setHoveredItem] = useState<number | null>(null);
 
   return (
-    <ScrollView className="p-4">
-      <View className="flex-row justify-between items-center mb-4">
-        <Text className="text-2xl font-bold">Item Shop</Text>
-        <View className="flex-row items-center">
-          <Text className="font-medium">Money: </Text>
-          <Text>{playerMoney} 💰</Text>
+    <View style={{ flex: 1, backgroundColor: COLORS.paperBeige }}>
+      {/* Eyebrow Banner */}
+      <View
+        style={{
+          height: 40,
+          backgroundColor: COLORS.actionYellow,
+          justifyContent: 'center',
+          alignItems: 'center',
+          borderBottomWidth: 1,
+          borderBottomColor: COLORS.slateCharcoal,
+          flexDirection: 'row',
+          paddingHorizontal: 16,
+        }}
+      >
+        <Text
+          style={{
+            color: COLORS.deepOnyx,
+            fontWeight: '700',
+            fontSize: 14,
+            textTransform: 'uppercase',
+            letterSpacing: 2,
+            flex: 1,
+            textAlign: 'center',
+          }}
+        >
+          Item Shop
+        </Text>
+        <View
+          style={{
+            position: 'absolute',
+            right: 16,
+            backgroundColor: COLORS.deepOnyx,
+            paddingHorizontal: 12,
+            paddingVertical: 4,
+            borderRadius: RADIUS.button,
+          }}
+        >
+          <Text
+            style={{
+              color: COLORS.actionYellow,
+              fontWeight: '700',
+              fontSize: 14,
+              fontFamily: 'monospace',
+            }}
+          >
+            ${playerMoney}
+          </Text>
         </View>
       </View>
 
-      <View className="flex-col gap-4">
-        {items.map((item, index) => {
-          // Format item effects for display
-          const effects = Object.entries(item.effects).map(([key, value]) => {
-            const formattedKey = key
-              .replace(/([A-Z])/g, ' $1')
-              .replace(/^./, str => str.toUpperCase());
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
+        {/* Section Header */}
+        <Text
+          style={{
+            color: COLORS.slateCharcoal,
+            fontWeight: '700',
+            fontSize: 24,
+            marginBottom: 8,
+            textTransform: 'uppercase',
+          }}
+        >
+          Available Items
+        </Text>
+        <Text
+          style={{
+            color: COLORS.slateCharcoal,
+            fontWeight: '400',
+            fontSize: 14,
+            marginBottom: 20,
+            opacity: 0.7,
+          }}
+        >
+          Purchase items to enhance your abilities
+        </Text>
 
-            let displayValue: string = '';
-            if (typeof value === 'number') {
-              displayValue = value > 0 ? `+${value}` : `${value}`;
-              if (key.toLowerCase().includes('percent')) {
-                displayValue += '%';
+        {/* Item Cards */}
+        <View style={{ gap: 12 }}>
+          {items.map((item, index) => {
+            const canAfford = playerMoney >= item.price;
+            const isHovered = hoveredItem === index;
+            const rarityColors = getRarityColors(item.rarity);
+
+            // Format effects
+            const effects = Object.entries(item.effects).map(([key, value]) => {
+              const formattedKey = key
+                .replace(/([A-Z])/g, ' $1')
+                .replace(/^./, str => str.toUpperCase());
+              let displayValue = '';
+              if (typeof value === 'number') {
+                displayValue = value > 0 ? `+${value}` : `${value}`;
+                if (key.toLowerCase().includes('percent')) displayValue += '%';
+              } else {
+                displayValue = String(value);
               }
-            } else {
-              displayValue = String(value);
-            }
+              return `${formattedKey}: ${displayValue}`;
+            });
 
-            return `${formattedKey}: ${displayValue}`;
-          });
-
-          // Format item drawbacks for display
-          const drawbacks = Object.entries(item.drawbacks || {}).map(([key, value]) => {
-            const formattedKey = key
-              .replace(/([A-Z])/g, ' $1')
-              .replace(/^./, str => str.toUpperCase());
-
-            let displayValue: string = '';
-            if (typeof value === 'number') {
-              displayValue = value > 0 ? `+${value}` : `${value}`;
-              if (key.toLowerCase().includes('percent')) {
-                displayValue += '%';
+            // Format drawbacks
+            const drawbacks = Object.entries(item.drawbacks || {}).map(([key, value]) => {
+              const formattedKey = key
+                .replace(/([A-Z])/g, ' $1')
+                .replace(/^./, str => str.toUpperCase());
+              let displayValue = '';
+              if (typeof value === 'number') {
+                displayValue = value > 0 ? `+${value}` : `${value}`;
+                if (key.toLowerCase().includes('percent')) displayValue += '%';
+              } else {
+                displayValue = String(value);
               }
-            } else {
-              displayValue = String(value);
-            }
+              return `${formattedKey}: ${displayValue}`;
+            });
 
-            return `${formattedKey}: ${displayValue}`;
-          });
-
-          const canAfford = playerMoney >= item.price;
-
-          return (
-            <View
-              key={`${item.name}-${index}`}
-              className={`p-4 border-2 ${getItemBorderClass(item.rarity)} rounded-lg ${!canAfford ? 'opacity-60' : ''}`}
-            >
-              <View className="flex-row justify-between items-start">
-                <Text className={`font-bold ${getRarityColor(item.rarity)}`}>{item.name}</Text>
-                <View className="bg-yellow-100 px-2 py-1 rounded">
-                  <Text className="text-sm font-medium">{item.price} 💰</Text>
+            return (
+              <Pressable
+                key={`${item.name}-${index}`}
+                onHoverIn={() => setHoveredItem(index)}
+                onHoverOut={() => setHoveredItem(null)}
+                style={{
+                  backgroundColor: COLORS.canvasWhite,
+                  borderRadius: RADIUS.module,
+                  borderWidth: 2,
+                  borderColor: rarityColors.border,
+                  padding: 16,
+                  opacity: canAfford ? 1 : 0.6,
+                  transform: [{ scale: isHovered && canAfford ? 1.01 : 1 }],
+                  shadowColor: COLORS.deepOnyx,
+                  shadowOffset: { width: 0, height: isHovered ? 4 : 2 },
+                  shadowOpacity: isHovered ? 0.15 : 0.08,
+                  shadowRadius: isHovered ? 8 : 4,
+                  elevation: isHovered ? 4 : 2,
+                }}
+              >
+                {/* Header Row */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        color: rarityColors.text,
+                        fontWeight: '700',
+                        fontSize: 16,
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      {item.name}
+                    </Text>
+                    <Text
+                      style={{
+                        color: rarityColors.text,
+                        fontWeight: '600',
+                        fontSize: 10,
+                        textTransform: 'uppercase',
+                        letterSpacing: 1,
+                        opacity: 0.7,
+                      }}
+                    >
+                      {item.rarity}
+                    </Text>
+                  </View>
+                  <View
+                    style={{
+                      backgroundColor: COLORS.actionYellow,
+                      paddingHorizontal: 10,
+                      paddingVertical: 6,
+                      borderRadius: RADIUS.button,
+                      borderWidth: 1,
+                      borderColor: COLORS.slateCharcoal,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: COLORS.slateCharcoal,
+                        fontWeight: '700',
+                        fontSize: 14,
+                        fontFamily: 'monospace',
+                      }}
+                    >
+                      ${item.price}
+                    </Text>
+                  </View>
                 </View>
-              </View>
 
-              <Text className="text-sm text-gray-600 mt-2">{item.description}</Text>
+                {/* Description */}
+                <Text
+                  style={{
+                    color: COLORS.slateCharcoal,
+                    fontWeight: '400',
+                    fontSize: 13,
+                    lineHeight: 18,
+                    marginBottom: 12,
+                    opacity: 0.8,
+                  }}
+                >
+                  {item.description}
+                </Text>
 
-              {effects.length > 0 && (
-                <View className="mt-3">
-                  <Text className="text-sm font-semibold text-green-700">Effects:</Text>
-                  <View className="mt-1">
+                {/* Effects */}
+                {effects.length > 0 && (
+                  <View
+                    style={{
+                      backgroundColor: COLORS.paperBeige,
+                      borderRadius: 8,
+                      padding: 10,
+                      marginBottom: 8,
+                      borderWidth: 1,
+                      borderColor: COLORS.logicTeal,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: COLORS.logicTeal,
+                        fontWeight: '600',
+                        fontSize: 11,
+                        textTransform: 'uppercase',
+                        letterSpacing: 0.5,
+                        marginBottom: 4,
+                      }}
+                    >
+                      Effects
+                    </Text>
                     {effects.map((effect, i) => (
-                      <Text key={i} className="text-xs text-green-600">{effect}</Text>
+                      <Text
+                        key={i}
+                        style={{
+                          color: COLORS.slateCharcoal,
+                          fontWeight: '400',
+                          fontSize: 12,
+                          fontFamily: 'monospace',
+                        }}
+                      >
+                        {effect}
+                      </Text>
                     ))}
                   </View>
-                </View>
-              )}
+                )}
 
-              {drawbacks.length > 0 && (
-                <View className="mt-3">
-                  <Text className="text-sm font-semibold text-red-700">Drawbacks:</Text>
-                  <View className="mt-1">
+                {/* Drawbacks */}
+                {drawbacks.length > 0 && (
+                  <View
+                    style={{
+                      backgroundColor: COLORS.paperBeige,
+                      borderRadius: 8,
+                      padding: 10,
+                      marginBottom: 12,
+                      borderWidth: 1,
+                      borderColor: COLORS.impactRed,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: COLORS.impactRed,
+                        fontWeight: '600',
+                        fontSize: 11,
+                        textTransform: 'uppercase',
+                        letterSpacing: 0.5,
+                        marginBottom: 4,
+                      }}
+                    >
+                      Drawbacks
+                    </Text>
                     {drawbacks.map((drawback, i) => (
-                      <Text key={i} className="text-xs text-red-600">{drawback}</Text>
+                      <Text
+                        key={i}
+                        style={{
+                          color: COLORS.slateCharcoal,
+                          fontWeight: '400',
+                          fontSize: 12,
+                          fontFamily: 'monospace',
+                        }}
+                      >
+                        {drawback}
+                      </Text>
                     ))}
                   </View>
-                </View>
-              )}
+                )}
 
-              <View className="mt-4">
+                {/* Purchase Button */}
                 <TouchableOpacity
-                  className={`w-full py-2 rounded-lg ${
-                    canAfford
-                      ? 'bg-blue-500'
-                      : 'bg-gray-300'
-                  }`}
                   onPress={() => canAfford && onPurchase(index)}
                   disabled={!canAfford}
+                  style={{
+                    backgroundColor: canAfford ? COLORS.actionYellow : COLORS.paperBeige,
+                    borderWidth: 1,
+                    borderColor: COLORS.slateCharcoal,
+                    borderRadius: RADIUS.button,
+                    paddingVertical: 12,
+                    alignItems: 'center',
+                  }}
                 >
-                  <Text className={`text-center font-medium ${canAfford ? 'text-white' : 'text-gray-500'}`}>
-                    Purchase
+                  <Text
+                    style={{
+                      color: COLORS.slateCharcoal,
+                      fontWeight: '700',
+                      fontSize: 14,
+                      textTransform: 'uppercase',
+                      letterSpacing: 1,
+                    }}
+                  >
+                    {canAfford ? 'Purchase' : 'Cannot Afford'}
                   </Text>
                 </TouchableOpacity>
-              </View>
-            </View>
-          );
-        })}
-      </View>
-
-      {items.length === 0 && (
-        <View className="py-8">
-          <Text className="text-center text-gray-500">No items available in the shop.</Text>
+              </Pressable>
+            );
+          })}
         </View>
-      )}
 
-      <View className="mt-6 flex-row justify-between">
-        <TouchableOpacity
-          className={`px-4 py-2 rounded-lg ${
-            (playerMoney >= rerollCost || freeRerolls > 0)
-              ? 'bg-purple-500'
-              : 'bg-gray-300'
-          }`}
-          onPress={onReroll}
-          disabled={playerMoney < rerollCost && freeRerolls <= 0}
-        >
-          <Text className={`${(playerMoney >= rerollCost || freeRerolls > 0) ? 'text-white' : 'text-gray-500'}`}>
-            {freeRerolls > 0
-              ? `Reroll (${freeRerolls} free)`
-              : `Reroll (${rerollCost} 💰)`}
-          </Text>
-        </TouchableOpacity>
+        {/* Empty State */}
+        {items.length === 0 && (
+          <View
+            style={{
+              backgroundColor: COLORS.canvasWhite,
+              borderRadius: RADIUS.module,
+              borderWidth: 1,
+              borderColor: COLORS.slateCharcoal,
+              padding: 32,
+              alignItems: 'center',
+            }}
+          >
+            <Text
+              style={{
+                color: COLORS.slateCharcoal,
+                fontWeight: '600',
+                fontSize: 16,
+                opacity: 0.6,
+              }}
+            >
+              No items available in the shop.
+            </Text>
+          </View>
+        )}
 
-        <TouchableOpacity
-          className="px-4 py-2 bg-green-500 rounded-lg"
-          onPress={onContinue}
-        >
-          <Text className="text-white">Continue to Next Round</Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+        {/* Action Buttons */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 24, marginBottom: 40, gap: 12 }}>
+          {/* Reroll Button */}
+          <TouchableOpacity
+            onPress={onReroll}
+            disabled={playerMoney < rerollCost && freeRerolls <= 0}
+            style={{
+              flex: 1,
+              backgroundColor: (playerMoney >= rerollCost || freeRerolls > 0)
+                ? COLORS.canvasWhite
+                : COLORS.paperBeige,
+              borderWidth: 2,
+              borderColor: COLORS.slateCharcoal,
+              borderRadius: RADIUS.button,
+              paddingVertical: 14,
+              alignItems: 'center',
+              opacity: (playerMoney >= rerollCost || freeRerolls > 0) ? 1 : 0.5,
+            }}
+          >
+            <Text
+              style={{
+                color: COLORS.slateCharcoal,
+                fontWeight: '700',
+                fontSize: 14,
+                textTransform: 'uppercase',
+              }}
+            >
+              {freeRerolls > 0
+                ? `Reroll (${freeRerolls} Free)`
+                : `Reroll ($${rerollCost})`}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Continue Button */}
+          <TouchableOpacity
+            onPress={onContinue}
+            style={{
+              flex: 1,
+              backgroundColor: COLORS.actionYellow,
+              borderWidth: 1,
+              borderColor: COLORS.slateCharcoal,
+              borderRadius: RADIUS.button,
+              paddingVertical: 14,
+              alignItems: 'center',
+              shadowColor: COLORS.deepOnyx,
+              shadowOffset: { width: 2, height: 2 },
+              shadowOpacity: 0.2,
+              shadowRadius: 0,
+              elevation: 2,
+            }}
+          >
+            <Text
+              style={{
+                color: COLORS.slateCharcoal,
+                fontWeight: '700',
+                fontSize: 14,
+                textTransform: 'uppercase',
+                letterSpacing: 1,
+              }}
+            >
+              Continue
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </View>
   );
 };
 

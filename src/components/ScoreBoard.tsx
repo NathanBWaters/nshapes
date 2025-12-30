@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { useSocket } from '@/context/SocketContext';
+import { COLORS, RADIUS } from '@/utils/colors';
 
 const ScoreBoard: React.FC = () => {
   const { players, playerId } = useSocket();
@@ -10,28 +11,30 @@ const ScoreBoard: React.FC = () => {
   }
 
   return (
-    <View className="mb-4 bg-white rounded-lg shadow-md p-4 w-full max-w-2xl">
-      <Text className="text-lg font-semibold mb-3">Player Scores</Text>
-      <View className="flex-col gap-3">
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerText}>PLAYER SCORES</Text>
+      </View>
+      <View style={styles.playerList}>
         {players.map((player) => (
           <View
             key={player.id}
-            className={`flex-row justify-between items-center p-3 rounded-lg ${
-              player.id === playerId
-                ? 'bg-blue-50 border border-blue-200'
-                : 'bg-gray-50'
-            }`}
+            style={[
+              styles.playerRow,
+              player.id === playerId && styles.currentPlayer,
+            ]}
           >
-            <View className="flex-row items-center">
+            <View style={styles.playerInfo}>
               <View
-                className={`w-3 h-3 rounded-full mr-2 ${
-                  player.id === playerId ? 'bg-blue-500' : 'bg-gray-400'
-                }`}
+                style={[
+                  styles.playerIndicator,
+                  player.id === playerId ? styles.indicatorActive : styles.indicatorInactive,
+                ]}
               />
-              <Text className="font-medium">{player.name}</Text>
+              <Text style={styles.playerName}>{player.name}</Text>
             </View>
-            <View className="bg-gray-100 px-3 py-1 rounded-full">
-              <Text className="font-semibold">{player.score}</Text>
+            <View style={styles.scoreBadge}>
+              <Text style={styles.scoreText}>{player.score}</Text>
             </View>
           </View>
         ))}
@@ -39,5 +42,85 @@ const ScoreBoard: React.FC = () => {
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    marginBottom: 16,
+    backgroundColor: COLORS.canvasWhite,
+    borderRadius: RADIUS.module,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+    overflow: 'hidden',
+    width: '100%',
+    maxWidth: 500,
+  },
+  header: {
+    backgroundColor: COLORS.actionYellow,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.slateCharcoal,
+  },
+  headerText: {
+    color: COLORS.deepOnyx,
+    fontWeight: '700',
+    fontSize: 14,
+    letterSpacing: 1,
+  },
+  playerList: {
+    padding: 12,
+    gap: 8,
+  },
+  playerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: RADIUS.button,
+    backgroundColor: COLORS.paperBeige,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+  },
+  currentPlayer: {
+    backgroundColor: COLORS.actionYellow,
+    borderColor: COLORS.slateCharcoal,
+    borderWidth: 2,
+  },
+  playerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  playerIndicator: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+  },
+  indicatorActive: {
+    backgroundColor: COLORS.logicTeal,
+  },
+  indicatorInactive: {
+    backgroundColor: COLORS.slateCharcoal,
+  },
+  playerName: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  scoreBadge: {
+    backgroundColor: COLORS.deepOnyx,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: RADIUS.button,
+  },
+  scoreText: {
+    color: COLORS.canvasWhite,
+    fontWeight: '700',
+    fontSize: 14,
+    fontFamily: 'monospace',
+  },
+});
 
 export default ScoreBoard;

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Card, CardReward, GameState, Enemy, Weapon, PlayerStats } from '@/types';
+import { COLORS, RADIUS } from '@/utils/colors';
 import { createDeck, shuffleArray, isValidCombination, findAllCombinations, generateGameBoard, formatTime } from '@/utils/gameUtils';
 import {
   CHARACTERS,
@@ -955,49 +956,70 @@ const Game: React.FC = () => {
 
       case 'game_over':
         return (
-          <View className="p-6 bg-gray-100 rounded-lg shadow-md max-w-md mx-auto">
-            <Text className="text-2xl font-bold mb-4 text-center">Game Over</Text>
+          <View style={gameOverStyles.container}>
+            {/* Eyebrow Banner */}
+            <View style={gameOverStyles.eyebrow}>
+              <Text style={gameOverStyles.eyebrowText}>GAME OVER</Text>
+            </View>
 
-            {/* Game over reason */}
-            {gameOverReason && (
-              <View className="mb-4 bg-red-100 border border-red-300 rounded-lg p-3">
-                <Text className="text-red-700 text-center font-medium">{gameOverReason}</Text>
+            <View style={gameOverStyles.content}>
+              {/* Game over reason */}
+              {gameOverReason && (
+                <View style={gameOverStyles.reasonContainer}>
+                  <Text style={gameOverStyles.reasonText}>{gameOverReason}</Text>
+                </View>
+              )}
+
+              {/* Stats Section */}
+              <View style={gameOverStyles.statsContainer}>
+                <View style={gameOverStyles.statRow}>
+                  <Text style={gameOverStyles.statLabel}>ROUND REACHED</Text>
+                  <Text style={gameOverStyles.statValue}>{state.round}</Text>
+                </View>
+                <View style={gameOverStyles.statRow}>
+                  <Text style={gameOverStyles.statLabel}>FINAL SCORE</Text>
+                  <Text style={gameOverStyles.statValue}>{state.score}</Text>
+                </View>
+                <View style={gameOverStyles.statRow}>
+                  <Text style={gameOverStyles.statLabel}>TARGET SCORE</Text>
+                  <Text style={gameOverStyles.statValue}>{state.targetScore}</Text>
+                </View>
+
+                {!gameOverReason && state.score >= state.targetScore ? (
+                  <View style={[gameOverStyles.resultBadge, gameOverStyles.successBadge]}>
+                    <Text style={[gameOverStyles.resultText, gameOverStyles.successText]}>
+                      TARGET ACHIEVED!
+                    </Text>
+                  </View>
+                ) : !gameOverReason ? (
+                  <View style={[gameOverStyles.resultBadge, gameOverStyles.failBadge]}>
+                    <Text style={[gameOverStyles.resultText, gameOverStyles.failText]}>
+                      TARGET NOT REACHED
+                    </Text>
+                  </View>
+                ) : null}
               </View>
-            )}
 
-            <View className="mb-4 items-center">
-              <Text className="text-lg">You reached round {state.round}</Text>
-              <Text className="text-lg font-medium">Final Score: {state.score}</Text>
-              <Text className="text-lg">Target Score: {state.targetScore}</Text>
+              {/* Round Scoreboard */}
+              <View style={gameOverStyles.scoreboardContainer}>
+                <RoundScoreboard
+                  currentRound={state.round}
+                  currentScore={state.score}
+                />
+              </View>
 
-              {!gameOverReason && state.score >= state.targetScore ? (
-                <Text className="mt-2 text-green-600 font-bold">
-                  You beat the target score!
-                </Text>
-              ) : !gameOverReason ? (
-                <Text className="mt-2 text-red-600 font-bold">
-                  You did not reach the target score
-                </Text>
-              ) : null}
-            </View>
-
-            <View className="mb-4">
-              <RoundScoreboard
-                currentRound={state.round}
-                currentScore={state.score}
-              />
-            </View>
-
-            <View className="items-center">
-              <TouchableOpacity
-                className="px-6 py-3 bg-blue-500 rounded-lg"
-                onPress={() => {
-                  setGameOverReason(null);
-                  setGamePhase('character_select');
-                }}
-              >
-                <Text className="text-white font-medium">Play Again</Text>
-              </TouchableOpacity>
+              {/* Play Again Button */}
+              <View style={gameOverStyles.buttonContainer}>
+                <TouchableOpacity
+                  style={gameOverStyles.playAgainButton}
+                  onPress={() => {
+                    setGameOverReason(null);
+                    setGamePhase('character_select');
+                  }}
+                >
+                  <Text style={gameOverStyles.playAgainText}>PLAY AGAIN</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         );
@@ -1038,5 +1060,127 @@ const Game: React.FC = () => {
     </View>
   );
 };
+
+// Game Over screen styles
+const gameOverStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.paperBeige,
+  },
+  eyebrow: {
+    height: 48,
+    backgroundColor: COLORS.impactRed,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: COLORS.slateCharcoal,
+  },
+  eyebrowText: {
+    color: COLORS.canvasWhite,
+    fontWeight: '700',
+    fontSize: 18,
+    letterSpacing: 3,
+  },
+  content: {
+    flex: 1,
+    padding: 16,
+  },
+  reasonContainer: {
+    backgroundColor: COLORS.deepOnyx,
+    borderRadius: RADIUS.module,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.impactRed,
+  },
+  reasonText: {
+    color: COLORS.impactRed,
+    fontWeight: '600',
+    fontSize: 14,
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  statsContainer: {
+    backgroundColor: COLORS.canvasWhite,
+    borderRadius: RADIUS.module,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+    padding: 16,
+    marginBottom: 16,
+  },
+  statRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.paperBeige,
+  },
+  statLabel: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '600',
+    fontSize: 12,
+    letterSpacing: 0.5,
+  },
+  statValue: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '700',
+    fontSize: 18,
+    fontFamily: 'monospace',
+  },
+  resultBadge: {
+    marginTop: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: RADIUS.button,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+  },
+  successBadge: {
+    backgroundColor: COLORS.logicTeal,
+  },
+  failBadge: {
+    backgroundColor: COLORS.impactRed,
+  },
+  resultText: {
+    fontWeight: '700',
+    fontSize: 14,
+    letterSpacing: 1,
+  },
+  successText: {
+    color: COLORS.canvasWhite,
+  },
+  failText: {
+    color: COLORS.canvasWhite,
+  },
+  scoreboardContainer: {
+    marginBottom: 16,
+  },
+  buttonContainer: {
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  playAgainButton: {
+    backgroundColor: COLORS.actionYellow,
+    paddingVertical: 16,
+    paddingHorizontal: 40,
+    borderRadius: RADIUS.button,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+    shadowColor: COLORS.deepOnyx,
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 0,
+    elevation: 4,
+  },
+  playAgainText: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '700',
+    fontSize: 16,
+    letterSpacing: 1,
+  },
+});
 
 export default Game;

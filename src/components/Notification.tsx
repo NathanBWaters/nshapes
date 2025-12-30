@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
+import { COLORS, RADIUS } from '@/utils/colors';
 
 interface NotificationProps {
   message: string;
@@ -65,29 +66,38 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 16,
     right: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: RADIUS.button,
     zIndex: 100,
-    maxWidth: 200,
+    maxWidth: 220,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+    shadowColor: COLORS.deepOnyx,
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 0,
+    elevation: 4,
   },
   text: {
-    color: '#ffffff',
+    color: COLORS.canvasWhite,
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
     textAlign: 'center',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   success: {
-    backgroundColor: '#22c55e',
+    backgroundColor: COLORS.logicTeal,
   },
   error: {
-    backgroundColor: '#ef4444',
+    backgroundColor: COLORS.impactRed,
   },
   warning: {
-    backgroundColor: '#f59e0b',
+    backgroundColor: COLORS.impactOrange,
   },
   info: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: COLORS.slateCharcoal,
   },
 });
 

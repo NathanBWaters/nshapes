@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
+import { COLORS, RADIUS } from '@/utils/colors';
 
 interface MultiplayerLobbyProps {
   roomId: string;
@@ -22,61 +23,230 @@ const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
   };
 
   return (
-    <View className="p-6 bg-gray-100 rounded-lg shadow-md max-w-md mx-auto my-8">
-      <Text className="text-2xl font-bold mb-4 text-center">Multiplayer Lobby</Text>
-
-      <View className="mb-6">
-        <Text className="text-center mb-2">Room ID:</Text>
-        <View className="flex-row items-center justify-center">
-          <View className="bg-white px-4 py-2 rounded-l-lg border border-gray-300">
-            <Text className="font-mono text-lg">{roomId}</Text>
-          </View>
-          <TouchableOpacity
-            className="bg-blue-500 px-4 py-2 rounded-r-lg"
-            onPress={copyRoomId}
-          >
-            <Text className="text-white">{copied ? 'Copied!' : 'Copy'}</Text>
-          </TouchableOpacity>
-        </View>
-        <Text className="text-center text-sm text-gray-600 mt-2">
-          Share this Room ID with your friends to let them join
-        </Text>
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerText}>MULTIPLAYER LOBBY</Text>
       </View>
 
-      <View className="items-center mb-6">
-        <View className="bg-green-100 px-3 py-1 rounded-full">
-          <Text className="text-green-800 text-sm">
-            {isHost ? 'You are the host' : 'Waiting for host to start the game'}
-          </Text>
-        </View>
-      </View>
-
-      {isHost && (
-        <View className="items-center">
-          <TouchableOpacity
-            className="bg-green-500 px-6 py-3 rounded-lg"
-            onPress={onStartGame}
-          >
-            <Text className="text-white font-bold">Start Game</Text>
-          </TouchableOpacity>
-          <Text className="text-sm text-gray-600 mt-2 text-center">
-            Click to start the game when all players have joined
-          </Text>
-        </View>
-      )}
-
-      {!isHost && (
-        <View className="items-center">
-          <View className="flex-row justify-center">
-            <View className="w-3 h-3 bg-blue-500 rounded-full mx-1" />
-            <View className="w-3 h-3 bg-blue-500 rounded-full mx-1" />
-            <View className="w-3 h-3 bg-blue-500 rounded-full mx-1" />
+      <View style={styles.content}>
+        {/* Room ID Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>ROOM ID</Text>
+          <View style={styles.roomIdContainer}>
+            <View style={styles.roomIdBox}>
+              <Text style={styles.roomIdText}>{roomId}</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.copyButton}
+              onPress={copyRoomId}
+            >
+              <Text style={styles.copyButtonText}>
+                {copied ? 'COPIED!' : 'COPY'}
+              </Text>
+            </TouchableOpacity>
           </View>
-          <Text className="text-gray-600 mt-2">Waiting for host to start the game...</Text>
+          <Text style={styles.helpText}>
+            Share this Room ID with your friends to let them join
+          </Text>
         </View>
-      )}
+
+        {/* Status Badge */}
+        <View style={styles.statusContainer}>
+          <View style={[styles.statusBadge, isHost ? styles.statusHost : styles.statusPlayer]}>
+            <Text style={styles.statusText}>
+              {isHost ? 'YOU ARE THE HOST' : 'WAITING FOR HOST'}
+            </Text>
+          </View>
+        </View>
+
+        {/* Actions */}
+        {isHost ? (
+          <View style={styles.actionContainer}>
+            <TouchableOpacity
+              style={styles.startButton}
+              onPress={onStartGame}
+            >
+              <Text style={styles.startButtonText}>START GAME</Text>
+            </TouchableOpacity>
+            <Text style={styles.actionHelp}>
+              Click to start the game when all players have joined
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.waitingContainer}>
+            <View style={styles.dotsContainer}>
+              <View style={styles.dot} />
+              <View style={styles.dot} />
+              <View style={styles.dot} />
+            </View>
+            <Text style={styles.waitingText}>
+              Waiting for host to start the game...
+            </Text>
+          </View>
+        )}
+      </View>
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    backgroundColor: COLORS.canvasWhite,
+    borderRadius: RADIUS.module,
+    borderWidth: 2,
+    borderColor: COLORS.slateCharcoal,
+    maxWidth: 400,
+    width: '100%',
+    alignSelf: 'center',
+    marginVertical: 32,
+    overflow: 'hidden',
+  },
+  header: {
+    backgroundColor: COLORS.actionYellow,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.slateCharcoal,
+    alignItems: 'center',
+  },
+  headerText: {
+    color: COLORS.deepOnyx,
+    fontWeight: '700',
+    fontSize: 16,
+    letterSpacing: 1,
+  },
+  content: {
+    padding: 20,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionLabel: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '600',
+    fontSize: 11,
+    letterSpacing: 1,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  roomIdContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  roomIdBox: {
+    backgroundColor: COLORS.paperBeige,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+    borderTopLeftRadius: RADIUS.button,
+    borderBottomLeftRadius: RADIUS.button,
+  },
+  roomIdText: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '700',
+    fontSize: 18,
+    fontFamily: 'monospace',
+    letterSpacing: 2,
+  },
+  copyButton: {
+    backgroundColor: COLORS.actionYellow,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderLeftWidth: 0,
+    borderColor: COLORS.slateCharcoal,
+    borderTopRightRadius: RADIUS.button,
+    borderBottomRightRadius: RADIUS.button,
+  },
+  copyButtonText: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '700',
+    fontSize: 12,
+    letterSpacing: 0.5,
+  },
+  helpText: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '400',
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 12,
+    opacity: 0.7,
+  },
+  statusContainer: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  statusBadge: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: RADIUS.button,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+  },
+  statusHost: {
+    backgroundColor: COLORS.logicTeal,
+  },
+  statusPlayer: {
+    backgroundColor: COLORS.paperBeige,
+  },
+  statusText: {
+    color: COLORS.canvasWhite,
+    fontWeight: '700',
+    fontSize: 11,
+    letterSpacing: 1,
+  },
+  actionContainer: {
+    alignItems: 'center',
+  },
+  startButton: {
+    backgroundColor: COLORS.actionYellow,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: RADIUS.button,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+    shadowColor: COLORS.deepOnyx,
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 0,
+    elevation: 4,
+  },
+  startButtonText: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '700',
+    fontSize: 14,
+    letterSpacing: 1,
+  },
+  actionHelp: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '400',
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 12,
+    opacity: 0.7,
+  },
+  waitingContainer: {
+    alignItems: 'center',
+  },
+  dotsContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: COLORS.logicTeal,
+  },
+  waitingText: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '400',
+    fontSize: 12,
+    opacity: 0.7,
+  },
+});
 
 export default MultiplayerLobby;

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Card as CardType } from '@/types';
+import { COLORS, RADIUS } from '@/utils/colors';
 
 // Shape sizing - adjust this to change all shape heights
 const SHAPE_SIZE = '50%';
@@ -83,7 +84,7 @@ const Card: React.FC<CardProps> = ({ card, onClick, disabled = false }) => {
 
     if (card.health && card.health > 1) {
       badges.push(
-        <View key="health" style={[styles.badge, styles.badgeTopRight, { backgroundColor: '#ef4444' }]}>
+        <View key="health" style={[styles.badge, styles.badgeTopRight, { backgroundColor: COLORS.impactRed }]}>
           <Text style={styles.badgeText}>{card.health}</Text>
         </View>
       );
@@ -91,24 +92,24 @@ const Card: React.FC<CardProps> = ({ card, onClick, disabled = false }) => {
 
     if (card.lootBox) {
       badges.push(
-        <View key="loot" style={[styles.badge, styles.badgeTopLeft, { backgroundColor: '#f59e0b' }]}>
-          <Text style={styles.badgeEmoji}>💎</Text>
+        <View key="loot" style={[styles.badge, styles.badgeTopLeft, { backgroundColor: COLORS.impactOrange }]}>
+          <Text style={styles.badgeEmoji}>?</Text>
         </View>
       );
     }
 
     if (card.bonusMoney) {
       badges.push(
-        <View key="money" style={[styles.badge, styles.badgeBottomLeft, { backgroundColor: '#22c55e' }]}>
-          <Text style={styles.badgeText}>+{card.bonusMoney}💰</Text>
+        <View key="money" style={[styles.badge, styles.badgeBottomLeft, { backgroundColor: COLORS.logicTeal }]}>
+          <Text style={styles.badgeText}>+{card.bonusMoney}$</Text>
         </View>
       );
     }
 
     if (card.bonusPoints) {
       badges.push(
-        <View key="points" style={[styles.badge, styles.badgeBottomRight, { backgroundColor: '#3b82f6' }]}>
-          <Text style={styles.badgeText}>+{card.bonusPoints}⭐</Text>
+        <View key="points" style={[styles.badge, styles.badgeBottomRight, { backgroundColor: COLORS.actionYellow }]}>
+          <Text style={[styles.badgeText, { color: COLORS.deepOnyx }]}>+{card.bonusPoints}</Text>
         </View>
       );
     }
@@ -140,10 +141,10 @@ interface ShapeProps {
 
 const getBorderColor = (color: string) => {
   switch (color) {
-    case 'red': return '#ef4444';
-    case 'green': return '#22c55e';
-    case 'purple': return '#a855f7';
-    default: return '#6b7280';
+    case 'red': return COLORS.impactRed;
+    case 'green': return COLORS.logicTeal;
+    case 'purple': return '#7C3AED';
+    default: return COLORS.slateCharcoal;
   }
 };
 
@@ -230,22 +231,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 4,
-    borderRadius: 8,
+    borderRadius: RADIUS.module,
     borderWidth: 2,
-    borderColor: '#d1d5db',
-    backgroundColor: '#ffffff',
+    borderColor: COLORS.slateCharcoal,
+    backgroundColor: COLORS.canvasWhite,
     flex: 1,
   },
   selected: {
-    borderColor: '#3b82f6',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    borderColor: COLORS.actionYellow,
+    borderWidth: 3,
+    shadowColor: COLORS.actionYellow,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
     elevation: 5,
   },
   hint: {
-    backgroundColor: '#fefce8',
+    backgroundColor: '#FFFDE7',
+    borderColor: COLORS.actionYellow,
+    borderStyle: 'dashed',
   },
   disabled: {
     opacity: 0.6,
@@ -284,12 +288,15 @@ const styles = StyleSheet.create({
   },
   badge: {
     position: 'absolute',
-    borderRadius: 10,
-    width: 20,
+    borderRadius: RADIUS.button,
+    minWidth: 20,
     height: 20,
+    paddingHorizontal: 4,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
   },
   badgeTopRight: {
     top: 2,
@@ -308,12 +315,15 @@ const styles = StyleSheet.create({
     left: 2,
   },
   badgeText: {
-    color: '#ffffff',
+    color: COLORS.canvasWhite,
     fontSize: 10,
-    fontWeight: 'bold',
+    fontWeight: '700',
+    fontFamily: 'monospace',
   },
   badgeEmoji: {
     fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.canvasWhite,
   },
 });
 

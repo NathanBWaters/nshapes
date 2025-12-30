@@ -127,6 +127,12 @@ npm run build:web
 5. Item Shop (buy items)
 6. Repeat for 10 rounds
 
+## Related Documentation
+
+When working on this codebase, also load these additional files for context:
+
+- [Style Guide](./style_guide.md) - UI design system including colors, typography, and component styles
+
 ## Game Board Layout
 
 The round phase uses a flex-based layout that adapts to all screen sizes (iOS, Web, Steam Deck):

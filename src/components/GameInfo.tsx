@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { PlayerStats } from '@/types';
 import CircularTimer from './CircularTimer';
+import { COLORS, RADIUS } from '@/utils/colors';
 
 interface GameInfoProps {
   round: number;
@@ -86,12 +87,12 @@ const GameInfo: React.FC<GameInfoProps> = ({
           onPress={hasActiveHint ? onClearHint : onHintPress}
           disabled={hintsAvailable <= 0 && !hasActiveHint}
         >
-          <Text style={styles.hintIcon}>💡</Text>
+          <Text style={styles.hintIcon}>?</Text>
           <Text style={[
             styles.hintCount,
             hintsAvailable > 0 ? styles.hintCountEnabled : styles.hintCountDisabled
           ]}>
-            {hasActiveHint ? '✕' : hintsAvailable}
+            {hasActiveHint ? 'x' : hintsAvailable}
           </Text>
         </TouchableOpacity>
 
@@ -131,6 +132,10 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'space-between',
     paddingVertical: 4,
+    backgroundColor: COLORS.canvasWhite,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.slateCharcoal,
+    paddingHorizontal: 8,
   },
   statsRow: {
     flexDirection: 'row',
@@ -138,66 +143,77 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   statBadge: {
-    backgroundColor: '#1f2937',
+    backgroundColor: COLORS.deepOnyx,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: RADIUS.button,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
   },
   statLabel: {
-    color: '#ffffff',
+    color: COLORS.canvasWhite,
     fontWeight: '700',
     fontSize: 13,
+    fontFamily: 'monospace',
   },
   statItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f3f4f6',
+    backgroundColor: COLORS.paperBeige,
     paddingHorizontal: 6,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: RADIUS.button,
     gap: 2,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
   },
   heartIcon: {
-    color: '#ef4444',
+    color: COLORS.impactRed,
     fontSize: 12,
   },
   coinIcon: {
-    color: '#eab308',
+    color: COLORS.actionYellow,
     fontSize: 12,
     fontWeight: '700',
   },
   statValue: {
-    color: '#374151',
+    color: COLORS.slateCharcoal,
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: 'monospace',
   },
   criticalValue: {
-    color: '#ef4444',
+    color: COLORS.impactRed,
   },
   levelContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f3f4f6',
+    backgroundColor: COLORS.paperBeige,
     paddingHorizontal: 6,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: RADIUS.button,
     gap: 4,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
   },
   levelText: {
-    color: '#7c3aed',
+    color: COLORS.logicTeal,
     fontSize: 12,
     fontWeight: '700',
+    fontFamily: 'monospace',
   },
   xpBarContainer: {
     width: 32,
     height: 6,
-    backgroundColor: '#e5e7eb',
+    backgroundColor: COLORS.paperBeige,
     borderRadius: 3,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
   },
   xpBarFill: {
     height: '100%',
-    backgroundColor: '#7c3aed',
+    backgroundColor: COLORS.logicTeal,
     borderRadius: 3,
   },
   hintButton: {
@@ -205,44 +221,53 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: RADIUS.button,
     gap: 2,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
   },
   hintButtonEnabled: {
-    backgroundColor: '#fef3c7',
+    backgroundColor: COLORS.actionYellow,
   },
   hintButtonDisabled: {
-    backgroundColor: '#e5e7eb',
+    backgroundColor: COLORS.paperBeige,
   },
   hintButtonActive: {
-    backgroundColor: '#fcd34d',
+    backgroundColor: COLORS.impactOrange,
   },
   hintIcon: {
     fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.slateCharcoal,
   },
   hintCount: {
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: 'monospace',
   },
   hintCountEnabled: {
-    color: '#92400e',
+    color: COLORS.slateCharcoal,
   },
   hintCountDisabled: {
-    color: '#9ca3af',
+    color: COLORS.slateCharcoal,
+    opacity: 0.5,
   },
   selectedBadge: {
-    backgroundColor: '#374151',
+    backgroundColor: COLORS.slateCharcoal,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: RADIUS.button,
+    borderWidth: 1,
+    borderColor: COLORS.deepOnyx,
   },
   selectedBadgeFull: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: COLORS.logicTeal,
   },
   selectedText: {
-    color: '#ffffff',
+    color: COLORS.canvasWhite,
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: 'monospace',
   },
   scoreRow: {
     flexDirection: 'row',
@@ -253,24 +278,27 @@ const styles = StyleSheet.create({
   scoreBarContainer: {
     flex: 1,
     height: 8,
-    backgroundColor: '#e5e7eb',
-    borderRadius: 4,
+    backgroundColor: COLORS.paperBeige,
+    borderRadius: RADIUS.button,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
   },
   scoreBarFill: {
     height: '100%',
-    backgroundColor: '#3b82f6',
-    borderRadius: 4,
+    backgroundColor: COLORS.logicTeal,
+    borderRadius: RADIUS.button,
   },
   scoreBarComplete: {
-    backgroundColor: '#22c55e',
+    backgroundColor: COLORS.actionYellow,
   },
   scoreText: {
-    color: '#6b7280',
+    color: COLORS.slateCharcoal,
     fontSize: 11,
     fontWeight: '600',
     minWidth: 36,
     textAlign: 'right',
+    fontFamily: 'monospace',
   },
 });
 

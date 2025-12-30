@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
+import { COLORS } from '@/utils/colors';
 
 interface CircularTimerProps {
   currentTime: number; // Current remaining time in seconds
@@ -48,16 +49,16 @@ const CircularTimer: React.FC<CircularTimerProps> = ({
     }
   }, [isCritical]);
 
-  // Color based on time remaining
+  // Color based on time remaining - using style guide colors
   const getProgressColor = () => {
-    if (isInfinite) return '#9ca3af'; // Gray for infinite
-    if (currentTime <= 5) return '#ef4444'; // Red - critical
-    if (currentTime <= 10) return '#f97316'; // Orange - warning
-    return '#3b82f6'; // Blue - normal
+    if (isInfinite) return COLORS.slateCharcoal;
+    if (currentTime <= 5) return COLORS.impactRed;
+    if (currentTime <= 10) return COLORS.impactOrange;
+    return COLORS.logicTeal;
   };
 
   const progressColor = getProgressColor();
-  const bgColor = '#e5e7eb';
+  const bgColor = COLORS.paperBeige;
   const innerSize = size - strokeWidth * 2;
 
   // Format the time display
@@ -176,7 +177,7 @@ const CircularTimer: React.FC<CircularTimerProps> = ({
           style={[
             styles.timeText,
             {
-              color: isInfinite ? '#6b7280' : isCritical ? progressColor : '#1f2937',
+              color: isInfinite ? COLORS.slateCharcoal : isCritical ? progressColor : COLORS.deepOnyx,
               fontSize: isInfinite ? 20 : currentTime >= 60 ? 10 : 14,
               fontWeight: isCritical ? '800' : '700',
             },
@@ -206,17 +207,15 @@ const styles = StyleSheet.create({
     position: 'absolute',
   },
   innerCircle: {
-    backgroundColor: '#ffffff',
+    backgroundColor: COLORS.canvasWhite,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
   },
   timeText: {
     textAlign: 'center',
+    fontFamily: 'monospace',
   },
 });
 

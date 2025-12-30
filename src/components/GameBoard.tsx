@@ -3,6 +3,7 @@ import { View, StyleSheet } from 'react-native';
 import { Card as CardType, PlayerStats, CardReward } from '@/types';
 import Card from './Card';
 import RewardReveal from './RewardReveal';
+import { COLORS } from '@/utils/colors';
 
 interface GameBoardProps {
   cards: CardType[];
@@ -246,7 +247,7 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'column',
     padding: 6,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: COLORS.paperBeige,
   },
   row: {
     flex: 1,
