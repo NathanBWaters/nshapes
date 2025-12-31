@@ -28,8 +28,7 @@ NShapes combines the classic SET card matching game with roguelike progression m
 **Adventure Mode** - Progressive Roguelike Campaign:
 
 * **Round-Based Complexity:** The number of attributes required for a "Set" increases as you progress:
-* **Round 1:** 2 Attributes (Shape, Color)
-* **Rounds 2–3:** 3 Attributes (adds Number)
+* **Rounds 1–3:** 3 Attributes (Shape, Color, Number)
 * **Rounds 4–9:** 4 Attributes (adds Shading)
 * **Round 10 (Final Boss):** 5 Attributes (adds Background Color)
 
@@ -100,9 +99,9 @@ src/                        # Shared code (imported via @/ alias)
 **Adventure Mode:**
 
 1. Character Selection → Choose Adventure.
-2. **Attribute Unlock:** Game initializes with 2 attributes (Shape/Color).
+2. **Attribute Unlock:** Game initializes with 3 attributes (Shape/Color/Number).
 3. Enemy Selection → Play Round (reach score target).
-4. **Progression:** After Round 1, 3, and 9, the game introduces the next attribute dimension.
+4. **Progression:** After Round 3 and 9, the game introduces the next attribute dimension.
 5. Level Up / Item Shop between rounds.
 6. Repeat for 10 rounds total.
 
