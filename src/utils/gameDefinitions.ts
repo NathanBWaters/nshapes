@@ -64,71 +64,45 @@ export const DEFAULT_PLAYER_STATS: PlayerStats = {
 export const CHARACTERS: Character[] = [
   {
     name: 'Orange Tabby',
-    description: 'Uses multiple lives to get more Mulligans',
-    startingWeapon: 'Second Chance',
-    startingItems: [],
+    description: 'Nine lives? More like eleven with all those extra hearts',
+    startingWeapons: ['Life Vessel', 'Life Vessel'],
     icon: 'lorc/cat',
-    baseStats: {
-      mulligans: 2,
-      luck: -5,
-      // Special ability: 20% chance to not consume a Mulligan when used (9 lives theme)
-    }
+    baseStats: {}
   },
   {
     name: 'Sly Fox',
-    description: 'Specializes in bomb and trap synergy',
-    startingWeapon: 'Flint Spark',
-    startingItems: [],
+    description: 'Where there\'s smoke, there\'s this fox causing chaos',
+    startingWeapons: ['Flint Spark', 'Blast Powder'],
     icon: 'caro-asercion/fox',
-    baseStats: {
-      // +15% chance bombs appear and +10% chance bombs have better rewards
-      fieldSize: -2,
-    }
+    baseStats: {}
   },
   {
     name: 'Corgi',
-    description: 'Gets extra match hints and free rerolls',
-    startingWeapon: 'Chrono Shard',
-    startingItems: [],
+    description: 'Those puppy eyes never miss a match',
+    startingWeapons: ['Crystal Orb', 'Seeker Lens'],
     icon: 'delapouite/sitting-dog',
-    baseStats: {
-      matchHints: 2,
-      freeRerolls: 1,
-      timeWarpPercent: -10, // Time runs slightly faster
-    }
+    baseStats: {}
   },
   {
     name: 'Emperor Penguin',
-    description: 'Money-focused with increased commerce',
-    startingWeapon: 'Field Stone',
-    startingItems: [],
+    description: 'Rules an ever-expanding frozen empire',
+    startingWeapons: ['Field Stone', 'Growth Seed'],
     icon: 'delapouite/penguin',
-    baseStats: {
-      commerce: 5,
-      experienceGainPercent: -10,
-    }
+    baseStats: {}
   },
   {
     name: 'Pelican',
-    description: 'Can make cards become fragile',
-    startingWeapon: 'Oracle Eye',
-    startingItems: [],
+    description: 'Spots every pattern from a mile away',
+    startingWeapons: ['Oracle Eye', 'Oracle Eye'],
     icon: 'delapouite/eating-pelican',
-    baseStats: {
-      // 5% chance any matched card becomes Fragile
-      // 50% chance of discarding 1 coin each wave
-    }
+    baseStats: {}
   },
   {
     name: 'Badger',
-    description: 'Has a larger field view',
-    startingWeapon: 'Growth Seed',
-    startingItems: [],
+    description: 'Too stubborn to quit - always has another chance',
+    startingWeapons: ['Second Chance', 'Fortune Token'],
     icon: 'caro-asercion/badger',
-    baseStats: {
-      fieldSize: 2,
-      luck: -10,
-    }
+    baseStats: {}
   },
   // {
   //   name: 'Cow',
@@ -387,22 +361,22 @@ export const WEAPONS: Weapon[] = [
     name: 'Blast Powder',
     rarity: 'rare',
     level: 1,
-    price: 20,
-    description: '20% chance to explode adjacent cards on match.',
+    price: 16,
+    description: '30% chance to explode adjacent cards on match.',
     icon: 'lorc/bright-explosion',
     specialEffect: 'explosive',
-    effects: { explosionChance: 20 }
+    effects: { explosionChance: 30 }
   },
   {
     id: 'blast-powder-legendary',
     name: 'Blast Powder',
     rarity: 'legendary',
     level: 1,
-    price: 50,
-    description: '40% chance to explode adjacent cards on match.',
+    price: 24,
+    description: '70% chance to explode adjacent cards on match.',
     icon: 'lorc/bright-explosion',
     specialEffect: 'explosive',
-    effects: { explosionChance: 40 }
+    effects: { explosionChance: 70 }
   },
 
   // ============================================================================
@@ -424,22 +398,22 @@ export const WEAPONS: Weapon[] = [
     name: 'Oracle Eye',
     rarity: 'rare',
     level: 1,
-    price: 18,
-    description: '25% chance for auto-hint every 8s.',
+    price: 12,
+    description: '45% chance for auto-hint every 7s.',
     icon: 'lorc/sheikah-eye',
     specialEffect: 'autoHint',
-    effects: { autoHintChance: 25, autoHintInterval: -2000 }
+    effects: { autoHintChance: 45, autoHintInterval: -3000 }
   },
   {
     id: 'oracle-eye-legendary',
     name: 'Oracle Eye',
     rarity: 'legendary',
     level: 1,
-    price: 45,
-    description: '40% chance for auto-hint every 5s.',
+    price: 18,
+    description: '100% chance for auto-hint every 4s.',
     icon: 'lorc/sheikah-eye',
     specialEffect: 'autoHint',
-    effects: { autoHintChance: 40, autoHintInterval: -5000 }
+    effects: { autoHintChance: 100, autoHintInterval: -6000 }
   },
 
   // ============================================================================
@@ -460,20 +434,20 @@ export const WEAPONS: Weapon[] = [
     name: 'Field Stone',
     rarity: 'rare',
     level: 1,
-    price: 18,
-    description: '+2 starting board size.',
+    price: 14,
+    description: '+3 starting board size.',
     icon: 'lorc/field',
-    effects: { fieldSize: 2 }
+    effects: { fieldSize: 3 }
   },
   {
     id: 'field-stone-legendary',
     name: 'Field Stone',
     rarity: 'legendary',
     level: 1,
-    price: 45,
-    description: '+4 starting board size.',
+    price: 21,
+    description: '+7 starting board size.',
     icon: 'lorc/field',
-    effects: { fieldSize: 4 }
+    effects: { fieldSize: 7 }
   },
 
   // ============================================================================
@@ -495,22 +469,22 @@ export const WEAPONS: Weapon[] = [
     name: 'Growth Seed',
     rarity: 'rare',
     level: 1,
-    price: 15,
-    description: '10% chance to expand board on match.',
+    price: 12,
+    description: '15% chance to expand board on match.',
     icon: 'delapouite/card-exchange',
     specialEffect: 'boardGrowth',
-    effects: { boardGrowthChance: 10 }
+    effects: { boardGrowthChance: 15 }
   },
   {
     id: 'growth-seed-legendary',
     name: 'Growth Seed',
     rarity: 'legendary',
     level: 1,
-    price: 40,
-    description: '15% chance to expand board by 2 on match.',
+    price: 18,
+    description: '35% chance to expand board by 2 on match.',
     icon: 'delapouite/card-exchange',
     specialEffect: 'boardGrowth',
-    effects: { boardGrowthChance: 15, boardGrowthAmount: 2 }
+    effects: { boardGrowthChance: 35, boardGrowthAmount: 2 }
   },
 
   // ============================================================================
@@ -532,22 +506,22 @@ export const WEAPONS: Weapon[] = [
     name: 'Flint Spark',
     rarity: 'rare',
     level: 1,
-    price: 20,
-    description: '20% chance to start fire on adjacent cards.',
+    price: 16,
+    description: '30% chance to start fire on adjacent cards.',
     icon: 'lorc/campfire',
     specialEffect: 'fire',
-    effects: { fireSpreadChance: 20 }
+    effects: { fireSpreadChance: 30 }
   },
   {
     id: 'flint-spark-legendary',
     name: 'Flint Spark',
     rarity: 'legendary',
     level: 1,
-    price: 50,
-    description: '35% chance to start fire on adjacent cards.',
+    price: 24,
+    description: '70% chance to start fire on adjacent cards.',
     icon: 'lorc/campfire',
     specialEffect: 'fire',
-    effects: { fireSpreadChance: 35 }
+    effects: { fireSpreadChance: 70 }
   },
 
   // ============================================================================
@@ -568,20 +542,20 @@ export const WEAPONS: Weapon[] = [
     name: 'Second Chance',
     rarity: 'rare',
     level: 1,
-    price: 15,
-    description: '+2 starting mulligans.',
+    price: 10,
+    description: '+3 starting mulligans.',
     icon: 'lorc/recycle',
-    effects: { mulligans: 2 }
+    effects: { mulligans: 3 }
   },
   {
     id: 'second-chance-legendary',
     name: 'Second Chance',
     rarity: 'legendary',
     level: 1,
-    price: 40,
-    description: '+4 starting mulligans.',
+    price: 15,
+    description: '+7 starting mulligans.',
     icon: 'lorc/recycle',
-    effects: { mulligans: 4 }
+    effects: { mulligans: 7 }
   },
 
   // ============================================================================
@@ -603,22 +577,22 @@ export const WEAPONS: Weapon[] = [
     name: 'Fortune Token',
     rarity: 'rare',
     level: 1,
-    price: 18,
-    description: '10% chance to gain mulligan on match.',
+    price: 12,
+    description: '15% chance to gain mulligan on match.',
     icon: 'lorc/cycle',
     specialEffect: 'mulliganGain',
-    effects: { mulliganGainChance: 10 }
+    effects: { mulliganGainChance: 15 }
   },
   {
     id: 'fortune-token-legendary',
     name: 'Fortune Token',
     rarity: 'legendary',
     level: 1,
-    price: 45,
-    description: '20% chance to gain mulligan on match.',
+    price: 18,
+    description: '35% chance to gain mulligan on match.',
     icon: 'lorc/cycle',
     specialEffect: 'mulliganGain',
-    effects: { mulliganGainChance: 20 }
+    effects: { mulliganGainChance: 35 }
   },
 
   // ============================================================================
@@ -639,20 +613,20 @@ export const WEAPONS: Weapon[] = [
     name: 'Life Vessel',
     rarity: 'rare',
     level: 1,
-    price: 16,
-    description: '+2 max health.',
+    price: 12,
+    description: '+3 max health.',
     icon: 'lorc/heart-inside',
-    effects: { maxHealth: 2 }
+    effects: { maxHealth: 3 }
   },
   {
     id: 'life-vessel-legendary',
     name: 'Life Vessel',
     rarity: 'legendary',
     level: 1,
-    price: 42,
-    description: '+4 max health.',
+    price: 18,
+    description: '+7 max health.',
     icon: 'lorc/heart-inside',
-    effects: { maxHealth: 4 }
+    effects: { maxHealth: 7 }
   },
 
   // ============================================================================
@@ -674,22 +648,22 @@ export const WEAPONS: Weapon[] = [
     name: 'Mending Charm',
     rarity: 'rare',
     level: 1,
-    price: 15,
-    description: '10% chance to heal on match.',
+    price: 10,
+    description: '15% chance to heal on match.',
     icon: 'lorc/shining-heart',
     specialEffect: 'healing',
-    effects: { healingChance: 10 }
+    effects: { healingChance: 15 }
   },
   {
     id: 'mending-charm-legendary',
     name: 'Mending Charm',
     rarity: 'legendary',
     level: 1,
-    price: 40,
-    description: '20% chance to heal on match.',
+    price: 15,
+    description: '35% chance to heal on match.',
     icon: 'lorc/shining-heart',
     specialEffect: 'healing',
-    effects: { healingChance: 20 }
+    effects: { healingChance: 35 }
   },
 
   // ============================================================================
@@ -710,20 +684,20 @@ export const WEAPONS: Weapon[] = [
     name: 'Crystal Orb',
     rarity: 'rare',
     level: 1,
-    price: 14,
-    description: '+2 starting hints.',
+    price: 10,
+    description: '+3 starting hints.',
     icon: 'lorc/floating-crystal',
-    effects: { hints: 2 }
+    effects: { hints: 3 }
   },
   {
     id: 'crystal-orb-legendary',
     name: 'Crystal Orb',
     rarity: 'legendary',
     level: 1,
-    price: 38,
-    description: '+4 starting hints.',
+    price: 15,
+    description: '+7 starting hints.',
     icon: 'lorc/floating-crystal',
-    effects: { hints: 4 }
+    effects: { hints: 7 }
   },
 
   // ============================================================================
@@ -745,22 +719,22 @@ export const WEAPONS: Weapon[] = [
     name: 'Seeker Lens',
     rarity: 'rare',
     level: 1,
-    price: 16,
-    description: '10% chance to gain hint on match.',
+    price: 12,
+    description: '15% chance to gain hint on match.',
     icon: 'lorc/light-bulb',
     specialEffect: 'hintGain',
-    effects: { hintGainChance: 10 }
+    effects: { hintGainChance: 15 }
   },
   {
     id: 'seeker-lens-legendary',
     name: 'Seeker Lens',
     rarity: 'legendary',
     level: 1,
-    price: 42,
-    description: '20% chance to gain hint on match.',
+    price: 18,
+    description: '35% chance to gain hint on match.',
     icon: 'lorc/light-bulb',
     specialEffect: 'hintGain',
-    effects: { hintGainChance: 20 }
+    effects: { hintGainChance: 35 }
   },
 
   // ============================================================================
@@ -782,22 +756,22 @@ export const WEAPONS: Weapon[] = [
     name: 'Prism Glass',
     rarity: 'rare',
     level: 1,
-    price: 22,
-    description: '20% chance for holographic cards (2x points).',
+    price: 16,
+    description: '30% chance for holographic cards (2x points).',
     icon: 'lorc/crystal-shine',
     specialEffect: 'holographic',
-    effects: { holoChance: 20 }
+    effects: { holoChance: 30 }
   },
   {
     id: 'prism-glass-legendary',
     name: 'Prism Glass',
     rarity: 'legendary',
     level: 1,
-    price: 55,
-    description: '35% chance for holographic cards (2x points).',
+    price: 24,
+    description: '70% chance for holographic cards (2x points).',
     icon: 'lorc/crystal-shine',
     specialEffect: 'holographic',
-    effects: { holoChance: 35 }
+    effects: { holoChance: 70 }
   },
 
   // ============================================================================
@@ -818,20 +792,20 @@ export const WEAPONS: Weapon[] = [
     name: 'Chrono Shard',
     rarity: 'rare',
     level: 1,
-    price: 18,
-    description: '+30s starting time.',
+    price: 14,
+    description: '+45s starting time.',
     icon: 'lorc/hourglass',
-    effects: { startingTime: 30 }
+    effects: { startingTime: 45 }
   },
   {
     id: 'chrono-shard-legendary',
     name: 'Chrono Shard',
     rarity: 'legendary',
     level: 1,
-    price: 48,
-    description: '+60s starting time.',
+    price: 21,
+    description: '+105s starting time.',
     icon: 'lorc/hourglass',
-    effects: { startingTime: 60 }
+    effects: { startingTime: 105 }
   },
 
   // ============================================================================
@@ -853,22 +827,22 @@ export const WEAPONS: Weapon[] = [
     name: 'Time Drop',
     rarity: 'rare',
     level: 1,
-    price: 16,
-    description: '10% chance to gain +10s on match.',
+    price: 12,
+    description: '15% chance to gain +10s on match.',
     icon: 'lorc/stopwatch',
     specialEffect: 'timeGain',
-    effects: { timeGainChance: 10, timeGainAmount: 10 }
+    effects: { timeGainChance: 15, timeGainAmount: 10 }
   },
   {
     id: 'time-drop-legendary',
     name: 'Time Drop',
     rarity: 'legendary',
     level: 1,
-    price: 42,
-    description: '15% chance to gain +15s on match.',
+    price: 18,
+    description: '35% chance to gain +15s on match.',
     icon: 'lorc/stopwatch',
     specialEffect: 'timeGain',
-    effects: { timeGainChance: 15, timeGainAmount: 15 }
+    effects: { timeGainChance: 35, timeGainAmount: 15 }
   },
 
   // ============================================================================
@@ -890,22 +864,22 @@ export const WEAPONS: Weapon[] = [
     name: 'Prismatic Ray',
     rarity: 'rare',
     level: 1,
-    price: 25,
-    description: '6% chance to destroy entire row or column.',
+    price: 20,
+    description: '9% chance to destroy entire row or column.',
     icon: 'lorc/laser-warning',
     specialEffect: 'laser',
-    effects: { laserChance: 6 }
+    effects: { laserChance: 9 }
   },
   {
     id: 'prismatic-ray-legendary',
     name: 'Prismatic Ray',
     rarity: 'legendary',
     level: 1,
-    price: 60,
-    description: '10% chance to destroy entire row or column.',
+    price: 30,
+    description: '21% chance to destroy entire row or column.',
     icon: 'lorc/laser-warning',
     specialEffect: 'laser',
-    effects: { laserChance: 10 }
+    effects: { laserChance: 21 }
   },
 ];
 
@@ -1058,17 +1032,12 @@ export const initializePlayer = (id: string, username: string, characterName: st
     throw new Error(`Character ${characterName} not found`);
   }
 
-  const startingWeapon = getWeaponByName(character.startingWeapon);
-  if (!startingWeapon) {
-    throw new Error(`Starting weapon ${character.startingWeapon} not found`);
-  }
-
-  const startingItems = character.startingItems.map(itemName => {
-    const item = getItemByName(itemName);
-    if (!item) {
-      throw new Error(`Starting item ${itemName} not found`);
+  const startingWeapons = character.startingWeapons.map(weaponName => {
+    const weapon = getWeaponByName(weaponName);
+    if (!weapon) {
+      throw new Error(`Starting weapon ${weaponName} not found`);
     }
-    return item;
+    return weapon;
   });
 
   return {
@@ -1079,8 +1048,8 @@ export const initializePlayer = (id: string, username: string, characterName: st
       ...DEFAULT_PLAYER_STATS,
       ...character.baseStats
     },
-    weapons: [startingWeapon],
-    items: startingItems
+    weapons: startingWeapons,
+    items: []
   };
 };
 

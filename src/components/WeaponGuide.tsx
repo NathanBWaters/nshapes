@@ -186,7 +186,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: RADIUS.button,
-    backgroundColor: COLORS.canvasWhite,
+    backgroundColor: COLORS.paperBeige,
     justifyContent: 'center',
     alignItems: 'center',
   },

@@ -1,9 +1,26 @@
-import React from 'react';
+import React, { ReactNode } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { CopilotStep, walkthroughable } from 'react-native-copilot';
 import { PlayerStats, Weapon } from '@/types';
 import CircularTimer from './CircularTimer';
 import GameMenu, { DevModeCallbacks } from './GameMenu';
 import { COLORS, RADIUS } from '@/utils/colors';
+
+const WalkthroughableView = walkthroughable(View);
+
+// Copilot step definitions for tutorial mode
+const COPILOT_STEPS = {
+  round: { order: 1, text: "This shows your current round. In Adventure Mode, you'll play through 10 rounds with increasing difficulty." },
+  health: { order: 2, text: "Your health! Invalid SET matches cost 1 heart. If you run out, it's game over. Protect your health!" },
+  money: { order: 3, text: "Gold coins! Earn money by matching cards. Spend it in the shop between rounds to buy powerful weapons." },
+  level: { order: 4, text: "Your level and XP bar. Earn experience with each match. Level up to choose a free weapon reward!" },
+  mulligans: { order: 5, text: "Mulligans auto-save you! When you make an invalid match, a mulligan is used instead of losing health." },
+  hints: { order: 6, text: "Stuck? Tap this to use a hint! It will highlight a valid SET on the board. Use them wisely!" },
+  selected: { order: 7, text: "Shows how many cards you've selected. Select 3 cards to check if they form a valid SET." },
+  timer: { order: 8, text: "The countdown timer! Reach the score target before time runs out to complete the round." },
+  score: { order: 9, text: "Your score progress! Fill this bar to reach the target and complete the round. Each valid SET adds to your score." },
+  menu: { order: 10, text: "Tap MENU to view your stats, check the weapon guide, or exit the game." },
+};
 
 interface GameInfoProps {
   round: number;
@@ -20,6 +37,10 @@ interface GameInfoProps {
   onExitGame?: () => void;
   devMode?: boolean;
   devCallbacks?: DevModeCallbacks;
+  // Tutorial mode - when true, wraps elements with CopilotStep
+  copilotMode?: boolean;
+  // Controlled menu open state for tutorial
+  controlledMenuOpen?: boolean;
 }
 
 // Calculate XP thresholds for level progression
@@ -42,6 +63,8 @@ const GameInfo: React.FC<GameInfoProps> = ({
   onExitGame,
   devMode = false,
   devCallbacks,
+  copilotMode = false,
+  controlledMenuOpen,
 }) => {
   // Calculate score progress percentage
   const scoreProgress = Math.min((score / targetScore) * 100, 100);
@@ -55,6 +78,23 @@ const GameInfo: React.FC<GameInfoProps> = ({
 
   const hintsAvailable = playerStats.hints ?? 0;
 
+  // Helper to wrap elements with CopilotStep when in tutorial mode
+  const withCopilot = (
+    name: keyof typeof COPILOT_STEPS,
+    children: ReactNode,
+    style?: any
+  ) => {
+    if (!copilotMode) {
+      return <View style={style}>{children}</View>;
+    }
+    const step = COPILOT_STEPS[name];
+    return (
+      <CopilotStep text={step.text} order={step.order} name={name}>
+        <WalkthroughableView style={style}>{children}</WalkthroughableView>
+      </CopilotStep>
+    );
+  };
+
   return (
     <View style={styles.container}>
         {/* Top row: All stats */}
@@ -62,71 +102,91 @@ const GameInfo: React.FC<GameInfoProps> = ({
           {/* Left section - gameplay stats */}
           <View style={styles.leftSection}>
             {/* Round */}
-            <View style={styles.statBadge}>
-              <Text style={styles.statLabel}>R{round}</Text>
-            </View>
-
-            {/* Health */}
-            <View style={styles.statItem}>
-              <Text style={styles.heartIcon}>♥</Text>
-              <Text style={[styles.statValue, playerStats.health <= 1 && styles.criticalValue]}>
-                {playerStats.health}/{playerStats.maxHealth}
-              </Text>
-            </View>
-
-            {/* Money */}
-            <View style={styles.statItem}>
-              <Text style={styles.coinIcon}>$</Text>
-              <Text style={styles.statValue}>{playerStats.money}</Text>
-            </View>
-
-            {/* Level + XP Progress */}
-            <View style={styles.levelContainer}>
-              <Text style={styles.levelText}>Lv{playerStats.level}</Text>
-              <View style={styles.xpBarContainer}>
-                <View style={[styles.xpBarFill, { width: `${xpProgress}%` }]} />
-              </View>
-            </View>
-
-            {/* Mulligans */}
-            {(playerStats.mulligans ?? 0) > 0 && (
-              <View style={styles.mulliganBadge}>
-                <Text style={styles.mulliganIcon}>↺</Text>
-                <Text style={styles.mulliganCount}>{playerStats.mulligans}</Text>
-              </View>
+            {withCopilot('round',
+              <Text style={styles.statLabel}>R{round}</Text>,
+              styles.statBadge
             )}
 
+            {/* Health */}
+            {withCopilot('health',
+              <>
+                <Text style={styles.heartIcon}>♥</Text>
+                <Text style={[styles.statValue, playerStats.health <= 1 && styles.criticalValue]}>
+                  {playerStats.health}/{playerStats.maxHealth}
+                </Text>
+              </>,
+              styles.statItem
+            )}
+
+            {/* Money */}
+            {withCopilot('money',
+              <>
+                <Text style={styles.coinIcon}>$</Text>
+                <Text style={styles.statValue}>{playerStats.money}</Text>
+              </>,
+              styles.statItem
+            )}
+
+            {/* Level + XP Progress */}
+            {withCopilot('level',
+              <>
+                <Text style={styles.levelText}>Lv{playerStats.level}</Text>
+                <View style={styles.xpBarContainer}>
+                  <View style={[styles.xpBarFill, { width: `${xpProgress}%` }]} />
+                </View>
+              </>,
+              styles.levelContainer
+            )}
+
+            {/* Mulligans - always show in copilot mode for tutorial, otherwise conditional */}
+            {((playerStats.mulligans ?? 0) > 0 || copilotMode) &&
+              withCopilot('mulligans',
+                <>
+                  <Text style={styles.mulliganIcon}>↺</Text>
+                  <Text style={styles.mulliganCount}>{playerStats.mulligans ?? 0}</Text>
+                </>,
+                styles.mulliganBadge
+              )
+            }
+
             {/* Hints */}
-            <TouchableOpacity
-              style={[
-                styles.hintButton,
-                hintsAvailable > 0 ? styles.hintButtonEnabled : styles.hintButtonDisabled,
-                hasActiveHint && styles.hintButtonActive,
-              ]}
-              onPress={hasActiveHint ? onClearHint : onHintPress}
-              disabled={hintsAvailable <= 0 && !hasActiveHint}
-            >
-              <Text style={styles.hintIcon}>?</Text>
-              <Text style={[
-                styles.hintCount,
-                hintsAvailable > 0 ? styles.hintCountEnabled : styles.hintCountDisabled
-              ]}>
-                {hasActiveHint ? 'x' : hintsAvailable}
-              </Text>
-            </TouchableOpacity>
+            {withCopilot('hints',
+              <TouchableOpacity
+                style={[
+                  styles.hintButtonInner,
+                  hintsAvailable > 0 ? styles.hintButtonEnabled : styles.hintButtonDisabled,
+                  hasActiveHint && styles.hintButtonActive,
+                ]}
+                onPress={hasActiveHint ? onClearHint : onHintPress}
+                disabled={copilotMode || (hintsAvailable <= 0 && !hasActiveHint)}
+              >
+                <Text style={styles.hintIcon}>?</Text>
+                <Text style={[
+                  styles.hintCount,
+                  hintsAvailable > 0 ? styles.hintCountEnabled : styles.hintCountDisabled
+                ]}>
+                  {hasActiveHint ? 'x' : hintsAvailable}
+                </Text>
+              </TouchableOpacity>,
+              undefined
+            )}
 
             {/* Selected count */}
-            <View style={[styles.selectedBadge, selectedCount === 3 && styles.selectedBadgeFull]}>
-              <Text style={styles.selectedText}>{selectedCount}/3</Text>
-            </View>
+            {withCopilot('selected',
+              <Text style={styles.selectedText}>{selectedCount}/3</Text>,
+              [styles.selectedBadge, selectedCount === 3 && styles.selectedBadgeFull]
+            )}
 
             {/* Timer */}
-            <CircularTimer
-              currentTime={time}
-              totalTime={totalTime}
-              size={40}
-              strokeWidth={3}
-            />
+            {withCopilot('timer',
+              <CircularTimer
+                currentTime={time}
+                totalTime={totalTime}
+                size={40}
+                strokeWidth={3}
+              />,
+              undefined
+            )}
 
             {/* Menu Button */}
             <GameMenu
@@ -135,32 +195,35 @@ const GameInfo: React.FC<GameInfoProps> = ({
               onExitGame={onExitGame}
               devMode={devMode}
               devCallbacks={devCallbacks}
+              copilotMode={copilotMode}
+              controlledOpen={controlledMenuOpen}
             />
           </View>
 
         </View>
 
         {/* Bottom row: Score progress bar */}
-        <View style={styles.scoreRow}>
-          <View style={styles.scoreBarContainer}>
-            <View
-              style={[
-                styles.scoreBarFill,
-                { width: `${scoreProgress}%` },
-                scoreProgress >= 100 && styles.scoreBarComplete,
-              ]}
-            />
-          </View>
-          <Text style={styles.scoreText}>{score}/{targetScore}</Text>
-        </View>
+        {withCopilot('score',
+          <>
+            <View style={styles.scoreBarContainer}>
+              <View
+                style={[
+                  styles.scoreBarFill,
+                  { width: `${scoreProgress}%` },
+                  scoreProgress >= 100 && styles.scoreBarComplete,
+                ]}
+              />
+            </View>
+            <Text style={styles.scoreText}>{score}/{targetScore}</Text>
+          </>,
+          styles.scoreRow
+        )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    justifyContent: 'space-between',
     paddingVertical: 4,
     backgroundColor: COLORS.canvasWhite,
     borderBottomWidth: 1,
@@ -274,7 +337,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontFamily: 'monospace',
   },
-  hintButton: {
+  hintButtonInner: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,

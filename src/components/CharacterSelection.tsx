@@ -56,7 +56,7 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
       {/* Eyebrow Banner */}
       <View style={styles.eyebrow}>
         <Text style={styles.eyebrowText}>Character Selection</Text>
-        <GameMenu playerStats={DEFAULT_PLAYER_STATS as PlayerStats} />
+        <GameMenu playerStats={DEFAULT_PLAYER_STATS as PlayerStats} character={selectedChar} />
       </View>
 
       {/* Top Half - Detail Focus */}
@@ -76,27 +76,21 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
             <Text style={styles.detailName}>{selectedChar.name}</Text>
             <Text style={styles.detailDescription}>{selectedChar.description}</Text>
 
-            {/* Stats */}
-            <View style={styles.statsRow}>
-              <View style={styles.statBox}>
-                <Text style={styles.statLabel}>Weapon</Text>
-                <View style={styles.statValueRow}>
-                  {(() => {
-                    const weapon = getWeaponByName(selectedChar.startingWeapon);
-                    return weapon?.icon ? (
-                      <Icon name={weapon.icon} size={16} color={COLORS.slateCharcoal} />
-                    ) : null;
-                  })()}
-                  <Text style={styles.statValue}>{selectedChar.startingWeapon}</Text>
-                </View>
-              </View>
-              <View style={styles.statBox}>
-                <Text style={styles.statLabel}>Items</Text>
-                <Text style={styles.statValue}>
-                  {selectedChar.startingItems.length > 0
-                    ? selectedChar.startingItems.join(', ')
-                    : 'None'}
-                </Text>
+            {/* Starting Weapons */}
+            <View style={styles.statBox}>
+              <Text style={styles.statLabel}>Starting Weapons</Text>
+              <View style={styles.weaponsList}>
+                {selectedChar.startingWeapons.map((weaponName, index) => {
+                  const weapon = getWeaponByName(weaponName);
+                  return (
+                    <View key={index} style={styles.statValueRow}>
+                      {weapon?.icon && (
+                        <Icon name={weapon.icon} size={16} color={COLORS.slateCharcoal} />
+                      )}
+                      <Text style={styles.statValue}>{weaponName}</Text>
+                    </View>
+                  );
+                })}
               </View>
             </View>
           </View>
@@ -306,12 +300,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     opacity: 0.8,
   },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
   statBox: {
-    flex: 1,
     backgroundColor: COLORS.paperBeige,
     borderRadius: 8,
     padding: 10,
@@ -336,6 +325,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+  },
+  weaponsList: {
+    gap: 4,
   },
   emptyDetail: {
     flex: 1,

@@ -125,8 +125,7 @@ export interface Enemy {
 export interface Character {
   name: CharacterName;
   description: string;
-  startingWeapon: WeaponName;
-  startingItems: ItemName[];
+  startingWeapons: WeaponName[];
   baseStats: Partial<PlayerStats>;
   icon?: string; // Icon path like "lorc/cat"
 }

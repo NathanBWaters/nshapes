@@ -1,10 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Modal, ScrollView, StyleSheet, Alert, Platform } from 'react-native';
-import { PlayerStats, Weapon, WeaponRarity, Card } from '@/types';
+import { CopilotStep, walkthroughable } from 'react-native-copilot';
+import { PlayerStats, Weapon, WeaponRarity, Card, Character } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import WeaponGuide from './WeaponGuide';
 import Icon from './Icon';
-import { WEAPONS } from '@/utils/gameDefinitions';
+import { WEAPONS, getWeaponByName } from '@/utils/gameDefinitions';
+
+const WalkthroughableView = walkthroughable(View);
+
+// Copilot step definitions for menu items
+const MENU_COPILOT_STEPS = {
+  menu_stats: { order: 11, text: "Character Stats shows your current health, money, level, and all your equipped weapons. Check here to see how powerful you've become!" },
+  menu_weapons: { order: 12, text: "The Weapon Guide shows all 15 weapon types and what they do. Browse this before buying weapons in the shop!" },
+  menu_exit: { order: 13, text: "Exit Game lets you return to the main menu. Your progress will be lost, so only use this when you want to start over!" },
+};
 
 // Weapon categories for dev testing
 const WEAPON_CATEGORIES = {
@@ -39,9 +49,14 @@ export interface DevModeCallbacks {
 interface GameMenuProps {
   playerStats: PlayerStats;
   playerWeapons?: Weapon[];
+  character?: Character;  // Optional character to display in stats
   onExitGame?: () => void;
   devMode?: boolean;
   devCallbacks?: DevModeCallbacks;
+  // Tutorial mode - when true, wraps menu button with CopilotStep
+  copilotMode?: boolean;
+  // Controlled mode for tutorial - parent controls whether menu is open
+  controlledOpen?: boolean;
 }
 
 type MenuScreen = 'menu' | 'stats' | 'weapons' | 'dev';
@@ -55,17 +70,20 @@ const getRarityColor = (rarity: WeaponRarity): string => {
   }
 };
 
-const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], onExitGame, devMode = false, devCallbacks }) => {
-  const [isModalOpen, setIsModalOpen] = useState(false);
+const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], character, onExitGame, devMode = false, devCallbacks, copilotMode = false, controlledOpen }) => {
+  const [internalModalOpen, setInternalModalOpen] = useState(false);
   const [currentScreen, setCurrentScreen] = useState<MenuScreen>('menu');
   const [showExitConfirm, setShowExitConfirm] = useState(false);
 
+  // Use controlled mode when copilotMode is true, otherwise use internal state
+  const isModalOpen = copilotMode ? (controlledOpen ?? false) : internalModalOpen;
+
   const openModal = () => {
     setCurrentScreen('menu');
-    setIsModalOpen(true);
+    setInternalModalOpen(true);
   };
   const closeModal = () => {
-    setIsModalOpen(false);
+    setInternalModalOpen(false);
     setCurrentScreen('menu');
   };
 
@@ -113,44 +131,68 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], on
       .replace(/^./, (str) => str.toUpperCase());
   };
 
+  // Helper to wrap menu items with CopilotStep when in tutorial mode
+  const withMenuCopilot = (
+    name: keyof typeof MENU_COPILOT_STEPS,
+    children: React.ReactNode
+  ) => {
+    if (!copilotMode) {
+      return <>{children}</>;
+    }
+    const step = MENU_COPILOT_STEPS[name];
+    return (
+      <CopilotStep text={step.text} order={step.order} name={name}>
+        <WalkthroughableView>{children}</WalkthroughableView>
+      </CopilotStep>
+    );
+  };
+
   const renderMenuOptions = () => (
     <View style={styles.menuContainer}>
       {/* Header */}
       <View style={styles.modalHeader}>
         <Text style={styles.modalTitle}>Menu</Text>
-        <TouchableOpacity onPress={closeModal} style={styles.closeButton}>
-          <Text style={styles.closeButtonText}>X</Text>
-        </TouchableOpacity>
+        {!copilotMode && (
+          <TouchableOpacity onPress={closeModal} style={styles.closeButton}>
+            <Text style={styles.closeButtonText}>X</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Menu Options */}
       <View style={styles.menuOptionsContainer}>
-        <TouchableOpacity
-          style={styles.menuOption}
-          onPress={() => setCurrentScreen('stats')}
-        >
-          <Text style={styles.menuOptionIcon}>📊</Text>
-          <View style={styles.menuOptionTextContainer}>
-            <Text style={styles.menuOptionTitle}>Character Stats</Text>
-            <Text style={styles.menuOptionDescription}>View your current stats and abilities</Text>
-          </View>
-          <Text style={styles.menuOptionArrow}>›</Text>
-        </TouchableOpacity>
+        {withMenuCopilot('menu_stats',
+          <TouchableOpacity
+            style={styles.menuOption}
+            onPress={copilotMode ? undefined : () => setCurrentScreen('stats')}
+            disabled={copilotMode}
+          >
+            <Text style={styles.menuOptionIcon}>📊</Text>
+            <View style={styles.menuOptionTextContainer}>
+              <Text style={styles.menuOptionTitle}>Character Stats</Text>
+              <Text style={styles.menuOptionDescription}>View your current stats and abilities</Text>
+            </View>
+            <Text style={styles.menuOptionArrow}>›</Text>
+          </TouchableOpacity>
+        )}
 
-        <TouchableOpacity
-          style={styles.menuOption}
-          onPress={() => setCurrentScreen('weapons')}
-        >
-          <Text style={styles.menuOptionIcon}>⚔️</Text>
-          <View style={styles.menuOptionTextContainer}>
-            <Text style={styles.menuOptionTitle}>Weapon Guide</Text>
-            <Text style={styles.menuOptionDescription}>Browse all weapons and their effects</Text>
-          </View>
-          <Text style={styles.menuOptionArrow}>›</Text>
-        </TouchableOpacity>
+        {withMenuCopilot('menu_weapons',
+          <TouchableOpacity
+            style={styles.menuOption}
+            onPress={copilotMode ? undefined : () => setCurrentScreen('weapons')}
+            disabled={copilotMode}
+          >
+            <Text style={styles.menuOptionIcon}>⚔️</Text>
+            <View style={styles.menuOptionTextContainer}>
+              <Text style={styles.menuOptionTitle}>Weapon Guide</Text>
+              <Text style={styles.menuOptionDescription}>Browse all weapons and their effects</Text>
+            </View>
+            <Text style={styles.menuOptionArrow}>›</Text>
+          </TouchableOpacity>
+        )}
 
-        {/* Dev Tools Option - only shown in dev mode */}
-        {devMode && (
+        {/* Dev Tools Option - only shown in dev mode, not in tutorial */}
+        {devMode && !copilotMode && (
           <TouchableOpacity
             style={[styles.menuOption, styles.devMenuOption]}
             onPress={() => setCurrentScreen('dev')}
@@ -164,11 +206,12 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], on
           </TouchableOpacity>
         )}
 
-        {/* Exit Game Option */}
-        {onExitGame && (
+        {/* Exit Game Option - always show in tutorial for highlighting */}
+        {(onExitGame || copilotMode) && withMenuCopilot('menu_exit',
           <TouchableOpacity
             style={[styles.menuOption, styles.exitMenuOption]}
-            onPress={() => setShowExitConfirm(true)}
+            onPress={copilotMode ? undefined : () => setShowExitConfirm(true)}
+            disabled={copilotMode}
           >
             <Text style={styles.menuOptionIcon}>🚪</Text>
             <View style={styles.menuOptionTextContainer}>
@@ -197,6 +240,11 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], on
     return acc;
   }, {} as Record<string, { weapon: Weapon; count: number }>);
 
+  // Get the character's starting weapons for display
+  const startingWeapons = character
+    ? character.startingWeapons.map(name => getWeaponByName(name)).filter((w): w is Weapon => w !== undefined)
+    : [];
+
   const renderStats = () => (
     <View style={styles.statsContainer}>
       {/* Modal Header */}
@@ -211,6 +259,26 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], on
       </View>
 
       <ScrollView style={styles.modalContent}>
+        {/* Character Info Section */}
+        {character && (
+          <View style={styles.categoryContainer}>
+            <View style={styles.categoryHeader}>
+              <Text style={styles.categoryTitle}>CHARACTER</Text>
+            </View>
+            <View style={styles.characterInfoContainer}>
+              <View style={styles.characterIconContainer}>
+                {character.icon && (
+                  <Icon name={character.icon} size={48} color={COLORS.slateCharcoal} />
+                )}
+              </View>
+              <View style={styles.characterDetails}>
+                <Text style={styles.characterName}>{character.name}</Text>
+                <Text style={styles.characterDescription}>{character.description}</Text>
+              </View>
+            </View>
+          </View>
+        )}
+
         {/* Equipped Weapons Section */}
         {playerWeapons.length > 0 && (
           <View style={styles.categoryContainer}>
@@ -242,15 +310,35 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], on
           </View>
         )}
 
-        {/* No weapons message */}
+        {/* No weapons message / Starting weapons display */}
         {playerWeapons.length === 0 && (
           <View style={styles.categoryContainer}>
             <View style={styles.categoryHeader}>
-              <Text style={styles.categoryTitle}>EQUIPPED WEAPONS</Text>
+              <Text style={styles.categoryTitle}>
+                {startingWeapons.length > 0 ? 'STARTING WEAPONS' : 'EQUIPPED WEAPONS'}
+              </Text>
             </View>
-            <View style={styles.noWeaponsContainer}>
-              <Text style={styles.noWeaponsText}>No weapons equipped yet</Text>
-            </View>
+            {startingWeapons.length > 0 ? (
+              <View style={styles.weaponsGrid}>
+                {startingWeapons.map((weapon, index) => (
+                  <View key={index} style={styles.weaponRow}>
+                    <View style={[styles.weaponIconContainer, { borderColor: getRarityColor(weapon.rarity) }]}>
+                      <Icon name={weapon.icon || 'lorc/field'} size={20} color={COLORS.slateCharcoal} />
+                    </View>
+                    <View style={styles.weaponInfo}>
+                      <Text style={styles.weaponName}>{weapon.name}</Text>
+                      <Text style={[styles.weaponRarity, { color: getRarityColor(weapon.rarity) }]}>
+                        {weapon.rarity.charAt(0).toUpperCase() + weapon.rarity.slice(1)}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.noWeaponsContainer}>
+                <Text style={styles.noWeaponsText}>No weapons equipped yet</Text>
+              </View>
+            )}
           </View>
         )}
 
@@ -492,21 +580,39 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], on
 
   const handleExitConfirm = () => {
     setShowExitConfirm(false);
-    setIsModalOpen(false);
+    setInternalModalOpen(false);
     if (onExitGame) {
       onExitGame();
     }
   };
 
+  // Menu button content
+  const menuButtonContent = (
+    <TouchableOpacity
+      style={styles.menuButton}
+      onPress={copilotMode ? undefined : openModal}
+      disabled={copilotMode}
+    >
+      <Text style={styles.menuButtonText}>MENU</Text>
+    </TouchableOpacity>
+  );
+
   return (
     <>
-      {/* Menu Button */}
-      <TouchableOpacity
-        style={styles.menuButton}
-        onPress={openModal}
-      >
-        <Text style={styles.menuButtonText}>MENU</Text>
-      </TouchableOpacity>
+      {/* Menu Button - wrapped with CopilotStep in tutorial mode */}
+      {copilotMode ? (
+        <CopilotStep
+          text="Tap MENU to view your stats, check the weapon guide, or exit the game."
+          order={10}
+          name="menu"
+        >
+          <WalkthroughableView>
+            {menuButtonContent}
+          </WalkthroughableView>
+        </CopilotStep>
+      ) : (
+        menuButtonContent
+      )}
 
       {/* Menu Modal */}
       <Modal
@@ -750,7 +856,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: RADIUS.button,
-    backgroundColor: COLORS.canvasWhite,
+    backgroundColor: COLORS.paperBeige,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
@@ -787,6 +893,39 @@ const styles = StyleSheet.create({
     fontSize: 13,
     opacity: 0.6,
     fontStyle: 'italic',
+  },
+  // Character info styles
+  characterInfoContainer: {
+    flexDirection: 'row',
+    padding: 12,
+    gap: 12,
+    alignItems: 'center',
+  },
+  characterIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: RADIUS.module,
+    backgroundColor: COLORS.paperBeige,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.slateCharcoal,
+  },
+  characterDetails: {
+    flex: 1,
+  },
+  characterName: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '700',
+    fontSize: 16,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  characterDescription: {
+    color: COLORS.slateCharcoal,
+    fontSize: 12,
+    opacity: 0.7,
+    marginTop: 2,
   },
   // Exit menu option styles
   exitMenuOption: {
