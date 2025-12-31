@@ -57,7 +57,8 @@ export interface CardReward {
   timeBonus?: number; // Seconds to add to timer
   mulliganBonus?: number; // Mulligans to add
   boardGrowth?: number; // Cards to add to board
-  // Extensible: add more reward types here
+  // Weapon effect types for visual distinction
+  effectType?: 'explosion' | 'laser' | 'fire';
 }
 
 export type CharacterName =

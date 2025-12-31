@@ -17,6 +17,7 @@ import {
   getRandomShopWeapon
 } from '@/utils/gameDefinitions';
 import { getActiveAttributesForRound, getBoardSizeForAttributes, ATTRIBUTE_SCALING } from '@/utils/gameConfig';
+import { getAdjacentIndices, getFireSpreadCards, WeaponEffectResult } from '@/utils/weaponEffects';
 import GameBoard from './GameBoard';
 import GameInfo from './GameInfo';
 import Notification from './Notification';
@@ -770,18 +771,15 @@ const Game: React.FC = () => {
     }
   };
 
-  // Handle valid match - receives cards and rewards from GameBoard after reveal
-  const handleValidMatch = (cards: Card[], rewards: CardReward[]) => {
+  // Handle valid match - receives cards, rewards, and weapon effects from GameBoard after reveal
+  const handleValidMatch = (cards: Card[], rewards: CardReward[], weaponEffects?: WeaponEffectResult) => {
     // In multiplayer, send the match to the server
     if (isMultiplayer) {
       sendCombinationFound(state);
       return;
     }
 
-    // Get player's total stats for weapon effects
-    const totalStats = calculatePlayerTotalStats(state.player);
-
-    // Calculate totals from rewards
+    // Calculate totals from rewards (includes explosion/laser rewards from GameBoard)
     let totalPoints = 0;
     let totalMoney = 0;
     let totalExperience = 0;
@@ -794,11 +792,13 @@ const Game: React.FC = () => {
       let points = reward.points || 0;
       let money = reward.money || 0;
 
-      // Check if this card is holographic for 2x points
-      const matchedCard = cards.find(c => c.id === reward.cardId);
-      if (matchedCard?.isHolographic) {
-        points *= 2;
-        holoBonus += points / 2; // Track the bonus portion
+      // Check if this card is holographic for 2x points (only for non-effect rewards)
+      if (!reward.effectType) {
+        const matchedCard = cards.find(c => c.id === reward.cardId);
+        if (matchedCard?.isHolographic) {
+          points *= 2;
+          holoBonus += points / 2; // Track the bonus portion
+        }
       }
 
       totalPoints += points;
@@ -809,9 +809,7 @@ const Game: React.FC = () => {
       if (reward.lootBox) lootCratesEarned++;
     });
 
-    // === WEAPON MATCH TRIGGER EFFECTS ===
-    let bonusMulligans = 0;
-    let bonusTime = 0;
+    // === WEAPON BONUS EFFECTS (from GameBoard's processWeaponEffects) ===
     const triggerNotifications: string[] = [];
 
     // Show holographic bonus if any
@@ -819,75 +817,22 @@ const Game: React.FC = () => {
       triggerNotifications.push(`Holo 2x! +${holoBonus}`);
     }
 
-    // Healing chance - roll to heal 1 HP
-    if (totalStats.healingChance > 0 && Math.random() * 100 < totalStats.healingChance) {
-      totalHealing += 1;
-      triggerNotifications.push('+1 HP');
-    }
+    // Apply weapon effect bonuses (healing, hints, time, mulligans, board growth, fire)
+    if (weaponEffects) {
+      totalHealing += weaponEffects.bonusHealing;
+      totalHints += weaponEffects.bonusHints;
 
-    // Hint gain chance - roll to gain 1 hint
-    if (totalStats.hintGainChance > 0 && Math.random() * 100 < totalStats.hintGainChance) {
-      totalHints += 1;
-      triggerNotifications.push('+1 Hint');
-    }
-
-    // Time gain chance - roll to add time
-    if (totalStats.timeGainChance > 0 && Math.random() * 100 < totalStats.timeGainChance) {
-      bonusTime = totalStats.timeGainAmount || 10;
-      triggerNotifications.push(`+${bonusTime}s`);
-    }
-
-    // Mulligan gain chance - roll to gain 1 mulligan
-    if (totalStats.mulliganGainChance > 0 && Math.random() * 100 < totalStats.mulliganGainChance) {
-      bonusMulligans = 1;
-      triggerNotifications.push('+1 Mulligan');
-    }
-
-    // Board growth chance - roll to add cards to the board
-    let boardGrowthTriggered = false;
-    let boardGrowthAmount = 0;
-    if (totalStats.boardGrowthChance > 0 && Math.random() * 100 < totalStats.boardGrowthChance) {
-      boardGrowthTriggered = true;
-      boardGrowthAmount = totalStats.boardGrowthAmount || 1;
-      triggerNotifications.push(`+${boardGrowthAmount} Cards`);
-    }
-
-    // Explosive effect - destroy adjacent cards
-    let explosiveCards: Card[] = [];
-    if (totalStats.explosionChance > 0) {
-      explosiveCards = getExplosiveCards(state.board, cards, totalStats.explosionChance);
-      if (explosiveCards.length > 0) {
-        // Add bonus points/money for exploded cards
-        totalPoints += explosiveCards.length;
-        totalMoney += explosiveCards.length;
-        triggerNotifications.push(`Explosion! +${explosiveCards.length}`);
+      // Set fire on cards
+      if (weaponEffects.fireCards.length > 0) {
+        igniteCards(weaponEffects.fireCards);
       }
-    }
 
-    // Laser effect - destroy entire row or column
-    let laserCards: Card[] = [];
-    if (totalStats.laserChance > 0 && Math.random() * 100 < totalStats.laserChance) {
-      laserCards = getLaserCards(state.board, cards);
-      // Filter out any cards already marked for explosion
-      laserCards = laserCards.filter(lc => !explosiveCards.some(ec => ec.id === lc.id));
-      if (laserCards.length > 0) {
-        // Add bonus points/money for laser-destroyed cards
-        totalPoints += laserCards.length * 2; // Laser gives more points
-        totalMoney += laserCards.length;
-        triggerNotifications.push(`Laser! +${laserCards.length * 2}`);
-      }
-    }
-
-    // Fire spread effect - set adjacent cards on fire
-    let fireSpreadCount = 0;
-    if (totalStats.fireSpreadChance > 0) {
-      const cardsToIgnite = getFireSpreadCards(state.board, cards, totalStats.fireSpreadChance);
-      if (cardsToIgnite.length > 0) {
-        fireSpreadCount = cardsToIgnite.length;
-        triggerNotifications.push(`Fire! ${fireSpreadCount} cards`);
-        // Set cards on fire (will be handled after state update)
-        igniteCards(cardsToIgnite);
-      }
+      // Show notifications (filter out explosion/laser since those were shown visually)
+      weaponEffects.notifications.forEach(n => {
+        if (!n.includes('Explosion') && !n.includes('Laser')) {
+          triggerNotifications.push(n);
+        }
+      });
     }
 
     // Show notification for triggered effects
@@ -941,7 +886,7 @@ const Game: React.FC = () => {
         selectedCards: prevState.selectedCards.filter(c => !cards.some(mc => mc.id === c.id)),
         foundCombinations: [...prevState.foundCombinations, cards],
         lootCrates: prevState.lootCrates + lootCratesEarned,
-        remainingTime: prevState.remainingTime + bonusTime,
+        remainingTime: prevState.remainingTime + (weaponEffects?.bonusTime || 0),
         player: {
           ...prevState.player,
           stats: {
@@ -951,149 +896,19 @@ const Game: React.FC = () => {
             money: prevState.player.stats.money + totalMoney,
             health: newHealth,
             hints: prevState.player.stats.hints + totalHints,
-            mulligans: prevState.player.stats.mulligans + bonusMulligans
+            mulligans: prevState.player.stats.mulligans + (weaponEffects?.bonusMulligans || 0)
           }
         }
       };
     });
 
-    // Combine all cards to replace: matched + exploded + laser
-    const allCardsToReplace = [...cards, ...explosiveCards, ...laserCards];
-
-    // Replace matched cards with new ones
-    replaceMatchedCards(allCardsToReplace);
+    // Cards to replace are already passed from GameBoard (matched + exploded + laser)
+    replaceMatchedCards(cards);
 
     // Handle board growth if triggered
-    if (boardGrowthTriggered && boardGrowthAmount > 0) {
-      growBoard(boardGrowthAmount);
+    if (weaponEffects && weaponEffects.boardGrowth > 0) {
+      growBoard(weaponEffects.boardGrowth);
     }
-  };
-
-  // Get grid dimensions based on board size (assumes 3 columns)
-  const getGridDimensions = (boardSize: number): { cols: number; rows: number } => {
-    const cols = 3;
-    const rows = Math.ceil(boardSize / cols);
-    return { cols, rows };
-  };
-
-  // Get adjacent card indices for a given card index
-  const getAdjacentIndices = (index: number, boardSize: number): number[] => {
-    const { cols } = getGridDimensions(boardSize);
-    const adjacent: number[] = [];
-    const row = Math.floor(index / cols);
-    const col = index % cols;
-
-    // Up
-    if (row > 0) adjacent.push(index - cols);
-    // Down
-    if (index + cols < boardSize) adjacent.push(index + cols);
-    // Left
-    if (col > 0) adjacent.push(index - 1);
-    // Right
-    if (col < cols - 1 && index + 1 < boardSize) adjacent.push(index + 1);
-
-    return adjacent;
-  };
-
-  // Get all card indices in the same row or column
-  const getLineIndices = (index: number, boardSize: number, isRow: boolean): number[] => {
-    const { cols } = getGridDimensions(boardSize);
-    const indices: number[] = [];
-    const row = Math.floor(index / cols);
-    const col = index % cols;
-
-    if (isRow) {
-      // Get all cards in the same row
-      for (let c = 0; c < cols; c++) {
-        const idx = row * cols + c;
-        if (idx < boardSize) indices.push(idx);
-      }
-    } else {
-      // Get all cards in the same column
-      for (let r = 0; r < Math.ceil(boardSize / cols); r++) {
-        const idx = r * cols + col;
-        if (idx < boardSize) indices.push(idx);
-      }
-    }
-
-    return indices;
-  };
-
-  // Get cards to explode (adjacent to matched cards)
-  const getExplosiveCards = (board: Card[], matchedCards: Card[], explosionChance: number): Card[] => {
-    const cardsToExplode: Card[] = [];
-    const explodedIndices = new Set<number>();
-
-    // For each matched card, check adjacent cards
-    matchedCards.forEach(matchedCard => {
-      const matchedIndex = board.findIndex(c => c.id === matchedCard.id);
-      if (matchedIndex === -1) return;
-
-      const adjacentIndices = getAdjacentIndices(matchedIndex, board.length);
-
-      adjacentIndices.forEach(adjIndex => {
-        // Roll explosion chance for each adjacent card
-        if (!explodedIndices.has(adjIndex) && Math.random() * 100 < explosionChance) {
-          explodedIndices.add(adjIndex);
-          const adjCard = board[adjIndex];
-          if (adjCard && !matchedCards.some(mc => mc.id === adjCard.id)) {
-            cardsToExplode.push(adjCard);
-          }
-        }
-      });
-    });
-
-    return cardsToExplode;
-  };
-
-  // Get cards to destroy with laser (entire row or column)
-  const getLaserCards = (board: Card[], matchedCards: Card[]): Card[] => {
-    const cardsToDestroy: Card[] = [];
-
-    // Pick a random matched card as the laser origin
-    const originCard = matchedCards[Math.floor(Math.random() * matchedCards.length)];
-    const originIndex = board.findIndex(c => c.id === originCard.id);
-    if (originIndex === -1) return cardsToDestroy;
-
-    // Randomly choose row or column
-    const isRow = Math.random() < 0.5;
-    const lineIndices = getLineIndices(originIndex, board.length, isRow);
-
-    lineIndices.forEach(idx => {
-      const card = board[idx];
-      if (card && !matchedCards.some(mc => mc.id === card.id)) {
-        cardsToDestroy.push(card);
-      }
-    });
-
-    return cardsToDestroy;
-  };
-
-  // Get cards to set on fire (adjacent to matched cards)
-  const getFireSpreadCards = (board: Card[], matchedCards: Card[], fireChance: number): Card[] => {
-    const cardsToIgnite: Card[] = [];
-    const igniteIndices = new Set<number>();
-
-    matchedCards.forEach(matchedCard => {
-      const matchedIndex = board.findIndex(c => c.id === matchedCard.id);
-      if (matchedIndex === -1) return;
-
-      const adjacentIndices = getAdjacentIndices(matchedIndex, board.length);
-
-      adjacentIndices.forEach(adjIndex => {
-        // Roll fire chance for each adjacent card
-        if (!igniteIndices.has(adjIndex) && Math.random() * 100 < fireChance) {
-          const adjCard = board[adjIndex];
-          // Don't ignite already burning cards or matched cards
-          if (adjCard && !adjCard.onFire && !matchedCards.some(mc => mc.id === adjCard.id)) {
-            igniteIndices.add(adjIndex);
-            cardsToIgnite.push(adjCard);
-          }
-        }
-      });
-    });
-
-    return cardsToIgnite;
   };
 
   // Set cards on fire

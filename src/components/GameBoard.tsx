@@ -5,13 +5,14 @@ import Card from './Card';
 import RewardReveal from './RewardReveal';
 import { COLORS } from '@/utils/colors';
 import { MATCH_REWARDS } from '@/utils/gameConfig';
+import { processWeaponEffects, WeaponEffectResult } from '@/utils/weaponEffects';
 
 // Default to 4 attributes for backward compatibility
 const DEFAULT_ATTRIBUTES: AttributeName[] = ['shape', 'color', 'number', 'shading'];
 
 interface GameBoardProps {
   cards: CardType[];
-  onMatch: (cards: CardType[], rewards: CardReward[]) => void;
+  onMatch: (cards: CardType[], rewards: CardReward[], weaponEffects?: WeaponEffectResult) => void;
   onInvalidSelection: (cards: CardType[]) => void;
   playerStats: PlayerStats;
   isPlayerTurn: boolean;
@@ -239,19 +240,55 @@ const GameBoard: React.FC<GameBoardProps> = ({
           // Generate unique match ID for this match
           const matchId = ++matchCounterRef.current;
 
-          // Calculate rewards for each card with matchId
-          const rewards = newSelectedCards.map(c => calculateCardReward(c));
-          const rewardsWithMatchId = rewards.map(r => ({ ...r, matchId }));
+          // Calculate rewards for matched cards
+          const matchedRewards = newSelectedCards.map(c => calculateCardReward(c));
 
-          // Mark cards as matched and add rewards (accumulate, don't replace)
-          setMatchedCardIds(prev => [...prev, ...newSelectedCards.map(c => c.id)]);
+          // Process weapon effects to get additional cards to destroy
+          const weaponEffects = processWeaponEffects(cards, newSelectedCards, playerStats);
+
+          // Create rewards for exploded cards
+          const explosionRewards: CardReward[] = weaponEffects.explosiveCards.map(c => ({
+            cardId: c.id,
+            points: 1,
+            money: 1,
+            effectType: 'explosion' as const,
+          }));
+
+          // Create rewards for laser-destroyed cards
+          const laserRewards: CardReward[] = weaponEffects.laserCards.map(c => ({
+            cardId: c.id,
+            points: 2,
+            money: 1,
+            effectType: 'laser' as const,
+          }));
+
+          // Combine all rewards
+          const allRewards = [...matchedRewards, ...explosionRewards, ...laserRewards];
+          const rewardsWithMatchId = allRewards.map(r => ({ ...r, matchId }));
+
+          // Collect all affected card IDs
+          const allAffectedCardIds = [
+            ...newSelectedCards.map(c => c.id),
+            ...weaponEffects.explosiveCards.map(c => c.id),
+            ...weaponEffects.laserCards.map(c => c.id),
+          ];
+
+          // Mark all affected cards as matched and add rewards
+          setMatchedCardIds(prev => [...prev, ...allAffectedCardIds]);
           setSelectedCards(prev => prev.filter(c => !newSelectedCards.some(mc => mc.id === c.id)));
           setRevealingRewards(prev => [...prev, ...rewardsWithMatchId]);
+
+          // Collect all cards to replace (matched + weapon effects)
+          const allCardsToReplace = [
+            ...newSelectedCards,
+            ...weaponEffects.explosiveCards,
+            ...weaponEffects.laserCards,
+          ];
 
           // After 1.5 seconds, notify parent and clear only this match's rewards
           setTimeout(() => {
             setRevealingRewards(prev => prev.filter(r => r.matchId !== matchId));
-            onMatch(newSelectedCards, rewards);
+            onMatch(allCardsToReplace, allRewards, weaponEffects);
           }, 1500);
         } else {
           onInvalidSelection(newSelectedCards);

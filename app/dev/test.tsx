@@ -11,6 +11,7 @@ import {
   getRandomShopWeapon,
 } from '@/utils/gameDefinitions';
 import { getActiveAttributesForRound } from '@/utils/gameConfig';
+import { WeaponEffectResult } from '@/utils/weaponEffects';
 import GameBoard from '@/components/GameBoard';
 
 const INITIAL_CARD_COUNT = 12;
@@ -252,25 +253,100 @@ export default function DevTest() {
     setTimeout(() => setNotification(null), 1500);
   };
 
-  const handleValidMatch = (cards: Card[], rewards: CardReward[]) => {
-    // Calculate totals from rewards
+  const handleValidMatch = (cards: Card[], rewards: CardReward[], weaponEffects?: WeaponEffectResult) => {
+    // Calculate totals from rewards (includes explosion/laser rewards from GameBoard)
     let totalPoints = 0;
     let totalMoney = 0;
+    let holoBonus = 0;
 
     rewards.forEach(reward => {
-      totalPoints += reward.points || 0;
+      let points = reward.points || 0;
+
+      // Check if this card is holographic for 2x points (only for non-effect rewards)
+      if (!reward.effectType) {
+        const matchedCard = cards.find(c => c.id === reward.cardId);
+        if (matchedCard?.isHolographic) {
+          points *= 2;
+          holoBonus += points / 2;
+        }
+      }
+
+      totalPoints += points;
       totalMoney += reward.money || 0;
     });
 
+    // Show notifications for effects (filter out explosion/laser shown visually)
+    const notifications: string[] = [];
+    if (holoBonus > 0) notifications.push(`Holo 2x! +${holoBonus}`);
+    if (weaponEffects) {
+      weaponEffects.notifications.forEach(n => {
+        if (!n.includes('Explosion') && !n.includes('Laser')) {
+          notifications.push(n);
+        }
+      });
+    }
+
+    if (notifications.length > 0) {
+      setNotification(notifications.join(' | '));
+      setTimeout(() => setNotification(null), 2000);
+    }
+
+    // Set fire on cards from weapon effects
+    if (weaponEffects && weaponEffects.fireCards.length > 0) {
+      setState(prev => ({
+        ...prev,
+        board: prev.board.map(card => {
+          if (weaponEffects.fireCards.some(fc => fc.id === card.id)) {
+            return { ...card, onFire: true, fireStartTime: Date.now() };
+          }
+          return card;
+        })
+      }));
+    }
+
+    // Update stats with weapon bonuses
     setState(prev => ({
       ...prev,
       score: prev.score + totalPoints,
       selectedCards: [],
       foundCombinations: [...prev.foundCombinations, cards],
+      remainingTime: prev.remainingTime + (weaponEffects?.bonusTime || 0),
+      player: {
+        ...prev.player,
+        stats: {
+          ...prev.player.stats,
+          mulligans: prev.player.stats.mulligans + (weaponEffects?.bonusMulligans || 0),
+          hints: prev.player.stats.hints + (weaponEffects?.bonusHints || 0),
+          health: Math.min(
+            prev.player.stats.health + (weaponEffects?.bonusHealing || 0),
+            prev.player.stats.maxHealth
+          ),
+        }
+      }
     }));
 
-    // Replace matched cards
+    // Cards to replace are passed from GameBoard (matched + exploded + laser)
     replaceMatchedCards(cards);
+
+    // Handle board growth
+    if (weaponEffects && weaponEffects.boardGrowth > 0) {
+      growBoard(weaponEffects.boardGrowth);
+    }
+  };
+
+  const growBoard = (amount: number) => {
+    if (state.deck.length < amount) return;
+
+    const newCards = state.deck.slice(0, amount).map(card => ({
+      ...card,
+      selected: false
+    }));
+
+    setState(prev => ({
+      ...prev,
+      board: [...prev.board, ...newCards],
+      deck: prev.deck.slice(amount)
+    }));
   };
 
   const handleInvalidMatch = () => {

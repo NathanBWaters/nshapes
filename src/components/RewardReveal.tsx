@@ -28,14 +28,48 @@ const RewardReveal: React.FC<RewardRevealProps> = ({ reward }) => {
     ]).start();
   }, []);
 
+  // Special styling for weapon effects
+  const isExplosion = reward.effectType === 'explosion';
+  const isLaser = reward.effectType === 'laser';
+  const isFire = reward.effectType === 'fire';
+
+  // Get background color based on effect type
+  const getBackgroundColor = () => {
+    if (isExplosion) return '#FF6B35'; // Orange-red for explosion
+    if (isLaser) return '#00D4FF'; // Cyan for laser
+    if (isFire) return '#FF4444'; // Red for fire
+    return COLORS.canvasWhite;
+  };
+
   // Build reward items to display
   const rewardItems: { icon: string; value: string; color: string }[] = [];
+
+  // For weapon effects, show effect name prominently
+  if (isExplosion) {
+    rewardItems.push({
+      icon: '💥',
+      value: 'BOOM!',
+      color: '#FFFFFF',
+    });
+  } else if (isLaser) {
+    rewardItems.push({
+      icon: '⚡',
+      value: 'ZAP!',
+      color: '#FFFFFF',
+    });
+  } else if (isFire) {
+    rewardItems.push({
+      icon: '🔥',
+      value: 'BURN!',
+      color: '#FFFFFF',
+    });
+  }
 
   if (reward.points && reward.points > 0) {
     rewardItems.push({
       icon: '*',
       value: `+${reward.points}`,
-      color: COLORS.actionYellow,
+      color: isExplosion || isLaser || isFire ? '#FFFFFF' : COLORS.actionYellow,
     });
   }
 
@@ -43,7 +77,7 @@ const RewardReveal: React.FC<RewardRevealProps> = ({ reward }) => {
     rewardItems.push({
       icon: '$',
       value: `+${reward.money}`,
-      color: COLORS.logicTeal,
+      color: isExplosion || isLaser || isFire ? '#FFFFFF' : COLORS.logicTeal,
     });
   }
 
@@ -51,7 +85,7 @@ const RewardReveal: React.FC<RewardRevealProps> = ({ reward }) => {
     rewardItems.push({
       icon: '+',
       value: `${reward.experience}XP`,
-      color: COLORS.impactOrange,
+      color: isExplosion || isLaser || isFire ? '#FFFFFF' : COLORS.impactOrange,
     });
   }
 
@@ -94,6 +128,8 @@ const RewardReveal: React.FC<RewardRevealProps> = ({ reward }) => {
         {
           opacity: opacityAnim,
           transform: [{ scale: scaleAnim }],
+          backgroundColor: getBackgroundColor(),
+          borderColor: isExplosion || isLaser || isFire ? getBackgroundColor() : COLORS.slateCharcoal,
         },
       ]}
     >
