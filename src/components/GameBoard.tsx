@@ -93,10 +93,11 @@ const GameBoard: React.FC<GameBoardProps> = ({
     rows.push(cards.slice(i, i + COLUMNS));
   }
 
-  // Reset selected cards when the board changes
+  // When the board changes, clear matched state and hints, but preserve valid selections
   useEffect(() => {
-    setSelectedCards([]);
-    setMatchedCardIds([]);
+    const cardIds = new Set(cards.map(c => c.id));
+    setSelectedCards(prev => prev.filter(c => cardIds.has(c.id)));
+    setMatchedCardIds([]); // Always clear - matched cards get replaced
     setHintCards([]);
   }, [cards]);
 
@@ -202,7 +203,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
           // Mark cards as matched and add rewards (accumulate, don't replace)
           setMatchedCardIds(prev => [...prev, ...newSelectedCards.map(c => c.id)]);
-          setSelectedCards([]);
+          setSelectedCards(prev => prev.filter(c => !newSelectedCards.some(mc => mc.id === c.id)));
           setRevealingRewards(prev => [...prev, ...rewardsWithMatchId]);
 
           // After 1.5 seconds, notify parent and clear only this match's rewards
@@ -214,7 +215,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
           onInvalidSelection();
 
           setTimeout(() => {
-            setSelectedCards([]);
+            setSelectedCards(prev => prev.filter(c => !newSelectedCards.some(mc => mc.id === c.id)));
           }, 500);
         }
       }, 200);
