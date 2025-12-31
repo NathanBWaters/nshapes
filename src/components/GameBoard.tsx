@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, StyleSheet } from 'react-native';
-import { Card as CardType, PlayerStats, CardReward, AttributeName } from '@/types';
+import { Card as CardType, PlayerStats, CardReward, AttributeName, Weapon } from '@/types';
 import Card from './Card';
 import RewardReveal from './RewardReveal';
 import { COLORS } from '@/utils/colors';
@@ -15,6 +15,7 @@ interface GameBoardProps {
   onMatch: (cards: CardType[], rewards: CardReward[], weaponEffects?: WeaponEffectResult) => void;
   onInvalidSelection: (cards: CardType[]) => void;
   playerStats: PlayerStats;
+  weapons?: Weapon[]; // For independent laser rolls
   isPlayerTurn: boolean;
   activeAttributes?: AttributeName[];
   onSelectedCountChange?: (count: number) => void;
@@ -59,6 +60,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
   onMatch,
   onInvalidSelection,
   playerStats,
+  weapons,
   isPlayerTurn,
   activeAttributes = DEFAULT_ATTRIBUTES,
   onSelectedCountChange,
@@ -244,7 +246,8 @@ const GameBoard: React.FC<GameBoardProps> = ({
           const matchedRewards = newSelectedCards.map(c => calculateCardReward(c));
 
           // Process weapon effects to get additional cards to destroy
-          const weaponEffects = processWeaponEffects(cards, newSelectedCards, playerStats);
+          // Pass weapons array for independent laser rolls
+          const weaponEffects = processWeaponEffects(cards, newSelectedCards, playerStats, weapons);
 
           // Create rewards for exploded cards
           const explosionRewards: CardReward[] = weaponEffects.explosiveCards.map(c => ({
@@ -291,11 +294,71 @@ const GameBoard: React.FC<GameBoardProps> = ({
             onMatch(allCardsToReplace, allRewards, weaponEffects);
           }, 1500);
         } else {
-          onInvalidSelection(newSelectedCards);
+          // Invalid match - check if player has mulligans for weapon effects
+          if (playerStats.mulligans > 0) {
+            // Mulligan will be used - treat as a valid match with full rewards!
+            const matchId = ++matchCounterRef.current;
 
-          setTimeout(() => {
+            // Calculate full rewards for matched cards (same as valid match)
+            const matchedRewards = newSelectedCards.map(c => calculateCardReward(c));
+
+            // Process weapon effects (explosions, lasers, etc.)
+            const weaponEffects = processWeaponEffects(cards, newSelectedCards, playerStats, weapons);
+
+            // Create rewards for exploded cards
+            const explosionRewards: CardReward[] = weaponEffects.explosiveCards.map(c => ({
+              cardId: c.id,
+              points: 1,
+              money: 1,
+              effectType: 'explosion' as const,
+            }));
+
+            // Create rewards for laser-destroyed cards
+            const laserRewards: CardReward[] = weaponEffects.laserCards.map(c => ({
+              cardId: c.id,
+              points: 2,
+              money: 1,
+              effectType: 'laser' as const,
+            }));
+
+            // Combine all rewards
+            const allRewards = [...mulliganRewards, ...explosionRewards, ...laserRewards];
+            const rewardsWithMatchId = allRewards.map(r => ({ ...r, matchId }));
+
+            // Collect all affected card IDs
+            const allAffectedCardIds = [
+              ...newSelectedCards.map(c => c.id),
+              ...weaponEffects.explosiveCards.map(c => c.id),
+              ...weaponEffects.laserCards.map(c => c.id),
+            ];
+
+            // Mark all affected cards and add rewards for visual reveal
+            setMatchedCardIds(prev => [...prev, ...allAffectedCardIds]);
             setSelectedCards(prev => prev.filter(c => !newSelectedCards.some(mc => mc.id === c.id)));
-          }, 500);
+            setRevealingRewards(prev => [...prev, ...rewardsWithMatchId]);
+
+            // Collect all cards to replace
+            const allCardsToReplace = [
+              ...newSelectedCards,
+              ...weaponEffects.explosiveCards,
+              ...weaponEffects.laserCards,
+            ];
+
+            // After 1.5 seconds, notify parent with weapon effects
+            setTimeout(() => {
+              setRevealingRewards(prev => prev.filter(r => r.matchId !== matchId));
+              // Call onInvalidSelection but pass weapon effects via onMatch-like behavior
+              // We need to signal this is a mulligan match with weapon effects
+              onMatch(allCardsToReplace, allRewards, weaponEffects);
+            }, 1500);
+          } else {
+            // No mulligans - just invalid selection
+            onInvalidSelection(newSelectedCards);
+
+            setTimeout(() => {
+              setSelectedCards(prev => prev.filter(c => !newSelectedCards.some(mc => mc.id === c.id)));
+            }, 500);
+          }
         }
       }, 200);
     }

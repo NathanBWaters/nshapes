@@ -1,4 +1,4 @@
-import { Card, PlayerStats } from '../types';
+import { Card, PlayerStats, Weapon } from '../types';
 
 // Grid dimensions (assumes 3 columns)
 const GRID_COLS = 3;
@@ -157,6 +157,7 @@ export const getFireSpreadCards = (
 export interface WeaponEffectResult {
   explosiveCards: Card[];
   laserCards: Card[];
+  laserCount: number; // How many lasers fired (for visual effects)
   fireCards: Card[];
   bonusPoints: number;
   bonusMoney: number;
@@ -170,15 +171,22 @@ export interface WeaponEffectResult {
 
 /**
  * Process all weapon effects after a valid match
+ *
+ * @param board - Current game board
+ * @param matchedCards - Cards that were matched
+ * @param playerStats - Combined player stats
+ * @param weapons - Optional array of player's weapons (for independent laser rolls)
  */
 export const processWeaponEffects = (
   board: Card[],
   matchedCards: Card[],
-  playerStats: PlayerStats
+  playerStats: PlayerStats,
+  weapons?: Weapon[]
 ): WeaponEffectResult => {
   const result: WeaponEffectResult = {
     explosiveCards: [],
     laserCards: [],
+    laserCount: 0,
     fireCards: [],
     bonusPoints: 0,
     bonusMoney: 0,
@@ -200,13 +208,53 @@ export const processWeaponEffects = (
     }
   }
 
-  // Laser effect - destroy entire row or column
-  if (playerStats.laserChance > 0 && Math.random() * 100 < playerStats.laserChance) {
+  // Laser effect - each laser weapon rolls independently
+  // If no weapons array provided, fall back to single roll with combined chance
+  if (weapons && weapons.length > 0) {
+    // Get all laser weapons and roll each independently
+    const laserWeapons = weapons.filter(w => w.specialEffect === 'laser' && w.effects.laserChance);
+    const laserCardIds = new Set<string>();
+    let lasersActivated = 0;
+
+    // DEBUG: Log laser weapon detection
+    console.log('[LASER DEBUG] Total weapons:', weapons.length);
+    console.log('[LASER DEBUG] Laser weapons found:', laserWeapons.length);
+    if (laserWeapons.length > 0) {
+      console.log('[LASER DEBUG] First laser weapon:', JSON.stringify(laserWeapons[0]));
+    }
+
+    laserWeapons.forEach(weapon => {
+      const chance = weapon.effects.laserChance || 0;
+      const roll = Math.random() * 100;
+      console.log(`[LASER DEBUG] Rolling for ${weapon.name} (${weapon.rarity}): need < ${chance}, got ${roll.toFixed(2)}, success: ${roll < chance}`);
+      if (roll < chance) {
+        // This laser fires! Get cards for this laser
+        const thisLaserCards = getLaserCards(board, matchedCards);
+        thisLaserCards.forEach(card => {
+          // Only add if not already exploded or already lasered
+          if (!result.explosiveCards.some(ec => ec.id === card.id) && !laserCardIds.has(card.id)) {
+            laserCardIds.add(card.id);
+            result.laserCards.push(card);
+          }
+        });
+        lasersActivated++;
+      }
+    });
+
+    result.laserCount = lasersActivated;
+    if (lasersActivated > 0 && result.laserCards.length > 0) {
+      result.bonusPoints += result.laserCards.length * 2;
+      result.bonusMoney += result.laserCards.length;
+      const laserText = lasersActivated > 1 ? `${lasersActivated}x Laser!` : 'Laser!';
+      result.notifications.push(`${laserText} +${result.laserCards.length * 2}`);
+    }
+  } else if (playerStats.laserChance > 0 && Math.random() * 100 < playerStats.laserChance) {
+    // Fallback: single roll with combined chance (for backward compatibility)
     result.laserCards = getLaserCards(board, matchedCards);
-    // Filter out cards already marked for explosion
     result.laserCards = result.laserCards.filter(
       lc => !result.explosiveCards.some(ec => ec.id === lc.id)
     );
+    result.laserCount = 1;
     if (result.laserCards.length > 0) {
       result.bonusPoints += result.laserCards.length * 2;
       result.bonusMoney += result.laserCards.length;

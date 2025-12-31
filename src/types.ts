@@ -58,7 +58,7 @@ export interface CardReward {
   mulliganBonus?: number; // Mulligans to add
   boardGrowth?: number; // Cards to add to board
   // Weapon effect types for visual distinction
-  effectType?: 'explosion' | 'laser' | 'fire';
+  effectType?: 'explosion' | 'laser' | 'fire' | 'mulligan';
 }
 
 export type CharacterName =

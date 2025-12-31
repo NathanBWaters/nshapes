@@ -779,6 +779,9 @@ const Game: React.FC = () => {
       return;
     }
 
+    // Check if this is a mulligan match (invalid match saved by mulligan)
+    const isMulliganMatch = rewards.length > 0 && rewards[0].effectType === 'mulligan';
+
     // Calculate totals from rewards (includes explosion/laser rewards from GameBoard)
     let totalPoints = 0;
     let totalMoney = 0;
@@ -787,8 +790,15 @@ const Game: React.FC = () => {
     let totalHints = 0;
     let lootCratesEarned = 0;
     let holoBonus = 0;
+    let mulliganUsed = false;
 
     rewards.forEach(reward => {
+      // Skip mulligan cards for base rewards - they don't give points/XP
+      if (reward.effectType === 'mulligan') {
+        mulliganUsed = true;
+        return; // Skip base rewards for mulligan cards
+      }
+
       let points = reward.points || 0;
       let money = reward.money || 0;
 
@@ -811,6 +821,11 @@ const Game: React.FC = () => {
 
     // === WEAPON BONUS EFFECTS (from GameBoard's processWeaponEffects) ===
     const triggerNotifications: string[] = [];
+
+    // Show mulligan used notification
+    if (isMulliganMatch) {
+      triggerNotifications.push('Mulligan Used!');
+    }
 
     // Show holographic bonus if any
     if (holoBonus > 0) {
@@ -880,6 +895,9 @@ const Game: React.FC = () => {
         });
       }
 
+      // Calculate mulligan change: if mulligan used, decrement; if bonus from weapon effects, add
+      const mulliganDelta = (mulliganUsed ? -1 : 0) + (weaponEffects?.bonusMulligans || 0);
+
       return {
         ...prevState,
         score: prevState.score + totalPoints,
@@ -896,7 +914,7 @@ const Game: React.FC = () => {
             money: prevState.player.stats.money + totalMoney,
             health: newHealth,
             hints: prevState.player.stats.hints + totalHints,
-            mulligans: prevState.player.stats.mulligans + (weaponEffects?.bonusMulligans || 0)
+            mulligans: prevState.player.stats.mulligans + mulliganDelta
           }
         }
       };
@@ -1416,6 +1434,7 @@ const Game: React.FC = () => {
                 onMatch={handleValidMatch}
                 onInvalidSelection={handleInvalidMatch}
                 playerStats={calculatePlayerTotalStats(state.player)}
+                weapons={state.player.weapons}
                 isPlayerTurn={true}
                 activeAttributes={state.activeAttributes}
                 onSelectedCountChange={setSelectedCount}
@@ -1496,6 +1515,7 @@ const Game: React.FC = () => {
                 onMatch={handleValidMatch}
                 onInvalidSelection={handleInvalidMatch}
                 playerStats={calculatePlayerTotalStats(state.player)}
+                weapons={state.player.weapons}
                 isPlayerTurn={true}
                 activeAttributes={state.activeAttributes}
                 onSelectedCountChange={setSelectedCount}

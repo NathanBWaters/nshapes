@@ -254,12 +254,22 @@ export default function DevTest() {
   };
 
   const handleValidMatch = (cards: Card[], rewards: CardReward[], weaponEffects?: WeaponEffectResult) => {
+    // Check if this is a mulligan match (invalid match saved by mulligan)
+    const isMulliganMatch = rewards.length > 0 && rewards[0].effectType === 'mulligan';
+
     // Calculate totals from rewards (includes explosion/laser rewards from GameBoard)
     let totalPoints = 0;
     let totalMoney = 0;
     let holoBonus = 0;
+    let mulliganUsed = false;
 
     rewards.forEach(reward => {
+      // Skip mulligan cards for base rewards - they don't give points
+      if (reward.effectType === 'mulligan') {
+        mulliganUsed = true;
+        return;
+      }
+
       let points = reward.points || 0;
 
       // Check if this card is holographic for 2x points (only for non-effect rewards)
@@ -277,6 +287,7 @@ export default function DevTest() {
 
     // Show notifications for effects (filter out explosion/laser shown visually)
     const notifications: string[] = [];
+    if (isMulliganMatch) notifications.push('Mulligan Used!');
     if (holoBonus > 0) notifications.push(`Holo 2x! +${holoBonus}`);
     if (weaponEffects) {
       weaponEffects.notifications.forEach(n => {
@@ -304,6 +315,9 @@ export default function DevTest() {
       }));
     }
 
+    // Calculate mulligan delta: if used, decrement; if bonus from weapon effects, add
+    const mulliganDelta = (mulliganUsed ? -1 : 0) + (weaponEffects?.bonusMulligans || 0);
+
     // Update stats with weapon bonuses
     setState(prev => ({
       ...prev,
@@ -315,7 +329,7 @@ export default function DevTest() {
         ...prev.player,
         stats: {
           ...prev.player.stats,
-          mulligans: prev.player.stats.mulligans + (weaponEffects?.bonusMulligans || 0),
+          mulligans: prev.player.stats.mulligans + mulliganDelta,
           hints: prev.player.stats.hints + (weaponEffects?.bonusHints || 0),
           health: Math.min(
             prev.player.stats.health + (weaponEffects?.bonusHealing || 0),
@@ -541,6 +555,7 @@ export default function DevTest() {
           onMatch={handleValidMatch}
           onInvalidSelection={handleInvalidMatch}
           playerStats={playerStats}
+          weapons={state.player.weapons}
           isPlayerTurn={true}
           activeAttributes={state.activeAttributes}
           onSelectedCountChange={setSelectedCount}

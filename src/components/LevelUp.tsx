@@ -89,7 +89,12 @@ const LevelUp: React.FC<LevelUpProps> = ({
       {/* Eyebrow Banner */}
       <View style={styles.eyebrow}>
         <Text style={styles.eyebrowText}>Level Up!</Text>
-        <StatsButton playerStats={playerStats} />
+        <View style={styles.eyebrowRight}>
+          <View style={styles.moneyBadge}>
+            <Text style={styles.moneyText}>${playerMoney}</Text>
+          </View>
+          <StatsButton playerStats={playerStats} />
+        </View>
       </View>
 
       {/* Top Half - Detail Focus */}
@@ -234,6 +239,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textTransform: 'uppercase',
     letterSpacing: 2,
+  },
+  eyebrowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  moneyBadge: {
+    backgroundColor: COLORS.deepOnyx,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: RADIUS.button,
+  },
+  moneyText: {
+    color: COLORS.actionYellow,
+    fontWeight: '700',
+    fontSize: 14,
+    fontFamily: 'monospace',
   },
   // Top Half - Detail Section
   detailSection: {

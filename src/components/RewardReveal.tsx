@@ -32,12 +32,15 @@ const RewardReveal: React.FC<RewardRevealProps> = ({ reward }) => {
   const isExplosion = reward.effectType === 'explosion';
   const isLaser = reward.effectType === 'laser';
   const isFire = reward.effectType === 'fire';
+  const isMulligan = reward.effectType === 'mulligan';
+  const isSpecialEffect = isExplosion || isLaser || isFire || isMulligan;
 
   // Get background color based on effect type
   const getBackgroundColor = () => {
     if (isExplosion) return '#FF6B35'; // Orange-red for explosion
     if (isLaser) return '#00D4FF'; // Cyan for laser
     if (isFire) return '#FF4444'; // Red for fire
+    if (isMulligan) return '#9B59B6'; // Purple for mulligan
     return COLORS.canvasWhite;
   };
 
@@ -63,13 +66,19 @@ const RewardReveal: React.FC<RewardRevealProps> = ({ reward }) => {
       value: 'BURN!',
       color: '#FFFFFF',
     });
+  } else if (isMulligan) {
+    rewardItems.push({
+      icon: '🔄',
+      value: 'REDO!',
+      color: '#FFFFFF',
+    });
   }
 
   if (reward.points && reward.points > 0) {
     rewardItems.push({
       icon: '*',
       value: `+${reward.points}`,
-      color: isExplosion || isLaser || isFire ? '#FFFFFF' : COLORS.actionYellow,
+      color: isSpecialEffect ? '#FFFFFF' : COLORS.actionYellow,
     });
   }
 
@@ -77,7 +86,7 @@ const RewardReveal: React.FC<RewardRevealProps> = ({ reward }) => {
     rewardItems.push({
       icon: '$',
       value: `+${reward.money}`,
-      color: isExplosion || isLaser || isFire ? '#FFFFFF' : COLORS.logicTeal,
+      color: isSpecialEffect ? '#FFFFFF' : COLORS.logicTeal,
     });
   }
 
@@ -85,7 +94,7 @@ const RewardReveal: React.FC<RewardRevealProps> = ({ reward }) => {
     rewardItems.push({
       icon: '+',
       value: `${reward.experience}XP`,
-      color: isExplosion || isLaser || isFire ? '#FFFFFF' : COLORS.impactOrange,
+      color: isSpecialEffect ? '#FFFFFF' : COLORS.impactOrange,
     });
   }
 
@@ -129,7 +138,7 @@ const RewardReveal: React.FC<RewardRevealProps> = ({ reward }) => {
           opacity: opacityAnim,
           transform: [{ scale: scaleAnim }],
           backgroundColor: getBackgroundColor(),
-          borderColor: isExplosion || isLaser || isFire ? getBackgroundColor() : COLORS.slateCharcoal,
+          borderColor: isSpecialEffect ? getBackgroundColor() : COLORS.slateCharcoal,
         },
       ]}
     >

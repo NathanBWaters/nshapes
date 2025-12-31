@@ -7,8 +7,20 @@ import {
   getFireSpreadCards,
   processWeaponEffects,
 } from '@/utils/weaponEffects';
-import { Card, PlayerStats } from '@/types';
-import { DEFAULT_PLAYER_STATS } from '@/utils/gameDefinitions';
+import { Card, PlayerStats, Weapon } from '@/types';
+import { DEFAULT_PLAYER_STATS, SHOP_WEAPONS } from '@/utils/gameDefinitions';
+
+// Helper to create a mock laser weapon
+const createLaserWeapon = (id: string, laserChance: number): Weapon => ({
+  id,
+  name: 'Prismatic Ray',
+  rarity: 'common',
+  level: 1,
+  description: 'Test laser weapon',
+  price: 10,
+  effects: { laserChance },
+  specialEffect: 'laser',
+});
 
 // Helper to create a test card
 const createTestCard = (
@@ -458,5 +470,205 @@ describe('processWeaponEffects', () => {
         expect(explosionIds).not.toContain(laserCard.id);
       });
     }
+  });
+});
+
+describe('Multi-Laser Independent Rolls', () => {
+  it('should roll each laser weapon independently', () => {
+    const board = createTestBoard();
+    const matchedCards = [board[4]];
+    const stats: PlayerStats = { ...DEFAULT_PLAYER_STATS };
+
+    // Create 3 laser weapons with 100% chance each
+    const weapons: Weapon[] = [
+      createLaserWeapon('laser-1', 100),
+      createLaserWeapon('laser-2', 100),
+      createLaserWeapon('laser-3', 100),
+    ];
+
+    const result = processWeaponEffects(board, matchedCards, stats, weapons);
+
+    // With 3 lasers at 100% chance, all 3 should fire
+    expect(result.laserCount).toBe(3);
+  });
+
+  it('should track laserCount correctly', () => {
+    const board = createTestBoard();
+    const matchedCards = [board[4]];
+    const stats: PlayerStats = { ...DEFAULT_PLAYER_STATS };
+
+    // Create 2 laser weapons with 100% chance
+    const weapons: Weapon[] = [
+      createLaserWeapon('laser-1', 100),
+      createLaserWeapon('laser-2', 100),
+    ];
+
+    const result = processWeaponEffects(board, matchedCards, stats, weapons);
+
+    expect(result.laserCount).toBe(2);
+    expect(result.notifications.some(n => n.includes('2x Laser'))).toBe(true);
+  });
+
+  it('should show single laser notification for 1 laser', () => {
+    const board = createTestBoard();
+    const matchedCards = [board[4]];
+    const stats: PlayerStats = { ...DEFAULT_PLAYER_STATS };
+
+    // Create 1 laser weapon with 100% chance
+    const weapons: Weapon[] = [
+      createLaserWeapon('laser-1', 100),
+    ];
+
+    const result = processWeaponEffects(board, matchedCards, stats, weapons);
+
+    expect(result.laserCount).toBe(1);
+    expect(result.notifications.some(n => n.includes('Laser!') && !n.includes('x Laser'))).toBe(true);
+  });
+
+  it('should not duplicate laser card rewards for overlapping lasers', () => {
+    const board = createTestBoard();
+    const matchedCards = [board[4]];
+    const stats: PlayerStats = { ...DEFAULT_PLAYER_STATS };
+
+    // Create 3 laser weapons with 100% chance
+    const weapons: Weapon[] = [
+      createLaserWeapon('laser-1', 100),
+      createLaserWeapon('laser-2', 100),
+      createLaserWeapon('laser-3', 100),
+    ];
+
+    // Run multiple times to ensure no duplicates
+    for (let i = 0; i < 20; i++) {
+      const result = processWeaponEffects(board, matchedCards, stats, weapons);
+      const laserCardIds = result.laserCards.map(c => c.id);
+      const uniqueIds = new Set(laserCardIds);
+      expect(uniqueIds.size).toBe(laserCardIds.length);
+    }
+  });
+
+  it('should return 0 lasers when no laser weapons exist', () => {
+    const board = createTestBoard();
+    const matchedCards = [board[4]];
+    const stats: PlayerStats = { ...DEFAULT_PLAYER_STATS };
+
+    const weapons: Weapon[] = []; // No weapons
+
+    const result = processWeaponEffects(board, matchedCards, stats, weapons);
+
+    expect(result.laserCount).toBe(0);
+    expect(result.laserCards.length).toBe(0);
+  });
+
+  it('should probabilistically fire some lasers with low chance', () => {
+    const board = createTestBoard();
+    const matchedCards = [board[4]];
+    const stats: PlayerStats = { ...DEFAULT_PLAYER_STATS };
+
+    // Create 3 laser weapons with 50% chance each
+    const weapons: Weapon[] = [
+      createLaserWeapon('laser-1', 50),
+      createLaserWeapon('laser-2', 50),
+      createLaserWeapon('laser-3', 50),
+    ];
+
+    // Track how often each count appears
+    const laserCounts: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0 };
+
+    for (let i = 0; i < 100; i++) {
+      const result = processWeaponEffects(board, matchedCards, stats, weapons);
+      laserCounts[result.laserCount] = (laserCounts[result.laserCount] || 0) + 1;
+    }
+
+    // With 50% chance each, we should see variety in counts
+    // At least one of each count should appear (probabilistically)
+    const countsWithOccurrences = Object.values(laserCounts).filter(c => c > 0).length;
+    expect(countsWithOccurrences).toBeGreaterThan(1);
+  });
+
+  it('should fallback to single roll when no weapons array provided', () => {
+    const board = createTestBoard();
+    const matchedCards = [board[4]];
+    const stats: PlayerStats = { ...DEFAULT_PLAYER_STATS, laserChance: 100 };
+
+    // No weapons array - should use fallback
+    const result = processWeaponEffects(board, matchedCards, stats);
+
+    // Should fire 1 laser with fallback behavior
+    expect(result.laserCount).toBe(1);
+    expect(result.laserCards.length).toBeGreaterThan(0);
+  });
+
+  it('should only count weapons with specialEffect laser', () => {
+    const board = createTestBoard();
+    const matchedCards = [board[4]];
+    const stats: PlayerStats = { ...DEFAULT_PLAYER_STATS };
+
+    // Create mixed weapons
+    const weapons: Weapon[] = [
+      createLaserWeapon('laser-1', 100),
+      {
+        id: 'not-laser',
+        name: 'Blast Powder',
+        rarity: 'common',
+        level: 1,
+        description: 'Not a laser',
+        price: 10,
+        effects: { explosionChance: 100 },
+        specialEffect: 'explosive',
+      },
+    ];
+
+    const result = processWeaponEffects(board, matchedCards, stats, weapons);
+
+    // Only 1 laser weapon should fire
+    expect(result.laserCount).toBe(1);
+  });
+
+  it('should work correctly with actual SHOP_WEAPONS laser definitions', () => {
+    const board = createTestBoard();
+    const matchedCards = [board[4]];
+    const stats: PlayerStats = { ...DEFAULT_PLAYER_STATS };
+
+    // Get the actual legendary laser weapon from SHOP_WEAPONS
+    const legendaryLaser = SHOP_WEAPONS.find(
+      w => w.name === 'Prismatic Ray' && w.rarity === 'legendary'
+    );
+
+    // Verify the structure is correct for our filter
+    expect(legendaryLaser).toBeDefined();
+    expect(legendaryLaser?.specialEffect).toBe('laser');
+    expect(legendaryLaser?.effects.laserChance).toBe(10);
+
+    // Create 28 legendary lasers (simulating user's scenario)
+    const weapons: Weapon[] = Array(28).fill(legendaryLaser) as Weapon[];
+
+    // Run the function and check the filter works
+    // Mock Math.random to always return 0 (100% success)
+    const originalRandom = Math.random;
+    Math.random = () => 0; // This will make all rolls succeed
+
+    const result = processWeaponEffects(board, matchedCards, stats, weapons);
+
+    Math.random = originalRandom;
+
+    // With mocked random, all 28 lasers should fire
+    expect(result.laserCount).toBe(28);
+    expect(result.laserCards.length).toBeGreaterThan(0);
+  });
+
+  it('should correctly filter laser weapons from SHOP_WEAPONS', () => {
+    // Verify how many laser weapons exist in SHOP_WEAPONS
+    const allLaserWeapons = SHOP_WEAPONS.filter(
+      w => w.specialEffect === 'laser' && w.effects.laserChance
+    );
+
+    // There should be 3 laser weapons (common, rare, legendary)
+    expect(allLaserWeapons.length).toBe(3);
+
+    // Verify each has the correct structure
+    allLaserWeapons.forEach(weapon => {
+      expect(weapon.specialEffect).toBe('laser');
+      expect(weapon.effects.laserChance).toBeGreaterThan(0);
+    });
   });
 });

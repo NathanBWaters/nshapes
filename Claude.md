@@ -81,6 +81,16 @@ The game features 15 weapon types, each available in 3 rarities (45 total weapon
 * **Purchase:** Buy weapons in the shop between rounds
 * **Level Up:** Choose from 3 weapon rewards on level up
 
+### Laser Mechanic (Independent Rolls)
+
+Each laser weapon (Prismatic Ray) rolls **independently** on every match:
+* If you have 3 laser weapons at 3% each, each one rolls separately
+* You could get 0, 1, 2, or 3 lasers firing on a single match
+* Each laser independently chooses horizontal OR vertical
+* Multiple lasers can overlap (same row/column = wasted) or differ (row + column = massive destruction)
+* The notification shows "2x Laser!" or "3x Laser!" when multiple fire
+* This makes stacking lasers very powerful but RNG-dependent
+
 ### Card States
 
 * **Holographic:** Purple shimmer border, awards 2x points when matched
