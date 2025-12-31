@@ -12,7 +12,7 @@ const DEFAULT_ATTRIBUTES: AttributeName[] = ['shape', 'color', 'number', 'shadin
 interface GameBoardProps {
   cards: CardType[];
   onMatch: (cards: CardType[], rewards: CardReward[]) => void;
-  onInvalidSelection: () => void;
+  onInvalidSelection: (cards: CardType[]) => void;
   playerStats: PlayerStats;
   isPlayerTurn: boolean;
   activeAttributes?: AttributeName[];
@@ -212,7 +212,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
             onMatch(newSelectedCards, rewards);
           }, 1500);
         } else {
-          onInvalidSelection();
+          onInvalidSelection(newSelectedCards);
 
           setTimeout(() => {
             setSelectedCards(prev => prev.filter(c => !newSelectedCards.some(mc => mc.id === c.id)));

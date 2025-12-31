@@ -721,7 +721,7 @@ const Game: React.FC = () => {
         handleValidMatch(newSelectedCards, rewards);
       } else {
         // Invalid selection
-        handleInvalidMatch();
+        handleInvalidMatch(newSelectedCards);
       }
     } else {
       // Update selected cards
@@ -819,9 +819,7 @@ const Game: React.FC = () => {
   };
 
   // Handle invalid match - removes cards and replaces them (costs 1 health)
-  const handleInvalidMatch = () => {
-    // Capture the selected cards before clearing them
-    const cardsToReplace = [...state.selectedCards];
+  const handleInvalidMatch = (cardsToReplace: Card[]) => {
 
     // Decrease health
     setState(prevState => {
