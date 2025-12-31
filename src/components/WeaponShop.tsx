@@ -1,17 +1,18 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Pressable, StyleSheet } from 'react-native';
-import { PlayerStats, Weapon, WeaponRarity } from '@/types';
+import { Weapon, PlayerStats, WeaponRarity } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import Icon from './Icon';
 import StatsButton from './StatsButton';
 
-interface LevelUpProps {
-  options: Weapon[];
-  onSelect: (optionIndex: number) => void;
+interface WeaponShopProps {
+  weapons: (Weapon | null)[];  // null represents a sold/empty slot
+  playerMoney: number;
+  onPurchase: (weaponIndex: number) => void;
   onReroll: () => void;
   rerollCost: number;
-  playerMoney: number;
   freeRerolls: number;
+  onContinue: () => void;
   playerStats: PlayerStats;
 }
 
@@ -34,41 +35,38 @@ const getRarityLabel = (rarity: WeaponRarity): string => {
   }
 };
 
-const LevelUp: React.FC<LevelUpProps> = ({
-  options,
-  onSelect,
+const WeaponShop: React.FC<WeaponShopProps> = ({
+  weapons,
+  playerMoney,
+  onPurchase,
   onReroll,
   rerollCost,
-  playerMoney,
   freeRerolls,
+  onContinue,
   playerStats
 }) => {
-  const [focusedIndex, setFocusedIndex] = useState<number>(0);
+  const [focusedIndex, setFocusedIndex] = useState<number>(() => {
+    // Initialize to first non-null weapon
+    const firstAvailable = weapons.findIndex(weapon => weapon !== null);
+    return firstAvailable >= 0 ? firstAvailable : 0;
+  });
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-  // Show hovered option if hovering, otherwise show focused
+  // Show hovered weapon if hovering, otherwise show focused
   const displayedIndex = hoveredIndex !== null ? hoveredIndex : focusedIndex;
 
-  // Format stat value for display
-  const formatStatValue = (value: number | string | undefined): string => {
-    if (value === undefined) return '';
-    if (typeof value === 'number') {
-      return value > 0 ? `+${value}` : `${value}`;
-    }
-    return String(value || '');
-  };
+  const focusedWeapon = weapons[displayedIndex];  // Can be null if slot is sold
+  const canAffordFocused = focusedWeapon ? playerMoney >= focusedWeapon.price : false;
 
-  // Format key from camelCase to Title Case
-  const formatKey = (key: string) => {
-    return key
-      .replace(/([A-Z])/g, ' $1')
-      .replace(/^./, str => str.toUpperCase());
-  };
+  // Count available (non-null) weapons
+  const availableWeapons = weapons.filter(weapon => weapon !== null);
 
   // Format effects for display
   const formatEffects = (effects: Record<string, any>): { key: string; value: string }[] => {
     return Object.entries(effects).map(([key, value]) => {
-      const formattedKey = formatKey(key);
+      const formattedKey = key
+        .replace(/([A-Z])/g, ' $1')
+        .replace(/^./, str => str.toUpperCase());
       let displayValue = '';
       if (typeof value === 'number') {
         displayValue = value > 0 ? `+${value}` : `${value}`;
@@ -82,14 +80,17 @@ const LevelUp: React.FC<LevelUpProps> = ({
     });
   };
 
-  const focusedWeapon = options[displayedIndex];
-
   return (
     <View style={styles.container}>
       {/* Eyebrow Banner */}
       <View style={styles.eyebrow}>
-        <Text style={styles.eyebrowText}>Level Up!</Text>
-        <StatsButton playerStats={playerStats} />
+        <Text style={styles.eyebrowText}>Weapon Shop</Text>
+        <View style={styles.eyebrowRight}>
+          <View style={styles.moneyBadge}>
+            <Text style={styles.moneyText}>${playerMoney}</Text>
+          </View>
+          <StatsButton playerStats={playerStats} />
+        </View>
       </View>
 
       {/* Top Half - Detail Focus */}
@@ -105,6 +106,9 @@ const LevelUp: React.FC<LevelUpProps> = ({
               )}
               <View style={[styles.rarityBadge, { backgroundColor: getRarityColor(focusedWeapon.rarity) }]}>
                 <Text style={styles.rarityBadgeText}>{getRarityLabel(focusedWeapon.rarity)}</Text>
+              </View>
+              <View style={styles.priceBadge}>
+                <Text style={styles.priceBadgeText}>${focusedWeapon.price}</Text>
               </View>
             </View>
 
@@ -131,7 +135,9 @@ const LevelUp: React.FC<LevelUpProps> = ({
           </View>
         ) : (
           <View style={styles.emptyDetail}>
-            <Text style={styles.emptyText}>Select a weapon below</Text>
+            <Text style={styles.emptyText}>
+              {availableWeapons.length === 0 ? 'All weapons sold' : 'Select a weapon below'}
+            </Text>
           </View>
         )}
       </View>
@@ -139,7 +145,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
       {/* Bottom Half - Options Grid */}
       <View style={styles.optionsSection}>
         <View style={styles.optionsHeaderRow}>
-          <Text style={styles.optionsHeader}>Choose Your Reward</Text>
+          <Text style={styles.optionsHeader}>Available Weapons</Text>
           <TouchableOpacity
             onPress={onReroll}
             disabled={playerMoney < rerollCost && freeRerolls <= 0}
@@ -158,56 +164,101 @@ const LevelUp: React.FC<LevelUpProps> = ({
           contentContainerStyle={styles.optionsGrid}
           showsVerticalScrollIndicator={false}
         >
-          {options.map((weapon, index) => {
-            const isFocused = focusedIndex === index;
-            const rarityColor = getRarityColor(weapon.rarity);
+          {weapons.length > 0 ? (
+            weapons.map((weapon, index) => {
+              // Handle sold/empty slot
+              if (weapon === null) {
+                return (
+                  <View
+                    key={`sold-${index}`}
+                    style={[styles.optionButton, styles.optionButtonSold]}
+                  >
+                    <Text style={styles.soldText}>SOLD</Text>
+                  </View>
+                );
+              }
 
-            return (
-              <Pressable
-                key={`${weapon.id}-${index}`}
-                onPress={() => setFocusedIndex(index)}
-                onHoverIn={() => setHoveredIndex(index)}
-                onHoverOut={() => setHoveredIndex(null)}
-                style={[
-                  styles.optionButton,
-                  { borderColor: rarityColor },
-                  isFocused && styles.optionButtonSelected,
-                ]}
-              >
-                {weapon.icon && (
-                  <Icon
-                    name={weapon.icon}
-                    size={24}
-                    color={COLORS.slateCharcoal}
-                    style={styles.optionIcon}
-                  />
-                )}
-                <Text
+              const isFocused = focusedIndex === index;
+              const canAfford = playerMoney >= weapon.price;
+              const rarityColor = getRarityColor(weapon.rarity);
+
+              return (
+                <Pressable
+                  key={`${weapon.id}-${index}`}
+                  onPress={() => setFocusedIndex(index)}
+                  onHoverIn={() => setHoveredIndex(index)}
+                  onHoverOut={() => setHoveredIndex(null)}
                   style={[
-                    styles.optionText,
-                    isFocused && styles.optionTextSelected,
+                    styles.optionButton,
+                    { borderColor: rarityColor },
+                    isFocused && styles.optionButtonSelected,
+                    !canAfford && styles.optionButtonUnaffordable,
                   ]}
-                  numberOfLines={1}
                 >
-                  {weapon.name}
-                </Text>
-                <Text style={[styles.rarityTag, { color: rarityColor }]}>
-                  {getRarityLabel(weapon.rarity)}
-                </Text>
-              </Pressable>
-            );
-          })}
+                  {weapon.icon && (
+                    <Icon
+                      name={weapon.icon}
+                      size={24}
+                      color={COLORS.slateCharcoal}
+                      style={styles.optionIcon}
+                    />
+                  )}
+                  <View style={styles.optionHeader}>
+                    <Text style={[styles.optionPrice, !canAfford && styles.optionPriceUnaffordable]}>
+                      ${weapon.price}
+                    </Text>
+                  </View>
+                  <Text
+                    style={[
+                      styles.optionText,
+                      isFocused && styles.optionTextSelected,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {weapon.name}
+                  </Text>
+                  <Text style={[styles.rarityTag, { color: rarityColor }]}>
+                    {getRarityLabel(weapon.rarity)}
+                  </Text>
+                </Pressable>
+              );
+            })
+          ) : (
+            <View style={styles.emptyShop}>
+              <Text style={styles.emptyShopText}>Shop is empty</Text>
+            </View>
+          )}
         </ScrollView>
       </View>
 
-      {/* Action Button */}
+      {/* Action Buttons */}
       <View style={styles.actionSection}>
-        <TouchableOpacity
-          onPress={() => onSelect(focusedIndex)}
-          style={styles.actionButton}
-        >
-          <Text style={styles.actionButtonText}>Select Weapon</Text>
-        </TouchableOpacity>
+        <View style={styles.actionRow}>
+          <TouchableOpacity
+            onPress={() => canAffordFocused && focusedWeapon && onPurchase(focusedIndex)}
+            disabled={!canAffordFocused || !focusedWeapon || availableWeapons.length === 0}
+            style={[
+              styles.purchaseButton,
+              (!canAffordFocused || !focusedWeapon || availableWeapons.length === 0) && styles.purchaseButtonDisabled,
+            ]}
+          >
+            <Text style={styles.purchaseButtonText}>
+              {availableWeapons.length === 0
+                ? 'No Weapons'
+                : !focusedWeapon
+                  ? 'Select Weapon'
+                  : canAffordFocused
+                    ? 'Purchase'
+                    : 'Cannot Afford'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={onContinue}
+            style={styles.continueButton}
+          >
+            <Text style={styles.continueButtonText}>Continue</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -224,9 +275,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.slateCharcoal,
+    paddingHorizontal: 16,
   },
   eyebrowText: {
     color: COLORS.deepOnyx,
@@ -234,6 +285,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textTransform: 'uppercase',
     letterSpacing: 2,
+  },
+  eyebrowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  moneyBadge: {
+    backgroundColor: COLORS.deepOnyx,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: RADIUS.button,
+  },
+  moneyText: {
+    color: COLORS.actionYellow,
+    fontWeight: '700',
+    fontSize: 14,
+    fontFamily: 'monospace',
   },
   // Top Half - Detail Section
   detailSection: {
@@ -277,6 +345,20 @@ const styles = StyleSheet.create({
     fontSize: 10,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  priceBadge: {
+    backgroundColor: COLORS.actionYellow,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: RADIUS.button,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+  },
+  priceBadgeText: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '700',
+    fontSize: 12,
+    fontFamily: 'monospace',
   },
   detailName: {
     fontWeight: '700',
@@ -418,6 +500,34 @@ const styles = StyleSheet.create({
   optionButtonSelected: {
     backgroundColor: COLORS.actionYellow,
   },
+  optionButtonUnaffordable: {
+    opacity: 0.5,
+  },
+  optionButtonSold: {
+    backgroundColor: COLORS.paperBeige,
+    borderColor: COLORS.slateCharcoal,
+    borderStyle: 'dashed',
+    opacity: 0.4,
+  },
+  soldText: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '600',
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  optionHeader: {
+    marginBottom: 2,
+  },
+  optionPrice: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '700',
+    fontSize: 11,
+    fontFamily: 'monospace',
+  },
+  optionPriceUnaffordable: {
+    color: COLORS.impactRed,
+  },
   optionText: {
     color: COLORS.slateCharcoal,
     fontWeight: '600',
@@ -435,6 +545,17 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginTop: 2,
   },
+  emptyShop: {
+    flex: 1,
+    padding: 32,
+    alignItems: 'center',
+  },
+  emptyShopText: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '400',
+    fontSize: 14,
+    opacity: 0.6,
+  },
   // Action Section
   actionSection: {
     padding: 16,
@@ -442,7 +563,12 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: COLORS.slateCharcoal,
   },
-  actionButton: {
+  actionRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  purchaseButton: {
+    flex: 1,
     backgroundColor: COLORS.actionYellow,
     borderRadius: RADIUS.button,
     borderWidth: 1,
@@ -450,13 +576,33 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
   },
-  actionButtonText: {
+  purchaseButtonDisabled: {
+    backgroundColor: COLORS.paperBeige,
+    opacity: 0.6,
+  },
+  purchaseButtonText: {
     color: COLORS.slateCharcoal,
     fontWeight: '700',
-    fontSize: 16,
+    fontSize: 14,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  continueButton: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    borderRadius: RADIUS.button,
+    borderWidth: 2,
+    borderColor: COLORS.slateCharcoal,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  continueButtonText: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '700',
+    fontSize: 14,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
 });
 
-export default LevelUp;
+export default WeaponShop;

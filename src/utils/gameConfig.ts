@@ -16,6 +16,23 @@ export const STARTING_STATS = {
   money: 0,
   fieldSize: 12,
   freeRerolls: 0,
+  mulligans: 0,
+
+  // Weapon effect stats (defaults to 0)
+  explosionChance: 0,
+  autoHintChance: 0,
+  autoHintInterval: 10000, // 10 seconds default interval
+  boardGrowthChance: 0,
+  boardGrowthAmount: 1,
+  fireSpreadChance: 0,
+  mulliganGainChance: 0,
+  healingChance: 0,
+  hintGainChance: 0,
+  holoChance: 0,
+  timeGainChance: 0,
+  timeGainAmount: 10, // 10 seconds default when triggered
+  laserChance: 0,
+  startingTime: 0, // Additional starting time in seconds
 } as const;
 
 // =============================================================================
@@ -37,6 +54,26 @@ export const ECONOMY = {
   rerollCostIncrement: 2,
   shopSize: 4,
   levelUpOptionsCount: 4,
+} as const;
+
+// =============================================================================
+// WEAPON SYSTEM
+// =============================================================================
+
+export const WEAPON_SYSTEM = {
+  // Rarity drop rates for shop generation
+  rarityChances: {
+    common: 0.70,    // 70% chance
+    rare: 0.25,      // 25% chance
+    legendary: 0.05, // 5% chance
+  },
+
+  // Fire system
+  fireBurnDuration: 15000, // 15 seconds
+  fireSpreadOnDeathChance: 0.10, // 10% to spread when burning out
+
+  // Auto-hint display duration
+  autoHintDisplayDuration: 1500, // 1.5 seconds
 } as const;
 
 // =============================================================================

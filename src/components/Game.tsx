@@ -8,10 +8,13 @@ import {
   ENEMIES,
   ITEMS,
   WEAPONS,
+  SHOP_WEAPONS,
   ROUND_REQUIREMENTS,
   initializePlayer,
   calculatePlayerTotalStats,
-  DEFAULT_PLAYER_STATS
+  DEFAULT_PLAYER_STATS,
+  generateShopWeapons,
+  getRandomShopWeapon
 } from '@/utils/gameDefinitions';
 import { getActiveAttributesForRound, getBoardSizeForAttributes, ATTRIBUTE_SCALING } from '@/utils/gameConfig';
 import GameBoard from './GameBoard';
@@ -22,6 +25,7 @@ import MultiplayerLobby from './MultiplayerLobby';
 import MultiplayerToggle from './MultiplayerToggle';
 import CharacterSelection, { GameMode } from './CharacterSelection';
 import ItemShop from './ItemShop';
+import WeaponShop from './WeaponShop';
 import LevelUp from './LevelUp';
 import EnemySelection from './EnemySelection';
 import RoundScoreboard from './RoundScoreboard';
@@ -92,6 +96,7 @@ const Game: React.FC = () => {
 
     // Shop and upgrades
     shopItems: [],
+    shopWeapons: [],
     levelUpOptions: [],
     rerollCost: BASE_REROLL_COST,
 
@@ -189,7 +194,7 @@ const Game: React.FC = () => {
 
   // Timer effect - countdown when in round phase
   useEffect(() => {
-    let timerInterval: NodeJS.Timeout | null = null;
+    let timerInterval: ReturnType<typeof setInterval> | null = null;
 
     if (gamePhase === 'round' && state.gameStarted && !state.gameEnded && state.remainingTime > 0) {
       // Start countdown timer
@@ -227,6 +232,28 @@ const Game: React.FC = () => {
       }
     };
   }, [gamePhase, state.gameStarted, state.gameEnded]);
+
+  // Fire effect - check for burning cards every second
+  useEffect(() => {
+    let fireInterval: ReturnType<typeof setInterval> | null = null;
+
+    if ((gamePhase === 'round' || gamePhase === 'free_play') && state.gameStarted && !state.gameEnded) {
+      // Check for burning cards every second
+      fireInterval = setInterval(() => {
+        // Check if any cards are on fire
+        const hasBurningCards = state.board.some(card => card.onFire);
+        if (hasBurningCards) {
+          handleBurningCards();
+        }
+      }, 1000);
+    }
+
+    return () => {
+      if (fireInterval) {
+        clearInterval(fireInterval);
+      }
+    };
+  }, [gamePhase, state.gameStarted, state.gameEnded, state.board]);
 
   // Handle round completion when time runs out - separate from timer to avoid race conditions
   useEffect(() => {
@@ -275,7 +302,7 @@ const Game: React.FC = () => {
       // Roguelike properties
       round: 1,
       targetScore: roundReq.targetScore,
-      remainingTime: roundReq.time,
+      remainingTime: roundReq.time, // startingTime bonus applied after player init
       roundCompleted: false,
 
       // Player
@@ -283,6 +310,7 @@ const Game: React.FC = () => {
 
       // Shop and upgrades - to be filled during gameplay
       shopItems: generateRandomShopItems(),
+      shopWeapons: generateShopWeapons(4),
       levelUpOptions: [],
       rerollCost: BASE_REROLL_COST,
 
@@ -346,81 +374,18 @@ const Game: React.FC = () => {
     return selectedItems;
   };
 
-  // Generate random level up options
+  // Generate random level up options - WEAPONS ONLY
   const generateLevelUpOptions = () => {
-    const options: (Partial<PlayerStats> | Weapon)[] = [];
+    const options: Weapon[] = [];
     const optionsSize = 4 + (state.player?.stats?.drawIncrease || 0);
 
-    console.log('[LevelUp] Generating', optionsSize, 'options');
+    console.log('[LevelUp] Generating', optionsSize, 'weapon options');
 
-    // 70% chance to get stat upgrade, 30% chance to get weapon upgrade
+    // Generate only weapon options
     for (let i = 0; i < optionsSize; i++) {
-      const roll = Math.random();
-
-      if (roll < 0.7) {
-        // Generate a random stat upgrade
-        const statUpgrade: Partial<PlayerStats> = {};
-
-        // Pick a random stat to upgrade
-        const availableStats = [
-          'damage', 'maxHealth', 'timeWarpPercent', 'fieldSize',
-          'chanceOfFire', 'dodgePercent', 'criticalChance', 'luck'
-        ];
-
-        const statIndex = Math.floor(Math.random() * availableStats.length);
-        const stat = availableStats[statIndex];
-
-        // Set the upgrade amount based on the stat
-        if (stat === 'damage' || stat === 'maxHealth') {
-          statUpgrade[stat as keyof PlayerStats] = 1; // +1 flat increase
-        } else if (stat === 'fieldSize') {
-          statUpgrade[stat as keyof PlayerStats] = 2;
-        } else {
-          statUpgrade[stat as keyof PlayerStats] = 5; // +5% increase for percentage stats
-        }
-
-        options.push(statUpgrade);
-      } else {
-        // Generate a weapon upgrade or new weapon
-        if (state.player.weapons.length < state.player.stats.maxWeapons) {
-          // Player can have a new weapon
-          const availableWeapons = WEAPONS.filter(weapon =>
-            !state.player.weapons.some(w => w.name === weapon.name)
-          );
-
-          if (availableWeapons.length > 0) {
-            const randomIndex = Math.floor(Math.random() * availableWeapons.length);
-            options.push(availableWeapons[randomIndex]);
-          } else {
-            // All weapons already owned, upgrade a random one instead
-            const playerWeapons = state.player.weapons;
-            const weaponToUpgrade = playerWeapons[Math.floor(Math.random() * playerWeapons.length)];
-
-            if (weaponToUpgrade.level < 4) {
-              const upgradedWeapon = {...weaponToUpgrade, level: weaponToUpgrade.level + 1};
-              options.push(upgradedWeapon);
-            } else {
-              // If all weapons are max level, add a stat upgrade instead
-              const statUpgrade: Partial<PlayerStats> = { damage: 1 };
-              options.push(statUpgrade);
-            }
-          }
-        } else {
-          // Max weapons reached, can only upgrade
-          const playerWeapons = state.player.weapons;
-          const upgradableWeapons = playerWeapons.filter(w => w.level < 4);
-
-          if (upgradableWeapons.length > 0) {
-            const weaponToUpgrade = upgradableWeapons[Math.floor(Math.random() * upgradableWeapons.length)];
-            const upgradedWeapon = {...weaponToUpgrade, level: weaponToUpgrade.level + 1};
-            options.push(upgradedWeapon);
-          } else {
-            // If all weapons are max level, add a stat upgrade instead
-            const statUpgrade: Partial<PlayerStats> = { damage: 1 };
-            options.push(statUpgrade);
-          }
-        }
-      }
+      // Get a random shop weapon
+      const weapon = getRandomShopWeapon();
+      options.push(weapon);
     }
 
     return options;
@@ -472,8 +437,28 @@ const Game: React.FC = () => {
       // Free Play mode - go directly to the game board
       setGamePhase('free_play');
     } else {
-      // Adventure mode - start with enemy selection
-      setGamePhase('enemy_select');
+      // Adventure mode - skip enemy selection, go directly to round
+      // Reset round stats for the first round
+      setRoundStats({
+        moneyEarned: 0,
+        experienceEarned: 0,
+        hintsEarned: 0,
+        healingDone: 0,
+        lootBoxesEarned: 0,
+        startLevel: 0,
+      });
+
+      // Apply startingTime bonus from weapons
+      setState(prevState => {
+        const totalStats = calculatePlayerTotalStats(prevState.player);
+        const timeBonus = totalStats.startingTime || 0;
+        return {
+          ...prevState,
+          remainingTime: prevState.remainingTime + timeBonus
+        };
+      });
+
+      setGamePhase('round');
     }
   };
 
@@ -514,9 +499,10 @@ const Game: React.FC = () => {
     setGamePhase('round');
   };
 
-  // Handle item purchase
+  // Handle item purchase (legacy - kept for backwards compatibility)
   const handleItemPurchase = (itemIndex: number) => {
     const item = state.shopItems[itemIndex];
+    if (!item) return;
 
     if (state.player.stats.money < item.price) {
       setNotification({
@@ -554,6 +540,82 @@ const Game: React.FC = () => {
         index === itemIndex ? null : shopItem
       )
     }));
+  };
+
+  // Handle weapon purchase in the new weapon shop
+  const handleWeaponPurchase = (weaponIndex: number) => {
+    const weapon = state.shopWeapons[weaponIndex];
+    if (!weapon) return;
+
+    if (state.player.stats.money < weapon.price) {
+      setNotification({
+        message: 'Not enough money to purchase this weapon',
+        type: 'error'
+      });
+      return;
+    }
+
+    // Purchase the weapon - weapons stack, so no limit check
+    setState(prevState => ({
+      ...prevState,
+      player: {
+        ...prevState.player,
+        stats: {
+          ...prevState.player.stats,
+          money: prevState.player.stats.money - weapon.price
+        },
+        weapons: [...prevState.player.weapons, weapon]
+      },
+      // Mark the slot as sold (null) instead of removing to preserve layout
+      shopWeapons: prevState.shopWeapons.map((shopWeapon, index) =>
+        index === weaponIndex ? null : shopWeapon
+      )
+    }));
+
+    setNotification({
+      message: `Purchased ${weapon.name}!`,
+      type: 'success'
+    });
+  };
+
+  // Handle weapon shop reroll
+  const handleWeaponShopReroll = () => {
+    if (state.player.stats.money < state.rerollCost && state.player.stats.freeRerolls <= 0) {
+      setNotification({
+        message: 'Not enough money to reroll the shop',
+        type: 'error'
+      });
+      return;
+    }
+
+    // Check if player has free rerolls
+    if (state.player.stats.freeRerolls > 0) {
+      setState(prevState => ({
+        ...prevState,
+        shopWeapons: generateShopWeapons(4),
+        player: {
+          ...prevState.player,
+          stats: {
+            ...prevState.player.stats,
+            freeRerolls: prevState.player.stats.freeRerolls - 1
+          }
+        }
+      }));
+    } else {
+      // Charge for the reroll
+      setState(prevState => ({
+        ...prevState,
+        shopWeapons: generateShopWeapons(4),
+        player: {
+          ...prevState.player,
+          stats: {
+            ...prevState.player.stats,
+            money: prevState.player.stats.money - prevState.rerollCost
+          }
+        },
+        rerollCost: prevState.rerollCost + 2 // Increase reroll cost
+      }));
+    }
   };
 
   // Handle shop reroll
@@ -596,49 +658,25 @@ const Game: React.FC = () => {
     }
   };
 
-  // Handle level up selection
+  // Handle level up selection - WEAPONS ONLY
   const handleLevelUpSelection = (optionIndex: number) => {
     const option = state.levelUpOptions[optionIndex];
 
-    // Check if the option is a weapon or a stat upgrade
+    // All options are now weapons
     if (isWeapon(option)) {
-      // It's a weapon
-      const existingWeaponIndex = state.player.weapons.findIndex(w => w.name === option.name);
-
-      if (existingWeaponIndex >= 0) {
-        // Upgrading existing weapon
-        const updatedWeapons = [...state.player.weapons];
-        updatedWeapons[existingWeaponIndex] = option;
-
-        setState(prevState => ({
-          ...prevState,
-          player: {
-            ...prevState.player,
-            weapons: updatedWeapons
-          }
-        }));
-      } else {
-        // Adding new weapon
-        setState(prevState => ({
-          ...prevState,
-          player: {
-            ...prevState.player,
-            weapons: [...prevState.player.weapons, option]
-          }
-        }));
-      }
-    } else {
-      // It's a stat upgrade
+      // Add the weapon to player's inventory (weapons stack)
       setState(prevState => ({
         ...prevState,
         player: {
           ...prevState.player,
-          stats: {
-            ...prevState.player.stats,
-            ...option
-          }
+          weapons: [...prevState.player.weapons, option]
         }
       }));
+
+      setNotification({
+        message: `Acquired ${option.name}!`,
+        type: 'success'
+      });
     }
 
     // Continue to shop
@@ -691,7 +729,7 @@ const Game: React.FC = () => {
 
     // In multiplayer, send the selection to the server
     if (isMultiplayer) {
-      selectMultiplayerCard(card.id);
+      selectMultiplayerCard(card.id, state.board);
       return;
     }
 
@@ -736,9 +774,12 @@ const Game: React.FC = () => {
   const handleValidMatch = (cards: Card[], rewards: CardReward[]) => {
     // In multiplayer, send the match to the server
     if (isMultiplayer) {
-      sendCombinationFound(cards.map(c => c.id));
+      sendCombinationFound(state);
       return;
     }
+
+    // Get player's total stats for weapon effects
+    const totalStats = calculatePlayerTotalStats(state.player);
 
     // Calculate totals from rewards
     let totalPoints = 0;
@@ -747,15 +788,115 @@ const Game: React.FC = () => {
     let totalHealing = 0;
     let totalHints = 0;
     let lootCratesEarned = 0;
+    let holoBonus = 0;
 
     rewards.forEach(reward => {
-      totalPoints += reward.points || 0;
-      totalMoney += reward.money || 0;
+      let points = reward.points || 0;
+      let money = reward.money || 0;
+
+      // Check if this card is holographic for 2x points
+      const matchedCard = cards.find(c => c.id === reward.cardId);
+      if (matchedCard?.isHolographic) {
+        points *= 2;
+        holoBonus += points / 2; // Track the bonus portion
+      }
+
+      totalPoints += points;
+      totalMoney += money;
       totalExperience += reward.experience || 0;
       totalHealing += reward.healing || 0;
       totalHints += reward.hint || 0;
       if (reward.lootBox) lootCratesEarned++;
     });
+
+    // === WEAPON MATCH TRIGGER EFFECTS ===
+    let bonusMulligans = 0;
+    let bonusTime = 0;
+    const triggerNotifications: string[] = [];
+
+    // Show holographic bonus if any
+    if (holoBonus > 0) {
+      triggerNotifications.push(`Holo 2x! +${holoBonus}`);
+    }
+
+    // Healing chance - roll to heal 1 HP
+    if (totalStats.healingChance > 0 && Math.random() * 100 < totalStats.healingChance) {
+      totalHealing += 1;
+      triggerNotifications.push('+1 HP');
+    }
+
+    // Hint gain chance - roll to gain 1 hint
+    if (totalStats.hintGainChance > 0 && Math.random() * 100 < totalStats.hintGainChance) {
+      totalHints += 1;
+      triggerNotifications.push('+1 Hint');
+    }
+
+    // Time gain chance - roll to add time
+    if (totalStats.timeGainChance > 0 && Math.random() * 100 < totalStats.timeGainChance) {
+      bonusTime = totalStats.timeGainAmount || 10;
+      triggerNotifications.push(`+${bonusTime}s`);
+    }
+
+    // Mulligan gain chance - roll to gain 1 mulligan
+    if (totalStats.mulliganGainChance > 0 && Math.random() * 100 < totalStats.mulliganGainChance) {
+      bonusMulligans = 1;
+      triggerNotifications.push('+1 Mulligan');
+    }
+
+    // Board growth chance - roll to add cards to the board
+    let boardGrowthTriggered = false;
+    let boardGrowthAmount = 0;
+    if (totalStats.boardGrowthChance > 0 && Math.random() * 100 < totalStats.boardGrowthChance) {
+      boardGrowthTriggered = true;
+      boardGrowthAmount = totalStats.boardGrowthAmount || 1;
+      triggerNotifications.push(`+${boardGrowthAmount} Cards`);
+    }
+
+    // Explosive effect - destroy adjacent cards
+    let explosiveCards: Card[] = [];
+    if (totalStats.explosionChance > 0) {
+      explosiveCards = getExplosiveCards(state.board, cards, totalStats.explosionChance);
+      if (explosiveCards.length > 0) {
+        // Add bonus points/money for exploded cards
+        totalPoints += explosiveCards.length;
+        totalMoney += explosiveCards.length;
+        triggerNotifications.push(`Explosion! +${explosiveCards.length}`);
+      }
+    }
+
+    // Laser effect - destroy entire row or column
+    let laserCards: Card[] = [];
+    if (totalStats.laserChance > 0 && Math.random() * 100 < totalStats.laserChance) {
+      laserCards = getLaserCards(state.board, cards);
+      // Filter out any cards already marked for explosion
+      laserCards = laserCards.filter(lc => !explosiveCards.some(ec => ec.id === lc.id));
+      if (laserCards.length > 0) {
+        // Add bonus points/money for laser-destroyed cards
+        totalPoints += laserCards.length * 2; // Laser gives more points
+        totalMoney += laserCards.length;
+        triggerNotifications.push(`Laser! +${laserCards.length * 2}`);
+      }
+    }
+
+    // Fire spread effect - set adjacent cards on fire
+    let fireSpreadCount = 0;
+    if (totalStats.fireSpreadChance > 0) {
+      const cardsToIgnite = getFireSpreadCards(state.board, cards, totalStats.fireSpreadChance);
+      if (cardsToIgnite.length > 0) {
+        fireSpreadCount = cardsToIgnite.length;
+        triggerNotifications.push(`Fire! ${fireSpreadCount} cards`);
+        // Set cards on fire (will be handled after state update)
+        igniteCards(cardsToIgnite);
+      }
+    }
+
+    // Show notification for triggered effects
+    if (triggerNotifications.length > 0) {
+      setNotification({
+        message: triggerNotifications.join(' | '),
+        type: 'info'
+      });
+    }
 
     // Calculate experience with bonus percentage
     const experienceMultiplier = 1 + (state.player.stats.experienceGainPercent || 0) / 100;
@@ -786,7 +927,7 @@ const Game: React.FC = () => {
         prevState.player.stats.maxHealth
       );
 
-      // Show notification only for level up
+      // Show notification only for level up (overrides trigger notification)
       if (hasLeveledUp) {
         setNotification({
           message: `LEVEL UP! Now Lv${newLevel}`,
@@ -800,6 +941,7 @@ const Game: React.FC = () => {
         selectedCards: prevState.selectedCards.filter(c => !cards.some(mc => mc.id === c.id)),
         foundCombinations: [...prevState.foundCombinations, cards],
         lootCrates: prevState.lootCrates + lootCratesEarned,
+        remainingTime: prevState.remainingTime + bonusTime,
         player: {
           ...prevState.player,
           stats: {
@@ -808,20 +950,335 @@ const Game: React.FC = () => {
             level: newLevel,
             money: prevState.player.stats.money + totalMoney,
             health: newHealth,
-            hints: prevState.player.stats.hints + totalHints
+            hints: prevState.player.stats.hints + totalHints,
+            mulligans: prevState.player.stats.mulligans + bonusMulligans
           }
         }
       };
     });
 
+    // Combine all cards to replace: matched + exploded + laser
+    const allCardsToReplace = [...cards, ...explosiveCards, ...laserCards];
+
     // Replace matched cards with new ones
-    replaceMatchedCards(cards);
+    replaceMatchedCards(allCardsToReplace);
+
+    // Handle board growth if triggered
+    if (boardGrowthTriggered && boardGrowthAmount > 0) {
+      growBoard(boardGrowthAmount);
+    }
   };
 
-  // Handle invalid match - removes cards and replaces them (costs 1 health)
-  const handleInvalidMatch = (cardsToReplace: Card[]) => {
+  // Get grid dimensions based on board size (assumes 3 columns)
+  const getGridDimensions = (boardSize: number): { cols: number; rows: number } => {
+    const cols = 3;
+    const rows = Math.ceil(boardSize / cols);
+    return { cols, rows };
+  };
 
-    // Decrease health
+  // Get adjacent card indices for a given card index
+  const getAdjacentIndices = (index: number, boardSize: number): number[] => {
+    const { cols } = getGridDimensions(boardSize);
+    const adjacent: number[] = [];
+    const row = Math.floor(index / cols);
+    const col = index % cols;
+
+    // Up
+    if (row > 0) adjacent.push(index - cols);
+    // Down
+    if (index + cols < boardSize) adjacent.push(index + cols);
+    // Left
+    if (col > 0) adjacent.push(index - 1);
+    // Right
+    if (col < cols - 1 && index + 1 < boardSize) adjacent.push(index + 1);
+
+    return adjacent;
+  };
+
+  // Get all card indices in the same row or column
+  const getLineIndices = (index: number, boardSize: number, isRow: boolean): number[] => {
+    const { cols } = getGridDimensions(boardSize);
+    const indices: number[] = [];
+    const row = Math.floor(index / cols);
+    const col = index % cols;
+
+    if (isRow) {
+      // Get all cards in the same row
+      for (let c = 0; c < cols; c++) {
+        const idx = row * cols + c;
+        if (idx < boardSize) indices.push(idx);
+      }
+    } else {
+      // Get all cards in the same column
+      for (let r = 0; r < Math.ceil(boardSize / cols); r++) {
+        const idx = r * cols + col;
+        if (idx < boardSize) indices.push(idx);
+      }
+    }
+
+    return indices;
+  };
+
+  // Get cards to explode (adjacent to matched cards)
+  const getExplosiveCards = (board: Card[], matchedCards: Card[], explosionChance: number): Card[] => {
+    const cardsToExplode: Card[] = [];
+    const explodedIndices = new Set<number>();
+
+    // For each matched card, check adjacent cards
+    matchedCards.forEach(matchedCard => {
+      const matchedIndex = board.findIndex(c => c.id === matchedCard.id);
+      if (matchedIndex === -1) return;
+
+      const adjacentIndices = getAdjacentIndices(matchedIndex, board.length);
+
+      adjacentIndices.forEach(adjIndex => {
+        // Roll explosion chance for each adjacent card
+        if (!explodedIndices.has(adjIndex) && Math.random() * 100 < explosionChance) {
+          explodedIndices.add(adjIndex);
+          const adjCard = board[adjIndex];
+          if (adjCard && !matchedCards.some(mc => mc.id === adjCard.id)) {
+            cardsToExplode.push(adjCard);
+          }
+        }
+      });
+    });
+
+    return cardsToExplode;
+  };
+
+  // Get cards to destroy with laser (entire row or column)
+  const getLaserCards = (board: Card[], matchedCards: Card[]): Card[] => {
+    const cardsToDestroy: Card[] = [];
+
+    // Pick a random matched card as the laser origin
+    const originCard = matchedCards[Math.floor(Math.random() * matchedCards.length)];
+    const originIndex = board.findIndex(c => c.id === originCard.id);
+    if (originIndex === -1) return cardsToDestroy;
+
+    // Randomly choose row or column
+    const isRow = Math.random() < 0.5;
+    const lineIndices = getLineIndices(originIndex, board.length, isRow);
+
+    lineIndices.forEach(idx => {
+      const card = board[idx];
+      if (card && !matchedCards.some(mc => mc.id === card.id)) {
+        cardsToDestroy.push(card);
+      }
+    });
+
+    return cardsToDestroy;
+  };
+
+  // Get cards to set on fire (adjacent to matched cards)
+  const getFireSpreadCards = (board: Card[], matchedCards: Card[], fireChance: number): Card[] => {
+    const cardsToIgnite: Card[] = [];
+    const igniteIndices = new Set<number>();
+
+    matchedCards.forEach(matchedCard => {
+      const matchedIndex = board.findIndex(c => c.id === matchedCard.id);
+      if (matchedIndex === -1) return;
+
+      const adjacentIndices = getAdjacentIndices(matchedIndex, board.length);
+
+      adjacentIndices.forEach(adjIndex => {
+        // Roll fire chance for each adjacent card
+        if (!igniteIndices.has(adjIndex) && Math.random() * 100 < fireChance) {
+          const adjCard = board[adjIndex];
+          // Don't ignite already burning cards or matched cards
+          if (adjCard && !adjCard.onFire && !matchedCards.some(mc => mc.id === adjCard.id)) {
+            igniteIndices.add(adjIndex);
+            cardsToIgnite.push(adjCard);
+          }
+        }
+      });
+    });
+
+    return cardsToIgnite;
+  };
+
+  // Set cards on fire
+  const igniteCards = (cardsToIgnite: Card[]) => {
+    setState(prevState => {
+      const updatedBoard = prevState.board.map(card => {
+        if (cardsToIgnite.some(c => c.id === card.id)) {
+          return {
+            ...card,
+            onFire: true,
+            fireStartTime: Date.now()
+          };
+        }
+        return card;
+      });
+
+      return {
+        ...prevState,
+        board: updatedBoard
+      };
+    });
+  };
+
+  // Handle burning cards (called from timer effect)
+  const handleBurningCards = () => {
+    const now = Date.now();
+    const FIRE_BURN_DURATION = 15000; // 15 seconds
+    const FIRE_SPREAD_ON_DEATH_CHANCE = 10; // 10%
+
+    setState(prevState => {
+      const burnedCards: Card[] = [];
+      const newFireCards: Card[] = [];
+      let updatedBoard = [...prevState.board];
+
+      // Find cards that have been burning for 15+ seconds
+      updatedBoard.forEach((card, index) => {
+        if (card.onFire && card.fireStartTime) {
+          if (now - card.fireStartTime >= FIRE_BURN_DURATION) {
+            burnedCards.push(card);
+
+            // 10% chance to spread fire to an adjacent card
+            if (Math.random() * 100 < FIRE_SPREAD_ON_DEATH_CHANCE) {
+              const adjacentIndices = getAdjacentIndices(index, updatedBoard.length);
+              const validAdjacent = adjacentIndices.filter(idx => {
+                const adjCard = updatedBoard[idx];
+                return adjCard && !adjCard.onFire && !burnedCards.some(bc => bc.id === adjCard.id);
+              });
+
+              if (validAdjacent.length > 0) {
+                const randomAdj = validAdjacent[Math.floor(Math.random() * validAdjacent.length)];
+                newFireCards.push(updatedBoard[randomAdj]);
+              }
+            }
+          }
+        }
+      });
+
+      // If no cards burned, no update needed
+      if (burnedCards.length === 0 && newFireCards.length === 0) {
+        return prevState;
+      }
+
+      // Award points for burned cards
+      const burnBonus = burnedCards.length;
+
+      // Mark new fire cards
+      updatedBoard = updatedBoard.map(card => {
+        if (newFireCards.some(fc => fc.id === card.id)) {
+          return { ...card, onFire: true, fireStartTime: now };
+        }
+        return card;
+      });
+
+      // Replace burned cards with new ones
+      const remainingDeck = [...prevState.deck];
+
+      burnedCards.forEach(burnedCard => {
+        const burnedIndex = updatedBoard.findIndex(c => c.id === burnedCard.id);
+        if (burnedIndex !== -1 && remainingDeck.length > 0) {
+          const randomIndex = Math.floor(Math.random() * remainingDeck.length);
+          const newCard = { ...remainingDeck[randomIndex], selected: false };
+          updatedBoard[burnedIndex] = newCard;
+          remainingDeck.splice(randomIndex, 1);
+        }
+      });
+
+      // Show notification
+      if (burnedCards.length > 0) {
+        setNotification({
+          message: `🔥 Burned! +${burnBonus} pts`,
+          type: 'info'
+        });
+      }
+
+      return {
+        ...prevState,
+        board: updatedBoard,
+        deck: remainingDeck,
+        score: prevState.score + burnBonus,
+        player: {
+          ...prevState.player,
+          stats: {
+            ...prevState.player.stats,
+            money: prevState.player.stats.money + burnBonus
+          }
+        }
+      };
+    });
+  };
+
+  // Grow the board by adding new cards
+  const growBoard = (amount: number) => {
+    setState(prevState => {
+      // Don't grow beyond max board size
+      if (prevState.board.length >= MAX_BOARD_SIZE) {
+        return prevState;
+      }
+
+      const cardsToAdd = Math.min(amount, MAX_BOARD_SIZE - prevState.board.length);
+      const newCards: Card[] = [];
+      const remainingDeck = [...prevState.deck];
+
+      // Generate new cards
+      for (let i = 0; i < cardsToAdd; i++) {
+        if (remainingDeck.length === 0) {
+          // Refill deck if necessary
+          const additionalCards = createDeck(prevState.activeAttributes);
+          for (const card of additionalCards) {
+            if (!remainingDeck.some(c => sameCardAttributes(c, card)) &&
+                !prevState.board.some(c => sameCardAttributes(c, card)) &&
+                !newCards.some(c => sameCardAttributes(c, card))) {
+              remainingDeck.push(card);
+            }
+          }
+        }
+
+        if (remainingDeck.length > 0) {
+          const randomIndex = Math.floor(Math.random() * remainingDeck.length);
+          const newCard = { ...remainingDeck[randomIndex], selected: false };
+          newCards.push(newCard);
+          remainingDeck.splice(randomIndex, 1);
+        }
+      }
+
+      return {
+        ...prevState,
+        board: [...prevState.board, ...newCards],
+        deck: remainingDeck
+      };
+    });
+  };
+
+  // Handle invalid match - removes cards and replaces them (costs 1 health unless mulligan)
+  const handleInvalidMatch = (cardsToReplace: Card[]) => {
+    // Get current total stats to check mulligans
+    const totalStats = calculatePlayerTotalStats(state.player);
+
+    // Check if player has mulligans to auto-use
+    if (totalStats.mulligans > 0) {
+      // Use a mulligan instead of losing health
+      setState(prevState => ({
+        ...prevState,
+        selectedCards: prevState.selectedCards.filter(c => !cardsToReplace.some(mc => mc.id === c.id)),
+        player: {
+          ...prevState.player,
+          stats: {
+            ...prevState.player.stats,
+            mulligans: prevState.player.stats.mulligans - 1
+          }
+        }
+      }));
+
+      setNotification({
+        message: 'Mulligan Used!',
+        type: 'info'
+      });
+
+      // Replace the invalid match cards with new ones from the deck
+      if (cardsToReplace.length === 3) {
+        replaceMatchedCards(cardsToReplace);
+      }
+      return;
+    }
+
+    // No mulligans - decrease health
     setState(prevState => {
       const newHealth = prevState.player.stats.health - 1;
 
@@ -928,6 +1385,12 @@ const Game: React.FC = () => {
           newCard.timedRewardAmount = Math.floor(Math.random() * 5) + 3;
         }
 
+        // Apply holographic effect based on player's holoChance stat
+        const totalStats = calculatePlayerTotalStats(state.player);
+        if (totalStats.holoChance > 0 && Math.random() * 100 < totalStats.holoChance) {
+          newCard.isHolographic = true;
+        }
+
         newCards.push(newCard);
 
         // Remove the card from the deck
@@ -956,7 +1419,7 @@ const Game: React.FC = () => {
 
     // In multiplayer, send the new cards to the server
     if (isMultiplayer && newCards.length > 0) {
-      sendAddCards(newCards.map(c => c.id));
+      sendAddCards(state);
     }
   };
 
@@ -1003,6 +1466,16 @@ const Game: React.FC = () => {
       newActiveAttributes
     );
 
+    // Reset round stats for the new round
+    setRoundStats({
+      moneyEarned: 0,
+      experienceEarned: 0,
+      hintsEarned: 0,
+      healingDone: 0,
+      lootBoxesEarned: 0,
+      startLevel: state.player.stats.level,
+    });
+
     setState(prevState => ({
       ...prevState,
       round: nextRound,
@@ -1016,11 +1489,22 @@ const Game: React.FC = () => {
       roundCompleted: false,
       gameStarted: true,
       currentEnemies: generateRandomEnemies(),
-      shopItems: generateRandomShopItems()  // Refill shop for next round
+      shopItems: generateRandomShopItems(),  // Refill shop for next round
+      shopWeapons: generateShopWeapons(4)    // Refill weapon shop for next round
     }));
 
-    // Move to enemy selection for the next round
-    setGamePhase('enemy_select');
+    // Apply startingTime bonus from weapons
+    setState(prevState => {
+      const totalStats = calculatePlayerTotalStats(prevState.player);
+      const timeBonus = totalStats.startingTime || 0;
+      return {
+        ...prevState,
+        remainingTime: prevState.remainingTime + timeBonus
+      };
+    });
+
+    // Skip enemy selection, go directly to round
+    setGamePhase('round');
   };
 
   // Render the appropriate game phase
@@ -1079,11 +1563,11 @@ const Game: React.FC = () => {
 
       case 'shop':
         return (
-          <ItemShop
-            items={state.shopItems}
+          <WeaponShop
+            weapons={state.shopWeapons}
             playerMoney={state.player.stats.money}
-            onPurchase={handleItemPurchase}
-            onReroll={handleShopReroll}
+            onPurchase={handleWeaponPurchase}
+            onReroll={handleWeaponShopReroll}
             rerollCost={state.rerollCost}
             freeRerolls={state.player.stats.freeRerolls}
             onContinue={startNextRound}
@@ -1294,11 +1778,11 @@ const Game: React.FC = () => {
         />
       )}
 
-      {isMultiplayer && gamePhase === 'character_select' && (
+      {isMultiplayer && gamePhase === 'character_select' && roomId && (
         <MultiplayerLobby
           roomId={roomId}
           isHost={isHost}
-          onStartGame={startMultiplayerGame}
+          onStartGame={() => startMultiplayerGame(state)}
         />
       )}
 

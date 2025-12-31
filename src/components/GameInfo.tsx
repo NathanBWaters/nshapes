@@ -79,6 +79,14 @@ const GameInfo: React.FC<GameInfoProps> = ({
               </View>
             </View>
 
+            {/* Mulligans */}
+            {(playerStats.mulligans ?? 0) > 0 && (
+              <View style={styles.mulliganBadge}>
+                <Text style={styles.mulliganIcon}>↺</Text>
+                <Text style={styles.mulliganCount}>{playerStats.mulligans}</Text>
+              </View>
+            )}
+
             {/* Hints */}
             <TouchableOpacity
               style={[
@@ -225,6 +233,28 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: COLORS.logicTeal,
     borderRadius: 3,
+  },
+  mulliganBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.logicTeal,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: RADIUS.button,
+    gap: 2,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+  },
+  mulliganIcon: {
+    color: COLORS.canvasWhite,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  mulliganCount: {
+    color: COLORS.canvasWhite,
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'monospace',
   },
   hintButton: {
     flexDirection: 'row',

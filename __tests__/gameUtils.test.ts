@@ -1,0 +1,371 @@
+import {
+  createDeck,
+  shuffleArray,
+  generateGameBoard,
+  isValidCombination,
+  findAllCombinations,
+  sameCardAttributes,
+} from '@/utils/gameUtils';
+import { Card, AttributeName } from '@/types';
+
+// Helper to create a test card
+const createTestCard = (
+  shape: 'oval' | 'squiggle' | 'diamond',
+  color: 'red' | 'green' | 'purple',
+  number: 1 | 2 | 3,
+  shading: 'solid' | 'striped' | 'open',
+  background: 'white' | 'beige' | 'charcoal' = 'white'
+): Card => ({
+  id: `test-${shape}-${color}-${number}-${shading}-${background}`,
+  shape,
+  color,
+  number,
+  shading,
+  background,
+  selected: false,
+});
+
+describe('createDeck', () => {
+  it('should create 81 cards for 4 attributes (3^4)', () => {
+    const deck = createDeck(['shape', 'color', 'number', 'shading']);
+    expect(deck.length).toBe(81);
+  });
+
+  it('should create 243 cards for 5 attributes (3^5)', () => {
+    const deck = createDeck(['shape', 'color', 'number', 'shading', 'background']);
+    expect(deck.length).toBe(243);
+  });
+
+  it('should create 27 cards for 3 attributes (3^3)', () => {
+    const deck = createDeck(['shape', 'color', 'number']);
+    expect(deck.length).toBe(27);
+  });
+
+  it('should create 9 cards for 2 attributes (3^2)', () => {
+    const deck = createDeck(['shape', 'color']);
+    expect(deck.length).toBe(9);
+  });
+
+  it('each card should have all required properties', () => {
+    const deck = createDeck(['shape', 'color', 'number', 'shading']);
+    deck.forEach(card => {
+      expect(card).toHaveProperty('id');
+      expect(card).toHaveProperty('shape');
+      expect(card).toHaveProperty('color');
+      expect(card).toHaveProperty('number');
+      expect(card).toHaveProperty('shading');
+      expect(card).toHaveProperty('selected');
+      expect(card.selected).toBe(false);
+    });
+  });
+
+  it('should have all unique cards (no duplicates)', () => {
+    const deck = createDeck(['shape', 'color', 'number', 'shading']);
+    const uniqueCombos = new Set(
+      deck.map(c => `${c.shape}-${c.color}-${c.number}-${c.shading}`)
+    );
+    expect(uniqueCombos.size).toBe(81);
+  });
+});
+
+describe('shuffleArray', () => {
+  it('should return an array of the same length', () => {
+    const original = [1, 2, 3, 4, 5];
+    const shuffled = shuffleArray(original);
+    expect(shuffled.length).toBe(original.length);
+  });
+
+  it('should contain all the same elements', () => {
+    const original = [1, 2, 3, 4, 5];
+    const shuffled = shuffleArray(original);
+    expect(shuffled.sort()).toEqual(original.sort());
+  });
+
+  it('should not modify the original array', () => {
+    const original = [1, 2, 3, 4, 5];
+    const originalCopy = [...original];
+    shuffleArray(original);
+    expect(original).toEqual(originalCopy);
+  });
+
+  it('should produce different orderings (probabilistic)', () => {
+    const original = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    let sameOrderCount = 0;
+    const iterations = 100;
+
+    for (let i = 0; i < iterations; i++) {
+      const shuffled = shuffleArray(original);
+      if (shuffled.every((val, idx) => val === original[idx])) {
+        sameOrderCount++;
+      }
+    }
+
+    // Probability of exact same order is 1/10! = very low
+    expect(sameOrderCount).toBeLessThan(iterations * 0.1);
+  });
+});
+
+describe('generateGameBoard', () => {
+  it('should generate the specified number of cards', () => {
+    const board = generateGameBoard(12, 1, 1, ['shape', 'color', 'number', 'shading']);
+    expect(board.length).toBe(12);
+  });
+
+  it('should generate valid cards', () => {
+    const board = generateGameBoard(12, 1, 1, ['shape', 'color', 'number', 'shading']);
+    board.forEach(card => {
+      expect(['oval', 'squiggle', 'diamond']).toContain(card.shape);
+      expect(['red', 'green', 'purple']).toContain(card.color);
+      expect([1, 2, 3]).toContain(card.number);
+      expect(['solid', 'striped', 'open']).toContain(card.shading);
+    });
+  });
+
+  it('should add modifiers based on difficulty and round', () => {
+    // Generate many boards at high difficulty to test modifier presence
+    let hasModifiers = false;
+    for (let i = 0; i < 10; i++) {
+      const board = generateGameBoard(12, 5, 5, ['shape', 'color', 'number', 'shading']);
+      const hasAnyModifier = board.some(
+        card =>
+          card.health !== undefined ||
+          card.lootBox ||
+          card.bonusMoney !== undefined ||
+          card.bonusPoints !== undefined ||
+          card.healing
+      );
+      if (hasAnyModifier) {
+        hasModifiers = true;
+        break;
+      }
+    }
+    expect(hasModifiers).toBe(true);
+  });
+});
+
+describe('isValidCombination', () => {
+  describe('with 4 attributes', () => {
+    const attrs: AttributeName[] = ['shape', 'color', 'number', 'shading'];
+
+    it('should accept all same shape, color, number - all different shading', () => {
+      const cards = [
+        createTestCard('oval', 'red', 1, 'solid'),
+        createTestCard('oval', 'red', 1, 'striped'),
+        createTestCard('oval', 'red', 1, 'open'),
+      ];
+      const result = isValidCombination(cards, attrs);
+      expect(result.isValid).toBe(true);
+    });
+
+    it('should accept all different shape, color, number, shading', () => {
+      const cards = [
+        createTestCard('oval', 'red', 1, 'solid'),
+        createTestCard('squiggle', 'green', 2, 'striped'),
+        createTestCard('diamond', 'purple', 3, 'open'),
+      ];
+      const result = isValidCombination(cards, attrs);
+      expect(result.isValid).toBe(true);
+    });
+
+    it('should reject 2 same + 1 different (shape)', () => {
+      const cards = [
+        createTestCard('oval', 'red', 1, 'solid'),
+        createTestCard('oval', 'green', 2, 'striped'),
+        createTestCard('diamond', 'purple', 3, 'open'),
+      ];
+      const result = isValidCombination(cards, attrs);
+      expect(result.isValid).toBe(false);
+      expect(result.invalidAttributes).toContain('shape');
+    });
+
+    it('should reject 2 same + 1 different (color)', () => {
+      const cards = [
+        createTestCard('oval', 'red', 1, 'solid'),
+        createTestCard('squiggle', 'red', 2, 'striped'),
+        createTestCard('diamond', 'purple', 3, 'open'),
+      ];
+      const result = isValidCombination(cards, attrs);
+      expect(result.isValid).toBe(false);
+      expect(result.invalidAttributes).toContain('color');
+    });
+
+    it('should reject 2 same + 1 different (number)', () => {
+      const cards = [
+        createTestCard('oval', 'red', 1, 'solid'),
+        createTestCard('squiggle', 'green', 1, 'striped'),
+        createTestCard('diamond', 'purple', 3, 'open'),
+      ];
+      const result = isValidCombination(cards, attrs);
+      expect(result.isValid).toBe(false);
+      expect(result.invalidAttributes).toContain('number');
+    });
+
+    it('should reject 2 same + 1 different (shading)', () => {
+      const cards = [
+        createTestCard('oval', 'red', 1, 'solid'),
+        createTestCard('squiggle', 'green', 2, 'solid'),
+        createTestCard('diamond', 'purple', 3, 'open'),
+      ];
+      const result = isValidCombination(cards, attrs);
+      expect(result.isValid).toBe(false);
+      expect(result.invalidAttributes).toContain('shading');
+    });
+
+    it('should identify multiple invalid attributes', () => {
+      const cards = [
+        createTestCard('oval', 'red', 1, 'solid'),
+        createTestCard('oval', 'red', 2, 'solid'),
+        createTestCard('diamond', 'purple', 3, 'open'),
+      ];
+      const result = isValidCombination(cards, attrs);
+      expect(result.isValid).toBe(false);
+      expect(result.invalidAttributes.length).toBeGreaterThan(1);
+    });
+
+    it('should reject less than 3 cards', () => {
+      const cards = [
+        createTestCard('oval', 'red', 1, 'solid'),
+        createTestCard('squiggle', 'green', 2, 'striped'),
+      ];
+      const result = isValidCombination(cards, attrs);
+      expect(result.isValid).toBe(false);
+    });
+
+    it('should reject more than 3 cards', () => {
+      const cards = [
+        createTestCard('oval', 'red', 1, 'solid'),
+        createTestCard('squiggle', 'green', 2, 'striped'),
+        createTestCard('diamond', 'purple', 3, 'open'),
+        createTestCard('oval', 'red', 1, 'solid'),
+      ];
+      const result = isValidCombination(cards, attrs);
+      expect(result.isValid).toBe(false);
+    });
+  });
+
+  describe('with 3 attributes', () => {
+    const attrs: AttributeName[] = ['shape', 'color', 'number'];
+
+    it('should ignore shading when not in active attributes', () => {
+      // Shading is 2 same + 1 different, but shading is not active
+      const cards = [
+        createTestCard('oval', 'red', 1, 'solid'),
+        createTestCard('squiggle', 'green', 2, 'solid'),
+        createTestCard('diamond', 'purple', 3, 'open'),
+      ];
+      const result = isValidCombination(cards, attrs);
+      expect(result.isValid).toBe(true);
+    });
+  });
+
+  describe('with 5 attributes (including background)', () => {
+    const attrs: AttributeName[] = ['shape', 'color', 'number', 'shading', 'background'];
+
+    it('should accept valid 5-attribute set', () => {
+      const cards = [
+        createTestCard('oval', 'red', 1, 'solid', 'white'),
+        createTestCard('squiggle', 'green', 2, 'striped', 'beige'),
+        createTestCard('diamond', 'purple', 3, 'open', 'charcoal'),
+      ];
+      const result = isValidCombination(cards, attrs);
+      expect(result.isValid).toBe(true);
+    });
+
+    it('should reject invalid background (2 same + 1 different)', () => {
+      const cards = [
+        createTestCard('oval', 'red', 1, 'solid', 'white'),
+        createTestCard('squiggle', 'green', 2, 'striped', 'white'),
+        createTestCard('diamond', 'purple', 3, 'open', 'charcoal'),
+      ];
+      const result = isValidCombination(cards, attrs);
+      expect(result.isValid).toBe(false);
+      expect(result.invalidAttributes).toContain('background');
+    });
+  });
+});
+
+describe('findAllCombinations', () => {
+  it('should find combinations in a simple board', () => {
+    const board = [
+      createTestCard('oval', 'red', 1, 'solid'),
+      createTestCard('oval', 'red', 1, 'striped'),
+      createTestCard('oval', 'red', 1, 'open'),
+      createTestCard('squiggle', 'green', 2, 'solid'),
+    ];
+    const attrs: AttributeName[] = ['shape', 'color', 'number', 'shading'];
+    const combinations = findAllCombinations(board, attrs);
+
+    // First 3 cards form a valid set
+    expect(combinations.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('should find no combinations when none exist', () => {
+    const board = [
+      createTestCard('oval', 'red', 1, 'solid'),
+      createTestCard('oval', 'red', 1, 'solid'), // Duplicate, makes it impossible
+      createTestCard('oval', 'green', 2, 'striped'),
+      createTestCard('diamond', 'purple', 3, 'open'),
+    ];
+    const attrs: AttributeName[] = ['shape', 'color', 'number', 'shading'];
+    const combinations = findAllCombinations(board, attrs);
+
+    // With this specific board, there should be no valid sets
+    expect(combinations.length).toBe(0);
+  });
+
+  it('should find multiple combinations when they exist', () => {
+    // Create a board with multiple valid sets
+    const board = [
+      // Set 1: All different everything
+      createTestCard('oval', 'red', 1, 'solid'),
+      createTestCard('squiggle', 'green', 2, 'striped'),
+      createTestCard('diamond', 'purple', 3, 'open'),
+      // Set 2: All same shape/color/number, different shading
+      createTestCard('oval', 'red', 1, 'striped'),
+      createTestCard('oval', 'red', 1, 'open'),
+    ];
+    const attrs: AttributeName[] = ['shape', 'color', 'number', 'shading'];
+    const combinations = findAllCombinations(board, attrs);
+
+    // Should find at least 2 valid sets
+    expect(combinations.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('sameCardAttributes', () => {
+  it('should return true for cards with identical attributes', () => {
+    const card1 = createTestCard('oval', 'red', 1, 'solid', 'white');
+    const card2 = createTestCard('oval', 'red', 1, 'solid', 'white');
+    expect(sameCardAttributes(card1, card2)).toBe(true);
+  });
+
+  it('should return false for different shapes', () => {
+    const card1 = createTestCard('oval', 'red', 1, 'solid', 'white');
+    const card2 = createTestCard('diamond', 'red', 1, 'solid', 'white');
+    expect(sameCardAttributes(card1, card2)).toBe(false);
+  });
+
+  it('should return false for different colors', () => {
+    const card1 = createTestCard('oval', 'red', 1, 'solid', 'white');
+    const card2 = createTestCard('oval', 'green', 1, 'solid', 'white');
+    expect(sameCardAttributes(card1, card2)).toBe(false);
+  });
+
+  it('should return false for different numbers', () => {
+    const card1 = createTestCard('oval', 'red', 1, 'solid', 'white');
+    const card2 = createTestCard('oval', 'red', 2, 'solid', 'white');
+    expect(sameCardAttributes(card1, card2)).toBe(false);
+  });
+
+  it('should return false for different shadings', () => {
+    const card1 = createTestCard('oval', 'red', 1, 'solid', 'white');
+    const card2 = createTestCard('oval', 'red', 1, 'striped', 'white');
+    expect(sameCardAttributes(card1, card2)).toBe(false);
+  });
+
+  it('should return false for different backgrounds', () => {
+    const card1 = createTestCard('oval', 'red', 1, 'solid', 'white');
+    const card2 = createTestCard('oval', 'red', 1, 'solid', 'charcoal');
+    expect(sameCardAttributes(card1, card2)).toBe(false);
+  });
+});

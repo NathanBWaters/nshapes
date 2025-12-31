@@ -19,7 +19,8 @@ NShapes combines the classic SET card matching game with roguelike progression m
 **The SET Rule:** A valid match requires 3 cards where **each active attribute** is either **all the same** OR **all different** across the three cards.
 
 **Invalid Match Mechanic:** When a player selects 3 cards that do NOT form a valid SET:
-* The player loses 1 health (heart)
+* If player has mulligans: Auto-use mulligan (saves 1 health)
+* Otherwise: The player loses 1 health (heart)
 * The 3 selected cards are **removed** from the board and replaced with new cards
 * This creates a strategic "sacrifice" option—stuck players can spend health to cycle in new cards
 
@@ -32,9 +33,8 @@ NShapes combines the classic SET card matching game with roguelike progression m
 * **Rounds 4–9:** 4 Attributes (adds Shading)
 * **Round 10 (Final Boss):** 5 Attributes (adds Background Color)
 
-
 * 60-second timer per round to reach score targets.
-* 16 unique characters, enemy modifiers, weapon level-ups, and item shop.
+* 16 unique characters and weapon-based progression.
 
 **Free Play Mode** - Relaxed Practice:
 
@@ -44,17 +44,66 @@ NShapes combines the classic SET card matching game with roguelike progression m
 * **Hard:** 4 Attributes
 * **Omega Brained:** 5 Attributes
 
+* No timer, no score targets—continuous endless gameplay.
 
-* No timer, no score targets, and no enemies—continuous endless gameplay.
+## Weapon System
 
-### Key Features
+The game features 15 weapon types, each available in 3 rarities (45 total weapons):
+
+### Weapon Rarities
+* **Common (70%):** Lower stats, prices 5-10 coins
+* **Rare (25%):** Medium stats, prices 15-25 coins
+* **Legendary (5%):** High stats, prices 40-60 coins
+
+### Weapon Types
+
+| Weapon | Effect | Special |
+|--------|--------|---------|
+| **Blast Powder** | Explodes adjacent cards on match | explosionChance |
+| **Oracle Eye** | Auto-shows hints periodically | autoHintChance, interval |
+| **Field Stone** | Increases starting board size | fieldSize |
+| **Growth Seed** | Chance to expand board on match | boardGrowthChance |
+| **Flint Spark** | Starts fires on adjacent cards | fireSpreadChance |
+| **Second Chance** | Starting mulligans | mulligans |
+| **Fortune Token** | Chance to gain mulligan on match | mulliganGainChance |
+| **Life Vessel** | Increases max health | maxHealth |
+| **Mending Charm** | Chance to heal on match | healingChance |
+| **Crystal Orb** | Starting hints | hints |
+| **Seeker Lens** | Chance to gain hint on match | hintGainChance |
+| **Prism Glass** | Chance for holographic cards (2x pts) | holoChance |
+| **Chrono Shard** | Starting time bonus | startingTime |
+| **Time Drop** | Chance to gain time on match | timeGainChance |
+| **Prismatic Ray** | Destroys entire row/column | laserChance |
+
+### Weapon Effects
+
+* **Stacking:** Multiple weapons of the same type stack their effects
+* **Purchase:** Buy weapons in the shop between rounds
+* **Level Up:** Choose from 3 weapon rewards on level up
+
+### Card States
+
+* **Holographic:** Purple shimmer border, awards 2x points when matched
+* **On Fire:** Red pulsing border, burns after 15 seconds (destroys card, awards points, 10% spread)
+
+## Key Features
 
 * 16 playable characters (Orange Tabby, Sly Fox, Corgi, etc.)
-* 9 enemy types with unique effects
-* 7 weapon types that can be leveled up
-* 22+ purchasable items across 4 tiers
+* 45 weapons across 15 types and 3 rarities
 * Card modifiers (bombs, spikes, healing, loot boxes, etc.)
-* Optional multiplayer via Socket.io
+* Mulligan auto-use system (prevents health loss)
+* Match trigger effects (healing, hints, time, mulligans)
+* Explosive and laser destruction effects
+* Fire spread and burn mechanics
+* Auto-hint system
+* Optional multiplayer via Socket.io (not a priority - ignore multiplayer code)
+
+## Notes
+
+* **Multiplayer is NOT a priority.** Do not worry about the multiplayer code or fixing multiplayer bugs. Focus on single-player gameplay.
+* **Enemy selection is skipped.** The game goes directly from character selection to the round phase.
+* **Shop shows only weapons.** Items have been replaced by the weapon system.
+* **Level-up shows only weapons.** No stat upgrade options.
 
 ## Tech Stack
 
@@ -71,23 +120,23 @@ app/                        # Expo Router routes only
 ├── _layout.tsx             # Root navigation layout
 ├── index.tsx               # App entry point (home screen)
 └── dev/
-    └── test.tsx            # Dev test page (/dev/test)
+    └── test.tsx            # Dev test page (/dev/test) - weapon testing
 
 src/                        # Shared code (imported via @/ alias)
 ├── components/
-│   ├── Game.tsx            # Main controller (handles Attribute Scaling logic)
-│   ├── GameBoard.tsx       # Card display (adjusts grid size for 5-attr sets)
-│   ├── Card.tsx            # Renders shapes, fills, and backgrounds
-│   ├── CharacterSelection.tsx  
-│   ├── EnemySelection.tsx
-│   ├── LevelUp.tsx
-│   ├── ItemShop.tsx
-│   └── RoundSummary.tsx    
+│   ├── Game.tsx            # Main controller (handles game phases, weapon effects)
+│   ├── GameBoard.tsx       # Card display (auto-hint system)
+│   ├── Card.tsx            # Renders shapes, fills, holographic, fire effects
+│   ├── CharacterSelection.tsx
+│   ├── WeaponShop.tsx      # Weapon purchase interface
+│   ├── LevelUp.tsx         # Weapon selection on level up
+│   └── RoundSummary.tsx
 ├── context/
 │   └── SocketContext.tsx   # Multiplayer state management
-├── types.ts                # Interfaces for Cards (2-5 attributes)
+├── types.ts                # Interfaces for Cards, Weapons, PlayerStats
 └── utils/
-    ├── gameDefinitions.ts  # Characters, enemies, items, weapons
+    ├── gameDefinitions.ts  # Characters, weapons (SHOP_WEAPONS array)
+    ├── gameConfig.ts       # Game constants, default stats
     └── gameUtils.ts        # Modular SET validation for N-attributes
 
 ```
@@ -100,9 +149,9 @@ src/                        # Shared code (imported via @/ alias)
 
 1. Character Selection → Choose Adventure.
 2. **Attribute Unlock:** Game initializes with 3 attributes (Shape/Color/Number).
-3. Enemy Selection → Play Round (reach score target).
+3. Play Round (reach score target within 60 seconds).
 4. **Progression:** After Round 3 and 9, the game introduces the next attribute dimension.
-5. Level Up / Item Shop between rounds.
+5. Level Up (choose weapon) / Weapon Shop between rounds.
 6. Repeat for 10 rounds total.
 
 **Free Play Mode:**
@@ -118,6 +167,14 @@ The layout adapts based on the number of active attributes to ensure a Set is ma
 * **2–3 Attributes:** 3x3 or 3x4 grid (9–12 cards).
 * **4–5 Attributes:** 3x5 or 3x6 grid (15–18 cards) to prevent "No-Set" deadlocks.
 
+## Dev Testing
+
+Access `/dev/test` to test weapon effects:
+* Add legendary weapons by category
+* Toggle holographic cards
+* Set cards on fire
+* Add mulligans
+* View active weapon stats
+
 When working on this codebase, also load these additional files for context:
--- [Style Guide](./style_guide.md) - UI design system including colors, typograph
-y, and component styles
+-- [Style Guide](./style_guide.md) - UI design system including colors, typography, and component styles

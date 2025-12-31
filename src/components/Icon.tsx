@@ -57,6 +57,13 @@ import ArrowsShield from '../../assets/icons/lorc/arrows-shield.svg';
 import Bullseye from '../../assets/icons/skoll/bullseye.svg';
 import SandsOfTime from '../../assets/icons/lorc/sands-of-time.svg';
 
+// New weapon icons
+import SheikahEye from '../../assets/icons/lorc/sheikah-eye.svg';
+import FloatingCrystal from '../../assets/icons/lorc/floating-crystal.svg';
+import CrystalShine from '../../assets/icons/lorc/crystal-shine.svg';
+import LaserWarning from '../../assets/icons/lorc/laser-warning.svg';
+import ShiningHeart from '../../assets/icons/lorc/shining-heart.svg';
+
 // Icon registry: maps path (e.g., "delapouite/token") to the imported component
 const ICON_REGISTRY: Record<string, React.FC<SvgProps>> = {
   // Characters
@@ -110,6 +117,13 @@ const ICON_REGISTRY: Record<string, React.FC<SvgProps>> = {
   'lorc/arrows-shield': ArrowsShield,
   'skoll/bullseye': Bullseye,
   'lorc/sands-of-time': SandsOfTime,
+
+  // New weapon icons
+  'lorc/sheikah-eye': SheikahEye,
+  'lorc/floating-crystal': FloatingCrystal,
+  'lorc/crystal-shine': CrystalShine,
+  'lorc/laser-warning': LaserWarning,
+  'lorc/shining-heart': ShiningHeart,
 };
 
 // Mapping from stat keys to icon paths
@@ -182,6 +196,22 @@ export const STAT_ICONS: Record<string, string> = {
 
   // Critical
   criticalChance: 'skoll/bullseye',
+
+  // New weapon effect stats
+  explosionChance: 'lorc/bright-explosion',
+  autoHintChance: 'lorc/sheikah-eye',
+  autoHintInterval: 'lorc/sheikah-eye',
+  boardGrowthChance: 'delapouite/card-exchange',
+  boardGrowthAmount: 'delapouite/card-exchange',
+  fireSpreadChance: 'lorc/campfire',
+  mulliganGainChance: 'lorc/cycle',
+  healingChance: 'lorc/shining-heart',
+  hintGainChance: 'lorc/light-bulb',
+  holoChance: 'lorc/crystal-shine',
+  timeGainChance: 'lorc/stopwatch',
+  timeGainAmount: 'lorc/stopwatch',
+  laserChance: 'lorc/laser-warning',
+  startingTime: 'lorc/hourglass',
 };
 
 interface IconProps {

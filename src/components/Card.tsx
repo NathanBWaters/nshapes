@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Svg, { Ellipse, Path, Polygon, Defs, Pattern, Rect } from 'react-native-svg';
 import { Card as CardType, Background } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { BACKGROUND_COLORS } from '@/utils/gameConfig';
+
+const FIRE_BURN_DURATION = 15000; // 15 seconds
 
 // SVG viewBox dimensions (1:2 width:height ratio)
 const SVG_WIDTH = 20;
@@ -18,6 +20,27 @@ interface CardProps {
 
 const Card: React.FC<CardProps> = ({ card, onClick, disabled = false }) => {
   const { shape, color, number, shading, selected, isHint } = card;
+
+  // Fire progress state (0 to 1, where 1 = fully burned)
+  const [fireProgress, setFireProgress] = useState(0);
+
+  // Update fire progress every 100ms
+  useEffect(() => {
+    if (!card.onFire || !card.fireStartTime) {
+      setFireProgress(0);
+      return;
+    }
+
+    const updateProgress = () => {
+      const elapsed = Date.now() - (card.fireStartTime || 0);
+      const progress = Math.min(elapsed / FIRE_BURN_DURATION, 1);
+      setFireProgress(progress);
+    };
+
+    updateProgress();
+    const interval = setInterval(updateProgress, 100);
+    return () => clearInterval(interval);
+  }, [card.onFire, card.fireStartTime]);
 
   // Handle card modifiers
   const hasModifiers = card.health !== undefined && card.health > 1 ||
@@ -67,6 +90,14 @@ const Card: React.FC<CardProps> = ({ card, onClick, disabled = false }) => {
       styles.card,
       { backgroundColor: getCardBackgroundColor(card.background) }
     ];
+
+    if (card.isHolographic) {
+      cardStyles.push(styles.holographic);
+    }
+
+    if (card.onFire) {
+      cardStyles.push(styles.onFire);
+    }
 
     if (selected) {
       cardStyles.push(styles.selected);
@@ -126,7 +157,7 @@ const Card: React.FC<CardProps> = ({ card, onClick, disabled = false }) => {
 
   return (
     <TouchableOpacity
-      nativeID={`card-${shape}-${color}-${number}-${shading}`}
+      testID={`card-${shape}-${color}-${number}-${shading}`}
       style={getCardStyle()}
       onPress={() => !disabled && !card.isDud && onClick(card)}
       disabled={disabled || card.isDud}
@@ -136,6 +167,20 @@ const Card: React.FC<CardProps> = ({ card, onClick, disabled = false }) => {
       <View nativeID="card-shapes" style={styles.shapesContainer}>
         {shapes}
       </View>
+
+      {/* Fire overlay - progressive darkening at edges */}
+      {card.onFire && (
+        <View
+          style={[
+            styles.fireOverlay,
+            {
+              borderColor: `rgba(239, 68, 68, ${0.5 + fireProgress * 0.5})`,
+              backgroundColor: `rgba(0, 0, 0, ${fireProgress * 0.4})`,
+            }
+          ]}
+          pointerEvents="none"
+        />
+      )}
     </TouchableOpacity>
   );
 };
@@ -304,6 +349,35 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFDE7',
     borderColor: COLORS.actionYellow,
     borderStyle: 'dashed',
+  },
+  holographic: {
+    borderColor: '#A855F7', // Purple/rainbow shimmer
+    borderWidth: 3,
+    shadowColor: '#A855F7',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
+    elevation: 6,
+    backgroundColor: '#FEFCE8', // Slight golden tint
+  },
+  onFire: {
+    borderColor: '#EF4444', // Red fire border
+    borderWidth: 3,
+    shadowColor: '#F97316',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
+    elevation: 8,
+    backgroundColor: '#FEF2F2', // Slight red tint
+  },
+  fireOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: RADIUS.module,
+    borderWidth: 6,
   },
   disabled: {
     opacity: 0.6,

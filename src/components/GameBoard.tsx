@@ -167,6 +167,48 @@ const GameBoard: React.FC<GameBoardProps> = ({
     }
   }, [triggerClearHint]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Auto-hint function - shows hint without consuming player hints
+  const showAutoHint = useCallback(() => {
+    const availableCards = cards.filter(card => !matchedCardIds.includes(card.id));
+
+    for (let i = 0; i < availableCards.length - 2; i++) {
+      for (let j = i + 1; j < availableCards.length - 1; j++) {
+        for (let k = j + 1; k < availableCards.length; k++) {
+          const potentialSet = [availableCards[i], availableCards[j], availableCards[k]];
+          if (isValidSet(potentialSet)) {
+            setHintCards(potentialSet.map(c => c.id));
+            // Auto-clear after 1.5 seconds
+            setTimeout(() => {
+              setHintCards([]);
+            }, 1500);
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }, [cards, matchedCardIds]);
+
+  // Auto-hint interval effect
+  useEffect(() => {
+    const autoHintChance = playerStats.autoHintChance || 0;
+    const autoHintInterval = playerStats.autoHintInterval || 10000;
+
+    if (autoHintChance <= 0) return;
+
+    const intervalId = setInterval(() => {
+      // Don't show auto-hint if a hint is already showing
+      if (hintCards.length > 0) return;
+
+      // Roll auto-hint chance
+      if (Math.random() * 100 < autoHintChance) {
+        showAutoHint();
+      }
+    }, autoHintInterval);
+
+    return () => clearInterval(intervalId);
+  }, [playerStats.autoHintChance, playerStats.autoHintInterval, hintCards.length, showAutoHint]);
+
   // Handle card click
   const handleCardClick = (card: CardType) => {
     if (!isPlayerTurn) return;

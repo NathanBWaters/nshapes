@@ -37,6 +37,11 @@ export interface Card {
   selfHealing?: boolean;
   timedReward?: boolean;
   timedRewardAmount?: number;
+
+  // New weapon effect states
+  isHolographic?: boolean;  // 2x points when matched
+  onFire?: boolean;         // Card is burning
+  fireStartTime?: number;   // Timestamp when fire started (for 15s burn timer)
 }
 
 // Rewards revealed when a card is matched
@@ -49,6 +54,9 @@ export interface CardReward {
   hint?: number;
   lootBox?: boolean;
   item?: string; // Future: item name/id
+  timeBonus?: number; // Seconds to add to timer
+  mulliganBonus?: number; // Mulligans to add
+  boardGrowth?: number; // Cards to add to board
   // Extensible: add more reward types here
 }
 
@@ -62,8 +70,16 @@ export type EnemyName =
   'Chihuahua' | 'Jellyfish' | 'Snake' | 'Mammoth' | 
   'Rabbit' | 'Squid' | 'Porcupine' | 'Hyena' | 'Tiger';
 
-export type WeaponName = 
-  'Flint' | 'Bamboo' | 'Carrot' | 'Beak' | 'Dirt' | 'Talon' | 'Hoe';
+export type WeaponName =
+  // Original weapons (kept for backwards compatibility)
+  'Flint' | 'Bamboo' | 'Carrot' | 'Beak' | 'Dirt' | 'Talon' | 'Hoe' |
+  // New weapon types
+  'Blast Powder' | 'Oracle Eye' | 'Field Stone' | 'Growth Seed' |
+  'Flint Spark' | 'Second Chance' | 'Fortune Token' | 'Life Vessel' |
+  'Mending Charm' | 'Crystal Orb' | 'Seeker Lens' | 'Prism Glass' |
+  'Chrono Shard' | 'Time Drop' | 'Prismatic Ray';
+
+export type WeaponRarity = 'common' | 'rare' | 'legendary';
 
 export type ItemName = 
   'Great Field' | 'Mirror Trinket' | 'Hint Booster' | 'Lucky Token' | 
@@ -76,10 +92,14 @@ export type ItemName =
 export type ItemRarity = 'Tier 1' | 'Tier 2' | 'Tier 3' | 'Tier 4';
 
 export interface Weapon {
+  id: string; // Unique identifier for stacking
   name: WeaponName;
+  rarity: WeaponRarity;
   level: number; // 1-4
   description: string;
+  price: number;
   effects: Partial<PlayerStats>;
+  specialEffect?: 'explosive' | 'autoHint' | 'boardGrowth' | 'fire' | 'mulliganGain' | 'healing' | 'hintGain' | 'holographic' | 'timeGain' | 'laser';
   icon?: string; // Icon path like "delapouite/bamboo"
 }
 
@@ -153,6 +173,22 @@ export interface PlayerStats {
   hints: number; // Number of hints available for finding valid sets
   // Co-op specific
   hintPasses: number;
+
+  // New weapon effect stats
+  explosionChance: number;      // % to explode adjacent cards on match
+  autoHintChance: number;       // % for auto-hint to trigger each interval
+  autoHintInterval: number;     // ms between auto-hint checks (default 10000)
+  boardGrowthChance: number;    // % for board to grow on match
+  boardGrowthAmount: number;    // how many cards to add when board grows
+  fireSpreadChance: number;     // % for fire to start on adjacent cards
+  mulliganGainChance: number;   // % to gain mulligan on match
+  healingChance: number;        // % to heal on match
+  hintGainChance: number;       // % to gain hint on match
+  holoChance: number;           // % for new cards to be holographic
+  timeGainChance: number;       // % to gain time on match
+  timeGainAmount: number;       // seconds gained when timeGain triggers
+  laserChance: number;          // % for laser to fire on match
+  startingTime: number;         // additional starting time in seconds
 }
 
 export interface Player {
@@ -191,7 +227,8 @@ export interface GameState {
   
   // Shop and upgrades
   shopItems: (Item | null)[];  // null represents a sold/empty slot
-  levelUpOptions: (Partial<PlayerStats> | Weapon)[];
+  shopWeapons: (Weapon | null)[];  // Weapon shop items
+  levelUpOptions: Weapon[];  // Now weapons only
   rerollCost: number;
   
   // Enemy

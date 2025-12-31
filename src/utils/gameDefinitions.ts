@@ -1,5 +1,5 @@
-import { Character, Enemy, Item, Weapon, PlayerStats, GameState, Player } from '../types';
-import { STARTING_STATS } from './gameConfig';
+import { Character, Enemy, Item, Weapon, PlayerStats, GameState, Player, WeaponRarity } from '../types';
+import { STARTING_STATS, WEAPON_SYSTEM } from './gameConfig';
 
 // Default player stats - uses values from gameConfig for easy tweaking
 export const DEFAULT_PLAYER_STATS: PlayerStats = {
@@ -8,7 +8,7 @@ export const DEFAULT_PLAYER_STATS: PlayerStats = {
   experience: 0,
   experienceGainPercent: 100,
   luck: 0,
-  maxWeapons: 3,
+  maxWeapons: 99, // Effectively unlimited for new weapon system
   commerce: 0,
   scavengingPercent: 0,
   scavengeAmount: 1,
@@ -32,7 +32,7 @@ export const DEFAULT_PLAYER_STATS: PlayerStats = {
   dodgePercent: 0,
   dodgeAttackBackPercent: 0,
   dodgeAttackBackAmount: 1,
-  mulligans: 0,
+  mulligans: STARTING_STATS.mulligans,
   bombTimer: 20,
   additionalPoints: 0,
   deflectPercent: 0,
@@ -42,6 +42,22 @@ export const DEFAULT_PLAYER_STATS: PlayerStats = {
   hints: STARTING_STATS.hints,
   // Co-op specific
   hintPasses: 0,
+
+  // New weapon effect stats
+  explosionChance: STARTING_STATS.explosionChance,
+  autoHintChance: STARTING_STATS.autoHintChance,
+  autoHintInterval: STARTING_STATS.autoHintInterval,
+  boardGrowthChance: STARTING_STATS.boardGrowthChance,
+  boardGrowthAmount: STARTING_STATS.boardGrowthAmount,
+  fireSpreadChance: STARTING_STATS.fireSpreadChance,
+  mulliganGainChance: STARTING_STATS.mulliganGainChance,
+  healingChance: STARTING_STATS.healingChance,
+  hintGainChance: STARTING_STATS.hintGainChance,
+  holoChance: STARTING_STATS.holoChance,
+  timeGainChance: STARTING_STATS.timeGainChance,
+  timeGainAmount: STARTING_STATS.timeGainAmount,
+  laserChance: STARTING_STATS.laserChance,
+  startingTime: STARTING_STATS.startingTime,
 };
 
 // Characters
@@ -350,21 +366,27 @@ export const ENEMIES: Enemy[] = [
   // Complete the implementation for remaining enemies
 ];
 
-// Weapons
-export const WEAPONS: Weapon[] = [
+// Legacy weapons (kept for backwards compatibility with characters)
+export const LEGACY_WEAPONS: Weapon[] = [
   {
+    id: 'legacy-flint',
     name: 'Flint',
+    rarity: 'common',
     level: 1,
-    description: '20% chance to start a fire on a card. This fire could spread. Dodge is decreased by 20%.',
+    price: 0,
+    description: '20% chance to start a fire on a card.',
     icon: 'delapouite/flint-spark',
+    specialEffect: 'fire',
     effects: {
-      chanceOfFire: 20,
-      dodgePercent: -20
+      fireSpreadChance: 20,
     }
   },
   {
+    id: 'legacy-bamboo',
     name: 'Bamboo',
+    rarity: 'common',
     level: 1,
+    price: 0,
     description: '20% to deal one extra damage to a field card.',
     icon: 'delapouite/bamboo',
     effects: {
@@ -372,8 +394,11 @@ export const WEAPONS: Weapon[] = [
     }
   },
   {
+    id: 'legacy-carrot',
     name: 'Carrot',
+    rarity: 'common',
     level: 1,
+    price: 0,
     description: 'Slows time by 1.1x.',
     icon: 'delapouite/carrot',
     effects: {
@@ -381,17 +406,21 @@ export const WEAPONS: Weapon[] = [
     }
   },
   {
+    id: 'legacy-beak',
     name: 'Beak',
+    rarity: 'common',
     level: 1,
-    description: '10% chance to inflict fragile on a field card that you\'ve matched with.',
+    price: 0,
+    description: '10% chance to inflict fragile on a matched field card.',
     icon: 'lorc/bird-claw',
-    effects: {
-      // Special effect for inflicting fragile would be implemented in game logic
-    }
+    effects: {}
   },
   {
+    id: 'legacy-dirt',
     name: 'Dirt',
+    rarity: 'common',
     level: 1,
+    price: 0,
     description: 'Increases field size by 1.',
     icon: 'delapouite/stone-pile',
     effects: {
@@ -399,24 +428,605 @@ export const WEAPONS: Weapon[] = [
     }
   },
   {
+    id: 'legacy-talon',
     name: 'Talon',
+    rarity: 'common',
     level: 1,
-    description: '25% chance to remove bramble upon match. Get +1 coin on removal.',
+    price: 0,
+    description: '25% chance to remove bramble upon match.',
     icon: 'lorc/claw-slashes',
-    effects: {
-      // Special effect for removing bramble would be implemented in game logic
-    }
+    effects: {}
   },
   {
+    id: 'legacy-hoe',
     name: 'Hoe',
+    rarity: 'common',
     level: 1,
-    description: '10% chance to increase field size by 1 for the round on a match.',
+    price: 0,
+    description: '10% chance to increase field size temporarily.',
     icon: 'delapouite/rake',
     effects: {
-      // Special effect for temporary field size increase would be implemented in game logic
+      boardGrowthChance: 10,
     }
   },
 ];
+
+// New weapon system - 15 types × 3 rarities = 45 weapons
+export const SHOP_WEAPONS: Weapon[] = [
+  // ============================================================================
+  // 1. BLAST POWDER - Explosive adjacent cards on match
+  // ============================================================================
+  {
+    id: 'blast-powder-common',
+    name: 'Blast Powder',
+    rarity: 'common',
+    level: 1,
+    price: 8,
+    description: '10% chance to explode adjacent cards on match.',
+    icon: 'lorc/bright-explosion',
+    specialEffect: 'explosive',
+    effects: { explosionChance: 10 }
+  },
+  {
+    id: 'blast-powder-rare',
+    name: 'Blast Powder',
+    rarity: 'rare',
+    level: 1,
+    price: 20,
+    description: '20% chance to explode adjacent cards on match.',
+    icon: 'lorc/bright-explosion',
+    specialEffect: 'explosive',
+    effects: { explosionChance: 20 }
+  },
+  {
+    id: 'blast-powder-legendary',
+    name: 'Blast Powder',
+    rarity: 'legendary',
+    level: 1,
+    price: 50,
+    description: '40% chance to explode adjacent cards on match.',
+    icon: 'lorc/bright-explosion',
+    specialEffect: 'explosive',
+    effects: { explosionChance: 40 }
+  },
+
+  // ============================================================================
+  // 2. ORACLE EYE - Auto-hint system
+  // ============================================================================
+  {
+    id: 'oracle-eye-common',
+    name: 'Oracle Eye',
+    rarity: 'common',
+    level: 1,
+    price: 6,
+    description: '15% chance for auto-hint every 10s.',
+    icon: 'lorc/sheikah-eye',
+    specialEffect: 'autoHint',
+    effects: { autoHintChance: 15 }
+  },
+  {
+    id: 'oracle-eye-rare',
+    name: 'Oracle Eye',
+    rarity: 'rare',
+    level: 1,
+    price: 18,
+    description: '25% chance for auto-hint every 8s.',
+    icon: 'lorc/sheikah-eye',
+    specialEffect: 'autoHint',
+    effects: { autoHintChance: 25, autoHintInterval: -2000 }
+  },
+  {
+    id: 'oracle-eye-legendary',
+    name: 'Oracle Eye',
+    rarity: 'legendary',
+    level: 1,
+    price: 45,
+    description: '40% chance for auto-hint every 5s.',
+    icon: 'lorc/sheikah-eye',
+    specialEffect: 'autoHint',
+    effects: { autoHintChance: 40, autoHintInterval: -5000 }
+  },
+
+  // ============================================================================
+  // 3. FIELD STONE - Starting board size
+  // ============================================================================
+  {
+    id: 'field-stone-common',
+    name: 'Field Stone',
+    rarity: 'common',
+    level: 1,
+    price: 7,
+    description: '+1 starting board size.',
+    icon: 'lorc/field',
+    effects: { fieldSize: 1 }
+  },
+  {
+    id: 'field-stone-rare',
+    name: 'Field Stone',
+    rarity: 'rare',
+    level: 1,
+    price: 18,
+    description: '+2 starting board size.',
+    icon: 'lorc/field',
+    effects: { fieldSize: 2 }
+  },
+  {
+    id: 'field-stone-legendary',
+    name: 'Field Stone',
+    rarity: 'legendary',
+    level: 1,
+    price: 45,
+    description: '+4 starting board size.',
+    icon: 'lorc/field',
+    effects: { fieldSize: 4 }
+  },
+
+  // ============================================================================
+  // 4. GROWTH SEED - Board grows on match
+  // ============================================================================
+  {
+    id: 'growth-seed-common',
+    name: 'Growth Seed',
+    rarity: 'common',
+    level: 1,
+    price: 6,
+    description: '5% chance to expand board on match.',
+    icon: 'delapouite/card-exchange',
+    specialEffect: 'boardGrowth',
+    effects: { boardGrowthChance: 5 }
+  },
+  {
+    id: 'growth-seed-rare',
+    name: 'Growth Seed',
+    rarity: 'rare',
+    level: 1,
+    price: 15,
+    description: '10% chance to expand board on match.',
+    icon: 'delapouite/card-exchange',
+    specialEffect: 'boardGrowth',
+    effects: { boardGrowthChance: 10 }
+  },
+  {
+    id: 'growth-seed-legendary',
+    name: 'Growth Seed',
+    rarity: 'legendary',
+    level: 1,
+    price: 40,
+    description: '15% chance to expand board by 2 on match.',
+    icon: 'delapouite/card-exchange',
+    specialEffect: 'boardGrowth',
+    effects: { boardGrowthChance: 15, boardGrowthAmount: 2 }
+  },
+
+  // ============================================================================
+  // 5. FLINT SPARK - Fire starter
+  // ============================================================================
+  {
+    id: 'flint-spark-common',
+    name: 'Flint Spark',
+    rarity: 'common',
+    level: 1,
+    price: 8,
+    description: '10% chance to start fire on adjacent cards.',
+    icon: 'lorc/campfire',
+    specialEffect: 'fire',
+    effects: { fireSpreadChance: 10 }
+  },
+  {
+    id: 'flint-spark-rare',
+    name: 'Flint Spark',
+    rarity: 'rare',
+    level: 1,
+    price: 20,
+    description: '20% chance to start fire on adjacent cards.',
+    icon: 'lorc/campfire',
+    specialEffect: 'fire',
+    effects: { fireSpreadChance: 20 }
+  },
+  {
+    id: 'flint-spark-legendary',
+    name: 'Flint Spark',
+    rarity: 'legendary',
+    level: 1,
+    price: 50,
+    description: '35% chance to start fire on adjacent cards.',
+    icon: 'lorc/campfire',
+    specialEffect: 'fire',
+    effects: { fireSpreadChance: 35 }
+  },
+
+  // ============================================================================
+  // 6. SECOND CHANCE - Starting mulligans
+  // ============================================================================
+  {
+    id: 'second-chance-common',
+    name: 'Second Chance',
+    rarity: 'common',
+    level: 1,
+    price: 5,
+    description: '+1 starting mulligan.',
+    icon: 'lorc/recycle',
+    effects: { mulligans: 1 }
+  },
+  {
+    id: 'second-chance-rare',
+    name: 'Second Chance',
+    rarity: 'rare',
+    level: 1,
+    price: 15,
+    description: '+2 starting mulligans.',
+    icon: 'lorc/recycle',
+    effects: { mulligans: 2 }
+  },
+  {
+    id: 'second-chance-legendary',
+    name: 'Second Chance',
+    rarity: 'legendary',
+    level: 1,
+    price: 40,
+    description: '+4 starting mulligans.',
+    icon: 'lorc/recycle',
+    effects: { mulligans: 4 }
+  },
+
+  // ============================================================================
+  // 7. FORTUNE TOKEN - Mulligan gain on match
+  // ============================================================================
+  {
+    id: 'fortune-token-common',
+    name: 'Fortune Token',
+    rarity: 'common',
+    level: 1,
+    price: 6,
+    description: '5% chance to gain mulligan on match.',
+    icon: 'lorc/cycle',
+    specialEffect: 'mulliganGain',
+    effects: { mulliganGainChance: 5 }
+  },
+  {
+    id: 'fortune-token-rare',
+    name: 'Fortune Token',
+    rarity: 'rare',
+    level: 1,
+    price: 18,
+    description: '10% chance to gain mulligan on match.',
+    icon: 'lorc/cycle',
+    specialEffect: 'mulliganGain',
+    effects: { mulliganGainChance: 10 }
+  },
+  {
+    id: 'fortune-token-legendary',
+    name: 'Fortune Token',
+    rarity: 'legendary',
+    level: 1,
+    price: 45,
+    description: '20% chance to gain mulligan on match.',
+    icon: 'lorc/cycle',
+    specialEffect: 'mulliganGain',
+    effects: { mulliganGainChance: 20 }
+  },
+
+  // ============================================================================
+  // 8. LIFE VESSEL - Max health
+  // ============================================================================
+  {
+    id: 'life-vessel-common',
+    name: 'Life Vessel',
+    rarity: 'common',
+    level: 1,
+    price: 6,
+    description: '+1 max health.',
+    icon: 'lorc/heart-inside',
+    effects: { maxHealth: 1 }
+  },
+  {
+    id: 'life-vessel-rare',
+    name: 'Life Vessel',
+    rarity: 'rare',
+    level: 1,
+    price: 16,
+    description: '+2 max health.',
+    icon: 'lorc/heart-inside',
+    effects: { maxHealth: 2 }
+  },
+  {
+    id: 'life-vessel-legendary',
+    name: 'Life Vessel',
+    rarity: 'legendary',
+    level: 1,
+    price: 42,
+    description: '+4 max health.',
+    icon: 'lorc/heart-inside',
+    effects: { maxHealth: 4 }
+  },
+
+  // ============================================================================
+  // 9. MENDING CHARM - Heal on match
+  // ============================================================================
+  {
+    id: 'mending-charm-common',
+    name: 'Mending Charm',
+    rarity: 'common',
+    level: 1,
+    price: 5,
+    description: '5% chance to heal on match.',
+    icon: 'lorc/shining-heart',
+    specialEffect: 'healing',
+    effects: { healingChance: 5 }
+  },
+  {
+    id: 'mending-charm-rare',
+    name: 'Mending Charm',
+    rarity: 'rare',
+    level: 1,
+    price: 15,
+    description: '10% chance to heal on match.',
+    icon: 'lorc/shining-heart',
+    specialEffect: 'healing',
+    effects: { healingChance: 10 }
+  },
+  {
+    id: 'mending-charm-legendary',
+    name: 'Mending Charm',
+    rarity: 'legendary',
+    level: 1,
+    price: 40,
+    description: '20% chance to heal on match.',
+    icon: 'lorc/shining-heart',
+    specialEffect: 'healing',
+    effects: { healingChance: 20 }
+  },
+
+  // ============================================================================
+  // 10. CRYSTAL ORB - Starting hints
+  // ============================================================================
+  {
+    id: 'crystal-orb-common',
+    name: 'Crystal Orb',
+    rarity: 'common',
+    level: 1,
+    price: 5,
+    description: '+1 starting hint.',
+    icon: 'lorc/floating-crystal',
+    effects: { hints: 1 }
+  },
+  {
+    id: 'crystal-orb-rare',
+    name: 'Crystal Orb',
+    rarity: 'rare',
+    level: 1,
+    price: 14,
+    description: '+2 starting hints.',
+    icon: 'lorc/floating-crystal',
+    effects: { hints: 2 }
+  },
+  {
+    id: 'crystal-orb-legendary',
+    name: 'Crystal Orb',
+    rarity: 'legendary',
+    level: 1,
+    price: 38,
+    description: '+4 starting hints.',
+    icon: 'lorc/floating-crystal',
+    effects: { hints: 4 }
+  },
+
+  // ============================================================================
+  // 11. SEEKER LENS - Hint gain on match
+  // ============================================================================
+  {
+    id: 'seeker-lens-common',
+    name: 'Seeker Lens',
+    rarity: 'common',
+    level: 1,
+    price: 6,
+    description: '5% chance to gain hint on match.',
+    icon: 'lorc/light-bulb',
+    specialEffect: 'hintGain',
+    effects: { hintGainChance: 5 }
+  },
+  {
+    id: 'seeker-lens-rare',
+    name: 'Seeker Lens',
+    rarity: 'rare',
+    level: 1,
+    price: 16,
+    description: '10% chance to gain hint on match.',
+    icon: 'lorc/light-bulb',
+    specialEffect: 'hintGain',
+    effects: { hintGainChance: 10 }
+  },
+  {
+    id: 'seeker-lens-legendary',
+    name: 'Seeker Lens',
+    rarity: 'legendary',
+    level: 1,
+    price: 42,
+    description: '20% chance to gain hint on match.',
+    icon: 'lorc/light-bulb',
+    specialEffect: 'hintGain',
+    effects: { hintGainChance: 20 }
+  },
+
+  // ============================================================================
+  // 12. PRISM GLASS - Holographic cards (2x points)
+  // ============================================================================
+  {
+    id: 'prism-glass-common',
+    name: 'Prism Glass',
+    rarity: 'common',
+    level: 1,
+    price: 8,
+    description: '10% chance for holographic cards (2x points).',
+    icon: 'lorc/crystal-shine',
+    specialEffect: 'holographic',
+    effects: { holoChance: 10 }
+  },
+  {
+    id: 'prism-glass-rare',
+    name: 'Prism Glass',
+    rarity: 'rare',
+    level: 1,
+    price: 22,
+    description: '20% chance for holographic cards (2x points).',
+    icon: 'lorc/crystal-shine',
+    specialEffect: 'holographic',
+    effects: { holoChance: 20 }
+  },
+  {
+    id: 'prism-glass-legendary',
+    name: 'Prism Glass',
+    rarity: 'legendary',
+    level: 1,
+    price: 55,
+    description: '35% chance for holographic cards (2x points).',
+    icon: 'lorc/crystal-shine',
+    specialEffect: 'holographic',
+    effects: { holoChance: 35 }
+  },
+
+  // ============================================================================
+  // 13. CHRONO SHARD - Starting time bonus
+  // ============================================================================
+  {
+    id: 'chrono-shard-common',
+    name: 'Chrono Shard',
+    rarity: 'common',
+    level: 1,
+    price: 7,
+    description: '+15s starting time.',
+    icon: 'lorc/hourglass',
+    effects: { startingTime: 15 }
+  },
+  {
+    id: 'chrono-shard-rare',
+    name: 'Chrono Shard',
+    rarity: 'rare',
+    level: 1,
+    price: 18,
+    description: '+30s starting time.',
+    icon: 'lorc/hourglass',
+    effects: { startingTime: 30 }
+  },
+  {
+    id: 'chrono-shard-legendary',
+    name: 'Chrono Shard',
+    rarity: 'legendary',
+    level: 1,
+    price: 48,
+    description: '+60s starting time.',
+    icon: 'lorc/hourglass',
+    effects: { startingTime: 60 }
+  },
+
+  // ============================================================================
+  // 14. TIME DROP - Time gain on match
+  // ============================================================================
+  {
+    id: 'time-drop-common',
+    name: 'Time Drop',
+    rarity: 'common',
+    level: 1,
+    price: 6,
+    description: '5% chance to gain +10s on match.',
+    icon: 'lorc/stopwatch',
+    specialEffect: 'timeGain',
+    effects: { timeGainChance: 5, timeGainAmount: 10 }
+  },
+  {
+    id: 'time-drop-rare',
+    name: 'Time Drop',
+    rarity: 'rare',
+    level: 1,
+    price: 16,
+    description: '10% chance to gain +10s on match.',
+    icon: 'lorc/stopwatch',
+    specialEffect: 'timeGain',
+    effects: { timeGainChance: 10, timeGainAmount: 10 }
+  },
+  {
+    id: 'time-drop-legendary',
+    name: 'Time Drop',
+    rarity: 'legendary',
+    level: 1,
+    price: 42,
+    description: '15% chance to gain +15s on match.',
+    icon: 'lorc/stopwatch',
+    specialEffect: 'timeGain',
+    effects: { timeGainChance: 15, timeGainAmount: 15 }
+  },
+
+  // ============================================================================
+  // 15. PRISMATIC RAY - Laser destroys row/column
+  // ============================================================================
+  {
+    id: 'prismatic-ray-common',
+    name: 'Prismatic Ray',
+    rarity: 'common',
+    level: 1,
+    price: 10,
+    description: '3% chance to destroy entire row or column.',
+    icon: 'lorc/laser-warning',
+    specialEffect: 'laser',
+    effects: { laserChance: 3 }
+  },
+  {
+    id: 'prismatic-ray-rare',
+    name: 'Prismatic Ray',
+    rarity: 'rare',
+    level: 1,
+    price: 25,
+    description: '6% chance to destroy entire row or column.',
+    icon: 'lorc/laser-warning',
+    specialEffect: 'laser',
+    effects: { laserChance: 6 }
+  },
+  {
+    id: 'prismatic-ray-legendary',
+    name: 'Prismatic Ray',
+    rarity: 'legendary',
+    level: 1,
+    price: 60,
+    description: '10% chance to destroy entire row or column.',
+    icon: 'lorc/laser-warning',
+    specialEffect: 'laser',
+    effects: { laserChance: 10 }
+  },
+];
+
+// Combined weapons list for backwards compatibility
+export const WEAPONS: Weapon[] = [...LEGACY_WEAPONS, ...SHOP_WEAPONS];
+
+// Helper function to get a random weapon based on rarity distribution
+export const getRandomShopWeapon = (): Weapon => {
+  const roll = Math.random();
+  let rarity: WeaponRarity;
+
+  if (roll < WEAPON_SYSTEM.rarityChances.legendary) {
+    rarity = 'legendary';
+  } else if (roll < WEAPON_SYSTEM.rarityChances.legendary + WEAPON_SYSTEM.rarityChances.rare) {
+    rarity = 'rare';
+  } else {
+    rarity = 'common';
+  }
+
+  const weaponsOfRarity = SHOP_WEAPONS.filter(w => w.rarity === rarity);
+  return weaponsOfRarity[Math.floor(Math.random() * weaponsOfRarity.length)];
+};
+
+// Helper function to generate shop weapons
+export const generateShopWeapons = (count: number): Weapon[] => {
+  const weapons: Weapon[] = [];
+  for (let i = 0; i < count; i++) {
+    weapons.push(getRandomShopWeapon());
+  }
+  return weapons;
+};
+
+// Get weapons by rarity
+export const getWeaponsByRarity = (rarity: WeaponRarity): Weapon[] => {
+  return SHOP_WEAPONS.filter(w => w.rarity === rarity);
+};
 
 // Items
 export const ITEMS: Item[] = [

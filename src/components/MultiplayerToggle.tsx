@@ -4,7 +4,7 @@ import { useSocket } from '@/context/SocketContext';
 import { COLORS, RADIUS } from '@/utils/colors';
 
 const MultiplayerToggle: React.FC = () => {
-  const { isMultiplayer, toggleMultiplayer } = useSocket();
+  const { isMultiplayer, setIsMultiplayer } = useSocket();
 
   return (
     <View style={styles.container}>
@@ -14,7 +14,7 @@ const MultiplayerToggle: React.FC = () => {
             styles.toggleButton,
             !isMultiplayer && styles.toggleButtonActive,
           ]}
-          onPress={() => toggleMultiplayer(false)}
+          onPress={() => setIsMultiplayer(false)}
         >
           <Text
             style={[
@@ -30,7 +30,7 @@ const MultiplayerToggle: React.FC = () => {
             styles.toggleButton,
             isMultiplayer && styles.toggleButtonActive,
           ]}
-          onPress={() => toggleMultiplayer(true)}
+          onPress={() => setIsMultiplayer(true)}
         >
           <Text
             style={[
