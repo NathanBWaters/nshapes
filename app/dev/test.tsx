@@ -9,7 +9,6 @@ import {
   calculatePlayerTotalStats,
 } from '@/utils/gameDefinitions';
 import GameBoard from '@/components/GameBoard';
-import GameInfo from '@/components/GameInfo';
 
 const INITIAL_CARD_COUNT = 12;
 
@@ -268,6 +267,11 @@ export default function DevTest() {
             ))}
           </ScrollView>
         </View>
+
+        {/* Stats (moved from footer) */}
+        <Text className="text-yellow-700 text-xs text-center mt-2">
+          Board: {state.board.length} | Deck: {state.deck.length} | Matches: {state.foundCombinations.length}
+        </Text>
       </View>
 
       {/* Notification */}
@@ -277,24 +281,8 @@ export default function DevTest() {
         </View>
       )}
 
-      {/* Game Info */}
-      <View className="h-[10%] px-2 py-1">
-        <GameInfo
-          round={state.round}
-          score={state.score}
-          targetScore={state.targetScore}
-          time={state.remainingTime}
-          totalTime={getRoundRequirement(state.round).time}
-          playerStats={playerStats}
-          selectedCount={selectedCount}
-          onHintPress={() => setHintTrigger(t => t + 1)}
-          onClearHint={() => setClearHintTrigger(t => t + 1)}
-          hasActiveHint={hasActiveHint}
-        />
-      </View>
-
-      {/* Game Board */}
-      <View className="h-[90%]">
+      {/* Game Board - takes all remaining space */}
+      <View className="flex-1">
         <GameBoard
           cards={state.board}
           onMatch={handleValidMatch}
@@ -306,14 +294,6 @@ export default function DevTest() {
           triggerHint={hintTrigger > 0 ? hintTrigger : undefined}
           triggerClearHint={clearHintTrigger > 0 ? clearHintTrigger : undefined}
         />
-      </View>
-
-      {/* Stats Footer */}
-      <View className="bg-gray-200 px-4 py-2">
-        <Text className="text-gray-600 text-xs text-center">
-          Board: {state.board.length} cards | Deck: {state.deck.length} cards |
-          Matches: {state.foundCombinations.length}
-        </Text>
       </View>
     </SafeAreaView>
   );

@@ -19,7 +19,7 @@ import Notification from './Notification';
 import { useSocket } from '@/context/SocketContext';
 import MultiplayerLobby from './MultiplayerLobby';
 import MultiplayerToggle from './MultiplayerToggle';
-import CharacterSelection from './CharacterSelection';
+import CharacterSelection, { GameMode } from './CharacterSelection';
 import ItemShop from './ItemShop';
 import LevelUp from './LevelUp';
 import EnemySelection from './EnemySelection';
@@ -51,6 +51,7 @@ const calculateLevel = (experience: number): number => {
 const Game: React.FC = () => {
   // Character selection state
   const [selectedCharacter, setSelectedCharacter] = useState<string | null>(null);
+  const [gameMode, setGameMode] = useState<GameMode>('adventure');
   const [gamePhase, setGamePhase] = useState<
     'character_select' |
     'round' |
@@ -59,7 +60,8 @@ const Game: React.FC = () => {
     'level_up' |
     'shop' |
     'enemy_select' |
-    'game_over'
+    'game_over' |
+    'free_play'
   >('character_select');
 
   const [state, setState] = useState<GameState>({
@@ -415,7 +417,7 @@ const Game: React.FC = () => {
   };
 
   // Start the game
-  const startGame = () => {
+  const startGame = (mode: GameMode) => {
     if (!selectedCharacter) {
       setNotification({
         message: 'Please select a character first',
@@ -423,6 +425,8 @@ const Game: React.FC = () => {
       });
       return;
     }
+
+    setGameMode(mode);
 
     // Initialize the game with the selected character
     initGame(selectedCharacter);
@@ -433,8 +437,13 @@ const Game: React.FC = () => {
       startTime: Date.now()
     }));
 
-    // Start with enemy selection
-    setGamePhase('enemy_select');
+    if (mode === 'free_play') {
+      // Free Play mode - go directly to the game board
+      setGamePhase('free_play');
+    } else {
+      // Adventure mode - start with enemy selection
+      setGamePhase('enemy_select');
+    }
   };
 
   // Handle character selection
@@ -1042,6 +1051,85 @@ const Game: React.FC = () => {
           </View>
         );
 
+      case 'free_play':
+        return (
+          <View nativeID="free-play-screen" style={freePlayStyles.container}>
+            {/* Minimal header for free play */}
+            <View style={freePlayStyles.header}>
+              <View style={freePlayStyles.statsRow}>
+                {/* Exit button */}
+                <TouchableOpacity
+                  style={freePlayStyles.exitButton}
+                  onPress={() => setGamePhase('character_select')}
+                >
+                  <Text style={freePlayStyles.exitButtonText}>Exit</Text>
+                </TouchableOpacity>
+
+                {/* Free Play label */}
+                <View style={freePlayStyles.modeBadge}>
+                  <Text style={freePlayStyles.modeBadgeText}>Free Play</Text>
+                </View>
+
+                {/* Health */}
+                <View style={freePlayStyles.statItem}>
+                  <Text style={freePlayStyles.heartIcon}>♥</Text>
+                  <Text style={freePlayStyles.statValue}>
+                    {calculatePlayerTotalStats(state.player).health}/{calculatePlayerTotalStats(state.player).maxHealth}
+                  </Text>
+                </View>
+
+                {/* Level */}
+                <View style={freePlayStyles.statItem}>
+                  <Text style={freePlayStyles.levelText}>Lv{calculatePlayerTotalStats(state.player).level}</Text>
+                </View>
+
+                {/* Hints */}
+                <TouchableOpacity
+                  style={[
+                    freePlayStyles.hintButton,
+                    calculatePlayerTotalStats(state.player).hints > 0 ? freePlayStyles.hintButtonEnabled : freePlayStyles.hintButtonDisabled,
+                    hasActiveHint && freePlayStyles.hintButtonActive,
+                  ]}
+                  onPress={hasActiveHint ? () => setClearHintTrigger(t => t + 1) : () => setHintTrigger(t => t + 1)}
+                  disabled={calculatePlayerTotalStats(state.player).hints <= 0 && !hasActiveHint}
+                >
+                  <Text style={freePlayStyles.hintIcon}>?</Text>
+                  <Text style={freePlayStyles.hintCount}>
+                    {hasActiveHint ? 'x' : calculatePlayerTotalStats(state.player).hints}
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Selected count */}
+                <View style={[freePlayStyles.selectedBadge, selectedCount === 3 && freePlayStyles.selectedBadgeFull]}>
+                  <Text style={freePlayStyles.selectedText}>{selectedCount}/3</Text>
+                </View>
+
+                {/* Matches counter */}
+                <View style={freePlayStyles.statItem}>
+                  <Text style={freePlayStyles.matchLabel}>Matches</Text>
+                  <Text style={freePlayStyles.statValue}>{state.foundCombinations.length}</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Game board area - fills remaining space */}
+            <View style={freePlayStyles.boardContainer}>
+              <GameBoard
+                cards={state.board}
+                onMatch={handleValidMatch}
+                onInvalidSelection={handleInvalidMatch}
+                playerStats={calculatePlayerTotalStats(state.player)}
+                isPlayerTurn={true}
+                onSelectedCountChange={setSelectedCount}
+                onHintStateChange={setHasActiveHint}
+                onUseHint={handleUseHint}
+                triggerHint={hintTrigger > 0 ? hintTrigger : undefined}
+                triggerClearHint={clearHintTrigger > 0 ? clearHintTrigger : undefined}
+              />
+            </View>
+          </View>
+        );
+
       case 'game_over':
         return (
           <View style={gameOverStyles.container}>
@@ -1263,6 +1351,138 @@ const gameOverStyles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 16,
     letterSpacing: 1,
+  },
+});
+
+// Free Play mode styles
+const freePlayStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.paperBeige,
+  },
+  header: {
+    backgroundColor: COLORS.canvasWhite,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.slateCharcoal,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  exitButton: {
+    backgroundColor: COLORS.slateCharcoal,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: RADIUS.button,
+    borderWidth: 1,
+    borderColor: COLORS.deepOnyx,
+  },
+  exitButtonText: {
+    color: COLORS.canvasWhite,
+    fontWeight: '600',
+    fontSize: 12,
+    textTransform: 'uppercase',
+  },
+  modeBadge: {
+    backgroundColor: COLORS.logicTeal,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: RADIUS.button,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+  },
+  modeBadgeText: {
+    color: COLORS.canvasWhite,
+    fontWeight: '700',
+    fontSize: 12,
+    textTransform: 'uppercase',
+  },
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.paperBeige,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: RADIUS.button,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+  },
+  heartIcon: {
+    color: COLORS.impactRed,
+    fontSize: 12,
+  },
+  statValue: {
+    color: COLORS.slateCharcoal,
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'monospace',
+  },
+  levelText: {
+    color: COLORS.logicTeal,
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: 'monospace',
+  },
+  matchLabel: {
+    color: COLORS.slateCharcoal,
+    fontSize: 10,
+    fontWeight: '600',
+    marginRight: 2,
+  },
+  hintButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: RADIUS.button,
+    gap: 2,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+  },
+  hintButtonEnabled: {
+    backgroundColor: COLORS.actionYellow,
+  },
+  hintButtonDisabled: {
+    backgroundColor: COLORS.paperBeige,
+  },
+  hintButtonActive: {
+    backgroundColor: COLORS.impactOrange,
+  },
+  hintIcon: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.slateCharcoal,
+  },
+  hintCount: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'monospace',
+    color: COLORS.slateCharcoal,
+  },
+  selectedBadge: {
+    backgroundColor: COLORS.slateCharcoal,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: RADIUS.button,
+    borderWidth: 1,
+    borderColor: COLORS.deepOnyx,
+  },
+  selectedBadgeFull: {
+    backgroundColor: COLORS.logicTeal,
+  },
+  selectedText: {
+    color: COLORS.canvasWhite,
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'monospace',
+  },
+  boardContainer: {
+    flex: 1,
   },
 });
 

@@ -8,11 +8,13 @@ import Icon from './Icon';
 // IMPORTANT: This game should NOT have scrollable screens.
 // All screens should fill the available height without requiring scrolling.
 
+export type GameMode = 'adventure' | 'free_play';
+
 interface CharacterSelectionProps {
   characters: Character[];
   selectedCharacter: string | null;
   onSelect: (characterName: string) => void;
-  onStart: () => void;
+  onStart: (mode: GameMode) => void;
 }
 
 const CharacterSelection: React.FC<CharacterSelectionProps> = ({
@@ -22,6 +24,7 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
   onStart
 }) => {
   const [hoveredCharacter, setHoveredCharacter] = React.useState<string | null>(null);
+  const [selectedMode, setSelectedMode] = React.useState<GameMode>('adventure');
 
   // Auto-select first character if none selected
   React.useEffect(() => {
@@ -132,10 +135,41 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
         </View>
       </View>
 
-      {/* Action Button */}
+      {/* Mode Selection & Action Buttons */}
       <View style={styles.actionSection}>
+        {/* Mode Toggle */}
+        <View style={styles.modeToggleContainer}>
+          <Pressable
+            onPress={() => setSelectedMode('free_play')}
+            style={[
+              styles.modeButton,
+              selectedMode === 'free_play' && styles.modeButtonSelected,
+            ]}
+          >
+            <Text style={[
+              styles.modeButtonText,
+              selectedMode === 'free_play' && styles.modeButtonTextSelected,
+            ]}>Free Play</Text>
+            <Text style={styles.modeDescription}>No timer, practice mode</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setSelectedMode('adventure')}
+            style={[
+              styles.modeButton,
+              selectedMode === 'adventure' && styles.modeButtonSelected,
+            ]}
+          >
+            <Text style={[
+              styles.modeButtonText,
+              selectedMode === 'adventure' && styles.modeButtonTextSelected,
+            ]}>Adventure</Text>
+            <Text style={styles.modeDescription}>10 rounds, enemies & loot</Text>
+          </Pressable>
+        </View>
+
+        {/* Start Button */}
         <TouchableOpacity
-          onPress={onStart}
+          onPress={() => onStart(selectedMode)}
           disabled={!selectedCharacter}
           style={[
             styles.actionButton,
@@ -143,7 +177,7 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
           ]}
         >
           <Text style={styles.actionButtonText}>
-            {selectedCharacter ? 'Start Game' : 'Select a Character'}
+            {selectedCharacter ? `Start ${selectedMode === 'adventure' ? 'Adventure' : 'Free Play'}` : 'Select a Character'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -333,6 +367,42 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.canvasWhite,
     borderTopWidth: 1,
     borderTopColor: COLORS.slateCharcoal,
+  },
+  modeToggleContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  modeButton: {
+    flex: 1,
+    backgroundColor: COLORS.paperBeige,
+    borderRadius: RADIUS.button,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+  },
+  modeButtonSelected: {
+    backgroundColor: COLORS.actionYellow,
+    borderWidth: 2,
+  },
+  modeButtonText: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '600',
+    fontSize: 14,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  modeButtonTextSelected: {
+    fontWeight: '700',
+  },
+  modeDescription: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '400',
+    fontSize: 10,
+    opacity: 0.7,
+    marginTop: 2,
   },
   actionButton: {
     backgroundColor: COLORS.actionYellow,
