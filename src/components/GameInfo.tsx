@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { PlayerStats } from '@/types';
+import { PlayerStats, Weapon } from '@/types';
 import CircularTimer from './CircularTimer';
+import GameMenu from './GameMenu';
 import { COLORS, RADIUS } from '@/utils/colors';
 
 interface GameInfoProps {
@@ -11,10 +12,12 @@ interface GameInfoProps {
   time: number;
   totalTime: number;
   playerStats: PlayerStats;
+  playerWeapons?: Weapon[];
   selectedCount: number;
   onHintPress?: () => void;
   onClearHint?: () => void;
   hasActiveHint?: boolean;
+  onExitGame?: () => void;
 }
 
 // Calculate XP thresholds for level progression
@@ -29,10 +32,12 @@ const GameInfo: React.FC<GameInfoProps> = ({
   time,
   totalTime,
   playerStats,
+  playerWeapons = [],
   selectedCount,
   onHintPress,
   onClearHint,
   hasActiveHint = false,
+  onExitGame,
 }) => {
   // Calculate score progress percentage
   const scoreProgress = Math.min((score / targetScore) * 100, 100);
@@ -117,6 +122,13 @@ const GameInfo: React.FC<GameInfoProps> = ({
               totalTime={totalTime}
               size={40}
               strokeWidth={3}
+            />
+
+            {/* Menu Button */}
+            <GameMenu
+              playerStats={playerStats}
+              playerWeapons={playerWeapons}
+              onExitGame={onExitGame}
             />
           </View>
 

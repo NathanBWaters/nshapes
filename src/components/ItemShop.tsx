@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Pressable, StyleSheet } from 'react-native';
-import { Item, PlayerStats } from '@/types';
+import { Item, PlayerStats, Weapon } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import Icon from './Icon';
-import StatsButton from './StatsButton';
+import GameMenu from './GameMenu';
 
 interface ItemShopProps {
   items: (Item | null)[];  // null represents a sold/empty slot
@@ -14,6 +14,8 @@ interface ItemShopProps {
   freeRerolls: number;
   onContinue: () => void;
   playerStats: PlayerStats;
+  playerWeapons?: Weapon[];
+  onExitGame?: () => void;
 }
 
 // Rarity colors
@@ -35,7 +37,9 @@ const ItemShop: React.FC<ItemShopProps> = ({
   rerollCost,
   freeRerolls,
   onContinue,
-  playerStats
+  playerStats,
+  playerWeapons = [],
+  onExitGame
 }) => {
   const [focusedIndex, setFocusedIndex] = useState<number>(() => {
     // Initialize to first non-null item
@@ -79,7 +83,7 @@ const ItemShop: React.FC<ItemShopProps> = ({
           <View style={styles.moneyBadge}>
             <Text style={styles.moneyText}>${playerMoney}</Text>
           </View>
-          <StatsButton playerStats={playerStats} />
+          <GameMenu playerStats={playerStats} playerWeapons={playerWeapons} onExitGame={onExitGame} />
         </View>
       </View>
 

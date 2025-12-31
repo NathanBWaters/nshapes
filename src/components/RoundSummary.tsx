@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
-import { PlayerStats } from '@/types';
+import { PlayerStats, Weapon } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import Icon from './Icon';
-import StatsButton from './StatsButton';
+import GameMenu from './GameMenu';
 
 interface RoundSummaryProps {
   round: number;
@@ -18,6 +18,8 @@ interface RoundSummaryProps {
   didLevelUp: boolean;
   onContinue: () => void;
   playerStats: PlayerStats;
+  playerWeapons?: Weapon[];
+  onExitGame?: () => void;
 }
 
 interface AwardTile {
@@ -71,6 +73,8 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
   didLevelUp,
   onContinue,
   playerStats,
+  playerWeapons = [],
+  onExitGame,
 }) => {
   // Animation values for each award tile
   const tileAnimations = useRef(
@@ -188,7 +192,7 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
       {/* Eyebrow Banner */}
       <View style={styles.eyebrow}>
         <Text style={styles.eyebrowText}>ROUND {round} COMPLETE</Text>
-        <StatsButton playerStats={playerStats} />
+        <GameMenu playerStats={playerStats} playerWeapons={playerWeapons} onExitGame={onExitGame} />
       </View>
 
       <View style={styles.content}>

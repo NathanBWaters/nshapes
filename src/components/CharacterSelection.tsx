@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Pressable, StyleSheet } from 'react-native';
-import { Character } from '@/types';
+import { Character, PlayerStats } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
-import { getWeaponByName } from '@/utils/gameDefinitions';
+import { getWeaponByName, DEFAULT_PLAYER_STATS } from '@/utils/gameDefinitions';
 import { ATTRIBUTE_SCALING } from '@/utils/gameConfig';
 import Icon from './Icon';
+import GameMenu from './GameMenu';
 
 // IMPORTANT: This game should NOT have scrollable screens.
 // All screens should fill the available height without requiring scrolling.
@@ -17,6 +18,7 @@ interface CharacterSelectionProps {
   selectedCharacter: string | null;
   onSelect: (characterName: string) => void;
   onStart: (mode: GameMode, difficulty?: FreePlayDifficulty) => void;
+  onTutorial?: () => void;
 }
 
 // Difficulty labels and descriptions
@@ -31,7 +33,8 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
   characters,
   selectedCharacter,
   onSelect,
-  onStart
+  onStart,
+  onTutorial
 }) => {
   const [hoveredCharacter, setHoveredCharacter] = React.useState<string | null>(null);
   const [selectedMode, setSelectedMode] = React.useState<GameMode>('adventure');
@@ -53,6 +56,7 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
       {/* Eyebrow Banner */}
       <View style={styles.eyebrow}>
         <Text style={styles.eyebrowText}>Character Selection</Text>
+        <GameMenu playerStats={DEFAULT_PLAYER_STATS as PlayerStats} />
       </View>
 
       {/* Top Half - Detail Focus */}
@@ -150,6 +154,15 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
       <View style={styles.actionSection}>
         {/* Mode Toggle */}
         <View style={styles.modeToggleContainer}>
+          {onTutorial && (
+            <Pressable
+              onPress={onTutorial}
+              style={styles.tutorialButton}
+            >
+              <Text style={styles.tutorialButtonText}>Tutorial</Text>
+              <Text style={styles.modeDescription}>Learn how to play</Text>
+            </Pressable>
+          )}
           <Pressable
             onPress={() => setSelectedMode('free_play')}
             style={[
@@ -233,8 +246,10 @@ const styles = StyleSheet.create({
   eyebrow: {
     height: 40,
     backgroundColor: COLORS.actionYellow,
-    justifyContent: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: 12,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.slateCharcoal,
   },
@@ -426,6 +441,23 @@ const styles = StyleSheet.create({
   modeButtonSelected: {
     backgroundColor: COLORS.actionYellow,
     borderWidth: 2,
+  },
+  tutorialButton: {
+    flex: 1,
+    backgroundColor: COLORS.logicTeal,
+    borderRadius: RADIUS.button,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+  },
+  tutorialButtonText: {
+    color: COLORS.canvasWhite,
+    fontWeight: '700',
+    fontSize: 14,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   modeButtonText: {
     color: COLORS.slateCharcoal,

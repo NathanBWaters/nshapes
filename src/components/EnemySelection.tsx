@@ -1,22 +1,26 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Pressable, StyleSheet } from 'react-native';
-import { Enemy, PlayerStats } from '@/types';
+import { Enemy, PlayerStats, Weapon } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import Icon from './Icon';
-import StatsButton from './StatsButton';
+import GameMenu from './GameMenu';
 
 interface EnemySelectionProps {
   enemies: Enemy[];
   onSelect: (enemy: Enemy) => void;
   round: number;
   playerStats: PlayerStats;
+  playerWeapons?: Weapon[];
+  onExitGame?: () => void;
 }
 
 const EnemySelection: React.FC<EnemySelectionProps> = ({
   enemies,
   onSelect,
   round,
-  playerStats
+  playerStats,
+  playerWeapons = [],
+  onExitGame
 }) => {
   const [focusedIndex, setFocusedIndex] = useState<number>(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
@@ -30,7 +34,7 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
       {/* Eyebrow Banner */}
       <View style={styles.eyebrow}>
         <Text style={styles.eyebrowText}>Round {round} - Choose Enemy</Text>
-        <StatsButton playerStats={playerStats} />
+        <GameMenu playerStats={playerStats} playerWeapons={playerWeapons} onExitGame={onExitGame} />
       </View>
 
       {/* Top Half - Detail Focus */}

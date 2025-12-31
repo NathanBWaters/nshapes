@@ -23,6 +23,8 @@ interface GameBoardProps {
   onUseHint?: () => void;
   triggerHint?: number;
   triggerClearHint?: number;
+  pendingBurnRewards?: CardReward[]; // Rewards for cards that finished burning
+  onBurnRewardsComplete?: (cardIds: string[]) => void; // Called after burn rewards are displayed
 }
 
 // Calculate rewards for a single card
@@ -68,6 +70,8 @@ const GameBoard: React.FC<GameBoardProps> = ({
   onUseHint,
   triggerHint,
   triggerClearHint,
+  pendingBurnRewards,
+  onBurnRewardsComplete,
 }) => {
   const [selectedCards, setSelectedCards] = useState<CardType[]>([]);
   const [matchedCardIds, setMatchedCardIds] = useState<string[]>([]);
@@ -113,6 +117,30 @@ const GameBoard: React.FC<GameBoardProps> = ({
   useEffect(() => {
     onHintStateChange?.(hintCards.length > 0);
   }, [hintCards.length, onHintStateChange]);
+
+  // Handle incoming burn rewards - display them for 1.5s then notify parent
+  useEffect(() => {
+    if (!pendingBurnRewards || pendingBurnRewards.length === 0) return;
+
+    // Generate a unique matchId for this batch of burn rewards
+    const burnMatchId = ++matchCounterRef.current;
+
+    // Add burn rewards to revealing rewards
+    const burnRewardsWithMatchId = pendingBurnRewards.map(r => ({ ...r, matchId: burnMatchId }));
+    const burnCardIds = pendingBurnRewards.map(r => r.cardId);
+
+    // Mark burned cards as matched so they show the reward
+    setMatchedCardIds(prev => [...prev, ...burnCardIds]);
+    setRevealingRewards(prev => [...prev, ...burnRewardsWithMatchId]);
+
+    // After 1.5 seconds, clear rewards and notify parent
+    const timeout = setTimeout(() => {
+      setRevealingRewards(prev => prev.filter(r => r.matchId !== burnMatchId));
+      onBurnRewardsComplete?.(burnCardIds);
+    }, 1500);
+
+    return () => clearTimeout(timeout);
+  }, [pendingBurnRewards, onBurnRewardsComplete]);
 
   // Check if three cards form a valid set using active attributes
   const isValidSet = (cards: CardType[]): boolean => {
@@ -372,37 +400,46 @@ const GameBoard: React.FC<GameBoardProps> = ({
   return (
     <View nativeID="gameboard-container" style={styles.container}>
       <View nativeID="gameboard-grid" style={styles.board}>
-        {rows.map((row, rowIndex) => (
-          <View key={rowIndex} nativeID={`card-row-${rowIndex}`} style={styles.row}>
-            {row.map((card, colIndex) => {
-              const isSelected = selectedCards.some(c => c.id === card.id);
-              const isMatched = matchedCardIds.includes(card.id);
-              const isHint = hintCards.includes(card.id);
-              const reward = rewardsByCardId.get(card.id);
+        {rows.map((row, rowIndex) => {
+          // Calculate how many empty slots we need to fill out the row
+          const emptySlots = COLUMNS - row.length;
 
-              const cardWithState = {
-                ...card,
-                selected: isSelected,
-                isHint: isHint
-              };
+          return (
+            <View key={rowIndex} nativeID={`card-row-${rowIndex}`} style={styles.row}>
+              {row.map((card, colIndex) => {
+                const isSelected = selectedCards.some(c => c.id === card.id);
+                const isMatched = matchedCardIds.includes(card.id);
+                const isHint = hintCards.includes(card.id);
+                const reward = rewardsByCardId.get(card.id);
 
-              return (
-                <View key={`${rowIndex}-${colIndex}-${card.id}`} nativeID={`card-slot-${rowIndex}-${colIndex}`} style={styles.cardWrapper}>
-                  {/* Show reward instead of card when revealing */}
-                  {reward ? (
-                    <RewardReveal reward={reward} />
-                  ) : (
-                    <Card
-                      card={cardWithState}
-                      onClick={handleCardClick}
-                      disabled={isMatched || !isPlayerTurn}
-                    />
-                  )}
-                </View>
-              );
-            })}
-          </View>
-        ))}
+                const cardWithState = {
+                  ...card,
+                  selected: isSelected,
+                  isHint: isHint
+                };
+
+                return (
+                  <View key={`${rowIndex}-${colIndex}-${card.id}`} nativeID={`card-slot-${rowIndex}-${colIndex}`} style={styles.cardWrapper}>
+                    {/* Show reward instead of card when revealing */}
+                    {reward ? (
+                      <RewardReveal reward={reward} />
+                    ) : (
+                      <Card
+                        card={cardWithState}
+                        onClick={handleCardClick}
+                        disabled={isMatched || !isPlayerTurn}
+                      />
+                    )}
+                  </View>
+                );
+              })}
+              {/* Add empty placeholder slots for incomplete rows */}
+              {Array.from({ length: emptySlots }).map((_, i) => (
+                <View key={`empty-${rowIndex}-${i}`} style={styles.cardWrapper} />
+              ))}
+            </View>
+          );
+        })}
       </View>
     </View>
   );

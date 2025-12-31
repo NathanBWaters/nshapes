@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView, Pressable, StyleSheet } from 
 import { PlayerStats, Weapon, WeaponRarity } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import Icon from './Icon';
-import StatsButton from './StatsButton';
+import GameMenu from './GameMenu';
 
 interface LevelUpProps {
   options: Weapon[];
@@ -13,6 +13,8 @@ interface LevelUpProps {
   playerMoney: number;
   freeRerolls: number;
   playerStats: PlayerStats;
+  playerWeapons?: Weapon[];
+  onExitGame?: () => void;
 }
 
 // Rarity colors
@@ -41,7 +43,9 @@ const LevelUp: React.FC<LevelUpProps> = ({
   rerollCost,
   playerMoney,
   freeRerolls,
-  playerStats
+  playerStats,
+  playerWeapons = [],
+  onExitGame
 }) => {
   const [focusedIndex, setFocusedIndex] = useState<number>(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
@@ -93,7 +97,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
           <View style={styles.moneyBadge}>
             <Text style={styles.moneyText}>${playerMoney}</Text>
           </View>
-          <StatsButton playerStats={playerStats} />
+          <GameMenu playerStats={playerStats} playerWeapons={playerWeapons} onExitGame={onExitGame} />
         </View>
       </View>
 

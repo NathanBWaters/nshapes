@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView, Pressable, StyleSheet } from 
 import { Weapon, PlayerStats, WeaponRarity } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import Icon from './Icon';
-import StatsButton from './StatsButton';
+import GameMenu from './GameMenu';
 
 interface WeaponShopProps {
   weapons: (Weapon | null)[];  // null represents a sold/empty slot
@@ -14,6 +14,8 @@ interface WeaponShopProps {
   freeRerolls: number;
   onContinue: () => void;
   playerStats: PlayerStats;
+  playerWeapons?: Weapon[];
+  onExitGame?: () => void;
 }
 
 // Rarity colors
@@ -43,7 +45,9 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
   rerollCost,
   freeRerolls,
   onContinue,
-  playerStats
+  playerStats,
+  playerWeapons = [],
+  onExitGame
 }) => {
   const [focusedIndex, setFocusedIndex] = useState<number>(() => {
     // Initialize to first non-null weapon
@@ -89,7 +93,7 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
           <View style={styles.moneyBadge}>
             <Text style={styles.moneyText}>${playerMoney}</Text>
           </View>
-          <StatsButton playerStats={playerStats} />
+          <GameMenu playerStats={playerStats} playerWeapons={playerWeapons} onExitGame={onExitGame} />
         </View>
       </View>
 

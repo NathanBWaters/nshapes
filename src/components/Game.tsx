@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
 import { Card, CardReward, GameState, Enemy, Weapon, PlayerStats, AttributeName } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { createDeck, shuffleArray, isValidCombination, findAllCombinations, generateGameBoard, formatTime, sameCardAttributes } from '@/utils/gameUtils';
@@ -31,6 +31,8 @@ import LevelUp from './LevelUp';
 import EnemySelection from './EnemySelection';
 import RoundScoreboard from './RoundScoreboard';
 import RoundSummary from './RoundSummary';
+import TutorialScreen from './TutorialScreen';
+import { useTutorial } from '@/context/TutorialContext';
 
 const INITIAL_CARD_COUNT = 12;
 const MAX_BOARD_SIZE = 21;
@@ -60,6 +62,7 @@ const Game: React.FC = () => {
   const [gameMode, setGameMode] = useState<GameMode>('adventure');
   const [gamePhase, setGamePhase] = useState<
     'character_select' |
+    'tutorial' |
     'round' |
     'round_summary' |
     'loot' |
@@ -69,6 +72,9 @@ const Game: React.FC = () => {
     'game_over' |
     'free_play'
   >('character_select');
+
+  // Tutorial context
+  const { state: tutorialState, startTutorial, markTutorialOffered } = useTutorial();
 
   const [state, setState] = useState<GameState>({
     // Core game
@@ -137,6 +143,14 @@ const Game: React.FC = () => {
     startLevel: 0,
   });
 
+  // Pending burn rewards - cards that finished burning and need to show rewards
+  const [pendingBurnRewards, setPendingBurnRewards] = useState<CardReward[] | null>(null);
+  // Data for cards pending burn completion (to replace after reward display)
+  const [pendingBurnData, setPendingBurnData] = useState<{
+    burnedCards: Card[];
+    newFireCards: Card[];
+    burnBonus: number;
+  } | null>(null);
 
   // Socket context for multiplayer
   const {
@@ -395,6 +409,13 @@ const Game: React.FC = () => {
   // Free Play difficulty state
   const [freePlayDifficulty, setFreePlayDifficulty] = useState<'easy' | 'medium' | 'hard' | 'omega'>('medium');
 
+  // Tutorial prompt modal state
+  const [showTutorialPrompt, setShowTutorialPrompt] = useState(false);
+  const [pendingGameStart, setPendingGameStart] = useState<{
+    mode: GameMode;
+    difficulty?: 'easy' | 'medium' | 'hard' | 'omega';
+  } | null>(null);
+
   // Start the game
   const startGame = (mode: GameMode, difficulty?: 'easy' | 'medium' | 'hard' | 'omega') => {
     if (!selectedCharacter) {
@@ -402,6 +423,13 @@ const Game: React.FC = () => {
         message: 'Please select a character first',
         type: 'warning'
       });
+      return;
+    }
+
+    // Check if we should show tutorial prompt for Adventure mode
+    if (mode === 'adventure' && !tutorialState.hasCompletedTutorial && !tutorialState.hasBeenOfferedTutorial) {
+      setPendingGameStart({ mode, difficulty });
+      setShowTutorialPrompt(true);
       return;
     }
 
@@ -466,6 +494,86 @@ const Game: React.FC = () => {
   // Handle character selection
   const handleCharacterSelect = (characterName: string) => {
     setSelectedCharacter(characterName);
+  };
+
+  // Handle tutorial start
+  const handleTutorialStart = () => {
+    startTutorial();
+    setGamePhase('tutorial');
+  };
+
+  // Handle tutorial complete - return to character select
+  const handleTutorialComplete = () => {
+    setGamePhase('character_select');
+  };
+
+  // Handle tutorial exit - return to character select
+  const handleTutorialExit = () => {
+    setGamePhase('character_select');
+  };
+
+  // Handle tutorial prompt - user wants to do tutorial
+  const handleTutorialPromptYes = () => {
+    setShowTutorialPrompt(false);
+    markTutorialOffered();
+    handleTutorialStart();
+  };
+
+  // Handle tutorial prompt - user wants to skip
+  const handleTutorialPromptSkip = () => {
+    setShowTutorialPrompt(false);
+    markTutorialOffered();
+    if (pendingGameStart) {
+      // Continue with the original game start
+      setGameMode(pendingGameStart.mode);
+
+      // Determine active attributes based on mode
+      let activeAttributes: AttributeName[];
+      if (pendingGameStart.mode === 'free_play' && pendingGameStart.difficulty) {
+        activeAttributes = [...ATTRIBUTE_SCALING.difficultyPresets[pendingGameStart.difficulty]];
+        setFreePlayDifficulty(pendingGameStart.difficulty);
+      } else if (pendingGameStart.mode === 'free_play') {
+        activeAttributes = [...ATTRIBUTE_SCALING.difficultyPresets[freePlayDifficulty]];
+      } else {
+        activeAttributes = getActiveAttributesForRound(1);
+      }
+
+      initGame(selectedCharacter!, activeAttributes);
+      setHintTrigger(0);
+      setClearHintTrigger(0);
+
+      setState(prevState => ({
+        ...prevState,
+        gameStarted: true,
+        startTime: Date.now()
+      }));
+
+      if (pendingGameStart.mode === 'free_play') {
+        setGamePhase('free_play');
+      } else {
+        setRoundStats({
+          moneyEarned: 0,
+          experienceEarned: 0,
+          hintsEarned: 0,
+          healingDone: 0,
+          lootBoxesEarned: 0,
+          startLevel: 0,
+        });
+
+        setState(prevState => {
+          const totalStats = calculatePlayerTotalStats(prevState.player);
+          const timeBonus = totalStats.startingTime || 0;
+          return {
+            ...prevState,
+            remainingTime: prevState.remainingTime + timeBonus
+          };
+        });
+
+        setGamePhase('round');
+      }
+
+      setPendingGameStart(null);
+    }
   };
 
   // Handle enemy selection
@@ -952,57 +1060,98 @@ const Game: React.FC = () => {
 
   // Handle burning cards (called from timer effect)
   const handleBurningCards = () => {
+    // Don't process if already showing burn rewards
+    if (pendingBurnRewards) return;
+
     const now = Date.now();
-    const FIRE_BURN_DURATION = 15000; // 15 seconds
+    const FIRE_BURN_DURATION = 7500; // 7.5 seconds
     const FIRE_SPREAD_ON_DEATH_CHANCE = 10; // 10%
 
-    setState(prevState => {
-      const burnedCards: Card[] = [];
-      const newFireCards: Card[] = [];
-      let updatedBoard = [...prevState.board];
+    const burnedCards: Card[] = [];
+    const newFireCards: Card[] = [];
+    const board = state.board;
 
-      // Find cards that have been burning for 15+ seconds
-      updatedBoard.forEach((card, index) => {
-        if (card.onFire && card.fireStartTime) {
-          if (now - card.fireStartTime >= FIRE_BURN_DURATION) {
-            burnedCards.push(card);
+    // Find cards that have finished burning
+    board.forEach((card, index) => {
+      if (card.onFire && card.fireStartTime) {
+        if (now - card.fireStartTime >= FIRE_BURN_DURATION) {
+          burnedCards.push(card);
 
-            // 10% chance to spread fire to an adjacent card
-            if (Math.random() * 100 < FIRE_SPREAD_ON_DEATH_CHANCE) {
-              const adjacentIndices = getAdjacentIndices(index, updatedBoard.length);
-              const validAdjacent = adjacentIndices.filter(idx => {
-                const adjCard = updatedBoard[idx];
-                return adjCard && !adjCard.onFire && !burnedCards.some(bc => bc.id === adjCard.id);
-              });
+          // 10% chance to spread fire to an adjacent card
+          if (Math.random() * 100 < FIRE_SPREAD_ON_DEATH_CHANCE) {
+            const adjacentIndices = getAdjacentIndices(index, board.length);
+            const validAdjacent = adjacentIndices.filter(idx => {
+              const adjCard = board[idx];
+              return adjCard && !adjCard.onFire && !burnedCards.some(bc => bc.id === adjCard.id);
+            });
 
-              if (validAdjacent.length > 0) {
-                const randomAdj = validAdjacent[Math.floor(Math.random() * validAdjacent.length)];
-                newFireCards.push(updatedBoard[randomAdj]);
-              }
+            if (validAdjacent.length > 0) {
+              const randomAdj = validAdjacent[Math.floor(Math.random() * validAdjacent.length)];
+              newFireCards.push(board[randomAdj]);
             }
           }
         }
-      });
-
-      // If no cards burned, no update needed
-      if (burnedCards.length === 0 && newFireCards.length === 0) {
-        return prevState;
       }
+    });
 
-      // Award points for burned cards
-      const burnBonus = burnedCards.length;
+    // If no cards burned, check if we need to ignite new fire cards
+    if (burnedCards.length === 0) {
+      if (newFireCards.length > 0) {
+        // Just ignite new fire cards without burn rewards
+        setState(prevState => ({
+          ...prevState,
+          board: prevState.board.map(card => {
+            if (newFireCards.some(fc => fc.id === card.id)) {
+              return { ...card, onFire: true, fireStartTime: now };
+            }
+            return card;
+          })
+        }));
+      }
+      return;
+    }
 
-      // Mark new fire cards
-      updatedBoard = updatedBoard.map(card => {
-        if (newFireCards.some(fc => fc.id === card.id)) {
-          return { ...card, onFire: true, fireStartTime: now };
-        }
-        return card;
-      });
+    // Create rewards for burned cards
+    const burnBonus = burnedCards.length;
+    const burnRewards: CardReward[] = burnedCards.map(card => ({
+      cardId: card.id,
+      points: 1,
+      money: 1,
+      effectType: 'fire' as const,
+    }));
 
-      // Replace burned cards with new ones
+    // Mark new fire cards immediately
+    if (newFireCards.length > 0) {
+      setState(prevState => ({
+        ...prevState,
+        board: prevState.board.map(card => {
+          if (newFireCards.some(fc => fc.id === card.id)) {
+            return { ...card, onFire: true, fireStartTime: now };
+          }
+          return card;
+        })
+      }));
+    }
+
+    // Set pending burn data and trigger reward display
+    setPendingBurnData({ burnedCards, newFireCards, burnBonus });
+    setPendingBurnRewards(burnRewards);
+  };
+
+  // Handle burn rewards completion - called after reward reveal displays for 1.5s
+  const handleBurnRewardsComplete = useCallback((cardIds: string[]) => {
+    if (!pendingBurnData) {
+      setPendingBurnRewards(null);
+      return;
+    }
+
+    const { burnedCards, burnBonus } = pendingBurnData;
+
+    setState(prevState => {
+      let updatedBoard = [...prevState.board];
       const remainingDeck = [...prevState.deck];
 
+      // Replace burned cards with new ones
       burnedCards.forEach(burnedCard => {
         const burnedIndex = updatedBoard.findIndex(c => c.id === burnedCard.id);
         if (burnedIndex !== -1 && remainingDeck.length > 0) {
@@ -1012,14 +1161,6 @@ const Game: React.FC = () => {
           remainingDeck.splice(randomIndex, 1);
         }
       });
-
-      // Show notification
-      if (burnedCards.length > 0) {
-        setNotification({
-          message: `🔥 Burned! +${burnBonus} pts`,
-          type: 'info'
-        });
-      }
 
       return {
         ...prevState,
@@ -1035,7 +1176,11 @@ const Game: React.FC = () => {
         }
       };
     });
-  };
+
+    // Clear pending burn state
+    setPendingBurnRewards(null);
+    setPendingBurnData(null);
+  }, [pendingBurnData]);
 
   // Grow the board by adding new cards
   const growBoard = (amount: number) => {
@@ -1350,6 +1495,15 @@ const Game: React.FC = () => {
             selectedCharacter={selectedCharacter}
             onSelect={handleCharacterSelect}
             onStart={startGame}
+            onTutorial={handleTutorialStart}
+          />
+        );
+
+      case 'tutorial':
+        return (
+          <TutorialScreen
+            onComplete={handleTutorialComplete}
+            onExit={handleTutorialExit}
           />
         );
 
@@ -1360,6 +1514,8 @@ const Game: React.FC = () => {
             onSelect={handleEnemySelect}
             round={state.round}
             playerStats={calculatePlayerTotalStats(state.player)}
+            playerWeapons={state.player.weapons}
+            onExitGame={() => setGamePhase('character_select')}
           />
         );
 
@@ -1378,6 +1534,8 @@ const Game: React.FC = () => {
             didLevelUp={state.player.stats.level > roundStats.startLevel}
             onContinue={() => setGamePhase('level_up')}
             playerStats={calculatePlayerTotalStats(state.player)}
+            playerWeapons={state.player.weapons}
+            onExitGame={() => setGamePhase('character_select')}
           />
         );
 
@@ -1391,6 +1549,8 @@ const Game: React.FC = () => {
             playerMoney={state.player.stats.money}
             freeRerolls={state.player.stats.freeRerolls}
             playerStats={calculatePlayerTotalStats(state.player)}
+            playerWeapons={state.player.weapons}
+            onExitGame={() => setGamePhase('character_select')}
           />
         );
 
@@ -1405,6 +1565,8 @@ const Game: React.FC = () => {
             freeRerolls={state.player.stats.freeRerolls}
             onContinue={startNextRound}
             playerStats={calculatePlayerTotalStats(state.player)}
+            playerWeapons={state.player.weapons}
+            onExitGame={() => setGamePhase('character_select')}
           />
         );
 
@@ -1420,10 +1582,12 @@ const Game: React.FC = () => {
                 time={state.remainingTime}
                 totalTime={getRoundRequirement(state.round).time}
                 playerStats={calculatePlayerTotalStats(state.player)}
+                playerWeapons={state.player.weapons}
                 selectedCount={selectedCount}
                 onHintPress={() => setHintTrigger(t => t + 1)}
                 onClearHint={() => setClearHintTrigger(t => t + 1)}
                 hasActiveHint={hasActiveHint}
+                onExitGame={() => setGamePhase('character_select')}
               />
             </View>
 
@@ -1442,6 +1606,8 @@ const Game: React.FC = () => {
                 onUseHint={handleUseHint}
                 triggerHint={hintTrigger > 0 ? hintTrigger : undefined}
                 triggerClearHint={clearHintTrigger > 0 ? clearHintTrigger : undefined}
+                pendingBurnRewards={pendingBurnRewards || undefined}
+                onBurnRewardsComplete={handleBurnRewardsComplete}
               />
             </View>
           </View>
@@ -1523,6 +1689,8 @@ const Game: React.FC = () => {
                 onUseHint={handleUseHint}
                 triggerHint={hintTrigger > 0 ? hintTrigger : undefined}
                 triggerClearHint={clearHintTrigger > 0 ? clearHintTrigger : undefined}
+                pendingBurnRewards={pendingBurnRewards || undefined}
+                onBurnRewardsComplete={handleBurnRewardsComplete}
               />
             </View>
           </View>
@@ -1626,9 +1794,109 @@ const Game: React.FC = () => {
       )} */}
 
       {renderGamePhase()}
+
+      {/* Tutorial Prompt Modal */}
+      <Modal
+        visible={showTutorialPrompt}
+        transparent={true}
+        animationType="fade"
+      >
+        <View style={tutorialPromptStyles.overlay}>
+          <View style={tutorialPromptStyles.container}>
+            <View style={tutorialPromptStyles.header}>
+              <Text style={tutorialPromptStyles.headerText}>New to NShapes?</Text>
+            </View>
+            <View style={tutorialPromptStyles.content}>
+              <Text style={tutorialPromptStyles.messageText}>
+                Would you like to play through a quick tutorial to learn how the game works?
+              </Text>
+            </View>
+            <View style={tutorialPromptStyles.buttons}>
+              <TouchableOpacity
+                style={tutorialPromptStyles.tutorialButton}
+                onPress={handleTutorialPromptYes}
+              >
+                <Text style={tutorialPromptStyles.tutorialButtonText}>Yes, show me!</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={tutorialPromptStyles.skipButton}
+                onPress={handleTutorialPromptSkip}
+              >
+                <Text style={tutorialPromptStyles.skipButtonText}>Skip - Start Adventure</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
+
+// Tutorial Prompt Modal styles
+const tutorialPromptStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(18, 18, 18, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  container: {
+    backgroundColor: COLORS.canvasWhite,
+    borderRadius: RADIUS.module,
+    borderWidth: 2,
+    borderColor: COLORS.slateCharcoal,
+    width: '100%',
+    maxWidth: 350,
+    overflow: 'hidden',
+  },
+  header: {
+    backgroundColor: COLORS.logicTeal,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+  },
+  headerText: {
+    color: COLORS.canvasWhite,
+    fontSize: 20,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  content: {
+    padding: 20,
+  },
+  messageText: {
+    color: COLORS.slateCharcoal,
+    fontSize: 16,
+    lineHeight: 24,
+    textAlign: 'center',
+  },
+  buttons: {
+    padding: 16,
+    gap: 12,
+  },
+  tutorialButton: {
+    backgroundColor: COLORS.actionYellow,
+    paddingVertical: 14,
+    borderRadius: RADIUS.button,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+    alignItems: 'center',
+  },
+  tutorialButtonText: {
+    color: COLORS.slateCharcoal,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  skipButton: {
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  skipButtonText: {
+    color: COLORS.slateCharcoal,
+    fontSize: 14,
+    opacity: 0.7,
+  },
+});
 
 // Game Over screen styles
 const gameOverStyles = StyleSheet.create({
