@@ -793,17 +793,17 @@ const Game: React.FC = () => {
     let mulliganUsed = false;
 
     rewards.forEach(reward => {
-      // Skip mulligan cards for base rewards - they don't give points/XP
+      // Track if this is a mulligan match (first reward marked as mulligan)
       if (reward.effectType === 'mulligan') {
         mulliganUsed = true;
-        return; // Skip base rewards for mulligan cards
+        // Still award full points for mulligan cards!
       }
 
       let points = reward.points || 0;
       let money = reward.money || 0;
 
-      // Check if this card is holographic for 2x points (only for non-effect rewards)
-      if (!reward.effectType) {
+      // Check if this card is holographic for 2x points (only for base match rewards, not effects)
+      if (!reward.effectType || reward.effectType === 'mulligan') {
         const matchedCard = cards.find(c => c.id === reward.cardId);
         if (matchedCard?.isHolographic) {
           points *= 2;

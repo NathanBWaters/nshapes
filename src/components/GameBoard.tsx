@@ -321,8 +321,13 @@ const GameBoard: React.FC<GameBoardProps> = ({
               effectType: 'laser' as const,
             }));
 
+            // Mark the first matched reward as a mulligan so Game.tsx knows to decrement mulligans
+            if (matchedRewards.length > 0) {
+              matchedRewards[0].effectType = 'mulligan';
+            }
+
             // Combine all rewards
-            const allRewards = [...mulliganRewards, ...explosionRewards, ...laserRewards];
+            const allRewards = [...matchedRewards, ...explosionRewards, ...laserRewards];
             const rewardsWithMatchId = allRewards.map(r => ({ ...r, matchId }));
 
             // Collect all affected card IDs

@@ -216,18 +216,9 @@ export const processWeaponEffects = (
     const laserCardIds = new Set<string>();
     let lasersActivated = 0;
 
-    // DEBUG: Log laser weapon detection
-    console.log('[LASER DEBUG] Total weapons:', weapons.length);
-    console.log('[LASER DEBUG] Laser weapons found:', laserWeapons.length);
-    if (laserWeapons.length > 0) {
-      console.log('[LASER DEBUG] First laser weapon:', JSON.stringify(laserWeapons[0]));
-    }
-
     laserWeapons.forEach(weapon => {
       const chance = weapon.effects.laserChance || 0;
-      const roll = Math.random() * 100;
-      console.log(`[LASER DEBUG] Rolling for ${weapon.name} (${weapon.rarity}): need < ${chance}, got ${roll.toFixed(2)}, success: ${roll < chance}`);
-      if (roll < chance) {
+      if (Math.random() * 100 < chance) {
         // This laser fires! Get cards for this laser
         const thisLaserCards = getLaserCards(board, matchedCards);
         thisLaserCards.forEach(card => {
