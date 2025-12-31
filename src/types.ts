@@ -2,6 +2,11 @@ export type Shape = 'oval' | 'squiggle' | 'diamond';
 export type Color = 'red' | 'green' | 'purple';
 export type Number = 1 | 2 | 3;
 export type Shading = 'solid' | 'striped' | 'open';
+export type Background = 'white' | 'beige' | 'charcoal';
+export type AttributeName = 'shape' | 'color' | 'number' | 'shading' | 'background';
+
+// Ordered list of attributes for progressive unlock
+export const ATTRIBUTE_ORDER: AttributeName[] = ['shape', 'color', 'number', 'shading', 'background'];
 
 export interface Card {
   id: string;
@@ -9,6 +14,7 @@ export interface Card {
   color: Color;
   number: Number;
   shading: Shading;
+  background?: Background;
   selected: boolean;
   isHint?: boolean;
 
@@ -170,7 +176,10 @@ export interface GameState {
   startTime: number | null;
   endTime: number | null;
   hintUsed: boolean;
-  
+
+  // Attribute scaling
+  activeAttributes: AttributeName[];
+
   // Roguelike properties
   round: number;
   targetScore: number;
@@ -181,7 +190,7 @@ export interface GameState {
   player: Player;
   
   // Shop and upgrades
-  shopItems: Item[];
+  shopItems: (Item | null)[];  // null represents a sold/empty slot
   levelUpOptions: (Partial<PlayerStats> | Weapon)[];
   rerollCost: number;
   

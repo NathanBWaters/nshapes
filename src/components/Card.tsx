@@ -1,8 +1,9 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Svg, { Ellipse, Path, Polygon, Defs, Pattern, Rect } from 'react-native-svg';
-import { Card as CardType } from '@/types';
+import { Card as CardType, Background } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
+import { BACKGROUND_COLORS } from '@/utils/gameConfig';
 
 // SVG viewBox dimensions (1:2 width:height ratio)
 const SVG_WIDTH = 20;
@@ -40,11 +41,11 @@ const Card: React.FC<CardProps> = ({ card, onClick, disabled = false }) => {
   const getShapeComponent = () => {
     switch (shape) {
       case 'oval':
-        return <Oval color={color} shading={shading} />;
+        return <Oval color={color} shading={shading} background={card.background} />;
       case 'squiggle':
-        return <Squiggle color={color} shading={shading} />;
+        return <Squiggle color={color} shading={shading} background={card.background} />;
       case 'diamond':
-        return <Diamond color={color} shading={shading} />;
+        return <Diamond color={color} shading={shading} background={card.background} />;
       default:
         return null;
     }
@@ -62,7 +63,10 @@ const Card: React.FC<CardProps> = ({ card, onClick, disabled = false }) => {
 
   // Get card styles
   const getCardStyle = () => {
-    const cardStyles: any[] = [styles.card];
+    const cardStyles: any[] = [
+      styles.card,
+      { backgroundColor: getCardBackgroundColor(card.background) }
+    ];
 
     if (selected) {
       cardStyles.push(styles.selected);
@@ -140,6 +144,7 @@ const Card: React.FC<CardProps> = ({ card, onClick, disabled = false }) => {
 interface ShapeProps {
   color: string;
   shading: string;
+  background?: Background;
 }
 
 const getBorderColor = (color: string) => {
@@ -151,6 +156,32 @@ const getBorderColor = (color: string) => {
   }
 };
 
+// Get lightened colors for charcoal background (better contrast)
+const getLightColor = (color: string) => {
+  switch (color) {
+    case 'red': return '#FF9999';
+    case 'green': return '#66CCBB';
+    case 'purple': return '#B39DDB';
+    default: return COLORS.canvasWhite;
+  }
+};
+
+// Get the appropriate shape color based on background
+const getShapeColor = (color: string, background?: Background) => {
+  if (background === 'charcoal') {
+    return getLightColor(color);
+  }
+  return getBorderColor(color);
+};
+
+// Get the card background color
+const getCardBackgroundColor = (background?: Background) => {
+  if (!background || background === 'white') {
+    return COLORS.canvasWhite;
+  }
+  return BACKGROUND_COLORS[background];
+};
+
 // Stripe pattern for "striped" shading
 const StripesPattern: React.FC<{ id: string; color: string }> = ({ id, color }) => (
   <Defs>
@@ -160,15 +191,15 @@ const StripesPattern: React.FC<{ id: string; color: string }> = ({ id, color }) 
   </Defs>
 );
 
-const getFill = (color: string, shading: string, patternId: string) => {
-  if (shading === 'solid') return getBorderColor(color);
+const getFill = (color: string, shading: string, patternId: string, background?: Background) => {
+  if (shading === 'solid') return getShapeColor(color, background);
   if (shading === 'striped') return `url(#${patternId})`;
   return 'transparent';
 };
 
-const Oval: React.FC<ShapeProps> = ({ color, shading }) => {
-  const strokeColor = getBorderColor(color);
-  const patternId = `stripes-oval-${color}`;
+const Oval: React.FC<ShapeProps> = ({ color, shading, background }) => {
+  const strokeColor = getShapeColor(color, background);
+  const patternId = `stripes-oval-${color}-${background || 'white'}`;
   return (
     <Svg
       width="100%"
@@ -184,15 +215,15 @@ const Oval: React.FC<ShapeProps> = ({ color, shading }) => {
         ry={(SVG_HEIGHT - STROKE_WIDTH) / 2}
         stroke={strokeColor}
         strokeWidth={STROKE_WIDTH}
-        fill={getFill(color, shading, patternId)}
+        fill={getFill(color, shading, patternId, background)}
       />
     </Svg>
   );
 };
 
-const Diamond: React.FC<ShapeProps> = ({ color, shading }) => {
-  const strokeColor = getBorderColor(color);
-  const patternId = `stripes-diamond-${color}`;
+const Diamond: React.FC<ShapeProps> = ({ color, shading, background }) => {
+  const strokeColor = getShapeColor(color, background);
+  const patternId = `stripes-diamond-${color}-${background || 'white'}`;
   // Diamond points: top, right, bottom, left
   const points = `${SVG_WIDTH / 2},${STROKE_WIDTH} ${SVG_WIDTH - STROKE_WIDTH},${SVG_HEIGHT / 2} ${SVG_WIDTH / 2},${SVG_HEIGHT - STROKE_WIDTH} ${STROKE_WIDTH},${SVG_HEIGHT / 2}`;
   return (
@@ -207,15 +238,15 @@ const Diamond: React.FC<ShapeProps> = ({ color, shading }) => {
         points={points}
         stroke={strokeColor}
         strokeWidth={STROKE_WIDTH}
-        fill={getFill(color, shading, patternId)}
+        fill={getFill(color, shading, patternId, background)}
       />
     </Svg>
   );
 };
 
-const Squiggle: React.FC<ShapeProps> = ({ color, shading }) => {
-  const strokeColor = getBorderColor(color);
-  const patternId = `stripes-squiggle-${color}`;
+const Squiggle: React.FC<ShapeProps> = ({ color, shading, background }) => {
+  const strokeColor = getShapeColor(color, background);
+  const patternId = `stripes-squiggle-${color}-${background || 'white'}`;
   // S-curve squiggle path (scaled for 20x40 viewBox)
   const d = `
     M 3,5
@@ -241,7 +272,7 @@ const Squiggle: React.FC<ShapeProps> = ({ color, shading }) => {
         d={d}
         stroke={strokeColor}
         strokeWidth={STROKE_WIDTH}
-        fill={getFill(color, shading, patternId)}
+        fill={getFill(color, shading, patternId, background)}
       />
     </Svg>
   );

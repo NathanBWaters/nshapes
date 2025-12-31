@@ -212,6 +212,15 @@ const Icon: React.FC<IconProps> = ({
 
   return (
     <View style={[{ width: size, height: size }, style]}>
+      {/* Shadow layer - slightly offset dark version */}
+      <View style={{ position: 'absolute', top: 1, left: 1, opacity: 0.5 }}>
+        <SvgComponent
+          width={size}
+          height={size}
+          fill="#000000"
+        />
+      </View>
+      {/* Main icon */}
       <SvgComponent
         width={size}
         height={size}

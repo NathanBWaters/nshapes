@@ -6,7 +6,7 @@ import Icon from './Icon';
 import StatsButton from './StatsButton';
 
 interface ItemShopProps {
-  items: Item[];
+  items: (Item | null)[];  // null represents a sold/empty slot
   playerMoney: number;
   onPurchase: (itemIndex: number) => void;
   onReroll: () => void;
@@ -37,14 +37,21 @@ const ItemShop: React.FC<ItemShopProps> = ({
   onContinue,
   playerStats
 }) => {
-  const [focusedIndex, setFocusedIndex] = useState<number>(0);
+  const [focusedIndex, setFocusedIndex] = useState<number>(() => {
+    // Initialize to first non-null item
+    const firstAvailable = items.findIndex(item => item !== null);
+    return firstAvailable >= 0 ? firstAvailable : 0;
+  });
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   // Show hovered item if hovering, otherwise show focused
   const displayedIndex = hoveredIndex !== null ? hoveredIndex : focusedIndex;
 
-  const focusedItem = items.length > 0 ? items[displayedIndex] : null;
+  const focusedItem = items[displayedIndex];  // Can be null if slot is sold
   const canAffordFocused = focusedItem ? playerMoney >= focusedItem.price : false;
+
+  // Count available (non-null) items
+  const availableItems = items.filter(item => item !== null);
 
   // Format effects for display
   const formatEffects = (effects: Record<string, any>): { key: string; value: string }[] => {
@@ -126,7 +133,9 @@ const ItemShop: React.FC<ItemShopProps> = ({
           </View>
         ) : (
           <View style={styles.emptyDetail}>
-            <Text style={styles.emptyText}>Select an item below</Text>
+            <Text style={styles.emptyText}>
+              {availableItems.length === 0 ? 'All items sold' : 'Select an item below'}
+            </Text>
           </View>
         )}
       </View>
@@ -155,6 +164,18 @@ const ItemShop: React.FC<ItemShopProps> = ({
         >
           {items.length > 0 ? (
             items.map((item, index) => {
+              // Handle sold/empty slot
+              if (item === null) {
+                return (
+                  <View
+                    key={`sold-${index}`}
+                    style={[styles.optionButton, styles.optionButtonSold]}
+                  >
+                    <Text style={styles.soldText}>SOLD</Text>
+                  </View>
+                );
+              }
+
               const isFocused = focusedIndex === index;
               const canAfford = playerMoney >= item.price;
               const rarityColor = getRarityColor(item.rarity);
@@ -209,19 +230,21 @@ const ItemShop: React.FC<ItemShopProps> = ({
       <View style={styles.actionSection}>
         <View style={styles.actionRow}>
           <TouchableOpacity
-            onPress={() => canAffordFocused && onPurchase(focusedIndex)}
-            disabled={!canAffordFocused || items.length === 0}
+            onPress={() => canAffordFocused && focusedItem && onPurchase(focusedIndex)}
+            disabled={!canAffordFocused || !focusedItem || availableItems.length === 0}
             style={[
               styles.purchaseButton,
-              (!canAffordFocused || items.length === 0) && styles.purchaseButtonDisabled,
+              (!canAffordFocused || !focusedItem || availableItems.length === 0) && styles.purchaseButtonDisabled,
             ]}
           >
             <Text style={styles.purchaseButtonText}>
-              {items.length === 0
+              {availableItems.length === 0
                 ? 'No Items'
-                : canAffordFocused
-                  ? 'Purchase'
-                  : 'Cannot Afford'}
+                : !focusedItem
+                  ? 'Select Item'
+                  : canAffordFocused
+                    ? 'Purchase'
+                    : 'Cannot Afford'}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -480,6 +503,19 @@ const styles = StyleSheet.create({
   },
   optionButtonUnaffordable: {
     opacity: 0.5,
+  },
+  optionButtonSold: {
+    backgroundColor: COLORS.paperBeige,
+    borderColor: COLORS.slateCharcoal,
+    borderStyle: 'dashed',
+    opacity: 0.4,
+  },
+  soldText: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '600',
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
   optionHeader: {
     marginBottom: 2,

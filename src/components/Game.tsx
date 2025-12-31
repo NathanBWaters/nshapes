@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { Card, CardReward, GameState, Enemy, Weapon, PlayerStats } from '@/types';
+import { Card, CardReward, GameState, Enemy, Weapon, PlayerStats, AttributeName } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { createDeck, shuffleArray, isValidCombination, findAllCombinations, generateGameBoard, formatTime } from '@/utils/gameUtils';
 import {
@@ -13,6 +13,7 @@ import {
   calculatePlayerTotalStats,
   DEFAULT_PLAYER_STATS
 } from '@/utils/gameDefinitions';
+import { getActiveAttributesForRound, getBoardSizeForAttributes, ATTRIBUTE_SCALING } from '@/utils/gameConfig';
 import GameBoard from './GameBoard';
 import GameInfo from './GameInfo';
 import Notification from './Notification';
@@ -76,6 +77,9 @@ const Game: React.FC = () => {
     startTime: null,
     endTime: null,
     hintUsed: false,
+
+    // Attribute scaling
+    activeAttributes: getActiveAttributesForRound(1),
 
     // Roguelike properties
     round: 1,
@@ -238,10 +242,13 @@ const Game: React.FC = () => {
   }, [gamePhase, state.gameStarted, state.gameEnded, state.roundCompleted, state.remainingTime, state.score, state.targetScore, completeRound, endGame]);
 
   // Initialize the game
-  const initGame = useCallback((characterName: string) => {
+  const initGame = useCallback((characterName: string, activeAttributes: AttributeName[]) => {
+    // Calculate board size based on active attributes
+    const boardSize = getBoardSizeForAttributes(activeAttributes.length);
+
     // Generate initial board with modifiers based on difficulty
-    const initialBoard = generateGameBoard(INITIAL_CARD_COUNT, 1, 1);
-    const deck = shuffleArray(createDeck());
+    const initialBoard = generateGameBoard(boardSize, 1, 1, activeAttributes);
+    const deck = shuffleArray(createDeck(activeAttributes));
     const remainingDeck = deck.filter(card =>
       !initialBoard.some(boardCard => boardCard.id === card.id)
     );
@@ -261,6 +268,9 @@ const Game: React.FC = () => {
       startTime: null,
       endTime: null,
       hintUsed: false,
+
+      // Attribute scaling
+      activeAttributes,
 
       // Roguelike properties
       round: 1,
@@ -416,8 +426,11 @@ const Game: React.FC = () => {
     return options;
   };
 
+  // Free Play difficulty state
+  const [freePlayDifficulty, setFreePlayDifficulty] = useState<'easy' | 'medium' | 'hard' | 'omega'>('medium');
+
   // Start the game
-  const startGame = (mode: GameMode) => {
+  const startGame = (mode: GameMode, difficulty?: 'easy' | 'medium' | 'hard' | 'omega') => {
     if (!selectedCharacter) {
       setNotification({
         message: 'Please select a character first',
@@ -428,8 +441,22 @@ const Game: React.FC = () => {
 
     setGameMode(mode);
 
-    // Initialize the game with the selected character
-    initGame(selectedCharacter);
+    // Determine active attributes based on mode
+    let activeAttributes: AttributeName[];
+    if (mode === 'free_play' && difficulty) {
+      // Free Play with selected difficulty
+      activeAttributes = [...ATTRIBUTE_SCALING.difficultyPresets[difficulty]];
+      setFreePlayDifficulty(difficulty);
+    } else if (mode === 'free_play') {
+      // Free Play with default difficulty
+      activeAttributes = [...ATTRIBUTE_SCALING.difficultyPresets[freePlayDifficulty]];
+    } else {
+      // Adventure mode - start with round 1 attributes
+      activeAttributes = getActiveAttributesForRound(1);
+    }
+
+    // Initialize the game with the selected character and attributes
+    initGame(selectedCharacter, activeAttributes);
 
     setState(prevState => ({
       ...prevState,
@@ -514,8 +541,10 @@ const Game: React.FC = () => {
         },
         items: [...prevState.player.items, item]
       },
-      // Remove the item from the shop
-      shopItems: prevState.shopItems.filter((_, index) => index !== itemIndex)
+      // Mark the slot as sold (null) instead of removing to preserve layout
+      shopItems: prevState.shopItems.map((shopItem, index) =>
+        index === itemIndex ? null : shopItem
+      )
     }));
 
     setNotification({
@@ -678,9 +707,15 @@ const Game: React.FC = () => {
 
     // If we have 3 cards selected, check if they form a valid set
     if (newSelectedCards.length === 3) {
-      if (isValidCombination(newSelectedCards)) {
-        // Valid set found!
-        handleValidMatch(newSelectedCards);
+      if (isValidCombination(newSelectedCards, state.activeAttributes).isValid) {
+        // Valid set found! (Legacy path - GameBoard normally handles rewards)
+        const rewards: CardReward[] = newSelectedCards.map(card => ({
+          cardId: card.id,
+          points: 1,
+          money: 1,
+          experience: 1
+        }));
+        handleValidMatch(newSelectedCards, rewards);
       } else {
         // Invalid selection
         handleInvalidMatch();
@@ -836,8 +871,8 @@ const Game: React.FC = () => {
 
     // Check if we have enough cards in the deck
     if (remainingDeck.length < matchedCards.length) {
-      // Refill the deck if necessary
-      const additionalCards = createDeck();
+      // Refill the deck if necessary with active attributes
+      const additionalCards = createDeck(state.activeAttributes);
       for (const card of additionalCards) {
         if (!remainingDeck.some(c => c.id === card.id) &&
             !state.board.some(c => c.id === card.id)) {
@@ -921,16 +956,44 @@ const Game: React.FC = () => {
     const nextRound = state.round + 1;
     const roundReq = getRoundRequirement(nextRound);
 
-    // Generate a new board with increased difficulty
-    const newBoard = generateGameBoard(
+    // Get active attributes for the new round
+    const newActiveAttributes = getActiveAttributesForRound(nextRound);
+    const previousAttributes = state.activeAttributes;
+
+    // Check if a new attribute is being unlocked
+    const newAttribute = newActiveAttributes.find(attr => !previousAttributes.includes(attr));
+    if (newAttribute) {
+      const attributeNames: Record<AttributeName, string> = {
+        shape: 'Shape',
+        color: 'Color',
+        number: 'Number',
+        shading: 'Shading',
+        background: 'Background'
+      };
+      setNotification({
+        message: `New Attribute Unlocked: ${attributeNames[newAttribute]}!`,
+        type: 'info'
+      });
+    }
+
+    // Calculate board size based on attribute count
+    const boardSize = Math.max(
       state.player.stats.fieldSize,
+      getBoardSizeForAttributes(newActiveAttributes.length)
+    );
+
+    // Generate a new board with the new attributes
+    const newBoard = generateGameBoard(
+      boardSize,
       nextRound,
-      nextRound
+      nextRound,
+      newActiveAttributes
     );
 
     setState(prevState => ({
       ...prevState,
       round: nextRound,
+      activeAttributes: newActiveAttributes,
       targetScore: roundReq.targetScore,
       remainingTime: roundReq.time,
       score: 0,
@@ -939,7 +1002,8 @@ const Game: React.FC = () => {
       foundCombinations: [],
       roundCompleted: false,
       gameStarted: true,
-      currentEnemies: generateRandomEnemies()
+      currentEnemies: generateRandomEnemies(),
+      shopItems: generateRandomShopItems()  // Refill shop for next round
     }));
 
     // Move to enemy selection for the next round
@@ -1041,6 +1105,7 @@ const Game: React.FC = () => {
                 onInvalidSelection={handleInvalidMatch}
                 playerStats={calculatePlayerTotalStats(state.player)}
                 isPlayerTurn={true}
+                activeAttributes={state.activeAttributes}
                 onSelectedCountChange={setSelectedCount}
                 onHintStateChange={setHasActiveHint}
                 onUseHint={handleUseHint}
@@ -1120,6 +1185,7 @@ const Game: React.FC = () => {
                 onInvalidSelection={handleInvalidMatch}
                 playerStats={calculatePlayerTotalStats(state.player)}
                 isPlayerTurn={true}
+                activeAttributes={state.activeAttributes}
                 onSelectedCountChange={setSelectedCount}
                 onHintStateChange={setHasActiveHint}
                 onUseHint={handleUseHint}

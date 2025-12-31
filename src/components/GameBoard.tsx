@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, StyleSheet } from 'react-native';
-import { Card as CardType, PlayerStats, CardReward } from '@/types';
+import { Card as CardType, PlayerStats, CardReward, AttributeName } from '@/types';
 import Card from './Card';
 import RewardReveal from './RewardReveal';
 import { COLORS } from '@/utils/colors';
 import { MATCH_REWARDS } from '@/utils/gameConfig';
+
+// Default to 4 attributes for backward compatibility
+const DEFAULT_ATTRIBUTES: AttributeName[] = ['shape', 'color', 'number', 'shading'];
 
 interface GameBoardProps {
   cards: CardType[];
@@ -12,6 +15,7 @@ interface GameBoardProps {
   onInvalidSelection: () => void;
   playerStats: PlayerStats;
   isPlayerTurn: boolean;
+  activeAttributes?: AttributeName[];
   onSelectedCountChange?: (count: number) => void;
   onHintStateChange?: (hasHint: boolean) => void;
   onUseHint?: () => void;
@@ -55,6 +59,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
   onInvalidSelection,
   playerStats,
   isPlayerTurn,
+  activeAttributes = DEFAULT_ATTRIBUTES,
   onSelectedCountChange,
   onHintStateChange,
   onUseHint,
@@ -103,14 +108,12 @@ const GameBoard: React.FC<GameBoardProps> = ({
     onHintStateChange?.(hintCards.length > 0);
   }, [hintCards.length, onHintStateChange]);
 
-  // Check if three cards form a valid set
+  // Check if three cards form a valid set using active attributes
   const isValidSet = (cards: CardType[]): boolean => {
     if (cards.length !== 3) return false;
 
-    const attributes = ['shape', 'color', 'number', 'shading'] as const;
-
-    return attributes.every(attr => {
-      const values = cards.map(card => card[attr]);
+    return activeAttributes.every(attr => {
+      const values = cards.map(card => card[attr as keyof CardType]);
       const allSame = values.every(v => v === values[0]);
       const allDifferent = values.length === new Set(values).size;
       return allSame || allDifferent;
@@ -163,7 +166,10 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
   // Handle card click
   const handleCardClick = (card: CardType) => {
-    if (!isPlayerTurn || isProcessing || revealingRewards.length > 0) return;
+    if (!isPlayerTurn) return;
+
+    // Don't allow clicking on cards that are currently being revealed as rewards
+    if (revealingRewards.some(r => r.cardId === card.id)) return;
 
     // If card is already selected, deselect it
     if (selectedCards.some(c => c.id === card.id)) {
@@ -240,7 +246,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
                     <Card
                       card={cardWithState}
                       onClick={handleCardClick}
-                      disabled={isMatched || !isPlayerTurn || isProcessing}
+                      disabled={isMatched || !isPlayerTurn}
                     />
                   )}
                 </View>

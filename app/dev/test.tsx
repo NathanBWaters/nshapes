@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Card, CardReward, GameState, PlayerStats } from '@/types';
+import { Card, CardReward, GameState, PlayerStats, AttributeName } from '@/types';
 import { createDeck, shuffleArray, generateGameBoard, formatTime } from '@/utils/gameUtils';
 import {
   ROUND_REQUIREMENTS,
   initializePlayer,
   calculatePlayerTotalStats,
 } from '@/utils/gameDefinitions';
+import { getActiveAttributesForRound } from '@/utils/gameConfig';
 import GameBoard from '@/components/GameBoard';
 
 const INITIAL_CARD_COUNT = 12;
@@ -30,8 +31,9 @@ export default function DevTest() {
 
   const [state, setState] = useState<GameState>(() => {
     const roundReq = getRoundRequirement(1);
-    const initialBoard = generateGameBoard(INITIAL_CARD_COUNT, 1, 1);
-    const deck = shuffleArray(createDeck());
+    const activeAttributes = getActiveAttributesForRound(1);
+    const initialBoard = generateGameBoard(INITIAL_CARD_COUNT, 1, 1, activeAttributes);
+    const deck = shuffleArray(createDeck(activeAttributes));
     const remainingDeck = deck.filter(card =>
       !initialBoard.some(boardCard => boardCard.id === card.id)
     );
@@ -47,6 +49,7 @@ export default function DevTest() {
       startTime: Date.now(),
       endTime: null,
       hintUsed: false,
+      activeAttributes,
       round: 1,
       targetScore: roundReq.targetScore,
       remainingTime: roundReq.time,
@@ -79,8 +82,9 @@ export default function DevTest() {
 
   const resetBoard = useCallback(() => {
     const roundReq = getRoundRequirement(currentRound);
-    const newBoard = generateGameBoard(INITIAL_CARD_COUNT, currentRound, currentRound);
-    const deck = shuffleArray(createDeck());
+    const activeAttributes = getActiveAttributesForRound(currentRound);
+    const newBoard = generateGameBoard(INITIAL_CARD_COUNT, currentRound, currentRound, activeAttributes);
+    const deck = shuffleArray(createDeck(activeAttributes));
     const remainingDeck = deck.filter(card =>
       !newBoard.some(boardCard => boardCard.id === card.id)
     );
@@ -95,6 +99,7 @@ export default function DevTest() {
       remainingTime: roundReq.time,
       round: currentRound,
       targetScore: roundReq.targetScore,
+      activeAttributes,
       gameEnded: false,
     }));
 
@@ -105,8 +110,9 @@ export default function DevTest() {
   const changeRound = (round: number) => {
     setCurrentRound(round);
     const roundReq = getRoundRequirement(round);
-    const newBoard = generateGameBoard(INITIAL_CARD_COUNT, round, round);
-    const deck = shuffleArray(createDeck());
+    const activeAttributes = getActiveAttributesForRound(round);
+    const newBoard = generateGameBoard(INITIAL_CARD_COUNT, round, round, activeAttributes);
+    const deck = shuffleArray(createDeck(activeAttributes));
     const remainingDeck = deck.filter(card =>
       !newBoard.some(boardCard => boardCard.id === card.id)
     );
@@ -121,6 +127,7 @@ export default function DevTest() {
       remainingTime: roundReq.time,
       round: round,
       targetScore: roundReq.targetScore,
+      activeAttributes,
       gameEnded: false,
     }));
   };
@@ -289,6 +296,7 @@ export default function DevTest() {
           onInvalidSelection={handleInvalidMatch}
           playerStats={playerStats}
           isPlayerTurn={true}
+          activeAttributes={state.activeAttributes}
           onSelectedCountChange={setSelectedCount}
           onHintStateChange={setHasActiveHint}
           triggerHint={hintTrigger > 0 ? hintTrigger : undefined}

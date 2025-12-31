@@ -500,10 +500,10 @@ export const ITEMS: Item[] = [
 
 // Round requirements
 export const ROUND_REQUIREMENTS = [
-  { round: 1, targetScore: 3, time: 60 },
-  { round: 2, targetScore: 4, time: 60 },
-  { round: 3, targetScore: 6, time: 60 },
-  { round: 4, targetScore: 8, time: 60 },
+  { round: 1, targetScore: 3, time: 30 },
+  { round: 2, targetScore: 4, time: 45 },
+  { round: 3, targetScore: 6, time: 45 },
+  { round: 4, targetScore: 8, time: 45 },
   { round: 5, targetScore: 10, time: 60 },
   { round: 6, targetScore: 14, time: 60 },
   { round: 7, targetScore: 20, time: 60 },

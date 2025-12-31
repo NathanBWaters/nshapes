@@ -1,32 +1,66 @@
-import { Card, Shape, Color, Number, Shading } from '../types';
+import { Card, Shape, Color, Number, Shading, Background, AttributeName } from '../types';
 
-// Create the complete deck of 81 cards
-export const createDeck = (): Card[] => {
-  const shapes: Shape[] = ['oval', 'squiggle', 'diamond'];
-  const colors: Color[] = ['red', 'green', 'purple'];
-  const numbers: Number[] = [1, 2, 3];
-  const shadings: Shading[] = ['solid', 'striped', 'open'];
-  
+// All possible values for each attribute
+const ALL_SHAPES: Shape[] = ['oval', 'squiggle', 'diamond'];
+const ALL_COLORS: Color[] = ['red', 'green', 'purple'];
+const ALL_NUMBERS: Number[] = [1, 2, 3];
+const ALL_SHADINGS: Shading[] = ['solid', 'striped', 'open'];
+const ALL_BACKGROUNDS: Background[] = ['white', 'beige', 'charcoal'];
+
+// Default to 4 attributes for backward compatibility
+const DEFAULT_ATTRIBUTES: AttributeName[] = ['shape', 'color', 'number', 'shading'];
+
+// Global counter for unique card instance IDs
+let cardInstanceCounter = 0;
+
+// Generate a unique card ID that includes both attributes and a unique instance number
+const generateCardId = (
+  shape: Shape,
+  color: Color,
+  number: Number,
+  shading: Shading,
+  background: Background,
+  includeBackground: boolean
+): string => {
+  const baseId = includeBackground
+    ? `${shape}-${color}-${number}-${shading}-${background}`
+    : `${shape}-${color}-${number}-${shading}`;
+  return `${baseId}-${++cardInstanceCounter}`;
+};
+
+// Create a deck of cards based on active attributes
+export const createDeck = (activeAttributes: AttributeName[] = DEFAULT_ATTRIBUTES): Card[] => {
+  // Determine which attribute values to iterate over
+  const shapes = activeAttributes.includes('shape') ? ALL_SHAPES : [ALL_SHAPES[0]];
+  const colors = activeAttributes.includes('color') ? ALL_COLORS : [ALL_COLORS[0]];
+  const numbers = activeAttributes.includes('number') ? ALL_NUMBERS : [ALL_NUMBERS[0]];
+  const shadings = activeAttributes.includes('shading') ? ALL_SHADINGS : [ALL_SHADINGS[0]];
+  const backgrounds = activeAttributes.includes('background') ? ALL_BACKGROUNDS : [ALL_BACKGROUNDS[0]];
+  const includeBackground = activeAttributes.includes('background');
+
   const deck: Card[] = [];
-  
-  // Generate all possible combinations (3^4 = 81 cards)
+
+  // Generate all combinations for active attributes
   for (const shape of shapes) {
     for (const color of colors) {
       for (const number of numbers) {
         for (const shading of shadings) {
-          deck.push({
-            id: `${shape}-${color}-${number}-${shading}`,
-            shape,
-            color,
-            number,
-            shading,
-            selected: false
-          });
+          for (const background of backgrounds) {
+            deck.push({
+              id: generateCardId(shape, color, number, shading, background, includeBackground),
+              shape,
+              color,
+              number,
+              shading,
+              background,
+              selected: false
+            });
+          }
         }
       }
     }
   }
-  
+
   return deck;
 };
 
@@ -42,12 +76,13 @@ export const shuffleArray = <T>(array: T[]): T[] => {
 
 // Generate a set of cards for the game board with random modifiers
 export const generateGameBoard = (
-  size: number = 12, 
-  difficulty: number = 1, 
-  round: number = 1
+  size: number = 12,
+  difficulty: number = 1,
+  round: number = 1,
+  activeAttributes: AttributeName[] = DEFAULT_ATTRIBUTES
 ): Card[] => {
-  // Create and shuffle the deck
-  const deck = shuffleArray(createDeck());
+  // Create and shuffle the deck with active attributes
+  const deck = shuffleArray(createDeck(activeAttributes));
   
   // Take the first 'size' cards for the board
   const boardCards = deck.slice(0, size);
@@ -157,13 +192,16 @@ export interface NShapesValidationResult {
 }
 
 // Check if three cards form a valid NShapes combination
-export const isValidCombination = (cards: Card[]): NShapesValidationResult => {
+export const isValidCombination = (
+  cards: Card[],
+  activeAttributes: AttributeName[] = DEFAULT_ATTRIBUTES
+): NShapesValidationResult => {
   const result: NShapesValidationResult = {
     isValid: true,
     invalidAttributes: [],
     errorMessage: ''
   };
-  
+
   if (cards.length !== 3) {
     return {
       isValid: false,
@@ -171,33 +209,44 @@ export const isValidCombination = (cards: Card[]): NShapesValidationResult => {
       errorMessage: 'A valid combination must consist of exactly 3 cards.'
     };
   }
-  
+
   // Check each attribute: must be all same or all different
   const checkAttribute = <T>(attribute: string, getAttribute: (card: Card) => T): boolean => {
     const values = cards.map(getAttribute);
     const uniqueValues = new Set(values);
-    
+
     // Either all cards have the same value (1 unique), or all are different (3 unique)
     const isValid = uniqueValues.size === 1 || uniqueValues.size === 3;
-    
+
     // If not valid, add this attribute to the list of invalid attributes
     if (!isValid) {
       result.isValid = false;
       result.invalidAttributes.push(attribute);
     }
-    
+
     return isValid;
   };
-  
-  // Check all attributes
-  checkAttribute('shape', card => card.shape);
-  checkAttribute('color', card => card.color);
-  checkAttribute('number', card => card.number);
-  checkAttribute('shading', card => card.shading);
-  
+
+  // Check only active attributes
+  if (activeAttributes.includes('shape')) {
+    checkAttribute('shape', card => card.shape);
+  }
+  if (activeAttributes.includes('color')) {
+    checkAttribute('color', card => card.color);
+  }
+  if (activeAttributes.includes('number')) {
+    checkAttribute('number', card => card.number);
+  }
+  if (activeAttributes.includes('shading')) {
+    checkAttribute('shading', card => card.shading);
+  }
+  if (activeAttributes.includes('background')) {
+    checkAttribute('background', card => card.background);
+  }
+
   // Generate a specific error message if not valid
   if (!result.isValid) {
-    const attributeDetails = {
+    const attributeDetails: Record<string, { label: string; values: (string | number | undefined)[] }> = {
       shape: {
         label: 'shapes',
         values: cards.map(card => card.shape)
@@ -213,51 +262,59 @@ export const isValidCombination = (cards: Card[]): NShapesValidationResult => {
       shading: {
         label: 'shadings',
         values: cards.map(card => card.shading)
+      },
+      background: {
+        label: 'backgrounds',
+        values: cards.map(card => card.background)
       }
     };
-    
+
     // Generate detailed messages for each invalid attribute
     const errorDetails = result.invalidAttributes.map(attr => {
-      const details = attributeDetails[attr as keyof typeof attributeDetails];
-      
+      const details = attributeDetails[attr];
+      if (!details) return `The ${attr} must be all the same or all different`;
+
       // Count occurrences of each value
       const valueCounts: Record<string, number> = {};
       details.values.forEach(value => {
         valueCounts[String(value)] = (valueCounts[String(value)] || 0) + 1;
       });
-      
+
       // Format the message based on the values
       const valueStr = Object.entries(valueCounts)
         .map(([value, count]) => `${count} ${value}`)
         .join(' and ');
-        
+
       return `The ${details.label} (${valueStr}) must be all the same or all different`;
     });
-    
+
     if (errorDetails.length === 1) {
       result.errorMessage = `Not a valid combination: ${errorDetails[0]}.`;
     } else {
       result.errorMessage = `Not a valid combination: ${errorDetails.join(', and ')}.`;
     }
   }
-  
+
   return result;
 };
 
 // Find all valid combinations in the current board
-export const findAllCombinations = (board: Card[]): Card[][] => {
+export const findAllCombinations = (
+  board: Card[],
+  activeAttributes: AttributeName[] = DEFAULT_ATTRIBUTES
+): Card[][] => {
   const validCombinations: Card[][] = [];
-  
+
   for (let i = 0; i < board.length; i++) {
     for (let j = i + 1; j < board.length; j++) {
       for (let k = j + 1; k < board.length; k++) {
         const cards = [board[i], board[j], board[k]];
-        if (isValidCombination(cards).isValid) {
+        if (isValidCombination(cards, activeAttributes).isValid) {
           validCombinations.push(cards);
         }
       }
     }
   }
-  
+
   return validCombinations;
 }; 

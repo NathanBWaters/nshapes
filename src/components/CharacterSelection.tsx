@@ -3,19 +3,29 @@ import { View, Text, TouchableOpacity, Pressable, StyleSheet } from 'react-nativ
 import { Character } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { getWeaponByName } from '@/utils/gameDefinitions';
+import { ATTRIBUTE_SCALING } from '@/utils/gameConfig';
 import Icon from './Icon';
 
 // IMPORTANT: This game should NOT have scrollable screens.
 // All screens should fill the available height without requiring scrolling.
 
 export type GameMode = 'adventure' | 'free_play';
+export type FreePlayDifficulty = 'easy' | 'medium' | 'hard' | 'omega';
 
 interface CharacterSelectionProps {
   characters: Character[];
   selectedCharacter: string | null;
   onSelect: (characterName: string) => void;
-  onStart: (mode: GameMode) => void;
+  onStart: (mode: GameMode, difficulty?: FreePlayDifficulty) => void;
 }
+
+// Difficulty labels and descriptions
+const DIFFICULTY_INFO: Record<FreePlayDifficulty, { label: string; description: string }> = {
+  easy: { label: 'Easy', description: '2 attributes' },
+  medium: { label: 'Medium', description: '3 attributes' },
+  hard: { label: 'Hard', description: '4 attributes' },
+  omega: { label: 'Omega', description: '5 attributes' },
+};
 
 const CharacterSelection: React.FC<CharacterSelectionProps> = ({
   characters,
@@ -25,6 +35,7 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
 }) => {
   const [hoveredCharacter, setHoveredCharacter] = React.useState<string | null>(null);
   const [selectedMode, setSelectedMode] = React.useState<GameMode>('adventure');
+  const [freePlayDifficulty, setFreePlayDifficulty] = React.useState<FreePlayDifficulty>('medium');
 
   // Auto-select first character if none selected
   React.useEffect(() => {
@@ -167,9 +178,38 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
           </Pressable>
         </View>
 
+        {/* Difficulty Selector - Only shown for Free Play */}
+        {selectedMode === 'free_play' && (
+          <View style={styles.difficultyContainer}>
+            <Text style={styles.difficultyLabel}>Difficulty</Text>
+            <View style={styles.difficultyOptions}>
+              {(['easy', 'medium', 'hard', 'omega'] as FreePlayDifficulty[]).map(diff => (
+                <Pressable
+                  key={diff}
+                  onPress={() => setFreePlayDifficulty(diff)}
+                  style={[
+                    styles.difficultyButton,
+                    freePlayDifficulty === diff && styles.difficultyButtonSelected,
+                  ]}
+                >
+                  <Text style={[
+                    styles.difficultyButtonText,
+                    freePlayDifficulty === diff && styles.difficultyButtonTextSelected,
+                  ]}>
+                    {DIFFICULTY_INFO[diff].label}
+                  </Text>
+                  <Text style={styles.difficultyAttrCount}>
+                    {DIFFICULTY_INFO[diff].description}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        )}
+
         {/* Start Button */}
         <TouchableOpacity
-          onPress={() => onStart(selectedMode)}
+          onPress={() => onStart(selectedMode, selectedMode === 'free_play' ? freePlayDifficulty : undefined)}
           disabled={!selectedCharacter}
           style={[
             styles.actionButton,
@@ -401,6 +441,53 @@ const styles = StyleSheet.create({
     color: COLORS.slateCharcoal,
     fontWeight: '400',
     fontSize: 10,
+    opacity: 0.7,
+    marginTop: 2,
+  },
+  // Difficulty Selector Styles
+  difficultyContainer: {
+    marginBottom: 12,
+  },
+  difficultyLabel: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '600',
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  difficultyOptions: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  difficultyButton: {
+    flex: 1,
+    backgroundColor: COLORS.paperBeige,
+    borderRadius: RADIUS.button,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+  },
+  difficultyButtonSelected: {
+    backgroundColor: COLORS.logicTeal,
+    borderWidth: 2,
+  },
+  difficultyButtonText: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '600',
+    fontSize: 11,
+    textTransform: 'uppercase',
+  },
+  difficultyButtonTextSelected: {
+    color: COLORS.canvasWhite,
+    fontWeight: '700',
+  },
+  difficultyAttrCount: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '400',
+    fontSize: 9,
     opacity: 0.7,
     marginTop: 2,
   },
