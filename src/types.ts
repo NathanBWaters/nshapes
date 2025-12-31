@@ -94,7 +94,9 @@ export interface Weapon {
   name: WeaponName;
   rarity: WeaponRarity;
   level: number; // 1-4
-  description: string;
+  description: string; // Technical description with percentages
+  shortDescription: string; // 3-8 word summary shown in lists
+  flavorText?: string; // Longer fun description for weapon guide
   price: number;
   effects: Partial<PlayerStats>;
   specialEffect?: 'explosive' | 'autoHint' | 'boardGrowth' | 'fire' | 'mulliganGain' | 'healing' | 'hintGain' | 'holographic' | 'timeGain' | 'laser';

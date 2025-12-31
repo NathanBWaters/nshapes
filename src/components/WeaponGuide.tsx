@@ -69,17 +69,11 @@ const WeaponGuide: React.FC<WeaponGuideProps> = ({ onClose }) => {
               <View style={styles.iconContainer}>
                 <Icon name={variants[0].icon || 'lorc/field'} size={28} color={COLORS.deepOnyx} />
               </View>
-              <Text style={styles.weaponName}>{weaponName}</Text>
-            </View>
-
-            {/* Special effect badge if applicable */}
-            {variants[0].specialEffect && (
-              <View style={styles.specialEffectBadge}>
-                <Text style={styles.specialEffectText}>
-                  {variants[0].specialEffect.toUpperCase()}
-                </Text>
+              <View style={styles.weaponHeaderText}>
+                <Text style={styles.weaponName}>{weaponName}</Text>
+                <Text style={styles.weaponShortDesc}>{variants[0].shortDescription}</Text>
               </View>
-            )}
+            </View>
 
             {/* Rarity tiers */}
             <View style={styles.rarityContainer}>
@@ -98,6 +92,13 @@ const WeaponGuide: React.FC<WeaponGuideProps> = ({ onClose }) => {
                 </View>
               ))}
             </View>
+
+            {/* Detailed explanation */}
+            {variants[0].flavorText && (
+              <View style={styles.flavorTextContainer}>
+                <Text style={styles.flavorText}>{variants[0].flavorText}</Text>
+              </View>
+            )}
           </View>
         ))}
       </ScrollView>
@@ -190,26 +191,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  weaponHeaderText: {
+    flex: 1,
+  },
   weaponName: {
     color: COLORS.canvasWhite,
     fontWeight: '700',
     fontSize: 15,
-    flex: 1,
   },
-  specialEffectBadge: {
-    backgroundColor: COLORS.logicTeal,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    alignSelf: 'flex-start',
-    marginLeft: 12,
-    marginTop: 8,
-    borderRadius: RADIUS.button,
-  },
-  specialEffectText: {
+  weaponShortDesc: {
     color: COLORS.canvasWhite,
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+    fontSize: 11,
+    opacity: 0.8,
+    marginTop: 2,
   },
   rarityContainer: {
     padding: 12,
@@ -242,6 +236,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     fontFamily: 'monospace',
+  },
+  flavorTextContainer: {
+    backgroundColor: COLORS.canvasWhite,
+    padding: 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.slateCharcoal + '30',
+  },
+  flavorText: {
+    color: COLORS.slateCharcoal,
+    fontSize: 12,
+    lineHeight: 18,
+    fontStyle: 'italic',
   },
   closeModalButton: {
     backgroundColor: COLORS.actionYellow,

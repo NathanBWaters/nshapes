@@ -294,16 +294,16 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
                     <Icon name={weapon.icon || 'lorc/field'} size={20} color={COLORS.slateCharcoal} />
                   </View>
                   <View style={styles.weaponInfo}>
-                    <Text style={styles.weaponName}>{weapon.name}</Text>
-                    <Text style={[styles.weaponRarity, { color: getRarityColor(weapon.rarity) }]}>
-                      {weapon.rarity.charAt(0).toUpperCase() + weapon.rarity.slice(1)}
-                    </Text>
-                  </View>
-                  {count > 1 && (
-                    <View style={styles.weaponCountBadge}>
-                      <Text style={styles.weaponCountText}>x{count}</Text>
+                    <View style={styles.weaponNameRow}>
+                      <Text style={styles.weaponName}>{weapon.name}</Text>
+                      {count > 1 && (
+                        <View style={styles.weaponCountBadge}>
+                          <Text style={styles.weaponCountText}>x{count}</Text>
+                        </View>
+                      )}
                     </View>
-                  )}
+                    <Text style={styles.weaponShortDesc}>{weapon.shortDescription}</Text>
+                  </View>
                 </View>
               ))}
             </View>
@@ -327,9 +327,7 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
                     </View>
                     <View style={styles.weaponInfo}>
                       <Text style={styles.weaponName}>{weapon.name}</Text>
-                      <Text style={[styles.weaponRarity, { color: getRarityColor(weapon.rarity) }]}>
-                        {weapon.rarity.charAt(0).toUpperCase() + weapon.rarity.slice(1)}
-                      </Text>
+                      <Text style={styles.weaponShortDesc}>{weapon.shortDescription}</Text>
                     </View>
                   </View>
                 ))}
@@ -869,20 +867,31 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 13,
   },
+  weaponNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  weaponShortDesc: {
+    color: COLORS.slateCharcoal,
+    fontSize: 11,
+    opacity: 0.7,
+    marginTop: 2,
+  },
   weaponRarity: {
     fontSize: 11,
     fontWeight: '500',
   },
   weaponCountBadge: {
     backgroundColor: COLORS.logicTeal,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     borderRadius: RADIUS.button,
   },
   weaponCountText: {
     color: COLORS.canvasWhite,
     fontWeight: '700',
-    fontSize: 12,
+    fontSize: 10,
   },
   noWeaponsContainer: {
     padding: 16,

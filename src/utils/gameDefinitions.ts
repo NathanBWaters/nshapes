@@ -352,6 +352,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 8,
     description: '10% chance to explode adjacent cards on match.',
+    shortDescription: 'May explode adjacent cards on match',
+    flavorText: 'After matching, each adjacent card (up/down/left/right) has a chance to explode. Exploded cards are destroyed and award +1 point and +1 coin each.',
     icon: 'lorc/bright-explosion',
     specialEffect: 'explosive',
     effects: { explosionChance: 10 }
@@ -363,6 +365,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 16,
     description: '30% chance to explode adjacent cards on match.',
+    shortDescription: 'May explode adjacent cards on match',
+    flavorText: 'After matching, each adjacent card (up/down/left/right) has a chance to explode. Exploded cards are destroyed and award +1 point and +1 coin each.',
     icon: 'lorc/bright-explosion',
     specialEffect: 'explosive',
     effects: { explosionChance: 30 }
@@ -374,6 +378,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 24,
     description: '70% chance to explode adjacent cards on match.',
+    shortDescription: 'May explode adjacent cards on match',
+    flavorText: 'After matching, each adjacent card (up/down/left/right) has a chance to explode. Exploded cards are destroyed and award +1 point and +1 coin each.',
     icon: 'lorc/bright-explosion',
     specialEffect: 'explosive',
     effects: { explosionChance: 70 }
@@ -389,6 +395,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 6,
     description: '15% chance for auto-hint every 10s.',
+    shortDescription: 'Automatic hints over time',
+    flavorText: 'Every 10 seconds, has a chance to automatically highlight a valid set on the board. Stacks with other Oracle Eyes for higher chance.',
     icon: 'lorc/sheikah-eye',
     specialEffect: 'autoHint',
     effects: { autoHintChance: 15 }
@@ -400,6 +408,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 12,
     description: '45% chance for auto-hint every 7s.',
+    shortDescription: 'Automatic hints over time',
+    flavorText: 'Every 7 seconds, has a chance to automatically highlight a valid set on the board. Stacks with other Oracle Eyes for higher chance.',
     icon: 'lorc/sheikah-eye',
     specialEffect: 'autoHint',
     effects: { autoHintChance: 45, autoHintInterval: -3000 }
@@ -411,6 +421,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 18,
     description: '100% chance for auto-hint every 4s.',
+    shortDescription: 'Automatic hints over time',
+    flavorText: 'Every 4 seconds, automatically highlights a valid set on the board. Guaranteed hints make finding matches effortless.',
     icon: 'lorc/sheikah-eye',
     specialEffect: 'autoHint',
     effects: { autoHintChance: 100, autoHintInterval: -6000 }
@@ -426,6 +438,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 7,
     description: '+1 starting board size.',
+    shortDescription: 'Larger starting board',
+    flavorText: 'Start each round with more cards on the board. More cards means more possible matches to find.',
     icon: 'lorc/field',
     effects: { fieldSize: 1 }
   },
@@ -436,6 +450,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 14,
     description: '+3 starting board size.',
+    shortDescription: 'Larger starting board',
+    flavorText: 'Start each round with more cards on the board. More cards means more possible matches to find.',
     icon: 'lorc/field',
     effects: { fieldSize: 3 }
   },
@@ -446,6 +462,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 21,
     description: '+7 starting board size.',
+    shortDescription: 'Larger starting board',
+    flavorText: 'Start each round with more cards on the board. More cards means more possible matches to find.',
     icon: 'lorc/field',
     effects: { fieldSize: 7 }
   },
@@ -460,6 +478,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 6,
     description: '5% chance to expand board on match.',
+    shortDescription: 'Board expands on match',
+    flavorText: 'After matching, has a chance to add new cards to the board. A growing board gives you more options and potential matches.',
     icon: 'delapouite/card-exchange',
     specialEffect: 'boardGrowth',
     effects: { boardGrowthChance: 5 }
@@ -471,6 +491,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 12,
     description: '15% chance to expand board on match.',
+    shortDescription: 'Board expands on match',
+    flavorText: 'After matching, has a chance to add new cards to the board. A growing board gives you more options and potential matches.',
     icon: 'delapouite/card-exchange',
     specialEffect: 'boardGrowth',
     effects: { boardGrowthChance: 15 }
@@ -482,6 +504,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 18,
     description: '35% chance to expand board by 2 on match.',
+    shortDescription: 'Board expands on match',
+    flavorText: 'After matching, has a chance to add new cards to the board. A growing board gives you more options and potential matches.',
     icon: 'delapouite/card-exchange',
     specialEffect: 'boardGrowth',
     effects: { boardGrowthChance: 35, boardGrowthAmount: 2 }
@@ -497,6 +521,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 8,
     description: '10% chance to start fire on adjacent cards.',
+    shortDescription: 'May ignite adjacent cards',
+    flavorText: 'After matching, adjacent cards may catch fire. Burning cards are destroyed after 7.5 seconds, awarding points. Fire has a 10% chance to spread to neighbors when a card burns out.',
     icon: 'lorc/campfire',
     specialEffect: 'fire',
     effects: { fireSpreadChance: 10 }
@@ -508,6 +534,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 16,
     description: '30% chance to start fire on adjacent cards.',
+    shortDescription: 'May ignite adjacent cards',
+    flavorText: 'After matching, adjacent cards may catch fire. Burning cards are destroyed after 7.5 seconds, awarding points. Fire has a 10% chance to spread to neighbors when a card burns out.',
     icon: 'lorc/campfire',
     specialEffect: 'fire',
     effects: { fireSpreadChance: 30 }
@@ -519,6 +547,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 24,
     description: '70% chance to start fire on adjacent cards.',
+    shortDescription: 'May ignite adjacent cards',
+    flavorText: 'After matching, adjacent cards may catch fire. Burning cards are destroyed after 7.5 seconds, awarding points. Fire has a 10% chance to spread to neighbors when a card burns out.',
     icon: 'lorc/campfire',
     specialEffect: 'fire',
     effects: { fireSpreadChance: 70 }
@@ -534,6 +564,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 5,
     description: '+1 starting mulligan.',
+    shortDescription: 'Extra starting mulligans',
+    flavorText: 'Mulligans automatically save you when you pick an invalid set. Instead of losing health, the mulligan is consumed and the cards are removed.',
     icon: 'lorc/recycle',
     effects: { mulligans: 1 }
   },
@@ -544,6 +576,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 10,
     description: '+3 starting mulligans.',
+    shortDescription: 'Extra starting mulligans',
+    flavorText: 'Mulligans automatically save you when you pick an invalid set. Instead of losing health, the mulligan is consumed and the cards are removed.',
     icon: 'lorc/recycle',
     effects: { mulligans: 3 }
   },
@@ -554,6 +588,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 15,
     description: '+7 starting mulligans.',
+    shortDescription: 'Extra starting mulligans',
+    flavorText: 'Mulligans automatically save you when you pick an invalid set. Instead of losing health, the mulligan is consumed and the cards are removed.',
     icon: 'lorc/recycle',
     effects: { mulligans: 7 }
   },
@@ -568,6 +604,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 6,
     description: '5% chance to gain mulligan on match.',
+    shortDescription: 'Gain mulligans on match',
+    flavorText: 'After a valid match, has a chance to grant +1 mulligan. Mulligans protect you from losing health on invalid matches.',
     icon: 'lorc/cycle',
     specialEffect: 'mulliganGain',
     effects: { mulliganGainChance: 5 }
@@ -579,6 +617,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 12,
     description: '15% chance to gain mulligan on match.',
+    shortDescription: 'Gain mulligans on match',
+    flavorText: 'After a valid match, has a chance to grant +1 mulligan. Mulligans protect you from losing health on invalid matches.',
     icon: 'lorc/cycle',
     specialEffect: 'mulliganGain',
     effects: { mulliganGainChance: 15 }
@@ -590,6 +630,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 18,
     description: '35% chance to gain mulligan on match.',
+    shortDescription: 'Gain mulligans on match',
+    flavorText: 'After a valid match, has a chance to grant +1 mulligan. Mulligans protect you from losing health on invalid matches.',
     icon: 'lorc/cycle',
     specialEffect: 'mulliganGain',
     effects: { mulliganGainChance: 35 }
@@ -605,6 +647,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 6,
     description: '+1 max health.',
+    shortDescription: 'Increased max health',
+    flavorText: 'Increases your maximum health pool. You lose 1 health when picking an invalid set without a mulligan to protect you.',
     icon: 'lorc/heart-inside',
     effects: { maxHealth: 1 }
   },
@@ -615,6 +659,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 12,
     description: '+3 max health.',
+    shortDescription: 'Increased max health',
+    flavorText: 'Increases your maximum health pool. You lose 1 health when picking an invalid set without a mulligan to protect you.',
     icon: 'lorc/heart-inside',
     effects: { maxHealth: 3 }
   },
@@ -625,6 +671,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 18,
     description: '+7 max health.',
+    shortDescription: 'Increased max health',
+    flavorText: 'Increases your maximum health pool. You lose 1 health when picking an invalid set without a mulligan to protect you.',
     icon: 'lorc/heart-inside',
     effects: { maxHealth: 7 }
   },
@@ -639,6 +687,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 5,
     description: '5% chance to heal on match.',
+    shortDescription: 'Heal on match',
+    flavorText: 'After a valid match, has a chance to restore 1 health. Cannot heal above your maximum health.',
     icon: 'lorc/shining-heart',
     specialEffect: 'healing',
     effects: { healingChance: 5 }
@@ -650,6 +700,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 10,
     description: '15% chance to heal on match.',
+    shortDescription: 'Heal on match',
+    flavorText: 'After a valid match, has a chance to restore 1 health. Cannot heal above your maximum health.',
     icon: 'lorc/shining-heart',
     specialEffect: 'healing',
     effects: { healingChance: 15 }
@@ -661,6 +713,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 15,
     description: '35% chance to heal on match.',
+    shortDescription: 'Heal on match',
+    flavorText: 'After a valid match, has a chance to restore 1 health. Cannot heal above your maximum health.',
     icon: 'lorc/shining-heart',
     specialEffect: 'healing',
     effects: { healingChance: 35 }
@@ -676,6 +730,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 5,
     description: '+1 starting hint.',
+    shortDescription: 'Extra starting hints',
+    flavorText: 'Hints highlight a valid set on the board when activated. Tap the hint button to use one.',
     icon: 'lorc/floating-crystal',
     effects: { hints: 1 }
   },
@@ -686,6 +742,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 10,
     description: '+3 starting hints.',
+    shortDescription: 'Extra starting hints',
+    flavorText: 'Hints highlight a valid set on the board when activated. Tap the hint button to use one.',
     icon: 'lorc/floating-crystal',
     effects: { hints: 3 }
   },
@@ -696,6 +754,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 15,
     description: '+7 starting hints.',
+    shortDescription: 'Extra starting hints',
+    flavorText: 'Hints highlight a valid set on the board when activated. Tap the hint button to use one.',
     icon: 'lorc/floating-crystal',
     effects: { hints: 7 }
   },
@@ -710,6 +770,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 6,
     description: '5% chance to gain hint on match.',
+    shortDescription: 'Gain hints on match',
+    flavorText: 'After a valid match, has a chance to gain +1 hint. Use hints to highlight valid sets when you\'re stuck.',
     icon: 'lorc/light-bulb',
     specialEffect: 'hintGain',
     effects: { hintGainChance: 5 }
@@ -721,6 +783,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 12,
     description: '15% chance to gain hint on match.',
+    shortDescription: 'Gain hints on match',
+    flavorText: 'After a valid match, has a chance to gain +1 hint. Use hints to highlight valid sets when you\'re stuck.',
     icon: 'lorc/light-bulb',
     specialEffect: 'hintGain',
     effects: { hintGainChance: 15 }
@@ -732,6 +796,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 18,
     description: '35% chance to gain hint on match.',
+    shortDescription: 'Gain hints on match',
+    flavorText: 'After a valid match, has a chance to gain +1 hint. Use hints to highlight valid sets when you\'re stuck.',
     icon: 'lorc/light-bulb',
     specialEffect: 'hintGain',
     effects: { hintGainChance: 35 }
@@ -747,6 +813,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 8,
     description: '10% chance for holographic cards (2x points).',
+    shortDescription: 'Holographic cards appear',
+    flavorText: 'When new cards are drawn, they have a chance to become holographic (purple shimmer). Matching holographic cards awards 2x points.',
     icon: 'lorc/crystal-shine',
     specialEffect: 'holographic',
     effects: { holoChance: 10 }
@@ -758,6 +826,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 16,
     description: '30% chance for holographic cards (2x points).',
+    shortDescription: 'Holographic cards appear',
+    flavorText: 'When new cards are drawn, they have a chance to become holographic (purple shimmer). Matching holographic cards awards 2x points.',
     icon: 'lorc/crystal-shine',
     specialEffect: 'holographic',
     effects: { holoChance: 30 }
@@ -769,6 +839,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 24,
     description: '70% chance for holographic cards (2x points).',
+    shortDescription: 'Holographic cards appear',
+    flavorText: 'When new cards are drawn, they have a chance to become holographic (purple shimmer). Matching holographic cards awards 2x points.',
     icon: 'lorc/crystal-shine',
     specialEffect: 'holographic',
     effects: { holoChance: 70 }
@@ -784,6 +856,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 7,
     description: '+15s starting time.',
+    shortDescription: 'More starting time',
+    flavorText: 'Adds bonus seconds to your starting time each round. More time means less pressure to find matches quickly.',
     icon: 'lorc/hourglass',
     effects: { startingTime: 15 }
   },
@@ -794,6 +868,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 14,
     description: '+45s starting time.',
+    shortDescription: 'More starting time',
+    flavorText: 'Adds bonus seconds to your starting time each round. More time means less pressure to find matches quickly.',
     icon: 'lorc/hourglass',
     effects: { startingTime: 45 }
   },
@@ -804,6 +880,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 21,
     description: '+105s starting time.',
+    shortDescription: 'More starting time',
+    flavorText: 'Adds bonus seconds to your starting time each round. More time means less pressure to find matches quickly.',
     icon: 'lorc/hourglass',
     effects: { startingTime: 105 }
   },
@@ -818,6 +896,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 6,
     description: '5% chance to gain +10s on match.',
+    shortDescription: 'Gain time on match',
+    flavorText: 'After a valid match, has a chance to add bonus time to the clock. Great for extending tight rounds.',
     icon: 'lorc/stopwatch',
     specialEffect: 'timeGain',
     effects: { timeGainChance: 5, timeGainAmount: 10 }
@@ -829,6 +909,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 12,
     description: '15% chance to gain +10s on match.',
+    shortDescription: 'Gain time on match',
+    flavorText: 'After a valid match, has a chance to add bonus time to the clock. Great for extending tight rounds.',
     icon: 'lorc/stopwatch',
     specialEffect: 'timeGain',
     effects: { timeGainChance: 15, timeGainAmount: 10 }
@@ -840,6 +922,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 18,
     description: '35% chance to gain +15s on match.',
+    shortDescription: 'Gain time on match',
+    flavorText: 'After a valid match, has a chance to add bonus time to the clock. Great for extending tight rounds.',
     icon: 'lorc/stopwatch',
     specialEffect: 'timeGain',
     effects: { timeGainChance: 35, timeGainAmount: 15 }
@@ -855,6 +939,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 10,
     description: '3% chance to destroy entire row or column.',
+    shortDescription: 'May destroy a row or column',
+    flavorText: 'Each laser weapon rolls independently on every match. When triggered, destroys all cards in either a row or column (randomly chosen). Multiple lasers can fire on the same match. Destroyed cards award +2 points each.',
     icon: 'lorc/laser-warning',
     specialEffect: 'laser',
     effects: { laserChance: 3 }
@@ -866,6 +952,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 20,
     description: '9% chance to destroy entire row or column.',
+    shortDescription: 'May destroy a row or column',
+    flavorText: 'Each laser weapon rolls independently on every match. When triggered, destroys all cards in either a row or column (randomly chosen). Multiple lasers can fire on the same match. Destroyed cards award +2 points each.',
     icon: 'lorc/laser-warning',
     specialEffect: 'laser',
     effects: { laserChance: 9 }
@@ -877,6 +965,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 30,
     description: '21% chance to destroy entire row or column.',
+    shortDescription: 'May destroy a row or column',
+    flavorText: 'Each laser weapon rolls independently on every match. When triggered, destroys all cards in either a row or column (randomly chosen). Multiple lasers can fire on the same match. Destroyed cards award +2 points each.',
     icon: 'lorc/laser-warning',
     specialEffect: 'laser',
     effects: { laserChance: 21 }

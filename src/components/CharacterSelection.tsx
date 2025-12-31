@@ -90,11 +90,16 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
                 {selectedChar.startingWeapons.map((weaponName, index) => {
                   const weapon = getWeaponByName(weaponName);
                   return (
-                    <View key={index} style={styles.statValueRow}>
-                      {weapon?.icon && (
-                        <Icon name={weapon.icon} size={16} color={COLORS.slateCharcoal} />
+                    <View key={index} style={styles.weaponItemRow}>
+                      <View style={styles.weaponItemHeader}>
+                        {weapon?.icon && (
+                          <Icon name={weapon.icon} size={16} color={COLORS.slateCharcoal} />
+                        )}
+                        <Text style={styles.statValue}>{weaponName}</Text>
+                      </View>
+                      {weapon?.shortDescription && (
+                        <Text style={styles.weaponShortDesc}>{weapon.shortDescription}</Text>
                       )}
-                      <Text style={styles.statValue}>{weaponName}</Text>
                     </View>
                   );
                 })}
@@ -347,7 +352,21 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   weaponsList: {
-    gap: 4,
+    gap: 8,
+  },
+  weaponItemRow: {
+    gap: 2,
+  },
+  weaponItemHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  weaponShortDesc: {
+    color: COLORS.slateCharcoal,
+    fontSize: 10,
+    opacity: 0.7,
+    marginLeft: 22,
   },
   emptyDetail: {
     flex: 1,
