@@ -458,6 +458,10 @@ const Game: React.FC = () => {
     // Initialize the game with the selected character and attributes
     initGame(selectedCharacter, activeAttributes);
 
+    // Reset hint triggers to prevent auto-triggering on game start
+    setHintTrigger(0);
+    setClearHintTrigger(0);
+
     setState(prevState => ({
       ...prevState,
       gameStarted: true,
@@ -489,6 +493,10 @@ const Game: React.FC = () => {
       lootBoxesEarned: 0,
       startLevel: state.player.stats.level,
     });
+
+    // Reset hint triggers to prevent auto-triggering on round start
+    setHintTrigger(0);
+    setClearHintTrigger(0);
 
     setState(prevState => ({
       ...prevState,
@@ -789,7 +797,7 @@ const Game: React.FC = () => {
       return {
         ...prevState,
         score: prevState.score + totalPoints,
-        selectedCards: [],
+        selectedCards: prevState.selectedCards.filter(c => !cards.some(mc => mc.id === c.id)),
         foundCombinations: [...prevState.foundCombinations, cards],
         lootCrates: prevState.lootCrates + lootCratesEarned,
         player: {
@@ -810,8 +818,11 @@ const Game: React.FC = () => {
     replaceMatchedCards(cards);
   };
 
-  // Handle invalid match
+  // Handle invalid match - removes cards and replaces them (costs 1 health)
   const handleInvalidMatch = () => {
+    // Capture the selected cards before clearing them
+    const cardsToReplace = [...state.selectedCards];
+
     // Decrease health
     setState(prevState => {
       const newHealth = prevState.player.stats.health - 1;
@@ -832,7 +843,7 @@ const Game: React.FC = () => {
 
       return {
         ...prevState,
-        selectedCards: [],
+        selectedCards: prevState.selectedCards.filter(c => !cardsToReplace.some(mc => mc.id === c.id)),
         player: {
           ...prevState.player,
           stats: {
@@ -842,6 +853,11 @@ const Game: React.FC = () => {
         }
       };
     });
+
+    // Replace the invalid match cards with new ones from the deck
+    if (cardsToReplace.length === 3) {
+      replaceMatchedCards(cardsToReplace);
+    }
   };
 
   // Handle using a hint (decrement hint count)
@@ -950,6 +966,10 @@ const Game: React.FC = () => {
   const startNextRound = () => {
     const nextRound = state.round + 1;
     const roundReq = getRoundRequirement(nextRound);
+
+    // Reset hint triggers to prevent auto-triggering on round start
+    setHintTrigger(0);
+    setClearHintTrigger(0);
 
     // Get active attributes for the new round
     const newActiveAttributes = getActiveAttributesForRound(nextRound);

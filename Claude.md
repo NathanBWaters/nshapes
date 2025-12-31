@@ -18,6 +18,11 @@ NShapes combines the classic SET card matching game with roguelike progression m
 
 **The SET Rule:** A valid match requires 3 cards where **each active attribute** is either **all the same** OR **all different** across the three cards.
 
+**Invalid Match Mechanic:** When a player selects 3 cards that do NOT form a valid SET:
+* The player loses 1 health (heart)
+* The 3 selected cards are **removed** from the board and replaced with new cards
+* This creates a strategic "sacrifice" option—stuck players can spend health to cycle in new cards
+
 ### Game Modes
 
 **Adventure Mode** - Progressive Roguelike Campaign:
