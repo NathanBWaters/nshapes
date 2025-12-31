@@ -70,18 +70,23 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
       <View style={styles.detailSection}>
         {selectedChar ? (
           <View style={styles.detailCard}>
-            {/* Character Icon */}
-            <View style={styles.previewArea}>
-              {selectedChar.icon ? (
-                <Icon name={selectedChar.icon} size={64} color={COLORS.slateCharcoal} />
-              ) : (
-                <Text style={styles.previewText}>{selectedChar.name}</Text>
-              )}
-            </View>
+            {/* Character Header: Icon + Name/Description side by side */}
+            <View style={styles.characterHeader}>
+              {/* Character Icon - Square on left */}
+              <View style={styles.previewArea}>
+                {selectedChar.icon ? (
+                  <Icon name={selectedChar.icon} size={48} color={COLORS.slateCharcoal} />
+                ) : (
+                  <Text style={styles.previewText}>{selectedChar.name}</Text>
+                )}
+              </View>
 
-            {/* Character Info */}
-            <Text style={styles.detailName}>{selectedChar.name}</Text>
-            <Text style={styles.detailDescription}>{selectedChar.description}</Text>
+              {/* Character Info - Right of icon */}
+              <View style={styles.characterInfo}>
+                <Text style={styles.detailName}>{selectedChar.name}</Text>
+                <Text style={styles.detailDescription}>{selectedChar.description}</Text>
+              </View>
+            </View>
 
             {/* Starting Weapons */}
             <View style={styles.statBox}>
@@ -292,11 +297,16 @@ const styles = StyleSheet.create({
     borderColor: COLORS.slateCharcoal,
     padding: 16,
   },
+  characterHeader: {
+    flexDirection: 'row',
+    marginBottom: 12,
+    gap: 12,
+  },
   previewArea: {
     backgroundColor: COLORS.paperBeige,
-    height: 80,
+    width: 72,
+    height: 72,
     borderRadius: 8,
-    marginBottom: 12,
     borderWidth: 1,
     borderStyle: 'dashed',
     borderColor: COLORS.slateCharcoal,
@@ -310,6 +320,10 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
+  characterInfo: {
+    flex: 1,
+    justifyContent: 'center',
+  },
   detailName: {
     color: COLORS.slateCharcoal,
     fontWeight: '700',
@@ -322,7 +336,6 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     fontSize: 14,
     lineHeight: 20,
-    marginBottom: 12,
     opacity: 0.8,
   },
   statBox: {
