@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, ScrollView } from 'react-native';
 import {
   CopilotProvider,
   CopilotStep,
@@ -14,6 +14,7 @@ import { DEFAULT_PLAYER_STATS } from '@/utils/gameDefinitions';
 import { generateGameBoard, shuffleArray, createDeck, sameCardAttributes } from '@/utils/gameUtils';
 
 const WalkthroughableView = walkthroughable(View);
+const WalkthroughableTouchable = walkthroughable(TouchableOpacity);
 
 interface TutorialUITourProps {
   onComplete: () => void;
@@ -41,8 +42,11 @@ const getXPForLevel = (level: number): number => {
 
 // Inner component that uses useCopilot hook
 const TourContent: React.FC<TutorialUITourProps> = ({ onComplete, onSkip }) => {
-  const { start, copilotEvents } = useCopilot();
+  const { start, copilotEvents, goToNext } = useCopilot();
   const [board, setBoard] = React.useState<CardType[]>([]);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const hasStartedRef = useRef(false);
+  const currentStepRef = useRef<string | null>(null);
 
   // Generate a static board for display
   useEffect(() => {
@@ -50,13 +54,38 @@ const TourContent: React.FC<TutorialUITourProps> = ({ onComplete, onSkip }) => {
     setBoard(initialBoard);
   }, []);
 
-  // Start the tour automatically
+  // Start the tour automatically (only once)
   useEffect(() => {
+    if (hasStartedRef.current) return;
+
     const timer = setTimeout(() => {
+      hasStartedRef.current = true;
       start();
     }, 500);
     return () => clearTimeout(timer);
   }, [start]);
+
+  // Listen for step changes to open menu at the right time
+  useEffect(() => {
+    const handleStepChange = (step: { name: string; order: number } | undefined) => {
+      if (!step) return;
+      currentStepRef.current = step.name;
+      // When we reach the menu button step, open the menu after a short delay
+      if (step.name === 'menu_button') {
+        setTimeout(() => {
+          setIsMenuOpen(true);
+          // After menu opens, advance to first menu item step
+          setTimeout(() => {
+            goToNext();
+          }, 300);
+        }, 500);
+      }
+    };
+    copilotEvents.on('stepChange', handleStepChange);
+    return () => {
+      copilotEvents.off('stepChange', handleStepChange);
+    };
+  }, [copilotEvents, goToNext]);
 
   // Listen for tour completion
   useEffect(() => {
@@ -207,6 +236,19 @@ const TourContent: React.FC<TutorialUITourProps> = ({ onComplete, onSkip }) => {
             <Text style={styles.scoreText}>2/5</Text>
           </WalkthroughableView>
         </CopilotStep>
+
+        {/* Menu Button */}
+        <CopilotStep
+          text="Tap MENU to view your stats, check the weapon guide, or exit the game. Let's open it!"
+          order={10}
+          name="menu_button"
+        >
+          <WalkthroughableView style={styles.menuButtonContainer}>
+            <View style={styles.menuButton}>
+              <Text style={styles.menuButtonText}>MENU</Text>
+            </View>
+          </WalkthroughableView>
+        </CopilotStep>
       </View>
 
       {/* Game Board (non-interactive during tour) */}
@@ -225,6 +267,78 @@ const TourContent: React.FC<TutorialUITourProps> = ({ onComplete, onSkip }) => {
       <TouchableOpacity style={styles.skipButton} onPress={onSkip}>
         <Text style={styles.skipButtonText}>Skip Tutorial</Text>
       </TouchableOpacity>
+
+      {/* Tutorial Menu Modal */}
+      <Modal
+        visible={isMenuOpen}
+        transparent={true}
+        animationType="fade"
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            {/* Menu Header */}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Menu</Text>
+              <View style={styles.closeButton}>
+                <Text style={styles.closeButtonText}>X</Text>
+              </View>
+            </View>
+
+            {/* Menu Options with Copilot Steps */}
+            <View style={styles.menuOptionsContainer}>
+              <CopilotStep
+                text="Character Stats shows your current health, money, level, and all your equipped weapons. Check here to see how powerful you've become!"
+                order={11}
+                name="menu_stats"
+              >
+                <WalkthroughableView style={styles.menuOption}>
+                  <Text style={styles.menuOptionIcon}>📊</Text>
+                  <View style={styles.menuOptionTextContainer}>
+                    <Text style={styles.menuOptionTitle}>Character Stats</Text>
+                    <Text style={styles.menuOptionDescription}>View your current stats and abilities</Text>
+                  </View>
+                  <Text style={styles.menuOptionArrow}>›</Text>
+                </WalkthroughableView>
+              </CopilotStep>
+
+              <CopilotStep
+                text="The Weapon Guide shows all 15 weapon types and what they do. Browse this before buying weapons in the shop so you know what each one does!"
+                order={12}
+                name="menu_weapons"
+              >
+                <WalkthroughableView style={styles.menuOption}>
+                  <Text style={styles.menuOptionIcon}>⚔️</Text>
+                  <View style={styles.menuOptionTextContainer}>
+                    <Text style={styles.menuOptionTitle}>Weapon Guide</Text>
+                    <Text style={styles.menuOptionDescription}>Browse all weapons and their effects</Text>
+                  </View>
+                  <Text style={styles.menuOptionArrow}>›</Text>
+                </WalkthroughableView>
+              </CopilotStep>
+
+              <CopilotStep
+                text="Exit Game lets you return to the main menu. Your progress will be lost, so only use this when you want to start over!"
+                order={13}
+                name="menu_exit"
+              >
+                <WalkthroughableView style={[styles.menuOption, styles.exitMenuOption]}>
+                  <Text style={styles.menuOptionIcon}>🚪</Text>
+                  <View style={styles.menuOptionTextContainer}>
+                    <Text style={[styles.menuOptionTitle, styles.exitMenuOptionTitle]}>Exit Game</Text>
+                    <Text style={styles.menuOptionDescription}>Return to the main menu</Text>
+                  </View>
+                  <Text style={styles.menuOptionArrow}>›</Text>
+                </WalkthroughableView>
+              </CopilotStep>
+            </View>
+
+            {/* Close Button */}
+            <TouchableOpacity style={styles.closeModalButton}>
+              <Text style={styles.closeModalButtonText}>CLOSE</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -431,6 +545,131 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderWidth: 2,
     borderColor: COLORS.slateCharcoal,
+  },
+  // Menu button styles
+  menuButtonContainer: {
+    marginLeft: 'auto',
+  },
+  menuButton: {
+    backgroundColor: COLORS.deepOnyx,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: RADIUS.button,
+  },
+  menuButtonText: {
+    color: COLORS.canvasWhite,
+    fontWeight: '700',
+    fontSize: 10,
+    letterSpacing: 0.5,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(18, 18, 18, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  modalContainer: {
+    backgroundColor: COLORS.canvasWhite,
+    borderRadius: RADIUS.module,
+    borderWidth: 2,
+    borderColor: COLORS.slateCharcoal,
+    width: '100%',
+    maxWidth: 500,
+    maxHeight: '90%',
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    backgroundColor: COLORS.actionYellow,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.slateCharcoal,
+  },
+  modalTitle: {
+    color: COLORS.deepOnyx,
+    fontWeight: '700',
+    fontSize: 16,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    flex: 1,
+    textAlign: 'center',
+  },
+  closeButton: {
+    width: 28,
+    height: 28,
+    borderRadius: RADIUS.button,
+    backgroundColor: COLORS.deepOnyx,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    color: COLORS.canvasWhite,
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  menuOptionsContainer: {
+    padding: 16,
+    gap: 12,
+  },
+  menuOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.paperBeige,
+    padding: 16,
+    borderRadius: RADIUS.module,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+    gap: 12,
+  },
+  menuOptionIcon: {
+    fontSize: 24,
+  },
+  menuOptionTextContainer: {
+    flex: 1,
+  },
+  menuOptionTitle: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  menuOptionDescription: {
+    color: COLORS.slateCharcoal,
+    fontSize: 12,
+    opacity: 0.7,
+    marginTop: 2,
+  },
+  menuOptionArrow: {
+    color: COLORS.slateCharcoal,
+    fontSize: 24,
+    fontWeight: '300',
+  },
+  exitMenuOption: {
+    backgroundColor: COLORS.impactRed + '15',
+    borderColor: COLORS.impactRed,
+  },
+  exitMenuOptionTitle: {
+    color: COLORS.impactRed,
+  },
+  closeModalButton: {
+    backgroundColor: COLORS.actionYellow,
+    margin: 16,
+    marginTop: 0,
+    paddingVertical: 14,
+    borderRadius: RADIUS.button,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+    alignItems: 'center',
+  },
+  closeModalButtonText: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '700',
+    fontSize: 14,
+    letterSpacing: 1,
   },
 });
 

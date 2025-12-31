@@ -11,7 +11,6 @@ export type TutorialStep =
   | 'complexity'
   | 'practice'
   | 'ui_tour'
-  | 'menu_tour'
   | 'complete';
 
 export interface TutorialState {
@@ -116,7 +115,6 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
     'complexity',
     'practice',
     'ui_tour',
-    'menu_tour',
     'complete',
   ];
 

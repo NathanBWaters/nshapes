@@ -65,7 +65,7 @@ export const CHARACTERS: Character[] = [
   {
     name: 'Orange Tabby',
     description: 'Uses multiple lives to get more Mulligans',
-    startingWeapon: 'Bamboo',
+    startingWeapon: 'Second Chance',
     startingItems: [],
     icon: 'lorc/cat',
     baseStats: {
@@ -77,7 +77,7 @@ export const CHARACTERS: Character[] = [
   {
     name: 'Sly Fox',
     description: 'Specializes in bomb and trap synergy',
-    startingWeapon: 'Flint',
+    startingWeapon: 'Flint Spark',
     startingItems: [],
     icon: 'caro-asercion/fox',
     baseStats: {
@@ -88,7 +88,7 @@ export const CHARACTERS: Character[] = [
   {
     name: 'Corgi',
     description: 'Gets extra match hints and free rerolls',
-    startingWeapon: 'Carrot',
+    startingWeapon: 'Chrono Shard',
     startingItems: [],
     icon: 'delapouite/sitting-dog',
     baseStats: {
@@ -100,7 +100,7 @@ export const CHARACTERS: Character[] = [
   {
     name: 'Emperor Penguin',
     description: 'Money-focused with increased commerce',
-    startingWeapon: 'Dirt',
+    startingWeapon: 'Field Stone',
     startingItems: [],
     icon: 'delapouite/penguin',
     baseStats: {
@@ -111,7 +111,7 @@ export const CHARACTERS: Character[] = [
   {
     name: 'Pelican',
     description: 'Can make cards become fragile',
-    startingWeapon: 'Beak',
+    startingWeapon: 'Oracle Eye',
     startingItems: [],
     icon: 'delapouite/eating-pelican',
     baseStats: {
@@ -122,7 +122,7 @@ export const CHARACTERS: Character[] = [
   {
     name: 'Badger',
     description: 'Has a larger field view',
-    startingWeapon: 'Hoe',
+    startingWeapon: 'Growth Seed',
     startingItems: [],
     icon: 'caro-asercion/badger',
     baseStats: {
@@ -366,93 +366,8 @@ export const ENEMIES: Enemy[] = [
   // Complete the implementation for remaining enemies
 ];
 
-// Legacy weapons (kept for backwards compatibility with characters)
-export const LEGACY_WEAPONS: Weapon[] = [
-  {
-    id: 'legacy-flint',
-    name: 'Flint',
-    rarity: 'common',
-    level: 1,
-    price: 0,
-    description: '20% chance to start a fire on a card.',
-    icon: 'delapouite/flint-spark',
-    specialEffect: 'fire',
-    effects: {
-      fireSpreadChance: 20,
-    }
-  },
-  {
-    id: 'legacy-bamboo',
-    name: 'Bamboo',
-    rarity: 'common',
-    level: 1,
-    price: 0,
-    description: '20% to deal one extra damage to a field card.',
-    icon: 'delapouite/bamboo',
-    effects: {
-      damagePercent: 20
-    }
-  },
-  {
-    id: 'legacy-carrot',
-    name: 'Carrot',
-    rarity: 'common',
-    level: 1,
-    price: 0,
-    description: 'Slows time by 1.1x.',
-    icon: 'delapouite/carrot',
-    effects: {
-      timeWarpPercent: 10
-    }
-  },
-  {
-    id: 'legacy-beak',
-    name: 'Beak',
-    rarity: 'common',
-    level: 1,
-    price: 0,
-    description: '10% chance to inflict fragile on a matched field card.',
-    icon: 'lorc/bird-claw',
-    effects: {}
-  },
-  {
-    id: 'legacy-dirt',
-    name: 'Dirt',
-    rarity: 'common',
-    level: 1,
-    price: 0,
-    description: 'Increases field size by 1.',
-    icon: 'delapouite/stone-pile',
-    effects: {
-      fieldSize: 1
-    }
-  },
-  {
-    id: 'legacy-talon',
-    name: 'Talon',
-    rarity: 'common',
-    level: 1,
-    price: 0,
-    description: '25% chance to remove bramble upon match.',
-    icon: 'lorc/claw-slashes',
-    effects: {}
-  },
-  {
-    id: 'legacy-hoe',
-    name: 'Hoe',
-    rarity: 'common',
-    level: 1,
-    price: 0,
-    description: '10% chance to increase field size temporarily.',
-    icon: 'delapouite/rake',
-    effects: {
-      boardGrowthChance: 10,
-    }
-  },
-];
-
-// New weapon system - 15 types × 3 rarities = 45 weapons
-export const SHOP_WEAPONS: Weapon[] = [
+// Weapon system - 15 types × 3 rarities = 45 weapons
+export const WEAPONS: Weapon[] = [
   // ============================================================================
   // 1. BLAST POWDER - Explosive adjacent cards on match
   // ============================================================================
@@ -994,9 +909,6 @@ export const SHOP_WEAPONS: Weapon[] = [
   },
 ];
 
-// Combined weapons list for backwards compatibility
-export const WEAPONS: Weapon[] = [...LEGACY_WEAPONS, ...SHOP_WEAPONS];
-
 // Helper function to get a random weapon based on rarity distribution
 export const getRandomShopWeapon = (): Weapon => {
   const roll = Math.random();
@@ -1010,7 +922,7 @@ export const getRandomShopWeapon = (): Weapon => {
     rarity = 'common';
   }
 
-  const weaponsOfRarity = SHOP_WEAPONS.filter(w => w.rarity === rarity);
+  const weaponsOfRarity = WEAPONS.filter(w => w.rarity === rarity);
   return weaponsOfRarity[Math.floor(Math.random() * weaponsOfRarity.length)];
 };
 
@@ -1025,7 +937,7 @@ export const generateShopWeapons = (count: number): Weapon[] => {
 
 // Get weapons by rarity
 export const getWeaponsByRarity = (rarity: WeaponRarity): Weapon[] => {
-  return SHOP_WEAPONS.filter(w => w.rarity === rarity);
+  return WEAPONS.filter(w => w.rarity === rarity);
 };
 
 // Items

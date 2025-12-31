@@ -8,7 +8,7 @@ import {
   processWeaponEffects,
 } from '@/utils/weaponEffects';
 import { Card, PlayerStats, Weapon } from '@/types';
-import { DEFAULT_PLAYER_STATS, SHOP_WEAPONS } from '@/utils/gameDefinitions';
+import { DEFAULT_PLAYER_STATS, WEAPONS } from '@/utils/gameDefinitions';
 
 // Helper to create a mock laser weapon
 const createLaserWeapon = (id: string, laserChance: number): Weapon => ({
@@ -624,13 +624,13 @@ describe('Multi-Laser Independent Rolls', () => {
     expect(result.laserCount).toBe(1);
   });
 
-  it('should work correctly with actual SHOP_WEAPONS laser definitions', () => {
+  it('should work correctly with actual WEAPONS laser definitions', () => {
     const board = createTestBoard();
     const matchedCards = [board[4]];
     const stats: PlayerStats = { ...DEFAULT_PLAYER_STATS };
 
-    // Get the actual legendary laser weapon from SHOP_WEAPONS
-    const legendaryLaser = SHOP_WEAPONS.find(
+    // Get the actual legendary laser weapon from WEAPONS
+    const legendaryLaser = WEAPONS.find(
       w => w.name === 'Prismatic Ray' && w.rarity === 'legendary'
     );
 
@@ -656,9 +656,9 @@ describe('Multi-Laser Independent Rolls', () => {
     expect(result.laserCards.length).toBeGreaterThan(0);
   });
 
-  it('should correctly filter laser weapons from SHOP_WEAPONS', () => {
-    // Verify how many laser weapons exist in SHOP_WEAPONS
-    const allLaserWeapons = SHOP_WEAPONS.filter(
+  it('should correctly filter laser weapons from WEAPONS', () => {
+    // Verify how many laser weapons exist in WEAPONS
+    const allLaserWeapons = WEAPONS.filter(
       w => w.specialEffect === 'laser' && w.effects.laserChance
     );
 

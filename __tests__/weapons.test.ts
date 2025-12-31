@@ -1,5 +1,5 @@
 import {
-  SHOP_WEAPONS,
+  WEAPONS,
   generateShopWeapons,
   getRandomShopWeapon,
   calculatePlayerTotalStats,
@@ -9,29 +9,29 @@ import {
 import { Weapon, WeaponRarity, Player } from '@/types';
 
 describe('Weapon Definitions', () => {
-  describe('SHOP_WEAPONS array', () => {
+  describe('WEAPONS array', () => {
     it('should have exactly 45 weapons (15 types x 3 rarities)', () => {
-      expect(SHOP_WEAPONS.length).toBe(45);
+      expect(WEAPONS.length).toBe(45);
     });
 
     it('should have 15 common weapons', () => {
-      const commons = SHOP_WEAPONS.filter(w => w.rarity === 'common');
+      const commons = WEAPONS.filter(w => w.rarity === 'common');
       expect(commons.length).toBe(15);
     });
 
     it('should have 15 rare weapons', () => {
-      const rares = SHOP_WEAPONS.filter(w => w.rarity === 'rare');
+      const rares = WEAPONS.filter(w => w.rarity === 'rare');
       expect(rares.length).toBe(15);
     });
 
     it('should have 15 legendary weapons', () => {
-      const legendaries = SHOP_WEAPONS.filter(w => w.rarity === 'legendary');
+      const legendaries = WEAPONS.filter(w => w.rarity === 'legendary');
       expect(legendaries.length).toBe(15);
     });
 
     it('should have all required weapon types', () => {
-      const weaponNames = new Set(SHOP_WEAPONS.map(w => w.name));
-      const expectedTypes = [
+      const weaponNames = new Set(WEAPONS.map(w => w.name));
+      const expectedTypes: import('@/types').WeaponName[] = [
         'Blast Powder',
         'Oracle Eye',
         'Field Stone',
@@ -55,7 +55,7 @@ describe('Weapon Definitions', () => {
     });
 
     it('each weapon should have all required properties', () => {
-      SHOP_WEAPONS.forEach(weapon => {
+      WEAPONS.forEach(weapon => {
         expect(weapon).toHaveProperty('id');
         expect(weapon).toHaveProperty('name');
         expect(weapon).toHaveProperty('rarity');
@@ -76,7 +76,7 @@ describe('Weapon Definitions', () => {
     });
 
     it('common weapons should cost 5-10 coins', () => {
-      const commons = SHOP_WEAPONS.filter(w => w.rarity === 'common');
+      const commons = WEAPONS.filter(w => w.rarity === 'common');
       commons.forEach(weapon => {
         expect(weapon.price).toBeGreaterThanOrEqual(5);
         expect(weapon.price).toBeLessThanOrEqual(10);
@@ -84,7 +84,7 @@ describe('Weapon Definitions', () => {
     });
 
     it('rare weapons should cost 14-25 coins', () => {
-      const rares = SHOP_WEAPONS.filter(w => w.rarity === 'rare');
+      const rares = WEAPONS.filter(w => w.rarity === 'rare');
       rares.forEach(weapon => {
         expect(weapon.price).toBeGreaterThanOrEqual(14);
         expect(weapon.price).toBeLessThanOrEqual(25);
@@ -92,7 +92,7 @@ describe('Weapon Definitions', () => {
     });
 
     it('legendary weapons should cost 38-60 coins', () => {
-      const legendaries = SHOP_WEAPONS.filter(w => w.rarity === 'legendary');
+      const legendaries = WEAPONS.filter(w => w.rarity === 'legendary');
       legendaries.forEach(weapon => {
         expect(weapon.price).toBeGreaterThanOrEqual(38);
         expect(weapon.price).toBeLessThanOrEqual(60);
@@ -102,7 +102,7 @@ describe('Weapon Definitions', () => {
     it('each weapon type should have 3 rarities', () => {
       const weaponsByName = new Map<string, Weapon[]>();
 
-      SHOP_WEAPONS.forEach(weapon => {
+      WEAPONS.forEach(weapon => {
         const existing = weaponsByName.get(weapon.name) || [];
         existing.push(weapon);
         weaponsByName.set(weapon.name, existing);
@@ -120,7 +120,7 @@ describe('Weapon Definitions', () => {
 
   describe('Weapon Effects', () => {
     it('Blast Powder should have explosionChance effect', () => {
-      const blastPowders = SHOP_WEAPONS.filter(w => w.name === 'Blast Powder');
+      const blastPowders = WEAPONS.filter(w => w.name === 'Blast Powder');
       blastPowders.forEach(weapon => {
         expect(weapon.effects).toHaveProperty('explosionChance');
         expect(weapon.effects.explosionChance).toBeGreaterThan(0);
@@ -128,7 +128,7 @@ describe('Weapon Definitions', () => {
     });
 
     it('Oracle Eye should have autoHintChance effect', () => {
-      const oracleEyes = SHOP_WEAPONS.filter(w => w.name === 'Oracle Eye');
+      const oracleEyes = WEAPONS.filter(w => w.name === 'Oracle Eye');
       oracleEyes.forEach(weapon => {
         expect(weapon.effects).toHaveProperty('autoHintChance');
         expect(weapon.effects.autoHintChance).toBeGreaterThan(0);
@@ -136,7 +136,7 @@ describe('Weapon Definitions', () => {
     });
 
     it('Field Stone should have fieldSize effect', () => {
-      const fieldStones = SHOP_WEAPONS.filter(w => w.name === 'Field Stone');
+      const fieldStones = WEAPONS.filter(w => w.name === 'Field Stone');
       fieldStones.forEach(weapon => {
         expect(weapon.effects).toHaveProperty('fieldSize');
         expect(weapon.effects.fieldSize).toBeGreaterThan(0);
@@ -144,7 +144,7 @@ describe('Weapon Definitions', () => {
     });
 
     it('Life Vessel should have maxHealth effect', () => {
-      const lifeVessels = SHOP_WEAPONS.filter(w => w.name === 'Life Vessel');
+      const lifeVessels = WEAPONS.filter(w => w.name === 'Life Vessel');
       lifeVessels.forEach(weapon => {
         expect(weapon.effects).toHaveProperty('maxHealth');
         expect(weapon.effects.maxHealth).toBeGreaterThan(0);
@@ -152,7 +152,7 @@ describe('Weapon Definitions', () => {
     });
 
     it('Mending Charm should have healingChance effect', () => {
-      const mendingCharms = SHOP_WEAPONS.filter(w => w.name === 'Mending Charm');
+      const mendingCharms = WEAPONS.filter(w => w.name === 'Mending Charm');
       mendingCharms.forEach(weapon => {
         expect(weapon.effects).toHaveProperty('healingChance');
         expect(weapon.effects.healingChance).toBeGreaterThan(0);
@@ -160,7 +160,7 @@ describe('Weapon Definitions', () => {
     });
 
     it('Crystal Orb should have hints effect', () => {
-      const crystalOrbs = SHOP_WEAPONS.filter(w => w.name === 'Crystal Orb');
+      const crystalOrbs = WEAPONS.filter(w => w.name === 'Crystal Orb');
       crystalOrbs.forEach(weapon => {
         expect(weapon.effects).toHaveProperty('hints');
         expect(weapon.effects.hints).toBeGreaterThan(0);
@@ -168,7 +168,7 @@ describe('Weapon Definitions', () => {
     });
 
     it('Second Chance should have mulligans effect', () => {
-      const secondChances = SHOP_WEAPONS.filter(w => w.name === 'Second Chance');
+      const secondChances = WEAPONS.filter(w => w.name === 'Second Chance');
       secondChances.forEach(weapon => {
         expect(weapon.effects).toHaveProperty('mulligans');
         expect(weapon.effects.mulligans).toBeGreaterThan(0);
@@ -176,7 +176,7 @@ describe('Weapon Definitions', () => {
     });
 
     it('Chrono Shard should have startingTime effect', () => {
-      const chronoShards = SHOP_WEAPONS.filter(w => w.name === 'Chrono Shard');
+      const chronoShards = WEAPONS.filter(w => w.name === 'Chrono Shard');
       chronoShards.forEach(weapon => {
         expect(weapon.effects).toHaveProperty('startingTime');
         expect(weapon.effects.startingTime).toBeGreaterThan(0);
@@ -184,7 +184,7 @@ describe('Weapon Definitions', () => {
     });
 
     it('Prismatic Ray should have laserChance effect', () => {
-      const prismaticRays = SHOP_WEAPONS.filter(w => w.name === 'Prismatic Ray');
+      const prismaticRays = WEAPONS.filter(w => w.name === 'Prismatic Ray');
       prismaticRays.forEach(weapon => {
         expect(weapon.effects).toHaveProperty('laserChance');
         expect(weapon.effects.laserChance).toBeGreaterThan(0);
@@ -194,7 +194,7 @@ describe('Weapon Definitions', () => {
     it('legendary weapons should have higher effect values than common', () => {
       const weaponsByName = new Map<string, Map<WeaponRarity, Weapon>>();
 
-      SHOP_WEAPONS.forEach(weapon => {
+      WEAPONS.forEach(weapon => {
         if (!weaponsByName.has(weapon.name)) {
           weaponsByName.set(weapon.name, new Map());
         }
@@ -282,7 +282,7 @@ describe('Stats Calculation', () => {
       const player = initializePlayer('test', 'Test Player', 'Orange Tabby');
 
       // Add a Life Vessel weapon (+1 maxHealth)
-      const lifeVessel = SHOP_WEAPONS.find(
+      const lifeVessel = WEAPONS.find(
         w => w.name === 'Life Vessel' && w.rarity === 'common'
       )!;
       player.weapons.push(lifeVessel);
@@ -297,7 +297,7 @@ describe('Stats Calculation', () => {
       const player = initializePlayer('test', 'Test Player', 'Orange Tabby');
 
       // Add 3 Life Vessel commons (+1 each = +3 maxHealth)
-      const lifeVessel = SHOP_WEAPONS.find(
+      const lifeVessel = WEAPONS.find(
         w => w.name === 'Life Vessel' && w.rarity === 'common'
       )!;
       player.weapons.push({ ...lifeVessel, id: 'lv1' });
@@ -314,10 +314,11 @@ describe('Stats Calculation', () => {
       const player = initializePlayer('test', 'Test Player', 'Orange Tabby');
 
       // Add Life Vessel (+1 maxHealth) and Second Chance (+1 mulligan)
-      const lifeVessel = SHOP_WEAPONS.find(
+      // Note: Orange Tabby already starts with Second Chance (+1 mulligan)
+      const lifeVessel = WEAPONS.find(
         w => w.name === 'Life Vessel' && w.rarity === 'common'
       )!;
-      const secondChance = SHOP_WEAPONS.find(
+      const secondChance = WEAPONS.find(
         w => w.name === 'Second Chance' && w.rarity === 'common'
       )!;
 
@@ -328,13 +329,14 @@ describe('Stats Calculation', () => {
       const totalStats = calculatePlayerTotalStats(player);
 
       expect(totalStats.maxHealth).toBe(baseStats.stats.maxHealth + 1);
-      expect(totalStats.mulligans).toBe(baseStats.stats.mulligans + 1);
+      // +2 because Orange Tabby starts with Second Chance, plus we added another
+      expect(totalStats.mulligans).toBe(baseStats.stats.mulligans + 2);
     });
 
     it('should correctly calculate explosionChance from Blast Powder', () => {
       const player = initializePlayer('test', 'Test Player', 'Orange Tabby');
 
-      const blastPowder = SHOP_WEAPONS.find(
+      const blastPowder = WEAPONS.find(
         w => w.name === 'Blast Powder' && w.rarity === 'common'
       )!;
       player.weapons.push(blastPowder);
@@ -347,7 +349,7 @@ describe('Stats Calculation', () => {
     it('should correctly calculate healingChance from Mending Charm', () => {
       const player = initializePlayer('test', 'Test Player', 'Orange Tabby');
 
-      const mendingCharm = SHOP_WEAPONS.find(
+      const mendingCharm = WEAPONS.find(
         w => w.name === 'Mending Charm' && w.rarity === 'rare'
       )!;
       player.weapons.push(mendingCharm);
@@ -360,7 +362,7 @@ describe('Stats Calculation', () => {
     it('should correctly calculate laserChance from Prismatic Ray', () => {
       const player = initializePlayer('test', 'Test Player', 'Orange Tabby');
 
-      const prismaticRay = SHOP_WEAPONS.find(
+      const prismaticRay = WEAPONS.find(
         w => w.name === 'Prismatic Ray' && w.rarity === 'legendary'
       )!;
       player.weapons.push(prismaticRay);
@@ -373,7 +375,7 @@ describe('Stats Calculation', () => {
     it('should correctly calculate startingTime from Chrono Shard', () => {
       const player = initializePlayer('test', 'Test Player', 'Orange Tabby');
 
-      const chronoShard = SHOP_WEAPONS.find(
+      const chronoShard = WEAPONS.find(
         w => w.name === 'Chrono Shard' && w.rarity === 'common'
       )!;
       player.weapons.push(chronoShard);

@@ -1,17 +1,50 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Modal, ScrollView, StyleSheet, Alert, Platform } from 'react-native';
-import { PlayerStats, Weapon, WeaponRarity } from '@/types';
+import { PlayerStats, Weapon, WeaponRarity, Card } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import WeaponGuide from './WeaponGuide';
 import Icon from './Icon';
+import { WEAPONS } from '@/utils/gameDefinitions';
+
+// Weapon categories for dev testing
+const WEAPON_CATEGORIES = {
+  'Explosive': WEAPONS.filter(w => w.specialEffect === 'explosive'),
+  'Auto-Hint': WEAPONS.filter(w => w.specialEffect === 'autoHint'),
+  'Board Growth': WEAPONS.filter(w => w.specialEffect === 'boardGrowth'),
+  'Fire': WEAPONS.filter(w => w.specialEffect === 'fire'),
+  'Mulligan': WEAPONS.filter(w => w.specialEffect === 'mulliganGain'),
+  'Healing': WEAPONS.filter(w => w.specialEffect === 'healing'),
+  'Hint Gain': WEAPONS.filter(w => w.specialEffect === 'hintGain'),
+  'Holographic': WEAPONS.filter(w => w.specialEffect === 'holographic'),
+  'Time Gain': WEAPONS.filter(w => w.specialEffect === 'timeGain'),
+  'Laser': WEAPONS.filter(w => w.specialEffect === 'laser'),
+};
+
+export interface DevModeCallbacks {
+  onAddWeapon: (weapon: Weapon) => void;
+  onClearWeapons: () => void;
+  onAddMulligans: (count: number) => void;
+  onSetCardsOnFire: (count: number) => void;
+  onMakeCardsHolo: (count: number) => void;
+  onToggleTimer: () => void;
+  onResetBoard: () => void;
+  onAddCards: (count: number) => void;
+  onChangeRound: (round: number) => void;
+  onChangeAttributes: (count: number) => void;
+  timerEnabled: boolean;
+  currentRound: number;
+  currentAttributes: number;
+}
 
 interface GameMenuProps {
   playerStats: PlayerStats;
   playerWeapons?: Weapon[];
   onExitGame?: () => void;
+  devMode?: boolean;
+  devCallbacks?: DevModeCallbacks;
 }
 
-type MenuScreen = 'menu' | 'stats' | 'weapons';
+type MenuScreen = 'menu' | 'stats' | 'weapons' | 'dev';
 
 const getRarityColor = (rarity: WeaponRarity): string => {
   switch (rarity) {
@@ -22,7 +55,7 @@ const getRarityColor = (rarity: WeaponRarity): string => {
   }
 };
 
-const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], onExitGame }) => {
+const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], onExitGame, devMode = false, devCallbacks }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentScreen, setCurrentScreen] = useState<MenuScreen>('menu');
   const [showExitConfirm, setShowExitConfirm] = useState(false);
@@ -115,6 +148,21 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], on
           </View>
           <Text style={styles.menuOptionArrow}>›</Text>
         </TouchableOpacity>
+
+        {/* Dev Tools Option - only shown in dev mode */}
+        {devMode && (
+          <TouchableOpacity
+            style={[styles.menuOption, styles.devMenuOption]}
+            onPress={() => setCurrentScreen('dev')}
+          >
+            <Text style={styles.menuOptionIcon}>🛠️</Text>
+            <View style={styles.menuOptionTextContainer}>
+              <Text style={[styles.menuOptionTitle, styles.devMenuOptionTitle]}>Dev Tools</Text>
+              <Text style={styles.menuOptionDescription}>Testing controls and weapon manipulation</Text>
+            </View>
+            <Text style={styles.menuOptionArrow}>›</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Exit Game Option */}
         {onExitGame && (
@@ -236,12 +284,207 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], on
     <WeaponGuide onClose={() => setCurrentScreen('menu')} />
   );
 
+  const addLegendaryFromCategory = (category: string) => {
+    const weapons = WEAPON_CATEGORIES[category as keyof typeof WEAPON_CATEGORIES];
+    if (weapons && weapons.length > 0 && devCallbacks) {
+      const legendary = weapons.find(w => w.rarity === 'legendary');
+      if (legendary) devCallbacks.onAddWeapon(legendary);
+    }
+  };
+
+  const renderDevTools = () => (
+    <View style={styles.statsContainer}>
+      {/* Header */}
+      <View style={[styles.modalHeader, styles.devModalHeader]}>
+        <TouchableOpacity onPress={() => setCurrentScreen('menu')} style={styles.backButton}>
+          <Text style={styles.backButtonText}>‹</Text>
+        </TouchableOpacity>
+        <Text style={styles.modalTitle}>Dev Tools</Text>
+        <TouchableOpacity onPress={closeModal} style={styles.closeButton}>
+          <Text style={styles.closeButtonText}>X</Text>
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView style={styles.modalContent}>
+        {/* Game Controls */}
+        <View style={styles.categoryContainer}>
+          <View style={[styles.categoryHeader, styles.devCategoryHeader]}>
+            <Text style={styles.categoryTitle}>GAME CONTROLS</Text>
+          </View>
+          <View style={styles.devButtonGrid}>
+            <TouchableOpacity
+              style={[styles.devButton, devCallbacks?.timerEnabled ? styles.devButtonActive : null]}
+              onPress={() => devCallbacks?.onToggleTimer()}
+            >
+              <Text style={styles.devButtonText}>
+                Timer: {devCallbacks?.timerEnabled ? 'ON' : 'OFF'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.devButton}
+              onPress={() => devCallbacks?.onResetBoard()}
+            >
+              <Text style={styles.devButtonText}>Reset Board</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.devButton}
+              onPress={() => devCallbacks?.onAddCards(3)}
+            >
+              <Text style={styles.devButtonText}>+3 Cards</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Round Selector */}
+        <View style={styles.categoryContainer}>
+          <View style={[styles.categoryHeader, styles.devCategoryHeader]}>
+            <Text style={styles.categoryTitle}>ROUND SELECT</Text>
+          </View>
+          <View style={styles.devRoundGrid}>
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(round => (
+              <TouchableOpacity
+                key={round}
+                style={[
+                  styles.devRoundButton,
+                  devCallbacks?.currentRound === round && styles.devRoundButtonActive
+                ]}
+                onPress={() => devCallbacks?.onChangeRound(round)}
+              >
+                <Text style={[
+                  styles.devRoundButtonText,
+                  devCallbacks?.currentRound === round && styles.devRoundButtonTextActive
+                ]}>
+                  {round}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Attribute Selector (Difficulty) */}
+        <View style={styles.categoryContainer}>
+          <View style={[styles.categoryHeader, styles.devCategoryHeader]}>
+            <Text style={styles.categoryTitle}>DIFFICULTY (ATTRIBUTES)</Text>
+          </View>
+          <View style={styles.devButtonGrid}>
+            {[3, 4, 5].map(count => (
+              <TouchableOpacity
+                key={count}
+                style={[
+                  styles.devButton,
+                  devCallbacks?.currentAttributes === count && styles.devButtonActive,
+                  { flex: 1 }
+                ]}
+                onPress={() => devCallbacks?.onChangeAttributes(count)}
+              >
+                <Text style={styles.devButtonText}>
+                  {count === 3 ? 'Easy (3)' : count === 4 ? 'Medium (4)' : 'Hard (5)'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Card Modifiers */}
+        <View style={styles.categoryContainer}>
+          <View style={[styles.categoryHeader, styles.devCategoryHeader]}>
+            <Text style={styles.categoryTitle}>CARD MODIFIERS</Text>
+          </View>
+          <View style={styles.devButtonGrid}>
+            <TouchableOpacity
+              style={[styles.devButton, styles.devButtonOrange]}
+              onPress={() => devCallbacks?.onSetCardsOnFire(3)}
+            >
+              <Text style={styles.devButtonText}>Set Fire (3)</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.devButton, styles.devButtonPurple]}
+              onPress={() => devCallbacks?.onMakeCardsHolo(3)}
+            >
+              <Text style={styles.devButtonText}>Make Holo (3)</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.devButton, styles.devButtonBlue]}
+              onPress={() => devCallbacks?.onAddMulligans(3)}
+            >
+              <Text style={styles.devButtonText}>+3 Mulligans</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Weapon Controls */}
+        <View style={styles.categoryContainer}>
+          <View style={[styles.categoryHeader, styles.devCategoryHeader]}>
+            <Text style={styles.categoryTitle}>ADD LEGENDARY WEAPONS</Text>
+          </View>
+          <View style={styles.devWeaponGrid}>
+            {Object.keys(WEAPON_CATEGORIES).map(category => (
+              <TouchableOpacity
+                key={category}
+                style={[styles.devButton, styles.devButtonGold]}
+                onPress={() => addLegendaryFromCategory(category)}
+              >
+                <Text style={styles.devButtonTextSmall}>{category}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <TouchableOpacity
+            style={[styles.devButton, styles.devButtonRed, { margin: 12, marginTop: 0 }]}
+            onPress={() => devCallbacks?.onClearWeapons()}
+          >
+            <Text style={styles.devButtonText}>Clear All Weapons</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Current Stats Display */}
+        <View style={styles.categoryContainer}>
+          <View style={[styles.categoryHeader, styles.devCategoryHeader]}>
+            <Text style={styles.categoryTitle}>ACTIVE WEAPON STATS</Text>
+          </View>
+          <View style={styles.statsGrid}>
+            <View style={styles.statRow}>
+              <Text style={styles.statKey}>Explosion Chance</Text>
+              <Text style={styles.statValue}>{playerStats.explosionChance || 0}%</Text>
+            </View>
+            <View style={styles.statRow}>
+              <Text style={styles.statKey}>Fire Spread</Text>
+              <Text style={styles.statValue}>{playerStats.fireSpreadChance || 0}%</Text>
+            </View>
+            <View style={styles.statRow}>
+              <Text style={styles.statKey}>Laser Chance</Text>
+              <Text style={styles.statValue}>{playerStats.laserChance || 0}%</Text>
+            </View>
+            <View style={styles.statRow}>
+              <Text style={styles.statKey}>Holographic</Text>
+              <Text style={styles.statValue}>{playerStats.holoChance || 0}%</Text>
+            </View>
+            <View style={styles.statRow}>
+              <Text style={styles.statKey}>Mulligans</Text>
+              <Text style={styles.statValue}>{playerStats.mulligans || 0}</Text>
+            </View>
+            <View style={styles.statRow}>
+              <Text style={styles.statKey}>Hints</Text>
+              <Text style={styles.statValue}>{playerStats.hints || 0}</Text>
+            </View>
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* Close Button */}
+      <TouchableOpacity onPress={closeModal} style={styles.closeModalButton}>
+        <Text style={styles.closeModalButtonText}>CLOSE</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   const renderContent = () => {
     switch (currentScreen) {
       case 'stats':
         return renderStats();
       case 'weapons':
         return renderWeapons();
+      case 'dev':
+        return renderDevTools();
       default:
         return renderMenuOptions();
     }
@@ -619,6 +862,101 @@ const styles = StyleSheet.create({
     color: COLORS.canvasWhite,
     fontWeight: '700',
     fontSize: 14,
+  },
+  // Dev mode menu option styles
+  devMenuOption: {
+    backgroundColor: '#FFF3CD',
+    borderColor: '#FFC107',
+  },
+  devMenuOptionTitle: {
+    color: '#856404',
+  },
+  // Dev tools screen styles
+  devModalHeader: {
+    backgroundColor: '#FFC107',
+  },
+  devCategoryHeader: {
+    backgroundColor: '#856404',
+  },
+  devButtonGrid: {
+    padding: 12,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  devWeaponGrid: {
+    padding: 12,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  devButton: {
+    backgroundColor: COLORS.slateCharcoal,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: RADIUS.button,
+    minWidth: 90,
+    alignItems: 'center',
+  },
+  devButtonActive: {
+    backgroundColor: '#28A745',
+  },
+  devButtonOrange: {
+    backgroundColor: '#F97316',
+  },
+  devButtonPurple: {
+    backgroundColor: '#9B59B6',
+  },
+  devButtonBlue: {
+    backgroundColor: '#3B82F6',
+  },
+  devButtonGold: {
+    backgroundColor: '#D97706',
+    minWidth: 70,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+  devButtonRed: {
+    backgroundColor: COLORS.impactRed,
+  },
+  devButtonText: {
+    color: COLORS.canvasWhite,
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  devButtonTextSmall: {
+    color: COLORS.canvasWhite,
+    fontWeight: '600',
+    fontSize: 10,
+  },
+  devRoundGrid: {
+    padding: 12,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'center',
+  },
+  devRoundButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.paperBeige,
+    borderWidth: 2,
+    borderColor: COLORS.slateCharcoal,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  devRoundButtonActive: {
+    backgroundColor: COLORS.logicTeal,
+    borderColor: COLORS.logicTeal,
+  },
+  devRoundButtonText: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  devRoundButtonTextActive: {
+    color: COLORS.canvasWhite,
   },
 });
 

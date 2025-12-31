@@ -72,9 +72,6 @@ export type EnemyName =
   'Rabbit' | 'Squid' | 'Porcupine' | 'Hyena' | 'Tiger';
 
 export type WeaponName =
-  // Original weapons (kept for backwards compatibility)
-  'Flint' | 'Bamboo' | 'Carrot' | 'Beak' | 'Dirt' | 'Talon' | 'Hoe' |
-  // New weapon types
   'Blast Powder' | 'Oracle Eye' | 'Field Stone' | 'Growth Seed' |
   'Flint Spark' | 'Second Chance' | 'Fortune Token' | 'Life Vessel' |
   'Mending Charm' | 'Crystal Orb' | 'Seeker Lens' | 'Prism Glass' |

@@ -8,7 +8,6 @@ import {
   ENEMIES,
   ITEMS,
   WEAPONS,
-  SHOP_WEAPONS,
   ROUND_REQUIREMENTS,
   initializePlayer,
   calculatePlayerTotalStats,
@@ -20,6 +19,7 @@ import { getActiveAttributesForRound, getBoardSizeForAttributes, ATTRIBUTE_SCALI
 import { getAdjacentIndices, getFireSpreadCards, WeaponEffectResult } from '@/utils/weaponEffects';
 import GameBoard from './GameBoard';
 import GameInfo from './GameInfo';
+import { DevModeCallbacks } from './GameMenu';
 import Notification from './Notification';
 import { useSocket } from '@/context/SocketContext';
 import MultiplayerLobby from './MultiplayerLobby';
@@ -56,9 +56,13 @@ const calculateLevel = (experience: number): number => {
   return Math.floor(Math.sqrt(experience / 10));
 };
 
-const Game: React.FC = () => {
+interface GameProps {
+  devMode?: boolean;
+}
+
+const Game: React.FC<GameProps> = ({ devMode = false }) => {
   // Character selection state
-  const [selectedCharacter, setSelectedCharacter] = useState<string | null>(null);
+  const [selectedCharacter, setSelectedCharacter] = useState<string | null>(devMode ? 'Orange Tabby' : null);
   const [gameMode, setGameMode] = useState<GameMode>('adventure');
   const [gamePhase, setGamePhase] = useState<
     'character_select' |
@@ -71,52 +75,80 @@ const Game: React.FC = () => {
     'enemy_select' |
     'game_over' |
     'free_play'
-  >('character_select');
+  >(devMode ? 'round' : 'character_select');
 
   // Tutorial context
   const { state: tutorialState, startTutorial, markTutorialOffered } = useTutorial();
 
-  const [state, setState] = useState<GameState>({
-    // Core game
-    deck: [],
-    board: [],
-    selectedCards: [],
-    foundCombinations: [],
-    score: 0,
-    gameStarted: false,
-    gameEnded: false,
-    startTime: null,
-    endTime: null,
-    hintUsed: false,
+  const [state, setState] = useState<GameState>(() => {
+    const activeAttributes = getActiveAttributesForRound(1);
+    const boardSize = getBoardSizeForAttributes(activeAttributes.length);
 
-    // Attribute scaling
-    activeAttributes: getActiveAttributesForRound(1),
+    // In dev mode, initialize with a ready-to-play board
+    if (devMode) {
+      const initialBoard = generateGameBoard(boardSize, 1, 1, activeAttributes);
+      const deck = shuffleArray(createDeck(activeAttributes));
+      const remainingDeck = deck.filter(card =>
+        !initialBoard.some(boardCard => boardCard.id === card.id)
+      );
 
-    // Roguelike properties
-    round: 1,
-    targetScore: getRoundRequirement(1).targetScore,
-    remainingTime: getRoundRequirement(1).time,
-    roundCompleted: false,
+      return {
+        deck: remainingDeck,
+        board: initialBoard,
+        selectedCards: [],
+        foundCombinations: [],
+        score: 0,
+        gameStarted: true,
+        gameEnded: false,
+        startTime: Date.now(),
+        endTime: null,
+        hintUsed: false,
+        activeAttributes,
+        round: 1,
+        targetScore: getRoundRequirement(1).targetScore,
+        remainingTime: getRoundRequirement(1).time,
+        roundCompleted: false,
+        player: initializePlayer('dev', 'Dev Player', 'Orange Tabby'),
+        shopItems: [],
+        shopWeapons: [],
+        levelUpOptions: [],
+        rerollCost: BASE_REROLL_COST,
+        currentEnemies: [],
+        selectedEnemy: null,
+        lootCrates: 0,
+        isCoOp: false,
+        players: []
+      };
+    }
 
-    // Player
-    player: initializePlayer('player1', 'Player 1', 'Orange Tabby'),
-
-    // Shop and upgrades
-    shopItems: [],
-    shopWeapons: [],
-    levelUpOptions: [],
-    rerollCost: BASE_REROLL_COST,
-
-    // Enemy
-    currentEnemies: [],
-    selectedEnemy: null,
-
-    // Loot and rewards
-    lootCrates: 0,
-
-    // Co-op
-    isCoOp: false,
-    players: []
+    // Normal mode - empty board until character selection
+    return {
+      deck: [],
+      board: [],
+      selectedCards: [],
+      foundCombinations: [],
+      score: 0,
+      gameStarted: false,
+      gameEnded: false,
+      startTime: null,
+      endTime: null,
+      hintUsed: false,
+      activeAttributes,
+      round: 1,
+      targetScore: getRoundRequirement(1).targetScore,
+      remainingTime: getRoundRequirement(1).time,
+      roundCompleted: false,
+      player: initializePlayer('player1', 'Player 1', 'Orange Tabby'),
+      shopItems: [],
+      shopWeapons: [],
+      levelUpOptions: [],
+      rerollCost: BASE_REROLL_COST,
+      currentEnemies: [],
+      selectedEnemy: null,
+      lootCrates: 0,
+      isCoOp: false,
+      players: []
+    };
   });
 
   const [notification, setNotification] = useState<{
@@ -151,6 +183,9 @@ const Game: React.FC = () => {
     newFireCards: Card[];
     burnBonus: number;
   } | null>(null);
+
+  // Dev mode state
+  const [devTimerEnabled, setDevTimerEnabled] = useState(!devMode); // Timer disabled by default in dev mode
 
   // Socket context for multiplayer
   const {
@@ -208,10 +243,13 @@ const Game: React.FC = () => {
   };
 
   // Timer effect - countdown when in round phase
+  // In dev mode, timer only runs when devTimerEnabled is true
   useEffect(() => {
     let timerInterval: ReturnType<typeof setInterval> | null = null;
 
-    if (gamePhase === 'round' && state.gameStarted && !state.gameEnded && state.remainingTime > 0) {
+    const shouldRunTimer = gamePhase === 'round' && state.gameStarted && !state.gameEnded && state.remainingTime > 0 && (!devMode || devTimerEnabled);
+
+    if (shouldRunTimer) {
       // Start countdown timer
       timerInterval = setInterval(() => {
         setState(prevState => {
@@ -246,7 +284,7 @@ const Game: React.FC = () => {
         clearInterval(timerInterval);
       }
     };
-  }, [gamePhase, state.gameStarted, state.gameEnded]);
+  }, [gamePhase, state.gameStarted, state.gameEnded, devMode, devTimerEnabled]);
 
   // Fire effect - check for burning cards every second
   useEffect(() => {
@@ -1307,6 +1345,138 @@ const Game: React.FC = () => {
     }));
   };
 
+  // Dev mode callbacks
+  const devCallbacks: DevModeCallbacks | undefined = devMode ? {
+    onAddWeapon: (weapon: Weapon) => {
+      setState(prevState => ({
+        ...prevState,
+        player: {
+          ...prevState.player,
+          weapons: [...prevState.player.weapons, weapon]
+        }
+      }));
+      setNotification({ message: `Added: ${weapon.name} (${weapon.rarity})`, type: 'success' });
+    },
+    onClearWeapons: () => {
+      setState(prevState => ({
+        ...prevState,
+        player: {
+          ...prevState.player,
+          weapons: []
+        }
+      }));
+      setNotification({ message: 'Weapons cleared!', type: 'info' });
+    },
+    onAddMulligans: (count: number) => {
+      setState(prevState => ({
+        ...prevState,
+        player: {
+          ...prevState.player,
+          stats: {
+            ...prevState.player.stats,
+            mulligans: prevState.player.stats.mulligans + count
+          }
+        }
+      }));
+      setNotification({ message: `+${count} Mulligans`, type: 'success' });
+    },
+    onSetCardsOnFire: (count: number) => {
+      const now = Date.now();
+      setState(prevState => ({
+        ...prevState,
+        board: prevState.board.map((card, i) =>
+          i < count ? { ...card, onFire: true, fireStartTime: now } : card
+        )
+      }));
+      setNotification({ message: `First ${count} cards on fire!`, type: 'info' });
+    },
+    onMakeCardsHolo: (count: number) => {
+      setState(prevState => ({
+        ...prevState,
+        board: prevState.board.map((card, i) =>
+          i < count ? { ...card, isHolographic: true } : card
+        )
+      }));
+      setNotification({ message: `First ${count} cards holographic!`, type: 'success' });
+    },
+    onToggleTimer: () => {
+      setDevTimerEnabled(prev => !prev);
+    },
+    onResetBoard: () => {
+      const boardSize = getBoardSizeForAttributes(state.activeAttributes.length);
+      const newBoard = generateGameBoard(boardSize, state.round, state.round, state.activeAttributes);
+      const deck = shuffleArray(createDeck(state.activeAttributes));
+      const remainingDeck = deck.filter(card =>
+        !newBoard.some(boardCard => boardCard.id === card.id)
+      );
+      setState(prevState => ({
+        ...prevState,
+        deck: remainingDeck,
+        board: newBoard,
+        selectedCards: [],
+        remainingTime: getRoundRequirement(state.round).time,
+      }));
+      setNotification({ message: 'Board reset!', type: 'info' });
+    },
+    onAddCards: (count: number) => {
+      if (state.deck.length < count) {
+        setNotification({ message: 'Not enough cards in deck!', type: 'warning' });
+        return;
+      }
+      const newCards = state.deck.slice(0, count).map(card => ({
+        ...card,
+        selected: false
+      }));
+      setState(prevState => ({
+        ...prevState,
+        board: [...prevState.board, ...newCards],
+        deck: prevState.deck.slice(count)
+      }));
+      setNotification({ message: `+${count} cards added`, type: 'success' });
+    },
+    onChangeRound: (round: number) => {
+      const activeAttributes = getActiveAttributesForRound(round);
+      const boardSize = getBoardSizeForAttributes(activeAttributes.length);
+      const newBoard = generateGameBoard(boardSize, round, round, activeAttributes);
+      const deck = shuffleArray(createDeck(activeAttributes));
+      const remainingDeck = deck.filter(card =>
+        !newBoard.some(boardCard => boardCard.id === card.id)
+      );
+      setState(prevState => ({
+        ...prevState,
+        round,
+        activeAttributes,
+        deck: remainingDeck,
+        board: newBoard,
+        selectedCards: [],
+        targetScore: getRoundRequirement(round).targetScore,
+        remainingTime: getRoundRequirement(round).time,
+      }));
+    },
+    onChangeAttributes: (count: number) => {
+      // Get attributes based on count (3=shape/color/number, 4=+shading, 5=+background)
+      const allAttributes: AttributeName[] = ['shape', 'color', 'number', 'shading', 'background'];
+      const activeAttributes = allAttributes.slice(0, count);
+      const boardSize = getBoardSizeForAttributes(count);
+      const newBoard = generateGameBoard(boardSize, state.round, state.round, activeAttributes);
+      const deck = shuffleArray(createDeck(activeAttributes));
+      const remainingDeck = deck.filter(card =>
+        !newBoard.some(boardCard => boardCard.id === card.id)
+      );
+      setState(prevState => ({
+        ...prevState,
+        activeAttributes,
+        deck: remainingDeck,
+        board: newBoard,
+        selectedCards: [],
+      }));
+      setNotification({ message: `Difficulty set to ${count} attributes`, type: 'info' });
+    },
+    timerEnabled: devTimerEnabled,
+    currentRound: state.round,
+    currentAttributes: state.activeAttributes.length,
+  } : undefined;
+
   // Replace matched cards
   const replaceMatchedCards = (matchedCards: Card[]) => {
     // Get new cards from the deck
@@ -1588,6 +1758,8 @@ const Game: React.FC = () => {
                 onClearHint={() => setClearHintTrigger(t => t + 1)}
                 hasActiveHint={hasActiveHint}
                 onExitGame={() => setGamePhase('character_select')}
+                devMode={devMode}
+                devCallbacks={devCallbacks}
               />
             </View>
 

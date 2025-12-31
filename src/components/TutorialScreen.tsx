@@ -204,59 +204,6 @@ const TutorialScreen: React.FC<TutorialScreenProps> = ({ onComplete, onExit }) =
     />
   );
 
-  const renderMenuTour = () => (
-    <View style={styles.contentContainer}>
-      <View style={styles.headerSection}>
-        <Text style={styles.title}>The Menu</Text>
-        <Text style={styles.subtitle}>Access stats and weapon info</Text>
-      </View>
-
-      <ScrollView style={styles.scrollContent} contentContainerStyle={styles.scrollContentContainer}>
-        <View style={styles.section}>
-          <Text style={styles.paragraph}>
-            During gameplay, tap the <Text style={styles.highlight}>MENU</Text> button in the top-right corner to access:
-          </Text>
-        </View>
-
-        <View style={styles.menuSection}>
-          <View style={styles.menuItem}>
-            <Text style={styles.menuIcon}>📊</Text>
-            <View style={styles.menuContent}>
-              <Text style={styles.menuTitle}>Character Stats</Text>
-              <Text style={styles.menuDesc}>View all your current stats, health, money, and special abilities</Text>
-            </View>
-          </View>
-
-          <View style={styles.menuItem}>
-            <Text style={styles.menuIcon}>⚔️</Text>
-            <View style={styles.menuContent}>
-              <Text style={styles.menuTitle}>Weapon Guide</Text>
-              <Text style={styles.menuDesc}>Browse all 15 weapon types and their effects. Learn what each weapon does before you buy!</Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.tipBox}>
-            <Text style={styles.tipTitle}>Remember</Text>
-            <Text style={styles.tipText}>
-              Weapons stack! Buy multiples of the same weapon to increase their effects.
-            </Text>
-          </View>
-        </View>
-      </ScrollView>
-
-      <View style={styles.buttonRow}>
-        <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
-          <Text style={styles.skipButtonText}>Skip</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.nextButton} onPress={nextStep}>
-          <Text style={styles.nextButtonText}>Finish Tutorial</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-
   const renderComplete = () => (
     <View style={styles.contentContainer}>
       <View style={styles.completeSection}>
@@ -297,8 +244,6 @@ const TutorialScreen: React.FC<TutorialScreenProps> = ({ onComplete, onExit }) =
         return renderPractice();
       case 'ui_tour':
         return renderUITour();
-      case 'menu_tour':
-        return renderMenuTour();
       case 'complete':
         return renderComplete();
       default:
@@ -307,7 +252,7 @@ const TutorialScreen: React.FC<TutorialScreenProps> = ({ onComplete, onExit }) =
   };
 
   // Calculate progress
-  const steps: TutorialStep[] = ['intro', 'quiz_1', 'quiz_2', 'quiz_3', 'complexity', 'practice', 'ui_tour', 'menu_tour', 'complete'];
+  const steps: TutorialStep[] = ['intro', 'quiz_1', 'quiz_2', 'quiz_3', 'complexity', 'practice', 'ui_tour', 'complete'];
   const currentIndex = steps.indexOf(state.currentStep);
   const progress = ((currentIndex + 1) / steps.length) * 100;
 
@@ -582,43 +527,6 @@ const styles = StyleSheet.create({
     color: COLORS.slateCharcoal,
     opacity: 0.8,
     marginTop: 2,
-  },
-  // Menu Tour styles
-  highlight: {
-    fontWeight: '700',
-    color: COLORS.logicTeal,
-  },
-  menuSection: {
-    gap: 12,
-    marginTop: 16,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.canvasWhite,
-    borderRadius: RADIUS.module,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: COLORS.slateCharcoal,
-    gap: 16,
-  },
-  menuIcon: {
-    fontSize: 32,
-  },
-  menuContent: {
-    flex: 1,
-  },
-  menuTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.slateCharcoal,
-  },
-  menuDesc: {
-    fontSize: 13,
-    color: COLORS.slateCharcoal,
-    opacity: 0.8,
-    marginTop: 4,
-    lineHeight: 18,
   },
   // Complete styles
   completeSection: {

@@ -145,7 +145,7 @@ src/                        # Shared code (imported via @/ alias)
 │   └── SocketContext.tsx   # Multiplayer state management
 ├── types.ts                # Interfaces for Cards, Weapons, PlayerStats
 └── utils/
-    ├── gameDefinitions.ts  # Characters, weapons (SHOP_WEAPONS array)
+    ├── gameDefinitions.ts  # Characters, weapons (WEAPONS array)
     ├── gameConfig.ts       # Game constants, default stats
     └── gameUtils.ts        # Modular SET validation for N-attributes
 

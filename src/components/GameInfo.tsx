@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { PlayerStats, Weapon } from '@/types';
 import CircularTimer from './CircularTimer';
-import GameMenu from './GameMenu';
+import GameMenu, { DevModeCallbacks } from './GameMenu';
 import { COLORS, RADIUS } from '@/utils/colors';
 
 interface GameInfoProps {
@@ -18,6 +18,8 @@ interface GameInfoProps {
   onClearHint?: () => void;
   hasActiveHint?: boolean;
   onExitGame?: () => void;
+  devMode?: boolean;
+  devCallbacks?: DevModeCallbacks;
 }
 
 // Calculate XP thresholds for level progression
@@ -38,6 +40,8 @@ const GameInfo: React.FC<GameInfoProps> = ({
   onClearHint,
   hasActiveHint = false,
   onExitGame,
+  devMode = false,
+  devCallbacks,
 }) => {
   // Calculate score progress percentage
   const scoreProgress = Math.min((score / targetScore) * 100, 100);
@@ -129,6 +133,8 @@ const GameInfo: React.FC<GameInfoProps> = ({
               playerStats={playerStats}
               playerWeapons={playerWeapons}
               onExitGame={onExitGame}
+              devMode={devMode}
+              devCallbacks={devCallbacks}
             />
           </View>
 

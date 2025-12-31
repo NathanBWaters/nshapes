@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { COLORS, RADIUS } from '@/utils/colors';
-import { SHOP_WEAPONS } from '@/utils/gameDefinitions';
+import { WEAPONS } from '@/utils/gameDefinitions';
 import { Weapon, WeaponRarity } from '@/types';
 import Icon from './Icon';
 
@@ -13,7 +13,7 @@ interface WeaponGuideProps {
 const getWeaponGroups = (): Map<string, Weapon[]> => {
   const groups = new Map<string, Weapon[]>();
 
-  SHOP_WEAPONS.forEach(weapon => {
+  WEAPONS.forEach(weapon => {
     const existing = groups.get(weapon.name) || [];
     existing.push(weapon);
     groups.set(weapon.name, existing);
