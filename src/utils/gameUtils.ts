@@ -64,6 +64,15 @@ export const createDeck = (activeAttributes: AttributeName[] = DEFAULT_ATTRIBUTE
   return deck;
 };
 
+// Check if two cards have the same attributes (ignoring ID)
+export const sameCardAttributes = (a: Card, b: Card): boolean => {
+  return a.shape === b.shape &&
+         a.color === b.color &&
+         a.number === b.number &&
+         a.shading === b.shading &&
+         a.background === b.background;
+};
+
 // Shuffle an array using Fisher-Yates algorithm
 export const shuffleArray = <T>(array: T[]): T[] => {
   const newArray = [...array];

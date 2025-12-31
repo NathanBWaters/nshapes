@@ -166,9 +166,9 @@ export const getLevelFromXP = (experience: number): number => {
 export const ATTRIBUTE_SCALING = {
   // Round-based attribute progression for Adventure Mode
   roundProgression: [
-    { rounds: [1, 2], attributes: ['shape', 'color'] as AttributeName[] },
-    { rounds: [3, 4], attributes: ['shape', 'color', 'number'] as AttributeName[] },
-    { rounds: [5, 6, 7, 8, 9], attributes: ['shape', 'color', 'number', 'shading'] as AttributeName[] },
+    { rounds: [1], attributes: ['shape', 'color'] as AttributeName[] },
+    { rounds: [2, 3], attributes: ['shape', 'color', 'number'] as AttributeName[] },
+    { rounds: [4, 5, 6, 7, 8, 9], attributes: ['shape', 'color', 'number', 'shading'] as AttributeName[] },
     { rounds: [10], attributes: ['shape', 'color', 'number', 'shading', 'background'] as AttributeName[] },
   ],
 

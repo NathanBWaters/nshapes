@@ -69,14 +69,16 @@ const GameBoard: React.FC<GameBoardProps> = ({
   const [selectedCards, setSelectedCards] = useState<CardType[]>([]);
   const [matchedCardIds, setMatchedCardIds] = useState<string[]>([]);
   const [hintCards, setHintCards] = useState<string[]>([]);
-  const [isProcessing, setIsProcessing] = useState(false);
 
   // Use ref for hints to avoid stale closure issues
   const hintsRef = useRef(playerStats.hints);
   hintsRef.current = playerStats.hints;
 
-  // Reward reveal state - managed internally
-  const [revealingRewards, setRevealingRewards] = useState<CardReward[]>([]);
+  // Match counter for tracking independent matches
+  const matchCounterRef = useRef(0);
+
+  // Reward reveal state - managed internally, supports multiple concurrent matches
+  const [revealingRewards, setRevealingRewards] = useState<(CardReward & { matchId: number })[]>([]);
 
   // Create a map for quick reward lookup
   const rewardsByCardId = new Map<string, CardReward>();
@@ -189,23 +191,23 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
     // If we have 3 cards selected, check if they form a valid set
     if (newSelectedCards.length === 3) {
-      setIsProcessing(true);
-
       setTimeout(() => {
         if (isValidSet(newSelectedCards)) {
-          // Calculate rewards for each card
+          // Generate unique match ID for this match
+          const matchId = ++matchCounterRef.current;
+
+          // Calculate rewards for each card with matchId
           const rewards = newSelectedCards.map(c => calculateCardReward(c));
+          const rewardsWithMatchId = rewards.map(r => ({ ...r, matchId }));
 
-          // Mark cards as matched and show rewards
-          const newMatchedIds = [...matchedCardIds, ...newSelectedCards.map(c => c.id)];
-          setMatchedCardIds(newMatchedIds);
+          // Mark cards as matched and add rewards (accumulate, don't replace)
+          setMatchedCardIds(prev => [...prev, ...newSelectedCards.map(c => c.id)]);
           setSelectedCards([]);
-          setRevealingRewards(rewards);
+          setRevealingRewards(prev => [...prev, ...rewardsWithMatchId]);
 
-          // After 1.5 seconds, notify parent and clear rewards
+          // After 1.5 seconds, notify parent and clear only this match's rewards
           setTimeout(() => {
-            setRevealingRewards([]);
-            setIsProcessing(false);
+            setRevealingRewards(prev => prev.filter(r => r.matchId !== matchId));
             onMatch(newSelectedCards, rewards);
           }, 1500);
         } else {
@@ -213,7 +215,6 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
           setTimeout(() => {
             setSelectedCards([]);
-            setIsProcessing(false);
           }, 500);
         }
       }, 200);

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Card, CardReward, GameState, Enemy, Weapon, PlayerStats, AttributeName } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
-import { createDeck, shuffleArray, isValidCombination, findAllCombinations, generateGameBoard, formatTime } from '@/utils/gameUtils';
+import { createDeck, shuffleArray, isValidCombination, findAllCombinations, generateGameBoard, formatTime, sameCardAttributes } from '@/utils/gameUtils';
 import {
   CHARACTERS,
   ENEMIES,
@@ -250,7 +250,7 @@ const Game: React.FC = () => {
     const initialBoard = generateGameBoard(boardSize, 1, 1, activeAttributes);
     const deck = shuffleArray(createDeck(activeAttributes));
     const remainingDeck = deck.filter(card =>
-      !initialBoard.some(boardCard => boardCard.id === card.id)
+      !initialBoard.some(boardCard => sameCardAttributes(boardCard, card))
     );
 
     // Get round 1 requirements
@@ -546,11 +546,6 @@ const Game: React.FC = () => {
         index === itemIndex ? null : shopItem
       )
     }));
-
-    setNotification({
-      message: `Purchased ${item.name}!`,
-      type: 'success'
-    });
   };
 
   // Handle shop reroll
@@ -874,8 +869,8 @@ const Game: React.FC = () => {
       // Refill the deck if necessary with active attributes
       const additionalCards = createDeck(state.activeAttributes);
       for (const card of additionalCards) {
-        if (!remainingDeck.some(c => c.id === card.id) &&
-            !state.board.some(c => c.id === card.id)) {
+        if (!remainingDeck.some(c => sameCardAttributes(c, card)) &&
+            !state.board.some(c => sameCardAttributes(c, card))) {
           remainingDeck.push(card);
         }
       }
