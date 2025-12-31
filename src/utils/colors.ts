@@ -14,6 +14,9 @@ export const COLORS = {
   impactOrange: '#FF9538',    // Warnings, secondary highlights
   impactRed: '#FF7169',       // Errors, damage indicators
 
+  // Tutorial & UI Colors
+  tutorialBlue: '#3B82F6',    // Tutorial highlight, new/unviewed state
+
   // Semantic Colors (derived from palette)
   success: '#16AA98',         // Logic Teal
   error: '#FF7169',           // Impact Red variant

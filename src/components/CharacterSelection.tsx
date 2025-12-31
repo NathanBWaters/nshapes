@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Pressable, StyleSheet } from 'react-native';
 import { Character, PlayerStats } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { getWeaponByName, DEFAULT_PLAYER_STATS } from '@/utils/gameDefinitions';
 import { ATTRIBUTE_SCALING } from '@/utils/gameConfig';
+import { TutorialStorage } from '@/utils/storage';
 import Icon from './Icon';
 import GameMenu from './GameMenu';
 
@@ -39,6 +40,12 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
   const [hoveredCharacter, setHoveredCharacter] = React.useState<string | null>(null);
   const [selectedMode, setSelectedMode] = React.useState<GameMode>('adventure');
   const [freePlayDifficulty, setFreePlayDifficulty] = React.useState<FreePlayDifficulty>('medium');
+  const [tutorialViewed, setTutorialViewed] = useState(false);
+
+  // Check if tutorial has been viewed on mount
+  useEffect(() => {
+    setTutorialViewed(TutorialStorage.hasViewedTutorial());
+  }, []);
 
   // Auto-select first character if none selected
   React.useEffect(() => {
@@ -150,11 +157,24 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
         <View style={styles.modeToggleContainer}>
           {onTutorial && (
             <Pressable
-              onPress={onTutorial}
-              style={styles.tutorialButton}
+              onPress={() => {
+                TutorialStorage.markTutorialViewed();
+                setTutorialViewed(true);
+                onTutorial();
+              }}
+              style={[
+                styles.tutorialButton,
+                tutorialViewed && styles.tutorialButtonViewed,
+              ]}
             >
-              <Text style={styles.tutorialButtonText}>Tutorial</Text>
-              <Text style={styles.modeDescription}>Learn how to play</Text>
+              <Text style={[
+                styles.tutorialButtonText,
+                tutorialViewed && styles.tutorialButtonTextViewed,
+              ]}>Tutorial</Text>
+              <Text style={[
+                styles.modeDescription,
+                tutorialViewed && styles.tutorialDescriptionViewed,
+              ]}>Learn how to play</Text>
             </Pressable>
           )}
           <Pressable
@@ -436,7 +456,7 @@ const styles = StyleSheet.create({
   },
   tutorialButton: {
     flex: 1,
-    backgroundColor: COLORS.logicTeal,
+    backgroundColor: COLORS.tutorialBlue,
     borderRadius: RADIUS.button,
     borderWidth: 1,
     borderColor: COLORS.slateCharcoal,
@@ -444,12 +464,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     alignItems: 'center',
   },
+  tutorialButtonViewed: {
+    backgroundColor: COLORS.paperBeige,
+  },
   tutorialButtonText: {
     color: COLORS.canvasWhite,
     fontWeight: '700',
     fontSize: 14,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  tutorialButtonTextViewed: {
+    color: COLORS.slateCharcoal,
+  },
+  tutorialDescriptionViewed: {
+    color: COLORS.slateCharcoal,
+    opacity: 0.7,
   },
   modeButtonText: {
     color: COLORS.slateCharcoal,
