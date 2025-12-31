@@ -4,18 +4,29 @@ A roguelike deckbuilding match-three puzzle game for iOS, Android, and Web, buil
 
 ## Game Overview
 
-NShapes combines the classic SET card matching game with roguelike progression mechanics similar to Slay the Spire. Players match valid 3-card combinations to progress through 10 rounds of escalating difficulty.
+NShapes combines the classic SET card matching game with roguelike progression mechanics similar to Slay the Spire. The game offers two modes: **Adventure Mode** (full roguelike campaign) and **Free Play** (relaxed practice mode).
 
 ### Core Mechanics
 
 **SET Card Rules:** The game uses 81 unique cards defined by 4 attributes (Shape, Color, Number, Shading) with 3 values each. A valid match requires 3 cards where each attribute is either all the same OR all different across the cards.
 
-**Roguelike Progression:**
+### Game Modes
+
+**Adventure Mode** - Full roguelike campaign:
 - 10 rounds with increasing difficulty and score targets
+- 60-second timer per round
 - Choose from 16 unique characters with distinct playstyles
 - Select enemies each round that add modifiers and grant rewards
 - Level up with stat upgrades and weapons after each round
 - Purchase items from the shop between rounds
+- Card modifiers (bombs, spikes, healing, loot boxes, etc.)
+
+**Free Play Mode** - Relaxed practice:
+- No timer - take as long as needed to find matches
+- No rounds or score targets - continuous endless gameplay
+- No enemies, shop, or level up mechanics
+- Simple UI showing health, level, hints, and match counter
+- Great for learning SET rules or casual play
 
 ### Key Features
 
@@ -46,13 +57,14 @@ app/                        # Expo Router routes only
 
 src/                        # Shared code (imported via @/ alias)
 ├── components/
-│   ├── Game.tsx            # Main game controller
+│   ├── Game.tsx            # Main game controller (handles both game modes)
 │   ├── GameBoard.tsx       # Card display and selection
 │   ├── Card.tsx            # Individual card rendering
-│   ├── CharacterSelection.tsx
+│   ├── CharacterSelection.tsx  # Character + game mode selection
 │   ├── EnemySelection.tsx
 │   ├── LevelUp.tsx
 │   ├── ItemShop.tsx
+│   ├── RoundSummary.tsx    # Post-round stats display
 │   └── ...
 ├── context/
 │   └── SocketContext.tsx   # Multiplayer state management
@@ -120,12 +132,20 @@ npm run build:web
 
 ## Game Flow
 
-1. Character Selection
+**Adventure Mode:**
+1. Character Selection → Choose Adventure
 2. Enemy Selection (each round)
-3. Play Round (match cards to reach score target before time runs out)
-4. Level Up (choose upgrade)
-5. Item Shop (buy items)
-6. Repeat for 10 rounds
+3. Play Round (match cards to reach score target before timer expires)
+4. Round Summary (stats display)
+5. Level Up (choose upgrade)
+6. Item Shop (buy items)
+7. Repeat steps 2-6 for 10 rounds
+8. Game Over screen with final stats
+
+**Free Play Mode:**
+1. Character Selection → Choose Free Play
+2. Play continuously (no timer, no score target)
+3. Exit anytime to return to character selection
 
 ## Related Documentation
 
