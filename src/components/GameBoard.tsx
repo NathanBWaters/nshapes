@@ -81,6 +81,10 @@ const GameBoard: React.FC<GameBoardProps> = ({
   const hintsRef = useRef(playerStats.hints);
   hintsRef.current = playerStats.hints;
 
+  // Use ref for burn rewards callback to avoid effect re-runs
+  const onBurnRewardsCompleteRef = useRef(onBurnRewardsComplete);
+  onBurnRewardsCompleteRef.current = onBurnRewardsComplete;
+
   // Match counter for tracking independent matches
   const matchCounterRef = useRef(0);
 
@@ -136,11 +140,11 @@ const GameBoard: React.FC<GameBoardProps> = ({
     // After 0.5 seconds, clear rewards and notify parent (shorter than regular matches)
     const timeout = setTimeout(() => {
       setRevealingRewards(prev => prev.filter(r => r.matchId !== burnMatchId));
-      onBurnRewardsComplete?.(burnCardIds);
+      onBurnRewardsCompleteRef.current?.(burnCardIds);
     }, 500);
 
     return () => clearTimeout(timeout);
-  }, [pendingBurnRewards, onBurnRewardsComplete]);
+  }, [pendingBurnRewards]);
 
   // Check if three cards form a valid set using active attributes
   const isValidSet = (cards: CardType[]): boolean => {
