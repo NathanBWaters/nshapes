@@ -69,7 +69,7 @@ export const WEAPON_SYSTEM = {
   },
 
   // Fire system
-  fireBurnDuration: 7500, // 7.5 seconds
+  fireBurnDuration: 1500, // 1.5 seconds - same as reward display duration
   fireSpreadOnDeathChance: 0.10, // 10% to spread when burning out
 
   // Auto-hint display duration

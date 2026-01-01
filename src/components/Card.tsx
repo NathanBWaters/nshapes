@@ -5,7 +5,7 @@ import { Card as CardType, Background } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { BACKGROUND_COLORS } from '@/utils/gameConfig';
 
-const FIRE_BURN_DURATION = 7500; // 7.5 seconds
+const FIRE_BURN_DURATION = 1500; // 1.5 seconds - same as reward display duration
 
 // SVG viewBox dimensions (1:2 width:height ratio)
 const SVG_WIDTH = 20;

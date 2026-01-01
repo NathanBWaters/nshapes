@@ -1102,7 +1102,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
     if (pendingBurnRewards) return;
 
     const now = Date.now();
-    const FIRE_BURN_DURATION = 7500; // 7.5 seconds
+    const FIRE_BURN_DURATION = 1500; // 1.5 seconds - same as reward display duration
     const FIRE_SPREAD_ON_DEATH_CHANCE = 10; // 10%
 
     const burnedCards: Card[] = [];
