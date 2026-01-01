@@ -65,7 +65,7 @@ export const CHARACTERS: Character[] = [
   {
     name: 'Orange Tabby',
     description: 'Nine lives? More like eleven with all those extra hearts',
-    startingWeapons: ['Life Vessel', 'Life Vessel'],
+    startingWeapons: ['Life Vessel', 'Mending Charm'],
     icon: 'lorc/cat',
     baseStats: {}
   },
