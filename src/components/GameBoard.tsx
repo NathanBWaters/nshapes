@@ -137,11 +137,11 @@ const GameBoard: React.FC<GameBoardProps> = ({
     setMatchedCardIds(prev => [...prev, ...burnCardIds]);
     setRevealingRewards(prev => [...prev, ...burnRewardsWithMatchId]);
 
-    // After 0.5 seconds, clear rewards and notify parent (shorter than regular matches)
+    // After 1.5 seconds, clear rewards and notify parent
     const timeout = setTimeout(() => {
       setRevealingRewards(prev => prev.filter(r => r.matchId !== burnMatchId));
       onBurnRewardsCompleteRef.current?.(burnCardIds);
-    }, 500);
+    }, 1500);
 
     return () => clearTimeout(timeout);
   }, [pendingBurnRewards]);

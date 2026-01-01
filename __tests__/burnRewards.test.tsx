@@ -98,7 +98,7 @@ describe('GameBoard Burn Rewards', () => {
     expect(getByTestId('card-card-3')).toBeTruthy();
   });
 
-  it('should clear burn rewards after 500ms timeout', async () => {
+  it('should clear burn rewards after 1500ms timeout', async () => {
     const cards = [
       createTestCard('card-1'),
       createTestCard('card-2'),
@@ -126,9 +126,9 @@ describe('GameBoard Burn Rewards', () => {
     // Reward should be visible initially
     expect(queryByTestId('reward-card-1')).toBeTruthy();
 
-    // Advance timer by 500ms
+    // Advance timer by 1500ms
     act(() => {
-      jest.advanceTimersByTime(500);
+      jest.advanceTimersByTime(1500);
     });
 
     // Callback should have been called
@@ -179,7 +179,7 @@ describe('GameBoard Burn Rewards', () => {
 
     // Advance timer
     act(() => {
-      jest.advanceTimersByTime(500);
+      jest.advanceTimersByTime(1500);
     });
 
     expect(onBurnRewardsComplete).toHaveBeenCalledWith(['card-1', 'card-2']);
@@ -232,7 +232,7 @@ describe('GameBoard Burn Rewards', () => {
 
     // Advance timer
     act(() => {
-      jest.advanceTimersByTime(500);
+      jest.advanceTimersByTime(1500);
     });
 
     // The latest callback should be called (using ref)
@@ -283,7 +283,7 @@ describe('GameBoard Burn Rewards', () => {
     expect(queryAllByTestId(/^reward-/)).toHaveLength(1);
   });
 
-  it('should clear rewards within 500ms, not hang for >10 seconds', () => {
+  it('should clear rewards within 1500ms, not hang for >10 seconds', () => {
     const cards = [
       createTestCard('card-1'),
       createTestCard('card-2'),
@@ -308,13 +308,13 @@ describe('GameBoard Burn Rewards', () => {
       />
     );
 
-    // Should NOT be called before 500ms
+    // Should NOT be called before 1500ms
     act(() => {
-      jest.advanceTimersByTime(400);
+      jest.advanceTimersByTime(1400);
     });
     expect(onBurnRewardsComplete).not.toHaveBeenCalled();
 
-    // Should be called at 500ms
+    // Should be called at 1500ms
     act(() => {
       jest.advanceTimersByTime(100);
     });
