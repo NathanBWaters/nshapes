@@ -92,7 +92,12 @@ const LevelUp: React.FC<LevelUpProps> = ({
     <View style={styles.container}>
       {/* Eyebrow Banner */}
       <View style={styles.eyebrow}>
-        <Text style={styles.eyebrowText}>Level Up!</Text>
+        <View style={styles.eyebrowLeft}>
+          <Text style={styles.eyebrowText}>Level Up!</Text>
+          <View style={styles.freeBadge}>
+            <Text style={styles.freeBadgeText}>FREE</Text>
+          </View>
+        </View>
         <View style={styles.eyebrowRight}>
           <View style={styles.moneyBadge}>
             <Text style={styles.moneyText}>${playerMoney}</Text>
@@ -148,7 +153,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
       {/* Bottom Half - Options Grid */}
       <View style={styles.optionsSection}>
         <View style={styles.optionsHeaderRow}>
-          <Text style={styles.optionsHeader}>Choose Your Reward</Text>
+          <Text style={styles.optionsHeader}>Choose Your <Text style={styles.freeText}>FREE</Text> Reward</Text>
           <TouchableOpacity
             onPress={onReroll}
             disabled={playerMoney < rerollCost && freeRerolls <= 0}
@@ -237,12 +242,29 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.slateCharcoal,
   },
+  eyebrowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   eyebrowText: {
     color: COLORS.deepOnyx,
     fontWeight: '700',
     fontSize: 14,
     textTransform: 'uppercase',
     letterSpacing: 2,
+  },
+  freeBadge: {
+    backgroundColor: COLORS.logicTeal,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.button,
+  },
+  freeBadgeText: {
+    color: COLORS.canvasWhite,
+    fontWeight: '800',
+    fontSize: 10,
+    letterSpacing: 1,
   },
   eyebrowRight: {
     flexDirection: 'row',
@@ -396,6 +418,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textTransform: 'uppercase',
     letterSpacing: 1,
+  },
+  freeText: {
+    color: COLORS.logicTeal,
+    fontWeight: '800',
   },
   rerollButton: {
     backgroundColor: 'transparent',
