@@ -4,6 +4,7 @@ import { PlayerStats, Weapon, WeaponRarity } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import Icon from './Icon';
 import GameMenu from './GameMenu';
+import InventoryBar from './InventoryBar';
 
 interface LevelUpProps {
   options: Weapon[];
@@ -105,6 +106,9 @@ const LevelUp: React.FC<LevelUpProps> = ({
           <GameMenu playerStats={playerStats} playerWeapons={playerWeapons} onExitGame={onExitGame} />
         </View>
       </View>
+
+      {/* Inventory Bar */}
+      <InventoryBar weapons={playerWeapons} />
 
       {/* Top Half - Detail Focus */}
       <View style={styles.detailSection}>

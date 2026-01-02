@@ -4,6 +4,7 @@ import { Weapon, PlayerStats, WeaponRarity } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import Icon from './Icon';
 import GameMenu from './GameMenu';
+import InventoryBar from './InventoryBar';
 
 interface WeaponShopProps {
   weapons: (Weapon | null)[];  // null represents a sold/empty slot
@@ -96,6 +97,9 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
           <GameMenu playerStats={playerStats} playerWeapons={playerWeapons} onExitGame={onExitGame} />
         </View>
       </View>
+
+      {/* Inventory Bar */}
+      <InventoryBar weapons={playerWeapons} />
 
       {/* Top Half - Detail Focus */}
       <View style={styles.detailSection}>
