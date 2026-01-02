@@ -216,7 +216,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
                   <Icon
                     name={weapon.icon}
                     size={24}
-                    color={COLORS.slateCharcoal}
+                    color={isFocused ? COLORS.canvasWhite : COLORS.logicTeal}
                     style={styles.optionIcon}
                   />
                 )}

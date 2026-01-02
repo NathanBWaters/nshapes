@@ -2,7 +2,7 @@ import React from 'react';
 import Game from '@/components/Game';
 
 /**
- * Dev Test Page
+ * Dev Play Page
  *
  * Renders the standard Game component in dev mode.
  * Access dev tools through the MENU button -> Dev Tools.
@@ -19,6 +19,6 @@ import Game from '@/components/Game';
  * - Add legendary weapons by category
  * - Clear all weapons
  */
-export default function DevTest() {
+export default function DevPlay() {
   return <Game devMode={true} />;
 }

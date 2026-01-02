@@ -148,7 +148,8 @@ app/                        # Expo Router routes only
 ├── _layout.tsx             # Root navigation layout
 ├── index.tsx               # App entry point (home screen)
 └── dev/
-    └── test.tsx            # Dev test page (/dev/test) - weapon testing
+    ├── play.tsx            # Dev play page (/dev/play) - full game with dev tools
+    └── store.tsx           # Dev store page (/dev/store) - weapon shop testing with $50k
 
 src/                        # Shared code (imported via @/ alias)
 ├── components/
@@ -210,12 +211,20 @@ This means Field Stone weapons can increase the starting board size beyond the m
 
 ## Dev Testing
 
-Access `/dev/test` to test weapon effects:
-* Add legendary weapons by category
-* Toggle holographic cards
-* Set cards on fire
+**`/dev/play`** - Full game with dev tools:
+* Access dev tools through MENU button -> Dev Tools
+* Toggle timer on/off
+* Reset board, add cards
+* Change round (1-10) and difficulty (3-5 attributes)
+* Set cards on fire, make holographic
 * Add graces
-* View active weapon stats
+* Add legendary weapons by category
+
+**`/dev/store`** - Standalone weapon shop tester:
+* Starts with $50,000
+* Buy weapons, reroll shop
+* Test stat preview and inventory display
+* "Continue" refreshes the shop for more testing
 
 When working on this codebase, also load these additional files for context:
 -- [Style Guide](./style_guide.md) - UI design system including colors, typography, and component styles
