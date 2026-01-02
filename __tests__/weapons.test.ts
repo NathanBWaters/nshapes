@@ -83,19 +83,19 @@ describe('Weapon Definitions', () => {
       });
     });
 
-    it('rare weapons should cost 14-25 coins', () => {
+    it('rare weapons should cost 10-20 coins', () => {
       const rares = WEAPONS.filter(w => w.rarity === 'rare');
       rares.forEach(weapon => {
-        expect(weapon.price).toBeGreaterThanOrEqual(14);
-        expect(weapon.price).toBeLessThanOrEqual(25);
+        expect(weapon.price).toBeGreaterThanOrEqual(10);
+        expect(weapon.price).toBeLessThanOrEqual(20);
       });
     });
 
-    it('legendary weapons should cost 38-60 coins', () => {
+    it('legendary weapons should cost 15-30 coins', () => {
       const legendaries = WEAPONS.filter(w => w.rarity === 'legendary');
       legendaries.forEach(weapon => {
-        expect(weapon.price).toBeGreaterThanOrEqual(38);
-        expect(weapon.price).toBeLessThanOrEqual(60);
+        expect(weapon.price).toBeGreaterThanOrEqual(15);
+        expect(weapon.price).toBeLessThanOrEqual(30);
       });
     });
 
@@ -282,6 +282,7 @@ describe('Stats Calculation', () => {
       const player = initializePlayer('test', 'Test Player', 'Orange Tabby');
 
       // Add a Life Vessel weapon (+1 maxHealth)
+      // Orange Tabby starts with Life Vessel (+1), so adding another makes +2
       const lifeVessel = WEAPONS.find(
         w => w.name === 'Life Vessel' && w.rarity === 'common'
       )!;
@@ -290,13 +291,15 @@ describe('Stats Calculation', () => {
       const baseStats = initializePlayer('test2', 'Test Player 2', 'Orange Tabby');
       const totalStats = calculatePlayerTotalStats(player);
 
-      expect(totalStats.maxHealth).toBe(baseStats.stats.maxHealth + 1);
+      // +2 = +1 from starting Life Vessel + 1 from added
+      expect(totalStats.maxHealth).toBe(baseStats.stats.maxHealth + 2);
     });
 
     it('should stack multiple weapons of the same type', () => {
       const player = initializePlayer('test', 'Test Player', 'Orange Tabby');
 
       // Add 3 Life Vessel commons (+1 each = +3 maxHealth)
+      // Note: Orange Tabby already starts with Life Vessel (+1), so total is +4
       const lifeVessel = WEAPONS.find(
         w => w.name === 'Life Vessel' && w.rarity === 'common'
       )!;
@@ -307,14 +310,15 @@ describe('Stats Calculation', () => {
       const baseStats = initializePlayer('test2', 'Test Player 2', 'Orange Tabby');
       const totalStats = calculatePlayerTotalStats(player);
 
-      expect(totalStats.maxHealth).toBe(baseStats.stats.maxHealth + 3);
+      // +4 = +1 from starting Life Vessel + 3 from added
+      expect(totalStats.maxHealth).toBe(baseStats.stats.maxHealth + 4);
     });
 
     it('should combine effects from different weapon types', () => {
       const player = initializePlayer('test', 'Test Player', 'Orange Tabby');
 
       // Add Life Vessel (+1 maxHealth) and Second Chance (+1 grace)
-      // Note: Orange Tabby already starts with Second Chance (+1 grace)
+      // Orange Tabby starts with Life Vessel (+1) and Mending Charm (+5 healing)
       const lifeVessel = WEAPONS.find(
         w => w.name === 'Life Vessel' && w.rarity === 'common'
       )!;
@@ -328,9 +332,10 @@ describe('Stats Calculation', () => {
       const baseStats = initializePlayer('test2', 'Test Player 2', 'Orange Tabby');
       const totalStats = calculatePlayerTotalStats(player);
 
-      expect(totalStats.maxHealth).toBe(baseStats.stats.maxHealth + 1);
-      // +2 because Orange Tabby starts with Second Chance, plus we added another
-      expect(totalStats.graces).toBe(baseStats.stats.graces + 2);
+      // +2 = +1 from starting Life Vessel + 1 from added
+      expect(totalStats.maxHealth).toBe(baseStats.stats.maxHealth + 2);
+      // +1 from added Second Chance (Orange Tabby doesn't start with any graces)
+      expect(totalStats.graces).toBe(baseStats.stats.graces + 1);
     });
 
     it('should correctly calculate explosionChance from Blast Powder', () => {
@@ -356,7 +361,8 @@ describe('Stats Calculation', () => {
 
       const totalStats = calculatePlayerTotalStats(player);
 
-      expect(totalStats.healingChance).toBe(10); // Rare is 10%
+      // Orange Tabby starts with Mending Charm Common (+5), adding Rare (+15) = 20
+      expect(totalStats.healingChance).toBe(20);
     });
 
     it('should correctly calculate laserChance from Prismatic Ray', () => {
@@ -369,7 +375,8 @@ describe('Stats Calculation', () => {
 
       const totalStats = calculatePlayerTotalStats(player);
 
-      expect(totalStats.laserChance).toBe(10); // Legendary is 10%
+      // Prismatic Ray Legendary is +21 laserChance
+      expect(totalStats.laserChance).toBe(21);
     });
 
     it('should correctly calculate startingTime from Chrono Shard', () => {

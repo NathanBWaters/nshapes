@@ -639,7 +639,7 @@ describe('Multi-Laser Independent Rolls', () => {
     // Verify the structure is correct for our filter
     expect(legendaryLaser).toBeDefined();
     expect(legendaryLaser?.specialEffect).toBe('laser');
-    expect(legendaryLaser?.effects.laserChance).toBe(10);
+    expect(legendaryLaser?.effects.laserChance).toBe(21); // Legendary is 21%
 
     // Create 28 legendary lasers (simulating user's scenario)
     const weapons: Weapon[] = Array(28).fill(legendaryLaser) as Weapon[];

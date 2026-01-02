@@ -330,8 +330,13 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
 
   // Initialize the game
   const initGame = useCallback((characterName: string, activeAttributes: AttributeName[]) => {
-    // Calculate board size based on active attributes
-    const boardSize = getBoardSizeForAttributes(activeAttributes.length);
+    // Initialize player first to get their starting weapons and stats
+    const player = initializePlayer('player1', 'Player 1', characterName);
+    const totalStats = calculatePlayerTotalStats(player);
+
+    // Calculate board size: max of player's fieldSize (with weapon bonuses) and minimum for attributes
+    const baseBoardSize = getBoardSizeForAttributes(activeAttributes.length);
+    const boardSize = Math.max(baseBoardSize, totalStats.fieldSize);
 
     // Generate initial board with modifiers based on difficulty
     const initialBoard = generateGameBoard(boardSize, 1, 1, activeAttributes);
@@ -365,8 +370,8 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
       remainingTime: roundReq.time, // startingTime bonus applied after player init
       roundCompleted: false,
 
-      // Player
-      player: initializePlayer('player1', 'Player 1', characterName),
+      // Player (already initialized above for fieldSize calculation)
+      player,
 
       // Shop and upgrades - to be filled during gameplay
       shopItems: generateRandomShopItems(),
@@ -1419,7 +1424,8 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
       setDevTimerEnabled(prev => !prev);
     },
     onResetBoard: () => {
-      const boardSize = getBoardSizeForAttributes(state.activeAttributes.length);
+      const totalStats = calculatePlayerTotalStats(state.player);
+      const boardSize = Math.max(totalStats.fieldSize, getBoardSizeForAttributes(state.activeAttributes.length));
       const newBoard = generateGameBoard(boardSize, state.round, state.round, state.activeAttributes);
       const deck = shuffleArray(createDeck(state.activeAttributes));
       const remainingDeck = deck.filter(card =>
@@ -1452,7 +1458,8 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
     },
     onChangeRound: (round: number) => {
       const activeAttributes = getActiveAttributesForRound(round);
-      const boardSize = getBoardSizeForAttributes(activeAttributes.length);
+      const totalStats = calculatePlayerTotalStats(state.player);
+      const boardSize = Math.max(totalStats.fieldSize, getBoardSizeForAttributes(activeAttributes.length));
       const newBoard = generateGameBoard(boardSize, round, round, activeAttributes);
       const deck = shuffleArray(createDeck(activeAttributes));
       const remainingDeck = deck.filter(card =>
@@ -1473,7 +1480,8 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
       // Get attributes based on count (3=shape/color/number, 4=+shading, 5=+background)
       const allAttributes: AttributeName[] = ['shape', 'color', 'number', 'shading', 'background'];
       const activeAttributes = allAttributes.slice(0, count);
-      const boardSize = getBoardSizeForAttributes(count);
+      const totalStats = calculatePlayerTotalStats(state.player);
+      const boardSize = Math.max(totalStats.fieldSize, getBoardSizeForAttributes(count));
       const newBoard = generateGameBoard(boardSize, state.round, state.round, activeAttributes);
       const deck = shuffleArray(createDeck(activeAttributes));
       const remainingDeck = deck.filter(card =>
@@ -1616,9 +1624,10 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
       });
     }
 
-    // Calculate board size based on attribute count
+    // Calculate board size: max of player's fieldSize (with weapon bonuses) and minimum for attributes
+    const totalStats = calculatePlayerTotalStats(state.player);
     const boardSize = Math.max(
-      state.player.stats.fieldSize,
+      totalStats.fieldSize,
       getBoardSizeForAttributes(newActiveAttributes.length)
     );
 
