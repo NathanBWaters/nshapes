@@ -33,6 +33,7 @@ import RoundScoreboard from './RoundScoreboard';
 import RoundSummary from './RoundSummary';
 import TutorialScreen from './TutorialScreen';
 import AttributeUnlockScreen from './AttributeUnlockScreen';
+import VictoryScreen from './VictoryScreen';
 import { useTutorial } from '@/context/TutorialContext';
 
 const INITIAL_CARD_COUNT = 12;
@@ -74,6 +75,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
     'level_up' |
     'shop' |
     'attribute_unlock' |
+    'victory' |
     'enemy_select' |
     'game_over' |
     'free_play'
@@ -239,6 +241,17 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
 
   // Complete the current round
   const completeRound = () => {
+    // Check if this is the final round (Round 10) - if so, go to victory
+    if (state.round >= 10) {
+      setState(prevState => ({
+        ...prevState,
+        roundCompleted: true,
+        gameEnded: true,
+      }));
+      setGamePhase('victory');
+      return;
+    }
+
     // Generate options first, then update state
     const options = generateLevelUpOptions();
 
@@ -1925,6 +1938,17 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
               />
             </View>
           </View>
+        );
+
+      case 'victory':
+        return (
+          <VictoryScreen
+            player={state.player}
+            finalScore={state.score}
+            matchCount={state.foundCombinations.length}
+            playerStats={calculatePlayerTotalStats(state.player)}
+            onReturnToMenu={() => setGamePhase('character_select')}
+          />
         );
 
       case 'game_over':

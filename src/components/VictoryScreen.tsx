@@ -1,0 +1,356 @@
+import React from 'react';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { Player, Weapon, PlayerStats, WeaponRarity } from '@/types';
+import { COLORS, RADIUS } from '@/utils/colors';
+import Icon from './Icon';
+
+interface VictoryScreenProps {
+  player: Player;
+  finalScore: number;
+  matchCount: number;
+  playerStats: PlayerStats;
+  onReturnToMenu: () => void;
+}
+
+// Rarity colors
+const getRarityColor = (rarity: WeaponRarity): string => {
+  switch (rarity) {
+    case 'common': return COLORS.slateCharcoal;
+    case 'rare': return '#1976D2';
+    case 'legendary': return COLORS.impactOrange;
+    default: return COLORS.slateCharcoal;
+  }
+};
+
+const getRarityLabel = (rarity: WeaponRarity): string => {
+  switch (rarity) {
+    case 'common': return 'Common';
+    case 'rare': return 'Rare';
+    case 'legendary': return 'Legendary';
+    default: return rarity;
+  }
+};
+
+// Group weapons by name+rarity and count duplicates
+const groupWeapons = (weapons: Weapon[]): { weapon: Weapon; count: number }[] => {
+  const groups = new Map<string, { weapon: Weapon; count: number }>();
+
+  weapons.forEach(weapon => {
+    const key = `${weapon.name}-${weapon.rarity}`;
+    if (groups.has(key)) {
+      groups.get(key)!.count++;
+    } else {
+      groups.set(key, { weapon, count: 1 });
+    }
+  });
+
+  // Sort by rarity (legendary first, then rare, then common)
+  const rarityOrder: Record<string, number> = { legendary: 0, rare: 1, common: 2 };
+  return Array.from(groups.values()).sort(
+    (a, b) => (rarityOrder[a.weapon.rarity] ?? 3) - (rarityOrder[b.weapon.rarity] ?? 3)
+  );
+};
+
+const VictoryScreen: React.FC<VictoryScreenProps> = ({
+  player,
+  finalScore,
+  matchCount,
+  playerStats,
+  onReturnToMenu,
+}) => {
+  const groupedWeapons = groupWeapons(player.weapons);
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.card}>
+        {/* Victory Banner */}
+        <View style={styles.banner}>
+          <Text style={styles.bannerEmoji}>!</Text>
+          <Text style={styles.bannerTitle}>VICTORY</Text>
+          <Text style={styles.bannerEmoji}>!</Text>
+        </View>
+
+        <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+          {/* Character Info */}
+          <View style={styles.characterSection}>
+            {player.character.icon && (
+              <Icon name={player.character.icon} size={48} color={COLORS.deepOnyx} />
+            )}
+            <Text style={styles.characterName}>{player.character.name}</Text>
+            <Text style={styles.subtitle}>Completed all 10 rounds!</Text>
+          </View>
+
+          {/* Stats */}
+          <View style={styles.statsSection}>
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{finalScore}</Text>
+              <Text style={styles.statLabel}>Final Score</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{matchCount}</Text>
+              <Text style={styles.statLabel}>Total Matches</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>Lv.{playerStats.level}</Text>
+              <Text style={styles.statLabel}>Final Level</Text>
+            </View>
+          </View>
+
+          {/* Weapons Collected */}
+          <View style={styles.weaponsSection}>
+            <Text style={styles.sectionTitle}>Weapons Collected</Text>
+            {groupedWeapons.length === 0 ? (
+              <Text style={styles.emptyWeapons}>No weapons collected</Text>
+            ) : (
+              <View style={styles.weaponsList}>
+                {groupedWeapons.map(({ weapon, count }, index) => (
+                  <View
+                    key={`${weapon.id}-${index}`}
+                    style={[styles.weaponItem, { borderLeftColor: getRarityColor(weapon.rarity) }]}
+                  >
+                    {weapon.icon && (
+                      <Icon name={weapon.icon} size={20} color={COLORS.slateCharcoal} />
+                    )}
+                    <View style={styles.weaponInfo}>
+                      <Text style={styles.weaponName}>{weapon.name}</Text>
+                      <Text style={[styles.weaponRarity, { color: getRarityColor(weapon.rarity) }]}>
+                        {getRarityLabel(weapon.rarity)}
+                      </Text>
+                    </View>
+                    {count > 1 && (
+                      <View style={styles.weaponCount}>
+                        <Text style={styles.weaponCountText}>x{count}</Text>
+                      </View>
+                    )}
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+
+          {/* Final Stats Summary */}
+          <View style={styles.finalStatsSection}>
+            <Text style={styles.sectionTitle}>Final Stats</Text>
+            <View style={styles.finalStatsGrid}>
+              <View style={styles.finalStatItem}>
+                <Text style={styles.finalStatIcon}>$</Text>
+                <Text style={styles.finalStatValue}>{playerStats.money}</Text>
+              </View>
+              <View style={styles.finalStatItem}>
+                <Text style={styles.finalStatIcon}>H</Text>
+                <Text style={styles.finalStatValue}>{playerStats.health}/{playerStats.maxHealth}</Text>
+              </View>
+              <View style={styles.finalStatItem}>
+                <Text style={styles.finalStatIcon}>?</Text>
+                <Text style={styles.finalStatValue}>{playerStats.hints}/{playerStats.maxHints}</Text>
+              </View>
+              <View style={styles.finalStatItem}>
+                <Text style={styles.finalStatIcon}>G</Text>
+                <Text style={styles.finalStatValue}>{playerStats.graces}</Text>
+              </View>
+            </View>
+          </View>
+        </ScrollView>
+
+        {/* Return Button */}
+        <TouchableOpacity style={styles.returnButton} onPress={onReturnToMenu}>
+          <Text style={styles.returnButtonText}>RETURN TO MENU</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: 'rgba(18, 18, 18, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  card: {
+    backgroundColor: COLORS.canvasWhite,
+    borderRadius: RADIUS.module,
+    borderWidth: 2,
+    borderColor: COLORS.actionYellow,
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '95%',
+    overflow: 'hidden',
+  },
+  banner: {
+    backgroundColor: COLORS.actionYellow,
+    paddingVertical: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  bannerEmoji: {
+    fontSize: 28,
+    color: COLORS.deepOnyx,
+    fontWeight: '800',
+  },
+  bannerTitle: {
+    fontSize: 32,
+    fontWeight: '900',
+    color: COLORS.deepOnyx,
+    letterSpacing: 4,
+  },
+  content: {
+    flex: 1,
+  },
+  contentContainer: {
+    padding: 20,
+  },
+  characterSection: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  characterName: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: COLORS.deepOnyx,
+    marginTop: 8,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: COLORS.logicTeal,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  statsSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    backgroundColor: COLORS.paperBeige,
+    padding: 16,
+    borderRadius: RADIUS.button,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+    marginBottom: 24,
+  },
+  statItem: {
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: COLORS.deepOnyx,
+    fontFamily: 'monospace',
+  },
+  statLabel: {
+    fontSize: 10,
+    color: COLORS.slateCharcoal,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginTop: 4,
+  },
+  statDivider: {
+    width: 1,
+    backgroundColor: COLORS.slateCharcoal,
+    opacity: 0.3,
+  },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.slateCharcoal,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  weaponsSection: {
+    marginBottom: 24,
+  },
+  emptyWeapons: {
+    fontSize: 14,
+    color: COLORS.slateCharcoal,
+    textAlign: 'center',
+    opacity: 0.6,
+  },
+  weaponsList: {
+    gap: 8,
+  },
+  weaponItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.paperBeige,
+    padding: 10,
+    borderRadius: RADIUS.button,
+    borderLeftWidth: 3,
+    gap: 10,
+  },
+  weaponInfo: {
+    flex: 1,
+  },
+  weaponName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.deepOnyx,
+  },
+  weaponRarity: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  weaponCount: {
+    backgroundColor: COLORS.slateCharcoal,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  weaponCountText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.canvasWhite,
+    fontFamily: 'monospace',
+  },
+  finalStatsSection: {
+    marginBottom: 16,
+  },
+  finalStatsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  finalStatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.paperBeige,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: RADIUS.button,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+    gap: 6,
+  },
+  finalStatIcon: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.slateCharcoal,
+  },
+  finalStatValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.deepOnyx,
+    fontFamily: 'monospace',
+  },
+  returnButton: {
+    backgroundColor: COLORS.actionYellow,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.slateCharcoal,
+    alignItems: 'center',
+  },
+  returnButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.slateCharcoal,
+    letterSpacing: 1,
+  },
+});
+
+export default VictoryScreen;

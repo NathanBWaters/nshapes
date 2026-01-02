@@ -175,6 +175,7 @@ src/                        # Shared code (imported via @/ alias)
    - Before Round 10: Shows Final Round warning screen
 5. Level Up (choose weapon) / Weapon Shop between rounds.
 6. Repeat for 10 rounds total.
+7. After completing Round 10: Victory Screen showing final stats and weapons collected.
 
 **Free Play Mode:**
 
