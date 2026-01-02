@@ -32,6 +32,7 @@ import EnemySelection from './EnemySelection';
 import RoundScoreboard from './RoundScoreboard';
 import RoundSummary from './RoundSummary';
 import TutorialScreen from './TutorialScreen';
+import AttributeUnlockScreen from './AttributeUnlockScreen';
 import { useTutorial } from '@/context/TutorialContext';
 
 const INITIAL_CARD_COUNT = 12;
@@ -72,10 +73,15 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
     'loot' |
     'level_up' |
     'shop' |
+    'attribute_unlock' |
     'enemy_select' |
     'game_over' |
     'free_play'
   >(devMode ? 'round' : 'character_select');
+
+  // Track pending attribute unlock for next round
+  const [pendingUnlockedAttribute, setPendingUnlockedAttribute] = useState<AttributeName | null>(null);
+  const [isFinalRoundWarning, setIsFinalRoundWarning] = useState(false);
 
   // Tutorial context
   const { state: tutorialState, startTutorial, markTutorialOffered } = useTutorial();
@@ -1599,6 +1605,35 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
     }
   };
 
+  // Handle proceeding from shop - check for attribute unlocks before starting next round
+  const handleProceedFromShop = () => {
+    const nextRound = state.round + 1;
+    const newActiveAttributes = getActiveAttributesForRound(nextRound);
+    const previousAttributes = state.activeAttributes;
+
+    // Check if a new attribute is being unlocked
+    const newAttribute = newActiveAttributes.find(attr => !previousAttributes.includes(attr));
+
+    // Check if this is the final round (round 10)
+    if (nextRound === 10) {
+      setIsFinalRoundWarning(true);
+      setPendingUnlockedAttribute(null);
+      setGamePhase('attribute_unlock');
+      return;
+    }
+
+    // If a new attribute is unlocking, show the unlock screen
+    if (newAttribute) {
+      setPendingUnlockedAttribute(newAttribute);
+      setIsFinalRoundWarning(false);
+      setGamePhase('attribute_unlock');
+      return;
+    }
+
+    // No unlock needed, proceed directly to next round
+    startNextRound();
+  };
+
   // Start the next round
   const startNextRound = () => {
     const nextRound = state.round + 1;
@@ -1612,21 +1647,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
     const newActiveAttributes = getActiveAttributesForRound(nextRound);
     const previousAttributes = state.activeAttributes;
 
-    // Check if a new attribute is being unlocked
-    const newAttribute = newActiveAttributes.find(attr => !previousAttributes.includes(attr));
-    if (newAttribute) {
-      const attributeNames: Record<AttributeName, string> = {
-        shape: 'Shape',
-        color: 'Color',
-        number: 'Number',
-        shading: 'Shading',
-        background: 'Background'
-      };
-      setNotification({
-        message: `New Attribute Unlocked: ${attributeNames[newAttribute]}!`,
-        type: 'info'
-      });
-    }
+    // Note: Attribute unlock is now handled via the AttributeUnlockScreen before this function is called
 
     // Calculate board size: max of player's fieldSize (with weapon bonuses) and minimum for attributes
     const totalStats = calculatePlayerTotalStats(state.player);
@@ -1762,10 +1783,23 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
             onReroll={handleWeaponShopReroll}
             rerollCost={state.rerollCost}
             freeRerolls={state.player.stats.freeRerolls}
-            onContinue={startNextRound}
+            onContinue={handleProceedFromShop}
             playerStats={calculatePlayerTotalStats(state.player)}
             playerWeapons={state.player.weapons}
             onExitGame={() => setGamePhase('character_select')}
+          />
+        );
+
+      case 'attribute_unlock':
+        return (
+          <AttributeUnlockScreen
+            newAttribute={pendingUnlockedAttribute || 'shading'}
+            onContinue={() => {
+              setPendingUnlockedAttribute(null);
+              setIsFinalRoundWarning(false);
+              startNextRound();
+            }}
+            isFinalRound={isFinalRoundWarning}
           />
         );
 

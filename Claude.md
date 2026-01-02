@@ -169,7 +169,10 @@ src/                        # Shared code (imported via @/ alias)
 1. Character Selection → Choose Adventure.
 2. **Attribute Unlock:** Game initializes with 3 attributes (Shape/Color/Number).
 3. Play Round (reach score target within 60 seconds).
-4. **Progression:** After Round 3 and 9, the game introduces the next attribute dimension.
+4. **Progression:** After Round 3 and 9:
+   - Shows Attribute Unlock Screen explaining the new attribute (Shading or Background)
+   - Displays example cards demonstrating the attribute values
+   - Before Round 10: Shows Final Round warning screen
 5. Level Up (choose weapon) / Weapon Shop between rounds.
 6. Repeat for 10 rounds total.
 
