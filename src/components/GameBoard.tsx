@@ -26,6 +26,7 @@ interface GameBoardProps {
   pendingBurnRewards?: CardReward[]; // Rewards for cards that finished burning
   onBurnRewardsComplete?: (cardIds: string[]) => void; // Called after burn rewards are displayed
   isPaused?: boolean; // When true, pauses auto-hint timer (e.g., when menu is open)
+  lastMatchTime?: number; // Timestamp of last successful match - auto-hint only triggers 15s after this
 }
 
 // Calculate rewards for a single card
@@ -74,6 +75,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
   pendingBurnRewards,
   onBurnRewardsComplete,
   isPaused = false,
+  lastMatchTime,
 }) => {
   const [selectedCards, setSelectedCards] = useState<CardType[]>([]);
   const [matchedCardIds, setMatchedCardIds] = useState<string[]>([]);
@@ -227,25 +229,36 @@ const GameBoard: React.FC<GameBoardProps> = ({
   }, [cards, matchedCardIds]);
 
   // Auto-hint interval effect
+  // Auto-hint now triggers 15 seconds AFTER the last match (not continuously)
+  // autoHintInterval modifies the 15-second threshold (lower = faster, but min is still 5s)
   // Pauses when isPaused is true (e.g., when menu is open)
   useEffect(() => {
     const autoHintChance = playerStats.autoHintChance || 0;
-    const autoHintInterval = playerStats.autoHintInterval || 10000;
+    // autoHintInterval reduces the base 15s threshold (e.g., -5000 = 10s wait)
+    const intervalReduction = playerStats.autoHintInterval || 0;
+    const minWaitTime = 5000; // Minimum 5 second wait
+    const baseWaitTime = 15000; // Base 15 second wait
+    const actualWaitTime = Math.max(minWaitTime, baseWaitTime - intervalReduction);
 
     if (autoHintChance <= 0 || isPaused) return;
 
+    // Check every 2 seconds if conditions are met
     const intervalId = setInterval(() => {
       // Don't show auto-hint if a hint is already showing
       if (hintCards.length > 0) return;
+
+      // Only trigger if enough time has passed since last match
+      const timeSinceMatch = lastMatchTime ? Date.now() - lastMatchTime : Infinity;
+      if (timeSinceMatch < actualWaitTime) return;
 
       // Roll auto-hint chance
       if (Math.random() * 100 < autoHintChance) {
         showAutoHint();
       }
-    }, autoHintInterval);
+    }, 2000); // Check every 2 seconds
 
     return () => clearInterval(intervalId);
-  }, [playerStats.autoHintChance, playerStats.autoHintInterval, hintCards.length, showAutoHint, isPaused]);
+  }, [playerStats.autoHintChance, playerStats.autoHintInterval, hintCards.length, showAutoHint, isPaused, lastMatchTime]);
 
   // Handle card click
   const handleCardClick = (card: CardType) => {

@@ -165,6 +165,9 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
   // Menu open state - used to pause game when menu is open
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
+  // Last match timestamp for auto-hint timing (triggers 15s after last match)
+  const [lastMatchTime, setLastMatchTime] = useState<number>(Date.now());
+
   // Game over reason
   const [gameOverReason, setGameOverReason] = useState<string | null>(null);
 
@@ -924,6 +927,9 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
 
   // Handle valid match - receives cards, rewards, and weapon effects from GameBoard after reveal
   const handleValidMatch = (cards: Card[], rewards: CardReward[], weaponEffects?: WeaponEffectResult) => {
+    // Update last match time for auto-hint timing
+    setLastMatchTime(Date.now());
+
     // In multiplayer, send the match to the server
     if (isMultiplayer) {
       sendCombinationFound(state);
@@ -1793,6 +1799,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
                 pendingBurnRewards={pendingBurnRewards || undefined}
                 onBurnRewardsComplete={handleBurnRewardsComplete}
                 isPaused={isMenuOpen}
+                lastMatchTime={lastMatchTime}
               />
             </View>
           </View>
@@ -1876,6 +1883,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
                 triggerClearHint={clearHintTrigger > 0 ? clearHintTrigger : undefined}
                 pendingBurnRewards={pendingBurnRewards || undefined}
                 onBurnRewardsComplete={handleBurnRewardsComplete}
+                lastMatchTime={lastMatchTime}
               />
             </View>
           </View>

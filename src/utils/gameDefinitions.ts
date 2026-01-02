@@ -394,9 +394,9 @@ export const WEAPONS: Weapon[] = [
     rarity: 'common',
     level: 1,
     price: 6,
-    description: '15% chance for auto-hint every 10s.',
-    shortDescription: 'Automatic hints over time',
-    flavorText: 'Every 10 seconds, has a chance to automatically highlight a valid set on the board. Stacks with other Oracle Eyes for higher chance.',
+    description: '15% chance for hint 15s after match.',
+    shortDescription: 'Hint when stuck',
+    flavorText: 'After 15 seconds without a match, has a chance to highlight a valid set. Helps when you get stuck!',
     icon: 'lorc/sheikah-eye',
     specialEffect: 'autoHint',
     effects: { autoHintChance: 15 }
@@ -407,12 +407,12 @@ export const WEAPONS: Weapon[] = [
     rarity: 'rare',
     level: 1,
     price: 12,
-    description: '45% chance for auto-hint every 7s.',
-    shortDescription: 'Automatic hints over time',
-    flavorText: 'Every 7 seconds, has a chance to automatically highlight a valid set on the board. Stacks with other Oracle Eyes for higher chance.',
+    description: '45% chance for hint 10s after match.',
+    shortDescription: 'Hint when stuck',
+    flavorText: 'After 10 seconds without a match, has a chance to highlight a valid set. Quicker help when stuck!',
     icon: 'lorc/sheikah-eye',
     specialEffect: 'autoHint',
-    effects: { autoHintChance: 45, autoHintInterval: -3000 }
+    effects: { autoHintChance: 45, autoHintInterval: 5000 }
   },
   {
     id: 'oracle-eye-legendary',
@@ -420,12 +420,12 @@ export const WEAPONS: Weapon[] = [
     rarity: 'legendary',
     level: 1,
     price: 18,
-    description: '100% chance for auto-hint every 4s.',
-    shortDescription: 'Automatic hints over time',
-    flavorText: 'Every 4 seconds, automatically highlights a valid set on the board. Guaranteed hints make finding matches effortless.',
+    description: '100% hint 5s after match.',
+    shortDescription: 'Hint when stuck',
+    flavorText: 'After 5 seconds without a match, automatically highlights a valid set. Never get stuck again!',
     icon: 'lorc/sheikah-eye',
     specialEffect: 'autoHint',
-    effects: { autoHintChance: 100, autoHintInterval: -6000 }
+    effects: { autoHintChance: 100, autoHintInterval: 10000 }
   },
 
   // ============================================================================
