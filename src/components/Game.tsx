@@ -162,6 +162,9 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
   const [hintTrigger, setHintTrigger] = useState(0);
   const [clearHintTrigger, setClearHintTrigger] = useState(0);
 
+  // Menu open state - used to pause game when menu is open
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
   // Game over reason
   const [gameOverReason, setGameOverReason] = useState<string | null>(null);
 
@@ -244,10 +247,11 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
 
   // Timer effect - countdown when in round phase
   // In dev mode, timer only runs when devTimerEnabled is true
+  // Timer pauses when menu is open
   useEffect(() => {
     let timerInterval: ReturnType<typeof setInterval> | null = null;
 
-    const shouldRunTimer = gamePhase === 'round' && state.gameStarted && !state.gameEnded && state.remainingTime > 0 && (!devMode || devTimerEnabled);
+    const shouldRunTimer = gamePhase === 'round' && state.gameStarted && !state.gameEnded && state.remainingTime > 0 && (!devMode || devTimerEnabled) && !isMenuOpen;
 
     if (shouldRunTimer) {
       // Start countdown timer
@@ -284,13 +288,14 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
         clearInterval(timerInterval);
       }
     };
-  }, [gamePhase, state.gameStarted, state.gameEnded, devMode, devTimerEnabled]);
+  }, [gamePhase, state.gameStarted, state.gameEnded, devMode, devTimerEnabled, isMenuOpen]);
 
   // Fire effect - check for burning cards every second
+  // Fire pauses when menu is open
   useEffect(() => {
     let fireInterval: ReturnType<typeof setInterval> | null = null;
 
-    if ((gamePhase === 'round' || gamePhase === 'free_play') && state.gameStarted && !state.gameEnded) {
+    if ((gamePhase === 'round' || gamePhase === 'free_play') && state.gameStarted && !state.gameEnded && !isMenuOpen) {
       // Check for burning cards every second
       fireInterval = setInterval(() => {
         // Check if any cards are on fire
@@ -306,7 +311,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
         clearInterval(fireInterval);
       }
     };
-  }, [gamePhase, state.gameStarted, state.gameEnded, state.board]);
+  }, [gamePhase, state.gameStarted, state.gameEnded, state.board, isMenuOpen]);
 
   // Handle round completion when time runs out - separate from timer to avoid race conditions
   useEffect(() => {
@@ -1760,6 +1765,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
                 onExitGame={() => setGamePhase('character_select')}
                 devMode={devMode}
                 devCallbacks={devCallbacks}
+                onMenuOpenChange={setIsMenuOpen}
               />
             </View>
 
@@ -1780,6 +1786,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
                 triggerClearHint={clearHintTrigger > 0 ? clearHintTrigger : undefined}
                 pendingBurnRewards={pendingBurnRewards || undefined}
                 onBurnRewardsComplete={handleBurnRewardsComplete}
+                isPaused={isMenuOpen}
               />
             </View>
           </View>

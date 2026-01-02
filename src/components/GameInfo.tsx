@@ -41,6 +41,8 @@ interface GameInfoProps {
   copilotMode?: boolean;
   // Controlled menu open state for tutorial
   controlledMenuOpen?: boolean;
+  // Callback when menu open state changes (for pausing game)
+  onMenuOpenChange?: (isOpen: boolean) => void;
 }
 
 // Calculate XP thresholds for level progression
@@ -65,6 +67,7 @@ const GameInfo: React.FC<GameInfoProps> = ({
   devCallbacks,
   copilotMode = false,
   controlledMenuOpen,
+  onMenuOpenChange,
 }) => {
   // Calculate score progress percentage
   const scoreProgress = Math.min((score / targetScore) * 100, 100);
@@ -197,6 +200,7 @@ const GameInfo: React.FC<GameInfoProps> = ({
               devCallbacks={devCallbacks}
               copilotMode={copilotMode}
               controlledOpen={controlledMenuOpen}
+              onMenuOpenChange={onMenuOpenChange}
             />
           </View>
 

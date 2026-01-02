@@ -57,6 +57,8 @@ interface GameMenuProps {
   copilotMode?: boolean;
   // Controlled mode for tutorial - parent controls whether menu is open
   controlledOpen?: boolean;
+  // Callback when menu open state changes (for pausing game)
+  onMenuOpenChange?: (isOpen: boolean) => void;
 }
 
 type MenuScreen = 'menu' | 'stats' | 'weapons' | 'dev';
@@ -70,7 +72,7 @@ const getRarityColor = (rarity: WeaponRarity): string => {
   }
 };
 
-const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], character, onExitGame, devMode = false, devCallbacks, copilotMode = false, controlledOpen }) => {
+const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], character, onExitGame, devMode = false, devCallbacks, copilotMode = false, controlledOpen, onMenuOpenChange }) => {
   const [internalModalOpen, setInternalModalOpen] = useState(false);
   const [currentScreen, setCurrentScreen] = useState<MenuScreen>('menu');
   const [showExitConfirm, setShowExitConfirm] = useState(false);
@@ -81,10 +83,12 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
   const openModal = () => {
     setCurrentScreen('menu');
     setInternalModalOpen(true);
+    onMenuOpenChange?.(true);
   };
   const closeModal = () => {
     setInternalModalOpen(false);
     setCurrentScreen('menu');
+    onMenuOpenChange?.(false);
   };
 
   // Group stats into categories for cleaner display

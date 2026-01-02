@@ -25,6 +25,7 @@ interface GameBoardProps {
   triggerClearHint?: number;
   pendingBurnRewards?: CardReward[]; // Rewards for cards that finished burning
   onBurnRewardsComplete?: (cardIds: string[]) => void; // Called after burn rewards are displayed
+  isPaused?: boolean; // When true, pauses auto-hint timer (e.g., when menu is open)
 }
 
 // Calculate rewards for a single card
@@ -72,6 +73,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
   triggerClearHint,
   pendingBurnRewards,
   onBurnRewardsComplete,
+  isPaused = false,
 }) => {
   const [selectedCards, setSelectedCards] = useState<CardType[]>([]);
   const [matchedCardIds, setMatchedCardIds] = useState<string[]>([]);
@@ -225,11 +227,12 @@ const GameBoard: React.FC<GameBoardProps> = ({
   }, [cards, matchedCardIds]);
 
   // Auto-hint interval effect
+  // Pauses when isPaused is true (e.g., when menu is open)
   useEffect(() => {
     const autoHintChance = playerStats.autoHintChance || 0;
     const autoHintInterval = playerStats.autoHintInterval || 10000;
 
-    if (autoHintChance <= 0) return;
+    if (autoHintChance <= 0 || isPaused) return;
 
     const intervalId = setInterval(() => {
       // Don't show auto-hint if a hint is already showing
@@ -242,7 +245,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
     }, autoHintInterval);
 
     return () => clearInterval(intervalId);
-  }, [playerStats.autoHintChance, playerStats.autoHintInterval, hintCards.length, showAutoHint]);
+  }, [playerStats.autoHintChance, playerStats.autoHintInterval, hintCards.length, showAutoHint, isPaused]);
 
   // Handle card click
   const handleCardClick = (card: CardType) => {
