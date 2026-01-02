@@ -154,9 +154,9 @@ export const STAT_ICONS: Record<string, string> = {
   // Field
   fieldSize: 'lorc/field',
 
-  // Rerolls & Mulligans
+  // Rerolls & Graces
   freeRerolls: 'lorc/cycle',
-  mulligans: 'lorc/recycle',
+  graces: 'lorc/clover',
 
   // Card Draw
   drawIncrease: 'delapouite/card-exchange',
@@ -204,7 +204,7 @@ export const STAT_ICONS: Record<string, string> = {
   boardGrowthChance: 'delapouite/card-exchange',
   boardGrowthAmount: 'delapouite/card-exchange',
   fireSpreadChance: 'lorc/campfire',
-  mulliganGainChance: 'lorc/cycle',
+  graceGainChance: 'lorc/clover',
   healingChance: 'lorc/shining-heart',
   hintGainChance: 'lorc/light-bulb',
   holoChance: 'lorc/crystal-shine',

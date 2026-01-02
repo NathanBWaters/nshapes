@@ -930,8 +930,8 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
       return;
     }
 
-    // Check if this is a mulligan match (invalid match saved by mulligan)
-    const isMulliganMatch = rewards.length > 0 && rewards[0].effectType === 'mulligan';
+    // Check if this is a grace match (invalid match saved by grace)
+    const isGraceMatch = rewards.length > 0 && rewards[0].effectType === 'grace';
 
     // Calculate totals from rewards (includes explosion/laser rewards from GameBoard)
     let totalPoints = 0;
@@ -941,20 +941,20 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
     let totalHints = 0;
     let lootCratesEarned = 0;
     let holoBonus = 0;
-    let mulliganUsed = false;
+    let graceUsed = false;
 
     rewards.forEach(reward => {
-      // Track if this is a mulligan match (first reward marked as mulligan)
-      if (reward.effectType === 'mulligan') {
-        mulliganUsed = true;
-        // Still award full points for mulligan cards!
+      // Track if this is a grace match (first reward marked as grace)
+      if (reward.effectType === 'grace') {
+        graceUsed = true;
+        // Still award full points for grace cards!
       }
 
       let points = reward.points || 0;
       let money = reward.money || 0;
 
       // Check if this card is holographic for 2x points (only for base match rewards, not effects)
-      if (!reward.effectType || reward.effectType === 'mulligan') {
+      if (!reward.effectType || reward.effectType === 'grace') {
         const matchedCard = cards.find(c => c.id === reward.cardId);
         if (matchedCard?.isHolographic) {
           points *= 2;
@@ -973,9 +973,9 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
     // === WEAPON BONUS EFFECTS (from GameBoard's processWeaponEffects) ===
     const triggerNotifications: string[] = [];
 
-    // Show mulligan used notification
-    if (isMulliganMatch) {
-      triggerNotifications.push('Mulligan Used!');
+    // Show grace used notification
+    if (isGraceMatch) {
+      triggerNotifications.push('Grace!');
     }
 
     // Show holographic bonus if any
@@ -983,7 +983,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
       triggerNotifications.push(`Holo 2x! +${holoBonus}`);
     }
 
-    // Apply weapon effect bonuses (healing, hints, time, mulligans, board growth, fire)
+    // Apply weapon effect bonuses (healing, hints, time, graces, board growth, fire)
     if (weaponEffects) {
       totalHealing += weaponEffects.bonusHealing;
       totalHints += weaponEffects.bonusHints;
@@ -1046,8 +1046,8 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
         });
       }
 
-      // Calculate mulligan change: if mulligan used, decrement; if bonus from weapon effects, add
-      const mulliganDelta = (mulliganUsed ? -1 : 0) + (weaponEffects?.bonusMulligans || 0);
+      // Calculate grace change: if grace used, decrement; if bonus from weapon effects, add
+      const graceDelta = (graceUsed ? -1 : 0) + (weaponEffects?.bonusGraces || 0);
 
       return {
         ...prevState,
@@ -1065,7 +1065,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
             money: prevState.player.stats.money + totalMoney,
             health: newHealth,
             hints: prevState.player.stats.hints + totalHints,
-            mulligans: prevState.player.stats.mulligans + mulliganDelta
+            graces: prevState.player.stats.graces + graceDelta
           }
         }
       };
@@ -1267,14 +1267,19 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
     });
   };
 
-  // Handle invalid match - removes cards and replaces them (costs 1 health unless mulligan)
+  // Handle invalid match - removes cards and replaces them (costs 1 health unless grace saves)
+  // Grace only saves when EXACTLY 1 attribute is wrong (a "near miss")
   const handleInvalidMatch = (cardsToReplace: Card[]) => {
-    // Get current total stats to check mulligans
+    // Get current total stats to check graces
     const totalStats = calculatePlayerTotalStats(state.player);
 
-    // Check if player has mulligans to auto-use
-    if (totalStats.mulligans > 0) {
-      // Use a mulligan instead of losing health
+    // Check how many attributes are invalid
+    const validationResult = isValidCombination(cardsToReplace, state.activeAttributes);
+    const invalidCount = validationResult.invalidAttributes.length;
+
+    // Grace only saves when exactly 1 attribute is wrong AND player has graces
+    if (invalidCount === 1 && totalStats.graces > 0) {
+      // Use a grace instead of losing health
       setState(prevState => ({
         ...prevState,
         selectedCards: prevState.selectedCards.filter(c => !cardsToReplace.some(mc => mc.id === c.id)),
@@ -1282,13 +1287,14 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
           ...prevState.player,
           stats: {
             ...prevState.player.stats,
-            mulligans: prevState.player.stats.mulligans - 1
+            graces: prevState.player.stats.graces - 1
           }
         }
       }));
 
+      const attrName = validationResult.invalidAttributes[0];
       setNotification({
-        message: 'Mulligan Used!',
+        message: `Grace! (${attrName} was wrong)`,
         type: 'info'
       });
 
@@ -1299,7 +1305,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
       return;
     }
 
-    // No mulligans - decrease health
+    // 2+ attributes wrong OR no graces - decrease health
     setState(prevState => {
       const newHealth = prevState.player.stats.health - 1;
 
@@ -1372,18 +1378,18 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
       }));
       setNotification({ message: 'Weapons cleared!', type: 'info' });
     },
-    onAddMulligans: (count: number) => {
+    onAddGraces: (count: number) => {
       setState(prevState => ({
         ...prevState,
         player: {
           ...prevState.player,
           stats: {
             ...prevState.player.stats,
-            mulligans: prevState.player.stats.mulligans + count
+            graces: prevState.player.stats.graces + count
           }
         }
       }));
-      setNotification({ message: `+${count} Mulligans`, type: 'success' });
+      setNotification({ message: `+${count} Graces`, type: 'success' });
     },
     onSetCardsOnFire: (count: number) => {
       const now = Date.now();

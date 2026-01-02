@@ -14,7 +14,7 @@ const COPILOT_STEPS = {
   health: { order: 2, text: "Your health! Invalid SET matches cost 1 heart. If you run out, it's game over. Protect your health!" },
   money: { order: 3, text: "Gold coins! Earn money by matching cards. Spend it in the shop between rounds to buy powerful weapons." },
   level: { order: 4, text: "Your level and XP bar. Earn experience with each match. Level up to choose a free weapon reward!" },
-  mulligans: { order: 5, text: "Mulligans auto-save you! When you make an invalid match, a mulligan is used instead of losing health." },
+  graces: { order: 5, text: "Graces save you from near-misses! When only 1 attribute is wrong, a grace is used instead of losing health." },
   hints: { order: 6, text: "Stuck? Tap this to use a hint! It will highlight a valid SET on the board. Use them wisely!" },
   selected: { order: 7, text: "Shows how many cards you've selected. Select 3 cards to check if they form a valid SET." },
   timer: { order: 8, text: "The countdown timer! Reach the score target before time runs out to complete the round." },
@@ -141,14 +141,14 @@ const GameInfo: React.FC<GameInfoProps> = ({
               styles.levelContainer
             )}
 
-            {/* Mulligans - always show in copilot mode for tutorial, otherwise conditional */}
-            {((playerStats.mulligans ?? 0) > 0 || copilotMode) &&
-              withCopilot('mulligans',
+            {/* Graces - always show in copilot mode for tutorial, otherwise conditional */}
+            {((playerStats.graces ?? 0) > 0 || copilotMode) &&
+              withCopilot('graces',
                 <>
-                  <Text style={styles.mulliganIcon}>↺</Text>
-                  <Text style={styles.mulliganCount}>{playerStats.mulligans ?? 0}</Text>
+                  <Text style={styles.graceIcon}>🍀</Text>
+                  <Text style={styles.graceCount}>{playerStats.graces ?? 0}</Text>
                 </>,
-                styles.mulliganBadge
+                styles.graceBadge
               )
             }
 
@@ -319,7 +319,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.logicTeal,
     borderRadius: 3,
   },
-  mulliganBadge: {
+  graceBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.logicTeal,
@@ -330,12 +330,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.slateCharcoal,
   },
-  mulliganIcon: {
+  graceIcon: {
     color: COLORS.canvasWhite,
     fontSize: 12,
     fontWeight: '700',
   },
-  mulliganCount: {
+  graceCount: {
     color: COLORS.canvasWhite,
     fontSize: 12,
     fontWeight: '600',

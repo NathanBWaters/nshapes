@@ -23,7 +23,7 @@ const TOUR_PLAYER_STATS: PlayerStats = {
   maxHealth: 3,
   level: 1,
   hints: 2,
-  mulligans: 1,
+  graces: 1,
   money: 25,
   experience: 15,
 };

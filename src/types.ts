@@ -55,10 +55,10 @@ export interface CardReward {
   lootBox?: boolean;
   item?: string; // Future: item name/id
   timeBonus?: number; // Seconds to add to timer
-  mulliganBonus?: number; // Mulligans to add
+  graceBonus?: number; // Graces to add
   boardGrowth?: number; // Cards to add to board
   // Weapon effect types for visual distinction
-  effectType?: 'explosion' | 'laser' | 'fire' | 'mulligan';
+  effectType?: 'explosion' | 'laser' | 'fire' | 'grace';
 }
 
 export type CharacterName =
@@ -85,7 +85,7 @@ export type ItemName =
   'Subtle Nudge' | 'Weapon Holster' | 'Culling Scroll' | 'Agile Treads' | 
   'Fate\'s Bargain' | 'Fractured Gains' | 'Self-Destructing Timer' | 
   'Card Cycler' | 'Team Reroll' | 'Molotov Catalyst' | 'Tempo Tuner' | 
-  'Sharp Edge' | 'Fortune Map' | 'Ghost Mulligan';
+  'Sharp Edge' | 'Fortune Map' | 'Ghost Grace';
 
 export type ItemRarity = 'Tier 1' | 'Tier 2' | 'Tier 3' | 'Tier 4';
 
@@ -99,7 +99,7 @@ export interface Weapon {
   flavorText?: string; // Longer fun description for weapon guide
   price: number;
   effects: Partial<PlayerStats>;
-  specialEffect?: 'explosive' | 'autoHint' | 'boardGrowth' | 'fire' | 'mulliganGain' | 'healing' | 'hintGain' | 'holographic' | 'timeGain' | 'laser';
+  specialEffect?: 'explosive' | 'autoHint' | 'boardGrowth' | 'fire' | 'graceGain' | 'healing' | 'hintGain' | 'holographic' | 'timeGain' | 'laser';
   icon?: string; // Icon path like "delapouite/bamboo"
 }
 
@@ -162,7 +162,7 @@ export interface PlayerStats {
   dodgePercent: number;
   dodgeAttackBackPercent: number;
   dodgeAttackBackAmount: number;
-  mulligans: number;
+  graces: number;
   bombTimer: number;
   additionalPoints: number;
   deflectPercent: number;
@@ -180,7 +180,7 @@ export interface PlayerStats {
   boardGrowthChance: number;    // % for board to grow on match
   boardGrowthAmount: number;    // how many cards to add when board grows
   fireSpreadChance: number;     // % for fire to start on adjacent cards
-  mulliganGainChance: number;   // % to gain mulligan on match
+  graceGainChance: number;      // % to gain grace on match
   healingChance: number;        // % to heal on match
   hintGainChance: number;       // % to gain hint on match
   holoChance: number;           // % for new cards to be holographic

@@ -332,6 +332,171 @@ describe('findAllCombinations', () => {
   });
 });
 
+describe('Grace System - Invalid Attribute Counting', () => {
+  // Grace saves player ONLY when exactly 1 attribute is wrong (near-miss)
+  // If 2+ attributes are wrong, grace does NOT save
+
+  const attrs: AttributeName[] = ['shape', 'color', 'number', 'shading'];
+
+  describe('should identify exactly 1 invalid attribute (grace saves)', () => {
+    it('only shape is wrong (2 same, 1 different)', () => {
+      const cards = [
+        createTestCard('oval', 'red', 1, 'solid'),
+        createTestCard('oval', 'green', 2, 'striped'),
+        createTestCard('diamond', 'purple', 3, 'open'),
+      ];
+      const result = isValidCombination(cards, attrs);
+      expect(result.isValid).toBe(false);
+      expect(result.invalidAttributes.length).toBe(1);
+      expect(result.invalidAttributes).toContain('shape');
+    });
+
+    it('only color is wrong (2 same, 1 different)', () => {
+      const cards = [
+        createTestCard('oval', 'red', 1, 'solid'),
+        createTestCard('squiggle', 'red', 2, 'striped'),
+        createTestCard('diamond', 'purple', 3, 'open'),
+      ];
+      const result = isValidCombination(cards, attrs);
+      expect(result.isValid).toBe(false);
+      expect(result.invalidAttributes.length).toBe(1);
+      expect(result.invalidAttributes).toContain('color');
+    });
+
+    it('only number is wrong (2 same, 1 different)', () => {
+      const cards = [
+        createTestCard('oval', 'red', 1, 'solid'),
+        createTestCard('squiggle', 'green', 1, 'striped'),
+        createTestCard('diamond', 'purple', 3, 'open'),
+      ];
+      const result = isValidCombination(cards, attrs);
+      expect(result.isValid).toBe(false);
+      expect(result.invalidAttributes.length).toBe(1);
+      expect(result.invalidAttributes).toContain('number');
+    });
+
+    it('only shading is wrong (2 same, 1 different)', () => {
+      const cards = [
+        createTestCard('oval', 'red', 1, 'solid'),
+        createTestCard('squiggle', 'green', 2, 'solid'),
+        createTestCard('diamond', 'purple', 3, 'open'),
+      ];
+      const result = isValidCombination(cards, attrs);
+      expect(result.isValid).toBe(false);
+      expect(result.invalidAttributes.length).toBe(1);
+      expect(result.invalidAttributes).toContain('shading');
+    });
+  });
+
+  describe('should identify 2+ invalid attributes (grace does NOT save)', () => {
+    it('shape AND color are wrong', () => {
+      const cards = [
+        createTestCard('oval', 'red', 1, 'solid'),
+        createTestCard('oval', 'red', 2, 'striped'),
+        createTestCard('diamond', 'purple', 3, 'open'),
+      ];
+      const result = isValidCombination(cards, attrs);
+      expect(result.isValid).toBe(false);
+      expect(result.invalidAttributes.length).toBe(2);
+      expect(result.invalidAttributes).toContain('shape');
+      expect(result.invalidAttributes).toContain('color');
+    });
+
+    it('shape AND number are wrong', () => {
+      const cards = [
+        createTestCard('oval', 'red', 1, 'solid'),
+        createTestCard('oval', 'green', 1, 'striped'),
+        createTestCard('diamond', 'purple', 3, 'open'),
+      ];
+      const result = isValidCombination(cards, attrs);
+      expect(result.isValid).toBe(false);
+      expect(result.invalidAttributes.length).toBe(2);
+      expect(result.invalidAttributes).toContain('shape');
+      expect(result.invalidAttributes).toContain('number');
+    });
+
+    it('color AND shading are wrong', () => {
+      const cards = [
+        createTestCard('oval', 'red', 1, 'solid'),
+        createTestCard('squiggle', 'red', 2, 'solid'),
+        createTestCard('diamond', 'purple', 3, 'striped'),
+      ];
+      const result = isValidCombination(cards, attrs);
+      expect(result.isValid).toBe(false);
+      expect(result.invalidAttributes.length).toBe(2);
+      expect(result.invalidAttributes).toContain('color');
+      expect(result.invalidAttributes).toContain('shading');
+    });
+
+    it('all 4 attributes are wrong', () => {
+      const cards = [
+        createTestCard('oval', 'red', 1, 'solid'),
+        createTestCard('oval', 'red', 1, 'solid'), // Duplicate
+        createTestCard('diamond', 'purple', 3, 'open'),
+      ];
+      const result = isValidCombination(cards, attrs);
+      expect(result.isValid).toBe(false);
+      // 3 attributes should be wrong (shape: 2 oval 1 diamond, color: 2 red 1 purple, number: 2 1s 1 3)
+      // shading: 2 solid 1 open
+      expect(result.invalidAttributes.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it('3 attributes are wrong', () => {
+      const cards = [
+        createTestCard('oval', 'red', 1, 'solid'),
+        createTestCard('oval', 'red', 2, 'solid'),
+        createTestCard('diamond', 'purple', 3, 'open'),
+      ];
+      const result = isValidCombination(cards, attrs);
+      expect(result.isValid).toBe(false);
+      // shape: 2 oval 1 diamond, color: 2 red 1 purple, shading: 2 solid 1 open
+      expect(result.invalidAttributes.length).toBe(3);
+    });
+  });
+
+  describe('edge cases for grace logic', () => {
+    it('valid set should have 0 invalid attributes', () => {
+      const cards = [
+        createTestCard('oval', 'red', 1, 'solid'),
+        createTestCard('squiggle', 'green', 2, 'striped'),
+        createTestCard('diamond', 'purple', 3, 'open'),
+      ];
+      const result = isValidCombination(cards, attrs);
+      expect(result.isValid).toBe(true);
+      expect(result.invalidAttributes.length).toBe(0);
+    });
+
+    it('with 3 attributes active, background errors should not count', () => {
+      const threeAttrs: AttributeName[] = ['shape', 'color', 'number'];
+      const cards = [
+        createTestCard('oval', 'red', 1, 'solid', 'white'),
+        createTestCard('squiggle', 'green', 2, 'striped', 'white'),
+        createTestCard('diamond', 'purple', 3, 'open', 'charcoal'),
+      ];
+      // Shape, color, number are all different = valid for 3 attrs
+      // Shading is 2 same 1 different, but not active
+      // Background is 2 same 1 different, but not active
+      const result = isValidCombination(cards, threeAttrs);
+      expect(result.isValid).toBe(true);
+      expect(result.invalidAttributes.length).toBe(0);
+    });
+
+    it('with 5 attributes, background errors should count', () => {
+      const fiveAttrs: AttributeName[] = ['shape', 'color', 'number', 'shading', 'background'];
+      const cards = [
+        createTestCard('oval', 'red', 1, 'solid', 'white'),
+        createTestCard('squiggle', 'green', 2, 'striped', 'white'),
+        createTestCard('diamond', 'purple', 3, 'open', 'charcoal'),
+      ];
+      // Everything is different except background (2 white, 1 charcoal)
+      const result = isValidCombination(cards, fiveAttrs);
+      expect(result.isValid).toBe(false);
+      expect(result.invalidAttributes.length).toBe(1);
+      expect(result.invalidAttributes).toContain('background');
+    });
+  });
+});
+
 describe('sameCardAttributes', () => {
   it('should return true for cards with identical attributes', () => {
     const card1 = createTestCard('oval', 'red', 1, 'solid', 'white');

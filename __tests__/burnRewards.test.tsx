@@ -2,6 +2,7 @@ import React from 'react';
 import { render, act, waitFor } from '@testing-library/react-native';
 import GameBoard from '@/components/GameBoard';
 import { Card, PlayerStats, CardReward } from '@/types';
+import { DEFAULT_PLAYER_STATS } from '@/utils/gameDefinitions';
 
 // Mock the Card and RewardReveal components to simplify testing
 jest.mock('@/components/Card', () => {
@@ -37,26 +38,9 @@ const createTestCard = (id: string): Card => ({
   selected: false,
 });
 
-// Default player stats for testing
+// Default player stats for testing - use the real defaults
 const defaultPlayerStats: PlayerStats = {
-  maxHealth: 5,
-  startingBoardSize: 12,
-  startingTime: 60,
-  bonusTimeOnMatch: 0,
-  mulligans: 0,
-  hints: 0,
-  explosionChance: 0,
-  growthChance: 0,
-  fireStarterChance: 0,
-  laserChance: 0,
-  pointMultiplier: 1,
-  moneyMultiplier: 1,
-  healingChance: 0,
-  hintChance: 0,
-  holographicChance: 0,
-  autoHintChance: 0,
-  autoHintInterval: 10000,
-  fortuneChance: 0,
+  ...DEFAULT_PLAYER_STATS,
 };
 
 describe('GameBoard Burn Rewards', () => {

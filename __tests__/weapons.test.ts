@@ -167,11 +167,11 @@ describe('Weapon Definitions', () => {
       });
     });
 
-    it('Second Chance should have mulligans effect', () => {
+    it('Second Chance should have graces effect', () => {
       const secondChances = WEAPONS.filter(w => w.name === 'Second Chance');
       secondChances.forEach(weapon => {
-        expect(weapon.effects).toHaveProperty('mulligans');
-        expect(weapon.effects.mulligans).toBeGreaterThan(0);
+        expect(weapon.effects).toHaveProperty('graces');
+        expect(weapon.effects.graces).toBeGreaterThan(0);
       });
     });
 
@@ -313,8 +313,8 @@ describe('Stats Calculation', () => {
     it('should combine effects from different weapon types', () => {
       const player = initializePlayer('test', 'Test Player', 'Orange Tabby');
 
-      // Add Life Vessel (+1 maxHealth) and Second Chance (+1 mulligan)
-      // Note: Orange Tabby already starts with Second Chance (+1 mulligan)
+      // Add Life Vessel (+1 maxHealth) and Second Chance (+1 grace)
+      // Note: Orange Tabby already starts with Second Chance (+1 grace)
       const lifeVessel = WEAPONS.find(
         w => w.name === 'Life Vessel' && w.rarity === 'common'
       )!;
@@ -330,7 +330,7 @@ describe('Stats Calculation', () => {
 
       expect(totalStats.maxHealth).toBe(baseStats.stats.maxHealth + 1);
       // +2 because Orange Tabby starts with Second Chance, plus we added another
-      expect(totalStats.mulligans).toBe(baseStats.stats.mulligans + 2);
+      expect(totalStats.graces).toBe(baseStats.stats.graces + 2);
     });
 
     it('should correctly calculate explosionChance from Blast Powder', () => {

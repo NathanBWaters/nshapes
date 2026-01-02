@@ -15,7 +15,7 @@ import Game from '@/components/Game';
  * - Change difficulty/attributes (3-5)
  * - Set cards on fire
  * - Make cards holographic
- * - Add mulligans
+ * - Add graces
  * - Add legendary weapons by category
  * - Clear all weapons
  */

@@ -22,7 +22,7 @@ const WEAPON_CATEGORIES = {
   'Auto-Hint': WEAPONS.filter(w => w.specialEffect === 'autoHint'),
   'Board Growth': WEAPONS.filter(w => w.specialEffect === 'boardGrowth'),
   'Fire': WEAPONS.filter(w => w.specialEffect === 'fire'),
-  'Mulligan': WEAPONS.filter(w => w.specialEffect === 'mulliganGain'),
+  'Grace': WEAPONS.filter(w => w.specialEffect === 'graceGain'),
   'Healing': WEAPONS.filter(w => w.specialEffect === 'healing'),
   'Hint Gain': WEAPONS.filter(w => w.specialEffect === 'hintGain'),
   'Holographic': WEAPONS.filter(w => w.specialEffect === 'holographic'),
@@ -33,7 +33,7 @@ const WEAPON_CATEGORIES = {
 export interface DevModeCallbacks {
   onAddWeapon: (weapon: Weapon) => void;
   onClearWeapons: () => void;
-  onAddMulligans: (count: number) => void;
+  onAddGraces: (count: number) => void;
   onSetCardsOnFire: (count: number) => void;
   onMakeCardsHolo: (count: number) => void;
   onToggleTimer: () => void;
@@ -112,7 +112,7 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
     "Gameplay": [
       'fieldSize', 'timeWarpPercent', 'maxTimeIncrease',
       'matchHints', 'matchPossibilityHints', 'matchIntervalHintPercent',
-      'mulligans'
+      'graces'
     ]
   };
 
@@ -495,9 +495,9 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.devButton, styles.devButtonBlue]}
-              onPress={() => devCallbacks?.onAddMulligans(3)}
+              onPress={() => devCallbacks?.onAddGraces(3)}
             >
-              <Text style={styles.devButtonText}>+3 Mulligans</Text>
+              <Text style={styles.devButtonText}>+3 Graces</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -549,8 +549,8 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
               <Text style={styles.statValue}>{playerStats.holoChance || 0}%</Text>
             </View>
             <View style={styles.statRow}>
-              <Text style={styles.statKey}>Mulligans</Text>
-              <Text style={styles.statValue}>{playerStats.mulligans || 0}</Text>
+              <Text style={styles.statKey}>Graces</Text>
+              <Text style={styles.statValue}>{playerStats.graces || 0}</Text>
             </View>
             <View style={styles.statRow}>
               <Text style={styles.statKey}>Hints</Text>

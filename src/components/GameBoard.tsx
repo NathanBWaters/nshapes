@@ -329,9 +329,9 @@ const GameBoard: React.FC<GameBoardProps> = ({
             onMatch(allCardsToReplace, allRewards, weaponEffects);
           }, 1500);
         } else {
-          // Invalid match - check if player has mulligans for weapon effects
-          if (playerStats.mulligans > 0) {
-            // Mulligan will be used - treat as a valid match with full rewards!
+          // Invalid match - check if player has graces for weapon effects
+          if (playerStats.graces > 0) {
+            // Grace will be used - treat as a valid match with full rewards!
             const matchId = ++matchCounterRef.current;
 
             // Calculate full rewards for matched cards (same as valid match)
@@ -356,9 +356,9 @@ const GameBoard: React.FC<GameBoardProps> = ({
               effectType: 'laser' as const,
             }));
 
-            // Mark the first matched reward as a mulligan so Game.tsx knows to decrement mulligans
+            // Mark the first matched reward as a grace so Game.tsx knows to decrement graces
             if (matchedRewards.length > 0) {
-              matchedRewards[0].effectType = 'mulligan';
+              matchedRewards[0].effectType = 'grace';
             }
 
             // Combine all rewards
@@ -388,11 +388,11 @@ const GameBoard: React.FC<GameBoardProps> = ({
             setTimeout(() => {
               setRevealingRewards(prev => prev.filter(r => r.matchId !== matchId));
               // Call onInvalidSelection but pass weapon effects via onMatch-like behavior
-              // We need to signal this is a mulligan match with weapon effects
+              // We need to signal this is a grace match with weapon effects
               onMatch(allCardsToReplace, allRewards, weaponEffects);
             }, 1500);
           } else {
-            // No mulligans - just invalid selection
+            // No graces - just invalid selection
             onInvalidSelection(newSelectedCards);
 
             setTimeout(() => {

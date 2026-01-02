@@ -17,14 +17,14 @@ interface TutorialPracticeProps {
 const TUTORIAL_ATTRIBUTES: AttributeName[] = ['shape', 'color', 'number'];
 
 // Static player stats for tutorial display (uses defaults with some tweaks)
-// Note: mulligans = 0 so invalid matches are properly caught and explained
+// Note: graces = 0 so invalid matches are properly caught and explained
 const TUTORIAL_PLAYER_STATS: PlayerStats = {
   ...DEFAULT_PLAYER_STATS,
   health: 3,
   maxHealth: 3,
   level: 1,
   hints: 2,
-  mulligans: 0,
+  graces: 0,
 };
 
 const TutorialPractice: React.FC<TutorialPracticeProps> = ({ onComplete, onSkip }) => {

@@ -30,7 +30,7 @@ For example, 3 cards with the same shape but different colors, different numbers
 
 Choose from 16 unique animal characters, each with different starting stats and abilities:
 
-- **Orange Tabby** - Gets extra mulligans
+- **Orange Tabby** - Gets extra graces
 - **Sly Fox** - Specializes in bomb and trap synergy
 - **Corgi** - Extra match hints and free rerolls
 - **Emperor Penguin** - Money-focused

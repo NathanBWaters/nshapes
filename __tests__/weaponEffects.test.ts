@@ -434,14 +434,14 @@ describe('processWeaponEffects', () => {
     expect(result.notifications).toContain('+15s');
   });
 
-  it('should process mulligan gain chance', () => {
+  it('should process grace gain chance', () => {
     const board = createTestBoard();
     const matchedCards = [board[0], board[1], board[2]];
-    const stats: PlayerStats = { ...DEFAULT_PLAYER_STATS, mulliganGainChance: 100 };
+    const stats: PlayerStats = { ...DEFAULT_PLAYER_STATS, graceGainChance: 100 };
 
     const result = processWeaponEffects(board, matchedCards, stats);
-    expect(result.bonusMulligans).toBe(1);
-    expect(result.notifications).toContain('+1 Mulligan');
+    expect(result.bonusGraces).toBe(1);
+    expect(result.notifications).toContain('+1 Grace');
   });
 
   it('should process board growth chance', () => {

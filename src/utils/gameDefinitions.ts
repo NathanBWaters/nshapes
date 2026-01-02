@@ -32,7 +32,7 @@ export const DEFAULT_PLAYER_STATS: PlayerStats = {
   dodgePercent: 0,
   dodgeAttackBackPercent: 0,
   dodgeAttackBackAmount: 1,
-  mulligans: STARTING_STATS.mulligans,
+  graces: STARTING_STATS.graces,
   bombTimer: 20,
   additionalPoints: 0,
   deflectPercent: 0,
@@ -50,7 +50,7 @@ export const DEFAULT_PLAYER_STATS: PlayerStats = {
   boardGrowthChance: STARTING_STATS.boardGrowthChance,
   boardGrowthAmount: STARTING_STATS.boardGrowthAmount,
   fireSpreadChance: STARTING_STATS.fireSpreadChance,
-  mulliganGainChance: STARTING_STATS.mulliganGainChance,
+  graceGainChance: STARTING_STATS.graceGainChance,
   healingChance: STARTING_STATS.healingChance,
   hintGainChance: STARTING_STATS.hintGainChance,
   holoChance: STARTING_STATS.holoChance,
@@ -203,7 +203,7 @@ export const CHARACTERS: Character[] = [
   //   startingItems: [],
   //   baseStats: {
   //     // Cards that can transform field cards have an additional 30% chance of activating
-  //     mulligans: -2,
+  //     graces: -2,
   //     matchHints: -2,
   //   }
   // },
@@ -555,7 +555,7 @@ export const WEAPONS: Weapon[] = [
   },
 
   // ============================================================================
-  // 6. SECOND CHANCE - Starting mulligans
+  // 6. SECOND CHANCE - Starting graces
   // ============================================================================
   {
     id: 'second-chance-common',
@@ -563,11 +563,11 @@ export const WEAPONS: Weapon[] = [
     rarity: 'common',
     level: 1,
     price: 5,
-    description: '+1 starting mulligan.',
-    shortDescription: 'Extra starting mulligans',
-    flavorText: 'Mulligans automatically save you when you pick an invalid set. Instead of losing health, the mulligan is consumed and the cards are removed.',
-    icon: 'lorc/recycle',
-    effects: { mulligans: 1 }
+    description: '+1 starting grace.',
+    shortDescription: 'Extra starting graces',
+    flavorText: 'Graces save you when you pick a near-miss (only 1 attribute wrong). Instead of losing health, the grace is consumed and the cards are removed.',
+    icon: 'lorc/clover',
+    effects: { graces: 1 }
   },
   {
     id: 'second-chance-rare',
@@ -575,11 +575,11 @@ export const WEAPONS: Weapon[] = [
     rarity: 'rare',
     level: 1,
     price: 10,
-    description: '+3 starting mulligans.',
-    shortDescription: 'Extra starting mulligans',
-    flavorText: 'Mulligans automatically save you when you pick an invalid set. Instead of losing health, the mulligan is consumed and the cards are removed.',
-    icon: 'lorc/recycle',
-    effects: { mulligans: 3 }
+    description: '+3 starting graces.',
+    shortDescription: 'Extra starting graces',
+    flavorText: 'Graces save you when you pick a near-miss (only 1 attribute wrong). Instead of losing health, the grace is consumed and the cards are removed.',
+    icon: 'lorc/clover',
+    effects: { graces: 3 }
   },
   {
     id: 'second-chance-legendary',
@@ -587,15 +587,15 @@ export const WEAPONS: Weapon[] = [
     rarity: 'legendary',
     level: 1,
     price: 15,
-    description: '+7 starting mulligans.',
-    shortDescription: 'Extra starting mulligans',
-    flavorText: 'Mulligans automatically save you when you pick an invalid set. Instead of losing health, the mulligan is consumed and the cards are removed.',
-    icon: 'lorc/recycle',
-    effects: { mulligans: 7 }
+    description: '+7 starting graces.',
+    shortDescription: 'Extra starting graces',
+    flavorText: 'Graces save you when you pick a near-miss (only 1 attribute wrong). Instead of losing health, the grace is consumed and the cards are removed.',
+    icon: 'lorc/clover',
+    effects: { graces: 7 }
   },
 
   // ============================================================================
-  // 7. FORTUNE TOKEN - Mulligan gain on match
+  // 7. FORTUNE TOKEN - Grace gain on match
   // ============================================================================
   {
     id: 'fortune-token-common',
@@ -603,12 +603,12 @@ export const WEAPONS: Weapon[] = [
     rarity: 'common',
     level: 1,
     price: 6,
-    description: '5% chance to gain mulligan on match.',
-    shortDescription: 'Gain mulligans on match',
-    flavorText: 'After a valid match, has a chance to grant +1 mulligan. Mulligans protect you from losing health on invalid matches.',
+    description: '5% chance to gain grace on match.',
+    shortDescription: 'Gain graces on match',
+    flavorText: 'After a valid match, has a chance to grant +1 grace. Graces protect you from near-miss invalid matches.',
     icon: 'lorc/cycle',
-    specialEffect: 'mulliganGain',
-    effects: { mulliganGainChance: 5 }
+    specialEffect: 'graceGain',
+    effects: { graceGainChance: 5 }
   },
   {
     id: 'fortune-token-rare',
@@ -616,12 +616,12 @@ export const WEAPONS: Weapon[] = [
     rarity: 'rare',
     level: 1,
     price: 12,
-    description: '15% chance to gain mulligan on match.',
-    shortDescription: 'Gain mulligans on match',
-    flavorText: 'After a valid match, has a chance to grant +1 mulligan. Mulligans protect you from losing health on invalid matches.',
+    description: '15% chance to gain grace on match.',
+    shortDescription: 'Gain graces on match',
+    flavorText: 'After a valid match, has a chance to grant +1 grace. Graces protect you from near-miss invalid matches.',
     icon: 'lorc/cycle',
-    specialEffect: 'mulliganGain',
-    effects: { mulliganGainChance: 15 }
+    specialEffect: 'graceGain',
+    effects: { graceGainChance: 15 }
   },
   {
     id: 'fortune-token-legendary',
@@ -629,12 +629,12 @@ export const WEAPONS: Weapon[] = [
     rarity: 'legendary',
     level: 1,
     price: 18,
-    description: '35% chance to gain mulligan on match.',
-    shortDescription: 'Gain mulligans on match',
-    flavorText: 'After a valid match, has a chance to grant +1 mulligan. Mulligans protect you from losing health on invalid matches.',
+    description: '35% chance to gain grace on match.',
+    shortDescription: 'Gain graces on match',
+    flavorText: 'After a valid match, has a chance to grant +1 grace. Graces protect you from near-miss invalid matches.',
     icon: 'lorc/cycle',
-    specialEffect: 'mulliganGain',
-    effects: { mulliganGainChance: 35 }
+    specialEffect: 'graceGain',
+    effects: { graceGainChance: 35 }
   },
 
   // ============================================================================
@@ -648,7 +648,7 @@ export const WEAPONS: Weapon[] = [
     price: 6,
     description: '+1 max health.',
     shortDescription: 'Increased max health',
-    flavorText: 'Increases your maximum health pool. You lose 1 health when picking an invalid set without a mulligan to protect you.',
+    flavorText: 'Increases your maximum health pool. You lose 1 health when picking an invalid set without a grace to protect you.',
     icon: 'lorc/heart-inside',
     effects: { maxHealth: 1 }
   },
@@ -660,7 +660,7 @@ export const WEAPONS: Weapon[] = [
     price: 12,
     description: '+3 max health.',
     shortDescription: 'Increased max health',
-    flavorText: 'Increases your maximum health pool. You lose 1 health when picking an invalid set without a mulligan to protect you.',
+    flavorText: 'Increases your maximum health pool. You lose 1 health when picking an invalid set without a grace to protect you.',
     icon: 'lorc/heart-inside',
     effects: { maxHealth: 3 }
   },
@@ -672,7 +672,7 @@ export const WEAPONS: Weapon[] = [
     price: 18,
     description: '+7 max health.',
     shortDescription: 'Increased max health',
-    flavorText: 'Increases your maximum health pool. You lose 1 health when picking an invalid set without a mulligan to protect you.',
+    flavorText: 'Increases your maximum health pool. You lose 1 health when picking an invalid set without a grace to protect you.',
     icon: 'lorc/heart-inside',
     effects: { maxHealth: 7 }
   },

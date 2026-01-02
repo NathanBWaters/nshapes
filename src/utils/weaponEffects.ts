@@ -162,7 +162,7 @@ export interface WeaponEffectResult {
   bonusPoints: number;
   bonusMoney: number;
   bonusTime: number;
-  bonusMulligans: number;
+  bonusGraces: number;
   bonusHealing: number;
   bonusHints: number;
   boardGrowth: number;
@@ -191,7 +191,7 @@ export const processWeaponEffects = (
     bonusPoints: 0,
     bonusMoney: 0,
     bonusTime: 0,
-    bonusMulligans: 0,
+    bonusGraces: 0,
     bonusHealing: 0,
     bonusHints: 0,
     boardGrowth: 0,
@@ -279,10 +279,10 @@ export const processWeaponEffects = (
     result.notifications.push(`+${result.bonusTime}s`);
   }
 
-  // Mulligan gain chance
-  if (playerStats.mulliganGainChance > 0 && Math.random() * 100 < playerStats.mulliganGainChance) {
-    result.bonusMulligans = 1;
-    result.notifications.push('+1 Mulligan');
+  // Grace gain chance
+  if (playerStats.graceGainChance > 0 && Math.random() * 100 < playerStats.graceGainChance) {
+    result.bonusGraces = 1;
+    result.notifications.push('+1 Grace');
   }
 
   // Board growth chance

@@ -34,7 +34,7 @@ const StatsButton: React.FC<StatsButtonProps> = ({ playerStats }) => {
     "Gameplay": [
       'fieldSize', 'timeWarpPercent', 'maxTimeIncrease',
       'matchHints', 'matchPossibilityHints', 'matchIntervalHintPercent',
-      'mulligans'
+      'graces'
     ]
   };
 

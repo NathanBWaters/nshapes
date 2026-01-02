@@ -16,7 +16,7 @@ export const STARTING_STATS = {
   money: 0,
   fieldSize: 12,
   freeRerolls: 0,
-  mulligans: 0,
+  graces: 0,
 
   // Weapon effect stats (defaults to 0)
   explosionChance: 0,
@@ -25,7 +25,7 @@ export const STARTING_STATS = {
   boardGrowthChance: 0,
   boardGrowthAmount: 1,
   fireSpreadChance: 0,
-  mulliganGainChance: 0,
+  graceGainChance: 0,
   healingChance: 0,
   hintGainChance: 0,
   holoChance: 0,
