@@ -888,7 +888,7 @@ export const WEAPONS: Weapon[] = [
   },
 
   // ============================================================================
-  // 14. TIME DROP - Time gain on match
+  // 14. TIME DROP - Time gain on match (each rolls independently like lasers)
   // ============================================================================
   {
     id: 'time-drop-common',
@@ -897,8 +897,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 6,
     description: '5% chance to gain +10s on match.',
-    shortDescription: 'Gain time on match',
-    flavorText: 'After a valid match, has a chance to add bonus time to the clock. Great for extending tight rounds.',
+    shortDescription: '5% chance for +10s',
+    flavorText: 'Each Time Drop rolls independently on every match. Stack multiples for more chances at bonus time!',
     icon: 'lorc/stopwatch',
     specialEffect: 'timeGain',
     effects: { timeGainChance: 5, timeGainAmount: 10 }
@@ -910,8 +910,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 12,
     description: '15% chance to gain +10s on match.',
-    shortDescription: 'Gain time on match',
-    flavorText: 'After a valid match, has a chance to add bonus time to the clock. Great for extending tight rounds.',
+    shortDescription: '15% chance for +10s',
+    flavorText: 'Each Time Drop rolls independently on every match. Stack multiples for more chances at bonus time!',
     icon: 'lorc/stopwatch',
     specialEffect: 'timeGain',
     effects: { timeGainChance: 15, timeGainAmount: 10 }
@@ -923,8 +923,8 @@ export const WEAPONS: Weapon[] = [
     level: 1,
     price: 18,
     description: '35% chance to gain +15s on match.',
-    shortDescription: 'Gain time on match',
-    flavorText: 'After a valid match, has a chance to add bonus time to the clock. Great for extending tight rounds.',
+    shortDescription: '35% chance for +15s',
+    flavorText: 'Each Time Drop rolls independently on every match. Stack multiples for more chances at bonus time!',
     icon: 'lorc/stopwatch',
     specialEffect: 'timeGain',
     effects: { timeGainChance: 35, timeGainAmount: 15 }

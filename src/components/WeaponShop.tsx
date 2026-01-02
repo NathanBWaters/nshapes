@@ -110,10 +110,21 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
     return displayValue;
   };
 
+  // Effects that roll independently per weapon (don't show misleading before→after)
+  const INDEPENDENT_ROLL_EFFECTS = [
+    'laserChance',
+    'timeGainChance',
+    'timeGainAmount',
+  ];
+
   // Calculate before/after stat comparison for a weapon
+  // Skips independent roll effects since they don't stack additively
   const getStatComparison = (weapon: Weapon): { key: string; before: string; after: string; isIncrease: boolean }[] => {
     return Object.entries(weapon.effects).map(([key, effectValue]) => {
       if (typeof effectValue !== 'number') return null;
+
+      // Skip independent roll effects - they're explained in the description
+      if (INDEPENDENT_ROLL_EFFECTS.includes(key)) return null;
 
       const currentValue = (playerStats as Record<string, any>)[key] ?? 0;
       const newValue = currentValue + effectValue;
@@ -167,6 +178,9 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
               {focusedWeapon.name}
             </Text>
             <Text style={styles.detailDescription}>{focusedWeapon.description}</Text>
+            {focusedWeapon.flavorText && (
+              <Text style={styles.detailFlavor}>{focusedWeapon.flavorText}</Text>
+            )}
 
             {/* Stats Preview - Before → After */}
             <View style={styles.effectsRow}>
@@ -430,8 +444,16 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     fontSize: 14,
     lineHeight: 20,
+    marginBottom: 4,
+  },
+  detailFlavor: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '400',
+    fontSize: 12,
+    lineHeight: 18,
     marginBottom: 12,
-    opacity: 0.8,
+    opacity: 0.6,
+    fontStyle: 'italic',
   },
   effectsRow: {
     flexDirection: 'row',
