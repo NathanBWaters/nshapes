@@ -91,8 +91,8 @@ const InventoryBar: React.FC<InventoryBarProps> = ({ weapons }) => {
 
 const styles = StyleSheet.create({
   container: {
-    height: 56,
-    backgroundColor: COLORS.deepOnyx,
+    height: 52,
+    backgroundColor: COLORS.paperBeige,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
@@ -100,13 +100,12 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.slateCharcoal,
   },
   title: {
-    color: COLORS.canvasWhite,
-    fontWeight: '600',
+    color: COLORS.slateCharcoal,
+    fontWeight: '700',
     fontSize: 10,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 1,
     marginRight: 12,
-    opacity: 0.7,
   },
   scrollContent: {
     flexDirection: 'row',
@@ -121,7 +120,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: RADIUS.button,
-    borderWidth: 2,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
     gap: 4,
   },
   itemName: {
@@ -147,10 +147,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   emptyText: {
-    color: COLORS.canvasWhite,
+    color: COLORS.slateCharcoal,
     fontWeight: '400',
     fontSize: 11,
-    opacity: 0.5,
+    opacity: 0.6,
     fontStyle: 'italic',
   },
 });
