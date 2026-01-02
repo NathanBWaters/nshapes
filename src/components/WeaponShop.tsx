@@ -94,23 +94,37 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
   // Count available (non-null) weapons
   const availableWeapons = weapons.filter(weapon => weapon !== null);
 
-  // Format effects for display
-  const formatEffects = (effects: Record<string, any>): { key: string; value: string }[] => {
-    return Object.entries(effects).map(([key, value]) => {
-      const formattedKey = key
-        .replace(/([A-Z])/g, ' $1')
-        .replace(/^./, str => str.toUpperCase());
-      let displayValue = '';
-      if (typeof value === 'number') {
-        displayValue = value > 0 ? `+${value}` : `${value}`;
-        if (key.toLowerCase().includes('percent') || key.toLowerCase().includes('chance')) displayValue += '%';
-        if (key.toLowerCase().includes('interval')) displayValue += 'ms';
-        if (key.toLowerCase().includes('time') && !key.toLowerCase().includes('interval')) displayValue += 's';
-      } else {
-        displayValue = String(value);
-      }
-      return { key: formattedKey, value: displayValue };
-    });
+  // Format stat name for display
+  const formatStatName = (key: string): string => {
+    return key
+      .replace(/([A-Z])/g, ' $1')
+      .replace(/^./, str => str.toUpperCase());
+  };
+
+  // Format stat value with appropriate suffix
+  const formatStatValue = (key: string, value: number): string => {
+    let displayValue = `${value}`;
+    if (key.toLowerCase().includes('percent') || key.toLowerCase().includes('chance')) displayValue += '%';
+    if (key.toLowerCase().includes('interval')) displayValue += 'ms';
+    if (key.toLowerCase().includes('time') && !key.toLowerCase().includes('interval')) displayValue += 's';
+    return displayValue;
+  };
+
+  // Calculate before/after stat comparison for a weapon
+  const getStatComparison = (weapon: Weapon): { key: string; before: string; after: string; isIncrease: boolean }[] => {
+    return Object.entries(weapon.effects).map(([key, effectValue]) => {
+      if (typeof effectValue !== 'number') return null;
+
+      const currentValue = (playerStats as Record<string, any>)[key] ?? 0;
+      const newValue = currentValue + effectValue;
+
+      return {
+        key: formatStatName(key),
+        before: formatStatValue(key, currentValue),
+        after: formatStatValue(key, newValue),
+        isIncrease: effectValue > 0,
+      };
+    }).filter((item): item is { key: string; before: string; after: string; isIncrease: boolean } => item !== null);
   };
 
   return (
@@ -154,15 +168,24 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
             </Text>
             <Text style={styles.detailDescription}>{focusedWeapon.description}</Text>
 
-            {/* Effects */}
+            {/* Stats Preview - Before → After */}
             <View style={styles.effectsRow}>
               {Object.keys(focusedWeapon.effects).length > 0 && (
                 <View style={[styles.effectsBox, styles.effectsBoxPositive]}>
-                  <Text style={styles.effectsLabelPositive}>Effects</Text>
-                  {formatEffects(focusedWeapon.effects).map((effect, i) => (
+                  <Text style={styles.effectsLabelPositive}>Stat Changes</Text>
+                  {getStatComparison(focusedWeapon).map((stat, i) => (
                     <View key={i} style={styles.effectRow}>
-                      <Text style={styles.effectKey}>{effect.key}</Text>
-                      <Text style={styles.effectValuePositive}>{effect.value}</Text>
+                      <Text style={styles.effectKey}>{stat.key}</Text>
+                      <View style={styles.statComparisonRow}>
+                        <Text style={styles.statBefore}>{stat.before}</Text>
+                        <Text style={styles.statArrow}>→</Text>
+                        <Text style={[
+                          styles.statAfter,
+                          stat.isIncrease ? styles.statIncrease : styles.statDecrease
+                        ]}>
+                          {stat.after}
+                        </Text>
+                      </View>
                     </View>
                   ))}
                 </View>
@@ -449,6 +472,33 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 12,
     fontFamily: 'monospace',
+  },
+  statComparisonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  statBefore: {
+    color: COLORS.slateCharcoal,
+    fontSize: 11,
+    fontFamily: 'monospace',
+    opacity: 0.7,
+  },
+  statArrow: {
+    color: COLORS.slateCharcoal,
+    fontSize: 10,
+    opacity: 0.5,
+  },
+  statAfter: {
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: 'monospace',
+  },
+  statIncrease: {
+    color: COLORS.logicTeal,
+  },
+  statDecrease: {
+    color: COLORS.impactRed,
   },
   emptyDetail: {
     flex: 1,
