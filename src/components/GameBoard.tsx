@@ -183,8 +183,6 @@ const GameBoard: React.FC<GameBoardProps> = ({
         }
       }
     }
-
-    console.log("No valid sets found on the board");
   }, [cards, matchedCardIds, onUseHint]);
 
   // Clear hint

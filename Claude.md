@@ -87,7 +87,8 @@ The game features 15 weapon types, each available in 3 rarities (45 total weapon
 
 * **Starting Hints:** Players start with 0 hints
 * **Max Hints:** Default max capacity is 3 (increased by Crystal Orb weapons)
-* **Earning Hints:** Gain hints from matches via Seeker Lens and auto-hint via Oracle Eye
+* **Earning Hints:** Gain hints from matches via Seeker Lens
+* **Auto-Hint:** Oracle Eye triggers 15 seconds after the last match (not on a fixed interval)
 * **Display:** Hints show as "X/max" in the UI (e.g., "2/3")
 
 ### Laser Mechanic (Independent Rolls)
@@ -102,8 +103,8 @@ Each laser weapon (Prismatic Ray) rolls **independently** on every match:
 
 ### Card States
 
-* **Holographic:** Purple shimmer border, awards 2x points when matched
-* **On Fire:** Red pulsing border, burns after 15 seconds (destroys card, awards points, 10% spread)
+* **Holographic:** Animated rainbow shimmer effect (Balatro-style), awards 2x points when matched
+* **On Fire:** Red pulsing border, burns after 7.5 seconds (destroys card, awards points, 10% spread)
 
 ## Key Features
 
@@ -114,8 +115,16 @@ Each laser weapon (Prismatic Ray) rolls **independently** on every match:
 * Match trigger effects (healing, hints, time, graces)
 * Explosive and laser destruction effects
 * Fire spread and burn mechanics
-* Auto-hint system
+* Auto-hint system (15s after last match)
 * Optional multiplayer via Socket.io (not a priority - ignore multiplayer code)
+
+### UI Features
+
+* **Inventory Bar:** Horizontal scrollable bar at top of Shop and Level Up screens showing all collected weapons
+* **Stats Preview:** Shop and Level Up show before→after stat comparison when viewing weapons
+* **Double-Tap Purchase:** Double-tap a weapon in the shop to instantly purchase (no confirmation)
+* **Free Indicator:** Level Up screen clearly shows rewards are free with "FREE" badge and banner
+* **Menu Pause:** Timer pauses when the game menu is open
 
 ## Notes
 
@@ -145,10 +154,13 @@ src/                        # Shared code (imported via @/ alias)
 ├── components/
 │   ├── Game.tsx            # Main controller (handles game phases, weapon effects)
 │   ├── GameBoard.tsx       # Card display (auto-hint system)
-│   ├── Card.tsx            # Renders shapes, fills, holographic, fire effects
+│   ├── Card.tsx            # Renders shapes, fills, holographic shimmer, fire effects
 │   ├── CharacterSelection.tsx
-│   ├── WeaponShop.tsx      # Weapon purchase interface
-│   ├── LevelUp.tsx         # Weapon selection on level up
+│   ├── WeaponShop.tsx      # Weapon purchase interface (double-tap, stats preview)
+│   ├── LevelUp.tsx         # Weapon selection on level up (FREE indicator)
+│   ├── InventoryBar.tsx    # Horizontal weapon inventory display
+│   ├── AttributeUnlockScreen.tsx  # New attribute explanation screen
+│   ├── VictoryScreen.tsx   # End-game celebration screen
 │   └── RoundSummary.tsx
 ├── context/
 │   └── SocketContext.tsx   # Multiplayer state management

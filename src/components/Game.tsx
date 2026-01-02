@@ -463,8 +463,6 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
     const options: Weapon[] = [];
     const optionsSize = 4 + (state.player?.stats?.drawIncrease || 0);
 
-    console.log('[LevelUp] Generating', optionsSize, 'weapon options');
-
     // Generate only weapon options
     for (let i = 0; i < optionsSize; i++) {
       // Get a random shop weapon
