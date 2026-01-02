@@ -1685,22 +1685,33 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
       startLevel: state.player.stats.level,
     });
 
-    setState(prevState => ({
-      ...prevState,
-      round: nextRound,
-      activeAttributes: newActiveAttributes,
-      targetScore: roundReq.targetScore,
-      remainingTime: roundReq.time,
-      score: 0,
-      board: newBoard,
-      selectedCards: [],
-      foundCombinations: [],
-      roundCompleted: false,
-      gameStarted: true,
-      currentEnemies: generateRandomEnemies(),
-      shopItems: generateRandomShopItems(),  // Refill shop for next round
-      shopWeapons: generateShopWeapons(4)    // Refill weapon shop for next round
-    }));
+    setState(prevState => {
+      // Reset health to max at the start of each round
+      const playerTotalStats = calculatePlayerTotalStats(prevState.player);
+      return {
+        ...prevState,
+        round: nextRound,
+        activeAttributes: newActiveAttributes,
+        targetScore: roundReq.targetScore,
+        remainingTime: roundReq.time,
+        score: 0,
+        board: newBoard,
+        selectedCards: [],
+        foundCombinations: [],
+        roundCompleted: false,
+        gameStarted: true,
+        currentEnemies: generateRandomEnemies(),
+        shopItems: generateRandomShopItems(),  // Refill shop for next round
+        shopWeapons: generateShopWeapons(4),   // Refill weapon shop for next round
+        player: {
+          ...prevState.player,
+          stats: {
+            ...prevState.player.stats,
+            health: playerTotalStats.maxHealth,  // Reset health to max
+          },
+        },
+      };
+    });
 
     // Apply startingTime bonus from weapons
     setState(prevState => {
