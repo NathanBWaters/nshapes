@@ -495,6 +495,104 @@ describe('Grace System - Invalid Attribute Counting', () => {
       expect(result.invalidAttributes).toContain('background');
     });
   });
+
+  describe('4 attributes active - explicit grace decision tests', () => {
+    // These tests simulate the exact scenario: 4 attributes (shape, color, number, shading)
+    // Grace should ONLY save when EXACTLY 1 attribute is wrong
+    const fourAttrs: AttributeName[] = ['shape', 'color', 'number', 'shading'];
+
+    // Helper to determine if grace would save
+    const wouldGraceSave = (cards: Card[], graces: number): boolean => {
+      const result = isValidCombination(cards, fourAttrs);
+      return result.invalidAttributes.length === 1 && graces > 0;
+    };
+
+    it('2 attributes correct, 2 wrong = grace does NOT save', () => {
+      // Shape: all different (valid), Color: all different (valid)
+      // Number: 2 same 1 different (INVALID), Shading: 2 same 1 different (INVALID)
+      const cards = [
+        createTestCard('oval', 'red', 1, 'solid'),     // 1, solid
+        createTestCard('squiggle', 'green', 1, 'solid'), // 1, solid (same number, same shading)
+        createTestCard('diamond', 'purple', 3, 'open'),  // 3, open (different)
+      ];
+      const result = isValidCombination(cards, fourAttrs);
+
+      expect(result.isValid).toBe(false);
+      expect(result.invalidAttributes.length).toBe(2);
+      expect(result.invalidAttributes).toContain('number');
+      expect(result.invalidAttributes).toContain('shading');
+
+      // Grace should NOT save because 2 attributes are wrong
+      expect(wouldGraceSave(cards, 5)).toBe(false);
+    });
+
+    it('3 attributes correct, 1 wrong = grace DOES save', () => {
+      // Shape: all different (valid), Color: all different (valid), Number: all different (valid)
+      // Shading: 2 same 1 different (INVALID)
+      const cards = [
+        createTestCard('oval', 'red', 1, 'solid'),
+        createTestCard('squiggle', 'green', 2, 'solid'),  // solid (same as first)
+        createTestCard('diamond', 'purple', 3, 'open'),   // open (different)
+      ];
+      const result = isValidCombination(cards, fourAttrs);
+
+      expect(result.isValid).toBe(false);
+      expect(result.invalidAttributes.length).toBe(1);
+      expect(result.invalidAttributes).toContain('shading');
+
+      // Grace SHOULD save because exactly 1 attribute is wrong
+      expect(wouldGraceSave(cards, 5)).toBe(true);
+    });
+
+    it('1 attribute correct, 3 wrong = grace does NOT save', () => {
+      // Shape: all different (valid)
+      // Color: 2 same 1 different (INVALID)
+      // Number: 2 same 1 different (INVALID)
+      // Shading: 2 same 1 different (INVALID)
+      const cards = [
+        createTestCard('oval', 'red', 1, 'solid'),
+        createTestCard('squiggle', 'red', 1, 'solid'),    // same color, number, shading
+        createTestCard('diamond', 'purple', 3, 'open'),
+      ];
+      const result = isValidCombination(cards, fourAttrs);
+
+      expect(result.isValid).toBe(false);
+      expect(result.invalidAttributes.length).toBe(3);
+
+      // Grace should NOT save because 3 attributes are wrong
+      expect(wouldGraceSave(cards, 5)).toBe(false);
+    });
+
+    it('grace does not save even with high grace count if 2+ attributes wrong', () => {
+      const cards = [
+        createTestCard('oval', 'red', 1, 'solid'),
+        createTestCard('oval', 'green', 2, 'solid'),      // same shape, same shading
+        createTestCard('diamond', 'purple', 3, 'open'),
+      ];
+      const result = isValidCombination(cards, fourAttrs);
+
+      // Shape: 2 oval, 1 diamond = INVALID
+      // Shading: 2 solid, 1 open = INVALID
+      expect(result.invalidAttributes.length).toBe(2);
+
+      // Even with 99 graces, should NOT save
+      expect(wouldGraceSave(cards, 99)).toBe(false);
+    });
+
+    it('grace does not save if player has 0 graces (even with 1 wrong)', () => {
+      const cards = [
+        createTestCard('oval', 'red', 1, 'solid'),
+        createTestCard('squiggle', 'green', 2, 'solid'),  // only shading wrong
+        createTestCard('diamond', 'purple', 3, 'open'),
+      ];
+      const result = isValidCombination(cards, fourAttrs);
+
+      expect(result.invalidAttributes.length).toBe(1);
+
+      // With 0 graces, should NOT save even though only 1 is wrong
+      expect(wouldGraceSave(cards, 0)).toBe(false);
+    });
+  });
 });
 
 describe('sameCardAttributes', () => {

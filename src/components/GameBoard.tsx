@@ -6,6 +6,7 @@ import RewardReveal from './RewardReveal';
 import { COLORS } from '@/utils/colors';
 import { MATCH_REWARDS } from '@/utils/gameConfig';
 import { processWeaponEffects, WeaponEffectResult } from '@/utils/weaponEffects';
+import { isValidCombination } from '@/utils/gameUtils';
 
 // Default to 4 attributes for backward compatibility
 const DEFAULT_ATTRIBUTES: AttributeName[] = ['shape', 'color', 'number', 'shading'];
@@ -340,9 +341,13 @@ const GameBoard: React.FC<GameBoardProps> = ({
             onMatch(allCardsToReplace, allRewards, weaponEffects);
           }, 1500);
         } else {
-          // Invalid match - check if player has graces for weapon effects
-          if (playerStats.graces > 0) {
-            // Grace will be used - treat as a valid match with full rewards!
+          // Invalid match - check if grace can save (ONLY when exactly 1 attribute is wrong)
+          const validationResult = isValidCombination(newSelectedCards, activeAttributes);
+          const invalidCount = validationResult.invalidAttributes.length;
+          const graceCanSave = invalidCount === 1 && playerStats.graces > 0;
+
+          if (graceCanSave) {
+            // Grace saves! (exactly 1 attribute wrong) - treat as valid match with full rewards
             const matchId = ++matchCounterRef.current;
 
             // Calculate full rewards for matched cards (same as valid match)
@@ -403,7 +408,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
               onMatch(allCardsToReplace, allRewards, weaponEffects);
             }, 1500);
           } else {
-            // No graces - just invalid selection
+            // 2+ attributes wrong OR no graces - full invalid match (lose health)
             onInvalidSelection(newSelectedCards);
 
             setTimeout(() => {
