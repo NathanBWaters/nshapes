@@ -104,7 +104,6 @@ const Card: React.FC<CardProps> = ({ card, onClick, disabled = false }) => {
                       card.bomb ||
                       card.healing ||
                       card.spikes ||
-                      card.isDud ||
                       card.isFragile ||
                       card.boobyTrap ||
                       card.clover ||
@@ -160,7 +159,7 @@ const Card: React.FC<CardProps> = ({ card, onClick, disabled = false }) => {
       cardStyles.push(styles.hint);
     }
 
-    if (disabled || card.isDud) {
+    if (disabled) {
       cardStyles.push(styles.disabled);
     }
 
@@ -212,8 +211,8 @@ const Card: React.FC<CardProps> = ({ card, onClick, disabled = false }) => {
     <TouchableOpacity
       testID={`card-${shape}-${color}-${number}-${shading}`}
       style={getCardStyle()}
-      onPress={() => !disabled && !card.isDud && onClick(card)}
-      disabled={disabled || card.isDud}
+      onPress={() => !disabled && onClick(card)}
+      disabled={disabled}
       activeOpacity={0.7}
     >
       {getModifierBadge()}

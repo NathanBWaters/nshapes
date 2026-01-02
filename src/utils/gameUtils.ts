@@ -143,12 +143,7 @@ export const generateGameBoard = (
     if (Math.random() < modifierChance * 0.2 && round > 3) {
       modifiedCard.spikes = true;
     }
-    
-    // Dud card (cannot be selected)
-    if (Math.random() < modifierChance * 0.1 && round > 4) {
-      modifiedCard.isDud = true;
-    }
-    
+
     // Fragile card (breaks if not matched quickly)
     if (Math.random() < modifierChance * 0.2 && round > 3) {
       modifiedCard.isFragile = true;

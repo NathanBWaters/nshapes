@@ -28,7 +28,6 @@ export interface Card {
   bombTimer?: number;
   healing?: boolean;
   spikes?: boolean;
-  isDud?: boolean;
   isFragile?: boolean;
   boobyTrap?: boolean;
   clover?: boolean;
