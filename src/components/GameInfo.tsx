@@ -15,7 +15,7 @@ const COPILOT_STEPS = {
   money: { order: 3, text: "Gold coins! Earn money by matching cards. Spend it in the shop between rounds to buy powerful weapons." },
   level: { order: 4, text: "Your level and XP bar. Earn experience with each match. Level up to choose a free weapon reward!" },
   graces: { order: 5, text: "Graces save you from near-misses! When only 1 attribute is wrong, a grace is used instead of losing health." },
-  hints: { order: 6, text: "Stuck? Tap this to use a hint! It will highlight a valid SET on the board. Use them wisely!" },
+  hints: { order: 6, text: "Stuck? Tap this to use a hint! It will highlight a valid SET on the board. Earn hints from matches - your capacity shows as X/max." },
   timer: { order: 7, text: "The countdown timer! Reach the score target before time runs out to complete the round." },
   score: { order: 9, text: "Your score progress! Fill this bar to reach the target and complete the round. Each valid SET adds to your score." },
   menu: { order: 10, text: "Tap MENU to view your stats, check the weapon guide, or exit the game." },
@@ -77,6 +77,7 @@ const GameInfo: React.FC<GameInfoProps> = ({
   const xpProgress = Math.min((xpInCurrentLevel / xpNeededForNextLevel) * 100, 100);
 
   const hintsAvailable = playerStats.hints ?? 0;
+  const maxHints = playerStats.maxHints ?? 3;
 
   // Helper to wrap elements with CopilotStep when in tutorial mode
   const withCopilot = (
@@ -165,7 +166,7 @@ const GameInfo: React.FC<GameInfoProps> = ({
                   styles.hintCount,
                   hintsAvailable > 0 ? styles.hintCountEnabled : styles.hintCountDisabled
                 ]}>
-                  {hasActiveHint ? 'x' : hintsAvailable}
+                  {hasActiveHint ? 'x' : `${hintsAvailable}/${maxHints}`}
                 </Text>
               </TouchableOpacity>,
               undefined

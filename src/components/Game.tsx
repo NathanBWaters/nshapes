@@ -1074,7 +1074,11 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
             level: newLevel,
             money: prevState.player.stats.money + totalMoney,
             health: newHealth,
-            hints: prevState.player.stats.hints + totalHints,
+            // Cap hints at maxHints (including weapon bonuses)
+            hints: Math.min(
+              prevState.player.stats.hints + totalHints,
+              calculatePlayerTotalStats(prevState.player).maxHints
+            ),
             graces: prevState.player.stats.graces + graceDelta
           }
         }

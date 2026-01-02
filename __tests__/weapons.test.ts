@@ -159,11 +159,11 @@ describe('Weapon Definitions', () => {
       });
     });
 
-    it('Crystal Orb should have hints effect', () => {
+    it('Crystal Orb should have maxHints effect', () => {
       const crystalOrbs = WEAPONS.filter(w => w.name === 'Crystal Orb');
       crystalOrbs.forEach(weapon => {
-        expect(weapon.effects).toHaveProperty('hints');
-        expect(weapon.effects.hints).toBeGreaterThan(0);
+        expect(weapon.effects).toHaveProperty('maxHints');
+        expect(weapon.effects.maxHints).toBeGreaterThan(0);
       });
     });
 

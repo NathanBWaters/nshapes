@@ -40,6 +40,7 @@ export const DEFAULT_PLAYER_STATS: PlayerStats = {
   timeFreezePercent: 0,
   timeFreezeAmount: 15,
   hints: STARTING_STATS.hints,
+  maxHints: STARTING_STATS.maxHints,
   // Co-op specific
   hintPasses: 0,
 
@@ -721,7 +722,7 @@ export const WEAPONS: Weapon[] = [
   },
 
   // ============================================================================
-  // 10. CRYSTAL ORB - Starting hints
+  // 10. CRYSTAL ORB - Max hints capacity
   // ============================================================================
   {
     id: 'crystal-orb-common',
@@ -729,11 +730,11 @@ export const WEAPONS: Weapon[] = [
     rarity: 'common',
     level: 1,
     price: 5,
-    description: '+1 starting hint.',
-    shortDescription: 'Extra starting hints',
-    flavorText: 'Hints highlight a valid set on the board when activated. Tap the hint button to use one.',
+    description: '+1 max hint capacity.',
+    shortDescription: 'Increased hint capacity',
+    flavorText: 'Hints highlight a valid set on the board when activated. Earn hints from matches to fill your capacity.',
     icon: 'lorc/floating-crystal',
-    effects: { hints: 1 }
+    effects: { maxHints: 1 }
   },
   {
     id: 'crystal-orb-rare',
@@ -741,11 +742,11 @@ export const WEAPONS: Weapon[] = [
     rarity: 'rare',
     level: 1,
     price: 10,
-    description: '+3 starting hints.',
-    shortDescription: 'Extra starting hints',
-    flavorText: 'Hints highlight a valid set on the board when activated. Tap the hint button to use one.',
+    description: '+2 max hint capacity.',
+    shortDescription: 'Increased hint capacity',
+    flavorText: 'Hints highlight a valid set on the board when activated. Earn hints from matches to fill your capacity.',
     icon: 'lorc/floating-crystal',
-    effects: { hints: 3 }
+    effects: { maxHints: 2 }
   },
   {
     id: 'crystal-orb-legendary',
@@ -753,11 +754,11 @@ export const WEAPONS: Weapon[] = [
     rarity: 'legendary',
     level: 1,
     price: 15,
-    description: '+7 starting hints.',
-    shortDescription: 'Extra starting hints',
-    flavorText: 'Hints highlight a valid set on the board when activated. Tap the hint button to use one.',
+    description: '+3 max hint capacity.',
+    shortDescription: 'Increased hint capacity',
+    flavorText: 'Hints highlight a valid set on the board when activated. Earn hints from matches to fill your capacity.',
     icon: 'lorc/floating-crystal',
-    effects: { hints: 7 }
+    effects: { maxHints: 3 }
   },
 
   // ============================================================================

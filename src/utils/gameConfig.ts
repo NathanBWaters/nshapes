@@ -10,7 +10,8 @@ import { AttributeName } from '../types';
 // =============================================================================
 
 export const STARTING_STATS = {
-  hints: 1,
+  hints: 0, // Start with 0 hints
+  maxHints: 3, // Maximum hints player can hold
   health: 3,
   maxHealth: 3,
   money: 0,

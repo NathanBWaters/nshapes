@@ -19,10 +19,12 @@ NShapes combines the classic SET card matching game with roguelike progression m
 **The SET Rule:** A valid match requires 3 cards where **each active attribute** is either **all the same** OR **all different** across the three cards.
 
 **Invalid Match Mechanic:** When a player selects 3 cards that do NOT form a valid SET:
-* If player has mulligans: Auto-use mulligan (saves 1 health)
-* Otherwise: The player loses 1 health (heart)
+* If player has graces AND exactly 1 attribute is wrong: Auto-use grace (saves 1 health)
+* If 2+ attributes are wrong OR no graces: The player loses 1 health (heart)
 * The 3 selected cards are **removed** from the board and replaced with new cards
 * This creates a strategic "sacrifice" option—stuck players can spend health to cycle in new cards
+
+**Grace System:** Graces are a "near-miss" protection. When only 1 attribute breaks the SET rule, a grace is consumed instead of losing health. If 2+ attributes are wrong, it's a full miss and health is lost regardless of graces.
 
 ### Game Modes
 
@@ -52,8 +54,8 @@ The game features 15 weapon types, each available in 3 rarities (45 total weapon
 
 ### Weapon Rarities
 * **Common (70%):** Lower stats, prices 5-10 coins
-* **Rare (25%):** Medium stats, prices 15-25 coins
-* **Legendary (5%):** High stats, prices 40-60 coins
+* **Rare (25%):** Medium stats, prices 10-20 coins
+* **Legendary (5%):** High stats, prices 15-30 coins
 
 ### Weapon Types
 
@@ -64,11 +66,11 @@ The game features 15 weapon types, each available in 3 rarities (45 total weapon
 | **Field Stone** | Increases starting board size | fieldSize |
 | **Growth Seed** | Chance to expand board on match | boardGrowthChance |
 | **Flint Spark** | Starts fires on adjacent cards | fireSpreadChance |
-| **Second Chance** | Starting mulligans | mulligans |
-| **Fortune Token** | Chance to gain mulligan on match | mulliganGainChance |
+| **Second Chance** | Starting graces | graces |
+| **Fortune Token** | Chance to gain grace on match | graceGainChance |
 | **Life Vessel** | Increases max health | maxHealth |
 | **Mending Charm** | Chance to heal on match | healingChance |
-| **Crystal Orb** | Starting hints | hints |
+| **Crystal Orb** | Increases max hint capacity | maxHints |
 | **Seeker Lens** | Chance to gain hint on match | hintGainChance |
 | **Prism Glass** | Chance for holographic cards (2x pts) | holoChance |
 | **Chrono Shard** | Starting time bonus | startingTime |
@@ -80,6 +82,13 @@ The game features 15 weapon types, each available in 3 rarities (45 total weapon
 * **Stacking:** Multiple weapons of the same type stack their effects
 * **Purchase:** Buy weapons in the shop between rounds
 * **Level Up:** Choose from 3 weapon rewards on level up
+
+### Hint System
+
+* **Starting Hints:** Players start with 0 hints
+* **Max Hints:** Default max capacity is 3 (increased by Crystal Orb weapons)
+* **Earning Hints:** Gain hints from matches via Seeker Lens and auto-hint via Oracle Eye
+* **Display:** Hints show as "X/max" in the UI (e.g., "2/3")
 
 ### Laser Mechanic (Independent Rolls)
 
@@ -101,8 +110,8 @@ Each laser weapon (Prismatic Ray) rolls **independently** on every match:
 * 16 playable characters (Orange Tabby, Sly Fox, Corgi, etc.)
 * 45 weapons across 15 types and 3 rarities
 * Card modifiers (bombs, spikes, healing, loot boxes, etc.)
-* Mulligan auto-use system (prevents health loss)
-* Match trigger effects (healing, hints, time, mulligans)
+* Grace auto-use system (prevents health loss on near-misses)
+* Match trigger effects (healing, hints, time, graces)
 * Explosive and laser destruction effects
 * Fire spread and burn mechanics
 * Auto-hint system
@@ -177,13 +186,19 @@ The layout adapts based on the number of active attributes to ensure a Set is ma
 * **2–3 Attributes:** 3x3 or 3x4 grid (9–12 cards).
 * **4–5 Attributes:** 3x5 or 3x6 grid (15–18 cards) to prevent "No-Set" deadlocks.
 
+**Field Size:** The actual board size is the maximum of:
+1. The minimum required for the attribute count (as above)
+2. The player's `fieldSize` stat (base 12 + weapon bonuses from Field Stone)
+
+This means Field Stone weapons can increase the starting board size beyond the minimum, giving players more cards to work with from the start of each round.
+
 ## Dev Testing
 
 Access `/dev/test` to test weapon effects:
 * Add legendary weapons by category
 * Toggle holographic cards
 * Set cards on fire
-* Add mulligans
+* Add graces
 * View active weapon stats
 
 When working on this codebase, also load these additional files for context:

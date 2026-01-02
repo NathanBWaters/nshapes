@@ -170,6 +170,7 @@ export interface PlayerStats {
   timeFreezePercent: number;
   timeFreezeAmount: number;
   hints: number; // Number of hints available for finding valid sets
+  maxHints: number; // Maximum hints player can hold
   // Co-op specific
   hintPasses: number;
 
