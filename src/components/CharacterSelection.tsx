@@ -1,10 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { View, Text, TouchableOpacity, Pressable, StyleSheet } from 'react-native';
 import { Character, PlayerStats } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { getWeaponByName, DEFAULT_PLAYER_STATS } from '@/utils/gameDefinitions';
-import { ATTRIBUTE_SCALING } from '@/utils/gameConfig';
-import { TutorialStorage } from '@/utils/storage';
 import Icon from './Icon';
 import GameMenu from './GameMenu';
 
@@ -18,34 +16,16 @@ interface CharacterSelectionProps {
   characters: Character[];
   selectedCharacter: string | null;
   onSelect: (characterName: string) => void;
-  onStart: (mode: GameMode, difficulty?: FreePlayDifficulty) => void;
-  onTutorial?: () => void;
+  onStart: () => void;
 }
-
-// Difficulty labels and descriptions
-const DIFFICULTY_INFO: Record<FreePlayDifficulty, { label: string; description: string }> = {
-  easy: { label: 'Easy', description: '2 attributes' },
-  medium: { label: 'Medium', description: '3 attributes' },
-  hard: { label: 'Hard', description: '4 attributes' },
-  omega: { label: 'Omega', description: '5 attributes' },
-};
 
 const CharacterSelection: React.FC<CharacterSelectionProps> = ({
   characters,
   selectedCharacter,
   onSelect,
   onStart,
-  onTutorial
 }) => {
   const [hoveredCharacter, setHoveredCharacter] = React.useState<string | null>(null);
-  const [selectedMode, setSelectedMode] = React.useState<GameMode>('adventure');
-  const [freePlayDifficulty, setFreePlayDifficulty] = React.useState<FreePlayDifficulty>('medium');
-  const [tutorialViewed, setTutorialViewed] = useState(false);
-
-  // Check if tutorial has been viewed on mount
-  useEffect(() => {
-    setTutorialViewed(TutorialStorage.hasViewedTutorial());
-  }, []);
 
   // Auto-select first character if none selected
   React.useEffect(() => {
@@ -161,92 +141,10 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
         </View>
       </View>
 
-      {/* Mode Selection & Action Buttons */}
+      {/* Start Adventure Button */}
       <View style={styles.actionSection}>
-        {/* Mode Toggle */}
-        <View style={styles.modeToggleContainer}>
-          {onTutorial && (
-            <Pressable
-              onPress={() => {
-                TutorialStorage.markTutorialViewed();
-                setTutorialViewed(true);
-                onTutorial();
-              }}
-              style={[
-                styles.tutorialButton,
-                tutorialViewed && styles.tutorialButtonViewed,
-              ]}
-            >
-              <Text style={[
-                styles.tutorialButtonText,
-                tutorialViewed && styles.tutorialButtonTextViewed,
-              ]}>Tutorial</Text>
-              <Text style={[
-                styles.modeDescription,
-                tutorialViewed && styles.tutorialDescriptionViewed,
-              ]}>Learn how to play</Text>
-            </Pressable>
-          )}
-          <Pressable
-            onPress={() => setSelectedMode('free_play')}
-            style={[
-              styles.modeButton,
-              selectedMode === 'free_play' && styles.modeButtonSelected,
-            ]}
-          >
-            <Text style={[
-              styles.modeButtonText,
-              selectedMode === 'free_play' && styles.modeButtonTextSelected,
-            ]}>Free Play</Text>
-            <Text style={styles.modeDescription}>No timer, practice mode</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setSelectedMode('adventure')}
-            style={[
-              styles.modeButton,
-              selectedMode === 'adventure' && styles.modeButtonSelected,
-            ]}
-          >
-            <Text style={[
-              styles.modeButtonText,
-              selectedMode === 'adventure' && styles.modeButtonTextSelected,
-            ]}>Adventure</Text>
-            <Text style={styles.modeDescription}>10 rounds, enemies & loot</Text>
-          </Pressable>
-        </View>
-
-        {/* Difficulty Selector - Only shown for Free Play */}
-        {selectedMode === 'free_play' && (
-          <View style={styles.difficultyContainer}>
-            <Text style={styles.difficultyLabel}>Difficulty</Text>
-            <View style={styles.difficultyOptions}>
-              {(['easy', 'medium', 'hard', 'omega'] as FreePlayDifficulty[]).map(diff => (
-                <Pressable
-                  key={diff}
-                  onPress={() => setFreePlayDifficulty(diff)}
-                  style={[
-                    styles.difficultyButton,
-                    freePlayDifficulty === diff && styles.difficultyButtonSelected,
-                  ]}
-                >
-                  <Text style={[
-                    styles.difficultyButtonText,
-                    freePlayDifficulty === diff && styles.difficultyButtonTextSelected,
-                  ]}>
-                    {DIFFICULTY_INFO[diff].label}
-                  </Text>
-                  <Text style={styles.difficultyAttrCount}>
-                    {DIFFICULTY_INFO[diff].description}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {/* Start Button */}
         <TouchableOpacity
-          onPress={() => onStart(selectedMode, selectedMode === 'free_play' ? freePlayDifficulty : undefined)}
+          onPress={onStart}
           disabled={!selectedCharacter}
           style={[
             styles.actionButton,
@@ -254,7 +152,7 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
           ]}
         >
           <Text style={styles.actionButtonText}>
-            {selectedCharacter ? `Start ${selectedMode === 'adventure' ? 'Adventure' : 'Free Play'}` : 'Select a Character'}
+            {selectedCharacter ? 'Start Adventure' : 'Select a Character'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -466,116 +364,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.canvasWhite,
     borderTopWidth: 1,
     borderTopColor: COLORS.slateCharcoal,
-  },
-  modeToggleContainer: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 12,
-  },
-  modeButton: {
-    flex: 1,
-    backgroundColor: COLORS.paperBeige,
-    borderRadius: RADIUS.button,
-    borderWidth: 1,
-    borderColor: COLORS.slateCharcoal,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-  },
-  modeButtonSelected: {
-    backgroundColor: COLORS.actionYellow,
-    borderWidth: 2,
-  },
-  tutorialButton: {
-    flex: 1,
-    backgroundColor: COLORS.tutorialBlue,
-    borderRadius: RADIUS.button,
-    borderWidth: 1,
-    borderColor: COLORS.slateCharcoal,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-  },
-  tutorialButtonViewed: {
-    backgroundColor: COLORS.paperBeige,
-  },
-  tutorialButtonText: {
-    color: COLORS.canvasWhite,
-    fontWeight: '700',
-    fontSize: 14,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  tutorialButtonTextViewed: {
-    color: COLORS.slateCharcoal,
-  },
-  tutorialDescriptionViewed: {
-    color: COLORS.slateCharcoal,
-    opacity: 0.7,
-  },
-  modeButtonText: {
-    color: COLORS.slateCharcoal,
-    fontWeight: '600',
-    fontSize: 14,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  modeButtonTextSelected: {
-    fontWeight: '700',
-  },
-  modeDescription: {
-    color: COLORS.slateCharcoal,
-    fontWeight: '400',
-    fontSize: 10,
-    opacity: 0.7,
-    marginTop: 2,
-  },
-  // Difficulty Selector Styles
-  difficultyContainer: {
-    marginBottom: 12,
-  },
-  difficultyLabel: {
-    color: COLORS.slateCharcoal,
-    fontWeight: '600',
-    fontSize: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 6,
-  },
-  difficultyOptions: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  difficultyButton: {
-    flex: 1,
-    backgroundColor: COLORS.paperBeige,
-    borderRadius: RADIUS.button,
-    borderWidth: 1,
-    borderColor: COLORS.slateCharcoal,
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    alignItems: 'center',
-  },
-  difficultyButtonSelected: {
-    backgroundColor: COLORS.logicTeal,
-    borderWidth: 2,
-  },
-  difficultyButtonText: {
-    color: COLORS.slateCharcoal,
-    fontWeight: '600',
-    fontSize: 11,
-    textTransform: 'uppercase',
-  },
-  difficultyButtonTextSelected: {
-    color: COLORS.canvasWhite,
-    fontWeight: '700',
-  },
-  difficultyAttrCount: {
-    color: COLORS.slateCharcoal,
-    fontWeight: '400',
-    fontSize: 9,
-    opacity: 0.7,
-    marginTop: 2,
   },
   actionButton: {
     backgroundColor: COLORS.actionYellow,

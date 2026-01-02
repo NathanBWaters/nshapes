@@ -24,7 +24,7 @@ import Notification from './Notification';
 import { useSocket } from '@/context/SocketContext';
 import MultiplayerLobby from './MultiplayerLobby';
 import MultiplayerToggle from './MultiplayerToggle';
-import CharacterSelection, { GameMode } from './CharacterSelection';
+import CharacterSelection, { GameMode, FreePlayDifficulty } from './CharacterSelection';
 import ItemShop from './ItemShop';
 import WeaponShop from './WeaponShop';
 import LevelUp from './LevelUp';
@@ -34,6 +34,8 @@ import RoundSummary from './RoundSummary';
 import TutorialScreen from './TutorialScreen';
 import AttributeUnlockScreen from './AttributeUnlockScreen';
 import VictoryScreen from './VictoryScreen';
+import MainMenu from './MainMenu';
+import DifficultySelection from './DifficultySelection';
 import { useTutorial } from '@/context/TutorialContext';
 
 const INITIAL_CARD_COUNT = 12;
@@ -66,8 +68,11 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
   // Character selection state
   const [selectedCharacter, setSelectedCharacter] = useState<string | null>(devMode ? 'Orange Tabby' : null);
   const [gameMode, setGameMode] = useState<GameMode>('adventure');
+  const [freePlayDifficulty, setFreePlayDifficulty] = useState<FreePlayDifficulty>('medium');
   const [gamePhase, setGamePhase] = useState<
+    'main_menu' |
     'character_select' |
+    'difficulty_select' |
     'tutorial' |
     'round' |
     'round_summary' |
@@ -79,7 +84,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
     'enemy_select' |
     'game_over' |
     'free_play'
-  >(devMode ? 'round' : 'character_select');
+  >(devMode ? 'round' : 'main_menu');
 
   // Track pending attribute unlock for next round
   const [pendingUnlockedAttribute, setPendingUnlockedAttribute] = useState<AttributeName | null>(null);
@@ -473,18 +478,15 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
     return options;
   };
 
-  // Free Play difficulty state
-  const [freePlayDifficulty, setFreePlayDifficulty] = useState<'easy' | 'medium' | 'hard' | 'omega'>('medium');
-
   // Tutorial prompt modal state
   const [showTutorialPrompt, setShowTutorialPrompt] = useState(false);
   const [pendingGameStart, setPendingGameStart] = useState<{
     mode: GameMode;
-    difficulty?: 'easy' | 'medium' | 'hard' | 'omega';
   } | null>(null);
 
   // Start the game
-  const startGame = (mode: GameMode, difficulty?: 'easy' | 'medium' | 'hard' | 'omega') => {
+  // Start Adventure Mode (called from Character Selection)
+  const startAdventure = () => {
     if (!selectedCharacter) {
       setNotification({
         message: 'Please select a character first',
@@ -494,27 +496,16 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
     }
 
     // Check if we should show tutorial prompt for Adventure mode
-    if (mode === 'adventure' && !tutorialState.hasCompletedTutorial && !tutorialState.hasBeenOfferedTutorial) {
-      setPendingGameStart({ mode, difficulty });
+    if (!tutorialState.hasCompletedTutorial && !tutorialState.hasBeenOfferedTutorial) {
+      setPendingGameStart({ mode: 'adventure' });
       setShowTutorialPrompt(true);
       return;
     }
 
-    setGameMode(mode);
+    setGameMode('adventure');
 
-    // Determine active attributes based on mode
-    let activeAttributes: AttributeName[];
-    if (mode === 'free_play' && difficulty) {
-      // Free Play with selected difficulty
-      activeAttributes = [...ATTRIBUTE_SCALING.difficultyPresets[difficulty]];
-      setFreePlayDifficulty(difficulty);
-    } else if (mode === 'free_play') {
-      // Free Play with default difficulty
-      activeAttributes = [...ATTRIBUTE_SCALING.difficultyPresets[freePlayDifficulty]];
-    } else {
-      // Adventure mode - start with round 1 attributes
-      activeAttributes = getActiveAttributesForRound(1);
-    }
+    // Adventure mode - start with round 1 attributes
+    const activeAttributes = getActiveAttributesForRound(1);
 
     // Initialize the game with the selected character and attributes
     initGame(selectedCharacter, activeAttributes);
@@ -529,33 +520,56 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
       startTime: Date.now()
     }));
 
-    if (mode === 'free_play') {
-      // Free Play mode - go directly to the game board
-      setGamePhase('free_play');
-    } else {
-      // Adventure mode - skip enemy selection, go directly to round
-      // Reset round stats for the first round
-      setRoundStats({
-        moneyEarned: 0,
-        experienceEarned: 0,
-        hintsEarned: 0,
-        healingDone: 0,
-        lootBoxesEarned: 0,
-        startLevel: 0,
-      });
+    // Adventure mode - skip enemy selection, go directly to round
+    // Reset round stats for the first round
+    setRoundStats({
+      moneyEarned: 0,
+      experienceEarned: 0,
+      hintsEarned: 0,
+      healingDone: 0,
+      lootBoxesEarned: 0,
+      startLevel: 0,
+    });
 
-      // Apply startingTime bonus from weapons
-      setState(prevState => {
-        const totalStats = calculatePlayerTotalStats(prevState.player);
-        const timeBonus = totalStats.startingTime || 0;
-        return {
-          ...prevState,
-          remainingTime: prevState.remainingTime + timeBonus
-        };
-      });
+    // Apply startingTime bonus from weapons
+    setState(prevState => {
+      const totalStats = calculatePlayerTotalStats(prevState.player);
+      const timeBonus = totalStats.startingTime || 0;
+      return {
+        ...prevState,
+        remainingTime: prevState.remainingTime + timeBonus
+      };
+    });
 
-      setGamePhase('round');
-    }
+    setGamePhase('round');
+  };
+
+  // Start Free Play Mode (called from Difficulty Selection)
+  const startFreePlay = (difficulty: FreePlayDifficulty) => {
+    setGameMode('free_play');
+    setFreePlayDifficulty(difficulty);
+
+    // Free Play - use selected difficulty
+    const activeAttributes = [...ATTRIBUTE_SCALING.difficultyPresets[difficulty]];
+
+    // For free play, use a default character if none selected
+    const characterToUse = selectedCharacter || 'Orange Tabby';
+
+    // Initialize the game with the selected character and attributes
+    initGame(characterToUse, activeAttributes);
+
+    // Reset hint triggers to prevent auto-triggering on game start
+    setHintTrigger(0);
+    setClearHintTrigger(0);
+
+    setState(prevState => ({
+      ...prevState,
+      gameStarted: true,
+      startTime: Date.now()
+    }));
+
+    // Free Play mode - go directly to the game board
+    setGamePhase('free_play');
   };
 
   // Handle character selection
@@ -569,14 +583,14 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
     setGamePhase('tutorial');
   };
 
-  // Handle tutorial complete - return to character select
+  // Handle tutorial complete - return to main menu
   const handleTutorialComplete = () => {
-    setGamePhase('character_select');
+    setGamePhase('main_menu');
   };
 
-  // Handle tutorial exit - return to character select
+  // Handle tutorial exit - return to main menu
   const handleTutorialExit = () => {
-    setGamePhase('character_select');
+    setGamePhase('main_menu');
   };
 
   // Handle tutorial prompt - user wants to do tutorial
@@ -586,61 +600,45 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
     handleTutorialStart();
   };
 
-  // Handle tutorial prompt - user wants to skip
+  // Handle tutorial prompt - user wants to skip and start adventure
   const handleTutorialPromptSkip = () => {
     setShowTutorialPrompt(false);
     markTutorialOffered();
-    if (pendingGameStart) {
-      // Continue with the original game start
-      setGameMode(pendingGameStart.mode);
+    setPendingGameStart(null);
 
-      // Determine active attributes based on mode
-      let activeAttributes: AttributeName[];
-      if (pendingGameStart.mode === 'free_play' && pendingGameStart.difficulty) {
-        activeAttributes = [...ATTRIBUTE_SCALING.difficultyPresets[pendingGameStart.difficulty]];
-        setFreePlayDifficulty(pendingGameStart.difficulty);
-      } else if (pendingGameStart.mode === 'free_play') {
-        activeAttributes = [...ATTRIBUTE_SCALING.difficultyPresets[freePlayDifficulty]];
-      } else {
-        activeAttributes = getActiveAttributesForRound(1);
-      }
+    // Continue with adventure mode start
+    setGameMode('adventure');
+    const activeAttributes = getActiveAttributesForRound(1);
 
-      initGame(selectedCharacter!, activeAttributes);
-      setHintTrigger(0);
-      setClearHintTrigger(0);
+    initGame(selectedCharacter!, activeAttributes);
+    setHintTrigger(0);
+    setClearHintTrigger(0);
 
-      setState(prevState => ({
+    setState(prevState => ({
+      ...prevState,
+      gameStarted: true,
+      startTime: Date.now()
+    }));
+
+    setRoundStats({
+      moneyEarned: 0,
+      experienceEarned: 0,
+      hintsEarned: 0,
+      healingDone: 0,
+      lootBoxesEarned: 0,
+      startLevel: 0,
+    });
+
+    setState(prevState => {
+      const totalStats = calculatePlayerTotalStats(prevState.player);
+      const timeBonus = totalStats.startingTime || 0;
+      return {
         ...prevState,
-        gameStarted: true,
-        startTime: Date.now()
-      }));
+        remainingTime: prevState.remainingTime + timeBonus
+      };
+    });
 
-      if (pendingGameStart.mode === 'free_play') {
-        setGamePhase('free_play');
-      } else {
-        setRoundStats({
-          moneyEarned: 0,
-          experienceEarned: 0,
-          hintsEarned: 0,
-          healingDone: 0,
-          lootBoxesEarned: 0,
-          startLevel: 0,
-        });
-
-        setState(prevState => {
-          const totalStats = calculatePlayerTotalStats(prevState.player);
-          const timeBonus = totalStats.startingTime || 0;
-          return {
-            ...prevState,
-            remainingTime: prevState.remainingTime + timeBonus
-          };
-        });
-
-        setGamePhase('round');
-      }
-
-      setPendingGameStart(null);
-    }
+    setGamePhase('round');
   };
 
   // Handle enemy selection
@@ -1730,14 +1728,29 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
   // Render the appropriate game phase
   const renderGamePhase = () => {
     switch (gamePhase) {
+      case 'main_menu':
+        return (
+          <MainMenu
+            onSelectAdventure={() => setGamePhase('character_select')}
+            onSelectFreeplay={() => setGamePhase('difficulty_select')}
+            onSelectTutorial={handleTutorialStart}
+          />
+        );
+
       case 'character_select':
         return (
           <CharacterSelection
             characters={CHARACTERS}
             selectedCharacter={selectedCharacter}
             onSelect={handleCharacterSelect}
-            onStart={startGame}
-            onTutorial={handleTutorialStart}
+            onStart={startAdventure}
+          />
+        );
+
+      case 'difficulty_select':
+        return (
+          <DifficultySelection
+            onStart={startFreePlay}
           />
         );
 
@@ -1757,7 +1770,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
             round={state.round}
             playerStats={calculatePlayerTotalStats(state.player)}
             playerWeapons={state.player.weapons}
-            onExitGame={() => setGamePhase('character_select')}
+            onExitGame={() => setGamePhase('main_menu')}
           />
         );
 
@@ -1777,7 +1790,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
             onContinue={() => setGamePhase('level_up')}
             playerStats={calculatePlayerTotalStats(state.player)}
             playerWeapons={state.player.weapons}
-            onExitGame={() => setGamePhase('character_select')}
+            onExitGame={() => setGamePhase('main_menu')}
           />
         );
 
@@ -1792,7 +1805,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
             freeRerolls={state.player.stats.freeRerolls}
             playerStats={calculatePlayerTotalStats(state.player)}
             playerWeapons={state.player.weapons}
-            onExitGame={() => setGamePhase('character_select')}
+            onExitGame={() => setGamePhase('main_menu')}
           />
         );
 
@@ -1808,7 +1821,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
             onContinue={handleProceedFromShop}
             playerStats={calculatePlayerTotalStats(state.player)}
             playerWeapons={state.player.weapons}
-            onExitGame={() => setGamePhase('character_select')}
+            onExitGame={() => setGamePhase('main_menu')}
           />
         );
 
@@ -1841,7 +1854,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
                 onHintPress={() => setHintTrigger(t => t + 1)}
                 onClearHint={() => setClearHintTrigger(t => t + 1)}
                 hasActiveHint={hasActiveHint}
-                onExitGame={() => setGamePhase('character_select')}
+                onExitGame={() => setGamePhase('main_menu')}
                 devMode={devMode}
                 devCallbacks={devCallbacks}
                 onMenuOpenChange={setIsMenuOpen}
@@ -1880,7 +1893,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
                 {/* Exit button */}
                 <TouchableOpacity
                   style={freePlayStyles.exitButton}
-                  onPress={() => setGamePhase('character_select')}
+                  onPress={() => setGamePhase('main_menu')}
                 >
                   <Text style={freePlayStyles.exitButtonText}>Exit</Text>
                 </TouchableOpacity>
@@ -1956,7 +1969,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
             finalScore={state.score}
             matchCount={state.foundCombinations.length}
             playerStats={calculatePlayerTotalStats(state.player)}
-            onReturnToMenu={() => setGamePhase('character_select')}
+            onReturnToMenu={() => setGamePhase('main_menu')}
           />
         );
 
@@ -2020,7 +2033,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
                   style={gameOverStyles.playAgainButton}
                   onPress={() => {
                     setGameOverReason(null);
-                    setGamePhase('character_select');
+                    setGamePhase('main_menu');
                   }}
                 >
                   <Text style={gameOverStyles.playAgainText}>PLAY AGAIN</Text>
