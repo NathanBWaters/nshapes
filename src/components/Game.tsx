@@ -157,7 +157,6 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
   } | null>(null);
 
   // UI state for header stats
-  const [selectedCount, setSelectedCount] = useState(0);
   const [hasActiveHint, setHasActiveHint] = useState(false);
   const [hintTrigger, setHintTrigger] = useState(0);
   const [clearHintTrigger, setClearHintTrigger] = useState(0);
@@ -1770,7 +1769,6 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
                 totalTime={getRoundRequirement(state.round).time}
                 playerStats={calculatePlayerTotalStats(state.player)}
                 playerWeapons={state.player.weapons}
-                selectedCount={selectedCount}
                 onHintPress={() => setHintTrigger(t => t + 1)}
                 onClearHint={() => setClearHintTrigger(t => t + 1)}
                 hasActiveHint={hasActiveHint}
@@ -1791,7 +1789,6 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
                 weapons={state.player.weapons}
                 isPlayerTurn={true}
                 activeAttributes={state.activeAttributes}
-                onSelectedCountChange={setSelectedCount}
                 onHintStateChange={setHasActiveHint}
                 onUseHint={handleUseHint}
                 triggerHint={hintTrigger > 0 ? hintTrigger : undefined}
@@ -1853,11 +1850,6 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
                   </Text>
                 </TouchableOpacity>
 
-                {/* Selected count */}
-                <View style={[freePlayStyles.selectedBadge, selectedCount === 3 && freePlayStyles.selectedBadgeFull]}>
-                  <Text style={freePlayStyles.selectedText}>{selectedCount}/3</Text>
-                </View>
-
                 {/* Matches counter */}
                 <View style={freePlayStyles.statItem}>
                   <Text style={freePlayStyles.matchLabel}>Matches</Text>
@@ -1876,7 +1868,6 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
                 weapons={state.player.weapons}
                 isPlayerTurn={true}
                 activeAttributes={state.activeAttributes}
-                onSelectedCountChange={setSelectedCount}
                 onHintStateChange={setHasActiveHint}
                 onUseHint={handleUseHint}
                 triggerHint={hintTrigger > 0 ? hintTrigger : undefined}
@@ -2322,23 +2313,6 @@ const freePlayStyles = StyleSheet.create({
     fontWeight: '600',
     fontFamily: 'monospace',
     color: COLORS.slateCharcoal,
-  },
-  selectedBadge: {
-    backgroundColor: COLORS.slateCharcoal,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: RADIUS.button,
-    borderWidth: 1,
-    borderColor: COLORS.deepOnyx,
-  },
-  selectedBadgeFull: {
-    backgroundColor: COLORS.logicTeal,
-  },
-  selectedText: {
-    color: COLORS.canvasWhite,
-    fontSize: 12,
-    fontWeight: '600',
-    fontFamily: 'monospace',
   },
   boardContainer: {
     flex: 1,

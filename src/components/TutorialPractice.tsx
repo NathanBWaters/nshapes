@@ -39,7 +39,6 @@ const TutorialPractice: React.FC<TutorialPracticeProps> = ({ onComplete, onSkip 
   } | null>(null);
 
   // UI state for GameInfo
-  const [selectedCount, setSelectedCount] = useState(0);
   const [hasActiveHint, setHasActiveHint] = useState(false);
 
   // Generate initial board on mount
@@ -170,7 +169,6 @@ const TutorialPractice: React.FC<TutorialPracticeProps> = ({ onComplete, onSkip 
           time={60}
           totalTime={60}
           playerStats={TUTORIAL_PLAYER_STATS}
-          selectedCount={selectedCount}
           hasActiveHint={hasActiveHint}
         />
       </View>
@@ -184,7 +182,6 @@ const TutorialPractice: React.FC<TutorialPracticeProps> = ({ onComplete, onSkip 
           playerStats={TUTORIAL_PLAYER_STATS}
           isPlayerTurn={!showFeedback}
           activeAttributes={TUTORIAL_ATTRIBUTES}
-          onSelectedCountChange={setSelectedCount}
           onHintStateChange={setHasActiveHint}
         />
       </View>

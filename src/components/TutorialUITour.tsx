@@ -107,7 +107,6 @@ const TourContent: React.FC<TutorialUITourProps> = ({ onComplete, onSkip }) => {
         totalTime={60}
         playerStats={TOUR_PLAYER_STATS}
         playerWeapons={[]}
-        selectedCount={0}
         copilotMode={true}
         controlledMenuOpen={isMenuOpen}
       />

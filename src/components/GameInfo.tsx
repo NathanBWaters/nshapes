@@ -16,8 +16,7 @@ const COPILOT_STEPS = {
   level: { order: 4, text: "Your level and XP bar. Earn experience with each match. Level up to choose a free weapon reward!" },
   graces: { order: 5, text: "Graces save you from near-misses! When only 1 attribute is wrong, a grace is used instead of losing health." },
   hints: { order: 6, text: "Stuck? Tap this to use a hint! It will highlight a valid SET on the board. Use them wisely!" },
-  selected: { order: 7, text: "Shows how many cards you've selected. Select 3 cards to check if they form a valid SET." },
-  timer: { order: 8, text: "The countdown timer! Reach the score target before time runs out to complete the round." },
+  timer: { order: 7, text: "The countdown timer! Reach the score target before time runs out to complete the round." },
   score: { order: 9, text: "Your score progress! Fill this bar to reach the target and complete the round. Each valid SET adds to your score." },
   menu: { order: 10, text: "Tap MENU to view your stats, check the weapon guide, or exit the game." },
 };
@@ -30,7 +29,6 @@ interface GameInfoProps {
   totalTime: number;
   playerStats: PlayerStats;
   playerWeapons?: Weapon[];
-  selectedCount: number;
   onHintPress?: () => void;
   onClearHint?: () => void;
   hasActiveHint?: boolean;
@@ -58,7 +56,6 @@ const GameInfo: React.FC<GameInfoProps> = ({
   totalTime,
   playerStats,
   playerWeapons = [],
-  selectedCount,
   onHintPress,
   onClearHint,
   hasActiveHint = false,
@@ -172,12 +169,6 @@ const GameInfo: React.FC<GameInfoProps> = ({
                 </Text>
               </TouchableOpacity>,
               undefined
-            )}
-
-            {/* Selected count */}
-            {withCopilot('selected',
-              <Text style={styles.selectedText}>{selectedCount}/3</Text>,
-              [styles.selectedBadge, selectedCount === 3 && styles.selectedBadgeFull]
             )}
 
             {/* Timer */}
@@ -376,23 +367,6 @@ const styles = StyleSheet.create({
   hintCountDisabled: {
     color: COLORS.slateCharcoal,
     opacity: 0.5,
-  },
-  selectedBadge: {
-    backgroundColor: COLORS.slateCharcoal,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: RADIUS.button,
-    borderWidth: 1,
-    borderColor: COLORS.deepOnyx,
-  },
-  selectedBadgeFull: {
-    backgroundColor: COLORS.logicTeal,
-  },
-  selectedText: {
-    color: COLORS.canvasWhite,
-    fontSize: 12,
-    fontWeight: '600',
-    fontFamily: 'monospace',
   },
   scoreRow: {
     flexDirection: 'row',
