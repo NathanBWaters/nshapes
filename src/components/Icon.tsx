@@ -63,6 +63,7 @@ import FloatingCrystal from '../../assets/icons/lorc/floating-crystal.svg';
 import CrystalShine from '../../assets/icons/lorc/crystal-shine.svg';
 import LaserWarning from '../../assets/icons/lorc/laser-warning.svg';
 import ShiningHeart from '../../assets/icons/lorc/shining-heart.svg';
+import ChainedArrowHeads from '../../assets/icons/lorc/chained-arrow-heads.svg';
 
 // Icon registry: maps path (e.g., "delapouite/token") to the imported component
 const ICON_REGISTRY: Record<string, React.FC<SvgProps>> = {
@@ -124,6 +125,7 @@ const ICON_REGISTRY: Record<string, React.FC<SvgProps>> = {
   'lorc/crystal-shine': CrystalShine,
   'lorc/laser-warning': LaserWarning,
   'lorc/shining-heart': ShiningHeart,
+  'lorc/chained-arrow-heads': ChainedArrowHeads,
 };
 
 // Mapping from stat keys to icon paths
@@ -212,6 +214,8 @@ export const STAT_ICONS: Record<string, string> = {
   timeGainAmount: 'lorc/stopwatch',
   laserChance: 'lorc/laser-warning',
   startingTime: 'lorc/hourglass',
+  ricochetChance: 'lorc/chained-arrow-heads',
+  ricochetChainChance: 'lorc/chained-arrow-heads',
 };
 
 interface IconProps {

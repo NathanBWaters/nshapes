@@ -33,7 +33,8 @@ const RewardReveal: React.FC<RewardRevealProps> = ({ reward }) => {
   const isLaser = reward.effectType === 'laser';
   const isFire = reward.effectType === 'fire';
   const isGrace = reward.effectType === 'grace';
-  const isSpecialEffect = isExplosion || isLaser || isFire || isGrace;
+  const isRicochet = reward.effectType === 'ricochet';
+  const isSpecialEffect = isExplosion || isLaser || isFire || isGrace || isRicochet;
 
   // Get background color based on effect type
   const getBackgroundColor = () => {
@@ -41,6 +42,7 @@ const RewardReveal: React.FC<RewardRevealProps> = ({ reward }) => {
     if (isLaser) return '#00D4FF'; // Cyan for laser
     if (isFire) return '#FF4444'; // Red for fire
     if (isGrace) return '#9B59B6'; // Purple for grace
+    if (isRicochet) return '#FFD700'; // Gold for ricochet
     return COLORS.canvasWhite;
   };
 
@@ -70,6 +72,12 @@ const RewardReveal: React.FC<RewardRevealProps> = ({ reward }) => {
     rewardItems.push({
       icon: '🍀',
       value: 'GRACE!',
+      color: '#FFFFFF',
+    });
+  } else if (isRicochet) {
+    rewardItems.push({
+      icon: '⚡',
+      value: 'RICOCHET!',
       color: '#FFFFFF',
     });
   }

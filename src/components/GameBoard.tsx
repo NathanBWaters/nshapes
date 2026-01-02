@@ -312,8 +312,16 @@ const GameBoard: React.FC<GameBoardProps> = ({
             effectType: 'laser' as const,
           }));
 
+          // Create rewards for ricocheted cards
+          const ricochetRewards: CardReward[] = weaponEffects.ricochetCards.map(c => ({
+            cardId: c.id,
+            points: 1,
+            money: 1,
+            effectType: 'ricochet' as const,
+          }));
+
           // Combine all rewards
-          const allRewards = [...matchedRewards, ...explosionRewards, ...laserRewards];
+          const allRewards = [...matchedRewards, ...explosionRewards, ...laserRewards, ...ricochetRewards];
           const rewardsWithMatchId = allRewards.map(r => ({ ...r, matchId }));
 
           // Collect all affected card IDs
@@ -321,6 +329,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
             ...newSelectedCards.map(c => c.id),
             ...weaponEffects.explosiveCards.map(c => c.id),
             ...weaponEffects.laserCards.map(c => c.id),
+            ...weaponEffects.ricochetCards.map(c => c.id),
           ];
 
           // Mark all affected cards as matched and add rewards
@@ -333,6 +342,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
             ...newSelectedCards,
             ...weaponEffects.explosiveCards,
             ...weaponEffects.laserCards,
+            ...weaponEffects.ricochetCards,
           ];
 
           // After 1.5 seconds, notify parent and clear only this match's rewards
@@ -372,13 +382,21 @@ const GameBoard: React.FC<GameBoardProps> = ({
               effectType: 'laser' as const,
             }));
 
+            // Create rewards for ricocheted cards
+            const ricochetRewards: CardReward[] = weaponEffects.ricochetCards.map(c => ({
+              cardId: c.id,
+              points: 1,
+              money: 1,
+              effectType: 'ricochet' as const,
+            }));
+
             // Mark the first matched reward as a grace so Game.tsx knows to decrement graces
             if (matchedRewards.length > 0) {
               matchedRewards[0].effectType = 'grace';
             }
 
             // Combine all rewards
-            const allRewards = [...matchedRewards, ...explosionRewards, ...laserRewards];
+            const allRewards = [...matchedRewards, ...explosionRewards, ...laserRewards, ...ricochetRewards];
             const rewardsWithMatchId = allRewards.map(r => ({ ...r, matchId }));
 
             // Collect all affected card IDs
@@ -386,6 +404,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
               ...newSelectedCards.map(c => c.id),
               ...weaponEffects.explosiveCards.map(c => c.id),
               ...weaponEffects.laserCards.map(c => c.id),
+              ...weaponEffects.ricochetCards.map(c => c.id),
             ];
 
             // Mark all affected cards and add rewards for visual reveal
@@ -398,6 +417,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
               ...newSelectedCards,
               ...weaponEffects.explosiveCards,
               ...weaponEffects.laserCards,
+              ...weaponEffects.ricochetCards,
             ];
 
             // After 1.5 seconds, notify parent with weapon effects

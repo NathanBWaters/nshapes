@@ -34,6 +34,8 @@ export const STARTING_STATS = {
   timeGainAmount: 10, // 10 seconds default when triggered
   laserChance: 0,
   startingTime: 0, // Additional starting time in seconds
+  ricochetChance: 0,
+  ricochetChainChance: 0,
 } as const;
 
 // =============================================================================

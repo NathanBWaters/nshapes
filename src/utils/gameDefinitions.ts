@@ -59,6 +59,8 @@ export const DEFAULT_PLAYER_STATS: PlayerStats = {
   timeGainAmount: STARTING_STATS.timeGainAmount,
   laserChance: STARTING_STATS.laserChance,
   startingTime: STARTING_STATS.startingTime,
+  ricochetChance: STARTING_STATS.ricochetChance,
+  ricochetChainChance: STARTING_STATS.ricochetChainChance,
 };
 
 // Characters
@@ -971,6 +973,49 @@ export const WEAPONS: Weapon[] = [
     icon: 'lorc/laser-warning',
     specialEffect: 'laser',
     effects: { laserChance: 21 }
+  },
+
+  // ============================================================================
+  // 16. CHAOS SHARD - Ricochet chain destruction
+  // ============================================================================
+  {
+    id: 'chaos-shard-common',
+    name: 'Chaos Shard',
+    rarity: 'common',
+    level: 1,
+    price: 8,
+    description: '10% chance to ricochet, 5% chain chance.',
+    shortDescription: 'Random ricochet chains',
+    flavorText: 'After matching, has a chance to destroy a random card anywhere on the board. Each destroyed card may chain to another random target. Chains can theoretically continue forever with lucky rolls!',
+    icon: 'lorc/chained-arrow-heads',
+    specialEffect: 'ricochet',
+    effects: { ricochetChance: 10, ricochetChainChance: 5 }
+  },
+  {
+    id: 'chaos-shard-rare',
+    name: 'Chaos Shard',
+    rarity: 'rare',
+    level: 1,
+    price: 16,
+    description: '30% chance to ricochet, 15% chain chance.',
+    shortDescription: 'Random ricochet chains',
+    flavorText: 'After matching, has a chance to destroy a random card anywhere on the board. Each destroyed card may chain to another random target. Chains can theoretically continue forever with lucky rolls!',
+    icon: 'lorc/chained-arrow-heads',
+    specialEffect: 'ricochet',
+    effects: { ricochetChance: 30, ricochetChainChance: 15 }
+  },
+  {
+    id: 'chaos-shard-legendary',
+    name: 'Chaos Shard',
+    rarity: 'legendary',
+    level: 1,
+    price: 24,
+    description: '70% chance to ricochet, 35% chain chance.',
+    shortDescription: 'Random ricochet chains',
+    flavorText: 'After matching, has a chance to destroy a random card anywhere on the board. Each destroyed card may chain to another random target. Chains can theoretically continue forever with lucky rolls!',
+    icon: 'lorc/chained-arrow-heads',
+    specialEffect: 'ricochet',
+    effects: { ricochetChance: 70, ricochetChainChance: 35 }
   },
 ];
 

@@ -57,7 +57,7 @@ export interface CardReward {
   graceBonus?: number; // Graces to add
   boardGrowth?: number; // Cards to add to board
   // Weapon effect types for visual distinction
-  effectType?: 'explosion' | 'laser' | 'fire' | 'grace';
+  effectType?: 'explosion' | 'laser' | 'fire' | 'grace' | 'ricochet';
 }
 
 export type CharacterName =
@@ -74,7 +74,7 @@ export type WeaponName =
   'Blast Powder' | 'Oracle Eye' | 'Field Stone' | 'Growth Seed' |
   'Flint Spark' | 'Second Chance' | 'Fortune Token' | 'Life Vessel' |
   'Mending Charm' | 'Crystal Orb' | 'Seeker Lens' | 'Prism Glass' |
-  'Chrono Shard' | 'Time Drop' | 'Prismatic Ray';
+  'Chrono Shard' | 'Time Drop' | 'Prismatic Ray' | 'Chaos Shard';
 
 export type WeaponRarity = 'common' | 'rare' | 'legendary';
 
@@ -98,7 +98,7 @@ export interface Weapon {
   flavorText?: string; // Longer fun description for weapon guide
   price: number;
   effects: Partial<PlayerStats>;
-  specialEffect?: 'explosive' | 'autoHint' | 'boardGrowth' | 'fire' | 'graceGain' | 'healing' | 'hintGain' | 'holographic' | 'timeGain' | 'laser';
+  specialEffect?: 'explosive' | 'autoHint' | 'boardGrowth' | 'fire' | 'graceGain' | 'healing' | 'hintGain' | 'holographic' | 'timeGain' | 'laser' | 'ricochet';
   icon?: string; // Icon path like "delapouite/bamboo"
 }
 
@@ -188,6 +188,8 @@ export interface PlayerStats {
   timeGainAmount: number;       // seconds gained when timeGain triggers
   laserChance: number;          // % for laser to fire on match
   startingTime: number;         // additional starting time in seconds
+  ricochetChance: number;       // % for initial ricochet on match
+  ricochetChainChance: number;  // % for each ricochet to chain again
 }
 
 export interface Player {

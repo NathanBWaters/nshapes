@@ -119,6 +119,62 @@ export const getLaserCards = (board: Card[], matchedCards: Card[]): Card[] => {
 };
 
 /**
+ * Get cards to destroy with ricochet (random chain destruction)
+ *
+ * @param board - Current game board
+ * @param matchedCards - Cards already matched (exclude from targeting)
+ * @param excludedCards - Cards already destroyed by other effects (explosions, lasers)
+ * @param ricochetChance - Initial % chance to start ricochet
+ * @param chainChance - % chance for each ricochet to chain to another card
+ * @returns Array of cards destroyed by ricochet chain
+ */
+export const getRicochetCards = (
+  board: Card[],
+  matchedCards: Card[],
+  excludedCards: Card[],
+  ricochetChance: number,
+  chainChance: number
+): Card[] => {
+  const ricochetedCards: Card[] = [];
+  const destroyedIds = new Set<string>();
+
+  // Track all cards we can't target
+  matchedCards.forEach(c => destroyedIds.add(c.id));
+  excludedCards.forEach(c => destroyedIds.add(c.id));
+
+  // Roll initial ricochet chance
+  if (Math.random() * 100 >= ricochetChance) {
+    return ricochetedCards; // No ricochet triggered
+  }
+
+  // Start the chain!
+  let chaining = true;
+  while (chaining) {
+    // Get available targets (not matched, not exploded, not already ricocheted)
+    const availableTargets = board.filter(card => !destroyedIds.has(card.id));
+
+    if (availableTargets.length === 0) {
+      break; // No more cards to hit
+    }
+
+    // Pick a random target
+    const randomIndex = Math.floor(Math.random() * availableTargets.length);
+    const targetCard = availableTargets[randomIndex];
+
+    // Destroy this card
+    ricochetedCards.push(targetCard);
+    destroyedIds.add(targetCard.id);
+
+    // Roll for chain continuation
+    if (Math.random() * 100 >= chainChance) {
+      chaining = false; // Chain ends
+    }
+  }
+
+  return ricochetedCards;
+};
+
+/**
  * Get cards to set on fire (adjacent to matched cards)
  */
 export const getFireSpreadCards = (
@@ -159,6 +215,8 @@ export interface WeaponEffectResult {
   laserCards: Card[];
   laserCount: number; // How many lasers fired (for visual effects)
   fireCards: Card[];
+  ricochetCards: Card[];
+  ricochetCount: number;
   bonusPoints: number;
   bonusMoney: number;
   bonusTime: number;
@@ -188,6 +246,8 @@ export const processWeaponEffects = (
     laserCards: [],
     laserCount: 0,
     fireCards: [],
+    ricochetCards: [],
+    ricochetCount: 0,
     bonusPoints: 0,
     bonusMoney: 0,
     bonusTime: 0,
@@ -250,6 +310,32 @@ export const processWeaponEffects = (
       result.bonusPoints += result.laserCards.length * 2;
       result.bonusMoney += result.laserCards.length;
       result.notifications.push(`Laser! +${result.laserCards.length * 2}`);
+    }
+  }
+
+  // Ricochet effect - random chain destruction
+  if (playerStats.ricochetChance > 0) {
+    // Calculate ricochet after explosions and lasers to avoid double-destruction
+    const excludedCards = [...result.explosiveCards, ...result.laserCards];
+    result.ricochetCards = getRicochetCards(
+      board,
+      matchedCards,
+      excludedCards,
+      playerStats.ricochetChance,
+      playerStats.ricochetChainChance
+    );
+
+    result.ricochetCount = result.ricochetCards.length;
+
+    if (result.ricochetCards.length > 0) {
+      // Award +1 point per ricocheted card (similar to explosions)
+      result.bonusPoints += result.ricochetCards.length;
+      result.bonusMoney += result.ricochetCards.length;
+
+      const chainText = result.ricochetCards.length > 1
+        ? `Ricochet x${result.ricochetCards.length}!`
+        : 'Ricochet!';
+      result.notifications.push(chainText);
     }
   }
 

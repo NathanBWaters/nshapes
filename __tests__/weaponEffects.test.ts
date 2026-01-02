@@ -4,6 +4,7 @@ import {
   getLineIndices,
   getExplosiveCards,
   getLaserCards,
+  getRicochetCards,
   getFireSpreadCards,
   processWeaponEffects,
 } from '@/utils/weaponEffects';
@@ -340,6 +341,174 @@ describe('getFireSpreadCards', () => {
   });
 });
 
+describe('getRicochetCards', () => {
+  it('should return empty array when ricochet chance is 0', () => {
+    const board = createTestBoard();
+    const matchedCards = [board[4]];
+    const excludedCards: Card[] = [];
+    const result = getRicochetCards(board, matchedCards, excludedCards, 0, 50);
+    expect(result).toEqual([]);
+  });
+
+  it('should return empty array when ricochet does not trigger', () => {
+    const board = createTestBoard();
+    const matchedCards = [board[4]];
+    const excludedCards: Card[] = [];
+
+    // Mock Math.random to always fail initial roll
+    const originalRandom = Math.random;
+    Math.random = () => 0.99; // 99% - will fail 10% ricochet check
+
+    const result = getRicochetCards(board, matchedCards, excludedCards, 10, 50);
+    expect(result).toEqual([]);
+
+    Math.random = originalRandom;
+  });
+
+  it('should destroy at least one card when ricochet triggers at 100%', () => {
+    const board = createTestBoard();
+    const matchedCards = [board[4]];
+    const excludedCards: Card[] = [];
+
+    for (let i = 0; i < 10; i++) {
+      const result = getRicochetCards(board, matchedCards, excludedCards, 100, 0);
+      // With 100% initial chance and 0% chain, should hit exactly 1 card
+      expect(result.length).toBe(1);
+    }
+  });
+
+  it('should chain to multiple cards when chain chance is 100%', () => {
+    const board = createTestBoard();
+    const matchedCards = [board[4]]; // Only 1 matched card
+    const excludedCards: Card[] = [];
+
+    // With 100% chain chance, will destroy all 11 available cards (12 total - 1 matched)
+    const result = getRicochetCards(board, matchedCards, excludedCards, 100, 100);
+
+    // Should destroy all 11 available cards
+    expect(result.length).toBe(11);
+  });
+
+  it('should not target matched cards', () => {
+    const board = createTestBoard();
+    const matchedCards = [board[0], board[1], board[2]];
+    const excludedCards: Card[] = [];
+
+    for (let i = 0; i < 20; i++) {
+      const result = getRicochetCards(board, matchedCards, excludedCards, 100, 50);
+      result.forEach(card => {
+        expect(card.id).not.toBe('card-0');
+        expect(card.id).not.toBe('card-1');
+        expect(card.id).not.toBe('card-2');
+      });
+    }
+  });
+
+  it('should not target excluded cards (exploded/lasered)', () => {
+    const board = createTestBoard();
+    const matchedCards = [board[4]];
+    const excludedCards = [board[0], board[1], board[2]]; // Pretend these were exploded
+
+    for (let i = 0; i < 20; i++) {
+      const result = getRicochetCards(board, matchedCards, excludedCards, 100, 50);
+      result.forEach(card => {
+        // Should not target matched cards
+        expect(card.id).not.toBe('card-4');
+        // Should not target excluded cards
+        expect(card.id).not.toBe('card-0');
+        expect(card.id).not.toBe('card-1');
+        expect(card.id).not.toBe('card-2');
+      });
+    }
+  });
+
+  it('should not duplicate card hits in a single chain', () => {
+    const board = createTestBoard();
+    const matchedCards = [board[4]];
+    const excludedCards: Card[] = [];
+
+    for (let i = 0; i < 20; i++) {
+      const result = getRicochetCards(board, matchedCards, excludedCards, 100, 70);
+      const ids = result.map(c => c.id);
+      const uniqueIds = new Set(ids);
+      expect(uniqueIds.size).toBe(ids.length);
+    }
+  });
+
+  it('should stop chaining when no cards available', () => {
+    // Create a small board with only 3 cards
+    const board = [
+      createTestCard('card-0'),
+      createTestCard('card-1'),
+      createTestCard('card-2'),
+    ];
+    const matchedCards = [board[0]]; // 1 matched
+    const excludedCards: Card[] = [];
+
+    // With 100% chain chance, should destroy both available cards and stop
+    const result = getRicochetCards(board, matchedCards, excludedCards, 100, 100);
+
+    // Maximum possible is 2 cards (card-1 and card-2, since card-0 is matched)
+    expect(result.length).toBeLessThanOrEqual(2);
+  });
+
+  it('should handle empty available board gracefully', () => {
+    const board = createTestBoard();
+    // All cards are either matched or excluded
+    const matchedCards = board.slice(0, 6);
+    const excludedCards = board.slice(6);
+
+    const result = getRicochetCards(board, matchedCards, excludedCards, 100, 100);
+
+    // No cards available to ricochet
+    expect(result).toEqual([]);
+  });
+
+  it('should pick random targets from entire board', () => {
+    const board = createTestBoard();
+    const matchedCards = [board[4]];
+    const excludedCards: Card[] = [];
+
+    // Track which cards get hit over many runs
+    const hitCounts: Record<string, number> = {};
+
+    for (let i = 0; i < 100; i++) {
+      const result = getRicochetCards(board, matchedCards, excludedCards, 100, 0);
+      result.forEach(card => {
+        hitCounts[card.id] = (hitCounts[card.id] || 0) + 1;
+      });
+    }
+
+    // Should have hit multiple different cards (random distribution)
+    const uniqueCardsHit = Object.keys(hitCounts).length;
+    expect(uniqueCardsHit).toBeGreaterThan(5); // Should see variety in 100 runs
+  });
+
+  it('should chain probabilistically with low chain chance', () => {
+    const board = createTestBoard();
+    const matchedCards = [board[4]];
+    const excludedCards: Card[] = [];
+
+    // Track chain lengths over many runs
+    const chainLengths: number[] = [];
+
+    for (let i = 0; i < 100; i++) {
+      const result = getRicochetCards(board, matchedCards, excludedCards, 100, 30);
+      chainLengths.push(result.length);
+    }
+
+    // With 30% chain chance, should see variety in chain lengths
+    const uniqueLengths = new Set(chainLengths);
+    expect(uniqueLengths.size).toBeGreaterThan(1);
+
+    // Should have some single-hit chains
+    expect(chainLengths.some(len => len === 1)).toBe(true);
+
+    // Should have some multi-hit chains
+    expect(chainLengths.some(len => len > 1)).toBe(true);
+  });
+});
+
 describe('processWeaponEffects', () => {
   it('should return empty results when no weapon effects active', () => {
     const board = createTestBoard();
@@ -471,6 +640,161 @@ describe('processWeaponEffects', () => {
         expect(explosionIds).not.toContain(laserCard.id);
       });
     }
+  });
+
+  it('should process ricochet effect when ricochetChance triggers', () => {
+    const board = createTestBoard();
+    const matchedCards = [board[4]];
+    const stats: PlayerStats = {
+      ...DEFAULT_PLAYER_STATS,
+      ricochetChance: 100,
+      ricochetChainChance: 0
+    };
+
+    const result = processWeaponEffects(board, matchedCards, stats);
+
+    // With 100% ricochet and 0% chain, should hit exactly 1 card
+    expect(result.ricochetCards.length).toBe(1);
+    expect(result.ricochetCount).toBe(1);
+    expect(result.bonusPoints).toBeGreaterThan(0);
+    expect(result.bonusMoney).toBeGreaterThan(0);
+    expect(result.notifications.some(n => n.includes('Ricochet'))).toBe(true);
+  });
+
+  it('should show "Ricochet!" for single hit', () => {
+    const board = createTestBoard();
+    const matchedCards = [board[4]];
+    const stats: PlayerStats = {
+      ...DEFAULT_PLAYER_STATS,
+      ricochetChance: 100,
+      ricochetChainChance: 0
+    };
+
+    const result = processWeaponEffects(board, matchedCards, stats);
+
+    expect(result.notifications).toContain('Ricochet!');
+  });
+
+  it('should show "Ricochet xN!" for multiple hits', () => {
+    const board = createTestBoard();
+    const matchedCards = [board[4]];
+    const stats: PlayerStats = {
+      ...DEFAULT_PLAYER_STATS,
+      ricochetChance: 100,
+      ricochetChainChance: 100
+    };
+
+    // With 100% chain chance, will destroy all 11 available cards
+    const result = processWeaponEffects(board, matchedCards, stats);
+
+    expect(result.ricochetCount).toBe(11);
+    expect(result.notifications.some(n => n.includes('Ricochet x11!'))).toBe(true);
+  });
+
+  it('should not ricochet already exploded cards', () => {
+    const board = createTestBoard();
+    const matchedCards = [board[4]];
+    const stats: PlayerStats = {
+      ...DEFAULT_PLAYER_STATS,
+      explosionChance: 100,
+      ricochetChance: 100,
+      ricochetChainChance: 50
+    };
+
+    for (let i = 0; i < 20; i++) {
+      const result = processWeaponEffects(board, matchedCards, stats);
+      // Check no card appears in both explosion and ricochet lists
+      const explosionIds = result.explosiveCards.map(c => c.id);
+      result.ricochetCards.forEach(ricochetCard => {
+        expect(explosionIds).not.toContain(ricochetCard.id);
+      });
+    }
+  });
+
+  it('should not ricochet already lasered cards', () => {
+    const board = createTestBoard();
+    const matchedCards = [board[4]];
+    const stats: PlayerStats = {
+      ...DEFAULT_PLAYER_STATS,
+      laserChance: 100,
+      ricochetChance: 100,
+      ricochetChainChance: 50
+    };
+
+    for (let i = 0; i < 20; i++) {
+      const result = processWeaponEffects(board, matchedCards, stats);
+      // Check no card appears in both laser and ricochet lists
+      const laserIds = result.laserCards.map(c => c.id);
+      result.ricochetCards.forEach(ricochetCard => {
+        expect(laserIds).not.toContain(ricochetCard.id);
+      });
+    }
+  });
+
+  it('should handle all destruction effects together without duplicates', () => {
+    const board = createTestBoard();
+    const matchedCards = [board[4]];
+    const stats: PlayerStats = {
+      ...DEFAULT_PLAYER_STATS,
+      explosionChance: 100,
+      laserChance: 100,
+      ricochetChance: 100,
+      ricochetChainChance: 70
+    };
+
+    for (let i = 0; i < 20; i++) {
+      const result = processWeaponEffects(board, matchedCards, stats);
+
+      // Collect all destroyed card IDs
+      const allDestroyedIds = [
+        ...result.explosiveCards.map(c => c.id),
+        ...result.laserCards.map(c => c.id),
+        ...result.ricochetCards.map(c => c.id),
+      ];
+
+      // No duplicates across all effects
+      const uniqueIds = new Set(allDestroyedIds);
+      expect(uniqueIds.size).toBe(allDestroyedIds.length);
+    }
+  });
+
+  it('should award +1 point and +1 money per ricocheted card', () => {
+    const board = createTestBoard();
+    const matchedCards = [board[4]];
+    const stats: PlayerStats = {
+      ...DEFAULT_PLAYER_STATS,
+      ricochetChance: 100,
+      ricochetChainChance: 100
+    };
+
+    // With 100% chain chance, will destroy all 11 available cards
+    const result = processWeaponEffects(board, matchedCards, stats);
+
+    expect(result.ricochetCount).toBe(11);
+    expect(result.bonusPoints).toBe(11); // +1 per ricocheted card
+    expect(result.bonusMoney).toBe(11); // +1 per ricocheted card
+  });
+
+  it('should return 0 ricochets when ricochet does not trigger', () => {
+    const board = createTestBoard();
+    const matchedCards = [board[4]];
+    const stats: PlayerStats = {
+      ...DEFAULT_PLAYER_STATS,
+      ricochetChance: 10, // Use 10% chance
+      ricochetChainChance: 50
+    };
+
+    // Mock to fail initial ricochet roll (10% chance means need < 10)
+    const originalRandom = Math.random;
+    Math.random = () => 0.99; // 99 >= 10, so ricochet fails
+
+    const result = processWeaponEffects(board, matchedCards, stats);
+
+    Math.random = originalRandom;
+
+    expect(result.ricochetCards).toEqual([]);
+    expect(result.ricochetCount).toBe(0);
+    expect(result.notifications.some(n => n.includes('Ricochet'))).toBe(false);
   });
 });
 

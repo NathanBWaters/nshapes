@@ -10,23 +10,23 @@ import { Weapon, WeaponRarity, Player } from '@/types';
 
 describe('Weapon Definitions', () => {
   describe('WEAPONS array', () => {
-    it('should have exactly 45 weapons (15 types x 3 rarities)', () => {
-      expect(WEAPONS.length).toBe(45);
+    it('should have exactly 48 weapons (16 types x 3 rarities)', () => {
+      expect(WEAPONS.length).toBe(48);
     });
 
-    it('should have 15 common weapons', () => {
+    it('should have 16 common weapons', () => {
       const commons = WEAPONS.filter(w => w.rarity === 'common');
-      expect(commons.length).toBe(15);
+      expect(commons.length).toBe(16);
     });
 
-    it('should have 15 rare weapons', () => {
+    it('should have 16 rare weapons', () => {
       const rares = WEAPONS.filter(w => w.rarity === 'rare');
-      expect(rares.length).toBe(15);
+      expect(rares.length).toBe(16);
     });
 
-    it('should have 15 legendary weapons', () => {
+    it('should have 16 legendary weapons', () => {
       const legendaries = WEAPONS.filter(w => w.rarity === 'legendary');
-      expect(legendaries.length).toBe(15);
+      expect(legendaries.length).toBe(16);
     });
 
     it('should have all required weapon types', () => {
@@ -47,6 +47,7 @@ describe('Weapon Definitions', () => {
         'Chrono Shard',
         'Time Drop',
         'Prismatic Ray',
+        'Chaos Shard',
       ];
 
       expectedTypes.forEach(type => {
