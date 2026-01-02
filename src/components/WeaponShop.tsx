@@ -57,6 +57,34 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
   });
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
+  // Double-tap detection for instant purchase
+  const [lastTapTime, setLastTapTime] = useState<number>(0);
+  const [lastTappedIndex, setLastTappedIndex] = useState<number | null>(null);
+  const DOUBLE_TAP_THRESHOLD = 300; // ms
+
+  const handleWeaponPress = (index: number) => {
+    const now = Date.now();
+    const weapon = weapons[index];
+    const canAfford = weapon && playerMoney >= weapon.price;
+
+    // Check for double-tap on same weapon
+    if (
+      lastTappedIndex === index &&
+      now - lastTapTime < DOUBLE_TAP_THRESHOLD &&
+      canAfford
+    ) {
+      // Double-tap: instant purchase
+      onPurchase(index);
+      setLastTapTime(0);
+      setLastTappedIndex(null);
+    } else {
+      // Single tap: focus the weapon
+      setFocusedIndex(index);
+      setLastTapTime(now);
+      setLastTappedIndex(index);
+    }
+  };
+
   // Show hovered weapon if hovering, otherwise show focused
   const displayedIndex = hoveredIndex !== null ? hoveredIndex : focusedIndex;
 
@@ -193,7 +221,7 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
               return (
                 <Pressable
                   key={`${weapon.id}-${index}`}
-                  onPress={() => setFocusedIndex(index)}
+                  onPress={() => handleWeaponPress(index)}
                   onHoverIn={() => setHoveredIndex(index)}
                   onHoverOut={() => setHoveredIndex(null)}
                   style={[
