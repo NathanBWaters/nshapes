@@ -1,11 +1,64 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import Svg, { Ellipse, Path, Polygon, Defs, Pattern, Rect } from 'react-native-svg';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
+import Svg, { Ellipse, Path, Polygon, Defs, Pattern, Rect, LinearGradient, Stop } from 'react-native-svg';
 import { Card as CardType, Background } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { BACKGROUND_COLORS } from '@/utils/gameConfig';
 
 const FIRE_BURN_DURATION = 7500; // 7.5 seconds
+const SHIMMER_DURATION = 2500; // 2.5 seconds for full shimmer cycle
+
+// Holographic shimmer overlay component - Balatro-style prismatic effect
+const HolographicShimmer: React.FC = () => {
+  const shimmerPosition = useSharedValue(0);
+
+  useEffect(() => {
+    shimmerPosition.value = withRepeat(
+      withTiming(1, {
+        duration: SHIMMER_DURATION,
+        easing: Easing.linear,
+      }),
+      -1, // Repeat infinitely
+      false // Don't reverse
+    );
+  }, [shimmerPosition]);
+
+  const shimmerStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        { translateX: (shimmerPosition.value - 0.5) * 200 },
+        { translateY: (shimmerPosition.value - 0.5) * 150 },
+      ],
+      opacity: 0.4 + Math.sin(shimmerPosition.value * Math.PI * 2) * 0.2,
+    };
+  });
+
+  return (
+    <Animated.View style={[styles.shimmerOverlay, shimmerStyle]} pointerEvents="none">
+      <Svg width="200%" height="200%" style={{ position: 'absolute', top: '-50%', left: '-50%' }}>
+        <Defs>
+          <LinearGradient id="holoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <Stop offset="0%" stopColor="#FF6B6B" stopOpacity="0.3" />
+            <Stop offset="16%" stopColor="#FFE66D" stopOpacity="0.4" />
+            <Stop offset="33%" stopColor="#4ECDC4" stopOpacity="0.4" />
+            <Stop offset="50%" stopColor="#45B7D1" stopOpacity="0.4" />
+            <Stop offset="66%" stopColor="#A855F7" stopOpacity="0.4" />
+            <Stop offset="83%" stopColor="#EC4899" stopOpacity="0.4" />
+            <Stop offset="100%" stopColor="#FF6B6B" stopOpacity="0.3" />
+          </LinearGradient>
+        </Defs>
+        <Rect x="0" y="0" width="100%" height="100%" fill="url(#holoGradient)" />
+      </Svg>
+    </Animated.View>
+  );
+};
 
 // SVG viewBox dimensions (1:2 width:height ratio)
 const SVG_WIDTH = 20;
@@ -164,6 +217,10 @@ const Card: React.FC<CardProps> = ({ card, onClick, disabled = false }) => {
       activeOpacity={0.7}
     >
       {getModifierBadge()}
+
+      {/* Holographic shimmer overlay */}
+      {card.isHolographic && <HolographicShimmer />}
+
       <View nativeID="card-shapes" style={styles.shapesContainer}>
         {shapes}
       </View>
@@ -378,6 +435,16 @@ const styles = StyleSheet.create({
     bottom: 0,
     borderRadius: RADIUS.module,
     borderWidth: 6,
+  },
+  shimmerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: RADIUS.module - 2,
+    overflow: 'hidden',
+    zIndex: 1,
   },
   disabled: {
     opacity: 0.6,
