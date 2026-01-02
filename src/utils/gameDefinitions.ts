@@ -898,7 +898,7 @@ export const WEAPONS: Weapon[] = [
     price: 6,
     description: '5% chance to gain +10s on match.',
     shortDescription: '5% chance for +10s',
-    flavorText: 'Each Time Drop rolls independently on every match. Stack multiples for more chances at bonus time!',
+    flavorText: 'If you have multiple Time Drops, each one rolls separately on every match with its own chance to activate. Two common Time Drops means two separate 5% chances!',
     icon: 'lorc/stopwatch',
     specialEffect: 'timeGain',
     effects: { timeGainChance: 5, timeGainAmount: 10 }
@@ -911,7 +911,7 @@ export const WEAPONS: Weapon[] = [
     price: 12,
     description: '15% chance to gain +10s on match.',
     shortDescription: '15% chance for +10s',
-    flavorText: 'Each Time Drop rolls independently on every match. Stack multiples for more chances at bonus time!',
+    flavorText: 'If you have multiple Time Drops, each one rolls separately on every match with its own chance to activate. Two rare Time Drops means two separate 15% chances!',
     icon: 'lorc/stopwatch',
     specialEffect: 'timeGain',
     effects: { timeGainChance: 15, timeGainAmount: 10 }
@@ -924,7 +924,7 @@ export const WEAPONS: Weapon[] = [
     price: 18,
     description: '35% chance to gain +15s on match.',
     shortDescription: '35% chance for +15s',
-    flavorText: 'Each Time Drop rolls independently on every match. Stack multiples for more chances at bonus time!',
+    flavorText: 'If you have multiple Time Drops, each one rolls separately on every match with its own chance to activate. Two legendary Time Drops means two separate 35% chances!',
     icon: 'lorc/stopwatch',
     specialEffect: 'timeGain',
     effects: { timeGainChance: 35, timeGainAmount: 15 }
