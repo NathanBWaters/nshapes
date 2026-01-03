@@ -1,7 +1,10 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet, Animated, Easing } from 'react-native';
 import { COLORS, RADIUS } from '@/utils/colors';
 import Icon from './Icon';
+import Card from './Card';
+import { Card as CardType } from '@/types';
+import { createDeck, shuffleArray } from '@/utils/gameUtils';
 
 interface MainMenuProps {
   onSelectAdventure: () => void;
@@ -14,12 +17,24 @@ const MainMenu: React.FC<MainMenuProps> = ({
   onSelectFreeplay,
   onSelectTutorial,
 }) => {
-  // Animated values for floating shapes
+  // Generate 4 random cards for background decoration
+  const backgroundCards = useMemo(() => {
+    const deck = createDeck(['shape', 'color', 'number', 'shading']);
+    const shuffled = shuffleArray(deck);
+    return shuffled.slice(0, 4).map(card => ({
+      ...card,
+      selected: false,
+      isHint: false,
+      onFire: false,
+      isHolographic: false,
+    }));
+  }, []);
+
+  // Animated values for floating cards
   const float1 = useRef(new Animated.Value(0)).current;
   const float2 = useRef(new Animated.Value(0)).current;
   const float3 = useRef(new Animated.Value(0)).current;
-  const rotate1 = useRef(new Animated.Value(0)).current;
-  const rotate2 = useRef(new Animated.Value(0)).current;
+  const float4 = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     // Create floating animations
@@ -43,89 +58,94 @@ const MainMenu: React.FC<MainMenuProps> = ({
       );
     };
 
-    // Create rotation animations
-    const createRotateAnimation = (animValue: Animated.Value, duration: number) => {
-      return Animated.loop(
-        Animated.timing(animValue, {
-          toValue: 1,
-          duration: duration,
-          easing: Easing.linear,
-          useNativeDriver: true,
-        })
-      );
-    };
-
-    // Start animations
+    // Start animations with staggered timing
     createFloatAnimation(float1, 4000, 0).start();
     createFloatAnimation(float2, 5000, 500).start();
     createFloatAnimation(float3, 4500, 1000).start();
-    createRotateAnimation(rotate1, 20000).start();
-    createRotateAnimation(rotate2, 15000).start();
+    createFloatAnimation(float4, 4200, 750).start();
   }, []);
 
-  // Interpolate values
+  // Interpolate values for floating motion
   const float1Y = float1.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, -30],
+    outputRange: [0, -25],
   });
 
   const float2Y = float2.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, 25],
+    outputRange: [0, 20],
   });
 
   const float3Y = float3.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, -20],
+    outputRange: [0, -18],
   });
 
-  const rotate1Deg = rotate1.interpolate({
+  const float4Y = float4.interpolate({
     inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
-
-  const rotate2Deg = rotate2.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['360deg', '0deg'],
+    outputRange: [0, 22],
   });
 
   return (
     <View style={styles.container}>
-      {/* Animated Background Shapes */}
-      <View style={styles.backgroundShapes}>
+      {/* Animated Background Cards */}
+      <View style={styles.backgroundShapes} pointerEvents="none">
         <Animated.View
           style={[
-            styles.floatingShape,
-            styles.shape1,
-            {
-              transform: [
-                { translateY: float1Y },
-                { rotate: rotate1Deg },
-              ],
-            },
+            styles.floatingCard,
+            styles.card1,
+            { transform: [{ translateY: float1Y }] },
           ]}
-        />
+        >
+          <Card
+            card={backgroundCards[0]}
+            onClick={() => {}}
+            disabled={true}
+            isPaused={true}
+          />
+        </Animated.View>
         <Animated.View
           style={[
-            styles.floatingShape,
-            styles.shape2,
-            {
-              transform: [
-                { translateY: float2Y },
-                { rotate: rotate2Deg },
-              ],
-            },
+            styles.floatingCard,
+            styles.card2,
+            { transform: [{ translateY: float2Y }] },
           ]}
-        />
+        >
+          <Card
+            card={backgroundCards[1]}
+            onClick={() => {}}
+            disabled={true}
+            isPaused={true}
+          />
+        </Animated.View>
         <Animated.View
           style={[
-            styles.floatingShape,
-            styles.shape3,
-            {
-              transform: [{ translateY: float3Y }],
-            },
+            styles.floatingCard,
+            styles.card3,
+            { transform: [{ translateY: float3Y }] },
           ]}
-        />
+        >
+          <Card
+            card={backgroundCards[2]}
+            onClick={() => {}}
+            disabled={true}
+            isPaused={true}
+          />
+        </Animated.View>
+        <Animated.View
+          style={[
+            styles.floatingCard,
+            styles.card4,
+            { transform: [{ translateY: float4Y }] },
+          ]}
+        >
+          <Card
+            card={backgroundCards[3]}
+            onClick={() => {}}
+            disabled={true}
+            isPaused={true}
+          />
+        </Animated.View>
       </View>
 
       {/* Main Content */}
@@ -214,36 +234,30 @@ const styles = StyleSheet.create({
     bottom: 0,
     overflow: 'hidden',
   },
-  floatingShape: {
+  floatingCard: {
     position: 'absolute',
-    borderWidth: 2,
-    borderColor: COLORS.slateCharcoal,
-    opacity: 0.15,
+    opacity: 0.18,
+    width: 70,
   },
-  shape1: {
-    width: 120,
-    height: 120,
-    top: '15%',
-    left: '10%',
-    borderRadius: 8,
-    backgroundColor: COLORS.actionYellow,
+  card1: {
+    top: '12%',
+    left: '8%',
+    transform: [{ rotate: '-8deg' }],
   },
-  shape2: {
-    width: 80,
-    height: 80,
-    top: '60%',
-    right: '15%',
-    borderRadius: 40,
-    backgroundColor: COLORS.logicTeal,
+  card2: {
+    top: '18%',
+    right: '10%',
+    transform: [{ rotate: '12deg' }],
   },
-  shape3: {
-    width: 100,
-    height: 100,
-    bottom: '20%',
-    left: '20%',
-    borderRadius: 12,
-    backgroundColor: COLORS.impactOrange,
-    transform: [{ rotate: '45deg' }],
+  card3: {
+    bottom: '25%',
+    left: '15%',
+    transform: [{ rotate: '5deg' }],
+  },
+  card4: {
+    bottom: '18%',
+    right: '12%',
+    transform: [{ rotate: '-10deg' }],
   },
   content: {
     flex: 1,
