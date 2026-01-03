@@ -1744,6 +1744,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
             selectedCharacter={selectedCharacter}
             onSelect={handleCharacterSelect}
             onStart={startAdventure}
+            onExitGame={() => setGamePhase('main_menu')}
           />
         );
 
@@ -1751,6 +1752,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
         return (
           <DifficultySelection
             onStart={startFreePlay}
+            onExitGame={() => setGamePhase('main_menu')}
           />
         );
 
@@ -1835,6 +1837,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
               startNextRound();
             }}
             isFinalRound={isFinalRoundWarning}
+            onExitGame={() => setGamePhase('main_menu')}
           />
         );
 

@@ -1,14 +1,17 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { COLORS, RADIUS } from '@/utils/colors';
-import { AttributeName, Card as CardType } from '@/types';
+import { AttributeName, Card as CardType, PlayerStats } from '@/types';
+import { DEFAULT_PLAYER_STATS } from '@/utils/gameDefinitions';
 import Card from './Card';
+import GameMenu from './GameMenu';
 
 interface AttributeUnlockScreenProps {
   newAttribute: AttributeName;
   onContinue: () => void;
   onPractice?: () => void;
   isFinalRound?: boolean;
+  onExitGame?: () => void;
 }
 
 // Example cards for demonstrating attributes
@@ -86,6 +89,7 @@ const AttributeUnlockScreen: React.FC<AttributeUnlockScreenProps> = ({
   onContinue,
   onPractice,
   isFinalRound = false,
+  onExitGame,
 }) => {
   const info = ATTRIBUTE_INFO[newAttribute];
 
@@ -95,6 +99,7 @@ const AttributeUnlockScreen: React.FC<AttributeUnlockScreenProps> = ({
         <View style={styles.card}>
           <View style={styles.finalBanner}>
             <Text style={styles.finalTitle}>FINAL ROUND</Text>
+            <GameMenu playerStats={DEFAULT_PLAYER_STATS as PlayerStats} onExitGame={onExitGame} />
           </View>
 
           <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
@@ -134,6 +139,7 @@ const AttributeUnlockScreen: React.FC<AttributeUnlockScreenProps> = ({
       <View style={styles.card}>
         <View style={styles.banner}>
           <Text style={styles.bannerText}>NEW ATTRIBUTE</Text>
+          <GameMenu playerStats={DEFAULT_PLAYER_STATS as PlayerStats} onExitGame={onExitGame} />
         </View>
 
         <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
@@ -216,6 +222,9 @@ const styles = StyleSheet.create({
   banner: {
     backgroundColor: COLORS.logicTeal,
     paddingVertical: 12,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
   bannerText: {
@@ -227,6 +236,9 @@ const styles = StyleSheet.create({
   finalBanner: {
     backgroundColor: COLORS.impactOrange,
     paddingVertical: 16,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
   finalTitle: {

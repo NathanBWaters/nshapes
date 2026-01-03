@@ -17,6 +17,7 @@ interface CharacterSelectionProps {
   selectedCharacter: string | null;
   onSelect: (characterName: string) => void;
   onStart: () => void;
+  onExitGame?: () => void;
 }
 
 const CharacterSelection: React.FC<CharacterSelectionProps> = ({
@@ -24,6 +25,7 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
   selectedCharacter,
   onSelect,
   onStart,
+  onExitGame,
 }) => {
   const [hoveredCharacter, setHoveredCharacter] = React.useState<string | null>(null);
 
@@ -43,7 +45,7 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
       {/* Eyebrow Banner */}
       <View style={styles.eyebrow}>
         <Text style={styles.eyebrowText}>Character Selection</Text>
-        <GameMenu playerStats={DEFAULT_PLAYER_STATS as PlayerStats} character={selectedChar} />
+        <GameMenu playerStats={DEFAULT_PLAYER_STATS as PlayerStats} character={selectedChar} onExitGame={onExitGame} />
       </View>
 
       {/* Top Half - Detail Focus */}

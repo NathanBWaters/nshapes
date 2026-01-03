@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable, TouchableOpacity, StyleSheet } from 'react-native';
 import { COLORS, RADIUS } from '@/utils/colors';
+import { PlayerStats } from '@/types';
 import { FreePlayDifficulty } from './CharacterSelection';
+import { DEFAULT_PLAYER_STATS } from '@/utils/gameDefinitions';
 import Icon from './Icon';
+import GameMenu from './GameMenu';
 
 interface DifficultySelectionProps {
   onStart: (difficulty: FreePlayDifficulty) => void;
+  onExitGame?: () => void;
 }
 
 // Difficulty labels and descriptions
@@ -16,7 +20,7 @@ const DIFFICULTY_INFO: Record<FreePlayDifficulty, { label: string; description: 
   omega: { label: 'Omega', description: '5 attributes', icon: 'flame' },
 };
 
-const DifficultySelection: React.FC<DifficultySelectionProps> = ({ onStart }) => {
+const DifficultySelection: React.FC<DifficultySelectionProps> = ({ onStart, onExitGame }) => {
   const [selectedDifficulty, setSelectedDifficulty] = useState<FreePlayDifficulty>('medium');
 
   return (
@@ -24,6 +28,7 @@ const DifficultySelection: React.FC<DifficultySelectionProps> = ({ onStart }) =>
       {/* Eyebrow Banner */}
       <View style={styles.eyebrow}>
         <Text style={styles.eyebrowText}>Free Play - Select Difficulty</Text>
+        <GameMenu playerStats={DEFAULT_PLAYER_STATS as PlayerStats} onExitGame={onExitGame} />
       </View>
 
       {/* Main Content */}
@@ -104,7 +109,7 @@ const styles = StyleSheet.create({
     height: 40,
     backgroundColor: COLORS.logicTeal,
     flexDirection: 'row',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 12,
     borderBottomWidth: 1,
