@@ -10,5 +10,19 @@ export { useStaggeredEntrance } from './useStaggeredEntrance';
 export { useFadeTransition } from './useFadeTransition';
 export { useHoverElevation } from './useHoverElevation';
 
+// Delightful interaction hooks
+export {
+  usePlayfulPress,
+  useCardPress,
+  useCelebration,
+  useErrorShake,
+} from './usePlayfulPress';
+export { useTouchFeedback, triggerHaptic } from './useTouchFeedback';
+export {
+  useReducedMotion,
+  useAnimationDuration,
+  useSpringConfig,
+} from './useReducedMotion';
+
 // Responsive hooks
 export { useResponsive, getResponsiveValue } from './useResponsive';

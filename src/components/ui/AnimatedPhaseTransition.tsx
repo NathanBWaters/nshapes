@@ -116,25 +116,41 @@ export function AnimatedPhaseTransition({
   onEnterComplete,
   onExitComplete,
 }: AnimatedPhaseTransitionProps) {
-  const transitionType = transition ?? getTransitionType(previousPhase, phaseKey);
-  const enteringAnimation = getEnteringAnimation(transitionType, duration);
-  const exitingAnimation = getExitingAnimation(transitionType, duration * 0.75);
+  // Track if this is the initial mount or a phase change
+  // Start with undefined so initial mount triggers animation
+  const lastPhaseRef = useRef<string | undefined>(undefined);
+  const isPhaseChange = lastPhaseRef.current !== phaseKey;
 
-  return (
-    <Animated.View
-      key={phaseKey}
-      entering={enteringAnimation?.withCallback((finished) => {
+  // Update ref after checking
+  useEffect(() => {
+    lastPhaseRef.current = phaseKey;
+  }, [phaseKey]);
+
+  // Only calculate animations when phase actually changes
+  const transitionType = transition ?? getTransitionType(previousPhase, phaseKey);
+
+  // Only apply entering animation on actual phase changes, not re-renders
+  const enteringAnimation = isPhaseChange
+    ? getEnteringAnimation(transitionType, duration)?.withCallback((finished) => {
         'worklet';
         if (finished && onEnterComplete) {
           runOnJS(onEnterComplete)();
         }
-      })}
-      exiting={exitingAnimation?.withCallback((finished) => {
-        'worklet';
-        if (finished && onExitComplete) {
-          runOnJS(onExitComplete)();
-        }
-      })}
+      })
+    : undefined;
+
+  const exitingAnimation = getExitingAnimation(transitionType, duration * 0.75)?.withCallback((finished) => {
+    'worklet';
+    if (finished && onExitComplete) {
+      runOnJS(onExitComplete)();
+    }
+  });
+
+  return (
+    <Animated.View
+      key={phaseKey}
+      entering={enteringAnimation}
+      exiting={exitingAnimation}
       style={[styles.container, style]}
     >
       {children}

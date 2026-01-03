@@ -297,7 +297,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
           <MenuButton
             onPress={onSelectAdventure}
             variant="adventure"
-            icon="sword"
+            icon="lorc/crossed-swords"
             title="Adventure"
             subtitle="10 rounds, enemies & loot"
           />
@@ -305,7 +305,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
           <MenuButton
             onPress={onSelectFreeplay}
             variant="freeplay"
-            icon="target"
+            icon="lorc/archery-target"
             title="Free Play"
             subtitle="No timer, practice mode"
           />
@@ -313,7 +313,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
           <MenuButton
             onPress={onSelectTutorial}
             variant="tutorial"
-            icon="help-circle"
+            icon="lorc/open-book"
             title="Tutorial"
             subtitle="Learn how to play"
           />

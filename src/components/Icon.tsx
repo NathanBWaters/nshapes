@@ -37,6 +37,15 @@ import Clover from '../../assets/icons/lorc/clover.svg';
 import Sunglasses from '../../assets/icons/delapouite/sunglasses.svg';
 import Token from '../../assets/icons/delapouite/token.svg';
 
+// Menu Icons
+import ArcheryTarget from '../../assets/icons/lorc/archery-target.svg';
+import OpenBook from '../../assets/icons/lorc/open-book.svg';
+
+// Difficulty Icons
+import Feather from '../../assets/icons/lorc/feather.svg';
+import DiamondHard from '../../assets/icons/lorc/diamond-hard.svg';
+import Brain from '../../assets/icons/lorc/brain.svg';
+
 // Stat Icons
 import HeartInside from '../../assets/icons/lorc/heart-inside.svg';
 import Cash from '../../assets/icons/lorc/cash.svg';
@@ -98,6 +107,15 @@ const ICON_REGISTRY: Record<string, React.FC<SvgProps>> = {
   'lorc/clover': Clover,
   'delapouite/sunglasses': Sunglasses,
   'delapouite/token': Token,
+
+  // Menu
+  'lorc/archery-target': ArcheryTarget,
+  'lorc/open-book': OpenBook,
+
+  // Difficulty
+  'lorc/feather': Feather,
+  'lorc/diamond-hard': DiamondHard,
+  'lorc/brain': Brain,
 
   // Stats
   'lorc/heart-inside': HeartInside,

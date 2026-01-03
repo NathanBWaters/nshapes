@@ -106,6 +106,73 @@ export const SPRINGS = {
     stiffness: 300,
     mass: 0.5,
   },
+
+  // ==========================================================================
+  // DELIGHTFUL SPRINGS - Make the UI feel alive!
+  // ==========================================================================
+
+  // Eager response - elements that WANT to be interacted with
+  eager: {
+    damping: 8,
+    stiffness: 250,
+    mass: 0.6,
+  },
+
+  // Joyful bounce - for celebrations and successes
+  joyful: {
+    damping: 6,
+    stiffness: 200,
+    mass: 0.8,
+  },
+
+  // Wobbly - fun overshoot for playful elements
+  wobbly: {
+    damping: 7,
+    stiffness: 180,
+    mass: 0.9,
+  },
+
+  // Soft landing - gentle arrival with character
+  softLand: {
+    damping: 14,
+    stiffness: 120,
+    mass: 1,
+  },
+
+  // Quick snap - fast and decisive
+  quickSnap: {
+    damping: 18,
+    stiffness: 400,
+    mass: 0.4,
+  },
+
+  // Card flip - satisfying card interactions
+  cardFlip: {
+    damping: 12,
+    stiffness: 160,
+    mass: 0.7,
+  },
+
+  // Button squish - satisfying press feedback
+  squish: {
+    damping: 10,
+    stiffness: 350,
+    mass: 0.5,
+  },
+
+  // Celebration pop - for victories and achievements
+  celebration: {
+    damping: 5,
+    stiffness: 220,
+    mass: 0.7,
+  },
+
+  // Breathing - for idle pulsing animations
+  breathing: {
+    damping: 20,
+    stiffness: 40,
+    mass: 1,
+  },
 } as const;
 
 // =============================================================================
@@ -186,6 +253,110 @@ export const ANIMATION_PRESETS = {
   glow: {
     riseTime: 200,
     fallTime: 300,
+  },
+
+  // ==========================================================================
+  // DELIGHTFUL PRESETS - Spark joy in every interaction!
+  // ==========================================================================
+
+  // Button squish - satisfying tactile feedback
+  buttonSquish: {
+    scale: 0.92,
+    duration: DURATIONS.fast,
+    spring: 'squish',
+  },
+
+  // Card eager hover - cards that want to be picked
+  cardEager: {
+    scale: 1.05,
+    translateY: -8,
+    rotation: 1, // slight tilt in degrees
+    duration: DURATIONS.fast,
+    spring: 'eager',
+  },
+
+  // Card select - satisfying selection feedback
+  cardSelect: {
+    scale: 1.08,
+    glow: true,
+    spring: 'joyful',
+  },
+
+  // Reward pop - for when good things happen
+  rewardPop: {
+    initialScale: 0.3,
+    overshootScale: 1.2,
+    finalScale: 1,
+    spring: 'celebration',
+  },
+
+  // Success bounce - celebratory bounce
+  successBounce: {
+    scale: 1.15,
+    spring: 'joyful',
+  },
+
+  // Error shake - playful but clear error feedback
+  errorShake: {
+    translateX: [-10, 10, -8, 8, -4, 4, 0],
+    duration: 400,
+  },
+
+  // Coin collect - satisfying currency feedback
+  coinCollect: {
+    scale: 1.3,
+    opacity: 0,
+    translateY: -30,
+    duration: 400,
+  },
+
+  // Health pulse - heartbeat for health changes
+  healthPulse: {
+    scale: 1.25,
+    duration: 200,
+    spring: 'eager',
+  },
+
+  // Entrance slide with bounce
+  entranceSlide: {
+    fromY: 50,
+    fromOpacity: 0,
+    spring: 'wobbly',
+  },
+
+  // Stagger entrance for lists
+  staggerEntrance: {
+    delay: 60,
+    fromY: 30,
+    fromScale: 0.9,
+    spring: 'softLand',
+  },
+
+  // Breathing idle - for elements waiting for attention
+  breathingIdle: {
+    scaleMin: 1,
+    scaleMax: 1.03,
+    duration: 2000,
+  },
+
+  // Wiggle attention - gentle attention-grabber
+  wiggleAttention: {
+    rotation: [-2, 2, -1.5, 1.5, -0.5, 0.5, 0],
+    duration: 500,
+  },
+
+  // Match celebration - for successful SET matches
+  matchCelebration: {
+    scale: [1, 1.15, 0.95, 1.05, 1],
+    opacity: [1, 1, 1, 0.9, 0],
+    duration: 500,
+  },
+
+  // Level up fanfare
+  levelUpFanfare: {
+    scale: [0, 1.3, 0.9, 1.1, 1],
+    rotation: [0, 10, -5, 3, 0],
+    duration: 800,
   },
 } as const;
 
