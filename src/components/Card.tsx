@@ -59,7 +59,8 @@ const Card: React.FC<CardProps> = ({ card, onClick, disabled = false, onBurnComp
     onComplete: handleBurnComplete,
   });
 
-  // Handle card modifiers (only show badges for gameplay-affecting modifiers, not rewards)
+  // NOTE: Multi-hit cards (health > 1) are not currently used in gameplay.
+  // Keeping this code for potential future use.
   const hasModifiers = card.health !== undefined && card.health > 1;
 
   // Get shape component based on shape type
@@ -116,7 +117,8 @@ const Card: React.FC<CardProps> = ({ card, onClick, disabled = false, onBurnComp
     return cardStyles;
   };
 
-  // Get modifier badges (only health shown - rewards are a surprise!)
+  // NOTE: Health badge for multi-hit cards - not currently used in gameplay.
+  // Keeping for potential future use.
   const getModifierBadge = () => {
     if (!hasModifiers) return null;
 
