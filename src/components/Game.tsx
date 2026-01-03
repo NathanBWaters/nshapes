@@ -193,15 +193,6 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
     startLevel: 0,
   });
 
-  // Pending burn rewards - cards that finished burning and need to show rewards
-  const [pendingBurnRewards, setPendingBurnRewards] = useState<CardReward[] | null>(null);
-  // Data for cards pending burn completion (to replace after reward display)
-  const [pendingBurnData, setPendingBurnData] = useState<{
-    burnedCards: Card[];
-    newFireCards: Card[];
-    burnBonus: number;
-  } | null>(null);
-
   // Dev mode state
   const [devTimerEnabled, setDevTimerEnabled] = useState(!devMode); // Timer disabled by default in dev mode
 
@@ -315,29 +306,6 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
       }
     };
   }, [gamePhase, state.gameStarted, state.gameEnded, devMode, devTimerEnabled, isMenuOpen]);
-
-  // Fire effect - check for burning cards every second
-  // Fire pauses when menu is open
-  useEffect(() => {
-    let fireInterval: ReturnType<typeof setInterval> | null = null;
-
-    if ((gamePhase === 'round' || gamePhase === 'free_play') && state.gameStarted && !state.gameEnded && !isMenuOpen) {
-      // Check for burning cards every second
-      fireInterval = setInterval(() => {
-        // Check if any cards are on fire
-        const hasBurningCards = state.board.some(card => card.onFire);
-        if (hasBurningCards) {
-          handleBurningCards();
-        }
-      }, 1000);
-    }
-
-    return () => {
-      if (fireInterval) {
-        clearInterval(fireInterval);
-      }
-    };
-  }, [gamePhase, state.gameStarted, state.gameEnded, state.board, isMenuOpen]);
 
   // Handle round completion when time runs out - separate from timer to avoid race conditions
   useEffect(() => {
@@ -1134,129 +1102,68 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
     });
   };
 
-  // Handle burning cards (called from timer effect)
-  const handleBurningCards = () => {
-    // Don't process if already showing burn rewards
-    if (pendingBurnRewards) return;
-
-    const now = Date.now();
-    const FIRE_BURN_DURATION = 7500; // 7.5 seconds
+  // Handle individual card burn completion - called by Card component when burn timer finishes
+  // This is non-blocking: immediately replaces card and rolls fire spread
+  const handleCardBurn = useCallback((burnedCard: Card) => {
     const FIRE_SPREAD_ON_DEATH_CHANCE = 10; // 10%
-
-    const burnedCards: Card[] = [];
-    const newFireCards: Card[] = [];
-    const board = state.board;
-
-    // Find cards that have finished burning
-    board.forEach((card, index) => {
-      if (card.onFire && card.fireStartTime) {
-        if (now - card.fireStartTime >= FIRE_BURN_DURATION) {
-          burnedCards.push(card);
-
-          // 10% chance to spread fire to an adjacent card
-          if (Math.random() * 100 < FIRE_SPREAD_ON_DEATH_CHANCE) {
-            const adjacentIndices = getAdjacentIndices(index, board.length);
-            const validAdjacent = adjacentIndices.filter(idx => {
-              const adjCard = board[idx];
-              return adjCard && !adjCard.onFire && !burnedCards.some(bc => bc.id === adjCard.id);
-            });
-
-            if (validAdjacent.length > 0) {
-              const randomAdj = validAdjacent[Math.floor(Math.random() * validAdjacent.length)];
-              newFireCards.push(board[randomAdj]);
-            }
-          }
-        }
-      }
-    });
-
-    // If no cards burned, check if we need to ignite new fire cards
-    if (burnedCards.length === 0) {
-      if (newFireCards.length > 0) {
-        // Just ignite new fire cards without burn rewards
-        setState(prevState => ({
-          ...prevState,
-          board: prevState.board.map(card => {
-            if (newFireCards.some(fc => fc.id === card.id)) {
-              return { ...card, onFire: true, fireStartTime: now };
-            }
-            return card;
-          })
-        }));
-      }
-      return;
-    }
-
-    // Create rewards for burned cards
-    const burnBonus = burnedCards.length;
-    const burnRewards: CardReward[] = burnedCards.map(card => ({
-      cardId: card.id,
-      points: 1,
-      money: 1,
-      effectType: 'fire' as const,
-    }));
-
-    // Mark new fire cards immediately
-    if (newFireCards.length > 0) {
-      setState(prevState => ({
-        ...prevState,
-        board: prevState.board.map(card => {
-          if (newFireCards.some(fc => fc.id === card.id)) {
-            return { ...card, onFire: true, fireStartTime: now };
-          }
-          return card;
-        })
-      }));
-    }
-
-    // Set pending burn data and trigger reward display
-    setPendingBurnData({ burnedCards, newFireCards, burnBonus });
-    setPendingBurnRewards(burnRewards);
-  };
-
-  // Handle burn rewards completion - called after reward reveal displays for 1.5s
-  const handleBurnRewardsComplete = useCallback((cardIds: string[]) => {
-    if (!pendingBurnData) {
-      setPendingBurnRewards(null);
-      return;
-    }
-
-    const { burnedCards, burnBonus } = pendingBurnData;
+    const now = Date.now();
 
     setState(prevState => {
       let updatedBoard = [...prevState.board];
       const remainingDeck = [...prevState.deck];
 
-      // Replace burned cards with new ones
-      burnedCards.forEach(burnedCard => {
-        const burnedIndex = updatedBoard.findIndex(c => c.id === burnedCard.id);
-        if (burnedIndex !== -1 && remainingDeck.length > 0) {
-          const randomIndex = Math.floor(Math.random() * remainingDeck.length);
-          const newCard = { ...remainingDeck[randomIndex], selected: false };
-          updatedBoard[burnedIndex] = newCard;
-          remainingDeck.splice(randomIndex, 1);
+      // Find the burned card's index
+      const burnedIndex = updatedBoard.findIndex(c => c.id === burnedCard.id);
+      if (burnedIndex === -1) return prevState;
+
+      // Roll fire spread chance (10%) before replacing the card
+      let fireSpreadTarget: Card | null = null;
+      if (Math.random() * 100 < FIRE_SPREAD_ON_DEATH_CHANCE) {
+        const adjacentIndices = getAdjacentIndices(burnedIndex, updatedBoard.length);
+        const validAdjacent = adjacentIndices.filter(idx => {
+          const adjCard = updatedBoard[idx];
+          return adjCard && !adjCard.onFire && adjCard.id !== burnedCard.id;
+        });
+
+        if (validAdjacent.length > 0) {
+          const randomAdj = validAdjacent[Math.floor(Math.random() * validAdjacent.length)];
+          fireSpreadTarget = updatedBoard[randomAdj];
         }
-      });
+      }
+
+      // Replace burned card with new one from deck
+      if (remainingDeck.length > 0) {
+        const randomIndex = Math.floor(Math.random() * remainingDeck.length);
+        const newCard = { ...remainingDeck[randomIndex], selected: false };
+        updatedBoard[burnedIndex] = newCard;
+        remainingDeck.splice(randomIndex, 1);
+      }
+
+      // Ignite fire spread target if one was selected
+      if (fireSpreadTarget) {
+        updatedBoard = updatedBoard.map(card => {
+          if (card.id === fireSpreadTarget!.id) {
+            return { ...card, onFire: true, fireStartTime: now };
+          }
+          return card;
+        });
+      }
 
       return {
         ...prevState,
         board: updatedBoard,
         deck: remainingDeck,
-        score: prevState.score + burnBonus,
+        score: prevState.score + 1, // +1 point per burned card
         player: {
           ...prevState.player,
           stats: {
             ...prevState.player.stats,
-            money: prevState.player.stats.money + burnBonus
+            money: prevState.player.stats.money + 1 // +1 money per burned card
           }
         }
       };
     });
-
-    // Clear pending burn state
-    setPendingBurnRewards(null);
-    setPendingBurnData(null);
-  }, [pendingBurnData]);
+  }, []);
 
   // Grow the board by adding new cards
   const growBoard = (amount: number) => {
@@ -1889,8 +1796,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
                 onUseHint={handleUseHint}
                 triggerHint={hintTrigger > 0 ? hintTrigger : undefined}
                 triggerClearHint={clearHintTrigger > 0 ? clearHintTrigger : undefined}
-                pendingBurnRewards={pendingBurnRewards || undefined}
-                onBurnRewardsComplete={handleBurnRewardsComplete}
+                onCardBurn={handleCardBurn}
                 isPaused={isMenuOpen}
                 lastMatchTime={lastMatchTime}
               />
@@ -1968,8 +1874,8 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
                 onUseHint={handleUseHint}
                 triggerHint={hintTrigger > 0 ? hintTrigger : undefined}
                 triggerClearHint={clearHintTrigger > 0 ? clearHintTrigger : undefined}
-                pendingBurnRewards={pendingBurnRewards || undefined}
-                onBurnRewardsComplete={handleBurnRewardsComplete}
+                onCardBurn={handleCardBurn}
+                isPaused={isMenuOpen}
                 lastMatchTime={lastMatchTime}
               />
             </View>

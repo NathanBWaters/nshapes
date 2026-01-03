@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -69,31 +69,69 @@ interface CardProps {
   card: CardType;
   onClick: (card: CardType) => void;
   disabled?: boolean;
+  onBurnComplete?: (card: CardType) => void;
+  isPaused?: boolean;
 }
 
-const Card: React.FC<CardProps> = ({ card, onClick, disabled = false }) => {
+const Card: React.FC<CardProps> = ({ card, onClick, disabled = false, onBurnComplete, isPaused = false }) => {
   const { shape, color, number, shading, selected, isHint } = card;
 
   // Fire progress state (0 to 1, where 1 = fully burned)
   const [fireProgress, setFireProgress] = useState(0);
 
-  // Update fire progress every 100ms
+  // Track accumulated burn time (for pause/resume)
+  const accumulatedTimeRef = useRef(0);
+  const lastTickRef = useRef<number | null>(null);
+  const burnCompleteCalledRef = useRef(false);
+
+  // Reset burn complete flag when card starts burning
+  useEffect(() => {
+    if (card.onFire && card.fireStartTime) {
+      burnCompleteCalledRef.current = false;
+      accumulatedTimeRef.current = 0;
+      lastTickRef.current = Date.now();
+    }
+  }, [card.onFire, card.fireStartTime]);
+
+  // Update fire progress every 100ms, respecting pause state
   useEffect(() => {
     if (!card.onFire || !card.fireStartTime) {
       setFireProgress(0);
+      accumulatedTimeRef.current = 0;
+      lastTickRef.current = null;
+      return;
+    }
+
+    // When paused, don't run the interval
+    if (isPaused) {
+      lastTickRef.current = null;
       return;
     }
 
     const updateProgress = () => {
-      const elapsed = Date.now() - (card.fireStartTime || 0);
-      const progress = Math.min(elapsed / FIRE_BURN_DURATION, 1);
+      const now = Date.now();
+
+      // Calculate time since last tick (handles pause/resume)
+      if (lastTickRef.current !== null) {
+        const delta = now - lastTickRef.current;
+        accumulatedTimeRef.current += delta;
+      }
+      lastTickRef.current = now;
+
+      const progress = Math.min(accumulatedTimeRef.current / FIRE_BURN_DURATION, 1);
       setFireProgress(progress);
+
+      // Call onBurnComplete when fire finishes (only once)
+      if (progress >= 1 && onBurnComplete && !burnCompleteCalledRef.current) {
+        burnCompleteCalledRef.current = true;
+        onBurnComplete(card);
+      }
     };
 
     updateProgress();
     const interval = setInterval(updateProgress, 100);
     return () => clearInterval(interval);
-  }, [card.onFire, card.fireStartTime]);
+  }, [card.onFire, card.fireStartTime, isPaused, onBurnComplete, card]);
 
   // Handle card modifiers
   const hasModifiers = card.health !== undefined && card.health > 1 ||

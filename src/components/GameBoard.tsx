@@ -24,9 +24,8 @@ interface GameBoardProps {
   onUseHint?: () => void;
   triggerHint?: number;
   triggerClearHint?: number;
-  pendingBurnRewards?: CardReward[]; // Rewards for cards that finished burning
-  onBurnRewardsComplete?: (cardIds: string[]) => void; // Called after burn rewards are displayed
-  isPaused?: boolean; // When true, pauses auto-hint timer (e.g., when menu is open)
+  onCardBurn?: (card: CardType) => void; // Called when a card finishes burning (individual card lifecycle)
+  isPaused?: boolean; // When true, pauses auto-hint timer and card burn timers (e.g., when menu is open)
   lastMatchTime?: number; // Timestamp of last successful match - auto-hint only triggers 15s after this
 }
 
@@ -73,8 +72,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
   onUseHint,
   triggerHint,
   triggerClearHint,
-  pendingBurnRewards,
-  onBurnRewardsComplete,
+  onCardBurn,
   isPaused = false,
   lastMatchTime,
 }) => {
@@ -86,9 +84,9 @@ const GameBoard: React.FC<GameBoardProps> = ({
   const hintsRef = useRef(playerStats.hints);
   hintsRef.current = playerStats.hints;
 
-  // Use ref for burn rewards callback to avoid effect re-runs
-  const onBurnRewardsCompleteRef = useRef(onBurnRewardsComplete);
-  onBurnRewardsCompleteRef.current = onBurnRewardsComplete;
+  // Use ref for burn callback to avoid stale closures
+  const onCardBurnRef = useRef(onCardBurn);
+  onCardBurnRef.current = onCardBurn;
 
   // Match counter for tracking independent matches
   const matchCounterRef = useRef(0);
@@ -127,29 +125,32 @@ const GameBoard: React.FC<GameBoardProps> = ({
     onHintStateChange?.(hintCards.length > 0);
   }, [hintCards.length, onHintStateChange]);
 
-  // Handle incoming burn rewards - display them for 1.5s then notify parent
-  useEffect(() => {
-    if (!pendingBurnRewards || pendingBurnRewards.length === 0) return;
-
-    // Generate a unique matchId for this batch of burn rewards
+  // Handle card burn completion - called by individual Card components when they finish burning
+  const handleCardBurnComplete = useCallback((card: CardType) => {
+    // Generate unique ID for this burn reward
     const burnMatchId = ++matchCounterRef.current;
 
-    // Add burn rewards to revealing rewards
-    const burnRewardsWithMatchId = pendingBurnRewards.map(r => ({ ...r, matchId: burnMatchId }));
-    const burnCardIds = pendingBurnRewards.map(r => r.cardId);
+    // Create burn reward for this single card
+    const burnReward: CardReward & { matchId: number } = {
+      cardId: card.id,
+      points: 1,
+      money: 1,
+      effectType: 'fire' as const,
+      matchId: burnMatchId,
+    };
 
-    // Mark burned cards as matched so they show the reward
-    setMatchedCardIds(prev => [...prev, ...burnCardIds]);
-    setRevealingRewards(prev => [...prev, ...burnRewardsWithMatchId]);
+    // Mark this card as matched and show its reward
+    setMatchedCardIds(prev => [...prev, card.id]);
+    setRevealingRewards(prev => [...prev, burnReward]);
 
-    // After 1.5 seconds, clear rewards and notify parent
-    const timeout = setTimeout(() => {
+    // Notify parent immediately (non-blocking) so card gets replaced and fire can spread
+    onCardBurnRef.current?.(card);
+
+    // Clear this card's reward after 1.5s (independent of other cards)
+    setTimeout(() => {
       setRevealingRewards(prev => prev.filter(r => r.matchId !== burnMatchId));
-      onBurnRewardsCompleteRef.current?.(burnCardIds);
     }, 1500);
-
-    return () => clearTimeout(timeout);
-  }, [pendingBurnRewards]);
+  }, []);
 
   // Check if three cards form a valid set using active attributes
   const isValidSet = (cards: CardType[]): boolean => {
@@ -471,6 +472,8 @@ const GameBoard: React.FC<GameBoardProps> = ({
                         card={cardWithState}
                         onClick={handleCardClick}
                         disabled={isMatched || !isPlayerTurn}
+                        onBurnComplete={handleCardBurnComplete}
+                        isPaused={isPaused}
                       />
                     )}
                   </View>
