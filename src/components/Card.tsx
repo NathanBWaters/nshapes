@@ -59,22 +59,8 @@ const Card: React.FC<CardProps> = ({ card, onClick, disabled = false, onBurnComp
     onComplete: handleBurnComplete,
   });
 
-  // Handle card modifiers
-  const hasModifiers = card.health !== undefined && card.health > 1 ||
-                      card.lootBox ||
-                      card.bonusMoney ||
-                      card.bonusPoints ||
-                      card.fireStarter ||
-                      card.bomb ||
-                      card.healing ||
-                      card.spikes ||
-                      card.isFragile ||
-                      card.boobyTrap ||
-                      card.clover ||
-                      card.cardClear ||
-                      card.broom ||
-                      card.selfHealing ||
-                      card.timedReward;
+  // Handle card modifiers (only show badges for gameplay-affecting modifiers, not rewards)
+  const hasModifiers = card.health !== undefined && card.health > 1;
 
   // Get shape component based on shape type
   const getShapeComponent = () => {
@@ -130,45 +116,19 @@ const Card: React.FC<CardProps> = ({ card, onClick, disabled = false, onBurnComp
     return cardStyles;
   };
 
-  // Get modifier badges
+  // Get modifier badges (only health shown - rewards are a surprise!)
   const getModifierBadge = () => {
     if (!hasModifiers) return null;
 
-    const badges = [];
-
     if (card.health && card.health > 1) {
-      badges.push(
-        <View key="health" style={[styles.badge, styles.badgeTopRight, { backgroundColor: COLORS.impactRed }]}>
+      return (
+        <View style={[styles.badge, styles.badgeTopRight, { backgroundColor: COLORS.impactRed }]}>
           <Text style={styles.badgeText}>{card.health}</Text>
         </View>
       );
     }
 
-    if (card.lootBox) {
-      badges.push(
-        <View key="loot" style={[styles.badge, styles.badgeTopLeft, { backgroundColor: COLORS.impactOrange }]}>
-          <Text style={styles.badgeEmoji}>?</Text>
-        </View>
-      );
-    }
-
-    if (card.bonusMoney) {
-      badges.push(
-        <View key="money" style={[styles.badge, styles.badgeBottomLeft, { backgroundColor: COLORS.logicTeal }]}>
-          <Text style={styles.badgeText}>+{card.bonusMoney}$</Text>
-        </View>
-      );
-    }
-
-    if (card.bonusPoints) {
-      badges.push(
-        <View key="points" style={[styles.badge, styles.badgeBottomRight, { backgroundColor: COLORS.actionYellow }]}>
-          <Text style={[styles.badgeText, { color: COLORS.deepOnyx }]}>+{card.bonusPoints}</Text>
-        </View>
-      );
-    }
-
-    return badges;
+    return null;
   };
 
   return (
