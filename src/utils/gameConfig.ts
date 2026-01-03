@@ -18,6 +18,7 @@ export const STARTING_STATS = {
   fieldSize: 12,
   freeRerolls: 0,
   graces: 0,
+  maxGraces: 5, // Maximum graces player can hold
 
   // Weapon effect stats (defaults to 0)
   explosionChance: 0,

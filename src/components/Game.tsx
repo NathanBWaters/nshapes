@@ -1094,7 +1094,11 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
               prevState.player.stats.hints + totalHints,
               calculatePlayerTotalStats(prevState.player).maxHints
             ),
-            graces: prevState.player.stats.graces + graceDelta
+            // Cap graces at maxGraces (including weapon bonuses)
+            graces: Math.min(
+              prevState.player.stats.graces + graceDelta,
+              calculatePlayerTotalStats(prevState.player).maxGraces
+            )
           }
         }
       };
@@ -1408,16 +1412,23 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
       setNotification({ message: 'Weapons cleared!', type: 'info' });
     },
     onAddGraces: (count: number) => {
-      setState(prevState => ({
-        ...prevState,
-        player: {
-          ...prevState.player,
-          stats: {
-            ...prevState.player.stats,
-            graces: prevState.player.stats.graces + count
+      setState(prevState => {
+        const totalStats = calculatePlayerTotalStats(prevState.player);
+        const newGraces = Math.min(
+          prevState.player.stats.graces + count,
+          totalStats.maxGraces
+        );
+        return {
+          ...prevState,
+          player: {
+            ...prevState.player,
+            stats: {
+              ...prevState.player.stats,
+              graces: newGraces
+            }
           }
-        }
-      }));
+        };
+      });
       setNotification({ message: `+${count} Graces`, type: 'success' });
     },
     onSetCardsOnFire: (count: number) => {

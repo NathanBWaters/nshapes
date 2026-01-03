@@ -162,6 +162,7 @@ export interface PlayerStats {
   dodgeAttackBackPercent: number;
   dodgeAttackBackAmount: number;
   graces: number;
+  maxGraces: number; // Maximum graces player can hold
   bombTimer: number;
   additionalPoints: number;
   deflectPercent: number;

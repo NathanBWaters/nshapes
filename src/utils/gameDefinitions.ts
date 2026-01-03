@@ -33,6 +33,7 @@ export const DEFAULT_PLAYER_STATS: PlayerStats = {
   dodgeAttackBackPercent: 0,
   dodgeAttackBackAmount: 1,
   graces: STARTING_STATS.graces,
+  maxGraces: STARTING_STATS.maxGraces,
   bombTimer: 20,
   additionalPoints: 0,
   deflectPercent: 0,
