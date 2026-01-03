@@ -50,7 +50,7 @@ NShapes combines the classic SET card matching game with roguelike progression m
 
 ## Weapon System
 
-The game features 15 weapon types, each available in 3 rarities (45 total weapons):
+The game features 17 weapon types across 49 total weapons (most have 3 rarities, some are legendary-only):
 
 ### Weapon Rarities
 * **Common (70%):** Lower stats, prices 5-10 coins
@@ -62,7 +62,8 @@ The game features 15 weapon types, each available in 3 rarities (45 total weapon
 | Weapon | Effect | Special |
 |--------|--------|---------|
 | **Blast Powder** | Explodes adjacent cards on match | explosionChance |
-| **Oracle Eye** | Auto-shows hints periodically | autoHintChance, interval |
+| **Oracle Eye** | Auto-shows 1 card from valid set periodically | autoHintChance, interval |
+| **Mystic Sight** | 33% chance autohint shows 2 cards | enhancedHintChance (legendary only, max 1) |
 | **Field Stone** | Increases starting board size | fieldSize |
 | **Growth Seed** | Chance to expand board on match | boardGrowthChance |
 | **Flint Spark** | Starts fires on adjacent cards | fireSpreadChance |
@@ -82,13 +83,15 @@ The game features 15 weapon types, each available in 3 rarities (45 total weapon
 * **Stacking:** Multiple weapons of the same type stack their effects
 * **Purchase:** Buy weapons in the shop between rounds
 * **Level Up:** Choose from 3 weapon rewards on level up
+* **Max Count:** Some weapons have a `maxCount` limit (e.g., Mystic Sight has max 1). These weapons won't appear in shop/level-up once the player owns the max. The limit is displayed in the weapon detail view.
 
 ### Hint System
 
 * **Starting Hints:** Players start with 0 hints
 * **Max Hints:** Default max capacity is 3 (increased by Crystal Orb weapons)
 * **Earning Hints:** Gain hints from matches via Seeker Lens
-* **Auto-Hint:** Oracle Eye triggers 15 seconds after the last match (not on a fixed interval)
+* **Auto-Hint:** Oracle Eye triggers 15 seconds after the last match, revealing **1 card guaranteed to be part of a valid set** (player must find the other 2)
+* **Enhanced Auto-Hint:** Mystic Sight (legendary) gives a 33% chance to reveal **2 cards** from a valid set instead of 1
 * **Display:** Hints show as "X/max" in the UI (e.g., "2/3")
 
 ### Laser Mechanic (Independent Rolls)
@@ -109,13 +112,13 @@ Each laser weapon (Prismatic Ray) rolls **independently** on every match:
 ## Key Features
 
 * 16 playable characters (Orange Tabby, Sly Fox, Corgi, etc.)
-* 45 weapons across 15 types and 3 rarities
+* 49 weapons across 17 types (most with 3 rarities, some legendary-only)
 * Card modifiers (bombs, spikes, healing, loot boxes, etc.)
 * Grace auto-use system (prevents health loss on near-misses)
 * Match trigger effects (healing, hints, time, graces)
 * Explosive and laser destruction effects
 * Fire spread and burn mechanics
-* Auto-hint system (15s after last match)
+* Auto-hint system (shows 1 card from valid set, 15s after last match)
 * Optional multiplayer via Socket.io (not a priority - ignore multiplayer code)
 
 ### UI Features

@@ -8,6 +8,7 @@ import { MATCH_REWARDS } from '@/utils/gameConfig';
 import { processWeaponEffects, WeaponEffectResult } from '@/utils/weaponEffects';
 import { isValidCombination } from '@/utils/gameUtils';
 import { useAutoHint } from '@/hooks/useAutoHint';
+import { gameHaptics } from '../utils/haptics';
 
 // Default to 4 attributes for backward compatibility
 const DEFAULT_ATTRIBUTES: AttributeName[] = ['shape', 'color', 'number', 'shading'];
@@ -208,6 +209,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
   }, [triggerClearHint]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-hint function - shows hint without consuming player hints
+  // By default shows only 1 card from a valid set; with Mystic Sight weapon, has a chance to show 2
   const showAutoHint = useCallback(() => {
     const availableCards = cards.filter(card => !matchedCardIds.includes(card.id));
 
@@ -216,7 +218,16 @@ const GameBoard: React.FC<GameBoardProps> = ({
         for (let k = j + 1; k < availableCards.length; k++) {
           const potentialSet = [availableCards[i], availableCards[j], availableCards[k]];
           if (isValidSet(potentialSet)) {
-            setHintCards(potentialSet.map(c => c.id));
+            // Determine how many cards to show (1 default, 2 with enhancedHintChance from Mystic Sight)
+            const enhancedHintChance = playerStats.enhancedHintChance || 0;
+            const showTwoCards = enhancedHintChance > 0 && Math.random() * 100 < enhancedHintChance;
+            const cardsToShow = showTwoCards ? 2 : 1;
+
+            // Randomly select which card(s) to reveal from the valid set
+            const shuffled = [...potentialSet].sort(() => Math.random() - 0.5);
+            const hintCardIds = shuffled.slice(0, cardsToShow).map(c => c.id);
+
+            setHintCards(hintCardIds);
             // Auto-clear after 1.5 seconds
             setTimeout(() => {
               setHintCards([]);
@@ -227,7 +238,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
       }
     }
     return false;
-  }, [cards, matchedCardIds]);
+  }, [cards, matchedCardIds, playerStats.enhancedHintChance]);
 
   // Auto-hint - triggers after period of inactivity
   useAutoHint({
@@ -248,9 +259,13 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
     // If card is already selected, deselect it
     if (selectedCards.some(c => c.id === card.id)) {
+      gameHaptics.cardDeselect();
       setSelectedCards(selectedCards.filter(c => c.id !== card.id));
       return;
     }
+
+    // Haptic feedback for card selection
+    gameHaptics.cardSelect();
 
     // If already have 3 cards selected, replace the first one
     let newSelectedCards;
@@ -266,6 +281,9 @@ const GameBoard: React.FC<GameBoardProps> = ({
     if (newSelectedCards.length === 3) {
       setTimeout(() => {
         if (isValidSet(newSelectedCards)) {
+          // Haptic feedback for valid match
+          gameHaptics.validMatch();
+
           // Generate unique match ID for this match
           const matchId = ++matchCounterRef.current;
 
@@ -337,6 +355,9 @@ const GameBoard: React.FC<GameBoardProps> = ({
           const graceCanSave = invalidCount === 1 && playerStats.graces > 0;
 
           if (graceCanSave) {
+            // Haptic feedback for grace save (near-miss saved)
+            gameHaptics.graceSave();
+
             // Grace saves! (exactly 1 attribute wrong) - treat as valid match with full rewards
             const matchId = ++matchCounterRef.current;
 
@@ -408,6 +429,9 @@ const GameBoard: React.FC<GameBoardProps> = ({
               onMatch(allCardsToReplace, allRewards, weaponEffects);
             }, 1500);
           } else {
+            // Haptic feedback for invalid match (lose health)
+            gameHaptics.invalidMatch();
+
             // 2+ attributes wrong OR no graces - full invalid match (lose health)
             onInvalidSelection(newSelectedCards);
 

@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
 import { Card, CardReward, GameState, Enemy, Weapon, PlayerStats, AttributeName } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
+import { AnimatedPhaseTransition } from './ui/AnimatedPhaseTransition';
 import { createDeck, shuffleArray, isValidCombination, findAllCombinations, generateGameBoard, formatTime, sameCardAttributes } from '@/utils/gameUtils';
 import {
   CHARACTERS,
@@ -13,7 +14,8 @@ import {
   calculatePlayerTotalStats,
   DEFAULT_PLAYER_STATS,
   generateShopWeapons,
-  getRandomShopWeapon
+  getRandomShopWeapon,
+  canObtainWeapon
 } from '@/utils/gameDefinitions';
 import { getActiveAttributesForRound, getBoardSizeForAttributes, ATTRIBUTE_SCALING } from '@/utils/gameConfig';
 import { getAdjacentIndices, getFireSpreadCards, WeaponEffectResult } from '@/utils/weaponEffects';
@@ -86,6 +88,15 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
     'game_over' |
     'free_play'
   >(devMode ? 'round' : 'main_menu');
+
+  // Track previous phase for smooth transitions
+  const previousPhaseRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    // Update previous phase after render
+    return () => {
+      previousPhaseRef.current = gamePhase;
+    };
+  }, [gamePhase]);
 
   // Track pending attribute unlock for next round
   const [pendingUnlockedAttribute, setPendingUnlockedAttribute] = useState<AttributeName | null>(null);
@@ -338,7 +349,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
 
       // Shop and upgrades - to be filled during gameplay
       shopItems: generateRandomShopItems(),
-      shopWeapons: generateShopWeapons(4),
+      shopWeapons: generateShopWeapons(4, player.weapons),
       levelUpOptions: [],
       rerollCost: BASE_REROLL_COST,
 
@@ -403,14 +414,16 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
   };
 
   // Generate random level up options - WEAPONS ONLY
+  // Filters out weapons the player can't obtain (at maxCount)
   const generateLevelUpOptions = () => {
     const options: Weapon[] = [];
     const optionsSize = 4 + (state.player?.stats?.drawIncrease || 0);
+    const playerWeapons = state.player?.weapons || [];
 
-    // Generate only weapon options
+    // Generate only weapon options, respecting maxCount limits
     for (let i = 0; i < optionsSize; i++) {
-      // Get a random shop weapon
-      const weapon = getRandomShopWeapon();
+      // Get a random shop weapon, filtered by player's current weapons
+      const weapon = getRandomShopWeapon(playerWeapons);
       options.push(weapon);
     }
 
@@ -705,7 +718,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
     if (state.player.stats.freeRerolls > 0) {
       setState(prevState => ({
         ...prevState,
-        shopWeapons: generateShopWeapons(4),
+        shopWeapons: generateShopWeapons(4, prevState.player.weapons),
         player: {
           ...prevState.player,
           stats: {
@@ -718,7 +731,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
       // Charge for the reroll
       setState(prevState => ({
         ...prevState,
-        shopWeapons: generateShopWeapons(4),
+        shopWeapons: generateShopWeapons(4, prevState.player.weapons),
         player: {
           ...prevState.player,
           stats: {
@@ -1589,7 +1602,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
         gameStarted: true,
         currentEnemies: generateRandomEnemies(),
         shopItems: generateRandomShopItems(),  // Refill shop for next round
-        shopWeapons: generateShopWeapons(4),   // Refill weapon shop for next round
+        shopWeapons: generateShopWeapons(4, prevState.player.weapons),   // Refill weapon shop for next round
         player: {
           ...prevState.player,
           stats: {
@@ -1961,7 +1974,12 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
         <MultiplayerToggle />
       )} */}
 
-      {renderGamePhase()}
+      <AnimatedPhaseTransition
+        phaseKey={gamePhase}
+        previousPhase={previousPhaseRef.current}
+      >
+        {renderGamePhase()}
+      </AnimatedPhaseTransition>
 
       {/* Tutorial Prompt Modal */}
       <Modal

@@ -398,9 +398,9 @@ export const WEAPONS: Weapon[] = [
     rarity: 'common',
     level: 1,
     price: 6,
-    description: '15% chance for hint 15s after match.',
+    description: '15% chance to reveal 1 card from a valid set 15s after match.',
     shortDescription: 'Hint when stuck',
-    flavorText: 'After 15 seconds without a match, has a chance to highlight a valid set. Helps when you get stuck!',
+    flavorText: 'After 15 seconds without a match, has a chance to highlight one card guaranteed to be part of a valid set. You still need to find the other two!',
     icon: 'lorc/sheikah-eye',
     specialEffect: 'autoHint',
     effects: { autoHintChance: 15 }
@@ -411,9 +411,9 @@ export const WEAPONS: Weapon[] = [
     rarity: 'rare',
     level: 1,
     price: 12,
-    description: '45% chance for hint 10s after match.',
+    description: '45% chance to reveal 1 card from a valid set 10s after match.',
     shortDescription: 'Hint when stuck',
-    flavorText: 'After 10 seconds without a match, has a chance to highlight a valid set. Quicker help when stuck!',
+    flavorText: 'After 10 seconds without a match, has a chance to highlight one card guaranteed to be part of a valid set. You still need to find the other two!',
     icon: 'lorc/sheikah-eye',
     specialEffect: 'autoHint',
     effects: { autoHintChance: 45, autoHintInterval: 5000 }
@@ -424,12 +424,30 @@ export const WEAPONS: Weapon[] = [
     rarity: 'legendary',
     level: 1,
     price: 18,
-    description: '100% hint 5s after match.',
+    description: 'Reveals 1 card from a valid set 5s after match.',
     shortDescription: 'Hint when stuck',
-    flavorText: 'After 5 seconds without a match, automatically highlights a valid set. Never get stuck again!',
+    flavorText: 'After 5 seconds without a match, automatically highlights one card guaranteed to be part of a valid set. You still need to find the other two!',
     icon: 'lorc/sheikah-eye',
     specialEffect: 'autoHint',
     effects: { autoHintChance: 100, autoHintInterval: 10000 }
+  },
+
+  // ============================================================================
+  // 2.5. MYSTIC SIGHT - Enhanced autohint reveals (legendary only)
+  // ============================================================================
+  {
+    id: 'mystic-sight-legendary',
+    name: 'Mystic Sight',
+    rarity: 'legendary',
+    level: 1,
+    price: 25,
+    description: '33% chance for autohint to reveal 2 cards from a valid set instead of 1.',
+    shortDescription: 'Autohint may show extra card',
+    flavorText: 'Occasionally grants deeper insight during auto-hints, revealing a second card guaranteed to be part of the valid set. Makes finding matches easier!',
+    icon: 'lorc/third-eye',
+    specialEffect: 'enhancedHint',
+    effects: { enhancedHintChance: 33 },
+    maxCount: 1  // Unique - only one can be owned
   },
 
   // ============================================================================
@@ -1020,8 +1038,21 @@ export const WEAPONS: Weapon[] = [
   },
 ];
 
+// Count how many of a specific weapon (by name) the player owns
+export const getPlayerWeaponCount = (weaponName: WeaponName, playerWeapons: Weapon[]): number => {
+  return playerWeapons.filter(w => w.name === weaponName).length;
+};
+
+// Check if a player can obtain more of a specific weapon (respects maxCount)
+export const canObtainWeapon = (weapon: Weapon, playerWeapons: Weapon[]): boolean => {
+  if (weapon.maxCount === undefined) return true; // No limit
+  const currentCount = getPlayerWeaponCount(weapon.name, playerWeapons);
+  return currentCount < weapon.maxCount;
+};
+
 // Helper function to get a random weapon based on rarity distribution
-export const getRandomShopWeapon = (): Weapon => {
+// Optionally filters out weapons the player can't obtain (at maxCount)
+export const getRandomShopWeapon = (playerWeapons?: Weapon[]): Weapon => {
   const roll = Math.random();
   let rarity: WeaponRarity;
 
@@ -1033,15 +1064,27 @@ export const getRandomShopWeapon = (): Weapon => {
     rarity = 'common';
   }
 
-  const weaponsOfRarity = WEAPONS.filter(w => w.rarity === rarity);
+  let weaponsOfRarity = WEAPONS.filter(w => w.rarity === rarity);
+
+  // Filter out weapons the player already has at max count
+  if (playerWeapons) {
+    weaponsOfRarity = weaponsOfRarity.filter(w => canObtainWeapon(w, playerWeapons));
+
+    // If all weapons of this rarity are at max, fall back to unfiltered
+    if (weaponsOfRarity.length === 0) {
+      weaponsOfRarity = WEAPONS.filter(w => w.rarity === rarity);
+    }
+  }
+
   return weaponsOfRarity[Math.floor(Math.random() * weaponsOfRarity.length)];
 };
 
 // Helper function to generate shop weapons
-export const generateShopWeapons = (count: number): Weapon[] => {
+// Optionally filters out weapons the player can't obtain
+export const generateShopWeapons = (count: number, playerWeapons?: Weapon[]): Weapon[] => {
   const weapons: Weapon[] = [];
   for (let i = 0; i < count; i++) {
-    weapons.push(getRandomShopWeapon());
+    weapons.push(getRandomShopWeapon(playerWeapons));
   }
   return weapons;
 };

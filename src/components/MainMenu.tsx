@@ -1,10 +1,20 @@
-import React, { useEffect, useRef, useMemo } from 'react';
-import { View, Text, Pressable, StyleSheet, Animated, Easing } from 'react-native';
-import { COLORS, RADIUS } from '@/utils/colors';
+import React, { useEffect, useRef, useMemo, useCallback } from 'react';
+import { View, Text, Pressable, StyleSheet, Animated, Easing, Platform } from 'react-native';
+import ReAnimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  interpolate,
+} from 'react-native-reanimated';
+import { COLORS, RADIUS, SPACING, SHADOWS } from '../theme';
+import { DURATIONS } from '../theme/animations';
+import { haptics } from '../utils/haptics';
 import Icon from './Icon';
 import Card from './Card';
 import { Card as CardType } from '@/types';
 import { createDeck, shuffleArray } from '@/utils/gameUtils';
+
+const AnimatedPressable = ReAnimated.createAnimatedComponent(Pressable);
 
 const NUM_BACKGROUND_CARDS = 8;
 
@@ -29,6 +39,116 @@ interface CardConfig {
   rotationDuration: number;
   rotationDirection: 1 | -1;
   opacity: number;
+}
+
+// Menu button with animations and haptics
+function MenuButton({
+  onPress,
+  variant,
+  icon,
+  title,
+  subtitle,
+}: {
+  onPress: () => void;
+  variant: 'adventure' | 'freeplay' | 'tutorial';
+  icon: string;
+  title: string;
+  subtitle: string;
+}) {
+  const pressed = useSharedValue(0);
+  const hovered = useSharedValue(0);
+
+  const handlePressIn = useCallback(() => {
+    pressed.value = withTiming(1, { duration: DURATIONS.press });
+  }, [pressed]);
+
+  const handlePressOut = useCallback(() => {
+    pressed.value = withTiming(0, { duration: DURATIONS.press });
+  }, [pressed]);
+
+  const handleHoverIn = useCallback(() => {
+    if (Platform.OS === 'web') {
+      hovered.value = withTiming(1, { duration: DURATIONS.hover });
+    }
+  }, [hovered]);
+
+  const handleHoverOut = useCallback(() => {
+    if (Platform.OS === 'web') {
+      hovered.value = withTiming(0, { duration: DURATIONS.hover });
+    }
+  }, [hovered]);
+
+  const handlePress = useCallback(() => {
+    haptics.light();
+    onPress();
+  }, [onPress]);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    const scale = interpolate(pressed.value, [0, 1], [1, 0.98]);
+    const opacity = interpolate(pressed.value, [0, 1], [1, 0.9]);
+    const translateY = interpolate(hovered.value, [0, 1], [0, -2]);
+    const shadowOpacity = interpolate(hovered.value, [0, 1], [0.1, 0.2]);
+
+    return {
+      transform: [
+        { scale },
+        { translateY },
+      ],
+      opacity,
+      shadowOpacity,
+    };
+  });
+
+  const variantStyles = {
+    adventure: {
+      button: styles.adventureButton,
+      iconBg: COLORS.paperBeige,
+      iconColor: COLORS.slateCharcoal,
+      textColor: COLORS.slateCharcoal,
+    },
+    freeplay: {
+      button: styles.freeplayButton,
+      iconBg: COLORS.paperBeige,
+      iconColor: COLORS.slateCharcoal,
+      textColor: COLORS.slateCharcoal,
+    },
+    tutorial: {
+      button: styles.tutorialButton,
+      iconBg: 'rgba(255,255,255,0.2)',
+      iconColor: COLORS.canvasWhite,
+      textColor: COLORS.canvasWhite,
+    },
+  };
+
+  const v = variantStyles[variant];
+
+  return (
+    <AnimatedPressable
+      onPress={handlePress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      onHoverIn={handleHoverIn}
+      onHoverOut={handleHoverOut}
+      accessibilityLabel={title}
+      testID={`menu-${variant}`}
+      style={[
+        styles.menuButton,
+        v.button,
+        animatedStyle,
+        Platform.OS === 'web' && { cursor: 'pointer' as const },
+      ]}
+    >
+      <View style={[styles.buttonIconContainer, { backgroundColor: v.iconBg }]}>
+        <Icon name={icon} size={32} color={v.iconColor} />
+      </View>
+      <View style={styles.buttonTextContainer}>
+        <Text style={[styles.menuButtonText, { color: v.textColor }]}>{title}</Text>
+        <Text style={[styles.menuButtonSubtext, { color: v.textColor, opacity: variant === 'tutorial' ? 0.9 : 0.7 }]}>
+          {subtitle}
+        </Text>
+      </View>
+    </AnimatedPressable>
+  );
 }
 
 const MainMenu: React.FC<MainMenuProps> = ({
@@ -114,7 +234,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
         })
       ).start();
     });
-  }, [cardConfigs]);
+  }, [cardConfigs, floatAnims, rotateAnims]);
 
   return (
     <View style={styles.container}>
@@ -174,58 +294,29 @@ const MainMenu: React.FC<MainMenuProps> = ({
 
         {/* Menu Buttons */}
         <View style={styles.menuSection}>
-          <Pressable
+          <MenuButton
             onPress={onSelectAdventure}
-            style={({ pressed }) => [
-              styles.menuButton,
-              styles.adventureButton,
-              pressed && styles.buttonPressed,
-            ]}
-          >
-            <View style={styles.buttonIconContainer}>
-              <Icon name="sword" size={32} color={COLORS.slateCharcoal} />
-            </View>
-            <View style={styles.buttonTextContainer}>
-              <Text style={styles.menuButtonText}>Adventure</Text>
-              <Text style={styles.menuButtonSubtext}>10 rounds, enemies & loot</Text>
-            </View>
-          </Pressable>
+            variant="adventure"
+            icon="sword"
+            title="Adventure"
+            subtitle="10 rounds, enemies & loot"
+          />
 
-          <Pressable
+          <MenuButton
             onPress={onSelectFreeplay}
-            style={({ pressed }) => [
-              styles.menuButton,
-              styles.freeplayButton,
-              pressed && styles.buttonPressed,
-            ]}
-          >
-            <View style={styles.buttonIconContainer}>
-              <Icon name="target" size={32} color={COLORS.slateCharcoal} />
-            </View>
-            <View style={styles.buttonTextContainer}>
-              <Text style={styles.menuButtonText}>Free Play</Text>
-              <Text style={styles.menuButtonSubtext}>No timer, practice mode</Text>
-            </View>
-          </Pressable>
+            variant="freeplay"
+            icon="target"
+            title="Free Play"
+            subtitle="No timer, practice mode"
+          />
 
-          <Pressable
+          <MenuButton
             onPress={onSelectTutorial}
-            style={({ pressed }) => [
-              styles.menuButton,
-              styles.tutorialButton,
-              pressed && styles.buttonPressed,
-            ]}
-          >
-            <View style={styles.buttonIconContainer}>
-              <Icon name="help-circle" size={32} color={COLORS.canvasWhite} />
-            </View>
-            <View style={styles.buttonTextContainer}>
-              <Text style={[styles.menuButtonText, styles.tutorialButtonText]}>Tutorial</Text>
-              <Text style={[styles.menuButtonSubtext, styles.tutorialButtonSubtext]}>
-                Learn how to play
-              </Text>
-            </View>
-          </Pressable>
+            variant="tutorial"
+            icon="help-circle"
+            title="Tutorial"
+            subtitle="Learn how to play"
+          />
         </View>
 
         {/* Footer */}
@@ -257,7 +348,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'space-between',
     paddingVertical: 40,
-    paddingHorizontal: 24,
+    paddingHorizontal: SPACING.lg,
     zIndex: 1,
   },
   titleSection: {
@@ -270,7 +361,7 @@ const styles = StyleSheet.create({
     color: COLORS.slateCharcoal,
     letterSpacing: 4,
     textTransform: 'uppercase',
-    marginBottom: 8,
+    marginBottom: SPACING.sm,
   },
   subtitle: {
     fontSize: 14,
@@ -281,18 +372,19 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   menuSection: {
-    gap: 16,
+    gap: SPACING.md,
     paddingHorizontal: 20,
   },
   menuButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.canvasWhite,
-    borderRadius: RADIUS.module,
+    borderRadius: RADIUS.lg,
     borderWidth: 2,
     borderColor: COLORS.slateCharcoal,
     padding: 20,
-    gap: 16,
+    gap: SPACING.md,
+    ...SHADOWS.sm,
   },
   adventureButton: {
     backgroundColor: COLORS.actionYellow,
@@ -304,14 +396,10 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.tutorialBlue,
     borderColor: COLORS.slateCharcoal,
   },
-  buttonPressed: {
-    opacity: 0.8,
-    transform: [{ scale: 0.98 }],
-  },
   buttonIconContainer: {
     width: 56,
     height: 56,
-    borderRadius: 8,
+    borderRadius: RADIUS.sm,
     backgroundColor: COLORS.paperBeige,
     justifyContent: 'center',
     alignItems: 'center',
@@ -327,20 +415,13 @@ const styles = StyleSheet.create({
     color: COLORS.slateCharcoal,
     textTransform: 'uppercase',
     letterSpacing: 1,
-    marginBottom: 4,
-  },
-  tutorialButtonText: {
-    color: COLORS.canvasWhite,
+    marginBottom: SPACING.xxs,
   },
   menuButtonSubtext: {
     fontSize: 12,
     fontWeight: '400',
     color: COLORS.slateCharcoal,
     opacity: 0.7,
-  },
-  tutorialButtonSubtext: {
-    color: COLORS.canvasWhite,
-    opacity: 0.9,
   },
   footer: {
     alignItems: 'center',

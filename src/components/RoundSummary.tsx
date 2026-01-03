@@ -1,9 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, Animated } from 'react-native';
 import { PlayerStats, Weapon } from '@/types';
-import { COLORS, RADIUS } from '@/utils/colors';
+import { COLORS, RADIUS, SPACING, SHADOWS } from '../theme';
+import { haptics } from '../utils/haptics';
 import Icon from './Icon';
 import GameMenu from './GameMenu';
+import { Button } from './ui';
 
 interface RoundSummaryProps {
   round: number;
@@ -222,11 +224,16 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
 
         {/* Continue Button */}
         <Animated.View style={[styles.buttonContainer, { opacity: buttonOpacity }]}>
-          <TouchableOpacity style={styles.continueButton} onPress={onContinue}>
-            <Text style={styles.continueButtonText}>
-              {didLevelUp ? 'GO TO UPGRADE' : 'GO TO SHOP'}
-            </Text>
-          </TouchableOpacity>
+          <Button
+            variant="primary"
+            size="lg"
+            onPress={() => {
+              haptics.medium();
+              onContinue();
+            }}
+          >
+            {didLevelUp ? 'GO TO UPGRADE' : 'GO TO SHOP'}
+          </Button>
         </Animated.View>
       </View>
     </View>
@@ -293,7 +300,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: SPACING.md,
     borderBottomWidth: 2,
     borderBottomColor: COLORS.slateCharcoal,
   },
@@ -305,19 +312,19 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 16,
+    padding: SPACING.md,
     justifyContent: 'space-between',
   },
   matchCounterContainer: {
     alignItems: 'center',
-    paddingVertical: 24,
+    paddingVertical: SPACING.lg,
   },
   matchCounterLabel: {
     color: COLORS.slateCharcoal,
     fontWeight: '600',
     fontSize: 14,
     letterSpacing: 2,
-    marginBottom: 8,
+    marginBottom: SPACING.sm,
   },
   matchCounterValue: {
     color: COLORS.slateCharcoal,
@@ -328,24 +335,22 @@ const styles = StyleSheet.create({
   awardsGrid: {
     flex: 1,
     justifyContent: 'center',
-    gap: 12,
+    gap: SPACING.sm,
   },
   awardsRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 12,
+    gap: SPACING.sm,
   },
   awardTile: {
     width: 100,
     backgroundColor: COLORS.canvasWhite,
-    borderRadius: RADIUS.module,
+    borderRadius: RADIUS.lg,
     borderWidth: 2,
     borderColor: COLORS.slateCharcoal,
-    padding: 12,
+    padding: SPACING.sm,
     alignItems: 'center',
-    shadowOffset: { width: 0, height: 0 },
-    shadowRadius: 12,
-    elevation: 4,
+    ...SHADOWS.md,
   },
   awardIconContainer: {
     width: 40,
@@ -353,14 +358,14 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: SPACING.sm,
   },
   awardLabel: {
     color: COLORS.slateCharcoal,
     fontWeight: '600',
     fontSize: 10,
     letterSpacing: 1,
-    marginBottom: 4,
+    marginBottom: SPACING.xxs,
   },
   awardValue: {
     color: COLORS.slateCharcoal,
@@ -370,26 +375,7 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     alignItems: 'center',
-    paddingVertical: 16,
-  },
-  continueButton: {
-    backgroundColor: COLORS.actionYellow,
-    paddingVertical: 16,
-    paddingHorizontal: 40,
-    borderRadius: RADIUS.button,
-    borderWidth: 1,
-    borderColor: COLORS.slateCharcoal,
-    shadowColor: COLORS.deepOnyx,
-    shadowOffset: { width: 2, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 0,
-    elevation: 4,
-  },
-  continueButtonText: {
-    color: COLORS.slateCharcoal,
-    fontWeight: '700',
-    fontSize: 16,
-    letterSpacing: 1,
+    paddingVertical: SPACING.md,
   },
 });
 

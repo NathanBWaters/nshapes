@@ -1,8 +1,10 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import React, { useCallback } from 'react';
+import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { Player, Weapon, PlayerStats, WeaponRarity } from '@/types';
-import { COLORS, RADIUS } from '@/utils/colors';
+import { COLORS, RADIUS, SPACING, SHADOWS, getRarityColor, RARITY } from '../theme';
+import { haptics } from '../utils/haptics';
 import Icon from './Icon';
+import { Button } from './ui';
 
 interface VictoryScreenProps {
   player: Player;
@@ -12,23 +14,8 @@ interface VictoryScreenProps {
   onReturnToMenu: () => void;
 }
 
-// Rarity colors
-const getRarityColor = (rarity: WeaponRarity): string => {
-  switch (rarity) {
-    case 'common': return COLORS.slateCharcoal;
-    case 'rare': return '#1976D2';
-    case 'legendary': return COLORS.impactOrange;
-    default: return COLORS.slateCharcoal;
-  }
-};
-
 const getRarityLabel = (rarity: WeaponRarity): string => {
-  switch (rarity) {
-    case 'common': return 'Common';
-    case 'rare': return 'Rare';
-    case 'legendary': return 'Legendary';
-    default: return rarity;
-  }
+  return RARITY[rarity]?.label ?? rarity;
 };
 
 // Group weapons by name+rarity and count duplicates
@@ -59,6 +46,11 @@ const VictoryScreen: React.FC<VictoryScreenProps> = ({
   onReturnToMenu,
 }) => {
   const groupedWeapons = groupWeapons(player.weapons);
+
+  const handleReturn = useCallback(() => {
+    haptics.success();
+    onReturnToMenu();
+  }, [onReturnToMenu]);
 
   return (
     <View style={styles.container}>
@@ -155,9 +147,16 @@ const VictoryScreen: React.FC<VictoryScreenProps> = ({
         </ScrollView>
 
         {/* Return Button */}
-        <TouchableOpacity style={styles.returnButton} onPress={onReturnToMenu}>
-          <Text style={styles.returnButtonText}>RETURN TO MENU</Text>
-        </TouchableOpacity>
+        <View style={styles.returnButtonContainer}>
+          <Button
+            variant="primary"
+            size="lg"
+            onPress={handleReturn}
+            fullWidth
+          >
+            RETURN TO MENU
+          </Button>
+        </View>
       </View>
     </View>
   );
@@ -338,18 +337,10 @@ const styles = StyleSheet.create({
     color: COLORS.deepOnyx,
     fontFamily: 'monospace',
   },
-  returnButton: {
-    backgroundColor: COLORS.actionYellow,
-    paddingVertical: 16,
+  returnButtonContainer: {
+    padding: SPACING.md,
     borderTopWidth: 1,
     borderTopColor: COLORS.slateCharcoal,
-    alignItems: 'center',
-  },
-  returnButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.slateCharcoal,
-    letterSpacing: 1,
   },
 });
 

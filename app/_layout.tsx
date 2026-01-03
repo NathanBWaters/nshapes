@@ -13,6 +13,16 @@ export default function RootLayout() {
           <Stack
             screenOptions={{
               headerShown: false,
+              // Screen transition animations
+              animation: 'fade',
+              animationDuration: 250,
+              // Gesture handling
+              gestureEnabled: true,
+              gestureDirection: 'horizontal',
+              // Prevent flash of white during transitions
+              contentStyle: {
+                backgroundColor: '#FFFFFF',
+              },
             }}
           />
           <StatusBar style="auto" />

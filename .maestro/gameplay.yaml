@@ -6,43 +6,51 @@ appId: com.nshapes.app
 # Wait for the app to fully load
 - launchApp
 
-# Wait for the main screen to appear
+# Wait for the main menu to appear
 - extendedWaitUntil:
-    visible: "NShapes"
+    visible: "NSHAPES"
     timeout: 10000
 
-# Step 1: Choose Single Player mode
-- tapOn: "Single Player"
+# Step 1: Choose Adventure mode using testID
+- tapOn:
+    id: "menu-adventure"
 
 # Step 2: Wait for character selection screen
 - extendedWaitUntil:
-    visible: "Choose Your Character"
-    timeout: 5000
+    visible: "CHOOSE YOUR CHARACTER"
+    timeout: 8000
 
-# Step 3: Tap on the first character (Orange Tabby is the first in the list)
-- tapOn: "Orange Tabby"
+# Step 3: Tap on the first character (Orange Tabby should be auto-selected or tap it)
+- tapOn: "ORANGE TABBY"
 
-# Step 4: Tap Start Game button
-- tapOn: "Start Game"
+# Dismiss Expo debugger banner if visible by tapping X (bottom right)
+- tapOn:
+    point: "92%,96%"
 
-# Step 5: Wait for enemy selection screen
+# Step 4: Tap Start Adventure button (yellow button near bottom, above safe area)
+- tapOn:
+    point: "50%,90%"
+
+# Step 4b: Wait a moment for tutorial prompt modal to appear
+- swipe:
+    start: "50%, 50%"
+    end: "50%, 50%"
+    duration: 500
+
+# Step 4c: Tap "Skip - Start Adventure" on tutorial prompt to skip tutorial
+- tapOn:
+    point: "50%,57%"
+
+# Step 5: Wait for game board to appear (look for MENU button which is always visible)
 - extendedWaitUntil:
-    visible: "Choose Your Enemy"
-    timeout: 5000
+    visible: "MENU"
+    timeout: 10000
 
-# Step 6: Select the first enemy by tapping "Fight This Enemy"
-- tapOn: "Fight This Enemy"
-
-# Step 7: Wait for game board to appear with the score indicator
-- extendedWaitUntil:
-    visible: "Selected:"
-    timeout: 5000
-
-# Step 8: Tap three cards randomly to attempt a match
-# Cards are arranged in a grid, tapping at different points in the card area
+# Step 6: Tap three cards to attempt a match
+# Cards are arranged in a 3-column grid
 # First card - left column
 - tapOn:
-    point: "20%,45%"
+    point: "20%,50%"
 
 # Small delay between taps
 - swipe:
@@ -52,7 +60,7 @@ appId: com.nshapes.app
 
 # Second card - middle column
 - tapOn:
-    point: "50%,45%"
+    point: "50%,50%"
 
 # Small delay
 - swipe:
@@ -62,12 +70,14 @@ appId: com.nshapes.app
 
 # Third card - right column
 - tapOn:
-    point: "80%,45%"
+    point: "80%,50%"
 
 # Wait for any animation to complete
-- extendedWaitUntil:
-    visible: "Selected:"
-    timeout: 3000
+- swipe:
+    start: "50%, 50%"
+    end: "50%, 50%"
+    duration: 500
 
-# Verify the game is still running (selected indicator visible means game is active)
-- assertVisible: "Selected:"
+# Verify the game completed (either still playing with MENU visible, or game over with PLAY AGAIN)
+- assertVisible:
+    text: "MENU|PLAY AGAIN|GAME OVER"

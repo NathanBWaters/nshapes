@@ -1,11 +1,22 @@
-import React, { useState } from 'react';
-import { View, Text, Pressable, TouchableOpacity, StyleSheet } from 'react-native';
-import { COLORS, RADIUS } from '@/utils/colors';
+import React, { useState, useCallback } from 'react';
+import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  interpolate,
+} from 'react-native-reanimated';
+import { COLORS, RADIUS, SPACING, SHADOWS } from '../theme';
+import { DURATIONS } from '../theme/animations';
+import { haptics } from '../utils/haptics';
 import { PlayerStats } from '@/types';
 import { FreePlayDifficulty } from './CharacterSelection';
 import { DEFAULT_PLAYER_STATS } from '@/utils/gameDefinitions';
 import Icon from './Icon';
 import GameMenu from './GameMenu';
+import { Button } from './ui';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 interface DifficultySelectionProps {
   onStart: (difficulty: FreePlayDifficulty) => void;
@@ -20,8 +31,106 @@ const DIFFICULTY_INFO: Record<FreePlayDifficulty, { label: string; description: 
   omega: { label: 'Omega', description: '5 attributes', icon: 'flame' },
 };
 
+// Animated difficulty card component
+function DifficultyCard({
+  difficulty,
+  info,
+  isSelected,
+  onSelect,
+}: {
+  difficulty: FreePlayDifficulty;
+  info: { label: string; description: string; icon: string };
+  isSelected: boolean;
+  onSelect: () => void;
+}) {
+  const pressed = useSharedValue(0);
+  const hovered = useSharedValue(0);
+
+  const handlePressIn = useCallback(() => {
+    pressed.value = withTiming(1, { duration: DURATIONS.press });
+  }, [pressed]);
+
+  const handlePressOut = useCallback(() => {
+    pressed.value = withTiming(0, { duration: DURATIONS.press });
+  }, [pressed]);
+
+  const handleHoverIn = useCallback(() => {
+    if (Platform.OS === 'web') {
+      hovered.value = withTiming(1, { duration: DURATIONS.hover });
+    }
+  }, [hovered]);
+
+  const handleHoverOut = useCallback(() => {
+    if (Platform.OS === 'web') {
+      hovered.value = withTiming(0, { duration: DURATIONS.hover });
+    }
+  }, [hovered]);
+
+  const handlePress = useCallback(() => {
+    haptics.selection();
+    onSelect();
+  }, [onSelect]);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    const scale = interpolate(pressed.value, [0, 1], [1, 0.96]);
+    const translateY = interpolate(hovered.value, [0, 1], [0, -4]);
+
+    return {
+      transform: [
+        { scale },
+        { translateY },
+      ],
+    };
+  });
+
+  return (
+    <AnimatedPressable
+      onPress={handlePress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      onHoverIn={handleHoverIn}
+      onHoverOut={handleHoverOut}
+      style={[
+        styles.difficultyCard,
+        isSelected && styles.difficultyCardSelected,
+        animatedStyle,
+        Platform.OS === 'web' && { cursor: 'pointer' as const },
+      ]}
+    >
+      <View style={styles.difficultyIconContainer}>
+        <Icon
+          name={info.icon}
+          size={40}
+          color={isSelected ? COLORS.canvasWhite : COLORS.slateCharcoal}
+        />
+      </View>
+      <Text
+        style={[
+          styles.difficultyLabel,
+          isSelected && styles.difficultyLabelSelected,
+        ]}
+      >
+        {info.label}
+      </Text>
+      <Text
+        style={[
+          styles.difficultyDescription,
+          isSelected && styles.difficultyDescriptionSelected,
+        ]}
+      >
+        {info.description}
+      </Text>
+    </AnimatedPressable>
+  );
+}
+
 const DifficultySelection: React.FC<DifficultySelectionProps> = ({ onStart, onExitGame }) => {
   const [selectedDifficulty, setSelectedDifficulty] = useState<FreePlayDifficulty>('medium');
+
+  const handleStart = useCallback(() => {
+    haptics.medium();
+    onStart(selectedDifficulty);
+  }, [onStart, selectedDifficulty]);
 
   return (
     <View style={styles.container}>
@@ -40,45 +149,15 @@ const DifficultySelection: React.FC<DifficultySelectionProps> = ({ onStart, onEx
 
         {/* Difficulty Options */}
         <View style={styles.difficultyGrid}>
-          {(['easy', 'medium', 'hard', 'omega'] as FreePlayDifficulty[]).map(difficulty => {
-            const info = DIFFICULTY_INFO[difficulty];
-            const isSelected = selectedDifficulty === difficulty;
-
-            return (
-              <Pressable
-                key={difficulty}
-                onPress={() => setSelectedDifficulty(difficulty)}
-                style={[
-                  styles.difficultyCard,
-                  isSelected && styles.difficultyCardSelected,
-                ]}
-              >
-                <View style={styles.difficultyIconContainer}>
-                  <Icon
-                    name={info.icon}
-                    size={40}
-                    color={isSelected ? COLORS.canvasWhite : COLORS.slateCharcoal}
-                  />
-                </View>
-                <Text
-                  style={[
-                    styles.difficultyLabel,
-                    isSelected && styles.difficultyLabelSelected,
-                  ]}
-                >
-                  {info.label}
-                </Text>
-                <Text
-                  style={[
-                    styles.difficultyDescription,
-                    isSelected && styles.difficultyDescriptionSelected,
-                  ]}
-                >
-                  {info.description}
-                </Text>
-              </Pressable>
-            );
-          })}
+          {(['easy', 'medium', 'hard', 'omega'] as FreePlayDifficulty[]).map(difficulty => (
+            <DifficultyCard
+              key={difficulty}
+              difficulty={difficulty}
+              info={DIFFICULTY_INFO[difficulty]}
+              isSelected={selectedDifficulty === difficulty}
+              onSelect={() => setSelectedDifficulty(difficulty)}
+            />
+          ))}
         </View>
 
         {/* Info Section */}
@@ -89,12 +168,14 @@ const DifficultySelection: React.FC<DifficultySelectionProps> = ({ onStart, onEx
         </View>
 
         {/* Start Button */}
-        <TouchableOpacity
-          onPress={() => onStart(selectedDifficulty)}
-          style={styles.startButton}
+        <Button
+          variant="primary"
+          size="lg"
+          onPress={handleStart}
+          fullWidth
         >
-          <Text style={styles.startButtonText}>Start Free Play</Text>
-        </TouchableOpacity>
+          Start Free Play
+        </Button>
       </View>
     </View>
   );
@@ -111,7 +192,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: SPACING.sm,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.slateCharcoal,
   },
@@ -124,12 +205,12 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 24,
+    padding: SPACING.lg,
     justifyContent: 'space-between',
   },
   headerSection: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: SPACING.lg,
   },
   title: {
     fontSize: 32,
@@ -137,7 +218,7 @@ const styles = StyleSheet.create({
     color: COLORS.slateCharcoal,
     textTransform: 'uppercase',
     letterSpacing: 2,
-    marginBottom: 8,
+    marginBottom: SPACING.sm,
   },
   subtitle: {
     fontSize: 14,
@@ -148,24 +229,26 @@ const styles = StyleSheet.create({
   difficultyGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 16,
+    gap: SPACING.md,
     justifyContent: 'center',
-    marginBottom: 24,
+    marginBottom: SPACING.lg,
   },
   difficultyCard: {
     width: '45%',
     minWidth: 140,
     backgroundColor: COLORS.canvasWhite,
-    borderRadius: RADIUS.module,
+    borderRadius: RADIUS.lg,
     borderWidth: 2,
     borderColor: COLORS.slateCharcoal,
-    padding: 24,
+    padding: SPACING.lg,
     alignItems: 'center',
-    gap: 12,
+    gap: SPACING.sm,
+    ...SHADOWS.sm,
   },
   difficultyCardSelected: {
     backgroundColor: COLORS.logicTeal,
     borderWidth: 3,
+    ...SHADOWS.md,
   },
   difficultyIconContainer: {
     width: 64,
@@ -199,11 +282,11 @@ const styles = StyleSheet.create({
   },
   infoSection: {
     backgroundColor: COLORS.canvasWhite,
-    borderRadius: RADIUS.module,
+    borderRadius: RADIUS.lg,
     borderWidth: 1,
     borderColor: COLORS.slateCharcoal,
-    padding: 16,
-    marginBottom: 16,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
   },
   infoText: {
     fontSize: 13,
@@ -211,21 +294,6 @@ const styles = StyleSheet.create({
     color: COLORS.slateCharcoal,
     textAlign: 'center',
     lineHeight: 20,
-  },
-  startButton: {
-    backgroundColor: COLORS.actionYellow,
-    borderRadius: RADIUS.button,
-    borderWidth: 1,
-    borderColor: COLORS.slateCharcoal,
-    paddingVertical: 18,
-    alignItems: 'center',
-  },
-  startButtonText: {
-    color: COLORS.slateCharcoal,
-    fontWeight: '700',
-    fontSize: 16,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
   },
 });
 

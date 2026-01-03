@@ -37,6 +37,7 @@ export const STARTING_STATS = {
   startingTime: 0, // Additional starting time in seconds
   ricochetChance: 0,
   ricochetChainChance: 0,
+  enhancedHintChance: 0,    // % chance for autohint to show 2 cards instead of 1
 } as const;
 
 // =============================================================================

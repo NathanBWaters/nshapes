@@ -5,13 +5,15 @@ import {
   calculatePlayerTotalStats,
   initializePlayer,
   DEFAULT_PLAYER_STATS,
+  canObtainWeapon,
+  getPlayerWeaponCount,
 } from '@/utils/gameDefinitions';
 import { Weapon, WeaponRarity, Player } from '@/types';
 
 describe('Weapon Definitions', () => {
   describe('WEAPONS array', () => {
-    it('should have exactly 48 weapons (16 types x 3 rarities)', () => {
-      expect(WEAPONS.length).toBe(48);
+    it('should have exactly 49 weapons (16 types x 3 rarities + 1 legendary-only)', () => {
+      expect(WEAPONS.length).toBe(49);
     });
 
     it('should have 16 common weapons', () => {
@@ -24,9 +26,9 @@ describe('Weapon Definitions', () => {
       expect(rares.length).toBe(16);
     });
 
-    it('should have 16 legendary weapons', () => {
+    it('should have 17 legendary weapons (16 base + Mystic Sight)', () => {
       const legendaries = WEAPONS.filter(w => w.rarity === 'legendary');
-      expect(legendaries.length).toBe(16);
+      expect(legendaries.length).toBe(17);
     });
 
     it('should have all required weapon types', () => {
@@ -34,6 +36,7 @@ describe('Weapon Definitions', () => {
       const expectedTypes: import('@/types').WeaponName[] = [
         'Blast Powder',
         'Oracle Eye',
+        'Mystic Sight',  // Legendary only
         'Field Stone',
         'Growth Seed',
         'Flint Spark',
@@ -100,8 +103,9 @@ describe('Weapon Definitions', () => {
       });
     });
 
-    it('each weapon type should have 3 rarities', () => {
+    it('most weapon types should have 3 rarities, some are legendary-only', () => {
       const weaponsByName = new Map<string, Weapon[]>();
+      const legendaryOnlyWeapons = ['Mystic Sight'];
 
       WEAPONS.forEach(weapon => {
         const existing = weaponsByName.get(weapon.name) || [];
@@ -110,11 +114,18 @@ describe('Weapon Definitions', () => {
       });
 
       weaponsByName.forEach((weapons, name) => {
-        expect(weapons.length).toBe(3);
-        const rarities = weapons.map(w => w.rarity);
-        expect(rarities).toContain('common');
-        expect(rarities).toContain('rare');
-        expect(rarities).toContain('legendary');
+        if (legendaryOnlyWeapons.includes(name)) {
+          // Legendary-only weapons should have exactly 1 rarity
+          expect(weapons.length).toBe(1);
+          expect(weapons[0].rarity).toBe('legendary');
+        } else {
+          // Normal weapons should have all 3 rarities
+          expect(weapons.length).toBe(3);
+          const rarities = weapons.map(w => w.rarity);
+          expect(rarities).toContain('common');
+          expect(rarities).toContain('rare');
+          expect(rarities).toContain('legendary');
+        }
       });
     });
   });
@@ -192,8 +203,9 @@ describe('Weapon Definitions', () => {
       });
     });
 
-    it('legendary weapons should have higher effect values than common', () => {
+    it('legendary weapons should have higher effect values than common (for weapons with all rarities)', () => {
       const weaponsByName = new Map<string, Map<WeaponRarity, Weapon>>();
+      const legendaryOnlyWeapons = ['Mystic Sight'];
 
       WEAPONS.forEach(weapon => {
         if (!weaponsByName.has(weapon.name)) {
@@ -203,6 +215,9 @@ describe('Weapon Definitions', () => {
       });
 
       weaponsByName.forEach((rarityMap, name) => {
+        // Skip legendary-only weapons
+        if (legendaryOnlyWeapons.includes(name)) return;
+
         const common = rarityMap.get('common')!;
         const legendary = rarityMap.get('legendary')!;
 
@@ -213,6 +228,24 @@ describe('Weapon Definitions', () => {
 
         expect(legendaryValue).toBeGreaterThan(commonValue);
       });
+    });
+
+    it('Mystic Sight should have enhancedHintChance effect', () => {
+      const mysticSight = WEAPONS.find(w => w.name === 'Mystic Sight');
+      expect(mysticSight).toBeDefined();
+      expect(mysticSight?.effects).toHaveProperty('enhancedHintChance');
+      expect(mysticSight?.effects.enhancedHintChance).toBe(33);
+    });
+
+    it('Mystic Sight should be legendary only', () => {
+      const mysticSights = WEAPONS.filter(w => w.name === 'Mystic Sight');
+      expect(mysticSights.length).toBe(1);
+      expect(mysticSights[0].rarity).toBe('legendary');
+    });
+
+    it('Mystic Sight should have maxCount of 1', () => {
+      const mysticSight = WEAPONS.find(w => w.name === 'Mystic Sight');
+      expect(mysticSight?.maxCount).toBe(1);
     });
   });
 
@@ -264,6 +297,63 @@ describe('Weapon Definitions', () => {
       expect(weapon).toHaveProperty('id');
       expect(weapon).toHaveProperty('name');
       expect(weapon).toHaveProperty('rarity');
+    });
+
+    it('should not return weapons at maxCount when player weapons provided', () => {
+      // Get Mystic Sight (maxCount: 1)
+      const mysticSight = WEAPONS.find(w => w.name === 'Mystic Sight')!;
+      const playerWeapons = [mysticSight]; // Player already has it
+
+      // Generate many weapons and verify Mystic Sight never appears
+      for (let i = 0; i < 100; i++) {
+        const weapon = getRandomShopWeapon(playerWeapons);
+        expect(weapon.name).not.toBe('Mystic Sight');
+      }
+    });
+  });
+
+  describe('canObtainWeapon', () => {
+    it('should return true for weapons without maxCount', () => {
+      const blastPowder = WEAPONS.find(w => w.name === 'Blast Powder')!;
+      const playerWeapons: Weapon[] = [blastPowder, blastPowder, blastPowder];
+
+      expect(canObtainWeapon(blastPowder, playerWeapons)).toBe(true);
+    });
+
+    it('should return false when player has maxCount of weapon', () => {
+      const mysticSight = WEAPONS.find(w => w.name === 'Mystic Sight')!;
+      const playerWeapons: Weapon[] = [mysticSight];
+
+      expect(canObtainWeapon(mysticSight, playerWeapons)).toBe(false);
+    });
+
+    it('should return true when player has less than maxCount', () => {
+      const mysticSight = WEAPONS.find(w => w.name === 'Mystic Sight')!;
+      const playerWeapons: Weapon[] = [];
+
+      expect(canObtainWeapon(mysticSight, playerWeapons)).toBe(true);
+    });
+  });
+
+  describe('getPlayerWeaponCount', () => {
+    it('should return 0 for empty weapon list', () => {
+      expect(getPlayerWeaponCount('Mystic Sight', [])).toBe(0);
+    });
+
+    it('should count weapons by name', () => {
+      const blastPowder = WEAPONS.find(w => w.name === 'Blast Powder' && w.rarity === 'common')!;
+      const playerWeapons = [blastPowder, blastPowder, blastPowder];
+
+      expect(getPlayerWeaponCount('Blast Powder', playerWeapons)).toBe(3);
+    });
+
+    it('should only count weapons with matching name', () => {
+      const blastPowder = WEAPONS.find(w => w.name === 'Blast Powder')!;
+      const oracleEye = WEAPONS.find(w => w.name === 'Oracle Eye')!;
+      const playerWeapons = [blastPowder, oracleEye, blastPowder];
+
+      expect(getPlayerWeaponCount('Blast Powder', playerWeapons)).toBe(2);
+      expect(getPlayerWeaponCount('Oracle Eye', playerWeapons)).toBe(1);
     });
   });
 });
