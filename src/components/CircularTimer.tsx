@@ -82,15 +82,10 @@ const CircularTimer: React.FC<CircularTimerProps> = ({
 
   const progressColor = getProgressColor();
 
-  // Format the time display
+  // Format the time display - ALWAYS show seconds, never minutes
   const formatDisplayTime = () => {
     if (isInfinite) return '∞';
-    const mins = Math.floor(currentTime / 60);
-    const secs = Math.floor(currentTime % 60);
-    if (mins > 0) {
-      return `${mins}:${secs.toString().padStart(2, '0')}`;
-    }
-    return String(secs);
+    return String(Math.floor(currentTime));
   };
 
   return (
@@ -146,7 +141,7 @@ const CircularTimer: React.FC<CircularTimerProps> = ({
             styles.timeText,
             {
               color: isInfinite ? COLORS.slateCharcoal : isCritical ? progressColor : COLORS.deepOnyx,
-              fontSize: isInfinite ? 20 : currentTime >= 60 ? 10 : 14,
+              fontSize: isInfinite ? 20 : currentTime >= 100 ? 10 : currentTime >= 60 ? 12 : 14,
               fontWeight: isCritical ? '800' : '700',
             },
           ]}
