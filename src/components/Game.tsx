@@ -17,6 +17,7 @@ import {
 } from '@/utils/gameDefinitions';
 import { getActiveAttributesForRound, getBoardSizeForAttributes, ATTRIBUTE_SCALING } from '@/utils/gameConfig';
 import { getAdjacentIndices, getFireSpreadCards, WeaponEffectResult } from '@/utils/weaponEffects';
+import { useGameTimer } from '@/hooks/useGameTimer';
 import GameBoard from './GameBoard';
 import GameInfo from './GameInfo';
 import { DevModeCallbacks } from './GameMenu';
@@ -262,50 +263,20 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
     setGamePhase('round_summary');
   };
 
-  // Timer effect - countdown when in round phase
-  // In dev mode, timer only runs when devTimerEnabled is true
-  // Timer pauses when menu is open
-  useEffect(() => {
-    let timerInterval: ReturnType<typeof setInterval> | null = null;
+  // Timer - countdown when in round phase
+  const isTimerActive = gamePhase === 'round' &&
+    state.gameStarted &&
+    !state.gameEnded &&
+    state.remainingTime > 0 &&
+    (!devMode || devTimerEnabled) &&
+    !isMenuOpen;
 
-    const shouldRunTimer = gamePhase === 'round' && state.gameStarted && !state.gameEnded && state.remainingTime > 0 && (!devMode || devTimerEnabled) && !isMenuOpen;
-
-    if (shouldRunTimer) {
-      // Start countdown timer
-      timerInterval = setInterval(() => {
-        setState(prevState => {
-          const newRemainingTime = prevState.remainingTime - 1;
-
-          // Check if time has run out
-          if (newRemainingTime <= 0) {
-            // Clear the interval
-            if (timerInterval) {
-              clearInterval(timerInterval);
-            }
-
-            // Just update state - round completion handled by separate effect
-            return {
-              ...prevState,
-              remainingTime: 0
-            };
-          }
-
-          // Normal time update
-          return {
-            ...prevState,
-            remainingTime: newRemainingTime
-          };
-        });
-      }, 1000);
-    }
-
-    // Cleanup timer on unmount or phase change
-    return () => {
-      if (timerInterval) {
-        clearInterval(timerInterval);
-      }
-    };
-  }, [gamePhase, state.gameStarted, state.gameEnded, devMode, devTimerEnabled, isMenuOpen]);
+  useGameTimer(isTimerActive, () => {
+    setState(prev => ({
+      ...prev,
+      remainingTime: Math.max(0, prev.remainingTime - 1),
+    }));
+  });
 
   // Handle round completion when time runs out - separate from timer to avoid race conditions
   useEffect(() => {

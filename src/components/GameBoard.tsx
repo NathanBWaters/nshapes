@@ -7,6 +7,7 @@ import { COLORS } from '@/utils/colors';
 import { MATCH_REWARDS } from '@/utils/gameConfig';
 import { processWeaponEffects, WeaponEffectResult } from '@/utils/weaponEffects';
 import { isValidCombination } from '@/utils/gameUtils';
+import { useAutoHint } from '@/hooks/useAutoHint';
 
 // Default to 4 attributes for backward compatibility
 const DEFAULT_ATTRIBUTES: AttributeName[] = ['shape', 'color', 'number', 'shading'];
@@ -228,37 +229,15 @@ const GameBoard: React.FC<GameBoardProps> = ({
     return false;
   }, [cards, matchedCardIds]);
 
-  // Auto-hint interval effect
-  // Auto-hint now triggers 15 seconds AFTER the last match (not continuously)
-  // autoHintInterval modifies the 15-second threshold (lower = faster, but min is still 5s)
-  // Pauses when isPaused is true (e.g., when menu is open)
-  useEffect(() => {
-    const autoHintChance = playerStats.autoHintChance || 0;
-    // autoHintInterval reduces the base 15s threshold (e.g., -5000 = 10s wait)
-    const intervalReduction = playerStats.autoHintInterval || 0;
-    const minWaitTime = 5000; // Minimum 5 second wait
-    const baseWaitTime = 15000; // Base 15 second wait
-    const actualWaitTime = Math.max(minWaitTime, baseWaitTime - intervalReduction);
-
-    if (autoHintChance <= 0 || isPaused) return;
-
-    // Check every 2 seconds if conditions are met
-    const intervalId = setInterval(() => {
-      // Don't show auto-hint if a hint is already showing
-      if (hintCards.length > 0) return;
-
-      // Only trigger if enough time has passed since last match
-      const timeSinceMatch = lastMatchTime ? Date.now() - lastMatchTime : Infinity;
-      if (timeSinceMatch < actualWaitTime) return;
-
-      // Roll auto-hint chance
-      if (Math.random() * 100 < autoHintChance) {
-        showAutoHint();
-      }
-    }, 2000); // Check every 2 seconds
-
-    return () => clearInterval(intervalId);
-  }, [playerStats.autoHintChance, playerStats.autoHintInterval, hintCards.length, showAutoHint, isPaused, lastMatchTime]);
+  // Auto-hint - triggers after period of inactivity
+  useAutoHint({
+    autoHintChance: playerStats.autoHintChance || 0,
+    autoHintInterval: playerStats.autoHintInterval || 0,
+    isPaused,
+    hasActiveHint: hintCards.length > 0,
+    lastMatchTime,
+    onTrigger: showAutoHint,
+  });
 
   // Handle card click
   const handleCardClick = (card: CardType) => {
