@@ -1,6 +1,6 @@
 /**
- * Button - World-class button component with animations and haptics
- * Consistent styling, press feedback, hover states, and loading support
+ * Button - Delightful button component with bouncy animations and haptics
+ * Every press should feel alive and satisfying
  */
 
 import React, { useCallback } from 'react';
@@ -11,18 +11,24 @@ import {
   Platform,
   ViewStyle,
   TextStyle,
-  TouchableOpacity,
+  Pressable,
 } from 'react-native';
-import Animated from 'react-native-reanimated';
+import Animated, {
+  useAnimatedStyle,
+  interpolateColor,
+  withSpring,
+  useSharedValue,
+} from 'react-native-reanimated';
 import { COLORS, RADIUS, SPACING, SHADOWS, FONT_WEIGHTS, OPACITY } from '../../theme';
-import { useScalePress } from '../../hooks/useScalePress';
+import { SPRINGS } from '../../theme/animations';
+import { usePlayfulPress } from '../../hooks/usePlayfulPress';
 import { useHoverElevation } from '../../hooks/useHoverElevation';
-import { haptics } from '../../utils/haptics';
 
-const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'success';
 type ButtonSize = 'sm' | 'md' | 'lg';
+type PressStyle = 'squish' | 'bounce' | 'eager' | 'gentle' | 'joyful';
 
 interface ButtonProps {
   /** Button text or content */
@@ -49,42 +55,60 @@ interface ButtonProps {
   textStyle?: TextStyle;
   /** Enable haptic feedback (default: true on mobile) */
   hapticFeedback?: boolean;
+  /** Press animation style */
+  pressStyle?: PressStyle;
   /** Test ID for testing */
   testID?: string;
 }
 
-const VARIANT_STYLES: Record<ButtonVariant, { bg: string; text: string; border: string }> = {
+const VARIANT_STYLES: Record<ButtonVariant, {
+  bg: string;
+  bgHover: string;
+  text: string;
+  border: string;
+}> = {
   primary: {
     bg: COLORS.actionYellow,
+    bgHover: '#FFE433', // Slightly lighter yellow
     text: COLORS.slateCharcoal,
     border: COLORS.slateCharcoal,
   },
   secondary: {
     bg: 'transparent',
+    bgHover: COLORS.paperBeige,
     text: COLORS.slateCharcoal,
     border: COLORS.slateCharcoal,
   },
   danger: {
     bg: COLORS.impactRed,
+    bgHover: '#FF8A84',
     text: COLORS.canvasWhite,
     border: COLORS.impactRed,
   },
   ghost: {
     bg: 'transparent',
+    bgHover: COLORS.paperBeige,
     text: COLORS.slateCharcoal,
     border: 'transparent',
   },
   success: {
     bg: COLORS.logicTeal,
+    bgHover: '#1BC4AF',
     text: COLORS.canvasWhite,
     border: COLORS.logicTeal,
   },
 };
 
-const SIZE_STYLES: Record<ButtonSize, { paddingH: number; paddingV: number; fontSize: number; minHeight: number }> = {
-  sm: { paddingH: SPACING.sm, paddingV: SPACING.xs, fontSize: 12, minHeight: 32 },
-  md: { paddingH: SPACING.md, paddingV: SPACING.sm, fontSize: 14, minHeight: 44 },
-  lg: { paddingH: SPACING.lg, paddingV: SPACING.md, fontSize: 16, minHeight: 52 },
+const SIZE_STYLES: Record<ButtonSize, {
+  paddingH: number;
+  paddingV: number;
+  fontSize: number;
+  minHeight: number;
+  iconGap: number;
+}> = {
+  sm: { paddingH: SPACING.sm, paddingV: SPACING.xs, fontSize: 12, minHeight: 36, iconGap: 4 },
+  md: { paddingH: SPACING.md, paddingV: SPACING.sm, fontSize: 14, minHeight: 48, iconGap: 6 },
+  lg: { paddingH: SPACING.lg, paddingV: SPACING.md, fontSize: 16, minHeight: 56, iconGap: 8 },
 };
 
 export function Button({
@@ -100,43 +124,89 @@ export function Button({
   style,
   textStyle,
   hapticFeedback = true,
+  pressStyle = 'squish',
   testID,
 }: ButtonProps) {
   const isDisabled = disabled || loading;
   const variantStyle = VARIANT_STYLES[variant];
   const sizeStyle = SIZE_STYLES[size];
 
-  const { onPressIn, onPressOut, animatedStyle: pressStyle } = useScalePress({
+  // Playful press animation with haptics
+  const {
+    onPressIn,
+    onPressOut,
+    animatedStyleSimple: pressAnimStyle
+  } = usePlayfulPress({
+    style: pressStyle,
+    haptics: hapticFeedback && Platform.OS !== 'web',
+    hapticType: 'light',
     disabled: isDisabled,
   });
 
-  const { onHoverIn, onHoverOut, animatedStyle: hoverStyle, webStyle } = useHoverElevation({
+  // Hover elevation for desktop
+  const {
+    onHoverIn,
+    onHoverOut,
+    animatedStyle: hoverAnimStyle,
+  } = useHoverElevation({
     disabled: isDisabled,
+    liftAmount: 3,
+    scaleAmount: 1.02,
   });
+
+  // Hover color transition
+  const hovered = useSharedValue(0);
+
+  const handleHoverIn = useCallback(() => {
+    if (isDisabled) return;
+    hovered.value = withSpring(1, SPRINGS.quickSnap);
+    onHoverIn();
+  }, [isDisabled, hovered, onHoverIn]);
+
+  const handleHoverOut = useCallback(() => {
+    hovered.value = withSpring(0, SPRINGS.gentle);
+    onHoverOut();
+  }, [hovered, onHoverOut]);
 
   const handlePress = useCallback(() => {
     if (isDisabled) return;
-
-    if (hapticFeedback && Platform.OS !== 'web') {
-      haptics.light();
-    }
-
     onPress();
-  }, [isDisabled, hapticFeedback, onPress]);
+  }, [isDisabled, onPress]);
+
+  // Background color animation on hover
+  const backgroundAnimStyle = useAnimatedStyle(() => {
+    const backgroundColor = interpolateColor(
+      hovered.value,
+      [0, 1],
+      [variantStyle.bg, variantStyle.bgHover]
+    );
+
+    return { backgroundColor };
+  });
+
+  // Combine all animated styles
+  const combinedAnimStyle = useAnimatedStyle(() => {
+    return {
+      ...pressAnimStyle.value,
+      ...hoverAnimStyle.value,
+      ...backgroundAnimStyle.value,
+    };
+  });
 
   const buttonStyles: ViewStyle[] = [
     styles.base,
     {
-      backgroundColor: variantStyle.bg,
       borderColor: variantStyle.border,
       paddingHorizontal: sizeStyle.paddingH,
       paddingVertical: sizeStyle.paddingV,
       minHeight: sizeStyle.minHeight,
+      gap: sizeStyle.iconGap,
     },
     variant === 'secondary' && styles.secondaryBorder,
     fullWidth && styles.fullWidth,
     isDisabled && styles.disabled,
-    webStyle,
+    Platform.OS === 'web' && styles.webCursor,
+    isDisabled && Platform.OS === 'web' && styles.webCursorDisabled,
     style,
   ];
 
@@ -154,13 +224,19 @@ export function Button({
   const accessibilityText = typeof children === 'string' ? children : undefined;
 
   return (
-    <TouchableOpacity
+    <AnimatedPressable
       onPress={handlePress}
       onPressIn={onPressIn}
       onPressOut={onPressOut}
+      onHoverIn={handleHoverIn}
+      onHoverOut={handleHoverOut}
       disabled={isDisabled}
-      activeOpacity={0.8}
-      style={buttonStyles}
+      style={[
+        buttonStyles,
+        pressAnimStyle,
+        hoverAnimStyle,
+        backgroundAnimStyle,
+      ]}
       testID={testID}
       accessibilityRole="button"
       accessibilityLabel={accessibilityText}
@@ -183,7 +259,75 @@ export function Button({
           {iconAfter && <>{iconAfter}</>}
         </>
       )}
-    </TouchableOpacity>
+    </AnimatedPressable>
+  );
+}
+
+/**
+ * Icon button variant - circular button for icon-only actions
+ */
+export function IconButton({
+  icon,
+  onPress,
+  size = 'md',
+  variant = 'ghost',
+  disabled = false,
+  style,
+  testID,
+  accessibilityLabel,
+}: {
+  icon: React.ReactNode;
+  onPress: () => void;
+  size?: ButtonSize;
+  variant?: ButtonVariant;
+  disabled?: boolean;
+  style?: ViewStyle;
+  testID?: string;
+  accessibilityLabel: string;
+}) {
+  const isDisabled = disabled;
+  const variantStyle = VARIANT_STYLES[variant];
+
+  const iconSizes = { sm: 32, md: 44, lg: 52 };
+  const buttonSize = iconSizes[size];
+
+  const { onPressIn, onPressOut, animatedStyleSimple } = usePlayfulPress({
+    style: 'eager',
+    haptics: Platform.OS !== 'web',
+    disabled: isDisabled,
+  });
+
+  const handlePress = useCallback(() => {
+    if (isDisabled) return;
+    onPress();
+  }, [isDisabled, onPress]);
+
+  return (
+    <AnimatedPressable
+      onPress={handlePress}
+      onPressIn={onPressIn}
+      onPressOut={onPressOut}
+      disabled={isDisabled}
+      style={[
+        styles.iconButton,
+        {
+          width: buttonSize,
+          height: buttonSize,
+          backgroundColor: variantStyle.bg,
+          borderColor: variantStyle.border,
+        },
+        isDisabled && styles.disabled,
+        Platform.OS === 'web' && styles.webCursor,
+        animatedStyleSimple,
+        style,
+      ]}
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ disabled: isDisabled }}
+    >
+      {icon}
+    </AnimatedPressable>
   );
 }
 
@@ -194,7 +338,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: RADIUS.sm,
     borderWidth: 1,
-    gap: SPACING.xs,
     ...SHADOWS.sm,
   },
   secondaryBorder: {
@@ -216,6 +359,20 @@ const styles = StyleSheet.create({
   },
   loader: {
     marginHorizontal: SPACING.xs,
+  },
+  iconButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+  },
+  webCursor: {
+    // @ts-ignore - web only
+    cursor: 'pointer',
+  },
+  webCursorDisabled: {
+    // @ts-ignore - web only
+    cursor: 'not-allowed',
   },
 });
 

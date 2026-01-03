@@ -117,7 +117,7 @@ function WeaponCard({
         <Icon
           name={weapon.icon}
           size={24}
-          color={isFocused ? COLORS.slateCharcoal : COLORS.logicTeal}
+          color={COLORS.canvasWhite}
           style={styles.optionIcon}
         />
       )}

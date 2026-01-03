@@ -1,13 +1,25 @@
 /**
  * NShapes UI Component Library
- * World-class, consistent UI components with animations and haptics
+ * Delightful, world-class UI components that feel alive
  */
 
 // Core components
-export { Button } from './Button';
-export { Card } from './Card';
+export { Button, IconButton } from './Button';
+export { Card, CardHeader, CardContent, CardFooter } from './Card';
 export { Badge, RarityBadge, PriceBadge, CountBadge, FreeBadge } from './Badge';
 export { Modal, ModalHeader, ModalBody, ModalFooter } from './Modal';
+export { BottomSheet, SimpleBottomSheet } from './BottomSheet';
+
+// Loading components
+export {
+  Skeleton,
+  SkeletonText,
+  SkeletonCircle,
+  SkeletonCard,
+  SkeletonGameCard,
+  SkeletonWeaponItem,
+  SkeletonGrid,
+} from './Skeleton';
 
 // Animation components
 export {

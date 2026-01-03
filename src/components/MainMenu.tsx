@@ -4,17 +4,23 @@ import ReAnimated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
+  withSpring,
+  withSequence,
+  withRepeat,
+  withDelay,
   interpolate,
+  Extrapolation,
 } from 'react-native-reanimated';
 import { COLORS, RADIUS, SPACING, SHADOWS } from '../theme';
-import { DURATIONS } from '../theme/animations';
-import { haptics } from '../utils/haptics';
+import { SPRINGS, DURATIONS } from '../theme/animations';
+import { triggerHaptic } from '../hooks/useTouchFeedback';
 import Icon from './Icon';
 import Card from './Card';
 import { Card as CardType } from '@/types';
 import { createDeck, shuffleArray } from '@/utils/gameUtils';
 
 const AnimatedPressable = ReAnimated.createAnimatedComponent(Pressable);
+const AnimatedText = ReAnimated.createAnimatedComponent(Text);
 
 const NUM_BACKGROUND_CARDS = 8;
 
@@ -41,61 +47,178 @@ interface CardConfig {
   opacity: number;
 }
 
-// Menu button with animations and haptics
+// Menu button with delightful bouncy animations
 function MenuButton({
   onPress,
   variant,
   icon,
   title,
   subtitle,
+  index,
 }: {
   onPress: () => void;
   variant: 'adventure' | 'freeplay' | 'tutorial';
   icon: string;
   title: string;
   subtitle: string;
+  index: number;
 }) {
   const pressed = useSharedValue(0);
   const hovered = useSharedValue(0);
+  const entrance = useSharedValue(0);
+  const idle = useSharedValue(0);
+
+  // Staggered entrance animation
+  useEffect(() => {
+    entrance.value = withDelay(
+      150 + index * 100,
+      withSpring(1, SPRINGS.wobbly)
+    );
+    // Subtle breathing animation for the primary button
+    if (variant === 'adventure') {
+      idle.value = withDelay(
+        1000,
+        withRepeat(
+          withSequence(
+            withTiming(1, { duration: 2000 }),
+            withTiming(0, { duration: 2000 })
+          ),
+          -1,
+          true
+        )
+      );
+    }
+  }, [entrance, idle, index, variant]);
 
   const handlePressIn = useCallback(() => {
-    pressed.value = withTiming(1, { duration: DURATIONS.press });
+    triggerHaptic('light');
+    // Quick squish
+    pressed.value = withSpring(1, {
+      ...SPRINGS.squish,
+      stiffness: SPRINGS.squish.stiffness * 1.5,
+    });
   }, [pressed]);
 
   const handlePressOut = useCallback(() => {
-    pressed.value = withTiming(0, { duration: DURATIONS.press });
+    // Bouncy release with overshoot
+    pressed.value = withSequence(
+      withSpring(-0.4, SPRINGS.wobbly),
+      withSpring(0, SPRINGS.gentle)
+    );
   }, [pressed]);
 
   const handleHoverIn = useCallback(() => {
     if (Platform.OS === 'web') {
-      hovered.value = withTiming(1, { duration: DURATIONS.hover });
+      hovered.value = withSpring(1, SPRINGS.eager);
     }
   }, [hovered]);
 
   const handleHoverOut = useCallback(() => {
     if (Platform.OS === 'web') {
-      hovered.value = withTiming(0, { duration: DURATIONS.hover });
+      hovered.value = withSpring(0, SPRINGS.gentle);
     }
   }, [hovered]);
 
   const handlePress = useCallback(() => {
-    haptics.light();
+    triggerHaptic('medium');
     onPress();
   }, [onPress]);
 
   const animatedStyle = useAnimatedStyle(() => {
-    const scale = interpolate(pressed.value, [0, 1], [1, 0.98]);
-    const opacity = interpolate(pressed.value, [0, 1], [1, 0.9]);
-    const translateY = interpolate(hovered.value, [0, 1], [0, -2]);
-    const shadowOpacity = interpolate(hovered.value, [0, 1], [0.1, 0.2]);
+    // Entrance: slide up and fade in
+    const entranceTranslateY = interpolate(
+      entrance.value,
+      [0, 1],
+      [40, 0],
+      Extrapolation.CLAMP
+    );
+    const entranceOpacity = interpolate(
+      entrance.value,
+      [0, 1],
+      [0, 1],
+      Extrapolation.CLAMP
+    );
+
+    // Press: squish down with slight overshoot on release
+    const pressScale = interpolate(
+      pressed.value,
+      [-0.5, 0, 1],
+      [1.06, 1, 0.92],
+      Extrapolation.CLAMP
+    );
+
+    // Hover: lift up and scale
+    const hoverTranslateY = interpolate(
+      hovered.value,
+      [0, 1],
+      [0, -4],
+      Extrapolation.CLAMP
+    );
+    const hoverScale = interpolate(
+      hovered.value,
+      [0, 1],
+      [1, 1.02],
+      Extrapolation.CLAMP
+    );
+
+    // Idle breathing for adventure button
+    const idleScale = interpolate(
+      idle.value,
+      [0, 1],
+      [1, 1.01],
+      Extrapolation.CLAMP
+    );
 
     return {
       transform: [
-        { scale },
-        { translateY },
+        { translateY: entranceTranslateY + hoverTranslateY },
+        { scale: pressScale * hoverScale * idleScale },
       ],
-      opacity,
+      opacity: entranceOpacity,
+    };
+  });
+
+  // Shadow animation for hover
+  const shadowStyle = useAnimatedStyle(() => {
+    const shadowOpacity = interpolate(
+      hovered.value,
+      [0, 1],
+      [0.1, 0.25],
+      Extrapolation.CLAMP
+    );
+    const shadowRadius = interpolate(
+      hovered.value,
+      [0, 1],
+      [4, 12],
+      Extrapolation.CLAMP
+    );
+
+    return {
       shadowOpacity,
+      shadowRadius,
+    };
+  });
+
+  // Icon container animation
+  const iconStyle = useAnimatedStyle(() => {
+    const rotate = interpolate(
+      hovered.value,
+      [0, 1],
+      [0, 5],
+      Extrapolation.CLAMP
+    );
+    const scale = interpolate(
+      pressed.value,
+      [0, 1],
+      [1, 0.9],
+      Extrapolation.CLAMP
+    );
+
+    return {
+      transform: [
+        { rotate: `${rotate}deg` },
+        { scale },
+      ],
     };
   });
 
@@ -135,12 +258,13 @@ function MenuButton({
         styles.menuButton,
         v.button,
         animatedStyle,
+        shadowStyle,
         Platform.OS === 'web' && { cursor: 'pointer' as const },
       ]}
     >
-      <View style={[styles.buttonIconContainer, { backgroundColor: v.iconBg }]}>
+      <ReAnimated.View style={[styles.buttonIconContainer, { backgroundColor: v.iconBg }, iconStyle]}>
         <Icon name={icon} size={32} color={v.iconColor} />
-      </View>
+      </ReAnimated.View>
       <View style={styles.buttonTextContainer}>
         <Text style={[styles.menuButtonText, { color: v.textColor }]}>{title}</Text>
         <Text style={[styles.menuButtonSubtext, { color: v.textColor, opacity: variant === 'tutorial' ? 0.9 : 0.7 }]}>
@@ -156,6 +280,49 @@ const MainMenu: React.FC<MainMenuProps> = ({
   onSelectFreeplay,
   onSelectTutorial,
 }) => {
+  // Title animation values
+  const titleScale = useSharedValue(0);
+  const subtitleOpacity = useSharedValue(0);
+
+  // Animate title on mount
+  useEffect(() => {
+    // Title pops in
+    titleScale.value = withDelay(
+      100,
+      withSpring(1, SPRINGS.celebration)
+    );
+    // Subtitle fades in after
+    subtitleOpacity.value = withDelay(
+      400,
+      withTiming(1, { duration: 500 })
+    );
+  }, [titleScale, subtitleOpacity]);
+
+  // Title breathing animation
+  const titleStyle = useAnimatedStyle(() => {
+    const scale = interpolate(
+      titleScale.value,
+      [0, 1],
+      [0.8, 1],
+      Extrapolation.CLAMP
+    );
+    const opacity = interpolate(
+      titleScale.value,
+      [0, 1],
+      [0, 1],
+      Extrapolation.CLAMP
+    );
+
+    return {
+      transform: [{ scale }],
+      opacity,
+    };
+  });
+
+  const subtitleStyle = useAnimatedStyle(() => ({
+    opacity: subtitleOpacity.value,
+  }));
+
   // Generate random card configurations
   const cardConfigs = useMemo((): CardConfig[] => {
     const deck = createDeck(['shape', 'color', 'number', 'shading']);
@@ -288,8 +455,10 @@ const MainMenu: React.FC<MainMenuProps> = ({
       <View style={styles.content}>
         {/* Title Section */}
         <View style={styles.titleSection}>
-          <Text style={styles.title}>NSHAPES</Text>
-          <Text style={styles.subtitle}>Roguelike Match-Three Puzzle</Text>
+          <ReAnimated.Text style={[styles.title, titleStyle]}>NSHAPES</ReAnimated.Text>
+          <ReAnimated.Text style={[styles.subtitle, subtitleStyle]}>
+            Roguelike Match-Three Puzzle
+          </ReAnimated.Text>
         </View>
 
         {/* Menu Buttons */}
@@ -300,6 +469,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
             icon="lorc/crossed-swords"
             title="Adventure"
             subtitle="10 rounds, enemies & loot"
+            index={0}
           />
 
           <MenuButton
@@ -308,6 +478,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
             icon="lorc/archery-target"
             title="Free Play"
             subtitle="No timer, practice mode"
+            index={1}
           />
 
           <MenuButton
@@ -316,6 +487,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
             icon="lorc/open-book"
             title="Tutorial"
             subtitle="Learn how to play"
+            index={2}
           />
         </View>
 
@@ -384,7 +556,11 @@ const styles = StyleSheet.create({
     borderColor: COLORS.slateCharcoal,
     padding: 20,
     gap: SPACING.md,
-    ...SHADOWS.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 4,
   },
   adventureButton: {
     backgroundColor: COLORS.actionYellow,

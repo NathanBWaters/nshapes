@@ -107,7 +107,7 @@ function CharacterCard({
           <Icon
             name={character.icon}
             size={48}
-            color={COLORS.slateCharcoal}
+            color={COLORS.canvasWhite}
           />
         )}
       </View>

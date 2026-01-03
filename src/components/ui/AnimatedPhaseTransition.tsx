@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect, useRef } from 'react';
-import { StyleSheet, ViewStyle } from 'react-native';
+import { StyleSheet, ViewStyle, View } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -145,6 +145,16 @@ export function AnimatedPhaseTransition({
       runOnJS(onExitComplete)();
     }
   });
+
+  // Use regular View when no animation is needed (prevents mobile web flicker)
+  // Only use Animated.View when actually animating a phase change
+  if (!isPhaseChange) {
+    return (
+      <View style={[styles.container, style]}>
+        {children}
+      </View>
+    );
+  }
 
   return (
     <Animated.View

@@ -241,7 +241,7 @@ interface IconProps {
   name: string;
   /** Icon size in pixels (default: 24) */
   size?: number;
-  /** Icon fill color (default: white) */
+  /** Icon fill color (default: Logic Teal #16AA98) */
   color?: string;
   /** Additional styles for the container */
   style?: object;
@@ -269,14 +269,14 @@ const Icon: React.FC<IconProps> = ({
         <SvgComponent
           width={size}
           height={size}
-          fill="#000000"
+          color="#000000"
         />
       </View>
       {/* Main icon */}
       <SvgComponent
         width={size}
         height={size}
-        fill={color}
+        color={color}
       />
     </View>
   );
