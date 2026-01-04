@@ -4,6 +4,7 @@ import { CopilotStep, walkthroughable } from 'react-native-copilot';
 import { PlayerStats, Weapon, WeaponRarity, Card, Character } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import WeaponGuide from './WeaponGuide';
+import WeaponList from './WeaponList';
 import Icon from './Icon';
 import { WEAPONS, getWeaponByName } from '@/utils/gameDefinitions';
 
@@ -234,16 +235,6 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
     </View>
   );
 
-  // Group weapons by name for display
-  const groupedWeapons = playerWeapons.reduce((acc, weapon) => {
-    const key = `${weapon.name}-${weapon.rarity}`;
-    if (!acc[key]) {
-      acc[key] = { weapon, count: 0 };
-    }
-    acc[key].count++;
-    return acc;
-  }, {} as Record<string, { weapon: Weapon; count: number }>);
-
   // Get the character's starting weapons for display
   const startingWeapons = character
     ? character.startingWeapons.map(name => getWeaponByName(name)).filter((w): w is Weapon => w !== undefined)
@@ -284,65 +275,11 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
         )}
 
         {/* Equipped Weapons Section */}
-        {playerWeapons.length > 0 && (
-          <View style={styles.categoryContainer}>
-            <View style={styles.categoryHeader}>
-              <Text style={styles.categoryTitle}>EQUIPPED WEAPONS ({playerWeapons.length})</Text>
-            </View>
-            <View style={styles.weaponsGrid}>
-              {Object.values(groupedWeapons)
-                .sort((a, b) => a.weapon.name.localeCompare(b.weapon.name))
-                .map(({ weapon, count }) => (
-                <View key={`${weapon.name}-${weapon.rarity}`} style={styles.weaponRow}>
-                  <View style={[styles.weaponIconContainer, { borderColor: getRarityColor(weapon.rarity) }]}>
-                    <Icon name={weapon.icon || 'lorc/field'} size={20} color={COLORS.slateCharcoal} />
-                  </View>
-                  <View style={styles.weaponInfo}>
-                    <View style={styles.weaponNameRow}>
-                      <Text style={styles.weaponName}>{weapon.name}</Text>
-                      {count > 1 && (
-                        <View style={styles.weaponCountBadge}>
-                          <Text style={styles.weaponCountText}>x{count}</Text>
-                        </View>
-                      )}
-                    </View>
-                    <Text style={styles.weaponShortDesc}>{weapon.shortDescription}</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {/* No weapons message / Starting weapons display */}
-        {playerWeapons.length === 0 && (
-          <View style={styles.categoryContainer}>
-            <View style={styles.categoryHeader}>
-              <Text style={styles.categoryTitle}>
-                {startingWeapons.length > 0 ? 'STARTING WEAPONS' : 'EQUIPPED WEAPONS'}
-              </Text>
-            </View>
-            {startingWeapons.length > 0 ? (
-              <View style={styles.weaponsGrid}>
-                {startingWeapons.map((weapon, index) => (
-                  <View key={index} style={styles.weaponRow}>
-                    <View style={[styles.weaponIconContainer, { borderColor: getRarityColor(weapon.rarity) }]}>
-                      <Icon name={weapon.icon || 'lorc/field'} size={20} color={COLORS.slateCharcoal} />
-                    </View>
-                    <View style={styles.weaponInfo}>
-                      <Text style={styles.weaponName}>{weapon.name}</Text>
-                      <Text style={styles.weaponShortDesc}>{weapon.shortDescription}</Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            ) : (
-              <View style={styles.noWeaponsContainer}>
-                <Text style={styles.noWeaponsText}>No weapons equipped yet</Text>
-              </View>
-            )}
-          </View>
-        )}
+        <WeaponList
+          weapons={playerWeapons.length > 0 ? playerWeapons : startingWeapons}
+          title={playerWeapons.length > 0 ? 'EQUIPPED WEAPONS' : (startingWeapons.length > 0 ? 'STARTING WEAPONS' : 'EQUIPPED WEAPONS')}
+          emptyMessage="No weapons equipped yet"
+        />
 
         {Object.entries(statCategories).map(([category, statKeys]) => (
           <View key={category} style={styles.categoryContainer}>
@@ -524,6 +461,16 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
           >
             <Text style={styles.devButtonText}>Clear All Weapons</Text>
           </TouchableOpacity>
+        </View>
+
+        {/* Current Weapons Display */}
+        <View style={{ marginBottom: 16 }}>
+          <WeaponList
+            weapons={playerWeapons}
+            title="CURRENT WEAPONS"
+            showDescription={false}
+            emptyMessage="No weapons yet"
+          />
         </View>
 
         {/* Current Stats Display */}
