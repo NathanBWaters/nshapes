@@ -1252,6 +1252,25 @@ export const ROUND_REQUIREMENTS = [
   { round: 10, targetScore: 100, time: 60 },
 ];
 
+// Endless mode round requirements (slightly exponential scaling)
+// Round 11: 120, Round 12: 144, Round 13: 173, Round 14: 208, Round 15: 250...
+export const getEndlessRoundRequirement = (round: number): { round: number; targetScore: number; time: number } => {
+  const baseScore = 100; // Round 10 target
+  const baseIncrement = 20;
+  const scaleFactor = 1.2; // 20% increase per round
+
+  let target = baseScore;
+  for (let r = 11; r <= round; r++) {
+    target += Math.floor(baseIncrement * Math.pow(scaleFactor, r - 11));
+  }
+
+  return {
+    round,
+    targetScore: target,
+    time: 60, // Keep 60s timer for all endless rounds
+  };
+};
+
 // Helper functions for character, weapon, and item selection
 export const getCharacterByName = (name: string): Character | undefined => {
   return CHARACTERS.find(character => character.name === name);

@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, Pressable, StyleSheet } from 'react-nativ
 import { Character, PlayerStats } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { getWeaponByName, DEFAULT_PLAYER_STATS } from '@/utils/gameDefinitions';
-import { CharacterWinsStorage, CharacterWins } from '@/utils/storage';
+import { CharacterWinsStorage, CharacterWins, EndlessHighScoresStorage, EndlessHighScores } from '@/utils/storage';
 import Icon from './Icon';
 import GameMenu from './GameMenu';
 
@@ -30,10 +30,12 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
 }) => {
   const [hoveredCharacter, setHoveredCharacter] = React.useState<string | null>(null);
   const [characterWins, setCharacterWins] = React.useState<CharacterWins>({});
+  const [endlessHighScores, setEndlessHighScores] = React.useState<EndlessHighScores>({});
 
-  // Load character wins on mount
+  // Load character wins and endless high scores on mount
   React.useEffect(() => {
     setCharacterWins(CharacterWinsStorage.getWins());
+    setEndlessHighScores(EndlessHighScoresStorage.getHighScores());
   }, []);
 
   // Auto-select first character if none selected
@@ -114,6 +116,7 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
           {characters.map(character => {
             const isSelected = selectedCharacter === character.name;
             const wins = characterWins[character.name] ?? 0;
+            const endlessHighRound = endlessHighScores[character.name] ?? 0;
 
             return (
               <Pressable
@@ -129,6 +132,11 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
                 {wins > 0 && (
                   <View style={styles.winsBadge}>
                     <Text style={styles.winsBadgeText}>{wins}</Text>
+                  </View>
+                )}
+                {endlessHighRound > 10 && (
+                  <View style={styles.endlessBadge}>
+                    <Text style={styles.endlessBadgeText}>R{endlessHighRound}</Text>
                   </View>
                 )}
                 <View style={styles.optionIconArea}>
@@ -367,6 +375,26 @@ const styles = StyleSheet.create({
     color: COLORS.slateCharcoal,
     fontWeight: '700',
     fontSize: 11,
+  },
+  endlessBadge: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    backgroundColor: COLORS.logicTeal,
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+    zIndex: 1,
+  },
+  endlessBadgeText: {
+    color: COLORS.canvasWhite,
+    fontWeight: '600',
+    fontSize: 9,
+    textTransform: 'uppercase',
   },
   optionIconArea: {
     flex: 2.5,

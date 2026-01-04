@@ -13,7 +13,8 @@ import {
   calculatePlayerTotalStats,
   DEFAULT_PLAYER_STATS,
   generateShopWeapons,
-  getRandomShopWeapon
+  getRandomShopWeapon,
+  getEndlessRoundRequirement
 } from '@/utils/gameDefinitions';
 import { getActiveAttributesForRound, getBoardSizeForAttributes, ATTRIBUTE_SCALING } from '@/utils/gameConfig';
 import { getAdjacentIndices, getFireSpreadCards, WeaponEffectResult } from '@/utils/weaponEffects';
@@ -38,14 +39,17 @@ import VictoryScreen from './VictoryScreen';
 import MainMenu from './MainMenu';
 import DifficultySelection from './DifficultySelection';
 import { useTutorial } from '@/context/TutorialContext';
-import { CharacterWinsStorage } from '@/utils/storage';
+import { CharacterWinsStorage, EndlessHighScoresStorage } from '@/utils/storage';
 
 const INITIAL_CARD_COUNT = 12;
 const MAX_BOARD_SIZE = 21;
 const BASE_REROLL_COST = 5;
 
-// Get round requirement
+// Get round requirement (handles both regular and endless rounds)
 const getRoundRequirement = (round: number) => {
+  if (round > 10) {
+    return getEndlessRoundRequirement(round);
+  }
   return ROUND_REQUIREMENTS.find(r => r.round === round) ||
          { round: 1, targetScore: 3, time: 60 };
 };
@@ -132,7 +136,8 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
         selectedEnemy: null,
         lootCrates: 0,
         isCoOp: false,
-        players: []
+        players: [],
+        isEndlessMode: false
       };
     }
 
@@ -162,7 +167,8 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
       selectedEnemy: null,
       lootCrates: 0,
       isCoOp: false,
-      players: []
+      players: [],
+      isEndlessMode: false
     };
   });
 
@@ -213,6 +219,11 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
   // Function declarations
   // Add an endGame function
   const endGame = (victory: boolean, reason?: string) => {
+    // Record endless high score if in endless mode
+    if (state.isEndlessMode && selectedCharacter) {
+      EndlessHighScoresStorage.recordHighScore(selectedCharacter, state.round);
+    }
+
     setState(prevState => ({
       ...prevState,
       gameEnded: true,
@@ -239,6 +250,19 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
 
   // Complete the current round
   const completeRound = () => {
+    // In endless mode, always continue to next round
+    if (state.isEndlessMode) {
+      const options = generateLevelUpOptions();
+      setState(prevState => ({
+        ...prevState,
+        roundCompleted: true,
+        gameEnded: false,
+        levelUpOptions: options
+      }));
+      setGamePhase('round_summary');
+      return;
+    }
+
     // Check if this is the final round (Round 10) - if so, go to victory
     if (state.round >= 10) {
       // Record the win for this character
@@ -356,7 +380,10 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
 
       // Co-op
       isCoOp: isMultiplayer,
-      players: []
+      players: [],
+
+      // Endless mode
+      isEndlessMode: false
     });
 
     setNotification(null);
@@ -1510,6 +1537,12 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
 
   // Handle proceeding from shop - check for attribute unlocks before starting next round
   const handleProceedFromShop = () => {
+    // In endless mode, skip attribute unlock screens (all 5 attributes already active)
+    if (state.isEndlessMode) {
+      startNextRound();
+      return;
+    }
+
     const nextRound = state.round + 1;
     const newActiveAttributes = getActiveAttributesForRound(nextRound);
     const previousAttributes = state.activeAttributes;
@@ -1537,6 +1570,20 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
     startNextRound();
   };
 
+  // Handle continuing to endless mode from victory screen
+  const handleContinueEndless = () => {
+    // Enable endless mode and proceed to level up
+    const options = generateLevelUpOptions();
+    setState(prevState => ({
+      ...prevState,
+      isEndlessMode: true,
+      roundCompleted: false,
+      gameEnded: false,
+      levelUpOptions: options
+    }));
+    setGamePhase('level_up');
+  };
+
   // Start the next round
   const startNextRound = () => {
     const nextRound = state.round + 1;
@@ -1547,7 +1594,10 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
     setClearHintTrigger(0);
 
     // Get active attributes for the new round
-    const newActiveAttributes = getActiveAttributesForRound(nextRound);
+    // In endless mode, always use all 5 attributes
+    const newActiveAttributes: AttributeName[] = state.isEndlessMode
+      ? ['shape', 'color', 'number', 'shading', 'background']
+      : getActiveAttributesForRound(nextRound);
     const previousAttributes = state.activeAttributes;
 
     // Note: Attribute unlock is now handled via the AttributeUnlockScreen before this function is called
@@ -1865,7 +1915,11 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
             finalScore={state.score}
             matchCount={state.foundCombinations.length}
             playerStats={calculatePlayerTotalStats(state.player)}
-            onReturnToMenu={() => setGamePhase('main_menu')}
+            onReturnToMenu={() => {
+              setState(prev => ({ ...prev, isEndlessMode: false }));
+              setGamePhase('main_menu');
+            }}
+            onContinueEndless={handleContinueEndless}
           />
         );
 
@@ -1929,6 +1983,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
                   style={gameOverStyles.playAgainButton}
                   onPress={() => {
                     setGameOverReason(null);
+                    setState(prev => ({ ...prev, isEndlessMode: false }));
                     setGamePhase('main_menu');
                   }}
                 >

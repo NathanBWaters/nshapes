@@ -10,6 +10,7 @@ interface VictoryScreenProps {
   matchCount: number;
   playerStats: PlayerStats;
   onReturnToMenu: () => void;
+  onContinueEndless: () => void;
 }
 
 // Rarity colors
@@ -57,6 +58,7 @@ const VictoryScreen: React.FC<VictoryScreenProps> = ({
   matchCount,
   playerStats,
   onReturnToMenu,
+  onContinueEndless,
 }) => {
   const groupedWeapons = groupWeapons(player.weapons);
 
@@ -154,10 +156,17 @@ const VictoryScreen: React.FC<VictoryScreenProps> = ({
           </View>
         </ScrollView>
 
-        {/* Return Button */}
-        <TouchableOpacity style={styles.returnButton} onPress={onReturnToMenu}>
-          <Text style={styles.returnButtonText}>RETURN TO MENU</Text>
-        </TouchableOpacity>
+        {/* Action Buttons */}
+        <View style={styles.buttonSection}>
+          <TouchableOpacity style={styles.endlessButton} onPress={onContinueEndless}>
+            <Text style={styles.endlessButtonText}>CONTINUE TO ENDLESS</Text>
+            <Text style={styles.endlessSubtext}>Round 11+</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.returnButton} onPress={onReturnToMenu}>
+            <Text style={styles.returnButtonText}>RETURN TO MENU</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -338,16 +347,38 @@ const styles = StyleSheet.create({
     color: COLORS.deepOnyx,
     fontFamily: 'monospace',
   },
-  returnButton: {
-    backgroundColor: COLORS.actionYellow,
-    paddingVertical: 16,
+  buttonSection: {
     borderTopWidth: 1,
     borderTopColor: COLORS.slateCharcoal,
+  },
+  endlessButton: {
+    backgroundColor: COLORS.logicTeal,
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.slateCharcoal,
+  },
+  endlessButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.canvasWhite,
+    letterSpacing: 1,
+  },
+  endlessSubtext: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: COLORS.canvasWhite,
+    opacity: 0.8,
+    marginTop: 2,
+  },
+  returnButton: {
+    backgroundColor: COLORS.paperBeige,
+    paddingVertical: 14,
     alignItems: 'center',
   },
   returnButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 12,
+    fontWeight: '600',
     color: COLORS.slateCharcoal,
     letterSpacing: 1,
   },

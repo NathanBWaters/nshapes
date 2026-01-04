@@ -248,4 +248,7 @@ export interface GameState {
   // Co-op
   isCoOp: boolean;
   players: Player[];
+
+  // Endless mode
+  isEndlessMode: boolean;
 } 
