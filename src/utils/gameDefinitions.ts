@@ -63,6 +63,8 @@ export const DEFAULT_PLAYER_STATS: PlayerStats = {
   ricochetChance: STARTING_STATS.ricochetChance,
   ricochetChainChance: STARTING_STATS.ricochetChainChance,
   enhancedHintChance: STARTING_STATS.enhancedHintChance,
+  echoChance: STARTING_STATS.echoChance,
+  chainReactionChance: STARTING_STATS.chainReactionChance,
 };
 
 // Characters
@@ -1036,6 +1038,67 @@ export const WEAPONS: Weapon[] = [
     icon: 'lorc/chained-arrow-heads',
     specialEffect: 'ricochet',
     effects: { ricochetChance: 70, ricochetChainChance: 35 }
+  },
+
+  // ============================================================================
+  // 17. ECHO STONE - Auto-match another set on the board
+  // ============================================================================
+  {
+    id: 'echo-stone-common',
+    name: 'Echo Stone',
+    rarity: 'common',
+    level: 1,
+    price: 8,
+    description: '5% chance to auto-match another set on the board.',
+    shortDescription: 'May auto-match another set',
+    flavorText: 'After matching, has a chance to automatically find and match another valid set on the board. The echoed match triggers all on-match effects like explosions, healing, and more!',
+    icon: 'lorc/echo-ripples',
+    specialEffect: 'echo',
+    effects: { echoChance: 5 }
+  },
+  {
+    id: 'echo-stone-rare',
+    name: 'Echo Stone',
+    rarity: 'rare',
+    level: 1,
+    price: 16,
+    description: '15% chance to auto-match another set on the board.',
+    shortDescription: 'May auto-match another set',
+    flavorText: 'After matching, has a chance to automatically find and match another valid set on the board. The echoed match triggers all on-match effects like explosions, healing, and more!',
+    icon: 'lorc/echo-ripples',
+    specialEffect: 'echo',
+    effects: { echoChance: 15 }
+  },
+  {
+    id: 'echo-stone-legendary',
+    name: 'Echo Stone',
+    rarity: 'legendary',
+    level: 1,
+    price: 24,
+    description: '35% chance to auto-match another set on the board.',
+    shortDescription: 'May auto-match another set',
+    flavorText: 'After matching, has a chance to automatically find and match another valid set on the board. The echoed match triggers all on-match effects like explosions, healing, and more!',
+    icon: 'lorc/echo-ripples',
+    specialEffect: 'echo',
+    effects: { echoChance: 35 }
+  },
+
+  // ============================================================================
+  // 18. CHAIN REACTION - Double auto-match (legendary only)
+  // ============================================================================
+  {
+    id: 'chain-reaction-legendary',
+    name: 'Chain Reaction',
+    rarity: 'legendary',
+    level: 1,
+    price: 25,
+    description: '30% chance for echo to trigger twice (2 additional matches).',
+    shortDescription: 'Echo may match twice',
+    flavorText: 'When Echo Stone triggers, has a chance to find and match TWO additional sets instead of one. Creates massive chain reactions with other on-match effects!',
+    icon: 'lorc/chain-lightning',
+    specialEffect: 'chainReaction',
+    effects: { chainReactionChance: 30 },
+    maxCount: 1  // Unique - only one can be owned
   },
 ];
 

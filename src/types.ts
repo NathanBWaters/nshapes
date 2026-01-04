@@ -74,7 +74,8 @@ export type WeaponName =
   'Blast Powder' | 'Oracle Eye' | 'Mystic Sight' | 'Field Stone' | 'Growth Seed' |
   'Flint Spark' | 'Second Chance' | 'Fortune Token' | 'Life Vessel' |
   'Mending Charm' | 'Crystal Orb' | 'Seeker Lens' | 'Prism Glass' |
-  'Chrono Shard' | 'Time Drop' | 'Prismatic Ray' | 'Chaos Shard';
+  'Chrono Shard' | 'Time Drop' | 'Prismatic Ray' | 'Chaos Shard' |
+  'Echo Stone' | 'Chain Reaction';
 
 export type WeaponRarity = 'common' | 'rare' | 'legendary';
 
@@ -98,7 +99,7 @@ export interface Weapon {
   flavorText?: string; // Longer fun description for weapon guide
   price: number;
   effects: Partial<PlayerStats>;
-  specialEffect?: 'explosive' | 'autoHint' | 'enhancedHint' | 'boardGrowth' | 'fire' | 'graceGain' | 'healing' | 'hintGain' | 'holographic' | 'timeGain' | 'laser' | 'ricochet';
+  specialEffect?: 'explosive' | 'autoHint' | 'enhancedHint' | 'boardGrowth' | 'fire' | 'graceGain' | 'healing' | 'hintGain' | 'holographic' | 'timeGain' | 'laser' | 'ricochet' | 'echo' | 'chainReaction';
   icon?: string; // Icon path like "delapouite/bamboo"
   maxCount?: number; // Maximum number of this weapon that can be owned (e.g., 1 for unique legendaries)
 }
@@ -193,6 +194,8 @@ export interface PlayerStats {
   ricochetChance: number;       // % for initial ricochet on match
   ricochetChainChance: number;  // % for each ricochet to chain again
   enhancedHintChance: number;   // % chance for autohint to show 2 cards instead of 1
+  echoChance: number;           // % chance to auto-match another set on player match
+  chainReactionChance: number;  // % chance for echo to trigger twice (2 additional matches)
 }
 
 export interface Player {

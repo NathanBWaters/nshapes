@@ -1,4 +1,5 @@
-import { Card, PlayerStats, Weapon } from '../types';
+import { Card, PlayerStats, Weapon, AttributeName } from '../types';
+import { isValidCombination } from './gameUtils';
 
 // Grid dimensions (assumes 3 columns)
 const GRID_COLS = 3;
@@ -208,6 +209,33 @@ export const getFireSpreadCards = (
 };
 
 /**
+ * Find a valid set on the board, excluding certain cards
+ * Returns the first valid set found, or null if none exists
+ */
+export const findValidSet = (
+  board: Card[],
+  excludedCards: Card[],
+  activeAttributes: AttributeName[]
+): Card[] | null => {
+  const excludedIds = new Set(excludedCards.map(c => c.id));
+  const availableCards = board.filter(c => !excludedIds.has(c.id));
+
+  // Try all combinations of 3 cards
+  for (let i = 0; i < availableCards.length; i++) {
+    for (let j = i + 1; j < availableCards.length; j++) {
+      for (let k = j + 1; k < availableCards.length; k++) {
+        const cards = [availableCards[i], availableCards[j], availableCards[k]];
+        if (isValidCombination(cards, activeAttributes).isValid) {
+          return cards;
+        }
+      }
+    }
+  }
+
+  return null;
+};
+
+/**
  * Result of processing weapon effects after a match
  */
 export interface WeaponEffectResult {
@@ -217,6 +245,7 @@ export interface WeaponEffectResult {
   fireCards: Card[];
   ricochetCards: Card[];
   ricochetCount: number;
+  autoMatchedSets: Card[][]; // Sets auto-matched by Echo Stone
   bonusPoints: number;
   bonusMoney: number;
   bonusTime: number;
@@ -234,12 +263,16 @@ export interface WeaponEffectResult {
  * @param matchedCards - Cards that were matched
  * @param playerStats - Combined player stats
  * @param weapons - Optional array of player's weapons (for independent laser rolls)
+ * @param activeAttributes - Active attributes for valid set detection (for echo)
+ * @param isEchoMatch - If true, this is an auto-matched set (don't trigger more echoes)
  */
 export const processWeaponEffects = (
   board: Card[],
   matchedCards: Card[],
   playerStats: PlayerStats,
-  weapons?: Weapon[]
+  weapons?: Weapon[],
+  activeAttributes?: AttributeName[],
+  isEchoMatch: boolean = false
 ): WeaponEffectResult => {
   const result: WeaponEffectResult = {
     explosiveCards: [],
@@ -248,6 +281,7 @@ export const processWeaponEffects = (
     fireCards: [],
     ricochetCards: [],
     ricochetCount: 0,
+    autoMatchedSets: [],
     bonusPoints: 0,
     bonusMoney: 0,
     bonusTime: 0,
@@ -258,9 +292,37 @@ export const processWeaponEffects = (
     notifications: [],
   };
 
-  // Explosive effect - destroy adjacent cards
+  // Echo effect - MUST be processed FIRST to reserve the echo set before explosions
+  // Only triggers on player matches (not on echoed matches) to prevent infinite loops
+  if (!isEchoMatch && playerStats.echoChance > 0 && activeAttributes && Math.random() * 100 < playerStats.echoChance) {
+    // Find a valid set among remaining cards (only excluding matched cards at this point)
+    const echoSet = findValidSet(board, matchedCards, activeAttributes);
+    if (echoSet) {
+      result.autoMatchedSets.push(echoSet);
+      result.notifications.push('Echo!');
+
+      // Check for Chain Reaction - chance for a second auto-match
+      if (playerStats.chainReactionChance > 0 && Math.random() * 100 < playerStats.chainReactionChance) {
+        // Exclude the first echo set too
+        const excludedForSecond = [...matchedCards, ...echoSet];
+        const secondEchoSet = findValidSet(board, excludedForSecond, activeAttributes);
+        if (secondEchoSet) {
+          result.autoMatchedSets.push(secondEchoSet);
+          // Update notification to show chain reaction
+          result.notifications[result.notifications.length - 1] = 'Chain Reaction!';
+        }
+      }
+    }
+  }
+
+  // Collect all echo cards to exclude from explosions/lasers/ricochet
+  const echoCardIds = new Set(result.autoMatchedSets.flat().map(c => c.id));
+
+  // Explosive effect - destroy adjacent cards (excluding echo set cards)
   if (playerStats.explosionChance > 0) {
-    result.explosiveCards = getExplosiveCards(board, matchedCards, playerStats.explosionChance);
+    const rawExplosiveCards = getExplosiveCards(board, matchedCards, playerStats.explosionChance);
+    // Filter out cards that are part of echo sets
+    result.explosiveCards = rawExplosiveCards.filter(c => !echoCardIds.has(c.id));
     if (result.explosiveCards.length > 0) {
       result.bonusPoints += result.explosiveCards.length;
       result.bonusMoney += result.explosiveCards.length;
@@ -273,7 +335,7 @@ export const processWeaponEffects = (
   if (weapons && weapons.length > 0) {
     // Get all laser weapons and roll each independently
     const laserWeapons = weapons.filter(w => w.specialEffect === 'laser' && w.effects.laserChance);
-    const laserCardIds = new Set<string>();
+    const laserCardIdSet = new Set<string>();
     let lasersActivated = 0;
 
     laserWeapons.forEach(weapon => {
@@ -282,9 +344,11 @@ export const processWeaponEffects = (
         // This laser fires! Get cards for this laser
         const thisLaserCards = getLaserCards(board, matchedCards);
         thisLaserCards.forEach(card => {
-          // Only add if not already exploded or already lasered
-          if (!result.explosiveCards.some(ec => ec.id === card.id) && !laserCardIds.has(card.id)) {
-            laserCardIds.add(card.id);
+          // Only add if not already exploded, already lasered, or part of echo set
+          if (!result.explosiveCards.some(ec => ec.id === card.id) &&
+              !laserCardIdSet.has(card.id) &&
+              !echoCardIds.has(card.id)) {
+            laserCardIdSet.add(card.id);
             result.laserCards.push(card);
           }
         });
@@ -303,7 +367,7 @@ export const processWeaponEffects = (
     // Fallback: single roll with combined chance (for backward compatibility)
     result.laserCards = getLaserCards(board, matchedCards);
     result.laserCards = result.laserCards.filter(
-      lc => !result.explosiveCards.some(ec => ec.id === lc.id)
+      lc => !result.explosiveCards.some(ec => ec.id === lc.id) && !echoCardIds.has(lc.id)
     );
     result.laserCount = 1;
     if (result.laserCards.length > 0) {
@@ -316,7 +380,12 @@ export const processWeaponEffects = (
   // Ricochet effect - random chain destruction
   if (playerStats.ricochetChance > 0) {
     // Calculate ricochet after explosions and lasers to avoid double-destruction
-    const excludedCards = [...result.explosiveCards, ...result.laserCards];
+    // Also exclude echo set cards
+    const excludedCards = [
+      ...result.explosiveCards,
+      ...result.laserCards,
+      ...result.autoMatchedSets.flat(),
+    ];
     result.ricochetCards = getRicochetCards(
       board,
       matchedCards,

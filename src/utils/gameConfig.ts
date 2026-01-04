@@ -38,6 +38,8 @@ export const STARTING_STATS = {
   ricochetChance: 0,
   ricochetChainChance: 0,
   enhancedHintChance: 0,    // % chance for autohint to show 2 cards instead of 1
+  echoChance: 0,            // % chance to auto-match another set on player match
+  chainReactionChance: 0,   // % chance for echo to trigger twice (2 additional matches)
 } as const;
 
 // =============================================================================

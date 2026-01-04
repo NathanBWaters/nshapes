@@ -12,23 +12,23 @@ import { Weapon, WeaponRarity, Player } from '@/types';
 
 describe('Weapon Definitions', () => {
   describe('WEAPONS array', () => {
-    it('should have exactly 49 weapons (16 types x 3 rarities + 1 legendary-only)', () => {
-      expect(WEAPONS.length).toBe(49);
+    it('should have exactly 53 weapons (17 types x 3 rarities + 2 legendary-only)', () => {
+      expect(WEAPONS.length).toBe(53);
     });
 
-    it('should have 16 common weapons', () => {
+    it('should have 17 common weapons', () => {
       const commons = WEAPONS.filter(w => w.rarity === 'common');
-      expect(commons.length).toBe(16);
+      expect(commons.length).toBe(17);
     });
 
-    it('should have 16 rare weapons', () => {
+    it('should have 17 rare weapons', () => {
       const rares = WEAPONS.filter(w => w.rarity === 'rare');
-      expect(rares.length).toBe(16);
+      expect(rares.length).toBe(17);
     });
 
-    it('should have 17 legendary weapons (16 base + Mystic Sight)', () => {
+    it('should have 19 legendary weapons (17 base + Mystic Sight + Chain Reaction)', () => {
       const legendaries = WEAPONS.filter(w => w.rarity === 'legendary');
-      expect(legendaries.length).toBe(17);
+      expect(legendaries.length).toBe(19);
     });
 
     it('should have all required weapon types', () => {
@@ -51,6 +51,8 @@ describe('Weapon Definitions', () => {
         'Time Drop',
         'Prismatic Ray',
         'Chaos Shard',
+        'Echo Stone',
+        'Chain Reaction',
       ];
 
       expectedTypes.forEach(type => {
@@ -105,7 +107,7 @@ describe('Weapon Definitions', () => {
 
     it('most weapon types should have 3 rarities, some are legendary-only', () => {
       const weaponsByName = new Map<string, Weapon[]>();
-      const legendaryOnlyWeapons = ['Mystic Sight'];
+      const legendaryOnlyWeapons = ['Mystic Sight', 'Chain Reaction'];
 
       WEAPONS.forEach(weapon => {
         const existing = weaponsByName.get(weapon.name) || [];
@@ -205,7 +207,7 @@ describe('Weapon Definitions', () => {
 
     it('legendary weapons should have higher effect values than common (for weapons with all rarities)', () => {
       const weaponsByName = new Map<string, Map<WeaponRarity, Weapon>>();
-      const legendaryOnlyWeapons = ['Mystic Sight'];
+      const legendaryOnlyWeapons = ['Mystic Sight', 'Chain Reaction'];
 
       WEAPONS.forEach(weapon => {
         if (!weaponsByName.has(weapon.name)) {

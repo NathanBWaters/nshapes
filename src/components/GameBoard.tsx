@@ -283,8 +283,8 @@ const GameBoard: React.FC<GameBoardProps> = ({
           const matchedRewards = newSelectedCards.map(c => calculateCardReward(c));
 
           // Process weapon effects to get additional cards to destroy
-          // Pass weapons array for independent laser rolls
-          const weaponEffects = processWeaponEffects(cards, newSelectedCards, playerStats, weapons);
+          // Pass weapons array for independent laser rolls, and activeAttributes for echo
+          const weaponEffects = processWeaponEffects(cards, newSelectedCards, playerStats, weapons, activeAttributes, false);
 
           // Create rewards for exploded cards
           const explosionRewards: CardReward[] = weaponEffects.explosiveCards.map(c => ({
@@ -310,8 +310,83 @@ const GameBoard: React.FC<GameBoardProps> = ({
             effectType: 'ricochet' as const,
           }));
 
+          // Process auto-matched sets from Echo Stone
+          const echoRewards: CardReward[] = [];
+          const echoCards: CardType[] = [];
+
+          // Track all cards already being processed to exclude from echo weapon effects
+          let allProcessedCards = [
+            ...newSelectedCards,
+            ...weaponEffects.explosiveCards,
+            ...weaponEffects.laserCards,
+            ...weaponEffects.ricochetCards,
+          ];
+
+          for (const echoSet of weaponEffects.autoMatchedSets) {
+            // Add rewards for the echo-matched cards
+            echoSet.forEach(c => {
+              echoRewards.push({
+                cardId: c.id,
+                points: MATCH_REWARDS.basePoints + (c.bonusPoints || 0),
+                money: MATCH_REWARDS.baseMoney + (c.bonusMoney || 0),
+                experience: MATCH_REWARDS.baseExperience,
+              });
+              echoCards.push(c);
+            });
+
+            // Process weapon effects for the echo match (but with isEchoMatch=true to prevent infinite loops)
+            const echoEffects = processWeaponEffects(
+              cards,
+              echoSet,
+              playerStats,
+              weapons,
+              activeAttributes,
+              true // isEchoMatch - prevents more echoes
+            );
+
+            // Add explosion rewards from echo
+            echoEffects.explosiveCards.forEach(c => {
+              if (!allProcessedCards.some(pc => pc.id === c.id)) {
+                echoRewards.push({ cardId: c.id, points: 1, money: 1, effectType: 'explosion' as const });
+                echoCards.push(c);
+                allProcessedCards.push(c);
+              }
+            });
+
+            // Add laser rewards from echo
+            echoEffects.laserCards.forEach(c => {
+              if (!allProcessedCards.some(pc => pc.id === c.id)) {
+                echoRewards.push({ cardId: c.id, points: 2, money: 1, effectType: 'laser' as const });
+                echoCards.push(c);
+                allProcessedCards.push(c);
+              }
+            });
+
+            // Add ricochet rewards from echo
+            echoEffects.ricochetCards.forEach(c => {
+              if (!allProcessedCards.some(pc => pc.id === c.id)) {
+                echoRewards.push({ cardId: c.id, points: 1, money: 1, effectType: 'ricochet' as const });
+                echoCards.push(c);
+                allProcessedCards.push(c);
+              }
+            });
+
+            // Accumulate bonus stats from echo effects
+            weaponEffects.bonusHealing += echoEffects.bonusHealing;
+            weaponEffects.bonusHints += echoEffects.bonusHints;
+            weaponEffects.bonusTime += echoEffects.bonusTime;
+            weaponEffects.bonusGraces += echoEffects.bonusGraces;
+            weaponEffects.bonusPoints += echoEffects.bonusPoints;
+            weaponEffects.bonusMoney += echoEffects.bonusMoney;
+            weaponEffects.boardGrowth += echoEffects.boardGrowth;
+            weaponEffects.notifications.push(...echoEffects.notifications);
+
+            // Mark the echo set as processed
+            allProcessedCards.push(...echoSet);
+          }
+
           // Combine all rewards
-          const allRewards = [...matchedRewards, ...explosionRewards, ...laserRewards, ...ricochetRewards];
+          const allRewards = [...matchedRewards, ...explosionRewards, ...laserRewards, ...ricochetRewards, ...echoRewards];
           const rewardsWithMatchId = allRewards.map(r => ({ ...r, matchId }));
 
           // Collect all affected card IDs
@@ -320,6 +395,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
             ...weaponEffects.explosiveCards.map(c => c.id),
             ...weaponEffects.laserCards.map(c => c.id),
             ...weaponEffects.ricochetCards.map(c => c.id),
+            ...echoCards.map(c => c.id),
           ];
 
           // Mark all affected cards as matched and add rewards
@@ -327,12 +403,13 @@ const GameBoard: React.FC<GameBoardProps> = ({
           setSelectedCards(prev => prev.filter(c => !newSelectedCards.some(mc => mc.id === c.id)));
           setRevealingRewards(prev => [...prev, ...rewardsWithMatchId]);
 
-          // Collect all cards to replace (matched + weapon effects)
+          // Collect all cards to replace (matched + weapon effects + echo)
           const allCardsToReplace = [
             ...newSelectedCards,
             ...weaponEffects.explosiveCards,
             ...weaponEffects.laserCards,
             ...weaponEffects.ricochetCards,
+            ...echoCards,
           ];
 
           // After 1.5 seconds, notify parent and clear only this match's rewards
@@ -354,7 +431,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
             const matchedRewards = newSelectedCards.map(c => calculateCardReward(c));
 
             // Process weapon effects (explosions, lasers, etc.)
-            const weaponEffects = processWeaponEffects(cards, newSelectedCards, playerStats, weapons);
+            const weaponEffects = processWeaponEffects(cards, newSelectedCards, playerStats, weapons, activeAttributes, false);
 
             // Create rewards for exploded cards
             const explosionRewards: CardReward[] = weaponEffects.explosiveCards.map(c => ({
@@ -380,13 +457,80 @@ const GameBoard: React.FC<GameBoardProps> = ({
               effectType: 'ricochet' as const,
             }));
 
+            // Process auto-matched sets from Echo Stone (grace matches can trigger echo too!)
+            const echoRewards: CardReward[] = [];
+            const echoCards: CardType[] = [];
+
+            let allProcessedCards = [
+              ...newSelectedCards,
+              ...weaponEffects.explosiveCards,
+              ...weaponEffects.laserCards,
+              ...weaponEffects.ricochetCards,
+            ];
+
+            for (const echoSet of weaponEffects.autoMatchedSets) {
+              echoSet.forEach(c => {
+                echoRewards.push({
+                  cardId: c.id,
+                  points: MATCH_REWARDS.basePoints + (c.bonusPoints || 0),
+                  money: MATCH_REWARDS.baseMoney + (c.bonusMoney || 0),
+                  experience: MATCH_REWARDS.baseExperience,
+                });
+                echoCards.push(c);
+              });
+
+              const echoEffects = processWeaponEffects(
+                cards,
+                echoSet,
+                playerStats,
+                weapons,
+                activeAttributes,
+                true
+              );
+
+              echoEffects.explosiveCards.forEach(c => {
+                if (!allProcessedCards.some(pc => pc.id === c.id)) {
+                  echoRewards.push({ cardId: c.id, points: 1, money: 1, effectType: 'explosion' as const });
+                  echoCards.push(c);
+                  allProcessedCards.push(c);
+                }
+              });
+
+              echoEffects.laserCards.forEach(c => {
+                if (!allProcessedCards.some(pc => pc.id === c.id)) {
+                  echoRewards.push({ cardId: c.id, points: 2, money: 1, effectType: 'laser' as const });
+                  echoCards.push(c);
+                  allProcessedCards.push(c);
+                }
+              });
+
+              echoEffects.ricochetCards.forEach(c => {
+                if (!allProcessedCards.some(pc => pc.id === c.id)) {
+                  echoRewards.push({ cardId: c.id, points: 1, money: 1, effectType: 'ricochet' as const });
+                  echoCards.push(c);
+                  allProcessedCards.push(c);
+                }
+              });
+
+              weaponEffects.bonusHealing += echoEffects.bonusHealing;
+              weaponEffects.bonusHints += echoEffects.bonusHints;
+              weaponEffects.bonusTime += echoEffects.bonusTime;
+              weaponEffects.bonusGraces += echoEffects.bonusGraces;
+              weaponEffects.bonusPoints += echoEffects.bonusPoints;
+              weaponEffects.bonusMoney += echoEffects.bonusMoney;
+              weaponEffects.boardGrowth += echoEffects.boardGrowth;
+              weaponEffects.notifications.push(...echoEffects.notifications);
+
+              allProcessedCards.push(...echoSet);
+            }
+
             // Mark the first matched reward as a grace so Game.tsx knows to decrement graces
             if (matchedRewards.length > 0) {
               matchedRewards[0].effectType = 'grace';
             }
 
             // Combine all rewards
-            const allRewards = [...matchedRewards, ...explosionRewards, ...laserRewards, ...ricochetRewards];
+            const allRewards = [...matchedRewards, ...explosionRewards, ...laserRewards, ...ricochetRewards, ...echoRewards];
             const rewardsWithMatchId = allRewards.map(r => ({ ...r, matchId }));
 
             // Collect all affected card IDs
@@ -395,6 +539,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
               ...weaponEffects.explosiveCards.map(c => c.id),
               ...weaponEffects.laserCards.map(c => c.id),
               ...weaponEffects.ricochetCards.map(c => c.id),
+              ...echoCards.map(c => c.id),
             ];
 
             // Mark all affected cards and add rewards for visual reveal
@@ -408,6 +553,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
               ...weaponEffects.explosiveCards,
               ...weaponEffects.laserCards,
               ...weaponEffects.ricochetCards,
+              ...echoCards,
             ];
 
             // After 1.5 seconds, notify parent with weapon effects

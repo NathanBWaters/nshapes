@@ -7,8 +7,9 @@ import {
   getRicochetCards,
   getFireSpreadCards,
   processWeaponEffects,
+  findValidSet,
 } from '@/utils/weaponEffects';
-import { Card, PlayerStats, Weapon } from '@/types';
+import { Card, PlayerStats, Weapon, AttributeName } from '@/types';
 import { DEFAULT_PLAYER_STATS, WEAPONS } from '@/utils/gameDefinitions';
 
 // Helper to create a mock laser weapon
@@ -996,5 +997,323 @@ describe('Multi-Laser Independent Rolls', () => {
       expect(weapon.specialEffect).toBe('laser');
       expect(weapon.effects.laserChance).toBeGreaterThan(0);
     });
+  });
+});
+
+describe('Echo Stone and Chain Reaction', () => {
+  // Create a specific card with exact attributes for valid set testing
+  const createSetCard = (
+    id: string,
+    shape: 'oval' | 'squiggle' | 'diamond',
+    color: 'red' | 'green' | 'purple',
+    number: 1 | 2 | 3
+  ): Card => ({
+    id,
+    shape,
+    color,
+    number,
+    shading: 'solid',
+    background: 'white',
+    selected: false,
+  });
+
+  // Create a 4x3 board (12 cards) with TWO known valid sets:
+  // Row 1: INVALID filler (2 same, 1 different for each attribute)
+  // Row 2: VALID SET 1 (all different shape, color, number)
+  // Row 3: VALID SET 2 (all different shape, color, number)
+  // Row 4: INVALID filler (2 same, 1 different)
+  //
+  // Layout:
+  //   0  1  2      <- row 1 (filler - adjacent to set 1)
+  //   3  4  5      <- row 2 (valid set 1)
+  //   6  7  8      <- row 3 (valid set 2)
+  //   9  10 11     <- row 4 (filler - adjacent to set 2)
+  //
+  // For filler to be INVALID: must have 2 same + 1 different in at least one attribute
+  const createBoardWithTwoSets = (): Card[] => {
+    return [
+      // Row 1 (filler - INVALID: 2 oval + 1 oval = all same shape, 2 red + 1 red = all same color, but 1+1+2 = 2 same numbers = INVALID)
+      createSetCard('row1-0', 'oval', 'red', 1),
+      createSetCard('row1-1', 'oval', 'red', 1), // Same number as row1-0
+      createSetCard('row1-2', 'oval', 'red', 2), // Different number = 2 same + 1 different = INVALID
+      // Row 2 - VALID SET 1: all different shape, color, number
+      createSetCard('set1-0', 'oval', 'red', 1),
+      createSetCard('set1-1', 'squiggle', 'green', 2),
+      createSetCard('set1-2', 'diamond', 'purple', 3),
+      // Row 3 - VALID SET 2: all different shape, color, number
+      createSetCard('set2-0', 'oval', 'green', 1),
+      createSetCard('set2-1', 'squiggle', 'purple', 2),
+      createSetCard('set2-2', 'diamond', 'red', 3),
+      // Row 4 (filler - INVALID: 2 same + 1 different number)
+      createSetCard('row4-0', 'squiggle', 'purple', 1),
+      createSetCard('row4-1', 'squiggle', 'purple', 1), // Same as row4-0
+      createSetCard('row4-2', 'squiggle', 'purple', 2), // Different = INVALID
+    ];
+  };
+
+  const activeAttributes: AttributeName[] = ['shape', 'color', 'number'];
+
+  it('should find valid sets on the board', () => {
+    const board = createBoardWithTwoSets();
+
+    // Find first valid set (should find set 1 in row 2)
+    const set1 = findValidSet(board, [], activeAttributes);
+    expect(set1).not.toBeNull();
+    expect(set1!.length).toBe(3);
+
+    // Find second valid set (excluding set 1)
+    const set2 = findValidSet(board, set1!, activeAttributes);
+    expect(set2).not.toBeNull();
+    expect(set2!.length).toBe(3);
+
+    // Sets should be different
+    const set1Ids = set1!.map(c => c.id);
+    const set2Ids = set2!.map(c => c.id);
+    expect(set1Ids.some(id => set2Ids.includes(id))).toBe(false);
+  });
+
+  it('should trigger echo to auto-match second set when echoChance is 100%', () => {
+    const board = createBoardWithTwoSets();
+    // Match set 1 (row 2): cards at indices 3, 4, 5
+    const matchedCards = [board[3], board[4], board[5]];
+
+    const stats: PlayerStats = {
+      ...DEFAULT_PLAYER_STATS,
+      echoChance: 100, // 100% echo chance
+      explosionChance: 0, // No explosions for this test
+    };
+
+    const result = processWeaponEffects(board, matchedCards, stats, [], activeAttributes, false);
+
+    // Echo should have triggered and found set 2
+    expect(result.autoMatchedSets.length).toBe(1);
+    expect(result.autoMatchedSets[0].length).toBe(3);
+    expect(result.notifications).toContain('Echo!');
+
+    // The auto-matched set should be set 2 (cards 6, 7, 8)
+    const echoSetIds = result.autoMatchedSets[0].map(c => c.id);
+    expect(echoSetIds).toContain('set2-0');
+    expect(echoSetIds).toContain('set2-1');
+    expect(echoSetIds).toContain('set2-2');
+  });
+
+  it('should NOT trigger echo when isEchoMatch is true (prevents infinite loops)', () => {
+    const board = createBoardWithTwoSets();
+    const matchedCards = [board[3], board[4], board[5]];
+
+    const stats: PlayerStats = {
+      ...DEFAULT_PLAYER_STATS,
+      echoChance: 100,
+    };
+
+    // Call with isEchoMatch = true
+    const result = processWeaponEffects(board, matchedCards, stats, [], activeAttributes, true);
+
+    // No echo should trigger
+    expect(result.autoMatchedSets.length).toBe(0);
+    expect(result.notifications).not.toContain('Echo!');
+  });
+
+  it('should trigger chain reaction for 2 auto-matches when chainReactionChance is 100%', () => {
+    // Create a board with 3 valid sets for chain reaction test
+    const board = [
+      // Row 1 (filler)
+      createSetCard('filler-0', 'oval', 'red', 1),
+      createSetCard('filler-1', 'oval', 'red', 2),
+      createSetCard('filler-2', 'oval', 'red', 3),
+      // Row 2 - VALID SET 1 (player matches this)
+      createSetCard('set1-0', 'oval', 'red', 1),
+      createSetCard('set1-1', 'squiggle', 'green', 2),
+      createSetCard('set1-2', 'diamond', 'purple', 3),
+      // Row 3 - VALID SET 2 (first echo)
+      createSetCard('set2-0', 'oval', 'green', 1),
+      createSetCard('set2-1', 'squiggle', 'purple', 2),
+      createSetCard('set2-2', 'diamond', 'red', 3),
+      // Row 4 - VALID SET 3 (second echo from chain reaction)
+      createSetCard('set3-0', 'oval', 'purple', 1),
+      createSetCard('set3-1', 'squiggle', 'red', 2),
+      createSetCard('set3-2', 'diamond', 'green', 3),
+    ];
+
+    const matchedCards = [board[3], board[4], board[5]]; // Match set 1
+
+    const stats: PlayerStats = {
+      ...DEFAULT_PLAYER_STATS,
+      echoChance: 100, // 100% echo chance
+      chainReactionChance: 100, // 100% chain reaction chance
+    };
+
+    const result = processWeaponEffects(board, matchedCards, stats, [], activeAttributes, false);
+
+    // Should have 2 auto-matched sets (chain reaction!)
+    expect(result.autoMatchedSets.length).toBe(2);
+    expect(result.notifications).toContain('Chain Reaction!');
+  });
+
+  it('should trigger explosions for both original match and echo match', () => {
+    const board = createBoardWithTwoSets();
+    // Match set 1 (row 2): cards at indices 3, 4, 5
+    const matchedCards = [board[3], board[4], board[5]];
+
+    const stats: PlayerStats = {
+      ...DEFAULT_PLAYER_STATS,
+      echoChance: 100, // 100% echo chance
+      explosionChance: 100, // 100% explosion chance
+    };
+
+    const result = processWeaponEffects(board, matchedCards, stats, [], activeAttributes, false);
+
+    // Echo should trigger
+    expect(result.autoMatchedSets.length).toBe(1);
+
+    // Original match explosions: row 2 (cards 3,4,5) is adjacent to row 1 (0,1,2) and row 3 (6,7,8)
+    // But row 3 is the echo set, so it shouldn't be in explosiveCards
+    // Explosions from original match should hit row 1 (cards 0, 1, 2)
+    expect(result.explosiveCards.length).toBeGreaterThan(0);
+
+    // Row 1 cards should be exploded (adjacent to the original match)
+    const explodedIds = result.explosiveCards.map(c => c.id);
+    // At least some row 1 cards should be exploded
+    const row1Exploded = explodedIds.filter(id => id.startsWith('row1-'));
+    expect(row1Exploded.length).toBeGreaterThan(0);
+
+    // Notification should include explosion
+    expect(result.notifications.some(n => n.includes('Explosion'))).toBe(true);
+  });
+
+  it('should have echo-triggered explosions processed separately in GameBoard', () => {
+    // This test verifies the data structure is correct for GameBoard to process
+    const board = createBoardWithTwoSets();
+    const matchedCards = [board[3], board[4], board[5]];
+
+    const stats: PlayerStats = {
+      ...DEFAULT_PLAYER_STATS,
+      echoChance: 100,
+      explosionChance: 100,
+    };
+
+    const result = processWeaponEffects(board, matchedCards, stats, [], activeAttributes, false);
+
+    // The autoMatchedSets should contain the echo set for GameBoard to process
+    expect(result.autoMatchedSets.length).toBe(1);
+
+    // GameBoard will call processWeaponEffects again for each echo set
+    // with isEchoMatch=true to get their explosion effects
+    const echoSet = result.autoMatchedSets[0];
+    const echoResult = processWeaponEffects(board, echoSet, stats, [], activeAttributes, true);
+
+    // Echo match should trigger explosions too
+    // Echo set is row 3 (6,7,8), adjacent to row 4 (9,10,11)
+    // Note: Row 2 cards (3,4,5) were the original match, not in the board for explosion calc
+    expect(echoResult.explosiveCards.length).toBeGreaterThan(0);
+
+    // Row 4 cards should be exploded (adjacent to echo match)
+    const echoExplodedIds = echoResult.explosiveCards.map(c => c.id);
+    const row4Exploded = echoExplodedIds.filter(id => id.startsWith('row4-'));
+    expect(row4Exploded.length).toBeGreaterThan(0);
+  });
+
+  it('should destroy whole board: match row 2, explode row 1, echo row 3, explode row 4', () => {
+    const board = createBoardWithTwoSets();
+    // Match set 1 (row 2): cards at indices 3, 4, 5
+    const matchedCards = [board[3], board[4], board[5]];
+
+    const stats: PlayerStats = {
+      ...DEFAULT_PLAYER_STATS,
+      echoChance: 100,
+      explosionChance: 100,
+    };
+
+    // Process original match
+    const result = processWeaponEffects(board, matchedCards, stats, [], activeAttributes, false);
+
+    // Collect cards from original processing
+    const allDestroyedFromOriginal = [
+      ...matchedCards,
+      ...result.explosiveCards,
+    ];
+
+    // Echo should have triggered
+    expect(result.autoMatchedSets.length).toBe(1);
+    const echoSet = result.autoMatchedSets[0];
+
+    // Process echo match (simulating what GameBoard does)
+    const echoResult = processWeaponEffects(board, echoSet, stats, [], activeAttributes, true);
+
+    // Combine all destroyed cards
+    const allDestroyed = [
+      ...allDestroyedFromOriginal.map(c => c.id),
+      ...echoSet.map(c => c.id),
+      ...echoResult.explosiveCards.map(c => c.id),
+    ];
+
+    // Remove duplicates
+    const uniqueDestroyed = new Set(allDestroyed);
+    const uniqueDestroyedArray = Array.from(uniqueDestroyed);
+
+    // Should have destroyed most/all of the board:
+    // Row 2 (3 cards - matched) + Row 1 (up to 3 cards - exploded from match)
+    // + Row 3 (3 cards - echo) + Row 4 (up to 3 cards - exploded from echo)
+    // = up to 12 cards total
+    expect(uniqueDestroyed.size).toBeGreaterThanOrEqual(6); // At minimum: 3 matched + 3 echo
+
+    // Verify row distribution (count from unique set to avoid duplicates)
+    const row1Count = uniqueDestroyedArray.filter(id => id.startsWith('row1-')).length;
+    const set1Count = uniqueDestroyedArray.filter(id => id.startsWith('set1-')).length;
+    const set2Count = uniqueDestroyedArray.filter(id => id.startsWith('set2-')).length;
+    const row4Count = uniqueDestroyedArray.filter(id => id.startsWith('row4-')).length;
+
+    expect(set1Count).toBe(3); // Original match
+    expect(set2Count).toBe(3); // Echo match
+    expect(row1Count).toBeGreaterThan(0); // Explosions from original
+    expect(row4Count).toBeGreaterThan(0); // Explosions from echo
+
+    console.log(`Destroyed: ${uniqueDestroyed.size}/12 cards`);
+    console.log(`  Row 1 (exploded): ${row1Count}`);
+    console.log(`  Set 1 (matched): ${set1Count}`);
+    console.log(`  Set 2 (echo): ${set2Count}`);
+    console.log(`  Row 4 (exploded from echo): ${row4Count}`);
+  });
+
+  it('should not trigger echo when echoChance is 0', () => {
+    const board = createBoardWithTwoSets();
+    const matchedCards = [board[3], board[4], board[5]];
+
+    const stats: PlayerStats = {
+      ...DEFAULT_PLAYER_STATS,
+      echoChance: 0, // No echo
+    };
+
+    const result = processWeaponEffects(board, matchedCards, stats, [], activeAttributes, false);
+
+    expect(result.autoMatchedSets.length).toBe(0);
+    expect(result.notifications).not.toContain('Echo!');
+  });
+
+  it('should not find echo when no valid set remains', () => {
+    // Create board with only 1 valid set
+    // Filler cards: all identical = cannot form any valid set with themselves
+    const board = [
+      createSetCard('set1-0', 'oval', 'red', 1),
+      createSetCard('set1-1', 'squiggle', 'green', 2),
+      createSetCard('set1-2', 'diamond', 'purple', 3),
+      // Filler cards: all IDENTICAL (can't form a valid set - need all same OR all different)
+      // 3 identical cards = all same, which IS valid. So use 2 same + 1 different to be INVALID
+      createSetCard('filler-0', 'oval', 'red', 1),
+      createSetCard('filler-1', 'oval', 'red', 1), // Same as filler-0
+      createSetCard('filler-2', 'oval', 'red', 2), // Different number = INVALID
+    ];
+
+    const matchedCards = [board[0], board[1], board[2]];
+
+    const stats: PlayerStats = {
+      ...DEFAULT_PLAYER_STATS,
+      echoChance: 100,
+    };
+
+    const result = processWeaponEffects(board, matchedCards, stats, [], activeAttributes, false);
+
+    // No echo should trigger (no valid set remaining - filler cards are invalid)
+    expect(result.autoMatchedSets.length).toBe(0);
   });
 });
