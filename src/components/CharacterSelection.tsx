@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, Pressable, StyleSheet } from 'react-nativ
 import { Character, PlayerStats } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { getWeaponByName, DEFAULT_PLAYER_STATS } from '@/utils/gameDefinitions';
+import { CharacterWinsStorage, CharacterWins } from '@/utils/storage';
 import Icon from './Icon';
 import GameMenu from './GameMenu';
 
@@ -28,6 +29,12 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
   onExitGame,
 }) => {
   const [hoveredCharacter, setHoveredCharacter] = React.useState<string | null>(null);
+  const [characterWins, setCharacterWins] = React.useState<CharacterWins>({});
+
+  // Load character wins on mount
+  React.useEffect(() => {
+    setCharacterWins(CharacterWinsStorage.getWins());
+  }, []);
 
   // Auto-select first character if none selected
   React.useEffect(() => {
@@ -106,6 +113,7 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
         <View style={styles.optionsGrid}>
           {characters.map(character => {
             const isSelected = selectedCharacter === character.name;
+            const wins = characterWins[character.name] ?? 0;
 
             return (
               <Pressable
@@ -118,6 +126,11 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
                   isSelected && styles.optionButtonSelected,
                 ]}
               >
+                {wins > 0 && (
+                  <View style={styles.winsBadge}>
+                    <Text style={styles.winsBadgeText}>{wins}</Text>
+                  </View>
+                )}
                 <View style={styles.optionIconArea}>
                   {character.icon && (
                     <Icon
@@ -333,6 +346,27 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     flexBasis: '31%',
     padding: '3%',
+    position: 'relative',
+  },
+  winsBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: COLORS.actionYellow,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+    zIndex: 1,
+  },
+  winsBadgeText: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '700',
+    fontSize: 11,
   },
   optionIconArea: {
     flex: 2.5,

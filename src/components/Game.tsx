@@ -38,6 +38,7 @@ import VictoryScreen from './VictoryScreen';
 import MainMenu from './MainMenu';
 import DifficultySelection from './DifficultySelection';
 import { useTutorial } from '@/context/TutorialContext';
+import { CharacterWinsStorage } from '@/utils/storage';
 
 const INITIAL_CARD_COUNT = 12;
 const MAX_BOARD_SIZE = 21;
@@ -240,6 +241,10 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
   const completeRound = () => {
     // Check if this is the final round (Round 10) - if so, go to victory
     if (state.round >= 10) {
+      // Record the win for this character
+      if (selectedCharacter) {
+        CharacterWinsStorage.recordWin(selectedCharacter);
+      }
       setState(prevState => ({
         ...prevState,
         roundCompleted: true,
