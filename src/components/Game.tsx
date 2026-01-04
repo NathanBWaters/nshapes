@@ -1051,7 +1051,11 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
         selectedCards: prevState.selectedCards.filter(c => !cards.some(mc => mc.id === c.id)),
         foundCombinations: [...prevState.foundCombinations, cards],
         lootCrates: prevState.lootCrates + lootCratesEarned,
-        remainingTime: prevState.remainingTime + (weaponEffects?.bonusTime || 0),
+        // Cap time gains at starting max (round base time + startingTime bonus)
+        remainingTime: Math.min(
+          prevState.remainingTime + (weaponEffects?.bonusTime || 0),
+          getRoundRequirement(prevState.round).time + (calculatePlayerTotalStats(prevState.player).startingTime || 0)
+        ),
         player: {
           ...prevState.player,
           stats: {
