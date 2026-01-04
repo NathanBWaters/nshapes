@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, StyleSheet } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { Card as CardType, PlayerStats, CardReward, AttributeName, Weapon } from '@/types';
 import Card from './Card';
 import RewardReveal from './RewardReveal';
@@ -8,6 +9,7 @@ import { MATCH_REWARDS } from '@/utils/gameConfig';
 import { processWeaponEffects, WeaponEffectResult } from '@/utils/weaponEffects';
 import { isValidCombination } from '@/utils/gameUtils';
 import { useAutoHint } from '@/hooks/useAutoHint';
+import { useScreenShake } from '@/hooks/useScreenShake';
 
 // Default to 4 attributes for backward compatibility
 const DEFAULT_ATTRIBUTES: AttributeName[] = ['shape', 'color', 'number', 'shading'];
@@ -80,6 +82,9 @@ const GameBoard: React.FC<GameBoardProps> = ({
   const [selectedCards, setSelectedCards] = useState<CardType[]>([]);
   const [matchedCardIds, setMatchedCardIds] = useState<string[]>([]);
   const [hintCards, setHintCards] = useState<string[]>([]);
+
+  // Screen shake for explosions
+  const { shakeStyle, triggerShake } = useScreenShake();
 
   // Use ref for hints to avoid stale closure issues
   const hintsRef = useRef(playerStats.hints);
@@ -286,6 +291,11 @@ const GameBoard: React.FC<GameBoardProps> = ({
           // Pass weapons array for independent laser rolls, and activeAttributes for echo
           const weaponEffects = processWeaponEffects(cards, newSelectedCards, playerStats, weapons, activeAttributes, false);
 
+          // Trigger screen shake for explosions
+          if (weaponEffects.explosiveCards.length > 0) {
+            triggerShake(weaponEffects.explosiveCards.length);
+          }
+
           // Create rewards for exploded cards
           const explosionRewards: CardReward[] = weaponEffects.explosiveCards.map(c => ({
             cardId: c.id,
@@ -433,6 +443,11 @@ const GameBoard: React.FC<GameBoardProps> = ({
             // Process weapon effects (explosions, lasers, etc.)
             const weaponEffects = processWeaponEffects(cards, newSelectedCards, playerStats, weapons, activeAttributes, false);
 
+            // Trigger screen shake for explosions
+            if (weaponEffects.explosiveCards.length > 0) {
+              triggerShake(weaponEffects.explosiveCards.length);
+            }
+
             // Create rewards for exploded cards
             const explosionRewards: CardReward[] = weaponEffects.explosiveCards.map(c => ({
               cardId: c.id,
@@ -577,7 +592,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
   };
 
   return (
-    <View nativeID="gameboard-container" style={styles.container}>
+    <Animated.View nativeID="gameboard-container" style={[styles.container, shakeStyle]}>
       <View nativeID="gameboard-grid" style={styles.board}>
         {rows.map((row, rowIndex) => {
           // Calculate how many empty slots we need to fill out the row
@@ -622,7 +637,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
           );
         })}
       </View>
-    </View>
+    </Animated.View>
   );
 };
 
