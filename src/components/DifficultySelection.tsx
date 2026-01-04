@@ -14,10 +14,10 @@ interface DifficultySelectionProps {
 
 // Difficulty labels and descriptions
 const DIFFICULTY_INFO: Record<FreePlayDifficulty, { label: string; description: string; icon: string }> = {
-  easy: { label: 'Easy', description: '2 attributes', icon: 'smile' },
-  medium: { label: 'Medium', description: '3 attributes', icon: 'target' },
-  hard: { label: 'Hard', description: '4 attributes', icon: 'zap' },
-  omega: { label: 'Omega', description: '5 attributes', icon: 'flame' },
+  easy: { label: 'Easy', description: '2 attributes', icon: 'lorc/feather' },
+  medium: { label: 'Medium', description: '3 attributes', icon: 'lorc/archery-target' },
+  hard: { label: 'Hard', description: '4 attributes', icon: 'lorc/diamond-hard' },
+  omega: { label: 'Omega', description: '5 attributes', icon: 'lorc/brain' },
 };
 
 const DifficultySelection: React.FC<DifficultySelectionProps> = ({ onStart, onExitGame }) => {

@@ -183,7 +183,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
             ]}
           >
             <View style={styles.buttonIconContainer}>
-              <Icon name="sword" size={32} color={COLORS.slateCharcoal} />
+              <Icon name="lorc/crossed-swords" size={32} color={COLORS.slateCharcoal} />
             </View>
             <View style={styles.buttonTextContainer}>
               <Text style={styles.menuButtonText}>Adventure</Text>
@@ -200,7 +200,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
             ]}
           >
             <View style={styles.buttonIconContainer}>
-              <Icon name="target" size={32} color={COLORS.slateCharcoal} />
+              <Icon name="lorc/archery-target" size={32} color={COLORS.slateCharcoal} />
             </View>
             <View style={styles.buttonTextContainer}>
               <Text style={styles.menuButtonText}>Free Play</Text>
@@ -217,7 +217,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
             ]}
           >
             <View style={styles.buttonIconContainer}>
-              <Icon name="help-circle" size={32} color={COLORS.canvasWhite} />
+              <Icon name="lorc/open-book" size={32} color={COLORS.canvasWhite} />
             </View>
             <View style={styles.buttonTextContainer}>
               <Text style={[styles.menuButtonText, styles.tutorialButtonText]}>Tutorial</Text>
