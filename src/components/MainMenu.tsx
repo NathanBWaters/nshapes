@@ -1,10 +1,18 @@
-import React, { useEffect, useRef, useMemo } from 'react';
-import { View, Text, Pressable, StyleSheet, Animated, Easing } from 'react-native';
+import React, { useEffect, useRef, useMemo, useCallback } from 'react';
+import { View, Text, Pressable, StyleSheet, Animated, Easing, Platform } from 'react-native';
+import ReAnimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  interpolate,
+} from 'react-native-reanimated';
 import { COLORS, RADIUS } from '@/utils/colors';
 import Icon from './Icon';
 import Card from './Card';
 import { Card as CardType } from '@/types';
 import { createDeck, shuffleArray } from '@/utils/gameUtils';
+
+const AnimatedPressable = ReAnimated.createAnimatedComponent(Pressable);
 
 const NUM_BACKGROUND_CARDS = 8;
 
@@ -29,6 +37,105 @@ interface CardConfig {
   rotationDuration: number;
   rotationDirection: 1 | -1;
   opacity: number;
+}
+
+// Menu button with smooth press animations
+function MenuButton({
+  onPress,
+  variant,
+  icon,
+  title,
+  subtitle,
+}: {
+  onPress: () => void;
+  variant: 'adventure' | 'freeplay' | 'tutorial';
+  icon: string;
+  title: string;
+  subtitle: string;
+}) {
+  const pressed = useSharedValue(0);
+  const hovered = useSharedValue(0);
+
+  const handlePressIn = useCallback(() => {
+    pressed.value = withTiming(1, { duration: 100 });
+  }, [pressed]);
+
+  const handlePressOut = useCallback(() => {
+    pressed.value = withTiming(0, { duration: 150 });
+  }, [pressed]);
+
+  const handleHoverIn = useCallback(() => {
+    if (Platform.OS === 'web') {
+      hovered.value = withTiming(1, { duration: 150 });
+    }
+  }, [hovered]);
+
+  const handleHoverOut = useCallback(() => {
+    if (Platform.OS === 'web') {
+      hovered.value = withTiming(0, { duration: 150 });
+    }
+  }, [hovered]);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    const scale = interpolate(pressed.value, [0, 1], [1, 0.97]);
+    const translateY = interpolate(hovered.value, [0, 1], [0, -3]);
+
+    return {
+      transform: [
+        { scale },
+        { translateY },
+      ],
+    };
+  });
+
+  const variantStyles = {
+    adventure: {
+      button: styles.adventureButton,
+      iconBg: COLORS.paperBeige,
+      iconColor: COLORS.slateCharcoal,
+      textColor: COLORS.slateCharcoal,
+    },
+    freeplay: {
+      button: styles.freeplayButton,
+      iconBg: COLORS.paperBeige,
+      iconColor: COLORS.slateCharcoal,
+      textColor: COLORS.slateCharcoal,
+    },
+    tutorial: {
+      button: styles.tutorialButton,
+      iconBg: 'rgba(255,255,255,0.2)',
+      iconColor: COLORS.canvasWhite,
+      textColor: COLORS.canvasWhite,
+    },
+  };
+
+  const v = variantStyles[variant];
+
+  return (
+    <AnimatedPressable
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      onHoverIn={handleHoverIn}
+      onHoverOut={handleHoverOut}
+      style={[
+        styles.menuButton,
+        v.button,
+        animatedStyle,
+        Platform.OS === 'web' && { cursor: 'pointer' as const },
+      ]}
+    >
+      <View style={[styles.buttonIconContainer, { backgroundColor: v.iconBg }]}>
+        <Icon name={icon} size={32} color={v.iconColor} />
+      </View>
+      <View style={styles.buttonTextContainer}>
+        <Text style={[styles.menuButtonText, { color: v.textColor }]}>{title}</Text>
+        <Text style={[styles.menuButtonSubtext, { color: v.textColor, opacity: variant === 'tutorial' ? 0.9 : 0.7 }]}>
+          {subtitle}
+        </Text>
+      </View>
+    </AnimatedPressable>
+  );
 }
 
 const MainMenu: React.FC<MainMenuProps> = ({
@@ -174,58 +281,27 @@ const MainMenu: React.FC<MainMenuProps> = ({
 
         {/* Menu Buttons */}
         <View style={styles.menuSection}>
-          <Pressable
+          <MenuButton
             onPress={onSelectAdventure}
-            style={({ pressed }) => [
-              styles.menuButton,
-              styles.adventureButton,
-              pressed && styles.buttonPressed,
-            ]}
-          >
-            <View style={styles.buttonIconContainer}>
-              <Icon name="lorc/crossed-swords" size={32} color={COLORS.slateCharcoal} />
-            </View>
-            <View style={styles.buttonTextContainer}>
-              <Text style={styles.menuButtonText}>Adventure</Text>
-              <Text style={styles.menuButtonSubtext}>10 rounds, enemies & loot</Text>
-            </View>
-          </Pressable>
-
-          <Pressable
+            variant="adventure"
+            icon="lorc/crossed-swords"
+            title="Adventure"
+            subtitle="10 rounds, enemies & loot"
+          />
+          <MenuButton
             onPress={onSelectFreeplay}
-            style={({ pressed }) => [
-              styles.menuButton,
-              styles.freeplayButton,
-              pressed && styles.buttonPressed,
-            ]}
-          >
-            <View style={styles.buttonIconContainer}>
-              <Icon name="lorc/archery-target" size={32} color={COLORS.slateCharcoal} />
-            </View>
-            <View style={styles.buttonTextContainer}>
-              <Text style={styles.menuButtonText}>Free Play</Text>
-              <Text style={styles.menuButtonSubtext}>No timer, practice mode</Text>
-            </View>
-          </Pressable>
-
-          <Pressable
+            variant="freeplay"
+            icon="lorc/archery-target"
+            title="Free Play"
+            subtitle="No timer, practice mode"
+          />
+          <MenuButton
             onPress={onSelectTutorial}
-            style={({ pressed }) => [
-              styles.menuButton,
-              styles.tutorialButton,
-              pressed && styles.buttonPressed,
-            ]}
-          >
-            <View style={styles.buttonIconContainer}>
-              <Icon name="lorc/open-book" size={32} color={COLORS.canvasWhite} />
-            </View>
-            <View style={styles.buttonTextContainer}>
-              <Text style={[styles.menuButtonText, styles.tutorialButtonText]}>Tutorial</Text>
-              <Text style={[styles.menuButtonSubtext, styles.tutorialButtonSubtext]}>
-                Learn how to play
-              </Text>
-            </View>
-          </Pressable>
+            variant="tutorial"
+            icon="lorc/open-book"
+            title="Tutorial"
+            subtitle="Learn how to play"
+          />
         </View>
 
         {/* Footer */}
@@ -304,10 +380,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.tutorialBlue,
     borderColor: COLORS.slateCharcoal,
   },
-  buttonPressed: {
-    opacity: 0.8,
-    transform: [{ scale: 0.98 }],
-  },
   buttonIconContainer: {
     width: 56,
     height: 56,
@@ -329,18 +401,11 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginBottom: 4,
   },
-  tutorialButtonText: {
-    color: COLORS.canvasWhite,
-  },
   menuButtonSubtext: {
     fontSize: 12,
     fontWeight: '400',
     color: COLORS.slateCharcoal,
     opacity: 0.7,
-  },
-  tutorialButtonSubtext: {
-    color: COLORS.canvasWhite,
-    opacity: 0.9,
   },
   footer: {
     alignItems: 'center',
