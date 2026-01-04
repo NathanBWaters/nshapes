@@ -1,12 +1,10 @@
-import React, { useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
-import { COLORS, RADIUS, SPACING, SHADOWS } from '../theme';
-import { haptics } from '../utils/haptics';
+import React from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { COLORS, RADIUS } from '@/utils/colors';
 import { AttributeName, Card as CardType, PlayerStats } from '@/types';
 import { DEFAULT_PLAYER_STATS } from '@/utils/gameDefinitions';
 import Card from './Card';
 import GameMenu from './GameMenu';
-import { Button } from './ui';
 
 interface AttributeUnlockScreenProps {
   newAttribute: AttributeName;
@@ -95,16 +93,6 @@ const AttributeUnlockScreen: React.FC<AttributeUnlockScreenProps> = ({
 }) => {
   const info = ATTRIBUTE_INFO[newAttribute];
 
-  const handleContinue = useCallback(() => {
-    haptics.medium();
-    onContinue();
-  }, [onContinue]);
-
-  const handlePractice = useCallback(() => {
-    haptics.light();
-    onPractice?.();
-  }, [onPractice]);
-
   if (isFinalRound) {
     return (
       <View style={styles.container}>
@@ -138,16 +126,9 @@ const AttributeUnlockScreen: React.FC<AttributeUnlockScreenProps> = ({
             </Text>
           </ScrollView>
 
-          <View style={styles.buttonRow}>
-            <Button
-              variant="primary"
-              size="lg"
-              onPress={handleContinue}
-              fullWidth
-            >
-              I'M READY
-            </Button>
-          </View>
+          <TouchableOpacity style={styles.continueButton} onPress={onContinue}>
+            <Text style={styles.continueButtonText}>I'M READY</Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
@@ -204,27 +185,16 @@ const AttributeUnlockScreen: React.FC<AttributeUnlockScreenProps> = ({
 
         <View style={styles.buttonRow}>
           {onPractice && (
-            <View style={styles.buttonHalf}>
-              <Button
-                variant="secondary"
-                size="md"
-                onPress={handlePractice}
-                fullWidth
-              >
-                PRACTICE FIRST
-              </Button>
-            </View>
+            <TouchableOpacity style={styles.practiceButton} onPress={onPractice}>
+              <Text style={styles.practiceButtonText}>PRACTICE FIRST</Text>
+            </TouchableOpacity>
           )}
-          <View style={onPractice ? styles.buttonHalf : styles.buttonFull}>
-            <Button
-              variant="primary"
-              size="md"
-              onPress={handleContinue}
-              fullWidth
-            >
-              CONTINUE
-            </Button>
-          </View>
+          <TouchableOpacity
+            style={[styles.continueButton, onPractice && styles.continueButtonSmall]}
+            onPress={onContinue}
+          >
+            <Text style={styles.continueButtonText}>CONTINUE</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </View>
@@ -374,16 +344,43 @@ const styles = StyleSheet.create({
   },
   buttonRow: {
     flexDirection: 'row',
-    padding: SPACING.md,
-    gap: SPACING.sm,
+    padding: 16,
+    gap: 12,
     borderTopWidth: 1,
     borderTopColor: COLORS.slateCharcoal,
   },
-  buttonHalf: {
+  practiceButton: {
+    flex: 1,
+    backgroundColor: COLORS.paperBeige,
+    paddingVertical: 14,
+    borderRadius: RADIUS.button,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+    alignItems: 'center',
+  },
+  practiceButtonText: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '700',
+    fontSize: 13,
+    letterSpacing: 1,
+  },
+  continueButton: {
+    flex: 1,
+    backgroundColor: COLORS.actionYellow,
+    paddingVertical: 14,
+    borderRadius: RADIUS.button,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+    alignItems: 'center',
+  },
+  continueButtonSmall: {
     flex: 1,
   },
-  buttonFull: {
-    flex: 1,
+  continueButtonText: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '700',
+    fontSize: 13,
+    letterSpacing: 1,
   },
   finalSubtitle: {
     fontSize: 18,

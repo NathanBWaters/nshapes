@@ -1,26 +1,10 @@
-import React, { useEffect, useRef, useMemo, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, Animated, Easing, Platform } from 'react-native';
-import ReAnimated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withSpring,
-  withSequence,
-  withRepeat,
-  withDelay,
-  interpolate,
-  Extrapolation,
-} from 'react-native-reanimated';
-import { COLORS, RADIUS, SPACING, SHADOWS } from '../theme';
-import { SPRINGS, DURATIONS } from '../theme/animations';
-import { triggerHaptic } from '../hooks/useTouchFeedback';
+import React, { useEffect, useRef, useMemo } from 'react';
+import { View, Text, Pressable, StyleSheet, Animated, Easing } from 'react-native';
+import { COLORS, RADIUS } from '@/utils/colors';
 import Icon from './Icon';
 import Card from './Card';
 import { Card as CardType } from '@/types';
 import { createDeck, shuffleArray } from '@/utils/gameUtils';
-
-const AnimatedPressable = ReAnimated.createAnimatedComponent(Pressable);
-const AnimatedText = ReAnimated.createAnimatedComponent(Text);
 
 const NUM_BACKGROUND_CARDS = 8;
 
@@ -47,282 +31,11 @@ interface CardConfig {
   opacity: number;
 }
 
-// Menu button with delightful bouncy animations
-function MenuButton({
-  onPress,
-  variant,
-  icon,
-  title,
-  subtitle,
-  index,
-}: {
-  onPress: () => void;
-  variant: 'adventure' | 'freeplay' | 'tutorial';
-  icon: string;
-  title: string;
-  subtitle: string;
-  index: number;
-}) {
-  const pressed = useSharedValue(0);
-  const hovered = useSharedValue(0);
-  const entrance = useSharedValue(0);
-  const idle = useSharedValue(0);
-
-  // Staggered entrance animation
-  useEffect(() => {
-    entrance.value = withDelay(
-      150 + index * 100,
-      withSpring(1, SPRINGS.wobbly)
-    );
-    // Subtle breathing animation for the primary button
-    if (variant === 'adventure') {
-      idle.value = withDelay(
-        1000,
-        withRepeat(
-          withSequence(
-            withTiming(1, { duration: 2000 }),
-            withTiming(0, { duration: 2000 })
-          ),
-          -1,
-          true
-        )
-      );
-    }
-  }, [entrance, idle, index, variant]);
-
-  const handlePressIn = useCallback(() => {
-    triggerHaptic('light');
-    // Quick squish
-    pressed.value = withSpring(1, {
-      ...SPRINGS.squish,
-      stiffness: SPRINGS.squish.stiffness * 1.5,
-    });
-  }, [pressed]);
-
-  const handlePressOut = useCallback(() => {
-    // Bouncy release with overshoot
-    pressed.value = withSequence(
-      withSpring(-0.4, SPRINGS.wobbly),
-      withSpring(0, SPRINGS.gentle)
-    );
-  }, [pressed]);
-
-  const handleHoverIn = useCallback(() => {
-    if (Platform.OS === 'web') {
-      hovered.value = withSpring(1, SPRINGS.eager);
-    }
-  }, [hovered]);
-
-  const handleHoverOut = useCallback(() => {
-    if (Platform.OS === 'web') {
-      hovered.value = withSpring(0, SPRINGS.gentle);
-    }
-  }, [hovered]);
-
-  const handlePress = useCallback(() => {
-    triggerHaptic('medium');
-    onPress();
-  }, [onPress]);
-
-  const animatedStyle = useAnimatedStyle(() => {
-    // Entrance: slide up and fade in
-    const entranceTranslateY = interpolate(
-      entrance.value,
-      [0, 1],
-      [40, 0],
-      Extrapolation.CLAMP
-    );
-    const entranceOpacity = interpolate(
-      entrance.value,
-      [0, 1],
-      [0, 1],
-      Extrapolation.CLAMP
-    );
-
-    // Press: squish down with slight overshoot on release
-    const pressScale = interpolate(
-      pressed.value,
-      [-0.5, 0, 1],
-      [1.06, 1, 0.92],
-      Extrapolation.CLAMP
-    );
-
-    // Hover: lift up and scale
-    const hoverTranslateY = interpolate(
-      hovered.value,
-      [0, 1],
-      [0, -4],
-      Extrapolation.CLAMP
-    );
-    const hoverScale = interpolate(
-      hovered.value,
-      [0, 1],
-      [1, 1.02],
-      Extrapolation.CLAMP
-    );
-
-    // Idle breathing for adventure button
-    const idleScale = interpolate(
-      idle.value,
-      [0, 1],
-      [1, 1.01],
-      Extrapolation.CLAMP
-    );
-
-    return {
-      transform: [
-        { translateY: entranceTranslateY + hoverTranslateY },
-        { scale: pressScale * hoverScale * idleScale },
-      ],
-      opacity: entranceOpacity,
-    };
-  });
-
-  // Shadow animation for hover
-  const shadowStyle = useAnimatedStyle(() => {
-    const shadowOpacity = interpolate(
-      hovered.value,
-      [0, 1],
-      [0.1, 0.25],
-      Extrapolation.CLAMP
-    );
-    const shadowRadius = interpolate(
-      hovered.value,
-      [0, 1],
-      [4, 12],
-      Extrapolation.CLAMP
-    );
-
-    return {
-      shadowOpacity,
-      shadowRadius,
-    };
-  });
-
-  // Icon container animation
-  const iconStyle = useAnimatedStyle(() => {
-    const rotate = interpolate(
-      hovered.value,
-      [0, 1],
-      [0, 5],
-      Extrapolation.CLAMP
-    );
-    const scale = interpolate(
-      pressed.value,
-      [0, 1],
-      [1, 0.9],
-      Extrapolation.CLAMP
-    );
-
-    return {
-      transform: [
-        { rotate: `${rotate}deg` },
-        { scale },
-      ],
-    };
-  });
-
-  const variantStyles = {
-    adventure: {
-      button: styles.adventureButton,
-      iconBg: COLORS.paperBeige,
-      iconColor: COLORS.slateCharcoal,
-      textColor: COLORS.slateCharcoal,
-    },
-    freeplay: {
-      button: styles.freeplayButton,
-      iconBg: COLORS.paperBeige,
-      iconColor: COLORS.slateCharcoal,
-      textColor: COLORS.slateCharcoal,
-    },
-    tutorial: {
-      button: styles.tutorialButton,
-      iconBg: 'rgba(255,255,255,0.2)',
-      iconColor: COLORS.canvasWhite,
-      textColor: COLORS.canvasWhite,
-    },
-  };
-
-  const v = variantStyles[variant];
-
-  return (
-    <AnimatedPressable
-      onPress={handlePress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      onHoverIn={handleHoverIn}
-      onHoverOut={handleHoverOut}
-      accessibilityLabel={title}
-      testID={`menu-${variant}`}
-      style={[
-        styles.menuButton,
-        v.button,
-        animatedStyle,
-        shadowStyle,
-        Platform.OS === 'web' && { cursor: 'pointer' as const },
-      ]}
-    >
-      <ReAnimated.View style={[styles.buttonIconContainer, { backgroundColor: v.iconBg }, iconStyle]}>
-        <Icon name={icon} size={32} color={v.iconColor} />
-      </ReAnimated.View>
-      <View style={styles.buttonTextContainer}>
-        <Text style={[styles.menuButtonText, { color: v.textColor }]}>{title}</Text>
-        <Text style={[styles.menuButtonSubtext, { color: v.textColor, opacity: variant === 'tutorial' ? 0.9 : 0.7 }]}>
-          {subtitle}
-        </Text>
-      </View>
-    </AnimatedPressable>
-  );
-}
-
 const MainMenu: React.FC<MainMenuProps> = ({
   onSelectAdventure,
   onSelectFreeplay,
   onSelectTutorial,
 }) => {
-  // Title animation values
-  const titleScale = useSharedValue(0);
-  const subtitleOpacity = useSharedValue(0);
-
-  // Animate title on mount
-  useEffect(() => {
-    // Title pops in
-    titleScale.value = withDelay(
-      100,
-      withSpring(1, SPRINGS.celebration)
-    );
-    // Subtitle fades in after
-    subtitleOpacity.value = withDelay(
-      400,
-      withTiming(1, { duration: 500 })
-    );
-  }, [titleScale, subtitleOpacity]);
-
-  // Title breathing animation
-  const titleStyle = useAnimatedStyle(() => {
-    const scale = interpolate(
-      titleScale.value,
-      [0, 1],
-      [0.8, 1],
-      Extrapolation.CLAMP
-    );
-    const opacity = interpolate(
-      titleScale.value,
-      [0, 1],
-      [0, 1],
-      Extrapolation.CLAMP
-    );
-
-    return {
-      transform: [{ scale }],
-      opacity,
-    };
-  });
-
-  const subtitleStyle = useAnimatedStyle(() => ({
-    opacity: subtitleOpacity.value,
-  }));
-
   // Generate random card configurations
   const cardConfigs = useMemo((): CardConfig[] => {
     const deck = createDeck(['shape', 'color', 'number', 'shading']);
@@ -401,7 +114,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
         })
       ).start();
     });
-  }, [cardConfigs, floatAnims, rotateAnims]);
+  }, [cardConfigs]);
 
   return (
     <View style={styles.container}>
@@ -455,40 +168,64 @@ const MainMenu: React.FC<MainMenuProps> = ({
       <View style={styles.content}>
         {/* Title Section */}
         <View style={styles.titleSection}>
-          <ReAnimated.Text style={[styles.title, titleStyle]}>NSHAPES</ReAnimated.Text>
-          <ReAnimated.Text style={[styles.subtitle, subtitleStyle]}>
-            Roguelike Match-Three Puzzle
-          </ReAnimated.Text>
+          <Text style={styles.title}>NSHAPES</Text>
+          <Text style={styles.subtitle}>Roguelike Match-Three Puzzle</Text>
         </View>
 
         {/* Menu Buttons */}
         <View style={styles.menuSection}>
-          <MenuButton
+          <Pressable
             onPress={onSelectAdventure}
-            variant="adventure"
-            icon="lorc/crossed-swords"
-            title="Adventure"
-            subtitle="10 rounds, enemies & loot"
-            index={0}
-          />
+            style={({ pressed }) => [
+              styles.menuButton,
+              styles.adventureButton,
+              pressed && styles.buttonPressed,
+            ]}
+          >
+            <View style={styles.buttonIconContainer}>
+              <Icon name="sword" size={32} color={COLORS.slateCharcoal} />
+            </View>
+            <View style={styles.buttonTextContainer}>
+              <Text style={styles.menuButtonText}>Adventure</Text>
+              <Text style={styles.menuButtonSubtext}>10 rounds, enemies & loot</Text>
+            </View>
+          </Pressable>
 
-          <MenuButton
+          <Pressable
             onPress={onSelectFreeplay}
-            variant="freeplay"
-            icon="lorc/archery-target"
-            title="Free Play"
-            subtitle="No timer, practice mode"
-            index={1}
-          />
+            style={({ pressed }) => [
+              styles.menuButton,
+              styles.freeplayButton,
+              pressed && styles.buttonPressed,
+            ]}
+          >
+            <View style={styles.buttonIconContainer}>
+              <Icon name="target" size={32} color={COLORS.slateCharcoal} />
+            </View>
+            <View style={styles.buttonTextContainer}>
+              <Text style={styles.menuButtonText}>Free Play</Text>
+              <Text style={styles.menuButtonSubtext}>No timer, practice mode</Text>
+            </View>
+          </Pressable>
 
-          <MenuButton
+          <Pressable
             onPress={onSelectTutorial}
-            variant="tutorial"
-            icon="lorc/open-book"
-            title="Tutorial"
-            subtitle="Learn how to play"
-            index={2}
-          />
+            style={({ pressed }) => [
+              styles.menuButton,
+              styles.tutorialButton,
+              pressed && styles.buttonPressed,
+            ]}
+          >
+            <View style={styles.buttonIconContainer}>
+              <Icon name="help-circle" size={32} color={COLORS.canvasWhite} />
+            </View>
+            <View style={styles.buttonTextContainer}>
+              <Text style={[styles.menuButtonText, styles.tutorialButtonText]}>Tutorial</Text>
+              <Text style={[styles.menuButtonSubtext, styles.tutorialButtonSubtext]}>
+                Learn how to play
+              </Text>
+            </View>
+          </Pressable>
         </View>
 
         {/* Footer */}
@@ -520,7 +257,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'space-between',
     paddingVertical: 40,
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: 24,
     zIndex: 1,
   },
   titleSection: {
@@ -533,7 +270,7 @@ const styles = StyleSheet.create({
     color: COLORS.slateCharcoal,
     letterSpacing: 4,
     textTransform: 'uppercase',
-    marginBottom: SPACING.sm,
+    marginBottom: 8,
   },
   subtitle: {
     fontSize: 14,
@@ -544,23 +281,18 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   menuSection: {
-    gap: SPACING.md,
+    gap: 16,
     paddingHorizontal: 20,
   },
   menuButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.canvasWhite,
-    borderRadius: RADIUS.lg,
+    borderRadius: RADIUS.module,
     borderWidth: 2,
     borderColor: COLORS.slateCharcoal,
     padding: 20,
-    gap: SPACING.md,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 4,
+    gap: 16,
   },
   adventureButton: {
     backgroundColor: COLORS.actionYellow,
@@ -572,10 +304,14 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.tutorialBlue,
     borderColor: COLORS.slateCharcoal,
   },
+  buttonPressed: {
+    opacity: 0.8,
+    transform: [{ scale: 0.98 }],
+  },
   buttonIconContainer: {
     width: 56,
     height: 56,
-    borderRadius: RADIUS.sm,
+    borderRadius: 8,
     backgroundColor: COLORS.paperBeige,
     justifyContent: 'center',
     alignItems: 'center',
@@ -591,13 +327,20 @@ const styles = StyleSheet.create({
     color: COLORS.slateCharcoal,
     textTransform: 'uppercase',
     letterSpacing: 1,
-    marginBottom: SPACING.xxs,
+    marginBottom: 4,
+  },
+  tutorialButtonText: {
+    color: COLORS.canvasWhite,
   },
   menuButtonSubtext: {
     fontSize: 12,
     fontWeight: '400',
     color: COLORS.slateCharcoal,
     opacity: 0.7,
+  },
+  tutorialButtonSubtext: {
+    color: COLORS.canvasWhite,
+    opacity: 0.9,
   },
   footer: {
     alignItems: 'center',

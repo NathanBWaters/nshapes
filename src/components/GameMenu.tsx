@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Modal, ScrollView, StyleSheet, Alert, Platform } from 'react-native';
 import { CopilotStep, walkthroughable } from 'react-native-copilot';
 import { PlayerStats, Weapon, WeaponRarity, Card, Character } from '@/types';
-import { COLORS, RADIUS, getRarityColor } from '../theme';
+import { COLORS, RADIUS } from '@/utils/colors';
 import WeaponGuide from './WeaponGuide';
 import Icon from './Icon';
 import { WEAPONS, getWeaponByName } from '@/utils/gameDefinitions';
@@ -62,6 +62,15 @@ interface GameMenuProps {
 }
 
 type MenuScreen = 'menu' | 'stats' | 'weapons' | 'dev';
+
+const getRarityColor = (rarity: WeaponRarity): string => {
+  switch (rarity) {
+    case 'legendary': return '#FFD700';
+    case 'rare': return '#9B59B6';
+    case 'common': return COLORS.slateCharcoal;
+    default: return COLORS.slateCharcoal;
+  }
+};
 
 const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], character, onExitGame, devMode = false, devCallbacks, copilotMode = false, controlledOpen, onMenuOpenChange }) => {
   const [internalModalOpen, setInternalModalOpen] = useState(false);

@@ -1,10 +1,14 @@
-import React, { useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useCallback, useRef, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import Svg, { Ellipse, Path, Polygon, Defs, Pattern, Rect } from 'react-native-svg';
 import { Card as CardType, Background } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { BACKGROUND_COLORS } from '@/utils/gameConfig';
 import { useBurnTimer } from '@/hooks/useBurnTimer';
+
+// Debug: Track render counts per card (only in development)
+const renderCounts = new Map<string, number>();
+const DEBUG_RENDERS = __DEV__ && Platform.OS === 'web';
 
 // SVG viewBox dimensions (1:2 width:height ratio)
 const SVG_WIDTH = 20;
@@ -21,6 +25,15 @@ interface CardProps {
 
 const Card: React.FC<CardProps> = ({ card, onClick, disabled = false, onBurnComplete, isPaused = false }) => {
   const { shape, color, number, shading, selected, isHint } = card;
+
+  // Debug: Track renders
+  if (DEBUG_RENDERS) {
+    const count = (renderCounts.get(card.id) || 0) + 1;
+    renderCounts.set(card.id, count);
+    if (count > 1) {
+      console.log(`[Card ${card.id}] render #${count}, selected=${selected}`);
+    }
+  }
 
   const handleBurnComplete = useCallback(() => {
     onBurnComplete?.(card);
@@ -284,14 +297,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 4,
     borderRadius: RADIUS.module,
-    borderWidth: 2,
+    // Use consistent borderWidth to prevent Safari flex layout recalculation on selection
+    borderWidth: 3,
     borderColor: COLORS.slateCharcoal,
     backgroundColor: COLORS.canvasWhite,
     flex: 1,
   },
   selected: {
     borderColor: COLORS.actionYellow,
-    borderWidth: 3,
+    // borderWidth removed - now using consistent 3px border
     shadowColor: COLORS.actionYellow,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
@@ -305,7 +319,7 @@ const styles = StyleSheet.create({
   },
   holographic: {
     borderColor: '#A855F7', // Purple/rainbow shimmer
-    borderWidth: 3,
+    // borderWidth now consistent at 3px in base card style
     shadowColor: '#A855F7',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.6,
@@ -315,7 +329,7 @@ const styles = StyleSheet.create({
   },
   onFire: {
     borderColor: '#EF4444', // Red fire border
-    borderWidth: 3,
+    // borderWidth now consistent at 3px in base card style
     shadowColor: '#F97316',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.8,

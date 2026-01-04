@@ -71,10 +71,10 @@ export type EnemyName =
   'Rabbit' | 'Squid' | 'Porcupine' | 'Hyena' | 'Tiger';
 
 export type WeaponName =
-  'Blast Powder' | 'Oracle Eye' | 'Field Stone' | 'Growth Seed' |
+  'Blast Powder' | 'Oracle Eye' | 'Mystic Sight' | 'Field Stone' | 'Growth Seed' |
   'Flint Spark' | 'Second Chance' | 'Fortune Token' | 'Life Vessel' |
   'Mending Charm' | 'Crystal Orb' | 'Seeker Lens' | 'Prism Glass' |
-  'Chrono Shard' | 'Time Drop' | 'Prismatic Ray' | 'Chaos Shard' | 'Mystic Sight';
+  'Chrono Shard' | 'Time Drop' | 'Prismatic Ray' | 'Chaos Shard';
 
 export type WeaponRarity = 'common' | 'rare' | 'legendary';
 
@@ -98,9 +98,9 @@ export interface Weapon {
   flavorText?: string; // Longer fun description for weapon guide
   price: number;
   effects: Partial<PlayerStats>;
-  specialEffect?: 'explosive' | 'autoHint' | 'boardGrowth' | 'fire' | 'graceGain' | 'healing' | 'hintGain' | 'holographic' | 'timeGain' | 'laser' | 'ricochet' | 'enhancedHint';
+  specialEffect?: 'explosive' | 'autoHint' | 'enhancedHint' | 'boardGrowth' | 'fire' | 'graceGain' | 'healing' | 'hintGain' | 'holographic' | 'timeGain' | 'laser' | 'ricochet';
   icon?: string; // Icon path like "delapouite/bamboo"
-  maxCount?: number; // Maximum copies player can own (undefined = unlimited, 1 = unique)
+  maxCount?: number; // Maximum number of this weapon that can be owned (e.g., 1 for unique legendaries)
 }
 
 export interface Item {

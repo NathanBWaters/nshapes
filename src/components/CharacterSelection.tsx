@@ -1,22 +1,10 @@
-import React, { useCallback } from 'react';
-import { View, Text, StyleSheet, Platform } from 'react-native';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  interpolate,
-} from 'react-native-reanimated';
-import { Pressable } from 'react-native';
+import React from 'react';
+import { View, Text, TouchableOpacity, Pressable, StyleSheet } from 'react-native';
 import { Character, PlayerStats } from '@/types';
-import { COLORS, RADIUS, SPACING, SHADOWS } from '../theme';
-import { DURATIONS } from '../theme/animations';
-import { haptics } from '../utils/haptics';
+import { COLORS, RADIUS } from '@/utils/colors';
 import { getWeaponByName, DEFAULT_PLAYER_STATS } from '@/utils/gameDefinitions';
 import Icon from './Icon';
 import GameMenu from './GameMenu';
-import { Button } from './ui';
-
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 // IMPORTANT: This game should NOT have scrollable screens.
 // All screens should fill the available height without requiring scrolling.
@@ -30,99 +18,6 @@ interface CharacterSelectionProps {
   onSelect: (characterName: string) => void;
   onStart: () => void;
   onExitGame?: () => void;
-}
-
-// Character option card with animations
-function CharacterCard({
-  character,
-  isSelected,
-  onSelect,
-  onHoverIn,
-  onHoverOut,
-}: {
-  character: Character;
-  isSelected: boolean;
-  onSelect: () => void;
-  onHoverIn: () => void;
-  onHoverOut: () => void;
-}) {
-  const pressed = useSharedValue(0);
-  const hovered = useSharedValue(0);
-
-  const handlePressIn = useCallback(() => {
-    pressed.value = withTiming(1, { duration: DURATIONS.press });
-  }, [pressed]);
-
-  const handlePressOut = useCallback(() => {
-    pressed.value = withTiming(0, { duration: DURATIONS.press });
-  }, [pressed]);
-
-  const handleHoverIn = useCallback(() => {
-    if (Platform.OS === 'web') {
-      hovered.value = withTiming(1, { duration: DURATIONS.hover });
-    }
-    onHoverIn();
-  }, [hovered, onHoverIn]);
-
-  const handleHoverOut = useCallback(() => {
-    if (Platform.OS === 'web') {
-      hovered.value = withTiming(0, { duration: DURATIONS.hover });
-    }
-    onHoverOut();
-  }, [hovered, onHoverOut]);
-
-  const handlePress = useCallback(() => {
-    haptics.selection();
-    onSelect();
-  }, [onSelect]);
-
-  const animatedStyle = useAnimatedStyle(() => {
-    const scale = interpolate(pressed.value, [0, 1], [1, 0.96]);
-    const translateY = interpolate(hovered.value, [0, 1], [0, -2]);
-
-    return {
-      transform: [
-        { scale },
-        { translateY },
-      ],
-    };
-  });
-
-  return (
-    <AnimatedPressable
-      onPress={handlePress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      onHoverIn={handleHoverIn}
-      onHoverOut={handleHoverOut}
-      style={[
-        styles.optionButton,
-        isSelected && styles.optionButtonSelected,
-        animatedStyle,
-        Platform.OS === 'web' && { cursor: 'pointer' as const },
-      ]}
-    >
-      <View style={styles.optionIconArea}>
-        {character.icon && (
-          <Icon
-            name={character.icon}
-            size={48}
-            color={COLORS.canvasWhite}
-          />
-        )}
-      </View>
-      <View style={styles.optionNameArea}>
-        <Text
-          style={[
-            styles.optionText,
-            isSelected && styles.optionTextSelected,
-          ]}
-        >
-          {character.name}
-        </Text>
-      </View>
-    </AnimatedPressable>
-  );
 }
 
 const CharacterSelection: React.FC<CharacterSelectionProps> = ({
@@ -144,11 +39,6 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
   // Show hovered character if hovering, otherwise show selected
   const displayedCharacter = hoveredCharacter || selectedCharacter;
   const selectedChar = characters.find(c => c.name === displayedCharacter);
-
-  const handleStart = useCallback(() => {
-    haptics.medium();
-    onStart();
-  }, [onStart]);
 
   return (
     <View style={styles.container}>
@@ -214,31 +104,59 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
       <View style={styles.optionsSection}>
         <Text style={styles.optionsHeader}>Choose Your Character</Text>
         <View style={styles.optionsGrid}>
-          {characters.map(character => (
-            <CharacterCard
-              key={character.name}
-              character={character}
-              isSelected={selectedCharacter === character.name}
-              onSelect={() => onSelect(character.name)}
-              onHoverIn={() => setHoveredCharacter(character.name)}
-              onHoverOut={() => setHoveredCharacter(null)}
-            />
-          ))}
+          {characters.map(character => {
+            const isSelected = selectedCharacter === character.name;
+
+            return (
+              <Pressable
+                key={character.name}
+                onPress={() => onSelect(character.name)}
+                onHoverIn={() => setHoveredCharacter(character.name)}
+                onHoverOut={() => setHoveredCharacter(null)}
+                style={[
+                  styles.optionButton,
+                  isSelected && styles.optionButtonSelected,
+                ]}
+              >
+                <View style={styles.optionIconArea}>
+                  {character.icon && (
+                    <Icon
+                      name={character.icon}
+                      size={48}
+                      color={COLORS.slateCharcoal}
+                    />
+                  )}
+                </View>
+                <View style={styles.optionNameArea}>
+                  <Text
+                    style={[
+                      styles.optionText,
+                      isSelected && styles.optionTextSelected,
+                    ]}
+                  >
+                    {character.name}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
         </View>
       </View>
 
       {/* Start Adventure Button */}
       <View style={styles.actionSection}>
-        <Button
-          variant="primary"
-          size="lg"
-          onPress={handleStart}
+        <TouchableOpacity
+          onPress={onStart}
           disabled={!selectedCharacter}
-          fullWidth
-          testID="start-adventure-button"
+          style={[
+            styles.actionButton,
+            !selectedCharacter && styles.actionButtonDisabled,
+          ]}
         >
-          {selectedCharacter ? 'Start Adventure' : 'Select a Character'}
-        </Button>
+          <Text style={styles.actionButtonText}>
+            {selectedCharacter ? 'Start Adventure' : 'Select a Character'}
+          </Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -255,7 +173,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: 12,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.slateCharcoal,
   },
@@ -269,27 +187,26 @@ const styles = StyleSheet.create({
   // Top Half - Detail Section
   detailSection: {
     flex: 1,
-    padding: SPACING.md,
+    padding: 16,
   },
   detailCard: {
     flex: 1,
     backgroundColor: COLORS.canvasWhite,
-    borderRadius: RADIUS.lg,
+    borderRadius: RADIUS.module,
     borderWidth: 1,
     borderColor: COLORS.slateCharcoal,
-    padding: SPACING.md,
-    ...SHADOWS.sm,
+    padding: 16,
   },
   characterHeader: {
     flexDirection: 'row',
-    marginBottom: SPACING.md,
-    gap: SPACING.md,
+    marginBottom: 12,
+    gap: 12,
   },
   previewArea: {
     backgroundColor: COLORS.paperBeige,
     width: 72,
     height: 72,
-    borderRadius: RADIUS.sm,
+    borderRadius: 8,
     borderWidth: 1,
     borderStyle: 'dashed',
     borderColor: COLORS.slateCharcoal,
@@ -312,7 +229,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 20,
     textTransform: 'uppercase',
-    marginBottom: SPACING.xxs,
+    marginBottom: 4,
   },
   detailDescription: {
     color: COLORS.slateCharcoal,
@@ -323,8 +240,8 @@ const styles = StyleSheet.create({
   },
   statBox: {
     backgroundColor: COLORS.paperBeige,
-    borderRadius: RADIUS.sm,
-    padding: SPACING.sm,
+    borderRadius: 8,
+    padding: 10,
     borderWidth: 1,
     borderColor: COLORS.slateCharcoal,
   },
@@ -334,7 +251,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: SPACING.xxs,
+    marginBottom: 4,
   },
   statValue: {
     color: COLORS.slateCharcoal,
@@ -342,8 +259,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'monospace',
   },
+  statValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   weaponsList: {
-    gap: SPACING.sm,
+    gap: 8,
   },
   weaponItemRow: {
     gap: 2,
@@ -351,7 +273,7 @@ const styles = StyleSheet.create({
   weaponItemHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.xs,
+    gap: 6,
   },
   weaponShortDesc: {
     color: COLORS.slateCharcoal,
@@ -362,11 +284,11 @@ const styles = StyleSheet.create({
   emptyDetail: {
     flex: 1,
     backgroundColor: COLORS.canvasWhite,
-    borderRadius: RADIUS.lg,
+    borderRadius: RADIUS.module,
     borderWidth: 1,
     borderStyle: 'dashed',
     borderColor: COLORS.slateCharcoal,
-    padding: SPACING.xl,
+    padding: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -389,29 +311,28 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textTransform: 'uppercase',
     letterSpacing: 1,
-    paddingHorizontal: SPACING.md,
-    paddingTop: SPACING.md,
-    paddingBottom: SPACING.sm,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
   },
   optionsGrid: {
     flex: 1,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: SPACING.md,
-    paddingBottom: SPACING.md,
-    gap: SPACING.sm,
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+    gap: 8,
     alignContent: 'stretch',
   },
   optionButton: {
     backgroundColor: COLORS.paperBeige,
-    borderRadius: RADIUS.sm,
+    borderRadius: RADIUS.button,
     borderWidth: 1,
     borderColor: COLORS.slateCharcoal,
     width: '31%',
     flexGrow: 1,
     flexBasis: '31%',
     padding: '3%',
-    ...SHADOWS.sm,
   },
   optionIconArea: {
     flex: 2.5,
@@ -428,7 +349,6 @@ const styles = StyleSheet.create({
   optionButtonSelected: {
     backgroundColor: COLORS.actionYellow,
     borderWidth: 2,
-    ...SHADOWS.md,
   },
   optionText: {
     color: COLORS.slateCharcoal,
@@ -442,10 +362,29 @@ const styles = StyleSheet.create({
   },
   // Action Section
   actionSection: {
-    padding: SPACING.md,
+    padding: 16,
     backgroundColor: COLORS.canvasWhite,
     borderTopWidth: 1,
     borderTopColor: COLORS.slateCharcoal,
+  },
+  actionButton: {
+    backgroundColor: COLORS.actionYellow,
+    borderRadius: RADIUS.button,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  actionButtonDisabled: {
+    backgroundColor: COLORS.paperBeige,
+    opacity: 0.6,
+  },
+  actionButtonText: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '700',
+    fontSize: 16,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
 });
 

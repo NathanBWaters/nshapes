@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { Weapon, WeaponRarity } from '@/types';
-import { COLORS, RADIUS, getRarityColor } from '../theme';
+import { COLORS, RADIUS } from '@/utils/colors';
 import Icon from './Icon';
 
 interface InventoryBarProps {
@@ -13,6 +13,15 @@ interface WeaponGroup {
   weapon: Weapon;
   count: number;
 }
+
+const getRarityColor = (rarity: WeaponRarity): string => {
+  switch (rarity) {
+    case 'common': return COLORS.slateCharcoal;
+    case 'rare': return '#1976D2'; // Blue
+    case 'legendary': return COLORS.impactOrange;
+    default: return COLORS.slateCharcoal;
+  }
+};
 
 const InventoryBar: React.FC<InventoryBarProps> = ({ weapons }) => {
   // Group weapons by name + rarity

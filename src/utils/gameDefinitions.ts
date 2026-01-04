@@ -1,4 +1,4 @@
-import { Character, Enemy, Item, Weapon, PlayerStats, GameState, Player, WeaponRarity } from '../types';
+import { Character, Enemy, Item, Weapon, PlayerStats, GameState, Player, WeaponRarity, WeaponName } from '../types';
 import { STARTING_STATS, WEAPON_SYSTEM } from './gameConfig';
 
 // Default player stats - uses values from gameConfig for easy tweaking
@@ -62,6 +62,7 @@ export const DEFAULT_PLAYER_STATS: PlayerStats = {
   startingTime: STARTING_STATS.startingTime,
   ricochetChance: STARTING_STATS.ricochetChance,
   ricochetChainChance: STARTING_STATS.ricochetChainChance,
+  enhancedHintChance: STARTING_STATS.enhancedHintChance,
 };
 
 // Characters

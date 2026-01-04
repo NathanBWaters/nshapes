@@ -8,7 +8,6 @@ import { MATCH_REWARDS } from '@/utils/gameConfig';
 import { processWeaponEffects, WeaponEffectResult } from '@/utils/weaponEffects';
 import { isValidCombination } from '@/utils/gameUtils';
 import { useAutoHint } from '@/hooks/useAutoHint';
-import { gameHaptics } from '../utils/haptics';
 
 // Default to 4 attributes for backward compatibility
 const DEFAULT_ATTRIBUTES: AttributeName[] = ['shape', 'color', 'number', 'shading'];
@@ -259,13 +258,9 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
     // If card is already selected, deselect it
     if (selectedCards.some(c => c.id === card.id)) {
-      gameHaptics.cardDeselect();
       setSelectedCards(selectedCards.filter(c => c.id !== card.id));
       return;
     }
-
-    // Haptic feedback for card selection
-    gameHaptics.cardSelect();
 
     // If already have 3 cards selected, replace the first one
     let newSelectedCards;
@@ -281,9 +276,6 @@ const GameBoard: React.FC<GameBoardProps> = ({
     if (newSelectedCards.length === 3) {
       setTimeout(() => {
         if (isValidSet(newSelectedCards)) {
-          // Haptic feedback for valid match
-          gameHaptics.validMatch();
-
           // Generate unique match ID for this match
           const matchId = ++matchCounterRef.current;
 
@@ -355,9 +347,6 @@ const GameBoard: React.FC<GameBoardProps> = ({
           const graceCanSave = invalidCount === 1 && playerStats.graces > 0;
 
           if (graceCanSave) {
-            // Haptic feedback for grace save (near-miss saved)
-            gameHaptics.graceSave();
-
             // Grace saves! (exactly 1 attribute wrong) - treat as valid match with full rewards
             const matchId = ++matchCounterRef.current;
 
@@ -429,9 +418,6 @@ const GameBoard: React.FC<GameBoardProps> = ({
               onMatch(allCardsToReplace, allRewards, weaponEffects);
             }, 1500);
           } else {
-            // Haptic feedback for invalid match (lose health)
-            gameHaptics.invalidMatch();
-
             // 2+ attributes wrong OR no graces - full invalid match (lose health)
             onInvalidSelection(newSelectedCards);
 

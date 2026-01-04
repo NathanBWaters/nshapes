@@ -1,22 +1,10 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, ScrollView, StyleSheet, Platform } from 'react-native';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  interpolate,
-} from 'react-native-reanimated';
-import { Pressable } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { Weapon, PlayerStats, WeaponRarity } from '@/types';
-import { COLORS, RADIUS, SPACING, SHADOWS, getRarityColor } from '../theme';
-import { DURATIONS } from '../theme/animations';
-import { haptics } from '../utils/haptics';
+import { COLORS, RADIUS } from '@/utils/colors';
 import Icon from './Icon';
 import GameMenu from './GameMenu';
 import InventoryBar from './InventoryBar';
-import { Button, RarityBadge, PriceBadge } from './ui';
-
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 interface WeaponShopProps {
   weapons: (Weapon | null)[];  // null represents a sold/empty slot
@@ -31,6 +19,16 @@ interface WeaponShopProps {
   onExitGame?: () => void;
 }
 
+// Rarity colors
+const getRarityColor = (rarity: WeaponRarity): string => {
+  switch (rarity) {
+    case 'common': return COLORS.slateCharcoal;
+    case 'rare': return '#1976D2'; // Blue
+    case 'legendary': return COLORS.impactOrange;
+    default: return COLORS.slateCharcoal;
+  }
+};
+
 const getRarityLabel = (rarity: WeaponRarity): string => {
   switch (rarity) {
     case 'common': return 'Common';
@@ -39,108 +37,6 @@ const getRarityLabel = (rarity: WeaponRarity): string => {
     default: return rarity;
   }
 };
-
-// Weapon option card with animations
-function WeaponCard({
-  weapon,
-  index,
-  isFocused,
-  canAfford,
-  onPress,
-  onHoverIn,
-  onHoverOut,
-}: {
-  weapon: Weapon;
-  index: number;
-  isFocused: boolean;
-  canAfford: boolean;
-  onPress: () => void;
-  onHoverIn: () => void;
-  onHoverOut: () => void;
-}) {
-  const pressed = useSharedValue(0);
-  const hovered = useSharedValue(0);
-
-  const handlePressIn = useCallback(() => {
-    pressed.value = withTiming(1, { duration: DURATIONS.press });
-  }, [pressed]);
-
-  const handlePressOut = useCallback(() => {
-    pressed.value = withTiming(0, { duration: DURATIONS.press });
-  }, [pressed]);
-
-  const handleHoverIn = useCallback(() => {
-    if (Platform.OS === 'web') {
-      hovered.value = withTiming(1, { duration: DURATIONS.hover });
-    }
-    onHoverIn();
-  }, [hovered, onHoverIn]);
-
-  const handleHoverOut = useCallback(() => {
-    if (Platform.OS === 'web') {
-      hovered.value = withTiming(0, { duration: DURATIONS.hover });
-    }
-    onHoverOut();
-  }, [hovered, onHoverOut]);
-
-  const animatedStyle = useAnimatedStyle(() => {
-    const scale = interpolate(pressed.value, [0, 1], [1, 0.96]);
-    const translateY = interpolate(hovered.value, [0, 1], [0, -2]);
-
-    return {
-      transform: [
-        { scale },
-        { translateY },
-      ],
-    };
-  });
-
-  const rarityColor = getRarityColor(weapon.rarity);
-
-  return (
-    <AnimatedPressable
-      onPress={onPress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      onHoverIn={handleHoverIn}
-      onHoverOut={handleHoverOut}
-      style={[
-        styles.optionButton,
-        { borderColor: rarityColor },
-        isFocused && styles.optionButtonSelected,
-        !canAfford && styles.optionButtonUnaffordable,
-        animatedStyle,
-        Platform.OS === 'web' && { cursor: 'pointer' as const },
-      ]}
-    >
-      {weapon.icon && (
-        <Icon
-          name={weapon.icon}
-          size={24}
-          color={COLORS.canvasWhite}
-          style={styles.optionIcon}
-        />
-      )}
-      <View style={styles.optionHeader}>
-        <Text style={[styles.optionPrice, !canAfford && styles.optionPriceUnaffordable]}>
-          ${weapon.price}
-        </Text>
-      </View>
-      <Text
-        style={[
-          styles.optionText,
-          isFocused && styles.optionTextSelected,
-        ]}
-        numberOfLines={1}
-      >
-        {weapon.name}
-      </Text>
-      <Text style={[styles.rarityTag, { color: rarityColor }]}>
-        {getRarityLabel(weapon.rarity)}
-      </Text>
-    </AnimatedPressable>
-  );
-}
 
 const WeaponShop: React.FC<WeaponShopProps> = ({
   weapons,
@@ -166,7 +62,7 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
   const [lastTappedIndex, setLastTappedIndex] = useState<number | null>(null);
   const DOUBLE_TAP_THRESHOLD = 300; // ms
 
-  const handleWeaponPress = useCallback((index: number) => {
+  const handleWeaponPress = (index: number) => {
     const now = Date.now();
     const weapon = weapons[index];
     const canAfford = weapon && playerMoney >= weapon.price;
@@ -178,18 +74,16 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
       canAfford
     ) {
       // Double-tap: instant purchase
-      haptics.medium();
       onPurchase(index);
       setLastTapTime(0);
       setLastTappedIndex(null);
     } else {
       // Single tap: focus the weapon
-      haptics.selection();
       setFocusedIndex(index);
       setLastTapTime(now);
       setLastTappedIndex(index);
     }
-  }, [weapons, playerMoney, lastTappedIndex, lastTapTime, onPurchase]);
+  };
 
   // Show hovered weapon if hovering, otherwise show focused
   const displayedIndex = hoveredIndex !== null ? hoveredIndex : focusedIndex;
@@ -244,23 +138,6 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
     }).filter((item): item is { key: string; before: string; after: string; isIncrease: boolean } => item !== null);
   };
 
-  const handlePurchase = useCallback(() => {
-    if (canAffordFocused && focusedWeapon) {
-      haptics.success();
-      onPurchase(focusedIndex);
-    }
-  }, [canAffordFocused, focusedWeapon, focusedIndex, onPurchase]);
-
-  const handleReroll = useCallback(() => {
-    haptics.light();
-    onReroll();
-  }, [onReroll]);
-
-  const handleContinue = useCallback(() => {
-    haptics.light();
-    onContinue();
-  }, [onContinue]);
-
   return (
     <View style={styles.container}>
       {/* Eyebrow Banner */}
@@ -288,8 +165,12 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
               ) : (
                 <Text style={styles.previewLabel}>{getRarityLabel(focusedWeapon.rarity)}</Text>
               )}
-              <RarityBadge rarity={focusedWeapon.rarity} size="sm" />
-              <PriceBadge price={focusedWeapon.price} size="sm" />
+              <View style={[styles.rarityBadge, { backgroundColor: getRarityColor(focusedWeapon.rarity) }]}>
+                <Text style={styles.rarityBadgeText}>{getRarityLabel(focusedWeapon.rarity)}</Text>
+              </View>
+              <View style={styles.priceBadge}>
+                <Text style={styles.priceBadgeText}>${focusedWeapon.price}</Text>
+              </View>
             </View>
 
             {/* Weapon Info */}
@@ -299,9 +180,6 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
             <Text style={styles.detailDescription}>{focusedWeapon.description}</Text>
             {focusedWeapon.flavorText && (
               <Text style={styles.detailFlavor}>{focusedWeapon.flavorText}</Text>
-            )}
-            {focusedWeapon.maxCount !== undefined && (
-              <Text style={styles.detailMaxCount}>Max: {focusedWeapon.maxCount}</Text>
             )}
 
             {/* Stats Preview - Before → After */}
@@ -341,14 +219,18 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
       <View style={styles.optionsSection}>
         <View style={styles.optionsHeaderRow}>
           <Text style={styles.optionsHeader}>Available Weapons</Text>
-          <Button
-            variant="secondary"
-            size="sm"
-            onPress={handleReroll}
+          <TouchableOpacity
+            onPress={onReroll}
             disabled={playerMoney < rerollCost && freeRerolls <= 0}
+            style={[
+              styles.rerollButton,
+              (playerMoney < rerollCost && freeRerolls <= 0) && styles.rerollButtonDisabled,
+            ]}
           >
-            {freeRerolls > 0 ? `Reroll (${freeRerolls})` : `Reroll $${rerollCost}`}
-          </Button>
+            <Text style={styles.rerollButtonText}>
+              {freeRerolls > 0 ? `Reroll (${freeRerolls})` : `Reroll $${rerollCost}`}
+            </Text>
+          </TouchableOpacity>
         </View>
         <ScrollView
           style={styles.optionsScroll}
@@ -371,18 +253,47 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
 
               const isFocused = focusedIndex === index;
               const canAfford = playerMoney >= weapon.price;
+              const rarityColor = getRarityColor(weapon.rarity);
 
               return (
-                <WeaponCard
+                <Pressable
                   key={`${weapon.id}-${index}`}
-                  weapon={weapon}
-                  index={index}
-                  isFocused={isFocused}
-                  canAfford={canAfford}
                   onPress={() => handleWeaponPress(index)}
                   onHoverIn={() => setHoveredIndex(index)}
                   onHoverOut={() => setHoveredIndex(null)}
-                />
+                  style={[
+                    styles.optionButton,
+                    { borderColor: rarityColor },
+                    isFocused && styles.optionButtonSelected,
+                    !canAfford && styles.optionButtonUnaffordable,
+                  ]}
+                >
+                  {weapon.icon && (
+                    <Icon
+                      name={weapon.icon}
+                      size={24}
+                      color={isFocused ? COLORS.canvasWhite : COLORS.logicTeal}
+                      style={styles.optionIcon}
+                    />
+                  )}
+                  <View style={styles.optionHeader}>
+                    <Text style={[styles.optionPrice, !canAfford && styles.optionPriceUnaffordable]}>
+                      ${weapon.price}
+                    </Text>
+                  </View>
+                  <Text
+                    style={[
+                      styles.optionText,
+                      isFocused && styles.optionTextSelected,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {weapon.name}
+                  </Text>
+                  <Text style={[styles.rarityTag, { color: rarityColor }]}>
+                    {getRarityLabel(weapon.rarity)}
+                  </Text>
+                </Pressable>
               );
             })
           ) : (
@@ -396,14 +307,15 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
       {/* Action Buttons */}
       <View style={styles.actionSection}>
         <View style={styles.actionRow}>
-          <View style={styles.actionButtonWrapper}>
-            <Button
-              variant="primary"
-              size="lg"
-              onPress={handlePurchase}
-              disabled={!canAffordFocused || !focusedWeapon || availableWeapons.length === 0}
-              fullWidth
-            >
+          <TouchableOpacity
+            onPress={() => canAffordFocused && focusedWeapon && onPurchase(focusedIndex)}
+            disabled={!canAffordFocused || !focusedWeapon || availableWeapons.length === 0}
+            style={[
+              styles.purchaseButton,
+              (!canAffordFocused || !focusedWeapon || availableWeapons.length === 0) && styles.purchaseButtonDisabled,
+            ]}
+          >
+            <Text style={styles.purchaseButtonText}>
               {availableWeapons.length === 0
                 ? 'No Weapons'
                 : !focusedWeapon
@@ -411,18 +323,14 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
                   : canAffordFocused
                     ? 'Purchase'
                     : 'Cannot Afford'}
-            </Button>
-          </View>
-          <View style={styles.actionButtonWrapper}>
-            <Button
-              variant="secondary"
-              size="lg"
-              onPress={handleContinue}
-              fullWidth
-            >
-              Continue
-            </Button>
-          </View>
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={onContinue}
+            style={styles.continueButton}
+          >
+            <Text style={styles.continueButtonText}>Continue</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </View>
@@ -442,7 +350,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderBottomWidth: 1,
     borderBottomColor: COLORS.slateCharcoal,
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: 16,
   },
   eyebrowText: {
     color: COLORS.deepOnyx,
@@ -454,13 +362,13 @@ const styles = StyleSheet.create({
   eyebrowRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.sm,
+    gap: 8,
   },
   moneyBadge: {
     backgroundColor: COLORS.deepOnyx,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xxs,
-    borderRadius: RADIUS.sm,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: RADIUS.button,
   },
   moneyText: {
     color: COLORS.actionYellow,
@@ -471,27 +379,26 @@ const styles = StyleSheet.create({
   // Top Half - Detail Section
   detailSection: {
     flex: 1,
-    padding: SPACING.md,
+    padding: 16,
   },
   detailCard: {
     flex: 1,
     backgroundColor: COLORS.canvasWhite,
-    borderRadius: RADIUS.lg,
+    borderRadius: RADIUS.module,
     borderWidth: 1,
     borderColor: COLORS.slateCharcoal,
-    padding: SPACING.md,
-    ...SHADOWS.sm,
+    padding: 16,
   },
   previewArea: {
     backgroundColor: COLORS.paperBeige,
     height: 50,
-    borderRadius: RADIUS.sm,
-    marginBottom: SPACING.md,
+    borderRadius: 8,
+    marginBottom: 12,
     borderWidth: 2,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: SPACING.sm,
+    gap: 8,
   },
   previewLabel: {
     color: COLORS.slateCharcoal,
@@ -500,44 +407,62 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
+  rarityBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: RADIUS.button,
+  },
+  rarityBadgeText: {
+    color: COLORS.canvasWhite,
+    fontWeight: '700',
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  priceBadge: {
+    backgroundColor: COLORS.actionYellow,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: RADIUS.button,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+  },
+  priceBadgeText: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '700',
+    fontSize: 12,
+    fontFamily: 'monospace',
+  },
   detailName: {
     fontWeight: '700',
     fontSize: 20,
     textTransform: 'uppercase',
-    marginBottom: SPACING.xxs,
+    marginBottom: 4,
   },
   detailDescription: {
     color: COLORS.slateCharcoal,
     fontWeight: '400',
     fontSize: 14,
     lineHeight: 20,
-    marginBottom: SPACING.xxs,
+    marginBottom: 4,
   },
   detailFlavor: {
     color: COLORS.slateCharcoal,
     fontWeight: '400',
     fontSize: 12,
     lineHeight: 18,
-    marginBottom: SPACING.md,
+    marginBottom: 12,
     opacity: 0.6,
     fontStyle: 'italic',
   },
-  detailMaxCount: {
-    color: COLORS.legendaryGold,
-    fontWeight: '600',
-    fontSize: 11,
-    marginBottom: SPACING.md,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
   effectsRow: {
     flexDirection: 'row',
-    gap: SPACING.sm,
+    gap: 8,
   },
   effectsBox: {
     flex: 1,
-    borderRadius: RADIUS.sm,
-    padding: SPACING.sm,
+    borderRadius: 8,
+    padding: 10,
     borderWidth: 1,
   },
   effectsBoxPositive: {
@@ -550,7 +475,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: SPACING.xs,
+    marginBottom: 6,
   },
   effectRow: {
     flexDirection: 'row',
@@ -564,10 +489,16 @@ const styles = StyleSheet.create({
     fontSize: 11,
     flex: 1,
   },
+  effectValuePositive: {
+    color: COLORS.logicTeal,
+    fontWeight: '700',
+    fontSize: 12,
+    fontFamily: 'monospace',
+  },
   statComparisonRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.xxs,
+    gap: 4,
   },
   statBefore: {
     color: COLORS.slateCharcoal,
@@ -594,11 +525,11 @@ const styles = StyleSheet.create({
   emptyDetail: {
     flex: 1,
     backgroundColor: COLORS.canvasWhite,
-    borderRadius: RADIUS.lg,
+    borderRadius: RADIUS.module,
     borderWidth: 1,
     borderStyle: 'dashed',
     borderColor: COLORS.slateCharcoal,
-    padding: SPACING.xl,
+    padding: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -619,9 +550,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: SPACING.md,
-    paddingTop: SPACING.md,
-    paddingBottom: SPACING.sm,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
   },
   optionsHeader: {
     color: COLORS.slateCharcoal,
@@ -630,6 +561,23 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
+  rerollButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+    borderRadius: RADIUS.button,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  rerollButtonDisabled: {
+    opacity: 0.4,
+  },
+  rerollButtonText: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '600',
+    fontSize: 11,
+    textTransform: 'uppercase',
+  },
   optionsScroll: {
     flex: 1,
   },
@@ -637,30 +585,28 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: SPACING.md,
-    paddingBottom: SPACING.md,
-    gap: SPACING.sm,
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+    gap: 8,
     alignContent: 'stretch',
   },
   optionButton: {
     backgroundColor: COLORS.paperBeige,
-    borderRadius: RADIUS.sm,
+    borderRadius: RADIUS.button,
     borderWidth: 2,
     width: '48%',
     flexGrow: 1,
     flexBasis: '48%',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: SPACING.sm,
+    paddingVertical: 8,
     gap: 2,
-    ...SHADOWS.sm,
   },
   optionIcon: {
     marginBottom: 2,
   },
   optionButtonSelected: {
     backgroundColor: COLORS.actionYellow,
-    ...SHADOWS.md,
   },
   optionButtonUnaffordable: {
     opacity: 0.5,
@@ -709,7 +655,7 @@ const styles = StyleSheet.create({
   },
   emptyShop: {
     flex: 1,
-    padding: SPACING.xl,
+    padding: 32,
     alignItems: 'center',
   },
   emptyShopText: {
@@ -720,17 +666,50 @@ const styles = StyleSheet.create({
   },
   // Action Section
   actionSection: {
-    padding: SPACING.md,
+    padding: 16,
     backgroundColor: COLORS.canvasWhite,
     borderTopWidth: 1,
     borderTopColor: COLORS.slateCharcoal,
   },
   actionRow: {
     flexDirection: 'row',
-    gap: SPACING.md,
+    gap: 12,
   },
-  actionButtonWrapper: {
+  purchaseButton: {
     flex: 1,
+    backgroundColor: COLORS.actionYellow,
+    borderRadius: RADIUS.button,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  purchaseButtonDisabled: {
+    backgroundColor: COLORS.paperBeige,
+    opacity: 0.6,
+  },
+  purchaseButtonText: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '700',
+    fontSize: 14,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  continueButton: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    borderRadius: RADIUS.button,
+    borderWidth: 2,
+    borderColor: COLORS.slateCharcoal,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  continueButtonText: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '700',
+    fontSize: 14,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
 });
 
