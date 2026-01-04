@@ -73,6 +73,7 @@ import CrystalShine from '../../assets/icons/lorc/crystal-shine.svg';
 import LaserWarning from '../../assets/icons/lorc/laser-warning.svg';
 import ShiningHeart from '../../assets/icons/lorc/shining-heart.svg';
 import ChainedArrowHeads from '../../assets/icons/lorc/chained-arrow-heads.svg';
+import EchoRipples from '../../assets/icons/lorc/echo-ripples.svg';
 
 // Icon registry: maps path (e.g., "delapouite/token") to the imported component
 const ICON_REGISTRY: Record<string, React.FC<SvgProps>> = {
@@ -144,6 +145,7 @@ const ICON_REGISTRY: Record<string, React.FC<SvgProps>> = {
   'lorc/laser-warning': LaserWarning,
   'lorc/shining-heart': ShiningHeart,
   'lorc/chained-arrow-heads': ChainedArrowHeads,
+  'lorc/echo-ripples': EchoRipples,
 };
 
 // Mapping from stat keys to icon paths

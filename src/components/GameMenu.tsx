@@ -22,6 +22,7 @@ const WEAPON_CATEGORIES = {
   'Explosive': WEAPONS.filter(w => w.specialEffect === 'explosive'),
   'Auto-Hint': WEAPONS.filter(w => w.specialEffect === 'autoHint'),
   'Board Growth': WEAPONS.filter(w => w.specialEffect === 'boardGrowth'),
+  'Echo': WEAPONS.filter(w => w.specialEffect === 'echo'),
   'Fire': WEAPONS.filter(w => w.specialEffect === 'fire'),
   'Grace': WEAPONS.filter(w => w.specialEffect === 'graceGain'),
   'Healing': WEAPONS.filter(w => w.specialEffect === 'healing'),
