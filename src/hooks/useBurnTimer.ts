@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-const FIRE_BURN_DURATION = 7500; // 7.5 seconds
+const FIRE_BURN_DURATION = 250; // 0.25 seconds
 
 interface UseBurnTimerOptions {
   isOnFire: boolean;
