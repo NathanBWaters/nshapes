@@ -269,6 +269,7 @@ const Icon: React.FC<IconProps> = ({
         <SvgComponent
           width={size}
           height={size}
+          fill="#000000"
           color="#000000"
         />
       </View>
@@ -276,6 +277,7 @@ const Icon: React.FC<IconProps> = ({
       <SvgComponent
         width={size}
         height={size}
+        fill={color}
         color={color}
       />
     </View>
