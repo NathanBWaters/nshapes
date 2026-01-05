@@ -1,4 +1,5 @@
 import React from 'react';
+import { useLocalSearchParams } from 'expo-router';
 import Game from '@/components/Game';
 
 /**
@@ -18,7 +19,12 @@ import Game from '@/components/Game';
  * - Add graces
  * - Add legendary weapons by category
  * - Clear all weapons
+ *
+ * URL params:
+ * - ?autoplayer=true - Enable autoplayer mode
  */
 export default function DevPlay() {
-  return <Game devMode={true} />;
+  const { autoplayer } = useLocalSearchParams<{ autoplayer?: string }>();
+
+  return <Game devMode={true} autoPlayer={autoplayer === 'true'} />;
 }

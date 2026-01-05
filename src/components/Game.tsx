@@ -69,9 +69,10 @@ const calculateLevel = (experience: number): number => {
 
 interface GameProps {
   devMode?: boolean;
+  autoPlayer?: boolean;
 }
 
-const Game: React.FC<GameProps> = ({ devMode = false }) => {
+const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
   // Character selection state
   const [selectedCharacter, setSelectedCharacter] = useState<string | null>(devMode ? 'Orange Tabby' : null);
   const [gameMode, setGameMode] = useState<GameMode>('adventure');
@@ -1864,6 +1865,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
                 onCardBurn={handleCardBurn}
                 isPaused={isMenuOpen}
                 lastMatchTime={lastMatchTime}
+                autoPlayer={autoPlayer}
               />
             </View>
           </View>
@@ -1943,6 +1945,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
                 onCardBurn={handleCardBurn}
                 isPaused={isMenuOpen}
                 lastMatchTime={lastMatchTime}
+                autoPlayer={autoPlayer}
               />
             </View>
           </View>

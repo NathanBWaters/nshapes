@@ -17,6 +17,7 @@ import { MATCH_REWARDS } from '@/utils/gameConfig';
 import { processWeaponEffects, WeaponEffectResult } from '@/utils/weaponEffects';
 import { isValidCombination } from '@/utils/gameUtils';
 import { useAutoHint } from '@/hooks/useAutoHint';
+import { useAutoPlayer } from '@/hooks/useAutoPlayer';
 import { useScreenShake } from '@/hooks/useScreenShake';
 import { useParticles } from '@/hooks/useParticles';
 import { DURATION } from '@/utils/designSystem';
@@ -42,6 +43,7 @@ interface GameBoardProps {
   onCardBurn?: (card: CardType) => void; // Called when a card finishes burning (individual card lifecycle)
   isPaused?: boolean; // When true, pauses auto-hint timer and card burn timers (e.g., when menu is open)
   lastMatchTime?: number; // Timestamp of last successful match - auto-hint only triggers 15s after this
+  autoPlayer?: boolean; // When true, automatically finds and selects valid SETs (for testing/review)
 }
 
 // Calculate rewards for a single card
@@ -91,6 +93,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
   onCardBurn,
   isPaused = false,
   lastMatchTime,
+  autoPlayer = false,
 }) => {
   const [selectedCards, setSelectedCards] = useState<CardType[]>([]);
   const [matchedCardIds, setMatchedCardIds] = useState<string[]>([]);
@@ -755,6 +758,16 @@ const GameBoard: React.FC<GameBoardProps> = ({
       }, 200);
     }
   };
+
+  // Auto-player - automatically finds and selects valid SETs (for testing/review)
+  useAutoPlayer({
+    isActive: autoPlayer && isPlayerTurn,
+    isPaused,
+    cards,
+    activeAttributes,
+    matchedCardIds,
+    onSelectCard: handleCardClick,
+  });
 
   return (
     <Animated.View nativeID="gameboard-container" style={[styles.container, shakeStyle]}>
