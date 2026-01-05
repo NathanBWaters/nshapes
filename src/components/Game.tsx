@@ -231,6 +231,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
 
   // Dev mode state
   const [devTimerEnabled, setDevTimerEnabled] = useState(!devMode); // Timer disabled by default in dev mode
+  const [autoPlayerEnabled, setAutoPlayerEnabled] = useState(autoPlayer); // Start with URL param value
 
   // Socket context for multiplayer
   const {
@@ -1471,6 +1472,9 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       setNotification({ message: `Difficulty set to ${count} attributes`, type: 'info' });
     },
     timerEnabled: devTimerEnabled,
+    autoPlayerEnabled: autoPlayerEnabled,
+    autoPlayerAvailable: autoPlayer, // Only show toggle if URL param was set
+    onToggleAutoPlayer: () => setAutoPlayerEnabled(prev => !prev),
     currentRound: state.round,
     currentAttributes: state.activeAttributes.length,
   } : undefined;
@@ -1860,7 +1864,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
                 onCardBurn={handleCardBurn}
                 isPaused={isMenuOpen}
                 lastMatchTime={lastMatchTime}
-                autoPlayer={autoPlayer}
+                autoPlayer={autoPlayerEnabled}
               />
             </View>
           </View>
@@ -1940,7 +1944,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
                 onCardBurn={handleCardBurn}
                 isPaused={isMenuOpen}
                 lastMatchTime={lastMatchTime}
-                autoPlayer={autoPlayer}
+                autoPlayer={autoPlayerEnabled}
               />
             </View>
           </View>

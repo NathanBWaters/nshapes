@@ -8,6 +8,7 @@ interface UseAutoPlayerOptions {
   cards: Card[];
   activeAttributes: AttributeName[];
   matchedCardIds: string[];
+  graces: number;
   onSelectCard: (card: Card) => void;
 }
 
@@ -26,11 +27,16 @@ export function useAutoPlayer({
   cards,
   activeAttributes,
   matchedCardIds,
+  graces,
   onSelectCard,
 }: UseAutoPlayerOptions): void {
   // Use ref for callback to avoid stale closures
   const onSelectCardRef = useRef(onSelectCard);
   onSelectCardRef.current = onSelectCard;
+
+  // Use ref for graces to avoid stale closures
+  const gracesRef = useRef(graces);
+  gracesRef.current = graces;
 
   // Track if currently in the process of selecting cards
   const isSelectingRef = useRef(false);
@@ -45,20 +51,31 @@ export function useAutoPlayer({
     };
   }, []);
 
-  // Find and select a valid SET
+  // Find and select a valid SET (or random cards if no valid set exists)
   const findAndSelectSet = useCallback(() => {
     if (isSelectingRef.current) return;
 
     // Get available cards (exclude matched ones)
     const availableCards = cards.filter(card => !matchedCardIds.includes(card.id));
 
+    if (availableCards.length < 3) return;
+
     // Find valid sets
     const validSets = findAllCombinations(availableCards, activeAttributes);
 
-    if (validSets.length === 0) return;
+    let targetSet: Card[];
 
-    // Select the first valid set
-    const targetSet = validSets[0];
+    if (validSets.length > 0) {
+      // Select the first valid set
+      targetSet = validSets[0];
+    } else {
+      // No valid set available - pick 3 random cards
+      // This will either use a grace (if available and only 1 attribute wrong)
+      // or lose health, but either way refreshes the board
+      const shuffled = [...availableCards].sort(() => Math.random() - 0.5);
+      targetSet = shuffled.slice(0, 3);
+    }
+
     isSelectingRef.current = true;
 
     // Select cards one at a time with delays

@@ -39,11 +39,14 @@ export interface DevModeCallbacks {
   onSetCardsOnFire: (count: number) => void;
   onMakeCardsHolo: (count: number) => void;
   onToggleTimer: () => void;
+  onToggleAutoPlayer?: () => void;
   onResetBoard: () => void;
   onAddCards: (count: number) => void;
   onChangeRound: (round: number) => void;
   onChangeAttributes: (count: number) => void;
   timerEnabled: boolean;
+  autoPlayerEnabled?: boolean;
+  autoPlayerAvailable?: boolean;
   currentRound: number;
   currentAttributes: number;
 }
@@ -348,6 +351,16 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
                 Timer: {devCallbacks?.timerEnabled ? 'ON' : 'OFF'}
               </Text>
             </TouchableOpacity>
+            {devCallbacks?.autoPlayerAvailable && (
+              <TouchableOpacity
+                style={[styles.devButton, devCallbacks?.autoPlayerEnabled ? styles.devButtonActive : null]}
+                onPress={() => devCallbacks?.onToggleAutoPlayer?.()}
+              >
+                <Text style={styles.devButtonText}>
+                  AutoPlayer: {devCallbacks?.autoPlayerEnabled ? 'ON' : 'OFF'}
+                </Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={styles.devButton}
               onPress={() => devCallbacks?.onResetBoard()}

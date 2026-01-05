@@ -766,6 +766,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
     cards,
     activeAttributes,
     matchedCardIds,
+    graces: playerStats.graces ?? 0,
     onSelectCard: handleCardClick,
   });
 
