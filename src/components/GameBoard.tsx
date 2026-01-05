@@ -1,6 +1,14 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { View, StyleSheet } from 'react-native';
-import Animated from 'react-native-reanimated';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSequence,
+  withTiming,
+  withRepeat,
+  interpolateColor,
+  Easing,
+} from 'react-native-reanimated';
 import { Card as CardType, PlayerStats, CardReward, AttributeName, Weapon } from '@/types';
 import Card from './Card';
 import RewardReveal from './RewardReveal';
@@ -10,6 +18,9 @@ import { processWeaponEffects, WeaponEffectResult } from '@/utils/weaponEffects'
 import { isValidCombination } from '@/utils/gameUtils';
 import { useAutoHint } from '@/hooks/useAutoHint';
 import { useScreenShake } from '@/hooks/useScreenShake';
+import { useParticles } from '@/hooks/useParticles';
+import { DURATION } from '@/utils/designSystem';
+import { triggerHaptic, selectionHaptic } from '@/utils/haptics';
 
 // Default to 4 attributes for backward compatibility
 const DEFAULT_ATTRIBUTES: AttributeName[] = ['shape', 'color', 'number', 'shading'];
@@ -17,6 +28,7 @@ const DEFAULT_ATTRIBUTES: AttributeName[] = ['shape', 'color', 'number', 'shadin
 interface GameBoardProps {
   cards: CardType[];
   onMatch: (cards: CardType[], rewards: CardReward[], weaponEffects?: WeaponEffectResult) => void;
+  onMatchStart?: () => void; // Called immediately when a valid match is detected (before animations)
   onInvalidSelection: (cards: CardType[]) => void;
   playerStats: PlayerStats;
   weapons?: Weapon[]; // For independent laser rolls
@@ -65,6 +77,7 @@ const calculateCardReward = (card: CardType): CardReward => {
 const GameBoard: React.FC<GameBoardProps> = ({
   cards,
   onMatch,
+  onMatchStart,
   onInvalidSelection,
   playerStats,
   weapons,
@@ -83,8 +96,136 @@ const GameBoard: React.FC<GameBoardProps> = ({
   const [matchedCardIds, setMatchedCardIds] = useState<string[]>([]);
   const [hintCards, setHintCards] = useState<string[]>([]);
 
-  // Screen shake for explosions
-  const { shakeStyle, triggerShake } = useScreenShake();
+  // Idle detection for ambient breathing animations
+  const [isIdle, setIsIdle] = useState(false);
+  const [suggestionCardId, setSuggestionCardId] = useState<string | null>(null);
+  const lastInteractionTimeRef = useRef(Date.now());
+
+  // Check for idle state (3+ seconds since last interaction)
+  // Also trigger suggestion card after 10s of idle
+  useEffect(() => {
+    const checkIdle = () => {
+      const timeSinceInteraction = Date.now() - lastInteractionTimeRef.current;
+      setIsIdle(timeSinceInteraction >= 3000);
+
+      // After 10s of no interaction, show a suggestion card
+      if (timeSinceInteraction >= 10000 && !suggestionCardId) {
+        // Find a valid set and pick one random card from it
+        const availableCards = cards.filter(card => !matchedCardIds.includes(card.id));
+        for (let i = 0; i < availableCards.length - 2; i++) {
+          for (let j = i + 1; j < availableCards.length - 1; j++) {
+            for (let k = j + 1; k < availableCards.length; k++) {
+              const potentialSet = [availableCards[i], availableCards[j], availableCards[k]];
+              // Check if valid set using active attributes
+              const isValid = activeAttributes.every(attr => {
+                const values = potentialSet.map(card => card[attr as keyof CardType]);
+                const allSame = values.every(v => v === values[0]);
+                const allDifferent = values.length === new Set(values).size;
+                return allSame || allDifferent;
+              });
+              if (isValid) {
+                // Pick a random card from the valid set
+                const randomCard = potentialSet[Math.floor(Math.random() * 3)];
+                setSuggestionCardId(randomCard.id);
+                return;
+              }
+            }
+          }
+        }
+      }
+    };
+
+    // Check immediately and then every second
+    checkIdle();
+    const interval = setInterval(checkIdle, 1000);
+
+    return () => clearInterval(interval);
+  }, [cards, matchedCardIds, activeAttributes, suggestionCardId]);
+
+  // Reset idle timer and clear suggestion on any card selection
+  useEffect(() => {
+    if (selectedCards.length > 0) {
+      lastInteractionTimeRef.current = Date.now();
+      setIsIdle(false);
+      setSuggestionCardId(null);
+    }
+  }, [selectedCards]);
+
+  // Screen shake for explosions and failures
+  const { shakeStyle, triggerShake, shake } = useScreenShake();
+
+  // Subtle background color animation - creates ambient life
+  const backgroundProgress = useSharedValue(0);
+
+  useEffect(() => {
+    // Very slow color shift cycle (45 seconds)
+    backgroundProgress.value = withRepeat(
+      withTiming(1, { duration: 45000, easing: Easing.inOut(Easing.sin) }),
+      -1, // infinite
+      true // reverse
+    );
+  }, [backgroundProgress]);
+
+  const animatedBoardStyle = useAnimatedStyle(() => {
+    // Subtle shift between paper beige variants
+    const backgroundColor = interpolateColor(
+      backgroundProgress.value,
+      [0, 0.5, 1],
+      [COLORS.paperBeige, '#F5EFE6', '#FAF6F0'] // Very subtle warm/cool variants
+    );
+
+    return { backgroundColor };
+  });
+
+  // Flash overlay animations
+  const successFlashOpacity = useSharedValue(0);
+  const failureFlashOpacity = useSharedValue(0);
+
+  const successFlashStyle = useAnimatedStyle(() => ({
+    opacity: successFlashOpacity.value,
+  }));
+
+  const failureFlashStyle = useAnimatedStyle(() => ({
+    opacity: failureFlashOpacity.value,
+  }));
+
+  // Trigger success flash
+  const triggerSuccessFlash = useCallback(() => {
+    successFlashOpacity.value = withSequence(
+      withTiming(0.15, { duration: 50 }),
+      withTiming(0, { duration: DURATION.fast })
+    );
+  }, [successFlashOpacity]);
+
+  // Trigger failure flash and shake
+  const triggerFailureFlash = useCallback(() => {
+    failureFlashOpacity.value = withSequence(
+      withTiming(0.2, { duration: 50 }),
+      withTiming(0, { duration: DURATION.normal })
+    );
+    shake('medium');
+  }, [failureFlashOpacity, shake]);
+
+  // Particle effects for explosions
+  const { spawnParticles, Particles } = useParticles();
+
+  // Card position refs for particle spawning (we'll estimate center of board)
+  const boardRef = useRef<View>(null);
+
+  // Trigger explosion particles at estimated card positions
+  const triggerExplosionParticles = useCallback((cardCount: number) => {
+    // Spawn particles at center of board area (estimated)
+    // In a real implementation, we'd track card positions
+    const centerX = 150; // Approximate center
+    const centerY = 200;
+
+    for (let i = 0; i < cardCount; i++) {
+      // Offset each explosion slightly for visual variety
+      const offsetX = (Math.random() - 0.5) * 100;
+      const offsetY = (Math.random() - 0.5) * 100;
+      spawnParticles(15, { x: centerX + offsetX, y: centerY + offsetY }, 'explosion');
+    }
+  }, [spawnParticles]);
 
   // Use ref for hints to avoid stale closure issues
   const hintsRef = useRef(playerStats.hints);
@@ -264,8 +405,12 @@ const GameBoard: React.FC<GameBoardProps> = ({
     // If card is already selected, deselect it
     if (selectedCards.some(c => c.id === card.id)) {
       setSelectedCards(selectedCards.filter(c => c.id !== card.id));
+      selectionHaptic(); // Light haptic on deselect
       return;
     }
+
+    // Haptic feedback for card selection
+    selectionHaptic();
 
     // If already have 3 cards selected, replace the first one
     let newSelectedCards;
@@ -281,6 +426,13 @@ const GameBoard: React.FC<GameBoardProps> = ({
     if (newSelectedCards.length === 3) {
       setTimeout(() => {
         if (isValidSet(newSelectedCards)) {
+          // Immediately notify parent that match started (for particle effects)
+          onMatchStart?.();
+
+          // Trigger success flash and haptic
+          triggerSuccessFlash();
+          triggerHaptic('success');
+
           // Generate unique match ID for this match
           const matchId = ++matchCounterRef.current;
 
@@ -291,9 +443,10 @@ const GameBoard: React.FC<GameBoardProps> = ({
           // Pass weapons array for independent laser rolls, and activeAttributes for echo
           const weaponEffects = processWeaponEffects(cards, newSelectedCards, playerStats, weapons, activeAttributes, false);
 
-          // Trigger screen shake for explosions
+          // Trigger screen shake and particles for explosions
           if (weaponEffects.explosiveCards.length > 0) {
             triggerShake(weaponEffects.explosiveCards.length);
+            triggerExplosionParticles(weaponEffects.explosiveCards.length);
           }
 
           // Create rewards for exploded cards
@@ -435,6 +588,13 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
           if (graceCanSave) {
             // Grace saves! (exactly 1 attribute wrong) - treat as valid match with full rewards
+            // Immediately notify parent that match started (for particle effects)
+            onMatchStart?.();
+
+            // Trigger success flash (grace is still a success!) with warning haptic
+            triggerSuccessFlash();
+            triggerHaptic('warning'); // Warning to indicate grace was used
+
             const matchId = ++matchCounterRef.current;
 
             // Calculate full rewards for matched cards (same as valid match)
@@ -443,9 +603,10 @@ const GameBoard: React.FC<GameBoardProps> = ({
             // Process weapon effects (explosions, lasers, etc.)
             const weaponEffects = processWeaponEffects(cards, newSelectedCards, playerStats, weapons, activeAttributes, false);
 
-            // Trigger screen shake for explosions
+            // Trigger screen shake and particles for explosions
             if (weaponEffects.explosiveCards.length > 0) {
               triggerShake(weaponEffects.explosiveCards.length);
+              triggerExplosionParticles(weaponEffects.explosiveCards.length);
             }
 
             // Create rewards for exploded cards
@@ -580,6 +741,10 @@ const GameBoard: React.FC<GameBoardProps> = ({
             }, 1500);
           } else {
             // 2+ attributes wrong OR no graces - full invalid match (lose health)
+            // Trigger failure flash, shake, and error haptic
+            triggerFailureFlash();
+            triggerHaptic('error');
+
             onInvalidSelection(newSelectedCards);
 
             setTimeout(() => {
@@ -593,7 +758,19 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
   return (
     <Animated.View nativeID="gameboard-container" style={[styles.container, shakeStyle]}>
-      <View nativeID="gameboard-grid" style={styles.board}>
+      {/* Success flash overlay */}
+      <Animated.View
+        style={[styles.flashOverlay, styles.successFlash, successFlashStyle]}
+        pointerEvents="none"
+      />
+      {/* Failure flash overlay */}
+      <Animated.View
+        style={[styles.flashOverlay, styles.failureFlash, failureFlashStyle]}
+        pointerEvents="none"
+      />
+      {/* Particle effects */}
+      <Particles />
+      <Animated.View nativeID="gameboard-grid" style={[styles.board, animatedBoardStyle]}>
         {rows.map((row, rowIndex) => {
           // Calculate how many empty slots we need to fill out the row
           const emptySlots = COLUMNS - row.length;
@@ -636,7 +813,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
             </View>
           );
         })}
-      </View>
+      </Animated.View>
     </Animated.View>
   );
 };
@@ -663,6 +840,20 @@ const styles = StyleSheet.create({
     aspectRatio: 0.75,
     maxHeight: '100%',
     position: 'relative',
+  },
+  flashOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 100,
+  },
+  successFlash: {
+    backgroundColor: '#FFFFFF',
+  },
+  failureFlash: {
+    backgroundColor: '#EF4444',
   },
 });
 

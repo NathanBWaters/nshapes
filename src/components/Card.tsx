@@ -1,10 +1,23 @@
-import React, { useCallback, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import React, { useCallback, useEffect } from 'react';
+import { View, Text, StyleSheet, Platform, TouchableOpacity } from 'react-native';
 import Svg, { Ellipse, Path, Polygon, Defs, Pattern, Rect } from 'react-native-svg';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withSequence,
+  withTiming,
+  withRepeat,
+  interpolateColor,
+  Easing,
+} from 'react-native-reanimated';
 import { Card as CardType, Background } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { BACKGROUND_COLORS } from '@/utils/gameConfig';
 import { useBurnTimer } from '@/hooks/useBurnTimer';
+import { EASING, DURATION, SHADOWS } from '@/utils/designSystem';
+
+const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
 
 // Debug: Track render counts per card (only in development)
 const renderCounts = new Map<string, number>();
@@ -21,10 +34,54 @@ interface CardProps {
   disabled?: boolean;
   onBurnComplete?: (card: CardType) => void;
   isPaused?: boolean;
+  isNew?: boolean; // Whether this card was just added to the board
+  entryDelay?: number; // Stagger delay for entry animation in ms
+  isIdle?: boolean; // Whether the game board is idle (for ambient breathing)
+  breathingOffset?: number; // Stagger offset in ms for breathing animation
+  isSuggestion?: boolean; // Whether this card is a subtle suggestion (after 10s idle)
 }
 
-const Card: React.FC<CardProps> = ({ card, onClick, disabled = false, onBurnComplete, isPaused = false }) => {
+const Card: React.FC<CardProps> = ({
+  card,
+  onClick,
+  disabled = false,
+  onBurnComplete,
+  isPaused = false,
+  isNew = false,
+  entryDelay = 0,
+  isIdle = false,
+  breathingOffset = 0,
+  isSuggestion = false,
+}) => {
   const { shape, color, number, shading, selected, isHint } = card;
+
+  // Animation values
+  const scale = useSharedValue(isNew ? 0.8 : 1);
+  const translateY = useSharedValue(isNew ? -50 : 0);
+  const opacity = useSharedValue(isNew ? 0 : 1);
+  const shadowRadius = useSharedValue(0);
+  const holoShimmerPosition = useSharedValue(0);
+  const fireFlicker = useSharedValue(0.7);
+  const hoverGlow = useSharedValue(0); // Web-only hover glow
+  const hintGlow = useSharedValue(0); // Hint blink animation
+
+  // Entry animation for new cards
+  useEffect(() => {
+    if (isNew) {
+      const timeout = setTimeout(() => {
+        opacity.value = withTiming(1, { duration: DURATION.fast });
+        scale.value = withSpring(1, {
+          damping: EASING.bounce.friction,
+          stiffness: EASING.bounce.tension,
+        });
+        translateY.value = withSpring(0, {
+          damping: EASING.bounce.friction,
+          stiffness: EASING.bounce.tension,
+        });
+      }, entryDelay);
+      return () => clearTimeout(timeout);
+    }
+  }, [isNew, entryDelay, opacity, scale, translateY]);
 
   // Debug: Track renders
   if (DEBUG_RENDERS) {
@@ -44,6 +101,108 @@ const Card: React.FC<CardProps> = ({ card, onClick, disabled = false, onBurnComp
     fireStartTime: card.fireStartTime,
     isPaused,
     onComplete: handleBurnComplete,
+  });
+
+
+  // Hint blink animation - blinks twice when hint is shown
+  useEffect(() => {
+    if (isHint) {
+      // Blink twice: on -> off -> on -> off -> stay on
+      hintGlow.value = withSequence(
+        withTiming(1, { duration: 150 }),
+        withTiming(0.3, { duration: 150 }),
+        withTiming(1, { duration: 150 }),
+        withTiming(0.3, { duration: 150 }),
+        withTiming(1, { duration: 150 })
+      );
+    } else {
+      hintGlow.value = 0;
+    }
+  }, [isHint, hintGlow]);
+
+  // Holographic shimmer animation
+  useEffect(() => {
+    if (card.isHolographic) {
+      holoShimmerPosition.value = withRepeat(
+        withTiming(1, { duration: 4000, easing: Easing.linear }),
+        -1, // infinite
+        false
+      );
+    } else {
+      holoShimmerPosition.value = 0;
+    }
+  }, [card.isHolographic, holoShimmerPosition]);
+
+  // Fire flicker animation
+  useEffect(() => {
+    if (card.onFire) {
+      fireFlicker.value = withRepeat(
+        withSequence(
+          withTiming(1, { duration: 100 + Math.random() * 50 }),
+          withTiming(0.7, { duration: 100 + Math.random() * 50 })
+        ),
+        -1,
+        true
+      );
+    } else {
+      fireFlicker.value = 0.7;
+    }
+  }, [card.onFire, fireFlicker]);
+
+  // Web-only hover handlers
+  const handleHoverIn = useCallback(() => {
+    if (Platform.OS !== 'web' || selected || disabled) return;
+    hoverGlow.value = withTiming(1, { duration: DURATION.fast });
+  }, [selected, disabled, hoverGlow]);
+
+  const handleHoverOut = useCallback(() => {
+    if (Platform.OS !== 'web') return;
+    hoverGlow.value = withTiming(0, { duration: DURATION.fast });
+  }, [hoverGlow]);
+
+  // Animated style for the card
+  const animatedCardStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: scale.value },
+      { translateY: translateY.value },
+    ],
+    shadowRadius: shadowRadius.value + hoverGlow.value * 4,
+    shadowOpacity: 0.1,
+    opacity: opacity.value,
+  }));
+
+  // Holographic border animation
+  const holoStyle = useAnimatedStyle(() => {
+    if (!card.isHolographic) return {};
+
+    const borderColor = interpolateColor(
+      holoShimmerPosition.value,
+      [0, 0.17, 0.33, 0.5, 0.67, 0.83, 1],
+      ['#A855F7', '#3B82F6', '#06B6D4', '#10B981', '#FACC15', '#EF4444', '#A855F7']
+    );
+
+    return {
+      borderColor,
+    };
+  });
+
+  // Fire flicker style
+  const fireStyle = useAnimatedStyle(() => {
+    if (!card.onFire) return {};
+
+    return {
+      shadowOpacity: fireFlicker.value,
+    };
+  });
+
+  // Hint glow style - pulses the shadow/glow effect
+  const hintStyle = useAnimatedStyle(() => {
+    if (!isHint) return {};
+
+    return {
+      shadowOpacity: hintGlow.value * 0.8,
+      shadowRadius: 8 + hintGlow.value * 4,
+    };
   });
 
   // NOTE: Multi-hit cards (health > 1) are not currently used in gameplay.
@@ -120,13 +279,29 @@ const Card: React.FC<CardProps> = ({ card, onClick, disabled = false, onBurnComp
     return null;
   };
 
+  // Web cursor style - applied separately to avoid TypeScript issues with reanimated
+  const webCursorStyle = Platform.OS === 'web'
+    ? { cursor: disabled ? 'default' : 'pointer' } as any
+    : undefined;
+
   return (
-    <TouchableOpacity
+    <AnimatedTouchableOpacity
       testID={`card-${shape}-${color}-${number}-${shading}`}
-      style={getCardStyle()}
+      style={[
+        getCardStyle(),
+        animatedCardStyle,
+        card.isHolographic && holoStyle,
+        card.onFire && fireStyle,
+        isHint && hintStyle,
+        webCursorStyle,
+      ]}
       onPress={() => !disabled && onClick(card)}
       disabled={disabled}
-      activeOpacity={0.7}
+      activeOpacity={0.9}
+      hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+      // @ts-ignore - onHoverIn/Out are web-only props
+      onHoverIn={handleHoverIn}
+      onHoverOut={handleHoverOut}
     >
       {getModifierBadge()}
 
@@ -136,7 +311,7 @@ const Card: React.FC<CardProps> = ({ card, onClick, disabled = false, onBurnComp
 
       {/* Fire overlay - progressive darkening at edges */}
       {card.onFire && (
-        <View
+        <Animated.View
           style={[
             styles.fireOverlay,
             {
@@ -147,7 +322,7 @@ const Card: React.FC<CardProps> = ({ card, onClick, disabled = false, onBurnComp
           pointerEvents="none"
         />
       )}
-    </TouchableOpacity>
+    </AnimatedTouchableOpacity>
   );
 };
 
@@ -302,20 +477,30 @@ const styles = StyleSheet.create({
     borderColor: COLORS.slateCharcoal,
     backgroundColor: COLORS.canvasWhite,
     flex: 1,
+    // Minimum touch target size for accessibility (48x48)
+    minWidth: 48,
+    minHeight: 48,
+    // Base shadow
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   selected: {
     borderColor: COLORS.actionYellow,
     // borderWidth removed - now using consistent 3px border
     shadowColor: COLORS.actionYellow,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 6,
-    elevation: 5,
+    shadowOpacity: 0.6,
+    elevation: 8,
   },
   hint: {
     backgroundColor: '#FFFDE7',
     borderColor: COLORS.actionYellow,
     borderStyle: 'dashed',
+    shadowColor: COLORS.actionYellow,
+    shadowOffset: { width: 0, height: 0 },
   },
   holographic: {
     borderColor: '#A855F7', // Purple/rainbow shimmer

@@ -1,8 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { Player, Weapon, PlayerStats, WeaponRarity } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import Icon from './Icon';
+import { ConfettiBurst } from './effects/ConfettiBurst';
+import { AnimatedCounter } from './ui/AnimatedCounter';
+import { ScreenTransition } from './ScreenTransition';
 
 interface VictoryScreenProps {
   player: Player;
@@ -62,8 +65,21 @@ const VictoryScreen: React.FC<VictoryScreenProps> = ({
 }) => {
   const groupedWeapons = groupWeapons(player.weapons);
 
+  // Trigger confetti on mount
+  const [showConfetti, setShowConfetti] = useState(false);
+
+  useEffect(() => {
+    // Slight delay to ensure component is mounted
+    const timer = setTimeout(() => setShowConfetti(true), 100);
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
-    <View style={styles.container}>
+    <ScreenTransition>
+      <View style={styles.container}>
+        {/* Confetti celebration */}
+        <ConfettiBurst trigger={showConfetti} count={50} />
+
       <View style={styles.card}>
         {/* Victory Banner */}
         <View style={styles.banner}>
@@ -85,17 +101,30 @@ const VictoryScreen: React.FC<VictoryScreenProps> = ({
           {/* Stats */}
           <View style={styles.statsSection}>
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{finalScore}</Text>
+              <AnimatedCounter
+                value={finalScore}
+                duration={800}
+                style={styles.statValue}
+              />
               <Text style={styles.statLabel}>Final Score</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{matchCount}</Text>
+              <AnimatedCounter
+                value={matchCount}
+                duration={800}
+                style={styles.statValue}
+              />
               <Text style={styles.statLabel}>Total Matches</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>Lv.{playerStats.level}</Text>
+              <AnimatedCounter
+                value={playerStats.level}
+                duration={800}
+                prefix="Lv."
+                style={styles.statValue}
+              />
               <Text style={styles.statLabel}>Final Level</Text>
             </View>
           </View>
@@ -168,7 +197,8 @@ const VictoryScreen: React.FC<VictoryScreenProps> = ({
           </TouchableOpacity>
         </View>
       </View>
-    </View>
+      </View>
+    </ScreenTransition>
   );
 };
 

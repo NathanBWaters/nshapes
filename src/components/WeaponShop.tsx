@@ -1,10 +1,76 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Pressable, StyleSheet, Platform } from 'react-native';
 import { Weapon, PlayerStats, WeaponRarity } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import Icon from './Icon';
 import GameMenu from './GameMenu';
 import InventoryBar from './InventoryBar';
+import { ScreenTransition } from './ScreenTransition';
+
+// Weapon option component
+interface WeaponOptionProps {
+  weapon: Weapon;
+  index: number;
+  isFocused: boolean;
+  canAfford: boolean;
+  rarityColor: string;
+  onPress: (index: number) => void;
+  onHoverIn: (index: number) => void;
+  onHoverOut: () => void;
+}
+
+function WeaponOption({
+  weapon,
+  index,
+  isFocused,
+  canAfford,
+  rarityColor,
+  onPress,
+  onHoverIn,
+  onHoverOut,
+}: WeaponOptionProps) {
+  return (
+    <Pressable
+      onPress={() => onPress(index)}
+      onHoverIn={() => onHoverIn(index)}
+      onHoverOut={onHoverOut}
+      style={[
+        styles.optionButton,
+        { borderColor: rarityColor },
+        isFocused && styles.optionButtonSelected,
+        !canAfford && styles.optionButtonUnaffordable,
+        Platform.OS === 'web' && { cursor: 'pointer' as any },
+      ]}
+    >
+      {weapon.icon && (
+        <View style={styles.optionIcon}>
+          <Icon
+            name={weapon.icon}
+            size={24}
+            color={isFocused ? COLORS.canvasWhite : COLORS.logicTeal}
+          />
+        </View>
+      )}
+      <View style={styles.optionHeader}>
+        <Text style={[styles.optionPrice, !canAfford && styles.optionPriceUnaffordable]}>
+          ${weapon.price}
+        </Text>
+      </View>
+      <Text
+        style={[
+          styles.optionText,
+          isFocused && styles.optionTextSelected,
+        ]}
+        numberOfLines={1}
+      >
+        {weapon.name}
+      </Text>
+      <Text style={[styles.rarityTag, { color: rarityColor }]}>
+        {getRarityLabel(weapon.rarity)}
+      </Text>
+    </Pressable>
+  );
+}
 
 interface WeaponShopProps {
   weapons: (Weapon | null)[];  // null represents a sold/empty slot
@@ -62,6 +128,15 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
   const [lastTappedIndex, setLastTappedIndex] = useState<number | null>(null);
   const DOUBLE_TAP_THRESHOLD = 300; // ms
 
+  // Purchase state
+  const [purchaseSuccess, setPurchaseSuccess] = useState(false);
+
+  const handlePurchase = (index: number) => {
+    setPurchaseSuccess(true);
+    setTimeout(() => setPurchaseSuccess(false), 800);
+    onPurchase(index);
+  };
+
   const handleWeaponPress = (index: number) => {
     const now = Date.now();
     const weapon = weapons[index];
@@ -74,7 +149,7 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
       canAfford
     ) {
       // Double-tap: instant purchase
-      onPurchase(index);
+      handlePurchase(index);
       setLastTapTime(0);
       setLastTappedIndex(null);
     } else {
@@ -139,9 +214,10 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
   };
 
   return (
-    <View style={styles.container}>
-      {/* Eyebrow Banner */}
-      <View style={styles.eyebrow}>
+    <ScreenTransition>
+      <View style={styles.container}>
+        {/* Eyebrow Banner */}
+        <View style={styles.eyebrow}>
         <Text style={styles.eyebrowText}>Weapon Shop</Text>
         <View style={styles.eyebrowRight}>
           <View style={styles.moneyBadge}>
@@ -256,44 +332,17 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
               const rarityColor = getRarityColor(weapon.rarity);
 
               return (
-                <Pressable
+                <WeaponOption
                   key={`${weapon.id}-${index}`}
-                  onPress={() => handleWeaponPress(index)}
-                  onHoverIn={() => setHoveredIndex(index)}
+                  weapon={weapon}
+                  index={index}
+                  isFocused={isFocused}
+                  canAfford={canAfford}
+                  rarityColor={rarityColor}
+                  onPress={handleWeaponPress}
+                  onHoverIn={setHoveredIndex}
                   onHoverOut={() => setHoveredIndex(null)}
-                  style={[
-                    styles.optionButton,
-                    { borderColor: rarityColor },
-                    isFocused && styles.optionButtonSelected,
-                    !canAfford && styles.optionButtonUnaffordable,
-                  ]}
-                >
-                  {weapon.icon && (
-                    <Icon
-                      name={weapon.icon}
-                      size={24}
-                      color={isFocused ? COLORS.canvasWhite : COLORS.logicTeal}
-                      style={styles.optionIcon}
-                    />
-                  )}
-                  <View style={styles.optionHeader}>
-                    <Text style={[styles.optionPrice, !canAfford && styles.optionPriceUnaffordable]}>
-                      ${weapon.price}
-                    </Text>
-                  </View>
-                  <Text
-                    style={[
-                      styles.optionText,
-                      isFocused && styles.optionTextSelected,
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {weapon.name}
-                  </Text>
-                  <Text style={[styles.rarityTag, { color: rarityColor }]}>
-                    {getRarityLabel(weapon.rarity)}
-                  </Text>
-                </Pressable>
+                />
               );
             })
           ) : (
@@ -307,24 +356,29 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
       {/* Action Buttons */}
       <View style={styles.actionSection}>
         <View style={styles.actionRow}>
-          <TouchableOpacity
-            onPress={() => canAffordFocused && focusedWeapon && onPurchase(focusedIndex)}
-            disabled={!canAffordFocused || !focusedWeapon || availableWeapons.length === 0}
-            style={[
-              styles.purchaseButton,
-              (!canAffordFocused || !focusedWeapon || availableWeapons.length === 0) && styles.purchaseButtonDisabled,
-            ]}
-          >
-            <Text style={styles.purchaseButtonText}>
-              {availableWeapons.length === 0
-                ? 'No Weapons'
-                : !focusedWeapon
-                  ? 'Select Weapon'
-                  : canAffordFocused
-                    ? 'Purchase'
-                    : 'Cannot Afford'}
-            </Text>
-          </TouchableOpacity>
+          <View style={{ flex: 1 }}>
+            <TouchableOpacity
+              onPress={() => canAffordFocused && focusedWeapon && handlePurchase(focusedIndex)}
+              disabled={!canAffordFocused || !focusedWeapon || availableWeapons.length === 0}
+              style={[
+                styles.purchaseButton,
+                (!canAffordFocused || !focusedWeapon || availableWeapons.length === 0) && styles.purchaseButtonDisabled,
+                purchaseSuccess && styles.purchaseButtonSuccess,
+              ]}
+            >
+              <Text style={styles.purchaseButtonText}>
+                {purchaseSuccess
+                  ? '✓ Purchased!'
+                  : availableWeapons.length === 0
+                    ? 'No Weapons'
+                    : !focusedWeapon
+                      ? 'Select Weapon'
+                      : canAffordFocused
+                        ? 'Purchase'
+                        : 'Cannot Afford'}
+              </Text>
+            </TouchableOpacity>
+          </View>
           <TouchableOpacity
             onPress={onContinue}
             style={styles.continueButton}
@@ -333,7 +387,8 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
           </TouchableOpacity>
         </View>
       </View>
-    </View>
+      </View>
+    </ScreenTransition>
   );
 };
 
@@ -687,6 +742,9 @@ const styles = StyleSheet.create({
   purchaseButtonDisabled: {
     backgroundColor: COLORS.paperBeige,
     opacity: 0.6,
+  },
+  purchaseButtonSuccess: {
+    backgroundColor: COLORS.logicTeal,
   },
   purchaseButtonText: {
     color: COLORS.slateCharcoal,

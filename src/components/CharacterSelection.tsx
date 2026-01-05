@@ -6,6 +6,7 @@ import { getWeaponByName, DEFAULT_PLAYER_STATS } from '@/utils/gameDefinitions';
 import { CharacterWinsStorage, CharacterWins, EndlessHighScoresStorage, EndlessHighScores } from '@/utils/storage';
 import Icon from './Icon';
 import GameMenu from './GameMenu';
+import { ScreenTransition } from './ScreenTransition';
 
 // IMPORTANT: This game should NOT have scrollable screens.
 // All screens should fill the available height without requiring scrolling.
@@ -50,9 +51,10 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
   const selectedChar = characters.find(c => c.name === displayedCharacter);
 
   return (
-    <View style={styles.container}>
-      {/* Eyebrow Banner */}
-      <View style={styles.eyebrow}>
+    <ScreenTransition>
+      <View style={styles.container}>
+        {/* Eyebrow Banner */}
+        <View style={styles.eyebrow}>
         <Text style={styles.eyebrowText}>Character Selection</Text>
         <GameMenu playerStats={DEFAULT_PLAYER_STATS as PlayerStats} character={selectedChar} onExitGame={onExitGame} />
       </View>
@@ -179,7 +181,8 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
           </Text>
         </TouchableOpacity>
       </View>
-    </View>
+      </View>
+    </ScreenTransition>
   );
 };
 

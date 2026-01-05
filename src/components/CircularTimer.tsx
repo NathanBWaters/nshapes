@@ -45,32 +45,82 @@ const CircularTimer: React.FC<CircularTimerProps> = ({
     strokeDashoffset: circumference * (1 - animatedProgress.value),
   }));
 
-  // Animation for pulse effect when critical
+  // Determine urgency level for pulse intensity
+  const getUrgencyLevel = () => {
+    if (isInfinite || currentTime <= 0) return 'none';
+    if (currentTime <= 5) return 'critical'; // Rapid pulse, red
+    if (currentTime <= 15) return 'warning'; // Medium pulse, orange
+    if (currentTime <= 30) return 'alert'; // Gentle pulse
+    return 'none';
+  };
+
+  const urgencyLevel = getUrgencyLevel();
+
+  // Animation for pulse effect based on urgency
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  const isCritical = currentTime <= 5 && currentTime > 0 && !isInfinite;
+  const shakeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (isCritical) {
-      const pulse = Animated.loop(
+    // Configure pulse based on urgency level
+    if (urgencyLevel === 'none') {
+      pulseAnim.setValue(1);
+      shakeAnim.setValue(0);
+      return;
+    }
+
+    // Pulse configuration by urgency
+    const pulseConfig = {
+      alert: { scale: 1.03, duration: 1000 }, // Gentle, slow
+      warning: { scale: 1.05, duration: 500 }, // Medium
+      critical: { scale: 1.08, duration: 250 }, // Rapid
+    }[urgencyLevel] || { scale: 1, duration: 1000 };
+
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: pulseConfig.scale,
+          duration: pulseConfig.duration,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: pulseConfig.duration,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    pulse.start();
+
+    // Add shake for critical (last 3 seconds)
+    if (currentTime <= 3 && currentTime > 0 && !isInfinite) {
+      const shake = Animated.loop(
         Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 1.08,
-            duration: 400,
+          Animated.timing(shakeAnim, {
+            toValue: 2,
+            duration: 50,
             useNativeDriver: true,
           }),
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 400,
+          Animated.timing(shakeAnim, {
+            toValue: -2,
+            duration: 50,
+            useNativeDriver: true,
+          }),
+          Animated.timing(shakeAnim, {
+            toValue: 0,
+            duration: 50,
             useNativeDriver: true,
           }),
         ])
       );
-      pulse.start();
-      return () => pulse.stop();
-    } else {
-      pulseAnim.setValue(1);
+      shake.start();
+      return () => {
+        pulse.stop();
+        shake.stop();
+      };
     }
-  }, [isCritical]);
+
+    return () => pulse.stop();
+  }, [urgencyLevel, currentTime, isInfinite]);
 
   // Color based on time remaining
   const getProgressColor = () => {
@@ -88,6 +138,8 @@ const CircularTimer: React.FC<CircularTimerProps> = ({
     return String(Math.floor(currentTime));
   };
 
+  const isCritical = urgencyLevel === 'critical';
+
   return (
     <Animated.View
       style={[
@@ -95,7 +147,10 @@ const CircularTimer: React.FC<CircularTimerProps> = ({
         {
           width: size,
           height: size,
-          transform: [{ scale: pulseAnim }],
+          transform: [
+            { scale: pulseAnim },
+            { translateX: shakeAnim },
+          ],
         },
       ]}
     >

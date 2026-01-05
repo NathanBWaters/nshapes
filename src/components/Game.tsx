@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Platform, Dimensions } from 'react-native';
 import { Card, CardReward, GameState, Enemy, Weapon, PlayerStats, AttributeName } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { createDeck, shuffleArray, isValidCombination, findAllCombinations, generateGameBoard, formatTime, sameCardAttributes } from '@/utils/gameUtils';
@@ -19,6 +19,7 @@ import {
 import { getActiveAttributesForRound, getBoardSizeForAttributes, ATTRIBUTE_SCALING } from '@/utils/gameConfig';
 import { getAdjacentIndices, getFireSpreadCards, WeaponEffectResult } from '@/utils/weaponEffects';
 import { useGameTimer } from '@/hooks/useGameTimer';
+import { useParticles } from '@/hooks/useParticles';
 import GameBoard from './GameBoard';
 import GameInfo from './GameInfo';
 import { DevModeCallbacks } from './GameMenu';
@@ -177,6 +178,9 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
     type: 'success' | 'error' | 'info' | 'warning';
   } | null>(null);
 
+  // Particle effects for match celebrations
+  const { spawnParticles, Particles } = useParticles();
+
   // UI state for header stats
   const [hasActiveHint, setHasActiveHint] = useState(false);
   const [hintTrigger, setHintTrigger] = useState(0);
@@ -190,6 +194,29 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
 
   // Game over reason
   const [gameOverReason, setGameOverReason] = useState<string | null>(null);
+
+  // Keyboard shortcut for hints (web only)
+  useEffect(() => {
+    if (Platform.OS !== 'web' || gamePhase !== 'round') return;
+
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.key === 'h' || e.key === 'H') {
+        const playerStats = calculatePlayerTotalStats(state.player);
+        const hintsAvailable = playerStats.hints ?? 0;
+
+        if (hasActiveHint) {
+          // Clear active hint
+          setClearHintTrigger(t => t + 1);
+        } else if (hintsAvailable > 0) {
+          // Use a hint
+          setHintTrigger(t => t + 1);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [gamePhase, hasActiveHint, state.player]);
 
   // Per-round stats tracking (for round summary screen)
   const [roundStats, setRoundStats] = useState({
@@ -914,6 +941,13 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
       }));
     }
   };
+
+  // Handle match start - called immediately when a valid match is detected (before animations)
+  const handleMatchStart = useCallback(() => {
+    // Spawn sparkle particles from the top bar area immediately
+    const { width } = Dimensions.get('window');
+    spawnParticles(360, { x: width / 2, y: 40 }, 'sparkle');
+  }, [spawnParticles]);
 
   // Handle valid match - receives cards, rewards, and weapon effects from GameBoard after reveal
   const handleValidMatch = (cards: Card[], rewards: CardReward[], weaponEffects?: WeaponEffectResult) => {
@@ -1817,6 +1851,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
               <GameBoard
                 cards={state.board}
                 onMatch={handleValidMatch}
+                onMatchStart={handleMatchStart}
                 onInvalidSelection={handleInvalidMatch}
                 playerStats={calculatePlayerTotalStats(state.player)}
                 weapons={state.player.weapons}
@@ -1895,6 +1930,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
               <GameBoard
                 cards={state.board}
                 onMatch={handleValidMatch}
+                onMatchStart={handleMatchStart}
                 onInvalidSelection={handleInvalidMatch}
                 playerStats={calculatePlayerTotalStats(state.player)}
                 weapons={state.player.weapons}
@@ -2027,6 +2063,9 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
 
       {renderGamePhase()}
 
+      {/* Particle effects layer - rendered last to appear on top */}
+      <Particles />
+
       {/* Tutorial Prompt Modal */}
       <Modal
         visible={showTutorialPrompt}
@@ -2138,7 +2177,7 @@ const gameOverStyles = StyleSheet.create({
   },
   eyebrow: {
     height: 48,
-    backgroundColor: COLORS.impactRed,
+    backgroundColor: '#CC4444', // Muted red - less harsh, more encouraging
     justifyContent: 'center',
     alignItems: 'center',
     borderBottomWidth: 2,
@@ -2155,19 +2194,18 @@ const gameOverStyles = StyleSheet.create({
     padding: 16,
   },
   reasonContainer: {
-    backgroundColor: COLORS.deepOnyx,
+    backgroundColor: '#FEF2F2', // Soft pink-white instead of deep onyx
     borderRadius: RADIUS.module,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: COLORS.impactRed,
+    borderColor: '#CC4444', // Muted red
   },
   reasonText: {
-    color: COLORS.impactRed,
+    color: '#383838', // Slate charcoal instead of bright red
     fontWeight: '600',
     fontSize: 14,
     textAlign: 'center',
-    textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   statsContainer: {
@@ -2211,7 +2249,7 @@ const gameOverStyles = StyleSheet.create({
     backgroundColor: COLORS.logicTeal,
   },
   failBadge: {
-    backgroundColor: COLORS.impactRed,
+    backgroundColor: '#CC4444', // Muted red - encouraging, not punishing
   },
   resultText: {
     fontWeight: '700',

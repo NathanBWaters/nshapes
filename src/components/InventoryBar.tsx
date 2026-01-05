@@ -1,5 +1,14 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+  withDelay,
+  Easing,
+} from 'react-native-reanimated';
 import { Weapon, WeaponRarity } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import Icon from './Icon';
@@ -22,6 +31,63 @@ const getRarityColor = (rarity: WeaponRarity): string => {
     default: return COLORS.slateCharcoal;
   }
 };
+
+// Animated weapon item with breathing effect
+interface AnimatedWeaponItemProps {
+  weapon: Weapon;
+  count: number;
+  index: number;
+  rarityColor: string;
+}
+
+function AnimatedWeaponItem({ weapon, count, index, rarityColor }: AnimatedWeaponItemProps) {
+  const breathingScale = useSharedValue(1);
+
+  useEffect(() => {
+    // Different breathing parameters based on rarity
+    const isLegendary = weapon.rarity === 'legendary';
+    const breathDuration = isLegendary ? 3000 : 2000;
+    const breathIntensity = isLegendary ? 0.03 : 0.015;
+    const offset = index * 300; // Stagger animation start
+
+    const breathAnimation = withRepeat(
+      withSequence(
+        withTiming(1 + breathIntensity, { duration: breathDuration / 2, easing: Easing.inOut(Easing.sin) }),
+        withTiming(1 - breathIntensity, { duration: breathDuration / 2, easing: Easing.inOut(Easing.sin) })
+      ),
+      -1,
+      false
+    );
+
+    breathingScale.value = withDelay(offset, breathAnimation);
+  }, [index, weapon.rarity, breathingScale]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: breathingScale.value }],
+  }));
+
+  return (
+    <Animated.View
+      style={[
+        styles.itemContainer,
+        { borderColor: rarityColor },
+        animatedStyle,
+      ]}
+    >
+      {weapon.icon && (
+        <Icon name={weapon.icon} size={16} color={COLORS.slateCharcoal} />
+      )}
+      <Text style={styles.itemName} numberOfLines={1}>
+        {weapon.name}
+      </Text>
+      {count > 1 && (
+        <View style={[styles.countBadge, { backgroundColor: rarityColor }]}>
+          <Text style={styles.countText}>{count}</Text>
+        </View>
+      )}
+    </Animated.View>
+  );
+}
 
 const InventoryBar: React.FC<InventoryBarProps> = ({ weapons }) => {
   // Group weapons by name + rarity
@@ -66,22 +132,13 @@ const InventoryBar: React.FC<InventoryBarProps> = ({ weapons }) => {
           const rarityColor = getRarityColor(weapon.rarity);
 
           return (
-            <View
+            <AnimatedWeaponItem
               key={`${weapon.id}-${index}`}
-              style={[styles.itemContainer, { borderColor: rarityColor }]}
-            >
-              {weapon.icon && (
-                <Icon name={weapon.icon} size={16} color={COLORS.slateCharcoal} />
-              )}
-              <Text style={styles.itemName} numberOfLines={1}>
-                {weapon.name}
-              </Text>
-              {count > 1 && (
-                <View style={[styles.countBadge, { backgroundColor: rarityColor }]}>
-                  <Text style={styles.countText}>{count}</Text>
-                </View>
-              )}
-            </View>
+              weapon={weapon}
+              count={count}
+              index={index}
+              rarityColor={rarityColor}
+            />
           );
         })}
       </ScrollView>

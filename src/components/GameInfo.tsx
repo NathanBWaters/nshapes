@@ -1,12 +1,232 @@
-import React, { ReactNode } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { ReactNode, useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions, Platform, Animated } from 'react-native';
 import { CopilotStep, walkthroughable } from 'react-native-copilot';
 import { PlayerStats, Weapon } from '@/types';
 import CircularTimer from './CircularTimer';
 import GameMenu, { DevModeCallbacks } from './GameMenu';
 import { COLORS, RADIUS } from '@/utils/colors';
+import { SPACING } from '@/utils/designSystem';
 
 const WalkthroughableView = walkthroughable(View);
+
+// Animated heart icon with heartbeat effect
+interface HeartBeatProps {
+  health: number;
+  maxHealth: number;
+  style?: any;
+}
+
+function HeartBeat({ health, maxHealth, style }: HeartBeatProps) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    // Calculate heartbeat speed based on health ratio
+    const healthRatio = health / maxHealth;
+    let duration: number;
+    let scale: number;
+
+    if (healthRatio <= 0.25) {
+      // Critical: rapid heartbeat
+      duration = 300;
+      scale = 1.15;
+    } else if (healthRatio <= 0.5) {
+      // Low: medium heartbeat
+      duration = 500;
+      scale = 1.1;
+    } else {
+      // Normal: gentle heartbeat
+      duration = 1000;
+      scale = 1.05;
+    }
+
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(scaleAnim, {
+          toValue: scale,
+          duration: duration * 0.3,
+          useNativeDriver: true,
+        }),
+        Animated.timing(scaleAnim, {
+          toValue: 1,
+          duration: duration * 0.7,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    pulse.start();
+    return () => pulse.stop();
+  }, [health, maxHealth, scaleAnim]);
+
+  return (
+    <Animated.Text
+      style={[
+        style,
+        {
+          transform: [{ scale: scaleAnim }],
+        },
+      ]}
+    >
+      ♥
+    </Animated.Text>
+  );
+}
+
+// Animated hint button with floating effect when hints are available
+interface AnimatedHintButtonProps {
+  hintsAvailable: number;
+  maxHints: number;
+  hasActiveHint: boolean;
+  onPress: () => void;
+  disabled: boolean;
+  mobileStyles?: any;
+}
+
+function AnimatedHintButton({
+  hintsAvailable,
+  maxHints,
+  hasActiveHint,
+  onPress,
+  disabled,
+  mobileStyles = {},
+}: AnimatedHintButtonProps) {
+  const floatY = useRef(new Animated.Value(0)).current;
+  const glowOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (hintsAvailable > 0 && !hasActiveHint) {
+      // Float animation when hints available
+      const float = Animated.loop(
+        Animated.sequence([
+          Animated.timing(floatY, {
+            toValue: -3,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(floatY, {
+            toValue: 3,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+
+      // Glow pulse
+      const glow = Animated.loop(
+        Animated.sequence([
+          Animated.timing(glowOpacity, {
+            toValue: 0.6,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(glowOpacity, {
+            toValue: 0.2,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+
+      float.start();
+      glow.start();
+
+      return () => {
+        float.stop();
+        glow.stop();
+      };
+    } else {
+      floatY.setValue(0);
+      glowOpacity.setValue(0);
+    }
+  }, [hintsAvailable, hasActiveHint, floatY, glowOpacity]);
+
+  return (
+    <Animated.View
+      style={{
+        transform: [{ translateY: floatY }],
+      }}
+    >
+      <TouchableOpacity
+        style={[
+          hintButtonStyles.hintButtonInner,
+          mobileStyles.mobileHintButton,
+          hintsAvailable > 0 ? hintButtonStyles.hintButtonEnabled : hintButtonStyles.hintButtonDisabled,
+          hasActiveHint && hintButtonStyles.hintButtonActive,
+        ]}
+        onPress={onPress}
+        disabled={disabled}
+      >
+        <Animated.View
+          style={[
+            hintButtonStyles.glowOverlay,
+            { opacity: glowOpacity },
+          ]}
+        />
+        <Text style={[hintButtonStyles.hintIcon, mobileStyles.hintIcon]}>?</Text>
+        <Text style={[
+          hintButtonStyles.hintCount,
+          mobileStyles.hintCount,
+          hintsAvailable > 0 ? hintButtonStyles.hintCountEnabled : hintButtonStyles.hintCountDisabled
+        ]}>
+          {hasActiveHint ? 'x' : `${hintsAvailable}/${maxHints}`}
+        </Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
+// Styles for AnimatedHintButton (reusing from main styles where possible)
+const hintButtonStyles = StyleSheet.create({
+  hintButtonInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: RADIUS.button,
+    gap: 2,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  hintButtonEnabled: {
+    backgroundColor: COLORS.actionYellow,
+  },
+  hintButtonDisabled: {
+    backgroundColor: COLORS.paperBeige,
+  },
+  hintButtonActive: {
+    backgroundColor: COLORS.impactOrange,
+  },
+  hintIcon: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.slateCharcoal,
+    zIndex: 1,
+  },
+  hintCount: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'monospace',
+    zIndex: 1,
+  },
+  hintCountEnabled: {
+    color: COLORS.slateCharcoal,
+  },
+  hintCountDisabled: {
+    color: COLORS.slateCharcoal,
+    opacity: 0.5,
+  },
+  glowOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: COLORS.canvasWhite,
+    borderRadius: RADIUS.button,
+  },
+});
 
 // Copilot step definitions for tutorial mode
 const COPILOT_STEPS = {
@@ -48,6 +268,58 @@ const getXPForLevel = (level: number): number => {
   return level * level * 10; // Level 1 = 10, Level 2 = 40, Level 3 = 90, etc.
 };
 
+// Animated score text that pulses when score is high
+interface AnimatedScoreTextProps {
+  score: number;
+  targetScore: number;
+  style?: any;
+}
+
+function AnimatedScoreText({ score, targetScore, style }: AnimatedScoreTextProps) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    // Only pulse when score is above 50% of target
+    const scoreRatio = score / targetScore;
+    if (scoreRatio > 0.5) {
+      // Intensity based on score ratio
+      const intensity = Math.min((scoreRatio - 0.5) * 0.06, 0.03); // Max 3% scale
+      const duration = 1500 - (scoreRatio * 500); // Faster as score increases (1000-1500ms)
+
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(scaleAnim, {
+            toValue: 1 + intensity,
+            duration: duration * 0.4,
+            useNativeDriver: true,
+          }),
+          Animated.timing(scaleAnim, {
+            toValue: 1,
+            duration: duration * 0.6,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+
+      pulse.start();
+      return () => pulse.stop();
+    } else {
+      scaleAnim.setValue(1);
+    }
+  }, [score, targetScore, scaleAnim]);
+
+  return (
+    <Animated.Text
+      style={[
+        style,
+        { transform: [{ scale: scaleAnim }] },
+      ]}
+    >
+      {score}/{targetScore}
+    </Animated.Text>
+  );
+}
+
 const GameInfo: React.FC<GameInfoProps> = ({
   round,
   score,
@@ -66,6 +338,10 @@ const GameInfo: React.FC<GameInfoProps> = ({
   controlledMenuOpen,
   onMenuOpenChange,
 }) => {
+  // Detect mobile layout (narrow screens)
+  const { width } = useWindowDimensions();
+  const isMobile = width < 500 || Platform.OS !== 'web';
+
   // Calculate score progress percentage
   const scoreProgress = Math.min((score / targetScore) * 100, 100);
 
@@ -96,91 +372,68 @@ const GameInfo: React.FC<GameInfoProps> = ({
     );
   };
 
+  // Mobile layout uses larger fonts and 2-row organization
+  const mobileStyles = isMobile ? {
+    statLabel: { fontSize: 14 },
+    statValue: { fontSize: 14 },
+    heartIcon: { fontSize: 14 },
+    coinIcon: { fontSize: 14 },
+    levelText: { fontSize: 14 },
+    hintIcon: { fontSize: 14 },
+    hintCount: { fontSize: 14 },
+    graceIcon: { fontSize: 14 },
+    graceCount: { fontSize: 14 },
+    scoreText: { fontSize: 13 },
+  } : {};
+
   return (
     <View style={styles.container}>
-        {/* Top row: All stats */}
-        <View style={styles.statsRow}>
-          {/* Left section - gameplay stats */}
-          <View style={styles.leftSection}>
-            {/* Round */}
-            {withCopilot('round',
-              <Text style={styles.statLabel}>R{round}</Text>,
-              styles.statBadge
-            )}
-
+      {isMobile ? (
+        // Mobile: 2-row layout
+        <>
+          {/* Row 1: Health, Timer, Score progress */}
+          <View style={styles.mobileRow}>
             {/* Health */}
             {withCopilot('health',
               <>
-                <Text style={styles.heartIcon}>♥</Text>
-                <Text style={[styles.statValue, playerStats.health <= 1 && styles.criticalValue]}>
+                <HeartBeat
+                health={playerStats.health}
+                maxHealth={playerStats.maxHealth}
+                style={[styles.heartIcon, mobileStyles.heartIcon]}
+              />
+                <Text style={[styles.statValue, mobileStyles.statValue, playerStats.health <= 1 && styles.criticalValue]}>
                   {playerStats.health}/{playerStats.maxHealth}
                 </Text>
               </>,
               styles.statItem
             )}
 
-            {/* Money */}
-            {withCopilot('money',
-              <>
-                <Text style={styles.coinIcon}>$</Text>
-                <Text style={styles.statValue}>{playerStats.money}</Text>
-              </>,
-              styles.statItem
-            )}
-
-            {/* Level + XP Progress */}
-            {withCopilot('level',
-              <>
-                <Text style={styles.levelText}>Lv{playerStats.level}</Text>
-                <View style={styles.xpBarContainer}>
-                  <View style={[styles.xpBarFill, { width: `${xpProgress}%` }]} />
-                </View>
-              </>,
-              styles.levelContainer
-            )}
-
-            {/* Graces - always show in copilot mode for tutorial, otherwise conditional */}
-            {((playerStats.graces ?? 0) > 0 || copilotMode) &&
-              withCopilot('graces',
-                <>
-                  <Text style={styles.graceIcon}>🍀</Text>
-                  <Text style={styles.graceCount}>{playerStats.graces ?? 0}</Text>
-                </>,
-                styles.graceBadge
-              )
-            }
-
-            {/* Hints */}
-            {withCopilot('hints',
-              <TouchableOpacity
-                style={[
-                  styles.hintButtonInner,
-                  hintsAvailable > 0 ? styles.hintButtonEnabled : styles.hintButtonDisabled,
-                  hasActiveHint && styles.hintButtonActive,
-                ]}
-                onPress={hasActiveHint ? onClearHint : onHintPress}
-                disabled={copilotMode || (hintsAvailable <= 0 && !hasActiveHint)}
-              >
-                <Text style={styles.hintIcon}>?</Text>
-                <Text style={[
-                  styles.hintCount,
-                  hintsAvailable > 0 ? styles.hintCountEnabled : styles.hintCountDisabled
-                ]}>
-                  {hasActiveHint ? 'x' : `${hintsAvailable}/${maxHints}`}
-                </Text>
-              </TouchableOpacity>,
-              undefined
-            )}
-
-            {/* Timer */}
+            {/* Timer - centered */}
             {withCopilot('timer',
               <CircularTimer
                 currentTime={time}
                 totalTime={totalTime}
-                size={40}
+                size={44}
                 strokeWidth={3}
               />,
               undefined
+            )}
+
+            {/* Score progress */}
+            {withCopilot('score',
+              <>
+                <View style={styles.mobileScoreBar}>
+                  <View
+                    style={[
+                      styles.scoreBarFill,
+                      { width: `${scoreProgress}%` },
+                      scoreProgress >= 100 && styles.scoreBarComplete,
+                    ]}
+                  />
+                </View>
+                <AnimatedScoreText score={score} targetScore={targetScore} style={[styles.scoreText, mobileStyles.scoreText]} />
+              </>,
+              styles.mobileScoreContainer
             )}
 
             {/* Menu Button */}
@@ -196,24 +449,177 @@ const GameInfo: React.FC<GameInfoProps> = ({
             />
           </View>
 
-        </View>
+          {/* Row 2: Round, Money, Level, Graces, Hints */}
+          <View style={styles.mobileRow}>
+            {/* Round */}
+            {withCopilot('round',
+              <Text style={[styles.statLabel, mobileStyles.statLabel]}>R{round}</Text>,
+              styles.statBadge
+            )}
 
-        {/* Bottom row: Score progress bar */}
-        {withCopilot('score',
-          <>
-            <View style={styles.scoreBarContainer}>
-              <View
-                style={[
-                  styles.scoreBarFill,
-                  { width: `${scoreProgress}%` },
-                  scoreProgress >= 100 && styles.scoreBarComplete,
-                ]}
+            {/* Money */}
+            {withCopilot('money',
+              <>
+                <Text style={[styles.coinIcon, mobileStyles.coinIcon]}>$</Text>
+                <Text style={[styles.statValue, mobileStyles.statValue]}>{playerStats.money}</Text>
+              </>,
+              styles.statItem
+            )}
+
+            {/* Level + XP Progress */}
+            {withCopilot('level',
+              <>
+                <Text style={[styles.levelText, mobileStyles.levelText]}>Lv{playerStats.level}</Text>
+                <View style={styles.xpBarContainer}>
+                  <View style={[styles.xpBarFill, { width: `${xpProgress}%` }]} />
+                </View>
+              </>,
+              styles.levelContainer
+            )}
+
+            {/* Graces */}
+            {((playerStats.graces ?? 0) > 0 || copilotMode) &&
+              withCopilot('graces',
+                <>
+                  <Text style={[styles.graceIcon, mobileStyles.graceIcon]}>🍀</Text>
+                  <Text style={[styles.graceCount, mobileStyles.graceCount]}>{playerStats.graces ?? 0}</Text>
+                </>,
+                styles.graceBadge
+              )
+            }
+
+            {/* Hints */}
+            {withCopilot('hints',
+              <AnimatedHintButton
+                hintsAvailable={hintsAvailable}
+                maxHints={maxHints}
+                hasActiveHint={hasActiveHint}
+                onPress={hasActiveHint ? (onClearHint ?? (() => {})) : (onHintPress ?? (() => {}))}
+                disabled={copilotMode || (hintsAvailable <= 0 && !hasActiveHint)}
+                mobileStyles={{ mobileHintButton: styles.mobileHintButton, hintIcon: mobileStyles.hintIcon, hintCount: mobileStyles.hintCount }}
+              />,
+              undefined
+            )}
+          </View>
+        </>
+      ) : (
+        // Desktop: Single row layout
+        <>
+          <View style={styles.statsRow}>
+            <View style={styles.leftSection}>
+              {/* Round */}
+              {withCopilot('round',
+                <Text style={styles.statLabel}>R{round}</Text>,
+                styles.statBadge
+              )}
+
+              {/* Health */}
+              {withCopilot('health',
+                <>
+                  <HeartBeat
+                    health={playerStats.health}
+                    maxHealth={playerStats.maxHealth}
+                    style={styles.heartIcon}
+                  />
+                  <Text style={[styles.statValue, playerStats.health <= 1 && styles.criticalValue]}>
+                    {playerStats.health}/{playerStats.maxHealth}
+                  </Text>
+                </>,
+                styles.statItem
+              )}
+
+              {/* Money */}
+              {withCopilot('money',
+                <>
+                  <Text style={styles.coinIcon}>$</Text>
+                  <Text style={styles.statValue}>{playerStats.money}</Text>
+                </>,
+                styles.statItem
+              )}
+
+              {/* Level + XP Progress */}
+              {withCopilot('level',
+                <>
+                  <Text style={styles.levelText}>Lv{playerStats.level}</Text>
+                  <View style={styles.xpBarContainer}>
+                    <View style={[styles.xpBarFill, { width: `${xpProgress}%` }]} />
+                  </View>
+                </>,
+                styles.levelContainer
+              )}
+
+              {/* Graces */}
+              {((playerStats.graces ?? 0) > 0 || copilotMode) &&
+                withCopilot('graces',
+                  <>
+                    <Text style={styles.graceIcon}>🍀</Text>
+                    <Text style={styles.graceCount}>{playerStats.graces ?? 0}</Text>
+                  </>,
+                  styles.graceBadge
+                )
+              }
+
+              {/* Hints */}
+              {withCopilot('hints',
+                <View style={styles.hintContainer}>
+                  <AnimatedHintButton
+                    hintsAvailable={hintsAvailable}
+                    maxHints={maxHints}
+                    hasActiveHint={hasActiveHint}
+                    onPress={hasActiveHint ? (onClearHint ?? (() => {})) : (onHintPress ?? (() => {}))}
+                    disabled={copilotMode || (hintsAvailable <= 0 && !hasActiveHint)}
+                  />
+                  {/* Keyboard shortcut hint - web only */}
+                  {Platform.OS === 'web' && hintsAvailable > 0 && !hasActiveHint && (
+                    <Text style={styles.keyboardHint}>H</Text>
+                  )}
+                </View>,
+                undefined
+              )}
+
+              {/* Timer */}
+              {withCopilot('timer',
+                <CircularTimer
+                  currentTime={time}
+                  totalTime={totalTime}
+                  size={40}
+                  strokeWidth={3}
+                />,
+                undefined
+              )}
+
+              {/* Menu Button */}
+              <GameMenu
+                playerStats={playerStats}
+                playerWeapons={playerWeapons}
+                onExitGame={onExitGame}
+                devMode={devMode}
+                devCallbacks={devCallbacks}
+                copilotMode={copilotMode}
+                controlledOpen={controlledMenuOpen}
+                onMenuOpenChange={onMenuOpenChange}
               />
             </View>
-            <Text style={styles.scoreText}>{score}/{targetScore}</Text>
-          </>,
-          styles.scoreRow
-        )}
+          </View>
+
+          {/* Bottom row: Score progress bar */}
+          {withCopilot('score',
+            <>
+              <View style={styles.scoreBarContainer}>
+                <View
+                  style={[
+                    styles.scoreBarFill,
+                    { width: `${scoreProgress}%` },
+                    scoreProgress >= 100 && styles.scoreBarComplete,
+                  ]}
+                />
+              </View>
+              <AnimatedScoreText score={score} targetScore={targetScore} style={styles.scoreText} />
+            </>,
+            styles.scoreRow
+          )}
+        </>
+      )}
     </View>
   );
 };
@@ -226,6 +632,35 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.slateCharcoal,
     paddingHorizontal: 8,
   },
+  // Mobile 2-row layout
+  mobileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+    gap: SPACING.sm,
+  },
+  mobileScoreContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  mobileScoreBar: {
+    flex: 1,
+    height: 10,
+    backgroundColor: COLORS.paperBeige,
+    borderRadius: RADIUS.button,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+  },
+  mobileHintButton: {
+    minWidth: 48,
+    minHeight: 36,
+    justifyContent: 'center',
+  },
+  // Desktop single-row layout
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -333,6 +768,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontFamily: 'monospace',
   },
+  hintContainer: {
+    flexDirection: 'column',
+    alignItems: 'center',
+  },
   hintButtonInner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -342,6 +781,13 @@ const styles = StyleSheet.create({
     gap: 2,
     borderWidth: 1,
     borderColor: COLORS.slateCharcoal,
+  },
+  keyboardHint: {
+    fontSize: 9,
+    color: COLORS.slateCharcoal,
+    opacity: 0.5,
+    marginTop: 2,
+    fontFamily: 'monospace',
   },
   hintButtonEnabled: {
     backgroundColor: COLORS.actionYellow,

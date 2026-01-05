@@ -12,14 +12,29 @@ const MAX_INTENSITY = 8; // Max pixel displacement
 const BASE_DURATION = 300; // Total shake duration ms
 const DECAY_RATE = 0.85; // How quickly shake decays
 
+type ShakeIntensityPreset = 'light' | 'medium' | 'heavy';
+
+interface ShakeConfig {
+  offset: number;
+  duration: number;
+  iterations: number;
+}
+
+const SHAKE_PRESETS: Record<ShakeIntensityPreset, ShakeConfig> = {
+  light: { offset: 2, duration: 100, iterations: 2 },
+  medium: { offset: 5, duration: 150, iterations: 3 },
+  heavy: { offset: 10, duration: 200, iterations: 4 },
+};
+
 /**
  * Provides screen shake animation for explosive effects.
- * Returns an animated style and trigger function.
+ * Returns an animated style and trigger functions.
  *
  * @example
- * const { shakeStyle, triggerShake } = useScreenShake();
+ * const { shakeStyle, triggerShake, shake } = useScreenShake();
  * // Apply shakeStyle to container
- * // Call triggerShake(explosionCount) when explosions occur
+ * // Call triggerShake(explosionCount) for dynamic intensity
+ * // Call shake('medium') for preset intensity
  */
 export function useScreenShake() {
   const translateX = useSharedValue(0);
@@ -63,9 +78,58 @@ export function useScreenShake() {
     [translateX, translateY]
   );
 
+  /**
+   * Trigger shake with preset intensity level
+   */
+  const shake = useCallback(
+    (preset: ShakeIntensityPreset = 'medium') => {
+      cancelAnimation(translateX);
+      cancelAnimation(translateY);
+
+      const config = SHAKE_PRESETS[preset];
+      const { offset, duration, iterations } = config;
+
+      // Build shake sequence with decay
+      const xSeq: number[] = [];
+      const ySeq: number[] = [];
+
+      for (let i = 0; i < iterations; i++) {
+        const decay = 1 - i / iterations;
+        const currentOffset = offset * decay;
+
+        xSeq.push(currentOffset);
+        xSeq.push(-currentOffset);
+        ySeq.push(currentOffset * 0.5);
+        ySeq.push(-currentOffset * 0.5);
+      }
+      xSeq.push(0);
+      ySeq.push(0);
+
+      const oscillationDuration = duration / (iterations * 2 + 1);
+
+      const makeTimings = (seq: number[]) =>
+        seq.map((val, i) =>
+          withTiming(val, {
+            duration: oscillationDuration,
+            easing: i === seq.length - 1 ? Easing.out(Easing.cubic) : Easing.linear,
+          })
+        );
+
+      translateX.value = withSequence(...makeTimings(xSeq));
+      translateY.value = withSequence(...makeTimings(ySeq));
+    },
+    [translateX, translateY]
+  );
+
   const shakeStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }, { translateY: translateY.value }],
   }));
 
-  return { shakeStyle, triggerShake };
+  return {
+    shakeStyle,
+    triggerShake,
+    shake,
+    translateX,
+    translateY,
+  };
 }

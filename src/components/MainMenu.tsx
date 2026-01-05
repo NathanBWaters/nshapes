@@ -1,20 +1,8 @@
-import React, { useEffect, useRef, useMemo, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, Animated, Easing, Platform } from 'react-native';
-import ReAnimated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  interpolate,
-} from 'react-native-reanimated';
+import React from 'react';
+import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { COLORS, RADIUS } from '@/utils/colors';
+import { triggerHaptic } from '@/utils/haptics';
 import Icon from './Icon';
-import Card from './Card';
-import { Card as CardType } from '@/types';
-import { createDeck, shuffleArray } from '@/utils/gameUtils';
-
-const AnimatedPressable = ReAnimated.createAnimatedComponent(Pressable);
-
-const NUM_BACKGROUND_CARDS = 8;
 
 interface MainMenuProps {
   onSelectAdventure: () => void;
@@ -22,24 +10,7 @@ interface MainMenuProps {
   onSelectTutorial: () => void;
 }
 
-// Generate random card configurations for depth/variety
-interface CardConfig {
-  card: CardType;
-  size: number;
-  top?: string;
-  bottom?: string;
-  left?: string;
-  right?: string;
-  initialRotation: number;
-  floatAmount: number;
-  floatDuration: number;
-  floatDelay: number;
-  rotationDuration: number;
-  rotationDirection: 1 | -1;
-  opacity: number;
-}
-
-// Menu button with smooth press animations
+// Menu button component
 function MenuButton({
   onPress,
   variant,
@@ -53,40 +24,10 @@ function MenuButton({
   title: string;
   subtitle: string;
 }) {
-  const pressed = useSharedValue(0);
-  const hovered = useSharedValue(0);
-
-  const handlePressIn = useCallback(() => {
-    pressed.value = withTiming(1, { duration: 100 });
-  }, [pressed]);
-
-  const handlePressOut = useCallback(() => {
-    pressed.value = withTiming(0, { duration: 150 });
-  }, [pressed]);
-
-  const handleHoverIn = useCallback(() => {
-    if (Platform.OS === 'web') {
-      hovered.value = withTiming(1, { duration: 150 });
-    }
-  }, [hovered]);
-
-  const handleHoverOut = useCallback(() => {
-    if (Platform.OS === 'web') {
-      hovered.value = withTiming(0, { duration: 150 });
-    }
-  }, [hovered]);
-
-  const animatedStyle = useAnimatedStyle(() => {
-    const scale = interpolate(pressed.value, [0, 1], [1, 0.97]);
-    const translateY = interpolate(hovered.value, [0, 1], [0, -3]);
-
-    return {
-      transform: [
-        { scale },
-        { translateY },
-      ],
-    };
-  });
+  const handlePress = () => {
+    triggerHaptic('light');
+    onPress();
+  };
 
   const variantStyles = {
     adventure: {
@@ -112,17 +53,12 @@ function MenuButton({
   const v = variantStyles[variant];
 
   return (
-    <AnimatedPressable
-      onPress={onPress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      onHoverIn={handleHoverIn}
-      onHoverOut={handleHoverOut}
+    <Pressable
+      onPress={handlePress}
       style={[
         styles.menuButton,
         v.button,
-        animatedStyle,
-        Platform.OS === 'web' && { cursor: 'pointer' as const },
+        Platform.OS === 'web' && { cursor: 'pointer' as any },
       ]}
     >
       <View style={[styles.buttonIconContainer, { backgroundColor: v.iconBg }]}>
@@ -134,7 +70,7 @@ function MenuButton({
           {subtitle}
         </Text>
       </View>
-    </AnimatedPressable>
+    </Pressable>
   );
 }
 
@@ -143,134 +79,8 @@ const MainMenu: React.FC<MainMenuProps> = ({
   onSelectFreeplay,
   onSelectTutorial,
 }) => {
-  // Generate random card configurations
-  const cardConfigs = useMemo((): CardConfig[] => {
-    const deck = createDeck(['shape', 'color', 'number', 'shading']);
-    const shuffled = shuffleArray(deck);
-
-    // Predefined positions to spread cards across screen
-    const positions = [
-      { top: '5%', left: '5%' },
-      { top: '8%', right: '8%' },
-      { top: '35%', left: '2%' },
-      { top: '30%', right: '5%' },
-      { bottom: '35%', left: '8%' },
-      { bottom: '30%', right: '3%' },
-      { bottom: '12%', left: '15%' },
-      { bottom: '8%', right: '12%' },
-    ];
-
-    return shuffled.slice(0, NUM_BACKGROUND_CARDS).map((card, i) => ({
-      card: {
-        ...card,
-        selected: false,
-        isHint: false,
-        onFire: false,
-        isHolographic: false,
-      },
-      size: 80 + Math.random() * 50, // 80-130px for depth
-      ...positions[i],
-      initialRotation: (Math.random() - 0.5) * 30, // -15 to 15 degrees
-      floatAmount: 15 + Math.random() * 20, // 15-35px float
-      floatDuration: 3500 + Math.random() * 2000, // 3.5-5.5s
-      floatDelay: Math.random() * 1500, // 0-1.5s delay
-      rotationDuration: 8000 + Math.random() * 8000, // 8-16s per rotation
-      rotationDirection: Math.random() > 0.5 ? 1 : -1,
-      opacity: 0.12 + Math.random() * 0.08, // 0.12-0.20 opacity
-    }));
-  }, []);
-
-  // Create animated values for each card
-  const floatAnims = useRef(
-    cardConfigs.map(() => new Animated.Value(0))
-  ).current;
-
-  const rotateAnims = useRef(
-    cardConfigs.map(() => new Animated.Value(0))
-  ).current;
-
-  useEffect(() => {
-    // Start float and rotation animations for each card
-    cardConfigs.forEach((config, i) => {
-      // Float animation
-      Animated.loop(
-        Animated.sequence([
-          Animated.delay(config.floatDelay),
-          Animated.timing(floatAnims[i], {
-            toValue: 1,
-            duration: config.floatDuration,
-            easing: Easing.inOut(Easing.sin),
-            useNativeDriver: true,
-          }),
-          Animated.timing(floatAnims[i], {
-            toValue: 0,
-            duration: config.floatDuration,
-            easing: Easing.inOut(Easing.sin),
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
-
-      // Rotation animation
-      Animated.loop(
-        Animated.timing(rotateAnims[i], {
-          toValue: 1,
-          duration: config.rotationDuration,
-          easing: Easing.linear,
-          useNativeDriver: true,
-        })
-      ).start();
-    });
-  }, [cardConfigs]);
-
   return (
     <View style={styles.container}>
-      {/* Animated Background Cards */}
-      <View style={styles.backgroundShapes} pointerEvents="none">
-        {cardConfigs.map((config, i) => {
-          const floatY = floatAnims[i].interpolate({
-            inputRange: [0, 1],
-            outputRange: [0, -config.floatAmount],
-          });
-
-          const rotation = rotateAnims[i].interpolate({
-            inputRange: [0, 1],
-            outputRange: [
-              `${config.initialRotation}deg`,
-              `${config.initialRotation + (360 * config.rotationDirection)}deg`,
-            ],
-          });
-
-          return (
-            <Animated.View
-              key={config.card.id}
-              style={[
-                styles.floatingCard,
-                {
-                  width: config.size,
-                  opacity: config.opacity,
-                  top: config.top,
-                  bottom: config.bottom,
-                  left: config.left,
-                  right: config.right,
-                  transform: [
-                    { translateY: floatY },
-                    { rotate: rotation },
-                  ],
-                },
-              ]}
-            >
-              <Card
-                card={config.card}
-                onClick={() => {}}
-                disabled={true}
-                isPaused={true}
-              />
-            </Animated.View>
-          );
-        })}
-      </View>
-
       {/* Main Content */}
       <View style={styles.content}>
         {/* Title Section */}
@@ -318,23 +128,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.paperBeige,
   },
-  backgroundShapes: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    overflow: 'hidden',
-  },
-  floatingCard: {
-    position: 'absolute',
-  },
   content: {
     flex: 1,
     justifyContent: 'space-between',
     paddingVertical: 40,
     paddingHorizontal: 24,
-    zIndex: 1,
   },
   titleSection: {
     alignItems: 'center',

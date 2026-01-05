@@ -1,9 +1,19 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import ReAnimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+  withDelay,
+} from 'react-native-reanimated';
 import { PlayerStats, Weapon } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
+import { DURATION } from '@/utils/designSystem';
 import Icon from './Icon';
 import GameMenu from './GameMenu';
+import { ScreenTransition } from './ScreenTransition';
 
 interface RoundSummaryProps {
   round: number;
@@ -188,9 +198,10 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
   };
 
   return (
-    <View style={styles.container}>
-      {/* Eyebrow Banner */}
-      <View style={styles.eyebrow}>
+    <ScreenTransition>
+      <View style={styles.container}>
+        {/* Eyebrow Banner */}
+        <View style={styles.eyebrow}>
         <Text style={styles.eyebrowText}>ROUND {round} COMPLETE</Text>
         <GameMenu playerStats={playerStats} playerWeapons={playerWeapons} onExitGame={onExitGame} />
       </View>
@@ -229,7 +240,8 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
           </TouchableOpacity>
         </Animated.View>
       </View>
-    </View>
+      </View>
+    </ScreenTransition>
   );
 };
 
@@ -246,6 +258,31 @@ interface AnimatedAwardTileProps {
 
 const AnimatedAwardTile: React.FC<AnimatedAwardTileProps> = ({ award, anim, delay }) => {
   const animatedValue = useAnimatedNumber(award.value, 500, delay);
+
+  // Pulse animation for non-zero values using reanimated
+  const pulseScale = useSharedValue(1);
+  const hasValue = award.value > 0;
+
+  useEffect(() => {
+    if (hasValue) {
+      // Start pulse after the tile appears
+      pulseScale.value = withDelay(
+        delay + 500,
+        withRepeat(
+          withSequence(
+            withTiming(1.05, { duration: DURATION.slow }),
+            withTiming(1, { duration: DURATION.slow })
+          ),
+          3, // Pulse 3 times then stop
+          false
+        )
+      );
+    }
+  }, [hasValue, delay, pulseScale]);
+
+  const pulseStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulseScale.value }],
+  }));
 
   // Interpolate glow to border color
   const borderColor = anim.glow.interpolate({
@@ -271,13 +308,15 @@ const AnimatedAwardTile: React.FC<AnimatedAwardTileProps> = ({ award, anim, dela
         },
       ]}
     >
-      <View style={[styles.awardIconContainer, { backgroundColor: award.color + '20' }]}>
-        <Icon name={award.icon} size={24} color={award.color} />
-      </View>
-      <Text style={styles.awardLabel}>{award.label}</Text>
-      <Text style={styles.awardValue}>
-        {award.prefix || ''}{animatedValue}{award.suffix || ''}
-      </Text>
+      <ReAnimated.View style={[styles.awardContent, hasValue && pulseStyle]}>
+        <View style={[styles.awardIconContainer, { backgroundColor: award.color + '20' }]}>
+          <Icon name={award.icon} size={24} color={award.color} />
+        </View>
+        <Text style={styles.awardLabel}>{award.label}</Text>
+        <Text style={[styles.awardValue, hasValue && { color: award.color }]}>
+          {award.prefix || ''}{animatedValue}{award.suffix || ''}
+        </Text>
+      </ReAnimated.View>
     </Animated.View>
   );
 };
@@ -346,6 +385,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
     shadowRadius: 12,
     elevation: 4,
+  },
+  awardContent: {
+    alignItems: 'center',
   },
   awardIconContainer: {
     width: 40,

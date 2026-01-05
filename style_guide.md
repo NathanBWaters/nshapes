@@ -186,3 +186,214 @@ Used for inventory, system upgrades, or mission briefings.
 ```
 
 Would you like me to create specific variations for the HUD (Heads-Up Display) or a Pause Menu based on these styles?
+
+---
+
+## 8. Spacing Scale (8px Grid System)
+
+All spacing should use these tokens for consistency:
+
+| Token | Value | Usage |
+|-------|-------|-------|
+| `xs` | 4px | Tight spacing, icon gaps |
+| `sm` | 8px | Default inner padding, small gaps |
+| `md` | 16px | Standard padding, section gaps |
+| `lg` | 24px | Large gaps, card padding |
+| `xl` | 32px | Section spacing, modal padding |
+| `2xl` | 48px | Major section dividers |
+| `3xl` | 64px | Screen-level spacing |
+
+---
+
+## 9. Typography Scale
+
+| Token | Size | Weight | Line Height | Usage |
+|-------|------|--------|-------------|-------|
+| `caption` | 11px | 400 | 1.2 | Badges, metadata |
+| `body-sm` | 13px | 400 | 1.4 | Secondary text, descriptions |
+| `body` | 15px | 400 | 1.5 | Standard body text |
+| `body-lg` | 17px | 400 | 1.5 | Emphasized body text |
+| `h4` | 19px | 600 | 1.3 | Section sub-headers |
+| `h3` | 22px | 600 | 1.3 | Card titles, section headers |
+| `h2` | 28px | 700 | 1.2 | Screen sub-titles |
+| `h1` | 36px | 700 | 1.1 | Screen titles |
+| `display` | 48px | 900 | 1.0 | Hero text, victory screens |
+
+---
+
+## 10. Animation Guidelines
+
+### Timing Tokens
+
+| Token | Duration | Easing | Usage |
+|-------|----------|--------|-------|
+| `instant` | 100ms | linear | Immediate feedback |
+| `fast` | 150ms | easeOut | Micro-interactions, button press |
+| `normal` | 250ms | easeOutExpo | Standard transitions |
+| `slow` | 400ms | easeOutExpo | Page transitions, reveals |
+| `slower` | 600ms | spring | Celebrations, emphasis |
+
+### Easing Curves
+
+```
+easeOutExpo: cubic-bezier(0.16, 1, 0.3, 1)     // Snappy, professional
+easeOutBack: cubic-bezier(0.34, 1.56, 0.64, 1) // Playful overshoot
+spring: { tension: 120, friction: 6 }           // Bouncy, delightful
+bounce: { tension: 180, friction: 12 }          // Quick bounce
+```
+
+### Animation Principles
+
+1. **Purpose:** Every animation should communicate something
+2. **100ms Rule:** All interactions must show feedback within 100ms
+3. **Stagger Pattern:** Animate list items 50-100ms apart
+4. **Reduced Motion:** Always respect user preferences
+5. **Performance:** Use native driver for all animations
+
+---
+
+## 11. Shadow System
+
+### Elevation Levels
+
+| Level | Shadow | Usage |
+|-------|--------|-------|
+| `shadow-sm` | `0 1px 2px rgba(0,0,0,0.05)` | Subtle cards |
+| `shadow-md` | `0 4px 6px rgba(0,0,0,0.1)` | Raised elements |
+| `shadow-lg` | `0 10px 15px rgba(0,0,0,0.1)` | Modals, dropdowns |
+| `shadow-xl` | `0 20px 25px rgba(0,0,0,0.15)` | Focused elements |
+
+### Glow Effects (Rarity-Based)
+
+```
+glow-common:    0 0 8px rgba(56, 56, 56, 0.3)
+glow-rare:      0 0 12px rgba(25, 118, 210, 0.4)
+glow-legendary: 0 0 16px rgba(255, 149, 56, 0.5)
+glow-selection: 0 0 12px rgba(255, 222, 0, 0.6)
+```
+
+---
+
+## 12. Platform-Specific Guidelines
+
+### Desktop Optimizations
+
+* **Hover States:** All interactive elements must have hover feedback
+  * Buttons: Lighten 5%, lift 2px, increase shadow
+  * Cards: Scale 1.02, add glow
+  * Links: Underline, color shift
+
+* **Keyboard Navigation:**
+  * Visible focus ring (2px offset, Action Yellow)
+  * Tab order follows visual hierarchy
+  * Enter/Space for activation
+  * Escape to dismiss modals
+
+* **Tooltips:**
+  * Delay: 400ms before showing
+  * Duration: 150ms fade in
+  * Position: Above element, centered
+
+* **Cursor:** Always `pointer` on clickable elements
+
+### Mobile Optimizations
+
+* **Touch Targets:** Minimum 48x48px hit area
+* **Haptic Feedback:**
+  * Light: Selection, hover-equivalent
+  * Medium: Success, confirmation
+  * Heavy: Error, failure, damage
+
+* **Gestures:**
+  * Swipe to dismiss notifications
+  * Long-press for details (hover alternative)
+  * Pull-to-refresh where applicable
+
+* **Modals:** Use bottom sheets on mobile (slide up from bottom)
+* **Safe Areas:** Respect notch and home indicator areas
+
+---
+
+## 13. Micro-Interaction Patterns
+
+### Button Press Sequence
+
+```
+1. Press Start (0ms):   scale(0.95), shadow reduce, slight darken
+2. Press Hold:          maintain pressed state
+3. Release (150ms):     scale(1.02) overshoot, shadow increase
+4. Settle (100ms):      scale(1.0), return to default
+```
+
+### Card Selection Sequence
+
+```
+1. Touch Start:         scale(1.02), add selection shadow
+2. Selection Confirm:   Yellow border appears, subtle pulse
+3. Third Card Select:   All 3 cards pulse together
+4. Match Success:       Burst animation, particles, screen flash
+5. Match Failure:       Shake animation, red flash, settle down
+```
+
+### Number Counter Animation
+
+```
+Duration: 600ms
+Easing: easeOutExpo
+Steps: Tick through intermediate values
+Sound: Satisfying tick on each step
+Final: Slight scale pulse on completion
+```
+
+---
+
+## 14. Sound Design Guidelines
+
+### Volume Hierarchy
+
+| Category | Volume | Notes |
+|----------|--------|-------|
+| Effects | 70% | Game actions, explosions |
+| UI | 50% | Button clicks, navigation |
+| Music | 40% | Background, ducks during effects |
+
+### Sound Characteristics
+
+* **Style:** Clean, technical, satisfying
+* **Duration:** Short (50-200ms for UI, 300-800ms for effects)
+* **Layering:** Multiple sounds can play simultaneously
+* **Variation:** Slight pitch/timing variations prevent repetition fatigue
+
+### Key Sounds Needed
+
+* Button click (soft, satisfying)
+* Card select (subtle pop)
+* Match success (triumphant chime)
+* Match failure (gentle error)
+* Explosion (impactful boom)
+* Laser (sci-fi beam)
+* Coin collect (satisfying clink)
+* Level up (celebratory jingle)
+* Victory (fanfare)
+* Timer warning (escalating tension)
+
+---
+
+## 15. Particle Effect Guidelines
+
+### Particle Types
+
+| Type | Use Case | Physics |
+|------|----------|---------|
+| Sparkle | Success, highlights | Float upward, fade |
+| Confetti | Victory, celebrations | Fall with gravity, rotate |
+| Explosion | Card destruction | Burst outward, fade |
+| Smoke | Fire effects | Rise slowly, expand, fade |
+| Coin | Rewards | Arc toward counter |
+
+### Performance Guidelines
+
+* Pool particles (reuse, don't recreate)
+* Limit simultaneous particles (50 max)
+* Use native driver for all particle animations
+* Reduce particle count on low-end devices

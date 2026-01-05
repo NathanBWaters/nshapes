@@ -1,10 +1,69 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Pressable, StyleSheet } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, Pressable, StyleSheet, Platform } from 'react-native';
 import { PlayerStats, Weapon, WeaponRarity } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import Icon from './Icon';
 import GameMenu from './GameMenu';
 import InventoryBar from './InventoryBar';
+import { ConfettiBurst } from './effects/ConfettiBurst';
+import { ScreenTransition } from './ScreenTransition';
+
+// Weapon option component
+interface WeaponOptionProps {
+  weapon: Weapon;
+  index: number;
+  isFocused: boolean;
+  rarityColor: string;
+  onPress: (index: number) => void;
+  onHoverIn: (index: number) => void;
+  onHoverOut: () => void;
+}
+
+function WeaponOption({
+  weapon,
+  index,
+  isFocused,
+  rarityColor,
+  onPress,
+  onHoverIn,
+  onHoverOut,
+}: WeaponOptionProps) {
+  return (
+    <Pressable
+      onPress={() => onPress(index)}
+      onHoverIn={() => onHoverIn(index)}
+      onHoverOut={onHoverOut}
+      style={[
+        styles.optionButton,
+        { borderColor: rarityColor },
+        isFocused && styles.optionButtonSelected,
+        Platform.OS === 'web' && { cursor: 'pointer' as any },
+      ]}
+    >
+      {weapon.icon && (
+        <View style={styles.optionIcon}>
+          <Icon
+            name={weapon.icon}
+            size={24}
+            color={isFocused ? COLORS.canvasWhite : COLORS.logicTeal}
+          />
+        </View>
+      )}
+      <Text
+        style={[
+          styles.optionText,
+          isFocused && styles.optionTextSelected,
+        ]}
+        numberOfLines={1}
+      >
+        {weapon.name}
+      </Text>
+      <Text style={[styles.rarityTag, { color: rarityColor }]}>
+        {getRarityLabel(weapon.rarity)}
+      </Text>
+    </Pressable>
+  );
+}
 
 interface LevelUpProps {
   options: Weapon[];
@@ -50,6 +109,13 @@ const LevelUp: React.FC<LevelUpProps> = ({
 }) => {
   const [focusedIndex, setFocusedIndex] = useState<number>(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+
+  // Trigger confetti on mount
+  const [showConfetti, setShowConfetti] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setShowConfetti(true), 100);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Show hovered option if hovering, otherwise show focused
   const displayedIndex = hoveredIndex !== null ? hoveredIndex : focusedIndex;
@@ -101,7 +167,11 @@ const LevelUp: React.FC<LevelUpProps> = ({
   const focusedWeapon = options[displayedIndex];
 
   return (
-    <View style={styles.container}>
+    <ScreenTransition>
+      <View style={styles.container}>
+        {/* Celebration confetti */}
+        <ConfettiBurst trigger={showConfetti} count={30} />
+
       {/* Eyebrow Banner */}
       <View style={styles.eyebrow}>
         <View style={styles.eyebrowLeft}>
@@ -201,38 +271,16 @@ const LevelUp: React.FC<LevelUpProps> = ({
             const rarityColor = getRarityColor(weapon.rarity);
 
             return (
-              <Pressable
+              <WeaponOption
                 key={`${weapon.id}-${index}`}
-                onPress={() => setFocusedIndex(index)}
-                onHoverIn={() => setHoveredIndex(index)}
+                weapon={weapon}
+                index={index}
+                isFocused={isFocused}
+                rarityColor={rarityColor}
+                onPress={setFocusedIndex}
+                onHoverIn={setHoveredIndex}
                 onHoverOut={() => setHoveredIndex(null)}
-                style={[
-                  styles.optionButton,
-                  { borderColor: rarityColor },
-                  isFocused && styles.optionButtonSelected,
-                ]}
-              >
-                {weapon.icon && (
-                  <Icon
-                    name={weapon.icon}
-                    size={24}
-                    color={isFocused ? COLORS.canvasWhite : COLORS.logicTeal}
-                    style={styles.optionIcon}
-                  />
-                )}
-                <Text
-                  style={[
-                    styles.optionText,
-                    isFocused && styles.optionTextSelected,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {weapon.name}
-                </Text>
-                <Text style={[styles.rarityTag, { color: rarityColor }]}>
-                  {getRarityLabel(weapon.rarity)}
-                </Text>
-              </Pressable>
+              />
             );
           })}
         </ScrollView>
@@ -247,7 +295,8 @@ const LevelUp: React.FC<LevelUpProps> = ({
           <Text style={styles.actionButtonText}>Select Weapon</Text>
         </TouchableOpacity>
       </View>
-    </View>
+      </View>
+    </ScreenTransition>
   );
 };
 
