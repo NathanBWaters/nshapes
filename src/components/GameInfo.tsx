@@ -1,5 +1,5 @@
-import React, { ReactNode, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions, Platform, Animated } from 'react-native';
+import React, { ReactNode } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions, Platform } from 'react-native';
 import { CopilotStep, walkthroughable } from 'react-native-copilot';
 import { PlayerStats, Weapon } from '@/types';
 import CircularTimer from './CircularTimer';
@@ -9,71 +9,17 @@ import { SPACING } from '@/utils/designSystem';
 
 const WalkthroughableView = walkthroughable(View);
 
-// Animated heart icon with heartbeat effect
-interface HeartBeatProps {
-  health: number;
-  maxHealth: number;
+// Static heart icon
+interface HeartIconProps {
   style?: any;
 }
 
-function HeartBeat({ health, maxHealth, style }: HeartBeatProps) {
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    // Calculate heartbeat speed based on health ratio
-    const healthRatio = health / maxHealth;
-    let duration: number;
-    let scale: number;
-
-    if (healthRatio <= 0.25) {
-      // Critical: rapid heartbeat
-      duration = 300;
-      scale = 1.15;
-    } else if (healthRatio <= 0.5) {
-      // Low: medium heartbeat
-      duration = 500;
-      scale = 1.1;
-    } else {
-      // Normal: gentle heartbeat
-      duration = 1000;
-      scale = 1.05;
-    }
-
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(scaleAnim, {
-          toValue: scale,
-          duration: duration * 0.3,
-          useNativeDriver: true,
-        }),
-        Animated.timing(scaleAnim, {
-          toValue: 1,
-          duration: duration * 0.7,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-
-    pulse.start();
-    return () => pulse.stop();
-  }, [health, maxHealth, scaleAnim]);
-
-  return (
-    <Animated.Text
-      style={[
-        style,
-        {
-          transform: [{ scale: scaleAnim }],
-        },
-      ]}
-    >
-      ♥
-    </Animated.Text>
-  );
+function HeartIcon({ style }: HeartIconProps) {
+  return <Text style={style}>♥</Text>;
 }
 
-// Animated hint button with floating effect when hints are available
-interface AnimatedHintButtonProps {
+// Static hint button - yellow when hints available, gray when empty
+interface HintButtonProps {
   hintsAvailable: number;
   maxHints: number;
   hasActiveHint: boolean;
@@ -82,100 +28,38 @@ interface AnimatedHintButtonProps {
   mobileStyles?: any;
 }
 
-function AnimatedHintButton({
+function HintButton({
   hintsAvailable,
   maxHints,
   hasActiveHint,
   onPress,
   disabled,
   mobileStyles = {},
-}: AnimatedHintButtonProps) {
-  const floatY = useRef(new Animated.Value(0)).current;
-  const glowOpacity = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (hintsAvailable > 0 && !hasActiveHint) {
-      // Float animation when hints available
-      const float = Animated.loop(
-        Animated.sequence([
-          Animated.timing(floatY, {
-            toValue: -3,
-            duration: 1500,
-            useNativeDriver: true,
-          }),
-          Animated.timing(floatY, {
-            toValue: 3,
-            duration: 1500,
-            useNativeDriver: true,
-          }),
-        ])
-      );
-
-      // Glow pulse
-      const glow = Animated.loop(
-        Animated.sequence([
-          Animated.timing(glowOpacity, {
-            toValue: 0.6,
-            duration: 1000,
-            useNativeDriver: true,
-          }),
-          Animated.timing(glowOpacity, {
-            toValue: 0.2,
-            duration: 1000,
-            useNativeDriver: true,
-          }),
-        ])
-      );
-
-      float.start();
-      glow.start();
-
-      return () => {
-        float.stop();
-        glow.stop();
-      };
-    } else {
-      floatY.setValue(0);
-      glowOpacity.setValue(0);
-    }
-  }, [hintsAvailable, hasActiveHint, floatY, glowOpacity]);
-
+}: HintButtonProps) {
   return (
-    <Animated.View
-      style={{
-        transform: [{ translateY: floatY }],
-      }}
+    <TouchableOpacity
+      style={[
+        hintButtonStyles.hintButtonInner,
+        mobileStyles.mobileHintButton,
+        hintsAvailable > 0 ? hintButtonStyles.hintButtonEnabled : hintButtonStyles.hintButtonDisabled,
+        hasActiveHint && hintButtonStyles.hintButtonActive,
+      ]}
+      onPress={onPress}
+      disabled={disabled}
     >
-      <TouchableOpacity
-        style={[
-          hintButtonStyles.hintButtonInner,
-          mobileStyles.mobileHintButton,
-          hintsAvailable > 0 ? hintButtonStyles.hintButtonEnabled : hintButtonStyles.hintButtonDisabled,
-          hasActiveHint && hintButtonStyles.hintButtonActive,
-        ]}
-        onPress={onPress}
-        disabled={disabled}
-      >
-        <Animated.View
-          style={[
-            hintButtonStyles.glowOverlay,
-            { opacity: glowOpacity },
-          ]}
-        />
-        <Text style={[hintButtonStyles.hintIcon, mobileStyles.hintIcon]}>?</Text>
-        <Text style={[
-          hintButtonStyles.hintCount,
-          mobileStyles.hintCount,
-          hintsAvailable > 0 ? hintButtonStyles.hintCountEnabled : hintButtonStyles.hintCountDisabled
-        ]}>
-          {hasActiveHint ? 'x' : `${hintsAvailable}/${maxHints}`}
-        </Text>
-      </TouchableOpacity>
-    </Animated.View>
+      <Text style={[hintButtonStyles.hintIcon, mobileStyles.hintIcon]}>?</Text>
+      <Text style={[
+        hintButtonStyles.hintCount,
+        mobileStyles.hintCount,
+        hintsAvailable > 0 ? hintButtonStyles.hintCountEnabled : hintButtonStyles.hintCountDisabled
+      ]}>
+        {hasActiveHint ? 'x' : `${hintsAvailable}/${maxHints}`}
+      </Text>
+    </TouchableOpacity>
   );
 }
 
-// Styles for AnimatedHintButton (reusing from main styles where possible)
+// Styles for HintButton
 const hintButtonStyles = StyleSheet.create({
   hintButtonInner: {
     flexDirection: 'row',
@@ -186,8 +70,6 @@ const hintButtonStyles = StyleSheet.create({
     gap: 2,
     borderWidth: 1,
     borderColor: COLORS.slateCharcoal,
-    position: 'relative',
-    overflow: 'hidden',
   },
   hintButtonEnabled: {
     backgroundColor: COLORS.actionYellow,
@@ -202,13 +84,11 @@ const hintButtonStyles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: COLORS.slateCharcoal,
-    zIndex: 1,
   },
   hintCount: {
     fontSize: 12,
     fontWeight: '600',
     fontFamily: 'monospace',
-    zIndex: 1,
   },
   hintCountEnabled: {
     color: COLORS.slateCharcoal,
@@ -216,15 +96,6 @@ const hintButtonStyles = StyleSheet.create({
   hintCountDisabled: {
     color: COLORS.slateCharcoal,
     opacity: 0.5,
-  },
-  glowOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: COLORS.canvasWhite,
-    borderRadius: RADIUS.button,
   },
 });
 
@@ -268,55 +139,18 @@ const getXPForLevel = (level: number): number => {
   return level * level * 10; // Level 1 = 10, Level 2 = 40, Level 3 = 90, etc.
 };
 
-// Animated score text that pulses when score is high
-interface AnimatedScoreTextProps {
+// Static score text
+interface ScoreTextProps {
   score: number;
   targetScore: number;
   style?: any;
 }
 
-function AnimatedScoreText({ score, targetScore, style }: AnimatedScoreTextProps) {
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    // Only pulse when score is above 50% of target
-    const scoreRatio = score / targetScore;
-    if (scoreRatio > 0.5) {
-      // Intensity based on score ratio
-      const intensity = Math.min((scoreRatio - 0.5) * 0.06, 0.03); // Max 3% scale
-      const duration = 1500 - (scoreRatio * 500); // Faster as score increases (1000-1500ms)
-
-      const pulse = Animated.loop(
-        Animated.sequence([
-          Animated.timing(scaleAnim, {
-            toValue: 1 + intensity,
-            duration: duration * 0.4,
-            useNativeDriver: true,
-          }),
-          Animated.timing(scaleAnim, {
-            toValue: 1,
-            duration: duration * 0.6,
-            useNativeDriver: true,
-          }),
-        ])
-      );
-
-      pulse.start();
-      return () => pulse.stop();
-    } else {
-      scaleAnim.setValue(1);
-    }
-  }, [score, targetScore, scaleAnim]);
-
+function ScoreText({ score, targetScore, style }: ScoreTextProps) {
   return (
-    <Animated.Text
-      style={[
-        style,
-        { transform: [{ scale: scaleAnim }] },
-      ]}
-    >
+    <Text style={style}>
       {score}/{targetScore}
-    </Animated.Text>
+    </Text>
   );
 }
 
@@ -396,11 +230,7 @@ const GameInfo: React.FC<GameInfoProps> = ({
             {/* Health */}
             {withCopilot('health',
               <>
-                <HeartBeat
-                health={playerStats.health}
-                maxHealth={playerStats.maxHealth}
-                style={[styles.heartIcon, mobileStyles.heartIcon]}
-              />
+                <HeartIcon style={[styles.heartIcon, mobileStyles.heartIcon]} />
                 <Text style={[styles.statValue, mobileStyles.statValue, playerStats.health <= 1 && styles.criticalValue]}>
                   {playerStats.health}/{playerStats.maxHealth}
                 </Text>
@@ -431,7 +261,7 @@ const GameInfo: React.FC<GameInfoProps> = ({
                     ]}
                   />
                 </View>
-                <AnimatedScoreText score={score} targetScore={targetScore} style={[styles.scoreText, mobileStyles.scoreText]} />
+                <ScoreText score={score} targetScore={targetScore} style={[styles.scoreText, mobileStyles.scoreText]} />
               </>,
               styles.mobileScoreContainer
             )}
@@ -490,7 +320,7 @@ const GameInfo: React.FC<GameInfoProps> = ({
 
             {/* Hints */}
             {withCopilot('hints',
-              <AnimatedHintButton
+              <HintButton
                 hintsAvailable={hintsAvailable}
                 maxHints={maxHints}
                 hasActiveHint={hasActiveHint}
@@ -516,11 +346,7 @@ const GameInfo: React.FC<GameInfoProps> = ({
               {/* Health */}
               {withCopilot('health',
                 <>
-                  <HeartBeat
-                    health={playerStats.health}
-                    maxHealth={playerStats.maxHealth}
-                    style={styles.heartIcon}
-                  />
+                  <HeartIcon style={styles.heartIcon} />
                   <Text style={[styles.statValue, playerStats.health <= 1 && styles.criticalValue]}>
                     {playerStats.health}/{playerStats.maxHealth}
                   </Text>
@@ -562,7 +388,7 @@ const GameInfo: React.FC<GameInfoProps> = ({
               {/* Hints */}
               {withCopilot('hints',
                 <View style={styles.hintContainer}>
-                  <AnimatedHintButton
+                  <HintButton
                     hintsAvailable={hintsAvailable}
                     maxHints={maxHints}
                     hasActiveHint={hasActiveHint}
@@ -614,7 +440,7 @@ const GameInfo: React.FC<GameInfoProps> = ({
                   ]}
                 />
               </View>
-              <AnimatedScoreText score={score} targetScore={targetScore} style={styles.scoreText} />
+              <ScoreText score={score} targetScore={targetScore} style={styles.scoreText} />
             </>,
             styles.scoreRow
           )}

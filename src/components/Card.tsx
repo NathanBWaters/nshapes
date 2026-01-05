@@ -63,8 +63,7 @@ const Card: React.FC<CardProps> = ({
   const holoShimmerPosition = useSharedValue(0);
   const fireFlicker = useSharedValue(0.7);
   const hoverGlow = useSharedValue(0); // Web-only hover glow
-  const hintGlow = useSharedValue(0); // Hint blink animation
-
+  
   // Entry animation for new cards
   useEffect(() => {
     if (isNew) {
@@ -103,22 +102,6 @@ const Card: React.FC<CardProps> = ({
     onComplete: handleBurnComplete,
   });
 
-
-  // Hint blink animation - blinks twice when hint is shown
-  useEffect(() => {
-    if (isHint) {
-      // Blink twice: on -> off -> on -> off -> stay on
-      hintGlow.value = withSequence(
-        withTiming(1, { duration: 150 }),
-        withTiming(0.3, { duration: 150 }),
-        withTiming(1, { duration: 150 }),
-        withTiming(0.3, { duration: 150 }),
-        withTiming(1, { duration: 150 })
-      );
-    } else {
-      hintGlow.value = 0;
-    }
-  }, [isHint, hintGlow]);
 
   // Holographic shimmer animation
   useEffect(() => {
@@ -192,16 +175,6 @@ const Card: React.FC<CardProps> = ({
 
     return {
       shadowOpacity: fireFlicker.value,
-    };
-  });
-
-  // Hint glow style - pulses the shadow/glow effect
-  const hintStyle = useAnimatedStyle(() => {
-    if (!isHint) return {};
-
-    return {
-      shadowOpacity: hintGlow.value * 0.8,
-      shadowRadius: 8 + hintGlow.value * 4,
     };
   });
 
@@ -292,7 +265,6 @@ const Card: React.FC<CardProps> = ({
         animatedCardStyle,
         card.isHolographic && holoStyle,
         card.onFire && fireStyle,
-        isHint && hintStyle,
         webCursorStyle,
       ]}
       onPress={() => !disabled && onClick(card)}
@@ -499,8 +471,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFDE7',
     borderColor: COLORS.actionYellow,
     borderStyle: 'dashed',
-    shadowColor: COLORS.actionYellow,
-    shadowOffset: { width: 0, height: 0 },
   },
   holographic: {
     borderColor: '#A855F7', // Purple/rainbow shimmer

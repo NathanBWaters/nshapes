@@ -1095,7 +1095,7 @@ export const WEAPONS: Weapon[] = [
     description: '30% chance for echo to trigger twice (2 additional matches).',
     shortDescription: 'Echo may match twice',
     flavorText: 'When Echo Stone triggers, has a chance to find and match TWO additional sets instead of one. Creates massive chain reactions with other on-match effects!',
-    icon: 'lorc/chain-lightning',
+    icon: 'lorc/lightning-branches',
     specialEffect: 'chainReaction',
     effects: { chainReactionChance: 30 },
     maxCount: 1  // Unique - only one can be owned

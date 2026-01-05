@@ -946,7 +946,7 @@ const Game: React.FC<GameProps> = ({ devMode = false }) => {
   const handleMatchStart = useCallback(() => {
     // Spawn sparkle particles from the top bar area immediately
     const { width } = Dimensions.get('window');
-    spawnParticles(360, { x: width / 2, y: 40 }, 'sparkle');
+    spawnParticles(50, { x: width / 2, y: 40 }, 'sparkle');
   }, [spawnParticles]);
 
   // Handle valid match - receives cards, rewards, and weapon effects from GameBoard after reveal
