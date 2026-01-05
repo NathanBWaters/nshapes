@@ -744,11 +744,6 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
         index === weaponIndex ? null : shopWeapon
       )
     }));
-
-    setNotification({
-      message: `Purchased ${weapon.name}!`,
-      type: 'success'
-    });
   };
 
   // Handle weapon shop reroll

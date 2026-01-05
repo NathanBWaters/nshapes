@@ -387,19 +387,13 @@ const GameInfo: React.FC<GameInfoProps> = ({
 
               {/* Hints */}
               {withCopilot('hints',
-                <View style={styles.hintContainer}>
-                  <HintButton
-                    hintsAvailable={hintsAvailable}
-                    maxHints={maxHints}
-                    hasActiveHint={hasActiveHint}
-                    onPress={hasActiveHint ? (onClearHint ?? (() => {})) : (onHintPress ?? (() => {}))}
-                    disabled={copilotMode || (hintsAvailable <= 0 && !hasActiveHint)}
-                  />
-                  {/* Keyboard shortcut hint - web only */}
-                  {Platform.OS === 'web' && hintsAvailable > 0 && !hasActiveHint && (
-                    <Text style={styles.keyboardHint}>H</Text>
-                  )}
-                </View>,
+                <HintButton
+                  hintsAvailable={hintsAvailable}
+                  maxHints={maxHints}
+                  hasActiveHint={hasActiveHint}
+                  onPress={hasActiveHint ? (onClearHint ?? (() => {})) : (onHintPress ?? (() => {}))}
+                  disabled={copilotMode || (hintsAvailable <= 0 && !hasActiveHint)}
+                />,
                 undefined
               )}
 
@@ -592,27 +586,6 @@ const styles = StyleSheet.create({
     color: COLORS.canvasWhite,
     fontSize: 12,
     fontWeight: '600',
-    fontFamily: 'monospace',
-  },
-  hintContainer: {
-    flexDirection: 'column',
-    alignItems: 'center',
-  },
-  hintButtonInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: RADIUS.button,
-    gap: 2,
-    borderWidth: 1,
-    borderColor: COLORS.slateCharcoal,
-  },
-  keyboardHint: {
-    fontSize: 9,
-    color: COLORS.slateCharcoal,
-    opacity: 0.5,
-    marginTop: 2,
     fontFamily: 'monospace',
   },
   hintButtonEnabled: {
