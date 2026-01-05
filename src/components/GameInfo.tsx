@@ -1,11 +1,10 @@
 import React, { ReactNode } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { CopilotStep, walkthroughable } from 'react-native-copilot';
 import { PlayerStats, Weapon } from '@/types';
 import CircularTimer from './CircularTimer';
 import GameMenu, { DevModeCallbacks } from './GameMenu';
 import { COLORS, RADIUS } from '@/utils/colors';
-import { SPACING } from '@/utils/designSystem';
 
 const WalkthroughableView = walkthroughable(View);
 
@@ -172,10 +171,6 @@ const GameInfo: React.FC<GameInfoProps> = ({
   controlledMenuOpen,
   onMenuOpenChange,
 }) => {
-  // Detect mobile layout (narrow screens)
-  const { width } = useWindowDimensions();
-  const isMobile = width < 500 || Platform.OS !== 'web';
-
   // Calculate score progress percentage
   const scoreProgress = Math.min((score / targetScore) * 100, 100);
 
@@ -206,239 +201,112 @@ const GameInfo: React.FC<GameInfoProps> = ({
     );
   };
 
-  // Mobile layout uses larger fonts and 2-row organization
-  const mobileStyles = isMobile ? {
-    statLabel: { fontSize: 14 },
-    statValue: { fontSize: 14 },
-    heartIcon: { fontSize: 14 },
-    coinIcon: { fontSize: 14 },
-    levelText: { fontSize: 14 },
-    hintIcon: { fontSize: 14 },
-    hintCount: { fontSize: 14 },
-    graceIcon: { fontSize: 14 },
-    graceCount: { fontSize: 14 },
-    scoreText: { fontSize: 13 },
-  } : {};
-
   return (
+    // IMPORTANT: Top bar must always be 1 row on all screen sizes (including mobile)
     <View style={styles.container}>
-      {isMobile ? (
-        // Mobile: 2-row layout
+      {/* Single row layout for all screen sizes */}
+      <View style={styles.statsRow}>
+        <View style={styles.leftSection}>
+          {/* Round */}
+          {withCopilot('round',
+            <Text style={styles.statLabel}>R{round}</Text>,
+            styles.statBadge
+          )}
+
+          {/* Health */}
+          {withCopilot('health',
+            <>
+              <HeartIcon style={styles.heartIcon} />
+              <Text style={[styles.statValue, playerStats.health <= 1 && styles.criticalValue]}>
+                {playerStats.health}/{playerStats.maxHealth}
+              </Text>
+            </>,
+            styles.statItem
+          )}
+
+          {/* Money */}
+          {withCopilot('money',
+            <>
+              <Text style={styles.coinIcon}>$</Text>
+              <Text style={styles.statValue}>{playerStats.money}</Text>
+            </>,
+            styles.statItem
+          )}
+
+          {/* Level + XP Progress */}
+          {withCopilot('level',
+            <>
+              <Text style={styles.levelText}>Lv{playerStats.level}</Text>
+              <View style={styles.xpBarContainer}>
+                <View style={[styles.xpBarFill, { width: `${xpProgress}%` }]} />
+              </View>
+            </>,
+            styles.levelContainer
+          )}
+
+          {/* Graces */}
+          {((playerStats.graces ?? 0) > 0 || copilotMode) &&
+            withCopilot('graces',
+              <>
+                <Text style={styles.graceIcon}>🍀</Text>
+                <Text style={styles.graceCount}>{playerStats.graces ?? 0}</Text>
+              </>,
+              styles.graceBadge
+            )
+          }
+
+          {/* Hints */}
+          {withCopilot('hints',
+            <HintButton
+              hintsAvailable={hintsAvailable}
+              maxHints={maxHints}
+              hasActiveHint={hasActiveHint}
+              onPress={hasActiveHint ? (onClearHint ?? (() => {})) : (onHintPress ?? (() => {}))}
+              disabled={copilotMode || (hintsAvailable <= 0 && !hasActiveHint)}
+            />,
+            undefined
+          )}
+
+          {/* Timer */}
+          {withCopilot('timer',
+            <CircularTimer
+              currentTime={time}
+              totalTime={totalTime}
+              size={40}
+              strokeWidth={3}
+            />,
+            undefined
+          )}
+
+          {/* Menu Button */}
+          <GameMenu
+            playerStats={playerStats}
+            playerWeapons={playerWeapons}
+            onExitGame={onExitGame}
+            devMode={devMode}
+            devCallbacks={devCallbacks}
+            copilotMode={copilotMode}
+            controlledOpen={controlledMenuOpen}
+            onMenuOpenChange={onMenuOpenChange}
+          />
+        </View>
+      </View>
+
+      {/* Score progress bar */}
+      {withCopilot('score',
         <>
-          {/* Row 1: Health, Timer, Score progress */}
-          <View style={styles.mobileRow}>
-            {/* Health */}
-            {withCopilot('health',
-              <>
-                <HeartIcon style={[styles.heartIcon, mobileStyles.heartIcon]} />
-                <Text style={[styles.statValue, mobileStyles.statValue, playerStats.health <= 1 && styles.criticalValue]}>
-                  {playerStats.health}/{playerStats.maxHealth}
-                </Text>
-              </>,
-              styles.statItem
-            )}
-
-            {/* Timer - centered */}
-            {withCopilot('timer',
-              <CircularTimer
-                currentTime={time}
-                totalTime={totalTime}
-                size={44}
-                strokeWidth={3}
-              />,
-              undefined
-            )}
-
-            {/* Score progress */}
-            {withCopilot('score',
-              <>
-                <View style={styles.mobileScoreBar}>
-                  <View
-                    style={[
-                      styles.scoreBarFill,
-                      { width: `${scoreProgress}%` },
-                      scoreProgress >= 100 && styles.scoreBarComplete,
-                    ]}
-                  />
-                </View>
-                <ScoreText score={score} targetScore={targetScore} style={[styles.scoreText, mobileStyles.scoreText]} />
-              </>,
-              styles.mobileScoreContainer
-            )}
-
-            {/* Menu Button */}
-            <GameMenu
-              playerStats={playerStats}
-              playerWeapons={playerWeapons}
-              onExitGame={onExitGame}
-              devMode={devMode}
-              devCallbacks={devCallbacks}
-              copilotMode={copilotMode}
-              controlledOpen={controlledMenuOpen}
-              onMenuOpenChange={onMenuOpenChange}
+          <View style={styles.scoreBarContainer}>
+            <View
+              style={[
+                styles.scoreBarFill,
+                { width: `${scoreProgress}%` },
+                scoreProgress >= 100 && styles.scoreBarComplete,
+              ]}
             />
           </View>
-
-          {/* Row 2: Round, Money, Level, Graces, Hints */}
-          <View style={styles.mobileRow}>
-            {/* Round */}
-            {withCopilot('round',
-              <Text style={[styles.statLabel, mobileStyles.statLabel]}>R{round}</Text>,
-              styles.statBadge
-            )}
-
-            {/* Money */}
-            {withCopilot('money',
-              <>
-                <Text style={[styles.coinIcon, mobileStyles.coinIcon]}>$</Text>
-                <Text style={[styles.statValue, mobileStyles.statValue]}>{playerStats.money}</Text>
-              </>,
-              styles.statItem
-            )}
-
-            {/* Level + XP Progress */}
-            {withCopilot('level',
-              <>
-                <Text style={[styles.levelText, mobileStyles.levelText]}>Lv{playerStats.level}</Text>
-                <View style={styles.xpBarContainer}>
-                  <View style={[styles.xpBarFill, { width: `${xpProgress}%` }]} />
-                </View>
-              </>,
-              styles.levelContainer
-            )}
-
-            {/* Graces */}
-            {((playerStats.graces ?? 0) > 0 || copilotMode) &&
-              withCopilot('graces',
-                <>
-                  <Text style={[styles.graceIcon, mobileStyles.graceIcon]}>🍀</Text>
-                  <Text style={[styles.graceCount, mobileStyles.graceCount]}>{playerStats.graces ?? 0}</Text>
-                </>,
-                styles.graceBadge
-              )
-            }
-
-            {/* Hints */}
-            {withCopilot('hints',
-              <HintButton
-                hintsAvailable={hintsAvailable}
-                maxHints={maxHints}
-                hasActiveHint={hasActiveHint}
-                onPress={hasActiveHint ? (onClearHint ?? (() => {})) : (onHintPress ?? (() => {}))}
-                disabled={copilotMode || (hintsAvailable <= 0 && !hasActiveHint)}
-                mobileStyles={{ mobileHintButton: styles.mobileHintButton, hintIcon: mobileStyles.hintIcon, hintCount: mobileStyles.hintCount }}
-              />,
-              undefined
-            )}
-          </View>
-        </>
-      ) : (
-        // Desktop: Single row layout
-        <>
-          <View style={styles.statsRow}>
-            <View style={styles.leftSection}>
-              {/* Round */}
-              {withCopilot('round',
-                <Text style={styles.statLabel}>R{round}</Text>,
-                styles.statBadge
-              )}
-
-              {/* Health */}
-              {withCopilot('health',
-                <>
-                  <HeartIcon style={styles.heartIcon} />
-                  <Text style={[styles.statValue, playerStats.health <= 1 && styles.criticalValue]}>
-                    {playerStats.health}/{playerStats.maxHealth}
-                  </Text>
-                </>,
-                styles.statItem
-              )}
-
-              {/* Money */}
-              {withCopilot('money',
-                <>
-                  <Text style={styles.coinIcon}>$</Text>
-                  <Text style={styles.statValue}>{playerStats.money}</Text>
-                </>,
-                styles.statItem
-              )}
-
-              {/* Level + XP Progress */}
-              {withCopilot('level',
-                <>
-                  <Text style={styles.levelText}>Lv{playerStats.level}</Text>
-                  <View style={styles.xpBarContainer}>
-                    <View style={[styles.xpBarFill, { width: `${xpProgress}%` }]} />
-                  </View>
-                </>,
-                styles.levelContainer
-              )}
-
-              {/* Graces */}
-              {((playerStats.graces ?? 0) > 0 || copilotMode) &&
-                withCopilot('graces',
-                  <>
-                    <Text style={styles.graceIcon}>🍀</Text>
-                    <Text style={styles.graceCount}>{playerStats.graces ?? 0}</Text>
-                  </>,
-                  styles.graceBadge
-                )
-              }
-
-              {/* Hints */}
-              {withCopilot('hints',
-                <HintButton
-                  hintsAvailable={hintsAvailable}
-                  maxHints={maxHints}
-                  hasActiveHint={hasActiveHint}
-                  onPress={hasActiveHint ? (onClearHint ?? (() => {})) : (onHintPress ?? (() => {}))}
-                  disabled={copilotMode || (hintsAvailable <= 0 && !hasActiveHint)}
-                />,
-                undefined
-              )}
-
-              {/* Timer */}
-              {withCopilot('timer',
-                <CircularTimer
-                  currentTime={time}
-                  totalTime={totalTime}
-                  size={40}
-                  strokeWidth={3}
-                />,
-                undefined
-              )}
-
-              {/* Menu Button */}
-              <GameMenu
-                playerStats={playerStats}
-                playerWeapons={playerWeapons}
-                onExitGame={onExitGame}
-                devMode={devMode}
-                devCallbacks={devCallbacks}
-                copilotMode={copilotMode}
-                controlledOpen={controlledMenuOpen}
-                onMenuOpenChange={onMenuOpenChange}
-              />
-            </View>
-          </View>
-
-          {/* Bottom row: Score progress bar */}
-          {withCopilot('score',
-            <>
-              <View style={styles.scoreBarContainer}>
-                <View
-                  style={[
-                    styles.scoreBarFill,
-                    { width: `${scoreProgress}%` },
-                    scoreProgress >= 100 && styles.scoreBarComplete,
-                  ]}
-                />
-              </View>
-              <ScoreText score={score} targetScore={targetScore} style={styles.scoreText} />
-            </>,
-            styles.scoreRow
-          )}
-        </>
+          <ScoreText score={score} targetScore={targetScore} style={styles.scoreText} />
+        </>,
+        styles.scoreRow
       )}
     </View>
   );
@@ -452,35 +320,7 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.slateCharcoal,
     paddingHorizontal: 8,
   },
-  // Mobile 2-row layout
-  mobileRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 4,
-    gap: SPACING.sm,
-  },
-  mobileScoreContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-  },
-  mobileScoreBar: {
-    flex: 1,
-    height: 10,
-    backgroundColor: COLORS.paperBeige,
-    borderRadius: RADIUS.button,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: COLORS.slateCharcoal,
-  },
-  mobileHintButton: {
-    minWidth: 48,
-    minHeight: 36,
-    justifyContent: 'center',
-  },
-  // Desktop single-row layout
+  // Single-row layout (used for all screen sizes)
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
