@@ -94,7 +94,7 @@ This plan covers 4 features + 1 bug fix, organized into distinct sections with t
 - [x] **2.9** Run TypeScript check: `npx tsc --noEmit` - 2026-01-06 22:17 - PASSED
 - [x] **2.10** Run unit tests: `npm test`, fix any failures - 2026-01-06 22:17 - 255 tests passed
 - [x] **2.11** Run Playwright E2E tests: `npx playwright test` - 2026-01-06 22:17 - 3 tests passed
-- [ ] **2.12** SECTION COMPLETE: Create commit "Add Options menu with sound toggle and persistence"
+- [x] **2.12** SECTION COMPLETE: Create commit "Add Options menu with sound toggle and persistence" - 2026-01-06 22:18
 
 ---
 

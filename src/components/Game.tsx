@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Platform, Dimensions } from 'react-native';
-import { Card, CardReward, GameState, Enemy, Weapon, PlayerStats, AttributeName } from '@/types';
+import { Card, CardReward, GameState, Enemy, Weapon, PlayerStats, AttributeName, AdventureDifficulty } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { createDeck, shuffleArray, isValidCombination, findAllCombinations, generateGameBoard, formatTime, sameCardAttributes } from '@/utils/gameUtils';
 import {
@@ -79,6 +79,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
   const [selectedCharacter, setSelectedCharacter] = useState<string | null>(devMode ? 'Orange Tabby' : null);
   const [gameMode, setGameMode] = useState<GameMode>('adventure');
   const [freePlayDifficulty, setFreePlayDifficulty] = useState<FreePlayDifficulty>('medium');
+  const [adventureDifficulty, setAdventureDifficulty] = useState<AdventureDifficulty>('medium');
   const [showOptionsModal, setShowOptionsModal] = useState(false);
   const [gamePhase, setGamePhase] = useState<
     'main_menu' |
@@ -498,7 +499,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
 
   // Start the game
   // Start Adventure Mode (called from Character Selection)
-  const startAdventure = () => {
+  const startAdventure = (difficulty: AdventureDifficulty) => {
     if (!selectedCharacter) {
       setNotification({
         message: 'Please select a character first',
@@ -510,14 +511,16 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     // Check if we should show tutorial prompt for Adventure mode
     if (!tutorialState.hasCompletedTutorial && !tutorialState.hasBeenOfferedTutorial) {
       setPendingGameStart({ mode: 'adventure' });
+      setAdventureDifficulty(difficulty);
       setShowTutorialPrompt(true);
       return;
     }
 
     setGameMode('adventure');
+    setAdventureDifficulty(difficulty);
 
-    // Adventure mode - start with round 1 attributes
-    const activeAttributes = getActiveAttributesForRound(1);
+    // Adventure mode - start with round 1 attributes based on difficulty
+    const activeAttributes = getActiveAttributesForRound(1, difficulty);
 
     // Initialize the game with the selected character and attributes
     // Pass startGame=true to set gameStarted, startTime, and time bonus atomically
@@ -597,9 +600,9 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     markTutorialOffered();
     setPendingGameStart(null);
 
-    // Continue with adventure mode start
+    // Continue with adventure mode start using stored difficulty
     setGameMode('adventure');
-    const activeAttributes = getActiveAttributesForRound(1);
+    const activeAttributes = getActiveAttributesForRound(1, adventureDifficulty);
 
     // Pass startGame=true to set gameStarted, startTime, and time bonus atomically
     initGame(selectedCharacter!, activeAttributes, true);
@@ -1425,7 +1428,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       setNotification({ message: `+${count} cards added`, type: 'success' });
     },
     onChangeRound: (round: number) => {
-      const activeAttributes = getActiveAttributesForRound(round);
+      const activeAttributes = getActiveAttributesForRound(round, adventureDifficulty);
       const totalStats = calculatePlayerTotalStats(state.player);
       const boardSize = Math.max(totalStats.fieldSize, getBoardSizeForAttributes(activeAttributes.length));
       const newBoard = generateGameBoard(boardSize, round, round, activeAttributes);
@@ -1580,16 +1583,20 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     }
 
     const nextRound = state.round + 1;
-    const newActiveAttributes = getActiveAttributesForRound(nextRound);
+    const newActiveAttributes = getActiveAttributesForRound(nextRound, adventureDifficulty);
     const previousAttributes = state.activeAttributes;
 
     // Check if a new attribute is being unlocked
     const newAttribute = newActiveAttributes.find(attr => !previousAttributes.includes(attr));
 
     // Check if this is the final round (round 10)
+    // Show final round warning, but only show attribute unlock if there's a new attribute
     if (nextRound === 10) {
       setIsFinalRoundWarning(true);
-      setPendingUnlockedAttribute(null);
+      // For hard difficulty, round 10 has no new attribute (already at 5)
+      // For medium, round 10 adds background
+      // For easy, no new attributes ever
+      setPendingUnlockedAttribute(newAttribute || null);
       setGamePhase('attribute_unlock');
       return;
     }
@@ -1633,7 +1640,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     // In endless mode, always use all 5 attributes
     const newActiveAttributes: AttributeName[] = state.isEndlessMode
       ? ['shape', 'color', 'number', 'shading', 'background']
-      : getActiveAttributesForRound(nextRound);
+      : getActiveAttributesForRound(nextRound, adventureDifficulty);
     const previousAttributes = state.activeAttributes;
 
     // Note: Attribute unlock is now handled via the AttributeUnlockScreen before this function is called

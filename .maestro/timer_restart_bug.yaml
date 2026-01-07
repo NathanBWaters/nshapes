@@ -24,11 +24,14 @@ appId: com.nshapes.app
     visible: "Choose Your Character"
     timeout: 5000
 
-# Step 3: Tap Start Adventure button (character auto-selects)
-# The button is at the bottom of the screen at around y=797 based on logs
-# Use explicit coordinate tap as fallback
+# Step 3: Wait for character to be auto-selected (button text changes from "Select a Character")
+- extendedWaitUntil:
+    visible: "Start Adventure"
+    timeout: 3000
+
+# Step 4: Tap Start Adventure button
 - tapOn:
-    point: "201, 797"
+    text: "Start Adventure"
 
 # Step 4: Handle tutorial prompt if it appears
 - runFlow:
@@ -89,9 +92,14 @@ appId: com.nshapes.app
     visible: "Choose Your Character"
     timeout: 5000
 
-# Character should still be selected, start the game
+# Wait for character to be selected (should still be selected from before)
+- extendedWaitUntil:
+    visible: "Start Adventure"
+    timeout: 3000
+
+# Tap Start Adventure button
 - tapOn:
-    point: "201, 797"
+    text: "Start Adventure"
 
 # Wait for game to load
 - extendedWaitUntil:

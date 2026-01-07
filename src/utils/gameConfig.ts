@@ -3,7 +3,7 @@
  * All game balance values and rules in one place for easy tweaking.
  */
 
-import { AttributeName } from '../types';
+import { AttributeName, AdventureDifficulty } from '../types';
 
 // =============================================================================
 // PLAYER STARTING VALUES
@@ -207,8 +207,27 @@ export const getLevelFromXP = (experience: number): number => {
 // ATTRIBUTE SCALING
 // =============================================================================
 
+// Adventure mode difficulty progressions
+export const ADVENTURE_DIFFICULTY_PROGRESSIONS: Record<AdventureDifficulty, { rounds: number[]; attributes: AttributeName[] }[]> = {
+  easy: [
+    // Easy: 3 attributes (shape, color, number) all 10 rounds
+    { rounds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], attributes: ['shape', 'color', 'number'] },
+  ],
+  medium: [
+    // Medium: Progressive (current default) - 3 -> 4 -> 5 attributes
+    { rounds: [1, 2, 3], attributes: ['shape', 'color', 'number'] },
+    { rounds: [4, 5, 6, 7, 8, 9], attributes: ['shape', 'color', 'number', 'shading'] },
+    { rounds: [10], attributes: ['shape', 'color', 'number', 'shading', 'background'] },
+  ],
+  hard: [
+    // Hard: 4 attributes rounds 1-5, 5 attributes rounds 6-10
+    { rounds: [1, 2, 3, 4, 5], attributes: ['shape', 'color', 'number', 'shading'] },
+    { rounds: [6, 7, 8, 9, 10], attributes: ['shape', 'color', 'number', 'shading', 'background'] },
+  ],
+};
+
 export const ATTRIBUTE_SCALING = {
-  // Round-based attribute progression for Adventure Mode
+  // Round-based attribute progression for Adventure Mode (legacy - use ADVENTURE_DIFFICULTY_PROGRESSIONS)
   roundProgression: [
     { rounds: [1, 2, 3], attributes: ['shape', 'color', 'number'] as AttributeName[] },
     { rounds: [4, 5, 6, 7, 8, 9], attributes: ['shape', 'color', 'number', 'shading'] as AttributeName[] },
@@ -240,8 +259,8 @@ export const BACKGROUND_COLORS = {
 } as const;
 
 /** Get active attributes for a given round (Adventure Mode) */
-export const getActiveAttributesForRound = (round: number): AttributeName[] => {
-  const progression = ATTRIBUTE_SCALING.roundProgression.find(
+export const getActiveAttributesForRound = (round: number, difficulty: AdventureDifficulty = 'medium'): AttributeName[] => {
+  const progression = ADVENTURE_DIFFICULTY_PROGRESSIONS[difficulty].find(
     p => (p.rounds as readonly number[]).includes(round)
   );
   return progression ? [...progression.attributes] : ['shape', 'color'];

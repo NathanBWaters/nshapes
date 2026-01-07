@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, Pressable, StyleSheet } from 'react-native';
-import { Character, PlayerStats } from '@/types';
+import { Character, PlayerStats, AdventureDifficulty } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { getWeaponByName, DEFAULT_PLAYER_STATS } from '@/utils/gameDefinitions';
 import { CharacterWinsStorage, CharacterWins, EndlessHighScoresStorage, EndlessHighScores } from '@/utils/storage';
@@ -18,7 +18,7 @@ interface CharacterSelectionProps {
   characters: Character[];
   selectedCharacter: string | null;
   onSelect: (characterName: string) => void;
-  onStart: () => void;
+  onStart: (difficulty: AdventureDifficulty) => void;
   onExitGame?: () => void;
 }
 
@@ -32,6 +32,7 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
   const [hoveredCharacter, setHoveredCharacter] = React.useState<string | null>(null);
   const [characterWins, setCharacterWins] = React.useState<CharacterWins>({});
   const [endlessHighScores, setEndlessHighScores] = React.useState<EndlessHighScores>({});
+  const [adventureDifficulty, setAdventureDifficulty] = React.useState<AdventureDifficulty>('medium');
 
   // Load character wins and endless high scores on mount
   React.useEffect(() => {
@@ -166,10 +167,42 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
         </View>
       </View>
 
-      {/* Start Adventure Button */}
+      {/* Difficulty Selector and Start Adventure Button */}
       <View style={styles.actionSection}>
+        {/* Difficulty Selector */}
+        <View style={styles.difficultySection}>
+          <Text style={styles.difficultyLabel}>Difficulty</Text>
+          <View style={styles.difficultyRow}>
+            {(['easy', 'medium', 'hard'] as AdventureDifficulty[]).map((diff) => {
+              const isSelected = adventureDifficulty === diff;
+              const labels: Record<AdventureDifficulty, { name: string; desc: string }> = {
+                easy: { name: 'Easy', desc: '3 Attributes' },
+                medium: { name: 'Medium', desc: 'Progressive' },
+                hard: { name: 'Hard', desc: '4-5 Attributes' },
+              };
+              return (
+                <Pressable
+                  key={diff}
+                  onPress={() => setAdventureDifficulty(diff)}
+                  style={[
+                    styles.difficultyButton,
+                    isSelected && styles.difficultyButtonSelected,
+                  ]}
+                >
+                  <Text style={[styles.difficultyButtonText, isSelected && styles.difficultyButtonTextSelected]}>
+                    {labels[diff].name}
+                  </Text>
+                  <Text style={[styles.difficultyButtonDesc, isSelected && styles.difficultyButtonDescSelected]}>
+                    {labels[diff].desc}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
         <TouchableOpacity
-          onPress={onStart}
+          onPress={() => onStart(adventureDifficulty)}
           disabled={!selectedCharacter}
           testID="start-adventure-button"
           accessibilityLabel="Start Adventure"
@@ -433,6 +466,54 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.canvasWhite,
     borderTopWidth: 1,
     borderTopColor: COLORS.slateCharcoal,
+    gap: 12,
+  },
+  difficultySection: {
+    gap: 8,
+  },
+  difficultyLabel: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '600',
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  difficultyRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  difficultyButton: {
+    flex: 1,
+    backgroundColor: COLORS.paperBeige,
+    borderRadius: RADIUS.button,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+  },
+  difficultyButtonSelected: {
+    backgroundColor: COLORS.actionYellow,
+    borderWidth: 2,
+  },
+  difficultyButtonText: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '600',
+    fontSize: 12,
+    textTransform: 'uppercase',
+  },
+  difficultyButtonTextSelected: {
+    fontWeight: '700',
+  },
+  difficultyButtonDesc: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '400',
+    fontSize: 9,
+    opacity: 0.7,
+    marginTop: 2,
+  },
+  difficultyButtonDescSelected: {
+    opacity: 1,
   },
   actionButton: {
     backgroundColor: COLORS.actionYellow,

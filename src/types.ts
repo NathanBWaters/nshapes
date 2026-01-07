@@ -5,6 +5,9 @@ export type Shading = 'solid' | 'striped' | 'open';
 export type Background = 'white' | 'beige' | 'charcoal';
 export type AttributeName = 'shape' | 'color' | 'number' | 'shading' | 'background';
 
+// Adventure mode difficulty setting
+export type AdventureDifficulty = 'easy' | 'medium' | 'hard';
+
 // Ordered list of attributes for progressive unlock
 export const ATTRIBUTE_ORDER: AttributeName[] = ['shape', 'color', 'number', 'shading', 'background'];
 

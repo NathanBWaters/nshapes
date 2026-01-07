@@ -4,45 +4,67 @@ appId: com.nshapes.app
 # This test will play through a basic game session
 
 # Wait for the app to fully load
-- launchApp
+- launchApp:
+    clearState: true
 
-# Wait for the main screen to appear
+# Wait for the main menu to appear
 - extendedWaitUntil:
-    visible: "NShapes"
+    visible: "NSHAPES"
     timeout: 10000
 
-# Step 1: Choose Single Player mode
-- tapOn: "Single Player"
+# Step 1: Choose Adventure mode
+- tapOn:
+    id: "menu-adventure"
 
 # Step 2: Wait for character selection screen
 - extendedWaitUntil:
     visible: "Choose Your Character"
     timeout: 5000
 
-# Step 3: Tap on the first character (Orange Tabby is the first in the list)
-- tapOn: "Orange Tabby"
-
-# Step 4: Tap Start Game button
-- tapOn: "Start Game"
-
-# Step 5: Wait for enemy selection screen
+# Step 3: Wait for a character to be auto-selected (button text changes)
 - extendedWaitUntil:
-    visible: "Choose Your Enemy"
+    visible: "Start Adventure"
+    timeout: 3000
+
+# Longer delay to ensure UI is fully rendered and interactive
+- swipe:
+    start: "50%, 50%"
+    end: "50%, 50%"
+    duration: 2000
+
+# Dismiss any debugger overlay by tapping X if present
+- runFlow:
+    when:
+      visible: "Open debugger"
+    commands:
+      - tapOn:
+          point: "95%, 95%"
+
+# Step 4: Tap Start Adventure button (very bottom of screen)
+- tapOn:
+    point: "50%, 95%"
+
+# Step 5: Wait for and handle tutorial prompt
+- extendedWaitUntil:
+    visible: "New to NShapes"
     timeout: 5000
 
-# Step 6: Select the first enemy by tapping "Fight This Enemy"
-- tapOn: "Fight This Enemy"
+# Tap on Skip link to start the game
+- tapOn: "Skip - Start Adventure"
 
-# Step 7: Wait for game board to appear with the score indicator
+# Step 6: Wait for game board to appear with the round indicator
 - extendedWaitUntil:
-    visible: "Selected:"
-    timeout: 5000
+    visible: "R1"
+    timeout: 8000
 
-# Step 8: Tap three cards randomly to attempt a match
+# Step 7: Verify the game is running (round indicator visible means game is active)
+- assertVisible: "R1"
+
+# Step 8: Tap three cards to attempt a match
 # Cards are arranged in a grid, tapping at different points in the card area
 # First card - left column
 - tapOn:
-    point: "20%,45%"
+    point: "20%,50%"
 
 # Small delay between taps
 - swipe:
@@ -52,7 +74,7 @@ appId: com.nshapes.app
 
 # Second card - middle column
 - tapOn:
-    point: "50%,45%"
+    point: "50%,50%"
 
 # Small delay
 - swipe:
@@ -62,12 +84,13 @@ appId: com.nshapes.app
 
 # Third card - right column
 - tapOn:
-    point: "80%,45%"
+    point: "80%,50%"
 
 # Wait for any animation to complete
-- extendedWaitUntil:
-    visible: "Selected:"
-    timeout: 3000
+- swipe:
+    start: "50%, 50%"
+    end: "50%, 50%"
+    duration: 1500
 
-# Verify the game is still running (selected indicator visible means game is active)
-- assertVisible: "Selected:"
+# Verify the game is still running (round indicator visible means game is active)
+- assertVisible: "R1"
