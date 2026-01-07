@@ -29,6 +29,17 @@ jest.mock('react-native-svg', () => {
   };
 });
 
+// Mock sounds module to avoid .ogg file import issues
+jest.mock('@/utils/sounds', () => ({
+  playSound: jest.fn(),
+  preloadSound: jest.fn(),
+  preloadAllSounds: jest.fn(),
+  setAudioEnabled: jest.fn(),
+  isAudioEnabled: jest.fn(() => true),
+  initAudio: jest.fn(),
+  playCardDealing: jest.fn(),
+}));
+
 // Silence console warnings during tests
 global.console = {
   ...console,

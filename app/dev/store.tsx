@@ -14,7 +14,7 @@ export default function DevStore() {
   const [money, setMoney] = useState(50000);
   const [shopWeapons, setShopWeapons] = useState<(Weapon | null)[]>(() => generateShopWeapons(4));
   const [playerWeapons, setPlayerWeapons] = useState<Weapon[]>([]);
-  const [rerollCost, setRerollCost] = useState(ECONOMY.baseRerollCost);
+  const [rerollCost, setRerollCost] = useState<number>(ECONOMY.baseRerollCost);
   const [freeRerolls, setFreeRerolls] = useState(0);
 
   // Calculate player stats including weapon effects

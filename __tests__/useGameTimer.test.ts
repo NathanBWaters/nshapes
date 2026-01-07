@@ -46,7 +46,7 @@ describe('useGameTimer', () => {
   it('should start ticking when isActive changes from false to true', () => {
     const onTick = jest.fn();
 
-    const { rerender } = renderHook(
+    const { rerender } = renderHook<void, { isActive: boolean }>(
       ({ isActive }) => useGameTimer(isActive, onTick),
       { initialProps: { isActive: false } }
     );
@@ -70,7 +70,7 @@ describe('useGameTimer', () => {
   it('should stop ticking when isActive changes from true to false', () => {
     const onTick = jest.fn();
 
-    const { rerender } = renderHook(
+    const { rerender } = renderHook<void, { isActive: boolean }>(
       ({ isActive }) => useGameTimer(isActive, onTick),
       { initialProps: { isActive: true } }
     );
@@ -94,7 +94,7 @@ describe('useGameTimer', () => {
   it('should resume ticking when reactivated (pause/resume)', () => {
     const onTick = jest.fn();
 
-    const { rerender } = renderHook(
+    const { rerender } = renderHook<void, { isActive: boolean }>(
       ({ isActive }) => useGameTimer(isActive, onTick),
       { initialProps: { isActive: true } }
     );
@@ -125,7 +125,7 @@ describe('useGameTimer', () => {
     const onTick1 = jest.fn(() => { counter = 1; });
     const onTick2 = jest.fn(() => { counter = 2; });
 
-    const { rerender } = renderHook(
+    const { rerender } = renderHook<void, { onTick: () => void }>(
       ({ onTick }) => useGameTimer(true, onTick),
       { initialProps: { onTick: onTick1 } }
     );
@@ -146,7 +146,7 @@ describe('useGameTimer', () => {
     const onTick1 = jest.fn();
     const onTick2 = jest.fn();
 
-    const { rerender } = renderHook(
+    const { rerender } = renderHook<void, { onTick: () => void }>(
       ({ onTick }) => useGameTimer(true, onTick),
       { initialProps: { onTick: onTick1 } }
     );
@@ -194,7 +194,7 @@ describe('useGameTimer', () => {
     const onTick = jest.fn();
 
     // Start with key=1
-    const { rerender } = renderHook(
+    const { rerender } = renderHook<void, { isActive: boolean; key: number }>(
       ({ isActive, key }) => useGameTimer(isActive, onTick, key),
       { initialProps: { isActive: true, key: 1 } }
     );
@@ -233,7 +233,7 @@ describe('useGameTimer', () => {
     const onTick = jest.fn();
 
     // Start game 1: isActive = true, key = 1000 (startTime)
-    const { rerender } = renderHook(
+    const { rerender } = renderHook<void, { isActive: boolean; key: number }>(
       ({ isActive, key }) => useGameTimer(isActive, onTick, key),
       { initialProps: { isActive: true, key: 1000 } }
     );

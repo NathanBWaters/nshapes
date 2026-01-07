@@ -25,7 +25,7 @@ jest.mock('@/components/Card', () => {
     isPaused?: boolean;
   }) {
     const accumulatedTimeRef = React.useRef(0);
-    const lastTickRef = React.useRef<number | null>(null);
+    const lastTickRef = React.useRef(null as number | null);
     const burnCompleteCalledRef = React.useRef(false);
 
     // Reset on new fire

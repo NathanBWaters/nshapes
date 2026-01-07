@@ -267,7 +267,7 @@ describe('Adventure Mode Timer - Edge Cases', () => {
   it('should stop timer when remainingTime reaches 0', () => {
     const onTick = jest.fn();
 
-    const { rerender } = renderHook(
+    const { rerender } = renderHook<void, { isActive: boolean }>(
       ({ isActive }) => useGameTimer(isActive, onTick),
       { initialProps: { isActive: true } }
     );
@@ -291,7 +291,7 @@ describe('Adventure Mode Timer - Edge Cases', () => {
   it('should handle rapid pause/resume without losing ticks', () => {
     const onTick = jest.fn();
 
-    const { rerender } = renderHook(
+    const { rerender } = renderHook<void, { isActive: boolean }>(
       ({ isActive }) => useGameTimer(isActive, onTick),
       { initialProps: { isActive: true } }
     );
