@@ -106,8 +106,8 @@ export const SettingsStorage = {
 };
 
 // Character unlock constants
-const DEFAULT_UNLOCKED = ['Orange Tabby', 'Sly Fox', 'Corgi'];
-const LOCKED_ORDER = ['Emperor Penguin', 'Pelican', 'Badger'];
+const DEFAULT_UNLOCKED = ['Orange Tabby', 'Sly Fox', 'Emperor Penguin'];
+const LOCKED_ORDER = ['Corgi', 'Pelican', 'Badger'];
 
 // Character unlock storage helpers
 export const CharacterUnlockStorage = {

@@ -84,17 +84,17 @@ export const CHARACTERS: Character[] = [
     baseStats: {}
   },
   {
-    name: 'Corgi',
-    description: 'Needs more space to zoom around. Much more space.',
-    startingWeapons: ['Field Stone', 'Growth Seed'],
-    icon: 'delapouite/sitting-dog',
-    baseStats: {}
-  },
-  {
     name: 'Emperor Penguin',
     description: 'Wise ruler with oracle-like vision from the frozen throne',
     startingWeapons: ['Crystal Orb', 'Seeker Lens'],
     icon: 'delapouite/penguin',
+    baseStats: {}
+  },
+  {
+    name: 'Corgi',
+    description: 'Needs more space to zoom around. Much more space.',
+    startingWeapons: ['Field Stone', 'Growth Seed'],
+    icon: 'delapouite/sitting-dog',
     baseStats: {}
   },
   {
