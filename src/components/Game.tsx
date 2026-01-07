@@ -37,7 +37,7 @@ import RoundSummary from './RoundSummary';
 import TutorialScreen from './TutorialScreen';
 import AttributeUnlockScreen from './AttributeUnlockScreen';
 import VictoryScreen from './VictoryScreen';
-import { RoundScore } from './RoundProgressChart';
+import RoundProgressChart, { RoundScore } from './RoundProgressChart';
 import CharacterUnlockScreen from './CharacterUnlockScreen';
 import MainMenu from './MainMenu';
 import DifficultySelection from './DifficultySelection';
@@ -2024,6 +2024,25 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
         );
 
       case 'game_over':
+        // Build roundScores including the current failed round
+        const gameOverRoundScores: RoundScore[] = ROUND_REQUIREMENTS.map(req => {
+          // Check if this round was completed in history
+          const historyEntry = roundHistory.find(h => h.round === req.round);
+          // If this is the current (failed) round, include the score
+          if (req.round === state.round) {
+            return {
+              round: req.round,
+              target: req.targetScore,
+              actual: state.score,
+            };
+          }
+          return {
+            round: req.round,
+            target: req.targetScore,
+            actual: historyEntry?.actual,
+          };
+        });
+
         return (
           <View style={gameOverStyles.container}>
             {/* Eyebrow Banner */}
@@ -2069,11 +2088,13 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
                 ) : null}
               </View>
 
-              {/* Round Scoreboard */}
-              <View style={gameOverStyles.scoreboardContainer}>
-                <RoundScoreboard
+              {/* Round Progress Chart */}
+              <View style={gameOverStyles.chartContainer}>
+                <Text style={gameOverStyles.chartTitle}>ROUND PROGRESS</Text>
+                <RoundProgressChart
+                  roundScores={gameOverRoundScores}
                   currentRound={state.round}
-                  currentScore={state.score}
+                  height={140}
                 />
               </View>
 
@@ -2325,6 +2346,22 @@ const gameOverStyles = StyleSheet.create({
   },
   scoreboardContainer: {
     marginBottom: 16,
+  },
+  chartContainer: {
+    backgroundColor: COLORS.canvasWhite,
+    borderRadius: RADIUS.module,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+    marginBottom: 16,
+  },
+  chartTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.slateCharcoal,
+    textAlign: 'center',
+    letterSpacing: 1,
+    marginBottom: 8,
   },
   buttonContainer: {
     alignItems: 'center',

@@ -137,7 +137,7 @@ const RoundProgressChart: React.FC<RoundProgressChartProps> = ({
                     )
                   )}
 
-                  {/* Yellow target */}
+                  {/* Yellow target - show full height for failed rounds too */}
                   <View
                     style={[
                       styles.yellowBar,
@@ -145,7 +145,17 @@ const RoundProgressChart: React.FC<RoundProgressChartProps> = ({
                       isCurrentRound && styles.currentRoundBar,
                       !isCompleted && styles.futureRoundBar,
                     ]}
-                  />
+                  >
+                    {/* Red shortfall bar - shows how close player was on failed rounds */}
+                    {isCompleted && round.actual !== undefined && round.actual < round.target && (
+                      <View
+                        style={[
+                          styles.redBar,
+                          { height: actualHeight }
+                        ]}
+                      />
+                    )}
+                  </View>
                 </View>
               </View>
             );
@@ -225,6 +235,14 @@ const styles = StyleSheet.create({
   blueBar: {
     width: '100%',
     backgroundColor: COLORS.logicTeal,
+    borderTopLeftRadius: 2,
+    borderTopRightRadius: 2,
+  },
+  redBar: {
+    position: 'absolute',
+    bottom: 0,
+    width: '100%',
+    backgroundColor: COLORS.impactRed,
     borderTopLeftRadius: 2,
     borderTopRightRadius: 2,
   },
