@@ -60,7 +60,6 @@ const Card: React.FC<CardProps> = ({
   const translateY = useSharedValue(isNew ? -50 : 0);
   const opacity = useSharedValue(isNew ? 0 : 1);
   const shadowRadius = useSharedValue(0);
-  const holoShimmerPosition = useSharedValue(0);
   const fireFlicker = useSharedValue(0.7);
   const hoverGlow = useSharedValue(0); // Web-only hover glow
   
@@ -102,20 +101,6 @@ const Card: React.FC<CardProps> = ({
     onComplete: handleBurnComplete,
   });
 
-
-  // Holographic shimmer animation
-  useEffect(() => {
-    if (card.isHolographic) {
-      holoShimmerPosition.value = withRepeat(
-        withTiming(1, { duration: 4000, easing: Easing.linear }),
-        -1, // infinite
-        false
-      );
-    } else {
-      holoShimmerPosition.value = 0;
-    }
-  }, [card.isHolographic, holoShimmerPosition]);
-
   // Fire flicker animation
   useEffect(() => {
     if (card.onFire) {
@@ -153,21 +138,6 @@ const Card: React.FC<CardProps> = ({
     shadowOpacity: 0.1,
     opacity: opacity.value,
   }));
-
-  // Holographic border animation
-  const holoStyle = useAnimatedStyle(() => {
-    if (!card.isHolographic) return {};
-
-    const borderColor = interpolateColor(
-      holoShimmerPosition.value,
-      [0, 0.17, 0.33, 0.5, 0.67, 0.83, 1],
-      ['#A855F7', '#3B82F6', '#06B6D4', '#10B981', '#FACC15', '#EF4444', '#A855F7']
-    );
-
-    return {
-      borderColor,
-    };
-  });
 
   // Fire flicker style
   const fireStyle = useAnimatedStyle(() => {
@@ -212,10 +182,6 @@ const Card: React.FC<CardProps> = ({
       styles.card,
       { backgroundColor: getCardBackgroundColor(card.background) }
     ];
-
-    if (card.isHolographic) {
-      cardStyles.push(styles.holographic);
-    }
 
     if (card.onFire) {
       cardStyles.push(styles.onFire);
@@ -263,7 +229,6 @@ const Card: React.FC<CardProps> = ({
       style={[
         getCardStyle(),
         animatedCardStyle,
-        card.isHolographic && holoStyle,
         card.onFire && fireStyle,
         webCursorStyle,
       ]}
@@ -471,16 +436,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFDE7',
     borderColor: COLORS.actionYellow,
     borderStyle: 'dashed',
-  },
-  holographic: {
-    borderColor: '#A855F7', // Purple/rainbow shimmer
-    // borderWidth now consistent at 3px in base card style
-    shadowColor: '#A855F7',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 8,
-    elevation: 6,
-    backgroundColor: '#FEFCE8', // Slight golden tint
   },
   onFire: {
     borderColor: '#EF4444', // Red fire border

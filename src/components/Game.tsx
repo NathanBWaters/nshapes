@@ -984,7 +984,6 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     let totalHealing = 0;
     let totalHints = 0;
     let lootCratesEarned = 0;
-    let holoBonus = 0;
     let graceUsed = false;
 
     rewards.forEach(reward => {
@@ -996,15 +995,6 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
 
       let points = reward.points || 0;
       let money = reward.money || 0;
-
-      // Check if this card is holographic for 2x points (only for base match rewards, not effects)
-      if (!reward.effectType || reward.effectType === 'grace') {
-        const matchedCard = cards.find(c => c.id === reward.cardId);
-        if (matchedCard?.isHolographic) {
-          points *= 2;
-          holoBonus += points / 2; // Track the bonus portion
-        }
-      }
 
       totalPoints += points;
       totalMoney += money;
@@ -1022,15 +1012,12 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       triggerNotifications.push('Grace!');
     }
 
-    // Show holographic bonus if any
-    if (holoBonus > 0) {
-      triggerNotifications.push(`Holo 2x! +${holoBonus}`);
-    }
-
-    // Apply weapon effect bonuses (healing, hints, time, graces, board growth, fire)
+    // Apply weapon effect bonuses (healing, hints, time, graces, board growth, fire, XP, coins)
     if (weaponEffects) {
       totalHealing += weaponEffects.bonusHealing;
       totalHints += weaponEffects.bonusHints;
+      totalExperience += weaponEffects.bonusExperience;
+      totalMoney += weaponEffects.bonusCoins;
 
       // Play sounds for bonus rewards (explosion/laser/ricochet sounds play immediately in GameBoard)
       if (weaponEffects.bonusHealing > 0) {
@@ -1423,15 +1410,6 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       }));
       setNotification({ message: `First ${count} cards on fire!`, type: 'info' });
     },
-    onMakeCardsHolo: (count: number) => {
-      setState(prevState => ({
-        ...prevState,
-        board: prevState.board.map((card, i) =>
-          i < count ? { ...card, isHolographic: true } : card
-        )
-      }));
-      setNotification({ message: `First ${count} cards holographic!`, type: 'success' });
-    },
     onToggleTimer: () => {
       setDevTimerEnabled(prev => !prev);
     },
@@ -1570,12 +1548,6 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
         if (Math.random() < modifierChance * 0.4) {
           newCard.timedReward = true;
           newCard.timedRewardAmount = Math.floor(Math.random() * 5) + 3;
-        }
-
-        // Apply holographic effect based on player's holoChance stat
-        const totalStats = calculatePlayerTotalStats(state.player);
-        if (totalStats.holoChance > 0 && Math.random() * 100 < totalStats.holoChance) {
-          newCard.isHolographic = true;
         }
 
         newCards.push(newCard);

@@ -29,7 +29,8 @@ const WEAPON_CATEGORIES = {
   'Grace': WEAPONS.filter(w => w.specialEffect === 'graceGain'),
   'Healing': WEAPONS.filter(w => w.specialEffect === 'healing'),
   'Hint Gain': WEAPONS.filter(w => w.specialEffect === 'hintGain'),
-  'Holographic': WEAPONS.filter(w => w.specialEffect === 'holographic'),
+  'XP Gain': WEAPONS.filter(w => w.specialEffect === 'xpGain'),
+  'Coin Gain': WEAPONS.filter(w => w.specialEffect === 'coinGain'),
   'Time Gain': WEAPONS.filter(w => w.specialEffect === 'timeGain'),
   'Laser': WEAPONS.filter(w => w.specialEffect === 'laser'),
 };
@@ -39,7 +40,6 @@ export interface DevModeCallbacks {
   onClearWeapons: () => void;
   onAddGraces: (count: number) => void;
   onSetCardsOnFire: (count: number) => void;
-  onMakeCardsHolo: (count: number) => void;
   onToggleTimer: () => void;
   onToggleAutoPlayer?: () => void;
   onResetBoard: () => void;
@@ -115,7 +115,7 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
   const statCategories = {
     "Character": [
       'level', 'experienceGainPercent', 'luck',
-      'maxWeapons', 'holographicPercent'
+      'maxWeapons'
     ],
     "Resources": [
       'money', 'commerce', 'scavengingPercent',
@@ -512,12 +512,6 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
               <Text style={styles.devButtonText}>Set Fire (3)</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.devButton, styles.devButtonPurple]}
-              onPress={() => devCallbacks?.onMakeCardsHolo(3)}
-            >
-              <Text style={styles.devButtonText}>Make Holo (3)</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
               style={[styles.devButton, styles.devButtonBlue]}
               onPress={() => devCallbacks?.onAddGraces(3)}
             >
@@ -577,10 +571,6 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
             <View style={styles.statRow}>
               <Text style={styles.statKey}>Laser Chance</Text>
               <Text style={styles.statValue}>{playerStats.laserChance || 0}%</Text>
-            </View>
-            <View style={styles.statRow}>
-              <Text style={styles.statKey}>Holographic</Text>
-              <Text style={styles.statValue}>{playerStats.holoChance || 0}%</Text>
             </View>
             <View style={styles.statRow}>
               <Text style={styles.statKey}>Graces</Text>

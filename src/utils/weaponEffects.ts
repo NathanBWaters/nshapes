@@ -252,6 +252,8 @@ export interface WeaponEffectResult {
   bonusGraces: number;
   bonusHealing: number;
   bonusHints: number;
+  bonusExperience: number;
+  bonusCoins: number;
   boardGrowth: number;
   notifications: string[];
 }
@@ -288,6 +290,8 @@ export const processWeaponEffects = (
     bonusGraces: 0,
     bonusHealing: 0,
     bonusHints: 0,
+    bonusExperience: 0,
+    bonusCoins: 0,
     boardGrowth: 0,
     notifications: [],
   };
@@ -438,6 +442,44 @@ export const processWeaponEffects = (
   if (playerStats.graceGainChance > 0 && Math.random() * 100 < playerStats.graceGainChance) {
     result.bonusGraces = 1;
     result.notifications.push('+1 Grace');
+  }
+
+  // XP gain chance - handles stacking above 100%
+  if (playerStats.xpGainChance > 0) {
+    const totalChance = playerStats.xpGainChance;
+    const guaranteedXP = Math.floor(totalChance / 100);
+    const remainingChance = totalChance % 100;
+
+    // Add guaranteed XP
+    result.bonusExperience += guaranteedXP;
+
+    // Roll for the remaining chance
+    if (remainingChance > 0 && Math.random() * 100 < remainingChance) {
+      result.bonusExperience += 1;
+    }
+
+    if (result.bonusExperience > 0) {
+      result.notifications.push(`+${result.bonusExperience} XP`);
+    }
+  }
+
+  // Coin gain chance - handles stacking above 100%
+  if (playerStats.coinGainChance > 0) {
+    const totalChance = playerStats.coinGainChance;
+    const guaranteedCoins = Math.floor(totalChance / 100);
+    const remainingChance = totalChance % 100;
+
+    // Add guaranteed coins
+    result.bonusCoins += guaranteedCoins;
+
+    // Roll for the remaining chance
+    if (remainingChance > 0 && Math.random() * 100 < remainingChance) {
+      result.bonusCoins += 1;
+    }
+
+    if (result.bonusCoins > 0) {
+      result.notifications.push(`+${result.bonusCoins} Coins`);
+    }
   }
 
   // Board growth chance

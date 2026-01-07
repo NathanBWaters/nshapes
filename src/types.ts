@@ -43,7 +43,6 @@ export interface Card {
   timedRewardAmount?: number;
 
   // New weapon effect states
-  isHolographic?: boolean;  // 2x points when matched
   onFire?: boolean;         // Card is burning
   fireStartTime?: number;   // Timestamp when fire started (for 15s burn timer)
 }
@@ -78,7 +77,7 @@ export type EnemyName =
 export type WeaponName =
   'Blast Powder' | 'Oracle Eye' | 'Mystic Sight' | 'Field Stone' | 'Growth Seed' |
   'Flint Spark' | 'Second Chance' | 'Fortune Token' | 'Life Vessel' |
-  'Mending Charm' | 'Crystal Orb' | 'Seeker Lens' | 'Prism Glass' |
+  'Mending Charm' | 'Crystal Orb' | 'Seeker Lens' | 'Scholar\'s Tome' | 'Fortune\'s Favor' |
   'Chrono Shard' | 'Time Drop' | 'Prismatic Ray' | 'Chaos Shard' |
   'Echo Stone' | 'Chain Reaction';
 
@@ -104,7 +103,7 @@ export interface Weapon {
   flavorText?: string; // Longer fun description for weapon guide
   price: number;
   effects: Partial<PlayerStats>;
-  specialEffect?: 'explosive' | 'autoHint' | 'enhancedHint' | 'boardGrowth' | 'fire' | 'graceGain' | 'healing' | 'hintGain' | 'holographic' | 'timeGain' | 'laser' | 'ricochet' | 'echo' | 'chainReaction';
+  specialEffect?: 'explosive' | 'autoHint' | 'enhancedHint' | 'boardGrowth' | 'fire' | 'graceGain' | 'healing' | 'hintGain' | 'xpGain' | 'coinGain' | 'timeGain' | 'laser' | 'ricochet' | 'echo' | 'chainReaction';
   icon?: IconName; // Icon path like "delapouite/bamboo" - must be in ICON_REGISTRY
   maxCount?: number; // Maximum number of this weapon that can be owned (e.g., 1 for unique legendaries)
 }
@@ -191,7 +190,8 @@ export interface PlayerStats {
   graceGainChance: number;      // % to gain grace on match
   healingChance: number;        // % to heal on match
   hintGainChance: number;       // % to gain hint on match
-  holoChance: number;           // % for new cards to be holographic
+  xpGainChance: number;         // % to gain +1 XP on match
+  coinGainChance: number;       // % to gain +1 coin on match
   timeGainChance: number;       // % to gain time on match
   timeGainAmount: number;       // seconds gained when timeGain triggers
   laserChance: number;          // % for laser to fire on match

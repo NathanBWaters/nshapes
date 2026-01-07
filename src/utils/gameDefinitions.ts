@@ -55,7 +55,8 @@ export const DEFAULT_PLAYER_STATS: PlayerStats = {
   graceGainChance: STARTING_STATS.graceGainChance,
   healingChance: STARTING_STATS.healingChance,
   hintGainChance: STARTING_STATS.hintGainChance,
-  holoChance: STARTING_STATS.holoChance,
+  xpGainChance: STARTING_STATS.xpGainChance,
+  coinGainChance: STARTING_STATS.coinGainChance,
   timeGainChance: STARTING_STATS.timeGainChance,
   timeGainAmount: STARTING_STATS.timeGainAmount,
   laserChance: STARTING_STATS.laserChance,
@@ -829,50 +830,93 @@ export const WEAPONS: Weapon[] = [
   },
 
   // ============================================================================
-  // 12. PRISM GLASS - Holographic cards (2x points)
+  // 12. SCHOLAR'S TOME - XP gain on match
   // ============================================================================
   {
-    id: 'prism-glass-common',
-    name: 'Prism Glass',
+    id: 'scholars-tome-common',
+    name: 'Scholar\'s Tome',
     rarity: 'common',
     level: 1,
     price: 8,
-    description: '10% chance for holographic cards (2x points).',
-    shortDescription: 'Holographic cards appear',
-    flavorText: 'When new cards are drawn, they have a chance to become holographic (purple shimmer). Matching holographic cards awards 2x points.',
-    icon: 'lorc/crystal-shine',
-    specialEffect: 'holographic',
-    effects: { holoChance: 10 }
+    description: '20% chance to gain +1 XP on match.',
+    shortDescription: 'Gain XP on match',
+    flavorText: 'Ancient wisdom grants bonus experience. Multiple tomes stack their chances - over 100% guarantees rewards with a chance for more.',
+    icon: 'lorc/open-book',
+    specialEffect: 'xpGain',
+    effects: { xpGainChance: 20 }
   },
   {
-    id: 'prism-glass-rare',
-    name: 'Prism Glass',
+    id: 'scholars-tome-rare',
+    name: 'Scholar\'s Tome',
     rarity: 'rare',
     level: 1,
     price: 16,
-    description: '30% chance for holographic cards (2x points).',
-    shortDescription: 'Holographic cards appear',
-    flavorText: 'When new cards are drawn, they have a chance to become holographic (purple shimmer). Matching holographic cards awards 2x points.',
-    icon: 'lorc/crystal-shine',
-    specialEffect: 'holographic',
-    effects: { holoChance: 30 }
+    description: '40% chance to gain +1 XP on match.',
+    shortDescription: 'Gain XP on match',
+    flavorText: 'Ancient wisdom grants bonus experience. Multiple tomes stack their chances - over 100% guarantees rewards with a chance for more.',
+    icon: 'lorc/open-book',
+    specialEffect: 'xpGain',
+    effects: { xpGainChance: 40 }
   },
   {
-    id: 'prism-glass-legendary',
-    name: 'Prism Glass',
+    id: 'scholars-tome-legendary',
+    name: 'Scholar\'s Tome',
     rarity: 'legendary',
     level: 1,
     price: 24,
-    description: '70% chance for holographic cards (2x points).',
-    shortDescription: 'Holographic cards appear',
-    flavorText: 'When new cards are drawn, they have a chance to become holographic (purple shimmer). Matching holographic cards awards 2x points.',
-    icon: 'lorc/crystal-shine',
-    specialEffect: 'holographic',
-    effects: { holoChance: 70 }
+    description: '80% chance to gain +1 XP on match.',
+    shortDescription: 'Gain XP on match',
+    flavorText: 'Ancient wisdom grants bonus experience. Multiple tomes stack their chances - over 100% guarantees rewards with a chance for more.',
+    icon: 'lorc/open-book',
+    specialEffect: 'xpGain',
+    effects: { xpGainChance: 80 }
   },
 
   // ============================================================================
-  // 13. CHRONO SHARD - Starting time bonus
+  // 13. FORTUNE'S FAVOR - Coin gain on match
+  // ============================================================================
+  {
+    id: 'fortunes-favor-common',
+    name: 'Fortune\'s Favor',
+    rarity: 'common',
+    level: 1,
+    price: 8,
+    description: '20% chance to gain +1 coin on match.',
+    shortDescription: 'Gain coins on match',
+    flavorText: 'Lady Luck smiles upon you, granting bonus coins. Multiple fortunes stack their chances - over 100% guarantees rewards with a chance for more.',
+    icon: 'lorc/crown-coin',
+    specialEffect: 'coinGain',
+    effects: { coinGainChance: 20 }
+  },
+  {
+    id: 'fortunes-favor-rare',
+    name: 'Fortune\'s Favor',
+    rarity: 'rare',
+    level: 1,
+    price: 16,
+    description: '40% chance to gain +1 coin on match.',
+    shortDescription: 'Gain coins on match',
+    flavorText: 'Lady Luck smiles upon you, granting bonus coins. Multiple fortunes stack their chances - over 100% guarantees rewards with a chance for more.',
+    icon: 'lorc/crown-coin',
+    specialEffect: 'coinGain',
+    effects: { coinGainChance: 40 }
+  },
+  {
+    id: 'fortunes-favor-legendary',
+    name: 'Fortune\'s Favor',
+    rarity: 'legendary',
+    level: 1,
+    price: 24,
+    description: '80% chance to gain +1 coin on match.',
+    shortDescription: 'Gain coins on match',
+    flavorText: 'Lady Luck smiles upon you, granting bonus coins. Multiple fortunes stack their chances - over 100% guarantees rewards with a chance for more.',
+    icon: 'lorc/crown-coin',
+    specialEffect: 'coinGain',
+    effects: { coinGainChance: 80 }
+  },
+
+  // ============================================================================
+  // 14. CHRONO SHARD - Starting time bonus
   // ============================================================================
   {
     id: 'chrono-shard-common',
@@ -912,7 +956,7 @@ export const WEAPONS: Weapon[] = [
   },
 
   // ============================================================================
-  // 14. TIME DROP - Time gain on match (each rolls independently like lasers)
+  // 15. TIME DROP - Time gain on match (each rolls independently like lasers)
   // ============================================================================
   {
     id: 'time-drop-common',
@@ -955,7 +999,7 @@ export const WEAPONS: Weapon[] = [
   },
 
   // ============================================================================
-  // 15. PRISMATIC RAY - Laser destroys row/column
+  // 16. PRISMATIC RAY - Laser destroys row/column
   // ============================================================================
   {
     id: 'prismatic-ray-common',
@@ -998,7 +1042,7 @@ export const WEAPONS: Weapon[] = [
   },
 
   // ============================================================================
-  // 16. CHAOS SHARD - Ricochet chain destruction
+  // 17. CHAOS SHARD - Ricochet chain destruction
   // ============================================================================
   {
     id: 'chaos-shard-common',
@@ -1041,7 +1085,7 @@ export const WEAPONS: Weapon[] = [
   },
 
   // ============================================================================
-  // 17. ECHO STONE - Auto-match another set on the board
+  // 18. ECHO STONE - Auto-match another set on the board
   // ============================================================================
   {
     id: 'echo-stone-common',
@@ -1084,7 +1128,7 @@ export const WEAPONS: Weapon[] = [
   },
 
   // ============================================================================
-  // 18. CHAIN REACTION - Double auto-match (legendary only)
+  // 19. CHAIN REACTION - Double auto-match (legendary only)
   // ============================================================================
   {
     id: 'chain-reaction-legendary',

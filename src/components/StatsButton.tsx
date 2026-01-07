@@ -17,7 +17,7 @@ const StatsButton: React.FC<StatsButtonProps> = ({ playerStats }) => {
   const statCategories = {
     "Character": [
       'level', 'experienceGainPercent', 'luck',
-      'maxWeapons', 'holographicPercent'
+      'maxWeapons'
     ],
     "Resources": [
       'money', 'commerce', 'scavengingPercent',

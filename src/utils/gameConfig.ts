@@ -30,7 +30,8 @@ export const STARTING_STATS = {
   graceGainChance: 0,
   healingChance: 0,
   hintGainChance: 0,
-  holoChance: 0,
+  xpGainChance: 0,
+  coinGainChance: 0,
   timeGainChance: 0,
   timeGainAmount: 10, // 10 seconds default when triggered
   laserChance: 0,

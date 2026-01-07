@@ -40,6 +40,7 @@ import Token from '../../assets/icons/delapouite/token.svg';
 // Menu Icons
 import ArcheryTarget from '../../assets/icons/lorc/archery-target.svg';
 import OpenBook from '../../assets/icons/lorc/open-book.svg';
+import CrownCoin from '../../assets/icons/lorc/crown-coin.svg';
 
 // Difficulty Icons
 import Feather from '../../assets/icons/lorc/feather.svg';
@@ -121,6 +122,7 @@ const ICON_REGISTRY = {
   // Menu
   'lorc/archery-target': ArcheryTarget,
   'lorc/open-book': OpenBook,
+  'lorc/crown-coin': CrownCoin,
 
   // Difficulty
   'lorc/feather': Feather,
@@ -188,6 +190,10 @@ export const STAT_ICONS: Record<string, IconName> = {
   // Weapons
   maxWeapons: 'lorc/crossed-swords',
 
+  // Economy
+  xpGainChance: 'lorc/open-book',
+  coinGainChance: 'lorc/crown-coin',
+
   // Scavenging
   scavengingPercent: 'lorc/gems',
   scavengeAmount: 'lorc/gems',
@@ -248,7 +254,6 @@ export const STAT_ICONS: Record<string, IconName> = {
   graceGainChance: 'lorc/clover',
   healingChance: 'lorc/shining-heart',
   hintGainChance: 'lorc/light-bulb',
-  holoChance: 'lorc/crystal-shine',
   timeGainChance: 'lorc/stopwatch',
   timeGainAmount: 'lorc/stopwatch',
   laserChance: 'lorc/laser-warning',
