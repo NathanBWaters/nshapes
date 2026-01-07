@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Platform, Dimensions } from 'react-native';
-import { Card, CardReward, GameState, Enemy, Weapon, PlayerStats, AttributeName, AdventureDifficulty } from '@/types';
+import { Card, CardReward, GameState, Enemy, Weapon, PlayerStats, AttributeName, AdventureDifficulty, Character } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { createDeck, shuffleArray, isValidCombination, findAllCombinations, generateGameBoard, formatTime, sameCardAttributes } from '@/utils/gameUtils';
 import {
@@ -37,11 +37,12 @@ import RoundSummary from './RoundSummary';
 import TutorialScreen from './TutorialScreen';
 import AttributeUnlockScreen from './AttributeUnlockScreen';
 import VictoryScreen from './VictoryScreen';
+import CharacterUnlockScreen from './CharacterUnlockScreen';
 import MainMenu from './MainMenu';
 import DifficultySelection from './DifficultySelection';
 import OptionsMenu from './OptionsMenu';
 import { useTutorial } from '@/context/TutorialContext';
-import { CharacterWinsStorage, EndlessHighScoresStorage } from '@/utils/storage';
+import { CharacterWinsStorage, EndlessHighScoresStorage, CharacterUnlockStorage } from '@/utils/storage';
 import { playSound, playCardDealing } from '@/utils/sounds';
 
 const INITIAL_CARD_COUNT = 12;
@@ -92,6 +93,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     'level_up' |
     'shop' |
     'attribute_unlock' |
+    'character_unlock' |
     'victory' |
     'enemy_select' |
     'game_over' |
@@ -101,6 +103,9 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
   // Track pending attribute unlock for next round
   const [pendingUnlockedAttribute, setPendingUnlockedAttribute] = useState<AttributeName | null>(null);
   const [isFinalRoundWarning, setIsFinalRoundWarning] = useState(false);
+
+  // Track unlocked character for character unlock screen
+  const [unlockedCharacter, setUnlockedCharacter] = useState<Character | null>(null);
 
   // Tutorial context
   const { state: tutorialState, startTutorial, markTutorialOffered } = useTutorial();
@@ -297,12 +302,30 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       return;
     }
 
-    // Check if this is the final round (Round 10) - if so, go to victory
+    // Check if this is the final round (Round 10) - if so, check for character unlock then victory
     if (state.round >= 10) {
       // Record the win for this character
       if (selectedCharacter) {
         CharacterWinsStorage.recordWin(selectedCharacter);
       }
+
+      // Check for character unlock
+      const nextUnlock = CharacterUnlockStorage.getNextLockedCharacter();
+      if (nextUnlock) {
+        CharacterUnlockStorage.unlockCharacter(nextUnlock);
+        const character = CHARACTERS.find(c => c.name === nextUnlock);
+        if (character) {
+          setUnlockedCharacter(character);
+          setState(prevState => ({
+            ...prevState,
+            roundCompleted: true,
+            gameEnded: true,
+          }));
+          setGamePhase('character_unlock');
+          return;
+        }
+      }
+
       setState(prevState => ({
         ...prevState,
         roundCompleted: true,
@@ -1834,6 +1857,17 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
             onExitGame={() => setGamePhase('main_menu')}
           />
         );
+
+      case 'character_unlock':
+        return unlockedCharacter ? (
+          <CharacterUnlockScreen
+            character={unlockedCharacter}
+            onContinue={() => {
+              setUnlockedCharacter(null);
+              setGamePhase('victory');
+            }}
+          />
+        ) : null;
 
       case 'round':
         return (

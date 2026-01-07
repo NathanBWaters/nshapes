@@ -76,6 +76,9 @@ import ChainedArrowHeads from '../../assets/icons/lorc/chained-arrow-heads.svg';
 import EchoRipples from '../../assets/icons/lorc/echo-ripples.svg';
 import LightningBranches from '../../assets/icons/lorc/lightning-branches.svg';
 
+// UI Icons
+import Padlock from '../../assets/icons/lorc/padlock.svg';
+
 // Icon registry: maps path (e.g., "delapouite/token") to the imported component
 const ICON_REGISTRY: Record<string, React.FC<SvgProps>> = {
   // Characters
@@ -148,6 +151,9 @@ const ICON_REGISTRY: Record<string, React.FC<SvgProps>> = {
   'lorc/chained-arrow-heads': ChainedArrowHeads,
   'lorc/echo-ripples': EchoRipples,
   'lorc/lightning-branches': LightningBranches,
+
+  // UI Icons
+  'lorc/padlock': Padlock,
 };
 
 // Mapping from stat keys to icon paths

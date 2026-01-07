@@ -11,6 +11,7 @@ export const STORAGE_KEYS = {
   CHARACTER_WINS: 'character_wins',
   ENDLESS_HIGH_SCORES: 'endless_high_scores',
   SOUND_ENABLED: 'sound_enabled',
+  UNLOCKED_CHARACTERS: 'unlocked_characters',
 } as const;
 
 // Character wins type: maps character name to win count
@@ -101,5 +102,43 @@ export const SettingsStorage = {
 
   setSoundEnabled: (enabled: boolean): void => {
     storage.set(STORAGE_KEYS.SOUND_ENABLED, enabled);
+  },
+};
+
+// Character unlock constants
+const DEFAULT_UNLOCKED = ['Orange Tabby', 'Sly Fox', 'Corgi'];
+const LOCKED_ORDER = ['Emperor Penguin', 'Pelican', 'Badger'];
+
+// Character unlock storage helpers
+export const CharacterUnlockStorage = {
+  getUnlockedCharacters: (): string[] => {
+    const data = storage.getString(STORAGE_KEYS.UNLOCKED_CHARACTERS);
+    if (!data) return [...DEFAULT_UNLOCKED];
+    try {
+      return JSON.parse(data) as string[];
+    } catch {
+      return [...DEFAULT_UNLOCKED];
+    }
+  },
+
+  unlockCharacter: (characterName: string): void => {
+    const unlocked = CharacterUnlockStorage.getUnlockedCharacters();
+    if (!unlocked.includes(characterName)) {
+      unlocked.push(characterName);
+      storage.set(STORAGE_KEYS.UNLOCKED_CHARACTERS, JSON.stringify(unlocked));
+    }
+  },
+
+  isCharacterUnlocked: (characterName: string): boolean => {
+    return CharacterUnlockStorage.getUnlockedCharacters().includes(characterName);
+  },
+
+  getNextLockedCharacter: (): string | null => {
+    const unlocked = CharacterUnlockStorage.getUnlockedCharacters();
+    return LOCKED_ORDER.find(c => !unlocked.includes(c)) || null;
+  },
+
+  resetUnlocks: (): void => {
+    storage.remove(STORAGE_KEYS.UNLOCKED_CHARACTERS);
   },
 };

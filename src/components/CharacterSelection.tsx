@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, Pressable, StyleSheet } from 'react-nativ
 import { Character, PlayerStats, AdventureDifficulty } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { getWeaponByName, DEFAULT_PLAYER_STATS } from '@/utils/gameDefinitions';
-import { CharacterWinsStorage, CharacterWins, EndlessHighScoresStorage, EndlessHighScores } from '@/utils/storage';
+import { CharacterWinsStorage, CharacterWins, EndlessHighScoresStorage, EndlessHighScores, CharacterUnlockStorage } from '@/utils/storage';
 import Icon from './Icon';
 import GameMenu from './GameMenu';
 import { ScreenTransition } from './ScreenTransition';
@@ -33,19 +33,28 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
   const [characterWins, setCharacterWins] = React.useState<CharacterWins>({});
   const [endlessHighScores, setEndlessHighScores] = React.useState<EndlessHighScores>({});
   const [adventureDifficulty, setAdventureDifficulty] = React.useState<AdventureDifficulty>('medium');
+  const [unlockedCharacters, setUnlockedCharacters] = React.useState<string[]>([]);
 
-  // Load character wins and endless high scores on mount
+  // Load character wins, endless high scores, and unlocked characters on mount
   React.useEffect(() => {
     setCharacterWins(CharacterWinsStorage.getWins());
     setEndlessHighScores(EndlessHighScoresStorage.getHighScores());
+    setUnlockedCharacters(CharacterUnlockStorage.getUnlockedCharacters());
   }, []);
 
-  // Auto-select first character if none selected
+  // Auto-select first unlocked character if none selected or selected is locked
   React.useEffect(() => {
-    if (!selectedCharacter && characters.length > 0) {
-      onSelect(characters[0].name);
+    if (unlockedCharacters.length === 0) return; // Wait for unlocked characters to load
+
+    const isCurrentSelectionLocked = selectedCharacter && !unlockedCharacters.includes(selectedCharacter);
+    if ((!selectedCharacter || isCurrentSelectionLocked) && characters.length > 0) {
+      // Find first unlocked character
+      const firstUnlocked = characters.find(c => unlockedCharacters.includes(c.name));
+      if (firstUnlocked) {
+        onSelect(firstUnlocked.name);
+      }
     }
-  }, [characters, selectedCharacter, onSelect]);
+  }, [characters, selectedCharacter, unlockedCharacters, onSelect]);
 
   // Show hovered character if hovering, otherwise show selected
   const displayedCharacter = hoveredCharacter || selectedCharacter;
@@ -120,34 +129,42 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
             const isSelected = selectedCharacter === character.name;
             const wins = characterWins[character.name] ?? 0;
             const endlessHighRound = endlessHighScores[character.name] ?? 0;
+            const isLocked = !unlockedCharacters.includes(character.name);
 
             return (
               <Pressable
                 key={character.name}
-                onPress={() => onSelect(character.name)}
-                onHoverIn={() => setHoveredCharacter(character.name)}
+                onPress={() => !isLocked && onSelect(character.name)}
+                onHoverIn={() => !isLocked && setHoveredCharacter(character.name)}
                 onHoverOut={() => setHoveredCharacter(null)}
                 style={[
                   styles.optionButton,
-                  isSelected && styles.optionButtonSelected,
+                  isSelected && !isLocked && styles.optionButtonSelected,
+                  isLocked && styles.optionButtonLocked,
                 ]}
               >
-                {wins > 0 && (
+                {/* Lock overlay for locked characters */}
+                {isLocked && (
+                  <View style={styles.lockOverlay}>
+                    <Icon name="lorc/padlock" size={28} color={COLORS.canvasWhite} />
+                  </View>
+                )}
+                {wins > 0 && !isLocked && (
                   <View style={styles.winsBadge}>
                     <Text style={styles.winsBadgeText}>{wins}</Text>
                   </View>
                 )}
-                {endlessHighRound > 10 && (
+                {endlessHighRound > 10 && !isLocked && (
                   <View style={styles.endlessBadge}>
                     <Text style={styles.endlessBadgeText}>R{endlessHighRound}</Text>
                   </View>
                 )}
-                <View style={styles.optionIconArea}>
+                <View style={[styles.optionIconArea, isLocked && styles.optionIconAreaLocked]}>
                   {character.icon && (
                     <Icon
                       name={character.icon}
                       size={48}
-                      color={COLORS.slateCharcoal}
+                      color={isLocked ? COLORS.slateCharcoal : COLORS.slateCharcoal}
                     />
                   )}
                 </View>
@@ -155,7 +172,8 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
                   <Text
                     style={[
                       styles.optionText,
-                      isSelected && styles.optionTextSelected,
+                      isSelected && !isLocked && styles.optionTextSelected,
+                      isLocked && styles.optionTextLocked,
                     ]}
                   >
                     {character.name}
@@ -449,6 +467,25 @@ const styles = StyleSheet.create({
   optionButtonSelected: {
     backgroundColor: COLORS.actionYellow,
     borderWidth: 2,
+  },
+  optionButtonLocked: {
+    backgroundColor: COLORS.slateCharcoal,
+    opacity: 0.7,
+  },
+  lockOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(56, 56, 56, 0.75)',
+    borderRadius: RADIUS.button,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  optionIconAreaLocked: {
+    opacity: 0.5,
+  },
+  optionTextLocked: {
+    color: COLORS.canvasWhite,
+    opacity: 0.7,
   },
   optionText: {
     color: COLORS.slateCharcoal,
