@@ -78,6 +78,7 @@ import LightningBranches from '../../assets/icons/lorc/lightning-branches.svg';
 
 // UI Icons
 import Padlock from '../../assets/icons/lorc/padlock.svg';
+import GearHammer from '../../assets/icons/lorc/gear-hammer.svg';
 
 // Icon registry: maps path (e.g., "delapouite/token") to the imported component
 const ICON_REGISTRY: Record<string, React.FC<SvgProps>> = {
@@ -154,6 +155,7 @@ const ICON_REGISTRY: Record<string, React.FC<SvgProps>> = {
 
   // UI Icons
   'lorc/padlock': Padlock,
+  'lorc/gear-hammer': GearHammer,
 };
 
 // Mapping from stat keys to icon paths
