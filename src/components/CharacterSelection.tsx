@@ -150,11 +150,9 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
                   </View>
                 ) : (
                   <>
-                    {wins > 0 && (
-                      <View style={styles.winsBadge}>
-                        <Text style={styles.winsBadgeText}>{wins}</Text>
-                      </View>
-                    )}
+                    <View style={styles.winsBadge}>
+                      <Text style={styles.winsBadgeText}>{wins}</Text>
+                    </View>
                     {endlessHighRound > 10 && (
                       <View style={styles.endlessBadge}>
                         <Text style={styles.endlessBadgeText}>R{endlessHighRound}</Text>
