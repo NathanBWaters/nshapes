@@ -193,10 +193,10 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
           <View style={styles.difficultyRow}>
             {(['easy', 'medium', 'hard'] as AdventureDifficulty[]).map((diff) => {
               const isSelected = adventureDifficulty === diff;
-              const labels: Record<AdventureDifficulty, { name: string; desc: string }> = {
-                easy: { name: 'Easy', desc: '3 Attributes' },
-                medium: { name: 'Medium', desc: 'Progressive' },
-                hard: { name: 'Hard', desc: '4-5 Attributes' },
+              const labels: Record<AdventureDifficulty, { name: string; desc: string; icon: string }> = {
+                easy: { name: 'Easy', desc: '3 Attributes', icon: 'lorc/feather' },
+                medium: { name: 'Medium', desc: 'Progressive', icon: 'lorc/archery-target' },
+                hard: { name: 'Hard', desc: '4-5 Attributes', icon: 'lorc/diamond-hard' },
               };
               return (
                 <Pressable
@@ -207,6 +207,11 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
                     isSelected && styles.difficultyButtonSelected,
                   ]}
                 >
+                  <Icon
+                    name={labels[diff].icon}
+                    size={20}
+                    color={isSelected ? COLORS.slateCharcoal : COLORS.slateCharcoal}
+                  />
                   <Text style={[styles.difficultyButtonText, isSelected && styles.difficultyButtonTextSelected]}>
                     {labels[diff].name}
                   </Text>
