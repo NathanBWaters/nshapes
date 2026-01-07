@@ -43,7 +43,7 @@ import MainMenu from './MainMenu';
 import DifficultySelection from './DifficultySelection';
 import OptionsMenu from './OptionsMenu';
 import { useTutorial } from '@/context/TutorialContext';
-import { CharacterWinsStorage, EndlessHighScoresStorage, CharacterUnlockStorage } from '@/utils/storage';
+import { CharacterWinsStorage, EndlessHighScoresStorage, AdventureHighRoundStorage, CharacterUnlockStorage } from '@/utils/storage';
 import { playSound, playCardDealing } from '@/utils/sounds';
 
 const INITIAL_CARD_COUNT = 12;
@@ -299,6 +299,11 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       ...prev.filter(r => r.round !== state.round), // Replace if exists
       { round: state.round, target: roundReq.targetScore, actual: state.score }
     ]);
+
+    // Record adventure mode high round (max across all runs)
+    if (!state.isEndlessMode && selectedCharacter) {
+      AdventureHighRoundStorage.recordHighRound(selectedCharacter, state.round);
+    }
 
     // In endless mode, always continue to next round
     if (state.isEndlessMode) {

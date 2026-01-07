@@ -10,6 +10,7 @@ export const STORAGE_KEYS = {
   TUTORIAL_VIEWED: 'tutorial_viewed',
   CHARACTER_WINS: 'character_wins',
   ENDLESS_HIGH_SCORES: 'endless_high_scores',
+  ADVENTURE_HIGH_ROUNDS: 'adventure_high_rounds',
   SOUND_ENABLED: 'sound_enabled',
   UNLOCKED_CHARACTERS: 'unlocked_characters',
 } as const;
@@ -19,6 +20,9 @@ export type CharacterWins = Record<string, number>;
 
 // Endless high scores type: maps character name to highest round reached
 export type EndlessHighScores = Record<string, number>;
+
+// Adventure high rounds type: maps character name to furthest round reached
+export type AdventureHighRounds = Record<string, number>;
 
 // Tutorial storage helpers
 export const TutorialStorage = {
@@ -91,6 +95,37 @@ export const EndlessHighScoresStorage = {
 
   resetHighScores: (): void => {
     storage.remove(STORAGE_KEYS.ENDLESS_HIGH_SCORES);
+  },
+};
+
+// Adventure high rounds storage helpers
+export const AdventureHighRoundStorage = {
+  getHighRounds: (): AdventureHighRounds => {
+    const data = storage.getString(STORAGE_KEYS.ADVENTURE_HIGH_ROUNDS);
+    if (!data) return {};
+    try {
+      return JSON.parse(data) as AdventureHighRounds;
+    } catch {
+      return {};
+    }
+  },
+
+  getHighRoundForCharacter: (characterName: string): number => {
+    const rounds = AdventureHighRoundStorage.getHighRounds();
+    return rounds[characterName] ?? 0;
+  },
+
+  recordHighRound: (characterName: string, round: number): void => {
+    const rounds = AdventureHighRoundStorage.getHighRounds();
+    const currentBest = rounds[characterName] ?? 0;
+    if (round > currentBest) {
+      rounds[characterName] = round;
+      storage.set(STORAGE_KEYS.ADVENTURE_HIGH_ROUNDS, JSON.stringify(rounds));
+    }
+  },
+
+  resetHighRounds: (): void => {
+    storage.remove(STORAGE_KEYS.ADVENTURE_HIGH_ROUNDS);
   },
 };
 
