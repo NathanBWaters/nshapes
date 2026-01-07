@@ -113,6 +113,22 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
                 })}
               </View>
             </View>
+
+            {/* Character Stats Row */}
+            <View style={styles.characterStatsRow}>
+              <View style={styles.characterStatItem}>
+                <Text style={styles.characterStatLabel}>Furthest Round</Text>
+                <Text style={styles.characterStatValue}>
+                  {endlessHighScores[selectedChar.name] || 0}
+                </Text>
+              </View>
+              <View style={styles.characterStatItem}>
+                <Text style={styles.characterStatLabel}>Wins</Text>
+                <Text style={styles.characterStatValue}>
+                  {characterWins[selectedChar.name] || 0}
+                </Text>
+              </View>
+            </View>
           </View>
         ) : (
           <View style={styles.emptyDetail}>
@@ -127,8 +143,6 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
         <View style={styles.optionsGrid}>
           {characters.map(character => {
             const isSelected = selectedCharacter === character.name;
-            const wins = characterWins[character.name] ?? 0;
-            const endlessHighRound = endlessHighScores[character.name] ?? 0;
             const isLocked = !unlockedCharacters.includes(character.name);
 
             return (
@@ -150,14 +164,6 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
                   </View>
                 ) : (
                   <>
-                    <View style={styles.winsBadge}>
-                      <Text style={styles.winsBadgeText}>{wins}</Text>
-                    </View>
-                    {endlessHighRound > 10 && (
-                      <View style={styles.endlessBadge}>
-                        <Text style={styles.endlessBadgeText}>R{endlessHighRound}</Text>
-                      </View>
-                    )}
                     <View style={styles.optionIconArea}>
                       {character.icon && (
                         <Icon
@@ -362,6 +368,28 @@ const styles = StyleSheet.create({
     fontSize: 10,
     opacity: 0.7,
     marginLeft: 22,
+  },
+  characterStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 16,
+    marginTop: 8,
+  },
+  characterStatItem: {
+    alignItems: 'center',
+  },
+  characterStatLabel: {
+    color: COLORS.slateCharcoal,
+    fontSize: 9,
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    opacity: 0.7,
+  },
+  characterStatValue: {
+    color: COLORS.slateCharcoal,
+    fontSize: 16,
+    fontWeight: '700',
   },
   emptyDetail: {
     flex: 1,
