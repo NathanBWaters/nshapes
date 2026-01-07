@@ -189,4 +189,81 @@ describe('useGameTimer', () => {
     });
     expect(onTick).toHaveBeenCalledTimes(1); // Still 1
   });
+
+  it('should restart interval when key changes (simulates new game start)', () => {
+    const onTick = jest.fn();
+
+    // Start with key=1
+    const { rerender } = renderHook(
+      ({ isActive, key }) => useGameTimer(isActive, onTick, key),
+      { initialProps: { isActive: true, key: 1 } }
+    );
+
+    // Tick once
+    act(() => {
+      jest.advanceTimersByTime(1000);
+    });
+    expect(onTick).toHaveBeenCalledTimes(1);
+
+    // Advance 500ms (halfway to next tick)
+    act(() => {
+      jest.advanceTimersByTime(500);
+    });
+
+    // Change key (simulates starting a new game with new startTime)
+    // This should restart the interval from 0
+    rerender({ isActive: true, key: 2 });
+
+    // If interval restarted, we need to wait full 1000ms for next tick
+    // If it didn't restart, tick would happen in 500ms
+    act(() => {
+      jest.advanceTimersByTime(500);
+    });
+    // Should still be 1 tick because interval restarted
+    expect(onTick).toHaveBeenCalledTimes(1);
+
+    // After full 1000ms from key change, should tick
+    act(() => {
+      jest.advanceTimersByTime(500);
+    });
+    expect(onTick).toHaveBeenCalledTimes(2);
+  });
+
+  it('should restart timer when isActive stays true but key changes (the bug fix case)', () => {
+    const onTick = jest.fn();
+
+    // Start game 1: isActive = true, key = 1000 (startTime)
+    const { rerender } = renderHook(
+      ({ isActive, key }) => useGameTimer(isActive, onTick, key),
+      { initialProps: { isActive: true, key: 1000 } }
+    );
+
+    // Let timer tick a few times
+    act(() => {
+      jest.advanceTimersByTime(3000);
+    });
+    expect(onTick).toHaveBeenCalledTimes(3);
+
+    // "Exit game" - isActive becomes false
+    rerender({ isActive: false, key: 1000 });
+
+    act(() => {
+      jest.advanceTimersByTime(2000);
+    });
+    expect(onTick).toHaveBeenCalledTimes(3); // No new ticks
+
+    // "Start new game" - isActive true, NEW key (new startTime)
+    rerender({ isActive: true, key: 2000 });
+
+    // Timer should restart and work correctly
+    act(() => {
+      jest.advanceTimersByTime(1000);
+    });
+    expect(onTick).toHaveBeenCalledTimes(4);
+
+    act(() => {
+      jest.advanceTimersByTime(1000);
+    });
+    expect(onTick).toHaveBeenCalledTimes(5);
+  });
 });

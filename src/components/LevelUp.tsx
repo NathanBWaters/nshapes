@@ -7,6 +7,7 @@ import GameMenu from './GameMenu';
 import InventoryBar from './InventoryBar';
 import { ConfettiBurst } from './effects/ConfettiBurst';
 import { ScreenTransition } from './ScreenTransition';
+import { playSound } from '@/utils/sounds';
 
 // Weapon option component
 interface WeaponOptionProps {
@@ -277,7 +278,10 @@ const LevelUp: React.FC<LevelUpProps> = ({
                 index={index}
                 isFocused={isFocused}
                 rarityColor={rarityColor}
-                onPress={setFocusedIndex}
+                onPress={(index) => {
+                  playSound('click');
+                  setFocusedIndex(index);
+                }}
                 onHoverIn={setHoveredIndex}
                 onHoverOut={() => setHoveredIndex(null)}
               />
@@ -289,7 +293,10 @@ const LevelUp: React.FC<LevelUpProps> = ({
       {/* Action Button */}
       <View style={styles.actionSection}>
         <TouchableOpacity
-          onPress={() => onSelect(focusedIndex)}
+          onPress={() => {
+            playSound('confirm');
+            onSelect(focusedIndex);
+          }}
           style={styles.actionButton}
         >
           <Text style={styles.actionButtonText}>Select Weapon</Text>

@@ -22,6 +22,7 @@ import { useScreenShake } from '@/hooks/useScreenShake';
 import { useParticles } from '@/hooks/useParticles';
 import { DURATION } from '@/utils/designSystem';
 import { triggerHaptic, selectionHaptic } from '@/utils/haptics';
+import { playSound } from '@/utils/sounds';
 
 // Default to 4 attributes for backward compatibility
 const DEFAULT_ATTRIBUTES: AttributeName[] = ['shape', 'color', 'number', 'shading'];
@@ -409,11 +410,13 @@ const GameBoard: React.FC<GameBoardProps> = ({
     if (selectedCards.some(c => c.id === card.id)) {
       setSelectedCards(selectedCards.filter(c => c.id !== card.id));
       selectionHaptic(); // Light haptic on deselect
+      playSound('click');
       return;
     }
 
     // Haptic feedback for card selection
     selectionHaptic();
+    playSound('click');
 
     // If already have 3 cards selected, replace the first one
     let newSelectedCards;
@@ -432,9 +435,10 @@ const GameBoard: React.FC<GameBoardProps> = ({
           // Immediately notify parent that match started (for particle effects)
           onMatchStart?.();
 
-          // Trigger success flash and haptic
+          // Trigger success flash, haptic, and sound
           triggerSuccessFlash();
           triggerHaptic('success');
+          playSound('matchValid');
 
           // Generate unique match ID for this match
           const matchId = ++matchCounterRef.current;
@@ -446,10 +450,21 @@ const GameBoard: React.FC<GameBoardProps> = ({
           // Pass weapons array for independent laser rolls, and activeAttributes for echo
           const weaponEffects = processWeaponEffects(cards, newSelectedCards, playerStats, weapons, activeAttributes, false);
 
-          // Trigger screen shake and particles for explosions
+          // Trigger screen shake, particles, and sound for explosions
           if (weaponEffects.explosiveCards.length > 0) {
             triggerShake(weaponEffects.explosiveCards.length);
             triggerExplosionParticles(weaponEffects.explosiveCards.length);
+            playSound('explosion');
+          }
+
+          // Play laser sound
+          if (weaponEffects.laserCount > 0) {
+            playSound('laser');
+          }
+
+          // Play ricochet sound
+          if (weaponEffects.ricochetCards.length > 0) {
+            playSound('ricochet');
           }
 
           // Create rewards for exploded cards
@@ -594,9 +609,10 @@ const GameBoard: React.FC<GameBoardProps> = ({
             // Immediately notify parent that match started (for particle effects)
             onMatchStart?.();
 
-            // Trigger success flash (grace is still a success!) with warning haptic
+            // Trigger success flash (grace is still a success!) with warning haptic and sound
             triggerSuccessFlash();
             triggerHaptic('warning'); // Warning to indicate grace was used
+            playSound('graceUsed');
 
             const matchId = ++matchCounterRef.current;
 
@@ -744,9 +760,10 @@ const GameBoard: React.FC<GameBoardProps> = ({
             }, 1500);
           } else {
             // 2+ attributes wrong OR no graces - full invalid match (lose health)
-            // Trigger failure flash, shake, and error haptic
+            // Trigger failure flash, shake, error haptic, and sound
             triggerFailureFlash();
             triggerHaptic('error');
+            playSound('matchInvalid');
 
             onInvalidSelection(newSelectedCards);
 

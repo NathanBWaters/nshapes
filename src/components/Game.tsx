@@ -41,6 +41,7 @@ import MainMenu from './MainMenu';
 import DifficultySelection from './DifficultySelection';
 import { useTutorial } from '@/context/TutorialContext';
 import { CharacterWinsStorage, EndlessHighScoresStorage } from '@/utils/storage';
+import { playSound, playCardDealing } from '@/utils/sounds';
 
 const INITIAL_CARD_COUNT = 12;
 const MAX_BOARD_SIZE = 21;
@@ -272,6 +273,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
         message: `Game Over! ${lossReason}`,
         type: 'error'
       });
+      playSound('gameOver');
     }
 
     setGamePhase('game_over');
@@ -322,6 +324,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
   };
 
   // Timer - countdown when in round phase
+  // Use gameMode as additional dependency to ensure timer restarts when a new game begins
   const isTimerActive = gamePhase === 'round' &&
     state.gameStarted &&
     !state.gameEnded &&
@@ -329,12 +332,15 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     (!devMode || devTimerEnabled) &&
     !isMenuOpen;
 
+  // Generate a unique key based on game start time to force timer reset on new games
+  const timerKey = state.startTime || 0;
+
   useGameTimer(isTimerActive, () => {
     setState(prev => ({
       ...prev,
       remainingTime: Math.max(0, prev.remainingTime - 1),
     }));
-  });
+  }, timerKey);
 
   // Handle round completion when time runs out - separate from timer to avoid race conditions
   useEffect(() => {
@@ -350,7 +356,8 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
   }, [gamePhase, state.gameStarted, state.gameEnded, state.roundCompleted, state.remainingTime, state.score, state.targetScore, completeRound, endGame]);
 
   // Initialize the game
-  const initGame = useCallback((characterName: string, activeAttributes: AttributeName[]) => {
+  // startGame param ensures all game start state is set atomically to avoid React batching issues
+  const initGame = useCallback((characterName: string, activeAttributes: AttributeName[], startGame: boolean = false) => {
     // Initialize player first to get their starting weapons and stats
     const player = initializePlayer('player1', 'Player 1', characterName);
     const totalStats = calculatePlayerTotalStats(player);
@@ -369,6 +376,9 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     // Get round 1 requirements
     const roundReq = getRoundRequirement(1);
 
+    // Calculate time with starting bonus if game is starting
+    const timeBonus = startGame ? (totalStats.startingTime || 0) : 0;
+
     setState({
       // Core game
       deck: remainingDeck,
@@ -376,9 +386,9 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       selectedCards: [],
       foundCombinations: [],
       score: 0,
-      gameStarted: false,
+      gameStarted: startGame,
       gameEnded: false,
-      startTime: null,
+      startTime: startGame ? Date.now() : null,
       endTime: null,
       hintUsed: false,
 
@@ -388,7 +398,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       // Roguelike properties
       round: 1,
       targetScore: roundReq.targetScore,
-      remainingTime: roundReq.time, // startingTime bonus applied after player init
+      remainingTime: roundReq.time + timeBonus,
       roundCompleted: false,
 
       // Player (already initialized above for fieldSize calculation)
@@ -508,19 +518,13 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     const activeAttributes = getActiveAttributesForRound(1);
 
     // Initialize the game with the selected character and attributes
-    initGame(selectedCharacter, activeAttributes);
+    // Pass startGame=true to set gameStarted, startTime, and time bonus atomically
+    initGame(selectedCharacter, activeAttributes, true);
 
     // Reset hint triggers to prevent auto-triggering on game start
     setHintTrigger(0);
     setClearHintTrigger(0);
 
-    setState(prevState => ({
-      ...prevState,
-      gameStarted: true,
-      startTime: Date.now()
-    }));
-
-    // Adventure mode - skip enemy selection, go directly to round
     // Reset round stats for the first round
     setRoundStats({
       moneyEarned: 0,
@@ -529,16 +533,6 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       healingDone: 0,
       lootBoxesEarned: 0,
       startLevel: 0,
-    });
-
-    // Apply startingTime bonus from weapons
-    setState(prevState => {
-      const totalStats = calculatePlayerTotalStats(prevState.player);
-      const timeBonus = totalStats.startingTime || 0;
-      return {
-        ...prevState,
-        remainingTime: prevState.remainingTime + timeBonus
-      };
     });
 
     setGamePhase('round');
@@ -556,17 +550,12 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     const characterToUse = selectedCharacter || 'Orange Tabby';
 
     // Initialize the game with the selected character and attributes
-    initGame(characterToUse, activeAttributes);
+    // Pass startGame=true to set gameStarted, startTime, and time bonus atomically
+    initGame(characterToUse, activeAttributes, true);
 
     // Reset hint triggers to prevent auto-triggering on game start
     setHintTrigger(0);
     setClearHintTrigger(0);
-
-    setState(prevState => ({
-      ...prevState,
-      gameStarted: true,
-      startTime: Date.now()
-    }));
 
     // Free Play mode - go directly to the game board
     setGamePhase('free_play');
@@ -610,15 +599,10 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     setGameMode('adventure');
     const activeAttributes = getActiveAttributesForRound(1);
 
-    initGame(selectedCharacter!, activeAttributes);
+    // Pass startGame=true to set gameStarted, startTime, and time bonus atomically
+    initGame(selectedCharacter!, activeAttributes, true);
     setHintTrigger(0);
     setClearHintTrigger(0);
-
-    setState(prevState => ({
-      ...prevState,
-      gameStarted: true,
-      startTime: Date.now()
-    }));
 
     setRoundStats({
       moneyEarned: 0,
@@ -627,15 +611,6 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       healingDone: 0,
       lootBoxesEarned: 0,
       startLevel: 0,
-    });
-
-    setState(prevState => {
-      const totalStats = calculatePlayerTotalStats(prevState.player);
-      const timeBonus = totalStats.startingTime || 0;
-      return {
-        ...prevState,
-        remainingTime: prevState.remainingTime + timeBonus
-      };
     });
 
     setGamePhase('round');
@@ -1015,6 +990,17 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       totalHealing += weaponEffects.bonusHealing;
       totalHints += weaponEffects.bonusHints;
 
+      // Play sounds for bonus rewards (explosion/laser/ricochet sounds play immediately in GameBoard)
+      if (weaponEffects.bonusHealing > 0) {
+        playSound('gainHeart');
+      }
+      if (weaponEffects.bonusHints > 0) {
+        playSound('gainHint');
+      }
+      if (weaponEffects.bonusGraces > 0) {
+        playSound('gainGrace');
+      }
+
       // Set fire on cards
       if (weaponEffects.fireCards.length > 0) {
         igniteCards(weaponEffects.fireCards);
@@ -1026,6 +1012,11 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
           triggerNotifications.push(n);
         }
       });
+    }
+
+    // Play sound for money earned
+    if (totalMoney > 0) {
+      playSound('gainMoney');
     }
 
     // Show notification for triggered effects
@@ -1546,6 +1537,11 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
         // Remove the card from the deck
         remainingDeck.splice(randomIndex, 1);
       }
+    }
+
+    // Play card dealing sounds for new cards
+    if (newCards.length > 0) {
+      playCardDealing(newCards.length, 30);
     }
 
     // Replace matched cards with new ones
@@ -2094,6 +2090,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
               <TouchableOpacity
                 style={tutorialPromptStyles.skipButton}
                 onPress={handleTutorialPromptSkip}
+                testID="skip-tutorial-button"
               >
                 <Text style={tutorialPromptStyles.skipButtonText}>Skip - Start Adventure</Text>
               </TouchableOpacity>

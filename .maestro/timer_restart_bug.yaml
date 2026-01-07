@@ -1,0 +1,111 @@
+appId: com.nshapes.app
+---
+# Timer Restart Bug Test
+# Tests that the timer counts down properly after exiting and restarting adventure mode
+#
+# Bug: When starting adventure mode, exiting via menu, and restarting,
+# the timer stays frozen at 30 instead of counting down.
+
+# Wait for the app to fully load (clear state to reset tutorial state)
+- launchApp:
+    clearState: true
+
+# Wait for the main menu to appear
+- extendedWaitUntil:
+    visible: "NSHAPES"
+    timeout: 10000
+
+# Step 1: Start Adventure mode
+- tapOn:
+    id: "menu-adventure"
+
+# Step 2: Wait for character selection screen
+- extendedWaitUntil:
+    visible: "Choose Your Character"
+    timeout: 5000
+
+# Step 3: Tap Start Adventure button (character auto-selects)
+# The button is at the bottom of the screen at around y=797 based on logs
+# Use explicit coordinate tap as fallback
+- tapOn:
+    point: "201, 797"
+
+# Step 4: Handle tutorial prompt if it appears
+- runFlow:
+    when:
+      visible: "New to NShapes"
+    commands:
+      - tapOn:
+          id: "skip-tutorial-button"
+
+# Wait for game to load - look for the round indicator
+- extendedWaitUntil:
+    visible: "R1"
+    timeout: 8000
+
+# Wait 5 seconds to let timer tick down
+- swipe:
+    start: "50%, 50%"
+    end: "50%, 50%"
+    duration: 5000
+
+# Timer should have ticked (verify timer is NOT frozen at 30 - the initial round 1 time)
+# The timer value after 5 seconds should be around 25
+- assertNotVisible:
+    text: "30"
+    enabled: true
+
+# Step 5: Open menu and exit to main menu
+- tapOn: "MENU"
+
+# Wait for menu to open
+- extendedWaitUntil:
+    visible: "Exit Game"
+    timeout: 3000
+
+# Tap exit
+- tapOn: "Exit Game"
+
+# Confirm exit
+- extendedWaitUntil:
+    visible: "Exit Game?"
+    timeout: 3000
+
+- tapOn:
+    text: "Exit Game"
+    index: 1
+
+# Wait for main menu
+- extendedWaitUntil:
+    visible: "NSHAPES"
+    timeout: 5000
+
+# Step 6: Start Adventure mode AGAIN (second time)
+- tapOn:
+    id: "menu-adventure"
+
+# Wait for character selection screen
+- extendedWaitUntil:
+    visible: "Choose Your Character"
+    timeout: 5000
+
+# Character should still be selected, start the game
+- tapOn:
+    point: "201, 797"
+
+# Wait for game to load
+- extendedWaitUntil:
+    visible: "R1"
+    timeout: 8000
+
+# Wait 5 seconds to verify timer is COUNTING DOWN (this is where the bug manifests)
+- swipe:
+    start: "50%, 50%"
+    end: "50%, 50%"
+    duration: 5000
+
+# THE CRITICAL CHECK: Timer should have decreased from 30
+# If the bug is present, timer will still show 30 (frozen)
+- assertNotVisible:
+    text: "30"
+    enabled: true

@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { triggerHaptic } from '@/utils/haptics';
+import { playSound } from '@/utils/sounds';
 import Icon from './Icon';
 
 interface MainMenuProps {
@@ -26,6 +27,7 @@ function MenuButton({
 }) {
   const handlePress = () => {
     triggerHaptic('light');
+    playSound('click');
     onPress();
   };
 
@@ -55,6 +57,8 @@ function MenuButton({
   return (
     <Pressable
       onPress={handlePress}
+      accessibilityLabel={title}
+      testID={`menu-${variant}`}
       style={[
         styles.menuButton,
         v.button,

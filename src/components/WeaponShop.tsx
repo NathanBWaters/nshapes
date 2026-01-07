@@ -6,6 +6,7 @@ import Icon from './Icon';
 import GameMenu from './GameMenu';
 import InventoryBar from './InventoryBar';
 import { ScreenTransition } from './ScreenTransition';
+import { playSound } from '@/utils/sounds';
 
 // Weapon option component
 interface WeaponOptionProps {
@@ -134,6 +135,7 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
   const handlePurchase = (index: number) => {
     setPurchaseSuccess(true);
     setTimeout(() => setPurchaseSuccess(false), 800);
+    playSound('confirm');
     onPurchase(index);
   };
 
@@ -154,6 +156,7 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
       setLastTappedIndex(null);
     } else {
       // Single tap: focus the weapon
+      playSound('click');
       setFocusedIndex(index);
       setLastTapTime(now);
       setLastTappedIndex(index);
@@ -380,7 +383,10 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
             </TouchableOpacity>
           </View>
           <TouchableOpacity
-            onPress={onContinue}
+            onPress={() => {
+              playSound('confirmExit');
+              onContinue();
+            }}
             style={styles.continueButton}
           >
             <Text style={styles.continueButtonText}>Continue</Text>

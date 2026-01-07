@@ -171,6 +171,8 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
         <TouchableOpacity
           onPress={onStart}
           disabled={!selectedCharacter}
+          testID="start-adventure-button"
+          accessibilityLabel="Start Adventure"
           style={[
             styles.actionButton,
             !selectedCharacter && styles.actionButtonDisabled,
