@@ -1143,13 +1143,17 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       };
     });
 
-    // Cards to replace are already passed from GameBoard (matched + exploded + laser)
-    replaceMatchedCards(cards);
+    // Delay card replacement to allow reward visualization (1.5s)
+    // Score has already been updated immediately above via setState
+    setTimeout(() => {
+      // Cards to replace are already passed from GameBoard (matched + exploded + laser)
+      replaceMatchedCards(cards);
 
-    // Handle board growth if triggered
-    if (weaponEffects && weaponEffects.boardGrowth > 0) {
-      growBoard(weaponEffects.boardGrowth);
-    }
+      // Handle board growth if triggered
+      if (weaponEffects && weaponEffects.boardGrowth > 0) {
+        growBoard(weaponEffects.boardGrowth);
+      }
+    }, 1500);
   };
 
   // Set cards on fire
