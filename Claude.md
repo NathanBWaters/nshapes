@@ -30,13 +30,14 @@ NShapes combines the classic SET card matching game with roguelike progression m
 
 **Adventure Mode** - Progressive Roguelike Campaign:
 
-* **Round-Based Complexity:** The number of attributes required for a "Set" increases as you progress:
-* **Rounds 1–3:** 3 Attributes (Shape, Color, Number)
-* **Rounds 4–9:** 4 Attributes (adds Shading)
-* **Round 10 (Final Boss):** 5 Attributes (adds Background Color)
+* **Difficulty Selection:** Choose difficulty on character selection screen:
+  * **Easy:** 3 attributes for all 10 rounds
+  * **Medium (default):** Progressive - 3 attrs (R1-3) → 4 attrs (R4-9) → 5 attrs (R10)
+  * **Hard:** 4 attributes (R1-5) → 5 attributes (R6-10)
 
 * 60-second timer per round to reach score targets.
-* 16 unique characters and weapon-based progression.
+* 6 playable characters (3 unlocked, 3 locked) with weapon-based progression.
+* **Character Unlocking:** Beat Adventure Mode to unlock one character. Locked characters: Emperor Penguin, Pelican, Badger.
 
 **Free Play Mode** - Relaxed Practice:
 
@@ -111,7 +112,7 @@ Each laser weapon (Prismatic Ray) rolls **independently** on every match:
 
 ## Key Features
 
-* 16 playable characters (Orange Tabby, Sly Fox, Corgi, etc.)
+* 6 playable characters (Orange Tabby, Sly Fox, Corgi unlocked; Emperor Penguin, Pelican, Badger locked)
 * 49 weapons across 17 types (most with 3 rarities, some legendary-only)
 * Card modifiers (bombs, spikes, healing, loot boxes, etc.)
 * Grace auto-use system (prevents health loss on near-misses)
@@ -119,6 +120,7 @@ Each laser weapon (Prismatic Ray) rolls **independently** on every match:
 * Explosive and laser destruction effects
 * Fire spread and burn mechanics
 * Auto-hint system (shows 1 card from valid set, 15s after last match)
+* Options menu with sound toggle (persisted to MMKV storage)
 * Optional multiplayer via Socket.io (not a priority - ignore multiplayer code)
 
 ### UI Features
@@ -164,15 +166,18 @@ src/                        # Shared code (imported via @/ alias)
 │   ├── LevelUp.tsx         # Weapon selection on level up (FREE indicator)
 │   ├── InventoryBar.tsx    # Horizontal weapon inventory display
 │   ├── AttributeUnlockScreen.tsx  # New attribute explanation screen
+│   ├── CharacterUnlockScreen.tsx  # Character unlock celebration
 │   ├── VictoryScreen.tsx   # End-game celebration screen
+│   ├── OptionsMenu.tsx     # Sound settings modal
 │   └── RoundSummary.tsx
 ├── context/
 │   └── SocketContext.tsx   # Multiplayer state management
 ├── types.ts                # Interfaces for Cards, Weapons, PlayerStats
 └── utils/
     ├── gameDefinitions.ts  # Characters, weapons (WEAPONS array)
-    ├── gameConfig.ts       # Game constants, default stats
-    └── gameUtils.ts        # Modular SET validation for N-attributes
+    ├── gameConfig.ts       # Game constants, default stats, difficulty progressions
+    ├── gameUtils.ts        # Modular SET validation for N-attributes
+    └── storage.ts          # MMKV persistence (settings, character unlocks, wins)
 
 ```
 
@@ -182,16 +187,13 @@ src/                        # Shared code (imported via @/ alias)
 
 **Adventure Mode:**
 
-1. Character Selection → Choose Adventure.
-2. **Attribute Unlock:** Game initializes with 3 attributes (Shape/Color/Number).
+1. Character Selection → Select Difficulty (Easy/Medium/Hard) → Start Adventure.
+2. **Attribute Unlock:** Game initializes with attributes based on difficulty.
 3. Play Round (reach score target within 60 seconds).
-4. **Progression:** After Round 3 and 9:
-   - Shows Attribute Unlock Screen explaining the new attribute (Shading or Background)
-   - Displays example cards demonstrating the attribute values
-   - Before Round 10: Shows Final Round warning screen
+4. **Progression:** Attribute unlock screens shown when new attributes are added (varies by difficulty).
 5. Level Up (choose weapon) / Weapon Shop between rounds.
 6. Repeat for 10 rounds total.
-7. After completing Round 10: Victory Screen showing final stats and weapons collected.
+7. After completing Round 10: Character Unlock Screen (if characters remain locked) → Victory Screen.
 
 **Free Play Mode:**
 
