@@ -593,10 +593,13 @@ const GameBoard: React.FC<GameBoardProps> = ({
             ...echoCards,
           ];
 
-          // After 1.5 seconds, notify parent and clear only this match's rewards
+          // IMMEDIATELY notify parent of the match (score updates instantly)
+          // This ensures score is credited even if timer runs out during animation
+          onMatch(allCardsToReplace, allRewards, weaponEffects);
+
+          // After 1.5 seconds, clear this match's rewards (visual cleanup only)
           setTimeout(() => {
             setRevealingRewards(prev => prev.filter(r => r.matchId !== matchId));
-            onMatch(allCardsToReplace, allRewards, weaponEffects);
           }, 1500);
         } else {
           // Invalid match - check if grace can save (ONLY when exactly 1 attribute is wrong)
@@ -751,12 +754,13 @@ const GameBoard: React.FC<GameBoardProps> = ({
               ...echoCards,
             ];
 
-            // After 1.5 seconds, notify parent with weapon effects
+            // IMMEDIATELY notify parent of the grace match (score updates instantly)
+            // This ensures score is credited even if timer runs out during animation
+            onMatch(allCardsToReplace, allRewards, weaponEffects);
+
+            // After 1.5 seconds, clear this match's rewards (visual cleanup only)
             setTimeout(() => {
               setRevealingRewards(prev => prev.filter(r => r.matchId !== matchId));
-              // Call onInvalidSelection but pass weapon effects via onMatch-like behavior
-              // We need to signal this is a grace match with weapon effects
-              onMatch(allCardsToReplace, allRewards, weaponEffects);
             }, 1500);
           } else {
             // 2+ attributes wrong OR no graces - full invalid match (lose health)
