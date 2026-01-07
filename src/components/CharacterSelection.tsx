@@ -4,7 +4,7 @@ import { Character, PlayerStats, AdventureDifficulty } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { getWeaponByName, DEFAULT_PLAYER_STATS } from '@/utils/gameDefinitions';
 import { CharacterWinsStorage, CharacterWins, EndlessHighScoresStorage, EndlessHighScores, CharacterUnlockStorage } from '@/utils/storage';
-import Icon from './Icon';
+import Icon, { IconName } from './Icon';
 import GameMenu from './GameMenu';
 import { ScreenTransition } from './ScreenTransition';
 
@@ -199,7 +199,7 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
           <View style={styles.difficultyRow}>
             {(['easy', 'medium', 'hard'] as AdventureDifficulty[]).map((diff) => {
               const isSelected = adventureDifficulty === diff;
-              const labels: Record<AdventureDifficulty, { name: string; desc: string; icon: string }> = {
+              const labels: Record<AdventureDifficulty, { name: string; desc: string; icon: IconName }> = {
                 easy: { name: 'Easy', desc: '3 Attributes', icon: 'lorc/feather' },
                 medium: { name: 'Medium', desc: 'Progressive', icon: 'lorc/archery-target' },
                 hard: { name: 'Hard', desc: '4-5 Attributes', icon: 'lorc/diamond-hard' },

@@ -13,7 +13,10 @@
     "server": "node server.js",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "typecheck": "tsc --noEmit",
+    "validate:icons": "npx tsx scripts/validate-icons.ts",
+    "prebuild": "npm run typecheck"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",

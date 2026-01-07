@@ -11,7 +11,7 @@ import ReAnimated, {
 import { PlayerStats, Weapon } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { DURATION } from '@/utils/designSystem';
-import Icon from './Icon';
+import Icon, { IconName } from './Icon';
 import GameMenu from './GameMenu';
 import { ScreenTransition } from './ScreenTransition';
 
@@ -38,7 +38,7 @@ interface AwardTile {
   value: number;
   prefix?: string;
   suffix?: string;
-  icon: string;
+  icon: IconName;
   color: string;
 }
 

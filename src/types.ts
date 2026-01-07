@@ -1,3 +1,5 @@
+import type { IconName } from './components/Icon';
+
 export type Shape = 'oval' | 'squiggle' | 'diamond';
 export type Color = 'red' | 'green' | 'purple';
 export type Number = 1 | 2 | 3;
@@ -103,7 +105,7 @@ export interface Weapon {
   price: number;
   effects: Partial<PlayerStats>;
   specialEffect?: 'explosive' | 'autoHint' | 'enhancedHint' | 'boardGrowth' | 'fire' | 'graceGain' | 'healing' | 'hintGain' | 'holographic' | 'timeGain' | 'laser' | 'ricochet' | 'echo' | 'chainReaction';
-  icon?: string; // Icon path like "delapouite/bamboo"
+  icon?: IconName; // Icon path like "delapouite/bamboo" - must be in ICON_REGISTRY
   maxCount?: number; // Maximum number of this weapon that can be owned (e.g., 1 for unique legendaries)
 }
 
@@ -115,7 +117,7 @@ export interface Item {
   limit: number | null; // null means no limit
   effects: Partial<PlayerStats>;
   drawbacks: Partial<PlayerStats>;
-  icon?: string; // Icon path like "lorc/clover"
+  icon?: IconName; // Icon path like "lorc/clover" - must be in ICON_REGISTRY
 }
 
 export interface Enemy {
@@ -123,7 +125,7 @@ export interface Enemy {
   description: string;
   effect: string;
   reward: string;
-  icon?: string; // Icon path like "lorc/jellyfish"
+  icon?: IconName; // Icon path like "lorc/jellyfish" - must be in ICON_REGISTRY
   applyEffect: (gameState: GameState) => GameState;
   applyReward: (gameState: GameState) => GameState;
 }
@@ -133,7 +135,7 @@ export interface Character {
   description: string;
   startingWeapons: WeaponName[];
   baseStats: Partial<PlayerStats>;
-  icon?: string; // Icon path like "lorc/cat"
+  icon?: IconName; // Icon path like "lorc/cat" - must be in ICON_REGISTRY
 }
 
 export interface PlayerStats {

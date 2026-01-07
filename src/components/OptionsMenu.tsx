@@ -47,7 +47,7 @@ const OptionsMenu: React.FC<OptionsMenuProps> = ({ visible, onClose }) => {
             {/* Sound Toggle Row */}
             <View style={styles.settingRow}>
               <View style={styles.settingLabel}>
-                <Icon name="lorc/sound-waves" size={24} color={COLORS.slateCharcoal} />
+                <Icon name="delapouite/sound-on" size={24} color={COLORS.slateCharcoal} />
                 <Text style={styles.settingText}>Sound Effects</Text>
               </View>
               <TouchableOpacity

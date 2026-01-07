@@ -3,7 +3,7 @@ import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { triggerHaptic } from '@/utils/haptics';
 import { playSound } from '@/utils/sounds';
-import Icon from './Icon';
+import Icon, { IconName } from './Icon';
 
 interface MainMenuProps {
   onSelectAdventure: () => void;
@@ -22,7 +22,7 @@ function MenuButton({
 }: {
   onPress: () => void;
   variant: 'adventure' | 'freeplay' | 'tutorial' | 'options';
-  icon: string;
+  icon: IconName;
   title: string;
   subtitle: string;
 }) {

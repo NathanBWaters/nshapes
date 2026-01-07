@@ -6,12 +6,14 @@ import Icon from './Icon';
 import { ConfettiBurst } from './effects/ConfettiBurst';
 import { AnimatedCounter } from './ui/AnimatedCounter';
 import { ScreenTransition } from './ScreenTransition';
+import RoundProgressChart, { RoundScore } from './RoundProgressChart';
 
 interface VictoryScreenProps {
   player: Player;
   finalScore: number;
   matchCount: number;
   playerStats: PlayerStats;
+  roundScores: RoundScore[];
   onReturnToMenu: () => void;
   onContinueEndless: () => void;
 }
@@ -60,6 +62,7 @@ const VictoryScreen: React.FC<VictoryScreenProps> = ({
   finalScore,
   matchCount,
   playerStats,
+  roundScores,
   onReturnToMenu,
   onContinueEndless,
 }) => {
@@ -182,6 +185,16 @@ const VictoryScreen: React.FC<VictoryScreenProps> = ({
                 <Text style={styles.finalStatValue}>{playerStats.graces}</Text>
               </View>
             </View>
+          </View>
+
+          {/* Round Progress Chart */}
+          <View style={styles.roundProgressSection}>
+            <Text style={styles.sectionTitle}>Round Progress</Text>
+            <RoundProgressChart
+              roundScores={roundScores}
+              currentRound={10}
+              height={160}
+            />
           </View>
         </ScrollView>
 
@@ -347,6 +360,9 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
   },
   finalStatsSection: {
+    marginBottom: 24,
+  },
+  roundProgressSection: {
     marginBottom: 16,
   },
   finalStatsGrid: {

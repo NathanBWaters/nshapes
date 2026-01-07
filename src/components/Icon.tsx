@@ -79,9 +79,13 @@ import LightningBranches from '../../assets/icons/lorc/lightning-branches.svg';
 // UI Icons
 import Padlock from '../../assets/icons/lorc/padlock.svg';
 import GearHammer from '../../assets/icons/lorc/gear-hammer.svg';
+import SoundOn from '../../assets/icons/delapouite/sound-on.svg';
+import ThirdEye from '../../assets/icons/lorc/third-eye.svg';
 
 // Icon registry: maps path (e.g., "delapouite/token") to the imported component
-const ICON_REGISTRY: Record<string, React.FC<SvgProps>> = {
+// NOTE: When adding new icons, also add the import above and the path here.
+// TypeScript will catch any usage of icon paths not in this registry.
+const ICON_REGISTRY = {
   // Characters
   'lorc/cat': Cat,
   'caro-asercion/fox': Fox,
@@ -156,10 +160,15 @@ const ICON_REGISTRY: Record<string, React.FC<SvgProps>> = {
   // UI Icons
   'lorc/padlock': Padlock,
   'lorc/gear-hammer': GearHammer,
-};
+  'delapouite/sound-on': SoundOn,
+  'lorc/third-eye': ThirdEye,
+} as const satisfies Record<string, React.FC<SvgProps>>;
+
+// TypeScript union type of all valid icon names - use this for type-safe icon references
+export type IconName = keyof typeof ICON_REGISTRY;
 
 // Mapping from stat keys to icon paths
-export const STAT_ICONS: Record<string, string> = {
+export const STAT_ICONS: Record<string, IconName> = {
   // Health
   health: 'lorc/heart-inside',
   maxHealth: 'lorc/heart-inside',
@@ -250,7 +259,7 @@ export const STAT_ICONS: Record<string, string> = {
 
 interface IconProps {
   /** Icon path like "delapouite/token" or "lorc/cat" */
-  name: string;
+  name: IconName;
   /** Icon size in pixels (default: 24) */
   size?: number;
   /** Icon fill color (default: Logic Teal #16AA98) */

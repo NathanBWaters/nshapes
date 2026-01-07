@@ -4,7 +4,7 @@ import { COLORS, RADIUS } from '@/utils/colors';
 import { PlayerStats } from '@/types';
 import { FreePlayDifficulty } from './CharacterSelection';
 import { DEFAULT_PLAYER_STATS } from '@/utils/gameDefinitions';
-import Icon from './Icon';
+import Icon, { IconName } from './Icon';
 import GameMenu from './GameMenu';
 
 interface DifficultySelectionProps {
@@ -13,7 +13,7 @@ interface DifficultySelectionProps {
 }
 
 // Difficulty labels and descriptions
-const DIFFICULTY_INFO: Record<FreePlayDifficulty, { label: string; description: string; icon: string }> = {
+const DIFFICULTY_INFO: Record<FreePlayDifficulty, { label: string; description: string; icon: IconName }> = {
   easy: { label: 'Easy', description: '2 attributes', icon: 'lorc/feather' },
   medium: { label: 'Medium', description: '3 attributes', icon: 'lorc/archery-target' },
   hard: { label: 'Hard', description: '4 attributes', icon: 'lorc/diamond-hard' },

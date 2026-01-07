@@ -37,6 +37,7 @@ import RoundSummary from './RoundSummary';
 import TutorialScreen from './TutorialScreen';
 import AttributeUnlockScreen from './AttributeUnlockScreen';
 import VictoryScreen from './VictoryScreen';
+import { RoundScore } from './RoundProgressChart';
 import CharacterUnlockScreen from './CharacterUnlockScreen';
 import MainMenu from './MainMenu';
 import DifficultySelection from './DifficultySelection';
@@ -106,6 +107,9 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
 
   // Track unlocked character for character unlock screen
   const [unlockedCharacter, setUnlockedCharacter] = useState<Character | null>(null);
+
+  // Track round scores for progress chart
+  const [roundHistory, setRoundHistory] = useState<Array<{ round: number; target: number; actual: number }>>([]);
 
   // Tutorial context
   const { state: tutorialState, startTutorial, markTutorialOffered } = useTutorial();
@@ -289,6 +293,13 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
 
   // Complete the current round
   const completeRound = () => {
+    // Record this round's score in history
+    const roundReq = getRoundRequirement(state.round);
+    setRoundHistory(prev => [
+      ...prev.filter(r => r.round !== state.round), // Replace if exists
+      { round: state.round, target: roundReq.targetScore, actual: state.score }
+    ]);
+
     // In endless mode, always continue to next round
     if (state.isEndlessMode) {
       const options = generateLevelUpOptions();
@@ -562,6 +573,9 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       lootBoxesEarned: 0,
       startLevel: 0,
     });
+
+    // Clear round history for new game
+    setRoundHistory([]);
 
     setGamePhase('round');
   };
@@ -1997,12 +2011,23 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
         );
 
       case 'victory':
+        // Build roundScores from ROUND_REQUIREMENTS and roundHistory
+        const victoryRoundScores: RoundScore[] = ROUND_REQUIREMENTS.map(req => {
+          const historyEntry = roundHistory.find(h => h.round === req.round);
+          return {
+            round: req.round,
+            target: req.targetScore,
+            actual: historyEntry?.actual,
+          };
+        });
+
         return (
           <VictoryScreen
             player={state.player}
             finalScore={state.score}
             matchCount={state.foundCombinations.length}
             playerStats={calculatePlayerTotalStats(state.player)}
+            roundScores={victoryRoundScores}
             onReturnToMenu={() => {
               setState(prev => ({ ...prev, isEndlessMode: false }));
               setGamePhase('main_menu');

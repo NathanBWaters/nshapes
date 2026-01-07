@@ -183,6 +183,65 @@ src/                        # Shared code (imported via @/ alias)
 
 **Import Alias:** Use `@/` to import from `src/` (configured in `tsconfig.json`).
 
+## Icon System (IMPORTANT)
+
+The game uses SVG icons from `assets/icons/` with a **type-safe registry system**. Icons are organized by artist (e.g., `lorc/`, `delapouite/`, `caro-asercion/`).
+
+### How Icons Work
+
+1. **Icon Registry:** All icons must be imported and registered in `src/components/Icon.tsx`
+2. **Type Safety:** The `IconName` type is a union of all registered icon paths
+3. **Build-Time Validation:** TypeScript catches any invalid icon paths at compile time
+
+### Adding a New Icon
+
+When adding a new icon, you MUST do both steps:
+
+```typescript
+// 1. Add the import at the top of Icon.tsx
+import MyNewIcon from '../../assets/icons/lorc/my-new-icon.svg';
+
+// 2. Add to ICON_REGISTRY (inside the object)
+const ICON_REGISTRY = {
+  // ... existing icons
+  'lorc/my-new-icon': MyNewIcon,  // Add this line
+} as const satisfies Record<string, React.FC<SvgProps>>;
+```
+
+### Using Icons
+
+```typescript
+// Import IconName type when needed for type annotations
+import Icon, { IconName } from './Icon';
+
+// Use in JSX - TypeScript validates the name
+<Icon name="lorc/cat" size={24} color={COLORS.slateCharcoal} />
+
+// For typed objects containing icons
+const myConfig: { icon: IconName } = {
+  icon: 'lorc/cat',  // TypeScript validates this
+};
+```
+
+### NEVER Do This
+
+- **Never use a string icon path without adding it to ICON_REGISTRY first**
+- **Never guess icon paths** - check `assets/icons/` for available SVGs
+- **Never use `icon: string`** - always use `icon: IconName` for type safety
+
+### Validation Commands
+
+```bash
+npm run typecheck        # Catches invalid icon paths
+npm run validate:icons   # Verifies all registered icons have SVG files
+```
+
+### Icon Locations
+
+- SVG files: `assets/icons/{artist}/{icon-name}.svg`
+- Registry: `src/components/Icon.tsx` (ICON_REGISTRY)
+- Type definitions: `src/types.ts` (uses IconName for Weapon, Character, etc.)
+
 ## Game Flow
 
 **Adventure Mode:**
