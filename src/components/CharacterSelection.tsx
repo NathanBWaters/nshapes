@@ -146,7 +146,7 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
                 {/* Lock overlay for locked characters */}
                 {isLocked && (
                   <View style={styles.lockOverlay}>
-                    <Icon name="lorc/padlock" size={28} color={COLORS.canvasWhite} />
+                    <Icon name="lorc/padlock" size={28} color={COLORS.canvasWhite} noShadow />
                   </View>
                 )}
                 {wins > 0 && !isLocked && (

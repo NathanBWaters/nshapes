@@ -257,6 +257,8 @@ interface IconProps {
   color?: string;
   /** Additional styles for the container */
   style?: object;
+  /** Hide the drop shadow (default: false) */
+  noShadow?: boolean;
 }
 
 const Icon: React.FC<IconProps> = ({
@@ -264,6 +266,7 @@ const Icon: React.FC<IconProps> = ({
   size = 24,
   color = '#FFFFFF',
   style,
+  noShadow = false,
 }) => {
   const SvgComponent = ICON_REGISTRY[name];
 
@@ -277,14 +280,16 @@ const Icon: React.FC<IconProps> = ({
   return (
     <View style={[{ width: size, height: size }, style]}>
       {/* Shadow layer - slightly offset dark version */}
-      <View style={{ position: 'absolute', top: 1, left: 1, opacity: 0.5 }}>
-        <SvgComponent
-          width={size}
-          height={size}
-          fill="#000000"
-          color="#000000"
-        />
-      </View>
+      {!noShadow && (
+        <View style={{ position: 'absolute', top: 1, left: 1, opacity: 0.5 }}>
+          <SvgComponent
+            width={size}
+            height={size}
+            fill="#000000"
+            color="#000000"
+          />
+        </View>
+      )}
       {/* Main icon */}
       <SvgComponent
         width={size}
