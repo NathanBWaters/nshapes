@@ -10,6 +10,7 @@ export const STORAGE_KEYS = {
   TUTORIAL_VIEWED: 'tutorial_viewed',
   CHARACTER_WINS: 'character_wins',
   ENDLESS_HIGH_SCORES: 'endless_high_scores',
+  SOUND_ENABLED: 'sound_enabled',
 } as const;
 
 // Character wins type: maps character name to win count
@@ -89,5 +90,16 @@ export const EndlessHighScoresStorage = {
 
   resetHighScores: (): void => {
     storage.remove(STORAGE_KEYS.ENDLESS_HIGH_SCORES);
+  },
+};
+
+// Settings storage helpers
+export const SettingsStorage = {
+  getSoundEnabled: (): boolean => {
+    return storage.getBoolean(STORAGE_KEYS.SOUND_ENABLED) ?? true;
+  },
+
+  setSoundEnabled: (enabled: boolean): void => {
+    storage.set(STORAGE_KEYS.SOUND_ENABLED, enabled);
   },
 };

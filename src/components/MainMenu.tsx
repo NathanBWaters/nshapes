@@ -9,6 +9,7 @@ interface MainMenuProps {
   onSelectAdventure: () => void;
   onSelectFreeplay: () => void;
   onSelectTutorial: () => void;
+  onSelectOptions: () => void;
 }
 
 // Menu button component
@@ -20,7 +21,7 @@ function MenuButton({
   subtitle,
 }: {
   onPress: () => void;
-  variant: 'adventure' | 'freeplay' | 'tutorial';
+  variant: 'adventure' | 'freeplay' | 'tutorial' | 'options';
   icon: string;
   title: string;
   subtitle: string;
@@ -49,6 +50,12 @@ function MenuButton({
       iconBg: 'rgba(255,255,255,0.2)',
       iconColor: COLORS.canvasWhite,
       textColor: COLORS.canvasWhite,
+    },
+    options: {
+      button: styles.optionsButton,
+      iconBg: COLORS.paperBeige,
+      iconColor: COLORS.slateCharcoal,
+      textColor: COLORS.slateCharcoal,
     },
   };
 
@@ -82,6 +89,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
   onSelectAdventure,
   onSelectFreeplay,
   onSelectTutorial,
+  onSelectOptions,
 }) => {
   return (
     <View style={styles.container}>
@@ -115,6 +123,13 @@ const MainMenu: React.FC<MainMenuProps> = ({
             icon="lorc/open-book"
             title="Tutorial"
             subtitle="Learn how to play"
+          />
+          <MenuButton
+            onPress={onSelectOptions}
+            variant="options"
+            icon="lorc/gear-hammer"
+            title="Options"
+            subtitle="Sound settings"
           />
         </View>
 
@@ -180,6 +195,10 @@ const styles = StyleSheet.create({
   },
   tutorialButton: {
     backgroundColor: COLORS.tutorialBlue,
+    borderColor: COLORS.slateCharcoal,
+  },
+  optionsButton: {
+    backgroundColor: COLORS.paperBeige,
     borderColor: COLORS.slateCharcoal,
   },
   buttonIconContainer: {

@@ -39,6 +39,7 @@ import AttributeUnlockScreen from './AttributeUnlockScreen';
 import VictoryScreen from './VictoryScreen';
 import MainMenu from './MainMenu';
 import DifficultySelection from './DifficultySelection';
+import OptionsMenu from './OptionsMenu';
 import { useTutorial } from '@/context/TutorialContext';
 import { CharacterWinsStorage, EndlessHighScoresStorage } from '@/utils/storage';
 import { playSound, playCardDealing } from '@/utils/sounds';
@@ -78,6 +79,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
   const [selectedCharacter, setSelectedCharacter] = useState<string | null>(devMode ? 'Orange Tabby' : null);
   const [gameMode, setGameMode] = useState<GameMode>('adventure');
   const [freePlayDifficulty, setFreePlayDifficulty] = useState<FreePlayDifficulty>('medium');
+  const [showOptionsModal, setShowOptionsModal] = useState(false);
   const [gamePhase, setGamePhase] = useState<
     'main_menu' |
     'character_select' |
@@ -1708,11 +1710,18 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     switch (gamePhase) {
       case 'main_menu':
         return (
-          <MainMenu
-            onSelectAdventure={() => setGamePhase('character_select')}
-            onSelectFreeplay={() => setGamePhase('difficulty_select')}
-            onSelectTutorial={handleTutorialStart}
-          />
+          <>
+            <MainMenu
+              onSelectAdventure={() => setGamePhase('character_select')}
+              onSelectFreeplay={() => setGamePhase('difficulty_select')}
+              onSelectTutorial={handleTutorialStart}
+              onSelectOptions={() => setShowOptionsModal(true)}
+            />
+            <OptionsMenu
+              visible={showOptionsModal}
+              onClose={() => setShowOptionsModal(false)}
+            />
+          </>
         );
 
       case 'character_select':

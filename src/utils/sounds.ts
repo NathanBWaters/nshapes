@@ -4,6 +4,8 @@
  * Follows the haptics.ts pattern for graceful degradation.
  */
 
+import { SettingsStorage } from './storage';
+
 // Dynamically import expo-av to handle missing native module gracefully
 let Audio: typeof import('expo-av').Audio | null = null;
 type AVPlaybackSource = import('expo-av').AVPlaybackSource;
@@ -44,9 +46,17 @@ interface SoundPool {
 // Preloaded sound pools
 const soundPools: Map<SoundCategory, SoundPool> = new Map();
 
-// Audio enabled state (can be toggled by user)
+// Audio enabled state (initialized from storage, can be toggled by user)
 let audioEnabled = true;
 let audioInitialized = false;
+
+// Initialize audio enabled state from storage
+try {
+  audioEnabled = SettingsStorage.getSoundEnabled();
+} catch {
+  // Storage not available yet, use default
+  audioEnabled = true;
+}
 
 // Sound definitions with require() for bundling
 const SOUND_DEFINITIONS: Record<SoundCategory, { sources: AVPlaybackSource[]; volume: number }> = {

@@ -7,6 +7,8 @@ import WeaponGuide from './WeaponGuide';
 import WeaponList from './WeaponList';
 import Icon from './Icon';
 import { WEAPONS, getWeaponByName } from '@/utils/gameDefinitions';
+import { SettingsStorage } from '@/utils/storage';
+import { setAudioEnabled } from '@/utils/sounds';
 
 const WalkthroughableView = walkthroughable(View);
 
@@ -66,7 +68,7 @@ interface GameMenuProps {
   onMenuOpenChange?: (isOpen: boolean) => void;
 }
 
-type MenuScreen = 'menu' | 'stats' | 'weapons' | 'dev';
+type MenuScreen = 'menu' | 'stats' | 'weapons' | 'options' | 'dev';
 
 const getRarityColor = (rarity: WeaponRarity): string => {
   switch (rarity) {
@@ -81,6 +83,19 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
   const [internalModalOpen, setInternalModalOpen] = useState(false);
   const [currentScreen, setCurrentScreen] = useState<MenuScreen>('menu');
   const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+
+  // Load sound setting on mount
+  useEffect(() => {
+    setSoundEnabled(SettingsStorage.getSoundEnabled());
+  }, []);
+
+  const handleToggleSound = () => {
+    const newValue = !soundEnabled;
+    setSoundEnabled(newValue);
+    setAudioEnabled(newValue);
+    SettingsStorage.setSoundEnabled(newValue);
+  };
 
   // Use controlled mode when copilotMode is true, otherwise use internal state
   const isModalOpen = copilotMode ? (controlledOpen ?? false) : internalModalOpen;
@@ -200,6 +215,21 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
           </TouchableOpacity>
         )}
 
+        {/* Options - Sound settings */}
+        {!copilotMode && (
+          <TouchableOpacity
+            style={styles.menuOption}
+            onPress={() => setCurrentScreen('options')}
+          >
+            <Text style={styles.menuOptionIcon}>⚙️</Text>
+            <View style={styles.menuOptionTextContainer}>
+              <Text style={styles.menuOptionTitle}>Options</Text>
+              <Text style={styles.menuOptionDescription}>Sound and game settings</Text>
+            </View>
+            <Text style={styles.menuOptionArrow}>›</Text>
+          </TouchableOpacity>
+        )}
+
         {/* Dev Tools Option - only shown in dev mode, not in tutorial */}
         {devMode && !copilotMode && (
           <TouchableOpacity
@@ -313,6 +343,49 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
 
   const renderWeapons = () => (
     <WeaponGuide onClose={() => setCurrentScreen('menu')} />
+  );
+
+  const renderOptions = () => (
+    <View style={styles.statsContainer}>
+      {/* Header */}
+      <View style={styles.modalHeader}>
+        <TouchableOpacity onPress={() => setCurrentScreen('menu')} style={styles.backButton}>
+          <Text style={styles.backButtonText}>‹</Text>
+        </TouchableOpacity>
+        <Text style={styles.modalTitle}>Options</Text>
+        <TouchableOpacity onPress={closeModal} style={styles.closeButton}>
+          <Text style={styles.closeButtonText}>X</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.modalContent}>
+        {/* Sound Toggle */}
+        <View style={styles.categoryContainer}>
+          <View style={styles.categoryHeader}>
+            <Text style={styles.categoryTitle}>SOUND</Text>
+          </View>
+          <View style={styles.optionRow}>
+            <View style={styles.optionLabel}>
+              <Text style={styles.optionText}>Sound Effects</Text>
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.toggleButton,
+                soundEnabled ? styles.toggleButtonOn : styles.toggleButtonOff,
+              ]}
+              onPress={handleToggleSound}
+            >
+              <Text style={[
+                styles.toggleButtonText,
+                soundEnabled ? styles.toggleTextOn : styles.toggleTextOff,
+              ]}>
+                {soundEnabled ? 'ON' : 'OFF'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </View>
   );
 
   const addLegendaryFromCategory = (category: string) => {
@@ -534,6 +607,8 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
         return renderStats();
       case 'weapons':
         return renderWeapons();
+      case 'options':
+        return renderOptions();
       case 'dev':
         return renderDevTools();
       default:
@@ -1070,6 +1145,49 @@ const styles = StyleSheet.create({
   },
   devRoundButtonTextActive: {
     color: COLORS.canvasWhite,
+  },
+  // Options screen styles
+  optionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.paperBeige,
+  },
+  optionLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  optionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.deepOnyx,
+  },
+  toggleButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: RADIUS.button,
+    minWidth: 70,
+    alignItems: 'center',
+  },
+  toggleButtonOn: {
+    backgroundColor: COLORS.logicTeal,
+  },
+  toggleButtonOff: {
+    backgroundColor: COLORS.paperBeige,
+  },
+  toggleButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  toggleTextOn: {
+    color: COLORS.canvasWhite,
+  },
+  toggleTextOff: {
+    color: COLORS.slateCharcoal,
   },
 });
 
