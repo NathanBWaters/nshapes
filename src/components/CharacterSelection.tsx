@@ -143,42 +143,44 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
                   isLocked && styles.optionButtonLocked,
                 ]}
               >
-                {/* Lock overlay for locked characters */}
-                {isLocked && (
+                {/* Lock overlay for locked characters - shows only lock icon */}
+                {isLocked ? (
                   <View style={styles.lockOverlay}>
-                    <Icon name="lorc/padlock" size={28} color={COLORS.canvasWhite} noShadow />
+                    <Icon name="lorc/padlock" size={32} color={COLORS.slateCharcoal} noShadow />
                   </View>
+                ) : (
+                  <>
+                    {wins > 0 && (
+                      <View style={styles.winsBadge}>
+                        <Text style={styles.winsBadgeText}>{wins}</Text>
+                      </View>
+                    )}
+                    {endlessHighRound > 10 && (
+                      <View style={styles.endlessBadge}>
+                        <Text style={styles.endlessBadgeText}>R{endlessHighRound}</Text>
+                      </View>
+                    )}
+                    <View style={styles.optionIconArea}>
+                      {character.icon && (
+                        <Icon
+                          name={character.icon}
+                          size={48}
+                          color={COLORS.slateCharcoal}
+                        />
+                      )}
+                    </View>
+                    <View style={styles.optionNameArea}>
+                      <Text
+                        style={[
+                          styles.optionText,
+                          isSelected && styles.optionTextSelected,
+                        ]}
+                      >
+                        {character.name}
+                      </Text>
+                    </View>
+                  </>
                 )}
-                {wins > 0 && !isLocked && (
-                  <View style={styles.winsBadge}>
-                    <Text style={styles.winsBadgeText}>{wins}</Text>
-                  </View>
-                )}
-                {endlessHighRound > 10 && !isLocked && (
-                  <View style={styles.endlessBadge}>
-                    <Text style={styles.endlessBadgeText}>R{endlessHighRound}</Text>
-                  </View>
-                )}
-                <View style={[styles.optionIconArea, isLocked && styles.optionIconAreaLocked]}>
-                  {character.icon && (
-                    <Icon
-                      name={character.icon}
-                      size={48}
-                      color={isLocked ? COLORS.slateCharcoal : COLORS.slateCharcoal}
-                    />
-                  )}
-                </View>
-                <View style={styles.optionNameArea}>
-                  <Text
-                    style={[
-                      styles.optionText,
-                      isSelected && !isLocked && styles.optionTextSelected,
-                      isLocked && styles.optionTextLocked,
-                    ]}
-                  >
-                    {character.name}
-                  </Text>
-                </View>
               </Pressable>
             );
           })}
@@ -474,23 +476,12 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   optionButtonLocked: {
-    backgroundColor: COLORS.slateCharcoal,
-    opacity: 0.7,
+    backgroundColor: COLORS.paperBeige,
   },
   lockOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(56, 56, 56, 0.75)',
-    borderRadius: RADIUS.button,
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 10,
-  },
-  optionIconAreaLocked: {
-    opacity: 0.5,
-  },
-  optionTextLocked: {
-    color: COLORS.canvasWhite,
-    opacity: 0.7,
   },
   optionText: {
     color: COLORS.slateCharcoal,
