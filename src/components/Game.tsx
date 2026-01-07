@@ -1808,6 +1808,16 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
         );
 
       case 'round_summary':
+        // Build roundScores from ROUND_REQUIREMENTS and roundHistory
+        const summaryRoundScores: RoundScore[] = ROUND_REQUIREMENTS.map(req => {
+          const historyEntry = roundHistory.find(h => h.round === req.round);
+          return {
+            round: req.round,
+            target: req.targetScore,
+            actual: historyEntry?.actual,
+          };
+        });
+
         return (
           <RoundSummary
             round={state.round}
@@ -1824,6 +1834,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
             playerStats={calculatePlayerTotalStats(state.player)}
             playerWeapons={state.player.weapons}
             onExitGame={() => setGamePhase('main_menu')}
+            roundScores={summaryRoundScores}
           />
         );
 

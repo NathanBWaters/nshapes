@@ -14,6 +14,7 @@ import { DURATION } from '@/utils/designSystem';
 import Icon, { IconName } from './Icon';
 import GameMenu from './GameMenu';
 import { ScreenTransition } from './ScreenTransition';
+import RoundProgressChart, { RoundScore } from './RoundProgressChart';
 
 interface RoundSummaryProps {
   round: number;
@@ -30,6 +31,7 @@ interface RoundSummaryProps {
   playerStats: PlayerStats;
   playerWeapons?: Weapon[];
   onExitGame?: () => void;
+  roundScores: RoundScore[];
 }
 
 interface AwardTile {
@@ -85,6 +87,7 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
   playerStats,
   playerWeapons = [],
   onExitGame,
+  roundScores,
 }) => {
   // Animation values for each award tile
   const tileAnimations = useRef(
@@ -231,6 +234,16 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
           </View>
         </View>
 
+        {/* Round Progress Chart */}
+        <View style={styles.chartSection}>
+          <Text style={styles.chartTitle}>ROUND PROGRESS</Text>
+          <RoundProgressChart
+            roundScores={roundScores}
+            currentRound={round}
+            height={140}
+          />
+        </View>
+
         {/* Continue Button */}
         <Animated.View style={[styles.buttonContainer, { opacity: buttonOpacity }]}>
           <TouchableOpacity style={styles.continueButton} onPress={onContinue}>
@@ -365,9 +378,24 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
   },
   awardsGrid: {
-    flex: 1,
     justifyContent: 'center',
     gap: 12,
+  },
+  chartSection: {
+    marginTop: 16,
+    backgroundColor: COLORS.canvasWhite,
+    borderRadius: RADIUS.module,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+  },
+  chartTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.slateCharcoal,
+    textAlign: 'center',
+    letterSpacing: 1,
+    marginBottom: 8,
   },
   awardsRow: {
     flexDirection: 'row',
