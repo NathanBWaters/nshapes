@@ -272,6 +272,9 @@ export const playSound = async (category: SoundCategory): Promise<void> => {
  * @param delayMs Delay between each card sound (default 50ms)
  */
 export const playCardDealing = (count: number, delayMs: number = 50): void => {
+  // Skip entirely if audio disabled - avoid setTimeout overhead
+  if (!audioEnabled || !Audio) return;
+
   // Cap at reasonable number to avoid audio overload
   const maxSounds = Math.min(count, 8);
   for (let i = 0; i < maxSounds; i++) {
