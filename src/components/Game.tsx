@@ -242,6 +242,9 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     startLevel: 0,
   });
 
+  // Queue of pending level-ups (for multi-level-up support)
+  const [pendingLevelUps, setPendingLevelUps] = useState<number[]>([]);
+
   // Dev mode state
   const [devTimerEnabled, setDevTimerEnabled] = useState(!devMode); // Timer disabled by default in dev mode
   const [autoPlayerEnabled, setAutoPlayerEnabled] = useState(autoPlayer); // Start with URL param value
@@ -870,8 +873,21 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       });
     }
 
-    // Continue to shop
-    setGamePhase('shop');
+    // Remove current level from queue
+    const remaining = pendingLevelUps.slice(1);
+    setPendingLevelUps(remaining);
+
+    if (remaining.length > 0) {
+      // Generate new options and stay in level_up phase
+      setState(prevState => ({
+        ...prevState,
+        levelUpOptions: generateLevelUpOptions()
+      }));
+      // Don't change phase - stay in 'level_up'
+    } else {
+      // No more level-ups, proceed to shop
+      setGamePhase('shop');
+    }
   };
 
   // Handle level up reroll
@@ -1811,7 +1827,20 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
             hintsEarned={roundStats.hintsEarned}
             healingDone={roundStats.healingDone}
             didLevelUp={state.player.stats.level > roundStats.startLevel}
-            onContinue={() => setGamePhase('level_up')}
+            onContinue={() => {
+              // Calculate all levels gained during round
+              const startLevel = roundStats.startLevel;
+              const endLevel = state.player.stats.level;
+              const levelsGained = endLevel - startLevel;
+
+              // Build queue of level-ups: [startLevel+1, startLevel+2, ...]
+              const levelQueue = Array.from(
+                { length: levelsGained },
+                (_, i) => startLevel + i + 1
+              );
+              setPendingLevelUps(levelQueue);
+              setGamePhase('level_up');
+            }}
             playerStats={calculatePlayerTotalStats(state.player)}
             playerWeapons={state.player.weapons}
             onExitGame={() => setGamePhase('main_menu')}
@@ -1831,6 +1860,8 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
             playerStats={calculatePlayerTotalStats(state.player)}
             playerWeapons={state.player.weapons}
             onExitGame={() => setGamePhase('main_menu')}
+            targetLevel={pendingLevelUps[0] || state.player.stats.level}
+            hasMoreLevelUps={pendingLevelUps.length > 1}
           />
         );
 

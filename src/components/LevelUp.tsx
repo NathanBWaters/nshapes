@@ -76,6 +76,8 @@ interface LevelUpProps {
   playerStats: PlayerStats;
   playerWeapons?: Weapon[];
   onExitGame?: () => void;
+  targetLevel: number;         // The level this reward is for
+  hasMoreLevelUps: boolean;    // True if more level-ups pending after this
 }
 
 // Rarity colors
@@ -106,7 +108,9 @@ const LevelUp: React.FC<LevelUpProps> = ({
   freeRerolls,
   playerStats,
   playerWeapons = [],
-  onExitGame
+  onExitGame,
+  targetLevel,
+  hasMoreLevelUps,
 }) => {
   const [focusedIndex, setFocusedIndex] = useState<number>(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
@@ -177,6 +181,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
       <View style={styles.eyebrow}>
         <View style={styles.eyebrowLeft}>
           <Text style={styles.eyebrowText}>Level Up!</Text>
+          <Text style={styles.levelNumber}>Level {targetLevel}</Text>
           <View style={styles.freeBadge}>
             <Text style={styles.freeBadgeText}>FREE</Text>
           </View>
@@ -299,7 +304,9 @@ const LevelUp: React.FC<LevelUpProps> = ({
           }}
           style={styles.actionButton}
         >
-          <Text style={styles.actionButtonText}>Select Weapon</Text>
+          <Text style={styles.actionButtonText}>
+            {hasMoreLevelUps ? 'Next Level Up' : 'Select Weapon'}
+          </Text>
         </TouchableOpacity>
       </View>
       </View>
@@ -333,6 +340,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textTransform: 'uppercase',
     letterSpacing: 2,
+  },
+  levelNumber: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '600',
+    fontSize: 14,
   },
   freeBadge: {
     backgroundColor: COLORS.logicTeal,
