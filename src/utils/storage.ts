@@ -132,7 +132,8 @@ export const AdventureHighRoundStorage = {
 // Settings storage helpers
 export const SettingsStorage = {
   getSoundEnabled: (): boolean => {
-    return storage.getBoolean(STORAGE_KEYS.SOUND_ENABLED) ?? true;
+    // Default to false - sound causes performance issues on iOS
+    return storage.getBoolean(STORAGE_KEYS.SOUND_ENABLED) ?? false;
   },
 
   setSoundEnabled: (enabled: boolean): void => {

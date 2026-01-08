@@ -47,15 +47,16 @@ interface SoundPool {
 const soundPools: Map<SoundCategory, SoundPool> = new Map();
 
 // Audio enabled state (initialized from storage, can be toggled by user)
-let audioEnabled = true;
+// Default to false - sound causes performance issues on iOS
+let audioEnabled = false;
 let audioInitialized = false;
 
 // Initialize audio enabled state from storage
 try {
   audioEnabled = SettingsStorage.getSoundEnabled();
 } catch {
-  // Storage not available yet, use default
-  audioEnabled = true;
+  // Storage not available yet, use default (off)
+  audioEnabled = false;
 }
 
 // Sound definitions with require() for bundling

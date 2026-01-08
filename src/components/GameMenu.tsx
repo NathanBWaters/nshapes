@@ -83,7 +83,7 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
   const [internalModalOpen, setInternalModalOpen] = useState(false);
   const [currentScreen, setCurrentScreen] = useState<MenuScreen>('menu');
   const [showExitConfirm, setShowExitConfirm] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(false);
 
   // Load sound setting on mount
   useEffect(() => {

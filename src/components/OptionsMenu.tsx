@@ -11,7 +11,7 @@ interface OptionsMenuProps {
 }
 
 const OptionsMenu: React.FC<OptionsMenuProps> = ({ visible, onClose }) => {
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(false);
 
   // Load setting on mount
   useEffect(() => {

@@ -290,5 +290,23 @@ This means Field Stone weapons can increase the starting board size beyond the m
 * Test stat preview and inventory display
 * "Continue" refreshes the shop for more testing
 
+## Versioning (IMPORTANT)
+
+When making commits, **ALWAYS increment the patch version** in `package.json`:
+
+```bash
+# Example: 0.1.0 → 0.1.1 → 0.1.2
+```
+
+After committing and pushing, **ALWAYS report the new version number** in your output:
+
+```
+✓ Pushed version X.Y.Z
+```
+
+This ensures builds can be verified to contain the latest changes.
+
+---
+
 When working on this codebase, also load these additional files for context:
 -- [Style Guide](./style_guide.md) - UI design system including colors, typography, and component styles
