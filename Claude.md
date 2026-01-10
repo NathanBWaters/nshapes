@@ -51,75 +51,27 @@ NShapes combines the classic SET card matching game with roguelike progression m
 
 ## Weapon System
 
-The game features 17 weapon types across 49 total weapons (most have 3 rarities, some are legendary-only):
+> **Full documentation:** [docs/weapons-design.md](./docs/weapons-design.md)
 
-### Weapon Rarities
-* **Common (70%):** Lower stats, prices 5-10 coins
-* **Rare (25%):** Medium stats, prices 10-20 coins
-* **Legendary (5%):** High stats, prices 15-30 coins
+20 weapon types with 56 total weapons. Most have 3 rarities (Common 70%, Rare 25%, Legendary 5%), with 2 legendary-only types.
 
-### Weapon Types
+**Key Mechanics:**
+* **Stacking:** Multiple weapons of the same type stack additively (3x 10% = 30%)
+* **Independent Rolls:** Destructive effects (Laser, Time Drop) roll separately per weapon
+* **Max Count:** Some weapons limited to 1 copy (Mystic Sight, Chain Reaction)
+* **Purchase:** Buy in shop between rounds; choose free weapon on level up
 
-| Weapon | Effect | Special |
-|--------|--------|---------|
-| **Blast Powder** | Explodes adjacent cards on match | explosionChance |
-| **Oracle Eye** | Auto-shows 1 card from valid set periodically | autoHintChance, interval |
-| **Mystic Sight** | 33% chance autohint shows 2 cards | enhancedHintChance (legendary only, max 1) |
-| **Field Stone** | Increases starting board size | fieldSize |
-| **Growth Seed** | Chance to expand board on match | boardGrowthChance |
-| **Flint Spark** | Starts fires on adjacent cards | fireSpreadChance |
-| **Second Chance** | Starting graces | graces |
-| **Fortune Token** | Chance to gain grace on match | graceGainChance |
-| **Life Vessel** | Increases max health | maxHealth |
-| **Mending Charm** | Chance to heal on match | healingChance |
-| **Crystal Orb** | Increases max hint capacity | maxHints |
-| **Seeker Lens** | Chance to gain hint on match | hintGainChance |
-| **Prism Glass** | Chance for holographic cards (2x pts) | holoChance |
-| **Chrono Shard** | Starting time bonus | startingTime |
-| **Time Drop** | Chance to gain time on match | timeGainChance |
-| **Prismatic Ray** | Destroys entire row/column | laserChance |
-
-### Weapon Effects
-
-* **Stacking:** Multiple weapons of the same type stack their effects
-* **Purchase:** Buy weapons in the shop between rounds
-* **Level Up:** Choose from 3 weapon rewards on level up
-* **Max Count:** Some weapons have a `maxCount` limit (e.g., Mystic Sight has max 1). These weapons won't appear in shop/level-up once the player owns the max. The limit is displayed in the weapon detail view.
-
-### Hint System
-
-* **Starting Hints:** Players start with 0 hints
-* **Max Hints:** Default max capacity is 3 (increased by Crystal Orb weapons)
-* **Earning Hints:** Gain hints from matches via Seeker Lens
-* **Auto-Hint:** Oracle Eye triggers 15 seconds after the last match, revealing **1 card guaranteed to be part of a valid set** (player must find the other 2)
-* **Enhanced Auto-Hint:** Mystic Sight (legendary) gives a 33% chance to reveal **2 cards** from a valid set instead of 1
-* **Display:** Hints show as "X/max" in the UI (e.g., "2/3")
-
-### Laser Mechanic (Independent Rolls)
-
-Each laser weapon (Prismatic Ray) rolls **independently** on every match:
-* If you have 3 laser weapons at 3% each, each one rolls separately
-* You could get 0, 1, 2, or 3 lasers firing on a single match
-* Each laser independently chooses horizontal OR vertical
-* Multiple lasers can overlap (same row/column = wasted) or differ (row + column = massive destruction)
-* The notification shows "2x Laser!" or "3x Laser!" when multiple fire
-* This makes stacking lasers very powerful but RNG-dependent
-
-### Card States
-
-* **Holographic:** Animated rainbow shimmer effect (Balatro-style), awards 2x points when matched
-* **On Fire:** Red pulsing border, burns after 7.5 seconds (destroys card, awards points, 10% spread)
+**Card States:**
+* **Holographic:** 2x points when matched
+* **On Fire:** Burns after 7.5s, 10% spread chance
 
 ## Key Features
 
 * 6 playable characters (Orange Tabby, Sly Fox, Corgi unlocked; Emperor Penguin, Pelican, Badger locked)
-* 49 weapons across 17 types (most with 3 rarities, some legendary-only)
-* Card modifiers (bombs, spikes, healing, loot boxes, etc.)
+* 56 weapons across 20 types (see [weapons-design.md](./docs/weapons-design.md))
 * Grace auto-use system (prevents health loss on near-misses)
-* Match trigger effects (healing, hints, time, graces)
-* Explosive and laser destruction effects
-* Fire spread and burn mechanics
-* Auto-hint system (shows 1 card from valid set, 15s after last match)
+* Match trigger effects (healing, hints, time, graces, explosions, lasers, fire)
+* Auto-hint system (shows 1 card from valid set after idle time)
 * Options menu with sound toggle (persisted to MMKV storage)
 * Optional multiplayer via Socket.io (not a priority - ignore multiplayer code)
 
@@ -308,5 +260,10 @@ This ensures builds can be verified to contain the latest changes.
 
 ---
 
-When working on this codebase, also load these additional files for context:
--- [Style Guide](./style_guide.md) - UI design system including colors, typography, and component styles
+## Design Documents
+
+When working on specific systems, load the relevant design doc for detailed specifications:
+
+* **[Weapon System](./docs/weapons-design.md)** - Complete weapon roster, rarities, effects, synergies, and balance notes
+* **[Enemy System](./docs/enemy-design.md)** - Enemy roster, tier scaling, defeat conditions, and weapon counters (in development)
+* **[Style Guide](./style_guide.md)** - UI design system including colors, typography, and component styles
