@@ -1,0 +1,249 @@
+# Enemy System Design
+
+## Design Philosophy
+
+The enemy system adds strategic depth to NShapes by introducing **pre-round decisions** that interact with your build. Rather than being on-board obstacles, enemies exist as **off-board influences** that modify the gameplay rules for each round.
+
+### Core Principles
+
+1. **Strategic Enemy Selection**
+   - Before each round, choose 1 of 3 enemies to face
+   - Full transparency: See all abilities, effects, and defeat conditions upfront
+   - Build-dependent choices: If you've specialized in fire weapons, avoid the anti-fire enemy
+   - Risk/reward: Harder enemies offer better rewards
+
+2. **Off-Board Influence**
+   - Enemies don't appear on the game board
+   - They create persistent effects that modify gameplay (attribute changes, time pressure, card states)
+   - Focus remains on SET matching, but with added constraints
+
+3. **Optional Bonus Challenges**
+   - **Score target** = Required to advance (unchanged from current gameplay)
+   - **Defeat condition** = Optional bonus challenge unique to each enemy
+   - Completing defeat condition grants a **premium bonus weapon** at level up
+   - No penalty for failing the defeat condition - just miss the bonus reward
+
+4. **Weapon Counter System**
+   - Many enemies counter specific weapon types (fire, explosion, laser, hints, etc.)
+   - Counters reduce weapon effectiveness by a percentage (scaling by tier)
+   - Creates meaningful choices: Do you take the enemy that counters your build for a better reward?
+
+5. **Escalating Threat Tiers**
+   - **Tier 1 (R1-5):** Single effects, mild counters (10-20% reduction)
+   - **Tier 2 (R5-7):** Two combined effects, moderate counters (30-40%)
+   - **Tier 3 (R8-9):** Three combined effects, strong counters (50-60%)
+   - **Tier 4 (R10):** Five combined effects, severe counters (70-90%)
+   - Animals get scarier as tiers increase (rat → wolf → bear → dragon)
+
+6. **Defeat Conditions**
+   - 45 unique conditions across all enemies
+   - Mix of: attribute challenges, streak/combo goals, speed challenges, specific patterns
+   - Some enemies have unique conditions tied to their mechanics (Iron Shell → clear the triple card)
+
+---
+
+## Design Rules
+
+### Instant Death
+**Instant death mechanics are reserved for Tier 3 and Tier 4 only.** In Tier 1 and Tier 2, inactivity or failure conditions should result in health loss, not instant death. This ensures early rounds are challenging but not punishing for new players.
+
+### Streak Definition
+A **streak** is defined as consecutive successful matches with **no invalid match attempts** in between. For example, a "4-match streak" means 4 valid SETs matched consecutively without selecting an invalid combination. The streak resets when the player makes an invalid match.
+
+### Timer vs Finish
+When describing defeat conditions, use "achieve minimum" rather than "finish" because the round continues until the timer runs out. Players keep scoring for coins after hitting the target.
+
+### Naming Convention
+Enemy names should be **1-3 words**, animal-themed, and hint at their mechanic without being purely mechanical. Example: "Burrowing Mole" not "Shrinking Field".
+
+---
+
+## Enemy Roster
+
+### Tier 1 (Rounds 1-5) — 20 Enemies
+*Single effect, counters at 10-20% reduction, mild animal icons*
+
+| # | Name | Icon | Effect | Defeat Condition |
+|---|------|------|--------|------------------|
+| 1 | **Junk Rat** | `rat` | 4% chance per card draw → card is white/blank dud (unmatchable) | Get a 4-match streak |
+| 2 | **Stalking Wolf** | `wolf-head` | 45s inactivity bar → lose 1 health | Match 3 times in under 5s each |
+| 3 | **Shifting Chameleon** | `chameleon-glyph` | Changes 1 attribute on random cards every 20s | Get 2 all-different matches |
+| 4 | **Burrowing Mole** | `mole` | Removes 1 random card every 20s | Match all 3 shapes at least once |
+| 5 | **Masked Bandit** | `raccoon-head` | Disables auto-hints entirely | Get 3 matches without hesitating >10s |
+| 6 | **Wild Goose** | `goose` | Shuffles card positions every 30s | Match 2 sets that share a card attribute |
+| 7 | **Thieving Raven** | `raven` | -5s stolen per match | Complete 5 matches total |
+| 8 | **Stinging Scorpion** | `scorpion` | 2x damage taken, 2x points earned | Make no invalid matches |
+| 9 | **Night Owl** | `barn-owl` | 20% chance per draw → card is face-down (looks like dud); matching flips face-down cards with 70% chance each | Match 4 face-down cards |
+| 10 | **Swift Bee** | `bee` | Timer 20% faster, 20% more points | Get a 5-match streak |
+| 11 | **Trap Weaver** | `spider-face` | Random cards get 10s bomb timers | Defuse 3 bombs (match bomb cards) |
+| 12 | **Circling Vulture** | `vulture` | Score drains 5pts/sec | Reach 150% of target score |
+| 13 | **Iron Shell** | `turtle` | One card needs 3 matches to clear | Clear the triple-health card |
+| 14 | **Ticking Viper** | `snake` | One card has 15s countdown timer; match or lose 1HP | Match the countdown card in time |
+| 15 | **Wet Crab** | `crab` | Fire effects -15% | Get 2 matches with all-same color |
+| 16 | **Spiny Hedgehog** | `hedgehog` | Explosion effects -15% | Get 3 matches containing squiggles |
+| 17 | **Shadow Bat** | `bat` | Laser effects -20% | Match 3 different colors in one set |
+| 18 | **Foggy Frog** | `frog` | Hint gain -15% | Achieve minimum with 2+ hints remaining |
+| 19 | **Sneaky Mouse** | `mouse` | Grace gain -15% | Never use a grace |
+| 20 | **Lazy Sloth** | `sloth` | Time gain -20% | Achieve minimum with 15+ seconds remaining |
+
+---
+
+### Tier 2 (Rounds 5-7) — 10 Enemies
+*Two combined effects, counters at 30-40% reduction, threatening animal icons*
+
+| # | Name | Icon | Effects (Combined) | Defeat Condition |
+|---|------|------|-------------------|------------------|
+| 21 | **Charging Boar** | `boar` | Stalking Wolf (35s → lose 1HP) + Circling Vulture (3pts/sec drain) | Get 3 matches each under 8s |
+| 22 | **Cackling Hyena** | `hyena-head` | Thieving Raven (-3s) + Sneaky Mouse (-35%) | Match 6 times with no grace used |
+| 23 | **Lurking Shark** | `shark-jaws` | Night Owl (25% face-down) + Ticking Viper (12s countdown) | Match 3 face-down cards + the countdown card |
+| 24 | **Diving Hawk** | `hawk-emblem` | Swift Bee (35% faster) + Burrowing Mole (15s removal) | Get 2 all-different matches under 6s each |
+| 25 | **Venomous Cobra** | `cobra` | Shifting Chameleon (15s) + Trap Weaver | Match 4 bombs before they explode |
+| 26 | **Prowling Direwolf** | `direwolf` | Junk Rat (6% dud) + Wild Goose (25s shuffle) | Get a 6-match streak |
+| 27 | **Hunting Eagle** | `eagle-head` | Iron Shell + Lazy Sloth (-35%) | Clear triple card with 20s+ remaining |
+| 28 | **Armored Tusks** | `boar-tusks` | Wet Crab (-35%) + Spiny Hedgehog (-35%) | Trigger 2 destruction effects (any type) |
+| 29 | **Creeping Shadow** | `beast-eye` | Masked Bandit + Foggy Frog (-35%) | Match all 3 colors at least once |
+| 30 | **Polar Guardian** | `polar-bear` | Stinging Scorpion + Shadow Bat (-40%) | Take no damage AND trigger 1 weapon effect |
+
+---
+
+### Tier 3 (Rounds 8-9) — 10 Enemies
+*Three combined effects, counters at 50-60% reduction, dangerous creature icons*
+*Note: Instant death mechanics become available in this tier*
+
+| # | Name | Icon | Effects (Combined) | Defeat Condition |
+|---|------|------|-------------------|------------------|
+| 31 | **Raging Bear** | `bear-head` | Stalking Wolf (30s → **instant death**) + Stinging Scorpion + Circling Vulture (4pts/sec) | 7-match streak with no invalid matches |
+| 32 | **Abyssal Octopus** | `octopus` | Night Owl (30% face-down) + Wild Goose (20s) + Ticking Viper (10s countdown) | Match 5 face-down cards |
+| 33 | **Feral Fangs** | `bestial-fangs` | Junk Rat (10% dud) + Iron Shell + Burrowing Mole (12s) | Clear triple card before 5 cards removed |
+| 34 | **Savage Claws** | `claws` | Thieving Raven (-4s) + Swift Bee (50% faster) + Trap Weaver | Match 8 times total |
+| 35 | **One-Eyed Terror** | `cyclops` | Masked Bandit + Shifting Chameleon (12s) + Foggy Frog (-55%) | Get 3 all-different matches |
+| 36 | **Goblin Saboteur** | `goblin-head` | All counter effects at -50% (pick 3 random weapon types) | Trigger 3 different weapon effects |
+| 37 | **Stone Sentinel** | `golem-head` | Iron Shell (×2 cards) + Spiny Hedgehog (-55%) + Shadow Bat (-55%) | Clear both triple cards |
+| 38 | **Wicked Imp** | `imp` | Stinging Scorpion + Sneaky Mouse (-55%) + Lazy Sloth (-55%) | Achieve minimum with 3+ graces unused |
+| 39 | **Swarming Ants** | `ant` | Trap Weaver (×2 bombs) + Wet Crab (-55%) + Ticking Viper (8s) | Defuse 5 bombs total |
+| 40 | **Nightmare Squid** | `giant-squid` | Night Owl (35% face-down, 50% flip chance) + Wild Goose (15s) + Circling Vulture (6pts/sec) | Score 200% of target |
+
+---
+
+### Tier 4 (Round 10 Only) — 5 Bosses
+*Five combined effects, counters at 70-90% reduction, terrifying legend icons*
+*Instant death mechanics at full intensity*
+
+| # | Name | Icon | Effects (Combined) | Defeat Condition |
+|---|------|------|-------------------|------------------|
+| 41 | **Ancient Dragon** | `dragon-head` | Iron Shell (×3 cards) + Shifting Chameleon (8s) + Swift Bee (80% faster) + Stinging Scorpion + Circling Vulture (8pts/sec) | Clear all 3 triple cards AND get 2 all-different matches |
+| 42 | **The Hydra** | `hydra` | Stalking Wolf (20s → **instant death**) + Trap Weaver (×3) + Ticking Viper (×2, 8s each) + Night Owl (40%) + Thieving Raven (-6s) | Match 10 times with no invalid matches |
+| 43 | **Kraken's Grasp** | `kraken-tentacle` | Wild Goose (10s) + Burrowing Mole (8s) + Junk Rat (15% dud) + All counters -75% | Survive with 5+ cards remaining on board |
+| 44 | **The Reaper** | `grim-reaper` | Sneaky Mouse (-90%) + Lazy Sloth (-90%) + Stinging Scorpion + Circling Vulture (10pts/sec) + Masked Bandit | Achieve minimum with 10+ seconds remaining AND 0 damage taken |
+| 45 | **Leviathan** | `sea-serpent` | All T1 effects at 50% intensity simultaneously | Get a 10-match streak |
+
+---
+
+## Effect Scaling Reference
+
+Effects scale up in intensity through the tiers:
+
+| Effect | Tier 1 | Tier 2 | Tier 3 | Tier 4 |
+|--------|--------|--------|--------|--------|
+| **Dud Chance** | 4% | 6% | 10% | 15% |
+| **Inactivity Penalty** | Lose 1HP | Lose 1HP | Instant Death | Instant Death |
+| **Attribute Flip Interval** | 20s | 15s | 12s | 8s |
+| **Speed Increase** | 20% | 35% | 50% | 80-100% |
+| **Countdown Timer** | 20s | 15s | 10s | 7s |
+| **Face-Down Chance** | 5% | 10% | 15-20% | 30% |
+| **Face-Down Flip Chance** | 70% | 60% | 50% | 40% |
+| **Point Decay** | 5pts/sec | 3-4pts/sec | 4-6pts/sec | 8-10pts/sec |
+| **Weapon Counters** | 10-20% | 30-40% | 50-60% | 70-90% |
+
+---
+
+## Enemy Selection Flow
+
+1. **Before each round:** Player sees 3 random enemies from the current tier's pool
+2. **Each enemy card shows:**
+   - Name and icon
+   - All active effects with exact values
+   - Defeat condition and bonus reward
+   - Difficulty indicator (based on how it interacts with your current build)
+3. **Player chooses one** → Round begins with that enemy's effects active
+4. **During round:**
+   - Reach score target = Advance to next round
+   - Complete defeat condition = Earn bonus weapon at level up
+   - Round continues until timer ends (keep scoring for coins)
+5. **Post-round:** If enemy was defeated, level-up screen shows bonus "Slayer Reward" weapon
+
+---
+
+## Weapon Counter Reference
+
+Enemies can counter specific weapon categories. Here's what each counter affects:
+
+| Counter Type | Weapons Affected |
+|--------------|------------------|
+| **Fire** | Flint Spark (fire spread chance) |
+| **Explosion** | Blast Powder (explosion chance) |
+| **Laser** | Prismatic Ray (laser chance) |
+| **Hints** | Oracle Eye, Seeker Lens, Crystal Orb, Mystic Sight |
+| **Graces** | Second Chance, Fortune Token |
+| **Healing** | Life Vessel, Mending Charm |
+| **Time** | Chrono Shard, Time Drop |
+| **Board Size** | Field Stone, Growth Seed |
+| **Holographic** | Prism Glass |
+
+---
+
+## Defeat Condition Categories
+
+### Attribute Challenges
+- "Get X all-different matches"
+- "Get X all-same [color/shape] matches"
+- "Match all 3 [shapes/colors] at least once"
+- "Match 3 different colors in one set"
+
+### Streak/Combo Goals
+- "Get a X-match streak" (X consecutive matches with no invalid attempts)
+- "Make no invalid matches"
+- "Match X times with no grace used"
+
+### Speed Challenges
+- "Match X times in under Y seconds each"
+- "Achieve minimum with X+ seconds remaining"
+- "Get X matches without hesitating >Y seconds"
+
+### Specific Patterns
+- "Get X matches containing [shape]"
+- "Defuse X bombs"
+- "Match X face-down cards"
+- "Clear the triple-health card"
+
+### Unique/Hybrid
+- "Take no damage AND trigger X weapon effects"
+- "Score X% of target"
+- "Survive with X+ cards remaining"
+
+---
+
+## Implementation Notes
+
+### Required New Systems
+1. **Enemy data structure** (types.ts)
+2. **Enemy selection screen** (pre-round UI)
+3. **Effect system** (Game.tsx modifications)
+4. **Defeat condition tracker** (per-round state)
+5. **Bonus reward integration** (LevelUp.tsx)
+
+### Card States (New)
+- **Dud Card:** White/blank card that cannot be selected or matched. Created by Junk Rat effect.
+- **Face-Down Card:** Card showing back side, looks similar to dud but can be flipped. Matching nearby cards has chance to flip face-down cards.
+- **Countdown Card:** Card with visible timer. Must be matched before timer expires or lose 1HP.
+- **Triple Card:** Card requiring 3 matches to clear. Shows health indicator (3→2→1→gone).
+
+### Icons Needed
+All icons should already exist in `assets/icons/`. Verify and register any missing ones in `Icon.tsx`.
+
+### Balancing Considerations
+- Tier distribution ensures appropriate challenge scaling
+- Counters never fully disable weapons (max 90% reduction)
+- Defeat conditions are challenging but achievable
+- Risk/reward is meaningful: harder enemies = better bonus weapons
+- Instant death reserved for T3/T4 to avoid frustrating early game

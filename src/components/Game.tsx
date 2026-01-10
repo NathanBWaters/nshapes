@@ -1154,8 +1154,31 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     // Delay card replacement to allow reward visualization (1.5s)
     // Score has already been updated immediately above via setState
     setTimeout(() => {
-      // Cards to replace are already passed from GameBoard (matched + exploded + laser)
-      replaceMatchedCards(cards);
+      // Separate multi-hit cards (health > 1) from cards to replace
+      const cardsToDecrement = cards.filter(c => c.health !== undefined && c.health > 1);
+      const cardsToReplace = cards.filter(c => c.health === undefined || c.health <= 1);
+
+      // Decrement health for multi-hit cards instead of replacing them
+      if (cardsToDecrement.length > 0) {
+        setState(prevState => {
+          const updatedBoard = prevState.board.map(boardCard => {
+            const matchedCard = cardsToDecrement.find(c => c.id === boardCard.id);
+            if (matchedCard) {
+              return {
+                ...boardCard,
+                health: (boardCard.health || 1) - 1
+              };
+            }
+            return boardCard;
+          });
+          return { ...prevState, board: updatedBoard };
+        });
+      }
+
+      // Replace cards that should be removed (no health or health <= 1)
+      if (cardsToReplace.length > 0) {
+        replaceMatchedCards(cardsToReplace);
+      }
 
       // Handle board growth if triggered
       if (weaponEffects && weaponEffects.boardGrowth > 0) {
@@ -1539,37 +1562,12 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     );
 
     // Generate replacement cards
+    // Note: Card modifiers (health, bombs, etc.) are applied by the enemy system, not randomly
     for (let i = 0; i < matchedCards.length; i++) {
       if (remainingDeck.length > 0) {
         // Get a random card from the deck
         const randomIndex = Math.floor(Math.random() * remainingDeck.length);
         const newCard = { ...remainingDeck[randomIndex], selected: false };
-
-        // Apply modifiers based on difficulty and round
-        const modifierChance = 0.05 * state.round + 0.02 * state.round;
-
-        if (Math.random() < modifierChance * 0.7) {
-          newCard.health = Math.min(Math.floor(Math.random() * 3) + 2, 5);
-        }
-        if (Math.random() < modifierChance * 0.3) {
-          newCard.lootBox = true;
-        }
-        if (Math.random() < modifierChance * 0.5) {
-          newCard.bonusMoney = Math.floor(Math.random() * 5) + 1;
-        }
-        if (Math.random() < modifierChance * 0.5) {
-          newCard.bonusPoints = Math.floor(Math.random() * 3) + 1;
-        }
-        if (Math.random() < modifierChance * 0.25) {
-          newCard.healing = true;
-        }
-        if (Math.random() < modifierChance * 0.3) {
-          newCard.clover = true;
-        }
-        if (Math.random() < modifierChance * 0.4) {
-          newCard.timedReward = true;
-          newCard.timedRewardAmount = Math.floor(Math.random() * 5) + 3;
-        }
 
         newCards.push(newCard);
 

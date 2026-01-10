@@ -570,17 +570,21 @@ const GameBoard: React.FC<GameBoardProps> = ({
           const allRewards = [...matchedRewards, ...explosionRewards, ...laserRewards, ...ricochetRewards, ...echoRewards];
           const rewardsWithMatchId = allRewards.map(r => ({ ...r, matchId }));
 
-          // Collect all affected card IDs
-          const allAffectedCardIds = [
-            ...newSelectedCards.map(c => c.id),
-            ...weaponEffects.explosiveCards.map(c => c.id),
-            ...weaponEffects.laserCards.map(c => c.id),
-            ...weaponEffects.ricochetCards.map(c => c.id),
-            ...echoCards.map(c => c.id),
+          // Collect all affected cards
+          const allAffectedCards = [
+            ...newSelectedCards,
+            ...weaponEffects.explosiveCards,
+            ...weaponEffects.laserCards,
+            ...weaponEffects.ricochetCards,
+            ...echoCards,
           ];
 
-          // Mark all affected cards as matched and add rewards
-          setMatchedCardIds(prev => [...prev, ...allAffectedCardIds]);
+          // Filter out multi-hit cards (health > 1) - they stay on board with decremented health
+          const cardsToRemove = allAffectedCards.filter(c => c.health === undefined || c.health <= 1);
+          const cardsToRemoveIds = cardsToRemove.map(c => c.id);
+
+          // Mark only removable cards as matched (multi-hit cards stay visible)
+          setMatchedCardIds(prev => [...prev, ...cardsToRemoveIds]);
           setSelectedCards(prev => prev.filter(c => !newSelectedCards.some(mc => mc.id === c.id)));
           setRevealingRewards(prev => [...prev, ...rewardsWithMatchId]);
 
@@ -731,17 +735,21 @@ const GameBoard: React.FC<GameBoardProps> = ({
             const allRewards = [...matchedRewards, ...explosionRewards, ...laserRewards, ...ricochetRewards, ...echoRewards];
             const rewardsWithMatchId = allRewards.map(r => ({ ...r, matchId }));
 
-            // Collect all affected card IDs
-            const allAffectedCardIds = [
-              ...newSelectedCards.map(c => c.id),
-              ...weaponEffects.explosiveCards.map(c => c.id),
-              ...weaponEffects.laserCards.map(c => c.id),
-              ...weaponEffects.ricochetCards.map(c => c.id),
-              ...echoCards.map(c => c.id),
+            // Collect all affected cards
+            const allAffectedCards = [
+              ...newSelectedCards,
+              ...weaponEffects.explosiveCards,
+              ...weaponEffects.laserCards,
+              ...weaponEffects.ricochetCards,
+              ...echoCards,
             ];
 
-            // Mark all affected cards and add rewards for visual reveal
-            setMatchedCardIds(prev => [...prev, ...allAffectedCardIds]);
+            // Filter out multi-hit cards (health > 1) - they stay on board with decremented health
+            const cardsToRemove = allAffectedCards.filter(c => c.health === undefined || c.health <= 1);
+            const cardsToRemoveIds = cardsToRemove.map(c => c.id);
+
+            // Mark only removable cards as matched (multi-hit cards stay visible)
+            setMatchedCardIds(prev => [...prev, ...cardsToRemoveIds]);
             setSelectedCards(prev => prev.filter(c => !newSelectedCards.some(mc => mc.id === c.id)));
             setRevealingRewards(prev => [...prev, ...rewardsWithMatchId]);
 

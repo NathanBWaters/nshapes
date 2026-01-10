@@ -148,8 +148,8 @@ const Card: React.FC<CardProps> = ({
     };
   });
 
-  // NOTE: Multi-hit cards (health > 1) are not currently used in gameplay.
-  // Keeping this code for potential future use.
+  // Multi-hit cards: health > 1 shows badge, health = 1 is regular (no badge), health = 0 means removed
+  // Default health is 1 (undefined treated as 1). Badge shows remaining hits needed.
   const hasModifiers = card.health !== undefined && card.health > 1;
 
   // Get shape component based on shape type
@@ -202,8 +202,8 @@ const Card: React.FC<CardProps> = ({
     return cardStyles;
   };
 
-  // NOTE: Health badge for multi-hit cards - not currently used in gameplay.
-  // Keeping for potential future use.
+  // Health badge for multi-hit cards (used by enemy system)
+  // Shows remaining hits needed when health > 1
   const getModifierBadge = () => {
     if (!hasModifiers) return null;
 

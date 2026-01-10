@@ -83,105 +83,19 @@ export const shuffleArray = <T>(array: T[]): T[] => {
   return newArray;
 };
 
-// Generate a set of cards for the game board with random modifiers
+// Generate a set of cards for the game board
+// Note: Card modifiers (health, bombs, etc.) are applied by the enemy system, not randomly
 export const generateGameBoard = (
   size: number = 12,
-  difficulty: number = 1,
-  round: number = 1,
+  _difficulty: number = 1,
+  _round: number = 1,
   activeAttributes: AttributeName[] = DEFAULT_ATTRIBUTES
 ): Card[] => {
   // Create and shuffle the deck with active attributes
   const deck = shuffleArray(createDeck(activeAttributes));
-  
-  // Take the first 'size' cards for the board
-  const boardCards = deck.slice(0, size);
-  
-  // Apply modifiers based on difficulty and round
-  return boardCards.map(card => {
-    const modifiedCard = { ...card };
-    
-    // Chance to add modifiers increases with difficulty and round
-    const modifierChance = 0.05 * difficulty + 0.02 * round;
-    
-    // Health (multi-hit cards)
-    if (Math.random() < modifierChance * 0.7) {
-      modifiedCard.health = Math.min(Math.floor(Math.random() * 3) + 2, 5); // 2-5 health
-    }
-    
-    // Loot box (gives random rewards)
-    if (Math.random() < modifierChance * 0.3) {
-      modifiedCard.lootBox = true;
-    }
-    
-    // Bonus money
-    if (Math.random() < modifierChance * 0.5) {
-      modifiedCard.bonusMoney = Math.floor(Math.random() * 5) + 1; // 1-5 bonus money
-    }
-    
-    // Bonus points
-    if (Math.random() < modifierChance * 0.5) {
-      modifiedCard.bonusPoints = Math.floor(Math.random() * 3) + 1; // 1-3 bonus points
-    }
-    
-    // Fire starter (burns adjacent cards)
-    if (Math.random() < modifierChance * 0.2) {
-      modifiedCard.fireStarter = true;
-    }
-    
-    // Bomb (explodes after a timer)
-    if (Math.random() < modifierChance * 0.15 && round > 2) {
-      modifiedCard.bomb = true;
-      modifiedCard.bombTimer = Math.floor(Math.random() * 10) + 10; // 10-20 seconds
-    }
-    
-    // Healing (restores player health)
-    if (Math.random() < modifierChance * 0.25) {
-      modifiedCard.healing = true;
-    }
-    
-    // Spikes (damages player when matched)
-    if (Math.random() < modifierChance * 0.2 && round > 3) {
-      modifiedCard.spikes = true;
-    }
 
-    // Fragile card (breaks if not matched quickly)
-    if (Math.random() < modifierChance * 0.2 && round > 3) {
-      modifiedCard.isFragile = true;
-    }
-    
-    // Booby trap (negative effect when matched)
-    if (Math.random() < modifierChance * 0.15 && round > 5) {
-      modifiedCard.boobyTrap = true;
-    }
-    
-    // Clover (increases luck temporarily)
-    if (Math.random() < modifierChance * 0.3) {
-      modifiedCard.clover = true;
-    }
-    
-    // Card clear (removes all cards of same type)
-    if (Math.random() < modifierChance * 0.1 && round > 6) {
-      modifiedCard.cardClear = true;
-    }
-    
-    // Broom (clears all modifiers from the board)
-    if (Math.random() < modifierChance * 0.05 && round > 7) {
-      modifiedCard.broom = true;
-    }
-    
-    // Self healing (regenerates health over time)
-    if (Math.random() < modifierChance * 0.2 && round > 4) {
-      modifiedCard.selfHealing = true;
-    }
-    
-    // Timed reward (bonus if matched quickly)
-    if (Math.random() < modifierChance * 0.4) {
-      modifiedCard.timedReward = true;
-      modifiedCard.timedRewardAmount = Math.floor(Math.random() * 5) + 3; // 3-7 bonus
-    }
-    
-    return modifiedCard;
-  });
+  // Take the first 'size' cards for the board
+  return deck.slice(0, size);
 };
 
 // Format time in seconds
