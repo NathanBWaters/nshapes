@@ -482,6 +482,64 @@ BOARD = {
 
 ---
 
+## Weapon System Overhaul (Planned)
+
+### Rarity Restructure
+
+| Rarity | Base % | Notes |
+|--------|--------|-------|
+| **Common** | 5% | Basic effect |
+| **Rare** | 10% | Better effect |
+| **Epic** | 20% | Effect + bonus (see below) |
+| **Legendary** | Varies | Cross-system bridges (new tier) |
+
+### Cap System
+
+Effects are capped to prevent overpowered stacking. Players have:
+- **Accumulated %**: Total from all purchased weapons
+- **Effective %**: Capped value actually applied
+
+| Effect | Weapon | Default Cap | Cap Increase |
+|--------|--------|-------------|--------------|
+| Echo | Echo Stone | 25% | +5% |
+| Lasers | Prismatic Ray | 30% | +5% |
+| Grace gain | Fortune Token | 30% | +5% |
+| Explosions | Blast Powder | 40% | +10% |
+| Hints | Oracle Eye, Seeker Lens | 40% | +10% |
+| Time gain | Time Drop | 40% | +10% |
+| Healing | Mending Charm | 50% | +10% |
+| Fire | Flint Spark | 50% | +10% |
+| Ricochets | Chaos Shard | 60% | +10% |
+| Board expansion | Growth Seed | 60% | +10% |
+| Coins | Fortune's Favor | 70% | +15% |
+| XP | Scholar's Tome | 100% | None needed |
+
+**Cap Increasers:** One per effect type, rare-priced. Increase is ~20% of base cap, rounded to 5%.
+
+### Epic Item Design
+
+Epics are 20% base + something extra (75% should have added value). Mix of:
+
+1. **Cap Bundle:** 20% effect + includes +5% cap increase
+2. **Cross-system Lite:** 20% effect + minor secondary trigger (e.g., 10% chance for bonus)
+3. **Multi-pack:** Combines 2-3 related effects in one item
+
+Each weapon type gets a unique, interesting Epic variant.
+
+### Legendary Item Design (New Tier)
+
+Cross-system bridge items that create cascading effect chains:
+
+- **Trigger:** When X happens (explosion, heal, echo, etc.)
+- **Effect:** Y% chance of causing Z (from a different system)
+- **Limited:** maxCount 1-3 to prevent infinite loops
+
+Example: "10% chance for explosions to grant a grace" (maxCount: 3)
+
+These are powerful, rare items that tie systems together.
+
+---
+
 ## Future Considerations
 
 ### Potential New Weapon Types
