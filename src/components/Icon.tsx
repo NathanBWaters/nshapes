@@ -12,6 +12,9 @@ import SittingDog from '../../assets/icons/delapouite/sitting-dog.svg';
 import Penguin from '../../assets/icons/delapouite/penguin.svg';
 import EatingPelican from '../../assets/icons/delapouite/eating-pelican.svg';
 import Badger from '../../assets/icons/caro-asercion/badger.svg';
+import BarnOwl from '../../assets/icons/caro-asercion/barn-owl.svg';
+import Hedgehog from '../../assets/icons/caro-asercion/hedgehog.svg';
+import Sloth from '../../assets/icons/caro-asercion/sloth.svg';
 
 // Enemies
 import JumpingDog from '../../assets/icons/delapouite/jumping-dog.svg';
@@ -19,6 +22,14 @@ import Jellyfish from '../../assets/icons/lorc/jellyfish.svg';
 import Snake from '../../assets/icons/lorc/snake.svg';
 import Mammoth from '../../assets/icons/delapouite/mammoth.svg';
 import Rabbit from '../../assets/icons/delapouite/rabbit.svg';
+import Vulture from '../../assets/icons/lorc/vulture.svg';
+import Crab from '../../assets/icons/lorc/crab.svg';
+import EvilBat from '../../assets/icons/lorc/evil-bat.svg';
+import Bee from '../../assets/icons/lorc/bee.svg';
+import Frog from '../../assets/icons/lorc/frog.svg';
+import Mouse from '../../assets/icons/lorc/mouse.svg';
+import Ermine from '../../assets/icons/delapouite/ermine.svg';
+import Squirrel from '../../assets/icons/delapouite/squirrel.svg';
 
 // Weapons
 import FlintSpark from '../../assets/icons/delapouite/flint-spark.svg';
@@ -94,6 +105,9 @@ const ICON_REGISTRY = {
   'delapouite/penguin': Penguin,
   'delapouite/eating-pelican': EatingPelican,
   'caro-asercion/badger': Badger,
+  'caro-asercion/barn-owl': BarnOwl,
+  'caro-asercion/hedgehog': Hedgehog,
+  'caro-asercion/sloth': Sloth,
 
   // Enemies
   'delapouite/jumping-dog': JumpingDog,
@@ -101,6 +115,14 @@ const ICON_REGISTRY = {
   'lorc/snake': Snake,
   'delapouite/mammoth': Mammoth,
   'delapouite/rabbit': Rabbit,
+  'lorc/vulture': Vulture,
+  'lorc/crab': Crab,
+  'lorc/evil-bat': EvilBat,
+  'lorc/bee': Bee,
+  'lorc/frog': Frog,
+  'lorc/mouse': Mouse,
+  'delapouite/ermine': Ermine,
+  'delapouite/squirrel': Squirrel,
 
   // Weapons
   'delapouite/flint-spark': FlintSpark,

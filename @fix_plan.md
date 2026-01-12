@@ -1,10 +1,8 @@
-# Ralph Fix Plan
-
-# Enemy System Implementation TODO
+# Enemy System Implementation Plan
 
 > **For Claude:** Check off tasks with `[x]` as you complete them. Follow TDD: write tests first, implement, verify tests pass.
 
-You MUST commit the code once the unit tests and integration tests are passing between each section, like "Section 1: Foundation - Core Types & Interfaces".
+You MUST commit the code once the unit tests and integration tests are passing between each section.
 
 ---
 
@@ -37,7 +35,7 @@ You MUST commit the code once the unit tests and integration tests are passing b
 - [x] Add `isFaceDown?: boolean` to Card interface
 - [x] Add `hasCountdown?: boolean` to Card interface
 - [x] Add `countdownTimer?: number` to Card interface
-- [x] Add `hasBomb?: boolean` to Card interface (if not using existing `bomb` property)
+- [x] Add `hasBomb?: boolean` to Card interface
 
 ### 1.4 Verification
 - [x] Committed at v0.1.3 (ce5637d)
@@ -78,84 +76,7 @@ You MUST commit the code once the unit tests and integration tests are passing b
 
 ### 3.1 Unit Tests
 - [x] Create `__tests__/enemyEffects.test.ts`
-
-#### DudCardEffect Tests
-- [x] Test: creates dud when random < chance
-- [x] Test: does not create dud when random >= chance
-- [x] Test: works at 0% chance (never dud)
-- [x] Test: works at 100% chance (always dud)
-
-#### InactivityEffect Tests
-- [x] Test: tracks time since match correctly
-- [x] Test: triggers damage penalty at threshold
-- [x] Test: triggers instant death at threshold when configured
-- [x] Test: resets timer when match occurs
-- [x] Test: emits warning event at 5 seconds remaining
-- [x] Test: returns correct UI modifiers for inactivity bar
-
-#### ScoreDecayEffect Tests
-- [x] Test: decays score by correct amount per tick
-- [x] Test: does not decay below 0 (handled in GameBoard)
-- [x] Test: returns correct UI modifiers for decay indicator
-
-#### FaceDownEffect Tests
-- [x] Test: creates face-down card when random < chance
-- [x] Test: any match triggers flip roll for ALL face-down cards
-- [x] Test: flips card when random < flipChance
-- [x] Test: does not flip when random >= flipChance
-- [x] Test: multiple face-down cards each get independent roll
-
-#### CardRemovalEffect Tests
-- [x] Test: removes card at interval
-- [x] Test: does not remove when board at minimum size (6)
-- [x] Test: resets removal timer after removal
-- [x] Test: emits card_removed event
-
-#### TimerSpeedEffect Tests
-- [x] Test: returns correct timerSpeedMultiplier in UI modifiers
-
-#### WeaponCounterEffect Tests
-- [x] Test: returns correct stat reduction for fire
-- [x] Test: returns correct stat reduction for explosion
-- [x] Test: returns correct stat reduction for laser
-- [x] Test: returns correct stat reduction for hints
-- [x] Test: returns correct stat reduction for graces
-- [x] Test: returns correct stat reduction for time
-- [x] Test: returns correct stat reduction for healing
-- [x] Test: returns correct UI modifier with counter badge info
-
-#### PositionShuffleEffect Tests
-- [x] Test: shuffles positions at interval
-- [x] Test: emits positions_shuffled event
-- [x] Test: resets timer after shuffle
-
-#### TimeStealEffect Tests
-- [x] Test: returns negative timeDelta on match
-
-#### DamageMultiplierEffect Tests
-- [x] Test: returns correct damage multiplier in stat modifiers
-
-#### PointsMultiplierEffect Tests
-- [x] Test: returns correct points multiplier on match
-- [x] Test: returns correct points multiplier in stat modifiers
-
-#### HintDisableEffect Tests
-- [x] Test: returns disableAutoHint in UI modifiers
-- [x] Test: returns disableManualHint in UI modifiers
-
-#### ExtraCardRemovalOnMatchEffect Tests
-- [x] Test: removes extra cards on valid match
-- [x] Test: respects minimum board size
-
-#### composeEffects Tests
-- [x] Test: composes multiple effects into a single enemy
-- [x] Test: merges onTick results from multiple effects
-- [x] Test: merges UI modifiers from multiple effects
-- [x] Test: merges stat modifiers from multiple effects
-- [x] Test: chains onCardDraw through multiple effects
-- [x] Test: resets inactivity timer on valid match
-- [x] Test: uses custom defeat condition when provided
-- [x] Test: resets internal state on onRoundStart
+- [x] All 54 effect behavior tests passing
 
 ### 3.2 Implementation
 - [x] Create `src/utils/enemyEffects.ts`
@@ -179,14 +100,12 @@ You MUST commit the code once the unit tests and integration tests are passing b
 - [x] Run `npm test __tests__/enemyEffects.test.ts` - all 54 tests pass
 - [x] Committed at 50febd0
 
-### 3.4 Note on Unimplemented Effects
-The following effects from the spec were not implemented in Section 3 as they require more complex state tracking that will be implemented when specific enemies need them:
-- `AttributeChangeEffect` - For enemies like Chameleon Snake that change card attributes
-- `BombEffect` - For enemies like Trap Weaver that place bombs
-- `CountdownEffect` - For enemies like Ticking Viper with countdown timers
-- `TripleCardEffect` - For enemies like Iron Shell with multi-hit cards
-
-These will be implemented as part of the individual enemy implementations in Section 4+.
+### 3.4 Unimplemented Effects (will add as needed)
+The following effects will be implemented when specific enemies need them:
+- `AttributeChangeEffect` - For Shifting Chameleon (changes card attributes)
+- `BombEffect` - For Trap Weaver (places timed bombs on cards)
+- `CountdownEffect` - For Ticking Viper (single countdown card)
+- `TripleCardEffect` - For Iron Shell (cards needing multiple matches)
 
 ---
 
@@ -198,7 +117,7 @@ These will be implemented as part of the individual enemy implementations in Sec
 - [x] Effect: 4% dud chance on card draw
 - [x] Defeat condition: Get a 4-match streak
 - [x] Create `__tests__/enemies/tier1/junkRat.test.ts`
-- [x] Tests passing
+- [x] Tests passing (all tests pass)
 
 ### 4.2 Stalking Wolf ✅ COMPLETED
 - [x] Create `src/utils/enemies/tier1/stalkingWolf.ts`
@@ -209,76 +128,726 @@ These will be implemented as part of the individual enemy implementations in Sec
 - [x] Tests passing (18 tests)
 
 ### 4.3 Shifting Chameleon
+- [ ] Implement `AttributeChangeEffect` in `src/utils/enemyEffects.ts`
+  - Config: `{ intervalMs: number, attribute: 'random' }`
+  - onTick: Track timeSinceAttributeChange, when >= interval, pick random card and change one attribute to a random different value
+  - Return cardModifications with the changed attribute
+  - Emit 'attribute_changed' event
 - [ ] Create `src/utils/enemies/tier1/shiftingChameleon.ts`
-- [ ] Implement AttributeChangeEffect (new effect needed)
+- [ ] Icon: `lorc/chameleon-glyph` (verify exists, otherwise use suitable alternative)
 - [ ] Effect: Changes 1 attribute on random cards every 20s
-- [ ] Defeat condition: Get 2 all-different matches
+- [ ] Defeat condition: Get 2 all-different matches (`stats.allDifferentMatches >= 2`)
+- [ ] Create `__tests__/enemies/tier1/shiftingChameleon.test.ts`
 - [ ] Tests passing
 
 ### 4.4 Burrowing Mole ✅ COMPLETED
 - [x] Create `src/utils/enemies/tier1/burrowingMole.ts`
-- [x] Effect: Removes 1 random card every 20s
+- [x] Effect: Removes 1 random card every 20s (uses CardRemovalEffect)
 - [x] Defeat condition: Match all 3 shapes at least once
 - [x] Tests passing (16 tests)
 
 ### 4.5 Masked Bandit ✅ COMPLETED
 - [x] Create `src/utils/enemies/tier1/maskedBandit.ts`
-- [x] Effect: Disables auto-hints entirely
+- [x] Effect: Disables auto-hints entirely (uses HintDisableEffect)
 - [x] Defeat condition: Get 3 matches without hesitating >10s
 - [x] Tests passing (17 tests)
 
 ### 4.6 Wild Goose ✅ COMPLETED
 - [x] Create `src/utils/enemies/tier1/wildGoose.ts`
-- [x] Effect: Shuffles card positions every 30s
+- [x] Effect: Shuffles card positions every 30s (uses PositionShuffleEffect)
 - [x] Defeat condition: Match 2 sets that share a card attribute
 - [x] Tests passing (10 tests)
 
 ### 4.7 Thieving Raven ✅ COMPLETED
 - [x] Create `src/utils/enemies/tier1/thievingRaven.ts`
-- [x] Effect: -5s stolen per match
+- [x] Effect: -5s stolen per match (uses TimeStealEffect)
 - [x] Defeat condition: Complete 5 matches total
 - [x] Tests passing (9 tests)
 
 ### 4.8 Stinging Scorpion ✅ COMPLETED
 - [x] Create `src/utils/enemies/tier1/stingingScorpion.ts`
-- [x] Effect: 2x damage taken, 2x points earned
+- [x] Effect: 2x damage taken, 2x points earned (uses DamageMultiplierEffect + PointsMultiplierEffect)
 - [x] Defeat condition: Make no invalid matches
 - [x] Tests passing (9 tests)
 
-### 4.9-4.22 (Remaining Tier 1 enemies)
-TODO: Add as individual subsections when starting implementation
-- Shifting Chameleon (needs AttributeChangeEffect)
-- Night Owl (needs FaceDownEffect - already implemented)
-- Swift Bee (needs TimerSpeedEffect - already implemented)
-- Trap Weaver (needs BombEffect - complex)
-- Circling Vulture (ScoreDecayEffect - already implemented)
-- Iron Shell (needs TripleCardEffect - complex)
-- Ticking Viper (needs CountdownEffect - complex)
-- Wet Crab, Spiny Hedgehog, Shadow Bat, Foggy Frog, Sneaky Mouse, Lazy Sloth (WeaponCounterEffect - already implemented)
-- Greedy Squirrel (ExtraCardRemovalOnMatchEffect - already implemented)
-- Punishing Ermine (ExtraCardRemovalOnInvalidEffect - already implemented)
+### 4.9 Night Owl ✅ COMPLETED
+- [x] Create `src/utils/enemies/tier1/nightOwl.ts`
+- [x] Icon: `caro-asercion/barn-owl`
+- [x] Effect: 20% chance per draw → card is face-down; matching flips with 70% chance (uses FaceDownEffect with `{ chance: 20, flipChance: 70 }`)
+- [x] Defeat condition: Match 4 face-down cards (`stats.faceDownCardsMatched >= 4`)
+- [x] Create `__tests__/enemies/tier1/nightOwl.test.ts`
+- [x] Register in `src/utils/enemies/tier1/index.ts`
+- [x] Tests passing
+
+### 4.10 Swift Bee ✅ COMPLETED
+- [x] Create `src/utils/enemies/tier1/swiftBee.ts`
+- [x] Icon: `lorc/bee`
+- [x] Effect: Timer 20% faster, 20% more points (uses TimerSpeedEffect `{ multiplier: 1.2 }` + PointsMultiplierEffect `{ multiplier: 1.2 }`)
+- [x] Defeat condition: Get a 5-match streak (`stats.maxStreak >= 5`)
+- [x] Create `__tests__/enemies/tier1/swiftBee.test.ts`
+- [x] Register in `src/utils/enemies/tier1/index.ts`
+- [x] Tests passing
+
+### 4.11 Trap Weaver
+- [ ] Implement `BombEffect` in `src/utils/enemyEffects.ts`
+  - Config: `{ bombChance: number, bombTimerMs: number, minBoardSize: number }`
+  - onCardDraw: Chance to add hasBomb=true and bombTimer to card
+  - onTick: Decrement bomb timers, explode (remove card) when timer reaches 0
+  - Track bombs in internalState, emit 'bomb_placed' and 'bomb_exploded' events
+  - Return cardsToRemove when bombs explode
+- [ ] Create `src/utils/enemies/tier1/trapWeaver.ts`
+- [ ] Icon: `carl-olsen/spider-face`
+- [ ] Effect: Random cards get 10s bomb timers (BombEffect `{ bombChance: 15, bombTimerMs: 10000, minBoardSize: 6 }`)
+- [ ] Defeat condition: Defuse 3 bombs - match bomb cards before explosion (`stats.bombsDefused >= 3`)
+- [ ] Create `__tests__/enemies/tier1/trapWeaver.test.ts`
+- [ ] Register in `src/utils/enemies/tier1/index.ts`
+- [ ] Tests passing
+
+### 4.12 Circling Vulture ✅ COMPLETED
+- [x] Create `src/utils/enemies/tier1/circlingVulture.ts`
+- [x] Icon: `lorc/vulture`
+- [x] Effect: Score drains 5pts/sec (uses ScoreDecayEffect `{ ratePerSecond: 5 }`)
+- [x] Defeat condition: Reach 150% of target score (`stats.currentScore >= stats.targetScore * 1.5`)
+- [x] Create `__tests__/enemies/tier1/circlingVulture.test.ts`
+- [x] Register in `src/utils/enemies/tier1/index.ts`
+- [x] Tests passing
+
+### 4.13 Iron Shell
+- [ ] Implement `TripleCardEffect` in `src/utils/enemyEffects.ts`
+  - Config: `{ count: number }` - number of triple cards to place
+  - onRoundStart: Select `count` random cards and set health=3 on them
+  - Track which cards have health > 1
+  - When card is matched, decrement health. Only remove when health reaches 0
+  - Emit event for health decrement
+- [ ] Create `src/utils/enemies/tier1/ironShell.ts`
+- [ ] Icon: `lorc/turtle`
+- [ ] Effect: One card needs 3 matches to clear (TripleCardEffect `{ count: 1 }`)
+- [ ] Defeat condition: Clear the triple-health card (`stats.tripleCardsCleared >= 1`)
+- [ ] Create `__tests__/enemies/tier1/ironShell.test.ts`
+- [ ] Register in `src/utils/enemies/tier1/index.ts`
+- [ ] Tests passing
+
+### 4.14 Ticking Viper
+- [ ] Implement `CountdownEffect` in `src/utils/enemyEffects.ts`
+  - Config: `{ countdownMs: number }` - time until penalty
+  - onRoundStart: Pick one random card and set hasCountdown=true, countdownTimer=config.countdownMs
+  - onTick: Decrement timer, when reaches 0 deal 1 damage and pick new card
+  - Emit 'countdown_warning' at 5s remaining, 'countdown_expired' when expires
+- [ ] Create `src/utils/enemies/tier1/tickingViper.ts`
+- [ ] Icon: `lorc/snake` (already registered)
+- [ ] Effect: One card has 15s countdown timer; match or lose 1HP (CountdownEffect `{ countdownMs: 15000 }`)
+- [ ] Defeat condition: Match the countdown card in time (`stats.countdownCardsMatched >= 1`)
+- [ ] Create `__tests__/enemies/tier1/tickingViper.test.ts`
+- [ ] Register in `src/utils/enemies/tier1/index.ts`
+- [ ] Tests passing
+
+### 4.15 Wet Crab ✅ COMPLETED
+- [x] Create `src/utils/enemies/tier1/wetCrab.ts`
+- [x] Icon: `lorc/crab`
+- [x] Effect: Fire effects -15% (uses WeaponCounterEffect `{ type: 'fire', reduction: 15 }`)
+- [x] Defeat condition: Get 2 matches with all-same color (`stats.allSameColorMatches >= 2`)
+- [x] Create `__tests__/enemies/tier1/wetCrab.test.ts`
+- [x] Register in `src/utils/enemies/tier1/index.ts`
+- [x] Tests passing
+
+### 4.16 Spiny Hedgehog ✅ COMPLETED
+- [x] Create `src/utils/enemies/tier1/spinyHedgehog.ts`
+- [x] Icon: `caro-asercion/hedgehog`
+- [x] Effect: Explosion effects -15% (uses WeaponCounterEffect `{ type: 'explosion', reduction: 15 }`)
+- [x] Defeat condition: Get 3 matches containing squiggles (`stats.squiggleMatches >= 3`)
+- [x] Create `__tests__/enemies/tier1/spinyHedgehog.test.ts`
+- [x] Register in `src/utils/enemies/tier1/index.ts`
+- [x] Tests passing
+
+### 4.17 Shadow Bat ✅ COMPLETED
+- [x] Create `src/utils/enemies/tier1/shadowBat.ts`
+- [x] Icon: `lorc/evil-bat`
+- [x] Effect: Laser effects -20% (uses WeaponCounterEffect `{ type: 'laser', reduction: 20 }`)
+- [x] Defeat condition: Get an all-different match (`stats.allDifferentMatches >= 1`)
+- [x] Create `__tests__/enemies/tier1/shadowBat.test.ts`
+- [x] Register in `src/utils/enemies/tier1/index.ts`
+- [x] Tests passing
+
+### 4.18 Foggy Frog ✅ COMPLETED
+- [x] Create `src/utils/enemies/tier1/foggyFrog.ts`
+- [x] Icon: `lorc/frog`
+- [x] Effect: Hint gain -15% (uses WeaponCounterEffect `{ type: 'hint', reduction: 15 }`)
+- [x] Defeat condition: Achieve minimum with 2+ hints remaining (`stats.currentScore >= stats.targetScore && stats.hintsRemaining >= 2`)
+- [x] Create `__tests__/enemies/tier1/foggyFrog.test.ts`
+- [x] Register in `src/utils/enemies/tier1/index.ts`
+- [x] Tests passing
+
+### 4.19 Sneaky Mouse ✅ COMPLETED
+- [x] Create `src/utils/enemies/tier1/sneakyMouse.ts`
+- [x] Icon: `lorc/mouse`
+- [x] Effect: Grace gain -15% (uses WeaponCounterEffect `{ type: 'grace', reduction: 15 }`)
+- [x] Defeat condition: Never use a grace (`stats.gracesUsed === 0 && stats.totalMatches >= 1`)
+- [x] Create `__tests__/enemies/tier1/sneakyMouse.test.ts`
+- [x] Register in `src/utils/enemies/tier1/index.ts`
+- [x] Tests passing
+
+### 4.20 Lazy Sloth ✅ COMPLETED
+- [x] Create `src/utils/enemies/tier1/lazySloth.ts`
+- [x] Icon: `caro-asercion/sloth`
+- [x] Effect: Time gain -20% (uses WeaponCounterEffect `{ type: 'time', reduction: 20 }`)
+- [x] Defeat condition: Achieve minimum with 15+ seconds remaining (`stats.currentScore >= stats.targetScore && stats.timeRemaining >= 15`)
+- [x] Create `__tests__/enemies/tier1/lazySloth.test.ts`
+- [x] Register in `src/utils/enemies/tier1/index.ts`
+- [x] Tests passing
+
+### 4.21 Greedy Squirrel ✅ COMPLETED
+- [x] Create `src/utils/enemies/tier1/greedySquirrel.ts`
+- [x] Icon: `delapouite/squirrel`
+- [x] Effect: On valid match, 1 additional random card is removed (uses ExtraCardRemovalOnMatchEffect `{ count: 1, minBoardSize: 6 }`)
+- [x] Defeat condition: Achieve minimum with 8+ cards remaining (`stats.currentScore >= stats.targetScore && stats.cardsRemaining >= 8`)
+- [x] Create `__tests__/enemies/tier1/greedySquirrel.test.ts`
+- [x] Register in `src/utils/enemies/tier1/index.ts`
+- [x] Tests passing
+
+### 4.22 Punishing Ermine ✅ COMPLETED
+- [x] Create `src/utils/enemies/tier1/punishingErmine.ts`
+- [x] Icon: `delapouite/ermine`
+- [x] Effect: On invalid match, 2 extra cards are removed (uses ExtraCardRemovalOnInvalidEffect `{ count: 2, minBoardSize: 6 }`)
+- [x] Defeat condition: Make no invalid matches (`stats.invalidMatches === 0 && stats.totalMatches >= 1`)
+- [x] Create `__tests__/enemies/tier1/punishingErmine.test.ts`
+- [x] Register in `src/utils/enemies/tier1/index.ts`
+- [x] Tests passing
+
+### 4.23 Verification
+- [ ] Run `npm test -- --testPathPattern="enemies/tier1"` - all tests pass
+- [ ] Verify all 22 enemies are registered via `getEnemiesByTier(1).length === 22`
+- [ ] Commit with message: "feat(enemy): complete all 22 Tier 1 enemies"
 
 ---
 
-## Section 5: Tier 2 Enemies (12 total)
-TODO: Add when Section 4 is complete
+## Section 5: GameBoard Integration (PRIORITY - Do before more enemies)
+
+> **Important:** Complete this section before implementing Tier 2-4 enemies. This ensures the enemy system is actually functional in-game.
+
+### 5.1 RoundStats Tracking
+- [ ] Create `src/hooks/useRoundStats.ts`
+- [ ] Initialize RoundStats at round start with default values
+- [ ] Track totalMatches on valid match
+- [ ] Track currentStreak (increment on valid, reset on invalid)
+- [ ] Track maxStreak (update when currentStreak exceeds)
+- [ ] Track invalidMatches on invalid match
+- [ ] Track matchTimes array (time since previous match in ms)
+- [ ] Track timeRemaining from game timer
+- [ ] Track cardsRemaining from board state
+- [ ] Track shapesMatched Set (add shapes from matched cards)
+- [ ] Track colorsMatched Set (add colors from matched cards)
+- [ ] Track allDifferentMatches (count when all attributes are different)
+- [ ] Track allSameColorMatches (count when color is all-same)
+- [ ] Track squiggleMatches (count when any matched card has squiggle)
+- [ ] Track gracesUsed (increment when grace auto-used)
+- [ ] Track hintsUsed (increment when hint used)
+- [ ] Track hintsRemaining / gracesRemaining from player stats
+- [ ] Track damageReceived (increment on health loss)
+- [ ] Track weaponEffectsTriggered Set (add weapon type on trigger)
+- [ ] Track currentScore / targetScore
+- [ ] Track faceDownCardsMatched (count face-down cards in valid matches)
+- [ ] Track bombsDefused (count bomb cards matched before explosion)
+- [ ] Track countdownCardsMatched (count countdown cards matched in time)
+- [ ] Track tripleCardsCleared (count cards with health > 1 fully cleared)
+- [ ] Create `__tests__/useRoundStats.test.ts` with unit tests
+- [ ] Tests passing
+
+### 5.2 GameBoard Enemy Lifecycle Integration
+- [ ] Add `enemy: EnemyInstance` prop to GameBoard component
+- [ ] Add `roundStats: RoundStats` prop (or use hook internally)
+
+#### 5.2.1 onRoundStart Integration
+- [ ] Call `enemy.onRoundStart(board)` when round begins
+- [ ] Apply `cardModifications` from result to board state
+- [ ] Handle `events` from result (sound effects, animations)
+
+#### 5.2.2 onTick Integration
+- [ ] Get `timerSpeedMultiplier` from `enemy.getUIModifiers()`
+- [ ] Scale deltaMs by timerSpeedMultiplier before passing to enemy
+- [ ] Call `enemy.onTick(scaledDelta, board)` every game tick
+- [ ] Apply `scoreDelta` to score (clamp to 0 minimum)
+- [ ] Apply `healthDelta` to health
+- [ ] Handle `instantDeath` flag → trigger game over
+- [ ] Remove cards in `cardsToRemove` (NO replacement - board shrinks)
+- [ ] Apply `cardModifications` to board
+- [ ] Flip cards in `cardsToFlip` (set isFaceDown=false)
+- [ ] Handle `events` for UI/sound
+
+#### 5.2.3 onValidMatch Integration
+- [ ] Call `enemy.onValidMatch(matchedCards, board)` after valid match
+- [ ] Apply `timeDelta` to remaining time (can be negative for time steal)
+- [ ] Apply `pointsMultiplier` to match points
+- [ ] Remove extra cards in `cardsToRemove` (NO replacement)
+- [ ] Flip cards in `cardsToFlip`
+- [ ] Handle `events`
+- [ ] Check defeat condition: `enemy.checkDefeatCondition(roundStats)`
+
+#### 5.2.4 onInvalidMatch Integration
+- [ ] Call `enemy.onInvalidMatch(cards, board)` after invalid match
+- [ ] Remove extra cards in `cardsToRemove` (NO replacement)
+- [ ] Handle `events`
+
+#### 5.2.5 onCardDraw Integration
+- [ ] Call `enemy.onCardDraw(card)` when drawing new cards to replace matched cards
+- [ ] Use returned card (may have isDud, isFaceDown, hasBomb, etc.)
+- [ ] Note: Do NOT call onCardDraw for cards removed by enemy effects
+
+#### 5.2.6 Stat Modifiers Integration
+- [ ] Get `statModifiers` from `enemy.getStatModifiers()`
+- [ ] Apply `damageMultiplier` when calculating damage taken
+- [ ] Apply `pointsMultiplier` when calculating points earned
+- [ ] Apply weapon counter reductions when rolling weapon effects:
+  - `fireSpreadChanceReduction` → reduce fire spread chance
+  - `explosionChanceReduction` → reduce explosion chance
+  - `laserChanceReduction` → reduce laser chance
+  - `hintGainChanceReduction` → reduce hint gain chance
+  - `graceGainChanceReduction` → reduce grace gain chance
+  - `timeGainChanceReduction` → reduce time bonus chance
+  - `healingChanceReduction` → reduce healing chance
+
+#### 5.2.7 onRoundEnd Integration
+- [ ] Call `enemy.onRoundEnd()` when round ends
+- [ ] Clean up any enemy-related state
+
+### 5.3 Card Component Updates
+- [ ] Update `Card.tsx` to render dud cards (isDud=true)
+  - Visual: White/blank card, grayed out, cannot select
+  - Block selection in handleCardSelect if isDud
+- [ ] Update `Card.tsx` to render face-down cards (isFaceDown=true)
+  - Visual: Card back with "?" symbol
+  - Block selection in handleCardSelect if isFaceDown
+- [ ] Update `Card.tsx` to render countdown cards (hasCountdown=true)
+  - Visual: Urgent countdown timer overlay
+  - Show countdownTimer value
+- [ ] Update `Card.tsx` to render bomb cards (hasBomb=true)
+  - Visual: Bomb icon with countdown overlay
+  - Show bomb timer value
+- [ ] Update `Card.tsx` to render multi-health cards (health > 1)
+  - Visual: Health pips (●●● → ●● → ●)
+  - Show current health value
+- [ ] Create `__tests__/Card.enemy.test.tsx` with render tests
+- [ ] Tests passing
+
+### 5.4 Enemy UI Components
+- [ ] Create `src/components/enemy-ui/InactivityBar.tsx`
+  - Props: `{ current: number, max: number, penalty: 'damage' | 'death' }`
+  - Visual: Progress bar filling up, color changes near max, death icon for death penalty
+- [ ] Create `src/components/enemy-ui/ScoreDecayIndicator.tsx`
+  - Props: `{ rate: number }`
+  - Visual: "-X/sec" badge near score display
+- [ ] Create `src/components/enemy-ui/TimerSpeedBadge.tsx`
+  - Props: `{ multiplier: number }`
+  - Visual: "1.2x" badge near timer (only show if multiplier !== 1)
+- [ ] Create `src/components/enemy-ui/WeaponCounterBadge.tsx`
+  - Props: `{ type: string, reduction: number }`
+  - Visual: Weapon icon with "-X%" overlay
+- [ ] Create `src/components/enemy-ui/EnemyPortrait.tsx`
+  - Props: `{ enemy: EnemyInstance }`
+  - Visual: Enemy icon + name, shows active enemy
+- [ ] Create `src/components/enemy-ui/DefeatProgress.tsx`
+  - Props: `{ enemy: EnemyInstance, stats: RoundStats }`
+  - Visual: Progress indicator toward defeat condition
+- [ ] Create `src/components/enemy-ui/index.ts` barrel export
+- [ ] Create `__tests__/enemy-ui/` tests for each component
+- [ ] Tests passing
+
+### 5.5 GameBoard UI Integration
+- [ ] Import enemy UI components in GameBoard
+- [ ] Render `InactivityBar` when `uiModifiers.showInactivityBar` is set
+- [ ] Render `ScoreDecayIndicator` when `uiModifiers.showScoreDecay` is set
+- [ ] Render `TimerSpeedBadge` when `uiModifiers.timerSpeedMultiplier` !== 1
+- [ ] Render `WeaponCounterBadge` for each item in `uiModifiers.weaponCounters`
+- [ ] Render `EnemyPortrait` showing current enemy
+- [ ] Render `DefeatProgress` showing progress toward defeat condition
+- [ ] Handle `disableAutoHint` - don't show auto-hints when true
+- [ ] Handle `disableManualHint` - disable hint button when true
+
+### 5.6 Game.tsx Integration
+- [ ] Import `createEnemy`, `createDummyEnemy` from enemyFactory
+- [ ] Add `currentEnemy: EnemyInstance` to game state
+- [ ] Pass `enemy` prop to GameBoard component
+- [ ] Handle enemy selection phase (for now, use dummy enemy or random)
+- [ ] Track if enemy was defeated for bonus reward
+
+### 5.7 Integration Tests
+- [ ] Create `__tests__/integration/enemyGameBoard.test.tsx`
+- [ ] Test: DummyEnemy has no effect on gameplay
+- [ ] Test: DudCardEffect creates unselectable cards
+- [ ] Test: InactivityEffect shows bar and damages on timeout
+- [ ] Test: ScoreDecayEffect reduces score over time
+- [ ] Test: FaceDownEffect creates unselectable cards that flip on match
+- [ ] Test: CardRemovalEffect removes cards without replacement
+- [ ] Test: TimerSpeedEffect speeds up game timer
+- [ ] Test: WeaponCounterEffect reduces weapon effectiveness
+- [ ] Tests passing
+
+### 5.8 Verification
+- [ ] Run `npm test` - all tests pass
+- [ ] Run `npm run typecheck` - no type errors
+- [ ] Manual test in `/dev/play` with dummy enemy
+- [ ] Manual test with one real enemy (e.g., Junk Rat)
+- [ ] Commit with message: "feat(enemy): integrate enemy lifecycle with GameBoard"
 
 ---
 
-## Section 6: Tier 3 Enemies (12 total)
-TODO: Add when Section 5 is complete
+## Section 6: Tier 2 Enemies (12 total)
+
+> **Prerequisite:** Complete Section 5 (GameBoard Integration) first.
+
+### 6.1 Charging Boar
+- [ ] Create `src/utils/enemies/tier2/chargingBoar.ts`
+- [ ] Icon: `caro-asercion/boar`
+- [ ] Effects: InactivityEffect (35s → 1HP) + ScoreDecayEffect (3pts/sec)
+- [ ] Defeat condition: Get 3 matches each under 8s (`matchTimes.filter(t => t < 8000).length >= 3`)
+- [ ] Create `__tests__/enemies/tier2/chargingBoar.test.ts`
+- [ ] Tests passing
+
+### 6.2 Cackling Hyena
+- [ ] Create `src/utils/enemies/tier2/cacklingHyena.ts`
+- [ ] Icon: `lorc/hyena-head` or suitable alternative
+- [ ] Effects: TimeStealEffect (-3s) + WeaponCounterEffect (grace -35%)
+- [ ] Defeat condition: Match 6 times with no grace used (`stats.totalMatches >= 6 && stats.gracesUsed === 0`)
+- [ ] Create `__tests__/enemies/tier2/cacklingHyena.test.ts`
+- [ ] Tests passing
+
+### 6.3 Lurking Shark
+- [ ] Create `src/utils/enemies/tier2/lurkingShark.ts`
+- [ ] Icon: `lorc/shark-jaws` or suitable alternative
+- [ ] Effects: FaceDownEffect (25% chance) + CountdownEffect (12s timer)
+- [ ] Defeat condition: Match 3 face-down cards + the countdown card (`stats.faceDownCardsMatched >= 3 && stats.countdownCardsMatched >= 1`)
+- [ ] Create `__tests__/enemies/tier2/lurkingShark.test.ts`
+- [ ] Tests passing
+
+### 6.4 Diving Hawk
+- [ ] Create `src/utils/enemies/tier2/divingHawk.ts`
+- [ ] Icon: `lorc/hawk-emblem` or suitable alternative
+- [ ] Effects: TimerSpeedEffect (1.35x) + CardRemovalEffect (15s interval)
+- [ ] Defeat condition: Get 2 all-different matches under 6s each (`allDifferentMatches >= 2 && matchTimes for those < 6000`)
+- [ ] Create `__tests__/enemies/tier2/divingHawk.test.ts`
+- [ ] Tests passing
+
+### 6.5 Venomous Cobra
+- [ ] Create `src/utils/enemies/tier2/venomousCobra.ts`
+- [ ] Icon: `lorc/cobra` or suitable alternative
+- [ ] Effects: AttributeChangeEffect (15s) + BombEffect
+- [ ] Defeat condition: Match 4 bombs before they explode (`stats.bombsDefused >= 4`)
+- [ ] Create `__tests__/enemies/tier2/venomousCobra.test.ts`
+- [ ] Tests passing
+
+### 6.6 Prowling Direwolf
+- [ ] Create `src/utils/enemies/tier2/prowlingDirewolf.ts`
+- [ ] Icon: `lorc/direwolf`
+- [ ] Effects: DudCardEffect (6%) + PositionShuffleEffect (25s)
+- [ ] Defeat condition: Get a 6-match streak (`stats.maxStreak >= 6`)
+- [ ] Create `__tests__/enemies/tier2/prowlingDirewolf.test.ts`
+- [ ] Tests passing
+
+### 6.7 Hunting Eagle
+- [ ] Create `src/utils/enemies/tier2/huntingEagle.ts`
+- [ ] Icon: `lorc/eagle-head` or suitable alternative
+- [ ] Effects: TripleCardEffect (1 card) + WeaponCounterEffect (time -35%)
+- [ ] Defeat condition: Clear triple card with 20s+ remaining (`stats.tripleCardsCleared >= 1 && stats.timeRemaining >= 20`)
+- [ ] Create `__tests__/enemies/tier2/huntingEagle.test.ts`
+- [ ] Tests passing
+
+### 6.8 Armored Tusks
+- [ ] Create `src/utils/enemies/tier2/armoredTusks.ts`
+- [ ] Icon: `lorc/boar-tusks` or suitable alternative
+- [ ] Effects: WeaponCounterEffect (fire -35%) + WeaponCounterEffect (explosion -35%)
+- [ ] Defeat condition: Trigger 2 destruction effects (`stats.weaponEffectsTriggered.size >= 2` where effects are fire/explosion/laser)
+- [ ] Create `__tests__/enemies/tier2/armoredTusks.test.ts`
+- [ ] Tests passing
+
+### 6.9 Creeping Shadow
+- [ ] Create `src/utils/enemies/tier2/creepingShadow.ts`
+- [ ] Icon: `lorc/beast-eye` or suitable alternative
+- [ ] Effects: HintDisableEffect (auto+manual) + WeaponCounterEffect (hint -35%)
+- [ ] Defeat condition: Match all 3 colors at least once (`stats.colorsMatched.size >= 3`)
+- [ ] Create `__tests__/enemies/tier2/creepingShadow.test.ts`
+- [ ] Tests passing
+
+### 6.10 Polar Guardian
+- [ ] Create `src/utils/enemies/tier2/polarGuardian.ts`
+- [ ] Icon: `delapouite/polar-bear` or suitable alternative
+- [ ] Effects: DamageMultiplierEffect (2x) + PointsMultiplierEffect (2x) + WeaponCounterEffect (laser -40%)
+- [ ] Defeat condition: Take no damage AND trigger 1 weapon effect (`stats.damageReceived === 0 && stats.weaponEffectsTriggered.size >= 1`)
+- [ ] Create `__tests__/enemies/tier2/polarGuardian.test.ts`
+- [ ] Tests passing
+
+### 6.11 Hoarding Beaver
+- [ ] Create `src/utils/enemies/tier2/hoardingBeaver.ts`
+- [ ] Icon: `caro-asercion/beaver` or suitable alternative
+- [ ] Effects: ExtraCardRemovalOnMatchEffect (1 card) + CardRemovalEffect (18s)
+- [ ] Defeat condition: Achieve minimum with 6+ cards remaining (`stats.currentScore >= stats.targetScore && stats.cardsRemaining >= 6`)
+- [ ] Create `__tests__/enemies/tier2/hoardingBeaver.test.ts`
+- [ ] Tests passing
+
+### 6.12 Fierce Wolverine
+- [ ] Create `src/utils/enemies/tier2/fierceWolverine.ts`
+- [ ] Icon: `lorc/wolverine-claws` or suitable alternative
+- [ ] Effects: ExtraCardRemovalOnInvalidEffect (2 cards) + DamageMultiplierEffect (2x) + PointsMultiplierEffect (2x)
+- [ ] Defeat condition: Make no invalid matches AND take no damage (`stats.invalidMatches === 0 && stats.damageReceived === 0`)
+- [ ] Create `__tests__/enemies/tier2/fierceWolverine.test.ts`
+- [ ] Tests passing
+
+### 6.13 Verification
+- [ ] Create `src/utils/enemies/tier2/index.ts` with all exports
+- [ ] Update `src/utils/enemies/index.ts` to import tier2
+- [ ] Run `npm test -- --testPathPattern="enemies/tier2"` - all tests pass
+- [ ] Verify all 12 enemies registered via `getEnemiesByTier(2).length === 12`
+- [ ] Commit with message: "feat(enemy): complete all 12 Tier 2 enemies"
 
 ---
 
-## Section 7: Tier 4 Bosses (5 total)
-TODO: Add when Section 6 is complete
+## Section 7: Tier 3 Enemies (12 total)
+
+> **Note:** Instant death mechanics become available in this tier.
+
+### 7.1 Raging Bear
+- [ ] Create `src/utils/enemies/tier3/ragingBear.ts`
+- [ ] Icon: `lorc/bear-head` or suitable alternative
+- [ ] Effects: InactivityEffect (30s → instant death) + DamageMultiplierEffect (2x) + PointsMultiplierEffect (2x) + ScoreDecayEffect (4pts/sec)
+- [ ] Defeat condition: 7-match streak with no invalid matches (`stats.maxStreak >= 7 && stats.invalidMatches === 0`)
+- [ ] Tests passing
+
+### 7.2 Abyssal Octopus
+- [ ] Create `src/utils/enemies/tier3/abyssalOctopus.ts`
+- [ ] Icon: `lorc/octopus` or suitable alternative
+- [ ] Effects: FaceDownEffect (30%) + PositionShuffleEffect (20s) + CountdownEffect (10s)
+- [ ] Defeat condition: Match 5 face-down cards (`stats.faceDownCardsMatched >= 5`)
+- [ ] Tests passing
+
+### 7.3 Feral Fangs
+- [ ] Create `src/utils/enemies/tier3/feralFangs.ts`
+- [ ] Icon: `lorc/bestial-fangs` or suitable alternative
+- [ ] Effects: DudCardEffect (10%) + TripleCardEffect (1) + CardRemovalEffect (12s)
+- [ ] Defeat condition: Clear triple card before 5 cards removed (track cards removed, `tripleCardsCleared >= 1` before `cardsRemovedByEnemy >= 5`)
+- [ ] Tests passing
+
+### 7.4 Savage Claws
+- [ ] Create `src/utils/enemies/tier3/savageClaws.ts`
+- [ ] Icon: `lorc/claw-slashes` (already registered)
+- [ ] Effects: TimeStealEffect (-4s) + TimerSpeedEffect (1.5x) + BombEffect
+- [ ] Defeat condition: Match 8 times total (`stats.totalMatches >= 8`)
+- [ ] Tests passing
+
+### 7.5 One-Eyed Terror
+- [ ] Create `src/utils/enemies/tier3/oneEyedTerror.ts`
+- [ ] Icon: `lorc/cyclops` or suitable alternative
+- [ ] Effects: HintDisableEffect (all) + AttributeChangeEffect (12s) + WeaponCounterEffect (hint -55%)
+- [ ] Defeat condition: Get 3 all-different matches (`stats.allDifferentMatches >= 3`)
+- [ ] Tests passing
+
+### 7.6 Goblin Saboteur
+- [ ] Create `src/utils/enemies/tier3/goblinSaboteur.ts`
+- [ ] Icon: `lorc/goblin-head` or suitable alternative
+- [ ] Effects: WeaponCounterEffect × 3 (pick 3 random weapon types at -50% each)
+- [ ] Defeat condition: Trigger 3 different weapon effects (`stats.weaponEffectsTriggered.size >= 3`)
+- [ ] Tests passing
+
+### 7.7 Stone Sentinel
+- [ ] Create `src/utils/enemies/tier3/stoneSentinel.ts`
+- [ ] Icon: `lorc/golem-head` or suitable alternative
+- [ ] Effects: TripleCardEffect (2 cards) + WeaponCounterEffect (explosion -55%) + WeaponCounterEffect (laser -55%)
+- [ ] Defeat condition: Clear both triple cards (`stats.tripleCardsCleared >= 2`)
+- [ ] Tests passing
+
+### 7.8 Wicked Imp
+- [ ] Create `src/utils/enemies/tier3/wickedImp.ts`
+- [ ] Icon: `lorc/imp` or suitable alternative
+- [ ] Effects: DamageMultiplierEffect (2x) + PointsMultiplierEffect (2x) + WeaponCounterEffect (grace -55%) + WeaponCounterEffect (time -55%)
+- [ ] Defeat condition: Achieve minimum with 3+ graces unused (`stats.currentScore >= stats.targetScore && stats.gracesRemaining >= 3`)
+- [ ] Tests passing
+
+### 7.9 Swarming Ants
+- [ ] Create `src/utils/enemies/tier3/swarmingAnts.ts`
+- [ ] Icon: `lorc/ant` or suitable alternative
+- [ ] Effects: BombEffect (×2 bombs) + WeaponCounterEffect (fire -55%) + CountdownEffect (8s)
+- [ ] Defeat condition: Defuse 5 bombs total (`stats.bombsDefused >= 5`)
+- [ ] Tests passing
+
+### 7.10 Nightmare Squid
+- [ ] Create `src/utils/enemies/tier3/nightmareSquid.ts`
+- [ ] Icon: `lorc/giant-squid` or suitable alternative
+- [ ] Effects: FaceDownEffect (35% chance, 50% flip) + PositionShuffleEffect (15s) + ScoreDecayEffect (6pts/sec)
+- [ ] Defeat condition: Score 200% of target (`stats.currentScore >= stats.targetScore * 2`)
+- [ ] Tests passing
+
+### 7.11 Ravenous Tapir
+- [ ] Create `src/utils/enemies/tier3/ravenousTapir.ts`
+- [ ] Icon: `lorc/tapir` or suitable alternative
+- [ ] Effects: ExtraCardRemovalOnMatchEffect (2 cards) + CardRemovalEffect (10s) + TimerSpeedEffect (1.4x)
+- [ ] Defeat condition: Achieve minimum with 5+ cards remaining (`stats.currentScore >= stats.targetScore && stats.cardsRemaining >= 5`)
+- [ ] Tests passing
+
+### 7.12 Merciless Porcupine
+- [ ] Create `src/utils/enemies/tier3/mercilessPorcupine.ts`
+- [ ] Icon: `lorc/porcupine` or suitable alternative
+- [ ] Effects: ExtraCardRemovalOnInvalidEffect (3 cards) + DamageMultiplierEffect (2x) + PointsMultiplierEffect (2x) + InactivityEffect (35s → instant death)
+- [ ] Defeat condition: Make no invalid matches (`stats.invalidMatches === 0 && stats.totalMatches >= 1`)
+- [ ] Tests passing
+
+### 7.13 Verification
+- [ ] Create `src/utils/enemies/tier3/index.ts` with all exports
+- [ ] Update `src/utils/enemies/index.ts` to import tier3
+- [ ] Run `npm test -- --testPathPattern="enemies/tier3"` - all tests pass
+- [ ] Verify all 12 enemies registered via `getEnemiesByTier(3).length === 12`
+- [ ] Commit with message: "feat(enemy): complete all 12 Tier 3 enemies"
 
 ---
 
-## Section 8: GameBoard Integration
-TODO: Add enemy lifecycle hook calls to GameBoard.tsx
+## Section 8: Tier 4 Bosses (5 total)
+
+> **Note:** These are Round 10 only bosses with severe effects.
+
+### 8.1 Ancient Dragon
+- [ ] Create `src/utils/enemies/tier4/ancientDragon.ts`
+- [ ] Icon: `lorc/dragon-head` or suitable alternative
+- [ ] Effects: TripleCardEffect (3 cards) + AttributeChangeEffect (8s) + TimerSpeedEffect (1.8x) + DamageMultiplierEffect (2x) + PointsMultiplierEffect (2x) + ScoreDecayEffect (8pts/sec)
+- [ ] Defeat condition: Clear all 3 triple cards AND get 2 all-different matches (`stats.tripleCardsCleared >= 3 && stats.allDifferentMatches >= 2`)
+- [ ] Tests passing
+
+### 8.2 The Hydra
+- [ ] Create `src/utils/enemies/tier4/theHydra.ts`
+- [ ] Icon: `lorc/hydra` or suitable alternative
+- [ ] Effects: InactivityEffect (20s → instant death) + BombEffect (×3) + CountdownEffect (×2, 8s each) + FaceDownEffect (40%) + TimeStealEffect (-6s)
+- [ ] Defeat condition: Match 10 times with no invalid matches (`stats.totalMatches >= 10 && stats.invalidMatches === 0`)
+- [ ] Tests passing
+
+### 8.3 Kraken's Grasp
+- [ ] Create `src/utils/enemies/tier4/krakensGrasp.ts`
+- [ ] Icon: `lorc/kraken-tentacle` or suitable alternative
+- [ ] Effects: PositionShuffleEffect (10s) + CardRemovalEffect (8s) + DudCardEffect (15%) + All weapon counters at -75%
+- [ ] Defeat condition: Survive with 5+ cards remaining (`stats.cardsRemaining >= 5`)
+- [ ] Tests passing
+
+### 8.4 The Reaper
+- [ ] Create `src/utils/enemies/tier4/theReaper.ts`
+- [ ] Icon: `lorc/grim-reaper` or suitable alternative
+- [ ] Effects: WeaponCounterEffect (grace -90%) + WeaponCounterEffect (time -90%) + DamageMultiplierEffect (2x) + PointsMultiplierEffect (2x) + ScoreDecayEffect (10pts/sec) + HintDisableEffect (all)
+- [ ] Defeat condition: Achieve minimum with 10+ seconds remaining AND 0 damage taken (`stats.currentScore >= stats.targetScore && stats.timeRemaining >= 10 && stats.damageReceived === 0`)
+- [ ] Tests passing
+
+### 8.5 World Eater
+- [ ] Create `src/utils/enemies/tier4/worldEater.ts`
+- [ ] Icon: `lorc/daemon-skull` or suitable alternative
+- [ ] Effects: ExtraCardRemovalOnMatchEffect (3 cards) + ExtraCardRemovalOnInvalidEffect (4 cards) + CardRemovalEffect (6s) + InactivityEffect (15s → instant death) + TimerSpeedEffect (2.0x)
+- [ ] Defeat condition: Achieve minimum with 4+ cards remaining AND no invalid matches (`stats.currentScore >= stats.targetScore && stats.cardsRemaining >= 4 && stats.invalidMatches === 0`)
+- [ ] Tests passing
+
+### 8.6 Verification
+- [ ] Create `src/utils/enemies/tier4/index.ts` with all exports
+- [ ] Update `src/utils/enemies/index.ts` to import tier4
+- [ ] Run `npm test -- --testPathPattern="enemies/tier4"` - all tests pass
+- [ ] Verify all 5 bosses registered via `getEnemiesByTier(4).length === 5`
+- [ ] Commit with message: "feat(enemy): complete all 5 Tier 4 bosses"
 
 ---
 
 ## Section 9: Enemy Selection Screen
-TODO: Add pre-round enemy selection UI
+
+### 9.1 EnemySelection Component
+- [ ] Create `src/components/EnemySelection.tsx`
+- [ ] Props: `{ tier: 1|2|3|4, onSelect: (enemy: EnemyInstance) => void }`
+- [ ] Display 3 random enemies from the specified tier
+- [ ] Each enemy card shows:
+  - [ ] Name and icon (large, centered)
+  - [ ] Tier badge
+  - [ ] Description (all effects with values)
+  - [ ] Defeat condition text
+  - [ ] Difficulty indicator based on effects
+- [ ] "Choose Enemy" button for each card
+- [ ] Animation when selecting
+- [ ] Create `__tests__/EnemySelection.test.tsx`
+- [ ] Tests passing
+
+### 9.2 Enemy Card Component
+- [ ] Create `src/components/EnemyCard.tsx`
+- [ ] Props: `{ enemy: EnemyInstance, onSelect: () => void, selected?: boolean }`
+- [ ] Render enemy icon, name, tier
+- [ ] Render description (effects list)
+- [ ] Render defeat condition
+- [ ] Show difficulty rating (easy/medium/hard based on tier and effect count)
+- [ ] Highlight when selected
+- [ ] Create `__tests__/EnemyCard.test.tsx`
+- [ ] Tests passing
+
+### 9.3 Game Flow Integration
+- [ ] Add `enemy_selection` phase to GamePhase enum in types.ts
+- [ ] Update Game.tsx to show EnemySelection between character selection and round start
+- [ ] Pass selected enemy to GameBoard
+- [ ] Store selected enemy in game state
+- [ ] Track if enemy was defeated for bonus reward
+
+### 9.4 LevelUp Integration (Slayer Reward)
+- [ ] Update LevelUp.tsx to accept `enemyDefeated: boolean` prop
+- [ ] If enemyDefeated, show bonus "Slayer Reward" weapon
+- [ ] Slayer Reward is a higher-rarity weapon based on enemy tier:
+  - Tier 1: Guaranteed Rare
+  - Tier 2: 50% Rare, 50% Legendary
+  - Tier 3: Guaranteed Legendary
+  - Tier 4: Guaranteed Legendary + bonus gold
+- [ ] Visual distinction for Slayer Reward (golden border, "SLAYER BONUS" label)
+
+### 9.5 Verification
+- [ ] Run `npm test` - all tests pass
+- [ ] Run `npm run typecheck` - no type errors
+- [ ] Manual test full flow: Character → Enemy Selection → Round → Level Up with Slayer Reward
+- [ ] Commit with message: "feat(enemy): add enemy selection screen and slayer rewards"
+
+---
+
+## Section 10: Final Integration & Polish
+
+### 10.1 Icon Registration
+- [ ] Verify all enemy icons exist in assets/icons/
+- [ ] Register any missing icons in Icon.tsx
+- [ ] Run `npm run validate:icons` - all pass
+- [ ] Update any placeholder icons with correct ones
+
+### 10.2 Full Test Suite
+- [ ] Run `npm test` - all tests pass
+- [ ] Run `npm run typecheck` - no type errors
+- [ ] Run `npm run lint` - no lint errors
+
+### 10.3 Manual Testing
+- [ ] Test each Tier 1 enemy in `/dev/play`
+- [ ] Test each Tier 2 enemy
+- [ ] Test each Tier 3 enemy
+- [ ] Test each Tier 4 boss
+- [ ] Test enemy selection flow
+- [ ] Test slayer rewards
+- [ ] Test defeat conditions for at least 5 different enemies
+
+### 10.4 Final Commit
+- [ ] Increment version in package.json
+- [ ] Commit with message: "feat(enemy): complete enemy system implementation"
+- [ ] Push to remote
+- [ ] Report version number
+
+---
+
+## Summary
+
+| Section | Items | Status |
+|---------|-------|--------|
+| 1. Types & Interfaces | Complete | ✅ |
+| 2. Factory & Dummy | Complete | ✅ |
+| 3. Effect Behaviors | Complete | ✅ |
+| 4. Tier 1 Enemies | 18/22 complete (4 need new effects) | 🔄 |
+| 5. GameBoard Integration | Not started | ⏳ |
+| 6. Tier 2 Enemies | 0/12 complete | ⏳ |
+| 7. Tier 3 Enemies | 0/12 complete | ⏳ |
+| 8. Tier 4 Bosses | 0/5 complete | ⏳ |
+| 9. Enemy Selection | Not started | ⏳ |
+| 10. Final Integration | Not started | ⏳ |
+
+**Total Enemies:** 51 (22 Tier 1 + 12 Tier 2 + 12 Tier 3 + 5 Tier 4)
+
+**Implementation Order:**
+1. ~~Section 1-3~~ (Complete)
+2. Section 4: Complete remaining Tier 1 enemies (15 more)
+3. **Section 5: GameBoard Integration** (PRIORITY)
+4. Section 6-8: Tier 2-4 enemies (after integration verified)
+5. Section 9: Enemy Selection Screen
+6. Section 10: Final polish
