@@ -45,6 +45,13 @@ export interface Card {
   // New weapon effect states
   onFire?: boolean;         // Card is burning
   fireStartTime?: number;   // Timestamp when fire started (for 15s burn timer)
+
+  // Enemy system card states
+  isDud?: boolean;          // Card cannot be selected or matched (white/blank visual)
+  isFaceDown?: boolean;     // Card shows back side, cannot be selected until flipped
+  hasCountdown?: boolean;   // Card has countdown timer that damages player when expired
+  countdownTimer?: number;  // Seconds remaining on countdown
+  hasBomb?: boolean;        // Card has bomb that explodes if not matched in time
 }
 
 // Rewards revealed when a card is matched
@@ -70,8 +77,8 @@ export type CharacterName =
   'Chimp' | 'Eagle' | 'Lemur' | 'Hedgehog' |
   'Armadillo' | 'Raccoon' | 'Polar Bear' | 'Chameleon';
 
-export type EnemyName = 
-  'Chihuahua' | 'Jellyfish' | 'Snake' | 'Mammoth' | 
+export type EnemyName =
+  'Chihuahua' | 'Jellyfish' | 'Snake' | 'Mammoth' |
   'Rabbit' | 'Squid' | 'Porcupine' | 'Hyena' | 'Tiger';
 
 export type WeaponName =
@@ -83,12 +90,12 @@ export type WeaponName =
 
 export type WeaponRarity = 'common' | 'rare' | 'legendary';
 
-export type ItemName = 
-  'Great Field' | 'Mirror Trinket' | 'Hint Booster' | 'Lucky Token' | 
-  'Colorblind Goggles' | 'Crimson Lens' | 'Crystal Ball' | 'Chrono Stop' | 
-  'Subtle Nudge' | 'Weapon Holster' | 'Culling Scroll' | 'Agile Treads' | 
-  'Fate\'s Bargain' | 'Fractured Gains' | 'Self-Destructing Timer' | 
-  'Card Cycler' | 'Team Reroll' | 'Molotov Catalyst' | 'Tempo Tuner' | 
+export type ItemName =
+  'Great Field' | 'Mirror Trinket' | 'Hint Booster' | 'Lucky Token' |
+  'Colorblind Goggles' | 'Crimson Lens' | 'Crystal Ball' | 'Chrono Stop' |
+  'Subtle Nudge' | 'Weapon Holster' | 'Culling Scroll' | 'Agile Treads' |
+  'Fate\'s Bargain' | 'Fractured Gains' | 'Self-Destructing Timer' |
+  'Card Cycler' | 'Team Reroll' | 'Molotov Catalyst' | 'Tempo Tuner' |
   'Sharp Edge' | 'Fortune Map' | 'Ghost Grace';
 
 export type ItemRarity = 'Tier 1' | 'Tier 2' | 'Tier 3' | 'Tier 4';
@@ -233,27 +240,27 @@ export interface GameState {
   targetScore: number;
   remainingTime: number;
   roundCompleted: boolean;
-  
+
   // Player
   player: Player;
-  
+
   // Shop and upgrades
   shopItems: (Item | null)[];  // null represents a sold/empty slot
   shopWeapons: (Weapon | null)[];  // Weapon shop items
   levelUpOptions: Weapon[];  // Now weapons only
   rerollCost: number;
-  
+
   // Enemy
   currentEnemies: Enemy[];
   selectedEnemy: Enemy | null;
-  
+
   // Loot and rewards
   lootCrates: number;
-  
+
   // Co-op
   isCoOp: boolean;
   players: Player[];
 
   // Endless mode
   isEndlessMode: boolean;
-} 
+}
