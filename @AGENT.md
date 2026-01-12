@@ -1,3 +1,5 @@
+Understand this project by reading Claude.md at root of this project.
+
 # Agent Build Instructions
 
 ## Project Setup
@@ -16,12 +18,6 @@ cargo build
 ```bash
 # Node.js
 npm test
-
-# Python
-pytest
-
-# Rust
-cargo test
 ```
 
 ## Build Commands
