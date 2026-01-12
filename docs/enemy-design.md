@@ -131,7 +131,7 @@ Enemy names should be **1-3 words**, animal-themed, and hint at their mechanic w
 
 ---
 
-### Tier 4 (Round 10 Only) — 6 Bosses
+### Tier 4 (Round 10 Only) — 5 Bosses
 *Five combined effects, counters at 70-90% reduction, terrifying legend icons*
 *Instant death mechanics at full intensity*
 
@@ -141,8 +141,7 @@ Enemy names should be **1-3 words**, animal-themed, and hint at their mechanic w
 | 48 | **The Hydra** | `hydra` | Stalking Wolf (20s → **instant death**) + Trap Weaver (×3) + Ticking Viper (×2, 8s each) + Night Owl (40%) + Thieving Raven (-6s) | Match 10 times with no invalid matches |
 | 49 | **Kraken's Grasp** | `kraken-tentacle` | Wild Goose (10s) + Burrowing Mole (8s) + Junk Rat (15% dud) + All counters -75% | Survive with 5+ cards remaining on board |
 | 50 | **The Reaper** | `grim-reaper` | Sneaky Mouse (-90%) + Lazy Sloth (-90%) + Stinging Scorpion + Circling Vulture (10pts/sec) + Masked Bandit | Achieve minimum with 10+ seconds remaining AND 0 damage taken |
-| 51 | **Leviathan** | `sea-serpent` | All T1 effects at 50% intensity simultaneously | Get a 10-match streak |
-| 52 | **World Eater** | `daemon-skull` | Greedy Squirrel (3 cards per match) + Punishing Ermine (4 cards per invalid) + Burrowing Mole (6s) + Stalking Wolf (15s → **instant death**) + Swift Bee (100% faster) | Achieve minimum with 4+ cards remaining AND no invalid matches
+| 51 | **World Eater** | `daemon-skull` | Greedy Squirrel (3 cards per match) + Punishing Ermine (4 cards per invalid) + Burrowing Mole (6s) + Stalking Wolf (15s → **instant death**) + Swift Bee (100% faster) | Achieve minimum with 4+ cards remaining AND no invalid matches
 
 ---
 
@@ -232,20 +231,56 @@ Enemies can counter specific weapon categories. Here's what each counter affects
 
 ---
 
+## Detailed Mechanic Rules
+
+### Face-Down Card Behavior
+- Face-down cards **cannot be selected** by the player
+- Face-down cards **cannot be matched** (must be flipped first)
+- **Any valid match** triggers a **70% flip chance for EACH face-down card** on the entire board
+- When flipped, the card reveals its actual attributes (which were always there, just hidden)
+- Visual: Card back with "?" symbol
+
+### Dud Card Behavior
+- Dud cards **cannot be selected** by the player
+- Dud cards **cannot be matched**
+- Duds count toward board size but are effectively dead space
+- Visual: White/blank card, grayed out
+
+### Card Removal Behavior
+- Removed cards (Burrowing Mole, Greedy Squirrel, etc.) are **NOT replaced**
+- Board shrinks permanently for that round
+- **Minimum board size: 6 cards** - enemies stop removing cards at this threshold
+- This creates real tension for card-removal enemies
+
+### Timer Speed Multiplier
+- `timerSpeedMultiplier` affects **actual game tick rate**
+- A 1.2x multiplier means 1 real second = 1.2 game seconds
+- This affects: timer countdown, score decay, bomb timers, burn timers, inactivity timers - everything
+- UI shows speed badge (e.g., "1.2x") near the timer
+
+---
+
 ## Implementation Notes
 
+> **Full implementation details:** See [enemy-implementation.md](./enemy-implementation.md) for architecture, interfaces, code examples, and testing strategy.
+
 ### Required New Systems
-1. **Enemy data structure** (types.ts)
-2. **Enemy selection screen** (pre-round UI)
-3. **Effect system** (Game.tsx modifications)
-4. **Defeat condition tracker** (per-round state)
-5. **Bonus reward integration** (LevelUp.tsx)
+1. **Enemy data structure** (types.ts) - EnemyInstance interface
+2. **Enemy factory** (enemyFactory.ts) - createEnemy(), createDummyEnemy()
+3. **Effect behaviors** (enemyEffects.ts) - Composable effect implementations
+4. **Enemy selection screen** (EnemySelection.tsx) - Pre-round UI
+5. **Round stats tracker** (RoundStats in types.ts)
+6. **Defeat condition checker** (per-enemy implementation)
+7. **Bonus reward integration** (LevelUp.tsx) - Slayer Reward
 
 ### Card States (New)
-- **Dud Card:** White/blank card that cannot be selected or matched. Created by Junk Rat effect.
-- **Face-Down Card:** Card showing back side, looks similar to dud but can be flipped. Matching nearby cards has chance to flip face-down cards.
-- **Countdown Card:** Card with visible timer. Must be matched before timer expires or lose 1HP.
-- **Triple Card:** Card requiring 3 matches to clear. Shows health indicator (3→2→1→gone).
+| State | Visual | Behavior |
+|-------|--------|----------|
+| **isDud** | White/blank, grayed out | Cannot be selected or matched |
+| **isFaceDown** | Card back (? symbol) | Cannot be selected; any match triggers 70% flip chance per face-down card |
+| **hasCountdown** | Urgent countdown timer | Must match before timer expires or lose HP |
+| **hasBomb** | Bomb icon + countdown | Explodes (card removed) if not matched in time |
+| **health > 1** | Health pips (●●●) | Needs multiple matches to clear |
 
 ### Icons Needed
 All icons should already exist in `assets/icons/`. Verify and register any missing ones in `Icon.tsx`.
@@ -256,3 +291,12 @@ All icons should already exist in `assets/icons/`. Verify and register any missi
 - Defeat conditions are challenging but achievable
 - Risk/reward is meaningful: harder enemies = better bonus weapons
 - Instant death reserved for T3/T4 to avoid frustrating early game
+
+---
+
+## Total Enemy Count: 51
+
+- **Tier 1:** 22 enemies
+- **Tier 2:** 12 enemies
+- **Tier 3:** 12 enemies
+- **Tier 4:** 5 bosses
