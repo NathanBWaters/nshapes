@@ -324,33 +324,33 @@ The following effects will be implemented when specific enemies need them:
 
 > **Important:** Complete this section before implementing Tier 2-4 enemies. This ensures the enemy system is actually functional in-game.
 
-### 5.1 RoundStats Tracking
-- [ ] Create `src/hooks/useRoundStats.ts`
-- [ ] Initialize RoundStats at round start with default values
-- [ ] Track totalMatches on valid match
-- [ ] Track currentStreak (increment on valid, reset on invalid)
-- [ ] Track maxStreak (update when currentStreak exceeds)
-- [ ] Track invalidMatches on invalid match
-- [ ] Track matchTimes array (time since previous match in ms)
-- [ ] Track timeRemaining from game timer
-- [ ] Track cardsRemaining from board state
-- [ ] Track shapesMatched Set (add shapes from matched cards)
-- [ ] Track colorsMatched Set (add colors from matched cards)
-- [ ] Track allDifferentMatches (count when all attributes are different)
-- [ ] Track allSameColorMatches (count when color is all-same)
-- [ ] Track squiggleMatches (count when any matched card has squiggle)
-- [ ] Track gracesUsed (increment when grace auto-used)
-- [ ] Track hintsUsed (increment when hint used)
-- [ ] Track hintsRemaining / gracesRemaining from player stats
-- [ ] Track damageReceived (increment on health loss)
-- [ ] Track weaponEffectsTriggered Set (add weapon type on trigger)
-- [ ] Track currentScore / targetScore
-- [ ] Track faceDownCardsMatched (count face-down cards in valid matches)
-- [ ] Track bombsDefused (count bomb cards matched before explosion)
-- [ ] Track countdownCardsMatched (count countdown cards matched in time)
-- [ ] Track tripleCardsCleared (count cards with health > 1 fully cleared)
-- [ ] Create `__tests__/useRoundStats.test.ts` with unit tests
-- [ ] Tests passing
+### 5.1 RoundStats Tracking ✅ COMPLETED
+- [x] Create `src/hooks/useRoundStats.ts`
+- [x] Initialize RoundStats at round start with default values
+- [x] Track totalMatches on valid match
+- [x] Track currentStreak (increment on valid, reset on invalid)
+- [x] Track maxStreak (update when currentStreak exceeds)
+- [x] Track invalidMatches on invalid match
+- [x] Track matchTimes array (time since previous match in ms)
+- [x] Track timeRemaining from game timer
+- [x] Track cardsRemaining from board state
+- [x] Track shapesMatched Set (add shapes from matched cards)
+- [x] Track colorsMatched Set (add colors from matched cards)
+- [x] Track allDifferentMatches (count when all attributes are different)
+- [x] Track allSameColorMatches (count when color is all-same)
+- [x] Track squiggleMatches (count when any matched card has squiggle)
+- [x] Track gracesUsed (increment when grace auto-used)
+- [x] Track hintsUsed (increment when hint used)
+- [x] Track hintsRemaining / gracesRemaining from player stats
+- [x] Track damageReceived (increment on health loss)
+- [x] Track weaponEffectsTriggered Set (add weapon type on trigger)
+- [x] Track currentScore / targetScore
+- [x] Track faceDownCardsMatched (count face-down cards in valid matches)
+- [x] Track bombsDefused (count bomb cards matched before explosion)
+- [x] Track countdownCardsMatched (count countdown cards matched in time)
+- [x] Track tripleCardsCleared (count cards with health > 1 fully cleared)
+- [x] Create `__tests__/hooks/useRoundStats.test.ts` with unit tests
+- [x] Tests passing (37 tests)
 
 ### 5.2 GameBoard Enemy Lifecycle Integration
 - [ ] Add `enemy: EnemyInstance` prop to GameBoard component
