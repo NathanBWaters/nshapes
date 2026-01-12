@@ -6,12 +6,6 @@ Understand this project by reading Claude.md at root of this project.
 ```bash
 # Install dependencies (example for Node.js project)
 npm install
-
-# Or for Python project
-pip install -r requirements.txt
-
-# Or for Rust project  
-cargo build
 ```
 
 ## Running Tests
@@ -24,16 +18,12 @@ npm test
 ```bash
 # Production build
 npm run build
-# or
-cargo build --release
 ```
 
 ## Development Server
 ```bash
 # Start development server
-npm run dev
-# or
-cargo run
+npx expo start --clear --web
 ```
 
 ## Key Learnings
