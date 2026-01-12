@@ -13,6 +13,24 @@ node_modules/
 dist/
 web-build/
 
+# Ralph generated files
+.circuit_breaker_history
+.circuit_breaker_state
+.call_count
+.last_reset
+.exit_signals
+status.json
+.ralph_session
+.ralph_session_history
+.claude_session_id
+.response_analysis
+progress.json
+
+# Logs
+logs/*
+!logs/.gitkeep
+*.log
+
 # Native builds
 *.orig.*
 *.jks
