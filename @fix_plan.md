@@ -4,6 +4,8 @@
 
 > **For Claude:** Check off tasks with `[x]` as you complete them. Follow TDD: write tests first, implement, verify tests pass.
 
+You MUST commit the code once the unit tests and integration tests are passing between each section, like "Section 1: Foundation - Core Types & Interfaces".
+
 ---
 
 ## Section 1: Foundation - Core Types & Interfaces

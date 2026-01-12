@@ -33,7 +33,7 @@ You are JUST working on the enemy system right now
 - Before making changes: search codebase using subagents
 - After implementation: run ESSENTIAL tests for the modified code only
 - If tests fail: fix them as part of your current work
-- Keep @AGENT.md updated with build/run instructions
+- Keep @AGENT.md and Claude.md updated with build/run instructions
 - Document the WHY behind tests and implementations
 - No placeholder implementations - build it properly
 
