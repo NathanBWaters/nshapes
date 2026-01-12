@@ -227,8 +227,36 @@ These will be implemented as part of the individual enemy implementations in Sec
 - [x] Defeat condition: Get 3 matches without hesitating >10s
 - [x] Tests passing (17 tests)
 
-### 4.6-4.22 (Remaining Tier 1 enemies)
+### 4.6 Wild Goose ✅ COMPLETED
+- [x] Create `src/utils/enemies/tier1/wildGoose.ts`
+- [x] Effect: Shuffles card positions every 30s
+- [x] Defeat condition: Match 2 sets that share a card attribute
+- [x] Tests passing (10 tests)
+
+### 4.7 Thieving Raven ✅ COMPLETED
+- [x] Create `src/utils/enemies/tier1/thievingRaven.ts`
+- [x] Effect: -5s stolen per match
+- [x] Defeat condition: Complete 5 matches total
+- [x] Tests passing (9 tests)
+
+### 4.8 Stinging Scorpion ✅ COMPLETED
+- [x] Create `src/utils/enemies/tier1/stingingScorpion.ts`
+- [x] Effect: 2x damage taken, 2x points earned
+- [x] Defeat condition: Make no invalid matches
+- [x] Tests passing (9 tests)
+
+### 4.9-4.22 (Remaining Tier 1 enemies)
 TODO: Add as individual subsections when starting implementation
+- Shifting Chameleon (needs AttributeChangeEffect)
+- Night Owl (needs FaceDownEffect - already implemented)
+- Swift Bee (needs TimerSpeedEffect - already implemented)
+- Trap Weaver (needs BombEffect - complex)
+- Circling Vulture (ScoreDecayEffect - already implemented)
+- Iron Shell (needs TripleCardEffect - complex)
+- Ticking Viper (needs CountdownEffect - complex)
+- Wet Crab, Spiny Hedgehog, Shadow Bat, Foggy Frog, Sneaky Mouse, Lazy Sloth (WeaponCounterEffect - already implemented)
+- Greedy Squirrel (ExtraCardRemovalOnMatchEffect - already implemented)
+- Punishing Ermine (ExtraCardRemovalOnInvalidEffect - already implemented)
 
 ---
 

@@ -10,9 +10,15 @@ import './junkRat';
 import './stalkingWolf';
 import './burrowingMole';
 import './maskedBandit';
+import './wildGoose';
+import './thievingRaven';
+import './stingingScorpion';
 
 // Re-export factory functions for direct access
 export { createJunkRat } from './junkRat';
 export { createStalkingWolf } from './stalkingWolf';
 export { createBurrowingMole } from './burrowingMole';
 export { createMaskedBandit } from './maskedBandit';
+export { createWildGoose } from './wildGoose';
+export { createThievingRaven } from './thievingRaven';
+export { createStingingScorpion } from './stingingScorpion';
