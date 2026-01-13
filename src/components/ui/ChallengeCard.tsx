@@ -10,7 +10,9 @@ interface ChallengeCardProps {
   enemy?: EnemyInstance;
   // For victory - show difficulty challenge
   difficulty?: AdventureDifficulty;
-  // Optional: show completion badge
+  // Whether the enemy was actually defeated (for round complete)
+  enemyDefeated?: boolean;
+  // Whether to show achievement badge (for victory screen only)
   showAchievement?: boolean;
 }
 
@@ -41,7 +43,7 @@ const getDifficultyInfo = (diff: AdventureDifficulty) => {
   }
 };
 
-const ChallengeCard: React.FC<ChallengeCardProps> = ({ enemy, difficulty, showAchievement = false }) => {
+const ChallengeCard: React.FC<ChallengeCardProps> = ({ enemy, difficulty, enemyDefeated = false, showAchievement = false }) => {
   // Determine what to display
   const isEnemyChallenge = !!enemy;
   const isDifficultyChallenge = !!difficulty;
@@ -59,7 +61,7 @@ const ChallengeCard: React.FC<ChallengeCardProps> = ({ enemy, difficulty, showAc
       <View style={styles.container}>
         <View style={styles.header}>
           <Icon name="lorc/sword-clash" size={20} color={COLORS.slateCharcoal} />
-          <Text style={styles.headerTitle}>Enemy Challenge</Text>
+          <Text style={styles.headerTitle}>Extra Challenge</Text>
         </View>
 
         <View style={[styles.card, { borderColor: tierColor }]}>
@@ -84,16 +86,35 @@ const ChallengeCard: React.FC<ChallengeCardProps> = ({ enemy, difficulty, showAc
 
           {/* Defeat Condition */}
           <View style={styles.infoSection}>
-            <Text style={[styles.infoLabel, { color: COLORS.logicTeal }]}>Defeat Condition</Text>
+            <Text style={[styles.infoLabel, { color: COLORS.logicTeal }]}>Challenge Requirement</Text>
             <Text style={styles.infoText}>{enemy.defeatConditionText}</Text>
           </View>
 
-          {showAchievement && (
-            <View style={styles.achievementBadge}>
+          {/* Result Badge */}
+          {enemyDefeated ? (
+            <View style={styles.successBadge}>
               <Icon name="lorc/checked-shield" size={14} color={COLORS.logicTeal} />
-              <Text style={styles.achievementText}>Enemy Defeated</Text>
+              <Text style={styles.successText}>Challenge Completed!</Text>
+            </View>
+          ) : (
+            <View style={styles.failureBadge}>
+              <Icon name="lorc/cancel" size={14} color={COLORS.impactRed} />
+              <Text style={styles.failureText}>Challenge Failed</Text>
             </View>
           )}
+
+          {/* Reward Info */}
+          <View style={[styles.rewardSection, { backgroundColor: enemyDefeated ? COLORS.logicTeal + '15' : COLORS.slateCharcoal + '10' }]}>
+            <Text style={[styles.rewardLabel, { color: enemyDefeated ? COLORS.logicTeal : COLORS.slateCharcoal }]}>
+              {enemyDefeated ? '🎁 REWARD EARNED' : '💔 REWARD MISSED'}
+            </Text>
+            <Text style={[styles.rewardText, { opacity: enemyDefeated ? 1 : 0.6 }]}>
+              {enemyDefeated
+                ? `Extra ${tierLabel} weapon in next level up`
+                : `Would have earned extra ${tierLabel} weapon`
+              }
+            </Text>
+          </View>
         </View>
       </View>
     );
@@ -265,12 +286,62 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
+  successBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.logicTeal + '20',
+    borderRadius: RADIUS.button,
+    borderWidth: 1,
+    borderColor: COLORS.logicTeal,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    gap: 6,
+  },
+  successText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.logicTeal,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  failureBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.impactRed + '15',
+    borderRadius: RADIUS.button,
+    borderWidth: 1,
+    borderColor: COLORS.impactRed,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    gap: 6,
+  },
+  failureText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.impactRed,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  rewardSection: {
+    borderRadius: RADIUS.button,
+    padding: 12,
+    gap: 4,
+    marginTop: 4,
+  },
+  rewardLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    textAlign: 'center',
+  },
   rewardText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: COLORS.deepOnyx,
     textAlign: 'center',
-    marginTop: 12,
   },
 });
 

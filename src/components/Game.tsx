@@ -2090,6 +2090,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
             roundScores={summaryRoundScores}
             enemy={state.activeEnemyInstance ?? undefined}
             difficulty={adventureDifficulty}
+            enemyDefeated={enemyDefeated}
           />
         );
 
