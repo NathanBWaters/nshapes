@@ -420,6 +420,347 @@ export const ExtraCardRemovalOnInvalidEffect: EffectBehavior = {
   },
 };
 
+/**
+ * AttributeChangeEffect - Changes random card attributes at intervals
+ * Config: { intervalMs: number }
+ */
+export const AttributeChangeEffect: EffectBehavior = {
+  onTick: (
+    deltaMs: number,
+    board: Card[],
+    internalState: Record<string, unknown>,
+    config: unknown
+  ): Partial<EnemyTickResult> => {
+    const { intervalMs } = config as { intervalMs: number };
+    const state = internalState as { timeSinceAttributeChange: number };
+    state.timeSinceAttributeChange = (state.timeSinceAttributeChange || 0) + deltaMs;
+
+    if (state.timeSinceAttributeChange >= intervalMs) {
+      state.timeSinceAttributeChange = 0;
+
+      // Pick a random non-dud, non-face-down card
+      const validCards = board.filter((c) => !c.isDud && !c.isFaceDown);
+      if (validCards.length === 0) return {};
+
+      const target = validCards[Math.floor(Math.random() * validCards.length)];
+
+      // Pick a random attribute to change
+      const attributes = ['shape', 'color', 'number', 'shading'] as const;
+      const attribute = attributes[Math.floor(Math.random() * attributes.length)];
+
+      // Get possible values for this attribute
+      const values: Record<string, readonly string[] | readonly number[]> = {
+        shape: ['oval', 'squiggle', 'diamond'] as const,
+        color: ['red', 'green', 'purple'] as const,
+        number: [1, 2, 3] as const,
+        shading: ['solid', 'striped', 'open'] as const,
+      };
+
+      // Pick a different value than current
+      const currentValue = target[attribute];
+      const possibleValues = values[attribute].filter((v) => v !== currentValue);
+      const newValue = possibleValues[Math.floor(Math.random() * possibleValues.length)];
+
+      return {
+        cardModifications: [
+          {
+            cardId: target.id,
+            changes: { [attribute]: newValue } as Partial<Card>,
+          },
+        ],
+        events: [
+          {
+            type: 'attribute_changed',
+            cardIds: [target.id],
+            attribute: attribute as import('@/types').AttributeName,
+          },
+        ],
+      };
+    }
+
+    return {};
+  },
+};
+
+/**
+ * BombEffect - Places bombs on cards that explode if not matched in time
+ * Config: { bombChance: number, bombTimerMs: number, minBoardSize: number }
+ */
+export const BombEffect: EffectBehavior = {
+  onCardDraw: (card: Card, config: unknown): Card => {
+    const { bombChance, bombTimerMs } = config as {
+      bombChance: number;
+      bombTimerMs: number;
+      minBoardSize: number;
+    };
+    if (Math.random() * 100 < bombChance) {
+      return { ...card, hasBomb: true, bombTimer: bombTimerMs };
+    }
+    return card;
+  },
+
+  onTick: (
+    deltaMs: number,
+    board: Card[],
+    internalState: Record<string, unknown>,
+    config: unknown
+  ): Partial<EnemyTickResult> => {
+    const { minBoardSize } = config as {
+      bombChance: number;
+      bombTimerMs: number;
+      minBoardSize: number;
+    };
+
+    // Track bomb timers in internal state
+    const bombTimers = (internalState.bombTimers as Record<string, number>) || {};
+    internalState.bombTimers = bombTimers;
+
+    // Initialize timers for new bomb cards
+    for (const card of board) {
+      if (card.hasBomb && bombTimers[card.id] === undefined) {
+        bombTimers[card.id] = card.bombTimer ?? 10000;
+      }
+    }
+
+    // Clean up timers for cards no longer on board
+    for (const cardId of Object.keys(bombTimers)) {
+      if (!board.find((c) => c.id === cardId)) {
+        delete bombTimers[cardId];
+      }
+    }
+
+    const cardsToRemove: string[] = [];
+    const events: EnemyEvent[] = [];
+    const cardModifications: Array<{ cardId: string; changes: Partial<Card> }> = [];
+
+    // Decrement bomb timers
+    for (const cardId of Object.keys(bombTimers)) {
+      bombTimers[cardId] -= deltaMs;
+
+      // Update card's bomb timer for UI display
+      const card = board.find((c) => c.id === cardId);
+      if (card) {
+        cardModifications.push({
+          cardId,
+          changes: { bombTimer: Math.max(0, bombTimers[cardId]) },
+        });
+      }
+
+      // Explode when timer reaches 0
+      if (bombTimers[cardId] <= 0 && board.length > minBoardSize) {
+        cardsToRemove.push(cardId);
+        events.push({ type: 'bomb_exploded', cardId });
+        delete bombTimers[cardId];
+      }
+    }
+
+    return { cardsToRemove, cardModifications, events };
+  },
+
+  getUIModifiers: (
+    internalState: Record<string, unknown>,
+    _config: unknown
+  ): Partial<EnemyUIModifiers> => {
+    const bombTimers = (internalState.bombTimers as Record<string, number>) || {};
+    const showBombCards = Object.entries(bombTimers).map(([cardId, timer]) => ({
+      cardId,
+      timeRemaining: timer,
+    }));
+    return showBombCards.length > 0 ? { showBombCards } : {};
+  },
+};
+
+/**
+ * CountdownEffect - Places countdown timer on one card; damages player on expiry
+ * Config: { countdownMs: number }
+ */
+export const CountdownEffect: EffectBehavior = {
+  onRoundStart: (
+    board: Card[],
+    internalState: Record<string, unknown>,
+    config: unknown
+  ): Partial<EnemyStartResult> => {
+    const { countdownMs } = config as { countdownMs: number };
+
+    // Pick a random card for countdown
+    const validCards = board.filter((c) => !c.isDud && !c.isFaceDown);
+    if (validCards.length === 0) return {};
+
+    const target = validCards[Math.floor(Math.random() * validCards.length)];
+    internalState.countdownCardId = target.id;
+    internalState.countdownTimer = countdownMs;
+
+    return {
+      cardModifications: [
+        {
+          cardId: target.id,
+          changes: { hasCountdown: true, countdownTimer: countdownMs },
+        },
+      ],
+      events: [],
+    };
+  },
+
+  onTick: (
+    deltaMs: number,
+    board: Card[],
+    internalState: Record<string, unknown>,
+    config: unknown
+  ): Partial<EnemyTickResult> => {
+    const { countdownMs } = config as { countdownMs: number };
+    const countdownCardId = internalState.countdownCardId as string | undefined;
+
+    if (!countdownCardId) return {};
+
+    // Check if countdown card still exists
+    const countdownCard = board.find((c) => c.id === countdownCardId);
+    if (!countdownCard) {
+      // Card was matched, pick a new one
+      const validCards = board.filter((c) => !c.isDud && !c.isFaceDown && !c.hasCountdown);
+      if (validCards.length === 0) {
+        internalState.countdownCardId = undefined;
+        return {};
+      }
+
+      const newTarget = validCards[Math.floor(Math.random() * validCards.length)];
+      internalState.countdownCardId = newTarget.id;
+      internalState.countdownTimer = countdownMs;
+
+      return {
+        cardModifications: [
+          {
+            cardId: newTarget.id,
+            changes: { hasCountdown: true, countdownTimer: countdownMs },
+          },
+        ],
+        events: [],
+      };
+    }
+
+    // Decrement timer
+    let timer = (internalState.countdownTimer as number) || countdownMs;
+    timer -= deltaMs;
+    internalState.countdownTimer = timer;
+
+    const cardModifications: Array<{ cardId: string; changes: Partial<Card> }> = [
+      {
+        cardId: countdownCardId,
+        changes: { countdownTimer: Math.max(0, timer) },
+      },
+    ];
+
+    const events: EnemyEvent[] = [];
+
+    // Warning at 5 seconds
+    const remaining = timer / 1000;
+    if (remaining <= 5 && remaining > 4) {
+      events.push({ type: 'countdown_warning', cardId: countdownCardId, secondsRemaining: Math.ceil(remaining) });
+    }
+
+    // Expired - damage player and pick new card
+    if (timer <= 0) {
+      events.push({ type: 'countdown_expired', cardId: countdownCardId });
+
+      // Remove countdown from old card
+      cardModifications.push({
+        cardId: countdownCardId,
+        changes: { hasCountdown: false, countdownTimer: undefined },
+      });
+
+      // Pick a new countdown card
+      const validCards = board.filter((c) => !c.isDud && !c.isFaceDown && c.id !== countdownCardId);
+      if (validCards.length > 0) {
+        const newTarget = validCards[Math.floor(Math.random() * validCards.length)];
+        internalState.countdownCardId = newTarget.id;
+        internalState.countdownTimer = countdownMs;
+        cardModifications.push({
+          cardId: newTarget.id,
+          changes: { hasCountdown: true, countdownTimer: countdownMs },
+        });
+      } else {
+        internalState.countdownCardId = undefined;
+      }
+
+      return {
+        healthDelta: -1,
+        cardModifications,
+        events,
+      };
+    }
+
+    return { cardModifications, events };
+  },
+
+  getUIModifiers: (
+    internalState: Record<string, unknown>,
+    _config: unknown
+  ): Partial<EnemyUIModifiers> => {
+    const countdownCardId = internalState.countdownCardId as string | undefined;
+    const countdownTimer = internalState.countdownTimer as number | undefined;
+
+    if (!countdownCardId || countdownTimer === undefined) return {};
+
+    return {
+      showCountdownCards: [{ cardId: countdownCardId, timeRemaining: countdownTimer }],
+    };
+  },
+};
+
+/**
+ * TripleCardEffect - Places cards that need multiple matches to clear
+ * Config: { count: number } - number of triple cards to place
+ */
+export const TripleCardEffect: EffectBehavior = {
+  onRoundStart: (
+    board: Card[],
+    internalState: Record<string, unknown>,
+    config: unknown
+  ): Partial<EnemyStartResult> => {
+    const { count } = config as { count: number };
+
+    // Pick random cards to become triple cards
+    const validCards = board.filter((c) => !c.isDud && !c.isFaceDown);
+    const shuffled = [...validCards].sort(() => Math.random() - 0.5);
+    const targets = shuffled.slice(0, Math.min(count, validCards.length));
+
+    // Track triple cards in internal state
+    const tripleCards: Record<string, number> = {};
+    for (const card of targets) {
+      tripleCards[card.id] = 3; // 3 health
+    }
+    internalState.tripleCards = tripleCards;
+
+    return {
+      cardModifications: targets.map((card) => ({
+        cardId: card.id,
+        changes: { health: 3 },
+      })),
+      events: [],
+    };
+  },
+
+  onValidMatch: (
+    matchedCards: Card[],
+    _board: Card[],
+    internalState: Record<string, unknown>,
+    _config: unknown
+  ): Partial<EnemyMatchResult> => {
+    const tripleCards = (internalState.tripleCards as Record<string, number>) || {};
+
+    // Check if any matched cards are triple cards
+    for (const card of matchedCards) {
+      if (tripleCards[card.id] !== undefined) {
+        tripleCards[card.id]--;
+        if (tripleCards[card.id] <= 0) {
+          delete tripleCards[card.id];
+        }
+      }
+    }
+
+    return {};
+  },
+};
+
 // ============================================================================
 // COMPOSITION HELPER
 // ============================================================================

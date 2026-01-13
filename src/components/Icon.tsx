@@ -37,6 +37,12 @@ import Scorpion from '../../assets/icons/lorc/scorpion.svg';
 import Mole from '../../assets/icons/caro-asercion/mole.svg';
 import RaccoonHead from '../../assets/icons/delapouite/raccoon-head.svg';
 import Uncertainty from '../../assets/icons/lorc/uncertainty.svg';
+import AngularSpider from '../../assets/icons/lorc/angular-spider.svg';
+import MaskedSpider from '../../assets/icons/lorc/masked-spider.svg';
+import SpiderFace from '../../assets/icons/carl-olsen/spider-face.svg';
+import Turtle from '../../assets/icons/lorc/turtle.svg';
+import TurtleShell from '../../assets/icons/lorc/turtle-shell.svg';
+import ChameleonGlyph from '../../assets/icons/darkzaitzev/chameleon-glyph.svg';
 
 // Weapons
 import FlintSpark from '../../assets/icons/delapouite/flint-spark.svg';
@@ -137,6 +143,12 @@ const ICON_REGISTRY = {
   'caro-asercion/mole': Mole,
   'delapouite/raccoon-head': RaccoonHead,
   'lorc/uncertainty': Uncertainty,
+  'lorc/angular-spider': AngularSpider,
+  'lorc/masked-spider': MaskedSpider,
+  'carl-olsen/spider-face': SpiderFace,
+  'lorc/turtle': Turtle,
+  'lorc/turtle-shell': TurtleShell,
+  'darkzaitzev/chameleon-glyph': ChameleonGlyph,
 
   // Weapons
   'delapouite/flint-spark': FlintSpark,
