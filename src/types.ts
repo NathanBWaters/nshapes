@@ -252,9 +252,9 @@ export interface GameState {
   rerollCost: number;
 
   // Enemy
-  currentEnemies: Enemy[];
-  selectedEnemy: Enemy | null;
-  activeEnemyInstance: EnemyInstance | null;  // Active enemy for current round
+  currentEnemies: EnemyInstance[];  // Enemies to choose from (from registry)
+  selectedEnemy: EnemyInstance | null;  // The enemy selected for this round
+  activeEnemyInstance: EnemyInstance | null;  // Active enemy for current round (same as selectedEnemy)
 
   // Loot and rewards
   lootCrates: number;

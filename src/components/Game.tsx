@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Platform, Dimensions } from 'react-native';
-import { Card, CardReward, GameState, Enemy, Weapon, PlayerStats, AttributeName, AdventureDifficulty, Character } from '@/types';
+import { Card, CardReward, GameState, Weapon, PlayerStats, AttributeName, AdventureDifficulty, Character } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { createDeck, shuffleArray, isValidCombination, findAllCombinations, generateGameBoard, formatTime, sameCardAttributes } from '@/utils/gameUtils';
 import {
   CHARACTERS,
-  ENEMIES,
   ITEMS,
   WEAPONS,
   ROUND_REQUIREMENTS,
@@ -21,7 +20,7 @@ import { getAdjacentIndices, getFireSpreadCards, WeaponEffectResult } from '@/ut
 import { useGameTimer } from '@/hooks/useGameTimer';
 import { useParticles } from '@/hooks/useParticles';
 import { useRoundStats } from '@/hooks/useRoundStats';
-import { createEnemy, createDummyEnemy, applyEnemyStatModifiers } from '@/utils/enemyFactory';
+import { createEnemy, createDummyEnemy, applyEnemyStatModifiers, getRandomEnemies } from '@/utils/enemyFactory';
 import type { EnemyInstance } from '@/types/enemy';
 import GameBoard from './GameBoard';
 import GameInfo from './GameInfo';
@@ -72,6 +71,18 @@ const calculateLevel = (experience: number): number => {
   // Simple level formula: level = floor(sqrt(experience/10))
   // Level 1 requires 10 XP, Level 2 requires 40 XP, Level 3 requires 90 XP, etc.
   return Math.floor(Math.sqrt(experience / 10));
+};
+
+// Get enemy tier based on round number
+// Tier 1: Rounds 1-4
+// Tier 2: Rounds 5-7
+// Tier 3: Rounds 8-9
+// Tier 4: Round 10+ (bosses)
+const getTierForRound = (round: number): 1 | 2 | 3 | 4 => {
+  if (round >= 10) return 4;
+  if (round >= 8) return 3;
+  if (round >= 5) return 2;
+  return 1;
 };
 
 interface GameProps {
@@ -264,6 +275,10 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     startLevel: 0,
   });
 
+  // Track if current enemy was defeated (for slayer bonus in level up)
+  const [enemyDefeated, setEnemyDefeated] = useState(false);
+  const [defeatedEnemyTier, setDefeatedEnemyTier] = useState<1 | 2 | 3 | 4>(1);
+
   // Queue of pending level-ups (for multi-level-up support)
   const [pendingLevelUps, setPendingLevelUps] = useState<number[]>([]);
 
@@ -323,9 +338,17 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
 
   // Complete the current round
   const completeRound = () => {
-    // Call enemy onRoundEnd to clean up
+    // Check if enemy was defeated BEFORE calling onRoundEnd
+    // Use the roundStats ref for up-to-date stats
+    let wasEnemyDefeated = false;
     if (state.activeEnemyInstance) {
+      wasEnemyDefeated = state.activeEnemyInstance.checkDefeatCondition(roundStatsRef.current);
+      setEnemyDefeated(wasEnemyDefeated);
+      setDefeatedEnemyTier(state.activeEnemyInstance.tier);
       state.activeEnemyInstance.onRoundEnd();
+    } else {
+      setEnemyDefeated(false);
+      setDefeatedEnemyTier(1);
     }
 
     // Record this round's score in history
@@ -545,20 +568,8 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     // Reset enemy round stats for defeat condition tracking
     resetRoundStats(roundReq.targetScore, totalStats.hints || 0, totalStats.graces || 0);
 
-    // Create enemy instance for this round (using dummy until enemy selection is implemented)
-    const enemyInstance = startGame ? createDummyEnemy() : null;
-
-    // Call enemy's onRoundStart and apply any card modifications
-    let finalBoard = initialBoard;
-    if (enemyInstance) {
-      const startResult = enemyInstance.onRoundStart(initialBoard);
-      if (startResult.cardModifications.length > 0) {
-        finalBoard = initialBoard.map(card => {
-          const mod = startResult.cardModifications.find(m => m.cardId === card.id);
-          return mod ? { ...card, ...mod.changes } : card;
-        });
-      }
-    }
+    // Don't apply enemy effects during init - that happens when player selects enemy
+    const finalBoard = initialBoard;
 
     setState({
       // Core game
@@ -592,9 +603,9 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       rerollCost: BASE_REROLL_COST,
 
       // Enemy - to be selected during gameplay
-      currentEnemies: generateRandomEnemies(),
+      currentEnemies: getRandomEnemies(getTierForRound(1), 3),
       selectedEnemy: null,
-      activeEnemyInstance: enemyInstance,
+      activeEnemyInstance: null,  // Set when player selects enemy
 
       // Loot and rewards
       lootCrates: 0,
@@ -610,20 +621,10 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     setNotification(null);
   }, [isMultiplayer, resetRoundStats]);
 
-  // Generate 3 random enemies to choose from
-  const generateRandomEnemies = (): Enemy[] => {
-    const availableEnemies = [...ENEMIES];
-    const selectedEnemies: Enemy[] = [];
-
-    for (let i = 0; i < 3; i++) {
-      if (availableEnemies.length === 0) break;
-
-      const randomIndex = Math.floor(Math.random() * availableEnemies.length);
-      selectedEnemies.push(availableEnemies[randomIndex]);
-      availableEnemies.splice(randomIndex, 1);
-    }
-
-    return selectedEnemies;
+  // Generate 3 random enemies from the appropriate tier for the round
+  const generateEnemiesForRound = (round: number): EnemyInstance[] => {
+    const tier = getTierForRound(round);
+    return getRandomEnemies(tier, 3);
   };
 
   // Generate random shop items
@@ -702,27 +703,18 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     const activeAttributes = getActiveAttributesForRound(1, difficulty);
 
     // Initialize the game with the selected character and attributes
-    // Pass startGame=true to set gameStarted, startTime, and time bonus atomically
-    initGame(selectedCharacter, activeAttributes, true);
+    // Don't start game yet - player needs to select enemy first
+    initGame(selectedCharacter, activeAttributes, false);
 
     // Reset hint triggers to prevent auto-triggering on game start
     setHintTrigger(0);
     setClearHintTrigger(0);
 
-    // Reset round stats for the first round
-    setRoundStats({
-      moneyEarned: 0,
-      experienceEarned: 0,
-      hintsEarned: 0,
-      healingDone: 0,
-      lootBoxesEarned: 0,
-      startLevel: 0,
-    });
-
     // Clear round history for new game
     setRoundHistory([]);
 
-    setGamePhase('round');
+    // Go to enemy selection screen
+    setGamePhase('enemy_select');
   };
 
   // Start Free Play Mode (called from Difficulty Selection)
@@ -786,25 +778,17 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     setGameMode('adventure');
     const activeAttributes = getActiveAttributesForRound(1, adventureDifficulty);
 
-    // Pass startGame=true to set gameStarted, startTime, and time bonus atomically
-    initGame(selectedCharacter!, activeAttributes, true);
+    // Don't start game yet - player needs to select enemy first
+    initGame(selectedCharacter!, activeAttributes, false);
     setHintTrigger(0);
     setClearHintTrigger(0);
 
-    setRoundStats({
-      moneyEarned: 0,
-      experienceEarned: 0,
-      hintsEarned: 0,
-      healingDone: 0,
-      lootBoxesEarned: 0,
-      startLevel: 0,
-    });
-
-    setGamePhase('round');
+    // Go to enemy selection screen
+    setGamePhase('enemy_select');
   };
 
-  // Handle enemy selection
-  const handleEnemySelect = (enemy: Enemy) => {
+  // Handle enemy selection - player has chosen which enemy to fight
+  const handleEnemySelect = (enemy: EnemyInstance) => {
     // Reset round stats and record starting level for round summary
     setRoundStats({
       moneyEarned: 0,
@@ -819,17 +803,24 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     setHintTrigger(0);
     setClearHintTrigger(0);
 
+    // Call enemy's onRoundStart and apply any card modifications
+    const startResult = enemy.onRoundStart(state.board);
+    let finalBoard = state.board;
+    if (startResult.cardModifications.length > 0) {
+      finalBoard = state.board.map(card => {
+        const mod = startResult.cardModifications.find(m => m.cardId === card.id);
+        return mod ? { ...card, ...mod.changes } : card;
+      });
+    }
+
     setState(prevState => ({
       ...prevState,
+      board: finalBoard,
       selectedEnemy: enemy,
-      gameStarted: true, // Ensure game is started
-      startTime: Date.now() // Record start time
+      activeEnemyInstance: enemy,  // Set the active enemy instance
+      gameStarted: true,
+      startTime: Date.now()
     }));
-
-    // Apply enemy effect to the game state
-    if (enemy.applyEffect) {
-      setState(prevState => enemy.applyEffect(prevState));
-    }
 
     // Start the round
     setGamePhase('round');
@@ -989,26 +980,24 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     }
   };
 
-  // Handle level up selection - WEAPONS ONLY
-  const handleLevelUpSelection = (optionIndex: number) => {
-    const option = state.levelUpOptions[optionIndex];
+  // Handle level up selection - receives the selected weapon directly
+  const handleLevelUpSelection = (weapon: Weapon) => {
+    // Add the weapon to player's inventory (weapons stack)
+    setState(prevState => ({
+      ...prevState,
+      player: {
+        ...prevState.player,
+        weapons: [...prevState.player.weapons, weapon]
+      }
+    }));
 
-    // All options are now weapons
-    if (isWeapon(option)) {
-      // Add the weapon to player's inventory (weapons stack)
-      setState(prevState => ({
-        ...prevState,
-        player: {
-          ...prevState.player,
-          weapons: [...prevState.player.weapons, option]
-        }
-      }));
+    setNotification({
+      message: `Acquired ${weapon.name}!`,
+      type: 'success'
+    });
 
-      setNotification({
-        message: `Acquired ${option.name}!`,
-        type: 'success'
-      });
-    }
+    // Clear enemy defeated state after receiving any slayer bonus
+    setEnemyDefeated(false);
 
     // Remove current level from queue
     const remaining = pendingLevelUps.slice(1);
@@ -1952,18 +1941,8 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     const playerTotalStats = calculatePlayerTotalStats(state.player);
     resetRoundStats(roundReq.targetScore, playerTotalStats.hints || 0, playerTotalStats.graces || 0);
 
-    // Create enemy instance for this round (using dummy until enemy selection is implemented)
-    const enemyInstance = createDummyEnemy();
-
-    // Call enemy's onRoundStart and apply any card modifications
-    const startResult = enemyInstance.onRoundStart(newBoard);
-    let finalBoard = newBoard;
-    if (startResult.cardModifications.length > 0) {
-      finalBoard = newBoard.map(card => {
-        const mod = startResult.cardModifications.find(m => m.cardId === card.id);
-        return mod ? { ...card, ...mod.changes } : card;
-      });
-    }
+    // Don't apply enemy effects yet - that happens when player selects enemy
+    const finalBoard = newBoard;
 
     setState(prevState => {
       // Reset health to max at the start of each round
@@ -1979,11 +1958,12 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
         selectedCards: [],
         foundCombinations: [],
         roundCompleted: false,
-        gameStarted: true,
-        currentEnemies: generateRandomEnemies(),
+        gameStarted: false,  // Not started yet - waiting for enemy selection
+        currentEnemies: getRandomEnemies(getTierForRound(nextRound), 3),
         shopItems: generateRandomShopItems(),  // Refill shop for next round
         shopWeapons: generateShopWeapons(4),   // Refill weapon shop for next round
-        activeEnemyInstance: enemyInstance,  // Store the enemy instance
+        selectedEnemy: null,
+        activeEnemyInstance: null,  // Set when player selects enemy
         player: {
           ...prevState.player,
           stats: {
@@ -1994,7 +1974,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       };
     });
 
-    // Apply startingTime bonus from weapons
+    // Apply startingTime bonus from weapons (will be applied when enemy is selected)
     setState(prevState => {
       const totalStats = calculatePlayerTotalStats(prevState.player);
       const timeBonus = totalStats.startingTime || 0;
@@ -2004,8 +1984,8 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       };
     });
 
-    // Skip enemy selection, go directly to round
-    setGamePhase('round');
+    // Go to enemy selection screen
+    setGamePhase('enemy_select');
   };
 
   // Render the appropriate game phase
@@ -2124,6 +2104,8 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
             onExitGame={() => setGamePhase('main_menu')}
             targetLevel={pendingLevelUps[0] || state.player.stats.level}
             hasMoreLevelUps={pendingLevelUps.length > 1}
+            enemyDefeated={enemyDefeated}
+            defeatedEnemyTier={defeatedEnemyTier}
           />
         );
 

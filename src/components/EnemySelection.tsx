@@ -1,13 +1,30 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Pressable, StyleSheet } from 'react-native';
-import { Enemy, PlayerStats, Weapon } from '@/types';
+import { View, Text, TouchableOpacity, Pressable, StyleSheet, ScrollView } from 'react-native';
+import { PlayerStats, Weapon } from '@/types';
+import type { EnemyInstance } from '@/types/enemy';
 import { COLORS, RADIUS } from '@/utils/colors';
 import Icon from './Icon';
 import GameMenu from './GameMenu';
 
+// Tier colors for visual distinction
+const TIER_COLORS: Record<1 | 2 | 3 | 4, string> = {
+  1: COLORS.logicTeal,
+  2: COLORS.actionYellow,
+  3: COLORS.impactOrange,
+  4: COLORS.impactRed,
+};
+
+// Tier labels
+const TIER_LABELS: Record<1 | 2 | 3 | 4, string> = {
+  1: 'Common',
+  2: 'Uncommon',
+  3: 'Rare',
+  4: 'Boss',
+};
+
 interface EnemySelectionProps {
-  enemies: Enemy[];
-  onSelect: (enemy: Enemy) => void;
+  enemies: EnemyInstance[];
+  onSelect: (enemy: EnemyInstance) => void;
   round: number;
   playerStats: PlayerStats;
   playerWeapons?: Weapon[];
@@ -29,6 +46,10 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
   const displayedIndex = hoveredIndex !== null ? hoveredIndex : focusedIndex;
   const focusedEnemy = enemies.length > 0 ? enemies[displayedIndex] : null;
 
+  // Get tier color for focused enemy
+  const tierColor = focusedEnemy ? TIER_COLORS[focusedEnemy.tier] : COLORS.slateCharcoal;
+  const tierLabel = focusedEnemy ? TIER_LABELS[focusedEnemy.tier] : '';
+
   return (
     <View style={styles.container}>
       {/* Eyebrow Banner */}
@@ -41,30 +62,29 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
       <View style={styles.detailSection}>
         {focusedEnemy ? (
           <View style={styles.detailCard}>
-            {/* Enemy Icon */}
+            {/* Enemy Icon and Tier Badge */}
             <View style={styles.previewArea}>
-              {focusedEnemy.icon ? (
-                <Icon name={focusedEnemy.icon} size={48} color={COLORS.slateCharcoal} />
-              ) : (
-                <Text style={styles.previewLabel}>{focusedEnemy.name}</Text>
-              )}
+              <Icon name={focusedEnemy.icon} size={64} color={COLORS.slateCharcoal} />
+              <View style={[styles.tierBadge, { backgroundColor: tierColor }]}>
+                <Text style={styles.tierBadgeText}>Tier {focusedEnemy.tier}</Text>
+              </View>
             </View>
 
-            {/* Enemy Info */}
+            {/* Enemy Name */}
             <Text style={styles.detailName}>{focusedEnemy.name}</Text>
-            <Text style={styles.detailDescription}>{focusedEnemy.description}</Text>
+            <Text style={[styles.tierLabel, { color: tierColor }]}>{tierLabel}</Text>
 
-            {/* Effect & Reward */}
-            <View style={styles.infoRow}>
+            {/* Effect & Defeat Condition */}
+            <ScrollView style={styles.infoScrollArea} showsVerticalScrollIndicator={false}>
               <View style={[styles.infoBox, styles.infoBoxEffect]}>
-                <Text style={styles.infoLabelEffect}>Effect</Text>
-                <Text style={styles.infoText}>{focusedEnemy.effect}</Text>
+                <Text style={styles.infoLabelEffect}>Enemy Effects</Text>
+                <Text style={styles.infoText}>{focusedEnemy.description}</Text>
               </View>
-              <View style={[styles.infoBox, styles.infoBoxReward]}>
-                <Text style={styles.infoLabelReward}>Reward</Text>
-                <Text style={styles.infoText}>{focusedEnemy.reward}</Text>
+              <View style={[styles.infoBox, styles.infoBoxDefeat]}>
+                <Text style={styles.infoLabelDefeat}>Defeat Condition</Text>
+                <Text style={styles.infoText}>{focusedEnemy.defeatConditionText}</Text>
               </View>
-            </View>
+            </ScrollView>
           </View>
         ) : (
           <View style={styles.emptyDetail}>
@@ -79,6 +99,7 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
         <View style={styles.optionsGrid}>
           {enemies.map((enemy, index) => {
             const isFocused = focusedIndex === index;
+            const enemyTierColor = TIER_COLORS[enemy.tier];
 
             return (
               <Pressable
@@ -89,16 +110,16 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
                 style={[
                   styles.optionButton,
                   isFocused && styles.optionButtonSelected,
+                  { borderColor: isFocused ? enemyTierColor : COLORS.slateCharcoal },
                 ]}
               >
-                {enemy.icon && (
-                  <Icon
-                    name={enemy.icon}
-                    size={32}
-                    color={COLORS.slateCharcoal}
-                    style={styles.optionIcon}
-                  />
-                )}
+                <View style={[styles.optionTierDot, { backgroundColor: enemyTierColor }]} />
+                <Icon
+                  name={enemy.icon}
+                  size={36}
+                  color={COLORS.slateCharcoal}
+                  style={styles.optionIcon}
+                />
                 <Text
                   style={[
                     styles.optionText,
@@ -108,6 +129,7 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
                 >
                   {enemy.name}
                 </Text>
+                <Text style={styles.optionTier}>Tier {enemy.tier}</Text>
               </Pressable>
             );
           })}
@@ -122,9 +144,10 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
           style={[
             styles.actionButton,
             !focusedEnemy && styles.actionButtonDisabled,
+            focusedEnemy && { backgroundColor: tierColor },
           ]}
         >
-          <Text style={styles.actionButtonText}>Fight</Text>
+          <Text style={styles.actionButtonText}>Fight {focusedEnemy?.name || 'Enemy'}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -168,7 +191,7 @@ const styles = StyleSheet.create({
   },
   previewArea: {
     backgroundColor: COLORS.paperBeige,
-    height: 60,
+    height: 100,
     borderRadius: 8,
     marginBottom: 12,
     borderWidth: 1,
@@ -176,44 +199,51 @@ const styles = StyleSheet.create({
     borderColor: COLORS.slateCharcoal,
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
   },
-  previewLabel: {
-    color: COLORS.slateCharcoal,
+  tierBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  tierBadgeText: {
+    color: COLORS.canvasWhite,
     fontWeight: '700',
-    fontSize: 14,
+    fontSize: 10,
     textTransform: 'uppercase',
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
   detailName: {
     color: COLORS.slateCharcoal,
     fontWeight: '700',
-    fontSize: 20,
+    fontSize: 22,
     textTransform: 'uppercase',
-    marginBottom: 4,
+    marginBottom: 2,
   },
-  detailDescription: {
-    color: COLORS.slateCharcoal,
-    fontWeight: '400',
-    fontSize: 14,
-    lineHeight: 20,
+  tierLabel: {
+    fontWeight: '600',
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
     marginBottom: 12,
-    opacity: 0.8,
   },
-  infoRow: {
-    flexDirection: 'row',
-    gap: 8,
+  infoScrollArea: {
+    flex: 1,
   },
   infoBox: {
-    flex: 1,
     backgroundColor: COLORS.paperBeige,
     borderRadius: 8,
-    padding: 10,
+    padding: 12,
     borderWidth: 1,
+    marginBottom: 8,
   },
   infoBoxEffect: {
     borderColor: COLORS.impactOrange,
   },
-  infoBoxReward: {
+  infoBoxDefeat: {
     borderColor: COLORS.logicTeal,
   },
   infoLabelEffect: {
@@ -224,7 +254,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginBottom: 4,
   },
-  infoLabelReward: {
+  infoLabelDefeat: {
     color: COLORS.logicTeal,
     fontWeight: '600',
     fontSize: 10,
@@ -235,7 +265,8 @@ const styles = StyleSheet.create({
   infoText: {
     color: COLORS.slateCharcoal,
     fontWeight: '400',
-    fontSize: 12,
+    fontSize: 13,
+    lineHeight: 18,
   },
   emptyDetail: {
     flex: 1,
@@ -288,9 +319,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 12,
     gap: 6,
+    position: 'relative',
+  },
+  optionTierDot: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   optionIcon: {
-    marginBottom: 2,
+    marginBottom: 4,
   },
   optionButtonSelected: {
     backgroundColor: COLORS.actionYellow,
@@ -305,6 +345,12 @@ const styles = StyleSheet.create({
   },
   optionTextSelected: {
     fontWeight: '700',
+  },
+  optionTier: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '400',
+    fontSize: 10,
+    opacity: 0.7,
   },
   // Action Section
   actionSection: {

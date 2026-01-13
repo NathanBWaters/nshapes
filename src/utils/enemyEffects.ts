@@ -922,14 +922,16 @@ export function composeEffects(
       for (const { behavior, config } of effects) {
         if (behavior.getUIModifiers) {
           const effectMods = behavior.getUIModifiers(internalState, config);
-          // Merge weapon counters arrays
-          if (effectMods.weaponCounters) {
-            modifiers.weaponCounters = [
-              ...(modifiers.weaponCounters ?? []),
-              ...effectMods.weaponCounters,
-            ];
-          }
+          // Save weapon counters before Object.assign overwrites them
+          const existingCounters = modifiers.weaponCounters ?? [];
+          const newCounters = effectMods.weaponCounters ?? [];
+
           Object.assign(modifiers, effectMods);
+
+          // Merge weapon counters arrays after assign
+          if (existingCounters.length > 0 || newCounters.length > 0) {
+            modifiers.weaponCounters = [...existingCounters, ...newCounters];
+          }
         }
       }
 

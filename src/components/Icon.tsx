@@ -44,6 +44,39 @@ import Turtle from '../../assets/icons/lorc/turtle.svg';
 import TurtleShell from '../../assets/icons/lorc/turtle-shell.svg';
 import ChameleonGlyph from '../../assets/icons/darkzaitzev/chameleon-glyph.svg';
 
+// Tier 2 Enemies
+import Boar from '../../assets/icons/caro-asercion/boar.svg';
+import HyenaHead from '../../assets/icons/caro-asercion/hyena-head.svg';
+import SharkJaws from '../../assets/icons/lorc/shark-jaws.svg';
+import HawkEmblem from '../../assets/icons/lorc/hawk-emblem.svg';
+import Cobra from '../../assets/icons/skoll/cobra.svg';
+import Direwolf from '../../assets/icons/lorc/direwolf.svg';
+import EagleHead from '../../assets/icons/delapouite/eagle-head.svg';
+import BoarTusks from '../../assets/icons/lorc/boar-tusks.svg';
+import BeastEye from '../../assets/icons/lorc/beast-eye.svg';
+import BearFace from '../../assets/icons/sparker/bear-face.svg';
+import Beaver from '../../assets/icons/delapouite/beaver.svg';
+import WolverineClaws from '../../assets/icons/lorc/wolverine-claws.svg';
+
+// Tier 3 Enemies
+import Octopus from '../../assets/icons/lorc/octopus.svg';
+import BestialFangs from '../../assets/icons/lorc/bestial-fangs.svg';
+import Cyclops from '../../assets/icons/lorc/cyclops.svg';
+import GoblinHead from '../../assets/icons/caro-asercion/goblin.svg';
+import GolemHead from '../../assets/icons/delapouite/golem-head.svg';
+import Imp from '../../assets/icons/lorc/imp.svg';
+import Ant from '../../assets/icons/delapouite/ant.svg';
+import GiantSquid from '../../assets/icons/delapouite/giant-squid.svg';
+import Porcupine from '../../assets/icons/caro-asercion/porcupine.svg';
+import Tapir from '../../assets/icons/delapouite/tapir.svg';
+
+// Tier 4 Bosses
+import DragonHead from '../../assets/icons/lorc/dragon-head.svg';
+import Hydra from '../../assets/icons/lorc/hydra.svg';
+import KrakenTentacle from '../../assets/icons/delapouite/kraken-tentacle.svg';
+import GrimReaper from '../../assets/icons/lorc/grim-reaper.svg';
+import DaemonSkull from '../../assets/icons/lorc/daemon-skull.svg';
+
 // Weapons
 import FlintSpark from '../../assets/icons/delapouite/flint-spark.svg';
 import Bamboo from '../../assets/icons/delapouite/bamboo.svg';
@@ -149,6 +182,39 @@ const ICON_REGISTRY = {
   'lorc/turtle': Turtle,
   'lorc/turtle-shell': TurtleShell,
   'darkzaitzev/chameleon-glyph': ChameleonGlyph,
+
+  // Tier 2 Enemies
+  'caro-asercion/boar': Boar,
+  'caro-asercion/hyena-head': HyenaHead,
+  'lorc/shark-jaws': SharkJaws,
+  'lorc/hawk-emblem': HawkEmblem,
+  'skoll/cobra': Cobra,
+  'lorc/direwolf': Direwolf,
+  'delapouite/eagle-head': EagleHead,
+  'lorc/boar-tusks': BoarTusks,
+  'lorc/beast-eye': BeastEye,
+  'sparker/bear-face': BearFace,
+  'delapouite/beaver': Beaver,
+  'lorc/wolverine-claws': WolverineClaws,
+
+  // Tier 3 Enemies
+  'lorc/octopus': Octopus,
+  'lorc/bestial-fangs': BestialFangs,
+  'lorc/cyclops': Cyclops,
+  'caro-asercion/goblin': GoblinHead,
+  'delapouite/golem-head': GolemHead,
+  'lorc/imp': Imp,
+  'delapouite/ant': Ant,
+  'delapouite/giant-squid': GiantSquid,
+  'caro-asercion/porcupine': Porcupine,
+  'delapouite/tapir': Tapir,
+
+  // Tier 4 Bosses
+  'lorc/dragon-head': DragonHead,
+  'lorc/hydra': Hydra,
+  'delapouite/kraken-tentacle': KrakenTentacle,
+  'lorc/grim-reaper': GrimReaper,
+  'lorc/daemon-skull': DaemonSkull,
 
   // Weapons
   'delapouite/flint-spark': FlintSpark,
