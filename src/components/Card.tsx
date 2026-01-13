@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, Platform, TouchableOpacity } from 'react-native';
-import Svg, { Ellipse, Path, Polygon, Defs, Pattern, Rect } from 'react-native-svg';
+import Svg, { Ellipse, Path, Polygon, Defs, Pattern, Rect, Circle, Line } from 'react-native-svg';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -16,6 +16,7 @@ import { COLORS, RADIUS } from '@/utils/colors';
 import { BACKGROUND_COLORS } from '@/utils/gameConfig';
 import { useBurnTimer } from '@/hooks/useBurnTimer';
 import { EASING, DURATION, SHADOWS } from '@/utils/designSystem';
+import Icon from './Icon';
 
 const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
 
@@ -53,7 +54,10 @@ const Card: React.FC<CardProps> = ({
   breathingOffset = 0,
   isSuggestion = false,
 }) => {
-  const { shape, color, number, shading, selected, isHint } = card;
+  const { shape, color, number, shading, selected, isHint, isDud, isFaceDown, hasCountdown, countdownTimer, hasBomb, bombTimer } = card;
+
+  // Cards that cannot be selected (dud or face-down)
+  const isUnselectable = isDud || isFaceDown;
 
   // Animation values
   const scale = useSharedValue(isNew ? 0.8 : 1);
@@ -150,7 +154,10 @@ const Card: React.FC<CardProps> = ({
 
   // Multi-hit cards: health > 1 shows badge, health = 1 is regular (no badge), health = 0 means removed
   // Default health is 1 (undefined treated as 1). Badge shows remaining hits needed.
-  const hasModifiers = card.health !== undefined && card.health > 1;
+  const hasHealthBadge = card.health !== undefined && card.health > 1;
+
+  // Check if card has any special enemy state requiring overlay
+  const hasEnemyState = isDud || isFaceDown || hasCountdown || hasBomb;
 
   // Get shape component based on shape type
   const getShapeComponent = () => {
@@ -183,8 +190,30 @@ const Card: React.FC<CardProps> = ({
       { backgroundColor: getCardBackgroundColor(card.background) }
     ];
 
+    // Dud cards have special styling - grayed out white card
+    if (isDud) {
+      cardStyles.push(styles.dudCard);
+      return cardStyles;
+    }
+
+    // Face-down cards have card-back styling
+    if (isFaceDown) {
+      cardStyles.push(styles.faceDownCard);
+      return cardStyles;
+    }
+
     if (card.onFire) {
       cardStyles.push(styles.onFire);
+    }
+
+    // Bomb cards have urgent red border
+    if (hasBomb) {
+      cardStyles.push(styles.bombCard);
+    }
+
+    // Countdown cards have urgent styling
+    if (hasCountdown) {
+      cardStyles.push(styles.countdownCard);
     }
 
     if (selected) {
@@ -195,7 +224,7 @@ const Card: React.FC<CardProps> = ({
       cardStyles.push(styles.hint);
     }
 
-    if (disabled) {
+    if (disabled || isUnselectable) {
       cardStyles.push(styles.disabled);
     }
 
@@ -204,18 +233,64 @@ const Card: React.FC<CardProps> = ({
 
   // Health badge for multi-hit cards (used by enemy system)
   // Shows remaining hits needed when health > 1
-  const getModifierBadge = () => {
-    if (!hasModifiers) return null;
+  const getHealthBadge = () => {
+    if (!hasHealthBadge) return null;
 
-    if (card.health && card.health > 1) {
-      return (
-        <View style={[styles.badge, styles.badgeTopRight, { backgroundColor: COLORS.impactRed }]}>
-          <Text style={styles.badgeText}>{card.health}</Text>
-        </View>
-      );
-    }
+    // Show health pips (●●● → ●● → ●)
+    const pips = '●'.repeat(card.health ?? 1);
+    return (
+      <View style={[styles.badge, styles.badgeTopRight, { backgroundColor: COLORS.impactRed }]}>
+        <Text style={styles.badgeText}>{pips}</Text>
+      </View>
+    );
+  };
 
-    return null;
+  // Render face-down card back with "?" symbol
+  const renderFaceDownContent = () => (
+    <View style={styles.faceDownContent}>
+      <View style={styles.faceDownPattern}>
+        {/* Question mark symbol */}
+        <Text style={styles.faceDownSymbol}>?</Text>
+      </View>
+    </View>
+  );
+
+  // Render dud card (blank/white card)
+  const renderDudContent = () => (
+    <View style={styles.dudContent}>
+      {/* Empty card - visually blank */}
+    </View>
+  );
+
+  // Render countdown timer overlay
+  const renderCountdownOverlay = () => {
+    if (!hasCountdown || countdownTimer === undefined) return null;
+
+    const isUrgent = countdownTimer <= 5;
+    return (
+      <View style={[styles.timerOverlay, isUrgent && styles.timerOverlayUrgent]}>
+        <Icon name="lorc/stopwatch" size={16} color={isUrgent ? COLORS.impactRed : COLORS.slateCharcoal} noShadow />
+        <Text style={[styles.timerText, isUrgent && styles.timerTextUrgent]}>
+          {Math.ceil(countdownTimer)}s
+        </Text>
+      </View>
+    );
+  };
+
+  // Render bomb timer overlay
+  const renderBombOverlay = () => {
+    if (!hasBomb) return null;
+
+    const timer = bombTimer ?? 10;
+    const isUrgent = timer <= 5;
+    return (
+      <View style={[styles.timerOverlay, styles.bombOverlay, isUrgent && styles.timerOverlayUrgent]}>
+        <Icon name="lorc/time-bomb" size={16} color={isUrgent ? COLORS.impactRed : COLORS.slateCharcoal} noShadow />
+        <Text style={[styles.timerText, isUrgent && styles.timerTextUrgent]}>
+          {Math.ceil(timer)}s
+        </Text>
+      </View>
+    );
   };
 
   // Web cursor style - applied separately to avoid TypeScript issues with reanimated
@@ -223,31 +298,46 @@ const Card: React.FC<CardProps> = ({
     ? { cursor: disabled ? 'default' : 'pointer' } as any
     : undefined;
 
+  // Determine if click should be blocked
+  const isClickDisabled = disabled || isUnselectable;
+
   return (
     <AnimatedTouchableOpacity
-      testID={`card-${shape}-${color}-${number}-${shading}`}
+      testID={`card-${shape}-${color}-${number}-${shading}${isDud ? '-dud' : ''}${isFaceDown ? '-facedown' : ''}${hasBomb ? '-bomb' : ''}${hasCountdown ? '-countdown' : ''}`}
       style={[
         getCardStyle(),
         animatedCardStyle,
-        card.onFire && fireStyle,
+        card.onFire && !isDud && !isFaceDown && fireStyle,
         webCursorStyle,
       ]}
-      onPress={() => !disabled && onClick(card)}
-      disabled={disabled}
-      activeOpacity={0.9}
+      onPress={() => !isClickDisabled && onClick(card)}
+      disabled={isClickDisabled}
+      activeOpacity={isUnselectable ? 1 : 0.9}
       hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
       // @ts-ignore - onHoverIn/Out are web-only props
       onHoverIn={handleHoverIn}
       onHoverOut={handleHoverOut}
     >
-      {getModifierBadge()}
+      {/* Health badge for multi-hit cards */}
+      {getHealthBadge()}
 
-      <View nativeID="card-shapes" style={styles.shapesContainer}>
-        {shapes}
-      </View>
+      {/* Card content - depends on state */}
+      {isDud ? (
+        renderDudContent()
+      ) : isFaceDown ? (
+        renderFaceDownContent()
+      ) : (
+        <View nativeID="card-shapes" style={styles.shapesContainer}>
+          {shapes}
+        </View>
+      )}
+
+      {/* Timer overlays for countdown and bomb cards */}
+      {renderCountdownOverlay()}
+      {renderBombOverlay()}
 
       {/* Fire overlay - progressive darkening at edges */}
-      {card.onFire && (
+      {card.onFire && !isDud && !isFaceDown && (
         <Animated.View
           style={[
             styles.fireOverlay,
@@ -458,6 +548,92 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.6,
+  },
+  // Dud card styling - blank/white unmatchable card
+  dudCard: {
+    backgroundColor: '#E5E5E5', // Grayed out
+    borderColor: '#CCCCCC',
+    opacity: 0.5,
+  },
+  dudContent: {
+    flex: 1,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Face-down card styling - card back with pattern
+  faceDownCard: {
+    backgroundColor: COLORS.slateCharcoal,
+    borderColor: COLORS.deepOnyx,
+  },
+  faceDownContent: {
+    flex: 1,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  faceDownPattern: {
+    width: '80%',
+    height: '80%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: RADIUS.button,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderStyle: 'dashed',
+  },
+  faceDownSymbol: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: COLORS.canvasWhite,
+    opacity: 0.8,
+  },
+  // Countdown card - urgent timer border
+  countdownCard: {
+    borderColor: COLORS.impactOrange,
+    shadowColor: COLORS.impactOrange,
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+  },
+  // Bomb card - red urgent border
+  bombCard: {
+    borderColor: COLORS.impactRed,
+    shadowColor: COLORS.impactRed,
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
+  },
+  // Timer overlay (shared by countdown and bomb)
+  timerOverlay: {
+    position: 'absolute',
+    bottom: 2,
+    left: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: RADIUS.button,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+    gap: 2,
+  },
+  bombOverlay: {
+    borderColor: COLORS.impactRed,
+    backgroundColor: 'rgba(255, 113, 105, 0.15)',
+  },
+  timerOverlayUrgent: {
+    backgroundColor: 'rgba(255, 113, 105, 0.3)',
+    borderColor: COLORS.impactRed,
+  },
+  timerText: {
+    fontSize: 10,
+    fontWeight: '700',
+    fontFamily: 'monospace',
+    color: COLORS.slateCharcoal,
+  },
+  timerTextUrgent: {
+    color: COLORS.impactRed,
   },
   shapeContainer: {
     height: '80%',

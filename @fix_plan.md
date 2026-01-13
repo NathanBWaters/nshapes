@@ -416,22 +416,21 @@ All effects needed for Tier 1 enemies are now implemented:
 - [x] Call `enemy.onRoundEnd()` when round ends (in completeRound and endGame)
 - [x] Clean up any enemy-related state
 
-### 5.3 Card Component Updates
-- [ ] Update `Card.tsx` to render dud cards (isDud=true)
-  - Visual: White/blank card, grayed out, cannot select
-  - Block selection in handleCardSelect if isDud
-- [ ] Update `Card.tsx` to render face-down cards (isFaceDown=true)
-  - Visual: Card back with "?" symbol
-  - Block selection in handleCardSelect if isFaceDown
-- [ ] Update `Card.tsx` to render countdown cards (hasCountdown=true)
-  - Visual: Urgent countdown timer overlay
-  - Show countdownTimer value
-- [ ] Update `Card.tsx` to render bomb cards (hasBomb=true)
-  - Visual: Bomb icon with countdown overlay
-  - Show bomb timer value
-- [ ] Update `Card.tsx` to render multi-health cards (health > 1)
-  - Visual: Health pips (●●● → ●● → ●)
-  - Show current health value
+### 5.3 Card Component Updates ✅ COMPLETED
+- [x] Update `Card.tsx` to render dud cards (isDud=true)
+  - Visual: Grayed out white/blank card, opacity 0.5
+  - Block selection via isUnselectable check
+- [x] Update `Card.tsx` to render face-down cards (isFaceDown=true)
+  - Visual: Dark card back with "?" symbol and dashed border pattern
+  - Block selection via isUnselectable check
+- [x] Update `Card.tsx` to render countdown cards (hasCountdown=true)
+  - Visual: Orange border glow + stopwatch timer overlay in bottom-left
+  - Timer turns red when <= 5 seconds
+- [x] Update `Card.tsx` to render bomb cards (hasBomb=true)
+  - Visual: Red border glow + time-bomb icon overlay in bottom-left
+  - Timer turns red when <= 5 seconds
+- [x] Update `Card.tsx` to render multi-health cards (health > 1)
+  - Visual: Health pips (●●● → ●● → ●) shown as red badge in top-right
 - [ ] Create `__tests__/Card.enemy.test.tsx` with render tests
 - [ ] Tests passing
 
@@ -841,8 +840,8 @@ All effects needed for Tier 1 enemies are now implemented:
 | 1. Types & Interfaces | Complete | ✅ |
 | 2. Factory & Dummy | Complete | ✅ |
 | 3. Effect Behaviors | Complete | ✅ |
-| 4. Tier 1 Enemies | 18/22 complete (4 need new effects) | 🔄 |
-| 5. GameBoard Integration | 5.1-5.2 Complete (lifecycle hooks integrated, weapon counters pending) | 🔄 |
+| 4. Tier 1 Enemies | 22/22 complete | ✅ |
+| 5. GameBoard Integration | 5.1-5.3 Complete (lifecycle hooks integrated, Card visuals done, weapon counters pending) | 🔄 |
 | 6. Tier 2 Enemies | 0/12 complete | ⏳ |
 | 7. Tier 3 Enemies | 0/12 complete | ⏳ |
 | 8. Tier 4 Bosses | 0/5 complete | ⏳ |
