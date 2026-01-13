@@ -96,7 +96,7 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
       {/* Bottom Half - Options Grid */}
       <View style={styles.optionsSection}>
         <Text style={styles.optionsHeader}>Select Your Opponent</Text>
-        <View style={styles.optionsGrid}>
+        <View style={styles.optionsGrid} testID="enemy-options-grid">
           {enemies.map((enemy, index) => {
             const isFocused = focusedIndex === index;
             const enemyTierColor = TIER_COLORS[enemy.tier];
@@ -104,6 +104,7 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
             return (
               <Pressable
                 key={enemy.name}
+                testID={`enemy-option-${index}`}
                 onPress={() => setFocusedIndex(index)}
                 onHoverIn={() => setHoveredIndex(index)}
                 onHoverOut={() => setHoveredIndex(null)}
