@@ -2298,6 +2298,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
             matchCount={state.foundCombinations.length}
             playerStats={calculatePlayerTotalStats(state.player)}
             roundScores={victoryRoundScores}
+            difficulty={adventureDifficulty}
             onReturnToMenu={() => {
               setState(prev => ({ ...prev, isEndlessMode: false }));
               setGamePhase('main_menu');

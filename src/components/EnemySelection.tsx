@@ -64,7 +64,7 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
           <View style={styles.detailCard}>
             {/* Enemy Icon and Tier Badge */}
             <View style={styles.previewArea}>
-              <Icon name={focusedEnemy.icon} size={64} color={COLORS.slateCharcoal} />
+              <Icon name={focusedEnemy.icon} size={48} color={COLORS.slateCharcoal} />
               <View style={[styles.tierBadge, { backgroundColor: tierColor }]}>
                 <Text style={styles.tierBadgeText}>Tier {focusedEnemy.tier}</Text>
               </View>
@@ -192,7 +192,7 @@ const styles = StyleSheet.create({
   },
   previewArea: {
     backgroundColor: COLORS.paperBeige,
-    height: 100,
+    height: 70,
     borderRadius: 8,
     marginBottom: 12,
     borderWidth: 1,
