@@ -74,30 +74,40 @@ describe('Trap Weaver', () => {
 
     it('has correct description', () => {
       const enemy = createTrapWeaver();
-      expect(enemy.description).toContain('bomb');
+      expect(enemy.description).toContain('Starts with 1 bomb card');
     });
 
     it('has correct defeat condition text', () => {
       const enemy = createTrapWeaver();
-      expect(enemy.defeatConditionText).toContain('Defuse 3 bombs');
+      expect(enemy.defeatConditionText).toContain('Defuse the bomb');
     });
   });
 
-  describe('bomb effect', () => {
-    it('creates bomb when random < 15%', () => {
-      mockRandom(0.14); // 14%, below 15% threshold
+  describe('bomb spawn on round start', () => {
+    it('spawns a bomb card at round start', () => {
       const enemy = createTrapWeaver();
-      const card = createTestCard();
-      const result = enemy.onCardDraw(card);
-      expect(result.hasBomb).toBe(true);
-      expect(result.bombTimer).toBe(10000);
+      const board = [
+        createTestCard('card-1'),
+        createTestCard('card-2'),
+        createTestCard('card-3'),
+        createTestCard('card-4'),
+        createTestCard('card-5'),
+        createTestCard('card-6'),
+      ];
+
+      const result = enemy.onRoundStart(board);
+
+      // Should have exactly one card modification for the bomb
+      expect(result.cardModifications).toHaveLength(1);
+      expect(result.cardModifications[0].changes.hasBomb).toBe(true);
+      expect(result.cardModifications[0].changes.bombTimer).toBe(10000);
     });
 
-    it('does not create bomb when random >= 15%', () => {
-      mockRandom(0.16); // 16%, above 15% threshold
+    it('does not create bombs on card draw', () => {
       const enemy = createTrapWeaver();
       const card = createTestCard();
       const result = enemy.onCardDraw(card);
+      // Should not add bombs via onCardDraw (bombChance is 0)
       expect(result.hasBomb).toBeUndefined();
     });
 
@@ -168,30 +178,31 @@ describe('Trap Weaver', () => {
   });
 
   describe('defeat condition', () => {
-    it('returns false when bombsDefused < 3', () => {
+    it('returns false when bombsDefused < 1', () => {
       const enemy = createTrapWeaver();
-      const stats = createRoundStats({ bombsDefused: 2 });
+      const stats = createRoundStats({ bombsDefused: 0 });
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
 
-    it('returns true when bombsDefused = 3', () => {
+    it('returns true when bombsDefused = 1', () => {
       const enemy = createTrapWeaver();
-      const stats = createRoundStats({ bombsDefused: 3 });
+      const stats = createRoundStats({ bombsDefused: 1 });
       expect(enemy.checkDefeatCondition(stats)).toBe(true);
     });
 
-    it('returns true when bombsDefused > 3', () => {
+    it('returns true when bombsDefused > 1', () => {
       const enemy = createTrapWeaver();
-      const stats = createRoundStats({ bombsDefused: 5 });
+      const stats = createRoundStats({ bombsDefused: 2 });
       expect(enemy.checkDefeatCondition(stats)).toBe(true);
     });
   });
 
   describe('lifecycle hooks', () => {
-    it('onRoundStart returns empty result', () => {
+    it('onRoundStart spawns bomb on valid board', () => {
       const enemy = createTrapWeaver();
-      const result = enemy.onRoundStart([]);
-      expect(result.cardModifications).toEqual([]);
+      const board = [createTestCard('card-1'), createTestCard('card-2'), createTestCard('card-3')];
+      const result = enemy.onRoundStart(board);
+      expect(result.cardModifications.length).toBe(1);
       expect(result.events).toEqual([]);
     });
 
