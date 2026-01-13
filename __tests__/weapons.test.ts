@@ -12,23 +12,23 @@ import { Weapon, WeaponRarity, Player } from '@/types';
 
 describe('Weapon Definitions', () => {
   describe('WEAPONS array', () => {
-    it('should have exactly 53 weapons (17 types x 3 rarities + 2 legendary-only)', () => {
-      expect(WEAPONS.length).toBe(53);
+    it('should have exactly 56 weapons (18 types x 3 rarities + 2 legendary-only)', () => {
+      expect(WEAPONS.length).toBe(56);
     });
 
-    it('should have 17 common weapons', () => {
+    it('should have 18 common weapons', () => {
       const commons = WEAPONS.filter(w => w.rarity === 'common');
-      expect(commons.length).toBe(17);
+      expect(commons.length).toBe(18);
     });
 
-    it('should have 17 rare weapons', () => {
+    it('should have 18 rare weapons', () => {
       const rares = WEAPONS.filter(w => w.rarity === 'rare');
-      expect(rares.length).toBe(17);
+      expect(rares.length).toBe(18);
     });
 
-    it('should have 19 legendary weapons (17 base + Mystic Sight + Chain Reaction)', () => {
+    it('should have 20 legendary weapons (18 base + Mystic Sight + Chain Reaction)', () => {
       const legendaries = WEAPONS.filter(w => w.rarity === 'legendary');
-      expect(legendaries.length).toBe(19);
+      expect(legendaries.length).toBe(20);
     });
 
     it('should have all required weapon types', () => {

@@ -121,25 +121,17 @@ describe('generateGameBoard', () => {
     });
   });
 
-  it('should add modifiers based on difficulty and round', () => {
-    // Generate many boards at high difficulty to test modifier presence
-    let hasModifiers = false;
-    for (let i = 0; i < 10; i++) {
-      const board = generateGameBoard(12, 5, 5, ['shape', 'color', 'number', 'shading']);
-      const hasAnyModifier = board.some(
-        card =>
-          card.health !== undefined ||
-          card.lootBox ||
-          card.bonusMoney !== undefined ||
-          card.bonusPoints !== undefined ||
-          card.healing
-      );
-      if (hasAnyModifier) {
-        hasModifiers = true;
-        break;
-      }
-    }
-    expect(hasModifiers).toBe(true);
+  it('should generate cards without modifiers (modifiers are applied by enemy system)', () => {
+    // generateGameBoard creates plain cards; modifiers are now applied by enemy onRoundStart/onCardDraw
+    const board = generateGameBoard(12, 5, 5, ['shape', 'color', 'number', 'shading']);
+
+    // All cards should start as plain cards without special modifiers
+    board.forEach(card => {
+      expect(card.isDud).toBeUndefined();
+      expect(card.isFaceDown).toBeUndefined();
+      expect(card.hasBomb).toBeUndefined();
+      expect(card.hasCountdown).toBeUndefined();
+    });
   });
 });
 
