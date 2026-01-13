@@ -367,47 +367,44 @@ The following effects will be implemented when specific enemies need them:
 - [x] Call recordWeaponEffect when fire/explosion/laser/ricochet triggers
 - [x] Update timeRemaining, score, cardsRemaining, hintsRemaining, gracesRemaining via useEffect
 
-#### 5.2.1 onRoundStart Integration
-- [ ] Call `enemy.onRoundStart(board)` when round begins
-- [ ] Apply `cardModifications` from result to board state
-- [ ] Handle `events` from result (sound effects, animations)
+#### 5.2.1 onRoundStart Integration ✅
+- [x] Call `enemy.onRoundStart(board)` when round begins
+- [x] Apply `cardModifications` from result to board state
+- [x] Create enemy instance (currently using dummy, until enemy selection)
 
-#### 5.2.2 onTick Integration
-- [ ] Get `timerSpeedMultiplier` from `enemy.getUIModifiers()`
-- [ ] Scale deltaMs by timerSpeedMultiplier before passing to enemy
-- [ ] Call `enemy.onTick(scaledDelta, board)` every game tick
-- [ ] Apply `scoreDelta` to score (clamp to 0 minimum)
-- [ ] Apply `healthDelta` to health
-- [ ] Handle `instantDeath` flag → trigger game over
-- [ ] Remove cards in `cardsToRemove` (NO replacement - board shrinks)
-- [ ] Apply `cardModifications` to board
-- [ ] Flip cards in `cardsToFlip` (set isFaceDown=false)
-- [ ] Handle `events` for UI/sound
+#### 5.2.2 onTick Integration ✅
+- [x] Get `timerSpeedMultiplier` from `enemy.getUIModifiers()`
+- [x] Scale deltaMs by timerSpeedMultiplier before passing to enemy
+- [x] Call `enemy.onTick(scaledDelta, board)` every game tick
+- [x] Apply `scoreDelta` to score (clamp to 0 minimum)
+- [x] Apply `healthDelta` to health
+- [x] Handle `instantDeath` flag → sets health to 0
+- [x] Remove cards in `cardsToRemove` (NO replacement - board shrinks)
+- [x] Apply `cardModifications` to board
+- [x] Flip cards in `cardsToFlip` (set isFaceDown=false)
 
-#### 5.2.3 onValidMatch Integration
-- [ ] Call `enemy.onValidMatch(matchedCards, board)` after valid match
-- [ ] Apply `timeDelta` to remaining time (can be negative for time steal)
-- [ ] Apply `pointsMultiplier` to match points
-- [ ] Remove extra cards in `cardsToRemove` (NO replacement)
-- [ ] Flip cards in `cardsToFlip`
-- [ ] Handle `events`
-- [ ] Check defeat condition: `enemy.checkDefeatCondition(roundStats)`
+#### 5.2.3 onValidMatch Integration ✅
+- [x] Call `enemy.onValidMatch(matchedCards, board)` after valid match
+- [x] Apply `timeDelta` to remaining time (can be negative for time steal)
+- [x] Apply `pointsMultiplier` to match points
+- [x] Remove extra cards in `cardsToRemove` (NO replacement)
+- [x] Flip cards in `cardsToFlip`
+- [x] Check defeat condition: `enemy.checkDefeatCondition(roundStats)`
 
-#### 5.2.4 onInvalidMatch Integration
-- [ ] Call `enemy.onInvalidMatch(cards, board)` after invalid match
-- [ ] Remove extra cards in `cardsToRemove` (NO replacement)
-- [ ] Handle `events`
+#### 5.2.4 onInvalidMatch Integration ✅
+- [x] Call `enemy.onInvalidMatch(cards, board)` after invalid match
+- [x] Remove extra cards in `cardsToRemove` (NO replacement)
 
-#### 5.2.5 onCardDraw Integration
-- [ ] Call `enemy.onCardDraw(card)` when drawing new cards to replace matched cards
-- [ ] Use returned card (may have isDud, isFaceDown, hasBomb, etc.)
-- [ ] Note: Do NOT call onCardDraw for cards removed by enemy effects
+#### 5.2.5 onCardDraw Integration ✅
+- [x] Call `enemy.onCardDraw(card)` when drawing new cards to replace matched cards
+- [x] Use returned card (may have isDud, isFaceDown, hasBomb, etc.)
+- [x] Note: Do NOT call onCardDraw for cards removed by enemy effects
 
-#### 5.2.6 Stat Modifiers Integration
-- [ ] Get `statModifiers` from `enemy.getStatModifiers()`
-- [ ] Apply `damageMultiplier` when calculating damage taken
-- [ ] Apply `pointsMultiplier` when calculating points earned
-- [ ] Apply weapon counter reductions when rolling weapon effects:
+#### 5.2.6 Stat Modifiers Integration (Partial ✅)
+- [x] Get `statModifiers` from `enemy.getStatModifiers()`
+- [x] Apply `damageMultiplier` when calculating damage taken
+- [x] Apply `pointsMultiplier` when calculating points earned (via onValidMatch)
+- [ ] Apply weapon counter reductions when rolling weapon effects (requires GameBoard changes):
   - `fireSpreadChanceReduction` → reduce fire spread chance
   - `explosionChanceReduction` → reduce explosion chance
   - `laserChanceReduction` → reduce laser chance
@@ -416,9 +413,9 @@ The following effects will be implemented when specific enemies need them:
   - `timeGainChanceReduction` → reduce time bonus chance
   - `healingChanceReduction` → reduce healing chance
 
-#### 5.2.7 onRoundEnd Integration
-- [ ] Call `enemy.onRoundEnd()` when round ends
-- [ ] Clean up any enemy-related state
+#### 5.2.7 onRoundEnd Integration ✅
+- [x] Call `enemy.onRoundEnd()` when round ends (in completeRound and endGame)
+- [x] Clean up any enemy-related state
 
 ### 5.3 Card Component Updates
 - [ ] Update `Card.tsx` to render dud cards (isDud=true)
@@ -846,7 +843,7 @@ The following effects will be implemented when specific enemies need them:
 | 2. Factory & Dummy | Complete | ✅ |
 | 3. Effect Behaviors | Complete | ✅ |
 | 4. Tier 1 Enemies | 18/22 complete (4 need new effects) | 🔄 |
-| 5. GameBoard Integration | 5.1 Complete, 5.2 Partial (RoundStats tracking integrated) | 🔄 |
+| 5. GameBoard Integration | 5.1-5.2 Complete (lifecycle hooks integrated, weapon counters pending) | 🔄 |
 | 6. Tier 2 Enemies | 0/12 complete | ⏳ |
 | 7. Tier 3 Enemies | 0/12 complete | ⏳ |
 | 8. Tier 4 Bosses | 0/5 complete | ⏳ |

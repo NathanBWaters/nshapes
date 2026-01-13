@@ -286,6 +286,11 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
   // Function declarations
   // Add an endGame function
   const endGame = (victory: boolean, reason?: string) => {
+    // Call enemy onRoundEnd to clean up
+    if (state.activeEnemyInstance) {
+      state.activeEnemyInstance.onRoundEnd();
+    }
+
     // Record endless high score if in endless mode
     if (state.isEndlessMode && selectedCharacter) {
       EndlessHighScoresStorage.recordHighScore(selectedCharacter, state.round);
@@ -318,6 +323,11 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
 
   // Complete the current round
   const completeRound = () => {
+    // Call enemy onRoundEnd to clean up
+    if (state.activeEnemyInstance) {
+      state.activeEnemyInstance.onRoundEnd();
+    }
+
     // Record this round's score in history
     const roundReq = getRoundRequirement(state.round);
     setRoundHistory(prev => [
@@ -403,10 +413,72 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
   const timerKey = state.startTime || 0;
 
   useGameTimer(isTimerActive, () => {
-    setState(prev => ({
-      ...prev,
-      remainingTime: Math.max(0, prev.remainingTime - 1),
-    }));
+    setState(prev => {
+      // Basic time decrement
+      let newTime = Math.max(0, prev.remainingTime - 1);
+      let newScore = prev.score;
+      let newHealth = prev.player.stats.health;
+      let newBoard = prev.board;
+
+      // Process enemy tick if enemy is active
+      const enemy = prev.activeEnemyInstance;
+      if (enemy) {
+        // Get timer speed multiplier from enemy
+        const uiMods = enemy.getUIModifiers();
+        const speedMultiplier = uiMods.timerSpeedMultiplier || 1;
+
+        // Call enemy onTick with scaled delta (1000ms * speedMultiplier)
+        const scaledDelta = 1000 * speedMultiplier;
+        const tickResult = enemy.onTick(scaledDelta, prev.board);
+
+        // Apply score delta (clamp to 0)
+        newScore = Math.max(0, prev.score + tickResult.scoreDelta);
+
+        // Apply health delta
+        newHealth = prev.player.stats.health + tickResult.healthDelta;
+
+        // Handle instant death
+        if (tickResult.instantDeath) {
+          newHealth = 0;
+        }
+
+        // Remove cards (NO replacement - board shrinks)
+        if (tickResult.cardsToRemove.length > 0) {
+          newBoard = prev.board.filter(card => !tickResult.cardsToRemove.includes(card.id));
+        }
+
+        // Apply card modifications
+        if (tickResult.cardModifications.length > 0) {
+          newBoard = newBoard.map(card => {
+            const mod = tickResult.cardModifications.find(m => m.cardId === card.id);
+            return mod ? { ...card, ...mod.changes } : card;
+          });
+        }
+
+        // Flip cards
+        if (tickResult.cardsToFlip.length > 0) {
+          newBoard = newBoard.map(card =>
+            tickResult.cardsToFlip.includes(card.id)
+              ? { ...card, isFaceDown: false }
+              : card
+          );
+        }
+      }
+
+      return {
+        ...prev,
+        remainingTime: newTime,
+        score: newScore,
+        board: newBoard,
+        player: {
+          ...prev.player,
+          stats: {
+            ...prev.player.stats,
+            health: newHealth,
+          },
+        },
+      };
+    });
   }, timerKey);
 
   // Update round stats for enemy defeat conditions (time, score, cards, resources)
@@ -473,10 +545,25 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     // Reset enemy round stats for defeat condition tracking
     resetRoundStats(roundReq.targetScore, totalStats.hints || 0, totalStats.graces || 0);
 
+    // Create enemy instance for this round (using dummy until enemy selection is implemented)
+    const enemyInstance = startGame ? createDummyEnemy() : null;
+
+    // Call enemy's onRoundStart and apply any card modifications
+    let finalBoard = initialBoard;
+    if (enemyInstance) {
+      const startResult = enemyInstance.onRoundStart(initialBoard);
+      if (startResult.cardModifications.length > 0) {
+        finalBoard = initialBoard.map(card => {
+          const mod = startResult.cardModifications.find(m => m.cardId === card.id);
+          return mod ? { ...card, ...mod.changes } : card;
+        });
+      }
+    }
+
     setState({
       // Core game
       deck: remainingDeck,
-      board: initialBoard,
+      board: finalBoard,
       selectedCards: [],
       foundCombinations: [],
       score: 0,
@@ -507,7 +594,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       // Enemy - to be selected during gameplay
       currentEnemies: generateRandomEnemies(),
       selectedEnemy: null,
-      activeEnemyInstance: null,
+      activeEnemyInstance: enemyInstance,
 
       // Loot and rewards
       lootCrates: 0,
@@ -1068,6 +1155,26 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       recordGraceUsed();
     }
 
+    // Call enemy onValidMatch and apply effects
+    let enemyTimeDelta = 0;
+    let enemyPointsMultiplier = 1;
+    let enemyCardsToRemove: string[] = [];
+    let enemyCardsToFlip: string[] = [];
+    if (state.activeEnemyInstance) {
+      const matchResult = state.activeEnemyInstance.onValidMatch(matchedCards, state.board);
+      enemyTimeDelta = matchResult.timeDelta;
+      enemyPointsMultiplier = matchResult.pointsMultiplier;
+      enemyCardsToRemove = matchResult.cardsToRemove;
+      enemyCardsToFlip = matchResult.cardsToFlip;
+
+      // Check defeat condition
+      const isDefeated = state.activeEnemyInstance.checkDefeatCondition(roundStatsRef.current);
+      if (isDefeated) {
+        // TODO: Show defeat notification and award slayer bonus
+        console.log('Enemy defeated!');
+      }
+    }
+
     // Calculate totals from rewards (includes explosion/laser rewards from GameBoard)
     let totalPoints = 0;
     let totalMoney = 0;
@@ -1199,17 +1306,38 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       // Calculate grace change: if grace used, decrement; if bonus from weapon effects, add
       const graceDelta = (graceUsed ? -1 : 0) + (weaponEffects?.bonusGraces || 0);
 
+      // Apply enemy points multiplier
+      const adjustedPoints = Math.floor(totalPoints * enemyPointsMultiplier);
+
+      // Apply enemy time delta (can be negative for time steal)
+      const weaponTimeBonus = weaponEffects?.bonusTime || 0;
+      const totalTimeChange = weaponTimeBonus + enemyTimeDelta;
+      const maxTime = getRoundRequirement(prevState.round).time + (calculatePlayerTotalStats(prevState.player).startingTime || 0);
+      const newRemainingTime = Math.min(Math.max(0, prevState.remainingTime + totalTimeChange), maxTime);
+
+      // Apply enemy card removals (NO replacement)
+      let newBoard = prevState.board;
+      if (enemyCardsToRemove.length > 0) {
+        newBoard = newBoard.filter(card => !enemyCardsToRemove.includes(card.id));
+      }
+
+      // Apply enemy card flips
+      if (enemyCardsToFlip.length > 0) {
+        newBoard = newBoard.map(card =>
+          enemyCardsToFlip.includes(card.id)
+            ? { ...card, isFaceDown: false }
+            : card
+        );
+      }
+
       return {
         ...prevState,
-        score: prevState.score + totalPoints,
+        score: prevState.score + adjustedPoints,
+        board: newBoard,
         selectedCards: prevState.selectedCards.filter(c => !cards.some(mc => mc.id === c.id)),
         foundCombinations: [...prevState.foundCombinations, cards],
         lootCrates: prevState.lootCrates + lootCratesEarned,
-        // Cap time gains at starting max (round base time + startingTime bonus)
-        remainingTime: Math.min(
-          prevState.remainingTime + (weaponEffects?.bonusTime || 0),
-          getRoundRequirement(prevState.round).time + (calculatePlayerTotalStats(prevState.player).startingTime || 0)
-        ),
+        remainingTime: newRemainingTime,
         player: {
           ...prevState.player,
           stats: {
@@ -1437,11 +1565,26 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     }
 
     // 2+ attributes wrong OR no graces - decrease health
+    // Get enemy damage multiplier
+    let damageMultiplier = 1;
+    if (state.activeEnemyInstance) {
+      const statMods = state.activeEnemyInstance.getStatModifiers();
+      damageMultiplier = statMods.damageMultiplier || 1;
+    }
+    const damageAmount = Math.floor(1 * damageMultiplier);
+
     // Track damage for enemy defeat conditions
-    recordDamage(1);
+    recordDamage(damageAmount);
+
+    // Call enemy onInvalidMatch and get extra cards to remove
+    let enemyCardsToRemove: string[] = [];
+    if (state.activeEnemyInstance) {
+      const matchResult = state.activeEnemyInstance.onInvalidMatch(cardsToReplace, state.board);
+      enemyCardsToRemove = matchResult.cardsToRemove;
+    }
 
     setState(prevState => {
-      const newHealth = prevState.player.stats.health - 1;
+      const newHealth = prevState.player.stats.health - damageAmount;
 
       // Check for game over
       if (newHealth <= 0) {
@@ -1457,8 +1600,15 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
         });
       }
 
+      // Apply enemy card removals (NO replacement - board shrinks)
+      let newBoard = prevState.board;
+      if (enemyCardsToRemove.length > 0) {
+        newBoard = newBoard.filter(card => !enemyCardsToRemove.includes(card.id));
+      }
+
       return {
         ...prevState,
+        board: newBoard,
         selectedCards: prevState.selectedCards.filter(c => !cardsToReplace.some(mc => mc.id === c.id)),
         player: {
           ...prevState.player,
@@ -1653,12 +1803,17 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     );
 
     // Generate replacement cards
-    // Note: Card modifiers (health, bombs, etc.) are applied by the enemy system, not randomly
+    // Note: Card modifiers (health, bombs, etc.) are applied by the enemy system via onCardDraw
     for (let i = 0; i < matchedCards.length; i++) {
       if (remainingDeck.length > 0) {
         // Get a random card from the deck
         const randomIndex = Math.floor(Math.random() * remainingDeck.length);
-        const newCard = { ...remainingDeck[randomIndex], selected: false };
+        let newCard = { ...remainingDeck[randomIndex], selected: false };
+
+        // Apply enemy onCardDraw modifications (may add isDud, isFaceDown, hasBomb, etc.)
+        if (state.activeEnemyInstance) {
+          newCard = state.activeEnemyInstance.onCardDraw(newCard);
+        }
 
         newCards.push(newCard);
 
@@ -1797,6 +1952,19 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     const playerTotalStats = calculatePlayerTotalStats(state.player);
     resetRoundStats(roundReq.targetScore, playerTotalStats.hints || 0, playerTotalStats.graces || 0);
 
+    // Create enemy instance for this round (using dummy until enemy selection is implemented)
+    const enemyInstance = createDummyEnemy();
+
+    // Call enemy's onRoundStart and apply any card modifications
+    const startResult = enemyInstance.onRoundStart(newBoard);
+    let finalBoard = newBoard;
+    if (startResult.cardModifications.length > 0) {
+      finalBoard = newBoard.map(card => {
+        const mod = startResult.cardModifications.find(m => m.cardId === card.id);
+        return mod ? { ...card, ...mod.changes } : card;
+      });
+    }
+
     setState(prevState => {
       // Reset health to max at the start of each round
       const playerTotalStats = calculatePlayerTotalStats(prevState.player);
@@ -1807,7 +1975,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
         targetScore: roundReq.targetScore,
         remainingTime: roundReq.time,
         score: 0,
-        board: newBoard,
+        board: finalBoard,
         selectedCards: [],
         foundCombinations: [],
         roundCompleted: false,
@@ -1815,6 +1983,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
         currentEnemies: generateRandomEnemies(),
         shopItems: generateRandomShopItems(),  // Refill shop for next round
         shopWeapons: generateShopWeapons(4),   // Refill weapon shop for next round
+        activeEnemyInstance: enemyInstance,  // Store the enemy instance
         player: {
           ...prevState.player,
           stats: {
