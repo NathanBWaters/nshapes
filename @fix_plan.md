@@ -351,10 +351,21 @@ The following effects will be implemented when specific enemies need them:
 - [x] Track tripleCardsCleared (count cards with health > 1 fully cleared)
 - [x] Create `__tests__/hooks/useRoundStats.test.ts` with unit tests
 - [x] Tests passing (37 tests)
+- [x] Integrated with Game.tsx
 
-### 5.2 GameBoard Enemy Lifecycle Integration
-- [ ] Add `enemy: EnemyInstance` prop to GameBoard component
-- [ ] Add `roundStats: RoundStats` prop (or use hook internally)
+### 5.2 GameBoard Enemy Lifecycle Integration (Partial ✅)
+- [x] Add `enemy: EnemyInstance` prop to GameBoard component
+- [x] Add `roundStats: RoundStats` prop (or use hook internally)
+- [x] Import and use `useRoundStats` hook in Game.tsx
+- [x] Pass enemy and roundStats to GameBoard in 'round' phase
+- [x] Call resetRoundStats in initGame and startNextRound
+- [x] Call recordValidMatch with match context (isAllDifferent, isAllSameColor, hasSquiggle)
+- [x] Call recordInvalidMatch on invalid matches
+- [x] Call recordGraceUsed when grace saves a near-miss
+- [x] Call recordHintUsed when hint is used
+- [x] Call recordDamage when player takes damage
+- [x] Call recordWeaponEffect when fire/explosion/laser/ricochet triggers
+- [x] Update timeRemaining, score, cardsRemaining, hintsRemaining, gracesRemaining via useEffect
 
 #### 5.2.1 onRoundStart Integration
 - [ ] Call `enemy.onRoundStart(board)` when round begins
@@ -835,7 +846,7 @@ The following effects will be implemented when specific enemies need them:
 | 2. Factory & Dummy | Complete | ✅ |
 | 3. Effect Behaviors | Complete | ✅ |
 | 4. Tier 1 Enemies | 18/22 complete (4 need new effects) | 🔄 |
-| 5. GameBoard Integration | Not started | ⏳ |
+| 5. GameBoard Integration | 5.1 Complete, 5.2 Partial (RoundStats tracking integrated) | 🔄 |
 | 6. Tier 2 Enemies | 0/12 complete | ⏳ |
 | 7. Tier 3 Enemies | 0/12 complete | ⏳ |
 | 8. Tier 4 Bosses | 0/5 complete | ⏳ |

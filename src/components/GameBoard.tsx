@@ -10,6 +10,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { Card as CardType, PlayerStats, CardReward, AttributeName, Weapon } from '@/types';
+import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import Card from './Card';
 import RewardReveal from './RewardReveal';
 import { COLORS } from '@/utils/colors';
@@ -45,6 +46,9 @@ interface GameBoardProps {
   isPaused?: boolean; // When true, pauses auto-hint timer and card burn timers (e.g., when menu is open)
   lastMatchTime?: number; // Timestamp of last successful match - auto-hint only triggers 15s after this
   autoPlayer?: boolean; // When true, automatically finds and selects valid SETs (for testing/review)
+  // Enemy system integration
+  enemy?: EnemyInstance | null; // Active enemy for current round
+  roundStats?: React.MutableRefObject<RoundStats>; // Mutable ref to round stats (from useRoundStats)
 }
 
 // Calculate rewards for a single card
@@ -95,6 +99,8 @@ const GameBoard: React.FC<GameBoardProps> = ({
   isPaused = false,
   lastMatchTime,
   autoPlayer = false,
+  enemy,
+  roundStats,
 }) => {
   const [selectedCards, setSelectedCards] = useState<CardType[]>([]);
   const [matchedCardIds, setMatchedCardIds] = useState<string[]>([]);

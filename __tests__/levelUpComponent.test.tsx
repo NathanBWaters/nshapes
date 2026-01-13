@@ -57,14 +57,15 @@ jest.mock('@/utils/sounds', () => ({
 }));
 
 // Create test weapons
-const createTestWeapon = (name: string): Weapon => ({
-  id: `test-weapon-${name}`,
-  name,
-  type: 'offensive',
+const createTestWeapon = (id: string): Weapon => ({
+  id: `test-weapon-${id}`,
+  name: 'Blast Powder',
+  level: 1,
   rarity: 'common',
   price: 10,
   icon: 'lorc/cat',
   description: 'Test weapon description',
+  shortDescription: 'Test short desc',
   flavorText: 'Test flavor text',
   effects: {
     explosionChance: 10,

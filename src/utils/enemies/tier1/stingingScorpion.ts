@@ -16,7 +16,7 @@ export function createStingingScorpion(): EnemyInstance {
   return composeEffects(
     {
       name: 'Stinging Scorpion',
-      icon: 'delapouite/scorpion',
+      icon: 'lorc/scorpion',
       tier: 1,
       description: '2x damage taken, 2x points earned',
       defeatConditionText: 'Make no invalid matches',

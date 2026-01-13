@@ -20,6 +20,9 @@ import { getActiveAttributesForRound, getBoardSizeForAttributes, ATTRIBUTE_SCALI
 import { getAdjacentIndices, getFireSpreadCards, WeaponEffectResult } from '@/utils/weaponEffects';
 import { useGameTimer } from '@/hooks/useGameTimer';
 import { useParticles } from '@/hooks/useParticles';
+import { useRoundStats } from '@/hooks/useRoundStats';
+import { createEnemy, createDummyEnemy } from '@/utils/enemyFactory';
+import type { EnemyInstance } from '@/types/enemy';
 import GameBoard from './GameBoard';
 import GameInfo from './GameInfo';
 import { DevModeCallbacks } from './GameMenu';
@@ -149,6 +152,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
         rerollCost: BASE_REROLL_COST,
         currentEnemies: [],
         selectedEnemy: null,
+        activeEnemyInstance: null,
         lootCrates: 0,
         isCoOp: false,
         players: [],
@@ -180,6 +184,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       rerollCost: BASE_REROLL_COST,
       currentEnemies: [],
       selectedEnemy: null,
+      activeEnemyInstance: null,
       lootCrates: 0,
       isCoOp: false,
       players: [],
@@ -194,6 +199,23 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
 
   // Particle effects for match celebrations
   const { spawnParticles, Particles } = useParticles();
+
+  // Round stats tracking for enemy defeat conditions
+  const {
+    statsRef: roundStatsRef,
+    resetStats: resetRoundStats,
+    recordValidMatch,
+    recordInvalidMatch,
+    recordGraceUsed,
+    recordHintUsed,
+    recordDamage,
+    recordWeaponEffect,
+    updateTimeRemaining,
+    updateCardsRemaining,
+    updateScore,
+    updateHintsRemaining,
+    updateGracesRemaining,
+  } = useRoundStats();
 
   // UI state for header stats
   const [hasActiveHint, setHasActiveHint] = useState(false);
@@ -387,6 +409,30 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     }));
   }, timerKey);
 
+  // Update round stats for enemy defeat conditions (time, score, cards, resources)
+  useEffect(() => {
+    if (gamePhase === 'round' && state.gameStarted) {
+      updateTimeRemaining(state.remainingTime);
+      updateScore(state.score);
+      updateCardsRemaining(state.board.length);
+      updateHintsRemaining(state.player.stats.hints);
+      updateGracesRemaining(state.player.stats.graces);
+    }
+  }, [
+    gamePhase,
+    state.gameStarted,
+    state.remainingTime,
+    state.score,
+    state.board.length,
+    state.player.stats.hints,
+    state.player.stats.graces,
+    updateTimeRemaining,
+    updateScore,
+    updateCardsRemaining,
+    updateHintsRemaining,
+    updateGracesRemaining,
+  ]);
+
   // Handle round completion when time runs out - separate from timer to avoid race conditions
   useEffect(() => {
     if (gamePhase === 'round' && state.gameStarted && !state.gameEnded && !state.roundCompleted && state.remainingTime === 0) {
@@ -424,6 +470,9 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     // Calculate time with starting bonus if game is starting
     const timeBonus = startGame ? (totalStats.startingTime || 0) : 0;
 
+    // Reset enemy round stats for defeat condition tracking
+    resetRoundStats(roundReq.targetScore, totalStats.hints || 0, totalStats.graces || 0);
+
     setState({
       // Core game
       deck: remainingDeck,
@@ -458,6 +507,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       // Enemy - to be selected during gameplay
       currentEnemies: generateRandomEnemies(),
       selectedEnemy: null,
+      activeEnemyInstance: null,
 
       // Loot and rewards
       lootCrates: 0,
@@ -471,7 +521,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     });
 
     setNotification(null);
-  }, [isMultiplayer]);
+  }, [isMultiplayer, resetRoundStats]);
 
   // Generate 3 random enemies to choose from
   const generateRandomEnemies = (): Enemy[] => {
@@ -998,6 +1048,26 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     // Check if this is a grace match (invalid match saved by grace)
     const isGraceMatch = rewards.length > 0 && rewards[0].effectType === 'grace';
 
+    // Track match for enemy defeat conditions
+    // Get the actual matched cards (first 3 in the cards array)
+    const matchedCards = cards.slice(0, 3);
+    const isAllDifferent = state.activeAttributes.every(attr => {
+      const values = matchedCards.map(c => c[attr as keyof Card]);
+      return values.length === new Set(values).size;
+    });
+    const isAllSameColor = matchedCards.every(c => c.color === matchedCards[0].color);
+    const hasSquiggle = matchedCards.some(c => c.shape === 'squiggle');
+    recordValidMatch(matchedCards, {
+      isAllDifferent,
+      isAllSameColor,
+      hasSquiggle,
+    });
+
+    // Track grace usage for defeat conditions
+    if (isGraceMatch) {
+      recordGraceUsed();
+    }
+
     // Calculate totals from rewards (includes explosion/laser rewards from GameBoard)
     let totalPoints = 0;
     let totalMoney = 0;
@@ -1054,6 +1124,18 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       // Set fire on cards
       if (weaponEffects.fireCards.length > 0) {
         igniteCards(weaponEffects.fireCards);
+        recordWeaponEffect('fire');
+      }
+
+      // Track weapon effects for defeat conditions
+      if (weaponEffects.explosiveCards.length > 0) {
+        recordWeaponEffect('explosion');
+      }
+      if (weaponEffects.laserCards.length > 0) {
+        recordWeaponEffect('laser');
+      }
+      if (weaponEffects.ricochetCards.length > 0) {
+        recordWeaponEffect('ricochet');
       }
 
       // Show notifications (filter out explosion/laser since those were shown visually)
@@ -1316,6 +1398,9 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
   // Handle invalid match - removes cards and replaces them (costs 1 health unless grace saves)
   // Grace only saves when EXACTLY 1 attribute is wrong (a "near miss")
   const handleInvalidMatch = (cardsToReplace: Card[]) => {
+    // Track invalid match for enemy defeat conditions
+    recordInvalidMatch();
+
     // Get current total stats to check graces
     const totalStats = calculatePlayerTotalStats(state.player);
 
@@ -1352,6 +1437,9 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     }
 
     // 2+ attributes wrong OR no graces - decrease health
+    // Track damage for enemy defeat conditions
+    recordDamage(1);
+
     setState(prevState => {
       const newHealth = prevState.player.stats.health - 1;
 
@@ -1390,6 +1478,9 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
 
   // Handle using a hint (decrement hint count)
   const handleUseHint = () => {
+    // Track hint usage for enemy defeat conditions
+    recordHintUsed();
+
     setState(prevState => ({
       ...prevState,
       player: {
@@ -1702,6 +1793,10 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       startLevel: state.player.stats.level,
     });
 
+    // Reset enemy round stats for defeat condition tracking
+    const playerTotalStats = calculatePlayerTotalStats(state.player);
+    resetRoundStats(roundReq.targetScore, playerTotalStats.hints || 0, playerTotalStats.graces || 0);
+
     setState(prevState => {
       // Reset health to max at the start of each round
       const playerTotalStats = calculatePlayerTotalStats(prevState.player);
@@ -1946,6 +2041,8 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
                 isPaused={isMenuOpen}
                 lastMatchTime={lastMatchTime}
                 autoPlayer={autoPlayerEnabled}
+                enemy={state.activeEnemyInstance}
+                roundStats={roundStatsRef}
               />
             </View>
           </View>

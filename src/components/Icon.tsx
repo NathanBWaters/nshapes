@@ -30,6 +30,13 @@ import Frog from '../../assets/icons/lorc/frog.svg';
 import Mouse from '../../assets/icons/lorc/mouse.svg';
 import Ermine from '../../assets/icons/delapouite/ermine.svg';
 import Squirrel from '../../assets/icons/delapouite/squirrel.svg';
+import WolfHead from '../../assets/icons/lorc/wolf-head.svg';
+import Raven from '../../assets/icons/lorc/raven.svg';
+import Swan from '../../assets/icons/lorc/swan.svg';
+import Scorpion from '../../assets/icons/lorc/scorpion.svg';
+import Mole from '../../assets/icons/caro-asercion/mole.svg';
+import RaccoonHead from '../../assets/icons/delapouite/raccoon-head.svg';
+import Uncertainty from '../../assets/icons/lorc/uncertainty.svg';
 
 // Weapons
 import FlintSpark from '../../assets/icons/delapouite/flint-spark.svg';
@@ -123,6 +130,13 @@ const ICON_REGISTRY = {
   'lorc/mouse': Mouse,
   'delapouite/ermine': Ermine,
   'delapouite/squirrel': Squirrel,
+  'lorc/wolf-head': WolfHead,
+  'lorc/raven': Raven,
+  'lorc/swan': Swan,
+  'lorc/scorpion': Scorpion,
+  'caro-asercion/mole': Mole,
+  'delapouite/raccoon-head': RaccoonHead,
+  'lorc/uncertainty': Uncertainty,
 
   // Weapons
   'delapouite/flint-spark': FlintSpark,

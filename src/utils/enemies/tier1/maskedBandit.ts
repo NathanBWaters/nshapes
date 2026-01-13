@@ -16,7 +16,7 @@ export function createMaskedBandit(): EnemyInstance {
   return composeEffects(
     {
       name: 'Masked Bandit',
-      icon: 'delapouite/raccoon',
+      icon: 'delapouite/raccoon-head',
       tier: 1,
       description: 'Disables auto-hints entirely',
       defeatConditionText: 'Get 3 matches without hesitating >10s',

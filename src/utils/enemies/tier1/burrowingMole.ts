@@ -16,7 +16,7 @@ export function createBurrowingMole(): EnemyInstance {
   return composeEffects(
     {
       name: 'Burrowing Mole',
-      icon: 'delapouite/mole',
+      icon: 'caro-asercion/mole',
       tier: 1,
       description: 'Removes 1 random card every 20s',
       defeatConditionText: 'Match all 3 shapes at least once',

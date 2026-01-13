@@ -1,4 +1,5 @@
 import type { IconName } from './components/Icon';
+import type { EnemyInstance } from './types/enemy';
 
 export type Shape = 'oval' | 'squiggle' | 'diamond';
 export type Color = 'red' | 'green' | 'purple';
@@ -253,6 +254,7 @@ export interface GameState {
   // Enemy
   currentEnemies: Enemy[];
   selectedEnemy: Enemy | null;
+  activeEnemyInstance: EnemyInstance | null;  // Active enemy for current round
 
   // Loot and rewards
   lootCrates: number;

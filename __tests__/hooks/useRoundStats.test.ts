@@ -17,9 +17,9 @@ function createMockCard(overrides: Partial<Card> = {}): Card {
     color: 'red',
     number: 1,
     shading: 'solid',
-    backgroundColor: 'white',
+    background: 'white',
     ...overrides,
-  };
+  } as Card;
 }
 
 describe('createInitialRoundStats', () => {
