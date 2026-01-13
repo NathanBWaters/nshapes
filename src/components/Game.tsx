@@ -2088,6 +2088,8 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
             playerWeapons={state.player.weapons}
             onExitGame={() => setGamePhase('main_menu')}
             roundScores={summaryRoundScores}
+            enemy={state.activeEnemyInstance ?? undefined}
+            difficulty={adventureDifficulty}
           />
         );
 

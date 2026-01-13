@@ -7,6 +7,7 @@ import { ConfettiBurst } from './effects/ConfettiBurst';
 import { AnimatedCounter } from './ui/AnimatedCounter';
 import { ScreenTransition } from './ScreenTransition';
 import RoundProgressChart, { RoundScore } from './RoundProgressChart';
+import ChallengeCard from './ui/ChallengeCard';
 
 interface VictoryScreenProps {
   player: Player;
@@ -79,20 +80,6 @@ const VictoryScreen: React.FC<VictoryScreenProps> = ({
     return () => clearTimeout(timer);
   }, []);
 
-  // Get difficulty display info
-  const getDifficultyInfo = (diff: AdventureDifficulty) => {
-    switch (diff) {
-      case 'easy':
-        return { label: 'Easy', desc: '3 attributes for all rounds', icon: 'lorc/feather' as const, color: COLORS.logicTeal };
-      case 'medium':
-        return { label: 'Medium', desc: 'Progressive difficulty (3→4→5 attributes)', icon: 'lorc/archery-target' as const, color: COLORS.actionYellow };
-      case 'hard':
-        return { label: 'Hard', desc: '4-5 attributes throughout', icon: 'lorc/diamond-hard' as const, color: COLORS.impactOrange };
-    }
-  };
-
-  const difficultyInfo = getDifficultyInfo(difficulty);
-
   return (
     <ScreenTransition>
       <View style={styles.container}>
@@ -119,29 +106,10 @@ const VictoryScreen: React.FC<VictoryScreenProps> = ({
 
           {/* Challenge Completed Section */}
           <View style={styles.challengeSection}>
-            <View style={styles.challengeHeader}>
-              <Icon name="lorc/trophy" size={24} color={COLORS.actionYellow} />
-              <Text style={styles.challengeTitle}>Challenge Completed</Text>
-            </View>
-            <View style={[styles.challengeCard, { borderColor: difficultyInfo.color }]}>
-              <View style={styles.challengeRow}>
-                <Icon name={difficultyInfo.icon} size={20} color={difficultyInfo.color} />
-                <View style={styles.challengeInfo}>
-                  <Text style={styles.challengeLabel}>Difficulty</Text>
-                  <Text style={[styles.challengeDifficulty, { color: difficultyInfo.color }]}>
-                    {difficultyInfo.label}
-                  </Text>
-                </View>
-              </View>
-              <Text style={styles.challengeDesc}>{difficultyInfo.desc}</Text>
-              <View style={styles.achievementBadge}>
-                <Icon name="lorc/checked-shield" size={16} color={COLORS.logicTeal} />
-                <Text style={styles.achievementText}>Achievement Unlocked</Text>
-              </View>
-            </View>
-            <Text style={styles.rewardText}>
-              🎉 Reward: Character unlock progress increased!
-            </Text>
+            <ChallengeCard
+              difficulty={difficulty}
+              showAchievement={true}
+            />
           </View>
 
           {/* Stats */}
@@ -319,80 +287,6 @@ const styles = StyleSheet.create({
   },
   challengeSection: {
     marginBottom: 24,
-  },
-  challengeHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  challengeTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.deepOnyx,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  challengeCard: {
-    backgroundColor: COLORS.paperBeige,
-    borderRadius: RADIUS.button,
-    borderWidth: 2,
-    padding: 16,
-    gap: 12,
-  },
-  challengeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  challengeInfo: {
-    flex: 1,
-  },
-  challengeLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: COLORS.slateCharcoal,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  challengeDifficulty: {
-    fontSize: 20,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    marginTop: 2,
-  },
-  challengeDesc: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: COLORS.slateCharcoal,
-    opacity: 0.8,
-  },
-  achievementBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.canvasWhite,
-    borderRadius: RADIUS.button,
-    borderWidth: 1,
-    borderColor: COLORS.logicTeal,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    gap: 6,
-  },
-  achievementText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.logicTeal,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  rewardText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.deepOnyx,
-    textAlign: 'center',
-    marginTop: 12,
   },
   statsSection: {
     flexDirection: 'row',

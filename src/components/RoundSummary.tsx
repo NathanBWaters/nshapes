@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, ScrollView } from 'react-native';
 import ReAnimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -8,13 +8,15 @@ import ReAnimated, {
   withTiming,
   withDelay,
 } from 'react-native-reanimated';
-import { PlayerStats, Weapon } from '@/types';
+import { PlayerStats, Weapon, AdventureDifficulty } from '@/types';
+import type { EnemyInstance } from '@/types/enemy';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { DURATION } from '@/utils/designSystem';
 import Icon, { IconName } from './Icon';
 import GameMenu from './GameMenu';
 import { ScreenTransition } from './ScreenTransition';
 import RoundProgressChart, { RoundScore } from './RoundProgressChart';
+import ChallengeCard from './ui/ChallengeCard';
 
 interface RoundSummaryProps {
   round: number;
@@ -32,6 +34,8 @@ interface RoundSummaryProps {
   playerWeapons?: Weapon[];
   onExitGame?: () => void;
   roundScores: RoundScore[];
+  enemy?: EnemyInstance;
+  difficulty?: AdventureDifficulty;
 }
 
 interface AwardTile {
@@ -88,6 +92,8 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
   playerWeapons = [],
   onExitGame,
   roundScores,
+  enemy,
+  difficulty,
 }) => {
   // Animation values for each award tile
   const tileAnimations = useRef(
@@ -209,7 +215,7 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
         <GameMenu playerStats={playerStats} playerWeapons={playerWeapons} onExitGame={onExitGame} />
       </View>
 
-      <View style={styles.content}>
+      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
         {/* Match Counter */}
         <Animated.View
           style={[
@@ -234,6 +240,17 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
           </View>
         </View>
 
+        {/* Challenge Card - Enemy or Difficulty */}
+        {(enemy || difficulty) && (
+          <View style={styles.challengeSection}>
+            <ChallengeCard
+              enemy={enemy}
+              difficulty={difficulty}
+              showAchievement={!!enemy}
+            />
+          </View>
+        )}
+
         {/* Round Progress Chart */}
         <View style={styles.chartSection}>
           <Text style={styles.chartTitle}>ROUND PROGRESS</Text>
@@ -243,16 +260,16 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
             height={140}
           />
         </View>
+      </ScrollView>
 
-        {/* Continue Button */}
-        <Animated.View style={[styles.buttonContainer, { opacity: buttonOpacity }]}>
-          <TouchableOpacity style={styles.continueButton} onPress={onContinue}>
-            <Text style={styles.continueButtonText}>
-              {didLevelUp ? 'GO TO UPGRADE' : 'GO TO SHOP'}
-            </Text>
-          </TouchableOpacity>
-        </Animated.View>
-      </View>
+      {/* Continue Button - Fixed at bottom */}
+      <Animated.View style={[styles.buttonContainer, { opacity: buttonOpacity }]}>
+        <TouchableOpacity style={styles.continueButton} onPress={onContinue}>
+          <Text style={styles.continueButtonText}>
+            {didLevelUp ? 'GO TO UPGRADE' : 'GO TO SHOP'}
+          </Text>
+        </TouchableOpacity>
+      </Animated.View>
       </View>
     </ScreenTransition>
   );
@@ -357,8 +374,10 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  contentContainer: {
     padding: 16,
-    justifyContent: 'space-between',
+    paddingBottom: 8,
   },
   matchCounterContainer: {
     alignItems: 'center',
@@ -380,14 +399,18 @@ const styles = StyleSheet.create({
   awardsGrid: {
     justifyContent: 'center',
     gap: 12,
+    marginBottom: 16,
+  },
+  challengeSection: {
+    marginBottom: 16,
   },
   chartSection: {
-    marginTop: 16,
     backgroundColor: COLORS.canvasWhite,
     borderRadius: RADIUS.module,
     padding: 12,
     borderWidth: 1,
     borderColor: COLORS.slateCharcoal,
+    marginBottom: 8,
   },
   chartTitle: {
     fontSize: 12,
@@ -441,6 +464,10 @@ const styles = StyleSheet.create({
   buttonContainer: {
     alignItems: 'center',
     paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.slateCharcoal,
+    backgroundColor: COLORS.paperBeige,
   },
   continueButton: {
     backgroundColor: COLORS.actionYellow,
