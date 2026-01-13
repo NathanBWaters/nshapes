@@ -459,22 +459,22 @@ All effects needed for Tier 1 enemies are now implemented:
 - [ ] Create `__tests__/enemy-ui/` tests for each component (deferred - testing is not priority)
 - [x] TypeScript compilation passing
 
-### 5.5 GameBoard UI Integration
-- [ ] Import enemy UI components in GameBoard
-- [ ] Render `InactivityBar` when `uiModifiers.showInactivityBar` is set
-- [ ] Render `ScoreDecayIndicator` when `uiModifiers.showScoreDecay` is set
-- [ ] Render `TimerSpeedBadge` when `uiModifiers.timerSpeedMultiplier` !== 1
-- [ ] Render `WeaponCounterBadge` for each item in `uiModifiers.weaponCounters`
-- [ ] Render `EnemyPortrait` showing current enemy
-- [ ] Render `DefeatProgress` showing progress toward defeat condition
-- [ ] Handle `disableAutoHint` - don't show auto-hints when true
-- [ ] Handle `disableManualHint` - disable hint button when true
+### 5.5 GameBoard UI Integration ✅ COMPLETED
+- [x] Import enemy UI components in GameBoard
+- [x] Render `InactivityBar` when `uiModifiers.showInactivityBar` is set
+- [x] Render `ScoreDecayIndicator` when `uiModifiers.showScoreDecay` is set
+- [x] Render `TimerSpeedBadge` when `uiModifiers.timerSpeedMultiplier` !== 1
+- [x] Render `WeaponCounterBadge` for each item in `uiModifiers.weaponCounters`
+- [x] Render `EnemyPortrait` showing current enemy
+- [x] Render `DefeatProgress` showing progress toward defeat condition
+- [x] Handle `disableAutoHint` - don't show auto-hints when true
+- [x] Handle `disableManualHint` - disable hint button when true
 
-### 5.6 Game.tsx Integration
-- [ ] Import `createEnemy`, `createDummyEnemy` from enemyFactory
-- [ ] Add `currentEnemy: EnemyInstance` to game state
-- [ ] Pass `enemy` prop to GameBoard component
-- [ ] Handle enemy selection phase (for now, use dummy enemy or random)
+### 5.6 Game.tsx Integration ✅ COMPLETED
+- [x] Import `createEnemy`, `createDummyEnemy` from enemyFactory
+- [x] Add `currentEnemy: EnemyInstance` to game state (as `activeEnemyInstance`)
+- [x] Pass `enemy` prop to GameBoard component
+- [x] Handle enemy selection phase (using dummy enemy until enemy selection is implemented)
 - [ ] Track if enemy was defeated for bonus reward
 
 ### 5.7 Integration Tests
@@ -843,7 +843,7 @@ All effects needed for Tier 1 enemies are now implemented:
 | 2. Factory & Dummy | Complete | ✅ |
 | 3. Effect Behaviors | Complete | ✅ |
 | 4. Tier 1 Enemies | 22/22 complete | ✅ |
-| 5. GameBoard Integration | 5.1-5.4 Complete (lifecycle hooks + weapon counters integrated, Card visuals done, UI components created) | 🔄 |
+| 5. GameBoard Integration | 5.1-5.6 Complete (lifecycle hooks, weapon counters, Card visuals, UI components, GameBoard UI integration) | 🔄 |
 | 6. Tier 2 Enemies | 0/12 complete | ⏳ |
 | 7. Tier 3 Enemies | 0/12 complete | ⏳ |
 | 8. Tier 4 Bosses | 0/5 complete | ⏳ |
@@ -853,9 +853,9 @@ All effects needed for Tier 1 enemies are now implemented:
 **Total Enemies:** 51 (22 Tier 1 + 12 Tier 2 + 12 Tier 3 + 5 Tier 4)
 
 **Implementation Order:**
-1. ~~Section 1-3~~ (Complete)
-2. Section 4: Complete remaining Tier 1 enemies (15 more)
-3. **Section 5: GameBoard Integration** (PRIORITY)
-4. Section 6-8: Tier 2-4 enemies (after integration verified)
+1. ~~Section 1-4~~ (Complete)
+2. ~~Section 5.1-5.6~~ (Complete - UI integration done)
+3. **Section 5.7-5.8: Integration Tests & Verification** (Current)
+4. Section 6-8: Tier 2-4 enemies
 5. Section 9: Enemy Selection Screen
 6. Section 10: Final polish

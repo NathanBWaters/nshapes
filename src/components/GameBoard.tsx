@@ -9,7 +9,7 @@ import Animated, {
   interpolateColor,
   Easing,
 } from 'react-native-reanimated';
-import { Card as CardType, PlayerStats, CardReward, AttributeName, Weapon } from '@/types';
+import { Card as CardType, PlayerStats, CardReward, AttributeName, Weapon, Shape, Color } from '@/types';
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import Card from './Card';
 import RewardReveal from './RewardReveal';
@@ -24,6 +24,14 @@ import { useParticles } from '@/hooks/useParticles';
 import { DURATION } from '@/utils/designSystem';
 import { triggerHaptic, selectionHaptic } from '@/utils/haptics';
 import { playSound } from '@/utils/sounds';
+import {
+  InactivityBar,
+  ScoreDecayIndicator,
+  TimerSpeedBadge,
+  WeaponCounterBadge,
+  EnemyPortrait,
+  DefeatProgress,
+} from './enemy-ui';
 
 // Default to 4 attributes for backward compatibility
 const DEFAULT_ATTRIBUTES: AttributeName[] = ['shape', 'color', 'number', 'shading'];
@@ -105,6 +113,11 @@ const GameBoard: React.FC<GameBoardProps> = ({
   const [selectedCards, setSelectedCards] = useState<CardType[]>([]);
   const [matchedCardIds, setMatchedCardIds] = useState<string[]>([]);
   const [hintCards, setHintCards] = useState<string[]>([]);
+
+  // Get enemy UI modifiers early for hint disable checks
+  const enemyUIModifiers = useMemo(() => {
+    return enemy?.getUIModifiers() ?? {};
+  }, [enemy]);
 
   // Idle detection for ambient breathing animations
   const [isIdle, setIsIdle] = useState(false);
@@ -323,6 +336,9 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
   // Find a hint (a valid set on the board)
   const findHint = useCallback(() => {
+    // Check if manual hints are disabled by enemy (e.g., Creeping Shadow)
+    if (enemyUIModifiers.disableManualHint === true) return;
+
     // Use ref to get current hints value without causing re-renders
     const hintsAvailable = hintsRef.current !== undefined && hintsRef.current > 0;
     if (!hintsAvailable) return;
@@ -342,7 +358,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
         }
       }
     }
-  }, [cards, matchedCardIds, onUseHint]);
+  }, [cards, matchedCardIds, onUseHint, enemyUIModifiers.disableManualHint]);
 
   // Clear hint
   const clearHint = useCallback(() => {
@@ -396,9 +412,12 @@ const GameBoard: React.FC<GameBoardProps> = ({
   }, [cards, matchedCardIds, playerStats.enhancedHintChance]);
 
   // Auto-hint - triggers after period of inactivity
+  // Auto-hint disabled by enemy (e.g., Masked Bandit)
+  const autoHintDisabled = enemyUIModifiers.disableAutoHint === true;
+
   useAutoHint({
-    autoHintChance: playerStats.autoHintChance || 0,
-    autoHintInterval: playerStats.autoHintInterval || 0,
+    autoHintChance: autoHintDisabled ? 0 : (playerStats.autoHintChance || 0),
+    autoHintInterval: autoHintDisabled ? 0 : (playerStats.autoHintInterval || 0),
     isPaused,
     hasActiveHint: hintCards.length > 0,
     lastMatchTime,
@@ -805,6 +824,34 @@ const GameBoard: React.FC<GameBoardProps> = ({
     onSelectCard: handleCardClick,
   });
 
+  // Get current round stats for defeat progress display
+  const currentRoundStats: RoundStats = roundStats?.current ?? {
+    totalMatches: 0,
+    currentStreak: 0,
+    maxStreak: 0,
+    invalidMatches: 0,
+    matchTimes: [],
+    timeRemaining: 0,
+    cardsRemaining: cards.length,
+    tripleCardsCleared: 0,
+    faceDownCardsMatched: 0,
+    bombsDefused: 0,
+    countdownCardsMatched: 0,
+    shapesMatched: new Set<Shape>(),
+    colorsMatched: new Set<Color>(),
+    allDifferentMatches: 0,
+    allSameColorMatches: 0,
+    squiggleMatches: 0,
+    gracesUsed: 0,
+    hintsUsed: 0,
+    hintsRemaining: playerStats.hints ?? 0,
+    gracesRemaining: playerStats.graces ?? 0,
+    damageReceived: 0,
+    weaponEffectsTriggered: new Set<string>(),
+    currentScore: 0,
+    targetScore: 0,
+  };
+
   return (
     <Animated.View nativeID="gameboard-container" style={[styles.container, shakeStyle]}>
       {/* Success flash overlay */}
@@ -819,6 +866,49 @@ const GameBoard: React.FC<GameBoardProps> = ({
       />
       {/* Particle effects */}
       <Particles />
+
+      {/* Enemy UI Overlay - Shows enemy info and status effects */}
+      {enemy && enemy.name !== 'Dummy' && (
+        <View style={styles.enemyOverlay}>
+          {/* Top row: Enemy portrait and defeat progress */}
+          <View style={styles.enemyTopRow}>
+            <EnemyPortrait enemy={enemy} compact />
+            <DefeatProgress enemy={enemy} stats={currentRoundStats} />
+          </View>
+
+          {/* Status effects row: Inactivity bar, score decay, timer speed, weapon counters */}
+          <View style={styles.enemyStatusRow}>
+            {/* Inactivity bar */}
+            {enemyUIModifiers.showInactivityBar && (
+              <InactivityBar
+                current={enemyUIModifiers.showInactivityBar.current}
+                max={enemyUIModifiers.showInactivityBar.max}
+                penalty={enemyUIModifiers.showInactivityBar.penalty}
+              />
+            )}
+
+            {/* Score decay indicator */}
+            {enemyUIModifiers.showScoreDecay && (
+              <ScoreDecayIndicator rate={enemyUIModifiers.showScoreDecay.rate} />
+            )}
+
+            {/* Timer speed badge */}
+            {enemyUIModifiers.timerSpeedMultiplier && enemyUIModifiers.timerSpeedMultiplier !== 1 && (
+              <TimerSpeedBadge multiplier={enemyUIModifiers.timerSpeedMultiplier} />
+            )}
+
+            {/* Weapon counter badges */}
+            {enemyUIModifiers.weaponCounters?.map((counter, index) => (
+              <WeaponCounterBadge
+                key={`${counter.type}-${index}`}
+                type={counter.type}
+                reduction={counter.reduction}
+              />
+            ))}
+          </View>
+        </View>
+      )}
+
       <Animated.View nativeID="gameboard-grid" style={[styles.board, animatedBoardStyle]}>
         {rows.map((row, rowIndex) => {
           // Calculate how many empty slots we need to fill out the row
@@ -903,6 +993,25 @@ const styles = StyleSheet.create({
   },
   failureFlash: {
     backgroundColor: '#EF4444',
+  },
+  enemyOverlay: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    right: 4,
+    zIndex: 50,
+    gap: 4,
+  },
+  enemyTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  enemyStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 4,
   },
 });
 
