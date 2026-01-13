@@ -21,6 +21,7 @@ import { useGameTimer } from '@/hooks/useGameTimer';
 import { useParticles } from '@/hooks/useParticles';
 import { useRoundStats } from '@/hooks/useRoundStats';
 import { createEnemy, createDummyEnemy, applyEnemyStatModifiers, getRandomEnemies } from '@/utils/enemyFactory';
+import '@/utils/enemies'; // Trigger enemy self-registration
 import type { EnemyInstance } from '@/types/enemy';
 import GameBoard from './GameBoard';
 import GameInfo from './GameInfo';
