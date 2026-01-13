@@ -4,6 +4,7 @@ import { COLORS, RADIUS } from '@/utils/colors';
 import { triggerHaptic } from '@/utils/haptics';
 import { playSound } from '@/utils/sounds';
 import Icon, { IconName } from './Icon';
+import { version } from '../../package.json';
 
 interface MainMenuProps {
   onSelectAdventure: () => void;
@@ -135,7 +136,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
 
         {/* Footer */}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>v1.0.0</Text>
+          <Text style={styles.footerText}>v{version}</Text>
         </View>
       </View>
     </View>

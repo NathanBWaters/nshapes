@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
-import { Player, Weapon, PlayerStats, WeaponRarity } from '@/types';
+import { Player, Weapon, PlayerStats, WeaponRarity, AdventureDifficulty } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import Icon from './Icon';
 import { ConfettiBurst } from './effects/ConfettiBurst';
@@ -14,6 +14,7 @@ interface VictoryScreenProps {
   matchCount: number;
   playerStats: PlayerStats;
   roundScores: RoundScore[];
+  difficulty: AdventureDifficulty;
   onReturnToMenu: () => void;
   onContinueEndless: () => void;
 }
@@ -63,6 +64,7 @@ const VictoryScreen: React.FC<VictoryScreenProps> = ({
   matchCount,
   playerStats,
   roundScores,
+  difficulty,
   onReturnToMenu,
   onContinueEndless,
 }) => {
@@ -76,6 +78,20 @@ const VictoryScreen: React.FC<VictoryScreenProps> = ({
     const timer = setTimeout(() => setShowConfetti(true), 100);
     return () => clearTimeout(timer);
   }, []);
+
+  // Get difficulty display info
+  const getDifficultyInfo = (diff: AdventureDifficulty) => {
+    switch (diff) {
+      case 'easy':
+        return { label: 'Easy', desc: '3 attributes for all rounds', icon: 'lorc/feather' as const, color: COLORS.logicTeal };
+      case 'medium':
+        return { label: 'Medium', desc: 'Progressive difficulty (3→4→5 attributes)', icon: 'lorc/archery-target' as const, color: COLORS.actionYellow };
+      case 'hard':
+        return { label: 'Hard', desc: '4-5 attributes throughout', icon: 'lorc/diamond-hard' as const, color: COLORS.impactOrange };
+    }
+  };
+
+  const difficultyInfo = getDifficultyInfo(difficulty);
 
   return (
     <ScreenTransition>
@@ -99,6 +115,33 @@ const VictoryScreen: React.FC<VictoryScreenProps> = ({
             )}
             <Text style={styles.characterName}>{player.character.name}</Text>
             <Text style={styles.subtitle}>Completed all 10 rounds!</Text>
+          </View>
+
+          {/* Challenge Completed Section */}
+          <View style={styles.challengeSection}>
+            <View style={styles.challengeHeader}>
+              <Icon name="lorc/trophy" size={24} color={COLORS.actionYellow} />
+              <Text style={styles.challengeTitle}>Challenge Completed</Text>
+            </View>
+            <View style={[styles.challengeCard, { borderColor: difficultyInfo.color }]}>
+              <View style={styles.challengeRow}>
+                <Icon name={difficultyInfo.icon} size={20} color={difficultyInfo.color} />
+                <View style={styles.challengeInfo}>
+                  <Text style={styles.challengeLabel}>Difficulty</Text>
+                  <Text style={[styles.challengeDifficulty, { color: difficultyInfo.color }]}>
+                    {difficultyInfo.label}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.challengeDesc}>{difficultyInfo.desc}</Text>
+              <View style={styles.achievementBadge}>
+                <Icon name="lorc/checked-shield" size={16} color={COLORS.logicTeal} />
+                <Text style={styles.achievementText}>Achievement Unlocked</Text>
+              </View>
+            </View>
+            <Text style={styles.rewardText}>
+              🎉 Reward: Character unlock progress increased!
+            </Text>
           </View>
 
           {/* Stats */}
