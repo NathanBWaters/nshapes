@@ -21,7 +21,7 @@ import { getAdjacentIndices, getFireSpreadCards, WeaponEffectResult } from '@/ut
 import { useGameTimer } from '@/hooks/useGameTimer';
 import { useParticles } from '@/hooks/useParticles';
 import { useRoundStats } from '@/hooks/useRoundStats';
-import { createEnemy, createDummyEnemy } from '@/utils/enemyFactory';
+import { createEnemy, createDummyEnemy, applyEnemyStatModifiers } from '@/utils/enemyFactory';
 import type { EnemyInstance } from '@/types/enemy';
 import GameBoard from './GameBoard';
 import GameInfo from './GameInfo';
@@ -2198,7 +2198,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
                 onMatch={handleValidMatch}
                 onMatchStart={handleMatchStart}
                 onInvalidSelection={handleInvalidMatch}
-                playerStats={calculatePlayerTotalStats(state.player)}
+                playerStats={applyEnemyStatModifiers(calculatePlayerTotalStats(state.player), state.activeEnemyInstance)}
                 weapons={state.player.weapons}
                 isPlayerTurn={true}
                 activeAttributes={state.activeAttributes}

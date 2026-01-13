@@ -179,3 +179,58 @@ export function registerEnemy(name: string, factory: () => EnemyInstance): void 
   }
   ENEMY_REGISTRY[name] = factory;
 }
+
+// ============================================================================
+// STAT MODIFIER UTILITIES
+// ============================================================================
+
+import type { PlayerStats } from '@/types';
+
+/**
+ * Apply enemy stat modifiers to player stats.
+ * Reduces weapon chances based on enemy counter effects.
+ *
+ * @param baseStats - The base player stats from calculatePlayerTotalStats
+ * @param enemy - The active enemy instance (or null/undefined for no enemy)
+ * @returns Modified player stats with enemy reductions applied
+ */
+export function applyEnemyStatModifiers(
+  baseStats: PlayerStats,
+  enemy: EnemyInstance | null | undefined
+): PlayerStats {
+  if (!enemy) {
+    return baseStats;
+  }
+
+  const modifiers = enemy.getStatModifiers();
+  const modifiedStats = { ...baseStats };
+
+  // Apply weapon counter reductions (clamp to 0 minimum)
+  if (modifiers.fireSpreadChanceReduction && modifiedStats.fireSpreadChance !== undefined) {
+    modifiedStats.fireSpreadChance = Math.max(0, modifiedStats.fireSpreadChance - modifiers.fireSpreadChanceReduction);
+  }
+  if (modifiers.explosionChanceReduction && modifiedStats.explosionChance !== undefined) {
+    modifiedStats.explosionChance = Math.max(0, modifiedStats.explosionChance - modifiers.explosionChanceReduction);
+  }
+  if (modifiers.laserChanceReduction && modifiedStats.laserChance !== undefined) {
+    modifiedStats.laserChance = Math.max(0, modifiedStats.laserChance - modifiers.laserChanceReduction);
+  }
+  if (modifiers.hintGainChanceReduction && modifiedStats.hintGainChance !== undefined) {
+    modifiedStats.hintGainChance = Math.max(0, modifiedStats.hintGainChance - modifiers.hintGainChanceReduction);
+  }
+  if (modifiers.graceGainChanceReduction && modifiedStats.graceGainChance !== undefined) {
+    modifiedStats.graceGainChance = Math.max(0, modifiedStats.graceGainChance - modifiers.graceGainChanceReduction);
+  }
+  if (modifiers.timeGainChanceReduction && modifiedStats.timeGainChance !== undefined) {
+    modifiedStats.timeGainChance = Math.max(0, modifiedStats.timeGainChance - modifiers.timeGainChanceReduction);
+  }
+  if (modifiers.healingChanceReduction && modifiedStats.healingChance !== undefined) {
+    modifiedStats.healingChance = Math.max(0, modifiedStats.healingChance - modifiers.healingChanceReduction);
+  }
+
+  // Note: damageMultiplier and pointsMultiplier are handled separately in Game.tsx
+  // because they need to be applied at the point of damage/points calculation,
+  // not to the base stats.
+
+  return modifiedStats;
+}
