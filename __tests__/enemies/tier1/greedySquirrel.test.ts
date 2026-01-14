@@ -74,7 +74,7 @@ describe('Greedy Squirrel', () => {
 
     it('has correct description', () => {
       const enemy = createGreedySquirrel();
-      expect(enemy.description).toContain('1 extra card is removed');
+      expect(enemy.description).toContain('Only 2 cards are replenished');
     });
 
     it('has correct defeat condition text', () => {

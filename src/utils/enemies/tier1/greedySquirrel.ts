@@ -1,7 +1,7 @@
 /**
  * Greedy Squirrel - Tier 1 Enemy
  *
- * Effect: On match, 1 extra card is removed
+ * Effect: Only 2 cards are replenished on match
  * Defeat Condition: Beat target score with 8+ cards remaining
  */
 
@@ -18,7 +18,7 @@ export function createGreedySquirrel(): EnemyInstance {
       name: 'Greedy Squirrel',
       icon: 'delapouite/squirrel',
       tier: 1,
-      description: 'On match, 1 extra card is removed',
+      description: 'Only 2 cards are replenished on match',
       defeatConditionText: 'Beat target score with 8+ cards remaining',
     },
     [

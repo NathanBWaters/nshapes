@@ -433,14 +433,14 @@ const styles = StyleSheet.create({
   },
   returnButton: {
     backgroundColor: COLORS.paperBeige,
-    paddingVertical: 14,
+    paddingVertical: 12,
     alignItems: 'center',
   },
   returnButtonText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: COLORS.slateCharcoal,
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
 });
 

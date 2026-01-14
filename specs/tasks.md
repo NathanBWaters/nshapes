@@ -260,9 +260,9 @@ You MUST commit the code once the unit tests and integration tests are passing b
 - Card rendering and touch handling
 
 **Tasks:**
-- [ ] Audit touch area for top row cards
-- [ ] Ensure enemy overlay has `pointerEvents="none"` or is positioned outside touch area
-- [ ] If needed, add padding/margin to push enemy UI above card grid
+- [x] Audit touch area for top row cards
+- [x] Ensure enemy overlay has `pointerEvents="box-none"` to allow touches to pass through to cards
+- [x] If needed, add padding/margin to push enemy UI above card grid
 - [ ] Test with 5-attribute board (more cards = worse issue)
 
 ### 4.2 Final Round Menu Issues
@@ -283,10 +283,10 @@ You MUST commit the code once the unit tests and integration tests are passing b
 - Hard: 4 → 5 (Round 6) - nothing added at Round 10
 
 **Tasks:**
-- [ ] Fix VictoryScreen button to match other screens (smaller, consistent padding)
-- [ ] Fix AttributeUnlockScreen logic: Don't show if no new attribute is being added
-- [ ] For Hard difficulty Round 10: Skip attribute unlock screen entirely
-- [ ] For Easy difficulty: Never show attribute unlock screen
+- [x] Fix VictoryScreen button to match other screens (smaller, consistent padding)
+- [x] Fix AttributeUnlockScreen logic: Don't show if no new attribute is being added
+- [x] For Hard difficulty Round 10: Skip attribute unlock screen entirely
+- [x] For Easy difficulty: Never show attribute unlock screen
 - [ ] Test all three difficulties through Round 10
 
 ### 4.3 Greedy Squirrel Description Reword
@@ -298,12 +298,13 @@ You MUST commit the code once the unit tests and integration tests are passing b
 **Target:** "Only 2 cards are replenished on match"
 
 **Tasks:**
-- [ ] Update `description` in greedySquirrel.ts
-- [ ] Verify UI displays correctly
+- [x] Update `description` in greedySquirrel.ts
+- [x] Update test to match new description
+- [x] Verify UI displays correctly
 
 ### 4.4 Verification
-- [ ] Run `npm test` - all tests pass
-- [ ] Run `npm run typecheck` - no type errors
+- [x] Run `npm test` - all tests pass
+- [x] Run `npm run typecheck` - no new type errors
 - [ ] Manual test: Verify top row cards are tappable
 - [ ] Manual test: Play through Round 10 on all 3 difficulties
 - [ ] Commit with message: "fix(ui): touch areas, final round screens, enemy descriptions"

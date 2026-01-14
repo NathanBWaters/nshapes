@@ -1912,25 +1912,17 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     // Check if a new attribute is being unlocked
     const newAttribute = newActiveAttributes.find(attr => !previousAttributes.includes(attr));
 
-    // Check if this is the final round (round 10)
-    // Show final round warning, but only show attribute unlock if there's a new attribute
-    if (nextRound === 10) {
-      setIsFinalRoundWarning(true);
-      // For hard difficulty, round 10 has no new attribute (already at 5)
-      // For medium, round 10 adds background
-      // For easy, no new attributes ever
-      setPendingUnlockedAttribute(newAttribute || null);
+    // If a new attribute is unlocking, show the unlock screen
+    if (newAttribute) {
+      setPendingUnlockedAttribute(newAttribute);
+      // If this is the final round AND we're unlocking a new attribute, show final round warning
+      setIsFinalRoundWarning(nextRound === 10);
       setGamePhase('attribute_unlock');
       return;
     }
 
-    // If a new attribute is unlocking, show the unlock screen
-    if (newAttribute) {
-      setPendingUnlockedAttribute(newAttribute);
-      setIsFinalRoundWarning(false);
-      setGamePhase('attribute_unlock');
-      return;
-    }
+    // No new attribute - skip the attribute unlock screen entirely
+    // This applies to: Easy (never unlocks), Hard at round 10 (already at 5)
 
     // No unlock needed, proceed directly to next round
     startNextRound();

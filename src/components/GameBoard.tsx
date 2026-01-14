@@ -869,7 +869,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
       {/* Enemy UI Overlay - Shows enemy info and status effects */}
       {enemy && enemy.name !== 'Dummy' && (
-        <View style={styles.enemyOverlay}>
+        <View style={styles.enemyOverlay} pointerEvents="box-none">
           {/* Top row: Enemy portrait and defeat progress */}
           <View style={styles.enemyTopRow}>
             <EnemyPortrait enemy={enemy} compact />
