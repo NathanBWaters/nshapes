@@ -56,23 +56,23 @@ describe('The Hydra', () => {
   });
 
   describe('inactivity effect', () => {
-    it('causes instant death after 20s', () => {
+    it('causes instant death after 30s', () => {
       const enemy = createTheHydra();
       const board = createTestBoard();
       enemy.onRoundStart(board);
 
-      const result = enemy.onTick(20000, board);
+      const result = enemy.onTick(30000, board);
       expect(result.instantDeath).toBe(true);
     });
   });
 
   describe('time steal', () => {
-    it('steals 6s per match', () => {
+    it('steals 4s per match', () => {
       const enemy = createTheHydra();
       const board = createTestBoard();
 
       const result = enemy.onValidMatch([board[0], board[1], board[2]], board);
-      expect(result.timeDelta).toBe(-6);
+      expect(result.timeDelta).toBe(-4);
     });
   });
 

@@ -56,39 +56,39 @@ describe('Ancient Dragon', () => {
   });
 
   describe('triple card effect', () => {
-    it('places 3 triple cards', () => {
+    it('places 2 triple cards', () => {
       const enemy = createAncientDragon();
       const board = createTestBoard();
 
       const result = enemy.onRoundStart(board);
       const tripleCards = result.cardModifications.filter((m) => m.changes.health === 3);
-      expect(tripleCards.length).toBe(3);
+      expect(tripleCards.length).toBe(2);
     });
   });
 
   describe('timer speed', () => {
-    it('has 80% faster timer', () => {
+    it('has 40% faster timer', () => {
       const enemy = createAncientDragon();
       const uiMods = enemy.getUIModifiers();
-      expect(uiMods.timerSpeedMultiplier).toBe(1.8);
+      expect(uiMods.timerSpeedMultiplier).toBe(1.4);
     });
   });
 
   describe('score decay', () => {
-    it('decays at 8 points per second', () => {
+    it('decays at 5 points per second', () => {
       const enemy = createAncientDragon();
       const board = createTestBoard();
 
       const result = enemy.onTick(1000, board);
-      expect(result.scoreDelta).toBe(-8);
+      expect(result.scoreDelta).toBe(-5);
     });
   });
 
   describe('defeat condition', () => {
-    it('returns false without all 3 triple cards cleared', () => {
+    it('returns false without all 2 triple cards cleared', () => {
       const enemy = createAncientDragon();
       const stats = createEmptyStats();
-      stats.tripleCardsCleared = 2;
+      stats.tripleCardsCleared = 1;
       stats.allDifferentMatches = 2;
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
@@ -96,15 +96,15 @@ describe('Ancient Dragon', () => {
     it('returns false without 2 all-different matches', () => {
       const enemy = createAncientDragon();
       const stats = createEmptyStats();
-      stats.tripleCardsCleared = 3;
+      stats.tripleCardsCleared = 2;
       stats.allDifferentMatches = 1;
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
 
-    it('returns true with 3 triple cards and 2 all-different', () => {
+    it('returns true with 2 triple cards and 2 all-different', () => {
       const enemy = createAncientDragon();
       const stats = createEmptyStats();
-      stats.tripleCardsCleared = 3;
+      stats.tripleCardsCleared = 2;
       stats.allDifferentMatches = 2;
       expect(enemy.checkDefeatCondition(stats)).toBe(true);
     });

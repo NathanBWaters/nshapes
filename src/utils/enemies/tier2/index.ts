@@ -15,6 +15,7 @@ import './creepingShadow';
 import './polarGuardian';
 import './hoardingBeaver';
 import './fierceWolverine';
+import './goblinSaboteur';
 
 // Re-export creators for direct access
 export { createChargingBoar } from './chargingBoar';
@@ -29,3 +30,4 @@ export { createCreepingShadow } from './creepingShadow';
 export { createPolarGuardian } from './polarGuardian';
 export { createHoardingBeaver } from './hoardingBeaver';
 export { createFierceWolverine } from './fierceWolverine';
+export { createGoblinSaboteur } from './goblinSaboteur';

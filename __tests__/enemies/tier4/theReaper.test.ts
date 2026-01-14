@@ -56,16 +56,16 @@ describe('The Reaper', () => {
   });
 
   describe('weapon counters', () => {
-    it('reduces grace by 90%', () => {
+    it('reduces grace by 60%', () => {
       const enemy = createTheReaper();
       const statMods = enemy.getStatModifiers();
-      expect(statMods.graceGainChanceReduction).toBe(90);
+      expect(statMods.graceGainChanceReduction).toBe(60);
     });
 
-    it('reduces time by 90%', () => {
+    it('reduces time by 60%', () => {
       const enemy = createTheReaper();
       const statMods = enemy.getStatModifiers();
-      expect(statMods.timeGainChanceReduction).toBe(90);
+      expect(statMods.timeGainChanceReduction).toBe(60);
     });
   });
 
@@ -79,12 +79,12 @@ describe('The Reaper', () => {
   });
 
   describe('score decay', () => {
-    it('decays at 10 points per second', () => {
+    it('decays at 6 points per second', () => {
       const enemy = createTheReaper();
       const board = createTestBoard();
 
       const result = enemy.onTick(1000, board);
-      expect(result.scoreDelta).toBe(-10);
+      expect(result.scoreDelta).toBe(-6);
     });
   });
 

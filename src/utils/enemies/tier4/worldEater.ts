@@ -1,7 +1,7 @@
 /**
  * World Eater - Tier 4 Boss
  *
- * Effects: Greedy Squirrel (3 cards per match) + Punishing Ermine (4 cards per invalid) + Burrowing Mole (6s) + Stalking Wolf (15s → INSTANT DEATH) + Swift Bee (100% faster)
+ * Effects: Greedy Squirrel (2 cards per match) + Punishing Ermine (3 cards per invalid) + Burrowing Mole (10s) + Stalking Wolf (25s → INSTANT DEATH) + Swift Bee (50% faster)
  * Defeat Condition: Achieve minimum with 4+ cards remaining AND no invalid matches
  */
 
@@ -25,15 +25,15 @@ export function createWorldEater(): EnemyInstance {
       name: 'World Eater',
       icon: 'lorc/daemon-skull',
       tier: 4,
-      description: '+3 cards removed per match, +4 on invalid, removes every 6s, 15s inactivity → death, timer 100% faster',
+      description: '+2 cards removed per match, +3 on invalid, removes every 10s, 25s inactivity → death, timer 50% faster',
       defeatConditionText: 'Achieve minimum with 4+ cards remaining AND no invalid matches',
     },
     [
-      { behavior: ExtraCardRemovalOnMatchEffect, config: { count: 3, minBoardSize: 4 } },
-      { behavior: ExtraCardRemovalOnInvalidEffect, config: { count: 4, minBoardSize: 4 } },
-      { behavior: CardRemovalEffect, config: { intervalMs: 6000, minBoardSize: 4 } },
-      { behavior: InactivityEffect, config: { maxMs: 15000, penalty: 'death' } },
-      { behavior: TimerSpeedEffect, config: { multiplier: 2.0 } },
+      { behavior: ExtraCardRemovalOnMatchEffect, config: { count: 2, minBoardSize: 4 } },
+      { behavior: ExtraCardRemovalOnInvalidEffect, config: { count: 3, minBoardSize: 4 } },
+      { behavior: CardRemovalEffect, config: { intervalMs: 10000, minBoardSize: 4 } },
+      { behavior: InactivityEffect, config: { maxMs: 25000, penalty: 'death' } },
+      { behavior: TimerSpeedEffect, config: { multiplier: 1.5 } },
     ],
     // Defeat condition: Beat target with 4+ cards AND no invalid matches
     (stats: RoundStats) =>

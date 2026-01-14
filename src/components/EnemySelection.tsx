@@ -74,14 +74,16 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
             <Text style={styles.detailName}>{focusedEnemy.name}</Text>
             <Text style={[styles.tierLabel, { color: tierColor }]}>{tierLabel}</Text>
 
-            {/* Effect & Defeat Condition */}
+            {/* Effect & Stretch Goal */}
             <ScrollView style={styles.infoScrollArea} showsVerticalScrollIndicator={false}>
               <View style={[styles.infoBox, styles.infoBoxEffect]}>
                 <Text style={styles.infoLabelEffect}>Enemy Effects</Text>
-                <Text style={styles.infoText}>{focusedEnemy.description}</Text>
+                {focusedEnemy.description.split(', ').map((effect, index) => (
+                  <Text key={index} style={styles.infoText}>• {effect}</Text>
+                ))}
               </View>
               <View style={[styles.infoBox, styles.infoBoxDefeat]}>
-                <Text style={styles.infoLabelDefeat}>Defeat Condition</Text>
+                <Text style={styles.infoLabelDefeat}>Stretch Goal</Text>
                 <Text style={styles.infoText}>{focusedEnemy.defeatConditionText}</Text>
               </View>
             </ScrollView>

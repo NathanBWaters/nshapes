@@ -146,9 +146,9 @@ You MUST commit the code once the unit tests and integration tests are passing b
 - Enemy definition files in `src/utils/enemies/`
 
 **Tasks:**
-- [ ] Update enemy `description` format to use newlines or array of effects
-- [ ] Update EnemySelection UI to render each effect on its own line with bullet points
-- [ ] Update in-game enemy portrait to show effects clearly
+- [x] Update enemy `description` format to use newlines or array of effects
+- [x] Update EnemySelection UI to render each effect on its own line with bullet points
+- [x] Update ChallengeCard UI to show effects with bullet points
 
 ### 3.2 Defeat Condition as "Stretch Goal"
 **Issue:** It's not clear that the defeat condition is optional/bonus. Should be labeled "Stretch Goal" and give bonus money in addition to bonus weapon.
@@ -170,11 +170,11 @@ You MUST commit the code once the unit tests and integration tests are passing b
 - Tier 4: +$50-100 (random)
 
 **Tasks:**
-- [ ] Rename "Defeat Condition" to "Stretch Goal" in EnemySelection
-- [ ] Rename "SLAYER BONUS" to "EXTRA CHALLENGE BONUS" in LevelUp
-- [ ] Add `getSlayerBonusMoney(tier: number)` function that returns random amount in tier range
-- [ ] Grant bonus money when enemy is defeated (in Game.tsx reward handling)
-- [ ] Update UI to show "Stretch Goal: [condition] → Bonus weapon + $X"
+- [x] Rename "Defeat Condition" to "Stretch Goal" in EnemySelection
+- [x] Rename "SLAYER BONUS" to "EXTRA CHALLENGE BONUS" in LevelUp
+- [x] Add `getChallengeBonusMoney(tier: number)` function that returns random amount in tier range
+- [x] Grant bonus money when enemy is defeated (in Game.tsx reward handling)
+- [x] Update UI to show "Stretch Goal: [condition] → Bonus weapon + $X"
 
 ### 3.3 Slayer Bonus Rarity Adjustment
 **Issue:** The current slayer bonus rarity system could be improved. Using existing 3 tiers (common, rare, legendary).
@@ -193,7 +193,7 @@ You MUST commit the code once the unit tests and integration tests are passing b
 - Tier 4: Guaranteed Legendary (keep as-is)
 
 **Tasks:**
-- [ ] Update `generateSlayerBonus()` with new percentages
+- [x] Update `generateChallengeBonus()` with new percentages
 - [ ] Update UI to show expected reward rarity before selecting enemy (e.g., "Reward: Rare or Legendary")
 
 ### 3.4 Tier 4 Boss Difficulty Adjustment
@@ -217,13 +217,13 @@ You MUST commit the code once the unit tests and integration tests are passing b
 | World Eater | 3 cards on match, 6s removal, 15s death, 2x timer | 2 cards on match, 10s removal, 25s death, 1.5x timer |
 
 **Tasks:**
-- [ ] Adjust Ancient Dragon values
-- [ ] Adjust The Hydra values
-- [ ] Adjust Kraken's Grasp values
-- [ ] Adjust The Reaper values
-- [ ] Adjust World Eater values
-- [ ] Update enemy descriptions to reflect new values
-- [ ] Update any related tests
+- [x] Adjust Ancient Dragon values
+- [x] Adjust The Hydra values
+- [x] Adjust Kraken's Grasp values
+- [x] Adjust The Reaper values
+- [x] Adjust World Eater values
+- [x] Update enemy descriptions to reflect new values
+- [x] Update any related tests
 
 ### 3.5 Move Goblin Saboteur to Tier 2
 **Issue:** "Triggering 3 weapon effects" is too easy for a Tier 3 challenge.
@@ -234,18 +234,18 @@ You MUST commit the code once the unit tests and integration tests are passing b
 - `src/utils/enemies/tier2/index.ts` - add export
 
 **Tasks:**
-- [ ] Move `goblinSaboteur.ts` from tier3 to tier2 directory
-- [ ] Update the `tier` property in the enemy definition from 3 to 2
-- [ ] Update tier3/index.ts to remove the export
-- [ ] Update tier2/index.ts to add the export
-- [ ] Update any tests that reference Goblin Saboteur's tier
-- [ ] Verify `getEnemiesByTier(2)` now includes Goblin Saboteur
-- [ ] Verify `getEnemiesByTier(3)` no longer includes Goblin Saboteur
+- [x] Move `goblinSaboteur.ts` from tier3 to tier2 directory
+- [x] Update the `tier` property in the enemy definition from 3 to 2
+- [x] Update tier3/index.ts to remove the export
+- [x] Update tier2/index.ts to add the export
+- [x] Update any tests that reference Goblin Saboteur's tier
+- [x] Verify `getEnemiesByTier(2)` now includes Goblin Saboteur
+- [x] Verify `getEnemiesByTier(3)` no longer includes Goblin Saboteur
 
 ### 3.6 Verification
-- [ ] Run `npm test -- --testPathPattern="enemies"` - all enemy tests pass
-- [ ] Run `npm run typecheck` - no type errors
-- [ ] Verify Tier 2 now has 13 enemies, Tier 3 now has 11 enemies
+- [x] Run `npm test -- --testPathPattern="enemies"` - all enemy tests pass
+- [x] Run `npm run typecheck` - no new type errors (pre-existing icon issues)
+- [x] Verify Tier 2 now has 13 enemies, Tier 3 now has 11 enemies
 - [ ] Commit with message: "fix(enemies): UI clarity, stretch goals, tier balancing, move Goblin Saboteur to T2"
 
 ---

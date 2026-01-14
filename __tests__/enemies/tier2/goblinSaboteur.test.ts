@@ -1,4 +1,4 @@
-import { createGoblinSaboteur } from '@/utils/enemies/tier3/goblinSaboteur';
+import { createGoblinSaboteur } from '@/utils/enemies/tier2/goblinSaboteur';
 import type { RoundStats } from '@/types/enemy';
 
 const createEmptyStats = (): RoundStats => ({
@@ -33,7 +33,7 @@ describe('Goblin Saboteur', () => {
     it('has correct name and tier', () => {
       const enemy = createGoblinSaboteur();
       expect(enemy.name).toBe('Goblin Saboteur');
-      expect(enemy.tier).toBe(3);
+      expect(enemy.tier).toBe(2);
     });
 
     it('has correct icon', () => {

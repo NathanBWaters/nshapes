@@ -56,40 +56,40 @@ describe('World Eater', () => {
   });
 
   describe('extra card removal on match', () => {
-    it('removes 3 cards on valid match', () => {
+    it('removes 2 cards on valid match', () => {
       const enemy = createWorldEater();
       const board = createTestBoard();
 
       const result = enemy.onValidMatch([board[0], board[1], board[2]], board);
-      expect(result.cardsToRemove.length).toBe(3);
+      expect(result.cardsToRemove.length).toBe(2);
     });
   });
 
   describe('extra card removal on invalid', () => {
-    it('removes 4 cards on invalid match', () => {
+    it('removes 3 cards on invalid match', () => {
       const enemy = createWorldEater();
       const board = createTestBoard();
 
       const result = enemy.onInvalidMatch([board[0], board[1], board[2]], board);
-      expect(result.cardsToRemove.length).toBe(4);
+      expect(result.cardsToRemove.length).toBe(3);
     });
   });
 
   describe('timer speed', () => {
-    it('has 100% faster timer', () => {
+    it('has 50% faster timer', () => {
       const enemy = createWorldEater();
       const uiMods = enemy.getUIModifiers();
-      expect(uiMods.timerSpeedMultiplier).toBe(2.0);
+      expect(uiMods.timerSpeedMultiplier).toBe(1.5);
     });
   });
 
   describe('inactivity effect', () => {
-    it('causes instant death after 15s', () => {
+    it('causes instant death after 25s', () => {
       const enemy = createWorldEater();
       const board = createTestBoard();
       enemy.onRoundStart(board);
 
-      const result = enemy.onTick(15000, board);
+      const result = enemy.onTick(25000, board);
       expect(result.instantDeath).toBe(true);
     });
   });

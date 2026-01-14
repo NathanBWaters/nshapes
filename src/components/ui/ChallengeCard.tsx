@@ -81,7 +81,9 @@ const ChallengeCard: React.FC<ChallengeCardProps> = ({ enemy, difficulty, enemyD
           {/* Enemy Effect */}
           <View style={styles.infoSection}>
             <Text style={styles.infoLabel}>Enemy Effects</Text>
-            <Text style={styles.infoText}>{enemy.description}</Text>
+            {enemy.description.split(', ').map((effect, index) => (
+              <Text key={index} style={styles.infoText}>• {effect}</Text>
+            ))}
           </View>
 
           {/* Defeat Condition */}

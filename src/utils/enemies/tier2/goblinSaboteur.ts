@@ -1,5 +1,5 @@
 /**
- * Goblin Saboteur - Tier 3 Enemy
+ * Goblin Saboteur - Tier 2 Enemy
  *
  * Effects: All counter effects at -50% (pick 3 random weapon types)
  * Defeat Condition: Trigger 3 different weapon effects
@@ -30,7 +30,7 @@ export function createGoblinSaboteur(): EnemyInstance {
     {
       name: 'Goblin Saboteur',
       icon: 'caro-asercion/goblin',
-      tier: 3,
+      tier: 2,
       description: '3 random weapon types -50% each',
       defeatConditionText: 'Trigger 3 different weapon effects',
     },

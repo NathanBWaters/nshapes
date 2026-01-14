@@ -56,22 +56,22 @@ describe("Kraken's Grasp", () => {
   });
 
   describe('position shuffle', () => {
-    it('shuffles every 10s', () => {
+    it('shuffles every 15s', () => {
       const enemy = createKrakensGrasp();
       const board = createTestBoard();
 
-      const result = enemy.onTick(10000, board);
+      const result = enemy.onTick(15000, board);
       expect(result.events).toContainEqual({ type: 'positions_shuffled' });
     });
   });
 
   describe('weapon counters', () => {
-    it('counters all 7 weapon types at 75%', () => {
+    it('counters all 7 weapon types at 50%', () => {
       const enemy = createKrakensGrasp();
       const uiMods = enemy.getUIModifiers();
       expect(uiMods.weaponCounters?.length).toBe(7);
       uiMods.weaponCounters?.forEach((counter) => {
-        expect(counter.reduction).toBe(75);
+        expect(counter.reduction).toBe(50);
       });
     });
   });

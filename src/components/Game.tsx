@@ -2165,6 +2165,22 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
             hasMoreLevelUps={pendingLevelUps.length > 1}
             enemyDefeated={enemyDefeated}
             defeatedEnemyTier={defeatedEnemyTier}
+            onChallengeBonusMoney={(amount) => {
+              setState(prevState => ({
+                ...prevState,
+                player: {
+                  ...prevState.player,
+                  stats: {
+                    ...prevState.player.stats,
+                    money: prevState.player.stats.money + amount
+                  }
+                }
+              }));
+              setNotification({
+                message: `Stretch goal bonus: +$${amount}!`,
+                type: 'success'
+              });
+            }}
           />
         );
 

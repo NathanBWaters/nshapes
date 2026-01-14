@@ -1,7 +1,7 @@
 /**
  * Kraken's Grasp - Tier 4 Boss
  *
- * Effects: Wild Goose (10s shuffle) + Burrowing Mole (8s) + Junk Rat (15% dud) + All counters -75%
+ * Effects: Wild Goose (15s shuffle) + Burrowing Mole (12s) + Junk Rat (15% dud) + All counters -50%
  * Defeat Condition: Survive with 5+ cards remaining on board
  */
 
@@ -22,10 +22,10 @@ const WEAPON_TYPES = ['fire', 'explosion', 'laser', 'hint', 'grace', 'time', 'he
  * Creates a fresh Kraken's Grasp enemy instance.
  */
 export function createKrakensGrasp(): EnemyInstance {
-  // All weapon types at -75%
+  // All weapon types at -50%
   const counterEffects = WEAPON_TYPES.map((type) => ({
     behavior: WeaponCounterEffect,
-    config: { type, reduction: 75 },
+    config: { type, reduction: 50 },
   }));
 
   return composeEffects(
@@ -33,12 +33,12 @@ export function createKrakensGrasp(): EnemyInstance {
       name: "Kraken's Grasp",
       icon: 'delapouite/kraken-tentacle',
       tier: 4,
-      description: 'Shuffles every 10s, removes card every 8s, 15% dud chance, all weapons -75%',
+      description: 'Shuffles every 15s, removes card every 12s, 15% dud chance, all weapons -50%',
       defeatConditionText: 'Survive with 5+ cards remaining on board',
     },
     [
-      { behavior: PositionShuffleEffect, config: { intervalMs: 10000 } },
-      { behavior: CardRemovalEffect, config: { intervalMs: 8000, minBoardSize: 5 } },
+      { behavior: PositionShuffleEffect, config: { intervalMs: 15000 } },
+      { behavior: CardRemovalEffect, config: { intervalMs: 12000, minBoardSize: 5 } },
       { behavior: DudCardEffect, config: { chance: 15 } },
       ...counterEffects,
     ],

@@ -10,11 +10,25 @@ import { ScreenTransition } from './ScreenTransition';
 import { playSound } from '@/utils/sounds';
 import { getWeaponsByRarity } from '@/utils/gameDefinitions';
 
-// Slayer bonus color (golden)
-const SLAYER_BONUS_COLOR = '#FFD700';
+// Extra challenge bonus color (golden)
+const CHALLENGE_BONUS_COLOR = '#FFD700';
 
-// Generate a slayer bonus weapon based on enemy tier
-const generateSlayerBonus = (tier: 1 | 2 | 3 | 4): Weapon => {
+// Bonus money ranges by enemy tier (min, max)
+const CHALLENGE_BONUS_MONEY: Record<1 | 2 | 3 | 4, [number, number]> = {
+  1: [10, 15],   // Tier 1: $10-15
+  2: [20, 30],   // Tier 2: $20-30
+  3: [40, 60],   // Tier 3: $40-60
+  4: [50, 100],  // Tier 4: $50-100
+};
+
+// Get random bonus money for defeating an enemy
+export const getChallengeBonusMoney = (tier: 1 | 2 | 3 | 4): number => {
+  const [min, max] = CHALLENGE_BONUS_MONEY[tier];
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+};
+
+// Generate a challenge bonus weapon based on enemy tier
+const generateChallengeBonus = (tier: 1 | 2 | 3 | 4): Weapon => {
   let targetRarity: WeaponRarity;
 
   switch (tier) {
@@ -23,12 +37,15 @@ const generateSlayerBonus = (tier: 1 | 2 | 3 | 4): Weapon => {
       targetRarity = 'rare';
       break;
     case 2:
-      // Tier 2: 50% Rare, 50% Legendary
-      targetRarity = Math.random() < 0.5 ? 'rare' : 'legendary';
+      // Tier 2: 70% Rare, 30% Legendary
+      targetRarity = Math.random() < 0.7 ? 'rare' : 'legendary';
       break;
     case 3:
+      // Tier 3: 40% Rare, 60% Legendary
+      targetRarity = Math.random() < 0.4 ? 'rare' : 'legendary';
+      break;
     case 4:
-      // Tier 3 & 4: Guaranteed Legendary
+      // Tier 4: Guaranteed Legendary
       targetRarity = 'legendary';
       break;
     default:
@@ -114,8 +131,9 @@ interface LevelUpProps {
   onExitGame?: () => void;
   targetLevel: number;         // The level this reward is for
   hasMoreLevelUps: boolean;    // True if more level-ups pending after this
-  enemyDefeated?: boolean;     // True if player defeated the enemy this round
-  defeatedEnemyTier?: 1 | 2 | 3 | 4;  // Tier of the defeated enemy (for slayer bonus rarity)
+  enemyDefeated?: boolean;     // True if player defeated the enemy's stretch goal
+  defeatedEnemyTier?: 1 | 2 | 3 | 4;  // Tier of the defeated enemy (for bonus rarity)
+  onChallengeBonusMoney?: (amount: number) => void;  // Callback to grant bonus money
 }
 
 // Rarity colors
@@ -151,6 +169,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
   hasMoreLevelUps,
   enemyDefeated = false,
   defeatedEnemyTier = 1,
+  onChallengeBonusMoney,
 }) => {
   const [focusedIndex, setFocusedIndex] = useState<number>(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
@@ -166,17 +185,17 @@ const LevelUp: React.FC<LevelUpProps> = ({
   const displayedIndex = hoveredIndex !== null ? hoveredIndex : focusedIndex;
 
   // Generate slayer bonus weapon if enemy was defeated (memoized to not change on re-renders)
-  const slayerBonusWeapon = useMemo(() => {
+  const challengeBonusWeapon = useMemo(() => {
     if (!enemyDefeated) return null;
-    return generateSlayerBonus(defeatedEnemyTier);
+    return generateChallengeBonus(defeatedEnemyTier);
   }, [enemyDefeated, defeatedEnemyTier]);
 
   // Check if the slayer bonus is selected (it's always the last option if available)
-  const slayerBonusIndex = enemyDefeated ? options.length : -1;
-  const isSlayerBonusFocused = displayedIndex === slayerBonusIndex;
+  const challengeBonusIndex = enemyDefeated ? options.length : -1;
+  const isChallengeBonusFocused = displayedIndex === challengeBonusIndex;
 
   // Get the focused weapon (either from options or the slayer bonus)
-  const focusedWeapon = isSlayerBonusFocused ? slayerBonusWeapon : options[displayedIndex];
+  const focusedWeapon = isChallengeBonusFocused ? challengeBonusWeapon : options[displayedIndex];
 
   // Format key from camelCase to Title Case
   const formatKey = (key: string) => {
@@ -251,18 +270,18 @@ const LevelUp: React.FC<LevelUpProps> = ({
       {/* Top Half - Detail Focus */}
       <View style={styles.detailSection}>
         {focusedWeapon ? (
-          <View style={[styles.detailCard, isSlayerBonusFocused && styles.slayerBonusCard]}>
-            {/* Slayer Bonus Banner */}
-            {isSlayerBonusFocused && (
-              <View style={styles.slayerBonusBanner}>
-                <Text style={styles.slayerBonusBannerText}>SLAYER BONUS</Text>
+          <View style={[styles.detailCard, isChallengeBonusFocused && styles.challengeBonusCard]}>
+            {/* Challenge Bonus Banner */}
+            {isChallengeBonusFocused && (
+              <View style={styles.challengeBonusBanner}>
+                <Text style={styles.challengeBonusBannerText}>STRETCH GOAL BONUS</Text>
               </View>
             )}
 
             {/* Weapon Icon */}
             <View style={[
               styles.previewArea,
-              { borderColor: isSlayerBonusFocused ? SLAYER_BONUS_COLOR : getRarityColor(focusedWeapon.rarity) }
+              { borderColor: isChallengeBonusFocused ? CHALLENGE_BONUS_COLOR : getRarityColor(focusedWeapon.rarity) }
             ]}>
               {focusedWeapon.icon ? (
                 <Icon name={focusedWeapon.icon} size={32} color={COLORS.slateCharcoal} />
@@ -271,7 +290,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
               )}
               <View style={[
                 styles.rarityBadge,
-                { backgroundColor: isSlayerBonusFocused ? SLAYER_BONUS_COLOR : getRarityColor(focusedWeapon.rarity) }
+                { backgroundColor: isChallengeBonusFocused ? CHALLENGE_BONUS_COLOR : getRarityColor(focusedWeapon.rarity) }
               ]}>
                 <Text style={styles.rarityBadgeText}>{getRarityLabel(focusedWeapon.rarity)}</Text>
               </View>
@@ -280,7 +299,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
             {/* Weapon Info */}
             <Text style={[
               styles.detailName,
-              { color: isSlayerBonusFocused ? SLAYER_BONUS_COLOR : getRarityColor(focusedWeapon.rarity) }
+              { color: isChallengeBonusFocused ? CHALLENGE_BONUS_COLOR : getRarityColor(focusedWeapon.rarity) }
             ]}>
               {focusedWeapon.name}
             </Text>
@@ -361,46 +380,46 @@ const LevelUp: React.FC<LevelUpProps> = ({
           })}
 
           {/* Slayer Bonus Option - shown only if enemy was defeated */}
-          {slayerBonusWeapon && (
+          {challengeBonusWeapon && (
             <Pressable
               onPress={() => {
                 playSound('click');
-                setFocusedIndex(slayerBonusIndex);
+                setFocusedIndex(challengeBonusIndex);
               }}
-              onHoverIn={() => setHoveredIndex(slayerBonusIndex)}
+              onHoverIn={() => setHoveredIndex(challengeBonusIndex)}
               onHoverOut={() => setHoveredIndex(null)}
               style={[
                 styles.optionButton,
-                styles.slayerBonusOption,
-                { borderColor: SLAYER_BONUS_COLOR },
-                focusedIndex === slayerBonusIndex && styles.slayerBonusOptionSelected,
+                styles.challengeBonusOption,
+                { borderColor: CHALLENGE_BONUS_COLOR },
+                focusedIndex === challengeBonusIndex && styles.challengeBonusOptionSelected,
                 Platform.OS === 'web' && { cursor: 'pointer' as any },
               ]}
             >
-              <View style={styles.slayerBonusTag}>
-                <Text style={styles.slayerBonusTagText}>SLAYER</Text>
+              <View style={styles.challengeBonusTag}>
+                <Text style={styles.challengeBonusTagText}>BONUS</Text>
               </View>
-              {slayerBonusWeapon.icon && (
+              {challengeBonusWeapon.icon && (
                 <View style={styles.optionIcon}>
                   <Icon
-                    name={slayerBonusWeapon.icon}
+                    name={challengeBonusWeapon.icon}
                     size={24}
-                    color={focusedIndex === slayerBonusIndex ? COLORS.canvasWhite : SLAYER_BONUS_COLOR}
+                    color={focusedIndex === challengeBonusIndex ? COLORS.canvasWhite : CHALLENGE_BONUS_COLOR}
                   />
                 </View>
               )}
               <Text
                 style={[
                   styles.optionText,
-                  { color: SLAYER_BONUS_COLOR },
-                  focusedIndex === slayerBonusIndex && styles.optionTextSelected,
+                  { color: CHALLENGE_BONUS_COLOR },
+                  focusedIndex === challengeBonusIndex && styles.optionTextSelected,
                 ]}
                 numberOfLines={1}
               >
-                {slayerBonusWeapon.name}
+                {challengeBonusWeapon.name}
               </Text>
-              <Text style={[styles.rarityTag, { color: SLAYER_BONUS_COLOR }]}>
-                {getRarityLabel(slayerBonusWeapon.rarity)}
+              <Text style={[styles.rarityTag, { color: CHALLENGE_BONUS_COLOR }]}>
+                {getRarityLabel(challengeBonusWeapon.rarity)}
               </Text>
             </Pressable>
           )}
@@ -413,6 +432,11 @@ const LevelUp: React.FC<LevelUpProps> = ({
           onPress={() => {
             if (focusedWeapon) {
               playSound('confirm');
+              // Grant bonus money if selecting challenge bonus
+              if (isChallengeBonusFocused && onChallengeBonusMoney) {
+                const bonusMoney = getChallengeBonusMoney(defeatedEnemyTier);
+                onChallengeBonusMoney(bonusMoney);
+              }
               onSelect(focusedWeapon);
             }
           }}
@@ -763,11 +787,11 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   // Slayer Bonus styles
-  slayerBonusCard: {
+  challengeBonusCard: {
     borderWidth: 2,
     borderColor: '#FFD700',
   },
-  slayerBonusBanner: {
+  challengeBonusBanner: {
     position: 'absolute',
     top: 0,
     left: 0,
@@ -779,22 +803,22 @@ const styles = StyleSheet.create({
     borderTopRightRadius: RADIUS.module - 1,
     zIndex: 1,
   },
-  slayerBonusBannerText: {
+  challengeBonusBannerText: {
     color: COLORS.slateCharcoal,
     fontWeight: '800',
     fontSize: 12,
     textTransform: 'uppercase',
     letterSpacing: 2,
   },
-  slayerBonusOption: {
+  challengeBonusOption: {
     backgroundColor: 'rgba(255, 215, 0, 0.1)',
     borderStyle: 'solid',
     position: 'relative',
   },
-  slayerBonusOptionSelected: {
+  challengeBonusOptionSelected: {
     backgroundColor: '#FFD700',
   },
-  slayerBonusTag: {
+  challengeBonusTag: {
     position: 'absolute',
     top: 4,
     right: 4,
@@ -803,7 +827,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 4,
   },
-  slayerBonusTagText: {
+  challengeBonusTagText: {
     color: COLORS.slateCharcoal,
     fontWeight: '700',
     fontSize: 8,

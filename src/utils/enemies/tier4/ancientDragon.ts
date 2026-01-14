@@ -1,8 +1,8 @@
 /**
  * Ancient Dragon - Tier 4 Boss
  *
- * Effects: Iron Shell (×3 cards) + Shifting Chameleon (8s) + Swift Bee (80% faster) + Stinging Scorpion + Circling Vulture (8pts/sec)
- * Defeat Condition: Clear all 3 triple cards AND get 2 all-different matches
+ * Effects: Iron Shell (×2 cards) + Shifting Chameleon (8s) + Swift Bee (40% faster) + Stinging Scorpion + Circling Vulture (5pts/sec)
+ * Defeat Condition: Clear all 2 triple cards AND get 2 all-different matches
  */
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
@@ -26,20 +26,20 @@ export function createAncientDragon(): EnemyInstance {
       name: 'Ancient Dragon',
       icon: 'lorc/dragon-head',
       tier: 4,
-      description: '3 triple cards, attributes shift every 8s, timer 80% faster, 2x damage/points, score drains 8pts/sec',
-      defeatConditionText: 'Clear all 3 triple cards AND get 2 all-different matches',
+      description: '2 triple cards, attributes shift every 8s, timer 40% faster, 2x damage/points, score drains 5pts/sec',
+      defeatConditionText: 'Clear all 2 triple cards AND get 2 all-different matches',
     },
     [
-      { behavior: TripleCardEffect, config: { count: 3 } },
+      { behavior: TripleCardEffect, config: { count: 2 } },
       { behavior: AttributeChangeEffect, config: { intervalMs: 8000 } },
-      { behavior: TimerSpeedEffect, config: { multiplier: 1.8 } },
+      { behavior: TimerSpeedEffect, config: { multiplier: 1.4 } },
       { behavior: DamageMultiplierEffect, config: { multiplier: 2.0 } },
       { behavior: PointsMultiplierEffect, config: { multiplier: 2.0 } },
-      { behavior: ScoreDecayEffect, config: { ratePerSecond: 8 } },
+      { behavior: ScoreDecayEffect, config: { ratePerSecond: 5 } },
     ],
-    // Defeat condition: Clear all 3 triple cards AND get 2 all-different matches
+    // Defeat condition: Clear all 2 triple cards AND get 2 all-different matches
     (stats: RoundStats) =>
-      stats.tripleCardsCleared >= 3 && stats.allDifferentMatches >= 2
+      stats.tripleCardsCleared >= 2 && stats.allDifferentMatches >= 2
   );
 }
 
