@@ -1824,26 +1824,32 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     const newCards: Card[] = [];
     const remainingDeck = [...state.deck];
 
-    // Check if we have enough cards in the deck
-    if (remainingDeck.length < matchedCards.length) {
-      // Refill the deck if necessary with active attributes
-      const additionalCards = createDeck(state.activeAttributes);
-      for (const card of additionalCards) {
-        if (!remainingDeck.some(c => sameCardAttributes(c, card)) &&
-            !state.board.some(c => sameCardAttributes(c, card))) {
-          remainingDeck.push(card);
-        }
-      }
-    }
-
     // Get the matched card indices from the board
     const matchedIndices = matchedCards.map(matchedCard =>
       state.board.findIndex(boardCard => boardCard.id === matchedCard.id)
     );
 
+    // Get board cards that are NOT being matched (will remain on board)
+    const remainingBoardCards = state.board.filter(
+      boardCard => !matchedCards.some(mc => mc.id === boardCard.id)
+    );
+
     // Generate replacement cards
     // Note: Card modifiers (health, bombs, etc.) are applied by the enemy system via onCardDraw
     for (let i = 0; i < matchedCards.length; i++) {
+      // Check if we need to refill the deck
+      if (remainingDeck.length === 0) {
+        // Refill the deck with active attributes, excluding cards already on board or being added
+        const additionalCards = createDeck(state.activeAttributes);
+        for (const card of additionalCards) {
+          if (!remainingDeck.some(c => sameCardAttributes(c, card)) &&
+              !remainingBoardCards.some(c => sameCardAttributes(c, card)) &&
+              !newCards.some(c => sameCardAttributes(c, card))) {
+            remainingDeck.push(card);
+          }
+        }
+      }
+
       if (remainingDeck.length > 0) {
         // Get a random card from the deck
         const randomIndex = Math.floor(Math.random() * remainingDeck.length);

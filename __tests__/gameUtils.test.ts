@@ -66,6 +66,23 @@ describe('createDeck', () => {
     );
     expect(uniqueCombos.size).toBe(81);
   });
+
+  it('should generate unique IDs for all cards', () => {
+    const deck = createDeck(['shape', 'color', 'number', 'shading']);
+    const uniqueIds = new Set(deck.map(c => c.id));
+    expect(uniqueIds.size).toBe(deck.length);
+  });
+
+  it('should generate unique IDs across multiple createDeck calls', () => {
+    const deck1 = createDeck(['shape', 'color', 'number', 'shading']);
+    const deck2 = createDeck(['shape', 'color', 'number', 'shading']);
+
+    const allIds = [...deck1.map(c => c.id), ...deck2.map(c => c.id)];
+    const uniqueIds = new Set(allIds);
+
+    // All IDs should be unique even across multiple deck creations
+    expect(uniqueIds.size).toBe(allIds.length);
+  });
 });
 
 describe('shuffleArray', () => {
