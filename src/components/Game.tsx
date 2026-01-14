@@ -599,7 +599,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
 
       // Shop and upgrades - to be filled during gameplay
       shopItems: generateRandomShopItems(),
-      shopWeapons: generateShopWeapons(4),
+      shopWeapons: generateShopWeapons(4, undefined, 1),  // Round 1 rarity scaling
       levelUpOptions: [],
       rerollCost: BASE_REROLL_COST,
 
@@ -884,21 +884,44 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     }
 
     // Purchase the weapon - weapons stack, so no limit check
-    setState(prevState => ({
-      ...prevState,
-      player: {
-        ...prevState.player,
-        stats: {
-          ...prevState.player.stats,
-          money: prevState.player.stats.money - weapon.price
+    setState(prevState => {
+      // Calculate the new max values after adding this weapon
+      const newWeapons = [...prevState.player.weapons, weapon];
+      const newPlayer = { ...prevState.player, weapons: newWeapons };
+      const newTotalStats = calculatePlayerTotalStats(newPlayer);
+
+      // Grant immediate bonuses for capacity-increasing weapons
+      let hintsBonus = 0;
+      let gracesBonus = 0;
+
+      // If weapon increases maxHints, grant +1 immediate hint (up to new max)
+      if (weapon.effects.maxHints && typeof weapon.effects.maxHints === 'number') {
+        hintsBonus = Math.min(1, newTotalStats.maxHints - prevState.player.stats.hints);
+      }
+
+      // If weapon grants graces (Second Chance), grant them immediately
+      if (weapon.effects.graces && typeof weapon.effects.graces === 'number') {
+        gracesBonus = weapon.effects.graces;
+      }
+
+      return {
+        ...prevState,
+        player: {
+          ...prevState.player,
+          stats: {
+            ...prevState.player.stats,
+            money: prevState.player.stats.money - weapon.price,
+            hints: Math.min(prevState.player.stats.hints + hintsBonus, newTotalStats.maxHints),
+            graces: Math.min(prevState.player.stats.graces + gracesBonus, newTotalStats.maxGraces),
+          },
+          weapons: newWeapons
         },
-        weapons: [...prevState.player.weapons, weapon]
-      },
-      // Mark the slot as sold (null) instead of removing to preserve layout
-      shopWeapons: prevState.shopWeapons.map((shopWeapon, index) =>
-        index === weaponIndex ? null : shopWeapon
-      )
-    }));
+        // Mark the slot as sold (null) instead of removing to preserve layout
+        shopWeapons: prevState.shopWeapons.map((shopWeapon, index) =>
+          index === weaponIndex ? null : shopWeapon
+        )
+      };
+    });
   };
 
   // Handle weapon shop reroll
@@ -915,7 +938,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     if (state.player.stats.freeRerolls > 0) {
       setState(prevState => ({
         ...prevState,
-        shopWeapons: generateShopWeapons(4),
+        shopWeapons: generateShopWeapons(4, prevState.player.weapons, prevState.round),
         player: {
           ...prevState.player,
           stats: {
@@ -928,7 +951,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       // Charge for the reroll
       setState(prevState => ({
         ...prevState,
-        shopWeapons: generateShopWeapons(4),
+        shopWeapons: generateShopWeapons(4, prevState.player.weapons, prevState.round),
         player: {
           ...prevState.player,
           stats: {
@@ -983,14 +1006,40 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
 
   // Handle level up selection - receives the selected weapon directly
   const handleLevelUpSelection = (weapon: Weapon) => {
-    // Add the weapon to player's inventory (weapons stack)
-    setState(prevState => ({
-      ...prevState,
-      player: {
-        ...prevState.player,
-        weapons: [...prevState.player.weapons, weapon]
+    // Add the weapon to player's inventory (weapons stack) with immediate bonuses
+    setState(prevState => {
+      // Calculate the new max values after adding this weapon
+      const newWeapons = [...prevState.player.weapons, weapon];
+      const newPlayer = { ...prevState.player, weapons: newWeapons };
+      const newTotalStats = calculatePlayerTotalStats(newPlayer);
+
+      // Grant immediate bonuses for capacity-increasing weapons
+      let hintsBonus = 0;
+      let gracesBonus = 0;
+
+      // If weapon increases maxHints, grant +1 immediate hint (up to new max)
+      if (weapon.effects.maxHints && typeof weapon.effects.maxHints === 'number') {
+        hintsBonus = Math.min(1, newTotalStats.maxHints - prevState.player.stats.hints);
       }
-    }));
+
+      // If weapon grants graces (Second Chance), grant them immediately
+      if (weapon.effects.graces && typeof weapon.effects.graces === 'number') {
+        gracesBonus = weapon.effects.graces;
+      }
+
+      return {
+        ...prevState,
+        player: {
+          ...prevState.player,
+          stats: {
+            ...prevState.player.stats,
+            hints: Math.min(prevState.player.stats.hints + hintsBonus, newTotalStats.maxHints),
+            graces: Math.min(prevState.player.stats.graces + gracesBonus, newTotalStats.maxGraces),
+          },
+          weapons: newWeapons
+        }
+      };
+    });
 
     setNotification({
       message: `Acquired ${weapon.name}!`,
@@ -1962,7 +2011,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
         gameStarted: false,  // Not started yet - waiting for enemy selection
         currentEnemies: getRandomEnemies(getTierForRound(nextRound), 3),
         shopItems: generateRandomShopItems(),  // Refill shop for next round
-        shopWeapons: generateShopWeapons(4),   // Refill weapon shop for next round
+        shopWeapons: generateShopWeapons(4, prevState.player.weapons, nextRound),   // Refill weapon shop with round-scaled rarity
         selectedEnemy: null,
         activeEnemyInstance: null,  // Set when player selects enemy
         player: {

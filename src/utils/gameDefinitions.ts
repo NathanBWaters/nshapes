@@ -1,5 +1,5 @@
 import { Character, Enemy, Item, Weapon, PlayerStats, GameState, Player, WeaponRarity, WeaponName } from '../types';
-import { STARTING_STATS, WEAPON_SYSTEM } from './gameConfig';
+import { STARTING_STATS, WEAPON_SYSTEM, getRarityChancesForRound } from './gameConfig';
 
 // Default player stats - uses values from gameConfig for easy tweaking
 export const DEFAULT_PLAYER_STATS: PlayerStats = {
@@ -359,7 +359,7 @@ export const WEAPONS: Weapon[] = [
     rarity: 'common',
     level: 1,
     price: 8,
-    description: '10% chance to explode adjacent cards on match.',
+    description: '10% chance to explode adjacent cards. Destroyed cards give +1 point and +1 coin each.',
     shortDescription: 'May explode adjacent cards on match',
     flavorText: 'After matching, each adjacent card (up/down/left/right) has a chance to explode. Exploded cards are destroyed and award +1 point and +1 coin each.',
     icon: 'lorc/bright-explosion',
@@ -372,7 +372,7 @@ export const WEAPONS: Weapon[] = [
     rarity: 'rare',
     level: 1,
     price: 16,
-    description: '30% chance to explode adjacent cards on match.',
+    description: '30% chance to explode adjacent cards. Destroyed cards give +1 point and +1 coin each.',
     shortDescription: 'May explode adjacent cards on match',
     flavorText: 'After matching, each adjacent card (up/down/left/right) has a chance to explode. Exploded cards are destroyed and award +1 point and +1 coin each.',
     icon: 'lorc/bright-explosion',
@@ -385,12 +385,12 @@ export const WEAPONS: Weapon[] = [
     rarity: 'legendary',
     level: 1,
     price: 24,
-    description: '70% chance to explode adjacent cards on match.',
+    description: '35% chance to explode adjacent cards. Destroyed cards give +1 point and +1 coin each.',
     shortDescription: 'May explode adjacent cards on match',
     flavorText: 'After matching, each adjacent card (up/down/left/right) has a chance to explode. Exploded cards are destroyed and award +1 point and +1 coin each.',
     icon: 'lorc/bright-explosion',
     specialEffect: 'explosive',
-    effects: { explosionChance: 70 }
+    effects: { explosionChance: 35 }
   },
 
   // ============================================================================
@@ -546,7 +546,7 @@ export const WEAPONS: Weapon[] = [
     rarity: 'common',
     level: 1,
     price: 8,
-    description: '10% chance to start fire on adjacent cards.',
+    description: '10% chance to ignite adjacent cards. Burned cards give +1 point and +1 coin each.',
     shortDescription: 'May ignite adjacent cards',
     flavorText: 'After matching, adjacent cards may catch fire. Burning cards are destroyed after 7.5 seconds, awarding points. Fire has a 10% chance to spread to neighbors when a card burns out.',
     icon: 'lorc/campfire',
@@ -559,7 +559,7 @@ export const WEAPONS: Weapon[] = [
     rarity: 'rare',
     level: 1,
     price: 16,
-    description: '30% chance to start fire on adjacent cards.',
+    description: '30% chance to ignite adjacent cards. Burned cards give +1 point and +1 coin each.',
     shortDescription: 'May ignite adjacent cards',
     flavorText: 'After matching, adjacent cards may catch fire. Burning cards are destroyed after 7.5 seconds, awarding points. Fire has a 10% chance to spread to neighbors when a card burns out.',
     icon: 'lorc/campfire',
@@ -572,7 +572,7 @@ export const WEAPONS: Weapon[] = [
     rarity: 'legendary',
     level: 1,
     price: 24,
-    description: '70% chance to start fire on adjacent cards.',
+    description: '70% chance to ignite adjacent cards. Burned cards give +1 point and +1 coin each.',
     shortDescription: 'May ignite adjacent cards',
     flavorText: 'After matching, adjacent cards may catch fire. Burning cards are destroyed after 7.5 seconds, awarding points. Fire has a 10% chance to spread to neighbors when a card burns out.',
     icon: 'lorc/campfire',
@@ -755,7 +755,7 @@ export const WEAPONS: Weapon[] = [
     rarity: 'common',
     level: 1,
     price: 5,
-    description: '+1 max hint capacity.',
+    description: '+1 max hint capacity (and +1 hint).',
     shortDescription: 'Increased hint capacity',
     flavorText: 'Hints highlight a valid set on the board when activated. Earn hints from matches to fill your capacity.',
     icon: 'lorc/floating-crystal',
@@ -767,7 +767,7 @@ export const WEAPONS: Weapon[] = [
     rarity: 'rare',
     level: 1,
     price: 10,
-    description: '+2 max hint capacity.',
+    description: '+2 max hint capacity (and +1 hint).',
     shortDescription: 'Increased hint capacity',
     flavorText: 'Hints highlight a valid set on the board when activated. Earn hints from matches to fill your capacity.',
     icon: 'lorc/floating-crystal',
@@ -779,7 +779,7 @@ export const WEAPONS: Weapon[] = [
     rarity: 'legendary',
     level: 1,
     price: 15,
-    description: '+3 max hint capacity.',
+    description: '+3 max hint capacity (and +1 hint).',
     shortDescription: 'Increased hint capacity',
     flavorText: 'Hints highlight a valid set on the board when activated. Earn hints from matches to fill your capacity.',
     icon: 'lorc/floating-crystal',
@@ -1007,7 +1007,7 @@ export const WEAPONS: Weapon[] = [
     rarity: 'common',
     level: 1,
     price: 10,
-    description: '3% chance to destroy entire row or column.',
+    description: '3% chance to destroy entire row or column. Destroyed cards give +2 points each.',
     shortDescription: 'May destroy a row or column',
     flavorText: 'Each laser weapon rolls independently on every match. When triggered, destroys all cards in either a row or column (randomly chosen). Multiple lasers can fire on the same match. Destroyed cards award +2 points each.',
     icon: 'lorc/laser-warning',
@@ -1020,7 +1020,7 @@ export const WEAPONS: Weapon[] = [
     rarity: 'rare',
     level: 1,
     price: 20,
-    description: '9% chance to destroy entire row or column.',
+    description: '9% chance to destroy entire row or column. Destroyed cards give +2 points each.',
     shortDescription: 'May destroy a row or column',
     flavorText: 'Each laser weapon rolls independently on every match. When triggered, destroys all cards in either a row or column (randomly chosen). Multiple lasers can fire on the same match. Destroyed cards award +2 points each.',
     icon: 'lorc/laser-warning',
@@ -1033,7 +1033,7 @@ export const WEAPONS: Weapon[] = [
     rarity: 'legendary',
     level: 1,
     price: 30,
-    description: '21% chance to destroy entire row or column.',
+    description: '21% chance to destroy entire row or column. Destroyed cards give +2 points each.',
     shortDescription: 'May destroy a row or column',
     flavorText: 'Each laser weapon rolls independently on every match. When triggered, destroys all cards in either a row or column (randomly chosen). Multiple lasers can fire on the same match. Destroyed cards award +2 points each.',
     icon: 'lorc/laser-warning',
@@ -1160,13 +1160,17 @@ export const canObtainWeapon = (weapon: Weapon, playerWeapons: Weapon[]): boolea
 
 // Helper function to get a random weapon based on rarity distribution
 // Optionally filters out weapons the player can't obtain (at maxCount)
-export const getRandomShopWeapon = (playerWeapons?: Weapon[]): Weapon => {
+// Round parameter enables rarity scaling (1-10, defaults to 5 for mid-game rates)
+export const getRandomShopWeapon = (playerWeapons?: Weapon[], round: number = 5): Weapon => {
   const roll = Math.random();
   let rarity: WeaponRarity;
 
-  if (roll < WEAPON_SYSTEM.rarityChances.legendary) {
+  // Get rarity chances based on round (scales legendary from 1.25% to 10%)
+  const rarityChances = getRarityChancesForRound(round);
+
+  if (roll < rarityChances.legendary) {
     rarity = 'legendary';
-  } else if (roll < WEAPON_SYSTEM.rarityChances.legendary + WEAPON_SYSTEM.rarityChances.rare) {
+  } else if (roll < rarityChances.legendary + rarityChances.rare) {
     rarity = 'rare';
   } else {
     rarity = 'common';
@@ -1189,10 +1193,11 @@ export const getRandomShopWeapon = (playerWeapons?: Weapon[]): Weapon => {
 
 // Helper function to generate shop weapons
 // Optionally filters out weapons the player can't obtain
-export const generateShopWeapons = (count: number, playerWeapons?: Weapon[]): Weapon[] => {
+// Round parameter enables rarity scaling (1-10)
+export const generateShopWeapons = (count: number, playerWeapons?: Weapon[], round: number = 5): Weapon[] => {
   const weapons: Weapon[] = [];
   for (let i = 0; i < count; i++) {
-    weapons.push(getRandomShopWeapon(playerWeapons));
+    weapons.push(getRandomShopWeapon(playerWeapons, round));
   }
   return weapons;
 };

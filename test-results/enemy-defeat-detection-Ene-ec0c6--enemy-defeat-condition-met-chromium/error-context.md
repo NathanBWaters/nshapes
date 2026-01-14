@@ -1,0 +1,45 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e12]:
+  - generic [ref=e13]:
+    - generic [ref=e14]: Round 1 - Choose Enemy
+    - generic [ref=e16] [cursor=pointer]: MENU
+  - generic [ref=e18]:
+    - generic [ref=e19]:
+      - generic [ref=e20]:
+        - img [ref=e22]
+        - img [ref=e24]
+      - generic [ref=e27]: Tier 1
+    - generic [ref=e28]: Punishing Ermine
+    - generic [ref=e29]: Common
+    - generic [ref=e31]:
+      - generic [ref=e32]:
+        - generic [ref=e33]: Enemy Effects
+        - generic [ref=e34]: On invalid match, 2 extra cards are removed
+      - generic [ref=e35]:
+        - generic [ref=e36]: Defeat Condition
+        - generic [ref=e37]: Make no invalid matches
+  - generic [ref=e38]:
+    - generic [ref=e39]: Select Your Opponent
+    - generic [ref=e40]:
+      - generic [active] [ref=e41] [cursor=pointer]:
+        - generic [ref=e43]:
+          - img [ref=e45]
+          - img [ref=e47]
+        - generic [ref=e49]: Punishing Ermine
+        - generic [ref=e50]: Tier 1
+      - generic [ref=e51] [cursor=pointer]:
+        - generic [ref=e53]:
+          - img [ref=e55]
+          - img [ref=e57]
+        - generic [ref=e59]: Thieving Raven
+        - generic [ref=e60]: Tier 1
+      - generic [ref=e61] [cursor=pointer]:
+        - generic [ref=e63]:
+          - img [ref=e65]
+          - img [ref=e67]
+        - generic [ref=e69]: Shifting Chameleon
+        - generic [ref=e70]: Tier 1
+  - generic [ref=e73] [cursor=pointer]: Fight Punishing Ermine
+```

@@ -69,7 +69,7 @@ export const ECONOMY = {
 // =============================================================================
 
 export const WEAPON_SYSTEM = {
-  // Rarity drop rates for shop generation
+  // Base rarity drop rates for shop generation (used as fallback)
   rarityChances: {
     common: 0.70,    // 70% chance
     rare: 0.25,      // 25% chance
@@ -83,6 +83,35 @@ export const WEAPON_SYSTEM = {
   // Auto-hint display duration
   autoHintDisplayDuration: 1500, // 1.5 seconds
 } as const;
+
+/**
+ * Get rarity chances that scale by round.
+ * Round 1: Legendary 1.25% (quarter of base), Rare 13.75%
+ * Round 10: Legendary 10% (double base), Rare 35%
+ * Linear interpolation between rounds.
+ */
+export const getRarityChancesForRound = (round: number): { common: number; rare: number; legendary: number } => {
+  // Clamp round between 1 and 10
+  const clampedRound = Math.max(1, Math.min(10, round));
+
+  // Calculate progress from round 1 (0) to round 10 (1)
+  const progress = (clampedRound - 1) / 9;
+
+  // Legendary: 1.25% at round 1, 10% at round 10
+  const legendaryStart = 0.0125;
+  const legendaryEnd = 0.10;
+  const legendary = legendaryStart + (legendaryEnd - legendaryStart) * progress;
+
+  // Rare: 13.75% at round 1, 35% at round 10
+  const rareStart = 0.1375;
+  const rareEnd = 0.35;
+  const rare = rareStart + (rareEnd - rareStart) * progress;
+
+  // Common: remainder
+  const common = 1 - legendary - rare;
+
+  return { common, rare, legendary };
+};
 
 // =============================================================================
 // REWARDS (per matched card)
