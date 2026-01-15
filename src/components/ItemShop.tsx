@@ -187,7 +187,10 @@ const ItemShop: React.FC<ItemShopProps> = ({
               return (
                 <Pressable
                   key={`${item.name}-${index}`}
-                  onPress={() => setFocusedIndex(index)}
+                  onPress={() => {
+                    setHoveredIndex(null); // Clear hover state to ensure display updates
+                    setFocusedIndex(index);
+                  }}
                   onHoverIn={() => setHoveredIndex(index)}
                   onHoverOut={() => setHoveredIndex(null)}
                   style={[

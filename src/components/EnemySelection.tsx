@@ -107,7 +107,10 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
               <Pressable
                 key={enemy.name}
                 testID={`enemy-option-${index}`}
-                onPress={() => setFocusedIndex(index)}
+                onPress={() => {
+                  setHoveredIndex(null); // Clear hover state to ensure display updates
+                  setFocusedIndex(index);
+                }}
                 onHoverIn={() => setHoveredIndex(index)}
                 onHoverOut={() => setHoveredIndex(null)}
                 style={[
