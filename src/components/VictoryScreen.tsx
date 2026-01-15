@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { Player, Weapon, PlayerStats, WeaponRarity, AdventureDifficulty } from '@/types';
-import { COLORS, RADIUS } from '@/utils/colors';
+import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
 import Icon from './Icon';
 import { ConfettiBurst } from './effects/ConfettiBurst';
 import { AnimatedCounter } from './ui/AnimatedCounter';
@@ -20,20 +20,11 @@ interface VictoryScreenProps {
   onContinueEndless: () => void;
 }
 
-// Rarity colors
-const getRarityColor = (rarity: WeaponRarity): string => {
-  switch (rarity) {
-    case 'common': return COLORS.slateCharcoal;
-    case 'rare': return '#1976D2';
-    case 'legendary': return COLORS.impactOrange;
-    default: return COLORS.slateCharcoal;
-  }
-};
-
 const getRarityLabel = (rarity: WeaponRarity): string => {
   switch (rarity) {
     case 'common': return 'Common';
     case 'rare': return 'Rare';
+    case 'epic': return 'Epic';
     case 'legendary': return 'Legendary';
     default: return rarity;
   }
@@ -52,10 +43,10 @@ const groupWeapons = (weapons: Weapon[]): { weapon: Weapon; count: number }[] =>
     }
   });
 
-  // Sort by rarity (legendary first, then rare, then common)
-  const rarityOrder: Record<string, number> = { legendary: 0, rare: 1, common: 2 };
+  // Sort by rarity (legendary first, then epic, then rare, then common)
+  const rarityOrder: Record<string, number> = { legendary: 0, epic: 1, rare: 2, common: 3 };
   return Array.from(groups.values()).sort(
-    (a, b) => (rarityOrder[a.weapon.rarity] ?? 3) - (rarityOrder[b.weapon.rarity] ?? 3)
+    (a, b) => (rarityOrder[a.weapon.rarity] ?? 4) - (rarityOrder[b.weapon.rarity] ?? 4)
   );
 };
 

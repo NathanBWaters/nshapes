@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
-import { COLORS, RADIUS } from '@/utils/colors';
+import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
 import { WEAPONS } from '@/utils/gameDefinitions';
 import { Weapon, WeaponRarity } from '@/types';
 import Icon from './Icon';
@@ -25,15 +25,6 @@ const getWeaponGroups = (): Map<string, Weapon[]> => {
   );
 
   return new Map(sortedEntries);
-};
-
-const getRarityColor = (rarity: WeaponRarity): string => {
-  switch (rarity) {
-    case 'legendary': return '#FFD700';
-    case 'rare': return '#9B59B6';
-    case 'common': return COLORS.slateCharcoal;
-    default: return COLORS.slateCharcoal;
-  }
 };
 
 const getRarityLabel = (rarity: WeaponRarity): string => {

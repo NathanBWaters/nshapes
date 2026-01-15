@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Weapon, WeaponRarity } from '@/types';
-import { COLORS, RADIUS } from '@/utils/colors';
+import { Weapon } from '@/types';
+import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
 import Icon from './Icon';
 
 interface WeaponListProps {
@@ -10,19 +10,6 @@ interface WeaponListProps {
   showDescription?: boolean;
   emptyMessage?: string;
 }
-
-const getRarityColor = (rarity: WeaponRarity): string => {
-  switch (rarity) {
-    case 'legendary':
-      return '#FFD700';
-    case 'rare':
-      return '#9B59B6';
-    case 'common':
-      return COLORS.slateCharcoal;
-    default:
-      return COLORS.slateCharcoal;
-  }
-};
 
 /**
  * Reusable component to display a list of weapons with icons, names, and counts.

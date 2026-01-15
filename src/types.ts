@@ -89,7 +89,7 @@ export type WeaponName =
   'Chrono Shard' | 'Time Drop' | 'Prismatic Ray' | 'Chaos Shard' |
   'Echo Stone' | 'Chain Reaction';
 
-export type WeaponRarity = 'common' | 'rare' | 'legendary';
+export type WeaponRarity = 'common' | 'rare' | 'epic' | 'legendary';
 
 export type ItemName =
   'Great Field' | 'Mirror Trinket' | 'Hint Booster' | 'Lucky Token' |

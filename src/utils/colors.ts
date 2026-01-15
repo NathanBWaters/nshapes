@@ -1,6 +1,8 @@
 // NShapes Style Guide Colors - "The Core Stack"
 // Retro-Modern Enterprise aesthetic with high-contrast, geometric design
 
+import type { WeaponRarity } from '../types';
+
 export const COLORS = {
   // Primary Colors
   actionYellow: '#FFDE00',    // Primary CTA, notifications, eyebrow banners
@@ -22,6 +24,27 @@ export const COLORS = {
   error: '#FF7169',           // Impact Red variant
   warning: '#FF9538',         // Impact Orange
   info: '#383838',            // Slate Charcoal
+
+  // Weapon Rarity Colors
+  rarityCommon: '#383838',    // Slate Charcoal - common items
+  rarityRare: '#3B82F6',      // Blue - rare items
+  rarityEpic: '#9333EA',      // Purple - epic items
+  rarityLegendary: '#FFD700', // Gold - legendary items
+};
+
+// Helper function to get color for weapon rarity
+export const getRarityColor = (rarity: WeaponRarity): string => {
+  switch (rarity) {
+    case 'legendary':
+      return COLORS.rarityLegendary;
+    case 'epic':
+      return COLORS.rarityEpic;
+    case 'rare':
+      return COLORS.rarityRare;
+    case 'common':
+    default:
+      return COLORS.rarityCommon;
+  }
 };
 
 // Border radius standards

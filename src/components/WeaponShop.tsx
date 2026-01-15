@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Pressable, StyleSheet, Platform } from 'react-native';
 import { Weapon, PlayerStats, WeaponRarity } from '@/types';
-import { COLORS, RADIUS } from '@/utils/colors';
+import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
 import Icon from './Icon';
 import GameMenu from './GameMenu';
 import InventoryBar from './InventoryBar';
@@ -86,20 +86,11 @@ interface WeaponShopProps {
   onExitGame?: () => void;
 }
 
-// Rarity colors
-const getRarityColor = (rarity: WeaponRarity): string => {
-  switch (rarity) {
-    case 'common': return COLORS.slateCharcoal;
-    case 'rare': return '#1976D2'; // Blue
-    case 'legendary': return COLORS.impactOrange;
-    default: return COLORS.slateCharcoal;
-  }
-};
-
 const getRarityLabel = (rarity: WeaponRarity): string => {
   switch (rarity) {
     case 'common': return 'Common';
     case 'rare': return 'Rare';
+    case 'epic': return 'Epic';
     case 'legendary': return 'Legendary';
     default: return rarity;
   }

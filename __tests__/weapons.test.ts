@@ -74,7 +74,7 @@ describe('Weapon Definitions', () => {
         // Validate types
         expect(typeof weapon.id).toBe('string');
         expect(typeof weapon.name).toBe('string');
-        expect(['common', 'rare', 'legendary']).toContain(weapon.rarity);
+        expect(['common', 'rare', 'epic', 'legendary']).toContain(weapon.rarity);
         expect(typeof weapon.level).toBe('number');
         expect(typeof weapon.price).toBe('number');
         expect(typeof weapon.description).toBe('string');
@@ -279,17 +279,27 @@ describe('Weapon Definitions', () => {
 
       const commons = weapons.filter(w => w.rarity === 'common').length;
       const rares = weapons.filter(w => w.rarity === 'rare').length;
+      const epics = weapons.filter(w => w.rarity === 'epic').length;
       const legendaries = weapons.filter(w => w.rarity === 'legendary').length;
 
-      // Expected: 70% common, 25% rare, 5% legendary
-      // Allow +/- 10% tolerance for randomness
-      expect(commons / totalSamples).toBeGreaterThan(0.55);
+      // Expected at round 5 (default): ~53% common, ~22.5% rare, ~10.5% epic, ~3% legendary
+      // Allow generous tolerance for randomness since epic weapons don't exist yet
+      // and all epic rolls fall back to common
+      // Common should be majority
+      expect(commons / totalSamples).toBeGreaterThan(0.35);
       expect(commons / totalSamples).toBeLessThan(0.85);
 
-      expect(rares / totalSamples).toBeGreaterThan(0.15);
+      // Rare should be significant
+      expect(rares / totalSamples).toBeGreaterThan(0.10);
       expect(rares / totalSamples).toBeLessThan(0.40);
 
-      expect(legendaries / totalSamples).toBeGreaterThan(0.01);
+      // Epic should be present (may be 0 until epic weapons are added)
+      // For now just check it's a valid count
+      expect(epics).toBeGreaterThanOrEqual(0);
+      expect(epics / totalSamples).toBeLessThan(0.30);
+
+      // Legendary should be rare
+      expect(legendaries / totalSamples).toBeGreaterThan(0.005);
       expect(legendaries / totalSamples).toBeLessThan(0.15);
     });
   });

@@ -71,9 +71,10 @@ export const ECONOMY = {
 export const WEAPON_SYSTEM = {
   // Base rarity drop rates for shop generation (used as fallback)
   rarityChances: {
-    common: 0.70,    // 70% chance
+    common: 0.60,    // 60% chance
     rare: 0.25,      // 25% chance
-    legendary: 0.05, // 5% chance
+    epic: 0.12,      // 12% chance
+    legendary: 0.03, // 3% chance
   },
 
   // Fire system
@@ -86,31 +87,36 @@ export const WEAPON_SYSTEM = {
 
 /**
  * Get rarity chances that scale by round.
- * Round 1: Legendary 1.25% (quarter of base), Rare 13.75%
- * Round 10: Legendary 10% (double base), Rare 35%
+ * Round 1: Lower epic/legendary chances, higher common
+ * Round 10: Higher epic/legendary chances, lower common
  * Linear interpolation between rounds.
  */
-export const getRarityChancesForRound = (round: number): { common: number; rare: number; legendary: number } => {
+export const getRarityChancesForRound = (round: number): { common: number; rare: number; epic: number; legendary: number } => {
   // Clamp round between 1 and 10
   const clampedRound = Math.max(1, Math.min(10, round));
 
   // Calculate progress from round 1 (0) to round 10 (1)
   const progress = (clampedRound - 1) / 9;
 
-  // Legendary: 1.25% at round 1, 10% at round 10
-  const legendaryStart = 0.0125;
-  const legendaryEnd = 0.10;
+  // Legendary: 0.75% at round 1, 6% at round 10
+  const legendaryStart = 0.0075;
+  const legendaryEnd = 0.06;
   const legendary = legendaryStart + (legendaryEnd - legendaryStart) * progress;
 
-  // Rare: 13.75% at round 1, 35% at round 10
-  const rareStart = 0.1375;
-  const rareEnd = 0.35;
+  // Epic: 3% at round 1, 18% at round 10
+  const epicStart = 0.03;
+  const epicEnd = 0.18;
+  const epic = epicStart + (epicEnd - epicStart) * progress;
+
+  // Rare: 15% at round 1, 30% at round 10
+  const rareStart = 0.15;
+  const rareEnd = 0.30;
   const rare = rareStart + (rareEnd - rareStart) * progress;
 
   // Common: remainder
-  const common = 1 - legendary - rare;
+  const common = 1 - legendary - epic - rare;
 
-  return { common, rare, legendary };
+  return { common, rare, epic, legendary };
 };
 
 // =============================================================================

@@ -1165,12 +1165,14 @@ export const getRandomShopWeapon = (playerWeapons?: Weapon[], round: number = 5)
   const roll = Math.random();
   let rarity: WeaponRarity;
 
-  // Get rarity chances based on round (scales legendary from 1.25% to 10%)
+  // Get rarity chances based on round (scales with progression)
   const rarityChances = getRarityChancesForRound(round);
 
   if (roll < rarityChances.legendary) {
     rarity = 'legendary';
-  } else if (roll < rarityChances.legendary + rarityChances.rare) {
+  } else if (roll < rarityChances.legendary + rarityChances.epic) {
+    rarity = 'epic';
+  } else if (roll < rarityChances.legendary + rarityChances.epic + rarityChances.rare) {
     rarity = 'rare';
   } else {
     rarity = 'common';
@@ -1186,6 +1188,11 @@ export const getRandomShopWeapon = (playerWeapons?: Weapon[], round: number = 5)
     if (weaponsOfRarity.length === 0) {
       weaponsOfRarity = WEAPONS.filter(w => w.rarity === rarity);
     }
+  }
+
+  // If still empty (no weapons of this rarity exist), fall back to common
+  if (weaponsOfRarity.length === 0) {
+    weaponsOfRarity = WEAPONS.filter(w => w.rarity === 'common');
   }
 
   return weaponsOfRarity[Math.floor(Math.random() * weaponsOfRarity.length)];
