@@ -1163,10 +1163,169 @@ export const WEAPONS: Weapon[] = [
     effects: { chainReactionChance: 30 },
     maxCount: 1  // Unique - only one can be owned
   },
+
+  // ============================================================================
+  // CAP INCREASER WEAPONS - Increase the cap for each effect type
+  // All are Rare rarity, increase cap for their respective effect
+  // ============================================================================
+  {
+    id: 'echo-mastery',
+    name: 'Echo Mastery',
+    rarity: 'rare',
+    level: 1,
+    price: 15,
+    description: 'Increases Echo cap by +5%. Max echo chance can now reach 30%.',
+    shortDescription: 'Raises Echo effect cap',
+    flavorText: 'Master the art of resonance to unlock greater echo potential.',
+    icon: 'lorc/open-book',
+    specialEffect: 'capIncrease',
+    effects: {},
+    capIncrease: { type: 'echo', amount: 5 },
+  },
+  {
+    id: 'laser-mastery',
+    name: 'Laser Mastery',
+    rarity: 'rare',
+    level: 1,
+    price: 18,
+    description: 'Increases Laser cap by +5%. Max laser chance can now reach 35%.',
+    shortDescription: 'Raises Laser effect cap',
+    flavorText: 'Learn to focus light with greater precision.',
+    icon: 'lorc/open-book',
+    specialEffect: 'capIncrease',
+    effects: {},
+    capIncrease: { type: 'laser', amount: 5 },
+  },
+  {
+    id: 'grace-mastery',
+    name: 'Grace Mastery',
+    rarity: 'rare',
+    level: 1,
+    price: 12,
+    description: 'Increases Grace Gain cap by +5%. Max grace gain chance can now reach 35%.',
+    shortDescription: 'Raises Grace Gain effect cap',
+    flavorText: 'Fortune favors those who study its ways.',
+    icon: 'lorc/open-book',
+    specialEffect: 'capIncrease',
+    effects: {},
+    capIncrease: { type: 'graceGain', amount: 5 },
+  },
+  {
+    id: 'explosion-mastery',
+    name: 'Explosion Mastery',
+    rarity: 'rare',
+    level: 1,
+    price: 15,
+    description: 'Increases Explosion cap by +10%. Max explosion chance can now reach 50%.',
+    shortDescription: 'Raises Explosion effect cap',
+    flavorText: 'Control the chaos of destruction itself.',
+    icon: 'lorc/open-book',
+    specialEffect: 'capIncrease',
+    effects: {},
+    capIncrease: { type: 'explosion', amount: 10 },
+  },
+  {
+    id: 'hint-mastery',
+    name: 'Hint Mastery',
+    rarity: 'rare',
+    level: 1,
+    price: 12,
+    description: 'Increases Hint cap by +10%. Max hint chance can now reach 50%.',
+    shortDescription: 'Raises Hint effect cap',
+    flavorText: 'Open your mind to greater insights.',
+    icon: 'lorc/open-book',
+    specialEffect: 'capIncrease',
+    effects: {},
+    capIncrease: { type: 'hint', amount: 10 },
+  },
+  {
+    id: 'time-mastery',
+    name: 'Time Mastery',
+    rarity: 'rare',
+    level: 1,
+    price: 15,
+    description: 'Increases Time Gain cap by +10%. Max time gain chance can now reach 50%.',
+    shortDescription: 'Raises Time Gain effect cap',
+    flavorText: 'Bend the flow of time to your will.',
+    icon: 'lorc/open-book',
+    specialEffect: 'capIncrease',
+    effects: {},
+    capIncrease: { type: 'timeGain', amount: 10 },
+  },
+  {
+    id: 'healing-mastery',
+    name: 'Healing Mastery',
+    rarity: 'rare',
+    level: 1,
+    price: 12,
+    description: 'Increases Healing cap by +10%. Max healing chance can now reach 60%.',
+    shortDescription: 'Raises Healing effect cap',
+    flavorText: 'Unlock the deeper secrets of restoration.',
+    icon: 'lorc/open-book',
+    specialEffect: 'capIncrease',
+    effects: {},
+    capIncrease: { type: 'healing', amount: 10 },
+  },
+  {
+    id: 'fire-mastery',
+    name: 'Fire Mastery',
+    rarity: 'rare',
+    level: 1,
+    price: 15,
+    description: 'Increases Fire cap by +10%. Max fire spread chance can now reach 60%.',
+    shortDescription: 'Raises Fire effect cap',
+    flavorText: 'Command the flames with greater intensity.',
+    icon: 'lorc/open-book',
+    specialEffect: 'capIncrease',
+    effects: {},
+    capIncrease: { type: 'fire', amount: 10 },
+  },
+  {
+    id: 'ricochet-mastery',
+    name: 'Ricochet Mastery',
+    rarity: 'rare',
+    level: 1,
+    price: 15,
+    description: 'Increases Ricochet cap by +10%. Max ricochet chance can now reach 70%.',
+    shortDescription: 'Raises Ricochet effect cap',
+    flavorText: 'Learn to predict the unpredictable bounces.',
+    icon: 'lorc/open-book',
+    specialEffect: 'capIncrease',
+    effects: {},
+    capIncrease: { type: 'ricochet', amount: 10 },
+  },
+  {
+    id: 'growth-mastery',
+    name: 'Growth Mastery',
+    rarity: 'rare',
+    level: 1,
+    price: 12,
+    description: 'Increases Board Growth cap by +10%. Max board growth chance can now reach 70%.',
+    shortDescription: 'Raises Board Growth effect cap',
+    flavorText: 'Nurture the seeds of expansion.',
+    icon: 'lorc/open-book',
+    specialEffect: 'capIncrease',
+    effects: {},
+    capIncrease: { type: 'boardGrowth', amount: 10 },
+  },
+  {
+    id: 'coin-mastery',
+    name: 'Coin Mastery',
+    rarity: 'rare',
+    level: 1,
+    price: 18,
+    description: 'Increases Coin Gain cap by +15%. Max coin gain chance can now reach 85%.',
+    shortDescription: 'Raises Coin Gain effect cap',
+    flavorText: 'Discover the secrets of endless wealth.',
+    icon: 'lorc/open-book',
+    specialEffect: 'capIncrease',
+    effects: {},
+    capIncrease: { type: 'coinGain', amount: 15 },
+  },
 ];
 
 // Count how many of a specific weapon (by name) the player owns
-export const getPlayerWeaponCount = (weaponName: WeaponName, playerWeapons: Weapon[]): number => {
+export const getPlayerWeaponCount = (weaponName: WeaponName | string, playerWeapons: Weapon[]): number => {
   return playerWeapons.filter(w => w.name === weaponName).length;
 };
 
@@ -1395,11 +1554,17 @@ export const initializePlayer = (id: string, username: string, characterName: st
 export const calculatePlayerTotalStats = (player: Player): PlayerStats => {
   const totalStats = { ...player.stats };
 
+  // Deep clone effectCaps so we can modify it
+  if (totalStats.effectCaps) {
+    totalStats.effectCaps = { ...totalStats.effectCaps };
+  }
+
   // Keys that should not be modified by weapon/item effects (non-numeric)
   const nonNumericKeys = new Set(['effectCaps']);
 
   // Apply weapon effects
   player.weapons.forEach((weapon: Weapon) => {
+    // Apply stat effects
     Object.entries(weapon.effects).forEach(([key, value]) => {
       if (nonNumericKeys.has(key)) return;
       const currentValue = totalStats[key as keyof PlayerStats];
@@ -1408,6 +1573,15 @@ export const calculatePlayerTotalStats = (player: Player): PlayerStats => {
         (totalStats as unknown as Record<string, number>)[key] = currentValue + value;
       }
     });
+
+    // Apply cap increase effects
+    if (weapon.capIncrease && totalStats.effectCaps) {
+      const { type, amount } = weapon.capIncrease;
+      const caps = totalStats.effectCaps as unknown as Record<string, number>;
+      if (caps[type] !== undefined) {
+        caps[type] += amount;
+      }
+    }
   });
 
   // Apply item effects and drawbacks

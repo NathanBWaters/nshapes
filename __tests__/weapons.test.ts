@@ -12,8 +12,8 @@ import { Weapon, WeaponRarity, Player } from '@/types';
 
 describe('Weapon Definitions', () => {
   describe('WEAPONS array', () => {
-    it('should have exactly 56 weapons (18 types x 3 rarities + 2 legendary-only)', () => {
-      expect(WEAPONS.length).toBe(56);
+    it('should have exactly 67 weapons (18 types x 3 rarities + 2 legendary-only + 11 cap increasers)', () => {
+      expect(WEAPONS.length).toBe(67);
     });
 
     it('should have 18 common weapons', () => {
@@ -21,9 +21,9 @@ describe('Weapon Definitions', () => {
       expect(commons.length).toBe(18);
     });
 
-    it('should have 18 rare weapons', () => {
+    it('should have 29 rare weapons (18 base + 11 cap increasers)', () => {
       const rares = WEAPONS.filter(w => w.rarity === 'rare');
-      expect(rares.length).toBe(18);
+      expect(rares.length).toBe(29);
     });
 
     it('should have 20 legendary weapons (18 base + Mystic Sight + Chain Reaction)', () => {
@@ -106,9 +106,15 @@ describe('Weapon Definitions', () => {
       });
     });
 
-    it('most weapon types should have 3 rarities, some are legendary-only', () => {
+    it('most weapon types should have 3 rarities, some are legendary-only or rare-only', () => {
       const weaponsByName = new Map<string, Weapon[]>();
       const legendaryOnlyWeapons = ['Mystic Sight', 'Chain Reaction'];
+      // Cap increaser weapons are rare-only (one per effect type)
+      const rareOnlyWeapons = [
+        'Echo Mastery', 'Laser Mastery', 'Grace Mastery', 'Explosion Mastery',
+        'Hint Mastery', 'Time Mastery', 'Healing Mastery', 'Fire Mastery',
+        'Ricochet Mastery', 'Growth Mastery', 'Coin Mastery'
+      ];
 
       WEAPONS.forEach(weapon => {
         const existing = weaponsByName.get(weapon.name) || [];
@@ -121,6 +127,10 @@ describe('Weapon Definitions', () => {
           // Legendary-only weapons should have exactly 1 rarity
           expect(weapons.length).toBe(1);
           expect(weapons[0].rarity).toBe('legendary');
+        } else if (rareOnlyWeapons.includes(name)) {
+          // Rare-only weapons (cap increasers) should have exactly 1 rarity
+          expect(weapons.length).toBe(1);
+          expect(weapons[0].rarity).toBe('rare');
         } else {
           // Normal weapons should have all 3 rarities
           expect(weapons.length).toBe(3);
@@ -209,6 +219,12 @@ describe('Weapon Definitions', () => {
     it('legendary weapons should have higher effect values than common (for weapons with all rarities)', () => {
       const weaponsByName = new Map<string, Map<WeaponRarity, Weapon>>();
       const legendaryOnlyWeapons = ['Mystic Sight', 'Chain Reaction'];
+      // Cap increaser weapons are rare-only (one per effect type)
+      const rareOnlyWeapons = [
+        'Echo Mastery', 'Laser Mastery', 'Grace Mastery', 'Explosion Mastery',
+        'Hint Mastery', 'Time Mastery', 'Healing Mastery', 'Fire Mastery',
+        'Ricochet Mastery', 'Growth Mastery', 'Coin Mastery'
+      ];
 
       WEAPONS.forEach(weapon => {
         if (!weaponsByName.has(weapon.name)) {
@@ -218,8 +234,9 @@ describe('Weapon Definitions', () => {
       });
 
       weaponsByName.forEach((rarityMap, name) => {
-        // Skip legendary-only weapons
+        // Skip legendary-only weapons and rare-only weapons (cap increasers)
         if (legendaryOnlyWeapons.includes(name)) return;
+        if (rareOnlyWeapons.includes(name)) return;
 
         const common = rarityMap.get('common')!;
         const legendary = rarityMap.get('legendary')!;

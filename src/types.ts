@@ -101,9 +101,17 @@ export type ItemName =
 
 export type ItemRarity = 'Tier 1' | 'Tier 2' | 'Tier 3' | 'Tier 4';
 
+// Cap increase effect types - must match EffectCapType in gameConfig.ts
+export type CapIncreaseType = 'echo' | 'laser' | 'graceGain' | 'explosion' | 'hint' | 'timeGain' | 'healing' | 'fire' | 'ricochet' | 'boardGrowth' | 'coinGain' | 'xpGain';
+
+export interface CapIncreaseEffect {
+  type: CapIncreaseType;
+  amount: number;
+}
+
 export interface Weapon {
   id: string; // Unique identifier for stacking
-  name: WeaponName;
+  name: WeaponName | string; // Allow string for new weapon names
   rarity: WeaponRarity;
   level: number; // 1-4
   description: string; // Technical description with percentages
@@ -111,7 +119,8 @@ export interface Weapon {
   flavorText?: string; // Longer fun description for weapon guide
   price: number;
   effects: Partial<PlayerStats>;
-  specialEffect?: 'explosive' | 'autoHint' | 'enhancedHint' | 'boardGrowth' | 'fire' | 'graceGain' | 'healing' | 'hintGain' | 'xpGain' | 'coinGain' | 'timeGain' | 'laser' | 'ricochet' | 'echo' | 'chainReaction';
+  specialEffect?: 'explosive' | 'autoHint' | 'enhancedHint' | 'boardGrowth' | 'fire' | 'graceGain' | 'healing' | 'hintGain' | 'xpGain' | 'coinGain' | 'timeGain' | 'laser' | 'ricochet' | 'echo' | 'chainReaction' | 'capIncrease';
+  capIncrease?: CapIncreaseEffect; // When acquired, increases the cap for an effect type
   icon?: IconName; // Icon path like "delapouite/bamboo" - must be in ICON_REGISTRY
   maxCount?: number; // Maximum number of this weapon that can be owned (e.g., 1 for unique legendaries)
 }
