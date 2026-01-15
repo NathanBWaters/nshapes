@@ -12,8 +12,8 @@ import { Weapon, WeaponRarity, Player } from '@/types';
 
 describe('Weapon Definitions', () => {
   describe('WEAPONS array', () => {
-    it('should have exactly 67 weapons (18 types x 3 rarities + 2 legendary-only + 11 cap increasers)', () => {
-      expect(WEAPONS.length).toBe(67);
+    it('should have exactly 95 weapons (18 types x 3 rarities + 2 legendary-only + 11 cap increasers + 18 epic variants + 10 bridge legendaries)', () => {
+      expect(WEAPONS.length).toBe(95);
     });
 
     it('should have 18 common weapons', () => {
@@ -26,9 +26,14 @@ describe('Weapon Definitions', () => {
       expect(rares.length).toBe(29);
     });
 
-    it('should have 20 legendary weapons (18 base + Mystic Sight + Chain Reaction)', () => {
+    it('should have 18 epic weapons (epic variants)', () => {
+      const epics = WEAPONS.filter(w => w.rarity === 'epic');
+      expect(epics.length).toBe(18);
+    });
+
+    it('should have 30 legendary weapons (18 base + Mystic Sight + Chain Reaction + 10 bridge legendaries)', () => {
       const legendaries = WEAPONS.filter(w => w.rarity === 'legendary');
-      expect(legendaries.length).toBe(20);
+      expect(legendaries.length).toBe(30);
     });
 
     it('should have all required weapon types', () => {
@@ -98,22 +103,36 @@ describe('Weapon Definitions', () => {
       });
     });
 
-    it('legendary weapons should cost 15-30 coins', () => {
+    it('legendary weapons should cost 15-50 coins', () => {
       const legendaries = WEAPONS.filter(w => w.rarity === 'legendary');
       legendaries.forEach(weapon => {
         expect(weapon.price).toBeGreaterThanOrEqual(15);
-        expect(weapon.price).toBeLessThanOrEqual(30);
+        expect(weapon.price).toBeLessThanOrEqual(50);
       });
     });
 
-    it('most weapon types should have 3 rarities, some are legendary-only or rare-only', () => {
+    it('most weapon types should have 3 rarities, some are legendary-only, rare-only, or epic-only', () => {
       const weaponsByName = new Map<string, Weapon[]>();
-      const legendaryOnlyWeapons = ['Mystic Sight', 'Chain Reaction'];
+      const legendaryOnlyWeapons = [
+        'Mystic Sight', 'Chain Reaction',
+        // Bridge weapons (cross-system triggers)
+        'Phoenix Feather', 'Chaos Conduit', 'Temporal Rift', 'Soul Harvest',
+        'Cascade Core', "Fortune's Blessing", 'Wisdom Chain', 'Grace Conduit',
+        'Hint Catalyst', 'Life Link'
+      ];
       // Cap increaser weapons are rare-only (one per effect type)
       const rareOnlyWeapons = [
         'Echo Mastery', 'Laser Mastery', 'Grace Mastery', 'Explosion Mastery',
         'Hint Mastery', 'Time Mastery', 'Healing Mastery', 'Fire Mastery',
         'Ricochet Mastery', 'Growth Mastery', 'Coin Mastery'
+      ];
+      // Epic weapon variants are epic-only
+      const epicOnlyWeapons = [
+        'Inferno Charge', 'Ember Heart', 'Lucky Charm', 'Restoration Aura',
+        'Golden Touch', 'Spectrum Annihilator', 'Resonance Crystal',
+        'Terra Foundation', "Fortune's Shield", 'Clairvoyant Sphere',
+        'Arcane Codex', 'Temporal Core', 'Vital Core', "Prophet's Vision",
+        'Life Bloom', 'Enlightened Eye', 'Hourglass of Ages', 'Entropy Engine'
       ];
 
       WEAPONS.forEach(weapon => {
@@ -131,6 +150,10 @@ describe('Weapon Definitions', () => {
           // Rare-only weapons (cap increasers) should have exactly 1 rarity
           expect(weapons.length).toBe(1);
           expect(weapons[0].rarity).toBe('rare');
+        } else if (epicOnlyWeapons.includes(name)) {
+          // Epic-only weapons should have exactly 1 rarity
+          expect(weapons.length).toBe(1);
+          expect(weapons[0].rarity).toBe('epic');
         } else {
           // Normal weapons should have all 3 rarities
           expect(weapons.length).toBe(3);
@@ -218,12 +241,26 @@ describe('Weapon Definitions', () => {
 
     it('legendary weapons should have higher effect values than common (for weapons with all rarities)', () => {
       const weaponsByName = new Map<string, Map<WeaponRarity, Weapon>>();
-      const legendaryOnlyWeapons = ['Mystic Sight', 'Chain Reaction'];
+      const legendaryOnlyWeapons = [
+        'Mystic Sight', 'Chain Reaction',
+        // Bridge weapons (cross-system triggers)
+        'Phoenix Feather', 'Chaos Conduit', 'Temporal Rift', 'Soul Harvest',
+        'Cascade Core', "Fortune's Blessing", 'Wisdom Chain', 'Grace Conduit',
+        'Hint Catalyst', 'Life Link'
+      ];
       // Cap increaser weapons are rare-only (one per effect type)
       const rareOnlyWeapons = [
         'Echo Mastery', 'Laser Mastery', 'Grace Mastery', 'Explosion Mastery',
         'Hint Mastery', 'Time Mastery', 'Healing Mastery', 'Fire Mastery',
         'Ricochet Mastery', 'Growth Mastery', 'Coin Mastery'
+      ];
+      // Epic weapon variants are epic-only
+      const epicOnlyWeapons = [
+        'Inferno Charge', 'Ember Heart', 'Lucky Charm', 'Restoration Aura',
+        'Golden Touch', 'Spectrum Annihilator', 'Resonance Crystal',
+        'Terra Foundation', "Fortune's Shield", 'Clairvoyant Sphere',
+        'Arcane Codex', 'Temporal Core', 'Vital Core', "Prophet's Vision",
+        'Life Bloom', 'Enlightened Eye', 'Hourglass of Ages', 'Entropy Engine'
       ];
 
       WEAPONS.forEach(weapon => {
@@ -234,9 +271,10 @@ describe('Weapon Definitions', () => {
       });
 
       weaponsByName.forEach((rarityMap, name) => {
-        // Skip legendary-only weapons and rare-only weapons (cap increasers)
+        // Skip legendary-only, rare-only (cap increasers), and epic-only weapons
         if (legendaryOnlyWeapons.includes(name)) return;
         if (rareOnlyWeapons.includes(name)) return;
+        if (epicOnlyWeapons.includes(name)) return;
 
         const common = rarityMap.get('common')!;
         const legendary = rarityMap.get('legendary')!;

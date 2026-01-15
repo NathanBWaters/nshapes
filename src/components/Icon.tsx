@@ -134,6 +134,26 @@ import ChainedArrowHeads from '../../assets/icons/lorc/chained-arrow-heads.svg';
 import EchoRipples from '../../assets/icons/lorc/echo-ripples.svg';
 import LightningBranches from '../../assets/icons/lorc/lightning-branches.svg';
 
+// Bridge weapon icons
+import LightningHelix from '../../assets/icons/lorc/lightning-helix.svg';
+import TimeTrap from '../../assets/icons/lorc/time-trap.svg';
+import DeathNote from '../../assets/icons/lorc/death-note.svg';
+import FireRing from '../../assets/icons/lorc/fire-ring.svg';
+import Bookmarklet from '../../assets/icons/lorc/bookmarklet.svg';
+import AngelOutfit from '../../assets/icons/lorc/angel-outfit.svg';
+import CrystalWand from '../../assets/icons/lorc/crystal-wand.svg';
+import BrokenHeart from '../../assets/icons/lorc/broken-heart.svg';
+
+// Epic weapon icons
+import Fireball from '../../assets/icons/lorc/fireball.svg';
+import HeartBottle from '../../assets/icons/lorc/heart-bottle.svg';
+import CoinsPile from '../../assets/icons/delapouite/coins-pile.svg';
+import LaserBlast from '../../assets/icons/lorc/laser-blast.svg';
+import StoneBlock from '../../assets/icons/lorc/stone-block.svg';
+import CrystalBall from '../../assets/icons/lorc/crystal-ball.svg';
+import Flowers from '../../assets/icons/lorc/flowers.svg';
+import CrackedBallDunk from '../../assets/icons/lorc/cracked-ball-dunk.svg';
+
 // UI Icons
 import Padlock from '../../assets/icons/lorc/padlock.svg';
 import GearHammer from '../../assets/icons/lorc/gear-hammer.svg';
@@ -272,6 +292,26 @@ const ICON_REGISTRY = {
   'lorc/chained-arrow-heads': ChainedArrowHeads,
   'lorc/echo-ripples': EchoRipples,
   'lorc/lightning-branches': LightningBranches,
+
+  // Bridge weapon icons
+  'lorc/lightning-helix': LightningHelix,
+  'lorc/time-trap': TimeTrap,
+  'lorc/death-note': DeathNote,
+  'lorc/fire-ring': FireRing,
+  'lorc/bookmarklet': Bookmarklet,
+  'lorc/angel-outfit': AngelOutfit,
+  'lorc/crystal-wand': CrystalWand,
+  'lorc/broken-heart': BrokenHeart,
+
+  // Epic weapon icons
+  'lorc/fireball': Fireball,
+  'lorc/heart-bottle': HeartBottle,
+  'delapouite/coins-pile': CoinsPile,
+  'lorc/laser-blast': LaserBlast,
+  'lorc/stone-block': StoneBlock,
+  'lorc/crystal-ball': CrystalBall,
+  'lorc/flowers': Flowers,
+  'lorc/cracked-ball-dunk': CrackedBallDunk,
 
   // UI Icons
   'lorc/padlock': Padlock,

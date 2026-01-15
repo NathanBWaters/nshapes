@@ -109,6 +109,38 @@ export interface CapIncreaseEffect {
   amount: number;
 }
 
+// Bridge effect trigger types - when X happens, there's a chance to trigger Y
+export type BridgeTriggerType =
+  | 'onHeal'           // When player heals
+  | 'onExplosion'      // When explosion destroys cards
+  | 'onTimeGain'       // When time is gained
+  | 'onDestruction'    // When any card is destroyed (fire, laser, explosion)
+  | 'onEcho'           // When echo triggers
+  | 'onCoinGain'       // When coins are gained
+  | 'onXPGain'         // When XP is gained
+  | 'onGraceUse'       // When grace prevents health loss
+  | 'onHintUse'        // When hint is used
+  | 'onHealthLoss';    // When player loses health
+
+// Bridge effect result types - what happens when triggered
+export type BridgeEffectType =
+  | 'makeHolographic'  // Make random card(s) holographic
+  | 'gainGrace'        // Gain grace
+  | 'triggerEcho'      // Trigger echo match
+  | 'heal'             // Heal HP
+  | 'fireCard'         // Set random card on fire
+  | 'gainHint'         // Gain hint
+  | 'gainCoin'         // Gain coins
+  | 'triggerLaser'     // Fire a laser
+  | 'explosion';       // Trigger explosion
+
+export interface BridgeEffect {
+  trigger: BridgeTriggerType;
+  chance: number;        // Percentage (0-100)
+  effect: BridgeEffectType;
+  amount?: number;       // Amount for effects that need it (heal, coins, etc.)
+}
+
 export interface Weapon {
   id: string; // Unique identifier for stacking
   name: WeaponName | string; // Allow string for new weapon names
@@ -119,8 +151,9 @@ export interface Weapon {
   flavorText?: string; // Longer fun description for weapon guide
   price: number;
   effects: Partial<PlayerStats>;
-  specialEffect?: 'explosive' | 'autoHint' | 'enhancedHint' | 'boardGrowth' | 'fire' | 'graceGain' | 'healing' | 'hintGain' | 'xpGain' | 'coinGain' | 'timeGain' | 'laser' | 'ricochet' | 'echo' | 'chainReaction' | 'capIncrease';
+  specialEffect?: 'explosive' | 'autoHint' | 'enhancedHint' | 'boardGrowth' | 'fire' | 'graceGain' | 'healing' | 'hintGain' | 'xpGain' | 'coinGain' | 'timeGain' | 'laser' | 'ricochet' | 'echo' | 'chainReaction' | 'capIncrease' | 'bridge';
   capIncrease?: CapIncreaseEffect; // When acquired, increases the cap for an effect type
+  bridgeEffect?: BridgeEffect; // Cross-system trigger: when X happens, Y% chance to cause Z
   icon?: IconName; // Icon path like "delapouite/bamboo" - must be in ICON_REGISTRY
   maxCount?: number; // Maximum number of this weapon that can be owned (e.g., 1 for unique legendaries)
 }

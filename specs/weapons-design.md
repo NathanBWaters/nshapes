@@ -16,9 +16,10 @@ This document details the complete weapon system, including all weapon types, ra
 
 | Rarity | Drop Rate | Typical Values | Price Range |
 |--------|-----------|----------------|-------------|
-| **Common** | 70% | 5-10% effects | 5-10 coins |
-| **Rare** | 25% | 15-30% effects | 10-20 coins |
-| **Legendary** | 5% | 35-70%+ effects | 15-30 coins |
+| **Common** | 60% | 5% effects | 5-10 coins |
+| **Rare** | 25% | 10% effects | 10-20 coins |
+| **Epic** | 12% | 20% + bonus | 20-35 coins |
+| **Legendary** | 3% | Cross-system bridges | 30-50 coins |
 
 ### Effect Stacking
 
@@ -389,7 +390,12 @@ All weapon effects stack additively:
 | 19 | Echo Stone | % to trigger | 3 | Additive |
 | 20 | Chain Reaction | % enhancement | 1 (L) | maxCount: 1 |
 
-**Total Weapons:** 18 types × 3 rarities + 2 legendary-only = 56 weapons
+**Total Weapons:** 95 weapons
+- 18 base types × 3 rarities = 54 weapons
+- 2 legendary-only (Mystic Sight, Chain Reaction)
+- 11 cap increaser rare weapons
+- 18 epic weapon variants
+- 10 legendary bridge weapons
 
 ---
 
@@ -482,20 +488,9 @@ BOARD = {
 
 ---
 
-## Weapon System Overhaul (Planned)
+## Effect Cap System
 
-### Rarity Restructure
-
-| Rarity | Base % | Notes |
-|--------|--------|-------|
-| **Common** | 5% | Basic effect |
-| **Rare** | 10% | Better effect |
-| **Epic** | 20% | Effect + bonus (see below) |
-| **Legendary** | Varies | Cross-system bridges (new tier) |
-
-### Cap System
-
-Effects are capped to prevent overpowered stacking. Players have:
+Effects are capped to prevent overpowered stacking. Players see both:
 - **Accumulated %**: Total from all purchased weapons
 - **Effective %**: Capped value actually applied
 
@@ -505,7 +500,7 @@ Effects are capped to prevent overpowered stacking. Players have:
 | Lasers | Prismatic Ray | 30% | +5% |
 | Grace gain | Fortune Token | 30% | +5% |
 | Explosions | Blast Powder | 40% | +10% |
-| Hints | Oracle Eye, Seeker Lens | 40% | +10% |
+| Hints | Seeker Lens | 40% | +10% |
 | Time gain | Time Drop | 40% | +10% |
 | Healing | Mending Charm | 50% | +10% |
 | Fire | Flint Spark | 50% | +10% |
@@ -514,29 +509,88 @@ Effects are capped to prevent overpowered stacking. Players have:
 | Coins | Fortune's Favor | 70% | +15% |
 | XP | Scholar's Tome | 100% | None needed |
 
-**Cap Increasers:** One per effect type, rare-priced. Increase is ~20% of base cap, rounded to 5%.
+---
 
-### Epic Item Design
+## Cap Increaser Weapons (11 Rare-Only)
 
-Epics are 20% base + something extra (75% should have added value). Mix of:
+One per effect type. Purchasing these permanently raises the cap.
 
-1. **Cap Bundle:** 20% effect + includes +5% cap increase
-2. **Cross-system Lite:** 20% effect + minor secondary trigger (e.g., 10% chance for bonus)
-3. **Multi-pack:** Combines 2-3 related effects in one item
+| Weapon Name | Effect | Cap Increase | Price |
+|-------------|--------|--------------|-------|
+| Echo Mastery | +Echo cap | +5% | 15 |
+| Laser Mastery | +Laser cap | +5% | 18 |
+| Grace Mastery | +Grace gain cap | +5% | 12 |
+| Explosion Mastery | +Explosion cap | +10% | 15 |
+| Hint Mastery | +Hint cap | +10% | 12 |
+| Time Mastery | +Time gain cap | +10% | 15 |
+| Healing Mastery | +Healing cap | +10% | 12 |
+| Fire Mastery | +Fire cap | +10% | 15 |
+| Ricochet Mastery | +Ricochet cap | +10% | 15 |
+| Growth Mastery | +Board growth cap | +10% | 12 |
+| Coin Mastery | +Coin gain cap | +15% | 18 |
 
-Each weapon type gets a unique, interesting Epic variant.
+---
 
-### Legendary Item Design (New Tier)
+## Epic Weapon Variants (18 Epic-Only)
 
-Cross-system bridge items that create cascading effect chains:
+Three design patterns:
 
-- **Trigger:** When X happens (explosion, heal, echo, etc.)
-- **Effect:** Y% chance of causing Z (from a different system)
-- **Limited:** maxCount 1-3 to prevent infinite loops
+### 1. Cap Bundle Pattern
+25% effect + includes cap increase for that effect.
 
-Example: "10% chance for explosions to grant a grace" (maxCount: 3)
+| Weapon | Effect | Cap Increase | Price |
+|--------|--------|--------------|-------|
+| Inferno Charge | 25% fire | +10% fire cap | 28 |
+| Ember Heart | 25% explosion | +10% explosion cap | 28 |
+| Lucky Charm | 25% grace gain | +5% grace cap | 24 |
+| Restoration Aura | 25% healing | +10% healing cap | 26 |
+| Golden Touch | 25% coin gain | +15% coin cap | 30 |
+| Spectrum Annihilator | 25% laser | +5% laser cap | 32 |
+| Resonance Crystal | 25% echo | +5% echo cap | 30 |
 
-These are powerful, rare items that tie systems together.
+### 2. Multi-pack Pattern
+Combines multiple related effects.
+
+| Weapon | Effects | Price |
+|--------|---------|-------|
+| Terra Foundation | +5 field size + 10% board growth | 28 |
+| Fortune's Shield | +5 graces + 10% grace gain | 26 |
+| Clairvoyant Sphere | +4 max hints + 10% hint gain | 24 |
+| Arcane Codex | 25% XP gain + 10% coin gain | 26 |
+| Temporal Core | +60s starting time + 10% time gain | 30 |
+| Vital Core | +5 max HP + 10% healing | 28 |
+
+### 3. Cross-system Lite Pattern
+Main effect + secondary from different system.
+
+| Weapon | Main Effect | Secondary Effect | Price |
+|--------|-------------|------------------|-------|
+| Prophet's Vision | 25% auto-hint | 10% grace gain | 28 |
+| Life Bloom | 25% board growth | 10% healing | 26 |
+| Enlightened Eye | 25% hint gain | 5% XP gain | 24 |
+| Hourglass of Ages | 25% time gain | 5% echo | 28 |
+| Entropy Engine | 25% ricochet | 10% explosion | 32 |
+
+---
+
+## Legendary Bridge Weapons (10 Legendary-Only)
+
+Cross-system triggers that create cascading effect chains.
+
+| Weapon | Trigger | Effect | Chance | maxCount | Price |
+|--------|---------|--------|--------|----------|-------|
+| Phoenix Feather | On heal | 1 card holographic | 15% | 2 | 35 |
+| Chaos Conduit | On explosion | +1 grace | 10% | 3 | 40 |
+| Temporal Rift | On time gain | Trigger echo | 20% | 2 | 45 |
+| Soul Harvest | On destruction | Heal 1 HP | 5% | 3 | 35 |
+| Cascade Core | On echo | Fire 1 card | 15% | 2 | 40 |
+| Fortune's Blessing | On coin gain | +1 hint | 10% | 3 | 35 |
+| Wisdom Chain | On XP gain | +1 coin | 15% | 3 | 30 |
+| Grace Conduit | On grace use | Fire laser | 25% | 2 | 45 |
+| Hint Catalyst | On hint use | 3 cards holographic | 20% | 2 | 40 |
+| Life Link | On health loss | Trigger explosion | 30% | 2 | 50 |
+
+**Cascade Prevention:** Bridge effects don't trigger other bridge effects (prevents infinite loops).
 
 ---
 

@@ -1009,8 +1009,8 @@ describe('Multi-Laser Independent Rolls', () => {
       w => w.specialEffect === 'laser' && w.effects.laserChance
     );
 
-    // There should be 3 laser weapons (common, rare, legendary)
-    expect(allLaserWeapons.length).toBe(3);
+    // There should be 4 laser weapons (common, rare, epic, legendary)
+    expect(allLaserWeapons.length).toBe(4);
 
     // Verify each has the correct structure
     allLaserWeapons.forEach(weapon => {

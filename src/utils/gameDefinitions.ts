@@ -1,4 +1,4 @@
-import { Character, Enemy, Item, Weapon, PlayerStats, GameState, Player, WeaponRarity, WeaponName, EffectCaps } from '../types';
+import { Character, Enemy, Item, Weapon, PlayerStats, GameState, Player, WeaponRarity, WeaponName, EffectCaps, BridgeTriggerType, BridgeEffectType } from '../types';
 import { STARTING_STATS, WEAPON_SYSTEM, getRarityChancesForRound, EFFECT_CAPS } from './gameConfig';
 
 // Default effect caps - initialized from EFFECT_CAPS configuration
@@ -1322,6 +1322,433 @@ export const WEAPONS: Weapon[] = [
     effects: {},
     capIncrease: { type: 'coinGain', amount: 15 },
   },
+
+  // ============================================================================
+  // EPIC WEAPON VARIANTS - Unique epic versions with bundled effects
+  // Pattern: 25% effect OR cap bundle OR multi-pack OR cross-system lite
+  // ============================================================================
+
+  // Cap Bundle pattern: 25% effect + cap increase
+  {
+    id: 'inferno-charge',
+    name: 'Inferno Charge',
+    rarity: 'epic',
+    level: 1,
+    price: 28,
+    description: '25% explosion chance + raises explosion cap by 10%.',
+    shortDescription: 'High explosions with cap boost',
+    flavorText: 'A volatile charge that pushes the limits of destruction.',
+    icon: 'lorc/bright-explosion',
+    specialEffect: 'explosive',
+    effects: { explosionChance: 25 },
+    capIncrease: { type: 'explosion', amount: 10 },
+  },
+  {
+    id: 'ember-heart',
+    name: 'Ember Heart',
+    rarity: 'epic',
+    level: 1,
+    price: 28,
+    description: '25% fire spread chance + raises fire cap by 10%.',
+    shortDescription: 'Strong fire with cap boost',
+    flavorText: 'A core of eternal flame that burns ever brighter.',
+    icon: 'lorc/fireball',
+    specialEffect: 'fire',
+    effects: { fireSpreadChance: 25 },
+    capIncrease: { type: 'fire', amount: 10 },
+  },
+  {
+    id: 'lucky-charm',
+    name: 'Lucky Charm',
+    rarity: 'epic',
+    level: 1,
+    price: 24,
+    description: '25% grace gain chance + raises grace cap by 5%.',
+    shortDescription: 'High grace gain with cap boost',
+    flavorText: 'Fortune smiles upon those who carry this charm.',
+    icon: 'lorc/clover',
+    specialEffect: 'graceGain',
+    effects: { graceGainChance: 25 },
+    capIncrease: { type: 'graceGain', amount: 5 },
+  },
+  {
+    id: 'restoration-aura',
+    name: 'Restoration Aura',
+    rarity: 'epic',
+    level: 1,
+    price: 26,
+    description: '25% healing chance + raises healing cap by 10%.',
+    shortDescription: 'Strong healing with cap boost',
+    flavorText: 'An aura of pure healing energy radiates outward.',
+    icon: 'lorc/heart-bottle',
+    specialEffect: 'healing',
+    effects: { healingChance: 25 },
+    capIncrease: { type: 'healing', amount: 10 },
+  },
+  {
+    id: 'golden-touch',
+    name: 'Golden Touch',
+    rarity: 'epic',
+    level: 1,
+    price: 30,
+    description: '25% coin gain chance + raises coin cap by 15%.',
+    shortDescription: 'High coins with cap boost',
+    flavorText: 'Everything this power touches turns to gold.',
+    icon: 'delapouite/coins-pile',
+    specialEffect: 'coinGain',
+    effects: { coinGainChance: 25 },
+    capIncrease: { type: 'coinGain', amount: 15 },
+  },
+  {
+    id: 'spectrum-annihilator',
+    name: 'Spectrum Annihilator',
+    rarity: 'epic',
+    level: 1,
+    price: 32,
+    description: '25% laser chance + raises laser cap by 5%.',
+    shortDescription: 'Powerful laser with cap boost',
+    flavorText: 'A prism of destruction that channels all wavelengths.',
+    icon: 'lorc/laser-blast',
+    specialEffect: 'laser',
+    effects: { laserChance: 25 },
+    capIncrease: { type: 'laser', amount: 5 },
+  },
+  {
+    id: 'resonance-crystal',
+    name: 'Resonance Crystal',
+    rarity: 'epic',
+    level: 1,
+    price: 30,
+    description: '25% echo chance + raises echo cap by 5%.',
+    shortDescription: 'Strong echo with cap boost',
+    flavorText: 'A crystal that amplifies the resonance of matching.',
+    icon: 'lorc/echo-ripples',
+    specialEffect: 'echo',
+    effects: { echoChance: 25 },
+    capIncrease: { type: 'echo', amount: 5 },
+  },
+
+  // Multi-pack pattern: Combines multiple related effects
+  {
+    id: 'terra-foundation',
+    name: 'Terra Foundation',
+    rarity: 'epic',
+    level: 1,
+    price: 28,
+    description: '+5 field size + 10% board growth chance.',
+    shortDescription: 'Bigger board with growth',
+    flavorText: 'The earth itself expands to accommodate more cards.',
+    icon: 'lorc/stone-block',
+    specialEffect: 'boardGrowth',
+    effects: { fieldSize: 5, boardGrowthChance: 10 },
+  },
+  {
+    id: 'fortunes-shield',
+    name: "Fortune's Shield",
+    rarity: 'epic',
+    level: 1,
+    price: 26,
+    description: '+5 graces + 10% grace gain chance.',
+    shortDescription: 'More graces with gain chance',
+    flavorText: 'A shield blessed by fortune itself.',
+    icon: 'lorc/clover',
+    specialEffect: 'graceGain',
+    effects: { graces: 5, graceGainChance: 10 },
+  },
+  {
+    id: 'clairvoyant-sphere',
+    name: 'Clairvoyant Sphere',
+    rarity: 'epic',
+    level: 1,
+    price: 24,
+    description: '+4 max hints + 10% hint gain chance.',
+    shortDescription: 'More hints with gain chance',
+    flavorText: 'See beyond the veil to find more sets.',
+    icon: 'lorc/crystal-ball',
+    specialEffect: 'hintGain',
+    effects: { maxHints: 4, hintGainChance: 10 },
+  },
+  {
+    id: 'arcane-codex',
+    name: 'Arcane Codex',
+    rarity: 'epic',
+    level: 1,
+    price: 26,
+    description: '25% XP gain chance + 10% coin gain chance.',
+    shortDescription: 'XP and coin gains',
+    flavorText: 'Ancient wisdom that rewards knowledge with wealth.',
+    icon: 'lorc/open-book',
+    specialEffect: 'xpGain',
+    effects: { xpGainChance: 25, coinGainChance: 10 },
+  },
+  {
+    id: 'temporal-core',
+    name: 'Temporal Core',
+    rarity: 'epic',
+    level: 1,
+    price: 30,
+    description: '+60s starting time + 10% time gain chance.',
+    shortDescription: 'More time with gain chance',
+    flavorText: 'A core of frozen time that slowly releases its power.',
+    icon: 'lorc/hourglass',
+    specialEffect: 'timeGain',
+    effects: { startingTime: 60, timeGainChance: 10 },
+  },
+  {
+    id: 'vital-core',
+    name: 'Vital Core',
+    rarity: 'epic',
+    level: 1,
+    price: 28,
+    description: '+5 max HP + 10% healing chance.',
+    shortDescription: 'More health with healing',
+    flavorText: 'A living core that sustains and heals.',
+    icon: 'lorc/heart-bottle',
+    specialEffect: 'healing',
+    effects: { maxHealth: 5, healingChance: 10 },
+  },
+
+  // Cross-system Lite pattern: Main effect + secondary from different system
+  // Note: These are simplified versions - full cross-system triggers are in Section 5
+  {
+    id: 'prophets-vision',
+    name: "Prophet's Vision",
+    rarity: 'epic',
+    level: 1,
+    price: 28,
+    description: '25% auto-hint chance + 10% grace gain on match.',
+    shortDescription: 'Auto-hints with grace gains',
+    flavorText: 'See the future and be blessed for your foresight.',
+    icon: 'lorc/third-eye',
+    specialEffect: 'autoHint',
+    effects: { autoHintChance: 25, graceGainChance: 10 },
+  },
+  {
+    id: 'life-bloom',
+    name: 'Life Bloom',
+    rarity: 'epic',
+    level: 1,
+    price: 26,
+    description: '25% board growth chance + 10% healing chance.',
+    shortDescription: 'Growth with healing',
+    flavorText: 'Where growth flourishes, life follows.',
+    icon: 'lorc/flowers',
+    specialEffect: 'boardGrowth',
+    effects: { boardGrowthChance: 25, healingChance: 10 },
+  },
+  {
+    id: 'enlightened-eye',
+    name: 'Enlightened Eye',
+    rarity: 'epic',
+    level: 1,
+    price: 24,
+    description: '25% hint gain chance + 5% XP gain chance.',
+    shortDescription: 'Hints with XP',
+    flavorText: 'Knowledge begets wisdom, and wisdom begets experience.',
+    icon: 'lorc/third-eye',
+    specialEffect: 'hintGain',
+    effects: { hintGainChance: 25, xpGainChance: 5 },
+  },
+  {
+    id: 'hourglass-of-ages',
+    name: 'Hourglass of Ages',
+    rarity: 'epic',
+    level: 1,
+    price: 28,
+    description: '25% time gain chance + 5% echo chance.',
+    shortDescription: 'Time with echo',
+    flavorText: 'Time flows, and in its wake, patterns repeat.',
+    icon: 'lorc/hourglass',
+    specialEffect: 'timeGain',
+    effects: { timeGainChance: 25, echoChance: 5 },
+  },
+  {
+    id: 'entropy-engine',
+    name: 'Entropy Engine',
+    rarity: 'epic',
+    level: 1,
+    price: 32,
+    description: '25% ricochet chance + 10% explosion chance.',
+    shortDescription: 'Ricochet with explosions',
+    flavorText: 'Chaos begets chaos, destruction begets destruction.',
+    icon: 'lorc/cracked-ball-dunk',
+    specialEffect: 'ricochet',
+    effects: { ricochetChance: 25, explosionChance: 10 },
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // LEGENDARY BRIDGE WEAPONS - Cross-system triggers (10 weapons)
+  // ═══════════════════════════════════════════════════════════════
+
+  // Phoenix Feather: On heal → holographic
+  {
+    id: 'phoenix-feather',
+    name: 'Phoenix Feather',
+    rarity: 'legendary',
+    level: 1,
+    price: 35,
+    description: 'On heal: 15% chance to make a random card holographic.',
+    shortDescription: 'Heal makes holographic',
+    flavorText: 'From the ashes of pain, golden glory rises.',
+    icon: 'lorc/feather',
+    specialEffect: 'bridge',
+    effects: {},
+    bridgeEffect: { trigger: 'onHeal', chance: 15, effect: 'makeHolographic', amount: 1 },
+    maxCount: 2,
+  },
+
+  // Chaos Conduit: On explosion → grace
+  {
+    id: 'chaos-conduit',
+    name: 'Chaos Conduit',
+    rarity: 'legendary',
+    level: 1,
+    price: 40,
+    description: 'On explosion: 10% chance to gain +1 grace.',
+    shortDescription: 'Explosions give grace',
+    flavorText: 'Channel the destruction into divine protection.',
+    icon: 'lorc/lightning-helix',
+    specialEffect: 'bridge',
+    effects: {},
+    bridgeEffect: { trigger: 'onExplosion', chance: 10, effect: 'gainGrace', amount: 1 },
+    maxCount: 3,
+  },
+
+  // Temporal Rift: On time gain → echo
+  {
+    id: 'temporal-rift',
+    name: 'Temporal Rift',
+    rarity: 'legendary',
+    level: 1,
+    price: 45,
+    description: 'On time gain: 20% chance to trigger echo.',
+    shortDescription: 'Time gain triggers echo',
+    flavorText: 'Bend time, and the echoes of the past return.',
+    icon: 'lorc/time-trap',
+    specialEffect: 'bridge',
+    effects: {},
+    bridgeEffect: { trigger: 'onTimeGain', chance: 20, effect: 'triggerEcho' },
+    maxCount: 2,
+  },
+
+  // Soul Harvest: On destruction → heal
+  {
+    id: 'soul-harvest',
+    name: 'Soul Harvest',
+    rarity: 'legendary',
+    level: 1,
+    price: 35,
+    description: 'On card destruction: 5% chance to heal 1 HP.',
+    shortDescription: 'Destruction heals you',
+    flavorText: 'Every falling card feeds your life force.',
+    icon: 'lorc/death-note',
+    specialEffect: 'bridge',
+    effects: {},
+    bridgeEffect: { trigger: 'onDestruction', chance: 5, effect: 'heal', amount: 1 },
+    maxCount: 3,
+  },
+
+  // Cascade Core: On echo → fire
+  {
+    id: 'cascade-core',
+    name: 'Cascade Core',
+    rarity: 'legendary',
+    level: 1,
+    price: 40,
+    description: 'On echo: 15% chance to set a random card on fire.',
+    shortDescription: 'Echoes ignite cards',
+    flavorText: 'The ripples of resonance carry flames.',
+    icon: 'lorc/fire-ring',
+    specialEffect: 'bridge',
+    effects: {},
+    bridgeEffect: { trigger: 'onEcho', chance: 15, effect: 'fireCard', amount: 1 },
+    maxCount: 2,
+  },
+
+  // Fortune's Blessing: On coin gain → hint
+  {
+    id: 'fortunes-blessing',
+    name: "Fortune's Blessing",
+    rarity: 'legendary',
+    level: 1,
+    price: 35,
+    description: 'On coin gain: 10% chance to gain +1 hint.',
+    shortDescription: 'Coins reveal hints',
+    flavorText: 'Wealth brings wisdom to those who seek it.',
+    icon: 'lorc/crown-coin',
+    specialEffect: 'bridge',
+    effects: {},
+    bridgeEffect: { trigger: 'onCoinGain', chance: 10, effect: 'gainHint', amount: 1 },
+    maxCount: 3,
+  },
+
+  // Wisdom Chain: On XP gain → coin
+  {
+    id: 'wisdom-chain',
+    name: 'Wisdom Chain',
+    rarity: 'legendary',
+    level: 1,
+    price: 30,
+    description: 'On XP gain: 15% chance to gain +1 coin.',
+    shortDescription: 'XP yields coins',
+    flavorText: 'Knowledge has always been worth its weight in gold.',
+    icon: 'lorc/bookmarklet',
+    specialEffect: 'bridge',
+    effects: {},
+    bridgeEffect: { trigger: 'onXPGain', chance: 15, effect: 'gainCoin', amount: 1 },
+    maxCount: 3,
+  },
+
+  // Grace Conduit: On grace use → laser
+  {
+    id: 'grace-conduit',
+    name: 'Grace Conduit',
+    rarity: 'legendary',
+    level: 1,
+    price: 45,
+    description: 'On grace use: 25% chance to fire a laser.',
+    shortDescription: 'Grace fires laser',
+    flavorText: 'Divine mercy becomes divine wrath.',
+    icon: 'lorc/angel-outfit',
+    specialEffect: 'bridge',
+    effects: {},
+    bridgeEffect: { trigger: 'onGraceUse', chance: 25, effect: 'triggerLaser' },
+    maxCount: 2,
+  },
+
+  // Hint Catalyst: On hint use → holographic
+  {
+    id: 'hint-catalyst',
+    name: 'Hint Catalyst',
+    rarity: 'legendary',
+    level: 1,
+    price: 40,
+    description: 'On hint use: 20% chance to make 3 random cards holographic.',
+    shortDescription: 'Hints make holographic',
+    flavorText: 'Seek and you shall find... treasure.',
+    icon: 'lorc/crystal-wand',
+    specialEffect: 'bridge',
+    effects: {},
+    bridgeEffect: { trigger: 'onHintUse', chance: 20, effect: 'makeHolographic', amount: 3 },
+    maxCount: 2,
+  },
+
+  // Life Link: On health loss → explosion
+  {
+    id: 'life-link',
+    name: 'Life Link',
+    rarity: 'legendary',
+    level: 1,
+    price: 50,
+    description: 'On health loss: 30% chance to trigger explosion.',
+    shortDescription: 'Damage causes explosion',
+    flavorText: 'Pain shared is pain doubled for your enemies.',
+    icon: 'lorc/broken-heart',
+    specialEffect: 'bridge',
+    effects: {},
+    bridgeEffect: { trigger: 'onHealthLoss', chance: 30, effect: 'explosion' },
+    maxCount: 2,
+  },
 ];
 
 // Count how many of a specific weapon (by name) the player owns
@@ -1607,3 +2034,74 @@ export const calculatePlayerTotalStats = (player: Player): PlayerStats => {
 
   return totalStats;
 }; 
+
+// ═══════════════════════════════════════════════════════════════
+// BRIDGE EFFECT SYSTEM - Cross-system triggers for legendary weapons
+// ═══════════════════════════════════════════════════════════════
+
+// Result of resolving bridge effects for a trigger event
+export interface BridgeEffectResult {
+  effect: BridgeEffectType;
+  amount?: number;
+  weaponName: string;
+}
+
+/**
+ * Get all bridge weapons from a player's arsenal that match a trigger type
+ */
+export const getBridgeWeaponsForTrigger = (
+  trigger: BridgeTriggerType,
+  playerWeapons: Weapon[]
+): Weapon[] => {
+  return playerWeapons.filter(
+    w => w.specialEffect === 'bridge' && w.bridgeEffect?.trigger === trigger
+  );
+};
+
+/**
+ * Roll bridge effects for a trigger event
+ * Returns array of effects that triggered successfully
+ * 
+ * @param trigger - The type of event that occurred
+ * @param playerWeapons - Player's current weapons
+ * @param isCascade - If true, we're already in a bridge resolution (prevents infinite loops)
+ * @returns Array of bridge effects that should be applied
+ */
+export const rollBridgeEffects = (
+  trigger: BridgeTriggerType,
+  playerWeapons: Weapon[],
+  isCascade: boolean = false
+): BridgeEffectResult[] => {
+  // Prevent cascade - bridge effects don't trigger other bridge effects
+  if (isCascade) {
+    return [];
+  }
+
+  const bridgeWeapons = getBridgeWeaponsForTrigger(trigger, playerWeapons);
+  const results: BridgeEffectResult[] = [];
+
+  bridgeWeapons.forEach(weapon => {
+    if (!weapon.bridgeEffect) return;
+
+    const roll = Math.random() * 100;
+    if (roll < weapon.bridgeEffect.chance) {
+      results.push({
+        effect: weapon.bridgeEffect.effect,
+        amount: weapon.bridgeEffect.amount,
+        weaponName: weapon.name,
+      });
+    }
+  });
+
+  return results;
+};
+
+/**
+ * Check if any bridge weapons exist for a trigger type
+ */
+export const hasBridgeWeaponsForTrigger = (
+  trigger: BridgeTriggerType,
+  playerWeapons: Weapon[]
+): boolean => {
+  return getBridgeWeaponsForTrigger(trigger, playerWeapons).length > 0;
+};
