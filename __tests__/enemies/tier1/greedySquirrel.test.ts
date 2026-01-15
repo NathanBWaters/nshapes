@@ -79,7 +79,7 @@ describe('Greedy Squirrel', () => {
 
     it('has correct defeat condition text', () => {
       const enemy = createGreedySquirrel();
-      expect(enemy.defeatConditionText).toContain('8+ cards remaining');
+      expect(enemy.defeatConditionText).toContain('<8 cards remaining');
     });
   });
 
@@ -136,34 +136,34 @@ describe('Greedy Squirrel', () => {
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
 
-    it('returns false when score meets target but cards remaining is less than 8', () => {
+    it('returns true when score meets target and cards remaining is less than 8', () => {
       const enemy = createGreedySquirrel();
       const stats = createRoundStats({
         currentScore: 100,
         targetScore: 100,
         cardsRemaining: 7,
       });
-      expect(enemy.checkDefeatCondition(stats)).toBe(false);
+      expect(enemy.checkDefeatCondition(stats)).toBe(true);
     });
 
-    it('returns true when score meets target and cards remaining is exactly 8', () => {
+    it('returns false when score meets target but cards remaining is exactly 8', () => {
       const enemy = createGreedySquirrel();
       const stats = createRoundStats({
         currentScore: 100,
         targetScore: 100,
         cardsRemaining: 8,
       });
-      expect(enemy.checkDefeatCondition(stats)).toBe(true);
+      expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
 
-    it('returns true when score exceeds target and cards remaining exceeds 8', () => {
+    it('returns false when score exceeds target but cards remaining exceeds 8', () => {
       const enemy = createGreedySquirrel();
       const stats = createRoundStats({
         currentScore: 150,
         targetScore: 100,
         cardsRemaining: 12,
       });
-      expect(enemy.checkDefeatCondition(stats)).toBe(true);
+      expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
   });
 });

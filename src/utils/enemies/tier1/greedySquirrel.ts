@@ -2,7 +2,7 @@
  * Greedy Squirrel - Tier 1 Enemy
  *
  * Effect: Only 2 cards are replenished on match
- * Defeat Condition: Beat target score with 8+ cards remaining
+ * Defeat Condition: Beat target score with <8 cards remaining
  */
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
@@ -19,7 +19,7 @@ export function createGreedySquirrel(): EnemyInstance {
       icon: 'delapouite/squirrel',
       tier: 1,
       description: 'Only 2 cards are replenished on match',
-      defeatConditionText: 'Beat target score with 8+ cards remaining',
+      defeatConditionText: 'Beat target score with <8 cards remaining',
     },
     [
       {
@@ -27,9 +27,9 @@ export function createGreedySquirrel(): EnemyInstance {
         config: { count: 1, minBoardSize: 6 },
       },
     ],
-    // Defeat condition: Achieve minimum score with 8+ cards remaining
+    // Defeat condition: Achieve minimum score with <8 cards remaining (cleared most of board)
     (stats: RoundStats) => {
-      return stats.currentScore >= stats.targetScore && stats.cardsRemaining >= 8;
+      return stats.currentScore >= stats.targetScore && stats.cardsRemaining < 8;
     }
   );
 }
