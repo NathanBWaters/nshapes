@@ -152,6 +152,9 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
     const weapon = weapons[index];
     const canAfford = weapon && playerMoney >= weapon.price;
 
+    // Clear hover state to ensure display updates (fixes stuck hover on touch devices)
+    setHoveredIndex(null);
+
     // Check for double-tap on same weapon
     if (
       lastTappedIndex === index &&

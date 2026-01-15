@@ -412,6 +412,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
                 rarityColor={rarityColor}
                 onPress={(index) => {
                   playSound('click');
+                  setHoveredIndex(null); // Clear hover state to ensure display updates
                   setFocusedIndex(index);
                 }}
                 onHoverIn={setHoveredIndex}
@@ -425,6 +426,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
             <Pressable
               onPress={() => {
                 playSound('click');
+                setHoveredIndex(null); // Clear hover state to ensure display updates
                 setFocusedIndex(challengeBonusIndex);
               }}
               onHoverIn={() => setHoveredIndex(challengeBonusIndex)}
