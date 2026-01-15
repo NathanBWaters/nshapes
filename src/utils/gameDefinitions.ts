@@ -1,5 +1,21 @@
-import { Character, Enemy, Item, Weapon, PlayerStats, GameState, Player, WeaponRarity, WeaponName } from '../types';
-import { STARTING_STATS, WEAPON_SYSTEM, getRarityChancesForRound } from './gameConfig';
+import { Character, Enemy, Item, Weapon, PlayerStats, GameState, Player, WeaponRarity, WeaponName, EffectCaps } from '../types';
+import { STARTING_STATS, WEAPON_SYSTEM, getRarityChancesForRound, EFFECT_CAPS } from './gameConfig';
+
+// Default effect caps - initialized from EFFECT_CAPS configuration
+export const DEFAULT_EFFECT_CAPS: EffectCaps = {
+  echo: EFFECT_CAPS.echo.defaultCap,
+  laser: EFFECT_CAPS.laser.defaultCap,
+  graceGain: EFFECT_CAPS.graceGain.defaultCap,
+  explosion: EFFECT_CAPS.explosion.defaultCap,
+  hint: EFFECT_CAPS.hint.defaultCap,
+  timeGain: EFFECT_CAPS.timeGain.defaultCap,
+  healing: EFFECT_CAPS.healing.defaultCap,
+  fire: EFFECT_CAPS.fire.defaultCap,
+  ricochet: EFFECT_CAPS.ricochet.defaultCap,
+  boardGrowth: EFFECT_CAPS.boardGrowth.defaultCap,
+  coinGain: EFFECT_CAPS.coinGain.defaultCap,
+  xpGain: EFFECT_CAPS.xpGain.defaultCap,
+};
 
 // Default player stats - uses values from gameConfig for easy tweaking
 export const DEFAULT_PLAYER_STATS: PlayerStats = {
@@ -66,6 +82,9 @@ export const DEFAULT_PLAYER_STATS: PlayerStats = {
   enhancedHintChance: STARTING_STATS.enhancedHintChance,
   echoChance: STARTING_STATS.echoChance,
   chainReactionChance: STARTING_STATS.chainReactionChance,
+
+  // Effect caps - initialized with defaults, can be increased by Cap Increaser weapons
+  effectCaps: { ...DEFAULT_EFFECT_CAPS },
 };
 
 // Characters
@@ -1375,35 +1394,42 @@ export const initializePlayer = (id: string, username: string, characterName: st
 // Helper function to calculate total player stats with all effects from weapons and items
 export const calculatePlayerTotalStats = (player: Player): PlayerStats => {
   const totalStats = { ...player.stats };
-  
+
+  // Keys that should not be modified by weapon/item effects (non-numeric)
+  const nonNumericKeys = new Set(['effectCaps']);
+
   // Apply weapon effects
   player.weapons.forEach((weapon: Weapon) => {
     Object.entries(weapon.effects).forEach(([key, value]) => {
-      if (typeof value === 'number' && typeof totalStats[key as keyof PlayerStats] === 'number') {
-        const statKey = key as keyof PlayerStats;
-        totalStats[statKey] = (totalStats[statKey] as number) + value;
+      if (nonNumericKeys.has(key)) return;
+      const currentValue = totalStats[key as keyof PlayerStats];
+      if (typeof value === 'number' && typeof currentValue === 'number') {
+        // Use type assertion to allow dynamic property assignment
+        (totalStats as unknown as Record<string, number>)[key] = currentValue + value;
       }
     });
   });
-  
+
   // Apply item effects and drawbacks
   player.items.forEach((item: Item) => {
     // Apply effects
     Object.entries(item.effects).forEach(([key, value]) => {
-      if (typeof value === 'number' && typeof totalStats[key as keyof PlayerStats] === 'number') {
-        const statKey = key as keyof PlayerStats;
-        totalStats[statKey] = (totalStats[statKey] as number) + value;
+      if (nonNumericKeys.has(key)) return;
+      const currentValue = totalStats[key as keyof PlayerStats];
+      if (typeof value === 'number' && typeof currentValue === 'number') {
+        (totalStats as unknown as Record<string, number>)[key] = currentValue + value;
       }
     });
-    
+
     // Apply drawbacks
     Object.entries(item.drawbacks).forEach(([key, value]) => {
-      if (typeof value === 'number' && typeof totalStats[key as keyof PlayerStats] === 'number') {
-        const statKey = key as keyof PlayerStats;
-        totalStats[statKey] = (totalStats[statKey] as number) + value;
+      if (nonNumericKeys.has(key)) return;
+      const currentValue = totalStats[key as keyof PlayerStats];
+      if (typeof value === 'number' && typeof currentValue === 'number') {
+        (totalStats as unknown as Record<string, number>)[key] = currentValue + value;
       }
     });
   });
-  
+
   return totalStats;
 }; 

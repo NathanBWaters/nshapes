@@ -120,6 +120,51 @@ export const getRarityChancesForRound = (round: number): { common: number; rare:
 };
 
 // =============================================================================
+// EFFECT CAPS - Maximum effective percentages for weapon effects
+// =============================================================================
+
+/**
+ * Effect caps limit how much a stat can actually be used, even if accumulated higher.
+ * This encourages build diversity and prevents one-dimensional strategies.
+ * Players can increase caps by acquiring Cap Increaser weapons.
+ */
+export const EFFECT_CAPS = {
+  // Effect name -> { defaultCap, capIncrease }
+  echo: { defaultCap: 25, capIncrease: 5 },           // Echo Stone
+  laser: { defaultCap: 30, capIncrease: 5 },          // Prismatic Ray
+  graceGain: { defaultCap: 30, capIncrease: 5 },      // Fortune Token
+  explosion: { defaultCap: 40, capIncrease: 10 },     // Blast Powder
+  hint: { defaultCap: 40, capIncrease: 10 },          // Oracle Eye, Seeker Lens
+  timeGain: { defaultCap: 40, capIncrease: 10 },      // Time Drop
+  healing: { defaultCap: 50, capIncrease: 10 },       // Mending Charm
+  fire: { defaultCap: 50, capIncrease: 10 },          // Flint Spark
+  ricochet: { defaultCap: 60, capIncrease: 10 },      // Chaos Shard
+  boardGrowth: { defaultCap: 60, capIncrease: 10 },   // Growth Seed
+  coinGain: { defaultCap: 70, capIncrease: 15 },      // Fortune's Favor
+  xpGain: { defaultCap: 100, capIncrease: 0 },        // Scholar's Tome (no cap increase)
+} as const;
+
+// Type for effect cap keys
+export type EffectCapType = keyof typeof EFFECT_CAPS;
+
+/**
+ * Get the effective (capped) value for an accumulated stat
+ * @param accumulated The total accumulated value from all sources
+ * @param cap The maximum effective value
+ * @returns The effective value (min of accumulated and cap)
+ */
+export const getEffectiveStat = (accumulated: number, cap: number): number => {
+  return Math.min(accumulated, cap);
+};
+
+/**
+ * Check if a stat is at or over its cap
+ */
+export const isStatCapped = (accumulated: number, cap: number): boolean => {
+  return accumulated >= cap;
+};
+
+// =============================================================================
 // REWARDS (per matched card)
 // =============================================================================
 

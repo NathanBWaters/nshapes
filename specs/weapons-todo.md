@@ -61,7 +61,7 @@ You MUST commit the code once the unit tests and integration tests are passing b
 - [x] Run `npm test -- --testPathPattern="weapon"` - all weapon tests pass
 - [x] Run `npm run typecheck` - no new type errors (pre-existing icon issues only)
 - [x] Verify shop displays all 4 rarities correctly (ready when epic weapons added)
-- [ ] Commit with message: "feat(weapons): add epic rarity tier and rebalance percentages"
+- [x] Commit with message: "feat(weapons): add epic rarity tier"
 
 ---
 
@@ -91,10 +91,10 @@ You MUST commit the code once the unit tests and integration tests are passing b
 | XP gain | Scholar's Tome | 100% | N/A |
 
 **Tasks:**
-- [ ] Add `EFFECT_CAPS` constant in gameConfig.ts with all caps
-- [ ] Add `effectCaps` and `effectCapIncreases` to PlayerStats interface
-- [ ] Initialize default cap values in `STARTING_STATS`
-- [ ] Write tests for cap configuration values
+- [x] Add `EFFECT_CAPS` constant in gameConfig.ts with all caps
+- [x] Add `effectCaps` to PlayerStats interface (via optional EffectCaps type)
+- [x] Initialize default cap values in DEFAULT_EFFECT_CAPS and DEFAULT_PLAYER_STATS
+- [x] Write tests for cap configuration values (__tests__/effectCaps.test.ts)
 
 ### 2.2 Implement Cap Enforcement
 **Goal:** Apply caps when calculating effective percentages.

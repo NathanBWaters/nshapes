@@ -128,8 +128,9 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
   };
 
   // Format stat for display
-  const formatStat = (key: string, value: number | string) => {
-    if (typeof value !== 'number') return value;
+  const formatStat = (key: string, value: number | string | object) => {
+    // Skip non-numeric values (like effectCaps object)
+    if (typeof value !== 'number') return typeof value === 'string' ? value : '-';
 
     // For percentage stats, add % symbol
     if (key.toLowerCase().includes('percent')) {

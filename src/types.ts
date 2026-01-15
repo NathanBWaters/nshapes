@@ -209,6 +209,26 @@ export interface PlayerStats {
   enhancedHintChance: number;   // % chance for autohint to show 2 cards instead of 1
   echoChance: number;           // % chance to auto-match another set on player match
   chainReactionChance: number;  // % chance for echo to trigger twice (2 additional matches)
+
+  // Effect cap system - tracks player's current caps for each effect type
+  // Caps can be increased by acquiring Cap Increaser weapons
+  effectCaps?: EffectCaps;
+}
+
+// Interface for tracking effect cap increases per effect type
+export interface EffectCaps {
+  echo: number;           // Current cap for echo chance
+  laser: number;          // Current cap for laser chance
+  graceGain: number;      // Current cap for grace gain chance
+  explosion: number;      // Current cap for explosion chance
+  hint: number;           // Current cap for hint gain chance
+  timeGain: number;       // Current cap for time gain chance
+  healing: number;        // Current cap for healing chance
+  fire: number;           // Current cap for fire spread chance
+  ricochet: number;       // Current cap for ricochet chance
+  boardGrowth: number;    // Current cap for board growth chance
+  coinGain: number;       // Current cap for coin gain chance
+  xpGain: number;         // Current cap for XP gain chance
 }
 
 export interface Player {
