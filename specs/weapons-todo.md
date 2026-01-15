@@ -100,16 +100,18 @@ You MUST commit the code once the unit tests and integration tests are passing b
 **Goal:** Apply caps when calculating effective percentages.
 
 **Files:**
-- `src/utils/gameDefinitions.ts` - Cap calculation in weapon effect functions
-- `src/components/Game.tsx` - Apply caps during effect resolution
+- `src/utils/gameConfig.ts` - `getEffectiveStat()` helper
+- `src/utils/weaponEffects.ts` - `getCappedStat()` and cap enforcement in `processWeaponEffects()`
 
 **Tasks:**
-- [ ] Create `getEffectiveStat(accumulated: number, cap: number): number` helper
-- [ ] Update `applyWeaponEffects()` to use capped values
-- [ ] Track "accumulated" vs "effective" stats separately
-- [ ] Display both values in UI: "30% (capped at 25%)" when over cap
-- [ ] Write tests for cap enforcement at various accumulation levels
-- [ ] Write tests for over-cap scenarios (accumulated > cap)
+- [x] Create `getEffectiveStat(accumulated: number, cap: number): number` helper
+- [x] Create `getCappedStat()` helper in weaponEffects.ts
+- [x] Update `processWeaponEffects()` to calculate effective (capped) values for all effects
+- [x] Track "accumulated" vs "effective" stats (playerStats.echoChance vs effectiveEchoChance)
+- [x] Write tests for cap enforcement at various accumulation levels (effectCaps.test.ts)
+- [x] Write tests for over-cap scenarios (accumulated > cap)
+- [x] Update weapon effects tests to use UNCAPPED_EFFECT_CAPS for 100% chance testing
+- [ ] Display both values in UI: "30% (capped at 25%)" when over cap (deferred to 2.3)
 
 ### 2.3 UI: Show Accumulated vs Effective
 **Goal:** Players should see both their accumulated total and the effective (capped) value.

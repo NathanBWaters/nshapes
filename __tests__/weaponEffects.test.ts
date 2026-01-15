@@ -9,8 +9,24 @@ import {
   processWeaponEffects,
   findValidSet,
 } from '@/utils/weaponEffects';
-import { Card, PlayerStats, Weapon, AttributeName } from '@/types';
+import { Card, PlayerStats, Weapon, AttributeName, EffectCaps } from '@/types';
 import { DEFAULT_PLAYER_STATS, WEAPONS } from '@/utils/gameDefinitions';
+
+// Uncapped effect caps for testing - allows 100% for all effects
+const UNCAPPED_EFFECT_CAPS: EffectCaps = {
+  echo: 100,
+  laser: 100,
+  graceGain: 100,
+  explosion: 100,
+  hint: 100,
+  timeGain: 100,
+  healing: 100,
+  fire: 100,
+  ricochet: 100,
+  boardGrowth: 100,
+  coinGain: 100,
+  xpGain: 100,
+};
 
 // Helper to create a mock laser weapon
 const createLaserWeapon = (id: string, laserChance: number): Weapon => ({
@@ -577,7 +593,7 @@ describe('processWeaponEffects', () => {
   it('should process healing chance', () => {
     const board = createTestBoard();
     const matchedCards = [board[0], board[1], board[2]];
-    const stats: PlayerStats = { ...DEFAULT_PLAYER_STATS, healingChance: 100 };
+    const stats: PlayerStats = { ...DEFAULT_PLAYER_STATS, healingChance: 100, effectCaps: UNCAPPED_EFFECT_CAPS };
 
     const result = processWeaponEffects(board, matchedCards, stats);
     expect(result.bonusHealing).toBe(1);
@@ -587,7 +603,7 @@ describe('processWeaponEffects', () => {
   it('should process hint gain chance', () => {
     const board = createTestBoard();
     const matchedCards = [board[0], board[1], board[2]];
-    const stats: PlayerStats = { ...DEFAULT_PLAYER_STATS, hintGainChance: 100 };
+    const stats: PlayerStats = { ...DEFAULT_PLAYER_STATS, hintGainChance: 100, effectCaps: UNCAPPED_EFFECT_CAPS };
 
     const result = processWeaponEffects(board, matchedCards, stats);
     expect(result.bonusHints).toBe(1);
@@ -597,7 +613,7 @@ describe('processWeaponEffects', () => {
   it('should process time gain chance', () => {
     const board = createTestBoard();
     const matchedCards = [board[0], board[1], board[2]];
-    const stats: PlayerStats = { ...DEFAULT_PLAYER_STATS, timeGainChance: 100, timeGainAmount: 15 };
+    const stats: PlayerStats = { ...DEFAULT_PLAYER_STATS, timeGainChance: 100, timeGainAmount: 15, effectCaps: UNCAPPED_EFFECT_CAPS };
 
     const result = processWeaponEffects(board, matchedCards, stats);
     expect(result.bonusTime).toBe(15);
@@ -607,7 +623,7 @@ describe('processWeaponEffects', () => {
   it('should process grace gain chance', () => {
     const board = createTestBoard();
     const matchedCards = [board[0], board[1], board[2]];
-    const stats: PlayerStats = { ...DEFAULT_PLAYER_STATS, graceGainChance: 100 };
+    const stats: PlayerStats = { ...DEFAULT_PLAYER_STATS, graceGainChance: 100, effectCaps: UNCAPPED_EFFECT_CAPS };
 
     const result = processWeaponEffects(board, matchedCards, stats);
     expect(result.bonusGraces).toBe(1);
@@ -617,7 +633,7 @@ describe('processWeaponEffects', () => {
   it('should process board growth chance', () => {
     const board = createTestBoard();
     const matchedCards = [board[0], board[1], board[2]];
-    const stats: PlayerStats = { ...DEFAULT_PLAYER_STATS, boardGrowthChance: 100, boardGrowthAmount: 2 };
+    const stats: PlayerStats = { ...DEFAULT_PLAYER_STATS, boardGrowthChance: 100, boardGrowthAmount: 2, effectCaps: UNCAPPED_EFFECT_CAPS };
 
     const result = processWeaponEffects(board, matchedCards, stats);
     expect(result.boardGrowth).toBe(2);
@@ -649,7 +665,8 @@ describe('processWeaponEffects', () => {
     const stats: PlayerStats = {
       ...DEFAULT_PLAYER_STATS,
       ricochetChance: 100,
-      ricochetChainChance: 0
+      ricochetChainChance: 0,
+      effectCaps: UNCAPPED_EFFECT_CAPS,
     };
 
     const result = processWeaponEffects(board, matchedCards, stats);
@@ -668,7 +685,8 @@ describe('processWeaponEffects', () => {
     const stats: PlayerStats = {
       ...DEFAULT_PLAYER_STATS,
       ricochetChance: 100,
-      ricochetChainChance: 0
+      ricochetChainChance: 0,
+      effectCaps: UNCAPPED_EFFECT_CAPS,
     };
 
     const result = processWeaponEffects(board, matchedCards, stats);
@@ -682,7 +700,8 @@ describe('processWeaponEffects', () => {
     const stats: PlayerStats = {
       ...DEFAULT_PLAYER_STATS,
       ricochetChance: 100,
-      ricochetChainChance: 100
+      ricochetChainChance: 100,
+      effectCaps: UNCAPPED_EFFECT_CAPS,
     };
 
     // With 100% chain chance, will destroy all 11 available cards
@@ -765,7 +784,8 @@ describe('processWeaponEffects', () => {
     const stats: PlayerStats = {
       ...DEFAULT_PLAYER_STATS,
       ricochetChance: 100,
-      ricochetChainChance: 100
+      ricochetChainChance: 100,
+      effectCaps: UNCAPPED_EFFECT_CAPS,
     };
 
     // With 100% chain chance, will destroy all 11 available cards
@@ -914,7 +934,7 @@ describe('Multi-Laser Independent Rolls', () => {
   it('should fallback to single roll when no weapons array provided', () => {
     const board = createTestBoard();
     const matchedCards = [board[4]];
-    const stats: PlayerStats = { ...DEFAULT_PLAYER_STATS, laserChance: 100 };
+    const stats: PlayerStats = { ...DEFAULT_PLAYER_STATS, laserChance: 100, effectCaps: UNCAPPED_EFFECT_CAPS };
 
     // No weapons array - should use fallback
     const result = processWeaponEffects(board, matchedCards, stats);
@@ -1081,6 +1101,7 @@ describe('Echo Stone and Chain Reaction', () => {
       ...DEFAULT_PLAYER_STATS,
       echoChance: 100, // 100% echo chance
       explosionChance: 0, // No explosions for this test
+      effectCaps: UNCAPPED_EFFECT_CAPS,
     };
 
     const result = processWeaponEffects(board, matchedCards, stats, [], activeAttributes, false);
@@ -1104,6 +1125,7 @@ describe('Echo Stone and Chain Reaction', () => {
     const stats: PlayerStats = {
       ...DEFAULT_PLAYER_STATS,
       echoChance: 100,
+      effectCaps: UNCAPPED_EFFECT_CAPS,
     };
 
     // Call with isEchoMatch = true
@@ -1141,6 +1163,7 @@ describe('Echo Stone and Chain Reaction', () => {
       ...DEFAULT_PLAYER_STATS,
       echoChance: 100, // 100% echo chance
       chainReactionChance: 100, // 100% chain reaction chance
+      effectCaps: UNCAPPED_EFFECT_CAPS,
     };
 
     const result = processWeaponEffects(board, matchedCards, stats, [], activeAttributes, false);
@@ -1159,6 +1182,7 @@ describe('Echo Stone and Chain Reaction', () => {
       ...DEFAULT_PLAYER_STATS,
       echoChance: 100, // 100% echo chance
       explosionChance: 100, // 100% explosion chance
+      effectCaps: UNCAPPED_EFFECT_CAPS,
     };
 
     const result = processWeaponEffects(board, matchedCards, stats, [], activeAttributes, false);
@@ -1190,6 +1214,7 @@ describe('Echo Stone and Chain Reaction', () => {
       ...DEFAULT_PLAYER_STATS,
       echoChance: 100,
       explosionChance: 100,
+      effectCaps: UNCAPPED_EFFECT_CAPS,
     };
 
     const result = processWeaponEffects(board, matchedCards, stats, [], activeAttributes, false);
@@ -1222,6 +1247,7 @@ describe('Echo Stone and Chain Reaction', () => {
       ...DEFAULT_PLAYER_STATS,
       echoChance: 100,
       explosionChance: 100,
+      effectCaps: UNCAPPED_EFFECT_CAPS,
     };
 
     // Process original match
@@ -1282,6 +1308,7 @@ describe('Echo Stone and Chain Reaction', () => {
     const stats: PlayerStats = {
       ...DEFAULT_PLAYER_STATS,
       echoChance: 0, // No echo
+      effectCaps: UNCAPPED_EFFECT_CAPS,
     };
 
     const result = processWeaponEffects(board, matchedCards, stats, [], activeAttributes, false);
@@ -1309,6 +1336,7 @@ describe('Echo Stone and Chain Reaction', () => {
     const stats: PlayerStats = {
       ...DEFAULT_PLAYER_STATS,
       echoChance: 100,
+      effectCaps: UNCAPPED_EFFECT_CAPS,
     };
 
     const result = processWeaponEffects(board, matchedCards, stats, [], activeAttributes, false);

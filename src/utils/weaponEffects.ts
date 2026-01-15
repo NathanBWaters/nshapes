@@ -1,8 +1,24 @@
-import { Card, PlayerStats, Weapon, AttributeName } from '../types';
+import { Card, PlayerStats, Weapon, AttributeName, EffectCaps } from '../types';
 import { isValidCombination } from './gameUtils';
+import { EFFECT_CAPS, getEffectiveStat, EffectCapType } from './gameConfig';
+import { DEFAULT_EFFECT_CAPS } from './gameDefinitions';
 
 // Grid dimensions (assumes 3 columns)
 const GRID_COLS = 3;
+
+/**
+ * Get the effective (capped) value for a stat, respecting the player's current caps.
+ * Uses the player's effectCaps if available, otherwise falls back to defaults.
+ */
+const getCappedStat = (
+  accumulated: number,
+  effectType: EffectCapType,
+  playerCaps?: EffectCaps
+): number => {
+  const caps = playerCaps || DEFAULT_EFFECT_CAPS;
+  const cap = caps[effectType];
+  return getEffectiveStat(accumulated, cap);
+};
 
 /**
  * Get grid dimensions based on board size
@@ -296,9 +312,26 @@ export const processWeaponEffects = (
     notifications: [],
   };
 
+  // Get player's effect caps (or use defaults)
+  const playerCaps = playerStats.effectCaps;
+
+  // Calculate effective (capped) stats for each effect
+  const effectiveEchoChance = getCappedStat(playerStats.echoChance, 'echo', playerCaps);
+  const effectiveExplosionChance = getCappedStat(playerStats.explosionChance, 'explosion', playerCaps);
+  const effectiveLaserChance = getCappedStat(playerStats.laserChance, 'laser', playerCaps);
+  const effectiveRicochetChance = getCappedStat(playerStats.ricochetChance, 'ricochet', playerCaps);
+  const effectiveFireChance = getCappedStat(playerStats.fireSpreadChance, 'fire', playerCaps);
+  const effectiveBoardGrowthChance = getCappedStat(playerStats.boardGrowthChance, 'boardGrowth', playerCaps);
+  const effectiveHealingChance = getCappedStat(playerStats.healingChance, 'healing', playerCaps);
+  const effectiveHintChance = getCappedStat(playerStats.hintGainChance, 'hint', playerCaps);
+  const effectiveTimeGainChance = getCappedStat(playerStats.timeGainChance, 'timeGain', playerCaps);
+  const effectiveGraceGainChance = getCappedStat(playerStats.graceGainChance, 'graceGain', playerCaps);
+  const effectiveCoinGainChance = getCappedStat(playerStats.coinGainChance, 'coinGain', playerCaps);
+  const effectiveXPGainChance = getCappedStat(playerStats.xpGainChance, 'xpGain', playerCaps);
+
   // Echo effect - MUST be processed FIRST to reserve the echo set before explosions
   // Only triggers on player matches (not on echoed matches) to prevent infinite loops
-  if (!isEchoMatch && playerStats.echoChance > 0 && activeAttributes && Math.random() * 100 < playerStats.echoChance) {
+  if (!isEchoMatch && effectiveEchoChance > 0 && activeAttributes && Math.random() * 100 < effectiveEchoChance) {
     // Find a valid set among remaining cards (only excluding matched cards at this point)
     const echoSet = findValidSet(board, matchedCards, activeAttributes);
     if (echoSet) {
@@ -323,8 +356,8 @@ export const processWeaponEffects = (
   const echoCardIds = new Set(result.autoMatchedSets.flat().map(c => c.id));
 
   // Explosive effect - destroy adjacent cards (excluding echo set cards)
-  if (playerStats.explosionChance > 0) {
-    const rawExplosiveCards = getExplosiveCards(board, matchedCards, playerStats.explosionChance);
+  if (effectiveExplosionChance > 0) {
+    const rawExplosiveCards = getExplosiveCards(board, matchedCards, effectiveExplosionChance);
     // Filter out cards that are part of echo sets
     result.explosiveCards = rawExplosiveCards.filter(c => !echoCardIds.has(c.id));
     if (result.explosiveCards.length > 0) {
@@ -367,7 +400,7 @@ export const processWeaponEffects = (
       const laserText = lasersActivated > 1 ? `${lasersActivated}x Laser!` : 'Laser!';
       result.notifications.push(`${laserText} +${result.laserCards.length * 2}`);
     }
-  } else if (playerStats.laserChance > 0 && Math.random() * 100 < playerStats.laserChance) {
+  } else if (effectiveLaserChance > 0 && Math.random() * 100 < effectiveLaserChance) {
     // Fallback: single roll with combined chance (for backward compatibility)
     result.laserCards = getLaserCards(board, matchedCards);
     result.laserCards = result.laserCards.filter(
@@ -382,7 +415,7 @@ export const processWeaponEffects = (
   }
 
   // Ricochet effect - random chain destruction
-  if (playerStats.ricochetChance > 0) {
+  if (effectiveRicochetChance > 0) {
     // Calculate ricochet after explosions and lasers to avoid double-destruction
     // Also exclude echo set cards
     const excludedCards = [
@@ -394,8 +427,8 @@ export const processWeaponEffects = (
       board,
       matchedCards,
       excludedCards,
-      playerStats.ricochetChance,
-      playerStats.ricochetChainChance
+      effectiveRicochetChance,
+      playerStats.ricochetChainChance  // Chain chance isn't capped (ricochet cap is for initial chance)
     );
 
     result.ricochetCount = result.ricochetCards.length;
@@ -413,40 +446,40 @@ export const processWeaponEffects = (
   }
 
   // Fire spread effect - set adjacent cards on fire
-  if (playerStats.fireSpreadChance > 0) {
-    result.fireCards = getFireSpreadCards(board, matchedCards, playerStats.fireSpreadChance);
+  if (effectiveFireChance > 0) {
+    result.fireCards = getFireSpreadCards(board, matchedCards, effectiveFireChance);
     if (result.fireCards.length > 0) {
       result.notifications.push(`Fire! ${result.fireCards.length} cards`);
     }
   }
 
   // Healing chance
-  if (playerStats.healingChance > 0 && Math.random() * 100 < playerStats.healingChance) {
+  if (effectiveHealingChance > 0 && Math.random() * 100 < effectiveHealingChance) {
     result.bonusHealing = 1;
     result.notifications.push('+1 HP');
   }
 
   // Hint gain chance
-  if (playerStats.hintGainChance > 0 && Math.random() * 100 < playerStats.hintGainChance) {
+  if (effectiveHintChance > 0 && Math.random() * 100 < effectiveHintChance) {
     result.bonusHints = 1;
     result.notifications.push('+1 Hint');
   }
 
   // Time gain chance
-  if (playerStats.timeGainChance > 0 && Math.random() * 100 < playerStats.timeGainChance) {
+  if (effectiveTimeGainChance > 0 && Math.random() * 100 < effectiveTimeGainChance) {
     result.bonusTime = playerStats.timeGainAmount || 10;
     result.notifications.push(`+${result.bonusTime}s`);
   }
 
   // Grace gain chance
-  if (playerStats.graceGainChance > 0 && Math.random() * 100 < playerStats.graceGainChance) {
+  if (effectiveGraceGainChance > 0 && Math.random() * 100 < effectiveGraceGainChance) {
     result.bonusGraces = 1;
     result.notifications.push('+1 Grace');
   }
 
-  // XP gain chance - handles stacking above 100%
-  if (playerStats.xpGainChance > 0) {
-    const totalChance = playerStats.xpGainChance;
+  // XP gain chance - handles stacking above 100% (XP has no cap by default)
+  if (effectiveXPGainChance > 0) {
+    const totalChance = effectiveXPGainChance;
     const guaranteedXP = Math.floor(totalChance / 100);
     const remainingChance = totalChance % 100;
 
@@ -464,8 +497,8 @@ export const processWeaponEffects = (
   }
 
   // Coin gain chance - handles stacking above 100%
-  if (playerStats.coinGainChance > 0) {
-    const totalChance = playerStats.coinGainChance;
+  if (effectiveCoinGainChance > 0) {
+    const totalChance = effectiveCoinGainChance;
     const guaranteedCoins = Math.floor(totalChance / 100);
     const remainingChance = totalChance % 100;
 
@@ -483,7 +516,7 @@ export const processWeaponEffects = (
   }
 
   // Board growth chance
-  if (playerStats.boardGrowthChance > 0 && Math.random() * 100 < playerStats.boardGrowthChance) {
+  if (effectiveBoardGrowthChance > 0 && Math.random() * 100 < effectiveBoardGrowthChance) {
     result.boardGrowth = playerStats.boardGrowthAmount || 1;
     result.notifications.push(`+${result.boardGrowth} Cards`);
   }
