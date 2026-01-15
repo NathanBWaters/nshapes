@@ -164,6 +164,41 @@ export const isStatCapped = (accumulated: number, cap: number): boolean => {
   return accumulated >= cap;
 };
 
+/**
+ * Mapping from PlayerStats field names to EffectCapType
+ * Used by UI to show cap information for stats
+ */
+export const STAT_TO_CAP_TYPE: Record<string, EffectCapType> = {
+  echoChance: 'echo',
+  laserChance: 'laser',
+  graceGainChance: 'graceGain',
+  explosionChance: 'explosion',
+  hintGainChance: 'hint',
+  autoHintChance: 'hint',
+  enhancedHintChance: 'hint',
+  timeGainChance: 'timeGain',
+  healingChance: 'healing',
+  fireSpreadChance: 'fire',
+  ricochetChance: 'ricochet',
+  boardGrowthChance: 'boardGrowth',
+  coinGainChance: 'coinGain',
+  xpGainChance: 'xpGain',
+};
+
+/**
+ * Get cap info for a stat if it has one
+ * Returns null if the stat is not capped
+ */
+export const getCapInfoForStat = (statKey: string, playerCaps?: Record<string, number>): { cap: number; capIncrease: number } | null => {
+  const capType = STAT_TO_CAP_TYPE[statKey];
+  if (!capType) return null;
+
+  const capConfig = EFFECT_CAPS[capType];
+  // If player has custom caps, use those
+  const cap = playerCaps?.[capType] ?? capConfig.defaultCap;
+  return { cap, capIncrease: capConfig.capIncrease };
+};
+
 // =============================================================================
 // REWARDS (per matched card)
 // =============================================================================

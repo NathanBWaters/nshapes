@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Pressable, StyleSheet, Platform } from 'react-native';
-import { Weapon, PlayerStats, WeaponRarity } from '@/types';
+import { Weapon, PlayerStats, WeaponRarity, EffectCaps } from '@/types';
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
+import { getCapInfoForStat, isStatCapped } from '@/utils/gameConfig';
 import Icon from './Icon';
 import GameMenu from './GameMenu';
 import InventoryBar from './InventoryBar';
@@ -188,7 +189,17 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
 
   // Calculate before/after stat comparison for a weapon
   // Skips independent roll effects since they don't stack additively
-  const getStatComparison = (weapon: Weapon): { key: string; before: string; after: string; isIncrease: boolean }[] => {
+  // Shows cap info when stat would exceed its cap
+  const getStatComparison = (weapon: Weapon): {
+    key: string;
+    before: string;
+    after: string;
+    isIncrease: boolean;
+    isCapped: boolean;
+    cap: number | null;
+  }[] => {
+    const effectCaps = playerStats.effectCaps as EffectCaps | undefined;
+
     return Object.entries(weapon.effects).map(([key, effectValue]) => {
       if (typeof effectValue !== 'number') return null;
 
@@ -198,13 +209,26 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
       const currentValue = (playerStats as Record<string, any>)[key] ?? 0;
       const newValue = currentValue + effectValue;
 
+      // Check if this stat has a cap
+      const capInfo = getCapInfoForStat(key, effectCaps as Record<string, number> | undefined);
+      const isCapped = capInfo ? isStatCapped(newValue, capInfo.cap) : false;
+
       return {
         key: formatStatName(key),
         before: formatStatValue(key, currentValue),
         after: formatStatValue(key, newValue),
         isIncrease: effectValue > 0,
+        isCapped,
+        cap: capInfo?.cap ?? null,
       };
-    }).filter((item): item is { key: string; before: string; after: string; isIncrease: boolean } => item !== null);
+    }).filter((item): item is {
+      key: string;
+      before: string;
+      after: string;
+      isIncrease: boolean;
+      isCapped: boolean;
+      cap: number | null;
+    } => item !== null);
   };
 
   return (
@@ -252,7 +276,7 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
               <Text style={styles.detailFlavor}>{focusedWeapon.flavorText}</Text>
             )}
 
-            {/* Stats Preview - Before → After */}
+            {/* Stats Preview - Before → After with cap info */}
             <View style={styles.effectsRow}>
               {Object.keys(focusedWeapon.effects).length > 0 && (
                 <View style={[styles.effectsBox, styles.effectsBoxPositive]}>
@@ -265,10 +289,14 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
                         <Text style={styles.statArrow}>→</Text>
                         <Text style={[
                           styles.statAfter,
-                          stat.isIncrease ? styles.statIncrease : styles.statDecrease
+                          stat.isIncrease ? styles.statIncrease : styles.statDecrease,
+                          stat.isCapped && styles.statCapped,
                         ]}>
                           {stat.after}
                         </Text>
+                        {stat.isCapped && stat.cap !== null && (
+                          <Text style={styles.capIndicator}>(cap {stat.cap}%)</Text>
+                        )}
                       </View>
                     </View>
                   ))}
@@ -573,6 +601,15 @@ const styles = StyleSheet.create({
   },
   statDecrease: {
     color: COLORS.impactRed,
+  },
+  statCapped: {
+    color: '#EAB308', // Yellow/amber to indicate capped
+  },
+  capIndicator: {
+    fontSize: 10,
+    color: '#EAB308',
+    marginLeft: 4,
+    fontWeight: '500',
   },
   emptyDetail: {
     flex: 1,
