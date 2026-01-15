@@ -1800,6 +1800,12 @@ export const getRandomShopWeapon = (playerWeapons?: Weapon[], round: number = 5)
     weaponsOfRarity = WEAPONS.filter(w => w.rarity === 'common');
   }
 
+  // Final fallback: if somehow still empty (shouldn't happen), use first weapon in WEAPONS
+  if (weaponsOfRarity.length === 0) {
+    console.warn('getRandomShopWeapon: No weapons found for any rarity, using fallback');
+    return WEAPONS[0];
+  }
+
   return weaponsOfRarity[Math.floor(Math.random() * weaponsOfRarity.length)];
 };
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Pressable, StyleSheet, Platform } from 'react-native';
 import { Weapon, PlayerStats, WeaponRarity, EffectCaps } from '@/types';
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
@@ -115,6 +115,22 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
     return firstAvailable >= 0 ? firstAvailable : 0;
   });
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+
+  // Reset focusedIndex when weapons array changes to ensure it points to a valid weapon
+  // This handles cases where:
+  // 1. All weapons were purchased and the user returns to shop
+  // 2. The weapons array is regenerated with new weapons
+  // 3. The current focused weapon becomes null after purchase
+  useEffect(() => {
+    // If current focused weapon is null or undefined, find first available
+    if (weapons[focusedIndex] === null || weapons[focusedIndex] === undefined) {
+      const firstAvailable = weapons.findIndex(weapon => weapon !== null);
+      if (firstAvailable >= 0) {
+        setFocusedIndex(firstAvailable);
+      }
+      // If all weapons are null, focusedIndex stays as-is (shop will show empty state)
+    }
+  }, [weapons, focusedIndex]);
 
   // Double-tap detection for instant purchase
   const [lastTapTime, setLastTapTime] = useState<number>(0);

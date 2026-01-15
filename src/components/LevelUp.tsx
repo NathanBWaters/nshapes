@@ -166,6 +166,25 @@ const LevelUp: React.FC<LevelUpProps> = ({
   const [focusedIndex, setFocusedIndex] = useState<number>(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
+  // Reset focusedIndex when options change to ensure it's valid
+  // This handles cases where:
+  // 1. Options are regenerated (multi-level-up scenarios)
+  // 2. Options array changes size
+  // 3. Player rerolls and gets new options
+  useEffect(() => {
+    // If current focusedIndex is out of bounds, reset to 0
+    if (focusedIndex >= options.length && options.length > 0) {
+      setFocusedIndex(0);
+    }
+    // If current focused option is undefined/null, find first valid one
+    if (options[focusedIndex] === undefined && options.length > 0) {
+      const firstValid = options.findIndex(opt => opt !== undefined);
+      if (firstValid >= 0) {
+        setFocusedIndex(firstValid);
+      }
+    }
+  }, [options, focusedIndex]);
+
   // Trigger confetti on mount
   const [showConfetti, setShowConfetti] = useState(false);
   useEffect(() => {
