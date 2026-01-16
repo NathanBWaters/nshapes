@@ -69,7 +69,7 @@ describe('Circling Vulture', () => {
 
     it('has correct description', () => {
       const enemy = createCirclingVulture();
-      expect(enemy.description).toBe('Score drains 5 points per second');
+      expect(enemy.description).toBe('Score drains 1 point every 10 seconds');
     });
 
     it('has correct defeat condition text', () => {
@@ -79,22 +79,22 @@ describe('Circling Vulture', () => {
   });
 
   describe('ScoreDecayEffect', () => {
-    it('decays score at 5 points per second', () => {
+    it('decays score at 0.1 points per second (1 point every 10 seconds)', () => {
       const enemy = createCirclingVulture();
       enemy.onRoundStart([]);
 
-      // Tick 1 second - should decay 5 points
+      // Tick 1 second - should decay 0.1 points
       const result = enemy.onTick(1000, []);
-      expect(result.scoreDelta).toBe(-5);
+      expect(result.scoreDelta).toBe(-0.1);
     });
 
     it('decays score proportionally for partial seconds', () => {
       const enemy = createCirclingVulture();
       enemy.onRoundStart([]);
 
-      // Tick 500ms - should decay 2.5 points
+      // Tick 500ms - should decay 0.05 points
       const result = enemy.onTick(500, []);
-      expect(result.scoreDelta).toBe(-2.5);
+      expect(result.scoreDelta).toBe(-0.05);
     });
 
     it('decays score over multiple ticks', () => {
@@ -105,8 +105,8 @@ describe('Circling Vulture', () => {
       const result1 = enemy.onTick(1000, []);
       const result2 = enemy.onTick(1000, []);
 
-      expect(result1.scoreDelta).toBe(-5);
-      expect(result2.scoreDelta).toBe(-5);
+      expect(result1.scoreDelta).toBe(-0.1);
+      expect(result2.scoreDelta).toBe(-0.1);
     });
 
     it('shows score decay rate in UI modifiers', () => {
@@ -115,7 +115,7 @@ describe('Circling Vulture', () => {
 
       const modifiers = enemy.getUIModifiers();
       expect(modifiers.showScoreDecay).toBeDefined();
-      expect(modifiers.showScoreDecay?.rate).toBe(5);
+      expect(modifiers.showScoreDecay?.rate).toBe(0.1);
     });
   });
 

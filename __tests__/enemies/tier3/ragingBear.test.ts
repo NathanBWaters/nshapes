@@ -67,12 +67,12 @@ describe('Raging Bear', () => {
   });
 
   describe('score decay', () => {
-    it('decays at 4 points per second', () => {
+    it('decays at 0.2 points per second (1 per 5s)', () => {
       const enemy = createRagingBear();
       const board = createTestBoard();
 
       const result = enemy.onTick(1000, board);
-      expect(result.scoreDelta).toBe(-4);
+      expect(result.scoreDelta).toBe(-0.2);
     });
   });
 

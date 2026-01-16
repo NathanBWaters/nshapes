@@ -79,12 +79,12 @@ describe('The Reaper', () => {
   });
 
   describe('score decay', () => {
-    it('decays at 6 points per second', () => {
+    it('decays at 0.33 points per second (1 per 3s)', () => {
       const enemy = createTheReaper();
       const board = createTestBoard();
 
       const result = enemy.onTick(1000, board);
-      expect(result.scoreDelta).toBe(-6);
+      expect(result.scoreDelta).toBe(-0.33);
     });
   });
 
