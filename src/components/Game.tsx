@@ -2154,6 +2154,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
             enemy={state.activeEnemyInstance ?? undefined}
             difficulty={adventureDifficulty}
             enemyDefeated={enemyDefeated}
+            stretchGoalReward={state.selectedEnemyReward}
           />
         );
 

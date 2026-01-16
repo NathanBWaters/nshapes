@@ -1,9 +1,20 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { AdventureDifficulty } from '@/types';
+import { AdventureDifficulty, Weapon, WeaponRarity } from '@/types';
 import type { EnemyInstance } from '@/types/enemy';
-import { COLORS, RADIUS } from '@/utils/colors';
+import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
 import Icon, { IconName } from '../Icon';
+
+// Helper to get rarity label
+const getRarityLabel = (rarity: WeaponRarity): string => {
+  switch (rarity) {
+    case 'common': return 'Common';
+    case 'rare': return 'Rare';
+    case 'epic': return 'Epic';
+    case 'legendary': return 'Legendary';
+    default: return rarity;
+  }
+};
 
 interface ChallengeCardProps {
   // For round complete - show enemy challenge
@@ -14,6 +25,8 @@ interface ChallengeCardProps {
   enemyDefeated?: boolean;
   // Whether to show achievement badge (for victory screen only)
   showAchievement?: boolean;
+  // The specific stretch goal reward weapon (pre-determined)
+  stretchGoalReward?: Weapon | null;
 }
 
 // Tier colors for enemies
@@ -43,7 +56,7 @@ const getDifficultyInfo = (diff: AdventureDifficulty) => {
   }
 };
 
-const ChallengeCard: React.FC<ChallengeCardProps> = ({ enemy, difficulty, enemyDefeated = false, showAchievement = false }) => {
+const ChallengeCard: React.FC<ChallengeCardProps> = ({ enemy, difficulty, enemyDefeated = false, showAchievement = false, stretchGoalReward }) => {
   // Determine what to display
   const isEnemyChallenge = !!enemy;
   const isDifficultyChallenge = !!difficulty;
@@ -108,14 +121,42 @@ const ChallengeCard: React.FC<ChallengeCardProps> = ({ enemy, difficulty, enemyD
           {/* Reward Info - Clear messaging about what the player gets */}
           <View style={[styles.rewardSection, { backgroundColor: enemyDefeated ? '#FEF3C7' : COLORS.slateCharcoal + '10' }]}>
             <Text style={[styles.rewardLabel, { color: enemyDefeated ? '#D97706' : COLORS.slateCharcoal }]}>
-              {enemyDefeated ? '🎁 BONUS WEAPON UNLOCKED!' : '💔 REWARD MISSED'}
+              {enemyDefeated ? '🎁 BONUS WEAPON EARNED!' : '💔 REWARD MISSED'}
             </Text>
-            <Text style={[styles.rewardText, { opacity: enemyDefeated ? 1 : 0.6, fontWeight: enemyDefeated ? '700' : '600' }]}>
-              {enemyDefeated
-                ? `You'll get an extra ${tierLabel} weapon at the next Level Up screen!`
-                : `Would have earned an extra ${tierLabel} weapon`
-              }
-            </Text>
+            {stretchGoalReward ? (
+              <View style={styles.rewardWeaponRow}>
+                {stretchGoalReward.icon && (
+                  <Icon
+                    name={stretchGoalReward.icon}
+                    size={24}
+                    color={enemyDefeated ? getRarityColor(stretchGoalReward.rarity) : COLORS.slateCharcoal}
+                    style={{ opacity: enemyDefeated ? 1 : 0.4 }}
+                  />
+                )}
+                <View style={styles.rewardWeaponInfo}>
+                  <Text style={[
+                    styles.rewardWeaponName,
+                    { color: enemyDefeated ? getRarityColor(stretchGoalReward.rarity) : COLORS.slateCharcoal },
+                    !enemyDefeated && { opacity: 0.5, textDecorationLine: 'line-through' }
+                  ]}>
+                    {stretchGoalReward.name}
+                  </Text>
+                  <Text style={[styles.rewardWeaponRarity, { opacity: enemyDefeated ? 0.8 : 0.4 }]}>
+                    {getRarityLabel(stretchGoalReward.rarity)} Weapon
+                  </Text>
+                </View>
+              </View>
+            ) : (
+              <Text style={[styles.rewardText, { opacity: enemyDefeated ? 1 : 0.6, fontWeight: enemyDefeated ? '700' : '600' }]}>
+                {enemyDefeated
+                  ? `You'll get an extra ${tierLabel} weapon at the next Level Up screen!`
+                  : `Would have earned an extra ${tierLabel} weapon`
+                }
+              </Text>
+            )}
+            {enemyDefeated && stretchGoalReward && (
+              <Text style={styles.rewardSubtext}>Available at the next Level Up screen</Text>
+            )}
           </View>
         </View>
       </View>
@@ -344,6 +385,36 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.deepOnyx,
     textAlign: 'center',
+  },
+  rewardWeaponRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 8,
+  },
+  rewardWeaponInfo: {
+    alignItems: 'flex-start',
+  },
+  rewardWeaponName: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  rewardWeaponRarity: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: COLORS.slateCharcoal,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 2,
+  },
+  rewardSubtext: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: COLORS.slateCharcoal,
+    opacity: 0.7,
+    textAlign: 'center',
+    marginTop: 4,
   },
 });
 

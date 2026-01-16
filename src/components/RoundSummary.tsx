@@ -40,6 +40,7 @@ interface RoundSummaryProps {
   enemy?: EnemyInstance;
   difficulty?: AdventureDifficulty;
   enemyDefeated?: boolean;
+  stretchGoalReward?: Weapon | null;
 }
 
 interface AwardTile {
@@ -99,6 +100,7 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
   enemy,
   difficulty,
   enemyDefeated = false,
+  stretchGoalReward,
 }) => {
   // Animation values for each award tile
   const tileAnimations = useRef(
@@ -254,6 +256,7 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
               enemy={enemy}
               difficulty={difficulty}
               enemyDefeated={enemyDefeated}
+              stretchGoalReward={stretchGoalReward}
             />
           </View>
         )}
