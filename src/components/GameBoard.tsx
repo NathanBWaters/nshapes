@@ -335,6 +335,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
   };
 
   // Find a hint (a valid set on the board)
+  // Excludes dud cards and face-down cards from hint calculation
   const findHint = useCallback(() => {
     // Check if manual hints are disabled by enemy (e.g., Creeping Shadow)
     if (enemyUIModifiers.disableManualHint === true) return;
@@ -343,7 +344,12 @@ const GameBoard: React.FC<GameBoardProps> = ({
     const hintsAvailable = hintsRef.current !== undefined && hintsRef.current > 0;
     if (!hintsAvailable) return;
 
-    const availableCards = cards.filter(card => !matchedCardIds.includes(card.id));
+    // Exclude matched, dud, and face-down cards from hint calculation
+    const availableCards = cards.filter(card =>
+      !matchedCardIds.includes(card.id) &&
+      !card.isDud &&
+      !card.isFaceDown
+    );
 
     for (let i = 0; i < availableCards.length - 2; i++) {
       for (let j = i + 1; j < availableCards.length - 1; j++) {
