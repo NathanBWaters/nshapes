@@ -113,7 +113,8 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
   const matchCounterScale = useRef(new Animated.Value(0.5)).current;
   const matchCounterOpacity = useRef(new Animated.Value(0)).current;
 
-  // Button animation
+  // Button animation - track when to show button container
+  const [showButtonContainer, setShowButtonContainer] = useState(false);
   const buttonOpacity = useRef(new Animated.Value(0)).current;
 
   // Animated number values
@@ -185,15 +186,16 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
       }, delay);
     });
 
-    // 3. Show button after all tiles
+    // 3. Show button after all tiles - first render container, then fade in
     setTimeout(() => {
+      setShowButtonContainer(true);
       Animated.timing(buttonOpacity, {
         toValue: 1,
         duration: 400,
         useNativeDriver: true,
       }).start();
     }, 600 + 6 * staggerDelay + 500);
-  }, []);
+  }, [buttonOpacity]);
 
   // Render individual award tile with animation
   const renderAwardTile = (award: AwardTile, index: number) => {
@@ -267,14 +269,16 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
         </View>
       </ScrollView>
 
-      {/* Continue Button - Fixed at bottom */}
-      <Animated.View style={[styles.buttonContainer, { opacity: buttonOpacity }]}>
-        <TouchableOpacity style={styles.continueButton} onPress={onContinue}>
-          <Text style={styles.continueButtonText}>
-            {didLevelUp ? 'GO TO UPGRADE' : 'GO TO SHOP'}
-          </Text>
-        </TouchableOpacity>
-      </Animated.View>
+      {/* Continue Button - Fixed at bottom, only rendered when ready to show */}
+      {showButtonContainer && (
+        <Animated.View style={[styles.buttonContainer, { opacity: buttonOpacity }]}>
+          <TouchableOpacity style={styles.continueButton} onPress={onContinue}>
+            <Text style={styles.continueButtonText}>
+              {didLevelUp ? 'GO TO UPGRADE' : 'GO TO SHOP'}
+            </Text>
+          </TouchableOpacity>
+        </Animated.View>
+      )}
       </View>
     </ScreenTransition>
   );
