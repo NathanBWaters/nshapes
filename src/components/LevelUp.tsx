@@ -32,7 +32,7 @@ export const getChallengeBonusMoney = (tier: 1 | 2 | 3 | 4): number => {
 };
 
 // Generate a challenge bonus weapon based on enemy tier
-const generateChallengeBonus = (tier: 1 | 2 | 3 | 4): Weapon => {
+export const generateChallengeBonus = (tier: 1 | 2 | 3 | 4): Weapon => {
   let targetRarity: WeaponRarity;
 
   switch (tier) {

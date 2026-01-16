@@ -185,14 +185,14 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
     const isPercent = key.toLowerCase().includes('percent') || key.toLowerCase().includes('chance');
     let display = isPercent ? `${value}%` : `${value}`;
 
-    // For capped stats, show the cap if relevant
+    // For capped stats, show the cap
     if (showCap) {
       const cap = getStatCap(key);
       if (cap !== null) {
         const isCapped = value >= cap;
         display = isPercent
-          ? `${value}% / ${cap}%${isCapped ? ' (MAX)' : ''}`
-          : `${value} / ${cap}${isCapped ? ' (MAX)' : ''}`;
+          ? `${value}% (max ${cap}%)${isCapped ? ' ✓' : ''}`
+          : `${value} (max ${cap})${isCapped ? ' ✓' : ''}`;
       }
     }
 
@@ -410,7 +410,7 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
                     <Text style={[
                       styles.statValue,
                       typeof value === 'number' && value > 0 && styles.statValueActive,
-                      displayValue.includes('(MAX)') && styles.statValueCapped,
+                      displayValue.includes('✓') && styles.statValueCapped,
                     ]}>
                       {displayValue}
                     </Text>

@@ -6,8 +6,21 @@
  * avoid race conditions with React state.
  */
 
-import type { Card, Shape, Color, AttributeName } from '../types';
+import type { Card, Shape, Color, AttributeName, Weapon } from '../types';
 import type { IconName } from '../components/Icon';
+
+// ============================================================================
+// ENEMY OPTION (for selection screen with pre-determined rewards)
+// ============================================================================
+
+/**
+ * An enemy paired with its pre-determined stretch goal reward.
+ * Generated before enemy selection so players can see what they'll get.
+ */
+export interface EnemyOption {
+  enemy: EnemyInstance;
+  stretchGoalReward: Weapon;
+}
 
 // ============================================================================
 // CORE ENEMY INTERFACE
