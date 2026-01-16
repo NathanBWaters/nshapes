@@ -1,7 +1,7 @@
 /**
  * Ancient Dragon - Tier 4 Boss
  *
- * Effects: Iron Shell (×2 cards) + Shifting Chameleon (8s) + Swift Bee (40% faster) + Stinging Scorpion + Circling Vulture (5pts/sec)
+ * Effects: Iron Shell (×2 cards) + Shifting Chameleon (8s) + Swift Bee (40% faster) + Stinging Scorpion + score drain (1pt/3s)
  * Defeat Condition: Clear all 2 triple cards AND get 2 all-different matches
  */
 
@@ -26,7 +26,7 @@ export function createAncientDragon(): EnemyInstance {
       name: 'Ancient Dragon',
       icon: 'lorc/dragon-head',
       tier: 4,
-      description: '2 triple cards, attributes shift every 8s, timer 40% faster, 2x damage/points, score drains 5pts/sec',
+      description: '2 triple cards, attributes shift every 8s, timer 40% faster, 2x damage/points, score drains 1pt/3s',
       defeatConditionText: 'Clear all 2 triple cards AND get 2 all-different matches',
     },
     [
@@ -35,7 +35,7 @@ export function createAncientDragon(): EnemyInstance {
       { behavior: TimerSpeedEffect, config: { multiplier: 1.4 } },
       { behavior: DamageMultiplierEffect, config: { multiplier: 2.0 } },
       { behavior: PointsMultiplierEffect, config: { multiplier: 2.0 } },
-      { behavior: ScoreDecayEffect, config: { ratePerSecond: 5 } },
+      { behavior: ScoreDecayEffect, config: { ratePerSecond: 0.33 } },
     ],
     // Defeat condition: Clear all 2 triple cards AND get 2 all-different matches
     (stats: RoundStats) =>

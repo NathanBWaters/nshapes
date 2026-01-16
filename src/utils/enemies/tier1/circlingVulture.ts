@@ -1,7 +1,7 @@
 /**
  * Circling Vulture - Tier 1 Enemy
  *
- * Effect: Score drains 5 points per second
+ * Effect: Score drains 1 point every 10 seconds
  * Defeat Condition: Reach 150% of target score
  */
 
@@ -18,13 +18,13 @@ export function createCirclingVulture(): EnemyInstance {
       name: 'Circling Vulture',
       icon: 'lorc/vulture',
       tier: 1,
-      description: 'Score drains 5 points per second',
+      description: 'Score drains 1 point every 10 seconds',
       defeatConditionText: 'Reach 150% of target score',
     },
     [
       {
         behavior: ScoreDecayEffect,
-        config: { ratePerSecond: 5 },
+        config: { ratePerSecond: 0.1 },
       },
     ],
     // Defeat condition: Reach 150% of target score
