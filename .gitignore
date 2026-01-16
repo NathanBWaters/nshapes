@@ -76,3 +76,6 @@ yarn-error.log*
 expo-env.d.ts
 # @end expo-clitest-results/
 playwright-report/
+test-results/
+.claude/
+.playwright-mcp/
