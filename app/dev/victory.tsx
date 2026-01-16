@@ -129,6 +129,7 @@ export default function DevVictory() {
       matchCount={42}
       playerStats={mockPlayerStats}
       roundScores={mockRoundScores}
+      difficulty="medium"
       onReturnToMenu={handleReturnToMenu}
       onContinueEndless={handleContinueEndless}
     />

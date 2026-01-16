@@ -9,6 +9,7 @@ import Icon from './Icon';
 import { WEAPONS, getWeaponByName } from '@/utils/gameDefinitions';
 import { SettingsStorage } from '@/utils/storage';
 import { setAudioEnabled } from '@/utils/sounds';
+import { STAT_TO_CAP_TYPE, EFFECT_CAPS, EffectCapType } from '@/utils/gameConfig';
 
 const WalkthroughableView = walkthroughable(View);
 
@@ -58,6 +59,8 @@ interface GameMenuProps {
   playerWeapons?: Weapon[];
   character?: Character;  // Optional character to display in stats
   onExitGame?: () => void;
+  onEndRoundEarly?: () => void;  // Callback when player ends round early (only available when target met)
+  canEndRoundEarly?: boolean;    // True when score target has been met
   devMode?: boolean;
   devCallbacks?: DevModeCallbacks;
   // Tutorial mode - when true, wraps menu button with CopilotStep
@@ -70,7 +73,7 @@ interface GameMenuProps {
 
 type MenuScreen = 'menu' | 'stats' | 'weapons' | 'options' | 'dev';
 
-const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], character, onExitGame, devMode = false, devCallbacks, copilotMode = false, controlledOpen, onMenuOpenChange }) => {
+const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], character, onExitGame, onEndRoundEarly, canEndRoundEarly = false, devMode = false, devCallbacks, copilotMode = false, controlledOpen, onMenuOpenChange }) => {
   const [internalModalOpen, setInternalModalOpen] = useState(false);
   const [currentScreen, setCurrentScreen] = useState<MenuScreen>('menu');
   const [showExitConfirm, setShowExitConfirm] = useState(false);
@@ -102,42 +105,98 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
     onMenuOpenChange?.(false);
   };
 
+  // Type for stat definition
+  interface StatDef {
+    key: string;
+    maxKey?: string;
+    cap?: boolean;
+  }
+
   // Group stats into categories for cleaner display
-  const statCategories = {
-    "Character": [
-      'level', 'experienceGainPercent', 'luck',
-      'maxWeapons'
+  // Updated to be comprehensive and show max limits
+  const statCategories: Record<string, StatDef[]> = {
+    "Core Stats": [
+      { key: 'health', maxKey: 'maxHealth' },           // Shows "3/3"
+      { key: 'graces', maxKey: 'maxGraces' },           // Shows "2/5"
+      { key: 'hints', maxKey: 'maxHints' },             // Shows "1/3"
+      { key: 'level' },
+      { key: 'money' },
+      { key: 'freeRerolls' },
     ],
-    "Resources": [
-      'money', 'commerce', 'scavengingPercent',
-      'scavengeAmount', 'freeRerolls'
+    "Field & Time": [
+      { key: 'fieldSize' },
+      { key: 'startingTime' },
+      { key: 'timeGainChance', cap: true },
+      { key: 'timeGainAmount' },
     ],
-    "Offensive": [
-      'damage', 'damagePercent', 'criticalChance',
-      'chanceOfFire', 'explosion', 'timeFreezePercent'
+    "Match Effects": [
+      { key: 'explosionChance', cap: true },
+      { key: 'fireSpreadChance', cap: true },
+      { key: 'laserChance', cap: true },
+      { key: 'echoChance', cap: true },
+      { key: 'ricochetChance', cap: true },
     ],
-    "Defensive": [
-      'health', 'maxHealth', 'dodgePercent',
-      'deflectPercent', 'dodgeAttackBackPercent'
+    "Utility Effects": [
+      { key: 'autoHintChance', cap: true },
+      { key: 'enhancedHintChance', cap: true },
+      { key: 'healingChance', cap: true },
+      { key: 'graceGainChance', cap: true },
+      { key: 'hintGainChance', cap: true },
+      { key: 'boardGrowthChance', cap: true },
     ],
-    "Gameplay": [
-      'fieldSize', 'timeWarpPercent', 'maxTimeIncrease',
-      'matchHints', 'matchPossibilityHints', 'matchIntervalHintPercent',
-      'graces'
-    ]
+    "Economy": [
+      { key: 'coinGainChance', cap: true },
+      { key: 'xpGainChance', cap: true },
+    ],
   };
 
-  // Format stat for display
-  const formatStat = (key: string, value: number | string | object) => {
+  // Get the current cap for a stat based on player's effectCaps
+  const getStatCap = (statKey: string): number | null => {
+    const capType = STAT_TO_CAP_TYPE[statKey];
+    if (!capType) return null;
+
+    const capConfig = EFFECT_CAPS[capType as EffectCapType];
+    if (!capConfig) return null;
+
+    // Check if player has custom caps from cap-increasing weapons
+    const effectCaps = playerStats.effectCaps as Record<string, number> | undefined;
+    return effectCaps?.[capType] ?? capConfig.defaultCap;
+  };
+
+  // Format stat for display with max limits and caps
+  const formatStat = (
+    key: string,
+    value: number | string | object,
+    maxKey?: string,
+    showCap?: boolean
+  ): string => {
     // Skip non-numeric values (like effectCaps object)
     if (typeof value !== 'number') return typeof value === 'string' ? value : '-';
 
-    // For percentage stats, add % symbol
-    if (key.toLowerCase().includes('percent')) {
-      return `${value}%`;
+    // For stats with a max, show current/max
+    if (maxKey) {
+      const maxValue = playerStats[maxKey as keyof PlayerStats];
+      if (typeof maxValue === 'number') {
+        return `${value}/${maxValue}`;
+      }
     }
 
-    return value;
+    // For percentage stats, add % symbol
+    const isPercent = key.toLowerCase().includes('percent') || key.toLowerCase().includes('chance');
+    let display = isPercent ? `${value}%` : `${value}`;
+
+    // For capped stats, show the cap if relevant
+    if (showCap) {
+      const cap = getStatCap(key);
+      if (cap !== null) {
+        const isCapped = value >= cap;
+        display = isPercent
+          ? `${value}% / ${cap}%${isCapped ? ' (MAX)' : ''}`
+          : `${value} / ${cap}${isCapped ? ' (MAX)' : ''}`;
+      }
+    }
+
+    return display;
   };
 
   // Format a key from camelCase to Title Case with spaces
@@ -237,6 +296,25 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
           </TouchableOpacity>
         )}
 
+        {/* End Round Early Option - only visible when score target is met */}
+        {onEndRoundEarly && canEndRoundEarly && (
+          <TouchableOpacity
+            style={[styles.menuOption, styles.endRoundMenuOption]}
+            onPress={() => {
+              setInternalModalOpen(false);
+              onMenuOpenChange?.(false);
+              onEndRoundEarly();
+            }}
+          >
+            <Text style={styles.menuOptionIcon}>✅</Text>
+            <View style={styles.menuOptionTextContainer}>
+              <Text style={[styles.menuOptionTitle, styles.endRoundMenuOptionTitle]}>End Round Early</Text>
+              <Text style={styles.menuOptionDescription}>Target reached! Proceed to shop</Text>
+            </View>
+            <Text style={styles.menuOptionArrow}>›</Text>
+          </TouchableOpacity>
+        )}
+
         {/* Exit Game Option - always show in tutorial for highlighting */}
         {(onExitGame || copilotMode) && withMenuCopilot('menu_exit',
           <TouchableOpacity
@@ -307,20 +385,38 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
           emptyMessage="No weapons equipped yet"
         />
 
-        {Object.entries(statCategories).map(([category, statKeys]) => (
+        {Object.entries(statCategories).map(([category, statDefs]) => (
           <View key={category} style={styles.categoryContainer}>
             <View style={styles.categoryHeader}>
               <Text style={styles.categoryTitle}>{category.toUpperCase()}</Text>
             </View>
             <View style={styles.statsGrid}>
-              {statKeys.map(key => (
-                <View key={key} style={styles.statRow}>
-                  <Text style={styles.statKey}>{formatKey(key)}</Text>
-                  <Text style={styles.statValue}>
-                    {formatStat(key, playerStats[key as keyof PlayerStats] || 0)}
-                  </Text>
-                </View>
-              ))}
+              {statDefs.map((statDef) => {
+                const key = statDef.key;
+                const value = playerStats[key as keyof PlayerStats] || 0;
+                const displayValue = formatStat(key, value, statDef.maxKey, statDef.cap);
+
+                // Skip stats that are 0/0 or show 0% for capped stats with 0 value
+                if (typeof value === 'number' && value === 0 && !statDef.maxKey) {
+                  // For capped stats showing 0%, still display with cap
+                  // For non-capped stats with 0, skip unless it's a core stat
+                  const coreStats = ['health', 'graces', 'hints', 'level', 'money', 'freeRerolls', 'fieldSize'];
+                  if (!coreStats.includes(key) && !statDef.cap) return null;
+                }
+
+                return (
+                  <View key={key} style={styles.statRow}>
+                    <Text style={styles.statKey}>{formatKey(key)}</Text>
+                    <Text style={[
+                      styles.statValue,
+                      typeof value === 'number' && value > 0 && styles.statValueActive,
+                      displayValue.includes('(MAX)') && styles.statValueCapped,
+                    ]}>
+                      {displayValue}
+                    </Text>
+                  </View>
+                );
+              })}
             </View>
           </View>
         ))}
@@ -609,6 +705,7 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
   // Menu button content
   const menuButtonContent = (
     <TouchableOpacity
+      testID="game-menu-button"
       style={styles.menuButton}
       onPress={copilotMode ? undefined : openModal}
       disabled={copilotMode}
@@ -689,9 +786,10 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
 const styles = StyleSheet.create({
   menuButton: {
     backgroundColor: COLORS.deepOnyx,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
+    paddingVertical: 3,
+    paddingHorizontal: 6,
     borderRadius: RADIUS.button,
+    flexShrink: 0,
   },
   menuButtonText: {
     color: COLORS.canvasWhite,
@@ -841,10 +939,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   statValue: {
-    color: COLORS.logicTeal,
-    fontWeight: '700',
+    color: COLORS.slateCharcoal,
+    fontWeight: '600',
     fontSize: 13,
     fontFamily: 'monospace',
+  },
+  statValueActive: {
+    color: COLORS.logicTeal,
+    fontWeight: '700',
+  },
+  statValueCapped: {
+    color: '#EAB308', // Yellow/amber for capped values
+    fontWeight: '700',
   },
   closeModalButton: {
     backgroundColor: COLORS.actionYellow,
@@ -1032,6 +1138,14 @@ const styles = StyleSheet.create({
     color: COLORS.canvasWhite,
     fontWeight: '700',
     fontSize: 14,
+  },
+  // End round early menu option styles
+  endRoundMenuOption: {
+    backgroundColor: COLORS.logicTeal + '20',
+    borderColor: COLORS.logicTeal,
+  },
+  endRoundMenuOptionTitle: {
+    color: COLORS.logicTeal,
   },
   // Dev mode menu option styles
   devMenuOption: {

@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, Pressable, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, Pressable, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { COLORS, RADIUS } from '@/utils/colors';
+
+// Extra bottom padding for mobile web browsers to account for browser UI (URL bar, navigation)
+const MOBILE_WEB_BOTTOM_PADDING = Platform.OS === 'web' ? 60 : 0;
 import { PlayerStats } from '@/types';
 import { FreePlayDifficulty } from './CharacterSelection';
 import { DEFAULT_PLAYER_STATS } from '@/utils/gameDefinitions';
@@ -125,6 +128,7 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 24,
+    paddingBottom: 24 + MOBILE_WEB_BOTTOM_PADDING,
     justifyContent: 'space-between',
   },
   headerSection: {

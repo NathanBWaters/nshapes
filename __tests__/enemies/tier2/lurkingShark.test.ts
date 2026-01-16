@@ -53,6 +53,16 @@ describe('Lurking Shark', () => {
       const enemy = createLurkingShark();
       expect(enemy.icon).toBe('lorc/shark-jaws');
     });
+
+    it('has correct description', () => {
+      const enemy = createLurkingShark();
+      expect(enemy.description).toBe('25% of new cards are face-down');
+    });
+
+    it('has correct defeat condition text', () => {
+      const enemy = createLurkingShark();
+      expect(enemy.defeatConditionText).toBe('Match 3 face-down cards');
+    });
   });
 
   describe('face-down effect', () => {
@@ -97,53 +107,25 @@ describe('Lurking Shark', () => {
     });
   });
 
-  describe('countdown effect', () => {
-    it('places countdown card on round start', () => {
-      const enemy = createLurkingShark();
-      const board = createTestBoard();
-
-      const result = enemy.onRoundStart(board);
-      expect(result.cardModifications.length).toBeGreaterThan(0);
-
-      const countdownMod = result.cardModifications.find((m) => m.changes.hasCountdown);
-      expect(countdownMod).toBeDefined();
-      expect(countdownMod?.changes.countdownTimer).toBe(12000);
-    });
-
-    it('damages player when countdown expires', () => {
-      const enemy = createLurkingShark();
-      const board = createTestBoard();
-
-      enemy.onRoundStart(board);
-
-      // Simulate 12 seconds
-      const result = enemy.onTick(12000, board);
-      expect(result.healthDelta).toBe(-1);
-    });
-  });
-
   describe('defeat condition', () => {
     it('returns false with insufficient face-down matches', () => {
       const enemy = createLurkingShark();
       const stats = createEmptyStats();
       stats.faceDownCardsMatched = 2;
-      stats.countdownCardsMatched = 1;
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
 
-    it('returns false without countdown match', () => {
+    it('returns true with 3 face-down matches', () => {
       const enemy = createLurkingShark();
       const stats = createEmptyStats();
       stats.faceDownCardsMatched = 3;
-      stats.countdownCardsMatched = 0;
-      expect(enemy.checkDefeatCondition(stats)).toBe(false);
+      expect(enemy.checkDefeatCondition(stats)).toBe(true);
     });
 
-    it('returns true with 3+ face-down and 1+ countdown matches', () => {
+    it('returns true with more than 3 face-down matches', () => {
       const enemy = createLurkingShark();
       const stats = createEmptyStats();
-      stats.faceDownCardsMatched = 3;
-      stats.countdownCardsMatched = 1;
+      stats.faceDownCardsMatched = 5;
       expect(enemy.checkDefeatCondition(stats)).toBe(true);
     });
   });

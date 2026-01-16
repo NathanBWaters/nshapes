@@ -2,357 +2,390 @@
 
 > **For Claude:** Check off tasks with `[x]` as you complete them. Follow TDD where applicable: write tests first, implement, verify tests pass.
 
-You MUST commit the code once the unit tests and integration tests are passing between each section.
+## Commit Protocol (IMPORTANT)
+
+**After EVERY subsection:**
+1. Run `npm test` - ALL unit tests must pass
+2. Run `npm run typecheck` - no type errors
+3. Run `npx playwright test` - ALL integration/e2e tests must pass
+4. Commit with a descriptive message specific to that subsection
+5. Only proceed to the next subsection after commit succeeds
+
+**Do NOT batch commits.** Each subsection gets its own commit. This ensures:
+- Every change is atomic and reversible
+- Bugs can be traced to specific commits
+- Progress is saved incrementally
 
 ---
 
-## Section 1: Weapon System Fixes
+## Section 1: UI Display Improvements
 
-### 1.1 Max-Capacity Weapons Should Grant Immediate Bonus ✅ COMPLETED
-**Issue:** Weapons that increase max capacity (hints, graces) should also grant +1 current when acquired. Currently they only increase the cap.
-
-**Affected Weapons:**
-- `Crystal Orb` (Common: +1 max hints, Rare: +2, Legendary: +3)
-- Weapons that increase `maxGraces`
+### 1.1 Max Items Display Enhancement
+**Issue:** Max items (like maxCount weapons) should show ownership count AND percentage stats should show their caps.
 
 **Files:**
-- `src/components/Game.tsx` - weapon acquisition logic
-- `src/utils/gameDefinitions.ts` - weapon definitions (lines 750-785 for Crystal Orb)
+- `src/components/WeaponShop.tsx` - stat display
+- `src/components/LevelUp.tsx` - stat display
+- `src/components/CharacterSelection.tsx` - character stats
 
 **Tasks:**
-- [x] When Crystal Orb is acquired, also grant +1 current hint (up to new max)
-- [x] When any max-grace weapon is acquired, also grant +1 current grace (up to new max)
-- [x] Update weapon descriptions to clarify: "+1 max hint capacity (and +1 hint)"
+- [ ] Show "2/3 owned" style display for weapons with maxCount when player owns multiple copies
+- [ ] Show percentage stats with their caps: "30% fire spread (max 70%)"
+- [ ] Update weapon cards to indicate ownership count when applicable
+- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
+- [ ] **Commit:** `fix(ui): show weapon ownership count and stat caps`
 
-### 1.2 Destruction Weapons Descriptions ✅ COMPLETED
-**Issue:** It's not clear why players would want explosions, fire, or lasers. Descriptions should explain destroyed cards give rewards.
-
-**Affected Weapons:**
-- `Blast Powder` (explosive)
-- `Flint Spark` (fire)
-- `Prismatic Ray` (laser)
-- Any weapon with `specialEffect: 'explosive' | 'fire' | 'laser'`
+### 1.2 Character Stats Comprehensive Display
+**Issue:** Character stats should show ALL stats (echo, board growth, fire spread, explosion chance, etc.) and display max limits near each stat.
 
 **Files:**
-- `src/utils/gameDefinitions.ts` - weapon descriptions
+- `src/components/CharacterSelection.tsx` - character stats display
+- `src/components/WeaponShop.tsx` - stats preview
+- `src/components/LevelUp.tsx` - stats preview
+- `src/types.ts` - PlayerStats interface
 
 **Tasks:**
-- [x] Update all explosive weapons to mention: "Destroyed cards give +1 point and +1 coin each."
-- [x] Update all fire weapons to mention destroyed card rewards
-- [x] Update all laser weapons to mention destroyed card rewards
+- [ ] Audit PlayerStats interface and ensure ALL stats are displayed
+- [ ] Add echo chance, board growth chance, laser chance, fire spread, explosion chance, etc.
+- [ ] Show max limit next to each stat (e.g., "Echo: 15% (max 60%)")
+- [ ] Ensure no stat from PlayerStats is missing from the display
+- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
+- [ ] **Commit:** `fix(ui): display all character stats with max limits`
 
-### 1.3 Blast Powder Legendary Nerf ✅ COMPLETED
-**Issue:** Blast Powder Legendary (70% explosion chance) is too powerful.
-
-**File:** `src/utils/gameDefinitions.ts` (lines 383-394)
-
-**Current:** 70% explosion chance
-**Target:** 35% explosion chance
-
-**Tasks:**
-- [x] Change `blast-powder-legendary` explosionChance from 70 to 35
-- [x] Update description from "70% chance" to "35% chance"
-
-### 1.4 Oracle Eye Rare Timing Fix ✅ VERIFIED
-**Issue:** Oracle Eye Rare should be noticeably better than Common. The auto-hint system works by waiting X seconds after a match, then having a chance to reveal a hint card.
-
-**File:** `src/utils/gameDefinitions.ts` (lines 413-424)
-
-**Current State:**
-- Common: 15s wait, 15% chance
-- Rare: 10s wait, 45% chance
-- Legendary: 5s wait, 100% chance
-
-**Understanding:** `autoHintInterval` modifies the base wait time. The rare version waits 10s (vs 15s for common) which is correct - shorter wait = better. Verified this is working correctly.
-
-**Tasks:**
-- [x] Verify auto-hint timing logic in GameBoard.tsx applies `autoHintInterval` correctly
-- [x] Ensure Rare (10s) is noticeably faster than Common (15s)
-- [x] Consider reducing Rare to 12s or 13s if 10s feels too strong relative to Legendary (5s) - **Kept at 10s, good progression**
-- [x] Update descriptions to be clear about the timing benefit - **Already clear in current descriptions**
-
-### 1.5 Shop Legendary Rarity Scaling ✅ COMPLETED
-**Issue:** Legendary weapons should be less likely early game and more likely late game. Currently it's a flat 5% all rounds.
+### 1.3 RoundSummary Bottom Section Visual Fix
+**Issue:** The bottom section (Continue button area) has a weird opaque rectangle that covers content before the button fades in. The transparent area should not hide what's behind it.
 
 **Files:**
-- `src/utils/gameConfig.ts` - rarity chances (lines 71-77)
-- `src/utils/gameDefinitions.ts` - `getRandomShopWeapon()` (lines 1161-1188)
-- `src/components/Game.tsx` - `generateShopWeapons()` calls
-
-**Current:** Flat 5% legendary all rounds
-**Target:** Round 1: ~1.25% (quarter of current), Round 10: ~10% (double current), gradual ramp
+- `src/components/RoundSummary.tsx` - button container styling (lines 185-192 for animation timing)
 
 **Tasks:**
-- [x] Add `getRarityChancesForRound(round: number)` function to `gameConfig.ts`
-- [x] Modify rarity calculation to scale by round:
-  - Round 1: Common 85%, Rare 13.75%, Legendary 1.25%
-  - Round 10: Common 55%, Rare 35%, Legendary 10%
-  - Linear interpolation between
-- [x] Update `getRandomShopWeapon()` to accept `round` parameter
-- [x] Update all `generateShopWeapons()` calls in Game.tsx to pass current round
+- [ ] Remove or fix the opaque background that covers content before fade-in
+- [ ] Ensure the area is fully transparent until the button actually appears
+- [ ] The button can still fade in, but the area shouldn't look like it's hiding things
+- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
+- [ ] **Commit:** `fix(ui): remove opaque background from RoundSummary button area`
 
-### 1.6 Verification ✅ COMPLETED
-- [x] Run `npm test` - all 1014 tests pass
-- [x] Run `npm run typecheck` - no new type errors (pre-existing icon issues)
-- [ ] Commit with message: "fix(weapons): capacity bonuses, descriptions, balancing, and rarity scaling"
+### 1.4 Section Verification
+- [ ] Verify all 3 subsection commits are pushed
+- [ ] Manual test: Confirm UI improvements work as expected
 
 ---
 
-## Section 2: Card System Bugs
+## Section 2: Enemy System Overhaul
 
-### 2.1 Duplicate Card Selection Bug ✅ FIXED
-**Issue:** The game can deal the exact same card twice. When you select one, it selects both because they share the same attributes.
+### 2.1 Enemy Difficulty Philosophy Change
+**Issue:** Enemies weren't fun - they were all net negative. Restructure tier system with this philosophy:
+- **Tier 1:** Fun extra challenge, should NOT make things harder
+- **Tier 2:** Slightly harder
+- **Tier 3:** Harder
+- **Tier 4:** Damn hard
+- **Rule:** Last round (Round 10) must be all Tier 4 enemies
 
 **Files:**
-- `src/utils/gameUtils.ts` - `createDeck()`, `generateCardId()`, `sameCardAttributes()`
-- `src/components/Game.tsx` - card selection handling
-- `src/components/GameBoard.tsx` - `handleCardClick()`
+- `src/utils/enemies/tier1/*.ts` - should be fun, not punishing
+- `src/utils/enemies/tier2/*.ts` - slight challenge
+- `src/utils/enemies/tier3/*.ts` - moderate challenge
+- `src/utils/enemies/tier4/*.ts` - hard challenge
+- `src/components/EnemySelection.tsx` - enemy selection logic
 
-**Root Causes Identified:**
-1. ✅ Card IDs use a global counter (`cardInstanceCounter`) - verified unique
-2. ✅ When deck runs low, cards were re-added without checking against newly added cards and matched cards still on board
-3. ✅ Card selection uses `card.id` exclusively - verified correct
+**Tasks:**
+- [ ] Review and adjust ALL Tier 1 enemies to be fun bonus challenges, not harder
+- [ ] Review and adjust Tier 2 enemies to be only slightly harder
+- [ ] Review and adjust Tier 3 enemies to be moderately harder
+- [ ] Verify Tier 4 enemies are appropriately difficult
+- [ ] Ensure Round 10 enemy selection only offers Tier 4 enemies
+- [ ] Update enemy descriptions to reflect new balance
+- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
+- [ ] **Commit:** `fix(enemies): rebalance tier difficulty philosophy`
 
-**Investigation Tasks:**
-- [x] Add debug logging to `handleCardClick()` to see what's being compared - **Verified uses card.id**
-- [x] Verify that card selection uses `card.id` exclusively (not attributes) - **Confirmed at GameBoard.tsx:435**
-- [x] Check if `selectedCards.some(c => c.id === card.id)` is the comparison being used - **Confirmed**
-- [x] Look for any code paths that might compare cards by attributes instead of ID - **None found in selection**
+### 2.2 Specific Enemy Fixes
 
-**Fix Tasks:**
-- [x] Ensure all card comparisons in selection use `card.id` - **Already correct**
-- [x] Add hash/UUID suffix to card IDs if counter-based IDs aren't unique enough - **Counter-based IDs are unique**
-- [x] Add duplicate prevention logic when creating the initial board - **Already implemented**
-- [x] Add duplicate prevention when replenishing deck (if possible given board state) - **Fixed: now excludes matched cards and newCards from duplicate check**
-- [x] If duplicates are unavoidable (all permutations on board), ensure selection still works by ID - **Works by ID**
-- [x] Write tests for duplicate card scenarios - **Added 2 new tests for unique IDs**
+#### Lurking Shark Clarity
+**Issue:** "Match face-down cards" is confusing because you can't see what a face-down card is. Reword to clarify it means cards that WERE face-down but have been flipped.
 
-### 2.2 Verification ✅ COMPLETED
-- [x] Run `npm test` - all 1016 tests pass
-- [x] Run `npm run typecheck` - no new type errors
-- [x] Manual test: Create scenario with duplicate-attribute cards, verify selecting one doesn't select both - **Card IDs are unique**
-- [ ] Commit with message: "fix(cards): duplicate card selection bug"
+**File:** `src/utils/enemies/tier2/lurkingShark.ts`
+
+**Tasks:**
+- [ ] Reword description: "Match cards that were originally face-down" or similar
+- [ ] Make the mechanic clearer in the defeat condition text
+- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
+- [ ] **Commit:** `fix(enemies): clarify Lurking Shark face-down mechanic`
+
+#### Charging Boar Too Tough
+**Issue:** Score draining at 3 points/second is too punishing. Should be 1 point every 3 seconds.
+
+**File:** `src/utils/enemies/tier2/chargingBoar.ts`
+
+**Current:** 3 points/second decay
+**Target:** ~0.33 points/second (1 point every 3 seconds)
+
+**Tasks:**
+- [ ] Change scoreDecay from 3 to 0.33 (or implement as 1 point per 3 seconds)
+- [ ] Update description to reflect new decay rate
+- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
+- [ ] **Commit:** `fix(enemies): reduce Charging Boar score decay rate`
+
+#### Diving Hawk Stretch Goal Impossible
+**Issue:** Stretch goal (2 all-different matches under 6 seconds each) is too hard.
+
+**File:** `src/utils/enemies/tier2/divingHawk.ts`
+
+**Tasks:**
+- [ ] Increase time limit from 6 seconds to 8 or 10 seconds
+- [ ] OR reduce required matches from 2 to 1
+- [ ] Update description
+- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
+- [ ] **Commit:** `fix(enemies): make Diving Hawk stretch goal achievable`
+
+#### Stalking Wolf Stretch Goal Adjustment
+**Issue:** Getting 3 matches each under 5 seconds is hard. Change to "get 3 matches within 10 seconds total" (do two quickly, lined up).
+
+**File:** `src/utils/enemies/tier1/stalkingWolf.ts`
+
+**Current:** 3 matches, each under 5 seconds
+**Target:** 3 matches within 10 seconds total
+
+**Tasks:**
+- [ ] Change defeat condition from "each under 5s" to "3 matches within 10 seconds window"
+- [ ] Update implementation to track a 10-second window
+- [ ] Update description
+- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
+- [ ] **Commit:** `fix(enemies): change Stalking Wolf to 10-second window`
+
+#### Ravenous Tapir Too Hard
+**Issue:** Card removal is so aggressive (5+ cards per match) that it's nearly impossible.
+
+**File:** `src/utils/enemies/tier3/ravenousTapir.ts`
+
+**Tasks:**
+- [ ] Reduce card removal rate significantly
+- [ ] Consider changing from "2 extra cards removed per match" to "1 extra card removed"
+- [ ] Adjust burrowing mole effect (currently 1 card every 10s)
+- [ ] Make the stretch goal achievable
+- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
+- [ ] **Commit:** `fix(enemies): reduce Ravenous Tapir card removal aggressiveness`
+
+### 2.3 Enemy Abilities Before/After Display
+**Issue:** Enemy abilities that decrease stats should show before and after values.
+
+**Files:**
+- `src/components/EnemySelection.tsx` - enemy ability display
+- `src/components/ui/ChallengeCard.tsx` - challenge card display
+
+**Example:** Instead of "-35% time", show "60s → 39s"
+
+**Tasks:**
+- [ ] Modify enemy ability display to show before → after for stat reductions
+- [ ] Apply to time reductions, score decay rates, etc.
+- [ ] Update ChallengeCard to support this format
+- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
+- [ ] **Commit:** `fix(enemies): show before/after values for stat reductions`
+
+### 2.4 Section Verification
+- [ ] Verify all 7 subsection commits are pushed
+- [ ] Manual test: Confirm enemy changes work as expected
 
 ---
 
-## Section 3: Enemy System Improvements
+## Section 3: Reward System Overhaul
 
-### 3.1 Enemy Abilities UI Clarity
-**Issue:** Enemy ability descriptions are hard to read. Each effect should be on its own line.
-
-**Files:**
-- `src/components/EnemySelection.tsx` - enemy selection display
-- `src/components/enemy-ui/EnemyPortrait.tsx` - in-game enemy display
-- Enemy definition files in `src/utils/enemies/`
-
-**Tasks:**
-- [x] Update enemy `description` format to use newlines or array of effects
-- [x] Update EnemySelection UI to render each effect on its own line with bullet points
-- [x] Update ChallengeCard UI to show effects with bullet points
-
-### 3.2 Defeat Condition as "Stretch Goal"
-**Issue:** It's not clear that the defeat condition is optional/bonus. Should be labeled "Stretch Goal" and give bonus money in addition to bonus weapon.
+### 3.1 Show Specific Rewards Before Enemy Selection
+**Issue:** It's not fun to get a random additional item. Players should see the SPECIFIC weapon they'll get for defeating each enemy's stretch goal BEFORE selecting.
 
 **Files:**
-- `src/components/EnemySelection.tsx` - defeat condition display
-- `src/components/enemy-ui/DefeatProgress.tsx` - in-game progress display
-- `src/components/LevelUp.tsx` - slayer reward logic (lines 16-46)
-- `src/components/Game.tsx` - reward handling
-
-**Current Slayer Bonus:**
-- Just a bonus weapon based on tier
-
-**Target Slayer Bonus:**
-- Bonus weapon + bonus gold
-- Tier 1: +$10-15 (random)
-- Tier 2: +$20-30 (random)
-- Tier 3: +$40-60 (random)
-- Tier 4: +$50-100 (random)
+- `src/components/EnemySelection.tsx` - enemy selection screen
+- `src/components/Game.tsx` - enemy/reward generation logic
+- `src/components/LevelUp.tsx` - current stretch goal bonus logic
+- `docs/enemy-design.md` - update documentation
 
 **Tasks:**
-- [x] Rename "Defeat Condition" to "Stretch Goal" in EnemySelection
-- [x] Rename "SLAYER BONUS" to "EXTRA CHALLENGE BONUS" in LevelUp
-- [x] Add `getChallengeBonusMoney(tier: number)` function that returns random amount in tier range
-- [x] Grant bonus money when enemy is defeated (in Game.tsx reward handling)
-- [x] Update UI to show "Stretch Goal: [condition] → Bonus weapon + $X"
+- [ ] Generate the specific stretch goal reward weapon when generating enemy options
+- [ ] Display the specific weapon on each enemy card in EnemySelection
+- [ ] Store the pre-determined reward with the enemy selection
+- [ ] When stretch goal is achieved, grant the pre-shown weapon (not random)
+- [ ] Update enemy-design.md to reflect this change
+- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
+- [ ] **Commit:** `feat(rewards): show specific weapon rewards before enemy selection`
 
-### 3.3 Slayer Bonus Rarity Adjustment
-**Issue:** The current slayer bonus rarity system could be improved. Using existing 3 tiers (common, rare, legendary).
-
-**File:** `src/components/LevelUp.tsx` (lines 16-46)
-
-**Current Slayer Bonus Logic:**
-- Tier 1: Guaranteed Rare
-- Tier 2: 50% Rare, 50% Legendary
-- Tier 3-4: Guaranteed Legendary
-
-**Updated Slayer Bonus Logic:**
-- Tier 1: Guaranteed Rare (keep as-is)
-- Tier 2: 70% Rare, 30% Legendary (slight legendary chance)
-- Tier 3: 40% Rare, 60% Legendary (better legendary chance)
-- Tier 4: Guaranteed Legendary (keep as-is)
-
-**Tasks:**
-- [x] Update `generateChallengeBonus()` with new percentages
-- [ ] Update UI to show expected reward rarity before selecting enemy (e.g., "Reward: Rare or Legendary")
-
-### 3.4 Tier 4 Boss Difficulty Adjustment
-**Issue:** Round 10 / Tier 4 bosses are extremely challenging. Need to reduce difficulty to be only slightly harder than Tier 3.
+### 3.2 Stretch Goal Bonus Selection Bug Fix
+**Issue:** Selecting stretch goal bonus weapons (Cascade Core, Growth Mastery, Flint Spark) in the upgrade shop causes the selection to refresh back to the first item.
 
 **Files:**
-- `src/utils/enemies/tier4/ancientDragon.ts`
-- `src/utils/enemies/tier4/theHydra.ts`
-- `src/utils/enemies/tier4/krakensGrasp.ts`
-- `src/utils/enemies/tier4/theReaper.ts`
-- `src/utils/enemies/tier4/worldEater.ts`
-
-**Adjustment Guidelines (make moderately harder than Tier 3, not extreme):**
-
-| Boss | Current | Adjusted |
-|------|---------|----------|
-| Ancient Dragon | 1.8x timer, 8pts/sec decay, 3 triple cards | 1.4x timer, 5pts/sec decay, 2 triple cards |
-| The Hydra | 20s instant death, 3 bombs, -6s steal | 30s instant death, 2 bombs, -4s steal |
-| Kraken's Grasp | 10s shuffle, 8s removal, -75% all counters | 15s shuffle, 12s removal, -50% all counters |
-| The Reaper | -90% grace/time, 10pts/sec decay | -60% grace/time, 6pts/sec decay |
-| World Eater | 3 cards on match, 6s removal, 15s death, 2x timer | 2 cards on match, 10s removal, 25s death, 1.5x timer |
+- `src/components/LevelUp.tsx` - selection handling for challenge bonus
+- `src/components/WeaponShop.tsx` - if applicable
 
 **Tasks:**
-- [x] Adjust Ancient Dragon values
-- [x] Adjust The Hydra values
-- [x] Adjust Kraken's Grasp values
-- [x] Adjust The Reaper values
-- [x] Adjust World Eater values
-- [x] Update enemy descriptions to reflect new values
-- [x] Update any related tests
+- [ ] Debug why selecting stretch goal bonus weapons causes refresh
+- [ ] Fix the selection state to persist correctly
+- [ ] Ensure challenge bonus weapons can be selected and acquired normally
+- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
+- [ ] **Commit:** `fix(rewards): fix stretch goal bonus weapon selection bug`
 
-### 3.5 Move Goblin Saboteur to Tier 2
-**Issue:** "Triggering 3 weapon effects" is too easy for a Tier 3 challenge.
+**Note:** This may become less relevant after 3.1 is implemented since rewards will be pre-determined.
+
+### 3.3 RoundSummary Stretch Goal Reward Clarity
+**Issue:** When completing a round, the summary should clearly show if the stretch goal was achieved and what specific weapon was earned.
 
 **Files:**
-- `src/utils/enemies/tier3/goblinSaboteur.ts` → move to `src/utils/enemies/tier2/goblinSaboteur.ts`
-- `src/utils/enemies/tier3/index.ts` - remove export
-- `src/utils/enemies/tier2/index.ts` - add export
+- `src/components/RoundSummary.tsx` - round completion display
 
 **Tasks:**
-- [x] Move `goblinSaboteur.ts` from tier3 to tier2 directory
-- [x] Update the `tier` property in the enemy definition from 3 to 2
-- [x] Update tier3/index.ts to remove the export
-- [x] Update tier2/index.ts to add the export
-- [x] Update any tests that reference Goblin Saboteur's tier
-- [x] Verify `getEnemiesByTier(2)` now includes Goblin Saboteur
-- [x] Verify `getEnemiesByTier(3)` no longer includes Goblin Saboteur
+- [ ] Add section showing "Stretch Goal: [Achieved/Not Achieved]"
+- [ ] If achieved, prominently display the weapon that was earned
+- [ ] Make it super clear what the player got from the stretch goal
+- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
+- [ ] **Commit:** `feat(rewards): show stretch goal results in RoundSummary`
 
-### 3.6 Verification
-- [x] Run `npm test -- --testPathPattern="enemies"` - all enemy tests pass
-- [x] Run `npm run typecheck` - no new type errors (pre-existing icon issues)
-- [x] Verify Tier 2 now has 13 enemies, Tier 3 now has 11 enemies
-- [ ] Commit with message: "fix(enemies): UI clarity, stretch goals, tier balancing, move Goblin Saboteur to T2"
+### 3.4 "Loot" Terminology Fix
+**Issue:** The reward screen mentions "LOOT" but we don't really gain loot in the traditional sense.
+
+**File:** `src/components/RoundSummary.tsx` (line 124)
+
+**Tasks:**
+- [ ] Rename "LOOT" to something more appropriate (e.g., "BONUS", "REWARDS", or remove if not meaningful)
+- [ ] Update icon if terminology changes
+- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
+- [ ] **Commit:** `fix(ui): rename LOOT to appropriate terminology`
+
+### 3.5 Section Verification
+- [ ] Verify all 4 subsection commits are pushed
+- [ ] Update docs/enemy-design.md with new reward system
+- [ ] Manual test: Confirm reward system changes work as expected
 
 ---
 
-## Section 4: UI/UX Fixes
+## Section 4: Gameplay Mechanics
 
-### 4.1 Top Row Card Touch Area
-**Issue:** The top row of cards is difficult to tap. The enemy UI overlay blocks touch events on the top half of the top row.
-
-**Files:**
-- `src/components/GameBoard.tsx` - enemy overlay positioning (lines 870-910)
-- Card rendering and touch handling
-
-**Tasks:**
-- [x] Audit touch area for top row cards
-- [x] Ensure enemy overlay has `pointerEvents="box-none"` to allow touches to pass through to cards
-- [x] If needed, add padding/margin to push enemy UI above card grid
-- [ ] Test with 5-attribute board (more cards = worse issue)
-
-### 4.2 Final Round Menu Issues
-**Issue:** Multiple problems with round 10 / final round screens.
-
-**Problems:**
-1. Bottom button is too large
-2. AttributeUnlockScreen appears even on Hard difficulty where no new attributes are added
+### 4.1 Game Over Screen Enemy Display
+**Issue:** When you lose, the game over screen should say which enemy you lost to.
 
 **Files:**
-- `src/components/VictoryScreen.tsx` - button styling
-- `src/components/AttributeUnlockScreen.tsx` - display logic
-- `src/components/Game.tsx` - `proceedFromRound()` logic (lines 1854-1878)
-
-**Attribute Progression by Difficulty:**
-- Easy: 3 attributes all rounds (NEVER add new attributes)
-- Medium: 3 → 4 (Round 4) → 5 (Round 10)
-- Hard: 4 → 5 (Round 6) - nothing added at Round 10
+- `src/components/Game.tsx` - game over handling (lines 2395-2466)
 
 **Tasks:**
-- [x] Fix VictoryScreen button to match other screens (smaller, consistent padding)
-- [x] Fix AttributeUnlockScreen logic: Don't show if no new attribute is being added
-- [x] For Hard difficulty Round 10: Skip attribute unlock screen entirely
-- [x] For Easy difficulty: Never show attribute unlock screen
-- [ ] Test all three difficulties through Round 10
+- [ ] Store the current enemy when game over occurs
+- [ ] Display enemy name and icon on game over screen
+- [ ] Show "Defeated by [Enemy Name]" or similar
+- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
+- [ ] **Commit:** `feat(ui): show enemy name on game over screen`
 
-### 4.3 Greedy Squirrel Description Reword
-**Issue:** The current description "On match, 1 extra card is removed" is confusing. Should say "Only 2 cards are replenished on match."
+### 4.2 Hints Should Not Include Dud Cards
+**Issue:** Hints can show sets that include dud cards, but duds can't be matched. Hints should exclude duds.
 
-**File:** `src/utils/enemies/tier1/greedySquirrel.ts` (line 21)
-
-**Current:** "On match, 1 extra card is removed"
-**Target:** "Only 2 cards are replenished on match"
+**Files:**
+- `src/components/GameBoard.tsx` - hint system
+- `src/utils/gameUtils.ts` - set finding logic
 
 **Tasks:**
-- [x] Update `description` in greedySquirrel.ts
-- [x] Update test to match new description
-- [x] Verify UI displays correctly
+- [ ] When finding valid sets for hints, exclude cards with `isDud: true`
+- [ ] Ensure auto-hints also exclude duds
+- [ ] Test with board containing duds to verify
+- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
+- [ ] **Commit:** `fix(hints): exclude dud cards from hint suggestions`
 
-### 4.4 Verification
-- [x] Run `npm test` - all tests pass
-- [x] Run `npm run typecheck` - no new type errors
-- [ ] Manual test: Verify top row cards are tappable
-- [ ] Manual test: Play through Round 10 on all 3 difficulties
-- [x] Commit with message: "fix(ui): touch areas, final round screens, enemy descriptions"
+### 4.3 Health Over 3 = Bonus Starting Time
+**Issue:** New mechanic - for every health over 3 that you have, gain 15 starting seconds.
+
+**Files:**
+- `src/components/Game.tsx` - round start logic
+- `src/utils/gameConfig.ts` - if constants needed
+- `src/types.ts` - if new stat tracking needed
+
+**Example:**
+- 3 health = 0 bonus seconds (base)
+- 4 health = +15 seconds
+- 5 health = +30 seconds
+- 6 health = +45 seconds
+
+**Tasks:**
+- [ ] Implement bonus time calculation at round start
+- [ ] Add the bonus time to starting timer
+- [ ] Display this bonus somewhere so player understands the benefit
+- [ ] Update any relevant documentation
+- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
+- [ ] **Commit:** `feat(gameplay): add bonus starting time for health over 3`
+
+### 4.4 End Round Early Button
+**Issue:** Players who have already hit the score target may want to skip ahead instead of waiting. Add an "End Round Early" button to the in-game pause menu (top-right corner menu button).
+
+**Files:**
+- `src/components/GameMenu.tsx` - pause menu modal
+- `src/components/Game.tsx` - round completion logic
+
+**Requirements:**
+- Only visible when actively playing a round (game board is up, matching phase)
+- NOT visible during other phases (character selection, shop, level up, etc.)
+- Should end the round and proceed to the round summary/rewards
+- Player keeps their current score, health, etc.
+
+**Tasks:**
+- [ ] Add "End Round Early" button to GameMenu component
+- [ ] Only show button when `gamePhase === 'playing'` or equivalent
+- [ ] Wire button to trigger round completion (same as timer expiry but successful)
+- [ ] Ensure score/rewards are calculated based on current progress
+- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
+- [ ] **Commit:** `feat(gameplay): add End Round Early button to pause menu`
+
+### 4.5 Section Verification
+- [ ] Verify all 4 subsection commits are pushed
+- [ ] Manual test: Confirm gameplay changes work as expected
 
 ---
 
 ## Section 5: Final Verification & Commit
 
 ### 5.1 Full Test Suite
-- [x] Run `npm test` - all 1016 tests pass
-- [x] Run `npm run typecheck` - no new type errors (pre-existing icon issues in ChallengeCard)
-- [x] Run `npm run validate:icons` - all 111 icons valid
+- [ ] Run `npm test` - all tests pass
+- [ ] Run `npm run typecheck` - no new type errors
+- [ ] Run `npx playwright test` - all integration tests pass
+- [ ] Run `npm run validate:icons` - all icons valid
 
-### 5.2 Manual Testing Checklist
-- [ ] Test Crystal Orb grants immediate hint on acquisition
-- [ ] Test destruction weapon descriptions are clear
-- [ ] Test card selection never selects duplicates
-- [ ] Test enemy abilities display on separate lines
-- [ ] Test stretch goal UI and bonus money rewards
-- [ ] Test top row cards are tappable
-- [ ] Test Final Round on all 3 difficulties (Easy, Medium, Hard)
-- [ ] Test shop legendary rarity scaling over 10 rounds
-- [ ] Test Goblin Saboteur appears in Tier 2 enemy selection
-- [ ] Test Tier 4 bosses are challenging but beatable
+### 5.2 Documentation Updates
+- [ ] Update docs/enemy-design.md with new tier philosophy
+- [ ] Update docs/enemy-design.md with pre-shown rewards
+- [ ] Update CLAUDE.md if any major system changes
+- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
+- [ ] **Commit:** `docs: update enemy and reward system documentation`
 
-### 5.3 Final Commit
-- [x] Increment version in package.json (0.1.21 → 0.1.22)
-- [ ] Commit with message: "release: v0.1.22 - bug fixes and balancing improvements"
+### 5.3 Manual Testing Checklist
+- [ ] Test stat display shows all stats with max limits
+- [ ] Test "2/3 owned" display for multi-copy weapons
+- [ ] Test enemy selection shows specific rewards
+- [ ] Test RoundSummary shows stretch goal results clearly
+- [ ] Test bottom button area doesn't have opaque rectangle issue
+- [ ] Test game over screen shows enemy that defeated you
+- [ ] Test hints don't include dud cards
+- [ ] Test health > 3 grants bonus starting time
+- [ ] Test "End Round Early" button only appears during active gameplay
+- [ ] Test "End Round Early" properly ends round with current score/rewards
+- [ ] Test Tier 1 enemies are fun, not punishing
+- [ ] Test rebalanced enemies (Charging Boar, Diving Hawk, Stalking Wolf, Ravenous Tapir)
+- [ ] Test Lurking Shark description is clearer
+
+### 5.4 Final Commit
+- [ ] Increment version in package.json
+- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
+- [ ] **Commit:** `release: vX.Y.Z - enemy rebalance, reward clarity, UI improvements`
 - [ ] Push to remote
 - [ ] Report version number
-- [ ] Only when everything is completely done, output "<promise>FULLY 100% ENTIRELY DONE</promise>"
-
+- [ ] Emit "FULLY 100% ENTIRELY DONE" on the log so that the loop ends.
 
 ---
 
 ## Summary
 
-| Section | Items | Status |
-|---------|-------|--------|
-| 1. Weapon System Fixes | 6 subsections | ✅ COMPLETED |
-| 2. Card System Bugs | 2 subsections | ✅ COMPLETED |
-| 3. Enemy System Improvements | 6 subsections | ✅ COMPLETED |
-| 4. UI/UX Fixes | 4 subsections | ✅ COMPLETED |
-| 5. Final Verification | 3 subsections | ✅ COMPLETED |
+| Section | Subsections | Commits Required |
+|---------|-------------|------------------|
+| 1. UI Display Improvements | 3 | 3 |
+| 2. Enemy System Overhaul | 7 | 7 |
+| 3. Reward System Overhaul | 4 | 4 |
+| 4. Gameplay Mechanics | 4 | 4 |
+| 5. Final Verification | 2 | 2 |
+| **Total** | **20** | **20** |
 
 **Implementation Order:**
-1. Section 1: Weapon fixes (standalone, no dependencies)
-2. Section 2: Card bugs (standalone, no dependencies)
-3. Section 3: Enemy improvements (depends on understanding current enemy system)
-4. Section 4: UI/UX fixes (may touch same files as Section 3)
+1. Section 1: UI improvements (standalone, affects display)
+2. Section 3: Reward system (changes how enemies work, do before enemy rebalance)
+3. Section 2: Enemy rebalance (depends on new reward system being in place)
+4. Section 4: Gameplay mechanics (standalone additions)
 5. Section 5: Final verification and release

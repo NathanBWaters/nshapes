@@ -32,6 +32,12 @@ test.describe('Timer Restart Bug', () => {
         await skipButton.click();
       }
 
+      // Wait for enemy selection screen
+      await expect(page.getByText('Choose Enemy')).toBeVisible({ timeout: 10000 });
+
+      // Select first enemy using testID
+      await page.getByTestId('fight-enemy-button').click();
+
       // Wait for game to load
       await expect(page.getByText('R1')).toBeVisible({ timeout: 10000 });
     }

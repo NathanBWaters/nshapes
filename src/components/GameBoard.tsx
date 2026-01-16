@@ -381,8 +381,13 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
   // Auto-hint function - shows hint without consuming player hints
   // By default shows only 1 card from a valid set; with Mystic Sight weapon, has a chance to show 2
+  // Excludes dud cards and face-down cards from hint calculation
   const showAutoHint = useCallback(() => {
-    const availableCards = cards.filter(card => !matchedCardIds.includes(card.id));
+    const availableCards = cards.filter(card =>
+      !matchedCardIds.includes(card.id) &&
+      !card.isDud &&
+      !card.isFaceDown
+    );
 
     for (let i = 0; i < availableCards.length - 2; i++) {
       for (let j = i + 1; j < availableCards.length - 1; j++) {
@@ -853,7 +858,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
   };
 
   return (
-    <Animated.View nativeID="gameboard-container" style={[styles.container, shakeStyle]}>
+    <Animated.View testID="game-board" nativeID="gameboard-container" style={[styles.container, shakeStyle]}>
       {/* Success flash overlay */}
       <Animated.View
         style={[styles.flashOverlay, styles.successFlash, successFlashStyle]}

@@ -66,7 +66,7 @@ Enemy names should be **1-3 words**, animal-themed, and hint at their mechanic w
 | # | Name | Icon | Effect | Defeat Condition |
 |---|------|------|--------|------------------|
 | 1 | **Junk Rat** | `rat` | 4% chance per card draw → card is white/blank dud (unmatchable) | Get a 4-match streak |
-| 2 | **Stalking Wolf** | `wolf-head` | 45s inactivity bar → lose 1 health | Match 3 times in under 5s each |
+| 2 | **Stalking Wolf** | `wolf-head` | 45s inactivity bar → lose 1 health | Match 5 times in under 8s each |
 | 3 | **Shifting Chameleon** | `chameleon-glyph` | Changes 1 attribute on random cards every 20s | Get 2 all-different matches |
 | 4 | **Burrowing Mole** | `mole` | Removes 1 random card every 20s | Match all 3 shapes at least once |
 | 5 | **Masked Bandit** | `raccoon-head` | Disables auto-hints entirely | Get 3 matches without hesitating >10s |
@@ -95,10 +95,10 @@ Enemy names should be **1-3 words**, animal-themed, and hint at their mechanic w
 
 | # | Name | Icon | Effects (Combined) | Defeat Condition |
 |---|------|------|-------------------|------------------|
-| 23 | **Charging Boar** | `boar` | Stalking Wolf (35s → lose 1HP) + Circling Vulture (3pts/sec drain) | Get 3 matches each under 8s |
+| 23 | **Charging Boar** | `boar` | 35s inactivity → lose 1HP | Get 5 matches each under 10s |
 | 24 | **Cackling Hyena** | `hyena-head` | Thieving Raven (-3s) + Sneaky Mouse (-35%) | Match 6 times with no grace used |
-| 25 | **Lurking Shark** | `shark-jaws` | Night Owl (25% face-down) + Ticking Viper (12s countdown) | Match 3 face-down cards + the countdown card |
-| 26 | **Diving Hawk** | `hawk-emblem` | Swift Bee (35% faster) + Burrowing Mole (15s removal) | Get 2 all-different matches under 6s each |
+| 25 | **Lurking Shark** | `shark-jaws` | 25% of new cards are face-down | Match 3 face-down cards |
+| 26 | **Diving Hawk** | `hawk-emblem` | Timer 35% faster | Get 3 all-different matches |
 | 27 | **Venomous Cobra** | `cobra` | Shifting Chameleon (15s) + Trap Weaver | Match 4 bombs before they explode |
 | 28 | **Prowling Direwolf** | `direwolf` | Junk Rat (6% dud) + Wild Goose (25s shuffle) | Get a 6-match streak |
 | 29 | **Hunting Eagle** | `eagle-head` | Iron Shell + Lazy Sloth (-35%) | Clear triple card with 20s+ remaining |
@@ -126,7 +126,7 @@ Enemy names should be **1-3 words**, animal-themed, and hint at their mechanic w
 | 42 | **Wicked Imp** | `imp` | Stinging Scorpion + Sneaky Mouse (-55%) + Lazy Sloth (-55%) | Achieve minimum with 3+ graces unused |
 | 43 | **Swarming Ants** | `ant` | Trap Weaver (×2 bombs) + Wet Crab (-55%) + Ticking Viper (8s) | Defuse 5 bombs total |
 | 44 | **Nightmare Squid** | `giant-squid` | Night Owl (35% face-down, 50% flip chance) + Wild Goose (15s) + Circling Vulture (6pts/sec) | Score 200% of target |
-| 45 | **Ravenous Tapir** | `tapir` | Greedy Squirrel (2 cards per match) + Burrowing Mole (10s) + Swift Bee (40% faster) | Achieve minimum with 5+ cards remaining |
+| 45 | **Ravenous Tapir** | `tapir` | +2 cards removed per match, removes 1 card every 10s | Beat target with 6+ cards remaining |
 | 46 | **Merciless Porcupine** | `porcupine` | Punishing Ermine (3 cards per invalid) + Stinging Scorpion + Stalking Wolf (35s → **instant death**) | Make no invalid matches
 
 ---

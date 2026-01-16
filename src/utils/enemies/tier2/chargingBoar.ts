@@ -1,12 +1,12 @@
 /**
  * Charging Boar - Tier 2 Enemy
  *
- * Effects: Stalking Wolf (35s → lose 1HP) + Circling Vulture (3pts/sec drain)
- * Defeat Condition: Get 3 matches each under 8s
+ * Effects: 35s inactivity → lose 1HP (focused single hazard)
+ * Defeat Condition: Get 5 matches each under 10s
  */
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
-import { InactivityEffect, ScoreDecayEffect, composeEffects } from '../../enemyEffects';
+import { InactivityEffect, composeEffects } from '../../enemyEffects';
 import { registerEnemy } from '../../enemyFactory';
 
 /**
@@ -18,17 +18,16 @@ export function createChargingBoar(): EnemyInstance {
       name: 'Charging Boar',
       icon: 'caro-asercion/boar',
       tier: 2,
-      description: '35s inactivity → lose 1HP, score drains 3pts/sec',
-      defeatConditionText: 'Get 3 matches each under 8s',
+      description: '35s inactivity → lose 1HP',
+      defeatConditionText: 'Get 5 matches each under 10s',
     },
     [
       { behavior: InactivityEffect, config: { maxMs: 35000, penalty: 'damage' } },
-      { behavior: ScoreDecayEffect, config: { ratePerSecond: 3 } },
     ],
-    // Defeat condition: 3 matches each under 8 seconds
+    // Defeat condition: 5 matches each under 10 seconds
     (stats: RoundStats) => {
-      const fastMatches = stats.matchTimes.filter((t) => t < 8000).length;
-      return fastMatches >= 3;
+      const fastMatches = stats.matchTimes.filter((t) => t < 10000).length;
+      return fastMatches >= 5;
     }
   );
 }

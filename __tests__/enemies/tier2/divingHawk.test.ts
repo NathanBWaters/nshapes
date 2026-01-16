@@ -53,6 +53,16 @@ describe('Diving Hawk', () => {
       const enemy = createDivingHawk();
       expect(enemy.icon).toBe('lorc/hawk-emblem');
     });
+
+    it('has correct description', () => {
+      const enemy = createDivingHawk();
+      expect(enemy.description).toBe('Timer 35% faster');
+    });
+
+    it('has correct defeat condition text', () => {
+      const enemy = createDivingHawk();
+      expect(enemy.defeatConditionText).toBe('Get 3 all-different matches');
+    });
   });
 
   describe('timer speed effect', () => {
@@ -63,48 +73,32 @@ describe('Diving Hawk', () => {
     });
   });
 
-  describe('card removal effect', () => {
-    it('removes card after 15 seconds', () => {
-      const enemy = createDivingHawk();
-      const board = createTestBoard();
-      enemy.onRoundStart(board);
-
-      const result = enemy.onTick(15000, board);
-      expect(result.cardsToRemove.length).toBe(1);
-    });
-
-    it('does not remove below minimum board size', () => {
-      const enemy = createDivingHawk();
-      const board = createTestBoard().slice(0, 6); // Only 6 cards
-      enemy.onRoundStart(board);
-
-      const result = enemy.onTick(15000, board);
-      expect(result.cardsToRemove.length).toBe(0);
-    });
-  });
-
   describe('defeat condition', () => {
     it('returns false with only 1 all-different match', () => {
       const enemy = createDivingHawk();
       const stats = createEmptyStats();
       stats.allDifferentMatches = 1;
-      stats.matchTimes = [5000, 5000];
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
 
-    it('returns false without fast matches', () => {
+    it('returns false with 2 all-different matches', () => {
       const enemy = createDivingHawk();
       const stats = createEmptyStats();
       stats.allDifferentMatches = 2;
-      stats.matchTimes = [7000, 8000];
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
 
-    it('returns true with 2+ all-different matches and fast times', () => {
+    it('returns true with 3 all-different matches', () => {
       const enemy = createDivingHawk();
       const stats = createEmptyStats();
-      stats.allDifferentMatches = 2;
-      stats.matchTimes = [5000, 4000];
+      stats.allDifferentMatches = 3;
+      expect(enemy.checkDefeatCondition(stats)).toBe(true);
+    });
+
+    it('returns true with more than 3 all-different matches', () => {
+      const enemy = createDivingHawk();
+      const stats = createEmptyStats();
+      stats.allDifferentMatches = 5;
       expect(enemy.checkDefeatCondition(stats)).toBe(true);
     });
   });

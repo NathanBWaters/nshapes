@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Pressable, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, Pressable, StyleSheet, ScrollView, Platform } from 'react-native';
 import { PlayerStats, Weapon } from '@/types';
+
+// Extra bottom padding for mobile web browsers to account for browser UI (URL bar, navigation)
+const MOBILE_WEB_BOTTOM_PADDING = Platform.OS === 'web' ? 60 : 0;
 import type { EnemyInstance } from '@/types/enemy';
 import { COLORS, RADIUS } from '@/utils/colors';
 import Icon from './Icon';
@@ -20,6 +23,14 @@ const TIER_LABELS: Record<1 | 2 | 3 | 4, string> = {
   2: 'Uncommon',
   3: 'Rare',
   4: 'Boss',
+};
+
+// Stretch goal reward descriptions by tier
+const TIER_REWARDS: Record<1 | 2 | 3 | 4, { weaponRarity: string; moneyRange: string }> = {
+  1: { weaponRarity: 'Rare', moneyRange: '$10-15' },
+  2: { weaponRarity: '70% Rare / 30% Legendary', moneyRange: '$20-30' },
+  3: { weaponRarity: '40% Rare / 60% Legendary', moneyRange: '$40-60' },
+  4: { weaponRarity: 'Legendary', moneyRange: '$50-100' },
 };
 
 interface EnemySelectionProps {
@@ -74,17 +85,69 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
             <Text style={styles.detailName}>{focusedEnemy.name}</Text>
             <Text style={[styles.tierLabel, { color: tierColor }]}>{tierLabel}</Text>
 
-            {/* Effect & Stretch Goal */}
+            {/* Effect, Stretch Goal & Reward */}
             <ScrollView style={styles.infoScrollArea} showsVerticalScrollIndicator={false}>
               <View style={[styles.infoBox, styles.infoBoxEffect]}>
                 <Text style={styles.infoLabelEffect}>Enemy Effects</Text>
                 {focusedEnemy.description.split(', ').map((effect, index) => (
                   <Text key={index} style={styles.infoText}>• {effect}</Text>
                 ))}
+                {/* Show stat modifiers if enemy has any */}
+                {(() => {
+                  const modifiers = focusedEnemy.getStatModifiers();
+                  const uiModifiers = focusedEnemy.getUIModifiers();
+                  const statChanges: string[] = [];
+
+                  // Timer speed modifier
+                  if (uiModifiers.timerSpeedMultiplier && uiModifiers.timerSpeedMultiplier > 1) {
+                    const speedUp = Math.round((uiModifiers.timerSpeedMultiplier - 1) * 100);
+                    statChanges.push(`Timer: 100% → ${100 + speedUp}% speed`);
+                  }
+
+                  // Score decay
+                  if (uiModifiers.showScoreDecay?.rate) {
+                    statChanges.push(`Score: -${uiModifiers.showScoreDecay.rate} pts/sec`);
+                  }
+
+                  // Weapon counter reductions
+                  if (modifiers.fireSpreadChanceReduction) {
+                    statChanges.push(`Fire Spread: -${modifiers.fireSpreadChanceReduction}%`);
+                  }
+                  if (modifiers.explosionChanceReduction) {
+                    statChanges.push(`Explosion: -${modifiers.explosionChanceReduction}%`);
+                  }
+                  if (modifiers.laserChanceReduction) {
+                    statChanges.push(`Laser: -${modifiers.laserChanceReduction}%`);
+                  }
+                  if (modifiers.healingChanceReduction) {
+                    statChanges.push(`Healing: -${modifiers.healingChanceReduction}%`);
+                  }
+
+                  if (statChanges.length > 0) {
+                    return (
+                      <View style={styles.statModifiersSection}>
+                        <Text style={styles.statModifiersLabel}>Stat Changes:</Text>
+                        {statChanges.map((change, i) => (
+                          <Text key={i} style={styles.statModifierText}>• {change}</Text>
+                        ))}
+                      </View>
+                    );
+                  }
+                  return null;
+                })()}
               </View>
               <View style={[styles.infoBox, styles.infoBoxDefeat]}>
                 <Text style={styles.infoLabelDefeat}>Stretch Goal</Text>
                 <Text style={styles.infoText}>{focusedEnemy.defeatConditionText}</Text>
+              </View>
+              <View style={[styles.infoBox, styles.infoBoxReward]}>
+                <Text style={styles.infoLabelReward}>Stretch Goal Reward</Text>
+                <Text style={styles.infoText}>
+                  • Bonus weapon: {TIER_REWARDS[focusedEnemy.tier].weaponRarity}
+                </Text>
+                <Text style={styles.infoText}>
+                  • Bonus money: {TIER_REWARDS[focusedEnemy.tier].moneyRange}
+                </Text>
               </View>
             </ScrollView>
           </View>
@@ -145,6 +208,7 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
       {/* Action Button */}
       <View style={styles.actionSection}>
         <TouchableOpacity
+          testID="fight-enemy-button"
           onPress={() => focusedEnemy && onSelect(focusedEnemy)}
           disabled={!focusedEnemy}
           style={[
@@ -252,6 +316,10 @@ const styles = StyleSheet.create({
   infoBoxDefeat: {
     borderColor: COLORS.logicTeal,
   },
+  infoBoxReward: {
+    borderColor: '#D97706', // Amber/gold color for rewards
+    backgroundColor: '#FEF3C7', // Slight amber tint
+  },
   infoLabelEffect: {
     color: COLORS.impactOrange,
     fontWeight: '600',
@@ -268,11 +336,39 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginBottom: 4,
   },
+  infoLabelReward: {
+    color: '#D97706',
+    fontWeight: '600',
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
   infoText: {
     color: COLORS.slateCharcoal,
     fontWeight: '400',
     fontSize: 13,
     lineHeight: 18,
+  },
+  statModifiersSection: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.impactOrange + '40',
+  },
+  statModifiersLabel: {
+    color: COLORS.impactRed,
+    fontWeight: '600',
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  statModifierText: {
+    color: COLORS.impactRed,
+    fontWeight: '500',
+    fontSize: 12,
+    lineHeight: 16,
   },
   emptyDetail: {
     flex: 1,
@@ -361,6 +457,7 @@ const styles = StyleSheet.create({
   // Action Section
   actionSection: {
     padding: 16,
+    paddingBottom: 16 + MOBILE_WEB_BOTTOM_PADDING,
     backgroundColor: COLORS.canvasWhite,
     borderTopWidth: 1,
     borderTopColor: COLORS.slateCharcoal,

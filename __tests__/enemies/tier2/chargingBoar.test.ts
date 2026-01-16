@@ -53,6 +53,16 @@ describe('Charging Boar', () => {
       const enemy = createChargingBoar();
       expect(enemy.icon).toBe('caro-asercion/boar');
     });
+
+    it('has correct description', () => {
+      const enemy = createChargingBoar();
+      expect(enemy.description).toBe('35s inactivity → lose 1HP');
+    });
+
+    it('has correct defeat condition text', () => {
+      const enemy = createChargingBoar();
+      expect(enemy.defeatConditionText).toBe('Get 5 matches each under 10s');
+    });
   });
 
   describe('inactivity effect', () => {
@@ -95,59 +105,32 @@ describe('Charging Boar', () => {
     });
   });
 
-  describe('score decay effect', () => {
-    it('shows score decay in UI modifiers', () => {
-      const enemy = createChargingBoar();
-      const uiMods = enemy.getUIModifiers();
-      expect(uiMods.showScoreDecay).toBeDefined();
-      expect(uiMods.showScoreDecay?.rate).toBe(3);
-    });
-
-    it('decays score at 3 points per second', () => {
-      const enemy = createChargingBoar();
-      const board = createTestBoard();
-
-      // Simulate 1 second
-      const result = enemy.onTick(1000, board);
-      expect(result.scoreDelta).toBe(-3);
-    });
-
-    it('decays score proportionally', () => {
-      const enemy = createChargingBoar();
-      const board = createTestBoard();
-
-      // Simulate 500ms
-      const result = enemy.onTick(500, board);
-      expect(result.scoreDelta).toBe(-1.5);
-    });
-  });
-
   describe('defeat condition', () => {
     it('returns false with no fast matches', () => {
       const enemy = createChargingBoar();
       const stats = createEmptyStats();
-      stats.matchTimes = [10000, 12000]; // All slow matches
+      stats.matchTimes = [15000, 12000]; // All slow matches (over 10s)
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
 
-    it('returns false with only 2 fast matches', () => {
+    it('returns false with only 4 fast matches', () => {
       const enemy = createChargingBoar();
       const stats = createEmptyStats();
-      stats.matchTimes = [5000, 6000, 10000]; // Only 2 under 8s
+      stats.matchTimes = [5000, 6000, 7000, 8000, 15000]; // Only 4 under 10s
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
 
-    it('returns true with 3 fast matches', () => {
+    it('returns true with 5 fast matches', () => {
       const enemy = createChargingBoar();
       const stats = createEmptyStats();
-      stats.matchTimes = [5000, 6000, 7000]; // All under 8s
+      stats.matchTimes = [5000, 6000, 7000, 8000, 9000]; // All under 10s
       expect(enemy.checkDefeatCondition(stats)).toBe(true);
     });
 
-    it('returns true with more than 3 fast matches', () => {
+    it('returns true with more than 5 fast matches', () => {
       const enemy = createChargingBoar();
       const stats = createEmptyStats();
-      stats.matchTimes = [3000, 4000, 5000, 6000, 7000]; // 5 under 8s
+      stats.matchTimes = [3000, 4000, 5000, 6000, 7000, 8000]; // 6 under 10s
       expect(enemy.checkDefeatCondition(stats)).toBe(true);
     });
   });

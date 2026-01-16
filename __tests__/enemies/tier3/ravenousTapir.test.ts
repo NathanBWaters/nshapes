@@ -53,23 +53,53 @@ describe('Ravenous Tapir', () => {
       const enemy = createRavenousTapir();
       expect(enemy.icon).toBe('delapouite/tapir');
     });
+
+    it('has correct description', () => {
+      const enemy = createRavenousTapir();
+      expect(enemy.description).toBe('+2 cards removed per match, removes 1 card every 10s');
+    });
+
+    it('has correct defeat condition text', () => {
+      const enemy = createRavenousTapir();
+      expect(enemy.defeatConditionText).toBe('Beat target with 6+ cards remaining');
+    });
   });
 
-  describe('extra card removal', () => {
-    it('removes 2 extra cards on match', () => {
+  describe('extra card removal on match', () => {
+    it('removes 2 extra cards on match (with board > minSize)', () => {
       const enemy = createRavenousTapir();
-      const board = createTestBoard();
+      const board = createTestBoard(); // 12 cards
 
       const result = enemy.onValidMatch([board[0], board[1], board[2]], board);
       expect(result.cardsToRemove.length).toBe(2);
     });
+
+    it('does not remove cards if board would go below minSize', () => {
+      const enemy = createRavenousTapir();
+      // Create small board (5 cards - at minSize)
+      const board = createTestBoard().slice(0, 5);
+
+      const result = enemy.onValidMatch([board[0], board[1], board[2]], board);
+      expect(result.cardsToRemove.length).toBe(0);
+    });
   });
 
-  describe('timer speed', () => {
-    it('has 40% faster timer', () => {
+  describe('timed card removal', () => {
+    it('removes 1 card after 10 seconds', () => {
       const enemy = createRavenousTapir();
-      const uiMods = enemy.getUIModifiers();
-      expect(uiMods.timerSpeedMultiplier).toBe(1.4);
+      const board = createTestBoard(); // 12 cards
+
+      const result = enemy.onTick(10000, board);
+      expect(result.cardsToRemove.length).toBe(1);
+    });
+
+    it('does not remove cards if board at minSize', () => {
+      const enemy = createRavenousTapir();
+      // Create small board (5 cards - at minSize)
+      const board = createTestBoard().slice(0, 5);
+
+      const result = enemy.onTick(10000, board);
+      expect(result.cardsToRemove.length).toBe(0);
     });
   });
 
@@ -83,21 +113,30 @@ describe('Ravenous Tapir', () => {
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
 
-    it('returns false with fewer than 5 cards', () => {
-      const enemy = createRavenousTapir();
-      const stats = createEmptyStats();
-      stats.currentScore = 100;
-      stats.targetScore = 100;
-      stats.cardsRemaining = 4;
-      expect(enemy.checkDefeatCondition(stats)).toBe(false);
-    });
-
-    it('returns true with target and 5+ cards', () => {
+    it('returns false with fewer than 6 cards', () => {
       const enemy = createRavenousTapir();
       const stats = createEmptyStats();
       stats.currentScore = 100;
       stats.targetScore = 100;
       stats.cardsRemaining = 5;
+      expect(enemy.checkDefeatCondition(stats)).toBe(false);
+    });
+
+    it('returns true with target reached and 6+ cards', () => {
+      const enemy = createRavenousTapir();
+      const stats = createEmptyStats();
+      stats.currentScore = 100;
+      stats.targetScore = 100;
+      stats.cardsRemaining = 6;
+      expect(enemy.checkDefeatCondition(stats)).toBe(true);
+    });
+
+    it('returns true with target exceeded and many cards', () => {
+      const enemy = createRavenousTapir();
+      const stats = createEmptyStats();
+      stats.currentScore = 150;
+      stats.targetScore = 100;
+      stats.cardsRemaining = 10;
       expect(enemy.checkDefeatCondition(stats)).toBe(true);
     });
   });

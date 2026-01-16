@@ -96,24 +96,24 @@ const ChallengeCard: React.FC<ChallengeCardProps> = ({ enemy, difficulty, enemyD
           {enemyDefeated ? (
             <View style={styles.successBadge}>
               <Icon name="lorc/checked-shield" size={14} color={COLORS.logicTeal} />
-              <Text style={styles.successText}>Challenge Completed!</Text>
+              <Text style={styles.successText}>Stretch Goal Complete!</Text>
             </View>
           ) : (
             <View style={styles.failureBadge}>
-              <Icon name="lorc/cancel" size={14} color={COLORS.impactRed} />
-              <Text style={styles.failureText}>Challenge Failed</Text>
+              <Icon name="lorc/cross-mark" size={14} color={COLORS.impactRed} />
+              <Text style={styles.failureText}>Stretch Goal Failed</Text>
             </View>
           )}
 
-          {/* Reward Info */}
-          <View style={[styles.rewardSection, { backgroundColor: enemyDefeated ? COLORS.logicTeal + '15' : COLORS.slateCharcoal + '10' }]}>
-            <Text style={[styles.rewardLabel, { color: enemyDefeated ? COLORS.logicTeal : COLORS.slateCharcoal }]}>
-              {enemyDefeated ? '🎁 REWARD EARNED' : '💔 REWARD MISSED'}
+          {/* Reward Info - Clear messaging about what the player gets */}
+          <View style={[styles.rewardSection, { backgroundColor: enemyDefeated ? '#FEF3C7' : COLORS.slateCharcoal + '10' }]}>
+            <Text style={[styles.rewardLabel, { color: enemyDefeated ? '#D97706' : COLORS.slateCharcoal }]}>
+              {enemyDefeated ? '🎁 BONUS WEAPON UNLOCKED!' : '💔 REWARD MISSED'}
             </Text>
-            <Text style={[styles.rewardText, { opacity: enemyDefeated ? 1 : 0.6 }]}>
+            <Text style={[styles.rewardText, { opacity: enemyDefeated ? 1 : 0.6, fontWeight: enemyDefeated ? '700' : '600' }]}>
               {enemyDefeated
-                ? `Extra ${tierLabel} weapon in next level up`
-                : `Would have earned extra ${tierLabel} weapon`
+                ? `You'll get an extra ${tierLabel} weapon at the next Level Up screen!`
+                : `Would have earned an extra ${tierLabel} weapon`
               }
             </Text>
           </View>

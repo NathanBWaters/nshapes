@@ -42,6 +42,7 @@ import AttributeUnlockScreen from './AttributeUnlockScreen';
 import VictoryScreen from './VictoryScreen';
 import RoundProgressChart, { RoundScore } from './RoundProgressChart';
 import CharacterUnlockScreen from './CharacterUnlockScreen';
+import Icon from './Icon';
 import MainMenu from './MainMenu';
 import DifficultySelection from './DifficultySelection';
 import OptionsMenu from './OptionsMenu';
@@ -272,7 +273,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     experienceEarned: 0,
     hintsEarned: 0,
     healingDone: 0,
-    lootBoxesEarned: 0,
+    bonusWeaponsEarned: 0,
     startLevel: 0,
   });
 
@@ -564,7 +565,11 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     const roundReq = getRoundRequirement(1);
 
     // Calculate time with starting bonus if game is starting
-    const timeBonus = startGame ? (totalStats.startingTime || 0) : 0;
+    // Also add bonus time for excess health (health > 3 = +3s per extra HP)
+    const weaponTimeBonus = startGame ? (totalStats.startingTime || 0) : 0;
+    const excessHealth = Math.max(0, totalStats.health - 3);
+    const healthTimeBonus = startGame ? (excessHealth * 3) : 0; // +3 seconds per excess HP
+    const timeBonus = weaponTimeBonus + healthTimeBonus;
 
     // Reset enemy round stats for defeat condition tracking
     resetRoundStats(roundReq.targetScore, totalStats.hints || 0, totalStats.graces || 0);
@@ -796,7 +801,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       experienceEarned: 0,
       hintsEarned: 0,
       healingDone: 0,
-      lootBoxesEarned: 0,
+      bonusWeaponsEarned: 0,
       startLevel: state.player.stats.level,
     });
 
@@ -1220,7 +1225,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     let totalExperience = 0;
     let totalHealing = 0;
     let totalHints = 0;
-    let lootCratesEarned = 0;
+    let bonusWeaponsCount = 0;
     let graceUsed = false;
 
     rewards.forEach(reward => {
@@ -1238,7 +1243,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       totalExperience += reward.experience || 0;
       totalHealing += reward.healing || 0;
       totalHints += reward.hint || 0;
-      if (reward.lootBox) lootCratesEarned++;
+      if (reward.lootBox) bonusWeaponsCount++;
     });
 
     // === WEAPON BONUS EFFECTS (from GameBoard's processWeaponEffects) ===
@@ -1316,7 +1321,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       experienceEarned: prev.experienceEarned + adjustedExperience,
       hintsEarned: prev.hintsEarned + totalHints,
       healingDone: prev.healingDone + totalHealing,
-      lootBoxesEarned: prev.lootBoxesEarned + lootCratesEarned,
+      bonusWeaponsEarned: prev.bonusWeaponsEarned + bonusWeaponsCount,
     }));
 
     // Update game state with rewards
@@ -1375,7 +1380,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
         board: newBoard,
         selectedCards: prevState.selectedCards.filter(c => !cards.some(mc => mc.id === c.id)),
         foundCombinations: [...prevState.foundCombinations, cards],
-        lootCrates: prevState.lootCrates + lootCratesEarned,
+        lootCrates: prevState.lootCrates + bonusWeaponsCount,
         remainingTime: newRemainingTime,
         player: {
           ...prevState.player,
@@ -1981,7 +1986,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       experienceEarned: 0,
       hintsEarned: 0,
       healingDone: 0,
-      lootBoxesEarned: 0,
+      bonusWeaponsEarned: 0,
       startLevel: state.player.stats.level,
     });
 
@@ -2022,10 +2027,14 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       };
     });
 
-    // Apply startingTime bonus from weapons (will be applied when enemy is selected)
+    // Apply startingTime bonus from weapons and excess health
+    // Health > 3 = +3s per extra HP
     setState(prevState => {
       const totalStats = calculatePlayerTotalStats(prevState.player);
-      const timeBonus = totalStats.startingTime || 0;
+      const weaponTimeBonus = totalStats.startingTime || 0;
+      const excessHealth = Math.max(0, totalStats.health - 3);
+      const healthTimeBonus = excessHealth * 3; // +3 seconds per excess HP
+      const timeBonus = weaponTimeBonus + healthTimeBonus;
       return {
         ...prevState,
         remainingTime: prevState.remainingTime + timeBonus
@@ -2113,7 +2122,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
             targetScore={state.targetScore}
             moneyEarned={roundStats.moneyEarned}
             experienceEarned={roundStats.experienceEarned}
-            lootBoxes={roundStats.lootBoxesEarned}
+            bonusWeapons={roundStats.bonusWeaponsEarned}
             hintsEarned={roundStats.hintsEarned}
             healingDone={roundStats.healingDone}
             didLevelUp={state.player.stats.level > roundStats.startLevel}
@@ -2234,6 +2243,8 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
                 onClearHint={() => setClearHintTrigger(t => t + 1)}
                 hasActiveHint={hasActiveHint}
                 onExitGame={() => setGamePhase('main_menu')}
+                onEndRoundEarly={completeRound}
+                canEndRoundEarly={state.score >= state.targetScore}
                 devMode={devMode}
                 devCallbacks={devCallbacks}
                 onMenuOpenChange={setIsMenuOpen}
@@ -2405,6 +2416,21 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
               {gameOverReason && (
                 <View style={gameOverStyles.reasonContainer}>
                   <Text style={gameOverStyles.reasonText}>{gameOverReason}</Text>
+                </View>
+              )}
+
+              {/* Enemy that defeated the player */}
+              {state.activeEnemyInstance && (
+                <View style={gameOverStyles.enemyContainer}>
+                  <Icon
+                    name={state.activeEnemyInstance.icon}
+                    size={32}
+                    color={COLORS.impactRed}
+                  />
+                  <View style={gameOverStyles.enemyInfo}>
+                    <Text style={gameOverStyles.enemyLabel}>DEFEATED BY</Text>
+                    <Text style={gameOverStyles.enemyName}>{state.activeEnemyInstance.name}</Text>
+                  </View>
                 </View>
               )}
 
@@ -2639,6 +2665,32 @@ const gameOverStyles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     letterSpacing: 0.5,
+  },
+  enemyContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEE2E2', // Light red/pink
+    borderRadius: RADIUS.module,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.impactRed,
+    gap: 12,
+  },
+  enemyInfo: {
+    flex: 1,
+  },
+  enemyLabel: {
+    color: COLORS.impactRed,
+    fontWeight: '600',
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  enemyName: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '700',
+    fontSize: 16,
   },
   statsContainer: {
     backgroundColor: COLORS.canvasWhite,

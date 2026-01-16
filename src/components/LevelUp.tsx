@@ -1,15 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Pressable, StyleSheet, Platform } from 'react-native';
 import { PlayerStats, Weapon, WeaponRarity, EffectCaps } from '@/types';
+
+// Extra bottom padding for mobile web browsers to account for browser UI (URL bar, navigation)
+const MOBILE_WEB_BOTTOM_PADDING = Platform.OS === 'web' ? 60 : 0;
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
-import { getCapInfoForStat, isStatCapped } from '@/utils/gameConfig';
+import { getCapInfoForStat, isStatCapped, STAT_TO_CAP_TYPE, EFFECT_CAPS } from '@/utils/gameConfig';
 import Icon from './Icon';
 import GameMenu from './GameMenu';
 import InventoryBar from './InventoryBar';
 import { ConfettiBurst } from './effects/ConfettiBurst';
 import { ScreenTransition } from './ScreenTransition';
 import { playSound } from '@/utils/sounds';
-import { getWeaponsByRarity } from '@/utils/gameDefinitions';
+import { getWeaponsByRarity, getPlayerWeaponCount } from '@/utils/gameDefinitions';
 
 // Extra challenge bonus color (golden)
 const CHALLENGE_BONUS_COLOR = '#FFD700';
@@ -72,6 +75,8 @@ interface WeaponOptionProps {
   onPress: (index: number) => void;
   onHoverIn: (index: number) => void;
   onHoverOut: () => void;
+  ownershipCount?: number;  // How many of this weapon the player already owns
+  maxCount?: number;        // Max count for this weapon (if limited)
 }
 
 function WeaponOption({
@@ -82,7 +87,11 @@ function WeaponOption({
   onPress,
   onHoverIn,
   onHoverOut,
+  ownershipCount,
+  maxCount,
 }: WeaponOptionProps) {
+  const showOwnership = maxCount !== undefined && ownershipCount !== undefined && ownershipCount > 0;
+
   return (
     <Pressable
       onPress={() => onPress(index)}
@@ -95,6 +104,12 @@ function WeaponOption({
         Platform.OS === 'web' && { cursor: 'pointer' as any },
       ]}
     >
+      {/* Ownership badge for weapons with maxCount */}
+      {showOwnership && (
+        <View style={styles.ownershipBadge}>
+          <Text style={styles.ownershipBadgeText}>{ownershipCount}/{maxCount}</Text>
+        </View>
+      )}
       {weapon.icon && (
         <View style={styles.optionIcon}>
           <Icon
@@ -328,6 +343,14 @@ const LevelUp: React.FC<LevelUpProps> = ({
               ]}>
                 <Text style={styles.rarityBadgeText}>{getRarityLabel(focusedWeapon.rarity)}</Text>
               </View>
+              {/* Ownership indicator for weapons with maxCount */}
+              {focusedWeapon.maxCount !== undefined && (
+                <View style={styles.ownershipIndicator}>
+                  <Text style={styles.ownershipIndicatorText}>
+                    {getPlayerWeaponCount(focusedWeapon.name, playerWeapons)}/{focusedWeapon.maxCount} owned
+                  </Text>
+                </View>
+              )}
             </View>
 
             {/* Weapon Info */}
@@ -360,8 +383,10 @@ const LevelUp: React.FC<LevelUpProps> = ({
                         ]}>
                           {stat.after}
                         </Text>
-                        {stat.isCapped && stat.cap !== null && (
-                          <Text style={styles.capIndicator}>(cap {stat.cap}%)</Text>
+                        {stat.cap !== null && (
+                          <Text style={[styles.capIndicator, stat.isCapped && styles.capIndicatorCapped]}>
+                            (max {stat.cap}%)
+                          </Text>
                         )}
                       </View>
                     </View>
@@ -402,6 +427,9 @@ const LevelUp: React.FC<LevelUpProps> = ({
           {options.map((weapon, index) => {
             const isFocused = focusedIndex === index;
             const rarityColor = getRarityColor(weapon.rarity);
+            const ownershipCount = weapon.maxCount !== undefined
+              ? getPlayerWeaponCount(weapon.name, playerWeapons)
+              : undefined;
 
             return (
               <WeaponOption
@@ -417,6 +445,8 @@ const LevelUp: React.FC<LevelUpProps> = ({
                 }}
                 onHoverIn={setHoveredIndex}
                 onHoverOut={() => setHoveredIndex(null)}
+                ownershipCount={ownershipCount}
+                maxCount={weapon.maxCount}
               />
             );
           })}
@@ -701,9 +731,14 @@ const styles = StyleSheet.create({
   },
   capIndicator: {
     fontSize: 10,
-    color: '#EAB308',
+    color: COLORS.slateCharcoal,
+    opacity: 0.6,
     marginLeft: 4,
     fontWeight: '500',
+  },
+  capIndicatorCapped: {
+    color: '#EAB308', // Yellow/amber when at cap
+    opacity: 1,
   },
   emptyDetail: {
     flex: 1,
@@ -788,6 +823,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 8,
     gap: 2,
+    position: 'relative',
   },
   optionIcon: {
     marginBottom: 2,
@@ -815,6 +851,7 @@ const styles = StyleSheet.create({
   // Action Section
   actionSection: {
     padding: 16,
+    paddingBottom: 16 + MOBILE_WEB_BOTTOM_PADDING,
     backgroundColor: COLORS.canvasWhite,
     borderTopWidth: 1,
     borderTopColor: COLORS.slateCharcoal,
@@ -883,6 +920,36 @@ const styles = StyleSheet.create({
     color: COLORS.slateCharcoal,
     fontWeight: '700',
     fontSize: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  // Ownership badge for weapon options with maxCount
+  ownershipBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: COLORS.logicTeal,
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    zIndex: 1,
+  },
+  ownershipBadgeText: {
+    color: COLORS.canvasWhite,
+    fontWeight: '700',
+    fontSize: 9,
+  },
+  // Ownership indicator in detail view
+  ownershipIndicator: {
+    backgroundColor: COLORS.logicTeal,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.button,
+  },
+  ownershipIndicatorText: {
+    color: COLORS.canvasWhite,
+    fontWeight: '600',
+    fontSize: 10,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },

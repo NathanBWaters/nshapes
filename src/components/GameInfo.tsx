@@ -63,12 +63,13 @@ const hintButtonStyles = StyleSheet.create({
   hintButtonInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 3,
     borderRadius: RADIUS.button,
-    gap: 2,
+    gap: 1,
     borderWidth: 1,
     borderColor: COLORS.slateCharcoal,
+    flexShrink: 0,
   },
   hintButtonEnabled: {
     backgroundColor: COLORS.actionYellow,
@@ -123,6 +124,8 @@ interface GameInfoProps {
   onClearHint?: () => void;
   hasActiveHint?: boolean;
   onExitGame?: () => void;
+  onEndRoundEarly?: () => void;  // Callback when player ends round early (only available when target met)
+  canEndRoundEarly?: boolean;    // True when score target has been met
   devMode?: boolean;
   devCallbacks?: DevModeCallbacks;
   // Tutorial mode - when true, wraps elements with CopilotStep
@@ -165,6 +168,8 @@ const GameInfo: React.FC<GameInfoProps> = ({
   onClearHint,
   hasActiveHint = false,
   onExitGame,
+  onEndRoundEarly,
+  canEndRoundEarly = false,
   devMode = false,
   devCallbacks,
   copilotMode = false,
@@ -272,7 +277,7 @@ const GameInfo: React.FC<GameInfoProps> = ({
             <CircularTimer
               currentTime={time}
               totalTime={totalTime}
-              size={40}
+              size={34}
               strokeWidth={3}
             />,
             undefined
@@ -283,6 +288,8 @@ const GameInfo: React.FC<GameInfoProps> = ({
             playerStats={playerStats}
             playerWeapons={playerWeapons}
             onExitGame={onExitGame}
+            onEndRoundEarly={onEndRoundEarly}
+            canEndRoundEarly={canEndRoundEarly}
             devMode={devMode}
             devCallbacks={devCallbacks}
             copilotMode={copilotMode}
@@ -329,16 +336,18 @@ const styles = StyleSheet.create({
   leftSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 4,
     flex: 1,
+    flexWrap: 'nowrap',
   },
   statBadge: {
     backgroundColor: COLORS.deepOnyx,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
     borderRadius: RADIUS.button,
     borderWidth: 1,
     borderColor: COLORS.slateCharcoal,
+    flexShrink: 0,
   },
   statLabel: {
     color: COLORS.canvasWhite,
@@ -350,12 +359,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.paperBeige,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 3,
     borderRadius: RADIUS.button,
-    gap: 2,
+    gap: 1,
     borderWidth: 1,
     borderColor: COLORS.slateCharcoal,
+    flexShrink: 0,
   },
   heartIcon: {
     color: COLORS.impactRed,
@@ -379,12 +389,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.paperBeige,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 3,
     borderRadius: RADIUS.button,
-    gap: 4,
+    gap: 2,
     borderWidth: 1,
     borderColor: COLORS.slateCharcoal,
+    flexShrink: 0,
   },
   levelText: {
     color: COLORS.logicTeal,
@@ -393,8 +404,8 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
   },
   xpBarContainer: {
-    width: 32,
-    height: 6,
+    width: 20,
+    height: 5,
     backgroundColor: COLORS.paperBeige,
     borderRadius: 3,
     overflow: 'hidden',
@@ -410,12 +421,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.logicTeal,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 3,
     borderRadius: RADIUS.button,
-    gap: 2,
+    gap: 1,
     borderWidth: 1,
     borderColor: COLORS.slateCharcoal,
+    flexShrink: 0,
   },
   graceIcon: {
     color: COLORS.canvasWhite,

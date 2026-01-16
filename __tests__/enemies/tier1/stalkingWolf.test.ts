@@ -70,7 +70,7 @@ describe('Stalking Wolf', () => {
 
     it('has correct defeat condition text', () => {
       const enemy = createStalkingWolf();
-      expect(enemy.defeatConditionText).toBe('Match 3 times in under 5s each');
+      expect(enemy.defeatConditionText).toBe('Match 5 times in under 8s each');
     });
   });
 
@@ -139,45 +139,45 @@ describe('Stalking Wolf', () => {
   });
 
   describe('defeat condition', () => {
-    it('returns false when less than 3 fast matches', () => {
+    it('returns false when less than 5 fast matches', () => {
       const enemy = createStalkingWolf();
       const stats = createRoundStats({
-        matchTimes: [4000, 3000], // Only 2 fast matches
+        matchTimes: [4000, 3000, 5000, 6000], // Only 4 fast matches (under 8s)
       });
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
 
-    it('returns true when exactly 3 fast matches (under 5s each)', () => {
+    it('returns true when exactly 5 fast matches (under 8s each)', () => {
       const enemy = createStalkingWolf();
       const stats = createRoundStats({
-        matchTimes: [4000, 3500, 4999], // All under 5000ms
+        matchTimes: [4000, 3500, 4999, 7000, 6000], // All under 8000ms
       });
       expect(enemy.checkDefeatCondition(stats)).toBe(true);
     });
 
-    it('returns true when more than 3 fast matches', () => {
+    it('returns true when more than 5 fast matches', () => {
       const enemy = createStalkingWolf();
       const stats = createRoundStats({
-        matchTimes: [2000, 3000, 4000, 1500], // 4 fast matches
+        matchTimes: [2000, 3000, 4000, 1500, 5000, 6000], // 6 fast matches
       });
       expect(enemy.checkDefeatCondition(stats)).toBe(true);
     });
 
-    it('does not count matches at exactly 5s (must be under)', () => {
+    it('does not count matches at exactly 8s (must be under)', () => {
       const enemy = createStalkingWolf();
       const stats = createRoundStats({
-        matchTimes: [4000, 5000, 3000], // 5000ms is NOT under 5s
+        matchTimes: [4000, 8000, 3000, 5000, 6000], // 8000ms is NOT under 8s
       });
-      // Only 2 are under 5s (4000 and 3000), so should fail
+      // Only 4 are under 8s, so should fail
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
 
     it('ignores slow matches when counting', () => {
       const enemy = createStalkingWolf();
       const stats = createRoundStats({
-        matchTimes: [4000, 10000, 3000, 15000, 2000], // 3 fast + 2 slow
+        matchTimes: [4000, 10000, 3000, 15000, 2000, 9000, 5000, 6000], // 5 fast + 3 slow
       });
-      // 3 fast matches is enough
+      // 5 fast matches is enough
       expect(enemy.checkDefeatCondition(stats)).toBe(true);
     });
   });

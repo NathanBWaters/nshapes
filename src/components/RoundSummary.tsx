@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, ScrollView, Platform } from 'react-native';
 import ReAnimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -18,6 +18,9 @@ import { ScreenTransition } from './ScreenTransition';
 import RoundProgressChart, { RoundScore } from './RoundProgressChart';
 import ChallengeCard from './ui/ChallengeCard';
 
+// Extra bottom padding for mobile web browsers to account for browser UI (URL bar, navigation)
+const MOBILE_WEB_BOTTOM_PADDING = Platform.OS === 'web' ? 60 : 0;
+
 interface RoundSummaryProps {
   round: number;
   matchCount: number;
@@ -25,7 +28,7 @@ interface RoundSummaryProps {
   targetScore: number;
   moneyEarned: number;
   experienceEarned: number;
-  lootBoxes: number;
+  bonusWeapons: number;
   hintsEarned: number;
   healingDone: number;
   didLevelUp: boolean;
@@ -84,7 +87,7 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
   targetScore,
   moneyEarned,
   experienceEarned,
-  lootBoxes,
+  bonusWeapons,
   hintsEarned,
   healingDone,
   didLevelUp,
@@ -121,7 +124,7 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
     { key: 'score', label: 'SCORE', value: score, icon: 'skoll/bullseye', color: COLORS.logicTeal },
     { key: 'money', label: 'GOLD', value: moneyEarned, prefix: '+', icon: 'lorc/cash', color: COLORS.actionYellow },
     { key: 'xp', label: 'XP', value: experienceEarned, prefix: '+', icon: 'lorc/flat-star', color: COLORS.logicTeal },
-    { key: 'loot', label: 'LOOT', value: lootBoxes, prefix: 'x', icon: 'lorc/gems', color: COLORS.impactOrange },
+    { key: 'bonus', label: 'BONUS', value: bonusWeapons, prefix: 'x', icon: 'lorc/gems', color: COLORS.impactOrange },
     { key: 'hints', label: 'HINTS', value: hintsEarned, prefix: '+', icon: 'lorc/light-bulb', color: COLORS.actionYellow },
     { key: 'healing', label: 'HEALED', value: healingDone, prefix: '+', suffix: ' HP', icon: 'lorc/heart-inside', color: COLORS.impactRed },
   ];
@@ -379,7 +382,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: 16,
-    paddingBottom: 8,
+    paddingBottom: 100 + MOBILE_WEB_BOTTOM_PADDING, // Account for fixed button container at bottom
   },
   matchCounterContainer: {
     alignItems: 'center',
@@ -404,7 +407,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   challengeSection: {
-    marginBottom: 16,
+    marginBottom: 12,
+    paddingHorizontal: 4, // Slight horizontal padding for visual breathing room
   },
   chartSection: {
     backgroundColor: COLORS.canvasWhite,
@@ -412,7 +416,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderWidth: 1,
     borderColor: COLORS.slateCharcoal,
-    marginBottom: 8,
+    marginBottom: 16, // Increased margin for visual separation
   },
   chartTitle: {
     fontSize: 12,
@@ -467,6 +471,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 16,
     paddingHorizontal: 16,
+    paddingBottom: 16 + MOBILE_WEB_BOTTOM_PADDING,
     borderTopWidth: 1,
     borderTopColor: COLORS.slateCharcoal,
     backgroundColor: COLORS.paperBeige,

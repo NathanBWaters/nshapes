@@ -2,7 +2,7 @@
  * Stalking Wolf - Tier 1 Enemy
  *
  * Effect: 45s inactivity bar → lose 1 health
- * Defeat Condition: Match 3 times in under 5s each
+ * Defeat Condition: Match 5 times in under 8s each (achievable with focus)
  */
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
@@ -19,7 +19,7 @@ export function createStalkingWolf(): EnemyInstance {
       icon: 'lorc/wolf-head',
       tier: 1,
       description: '45s inactivity → lose 1 health',
-      defeatConditionText: 'Match 3 times in under 5s each',
+      defeatConditionText: 'Match 5 times in under 8s each',
     },
     [
       {
@@ -27,12 +27,11 @@ export function createStalkingWolf(): EnemyInstance {
         config: { maxMs: 45000, penalty: 'damage' as const },
       },
     ],
-    // Defeat condition: 3 matches in under 5s each
-    // We need to track matches that were made in under 5s (5000ms)
+    // Defeat condition: 5 matches in under 8s each
     // "under" means strictly less than
     (stats: RoundStats) => {
-      const fastMatches = stats.matchTimes.filter((time) => time < 5000);
-      return fastMatches.length >= 3;
+      const fastMatches = stats.matchTimes.filter((time) => time < 8000);
+      return fastMatches.length >= 5;
     }
   );
 }
