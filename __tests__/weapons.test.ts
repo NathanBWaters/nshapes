@@ -12,8 +12,8 @@ import { Weapon, WeaponRarity, Player } from '@/types';
 
 describe('Weapon Definitions', () => {
   describe('WEAPONS array', () => {
-    it('should have exactly 95 weapons (18 types x 3 rarities + 2 legendary-only + 11 cap increasers + 18 epic variants + 10 bridge legendaries)', () => {
-      expect(WEAPONS.length).toBe(95);
+    it('should have exactly 77 weapons (18 types x 2 rarities + 2 legendary-only + 11 cap increasers + 18 epic variants + 10 bridge legendaries)', () => {
+      expect(WEAPONS.length).toBe(77);
     });
 
     it('should have 18 common weapons', () => {
@@ -31,9 +31,9 @@ describe('Weapon Definitions', () => {
       expect(epics.length).toBe(18);
     });
 
-    it('should have 30 legendary weapons (18 base + Mystic Sight + Chain Reaction + 10 bridge legendaries)', () => {
+    it('should have 12 legendary weapons (Mystic Sight + Chain Reaction + 10 bridge legendaries)', () => {
       const legendaries = WEAPONS.filter(w => w.rarity === 'legendary');
-      expect(legendaries.length).toBe(30);
+      expect(legendaries.length).toBe(12);
     });
 
     it('should have all required weapon types', () => {
@@ -111,7 +111,7 @@ describe('Weapon Definitions', () => {
       });
     });
 
-    it('most weapon types should have 3 rarities, some are legendary-only, rare-only, or epic-only', () => {
+    it('most weapon types should have 2 rarities, some are legendary-only, rare-only, or epic-only', () => {
       const weaponsByName = new Map<string, Weapon[]>();
       const legendaryOnlyWeapons = [
         'Mystic Sight', 'Chain Reaction',
@@ -155,12 +155,11 @@ describe('Weapon Definitions', () => {
           expect(weapons.length).toBe(1);
           expect(weapons[0].rarity).toBe('epic');
         } else {
-          // Normal weapons should have all 3 rarities
-          expect(weapons.length).toBe(3);
+          // Normal weapons have common and rare only (base-type legendary removed)
+          expect(weapons.length).toBe(2);
           const rarities = weapons.map(w => w.rarity);
           expect(rarities).toContain('common');
           expect(rarities).toContain('rare');
-          expect(rarities).toContain('legendary');
         }
       });
     });
@@ -239,7 +238,7 @@ describe('Weapon Definitions', () => {
       });
     });
 
-    it('legendary weapons should have higher effect values than common (for weapons with all rarities)', () => {
+    it('rare weapons should have higher effect values than common (for weapons with both rarities)', () => {
       const weaponsByName = new Map<string, Map<WeaponRarity, Weapon>>();
       const legendaryOnlyWeapons = [
         'Mystic Sight', 'Chain Reaction',
@@ -277,14 +276,14 @@ describe('Weapon Definitions', () => {
         if (epicOnlyWeapons.includes(name)) return;
 
         const common = rarityMap.get('common')!;
-        const legendary = rarityMap.get('legendary')!;
+        const rare = rarityMap.get('rare')!;
 
         // Compare the first effect value
         const commonEffectKey = Object.keys(common.effects)[0];
         const commonValue = common.effects[commonEffectKey as keyof typeof common.effects] as number;
-        const legendaryValue = legendary.effects[commonEffectKey as keyof typeof legendary.effects] as number;
+        const rareValue = rare.effects[commonEffectKey as keyof typeof rare.effects] as number;
 
-        expect(legendaryValue).toBeGreaterThan(commonValue);
+        expect(rareValue).toBeGreaterThan(commonValue);
       });
     });
 
@@ -528,14 +527,14 @@ describe('Stats Calculation', () => {
       const player = initializePlayer('test', 'Test Player', 'Orange Tabby');
 
       const prismaticRay = WEAPONS.find(
-        w => w.name === 'Prismatic Ray' && w.rarity === 'legendary'
+        w => w.name === 'Prismatic Ray' && w.rarity === 'rare'
       )!;
       player.weapons.push(prismaticRay);
 
       const totalStats = calculatePlayerTotalStats(player);
 
-      // Prismatic Ray Legendary is +21 laserChance
-      expect(totalStats.laserChance).toBe(21);
+      // Prismatic Ray Rare is +9 laserChance
+      expect(totalStats.laserChance).toBe(9);
     });
 
     it('should correctly calculate startingTime from Chrono Shard', () => {

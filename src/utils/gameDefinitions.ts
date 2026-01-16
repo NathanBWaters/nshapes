@@ -398,19 +398,6 @@ export const WEAPONS: Weapon[] = [
     specialEffect: 'explosive',
     effects: { explosionChance: 30 }
   },
-  {
-    id: 'blast-powder-legendary',
-    name: 'Blast Powder',
-    rarity: 'legendary',
-    level: 1,
-    price: 24,
-    description: '35% chance to explode adjacent cards. Destroyed cards give +1 point and +1 coin each.',
-    shortDescription: 'May explode adjacent cards on match',
-    flavorText: 'After matching, each adjacent card (up/down/left/right) has a chance to explode. Exploded cards are destroyed and award +1 point and +1 coin each.',
-    icon: 'lorc/bright-explosion',
-    specialEffect: 'explosive',
-    effects: { explosionChance: 35 }
-  },
 
   // ============================================================================
   // 2. ORACLE EYE - Auto-hint system
@@ -440,19 +427,6 @@ export const WEAPONS: Weapon[] = [
     icon: 'lorc/sheikah-eye',
     specialEffect: 'autoHint',
     effects: { autoHintChance: 45, autoHintInterval: 5000 }
-  },
-  {
-    id: 'oracle-eye-legendary',
-    name: 'Oracle Eye',
-    rarity: 'legendary',
-    level: 1,
-    price: 18,
-    description: 'Reveals 1 card from a valid set 5s after match.',
-    shortDescription: 'Hint when stuck',
-    flavorText: 'After 5 seconds without a match, automatically highlights one card guaranteed to be part of a valid set. You still need to find the other two!',
-    icon: 'lorc/sheikah-eye',
-    specialEffect: 'autoHint',
-    effects: { autoHintChance: 100, autoHintInterval: 10000 }
   },
 
   // ============================================================================
@@ -500,18 +474,6 @@ export const WEAPONS: Weapon[] = [
     icon: 'lorc/field',
     effects: { fieldSize: 3 }
   },
-  {
-    id: 'field-stone-legendary',
-    name: 'Field Stone',
-    rarity: 'legendary',
-    level: 1,
-    price: 21,
-    description: '+7 starting board size.',
-    shortDescription: 'Larger starting board',
-    flavorText: 'Start each round with more cards on the board. More cards means more possible matches to find.',
-    icon: 'lorc/field',
-    effects: { fieldSize: 7 }
-  },
 
   // ============================================================================
   // 4. GROWTH SEED - Board grows on match
@@ -541,19 +503,6 @@ export const WEAPONS: Weapon[] = [
     icon: 'delapouite/card-exchange',
     specialEffect: 'boardGrowth',
     effects: { boardGrowthChance: 15 }
-  },
-  {
-    id: 'growth-seed-legendary',
-    name: 'Growth Seed',
-    rarity: 'legendary',
-    level: 1,
-    price: 18,
-    description: '35% chance to expand board by 2 on match.',
-    shortDescription: 'Board expands on match',
-    flavorText: 'After matching, has a chance to add new cards to the board. A growing board gives you more options and potential matches.',
-    icon: 'delapouite/card-exchange',
-    specialEffect: 'boardGrowth',
-    effects: { boardGrowthChance: 35, boardGrowthAmount: 2 }
   },
 
   // ============================================================================
@@ -585,19 +534,6 @@ export const WEAPONS: Weapon[] = [
     specialEffect: 'fire',
     effects: { fireSpreadChance: 30 }
   },
-  {
-    id: 'flint-spark-legendary',
-    name: 'Flint Spark',
-    rarity: 'legendary',
-    level: 1,
-    price: 24,
-    description: '70% chance to ignite adjacent cards. Burned cards give +1 point and +1 coin each.',
-    shortDescription: 'May ignite adjacent cards',
-    flavorText: 'After matching, adjacent cards may catch fire. Burning cards are destroyed after 7.5 seconds, awarding points. Fire has a 10% chance to spread to neighbors when a card burns out.',
-    icon: 'lorc/campfire',
-    specialEffect: 'fire',
-    effects: { fireSpreadChance: 70 }
-  },
 
   // ============================================================================
   // 6. SECOND CHANCE - Starting graces
@@ -625,18 +561,6 @@ export const WEAPONS: Weapon[] = [
     flavorText: 'Graces save you when you pick a near-miss (only 1 attribute wrong). Instead of losing health, the grace is consumed and the cards are removed.',
     icon: 'lorc/clover',
     effects: { graces: 3 }
-  },
-  {
-    id: 'second-chance-legendary',
-    name: 'Second Chance',
-    rarity: 'legendary',
-    level: 1,
-    price: 15,
-    description: '+7 starting graces.',
-    shortDescription: 'Extra starting graces',
-    flavorText: 'Graces save you when you pick a near-miss (only 1 attribute wrong). Instead of losing health, the grace is consumed and the cards are removed.',
-    icon: 'lorc/clover',
-    effects: { graces: 7 }
   },
 
   // ============================================================================
@@ -668,19 +592,6 @@ export const WEAPONS: Weapon[] = [
     specialEffect: 'graceGain',
     effects: { graceGainChance: 15 }
   },
-  {
-    id: 'fortune-token-legendary',
-    name: 'Fortune Token',
-    rarity: 'legendary',
-    level: 1,
-    price: 18,
-    description: '35% chance to gain grace on match.',
-    shortDescription: 'Gain graces on match',
-    flavorText: 'After a valid match, has a chance to grant +1 grace. Graces protect you from near-miss invalid matches.',
-    icon: 'lorc/cycle',
-    specialEffect: 'graceGain',
-    effects: { graceGainChance: 35 }
-  },
 
   // ============================================================================
   // 8. LIFE VESSEL - Max health
@@ -708,18 +619,6 @@ export const WEAPONS: Weapon[] = [
     flavorText: 'Increases your maximum health pool. You lose 1 health when picking an invalid set without a grace to protect you.',
     icon: 'lorc/heart-inside',
     effects: { maxHealth: 3 }
-  },
-  {
-    id: 'life-vessel-legendary',
-    name: 'Life Vessel',
-    rarity: 'legendary',
-    level: 1,
-    price: 18,
-    description: '+7 max health.',
-    shortDescription: 'Increased max health',
-    flavorText: 'Increases your maximum health pool. You lose 1 health when picking an invalid set without a grace to protect you.',
-    icon: 'lorc/heart-inside',
-    effects: { maxHealth: 7 }
   },
 
   // ============================================================================
@@ -751,19 +650,6 @@ export const WEAPONS: Weapon[] = [
     specialEffect: 'healing',
     effects: { healingChance: 15 }
   },
-  {
-    id: 'mending-charm-legendary',
-    name: 'Mending Charm',
-    rarity: 'legendary',
-    level: 1,
-    price: 15,
-    description: '35% chance to heal on match.',
-    shortDescription: 'Heal on match',
-    flavorText: 'After a valid match, has a chance to restore 1 health. Cannot heal above your maximum health.',
-    icon: 'lorc/shining-heart',
-    specialEffect: 'healing',
-    effects: { healingChance: 35 }
-  },
 
   // ============================================================================
   // 10. CRYSTAL ORB - Max hints capacity
@@ -791,18 +677,6 @@ export const WEAPONS: Weapon[] = [
     flavorText: 'Hints highlight a valid set on the board when activated. Earn hints from matches to fill your capacity.',
     icon: 'lorc/floating-crystal',
     effects: { maxHints: 2 }
-  },
-  {
-    id: 'crystal-orb-legendary',
-    name: 'Crystal Orb',
-    rarity: 'legendary',
-    level: 1,
-    price: 15,
-    description: '+3 max hint capacity (and +1 hint).',
-    shortDescription: 'Increased hint capacity',
-    flavorText: 'Hints highlight a valid set on the board when activated. Earn hints from matches to fill your capacity.',
-    icon: 'lorc/floating-crystal',
-    effects: { maxHints: 3 }
   },
 
   // ============================================================================
@@ -834,19 +708,6 @@ export const WEAPONS: Weapon[] = [
     specialEffect: 'hintGain',
     effects: { hintGainChance: 15 }
   },
-  {
-    id: 'seeker-lens-legendary',
-    name: 'Seeker Lens',
-    rarity: 'legendary',
-    level: 1,
-    price: 18,
-    description: '35% chance to gain hint on match.',
-    shortDescription: 'Gain hints on match',
-    flavorText: 'After a valid match, has a chance to gain +1 hint. Use hints to highlight valid sets when you\'re stuck.',
-    icon: 'lorc/light-bulb',
-    specialEffect: 'hintGain',
-    effects: { hintGainChance: 35 }
-  },
 
   // ============================================================================
   // 12. SCHOLAR'S TOME - XP gain on match
@@ -876,19 +737,6 @@ export const WEAPONS: Weapon[] = [
     icon: 'lorc/open-book',
     specialEffect: 'xpGain',
     effects: { xpGainChance: 40 }
-  },
-  {
-    id: 'scholars-tome-legendary',
-    name: 'Scholar\'s Tome',
-    rarity: 'legendary',
-    level: 1,
-    price: 24,
-    description: '80% chance to gain +1 XP on match.',
-    shortDescription: 'Gain XP on match',
-    flavorText: 'Ancient wisdom grants bonus experience. Multiple tomes stack their chances - over 100% guarantees rewards with a chance for more.',
-    icon: 'lorc/open-book',
-    specialEffect: 'xpGain',
-    effects: { xpGainChance: 80 }
   },
 
   // ============================================================================
@@ -920,19 +768,6 @@ export const WEAPONS: Weapon[] = [
     specialEffect: 'coinGain',
     effects: { coinGainChance: 40 }
   },
-  {
-    id: 'fortunes-favor-legendary',
-    name: 'Fortune\'s Favor',
-    rarity: 'legendary',
-    level: 1,
-    price: 24,
-    description: '80% chance to gain +1 coin on match.',
-    shortDescription: 'Gain coins on match',
-    flavorText: 'Lady Luck smiles upon you, granting bonus coins. Multiple fortunes stack their chances - over 100% guarantees rewards with a chance for more.',
-    icon: 'lorc/crown-coin',
-    specialEffect: 'coinGain',
-    effects: { coinGainChance: 80 }
-  },
 
   // ============================================================================
   // 14. CHRONO SHARD - Starting time bonus
@@ -960,18 +795,6 @@ export const WEAPONS: Weapon[] = [
     flavorText: 'Also raises the cap for time gained during matches, making Time Drop weapons more effective.',
     icon: 'lorc/hourglass',
     effects: { startingTime: 45 }
-  },
-  {
-    id: 'chrono-shard-legendary',
-    name: 'Chrono Shard',
-    rarity: 'legendary',
-    level: 1,
-    price: 21,
-    description: '+105s starting time. Raises time cap.',
-    shortDescription: 'More starting time',
-    flavorText: 'Also raises the cap for time gained during matches, making Time Drop weapons more effective.',
-    icon: 'lorc/hourglass',
-    effects: { startingTime: 105 }
   },
 
   // ============================================================================
@@ -1003,19 +826,6 @@ export const WEAPONS: Weapon[] = [
     specialEffect: 'timeGain',
     effects: { timeGainChance: 15, timeGainAmount: 10 }
   },
-  {
-    id: 'time-drop-legendary',
-    name: 'Time Drop',
-    rarity: 'legendary',
-    level: 1,
-    price: 18,
-    description: '35% chance to gain +15s on match (capped at starting time).',
-    shortDescription: '35% chance for +15s',
-    flavorText: 'Time can only increase up to your starting max. Chrono Shards raise this cap!',
-    icon: 'lorc/stopwatch',
-    specialEffect: 'timeGain',
-    effects: { timeGainChance: 35, timeGainAmount: 15 }
-  },
 
   // ============================================================================
   // 16. PRISMATIC RAY - Laser destroys row/column
@@ -1045,19 +855,6 @@ export const WEAPONS: Weapon[] = [
     icon: 'lorc/laser-warning',
     specialEffect: 'laser',
     effects: { laserChance: 9 }
-  },
-  {
-    id: 'prismatic-ray-legendary',
-    name: 'Prismatic Ray',
-    rarity: 'legendary',
-    level: 1,
-    price: 30,
-    description: '21% chance to destroy entire row or column. Destroyed cards give +2 points each.',
-    shortDescription: 'May destroy a row or column',
-    flavorText: 'Each laser weapon rolls independently on every match. When triggered, destroys all cards in either a row or column (randomly chosen). Multiple lasers can fire on the same match. Destroyed cards award +2 points each.',
-    icon: 'lorc/laser-warning',
-    specialEffect: 'laser',
-    effects: { laserChance: 21 }
   },
 
   // ============================================================================
@@ -1089,19 +886,6 @@ export const WEAPONS: Weapon[] = [
     specialEffect: 'ricochet',
     effects: { ricochetChance: 30, ricochetChainChance: 15 }
   },
-  {
-    id: 'chaos-shard-legendary',
-    name: 'Chaos Shard',
-    rarity: 'legendary',
-    level: 1,
-    price: 24,
-    description: '70% chance to ricochet, 35% chain chance.',
-    shortDescription: 'Random ricochet chains',
-    flavorText: 'After matching, has a chance to destroy a random card anywhere on the board. Each destroyed card may chain to another random target. Chains can theoretically continue forever with lucky rolls!',
-    icon: 'lorc/chained-arrow-heads',
-    specialEffect: 'ricochet',
-    effects: { ricochetChance: 70, ricochetChainChance: 35 }
-  },
 
   // ============================================================================
   // 18. ECHO STONE - Auto-match another set on the board
@@ -1131,19 +915,6 @@ export const WEAPONS: Weapon[] = [
     icon: 'lorc/echo-ripples',
     specialEffect: 'echo',
     effects: { echoChance: 15 }
-  },
-  {
-    id: 'echo-stone-legendary',
-    name: 'Echo Stone',
-    rarity: 'legendary',
-    level: 1,
-    price: 24,
-    description: '35% chance to auto-match another set on the board.',
-    shortDescription: 'May auto-match another set',
-    flavorText: 'After matching, has a chance to automatically find and match another valid set on the board. The echoed match triggers all on-match effects like explosions, healing, and more!',
-    icon: 'lorc/echo-ripples',
-    specialEffect: 'echo',
-    effects: { echoChance: 35 }
   },
 
   // ============================================================================
