@@ -18,8 +18,8 @@ export function createLurkingShark(): EnemyInstance {
       name: 'Lurking Shark',
       icon: 'lorc/shark-jaws',
       tier: 2,
-      description: '25% of new cards are face-down',
-      defeatConditionText: 'Match 3 face-down cards',
+      description: '25% of new cards start face-down (tap to reveal)',
+      defeatConditionText: 'Include 3 revealed cards in your matches',
     },
     [
       { behavior: FaceDownEffect, config: { chance: 25, flipChance: 60 } },

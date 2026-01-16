@@ -56,12 +56,12 @@ describe('Lurking Shark', () => {
 
     it('has correct description', () => {
       const enemy = createLurkingShark();
-      expect(enemy.description).toBe('25% of new cards are face-down');
+      expect(enemy.description).toBe('25% of new cards start face-down (tap to reveal)');
     });
 
     it('has correct defeat condition text', () => {
       const enemy = createLurkingShark();
-      expect(enemy.defeatConditionText).toBe('Match 3 face-down cards');
+      expect(enemy.defeatConditionText).toBe('Include 3 revealed cards in your matches');
     });
   });
 

@@ -1,8 +1,8 @@
 /**
  * Ravenous Tapir - Tier 3 Enemy
  *
- * Effects: +2 cards removed per match, removes 1 card every 10s (focused card economy pressure)
- * Defeat Condition: Beat target with 6+ cards remaining
+ * Effects: +1 card removed per match, removes 1 card every 15s (card economy pressure)
+ * Defeat Condition: Beat target with 5+ cards remaining
  */
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
@@ -22,16 +22,16 @@ export function createRavenousTapir(): EnemyInstance {
       name: 'Ravenous Tapir',
       icon: 'delapouite/tapir',
       tier: 3,
-      description: '+2 cards removed per match, removes 1 card every 10s',
-      defeatConditionText: 'Beat target with 6+ cards remaining',
+      description: '+1 card removed per match, removes 1 card every 15s',
+      defeatConditionText: 'Beat target with 5+ cards remaining',
     },
     [
-      { behavior: ExtraCardRemovalOnMatchEffect, config: { count: 2, minBoardSize: 5 } },
-      { behavior: CardRemovalEffect, config: { intervalMs: 10000, minBoardSize: 5 } },
+      { behavior: ExtraCardRemovalOnMatchEffect, config: { count: 1, minBoardSize: 5 } },
+      { behavior: CardRemovalEffect, config: { intervalMs: 15000, minBoardSize: 5 } },
     ],
-    // Defeat condition: Beat target with 6+ cards remaining
+    // Defeat condition: Beat target with 5+ cards remaining
     (stats: RoundStats) =>
-      stats.currentScore >= stats.targetScore && stats.cardsRemaining >= 6
+      stats.currentScore >= stats.targetScore && stats.cardsRemaining >= 5
   );
 }
 
