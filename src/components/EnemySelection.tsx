@@ -105,35 +105,46 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
                 {focusedEnemy.description.split(', ').map((effect, index) => (
                   <Text key={index} style={styles.infoText}>• {effect}</Text>
                 ))}
-                {/* Show stat modifiers if enemy has any */}
+                {/* Show stat modifiers if enemy has any (before → after format) */}
                 {(() => {
                   const modifiers = focusedEnemy.getStatModifiers();
                   const uiModifiers = focusedEnemy.getUIModifiers();
                   const statChanges: string[] = [];
 
-                  // Timer speed modifier
+                  // Timer speed modifier - show effective time reduction
                   if (uiModifiers.timerSpeedMultiplier && uiModifiers.timerSpeedMultiplier > 1) {
-                    const speedUp = Math.round((uiModifiers.timerSpeedMultiplier - 1) * 100);
-                    statChanges.push(`Timer: 100% → ${100 + speedUp}% speed`);
+                    // Base round time is 60s + any bonus from weapons
+                    const baseTime = 60 + (playerStats.startingTime || 0);
+                    // Timer runs faster, so effective time is reduced
+                    const effectiveTime = Math.round(baseTime / uiModifiers.timerSpeedMultiplier);
+                    statChanges.push(`Timer: ${baseTime}s → ${effectiveTime}s`);
                   }
 
-                  // Score decay
+                  // Score decay - show rate (no before/after needed)
                   if (uiModifiers.showScoreDecay?.rate) {
                     statChanges.push(`Score: -${uiModifiers.showScoreDecay.rate} pts/sec`);
                   }
 
-                  // Weapon counter reductions
+                  // Weapon counter reductions - show before → after
                   if (modifiers.fireSpreadChanceReduction) {
-                    statChanges.push(`Fire Spread: -${modifiers.fireSpreadChanceReduction}%`);
+                    const before = playerStats.fireSpreadChance || 0;
+                    const after = Math.max(0, before - modifiers.fireSpreadChanceReduction);
+                    statChanges.push(`Fire Spread: ${before}% → ${after}%`);
                   }
                   if (modifiers.explosionChanceReduction) {
-                    statChanges.push(`Explosion: -${modifiers.explosionChanceReduction}%`);
+                    const before = playerStats.explosionChance || 0;
+                    const after = Math.max(0, before - modifiers.explosionChanceReduction);
+                    statChanges.push(`Explosion: ${before}% → ${after}%`);
                   }
                   if (modifiers.laserChanceReduction) {
-                    statChanges.push(`Laser: -${modifiers.laserChanceReduction}%`);
+                    const before = playerStats.laserChance || 0;
+                    const after = Math.max(0, before - modifiers.laserChanceReduction);
+                    statChanges.push(`Laser: ${before}% → ${after}%`);
                   }
                   if (modifiers.healingChanceReduction) {
-                    statChanges.push(`Healing: -${modifiers.healingChanceReduction}%`);
+                    const before = playerStats.healingChance || 0;
+                    const after = Math.max(0, before - modifiers.healingChanceReduction);
+                    statChanges.push(`Healing: ${before}% → ${after}%`);
                   }
 
                   if (statChanges.length > 0) {
