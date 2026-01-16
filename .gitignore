@@ -50,6 +50,11 @@ android/
 # production
 /build
 
+playwright-report/
+test-results/
+.claude/
+.playwright-mcp/
+
 # misc
 .DS_Store
 *.pem
@@ -75,7 +80,3 @@ yarn-error.log*
 
 expo-env.d.ts
 # @end expo-clitest-results/
-playwright-report/
-test-results/
-.claude/
-.playwright-mcp/
