@@ -1,5 +1,5 @@
 import type { IconName } from './components/Icon';
-import type { EnemyInstance } from './types/enemy';
+import type { EnemyInstance, EnemyOption } from './types/enemy';
 
 export type Shape = 'oval' | 'squiggle' | 'diamond';
 export type Color = 'red' | 'green' | 'purple';
@@ -314,9 +314,10 @@ export interface GameState {
   rerollCost: number;
 
   // Enemy
-  currentEnemies: EnemyInstance[];  // Enemies to choose from (from registry)
+  currentEnemies: EnemyOption[];  // Enemies with pre-determined rewards to choose from
   selectedEnemy: EnemyInstance | null;  // The enemy selected for this round
   activeEnemyInstance: EnemyInstance | null;  // Active enemy for current round (same as selectedEnemy)
+  selectedEnemyReward: Weapon | null;  // Pre-determined stretch goal reward for selected enemy
 
   // Loot and rewards
   lootCrates: number;

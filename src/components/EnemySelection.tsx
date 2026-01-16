@@ -1,13 +1,24 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Pressable, StyleSheet, ScrollView, Platform } from 'react-native';
-import { PlayerStats, Weapon } from '@/types';
+import { PlayerStats, Weapon, WeaponRarity } from '@/types';
 
 // Extra bottom padding for mobile web browsers to account for browser UI (URL bar, navigation)
 const MOBILE_WEB_BOTTOM_PADDING = Platform.OS === 'web' ? 60 : 0;
-import type { EnemyInstance } from '@/types/enemy';
-import { COLORS, RADIUS } from '@/utils/colors';
+import type { EnemyInstance, EnemyOption } from '@/types/enemy';
+import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
 import Icon from './Icon';
 import GameMenu from './GameMenu';
+
+// Helper to get rarity label
+const getRarityLabel = (rarity: WeaponRarity): string => {
+  switch (rarity) {
+    case 'common': return 'Common';
+    case 'rare': return 'Rare';
+    case 'epic': return 'Epic';
+    case 'legendary': return 'Legendary';
+    default: return rarity;
+  }
+};
 
 // Tier colors for visual distinction
 const TIER_COLORS: Record<1 | 2 | 3 | 4, string> = {
@@ -25,17 +36,17 @@ const TIER_LABELS: Record<1 | 2 | 3 | 4, string> = {
   4: 'Boss',
 };
 
-// Stretch goal reward descriptions by tier
-const TIER_REWARDS: Record<1 | 2 | 3 | 4, { weaponRarity: string; moneyRange: string }> = {
-  1: { weaponRarity: 'Rare', moneyRange: '$10-15' },
-  2: { weaponRarity: '70% Rare / 30% Legendary', moneyRange: '$20-30' },
-  3: { weaponRarity: '40% Rare / 60% Legendary', moneyRange: '$40-60' },
-  4: { weaponRarity: 'Legendary', moneyRange: '$50-100' },
+// Bonus money ranges by tier (for display)
+const TIER_MONEY: Record<1 | 2 | 3 | 4, string> = {
+  1: '$10-15',
+  2: '$20-30',
+  3: '$40-60',
+  4: '$50-100',
 };
 
 interface EnemySelectionProps {
-  enemies: EnemyInstance[];
-  onSelect: (enemy: EnemyInstance) => void;
+  enemies: EnemyOption[];
+  onSelect: (enemyOption: EnemyOption) => void;
   round: number;
   playerStats: PlayerStats;
   playerWeapons?: Weapon[];
@@ -55,7 +66,9 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
 
   // Show hovered enemy if hovering, otherwise show focused
   const displayedIndex = hoveredIndex !== null ? hoveredIndex : focusedIndex;
-  const focusedEnemy = enemies.length > 0 ? enemies[displayedIndex] : null;
+  const focusedOption = enemies.length > 0 ? enemies[displayedIndex] : null;
+  const focusedEnemy = focusedOption?.enemy ?? null;
+  const focusedReward = focusedOption?.stretchGoalReward ?? null;
 
   // Get tier color for focused enemy
   const tierColor = focusedEnemy ? TIER_COLORS[focusedEnemy.tier] : COLORS.slateCharcoal;
@@ -142,11 +155,23 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
               </View>
               <View style={[styles.infoBox, styles.infoBoxReward]}>
                 <Text style={styles.infoLabelReward}>Stretch Goal Reward</Text>
+                {focusedReward && (
+                  <View style={styles.rewardWeaponRow}>
+                    {focusedReward.icon && (
+                      <Icon name={focusedReward.icon} size={20} color={getRarityColor(focusedReward.rarity)} />
+                    )}
+                    <View style={styles.rewardWeaponInfo}>
+                      <Text style={[styles.infoText, { color: getRarityColor(focusedReward.rarity), fontWeight: '600' }]}>
+                        {focusedReward.name}
+                      </Text>
+                      <Text style={styles.rewardRarity}>
+                        {getRarityLabel(focusedReward.rarity)}
+                      </Text>
+                    </View>
+                  </View>
+                )}
                 <Text style={styles.infoText}>
-                  • Bonus weapon: {TIER_REWARDS[focusedEnemy.tier].weaponRarity}
-                </Text>
-                <Text style={styles.infoText}>
-                  • Bonus money: {TIER_REWARDS[focusedEnemy.tier].moneyRange}
+                  + Bonus money: {TIER_MONEY[focusedEnemy.tier]}
                 </Text>
               </View>
             </ScrollView>
@@ -162,7 +187,8 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
       <View style={styles.optionsSection}>
         <Text style={styles.optionsHeader}>Select Your Opponent</Text>
         <View style={styles.optionsGrid} testID="enemy-options-grid">
-          {enemies.map((enemy, index) => {
+          {enemies.map((enemyOption, index) => {
+            const { enemy } = enemyOption;
             const isFocused = focusedIndex === index;
             const enemyTierColor = TIER_COLORS[enemy.tier];
 
@@ -209,12 +235,12 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
       <View style={styles.actionSection}>
         <TouchableOpacity
           testID="fight-enemy-button"
-          onPress={() => focusedEnemy && onSelect(focusedEnemy)}
-          disabled={!focusedEnemy}
+          onPress={() => focusedOption && onSelect(focusedOption)}
+          disabled={!focusedOption}
           style={[
             styles.actionButton,
-            !focusedEnemy && styles.actionButtonDisabled,
-            focusedEnemy && { backgroundColor: tierColor },
+            !focusedOption && styles.actionButtonDisabled,
+            focusedOption && { backgroundColor: tierColor },
           ]}
         >
           <Text style={styles.actionButtonText}>Fight {focusedEnemy?.name || 'Enemy'}</Text>
@@ -349,6 +375,22 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     fontSize: 13,
     lineHeight: 18,
+  },
+  rewardWeaponRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+    paddingVertical: 4,
+  },
+  rewardWeaponInfo: {
+    flex: 1,
+  },
+  rewardRarity: {
+    color: COLORS.slateCharcoal,
+    fontSize: 10,
+    opacity: 0.7,
+    textTransform: 'uppercase',
   },
   statModifiersSection: {
     marginTop: 8,

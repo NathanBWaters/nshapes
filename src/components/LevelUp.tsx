@@ -13,58 +13,13 @@ import { ConfettiBurst } from './effects/ConfettiBurst';
 import { ScreenTransition } from './ScreenTransition';
 import { playSound } from '@/utils/sounds';
 import { getWeaponsByRarity, getPlayerWeaponCount } from '@/utils/gameDefinitions';
+import { generateChallengeBonus, getChallengeBonusMoney } from '@/utils/rewardUtils';
+
+// Re-export for backwards compatibility
+export { generateChallengeBonus, getChallengeBonusMoney };
 
 // Extra challenge bonus color (golden)
 const CHALLENGE_BONUS_COLOR = '#FFD700';
-
-// Bonus money ranges by enemy tier (min, max)
-const CHALLENGE_BONUS_MONEY: Record<1 | 2 | 3 | 4, [number, number]> = {
-  1: [10, 15],   // Tier 1: $10-15
-  2: [20, 30],   // Tier 2: $20-30
-  3: [40, 60],   // Tier 3: $40-60
-  4: [50, 100],  // Tier 4: $50-100
-};
-
-// Get random bonus money for defeating an enemy
-export const getChallengeBonusMoney = (tier: 1 | 2 | 3 | 4): number => {
-  const [min, max] = CHALLENGE_BONUS_MONEY[tier];
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-};
-
-// Generate a challenge bonus weapon based on enemy tier
-export const generateChallengeBonus = (tier: 1 | 2 | 3 | 4): Weapon => {
-  let targetRarity: WeaponRarity;
-
-  switch (tier) {
-    case 1:
-      // Tier 1: Guaranteed Rare
-      targetRarity = 'rare';
-      break;
-    case 2:
-      // Tier 2: 70% Rare, 30% Legendary
-      targetRarity = Math.random() < 0.7 ? 'rare' : 'legendary';
-      break;
-    case 3:
-      // Tier 3: 40% Rare, 60% Legendary
-      targetRarity = Math.random() < 0.4 ? 'rare' : 'legendary';
-      break;
-    case 4:
-      // Tier 4: Guaranteed Legendary
-      targetRarity = 'legendary';
-      break;
-    default:
-      targetRarity = 'rare';
-  }
-
-  // Get a random weapon of the target rarity
-  const weaponsOfRarity = getWeaponsByRarity(targetRarity);
-  if (weaponsOfRarity.length === 0) {
-    // Fallback to rare if no weapons of target rarity
-    const rareWeapons = getWeaponsByRarity('rare');
-    return rareWeapons[Math.floor(Math.random() * rareWeapons.length)];
-  }
-  return weaponsOfRarity[Math.floor(Math.random() * weaponsOfRarity.length)];
-};
 
 // Weapon option component
 interface WeaponOptionProps {
@@ -149,6 +104,7 @@ interface LevelUpProps {
   hasMoreLevelUps: boolean;    // True if more level-ups pending after this
   enemyDefeated?: boolean;     // True if player defeated the enemy's stretch goal
   defeatedEnemyTier?: 1 | 2 | 3 | 4;  // Tier of the defeated enemy (for bonus rarity)
+  challengeBonusWeapon?: Weapon | null;  // Pre-determined stretch goal reward (from enemy selection)
   onChallengeBonusMoney?: (amount: number) => void;  // Callback to grant bonus money
 }
 
@@ -176,6 +132,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
   hasMoreLevelUps,
   enemyDefeated = false,
   defeatedEnemyTier = 1,
+  challengeBonusWeapon: preGeneratedReward = null,
   onChallengeBonusMoney,
 }) => {
   const [focusedIndex, setFocusedIndex] = useState<number>(0);
@@ -210,11 +167,14 @@ const LevelUp: React.FC<LevelUpProps> = ({
   // Show hovered option if hovering, otherwise show focused
   const displayedIndex = hoveredIndex !== null ? hoveredIndex : focusedIndex;
 
-  // Generate slayer bonus weapon if enemy was defeated (memoized to not change on re-renders)
+  // Use pre-generated reward if available, otherwise generate one (for backwards compatibility)
   const challengeBonusWeapon = useMemo(() => {
     if (!enemyDefeated) return null;
+    // Use the pre-determined reward from enemy selection when available
+    if (preGeneratedReward) return preGeneratedReward;
+    // Fallback to generating a new reward (legacy behavior)
     return generateChallengeBonus(defeatedEnemyTier);
-  }, [enemyDefeated, defeatedEnemyTier]);
+  }, [enemyDefeated, preGeneratedReward, defeatedEnemyTier]);
 
   // Check if the slayer bonus is selected (it's always the last option if available)
   const challengeBonusIndex = enemyDefeated ? options.length : -1;

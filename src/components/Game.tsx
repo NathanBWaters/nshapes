@@ -20,9 +20,9 @@ import { getAdjacentIndices, getFireSpreadCards, WeaponEffectResult } from '@/ut
 import { useGameTimer } from '@/hooks/useGameTimer';
 import { useParticles } from '@/hooks/useParticles';
 import { useRoundStats } from '@/hooks/useRoundStats';
-import { createEnemy, createDummyEnemy, applyEnemyStatModifiers, getRandomEnemies } from '@/utils/enemyFactory';
+import { createEnemy, createDummyEnemy, applyEnemyStatModifiers, getRandomEnemies, getRandomEnemyOptions } from '@/utils/enemyFactory';
 import '@/utils/enemies'; // Trigger enemy self-registration
-import type { EnemyInstance } from '@/types/enemy';
+import type { EnemyInstance, EnemyOption } from '@/types/enemy';
 import GameBoard from './GameBoard';
 import GameInfo from './GameInfo';
 import { DevModeCallbacks } from './GameMenu';
@@ -166,6 +166,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
         currentEnemies: [],
         selectedEnemy: null,
         activeEnemyInstance: null,
+        selectedEnemyReward: null,
         lootCrates: 0,
         isCoOp: false,
         players: [],
@@ -198,6 +199,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       currentEnemies: [],
       selectedEnemy: null,
       activeEnemyInstance: null,
+      selectedEnemyReward: null,
       lootCrates: 0,
       isCoOp: false,
       players: [],
@@ -608,10 +610,11 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       levelUpOptions: [],
       rerollCost: BASE_REROLL_COST,
 
-      // Enemy - to be selected during gameplay
-      currentEnemies: getRandomEnemies(getTierForRound(1), 3),
+      // Enemy - to be selected during gameplay (with pre-determined rewards)
+      currentEnemies: getRandomEnemyOptions(getTierForRound(1), 3),
       selectedEnemy: null,
       activeEnemyInstance: null,  // Set when player selects enemy
+      selectedEnemyReward: null,
 
       // Loot and rewards
       lootCrates: 0,
@@ -627,10 +630,10 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     setNotification(null);
   }, [isMultiplayer, resetRoundStats]);
 
-  // Generate 3 random enemies from the appropriate tier for the round
-  const generateEnemiesForRound = (round: number): EnemyInstance[] => {
+  // Generate 3 random enemies from the appropriate tier for the round (with pre-determined rewards)
+  const generateEnemiesForRound = (round: number): EnemyOption[] => {
     const tier = getTierForRound(round);
-    return getRandomEnemies(tier, 3);
+    return getRandomEnemyOptions(tier, 3);
   };
 
   // Generate random shop items
@@ -794,7 +797,9 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
   };
 
   // Handle enemy selection - player has chosen which enemy to fight
-  const handleEnemySelect = (enemy: EnemyInstance) => {
+  const handleEnemySelect = (enemyOption: EnemyOption) => {
+    const { enemy, stretchGoalReward } = enemyOption;
+
     // Reset round stats and record starting level for round summary
     setRoundStats({
       moneyEarned: 0,
@@ -824,6 +829,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       board: finalBoard,
       selectedEnemy: enemy,
       activeEnemyInstance: enemy,  // Set the active enemy instance
+      selectedEnemyReward: stretchGoalReward,  // Store the pre-determined reward
       gameStarted: true,
       startTime: Date.now()
     }));
@@ -2012,11 +2018,12 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
         foundCombinations: [],
         roundCompleted: false,
         gameStarted: false,  // Not started yet - waiting for enemy selection
-        currentEnemies: getRandomEnemies(getTierForRound(nextRound), 3),
+        currentEnemies: getRandomEnemyOptions(getTierForRound(nextRound), 3),
         shopItems: generateRandomShopItems(),  // Refill shop for next round
         shopWeapons: generateShopWeapons(4, prevState.player.weapons, nextRound),   // Refill weapon shop with round-scaled rarity
         selectedEnemy: null,
         activeEnemyInstance: null,  // Set when player selects enemy
+        selectedEnemyReward: null,
         player: {
           ...prevState.player,
           stats: {
@@ -2166,6 +2173,7 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
             hasMoreLevelUps={pendingLevelUps.length > 1}
             enemyDefeated={enemyDefeated}
             defeatedEnemyTier={defeatedEnemyTier}
+            challengeBonusWeapon={state.selectedEnemyReward}
             onChallengeBonusMoney={(amount) => {
               setState(prevState => ({
                 ...prevState,

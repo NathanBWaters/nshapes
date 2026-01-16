@@ -5,9 +5,10 @@
  * Each call to createEnemy() returns a fresh instance with reset internal state.
  */
 
-import type { Card } from '@/types';
+import type { Card, Weapon } from '@/types';
 import type {
   EnemyInstance,
+  EnemyOption,
   EnemyStartResult,
   EnemyTickResult,
   EnemyMatchResult,
@@ -16,6 +17,7 @@ import type {
   RoundStats,
 } from '@/types/enemy';
 import { shuffleArray } from './gameUtils';
+import { generateChallengeBonus } from './rewardUtils';
 
 // ============================================================================
 // ENEMY REGISTRY
@@ -154,6 +156,22 @@ export function getRandomEnemies(tier: 1 | 2 | 3 | 4, count: number = 3): EnemyI
 
   // Create fresh instances
   return selectedNames.map(name => createEnemy(name));
+}
+
+/**
+ * Get random enemy options for selection screen with pre-determined rewards.
+ * Returns fresh instances with their stretch goal rewards already generated.
+ *
+ * @param tier - Which tier to pull from
+ * @param count - How many to return (default 3)
+ * @returns Array of EnemyOption objects (enemy + pre-determined reward)
+ */
+export function getRandomEnemyOptions(tier: 1 | 2 | 3 | 4, count: number = 3): EnemyOption[] {
+  const enemies = getRandomEnemies(tier, count);
+  return enemies.map(enemy => ({
+    enemy,
+    stretchGoalReward: generateChallengeBonus(enemy.tier),
+  }));
 }
 
 /**
