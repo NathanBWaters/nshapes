@@ -1,9 +1,67 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Pressable, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, Pressable, StyleSheet, Platform } from 'react-native';
 import { Character, PlayerStats, AdventureDifficulty } from '@/types';
+
+// Extra bottom padding for mobile web browsers to account for browser UI (URL bar, navigation)
+const MOBILE_WEB_BOTTOM_PADDING = Platform.OS === 'web' ? 60 : 0;
 import { COLORS, RADIUS } from '@/utils/colors';
 import { getWeaponByName, DEFAULT_PLAYER_STATS } from '@/utils/gameDefinitions';
+import { EFFECT_CAPS, EffectCapType, STARTING_STATS } from '@/utils/gameConfig';
 import { CharacterWinsStorage, CharacterWins, EndlessHighScoresStorage, EndlessHighScores, CharacterUnlockStorage } from '@/utils/storage';
+
+// Stats to display with their display names and cap types
+const DISPLAYABLE_STATS: { key: string; label: string; suffix: string; capType?: EffectCapType }[] = [
+  { key: 'health', label: 'Health', suffix: '' },
+  { key: 'graces', label: 'Graces', suffix: '' },
+  { key: 'fieldSize', label: 'Field Size', suffix: '' },
+  { key: 'explosionChance', label: 'Explosion', suffix: '%', capType: 'explosion' },
+  { key: 'fireSpreadChance', label: 'Fire Spread', suffix: '%', capType: 'fire' },
+  { key: 'autoHintChance', label: 'Auto Hint', suffix: '%', capType: 'hint' },
+  { key: 'boardGrowthChance', label: 'Board Growth', suffix: '%', capType: 'boardGrowth' },
+  { key: 'graceGainChance', label: 'Grace Gain', suffix: '%', capType: 'graceGain' },
+  { key: 'healingChance', label: 'Healing', suffix: '%', capType: 'healing' },
+  { key: 'echoChance', label: 'Echo', suffix: '%', capType: 'echo' },
+  { key: 'laserChance', label: 'Laser', suffix: '%', capType: 'laser' },
+  { key: 'ricochetChance', label: 'Ricochet', suffix: '%', capType: 'ricochet' },
+  { key: 'timeGainChance', label: 'Time Gain', suffix: '%', capType: 'timeGain' },
+  { key: 'coinGainChance', label: 'Coin Gain', suffix: '%', capType: 'coinGain' },
+  { key: 'xpGainChance', label: 'XP Gain', suffix: '%', capType: 'xpGain' },
+];
+
+// Calculate effective stats from starting weapons
+const getEffectiveStats = (startingWeapons: string[]): Record<string, number> => {
+  const stats: Record<string, number> = {
+    health: STARTING_STATS.health,
+    graces: STARTING_STATS.graces,
+    fieldSize: STARTING_STATS.fieldSize,
+    explosionChance: STARTING_STATS.explosionChance,
+    fireSpreadChance: STARTING_STATS.fireSpreadChance,
+    autoHintChance: STARTING_STATS.autoHintChance,
+    boardGrowthChance: STARTING_STATS.boardGrowthChance,
+    graceGainChance: STARTING_STATS.graceGainChance,
+    healingChance: STARTING_STATS.healingChance,
+    echoChance: STARTING_STATS.echoChance,
+    laserChance: STARTING_STATS.laserChance,
+    ricochetChance: STARTING_STATS.ricochetChance,
+    timeGainChance: STARTING_STATS.timeGainChance,
+    coinGainChance: STARTING_STATS.coinGainChance,
+    xpGainChance: STARTING_STATS.xpGainChance,
+  };
+
+  // Apply weapon effects
+  startingWeapons.forEach(weaponName => {
+    const weapon = getWeaponByName(weaponName);
+    if (weapon?.effects) {
+      Object.entries(weapon.effects).forEach(([key, value]) => {
+        if (typeof value === 'number' && key in stats) {
+          stats[key] += value;
+        }
+      });
+    }
+  });
+
+  return stats;
+};
 import Icon, { IconName } from './Icon';
 import GameMenu from './GameMenu';
 import { ScreenTransition } from './ScreenTransition';
@@ -113,6 +171,40 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
                 })}
               </View>
             </View>
+
+            {/* Starting Stats - Shows effective stats from weapons */}
+            {(() => {
+              const effectiveStats = getEffectiveStats(selectedChar.startingWeapons);
+              const nonZeroStats = DISPLAYABLE_STATS.filter(stat => {
+                const value = effectiveStats[stat.key];
+                // Show if non-zero, or if it's health/graces/fieldSize (always show these)
+                return value > 0 || ['health', 'graces', 'fieldSize'].includes(stat.key);
+              });
+
+              // Only show percentage stats that are non-zero
+              const percentStats = nonZeroStats.filter(stat => stat.suffix === '%' && effectiveStats[stat.key] > 0);
+
+              return percentStats.length > 0 ? (
+                <View style={styles.startingStatsBox}>
+                  <Text style={styles.statLabel}>Starting Bonuses</Text>
+                  <View style={styles.startingStatsGrid}>
+                    {percentStats.map(stat => {
+                      const value = effectiveStats[stat.key];
+                      const cap = stat.capType ? EFFECT_CAPS[stat.capType].defaultCap : undefined;
+                      return (
+                        <View key={stat.key} style={styles.startingStatItem}>
+                          <Text style={styles.startingStatLabel}>{stat.label}</Text>
+                          <Text style={styles.startingStatValue}>
+                            {value}{stat.suffix}
+                            {cap && <Text style={styles.startingStatCap}> (max {cap}%)</Text>}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+              ) : null;
+            })()}
 
             {/* Character Stats Row */}
             <View style={styles.characterStatsRow}>
@@ -369,6 +461,41 @@ const styles = StyleSheet.create({
     opacity: 0.7,
     marginLeft: 22,
   },
+  startingStatsBox: {
+    backgroundColor: COLORS.paperBeige,
+    borderRadius: 8,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+    marginTop: 8,
+  },
+  startingStatsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  startingStatItem: {
+    minWidth: '45%',
+  },
+  startingStatLabel: {
+    color: COLORS.slateCharcoal,
+    fontSize: 9,
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    opacity: 0.7,
+  },
+  startingStatValue: {
+    color: COLORS.slateCharcoal,
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'monospace',
+  },
+  startingStatCap: {
+    color: COLORS.slateCharcoal,
+    fontSize: 10,
+    fontWeight: '400',
+    opacity: 0.6,
+  },
   characterStatsRow: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
@@ -523,6 +650,7 @@ const styles = StyleSheet.create({
   // Action Section
   actionSection: {
     padding: 16,
+    paddingBottom: 16 + MOBILE_WEB_BOTTOM_PADDING,
     backgroundColor: COLORS.canvasWhite,
     borderTopWidth: 1,
     borderTopColor: COLORS.slateCharcoal,
