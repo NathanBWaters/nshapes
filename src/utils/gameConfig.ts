@@ -165,6 +165,21 @@ export const isStatCapped = (accumulated: number, cap: number): boolean => {
 };
 
 /**
+ * Check if the player is close enough to a cap to warrant showing it.
+ * Returns true if:
+ * - currentValue >= cap * 0.8 (within 20% of cap), OR
+ * - currentValue >= cap - 2 (within 2 points of cap)
+ *
+ * This prevents showing max info when players are far from the cap,
+ * which can be confusing for stats they have nothing in.
+ */
+export const shouldShowCapInfo = (currentValue: number, cap: number): boolean => {
+  const withinPercentage = currentValue >= cap * 0.8;  // Within 20%
+  const withinPoints = currentValue >= cap - 2;        // Within 2 points
+  return withinPercentage || withinPoints;
+};
+
+/**
  * Mapping from PlayerStats field names to EffectCapType
  * Used by UI to show cap information for stats
  */

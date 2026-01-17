@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Pressable, StyleSheet, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PlayerStats, Weapon, WeaponRarity, EffectCaps } from '@/types';
-
-// Extra bottom padding for mobile web browsers to account for browser UI (URL bar, navigation)
-const MOBILE_WEB_BOTTOM_PADDING = Platform.OS === 'web' ? 60 : 0;
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
-import { getCapInfoForStat, isStatCapped, STAT_TO_CAP_TYPE, EFFECT_CAPS } from '@/utils/gameConfig';
+import { getCapInfoForStat, isStatCapped, shouldShowCapInfo, STAT_TO_CAP_TYPE, EFFECT_CAPS } from '@/utils/gameConfig';
 import Icon from './Icon';
 import GameMenu from './GameMenu';
 import InventoryBar from './InventoryBar';
@@ -135,6 +133,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
   challengeBonusWeapon: preGeneratedReward = null,
   onChallengeBonusMoney,
 }) => {
+  const insets = useSafeAreaInsets();
   const [focusedIndex, setFocusedIndex] = useState<number>(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
@@ -238,13 +237,16 @@ const LevelUp: React.FC<LevelUpProps> = ({
       const capInfo = getCapInfoForStat(key, effectCaps as Record<string, number> | undefined);
       const isCapped = capInfo ? isStatCapped(newValue, capInfo.cap) : false;
 
+      // Only show cap info when player is close to the cap (within 20% or 2 points)
+      const showCapInfo = capInfo ? shouldShowCapInfo(currentValue, capInfo.cap) : false;
+
       return {
         key: formatKey(key),
         before: formatStatValue(key, currentValue),
         after: formatStatValue(key, newValue),
         isIncrease: effectValue > 0,
         isCapped,
-        cap: capInfo?.cap ?? null,
+        cap: showCapInfo ? capInfo?.cap ?? null : null,
       };
     }).filter((item): item is {
       key: string;
@@ -466,7 +468,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
       </View>
 
       {/* Action Button */}
-      <View style={styles.actionSection}>
+      <View style={[styles.actionSection, { paddingBottom: 16 + insets.bottom }]}>
         <TouchableOpacity
           onPress={() => {
             if (focusedWeapon) {
@@ -817,7 +819,6 @@ const styles = StyleSheet.create({
   // Action Section
   actionSection: {
     padding: 16,
-    paddingBottom: 16 + MOBILE_WEB_BOTTOM_PADDING,
     backgroundColor: COLORS.canvasWhite,
     borderTopWidth: 1,
     borderTopColor: COLORS.slateCharcoal,

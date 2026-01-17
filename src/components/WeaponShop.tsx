@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Pressable, StyleSheet, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Weapon, PlayerStats, WeaponRarity, EffectCaps } from '@/types';
-
-// Extra bottom padding for mobile web browsers to account for browser UI (URL bar, navigation)
-const MOBILE_WEB_BOTTOM_PADDING = Platform.OS === 'web' ? 60 : 0;
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
-import { getCapInfoForStat, isStatCapped, STAT_TO_CAP_TYPE, EFFECT_CAPS } from '@/utils/gameConfig';
+import { getCapInfoForStat, isStatCapped, shouldShowCapInfo, STAT_TO_CAP_TYPE, EFFECT_CAPS } from '@/utils/gameConfig';
 import { getPlayerWeaponCount } from '@/utils/gameDefinitions';
 import Icon from './Icon';
 import GameMenu from './GameMenu';
@@ -125,6 +123,7 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
   playerWeapons = [],
   onExitGame
 }) => {
+  const insets = useSafeAreaInsets();
   const [focusedIndex, setFocusedIndex] = useState<number>(() => {
     // Initialize to first non-null weapon
     const firstAvailable = weapons.findIndex(weapon => weapon !== null);
@@ -248,13 +247,16 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
       const capInfo = getCapInfoForStat(key, effectCaps as Record<string, number> | undefined);
       const isCapped = capInfo ? isStatCapped(newValue, capInfo.cap) : false;
 
+      // Only show cap info when player is close to the cap (within 20% or 2 points)
+      const showCapInfo = capInfo ? shouldShowCapInfo(currentValue, capInfo.cap) : false;
+
       return {
         key: formatStatName(key),
         before: formatStatValue(key, currentValue),
         after: formatStatValue(key, newValue),
         isIncrease: effectValue > 0,
         isCapped,
-        cap: capInfo?.cap ?? null,
+        cap: showCapInfo ? capInfo?.cap ?? null : null,
       };
     }).filter((item): item is {
       key: string;
@@ -426,7 +428,7 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
       </View>
 
       {/* Action Buttons */}
-      <View style={styles.actionSection}>
+      <View style={[styles.actionSection, { paddingBottom: 16 + insets.bottom }]}>
         <View style={styles.actionRow}>
           <View style={{ flex: 1 }}>
             <TouchableOpacity
@@ -812,7 +814,6 @@ const styles = StyleSheet.create({
   // Action Section
   actionSection: {
     padding: 16,
-    paddingBottom: 16 + MOBILE_WEB_BOTTOM_PADDING,
     backgroundColor: COLORS.canvasWhite,
     borderTopWidth: 1,
     borderTopColor: COLORS.slateCharcoal,
