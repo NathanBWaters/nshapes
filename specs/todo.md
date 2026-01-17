@@ -991,17 +991,17 @@
 - Remove any holographic card rendering code
 
 **Tasks:**
-- [ ] Delete Phoenix Feather weapon definition
-- [ ] Delete Hint Catalyst weapon definition
-- [ ] Delete Colorblind Goggles item definition
-- [ ] Remove `holographicPercent` from PlayerStats type and defaults
-- [ ] Remove `'makeHolographic'` from CardReward/bridge effect types
-- [ ] Delete `useHolographicShimmer.ts` hook file
-- [ ] Remove any holographic imports and usages in Card.tsx
-- [ ] Remove holographic handling in weaponEffects.ts
-- [ ] Update any tests that reference holographic
-- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
-- [ ] **Commit:** `refactor(cards): remove holographic card system`
+- [x] Delete Phoenix Feather weapon definition (2026-01-17)
+- [x] Delete Hint Catalyst weapon definition (2026-01-17)
+- [x] Delete Colorblind Goggles item definition (2026-01-17)
+- [x] Remove `holographicPercent` from PlayerStats type and defaults (2026-01-17)
+- [x] Remove `'makeHolographic'` from CardReward/bridge effect types (2026-01-17)
+- [x] Delete `useHolographicShimmer.ts` hook file (2026-01-17)
+- [x] Remove any holographic imports and usages in Card.tsx (N/A - no usages found) (2026-01-17)
+- [x] Remove holographic handling in weaponEffects.ts (N/A - no usages found) (2026-01-17)
+- [x] Update any tests that reference holographic (bridgeWeapons.test.ts, weapons.test.ts, applyEnemyStatModifiers.test.ts) (2026-01-17)
+- [x] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass (2026-01-17)
+- [x] **Commit:** `refactor(cards): remove holographic card system` (2026-01-17)
 
 ### 10.4 Notification Duration
 **Issue:** Bottom-right notifications during gameplay last too long (1000ms).

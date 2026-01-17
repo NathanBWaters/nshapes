@@ -13,7 +13,7 @@ const Notification: React.FC<NotificationProps> = ({
   message,
   type,
   onClose,
-  duration = 1000
+  duration = 500
 }) => {
   const opacity = React.useRef(new Animated.Value(0)).current;
 
