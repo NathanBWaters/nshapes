@@ -6,8 +6,8 @@ describe('Bridge Weapons', () => {
   const bridgeWeapons = WEAPONS.filter(w => w.specialEffect === 'bridge');
 
   describe('Weapon Definitions', () => {
-    it('should have 10 bridge weapons', () => {
-      expect(bridgeWeapons.length).toBe(10);
+    it('should have 8 bridge weapons', () => {
+      expect(bridgeWeapons.length).toBe(8);
     });
 
     it('all bridge weapons should be legendary rarity', () => {
@@ -49,7 +49,6 @@ describe('Bridge Weapons', () => {
 
   describe('Trigger Coverage', () => {
     const expectedTriggers: BridgeTriggerType[] = [
-      'onHeal',
       'onExplosion',
       'onTimeGain',
       'onDestruction',
@@ -57,11 +56,10 @@ describe('Bridge Weapons', () => {
       'onCoinGain',
       'onXPGain',
       'onGraceUse',
-      'onHintUse',
       'onHealthLoss'
     ];
 
-    it('should cover all trigger types', () => {
+    it('should cover all used trigger types', () => {
       const usedTriggers = bridgeWeapons.map(w => w.bridgeEffect?.trigger);
       expectedTriggers.forEach(trigger => {
         expect(usedTriggers).toContain(trigger);
@@ -71,10 +69,6 @@ describe('Bridge Weapons', () => {
 
   describe('Effect Coverage', () => {
     const usedEffects = bridgeWeapons.map(w => w.bridgeEffect?.effect);
-
-    it('should have holographic effects', () => {
-      expect(usedEffects).toContain('makeHolographic');
-    });
 
     it('should have grace effects', () => {
       expect(usedEffects).toContain('gainGrace');
@@ -127,7 +121,6 @@ describe('Bridge Weapons', () => {
       });
     };
 
-    testBridgeWeapon('Phoenix Feather', 'onHeal', 'makeHolographic', 15, 2);
     testBridgeWeapon('Chaos Conduit', 'onExplosion', 'gainGrace', 10, 3);
     testBridgeWeapon('Temporal Rift', 'onTimeGain', 'triggerEcho', 20, 2);
     testBridgeWeapon('Soul Harvest', 'onDestruction', 'heal', 5, 3);
@@ -135,21 +128,10 @@ describe('Bridge Weapons', () => {
     testBridgeWeapon("Fortune's Blessing", 'onCoinGain', 'gainHint', 10, 3);
     testBridgeWeapon('Wisdom Chain', 'onXPGain', 'gainCoin', 15, 3);
     testBridgeWeapon('Grace Conduit', 'onGraceUse', 'triggerLaser', 25, 2);
-    testBridgeWeapon('Hint Catalyst', 'onHintUse', 'makeHolographic', 20, 2);
     testBridgeWeapon('Life Link', 'onHealthLoss', 'explosion', 30, 2);
   });
 
   describe('Bridge Effect Amounts', () => {
-    it('Phoenix Feather should make 1 card holographic', () => {
-      const weapon = WEAPONS.find(w => w.name === 'Phoenix Feather');
-      expect(weapon?.bridgeEffect?.amount).toBe(1);
-    });
-
-    it('Hint Catalyst should make 3 cards holographic', () => {
-      const weapon = WEAPONS.find(w => w.name === 'Hint Catalyst');
-      expect(weapon?.bridgeEffect?.amount).toBe(3);
-    });
-
     it('Soul Harvest should heal 1 HP', () => {
       const weapon = WEAPONS.find(w => w.name === 'Soul Harvest');
       expect(weapon?.bridgeEffect?.amount).toBe(1);
@@ -178,33 +160,33 @@ describe('Bridge Weapons', () => {
 
   describe('Bridge Resolution Functions', () => {
     // Create test weapons for resolution testing
-    const phoenixFeather = WEAPONS.find(w => w.name === 'Phoenix Feather')!;
+    const soulHarvest = WEAPONS.find(w => w.name === 'Soul Harvest')!;
     const chaosConduit = WEAPONS.find(w => w.name === 'Chaos Conduit')!;
     const temporalRift = WEAPONS.find(w => w.name === 'Temporal Rift')!;
 
     describe('getBridgeWeaponsForTrigger', () => {
       it('should return empty array when no bridge weapons', () => {
         const regularWeapons = WEAPONS.filter(w => w.specialEffect !== 'bridge').slice(0, 5);
-        const result = getBridgeWeaponsForTrigger('onHeal', regularWeapons);
+        const result = getBridgeWeaponsForTrigger('onDestruction', regularWeapons);
         expect(result).toEqual([]);
       });
 
       it('should return matching bridge weapons for trigger', () => {
-        const testWeapons = [phoenixFeather, chaosConduit];
-        const result = getBridgeWeaponsForTrigger('onHeal', testWeapons);
+        const testWeapons = [soulHarvest, chaosConduit];
+        const result = getBridgeWeaponsForTrigger('onDestruction', testWeapons);
         expect(result.length).toBe(1);
-        expect(result[0].name).toBe('Phoenix Feather');
+        expect(result[0].name).toBe('Soul Harvest');
       });
 
       it('should return all matching weapons when multiple exist', () => {
-        const phoenixCopy = { ...phoenixFeather, id: 'phoenix-2' };
-        const testWeapons = [phoenixFeather, phoenixCopy, chaosConduit];
-        const result = getBridgeWeaponsForTrigger('onHeal', testWeapons);
+        const soulHarvestCopy = { ...soulHarvest, id: 'soul-harvest-2' };
+        const testWeapons = [soulHarvest, soulHarvestCopy, chaosConduit];
+        const result = getBridgeWeaponsForTrigger('onDestruction', testWeapons);
         expect(result.length).toBe(2);
       });
 
       it('should return empty array when trigger type does not match', () => {
-        const testWeapons = [phoenixFeather];
+        const testWeapons = [soulHarvest];
         const result = getBridgeWeaponsForTrigger('onExplosion', testWeapons);
         expect(result).toEqual([]);
       });
@@ -212,25 +194,25 @@ describe('Bridge Weapons', () => {
 
     describe('hasBridgeWeaponsForTrigger', () => {
       it('should return false when no matching bridge weapons', () => {
-        const testWeapons = [phoenixFeather];
+        const testWeapons = [soulHarvest];
         expect(hasBridgeWeaponsForTrigger('onExplosion', testWeapons)).toBe(false);
       });
 
       it('should return true when matching bridge weapons exist', () => {
-        const testWeapons = [phoenixFeather];
-        expect(hasBridgeWeaponsForTrigger('onHeal', testWeapons)).toBe(true);
+        const testWeapons = [soulHarvest];
+        expect(hasBridgeWeaponsForTrigger('onDestruction', testWeapons)).toBe(true);
       });
     });
 
     describe('rollBridgeEffects', () => {
       it('should return empty array when isCascade is true', () => {
-        const testWeapons = [phoenixFeather];
-        const result = rollBridgeEffects('onHeal', testWeapons, true);
+        const testWeapons = [soulHarvest];
+        const result = rollBridgeEffects('onDestruction', testWeapons, true);
         expect(result).toEqual([]);
       });
 
       it('should return empty array when no matching bridge weapons', () => {
-        const testWeapons = [phoenixFeather];
+        const testWeapons = [soulHarvest];
         const result = rollBridgeEffects('onExplosion', testWeapons, false);
         expect(result).toEqual([]);
       });
@@ -238,12 +220,12 @@ describe('Bridge Weapons', () => {
       it('should respect chance probability (100% chance should always trigger)', () => {
         // Create a weapon with 100% chance for testing
         const guaranteedWeapon: Weapon = {
-          ...phoenixFeather,
+          ...soulHarvest,
           id: 'guaranteed-test',
           bridgeEffect: {
-            trigger: 'onHeal',
+            trigger: 'onDestruction',
             chance: 100,
-            effect: 'makeHolographic',
+            effect: 'heal',
             amount: 1,
           },
         };
@@ -251,21 +233,21 @@ describe('Bridge Weapons', () => {
 
         // Should always trigger with 100% chance
         for (let i = 0; i < 10; i++) {
-          const result = rollBridgeEffects('onHeal', testWeapons, false);
+          const result = rollBridgeEffects('onDestruction', testWeapons, false);
           expect(result.length).toBe(1);
-          expect(result[0].effect).toBe('makeHolographic');
+          expect(result[0].effect).toBe('heal');
           expect(result[0].amount).toBe(1);
         }
       });
 
       it('should respect chance probability (0% chance should never trigger)', () => {
         const impossibleWeapon: Weapon = {
-          ...phoenixFeather,
+          ...soulHarvest,
           id: 'impossible-test',
           bridgeEffect: {
-            trigger: 'onHeal',
+            trigger: 'onDestruction',
             chance: 0,
-            effect: 'makeHolographic',
+            effect: 'heal',
             amount: 1,
           },
         };
@@ -273,41 +255,41 @@ describe('Bridge Weapons', () => {
 
         // Should never trigger with 0% chance
         for (let i = 0; i < 10; i++) {
-          const result = rollBridgeEffects('onHeal', testWeapons, false);
+          const result = rollBridgeEffects('onDestruction', testWeapons, false);
           expect(result.length).toBe(0);
         }
       });
 
       it('should include weapon name in result', () => {
         const guaranteedWeapon: Weapon = {
-          ...phoenixFeather,
+          ...soulHarvest,
           id: 'named-test',
           bridgeEffect: {
-            trigger: 'onHeal',
+            trigger: 'onDestruction',
             chance: 100,
-            effect: 'makeHolographic',
+            effect: 'heal',
             amount: 1,
           },
         };
         const testWeapons = [guaranteedWeapon];
-        const result = rollBridgeEffects('onHeal', testWeapons, false);
-        expect(result[0].weaponName).toBe('Phoenix Feather');
+        const result = rollBridgeEffects('onDestruction', testWeapons, false);
+        expect(result[0].weaponName).toBe('Soul Harvest');
       });
 
       it('should roll for each matching weapon independently', () => {
         // Create two weapons with 100% chance
         const weapon1: Weapon = {
-          ...phoenixFeather,
+          ...soulHarvest,
           id: 'test-1',
-          bridgeEffect: { trigger: 'onHeal', chance: 100, effect: 'makeHolographic', amount: 1 },
+          bridgeEffect: { trigger: 'onDestruction', chance: 100, effect: 'heal', amount: 1 },
         };
         const weapon2: Weapon = {
-          ...phoenixFeather,
+          ...soulHarvest,
           id: 'test-2',
-          bridgeEffect: { trigger: 'onHeal', chance: 100, effect: 'makeHolographic', amount: 2 },
+          bridgeEffect: { trigger: 'onDestruction', chance: 100, effect: 'heal', amount: 2 },
         };
         const testWeapons = [weapon1, weapon2];
-        const result = rollBridgeEffects('onHeal', testWeapons, false);
+        const result = rollBridgeEffects('onDestruction', testWeapons, false);
         expect(result.length).toBe(2);
         expect(result[0].amount).toBe(1);
         expect(result[1].amount).toBe(2);

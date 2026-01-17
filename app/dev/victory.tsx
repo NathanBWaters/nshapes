@@ -42,7 +42,6 @@ const mockPlayerStats: PlayerStats = {
   explosion: 0,
   damage: 1,
   damagePercent: 0,
-  holographicPercent: 0,
   maxTimeIncrease: 0,
   timeWarpPercent: 0,
   matchHints: 0,

@@ -947,11 +947,11 @@
 - Keep the orange theme and "FINAL ROUND" banner
 
 **Tasks:**
-- [ ] Find the button style in AttributeUnlockScreen
-- [ ] Match button dimensions to standard button style used elsewhere
-- [ ] Verify visual consistency with other screens
-- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
-- [ ] **Commit:** `fix(ui): standardize Final Round button size`
+- [x] Find the button style in AttributeUnlockScreen (2026-01-17)
+- [x] Match button dimensions to standard button style used elsewhere (wrapped in buttonRow) (2026-01-17)
+- [x] Verify visual consistency with other screens (2026-01-17)
+- [x] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass (2026-01-17)
+- [x] **Commit:** `fix(ui): standardize Final Round button size` (2026-01-17)
 
 ### 10.2 Remove Fireworks Particle Effect
 **Issue:** Fireworks/confetti particle effect should be removed.
@@ -966,12 +966,12 @@
 - Keep the particle system (used for explosions), just remove confetti/fireworks triggers
 
 **Tasks:**
-- [ ] Remove ConfettiBurst import and usage from VictoryScreen
-- [ ] Remove confetti from LevelUp screen
-- [ ] Remove confetti from CharacterUnlockScreen
-- [ ] Optionally: remove ConfettiBurst component file if unused elsewhere
-- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
-- [ ] **Commit:** `fix(ui): remove confetti particle effects`
+- [x] Remove ConfettiBurst import and usage from VictoryScreen (2026-01-17)
+- [x] Remove confetti from LevelUp screen (2026-01-17)
+- [x] Remove confetti from CharacterUnlockScreen (2026-01-17)
+- [x] Optionally: remove ConfettiBurst component file if unused elsewhere (deleted) (2026-01-17)
+- [x] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass (2026-01-17)
+- [x] **Commit:** `refactor(ui): remove ConfettiBurst particle effects` (2026-01-17)
 
 ### 10.3 Remove Holographic Card References
 **Issue:** All holographic card references should be removed.

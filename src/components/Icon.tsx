@@ -385,9 +385,6 @@ export const STAT_ICONS: Record<string, IconName> = {
   damage: 'lorc/fist',
   damagePercent: 'lorc/fist',
 
-  // Holographic
-  holographicPercent: 'lorc/mirror-mirror',
-
   // Time
   maxTimeIncrease: 'lorc/hourglass',
   timeWarpPercent: 'lorc/hourglass',

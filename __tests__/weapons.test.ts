@@ -12,8 +12,8 @@ import { Weapon, WeaponRarity, Player } from '@/types';
 
 describe('Weapon Definitions', () => {
   describe('WEAPONS array', () => {
-    it('should have exactly 79 weapons (18 types x 2 rarities + 3 legendary-only + 11 cap increasers + 18 epic variants + 10 bridge legendaries + 1 luck)', () => {
-      expect(WEAPONS.length).toBe(79);
+    it('should have exactly 77 weapons (18 types x 2 rarities + 3 legendary-only + 11 cap increasers + 18 epic variants + 8 bridge legendaries + 1 luck)', () => {
+      expect(WEAPONS.length).toBe(77);
     });
 
     it('should have 18 common weapons', () => {
@@ -31,9 +31,9 @@ describe('Weapon Definitions', () => {
       expect(epics.length).toBe(18);
     });
 
-    it('should have 13 legendary weapons (Mystic Sight + Chain Reaction + Snowball + 10 bridge legendaries)', () => {
+    it('should have 11 legendary weapons (Mystic Sight + Chain Reaction + Snowball + 8 bridge legendaries)', () => {
       const legendaries = WEAPONS.filter(w => w.rarity === 'legendary');
-      expect(legendaries.length).toBe(13);
+      expect(legendaries.length).toBe(11);
     });
 
     it('should have all required weapon types', () => {
@@ -116,9 +116,9 @@ describe('Weapon Definitions', () => {
       const legendaryOnlyWeapons = [
         'Mystic Sight', 'Chain Reaction', 'Snowball',
         // Bridge weapons (cross-system triggers)
-        'Phoenix Feather', 'Chaos Conduit', 'Temporal Rift', 'Soul Harvest',
+        'Chaos Conduit', 'Temporal Rift', 'Soul Harvest',
         'Cascade Core', "Fortune's Blessing", 'Wisdom Chain', 'Grace Conduit',
-        'Hint Catalyst', 'Life Link'
+        'Life Link'
       ];
       // Cap increaser weapons and Fortune's Eye are rare-only
       const rareOnlyWeapons = [
@@ -243,9 +243,9 @@ describe('Weapon Definitions', () => {
       const legendaryOnlyWeapons = [
         'Mystic Sight', 'Chain Reaction', 'Snowball',
         // Bridge weapons (cross-system triggers)
-        'Phoenix Feather', 'Chaos Conduit', 'Temporal Rift', 'Soul Harvest',
+        'Chaos Conduit', 'Temporal Rift', 'Soul Harvest',
         'Cascade Core', "Fortune's Blessing", 'Wisdom Chain', 'Grace Conduit',
-        'Hint Catalyst', 'Life Link'
+        'Life Link'
       ];
       // Cap increaser weapons and Fortune's Eye are rare-only
       const rareOnlyWeapons = [

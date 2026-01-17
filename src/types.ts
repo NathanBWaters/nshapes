@@ -93,7 +93,7 @@ export type WeaponRarity = 'common' | 'rare' | 'epic' | 'legendary';
 
 export type ItemName =
   'Great Field' | 'Mirror Trinket' | 'Hint Booster' | 'Lucky Token' |
-  'Colorblind Goggles' | 'Crimson Lens' | 'Crystal Ball' | 'Chrono Stop' |
+  'Crimson Lens' | 'Crystal Ball' | 'Chrono Stop' |
   'Subtle Nudge' | 'Weapon Holster' | 'Culling Scroll' | 'Agile Treads' |
   'Fate\'s Bargain' | 'Fractured Gains' | 'Self-Destructing Timer' |
   'Card Cycler' | 'Team Reroll' | 'Molotov Catalyst' | 'Tempo Tuner' |
@@ -124,7 +124,6 @@ export type BridgeTriggerType =
 
 // Bridge effect result types - what happens when triggered
 export type BridgeEffectType =
-  | 'makeHolographic'  // Make random card(s) holographic
   | 'gainGrace'        // Gain grace
   | 'triggerEcho'      // Trigger echo match
   | 'heal'             // Heal HP
@@ -207,7 +206,6 @@ export interface PlayerStats {
   explosion: number;
   damage: number;
   damagePercent: number;
-  holographicPercent: number;
   maxTimeIncrease: number;
   timeWarpPercent: number;
   matchHints: number;

@@ -35,7 +35,6 @@ const createBaseStats = (overrides: Partial<PlayerStats> = {}): PlayerStats => (
   explosion: 0,
   damage: 0,
   damagePercent: 0,
-  holographicPercent: 0,
   maxTimeIncrease: 0,
   timeWarpPercent: 0,
   matchHints: 0,

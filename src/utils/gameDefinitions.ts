@@ -38,7 +38,6 @@ export const DEFAULT_PLAYER_STATS: PlayerStats = {
   explosion: 0,
   damage: 1,
   damagePercent: 0,
-  holographicPercent: 0,
   maxTimeIncrease: 0,
   timeWarpPercent: 0,
   matchHints: 0,
@@ -1365,25 +1364,8 @@ export const WEAPONS: Weapon[] = [
   },
 
   // ═══════════════════════════════════════════════════════════════
-  // LEGENDARY BRIDGE WEAPONS - Cross-system triggers (10 weapons)
+  // LEGENDARY BRIDGE WEAPONS - Cross-system triggers (8 weapons)
   // ═══════════════════════════════════════════════════════════════
-
-  // Phoenix Feather: On heal → holographic
-  {
-    id: 'phoenix-feather',
-    name: 'Phoenix Feather',
-    rarity: 'legendary',
-    level: 1,
-    price: 35,
-    description: 'On heal: 15% chance to make a random card holographic.',
-    shortDescription: 'Heal makes holographic',
-    flavorText: 'From the ashes of pain, golden glory rises.',
-    icon: 'lorc/feather',
-    specialEffect: 'bridge',
-    effects: {},
-    bridgeEffect: { trigger: 'onHeal', chance: 15, effect: 'makeHolographic', amount: 1 },
-    maxCount: 2,
-  },
 
   // Chaos Conduit: On explosion → grace
   {
@@ -1501,23 +1483,6 @@ export const WEAPONS: Weapon[] = [
     specialEffect: 'bridge',
     effects: {},
     bridgeEffect: { trigger: 'onGraceUse', chance: 25, effect: 'triggerLaser' },
-    maxCount: 2,
-  },
-
-  // Hint Catalyst: On hint use → holographic
-  {
-    id: 'hint-catalyst',
-    name: 'Hint Catalyst',
-    rarity: 'legendary',
-    level: 1,
-    price: 40,
-    description: 'On hint use: 20% chance to make 3 random cards holographic.',
-    shortDescription: 'Hints make holographic',
-    flavorText: 'Seek and you shall find... treasure.',
-    icon: 'lorc/crystal-wand',
-    specialEffect: 'bridge',
-    effects: {},
-    bridgeEffect: { trigger: 'onHintUse', chance: 20, effect: 'makeHolographic', amount: 3 },
     maxCount: 2,
   },
 
@@ -1789,21 +1754,6 @@ export const ITEMS: Item[] = [
     },
     drawbacks: {
       damage: -1
-    }
-  },
-  {
-    name: 'Colorblind Goggles',
-    description: 'Increases holographic chance and damage',
-    rarity: 'Tier 1',
-    price: 3,
-    limit: 1,
-    icon: 'delapouite/sunglasses',
-    effects: {
-      holographicPercent: 15,
-      damage: 1
-    },
-    drawbacks: {
-      // Special effect for reducing money and points by 50% would be implemented in game logic
     }
   },
   // Implement the remaining items following the pattern above
