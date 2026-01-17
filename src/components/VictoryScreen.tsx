@@ -1,9 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { Player, Weapon, PlayerStats, WeaponRarity, AdventureDifficulty } from '@/types';
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
 import Icon from './Icon';
-import { ConfettiBurst } from './effects/ConfettiBurst';
 import { AnimatedCounter } from './ui/AnimatedCounter';
 import { ScreenTransition } from './ScreenTransition';
 import RoundProgressChart, { RoundScore } from './RoundProgressChart';
@@ -62,20 +61,9 @@ const VictoryScreen: React.FC<VictoryScreenProps> = ({
 }) => {
   const groupedWeapons = groupWeapons(player.weapons);
 
-  // Trigger confetti on mount
-  const [showConfetti, setShowConfetti] = useState(false);
-
-  useEffect(() => {
-    // Slight delay to ensure component is mounted
-    const timer = setTimeout(() => setShowConfetti(true), 100);
-    return () => clearTimeout(timer);
-  }, []);
-
   return (
     <ScreenTransition>
       <View style={styles.container}>
-        {/* Confetti celebration */}
-        <ConfettiBurst trigger={showConfetti} count={50} />
 
       <View style={styles.card}>
         {/* Victory Banner */}

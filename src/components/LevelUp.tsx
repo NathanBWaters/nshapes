@@ -7,7 +7,6 @@ import { getCapInfoForStat, isStatCapped, shouldShowCapInfo, STAT_TO_CAP_TYPE, E
 import Icon from './Icon';
 import GameMenu from './GameMenu';
 import InventoryBar from './InventoryBar';
-import { ConfettiBurst } from './effects/ConfettiBurst';
 import { ScreenTransition } from './ScreenTransition';
 import { playSound } from '@/utils/sounds';
 import { getWeaponsByRarity, getPlayerWeaponCount } from '@/utils/gameDefinitions';
@@ -162,13 +161,6 @@ const LevelUp: React.FC<LevelUpProps> = ({
     }
   }, [options, focusedIndex, maxValidIndex]);
 
-  // Trigger confetti on mount
-  const [showConfetti, setShowConfetti] = useState(false);
-  useEffect(() => {
-    const timer = setTimeout(() => setShowConfetti(true), 100);
-    return () => clearTimeout(timer);
-  }, []);
-
   // Show hovered option if hovering, otherwise show focused
   const displayedIndex = hoveredIndex !== null ? hoveredIndex : focusedIndex;
 
@@ -318,9 +310,6 @@ const LevelUp: React.FC<LevelUpProps> = ({
   return (
     <ScreenTransition>
       <View style={styles.container}>
-        {/* Celebration confetti */}
-        <ConfettiBurst trigger={showConfetti} count={30} />
-
       {/* Eyebrow Banner */}
       <View style={styles.eyebrow}>
         <View style={styles.eyebrowLeft}>

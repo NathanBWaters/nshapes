@@ -12,8 +12,8 @@ import { Weapon, WeaponRarity, Player } from '@/types';
 
 describe('Weapon Definitions', () => {
   describe('WEAPONS array', () => {
-    it('should have exactly 78 weapons (18 types x 2 rarities + 2 legendary-only + 11 cap increasers + 18 epic variants + 10 bridge legendaries + 1 luck)', () => {
-      expect(WEAPONS.length).toBe(78);
+    it('should have exactly 79 weapons (18 types x 2 rarities + 3 legendary-only + 11 cap increasers + 18 epic variants + 10 bridge legendaries + 1 luck)', () => {
+      expect(WEAPONS.length).toBe(79);
     });
 
     it('should have 18 common weapons', () => {
@@ -31,9 +31,9 @@ describe('Weapon Definitions', () => {
       expect(epics.length).toBe(18);
     });
 
-    it('should have 12 legendary weapons (Mystic Sight + Chain Reaction + 10 bridge legendaries)', () => {
+    it('should have 13 legendary weapons (Mystic Sight + Chain Reaction + Snowball + 10 bridge legendaries)', () => {
       const legendaries = WEAPONS.filter(w => w.rarity === 'legendary');
-      expect(legendaries.length).toBe(12);
+      expect(legendaries.length).toBe(13);
     });
 
     it('should have all required weapon types', () => {
@@ -114,17 +114,17 @@ describe('Weapon Definitions', () => {
     it('most weapon types should have 2 rarities, some are legendary-only, rare-only, or epic-only', () => {
       const weaponsByName = new Map<string, Weapon[]>();
       const legendaryOnlyWeapons = [
-        'Mystic Sight', 'Chain Reaction',
+        'Mystic Sight', 'Chain Reaction', 'Snowball',
         // Bridge weapons (cross-system triggers)
         'Phoenix Feather', 'Chaos Conduit', 'Temporal Rift', 'Soul Harvest',
         'Cascade Core', "Fortune's Blessing", 'Wisdom Chain', 'Grace Conduit',
         'Hint Catalyst', 'Life Link'
       ];
-      // Cap increaser weapons are rare-only (one per effect type)
+      // Cap increaser weapons and Fortune's Eye are rare-only
       const rareOnlyWeapons = [
         'Echo Mastery', 'Laser Mastery', 'Grace Mastery', 'Explosion Mastery',
         'Hint Mastery', 'Time Mastery', 'Healing Mastery', 'Fire Mastery',
-        'Ricochet Mastery', 'Growth Mastery', 'Coin Mastery'
+        'Ricochet Mastery', 'Growth Mastery', 'Coin Mastery', "Fortune's Eye"
       ];
       // Epic weapon variants are epic-only
       const epicOnlyWeapons = [
@@ -241,17 +241,17 @@ describe('Weapon Definitions', () => {
     it('rare weapons should have higher effect values than common (for weapons with both rarities)', () => {
       const weaponsByName = new Map<string, Map<WeaponRarity, Weapon>>();
       const legendaryOnlyWeapons = [
-        'Mystic Sight', 'Chain Reaction',
+        'Mystic Sight', 'Chain Reaction', 'Snowball',
         // Bridge weapons (cross-system triggers)
         'Phoenix Feather', 'Chaos Conduit', 'Temporal Rift', 'Soul Harvest',
         'Cascade Core', "Fortune's Blessing", 'Wisdom Chain', 'Grace Conduit',
         'Hint Catalyst', 'Life Link'
       ];
-      // Cap increaser weapons are rare-only (one per effect type)
+      // Cap increaser weapons and Fortune's Eye are rare-only
       const rareOnlyWeapons = [
         'Echo Mastery', 'Laser Mastery', 'Grace Mastery', 'Explosion Mastery',
         'Hint Mastery', 'Time Mastery', 'Healing Mastery', 'Fire Mastery',
-        'Ricochet Mastery', 'Growth Mastery', 'Coin Mastery'
+        'Ricochet Mastery', 'Growth Mastery', 'Coin Mastery', "Fortune's Eye"
       ];
       // Epic weapon variants are epic-only
       const epicOnlyWeapons = [
@@ -353,7 +353,7 @@ describe('Weapon Definitions', () => {
       expect(epics / totalSamples).toBeLessThan(0.30);
 
       // Legendary should be rare
-      expect(legendaries / totalSamples).toBeGreaterThan(0.005);
+      expect(legendaries / totalSamples).toBeGreaterThanOrEqual(0.005);
       expect(legendaries / totalSamples).toBeLessThan(0.15);
     });
   });

@@ -34,15 +34,6 @@ jest.mock('@/components/InventoryBar', () => {
   };
 });
 
-jest.mock('@/components/effects/ConfettiBurst', () => {
-  const { View } = require('react-native');
-  return {
-    ConfettiBurst: function MockConfettiBurst() {
-      return <View testID="mock-confetti" />;
-    },
-  };
-});
-
 jest.mock('@/components/ScreenTransition', () => {
   const { View } = require('react-native');
   return {
@@ -54,6 +45,10 @@ jest.mock('@/components/ScreenTransition', () => {
 
 jest.mock('@/utils/sounds', () => ({
   playSound: jest.fn(),
+}));
+
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
 // Create test weapons

@@ -1,9 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Character } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import Icon from './Icon';
-import { ConfettiBurst } from './effects/ConfettiBurst';
 import { ScreenTransition } from './ScreenTransition';
 import { getWeaponByName } from '@/utils/gameDefinitions';
 
@@ -16,21 +15,9 @@ const CharacterUnlockScreen: React.FC<CharacterUnlockScreenProps> = ({
   character,
   onContinue,
 }) => {
-  // Trigger confetti on mount
-  const [showConfetti, setShowConfetti] = useState(false);
-
-  useEffect(() => {
-    // Slight delay to ensure component is mounted
-    const timer = setTimeout(() => setShowConfetti(true), 100);
-    return () => clearTimeout(timer);
-  }, []);
-
   return (
     <ScreenTransition>
       <View style={styles.container}>
-        {/* Confetti celebration */}
-        <ConfettiBurst trigger={showConfetti} count={60} />
-
         <View style={styles.card}>
           {/* Banner */}
           <View style={styles.banner}>
