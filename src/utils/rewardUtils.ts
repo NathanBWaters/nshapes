@@ -76,18 +76,36 @@ export const generateChallengeBonus = (tier: 1 | 2 | 3 | 4, excludeIds: string[]
   let targetRarity: WeaponRarity;
 
   switch (tier) {
-    case 1:
-      // Tier 1: Guaranteed Rare
-      targetRarity = 'rare';
+    case 1: {
+      // Tier 1: 50% Rare, 50% Epic
+      const roll1 = Math.random();
+      targetRarity = roll1 < 0.5 ? 'rare' : 'epic';
       break;
-    case 2:
-      // Tier 2: 70% Rare, 30% Legendary
-      targetRarity = Math.random() < 0.7 ? 'rare' : 'legendary';
+    }
+    case 2: {
+      // Tier 2: 40% Rare, 40% Epic, 20% Legendary
+      const roll2 = Math.random();
+      if (roll2 < 0.4) {
+        targetRarity = 'rare';
+      } else if (roll2 < 0.8) {
+        targetRarity = 'epic';
+      } else {
+        targetRarity = 'legendary';
+      }
       break;
-    case 3:
-      // Tier 3: 40% Rare, 60% Legendary
-      targetRarity = Math.random() < 0.4 ? 'rare' : 'legendary';
+    }
+    case 3: {
+      // Tier 3: 20% Rare, 40% Epic, 40% Legendary
+      const roll3 = Math.random();
+      if (roll3 < 0.2) {
+        targetRarity = 'rare';
+      } else if (roll3 < 0.6) {
+        targetRarity = 'epic';
+      } else {
+        targetRarity = 'legendary';
+      }
       break;
+    }
     case 4:
       // Tier 4: Guaranteed Legendary
       targetRarity = 'legendary';

@@ -98,14 +98,14 @@ export const getRarityChancesForRound = (round: number): { common: number; rare:
   // Calculate progress from round 1 (0) to round 10 (1)
   const progress = (clampedRound - 1) / 9;
 
-  // Legendary: 0.75% at round 1, 6% at round 10
-  const legendaryStart = 0.0075;
-  const legendaryEnd = 0.06;
+  // Legendary: 0.375% at round 1, 3% at round 10 (halved from original to make stretch goals more valuable)
+  const legendaryStart = 0.00375;
+  const legendaryEnd = 0.03;
   const legendary = legendaryStart + (legendaryEnd - legendaryStart) * progress;
 
-  // Epic: 3% at round 1, 18% at round 10
-  const epicStart = 0.03;
-  const epicEnd = 0.18;
+  // Epic: 1.5% at round 1, 9% at round 10 (halved from original to make stretch goals more valuable)
+  const epicStart = 0.015;
+  const epicEnd = 0.09;
   const epic = epicStart + (epicEnd - epicStart) * progress;
 
   // Rare: 15% at round 1, 30% at round 10
