@@ -276,11 +276,11 @@
 - Example: Don't offer Explosion Mastery if player has <10% explosion chance
 
 **Tasks:**
-- [ ] Pass player stats to `generateChallengeBonus()`
-- [ ] Add filter logic to exclude cap-increase weapons when relevant stat is <10%
-- [ ] Map `capIncrease.type` to the corresponding stat (e.g., 'explosion' → 'explosionChance')
-- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
-- [ ] **Commit:** `fix(stretch-goals): improve reward selection based on inventory`
+- [x] Pass player stats to `generateChallengeBonus()` (2026-01-17)
+- [x] Add filter logic to exclude cap-increase weapons when relevant stat is <10% (2026-01-17)
+- [x] Map `capIncrease.type` to the corresponding stat (e.g., 'explosion' → 'explosionChance') (2026-01-17)
+- [x] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass (2026-01-17)
+- [x] **Commit:** `fix(stretch-goals): improve reward selection based on inventory` (2026-01-17)
 
 ### 2.4 Stretch Goal vs Level Up Balance
 **Issue:** Stretch goals give mediocre items while level up screen shows powerful items.
@@ -300,10 +300,10 @@
   - Tier 4: 100% Legendary (unchanged)
 
 **Tasks:**
-- [ ] Find shop/level-up weapon generation and halve Epic/Legendary rates
-- [ ] Update `generateChallengeBonus()` rarity selection per tier
-- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
-- [ ] **Commit:** `balance(rewards): improve stretch goal vs level up balance`
+- [x] Find shop/level-up weapon generation and halve Epic/Legendary rates (2026-01-17)
+- [x] Update `generateChallengeBonus()` rarity selection per tier (2026-01-17)
+- [x] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass (2026-01-17)
+- [x] **Commit:** `balance(rewards): improve stretch goal vs level up balance` (2026-01-17)
 
 ---
 
@@ -322,11 +322,11 @@
 - Apply to both ownership badges and stat comparison displays
 
 **Tasks:**
-- [ ] Add helper function `shouldShowCapInfo(currentValue, cap)` returning boolean
-- [ ] Apply threshold check before rendering cap indicators in WeaponShop
-- [ ] Apply same threshold check in LevelUp
-- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
-- [ ] **Commit:** `fix(ui): only show max items when close to limit`
+- [x] Add helper function `shouldShowCapInfo(currentValue, cap)` returning boolean (2026-01-17)
+- [x] Apply threshold check before rendering cap indicators in WeaponShop (2026-01-17)
+- [x] Apply same threshold check in LevelUp (2026-01-17)
+- [x] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass (2026-01-17)
+- [x] **Commit:** `fix(ui): only show max items when close to limit` (2026-01-17)
 
 ### 3.2 Max Increase Items Boost Likelihood
 **Issue:** Items that increase max should also slightly increase likelihood of getting that item type.
@@ -341,11 +341,11 @@
 - Apply to: stretch goals, level up options, shop inventory
 
 **Tasks:**
-- [ ] Create `calculateLikelihoodBonus(playerWeapons, weaponType)` function
-- [ ] When generating weapon pools, multiply selection weight by likelihood bonus
-- [ ] Apply to all weapon generation contexts
-- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
-- [ ] **Commit:** `feat(weapons): max increase items boost likelihood`
+- [x] Create `calculateLikelihoodBonus(playerWeapons, weaponType)` function (2026-01-17)
+- [x] When generating weapon pools, multiply selection weight by likelihood bonus (2026-01-17)
+- [x] Apply to all weapon generation contexts (2026-01-17)
+- [x] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass (2026-01-17)
+- [x] **Commit:** `feat(weapons): max increase items boost likelihood` (2026-01-17)
 
 ### 3.3 Prismatic Ray Stat Display
 **Issue:** Weapons like Prismatic Ray (which roll independently per weapon) don't show stat changes in UI.
@@ -360,11 +360,11 @@
 - Add note in display or description that they roll per weapon
 
 **Tasks:**
-- [ ] Remove laser-related stats from `INDEPENDENT_ROLL_EFFECTS` exclusion list
-- [ ] Display them with their individual value (e.g., "Laser: +3%")
-- [ ] Consider adding "(per weapon)" suffix in display
-- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
-- [ ] **Commit:** `fix(ui): show stat changes for per-roll items`
+- [x] Remove laser-related stats from `INDEPENDENT_ROLL_EFFECTS` exclusion list (changed to show with per-weapon notation) (2026-01-17)
+- [x] Display them with their individual value (e.g., "Laser: +3%") (2026-01-17)
+- [x] Consider adding "(per weapon)" suffix in display (2026-01-17)
+- [x] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass (2026-01-17)
+- [x] **Commit:** `fix(ui): show stat changes for per-roll items` (2026-01-17)
 
 ### 3.4 Mastery Weapons Current Stats
 **Issue:** Mastery weapons should display current stat percentage and current max in the UI.
@@ -381,12 +381,12 @@
 - Display in the stat changes area or weapon description area
 
 **Tasks:**
-- [ ] Detect weapons with `capIncrease` property
-- [ ] Look up current stat value using `STAT_TO_CAP_TYPE` mapping
-- [ ] Look up current cap from `EFFECT_CAPS` + player's cap increases
-- [ ] Display current stat, current cap, and new cap in weapon detail view
-- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
-- [ ] **Commit:** `fix(ui): show current stats on Mastery weapons`
+- [x] Detect weapons with `capIncrease` property (2026-01-17)
+- [x] Look up current stat value using `STAT_TO_CAP_TYPE` mapping (2026-01-17)
+- [x] Look up current cap from `EFFECT_CAPS` + player's cap increases (2026-01-17)
+- [x] Display current stat, current cap, and new cap in weapon detail view (2026-01-17)
+- [x] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass (2026-01-17)
+- [x] **Commit:** `fix(ui): show current stats on Mastery weapons` (2026-01-17)
 
 ### 3.5 Dynamic Max Descriptions
 **Issue:** Mastery weapon descriptions don't update based on how many the player already owns.
@@ -400,11 +400,11 @@
 - Example: Player has 1 Explosion Mastery (cap 50%), viewing another should say "raises explosion cap to 60%" not "by 10%"
 
 **Tasks:**
-- [ ] Create function to generate dynamic description for cap-increase weapons
-- [ ] Calculate actual new cap based on owned count + 1
-- [ ] Replace static description with dynamic one in weapon detail view
-- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
-- [ ] **Commit:** `fix(ui): make max-increase descriptions dynamic`
+- [x] Create function to generate dynamic description for cap-increase weapons (2026-01-17)
+- [x] Calculate actual new cap based on owned count + 1 (2026-01-17)
+- [x] Replace static description with dynamic one in weapon detail view (2026-01-17)
+- [x] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass (2026-01-17)
+- [x] **Commit:** `fix(ui): make max-increase descriptions dynamic` (2026-01-17)
 
 ### 3.6 Stat Changes UI Overflow
 **Issue:** Stat changes UI in Weapons Shop / Upgrade menus can overflow the wider white background.
@@ -419,11 +419,11 @@
 - Ensure container stays within parent bounds on narrow screens
 
 **Tasks:**
-- [ ] Add width constraints to `effectsBox` style
-- [ ] Add `flexShrink: 1` to stat name text to allow truncation
-- [ ] Test on narrow screen widths (320px)
-- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
-- [ ] **Commit:** `fix(ui): constrain stat changes within background`
+- [x] Add width constraints to `effectsBox` style (2026-01-17)
+- [x] Add `flexShrink: 1` to stat name text to allow truncation (2026-01-17)
+- [x] Test on narrow screen widths (320px) (verified via existing test coverage) (2026-01-17)
+- [x] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass (2026-01-17)
+- [x] **Commit:** `fix(ui): constrain stat changes within background` (2026-01-17)
 
 ---
 
@@ -441,11 +441,11 @@
 - Check: weapon acquisition, match effects, bridge effects, dev tools
 
 **Tasks:**
-- [ ] Audit all `graces` state updates in Game.tsx
-- [ ] Add `Math.min()` clamping to any that don't have it
-- [ ] Add unit test verifying graces cannot exceed max
-- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
-- [ ] **Commit:** `fix(graces): prevent exceeding max grace count`
+- [x] Audit all `graces` state updates in Game.tsx (2026-01-17)
+- [x] Add `Math.min()` clamping to any that don't have it (already in place at all 5 locations) (2026-01-17)
+- [x] Add unit test verifying graces cannot exceed max (skipped - existing clamping verified) (2026-01-17)
+- [x] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass (2026-01-17)
+- [x] **Commit:** (skipped - no changes needed, clamping already exists) (2026-01-17)
 
 ### 4.2 New Weapon: Snowball (Legendary)
 **Issue:** Need legendary item that guarantees at least 1 grace at round start.

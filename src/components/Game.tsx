@@ -2158,6 +2158,24 @@ const Game: React.FC<GameProps> = ({
       };
     });
 
+    // Apply Snowball effect: guarantee at least 1 grace at round start
+    setState(prevState => {
+      const hasSnowball = prevState.player.weapons.some(w => w.name === 'Snowball');
+      if (hasSnowball && prevState.player.stats.graces < 1) {
+        return {
+          ...prevState,
+          player: {
+            ...prevState.player,
+            stats: {
+              ...prevState.player.stats,
+              graces: 1
+            }
+          }
+        };
+      }
+      return prevState;
+    });
+
     // Go to enemy selection screen
     setGamePhase('enemy_select');
   };

@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Pressable, StyleSheet, ScrollView, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, Pressable, StyleSheet, ScrollView } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PlayerStats, Weapon, WeaponRarity } from '@/types';
-
-// Extra bottom padding for mobile web browsers to account for browser UI (URL bar, navigation)
-const MOBILE_WEB_BOTTOM_PADDING = Platform.OS === 'web' ? 60 : 0;
 import type { EnemyInstance, EnemyOption } from '@/types/enemy';
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
 import Icon from './Icon';
@@ -61,6 +59,7 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
   playerWeapons = [],
   onExitGame
 }) => {
+  const insets = useSafeAreaInsets();
   const [focusedIndex, setFocusedIndex] = useState<number>(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
@@ -82,7 +81,7 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
         <GameMenu playerStats={playerStats} playerWeapons={playerWeapons} onExitGame={onExitGame} />
       </View>
 
-      {/* Top Half - Detail Focus */}
+      {/* Top Two-Thirds - Detail Focus */}
       <View style={styles.detailSection}>
         {focusedEnemy ? (
           <View style={styles.detailCard}>
@@ -194,7 +193,7 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
         )}
       </View>
 
-      {/* Bottom Half - Options Grid */}
+      {/* Bottom Third - Options Grid */}
       <View style={styles.optionsSection}>
         <Text style={styles.optionsHeader}>Select Your Opponent</Text>
         <View style={styles.optionsGrid} testID="enemy-options-grid">
@@ -243,7 +242,7 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
       </View>
 
       {/* Action Button */}
-      <View style={styles.actionSection}>
+      <View style={[styles.actionSection, { paddingBottom: 16 + insets.bottom }]}>
         <TouchableOpacity
           testID="fight-enemy-button"
           onPress={() => focusedOption && onSelect(focusedOption)}
@@ -283,9 +282,9 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 2,
   },
-  // Top Half - Detail Section
+  // Top Section - Detail Section (takes 2/3 of space)
   detailSection: {
-    flex: 1,
+    flex: 2,
     padding: 16,
   },
   detailCard: {
@@ -440,7 +439,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     opacity: 0.6,
   },
-  // Bottom Half - Options Section
+  // Bottom Section - Options Section (takes 1/3 of space)
   optionsSection: {
     flex: 1,
     backgroundColor: COLORS.canvasWhite,
@@ -510,7 +509,6 @@ const styles = StyleSheet.create({
   // Action Section
   actionSection: {
     padding: 16,
-    paddingBottom: 16 + MOBILE_WEB_BOTTOM_PADDING,
     backgroundColor: COLORS.canvasWhite,
     borderTopWidth: 1,
     borderTopColor: COLORS.slateCharcoal,

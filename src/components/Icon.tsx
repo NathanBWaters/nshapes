@@ -91,6 +91,7 @@ import Field from '../../assets/icons/lorc/field.svg';
 import MirrorMirror from '../../assets/icons/lorc/mirror-mirror.svg';
 import LightBulb from '../../assets/icons/lorc/light-bulb.svg';
 import Clover from '../../assets/icons/lorc/clover.svg';
+import Snowflake1 from '../../assets/icons/lorc/snowflake-1.svg';
 import Sunglasses from '../../assets/icons/delapouite/sunglasses.svg';
 import Token from '../../assets/icons/delapouite/token.svg';
 
@@ -256,6 +257,7 @@ const ICON_REGISTRY = {
   'lorc/mirror-mirror': MirrorMirror,
   'lorc/light-bulb': LightBulb,
   'lorc/clover': Clover,
+  'lorc/snowflake-1': Snowflake1,
   'delapouite/sunglasses': Sunglasses,
   'delapouite/token': Token,
 

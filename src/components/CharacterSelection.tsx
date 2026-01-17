@@ -1,9 +1,7 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Pressable, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, Pressable, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Character, PlayerStats, AdventureDifficulty } from '@/types';
-
-// Extra bottom padding for mobile web browsers to account for browser UI (URL bar, navigation)
-const MOBILE_WEB_BOTTOM_PADDING = Platform.OS === 'web' ? 60 : 0;
 import { COLORS, RADIUS } from '@/utils/colors';
 import { getWeaponByName, DEFAULT_PLAYER_STATS } from '@/utils/gameDefinitions';
 import { EFFECT_CAPS, EffectCapType, STARTING_STATS } from '@/utils/gameConfig';
@@ -87,6 +85,7 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
   onStart,
   onExitGame,
 }) => {
+  const insets = useSafeAreaInsets();
   const [hoveredCharacter, setHoveredCharacter] = React.useState<string | null>(null);
   const [characterWins, setCharacterWins] = React.useState<CharacterWins>({});
   const [endlessHighScores, setEndlessHighScores] = React.useState<EndlessHighScores>({});
@@ -284,7 +283,7 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
       </View>
 
       {/* Difficulty Selector and Start Adventure Button */}
-      <View style={styles.actionSection}>
+      <View style={[styles.actionSection, { paddingBottom: 16 + insets.bottom }]}>
         {/* Difficulty Selector */}
         <View style={styles.difficultySection}>
           <Text style={styles.difficultyLabel}>Difficulty</Text>
@@ -650,7 +649,6 @@ const styles = StyleSheet.create({
   // Action Section
   actionSection: {
     padding: 16,
-    paddingBottom: 16 + MOBILE_WEB_BOTTOM_PADDING,
     backgroundColor: COLORS.canvasWhite,
     borderTopWidth: 1,
     borderTopColor: COLORS.slateCharcoal,

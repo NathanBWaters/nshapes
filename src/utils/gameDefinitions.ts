@@ -594,6 +594,23 @@ export const WEAPONS: Weapon[] = [
   },
 
   // ============================================================================
+  // 7.5. SNOWBALL - Guaranteed starting grace (Legendary)
+  // ============================================================================
+  {
+    id: 'snowball',
+    name: 'Snowball',
+    rarity: 'legendary',
+    level: 1,
+    price: 40,
+    description: 'Guarantees at least 1 grace at the start of each round.',
+    shortDescription: 'Start with 1 grace',
+    flavorText: 'A magical snowball that never melts, providing comfort even in the darkest times.',
+    icon: 'lorc/snowflake-1',
+    maxCount: 1,
+    effects: {}
+  },
+
+  // ============================================================================
   // 8. LIFE VESSEL - Max health
   // ============================================================================
   {

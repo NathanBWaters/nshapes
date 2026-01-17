@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, Pressable, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, Text, Pressable, TouchableOpacity, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, RADIUS } from '@/utils/colors';
-
-// Extra bottom padding for mobile web browsers to account for browser UI (URL bar, navigation)
-const MOBILE_WEB_BOTTOM_PADDING = Platform.OS === 'web' ? 60 : 0;
 import { PlayerStats } from '@/types';
 import { FreePlayDifficulty } from './CharacterSelection';
 import { DEFAULT_PLAYER_STATS } from '@/utils/gameDefinitions';
@@ -24,6 +22,7 @@ const DIFFICULTY_INFO: Record<FreePlayDifficulty, { label: string; description: 
 };
 
 const DifficultySelection: React.FC<DifficultySelectionProps> = ({ onStart, onExitGame }) => {
+  const insets = useSafeAreaInsets();
   const [selectedDifficulty, setSelectedDifficulty] = useState<FreePlayDifficulty>('medium');
 
   return (
@@ -35,7 +34,7 @@ const DifficultySelection: React.FC<DifficultySelectionProps> = ({ onStart, onEx
       </View>
 
       {/* Main Content */}
-      <View style={styles.content}>
+      <View style={[styles.content, { paddingBottom: 24 + insets.bottom }]}>
         <View style={styles.headerSection}>
           <Text style={styles.title}>Choose Difficulty</Text>
           <Text style={styles.subtitle}>Select the number of attributes to match</Text>
@@ -128,7 +127,6 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 24,
-    paddingBottom: 24 + MOBILE_WEB_BOTTOM_PADDING,
     justifyContent: 'space-between',
   },
   headerSection: {
