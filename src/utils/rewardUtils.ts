@@ -30,9 +30,10 @@ export const getChallengeBonusMoney = (tier: 1 | 2 | 3 | 4): number => {
  * Higher tiers have better chances for legendary weapons.
  *
  * @param tier - Enemy tier (1-4)
+ * @param excludeIds - Weapon IDs to exclude (already awarded weapons)
  * @returns A weapon of appropriate rarity for the tier
  */
-export const generateChallengeBonus = (tier: 1 | 2 | 3 | 4): Weapon => {
+export const generateChallengeBonus = (tier: 1 | 2 | 3 | 4, excludeIds: string[] = []): Weapon => {
   let targetRarity: WeaponRarity;
 
   switch (tier) {
@@ -56,11 +57,17 @@ export const generateChallengeBonus = (tier: 1 | 2 | 3 | 4): Weapon => {
       targetRarity = 'rare';
   }
 
-  // Get a random weapon of the target rarity
-  const weaponsOfRarity = getWeaponsByRarity(targetRarity);
+  // Get a random weapon of the target rarity, excluding already-awarded weapons
+  const weaponsOfRarity = getWeaponsByRarity(targetRarity).filter(w => !excludeIds.includes(w.id));
+
   if (weaponsOfRarity.length === 0) {
-    // Fallback to rare if no weapons of target rarity
-    const rareWeapons = getWeaponsByRarity('rare');
+    // Fallback to rare if no weapons of target rarity (excluding already awarded)
+    const rareWeapons = getWeaponsByRarity('rare').filter(w => !excludeIds.includes(w.id));
+    if (rareWeapons.length === 0) {
+      // Last resort: return any weapon (shouldn't happen in practice)
+      const allWeapons = getWeaponsByRarity('rare');
+      return allWeapons[Math.floor(Math.random() * allWeapons.length)];
+    }
     return rareWeapons[Math.floor(Math.random() * rareWeapons.length)];
   }
   return weaponsOfRarity[Math.floor(Math.random() * weaponsOfRarity.length)];

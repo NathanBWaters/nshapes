@@ -256,12 +256,13 @@
 - Add weapon ID to list when stretch goal is completed
 
 **Tasks:**
-- [ ] Add `awardedStretchGoalWeapons: string[]` to game state
-- [ ] Modify `generateChallengeBonus()` to accept excluded weapon list
-- [ ] Filter out already-awarded weapons when selecting reward
-- [ ] Add awarded weapon ID to tracking list on completion
-- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
-- [ ] **Commit:** `fix(stretch-goals): ensure all stretch goal rewards are unique`
+- [x] Add `awardedStretchGoalWeapons: string[]` to game state (2026-01-17)
+- [x] Modify `generateChallengeBonus()` to accept excluded weapon list (2026-01-17)
+- [x] Update `getRandomEnemyOptions()` to pass excludeWeaponIds (2026-01-17)
+- [x] Filter out already-awarded weapons when selecting reward (2026-01-17)
+- [x] Add awarded weapon ID to tracking list on completion (2026-01-17)
+- [x] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass (2026-01-17)
+- [x] **Commit:** `fix(stretch-goals): ensure all stretch goal rewards are unique` (2026-01-17)
 
 ### 2.3 Intelligent Reward Selection
 **Issue:** Max-increase items (Mastery weapons) are given as stretch goal rewards for stat categories the player has none of or very little of.
