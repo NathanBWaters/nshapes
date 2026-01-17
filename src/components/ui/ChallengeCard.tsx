@@ -155,7 +155,7 @@ const ChallengeCard: React.FC<ChallengeCardProps> = ({ enemy, difficulty, enemyD
               </Text>
             )}
             {enemyDefeated && stretchGoalReward && (
-              <Text style={styles.rewardSubtext}>Available at the next Level Up screen</Text>
+              <Text style={styles.rewardSubtext}>Added to your inventory!</Text>
             )}
           </View>
         </View>

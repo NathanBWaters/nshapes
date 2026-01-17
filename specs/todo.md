@@ -237,12 +237,11 @@
 - No popup/modal needed - just show on round completion screen
 
 **Tasks:**
-- [ ] Modify `completeRound()` to add stretch goal weapon directly to inventory if `enemyDefeated`
-- [ ] Update RoundSummary to display the earned weapon (already shows it, but now it's in inventory)
-- [ ] Remove challenge bonus option rendering from LevelUp.tsx
-- [ ] Remove `challengeBonusWeapon` prop passing to LevelUp
-- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
-- [ ] **Commit:** `fix(stretch-goals): directly add rewards to inventory`
+- [x] Modify `completeRound()` to add stretch goal weapon directly to inventory if `enemyDefeated` (2026-01-17)
+- [x] Update ChallengeCard to say "Added to your inventory!" instead of "Available at next Level Up" (2026-01-17)
+- [x] Remove `challengeBonusWeapon` prop passing to LevelUp (weapon now auto-added) (2026-01-17)
+- [x] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass (2026-01-17)
+- [x] **Commit:** `fix(stretch-goals): directly add rewards to inventory` (2026-01-17)
 
 ### 2.2 Unique Stretch Goals
 **Issue:** Stretch goal rewards (weapons) can repeat across rounds.

@@ -366,11 +366,21 @@ const Game: React.FC<GameProps> = ({
       setEnemyDefeated(wasEnemyDefeated);
       setDefeatedEnemyTier(state.activeEnemyInstance.tier);
       // Track defeated enemy to prevent them from appearing again
+      // Also add stretch goal reward directly to inventory
       if (wasEnemyDefeated) {
-        setState(prevState => ({
-          ...prevState,
-          defeatedEnemies: [...prevState.defeatedEnemies, state.activeEnemyInstance!.name]
-        }));
+        setState(prevState => {
+          const newWeapons = state.selectedEnemyReward
+            ? [...prevState.player.weapons, state.selectedEnemyReward]
+            : prevState.player.weapons;
+          return {
+            ...prevState,
+            defeatedEnemies: [...prevState.defeatedEnemies, state.activeEnemyInstance!.name],
+            player: {
+              ...prevState.player,
+              weapons: newWeapons,
+            },
+          };
+        });
       }
       state.activeEnemyInstance.onRoundEnd();
     } else {
@@ -2261,23 +2271,6 @@ const Game: React.FC<GameProps> = ({
             hasMoreLevelUps={pendingLevelUps.length > 1}
             enemyDefeated={enemyDefeated}
             defeatedEnemyTier={defeatedEnemyTier}
-            challengeBonusWeapon={state.selectedEnemyReward}
-            onChallengeBonusMoney={(amount) => {
-              setState(prevState => ({
-                ...prevState,
-                player: {
-                  ...prevState.player,
-                  stats: {
-                    ...prevState.player.stats,
-                    money: prevState.player.stats.money + amount
-                  }
-                }
-              }));
-              setNotification({
-                message: `Stretch goal bonus: +$${amount}!`,
-                type: 'success'
-              });
-            }}
           />
         );
 
