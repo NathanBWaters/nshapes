@@ -126,9 +126,11 @@ const AttributeUnlockScreen: React.FC<AttributeUnlockScreenProps> = ({
             </Text>
           </ScrollView>
 
-          <TouchableOpacity style={styles.continueButton} onPress={onContinue}>
-            <Text style={styles.continueButtonText}>I'M READY</Text>
-          </TouchableOpacity>
+          <View style={styles.buttonRow}>
+            <TouchableOpacity style={styles.continueButton} onPress={onContinue}>
+              <Text style={styles.continueButtonText}>I'M READY</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     );

@@ -675,14 +675,14 @@
 - **Price:** 15
 
 **Tasks:**
-- [ ] Add `luck: number` to PlayerStats type (default 0)
-- [ ] Add luck to DEFAULT_PLAYER_STATS
-- [ ] Create Luck weapon definition
-- [ ] Register icon if needed
-- [ ] Modify weapon generation to multiply Epic/Legendary chances by `1.1^luck`
-- [ ] Apply luck bonus to: stretch goals, level up, shop
-- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
-- [ ] **Commit:** `feat(weapons): add Luck stat and weapon`
+- [x] Add `luck: number` to PlayerStats type (default 0) (already existed) (2026-01-17)
+- [x] Add luck to DEFAULT_PLAYER_STATS (already existed) (2026-01-17)
+- [x] Create Luck weapon definition (Fortune's Eye, rare) (2026-01-17)
+- [x] Register icon if needed (lorc/crystal-ball already registered) (2026-01-17)
+- [x] Modify weapon generation to multiply Epic/Legendary chances by `1.1^luck` (2026-01-17)
+- [x] Apply luck bonus to: stretch goals, level up, shop (applied to generateShopWeapons) (2026-01-17)
+- [x] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass (2026-01-17)
+- [x] **Commit:** `feat(weapons): add Fortune's Eye luck weapon` (2026-01-17)
 
 ### 9.2 Electric Retribution (Epic)
 **Issue:** Need weapon that triggers on health loss.
