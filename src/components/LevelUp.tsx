@@ -722,9 +722,11 @@ const styles = StyleSheet.create({
   },
   effectsBox: {
     flex: 1,
+    maxWidth: '100%',
     borderRadius: 8,
     padding: 10,
     borderWidth: 1,
+    overflow: 'hidden',
   },
   effectsBoxPositive: {
     backgroundColor: COLORS.paperBeige,
@@ -749,6 +751,7 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     fontSize: 11,
     flex: 1,
+    flexShrink: 1,
   },
   effectValuePositive: {
     color: COLORS.logicTeal,
