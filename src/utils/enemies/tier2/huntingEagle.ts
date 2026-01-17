@@ -26,8 +26,9 @@ export function createHuntingEagle(): EnemyInstance {
       { behavior: WeaponCounterEffect, config: { type: 'time', reduction: 35 } },
     ],
     // Defeat condition: Clear triple card with 20+ seconds remaining
+    // Note: timeRemaining is in seconds, not milliseconds
     (stats: RoundStats) =>
-      stats.tripleCardsCleared >= 1 && stats.timeRemaining >= 20000
+      stats.tripleCardsCleared >= 1 && stats.timeRemaining >= 20
   );
 }
 

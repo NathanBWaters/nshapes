@@ -8,7 +8,7 @@ const createEmptyStats = (): RoundStats => ({
   maxStreak: 0,
   invalidMatches: 0,
   matchTimes: [],
-  timeRemaining: 60000,
+  timeRemaining: 60,  // seconds, not milliseconds
   cardsRemaining: 12,
   tripleCardsCleared: 0,
   faceDownCardsMatched: 0,
@@ -86,7 +86,7 @@ describe('Hunting Eagle', () => {
       const enemy = createHuntingEagle();
       const stats = createEmptyStats();
       stats.tripleCardsCleared = 0;
-      stats.timeRemaining = 25000;
+      stats.timeRemaining = 25;  // 25 seconds
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
 
@@ -94,7 +94,7 @@ describe('Hunting Eagle', () => {
       const enemy = createHuntingEagle();
       const stats = createEmptyStats();
       stats.tripleCardsCleared = 1;
-      stats.timeRemaining = 15000;
+      stats.timeRemaining = 15;  // 15 seconds (not enough)
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
 
@@ -102,7 +102,7 @@ describe('Hunting Eagle', () => {
       const enemy = createHuntingEagle();
       const stats = createEmptyStats();
       stats.tripleCardsCleared = 1;
-      stats.timeRemaining = 20000;
+      stats.timeRemaining = 20;  // exactly 20 seconds
       expect(enemy.checkDefeatCondition(stats)).toBe(true);
     });
   });

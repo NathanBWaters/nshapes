@@ -8,7 +8,7 @@ const createEmptyStats = (): RoundStats => ({
   maxStreak: 0,
   invalidMatches: 0,
   matchTimes: [],
-  timeRemaining: 60000,
+  timeRemaining: 60,  // seconds, not milliseconds
   cardsRemaining: 12,
   tripleCardsCleared: 0,
   faceDownCardsMatched: 0,
@@ -95,7 +95,7 @@ describe('The Reaper', () => {
       const stats = createEmptyStats();
       stats.currentScore = 80;
       stats.targetScore = 100;
-      stats.timeRemaining = 15000;
+      stats.timeRemaining = 15;  // 15 seconds
       stats.damageReceived = 0;
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
@@ -105,7 +105,7 @@ describe('The Reaper', () => {
       const stats = createEmptyStats();
       stats.currentScore = 100;
       stats.targetScore = 100;
-      stats.timeRemaining = 9000;
+      stats.timeRemaining = 9;  // 9 seconds (not enough)
       stats.damageReceived = 0;
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
@@ -115,7 +115,7 @@ describe('The Reaper', () => {
       const stats = createEmptyStats();
       stats.currentScore = 100;
       stats.targetScore = 100;
-      stats.timeRemaining = 15000;
+      stats.timeRemaining = 15;  // 15 seconds
       stats.damageReceived = 1;
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
@@ -125,7 +125,7 @@ describe('The Reaper', () => {
       const stats = createEmptyStats();
       stats.currentScore = 100;
       stats.targetScore = 100;
-      stats.timeRemaining = 10000;
+      stats.timeRemaining = 10;  // exactly 10 seconds
       stats.damageReceived = 0;
       expect(enemy.checkDefeatCondition(stats)).toBe(true);
     });

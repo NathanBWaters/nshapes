@@ -37,9 +37,10 @@ export function createTheReaper(): EnemyInstance {
       { behavior: HintDisableEffect, config: { disableAuto: true, disableManual: true } },
     ],
     // Defeat condition: Beat target with 10+ seconds AND no damage
+    // Note: timeRemaining is in seconds, not milliseconds
     (stats: RoundStats) =>
       stats.currentScore >= stats.targetScore &&
-      stats.timeRemaining >= 10000 &&
+      stats.timeRemaining >= 10 &&
       stats.damageReceived === 0
   );
 }
