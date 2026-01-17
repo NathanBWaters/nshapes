@@ -243,6 +243,7 @@ export interface RoundStats {
   // Attribute tracking
   shapesMatched: Set<Shape>;
   colorsMatched: Set<Color>;
+  colorMatchCounts: Map<Color, number>;  // Track how many times each color was matched
   allDifferentMatches: number;
   allSameColorMatches: number;
   squiggleMatches: number;

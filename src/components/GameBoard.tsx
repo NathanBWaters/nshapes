@@ -850,6 +850,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
     countdownCardsMatched: 0,
     shapesMatched: new Set<Shape>(),
     colorsMatched: new Set<Color>(),
+    colorMatchCounts: new Map<Color, number>(),
     allDifferentMatches: 0,
     allSameColorMatches: 0,
     squiggleMatches: 0,

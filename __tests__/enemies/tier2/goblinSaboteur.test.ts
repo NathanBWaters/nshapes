@@ -15,6 +15,7 @@ const createEmptyStats = (): RoundStats => ({
   countdownCardsMatched: 0,
   shapesMatched: new Set(),
   colorsMatched: new Set(),
+  colorMatchCounts: new Map(),
   allDifferentMatches: 0,
   allSameColorMatches: 0,
   squiggleMatches: 0,

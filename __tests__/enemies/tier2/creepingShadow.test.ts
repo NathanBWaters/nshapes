@@ -15,6 +15,7 @@ const createEmptyStats = (): RoundStats => ({
   countdownCardsMatched: 0,
   shapesMatched: new Set(),
   colorsMatched: new Set(),
+  colorMatchCounts: new Map(),
   allDifferentMatches: 0,
   allSameColorMatches: 0,
   squiggleMatches: 0,
@@ -71,17 +72,40 @@ describe('Creeping Shadow', () => {
   });
 
   describe('defeat condition', () => {
-    it('returns false with only 2 colors matched', () => {
+    it('returns false when one color has fewer than 3 matches', () => {
       const enemy = createCreepingShadow();
       const stats = createEmptyStats();
-      stats.colorsMatched = new Set(['red', 'green']);
+      // Red has 3, green has 3, but purple only has 2
+      stats.colorMatchCounts.set('red', 3);
+      stats.colorMatchCounts.set('green', 3);
+      stats.colorMatchCounts.set('purple', 2);
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
 
-    it('returns true with all 3 colors matched', () => {
+    it('returns false when a color is missing', () => {
       const enemy = createCreepingShadow();
       const stats = createEmptyStats();
-      stats.colorsMatched = new Set(['red', 'green', 'purple']);
+      // Only 2 colors present
+      stats.colorMatchCounts.set('red', 5);
+      stats.colorMatchCounts.set('green', 5);
+      expect(enemy.checkDefeatCondition(stats)).toBe(false);
+    });
+
+    it('returns true when all 3 colors have 3+ matches', () => {
+      const enemy = createCreepingShadow();
+      const stats = createEmptyStats();
+      stats.colorMatchCounts.set('red', 3);
+      stats.colorMatchCounts.set('green', 3);
+      stats.colorMatchCounts.set('purple', 3);
+      expect(enemy.checkDefeatCondition(stats)).toBe(true);
+    });
+
+    it('returns true when colors have more than 3 matches', () => {
+      const enemy = createCreepingShadow();
+      const stats = createEmptyStats();
+      stats.colorMatchCounts.set('red', 5);
+      stats.colorMatchCounts.set('green', 4);
+      stats.colorMatchCounts.set('purple', 6);
       expect(enemy.checkDefeatCondition(stats)).toBe(true);
     });
   });

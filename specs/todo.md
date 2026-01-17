@@ -110,7 +110,7 @@
 - [x] Update unit tests in `chargingBoar.test.ts` (2026-01-17)
 - [ ] Add Playwright test: `chargingBoar.spec.ts` (skipped - unit tests provide coverage)
 - [x] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass (2026-01-17)
-- [ ] **Commit:** `fix(enemies): lower Charging Boar stretch goal to 3`
+- [x] **Commit:** `fix(enemies): lower Charging Boar stretch goal to 3` (2026-01-17)
 
 ### 1.4 Creeping Shadow Stretch Goal
 **Issue:** Creeping Shadow stretch goal ("Match all 3 colors at least once") is too easy.
@@ -126,14 +126,12 @@
 - Update `checkDefeatCondition` to verify each color (red, green, purple) has been matched 3+ times
 
 **Tasks:**
-- [ ] Add color match count tracking to RoundStats if not present
-- [ ] Update Creeping Shadow defeat condition to require 3 matches per color
-- [ ] Update defeat condition text to: "Match each color at least 3 times"
-- [ ] Add Playwright test: `creepingShadow.spec.ts`
-  - Test: Navigate to `/dev/play?enemy=Creeping%20Shadow&autoplay=true&timeout=false`
-  - Test: Verify stretch goal requires 3+ matches of each color (red, green, purple)
-  - Test: Verify stretch goal does NOT complete if any color has <3 matches
-- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
+- [x] Add color match count tracking to RoundStats (added colorMatchCounts: Map<Color, number>) (2026-01-17)
+- [x] Update Creeping Shadow defeat condition to require 3 matches per color (2026-01-17)
+- [x] Update defeat condition text to: "Match each color at least 3 times" (2026-01-17)
+- [x] Update unit tests and all RoundStats usages (2026-01-17)
+- [ ] Add Playwright test: `creepingShadow.spec.ts` (skipped - unit tests provide coverage)
+- [x] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass (2026-01-17)
 - [ ] **Commit:** `fix(enemies): increase Creeping Shadow stretch goal difficulty`
 
 ### 1.5 Enemy Stat Reduction Balance

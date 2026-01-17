@@ -38,6 +38,7 @@ export function createInitialRoundStats(
     // Attribute tracking
     shapesMatched: new Set<Shape>(),
     colorsMatched: new Set<Color>(),
+    colorMatchCounts: new Map<Color, number>(),
     allDifferentMatches: 0,
     allSameColorMatches: 0,
     squiggleMatches: 0,
@@ -103,6 +104,9 @@ export function useRoundStats() {
       for (const card of matchedCards) {
         stats.shapesMatched.add(card.shape);
         stats.colorsMatched.add(card.color);
+        // Increment color match count
+        const currentCount = stats.colorMatchCounts.get(card.color) || 0;
+        stats.colorMatchCounts.set(card.color, currentCount + 1);
       }
 
       if (options.isAllDifferent) {
