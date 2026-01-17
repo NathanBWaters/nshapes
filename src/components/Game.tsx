@@ -240,6 +240,7 @@ const Game: React.FC<GameProps> = ({
     recordHintUsed,
     recordDamage,
     recordWeaponEffect,
+    recordTripleCardCleared,
     updateTimeRemaining,
     updateCardsRemaining,
     updateScore,
@@ -1519,6 +1520,10 @@ const Game: React.FC<GameProps> = ({
 
       // Replace cards that should be removed (no health or health <= 1)
       if (cardsToReplace.length > 0) {
+        // Track triple cards cleared (cards with health === 1 were multi-hit cards now fully cleared)
+        const clearedTripleCards = cardsToReplace.filter(c => c.health === 1);
+        clearedTripleCards.forEach(() => recordTripleCardCleared());
+
         replaceMatchedCards(cardsToReplace);
       }
 
