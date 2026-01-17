@@ -465,12 +465,12 @@
 - **Price:** 40
 
 **Tasks:**
-- [ ] Add Snowball weapon definition to WEAPONS array
-- [ ] Register icon if not already in ICON_REGISTRY
-- [ ] Add round-start logic: if player has Snowball and graces < 1, set graces = 1
-- [ ] Add to WeaponName type if using strict typing
-- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
-- [ ] **Commit:** `feat(weapons): add Snowball legendary weapon`
+- [x] Add Snowball weapon definition to WEAPONS array (2026-01-17)
+- [x] Register icon if not already in ICON_REGISTRY (lorc/snowflake-1) (2026-01-17)
+- [x] Add round-start logic: if player has Snowball and graces < 1, set graces = 1 (2026-01-17)
+- [x] Add to WeaponName type if using strict typing (N/A - uses string type) (2026-01-17)
+- [x] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass (2026-01-17)
+- [x] **Commit:** `feat(weapons): add Snowball legendary weapon` (2026-01-17)
 
 ### 4.3 Second Chance Clarity
 **Issue:** "+3 starting graces" sounds like permanent graces. Clarify they are single-use.
