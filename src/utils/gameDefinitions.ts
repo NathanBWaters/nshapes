@@ -1537,6 +1537,23 @@ export const WEAPONS: Weapon[] = [
     bridgeEffect: { trigger: 'onHealthLoss', chance: 30, effect: 'explosion' },
     maxCount: 2,
   },
+
+  // ============================================================================
+  // FORTUNE'S EYE - Increases luck stat for better item appearance rates
+  // ============================================================================
+  {
+    id: 'fortunes-eye',
+    name: "Fortune's Eye",
+    rarity: 'rare',
+    level: 1,
+    price: 15,
+    description: '+1 luck. Each luck point increases Epic/Legendary appearance by 10%.',
+    shortDescription: 'Better item finds',
+    flavorText: 'See the future, seize the fortune.',
+    icon: 'lorc/crystal-ball',
+    effects: { luck: 1 },
+    maxCount: 10,
+  },
 ];
 
 // Count how many of a specific weapon (by name) the player owns
@@ -1637,18 +1654,24 @@ export const selectWeightedWeapon = (weapons: Weapon[], weights: number[]): Weap
 // Helper function to get a random weapon based on rarity distribution
 // Optionally filters out weapons the player can't obtain (at maxCount)
 // Round parameter enables rarity scaling (1-10, defaults to 5 for mid-game rates)
-export const getRandomShopWeapon = (playerWeapons?: Weapon[], round: number = 5): Weapon => {
+// Luck parameter boosts Epic/Legendary chances by 1.1x per luck point
+export const getRandomShopWeapon = (playerWeapons?: Weapon[], round: number = 5, luck: number = 0): Weapon => {
   const roll = Math.random();
   let rarity: WeaponRarity;
 
   // Get rarity chances based on round (scales with progression)
   const rarityChances = getRarityChancesForRound(round);
 
-  if (roll < rarityChances.legendary) {
+  // Apply luck bonus: each luck point multiplies Epic/Legendary chances by 1.1x
+  const luckMultiplier = Math.pow(1.1, luck);
+  const boostedLegendary = Math.min(rarityChances.legendary * luckMultiplier, 0.5); // Cap at 50%
+  const boostedEpic = Math.min(rarityChances.epic * luckMultiplier, 0.5); // Cap at 50%
+
+  if (roll < boostedLegendary) {
     rarity = 'legendary';
-  } else if (roll < rarityChances.legendary + rarityChances.epic) {
+  } else if (roll < boostedLegendary + boostedEpic) {
     rarity = 'epic';
-  } else if (roll < rarityChances.legendary + rarityChances.epic + rarityChances.rare) {
+  } else if (roll < boostedLegendary + boostedEpic + rarityChances.rare) {
     rarity = 'rare';
   } else {
     rarity = 'common';
@@ -1692,10 +1715,11 @@ export const getRandomShopWeapon = (playerWeapons?: Weapon[], round: number = 5)
 // Helper function to generate shop weapons
 // Optionally filters out weapons the player can't obtain
 // Round parameter enables rarity scaling (1-10)
-export const generateShopWeapons = (count: number, playerWeapons?: Weapon[], round: number = 5): Weapon[] => {
+// Luck parameter boosts Epic/Legendary chances
+export const generateShopWeapons = (count: number, playerWeapons?: Weapon[], round: number = 5, luck: number = 0): Weapon[] => {
   const weapons: Weapon[] = [];
   for (let i = 0; i < count; i++) {
-    weapons.push(getRandomShopWeapon(playerWeapons, round));
+    weapons.push(getRandomShopWeapon(playerWeapons, round, luck));
   }
   return weapons;
 };

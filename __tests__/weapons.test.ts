@@ -12,8 +12,8 @@ import { Weapon, WeaponRarity, Player } from '@/types';
 
 describe('Weapon Definitions', () => {
   describe('WEAPONS array', () => {
-    it('should have exactly 77 weapons (18 types x 2 rarities + 2 legendary-only + 11 cap increasers + 18 epic variants + 10 bridge legendaries)', () => {
-      expect(WEAPONS.length).toBe(77);
+    it('should have exactly 78 weapons (18 types x 2 rarities + 2 legendary-only + 11 cap increasers + 18 epic variants + 10 bridge legendaries + 1 luck)', () => {
+      expect(WEAPONS.length).toBe(78);
     });
 
     it('should have 18 common weapons', () => {
@@ -21,9 +21,9 @@ describe('Weapon Definitions', () => {
       expect(commons.length).toBe(18);
     });
 
-    it('should have 29 rare weapons (18 base + 11 cap increasers)', () => {
+    it('should have 30 rare weapons (18 base + 11 cap increasers + 1 luck)', () => {
       const rares = WEAPONS.filter(w => w.rarity === 'rare');
-      expect(rares.length).toBe(29);
+      expect(rares.length).toBe(30);
     });
 
     it('should have 18 epic weapons (epic variants)', () => {

@@ -1068,31 +1068,37 @@ const Game: React.FC<GameProps> = ({
 
     // Check if player has free rerolls
     if (state.player.stats.freeRerolls > 0) {
-      setState(prevState => ({
-        ...prevState,
-        shopWeapons: generateShopWeapons(4, prevState.player.weapons, prevState.round),
-        player: {
-          ...prevState.player,
-          stats: {
-            ...prevState.player.stats,
-            freeRerolls: prevState.player.stats.freeRerolls - 1
+      setState(prevState => {
+        const totalStats = calculatePlayerTotalStats(prevState.player);
+        return {
+          ...prevState,
+          shopWeapons: generateShopWeapons(4, prevState.player.weapons, prevState.round, totalStats.luck),
+          player: {
+            ...prevState.player,
+            stats: {
+              ...prevState.player.stats,
+              freeRerolls: prevState.player.stats.freeRerolls - 1
+            }
           }
-        }
-      }));
+        };
+      });
     } else {
       // Charge for the reroll
-      setState(prevState => ({
-        ...prevState,
-        shopWeapons: generateShopWeapons(4, prevState.player.weapons, prevState.round),
-        player: {
-          ...prevState.player,
-          stats: {
-            ...prevState.player.stats,
-            money: prevState.player.stats.money - prevState.rerollCost
-          }
-        },
-        rerollCost: Math.max(1, Math.round(prevState.rerollCost * 1.2)) // Increase reroll cost by 20%
-      }));
+      setState(prevState => {
+        const totalStats = calculatePlayerTotalStats(prevState.player);
+        return {
+          ...prevState,
+          shopWeapons: generateShopWeapons(4, prevState.player.weapons, prevState.round, totalStats.luck),
+          player: {
+            ...prevState.player,
+            stats: {
+              ...prevState.player.stats,
+              money: prevState.player.stats.money - prevState.rerollCost
+            }
+          },
+          rerollCost: Math.max(1, Math.round(prevState.rerollCost * 1.2)) // Increase reroll cost by 20%
+        };
+      });
     }
   };
 
@@ -2153,7 +2159,7 @@ const Game: React.FC<GameProps> = ({
         gameStarted: false,  // Not started yet - waiting for enemy selection
         currentEnemies: getRandomEnemyOptions(getTierForRound(nextRound), 3, prevState.defeatedEnemies, prevState.awardedStretchGoalWeapons, calculatePlayerTotalStats(prevState.player), prevState.player.weapons),
         shopItems: generateRandomShopItems(),  // Refill shop for next round
-        shopWeapons: generateShopWeapons(4, prevState.player.weapons, nextRound),   // Refill weapon shop with round-scaled rarity
+        shopWeapons: generateShopWeapons(4, prevState.player.weapons, nextRound, playerTotalStats.luck),   // Refill weapon shop with round-scaled rarity
         rerollCost: getBaseRollPrice(nextRound),  // Reset roll price for new round
         selectedEnemy: null,
         activeEnemyInstance: null,  // Set when player selects enemy
