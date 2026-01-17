@@ -140,18 +140,22 @@ export function getEnemiesByTier(tier: 1 | 2 | 3 | 4): string[] {
  *
  * @param tier - Which tier to pull from
  * @param count - How many to return (default 3)
+ * @param exclude - Enemy names to exclude from selection (e.g., already defeated enemies)
  * @returns Array of fresh EnemyInstance objects
  */
-export function getRandomEnemies(tier: 1 | 2 | 3 | 4, count: number = 3): EnemyInstance[] {
+export function getRandomEnemies(tier: 1 | 2 | 3 | 4, count: number = 3, exclude: string[] = []): EnemyInstance[] {
   const tierEnemyNames = getEnemiesByTier(tier);
 
-  if (tierEnemyNames.length === 0) {
-    // No enemies registered for this tier, return dummy enemies
+  // Filter out excluded enemies (already defeated)
+  const availableNames = tierEnemyNames.filter(name => !exclude.includes(name));
+
+  if (availableNames.length === 0) {
+    // No enemies available for this tier, return dummy enemies
     return Array(count).fill(null).map(() => createDummyEnemy());
   }
 
   // Shuffle and take requested count
-  const shuffled = shuffleArray(tierEnemyNames);
+  const shuffled = shuffleArray(availableNames);
   const selectedNames = shuffled.slice(0, Math.min(count, shuffled.length));
 
   // Create fresh instances
@@ -164,10 +168,11 @@ export function getRandomEnemies(tier: 1 | 2 | 3 | 4, count: number = 3): EnemyI
  *
  * @param tier - Which tier to pull from
  * @param count - How many to return (default 3)
+ * @param exclude - Enemy names to exclude from selection (e.g., already defeated enemies)
  * @returns Array of EnemyOption objects (enemy + pre-determined reward)
  */
-export function getRandomEnemyOptions(tier: 1 | 2 | 3 | 4, count: number = 3): EnemyOption[] {
-  const enemies = getRandomEnemies(tier, count);
+export function getRandomEnemyOptions(tier: 1 | 2 | 3 | 4, count: number = 3, exclude: string[] = []): EnemyOption[] {
+  const enemies = getRandomEnemies(tier, count, exclude);
   return enemies.map(enemy => ({
     enemy,
     stretchGoalReward: generateChallengeBonus(enemy.tier),

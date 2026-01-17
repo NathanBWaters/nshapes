@@ -180,6 +180,7 @@ const Game: React.FC<GameProps> = ({
         selectedEnemy: null,
         activeEnemyInstance: null,
         selectedEnemyReward: null,
+        defeatedEnemies: [],
         lootCrates: 0,
         isCoOp: false,
         players: [],
@@ -213,6 +214,7 @@ const Game: React.FC<GameProps> = ({
       selectedEnemy: null,
       activeEnemyInstance: null,
       selectedEnemyReward: null,
+      defeatedEnemies: [],
       lootCrates: 0,
       isCoOp: false,
       players: [],
@@ -362,6 +364,13 @@ const Game: React.FC<GameProps> = ({
       wasEnemyDefeated = state.activeEnemyInstance.checkDefeatCondition(roundStatsRef.current);
       setEnemyDefeated(wasEnemyDefeated);
       setDefeatedEnemyTier(state.activeEnemyInstance.tier);
+      // Track defeated enemy to prevent them from appearing again
+      if (wasEnemyDefeated) {
+        setState(prevState => ({
+          ...prevState,
+          defeatedEnemies: [...prevState.defeatedEnemies, state.activeEnemyInstance!.name]
+        }));
+      }
       state.activeEnemyInstance.onRoundEnd();
     } else {
       setEnemyDefeated(false);
@@ -683,10 +692,11 @@ const Game: React.FC<GameProps> = ({
       rerollCost: BASE_REROLL_COST,
 
       // Enemy - to be selected during gameplay (with pre-determined rewards)
-      currentEnemies: getRandomEnemyOptions(getTierForRound(1), 3),
+      currentEnemies: getRandomEnemyOptions(getTierForRound(1), 3, []),  // No defeated enemies at start
       selectedEnemy: null,
       activeEnemyInstance: null,  // Set when player selects enemy
       selectedEnemyReward: null,
+      defeatedEnemies: [],  // Track which enemies have been defeated
 
       // Loot and rewards
       lootCrates: 0,
@@ -703,9 +713,9 @@ const Game: React.FC<GameProps> = ({
   }, [isMultiplayer, resetRoundStats]);
 
   // Generate 3 random enemies from the appropriate tier for the round (with pre-determined rewards)
-  const generateEnemiesForRound = (round: number): EnemyOption[] => {
+  const generateEnemiesForRound = (round: number, defeatedEnemies: string[] = []): EnemyOption[] => {
     const tier = getTierForRound(round);
-    return getRandomEnemyOptions(tier, 3);
+    return getRandomEnemyOptions(tier, 3, defeatedEnemies);
   };
 
   // Generate random shop items
@@ -2090,7 +2100,7 @@ const Game: React.FC<GameProps> = ({
         foundCombinations: [],
         roundCompleted: false,
         gameStarted: false,  // Not started yet - waiting for enemy selection
-        currentEnemies: getRandomEnemyOptions(getTierForRound(nextRound), 3),
+        currentEnemies: getRandomEnemyOptions(getTierForRound(nextRound), 3, prevState.defeatedEnemies),
         shopItems: generateRandomShopItems(),  // Refill shop for next round
         shopWeapons: generateShopWeapons(4, prevState.player.weapons, nextRound),   // Refill weapon shop with round-scaled rarity
         selectedEnemy: null,

@@ -221,6 +221,71 @@ describe('getRandomEnemies', () => {
     const enemies = getRandomEnemies(1);
     expect(enemies.length).toBe(3);
   });
+
+  describe('exclude parameter', () => {
+    beforeEach(() => {
+      // Register some test enemies for exclusion tests
+      registerEnemy('Enemy A', () => ({
+        ...createDummyEnemy(),
+        name: 'Enemy A',
+        tier: 1 as const,
+      }));
+      registerEnemy('Enemy B', () => ({
+        ...createDummyEnemy(),
+        name: 'Enemy B',
+        tier: 1 as const,
+      }));
+      registerEnemy('Enemy C', () => ({
+        ...createDummyEnemy(),
+        name: 'Enemy C',
+        tier: 1 as const,
+      }));
+    });
+
+    afterEach(() => {
+      // Clean up registered test enemies
+      delete ENEMY_REGISTRY['Enemy A'];
+      delete ENEMY_REGISTRY['Enemy B'];
+      delete ENEMY_REGISTRY['Enemy C'];
+    });
+
+    it('should exclude specified enemies from selection', () => {
+      // Run multiple times to verify exclusion is consistent
+      for (let i = 0; i < 10; i++) {
+        const enemies = getRandomEnemies(1, 3, ['Enemy A']);
+        const names = enemies.map(e => e.name);
+        expect(names).not.toContain('Enemy A');
+      }
+    });
+
+    it('should exclude multiple enemies', () => {
+      for (let i = 0; i < 10; i++) {
+        const enemies = getRandomEnemies(1, 3, ['Enemy A', 'Enemy B']);
+        const names = enemies.map(e => e.name);
+        expect(names).not.toContain('Enemy A');
+        expect(names).not.toContain('Enemy B');
+      }
+    });
+
+    it('should return dummy enemies when all are excluded', () => {
+      const enemies = getRandomEnemies(1, 3, ['Enemy A', 'Enemy B', 'Enemy C']);
+      enemies.forEach(enemy => {
+        expect(enemy.name).toBe('Dummy');
+      });
+    });
+
+    it('should handle empty exclude array', () => {
+      const enemies = getRandomEnemies(1, 3, []);
+      expect(enemies.length).toBe(3);
+      // Should still work normally
+    });
+
+    it('should handle exclude with non-existent enemy names', () => {
+      // Excluding a name that doesn't exist shouldn't cause issues
+      const enemies = getRandomEnemies(1, 3, ['Non-existent Enemy']);
+      expect(enemies.length).toBe(3);
+    });
+  });
 });
 
 describe('getEnemyNames', () => {

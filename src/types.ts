@@ -318,6 +318,7 @@ export interface GameState {
   selectedEnemy: EnemyInstance | null;  // The enemy selected for this round
   activeEnemyInstance: EnemyInstance | null;  // Active enemy for current round (same as selectedEnemy)
   selectedEnemyReward: Weapon | null;  // Pre-determined stretch goal reward for selected enemy
+  defeatedEnemies: string[];  // Names of enemies whose stretch goals have been completed
 
   // Loot and rewards
   lootCrates: number;
