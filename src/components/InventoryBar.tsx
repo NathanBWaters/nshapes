@@ -65,7 +65,7 @@ const InventoryBar: React.FC<InventoryBarProps> = ({ weapons }) => {
 
   if (weapons.length === 0) {
     return (
-      <View style={styles.container}>
+      <View style={styles.container} testID="weapon-inventory">
         <Text style={styles.title}>Inventory</Text>
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>No items yet</Text>
@@ -75,7 +75,7 @@ const InventoryBar: React.FC<InventoryBarProps> = ({ weapons }) => {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="weapon-inventory">
       <Text style={styles.title}>Inventory</Text>
       <ScrollView
         horizontal

@@ -107,12 +107,12 @@ const ChallengeCard: React.FC<ChallengeCardProps> = ({ enemy, difficulty, enemyD
 
           {/* Result Badge */}
           {enemyDefeated ? (
-            <View style={styles.successBadge}>
+            <View style={styles.successBadge} testID="enemy-defeated-indicator">
               <Icon name="lorc/checked-shield" size={14} color={COLORS.logicTeal} />
               <Text style={styles.successText}>Stretch Goal Complete!</Text>
             </View>
           ) : (
-            <View style={styles.failureBadge}>
+            <View style={styles.failureBadge} testID="enemy-defeated-indicator">
               <Icon name="lorc/cross-mark" size={14} color={COLORS.impactRed} />
               <Text style={styles.failureText}>Stretch Goal Failed</Text>
             </View>

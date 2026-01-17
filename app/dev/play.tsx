@@ -21,10 +21,33 @@ import Game from '@/components/Game';
  * - Clear all weapons
  *
  * URL params:
- * - ?autoplayer=true - Enable autoplayer mode
+ * - ?autoplayer=true - Enable autoplayer mode (alias: ?autoplay=true)
+ * - ?enemy=Night%20Owl - Force specific enemy selection (skips enemy selection screen)
+ * - ?speed=fast - Speed up animations for faster test runs
+ * - ?timeout=false - Disable round timer for deterministic testing
  */
 export default function DevPlay() {
-  const { autoplayer } = useLocalSearchParams<{ autoplayer?: string }>();
+  const params = useLocalSearchParams<{
+    autoplayer?: string;
+    autoplay?: string;
+    enemy?: string;
+    speed?: string;
+    timeout?: string;
+  }>();
 
-  return <Game devMode={true} autoPlayer={autoplayer === 'true'} />;
+  // Support both autoplayer and autoplay params
+  const autoPlayerEnabled = params.autoplayer === 'true' || params.autoplay === 'true';
+  const forcedEnemy = params.enemy || undefined;
+  const speedMode = params.speed === 'fast';
+  const disableTimeout = params.timeout === 'false';
+
+  return (
+    <Game
+      devMode={true}
+      autoPlayer={autoPlayerEnabled}
+      forcedEnemy={forcedEnemy}
+      speedMode={speedMode}
+      disableTimeout={disableTimeout}
+    />
+  );
 }

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, ScrollView, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, ScrollView } from 'react-native';
 import ReAnimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -8,6 +8,7 @@ import ReAnimated, {
   withTiming,
   withDelay,
 } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PlayerStats, Weapon, AdventureDifficulty } from '@/types';
 import type { EnemyInstance } from '@/types/enemy';
 import { COLORS, RADIUS } from '@/utils/colors';
@@ -17,9 +18,6 @@ import GameMenu from './GameMenu';
 import { ScreenTransition } from './ScreenTransition';
 import RoundProgressChart, { RoundScore } from './RoundProgressChart';
 import ChallengeCard from './ui/ChallengeCard';
-
-// Extra bottom padding for mobile web browsers to account for browser UI (URL bar, navigation)
-const MOBILE_WEB_BOTTOM_PADDING = Platform.OS === 'web' ? 60 : 0;
 
 interface RoundSummaryProps {
   round: number;
@@ -102,6 +100,8 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
   enemyDefeated = false,
   stretchGoalReward,
 }) => {
+  const insets = useSafeAreaInsets();
+
   // Animation values for each award tile
   const tileAnimations = useRef(
     Array(6).fill(null).map(() => ({
@@ -217,14 +217,14 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
 
   return (
     <ScreenTransition>
-      <View style={styles.container}>
+      <View style={styles.container} testID="round-summary">
         {/* Eyebrow Banner */}
         <View style={styles.eyebrow}>
         <Text style={styles.eyebrowText}>ROUND {round} COMPLETE</Text>
         <GameMenu playerStats={playerStats} playerWeapons={playerWeapons} onExitGame={onExitGame} />
       </View>
 
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+      <ScrollView style={styles.content} contentContainerStyle={[styles.contentContainer, { paddingBottom: 100 + insets.bottom }]}>
         {/* Match Counter */}
         <Animated.View
           style={[
@@ -251,7 +251,7 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
 
         {/* Challenge Card - Enemy or Difficulty */}
         {(enemy || difficulty) && (
-          <View style={styles.challengeSection}>
+          <View style={styles.challengeSection} testID="stretch-goal-status">
             <ChallengeCard
               enemy={enemy}
               difficulty={difficulty}
@@ -274,7 +274,7 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
 
       {/* Continue Button - Fixed at bottom, only rendered when ready to show */}
       {showButtonContainer && (
-        <Animated.View style={[styles.buttonContainer, { opacity: buttonOpacity }]}>
+        <Animated.View style={[styles.buttonContainer, { opacity: buttonOpacity, paddingBottom: 16 + insets.bottom }]}>
           <TouchableOpacity style={styles.continueButton} onPress={onContinue}>
             <Text style={styles.continueButtonText}>
               {didLevelUp ? 'GO TO UPGRADE' : 'GO TO SHOP'}
@@ -389,7 +389,6 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: 16,
-    paddingBottom: 100 + MOBILE_WEB_BOTTOM_PADDING, // Account for fixed button container at bottom
   },
   matchCounterContainer: {
     alignItems: 'center',
@@ -478,7 +477,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 16,
     paddingHorizontal: 16,
-    paddingBottom: 16 + MOBILE_WEB_BOTTOM_PADDING,
     borderTopWidth: 1,
     borderTopColor: COLORS.slateCharcoal,
     backgroundColor: COLORS.paperBeige,

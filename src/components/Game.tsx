@@ -21,6 +21,7 @@ import { useGameTimer } from '@/hooks/useGameTimer';
 import { useParticles } from '@/hooks/useParticles';
 import { useRoundStats } from '@/hooks/useRoundStats';
 import { createEnemy, createDummyEnemy, applyEnemyStatModifiers, getRandomEnemies, getRandomEnemyOptions } from '@/utils/enemyFactory';
+import { generateChallengeBonus } from '@/utils/rewardUtils';
 import '@/utils/enemies'; // Trigger enemy self-registration
 import type { EnemyInstance, EnemyOption } from '@/types/enemy';
 import GameBoard from './GameBoard';
@@ -90,9 +91,21 @@ const getTierForRound = (round: number): 1 | 2 | 3 | 4 => {
 interface GameProps {
   devMode?: boolean;
   autoPlayer?: boolean;
+  /** Force a specific enemy by name (skips enemy selection screen) */
+  forcedEnemy?: string;
+  /** Speed up animations for faster test runs */
+  speedMode?: boolean;
+  /** Disable round timer for deterministic testing */
+  disableTimeout?: boolean;
 }
 
-const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
+const Game: React.FC<GameProps> = ({
+  devMode = false,
+  autoPlayer = false,
+  forcedEnemy,
+  speedMode = false,
+  disableTimeout = false,
+}) => {
   // Character selection state
   const [selectedCharacter, setSelectedCharacter] = useState<string | null>(devMode ? 'Orange Tabby' : null);
   const [gameMode, setGameMode] = useState<GameMode>('adventure');
@@ -434,7 +447,8 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
     !state.gameEnded &&
     state.remainingTime > 0 &&
     (!devMode || devTimerEnabled) &&
-    !isMenuOpen;
+    !isMenuOpen &&
+    !disableTimeout;
 
   // Generate a unique key based on game start time to force timer reset on new games
   const timerKey = state.startTime || 0;
@@ -544,6 +558,64 @@ const Game: React.FC<GameProps> = ({ devMode = false, autoPlayer = false }) => {
       }
     }
   }, [gamePhase, state.gameStarted, state.gameEnded, state.roundCompleted, state.remainingTime, state.score, state.targetScore, completeRound, endGame]);
+
+  // Auto-select forced enemy when in enemy_select phase (for testing)
+  useEffect(() => {
+    if (gamePhase === 'enemy_select' && forcedEnemy && state.currentEnemies.length > 0) {
+      // Find the forced enemy in the current options, or create it
+      const existingOption = state.currentEnemies.find(
+        option => option.enemy.name === forcedEnemy
+      );
+
+      if (existingOption) {
+        // Use the existing option
+        handleEnemySelect(existingOption);
+      } else {
+        // Create the enemy directly and use it
+        const enemy = createEnemy(forcedEnemy);
+        const option: EnemyOption = {
+          enemy,
+          stretchGoalReward: generateChallengeBonus(enemy.tier),
+        };
+        handleEnemySelect(option);
+      }
+    }
+  }, [gamePhase, forcedEnemy, state.currentEnemies]);
+
+  // Expose game state for Playwright testing in dev mode (web only)
+  useEffect(() => {
+    if (devMode && Platform.OS === 'web' && typeof window !== 'undefined') {
+      (window as any).__gameState__ = {
+        enemyDefeated,
+        roundStats: roundStatsRef.current,
+        playerWeapons: state.player.weapons,
+        gamePhase,
+        round: state.round,
+        score: state.score,
+        targetScore: state.targetScore,
+        remainingTime: state.remainingTime,
+        activeEnemy: state.activeEnemyInstance?.name ?? null,
+        board: state.board,
+      };
+    }
+    return () => {
+      if (devMode && Platform.OS === 'web' && typeof window !== 'undefined') {
+        delete (window as any).__gameState__;
+      }
+    };
+  }, [
+    devMode,
+    enemyDefeated,
+    roundStatsRef,
+    state.player.weapons,
+    gamePhase,
+    state.round,
+    state.score,
+    state.targetScore,
+    state.remainingTime,
+    state.activeEnemyInstance,
+    state.board,
+  ]);
 
   // Initialize the game
   // startGame param ensures all game start state is set atomically to avoid React batching issues
