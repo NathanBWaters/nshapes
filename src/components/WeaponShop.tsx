@@ -221,6 +221,21 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
     'timeGainAmount',
   ];
 
+  // Generate dynamic description for cap-increase weapons
+  const getDynamicDescription = (weapon: Weapon): string => {
+    if (!weapon.capIncrease) return weapon.description;
+
+    const capType = weapon.capIncrease.type;
+    const effectCaps = playerStats.effectCaps as Record<string, number> | undefined;
+    const currentCap = effectCaps?.[capType] ?? EFFECT_CAPS[capType as keyof typeof EFFECT_CAPS]?.defaultCap ?? 0;
+    const newCap = currentCap + weapon.capIncrease.amount;
+
+    // Format cap type for display
+    const capTypeName = capType.replace(/([A-Z])/g, ' $1').toLowerCase().trim();
+
+    return `Raises your ${capTypeName} cap to ${newCap}%`;
+  };
+
   // Get cap-increase info for display (for Mastery weapons)
   const getCapIncreaseInfo = (weapon: Weapon): {
     statName: string;
@@ -358,7 +373,7 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
             <Text style={[styles.detailName, { color: getRarityColor(focusedWeapon.rarity) }]}>
               {focusedWeapon.name}
             </Text>
-            <Text style={styles.detailDescription}>{focusedWeapon.description}</Text>
+            <Text style={styles.detailDescription}>{getDynamicDescription(focusedWeapon)}</Text>
             {focusedWeapon.flavorText && (
               <Text style={styles.detailFlavor}>{focusedWeapon.flavorText}</Text>
             )}
