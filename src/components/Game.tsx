@@ -506,8 +506,8 @@ const Game: React.FC<GameProps> = ({
         const scaledDelta = 1000 * speedMultiplier;
         const tickResult = enemy.onTick(scaledDelta, prev.board);
 
-        // Apply score delta (clamp to 0)
-        newScore = Math.max(0, prev.score + tickResult.scoreDelta);
+        // Apply score delta (clamp to 0, ensure integer)
+        newScore = Math.max(0, Math.round(prev.score + tickResult.scoreDelta));
 
         // Apply health delta
         newHealth = prev.player.stats.health + tickResult.healthDelta;

@@ -1014,10 +1014,10 @@
 - This makes notifications feel snappier during fast gameplay
 
 **Tasks:**
-- [ ] Change `duration` prop default from 1000 to 500 in Notification.tsx
-- [ ] Verify notification still appears and is readable
-- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
-- [ ] **Commit:** `fix(ui): reduce notification duration`
+- [x] Change `duration` prop default from 1000 to 500 in Notification.tsx (2026-01-17)
+- [x] Verify notification still appears and is readable (2026-01-17)
+- [x] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass (2026-01-17)
+- [x] **Commit:** `fix(ui): reduce notification duration to 500ms` (2026-01-17)
 
 ---
 
