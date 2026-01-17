@@ -5,7 +5,7 @@
  */
 
 import type { Weapon, WeaponRarity, CapIncreaseType, PlayerStats } from '@/types';
-import { getWeaponsByRarity } from './gameDefinitions';
+import { getWeaponsByRarity, countCapIncreaseWeapons, calculateLikelihoodBonus, selectWeightedWeapon } from './gameDefinitions';
 
 // Mapping from CapIncreaseType to the corresponding PlayerStats key
 const CAP_TYPE_TO_STAT: Record<CapIncreaseType, keyof PlayerStats> = {
@@ -66,13 +66,15 @@ const isCapIncreaseUseful = (weapon: Weapon, playerStats?: PlayerStats): boolean
  * Generate a challenge bonus weapon based on enemy tier.
  * Higher tiers have better chances for legendary weapons.
  * Excludes cap-increase weapons if player has <10% in that stat.
+ * Applies likelihood bonus based on player's cap-increase weapons.
  *
  * @param tier - Enemy tier (1-4)
  * @param excludeIds - Weapon IDs to exclude (already awarded weapons)
  * @param playerStats - Player's current stats (for filtering useless cap-increases)
+ * @param playerWeapons - Player's current weapons (for likelihood bonus)
  * @returns A weapon of appropriate rarity for the tier
  */
-export const generateChallengeBonus = (tier: 1 | 2 | 3 | 4, excludeIds: string[] = [], playerStats?: PlayerStats): Weapon => {
+export const generateChallengeBonus = (tier: 1 | 2 | 3 | 4, excludeIds: string[] = [], playerStats?: PlayerStats, playerWeapons?: Weapon[]): Weapon => {
   let targetRarity: WeaponRarity;
 
   switch (tier) {
@@ -121,6 +123,18 @@ export const generateChallengeBonus = (tier: 1 | 2 | 3 | 4, excludeIds: string[]
     .filter(w => !excludeIds.includes(w.id))
     .filter(w => isCapIncreaseUseful(w, playerStats));
 
+  // Helper to select with likelihood bonus if playerWeapons provided
+  const selectWithBonus = (weapons: Weapon[]): Weapon => {
+    if (playerWeapons && playerWeapons.length > 0) {
+      const capIncreaseCounts = countCapIncreaseWeapons(playerWeapons);
+      if (capIncreaseCounts.size > 0) {
+        const weights = weapons.map(w => calculateLikelihoodBonus(w, capIncreaseCounts));
+        return selectWeightedWeapon(weapons, weights);
+      }
+    }
+    return weapons[Math.floor(Math.random() * weapons.length)];
+  };
+
   if (weaponsOfRarity.length === 0) {
     // Fallback to rare if no weapons of target rarity (excluding already awarded and useless cap-increases)
     const rareWeapons = getWeaponsByRarity('rare')
@@ -131,7 +145,7 @@ export const generateChallengeBonus = (tier: 1 | 2 | 3 | 4, excludeIds: string[]
       const allWeapons = getWeaponsByRarity('rare');
       return allWeapons[Math.floor(Math.random() * allWeapons.length)];
     }
-    return rareWeapons[Math.floor(Math.random() * rareWeapons.length)];
+    return selectWithBonus(rareWeapons);
   }
-  return weaponsOfRarity[Math.floor(Math.random() * weaponsOfRarity.length)];
+  return selectWithBonus(weaponsOfRarity);
 };

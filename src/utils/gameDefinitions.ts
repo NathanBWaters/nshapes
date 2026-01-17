@@ -1534,6 +1534,89 @@ export const canObtainWeapon = (weapon: Weapon, playerWeapons: Weapon[]): boolea
   return currentCount < weapon.maxCount;
 };
 
+// Mapping from CapIncreaseType to the stat keys that are boosted
+const CAP_TYPE_TO_RELATED_STATS: Record<string, string[]> = {
+  echo: ['echoChance'],
+  laser: ['laserChance'],
+  graceGain: ['graceGainChance'],
+  explosion: ['explosionChance'],
+  hint: ['hintGainChance', 'autoHintChance', 'enhancedHintChance'],
+  timeGain: ['timeGainChance', 'timeGainAmount'],
+  healing: ['healingChance', 'healingAmount'],
+  fire: ['fireSpreadChance', 'fireStartChance'],
+  ricochet: ['ricochetChance'],
+  boardGrowth: ['boardGrowthChance'],
+  coinGain: ['coinGainChance', 'coinGainAmount'],
+  xpGain: ['xpGainChance', 'xpGainAmount'],
+};
+
+/**
+ * Count cap-increase weapons by type that the player owns.
+ * @param playerWeapons - Array of player's weapons
+ * @returns Map of cap-increase type to count
+ */
+export const countCapIncreaseWeapons = (playerWeapons: Weapon[]): Map<string, number> => {
+  const counts = new Map<string, number>();
+  for (const weapon of playerWeapons) {
+    if (weapon.capIncrease) {
+      const type = weapon.capIncrease.type;
+      counts.set(type, (counts.get(type) ?? 0) + 1);
+    }
+  }
+  return counts;
+};
+
+/**
+ * Calculate likelihood bonus for a weapon based on player's cap-increase weapons.
+ * Each owned cap-increase item boosts appearance rate of related items by 1.1x.
+ *
+ * @param weapon - The weapon to calculate bonus for
+ * @param capIncreaseCounts - Map of cap-increase type to count (from countCapIncreaseWeapons)
+ * @returns Multiplier for weapon appearance (default 1.0, boosted by 1.1^count)
+ */
+export const calculateLikelihoodBonus = (
+  weapon: Weapon,
+  capIncreaseCounts: Map<string, number>
+): number => {
+  let bonus = 1.0;
+
+  // Check each stat in the weapon's effects
+  for (const statKey of Object.keys(weapon.effects)) {
+    // Find which cap-increase type this stat belongs to
+    for (const [capType, relatedStats] of Object.entries(CAP_TYPE_TO_RELATED_STATS)) {
+      if (relatedStats.includes(statKey)) {
+        const capCount = capIncreaseCounts.get(capType) ?? 0;
+        if (capCount > 0) {
+          bonus *= Math.pow(1.1, capCount);
+        }
+      }
+    }
+  }
+
+  return bonus;
+};
+
+/**
+ * Select a weapon from a pool using weighted random selection.
+ * @param weapons - Array of weapons to choose from
+ * @param weights - Array of weights corresponding to each weapon
+ * @returns Selected weapon
+ */
+export const selectWeightedWeapon = (weapons: Weapon[], weights: number[]): Weapon => {
+  const totalWeight = weights.reduce((sum, w) => sum + w, 0);
+  let random = Math.random() * totalWeight;
+
+  for (let i = 0; i < weapons.length; i++) {
+    random -= weights[i];
+    if (random <= 0) {
+      return weapons[i];
+    }
+  }
+
+  // Fallback (shouldn't happen with valid weights)
+  return weapons[weapons.length - 1];
+};
+
 // Helper function to get a random weapon based on rarity distribution
 // Optionally filters out weapons the player can't obtain (at maxCount)
 // Round parameter enables rarity scaling (1-10, defaults to 5 for mid-game rates)
@@ -1575,6 +1658,15 @@ export const getRandomShopWeapon = (playerWeapons?: Weapon[], round: number = 5)
   if (weaponsOfRarity.length === 0) {
     console.warn('getRandomShopWeapon: No weapons found for any rarity, using fallback');
     return WEAPONS[0];
+  }
+
+  // Apply likelihood bonus based on cap-increase weapons
+  if (playerWeapons && playerWeapons.length > 0) {
+    const capIncreaseCounts = countCapIncreaseWeapons(playerWeapons);
+    if (capIncreaseCounts.size > 0) {
+      const weights = weaponsOfRarity.map(w => calculateLikelihoodBonus(w, capIncreaseCounts));
+      return selectWeightedWeapon(weaponsOfRarity, weights);
+    }
   }
 
   return weaponsOfRarity[Math.floor(Math.random() * weaponsOfRarity.length)];

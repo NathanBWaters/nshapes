@@ -171,6 +171,7 @@ export function getRandomEnemies(tier: 1 | 2 | 3 | 4, count: number = 3, exclude
  * @param excludeEnemies - Enemy names to exclude from selection (e.g., already defeated enemies)
  * @param excludeWeaponIds - Weapon IDs to exclude from rewards (e.g., already awarded weapons)
  * @param playerStats - Player's current stats (for filtering useless cap-increase weapons)
+ * @param playerWeapons - Player's current weapons (for likelihood bonus)
  * @returns Array of EnemyOption objects (enemy + pre-determined reward)
  */
 export function getRandomEnemyOptions(
@@ -178,12 +179,13 @@ export function getRandomEnemyOptions(
   count: number = 3,
   excludeEnemies: string[] = [],
   excludeWeaponIds: string[] = [],
-  playerStats?: PlayerStats
+  playerStats?: PlayerStats,
+  playerWeapons?: Weapon[]
 ): EnemyOption[] {
   const enemies = getRandomEnemies(tier, count, excludeEnemies);
   return enemies.map(enemy => ({
     enemy,
-    stretchGoalReward: generateChallengeBonus(enemy.tier, excludeWeaponIds, playerStats),
+    stretchGoalReward: generateChallengeBonus(enemy.tier, excludeWeaponIds, playerStats, playerWeapons),
   }));
 }
 
