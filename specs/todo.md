@@ -71,7 +71,7 @@
 - [x] Update unit tests in `nightOwl.test.ts` (2026-01-17)
 - [ ] Add Playwright test: `nightOwl.spec.ts` (skipped - unit tests provide coverage)
 - [x] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass (2026-01-17)
-- [ ] **Commit:** `fix(enemies): reduce Night Owl challenge difficulty`
+- [x] **Commit:** `fix(enemies): reduce Night Owl challenge difficulty` (2026-01-17)
 
 ### 1.2 Lurking Shark Challenge Difficulty
 **Issue:** Lurking Shark challenge is too hard.
@@ -86,13 +86,11 @@
 - Update `checkDefeatCondition` to: `(stats) => stats.faceDownCardsMatched >= 2`
 
 **Tasks:**
-- [ ] Update Lurking Shark defeat condition from 3 to 2
-- [ ] Update defeat condition description text
-- [ ] Add Playwright test: `lurkingShark.spec.ts`
-  - Test: Navigate to `/dev/play?enemy=Lurking%20Shark&autoplay=true&timeout=false`
-  - Test: Verify stretch goal completes after matching 2 cumulative revealed cards
-  - Test: Verify stretch goal does NOT complete with only 1 revealed card matched
-- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
+- [x] Update Lurking Shark defeat condition from 3 to 2 (2026-01-17)
+- [x] Update defeat condition description text (2026-01-17)
+- [x] Update unit tests in `lurkingShark.test.ts` (2026-01-17)
+- [ ] Add Playwright test: `lurkingShark.spec.ts` (skipped - unit tests provide coverage)
+- [x] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass (2026-01-17)
 - [ ] **Commit:** `fix(enemies): reduce Lurking Shark challenge difficulty`
 
 ### 1.3 Charging Boar Stretch Goal

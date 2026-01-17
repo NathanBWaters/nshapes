@@ -61,7 +61,7 @@ describe('Lurking Shark', () => {
 
     it('has correct defeat condition text', () => {
       const enemy = createLurkingShark();
-      expect(enemy.defeatConditionText).toBe('Include 3 revealed cards in your matches');
+      expect(enemy.defeatConditionText).toBe('Include 2 revealed cards in your matches');
     });
   });
 
@@ -111,18 +111,18 @@ describe('Lurking Shark', () => {
     it('returns false with insufficient face-down matches', () => {
       const enemy = createLurkingShark();
       const stats = createEmptyStats();
-      stats.faceDownCardsMatched = 2;
+      stats.faceDownCardsMatched = 1;
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
 
-    it('returns true with 3 face-down matches', () => {
+    it('returns true with 2 face-down matches', () => {
       const enemy = createLurkingShark();
       const stats = createEmptyStats();
-      stats.faceDownCardsMatched = 3;
+      stats.faceDownCardsMatched = 2;
       expect(enemy.checkDefeatCondition(stats)).toBe(true);
     });
 
-    it('returns true with more than 3 face-down matches', () => {
+    it('returns true with more than 2 face-down matches', () => {
       const enemy = createLurkingShark();
       const stats = createEmptyStats();
       stats.faceDownCardsMatched = 5;

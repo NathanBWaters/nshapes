@@ -2,7 +2,7 @@
  * Lurking Shark - Tier 2 Enemy
  *
  * Effects: 25% face-down cards (simpler, more focused hazard)
- * Defeat Condition: Match 3 face-down cards
+ * Defeat Condition: Match 2 face-down cards (cumulative)
  */
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
@@ -19,13 +19,13 @@ export function createLurkingShark(): EnemyInstance {
       icon: 'lorc/shark-jaws',
       tier: 2,
       description: '25% of new cards start face-down (tap to reveal)',
-      defeatConditionText: 'Include 3 revealed cards in your matches',
+      defeatConditionText: 'Include 2 revealed cards in your matches',
     },
     [
       { behavior: FaceDownEffect, config: { chance: 25, flipChance: 60 } },
     ],
-    // Defeat condition: Match 3 face-down cards
-    (stats: RoundStats) => stats.faceDownCardsMatched >= 3
+    // Defeat condition: Match at least 2 face-down cards total
+    (stats: RoundStats) => stats.faceDownCardsMatched >= 2
   );
 }
 
