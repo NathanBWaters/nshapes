@@ -76,7 +76,7 @@ describe('Night Owl', () => {
 
     it('has correct defeat condition text', () => {
       const enemy = createNightOwl();
-      expect(enemy.defeatConditionText).toBe('Match 4 face-down cards');
+      expect(enemy.defeatConditionText).toBe('Match a set with a revealed card');
     });
   });
 
@@ -153,36 +153,28 @@ describe('Night Owl', () => {
   });
 
   describe('defeat condition', () => {
-    it('returns false when less than 4 face-down cards matched', () => {
-      const enemy = createNightOwl();
-      const stats = createRoundStats({
-        faceDownCardsMatched: 3,
-      });
-      expect(enemy.checkDefeatCondition(stats)).toBe(false);
-    });
-
-    it('returns true when exactly 4 face-down cards matched', () => {
-      const enemy = createNightOwl();
-      const stats = createRoundStats({
-        faceDownCardsMatched: 4,
-      });
-      expect(enemy.checkDefeatCondition(stats)).toBe(true);
-    });
-
-    it('returns true when more than 4 face-down cards matched', () => {
-      const enemy = createNightOwl();
-      const stats = createRoundStats({
-        faceDownCardsMatched: 6,
-      });
-      expect(enemy.checkDefeatCondition(stats)).toBe(true);
-    });
-
     it('returns false when no face-down cards matched', () => {
       const enemy = createNightOwl();
       const stats = createRoundStats({
         faceDownCardsMatched: 0,
       });
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
+    });
+
+    it('returns true when exactly 1 face-down card matched', () => {
+      const enemy = createNightOwl();
+      const stats = createRoundStats({
+        faceDownCardsMatched: 1,
+      });
+      expect(enemy.checkDefeatCondition(stats)).toBe(true);
+    });
+
+    it('returns true when multiple face-down cards matched', () => {
+      const enemy = createNightOwl();
+      const stats = createRoundStats({
+        faceDownCardsMatched: 3,
+      });
+      expect(enemy.checkDefeatCondition(stats)).toBe(true);
     });
   });
 

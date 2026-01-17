@@ -2,7 +2,7 @@
  * Night Owl - Tier 1 Enemy
  *
  * Effect: 20% of cards are face-down; matching flips with 70% chance
- * Defeat Condition: Match 4 face-down cards
+ * Defeat Condition: Match a set with a revealed card (previously face-down)
  */
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
@@ -19,7 +19,7 @@ export function createNightOwl(): EnemyInstance {
       icon: 'caro-asercion/barn-owl',
       tier: 1,
       description: "20% of cards are face-down; matching flips with 70% chance",
-      defeatConditionText: 'Match 4 face-down cards',
+      defeatConditionText: 'Match a set with a revealed card',
     },
     [
       {
@@ -27,9 +27,9 @@ export function createNightOwl(): EnemyInstance {
         config: { chance: 20, flipChance: 70 },
       },
     ],
-    // Defeat condition: Match 4 face-down cards
+    // Defeat condition: Match at least 1 face-down card
     (stats: RoundStats) => {
-      return stats.faceDownCardsMatched >= 4;
+      return stats.faceDownCardsMatched >= 1;
     }
   );
 }
