@@ -485,11 +485,11 @@
 - Update `flavorText` to explain graces are consumed when protecting from invalid matches
 
 **Tasks:**
-- [ ] Update Second Chance (Common) description and shortDescription
-- [ ] Update Second Chance (Rare) description and shortDescription
-- [ ] Update flavorText to clarify single-use nature
-- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
-- [ ] **Commit:** `fix(weapons): clarify Second Chance single-use graces`
+- [x] Update Second Chance (Common) description and shortDescription (2026-01-17)
+- [x] Update Second Chance (Rare) description and shortDescription (2026-01-17)
+- [x] Update flavorText to clarify single-use nature (2026-01-17)
+- [x] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass (2026-01-17)
+- [x] **Commit:** `fix(weapons): clarify Second Chance single-use graces` (2026-01-17)
 
 ---
 

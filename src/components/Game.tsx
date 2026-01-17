@@ -1010,6 +1010,7 @@ const Game: React.FC<GameProps> = ({
       // Grant immediate bonuses for capacity-increasing weapons
       let hintsBonus = 0;
       let gracesBonus = 0;
+      let healthBonus = 0;
 
       // If weapon increases maxHints, grant +1 immediate hint (up to new max)
       if (weapon.effects.maxHints && typeof weapon.effects.maxHints === 'number') {
@@ -1021,6 +1022,11 @@ const Game: React.FC<GameProps> = ({
         gracesBonus = weapon.effects.graces;
       }
 
+      // If weapon grants health (Life Vessel), heal immediately (clamped to new max)
+      if (weapon.effects.health && typeof weapon.effects.health === 'number') {
+        healthBonus = weapon.effects.health;
+      }
+
       return {
         ...prevState,
         player: {
@@ -1030,6 +1036,7 @@ const Game: React.FC<GameProps> = ({
             money: prevState.player.stats.money - weapon.price,
             hints: Math.min(prevState.player.stats.hints + hintsBonus, newTotalStats.maxHints),
             graces: Math.min(prevState.player.stats.graces + gracesBonus, newTotalStats.maxGraces),
+            health: Math.min(prevState.player.stats.health + healthBonus, newTotalStats.maxHealth),
           },
           weapons: newWeapons
         },
@@ -1133,6 +1140,7 @@ const Game: React.FC<GameProps> = ({
       // Grant immediate bonuses for capacity-increasing weapons
       let hintsBonus = 0;
       let gracesBonus = 0;
+      let healthBonus = 0;
 
       // If weapon increases maxHints, grant +1 immediate hint (up to new max)
       if (weapon.effects.maxHints && typeof weapon.effects.maxHints === 'number') {
@@ -1144,6 +1152,11 @@ const Game: React.FC<GameProps> = ({
         gracesBonus = weapon.effects.graces;
       }
 
+      // If weapon grants health (Life Vessel), heal immediately (clamped to new max)
+      if (weapon.effects.health && typeof weapon.effects.health === 'number') {
+        healthBonus = weapon.effects.health;
+      }
+
       return {
         ...prevState,
         player: {
@@ -1152,6 +1165,7 @@ const Game: React.FC<GameProps> = ({
             ...prevState.player.stats,
             hints: Math.min(prevState.player.stats.hints + hintsBonus, newTotalStats.maxHints),
             graces: Math.min(prevState.player.stats.graces + gracesBonus, newTotalStats.maxGraces),
+            health: Math.min(prevState.player.stats.health + healthBonus, newTotalStats.maxHealth),
           },
           weapons: newWeapons
         }

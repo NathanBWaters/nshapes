@@ -619,11 +619,11 @@ export const WEAPONS: Weapon[] = [
     rarity: 'common',
     level: 1,
     price: 6,
-    description: '+1 max health.',
-    shortDescription: 'Increased max health',
-    flavorText: 'Increases your maximum health pool. You lose 1 health when picking an invalid set without a grace to protect you.',
+    description: '+1 max health and heals you by 1.',
+    shortDescription: 'Increased max health + heal',
+    flavorText: 'Increases your maximum health pool and restores some health. You lose 1 health when picking an invalid set without a grace to protect you.',
     icon: 'lorc/heart-inside',
-    effects: { maxHealth: 1 }
+    effects: { maxHealth: 1, health: 1 }
   },
   {
     id: 'life-vessel-rare',
@@ -631,11 +631,11 @@ export const WEAPONS: Weapon[] = [
     rarity: 'rare',
     level: 1,
     price: 12,
-    description: '+3 max health.',
-    shortDescription: 'Increased max health',
-    flavorText: 'Increases your maximum health pool. You lose 1 health when picking an invalid set without a grace to protect you.',
+    description: '+3 max health and heals you by 3.',
+    shortDescription: 'Increased max health + heal',
+    flavorText: 'Increases your maximum health pool and restores some health. You lose 1 health when picking an invalid set without a grace to protect you.',
     icon: 'lorc/heart-inside',
-    effects: { maxHealth: 3 }
+    effects: { maxHealth: 3, health: 3 }
   },
 
   // ============================================================================
