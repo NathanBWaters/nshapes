@@ -529,12 +529,12 @@
   - Health reset logic issue
 
 **Tasks:**
-- [ ] Search for any hardcoded health limits (3, or similar)
-- [ ] Verify healing uses `maxHealth` not a hardcoded cap
-- [ ] Add logging to track health changes during gameplay
-- [ ] If issue found, fix it; if not reproducible, note and move on
-- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
-- [ ] **Commit:** `fix(health): investigate and fix health cap bug` (or skip if not reproducible)
+- [x] Search for any hardcoded health limits (3, or similar) (2026-01-17)
+- [x] Verify healing uses `maxHealth` not a hardcoded cap (2026-01-17)
+- [x] Add logging to track health changes during gameplay (N/A - bug found and fixed) (2026-01-17)
+- [x] If issue found, fix it; if not reproducible, note and move on (BUG FOUND: healing capped at base maxHealth not weapon-boosted total) (2026-01-17)
+- [x] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass (2026-01-17)
+- [x] **Commit:** `fix(health): healing now respects weapon-boosted maxHealth` (2026-01-17)
 
 ---
 

@@ -2282,13 +2282,19 @@ const Game: React.FC<GameProps> = ({
               const endLevel = state.player.stats.level;
               const levelsGained = endLevel - startLevel;
 
-              // Build queue of level-ups: [startLevel+1, startLevel+2, ...]
-              const levelQueue = Array.from(
-                { length: levelsGained },
-                (_, i) => startLevel + i + 1
-              );
-              setPendingLevelUps(levelQueue);
-              setGamePhase('level_up');
+              // Only show level up screen if player actually leveled up
+              if (levelsGained > 0) {
+                // Build queue of level-ups: [startLevel+1, startLevel+2, ...]
+                const levelQueue = Array.from(
+                  { length: levelsGained },
+                  (_, i) => startLevel + i + 1
+                );
+                setPendingLevelUps(levelQueue);
+                setGamePhase('level_up');
+              } else {
+                // No level ups, go directly to shop
+                setGamePhase('shop');
+              }
             }}
             playerStats={calculatePlayerTotalStats(state.player)}
             playerWeapons={state.player.weapons}
