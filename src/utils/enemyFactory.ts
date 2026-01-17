@@ -17,7 +17,7 @@ import type {
   RoundStats,
 } from '@/types/enemy';
 import { shuffleArray } from './gameUtils';
-import { generateChallengeBonus } from './rewardUtils';
+import { generateChallengeBonus, getChallengeBonusMoney } from './rewardUtils';
 
 // ============================================================================
 // ENEMY REGISTRY
@@ -186,6 +186,7 @@ export function getRandomEnemyOptions(
   return enemies.map(enemy => ({
     enemy,
     stretchGoalReward: generateChallengeBonus(enemy.tier, excludeWeaponIds, playerStats, playerWeapons),
+    stretchGoalMoney: getChallengeBonusMoney(enemy.tier),
   }));
 }
 

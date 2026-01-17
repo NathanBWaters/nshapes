@@ -21,7 +21,7 @@ import { useGameTimer } from '@/hooks/useGameTimer';
 import { useParticles } from '@/hooks/useParticles';
 import { useRoundStats } from '@/hooks/useRoundStats';
 import { createEnemy, createDummyEnemy, applyEnemyStatModifiers, getRandomEnemies, getRandomEnemyOptions } from '@/utils/enemyFactory';
-import { generateChallengeBonus } from '@/utils/rewardUtils';
+import { generateChallengeBonus, getChallengeBonusMoney } from '@/utils/rewardUtils';
 import '@/utils/enemies'; // Trigger enemy self-registration
 import type { EnemyInstance, EnemyOption } from '@/types/enemy';
 import GameBoard from './GameBoard';
@@ -188,6 +188,7 @@ const Game: React.FC<GameProps> = ({
         selectedEnemy: null,
         activeEnemyInstance: null,
         selectedEnemyReward: null,
+        selectedEnemyMoney: null,
         defeatedEnemies: [],
         awardedStretchGoalWeapons: [],
         lootCrates: 0,
@@ -223,6 +224,7 @@ const Game: React.FC<GameProps> = ({
       selectedEnemy: null,
       activeEnemyInstance: null,
       selectedEnemyReward: null,
+      selectedEnemyMoney: null,
       defeatedEnemies: [],
       awardedStretchGoalWeapons: [],
       lootCrates: 0,
@@ -385,6 +387,7 @@ const Game: React.FC<GameProps> = ({
           const newAwardedWeaponIds = state.selectedEnemyReward
             ? [...prevState.awardedStretchGoalWeapons, state.selectedEnemyReward.id]
             : prevState.awardedStretchGoalWeapons;
+          const bonusMoney = state.selectedEnemyMoney ?? 0;
           return {
             ...prevState,
             defeatedEnemies: [...prevState.defeatedEnemies, state.activeEnemyInstance!.name],
@@ -392,6 +395,10 @@ const Game: React.FC<GameProps> = ({
             player: {
               ...prevState.player,
               weapons: newWeapons,
+              stats: {
+                ...prevState.player.stats,
+                money: prevState.player.stats.money + bonusMoney,
+              },
             },
           };
         });
@@ -610,6 +617,7 @@ const Game: React.FC<GameProps> = ({
         const option: EnemyOption = {
           enemy,
           stretchGoalReward: generateChallengeBonus(enemy.tier, state.awardedStretchGoalWeapons),
+          stretchGoalMoney: getChallengeBonusMoney(enemy.tier),
         };
         handleEnemySelect(option);
       }
@@ -721,6 +729,7 @@ const Game: React.FC<GameProps> = ({
       selectedEnemy: null,
       activeEnemyInstance: null,  // Set when player selects enemy
       selectedEnemyReward: null,
+      selectedEnemyMoney: null,
       defeatedEnemies: [],  // Track which enemies have been defeated
       awardedStretchGoalWeapons: [],  // Track which weapons have been awarded as stretch goals
 
@@ -912,7 +921,7 @@ const Game: React.FC<GameProps> = ({
 
   // Handle enemy selection - player has chosen which enemy to fight
   const handleEnemySelect = (enemyOption: EnemyOption) => {
-    const { enemy, stretchGoalReward } = enemyOption;
+    const { enemy, stretchGoalReward, stretchGoalMoney } = enemyOption;
 
     // Reset round stats and record starting level for round summary
     setRoundStats({
@@ -944,6 +953,7 @@ const Game: React.FC<GameProps> = ({
       selectedEnemy: enemy,
       activeEnemyInstance: enemy,  // Set the active enemy instance
       selectedEnemyReward: stretchGoalReward,  // Store the pre-determined reward
+      selectedEnemyMoney: stretchGoalMoney,  // Store the pre-determined bonus money
       gameStarted: true,
       startTime: Date.now()
     }));
@@ -2164,6 +2174,7 @@ const Game: React.FC<GameProps> = ({
         selectedEnemy: null,
         activeEnemyInstance: null,  // Set when player selects enemy
         selectedEnemyReward: null,
+        selectedEnemyMoney: null,
         player: {
           ...prevState.player,
           stats: {
@@ -2319,6 +2330,7 @@ const Game: React.FC<GameProps> = ({
             difficulty={adventureDifficulty}
             enemyDefeated={enemyDefeated}
             stretchGoalReward={state.selectedEnemyReward}
+            stretchGoalMoney={state.selectedEnemyMoney}
           />
         );
 

@@ -39,6 +39,7 @@ interface RoundSummaryProps {
   difficulty?: AdventureDifficulty;
   enemyDefeated?: boolean;
   stretchGoalReward?: Weapon | null;
+  stretchGoalMoney?: number | null;
 }
 
 interface AwardTile {
@@ -99,6 +100,7 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
   difficulty,
   enemyDefeated = false,
   stretchGoalReward,
+  stretchGoalMoney,
 }) => {
   const insets = useSafeAreaInsets();
 
@@ -257,6 +259,7 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
               difficulty={difficulty}
               enemyDefeated={enemyDefeated}
               stretchGoalReward={stretchGoalReward}
+              stretchGoalMoney={stretchGoalMoney}
             />
           </View>
         )}

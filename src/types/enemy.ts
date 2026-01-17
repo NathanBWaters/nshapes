@@ -20,6 +20,7 @@ import type { IconName } from '../components/Icon';
 export interface EnemyOption {
   enemy: EnemyInstance;
   stretchGoalReward: Weapon;
+  stretchGoalMoney: number;
 }
 
 // ============================================================================

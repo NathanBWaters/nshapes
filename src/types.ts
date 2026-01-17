@@ -316,6 +316,7 @@ export interface GameState {
   selectedEnemy: EnemyInstance | null;  // The enemy selected for this round
   activeEnemyInstance: EnemyInstance | null;  // Active enemy for current round (same as selectedEnemy)
   selectedEnemyReward: Weapon | null;  // Pre-determined stretch goal reward for selected enemy
+  selectedEnemyMoney: number | null;  // Pre-determined stretch goal bonus money for selected enemy
   defeatedEnemies: string[];  // Names of enemies whose stretch goals have been completed
   awardedStretchGoalWeapons: string[];  // IDs of stretch goal weapons that have been awarded
 

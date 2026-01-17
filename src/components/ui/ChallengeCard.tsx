@@ -27,6 +27,8 @@ interface ChallengeCardProps {
   showAchievement?: boolean;
   // The specific stretch goal reward weapon (pre-determined)
   stretchGoalReward?: Weapon | null;
+  // The specific stretch goal bonus money (pre-determined)
+  stretchGoalMoney?: number | null;
 }
 
 // Tier colors for enemies
@@ -56,7 +58,7 @@ const getDifficultyInfo = (diff: AdventureDifficulty) => {
   }
 };
 
-const ChallengeCard: React.FC<ChallengeCardProps> = ({ enemy, difficulty, enemyDefeated = false, showAchievement = false, stretchGoalReward }) => {
+const ChallengeCard: React.FC<ChallengeCardProps> = ({ enemy, difficulty, enemyDefeated = false, showAchievement = false, stretchGoalReward, stretchGoalMoney }) => {
   // Determine what to display
   const isEnemyChallenge = !!enemy;
   const isDifficultyChallenge = !!difficulty;
@@ -121,7 +123,7 @@ const ChallengeCard: React.FC<ChallengeCardProps> = ({ enemy, difficulty, enemyD
           {/* Reward Info - Clear messaging about what the player gets */}
           <View style={[styles.rewardSection, { backgroundColor: enemyDefeated ? '#FEF3C7' : COLORS.slateCharcoal + '10' }]}>
             <Text style={[styles.rewardLabel, { color: enemyDefeated ? '#D97706' : COLORS.slateCharcoal }]}>
-              {enemyDefeated ? '🎁 BONUS WEAPON EARNED!' : '💔 REWARD MISSED'}
+              {enemyDefeated ? '🎁 BONUS REWARDS EARNED!' : '💔 REWARDS MISSED'}
             </Text>
             {stretchGoalReward ? (
               <View style={styles.rewardWeaponRow}>
@@ -153,6 +155,24 @@ const ChallengeCard: React.FC<ChallengeCardProps> = ({ enemy, difficulty, enemyD
                   : `Would have earned an extra ${tierLabel} weapon`
                 }
               </Text>
+            )}
+            {/* Bonus Money Display */}
+            {stretchGoalMoney != null && stretchGoalMoney > 0 && (
+              <View style={styles.rewardMoneyRow}>
+                <Icon
+                  name="lorc/cash"
+                  size={20}
+                  color={enemyDefeated ? COLORS.actionYellow : COLORS.slateCharcoal}
+                  style={{ opacity: enemyDefeated ? 1 : 0.4 }}
+                />
+                <Text style={[
+                  styles.rewardMoneyText,
+                  { color: enemyDefeated ? COLORS.actionYellow : COLORS.slateCharcoal },
+                  !enemyDefeated && { opacity: 0.5, textDecorationLine: 'line-through' }
+                ]}>
+                  +${stretchGoalMoney} Gold
+                </Text>
+              </View>
             )}
             {enemyDefeated && stretchGoalReward && (
               <Text style={styles.rewardSubtext}>Added to your inventory!</Text>
@@ -415,6 +435,17 @@ const styles = StyleSheet.create({
     opacity: 0.7,
     textAlign: 'center',
     marginTop: 4,
+  },
+  rewardMoneyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 4,
+  },
+  rewardMoneyText: {
+    fontSize: 14,
+    fontWeight: '700',
   },
 });
 
