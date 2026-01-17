@@ -212,7 +212,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
   ];
 
   // Calculate before/after stat comparison for a weapon
-  // Skips independent roll effects since they don't stack additively
+  // Shows independent roll effects with "(per weapon)" notation
   // Shows cap info when stat would exceed its cap
   const getStatComparison = (weapon: Weapon): {
     key: string;
@@ -221,14 +221,27 @@ const LevelUp: React.FC<LevelUpProps> = ({
     isIncrease: boolean;
     isCapped: boolean;
     cap: number | null;
+    isPerWeapon: boolean;
   }[] => {
     const effectCaps = playerStats.effectCaps as EffectCaps | undefined;
 
     return Object.entries(weapon.effects).map(([key, effectValue]) => {
       if (typeof effectValue !== 'number') return null;
 
-      // Skip independent roll effects - they're explained in the description
-      if (INDEPENDENT_ROLL_EFFECTS.includes(key)) return null;
+      const isPerWeapon = INDEPENDENT_ROLL_EFFECTS.includes(key);
+
+      if (isPerWeapon) {
+        // For per-weapon effects, just show the weapon's value (no cumulative before→after)
+        return {
+          key: formatKey(key),
+          before: '',  // Not shown for per-weapon effects
+          after: formatStatValue(key, effectValue),
+          isIncrease: effectValue > 0,
+          isCapped: false,
+          cap: null,
+          isPerWeapon: true,
+        };
+      }
 
       const currentValue = (playerStats as Record<string, any>)[key] ?? 0;
       const newValue = currentValue + effectValue;
@@ -247,6 +260,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
         isIncrease: effectValue > 0,
         isCapped,
         cap: showCapInfo ? capInfo?.cap ?? null : null,
+        isPerWeapon: false,
       };
     }).filter((item): item is {
       key: string;
@@ -255,6 +269,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
       isIncrease: boolean;
       isCapped: boolean;
       cap: number | null;
+      isPerWeapon: boolean;
     } => item !== null);
   };
 
@@ -342,15 +357,31 @@ const LevelUp: React.FC<LevelUpProps> = ({
                     <View key={i} style={styles.statComparisonRow}>
                       <Text style={styles.effectKey}>{stat.key}</Text>
                       <View style={styles.statValues}>
-                        <Text style={styles.statBefore}>{stat.before}</Text>
-                        <Text style={styles.statArrow}>→</Text>
-                        <Text style={[
-                          styles.statAfter,
-                          stat.isIncrease ? styles.statIncrease : styles.statDecrease,
-                          stat.isCapped && styles.statCapped,
-                        ]}>
-                          {stat.after}
-                        </Text>
+                        {stat.isPerWeapon ? (
+                          // Per-weapon effects: just show the value with "(per weapon)"
+                          <>
+                            <Text style={[
+                              styles.statAfter,
+                              stat.isIncrease ? styles.statIncrease : styles.statDecrease,
+                            ]}>
+                              {stat.after}
+                            </Text>
+                            <Text style={styles.capIndicator}>(per weapon)</Text>
+                          </>
+                        ) : (
+                          // Normal effects: show before → after
+                          <>
+                            <Text style={styles.statBefore}>{stat.before}</Text>
+                            <Text style={styles.statArrow}>→</Text>
+                            <Text style={[
+                              styles.statAfter,
+                              stat.isIncrease ? styles.statIncrease : styles.statDecrease,
+                              stat.isCapped && styles.statCapped,
+                            ]}>
+                              {stat.after}
+                            </Text>
+                          </>
+                        )}
                         {stat.cap !== null && (
                           <Text style={[styles.capIndicator, stat.isCapped && styles.capIndicatorCapped]}>
                             (max {stat.cap}%)
