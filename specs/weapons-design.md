@@ -429,6 +429,14 @@ Each character begins with 2 weapons that define their playstyle:
 - **Cost:** FREE
 - **Rarity Distribution:** Same as shop (70/25/5)
 
+### Stretch Goal Rewards
+
+Stretch goals (enemy defeat conditions) provide **automatic** bonus rewards:
+- **Pre-determined:** Both the bonus weapon and bonus money are shown before selecting the enemy
+- **Automatic Award:** When the stretch goal is completed, the weapon and money are added instantly
+- **No Selection:** Players don't choose to take the stretch goal reward - it's automatically granted
+- **Display:** Enemy selection shows the full weapon details (name, description, stat changes) in shop-style format
+
 ### Double-Tap Purchase
 
 Shop supports double-tap to instantly purchase without confirmation dialog.

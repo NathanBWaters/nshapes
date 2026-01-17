@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Pressable, StyleSheet, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PlayerStats, Weapon, WeaponRarity, EffectCaps } from '@/types';
@@ -9,14 +9,7 @@ import GameMenu from './GameMenu';
 import InventoryBar from './InventoryBar';
 import { ScreenTransition } from './ScreenTransition';
 import { playSound } from '@/utils/sounds';
-import { getWeaponsByRarity, getPlayerWeaponCount } from '@/utils/gameDefinitions';
-import { generateChallengeBonus, getChallengeBonusMoney } from '@/utils/rewardUtils';
-
-// Re-export for backwards compatibility
-export { generateChallengeBonus, getChallengeBonusMoney };
-
-// Extra challenge bonus color (golden)
-const CHALLENGE_BONUS_COLOR = '#FFD700';
+import { getPlayerWeaponCount } from '@/utils/gameDefinitions';
 
 // Weapon option component
 interface WeaponOptionProps {
@@ -89,7 +82,7 @@ function WeaponOption({
 
 interface LevelUpProps {
   options: Weapon[];
-  onSelect: (weapon: Weapon) => void;  // Changed to pass the weapon directly
+  onSelect: (weapon: Weapon) => void;
   onReroll: () => void;
   rerollCost: number;
   playerMoney: number;
@@ -99,10 +92,6 @@ interface LevelUpProps {
   onExitGame?: () => void;
   targetLevel: number;         // The level this reward is for
   hasMoreLevelUps: boolean;    // True if more level-ups pending after this
-  enemyDefeated?: boolean;     // True if player defeated the enemy's stretch goal
-  defeatedEnemyTier?: 1 | 2 | 3 | 4;  // Tier of the defeated enemy (for bonus rarity)
-  challengeBonusWeapon?: Weapon | null;  // Pre-determined stretch goal reward (from enemy selection)
-  onChallengeBonusMoney?: (amount: number) => void;  // Callback to grant bonus money
 }
 
 const getRarityLabel = (rarity: WeaponRarity): string => {
@@ -127,58 +116,27 @@ const LevelUp: React.FC<LevelUpProps> = ({
   onExitGame,
   targetLevel,
   hasMoreLevelUps,
-  enemyDefeated = false,
-  defeatedEnemyTier = 1,
-  challengeBonusWeapon: preGeneratedReward = null,
-  onChallengeBonusMoney,
 }) => {
   const insets = useSafeAreaInsets();
   const [focusedIndex, setFocusedIndex] = useState<number>(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-  // Determine valid focus range - regular options plus challenge bonus if available
-  const hasChallengeBonus = enemyDefeated && preGeneratedReward !== null;
-  const maxValidIndex = hasChallengeBonus ? options.length : options.length - 1;
-
   // Reset focusedIndex when options change to ensure it's valid
-  // This handles cases where:
-  // 1. Options are regenerated (multi-level-up scenarios)
-  // 2. Options array changes size
-  // 3. Player rerolls and gets new options
-  // Note: Challenge bonus is at index options.length, so we allow that when available
   useEffect(() => {
-    // If current focusedIndex is out of bounds, reset to 0
-    // Allow options.length as valid when challenge bonus exists
-    if (focusedIndex > maxValidIndex && options.length > 0) {
+    if (focusedIndex >= options.length && options.length > 0) {
       setFocusedIndex(0);
     }
-    // If current focused option is undefined/null AND not the challenge bonus, find first valid one
     if (focusedIndex < options.length && options[focusedIndex] === undefined && options.length > 0) {
       const firstValid = options.findIndex(opt => opt !== undefined);
       if (firstValid >= 0) {
         setFocusedIndex(firstValid);
       }
     }
-  }, [options, focusedIndex, maxValidIndex]);
+  }, [options, focusedIndex]);
 
   // Show hovered option if hovering, otherwise show focused
   const displayedIndex = hoveredIndex !== null ? hoveredIndex : focusedIndex;
-
-  // Use pre-generated reward if available, otherwise generate one (for backwards compatibility)
-  const challengeBonusWeapon = useMemo(() => {
-    if (!enemyDefeated) return null;
-    // Use the pre-determined reward from enemy selection when available
-    if (preGeneratedReward) return preGeneratedReward;
-    // Fallback to generating a new reward (legacy behavior)
-    return generateChallengeBonus(defeatedEnemyTier);
-  }, [enemyDefeated, preGeneratedReward, defeatedEnemyTier]);
-
-  // Check if the slayer bonus is selected (it's always the last option if available)
-  const challengeBonusIndex = enemyDefeated ? options.length : -1;
-  const isChallengeBonusFocused = displayedIndex === challengeBonusIndex;
-
-  // Get the focused weapon (either from options or the slayer bonus)
-  const focusedWeapon = isChallengeBonusFocused ? challengeBonusWeapon : options[displayedIndex];
+  const focusedWeapon = options[displayedIndex];
 
   // Format key from camelCase to Title Case
   const formatKey = (key: string) => {
@@ -246,8 +204,6 @@ const LevelUp: React.FC<LevelUpProps> = ({
   };
 
   // Calculate before/after stat comparison for a weapon
-  // Shows independent roll effects with "(per weapon)" notation
-  // Shows cap info when stat would exceed its cap
   const getStatComparison = (weapon: Weapon): {
     key: string;
     before: string;
@@ -265,10 +221,9 @@ const LevelUp: React.FC<LevelUpProps> = ({
       const isPerWeapon = INDEPENDENT_ROLL_EFFECTS.includes(key);
 
       if (isPerWeapon) {
-        // For per-weapon effects, just show the weapon's value (no cumulative before→after)
         return {
           key: formatKey(key),
-          before: '',  // Not shown for per-weapon effects
+          before: '',
           after: formatStatValue(key, effectValue),
           isIncrease: effectValue > 0,
           isCapped: false,
@@ -280,11 +235,8 @@ const LevelUp: React.FC<LevelUpProps> = ({
       const currentValue = (playerStats as Record<string, any>)[key] ?? 0;
       const newValue = currentValue + effectValue;
 
-      // Check if this stat has a cap
       const capInfo = getCapInfoForStat(key, effectCaps as Record<string, number> | undefined);
       const isCapped = capInfo ? isStatCapped(newValue, capInfo.cap) : false;
-
-      // Only show cap info when player is close to the cap (within 20% or 2 points)
       const showCapInfo = capInfo ? shouldShowCapInfo(currentValue, capInfo.cap) : false;
 
       return {
@@ -333,18 +285,11 @@ const LevelUp: React.FC<LevelUpProps> = ({
       {/* Top Half - Detail Focus */}
       <View style={styles.detailSection}>
         {focusedWeapon ? (
-          <View style={[styles.detailCard, isChallengeBonusFocused && styles.challengeBonusCard]}>
-            {/* Challenge Bonus Banner */}
-            {isChallengeBonusFocused && (
-              <View style={styles.challengeBonusBanner}>
-                <Text style={styles.challengeBonusBannerText}>STRETCH GOAL BONUS</Text>
-              </View>
-            )}
-
+          <View style={styles.detailCard}>
             {/* Weapon Icon */}
             <View style={[
               styles.previewArea,
-              { borderColor: isChallengeBonusFocused ? CHALLENGE_BONUS_COLOR : getRarityColor(focusedWeapon.rarity) }
+              { borderColor: getRarityColor(focusedWeapon.rarity) }
             ]}>
               {focusedWeapon.icon ? (
                 <Icon name={focusedWeapon.icon} size={32} color={COLORS.slateCharcoal} />
@@ -353,7 +298,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
               )}
               <View style={[
                 styles.rarityBadge,
-                { backgroundColor: isChallengeBonusFocused ? CHALLENGE_BONUS_COLOR : getRarityColor(focusedWeapon.rarity) }
+                { backgroundColor: getRarityColor(focusedWeapon.rarity) }
               ]}>
                 <Text style={styles.rarityBadgeText}>{getRarityLabel(focusedWeapon.rarity)}</Text>
               </View>
@@ -370,7 +315,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
             {/* Weapon Info */}
             <Text style={[
               styles.detailName,
-              { color: isChallengeBonusFocused ? CHALLENGE_BONUS_COLOR : getRarityColor(focusedWeapon.rarity) }
+              { color: getRarityColor(focusedWeapon.rarity) }
             ]}>
               {focusedWeapon.name}
             </Text>
@@ -389,7 +334,6 @@ const LevelUp: React.FC<LevelUpProps> = ({
                       <Text style={styles.effectKey}>{stat.key}</Text>
                       <View style={styles.statValues}>
                         {stat.isPerWeapon ? (
-                          // Per-weapon effects: just show the value with "(per weapon)"
                           <>
                             <Text style={[
                               styles.statAfter,
@@ -400,7 +344,6 @@ const LevelUp: React.FC<LevelUpProps> = ({
                             <Text style={styles.capIndicator}>(per weapon)</Text>
                           </>
                         ) : (
-                          // Normal effects: show before → after
                           <>
                             <Text style={styles.statBefore}>{stat.before}</Text>
                             <Text style={styles.statArrow}>→</Text>
@@ -493,7 +436,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
                 rarityColor={rarityColor}
                 onPress={(index) => {
                   playSound('click');
-                  setHoveredIndex(null); // Clear hover state to ensure display updates
+                  setHoveredIndex(null);
                   setFocusedIndex(index);
                 }}
                 onHoverIn={setHoveredIndex}
@@ -503,52 +446,6 @@ const LevelUp: React.FC<LevelUpProps> = ({
               />
             );
           })}
-
-          {/* Slayer Bonus Option - shown only if enemy was defeated */}
-          {challengeBonusWeapon && (
-            <Pressable
-              onPress={() => {
-                playSound('click');
-                setHoveredIndex(null); // Clear hover state to ensure display updates
-                setFocusedIndex(challengeBonusIndex);
-              }}
-              onHoverIn={() => setHoveredIndex(challengeBonusIndex)}
-              onHoverOut={() => setHoveredIndex(null)}
-              style={[
-                styles.optionButton,
-                styles.challengeBonusOption,
-                { borderColor: CHALLENGE_BONUS_COLOR },
-                focusedIndex === challengeBonusIndex && styles.challengeBonusOptionSelected,
-                Platform.OS === 'web' && { cursor: 'pointer' as any },
-              ]}
-            >
-              <View style={styles.challengeBonusTag}>
-                <Text style={styles.challengeBonusTagText}>BONUS</Text>
-              </View>
-              {challengeBonusWeapon.icon && (
-                <View style={styles.optionIcon}>
-                  <Icon
-                    name={challengeBonusWeapon.icon}
-                    size={24}
-                    color={focusedIndex === challengeBonusIndex ? COLORS.canvasWhite : CHALLENGE_BONUS_COLOR}
-                  />
-                </View>
-              )}
-              <Text
-                style={[
-                  styles.optionText,
-                  { color: CHALLENGE_BONUS_COLOR },
-                  focusedIndex === challengeBonusIndex && styles.optionTextSelected,
-                ]}
-                numberOfLines={1}
-              >
-                {challengeBonusWeapon.name}
-              </Text>
-              <Text style={[styles.rarityTag, { color: CHALLENGE_BONUS_COLOR }]}>
-                {getRarityLabel(challengeBonusWeapon.rarity)}
-              </Text>
-            </Pressable>
-          )}
         </ScrollView>
       </View>
 
@@ -558,11 +455,6 @@ const LevelUp: React.FC<LevelUpProps> = ({
           onPress={() => {
             if (focusedWeapon) {
               playSound('confirm');
-              // Grant bonus money if selecting challenge bonus
-              if (isChallengeBonusFocused && onChallengeBonusMoney) {
-                const bonusMoney = getChallengeBonusMoney(defeatedEnemyTier);
-                onChallengeBonusMoney(bonusMoney);
-              }
               onSelect(focusedWeapon);
             }
           }}
@@ -783,7 +675,7 @@ const styles = StyleSheet.create({
     color: COLORS.impactOrange,
   },
   statCapped: {
-    color: '#EAB308', // Yellow/amber to indicate capped
+    color: '#EAB308',
   },
   capIndicator: {
     fontSize: 10,
@@ -793,7 +685,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   capIndicatorCapped: {
-    color: '#EAB308', // Yellow/amber when at cap
+    color: '#EAB308',
     opacity: 1,
   },
   emptyDetail: {
@@ -929,54 +821,6 @@ const styles = StyleSheet.create({
   actionButtonDisabled: {
     backgroundColor: COLORS.paperBeige,
     opacity: 0.6,
-  },
-  // Slayer Bonus styles
-  challengeBonusCard: {
-    borderWidth: 2,
-    borderColor: '#FFD700',
-  },
-  challengeBonusBanner: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#FFD700',
-    paddingVertical: 4,
-    alignItems: 'center',
-    borderTopLeftRadius: RADIUS.module - 1,
-    borderTopRightRadius: RADIUS.module - 1,
-    zIndex: 1,
-  },
-  challengeBonusBannerText: {
-    color: COLORS.slateCharcoal,
-    fontWeight: '800',
-    fontSize: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 2,
-  },
-  challengeBonusOption: {
-    backgroundColor: 'rgba(255, 215, 0, 0.1)',
-    borderStyle: 'solid',
-    position: 'relative',
-  },
-  challengeBonusOptionSelected: {
-    backgroundColor: '#FFD700',
-  },
-  challengeBonusTag: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    backgroundColor: '#FFD700',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  challengeBonusTagText: {
-    color: COLORS.slateCharcoal,
-    fontWeight: '700',
-    fontSize: 8,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   // Ownership badge for weapon options with maxCount
   ownershipBadge: {

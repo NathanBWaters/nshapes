@@ -2348,8 +2348,6 @@ const Game: React.FC<GameProps> = ({
             onExitGame={() => setGamePhase('main_menu')}
             targetLevel={pendingLevelUps[0] || state.player.stats.level}
             hasMoreLevelUps={pendingLevelUps.length > 1}
-            enemyDefeated={enemyDefeated}
-            defeatedEnemyTier={defeatedEnemyTier}
           />
         );
 
