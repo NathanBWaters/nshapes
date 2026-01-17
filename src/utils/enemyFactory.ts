@@ -5,7 +5,7 @@
  * Each call to createEnemy() returns a fresh instance with reset internal state.
  */
 
-import type { Card, Weapon } from '@/types';
+import type { Card, Weapon, PlayerStats } from '@/types';
 import type {
   EnemyInstance,
   EnemyOption,
@@ -170,18 +170,20 @@ export function getRandomEnemies(tier: 1 | 2 | 3 | 4, count: number = 3, exclude
  * @param count - How many to return (default 3)
  * @param excludeEnemies - Enemy names to exclude from selection (e.g., already defeated enemies)
  * @param excludeWeaponIds - Weapon IDs to exclude from rewards (e.g., already awarded weapons)
+ * @param playerStats - Player's current stats (for filtering useless cap-increase weapons)
  * @returns Array of EnemyOption objects (enemy + pre-determined reward)
  */
 export function getRandomEnemyOptions(
   tier: 1 | 2 | 3 | 4,
   count: number = 3,
   excludeEnemies: string[] = [],
-  excludeWeaponIds: string[] = []
+  excludeWeaponIds: string[] = [],
+  playerStats?: PlayerStats
 ): EnemyOption[] {
   const enemies = getRandomEnemies(tier, count, excludeEnemies);
   return enemies.map(enemy => ({
     enemy,
-    stretchGoalReward: generateChallengeBonus(enemy.tier, excludeWeaponIds),
+    stretchGoalReward: generateChallengeBonus(enemy.tier, excludeWeaponIds, playerStats),
   }));
 }
 
@@ -212,8 +214,6 @@ export function registerEnemy(name: string, factory: () => EnemyInstance): void 
 // ============================================================================
 // STAT MODIFIER UTILITIES
 // ============================================================================
-
-import type { PlayerStats } from '@/types';
 
 /**
  * Apply enemy stat modifiers to player stats.

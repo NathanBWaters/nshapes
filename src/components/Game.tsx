@@ -734,10 +734,11 @@ const Game: React.FC<GameProps> = ({
   const generateEnemiesForRound = (
     round: number,
     defeatedEnemies: string[] = [],
-    awardedWeaponIds: string[] = []
+    awardedWeaponIds: string[] = [],
+    playerStats?: PlayerStats
   ): EnemyOption[] => {
     const tier = getTierForRound(round);
-    return getRandomEnemyOptions(tier, 3, defeatedEnemies, awardedWeaponIds);
+    return getRandomEnemyOptions(tier, 3, defeatedEnemies, awardedWeaponIds, playerStats);
   };
 
   // Generate random shop items
@@ -2126,7 +2127,7 @@ const Game: React.FC<GameProps> = ({
         foundCombinations: [],
         roundCompleted: false,
         gameStarted: false,  // Not started yet - waiting for enemy selection
-        currentEnemies: getRandomEnemyOptions(getTierForRound(nextRound), 3, prevState.defeatedEnemies, prevState.awardedStretchGoalWeapons),
+        currentEnemies: getRandomEnemyOptions(getTierForRound(nextRound), 3, prevState.defeatedEnemies, prevState.awardedStretchGoalWeapons, calculatePlayerTotalStats(prevState.player)),
         shopItems: generateRandomShopItems(),  // Refill shop for next round
         shopWeapons: generateShopWeapons(4, prevState.player.weapons, nextRound),   // Refill weapon shop with round-scaled rarity
         selectedEnemy: null,

@@ -4,8 +4,24 @@
  * Utility functions for generating rewards, extracted to avoid circular dependencies.
  */
 
-import type { Weapon, WeaponRarity } from '@/types';
+import type { Weapon, WeaponRarity, CapIncreaseType, PlayerStats } from '@/types';
 import { getWeaponsByRarity } from './gameDefinitions';
+
+// Mapping from CapIncreaseType to the corresponding PlayerStats key
+const CAP_TYPE_TO_STAT: Record<CapIncreaseType, keyof PlayerStats> = {
+  echo: 'echoChance',
+  laser: 'laserChance',
+  graceGain: 'graceGainChance',
+  explosion: 'explosionChance',
+  hint: 'hintGainChance',
+  timeGain: 'timeGainChance',
+  healing: 'healingChance',
+  fire: 'fireSpreadChance',
+  ricochet: 'ricochetChance',
+  boardGrowth: 'boardGrowthChance',
+  coinGain: 'coinGainChance',
+  xpGain: 'xpGainChance',
+};
 
 // Bonus money ranges by enemy tier (min, max)
 export const CHALLENGE_BONUS_MONEY: Record<1 | 2 | 3 | 4, [number, number]> = {
@@ -26,14 +42,37 @@ export const getChallengeBonusMoney = (tier: 1 | 2 | 3 | 4): number => {
 };
 
 /**
+ * Check if a cap-increase weapon is useful for the player.
+ * A cap-increase is only useful if the player has at least 10% in the corresponding stat.
+ *
+ * @param weapon - The weapon to check
+ * @param playerStats - The player's current stats (optional)
+ * @returns true if the weapon is useful (not a cap-increase, or player has >=10% in that stat)
+ */
+const isCapIncreaseUseful = (weapon: Weapon, playerStats?: PlayerStats): boolean => {
+  // If no player stats provided, assume all weapons are useful
+  if (!playerStats) return true;
+
+  // If weapon doesn't have a cap increase, it's useful
+  if (!weapon.capIncrease) return true;
+
+  // Check if player has at least 10% in the corresponding stat
+  const statKey = CAP_TYPE_TO_STAT[weapon.capIncrease.type];
+  const statValue = playerStats[statKey] as number | undefined;
+  return (statValue ?? 0) >= 10;
+};
+
+/**
  * Generate a challenge bonus weapon based on enemy tier.
  * Higher tiers have better chances for legendary weapons.
+ * Excludes cap-increase weapons if player has <10% in that stat.
  *
  * @param tier - Enemy tier (1-4)
  * @param excludeIds - Weapon IDs to exclude (already awarded weapons)
+ * @param playerStats - Player's current stats (for filtering useless cap-increases)
  * @returns A weapon of appropriate rarity for the tier
  */
-export const generateChallengeBonus = (tier: 1 | 2 | 3 | 4, excludeIds: string[] = []): Weapon => {
+export const generateChallengeBonus = (tier: 1 | 2 | 3 | 4, excludeIds: string[] = [], playerStats?: PlayerStats): Weapon => {
   let targetRarity: WeaponRarity;
 
   switch (tier) {
@@ -57,12 +96,18 @@ export const generateChallengeBonus = (tier: 1 | 2 | 3 | 4, excludeIds: string[]
       targetRarity = 'rare';
   }
 
-  // Get a random weapon of the target rarity, excluding already-awarded weapons
-  const weaponsOfRarity = getWeaponsByRarity(targetRarity).filter(w => !excludeIds.includes(w.id));
+  // Get a random weapon of the target rarity, excluding:
+  // 1. Already-awarded weapons
+  // 2. Cap-increase weapons where player has <10% in that stat
+  const weaponsOfRarity = getWeaponsByRarity(targetRarity)
+    .filter(w => !excludeIds.includes(w.id))
+    .filter(w => isCapIncreaseUseful(w, playerStats));
 
   if (weaponsOfRarity.length === 0) {
-    // Fallback to rare if no weapons of target rarity (excluding already awarded)
-    const rareWeapons = getWeaponsByRarity('rare').filter(w => !excludeIds.includes(w.id));
+    // Fallback to rare if no weapons of target rarity (excluding already awarded and useless cap-increases)
+    const rareWeapons = getWeaponsByRarity('rare')
+      .filter(w => !excludeIds.includes(w.id))
+      .filter(w => isCapIncreaseUseful(w, playerStats));
     if (rareWeapons.length === 0) {
       // Last resort: return any weapon (shouldn't happen in practice)
       const allWeapons = getWeaponsByRarity('rare');
