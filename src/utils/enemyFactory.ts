@@ -208,6 +208,9 @@ import type { PlayerStats } from '@/types';
  * Apply enemy stat modifiers to player stats.
  * Reduces weapon chances based on enemy counter effects.
  *
+ * Uses division by 3 instead of subtraction to ensure players always retain
+ * some capability. Example: 40% explosion with enemy counter → 40% ÷ 3 ≈ 13%
+ *
  * @param baseStats - The base player stats from calculatePlayerTotalStats
  * @param enemy - The active enemy instance (or null/undefined for no enemy)
  * @returns Modified player stats with enemy reductions applied
@@ -223,27 +226,28 @@ export function applyEnemyStatModifiers(
   const modifiers = enemy.getStatModifiers();
   const modifiedStats = { ...baseStats };
 
-  // Apply weapon counter reductions (clamp to 0 minimum)
+  // Apply weapon counter reductions by dividing by 3 (ensures some capability remains)
+  // This is more balanced than subtraction which could reduce stats to 0%
   if (modifiers.fireSpreadChanceReduction && modifiedStats.fireSpreadChance !== undefined) {
-    modifiedStats.fireSpreadChance = Math.max(0, modifiedStats.fireSpreadChance - modifiers.fireSpreadChanceReduction);
+    modifiedStats.fireSpreadChance = Math.round(modifiedStats.fireSpreadChance / 3);
   }
   if (modifiers.explosionChanceReduction && modifiedStats.explosionChance !== undefined) {
-    modifiedStats.explosionChance = Math.max(0, modifiedStats.explosionChance - modifiers.explosionChanceReduction);
+    modifiedStats.explosionChance = Math.round(modifiedStats.explosionChance / 3);
   }
   if (modifiers.laserChanceReduction && modifiedStats.laserChance !== undefined) {
-    modifiedStats.laserChance = Math.max(0, modifiedStats.laserChance - modifiers.laserChanceReduction);
+    modifiedStats.laserChance = Math.round(modifiedStats.laserChance / 3);
   }
   if (modifiers.hintGainChanceReduction && modifiedStats.hintGainChance !== undefined) {
-    modifiedStats.hintGainChance = Math.max(0, modifiedStats.hintGainChance - modifiers.hintGainChanceReduction);
+    modifiedStats.hintGainChance = Math.round(modifiedStats.hintGainChance / 3);
   }
   if (modifiers.graceGainChanceReduction && modifiedStats.graceGainChance !== undefined) {
-    modifiedStats.graceGainChance = Math.max(0, modifiedStats.graceGainChance - modifiers.graceGainChanceReduction);
+    modifiedStats.graceGainChance = Math.round(modifiedStats.graceGainChance / 3);
   }
   if (modifiers.timeGainChanceReduction && modifiedStats.timeGainChance !== undefined) {
-    modifiedStats.timeGainChance = Math.max(0, modifiedStats.timeGainChance - modifiers.timeGainChanceReduction);
+    modifiedStats.timeGainChance = Math.round(modifiedStats.timeGainChance / 3);
   }
   if (modifiers.healingChanceReduction && modifiedStats.healingChance !== undefined) {
-    modifiedStats.healingChance = Math.max(0, modifiedStats.healingChance - modifiers.healingChanceReduction);
+    modifiedStats.healingChance = Math.round(modifiedStats.healingChance / 3);
   }
 
   // Note: damageMultiplier and pointsMultiplier are handled separately in Game.tsx
