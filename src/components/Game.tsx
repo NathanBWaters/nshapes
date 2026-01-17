@@ -1459,10 +1459,11 @@ const Game: React.FC<GameProps> = ({
       const newLevel = calculateLevel(newExperience);
       const hasLeveledUp = newLevel > currentLevel;
 
-      // Calculate new health (capped at max)
+      // Calculate new health (capped at max including weapon bonuses)
+      const playerTotalStats = calculatePlayerTotalStats(prevState.player);
       const newHealth = Math.min(
         prevState.player.stats.health + totalHealing,
-        prevState.player.stats.maxHealth
+        playerTotalStats.maxHealth
       );
 
       // Show notification only for level up (overrides trigger notification)

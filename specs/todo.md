@@ -508,12 +508,12 @@
 - Add `health: 1` to effects alongside `maxHealth: 1`
 
 **Tasks:**
-- [ ] Add `health: 1` to Life Vessel (Common) effects
-- [ ] Add `health: 3` to Life Vessel (Rare) effects (matches maxHealth bonus)
-- [ ] Verify acquisition logic applies both maxHealth AND health bonuses
-- [ ] Ensure health is clamped to new maxHealth
-- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
-- [ ] **Commit:** `fix(weapons): Life Vessel grants +1 health with max increase`
+- [x] Add `health: 1` to Life Vessel (Common) effects (2026-01-17)
+- [x] Add `health: 3` to Life Vessel (Rare) effects (matches maxHealth bonus) (2026-01-17)
+- [x] Verify acquisition logic applies both maxHealth AND health bonuses (2026-01-17)
+- [x] Ensure health is clamped to new maxHealth (2026-01-17)
+- [x] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass (2026-01-17)
+- [x] **Commit:** `fix(weapons): Life Vessel grants +1 health with max increase` (2026-01-17)
 
 ### 5.2 Health Cap Bug (Investigation)
 **Issue:** Azlen reported health capping at 3 despite 20 max health and 50% health gain.
