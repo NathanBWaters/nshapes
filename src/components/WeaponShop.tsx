@@ -221,6 +221,33 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
     'timeGainAmount',
   ];
 
+  // Get cap-increase info for display (for Mastery weapons)
+  const getCapIncreaseInfo = (weapon: Weapon): {
+    statName: string;
+    currentValue: number;
+    currentCap: number;
+    newCap: number;
+  } | null => {
+    if (!weapon.capIncrease) return null;
+
+    const capType = weapon.capIncrease.type;
+    const statKey = STAT_TO_CAP_TYPE[`${capType}Chance` as keyof typeof STAT_TO_CAP_TYPE]
+      ? `${capType}Chance`
+      : Object.entries(STAT_TO_CAP_TYPE).find(([_, type]) => type === capType)?.[0];
+
+    if (!statKey) return null;
+
+    const effectCaps = playerStats.effectCaps as Record<string, number> | undefined;
+    const currentCap = effectCaps?.[capType] ?? EFFECT_CAPS[capType as keyof typeof EFFECT_CAPS]?.defaultCap ?? 0;
+    const newCap = currentCap + weapon.capIncrease.amount;
+    const currentValue = (playerStats as Record<string, any>)[statKey] ?? 0;
+
+    // Format the stat name
+    const statName = formatStatName(statKey);
+
+    return { statName, currentValue, currentCap, newCap };
+  };
+
   // Calculate before/after stat comparison for a weapon
   // Shows independent roll effects with "(per weapon)" notation
   // Shows cap info when stat would exceed its cap
@@ -380,6 +407,29 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
                   ))}
                 </View>
               )}
+
+              {/* Cap Increase Info (for Mastery weapons) */}
+              {focusedWeapon.capIncrease && (() => {
+                const capInfo = getCapIncreaseInfo(focusedWeapon);
+                if (!capInfo) return null;
+                return (
+                  <View style={[styles.effectsBox, styles.effectsBoxPositive, { marginTop: 8 }]}>
+                    <Text style={styles.effectsLabelPositive}>Cap Increase</Text>
+                    <View style={styles.effectRow}>
+                      <Text style={styles.effectKey}>Current {capInfo.statName}</Text>
+                      <Text style={styles.statBefore}>{capInfo.currentValue}%</Text>
+                    </View>
+                    <View style={styles.effectRow}>
+                      <Text style={styles.effectKey}>Current Cap</Text>
+                      <Text style={styles.statBefore}>{capInfo.currentCap}%</Text>
+                    </View>
+                    <View style={styles.effectRow}>
+                      <Text style={styles.effectKey}>New Cap</Text>
+                      <Text style={styles.statIncrease}>{capInfo.newCap}%</Text>
+                    </View>
+                  </View>
+                );
+              })()}
             </View>
           </View>
         ) : (
