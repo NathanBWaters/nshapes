@@ -2,7 +2,7 @@
  * Charging Boar - Tier 2 Enemy
  *
  * Effects: 35s inactivity → lose 1HP (focused single hazard)
- * Defeat Condition: Get 5 matches each under 10s
+ * Defeat Condition: Get 3 matches each under 10s
  */
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
@@ -19,15 +19,15 @@ export function createChargingBoar(): EnemyInstance {
       icon: 'caro-asercion/boar',
       tier: 2,
       description: '35s inactivity → lose 1HP',
-      defeatConditionText: 'Get 5 matches each under 10s',
+      defeatConditionText: 'Get 3 matches each under 10s',
     },
     [
       { behavior: InactivityEffect, config: { maxMs: 35000, penalty: 'damage' } },
     ],
-    // Defeat condition: 5 matches each under 10 seconds
+    // Defeat condition: 3 matches each under 10 seconds
     (stats: RoundStats) => {
       const fastMatches = stats.matchTimes.filter((t) => t < 10000).length;
-      return fastMatches >= 5;
+      return fastMatches >= 3;
     }
   );
 }

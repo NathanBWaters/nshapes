@@ -91,7 +91,7 @@
 - [x] Update unit tests in `lurkingShark.test.ts` (2026-01-17)
 - [ ] Add Playwright test: `lurkingShark.spec.ts` (skipped - unit tests provide coverage)
 - [x] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass (2026-01-17)
-- [ ] **Commit:** `fix(enemies): reduce Lurking Shark challenge difficulty`
+- [x] **Commit:** `fix(enemies): reduce Lurking Shark challenge difficulty` (2026-01-17)
 
 ### 1.3 Charging Boar Stretch Goal
 **Issue:** Charging Boar stretch goal target (5 fast matches) is too high.
@@ -105,13 +105,11 @@
 - Update `checkDefeatCondition` to check for `fastMatches >= 3`
 
 **Tasks:**
-- [ ] Lower Charging Boar defeat condition from 5 to 3 fast matches
-- [ ] Update defeat condition text to reflect new target
-- [ ] Add Playwright test: `chargingBoar.spec.ts`
-  - Test: Navigate to `/dev/play?enemy=Charging%20Boar&timeout=false`
-  - Test: Manually trigger 3 fast matches (under 10s each) and verify stretch goal completes
-  - Test: Verify stretch goal does NOT complete with only 2 fast matches
-- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
+- [x] Lower Charging Boar defeat condition from 5 to 3 fast matches (2026-01-17)
+- [x] Update defeat condition text to reflect new target (2026-01-17)
+- [x] Update unit tests in `chargingBoar.test.ts` (2026-01-17)
+- [ ] Add Playwright test: `chargingBoar.spec.ts` (skipped - unit tests provide coverage)
+- [x] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass (2026-01-17)
 - [ ] **Commit:** `fix(enemies): lower Charging Boar stretch goal to 3`
 
 ### 1.4 Creeping Shadow Stretch Goal

@@ -61,7 +61,7 @@ describe('Charging Boar', () => {
 
     it('has correct defeat condition text', () => {
       const enemy = createChargingBoar();
-      expect(enemy.defeatConditionText).toBe('Get 5 matches each under 10s');
+      expect(enemy.defeatConditionText).toBe('Get 3 matches each under 10s');
     });
   });
 
@@ -113,24 +113,24 @@ describe('Charging Boar', () => {
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
 
-    it('returns false with only 4 fast matches', () => {
+    it('returns false with only 2 fast matches', () => {
       const enemy = createChargingBoar();
       const stats = createEmptyStats();
-      stats.matchTimes = [5000, 6000, 7000, 8000, 15000]; // Only 4 under 10s
+      stats.matchTimes = [5000, 6000, 15000]; // Only 2 under 10s
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
 
-    it('returns true with 5 fast matches', () => {
+    it('returns true with 3 fast matches', () => {
       const enemy = createChargingBoar();
       const stats = createEmptyStats();
-      stats.matchTimes = [5000, 6000, 7000, 8000, 9000]; // All under 10s
+      stats.matchTimes = [5000, 6000, 7000]; // All under 10s
       expect(enemy.checkDefeatCondition(stats)).toBe(true);
     });
 
-    it('returns true with more than 5 fast matches', () => {
+    it('returns true with more than 3 fast matches', () => {
       const enemy = createChargingBoar();
       const stats = createEmptyStats();
-      stats.matchTimes = [3000, 4000, 5000, 6000, 7000, 8000]; // 6 under 10s
+      stats.matchTimes = [3000, 4000, 5000, 6000, 7000]; // 5 under 10s
       expect(enemy.checkDefeatCondition(stats)).toBe(true);
     });
   });
