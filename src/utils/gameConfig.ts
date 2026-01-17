@@ -383,9 +383,10 @@ export const ATTRIBUTE_SCALING = {
 } as const;
 
 // Background color hex values
+// Note: "beige" is now medium gray (#808080) for better visual contrast with white
 export const BACKGROUND_COLORS = {
   white: '#FFFFFF',
-  beige: '#F4EFEA',
+  beige: '#808080',  // Changed from #F4EFEA (light beige) to medium gray for visibility
   charcoal: '#383838',
 } as const;
 
