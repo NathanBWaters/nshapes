@@ -552,11 +552,11 @@
 - If no level up, go directly to shop phase
 
 **Tasks:**
-- [ ] Find the round-end transition logic
-- [ ] Add condition: only set `gamePhase = 'level_up'` if levels were gained
-- [ ] Verify direct shop transition when no level up
-- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
-- [ ] **Commit:** `fix(levelup): only show screen on actual level up`
+- [x] Find the round-end transition logic (2026-01-17)
+- [x] Add condition: only set `gamePhase = 'level_up'` if levels were gained (2026-01-17)
+- [x] Verify direct shop transition when no level up (2026-01-17)
+- [x] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass (2026-01-17)
+- [x] **Commit:** `fix(levelup): only show screen on actual level up` (2026-01-17)
 
 ### 6.2 Multiple Level Up Screens
 **Issue:** If player levels up multiple times, they should get multiple level up screens with free weapon each.
@@ -572,12 +572,12 @@
 - Button text: "Next Level Up" if more pending, "Continue" if last one
 
 **Tasks:**
-- [ ] Verify `pendingLevelUps` queue is correctly populated with all gained levels
-- [ ] Verify LevelUp receives and displays `targetLevel` prop
-- [ ] Verify multiple screens are shown sequentially
-- [ ] Update title to clearly show level number
-- [ ] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass
-- [ ] **Commit:** `feat(levelup): support multiple level ups per round`
+- [x] Verify `pendingLevelUps` queue is correctly populated with all gained levels (already implemented - verified) (2026-01-17)
+- [x] Verify LevelUp receives and displays `targetLevel` prop (already implemented - verified) (2026-01-17)
+- [x] Verify multiple screens are shown sequentially (already implemented - verified) (2026-01-17)
+- [x] Update title to clearly show level number (already shows "Level {targetLevel}") (2026-01-17)
+- [x] **Verify:** Run `npm test`, `npm run typecheck`, and `npx playwright test` - all pass (2026-01-17)
+- [x] **Commit:** (skipped - no changes needed, feature already implemented correctly) (2026-01-17)
 
 ---
 

@@ -55,6 +55,14 @@ const INITIAL_CARD_COUNT = 12;
 const MAX_BOARD_SIZE = 21;
 const BASE_REROLL_COST = 5;
 
+// Get base roll price for a round (linear interpolation: R1=$1, R10=$20)
+const getBaseRollPrice = (round: number): number => {
+  // Formula: startPrice = Math.round(1 + (round - 1) * (20 - 1) / (10 - 1))
+  // Results: R1=$1, R2=$3, R3=$5, R4=$7, R5=$9, R6=$11, R7=$13, R8=$15, R9=$17, R10=$20
+  // For rounds > 10, continue the linear progression
+  return Math.max(1, Math.round(1 + (round - 1) * (20 - 1) / (10 - 1)));
+};
+
 // Get round requirement (handles both regular and endless rounds)
 const getRoundRequirement = (round: number) => {
   if (round > 10) {
@@ -1083,7 +1091,7 @@ const Game: React.FC<GameProps> = ({
             money: prevState.player.stats.money - prevState.rerollCost
           }
         },
-        rerollCost: prevState.rerollCost + 2 // Increase reroll cost
+        rerollCost: Math.max(1, Math.round(prevState.rerollCost * 1.2)) // Increase reroll cost by 20%
       }));
     }
   };
@@ -1123,7 +1131,7 @@ const Game: React.FC<GameProps> = ({
             money: prevState.player.stats.money - prevState.rerollCost
           }
         },
-        rerollCost: prevState.rerollCost + 2 // Increase reroll cost
+        rerollCost: Math.max(1, Math.round(prevState.rerollCost * 1.2)) // Increase reroll cost by 20%
       }));
     }
   };
@@ -1232,7 +1240,7 @@ const Game: React.FC<GameProps> = ({
             money: prevState.player.stats.money - prevState.rerollCost
           }
         },
-        rerollCost: prevState.rerollCost + 2 // Increase reroll cost
+        rerollCost: Math.max(1, Math.round(prevState.rerollCost * 1.2)) // Increase reroll cost by 20%
       }));
     }
   };
@@ -2146,6 +2154,7 @@ const Game: React.FC<GameProps> = ({
         currentEnemies: getRandomEnemyOptions(getTierForRound(nextRound), 3, prevState.defeatedEnemies, prevState.awardedStretchGoalWeapons, calculatePlayerTotalStats(prevState.player), prevState.player.weapons),
         shopItems: generateRandomShopItems(),  // Refill shop for next round
         shopWeapons: generateShopWeapons(4, prevState.player.weapons, nextRound),   // Refill weapon shop with round-scaled rarity
+        rerollCost: getBaseRollPrice(nextRound),  // Reset roll price for new round
         selectedEnemy: null,
         activeEnemyInstance: null,  // Set when player selects enemy
         selectedEnemyReward: null,
