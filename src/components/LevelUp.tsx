@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Pressable, StyleSheet, Platform } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { usePWASafeAreaInsets } from '@/utils/usePWASafeAreaInsets';
 import { PlayerStats, Weapon, WeaponRarity, EffectCaps } from '@/types';
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
 import { getCapInfoForStat, isStatCapped, shouldShowCapInfo, STAT_TO_CAP_TYPE, EFFECT_CAPS } from '@/utils/gameConfig';
@@ -117,7 +117,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
   targetLevel,
   hasMoreLevelUps,
 }) => {
-  const insets = useSafeAreaInsets();
+  const insets = usePWASafeAreaInsets();
   const [focusedIndex, setFocusedIndex] = useState<number>(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 

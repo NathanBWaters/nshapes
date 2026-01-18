@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Pressable, StyleSheet, ScrollView, Platform } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { usePWASafeAreaInsets } from '@/utils/usePWASafeAreaInsets';
 import { PlayerStats, Weapon, WeaponRarity, EffectCaps } from '@/types';
 import type { EnemyInstance, EnemyOption } from '@/types/enemy';
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
@@ -44,7 +44,7 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
   playerWeapons = [],
   onExitGame
 }) => {
-  const insets = useSafeAreaInsets();
+  const insets = usePWASafeAreaInsets();
   const [focusedIndex, setFocusedIndex] = useState<number>(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 

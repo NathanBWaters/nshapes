@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, Pressable, StyleSheet, ScrollView } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { usePWASafeAreaInsets } from '@/utils/usePWASafeAreaInsets';
 import { Character, PlayerStats, AdventureDifficulty } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { getWeaponByName, DEFAULT_PLAYER_STATS } from '@/utils/gameDefinitions';
@@ -85,7 +85,7 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
   onStart,
   onExitGame,
 }) => {
-  const insets = useSafeAreaInsets();
+  const insets = usePWASafeAreaInsets();
   const [hoveredCharacter, setHoveredCharacter] = React.useState<string | null>(null);
   const [characterWins, setCharacterWins] = React.useState<CharacterWins>({});
   const [endlessHighScores, setEndlessHighScores] = React.useState<EndlessHighScores>({});

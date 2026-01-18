@@ -8,7 +8,7 @@ import ReAnimated, {
   withTiming,
   withDelay,
 } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { usePWASafeAreaInsets } from '@/utils/usePWASafeAreaInsets';
 import { PlayerStats, Weapon, AdventureDifficulty } from '@/types';
 import type { EnemyInstance } from '@/types/enemy';
 import { COLORS, RADIUS } from '@/utils/colors';
@@ -102,7 +102,7 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
   stretchGoalReward,
   stretchGoalMoney,
 }) => {
-  const insets = useSafeAreaInsets();
+  const insets = usePWASafeAreaInsets();
 
   // Animation values for each award tile
   const tileAnimations = useRef(

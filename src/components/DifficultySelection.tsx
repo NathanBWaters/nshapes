@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable, TouchableOpacity, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { usePWASafeAreaInsets } from '@/utils/usePWASafeAreaInsets';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { PlayerStats } from '@/types';
 import { FreePlayDifficulty } from './CharacterSelection';
@@ -22,7 +22,7 @@ const DIFFICULTY_INFO: Record<FreePlayDifficulty, { label: string; description: 
 };
 
 const DifficultySelection: React.FC<DifficultySelectionProps> = ({ onStart, onExitGame }) => {
-  const insets = useSafeAreaInsets();
+  const insets = usePWASafeAreaInsets();
   const [selectedDifficulty, setSelectedDifficulty] = useState<FreePlayDifficulty>('medium');
 
   return (

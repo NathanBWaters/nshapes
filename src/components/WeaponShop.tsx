@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Pressable, StyleSheet, Platform } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { usePWASafeAreaInsets } from '@/utils/usePWASafeAreaInsets';
 import { Weapon, PlayerStats, WeaponRarity, EffectCaps } from '@/types';
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
 import { getCapInfoForStat, isStatCapped, shouldShowCapInfo, STAT_TO_CAP_TYPE, EFFECT_CAPS } from '@/utils/gameConfig';
@@ -123,7 +123,7 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
   playerWeapons = [],
   onExitGame
 }) => {
-  const insets = useSafeAreaInsets();
+  const insets = usePWASafeAreaInsets();
   const [focusedIndex, setFocusedIndex] = useState<number>(() => {
     // Initialize to first non-null weapon
     const firstAvailable = weapons.findIndex(weapon => weapon !== null);
