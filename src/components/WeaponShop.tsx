@@ -346,106 +346,113 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
       <View style={styles.detailSection}>
         {focusedWeapon ? (
           <View style={styles.detailCard}>
-            {/* Weapon Icon */}
-            <View style={[styles.previewArea, { borderColor: getRarityColor(focusedWeapon.rarity) }]}>
-              {focusedWeapon.icon ? (
-                <Icon name={focusedWeapon.icon} size={32} color={COLORS.slateCharcoal} />
-              ) : (
-                <Text style={styles.previewLabel}>{getRarityLabel(focusedWeapon.rarity)}</Text>
-              )}
-              <View style={[styles.rarityBadge, { backgroundColor: getRarityColor(focusedWeapon.rarity) }]}>
-                <Text style={styles.rarityBadgeText}>{getRarityLabel(focusedWeapon.rarity)}</Text>
-              </View>
-              <View style={styles.priceBadge}>
-                <Text style={styles.priceBadgeText}>${focusedWeapon.price}</Text>
-              </View>
-              {/* Ownership indicator for weapons with maxCount */}
-              {focusedWeapon.maxCount !== undefined && (
-                <View style={styles.ownershipIndicator}>
-                  <Text style={styles.ownershipIndicatorText}>
-                    {getPlayerWeaponCount(focusedWeapon.name, playerWeapons)}/{focusedWeapon.maxCount} owned
-                  </Text>
+            <ScrollView
+              style={styles.detailCardScroll}
+              contentContainerStyle={styles.detailCardContent}
+              showsVerticalScrollIndicator={true}
+              bounces={false}
+            >
+              {/* Weapon Icon */}
+              <View style={[styles.previewArea, { borderColor: getRarityColor(focusedWeapon.rarity) }]}>
+                {focusedWeapon.icon ? (
+                  <Icon name={focusedWeapon.icon} size={32} color={COLORS.slateCharcoal} />
+                ) : (
+                  <Text style={styles.previewLabel}>{getRarityLabel(focusedWeapon.rarity)}</Text>
+                )}
+                <View style={[styles.rarityBadge, { backgroundColor: getRarityColor(focusedWeapon.rarity) }]}>
+                  <Text style={styles.rarityBadgeText}>{getRarityLabel(focusedWeapon.rarity)}</Text>
                 </View>
+                <View style={styles.priceBadge}>
+                  <Text style={styles.priceBadgeText}>${focusedWeapon.price}</Text>
+                </View>
+                {/* Ownership indicator for weapons with maxCount */}
+                {focusedWeapon.maxCount !== undefined && (
+                  <View style={styles.ownershipIndicator}>
+                    <Text style={styles.ownershipIndicatorText}>
+                      {getPlayerWeaponCount(focusedWeapon.name, playerWeapons)}/{focusedWeapon.maxCount} owned
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Weapon Info */}
+              <Text style={[styles.detailName, { color: getRarityColor(focusedWeapon.rarity) }]}>
+                {focusedWeapon.name}
+              </Text>
+              <Text style={styles.detailDescription}>{getDynamicDescription(focusedWeapon)}</Text>
+              {focusedWeapon.flavorText && (
+                <Text style={styles.detailFlavor}>{focusedWeapon.flavorText}</Text>
               )}
-            </View>
 
-            {/* Weapon Info */}
-            <Text style={[styles.detailName, { color: getRarityColor(focusedWeapon.rarity) }]}>
-              {focusedWeapon.name}
-            </Text>
-            <Text style={styles.detailDescription}>{getDynamicDescription(focusedWeapon)}</Text>
-            {focusedWeapon.flavorText && (
-              <Text style={styles.detailFlavor}>{focusedWeapon.flavorText}</Text>
-            )}
+              {/* Stats Preview - Before → After with cap info */}
+              <View style={styles.effectsContainer}>
+                {Object.keys(focusedWeapon.effects).length > 0 && (
+                  <View style={[styles.effectsBox, styles.effectsBoxPositive]}>
+                    <Text style={styles.effectsLabelPositive}>Stat Changes</Text>
+                    {getStatComparison(focusedWeapon).map((stat, i) => (
+                      <View key={i} style={styles.effectRow}>
+                        <Text style={styles.effectKey}>{stat.key}</Text>
+                        <View style={styles.statComparisonRow}>
+                          {stat.isPerWeapon ? (
+                            // Per-weapon effects: just show the value with "(per weapon)"
+                            <>
+                              <Text style={[
+                                styles.statAfter,
+                                stat.isIncrease ? styles.statIncrease : styles.statDecrease,
+                              ]}>
+                                {stat.after}
+                              </Text>
+                              <Text style={styles.capIndicator}>(per weapon)</Text>
+                            </>
+                          ) : (
+                            // Normal effects: show before → after
+                            <>
+                              <Text style={styles.statBefore}>{stat.before}</Text>
+                              <Text style={styles.statArrow}>→</Text>
+                              <Text style={[
+                                styles.statAfter,
+                                stat.isIncrease ? styles.statIncrease : styles.statDecrease,
+                                stat.isCapped && styles.statCapped,
+                              ]}>
+                                {stat.after}
+                              </Text>
+                            </>
+                          )}
+                          {stat.cap !== null && (
+                            <Text style={[styles.capIndicator, stat.isCapped && styles.capIndicatorCapped]}>
+                              (max {stat.cap}%)
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                )}
 
-            {/* Stats Preview - Before → After with cap info */}
-            <View style={styles.effectsRow}>
-              {Object.keys(focusedWeapon.effects).length > 0 && (
-                <View style={[styles.effectsBox, styles.effectsBoxPositive]}>
-                  <Text style={styles.effectsLabelPositive}>Stat Changes</Text>
-                  {getStatComparison(focusedWeapon).map((stat, i) => (
-                    <View key={i} style={styles.effectRow}>
-                      <Text style={styles.effectKey}>{stat.key}</Text>
-                      <View style={styles.statComparisonRow}>
-                        {stat.isPerWeapon ? (
-                          // Per-weapon effects: just show the value with "(per weapon)"
-                          <>
-                            <Text style={[
-                              styles.statAfter,
-                              stat.isIncrease ? styles.statIncrease : styles.statDecrease,
-                            ]}>
-                              {stat.after}
-                            </Text>
-                            <Text style={styles.capIndicator}>(per weapon)</Text>
-                          </>
-                        ) : (
-                          // Normal effects: show before → after
-                          <>
-                            <Text style={styles.statBefore}>{stat.before}</Text>
-                            <Text style={styles.statArrow}>→</Text>
-                            <Text style={[
-                              styles.statAfter,
-                              stat.isIncrease ? styles.statIncrease : styles.statDecrease,
-                              stat.isCapped && styles.statCapped,
-                            ]}>
-                              {stat.after}
-                            </Text>
-                          </>
-                        )}
-                        {stat.cap !== null && (
-                          <Text style={[styles.capIndicator, stat.isCapped && styles.capIndicatorCapped]}>
-                            (max {stat.cap}%)
-                          </Text>
-                        )}
+                {/* Cap Increase Info (for Mastery weapons) */}
+                {focusedWeapon.capIncrease && (() => {
+                  const capInfo = getCapIncreaseInfo(focusedWeapon);
+                  if (!capInfo) return null;
+                  return (
+                    <View style={[styles.effectsBox, styles.effectsBoxPositive, { marginTop: 8 }]}>
+                      <Text style={styles.effectsLabelPositive}>Cap Increase</Text>
+                      <View style={styles.effectRow}>
+                        <Text style={styles.effectKey}>Current {capInfo.statName}</Text>
+                        <Text style={styles.statBefore}>{capInfo.currentValue}%</Text>
+                      </View>
+                      <View style={styles.effectRow}>
+                        <Text style={styles.effectKey}>Current Cap</Text>
+                        <Text style={styles.statBefore}>{capInfo.currentCap}%</Text>
+                      </View>
+                      <View style={styles.effectRow}>
+                        <Text style={styles.effectKey}>New Cap</Text>
+                        <Text style={styles.statIncrease}>{capInfo.newCap}%</Text>
                       </View>
                     </View>
-                  ))}
-                </View>
-              )}
-
-              {/* Cap Increase Info (for Mastery weapons) */}
-              {focusedWeapon.capIncrease && (() => {
-                const capInfo = getCapIncreaseInfo(focusedWeapon);
-                if (!capInfo) return null;
-                return (
-                  <View style={[styles.effectsBox, styles.effectsBoxPositive, { marginTop: 8 }]}>
-                    <Text style={styles.effectsLabelPositive}>Cap Increase</Text>
-                    <View style={styles.effectRow}>
-                      <Text style={styles.effectKey}>Current {capInfo.statName}</Text>
-                      <Text style={styles.statBefore}>{capInfo.currentValue}%</Text>
-                    </View>
-                    <View style={styles.effectRow}>
-                      <Text style={styles.effectKey}>Current Cap</Text>
-                      <Text style={styles.statBefore}>{capInfo.currentCap}%</Text>
-                    </View>
-                    <View style={styles.effectRow}>
-                      <Text style={styles.effectKey}>New Cap</Text>
-                      <Text style={styles.statIncrease}>{capInfo.newCap}%</Text>
-                    </View>
-                  </View>
-                );
-              })()}
-            </View>
+                  );
+                })()}
+              </View>
+            </ScrollView>
           </View>
         ) : (
           <View style={styles.emptyDetail}>
@@ -615,7 +622,14 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.module,
     borderWidth: 1,
     borderColor: COLORS.slateCharcoal,
+    overflow: 'hidden',
+  },
+  detailCardScroll: {
+    flex: 1,
+  },
+  detailCardContent: {
     padding: 16,
+    flexGrow: 1,
   },
   previewArea: {
     backgroundColor: COLORS.paperBeige,
@@ -683,17 +697,14 @@ const styles = StyleSheet.create({
     opacity: 0.6,
     fontStyle: 'italic',
   },
-  effectsRow: {
-    flexDirection: 'row',
+  effectsContainer: {
+    flexDirection: 'column',
     gap: 8,
   },
   effectsBox: {
-    flex: 1,
-    maxWidth: '100%',
     borderRadius: 8,
     padding: 10,
     borderWidth: 1,
-    overflow: 'hidden',
   },
   effectsBoxPositive: {
     backgroundColor: COLORS.paperBeige,
@@ -730,12 +741,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    flexShrink: 0,
   },
   statBefore: {
     color: COLORS.slateCharcoal,
     fontSize: 11,
     fontFamily: 'monospace',
     opacity: 0.7,
+    flexShrink: 0,
   },
   statArrow: {
     color: COLORS.slateCharcoal,

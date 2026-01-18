@@ -17,6 +17,14 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
+    {
+      name: 'iphone-se',
+      use: { ...devices['iPhone SE'] },
+    },
+    {
+      name: 'iphone-12-pro',
+      use: { ...devices['iPhone 12 Pro'] },
+    },
   ],
   webServer: {
     command: 'npx expo start --web --port 8081',
