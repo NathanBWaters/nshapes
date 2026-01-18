@@ -13,6 +13,8 @@ node_modules/
 dist/
 web-build/
 
+e2e-screenshots/
+
 # Ralph generated files
 .circuit_breaker_history
 .circuit_breaker_state
