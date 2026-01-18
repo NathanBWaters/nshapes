@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Pressable, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Character, PlayerStats, AdventureDifficulty } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
@@ -130,96 +130,103 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
       <View style={styles.detailSection}>
         {selectedChar ? (
           <View style={styles.detailCard}>
-            {/* Character Header: Icon + Name/Description side by side */}
-            <View style={styles.characterHeader}>
-              {/* Character Icon - Square on left */}
-              <View style={styles.previewArea}>
-                {selectedChar.icon ? (
-                  <Icon name={selectedChar.icon} size={48} color={COLORS.slateCharcoal} />
-                ) : (
-                  <Text style={styles.previewText}>{selectedChar.name}</Text>
-                )}
-              </View>
-
-              {/* Character Info - Right of icon */}
-              <View style={styles.characterInfo}>
-                <Text style={styles.detailName}>{selectedChar.name}</Text>
-                <Text style={styles.detailDescription}>{selectedChar.description}</Text>
-              </View>
-            </View>
-
-            {/* Starting Weapons */}
-            <View style={styles.statBox}>
-              <Text style={styles.statLabel}>Starting Weapons</Text>
-              <View style={styles.weaponsList}>
-                {selectedChar.startingWeapons.map((weaponName, index) => {
-                  const weapon = getWeaponByName(weaponName);
-                  return (
-                    <View key={index} style={styles.weaponItemRow}>
-                      <View style={styles.weaponItemHeader}>
-                        {weapon?.icon && (
-                          <Icon name={weapon.icon} size={16} color={COLORS.slateCharcoal} />
-                        )}
-                        <Text style={styles.statValue}>{weaponName}</Text>
-                      </View>
-                      {weapon?.shortDescription && (
-                        <Text style={styles.weaponShortDesc}>{weapon.shortDescription}</Text>
-                      )}
-                    </View>
-                  );
-                })}
-              </View>
-            </View>
-
-            {/* Starting Stats - Shows effective stats from weapons */}
-            {(() => {
-              const effectiveStats = getEffectiveStats(selectedChar.startingWeapons);
-              const nonZeroStats = DISPLAYABLE_STATS.filter(stat => {
-                const value = effectiveStats[stat.key];
-                // Show if non-zero, or if it's health/graces/fieldSize (always show these)
-                return value > 0 || ['health', 'graces', 'fieldSize'].includes(stat.key);
-              });
-
-              // Only show percentage stats that are non-zero
-              const percentStats = nonZeroStats.filter(stat => stat.suffix === '%' && effectiveStats[stat.key] > 0);
-
-              return percentStats.length > 0 ? (
-                <View style={styles.startingStatsBox}>
-                  <Text style={styles.statLabel}>Starting Bonuses</Text>
-                  <View style={styles.startingStatsGrid}>
-                    {percentStats.map(stat => {
-                      const value = effectiveStats[stat.key];
-                      const cap = stat.capType ? EFFECT_CAPS[stat.capType].defaultCap : undefined;
-                      return (
-                        <View key={stat.key} style={styles.startingStatItem}>
-                          <Text style={styles.startingStatLabel}>{stat.label}</Text>
-                          <Text style={styles.startingStatValue}>
-                            {value}{stat.suffix}
-                            {cap && <Text style={styles.startingStatCap}> (max {cap}%)</Text>}
-                          </Text>
-                        </View>
-                      );
-                    })}
-                  </View>
+            <ScrollView
+              style={styles.detailCardScroll}
+              contentContainerStyle={styles.detailCardContent}
+              showsVerticalScrollIndicator={true}
+              bounces={false}
+            >
+              {/* Character Header: Icon + Name/Description side by side */}
+              <View style={styles.characterHeader}>
+                {/* Character Icon - Square on left */}
+                <View style={styles.previewArea}>
+                  {selectedChar.icon ? (
+                    <Icon name={selectedChar.icon} size={48} color={COLORS.slateCharcoal} />
+                  ) : (
+                    <Text style={styles.previewText}>{selectedChar.name}</Text>
+                  )}
                 </View>
-              ) : null;
-            })()}
 
-            {/* Character Stats Row */}
-            <View style={styles.characterStatsRow}>
-              <View style={styles.characterStatItem}>
-                <Text style={styles.characterStatLabel}>Furthest Round</Text>
-                <Text style={styles.characterStatValue}>
-                  {endlessHighScores[selectedChar.name] || 0}
-                </Text>
+                {/* Character Info - Right of icon */}
+                <View style={styles.characterInfo}>
+                  <Text style={styles.detailName}>{selectedChar.name}</Text>
+                  <Text style={styles.detailDescription}>{selectedChar.description}</Text>
+                </View>
               </View>
-              <View style={styles.characterStatItem}>
-                <Text style={styles.characterStatLabel}>Wins</Text>
-                <Text style={styles.characterStatValue}>
-                  {characterWins[selectedChar.name] || 0}
-                </Text>
+
+              {/* Starting Weapons */}
+              <View style={styles.statBox}>
+                <Text style={styles.statLabel}>Starting Weapons</Text>
+                <View style={styles.weaponsList}>
+                  {selectedChar.startingWeapons.map((weaponName, index) => {
+                    const weapon = getWeaponByName(weaponName);
+                    return (
+                      <View key={index} style={styles.weaponItemRow}>
+                        <View style={styles.weaponItemHeader}>
+                          {weapon?.icon && (
+                            <Icon name={weapon.icon} size={16} color={COLORS.slateCharcoal} />
+                          )}
+                          <Text style={styles.statValue}>{weaponName}</Text>
+                        </View>
+                        {weapon?.shortDescription && (
+                          <Text style={styles.weaponShortDesc}>{weapon.shortDescription}</Text>
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
               </View>
-            </View>
+
+              {/* Starting Stats - Shows effective stats from weapons */}
+              {(() => {
+                const effectiveStats = getEffectiveStats(selectedChar.startingWeapons);
+                const nonZeroStats = DISPLAYABLE_STATS.filter(stat => {
+                  const value = effectiveStats[stat.key];
+                  // Show if non-zero, or if it's health/graces/fieldSize (always show these)
+                  return value > 0 || ['health', 'graces', 'fieldSize'].includes(stat.key);
+                });
+
+                // Only show percentage stats that are non-zero
+                const percentStats = nonZeroStats.filter(stat => stat.suffix === '%' && effectiveStats[stat.key] > 0);
+
+                return percentStats.length > 0 ? (
+                  <View style={styles.startingStatsBox}>
+                    <Text style={styles.statLabel}>Starting Bonuses</Text>
+                    <View style={styles.startingStatsGrid}>
+                      {percentStats.map(stat => {
+                        const value = effectiveStats[stat.key];
+                        const cap = stat.capType ? EFFECT_CAPS[stat.capType].defaultCap : undefined;
+                        return (
+                          <View key={stat.key} style={styles.startingStatItem}>
+                            <Text style={styles.startingStatLabel}>{stat.label}</Text>
+                            <Text style={styles.startingStatValue}>
+                              {value}{stat.suffix}
+                              {cap && <Text style={styles.startingStatCap}> (max {cap}%)</Text>}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
+                ) : null;
+              })()}
+
+              {/* Character Stats Row */}
+              <View style={styles.characterStatsRow}>
+                <View style={styles.characterStatItem}>
+                  <Text style={styles.characterStatLabel}>Furthest Round</Text>
+                  <Text style={styles.characterStatValue}>
+                    {endlessHighScores[selectedChar.name] || 0}
+                  </Text>
+                </View>
+                <View style={styles.characterStatItem}>
+                  <Text style={styles.characterStatLabel}>Wins</Text>
+                  <Text style={styles.characterStatValue}>
+                    {characterWins[selectedChar.name] || 0}
+                  </Text>
+                </View>
+              </View>
+            </ScrollView>
           </View>
         ) : (
           <View style={styles.emptyDetail}>
@@ -374,7 +381,14 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.module,
     borderWidth: 1,
     borderColor: COLORS.slateCharcoal,
+    overflow: 'hidden',
+  },
+  detailCardScroll: {
+    flex: 1,
+  },
+  detailCardContent: {
     padding: 16,
+    flexGrow: 1,
   },
   characterHeader: {
     flexDirection: 'row',
