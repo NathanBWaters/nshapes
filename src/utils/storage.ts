@@ -1,4 +1,5 @@
 import { createMMKV } from 'react-native-mmkv';
+import type { PlayerStats, AdventureDifficulty } from '@/types';
 
 // Create a single MMKV instance for the app
 export const storage = createMMKV({
@@ -13,6 +14,7 @@ export const STORAGE_KEYS = {
   ADVENTURE_HIGH_ROUNDS: 'adventure_high_rounds',
   SOUND_ENABLED: 'sound_enabled',
   UNLOCKED_CHARACTERS: 'unlocked_characters',
+  SAVED_ADVENTURE_GAME: 'saved_adventure_game',
 } as const;
 
 // Character wins type: maps character name to win count
@@ -176,5 +178,71 @@ export const CharacterUnlockStorage = {
 
   resetUnlocks: (): void => {
     storage.remove(STORAGE_KEYS.UNLOCKED_CHARACTERS);
+  },
+};
+
+// Saved adventure game state - for resuming interrupted games
+// Version allows for future migrations if the save format changes
+const SAVED_GAME_VERSION = 1;
+
+export interface SavedGameState {
+  version: number;
+  savedAt: number; // Timestamp
+
+  // Character
+  characterName: string;
+
+  // Player stats (experience, money, level, health, graces, hints, etc.)
+  playerStats: PlayerStats;
+
+  // Weapons by ID (not full objects - enables resilience to weapon changes)
+  weaponIds: string[];
+
+  // Game progress
+  round: number;
+  adventureDifficulty: AdventureDifficulty;
+  defeatedEnemies: string[];
+  awardedStretchGoalWeapons: string[];
+
+  // Screen to resume to
+  gamePhase: string;
+}
+
+// Saved adventure game storage helpers
+export const SavedGameStorage = {
+  hasSavedGame: (): boolean => {
+    return storage.getString(STORAGE_KEYS.SAVED_ADVENTURE_GAME) !== undefined;
+  },
+
+  save: (state: Omit<SavedGameState, 'version' | 'savedAt'>): void => {
+    const saveData: SavedGameState = {
+      ...state,
+      version: SAVED_GAME_VERSION,
+      savedAt: Date.now(),
+    };
+    storage.set(STORAGE_KEYS.SAVED_ADVENTURE_GAME, JSON.stringify(saveData));
+  },
+
+  load: (): SavedGameState | null => {
+    const data = storage.getString(STORAGE_KEYS.SAVED_ADVENTURE_GAME);
+    if (!data) return null;
+    try {
+      const parsed = JSON.parse(data) as SavedGameState;
+      // Version check - if format changes in future, handle migration here
+      if (parsed.version !== SAVED_GAME_VERSION) {
+        console.warn('Saved game version mismatch, clearing saved game');
+        SavedGameStorage.clear();
+        return null;
+      }
+      return parsed;
+    } catch {
+      console.warn('Failed to parse saved game, clearing');
+      SavedGameStorage.clear();
+      return null;
+    }
+  },
+
+  clear: (): void => {
+    storage.remove(STORAGE_KEYS.SAVED_ADVENTURE_GAME);
   },
 };

@@ -4,6 +4,7 @@ import { COLORS, RADIUS } from '@/utils/colors';
 import { triggerHaptic } from '@/utils/haptics';
 import { playSound } from '@/utils/sounds';
 import Icon, { IconName } from './Icon';
+import { SavedGameStorage } from '@/utils/storage';
 import { version } from '../../package.json';
 
 interface MainMenuProps {
@@ -11,6 +12,7 @@ interface MainMenuProps {
   onSelectFreeplay: () => void;
   onSelectTutorial: () => void;
   onSelectOptions: () => void;
+  onResumeGame?: () => void;
 }
 
 // Menu button component
@@ -22,7 +24,7 @@ function MenuButton({
   subtitle,
 }: {
   onPress: () => void;
-  variant: 'adventure' | 'freeplay' | 'tutorial' | 'options';
+  variant: 'resume' | 'adventure' | 'freeplay' | 'tutorial' | 'options';
   icon: IconName;
   title: string;
   subtitle: string;
@@ -34,6 +36,12 @@ function MenuButton({
   };
 
   const variantStyles = {
+    resume: {
+      button: styles.resumeButton,
+      iconBg: COLORS.paperBeige,
+      iconColor: COLORS.slateCharcoal,
+      textColor: COLORS.canvasWhite,
+    },
     adventure: {
       button: styles.adventureButton,
       iconBg: COLORS.paperBeige,
@@ -91,7 +99,11 @@ const MainMenu: React.FC<MainMenuProps> = ({
   onSelectFreeplay,
   onSelectTutorial,
   onSelectOptions,
+  onResumeGame,
 }) => {
+  const hasSavedGame = SavedGameStorage.hasSavedGame();
+  const savedGame = hasSavedGame ? SavedGameStorage.load() : null;
+
   return (
     <View style={styles.container}>
       {/* Main Content */}
@@ -104,6 +116,15 @@ const MainMenu: React.FC<MainMenuProps> = ({
 
         {/* Menu Buttons */}
         <View style={styles.menuSection}>
+          {hasSavedGame && onResumeGame && savedGame && (
+            <MenuButton
+              onPress={onResumeGame}
+              variant="resume"
+              icon="lorc/return-arrow"
+              title="Resume Game"
+              subtitle={`Round ${savedGame.round} - ${savedGame.characterName}`}
+            />
+          )}
           <MenuButton
             onPress={onSelectAdventure}
             variant="adventure"
@@ -187,6 +208,9 @@ const styles = StyleSheet.create({
     borderColor: COLORS.slateCharcoal,
     padding: 20,
     gap: 16,
+  },
+  resumeButton: {
+    backgroundColor: COLORS.logicTeal,
   },
   adventureButton: {
     backgroundColor: COLORS.actionYellow,

@@ -99,6 +99,7 @@ import Token from '../../assets/icons/delapouite/token.svg';
 import ArcheryTarget from '../../assets/icons/lorc/archery-target.svg';
 import OpenBook from '../../assets/icons/lorc/open-book.svg';
 import CrownCoin from '../../assets/icons/lorc/crown-coin.svg';
+import ReturnArrow from '../../assets/icons/lorc/return-arrow.svg';
 
 // Difficulty Icons
 import Feather from '../../assets/icons/lorc/feather.svg';
@@ -265,6 +266,7 @@ const ICON_REGISTRY = {
   'lorc/archery-target': ArcheryTarget,
   'lorc/open-book': OpenBook,
   'lorc/crown-coin': CrownCoin,
+  'lorc/return-arrow': ReturnArrow,
 
   // Difficulty
   'lorc/feather': Feather,

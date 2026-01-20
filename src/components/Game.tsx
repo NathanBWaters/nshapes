@@ -48,7 +48,7 @@ import MainMenu from './MainMenu';
 import DifficultySelection from './DifficultySelection';
 import OptionsMenu from './OptionsMenu';
 import { useTutorial } from '@/context/TutorialContext';
-import { CharacterWinsStorage, EndlessHighScoresStorage, AdventureHighRoundStorage, CharacterUnlockStorage } from '@/utils/storage';
+import { CharacterWinsStorage, EndlessHighScoresStorage, AdventureHighRoundStorage, CharacterUnlockStorage, SavedGameStorage } from '@/utils/storage';
 import { playSound, playCardDealing } from '@/utils/sounds';
 
 const INITIAL_CARD_COUNT = 12;
@@ -297,6 +297,28 @@ const Game: React.FC<GameProps> = ({
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [gamePhase, hasActiveHint, state.player]);
 
+  // Save adventure game state when entering round_summary or enemy_select (between rounds)
+  // This ensures we capture state after all setState calls have been committed
+  useEffect(() => {
+    // Only save for adventure mode
+    if (gameMode !== 'adventure' || !selectedCharacter) return;
+
+    // Save when entering round_summary (after completing a round)
+    // Skip round 10+ since that goes to victory/character_unlock
+    if (gamePhase === 'round_summary' && state.round < 10) {
+      SavedGameStorage.save({
+        characterName: selectedCharacter,
+        playerStats: state.player.stats,
+        weaponIds: state.player.weapons.map(w => w.id),
+        round: state.round,
+        adventureDifficulty,
+        defeatedEnemies: state.defeatedEnemies,
+        awardedStretchGoalWeapons: state.awardedStretchGoalWeapons,
+        gamePhase: 'enemy_select', // Resume to enemy selection for next round
+      });
+    }
+  }, [gamePhase, gameMode, selectedCharacter, adventureDifficulty, state.round, state.player.stats, state.player.weapons, state.defeatedEnemies, state.awardedStretchGoalWeapons]);
+
   // Per-round stats tracking (for round summary screen)
   const [roundStats, setRoundStats] = useState({
     moneyEarned: 0,
@@ -333,6 +355,9 @@ const Game: React.FC<GameProps> = ({
   // Function declarations
   // Add an endGame function
   const endGame = (victory: boolean, reason?: string) => {
+    // Clear saved adventure game on game end (win or loss)
+    SavedGameStorage.clear();
+
     // Call enemy onRoundEnd to clean up
     if (state.activeEnemyInstance) {
       state.activeEnemyInstance.onRoundEnd();
@@ -436,6 +461,9 @@ const Game: React.FC<GameProps> = ({
 
     // Check if this is the final round (Round 10) - if so, check for character unlock then victory
     if (state.round >= 10) {
+      // Clear saved adventure game on victory
+      SavedGameStorage.clear();
+
       // Record the win for this character
       if (selectedCharacter) {
         CharacterWinsStorage.recordWin(selectedCharacter);
@@ -747,6 +775,28 @@ const Game: React.FC<GameProps> = ({
     setNotification(null);
   }, [isMultiplayer, resetRoundStats]);
 
+  // Save adventure game state for resume functionality
+  const saveAdventureGame = useCallback((
+    currentState: GameState,
+    character: string,
+    difficulty: AdventureDifficulty,
+    phase: string
+  ) => {
+    // Only save for adventure mode (not endless or free play)
+    if (currentState.isEndlessMode) return;
+
+    SavedGameStorage.save({
+      characterName: character,
+      playerStats: currentState.player.stats,
+      weaponIds: currentState.player.weapons.map(w => w.id),
+      round: currentState.round,
+      adventureDifficulty: difficulty,
+      defeatedEnemies: currentState.defeatedEnemies,
+      awardedStretchGoalWeapons: currentState.awardedStretchGoalWeapons,
+      gamePhase: phase,
+    });
+  }, []);
+
   // Generate 3 random enemies from the appropriate tier for the round (with pre-determined rewards)
   const generateEnemiesForRound = (
     round: number,
@@ -828,6 +878,9 @@ const Game: React.FC<GameProps> = ({
       return;
     }
 
+    // Clear any saved adventure game when starting a new one
+    SavedGameStorage.clear();
+
     setGameMode('adventure');
     setAdventureDifficulty(difficulty);
 
@@ -870,6 +923,140 @@ const Game: React.FC<GameProps> = ({
 
     // Free Play mode - go directly to the game board
     setGamePhase('free_play');
+  };
+
+  // Resume a saved adventure game
+  const resumeGame = () => {
+    const savedGame = SavedGameStorage.load();
+    if (!savedGame) {
+      setNotification({
+        message: 'No saved game found',
+        type: 'error'
+      });
+      return;
+    }
+
+    // Validate weapons - filter out any that no longer exist
+    const validWeapons: Weapon[] = [];
+    for (const weaponId of savedGame.weaponIds) {
+      const weapon = WEAPONS.find(w => w.id === weaponId);
+      if (weapon) {
+        validWeapons.push(weapon);
+      } else {
+        console.warn(`Saved weapon ${weaponId} no longer exists, skipping`);
+      }
+    }
+
+    // Get the character
+    const character = CHARACTERS.find(c => c.name === savedGame.characterName);
+    if (!character) {
+      setNotification({
+        message: `Character ${savedGame.characterName} not found`,
+        type: 'error'
+      });
+      SavedGameStorage.clear();
+      return;
+    }
+
+    // Set up game mode and difficulty
+    setGameMode('adventure');
+    setAdventureDifficulty(savedGame.adventureDifficulty);
+    setSelectedCharacter(savedGame.characterName);
+
+    // Get active attributes for the round
+    const activeAttributes = getActiveAttributesForRound(savedGame.round + 1, savedGame.adventureDifficulty);
+
+    // Calculate board size based on saved stats
+    const baseBoardSize = getBoardSizeForAttributes(activeAttributes.length);
+    const boardSize = Math.max(baseBoardSize, savedGame.playerStats.fieldSize);
+
+    // Generate initial board for the next round
+    const nextRound = savedGame.round + 1;
+    const initialBoard = generateGameBoard(boardSize, nextRound, nextRound, activeAttributes);
+    const deck = shuffleArray(createDeck(activeAttributes));
+    const remainingDeck = deck.filter(card =>
+      !initialBoard.some(boardCard => sameCardAttributes(boardCard, card))
+    );
+
+    // Get round requirements
+    const roundReq = getRoundRequirement(nextRound);
+
+    // Rebuild player with validated weapons and saved stats
+    const player = {
+      id: 'player1',
+      username: 'Player 1',
+      character,
+      stats: savedGame.playerStats,
+      weapons: validWeapons,
+      items: [], // Items not currently saved
+    };
+
+    // Calculate time bonus
+    const totalStats = calculatePlayerTotalStats(player);
+    const weaponTimeBonus = totalStats.startingTime || 0;
+    const excessHealth = Math.max(0, totalStats.health - 3);
+    const healthTimeBonus = excessHealth * 3;
+    const timeBonus = weaponTimeBonus + healthTimeBonus;
+
+    // Reset round stats
+    resetRoundStats(roundReq.targetScore, totalStats.hints || 0, totalStats.graces || 0);
+
+    // Clear round history for resumed game
+    setRoundHistory([]);
+
+    // Reset hint triggers
+    setHintTrigger(0);
+    setClearHintTrigger(0);
+
+    // Set the game state
+    setState({
+      deck: remainingDeck,
+      board: initialBoard,
+      selectedCards: [],
+      foundCombinations: [],
+      score: 0,
+      gameStarted: false,
+      gameEnded: false,
+      startTime: null,
+      endTime: null,
+      hintUsed: false,
+      activeAttributes,
+      round: nextRound,
+      targetScore: roundReq.targetScore,
+      remainingTime: roundReq.time + timeBonus,
+      roundCompleted: false,
+      player,
+      shopItems: generateRandomShopItems(),
+      shopWeapons: generateShopWeapons(4, validWeapons, nextRound, totalStats.luck),
+      levelUpOptions: [],
+      rerollCost: getBaseRollPrice(nextRound),
+      currentEnemies: getRandomEnemyOptions(
+        getTierForRound(nextRound),
+        3,
+        savedGame.defeatedEnemies,
+        savedGame.awardedStretchGoalWeapons,
+        totalStats,
+        validWeapons
+      ),
+      selectedEnemy: null,
+      activeEnemyInstance: null,
+      selectedEnemyReward: null,
+      selectedEnemyMoney: null,
+      defeatedEnemies: savedGame.defeatedEnemies,
+      awardedStretchGoalWeapons: savedGame.awardedStretchGoalWeapons,
+      lootCrates: 0,
+      isCoOp: false,
+      players: [],
+      isEndlessMode: false,
+    });
+
+    // Go to enemy selection
+    setGamePhase('enemy_select');
+
+    setNotification({
+      message: `Resumed game at Round ${nextRound}`,
+      type: 'success'
+    });
   };
 
   // Handle character selection
@@ -2232,6 +2419,7 @@ const Game: React.FC<GameProps> = ({
               onSelectFreeplay={() => setGamePhase('difficulty_select')}
               onSelectTutorial={handleTutorialStart}
               onSelectOptions={() => setShowOptionsModal(true)}
+              onResumeGame={resumeGame}
             />
             <OptionsMenu
               visible={showOptionsModal}
