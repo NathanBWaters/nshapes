@@ -81,7 +81,10 @@ function WeaponOption({
       >
         {weapon.name}
       </Text>
-      <Text style={[styles.rarityTag, { color: rarityColor }]}>
+      <Text style={[
+        styles.rarityTag,
+        { color: isFocused && weapon.rarity === 'legendary' ? COLORS.canvasWhite : rarityColor }
+      ]}>
         {getRarityLabel(weapon.rarity)}
       </Text>
     </Pressable>

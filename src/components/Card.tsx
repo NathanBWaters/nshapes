@@ -524,8 +524,6 @@ const styles = StyleSheet.create({
   },
   hint: {
     backgroundColor: '#FFFDE7',
-    borderColor: COLORS.actionYellow,
-    borderStyle: 'dashed',
   },
   onFire: {
     borderColor: '#EF4444', // Red fire border
