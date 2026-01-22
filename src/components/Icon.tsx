@@ -161,6 +161,7 @@ import Padlock from '../../assets/icons/lorc/padlock.svg';
 import GearHammer from '../../assets/icons/lorc/gear-hammer.svg';
 import SoundOn from '../../assets/icons/delapouite/sound-on.svg';
 import ThirdEye from '../../assets/icons/lorc/third-eye.svg';
+import DiscordSymbol from '../../assets/icons/discord-symbol.svg';
 
 // ChallengeCard Icons
 import SwordClash from '../../assets/icons/lorc/sword-clash.svg';
@@ -328,6 +329,7 @@ const ICON_REGISTRY = {
   'lorc/gear-hammer': GearHammer,
   'delapouite/sound-on': SoundOn,
   'lorc/third-eye': ThirdEye,
+  'discord-symbol': DiscordSymbol,
 
   // ChallengeCard Icons
   'lorc/sword-clash': SwordClash,

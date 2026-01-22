@@ -1,11 +1,13 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Platform, Linking } from 'react-native';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { triggerHaptic } from '@/utils/haptics';
 import { playSound } from '@/utils/sounds';
 import Icon, { IconName } from './Icon';
 import { SavedGameStorage } from '@/utils/storage';
 import { version } from '../../package.json';
+
+const DISCORD_URL = 'https://discord.gg/JFkUmp54Sp';
 
 interface MainMenuProps {
   onSelectAdventure: () => void;
@@ -155,6 +157,27 @@ const MainMenu: React.FC<MainMenuProps> = ({
           />
         </View>
 
+        {/* Discord Section */}
+        <Pressable
+          onPress={() => {
+            triggerHaptic('light');
+            playSound('click');
+            Linking.openURL(DISCORD_URL);
+          }}
+          style={({ pressed }) => [
+            styles.discordButton,
+            pressed && styles.discordButtonPressed,
+            Platform.OS === 'web' && { cursor: 'pointer' as any },
+          ]}
+          accessibilityLabel="Join Discord"
+          accessibilityRole="link"
+        >
+          <View style={styles.discordIconContainer}>
+            <Icon name="discord-symbol" size={20} color={COLORS.canvasWhite} noShadow />
+          </View>
+          <Text style={styles.discordTitle}>Join the NShapes Discord!</Text>
+        </Pressable>
+
         {/* Footer */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>v{version}</Text>
@@ -253,9 +276,38 @@ const styles = StyleSheet.create({
     color: COLORS.slateCharcoal,
     opacity: 0.7,
   },
+  discordButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    backgroundColor: '#5865F2',
+    borderRadius: RADIUS.button,
+    borderWidth: 2,
+    borderColor: COLORS.slateCharcoal,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    gap: 10,
+  },
+  discordButtonPressed: {
+    backgroundColor: '#4752C4',
+  },
+  discordIconContainer: {
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  discordTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.canvasWhite,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
   footer: {
     alignItems: 'center',
-    paddingTop: 20,
+    paddingTop: 12,
   },
   footerText: {
     fontSize: 10,
