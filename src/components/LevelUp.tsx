@@ -8,6 +8,7 @@ import Icon from './Icon';
 import GameMenu from './GameMenu';
 import InventoryBar from './InventoryBar';
 import { ScreenTransition } from './ScreenTransition';
+import KeywordText from './KeywordText';
 import { playSound } from '@/utils/sounds';
 import { getPlayerWeaponCount } from '@/utils/gameDefinitions';
 
@@ -328,9 +329,9 @@ const LevelUp: React.FC<LevelUpProps> = ({
               ]}>
                 {focusedWeapon.name}
               </Text>
-              <Text style={styles.detailDescription}>{getDynamicDescription(focusedWeapon)}</Text>
+              <KeywordText style={styles.detailDescription}>{getDynamicDescription(focusedWeapon)}</KeywordText>
               {focusedWeapon.flavorText && (
-                <Text style={styles.detailFlavor}>{focusedWeapon.flavorText}</Text>
+                <KeywordText style={styles.detailFlavor}>{focusedWeapon.flavorText}</KeywordText>
               )}
 
               {/* Effects with before/after comparison and cap info */}

@@ -8,6 +8,7 @@ import { getPlayerWeaponCount } from '@/utils/gameDefinitions';
 import Icon from './Icon';
 import GameMenu from './GameMenu';
 import InventoryBar from './InventoryBar';
+import KeywordText from './KeywordText';
 import { ScreenTransition } from './ScreenTransition';
 import { playSound } from '@/utils/sounds';
 
@@ -382,9 +383,9 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
               <Text style={[styles.detailName, { color: getRarityColor(focusedWeapon.rarity) }]}>
                 {focusedWeapon.name}
               </Text>
-              <Text style={styles.detailDescription}>{getDynamicDescription(focusedWeapon)}</Text>
+              <KeywordText style={styles.detailDescription}>{getDynamicDescription(focusedWeapon)}</KeywordText>
               {focusedWeapon.flavorText && (
-                <Text style={styles.detailFlavor}>{focusedWeapon.flavorText}</Text>
+                <KeywordText style={styles.detailFlavor}>{focusedWeapon.flavorText}</KeywordText>
               )}
 
               {/* Stats Preview - Before → After with cap info */}

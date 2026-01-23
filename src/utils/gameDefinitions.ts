@@ -543,8 +543,8 @@ export const WEAPONS: Weapon[] = [
     rarity: 'common',
     level: 1,
     price: 5,
-    description: '+1 single-use starting grace.',
-    shortDescription: 'Single-use grace',
+    description: '+1 starting grace.',
+    shortDescription: 'Extra starting grace',
     flavorText: 'Graces are consumed when they protect you from a near-miss. Once used, they\'re gone!',
     icon: 'lorc/clover',
     effects: { graces: 1 }
@@ -555,8 +555,8 @@ export const WEAPONS: Weapon[] = [
     rarity: 'rare',
     level: 1,
     price: 10,
-    description: '+3 single-use starting graces.',
-    shortDescription: 'Single-use graces',
+    description: '+3 starting graces.',
+    shortDescription: 'Extra starting graces',
     flavorText: 'Graces are consumed when they protect you from a near-miss. Once used, they\'re gone!',
     icon: 'lorc/clover',
     effects: { graces: 3 }
@@ -676,8 +676,8 @@ export const WEAPONS: Weapon[] = [
     rarity: 'common',
     level: 1,
     price: 5,
-    description: '+1 max hint capacity (and +1 hint).',
-    shortDescription: 'Increased hint capacity',
+    description: '+1 max hints (+1 hint).',
+    shortDescription: 'More hint capacity',
     flavorText: 'Hints highlight a valid set on the board when activated. Earn hints from matches to fill your capacity.',
     icon: 'lorc/floating-crystal',
     effects: { maxHints: 1 }
@@ -688,8 +688,8 @@ export const WEAPONS: Weapon[] = [
     rarity: 'rare',
     level: 1,
     price: 10,
-    description: '+2 max hint capacity (and +1 hint).',
-    shortDescription: 'Increased hint capacity',
+    description: '+2 max hints (+1 hint).',
+    shortDescription: 'More hint capacity',
     flavorText: 'Hints highlight a valid set on the board when activated. Earn hints from matches to fill your capacity.',
     icon: 'lorc/floating-crystal',
     effects: { maxHints: 2 }

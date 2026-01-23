@@ -63,6 +63,7 @@ const getEffectiveStats = (startingWeapons: string[]): Record<string, number> =>
 import Icon, { IconName } from './Icon';
 import GameMenu from './GameMenu';
 import { ScreenTransition } from './ScreenTransition';
+import KeywordText from './KeywordText';
 
 // IMPORTANT: This game should NOT have scrollable screens.
 // All screens should fill the available height without requiring scrolling.
@@ -150,7 +151,7 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
                 {/* Character Info - Right of icon */}
                 <View style={styles.characterInfo}>
                   <Text style={styles.detailName}>{selectedChar.name}</Text>
-                  <Text style={styles.detailDescription}>{selectedChar.description}</Text>
+                  <KeywordText style={styles.detailDescription}>{selectedChar.description}</KeywordText>
                 </View>
               </View>
 
@@ -169,7 +170,7 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
                           <Text style={styles.statValue}>{weaponName}</Text>
                         </View>
                         {weapon?.shortDescription && (
-                          <Text style={styles.weaponShortDesc}>{weapon.shortDescription}</Text>
+                          <KeywordText style={styles.weaponShortDesc}>{weapon.shortDescription}</KeywordText>
                         )}
                       </View>
                     );

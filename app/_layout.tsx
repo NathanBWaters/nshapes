@@ -5,6 +5,8 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { SocketProvider } from "@/context/SocketContext";
 import { TutorialProvider } from "@/context/TutorialContext";
+import { KeywordProvider } from "@/context/KeywordContext";
+import KeywordTooltip from "@/components/KeywordTooltip";
 import { initAudio, preloadAllSounds } from "@/utils/sounds";
 
 export default function RootLayout() {
@@ -16,16 +18,19 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <TutorialProvider>
-        <SocketProvider>
-          <Stack
-            screenOptions={{
-              headerShown: false,
-            }}
-          />
-          <StatusBar style="auto" />
-        </SocketProvider>
-      </TutorialProvider>
+      <KeywordProvider>
+        <TutorialProvider>
+          <SocketProvider>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+              }}
+            />
+            <StatusBar style="auto" />
+            <KeywordTooltip />
+          </SocketProvider>
+        </TutorialProvider>
+      </KeywordProvider>
     </SafeAreaProvider>
   );
 }
