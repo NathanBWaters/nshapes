@@ -119,7 +119,7 @@ All weapon effects stack additively:
 
 **Effect:** After matching, adjacent cards may catch fire.
 **Fire Behavior:**
-- Burns for 7.5 seconds (`fireBurnDuration: 7500`)
+- Burns for 0.25 seconds (`fireBurnDuration: 250`)
 - Destroyed cards award points
 - 10% chance to spread to neighbors when burning out (`fireSpreadOnDeathChance: 0.10`)
 
@@ -484,7 +484,7 @@ STARTING_STATS = {
 
 WEAPON_SYSTEM = {
   rarityChances: { common: 0.70, rare: 0.25, legendary: 0.05 },
-  fireBurnDuration: 7500,      // 7.5 seconds
+  fireBurnDuration: 250,       // 0.25 seconds
   fireSpreadOnDeathChance: 0.10, // 10%
   autoHintDisplayDuration: 1500, // 1.5 seconds
 }

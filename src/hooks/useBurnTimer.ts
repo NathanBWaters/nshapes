@@ -10,7 +10,7 @@ interface UseBurnTimerOptions {
 }
 
 /**
- * Manages a burn timer that tracks progress from 0 to 1 over 7.5 seconds.
+ * Manages a burn timer that tracks progress from 0 to 1 over 0.25 seconds.
  * Supports pause/resume by tracking accumulated time rather than wall clock.
  * Calls onComplete exactly once when the timer finishes.
  */

@@ -67,8 +67,8 @@ export const KEYWORDS: Record<string, KeywordDefinition> = {
 
   fire: {
     terms: ['fire', 'burning', 'burns', 'ignite', 'ignites', 'on fire'],
-    brief: 'Cards on fire are destroyed after 7.5 seconds.',
-    detailed: 'Burning cards have a flame effect and are automatically destroyed after 7.5 seconds, awarding +1 point and +1 coin. When a card burns out, fire has a 10% chance to spread to adjacent cards.',
+    brief: 'Cards on fire are destroyed after 0.25 seconds.',
+    detailed: 'Burning cards have a flame effect and are automatically destroyed after 0.25 seconds, awarding +1 point and +1 coin. When a card burns out, fire has a 10% chance to spread to adjacent cards.',
   },
 
   holographic: {

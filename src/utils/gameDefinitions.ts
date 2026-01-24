@@ -515,7 +515,7 @@ export const WEAPONS: Weapon[] = [
     price: 8,
     description: '10% chance to ignite adjacent cards. Burned cards give +1 point and +1 coin each.',
     shortDescription: 'May ignite adjacent cards',
-    flavorText: 'After matching, adjacent cards may catch fire. Burning cards are destroyed after 7.5 seconds, awarding points. Fire has a 10% chance to spread to neighbors when a card burns out.',
+    flavorText: 'After matching, adjacent cards may catch fire. Burning cards are destroyed after 0.25 seconds, awarding points. Fire has a 10% chance to spread to neighbors when a card burns out.',
     icon: 'lorc/campfire',
     specialEffect: 'fire',
     effects: { fireSpreadChance: 10 }
@@ -528,7 +528,7 @@ export const WEAPONS: Weapon[] = [
     price: 16,
     description: '30% chance to ignite adjacent cards. Burned cards give +1 point and +1 coin each.',
     shortDescription: 'May ignite adjacent cards',
-    flavorText: 'After matching, adjacent cards may catch fire. Burning cards are destroyed after 7.5 seconds, awarding points. Fire has a 10% chance to spread to neighbors when a card burns out.',
+    flavorText: 'After matching, adjacent cards may catch fire. Burning cards are destroyed after 0.25 seconds, awarding points. Fire has a 10% chance to spread to neighbors when a card burns out.',
     icon: 'lorc/campfire',
     specialEffect: 'fire',
     effects: { fireSpreadChance: 30 }

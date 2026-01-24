@@ -63,7 +63,7 @@ NShapes combines the classic SET card matching game with roguelike progression m
 
 **Card States:**
 * **Holographic:** 2x points when matched
-* **On Fire:** Burns after 7.5s, 10% spread chance
+* **On Fire:** Burns after 0.25s, 10% spread chance
 
 ## Key Features
 
