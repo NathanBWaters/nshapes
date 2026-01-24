@@ -55,6 +55,11 @@ const createEmptyRoundStats = (): RoundStats => ({
   weaponEffectsTriggered: new Set<string>(),
   currentScore: 0,
   targetScore: 100,
+  timeGainTriggersThisRound: 0,
+  timeGainTriggerCapBonus: 0,
+  consecutiveInvalidMatches: 0,
+  prismaticPerfectionTriggered: false,
+  tabulaRasaTriggered: false,
 });
 
 describe('createDummyEnemy', () => {

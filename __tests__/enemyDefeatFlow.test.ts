@@ -37,6 +37,11 @@ const createRoundStats = (overrides: Partial<RoundStats> = {}): RoundStats => ({
   weaponEffectsTriggered: new Set(),
   currentScore: 0,
   targetScore: 100,
+  timeGainTriggersThisRound: 0,
+  timeGainTriggerCapBonus: 0,
+  consecutiveInvalidMatches: 0,
+  prismaticPerfectionTriggered: false,
+  tabulaRasaTriggered: false,
   ...overrides,
 });
 

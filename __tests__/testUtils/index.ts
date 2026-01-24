@@ -78,6 +78,13 @@ export function createRoundStats(overrides: Partial<RoundStats> = {}): RoundStat
     currentScore: 0,
     targetScore: 100,
 
+    // Time gain trigger tracking
+    timeGainTriggersThisRound: 0,
+    timeGainTriggerCapBonus: 0,
+    consecutiveInvalidMatches: 0,
+    prismaticPerfectionTriggered: false,
+    tabulaRasaTriggered: false,
+
     ...overrides,
   };
 }

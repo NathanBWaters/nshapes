@@ -82,6 +82,7 @@ const mockPlayerStats: PlayerStats = {
   enhancedHintChance: 0,
   echoChance: 0,
   chainReactionChance: 0,
+  timeGainTriggerCap: 5,
 };
 
 // Mock player

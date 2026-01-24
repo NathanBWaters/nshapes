@@ -27,6 +27,12 @@ const createEmptyStats = (): RoundStats => ({
   weaponEffectsTriggered: new Set(),
   currentScore: 0,
   targetScore: 100,
+  // Time gain trigger tracking
+  timeGainTriggersThisRound: 0,
+  timeGainTriggerCapBonus: 0,
+  consecutiveInvalidMatches: 0,
+  prismaticPerfectionTriggered: false,
+  tabulaRasaTriggered: false,
 });
 
 describe('One-Eyed Terror', () => {

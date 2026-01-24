@@ -882,6 +882,11 @@ const GameBoard: React.FC<GameBoardProps> = ({
     weaponEffectsTriggered: new Set<string>(),
     currentScore: 0,
     targetScore: 0,
+    timeGainTriggersThisRound: 0,
+    timeGainTriggerCapBonus: 0,
+    consecutiveInvalidMatches: 0,
+    prismaticPerfectionTriggered: false,
+    tabulaRasaTriggered: false,
   };
 
   return (

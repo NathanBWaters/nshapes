@@ -75,6 +75,7 @@ const createBaseStats = (overrides: Partial<PlayerStats> = {}): PlayerStats => (
   enhancedHintChance: 0,
   echoChance: 0,
   chainReactionChance: 0,
+  timeGainTriggerCap: 5,
   ...overrides,
 });
 
