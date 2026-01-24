@@ -169,6 +169,11 @@ import CheckedShield from '../../assets/icons/lorc/checked-shield.svg';
 import CrossMark from '../../assets/icons/lorc/cross-mark.svg';
 import Trophy from '../../assets/icons/lorc/trophy.svg';
 
+// Challenge Legendary Icons
+import RainbowStar from '../../assets/icons/lorc/rainbow-star.svg';
+import RadarSweep from '../../assets/icons/lorc/radar-sweep.svg';
+import SkullCrack from '../../assets/icons/lorc/skull-crack.svg';
+
 // Icon registry: maps path (e.g., "delapouite/token") to the imported component
 // NOTE: When adding new icons, also add the import above and the path here.
 // TypeScript will catch any usage of icon paths not in this registry.
@@ -336,6 +341,11 @@ const ICON_REGISTRY = {
   'lorc/checked-shield': CheckedShield,
   'lorc/cross-mark': CrossMark,
   'lorc/trophy': Trophy,
+
+  // Challenge Legendary Icons
+  'lorc/rainbow-star': RainbowStar,
+  'lorc/radar-sweep': RadarSweep,
+  'lorc/skull-crack': SkullCrack,
 } as const satisfies Record<string, React.FC<SvgProps>>;
 
 // TypeScript union type of all valid icon names - use this for type-safe icon references

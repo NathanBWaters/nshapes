@@ -1155,7 +1155,7 @@ export const WEAPONS: Weapon[] = [
     description: 'Clear the board: increase the max number of time gains on match you can have for that round by 5. Can only be done once per round.',
     shortDescription: 'Board clear unlocks time',
     flavorText: 'A clean slate reveals hidden seconds.',
-    icon: 'lorc/eraser',
+    icon: 'lorc/radar-sweep',
     specialEffect: 'challengeLegendary',
     effects: {},
     maxCount: 1,
