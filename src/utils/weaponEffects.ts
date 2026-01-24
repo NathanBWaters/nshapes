@@ -272,6 +272,7 @@ export interface WeaponEffectResult {
   bonusCoins: number;
   boardGrowth: number;
   notifications: string[];
+  timeGainTriggered: boolean;  // Whether time gain actually triggered (for tracking)
 }
 
 /**
@@ -290,7 +291,11 @@ export const processWeaponEffects = (
   playerStats: PlayerStats,
   weapons?: Weapon[],
   activeAttributes?: AttributeName[],
-  isEchoMatch: boolean = false
+  isEchoMatch: boolean = false,
+  timeGainContext?: {
+    triggersThisRound: number;
+    effectiveCap: number;
+  }
 ): WeaponEffectResult => {
   const result: WeaponEffectResult = {
     explosiveCards: [],
@@ -310,6 +315,7 @@ export const processWeaponEffects = (
     bonusCoins: 0,
     boardGrowth: 0,
     notifications: [],
+    timeGainTriggered: false,
   };
 
   // Get player's effect caps (or use defaults)
@@ -465,10 +471,18 @@ export const processWeaponEffects = (
     result.notifications.push('+1 Hint');
   }
 
-  // Time gain chance
+  // Time gain chance - respects per-round trigger cap
   if (effectiveTimeGainChance > 0 && Math.random() * 100 < effectiveTimeGainChance) {
-    result.bonusTime = playerStats.timeGainAmount || 10;
-    result.notifications.push(`+${result.bonusTime}s`);
+    // Check if we're under the trigger cap
+    const canTrigger = !timeGainContext ||
+      timeGainContext.triggersThisRound < timeGainContext.effectiveCap;
+
+    if (canTrigger) {
+      result.bonusTime = playerStats.timeGainAmount || 10;
+      result.timeGainTriggered = true;
+      result.notifications.push(`+${result.bonusTime}s`);
+    }
+    // If over cap, the roll happened but no time awarded
   }
 
   // Grace gain chance
