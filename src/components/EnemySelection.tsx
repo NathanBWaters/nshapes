@@ -1,23 +1,18 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Pressable, StyleSheet, ScrollView, Platform } from 'react-native';
 import { usePWASafeAreaInsets } from '@/utils/usePWASafeAreaInsets';
-import { PlayerStats, Weapon, WeaponRarity, EffectCaps } from '@/types';
+import { PlayerStats, Weapon, WeaponRarity } from '@/types';
 import type { EnemyInstance, EnemyOption } from '@/types/enemy';
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
-import { getCapInfoForStat, isStatCapped, shouldShowCapInfo, STAT_TO_CAP_TYPE, EFFECT_CAPS } from '@/utils/gameConfig';
+import {
+  getDynamicDescription,
+  getStatComparison,
+  getCapIncreaseInfo,
+  getRarityLabel,
+} from '@/utils/weaponDisplay';
 import Icon from './Icon';
 import GameMenu from './GameMenu';
-
-// Helper to get rarity label
-const getRarityLabel = (rarity: WeaponRarity): string => {
-  switch (rarity) {
-    case 'common': return 'Common';
-    case 'rare': return 'Rare';
-    case 'epic': return 'Epic';
-    case 'legendary': return 'Legendary';
-    default: return rarity;
-  }
-};
+import KeywordText from './KeywordText';
 
 // Tier colors for visual distinction
 const TIER_COLORS: Record<1 | 2 | 3 | 4, string> = {
@@ -58,127 +53,6 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
   // Get tier color for focused enemy
   const tierColor = focusedEnemy ? TIER_COLORS[focusedEnemy.tier] : COLORS.slateCharcoal;
 
-  // Format key from camelCase to Title Case
-  const formatKey = (key: string) => {
-    return key
-      .replace(/([A-Z])/g, ' $1')
-      .replace(/^./, str => str.toUpperCase());
-  };
-
-  // Format stat value with appropriate suffix
-  const formatStatValue = (key: string, value: number): string => {
-    let displayValue = `${value}`;
-    if (key.toLowerCase().includes('percent') || key.toLowerCase().includes('chance')) displayValue += '%';
-    if (key.toLowerCase().includes('interval')) displayValue += 'ms';
-    if (key.toLowerCase().includes('time') && !key.toLowerCase().includes('interval')) displayValue += 's';
-    return displayValue;
-  };
-
-  // Effects that roll independently per weapon (don't show misleading before→after)
-  const INDEPENDENT_ROLL_EFFECTS = [
-    'laserChance',
-    'timeGainChance',
-    'timeGainAmount',
-  ];
-
-  // Generate dynamic description for cap-increase weapons
-  const getDynamicDescription = (weapon: Weapon): string => {
-    if (!weapon.capIncrease) return weapon.description;
-
-    const capType = weapon.capIncrease.type;
-    const effectCaps = playerStats.effectCaps as Record<string, number> | undefined;
-    const currentCap = effectCaps?.[capType] ?? EFFECT_CAPS[capType as keyof typeof EFFECT_CAPS]?.defaultCap ?? 0;
-    const newCap = currentCap + weapon.capIncrease.amount;
-
-    // Format cap type for display
-    const capTypeName = capType.replace(/([A-Z])/g, ' $1').toLowerCase().trim();
-
-    return `Raises your ${capTypeName} cap to ${newCap}%`;
-  };
-
-  // Get cap-increase info for display (for Mastery weapons)
-  const getCapIncreaseInfo = (weapon: Weapon): {
-    statName: string;
-    currentValue: number;
-    currentCap: number;
-    newCap: number;
-  } | null => {
-    if (!weapon.capIncrease) return null;
-
-    const capType = weapon.capIncrease.type;
-    const statKey = STAT_TO_CAP_TYPE[`${capType}Chance` as keyof typeof STAT_TO_CAP_TYPE]
-      ? `${capType}Chance`
-      : Object.entries(STAT_TO_CAP_TYPE).find(([_, type]) => type === capType)?.[0];
-
-    if (!statKey) return null;
-
-    const effectCaps = playerStats.effectCaps as Record<string, number> | undefined;
-    const currentCap = effectCaps?.[capType] ?? EFFECT_CAPS[capType as keyof typeof EFFECT_CAPS]?.defaultCap ?? 0;
-    const newCap = currentCap + weapon.capIncrease.amount;
-    const currentValue = (playerStats as Record<string, any>)[statKey] ?? 0;
-
-    // Format the stat name
-    const statName = formatKey(statKey);
-
-    return { statName, currentValue, currentCap, newCap };
-  };
-
-  // Calculate before/after stat comparison for a weapon
-  const getStatComparison = (weapon: Weapon): {
-    key: string;
-    before: string;
-    after: string;
-    isIncrease: boolean;
-    isCapped: boolean;
-    cap: number | null;
-    isPerWeapon: boolean;
-  }[] => {
-    const effectCaps = playerStats.effectCaps as EffectCaps | undefined;
-
-    return Object.entries(weapon.effects).map(([key, effectValue]) => {
-      if (typeof effectValue !== 'number') return null;
-
-      const isPerWeapon = INDEPENDENT_ROLL_EFFECTS.includes(key);
-
-      if (isPerWeapon) {
-        return {
-          key: formatKey(key),
-          before: '',
-          after: formatStatValue(key, effectValue),
-          isIncrease: effectValue > 0,
-          isCapped: false,
-          cap: null,
-          isPerWeapon: true,
-        };
-      }
-
-      const currentValue = (playerStats as Record<string, any>)[key] ?? 0;
-      const newValue = currentValue + effectValue;
-
-      const capInfo = getCapInfoForStat(key, effectCaps as Record<string, number> | undefined);
-      const isCapped = capInfo ? isStatCapped(newValue, capInfo.cap) : false;
-      const showCapInfo = capInfo ? shouldShowCapInfo(currentValue, capInfo.cap) : false;
-
-      return {
-        key: formatKey(key),
-        before: formatStatValue(key, currentValue),
-        after: formatStatValue(key, newValue),
-        isIncrease: effectValue > 0,
-        isCapped,
-        cap: showCapInfo ? capInfo?.cap ?? null : null,
-        isPerWeapon: false,
-      };
-    }).filter((item): item is {
-      key: string;
-      before: string;
-      after: string;
-      isIncrease: boolean;
-      isCapped: boolean;
-      cap: number | null;
-      isPerWeapon: boolean;
-    } => item !== null);
-  };
-
   return (
     <View style={styles.container}>
       {/* Eyebrow Banner */}
@@ -203,7 +77,7 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
             <View style={[styles.infoBox, styles.infoBoxEffect]}>
               <Text style={styles.infoLabelEffect}>Enemy Effects</Text>
               {focusedEnemy.description.split(', ').map((effect, index) => (
-                <Text key={index} style={styles.infoText}>• {effect}</Text>
+                <KeywordText key={index} style={styles.infoText}>{`• ${effect}`}</KeywordText>
               ))}
               {/* Show stat modifiers if enemy has any (before → after format) */}
               {(() => {
@@ -263,7 +137,7 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
 
             <View style={[styles.infoBox, styles.infoBoxDefeat]}>
               <Text style={styles.infoLabelDefeat}>Stretch Goal</Text>
-              <Text style={styles.infoText}>{focusedEnemy.defeatConditionText}</Text>
+              <KeywordText style={styles.infoText}>{focusedEnemy.defeatConditionText}</KeywordText>
             </View>
 
             {/* Stretch Goal Reward - Weapon Shop style display */}
@@ -289,16 +163,16 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
                   <Text style={[styles.rewardWeaponName, { color: getRarityColor(focusedReward.rarity) }]}>
                     {focusedReward.name}
                   </Text>
-                  <Text style={styles.rewardDescription}>{getDynamicDescription(focusedReward)}</Text>
+                  <KeywordText style={styles.rewardDescription}>{getDynamicDescription(focusedReward, playerStats)}</KeywordText>
                   {focusedReward.flavorText && (
-                    <Text style={styles.rewardFlavor}>{focusedReward.flavorText}</Text>
+                    <KeywordText style={styles.rewardFlavor}>{focusedReward.flavorText}</KeywordText>
                   )}
 
                   {/* Stats Preview - Before → After */}
                   {Object.keys(focusedReward.effects).length > 0 && (
                     <View style={styles.rewardEffectsBox}>
                       <Text style={styles.rewardEffectsLabel}>Stat Changes</Text>
-                      {getStatComparison(focusedReward).map((stat, i) => (
+                      {getStatComparison(focusedReward, playerStats).map((stat, i) => (
                         <View key={i} style={styles.statComparisonRow}>
                           <Text style={styles.effectKey}>{stat.key}</Text>
                           <View style={styles.statValues}>
@@ -338,7 +212,7 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
 
                   {/* Cap Increase Info (for Mastery weapons) */}
                   {focusedReward.capIncrease && (() => {
-                    const capInfo = getCapIncreaseInfo(focusedReward);
+                    const capInfo = getCapIncreaseInfo(focusedReward, playerStats);
                     if (!capInfo) return null;
                     return (
                       <View style={[styles.rewardEffectsBox, { marginTop: 8 }]}>

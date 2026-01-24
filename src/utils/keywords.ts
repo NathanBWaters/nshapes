@@ -220,9 +220,187 @@ export const KEYWORDS: Record<string, KeywordDefinition> = {
   // =============================================================================
 
   onMatch: {
-    terms: ['on match', 'when you match', 'after matching'],
+    terms: ['on match', 'when you match', 'after matching', 'per match'],
     brief: 'Effect triggers each time you successfully match.',
     detailed: 'Many weapon effects have a percentage chance to trigger on each successful match. Effects like explosion, healing, coin drops, and time gains all roll their chances after you complete a match.',
+  },
+
+  // =============================================================================
+  // ENEMY CARD STATES
+  // =============================================================================
+
+  unmatchable: {
+    terms: ['unmatchable', 'dud', 'duds'],
+    brief: 'A card that cannot be part of any valid SET.',
+    detailed: 'Unmatchable (dud) cards take up board space but can never form a valid SET with other cards. They reduce your options and make finding matches harder. Some enemies spawn these to increase difficulty.',
+  },
+
+  faceDown: {
+    terms: ['face-down', 'face down', 'flipped', 'hidden'],
+    brief: 'A card whose attributes are hidden until revealed.',
+    detailed: 'Face-down cards show only their back. Tap a face-down card to reveal its attributes. You cannot include unrevealed cards in a match - you must reveal them first to see what SET they could form.',
+  },
+
+  countdownCard: {
+    terms: ['countdown', 'countdown card', 'ticking', 'ticking card'],
+    brief: 'A card with a timer that must be matched before it expires.',
+    detailed: 'Countdown cards display a timer. If the timer reaches zero before you match the card, you lose 1 health. Prioritize matching these cards to avoid damage! The countdown is visible on the card.',
+  },
+
+  bomb: {
+    terms: ['bomb', 'bomb card', 'bombs'],
+    brief: 'A card that explodes and damages you if not matched in time.',
+    detailed: 'Bomb cards have a visible fuse timer. Match the bomb before it explodes to "defuse" it safely. If the timer runs out, you lose 1 health and the bomb is removed from the board.',
+  },
+
+  tripleHealth: {
+    terms: ['triple-health', 'triple health', 'triple-health card', '3 matches to clear'],
+    brief: 'A card that must be matched 3 times to remove from the board.',
+    detailed: 'Triple-health cards are extra durable. Each time you include one in a valid match, it loses one "health" but stays on the board. After being matched 3 times total, it\'s finally removed. The card shows its remaining health.',
+  },
+
+  // =============================================================================
+  // ENEMY PLAYER ACTIONS
+  // =============================================================================
+
+  invalidMatch: {
+    terms: ['invalid match', 'invalid', 'wrong match'],
+    brief: 'Selecting 3 cards that do NOT form a valid SET.',
+    detailed: 'When you select 3 cards that aren\'t a valid SET, you lose 1 health (unless a grace saves you). The 3 cards are removed from the board and replaced. Some enemies punish invalid matches more severely with extra card removal or increased damage.',
+  },
+
+  streak: {
+    terms: ['streak', 'match streak', 'consecutive'],
+    brief: 'Making multiple valid matches in a row without mistakes.',
+    detailed: 'A streak counts consecutive successful matches. It resets to zero if you make an invalid match. Some enemy defeat conditions require achieving a specific streak length (e.g., "Get a 5-match streak").',
+  },
+
+  defuse: {
+    terms: ['defuse', 'defused', 'defusing'],
+    brief: 'Successfully matching a bomb card before it explodes.',
+    detailed: 'To defuse a bomb, include it in a valid SET match before its timer expires. This removes the bomb safely without taking damage. Some enemies require you to defuse multiple bombs to achieve their stretch goal.',
+  },
+
+  reveal: {
+    terms: ['reveal', 'revealed', 'revealing'],
+    brief: 'Tapping a face-down card to show its attributes.',
+    detailed: 'Face-down cards must be revealed before you can use them in a match. Tap the card to flip it over and see its shape, color, and other attributes. Some enemies require you to include revealed cards in your matches.',
+  },
+
+  // =============================================================================
+  // ENEMY BOARD EFFECTS
+  // =============================================================================
+
+  cardRemoval: {
+    terms: ['card removal', 'removes card', 'cards removed', 'removed'],
+    brief: 'Cards disappearing from the board without being matched.',
+    detailed: 'Some enemies periodically remove random cards from your board, shrinking your options. Others remove extra cards when you make matches or invalid selections. If too many cards are removed, finding valid SETs becomes impossible.',
+  },
+
+  shuffle: {
+    terms: ['shuffle', 'shuffles', 'shuffled', 'positions shuffled'],
+    brief: 'Card positions on the board are randomly rearranged.',
+    detailed: 'When the board shuffles, all cards swap to new random positions. The cards themselves don\'t change - just their locations. This can disrupt patterns you were tracking and force you to re-scan the board.',
+  },
+
+  attributeShift: {
+    terms: ['attribute shift', 'attributes change', 'attributes shift', 'shift'],
+    brief: 'Card attributes randomly change to different values.',
+    detailed: 'Unlike shuffling, attribute shifts actually modify the cards themselves. A red card might become green, or a diamond might become an oval. This can break SETs you were planning and create new unexpected combinations.',
+  },
+
+  // =============================================================================
+  // ENEMY TIME/RESOURCE EFFECTS
+  // =============================================================================
+
+  timeSteal: {
+    terms: ['time stolen', 'stolen', 'lose time', 'loses time', '-s per match'],
+    brief: 'Seconds removed from your timer when you make matches.',
+    detailed: 'Some enemies steal time from you with each successful match. For example, "-5s per match" means every match costs 5 seconds from your remaining time. You must balance scoring points against the time cost.',
+  },
+
+  timerFaster: {
+    terms: ['timer faster', 'faster', 'accelerated', 'runs faster', '% faster'],
+    brief: 'The countdown timer moves more quickly than normal.',
+    detailed: 'When the timer runs faster (e.g., "20% faster"), each real second costs more than 1 second on the clock. A 60-second round with 20% acceleration effectively gives you only 50 seconds of real time.',
+  },
+
+  inactivity: {
+    terms: ['inactivity', 'inactive', 'inactivity penalty', 'instant death'],
+    brief: 'Penalty for going too long without making a match.',
+    detailed: 'Some enemies punish you if you don\'t match within a time window. Mild versions cost 1 health after extended delays. Severe versions cause instant death if you\'re inactive too long. Keep matching to avoid these penalties!',
+  },
+
+  scoreDecay: {
+    terms: ['score decay', 'score drains', 'drains', 'points drain'],
+    brief: 'Your score automatically decreases over time.',
+    detailed: 'With score decay, your points constantly tick down (e.g., "1 point every 5 seconds"). You must earn points faster than they drain to reach the target score. Faster matching helps outpace the decay.',
+  },
+
+  damage: {
+    terms: ['damage', '2x damage', 'double damage'],
+    brief: 'Health lost when making mistakes.',
+    detailed: 'Normally you lose 1 health per invalid match. Some enemies deal double damage (2 health lost per mistake). Combined with limited health, this makes every selection critical - one wrong move is twice as costly.',
+  },
+
+  // =============================================================================
+  // ENEMY MATCH TYPES
+  // =============================================================================
+
+  allDifferent: {
+    terms: ['all-different', 'all different'],
+    brief: 'A match where each attribute has 3 different values.',
+    detailed: 'An all-different match means for EVERY active attribute (shape, color, number, etc.), all 3 cards have DIFFERENT values. Example: red-diamond-1, green-oval-2, purple-squiggle-3. These are harder to spot but some enemies require them.',
+  },
+
+  allSame: {
+    terms: ['all-same', 'all same', 'same color', 'same shape'],
+    brief: 'A match where an attribute has the same value on all 3 cards.',
+    detailed: 'An all-same match for an attribute means all 3 cards share that value. Example: 3 red cards (all-same color). Most matches have a mix of all-same and all-different attributes across the active attribute set.',
+  },
+
+  // =============================================================================
+  // ENEMY WEAPON COUNTERS
+  // =============================================================================
+
+  weaponCounter: {
+    terms: ['reduced', 'reduction', 'countered', '-35%', '-40%', '-50%', '-55%', '-60%'],
+    brief: 'Enemy reduces the effectiveness of certain weapon types.',
+    detailed: 'Some enemies counter specific weapon categories. For example, "Fire -35%" means all fire-related weapons work at only 65% effectiveness. Check enemy effects before choosing weapons - your build might be countered!',
+  },
+
+  weaponEffect: {
+    terms: ['weapon effect', 'trigger', 'triggered'],
+    brief: 'Any special ability from your equipped weapons activating.',
+    detailed: 'Weapon effects include explosions, fire spread, lasers, healing, echo, ricochet, and more. Some enemy stretch goals require triggering specific numbers or types of weapon effects to achieve bonus rewards.',
+  },
+
+  destructionEffect: {
+    terms: ['destruction', 'destruction effect'],
+    brief: 'Any effect that removes cards from the board.',
+    detailed: 'Destruction effects include explosions, lasers, fire burnout, and ricochet. These clear cards beyond your normal match, earning bonus points and coins. Some enemies require triggering destruction effects for their stretch goal.',
+  },
+
+  // =============================================================================
+  // ENEMY DEFEAT CONDITIONS
+  // =============================================================================
+
+  stretchGoal: {
+    terms: ['stretch goal', 'defeat condition', 'bonus objective'],
+    brief: 'Optional challenge for bonus rewards when fighting an enemy.',
+    detailed: 'Each enemy has a stretch goal - an extra challenge beyond just surviving. Complete it to earn a bonus weapon reward and extra coins. Stretch goals vary: some require streaks, others require no damage, special matches, or defusing bombs.',
+  },
+
+  targetScore: {
+    terms: ['target', 'target score', 'score target', 'minimum'],
+    brief: 'The number of points needed to complete the round.',
+    detailed: 'Each round has a target score you must reach before time runs out. Match cards to earn points. Some enemies modify scoring with decay, bonuses, or higher targets. Reach the target to advance!',
+  },
+
+  cardsRemaining: {
+    terms: ['cards remaining', 'remaining'],
+    brief: 'How many cards are left on the board.',
+    detailed: 'Some stretch goals require finishing with a minimum number of cards still on the board. Enemies that remove cards make this harder. Avoid triggering extra removal and match efficiently to preserve your board.',
   },
 };
 

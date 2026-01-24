@@ -1,9 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Pressable, StyleSheet, Platform } from 'react-native';
 import { usePWASafeAreaInsets } from '@/utils/usePWASafeAreaInsets';
-import { PlayerStats, Weapon, WeaponRarity, EffectCaps } from '@/types';
+import { PlayerStats, Weapon } from '@/types';
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
-import { getCapInfoForStat, isStatCapped, shouldShowCapInfo, STAT_TO_CAP_TYPE, EFFECT_CAPS } from '@/utils/gameConfig';
+import {
+  getDynamicDescription,
+  getStatComparison,
+  getCapIncreaseInfo,
+  getRarityLabel,
+} from '@/utils/weaponDisplay';
 import Icon from './Icon';
 import GameMenu from './GameMenu';
 import InventoryBar from './InventoryBar';
@@ -98,16 +103,6 @@ interface LevelUpProps {
   hasMoreLevelUps: boolean;    // True if more level-ups pending after this
 }
 
-const getRarityLabel = (rarity: WeaponRarity): string => {
-  switch (rarity) {
-    case 'common': return 'Common';
-    case 'rare': return 'Rare';
-    case 'epic': return 'Epic';
-    case 'legendary': return 'Legendary';
-    default: return rarity;
-  }
-};
-
 const LevelUp: React.FC<LevelUpProps> = ({
   options,
   onSelect,
@@ -141,127 +136,6 @@ const LevelUp: React.FC<LevelUpProps> = ({
   // Show hovered option if hovering, otherwise show focused
   const displayedIndex = hoveredIndex !== null ? hoveredIndex : focusedIndex;
   const focusedWeapon = options[displayedIndex];
-
-  // Format key from camelCase to Title Case
-  const formatKey = (key: string) => {
-    return key
-      .replace(/([A-Z])/g, ' $1')
-      .replace(/^./, str => str.toUpperCase());
-  };
-
-  // Format stat value with appropriate suffix
-  const formatStatValue = (key: string, value: number): string => {
-    let displayValue = `${value}`;
-    if (key.toLowerCase().includes('percent') || key.toLowerCase().includes('chance')) displayValue += '%';
-    if (key.toLowerCase().includes('interval')) displayValue += 'ms';
-    if (key.toLowerCase().includes('time') && !key.toLowerCase().includes('interval')) displayValue += 's';
-    return displayValue;
-  };
-
-  // Effects that roll independently per weapon (don't show misleading before→after)
-  const INDEPENDENT_ROLL_EFFECTS = [
-    'laserChance',
-    'timeGainChance',
-    'timeGainAmount',
-  ];
-
-  // Generate dynamic description for cap-increase weapons
-  const getDynamicDescription = (weapon: Weapon): string => {
-    if (!weapon.capIncrease) return weapon.description;
-
-    const capType = weapon.capIncrease.type;
-    const effectCaps = playerStats.effectCaps as Record<string, number> | undefined;
-    const currentCap = effectCaps?.[capType] ?? EFFECT_CAPS[capType as keyof typeof EFFECT_CAPS]?.defaultCap ?? 0;
-    const newCap = currentCap + weapon.capIncrease.amount;
-
-    // Format cap type for display
-    const capTypeName = capType.replace(/([A-Z])/g, ' $1').toLowerCase().trim();
-
-    return `Raises your ${capTypeName} cap to ${newCap}%`;
-  };
-
-  // Get cap-increase info for display (for Mastery weapons)
-  const getCapIncreaseInfo = (weapon: Weapon): {
-    statName: string;
-    currentValue: number;
-    currentCap: number;
-    newCap: number;
-  } | null => {
-    if (!weapon.capIncrease) return null;
-
-    const capType = weapon.capIncrease.type;
-    const statKey = STAT_TO_CAP_TYPE[`${capType}Chance` as keyof typeof STAT_TO_CAP_TYPE]
-      ? `${capType}Chance`
-      : Object.entries(STAT_TO_CAP_TYPE).find(([_, type]) => type === capType)?.[0];
-
-    if (!statKey) return null;
-
-    const effectCaps = playerStats.effectCaps as Record<string, number> | undefined;
-    const currentCap = effectCaps?.[capType] ?? EFFECT_CAPS[capType as keyof typeof EFFECT_CAPS]?.defaultCap ?? 0;
-    const newCap = currentCap + weapon.capIncrease.amount;
-    const currentValue = (playerStats as Record<string, any>)[statKey] ?? 0;
-
-    // Format the stat name
-    const statName = formatKey(statKey);
-
-    return { statName, currentValue, currentCap, newCap };
-  };
-
-  // Calculate before/after stat comparison for a weapon
-  const getStatComparison = (weapon: Weapon): {
-    key: string;
-    before: string;
-    after: string;
-    isIncrease: boolean;
-    isCapped: boolean;
-    cap: number | null;
-    isPerWeapon: boolean;
-  }[] => {
-    const effectCaps = playerStats.effectCaps as EffectCaps | undefined;
-
-    return Object.entries(weapon.effects).map(([key, effectValue]) => {
-      if (typeof effectValue !== 'number') return null;
-
-      const isPerWeapon = INDEPENDENT_ROLL_EFFECTS.includes(key);
-
-      if (isPerWeapon) {
-        return {
-          key: formatKey(key),
-          before: '',
-          after: formatStatValue(key, effectValue),
-          isIncrease: effectValue > 0,
-          isCapped: false,
-          cap: null,
-          isPerWeapon: true,
-        };
-      }
-
-      const currentValue = (playerStats as Record<string, any>)[key] ?? 0;
-      const newValue = currentValue + effectValue;
-
-      const capInfo = getCapInfoForStat(key, effectCaps as Record<string, number> | undefined);
-      const isCapped = capInfo ? isStatCapped(newValue, capInfo.cap) : false;
-      const showCapInfo = capInfo ? shouldShowCapInfo(currentValue, capInfo.cap) : false;
-
-      return {
-        key: formatKey(key),
-        before: formatStatValue(key, currentValue),
-        after: formatStatValue(key, newValue),
-        isIncrease: effectValue > 0,
-        isCapped,
-        cap: showCapInfo ? capInfo?.cap ?? null : null,
-        isPerWeapon: false,
-      };
-    }).filter((item): item is {
-      key: string;
-      before: string;
-      after: string;
-      isIncrease: boolean;
-      isCapped: boolean;
-      cap: number | null;
-      isPerWeapon: boolean;
-    } => item !== null);
-  };
 
   return (
     <ScreenTransition>
@@ -329,7 +203,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
               ]}>
                 {focusedWeapon.name}
               </Text>
-              <KeywordText style={styles.detailDescription}>{getDynamicDescription(focusedWeapon)}</KeywordText>
+              <KeywordText style={styles.detailDescription}>{getDynamicDescription(focusedWeapon, playerStats)}</KeywordText>
               {focusedWeapon.flavorText && (
                 <KeywordText style={styles.detailFlavor}>{focusedWeapon.flavorText}</KeywordText>
               )}
@@ -339,7 +213,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
                 {Object.keys(focusedWeapon.effects).length > 0 && (
                   <View style={[styles.effectsBox, styles.effectsBoxPositive]}>
                     <Text style={styles.effectsLabelPositive}>Stats Change</Text>
-                    {getStatComparison(focusedWeapon).map((stat, i) => (
+                    {getStatComparison(focusedWeapon, playerStats).map((stat, i) => (
                       <View key={i} style={styles.statComparisonRow}>
                         <Text style={styles.effectKey}>{stat.key}</Text>
                         <View style={styles.statValues}>
@@ -379,7 +253,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
 
                 {/* Cap Increase Info (for Mastery weapons) */}
                 {focusedWeapon.capIncrease && (() => {
-                  const capInfo = getCapIncreaseInfo(focusedWeapon);
+                  const capInfo = getCapIncreaseInfo(focusedWeapon, playerStats);
                   if (!capInfo) return null;
                   return (
                     <View style={[styles.effectsBox, styles.effectsBoxPositive, { marginTop: 8 }]}>
