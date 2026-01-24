@@ -1112,6 +1112,70 @@ export const WEAPONS: Weapon[] = [
   },
 
   // ============================================================================
+  // TIME TRIGGER MASTERY - Increases time gain trigger cap per round
+  // ============================================================================
+  {
+    id: 'time-trigger-mastery',
+    name: 'Time Trigger Mastery',
+    rarity: 'rare',
+    level: 1,
+    price: 15,
+    description: 'Increases max time gains per round by 2.',
+    shortDescription: 'More time triggers per round',
+    flavorText: 'Master the flow of time to squeeze more moments from each round.',
+    icon: 'lorc/hourglass',
+    specialEffect: 'capIncrease',
+    effects: {},
+    capIncrease: { type: 'timeGain', amount: 2 },
+  },
+
+  // ============================================================================
+  // CHALLENGE LEGENDARIES - Temporary time trigger cap bonuses
+  // ============================================================================
+  {
+    id: 'prismatic-perfection',
+    name: 'Prismatic Perfection',
+    rarity: 'legendary',
+    level: 1,
+    price: 40,
+    description: 'All-different match: increase the max number of time gains on match you can have for that round by 5. Can only be done once per round.',
+    shortDescription: 'Perfect matches unlock time',
+    flavorText: 'When every attribute aligns in opposition, time itself bends to your will.',
+    icon: 'lorc/rainbow-star',
+    specialEffect: 'challengeLegendary',
+    effects: {},
+    maxCount: 1,
+  },
+  {
+    id: 'tabula-rasa',
+    name: 'Tabula Rasa',
+    rarity: 'legendary',
+    level: 1,
+    price: 40,
+    description: 'Clear the board: increase the max number of time gains on match you can have for that round by 5. Can only be done once per round.',
+    shortDescription: 'Board clear unlocks time',
+    flavorText: 'A clean slate reveals hidden seconds.',
+    icon: 'lorc/eraser',
+    specialEffect: 'challengeLegendary',
+    effects: {},
+    maxCount: 1,
+  },
+  {
+    id: 'desperate-measures',
+    name: 'Desperate Measures',
+    rarity: 'legendary',
+    level: 1,
+    price: 40,
+    description: '3 consecutive invalid matches: increase the max number of time gains on match you can have for that round by 10. Can trigger multiple times.',
+    shortDescription: 'Sacrifice health for time',
+    flavorText: 'Sometimes you have to bleed to buy more seconds.',
+    icon: 'lorc/skull-crack',
+    specialEffect: 'challengeLegendary',
+    effects: {},
+    maxCount: 1,
+  },
+
+  // ============================================================================
   // EPIC WEAPON VARIANTS - Unique epic versions with bundled effects
   // Pattern: 25% effect OR cap bundle OR multi-pack OR cross-system lite
   // ============================================================================

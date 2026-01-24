@@ -87,7 +87,8 @@ export type WeaponName =
   'Flint Spark' | 'Second Chance' | 'Fortune Token' | 'Life Vessel' |
   'Mending Charm' | 'Crystal Orb' | 'Seeker Lens' | 'Scholar\'s Tome' | 'Fortune\'s Favor' |
   'Chrono Shard' | 'Time Drop' | 'Prismatic Ray' | 'Chaos Shard' |
-  'Echo Stone' | 'Chain Reaction';
+  'Echo Stone' | 'Chain Reaction' | 'Time Trigger Mastery' |
+  'Prismatic Perfection' | 'Tabula Rasa' | 'Desperate Measures';
 
 export type WeaponRarity = 'common' | 'rare' | 'epic' | 'legendary';
 
@@ -150,7 +151,7 @@ export interface Weapon {
   flavorText?: string; // Longer fun description for weapon guide
   price: number;
   effects: Partial<PlayerStats>;
-  specialEffect?: 'explosive' | 'autoHint' | 'enhancedHint' | 'boardGrowth' | 'fire' | 'graceGain' | 'healing' | 'hintGain' | 'xpGain' | 'coinGain' | 'timeGain' | 'laser' | 'ricochet' | 'echo' | 'chainReaction' | 'capIncrease' | 'bridge';
+  specialEffect?: 'explosive' | 'autoHint' | 'enhancedHint' | 'boardGrowth' | 'fire' | 'graceGain' | 'healing' | 'hintGain' | 'xpGain' | 'coinGain' | 'timeGain' | 'laser' | 'ricochet' | 'echo' | 'chainReaction' | 'capIncrease' | 'bridge' | 'challengeLegendary';
   capIncrease?: CapIncreaseEffect; // When acquired, increases the cap for an effect type
   bridgeEffect?: BridgeEffect; // Cross-system trigger: when X happens, Y% chance to cause Z
   icon?: IconName; // Icon path like "delapouite/bamboo" - must be in ICON_REGISTRY
