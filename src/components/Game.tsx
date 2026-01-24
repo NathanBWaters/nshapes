@@ -258,6 +258,17 @@ const Game: React.FC<GameProps> = ({
     updateScore,
     updateHintsRemaining,
     updateGracesRemaining,
+    recordTimeGainTrigger,
+    getTimeGainTriggers,
+    addTimeGainTriggerCapBonus,
+    getTimeGainTriggerCapBonus,
+    incrementConsecutiveInvalidMatches,
+    resetConsecutiveInvalidMatches,
+    getConsecutiveInvalidMatches,
+    markPrismaticPerfectionTriggered,
+    isPrismaticPerfectionTriggered,
+    markTabulaRasaTriggered,
+    isTabulaRasaTriggered,
   } = useRoundStats();
 
   // UI state for header stats
@@ -1531,6 +1542,36 @@ const Game: React.FC<GameProps> = ({
       hasSquiggle,
     });
 
+    // Reset consecutive invalid matches on valid match
+    resetConsecutiveInvalidMatches();
+
+    // Check for Prismatic Perfection (all-different match)
+    const hasPrismaticPerfection = state.player.weapons.some(w => w.id === 'prismatic-perfection');
+    if (hasPrismaticPerfection && !isPrismaticPerfectionTriggered() && isAllDifferent) {
+      addTimeGainTriggerCapBonus(5);
+      markPrismaticPerfectionTriggered();
+      setNotification({ message: 'Prismatic Perfection! +5 time triggers', type: 'success' });
+    }
+
+    // Check for Tabula Rasa (board clear) - board will be empty after removing matched cards and weapon effect cards
+    const hasTabulaRasa = state.player.weapons.some(w => w.id === 'tabula-rasa');
+    if (hasTabulaRasa && !isTabulaRasaTriggered()) {
+      // Calculate remaining cards after match and weapon effects
+      const cardsBeingRemoved = new Set(cards.map(c => c.id));
+      if (weaponEffects) {
+        weaponEffects.explosiveCards.forEach(c => cardsBeingRemoved.add(c.id));
+        weaponEffects.laserCards.forEach(c => cardsBeingRemoved.add(c.id));
+        weaponEffects.ricochetCards.forEach(c => cardsBeingRemoved.add(c.id));
+        weaponEffects.autoMatchedSets.flat().forEach(c => cardsBeingRemoved.add(c.id));
+      }
+      const remainingCards = state.board.filter(c => !cardsBeingRemoved.has(c.id)).length;
+      if (remainingCards === 0) {
+        addTimeGainTriggerCapBonus(5);
+        markTabulaRasaTriggered();
+        setNotification({ message: 'Tabula Rasa! +5 time triggers', type: 'success' });
+      }
+    }
+
     // Track grace usage for defeat conditions
     if (isGraceMatch) {
       recordGraceUsed();
@@ -1914,6 +1955,17 @@ const Game: React.FC<GameProps> = ({
   const handleInvalidMatch = (cardsToReplace: Card[]) => {
     // Track invalid match for enemy defeat conditions
     recordInvalidMatch();
+
+    // Track consecutive invalid matches for Desperate Measures
+    incrementConsecutiveInvalidMatches();
+
+    // Check for Desperate Measures (3 consecutive invalid matches)
+    const hasDesperateMeasures = state.player.weapons.some(w => w.id === 'desperate-measures');
+    if (hasDesperateMeasures && getConsecutiveInvalidMatches() >= 3) {
+      addTimeGainTriggerCapBonus(10);
+      resetConsecutiveInvalidMatches(); // Reset so it can trigger again
+      setNotification({ message: 'Desperate Measures! +10 time triggers', type: 'success' });
+    }
 
     // Get current total stats to check graces
     const totalStats = calculatePlayerTotalStats(state.player);
