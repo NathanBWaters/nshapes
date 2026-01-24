@@ -2678,6 +2678,16 @@ const Game: React.FC<GameProps> = ({
                 autoPlayer={autoPlayerEnabled}
                 enemy={state.activeEnemyInstance}
                 roundStats={roundStatsRef}
+                timeGainContext={{
+                  triggersThisRound: getTimeGainTriggers(),
+                  effectiveCap: (() => {
+                    const totalStats = calculatePlayerTotalStats(state.player);
+                    const baseCap = totalStats.timeGainTriggerCap || 5;
+                    const masteryCount = state.player.weapons.filter(w => w.id === 'time-trigger-mastery').length;
+                    return baseCap + (masteryCount * 2) + getTimeGainTriggerCapBonus();
+                  })(),
+                }}
+                onTimeGainTriggered={recordTimeGainTrigger}
               />
             </View>
           </View>
@@ -2758,6 +2768,16 @@ const Game: React.FC<GameProps> = ({
                 isPaused={isMenuOpen}
                 lastMatchTime={lastMatchTime}
                 autoPlayer={autoPlayerEnabled}
+                timeGainContext={{
+                  triggersThisRound: getTimeGainTriggers(),
+                  effectiveCap: (() => {
+                    const totalStats = calculatePlayerTotalStats(state.player);
+                    const baseCap = totalStats.timeGainTriggerCap || 5;
+                    const masteryCount = state.player.weapons.filter(w => w.id === 'time-trigger-mastery').length;
+                    return baseCap + (masteryCount * 2) + getTimeGainTriggerCapBonus();
+                  })(),
+                }}
+                onTimeGainTriggered={recordTimeGainTrigger}
               />
             </View>
           </View>

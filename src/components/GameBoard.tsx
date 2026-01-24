@@ -57,6 +57,12 @@ interface GameBoardProps {
   // Enemy system integration
   enemy?: EnemyInstance | null; // Active enemy for current round
   roundStats?: React.MutableRefObject<RoundStats>; // Mutable ref to round stats (from useRoundStats)
+  // Time gain trigger cap system
+  timeGainContext?: {
+    triggersThisRound: number;
+    effectiveCap: number;
+  };
+  onTimeGainTriggered?: () => void; // Called when time gain triggers (for tracking)
 }
 
 // Calculate rewards for a single card
@@ -109,6 +115,8 @@ const GameBoard: React.FC<GameBoardProps> = ({
   autoPlayer = false,
   enemy,
   roundStats,
+  timeGainContext,
+  onTimeGainTriggered,
 }) => {
   const [selectedCards, setSelectedCards] = useState<CardType[]>([]);
   const [matchedCardIds, setMatchedCardIds] = useState<string[]>([]);
@@ -484,7 +492,12 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
           // Process weapon effects to get additional cards to destroy
           // Pass weapons array for independent laser rolls, and activeAttributes for echo
-          const weaponEffects = processWeaponEffects(cards, newSelectedCards, playerStats, weapons, activeAttributes, false);
+          const weaponEffects = processWeaponEffects(cards, newSelectedCards, playerStats, weapons, activeAttributes, false, timeGainContext);
+
+          // Track time gain trigger if it happened
+          if (weaponEffects.timeGainTriggered && onTimeGainTriggered) {
+            onTimeGainTriggered();
+          }
 
           // Trigger screen shake, particles, and sound for explosions
           if (weaponEffects.explosiveCards.length > 0) {
@@ -552,6 +565,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
             });
 
             // Process weapon effects for the echo match (but with isEchoMatch=true to prevent infinite loops)
+            // Note: Echo matches don't pass timeGainContext - time gain tracking is handled by the parent match
             const echoEffects = processWeaponEffects(
               cards,
               echoSet,
@@ -663,7 +677,12 @@ const GameBoard: React.FC<GameBoardProps> = ({
             const matchedRewards = newSelectedCards.map(c => calculateCardReward(c));
 
             // Process weapon effects (explosions, lasers, etc.)
-            const weaponEffects = processWeaponEffects(cards, newSelectedCards, playerStats, weapons, activeAttributes, false);
+            const weaponEffects = processWeaponEffects(cards, newSelectedCards, playerStats, weapons, activeAttributes, false, timeGainContext);
+
+            // Track time gain trigger if it happened
+            if (weaponEffects.timeGainTriggered && onTimeGainTriggered) {
+              onTimeGainTriggered();
+            }
 
             // Trigger screen shake and particles for explosions
             if (weaponEffects.explosiveCards.length > 0) {
@@ -717,13 +736,14 @@ const GameBoard: React.FC<GameBoardProps> = ({
                 echoCards.push(c);
               });
 
+              // Note: Echo matches don't pass timeGainContext - time gain tracking is handled by parent match
               const echoEffects = processWeaponEffects(
                 cards,
                 echoSet,
                 playerStats,
                 weapons,
                 activeAttributes,
-                true
+                true // isEchoMatch - prevents more echoes
               );
 
               echoEffects.explosiveCards.forEach(c => {
