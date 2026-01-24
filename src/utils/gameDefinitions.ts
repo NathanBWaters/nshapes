@@ -74,6 +74,7 @@ export const DEFAULT_PLAYER_STATS: PlayerStats = {
   coinGainChance: STARTING_STATS.coinGainChance,
   timeGainChance: STARTING_STATS.timeGainChance,
   timeGainAmount: STARTING_STATS.timeGainAmount,
+  timeGainTriggerCap: STARTING_STATS.timeGainTriggerCap,
   laserChance: STARTING_STATS.laserChance,
   startingTime: STARTING_STATS.startingTime,
   ricochetChance: STARTING_STATS.ricochetChance,

@@ -34,6 +34,7 @@ export const STARTING_STATS = {
   coinGainChance: 0,
   timeGainChance: 0,
   timeGainAmount: 10, // 10 seconds default when triggered
+  timeGainTriggerCap: 5, // Max time gains per round
   laserChance: 0,
   startingTime: 0, // Additional starting time in seconds
   ricochetChance: 0,

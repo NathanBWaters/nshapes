@@ -242,6 +242,7 @@ export interface PlayerStats {
   coinGainChance: number;       // % to gain +1 coin on match
   timeGainChance: number;       // % to gain time on match
   timeGainAmount: number;       // seconds gained when timeGain triggers
+  timeGainTriggerCap: number;   // Max time gains per round (default 5)
   laserChance: number;          // % for laser to fire on match
   startingTime: number;         // additional starting time in seconds
   ricochetChance: number;       // % for initial ricochet on match
