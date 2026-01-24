@@ -54,6 +54,15 @@ export function createInitialRoundStats(
     // Score
     currentScore: 0,
     targetScore,
+
+    // Time gain trigger tracking
+    timeGainTriggersThisRound: 0,
+    timeGainTriggerCapBonus: 0,
+    consecutiveInvalidMatches: 0,
+
+    // Challenge legendary trigger flags
+    prismaticPerfectionTriggered: false,
+    tabulaRasaTriggered: false,
   };
 }
 
@@ -230,6 +239,83 @@ export function useRoundStats() {
     return { ...statsRef.current };
   }, []);
 
+  /**
+   * Record a time gain trigger (increment counter)
+   */
+  const recordTimeGainTrigger = useCallback(() => {
+    statsRef.current.timeGainTriggersThisRound += 1;
+  }, []);
+
+  /**
+   * Get current time gain triggers this round
+   */
+  const getTimeGainTriggers = useCallback((): number => {
+    return statsRef.current.timeGainTriggersThisRound;
+  }, []);
+
+  /**
+   * Add temporary bonus to time gain trigger cap (from challenge legendaries)
+   */
+  const addTimeGainTriggerCapBonus = useCallback((amount: number) => {
+    statsRef.current.timeGainTriggerCapBonus += amount;
+  }, []);
+
+  /**
+   * Get current time gain trigger cap bonus
+   */
+  const getTimeGainTriggerCapBonus = useCallback((): number => {
+    return statsRef.current.timeGainTriggerCapBonus;
+  }, []);
+
+  /**
+   * Increment consecutive invalid matches counter
+   */
+  const incrementConsecutiveInvalidMatches = useCallback(() => {
+    statsRef.current.consecutiveInvalidMatches += 1;
+  }, []);
+
+  /**
+   * Reset consecutive invalid matches counter (on valid match)
+   */
+  const resetConsecutiveInvalidMatches = useCallback(() => {
+    statsRef.current.consecutiveInvalidMatches = 0;
+  }, []);
+
+  /**
+   * Get consecutive invalid matches count
+   */
+  const getConsecutiveInvalidMatches = useCallback((): number => {
+    return statsRef.current.consecutiveInvalidMatches;
+  }, []);
+
+  /**
+   * Mark Prismatic Perfection as triggered
+   */
+  const markPrismaticPerfectionTriggered = useCallback(() => {
+    statsRef.current.prismaticPerfectionTriggered = true;
+  }, []);
+
+  /**
+   * Check if Prismatic Perfection already triggered this round
+   */
+  const isPrismaticPerfectionTriggered = useCallback((): boolean => {
+    return statsRef.current.prismaticPerfectionTriggered;
+  }, []);
+
+  /**
+   * Mark Tabula Rasa as triggered
+   */
+  const markTabulaRasaTriggered = useCallback(() => {
+    statsRef.current.tabulaRasaTriggered = true;
+  }, []);
+
+  /**
+   * Check if Tabula Rasa already triggered this round
+   */
+  const isTabulaRasaTriggered = useCallback((): boolean => {
+    return statsRef.current.tabulaRasaTriggered;
+  }, []);
+
   return {
     statsRef,
     resetStats,
@@ -246,5 +332,16 @@ export function useRoundStats() {
     updateHintsRemaining,
     updateGracesRemaining,
     getStats,
+    recordTimeGainTrigger,
+    getTimeGainTriggers,
+    addTimeGainTriggerCapBonus,
+    getTimeGainTriggerCapBonus,
+    incrementConsecutiveInvalidMatches,
+    resetConsecutiveInvalidMatches,
+    getConsecutiveInvalidMatches,
+    markPrismaticPerfectionTriggered,
+    isPrismaticPerfectionTriggered,
+    markTabulaRasaTriggered,
+    isTabulaRasaTriggered,
   };
 }

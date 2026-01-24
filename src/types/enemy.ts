@@ -260,6 +260,15 @@ export interface RoundStats {
   // Score
   currentScore: number;
   targetScore: number;
+
+  // Time gain trigger tracking
+  timeGainTriggersThisRound: number;
+  timeGainTriggerCapBonus: number;  // Temporary bonus from challenge legendaries
+  consecutiveInvalidMatches: number;
+
+  // Challenge legendary trigger flags (prevent multiple triggers per round)
+  prismaticPerfectionTriggered: boolean;
+  tabulaRasaTriggered: boolean;
 }
 
 // ============================================================================
