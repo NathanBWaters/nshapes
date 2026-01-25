@@ -1,7 +1,7 @@
 /**
  * Spiny Hedgehog - Tier 1 Enemy
  *
- * Effect: Explosion effects reduced by 15%
+ * Effect: Explosion effects divided by 3
  * Defeat Condition: Get 3 matches containing squiggles
  */
 
@@ -18,7 +18,7 @@ export function createSpinyHedgehog(): EnemyInstance {
       name: 'Spiny Hedgehog',
       icon: 'caro-asercion/hedgehog',
       tier: 1,
-      description: 'Explosion effects reduced by 15%',
+      description: 'Explosion effects divided by 3',
       defeatConditionText: 'Get 3 matches containing squiggles',
     },
     [

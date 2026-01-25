@@ -1,7 +1,7 @@
 /**
  * Sneaky Mouse - Tier 1 Enemy
  *
- * Effect: Grace gain reduced by 15%
+ * Effect: Grace effects divided by 3
  * Defeat Condition: Never use a grace (must have at least 1 match)
  */
 
@@ -18,7 +18,7 @@ export function createSneakyMouse(): EnemyInstance {
       name: 'Sneaky Mouse',
       icon: 'lorc/mouse',
       tier: 1,
-      description: 'Grace gain reduced by 15%',
+      description: 'Grace effects divided by 3',
       defeatConditionText: 'Never use a grace',
     },
     [

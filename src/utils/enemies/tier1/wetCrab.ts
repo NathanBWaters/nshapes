@@ -1,7 +1,7 @@
 /**
  * Wet Crab - Tier 1 Enemy
  *
- * Effect: Fire effects reduced by 15%
+ * Effect: Fire effects divided by 3
  * Defeat Condition: Get 2 all-same color matches
  */
 
@@ -18,7 +18,7 @@ export function createWetCrab(): EnemyInstance {
       name: 'Wet Crab',
       icon: 'lorc/crab',
       tier: 1,
-      description: 'Fire effects reduced by 15%',
+      description: 'Fire effects divided by 3',
       defeatConditionText: 'Get 2 all-same color matches',
     },
     [

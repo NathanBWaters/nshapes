@@ -129,6 +129,12 @@ export const KEYWORDS: Record<string, KeywordDefinition> = {
     detailed: 'Each round has a 60-second timer. Reach the score target before time runs out! Some weapons add starting time or grant bonus time on match. Time gained is capped at your starting time.',
   },
 
+  timeGain: {
+    terms: ['time gain', 'time gains', 'gain time', 'gains time', '+time', 'time on match'],
+    brief: 'Chance to add bonus seconds when matching. Limited to 5 triggers per round by default.',
+    detailed: 'Time Gain weapons have a chance to add bonus seconds on each match. However, you can only trigger time gains up to 5 times per round by default. The Time Trigger Mastery weapon increases this cap by 10 per copy. The Time Gain chance itself caps at 40% by default.',
+  },
+
   board: {
     terms: ['board', 'field'],
     brief: 'The grid of cards you match from.',
@@ -364,9 +370,9 @@ export const KEYWORDS: Record<string, KeywordDefinition> = {
   // =============================================================================
 
   weaponCounter: {
-    terms: ['reduced', 'reduction', 'countered', '-35%', '-40%', '-50%', '-55%', '-60%'],
-    brief: 'Enemy reduces the effectiveness of certain weapon types.',
-    detailed: 'Some enemies counter specific weapon categories. For example, "Fire -35%" means all fire-related weapons work at only 65% effectiveness. Check enemy effects before choosing weapons - your build might be countered!',
+    terms: ['divided', 'divided by 3', '÷3'],
+    brief: 'Enemy divides the effectiveness of certain weapon types by 3.',
+    detailed: 'Some enemies counter specific weapon categories by dividing your stat by 3. For example, "Fire effects divided by 3" means if you have 30% fire chance, it becomes 10%. This ensures you keep some capability even with heavy weapon investment.',
   },
 
   weaponEffect: {

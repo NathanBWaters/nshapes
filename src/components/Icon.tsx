@@ -446,7 +446,7 @@ interface IconProps {
   name: IconName;
   /** Icon size in pixels (default: 24) */
   size?: number;
-  /** Icon fill color (default: Logic Teal #16AA98) */
+  /** Icon fill color (default: slateCharcoal #383838) */
   color?: string;
   /** Additional styles for the container */
   style?: object;
@@ -457,7 +457,7 @@ interface IconProps {
 const Icon: React.FC<IconProps> = ({
   name,
   size = 24,
-  color = '#FFFFFF',
+  color = '#383838', // Default to slateCharcoal for light backgrounds
   style,
   noShadow = false,
 }) => {

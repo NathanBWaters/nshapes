@@ -1,7 +1,7 @@
 /**
  * Lazy Sloth - Tier 1 Enemy
  *
- * Effect: Time gain reduced by 20%
+ * Effect: Time gain divided by 3
  * Defeat Condition: Beat target score with 15+ seconds remaining
  */
 
@@ -18,7 +18,7 @@ export function createLazySloth(): EnemyInstance {
       name: 'Lazy Sloth',
       icon: 'caro-asercion/sloth',
       tier: 1,
-      description: 'Time gain reduced by 20%',
+      description: 'Time gain divided by 3',
       defeatConditionText: 'Beat target score with 15+ seconds remaining',
     },
     [

@@ -63,6 +63,9 @@ export function createInitialRoundStats(
     // Challenge legendary trigger flags
     prismaticPerfectionTriggered: false,
     tabulaRasaTriggered: false,
+
+    // Weapon impact tracking
+    weaponImpacts: new Map(),
   };
 }
 
@@ -316,6 +319,90 @@ export function useRoundStats() {
     return statsRef.current.tabulaRasaTriggered;
   }, []);
 
+  /**
+   * Record a weapon impact (points, cards destroyed, etc.)
+   */
+  const recordWeaponImpact = useCallback(
+    (
+      weaponId: string,
+      weaponName: string,
+      weaponIcon: string,
+      impact: {
+        pointsEarned?: number;
+        cardsDestroyed?: number;
+        moneyEarned?: number;
+        heartsEarned?: number;
+        xpEarned?: number;
+        timeGained?: number;
+        gracesEarned?: number;
+        hintsEarned?: number;
+      }
+    ) => {
+      const stats = statsRef.current;
+      if (!stats.weaponImpacts) {
+        stats.weaponImpacts = new Map();
+      }
+      const existing = stats.weaponImpacts.get(weaponId);
+
+      if (existing) {
+        // Add to existing impact
+        existing.pointsEarned += impact.pointsEarned || 0;
+        existing.cardsDestroyed += impact.cardsDestroyed || 0;
+        existing.moneyEarned += impact.moneyEarned || 0;
+        existing.heartsEarned += impact.heartsEarned || 0;
+        existing.xpEarned += impact.xpEarned || 0;
+        existing.timeGained += impact.timeGained || 0;
+        existing.gracesEarned += impact.gracesEarned || 0;
+        existing.hintsEarned += impact.hintsEarned || 0;
+      } else {
+        // Create new impact entry
+        stats.weaponImpacts.set(weaponId, {
+          weaponId,
+          weaponName,
+          weaponIcon,
+          pointsEarned: impact.pointsEarned || 0,
+          cardsDestroyed: impact.cardsDestroyed || 0,
+          moneyEarned: impact.moneyEarned || 0,
+          heartsEarned: impact.heartsEarned || 0,
+          xpEarned: impact.xpEarned || 0,
+          timeGained: impact.timeGained || 0,
+          gracesEarned: impact.gracesEarned || 0,
+          hintsEarned: impact.hintsEarned || 0,
+        });
+      }
+    },
+    []
+  );
+
+  /**
+   * Get weapon impacts sorted by total value (descending)
+   */
+  const getWeaponImpacts = useCallback(() => {
+    if (!statsRef.current.weaponImpacts) {
+      return [];
+    }
+    const impacts = Array.from(statsRef.current.weaponImpacts.values());
+    return impacts.sort((a, b) => {
+      const totalA =
+        a.pointsEarned +
+        a.cardsDestroyed * 2 +
+        a.moneyEarned +
+        a.heartsEarned * 10 +
+        a.timeGained +
+        a.gracesEarned * 5 +
+        a.hintsEarned * 3;
+      const totalB =
+        b.pointsEarned +
+        b.cardsDestroyed * 2 +
+        b.moneyEarned +
+        b.heartsEarned * 10 +
+        b.timeGained +
+        b.gracesEarned * 5 +
+        b.hintsEarned * 3;
+      return totalB - totalA;
+    });
+  }, []);
+
   return {
     statsRef,
     resetStats,
@@ -343,5 +430,7 @@ export function useRoundStats() {
     isPrismaticPerfectionTriggered,
     markTabulaRasaTriggered,
     isTabulaRasaTriggered,
+    recordWeaponImpact,
+    getWeaponImpacts,
   };
 }

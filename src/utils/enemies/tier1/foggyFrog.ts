@@ -1,7 +1,7 @@
 /**
  * Foggy Frog - Tier 1 Enemy
  *
- * Effect: Hint gain reduced by 15%
+ * Effect: Hint effects divided by 3
  * Defeat Condition: Beat target score with 2+ hints remaining
  */
 
@@ -18,7 +18,7 @@ export function createFoggyFrog(): EnemyInstance {
       name: 'Foggy Frog',
       icon: 'lorc/frog',
       tier: 1,
-      description: 'Hint gain reduced by 15%',
+      description: 'Hint effects divided by 3',
       defeatConditionText: 'Beat target score with 2+ hints remaining',
     },
     [

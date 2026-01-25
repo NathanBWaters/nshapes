@@ -1,7 +1,7 @@
 /**
  * Shadow Bat - Tier 1 Enemy
  *
- * Effect: Laser effects reduced by 20%
+ * Effect: Laser effects divided by 3
  * Defeat Condition: Get an all-different match
  */
 
@@ -18,7 +18,7 @@ export function createShadowBat(): EnemyInstance {
       name: 'Shadow Bat',
       icon: 'lorc/evil-bat',
       tier: 1,
-      description: 'Laser effects reduced by 20%',
+      description: 'Laser effects divided by 3',
       defeatConditionText: 'Get an all-different match',
     },
     [

@@ -217,6 +217,27 @@ export type EnemyEvent =
   | { type: 'time_stolen'; amount: number };
 
 // ============================================================================
+// WEAPON IMPACT TRACKING
+// ============================================================================
+
+/**
+ * Impact stats tracked per weapon during a round
+ */
+export interface WeaponImpact {
+  weaponId: string;
+  weaponName: string;
+  weaponIcon: string;
+  pointsEarned: number;
+  cardsDestroyed: number;
+  moneyEarned: number;
+  heartsEarned: number;
+  xpEarned: number;
+  timeGained: number;
+  gracesEarned: number;
+  hintsEarned: number;
+}
+
+// ============================================================================
 // ROUND STATS - For Defeat Conditions
 // ============================================================================
 
@@ -269,6 +290,9 @@ export interface RoundStats {
   // Challenge legendary trigger flags (prevent multiple triggers per round)
   prismaticPerfectionTriggered: boolean;
   tabulaRasaTriggered: boolean;
+
+  // Weapon impact tracking (optional - only populated when tracking is enabled)
+  weaponImpacts?: Map<string, WeaponImpact>;
 }
 
 // ============================================================================

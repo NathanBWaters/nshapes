@@ -10,7 +10,7 @@ import ReAnimated, {
 } from 'react-native-reanimated';
 import { usePWASafeAreaInsets } from '@/utils/usePWASafeAreaInsets';
 import { PlayerStats, Weapon, AdventureDifficulty } from '@/types';
-import type { EnemyInstance } from '@/types/enemy';
+import type { EnemyInstance, WeaponImpact } from '@/types/enemy';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { DURATION } from '@/utils/designSystem';
 import Icon, { IconName } from './Icon';
@@ -40,6 +40,7 @@ interface RoundSummaryProps {
   enemyDefeated?: boolean;
   stretchGoalReward?: Weapon | null;
   stretchGoalMoney?: number | null;
+  weaponImpacts?: WeaponImpact[];
 }
 
 interface AwardTile {
@@ -101,6 +102,7 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
   enemyDefeated = false,
   stretchGoalReward,
   stretchGoalMoney,
+  weaponImpacts = [],
 }) => {
   const insets = usePWASafeAreaInsets();
 
@@ -261,6 +263,73 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
               stretchGoalReward={stretchGoalReward}
               stretchGoalMoney={stretchGoalMoney}
             />
+          </View>
+        )}
+
+        {/* Weapon Impacts Section */}
+        {weaponImpacts.length > 0 && (
+          <View style={styles.weaponImpactsSection}>
+            <Text style={styles.weaponImpactsTitle}>WEAPON IMPACT</Text>
+            {weaponImpacts.slice(0, 5).map((impact, index) => {
+              const hasImpact = impact.pointsEarned > 0 || impact.cardsDestroyed > 0 ||
+                impact.moneyEarned > 0 || impact.heartsEarned > 0 ||
+                impact.timeGained > 0 || impact.gracesEarned > 0 || impact.hintsEarned > 0;
+
+              if (!hasImpact) return null;
+
+              return (
+                <View key={impact.weaponId} style={styles.weaponImpactRow}>
+                  <View style={styles.weaponImpactLeft}>
+                    <Icon name={impact.weaponIcon as IconName} size={20} color={COLORS.slateCharcoal} />
+                    <Text style={styles.weaponImpactName} numberOfLines={1}>{impact.weaponName}</Text>
+                  </View>
+                  <View style={styles.weaponImpactRight}>
+                    {impact.pointsEarned > 0 && (
+                      <View style={styles.impactBadge}>
+                        <Icon name="skoll/bullseye" size={12} color={COLORS.logicTeal} />
+                        <Text style={[styles.impactBadgeText, { color: COLORS.logicTeal }]}>+{impact.pointsEarned}</Text>
+                      </View>
+                    )}
+                    {impact.cardsDestroyed > 0 && (
+                      <View style={styles.impactBadge}>
+                        <Icon name="lorc/bright-explosion" size={12} color={COLORS.impactOrange} />
+                        <Text style={[styles.impactBadgeText, { color: COLORS.impactOrange }]}>{impact.cardsDestroyed}</Text>
+                      </View>
+                    )}
+                    {impact.moneyEarned > 0 && (
+                      <View style={styles.impactBadge}>
+                        <Icon name="lorc/cash" size={12} color={COLORS.actionYellow} />
+                        <Text style={[styles.impactBadgeText, { color: COLORS.actionYellow }]}>+{impact.moneyEarned}</Text>
+                      </View>
+                    )}
+                    {impact.heartsEarned > 0 && (
+                      <View style={styles.impactBadge}>
+                        <Icon name="lorc/heart-inside" size={12} color={COLORS.impactRed} />
+                        <Text style={[styles.impactBadgeText, { color: COLORS.impactRed }]}>+{impact.heartsEarned}</Text>
+                      </View>
+                    )}
+                    {impact.timeGained > 0 && (
+                      <View style={styles.impactBadge}>
+                        <Icon name="lorc/stopwatch" size={12} color={COLORS.logicTeal} />
+                        <Text style={[styles.impactBadgeText, { color: COLORS.logicTeal }]}>+{impact.timeGained}s</Text>
+                      </View>
+                    )}
+                    {impact.gracesEarned > 0 && (
+                      <View style={styles.impactBadge}>
+                        <Icon name="lorc/clover" size={12} color={COLORS.logicTeal} />
+                        <Text style={[styles.impactBadgeText, { color: COLORS.logicTeal }]}>+{impact.gracesEarned}</Text>
+                      </View>
+                    )}
+                    {impact.hintsEarned > 0 && (
+                      <View style={styles.impactBadge}>
+                        <Icon name="lorc/light-bulb" size={12} color={COLORS.actionYellow} />
+                        <Text style={[styles.impactBadgeText, { color: COLORS.actionYellow }]}>+{impact.hintsEarned}</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
           </View>
         )}
 
@@ -502,6 +571,64 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 16,
     letterSpacing: 1,
+  },
+  // Weapon Impacts Section
+  weaponImpactsSection: {
+    backgroundColor: COLORS.canvasWhite,
+    borderRadius: RADIUS.module,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+    marginBottom: 16,
+  },
+  weaponImpactsTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.slateCharcoal,
+    textAlign: 'center',
+    letterSpacing: 1,
+    marginBottom: 12,
+  },
+  weaponImpactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.slateCharcoal + '20',
+  },
+  weaponImpactLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  weaponImpactName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.slateCharcoal,
+    flex: 1,
+  },
+  weaponImpactRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    maxWidth: 160,
+  },
+  impactBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: COLORS.paperBeige,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  impactBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
 });
 

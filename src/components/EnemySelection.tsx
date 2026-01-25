@@ -99,26 +99,26 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
                   statChanges.push(`Score: -${uiModifiers.showScoreDecay.rate} pts/sec`);
                 }
 
-                // Weapon counter reductions - show before → after
+                // Weapon counter effects - show before → after (division by 3)
                 if (modifiers.fireSpreadChanceReduction) {
                   const before = playerStats.fireSpreadChance || 0;
-                  const after = Math.max(0, before - modifiers.fireSpreadChanceReduction);
-                  statChanges.push(`Fire Spread: ${before}% → ${after}%`);
+                  const after = Math.round(before / 3);
+                  statChanges.push(`Fire Spread: ${before}% → ${after}% (÷3)`);
                 }
                 if (modifiers.explosionChanceReduction) {
                   const before = playerStats.explosionChance || 0;
-                  const after = Math.max(0, before - modifiers.explosionChanceReduction);
-                  statChanges.push(`Explosion: ${before}% → ${after}%`);
+                  const after = Math.round(before / 3);
+                  statChanges.push(`Explosion: ${before}% → ${after}% (÷3)`);
                 }
                 if (modifiers.laserChanceReduction) {
                   const before = playerStats.laserChance || 0;
-                  const after = Math.max(0, before - modifiers.laserChanceReduction);
-                  statChanges.push(`Laser: ${before}% → ${after}%`);
+                  const after = Math.round(before / 3);
+                  statChanges.push(`Laser: ${before}% → ${after}% (÷3)`);
                 }
                 if (modifiers.healingChanceReduction) {
                   const before = playerStats.healingChance || 0;
-                  const after = Math.max(0, before - modifiers.healingChanceReduction);
-                  statChanges.push(`Healing: ${before}% → ${after}%`);
+                  const after = Math.round(before / 3);
+                  statChanges.push(`Healing: ${before}% → ${after}% (÷3)`);
                 }
 
                 if (statChanges.length > 0) {

@@ -141,23 +141,46 @@ const MainMenu: React.FC<MainMenuProps> = ({
             title="Free Play"
             subtitle="No timer, practice mode"
           />
-          <MenuButton
-            onPress={onSelectTutorial}
-            variant="tutorial"
-            icon="lorc/open-book"
-            title="Tutorial"
-            subtitle="Learn how to play"
-          />
-          <MenuButton
-            onPress={onSelectOptions}
-            variant="options"
-            icon="lorc/gear-hammer"
-            title="Options"
-            subtitle="Sound settings"
-          />
+          {/* Tutorial and Options side by side - smaller buttons */}
+          <View style={styles.secondaryButtonsRow}>
+            <Pressable
+              onPress={() => {
+                triggerHaptic('light');
+                playSound('click');
+                onSelectTutorial();
+              }}
+              accessibilityLabel="Tutorial"
+              testID="menu-tutorial"
+              style={[
+                styles.secondaryButton,
+                styles.tutorialButtonSmall,
+                Platform.OS === 'web' && { cursor: 'pointer' as any },
+              ]}
+            >
+              <Icon name="lorc/open-book" size={20} color={COLORS.canvasWhite} />
+              <Text style={styles.secondaryButtonText}>Tutorial</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                triggerHaptic('light');
+                playSound('click');
+                onSelectOptions();
+              }}
+              accessibilityLabel="Options"
+              testID="menu-options"
+              style={[
+                styles.secondaryButton,
+                styles.optionsButtonSmall,
+                Platform.OS === 'web' && { cursor: 'pointer' as any },
+              ]}
+            >
+              <Icon name="lorc/gear-hammer" size={20} color={COLORS.slateCharcoal} />
+              <Text style={[styles.secondaryButtonText, { color: COLORS.slateCharcoal }]}>Options</Text>
+            </Pressable>
+          </View>
         </View>
 
-        {/* Discord Section */}
+        {/* Discord Section - Even smaller */}
         <Pressable
           onPress={() => {
             triggerHaptic('light');
@@ -165,17 +188,15 @@ const MainMenu: React.FC<MainMenuProps> = ({
             Linking.openURL(DISCORD_URL);
           }}
           style={({ pressed }) => [
-            styles.discordButton,
+            styles.discordButtonSmall,
             pressed && styles.discordButtonPressed,
             Platform.OS === 'web' && { cursor: 'pointer' as any },
           ]}
           accessibilityLabel="Join Discord"
           accessibilityRole="link"
         >
-          <View style={styles.discordIconContainer}>
-            <Icon name="discord-symbol" size={20} color={COLORS.canvasWhite} noShadow />
-          </View>
-          <Text style={styles.discordTitle}>Join the NShapes Discord!</Text>
+          <Icon name="discord-symbol" size={14} color={COLORS.canvasWhite} noShadow />
+          <Text style={styles.discordTitleSmall}>Discord</Text>
         </Pressable>
 
         {/* Footer */}
@@ -276,6 +297,61 @@ const styles = StyleSheet.create({
     color: COLORS.slateCharcoal,
     opacity: 0.7,
   },
+  // Secondary buttons row (Tutorial & Options side by side)
+  secondaryButtonsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  secondaryButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: RADIUS.button,
+    borderWidth: 2,
+    borderColor: COLORS.slateCharcoal,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    gap: 8,
+  },
+  tutorialButtonSmall: {
+    backgroundColor: COLORS.tutorialBlue,
+  },
+  optionsButtonSmall: {
+    backgroundColor: COLORS.paperBeige,
+  },
+  secondaryButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.canvasWhite,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  // Smaller discord button
+  discordButtonSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    backgroundColor: '#5865F2',
+    borderRadius: RADIUS.button,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    gap: 6,
+  },
+  discordButtonPressed: {
+    backgroundColor: '#4752C4',
+  },
+  discordTitleSmall: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.canvasWhite,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  // Legacy styles kept for compatibility
   discordButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -288,9 +364,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 20,
     gap: 10,
-  },
-  discordButtonPressed: {
-    backgroundColor: '#4752C4',
   },
   discordIconContainer: {
     width: 24,
