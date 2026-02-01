@@ -59,14 +59,9 @@ describe('Spiny Hedgehog', () => {
       expect(enemy.description.toLowerCase()).toContain('explosion');
     });
 
-    it('has description mentioning 15% reduction', () => {
+    it('has description mentioning divided by 3', () => {
       const enemy = createSpinyHedgehog();
-      expect(enemy.description).toContain('15%');
-    });
-
-    it('has description mentioning reduced', () => {
-      const enemy = createSpinyHedgehog();
-      expect(enemy.description.toLowerCase()).toContain('reduced');
+      expect(enemy.description).toContain('divided by 3');
     });
 
     it('has correct defeat condition text', () => {

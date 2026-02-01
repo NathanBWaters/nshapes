@@ -158,10 +158,11 @@ export function generateInactivityEffectTests(
     });
 
     if (config.warningAtSeconds) {
-      it(`emits warning at ${config.warningAtSeconds} seconds remaining`, () => {
+      const warningSeconds = config.warningAtSeconds;
+      it(`emits warning at ${warningSeconds} seconds remaining`, () => {
         const enemy = createEnemy();
         enemy.onRoundStart([]);
-        const warningTime = config.maxMs - config.warningAtSeconds * 1000;
+        const warningTime = config.maxMs - warningSeconds * 1000;
         enemy.onTick(warningTime - 500, []);
         const result = enemy.onTick(500, []);
         expect(result.events).toContainEqual({

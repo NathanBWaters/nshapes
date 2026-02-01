@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Pressable, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, Pressable, StyleSheet, ScrollView, useWindowDimensions, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 import { usePWASafeAreaInsets } from '@/utils/usePWASafeAreaInsets';
 import { Character, PlayerStats, AdventureDifficulty } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
@@ -87,11 +87,31 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
   onExitGame,
 }) => {
   const insets = usePWASafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const [hoveredCharacter, setHoveredCharacter] = React.useState<string | null>(null);
   const [characterWins, setCharacterWins] = React.useState<CharacterWins>({});
   const [endlessHighScores, setEndlessHighScores] = React.useState<EndlessHighScores>({});
   const [adventureDifficulty, setAdventureDifficulty] = React.useState<AdventureDifficulty>('medium');
   const [unlockedCharacters, setUnlockedCharacters] = React.useState<string[]>([]);
+  const [expandedWeapons, setExpandedWeapons] = React.useState<Set<string>>(new Set());
+  const [canScrollRight, setCanScrollRight] = React.useState(true);
+
+  // Calculate dynamic row height based on available space
+  // Character section gets about 1/4 of screen height (was 1/2 before)
+  const characterSectionHeight = Math.max(120, windowHeight * 0.20);
+  const characterCardSize = Math.min(80, characterSectionHeight - 50); // Leave room for header and padding
+
+  const toggleWeaponExpanded = (weaponName: string) => {
+    setExpandedWeapons(prev => {
+      const next = new Set(prev);
+      if (next.has(weaponName)) {
+        next.delete(weaponName);
+      } else {
+        next.add(weaponName);
+      }
+      return next;
+    });
+  };
 
   // Load character wins, endless high scores, and unlocked characters on mount
   React.useEffect(() => {
@@ -155,24 +175,39 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
                 </View>
               </View>
 
-              {/* Starting Weapons */}
+              {/* Starting Weapons - Expandable */}
               <View style={styles.statBox}>
                 <Text style={styles.statLabel}>Starting Weapons</Text>
                 <View style={styles.weaponsList}>
                   {selectedChar.startingWeapons.map((weaponName, index) => {
                     const weapon = getWeaponByName(weaponName);
+                    const isExpanded = expandedWeapons.has(weaponName);
                     return (
-                      <View key={index} style={styles.weaponItemRow}>
+                      <TouchableOpacity
+                        key={index}
+                        style={styles.weaponItemRow}
+                        onPress={() => toggleWeaponExpanded(weaponName)}
+                        activeOpacity={0.7}
+                      >
                         <View style={styles.weaponItemHeader}>
                           {weapon?.icon && (
                             <Icon name={weapon.icon} size={16} color={COLORS.slateCharcoal} />
                           )}
                           <Text style={styles.statValue}>{weaponName}</Text>
+                          <Text style={styles.expandArrow}>{isExpanded ? '▲' : '▼'}</Text>
                         </View>
-                        {weapon?.shortDescription && (
+                        {!isExpanded && weapon?.shortDescription && (
                           <KeywordText style={styles.weaponShortDesc}>{weapon.shortDescription}</KeywordText>
                         )}
-                      </View>
+                        {isExpanded && weapon && (
+                          <View style={styles.weaponExpandedDetails}>
+                            <KeywordText style={styles.weaponFullDesc}>{weapon.description}</KeywordText>
+                            {weapon.flavorText && (
+                              <Text style={styles.weaponFlavorText}>"{weapon.flavorText}"</Text>
+                            )}
+                          </View>
+                        )}
+                      </TouchableOpacity>
                     );
                   })}
                 </View>
@@ -236,10 +271,27 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
         )}
       </View>
 
-      {/* Bottom Half - Options Grid (no scrolling - fills available space) */}
-      <View style={styles.optionsSection}>
-        <Text style={styles.optionsHeader}>Choose Your Character</Text>
-        <View style={styles.optionsGrid}>
+      {/* Bottom Section - Horizontally Scrollable Character List */}
+      <View style={[styles.optionsSection, { height: characterSectionHeight }]}>
+        <View style={styles.optionsHeaderRow}>
+          <Text style={styles.optionsHeader}>Choose Your Character</Text>
+          <View style={[styles.scrollHint, { opacity: canScrollRight ? 1 : 0 }]}>
+            <Text style={styles.scrollHintText}>swipe</Text>
+            <Text style={styles.scrollHintArrow}>→</Text>
+          </View>
+        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.optionsScrollContent}
+          style={styles.optionsScroll}
+          onScroll={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
+            const { contentOffset, layoutMeasurement, contentSize } = e.nativeEvent;
+            const isAtEnd = contentOffset.x + layoutMeasurement.width >= contentSize.width - 10;
+            setCanScrollRight(!isAtEnd);
+          }}
+          scrollEventThrottle={100}
+        >
           {characters.map(character => {
             const isSelected = selectedCharacter === character.name;
             const isLocked = !unlockedCharacters.includes(character.name);
@@ -252,6 +304,7 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
                 onHoverOut={() => setHoveredCharacter(null)}
                 style={[
                   styles.optionButton,
+                  { width: characterCardSize, height: characterCardSize },
                   isSelected && !isLocked && styles.optionButtonSelected,
                   isLocked && styles.optionButtonLocked,
                 ]}
@@ -259,7 +312,7 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
                 {/* Lock overlay for locked characters - shows only lock icon */}
                 {isLocked ? (
                   <View style={styles.lockOverlay}>
-                    <Icon name="lorc/padlock" size={32} color={COLORS.slateCharcoal} noShadow />
+                    <Icon name="lorc/padlock" size={Math.min(28, characterCardSize * 0.4)} color={COLORS.slateCharcoal} noShadow />
                   </View>
                 ) : (
                   <>
@@ -267,7 +320,7 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
                       {character.icon && (
                         <Icon
                           name={character.icon}
-                          size={48}
+                          size={Math.min(36, characterCardSize * 0.5)}
                           color={COLORS.slateCharcoal}
                         />
                       )}
@@ -278,6 +331,7 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
                           styles.optionText,
                           isSelected && styles.optionTextSelected,
                         ]}
+                        numberOfLines={1}
                       >
                         {character.name}
                       </Text>
@@ -287,60 +341,23 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
               </Pressable>
             );
           })}
-        </View>
+        </ScrollView>
       </View>
 
-      {/* Difficulty Selector and Start Adventure Button */}
+      {/* Start Button - No difficulty selector, levels determine difficulty */}
       <View style={[styles.actionSection, { paddingBottom: 16 + insets.bottom }]}>
-        {/* Difficulty Selector */}
-        <View style={styles.difficultySection}>
-          <Text style={styles.difficultyLabel}>Difficulty</Text>
-          <View style={styles.difficultyRow}>
-            {(['easy', 'medium', 'hard'] as AdventureDifficulty[]).map((diff) => {
-              const isSelected = adventureDifficulty === diff;
-              const labels: Record<AdventureDifficulty, { name: string; desc: string; icon: IconName }> = {
-                easy: { name: 'Easy', desc: '3 Attributes', icon: 'lorc/feather' },
-                medium: { name: 'Medium', desc: 'Progressive', icon: 'lorc/archery-target' },
-                hard: { name: 'Hard', desc: '4-5 Attributes', icon: 'lorc/diamond-hard' },
-              };
-              return (
-                <Pressable
-                  key={diff}
-                  onPress={() => setAdventureDifficulty(diff)}
-                  style={[
-                    styles.difficultyButton,
-                    isSelected && styles.difficultyButtonSelected,
-                  ]}
-                >
-                  <Icon
-                    name={labels[diff].icon}
-                    size={20}
-                    color={isSelected ? COLORS.slateCharcoal : COLORS.slateCharcoal}
-                  />
-                  <Text style={[styles.difficultyButtonText, isSelected && styles.difficultyButtonTextSelected]}>
-                    {labels[diff].name}
-                  </Text>
-                  <Text style={[styles.difficultyButtonDesc, isSelected && styles.difficultyButtonDescSelected]}>
-                    {labels[diff].desc}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-
         <TouchableOpacity
-          onPress={() => onStart(adventureDifficulty)}
+          onPress={() => onStart('medium')}  // Difficulty is now determined by level, pass dummy value
           disabled={!selectedCharacter}
           testID="start-adventure-button"
-          accessibilityLabel="Start Adventure"
+          accessibilityLabel="Continue to Level Select"
           style={[
             styles.actionButton,
             !selectedCharacter && styles.actionButtonDisabled,
           ]}
         >
           <Text style={styles.actionButtonText}>
-            {selectedCharacter ? 'Start Adventure' : 'Select a Character'}
+            {selectedCharacter ? 'Select Level' : 'Select a Character'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -475,6 +492,31 @@ const styles = StyleSheet.create({
     opacity: 0.7,
     marginLeft: 22,
   },
+  expandArrow: {
+    color: COLORS.slateCharcoal,
+    fontSize: 10,
+    marginLeft: 'auto',
+    opacity: 0.5,
+  },
+  weaponExpandedDetails: {
+    marginLeft: 22,
+    marginTop: 4,
+    paddingLeft: 8,
+    borderLeftWidth: 2,
+    borderLeftColor: COLORS.slateCharcoal,
+  },
+  weaponFullDesc: {
+    color: COLORS.slateCharcoal,
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  weaponFlavorText: {
+    color: COLORS.slateCharcoal,
+    fontSize: 10,
+    fontStyle: 'italic',
+    opacity: 0.7,
+    marginTop: 4,
+  },
   startingStatsBox: {
     backgroundColor: COLORS.paperBeige,
     borderRadius: 8,
@@ -550,41 +592,61 @@ const styles = StyleSheet.create({
     fontSize: 14,
     opacity: 0.6,
   },
-  // Bottom Half - Options Section
+  // Bottom Section - Options Section (dynamic height)
   optionsSection: {
-    flex: 1,
     backgroundColor: COLORS.canvasWhite,
     borderTopWidth: 1,
     borderTopColor: COLORS.slateCharcoal,
   },
+  optionsHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 6,
+  },
   optionsHeader: {
     color: COLORS.slateCharcoal,
     fontWeight: '700',
-    fontSize: 12,
+    fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 1,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 8,
   },
-  optionsGrid: {
-    flex: 1,
+  scrollHint: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 4,
+  },
+  scrollHintText: {
+    color: COLORS.slateCharcoal,
+    fontSize: 10,
+    fontWeight: '500',
+    opacity: 0.5,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  scrollHintArrow: {
+    color: COLORS.slateCharcoal,
+    fontSize: 14,
+    fontWeight: '600',
+    opacity: 0.6,
+  },
+  optionsScroll: {
+    flex: 1,
+  },
+  optionsScrollContent: {
     paddingHorizontal: 12,
-    paddingBottom: 12,
-    gap: 8,
-    alignContent: 'stretch',
+    paddingBottom: 8,
+    gap: 10,
+    alignItems: 'center',
   },
   optionButton: {
     backgroundColor: COLORS.paperBeige,
     borderRadius: RADIUS.button,
     borderWidth: 1,
     borderColor: COLORS.slateCharcoal,
-    width: '31%',
-    flexGrow: 1,
-    flexBasis: '31%',
-    padding: '3%',
+    padding: 4,
     position: 'relative',
   },
   winsBadge: {

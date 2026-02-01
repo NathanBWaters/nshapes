@@ -174,6 +174,13 @@ import RainbowStar from '../../assets/icons/lorc/rainbow-star.svg';
 import RadarSweep from '../../assets/icons/lorc/radar-sweep.svg';
 import SkullCrack from '../../assets/icons/lorc/skull-crack.svg';
 
+// Connector Weapon Icons
+import ChainedHeart from '../../assets/icons/lorc/chained-heart.svg';
+import BrokenHeartZone from '../../assets/icons/lorc/broken-heart-zone.svg';
+import Cobweb from '../../assets/icons/lorc/cobweb.svg';
+import LinkedRings from '../../assets/icons/lorc/linked-rings.svg';
+import Brainstorm from '../../assets/icons/lorc/brainstorm.svg';
+
 // Icon registry: maps path (e.g., "delapouite/token") to the imported component
 // NOTE: When adding new icons, also add the import above and the path here.
 // TypeScript will catch any usage of icon paths not in this registry.
@@ -346,6 +353,13 @@ const ICON_REGISTRY = {
   'lorc/rainbow-star': RainbowStar,
   'lorc/radar-sweep': RadarSweep,
   'lorc/skull-crack': SkullCrack,
+
+  // Connector Weapon Icons
+  'lorc/chained-heart': ChainedHeart,
+  'lorc/broken-heart-zone': BrokenHeartZone,
+  'lorc/cobweb': Cobweb,
+  'lorc/linked-rings': LinkedRings,
+  'lorc/brainstorm': Brainstorm,
 } as const satisfies Record<string, React.FC<SvgProps>>;
 
 // TypeScript union type of all valid icon names - use this for type-safe icon references

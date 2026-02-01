@@ -53,19 +53,14 @@ describe('Lazy Sloth', () => {
       expect(enemy.description.toLowerCase()).toContain('time');
     });
 
-    it('description mentions 20% reduction', () => {
+    it('description mentions divided by 3', () => {
       const enemy = createLazySloth();
-      expect(enemy.description).toContain('20%');
-    });
-
-    it('description mentions "reduced"', () => {
-      const enemy = createLazySloth();
-      expect(enemy.description.toLowerCase()).toContain('reduced');
+      expect(enemy.description).toContain('divided by 3');
     });
 
     it('has correct full description text', () => {
       const enemy = createLazySloth();
-      expect(enemy.description).toBe('Time gain reduced by 20%');
+      expect(enemy.description).toBe('Time gain divided by 3');
     });
 
     it('has a defeat condition text', () => {

@@ -64,6 +64,20 @@ NShapes combines the classic SET card matching game with roguelike progression m
 **Card States:**
 * **Holographic:** 2x points when matched
 * **On Fire:** Burns after 0.25s, 10% spread chance
+* **Connected:** Part of a connector weapon link
+
+## Card Visual Rules (IMPORTANT)
+
+**Borders/outlines are EXCLUSIVELY for selection.** Never use card borders or outlines to indicate any other state (fire, connections, etc.).
+
+**State indicators use small icons** in the bottom left corner of cards:
+* Icons are ~1/5 the size of the card shapes (about 10-14px)
+* Multiple states can stack horizontally
+* Current icons:
+  * 🔥 Fire: `lorc/campfire` (red)
+  * 🔗 Connection: `lorc/linked-rings` (gray)
+
+This rule ensures visual consistency and prevents confusion with selection state.
 
 ## Key Features
 

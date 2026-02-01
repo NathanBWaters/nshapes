@@ -8,12 +8,15 @@ import { TutorialProvider } from "@/context/TutorialContext";
 import { KeywordProvider } from "@/context/KeywordContext";
 import KeywordTooltip from "@/components/KeywordTooltip";
 import { initAudio, preloadAllSounds } from "@/utils/sounds";
+import { LevelProgressStorage } from "@/utils/storage";
 
 export default function RootLayout() {
-  // Initialize audio system and preload sounds
+  // Initialize audio system, preload sounds, and migrate old save data
   useEffect(() => {
     initAudio();
     preloadAllSounds();
+    // Migrate old save format to new level-based system
+    LevelProgressStorage.migrateFromOldSaveFormat();
   }, []);
 
   return (

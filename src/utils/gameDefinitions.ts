@@ -83,6 +83,13 @@ export const DEFAULT_PLAYER_STATS: PlayerStats = {
   echoChance: STARTING_STATS.echoChance,
   chainReactionChance: STARTING_STATS.chainReactionChance,
 
+  // Connector weapon stats
+  connectionChance: 0,
+  startingConnections: 0,
+  echoTimeBonusPerLink: 0,
+  linkedFireMultiplier: 1, // Default 1x (no multiplier)
+  bonusConnectionChance: 0,
+
   // Effect caps - initialized with defaults, can be increased by Cap Increaser weapons
   effectCaps: { ...DEFAULT_EFFECT_CAPS },
 };
@@ -1583,6 +1590,164 @@ export const WEAPONS: Weapon[] = [
     icon: 'lorc/crystal-ball',
     effects: { luck: 1 },
     maxCount: 10,
+  },
+
+  // ============================================================================
+  // CONNECTOR WEAPONS - Link board positions together
+  // When a card at a connected position is destroyed, the linked card is too
+  // ============================================================================
+  {
+    id: 'connector-common',
+    name: 'Link Stone',
+    rarity: 'common',
+    level: 1,
+    price: 8,
+    description: '15% chance on match to connect two of the matched positions for the rest of the round. Connected cards are destroyed together.',
+    shortDescription: '15% link on match',
+    flavorText: 'What is joined cannot be undone.',
+    icon: 'lorc/chained-heart',
+    specialEffect: 'connector',
+    effects: { connectionChance: 15 },
+  },
+  {
+    id: 'connector-rare',
+    name: 'Link Chain',
+    rarity: 'rare',
+    level: 1,
+    price: 15,
+    description: '20% chance on match to connect two of the matched positions for the rest of the round. Connected cards are destroyed together.',
+    shortDescription: '20% link on match',
+    flavorText: 'Chains of fate bind all things.',
+    icon: 'lorc/chained-heart',
+    specialEffect: 'connector',
+    effects: { connectionChance: 20 },
+  },
+  {
+    id: 'connector-legendary',
+    name: 'Soul Link',
+    rarity: 'legendary',
+    level: 1,
+    price: 35,
+    description: '25% chance on match to connect two of the matched positions for the rest of the round. Connected cards are destroyed together.',
+    shortDescription: '25% link on match',
+    flavorText: 'Two souls, one destiny.',
+    icon: 'lorc/chained-heart',
+    specialEffect: 'connector',
+    effects: { connectionChance: 25 },
+    maxCount: 1,
+  },
+
+  // ============================================================================
+  // REVENGE LINKER - Create connections when taking damage
+  // ============================================================================
+  {
+    id: 'revenge-linker',
+    name: 'Revenge Linker',
+    rarity: 'legendary',
+    level: 1,
+    price: 40,
+    description: 'When you lose health: 3 separate 20% rolls. Each success connects two random positions in a triangle pattern.',
+    shortDescription: 'Damage creates links',
+    flavorText: 'Pain weaves a web of vengeance.',
+    icon: 'lorc/broken-heart-zone',
+    specialEffect: 'revengeLinker',
+    effects: {},
+    maxCount: 1,
+  },
+
+  // ============================================================================
+  // WEB WEAVER - Start rounds with connections
+  // ============================================================================
+  {
+    id: 'web-weaver-common',
+    name: 'Web Spinner',
+    rarity: 'common',
+    level: 1,
+    price: 8,
+    description: 'Start each round with 1 random connection already placed.',
+    shortDescription: 'Start with 1 link',
+    flavorText: 'The web is always ready.',
+    icon: 'lorc/cobweb',
+    specialEffect: 'webWeaver',
+    effects: { startingConnections: 1 },
+  },
+  {
+    id: 'web-weaver-rare',
+    name: 'Web Master',
+    rarity: 'rare',
+    level: 1,
+    price: 15,
+    description: 'Start each round with 2 random connections already placed.',
+    shortDescription: 'Start with 2 links',
+    flavorText: 'A master weaves fate itself.',
+    icon: 'lorc/cobweb',
+    specialEffect: 'webWeaver',
+    effects: { startingConnections: 2 },
+  },
+
+  // ============================================================================
+  // ECHO CHAMBER - Time bonus on connected destruction
+  // ============================================================================
+  {
+    id: 'echo-chamber-common',
+    name: 'Echo Chamber',
+    rarity: 'common',
+    level: 1,
+    price: 8,
+    description: 'Gain +1 second each time a card is destroyed via a connection.',
+    shortDescription: '+1s on linked destroy',
+    flavorText: 'Time echoes through the links.',
+    icon: 'lorc/linked-rings',
+    specialEffect: 'echoChamber',
+    effects: { echoTimeBonusPerLink: 1 },
+  },
+  {
+    id: 'echo-chamber-rare',
+    name: 'Resonance Core',
+    rarity: 'rare',
+    level: 1,
+    price: 15,
+    description: 'Gain +2 seconds each time a card is destroyed via a connection.',
+    shortDescription: '+2s on linked destroy',
+    flavorText: 'The core amplifies every resonance.',
+    icon: 'lorc/linked-rings',
+    specialEffect: 'echoChamber',
+    effects: { echoTimeBonusPerLink: 2 },
+  },
+
+  // ============================================================================
+  // SYMPATHETIC FLAMES - Fire spreads faster on connected positions
+  // ============================================================================
+  {
+    id: 'sympathetic-flames',
+    name: 'Sympathetic Flames',
+    rarity: 'rare',
+    level: 1,
+    price: 15,
+    description: 'Cards at connected positions have 2x fire spread chance.',
+    shortDescription: '2x fire on linked',
+    flavorText: 'Where one burns, all burn.',
+    icon: 'lorc/fire-ring',
+    specialEffect: 'sympatheticFlames',
+    effects: { linkedFireMultiplier: 2 },
+  },
+
+  // ============================================================================
+  // NEURAL NETWORK - Bonus connections on link creation
+  // ============================================================================
+  {
+    id: 'neural-network',
+    name: 'Neural Network',
+    rarity: 'legendary',
+    level: 1,
+    price: 40,
+    description: 'When you create a connection, 30% chance to create a second random connection.',
+    shortDescription: '30% bonus link',
+    flavorText: 'The network grows itself.',
+    icon: 'lorc/brainstorm',
+    specialEffect: 'neuralNetwork',
+    effects: { bonusConnectionChance: 30 },
+    maxCount: 1,
   },
 ];
 

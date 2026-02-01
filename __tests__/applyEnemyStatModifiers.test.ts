@@ -57,7 +57,7 @@ const createBaseStats = (overrides: Partial<PlayerStats> = {}): PlayerStats => (
   hintPasses: 0,
   explosionChance: 0,
   autoHintChance: 0,
-  autoHintInterval: 10000,
+  autoHintInterval: 0,
   boardGrowthChance: 0,
   boardGrowthAmount: 0,
   fireSpreadChance: 0,
@@ -76,6 +76,12 @@ const createBaseStats = (overrides: Partial<PlayerStats> = {}): PlayerStats => (
   echoChance: 0,
   chainReactionChance: 0,
   timeGainTriggerCap: 5,
+  // Connector weapon stats
+  connectionChance: 0,
+  startingConnections: 0,
+  echoTimeBonusPerLink: 0,
+  linkedFireMultiplier: 1,
+  bonusConnectionChance: 0,
   ...overrides,
 });
 

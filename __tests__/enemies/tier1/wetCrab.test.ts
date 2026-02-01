@@ -53,19 +53,14 @@ describe('Wet Crab', () => {
       expect(enemy.description).toContain('Fire');
     });
 
-    it('has description containing "reduced"', () => {
+    it('has description containing "divided by 3"', () => {
       const enemy = createWetCrab();
-      expect(enemy.description).toContain('reduced');
-    });
-
-    it('has description containing "15%"', () => {
-      const enemy = createWetCrab();
-      expect(enemy.description).toContain('15%');
+      expect(enemy.description).toContain('divided by 3');
     });
 
     it('has description exactly matching expected text', () => {
       const enemy = createWetCrab();
-      expect(enemy.description).toBe('Fire effects reduced by 15%');
+      expect(enemy.description).toBe('Fire effects divided by 3');
     });
 
     it('has defeatConditionText containing "2"', () => {

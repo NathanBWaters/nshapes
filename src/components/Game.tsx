@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Platform, Dimensions } from 'react-native';
-import { Card, CardReward, GameState, Weapon, PlayerStats, AttributeName, AdventureDifficulty, Character } from '@/types';
+import { Card, CardReward, GameState, Weapon, PlayerStats, AttributeName, AdventureDifficulty, Character, LevelNumber } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { createDeck, shuffleArray, isValidCombination, findAllCombinations, generateGameBoard, formatTime, sameCardAttributes } from '@/utils/gameUtils';
 import {
@@ -15,8 +15,31 @@ import {
   getRandomShopWeapon,
   getEndlessRoundRequirement
 } from '@/utils/gameDefinitions';
-import { getActiveAttributesForRound, getBoardSizeForAttributes, ATTRIBUTE_SCALING } from '@/utils/gameConfig';
+import {
+  getActiveAttributesForRound,
+  getBoardSizeForAttributes,
+  ATTRIBUTE_SCALING,
+  LEVEL_SYSTEM,
+  LEVEL_DEFINITIONS,
+  getLevelDefinition,
+  getAttributesForLevel,
+  getEnemyForLevelRound,
+  roundHasEnemy,
+  getNewRoundRequirement,
+  getAdjustedLevelFromXP,
+  NEW_ROUND_REQUIREMENTS,
+} from '@/utils/gameConfig';
 import { getAdjacentIndices, getFireSpreadCards, WeaponEffectResult } from '@/utils/weaponEffects';
+import {
+  createConnection,
+  createRandomConnections,
+  shouldCreateConnection,
+  shouldCreateBonusConnection,
+  selectPositionsToConnect,
+  getLinkedDestructionPositions,
+  rollRevengeLinkerConnections,
+  getFireSpreadMultiplier,
+} from '@/utils/connectionUtils';
 import { useGameTimer } from '@/hooks/useGameTimer';
 import { useParticles } from '@/hooks/useParticles';
 import { useRoundStats } from '@/hooks/useRoundStats';
@@ -46,9 +69,11 @@ import CharacterUnlockScreen from './CharacterUnlockScreen';
 import Icon from './Icon';
 import MainMenu from './MainMenu';
 import DifficultySelection from './DifficultySelection';
+import LevelSelection from './LevelSelection';
+import LevelUpModal from './LevelUpModal';
 import OptionsMenu from './OptionsMenu';
 import { useTutorial } from '@/context/TutorialContext';
-import { CharacterWinsStorage, EndlessHighScoresStorage, AdventureHighRoundStorage, CharacterUnlockStorage, SavedGameStorage } from '@/utils/storage';
+import { CharacterWinsStorage, EndlessHighScoresStorage, AdventureHighRoundStorage, CharacterUnlockStorage, SavedGameStorage, LevelProgressStorage } from '@/utils/storage';
 import { playSound, playCardDealing } from '@/utils/sounds';
 
 const INITIAL_CARD_COUNT = 12;
@@ -78,13 +103,15 @@ const isWeapon = (option: Partial<PlayerStats> | Weapon): option is Weapon => {
 };
 
 // Calculate player level based on experience points
+// NEW level-based system: Uses 3x faster leveling formula
 const calculateLevel = (experience: number): number => {
-  // Simple level formula: level = floor(sqrt(experience/10))
-  // Level 1 requires 10 XP, Level 2 requires 40 XP, Level 3 requires 90 XP, etc.
-  return Math.floor(Math.sqrt(experience / 10));
+  // Use adjusted formula: level up 3x faster than before
+  // Original: level = floor(sqrt(experience/10))
+  // New: level = floor(sqrt(experience * 3 / 10))
+  return getAdjustedLevelFromXP(experience);
 };
 
-// Get enemy tier based on round number
+// Get enemy tier based on round number (legacy - for old system)
 // Tier 1: Rounds 1-4
 // Tier 2: Rounds 5-7
 // Tier 3: Rounds 8-9
@@ -94,6 +121,20 @@ const getTierForRound = (round: number): 1 | 2 | 3 | 4 => {
   if (round >= 8) return 3;
   if (round >= 5) return 2;
   return 1;
+};
+
+// Create a single enemy option for a specific enemy name (for level-based system)
+const createEnemyOptionForName = (
+  enemyName: string,
+  awardedWeaponIds: string[] = []
+): EnemyOption | null => {
+  const enemy = createEnemy(enemyName);
+  if (!enemy) return null;
+  return {
+    enemy,
+    stretchGoalReward: generateChallengeBonus(enemy.tier, awardedWeaponIds),
+    stretchGoalMoney: getChallengeBonusMoney(enemy.tier),
+  };
 };
 
 interface GameProps {
@@ -123,6 +164,7 @@ const Game: React.FC<GameProps> = ({
   const [gamePhase, setGamePhase] = useState<
     'main_menu' |
     'character_select' |
+    'level_select' |      // NEW: Level selection screen
     'difficulty_select' |
     'tutorial' |
     'round' |
@@ -137,6 +179,10 @@ const Game: React.FC<GameProps> = ({
     'game_over' |
     'free_play'
   >(devMode ? 'round' : 'main_menu');
+
+  // NEW: Track current level (1-10) and round within level (1-5)
+  const [currentLevel, setCurrentLevel] = useState<number>(1);
+  const [roundInLevel, setRoundInLevel] = useState<number>(1);
 
   // Track pending attribute unlock for next round
   const [pendingUnlockedAttribute, setPendingUnlockedAttribute] = useState<AttributeName | null>(null);
@@ -194,7 +240,8 @@ const Game: React.FC<GameProps> = ({
         lootCrates: 0,
         isCoOp: false,
         players: [],
-        isEndlessMode: false
+        isEndlessMode: false,
+        connections: [],
       };
     }
 
@@ -230,7 +277,8 @@ const Game: React.FC<GameProps> = ({
       lootCrates: 0,
       isCoOp: false,
       players: [],
-      isEndlessMode: false
+      isEndlessMode: false,
+      connections: [],
     };
   });
 
@@ -347,6 +395,10 @@ const Game: React.FC<GameProps> = ({
   // Queue of pending level-ups (for multi-level-up support)
   const [pendingLevelUps, setPendingLevelUps] = useState<number[]>([]);
 
+  // In-round level-up modal state (NEW level-based system)
+  const [showLevelUpModal, setShowLevelUpModal] = useState(false);
+  const [inRoundLevelUpQueue, setInRoundLevelUpQueue] = useState<number[]>([]);
+
   // Dev mode state
   const [devTimerEnabled, setDevTimerEnabled] = useState(!devMode); // Timer disabled by default in dev mode
   const [autoPlayerEnabled, setAutoPlayerEnabled] = useState(autoPlayer); // Start with URL param value
@@ -445,11 +497,11 @@ const Game: React.FC<GameProps> = ({
       setDefeatedEnemyTier(1);
     }
 
-    // Record this round's score in history
-    const roundReq = getRoundRequirement(state.round);
+    // Record this round's score in history (using roundInLevel for 5-round system)
+    const newRoundReq = getNewRoundRequirement(roundInLevel);
     setRoundHistory(prev => [
-      ...prev.filter(r => r.round !== state.round), // Replace if exists
-      { round: state.round, target: roundReq.targetScore, actual: state.score }
+      ...prev.filter(r => r.round !== roundInLevel), // Replace if exists
+      { round: roundInLevel, target: newRoundReq.targetScore, actual: state.score }
     ]);
 
     // Record adventure mode high round (max across all runs)
@@ -528,6 +580,7 @@ const Game: React.FC<GameProps> = ({
     state.remainingTime > 0 &&
     (!devMode || devTimerEnabled) &&
     !isMenuOpen &&
+    !showLevelUpModal &&  // Pause timer during in-round level-up
     !disableTimeout;
 
   // Generate a unique key based on game start time to force timer reset on new games
@@ -780,7 +833,10 @@ const Game: React.FC<GameProps> = ({
       players: [],
 
       // Endless mode
-      isEndlessMode: false
+      isEndlessMode: false,
+
+      // Connector weapon system
+      connections: [],
     });
 
     setNotification(null);
@@ -868,6 +924,7 @@ const Game: React.FC<GameProps> = ({
   const [showTutorialPrompt, setShowTutorialPrompt] = useState(false);
   const [pendingGameStart, setPendingGameStart] = useState<{
     mode: GameMode;
+    levelNumber?: LevelNumber;
   } | null>(null);
 
   // Start the game
@@ -911,6 +968,66 @@ const Game: React.FC<GameProps> = ({
 
     // Go to enemy selection screen
     setGamePhase('enemy_select');
+  };
+
+  // Start a specific level (NEW level-based system)
+  const startLevel = (levelNumber: LevelNumber) => {
+    if (!selectedCharacter) {
+      setNotification({
+        message: 'Please select a character first',
+        type: 'warning'
+      });
+      return;
+    }
+
+    // Check if we should show tutorial prompt (only for level 1)
+    if (levelNumber === 1 && !tutorialState.hasCompletedTutorial && !tutorialState.hasBeenOfferedTutorial) {
+      setPendingGameStart({ mode: 'adventure', levelNumber });
+      setShowTutorialPrompt(true);
+      return;
+    }
+
+    // Clear any saved adventure game when starting a new one
+    SavedGameStorage.clear();
+
+    setGameMode('adventure');
+    setCurrentLevel(levelNumber);
+    setRoundInLevel(1);
+
+    // Get level definition
+    const levelDef = getLevelDefinition(levelNumber);
+    const activeAttributes = [...levelDef.attributes];
+
+    // Initialize the game with the selected character and attributes
+    // Don't start game yet - check if there's an enemy for round 1
+    initGame(selectedCharacter, activeAttributes, false);
+
+    // Reset hint triggers to prevent auto-triggering on game start
+    setHintTrigger(0);
+    setClearHintTrigger(0);
+
+    // Clear round history for new game
+    setRoundHistory([]);
+
+    // Check if first round has an enemy (it shouldn't in the new system)
+    const enemyForRound = getEnemyForLevelRound(levelNumber, 1);
+    if (enemyForRound) {
+      // Generate enemy options and go to enemy selection
+      setGamePhase('enemy_select');
+    } else {
+      // No enemy for round 1 - start the round directly
+      // Update state to use new round timing
+      const roundReq = getNewRoundRequirement(1);
+      setState(prev => ({
+        ...prev,
+        round: 1,
+        targetScore: roundReq.targetScore,
+        remainingTime: roundReq.time + (prev.player.stats.startingTime || 0),
+        gameStarted: true,
+        startTime: Date.now(),
+      }));
+      setGamePhase('round');
+    }
   };
 
   // Start Free Play Mode (called from Difficulty Selection)
@@ -1059,6 +1176,7 @@ const Game: React.FC<GameProps> = ({
       isCoOp: false,
       players: [],
       isEndlessMode: false,
+      connections: [],
     });
 
     // Go to enemy selection
@@ -1102,9 +1220,18 @@ const Game: React.FC<GameProps> = ({
   const handleTutorialPromptSkip = () => {
     setShowTutorialPrompt(false);
     markTutorialOffered();
+    const pending = pendingGameStart;
     setPendingGameStart(null);
 
-    // Continue with adventure mode start using stored difficulty
+    // If we have a level number, use the new level-based flow
+    if (pending?.levelNumber) {
+      // Re-call startLevel now that tutorial has been offered
+      // The check will pass since hasBeenOfferedTutorial is now true
+      startLevel(pending.levelNumber);
+      return;
+    }
+
+    // Legacy fallback: Continue with adventure mode start using stored difficulty
     setGameMode('adventure');
     const activeAttributes = getActiveAttributesForRound(1, adventureDifficulty);
 
@@ -1419,6 +1546,96 @@ const Game: React.FC<GameProps> = ({
     }
   };
 
+  // Handle in-round level-up selection (NEW level-based system)
+  const handleInRoundLevelUpSelect = (weapon: Weapon) => {
+    // Apply the weapon (same logic as handleLevelUpSelection)
+    setState(prevState => {
+      const newWeapons = [...prevState.player.weapons, weapon];
+      const newPlayer = { ...prevState.player, weapons: newWeapons };
+      const newTotalStats = calculatePlayerTotalStats(newPlayer);
+
+      // Grant immediate bonuses for capacity-increasing weapons
+      let hintsBonus = 0;
+      let gracesBonus = 0;
+      let healthBonus = 0;
+
+      if (weapon.effects.maxHints && typeof weapon.effects.maxHints === 'number') {
+        hintsBonus = Math.min(1, newTotalStats.maxHints - prevState.player.stats.hints);
+      }
+      if (weapon.effects.graces && typeof weapon.effects.graces === 'number') {
+        gracesBonus = weapon.effects.graces;
+      }
+      if (weapon.effects.health && typeof weapon.effects.health === 'number') {
+        healthBonus = weapon.effects.health;
+      }
+
+      return {
+        ...prevState,
+        player: {
+          ...prevState.player,
+          weapons: newWeapons,
+          stats: {
+            ...prevState.player.stats,
+            hints: Math.min(prevState.player.stats.hints + hintsBonus, newTotalStats.maxHints),
+            graces: Math.min(prevState.player.stats.graces + gracesBonus, newTotalStats.maxGraces),
+            health: Math.min(prevState.player.stats.health + healthBonus, newTotalStats.maxHealth),
+          }
+        }
+      };
+    });
+
+    // Check if there are more level-ups pending
+    const remaining = inRoundLevelUpQueue.slice(1);
+    setInRoundLevelUpQueue(remaining);
+
+    if (remaining.length > 0) {
+      // Generate new options for next level-up
+      const options = generateLevelUpOptions();
+      setState(prev => ({ ...prev, levelUpOptions: options }));
+    } else {
+      // All level-ups done, close modal and resume game
+      setShowLevelUpModal(false);
+    }
+  };
+
+  // Handle in-round level-up reroll
+  const handleInRoundLevelUpReroll = () => {
+    if (state.player.stats.money < state.rerollCost && state.player.stats.freeRerolls <= 0) {
+      setNotification({
+        message: 'Not enough money to reroll',
+        type: 'error'
+      });
+      return;
+    }
+
+    if (state.player.stats.freeRerolls > 0) {
+      setState(prevState => ({
+        ...prevState,
+        levelUpOptions: generateLevelUpOptions(),
+        player: {
+          ...prevState.player,
+          stats: {
+            ...prevState.player.stats,
+            freeRerolls: prevState.player.stats.freeRerolls - 1
+          }
+        }
+      }));
+    } else {
+      setState(prevState => ({
+        ...prevState,
+        levelUpOptions: generateLevelUpOptions(),
+        player: {
+          ...prevState.player,
+          stats: {
+            ...prevState.player.stats,
+            money: prevState.player.stats.money - prevState.rerollCost
+          }
+        },
+        rerollCost: Math.max(1, Math.round(prevState.rerollCost * 1.2))
+      }));
+    }
+  };
+
   // Handle level up reroll
   const handleLevelUpReroll = () => {
     if (state.player.stats.money < state.rerollCost && state.player.stats.freeRerolls <= 0) {
@@ -1666,7 +1883,26 @@ const Game: React.FC<GameProps> = ({
       if (weaponEffects.ricochetCards.length > 0) {
         recordWeaponEffect('ricochet');
       }
+    }
 
+    // Award time bonus for linked destruction (Echo Chamber weapon)
+    const connectedCardCount = rewards.filter(r => r.effectType === 'connected').length;
+    if (connectedCardCount > 0) {
+      const playerTotalStats = calculatePlayerTotalStats(state.player);
+      const timeBonus = (playerTotalStats.echoTimeBonusPerLink || 0) * connectedCardCount;
+      if (timeBonus > 0) {
+        setState(prevState => ({
+          ...prevState,
+          remainingTime: Math.min(
+            prevState.remainingTime + timeBonus,
+            getRoundRequirement(prevState.round).time + (calculatePlayerTotalStats(prevState.player).startingTime || 0)
+          )
+        }));
+        setNotification({ message: `+${timeBonus}s from links!`, type: 'info' });
+      }
+    }
+
+    if (weaponEffects) {
       // Show notifications (filter out explosion/laser since those were shown visually)
       weaponEffects.notifications.forEach(n => {
         if (!n.includes('Explosion') && !n.includes('Laser')) {
@@ -1718,8 +1954,31 @@ const Game: React.FC<GameProps> = ({
         playerTotalStats.maxHealth
       );
 
-      // Show notification only for level up (overrides trigger notification)
-      if (hasLeveledUp) {
+      // Trigger in-round level-up modal (NEW level-based system)
+      if (hasLeveledUp && gameMode === 'adventure' && !state.isEndlessMode) {
+        // Calculate all levels gained
+        const levelsGained = newLevel - currentLevel;
+        const levelQueue = Array.from(
+          { length: levelsGained },
+          (_, i) => currentLevel + i + 1
+        );
+
+        // Queue up the level-ups and show modal
+        setInRoundLevelUpQueue(prev => [...prev, ...levelQueue]);
+
+        // Generate level-up options if not already showing modal
+        if (!showLevelUpModal) {
+          const options = generateLevelUpOptions();
+          setState(prev => ({ ...prev, levelUpOptions: options }));
+          setShowLevelUpModal(true);
+        }
+
+        setNotification({
+          message: `LEVEL UP! Choose a reward!`,
+          type: 'success'
+        });
+      } else if (hasLeveledUp) {
+        // Old behavior for endless/free play
         setNotification({
           message: `LEVEL UP! Now Lv${newLevel}`,
           type: 'success'
@@ -1784,6 +2043,48 @@ const Game: React.FC<GameProps> = ({
       };
     });
 
+    // === CONNECTOR WEAPON EFFECTS ===
+    // Roll for connection creation on match
+    const playerTotalStatsForConnector = calculatePlayerTotalStats(state.player);
+    if (shouldCreateConnection(playerTotalStatsForConnector)) {
+      // Get positions of matched cards on the board
+      const matchedPositions = matchedCards.map(card =>
+        state.board.findIndex(bc => bc.id === card.id)
+      ).filter(pos => pos !== -1);
+
+      if (matchedPositions.length >= 2) {
+        const positionPair = selectPositionsToConnect(matchedPositions, state.connections);
+        if (positionPair) {
+          const [posA, posB] = positionPair;
+          const newConnection = createConnection(posA, posB);
+
+          setState(prevState => ({
+            ...prevState,
+            connections: [...prevState.connections, newConnection]
+          }));
+
+          setNotification({ message: 'Link Created!', type: 'info' });
+
+          // Check for Neural Network bonus connection
+          if (shouldCreateBonusConnection(playerTotalStatsForConnector)) {
+            // Create a random bonus connection
+            const bonusConnections = createRandomConnections(
+              state.board.length,
+              1,
+              [...state.connections, newConnection]
+            );
+            if (bonusConnections.length > 0) {
+              setState(prevState => ({
+                ...prevState,
+                connections: [...prevState.connections, ...bonusConnections]
+              }));
+              setNotification({ message: 'Bonus Link!', type: 'info' });
+            }
+          }
+        }
+      }
+    }
+
     // Delay card replacement to allow reward visualization (1.5s)
     // Score has already been updated immediately above via setState
     setTimeout(() => {
@@ -1847,21 +2148,43 @@ const Game: React.FC<GameProps> = ({
 
   // Handle individual card burn completion - called by Card component when burn timer finishes
   // This is non-blocking: immediately replaces card and rolls fire spread
+  // Also triggers linked destruction for connector weapons
   const handleCardBurn = useCallback((burnedCard: Card) => {
     const FIRE_SPREAD_ON_DEATH_CHANCE = 10; // 10%
     const now = Date.now();
 
     setState(prevState => {
       let updatedBoard = [...prevState.board];
-      const remainingDeck = [...prevState.deck];
+      let remainingDeck = [...prevState.deck];
+      let updatedConnections = [...prevState.connections];
 
       // Find the burned card's index
       const burnedIndex = updatedBoard.findIndex(c => c.id === burnedCard.id);
       if (burnedIndex === -1) return prevState;
 
+      // === LINKED DESTRUCTION FOR FIRE ===
+      // Get all positions that should be destroyed via connections
+      const linkedPositions = getLinkedDestructionPositions(
+        updatedConnections,
+        burnedIndex,
+        new Set([burnedIndex])
+      );
+
+      // Calculate time bonus for linked destruction (Echo Chamber)
+      const playerTotalStats = calculatePlayerTotalStats(prevState.player);
+      const linkedTimeBonus = (playerTotalStats.echoTimeBonusPerLink || 0) * linkedPositions.length;
+
       // Roll fire spread chance (10%) before replacing the card
+      // Apply Sympathetic Flames multiplier for connected positions
+      const fireMultiplier = getFireSpreadMultiplier(
+        updatedConnections,
+        burnedIndex,
+        playerTotalStats.linkedFireMultiplier || 1
+      );
+      const effectiveFireChance = FIRE_SPREAD_ON_DEATH_CHANCE * fireMultiplier;
+
       let fireSpreadTarget: Card | null = null;
-      if (Math.random() * 100 < FIRE_SPREAD_ON_DEATH_CHANCE) {
+      if (Math.random() * 100 < effectiveFireChance) {
         const adjacentIndices = getAdjacentIndices(burnedIndex, updatedBoard.length);
         const validAdjacent = adjacentIndices.filter(idx => {
           const adjCard = updatedBoard[idx];
@@ -1874,12 +2197,17 @@ const Game: React.FC<GameProps> = ({
         }
       }
 
-      // Replace burned card with new one from deck
-      if (remainingDeck.length > 0) {
-        const randomIndex = Math.floor(Math.random() * remainingDeck.length);
-        const newCard = { ...remainingDeck[randomIndex], selected: false };
-        updatedBoard[burnedIndex] = newCard;
-        remainingDeck.splice(randomIndex, 1);
+      // Collect all positions to replace (burned + linked)
+      const positionsToReplace = [burnedIndex, ...linkedPositions.filter(p => p !== burnedIndex && p < updatedBoard.length)];
+
+      // Replace burned card and linked cards with new ones from deck
+      for (const posIndex of positionsToReplace) {
+        if (remainingDeck.length > 0 && posIndex < updatedBoard.length) {
+          const randomIndex = Math.floor(Math.random() * remainingDeck.length);
+          const newCard = { ...remainingDeck[randomIndex], selected: false };
+          updatedBoard[posIndex] = newCard;
+          remainingDeck.splice(randomIndex, 1);
+        }
       }
 
       // Ignite fire spread target if one was selected
@@ -1892,16 +2220,24 @@ const Game: React.FC<GameProps> = ({
         });
       }
 
+      // Calculate bonus points/money for linked cards
+      const linkedBonus = linkedPositions.length;
+
       return {
         ...prevState,
         board: updatedBoard,
         deck: remainingDeck,
-        score: prevState.score + 1, // +1 point per burned card
+        connections: updatedConnections,
+        score: prevState.score + 1 + linkedBonus, // +1 per card destroyed
+        remainingTime: Math.min(
+          prevState.remainingTime + linkedTimeBonus,
+          getRoundRequirement(prevState.round).time + (playerTotalStats.startingTime || 0)
+        ),
         player: {
           ...prevState.player,
           stats: {
             ...prevState.player.stats,
-            money: prevState.player.stats.money + 1 // +1 money per burned card
+            money: prevState.player.stats.money + 1 + linkedBonus // +1 per card destroyed
           }
         }
       };
@@ -2057,6 +2393,22 @@ const Game: React.FC<GameProps> = ({
         }
       };
     });
+
+    // === REVENGE LINKER: Create connections when taking damage ===
+    const hasRevengeLinker = state.player.weapons.some(w => w.specialEffect === 'revengeLinker');
+    if (hasRevengeLinker && state.board.length >= 3) {
+      const revengeConnections = rollRevengeLinkerConnections(state.board.length, state.connections);
+      if (revengeConnections.length > 0) {
+        setState(prevState => ({
+          ...prevState,
+          connections: [...prevState.connections, ...revengeConnections]
+        }));
+        setNotification({
+          message: `Revenge! ${revengeConnections.length} link${revengeConnections.length > 1 ? 's' : ''} created!`,
+          type: 'info'
+        });
+      }
+    }
 
     // Replace the invalid match cards with new ones from the deck
     if (cardsToReplace.length === 3) {
@@ -2224,18 +2576,23 @@ const Game: React.FC<GameProps> = ({
     const remainingDeck = [...state.deck];
 
     // Get the matched card indices from the board
+    // Note: matchedCards now includes connected cards from GameBoard
     const matchedIndices = matchedCards.map(matchedCard =>
       state.board.findIndex(boardCard => boardCard.id === matchedCard.id)
     );
 
-    // Get board cards that are NOT being matched (will remain on board)
+    // matchedCards already includes connected cards from GameBoard
+    const allCardsToReplace = matchedCards;
+    const allIndicesToReplace = matchedIndices;
+
+    // Get board cards that are NOT being replaced (will remain on board)
     const remainingBoardCards = state.board.filter(
-      boardCard => !matchedCards.some(mc => mc.id === boardCard.id)
+      boardCard => !allCardsToReplace.some(mc => mc.id === boardCard.id)
     );
 
-    // Generate replacement cards
+    // Generate replacement cards for ALL cards being destroyed (matched + linked)
     // Note: Card modifiers (health, bombs, etc.) are applied by the enemy system via onCardDraw
-    for (let i = 0; i < matchedCards.length; i++) {
+    for (let i = 0; i < allCardsToReplace.length; i++) {
       // Check if we need to refill the deck
       if (remainingDeck.length === 0) {
         // Refill the deck with active attributes, excluding cards already on board or being added
@@ -2271,13 +2628,13 @@ const Game: React.FC<GameProps> = ({
       playCardDealing(newCards.length, 30);
     }
 
-    // Replace matched cards with new ones
+    // Replace matched cards AND linked cards with new ones
     setState(prevState => {
       // Create a new board array with replaced cards
       const updatedBoard = [...prevState.board];
 
-      // Replace each matched card with a new one
-      matchedIndices.forEach((index, i) => {
+      // Replace each destroyed card with a new one
+      allIndicesToReplace.forEach((index, i) => {
         if (index !== -1 && i < newCards.length) {
           updatedBoard[index] = newCards[i];
         }
@@ -2304,26 +2661,32 @@ const Game: React.FC<GameProps> = ({
       return;
     }
 
-    const nextRound = state.round + 1;
-    const newActiveAttributes = getActiveAttributesForRound(nextRound, adventureDifficulty);
-    const previousAttributes = state.activeAttributes;
+    // Check if next round is in a new level with different attributes
+    const nextRoundInLevelCheck = roundInLevel + 1;
+    const isNewLevel = nextRoundInLevelCheck > LEVEL_SYSTEM.roundsPerLevel;
 
-    // Check if a new attribute is being unlocked
-    const newAttribute = newActiveAttributes.find(attr => !previousAttributes.includes(attr));
+    if (isNewLevel) {
+      // Moving to next level - check if new level has more attributes
+      const nextLevel = currentLevel + 1;
+      if (nextLevel <= LEVEL_SYSTEM.totalLevels) {
+        const currentLevelDef = getLevelDefinition(currentLevel as LevelNumber);
+        const nextLevelDef = getLevelDefinition(nextLevel as LevelNumber);
+        const previousAttributes = currentLevelDef.attributes;
+        const newActiveAttributes = nextLevelDef.attributes;
 
-    // If a new attribute is unlocking, show the unlock screen
-    if (newAttribute) {
-      setPendingUnlockedAttribute(newAttribute);
-      // If this is the final round AND we're unlocking a new attribute, show final round warning
-      setIsFinalRoundWarning(nextRound === 10);
-      setGamePhase('attribute_unlock');
-      return;
+        // Check if a new attribute is being unlocked
+        const newAttribute = newActiveAttributes.find(attr => !previousAttributes.includes(attr));
+
+        if (newAttribute) {
+          setPendingUnlockedAttribute(newAttribute as AttributeName);
+          setIsFinalRoundWarning(false); // Not used in level-based system
+          setGamePhase('attribute_unlock');
+          return;
+        }
+      }
     }
 
-    // No new attribute - skip the attribute unlock screen entirely
-    // This applies to: Easy (never unlocks), Hard at round 10 (already at 5)
-
-    // No unlock needed, proceed directly to next round
+    // No attribute unlock needed, proceed directly to next round
     startNextRound();
   };
 
@@ -2343,18 +2706,53 @@ const Game: React.FC<GameProps> = ({
 
   // Start the next round
   const startNextRound = () => {
-    const nextRound = state.round + 1;
-    const roundReq = getRoundRequirement(nextRound);
+    // Calculate next round in level (1-5 per level)
+    const nextRoundInLevel = roundInLevel + 1;
+    const isNewLevel = nextRoundInLevel > LEVEL_SYSTEM.roundsPerLevel;
+
+    // If we've completed 5 rounds, handle level completion
+    if (isNewLevel && !state.isEndlessMode) {
+      // Level is complete - record completion and unlock next level
+      LevelProgressStorage.recordCompletion(currentLevel as LevelNumber, selectedCharacter!);
+      LevelProgressStorage.unlockNextLevel(currentLevel);
+
+      // Try to unlock a new character
+      const nextLockedCharacter = CharacterUnlockStorage.getNextLockedCharacter();
+      if (nextLockedCharacter) {
+        CharacterUnlockStorage.unlockCharacter(nextLockedCharacter);
+        setNotification({
+          message: `Level ${currentLevel} Complete! Unlocked ${nextLockedCharacter}!`,
+          type: 'success'
+        });
+      } else if (currentLevel < LEVEL_SYSTEM.totalLevels) {
+        setNotification({
+          message: `Level ${currentLevel} Complete!`,
+          type: 'success'
+        });
+      }
+
+      // Go to victory screen
+      setGamePhase('victory');
+      return;
+    }
+
+    // Update roundInLevel state
+    setRoundInLevel(nextRoundInLevel);
+
+    // Use new round requirements for level-based system (120s rounds)
+    const roundReq = getNewRoundRequirement(nextRoundInLevel);
+    const nextRound = state.round + 1; // Still track overall round for compatibility
 
     // Reset hint triggers to prevent auto-triggering on round start
     setHintTrigger(0);
     setClearHintTrigger(0);
 
-    // Get active attributes for the new round
+    // Get active attributes from level definition (not difficulty-based)
     // In endless mode, always use all 5 attributes
+    const levelDef = getLevelDefinition(currentLevel as LevelNumber);
     const newActiveAttributes: AttributeName[] = state.isEndlessMode
       ? ['shape', 'color', 'number', 'shading', 'background']
-      : getActiveAttributesForRound(nextRound, adventureDifficulty);
+      : [...levelDef.attributes];
     const previousAttributes = state.activeAttributes;
 
     // Note: Attribute unlock is now handled via the AttributeUnlockScreen before this function is called
@@ -2394,6 +2792,12 @@ const Game: React.FC<GameProps> = ({
     setState(prevState => {
       // Reset health to max at the start of each round
       const playerTotalStats = calculatePlayerTotalStats(prevState.player);
+
+      // Only generate random enemies for endless mode
+      const enemies = prevState.isEndlessMode
+        ? getRandomEnemyOptions(getTierForRound(nextRound), 3, prevState.defeatedEnemies, prevState.awardedStretchGoalWeapons, calculatePlayerTotalStats(prevState.player), prevState.player.weapons)
+        : []; // Level-based enemies are set up later
+
       return {
         ...prevState,
         round: nextRound,
@@ -2405,8 +2809,8 @@ const Game: React.FC<GameProps> = ({
         selectedCards: [],
         foundCombinations: [],
         roundCompleted: false,
-        gameStarted: false,  // Not started yet - waiting for enemy selection
-        currentEnemies: getRandomEnemyOptions(getTierForRound(nextRound), 3, prevState.defeatedEnemies, prevState.awardedStretchGoalWeapons, calculatePlayerTotalStats(prevState.player), prevState.player.weapons),
+        gameStarted: false,  // Not started yet - may need enemy setup
+        currentEnemies: enemies,
         shopItems: generateRandomShopItems(),  // Refill shop for next round
         shopWeapons: generateShopWeapons(4, prevState.player.weapons, nextRound, playerTotalStats.luck),   // Refill weapon shop with round-scaled rarity
         rerollCost: getBaseRollPrice(nextRound),  // Reset roll price for new round
@@ -2414,6 +2818,7 @@ const Game: React.FC<GameProps> = ({
         activeEnemyInstance: null,  // Set when player selects enemy
         selectedEnemyReward: null,
         selectedEnemyMoney: null,
+        connections: [],  // Clear connections at round start
         player: {
           ...prevState.player,
           stats: {
@@ -2456,8 +2861,63 @@ const Game: React.FC<GameProps> = ({
       return prevState;
     });
 
-    // Go to enemy selection screen
-    setGamePhase('enemy_select');
+    // Apply Web Weaver effect: create starting connections
+    setState(prevState => {
+      const totalStats = calculatePlayerTotalStats(prevState.player);
+      const startingConnections = totalStats.startingConnections || 0;
+      if (startingConnections > 0 && prevState.board.length >= 2) {
+        const newConnections = createRandomConnections(prevState.board.length, startingConnections, []);
+        return {
+          ...prevState,
+          connections: newConnections,
+        };
+      }
+      return prevState;
+    });
+
+    // NEW: Level-based enemy selection
+    // In level-based system, only rounds 3 and 5 have enemies
+    const enemyName = getEnemyForLevelRound(currentLevel as LevelNumber, nextRoundInLevel);
+
+    if (enemyName && !state.isEndlessMode) {
+      // Round 3 or 5 - spawn the specific boss from level definition
+      const enemyOption = createEnemyOptionForName(enemyName, state.awardedStretchGoalWeapons);
+      if (enemyOption) {
+        // Set up the enemy directly without selection screen
+        setState(prevState => ({
+          ...prevState,
+          currentEnemies: [enemyOption],
+          selectedEnemy: enemyOption.enemy,
+          activeEnemyInstance: enemyOption.enemy,
+          selectedEnemyReward: enemyOption.stretchGoalReward,
+          selectedEnemyMoney: enemyOption.stretchGoalMoney,
+          gameStarted: true,
+          startTime: Date.now(),
+        }));
+        // Apply enemy start effects
+        enemyOption.enemy.onRoundStart(state.board);
+        setGamePhase('round');
+      } else {
+        // Enemy not found - start without enemy
+        setState(prevState => ({
+          ...prevState,
+          gameStarted: true,
+          startTime: Date.now(),
+        }));
+        setGamePhase('round');
+      }
+    } else if (state.isEndlessMode) {
+      // Endless mode - use the old random enemy selection
+      setGamePhase('enemy_select');
+    } else {
+      // Rounds 1, 2, 4 - no enemy, start directly
+      setState(prevState => ({
+        ...prevState,
+        gameStarted: true,
+        startTime: Date.now(),
+      }));
+      setGamePhase('round');
+    }
   };
 
   // Render the appropriate game phase
@@ -2486,7 +2946,23 @@ const Game: React.FC<GameProps> = ({
             characters={CHARACTERS}
             selectedCharacter={selectedCharacter}
             onSelect={handleCharacterSelect}
-            onStart={startAdventure}
+            onStart={() => setGamePhase('level_select')}  // Go to level selection instead of starting adventure
+            onExitGame={() => setGamePhase('main_menu')}
+          />
+        );
+
+      case 'level_select':
+        const selectedChar = CHARACTERS.find(c => c.name === selectedCharacter);
+        if (!selectedChar) {
+          // Fallback - shouldn't happen
+          setGamePhase('character_select');
+          return null;
+        }
+        return (
+          <LevelSelection
+            selectedCharacter={selectedChar}
+            onSelectLevel={(levelNumber) => startLevel(levelNumber)}
+            onBack={() => setGamePhase('character_select')}
             onExitGame={() => setGamePhase('main_menu')}
           />
         );
@@ -2520,11 +2996,11 @@ const Game: React.FC<GameProps> = ({
         );
 
       case 'round_summary':
-        // Build roundScores from ROUND_REQUIREMENTS and roundHistory
-        const summaryRoundScores: RoundScore[] = ROUND_REQUIREMENTS.map(req => {
-          const historyEntry = roundHistory.find(h => h.round === req.round);
+        // Build roundScores from NEW_ROUND_REQUIREMENTS and roundHistory (5-round system)
+        const summaryRoundScores: RoundScore[] = NEW_ROUND_REQUIREMENTS.map(req => {
+          const historyEntry = roundHistory.find(h => h.round === req.roundInLevel);
           return {
-            round: req.round,
+            round: req.roundInLevel,
             target: req.targetScore,
             actual: historyEntry?.actual,
           };
@@ -2532,7 +3008,7 @@ const Game: React.FC<GameProps> = ({
 
         return (
           <RoundSummary
-            round={state.round}
+            round={roundInLevel}
             matchCount={state.foundCombinations.length}
             score={state.score}
             targetScore={state.targetScore}
@@ -2543,31 +3019,14 @@ const Game: React.FC<GameProps> = ({
             healingDone={roundStats.healingDone}
             didLevelUp={state.player.stats.level > roundStats.startLevel}
             onContinue={() => {
-              // Calculate all levels gained during round
-              const startLevel = roundStats.startLevel;
-              const endLevel = state.player.stats.level;
-              const levelsGained = endLevel - startLevel;
-
-              // Only show level up screen if player actually leveled up
-              if (levelsGained > 0) {
-                // Build queue of level-ups: [startLevel+1, startLevel+2, ...]
-                const levelQueue = Array.from(
-                  { length: levelsGained },
-                  (_, i) => startLevel + i + 1
-                );
-                setPendingLevelUps(levelQueue);
-                setGamePhase('level_up');
-              } else {
-                // No level ups, go directly to shop
-                setGamePhase('shop');
-              }
+              // Level ups now happen during gameplay via modal
+              setGamePhase('shop');
             }}
             playerStats={calculatePlayerTotalStats(state.player)}
             playerWeapons={state.player.weapons}
             onExitGame={() => setGamePhase('main_menu')}
             roundScores={summaryRoundScores}
             enemy={state.activeEnemyInstance ?? undefined}
-            difficulty={adventureDifficulty}
             enemyDefeated={enemyDefeated}
             stretchGoalReward={state.selectedEnemyReward}
             stretchGoalMoney={state.selectedEnemyMoney}
@@ -2688,8 +3147,24 @@ const Game: React.FC<GameProps> = ({
                   })(),
                 }}
                 onTimeGainTriggered={recordTimeGainTrigger}
+                connections={state.connections}
               />
             </View>
+
+            {/* In-round level-up modal (NEW level-based system) */}
+            <LevelUpModal
+              visible={showLevelUpModal}
+              options={state.levelUpOptions}
+              onSelect={handleInRoundLevelUpSelect}
+              onReroll={handleInRoundLevelUpReroll}
+              rerollCost={state.rerollCost}
+              playerMoney={state.player.stats.money}
+              freeRerolls={state.player.stats.freeRerolls}
+              playerStats={calculatePlayerTotalStats(state.player)}
+              playerWeapons={state.player.weapons}
+              targetLevel={inRoundLevelUpQueue[0] || state.player.stats.level}
+              hasMoreLevelUps={inRoundLevelUpQueue.length > 1}
+            />
           </View>
         );
 
@@ -2778,17 +3253,18 @@ const Game: React.FC<GameProps> = ({
                   })(),
                 }}
                 onTimeGainTriggered={recordTimeGainTrigger}
+                connections={state.connections}
               />
             </View>
           </View>
         );
 
       case 'victory':
-        // Build roundScores from ROUND_REQUIREMENTS and roundHistory
-        const victoryRoundScores: RoundScore[] = ROUND_REQUIREMENTS.map(req => {
-          const historyEntry = roundHistory.find(h => h.round === req.round);
+        // Build roundScores from NEW_ROUND_REQUIREMENTS and roundHistory (5-round system)
+        const victoryRoundScores: RoundScore[] = NEW_ROUND_REQUIREMENTS.map(req => {
+          const historyEntry = roundHistory.find(h => h.round === req.roundInLevel);
           return {
-            round: req.round,
+            round: req.roundInLevel,
             target: req.targetScore,
             actual: historyEntry?.actual,
           };
@@ -2811,20 +3287,20 @@ const Game: React.FC<GameProps> = ({
         );
 
       case 'game_over':
-        // Build roundScores including the current failed round
-        const gameOverRoundScores: RoundScore[] = ROUND_REQUIREMENTS.map(req => {
+        // Build roundScores including the current failed round (5-round system)
+        const gameOverRoundScores: RoundScore[] = NEW_ROUND_REQUIREMENTS.map(req => {
           // Check if this round was completed in history
-          const historyEntry = roundHistory.find(h => h.round === req.round);
+          const historyEntry = roundHistory.find(h => h.round === req.roundInLevel);
           // If this is the current (failed) round, include the score
-          if (req.round === state.round) {
+          if (req.roundInLevel === roundInLevel) {
             return {
-              round: req.round,
+              round: req.roundInLevel,
               target: req.targetScore,
               actual: state.score,
             };
           }
           return {
-            round: req.round,
+            round: req.roundInLevel,
             target: req.targetScore,
             actual: historyEntry?.actual,
           };

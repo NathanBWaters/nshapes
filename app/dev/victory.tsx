@@ -83,6 +83,12 @@ const mockPlayerStats: PlayerStats = {
   echoChance: 0,
   chainReactionChance: 0,
   timeGainTriggerCap: 5,
+  // Connector weapon stats
+  connectionChance: 0,
+  startingConnections: 0,
+  echoTimeBonusPerLink: 0,
+  linkedFireMultiplier: 1,
+  bonusConnectionChance: 0,
 };
 
 // Mock player

@@ -9,15 +9,15 @@ import ReAnimated, {
   withDelay,
 } from 'react-native-reanimated';
 import { usePWASafeAreaInsets } from '@/utils/usePWASafeAreaInsets';
-import { PlayerStats, Weapon, AdventureDifficulty } from '@/types';
+import { PlayerStats, Weapon } from '@/types';
 import type { EnemyInstance, WeaponImpact } from '@/types/enemy';
+import ChallengeCard from './ui/ChallengeCard';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { DURATION } from '@/utils/designSystem';
 import Icon, { IconName } from './Icon';
 import GameMenu from './GameMenu';
 import { ScreenTransition } from './ScreenTransition';
 import RoundProgressChart, { RoundScore } from './RoundProgressChart';
-import ChallengeCard from './ui/ChallengeCard';
 
 interface RoundSummaryProps {
   round: number;
@@ -36,7 +36,6 @@ interface RoundSummaryProps {
   onExitGame?: () => void;
   roundScores: RoundScore[];
   enemy?: EnemyInstance;
-  difficulty?: AdventureDifficulty;
   enemyDefeated?: boolean;
   stretchGoalReward?: Weapon | null;
   stretchGoalMoney?: number | null;
@@ -98,7 +97,6 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
   onExitGame,
   roundScores,
   enemy,
-  difficulty,
   enemyDefeated = false,
   stretchGoalReward,
   stretchGoalMoney,
@@ -253,12 +251,11 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
           </View>
         </View>
 
-        {/* Challenge Card - Enemy or Difficulty */}
-        {(enemy || difficulty) && (
+        {/* Challenge Card - Only show if there's an enemy */}
+        {enemy && (
           <View style={styles.challengeSection} testID="stretch-goal-status">
             <ChallengeCard
               enemy={enemy}
-              difficulty={difficulty}
               enemyDefeated={enemyDefeated}
               stretchGoalReward={stretchGoalReward}
               stretchGoalMoney={stretchGoalMoney}

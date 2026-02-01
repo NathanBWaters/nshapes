@@ -47,6 +47,13 @@ jest.mock('@/utils/sounds', () => ({
   playSound: jest.fn(),
 }));
 
+jest.mock('@/components/KeywordText', () => {
+  const { Text } = require('react-native');
+  return function MockKeywordText({ children, style }: { children: React.ReactNode; style?: object }) {
+    return <Text style={style}>{children}</Text>;
+  };
+});
+
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));

@@ -34,7 +34,8 @@ const RewardReveal: React.FC<RewardRevealProps> = ({ reward }) => {
   const isFire = reward.effectType === 'fire';
   const isGrace = reward.effectType === 'grace';
   const isRicochet = reward.effectType === 'ricochet';
-  const isSpecialEffect = isExplosion || isLaser || isFire || isGrace || isRicochet;
+  const isConnected = reward.effectType === 'connected';
+  const isSpecialEffect = isExplosion || isLaser || isFire || isGrace || isRicochet || isConnected;
 
   // Get background color based on effect type
   const getBackgroundColor = () => {
@@ -43,6 +44,7 @@ const RewardReveal: React.FC<RewardRevealProps> = ({ reward }) => {
     if (isFire) return '#FF4444'; // Red for fire
     if (isGrace) return '#9B59B6'; // Purple for grace
     if (isRicochet) return '#FFD700'; // Gold for ricochet
+    if (isConnected) return '#7B68EE'; // Medium slate blue for connected
     return COLORS.canvasWhite;
   };
 
@@ -78,6 +80,12 @@ const RewardReveal: React.FC<RewardRevealProps> = ({ reward }) => {
     rewardItems.push({
       icon: '⚡',
       value: 'RICOCHET!',
+      color: '#FFFFFF',
+    });
+  } else if (isConnected) {
+    rewardItems.push({
+      icon: '🔗',
+      value: 'LINKED!',
       color: '#FFFFFF',
     });
   }

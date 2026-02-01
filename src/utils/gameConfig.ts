@@ -3,7 +3,7 @@
  * All game balance values and rules in one place for easy tweaking.
  */
 
-import { AttributeName, AdventureDifficulty } from '../types';
+import { AttributeName, AdventureDifficulty, LevelDefinition, LevelNumber, EnemyName } from '../types';
 
 // =============================================================================
 // PLAYER STARTING VALUES
@@ -23,7 +23,7 @@ export const STARTING_STATS = {
   // Weapon effect stats (defaults to 0)
   explosionChance: 0,
   autoHintChance: 0,
-  autoHintInterval: 10000, // 10 seconds default interval
+  autoHintInterval: 0, // ms reduction from 15s base wait (higher = faster hints)
   boardGrowthChance: 0,
   boardGrowthAmount: 1,
   fireSpreadChance: 0,
@@ -403,4 +403,196 @@ export const getActiveAttributesForRound = (round: number, difficulty: Adventure
 export const getBoardSizeForAttributes = (attributeCount: number): number => {
   const sizes: Record<number, number> = ATTRIBUTE_SCALING.boardSizes;
   return sizes[attributeCount] || BOARD.initialCardCount;
+};
+
+// =============================================================================
+// NEW LEVEL-BASED SYSTEM
+// =============================================================================
+
+/**
+ * New level-based progression replaces the old easy/medium/hard difficulty system.
+ * - 10 levels total, each with 5 rounds
+ * - Round timer is 120 seconds (doubled from 60)
+ * - Rounds 1, 2, 4: No enemies
+ * - Round 3: Mini-boss
+ * - Round 5: Boss (harder)
+ * - Level 1 is tutorial (no bosses)
+ * - Levels 1-3: 3 attributes
+ * - Levels 4-7: 4 attributes
+ * - Levels 8-10: 5 attributes
+ */
+
+export const LEVEL_SYSTEM = {
+  totalLevels: 10,
+  roundsPerLevel: 5,
+  baseRoundTime: 120, // Doubled from 60 seconds
+  xpMultiplierReduction: 3, // XP requirements reduced to 1/3
+} as const;
+
+/**
+ * Level definitions with names, attributes, and boss assignments.
+ * Mini-boss appears on round 3, main boss on round 5.
+ * Level 1 (tutorial) has no bosses.
+ */
+export const LEVEL_DEFINITIONS: LevelDefinition[] = [
+  {
+    number: 1,
+    name: 'First Steps',
+    description: 'Learn the basics of matching. No enemies, just pure matching practice.',
+    attributes: ['shape', 'color', 'number'],
+    miniBoss: null,
+    boss: null,
+  },
+  {
+    number: 2,
+    name: 'The Awakening',
+    description: 'Your first real challenge. Simple enemies test your skills.',
+    attributes: ['shape', 'color', 'number'],
+    miniBoss: 'Chihuahua',
+    boss: 'Jellyfish',
+  },
+  {
+    number: 3,
+    name: 'Rising Tide',
+    description: 'The difficulty rises. Stay sharp and match quickly.',
+    attributes: ['shape', 'color', 'number'],
+    miniBoss: 'Jellyfish',
+    boss: 'Snake',
+  },
+  {
+    number: 4,
+    name: 'Shifting Shadows',
+    description: 'A new attribute enters the fray. Shading matters now.',
+    attributes: ['shape', 'color', 'number', 'shading'],
+    miniBoss: 'Snake',
+    boss: 'Rabbit',
+  },
+  {
+    number: 5,
+    name: 'The Crucible',
+    description: 'Your skills are tested. Only the worthy progress.',
+    attributes: ['shape', 'color', 'number', 'shading'],
+    miniBoss: 'Rabbit',
+    boss: 'Squid',
+  },
+  {
+    number: 6,
+    name: "Storm's Edge",
+    description: 'The storm intensifies. Enemies grow fiercer.',
+    attributes: ['shape', 'color', 'number', 'shading'],
+    miniBoss: 'Squid',
+    boss: 'Porcupine',
+  },
+  {
+    number: 7,
+    name: 'Dark Descent',
+    description: 'Descend into darkness. The hardest tier 2 challenges await.',
+    attributes: ['shape', 'color', 'number', 'shading'],
+    miniBoss: 'Porcupine',
+    boss: 'Hyena',
+  },
+  {
+    number: 8,
+    name: 'Prismatic Chaos',
+    description: 'All five attributes unlock. Background color joins the game.',
+    attributes: ['shape', 'color', 'number', 'shading', 'background'],
+    miniBoss: 'Hyena',
+    boss: 'Tiger',
+  },
+  {
+    number: 9,
+    name: 'The Gauntlet',
+    description: 'A brutal gauntlet of the toughest enemies.',
+    attributes: ['shape', 'color', 'number', 'shading', 'background'],
+    miniBoss: 'Tiger',
+    boss: 'Mammoth',
+  },
+  {
+    number: 10,
+    name: 'Final Stand',
+    description: 'The ultimate challenge. Prove you are a true master.',
+    attributes: ['shape', 'color', 'number', 'shading', 'background'],
+    miniBoss: 'Mammoth',
+    boss: 'Mammoth', // Final boss is Mammoth again but harder
+  },
+];
+
+/**
+ * Get level definition by level number
+ */
+export const getLevelDefinition = (levelNumber: LevelNumber): LevelDefinition => {
+  const level = LEVEL_DEFINITIONS.find(l => l.number === levelNumber);
+  if (!level) {
+    throw new Error(`Level ${levelNumber} not found`);
+  }
+  return level;
+};
+
+/**
+ * Get attributes for a specific level
+ */
+export const getAttributesForLevel = (levelNumber: LevelNumber): AttributeName[] => {
+  return [...getLevelDefinition(levelNumber).attributes];
+};
+
+/**
+ * Get enemy for a specific round within a level.
+ * Rounds 1, 2, 4: No enemy
+ * Round 3: Mini-boss
+ * Round 5: Boss
+ */
+export const getEnemyForLevelRound = (levelNumber: LevelNumber, roundInLevel: number): EnemyName | null => {
+  const level = getLevelDefinition(levelNumber);
+  if (roundInLevel === 3) return level.miniBoss;
+  if (roundInLevel === 5) return level.boss;
+  return null;
+};
+
+/**
+ * Check if a round within a level has an enemy
+ */
+export const roundHasEnemy = (roundInLevel: number): boolean => {
+  return roundInLevel === 3 || roundInLevel === 5;
+};
+
+/**
+ * Round requirements for the new 5-round system.
+ * Score targets are balanced for 120-second rounds.
+ */
+export const NEW_ROUND_REQUIREMENTS: readonly { roundInLevel: number; targetScore: number; time: number }[] = [
+  { roundInLevel: 1, targetScore: 8, time: 120 },
+  { roundInLevel: 2, targetScore: 12, time: 120 },
+  { roundInLevel: 3, targetScore: 18, time: 120 }, // Mini-boss round
+  { roundInLevel: 4, targetScore: 25, time: 120 },
+  { roundInLevel: 5, targetScore: 35, time: 120 }, // Boss round
+];
+
+/**
+ * Get round requirement for a round within a level
+ */
+export const getNewRoundRequirement = (roundInLevel: number): { targetScore: number; time: number } => {
+  const req = NEW_ROUND_REQUIREMENTS.find(r => r.roundInLevel === roundInLevel);
+  if (!req) {
+    // Fallback for invalid round
+    return { targetScore: 10, time: 120 };
+  }
+  return { targetScore: req.targetScore, time: req.time };
+};
+
+/**
+ * Get adjusted XP for level (1/3 of original requirement for faster leveling)
+ */
+export const getAdjustedXPForLevel = (level: number): number => {
+  // Original: level * level * 10
+  // New: level * level * 10 / 3 (rounded down)
+  return Math.floor((level * level * LEVEL_UP.xpMultiplier) / LEVEL_SYSTEM.xpMultiplierReduction);
+};
+
+/**
+ * Get level from XP using adjusted formula (level up 3x faster)
+ */
+export const getAdjustedLevelFromXP = (experience: number): number => {
+  // Original: sqrt(experience / 10)
+  // New: sqrt(experience * 3 / 10) = sqrt(experience / 3.33)
+  return Math.floor(Math.sqrt((experience * LEVEL_SYSTEM.xpMultiplierReduction) / LEVEL_UP.xpMultiplier));
 };

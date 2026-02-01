@@ -59,14 +59,9 @@ describe('Shadow Bat', () => {
       expect(enemy.description.toLowerCase()).toContain('laser');
     });
 
-    it('description mentions 20% reduction', () => {
+    it('description mentions divided by 3', () => {
       const enemy = createShadowBat();
-      expect(enemy.description).toContain('20%');
-    });
-
-    it('description mentions "reduced"', () => {
-      const enemy = createShadowBat();
-      expect(enemy.description.toLowerCase()).toContain('reduced');
+      expect(enemy.description).toContain('divided by 3');
     });
 
     it('has correct defeat condition text', () => {

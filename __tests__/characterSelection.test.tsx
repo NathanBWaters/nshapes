@@ -91,7 +91,7 @@ describe('CharacterSelection Component', () => {
     });
 
     it('allows selecting different unlocked characters', async () => {
-      const { getByText, rerender } = render(
+      const { getByText, getAllByText, rerender } = render(
         <CharacterSelection {...defaultProps} selectedCharacter="Orange Tabby" />
       );
 
@@ -106,9 +106,9 @@ describe('CharacterSelection Component', () => {
         <CharacterSelection {...defaultProps} selectedCharacter="Sly Fox" />
       );
 
-      // Detail card should show Sly Fox
+      // Detail card should show Sly Fox (appears in both list and detail panel)
       await waitFor(() => {
-        expect(getByText('Sly Fox')).toBeTruthy();
+        expect(getAllByText('Sly Fox').length).toBeGreaterThanOrEqual(1);
       });
     });
 
@@ -173,24 +173,16 @@ describe('CharacterSelection Component', () => {
       expect(enabledStartButton.props.accessibilityState?.disabled).toBeFalsy();
     });
 
-    it('calls onStart with selected difficulty when start button pressed', () => {
-      const { getByTestId, getByText } = render(
+    it('calls onStart when start button pressed', () => {
+      const { getByTestId } = render(
         <CharacterSelection {...defaultProps} selectedCharacter="Orange Tabby" />
       );
 
-      // Default difficulty should be medium
       const startButton = getByTestId('start-adventure-button');
       fireEvent.press(startButton);
 
+      // Difficulty is now determined by level selection, so 'medium' is passed as dummy value
       expect(mockOnStart).toHaveBeenCalledWith('medium');
-
-      // Change difficulty to hard and press again
-      mockOnStart.mockClear();
-      const hardButton = getByText('Hard');
-      fireEvent.press(hardButton);
-      fireEvent.press(startButton);
-
-      expect(mockOnStart).toHaveBeenCalledWith('hard');
     });
 
     it('maintains selected character state through multiple selections', async () => {
@@ -252,28 +244,4 @@ describe('CharacterSelection Component', () => {
     });
   });
 
-  describe('Difficulty selection', () => {
-    it('allows changing difficulty', () => {
-      const { getByText } = render(
-        <CharacterSelection {...defaultProps} selectedCharacter="Orange Tabby" />
-      );
-
-      // Click easy difficulty
-      const easyButton = getByText('Easy');
-      fireEvent.press(easyButton);
-
-      // Click medium difficulty
-      const mediumButton = getByText('Medium');
-      fireEvent.press(mediumButton);
-
-      // Click hard difficulty
-      const hardButton = getByText('Hard');
-      fireEvent.press(hardButton);
-
-      // All difficulty buttons should be accessible
-      expect(easyButton).toBeTruthy();
-      expect(mediumButton).toBeTruthy();
-      expect(hardButton).toBeTruthy();
-    });
-  });
 });

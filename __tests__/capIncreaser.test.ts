@@ -7,9 +7,8 @@ describe('Cap Increaser Weapons', () => {
   const capIncreasers = WEAPONS.filter(w => w.specialEffect === 'capIncrease');
 
   describe('Weapon Definitions', () => {
-    it('should have 11 cap increaser weapons (one per effect type except XP)', () => {
-      // XP has no cap increase, so there are 11 cap types with cap increasers
-      expect(capIncreasers.length).toBe(11);
+    it('should have 12 cap increaser weapons', () => {
+      expect(capIncreasers.length).toBe(12);
     });
 
     it('all cap increaser weapons should be rare rarity', () => {

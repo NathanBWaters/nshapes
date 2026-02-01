@@ -43,14 +43,9 @@ describe('Foggy Frog', () => {
       expect(enemy.description).toContain('Hint');
     });
 
-    it('has description mentioning 15% reduction', () => {
+    it('has description mentioning divided by 3', () => {
       const enemy = createFoggyFrog();
-      expect(enemy.description).toContain('15%');
-    });
-
-    it('has description mentioning reduced', () => {
-      const enemy = createFoggyFrog();
-      expect(enemy.description.toLowerCase()).toContain('reduced');
+      expect(enemy.description).toContain('divided by 3');
     });
 
     it('has defeat condition text mentioning target score', () => {

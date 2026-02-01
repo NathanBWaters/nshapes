@@ -9,7 +9,7 @@ import Animated, {
   interpolateColor,
   Easing,
 } from 'react-native-reanimated';
-import { Card as CardType, PlayerStats, CardReward, AttributeName, Weapon, Shape, Color } from '@/types';
+import { Card as CardType, PlayerStats, CardReward, AttributeName, Weapon, Shape, Color, BoardConnection } from '@/types';
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import Card from './Card';
 import RewardReveal from './RewardReveal';
@@ -17,6 +17,7 @@ import { COLORS } from '@/utils/colors';
 import { MATCH_REWARDS } from '@/utils/gameConfig';
 import { processWeaponEffects, WeaponEffectResult } from '@/utils/weaponEffects';
 import { isValidCombination } from '@/utils/gameUtils';
+import { getLinkedDestructionPositions } from '@/utils/connectionUtils';
 import { useAutoHint } from '@/hooks/useAutoHint';
 import { useAutoPlayer } from '@/hooks/useAutoPlayer';
 import { useScreenShake } from '@/hooks/useScreenShake';
@@ -63,6 +64,8 @@ interface GameBoardProps {
     effectiveCap: number;
   };
   onTimeGainTriggered?: () => void; // Called when time gain triggers (for tracking)
+  // Connector weapon system
+  connections?: BoardConnection[]; // Active connections between board positions
 }
 
 // Calculate rewards for a single card
@@ -117,6 +120,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
   roundStats,
   timeGainContext,
   onTimeGainTriggered,
+  connections = [],
 }) => {
   const [selectedCards, setSelectedCards] = useState<CardType[]>([]);
   const [matchedCardIds, setMatchedCardIds] = useState<string[]>([]);
@@ -540,6 +544,54 @@ const GameBoard: React.FC<GameBoardProps> = ({
             effectType: 'ricochet' as const,
           }));
 
+          // Process connected cards (connector weapon system)
+          const connectedCards: CardType[] = [];
+          const connectedRewards: CardReward[] = [];
+          if (connections && connections.length > 0) {
+            // Get indices of all cards being destroyed so far
+            const destroyedIndices = new Set<number>();
+            [...newSelectedCards, ...weaponEffects.explosiveCards, ...weaponEffects.laserCards, ...weaponEffects.ricochetCards].forEach(card => {
+              const idx = cards.findIndex(c => c.id === card.id);
+              if (idx !== -1) destroyedIndices.add(idx);
+            });
+
+            // Find linked positions for all destroyed cards
+            const processedPositions = new Set<number>();
+            const linkedPositions: number[] = [];
+            for (const pos of destroyedIndices) {
+              if (!processedPositions.has(pos)) {
+                const chainedPositions = getLinkedDestructionPositions(
+                  connections,
+                  pos,
+                  processedPositions
+                );
+                linkedPositions.push(...chainedPositions);
+              }
+            }
+
+            // Get linked cards that aren't already being destroyed
+            linkedPositions
+              .filter(pos => pos >= 0 && pos < cards.length)
+              .filter(pos => !destroyedIndices.has(pos))
+              .forEach(pos => {
+                const card = cards[pos];
+                if (card && !connectedCards.some(c => c.id === card.id)) {
+                  connectedCards.push(card);
+                  connectedRewards.push({
+                    cardId: card.id,
+                    points: 1,
+                    money: 1,
+                    effectType: 'connected' as const,
+                  });
+                }
+              });
+
+            // Play sound if cards were linked
+            if (connectedCards.length > 0) {
+              playSound('ricochet'); // Reuse ricochet sound for now
+            }
+          }
+
           // Process auto-matched sets from Echo Stone
           const echoRewards: CardReward[] = [];
           const echoCards: CardType[] = [];
@@ -550,6 +602,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
             ...weaponEffects.explosiveCards,
             ...weaponEffects.laserCards,
             ...weaponEffects.ricochetCards,
+            ...connectedCards,
           ];
 
           for (const echoSet of weaponEffects.autoMatchedSets) {
@@ -617,7 +670,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
           }
 
           // Combine all rewards
-          const allRewards = [...matchedRewards, ...explosionRewards, ...laserRewards, ...ricochetRewards, ...echoRewards];
+          const allRewards = [...matchedRewards, ...explosionRewards, ...laserRewards, ...ricochetRewards, ...connectedRewards, ...echoRewards];
           const rewardsWithMatchId = allRewards.map(r => ({ ...r, matchId }));
 
           // Collect all affected cards
@@ -626,6 +679,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
             ...weaponEffects.explosiveCards,
             ...weaponEffects.laserCards,
             ...weaponEffects.ricochetCards,
+            ...connectedCards,
             ...echoCards,
           ];
 
@@ -638,12 +692,13 @@ const GameBoard: React.FC<GameBoardProps> = ({
           setSelectedCards(prev => prev.filter(c => !newSelectedCards.some(mc => mc.id === c.id)));
           setRevealingRewards(prev => [...prev, ...rewardsWithMatchId]);
 
-          // Collect all cards to replace (matched + weapon effects + echo)
+          // Collect all cards to replace (matched + weapon effects + connected + echo)
           const allCardsToReplace = [
             ...newSelectedCards,
             ...weaponEffects.explosiveCards,
             ...weaponEffects.laserCards,
             ...weaponEffects.ricochetCards,
+            ...connectedCards,
             ...echoCards,
           ];
 
@@ -714,6 +769,54 @@ const GameBoard: React.FC<GameBoardProps> = ({
               effectType: 'ricochet' as const,
             }));
 
+            // Process connected cards (connector weapon system)
+            const connectedCards: CardType[] = [];
+            const connectedRewards: CardReward[] = [];
+            if (connections && connections.length > 0) {
+              // Get indices of all cards being destroyed so far
+              const destroyedIndices = new Set<number>();
+              [...newSelectedCards, ...weaponEffects.explosiveCards, ...weaponEffects.laserCards, ...weaponEffects.ricochetCards].forEach(card => {
+                const idx = cards.findIndex(c => c.id === card.id);
+                if (idx !== -1) destroyedIndices.add(idx);
+              });
+
+              // Find linked positions for all destroyed cards
+              const processedPositions = new Set<number>();
+              const linkedPositions: number[] = [];
+              for (const pos of destroyedIndices) {
+                if (!processedPositions.has(pos)) {
+                  const chainedPositions = getLinkedDestructionPositions(
+                    connections,
+                    pos,
+                    processedPositions
+                  );
+                  linkedPositions.push(...chainedPositions);
+                }
+              }
+
+              // Get linked cards that aren't already being destroyed
+              linkedPositions
+                .filter(pos => pos >= 0 && pos < cards.length)
+                .filter(pos => !destroyedIndices.has(pos))
+                .forEach(pos => {
+                  const card = cards[pos];
+                  if (card && !connectedCards.some(c => c.id === card.id)) {
+                    connectedCards.push(card);
+                    connectedRewards.push({
+                      cardId: card.id,
+                      points: 1,
+                      money: 1,
+                      effectType: 'connected' as const,
+                    });
+                  }
+                });
+
+              // Play sound if cards were linked
+              if (connectedCards.length > 0) {
+                playSound('ricochet'); // Reuse ricochet sound for now
+              }
+            }
+
             // Process auto-matched sets from Echo Stone (grace matches can trigger echo too!)
             const echoRewards: CardReward[] = [];
             const echoCards: CardType[] = [];
@@ -723,6 +826,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
               ...weaponEffects.explosiveCards,
               ...weaponEffects.laserCards,
               ...weaponEffects.ricochetCards,
+              ...connectedCards,
             ];
 
             for (const echoSet of weaponEffects.autoMatchedSets) {
@@ -788,7 +892,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
             }
 
             // Combine all rewards
-            const allRewards = [...matchedRewards, ...explosionRewards, ...laserRewards, ...ricochetRewards, ...echoRewards];
+            const allRewards = [...matchedRewards, ...explosionRewards, ...laserRewards, ...ricochetRewards, ...connectedRewards, ...echoRewards];
             const rewardsWithMatchId = allRewards.map(r => ({ ...r, matchId }));
 
             // Collect all affected cards
@@ -797,6 +901,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
               ...weaponEffects.explosiveCards,
               ...weaponEffects.laserCards,
               ...weaponEffects.ricochetCards,
+              ...connectedCards,
               ...echoCards,
             ];
 
@@ -815,6 +920,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
               ...weaponEffects.explosiveCards,
               ...weaponEffects.laserCards,
               ...weaponEffects.ricochetCards,
+              ...connectedCards,
               ...echoCards,
             ];
 
@@ -959,6 +1065,12 @@ const GameBoard: React.FC<GameBoardProps> = ({
                 const isHint = hintCards.includes(card.id);
                 const reward = rewardsByCardId.get(card.id);
 
+                // Calculate board index for connection checking
+                const boardIndex = rowIndex * COLUMNS + colIndex;
+                const isConnected = connections.some(
+                  conn => conn.positionA === boardIndex || conn.positionB === boardIndex
+                );
+
                 const cardWithState = {
                   ...card,
                   selected: isSelected,
@@ -977,6 +1089,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
                         disabled={isMatched || !isPlayerTurn}
                         onBurnComplete={handleCardBurnComplete}
                         isPaused={isPaused}
+                        isConnected={isConnected}
                       />
                     )}
                   </View>
@@ -1050,6 +1163,8 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 4,
   },
+  // Note: Connection state is now shown via small icon on card, not border glow
+  // Borders/outlines are EXCLUSIVELY reserved for selection state
 });
 
 export default GameBoard;

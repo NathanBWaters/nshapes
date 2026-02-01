@@ -40,6 +40,7 @@ interface CardProps {
   isIdle?: boolean; // Whether the game board is idle (for ambient breathing)
   breathingOffset?: number; // Stagger offset in ms for breathing animation
   isSuggestion?: boolean; // Whether this card is a subtle suggestion (after 10s idle)
+  isConnected?: boolean; // Whether this card is part of a connection (connector weapons)
 }
 
 const Card: React.FC<CardProps> = ({
@@ -53,6 +54,7 @@ const Card: React.FC<CardProps> = ({
   isIdle = false,
   breathingOffset = 0,
   isSuggestion = false,
+  isConnected = false,
 }) => {
   const { shape, color, number, shading, selected, isHint, isDud, isFaceDown, hasCountdown, countdownTimer, hasBomb, bombTimer } = card;
 
@@ -202,9 +204,7 @@ const Card: React.FC<CardProps> = ({
       return cardStyles;
     }
 
-    if (card.onFire) {
-      cardStyles.push(styles.onFire);
-    }
+    // Fire state is shown via small icon, not border (borders reserved for selection)
 
     // Bomb cards have urgent red border
     if (hasBomb) {
@@ -241,6 +241,35 @@ const Card: React.FC<CardProps> = ({
     return (
       <View style={[styles.badge, styles.badgeTopRight, { backgroundColor: COLORS.impactRed }]}>
         <Text style={styles.badgeText}>{pips}</Text>
+      </View>
+    );
+  };
+
+  // State indicator icons in bottom left corner
+  // These are small icons (1/5 size of shapes) that show card state
+  // IMPORTANT: Outlines/borders are ONLY for selection - use icons for other states
+  const renderStateIndicators = () => {
+    const indicators: { icon: string; color: string }[] = [];
+
+    // Fire indicator
+    if (card.onFire && !isDud && !isFaceDown) {
+      indicators.push({ icon: 'lorc/campfire', color: '#EF4444' }); // Red fire
+    }
+
+    // Connection indicator
+    if (isConnected && !isDud && !isFaceDown) {
+      indicators.push({ icon: 'lorc/linked-rings', color: COLORS.slateCharcoal }); // Gray connection
+    }
+
+    if (indicators.length === 0) return null;
+
+    return (
+      <View style={styles.stateIndicatorContainer}>
+        {indicators.map((indicator, index) => (
+          <View key={index} style={styles.stateIndicator}>
+            <Icon name={indicator.icon as any} size={10} color={indicator.color} noShadow />
+          </View>
+        ))}
       </View>
     );
   };
@@ -307,7 +336,7 @@ const Card: React.FC<CardProps> = ({
       style={[
         getCardStyle(),
         animatedCardStyle,
-        card.onFire && !isDud && !isFaceDown && fireStyle,
+        // Note: Fire state shown via icon, not border styling
         webCursorStyle,
       ]}
       onPress={() => !isClickDisabled && onClick(card)}
@@ -320,6 +349,9 @@ const Card: React.FC<CardProps> = ({
     >
       {/* Health badge for multi-hit cards */}
       {getHealthBadge()}
+
+      {/* State indicator icons (fire, connection) in bottom left */}
+      {renderStateIndicators()}
 
       {/* Card content - depends on state */}
       {isDud ? (
@@ -336,14 +368,13 @@ const Card: React.FC<CardProps> = ({
       {renderCountdownOverlay()}
       {renderBombOverlay()}
 
-      {/* Fire overlay - progressive darkening at edges */}
+      {/* Fire overlay - progressive darkening (no border, borders are for selection only) */}
       {card.onFire && !isDud && !isFaceDown && (
         <Animated.View
           style={[
             styles.fireOverlay,
             {
-              borderColor: `rgba(239, 68, 68, ${0.5 + fireProgress * 0.5})`,
-              backgroundColor: `rgba(0, 0, 0, ${fireProgress * 0.4})`,
+              backgroundColor: `rgba(239, 68, 68, ${fireProgress * 0.3})`,
             }
           ]}
           pointerEvents="none"
@@ -525,24 +556,35 @@ const styles = StyleSheet.create({
   hint: {
     backgroundColor: '#FFFDE7',
   },
-  onFire: {
-    borderColor: '#EF4444', // Red fire border
-    // borderWidth now consistent at 3px in base card style
-    shadowColor: '#F97316',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 10,
-    elevation: 8,
-    backgroundColor: '#FEF2F2', // Slight red tint
-  },
+  // Note: Fire state is shown via small icon in bottom left, not border
+  // Borders/outlines are EXCLUSIVELY for selection state
   fireOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    borderRadius: RADIUS.module,
-    borderWidth: 6,
+    borderRadius: RADIUS.module - 2, // Slightly smaller to not overlap card border
+  },
+  // State indicator icons (fire, connection) in bottom left corner
+  // Size is ~1/5 of the shapes on the card
+  stateIndicatorContainer: {
+    position: 'absolute',
+    bottom: 3,
+    left: 3,
+    flexDirection: 'row',
+    gap: 2,
+    zIndex: 10,
+  },
+  stateIndicator: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
   },
   disabled: {
     opacity: 0.6,

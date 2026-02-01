@@ -8,8 +8,52 @@ export type Shading = 'solid' | 'striped' | 'open';
 export type Background = 'white' | 'beige' | 'charcoal';
 export type AttributeName = 'shape' | 'color' | 'number' | 'shading' | 'background';
 
-// Adventure mode difficulty setting
+// Adventure mode difficulty setting (legacy - to be removed)
 export type AdventureDifficulty = 'easy' | 'medium' | 'hard';
+
+// New level-based progression system
+export type LevelNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+
+// Level completion tracking per character
+export interface LevelCompletion {
+  levelNumber: LevelNumber;
+  characterName: string;
+  completedAt: number; // Timestamp
+}
+
+// Level definition with bosses and attributes
+export interface LevelDefinition {
+  number: LevelNumber;
+  name: string;
+  description: string;
+  attributes: AttributeName[];
+  miniBoss: EnemyName | null; // Round 3 boss (null for tutorial level 1)
+  boss: EnemyName | null;     // Round 5 boss (null for tutorial level 1)
+}
+
+// =============================================================================
+// CONNECTOR WEAPON SYSTEM
+// =============================================================================
+
+/**
+ * Connection between two board positions.
+ * Connections persist on POSITIONS, not cards.
+ * When a card at a connected position is destroyed, the card at the linked position is also destroyed.
+ */
+export interface BoardConnection {
+  id: string;
+  positionA: number; // Board index
+  positionB: number; // Board index
+  createdAt: number; // Timestamp
+}
+
+/**
+ * Connection state for the current round.
+ * Connections are cleared at the end of each round.
+ */
+export interface ConnectionState {
+  connections: BoardConnection[];
+}
 
 // Ordered list of attributes for progressive unlock
 export const ATTRIBUTE_ORDER: AttributeName[] = ['shape', 'color', 'number', 'shading', 'background'];
@@ -50,6 +94,7 @@ export interface Card {
   // Enemy system card states
   isDud?: boolean;          // Card cannot be selected or matched (white/blank visual)
   isFaceDown?: boolean;     // Card shows back side, cannot be selected until flipped
+  wasOriginallyFaceDown?: boolean; // Tracks if card was face-down when round started (for test tracking)
   hasCountdown?: boolean;   // Card has countdown timer that damages player when expired
   countdownTimer?: number;  // Seconds remaining on countdown
   hasBomb?: boolean;        // Card has bomb that explodes if not matched in time
@@ -69,7 +114,7 @@ export interface CardReward {
   graceBonus?: number; // Graces to add
   boardGrowth?: number; // Cards to add to board
   // Weapon effect types for visual distinction
-  effectType?: 'explosion' | 'laser' | 'fire' | 'grace' | 'ricochet';
+  effectType?: 'explosion' | 'laser' | 'fire' | 'grace' | 'ricochet' | 'connected';
 }
 
 export type CharacterName =
@@ -88,7 +133,11 @@ export type WeaponName =
   'Mending Charm' | 'Crystal Orb' | 'Seeker Lens' | 'Scholar\'s Tome' | 'Fortune\'s Favor' |
   'Chrono Shard' | 'Time Drop' | 'Prismatic Ray' | 'Chaos Shard' |
   'Echo Stone' | 'Chain Reaction' | 'Time Trigger Mastery' |
-  'Prismatic Perfection' | 'Tabula Rasa' | 'Desperate Measures';
+  'Prismatic Perfection' | 'Tabula Rasa' | 'Desperate Measures' |
+  // Connector weapons
+  'Link Stone' | 'Link Chain' | 'Soul Link' | 'Revenge Linker' |
+  'Web Spinner' | 'Web Master' | 'Echo Chamber' | 'Resonance Core' |
+  'Sympathetic Flames' | 'Neural Network';
 
 export type WeaponRarity = 'common' | 'rare' | 'epic' | 'legendary';
 
@@ -151,7 +200,7 @@ export interface Weapon {
   flavorText?: string; // Longer fun description for weapon guide
   price: number;
   effects: Partial<PlayerStats>;
-  specialEffect?: 'explosive' | 'autoHint' | 'enhancedHint' | 'boardGrowth' | 'fire' | 'graceGain' | 'healing' | 'hintGain' | 'xpGain' | 'coinGain' | 'timeGain' | 'laser' | 'ricochet' | 'echo' | 'chainReaction' | 'capIncrease' | 'bridge' | 'challengeLegendary';
+  specialEffect?: 'explosive' | 'autoHint' | 'enhancedHint' | 'boardGrowth' | 'fire' | 'graceGain' | 'healing' | 'hintGain' | 'xpGain' | 'coinGain' | 'timeGain' | 'laser' | 'ricochet' | 'echo' | 'chainReaction' | 'capIncrease' | 'bridge' | 'challengeLegendary' | 'connector' | 'revengeLinker' | 'webWeaver' | 'echoChamber' | 'sympatheticFlames' | 'neuralNetwork';
   capIncrease?: CapIncreaseEffect; // When acquired, increases the cap for an effect type
   bridgeEffect?: BridgeEffect; // Cross-system trigger: when X happens, Y% chance to cause Z
   icon?: IconName; // Icon path like "delapouite/bamboo" - must be in ICON_REGISTRY
@@ -252,6 +301,13 @@ export interface PlayerStats {
   echoChance: number;           // % chance to auto-match another set on player match
   chainReactionChance: number;  // % chance for echo to trigger twice (2 additional matches)
 
+  // Connector weapon stats
+  connectionChance: number;     // % chance to create a connection on match
+  startingConnections: number;  // Number of connections to start each round with
+  echoTimeBonusPerLink: number; // Seconds gained per linked destruction
+  linkedFireMultiplier: number; // Fire spread multiplier for connected positions
+  bonusConnectionChance: number; // % chance to create bonus connection when creating one
+
   // Effect cap system - tracks player's current caps for each effect type
   // Caps can be increased by acquiring Cap Increaser weapons
   effectCaps?: EffectCaps;
@@ -331,4 +387,7 @@ export interface GameState {
 
   // Endless mode
   isEndlessMode: boolean;
+
+  // Connector weapon system
+  connections: BoardConnection[];  // Active connections between board positions
 }

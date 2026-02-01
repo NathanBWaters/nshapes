@@ -12,18 +12,18 @@ import { Weapon, WeaponRarity, Player } from '@/types';
 
 describe('Weapon Definitions', () => {
   describe('WEAPONS array', () => {
-    it('should have exactly 77 weapons (18 types x 2 rarities + 3 legendary-only + 11 cap increasers + 18 epic variants + 8 bridge legendaries + 1 luck)', () => {
-      expect(WEAPONS.length).toBe(77);
+    it('should have exactly 91 weapons (base types + cap increasers + epic variants + bridge legendaries + connector weapons)', () => {
+      expect(WEAPONS.length).toBe(91);
     });
 
-    it('should have 18 common weapons', () => {
+    it('should have 21 common weapons', () => {
       const commons = WEAPONS.filter(w => w.rarity === 'common');
-      expect(commons.length).toBe(18);
+      expect(commons.length).toBe(21);
     });
 
-    it('should have 30 rare weapons (18 base + 11 cap increasers + 1 luck)', () => {
+    it('should have 35 rare weapons', () => {
       const rares = WEAPONS.filter(w => w.rarity === 'rare');
-      expect(rares.length).toBe(30);
+      expect(rares.length).toBe(35);
     });
 
     it('should have 18 epic weapons (epic variants)', () => {
@@ -31,9 +31,9 @@ describe('Weapon Definitions', () => {
       expect(epics.length).toBe(18);
     });
 
-    it('should have 11 legendary weapons (Mystic Sight + Chain Reaction + Snowball + 8 bridge legendaries)', () => {
+    it('should have 17 legendary weapons', () => {
       const legendaries = WEAPONS.filter(w => w.rarity === 'legendary');
-      expect(legendaries.length).toBe(11);
+      expect(legendaries.length).toBe(17);
     });
 
     it('should have all required weapon types', () => {
@@ -111,20 +111,31 @@ describe('Weapon Definitions', () => {
       });
     });
 
-    it('most weapon types should have 2 rarities, some are legendary-only, rare-only, or epic-only', () => {
+    it('most weapon types should have 2 rarities, some are legendary-only, rare-only, common-only, or epic-only', () => {
       const weaponsByName = new Map<string, Weapon[]>();
       const legendaryOnlyWeapons = [
         'Mystic Sight', 'Chain Reaction', 'Snowball',
         // Bridge weapons (cross-system triggers)
         'Chaos Conduit', 'Temporal Rift', 'Soul Harvest',
         'Cascade Core', "Fortune's Blessing", 'Wisdom Chain', 'Grace Conduit',
-        'Life Link'
+        'Life Link',
+        // Connector weapons (legendary)
+        'Soul Link', 'Revenge Linker', 'Neural Network',
+        // Challenge legendary weapons
+        'Prismatic Perfection', 'Tabula Rasa', 'Desperate Measures'
       ];
-      // Cap increaser weapons and Fortune's Eye are rare-only
+      // Cap increaser weapons, Fortune's Eye, and connector rare-only weapons
       const rareOnlyWeapons = [
         'Echo Mastery', 'Laser Mastery', 'Grace Mastery', 'Explosion Mastery',
         'Hint Mastery', 'Time Mastery', 'Healing Mastery', 'Fire Mastery',
-        'Ricochet Mastery', 'Growth Mastery', 'Coin Mastery', "Fortune's Eye"
+        'Ricochet Mastery', 'Growth Mastery', 'Coin Mastery', "Fortune's Eye",
+        'Connection Mastery', 'Time Trigger Mastery',
+        // Connector weapons (rare-only)
+        'Link Chain', 'Web Master', 'Resonance Core', 'Sympathetic Flames'
+      ];
+      // Common-only weapons (connector common versions)
+      const commonOnlyWeapons = [
+        'Link Stone', 'Web Spinner', 'Echo Chamber'
       ];
       // Epic weapon variants are epic-only
       const epicOnlyWeapons = [
@@ -150,6 +161,10 @@ describe('Weapon Definitions', () => {
           // Rare-only weapons (cap increasers) should have exactly 1 rarity
           expect(weapons.length).toBe(1);
           expect(weapons[0].rarity).toBe('rare');
+        } else if (commonOnlyWeapons.includes(name)) {
+          // Common-only weapons (connector common versions) should have exactly 1 rarity
+          expect(weapons.length).toBe(1);
+          expect(weapons[0].rarity).toBe('common');
         } else if (epicOnlyWeapons.includes(name)) {
           // Epic-only weapons should have exactly 1 rarity
           expect(weapons.length).toBe(1);
@@ -245,13 +260,24 @@ describe('Weapon Definitions', () => {
         // Bridge weapons (cross-system triggers)
         'Chaos Conduit', 'Temporal Rift', 'Soul Harvest',
         'Cascade Core', "Fortune's Blessing", 'Wisdom Chain', 'Grace Conduit',
-        'Life Link'
+        'Life Link',
+        // Connector weapons (legendary)
+        'Soul Link', 'Revenge Linker', 'Neural Network',
+        // Challenge legendary weapons
+        'Prismatic Perfection', 'Tabula Rasa', 'Desperate Measures'
       ];
-      // Cap increaser weapons and Fortune's Eye are rare-only
+      // Cap increaser weapons, Fortune's Eye, and connector rare-only weapons
       const rareOnlyWeapons = [
         'Echo Mastery', 'Laser Mastery', 'Grace Mastery', 'Explosion Mastery',
         'Hint Mastery', 'Time Mastery', 'Healing Mastery', 'Fire Mastery',
-        'Ricochet Mastery', 'Growth Mastery', 'Coin Mastery', "Fortune's Eye"
+        'Ricochet Mastery', 'Growth Mastery', 'Coin Mastery', "Fortune's Eye",
+        'Connection Mastery', 'Time Trigger Mastery',
+        // Connector weapons (rare-only)
+        'Link Chain', 'Web Master', 'Resonance Core', 'Sympathetic Flames'
+      ];
+      // Common-only weapons (connector common versions)
+      const commonOnlyWeapons = [
+        'Link Stone', 'Web Spinner', 'Echo Chamber'
       ];
       // Epic weapon variants are epic-only
       const epicOnlyWeapons = [
@@ -270,9 +296,10 @@ describe('Weapon Definitions', () => {
       });
 
       weaponsByName.forEach((rarityMap, name) => {
-        // Skip legendary-only, rare-only (cap increasers), and epic-only weapons
+        // Skip legendary-only, rare-only (cap increasers), common-only (connector), and epic-only weapons
         if (legendaryOnlyWeapons.includes(name)) return;
         if (rareOnlyWeapons.includes(name)) return;
+        if (commonOnlyWeapons.includes(name)) return;
         if (epicOnlyWeapons.includes(name)) return;
 
         const common = rarityMap.get('common')!;

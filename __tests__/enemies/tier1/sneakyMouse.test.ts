@@ -49,12 +49,7 @@ describe('Sneaky Mouse', () => {
     it('has description containing grace reduction info', () => {
       const enemy = createSneakyMouse();
       expect(enemy.description.toLowerCase()).toContain('grace');
-      expect(enemy.description).toContain('15%');
-    });
-
-    it('has description mentioning reduction', () => {
-      const enemy = createSneakyMouse();
-      expect(enemy.description.toLowerCase()).toContain('reduced');
+      expect(enemy.description).toContain('divided by 3');
     });
 
     it('has defeat condition text mentioning grace', () => {

@@ -15,6 +15,9 @@ export const STORAGE_KEYS = {
   SOUND_ENABLED: 'sound_enabled',
   UNLOCKED_CHARACTERS: 'unlocked_characters',
   SAVED_ADVENTURE_GAME: 'saved_adventure_game',
+  // New level-based system
+  HIGHEST_UNLOCKED_LEVEL: 'highest_unlocked_level',
+  LEVEL_COMPLETIONS: 'level_completions',
 } as const;
 
 // Character wins type: maps character name to win count
@@ -244,5 +247,161 @@ export const SavedGameStorage = {
 
   clear: (): void => {
     storage.remove(STORAGE_KEYS.SAVED_ADVENTURE_GAME);
+  },
+};
+
+// =============================================================================
+// NEW LEVEL-BASED PROGRESSION STORAGE
+// =============================================================================
+
+// Level completion record: tracks which characters beat which levels
+export interface LevelCompletionRecord {
+  levelNumber: number;
+  characterName: string;
+  completedAt: number;
+}
+
+// Level progress storage helpers
+export const LevelProgressStorage = {
+  /**
+   * Get the highest unlocked level (1-10).
+   * Level 1 is always unlocked by default.
+   */
+  getHighestUnlockedLevel: (): number => {
+    const level = storage.getNumber(STORAGE_KEYS.HIGHEST_UNLOCKED_LEVEL);
+    return level ?? 1; // Default to level 1
+  },
+
+  /**
+   * Check if a specific level is unlocked.
+   * Levels are unlocked linearly: beat N to unlock N+1.
+   */
+  isLevelUnlocked: (levelNumber: number): boolean => {
+    return levelNumber <= LevelProgressStorage.getHighestUnlockedLevel();
+  },
+
+  /**
+   * Unlock the next level after completing the current one.
+   * Only unlocks if the next level isn't already unlocked.
+   */
+  unlockNextLevel: (completedLevel: number): void => {
+    const currentHighest = LevelProgressStorage.getHighestUnlockedLevel();
+    const nextLevel = completedLevel + 1;
+    if (nextLevel > currentHighest && nextLevel <= 10) {
+      storage.set(STORAGE_KEYS.HIGHEST_UNLOCKED_LEVEL, nextLevel);
+    }
+  },
+
+  /**
+   * Get all level completions (which characters beat which levels).
+   */
+  getAllCompletions: (): LevelCompletionRecord[] => {
+    const data = storage.getString(STORAGE_KEYS.LEVEL_COMPLETIONS);
+    if (!data) return [];
+    try {
+      return JSON.parse(data) as LevelCompletionRecord[];
+    } catch {
+      return [];
+    }
+  },
+
+  /**
+   * Get completions for a specific level.
+   * Returns array of character names that have beaten this level.
+   */
+  getCompletionsForLevel: (levelNumber: number): string[] => {
+    const completions = LevelProgressStorage.getAllCompletions();
+    return completions
+      .filter(c => c.levelNumber === levelNumber)
+      .map(c => c.characterName);
+  },
+
+  /**
+   * Check if a character has beaten a specific level.
+   */
+  hasCharacterBeatenLevel: (levelNumber: number, characterName: string): boolean => {
+    const completions = LevelProgressStorage.getAllCompletions();
+    return completions.some(
+      c => c.levelNumber === levelNumber && c.characterName === characterName
+    );
+  },
+
+  /**
+   * Record a level completion for a character.
+   * Also unlocks the next level.
+   */
+  recordCompletion: (levelNumber: number, characterName: string): void => {
+    // Check if already recorded
+    if (LevelProgressStorage.hasCharacterBeatenLevel(levelNumber, characterName)) {
+      // Still unlock next level in case it wasn't unlocked
+      LevelProgressStorage.unlockNextLevel(levelNumber);
+      return;
+    }
+
+    // Add completion record
+    const completions = LevelProgressStorage.getAllCompletions();
+    completions.push({
+      levelNumber,
+      characterName,
+      completedAt: Date.now(),
+    });
+    storage.set(STORAGE_KEYS.LEVEL_COMPLETIONS, JSON.stringify(completions));
+
+    // Unlock next level
+    LevelProgressStorage.unlockNextLevel(levelNumber);
+  },
+
+  /**
+   * Get all levels a character has beaten.
+   */
+  getLevelsBeatenByCharacter: (characterName: string): number[] => {
+    const completions = LevelProgressStorage.getAllCompletions();
+    return completions
+      .filter(c => c.characterName === characterName)
+      .map(c => c.levelNumber)
+      .sort((a, b) => a - b);
+  },
+
+  /**
+   * Reset all level progress (for testing).
+   */
+  resetProgress: (): void => {
+    storage.remove(STORAGE_KEYS.HIGHEST_UNLOCKED_LEVEL);
+    storage.remove(STORAGE_KEYS.LEVEL_COMPLETIONS);
+  },
+
+  /**
+   * Migrate old save data from pre-level system.
+   * Characters with wins are given credit for completing level 1.
+   * This should be called once on app startup.
+   */
+  migrateFromOldSaveFormat: (): void => {
+    // Check if migration has already happened
+    const migrationKey = 'level_migration_v1_complete';
+    if (storage.getBoolean(migrationKey)) {
+      return; // Already migrated
+    }
+
+    // Get old character wins
+    const winsData = storage.getString(STORAGE_KEYS.CHARACTER_WINS);
+    if (winsData) {
+      try {
+        const wins = JSON.parse(winsData) as Record<string, number>;
+        // For each character with at least 1 win, mark level 1 as complete
+        Object.entries(wins).forEach(([characterName, winCount]) => {
+          if (winCount > 0) {
+            // Only record if not already recorded
+            if (!LevelProgressStorage.hasCharacterBeatenLevel(1, characterName)) {
+              LevelProgressStorage.recordCompletion(1, characterName);
+            }
+          }
+        });
+      } catch {
+        // Ignore parse errors
+      }
+    }
+
+    // Mark migration as complete
+    storage.set(migrationKey, true);
   },
 };
