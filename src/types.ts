@@ -127,19 +127,56 @@ export type EnemyName =
   'Chihuahua' | 'Jellyfish' | 'Snake' | 'Mammoth' |
   'Rabbit' | 'Squid' | 'Porcupine' | 'Hyena' | 'Tiger';
 
-export type WeaponName =
-  'Blast Powder' | 'Oracle Eye' | 'Mystic Sight' | 'Field Stone' | 'Growth Seed' |
-  'Flint Spark' | 'Second Chance' | 'Fortune Token' | 'Life Vessel' |
-  'Mending Charm' | 'Crystal Orb' | 'Seeker Lens' | 'Scholar\'s Tome' | 'Fortune\'s Favor' |
-  'Chrono Shard' | 'Time Drop' | 'Prismatic Ray' | 'Chaos Shard' |
-  'Echo Stone' | 'Chain Reaction' | 'Time Trigger Mastery' |
+// =============================================================================
+// NEW WEAPON/PASSIVE FUSION SYSTEM TYPES
+// =============================================================================
+
+/** Weapon type: 'weapon' can fuse, 'passive' cannot */
+export type WeaponType = 'weapon' | 'passive';
+
+/** Weapon level: 1, 2, or 3 */
+export type WeaponLevel = 1 | 2 | 3;
+
+/** Fusion tier: 0 = base, 1 = Tier 1 fusion, 2 = Tier 2 fusion */
+export type FusionTier = 0 | 1 | 2;
+
+/** Base weapon names (6 weapons that can fuse) */
+export type BaseWeaponName =
+  'Blast Powder' | 'Flint Spark' | 'Prismatic Ray' |
+  'Chaos Shard' | 'Echo Stone' | 'Link Stone';
+
+/** Base passive names (13 passives that cannot fuse) */
+export type BasePassiveName =
+  'Oracle Eye' | 'Field Stone' | 'Growth Seed' | 'Second Chance' |
+  'Fortune Token' | 'Life Vessel' | 'Mending Charm' | 'Crystal Orb' |
+  'Seeker Lens' | 'Scholar\'s Tome' | 'Fortune\'s Favor' | 'Chrono Shard' | 'Time Drop';
+
+/** Tier 1 fusion names (15 fusions from base weapon pairs) */
+export type Tier1FusionName =
+  'Infernal Charge' | 'Detonation Beam' | 'Shrapnel Storm' |
+  'Resonant Blast' | 'Chain Detonator' | 'Solar Flare' |
+  'Wildfire Shard' | 'Blazing Echo' | 'Burning Bonds' |
+  'Prism Shatter' | 'Mirror Beam' | 'Linked Annihilation' |
+  'Cascade Chaos' | 'Chaotic Web' | 'Resonant Link';
+
+/** Tier 2 fusion names (15 legendary fusions from Tier 1 pairs) */
+export type Tier2FusionName =
+  'Supernova' | 'Eternal Flame' | 'Extinction Ray' |
+  'Reality Fracture' | 'Infinite Echo' | 'Doom Network' |
+  'Prismatic Inferno' | 'Soul Pyre' | 'Plague Fire' |
+  'Quantum Entanglement' | 'Paradox Engine' | 'Grid Eraser' |
+  'Scorched Earth' | 'Phoenix Storm' | 'Armageddon';
+
+/** Legacy weapon names (for backward compatibility during migration) */
+export type LegacyWeaponName =
+  'Mystic Sight' | 'Chain Reaction' | 'Time Trigger Mastery' |
   'Prismatic Perfection' | 'Tabula Rasa' | 'Desperate Measures' |
-  // Connector weapons
-  'Link Stone' | 'Link Chain' | 'Soul Link' | 'Revenge Linker' |
+  'Link Chain' | 'Soul Link' | 'Revenge Linker' |
   'Web Spinner' | 'Web Master' | 'Echo Chamber' | 'Resonance Core' |
   'Sympathetic Flames' | 'Neural Network';
 
-export type WeaponRarity = 'common' | 'rare' | 'epic' | 'legendary';
+/** All weapon/passive names */
+export type WeaponName = BaseWeaponName | BasePassiveName | Tier1FusionName | Tier2FusionName | LegacyWeaponName;
 
 export type ItemName =
   'Great Field' | 'Mirror Trinket' | 'Hint Booster' | 'Lucky Token' |
@@ -151,60 +188,202 @@ export type ItemName =
 
 export type ItemRarity = 'Tier 1' | 'Tier 2' | 'Tier 3' | 'Tier 4';
 
-// Cap increase effect types - must match EffectCapType in gameConfig.ts
+// =============================================================================
+// LEGACY TYPES (for backward compatibility during migration)
+// These will be removed once migration to new Weapon system is complete
+// =============================================================================
+
+/** @deprecated Use new Weapon interface with levelEffects instead */
+export type WeaponRarity = 'common' | 'rare' | 'epic' | 'legendary';
+
+/** @deprecated Cap system removed in new weapon system */
 export type CapIncreaseType = 'echo' | 'laser' | 'graceGain' | 'explosion' | 'hint' | 'timeGain' | 'healing' | 'fire' | 'ricochet' | 'boardGrowth' | 'coinGain' | 'xpGain';
 
+/** @deprecated Cap system removed in new weapon system */
 export interface CapIncreaseEffect {
   type: CapIncreaseType;
   amount: number;
 }
 
-// Bridge effect trigger types - when X happens, there's a chance to trigger Y
+/** @deprecated Bridge system removed in new weapon system */
 export type BridgeTriggerType =
-  | 'onHeal'           // When player heals
-  | 'onExplosion'      // When explosion destroys cards
-  | 'onTimeGain'       // When time is gained
-  | 'onDestruction'    // When any card is destroyed (fire, laser, explosion)
-  | 'onEcho'           // When echo triggers
-  | 'onCoinGain'       // When coins are gained
-  | 'onXPGain'         // When XP is gained
-  | 'onGraceUse'       // When grace prevents health loss
-  | 'onHintUse'        // When hint is used
-  | 'onHealthLoss';    // When player loses health
+  | 'onHeal'
+  | 'onExplosion'
+  | 'onTimeGain'
+  | 'onDestruction'
+  | 'onEcho'
+  | 'onCoinGain'
+  | 'onXPGain'
+  | 'onGraceUse'
+  | 'onHintUse'
+  | 'onHealthLoss';
 
-// Bridge effect result types - what happens when triggered
+/** @deprecated Bridge system removed in new weapon system */
 export type BridgeEffectType =
-  | 'gainGrace'        // Gain grace
-  | 'triggerEcho'      // Trigger echo match
-  | 'heal'             // Heal HP
-  | 'fireCard'         // Set random card on fire
-  | 'gainHint'         // Gain hint
-  | 'gainCoin'         // Gain coins
-  | 'triggerLaser'     // Fire a laser
-  | 'explosion';       // Trigger explosion
+  | 'gainGrace'
+  | 'triggerEcho'
+  | 'heal'
+  | 'fireCard'
+  | 'gainHint'
+  | 'gainCoin'
+  | 'triggerLaser'
+  | 'explosion';
 
+/** @deprecated Bridge system removed in new weapon system */
 export interface BridgeEffect {
   trigger: BridgeTriggerType;
-  chance: number;        // Percentage (0-100)
+  chance: number;
   effect: BridgeEffectType;
-  amount?: number;       // Amount for effects that need it (heal, coins, etc.)
+  amount?: number;
 }
 
+/** @deprecated Use EffectCaps type in gameConfig.ts during migration */
+export interface EffectCaps {
+  echo: number;
+  laser: number;
+  graceGain: number;
+  explosion: number;
+  hint: number;
+  timeGain: number;
+  healing: number;
+  fire: number;
+  ricochet: number;
+  boardGrowth: number;
+  coinGain: number;
+  xpGain: number;
+  [key: string]: number; // Index signature for Record<string, number> compatibility
+}
+
+// =============================================================================
+// NEW WEAPON/PASSIVE FUSION SYSTEM TYPES
+// =============================================================================
+
+/** Effects that a weapon/passive can have at a given level */
+export interface WeaponEffects {
+  // Damage/destruction effects
+  explosionChance?: number;
+  fireSpreadChance?: number;
+  laserChance?: number;
+  ricochetChance?: number;
+  ricochetChainChance?: number;
+  echoChance?: number;
+  connectionChance?: number;
+
+  // Passive/utility effects
+  autoHintChance?: number;
+  autoHintInterval?: number;
+  boardGrowthChance?: number;
+  boardGrowthAmount?: number;
+  graceGainChance?: number;
+  healingChance?: number;
+  hintGainChance?: number;
+  xpGainChance?: number;
+  coinGainChance?: number;
+  timeGainChance?: number;
+  timeGainAmount?: number;
+
+  // Static bonuses
+  fieldSize?: number;
+  graces?: number;
+  maxHealth?: number;
+  health?: number;
+  maxHints?: number;
+  hints?: number;
+  startingTime?: number;
+  startingConnections?: number;
+
+  // Fusion bonus effects (when limitation is lifted)
+  explosionsIgnite?: boolean;        // Infernal Charge: explosions set cards on fire
+  laserIgnites?: boolean;            // Solar Flare: laser path catches fire
+  laserBothDirections?: boolean;     // Solar Flare: laser fires row AND column
+  echoTriggersWeapons?: boolean;     // Resonant Blast: echo triggers weapon effects
+  maxRicochets?: number;             // Override for ricochet limit
+  maxConnections?: number;           // Override for connection limit
+  fireAnyColor?: boolean;            // Infernal Charge: fire spreads to any color
+  explosionAnyColor?: boolean;       // Detonation Beam: explosions hit any card
+}
+
+/** Level-based effects structure */
+export interface LevelEffects {
+  1: WeaponEffects;
+  2: WeaponEffects;
+  3: WeaponEffects;
+}
+
+/**
+ * Legacy Weapon interface - used by existing code during migration.
+ * Once migration is complete, this will be replaced by FusionWeapon.
+ */
 export interface Weapon {
-  id: string; // Unique identifier for stacking
-  name: WeaponName | string; // Allow string for new weapon names
+  id: string;
+  name: WeaponName | string;
   rarity: WeaponRarity;
-  level: number; // 1-4
-  description: string; // Technical description with percentages
-  shortDescription: string; // 3-8 word summary shown in lists
-  flavorText?: string; // Longer fun description for weapon guide
+  level: number;
+  description: string;
+  shortDescription: string;
+  flavorText?: string;
   price: number;
   effects: Partial<PlayerStats>;
-  specialEffect?: 'explosive' | 'autoHint' | 'enhancedHint' | 'boardGrowth' | 'fire' | 'graceGain' | 'healing' | 'hintGain' | 'xpGain' | 'coinGain' | 'timeGain' | 'laser' | 'ricochet' | 'echo' | 'chainReaction' | 'capIncrease' | 'bridge' | 'challengeLegendary' | 'connector' | 'revengeLinker' | 'webWeaver' | 'echoChamber' | 'sympatheticFlames' | 'neuralNetwork';
-  capIncrease?: CapIncreaseEffect; // When acquired, increases the cap for an effect type
-  bridgeEffect?: BridgeEffect; // Cross-system trigger: when X happens, Y% chance to cause Z
-  icon?: IconName; // Icon path like "delapouite/bamboo" - must be in ICON_REGISTRY
-  maxCount?: number; // Maximum number of this weapon that can be owned (e.g., 1 for unique legendaries)
+  specialEffect?: 'explosive' | 'autoHint' | 'enhancedHint' | 'boardGrowth' | 'fire' |
+                  'graceGain' | 'healing' | 'hintGain' | 'xpGain' | 'coinGain' |
+                  'timeGain' | 'laser' | 'ricochet' | 'echo' | 'chainReaction' |
+                  'capIncrease' | 'bridge' | 'challengeLegendary' | 'connector' |
+                  'revengeLinker' | 'webWeaver' | 'echoChamber' | 'sympatheticFlames' | 'neuralNetwork';
+  capIncrease?: CapIncreaseEffect;
+  bridgeEffect?: BridgeEffect;
+  icon?: IconName;
+  maxCount?: number;
+
+  // NEW FIELDS (added for fusion system, optional during migration)
+  type?: WeaponType;
+  fusionTier?: FusionTier;
+  fusionParents?: [string, string];
+  levelEffects?: LevelEffects;
+  limitation?: string;
+}
+
+/**
+ * New Weapon interface for the fusion system.
+ * Will replace Weapon interface once migration is complete.
+ */
+export interface FusionWeapon {
+  id: string;
+  name: WeaponName | string;
+  type: WeaponType;
+  level: WeaponLevel;
+  fusionTier: FusionTier;
+  fusionParents?: [string, string];
+
+  description: string;
+  shortDescription: string;
+  flavorText?: string;
+
+  levelEffects: LevelEffects;
+  limitation?: string;
+
+  specialEffect?: 'explosive' | 'fire' | 'laser' | 'ricochet' | 'echo' | 'connector' |
+                  'autoHint' | 'boardGrowth' | 'graceGain' | 'healing' | 'hintGain' |
+                  'xpGain' | 'coinGain' | 'timeGain';
+
+  icon?: IconName;
+  maxCount?: number;
+}
+
+/**
+ * Fusion recipe: defines which weapons combine to create a new weapon
+ */
+export interface FusionRecipe {
+  inputs: [string, string]; // IDs of input weapons (order doesn't matter)
+  output: string;           // ID of resulting fusion weapon
+  tier: 1 | 2;              // Tier 1 = base+base, Tier 2 = fusion+fusion
+}
+
+/**
+ * Player inventory with 4 weapon slots and 4 passive slots
+ */
+export interface PlayerInventory {
+  weapons: (FusionWeapon | null)[];   // Length 4
+  passives: (FusionWeapon | null)[];  // Length 4
 }
 
 export interface Item {
@@ -215,7 +394,7 @@ export interface Item {
   limit: number | null; // null means no limit
   effects: Partial<PlayerStats>;
   drawbacks: Partial<PlayerStats>;
-  icon?: IconName; // Icon path like "lorc/clover" - must be in ICON_REGISTRY
+  icon?: IconName;
 }
 
 export interface Enemy {
@@ -223,7 +402,7 @@ export interface Enemy {
   description: string;
   effect: string;
   reward: string;
-  icon?: IconName; // Icon path like "lorc/jellyfish" - must be in ICON_REGISTRY
+  icon?: IconName;
   applyEffect: (gameState: GameState) => GameState;
   applyReward: (gameState: GameState) => GameState;
 }
@@ -233,13 +412,13 @@ export interface Character {
   description: string;
   startingWeapons: WeaponName[];
   baseStats: Partial<PlayerStats>;
-  icon?: IconName; // Icon path like "lorc/cat" - must be in ICON_REGISTRY
+  icon?: IconName;
 }
 
 export interface PlayerStats {
   level: number;
   money: number;
-  experience: number; // Total accumulated experience points
+  experience: number;
   experienceGainPercent: number;
   luck: number;
   maxWeapons: number;
@@ -266,67 +445,50 @@ export interface PlayerStats {
   dodgeAttackBackPercent: number;
   dodgeAttackBackAmount: number;
   graces: number;
-  maxGraces: number; // Maximum graces player can hold
+  maxGraces: number;
   bombTimer: number;
   additionalPoints: number;
   deflectPercent: number;
   criticalChance: number;
   timeFreezePercent: number;
   timeFreezeAmount: number;
-  hints: number; // Number of hints available for finding valid sets
-  maxHints: number; // Maximum hints player can hold
-  // Co-op specific
+  hints: number;
+  maxHints: number;
   hintPasses: number;
 
-  // New weapon effect stats
-  explosionChance: number;      // % to explode adjacent cards on match
-  autoHintChance: number;       // % for auto-hint to trigger each interval
-  autoHintInterval: number;     // ms between auto-hint checks (default 10000)
-  boardGrowthChance: number;    // % for board to grow on match
-  boardGrowthAmount: number;    // how many cards to add when board grows
-  fireSpreadChance: number;     // % for fire to start on adjacent cards
-  graceGainChance: number;      // % to gain grace on match
-  healingChance: number;        // % to heal on match
-  hintGainChance: number;       // % to gain hint on match
-  xpGainChance: number;         // % to gain +1 XP on match
-  coinGainChance: number;       // % to gain +1 coin on match
-  timeGainChance: number;       // % to gain time on match
-  timeGainAmount: number;       // seconds gained when timeGain triggers
-  timeGainTriggerCap: number;   // Max time gains per round (default 5)
-  laserChance: number;          // % for laser to fire on match
-  startingTime: number;         // additional starting time in seconds
-  ricochetChance: number;       // % for initial ricochet on match
-  ricochetChainChance: number;  // % for each ricochet to chain again
-  enhancedHintChance: number;   // % chance for autohint to show 2 cards instead of 1
-  echoChance: number;           // % chance to auto-match another set on player match
-  chainReactionChance: number;  // % chance for echo to trigger twice (2 additional matches)
+  // Weapon effect stats
+  explosionChance: number;
+  autoHintChance: number;
+  autoHintInterval: number;
+  boardGrowthChance: number;
+  boardGrowthAmount: number;
+  fireSpreadChance: number;
+  graceGainChance: number;
+  healingChance: number;
+  hintGainChance: number;
+  xpGainChance: number;
+  coinGainChance: number;
+  timeGainChance: number;
+  timeGainAmount: number;
+  timeGainTriggerCap: number;
+  laserChance: number;
+  startingTime: number;
+  ricochetChance: number;
+  ricochetChainChance: number;
+  enhancedHintChance: number;
+  echoChance: number;
+  chainReactionChance: number;
 
   // Connector weapon stats
-  connectionChance: number;     // % chance to create a connection on match
-  startingConnections: number;  // Number of connections to start each round with
-  echoTimeBonusPerLink: number; // Seconds gained per linked destruction
-  linkedFireMultiplier: number; // Fire spread multiplier for connected positions
-  bonusConnectionChance: number; // % chance to create bonus connection when creating one
+  connectionChance: number;
+  startingConnections: number;
+  echoTimeBonusPerLink: number;
+  linkedFireMultiplier: number;
+  bonusConnectionChance: number;
 
-  // Effect cap system - tracks player's current caps for each effect type
-  // Caps can be increased by acquiring Cap Increaser weapons
+  // Legacy field (will be removed after migration)
+  /** @deprecated Cap system removed in new weapon system */
   effectCaps?: EffectCaps;
-}
-
-// Interface for tracking effect cap increases per effect type
-export interface EffectCaps {
-  echo: number;           // Current cap for echo chance
-  laser: number;          // Current cap for laser chance
-  graceGain: number;      // Current cap for grace gain chance
-  explosion: number;      // Current cap for explosion chance
-  hint: number;           // Current cap for hint gain chance
-  timeGain: number;       // Current cap for time gain chance
-  healing: number;        // Current cap for healing chance
-  fire: number;           // Current cap for fire spread chance
-  ricochet: number;       // Current cap for ricochet chance
-  boardGrowth: number;    // Current cap for board growth chance
-  coinGain: number;       // Current cap for coin gain chance
-  xpGain: number;         // Current cap for XP gain chance
 }
 
 export interface Player {
@@ -336,6 +498,8 @@ export interface Player {
   stats: PlayerStats;
   weapons: Weapon[];
   items: Item[];
+  /** New inventory system with 4 weapon + 4 passive slots (added in fusion system) */
+  inventory?: PlayerInventory;
 }
 
 export interface GameState {
@@ -363,20 +527,23 @@ export interface GameState {
   // Player
   player: Player;
 
-  // Shop and upgrades
-  shopItems: (Item | null)[];  // null represents a sold/empty slot
-  shopWeapons: (Weapon | null)[];  // Weapon shop items
-  levelUpOptions: Weapon[];  // Now weapons only
+  // Shop and upgrades (shop hidden but code preserved)
+  shopItems: (Item | null)[];
+  shopWeapons: (Weapon | null)[];
+  levelUpOptions: Weapon[];
   rerollCost: number;
 
+  // Fusion system
+  fusionGemPending?: boolean;
+
   // Enemy
-  currentEnemies: EnemyOption[];  // Enemies with pre-determined rewards to choose from
-  selectedEnemy: EnemyInstance | null;  // The enemy selected for this round
-  activeEnemyInstance: EnemyInstance | null;  // Active enemy for current round (same as selectedEnemy)
-  selectedEnemyReward: Weapon | null;  // Pre-determined stretch goal reward for selected enemy
-  selectedEnemyMoney: number | null;  // Pre-determined stretch goal bonus money for selected enemy
-  defeatedEnemies: string[];  // Names of enemies whose stretch goals have been completed
-  awardedStretchGoalWeapons: string[];  // IDs of stretch goal weapons that have been awarded
+  currentEnemies: EnemyOption[];
+  selectedEnemy: EnemyInstance | null;
+  activeEnemyInstance: EnemyInstance | null;
+  selectedEnemyReward: Weapon | null;
+  selectedEnemyMoney: number | null;
+  defeatedEnemies: string[];
+  awardedStretchGoalWeapons: string[];
 
   // Loot and rewards
   lootCrates: number;
@@ -389,5 +556,8 @@ export interface GameState {
   isEndlessMode: boolean;
 
   // Connector weapon system
-  connections: BoardConnection[];  // Active connections between board positions
+  connections: BoardConnection[];
+
+  // Round-scoped tracking
+  timeGainTriggersThisRound?: number;
 }
