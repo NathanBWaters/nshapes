@@ -99,11 +99,12 @@ describe('initializePlayer', () => {
   });
 
   describe('Legacy weapons array', () => {
-    it('should still populate legacy weapons array for backward compatibility', () => {
+    it('should have empty legacy weapons array when using inventory system', () => {
       const player = initializePlayer('test', 'Test', 'Orange Tabby');
-      // Legacy weapons array should still be populated during migration
+      // Legacy weapons array is empty to avoid double-counting effects
+      // All starting items are now in the inventory system
       expect(player.weapons).toBeDefined();
-      expect(player.weapons.length).toBeGreaterThan(0);
+      expect(player.weapons.length).toBe(0);
     });
   });
 

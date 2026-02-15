@@ -1541,8 +1541,9 @@ const Game: React.FC<GameProps> = ({
       }));
       // Don't change phase - stay in 'level_up'
     } else {
-      // No more level-ups, proceed to shop
-      setGamePhase('shop');
+      // No more level-ups, skip shop and proceed to next round
+      // Shop is hidden in the fusion system - items are acquired via level-up only
+      handleProceedFromShop();
     }
   };
 
@@ -3020,7 +3021,8 @@ const Game: React.FC<GameProps> = ({
             didLevelUp={state.player.stats.level > roundStats.startLevel}
             onContinue={() => {
               // Level ups now happen during gameplay via modal
-              setGamePhase('shop');
+              // Shop is hidden - proceed directly to next round
+              handleProceedFromShop();
             }}
             playerStats={calculatePlayerTotalStats(state.player)}
             playerWeapons={state.player.weapons}

@@ -49,17 +49,37 @@ NShapes combines the classic SET card matching game with roguelike progression m
 
 * No timer, no score targets—continuous endless gameplay.
 
-## Weapon System
+## Weapon & Passive Fusion System
 
-> **Full documentation:** [docs/weapons-design.md](./docs/weapons-design.md)
+> **Full documentation:** [docs/plans/2026-02-14-weapon-passive-fusion-design.md](./docs/plans/2026-02-14-weapon-passive-fusion-design.md)
 
-20 weapon types with 56 total weapons. Most have 3 rarities (Common 70%, Rare 25%, Legendary 5%), with 2 legendary-only types.
+The game uses a fusion-based progression system with weapons and passives that level up and combine.
 
-**Key Mechanics:**
-* **Stacking:** Multiple weapons of the same type stack additively (3x 10% = 30%)
-* **Independent Rolls:** Destructive effects (Laser, Time Drop) roll separately per weapon
-* **Max Count:** Some weapons limited to 1 copy (Mystic Sight, Chain Reaction)
-* **Purchase:** Buy in shop between rounds; choose free weapon on level up
+### Inventory Layout
+* **4 Weapon Slots** - Active abilities that trigger on matches (explosions, lasers, fire, etc.)
+* **4 Passive Slots** - Stat bonuses that apply continuously (health, hints, graces, etc.)
+
+### Item Tiers
+* **Base (Tier 0):** 6 weapons + 13 passives - Starting items with limitations
+* **Tier 1 Fusions:** 15 combinations - Two base weapons fused, limitations partially lifted
+* **Tier 2 Fusions:** 15 combinations - Two Tier 1 fusions combined, maximum power
+
+### Level Progression
+All items have 3 levels with scaling effects:
+* **Level 1:** Base effect (e.g., 10% explosion chance)
+* **Level 2:** Enhanced effect (e.g., 20% explosion chance)
+* **Level 3:** Maximum effect + fusion eligible (e.g., 30% explosion chance)
+
+### Fusion System
+* Two level 3 weapons can fuse into a higher tier weapon
+* Fused weapons start at level 1 and can be leveled again
+* Fusion gems drop randomly (25% base + 5% per round)
+* Fusion frees an inventory slot (2 inputs → 1 output)
+
+### Acquisition
+* **Level Up:** Choose from mixed pool of new items + upgrades
+* **No Shop:** Items are only acquired via level-up rewards
+* **Contextual Filtering:** Full slots prevent new items of that type from appearing
 
 **Card States:**
 * **Holographic:** 2x points when matched
@@ -82,7 +102,8 @@ This rule ensures visual consistency and prevents confusion with selection state
 ## Key Features
 
 * 6 playable characters (Orange Tabby, Sly Fox, Corgi unlocked; Emperor Penguin, Pelican, Badger locked)
-* 56 weapons across 20 types (see [weapons-design.md](./docs/weapons-design.md))
+* Fusion system: 6 base weapons + 13 passives → 15 Tier 1 fusions → 15 Tier 2 fusions
+* 4 weapon + 4 passive inventory slots with level progression (1→2→3)
 * Grace auto-use system (prevents health loss on near-misses)
 * Match trigger effects (healing, hints, time, graces, explosions, lasers, fire)
 * Auto-hint system (shows 1 card from valid set after idle time)
@@ -91,18 +112,19 @@ This rule ensures visual consistency and prevents confusion with selection state
 
 ### UI Features
 
-* **Inventory Bar:** Horizontal scrollable bar at top of Shop and Level Up screens showing all collected weapons
-* **Stats Preview:** Shop and Level Up show before→after stat comparison when viewing weapons
-* **Double-Tap Purchase:** Double-tap a weapon in the shop to instantly purchase (no confirmation)
+* **Inventory Bar:** Displays 4 weapon slots + 4 passive slots with level indicators and fusion tier borders
+* **Level Up Selection:** Mixed pool of new items and upgrades with "NEW" and "Lv.X ↑" badges
+* **Fusion Tier Styling:** Tier 1 = purple border, Tier 2 = gold legendary border
 * **Free Indicator:** Level Up screen clearly shows rewards are free with "FREE" badge and banner
 * **Menu Pause:** Timer pauses when the game menu is open
 
 ## Notes
 
-* **Multiplayer is NOT a priority.** Do not worry about the multiplayer code or fixing multiplayer bugs. Focus on single-player gameplay.
+* **Multiplayer is NOT a priority.** Do not worry about the multiplayer code or fixing multiplayer code. Focus on single-player gameplay.
 * **Enemy selection is skipped.** The game goes directly from character selection to the round phase.
-* **Shop shows only weapons.** Items have been replaced by the weapon system.
-* **Level-up shows only weapons.** No stat upgrade options.
+* **Shop is hidden.** Items are acquired only via level-up rewards.
+* **Level-up shows mixed pool.** New weapons, new passives, and upgrades for existing items.
+* **Fusion requires level 3.** Only max-level weapons can be fused into higher tiers.
 
 ## Tech Stack
 
@@ -140,9 +162,12 @@ src/                        # Shared code (imported via @/ alias)
 │   └── SocketContext.tsx   # Multiplayer state management
 ├── types.ts                # Interfaces for Cards, Weapons, PlayerStats
 └── utils/
-    ├── gameDefinitions.ts  # Characters, weapons (WEAPONS array)
+    ├── gameDefinitions.ts  # Characters, player initialization, stats calculation
     ├── gameConfig.ts       # Game constants, default stats, difficulty progressions
     ├── gameUtils.ts        # Modular SET validation for N-attributes
+    ├── fusionDefinitions.ts # Weapon/passive data, fusion recipes, tiers
+    ├── fusionUtils.ts      # Fusion execution, eligibility checks
+    ├── levelUpUtils.ts     # Level-up option generation, upgrade logic
     └── storage.ts          # MMKV persistence (settings, character unlocks, wins)
 
 ```
@@ -216,9 +241,10 @@ npm run validate:icons   # Verifies all registered icons have SVG files
 2. **Attribute Unlock:** Game initializes with attributes based on difficulty.
 3. Play Round (reach score target within 60 seconds).
 4. **Progression:** Attribute unlock screens shown when new attributes are added (varies by difficulty).
-5. Level Up (choose weapon) / Weapon Shop between rounds.
-6. Repeat for 10 rounds total.
-7. After completing Round 10: Character Unlock Screen (if characters remain locked) → Victory Screen.
+5. Level Up (choose from mixed pool of new weapons/passives + upgrades).
+6. **Fusion Gem:** Random chance to get fusion gem for combining level 3 weapons.
+7. Repeat for 10 rounds total.
+8. After completing Round 10: Character Unlock Screen (if characters remain locked) → Victory Screen.
 
 **Free Play Mode:**
 
@@ -250,11 +276,9 @@ This means Field Stone weapons can increase the starting board size beyond the m
 * Add graces
 * Add legendary weapons by category
 
-**`/dev/store`** - Standalone weapon shop tester:
-* Starts with $50,000
-* Buy weapons, reroll shop
-* Test stat preview and inventory display
-* "Continue" refreshes the shop for more testing
+**`/dev/store`** - Standalone weapon shop tester (legacy, may be deprecated):
+* Tests the hidden shop component
+* Not used in normal gameplay flow
 
 ## Versioning (IMPORTANT)
 
@@ -278,6 +302,7 @@ This ensures builds can be verified to contain the latest changes.
 
 When working on specific systems, load the relevant design doc for detailed specifications:
 
-* **[Weapon System](./docs/weapons-design.md)** - Complete weapon roster, rarities, effects, synergies, and balance notes
+* **[Weapon/Passive Fusion System](./docs/plans/2026-02-14-weapon-passive-fusion-design.md)** - Fusion mechanics, all weapon/passive definitions, recipes, and tier progression
+* **[Legacy Weapon System](./docs/weapons-design.md)** - Original weapon roster (deprecated, kept for reference)
 * **[Enemy System](./docs/enemy-design.md)** - Enemy roster, tier scaling, defeat conditions, and weapon counters (in development)
 * **[Style Guide](./style_guide.md)** - UI design system including colors, typography, and component styles

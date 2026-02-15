@@ -861,7 +861,9 @@ export const initializePlayer = (id: string, username: string, characterName: st
       ...DEFAULT_PLAYER_STATS,
       ...character.baseStats
     },
-    weapons: startingWeapons,
+    // Legacy weapons array is empty when using new inventory system
+    // to avoid double-counting effects in calculatePlayerTotalStats
+    weapons: [],
     items: [],
     inventory,
   };
@@ -871,33 +873,52 @@ export const initializePlayer = (id: string, username: string, characterName: st
 export const calculatePlayerTotalStats = (player: Player): PlayerStats => {
   const totalStats = { ...player.stats };
 
-  // Apply weapon effects
-  player.weapons.forEach((weapon: Weapon) => {
-    Object.entries(weapon.effects).forEach(([key, value]) => {
+  // Helper to apply effects to totalStats
+  const applyEffects = (effects: Record<string, unknown>) => {
+    Object.entries(effects).forEach(([key, value]) => {
       const currentValue = totalStats[key as keyof PlayerStats];
       if (typeof value === 'number' && typeof currentValue === 'number') {
         (totalStats as unknown as Record<string, number>)[key] = currentValue + value;
       }
     });
+  };
+
+  // NEW INVENTORY SYSTEM: Apply effects from fusion weapons/passives with level-based effects
+  if (player.inventory) {
+    // Apply weapon effects from new inventory
+    player.inventory.weapons.forEach((weapon) => {
+      if (weapon && weapon.levelEffects) {
+        const levelEffect = weapon.levelEffects[weapon.level as 1 | 2 | 3];
+        if (levelEffect) {
+          applyEffects(levelEffect as Record<string, unknown>);
+        }
+      }
+    });
+
+    // Apply passive effects from new inventory
+    player.inventory.passives.forEach((passive) => {
+      if (passive && passive.levelEffects) {
+        const levelEffect = passive.levelEffects[passive.level as 1 | 2 | 3];
+        if (levelEffect) {
+          applyEffects(levelEffect as Record<string, unknown>);
+        }
+      }
+    });
+  }
+
+  // LEGACY SYSTEM: Apply weapon effects from old weapons array
+  // These are applied in addition to inventory effects (for backward compatibility)
+  player.weapons.forEach((weapon: Weapon) => {
+    applyEffects(weapon.effects as Record<string, unknown>);
   });
 
   // Apply item effects and drawbacks
   player.items.forEach((item: Item) => {
     // Apply effects
-    Object.entries(item.effects).forEach(([key, value]) => {
-      const currentValue = totalStats[key as keyof PlayerStats];
-      if (typeof value === 'number' && typeof currentValue === 'number') {
-        (totalStats as unknown as Record<string, number>)[key] = currentValue + value;
-      }
-    });
+    applyEffects(item.effects as Record<string, unknown>);
 
     // Apply drawbacks
-    Object.entries(item.drawbacks).forEach(([key, value]) => {
-      const currentValue = totalStats[key as keyof PlayerStats];
-      if (typeof value === 'number' && typeof currentValue === 'number') {
-        (totalStats as unknown as Record<string, number>)[key] = currentValue + value;
-      }
-    });
+    applyEffects(item.drawbacks as Record<string, unknown>);
   });
 
   return totalStats;
