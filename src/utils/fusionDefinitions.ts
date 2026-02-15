@@ -956,14 +956,28 @@ export const FUSION_RECIPES: FusionRecipe[] = [
 // =============================================================================
 
 /**
+ * Get the base ID for a weapon (handles instance IDs like "blast-powder-12345-abc")
+ * Returns the weapon's base ID by looking up its template by name
+ */
+function getBaseId(weapon: FusionWeapon): string {
+  // Look up the base template by name
+  const template = ALL_ITEMS.find(w => w.name === weapon.name);
+  return template ? template.id : weapon.id;
+}
+
+/**
  * Get the fusion result for two weapons
  * @returns The resulting fusion weapon or null if no valid recipe exists
  */
 export function getFusionResult(weaponA: FusionWeapon, weaponB: FusionWeapon): FusionWeapon | null {
+  // Get base IDs for recipe lookup (handles instance IDs)
+  const baseIdA = getBaseId(weaponA);
+  const baseIdB = getBaseId(weaponB);
+
   // Find matching recipe (order doesn't matter)
   const recipe = FUSION_RECIPES.find(r =>
-    (r.inputs.includes(weaponA.id) && r.inputs.includes(weaponB.id)) &&
-    weaponA.id !== weaponB.id // Can't fuse with itself
+    (r.inputs.includes(baseIdA) && r.inputs.includes(baseIdB)) &&
+    baseIdA !== baseIdB // Can't fuse with itself
   );
 
   if (!recipe) {
@@ -997,10 +1011,14 @@ export function canFuse(weaponA: FusionWeapon, weaponB: FusionWeapon): boolean {
     return false;
   }
 
+  // Get base IDs for recipe lookup
+  const baseIdA = getBaseId(weaponA);
+  const baseIdB = getBaseId(weaponB);
+
   // Must have a valid recipe
   const recipe = FUSION_RECIPES.find(r =>
-    (r.inputs.includes(weaponA.id) && r.inputs.includes(weaponB.id)) &&
-    weaponA.id !== weaponB.id
+    (r.inputs.includes(baseIdA) && r.inputs.includes(baseIdB)) &&
+    baseIdA !== baseIdB
   );
 
   return recipe !== undefined;
