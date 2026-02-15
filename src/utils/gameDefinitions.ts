@@ -1,5 +1,6 @@
-import { Character, Enemy, Item, Weapon, PlayerStats, GameState, Player, WeaponName } from '../types';
+import { Character, Enemy, Item, Weapon, PlayerStats, GameState, Player, WeaponName, FusionWeapon, PlayerInventory } from '../types';
 import { STARTING_STATS } from './gameConfig';
+import { getWeaponByName as getFusionWeaponByName } from './fusionDefinitions';
 
 // Default player stats - uses values from gameConfig for easy tweaking
 export const DEFAULT_PLAYER_STATS: PlayerStats = {
@@ -807,12 +808,49 @@ export const initializePlayer = (id: string, username: string, characterName: st
     throw new Error(`Character ${characterName} not found`);
   }
 
+  // Legacy: Get starting weapons for backward compatibility
   const startingWeapons = character.startingWeapons.map(weaponName => {
     const weapon = getWeaponByName(weaponName);
     if (!weapon) {
       throw new Error(`Starting weapon ${weaponName} not found`);
     }
     return weapon;
+  });
+
+  // New inventory system: Create 4-slot weapon and passive arrays
+  const inventory: PlayerInventory = {
+    weapons: [null, null, null, null],
+    passives: [null, null, null, null],
+  };
+
+  // Place starting items in correct slots based on type
+  let weaponSlot = 0;
+  let passiveSlot = 0;
+
+  character.startingWeapons.forEach(weaponName => {
+    const fusionItem = getFusionWeaponByName(weaponName);
+    if (!fusionItem) {
+      throw new Error(`Starting weapon ${weaponName} not found in fusion system`);
+    }
+
+    // Create a copy with unique ID and level 1
+    const itemCopy: FusionWeapon = {
+      ...fusionItem,
+      id: `${fusionItem.id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      level: 1,
+    };
+
+    if (fusionItem.type === 'weapon') {
+      if (weaponSlot < 4) {
+        inventory.weapons[weaponSlot] = itemCopy;
+        weaponSlot++;
+      }
+    } else {
+      if (passiveSlot < 4) {
+        inventory.passives[passiveSlot] = itemCopy;
+        passiveSlot++;
+      }
+    }
   });
 
   return {
@@ -824,7 +862,8 @@ export const initializePlayer = (id: string, username: string, characterName: st
       ...character.baseStats
     },
     weapons: startingWeapons,
-    items: []
+    items: [],
+    inventory,
   };
 };
 
