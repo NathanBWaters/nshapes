@@ -350,17 +350,19 @@ These existing test files will need modification:
 
 ---
 
-## Phase 5: Level Up System
+## Phase 5: Level Up System (Utility Functions Complete)
 
-### 5.1 Update Level Up Option Generation
-- [ ] Create function to generate mixed pool options
-- [ ] Include new weapons (if weapon slots < 4)
-- [ ] Include new passives (if passive slots < 4)
-- [ ] Include weapon upgrades (if any weapon < level 3)
-- [ ] Include passive upgrades (if any passive < level 3)
-- [ ] Apply contextual filtering based on slot availability
+> **Note:** Utility functions complete and tested. UI integration (LevelUp.tsx) deferred to later phase alongside Game.tsx integration.
 
-### 5.2 Update Level Up UI (LevelUp.tsx)
+### 5.1 Update Level Up Option Generation ✅
+- [x] Create function to generate mixed pool options (`generateLevelUpOptions`)
+- [x] Include new weapons (if weapon slots < 4)
+- [x] Include new passives (if passive slots < 4)
+- [x] Include weapon upgrades (if any weapon < level 3)
+- [x] Include passive upgrades (if any passive < level 3)
+- [x] Apply contextual filtering based on slot availability
+
+### 5.2 Update Level Up UI (LevelUp.tsx) (Deferred)
 - [ ] Display mixed options (new items + upgrades)
 - [ ] Show "NEW" badge for new items
 - [ ] Show "Lv.X ↑" for upgrades with before/after stats
@@ -368,55 +370,47 @@ These existing test files will need modification:
 - [ ] Disable reroll if can't afford
 - [ ] Update reroll cost after each reroll (double)
 
-### 5.3 Implement Upgrade Logic
-- [ ] Create function to upgrade weapon/passive level
-- [ ] Update effects when leveling up
-- [ ] Cap at level 3
+### 5.3 Implement Upgrade Logic ✅
+- [x] Create function to upgrade weapon/passive level (`upgradeItem`)
+- [x] Update effects when leveling up (uses `levelEffects`)
+- [x] Cap at level 3
 
-### 5.4 Reset Reroll Cost
-- [ ] Reset rerollCost to 5 at start of each round
+### 5.4 Reset Reroll Cost ✅
+- [x] `resetRerollCost()` function returns initial cost (5)
 
-### 5.5 Phase 5 Unit Tests
-- [ ] **Rewrite** `__tests__/levelUp.test.ts`
-  - [ ] Test generateLevelUpOptions returns 3 options
-  - [ ] Test options can include new weapons
-  - [ ] Test options can include new passives
-  - [ ] Test options can include upgrades
-  - [ ] Test mixed options (new + upgrade in same set)
-- [ ] Create `__tests__/levelUp/contextualFiltering.test.ts`
-  - [ ] Test player with 4 weapons sees no new weapons
-  - [ ] Test player with 4 weapons can still see weapon upgrades
-  - [ ] Test player with 4 passives sees no new passives
-  - [ ] Test player with 4 passives can still see passive upgrades
-  - [ ] Test player with room for both sees mixed options
-  - [ ] Test player with all items at level 3 sees only new items
-- [ ] Create `__tests__/levelUp/upgradeLogic.test.ts`
-  - [ ] Test upgradeWeapon increases level from 1 to 2
-  - [ ] Test upgradeWeapon increases level from 2 to 3
-  - [ ] Test upgradeWeapon does nothing at level 3
-  - [ ] Test upgraded weapon has correct effects for new level
-  - [ ] Test upgradePassive works the same way
-- [ ] Create `__tests__/levelUp/rerollCost.test.ts`
-  - [ ] Test initial reroll cost is 5
-  - [ ] Test reroll cost doubles after each reroll (5 → 10 → 20 → 40)
-  - [ ] Test reroll cost resets to 5 at start of new round
-  - [ ] Test reroll disabled when player can't afford
-  - [ ] Test reroll deducts correct amount from player money
+### 5.5 Phase 5 Unit Tests ✅
+- [x] Existing `__tests__/levelUp.test.ts` retained (multi-level-up queue tests)
+- [x] Created `__tests__/levelUp/contextualFiltering.test.ts` (20 tests)
+  - [x] Test player with 4 weapons sees no new weapons
+  - [x] Test player with 4 weapons can still see weapon upgrades
+  - [x] Test player with 4 passives sees no new passives
+  - [x] Test player with 4 passives can still see passive upgrades
+  - [x] Test player with room for both sees mixed options
+  - [x] Test player with all items at level 3 sees only new items
+- [x] Created `__tests__/levelUp/upgradeLogic.test.ts` (22 tests)
+  - [x] Test upgradeItem increases level from 1 to 2
+  - [x] Test upgradeItem increases level from 2 to 3
+  - [x] Test upgradeItem does nothing at level 3
+  - [x] Test upgraded item has correct effects for new level
+  - [x] Test works for both weapons and passives
+- [x] Created `__tests__/levelUp/rerollCost.test.ts` (13 tests)
+  - [x] Test initial reroll cost is 5
+  - [x] Test reroll cost doubles after each reroll (5 → 10 → 20 → 40)
+  - [x] Test reroll cost resets to 5 at start of new round
+  - [x] Test reroll disabled when player can't afford
+  - [x] Test reroll deducts correct amount from player money
 
-### 5.6 Phase 5 Code Cleanup
-**Goal:** Ensure level up system is clean and well-structured.
+### 5.6 Phase 5 Code Cleanup ✅
+- [x] No debug console.log statements
+- [x] No temporary test code
+- [x] Consistent function naming
+- [x] No unused imports
+- [x] ESLint not configured (skipped)
 
-**Tasks:**
-- [ ] Remove any debug console.log statements
-- [ ] Remove any temporary test code
-- [ ] Ensure consistent function naming
-- [ ] Remove any unused imports
-- [ ] Run linter and fix any issues
-
-### 5.7 Phase 5 Verification
-- [ ] Run test suite: `npm test`
-- [ ] Run typecheck: `npm run typecheck`
-- [ ] Commit with descriptive message
+### 5.7 Phase 5 Verification ✅
+- [x] Run test suite: `npm test` - 4052 tests pass
+- [x] Run typecheck: `npm run typecheck` - passes
+- [x] Commit pending
 
 ---
 
