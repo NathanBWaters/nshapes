@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { generateShopWeapons, DEFAULT_PLAYER_STATS } from '@/utils/gameDefinitions';
+import { generateLevelUpWeapons, DEFAULT_PLAYER_STATS } from '@/utils/gameDefinitions';
 import { ECONOMY } from '@/utils/gameConfig';
 import { Weapon, PlayerStats } from '@/types';
 import WeaponShop from '@/components/WeaponShop';
@@ -8,11 +8,11 @@ import WeaponShop from '@/components/WeaponShop';
  * Dev Store Page
  *
  * Standalone weapon shop for testing store UI and purchases.
- * Starts with $50,000 so you can freely buy and test weapons.
+ * Note: Shop is hidden in the new fusion system, but this dev page is preserved for testing.
  */
 export default function DevStore() {
   const [money, setMoney] = useState(50000);
-  const [shopWeapons, setShopWeapons] = useState<(Weapon | null)[]>(() => generateShopWeapons(4));
+  const [shopWeapons, setShopWeapons] = useState<(Weapon | null)[]>(() => generateLevelUpWeapons(4));
   const [playerWeapons, setPlayerWeapons] = useState<Weapon[]>([]);
   const [rerollCost, setRerollCost] = useState<number>(ECONOMY.baseRerollCost);
   const [freeRerolls, setFreeRerolls] = useState(0);
@@ -50,12 +50,12 @@ export default function DevStore() {
     } else {
       return;
     }
-    setShopWeapons(generateShopWeapons(4));
+    setShopWeapons(generateLevelUpWeapons(4));
   }, [freeRerolls, money, rerollCost]);
 
   const handleContinue = useCallback(() => {
     // Just refresh the shop for testing
-    setShopWeapons(generateShopWeapons(4));
+    setShopWeapons(generateLevelUpWeapons(4));
     setRerollCost(ECONOMY.baseRerollCost);
   }, []);
 

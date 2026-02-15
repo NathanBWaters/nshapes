@@ -1,407 +1,244 @@
 import {
   WEAPONS,
-  generateShopWeapons,
-  getRandomShopWeapon,
+  getRandomWeapon,
+  generateLevelUpWeapons,
   calculatePlayerTotalStats,
   initializePlayer,
-  DEFAULT_PLAYER_STATS,
   canObtainWeapon,
   getPlayerWeaponCount,
 } from '@/utils/gameDefinitions';
-import { Weapon, WeaponRarity, Player } from '@/types';
+import { Weapon } from '@/types';
 
-describe('Weapon Definitions', () => {
+describe('Weapon Definitions - New Fusion System', () => {
   describe('WEAPONS array', () => {
-    it('should have exactly 91 weapons (base types + cap increasers + epic variants + bridge legendaries + connector weapons)', () => {
-      expect(WEAPONS.length).toBe(91);
+    it('should have exactly 19 base weapons/passives', () => {
+      // 6 base weapons + 13 base passives = 19 total
+      expect(WEAPONS.length).toBe(19);
     });
 
-    it('should have 21 common weapons', () => {
+    it('should have all weapons as common rarity (rarity system deprecated)', () => {
       const commons = WEAPONS.filter(w => w.rarity === 'common');
-      expect(commons.length).toBe(21);
+      expect(commons.length).toBe(19);
     });
 
-    it('should have 35 rare weapons', () => {
+    it('should have no rare/epic/legendary weapons', () => {
       const rares = WEAPONS.filter(w => w.rarity === 'rare');
-      expect(rares.length).toBe(35);
-    });
-
-    it('should have 18 epic weapons (epic variants)', () => {
       const epics = WEAPONS.filter(w => w.rarity === 'epic');
-      expect(epics.length).toBe(18);
-    });
-
-    it('should have 17 legendary weapons', () => {
       const legendaries = WEAPONS.filter(w => w.rarity === 'legendary');
-      expect(legendaries.length).toBe(17);
+      expect(rares.length).toBe(0);
+      expect(epics.length).toBe(0);
+      expect(legendaries.length).toBe(0);
     });
 
-    it('should have all required weapon types', () => {
-      const weaponNames = new Set(WEAPONS.map(w => w.name));
-      const expectedTypes: import('@/types').WeaponName[] = [
-        'Blast Powder',
-        'Oracle Eye',
-        'Mystic Sight',  // Legendary only
-        'Field Stone',
-        'Growth Seed',
-        'Flint Spark',
-        'Second Chance',
-        'Fortune Token',
-        'Life Vessel',
-        'Mending Charm',
-        'Crystal Orb',
-        'Seeker Lens',
-        'Scholar\'s Tome',
-        'Fortune\'s Favor',
-        'Chrono Shard',
-        'Time Drop',
-        'Prismatic Ray',
-        'Chaos Shard',
-        'Echo Stone',
-        'Chain Reaction',
+    it('should have 6 base weapons (can fuse)', () => {
+      const baseWeapons = ['Blast Powder', 'Flint Spark', 'Prismatic Ray', 'Chaos Shard', 'Echo Stone', 'Link Stone'];
+      const weapons = WEAPONS.filter(w => baseWeapons.includes(w.name));
+      expect(weapons.length).toBe(6);
+    });
+
+    it('should have 13 base passives (cannot fuse)', () => {
+      const basePassives = [
+        'Oracle Eye', 'Field Stone', 'Growth Seed', 'Second Chance',
+        'Fortune Token', 'Life Vessel', 'Mending Charm', 'Crystal Orb',
+        'Seeker Lens', 'Scholar\'s Tome', 'Fortune\'s Favor', 'Chrono Shard', 'Time Drop'
       ];
-
-      expectedTypes.forEach(type => {
-        expect(weaponNames.has(type)).toBe(true);
-      });
+      const passives = WEAPONS.filter(w => basePassives.includes(w.name));
+      expect(passives.length).toBe(13);
     });
 
-    it('each weapon should have all required properties', () => {
+    it('each weapon should have required properties', () => {
       WEAPONS.forEach(weapon => {
         expect(weapon).toHaveProperty('id');
         expect(weapon).toHaveProperty('name');
         expect(weapon).toHaveProperty('rarity');
         expect(weapon).toHaveProperty('level');
-        expect(weapon).toHaveProperty('price');
         expect(weapon).toHaveProperty('description');
         expect(weapon).toHaveProperty('effects');
 
         // Validate types
         expect(typeof weapon.id).toBe('string');
         expect(typeof weapon.name).toBe('string');
-        expect(['common', 'rare', 'epic', 'legendary']).toContain(weapon.rarity);
+        expect(weapon.rarity).toBe('common'); // All weapons are common now
         expect(typeof weapon.level).toBe('number');
-        expect(typeof weapon.price).toBe('number');
         expect(typeof weapon.description).toBe('string');
         expect(typeof weapon.effects).toBe('object');
       });
     });
 
-    it('common weapons should cost 5-10 coins', () => {
-      const commons = WEAPONS.filter(w => w.rarity === 'common');
-      commons.forEach(weapon => {
-        expect(weapon.price).toBeGreaterThanOrEqual(5);
-        expect(weapon.price).toBeLessThanOrEqual(10);
+    it('all weapons should have price 0 (shop removed)', () => {
+      WEAPONS.forEach(weapon => {
+        expect(weapon.price).toBe(0);
       });
     });
 
-    it('rare weapons should cost 10-20 coins', () => {
-      const rares = WEAPONS.filter(w => w.rarity === 'rare');
-      rares.forEach(weapon => {
-        expect(weapon.price).toBeGreaterThanOrEqual(10);
-        expect(weapon.price).toBeLessThanOrEqual(20);
-      });
-    });
-
-    it('legendary weapons should cost 15-50 coins', () => {
-      const legendaries = WEAPONS.filter(w => w.rarity === 'legendary');
-      legendaries.forEach(weapon => {
-        expect(weapon.price).toBeGreaterThanOrEqual(15);
-        expect(weapon.price).toBeLessThanOrEqual(50);
-      });
-    });
-
-    it('most weapon types should have 2 rarities, some are legendary-only, rare-only, common-only, or epic-only', () => {
-      const weaponsByName = new Map<string, Weapon[]>();
-      const legendaryOnlyWeapons = [
-        'Mystic Sight', 'Chain Reaction', 'Snowball',
-        // Bridge weapons (cross-system triggers)
-        'Chaos Conduit', 'Temporal Rift', 'Soul Harvest',
-        'Cascade Core', "Fortune's Blessing", 'Wisdom Chain', 'Grace Conduit',
-        'Life Link',
-        // Connector weapons (legendary)
-        'Soul Link', 'Revenge Linker', 'Neural Network',
-        // Challenge legendary weapons
-        'Prismatic Perfection', 'Tabula Rasa', 'Desperate Measures'
-      ];
-      // Cap increaser weapons, Fortune's Eye, and connector rare-only weapons
-      const rareOnlyWeapons = [
+    it('should NOT contain any mastery weapons', () => {
+      const masteryNames = [
         'Echo Mastery', 'Laser Mastery', 'Grace Mastery', 'Explosion Mastery',
         'Hint Mastery', 'Time Mastery', 'Healing Mastery', 'Fire Mastery',
-        'Ricochet Mastery', 'Growth Mastery', 'Coin Mastery', "Fortune's Eye",
-        'Connection Mastery', 'Time Trigger Mastery',
-        // Connector weapons (rare-only)
-        'Link Chain', 'Web Master', 'Resonance Core', 'Sympathetic Flames'
+        'Ricochet Mastery', 'Growth Mastery', 'Coin Mastery', 'Time Trigger Mastery'
       ];
-      // Common-only weapons (connector common versions)
-      const commonOnlyWeapons = [
-        'Link Stone', 'Web Spinner', 'Echo Chamber'
-      ];
-      // Epic weapon variants are epic-only
-      const epicOnlyWeapons = [
-        'Inferno Charge', 'Ember Heart', 'Lucky Charm', 'Restoration Aura',
-        'Golden Touch', 'Spectrum Annihilator', 'Resonance Crystal',
-        'Terra Foundation', "Fortune's Shield", 'Clairvoyant Sphere',
-        'Arcane Codex', 'Temporal Core', 'Vital Core', "Prophet's Vision",
-        'Life Bloom', 'Enlightened Eye', 'Hourglass of Ages', 'Entropy Engine'
-      ];
-
       WEAPONS.forEach(weapon => {
-        const existing = weaponsByName.get(weapon.name) || [];
-        existing.push(weapon);
-        weaponsByName.set(weapon.name, existing);
+        expect(masteryNames).not.toContain(weapon.name);
       });
+    });
 
-      weaponsByName.forEach((weapons, name) => {
-        if (legendaryOnlyWeapons.includes(name)) {
-          // Legendary-only weapons should have exactly 1 rarity
-          expect(weapons.length).toBe(1);
-          expect(weapons[0].rarity).toBe('legendary');
-        } else if (rareOnlyWeapons.includes(name)) {
-          // Rare-only weapons (cap increasers) should have exactly 1 rarity
-          expect(weapons.length).toBe(1);
-          expect(weapons[0].rarity).toBe('rare');
-        } else if (commonOnlyWeapons.includes(name)) {
-          // Common-only weapons (connector common versions) should have exactly 1 rarity
-          expect(weapons.length).toBe(1);
-          expect(weapons[0].rarity).toBe('common');
-        } else if (epicOnlyWeapons.includes(name)) {
-          // Epic-only weapons should have exactly 1 rarity
-          expect(weapons.length).toBe(1);
-          expect(weapons[0].rarity).toBe('epic');
-        } else {
-          // Normal weapons have common and rare only (base-type legendary removed)
-          expect(weapons.length).toBe(2);
-          const rarities = weapons.map(w => w.rarity);
-          expect(rarities).toContain('common');
-          expect(rarities).toContain('rare');
-        }
+    it('should NOT contain any bridge weapons', () => {
+      const bridgeNames = [
+        'Chaos Conduit', 'Temporal Rift', 'Soul Harvest', 'Cascade Core',
+        "Fortune's Blessing", 'Wisdom Chain', 'Grace Conduit', 'Life Link'
+      ];
+      WEAPONS.forEach(weapon => {
+        expect(bridgeNames).not.toContain(weapon.name);
+      });
+    });
+
+    it('should NOT contain any challenge legendaries', () => {
+      const challengeNames = ['Prismatic Perfection', 'Tabula Rasa', 'Desperate Measures'];
+      WEAPONS.forEach(weapon => {
+        expect(challengeNames).not.toContain(weapon.name);
+      });
+    });
+
+    it('should NOT contain removed connector variants', () => {
+      const removedConnectors = [
+        'Link Chain', 'Soul Link', 'Web Spinner', 'Web Master',
+        'Echo Chamber', 'Resonance Core', 'Sympathetic Flames',
+        'Neural Network', 'Revenge Linker'
+      ];
+      WEAPONS.forEach(weapon => {
+        expect(removedConnectors).not.toContain(weapon.name);
+      });
+    });
+
+    it('should NOT contain capIncrease on any weapon', () => {
+      WEAPONS.forEach(weapon => {
+        expect(weapon.capIncrease).toBeUndefined();
+      });
+    });
+
+    it('should NOT contain bridgeEffect on any weapon', () => {
+      WEAPONS.forEach(weapon => {
+        expect(weapon.bridgeEffect).toBeUndefined();
       });
     });
   });
 
   describe('Weapon Effects', () => {
     it('Blast Powder should have explosionChance effect', () => {
-      const blastPowders = WEAPONS.filter(w => w.name === 'Blast Powder');
-      blastPowders.forEach(weapon => {
-        expect(weapon.effects).toHaveProperty('explosionChance');
-        expect(weapon.effects.explosionChance).toBeGreaterThan(0);
-      });
+      const blastPowder = WEAPONS.find(w => w.name === 'Blast Powder');
+      expect(blastPowder).toBeDefined();
+      expect(blastPowder?.effects).toHaveProperty('explosionChance');
+      expect(blastPowder?.effects.explosionChance).toBe(10);
     });
 
     it('Oracle Eye should have autoHintChance effect', () => {
-      const oracleEyes = WEAPONS.filter(w => w.name === 'Oracle Eye');
-      oracleEyes.forEach(weapon => {
-        expect(weapon.effects).toHaveProperty('autoHintChance');
-        expect(weapon.effects.autoHintChance).toBeGreaterThan(0);
-      });
+      const oracleEye = WEAPONS.find(w => w.name === 'Oracle Eye');
+      expect(oracleEye).toBeDefined();
+      expect(oracleEye?.effects).toHaveProperty('autoHintChance');
+      expect(oracleEye?.effects.autoHintChance).toBe(15);
     });
 
     it('Field Stone should have fieldSize effect', () => {
-      const fieldStones = WEAPONS.filter(w => w.name === 'Field Stone');
-      fieldStones.forEach(weapon => {
-        expect(weapon.effects).toHaveProperty('fieldSize');
-        expect(weapon.effects.fieldSize).toBeGreaterThan(0);
-      });
+      const fieldStone = WEAPONS.find(w => w.name === 'Field Stone');
+      expect(fieldStone).toBeDefined();
+      expect(fieldStone?.effects).toHaveProperty('fieldSize');
+      expect(fieldStone?.effects.fieldSize).toBe(1);
     });
 
-    it('Life Vessel should have maxHealth effect', () => {
-      const lifeVessels = WEAPONS.filter(w => w.name === 'Life Vessel');
-      lifeVessels.forEach(weapon => {
-        expect(weapon.effects).toHaveProperty('maxHealth');
-        expect(weapon.effects.maxHealth).toBeGreaterThan(0);
-      });
+    it('Life Vessel should have maxHealth and health effects', () => {
+      const lifeVessel = WEAPONS.find(w => w.name === 'Life Vessel');
+      expect(lifeVessel).toBeDefined();
+      expect(lifeVessel?.effects).toHaveProperty('maxHealth');
+      expect(lifeVessel?.effects).toHaveProperty('health');
+      expect(lifeVessel?.effects.maxHealth).toBe(1);
+      expect(lifeVessel?.effects.health).toBe(1);
     });
 
     it('Mending Charm should have healingChance effect', () => {
-      const mendingCharms = WEAPONS.filter(w => w.name === 'Mending Charm');
-      mendingCharms.forEach(weapon => {
-        expect(weapon.effects).toHaveProperty('healingChance');
-        expect(weapon.effects.healingChance).toBeGreaterThan(0);
-      });
+      const mendingCharm = WEAPONS.find(w => w.name === 'Mending Charm');
+      expect(mendingCharm).toBeDefined();
+      expect(mendingCharm?.effects).toHaveProperty('healingChance');
+      expect(mendingCharm?.effects.healingChance).toBe(5);
     });
 
     it('Crystal Orb should have maxHints effect', () => {
-      const crystalOrbs = WEAPONS.filter(w => w.name === 'Crystal Orb');
-      crystalOrbs.forEach(weapon => {
-        expect(weapon.effects).toHaveProperty('maxHints');
-        expect(weapon.effects.maxHints).toBeGreaterThan(0);
-      });
+      const crystalOrb = WEAPONS.find(w => w.name === 'Crystal Orb');
+      expect(crystalOrb).toBeDefined();
+      expect(crystalOrb?.effects).toHaveProperty('maxHints');
+      expect(crystalOrb?.effects.maxHints).toBe(1);
     });
 
     it('Second Chance should have graces effect', () => {
-      const secondChances = WEAPONS.filter(w => w.name === 'Second Chance');
-      secondChances.forEach(weapon => {
-        expect(weapon.effects).toHaveProperty('graces');
-        expect(weapon.effects.graces).toBeGreaterThan(0);
-      });
+      const secondChance = WEAPONS.find(w => w.name === 'Second Chance');
+      expect(secondChance).toBeDefined();
+      expect(secondChance?.effects).toHaveProperty('graces');
+      expect(secondChance?.effects.graces).toBe(1);
     });
 
     it('Chrono Shard should have startingTime effect', () => {
-      const chronoShards = WEAPONS.filter(w => w.name === 'Chrono Shard');
-      chronoShards.forEach(weapon => {
-        expect(weapon.effects).toHaveProperty('startingTime');
-        expect(weapon.effects.startingTime).toBeGreaterThan(0);
-      });
+      const chronoShard = WEAPONS.find(w => w.name === 'Chrono Shard');
+      expect(chronoShard).toBeDefined();
+      expect(chronoShard?.effects).toHaveProperty('startingTime');
+      expect(chronoShard?.effects.startingTime).toBe(10);
     });
 
     it('Prismatic Ray should have laserChance effect', () => {
-      const prismaticRays = WEAPONS.filter(w => w.name === 'Prismatic Ray');
-      prismaticRays.forEach(weapon => {
-        expect(weapon.effects).toHaveProperty('laserChance');
-        expect(weapon.effects.laserChance).toBeGreaterThan(0);
-      });
+      const prismaticRay = WEAPONS.find(w => w.name === 'Prismatic Ray');
+      expect(prismaticRay).toBeDefined();
+      expect(prismaticRay?.effects).toHaveProperty('laserChance');
+      expect(prismaticRay?.effects.laserChance).toBe(5);
     });
 
-    it('rare weapons should have higher effect values than common (for weapons with both rarities)', () => {
-      const weaponsByName = new Map<string, Map<WeaponRarity, Weapon>>();
-      const legendaryOnlyWeapons = [
-        'Mystic Sight', 'Chain Reaction', 'Snowball',
-        // Bridge weapons (cross-system triggers)
-        'Chaos Conduit', 'Temporal Rift', 'Soul Harvest',
-        'Cascade Core', "Fortune's Blessing", 'Wisdom Chain', 'Grace Conduit',
-        'Life Link',
-        // Connector weapons (legendary)
-        'Soul Link', 'Revenge Linker', 'Neural Network',
-        // Challenge legendary weapons
-        'Prismatic Perfection', 'Tabula Rasa', 'Desperate Measures'
-      ];
-      // Cap increaser weapons, Fortune's Eye, and connector rare-only weapons
-      const rareOnlyWeapons = [
-        'Echo Mastery', 'Laser Mastery', 'Grace Mastery', 'Explosion Mastery',
-        'Hint Mastery', 'Time Mastery', 'Healing Mastery', 'Fire Mastery',
-        'Ricochet Mastery', 'Growth Mastery', 'Coin Mastery', "Fortune's Eye",
-        'Connection Mastery', 'Time Trigger Mastery',
-        // Connector weapons (rare-only)
-        'Link Chain', 'Web Master', 'Resonance Core', 'Sympathetic Flames'
-      ];
-      // Common-only weapons (connector common versions)
-      const commonOnlyWeapons = [
-        'Link Stone', 'Web Spinner', 'Echo Chamber'
-      ];
-      // Epic weapon variants are epic-only
-      const epicOnlyWeapons = [
-        'Inferno Charge', 'Ember Heart', 'Lucky Charm', 'Restoration Aura',
-        'Golden Touch', 'Spectrum Annihilator', 'Resonance Crystal',
-        'Terra Foundation', "Fortune's Shield", 'Clairvoyant Sphere',
-        'Arcane Codex', 'Temporal Core', 'Vital Core', "Prophet's Vision",
-        'Life Bloom', 'Enlightened Eye', 'Hourglass of Ages', 'Entropy Engine'
-      ];
-
-      WEAPONS.forEach(weapon => {
-        if (!weaponsByName.has(weapon.name)) {
-          weaponsByName.set(weapon.name, new Map());
-        }
-        weaponsByName.get(weapon.name)!.set(weapon.rarity, weapon);
-      });
-
-      weaponsByName.forEach((rarityMap, name) => {
-        // Skip legendary-only, rare-only (cap increasers), common-only (connector), and epic-only weapons
-        if (legendaryOnlyWeapons.includes(name)) return;
-        if (rareOnlyWeapons.includes(name)) return;
-        if (commonOnlyWeapons.includes(name)) return;
-        if (epicOnlyWeapons.includes(name)) return;
-
-        const common = rarityMap.get('common')!;
-        const rare = rarityMap.get('rare')!;
-
-        // Compare the first effect value
-        const commonEffectKey = Object.keys(common.effects)[0];
-        const commonValue = common.effects[commonEffectKey as keyof typeof common.effects] as number;
-        const rareValue = rare.effects[commonEffectKey as keyof typeof rare.effects] as number;
-
-        expect(rareValue).toBeGreaterThan(commonValue);
-      });
+    it('Echo Stone should have echoChance effect', () => {
+      const echoStone = WEAPONS.find(w => w.name === 'Echo Stone');
+      expect(echoStone).toBeDefined();
+      expect(echoStone?.effects).toHaveProperty('echoChance');
+      expect(echoStone?.effects.echoChance).toBe(8);
     });
 
-    it('Mystic Sight should have enhancedHintChance effect', () => {
-      const mysticSight = WEAPONS.find(w => w.name === 'Mystic Sight');
-      expect(mysticSight).toBeDefined();
-      expect(mysticSight?.effects).toHaveProperty('enhancedHintChance');
-      expect(mysticSight?.effects.enhancedHintChance).toBe(33);
-    });
-
-    it('Mystic Sight should be legendary only', () => {
-      const mysticSights = WEAPONS.filter(w => w.name === 'Mystic Sight');
-      expect(mysticSights.length).toBe(1);
-      expect(mysticSights[0].rarity).toBe('legendary');
-    });
-
-    it('Mystic Sight should have maxCount of 1', () => {
-      const mysticSight = WEAPONS.find(w => w.name === 'Mystic Sight');
-      expect(mysticSight?.maxCount).toBe(1);
+    it('Link Stone should have connectionChance effect', () => {
+      const linkStone = WEAPONS.find(w => w.name === 'Link Stone');
+      expect(linkStone).toBeDefined();
+      expect(linkStone?.effects).toHaveProperty('connectionChance');
+      expect(linkStone?.effects.connectionChance).toBe(15);
     });
   });
 
-  describe('generateShopWeapons', () => {
+  describe('generateLevelUpWeapons', () => {
     it('should generate the specified number of weapons', () => {
-      const weapons = generateShopWeapons(4);
+      const weapons = generateLevelUpWeapons(4);
       expect(weapons.length).toBe(4);
     });
 
     it('should generate weapons with valid properties', () => {
-      const weapons = generateShopWeapons(10);
+      const weapons = generateLevelUpWeapons(10);
       weapons.forEach(weapon => {
         expect(weapon).toHaveProperty('id');
         expect(weapon).toHaveProperty('name');
         expect(weapon).toHaveProperty('rarity');
-        expect(weapon).toHaveProperty('price');
       });
-    });
-
-    it('should follow approximate rarity distribution over many samples', () => {
-      // Generate many weapons to test distribution
-      const totalSamples = 1000;
-      const weapons: Weapon[] = [];
-
-      for (let i = 0; i < totalSamples / 4; i++) {
-        weapons.push(...generateShopWeapons(4));
-      }
-
-      const commons = weapons.filter(w => w.rarity === 'common').length;
-      const rares = weapons.filter(w => w.rarity === 'rare').length;
-      const epics = weapons.filter(w => w.rarity === 'epic').length;
-      const legendaries = weapons.filter(w => w.rarity === 'legendary').length;
-
-      // Expected at round 5 (default): ~53% common, ~22.5% rare, ~10.5% epic, ~3% legendary
-      // Allow generous tolerance for randomness since epic weapons don't exist yet
-      // and all epic rolls fall back to common
-      // Common should be majority
-      expect(commons / totalSamples).toBeGreaterThan(0.35);
-      expect(commons / totalSamples).toBeLessThan(0.85);
-
-      // Rare should be significant
-      expect(rares / totalSamples).toBeGreaterThan(0.10);
-      expect(rares / totalSamples).toBeLessThan(0.40);
-
-      // Epic should be present (may be 0 until epic weapons are added)
-      // For now just check it's a valid count
-      expect(epics).toBeGreaterThanOrEqual(0);
-      expect(epics / totalSamples).toBeLessThan(0.30);
-
-      // Legendary should be rare
-      expect(legendaries / totalSamples).toBeGreaterThanOrEqual(0.005);
-      expect(legendaries / totalSamples).toBeLessThan(0.15);
     });
   });
 
-  describe('getRandomShopWeapon', () => {
+  describe('getRandomWeapon', () => {
     it('should return a valid weapon', () => {
-      const weapon = getRandomShopWeapon();
+      const weapon = getRandomWeapon();
       expect(weapon).toHaveProperty('id');
       expect(weapon).toHaveProperty('name');
       expect(weapon).toHaveProperty('rarity');
     });
 
-    it('should not return weapons at maxCount when player weapons provided', () => {
-      // Get Mystic Sight (maxCount: 1)
-      const mysticSight = WEAPONS.find(w => w.name === 'Mystic Sight')!;
-      const playerWeapons = [mysticSight]; // Player already has it
+    it('should filter based on maxCount when defined on WEAPONS entry', () => {
+      // Note: maxCount is checked on the weapon definition (from WEAPONS array),
+      // not on the player's copy. Currently no base weapons have maxCount defined.
+      // This test verifies the function doesn't crash with empty/full player weapons.
+      const playerWeapons = [...WEAPONS]; // Player has one of each weapon
 
-      // Generate many weapons and verify Mystic Sight never appears
-      for (let i = 0; i < 100; i++) {
-        const weapon = getRandomShopWeapon(playerWeapons);
-        expect(weapon.name).not.toBe('Mystic Sight');
+      // Should still return weapons since none have maxCount limits
+      for (let i = 0; i < 10; i++) {
+        const weapon = getRandomWeapon(playerWeapons);
+        expect(weapon).toBeDefined();
+        expect(weapon.id).toBeDefined();
       }
     });
   });
@@ -415,27 +252,27 @@ describe('Weapon Definitions', () => {
     });
 
     it('should return false when player has maxCount of weapon', () => {
-      const mysticSight = WEAPONS.find(w => w.name === 'Mystic Sight')!;
-      const playerWeapons: Weapon[] = [mysticSight];
+      const weaponWithLimit = { ...WEAPONS[0], maxCount: 1 };
+      const playerWeapons: Weapon[] = [weaponWithLimit];
 
-      expect(canObtainWeapon(mysticSight, playerWeapons)).toBe(false);
+      expect(canObtainWeapon(weaponWithLimit, playerWeapons)).toBe(false);
     });
 
     it('should return true when player has less than maxCount', () => {
-      const mysticSight = WEAPONS.find(w => w.name === 'Mystic Sight')!;
-      const playerWeapons: Weapon[] = [];
+      const weaponWithLimit = { ...WEAPONS[0], maxCount: 2 };
+      const playerWeapons: Weapon[] = [weaponWithLimit];
 
-      expect(canObtainWeapon(mysticSight, playerWeapons)).toBe(true);
+      expect(canObtainWeapon(weaponWithLimit, playerWeapons)).toBe(true);
     });
   });
 
   describe('getPlayerWeaponCount', () => {
     it('should return 0 for empty weapon list', () => {
-      expect(getPlayerWeaponCount('Mystic Sight', [])).toBe(0);
+      expect(getPlayerWeaponCount('Blast Powder', [])).toBe(0);
     });
 
     it('should count weapons by name', () => {
-      const blastPowder = WEAPONS.find(w => w.name === 'Blast Powder' && w.rarity === 'common')!;
+      const blastPowder = WEAPONS.find(w => w.name === 'Blast Powder')!;
       const playerWeapons = [blastPowder, blastPowder, blastPowder];
 
       expect(getPlayerWeaponCount('Blast Powder', playerWeapons)).toBe(3);
@@ -468,9 +305,7 @@ describe('Stats Calculation', () => {
 
       // Add a Life Vessel weapon (+1 maxHealth)
       // Orange Tabby starts with Life Vessel (+1), so adding another makes +2
-      const lifeVessel = WEAPONS.find(
-        w => w.name === 'Life Vessel' && w.rarity === 'common'
-      )!;
+      const lifeVessel = WEAPONS.find(w => w.name === 'Life Vessel')!;
       player.weapons.push(lifeVessel);
 
       const baseStats = initializePlayer('test2', 'Test Player 2', 'Orange Tabby');
@@ -483,11 +318,9 @@ describe('Stats Calculation', () => {
     it('should stack multiple weapons of the same type', () => {
       const player = initializePlayer('test', 'Test Player', 'Orange Tabby');
 
-      // Add 3 Life Vessel commons (+1 each = +3 maxHealth)
+      // Add 3 Life Vessel weapons (+1 each = +3 maxHealth)
       // Note: Orange Tabby already starts with Life Vessel (+1), so total is +4
-      const lifeVessel = WEAPONS.find(
-        w => w.name === 'Life Vessel' && w.rarity === 'common'
-      )!;
+      const lifeVessel = WEAPONS.find(w => w.name === 'Life Vessel')!;
       player.weapons.push({ ...lifeVessel, id: 'lv1' });
       player.weapons.push({ ...lifeVessel, id: 'lv2' });
       player.weapons.push({ ...lifeVessel, id: 'lv3' });
@@ -503,13 +336,8 @@ describe('Stats Calculation', () => {
       const player = initializePlayer('test', 'Test Player', 'Orange Tabby');
 
       // Add Life Vessel (+1 maxHealth) and Second Chance (+1 grace)
-      // Orange Tabby starts with Life Vessel (+1) and Mending Charm (+5 healing)
-      const lifeVessel = WEAPONS.find(
-        w => w.name === 'Life Vessel' && w.rarity === 'common'
-      )!;
-      const secondChance = WEAPONS.find(
-        w => w.name === 'Second Chance' && w.rarity === 'common'
-      )!;
+      const lifeVessel = WEAPONS.find(w => w.name === 'Life Vessel')!;
+      const secondChance = WEAPONS.find(w => w.name === 'Second Chance')!;
 
       player.weapons.push(lifeVessel);
       player.weapons.push(secondChance);
@@ -519,62 +347,54 @@ describe('Stats Calculation', () => {
 
       // +2 = +1 from starting Life Vessel + 1 from added
       expect(totalStats.maxHealth).toBe(baseStats.stats.maxHealth + 2);
-      // +1 from added Second Chance (Orange Tabby doesn't start with any graces)
+      // +1 from added Second Chance
       expect(totalStats.graces).toBe(baseStats.stats.graces + 1);
     });
 
     it('should correctly calculate explosionChance from Blast Powder', () => {
       const player = initializePlayer('test', 'Test Player', 'Orange Tabby');
 
-      const blastPowder = WEAPONS.find(
-        w => w.name === 'Blast Powder' && w.rarity === 'common'
-      )!;
+      const blastPowder = WEAPONS.find(w => w.name === 'Blast Powder')!;
       player.weapons.push(blastPowder);
 
       const totalStats = calculatePlayerTotalStats(player);
 
-      expect(totalStats.explosionChance).toBe(10); // Common is 10%
+      expect(totalStats.explosionChance).toBe(10);
     });
 
     it('should correctly calculate healingChance from Mending Charm', () => {
       const player = initializePlayer('test', 'Test Player', 'Orange Tabby');
 
-      const mendingCharm = WEAPONS.find(
-        w => w.name === 'Mending Charm' && w.rarity === 'rare'
-      )!;
+      const mendingCharm = WEAPONS.find(w => w.name === 'Mending Charm')!;
       player.weapons.push(mendingCharm);
 
       const totalStats = calculatePlayerTotalStats(player);
 
-      // Orange Tabby starts with Mending Charm Common (+5), adding Rare (+15) = 20
-      expect(totalStats.healingChance).toBe(20);
+      // Orange Tabby starts with Mending Charm (+5), adding another (+5) = 10
+      expect(totalStats.healingChance).toBe(10);
     });
 
     it('should correctly calculate laserChance from Prismatic Ray', () => {
       const player = initializePlayer('test', 'Test Player', 'Orange Tabby');
 
-      const prismaticRay = WEAPONS.find(
-        w => w.name === 'Prismatic Ray' && w.rarity === 'rare'
-      )!;
+      const prismaticRay = WEAPONS.find(w => w.name === 'Prismatic Ray')!;
       player.weapons.push(prismaticRay);
 
       const totalStats = calculatePlayerTotalStats(player);
 
-      // Prismatic Ray Rare is +9 laserChance
-      expect(totalStats.laserChance).toBe(9);
+      // Prismatic Ray is +5 laserChance
+      expect(totalStats.laserChance).toBe(5);
     });
 
     it('should correctly calculate startingTime from Chrono Shard', () => {
       const player = initializePlayer('test', 'Test Player', 'Orange Tabby');
 
-      const chronoShard = WEAPONS.find(
-        w => w.name === 'Chrono Shard' && w.rarity === 'common'
-      )!;
+      const chronoShard = WEAPONS.find(w => w.name === 'Chrono Shard')!;
       player.weapons.push(chronoShard);
 
       const totalStats = calculatePlayerTotalStats(player);
 
-      expect(totalStats.startingTime).toBe(15); // Common is +15s
+      expect(totalStats.startingTime).toBe(10);
     });
   });
 });

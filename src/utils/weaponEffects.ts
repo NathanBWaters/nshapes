@@ -1,24 +1,8 @@
-import { Card, PlayerStats, Weapon, AttributeName, EffectCaps } from '../types';
+import { Card, PlayerStats, Weapon, AttributeName } from '../types';
 import { isValidCombination } from './gameUtils';
-import { EFFECT_CAPS, getEffectiveStat, EffectCapType } from './gameConfig';
-import { DEFAULT_EFFECT_CAPS } from './gameDefinitions';
 
 // Grid dimensions (assumes 3 columns)
 const GRID_COLS = 3;
-
-/**
- * Get the effective (capped) value for a stat, respecting the player's current caps.
- * Uses the player's effectCaps if available, otherwise falls back to defaults.
- */
-const getCappedStat = (
-  accumulated: number,
-  effectType: EffectCapType,
-  playerCaps?: EffectCaps
-): number => {
-  const caps = playerCaps || DEFAULT_EFFECT_CAPS;
-  const cap = caps[effectType];
-  return getEffectiveStat(accumulated, cap);
-};
 
 /**
  * Get grid dimensions based on board size
@@ -318,22 +302,19 @@ export const processWeaponEffects = (
     timeGainTriggered: false,
   };
 
-  // Get player's effect caps (or use defaults)
-  const playerCaps = playerStats.effectCaps;
-
-  // Calculate effective (capped) stats for each effect
-  const effectiveEchoChance = getCappedStat(playerStats.echoChance, 'echo', playerCaps);
-  const effectiveExplosionChance = getCappedStat(playerStats.explosionChance, 'explosion', playerCaps);
-  const effectiveLaserChance = getCappedStat(playerStats.laserChance, 'laser', playerCaps);
-  const effectiveRicochetChance = getCappedStat(playerStats.ricochetChance, 'ricochet', playerCaps);
-  const effectiveFireChance = getCappedStat(playerStats.fireSpreadChance, 'fire', playerCaps);
-  const effectiveBoardGrowthChance = getCappedStat(playerStats.boardGrowthChance, 'boardGrowth', playerCaps);
-  const effectiveHealingChance = getCappedStat(playerStats.healingChance, 'healing', playerCaps);
-  const effectiveHintChance = getCappedStat(playerStats.hintGainChance, 'hint', playerCaps);
-  const effectiveTimeGainChance = getCappedStat(playerStats.timeGainChance, 'timeGain', playerCaps);
-  const effectiveGraceGainChance = getCappedStat(playerStats.graceGainChance, 'graceGain', playerCaps);
-  const effectiveCoinGainChance = getCappedStat(playerStats.coinGainChance, 'coinGain', playerCaps);
-  const effectiveXPGainChance = getCappedStat(playerStats.xpGainChance, 'xpGain', playerCaps);
+  // Use player stats directly - cap system has been removed
+  const effectiveEchoChance = playerStats.echoChance;
+  const effectiveExplosionChance = playerStats.explosionChance;
+  const effectiveLaserChance = playerStats.laserChance;
+  const effectiveRicochetChance = playerStats.ricochetChance;
+  const effectiveFireChance = playerStats.fireSpreadChance;
+  const effectiveBoardGrowthChance = playerStats.boardGrowthChance;
+  const effectiveHealingChance = playerStats.healingChance;
+  const effectiveHintChance = playerStats.hintGainChance;
+  const effectiveTimeGainChance = playerStats.timeGainChance;
+  const effectiveGraceGainChance = playerStats.graceGainChance;
+  const effectiveCoinGainChance = playerStats.coinGainChance;
+  const effectiveXPGainChance = playerStats.xpGainChance;
 
   // Echo effect - MUST be processed FIRST to reserve the echo set before explosions
   // Only triggers on player matches (not on echoed matches) to prevent infinite loops

@@ -11,8 +11,8 @@ import {
   initializePlayer,
   calculatePlayerTotalStats,
   DEFAULT_PLAYER_STATS,
-  generateShopWeapons,
-  getRandomShopWeapon,
+  generateLevelUpWeapons,
+  getRandomWeapon,
   getEndlessRoundRequirement
 } from '@/utils/gameDefinitions';
 import {
@@ -812,7 +812,7 @@ const Game: React.FC<GameProps> = ({
 
       // Shop and upgrades - to be filled during gameplay
       shopItems: generateRandomShopItems(),
-      shopWeapons: generateShopWeapons(4, undefined, 1),  // Round 1 rarity scaling
+      shopWeapons: generateLevelUpWeapons(4),  // Round 1 rarity scaling
       levelUpOptions: [],
       rerollCost: BASE_REROLL_COST,
 
@@ -913,7 +913,7 @@ const Game: React.FC<GameProps> = ({
     // Generate only weapon options
     for (let i = 0; i < optionsSize; i++) {
       // Get a random shop weapon
-      const weapon = getRandomShopWeapon();
+      const weapon = getRandomWeapon();
       options.push(weapon);
     }
 
@@ -1155,7 +1155,7 @@ const Game: React.FC<GameProps> = ({
       roundCompleted: false,
       player,
       shopItems: generateRandomShopItems(),
-      shopWeapons: generateShopWeapons(4, validWeapons, nextRound, totalStats.luck),
+      shopWeapons: generateLevelUpWeapons(4, validWeapons),
       levelUpOptions: [],
       rerollCost: getBaseRollPrice(nextRound),
       currentEnemies: getRandomEnemyOptions(
@@ -1407,7 +1407,7 @@ const Game: React.FC<GameProps> = ({
         const totalStats = calculatePlayerTotalStats(prevState.player);
         return {
           ...prevState,
-          shopWeapons: generateShopWeapons(4, prevState.player.weapons, prevState.round, totalStats.luck),
+          shopWeapons: generateLevelUpWeapons(4, prevState.player.weapons),
           player: {
             ...prevState.player,
             stats: {
@@ -1423,7 +1423,7 @@ const Game: React.FC<GameProps> = ({
         const totalStats = calculatePlayerTotalStats(prevState.player);
         return {
           ...prevState,
-          shopWeapons: generateShopWeapons(4, prevState.player.weapons, prevState.round, totalStats.luck),
+          shopWeapons: generateLevelUpWeapons(4, prevState.player.weapons),
           player: {
             ...prevState.player,
             stats: {
@@ -2812,7 +2812,7 @@ const Game: React.FC<GameProps> = ({
         gameStarted: false,  // Not started yet - may need enemy setup
         currentEnemies: enemies,
         shopItems: generateRandomShopItems(),  // Refill shop for next round
-        shopWeapons: generateShopWeapons(4, prevState.player.weapons, nextRound, playerTotalStats.luck),   // Refill weapon shop with round-scaled rarity
+        shopWeapons: generateLevelUpWeapons(4, prevState.player.weapons),   // Refill weapon options
         rerollCost: getBaseRollPrice(nextRound),  // Reset roll price for new round
         selectedEnemy: null,
         activeEnemyInstance: null,  // Set when player selects enemy
