@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Modal, ScrollView, StyleSheet, Alert, Platform } from 'react-native';
 import { CopilotStep, walkthroughable } from 'react-native-copilot';
-import { PlayerStats, Weapon, Card, Character } from '@/types';
+import { PlayerStats, Weapon, Card, Character, PlayerInventory, FusionWeapon } from '@/types';
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
 import WeaponGuide from './WeaponGuide';
 import WeaponList from './WeaponList';
@@ -57,6 +57,7 @@ export interface DevModeCallbacks {
 interface GameMenuProps {
   playerStats: PlayerStats;
   playerWeapons?: Weapon[];
+  playerInventory?: PlayerInventory;  // New fusion inventory system
   character?: Character;  // Optional character to display in stats
   onExitGame?: () => void;
   onEndRoundEarly?: () => void;  // Callback when player ends round early (only available when target met)
@@ -73,7 +74,7 @@ interface GameMenuProps {
 
 type MenuScreen = 'menu' | 'stats' | 'weapons' | 'options' | 'dev';
 
-const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], character, onExitGame, onEndRoundEarly, canEndRoundEarly = false, devMode = false, devCallbacks, copilotMode = false, controlledOpen, onMenuOpenChange }) => {
+const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], playerInventory, character, onExitGame, onEndRoundEarly, canEndRoundEarly = false, devMode = false, devCallbacks, copilotMode = false, controlledOpen, onMenuOpenChange }) => {
   const [internalModalOpen, setInternalModalOpen] = useState(false);
   const [currentScreen, setCurrentScreen] = useState<MenuScreen>('menu');
   const [showExitConfirm, setShowExitConfirm] = useState(false);
@@ -221,6 +222,16 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
       </CopilotStep>
     );
   };
+
+  // Get inventory items for display (new fusion system)
+  const getInventoryItems = (): FusionWeapon[] => {
+    if (!playerInventory) return [];
+    const weapons = playerInventory.weapons.filter((w): w is FusionWeapon => w !== null);
+    const passives = playerInventory.passives.filter((p): p is FusionWeapon => p !== null);
+    return [...weapons, ...passives];
+  };
+
+  const inventoryItems = getInventoryItems();
 
   const renderMenuOptions = () => (
     <View style={styles.menuContainer}>
@@ -378,12 +389,39 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
           </View>
         )}
 
-        {/* Equipped Weapons Section */}
-        <WeaponList
-          weapons={playerWeapons.length > 0 ? playerWeapons : startingWeapons}
-          title={playerWeapons.length > 0 ? 'EQUIPPED WEAPONS' : (startingWeapons.length > 0 ? 'STARTING WEAPONS' : 'EQUIPPED WEAPONS')}
-          emptyMessage="No weapons equipped yet"
-        />
+        {/* Equipped Items Section - New Fusion Inventory System */}
+        {inventoryItems.length > 0 ? (
+          <View style={styles.categoryContainer}>
+            <View style={styles.categoryHeader}>
+              <Text style={styles.categoryTitle}>EQUIPPED ITEMS</Text>
+            </View>
+            <View style={styles.inventoryItemsGrid}>
+              {inventoryItems.map((item, index) => (
+                <View key={item.id || index} style={styles.inventoryItemRow}>
+                  <View style={styles.inventoryItemIconContainer}>
+                    {item.icon && <Icon name={item.icon} size={20} color={COLORS.slateCharcoal} />}
+                  </View>
+                  <View style={styles.inventoryItemInfo}>
+                    <Text style={styles.inventoryItemName}>
+                      {item.name} <Text style={styles.inventoryItemLevel}>Lv.{item.level}</Text>
+                    </Text>
+                    <Text style={styles.inventoryItemType}>
+                      {item.type === 'weapon' ? '⚔️ Weapon' : '🛡️ Passive'}
+                      {item.fusionTier > 0 && ` • Tier ${item.fusionTier}`}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : (
+          /* Fallback to legacy WeaponList */
+          <WeaponList
+            weapons={playerWeapons.length > 0 ? playerWeapons : startingWeapons}
+            title={playerWeapons.length > 0 ? 'EQUIPPED WEAPONS' : (startingWeapons.length > 0 ? 'STARTING WEAPONS' : 'EQUIPPED WEAPONS')}
+            emptyMessage="No weapons equipped yet"
+          />
+        )}
 
         {Object.entries(statCategories).map(([category, statDefs]) => (
           <View key={category} style={styles.categoryContainer}>
@@ -927,6 +965,44 @@ const styles = StyleSheet.create({
   statsGrid: {
     padding: 12,
     gap: 8,
+  },
+  inventoryItemsGrid: {
+    padding: 12,
+    gap: 8,
+  },
+  inventoryItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  inventoryItemIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    backgroundColor: COLORS.canvasWhite,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+  },
+  inventoryItemInfo: {
+    flex: 1,
+  },
+  inventoryItemName: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  inventoryItemLevel: {
+    color: COLORS.logicTeal,
+    fontWeight: '700',
+    fontSize: 11,
+  },
+  inventoryItemType: {
+    color: COLORS.slateCharcoal,
+    fontSize: 11,
+    opacity: 0.7,
+    marginTop: 1,
   },
   statRow: {
     flexDirection: 'row',

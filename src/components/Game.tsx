@@ -3106,6 +3106,7 @@ const Game: React.FC<GameProps> = ({
                 totalTime={getRoundRequirement(state.round).time}
                 playerStats={calculatePlayerTotalStats(state.player)}
                 playerWeapons={state.player.weapons}
+                playerInventory={state.player.inventory}
                 onHintPress={() => setHintTrigger(t => t + 1)}
                 onClearHint={() => setClearHintTrigger(t => t + 1)}
                 hasActiveHint={hasActiveHint}

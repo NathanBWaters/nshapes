@@ -1,7 +1,7 @@
 import React, { ReactNode } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { CopilotStep, walkthroughable } from 'react-native-copilot';
-import { PlayerStats, Weapon } from '@/types';
+import { PlayerStats, Weapon, PlayerInventory } from '@/types';
 import CircularTimer from './CircularTimer';
 import GameMenu, { DevModeCallbacks } from './GameMenu';
 import { COLORS, RADIUS } from '@/utils/colors';
@@ -120,6 +120,7 @@ interface GameInfoProps {
   totalTime: number;
   playerStats: PlayerStats;
   playerWeapons?: Weapon[];
+  playerInventory?: PlayerInventory;
   onHintPress?: () => void;
   onClearHint?: () => void;
   hasActiveHint?: boolean;
@@ -164,6 +165,7 @@ const GameInfo: React.FC<GameInfoProps> = ({
   totalTime,
   playerStats,
   playerWeapons = [],
+  playerInventory,
   onHintPress,
   onClearHint,
   hasActiveHint = false,
@@ -287,6 +289,7 @@ const GameInfo: React.FC<GameInfoProps> = ({
           <GameMenu
             playerStats={playerStats}
             playerWeapons={playerWeapons}
+            playerInventory={playerInventory}
             onExitGame={onExitGame}
             onEndRoundEarly={onEndRoundEarly}
             canEndRoundEarly={canEndRoundEarly}
