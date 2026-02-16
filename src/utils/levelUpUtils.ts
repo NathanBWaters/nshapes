@@ -28,7 +28,7 @@ export interface RerollState {
 // =============================================================================
 
 const INITIAL_REROLL_COST = 5;
-const NUM_LEVEL_UP_OPTIONS = 3;
+const NUM_LEVEL_UP_OPTIONS = 4;
 
 // =============================================================================
 // Reroll Cost Functions

@@ -12,6 +12,7 @@ import {
 import Icon from './Icon';
 import KeywordText from './KeywordText';
 import { playSound } from '@/utils/sounds';
+import InventoryDisplay, { InventorySlotInfo } from './InventoryDisplay';
 
 /**
  * LevelUpModal - In-round level-up popup
@@ -56,6 +57,19 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({
   hasMoreLevelUps,
 }) => {
   const [focusedIndex, setFocusedIndex] = useState<number>(0);
+  const [viewingInventoryItem, setViewingInventoryItem] = useState<InventorySlotInfo | null>(null);
+
+  // Handle clicking an inventory item
+  const handleInventoryItemSelect = (slotInfo: InventorySlotInfo) => {
+    playSound('click');
+    setViewingInventoryItem(slotInfo);
+  };
+
+  // Clear inventory item selection when selecting an option
+  const handleOptionSelect = (index: number) => {
+    setFocusedIndex(index);
+    setViewingInventoryItem(null);
+  };
 
   // Reset focusedIndex when options change
   useEffect(() => {
@@ -103,80 +117,104 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({
             </View>
           </View>
 
-          {/* Selected Item Detail - Above selection for better visibility */}
-          {focusedOption && focusedItem && (
-            <View style={styles.detailPanel}>
-              <ScrollView
-                style={styles.detailScroll}
-                contentContainerStyle={styles.detailScrollContent}
-                showsVerticalScrollIndicator={true}
-                bounces={false}
-              >
-                <View style={styles.detailHeader}>
-                  {focusedItem.icon && (
-                    <Icon
-                      name={focusedItem.icon}
-                      size={24}
-                      color={COLORS.slateCharcoal}
-                    />
-                  )}
-                  <Text style={[
-                    styles.detailName,
-                    { color: focusedOption.type === 'upgrade' ? COLORS.impactOrange : COLORS.logicTeal }
-                  ]}>
-                    {focusedItem.name}
-                  </Text>
-                  {/* NEW or UPGRADE indicator */}
-                  <View style={[
-                    styles.ownershipBadge,
-                    { backgroundColor: focusedOption.type === 'upgrade' ? COLORS.impactOrange : COLORS.logicTeal }
-                  ]}>
-                    <Text style={styles.ownershipBadgeText}>
-                      {focusedOption.type === 'upgrade'
-                        ? `LV${Math.min(3, focusedItem.level + 1)}`
-                        : 'NEW'}
-                    </Text>
-                  </View>
-                </View>
-                <KeywordText style={styles.detailDesc}>
-                  {focusedItem.description}
-                </KeywordText>
-                {focusedItem.flavorText && (
-                  <KeywordText style={styles.detailFlavor}>{focusedItem.flavorText}</KeywordText>
-                )}
-
-                {/* Level Effects Display */}
-                {focusedItem.levelEffects && (() => {
-                  const effectLevel = focusedOption.type === 'upgrade'
-                    ? Math.min(3, focusedItem.level + 1) as WeaponLevel
-                    : 1;
-                  const effects = focusedItem.levelEffects[effectLevel];
-                  if (!effects || Object.keys(effects).length === 0) return null;
-
-                  return (
-                    <View style={styles.effectsBox}>
-                      <Text style={styles.effectsLabel}>Level {effectLevel} Effects</Text>
-                      {Object.entries(effects).map(([key, value], i) => (
-                        <View key={i} style={styles.effectRow}>
-                          <Text style={styles.effectKey}>{key}</Text>
-                          <Text style={styles.statIncrease}>
-                            {typeof value === 'number' && value > 0 ? '+' : ''}{value}
-                          </Text>
-                        </View>
-                      ))}
-                    </View>
-                  );
-                })()}
-
-                {/* Item Type Badge */}
-                <View style={styles.itemTypeBadge}>
-                  <Text style={styles.itemTypeBadgeText}>
-                    {focusedItem.type === 'weapon' ? '⚔️ WEAPON' : '🛡️ PASSIVE'}
-                  </Text>
-                </View>
-              </ScrollView>
+          {/* Current Inventory */}
+          {playerInventory && (
+            <View style={styles.inventorySection}>
+              <InventoryDisplay
+                inventory={playerInventory}
+                onItemSelect={handleInventoryItemSelect}
+                selectedSlot={viewingInventoryItem
+                  ? { type: viewingInventoryItem.slotType, index: viewingInventoryItem.slotIndex }
+                  : null}
+                showLabels={false}
+                compact={true}
+              />
             </View>
           )}
+
+          {/* Detail Panel - Shows either focused option or clicked inventory item */}
+          {(() => {
+            // Determine what to display
+            const displayItem = viewingInventoryItem?.item ?? focusedItem;
+            const isInventoryView = viewingInventoryItem !== null;
+            const isUpgrade = !isInventoryView && focusedOption?.type === 'upgrade';
+
+            if (!displayItem) return null;
+
+            return (
+              <View style={styles.detailPanel}>
+                <ScrollView
+                  style={styles.detailScroll}
+                  contentContainerStyle={styles.detailScrollContent}
+                  showsVerticalScrollIndicator={true}
+                  bounces={false}
+                >
+                  <View style={styles.detailHeader}>
+                    {displayItem.icon && (
+                      <Icon
+                        name={displayItem.icon}
+                        size={24}
+                        color={COLORS.slateCharcoal}
+                      />
+                    )}
+                    <Text style={[
+                      styles.detailName,
+                      { color: isInventoryView ? COLORS.slateCharcoal : (isUpgrade ? COLORS.impactOrange : COLORS.logicTeal) }
+                    ]}>
+                      {displayItem.name}
+                    </Text>
+                    {/* Badge: EQUIPPED for inventory, NEW/UPGRADE for options */}
+                    <View style={[
+                      styles.ownershipBadge,
+                      { backgroundColor: isInventoryView ? COLORS.slateCharcoal : (isUpgrade ? COLORS.impactOrange : COLORS.logicTeal) }
+                    ]}>
+                      <Text style={styles.ownershipBadgeText}>
+                        {isInventoryView
+                          ? `LV${displayItem.level}`
+                          : (isUpgrade ? `LV${Math.min(3, displayItem.level + 1)}` : 'NEW')}
+                      </Text>
+                    </View>
+                  </View>
+                  <KeywordText style={styles.detailDesc}>
+                    {displayItem.description}
+                  </KeywordText>
+                  {displayItem.flavorText && (
+                    <KeywordText style={styles.detailFlavor}>{displayItem.flavorText}</KeywordText>
+                  )}
+
+                  {/* Level Effects Display */}
+                  {displayItem.levelEffects && (() => {
+                    const effectLevel = isInventoryView
+                      ? displayItem.level
+                      : (isUpgrade ? Math.min(3, displayItem.level + 1) as WeaponLevel : 1);
+                    const effects = displayItem.levelEffects[effectLevel];
+                    if (!effects || Object.keys(effects).length === 0) return null;
+
+                    return (
+                      <View style={styles.effectsBox}>
+                        <Text style={styles.effectsLabel}>Level {effectLevel} Effects</Text>
+                        {Object.entries(effects).map(([key, value], i) => (
+                          <View key={i} style={styles.effectRow}>
+                            <Text style={styles.effectKey}>{key}</Text>
+                            <Text style={styles.statIncrease}>
+                              {typeof value === 'number' && value > 0 ? '+' : ''}{value}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    );
+                  })()}
+
+                  {/* Item Type Badge */}
+                  <View style={styles.itemTypeBadge}>
+                    <Text style={styles.itemTypeBadgeText}>
+                      {displayItem.type === 'weapon' ? '⚔️ WEAPON' : '🛡️ PASSIVE'}
+                    </Text>
+                  </View>
+                </ScrollView>
+              </View>
+            );
+          })()}
 
           {/* Item Options Grid */}
           <View style={styles.optionsGrid}>
@@ -188,7 +226,7 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({
               return (
                 <Pressable
                   key={option.item.id || index}
-                  onPress={() => setFocusedIndex(index)}
+                  onPress={() => handleOptionSelect(index)}
                   style={[
                     styles.optionCard,
                     { borderColor: rarityColor },
@@ -285,6 +323,9 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 400,
     padding: 16,
+  },
+  inventorySection: {
+    marginBottom: 12,
   },
   header: {
     flexDirection: 'row',
