@@ -9,7 +9,7 @@
 import React from 'react';
 import { render } from '@testing-library/react-native';
 import LevelUp from '@/components/LevelUp';
-import { Weapon, PlayerStats } from '@/types';
+import { LevelUpOption, FusionWeapon, PlayerStats } from '@/types';
 import { DEFAULT_PLAYER_STATS } from '@/utils/gameDefinitions';
 
 // Mock dependencies
@@ -58,27 +58,36 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
-// Create test weapons
-const createTestWeapon = (id: string): Weapon => ({
+// Create test FusionWeapon
+const createTestFusionWeapon = (id: string): FusionWeapon => ({
   id: `test-weapon-${id}`,
   name: 'Blast Powder',
+  type: 'weapon',
   level: 1,
-  rarity: 'common',
-  price: 10,
+  fusionTier: 0,
   icon: 'lorc/cat',
   description: 'Test weapon description',
   shortDescription: 'Test short desc',
   flavorText: 'Test flavor text',
-  effects: {
-    explosionChance: 10,
+  levelEffects: {
+    1: { explosionChance: 10 },
+    2: { explosionChance: 15 },
+    3: { explosionChance: 20 },
   },
+});
+
+// Create test LevelUpOption
+const createTestOption = (id: string, type: 'new' | 'upgrade' = 'new'): LevelUpOption => ({
+  type,
+  item: createTestFusionWeapon(id),
+  slotInfo: type === 'upgrade' ? { slotType: 'weapons', slotIndex: 0 } : undefined,
 });
 
 const defaultProps = {
   options: [
-    createTestWeapon('Weapon 1'),
-    createTestWeapon('Weapon 2'),
-    createTestWeapon('Weapon 3'),
+    createTestOption('1'),
+    createTestOption('2'),
+    createTestOption('3'),
   ],
   onSelect: jest.fn(),
   onReroll: jest.fn(),
@@ -146,7 +155,7 @@ describe('LevelUp Component', () => {
       expect(getByText('Next Level Up')).toBeTruthy();
     });
 
-    it('shows "Select Weapon" on final level-up', () => {
+    it('shows "Get Item" on final level-up with new item', () => {
       const { getByText } = render(
         <LevelUp
           {...defaultProps}
@@ -155,7 +164,26 @@ describe('LevelUp Component', () => {
         />
       );
 
-      expect(getByText('Select Weapon')).toBeTruthy();
+      expect(getByText('Get Item')).toBeTruthy();
+    });
+
+    it('shows "Upgrade Item" when focused on upgrade option', () => {
+      const upgradeOptions = [
+        createTestOption('1', 'upgrade'),
+        createTestOption('2', 'upgrade'),
+        createTestOption('3', 'upgrade'),
+      ];
+
+      const { getByText } = render(
+        <LevelUp
+          {...defaultProps}
+          options={upgradeOptions}
+          targetLevel={8}
+          hasMoreLevelUps={false}
+        />
+      );
+
+      expect(getByText('Upgrade Item')).toBeTruthy();
     });
   });
 
@@ -185,7 +213,7 @@ describe('LevelUp Component', () => {
       );
 
       expect(getByText('Level 7')).toBeTruthy();
-      expect(getByText('Select Weapon')).toBeTruthy();
+      expect(getByText('Get Item')).toBeTruthy();
     });
   });
 });

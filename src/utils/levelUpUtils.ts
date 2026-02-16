@@ -8,22 +8,15 @@
  * - Reroll cost management
  */
 
-import { FusionWeapon, PlayerInventory, WeaponLevel } from '../types';
+import { FusionWeapon, PlayerInventory, WeaponLevel, LevelUpOption } from '../types';
 import { BASE_WEAPONS, BASE_PASSIVES, ALL_ITEMS } from './fusionDefinitions';
+
+// Re-export LevelUpOption for convenience
+export type { LevelUpOption };
 
 // =============================================================================
 // Types
 // =============================================================================
-
-export interface LevelUpOption {
-  type: 'new' | 'upgrade';
-  item: FusionWeapon;
-  /** For upgrades: the slot index and array type to update */
-  slotInfo?: {
-    slotType: 'weapons' | 'passives';
-    slotIndex: number;
-  };
-}
 
 export interface RerollState {
   cost: number;

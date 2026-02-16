@@ -6,6 +6,7 @@ import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
 import WeaponGuide from './WeaponGuide';
 import WeaponList from './WeaponList';
 import Icon from './Icon';
+import InventoryDisplay from './InventoryDisplay';
 import { WEAPONS, getWeaponByName } from '@/utils/gameDefinitions';
 import { SettingsStorage } from '@/utils/storage';
 import { setAudioEnabled } from '@/utils/sounds';
@@ -390,28 +391,17 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], pl
         )}
 
         {/* Equipped Items Section - New Fusion Inventory System */}
-        {inventoryItems.length > 0 ? (
+        {playerInventory ? (
           <View style={styles.categoryContainer}>
             <View style={styles.categoryHeader}>
               <Text style={styles.categoryTitle}>EQUIPPED ITEMS</Text>
             </View>
-            <View style={styles.inventoryItemsGrid}>
-              {inventoryItems.map((item, index) => (
-                <View key={item.id || index} style={styles.inventoryItemRow}>
-                  <View style={styles.inventoryItemIconContainer}>
-                    {item.icon && <Icon name={item.icon} size={20} color={COLORS.slateCharcoal} />}
-                  </View>
-                  <View style={styles.inventoryItemInfo}>
-                    <Text style={styles.inventoryItemName}>
-                      {item.name} <Text style={styles.inventoryItemLevel}>Lv.{item.level}</Text>
-                    </Text>
-                    <Text style={styles.inventoryItemType}>
-                      {item.type === 'weapon' ? '⚔️ Weapon' : '🛡️ Passive'}
-                      {item.fusionTier > 0 && ` • Tier ${item.fusionTier}`}
-                    </Text>
-                  </View>
-                </View>
-              ))}
+            <View style={styles.inventoryDisplayWrapper}>
+              <InventoryDisplay
+                inventory={playerInventory}
+                showLabels={true}
+                compact={false}
+              />
             </View>
           </View>
         ) : (
@@ -969,6 +959,9 @@ const styles = StyleSheet.create({
   inventoryItemsGrid: {
     padding: 12,
     gap: 8,
+  },
+  inventoryDisplayWrapper: {
+    padding: 8,
   },
   inventoryItemRow: {
     flexDirection: 'row',

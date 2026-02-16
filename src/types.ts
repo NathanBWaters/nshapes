@@ -386,6 +386,19 @@ export interface PlayerInventory {
   passives: (FusionWeapon | null)[];  // Length 4
 }
 
+/**
+ * Level up option - can be a new item or an upgrade to an existing item
+ */
+export interface LevelUpOption {
+  type: 'new' | 'upgrade';
+  item: FusionWeapon;
+  /** For upgrades: the slot index and array type to update */
+  slotInfo?: {
+    slotType: 'weapons' | 'passives';
+    slotIndex: number;
+  };
+}
+
 export interface Item {
   name: ItemName;
   description: string;
@@ -530,7 +543,7 @@ export interface GameState {
   // Shop and upgrades (shop hidden but code preserved)
   shopItems: (Item | null)[];
   shopWeapons: (Weapon | null)[];
-  levelUpOptions: Weapon[];
+  levelUpOptions: LevelUpOption[];
   rerollCost: number;
 
   // Fusion system

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Platform, Dimensions } from 'react-native';
-import { Card, CardReward, GameState, Weapon, PlayerStats, AttributeName, AdventureDifficulty, Character, LevelNumber } from '@/types';
+import { Card, CardReward, GameState, Weapon, PlayerStats, AttributeName, AdventureDifficulty, Character, LevelNumber, LevelUpOption, FusionWeapon, PlayerInventory, WeaponLevel } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { createDeck, shuffleArray, isValidCombination, findAllCombinations, generateGameBoard, formatTime, sameCardAttributes } from '@/utils/gameUtils';
 import {
@@ -75,6 +75,7 @@ import OptionsMenu from './OptionsMenu';
 import { useTutorial } from '@/context/TutorialContext';
 import { CharacterWinsStorage, EndlessHighScoresStorage, AdventureHighRoundStorage, CharacterUnlockStorage, SavedGameStorage, LevelProgressStorage } from '@/utils/storage';
 import { playSound, playCardDealing } from '@/utils/sounds';
+import { generateLevelUpOptions as generateFusionLevelUpOptions, upgradeItem } from '@/utils/levelUpUtils';
 
 const INITIAL_CARD_COUNT = 12;
 const MAX_BOARD_SIZE = 21;
@@ -905,19 +906,14 @@ const Game: React.FC<GameProps> = ({
     return selectedItems;
   };
 
-  // Generate random level up options - WEAPONS ONLY
-  const generateLevelUpOptions = () => {
-    const options: Weapon[] = [];
-    const optionsSize = 4 + (state.player?.stats?.drawIncrease || 0);
-
-    // Generate only weapon options
-    for (let i = 0; i < optionsSize; i++) {
-      // Get a random shop weapon
-      const weapon = getRandomWeapon();
-      options.push(weapon);
+  // Generate random level up options using the fusion system
+  const generateLevelUpOptions = (): LevelUpOption[] => {
+    // Use the fusion-based level up system
+    if (state.player?.inventory) {
+      return generateFusionLevelUpOptions(state.player.inventory);
     }
-
-    return options;
+    // Fallback: return empty array if no inventory
+    return [];
   };
 
   // Tutorial prompt modal state
@@ -1477,52 +1473,84 @@ const Game: React.FC<GameProps> = ({
     }
   };
 
-  // Handle level up selection - receives the selected weapon directly
-  const handleLevelUpSelection = (weapon: Weapon) => {
-    // Add the weapon to player's inventory (weapons stack) with immediate bonuses
+  // Handle level up selection - receives the selected LevelUpOption
+  const handleLevelUpSelection = (option: LevelUpOption) => {
+    const { type, item, slotInfo } = option;
+
     setState(prevState => {
-      // Calculate the new max values after adding this weapon
-      const newWeapons = [...prevState.player.weapons, weapon];
-      const newPlayer = { ...prevState.player, weapons: newWeapons };
+      // Get current inventory or create default
+      const currentInventory = prevState.player.inventory ?? {
+        weapons: [null, null, null, null],
+        passives: [null, null, null, null],
+      };
+
+      // Create new inventory based on whether this is a new item or upgrade
+      const newInventory: PlayerInventory = {
+        weapons: [...currentInventory.weapons],
+        passives: [...currentInventory.passives],
+      };
+
+      if (type === 'upgrade' && slotInfo) {
+        // Upgrade existing item: increase its level
+        const existingItem = newInventory[slotInfo.slotType][slotInfo.slotIndex];
+        if (existingItem) {
+          newInventory[slotInfo.slotType][slotInfo.slotIndex] = upgradeItem(existingItem);
+        }
+      } else {
+        // New item: find first empty slot in appropriate array
+        const targetArray = item.type === 'weapon' ? 'weapons' : 'passives';
+        const emptyIndex = newInventory[targetArray].findIndex(slot => slot === null);
+        if (emptyIndex !== -1) {
+          newInventory[targetArray][emptyIndex] = item;
+        }
+      }
+
+      // Calculate new stats after adding/upgrading item
+      const newPlayer = { ...prevState.player, inventory: newInventory };
       const newTotalStats = calculatePlayerTotalStats(newPlayer);
 
-      // Grant immediate bonuses for capacity-increasing weapons
+      // Grant immediate bonuses for capacity-increasing items
       let hintsBonus = 0;
       let gracesBonus = 0;
       let healthBonus = 0;
 
-      // If weapon increases maxHints, grant +1 immediate hint (up to new max)
-      if (weapon.effects.maxHints && typeof weapon.effects.maxHints === 'number') {
+      // Get the level effects for the item at its current/new level
+      const effectLevel = type === 'upgrade' ? Math.min(3, item.level + 1) as WeaponLevel : 1;
+      const effects = item.levelEffects?.[effectLevel] || {};
+
+      // If item increases maxHints, grant +1 immediate hint (up to new max)
+      if (effects.maxHints && typeof effects.maxHints === 'number') {
         hintsBonus = Math.min(1, newTotalStats.maxHints - prevState.player.stats.hints);
       }
 
-      // If weapon grants graces (Second Chance), grant them immediately
-      if (weapon.effects.graces && typeof weapon.effects.graces === 'number') {
-        gracesBonus = weapon.effects.graces;
+      // If item grants graces, grant them immediately
+      if (effects.graces && typeof effects.graces === 'number') {
+        gracesBonus = effects.graces;
       }
 
-      // If weapon grants health (Life Vessel), heal immediately (clamped to new max)
-      if (weapon.effects.health && typeof weapon.effects.health === 'number') {
-        healthBonus = weapon.effects.health;
+      // If item grants health, heal immediately (clamped to new max)
+      if (effects.health && typeof effects.health === 'number') {
+        healthBonus = effects.health;
       }
 
       return {
         ...prevState,
         player: {
           ...prevState.player,
+          inventory: newInventory,
           stats: {
             ...prevState.player.stats,
             hints: Math.min(prevState.player.stats.hints + hintsBonus, newTotalStats.maxHints),
             graces: Math.min(prevState.player.stats.graces + gracesBonus, newTotalStats.maxGraces),
             health: Math.min(prevState.player.stats.health + healthBonus, newTotalStats.maxHealth),
           },
-          weapons: newWeapons
         }
       };
     });
 
+    const actionWord = type === 'upgrade' ? 'Upgraded' : 'Acquired';
     setNotification({
-      message: `Acquired ${weapon.name}!`,
+      message: `${actionWord} ${item.name}!`,
       type: 'success'
     });
 
@@ -1548,33 +1576,63 @@ const Game: React.FC<GameProps> = ({
   };
 
   // Handle in-round level-up selection (NEW level-based system)
-  const handleInRoundLevelUpSelect = (weapon: Weapon) => {
-    // Apply the weapon (same logic as handleLevelUpSelection)
+  const handleInRoundLevelUpSelect = (option: LevelUpOption) => {
+    const { type, item, slotInfo } = option;
+
+    // Apply the item to inventory (same logic as handleLevelUpSelection)
     setState(prevState => {
-      const newWeapons = [...prevState.player.weapons, weapon];
-      const newPlayer = { ...prevState.player, weapons: newWeapons };
+      // Get current inventory or create default
+      const currentInventory = prevState.player.inventory ?? {
+        weapons: [null, null, null, null],
+        passives: [null, null, null, null],
+      };
+
+      const newInventory: PlayerInventory = {
+        weapons: [...currentInventory.weapons],
+        passives: [...currentInventory.passives],
+      };
+
+      if (type === 'upgrade' && slotInfo) {
+        // Upgrade existing item
+        const existingItem = newInventory[slotInfo.slotType][slotInfo.slotIndex];
+        if (existingItem) {
+          newInventory[slotInfo.slotType][slotInfo.slotIndex] = upgradeItem(existingItem);
+        }
+      } else {
+        // New item: find first empty slot
+        const targetArray = item.type === 'weapon' ? 'weapons' : 'passives';
+        const emptyIndex = newInventory[targetArray].findIndex(slot => slot === null);
+        if (emptyIndex !== -1) {
+          newInventory[targetArray][emptyIndex] = item;
+        }
+      }
+
+      const newPlayer = { ...prevState.player, inventory: newInventory };
       const newTotalStats = calculatePlayerTotalStats(newPlayer);
 
-      // Grant immediate bonuses for capacity-increasing weapons
+      // Grant immediate bonuses
       let hintsBonus = 0;
       let gracesBonus = 0;
       let healthBonus = 0;
 
-      if (weapon.effects.maxHints && typeof weapon.effects.maxHints === 'number') {
+      const effectLevel = type === 'upgrade' ? Math.min(3, item.level + 1) as WeaponLevel : 1;
+      const effects = item.levelEffects?.[effectLevel] || {};
+
+      if (effects.maxHints && typeof effects.maxHints === 'number') {
         hintsBonus = Math.min(1, newTotalStats.maxHints - prevState.player.stats.hints);
       }
-      if (weapon.effects.graces && typeof weapon.effects.graces === 'number') {
-        gracesBonus = weapon.effects.graces;
+      if (effects.graces && typeof effects.graces === 'number') {
+        gracesBonus = effects.graces;
       }
-      if (weapon.effects.health && typeof weapon.effects.health === 'number') {
-        healthBonus = weapon.effects.health;
+      if (effects.health && typeof effects.health === 'number') {
+        healthBonus = effects.health;
       }
 
       return {
         ...prevState,
         player: {
           ...prevState.player,
-          weapons: newWeapons,
+          inventory: newInventory,
           stats: {
             ...prevState.player.stats,
             hints: Math.min(prevState.player.stats.hints + hintsBonus, newTotalStats.maxHints),
@@ -3046,6 +3104,7 @@ const Game: React.FC<GameProps> = ({
             freeRerolls={state.player.stats.freeRerolls}
             playerStats={calculatePlayerTotalStats(state.player)}
             playerWeapons={state.player.weapons}
+            playerInventory={state.player.inventory}
             onExitGame={() => setGamePhase('main_menu')}
             targetLevel={pendingLevelUps[0] || state.player.stats.level}
             hasMoreLevelUps={pendingLevelUps.length > 1}
@@ -3165,6 +3224,7 @@ const Game: React.FC<GameProps> = ({
               freeRerolls={state.player.stats.freeRerolls}
               playerStats={calculatePlayerTotalStats(state.player)}
               playerWeapons={state.player.weapons}
+              playerInventory={state.player.inventory}
               targetLevel={inRoundLevelUpQueue[0] || state.player.stats.level}
               hasMoreLevelUps={inRoundLevelUpQueue.length > 1}
             />

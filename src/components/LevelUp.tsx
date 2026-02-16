@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Pressable, StyleSheet, Platform } from 'react-native';
 import { usePWASafeAreaInsets } from '@/utils/usePWASafeAreaInsets';
-import { PlayerStats, Weapon } from '@/types';
+import { PlayerStats, Weapon, LevelUpOption, FusionWeapon, PlayerInventory, WeaponLevel } from '@/types';
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
 import {
   getDynamicDescription,
@@ -11,37 +11,35 @@ import {
 } from '@/utils/weaponDisplay';
 import Icon from './Icon';
 import GameMenu from './GameMenu';
-import InventoryBar from './InventoryBar';
+import InventoryDisplay, { InventorySlotInfo } from './InventoryDisplay';
 import { ScreenTransition } from './ScreenTransition';
 import KeywordText from './KeywordText';
 import { playSound } from '@/utils/sounds';
 import { getPlayerWeaponCount } from '@/utils/gameDefinitions';
 
-// Weapon option component
-interface WeaponOptionProps {
-  weapon: Weapon;
+// Level up option component
+interface LevelUpItemProps {
+  option: LevelUpOption;
   index: number;
   isFocused: boolean;
   rarityColor: string;
   onPress: (index: number) => void;
   onHoverIn: (index: number) => void;
   onHoverOut: () => void;
-  ownershipCount?: number;  // How many of this weapon the player already owns
-  maxCount?: number;        // Max count for this weapon (if limited)
 }
 
-function WeaponOption({
-  weapon,
+function LevelUpItem({
+  option,
   index,
   isFocused,
   rarityColor,
   onPress,
   onHoverIn,
   onHoverOut,
-  ownershipCount,
-  maxCount,
-}: WeaponOptionProps) {
-  const showOwnership = maxCount !== undefined && ownershipCount !== undefined && ownershipCount > 0;
+}: LevelUpItemProps) {
+  const { type, item } = option;
+  const isUpgrade = type === 'upgrade';
+  const newLevel = isUpgrade ? Math.min(3, item.level + 1) : 1;
 
   return (
     <Pressable
@@ -55,16 +53,19 @@ function WeaponOption({
         Platform.OS === 'web' && { cursor: 'pointer' as any },
       ]}
     >
-      {/* Ownership badge for weapons with maxCount */}
-      {showOwnership && (
-        <View style={styles.ownershipBadge}>
-          <Text style={styles.ownershipBadgeText}>{ownershipCount}/{maxCount}</Text>
-        </View>
-      )}
-      {weapon.icon && (
+      {/* NEW or UPGRADE badge */}
+      <View style={[
+        styles.typeBadge,
+        isUpgrade ? styles.upgradeBadge : styles.newBadge
+      ]}>
+        <Text style={styles.typeBadgeText}>
+          {isUpgrade ? `LV${newLevel}` : 'NEW'}
+        </Text>
+      </View>
+      {item.icon && (
         <View style={styles.optionIcon}>
           <Icon
-            name={weapon.icon}
+            name={item.icon}
             size={24}
             color={isFocused ? COLORS.canvasWhite : COLORS.logicTeal}
           />
@@ -77,27 +78,28 @@ function WeaponOption({
         ]}
         numberOfLines={1}
       >
-        {weapon.name}
+        {item.name}
       </Text>
       <Text style={[
         styles.rarityTag,
-        { color: isFocused && weapon.rarity === 'legendary' ? COLORS.canvasWhite : rarityColor }
+        { color: isFocused ? COLORS.canvasWhite : COLORS.slateCharcoal }
       ]}>
-        {getRarityLabel(weapon.rarity)}
+        {item.type === 'weapon' ? 'WEAPON' : 'PASSIVE'}
       </Text>
     </Pressable>
   );
 }
 
 interface LevelUpProps {
-  options: Weapon[];
-  onSelect: (weapon: Weapon) => void;
+  options: LevelUpOption[];
+  onSelect: (option: LevelUpOption) => void;
   onReroll: () => void;
   rerollCost: number;
   playerMoney: number;
   freeRerolls: number;
   playerStats: PlayerStats;
   playerWeapons?: Weapon[];
+  playerInventory?: PlayerInventory;
   onExitGame?: () => void;
   targetLevel: number;         // The level this reward is for
   hasMoreLevelUps: boolean;    // True if more level-ups pending after this
@@ -112,6 +114,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
   freeRerolls,
   playerStats,
   playerWeapons = [],
+  playerInventory,
   onExitGame,
   targetLevel,
   hasMoreLevelUps,
@@ -119,6 +122,8 @@ const LevelUp: React.FC<LevelUpProps> = ({
   const insets = usePWASafeAreaInsets();
   const [focusedIndex, setFocusedIndex] = useState<number>(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  // State for viewing an existing inventory item
+  const [viewingInventoryItem, setViewingInventoryItem] = useState<InventorySlotInfo | null>(null);
 
   // Reset focusedIndex when options change to ensure it's valid
   useEffect(() => {
@@ -133,9 +138,16 @@ const LevelUp: React.FC<LevelUpProps> = ({
     }
   }, [options, focusedIndex]);
 
-  // Show hovered option if hovering, otherwise show focused
+  // Handle inventory item selection - show its details
+  const handleInventoryItemSelect = (slotInfo: InventorySlotInfo) => {
+    playSound('click');
+    setViewingInventoryItem(slotInfo);
+  };
+
+  // Show hovered option if hovering, otherwise show focused, unless viewing inventory item
   const displayedIndex = hoveredIndex !== null ? hoveredIndex : focusedIndex;
-  const focusedWeapon = options[displayedIndex];
+  const focusedOption = viewingInventoryItem ? null : options[displayedIndex];
+  const focusedItem = viewingInventoryItem?.item || focusedOption?.item;
 
   return (
     <ScreenTransition>
@@ -157,12 +169,25 @@ const LevelUp: React.FC<LevelUpProps> = ({
         </View>
       </View>
 
-      {/* Inventory Bar */}
-      <InventoryBar weapons={playerWeapons} />
+      {/* Inventory Display - 4 weapons on top, 4 passives on bottom */}
+      {playerInventory && (
+        <View style={styles.inventorySection}>
+          <InventoryDisplay
+            inventory={playerInventory}
+            onItemSelect={handleInventoryItemSelect}
+            selectedSlot={viewingInventoryItem
+              ? { type: viewingInventoryItem.slotType, index: viewingInventoryItem.slotIndex }
+              : null}
+            showLabels={true}
+            compact={false}
+          />
+        </View>
+      )}
 
       {/* Top Half - Detail Focus */}
       <View style={styles.detailSection}>
-        {focusedWeapon ? (
+        {/* Viewing existing inventory item */}
+        {viewingInventoryItem ? (
           <View style={styles.detailCard}>
             <ScrollView
               style={styles.detailCardScroll}
@@ -170,115 +195,155 @@ const LevelUp: React.FC<LevelUpProps> = ({
               showsVerticalScrollIndicator={true}
               bounces={false}
             >
-              {/* Weapon Icon */}
+              {/* Item Icon with EQUIPPED indicator */}
               <View style={[
                 styles.previewArea,
-                { borderColor: getRarityColor(focusedWeapon.rarity) }
+                { borderColor: COLORS.slateCharcoal }
               ]}>
-                {focusedWeapon.icon ? (
-                  <Icon name={focusedWeapon.icon} size={32} color={COLORS.slateCharcoal} />
+                {viewingInventoryItem.item.icon ? (
+                  <Icon name={viewingInventoryItem.item.icon} size={32} color={COLORS.slateCharcoal} />
                 ) : (
-                  <Text style={styles.previewLabel}>{getRarityLabel(focusedWeapon.rarity)}</Text>
+                  <Text style={styles.previewLabel}>{viewingInventoryItem.item.type.toUpperCase()}</Text>
                 )}
                 <View style={[
                   styles.rarityBadge,
-                  { backgroundColor: getRarityColor(focusedWeapon.rarity) }
+                  { backgroundColor: COLORS.slateCharcoal }
                 ]}>
-                  <Text style={styles.rarityBadgeText}>{getRarityLabel(focusedWeapon.rarity)}</Text>
+                  <Text style={styles.rarityBadgeText}>
+                    EQUIPPED • LEVEL {viewingInventoryItem.item.level}
+                  </Text>
                 </View>
-                {/* Ownership indicator for weapons with maxCount */}
-                {focusedWeapon.maxCount !== undefined && (
-                  <View style={styles.ownershipIndicator}>
-                    <Text style={styles.ownershipIndicatorText}>
-                      {getPlayerWeaponCount(focusedWeapon.name, playerWeapons)}/{focusedWeapon.maxCount} owned
-                    </Text>
-                  </View>
-                )}
               </View>
 
-              {/* Weapon Info */}
-              <Text style={[
-                styles.detailName,
-                { color: getRarityColor(focusedWeapon.rarity) }
-              ]}>
-                {focusedWeapon.name}
+              {/* Item Info */}
+              <Text style={[styles.detailName, { color: COLORS.slateCharcoal }]}>
+                {viewingInventoryItem.item.name}
               </Text>
-              <KeywordText style={styles.detailDescription}>{getDynamicDescription(focusedWeapon, playerStats)}</KeywordText>
-              {focusedWeapon.flavorText && (
-                <KeywordText style={styles.detailFlavor}>{focusedWeapon.flavorText}</KeywordText>
+              <KeywordText style={styles.detailDescription}>{viewingInventoryItem.item.description}</KeywordText>
+              {viewingInventoryItem.item.flavorText && (
+                <KeywordText style={styles.detailFlavor}>{viewingInventoryItem.item.flavorText}</KeywordText>
               )}
 
-              {/* Effects with before/after comparison and cap info */}
-              <View style={styles.effectsRow}>
-                {Object.keys(focusedWeapon.effects).length > 0 && (
+              {/* Current Level Effects */}
+              {viewingInventoryItem.item.levelEffects && (() => {
+                const currentLevel = viewingInventoryItem.item.level as WeaponLevel;
+                const effects = viewingInventoryItem.item.levelEffects[currentLevel];
+                if (!effects || Object.keys(effects).length === 0) return null;
+
+                return (
                   <View style={[styles.effectsBox, styles.effectsBoxPositive]}>
-                    <Text style={styles.effectsLabelPositive}>Stats Change</Text>
-                    {getStatComparison(focusedWeapon, playerStats).map((stat, i) => (
+                    <Text style={styles.effectsLabelPositive}>
+                      Current Effects (Level {currentLevel})
+                    </Text>
+                    {Object.entries(effects).map(([key, value], i) => (
                       <View key={i} style={styles.statComparisonRow}>
-                        <Text style={styles.effectKey}>{stat.key}</Text>
-                        <View style={styles.statValues}>
-                          {stat.isPerWeapon ? (
-                            <>
-                              <Text style={[
-                                styles.statAfter,
-                                stat.isIncrease ? styles.statIncrease : styles.statDecrease,
-                              ]}>
-                                {stat.after}
-                              </Text>
-                              <Text style={styles.capIndicator}>(per weapon)</Text>
-                            </>
-                          ) : (
-                            <>
-                              <Text style={styles.statBefore}>{stat.before}</Text>
-                              <Text style={styles.statArrow}>→</Text>
-                              <Text style={[
-                                styles.statAfter,
-                                stat.isIncrease ? styles.statIncrease : styles.statDecrease,
-                                stat.isCapped && styles.statCapped,
-                              ]}>
-                                {stat.after}
-                              </Text>
-                            </>
-                          )}
-                          {stat.cap !== null && (
-                            <Text style={[styles.capIndicator, stat.isCapped && styles.capIndicatorCapped]}>
-                              (max {stat.cap}%)
-                            </Text>
-                          )}
-                        </View>
+                        <Text style={styles.effectKey}>{key}</Text>
+                        <Text style={styles.statIncrease}>
+                          {typeof value === 'number' && value > 0 ? '+' : ''}{value}
+                        </Text>
                       </View>
                     ))}
                   </View>
-                )}
+                );
+              })()}
 
-                {/* Cap Increase Info (for Mastery weapons) */}
-                {focusedWeapon.capIncrease && (() => {
-                  const capInfo = getCapIncreaseInfo(focusedWeapon, playerStats);
-                  if (!capInfo) return null;
-                  return (
-                    <View style={[styles.effectsBox, styles.effectsBoxPositive, { marginTop: 8 }]}>
-                      <Text style={styles.effectsLabelPositive}>Cap Increase</Text>
-                      <View style={styles.statComparisonRow}>
-                        <Text style={styles.effectKey}>Current {capInfo.statName}</Text>
-                        <Text style={styles.statBefore}>{capInfo.currentValue}%</Text>
+              {/* Item Type Badge */}
+              <View style={styles.itemTypeBadge}>
+                <Text style={styles.itemTypeBadgeText}>
+                  {viewingInventoryItem.item.type === 'weapon' ? '⚔️ WEAPON' : '🛡️ PASSIVE'}
+                </Text>
+              </View>
+
+              {/* Button to go back to level-up options */}
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={() => {
+                  playSound('click');
+                  setViewingInventoryItem(null);
+                }}
+              >
+                <Text style={styles.backButtonText}>← Back to Options</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        ) : focusedOption && focusedItem ? (
+          <View style={styles.detailCard}>
+            <ScrollView
+              style={styles.detailCardScroll}
+              contentContainerStyle={styles.detailCardContent}
+              showsVerticalScrollIndicator={true}
+              bounces={false}
+            >
+              {/* Item Icon with NEW/UPGRADE indicator */}
+              <View style={[
+                styles.previewArea,
+                { borderColor: focusedOption.type === 'upgrade' ? COLORS.impactOrange : COLORS.logicTeal }
+              ]}>
+                {focusedItem.icon ? (
+                  <Icon name={focusedItem.icon} size={32} color={COLORS.slateCharcoal} />
+                ) : (
+                  <Text style={styles.previewLabel}>{focusedItem.type.toUpperCase()}</Text>
+                )}
+                <View style={[
+                  styles.rarityBadge,
+                  { backgroundColor: focusedOption.type === 'upgrade' ? COLORS.impactOrange : COLORS.logicTeal }
+                ]}>
+                  <Text style={styles.rarityBadgeText}>
+                    {focusedOption.type === 'upgrade'
+                      ? `UPGRADE TO LV${Math.min(3, focusedItem.level + 1)}`
+                      : 'NEW ITEM'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Item Info */}
+              <Text style={[
+                styles.detailName,
+                { color: focusedOption.type === 'upgrade' ? COLORS.impactOrange : COLORS.logicTeal }
+              ]}>
+                {focusedItem.name}
+              </Text>
+              <KeywordText style={styles.detailDescription}>{focusedItem.description}</KeywordText>
+              {focusedItem.flavorText && (
+                <KeywordText style={styles.detailFlavor}>{focusedItem.flavorText}</KeywordText>
+              )}
+
+              {/* Level Effects Display */}
+              {focusedItem.levelEffects && (() => {
+                const targetLevel = focusedOption.type === 'upgrade'
+                  ? Math.min(3, focusedItem.level + 1) as WeaponLevel
+                  : 1;
+                const effects = focusedItem.levelEffects[targetLevel];
+                if (!effects || Object.keys(effects).length === 0) return null;
+
+                return (
+                  <View style={[styles.effectsBox, styles.effectsBoxPositive]}>
+                    <Text style={styles.effectsLabelPositive}>
+                      Level {targetLevel} Effects
+                    </Text>
+                    {Object.entries(effects).map(([key, value], i) => (
+                      <View key={i} style={styles.statComparisonRow}>
+                        <Text style={styles.effectKey}>{key}</Text>
+                        <Text style={styles.statIncrease}>
+                          {typeof value === 'number' && value > 0 ? '+' : ''}{value}
+                        </Text>
                       </View>
-                      <View style={styles.statComparisonRow}>
-                        <Text style={styles.effectKey}>Current Cap</Text>
-                        <Text style={styles.statBefore}>{capInfo.currentCap}%</Text>
-                      </View>
-                      <View style={styles.statComparisonRow}>
-                        <Text style={styles.effectKey}>New Cap</Text>
-                        <Text style={styles.statIncrease}>{capInfo.newCap}%</Text>
-                      </View>
-                    </View>
-                  );
-                })()}
+                    ))}
+                  </View>
+                );
+              })()}
+
+              {/* Item Type Badge */}
+              <View style={styles.itemTypeBadge}>
+                <Text style={styles.itemTypeBadgeText}>
+                  {focusedItem.type === 'weapon' ? '⚔️ WEAPON' : '🛡️ PASSIVE'}
+                </Text>
               </View>
             </ScrollView>
           </View>
         ) : (
           <View style={styles.emptyDetail}>
-            <Text style={styles.emptyText}>Select a weapon below</Text>
+            <Text style={styles.emptyText}>Select an item below</Text>
           </View>
         )}
       </View>
@@ -305,17 +370,14 @@ const LevelUp: React.FC<LevelUpProps> = ({
           contentContainerStyle={styles.optionsGrid}
           showsVerticalScrollIndicator={false}
         >
-          {options.map((weapon, index) => {
+          {options.map((option, index) => {
             const isFocused = focusedIndex === index;
-            const rarityColor = getRarityColor(weapon.rarity);
-            const ownershipCount = weapon.maxCount !== undefined
-              ? getPlayerWeaponCount(weapon.name, playerWeapons)
-              : undefined;
+            const rarityColor = option.type === 'upgrade' ? COLORS.impactOrange : COLORS.logicTeal;
 
             return (
-              <WeaponOption
-                key={`${weapon.id}-${index}`}
-                weapon={weapon}
+              <LevelUpItem
+                key={`${option.item.id}-${index}`}
+                option={option}
                 index={index}
                 isFocused={isFocused}
                 rarityColor={rarityColor}
@@ -326,8 +388,6 @@ const LevelUp: React.FC<LevelUpProps> = ({
                 }}
                 onHoverIn={setHoveredIndex}
                 onHoverOut={() => setHoveredIndex(null)}
-                ownershipCount={ownershipCount}
-                maxCount={weapon.maxCount}
               />
             );
           })}
@@ -338,16 +398,16 @@ const LevelUp: React.FC<LevelUpProps> = ({
       <View style={[styles.actionSection, { paddingBottom: 16 + insets.bottom }]}>
         <TouchableOpacity
           onPress={() => {
-            if (focusedWeapon) {
+            if (focusedOption) {
               playSound('confirm');
-              onSelect(focusedWeapon);
+              onSelect(focusedOption);
             }
           }}
-          disabled={!focusedWeapon}
-          style={[styles.actionButton, !focusedWeapon && styles.actionButtonDisabled]}
+          disabled={!focusedOption}
+          style={[styles.actionButton, !focusedOption && styles.actionButtonDisabled]}
         >
           <Text style={styles.actionButtonText}>
-            {hasMoreLevelUps ? 'Next Level Up' : 'Select Weapon'}
+            {hasMoreLevelUps ? 'Next Level Up' : (focusedOption?.type === 'upgrade' ? 'Upgrade Item' : 'Get Item')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -743,6 +803,63 @@ const styles = StyleSheet.create({
     fontSize: 10,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  // Type badges for NEW/UPGRADE indicators
+  typeBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    zIndex: 1,
+  },
+  newBadge: {
+    backgroundColor: COLORS.logicTeal,
+  },
+  upgradeBadge: {
+    backgroundColor: COLORS.impactOrange,
+  },
+  typeBadgeText: {
+    color: COLORS.canvasWhite,
+    fontWeight: '700',
+    fontSize: 9,
+    letterSpacing: 0.5,
+  },
+  // Item type badge in detail view
+  itemTypeBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: COLORS.paperBeige,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: RADIUS.button,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+  },
+  itemTypeBadgeText: {
+    color: COLORS.slateCharcoal,
+    fontWeight: '600',
+    fontSize: 11,
+    letterSpacing: 0.5,
+  },
+  // Inventory section
+  inventorySection: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
+  // Back button for inventory item view
+  backButton: {
+    alignSelf: 'center',
+    marginTop: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  backButtonText: {
+    color: COLORS.logicTeal,
+    fontWeight: '600',
+    fontSize: 12,
   },
 });
 
