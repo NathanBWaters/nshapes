@@ -65,3 +65,33 @@ describe('adventure balance (headless bots)', () => {
     });
   }
 });
+
+describe('harder foes pay more (Vampire Survivors-style grind)', () => {
+  const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
+  const regions = ['meadow', 'woods', 'canyon', 'peaks'] as const;
+
+  it('each region pays more per coin than the last', () => {
+    const m = regions.map(r => mean(LEVELS.filter(l => l.biome === r).map(l => l.coinMultiplier)));
+    for (let i = 1; i < m.length; i++) expect(m[i]).toBeGreaterThan(m[i - 1]);
+  });
+
+  it('bosses pay the most in their region', () => {
+    for (const r of regions) {
+      const lv = LEVELS.filter(l => l.biome === r);
+      const boss = lv.filter(l => l.isBoss);
+      for (const b of boss) for (const l of lv.filter(x => !x.isBoss)) expect(b.coinMultiplier).toBeGreaterThan(l.coinMultiplier);
+    }
+  });
+
+  it('higher difficulty pays more on average', () => {
+    const byDiff = [1, 2, 3, 4, 5].map(d => LEVELS.filter(l => l.difficulty === d).map(l => l.coinMultiplier)).filter(xs => xs.length);
+    const m = byDiff.map(mean);
+    for (let i = 1; i < m.length; i++) expect(m[i]).toBeGreaterThan(m[i - 1]);
+  });
+
+  it('an average player banks more coins per run on each region boss', () => {
+    const save = progressedSave();
+    const coins = ['1-8', '2-8', '3-8'].map(id => starDistribution(LEVELS.find(l => l.id === id)!, save, BOTS.average, 12).avgCoins);
+    for (let i = 1; i < coins.length; i++) expect(coins[i]).toBeGreaterThan(coins[i - 1]);
+  });
+});

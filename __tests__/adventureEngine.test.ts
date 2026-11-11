@@ -145,8 +145,8 @@ describe('fighter abilities', () => {
     expect(s.timeLeft).toBeLessThan(t!);
   });
 
-  it('Corgi — Zoomies re-deals the board', () => {
-    let s = createRun(getLevel('2-2'), caughtUp(), { seed: 6, fighter: 'Corgi' });
+  it.each([6, 11, 21, 34, 55, 89, 144, 233])('Corgi — Zoomies re-deals a clean board (seed %i)', seed => {
+    let s = createRun(getLevel('2-2'), caughtUp(), { seed, fighter: 'Corgi' });
     for (let i = 0; i < 3; i++) s = playSet(s);
     const before = s.board.map(c => c.id);
     s = runReducer(s, { type: 'ABILITY' });

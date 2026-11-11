@@ -163,11 +163,12 @@ const emitEnemyEvents = (d: Draft, events: EnemyEvent[]) => {
 };
 
 /** Draw one card from the deck top (recycling is handled by the caller). */
-const drawCard = (d: Draft): Card => {
+const drawCard = (d: Draft, clean = false): Card => {
   if (d.deck.length === 0) d.deck = d._rng.shuffle(createDeck(d.attributes)).map(toDeckCard);
   const base = d.deck.shift()!;
   let card = freshCard(base);
   if (d.features.has('coins') && d._rng.next() < COIN_CARD_CHANCE) card.bonusMoney = COIN_CARD_VALUE;
+  if (clean) return card;
   card = d.foe.onCardDraw(card);
   if (card.isDud) emit(d, 'dud');
   if (card.isFaceDown) emit(d, 'face_down');
@@ -180,10 +181,10 @@ const drawCard = (d: Draft): Card => {
  * Replace the cards at `indices` with fresh draws. If that leaves the board
  * without any Set, redraw (a few times) — the game should never deadlock.
  */
-const refill = (d: Draft, indices: number[]) => {
+const refill = (d: Draft, indices: number[], clean = false) => {
   if (indices.length === 0) return;
   for (let attempt = 0; attempt < 12; attempt++) {
-    const drawn = indices.map(() => drawCard(d));
+    const drawn = indices.map(() => drawCard(d, clean));
     const candidate = [...d.board];
     indices.forEach((idx, i) => (candidate[idx] = drawn[i]));
     if (boardHasSet(candidate, d.attributes) || attempt === 11) {
@@ -757,7 +758,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
         const idx = d.board.map((c, i) => ((c.health ?? 1) > 1 ? -1 : i)).filter(i => i >= 0);
         idx.forEach(i => d.deck.push(toDeckCard(d.board[i])));
         d.deck = d._rng.shuffle(d.deck);
-        refill(d, idx);
+        refill(d, idx, true); // a clean board: the foe's draw effects don't apply
         emit(d, 'redeal');
         return finish(d);
       }
