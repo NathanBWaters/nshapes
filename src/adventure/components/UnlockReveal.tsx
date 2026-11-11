@@ -8,6 +8,7 @@ import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity } from 'rea
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, Easing, cancelAnimation } from 'react-native-reanimated';
 import Icon, { IconName } from '@/components/Icon';
 import { FighterAvatar } from '@/components/fighters';
+import { WeaponAvatar } from '@/components/weapons';
 import { COLORS, getRarityColor } from '@/utils/colors';
 import { WEAPONS } from '@/utils/gameDefinitions';
 import { sfx } from '@/audio';
@@ -130,6 +131,13 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                   reaction={{ type: 'ecstatic', id: i + 1 }}
                   interactive
                 />
+              ) : revealed && w ? (
+                <WeaponAvatar
+                  testID="unlock-revealed-weapon"
+                  weapon={w}
+                  size={108}
+                  interactive
+                />
               ) : (
                 <Icon name={icon} size={92} color={revealed ? INK : '#050505'} />
               )}
@@ -165,7 +173,7 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                       const g = weapon(id);
                       return g ? (
                         <View key={k} style={st.row}>
-                          <View style={st.rowIcon}>{g.icon && <Icon name={g.icon} size={22} color={INK} />}</View>
+                          <View style={st.rowIcon}><WeaponAvatar weapon={g} size={28} interactive /></View>
                           <View style={{ flex: 1 }}>
                             <Text style={st.rowTitle}>{g.name} <Text style={st.rowTag}>STARTING GEAR</Text></Text>
                             <Text style={st.rowBody}>{adventureText(g.description)}</Text>

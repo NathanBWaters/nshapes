@@ -10,13 +10,13 @@ import {
   getCapIncreaseInfo,
   getRarityLabel,
 } from '@/utils/weaponDisplay';
-import Icon from './Icon';
 import GameMenu from './GameMenu';
 import InventoryBar from './InventoryBar';
 import KeywordText from './KeywordText';
 import { ScreenTransition } from './ScreenTransition';
 import { playSound } from '@/utils/sounds';
 import { FighterAvatar } from './fighters';
+import { WeaponAvatar } from './weapons';
 import { FighterReactionEvent } from '@/utils/fighterAnimations';
 
 // Weapon option component
@@ -31,6 +31,7 @@ interface WeaponOptionProps {
   onHoverOut: () => void;
   ownershipCount?: number;  // How many of this weapon the player already owns
   maxCount?: number;        // Max count for this weapon (if limited)
+  triggerKey?: number;
 }
 
 function WeaponOption({
@@ -44,6 +45,7 @@ function WeaponOption({
   onHoverOut,
   ownershipCount,
   maxCount,
+  triggerKey,
 }: WeaponOptionProps) {
   const showOwnership = maxCount !== undefined && ownershipCount !== undefined && ownershipCount > 0;
 
@@ -66,15 +68,9 @@ function WeaponOption({
           <Text style={styles.ownershipBadgeText}>{ownershipCount}/{maxCount}</Text>
         </View>
       )}
-      {weapon.icon && (
-        <View style={styles.optionIcon}>
-          <Icon
-            name={weapon.icon}
-            size={24}
-            color={isFocused ? COLORS.canvasWhite : COLORS.logicTeal}
-          />
-        </View>
-      )}
+      <View style={styles.optionIcon}>
+        <WeaponAvatar weapon={weapon} size={30} triggerKey={triggerKey} />
+      </View>
       <View style={styles.optionHeader}>
         <Text style={[styles.optionPrice, !canAfford && styles.optionPriceUnaffordable]}>
           ${weapon.price}
@@ -157,6 +153,7 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
 
   // Purchase state
   const [purchaseSuccess, setPurchaseSuccess] = useState(false);
+  const [tapTriggers, setTapTriggers] = useState<Record<number, number>>({});
 
   const handlePurchase = (index: number) => {
     setPurchaseSuccess(true);
@@ -171,6 +168,8 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
     const now = Date.now();
     const weapon = weapons[index];
     const canAfford = weapon && playerMoney >= weapon.price;
+
+    setTapTriggers(prev => ({ ...prev, [index]: (prev[index] ?? 0) + 1 }));
 
     // Clear hover state to ensure display updates (fixes stuck hover on touch devices)
     setHoveredIndex(null);
@@ -248,11 +247,7 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
             >
               {/* Weapon Icon */}
               <View style={[styles.previewArea, { borderColor: getRarityColor(focusedWeapon.rarity) }]}>
-                {focusedWeapon.icon ? (
-                  <Icon name={focusedWeapon.icon} size={32} color={COLORS.slateCharcoal} />
-                ) : (
-                  <Text style={styles.previewLabel}>{getRarityLabel(focusedWeapon.rarity)}</Text>
-                )}
+                <WeaponAvatar weapon={focusedWeapon} size={46} interactive />
                 <View style={[styles.rarityBadge, { backgroundColor: getRarityColor(focusedWeapon.rarity) }]}>
                   <Text style={styles.rarityBadgeText}>{getRarityLabel(focusedWeapon.rarity)}</Text>
                 </View>
@@ -413,6 +408,7 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
                   onHoverOut={() => setHoveredIndex(null)}
                   ownershipCount={ownershipCount}
                   maxCount={weapon.maxCount}
+                  triggerKey={tapTriggers[index]}
                 />
               );
             })

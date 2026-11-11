@@ -2,12 +2,12 @@ import React from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { Player, Weapon, PlayerStats, WeaponRarity, AdventureDifficulty } from '@/types';
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
-import Icon from './Icon';
 import { AnimatedCounter } from './ui/AnimatedCounter';
 import { ScreenTransition } from './ScreenTransition';
 import RoundProgressChart, { RoundScore } from './RoundProgressChart';
 import ChallengeCard from './ui/ChallengeCard';
 import { FighterAvatar } from './fighters';
+import { WeaponAvatar } from './weapons';
 
 interface VictoryScreenProps {
   player: Player;
@@ -142,9 +142,7 @@ const VictoryScreen: React.FC<VictoryScreenProps> = ({
                     key={`${weapon.id}-${index}`}
                     style={[styles.weaponItem, { borderLeftColor: getRarityColor(weapon.rarity) }]}
                   >
-                    {weapon.icon && (
-                      <Icon name={weapon.icon} size={20} color={COLORS.slateCharcoal} />
-                    )}
+                    <WeaponAvatar weapon={weapon} size={26} interactive />
                     <View style={styles.weaponInfo}>
                       <Text style={styles.weaponName}>{weapon.name}</Text>
                       <Text style={[styles.weaponRarity, { color: getRarityColor(weapon.rarity) }]}>

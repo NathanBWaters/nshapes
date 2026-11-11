@@ -3,10 +3,12 @@
  * mechanic, star goals with their coin rewards, secret unlocks shown as
  * silhouettes, and the fighter + charm you'll bring.
  */
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity } from 'react-native';
 import Icon, { IconName } from '@/components/Icon';
+import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
+import { WeaponAvatar } from '@/components/weapons';
 import { COLORS, getRarityColor } from '@/utils/colors';
 import { WEAPONS } from '@/utils/gameDefinitions';
 import type { CharacterName } from '@/types';
@@ -46,6 +48,7 @@ interface Props {
 }
 
 const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectFighter, onSelectCharm, onShowMechanic }) => {
+  const [charmTapCounts, setCharmTapCounts] = useState<Record<string, number>>({});
   if (!level) return null;
   const biome = getBiome(level.biome);
   const foe = levelFoe(level);
@@ -78,7 +81,14 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
             </View>
             <View style={st.foeRow}>
               <View style={[st.foePortrait, level.isBoss && st.foeBoss, level.branchOf && st.foeElite]}>
-                <Icon name={foe.icon} size={level.isBoss ? 64 : 54} color={level.branchOf ? COLORS.canvasWhite : INK} />
+                <EnemyAvatar
+                  testID="preview-enemy-avatar"
+                  enemy={foe}
+                  size={level.isBoss ? 78 : 68}
+                  mood={level.isBoss ? 'enraged' : 'menacing'}
+                  reaction={{ type: 'entrance', id: 1 }}
+                  interactive
+                />
               </View>
               <View style={{ flex: 1, gap: 4 }}>
                 <Text style={st.levelName}>{level.name}</Text>
@@ -124,7 +134,7 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
               const d = foeDisplay(f);
               return d.ability ? (
                 <View key={i} style={st.ability}>
-                  <Icon name={d.icon} size={18} color={INK} />
+                  <EnemyAvatar enemy={d} size={26} mood="menacing" lightweight />
                   <Text style={st.abilityText}><Text style={{ fontWeight: '900' }}>{d.name}: </Text>{d.ability}</Text>
                 </View>
               ) : null;
@@ -151,7 +161,13 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                       {unlock && (
                         done ? (
                           <View style={[st.unlockChip, st.chipDone]}>
-                            <Icon name={unlock.icon} size={16} color="#8E877D" />
+                            {g.reward.character ? (
+                              <FighterAvatar character={g.reward.character} size={20} mood="idle" />
+                            ) : g.reward.weapons?.length && weapon(g.reward.weapons[0]) ? (
+                              <WeaponAvatar weapon={weapon(g.reward.weapons[0])} size={20} interactive />
+                            ) : (
+                              <Icon name={unlock.icon} size={16} color="#8E877D" />
+                            )}
                             <Text style={[st.unlockText, { color: '#8E877D' }]} numberOfLines={1}>{unlock.revealed}</Text>
                           </View>
                         ) : (
@@ -200,8 +216,17 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                     if (!w) return null;
                     const selected = save.charm === id;
                     return (
-                      <TouchableOpacity key={id} testID={`charm-${id}`} onPress={() => onSelectCharm(id)} style={[st.charm, { borderColor: selected ? INK : getRarityColor(w.rarity) }, selected && st.charmSel]} activeOpacity={0.85}>
-                        {w.icon && <Icon name={w.icon} size={24} color={INK} />}
+                      <TouchableOpacity
+                        key={id}
+                        testID={`charm-${id}`}
+                        onPress={() => {
+                          setCharmTapCounts(prev => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }));
+                          onSelectCharm(id);
+                        }}
+                        style={[st.charm, { borderColor: selected ? INK : getRarityColor(w.rarity) }, selected && st.charmSel]}
+                        activeOpacity={0.85}
+                      >
+                        <WeaponAvatar weapon={w} size={32} triggerKey={charmTapCounts[id]} />
                         <Text style={st.fighterName} numberOfLines={1}>{w.name}</Text>
                         <Text style={st.charmDesc} numberOfLines={2}>{w.shortDescription}</Text>
                       </TouchableOpacity>

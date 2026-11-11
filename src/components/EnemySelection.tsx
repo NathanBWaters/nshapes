@@ -10,10 +10,11 @@ import {
   getCapIncreaseInfo,
   getRarityLabel,
 } from '@/utils/weaponDisplay';
-import Icon from './Icon';
 import GameMenu from './GameMenu';
 import KeywordText from './KeywordText';
+import { EnemyAvatar } from './enemies';
 import { FighterAvatar } from './fighters';
+import { WeaponAvatar } from './weapons';
 
 // Tier colors for visual distinction
 const TIER_COLORS: Record<1 | 2 | 3 | 4, string> = {
@@ -82,7 +83,13 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
           <View style={styles.detailCard}>
             {/* Enemy Icon */}
             <View style={styles.previewArea}>
-              <Icon name={focusedEnemy.icon} size={48} color={COLORS.slateCharcoal} />
+              <EnemyAvatar
+                enemy={focusedEnemy}
+                size={58}
+                mood={focusedEnemy.tier >= 4 ? 'enraged' : 'menacing'}
+                reaction={{ type: 'entrance', id: displayedIndex + 1 }}
+                interactive
+              />
             </View>
 
             {/* Enemy Name */}
@@ -163,9 +170,7 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
                 <>
                   {/* Weapon Header with Icon and Rarity */}
                   <View style={[styles.rewardPreviewArea, { borderColor: getRarityColor(focusedReward.rarity) }]}>
-                    {focusedReward.icon && (
-                      <Icon name={focusedReward.icon} size={28} color={COLORS.slateCharcoal} />
-                    )}
+                    <WeaponAvatar weapon={focusedReward} size={36} interactive />
                     <View style={[styles.rewardRarityBadge, { backgroundColor: getRarityColor(focusedReward.rarity) }]}>
                       <Text style={styles.rewardRarityBadgeText}>{getRarityLabel(focusedReward.rarity)}</Text>
                     </View>
@@ -285,10 +290,11 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
                 ]}
               >
                 <View style={[styles.optionTierDot, { backgroundColor: enemyTierColor }]} />
-                <Icon
-                  name={enemy.icon}
-                  size={28}
-                  color={COLORS.slateCharcoal}
+                <EnemyAvatar
+                  enemy={enemy}
+                  size={34}
+                  mood={isFocused ? 'menacing' : 'idle'}
+                  lightweight
                 />
                 <Text
                   style={[

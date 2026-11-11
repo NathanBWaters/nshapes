@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Weapon } from '@/types';
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
-import Icon from './Icon';
+import { WeaponAvatar } from './weapons';
 
 interface WeaponListProps {
   weapons: Weapon[];
@@ -53,7 +53,7 @@ const WeaponList: React.FC<WeaponListProps> = ({
           sortedWeapons.map(({ weapon, count }) => (
             <View key={`${weapon.name}-${weapon.rarity}`} style={styles.weaponRow}>
               <View style={[styles.weaponIcon, { borderColor: getRarityColor(weapon.rarity) }]}>
-                <Icon name={weapon.icon || 'lorc/field'} size={20} color={COLORS.slateCharcoal} />
+                <WeaponAvatar weapon={weapon} size={26} interactive />
               </View>
               <View style={styles.weaponInfo}>
                 <View style={styles.weaponNameRow}>

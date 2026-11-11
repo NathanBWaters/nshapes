@@ -9,7 +9,6 @@ import {
   getCapIncreaseInfo,
   getRarityLabel,
 } from '@/utils/weaponDisplay';
-import Icon from './Icon';
 import GameMenu from './GameMenu';
 import InventoryBar from './InventoryBar';
 import { ScreenTransition } from './ScreenTransition';
@@ -17,6 +16,7 @@ import KeywordText from './KeywordText';
 import { playSound } from '@/utils/sounds';
 import { getPlayerWeaponCount } from '@/utils/gameDefinitions';
 import { FighterAvatar } from './fighters';
+import { WeaponAvatar } from './weapons';
 
 // Weapon option component
 interface WeaponOptionProps {
@@ -29,6 +29,7 @@ interface WeaponOptionProps {
   onHoverOut: () => void;
   ownershipCount?: number;  // How many of this weapon the player already owns
   maxCount?: number;        // Max count for this weapon (if limited)
+  triggerKey?: number;
 }
 
 function WeaponOption({
@@ -41,6 +42,7 @@ function WeaponOption({
   onHoverOut,
   ownershipCount,
   maxCount,
+  triggerKey,
 }: WeaponOptionProps) {
   const showOwnership = maxCount !== undefined && ownershipCount !== undefined && ownershipCount > 0;
 
@@ -62,15 +64,9 @@ function WeaponOption({
           <Text style={styles.ownershipBadgeText}>{ownershipCount}/{maxCount}</Text>
         </View>
       )}
-      {weapon.icon && (
-        <View style={styles.optionIcon}>
-          <Icon
-            name={weapon.icon}
-            size={24}
-            color={isFocused ? COLORS.canvasWhite : COLORS.logicTeal}
-          />
-        </View>
-      )}
+      <View style={styles.optionIcon}>
+        <WeaponAvatar weapon={weapon} size={30} triggerKey={triggerKey} />
+      </View>
       <Text
         style={[
           styles.optionText,
@@ -122,6 +118,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
   const insets = usePWASafeAreaInsets();
   const [focusedIndex, setFocusedIndex] = useState<number>(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [tapTriggers, setTapTriggers] = useState<Record<number, number>>({});
 
   // Reset focusedIndex when options change to ensure it's valid
   useEffect(() => {
@@ -189,11 +186,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
                 styles.previewArea,
                 { borderColor: getRarityColor(focusedWeapon.rarity) }
               ]}>
-                {focusedWeapon.icon ? (
-                  <Icon name={focusedWeapon.icon} size={32} color={COLORS.slateCharcoal} />
-                ) : (
-                  <Text style={styles.previewLabel}>{getRarityLabel(focusedWeapon.rarity)}</Text>
-                )}
+                <WeaponAvatar weapon={focusedWeapon} size={46} interactive />
                 <View style={[
                   styles.rarityBadge,
                   { backgroundColor: getRarityColor(focusedWeapon.rarity) }
@@ -335,6 +328,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
                 rarityColor={rarityColor}
                 onPress={(index) => {
                   playSound('click');
+                  setTapTriggers(prev => ({ ...prev, [index]: (prev[index] ?? 0) + 1 }));
                   setHoveredIndex(null);
                   setFocusedIndex(index);
                 }}
@@ -342,6 +336,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
                 onHoverOut={() => setHoveredIndex(null)}
                 ownershipCount={ownershipCount}
                 maxCount={weapon.maxCount}
+                triggerKey={tapTriggers[index]}
               />
             );
           })}

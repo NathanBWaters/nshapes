@@ -5,14 +5,23 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { COLORS, RADIUS } from '@/utils/colors';
-import Icon from '../Icon';
+import { EnemyAmbientMood, EnemyReactionEvent } from '@/utils/enemyAnimations';
 import type { EnemyInstance } from '@/types/enemy';
+import { EnemyAvatar } from '../enemies';
 
 interface EnemyPortraitProps {
   /** The active enemy instance */
   enemy: EnemyInstance;
   /** Optional compact mode for smaller display */
   compact?: boolean;
+  /** Optional current HP for progressive battle wear */
+  hp?: number;
+  /** Optional max HP */
+  maxHp?: number;
+  /** Optional continuous ambient mood */
+  mood?: EnemyAmbientMood;
+  /** Optional discrete combat reaction */
+  reaction?: EnemyReactionEvent | null;
 }
 
 // Tier badge colors
@@ -23,13 +32,28 @@ const TIER_COLORS: Record<number, string> = {
   4: '#7C3AED', // Purple for boss tier
 };
 
-const EnemyPortrait: React.FC<EnemyPortraitProps> = ({ enemy, compact = false }) => {
+const EnemyPortrait: React.FC<EnemyPortraitProps> = ({
+  enemy,
+  compact = false,
+  hp,
+  maxHp,
+  mood = 'menacing',
+  reaction = null,
+}) => {
   const tierColor = TIER_COLORS[enemy.tier] || COLORS.slateCharcoal;
 
   if (compact) {
     return (
       <View style={styles.containerCompact}>
-        <Icon name={enemy.icon} size={20} color={tierColor} />
+        <EnemyAvatar
+          enemy={enemy}
+          size={28}
+          hp={hp}
+          maxHp={maxHp}
+          mood={mood}
+          reaction={reaction}
+          interactive
+        />
         <View style={[styles.tierDot, { backgroundColor: tierColor }]} />
       </View>
     );
@@ -38,7 +62,15 @@ const EnemyPortrait: React.FC<EnemyPortraitProps> = ({ enemy, compact = false })
   return (
     <View style={styles.container}>
       <View style={[styles.iconContainer, { borderColor: tierColor }]}>
-        <Icon name={enemy.icon} size={28} color={tierColor} />
+        <EnemyAvatar
+          enemy={enemy}
+          size={36}
+          hp={hp}
+          maxHp={maxHp}
+          mood={mood}
+          reaction={reaction}
+          interactive
+        />
       </View>
       <View style={styles.info}>
         <Text style={styles.name} numberOfLines={1}>{enemy.name}</Text>

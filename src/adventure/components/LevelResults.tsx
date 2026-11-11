@@ -3,8 +3,11 @@ import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '@/components/Icon';
+import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
+import { WeaponAvatar } from '@/components/weapons';
 import { COLORS } from '@/utils/colors';
+import { WEAPONS } from '@/utils/gameDefinitions';
 import { sfx } from '@/audio';
 import type { LevelDef, RunState } from '../types';
 import type { ResultApplication } from '../progress';
@@ -74,17 +77,31 @@ const LevelResults: React.FC<Props> = ({ level, run, stars, result, unlocksRevea
       <ScrollView contentContainerStyle={st.scroll}>
         <PopIn style={st.card}>
           <Text style={st.levelId}>{level.id} · {level.name}</Text>
-          <FighterAvatar
-            testID="results-fighter-avatar"
-            character={run.fighter}
-            size={84}
-            health={resultFighterHealth}
-            maxHealth={resultFighterMaxHealth}
-            mood={won ? 'victory' : 'defeat'}
-            reaction={won ? { type: stars >= 3 ? 'ecstatic' : 'joy', id: 1 } : null}
-            framed
-            interactive
-          />
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+            <FighterAvatar
+              testID="results-fighter-avatar"
+              character={run.fighter}
+              size={80}
+              health={resultFighterHealth}
+              maxHealth={resultFighterMaxHealth}
+              mood={won ? 'victory' : 'defeat'}
+              reaction={won ? { type: stars >= 3 ? 'ecstatic' : 'joy', id: 1 } : null}
+              framed
+              interactive
+            />
+            <Text style={{ fontWeight: '900', fontSize: 13, color: INK, opacity: 0.55 }}>VS</Text>
+            <EnemyAvatar
+              testID="results-enemy-avatar"
+              enemy={{ name: run.foeName, icon: run.foeIcon, tier: run.foe.tier }}
+              size={64}
+              hp={run.foeHp}
+              maxHp={run.foeMaxHp}
+              mood={won ? 'cornered' : 'victory'}
+              reaction={!won ? { type: 'taunt', id: 1 } : null}
+              framed
+              interactive
+            />
+          </View>
           <Text style={[st.title, { color: won ? INK : COLORS.impactRed }]}>{title}</Text>
           <StarRow stars={stars} size={52} animateFrom={0} />
           <Text style={st.sub}>{sub}</Text>
@@ -117,7 +134,17 @@ const LevelResults: React.FC<Props> = ({ level, run, stars, result, unlocksRevea
                 return (
                   <View key={g.star} style={st.reward}>
                     <StarRow stars={g.star} max={g.star} size={14} />
-                    {unlocksRevealed ? <Icon name={u.icon} size={22} color={COLORS.actionYellow} /> : <Silhouette icon={u.icon} size={16} />}
+                    {unlocksRevealed ? (
+                      g.reward.character ? (
+                        <FighterAvatar character={g.reward.character} size={24} mood="victory" />
+                      ) : g.reward.weapons?.length ? (
+                        <WeaponAvatar weapon={WEAPONS.find(w => w.id === g.reward.weapons![0])} size={24} interactive />
+                      ) : (
+                        <Icon name={u.icon} size={22} color={COLORS.actionYellow} />
+                      )
+                    ) : (
+                      <Silhouette icon={u.icon} size={16} />
+                    )}
                     <Text style={st.rewardText}>{unlocksRevealed ? u.revealed : u.secret}</Text>
                   </View>
                 );

@@ -60,11 +60,12 @@ const getEffectiveStats = (startingWeapons: string[]): Record<string, number> =>
 
   return stats;
 };
-import Icon, { IconName } from './Icon';
+import Icon from './Icon';
 import GameMenu from './GameMenu';
 import { ScreenTransition } from './ScreenTransition';
 import KeywordText from './KeywordText';
 import { FighterAvatar } from './fighters';
+import { WeaponAvatar } from './weapons';
 import { FighterReactionEvent } from '@/utils/fighterAnimations';
 
 // IMPORTANT: This game should NOT have scrollable screens.
@@ -96,6 +97,7 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
   const [adventureDifficulty, setAdventureDifficulty] = React.useState<AdventureDifficulty>('medium');
   const [unlockedCharacters, setUnlockedCharacters] = React.useState<string[]>([]);
   const [expandedWeapons, setExpandedWeapons] = React.useState<Set<string>>(new Set());
+  const [weaponTapCounts, setWeaponTapCounts] = React.useState<Record<string, number>>({});
   const [canScrollRight, setCanScrollRight] = React.useState(true);
 
   // Calculate dynamic row height based on available space
@@ -104,6 +106,7 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
   const characterCardSize = Math.min(80, characterSectionHeight - 50); // Leave room for header and padding
 
   const toggleWeaponExpanded = (weaponName: string) => {
+    setWeaponTapCounts(prev => ({ ...prev, [weaponName]: (prev[weaponName] ?? 0) + 1 }));
     setExpandedWeapons(prev => {
       const next = new Set(prev);
       if (next.has(weaponName)) {
@@ -204,8 +207,12 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
                         activeOpacity={0.7}
                       >
                         <View style={styles.weaponItemHeader}>
-                          {weapon?.icon && (
-                            <Icon name={weapon.icon} size={16} color={COLORS.slateCharcoal} />
+                          {weapon && (
+                            <WeaponAvatar
+                              weapon={weapon}
+                              size={22}
+                              triggerKey={weaponTapCounts[weaponName]}
+                            />
                           )}
                           <Text style={styles.statValue}>{weaponName}</Text>
                           <Text style={styles.expandArrow}>{isExpanded ? '▲' : '▼'}</Text>

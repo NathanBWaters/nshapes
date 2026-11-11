@@ -68,6 +68,7 @@ import VictoryScreen from './VictoryScreen';
 import RoundProgressChart, { RoundScore } from './RoundProgressChart';
 import CharacterUnlockScreen from './CharacterUnlockScreen';
 import Icon from './Icon';
+import { EnemyAvatar } from './enemies';
 import { FighterAvatar } from './fighters';
 import MainMenu from './MainMenu';
 import AdventureMode from '@/adventure/AdventureMode';
@@ -3409,10 +3410,13 @@ const Game: React.FC<GameProps> = ({
               {/* Enemy that defeated the player */}
               {state.activeEnemyInstance && (
                 <View style={gameOverStyles.enemyContainer}>
-                  <Icon
-                    name={state.activeEnemyInstance.icon}
-                    size={32}
-                    color={COLORS.impactRed}
+                  <EnemyAvatar
+                    enemy={state.activeEnemyInstance}
+                    size={42}
+                    mood="victory"
+                    reaction={{ type: 'taunt', id: 1 }}
+                    interactive
+                    testID="gameover-enemy-avatar"
                   />
                   <View style={gameOverStyles.enemyInfo}>
                     <Text style={gameOverStyles.enemyLabel}>DEFEATED BY</Text>

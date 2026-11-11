@@ -9,10 +9,10 @@ import {
   getCapIncreaseInfo,
   getRarityLabel,
 } from '@/utils/weaponDisplay';
-import Icon from './Icon';
 import KeywordText from './KeywordText';
 import { playSound } from '@/utils/sounds';
 import { FighterAvatar } from './fighters';
+import { WeaponAvatar } from './weapons';
 
 /**
  * LevelUpModal - In-round level-up popup
@@ -57,6 +57,7 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({
   hasMoreLevelUps,
 }) => {
   const [focusedIndex, setFocusedIndex] = useState<number>(0);
+  const [tapTriggers, setTapTriggers] = useState<Record<number, number>>({});
 
   // Reset focusedIndex when options change
   useEffect(() => {
@@ -124,13 +125,7 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({
                 bounces={false}
               >
                 <View style={styles.detailHeader}>
-                  {focusedWeapon.icon && (
-                    <Icon
-                      name={focusedWeapon.icon}
-                      size={24}
-                      color={COLORS.slateCharcoal}
-                    />
-                  )}
+                  <WeaponAvatar weapon={focusedWeapon} size={32} interactive />
                   <Text style={[styles.detailName, { color: getRarityColor(focusedWeapon.rarity) }]}>
                     {focusedWeapon.name}
                   </Text>
@@ -227,20 +222,17 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({
               return (
                 <Pressable
                   key={weapon.id || index}
-                  onPress={() => setFocusedIndex(index)}
+                  onPress={() => {
+                    setTapTriggers(prev => ({ ...prev, [index]: (prev[index] ?? 0) + 1 }));
+                    setFocusedIndex(index);
+                  }}
                   style={[
                     styles.optionCard,
                     { borderColor: rarityColor },
                     isSelected && styles.optionCardSelected,
                   ]}
                 >
-                  {weapon.icon && (
-                    <Icon
-                      name={weapon.icon}
-                      size={28}
-                      color={isSelected ? COLORS.logicTeal : COLORS.slateCharcoal}
-                    />
-                  )}
+                  <WeaponAvatar weapon={weapon} size={34} triggerKey={tapTriggers[index]} />
                   <Text
                     style={[
                       styles.optionName,

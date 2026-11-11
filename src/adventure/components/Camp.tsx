@@ -9,6 +9,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '@/components/Icon';
 import { FighterAvatar } from '@/components/fighters';
+import { WeaponAvatar } from '@/components/weapons';
 import type { FighterReactionEvent, FighterReactionType } from '@/utils/fighterAnimations';
 import { COLORS, getRarityColor } from '@/utils/colors';
 import { WEAPONS } from '@/utils/gameDefinitions';
@@ -35,6 +36,7 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose }) => {
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<Tab>('fighters');
   const [reactions, setReactions] = useState<Partial<Record<CharacterName, FighterReactionEvent>>>({});
+  const [armoryTapCounts, setArmoryTapCounts] = useState<Record<string, number>>({});
   const reactionSeq = useRef(0);
 
   const fireFighterReaction = (name: CharacterName, type: FighterReactionType) => {
@@ -114,7 +116,7 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose }) => {
                       const w = weapon(id);
                       return (
                         <View key={i} style={[st.gear, { borderColor: w ? getRarityColor(w.rarity) : INK }]}>
-                          {w?.icon && <Icon name={w.icon} size={16} color={INK} />}
+                          {w && <WeaponAvatar weapon={w} size={20} interactive />}
                           <Text style={st.gearText} numberOfLines={1}>{w?.name ?? id}</Text>
                         </View>
                       );
@@ -185,8 +187,17 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose }) => {
               {WEAPONS.filter(w => save.armory.includes(w.id)).map(w => {
                 const equipped = save.charm === w.id;
                 return (
-                  <TouchableOpacity key={w.id} onPress={() => { sfx('confirm'); onChange(equipCharm(save, w.id)); }} activeOpacity={0.85} style={[st.armoryItem, { borderColor: equipped ? COLORS.actionYellow : getRarityColor(w.rarity) }, equipped && { backgroundColor: '#FFFBE0' }]}>
-                    {w.icon && <Icon name={w.icon} size={24} color={INK} />}
+                  <TouchableOpacity
+                    key={w.id}
+                    onPress={() => {
+                      sfx('confirm');
+                      setArmoryTapCounts(prev => ({ ...prev, [w.id]: (prev[w.id] ?? 0) + 1 }));
+                      onChange(equipCharm(save, w.id));
+                    }}
+                    activeOpacity={0.85}
+                    style={[st.armoryItem, { borderColor: equipped ? COLORS.actionYellow : getRarityColor(w.rarity) }, equipped && { backgroundColor: '#FFFBE0' }]}
+                  >
+                    <WeaponAvatar weapon={w} size={36} triggerKey={armoryTapCounts[w.id]} />
                     <Text style={st.armoryName} numberOfLines={1}>{w.name}</Text>
                     <Text style={[st.armoryRarity, { color: getRarityColor(w.rarity) === COLORS.rarityCommon ? '#8E877D' : getRarityColor(w.rarity) }]}>{equipped ? 'equipped' : w.rarity}</Text>
                     <Text style={st.armoryDesc} numberOfLines={2}>{w.shortDescription}</Text>

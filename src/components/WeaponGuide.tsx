@@ -3,7 +3,7 @@ import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-nati
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
 import { WEAPONS } from '@/utils/gameDefinitions';
 import { Weapon, WeaponRarity } from '@/types';
-import Icon from './Icon';
+import { WeaponAvatar } from './weapons';
 
 interface WeaponGuideProps {
   onClose: () => void;
@@ -58,7 +58,7 @@ const WeaponGuide: React.FC<WeaponGuideProps> = ({ onClose }) => {
             {/* Weapon header with icon and name */}
             <View style={styles.weaponHeader}>
               <View style={styles.iconContainer}>
-                <Icon name={variants[0].icon || 'lorc/field'} size={28} color={COLORS.deepOnyx} />
+                <WeaponAvatar weapon={variants[0]} size={30} interactive />
               </View>
               <View style={styles.weaponHeaderText}>
                 <Text style={styles.weaponName}>{weaponName}</Text>

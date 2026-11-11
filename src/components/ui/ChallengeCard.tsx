@@ -3,7 +3,9 @@ import { View, Text, StyleSheet } from 'react-native';
 import { AdventureDifficulty, Weapon, WeaponRarity } from '@/types';
 import type { EnemyInstance } from '@/types/enemy';
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
-import Icon, { IconName } from '../Icon';
+import Icon from '../Icon';
+import { EnemyAvatar } from '../enemies';
+import { WeaponAvatar } from '../weapons';
 
 // Helper to get rarity label
 const getRarityLabel = (rarity: WeaponRarity): string => {
@@ -83,7 +85,14 @@ const ChallengeCard: React.FC<ChallengeCardProps> = ({ enemy, difficulty, enemyD
           {/* Enemy Header */}
           <View style={styles.enemyHeader}>
             <View style={styles.enemyIconContainer}>
-              <Icon name={enemy.icon} size={32} color={tierColor} />
+              <EnemyAvatar
+                enemy={enemy}
+                size={38}
+                hp={enemyDefeated ? 0 : 3}
+                maxHp={3}
+                mood={enemyDefeated ? 'cornered' : 'victory'}
+                interactive
+              />
             </View>
             <View style={styles.enemyInfo}>
               <Text style={styles.enemyName}>{enemy.name}</Text>
@@ -127,14 +136,12 @@ const ChallengeCard: React.FC<ChallengeCardProps> = ({ enemy, difficulty, enemyD
             </Text>
             {stretchGoalReward ? (
               <View style={styles.rewardWeaponRow}>
-                {stretchGoalReward.icon && (
-                  <Icon
-                    name={stretchGoalReward.icon}
-                    size={24}
-                    color={enemyDefeated ? getRarityColor(stretchGoalReward.rarity) : COLORS.slateCharcoal}
-                    style={{ opacity: enemyDefeated ? 1 : 0.4 }}
-                  />
-                )}
+                <WeaponAvatar
+                  weapon={stretchGoalReward}
+                  size={28}
+                  interactive
+                  style={{ opacity: enemyDefeated ? 1 : 0.4 }}
+                />
                 <View style={styles.rewardWeaponInfo}>
                   <Text style={[
                     styles.rewardWeaponName,

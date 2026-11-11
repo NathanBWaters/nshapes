@@ -7,6 +7,7 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet, useWindowDimensio
 import Svg, { Path, Circle } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '@/components/Icon';
+import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
 import { COLORS } from '@/utils/colors';
 import type { CharacterName } from '@/types';
@@ -240,7 +241,16 @@ const MapNode: React.FC<{ node: NodePos; save: AdventureSave; isFrontier: boolea
             isFrontier && s.nodeFrontier,
           ]}
         >
-          <Icon name={locked ? 'lorc/padlock' : foe.icon} size={size * 0.55} color={locked ? '#A69F95' : elite ? COLORS.canvasWhite : INK} />
+          {locked ? (
+            <Icon name="lorc/padlock" size={size * 0.55} color="#A69F95" />
+          ) : (
+            <EnemyAvatar
+              enemy={foe}
+              size={Math.round(size * 0.76)}
+              mood={isFrontier ? 'menacing' : 'idle'}
+              lightweight
+            />
+          )}
           {elite && (
             <View style={s.skull}><Icon name="lorc/daemon-skull" size={14} color={locked ? '#A69F95' : ELITE} /></View>
           )}

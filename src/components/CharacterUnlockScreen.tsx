@@ -2,10 +2,10 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Character } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
-import Icon from './Icon';
 import { ScreenTransition } from './ScreenTransition';
 import { getWeaponByName } from '@/utils/gameDefinitions';
 import { FighterAvatar } from './fighters';
+import { WeaponAvatar } from './weapons';
 
 interface CharacterUnlockScreenProps {
   character: Character;
@@ -54,8 +54,8 @@ const CharacterUnlockScreen: React.FC<CharacterUnlockScreenProps> = ({
                     const weapon = getWeaponByName(weaponName);
                     return (
                       <View key={index} style={styles.weaponItem}>
-                        {weapon?.icon && (
-                          <Icon name={weapon.icon} size={18} color={COLORS.slateCharcoal} />
+                        {weapon && (
+                          <WeaponAvatar weapon={weapon} size={24} interactive />
                         )}
                         <Text style={styles.weaponName}>{weaponName}</Text>
                       </View>

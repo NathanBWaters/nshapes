@@ -15,8 +15,8 @@ import {
   getCapIncreaseInfo,
   getRarityLabel,
 } from '@/utils/weaponDisplay';
-import Icon from './Icon';
 import KeywordText from './KeywordText';
+import { WeaponAvatar } from './weapons';
 
 export interface WeaponDetailCardProps {
   /** The weapon to display */
@@ -59,11 +59,7 @@ const WeaponDetailCard: React.FC<WeaponDetailCardProps> = ({
     <View style={styles.container}>
       {/* Weapon Icon/Preview Area */}
       <View style={[styles.previewArea, { borderColor: rarityColor }]}>
-        {weapon.icon ? (
-          <Icon name={weapon.icon} size={compact ? 24 : 32} color={COLORS.slateCharcoal} />
-        ) : (
-          <Text style={styles.previewLabel}>{getRarityLabel(weapon.rarity)}</Text>
-        )}
+        <WeaponAvatar weapon={weapon} size={compact ? 34 : 46} interactive />
         <View style={[styles.rarityBadge, { backgroundColor: rarityColor }]}>
           <Text style={styles.rarityBadgeText}>{getRarityLabel(weapon.rarity)}</Text>
         </View>

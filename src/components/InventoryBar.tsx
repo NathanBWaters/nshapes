@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { Weapon, WeaponRarity } from '@/types';
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
-import Icon from './Icon';
+import { WeaponAvatar } from './weapons';
 
 interface InventoryBarProps {
   weapons: Weapon[];
@@ -29,9 +29,7 @@ function WeaponItem({ weapon, count, rarityColor }: WeaponItemProps) {
         { borderColor: rarityColor },
       ]}
     >
-      {weapon.icon && (
-        <Icon name={weapon.icon} size={16} color={COLORS.slateCharcoal} />
-      )}
+      <WeaponAvatar weapon={weapon} size={20} interactive />
       <Text style={styles.itemName} numberOfLines={1}>
         {weapon.name}
       </Text>

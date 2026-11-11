@@ -9,7 +9,10 @@ import Animated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, E
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GameBoard from '@/components/GameBoard';
 import Icon from '@/components/Icon';
+import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
+import { WeaponAvatar } from '@/components/weapons';
+import { useEnemyConductor } from '@/hooks/useEnemyConductor';
 import { useFighterConductor } from '@/hooks/useFighterConductor';
 import { COLORS, getRarityColor } from '@/utils/colors';
 import type { Card, CardReward, Weapon } from '@/types';
@@ -20,6 +23,7 @@ import { createRun, runReducer, shopPrice, rerollCost, xpForLevel, type RunActio
 import { challengeProgress } from '../engine/challenges';
 import { MECHANICS } from '../data/mechanics';
 import { getBiome } from '../data/biomes';
+import { foeDisplay } from '../data/foes';
 import { ABILITIES, ABILITY_TUNING } from '../data/abilities';
 import { Btn, CoinPill, Eyebrow, Heart, INK, PopIn } from './ui';
 
@@ -128,10 +132,27 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   });
   const fighterMood = run.status === 'won' ? 'victory' : run.status === 'lost' ? 'defeat' : conductor.mood;
 
+  const ui = run.foe.getUIModifiers();
+  const inactivityRatio = ui.showInactivityBar
+    ? ui.showInactivityBar.current / Math.max(1, ui.showInactivityBar.max)
+    : 0;
+  const enemyConductor = useEnemyConductor({
+    enemyName: run.foeName,
+    tier: run.foe.tier,
+    hp: run.foeHp,
+    maxHp: run.foeMaxHp,
+    isBoss: level.isBoss,
+    inactivityRatio,
+    isActiveCombat: playing,
+  });
+  const enemyMood = run.status === 'lost' ? 'victory' : enemyConductor.mood;
+
   const { triggerEntrance } = conductor;
+  const { triggerEntrance: triggerEnemyEntrance } = enemyConductor;
   useEffect(() => {
     triggerEntrance();
-  }, [triggerEntrance]);
+    triggerEnemyEntrance();
+  }, [triggerEntrance, triggerEnemyEntrance]);
 
   useEffect(() => {
     if (secondsLeft !== null && secondsLeft <= 5 && secondsLeft > 0 && run.status === 'playing') sfx('tick');
@@ -175,6 +196,25 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
         conductor.triggerReaction('pain');
       } else if (e.type === 'wave') {
         conductor.triggerEntrance();
+      }
+
+      if (
+        e.type === 'rainbow' ||
+        e.type === 'combo' ||
+        e.type === 'grudge_release' ||
+        e.type === 'scoop'
+      ) {
+        enemyConductor.triggerHit({ isCritical: true });
+      } else if (e.type === 'hit') {
+        enemyConductor.triggerHit();
+      } else if (e.type === 'hurt') {
+        enemyConductor.triggerMistakeGloat();
+      } else if (e.type === 'time_stolen' || e.type === 'inactivity' || e.type === 'shuffle') {
+        enemyConductor.triggerAttack();
+      } else if (e.type === 'regen') {
+        enemyConductor.triggerRegen();
+      } else if (e.type === 'wave') {
+        enemyConductor.triggerEntrance();
       }
       if (e.type === 'scoop') {
         const ids = runRef.current.ability?.scooped ?? [];
@@ -235,10 +275,11 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
 
   const handleInvalid = useCallback((cards: Card[]) => {
     conductor.triggerMistake();
+    enemyConductor.triggerMistakeGloat();
     dispatch({ type: 'INVALID', cards });
     const ids = cards.map(c => c.id);
     later(() => dispatch({ type: 'REPLACE', ids }), 520);
-  }, [dispatch, conductor, later]);
+  }, [dispatch, conductor, enemyConductor, later]);
 
   const handleBurn = useCallback((card: Card) => dispatch({ type: 'BURN', card }), [dispatch]);
   const handleUseHint = useCallback(() => {
@@ -250,7 +291,6 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   const foeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: foeShake.value }, { scale: foeScale.value }] }));
   const hpPct = run.foeMaxHp > 0 ? run.foeHp / run.foeMaxHp : 0;
   const challenge = challengeProgress(run);
-  const ui = run.foe.getUIModifiers();
   const xpNeed = xpForLevel(run.xpLevel);
 
   return (
@@ -263,7 +303,16 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
           </TouchableOpacity>
 
           <Animated.View style={[st.foePortrait, level.isBoss && { backgroundColor: COLORS.actionYellow }, foeStyle]}>
-            <Icon name={run.foeIcon} size={38} color={INK} />
+            <EnemyAvatar
+              testID="adventure-run-enemy"
+              enemy={{ name: run.foeName, icon: run.foeIcon, tier: run.foe.tier }}
+              size={48}
+              hp={run.foeHp}
+              maxHp={run.foeMaxHp}
+              mood={enemyMood}
+              reaction={enemyConductor.reaction}
+              interactive
+            />
           </Animated.View>
 
           <View style={{ flex: 1, gap: 3 }}>
@@ -438,7 +487,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
               <View style={st.gearRow}>
                 {run.weapons.map((w, i) => (
                   <View key={i} style={[st.gearChip, { borderColor: getRarityColor(w.rarity) }]}>
-                    {w.icon && <Icon name={w.icon} size={16} color={INK} />}
+                    <WeaponAvatar weapon={w} size={20} interactive />
                     <Text style={st.gearText} numberOfLines={1}>{w.name}</Text>
                   </View>
                 ))}
@@ -537,7 +586,7 @@ export const WeaponPick: React.FC<{ title: string; subtitle: string; options: We
         <Text style={st.panelSub}>{subtitle}</Text>
         {options.map((w, i) => (
           <TouchableOpacity key={`${w.id}-${i}`} testID={`pick-${i}`} onPress={() => onPick(w)} style={[st.pickCard, { borderColor: getRarityColor(w.rarity) }]} activeOpacity={0.85}>
-            <View style={[st.pickIcon, { backgroundColor: COLORS.paperBeige }]}>{w.icon && <Icon name={w.icon} size={28} color={INK} />}</View>
+            <View style={[st.pickIcon, { backgroundColor: COLORS.paperBeige }]}><WeaponAvatar weapon={w} size={34} /></View>
             <View style={{ flex: 1 }}>
               <Text style={st.pickName}>{w.name} <Text style={[st.pickRarity, { color: getRarityColor(w.rarity) === COLORS.rarityCommon ? '#8E877D' : getRarityColor(w.rarity) }]}>{w.rarity.toUpperCase()}</Text></Text>
               <Text style={st.pickDesc}>{w.shortDescription}</Text>
@@ -553,6 +602,8 @@ export const WeaponPick: React.FC<{ title: string; subtitle: string; options: We
 const Intermission: React.FC<{ run: RunState; dispatch: (a: RunAction) => void; onPurchase?: () => void }> = ({ run, dispatch, onPurchase }) => {
   const hasShop = run.features.has('shop');
   const next = run.level.foes[run.wave + 1];
+  const nextDisplay = next ? foeDisplay(next) : null;
+  const [tapTriggers, setTapTriggers] = useState<Record<number, number>>({});
   return (
     <Modal visible transparent animationType="fade">
       <View style={st.overlay}>
@@ -568,8 +619,20 @@ const Intermission: React.FC<{ run: RunState; dispatch: (a: RunAction) => void; 
                   const price = shopPrice(w);
                   const afford = run.coins >= price;
                   return (
-                    <TouchableOpacity key={`${w.id}-${i}`} onPress={() => { if (afford) { sfx('coin'); onPurchase?.(); dispatch({ type: 'BUY', index: i }); } }} style={[st.pickCard, { borderColor: getRarityColor(w.rarity), opacity: afford ? 1 : 0.5 }]} activeOpacity={0.85}>
-                      <View style={st.pickIcon}>{w.icon && <Icon name={w.icon} size={26} color={INK} />}</View>
+                    <TouchableOpacity
+                      key={`${w.id}-${i}`}
+                      onPress={() => {
+                        setTapTriggers(prev => ({ ...prev, [i]: (prev[i] ?? 0) + 1 }));
+                        if (afford) {
+                          sfx('coin');
+                          onPurchase?.();
+                          dispatch({ type: 'BUY', index: i });
+                        }
+                      }}
+                      style={[st.pickCard, { borderColor: getRarityColor(w.rarity), opacity: afford ? 1 : 0.5 }]}
+                      activeOpacity={0.85}
+                    >
+                      <View style={st.pickIcon}><WeaponAvatar weapon={w} size={34} triggerKey={tapTriggers[i]} /></View>
                       <View style={{ flex: 1 }}>
                         <Text style={st.pickName}>{w.name}</Text>
                         <Text style={st.pickDesc}>{w.shortDescription}</Text>
@@ -583,7 +646,12 @@ const Intermission: React.FC<{ run: RunState; dispatch: (a: RunAction) => void; 
               <Btn small variant="secondary" label={`Reroll (${rerollCost(run)}¢)`} disabled={run.coins < rerollCost(run)} onPress={() => dispatch({ type: 'REROLL' })} />
             </>
           )}
-          {next && <Text style={st.panelSub}>Next: {next.name ?? next.enemy} · {next.hp} HP</Text>}
+          {next && nextDisplay && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              <EnemyAvatar enemy={nextDisplay} size={30} mood="menacing" lightweight />
+              <Text style={st.panelSub}>Next: {nextDisplay.name} · {next.hp} HP</Text>
+            </View>
+          )}
           <Btn testID="next-wave" label="Next wave" icon="lorc/crossed-swords" onPress={() => { sfx('wave'); dispatch({ type: 'NEXT_WAVE' }); }} />
         </PopIn>
       </View>

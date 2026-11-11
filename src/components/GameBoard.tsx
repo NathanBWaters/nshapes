@@ -33,6 +33,7 @@ import {
   EnemyPortrait,
   DefeatProgress,
 } from './enemy-ui';
+import type { EnemyReactionEvent } from '@/utils/enemyAnimations';
 
 // Default to 4 attributes for backward compatibility
 const DEFAULT_ATTRIBUTES: AttributeName[] = ['shape', 'color', 'number', 'shading'];
@@ -134,6 +135,9 @@ const GameBoard: React.FC<GameBoardProps> = ({
   const enemyUIModifiers = useMemo(() => {
     return enemy?.getUIModifiers() ?? {};
   }, [enemy]);
+
+  const [enemyReaction, setEnemyReaction] = useState<EnemyReactionEvent | null>(null);
+  const enemyReactionSeq = useRef(0);
 
   // Idle detection for ambient breathing animations
   const [isIdle, setIsIdle] = useState(false);
@@ -716,6 +720,16 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
           // IMMEDIATELY notify parent of the match (score updates instantly)
           // This ensures score is credited even if timer runs out during animation
+          enemyReactionSeq.current += 1;
+          setEnemyReaction({
+            type:
+              weaponEffects.explosiveCards.length > 0 ||
+              weaponEffects.laserCount > 0 ||
+              weaponEffects.ricochetCards.length > 0
+                ? 'crit_pain'
+                : 'pain',
+            id: enemyReactionSeq.current,
+          });
           onMatch(allCardsToReplace, allRewards, weaponEffects);
 
           // After 1.5 seconds, clear this match's rewards (visual cleanup only)
@@ -938,6 +952,16 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
             // IMMEDIATELY notify parent of the grace match (score updates instantly)
             // This ensures score is credited even if timer runs out during animation
+            enemyReactionSeq.current += 1;
+            setEnemyReaction({
+              type:
+                weaponEffects.explosiveCards.length > 0 ||
+                weaponEffects.laserCount > 0 ||
+                weaponEffects.ricochetCards.length > 0
+                  ? 'crit_pain'
+                  : 'pain',
+              id: enemyReactionSeq.current,
+            });
             onMatch(allCardsToReplace, allRewards, weaponEffects);
 
             // After 1.5 seconds, clear this match's rewards (visual cleanup only)
@@ -951,6 +975,8 @@ const GameBoard: React.FC<GameBoardProps> = ({
             triggerHaptic('error');
             playSound('matchInvalid');
 
+            enemyReactionSeq.current += 1;
+            setEnemyReaction({ type: 'taunt', id: enemyReactionSeq.current });
             onInvalidSelection(newSelectedCards);
 
             setTimeout(() => {
@@ -1027,7 +1053,23 @@ const GameBoard: React.FC<GameBoardProps> = ({
         <View style={styles.enemyOverlay} pointerEvents="box-none">
           {/* Top row: Enemy portrait and defeat progress */}
           <View style={styles.enemyTopRow}>
-            <EnemyPortrait enemy={enemy} compact />
+            {(() => {
+              const stretchDefeated =
+                currentRoundStats && typeof enemy.checkDefeatCondition === 'function'
+                  ? enemy.checkDefeatCondition(currentRoundStats)
+                  : false;
+              const matchWear = Math.min(3, Math.floor((currentRoundStats?.totalMatches ?? 0) / 2));
+              return (
+                <EnemyPortrait
+                  enemy={enemy}
+                  compact
+                  hp={stretchDefeated ? 0 : Math.max(1, 4 - matchWear)}
+                  maxHp={4}
+                  mood={enemy.tier >= 4 ? 'enraged' : 'menacing'}
+                  reaction={enemyReaction}
+                />
+              );
+            })()}
             <DefeatProgress enemy={enemy} stats={currentRoundStats} />
           </View>
 
