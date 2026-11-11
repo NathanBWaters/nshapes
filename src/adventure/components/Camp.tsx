@@ -4,10 +4,12 @@
  *   Workshop: expensive permanent upgrades
  * Plus a read-only Armory of every weapon unlocked so far.
  */
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '@/components/Icon';
+import { FighterAvatar } from '@/components/fighters';
+import type { FighterReactionEvent, FighterReactionType } from '@/utils/fighterAnimations';
 import { COLORS, getRarityColor } from '@/utils/colors';
 import { WEAPONS } from '@/utils/gameDefinitions';
 import { sfx } from '@/audio';
@@ -32,6 +34,13 @@ const weapon = (id: string) => WEAPONS.find(w => w.id === id);
 const Camp: React.FC<Props> = ({ save, onChange, onClose }) => {
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<Tab>('fighters');
+  const [reactions, setReactions] = useState<Partial<Record<CharacterName, FighterReactionEvent>>>({});
+  const reactionSeq = useRef(0);
+
+  const fireFighterReaction = (name: CharacterName, type: FighterReactionType) => {
+    reactionSeq.current += 1;
+    setReactions(prev => ({ ...prev, [name]: { type, id: reactionSeq.current } }));
+  };
 
   return (
     <View style={[st.root, { paddingTop: insets.top }]}>
@@ -66,13 +75,36 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose }) => {
           return (
             <View key={f.name} style={[st.fighter, !unlocked && { opacity: 0.55 }, selected && { borderColor: COLORS.deepOnyx, backgroundColor: '#FFFBE0' }]}>
               <View style={st.fighterHead}>
-                <View style={st.portrait}><Icon name={unlocked ? f.icon : 'lorc/padlock'} size={36} color={INK} /></View>
+                {unlocked ? (
+                  <FighterAvatar
+                    testID={`camp-fighter-avatar-${f.name}`}
+                    character={f.name}
+                    size={50}
+                    mood={selected ? 'anticipation' : 'idle'}
+                    reaction={reactions[f.name] ?? null}
+                    framed
+                    interactive
+                  />
+                ) : (
+                  <View style={st.portrait}><Icon name="lorc/padlock" size={30} color={INK} /></View>
+                )}
                 <View style={{ flex: 1 }}>
                   <Text style={st.fighterName}>{unlocked ? f.name : '???'}</Text>
                   <Text style={st.fighterBlurb}>{unlocked ? f.blurb : 'A fighter you have not met yet. Keep winning stars.'}</Text>
                   {unlocked && <LevelPips level={lvl} />}
                 </View>
-                {unlocked && !selected && <Btn small variant="secondary" label="Use" onPress={() => { sfx('confirm'); onChange({ ...save, selectedFighter: f.name }); }} />}
+                {unlocked && !selected && (
+                  <Btn
+                    small
+                    variant="secondary"
+                    label="Use"
+                    onPress={() => {
+                      sfx('confirm');
+                      fireFighterReaction(f.name, 'joy');
+                      onChange({ ...save, selectedFighter: f.name });
+                    }}
+                  />
+                )}
                 {selected && <View style={st.usingTag}><Text style={st.usingText}>USING</Text></View>}
               </View>
               {unlocked && (
@@ -102,7 +134,11 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose }) => {
                         label={`${cost}¢`}
                         icon="lorc/crown-coin"
                         disabled={!canLevelFighter(save, f.name)}
-                        onPress={() => { sfx('levelup'); onChange(levelFighter(save, f.name)); }}
+                        onPress={() => {
+                          sfx('levelup');
+                          fireFighterReaction(f.name, 'powerup');
+                          onChange(levelFighter(save, f.name));
+                        }}
                       />
                     </View>
                   ) : (

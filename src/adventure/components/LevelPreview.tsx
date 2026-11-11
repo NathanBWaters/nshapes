@@ -6,6 +6,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity } from 'react-native';
 import Icon, { IconName } from '@/components/Icon';
+import { FighterAvatar } from '@/components/fighters';
 import { COLORS, getRarityColor } from '@/utils/colors';
 import { WEAPONS } from '@/utils/gameDefinitions';
 import type { CharacterName } from '@/types';
@@ -174,7 +175,12 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                 const rec = level.recommended?.includes(f.name);
                 return (
                   <TouchableOpacity key={f.name} onPress={() => onSelectFighter(f.name)} style={[st.fighter, selected && st.fighterSel]} activeOpacity={0.85}>
-                    <Icon name={f.icon} size={30} color={INK} />
+                    <FighterAvatar
+                      character={f.name}
+                      size={42}
+                      mood={selected ? 'anticipation' : 'idle'}
+                      reaction={selected ? { type: 'entrance', id: 1 } : null}
+                    />
                     <Text style={st.fighterName} numberOfLines={1}>{f.name}</Text>
                     <Text style={st.fighterLvl}>LV {fighterLevel(save, f.name)}</Text>
                     {rec && <View style={st.rec}><Text style={st.recText}>STRONG</Text></View>}

@@ -7,7 +7,9 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet, useWindowDimensio
 import Svg, { Path, Circle } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '@/components/Icon';
+import { FighterAvatar } from '@/components/fighters';
 import { COLORS } from '@/utils/colors';
+import type { CharacterName } from '@/types';
 import type { AdventureSave, LevelDef } from '../types';
 import { MAIN_LEVELS, branchesOf } from '../data/levels';
 import { BIOMES } from '../data/biomes';
@@ -171,7 +173,7 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
 
           {/* Elite branch nodes */}
           {branches.map(n => (
-            <MapNode key={n.level.id} node={n} save={save} isFrontier={false} onPress={() => onSelectLevel(n.level)} fighterIcon={fighter.icon} />
+            <MapNode key={n.level.id} node={n} save={save} isFrontier={false} onPress={() => onSelectLevel(n.level)} fighterName={fighter.name} />
           ))}
 
           {/* Nodes */}
@@ -182,7 +184,7 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
               save={save}
               isFrontier={n.level.id === frontier.id}
               onPress={() => onSelectLevel(n.level)}
-              fighterIcon={fighter.icon}
+              fighterName={fighter.name}
             />
           ))}
         </View>
@@ -192,8 +194,8 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
       <View style={[s.dock, { paddingBottom: Math.max(insets.bottom, Platform.OS === 'web' ? 12 : 8) }]}>
         <DockButton icon="lorc/open-book" label="Field Guide" onPress={onOpenGuide} />
         <TouchableOpacity testID="map-play-next" onPress={() => onSelectLevel(frontier)} style={s.playNext} activeOpacity={0.85}>
-          <Icon name={fighter.icon} size={26} color={INK} />
-          <View>
+          <FighterAvatar character={fighter.name} size={34} mood="anticipation" />
+          <View style={{ flex: 1 }}>
             <Text style={s.playNextLabel}>PLAY {frontier.id}</Text>
             <Text style={s.playNextSub} numberOfLines={1}>{frontier.name}</Text>
           </View>
@@ -212,7 +214,7 @@ const DockButton: React.FC<{ icon: React.ComponentProps<typeof Icon>['name']; la
   </TouchableOpacity>
 );
 
-const MapNode: React.FC<{ node: NodePos; save: AdventureSave; isFrontier: boolean; onPress: () => void; fighterIcon: React.ComponentProps<typeof Icon>['name'] }> = ({ node, save, isFrontier, onPress, fighterIcon }) => {
+const MapNode: React.FC<{ node: NodePos; save: AdventureSave; isFrontier: boolean; onPress: () => void; fighterName: CharacterName }> = ({ node, save, isFrontier, onPress, fighterName }) => {
   const { level, x, y } = node;
   const lock = getLockReason(save, level);
   const locked = lock !== null;
@@ -261,7 +263,7 @@ const MapNode: React.FC<{ node: NodePos; save: AdventureSave; isFrontier: boolea
         <View style={s.avatar} pointerEvents="none">
           <Bob amount={3}>
             <View style={s.avatarBubble}>
-              <Icon name={fighterIcon} size={22} color={INK} />
+              <FighterAvatar character={fighterName} size={30} mood="anticipation" />
             </View>
           </Bob>
         </View>

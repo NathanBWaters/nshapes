@@ -3,12 +3,14 @@
  * foe HP bar, hearts, moves/clock, coins, XP, challenge ticker, coach marks,
  * level-up picks and the between-wave shop.
  */
-import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Platform } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, Easing } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GameBoard from '@/components/GameBoard';
 import Icon from '@/components/Icon';
+import { FighterAvatar } from '@/components/fighters';
+import { useFighterConductor } from '@/hooks/useFighterConductor';
 import { COLORS, getRarityColor } from '@/utils/colors';
 import type { Card, CardReward, Weapon } from '@/types';
 import type { WeaponEffectResult } from '@/utils/weaponEffects';
@@ -68,7 +70,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   const [hudHeight, setHudHeight] = useState(150);
   const [hintTrigger, setHintTrigger] = useState(0);
   const [lastMatchTime, setLastMatchTime] = useState(Date.now());
-  const [floaters, setFloaters] = useState<Array<{ id: number; text: string; color: string }>>([]);
+  const [floaters, setFloaters] = useState<{ id: number; text: string; color: string }[]>([]);
   const [tips, setTips] = useState<Tip[]>([]);
   const tip = tips[0] ?? null;
   const pushTip = useCallback((t: Tip) => setTips(q => (q.some(x => x.id === t.id) ? q : [...q, t])), []);
@@ -83,9 +85,9 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   useEffect(() => {
     if (__DEV__ && Platform.OS === 'web') (window as unknown as { __nshapesRun?: RunState }).__nshapesRun = run;
   }, [run]);
-  const later = (fn: () => void, ms: number) => {
+  const later = useCallback((fn: () => void, ms: number) => {
     timeouts.current.push(setTimeout(fn, ms));
-  };
+  }, []);
 
   // Music: battle arrangement for this biome, boss arrangement for bosses
   useEffect(() => {
@@ -113,6 +115,24 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
 
   // Low-time tick sound
   const secondsLeft = run.timeLeft !== null ? Math.ceil(run.timeLeft) : null;
+  const hasHearts = run.hearts !== null && run.maxHearts !== null && run.maxHearts > 0;
+  const fighterHealth = hasHearts ? run.hearts! : (run.status === 'lost' ? 0 : 3);
+  const fighterMaxHealth = hasHearts ? run.maxHearts! : 3;
+  const conductor = useFighterConductor({
+    health: fighterHealth,
+    maxHealth: fighterMaxHealth,
+    remainingTime: secondsLeft ?? undefined,
+    score: run.foeMaxHp - run.foeHp,
+    targetScore: run.foeMaxHp,
+    isActiveRound: playing,
+  });
+  const fighterMood = run.status === 'won' ? 'victory' : run.status === 'lost' ? 'defeat' : conductor.mood;
+
+  const { triggerEntrance } = conductor;
+  useEffect(() => {
+    triggerEntrance();
+  }, [triggerEntrance]);
+
   useEffect(() => {
     if (secondsLeft !== null && secondsLeft <= 5 && secondsLeft > 0 && run.status === 'playing') sfx('tick');
   }, [secondsLeft, run.status]);
@@ -137,6 +157,25 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
       if (e.type === 'combo') addFloater(`COMBO ×${e.amount}`, COLORS.impactOrange);
       if (e.type === 'grudge_release') addFloater(`GRUDGE +${e.amount}`, '#7A3E00');
       if (e.type === 'nine_lives') addFloater('NINE LIVES!', COLORS.logicTeal);
+      if (
+        e.type === 'rainbow' ||
+        e.type === 'combo' ||
+        e.type === 'grudge_release' ||
+        e.type === 'foe_defeated' ||
+        e.type === 'scoop' ||
+        e.type === 'freeze' ||
+        e.type === 'redeal'
+      ) {
+        conductor.triggerReaction('ecstatic');
+      } else if (e.type === 'nine_lives' || e.type === 'heal') {
+        conductor.triggerHeal();
+      } else if (e.type === 'levelup') {
+        conductor.triggerPowerup();
+      } else if (e.type === 'time_stolen' || e.type === 'inactivity') {
+        conductor.triggerReaction('pain');
+      } else if (e.type === 'wave') {
+        conductor.triggerEntrance();
+      }
       if (e.type === 'scoop') {
         const ids = runRef.current.ability?.scooped ?? [];
         setLastMatchTime(Date.now());
@@ -181,22 +220,32 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   // Board callbacks
   const handleMatch = useCallback((cards: Card[], rewards: CardReward[], effects?: WeaponEffectResult) => {
     setLastMatchTime(Date.now());
+    const graceUsed = rewards.some(r => r.effectType === 'grace');
+    const isMegaMatch =
+      Boolean(effects?.explosiveCards.length) ||
+      Boolean(effects?.laserCards.length) ||
+      Boolean(effects?.ricochetCards.length) ||
+      cards.length > 3;
+    const didHeal = rewards.some(r => (r.healing ?? 0) > 0) || Boolean(effects?.bonusHealing);
+    conductor.triggerMatch({ isGraceMatch: graceUsed, isMegaMatch, didHeal });
     dispatch({ type: 'MATCH', cards, rewards, effects });
     const ids = cards.map(c => c.id);
     later(() => dispatch({ type: 'REPLACE', ids }), REPLACE_DELAY_MS);
-  }, [dispatch]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [dispatch, conductor, later]);
 
   const handleInvalid = useCallback((cards: Card[]) => {
+    conductor.triggerMistake();
     dispatch({ type: 'INVALID', cards });
     const ids = cards.map(c => c.id);
     later(() => dispatch({ type: 'REPLACE', ids }), 520);
-  }, [dispatch]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [dispatch, conductor, later]);
 
   const handleBurn = useCallback((card: Card) => dispatch({ type: 'BURN', card }), [dispatch]);
   const handleUseHint = useCallback(() => {
+    conductor.triggerHint();
     dispatch({ type: 'USE_HINT' });
     sfx('hint');
-  }, [dispatch]);
+  }, [dispatch, conductor]);
 
   const foeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: foeShake.value }, { scale: foeScale.value }] }));
   const hpPct = run.foeMaxHp > 0 ? run.foeHp / run.foeMaxHp : 0;
@@ -232,6 +281,20 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
               </View>
             )}
           </View>
+
+          {/* Player's living fighter */}
+          <FighterAvatar
+            testID="adventure-run-fighter"
+            character={run.fighter}
+            size={46}
+            health={fighterHealth}
+            maxHealth={fighterMaxHealth}
+            mood={fighterMood}
+            reaction={conductor.reaction}
+            streak={conductor.streak}
+            framed
+            interactive
+          />
 
           {/* Floating damage numbers */}
           <View style={st.floaters} pointerEvents="none">
@@ -313,6 +376,8 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
           autoPlayer={autoPlayer}
           enemy={run.foe}
           hideEnemyOverlay
+          onSelectedCountChange={conductor.setSelectedCount}
+          onBoardIdleChange={conductor.setIsBoardIdle}
         />
       </View>
 
@@ -353,14 +418,14 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
           title="LEVEL UP!"
           subtitle="Pick one for this fight"
           options={run.pickOptions}
-          onPick={w => { sfx('confirm'); dispatch({ type: 'PICK', weaponId: w.id }); }}
+          onPick={w => { sfx('confirm'); conductor.triggerPowerup(); dispatch({ type: 'PICK', weaponId: w.id }); }}
           onSkip={() => dispatch({ type: 'PICK', weaponId: null })}
         />
       )}
 
       {/* Between waves */}
       {run.status === 'intermission' && (
-        <Intermission run={run} dispatch={dispatch} />
+        <Intermission run={run} dispatch={dispatch} onPurchase={() => conductor.triggerPowerup()} />
       )}
 
       {/* Pause */}
@@ -485,7 +550,7 @@ export const WeaponPick: React.FC<{ title: string; subtitle: string; options: We
   </Modal>
 );
 
-const Intermission: React.FC<{ run: RunState; dispatch: (a: RunAction) => void }> = ({ run, dispatch }) => {
+const Intermission: React.FC<{ run: RunState; dispatch: (a: RunAction) => void; onPurchase?: () => void }> = ({ run, dispatch, onPurchase }) => {
   const hasShop = run.features.has('shop');
   const next = run.level.foes[run.wave + 1];
   return (
@@ -503,7 +568,7 @@ const Intermission: React.FC<{ run: RunState; dispatch: (a: RunAction) => void }
                   const price = shopPrice(w);
                   const afford = run.coins >= price;
                   return (
-                    <TouchableOpacity key={`${w.id}-${i}`} onPress={() => { if (afford) { sfx('coin'); dispatch({ type: 'BUY', index: i }); } }} style={[st.pickCard, { borderColor: getRarityColor(w.rarity), opacity: afford ? 1 : 0.5 }]} activeOpacity={0.85}>
+                    <TouchableOpacity key={`${w.id}-${i}`} onPress={() => { if (afford) { sfx('coin'); onPurchase?.(); dispatch({ type: 'BUY', index: i }); } }} style={[st.pickCard, { borderColor: getRarityColor(w.rarity), opacity: afford ? 1 : 0.5 }]} activeOpacity={0.85}>
                       <View style={st.pickIcon}>{w.icon && <Icon name={w.icon} size={26} color={INK} />}</View>
                       <View style={{ flex: 1 }}>
                         <Text style={st.pickName}>{w.name}</Text>

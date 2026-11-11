@@ -9,6 +9,12 @@ import {
   resolveFighterAmbientMood,
   resolveFighterExpression,
 } from '@/utils/fighterAnimations';
+import { createNewSave } from '@/adventure/progress';
+import { getLevel } from '@/adventure/data/levels';
+import AdventureRun from '@/adventure/components/AdventureRun';
+import Camp from '@/adventure/components/Camp';
+import UnlockReveal from '@/adventure/components/UnlockReveal';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Text, View } from 'react-native';
 
 jest.mock('@/components/Icon', () => {
@@ -17,6 +23,32 @@ jest.mock('@/components/Icon', () => {
     return (
       <RNView testID={`fallback-icon-${name}`}>
         <RNText>{name}</RNText>
+      </RNView>
+    );
+  };
+});
+
+jest.mock('@/components/GameBoard', () => {
+  const { View: RNView, Pressable: RNPressable } = require('react-native');
+  return function MockGameBoard({
+    cards,
+    onMatch,
+    onInvalidSelection,
+  }: {
+    cards: unknown[];
+    onMatch: (cards: unknown[], rewards: { points: number }[]) => void;
+    onInvalidSelection: (cards: unknown[]) => void;
+  }) {
+    return (
+      <RNView testID="mock-game-board">
+        <RNPressable
+          testID="mock-board-match"
+          onPress={() => onMatch(cards.slice(0, 3), [{ points: 3 }])}
+        />
+        <RNPressable
+          testID="mock-board-mistake"
+          onPress={() => onInvalidSelection(cards.slice(0, 3))}
+        />
       </RNView>
     );
   };
@@ -361,6 +393,76 @@ describe('Fighter Animation System', () => {
         latest.setSelectedCount(2);
       });
       expect(getByTestId('mood').props.children).toBe('anticipation');
+    });
+  });
+
+  describe('Adventure Mode v2 integration', () => {
+    const SAFE_AREA_METRICS = {
+      frame: { x: 0, y: 0, width: 390, height: 844 },
+      insets: { top: 0, left: 0, right: 0, bottom: 0 },
+    };
+
+    it('renders pristine FighterAvatar in heartless tutorial level 1-1', () => {
+      const save = createNewSave();
+      const level11 = getLevel('1-1');
+      const { getByTestId, queryByTestId } = render(
+        <SafeAreaProvider initialMetrics={SAFE_AREA_METRICS}>
+          <AdventureRun
+            level={level11}
+            save={save}
+            seed={12345}
+            onFinish={() => {}}
+            onQuit={() => {}}
+            onRestart={() => {}}
+            onCoachMarkSeen={() => {}}
+          />
+        </SafeAreaProvider>
+      );
+
+      const avatar = getByTestId('adventure-run-fighter');
+      expect(avatar).toBeTruthy();
+      expect(avatar.props.accessibilityLabel).toContain('pristine');
+      expect(queryByTestId('fighter-damage-knocked_out')).toBeNull();
+
+      // Match triggers joy reaction on the HUD fighter
+      fireEvent.press(getByTestId('mock-board-match'));
+      expect(getByTestId('fighter-fx-joy')).toBeTruthy();
+
+      // Mistake triggers pain reaction on the HUD fighter
+      fireEvent.press(getByTestId('mock-board-mistake'));
+      expect(getByTestId('fighter-fx-pain')).toBeTruthy();
+    });
+
+    it('renders FighterAvatar for unlocked fighters at Camp while keeping locked fighters secret', () => {
+      const save = createNewSave(); // Orange Tabby unlocked, others locked
+      const { getByTestId, queryByTestId } = render(
+        <SafeAreaProvider initialMetrics={SAFE_AREA_METRICS}>
+          <Camp save={save} onChange={() => {}} onClose={() => {}} />
+        </SafeAreaProvider>
+      );
+
+      expect(getByTestId('camp-fighter-avatar-Orange Tabby')).toBeTruthy();
+      expect(queryByTestId('camp-fighter-avatar-Sly Fox')).toBeNull();
+    });
+
+    it('keeps silhouette before reveal and showcases living FighterAvatar upon reveal in UnlockReveal', () => {
+      const save = createNewSave();
+      const { getByTestId, queryByTestId } = render(
+        <UnlockReveal
+          unlocks={[{ kind: 'fighter', name: 'Sly Fox', star: 1 }]}
+          save={save}
+          onUseFighter={() => {}}
+          onEquipCharm={() => {}}
+          onDone={() => {}}
+        />
+      );
+
+      expect(queryByTestId('unlock-revealed-fighter')).toBeNull();
+      fireEvent.press(getByTestId('unlock-reveal'));
+      const revealed = getByTestId('unlock-revealed-fighter');
+      expect(revealed).toBeTruthy();
+      expect(revealed.props.accessibilityLabel).toContain('Sly Fox');
+      expect(getByTestId('fighter-fx-ecstatic')).toBeTruthy();
     });
   });
 });

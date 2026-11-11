@@ -7,6 +7,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, Easing, cancelAnimation } from 'react-native-reanimated';
 import Icon, { IconName } from '@/components/Icon';
+import { FighterAvatar } from '@/components/fighters';
 import { COLORS, getRarityColor } from '@/utils/colors';
 import { WEAPONS } from '@/utils/gameDefinitions';
 import { sfx } from '@/audio';
@@ -120,7 +121,18 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
           <View style={st.heroWrap}>
             <Rays color={accent} />
             <Animated.View style={[st.hero, { borderColor: accent, backgroundColor: revealed ? COLORS.canvasWhite : '#151413' }, heroStyle]}>
-              <Icon name={icon} size={92} color={revealed ? INK : '#050505'} />
+              {revealed && fighter ? (
+                <FighterAvatar
+                  testID="unlock-revealed-fighter"
+                  character={fighter.name}
+                  size={116}
+                  mood="victory"
+                  reaction={{ type: 'ecstatic', id: i + 1 }}
+                  interactive
+                />
+              ) : (
+                <Icon name={icon} size={92} color={revealed ? INK : '#050505'} />
+              )}
               {!revealed && <Text style={st.heroQ}>?</Text>}
             </Animated.View>
           </View>

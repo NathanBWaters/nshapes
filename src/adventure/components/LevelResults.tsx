@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '@/components/Icon';
+import { FighterAvatar } from '@/components/fighters';
 import { COLORS } from '@/utils/colors';
 import { sfx } from '@/audio';
 import type { LevelDef, RunState } from '../types';
@@ -62,12 +63,28 @@ const LevelResults: React.FC<Props> = ({ level, run, stars, result, unlocksRevea
       : null;
 
   const totalCoins = result.starCoins + result.coinsBanked;
+  const hasHearts = run.hearts !== null && run.maxHearts !== null && run.maxHearts > 0;
+  const resultFighterHealth = won
+    ? (hasHearts ? Math.max(1, run.hearts!) : 3)
+    : 0;
+  const resultFighterMaxHealth = hasHearts ? run.maxHearts! : 3;
 
   return (
     <View style={[st.root, { backgroundColor: biome.colors.sky, paddingTop: insets.top + 12, paddingBottom: insets.bottom + 12 }]}>
       <ScrollView contentContainerStyle={st.scroll}>
         <PopIn style={st.card}>
           <Text style={st.levelId}>{level.id} · {level.name}</Text>
+          <FighterAvatar
+            testID="results-fighter-avatar"
+            character={run.fighter}
+            size={84}
+            health={resultFighterHealth}
+            maxHealth={resultFighterMaxHealth}
+            mood={won ? 'victory' : 'defeat'}
+            reaction={won ? { type: stars >= 3 ? 'ecstatic' : 'joy', id: 1 } : null}
+            framed
+            interactive
+          />
           <Text style={[st.title, { color: won ? INK : COLORS.impactRed }]}>{title}</Text>
           <StarRow stars={stars} size={52} animateFrom={0} />
           <Text style={st.sub}>{sub}</Text>

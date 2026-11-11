@@ -255,6 +255,8 @@ This means Field Stone weapons can increase the starting board size beyond the m
 
 **`/dev/adventure`** - Adventure map (`?save=maxed` everything unlocked + 50k coins, `?save=fresh`, `?autoplay=true`)
 
+**`/dev/fighters`** - Interactive fighter animation & battle wear-and-tear studio (all 6 creatures, health tiers, reactions, moods, tap-to-pet)
+
 **`/dev/store`** - Standalone weapon shop tester:
 * Starts with $50,000
 * Buy weapons, reroll shop

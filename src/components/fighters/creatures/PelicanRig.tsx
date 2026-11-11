@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated from 'react-native-reanimated';
-import { Svg, Circle, Ellipse, G, Path, Polygon } from 'react-native-svg';
+import { Svg, Circle, Ellipse, Path, Polygon } from 'react-native-svg';
 import { COLORS } from '@/utils/colors';
 import { CreatureEyes } from './FacialFeatures';
 import { CreatureRigProps } from './types';
