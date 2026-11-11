@@ -17,7 +17,7 @@ export const audioSupported = (): boolean => chip.available;
 
 export const setMusicEnabled = (on: boolean) => {
   musicEnabled = on;
-  if (!on) music.stop();
+  if (!on) music.halt();
   else if (music.current) music.play(music.current);
 };
 export const isMusicEnabled = () => musicEnabled;
@@ -26,9 +26,49 @@ export const setSfxEnabled = (on: boolean) => {
 };
 export const isSfxEnabled = () => sfxEnabled;
 
-/** Call from any user gesture to unlock audio on the web. */
+/**
+ * Unlock audio inside a real user gesture. iOS (Safari, Chrome, and installed
+ * PWAs all use WebKit) only lets audio start from "activation" events such as
+ * touchend or click, not touchstart. It also wants a sound actually played
+ * inside that gesture.
+ */
 export const unlockAudio = () => {
-  chip.ensure();
+  if (!chip.ensure()) return;
+  const ctx = chip.liveContext;
+  if (!ctx) return;
+  // Web Audio is "ambient" on iOS by default, so the ring/silent switch mutes
+  // it. Mark this as playback audio (Safari 16.4+). Players can still mute
+  // with the in-game toggles.
+  const nav = navigator as unknown as { audioSession?: { type: string } };
+  if (nav.audioSession && nav.audioSession.type !== 'playback') {
+    try { nav.audioSession.type = 'playback'; } catch { /* unsupported */ }
+  }
+  if (ctx.state !== 'running') void ctx.resume().catch(() => undefined);
+  try {
+    // One silent sample — the classic iOS "unlock" nudge
+    const b = ctx.createBuffer(1, 1, ctx.sampleRate);
+    const src = ctx.createBufferSource();
+    src.buffer = b;
+    src.connect(ctx.destination);
+    src.start(0);
+  } catch { /* ignore */ }
+};
+
+const installGestureUnlock = () => {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  if (!chip.available) return;
+  const events = ['touchend', 'pointerup', 'click', 'keydown'];
+  const handler = () => {
+    unlockAudio();
+    if (chip.liveContext?.state === 'running' && music.current && musicEnabled) music.play(music.current);
+  };
+  // Keep listening: iOS can interrupt the context again later (calls, Siri, app switch)
+  events.forEach(e => document.addEventListener(e, handler, { capture: true, passive: true }));
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && chip.liveContext && chip.liveContext.state !== 'running') {
+      void chip.liveContext.resume().catch(() => undefined);
+    }
+  });
 };
 
 // ─── Music sequencer ───────────────────────────────────────────────────────
@@ -61,7 +101,14 @@ class Sequencer {
     this.timer = setInterval(() => this.schedule(), 25);
   }
 
+  /** Stop and forget the current song (leaving a screen). */
   stop() {
+    this.halt();
+    this.current = null;
+  }
+
+  /** Silence playback but remember the song (music toggled off, autoplay blocked). */
+  halt() {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
     this.arr = null;
@@ -275,6 +322,8 @@ const withNow = (t: number, fn: () => void) => {
   lastPlayed = {};
   try { fn(); } finally { nowOverride = null; }
 };
+
+installGestureUnlock();
 
 // Dev handle for poking the synth from the browser console: __nshapesAudio.sfx('rainbow')
 if (typeof __DEV__ !== 'undefined' && __DEV__ && typeof window !== 'undefined') {

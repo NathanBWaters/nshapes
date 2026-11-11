@@ -1,5 +1,5 @@
-import { getLevel, LEVELS } from '@/adventure/data/levels';
-import { createNewSave, applyLevelResult, getFeaturesForLevel, isLevelUnlocked, levelFighter, buyUpgrade, totalStars } from '@/adventure/progress';
+import { getLevel, LEVELS, MAIN_LEVELS } from '@/adventure/data/levels';
+import { createNewSave, applyLevelResult, getFeaturesForLevel, getLockReason, isLevelUnlocked, levelFighter, buyUpgrade, totalStars } from '@/adventure/progress';
 import { createRun, runReducer, computeStars, boardHasSet } from '@/adventure/engine/run';
 import { allSets } from '@/adventure/engine/sets';
 import type { Card, CardReward } from '@/types';
@@ -33,22 +33,45 @@ describe('features accumulate along the map', () => {
 });
 
 describe('run reducer', () => {
-  it('matches damage the foe, spend moves, and knock it out for 2+ stars', () => {
+  it('1-1: five Sets win it, and it cannot be lost', () => {
     let s = createRun(getLevel('1-1'), createNewSave(), { seed: 42 });
-    expect(s.foeHp).toBe(12);
+    expect(s.foeHp).toBe(15);
+    expect(s.hearts).toBeNull();
+    expect(s.movesLeft).toBeNull();
+    expect(s.timeLeft).toBeNull();
     s = playSet(s);
-    expect(s.foeHp).toBe(9);
-    expect(s.movesLeft).toBe(5);
+    expect(s.foeHp).toBe(12);
     while (s.status === 'playing') s = playSet(s);
+    expect(s.matches).toBe(5);
     expect(s.status).toBe('won');
-    expect(s.endReason).toBe('defeated');
     expect(computeStars(s)).toBe(3); // no mistakes
+  });
+
+  it.each([[0, 3], [1, 2], [2, 1], [5, 1]])('1-1 stars are about accuracy: %i mistakes → %i stars', (mistakes, stars) => {
+    let s = createRun(getLevel('1-1'), createNewSave(), { seed: 8 });
+    for (let i = 0; i < mistakes; i++) {
+      const wrong = s.board.slice(0, 3);
+      s = runReducer(s, { type: 'INVALID', cards: wrong });
+      s = runReducer(s, { type: 'REPLACE', ids: wrong.map(c => c.id) });
+    }
+    expect(s.status).toBe('playing');
+    while (s.status === 'playing') s = playSet(s);
+    expect(computeStars(s)).toBe(stars);
+  });
+
+  it('move-limited levels count down moves', () => {
+    let s = createRun(getLevel('1-3'), createNewSave(), { seed: 42 });
+    const moves = s.movesLeft!;
+    s = playSet(s);
+    expect(s.movesLeft).toBe(moves - 1);
   });
 
   it('mistakes cost hearts and can lose the level', () => {
     let s = createRun(getLevel('1-2'), { ...createNewSave(), stars: { '1-1': 1 } }, { seed: 7 });
-    expect(s.hearts).toBe(3);
-    for (let i = 0; i < 3; i++) s = runReducer(s, { type: 'INVALID', cards: s.board.slice(0, 3) });
+    const hearts = s.hearts!;
+    expect(hearts).toBeGreaterThanOrEqual(3);
+    // +1: Orange Tabby's Nine Lives absorbs one knockout
+    for (let i = 0; i < hearts + 1; i++) s = runReducer(s, { type: 'INVALID', cards: s.board.slice(0, 3) });
     expect(s.hearts).toBe(0);
     expect(s.status).toBe('lost');
     expect(computeStars(s)).toBe(0);
@@ -93,9 +116,32 @@ describe('fighter abilities', () => {
     return { ...base, stars, unlockedFighters: ['Orange Tabby', 'Sly Fox', 'Badger', 'Emperor Penguin', 'Corgi', 'Pelican'] as const } as unknown as ReturnType<typeof createNewSave>;
   };
 
-  it('no ability before gear is taught (1-4)', () => {
-    expect(createRun(getLevel('1-3'), createNewSave(), { seed: 1 }).ability).toBeNull();
-    expect(createRun(getLevel('1-4'), createNewSave(), { seed: 1 }).ability?.id).toBe('nine_lives');
+  it('the bare first level has no ability or gear; everything after does', () => {
+    const first = createRun(getLevel('1-1'), createNewSave(), { seed: 1 });
+    expect(first.ability).toBeNull();
+    expect(first.weapons).toHaveLength(0);
+    const second = createRun(getLevel('1-2'), createNewSave(), { seed: 1 });
+    expect(second.ability?.id).toBe('nine_lives');
+    expect(second.weapons.length).toBeGreaterThan(0);
+  });
+
+  it('the equipped charm joins the fighter gear', () => {
+    const save = { ...createNewSave(), armory: ['blast-powder-rare'], charm: 'blast-powder-rare' };
+    const withCharm = createRun(getLevel('1-2'), save, { seed: 1 });
+    const without = createRun(getLevel('1-2'), createNewSave(), { seed: 1 });
+    expect(withCharm.weapons.map(w => w.id)).toContain('blast-powder-rare');
+    expect(withCharm.weapons).toHaveLength(without.weapons.length + 1);
+    expect(withCharm.stats.explosionChance).toBeGreaterThan(without.stats.explosionChance);
+  });
+
+  it('power cards appear from 1-4 on and add damage', () => {
+    const before = createRun(getLevel('1-3'), createNewSave(), { seed: 2 });
+    expect(before.features.has('power')).toBe(false);
+    let found = false;
+    for (let seed = 1; seed < 30 && !found; seed++) {
+      found = createRun(getLevel('1-4'), createNewSave(), { seed }).board.some(c => c.bonusPoints === 2);
+    }
+    expect(found).toBe(true);
   });
 
   it('Orange Tabby — Nine Lives survives one knockout', () => {
@@ -167,17 +213,43 @@ describe('fighter abilities', () => {
 });
 
 describe('progression', () => {
-  it('star rewards are granted once each, coins always bank', () => {
+  it('every star on every level pays coins, rising with the stars', () => {
+    for (const l of LEVELS) {
+      const { star1, star2, star3 } = l.rewards;
+      expect(star1.coins).toBeGreaterThan(0);
+      expect(star2.coins).toBeGreaterThanOrEqual(star1.coins);
+      expect(star3.coins).toBeGreaterThanOrEqual(star2.coins);
+    }
+  });
+
+  it('1-1 unlocks a fighter at ★ and a weapon at ★★, each once', () => {
     const save = createNewSave();
     const lvl = getLevel('1-1');
-    const r1 = applyLevelResult(save, lvl, 2, 0);
-    expect(r1.granted.map(g => g.star)).toEqual([1, 2]);
-    expect(r1.save.coins).toBe(25);
+    const r1 = applyLevelResult(save, lvl, 1, 0);
+    expect(r1.unlocks).toEqual([{ kind: 'fighter', name: 'Sly Fox', star: 1 }]);
+    expect(r1.save.unlockedFighters).toContain('Sly Fox');
+    expect(r1.save.coins).toBe(20);
     const r2 = applyLevelResult(r1.save, lvl, 2, 5);
-    expect(r2.granted).toHaveLength(0);
-    expect(r2.save.coins).toBe(30);
-    const r3 = applyLevelResult(r2.save, lvl, 3, 0);
-    expect(r3.granted.map(g => g.star)).toEqual([3]);
+    expect(r2.unlocks).toEqual([{ kind: 'weapon', id: 'blast-powder-common', star: 2, firstWeapon: true }]);
+    expect(r2.save.armory).toEqual(['blast-powder-common']);
+    expect(r2.save.charm).toBe('blast-powder-common'); // first weapon is equipped automatically
+    expect(r2.save.coins).toBe(20 + 30 + 5);
+    const r3 = applyLevelResult(r2.save, lvl, 2, 0);
+    expect(r3.granted).toHaveLength(0);
+    expect(r3.unlocks).toHaveLength(0);
+    const r4 = applyLevelResult(r3.save, lvl, 3, 0);
+    expect(r4.granted.map(g => g.star)).toEqual([3]);
+    expect(r4.starCoins).toBe(50);
+  });
+
+  it('elite branches open at ★★ on their parent and never block the main path', () => {
+    let save = createNewSave();
+    for (const id of ['1-1', '1-2', '1-3', '1-4']) save = applyLevelResult(save, getLevel(id), 1, 0).save;
+    save = applyLevelResult(save, getLevel('1-5'), 1, 0).save;
+    expect(getLockReason(save, getLevel('1-5E'))).toEqual({ kind: 'branch', parentId: '1-5', need: 2 });
+    expect(isLevelUnlocked(save, getLevel('1-6'))).toBe(true);
+    save = applyLevelResult(save, getLevel('1-5'), 2, 0).save;
+    expect(isLevelUnlocked(save, getLevel('1-5E'))).toBe(true);
   });
 
   it('levels unlock in order and biomes are star-gated', () => {
@@ -186,14 +258,14 @@ describe('progression', () => {
     save = applyLevelResult(save, getLevel('1-1'), 1, 0).save;
     expect(isLevelUnlocked(save, getLevel('1-2'))).toBe(true);
     // Beat all of meadow with 1 star each: 8 stars < 12 gate for woods
-    for (const l of LEVELS.filter(x => x.biome === 'meadow')) save = applyLevelResult(save, l, 1, 0).save;
+    for (const l of MAIN_LEVELS.filter(x => x.biome === 'meadow')) save = applyLevelResult(save, l, 1, 0).save;
     expect(totalStars(save)).toBe(8);
     expect(isLevelUnlocked(save, getLevel('2-1'))).toBe(false);
   });
 
   it('boss star rewards unlock fighters', () => {
     const r = applyLevelResult(createNewSave(), getLevel('1-8'), 2, 0);
-    expect(r.save.unlockedFighters).toContain('Sly Fox');
+    expect(r.save.unlockedFighters).toContain('Corgi');
   });
 
   it('camp purchases spend coins', () => {

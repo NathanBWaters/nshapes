@@ -9,7 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '@/components/Icon';
 import { COLORS } from '@/utils/colors';
 import type { AdventureSave, LevelDef } from '../types';
-import { LEVELS } from '../data/levels';
+import { MAIN_LEVELS, branchesOf } from '../data/levels';
 import { BIOMES } from '../data/biomes';
 import { levelFoe } from '../data/foes';
 import { getMechanic } from '../data/mechanics';
@@ -17,20 +17,22 @@ import { getFighter } from '../data/fighters';
 import { getFrontierLevel, getLockReason, maxStars, totalStars, isBiomeOpen } from '../progress';
 import { Bob, CoinPill, INK, StarRow } from './ui';
 
+const ELITE = '#5B2333';
 const ROW = 112;
 const BANNER = 132;
 const TOP_PAD = 24;
 
-interface NodePos { level: LevelDef; x: number; y: number }
+interface NodePos { level: LevelDef; x: number; y: number; parent?: { x: number; y: number } }
 interface BannerPos { biomeIndex: number; y: number; height: number }
 
 const layout = (width: number) => {
   const nodes: NodePos[] = [];
+  const branches: NodePos[] = [];
   const banners: BannerPos[] = [];
   let y = TOP_PAD;
   let lastBiome = '';
   const amp = Math.min(120, width * 0.28);
-  LEVELS.forEach((level, i) => {
+  MAIN_LEVELS.forEach((level, i) => {
     if (level.biome !== lastBiome) {
       const bi = BIOMES.findIndex(b => b.id === level.biome);
       banners.push({ biomeIndex: bi, y, height: 0 });
@@ -39,6 +41,12 @@ const layout = (width: number) => {
     }
     const x = width / 2 + Math.sin(i * 0.95) * amp;
     nodes.push({ level, x, y: y + ROW / 2 });
+    // Elite side paths branch off sideways, toward whichever side has room
+    branchesOf(level.id).forEach(b => {
+      const side = x < width / 2 ? 1 : -1;
+      const bx = Math.max(58, Math.min(width - 58, x + side * Math.min(150, width * 0.4)));
+      branches.push({ level: b, x: bx, y: y + ROW / 2 + 6, parent: { x, y: y + ROW / 2 } });
+    });
     y += ROW;
   });
   // biome band heights
@@ -46,7 +54,7 @@ const layout = (width: number) => {
     const end = i + 1 < banners.length ? banners[i + 1].y : y + 40;
     b.height = end - b.y;
   });
-  return { nodes, banners, height: y + 60 };
+  return { nodes, branches, banners, height: y + 60 };
 };
 
 const pathFor = (nodes: NodePos[]): string => {
@@ -76,7 +84,7 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
   const { width: winW } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const width = Math.min(winW, 560);
-  const { nodes, banners, height } = useMemo(() => layout(width), [width]);
+  const { nodes, branches, banners, height } = useMemo(() => layout(width), [width]);
   const frontier = getFrontierLevel(save);
   const scrollRef = useRef<ScrollView>(null);
   const stars = totalStars(save);
@@ -148,7 +156,23 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
             )}
             <Path d={pathFor(nodes)} stroke={INK} strokeWidth={2} fill="none" strokeDasharray="2 10" strokeLinecap="round" opacity={0.35} />
             {nodes.map(n => <Circle key={n.level.id} cx={n.x} cy={n.y} r={6} fill={INK} opacity={0.15} />)}
+            {branches.map(b => (
+              <Path
+                key={b.level.id}
+                d={`M ${b.parent!.x} ${b.parent!.y} L ${b.x} ${b.y}`}
+                stroke={getLockReason(save, b.level) ? '#B8B0A4' : ELITE}
+                strokeWidth={5}
+                strokeDasharray="3 9"
+                strokeLinecap="round"
+                fill="none"
+              />
+            ))}
           </Svg>
+
+          {/* Elite branch nodes */}
+          {branches.map(n => (
+            <MapNode key={n.level.id} node={n} save={save} isFrontier={false} onPress={() => onSelectLevel(n.level)} fighterIcon={fighter.icon} />
+          ))}
 
           {/* Nodes */}
           {nodes.map(n => (
@@ -194,7 +218,8 @@ const MapNode: React.FC<{ node: NodePos; save: AdventureSave; isFrontier: boolea
   const locked = lock !== null;
   const stars = save.stars[level.id] ?? 0;
   const foe = levelFoe(level);
-  const size = level.isBoss ? 78 : 62;
+  const elite = !!level.branchOf;
+  const size = level.isBoss ? 78 : elite ? 54 : 62;
   const isNew = !locked && !save.seenMechanics.includes(level.introduces);
   const mech = getMechanic(level.introduces);
 
@@ -209,11 +234,14 @@ const MapNode: React.FC<{ node: NodePos; save: AdventureSave; isFrontier: boolea
           style={[
             s.node,
             { width: size, height: size, borderRadius: size / 2 },
-            locked ? s.nodeLocked : stars === 3 ? s.nodePerfect : stars > 0 ? s.nodeDone : s.nodeOpen,
+            locked ? s.nodeLocked : elite ? s.nodeElite : stars === 3 ? s.nodePerfect : stars > 0 ? s.nodeDone : s.nodeOpen,
             isFrontier && s.nodeFrontier,
           ]}
         >
-          <Icon name={locked ? 'lorc/padlock' : foe.icon} size={size * 0.55} color={locked ? '#A69F95' : INK} />
+          <Icon name={locked ? 'lorc/padlock' : foe.icon} size={size * 0.55} color={locked ? '#A69F95' : elite ? COLORS.canvasWhite : INK} />
+          {elite && (
+            <View style={s.skull}><Icon name="lorc/daemon-skull" size={14} color={locked ? '#A69F95' : ELITE} /></View>
+          )}
           {level.isBoss && !locked && (
             <View style={s.crown}><Icon name="lorc/crown-coin" size={18} color="#E0A800" /></View>
           )}
@@ -221,7 +249,7 @@ const MapNode: React.FC<{ node: NodePos; save: AdventureSave; isFrontier: boolea
       </Bob>
       <View style={s.nodeMeta} pointerEvents="none">
         {!locked && <StarRow stars={stars} size={15} />}
-        <Text style={[s.nodeLabel, locked && { color: '#A69F95' }]}>{level.id}</Text>
+        <Text style={[s.nodeLabel, locked && { color: '#A69F95' }]}>{elite ? (locked ? 'ELITE ★★' : 'ELITE') : level.id}</Text>
       </View>
       {isNew && (
         <View style={s.newTag} pointerEvents="none">
@@ -275,6 +303,8 @@ const s = StyleSheet.create({
   nodeOpen: { backgroundColor: COLORS.canvasWhite },
   nodeDone: { backgroundColor: '#FFF6C2' },
   nodePerfect: { backgroundColor: COLORS.actionYellow },
+  nodeElite: { backgroundColor: ELITE, borderColor: COLORS.deepOnyx },
+  skull: { position: 'absolute', top: -10, right: -6, backgroundColor: COLORS.canvasWhite, borderRadius: 11, borderWidth: 2, borderColor: INK, padding: 1 },
   nodeFrontier: { borderColor: COLORS.deepOnyx, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
   crown: { position: 'absolute', top: -14, backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 2, borderColor: INK, padding: 1 },
   nodeMeta: { alignItems: 'center', marginTop: 2, gap: 1 },

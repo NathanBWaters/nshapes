@@ -1,33 +1,38 @@
 /**
  * Level preview sheet — "what am I up against?" Foe, difficulty, new
- * mechanic, star goals + rewards, and fighter choice.
+ * mechanic, star goals with their coin rewards, secret unlocks shown as
+ * silhouettes, and the fighter + charm you'll bring.
  */
 import React from 'react';
 import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity } from 'react-native';
-import Icon from '@/components/Icon';
-import { COLORS } from '@/utils/colors';
+import Icon, { IconName } from '@/components/Icon';
+import { COLORS, getRarityColor } from '@/utils/colors';
 import { WEAPONS } from '@/utils/gameDefinitions';
 import type { CharacterName } from '@/types';
 import type { AdventureSave, LevelDef, RewardDef } from '../types';
 import { getBiome } from '../data/biomes';
 import { foeDisplay, levelFoe } from '../data/foes';
 import { getMechanic } from '../data/mechanics';
-import { FIGHTERS } from '../data/fighters';
-import { describeChallenge } from '../engine/challenges';
+import { FIGHTERS, getFighter } from '../data/fighters';
+import { getLevel } from '../data/levels';
+import { starGoals } from '../engine/challenges';
 import { fighterLevel, getLockReason } from '../progress';
 import { Btn, Eyebrow, Heart, INK, PopIn, Skulls, StarRow } from './ui';
+import { Silhouette } from './UnlockReveal';
 
 const ATTR_ICONS = { shape: 'lorc/diamond-hard', color: 'lorc/crystal-shine', number: 'lorc/cycle', shading: 'lorc/stone-block', background: 'lorc/field' } as const;
 
-export const rewardText = (r: RewardDef): string => {
-  const parts: string[] = [];
-  if (r.character) parts.push(`Unlock ${r.character}`);
-  if (r.weapons?.length) parts.push(r.weapons.map(id => WEAPONS.find(w => w.id === id)?.name ?? id).filter((v, i, a) => a.indexOf(v) === i).join(' + '));
-  if (r.coins) parts.push(`${r.coins} coins`);
-  return parts.join(' · ');
-};
+const weapon = (id: string) => WEAPONS.find(w => w.id === id);
 
-const rewardIcon = (r: RewardDef) => (r.character ? 'lorc/trophy' : r.weapons?.length ? 'lorc/gems' : 'lorc/crown-coin');
+/** What a star unlocks besides coins. Secret until earned. */
+export const unlockInfo = (r: RewardDef): { secret: string; revealed: string; icon: IconName } | null => {
+  if (r.character) return { secret: 'A new fighter', revealed: r.character, icon: getFighter(r.character).icon };
+  if (r.weapons?.length) {
+    const ws = r.weapons.map(weapon);
+    return { secret: r.weapons.length > 1 ? 'New weapons' : 'A new weapon', revealed: ws.map(w => w?.name ?? '?').join(' + '), icon: ws[0]?.icon ?? 'lorc/gems' };
+  }
+  return null;
+};
 
 interface Props {
   level: LevelDef | null;
@@ -35,10 +40,11 @@ interface Props {
   onClose: () => void;
   onPlay: (level: LevelDef, fighter: CharacterName) => void;
   onSelectFighter: (f: CharacterName) => void;
+  onSelectCharm: (id: string) => void;
   onShowMechanic: (id: string) => void;
 }
 
-const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectFighter, onShowMechanic }) => {
+const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectFighter, onSelectCharm, onShowMechanic }) => {
   if (!level) return null;
   const biome = getBiome(level.biome);
   const foe = levelFoe(level);
@@ -46,12 +52,16 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
   const lock = getLockReason(save, level);
   const best = save.stars[level.id] ?? 0;
   const timed = !!level.rules.timer;
+  const accuracy = level.starRule?.kind === 'accuracy';
+  const texts = starGoals(level, foe.name);
   const goals = [
-    { star: 1, text: timed ? `Survive ${level.rules.timer}s` : level.rules.moves ? `Survive all ${level.rules.moves} moves` : 'Survive', reward: level.rewards.star1 },
-    { star: 2, text: level.foes.length > 1 ? `Defeat all ${level.foes.length} waves` : `Defeat ${foe.name}`, reward: level.rewards.star2 },
-    { star: 3, text: `Defeat + ${describeChallenge(level)}`, reward: level.rewards.star3 },
+    { star: 1, text: texts[0], reward: level.rewards.star1 },
+    { star: 2, text: texts[1], reward: level.rewards.star2 },
+    { star: 3, text: texts[2], reward: level.rewards.star3 },
   ];
   const isNew = !save.seenMechanics.includes(level.introduces);
+  const gearOn = !level.rules.noGear;
+  const totalHp = level.foes.reduce((a, f) => a + f.hp, 0);
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
@@ -60,12 +70,14 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
         <PopIn style={st.sheet}>
           <View style={[st.header, { backgroundColor: biome.colors.sky }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Text style={[st.levelId, { color: biome.colors.ink }]}>{biome.name.toUpperCase()} · {level.id}{level.isBoss ? ' · BOSS' : ''}</Text>
+              <Text style={[st.levelId, { color: biome.colors.ink }]}>
+                {biome.name.toUpperCase()} · {level.id}{level.isBoss ? ' · BOSS' : ''}{level.branchOf ? ' · ELITE' : ''}
+              </Text>
               <TouchableOpacity onPress={onClose} style={st.close}><Text style={st.closeText}>✕</Text></TouchableOpacity>
             </View>
             <View style={st.foeRow}>
-              <View style={[st.foePortrait, level.isBoss && st.foeBoss]}>
-                <Icon name={foe.icon} size={level.isBoss ? 64 : 54} color={INK} />
+              <View style={[st.foePortrait, level.isBoss && st.foeBoss, level.branchOf && st.foeElite]}>
+                <Icon name={foe.icon} size={level.isBoss ? 64 : 54} color={level.branchOf ? COLORS.canvasWhite : INK} />
               </View>
               <View style={{ flex: 1, gap: 4 }}>
                 <Text style={st.levelName}>{level.name}</Text>
@@ -92,9 +104,13 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
 
             {/* Rules strip */}
             <View style={st.rules}>
-              <Rule icon={timed ? 'lorc/stopwatch' : 'lorc/archery-target'} text={timed ? `${level.rules.timer}s` : `${level.rules.moves} moves`} />
-              <View style={st.rule}><Heart size={16} /><Text style={st.ruleText}>{level.index === 0 ? '∞' : level.rules.hearts}</Text></View>
-              <Rule icon="lorc/crossed-swords" text={`${level.foes.reduce((a, f) => a + f.hp, 0)} HP`} />
+              {accuracy ? (
+                <Rule icon="lorc/archery-target" text={`Make ${Math.ceil(totalHp / 3)} Sets`} />
+              ) : (
+                <Rule icon={timed ? 'lorc/stopwatch' : 'lorc/archery-target'} text={timed ? `${level.rules.timer}s` : `${level.rules.moves} moves`} />
+              )}
+              <View style={st.rule}><Heart size={16} /><Text style={st.ruleText}>{level.rules.hearts === 0 ? "Can't lose" : level.rules.hearts}</Text></View>
+              <Rule icon="lorc/crossed-swords" text={`${totalHp} HP`} />
               <View style={st.rule}>
                 <View style={{ flexDirection: 'row' }}>
                   {level.rules.attributes.map(a => <Icon key={a} name={ATTR_ICONS[a]} size={14} color={INK} />)}
@@ -113,21 +129,38 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
               ) : null;
             })}
 
-            {/* Star goals */}
+            {/* Star goals: coins up front, unlocks kept secret */}
+            <Text style={st.section}>REWARDS</Text>
             <View style={{ gap: 6 }}>
               {goals.map(g => {
                 const done = best >= g.star;
+                const unlock = unlockInfo(g.reward);
                 return (
                   <View key={g.star} style={[st.goal, done && st.goalDone]}>
-                    <StarRow stars={g.star} max={g.star} size={14} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={st.goalText}>{g.text}</Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        <Icon name={rewardIcon(g.reward)} size={12} color={done ? '#8E877D' : '#B07D00'} />
-                        <Text style={[st.goalReward, done && { textDecorationLine: 'line-through', color: '#8E877D' }]}>{rewardText(g.reward)}</Text>
-                      </View>
+                    <View style={st.goalTop}>
+                      <StarRow stars={g.star} max={g.star} size={15} />
+                      <Text style={[st.goalText, done && { opacity: 0.6 }]}>{g.text}</Text>
+                      {done && <Text style={st.doneMark}>✓</Text>}
                     </View>
-                    {done && <Icon name="lorc/checked-shield" size={18} color={COLORS.logicTeal} />}
+                    <View style={st.goalRewards}>
+                      <View style={[st.coinChip, done && st.chipDone]}>
+                        <Icon name="lorc/crown-coin" size={14} color={done ? '#8E877D' : '#B07D00'} />
+                        <Text style={[st.coinChipText, done && { color: '#8E877D' }]}>{g.reward.coins}</Text>
+                      </View>
+                      {unlock && (
+                        done ? (
+                          <View style={[st.unlockChip, st.chipDone]}>
+                            <Icon name={unlock.icon} size={16} color="#8E877D" />
+                            <Text style={[st.unlockText, { color: '#8E877D' }]} numberOfLines={1}>{unlock.revealed}</Text>
+                          </View>
+                        ) : (
+                          <View style={st.unlockChip}>
+                            <Silhouette icon={unlock.icon} size={14} />
+                            <Text style={st.unlockText}>{unlock.secret}</Text>
+                          </View>
+                        )
+                      )}
+                    </View>
                   </View>
                 );
               })}
@@ -135,7 +168,7 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
 
             {/* Fighter picker */}
             <Text style={st.section}>FIGHTER</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4, paddingTop: 6 }}>
               {FIGHTERS.filter(f => save.unlockedFighters.includes(f.name)).map(f => {
                 const selected = f.name === save.selectedFighter;
                 const rec = level.recommended?.includes(f.name);
@@ -149,6 +182,28 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                 );
               })}
             </ScrollView>
+            {!gearOn && <Text style={st.note}>Fighter abilities and weapons switch on after this first fight.</Text>}
+
+            {/* Charm picker */}
+            {gearOn && save.armory.length > 0 && (
+              <>
+                <Text style={st.section}>CHARM <Text style={st.sectionHint}>one weapon from your Armory</Text></Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
+                  {save.armory.map(id => {
+                    const w = weapon(id);
+                    if (!w) return null;
+                    const selected = save.charm === id;
+                    return (
+                      <TouchableOpacity key={id} testID={`charm-${id}`} onPress={() => onSelectCharm(id)} style={[st.charm, { borderColor: selected ? INK : getRarityColor(w.rarity) }, selected && st.charmSel]} activeOpacity={0.85}>
+                        {w.icon && <Icon name={w.icon} size={24} color={INK} />}
+                        <Text style={st.fighterName} numberOfLines={1}>{w.name}</Text>
+                        <Text style={st.charmDesc} numberOfLines={2}>{w.shortDescription}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </>
+            )}
           </ScrollView>
 
           <View style={st.footer}>
@@ -156,7 +211,11 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
               <View style={st.locked}>
                 <Icon name="lorc/padlock" size={18} color={INK} />
                 <Text style={st.lockedText}>
-                  {lock.kind === 'previous' ? 'Earn a star on the previous level to unlock.' : `Need ${lock.need} ★ total to enter ${biome.name} (you have ${lock.have}).`}
+                  {lock.kind === 'previous'
+                    ? 'Earn a star on the previous level to unlock.'
+                    : lock.kind === 'branch'
+                      ? `Elite path. Earn ${'★'.repeat(lock.need)} on ${lock.parentId} ${getLevel(lock.parentId).name} to open it.`
+                      : `Need ${lock.need} ★ total to enter ${biome.name} (you have ${lock.have}).`}
                 </Text>
               </View>
             ) : (
@@ -169,7 +228,7 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
   );
 };
 
-const Rule: React.FC<{ icon: React.ComponentProps<typeof Icon>['name']; text: string }> = ({ icon, text }) => (
+const Rule: React.FC<{ icon: IconName; text: string }> = ({ icon, text }) => (
   <View style={st.rule}>
     <Icon name={icon} size={18} color={INK} />
     <Text style={st.ruleText}>{text}</Text>
@@ -186,6 +245,7 @@ const st = StyleSheet.create({
   foeRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   foePortrait: { width: 84, height: 84, borderRadius: 42, borderWidth: 3, borderBottomWidth: 6, borderColor: INK, backgroundColor: COLORS.canvasWhite, alignItems: 'center', justifyContent: 'center' },
   foeBoss: { width: 96, height: 96, borderRadius: 48, backgroundColor: COLORS.actionYellow },
+  foeElite: { backgroundColor: '#5B2333', borderColor: COLORS.deepOnyx },
   levelName: { fontSize: 24, fontWeight: '900', color: INK },
   foeName: { fontSize: 14, fontWeight: '700', color: INK, opacity: 0.8 },
   bubble: { alignSelf: 'flex-start', backgroundColor: COLORS.canvasWhite, borderWidth: 2, borderColor: INK, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, marginLeft: 20 },
@@ -199,17 +259,29 @@ const st = StyleSheet.create({
   ruleText: { fontWeight: '800', fontSize: 13, color: INK },
   ability: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFE9E7', borderRadius: 8, padding: 8, borderWidth: 1.5, borderColor: INK },
   abilityText: { flex: 1, color: INK, fontSize: 13 },
-  goal: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 8, borderRadius: 8, borderWidth: 1.5, borderColor: INK, backgroundColor: COLORS.canvasWhite },
-  goalDone: { backgroundColor: '#F1FBF8' },
-  goalText: { fontWeight: '800', color: INK, fontSize: 14 },
-  goalReward: { fontSize: 12, color: '#B07D00', fontWeight: '700' },
+  goal: { gap: 6, padding: 10, borderRadius: 8, borderWidth: 1.5, borderColor: INK, backgroundColor: COLORS.canvasWhite },
+  goalDone: { backgroundColor: '#F4F1EC', borderColor: '#CFC8BD' },
+  goalTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  goalText: { flex: 1, fontWeight: '800', color: INK, fontSize: 14 },
+  doneMark: { color: COLORS.logicTeal, fontWeight: '900', fontSize: 16 },
+  goalRewards: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+  coinChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FFF6C2', borderRadius: 999, borderWidth: 1.5, borderColor: '#B07D00', paddingHorizontal: 8, paddingVertical: 2 },
+  coinChipText: { fontWeight: '900', color: '#7A5600', fontSize: 13 },
+  unlockChip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.deepOnyx, borderRadius: 999, paddingLeft: 3, paddingRight: 10, paddingVertical: 2, maxWidth: 240 },
+  unlockText: { fontWeight: '800', color: COLORS.actionYellow, fontSize: 12 },
+  chipDone: { backgroundColor: '#EAE5DD', borderColor: '#CFC8BD', paddingLeft: 8 },
   section: { fontWeight: '900', letterSpacing: 2, fontSize: 12, color: INK, marginTop: 4 },
+  sectionHint: { fontWeight: '600', letterSpacing: 0, fontSize: 11, opacity: 0.7 },
+  note: { fontSize: 12, color: INK, opacity: 0.7 },
   fighter: { width: 92, alignItems: 'center', padding: 8, borderRadius: 10, borderWidth: 2, borderColor: '#CFC8BD', backgroundColor: COLORS.paperBeige, gap: 2 },
   fighterSel: { borderColor: INK, backgroundColor: COLORS.actionYellow, borderBottomWidth: 4 },
   fighterName: { fontSize: 11, fontWeight: '800', color: INK },
   fighterLvl: { fontSize: 10, fontWeight: '700', color: INK, opacity: 0.7 },
   rec: { position: 'absolute', top: -6, right: -4, backgroundColor: COLORS.logicTeal, borderRadius: 4, paddingHorizontal: 4, borderWidth: 1, borderColor: INK },
   recText: { fontSize: 8, fontWeight: '900', color: COLORS.canvasWhite, letterSpacing: 1 },
+  charm: { width: 112, alignItems: 'center', padding: 8, borderRadius: 10, borderWidth: 2, backgroundColor: COLORS.paperBeige, gap: 2 },
+  charmSel: { backgroundColor: COLORS.actionYellow, borderBottomWidth: 4 },
+  charmDesc: { fontSize: 10, color: INK, textAlign: 'center', opacity: 0.8 },
   footer: { padding: 14, borderTopWidth: 2, borderTopColor: INK, backgroundColor: COLORS.paperBeige },
   locked: { flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center' },
   lockedText: { color: INK, fontWeight: '700', flexShrink: 1 },

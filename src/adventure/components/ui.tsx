@@ -1,7 +1,7 @@
 /** Small shared UI primitives for Adventure screens (Retro-Modern style guide). */
 import React, { useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ViewStyle, TextStyle, StyleProp } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, withDelay, withSpring, Easing } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, withDelay, Easing } from 'react-native-reanimated';
 import Icon, { IconName } from '@/components/Icon';
 import { COLORS } from '@/utils/colors';
 
@@ -45,7 +45,8 @@ export const StarRow: React.FC<{ stars: number; size?: number; max?: number; ani
 const AnimatedStar: React.FC<{ filled: boolean; size: number; delay: number; color: string }> = ({ filled, size, delay, color }) => {
   const scale = useSharedValue(delay >= 0 ? 0 : 1);
   useEffect(() => {
-    if (delay >= 0) scale.value = withDelay(delay, withSequence(withSpring(1.5, { damping: 6 }), withSpring(1)));
+    // one quick pop, no wobble
+    if (delay >= 0) scale.value = withDelay(delay, withSequence(withTiming(1.25, { duration: 140, easing: Easing.out(Easing.cubic) }), withTiming(1, { duration: 120, easing: Easing.inOut(Easing.quad) })));
   }, [delay, scale]);
   const st = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   const glyph = { fontSize: size, lineHeight: size * 1.1, width: size * 1.05, textAlign: 'center' as const };
@@ -97,11 +98,12 @@ export const Bob: React.FC<{ children: React.ReactNode; active?: boolean; amount
 
 /** Pop-in wrapper. */
 export const PopIn: React.FC<{ children: React.ReactNode; delay?: number; style?: StyleProp<ViewStyle> }> = ({ children, delay = 0, style }) => {
-  const s = useSharedValue(0.6);
+  const s = useSharedValue(0.94);
   const o = useSharedValue(0);
   useEffect(() => {
-    s.value = withDelay(delay, withSpring(1, { damping: 10 }));
-    o.value = withDelay(delay, withTiming(1, { duration: 180 }));
+    // Short ease-out, no overshoot: panels should appear, not bounce
+    s.value = withDelay(delay, withTiming(1, { duration: 180, easing: Easing.out(Easing.cubic) }));
+    o.value = withDelay(delay, withTiming(1, { duration: 140 }));
   }, [delay, s, o]);
   const st = useAnimatedStyle(() => ({ opacity: o.value, transform: [{ scale: s.value }] }));
   return <Animated.View style={[st, style]}>{children}</Animated.View>;

@@ -32,6 +32,8 @@ import { ABILITY_TUNING, abilityFor } from '../data/abilities';
 export const MAX_BOARD = 21;
 export const COIN_CARD_CHANCE = 0.1;
 export const COIN_CARD_VALUE = 3;
+export const POWER_CARD_CHANCE = 0.12;
+export const POWER_CARD_BONUS = 2;
 export const RAINBOW_MULTIPLIER = 2;
 
 export const xpForLevel = (lvl: number): number => 6 + lvl * 5;
@@ -168,6 +170,7 @@ const drawCard = (d: Draft, clean = false): Card => {
   const base = d.deck.shift()!;
   let card = freshCard(base);
   if (d.features.has('coins') && d._rng.next() < COIN_CARD_CHANCE) card.bonusMoney = COIN_CARD_VALUE;
+  if (d.features.has('power') && d._rng.next() < POWER_CARD_CHANCE) card.bonusPoints = POWER_CARD_BONUS;
   if (clean) return card;
   card = d.foe.onCardDraw(card);
   if (card.isDud) emit(d, 'dud');
@@ -335,6 +338,9 @@ export const computeStartingStats = (level: LevelDef, save: AdventureSave, fight
   const weapons: Weapon[] = features.has('gear')
     ? getLoadout(fighter, lvl).map(weaponById).filter((w): w is Weapon => !!w)
     : [];
+  // Charm: one equipped Armory weapon on top of the fighter's own gear
+  const charm = features.has('gear') && save.charm && save.armory.includes(save.charm) ? weaponById(save.charm) : undefined;
+  if (charm) weapons.push(charm);
   let stats: PlayerStats = { ...DEFAULT_PLAYER_STATS, hints: 0, graces: 0, effectCaps: { ...DEFAULT_PLAYER_STATS.effectCaps! } };
   for (const w of weapons) stats = applyWeaponToStats(stats, w);
   stats = addStats(stats, getPerkStats(fighter, lvl));
@@ -791,6 +797,8 @@ export const rerollCost = (s: RunState): number => 5 + s.rerolls * 5;
 export const computeStars = (s: RunState): number => {
   if (s.status === 'lost') return 0;
   if (s.status !== 'won') return 0;
+  const rule = s.level.starRule;
+  if (rule?.kind === 'accuracy') return s.mistakes <= rule.threeStarMax ? 3 : s.mistakes <= rule.twoStarMax ? 2 : 1;
   if (s.endReason === 'survived') return 1;
   return s.challengeMet ? 3 : 2;
 };

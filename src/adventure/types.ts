@@ -23,7 +23,8 @@ export type MechanicKind = 'feature' | 'threat' | 'rule' | 'fighter';
 
 export type FeatureFlag =
   | 'hearts'      // wrong sets cost a heart
-  | 'gear'        // fighter's weapons are active
+  | 'gear'        // fighter gear, ability and charm are active (everywhere except bare levels)
+  | 'power'       // power cards: +2 damage when matched
   | 'rainbow'     // all-different sets hit twice as hard
   | 'coins'       // coins drop & bank to your purse
   | 'hints'       // hint button
@@ -44,8 +45,35 @@ export interface MechanicDef {
   demo?: MechanicDemo;
   /** Turning this feature on when the mechanic is introduced */
   enables?: FeatureFlag;
-  /** In-run coach mark shown the first time it happens (keyed by run event) */
+  /** In-run tip shown the first time it happens (keyed by run event). The player must accept it. */
   coachMark?: { on: RunEventType; text: string };
+  /** Tips shown one by one when the first fight with this mechanic starts. Each must be accepted. */
+  fightTips?: FightTip[];
+  /** Extra teaching pages shown before the summary page */
+  lessons?: LessonPage[];
+  /** "Is this a Set?" questions the player answers before the fight */
+  quiz?: QuizQuestion[];
+}
+
+export interface FightTip {
+  title: string;
+  text: string;
+  /** Which part of the screen the tip is about */
+  anchor?: 'top' | 'bottom';
+}
+
+export interface LessonPage {
+  title: string;
+  body: string[];
+  demo?: MechanicDemo;
+}
+
+/** Validity is computed from the cards, never hand-authored. */
+export interface QuizQuestion {
+  attributes: AttributeName[];
+  cards: DemoCard[];
+  /** Shown after answering */
+  explain: string;
 }
 
 export type MechanicDemo =
@@ -58,7 +86,7 @@ export interface DemoCard {
   number: Card['number'];
   shading: Card['shading'];
   background?: Card['background'];
-  modifiers?: Partial<Pick<Card, 'isDud' | 'isFaceDown' | 'health' | 'hasCountdown' | 'countdownTimer' | 'hasBomb' | 'bombTimer' | 'onFire' | 'bonusMoney'>>;
+  modifiers?: Partial<Pick<Card, 'isDud' | 'isFaceDown' | 'health' | 'hasCountdown' | 'countdownTimer' | 'hasBomb' | 'bombTimer' | 'onFire' | 'bonusMoney' | 'bonusPoints'>>;
 }
 
 // ---------------------------------------------------------------------------
@@ -101,12 +129,22 @@ export type ChallengeDef =
   | { kind: 'hintsLeft'; n: number }
   | { kind: 'enemy' };   // use the registered enemy's own defeat condition
 
+/**
+ * Every star pays coins (shown up front). Some stars ALSO unlock a weapon or a
+ * fighter — hidden as a silhouette until earned, then revealed with fanfare.
+ */
 export interface RewardDef {
-  coins?: number;
-  /** Weapon ids added to the Armory (shop / level-up pool) */
+  coins: number;
+  /** Weapon ids added to the Armory (charm slot, shop and level-up pool) */
   weapons?: string[];
   character?: CharacterName;
 }
+
+/** How stars are earned. Default 'combat': survive / knock out / knock out + challenge. */
+export type StarRule =
+  | { kind: 'combat' }
+  /** Finish the level; stars depend on mistakes (the very first level). */
+  | { kind: 'accuracy'; threeStarMax: number; twoStarMax: number };
 
 export interface LevelRules {
   attributes: AttributeName[];
@@ -118,6 +156,8 @@ export interface LevelRules {
   hearts: number;
   startingHints?: number;
   startingGraces?: number;
+  /** Bare level: no fighter gear, ability or charm (the very first level) */
+  noGear?: boolean;
 }
 
 export interface LevelDef {
@@ -131,12 +171,18 @@ export interface LevelDef {
   /** One or more foes. More than one = waves. */
   foes: FoeDef[];
   challenge: ChallengeDef;
+  starRule?: StarRule;
   /** Coin multiplier — harder levels pay more */
   coinMultiplier: number;
   /** 1-5 skulls shown on the preview */
   difficulty: 1 | 2 | 3 | 4 | 5;
   rewards: { star1: RewardDef; star2: RewardDef; star3: RewardDef };
   isBoss?: boolean;
+  /**
+   * Elite side branch: hangs off this main-path level on the map, needs ★★
+   * there to unlock, and never blocks the main path.
+   */
+  branchOf?: string;
   /** Fighters that are especially good here (shown on preview) */
   recommended?: CharacterName[];
 }
@@ -187,6 +233,8 @@ export interface AdventureSave {
   seenMechanics: string[];
   seenCoachMarks: string[];
   selectedFighter: CharacterName;
+  /** Equipped Armory weapon (one charm slot, on top of the fighter's own gear) */
+  charm: string | null;
   lastLevelId: string | null;
   musicOn: boolean;
 }

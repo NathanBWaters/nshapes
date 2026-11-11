@@ -14,8 +14,13 @@ export const MECHANICS: Record<string, MechanicDef> = {
     tagline: 'Pick 3 cards. Each trait: all same or all different.',
     body: [
       'Tap three cards to make a Set.',
-      'For every trait — shape and color for now — the three cards must be ALL THE SAME or ALL DIFFERENT.',
-      'Every Set hits the foe. Knock its health to zero!',
+      'For every trait, the three cards must be ALL THE SAME or ALL DIFFERENT. For now the traits are shape and color.',
+      'Every Set hits the foe. Make 5 Sets to win!',
+    ],
+    fightTips: [
+      { title: 'Your foe', text: 'This is Dozy Bunny. The red bar is its health. Every Set you make knocks 3 off.', anchor: 'top' },
+      { title: 'Your move', text: 'Tap three cards that make a Set. Check shape first, then color. You can tap a card again to put it back.', anchor: 'bottom' },
+      { title: 'No pressure', text: 'You cannot lose this fight. A wrong guess just swaps those three cards for new ones. Fewer mistakes earn more stars.', anchor: 'top' },
     ],
     icon: 'lorc/crossed-swords',
     demo: {
@@ -29,6 +34,85 @@ export const MECHANICS: Record<string, MechanicDef> = {
         { shape: 'squiggle', color: 'red', number: 1, shading: 'solid' },
       ],
     },
+    lessons: [
+      {
+        title: 'Every card has traits',
+        body: ['Each card has a SHAPE (diamond, oval or squiggle) and a COLOR (red, green or purple).', 'You win fights by spotting three cards that go together.'],
+        demo: {
+          type: 'set', attributes: ['shape', 'color'], valid: true, caption: 'Three shapes, three colors',
+          cards: [
+          { shape: 'diamond', color: 'red', number: 1, shading: 'solid' },
+          { shape: 'oval', color: 'green', number: 1, shading: 'solid' },
+          { shape: 'squiggle', color: 'purple', number: 1, shading: 'solid' },
+        ],
+        },
+      },
+      {
+        title: 'All the same is good',
+        body: ['Check one trait at a time. Start with color.', 'Red, red, red. All three match, so color passes.'],
+        demo: {
+          type: 'set', attributes: ['shape', 'color'], valid: true, caption: 'Color: all the same ✓',
+          cards: [
+          { shape: 'diamond', color: 'red', number: 1, shading: 'solid' },
+          { shape: 'oval', color: 'red', number: 1, shading: 'solid' },
+          { shape: 'squiggle', color: 'red', number: 1, shading: 'solid' },
+        ],
+        },
+      },
+      {
+        title: 'All different is good too',
+        body: ['Now look at shape on the same three cards.', 'Diamond, oval, squiggle. No two match, so shape passes as well.', 'Both traits pass. That makes it a Set!'],
+        demo: {
+          type: 'set', attributes: ['shape', 'color'], valid: true, caption: 'Shape: all different ✓  Color: all the same ✓',
+          cards: [
+          { shape: 'diamond', color: 'red', number: 1, shading: 'solid' },
+          { shape: 'oval', color: 'red', number: 1, shading: 'solid' },
+          { shape: 'squiggle', color: 'red', number: 1, shading: 'solid' },
+        ],
+        },
+      },
+      {
+        title: 'Two alike and one odd is NOT a Set',
+        body: ['Here two cards are red and one is green.', 'Color is neither all the same nor all different, so this is not a Set. One bad trait spoils it.'],
+        demo: {
+          type: 'set', attributes: ['shape', 'color'], valid: false, caption: 'Color: red, red, green ✗',
+          cards: [
+          { shape: 'diamond', color: 'red', number: 1, shading: 'solid' },
+          { shape: 'oval', color: 'red', number: 1, shading: 'solid' },
+          { shape: 'squiggle', color: 'green', number: 1, shading: 'solid' },
+        ],
+        },
+      },
+    ],
+    quiz: [
+      {
+        attributes: ['shape', 'color'],
+        cards: [
+          { shape: 'oval', color: 'green', number: 1, shading: 'solid' },
+          { shape: 'oval', color: 'red', number: 1, shading: 'solid' },
+          { shape: 'oval', color: 'purple', number: 1, shading: 'solid' },
+        ],
+        explain: 'Shape is all the same (ovals) and color is all different. Both traits pass.',
+      },
+      {
+        attributes: ['shape', 'color'],
+        cards: [
+          { shape: 'diamond', color: 'purple', number: 1, shading: 'solid' },
+          { shape: 'diamond', color: 'green', number: 1, shading: 'solid' },
+          { shape: 'squiggle', color: 'purple', number: 1, shading: 'solid' },
+        ],
+        explain: 'Two diamonds and one squiggle: shape fails. Two purple and one green: color fails too.',
+      },
+      {
+        attributes: ['shape', 'color'],
+        cards: [
+          { shape: 'squiggle', color: 'red', number: 1, shading: 'solid' },
+          { shape: 'diamond', color: 'green', number: 1, shading: 'solid' },
+          { shape: 'oval', color: 'purple', number: 1, shading: 'solid' },
+        ],
+        explain: 'Every shape is different and every color is different. Both traits pass.',
+      },
+    ],
   },
   hearts: {
     id: 'hearts',
@@ -39,6 +123,9 @@ export const MECHANICS: Record<string, MechanicDef> = {
     body: [
       'A wrong Set now costs you a heart. Run out and you lose the level.',
       'The three cards are still swapped out, so when you are stuck, a mistake shuffles in fresh cards. It just costs you.',
+    ],
+    fightTips: [
+      { title: 'Your hearts', text: 'These are your hearts. A wrong Set costs one. Lose them all and the fight is over.', anchor: 'top' },
     ],
     icon: 'lorc/shining-heart',
     demo: {
@@ -75,27 +162,64 @@ export const MECHANICS: Record<string, MechanicDef> = {
         { shape: 'oval', color: 'purple', number: 3, shading: 'solid' },
       ],
     },
-  },
-  gear: {
-    id: 'gear',
-    kind: 'feature',
-    enables: 'gear',
-    title: 'Gear',
-    tagline: 'Your fighter\'s weapons wake up.',
-    body: [
-      'Every fighter carries two pieces of gear. From now on they trigger as you play.',
-      'Fighters also wake up their signature ability. Orange Tabby has Nine Lives: once per fight, a knockout leaves you on 1 heart.',
-      'Level up fighters at Camp to upgrade their gear: common → rare → epic.',
+    quiz: [
+      {
+        attributes: ['shape', 'color', 'number'],
+        cards: [
+          { shape: 'diamond', color: 'red', number: 2, shading: 'solid' },
+          { shape: 'diamond', color: 'purple', number: 2, shading: 'solid' },
+          { shape: 'diamond', color: 'green', number: 3, shading: 'solid' },
+        ],
+        explain: 'Shape and color pass, but the numbers are 2, 2 and 3. Two alike and one odd breaks the Set.',
+      },
+      {
+        attributes: ['shape', 'color', 'number'],
+        cards: [
+          { shape: 'squiggle', color: 'purple', number: 1, shading: 'solid' },
+          { shape: 'squiggle', color: 'purple', number: 2, shading: 'solid' },
+          { shape: 'squiggle', color: 'purple', number: 3, shading: 'solid' },
+        ],
+        explain: 'Same shape, same color, and the numbers 1, 2, 3 are all different. All three traits pass.',
+      },
     ],
-    icon: 'lorc/gear-hammer',
+  },
+  power_cards: {
+    id: 'power_cards',
+    kind: 'feature',
+    enables: 'power',
+    title: 'Power Cards',
+    tagline: 'Cards marked +2 hit harder.',
+    body: [
+      'Some cards now carry a +2 badge. Use one in a Set and that Set deals 2 extra damage.',
+      'Building your Sets around power cards is how you beat tougher foes with moves to spare.',
+    ],
+    fightTips: [
+      { title: 'Power cards', text: 'Look for cards with a +2 badge in the corner. A Set that uses one hits for 2 more.', anchor: 'bottom' },
+    ],
+    icon: 'lorc/fist',
     demo: {
-      type: 'icons',
-      items: [
-        { icon: 'lorc/shining-heart', label: 'Heal' },
-        { icon: 'lorc/bright-explosion', label: 'Explode' },
-        { icon: 'lorc/light-bulb', label: 'Hints' },
+      type: 'set',
+      attributes: ['shape', 'color', 'number'],
+      valid: true,
+      caption: 'A Set with a power card: 3 + 2 = 5 damage',
+      cards: [
+        { shape: 'squiggle', color: 'purple', number: 1, shading: 'solid', modifiers: { bonusPoints: 2 } },
+        { shape: 'squiggle', color: 'purple', number: 2, shading: 'solid' },
+        { shape: 'squiggle', color: 'purple', number: 3, shading: 'solid' },
       ],
     },
+  },
+  charm: {
+    id: 'charm',
+    kind: 'feature',
+    title: 'Charm Slot',
+    tagline: 'Equip one unlocked weapon in every fight.',
+    body: [
+      'Weapons you unlock go into your Armory. You can equip ONE as a charm, on top of the gear your fighter already carries.',
+      'Change your charm on the screen before each fight. Different foes call for different charms.',
+    ],
+    icon: 'lorc/gems',
+    demo: { type: 'icons', items: [{ icon: 'lorc/gems', label: 'Unlock' }, { icon: 'lorc/gear-hammer', label: 'Equip 1' }, { icon: 'lorc/crossed-swords', label: 'Fight' }] },
   },
   rainbow: {
     id: 'rainbow',
@@ -106,6 +230,9 @@ export const MECHANICS: Record<string, MechanicDef> = {
     body: [
       'A Set where EVERY trait is different is a Rainbow Strike, and it does double damage.',
       'This foe has more health than plain Sets can deal. Hunt for rainbows to knock it out!',
+    ],
+    fightTips: [
+      { title: 'Hunt for rainbows', text: 'A Set where every trait is different hits twice as hard. Plain Sets alone will not finish this foe in time.', anchor: 'bottom' },
     ],
     icon: 'lorc/rainbow-star',
     demo: {
@@ -125,12 +252,15 @@ export const MECHANICS: Record<string, MechanicDef> = {
     id: 'coins',
     kind: 'feature',
     enables: 'coins',
-    title: 'Coins & Camp',
-    tagline: 'Every matched card drops a coin.',
+    title: 'Coin Drops',
+    tagline: 'Matched cards now drop coins.',
     body: [
-      'Every matched card drops coins. Golden cards drop extra!',
-      'Coins go into your purse even when you lose. Spend them at Camp to level up fighters and buy permanent upgrades.',
+      'From now on every matched card drops coins on top of your star rewards. Golden cards drop extra!',
+      'Dropped coins are yours even when you lose. Spend them at Camp to level up fighters and buy permanent upgrades.',
       'Tougher foes pay more. Replaying levels is a good way to save up.',
+    ],
+    fightTips: [
+      { title: 'Coin drops', text: 'Cards with a gold +3 badge drop extra coins when you match them. Your coin total is up here.', anchor: 'top' },
     ],
     icon: 'lorc/crown-coin',
     demo: {
@@ -153,6 +283,9 @@ export const MECHANICS: Record<string, MechanicDef> = {
     body: [
       'This level has a clock and no move limit.',
       'Survive until time runs out for ★. Knock out the foe before then for ★★.',
+    ],
+    fightTips: [
+      { title: 'The clock', text: 'No move limit this time. Survive until the clock runs out for one star, or knock the foe out first for two.', anchor: 'top' },
     ],
     icon: 'lorc/stopwatch',
     demo: { type: 'icons', items: [{ icon: 'lorc/stopwatch', label: 'Survive = ★' }, { icon: 'lorc/crossed-swords', label: 'KO = ★★' }, { icon: 'lorc/flat-star', label: 'Challenge = ★★★' }] },
@@ -189,6 +322,9 @@ export const MECHANICS: Record<string, MechanicDef> = {
     body: [
       'You now carry hints. Tap the light bulb to reveal a Set on the board.',
       'Hints are limited, so save them for when you\'re truly stuck. Some gear refills them.',
+    ],
+    fightTips: [
+      { title: 'Hints', text: 'Stuck? Tap the yellow bulb to light up a Set. The number shows how many hints you have left.', anchor: 'top' },
     ],
     icon: 'lorc/light-bulb',
     demo: { type: 'icons', items: [{ icon: 'lorc/light-bulb', label: 'Reveal a Set' }, { icon: 'lorc/floating-crystal', label: 'Hold more' }] },
@@ -237,6 +373,9 @@ export const MECHANICS: Record<string, MechanicDef> = {
       'If only ONE trait is wrong, that\'s a near miss. A grace counts it as a Set instead of costing a heart.',
       'Two or more wrong traits still hurt.',
     ],
+    fightTips: [
+      { title: 'Graces', text: 'The clover shows your graces. If only one trait is wrong, a grace turns the mistake into a Set.', anchor: 'top' },
+    ],
     icon: 'lorc/clover',
     demo: {
       type: 'set', attributes: ['shape', 'color', 'number'], valid: false, caption: 'Only number is wrong → a grace saves you',
@@ -257,6 +396,9 @@ export const MECHANICS: Record<string, MechanicDef> = {
     body: [
       'Matches fill your XP bar. When it fills, the action pauses and you pick 1 of 3 weapons from your Armory.',
       'Weapons you pick last for this level only. Winning more stars unlocks more weapons for the Armory.',
+    ],
+    fightTips: [
+      { title: 'Level up', text: 'The blue bar fills as you match. When it is full, the fight pauses and you pick a weapon.', anchor: 'top' },
     ],
     icon: 'lorc/open-book',
     demo: { type: 'icons', items: [{ icon: 'lorc/flat-star', label: 'Fill XP' }, { icon: 'lorc/gems', label: 'Pick 1 of 3' }] },
@@ -321,6 +463,26 @@ export const MECHANICS: Record<string, MechanicDef> = {
         { shape: 'oval', color: 'green', number: 2, shading: 'open' },
       ],
     },
+    quiz: [
+      {
+        attributes: ['shape', 'color', 'number', 'shading'],
+        cards: [
+          { shape: 'diamond', color: 'red', number: 1, shading: 'solid' },
+          { shape: 'oval', color: 'green', number: 2, shading: 'solid' },
+          { shape: 'squiggle', color: 'purple', number: 3, shading: 'striped' },
+        ],
+        explain: 'Shape, color and number are all different, but shading is solid, solid, striped. That breaks it.',
+      },
+      {
+        attributes: ['shape', 'color', 'number', 'shading'],
+        cards: [
+          { shape: 'diamond', color: 'red', number: 2, shading: 'striped' },
+          { shape: 'diamond', color: 'green', number: 2, shading: 'striped' },
+          { shape: 'diamond', color: 'purple', number: 2, shading: 'striped' },
+        ],
+        explain: 'Shape, number and shading are all the same, and color is all different. Every trait passes.',
+      },
+    ],
   },
   waves: {
     id: 'waves',
@@ -328,6 +490,9 @@ export const MECHANICS: Record<string, MechanicDef> = {
     title: 'Waves',
     tagline: 'Several foes, one after another.',
     body: ['The ants come in waves. Beat one and the next marches in.', 'Knock out every wave for ★★.'],
+    fightTips: [
+      { title: 'Waves', text: 'This fight has three foes in a row. The clock keeps running between them.', anchor: 'top' },
+    ],
     icon: 'delapouite/ant',
     demo: { type: 'icons', items: [{ icon: 'delapouite/ant', label: 'Wave 1' }, { icon: 'delapouite/ant', label: 'Wave 2' }, { icon: 'delapouite/ant', label: 'Wave 3' }] },
     coachMark: { on: 'wave', text: 'Next wave incoming!' },
@@ -410,6 +575,17 @@ export const MECHANICS: Record<string, MechanicDef> = {
         { shape: 'diamond', color: 'red', number: 1, shading: 'open', background: 'charcoal' },
       ],
     },
+    quiz: [
+      {
+        attributes: ['shape', 'color', 'number', 'shading', 'background'],
+        cards: [
+          { shape: 'oval', color: 'red', number: 3, shading: 'solid', background: 'white' },
+          { shape: 'oval', color: 'purple', number: 3, shading: 'solid', background: 'white' },
+          { shape: 'oval', color: 'green', number: 3, shading: 'solid', background: 'charcoal' },
+        ],
+        explain: 'Backgrounds are white, white and charcoal. Two alike and one odd breaks the Set.',
+      },
+    ],
   },
   fast_timer: {
     id: 'fast_timer',
@@ -446,6 +622,64 @@ export const MECHANICS: Record<string, MechanicDef> = {
     body: ['Bombs, countdowns, hidden cards, time theft, and instant death if you stop matching.', 'Everything you\'ve learned leads here.'],
     icon: 'lorc/hydra',
     demo: { type: 'icons', items: [{ icon: 'lorc/time-bomb', label: 'Bombs' }, { icon: 'caro-asercion/barn-owl', label: 'Hidden' }, { icon: 'lorc/stopwatch', label: 'Countdown' }] },
+  },
+
+  // ── Elite branches (optional, tougher foes) ────────────────────────────
+  elite: {
+    id: 'elite', kind: 'threat', title: 'Elite Foe: Hoarder',
+    tagline: 'Every Set you make costs you a card.',
+    body: ['Elite foes sit on side paths. They are optional, much tougher, and guard better loot.', 'Hoarding Beaver takes one extra card each time you match, and another every 18 seconds. The board keeps shrinking.'],
+    icon: 'delapouite/beaver',
+    demo: { type: 'icons', items: [{ icon: 'lorc/daemon-skull', label: 'Elite' }, { icon: 'lorc/cross-mark', label: '−1 card / Set' }] },
+  },
+  sabotage: {
+    id: 'sabotage', kind: 'threat', title: 'Sabotage',
+    tagline: 'Your weapons work half as well.',
+    body: ['Goblin Saboteur tampers with three kinds of weapon at random. Each works half as often in this fight.', 'Lean on plain Sets and your fighter ability.'],
+    icon: 'caro-asercion/goblin',
+    demo: { type: 'icons', items: [{ icon: 'lorc/gear-hammer', label: '3 weapons −50%' }] },
+  },
+  double_armor: {
+    id: 'double_armor', kind: 'threat', title: 'Double Armor',
+    tagline: 'Two armored cards, and blasts barely work.',
+    body: ['Stone Sentinel brings two armored cards. Each needs three Sets to break.', 'Explosions and lasers are much weaker here, so you have to break the armor by hand.'],
+    icon: 'delapouite/golem-head',
+    demo: { type: 'icons', items: [{ icon: 'lorc/turtle-shell', label: '2 armored' }, { icon: 'lorc/bright-explosion', label: 'Blasts −55%' }] },
+  },
+  instant_death: {
+    id: 'instant_death', kind: 'threat', title: 'No Hesitation',
+    tagline: 'Stop matching for 30 seconds and you are out.',
+    body: ['Raging Bear ends the fight on the spot if you go 30 seconds without a Set.', 'Mistakes cost 2 hearts, your Sets hit twice as hard, and the bear heals over time.'],
+    icon: 'sparker/bear-face',
+    demo: { type: 'icons', items: [{ icon: 'lorc/stopwatch', label: '30s idle = KO' }, { icon: 'lorc/broken-heart', label: '×2 hurt' }] },
+  },
+  bomb_swarm: {
+    id: 'bomb_swarm', kind: 'threat', title: 'Bomb Swarm',
+    tagline: 'Bombs keep coming.',
+    body: ['Swarming Ants wire a bomb into about one in four new cards, and plant an 8-second countdown card.', 'Defuse five bombs for the third star.'],
+    icon: 'delapouite/ant',
+    demo: { type: 'icons', items: [{ icon: 'lorc/time-bomb', label: 'Many bombs' }, { icon: 'lorc/stopwatch', label: '8s countdown' }] },
+  },
+  deep_dark: {
+    id: 'deep_dark', kind: 'threat', title: 'The Deep',
+    tagline: 'Hidden cards, shuffling, and a foe that heals.',
+    body: ['Nightmare Squid hides a third of the cards, shuffles the board every 15 seconds, and heals as time passes.', 'Three things you have learned, all at once.'],
+    icon: 'delapouite/giant-squid',
+    demo: { type: 'icons', items: [{ icon: 'caro-asercion/barn-owl', label: 'Hidden' }, { icon: 'lorc/cycle', label: 'Shuffle' }, { icon: 'lorc/heart-bottle', label: 'Heals' }] },
+  },
+  dragon: {
+    id: 'dragon', kind: 'threat', title: 'Ancient Dragon',
+    tagline: 'Armor, shifting traits and a racing clock.',
+    body: ['Two armored cards. Traits shift every 8 seconds. The clock runs 40% faster. Mistakes cost 2 hearts.', 'Come back with a levelled fighter.'],
+    icon: 'lorc/dragon-head',
+    demo: { type: 'icons', items: [{ icon: 'lorc/turtle-shell', label: 'Armor' }, { icon: 'darkzaitzev/chameleon-glyph', label: 'Shifts' }, { icon: 'lorc/stopwatch', label: 'Fast clock' }] },
+  },
+  no_mercy: {
+    id: 'no_mercy', kind: 'threat', title: 'No Mercy',
+    tagline: 'No hints, weak graces, double damage.',
+    body: ['The Reaper switches off hints, weakens grace and time weapons, and heals quickly.', 'Mistakes cost 2 hearts. Play clean or not at all.'],
+    icon: 'lorc/grim-reaper',
+    demo: { type: 'icons', items: [{ icon: 'lorc/light-bulb', label: 'No hints' }, { icon: 'lorc/broken-heart', label: '×2 hurt' }] },
   },
 
   // ── Fighters (shown when a fighter is unlocked) ────────────────────────

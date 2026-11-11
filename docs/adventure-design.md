@@ -21,7 +21,28 @@ Map ─tap foe─▶ Preview (foe, skulls, star goals + rewards, fighter pick)
 | ★★ | **Knock out** the foe (every wave) |
 | ★★★ | Knock out **and** meet the level's challenge (no mistakes, rainbows, the enemy's own defeat condition…) |
 
-Each star's reward is granted **once**, the first time you earn it: ★ coins, ★★ usually a weapon or fighter unlock, ★★★ a big payout or a rare weapon. ★★★ is not expected on a first visit. You come back with a levelled fighter or a counter-pick (the preview marks fighters that are **STRONG** for a level).
+The very first level (1-1) is different: it cannot be lost, and its stars are about accuracy (`starRule: 'accuracy'`). ★ beat the foe, ★★ at most 1 mistake, ★★★ no mistakes.
+
+### Rewards and unlocks
+- **Every star pays coins**, and the amount is shown up front on the preview.
+- **Some stars also unlock one thing**, a weapon or a fighter. Until it is earned the preview shows only a silhouette and "A new weapon" / "A new fighter".
+- **Each unlock gets its own full-screen reveal** (`UnlockReveal.tsx`): silhouette, tap to reveal, then a "How it works" card and a button to start using it.
+- Unlocks come early on purpose: 1-1 gives a second fighter at ★ and the first weapon at ★★.
+- Each star's reward is granted **once**. ★★★ is not expected on a first visit. You come back with a levelled fighter, a better charm, or a counter-pick (the preview marks fighters that are **STRONG** for a level).
+
+### Charm slot
+Weapons won from stars go into the Armory. The player equips **one** as a charm on the preview screen (or in Camp → Armory). It is added on top of the fighter's own gear in `computeStartingStats`. The first weapon ever unlocked is equipped automatically. Armory weapons are also the pool for level-up picks and shops.
+
+### How the game teaches
+The player always has to accept a teaching step; nothing auto-dismisses.
+- **Lesson cards** (`MechanicIntro.tsx`): a paged card before the first fight with a new mechanic. Pages come from the mechanic's `lessons`, then its summary, then its `quiz`.
+- **"Is this a Set?" checks**: yes/no questions with an explanation after each answer. Validity is computed from the cards, never hand-written. The Set rule and each new trait have them.
+- **First-run onboarding**: entering Adventure for the first time plays the story page (`data/story.ts`, placeholder text to be replaced), the Set lessons and the checks, then drops straight into 1-1.
+- **Fight tips** (`fightTips` on a mechanic): shown one by one when the first fight with that mechanic starts. The fight is paused, and the part of the screen the tip is about stays lit.
+- **First-time event tips** (`coachMark`): the first time something happens (first mistake, first rainbow, first bomb), the fight pauses on a tip.
+
+### Elite branches
+Some levels have an optional side path to a much tougher foe (`branchOf` in `levels.ts`, ids ending in `E`). A branch opens at ★★ on its parent level, never blocks the main path, pays more coins, and guards better weapons. Their stars count toward region gates.
 
 ### Money (Vampire Survivors style)
 Every matched card drops coins; golden cards drop +3. Harder levels have a higher `coinMultiplier`. Coins **bank even when you lose**. Spend them:
@@ -29,7 +50,9 @@ Every matched card drops coins; golden cards drop +3. Harder levels have a highe
 - **At Camp**, permanently: fighter levels (60 → 1900 coins per level, up to Lv 10) and Workshop upgrades (250 → 2600 per tier). These are priced so replaying levels for coins is worthwhile.
 
 ### Fighters bring new rules
-Each fighter adds one ability that no weapon provides (`data/abilities.ts`, implemented in `engine/run.ts`). Abilities switch on at 1-4, together with gear.
+Each fighter adds one ability that no weapon provides (`data/abilities.ts`, implemented in `engine/run.ts`). Abilities and gear are on in every level except the bare first one (`rules.noGear`).
+
+Unlock order: Sly Fox (1-1 ★), Corgi (1-8 ★★), Badger (2-4 ★★), Emperor Penguin (2-8 ★★), Pelican (3-5 ★★).
 
 | Fighter | Ability | Type | What it does | Counters |
 |---|---|---|---|---|
@@ -51,12 +74,12 @@ The preview's **STRONG** tag (`recommended`) points players at these counters. T
 
 | Lvl | Teaches | Kind |
 |---|---|---|
-| 1-1 | The Set (2 traits, 6 moves, infinite hearts) | rule |
+| 1-1 | The Set (2 traits, make 5 Sets, cannot lose, no gear) | rule |
 | 1-2 | Hearts | feature |
 | 1-3 | Number trait | rule |
-| 1-4 | Gear (fighter weapons switch on) | feature |
+| 1-4 | Power cards (+2 damage) | feature |
 | 1-5 | Rainbow Strike (all-different = 2× damage) | feature |
-| 1-6 | Coins & Camp (golden cards) | feature |
+| 1-6 | Coin drops (golden cards) | feature |
 | 1-7 | The clock (survive = ★) | rule |
 | 1-8 | **Boss** Iron Shell: armored card | threat |
 | 2-1…2-8 | Hints, duds, face-down, graces, in-run level-ups, countdown, shuffle, **boss** bombs | |
@@ -81,7 +104,9 @@ src/adventure/
   engine/challenges.ts  ★★★ text / progress / checks
   engine/sets.ts        O(n²) Set finder
   engine/bot.ts         headless bot that plays through the reducer
-  components/           Map, Preview, MechanicIntro, Run, Results, Camp, FieldGuide
+  data/abilities.ts     fighter signature abilities
+  data/story.ts         story pages (placeholder text)
+  components/           Map, Preview, MechanicIntro (lesson cards), Run, Results, UnlockReveal, Camp, FieldGuide
   AdventureMode.tsx     screen router
 src/audio/              Game Boy–style synth (no audio files)
 ```
@@ -107,3 +132,9 @@ Debug in the browser console (dev builds): `__nshapesAudio.sfx('rainbow')`, `__n
 - `/dev/adventure?save=maxed`: everything unlocked, 50k coins (this save gets persisted once you play)
 - `/dev/adventure?save=fresh`: brand-new save
 - `/dev/adventure?autoplay=true`: board plays itself
+
+## Status and next steps
+- The story text in `data/story.ts` is a placeholder waiting for the real story.
+- Weapon descriptions were written for the score-based modes. `adventureText()` swaps "points" for "damage" when showing them in Adventure.
+- Balance was retuned after the charm slot and power cards went in. Re-run the balance report after changing either.
+- iOS audio: `unlockAudio()` in `src/audio/index.ts` unlocks on touchend/click and sets `navigator.audioSession.type = 'playback'` so the silent switch does not mute the game. Needs confirming on a real iPhone.

@@ -16,8 +16,7 @@ import type { AdventureSave } from '../types';
 import { FIGHTERS, MAX_FIGHTER_LEVEL, getLevelUpCost, getLoadout } from '../data/fighters';
 import { UPGRADES } from '../data/upgrades';
 import { MECHANICS } from '../data/mechanics';
-import { LEVELS } from '../data/levels';
-import { buyUpgrade, canLevelFighter, fighterLevel, levelFighter, upgradeCost, upgradeTier } from '../progress';
+import { buyUpgrade, canLevelFighter, equipCharm, fighterLevel, levelFighter, upgradeCost, upgradeTier } from '../progress';
 import { Btn, CoinPill, INK, PopIn } from './ui';
 
 type Tab = 'fighters' | 'workshop' | 'armory';
@@ -29,15 +28,6 @@ interface Props {
 }
 
 const weapon = (id: string) => WEAPONS.find(w => w.id === id);
-
-const unlockSourceFor = (name: CharacterName): string | null => {
-  for (const l of LEVELS) {
-    for (const [k, r] of Object.entries(l.rewards)) {
-      if (r.character === name) return `Earn ${k === 'star1' ? '★' : k === 'star2' ? '★★' : '★★★'} on ${l.id} ${l.name}`;
-    }
-  }
-  return null;
-};
 
 const Camp: React.FC<Props> = ({ save, onChange, onClose }) => {
   const insets = useSafeAreaInsets();
@@ -78,8 +68,8 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose }) => {
               <View style={st.fighterHead}>
                 <View style={st.portrait}><Icon name={unlocked ? f.icon : 'lorc/padlock'} size={36} color={INK} /></View>
                 <View style={{ flex: 1 }}>
-                  <Text style={st.fighterName}>{f.name}</Text>
-                  <Text style={st.fighterBlurb}>{unlocked ? f.blurb : unlockSourceFor(f.name) ?? 'Locked'}</Text>
+                  <Text style={st.fighterName}>{unlocked ? f.name : '???'}</Text>
+                  <Text style={st.fighterBlurb}>{unlocked ? f.blurb : 'A fighter you have not met yet. Keep winning stars.'}</Text>
                   {unlocked && <LevelPips level={lvl} />}
                 </View>
                 {unlocked && !selected && <Btn small variant="secondary" label="Use" onPress={() => { sfx('confirm'); onChange({ ...save, selectedFighter: f.name }); }} />}
@@ -153,18 +143,22 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose }) => {
 
         {tab === 'armory' && (
           <>
-            <Text style={st.blurb}>Weapons you've unlocked. These can show up in level-up picks and shops. Win stars to unlock more.</Text>
+            <Text style={st.blurb}>Weapons you've unlocked. Tap one to equip it as your charm. They also show up in level-up picks and shops.</Text>
+            {save.armory.length === 0 && <Text style={st.blurb}>Nothing here yet. Some stars unlock a weapon.</Text>}
             <View style={st.armory}>
-              {WEAPONS.filter(w => save.armory.includes(w.id)).map(w => (
-                <View key={w.id} style={[st.armoryItem, { borderColor: getRarityColor(w.rarity) }]}>
-                  {w.icon && <Icon name={w.icon} size={24} color={INK} />}
-                  <Text style={st.armoryName} numberOfLines={1}>{w.name}</Text>
-                  <Text style={[st.armoryRarity, { color: getRarityColor(w.rarity) === COLORS.rarityCommon ? '#8E877D' : getRarityColor(w.rarity) }]}>{w.rarity}</Text>
-                  <Text style={st.armoryDesc} numberOfLines={2}>{w.shortDescription}</Text>
-                </View>
-              ))}
+              {WEAPONS.filter(w => save.armory.includes(w.id)).map(w => {
+                const equipped = save.charm === w.id;
+                return (
+                  <TouchableOpacity key={w.id} onPress={() => { sfx('confirm'); onChange(equipCharm(save, w.id)); }} activeOpacity={0.85} style={[st.armoryItem, { borderColor: equipped ? COLORS.actionYellow : getRarityColor(w.rarity) }, equipped && { backgroundColor: '#FFFBE0' }]}>
+                    {w.icon && <Icon name={w.icon} size={24} color={INK} />}
+                    <Text style={st.armoryName} numberOfLines={1}>{w.name}</Text>
+                    <Text style={[st.armoryRarity, { color: getRarityColor(w.rarity) === COLORS.rarityCommon ? '#8E877D' : getRarityColor(w.rarity) }]}>{equipped ? 'equipped' : w.rarity}</Text>
+                    <Text style={st.armoryDesc} numberOfLines={2}>{w.shortDescription}</Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
-            <Text style={st.blurb}>{WEAPONS.length - save.armory.length} more to discover…</Text>
+            <Text style={st.blurb}>More weapons are out there…</Text>
           </>
         )}
       </ScrollView>

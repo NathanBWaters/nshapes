@@ -41,6 +41,11 @@ export class Chip {
   private noiseLong: AudioBuffer | null = null;
   private noiseShort: AudioBuffer | null = null;
 
+  /** The real (speaker) context, if created. */
+  get liveContext(): AudioContext | null {
+    return this.live;
+  }
+
   get available(): boolean {
     return getAudioContextCtor() !== null;
   }
@@ -48,7 +53,8 @@ export class Chip {
   /** Create the context lazily (must happen after a user gesture on the web). */
   ensure(): boolean {
     if (this.ctx) {
-      if (this.live && this.live.state === 'suspended') void this.live.resume();
+      // iOS reports 'interrupted' after calls/app switches, not just 'suspended'
+      if (this.live && this.live.state !== 'running' && this.live.state !== 'closed') void this.live.resume().catch(() => undefined);
       return true;
     }
     const Ctor = getAudioContextCtor();

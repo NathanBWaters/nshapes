@@ -50,3 +50,24 @@ export const challengeProgress = (run: RunState): ChallengeProgress => {
     }
   }
 };
+
+const lowerFirst = (t: string) => t.charAt(0).toLowerCase() + t.slice(1);
+
+/** The three star goals for a level, in plain words (preview + results). */
+export const starGoals = (level: LevelDef, foeName: string): [string, string, string] => {
+  const rule = level.starRule;
+  if (rule?.kind === 'accuracy') {
+    const plural = (n: number) => `${n} mistake${n === 1 ? '' : 's'}`;
+    return [
+      `Beat ${foeName}`,
+      `Beat ${foeName} with at most ${plural(rule.twoStarMax)}`,
+      rule.threeStarMax === 0 ? `Beat ${foeName} with no mistakes` : `Beat ${foeName} with at most ${plural(rule.threeStarMax)}`,
+    ];
+  }
+  const target = level.foes.length > 1 ? `all ${level.foes.length} waves` : foeName;
+  const survive = level.rules.timer
+    ? `Survive ${level.rules.timer} seconds`
+    : `Still be standing after ${level.rules.moves} moves`;
+  const defeat = level.rules.timer ? `Defeat ${target} before time runs out` : `Defeat ${target} within ${level.rules.moves} moves`;
+  return [survive, defeat, `Defeat ${target}, and ${lowerFirst(describeChallenge(level))}`];
+};

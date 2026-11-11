@@ -350,6 +350,13 @@ const Card: React.FC<CardProps> = ({
       {/* Health badge for multi-hit cards */}
       {getHealthBadge()}
 
+      {/* Power card: extra damage when matched (adventure mode) */}
+      {!!card.bonusPoints && card.bonusPoints > 0 && !isDud && !isFaceDown && (
+        <View style={[styles.badge, styles.powerBadge]} pointerEvents="none">
+          <Text style={styles.powerBadgeText}>+{card.bonusPoints}</Text>
+        </View>
+      )}
+
       {/* Golden card: extra coins when matched (adventure mode) */}
       {!!card.bonusMoney && card.bonusMoney > 0 && !isDud && !isFaceDown && (
         <View style={[styles.badge, styles.coinBadge]} pointerEvents="none">
@@ -530,6 +537,17 @@ const Squiggle: React.FC<ShapeProps> = ({ color, shading, background }) => {
 };
 
 const styles = StyleSheet.create({
+  powerBadge: {
+    bottom: 3,
+    right: 3,
+    backgroundColor: '#383838',
+    borderColor: '#121212',
+  },
+  powerBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#FFDE00',
+  },
   coinBadge: {
     top: 3,
     left: 3,

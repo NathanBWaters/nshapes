@@ -32,11 +32,14 @@ NShapes combines the classic SET card matching game with roguelike progression m
 
 > **Full documentation:** [docs/adventure-design.md](./docs/adventure-design.md). All code lives in `src/adventure/` and is **data-driven**: edit `src/adventure/data/*.ts`, not the engine.
 
-* A tappable map of 25 levels across 4 star-gated regions. Each node is a foe; tapping one opens a preview showing the foe, difficulty, star goals, rewards, and a fighter pick.
-* **One new mechanic per level.** The game is the tutorial: 1-1 is 2 traits, 6 moves, no hearts, no timer, one foe. Hearts, gear, rainbows, coins, the clock, hints, graces, level-ups, waves and the shop are introduced one at a time, with an intro card plus in-run coach marks.
-* **Stars:** ★ survive (moves used up / clock runs out) · ★★ knock out the foe · ★★★ knock out + challenge. Each star's reward is granted once. Levels are replayable.
+* A tappable map of 29 main levels plus 8 optional elite branches across 4 star-gated regions. Each node is a foe; tapping one opens a preview showing the foe, difficulty, star goals, rewards, and a fighter pick.
+* **One new mechanic per level.** The game is the tutorial: 1-1 is 2 traits, make 5 Sets, cannot be lost, no gear, one foe. Teaching uses paged lesson cards, "Is this a Set?" yes/no checks, and in-fight tips that pause until accepted. First entry plays an onboarding (`data/story.ts` holds placeholder story text). Hearts, gear, rainbows, coins, the clock, hints, graces, level-ups, waves and the shop are introduced one at a time, with an intro card plus in-run coach marks.
+* **Stars:** ★ survive (moves used up / clock runs out) · ★★ knock out the foe · ★★★ knock out + challenge. 1-1 instead scores accuracy (0 / 1 / 2+ mistakes). Levels are replayable.
+* **Rewards:** every star pays coins, shown up front. Some stars also unlock one weapon or fighter, hidden as a silhouette until earned and then revealed in a full-screen modal. Each reward is granted once.
+* **Charm slot:** one unlocked Armory weapon is equipped on top of the fighter's own gear.
+* **Elite branches:** optional tougher side levels (`branchOf`), open at ★★ on the parent level.
 * **Coins** drop from matches, bank even on a loss, and are spent mid-run (shop between waves) or at **Camp** (fighter levels 1–10 upgrade starting gear; expensive Workshop upgrades).
-* **Unlocks:** weapons enter the Armory (the level-up/shop pool) through star rewards; fighters unlock from boss ★★ rewards.
+* **Unlocks:** weapons enter the Armory (charm slot, level-up and shop pool) through star rewards. Fighters unlock early and often: Sly Fox at 1-1 ★, then Corgi, Badger, Emperor Penguin, Pelican.
 * **Fighter abilities** (`src/adventure/data/abilities.ts`): each fighter adds a new rule. Nine Lives (Tabby), Combo (Fox), Grudge (Badger) are passives; Deep Freeze (Penguin), Zoomies (Corgi), Big Scoop (Pelican) are actives that charge from Sets.
 * Balance is checked by headless bots: `ADVENTURE_BALANCE_REPORT=1 npx jest __tests__/adventureBalance.test.ts`.
 * The legacy 10-round adventure flow is still in `Game.tsx` but is no longer reachable from the main menu.

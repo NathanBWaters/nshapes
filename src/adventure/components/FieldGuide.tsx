@@ -45,7 +45,7 @@ const FieldGuide: React.FC<Props> = ({ save, onClose }) => {
           </TouchableOpacity>
         ))}
       </ScrollView>
-      <MechanicIntro mechanic={open} onClose={() => setOpen(null)} cta="Close" />
+      <MechanicIntro mechanic={open} onClose={() => setOpen(null)} cta="Close" quiz={false} dismissible />
     </View>
   );
 };

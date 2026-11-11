@@ -5,7 +5,7 @@
  */
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Platform } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, withSpring, Easing } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, Easing } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GameBoard from '@/components/GameBoard';
 import Icon from '@/components/Icon';
@@ -41,9 +41,20 @@ const SFX_FOR_EVENT: Partial<Record<RunEvent['type'], Parameters<typeof sfx>[0]>
   nine_lives: 'heart', grudge_release: 'explosion', ability_ready: 'star2', freeze: 'freeze', redeal: 'whoosh', scoop: 'match',
 };
 
-// coach marks keyed by the run event that triggers them
-const COACH_BY_EVENT = Object.values(MECHANICS).reduce<Record<string, { id: string; text: string; icon: React.ComponentProps<typeof Icon>['name'] }>>((acc, m) => {
-  if (m.coachMark) acc[m.coachMark.on] = { id: m.id, text: m.coachMark.text, icon: m.icon };
+/** A tip the player has to accept. The fight is paused while one is showing. */
+interface Tip {
+  id: string;
+  title: string;
+  text: string;
+  icon: React.ComponentProps<typeof Icon>['name'];
+  anchor?: 'top' | 'bottom';
+  /** e.g. "Tip 2 of 3" */
+  label?: string;
+}
+
+// first-time tips keyed by the run event that triggers them
+const COACH_BY_EVENT = Object.values(MECHANICS).reduce<Record<string, Tip>>((acc, m) => {
+  if (m.coachMark) acc[m.coachMark.on] = { id: m.id, title: m.title, text: m.coachMark.text, icon: m.icon };
   return acc;
 }, {});
 
@@ -54,10 +65,13 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   runRef.current = run;
   const dispatch = useCallback((a: RunAction) => dispatchRaw(a), []);
   const [paused, setPaused] = useState(false);
+  const [hudHeight, setHudHeight] = useState(150);
   const [hintTrigger, setHintTrigger] = useState(0);
   const [lastMatchTime, setLastMatchTime] = useState(Date.now());
   const [floaters, setFloaters] = useState<Array<{ id: number; text: string; color: string }>>([]);
-  const [coach, setCoach] = useState<{ id: string; text: string; icon: React.ComponentProps<typeof Icon>['name'] } | null>(null);
+  const [tips, setTips] = useState<Tip[]>([]);
+  const tip = tips[0] ?? null;
+  const pushTip = useCallback((t: Tip) => setTips(q => (q.some(x => x.id === t.id) ? q : [...q, t])), []);
   const seenCoach = useRef(new Set(save.seenCoachMarks));
   const timeouts = useRef<ReturnType<typeof setTimeout>[]>([]);
   const biome = getBiome(level.biome);
@@ -79,7 +93,18 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   }, [level.isBoss, biome.music]);
 
   // Clock
-  const playing = run.status === 'playing' && !paused;
+  const playing = run.status === 'playing' && !paused && !tip;
+
+  // First fight with a new mechanic: walk through its tips before anything moves
+  useEffect(() => {
+    const m = MECHANICS[level.introduces];
+    const key = `start_${m.id}`;
+    if (!m.fightTips?.length || seenCoach.current.has(key)) return;
+    seenCoach.current.add(key);
+    onCoachMarkSeen(key);
+    const n = m.fightTips.length;
+    m.fightTips.forEach((t, i) => pushTip({ id: `${key}_${i}`, title: t.title, text: t.text, icon: m.icon, anchor: t.anchor, label: n > 1 ? `Tip ${i + 1} of ${n}` : 'Tip' }));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!playing) return;
     const iv = setInterval(() => dispatch({ type: 'TICK', ms: TICK_MS }), TICK_MS);
@@ -105,7 +130,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
       if (s) sfx(s);
       if (e.type === 'hit' || e.type === 'rainbow') {
         foeShake.value = withSequence(withTiming(-8, { duration: 40 }), withTiming(8, { duration: 60 }), withTiming(-4, { duration: 50 }), withTiming(0, { duration: 50 }));
-        foeScale.value = withSequence(withTiming(0.88, { duration: 60 }), withSpring(1));
+        foeScale.value = withSequence(withTiming(0.9, { duration: 60 }), withTiming(1, { duration: 120, easing: Easing.out(Easing.quad) }));
         addFloater(e.type === 'rainbow' ? `RAINBOW −${e.amount}` : `−${e.amount}`, e.type === 'rainbow' ? '#9333EA' : COLORS.impactRed);
       }
       if (e.type === 'regen') addFloater(`+${e.amount}`, COLORS.logicTeal);
@@ -123,8 +148,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
         if (!seenCoach.current.has(key)) {
           seenCoach.current.add(key);
           onCoachMarkSeen(key);
-          setCoach({ id: key, text: `${def.name} is charged! Tap the glowing button.`, icon: def.icon });
-          later(() => setCoach(c => (c?.id === key ? null : c)), 3800);
+          pushTip({ id: key, title: `${def.name} is ready`, text: `${def.short} Tap the glowing button to use it.`, icon: def.icon, anchor: 'top' });
         }
       }
       if (e.type === 'coins') addFloater(`+${e.amount}¢`, '#B07D00');
@@ -132,8 +156,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
       if (cm && !seenCoach.current.has(cm.id)) {
         seenCoach.current.add(cm.id);
         onCoachMarkSeen(cm.id);
-        setCoach(cm);
-        later(() => setCoach(c => (c?.id === cm.id ? null : c)), 3800);
+        pushTip(cm);
       }
     }
     dispatch({ type: 'CLEAR_EVENTS', upTo: lastEventId.current - 20 });
@@ -184,7 +207,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   return (
     <View style={[st.root, { backgroundColor: biome.colors.sky, paddingTop: insets.top }]}>
       {/* ── HUD ─────────────────────────────────────────── */}
-      <View style={st.hud}>
+      <View style={st.hud} onLayout={e => setHudHeight(e.nativeEvent.layout.height)}>
         <View style={st.hudTop}>
           <TouchableOpacity onPress={() => setPaused(true)} style={st.pauseBtn} accessibilityLabel="Pause">
             <Text style={st.pauseText}>II</Text>
@@ -280,7 +303,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
           onInvalidSelection={handleInvalid}
           playerStats={run.stats}
           weapons={run.weapons}
-          isPlayerTurn={run.status === 'playing' && !paused}
+          isPlayerTurn={run.status === 'playing' && !paused && !tip}
           activeAttributes={run.attributes}
           onUseHint={handleUseHint}
           triggerHint={hintTrigger}
@@ -293,13 +316,36 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
         />
       </View>
 
-      {/* Coach mark */}
-      {coach && (
-        <PopIn style={[st.coach, { bottom: Math.max(insets.bottom, 12) + 8 }]}>
-          <Icon name={coach.icon} size={22} color={INK} />
-          <Text style={st.coachText}>{coach.text}</Text>
-        </PopIn>
-      )}
+      {/* Tip: pauses the fight until accepted. The part it talks about stays lit. */}
+      {tip && !ended && (() => {
+        const hudBottom = insets.top + hudHeight;
+        const aboutHud = tip.anchor !== 'bottom';
+        return (
+          <>
+            {/* dim everything except what the tip is pointing at */}
+            <View style={[st.tipDim, aboutHud ? { top: hudBottom, bottom: 0 } : { top: 0, height: hudBottom }]} />
+            <View style={[st.tipWrap, aboutHud ? { top: hudBottom + 2 } : { bottom: Math.max(insets.bottom, 12) + 8 }]} pointerEvents="box-none">
+              {aboutHud && <View style={st.tipArrow} />}
+              <View style={st.tipCard}>
+                <View style={st.tipRule} />
+                <View style={st.tipBody}>
+                  <View style={st.tipHead}>
+                    <View style={st.tipIcon}><Icon name={tip.icon} size={22} color={INK} /></View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={st.tipEyebrow}>{tip.label ?? 'Tip'}</Text>
+                      <Text style={st.tipTitle}>{tip.title}</Text>
+                    </View>
+                  </View>
+                  <Text style={st.tipText}>{tip.text}</Text>
+                  <TouchableOpacity testID="tip-ok" onPress={() => { sfx('click'); setTips(q => q.slice(1)); }} style={st.tipBtn} activeOpacity={0.85}>
+                    <Text style={st.tipBtnText}>Got it</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </>
+        );
+      })()}
 
       {/* Level-up pick */}
       {run.status === 'pick' && (
@@ -514,8 +560,19 @@ const st = StyleSheet.create({
   challengeStar: { color: '#E0A800', fontSize: 11, fontWeight: '900' },
   challengeText: { flex: 1, fontSize: 12, fontWeight: '700', color: INK },
   boardWrap: { flex: 1, padding: 6 },
-  coach: { position: 'absolute', left: 16, right: 16, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.actionYellow, borderWidth: 2, borderBottomWidth: 5, borderColor: INK, borderRadius: 10, padding: 12, zIndex: 200, ...(Platform.OS === 'web' ? { maxWidth: 520, alignSelf: 'center' } : {}) },
-  coachText: { flex: 1, fontWeight: '800', color: INK, fontSize: 14 },
+  tipDim: { position: 'absolute', left: 0, right: 0, zIndex: 299, backgroundColor: 'rgba(10,10,10,0.5)' },
+  tipWrap: { position: 'absolute', left: 0, right: 0, zIndex: 300, alignItems: 'center', paddingHorizontal: 12 },
+  tipArrow: { width: 18, height: 18, backgroundColor: COLORS.actionYellow, transform: [{ rotate: '45deg' }], marginBottom: -11, alignSelf: 'flex-start', marginLeft: 70 },
+  tipCard: { width: '100%', maxWidth: 460, backgroundColor: '#1C1B19', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,222,0,0.4)', overflow: 'hidden' },
+  tipRule: { height: 4, backgroundColor: COLORS.actionYellow },
+  tipBody: { padding: 16, gap: 12 },
+  tipHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  tipIcon: { width: 42, height: 42, borderRadius: 10, backgroundColor: COLORS.actionYellow, alignItems: 'center', justifyContent: 'center' },
+  tipEyebrow: { color: COLORS.actionYellow, fontWeight: '800', letterSpacing: 2, fontSize: 10, textTransform: 'uppercase' },
+  tipTitle: { color: COLORS.canvasWhite, fontWeight: '900', fontSize: 20 },
+  tipText: { color: '#F1ECE4', fontSize: 16, lineHeight: 23 },
+  tipBtn: { backgroundColor: COLORS.actionYellow, borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
+  tipBtnText: { color: INK, fontWeight: '900', letterSpacing: 1.5, textTransform: 'uppercase' },
   overlay: { flex: 1, backgroundColor: 'rgba(18,18,18,0.6)', alignItems: 'center', justifyContent: 'center', padding: 16 },
   panel: { width: '100%', maxWidth: 420, backgroundColor: COLORS.canvasWhite, borderRadius: 14, borderWidth: 3, borderBottomWidth: 7, borderColor: INK, padding: 18, gap: 10 },
   panelTitle: { fontSize: 24, fontWeight: '900', color: INK, textAlign: 'center' },
