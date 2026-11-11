@@ -1,7 +1,7 @@
 /** Storage wrapper for the adventure save (MMKV). Keep I/O out of progress.ts. */
 import { storage } from '@/utils/storage';
 import type { AdventureSave } from './types';
-import { createNewSave } from './progress';
+import { createNewSave, reconcileUnlocks } from './progress';
 
 const KEY = 'adventure_v2_save';
 
@@ -12,7 +12,7 @@ export const loadAdventureSave = (): AdventureSave => {
     const parsed = JSON.parse(raw) as AdventureSave;
     if (parsed.version !== 1) return createNewSave();
     // Fill in fields added after a save was written
-    return { ...createNewSave(), ...parsed };
+    return reconcileUnlocks({ ...createNewSave(), ...parsed });
   } catch {
     return createNewSave();
   }

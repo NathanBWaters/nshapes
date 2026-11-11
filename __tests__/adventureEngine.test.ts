@@ -1,5 +1,5 @@
 import { getLevel, LEVELS, MAIN_LEVELS } from '@/adventure/data/levels';
-import { createNewSave, applyLevelResult, getFeaturesForLevel, getLockReason, isLevelUnlocked, levelFighter, buyUpgrade, totalStars } from '@/adventure/progress';
+import { createNewSave, applyLevelResult, getFeaturesForLevel, getLockReason, isLevelUnlocked, levelFighter, buyUpgrade, reconcileUnlocks, totalStars } from '@/adventure/progress';
 import { createRun, runReducer, computeStars, boardHasSet } from '@/adventure/engine/run';
 import { allSets } from '@/adventure/engine/sets';
 import type { Card, CardReward } from '@/types';
@@ -266,6 +266,17 @@ describe('progression', () => {
   it('boss star rewards unlock fighters', () => {
     const r = applyLevelResult(createNewSave(), getLevel('1-8'), 2, 0);
     expect(r.save.unlockedFighters).toContain('Corgi');
+  });
+
+  it('an older save gets unlocks that moved onto levels it already cleared', () => {
+    // A save from before fighters unlocked early: stars but no Sly Fox, no weapons
+    const old = { ...createNewSave(), stars: { '1-1': 3, '1-2': 2 }, coins: 70 };
+    const fixed = reconcileUnlocks(old);
+    expect(fixed.unlockedFighters).toContain('Sly Fox');
+    expect(fixed.armory).toContain('blast-powder-common');
+    expect(fixed.charm).toBe('blast-powder-common');
+    expect(fixed.coins).toBe(70); // no coins paid twice
+    expect(reconcileUnlocks(fixed)).toEqual(fixed);
   });
 
   it('camp purchases spend coins', () => {

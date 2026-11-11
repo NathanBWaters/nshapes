@@ -172,6 +172,22 @@ export const applyLevelResult = (
   return { save: next, granted, newStars: stars, previousStars, coinsBanked: runCoins, starCoins, unlocks, newlyUnlockedLevels, newlyOpenedBiomes };
 };
 
+/**
+ * Bring an older save in line with the current level table: anything a level's
+ * already-earned stars now unlock (a fighter or weapon that moved there in an
+ * update) is granted. Coins are never paid twice.
+ */
+export const reconcileUnlocks = (save: AdventureSave): AdventureSave => {
+  let next = save;
+  for (const level of LEVELS) {
+    const stars = save.stars[level.id] ?? 0;
+    const rewards = [level.rewards.star1, level.rewards.star2, level.rewards.star3];
+    for (let s = 0; s < stars; s++) next = grant(next, { ...rewards[s], coins: 0 });
+  }
+  if (next.charm && !next.armory.includes(next.charm)) next = { ...next, charm: next.armory[0] ?? null };
+  return next;
+};
+
 // ─── Camp purchases ─────────────────────────────────────────────────────────
 
 export const fighterLevel = (save: AdventureSave, name: string): number => save.fighterLevels[name] ?? 1;
