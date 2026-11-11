@@ -9,6 +9,17 @@ import {
   resolveFighterAmbientMood,
   resolveFighterExpression,
 } from '@/utils/fighterAnimations';
+import {
+  TAU,
+  advancePhase,
+  computeMoodLoopRates,
+  computeMoodPoseTargets,
+  computeVolumePreservedScale,
+  createSecondOrderState,
+  sampleOrganicBreath,
+  sampleOverlappingWave,
+  stepSecondOrder,
+} from '@/utils/proceduralMotion';
 import { createNewSave } from '@/adventure/progress';
 import { getLevel } from '@/adventure/data/levels';
 import AdventureRun from '@/adventure/components/AdventureRun';
@@ -463,6 +474,127 @@ describe('Fighter Animation System', () => {
       expect(revealed).toBeTruthy();
       expect(revealed.props.accessibilityLabel).toContain('Sly Fox');
       expect(getByTestId('fighter-fx-ecstatic')).toBeTruthy();
+    });
+  });
+
+  describe('Procedural Motion & Seamless State Transition Engine', () => {
+    it('maintains strict C0 phase continuity across abrupt loop frequency changes', () => {
+      let phase = 1.234;
+      const dt = 1 / 60;
+
+      // Advance at calm sleepy rate (0.3 Hz), then abruptly switch to urgent rate (2.4 Hz)
+      const beforeSwitch = advancePhase(phase, 0.3, dt);
+      const afterSwitch = advancePhase(beforeSwitch, 2.4, dt);
+
+      // Phase delta over a single 16.7ms frame is tiny and continuous (never snaps to 0!)
+      const delta = Math.abs(afterSwitch - beforeSwitch);
+      expect(delta).toBeGreaterThan(0);
+      expect(delta).toBeLessThan(TAU * 2.4 * dt + 1e-6);
+
+      // Wraps cleanly across 2π boundary without negative values or NaN
+      const wrapped = advancePhase(TAU - 0.01, 1.0, 0.02);
+      expect(wrapped).toBeGreaterThanOrEqual(0);
+      expect(wrapped).toBeLessThan(TAU);
+    });
+
+    it('produces asymmetric organic breathing and phase-lagged overlapping waves', () => {
+      const inhale = sampleOrganicBreath(Math.PI * 0.45, 0.5);
+      const exhale = sampleOrganicBreath(Math.PI * 1.45, 0.5);
+      expect(inhale).toBeGreaterThan(0);
+      expect(exhale).toBeLessThan(0);
+      // Asymmetric skew + second harmonic means waveform is not a symmetric mirror
+      expect(Math.abs(inhale + exhale)).toBeGreaterThan(0.01);
+
+      // Hierarchical lag: torso (0 rad), head (0.68 rad), ear (1.28 rad) are distinct at same instant
+      const tPhase = 1.1;
+      const torso = sampleOverlappingWave(tPhase, 0);
+      const head = sampleOverlappingWave(tPhase, 0.68);
+      const ear = sampleOverlappingWave(tPhase, 1.28);
+      expect(torso).not.toBeCloseTo(head, 2);
+      expect(head).not.toBeCloseTo(ear, 2);
+    });
+
+    it('preserves momentum across mid-flight reversals and remains stable on frame hitches', () => {
+      let state = createSecondOrderState(0);
+      // Accelerate partway toward +12 degrees
+      for (let i = 0; i < 8; i++) {
+        state = stepSecondOrder(state, 12, 1 / 60, 3.0, 0.65, 0.2);
+      }
+      const posBeforeReversal = state.y;
+      const velBeforeReversal = state.yd;
+      expect(posBeforeReversal).toBeGreaterThan(1);
+      expect(velBeforeReversal).toBeGreaterThan(0);
+
+      // Abruptly flip target to -10 degrees mid-flight: position does NOT snap in 1 frame!
+      const nextFrame = stepSecondOrder(state, -10, 1 / 60, 3.0, 0.65, 0.2);
+      expect(Math.abs(nextFrame.y - posBeforeReversal)).toBeLessThan(2.5);
+
+      // Settles accurately to -10 over 1.5s
+      let settled = nextFrame;
+      for (let i = 0; i < 90; i++) {
+        settled = stepSecondOrder(settled, -10, 1 / 60, 3.0, 0.65, 0.2);
+      }
+      expect(settled.y).toBeCloseTo(-10, 1);
+
+      // Unconditional stability under huge 250ms frame hitch
+      const hitched = stepSecondOrder(createSecondOrderState(0), 100, 0.25, 4.0, 0.5, 0.5);
+      expect(Number.isFinite(hitched.y)).toBe(true);
+      expect(Number.isFinite(hitched.yd)).toBe(true);
+    });
+
+    it('enforces constant-area volume conservation (scaleX * scaleY === 1)', () => {
+      const squash = computeVolumePreservedScale(0.8);
+      expect(squash.scaleY).toBeCloseTo(0.8, 5);
+      expect(squash.scaleX).toBeCloseTo(1.25, 5);
+      expect(squash.scaleX * squash.scaleY).toBeCloseTo(1, 5);
+
+      const stretch = computeVolumePreservedScale(1.2);
+      expect(stretch.scaleX * stretch.scaleY).toBeCloseTo(1, 5);
+
+      // Clamps extreme inputs safely
+      const clamped = computeVolumePreservedScale(0.2);
+      expect(clamped.scaleY).toBe(0.72);
+      expect(clamped.scaleX * clamped.scaleY).toBeCloseTo(1, 5);
+    });
+
+    it('renders grounded contact shadow and transitions rapidly across moods & reactions cleanly', () => {
+      const rates = computeMoodLoopRates('anticipation', 'pristine', 2400, 1400);
+      const idleRates = computeMoodLoopRates('idle', 'pristine', 2400, 1400);
+      expect(rates.wagHz).toBeGreaterThan(idleRates.wagHz);
+
+      const curiousPose = computeMoodPoseTargets('curious', 'pristine', 64, 0.65, -0.32);
+      expect(curiousPose.headTiltDeg).toBeGreaterThan(5);
+
+      const { getByTestId, rerender } = render(
+        <FighterAvatar character="Orange Tabby" size={72} mood="idle" testID="smooth-tabby" />
+      );
+      expect(getByTestId('fighter-ground-shadow')).toBeTruthy();
+
+      // Rapidly transition through moods and interrupt mid-reaction without errors
+      rerender(
+        <FighterAvatar
+          character="Orange Tabby"
+          size={72}
+          mood="curious"
+          reaction={{ type: 'joy', id: 1 }}
+          testID="smooth-tabby"
+        />
+      );
+      expect(getByTestId('fighter-fx-joy')).toBeTruthy();
+
+      rerender(
+        <FighterAvatar
+          character="Orange Tabby"
+          size={72}
+          mood="anticipation"
+          health={1}
+          maxHealth={3}
+          reaction={{ type: 'ecstatic', id: 2 }}
+          testID="smooth-tabby"
+        />
+      );
+      expect(getByTestId('fighter-fx-ecstatic')).toBeTruthy();
+      expect(getByTestId('fighter-damage-critical')).toBeTruthy();
     });
   });
 });

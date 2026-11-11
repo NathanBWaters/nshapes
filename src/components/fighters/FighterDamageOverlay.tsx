@@ -1,17 +1,17 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import Animated, {
   Easing,
-  cancelAnimation,
   useAnimatedStyle,
+  useFrameCallback,
   useSharedValue,
-  withRepeat,
-  withSequence,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { Svg, Circle, Ellipse, G, Line, Path, Polygon, Rect } from 'react-native-svg';
 import { COLORS } from '@/utils/colors';
 import { FighterHealthState } from '@/utils/fighterAnimations';
+import { advancePhase } from '@/utils/proceduralMotion';
 
 interface FighterDamageOverlayProps {
   healthState: FighterHealthState;
@@ -21,6 +21,14 @@ interface FighterDamageOverlayProps {
 }
 
 const STROKE = COLORS.slateCharcoal;
+
+const HEALTH_SEVERITY: Record<FighterHealthState, number> = {
+  pristine: 0,
+  scuffed: 1,
+  battered: 2,
+  critical: 3,
+  knocked_out: 4,
+};
 
 function MiniStar({ cx, cy, r, fill }: { cx: number; cy: number; r: number; fill: string }) {
   const pts: string[] = [];
@@ -41,12 +49,13 @@ function MiniStar({ cx, cy, r, fill }: { cx: number; cy: number; r: number; fill
 }
 
 /**
- * Renders progressive cartoon battle-wear over the fighter rig:
+ * Renders progressive cartoon battle-wear over the fighter rig with continuous
+ * phase-integrated KO star orbits, smooth gravity-eased sweat drips, and spring pop-in:
  * - pristine: none
  * - scuffed: cheek band-aid + minor fur/feather scuff marks
  * - battered: + brow X-plaster + temple sweat drop + heavier torso scuffs
  * - critical: + wrapped white gauze forehead bandage + dripping sweat
- * - knocked_out: + orbiting dizzy KO stars above head
+ * - knocked_out: + elliptical 3D-feel orbiting dizzy KO stars above head
  */
 export const FighterDamageOverlay: React.FC<FighterDamageOverlayProps> = ({
   healthState,
@@ -54,68 +63,75 @@ export const FighterDamageOverlay: React.FC<FighterDamageOverlayProps> = ({
   animate = true,
   testID,
 }) => {
-  const dizzyPhase = useSharedValue(0);
-  const sweatBob = useSharedValue(0);
+  const orbitPhase = useSharedValue(0);
+  const sweatPhase = useSharedValue(0);
+  const badgePop = useSharedValue(1);
+  const koPresence = useSharedValue(healthState === 'knocked_out' ? 1 : 0);
+  const prevSeverityRef = useRef<number>(HEALTH_SEVERITY[healthState]);
+
+  useFrameCallback((frameInfo) => {
+    const dtMs = frameInfo.timeSincePreviousFrame;
+    if (dtMs === null || dtMs <= 0) return;
+    const dt = Math.min(dtMs / 1000, 0.05);
+    orbitPhase.value = advancePhase(orbitPhase.value, 0.58, dt);
+    sweatPhase.value = advancePhase(sweatPhase.value, 0.92, dt);
+  }, animate && healthState !== 'pristine');
 
   useEffect(() => {
+    const nextSev = HEALTH_SEVERITY[healthState];
+    const prevSev = prevSeverityRef.current;
+    prevSeverityRef.current = nextSev;
+
     if (!animate) {
-      cancelAnimation(dizzyPhase);
-      cancelAnimation(sweatBob);
-      dizzyPhase.value = 0;
-      sweatBob.value = 0;
+      badgePop.value = 1;
+      koPresence.value = healthState === 'knocked_out' ? 1 : 0;
       return;
     }
 
-    if (healthState === 'knocked_out') {
-      dizzyPhase.value = withRepeat(
-        withSequence(
-          withTiming(1, { duration: 900, easing: Easing.inOut(Easing.sin) }),
-          withTiming(-1, { duration: 900, easing: Easing.inOut(Easing.sin) })
-        ),
-        -1,
-        false
-      );
-    } else {
-      cancelAnimation(dizzyPhase);
-      dizzyPhase.value = 0;
+    if (nextSev > prevSev && nextSev > 0) {
+      // Tactile cartoon pop-in whenever new battle bandages/plasters appear!
+      badgePop.value = 0.88;
+      badgePop.value = withSpring(1, { damping: 10, stiffness: 240 });
     }
 
-    if (healthState === 'critical' || healthState === 'battered') {
-      sweatBob.value = withRepeat(
-        withSequence(
-          withTiming(2.5, { duration: 650, easing: Easing.in(Easing.quad) }),
-          withTiming(0, { duration: 350, easing: Easing.out(Easing.quad) })
-        ),
-        -1,
-        false
-      );
-    } else {
-      cancelAnimation(sweatBob);
-      sweatBob.value = 0;
-    }
+    koPresence.value = withTiming(healthState === 'knocked_out' ? 1 : 0, {
+      duration: 240,
+      easing: Easing.out(Easing.cubic),
+    });
+  }, [healthState, animate, badgePop, koPresence]);
 
-    return () => {
-      cancelAnimation(dizzyPhase);
-      cancelAnimation(sweatBob);
+  const badgePopStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: badgePop.value }],
+  }));
+
+  const dizzyStarsStyle = useAnimatedStyle(() => {
+    const tx = Math.sin(orbitPhase.value) * 4.5;
+    const ty = Math.cos(orbitPhase.value * 2) * 1.3;
+    const rot = Math.sin(orbitPhase.value) * 7.5;
+    const scale = 0.85 + 0.15 * koPresence.value + Math.cos(orbitPhase.value) * 0.04;
+    return {
+      opacity: koPresence.value,
+      transform: [{ translateX: tx }, { translateY: ty }, { rotate: `${rot}deg` }, { scale }],
     };
-  }, [animate, healthState, dizzyPhase, sweatBob]);
+  });
 
-  const dizzyStarsStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: dizzyPhase.value * 4 },
-      { rotate: `${dizzyPhase.value * 8}deg` },
-    ],
-  }));
-
-  const sweatStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: sweatBob.value }],
-  }));
+  const sweatStyle = useAnimatedStyle(() => {
+    // Asymmetric gravity drop: slow bead build-up, quick downward fall, soft fade reset
+    const norm = sweatPhase.value / (Math.PI * 2);
+    const dropCurve = norm * norm;
+    const ty = dropCurve * 3.4;
+    const opacity = norm < 0.15 ? norm / 0.15 : norm > 0.85 ? (1 - norm) / 0.15 : 1;
+    return {
+      opacity: animate ? opacity : 1,
+      transform: [{ translateY: animate ? ty : 0 }],
+    };
+  });
 
   if (healthState === 'pristine') {
     return null;
   }
 
-  const showScuffed = true; // All non-pristine states have at least scuffed wear
+  const showScuffed = true;
   const showBattered =
     healthState === 'battered' || healthState === 'critical' || healthState === 'knocked_out';
   const showCritical = healthState === 'critical' || healthState === 'knocked_out';
@@ -147,7 +163,7 @@ export const FighterDamageOverlay: React.FC<FighterDamageOverlayProps> = ({
       </View>
 
       {/* Head-mounted Band-Aids, X-Plasters & Critical Gauze Headband (moves with headStyle!) */}
-      <Animated.View style={[StyleSheet.absoluteFill, headStyle]}>
+      <Animated.View style={[StyleSheet.absoluteFill, headStyle, badgePopStyle]}>
         <Svg width="100%" height="100%" viewBox="0 0 100 100">
           {/* 1. Scuffed: Cheek Band-Aid on left cheek */}
           {showScuffed && (

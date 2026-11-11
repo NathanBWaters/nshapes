@@ -14,6 +14,7 @@ const TONGUE_PINK = '#FF7169';
 export const CorgiRig: React.FC<CreatureRigProps> = ({
   expression,
   healthState,
+  gazeOffset,
   headStyle,
   leftEarStyle,
   rightEarStyle,
@@ -149,7 +150,7 @@ export const CorgiRig: React.FC<CreatureRigProps> = ({
           <Ellipse cx={62} cy={35} rx={3.2} ry={2} fill="#FEF3C7" />
 
           {/* Eyes */}
-          <CreatureEyes expression={expression} leftX={37.5} rightX={62.5} y={42.5} radius={4.7} />
+          <CreatureEyes expression={expression} gazeOffset={gazeOffset} leftX={37.5} rightX={62.5} y={42.5} radius={4.7} />
 
           {/* Shiny oval dog nose */}
           <Ellipse cx={50} cy={49} rx={4.6} ry={3.3} fill={STROKE} />

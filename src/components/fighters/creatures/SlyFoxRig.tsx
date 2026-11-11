@@ -14,6 +14,7 @@ const FOX_CREAM = '#FFFBF5';
 export const SlyFoxRig: React.FC<CreatureRigProps> = ({
   expression,
   healthState,
+  gazeOffset,
   headStyle,
   leftEarStyle,
   rightEarStyle,
@@ -125,7 +126,7 @@ export const SlyFoxRig: React.FC<CreatureRigProps> = ({
           />
 
           {/* Eyes */}
-          <CreatureEyes expression={expression} leftX={38} rightX={62} y={42} radius={4.5} />
+          <CreatureEyes expression={expression} gazeOffset={gazeOffset} leftX={38} rightX={62} y={42} radius={4.5} />
 
           {/* Signature sly slanted brow when calm */}
           {expression === 'normal' && (

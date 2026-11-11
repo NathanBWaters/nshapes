@@ -16,6 +16,13 @@ export interface CreatureJointPivots {
   paws: JointPivot;
 }
 
+export interface GazeOffset {
+  /** Horizontal eye look offset in `-1 .. 1` */
+  x: number;
+  /** Vertical eye look offset in `-1 .. 1` */
+  y: number;
+}
+
 export interface CreatureRigProps {
   /** Pixel width & height of the avatar stage */
   size: number;
@@ -23,6 +30,8 @@ export interface CreatureRigProps {
   expression: FighterExpression;
   /** Current health wear state (drives subtle posture/crown/coat details) */
   healthState: FighterHealthState;
+  /** Optional micro-saccade / gaze look offset (`-1..1`) for living eye tracking */
+  gazeOffset?: GazeOffset;
   /** Animated style for head/face container */
   headStyle?: StyleProp<ViewStyle>;
   /** Animated style for left ear / left flipper / left wing */

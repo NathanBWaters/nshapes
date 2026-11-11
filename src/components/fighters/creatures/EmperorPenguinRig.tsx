@@ -14,6 +14,7 @@ const BEAK_ORANGE = '#FF9538';
 export const EmperorPenguinRig: React.FC<CreatureRigProps> = ({
   expression,
   healthState,
+  gazeOffset,
   headStyle,
   leftEarStyle,
   rightEarStyle,
@@ -138,7 +139,7 @@ export const EmperorPenguinRig: React.FC<CreatureRigProps> = ({
           </G>
 
           {/* Eyes */}
-          <CreatureEyes expression={expression} leftX={39.5} rightX={60.5} y={39} radius={4.3} />
+          <CreatureEyes expression={expression} gazeOffset={gazeOffset} leftX={39.5} rightX={60.5} y={39} radius={4.3} />
 
           {/* Golden-Orange Diamond Beak */}
           {isOpenBeak ? (

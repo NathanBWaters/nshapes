@@ -14,6 +14,7 @@ const BILL_GOLD = '#FFDE00';
 export const PelicanRig: React.FC<CreatureRigProps> = ({
   expression,
   healthState,
+  gazeOffset,
   headStyle,
   leftEarStyle,
   rightEarStyle,
@@ -159,7 +160,7 @@ export const PelicanRig: React.FC<CreatureRigProps> = ({
           />
 
           {/* Eyes (Keen Pattern-Spotter pair angled slightly toward the bill!) */}
-          <CreatureEyes expression={expression} leftX={35} rightX={49} y={33.5} radius={4.2} />
+          <CreatureEyes expression={expression} gazeOffset={gazeOffset} leftX={35} rightX={49} y={33.5} radius={4.2} />
 
           {/* Sculpted Golden Upper Bill with Hooked Tip */}
           <Path

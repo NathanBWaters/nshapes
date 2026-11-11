@@ -15,6 +15,7 @@ const NOSE_PINK = '#FF7169';
 export const OrangeTabbyRig: React.FC<CreatureRigProps> = ({
   expression,
   healthState,
+  gazeOffset,
   headStyle,
   leftEarStyle,
   rightEarStyle,
@@ -145,7 +146,7 @@ export const OrangeTabbyRig: React.FC<CreatureRigProps> = ({
           </G>
 
           {/* Eyes */}
-          <CreatureEyes expression={expression} leftX={38.5} rightX={61.5} y={42.5} radius={4.6} />
+          <CreatureEyes expression={expression} gazeOffset={gazeOffset} leftX={38.5} rightX={61.5} y={42.5} radius={4.6} />
 
           {/* Cute pink triangle nose */}
           <Polygon

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { FighterAvatar } from '@/components/fighters';
 import { CHARACTERS } from '@/utils/gameDefinitions';
@@ -46,7 +46,9 @@ export default function DevFightersPage() {
   const [hpPresetIndex, setHpPresetIndex] = useState(0);
   const [mood, setMood] = useState<FighterAmbientMood>('idle');
   const [reaction, setReaction] = useState<FighterReactionEvent | null>(null);
+  const [autoCycle, setAutoCycle] = useState(false);
   const reactionIdRef = useRef(0);
+  const stepRef = useRef(0);
 
   const hp = HP_PRESETS[hpPresetIndex];
   const healthState = getFighterHealthState(hp.health, hp.maxHealth);
@@ -56,11 +58,53 @@ export default function DevFightersPage() {
     setReaction({ type, id: reactionIdRef.current });
   };
 
+  // Smooth transition stress-tester: cycles moods, reactions, and wear states continuously
+  useEffect(() => {
+    if (!autoCycle) return;
+    const sequence: {
+      mood: FighterAmbientMood;
+      hpIdx: number;
+      reaction?: FighterReactionType;
+    }[] = [
+      { mood: 'idle', hpIdx: 0 },
+      { mood: 'curious', hpIdx: 0 },
+      { mood: 'anticipation', hpIdx: 0 },
+      { mood: 'streak', hpIdx: 0, reaction: 'joy' },
+      { mood: 'streak', hpIdx: 0, reaction: 'ecstatic' },
+      { mood: 'urgent', hpIdx: 1, reaction: 'pain' },
+      { mood: 'idle', hpIdx: 2, reaction: 'relief' },
+      { mood: 'urgent', hpIdx: 3, reaction: 'heal' },
+      { mood: 'sleepy', hpIdx: 0 },
+      { mood: 'victory', hpIdx: 0, reaction: 'powerup' },
+    ];
+    const iv = setInterval(() => {
+      const next = sequence[stepRef.current % sequence.length];
+      stepRef.current += 1;
+      setMood(next.mood);
+      setHpPresetIndex(next.hpIdx);
+      if (next.reaction) {
+        reactionIdRef.current += 1;
+        setReaction({ type: next.reaction, id: reactionIdRef.current });
+      }
+    }, 1150);
+    return () => clearInterval(iv);
+  }, [autoCycle]);
+
   return (
     <View style={styles.container}>
       <View style={styles.eyebrow}>
         <Text style={styles.eyebrowText}>FIGHTER ANIMATION STUDIO</Text>
-        <Text style={styles.statePill}>{healthState.toUpperCase()}</Text>
+        <View style={styles.eyebrowRight}>
+          <TouchableOpacity
+            style={[styles.autoBtn, autoCycle && styles.autoBtnActive]}
+            onPress={() => setAutoCycle((v) => !v)}
+          >
+            <Text style={[styles.autoBtnText, autoCycle && styles.chipTextActive]}>
+              {autoCycle ? '■ Stop Flow' : '▶ Auto-Flow'}
+            </Text>
+          </TouchableOpacity>
+          <Text style={styles.statePill}>{healthState.toUpperCase()}</Text>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -161,6 +205,27 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.slateCharcoal,
     letterSpacing: 1.5,
+  },
+  eyebrowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  autoBtn: {
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: RADIUS.button,
+    borderWidth: 1.5,
+    borderColor: COLORS.slateCharcoal,
+    backgroundColor: COLORS.canvasWhite,
+  },
+  autoBtnActive: {
+    backgroundColor: COLORS.logicTeal,
+  },
+  autoBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.slateCharcoal,
   },
   statePill: {
     fontSize: 11,

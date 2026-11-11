@@ -14,6 +14,7 @@ const STRIPE_WHITE = '#FFFFFF';
 export const BadgerRig: React.FC<CreatureRigProps> = ({
   expression,
   healthState,
+  gazeOffset,
   headStyle,
   leftEarStyle,
   rightEarStyle,
@@ -104,6 +105,7 @@ export const BadgerRig: React.FC<CreatureRigProps> = ({
           {/* Eyes (rendered with darkMask=true so crisp white arcs/scleras pop on the black war-stripes!) */}
           <CreatureEyes
             expression={expression}
+            gazeOffset={gazeOffset}
             leftX={38}
             rightX={62}
             y={42.5}
