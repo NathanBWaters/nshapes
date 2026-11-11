@@ -22,7 +22,7 @@ const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpaci
 
 // Debug: Track render counts per card (only in development)
 const renderCounts = new Map<string, number>();
-const DEBUG_RENDERS = __DEV__ && Platform.OS === 'web';
+const DEBUG_RENDERS = false;
 
 // SVG viewBox dimensions (1:2 width:height ratio)
 const SVG_WIDTH = 20;
@@ -350,6 +350,20 @@ const Card: React.FC<CardProps> = ({
       {/* Health badge for multi-hit cards */}
       {getHealthBadge()}
 
+      {/* Power card: extra damage when matched (adventure mode) */}
+      {!!card.bonusPoints && card.bonusPoints > 0 && !isDud && !isFaceDown && (
+        <View style={[styles.badge, styles.powerBadge]} pointerEvents="none">
+          <Text style={styles.powerBadgeText}>+{card.bonusPoints}</Text>
+        </View>
+      )}
+
+      {/* Golden card: extra coins when matched (adventure mode) */}
+      {!!card.bonusMoney && card.bonusMoney > 0 && !isDud && !isFaceDown && (
+        <View style={[styles.badge, styles.coinBadge]} pointerEvents="none">
+          <Text style={styles.coinBadgeText}>+{card.bonusMoney}¢</Text>
+        </View>
+      )}
+
       {/* State indicator icons (fire, connection) in bottom left */}
       {renderStateIndicators()}
 
@@ -523,6 +537,29 @@ const Squiggle: React.FC<ShapeProps> = ({ color, shading, background }) => {
 };
 
 const styles = StyleSheet.create({
+  powerBadge: {
+    bottom: 3,
+    right: 3,
+    backgroundColor: '#383838',
+    borderColor: '#121212',
+  },
+  powerBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#FFDE00',
+  },
+  coinBadge: {
+    top: 3,
+    left: 3,
+    backgroundColor: '#FFD54A',
+    borderWidth: 1,
+    borderColor: '#B07D00',
+  },
+  coinBadgeText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#5C3D00',
+  },
   card: {
     position: 'relative',
     flexDirection: 'column',

@@ -1,4 +1,5 @@
 import { createMMKV } from 'react-native-mmkv';
+import { Platform } from 'react-native';
 import type { PlayerStats, AdventureDifficulty } from '@/types';
 
 // Create a single MMKV instance for the app
@@ -137,8 +138,9 @@ export const AdventureHighRoundStorage = {
 // Settings storage helpers
 export const SettingsStorage = {
   getSoundEnabled: (): boolean => {
-    // Default to false - sound causes performance issues on iOS
-    return storage.getBoolean(STORAGE_KEYS.SOUND_ENABLED) ?? false;
+    // Default off on native (expo-av sample playback is slow on iOS);
+    // on in browsers, where sounds are synthesized live by the chip.
+    return storage.getBoolean(STORAGE_KEYS.SOUND_ENABLED) ?? Platform.OS === 'web';
   },
 
   setSoundEnabled: (enabled: boolean): void => {

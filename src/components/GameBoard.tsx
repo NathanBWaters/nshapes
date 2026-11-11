@@ -67,6 +67,7 @@ interface GameBoardProps {
   onTimeGainTriggered?: () => void; // Called when time gain triggers (for tracking)
   // Connector weapon system
   connections?: BoardConnection[]; // Active connections between board positions
+  hideEnemyOverlay?: boolean; // Adventure mode renders its own foe HUD
 }
 
 // Calculate rewards for a single card
@@ -123,6 +124,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
   timeGainContext,
   onTimeGainTriggered,
   connections = [],
+  hideEnemyOverlay = false,
 }) => {
   const [selectedCards, setSelectedCards] = useState<CardType[]>([]);
   const [matchedCardIds, setMatchedCardIds] = useState<string[]>([]);
@@ -1021,7 +1023,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
       <Particles />
 
       {/* Enemy UI Overlay - Shows enemy info and status effects */}
-      {enemy && enemy.name !== 'Dummy' && (
+      {enemy && enemy.name !== 'Dummy' && !hideEnemyOverlay && (
         <View style={styles.enemyOverlay} pointerEvents="box-none">
           {/* Top row: Enemy portrait and defeat progress */}
           <View style={styles.enemyTopRow}>

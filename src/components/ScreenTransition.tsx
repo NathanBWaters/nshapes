@@ -131,6 +131,11 @@ export function DoorTransition({
     return { opacity };
   });
 
+  const seamStyle = useAnimatedStyle(() => ({
+    // Center seam appears only once the doors have met
+    opacity: interpolate(progress.value, [0.9, 1], [0, 1]),
+  }));
+
   if (!isVisible && !active) {
     return null;
   }
@@ -158,9 +163,7 @@ export function DoorTransition({
       </Animated.View>
 
       {/* Center seam accent */}
-      <Animated.View style={[styles.centerSeam, useAnimatedStyle(() => ({
-        opacity: interpolate(progress.value, [0.9, 1], [0, 1]),
-      }))]} />
+      <Animated.View style={[styles.centerSeam, seamStyle]} />
     </View>
   );
 }

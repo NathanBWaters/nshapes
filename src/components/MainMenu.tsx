@@ -150,7 +150,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
             variant="adventure"
             icon="lorc/crossed-swords"
             title="Adventure"
-            subtitle="10 rounds, enemies & loot"
+            subtitle="Map, foes, stars & unlocks"
           />
           <MenuButton
             onPress={onSelectFreeplay}
