@@ -4,7 +4,7 @@ A roguelike deckbuilding match-three puzzle game for iOS, Android, and Web, buil
 
 ## Game Overview
 
-NShapes combines the classic SET card matching game with roguelike progression mechanics. The game offers two modes: **Adventure Mode** (a 10-round campaign with expanding logic) and **Free Play** (a customizable practice mode).
+NShapes combines the classic SET card matching game with roguelike progression mechanics. The game offers two modes: **Adventure Mode** (a map-based campaign where every level teaches one new mechanic) and **Free Play** (a customizable practice mode).
 
 ### Core Mechanics
 
@@ -28,16 +28,18 @@ NShapes combines the classic SET card matching game with roguelike progression m
 
 ### Game Modes
 
-**Adventure Mode** - Progressive Roguelike Campaign:
+**Adventure Mode** - Map campaign (Angry Birds / Bloons map + Vampire Survivors meta-progression):
 
-* **Difficulty Selection:** Choose difficulty on character selection screen:
-  * **Easy:** 3 attributes for all 10 rounds
-  * **Medium (default):** Progressive - 3 attrs (R1-3) → 4 attrs (R4-9) → 5 attrs (R10)
-  * **Hard:** 4 attributes (R1-5) → 5 attributes (R6-10)
+> **Full documentation:** [docs/adventure-design.md](./docs/adventure-design.md). All code lives in `src/adventure/` and is **data-driven**: edit `src/adventure/data/*.ts`, not the engine.
 
-* 60-second timer per round to reach score targets.
-* 6 playable characters (3 unlocked, 3 locked) with weapon-based progression.
-* **Character Unlocking:** Beat Adventure Mode to unlock one character. Locked characters: Emperor Penguin, Pelican, Badger.
+* A tappable map of 25 levels across 4 star-gated regions. Each node is a foe; tapping one opens a preview showing the foe, difficulty, star goals, rewards, and a fighter pick.
+* **One new mechanic per level.** The game is the tutorial: 1-1 is 2 traits, 6 moves, no hearts, no timer, one foe. Hearts, gear, rainbows, coins, the clock, hints, graces, level-ups, waves and the shop are introduced one at a time, with an intro card plus in-run coach marks.
+* **Stars:** ★ survive (moves used up / clock runs out) · ★★ knock out the foe · ★★★ knock out + challenge. Each star's reward is granted once. Levels are replayable.
+* **Coins** drop from matches, bank even on a loss, and are spent mid-run (shop between waves) or at **Camp** (fighter levels 1–10 upgrade starting gear; expensive Workshop upgrades).
+* **Unlocks:** weapons enter the Armory (the level-up/shop pool) through star rewards; fighters unlock from boss ★★ rewards.
+* **Fighter abilities** (`src/adventure/data/abilities.ts`): each fighter adds a new rule. Nine Lives (Tabby), Combo (Fox), Grudge (Badger) are passives; Deep Freeze (Penguin), Zoomies (Corgi), Big Scoop (Pelican) are actives that charge from Sets.
+* Balance is checked by headless bots: `ADVENTURE_BALANCE_REPORT=1 npx jest __tests__/adventureBalance.test.ts`.
+* The legacy 10-round adventure flow is still in `Game.tsx` but is no longer reachable from the main menu.
 
 **Free Play Mode** - Relaxed Practice:
 
@@ -212,13 +214,11 @@ npm run validate:icons   # Verifies all registered icons have SVG files
 
 **Adventure Mode:**
 
-1. Character Selection → Select Difficulty (Easy/Medium/Hard) → Start Adventure.
-2. **Attribute Unlock:** Game initializes with attributes based on difficulty.
-3. Play Round (reach score target within 60 seconds).
-4. **Progression:** Attribute unlock screens shown when new attributes are added (varies by difficulty).
-5. Level Up (choose weapon) / Weapon Shop between rounds.
-6. Repeat for 10 rounds total.
-7. After completing Round 10: Character Unlock Screen (if characters remain locked) → Victory Screen.
+1. Main Menu → Adventure → **Map** (frontier node bobs; your fighter stands beside it).
+2. Tap a foe → **Preview** (foe + taunt, skulls, NEW mechanic, rules, ★/★★/★★★ goals + rewards, fighter pick).
+3. If the level teaches something new → **Intro card** (demo cards/icons).
+4. **Fight**: HUD with foe HP bar, hearts, moves or clock, coins, hint, XP, live ★★★ challenge. Waves → intermission (shop once taught).
+5. **Results**: stars pop in, coins bank, first-time star rewards unlock weapons/fighters/regions → Next / Retry / Map / Camp.
 
 **Free Play Mode:**
 
@@ -250,6 +250,8 @@ This means Field Stone weapons can increase the starting board size beyond the m
 * Add graces
 * Add legendary weapons by category
 
+**`/dev/adventure`** - Adventure map (`?save=maxed` everything unlocked + 50k coins, `?save=fresh`, `?autoplay=true`)
+
 **`/dev/store`** - Standalone weapon shop tester:
 * Starts with $50,000
 * Buy weapons, reroll shop
@@ -278,6 +280,7 @@ This ensures builds can be verified to contain the latest changes.
 
 When working on specific systems, load the relevant design doc for detailed specifications:
 
+* **[Adventure Mode](./docs/adventure-design.md)** - Map, levels, stars, economy, fighters, audio synth, balance bots
 * **[Weapon System](./docs/weapons-design.md)** - Complete weapon roster, rarities, effects, synergies, and balance notes
 * **[Enemy System](./docs/enemy-design.md)** - Enemy roster, tier scaling, defeat conditions, and weapon counters (in development)
 * **[Style Guide](./style_guide.md)** - UI design system including colors, typography, and component styles

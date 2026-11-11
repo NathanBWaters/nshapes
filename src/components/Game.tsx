@@ -68,6 +68,7 @@ import RoundProgressChart, { RoundScore } from './RoundProgressChart';
 import CharacterUnlockScreen from './CharacterUnlockScreen';
 import Icon from './Icon';
 import MainMenu from './MainMenu';
+import AdventureMode from '@/adventure/AdventureMode';
 import DifficultySelection from './DifficultySelection';
 import LevelSelection from './LevelSelection';
 import LevelUpModal from './LevelUpModal';
@@ -163,6 +164,7 @@ const Game: React.FC<GameProps> = ({
   const [showOptionsModal, setShowOptionsModal] = useState(false);
   const [gamePhase, setGamePhase] = useState<
     'main_menu' |
+    'adventure' |         // Map-based adventure (src/adventure)
     'character_select' |
     'level_select' |      // NEW: Level selection screen
     'difficulty_select' |
@@ -2927,7 +2929,7 @@ const Game: React.FC<GameProps> = ({
         return (
           <>
             <MainMenu
-              onSelectAdventure={() => setGamePhase('character_select')}
+              onSelectAdventure={() => setGamePhase('adventure')}
               onSelectFreeplay={() => setGamePhase('difficulty_select')}
               onSelectTutorial={handleTutorialStart}
               onSelectOptions={() => setShowOptionsModal(true)}
@@ -2939,6 +2941,9 @@ const Game: React.FC<GameProps> = ({
             />
           </>
         );
+
+      case 'adventure':
+        return <AdventureMode onExit={() => setGamePhase('main_menu')} autoPlayer={autoPlayerEnabled} />;
 
       case 'character_select':
         return (

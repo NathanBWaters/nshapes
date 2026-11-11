@@ -4,7 +4,33 @@
  * Follows the haptics.ts pattern for graceful degradation.
  */
 
+import { Platform } from 'react-native';
 import { SettingsStorage } from './storage';
+import { sfx, audioSupported, setSfxEnabled, type SfxName } from '@/audio';
+
+/**
+ * On the web, every sound is synthesized by the chip (src/audio) — no files
+ * are downloaded. Native keeps the bundled expo-av samples.
+ */
+const useChip = Platform.OS === 'web' && audioSupported();
+
+const CHIP_SFX: Record<SoundCategory, SfxName> = {
+  cardSlide: 'deal',
+  laser: 'laser',
+  explosion: 'explosion',
+  ricochet: 'ricochet',
+  matchValid: 'match',
+  matchInvalid: 'invalid',
+  graceUsed: 'grace',
+  gainHeart: 'heart',
+  gainHint: 'hint',
+  gainGrace: 'graceGain',
+  gainMoney: 'coin',
+  click: 'click',
+  confirm: 'confirm',
+  confirmExit: 'back',
+  gameOver: 'gameOver',
+};
 
 // Dynamically import expo-av to handle missing native module gracefully
 let Audio: typeof import('expo-av').Audio | null = null;
@@ -54,6 +80,7 @@ let audioInitialized = false;
 // Initialize audio enabled state from storage
 try {
   audioEnabled = SettingsStorage.getSoundEnabled();
+  setSfxEnabled(audioEnabled);
 } catch {
   // Storage not available yet, use default (off)
   audioEnabled = false;
@@ -169,7 +196,7 @@ export const initAudio = async (): Promise<void> => {
  * Call during app initialization or screen load.
  */
 export const preloadSound = async (category: SoundCategory): Promise<void> => {
-  if (!Audio) return; // Audio not available
+  if (!Audio || useChip) return; // Audio not available, or synthesized instead
   if (soundPools.has(category)) return; // Already preloaded
 
   const definition = SOUND_DEFINITIONS[category];
@@ -218,7 +245,12 @@ export const preloadAllSounds = async (): Promise<void> => {
  * - Non-blocking - fires and forgets.
  */
 export const playSound = async (category: SoundCategory): Promise<void> => {
-  if (!audioEnabled || !Audio) return;
+  if (!audioEnabled) return;
+  if (useChip) {
+    sfx(CHIP_SFX[category]);
+    return;
+  }
+  if (!Audio) return;
 
   const pool = soundPools.get(category);
 
@@ -274,7 +306,7 @@ export const playSound = async (category: SoundCategory): Promise<void> => {
  */
 export const playCardDealing = (count: number, delayMs: number = 50): void => {
   // Skip entirely if audio disabled - avoid setTimeout overhead
-  if (!audioEnabled || !Audio) return;
+  if (!audioEnabled || (!Audio && !useChip)) return;
 
   // Cap at reasonable number to avoid audio overload
   const maxSounds = Math.min(count, 8);
@@ -288,6 +320,7 @@ export const playCardDealing = (count: number, delayMs: number = 50): void => {
  */
 export const setAudioEnabled = (enabled: boolean): void => {
   audioEnabled = enabled;
+  setSfxEnabled(enabled);
 };
 
 /**
