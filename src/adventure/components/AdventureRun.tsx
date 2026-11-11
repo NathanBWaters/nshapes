@@ -64,6 +64,11 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   const ended = run.status === 'won' || run.status === 'lost';
 
   useEffect(() => () => timeouts.current.forEach(clearTimeout), []);
+
+  // Dev only: expose the live run so browser scripts can play end-to-end
+  useEffect(() => {
+    if (__DEV__ && Platform.OS === 'web') (window as unknown as { __nshapesRun?: RunState }).__nshapesRun = run;
+  }, [run]);
   const later = (fn: () => void, ms: number) => {
     timeouts.current.push(setTimeout(fn, ms));
   };
