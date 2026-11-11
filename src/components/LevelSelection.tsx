@@ -9,6 +9,7 @@ import { CHARACTERS } from '@/utils/gameDefinitions';
 import Icon from './Icon';
 import GameMenu from './GameMenu';
 import { ScreenTransition } from './ScreenTransition';
+import { FighterAvatar } from './fighters';
 
 interface LevelSelectionProps {
   selectedCharacter: Character;
@@ -74,9 +75,12 @@ const LevelSelection: React.FC<LevelSelectionProps> = ({
 
         {/* Character Info */}
         <View style={styles.characterBanner}>
-          {selectedCharacter.icon && (
-            <Icon name={selectedCharacter.icon} size={24} color={COLORS.slateCharcoal} />
-          )}
+          <FighterAvatar
+            character={selectedCharacter}
+            size={34}
+            mood="curious"
+            interactive
+          />
           <Text style={styles.characterName}>{selectedCharacter.name}</Text>
         </View>
 
@@ -150,17 +154,11 @@ const LevelSelection: React.FC<LevelSelectionProps> = ({
                               isCurrentChar && styles.completionIconCurrent,
                             ]}
                           >
-                            {char?.icon ? (
-                              <Icon
-                                name={char.icon}
-                                size={14}
-                                color={isCurrentChar ? COLORS.actionYellow : COLORS.slateCharcoal}
-                              />
-                            ) : (
-                              <Text style={styles.completionInitial}>
-                                {charName.charAt(0)}
-                              </Text>
-                            )}
+                            <FighterAvatar
+                              character={char ?? charName}
+                              size={18}
+                              animate={false}
+                            />
                           </View>
                         );
                       })}

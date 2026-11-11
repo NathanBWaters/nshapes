@@ -5,6 +5,7 @@ import { COLORS, RADIUS } from '@/utils/colors';
 import Icon from './Icon';
 import { ScreenTransition } from './ScreenTransition';
 import { getWeaponByName } from '@/utils/gameDefinitions';
+import { FighterAvatar } from './fighters';
 
 interface CharacterUnlockScreenProps {
   character: Character;
@@ -25,14 +26,16 @@ const CharacterUnlockScreen: React.FC<CharacterUnlockScreenProps> = ({
           </View>
 
           <View style={styles.content}>
-            {/* Character Icon */}
+            {/* Animated Character Showcase */}
             <View style={styles.iconSection}>
               <View style={styles.iconContainer}>
-                {character.icon ? (
-                  <Icon name={character.icon} size={72} color={COLORS.deepOnyx} />
-                ) : (
-                  <Text style={styles.iconFallback}>{character.name[0]}</Text>
-                )}
+                <FighterAvatar
+                  character={character}
+                  size={98}
+                  mood="victory"
+                  reaction={{ type: 'ecstatic', id: 1 }}
+                  interactive
+                />
               </View>
             </View>
 

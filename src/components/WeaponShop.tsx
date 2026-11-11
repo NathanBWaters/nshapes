@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Pressable, StyleSheet, Platform } from 'react-native';
 import { usePWASafeAreaInsets } from '@/utils/usePWASafeAreaInsets';
-import { Weapon, PlayerStats, WeaponRarity } from '@/types';
+import { Character, Weapon, PlayerStats, WeaponRarity } from '@/types';
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
 import { getPlayerWeaponCount } from '@/utils/gameDefinitions';
 import {
@@ -16,6 +16,8 @@ import InventoryBar from './InventoryBar';
 import KeywordText from './KeywordText';
 import { ScreenTransition } from './ScreenTransition';
 import { playSound } from '@/utils/sounds';
+import { FighterAvatar } from './fighters';
+import { FighterReactionEvent } from '@/utils/fighterAnimations';
 
 // Weapon option component
 interface WeaponOptionProps {
@@ -107,6 +109,7 @@ interface WeaponShopProps {
   onContinue: () => void;
   playerStats: PlayerStats;
   playerWeapons?: Weapon[];
+  character?: Character;
   onExitGame?: () => void;
 }
 
@@ -120,6 +123,7 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
   onContinue,
   playerStats,
   playerWeapons = [],
+  character,
   onExitGame
 }) => {
   const insets = usePWASafeAreaInsets();
@@ -158,6 +162,8 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
     setPurchaseSuccess(true);
     setTimeout(() => setPurchaseSuccess(false), 800);
     playSound('confirm');
+    purchaseCounterRef.current += 1;
+    setShopReaction({ type: 'powerup', id: purchaseCounterRef.current });
     onPurchase(index);
   };
 
@@ -194,6 +200,9 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
   const focusedWeapon = weapons[displayedIndex];  // Can be null if slot is sold
   const canAffordFocused = focusedWeapon ? playerMoney >= focusedWeapon.price : false;
 
+  const [shopReaction, setShopReaction] = useState<FighterReactionEvent | null>(null);
+  const purchaseCounterRef = React.useRef(0);
+
   // Count available (non-null) weapons
   const availableWeapons = weapons.filter(weapon => weapon !== null);
 
@@ -202,12 +211,25 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
       <View style={styles.container}>
         {/* Eyebrow Banner */}
         <View style={styles.eyebrow}>
-        <Text style={styles.eyebrowText}>Weapon Shop</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {character && (
+            <FighterAvatar
+              character={character}
+              size={34}
+              health={playerStats.health}
+              maxHealth={playerStats.maxHealth}
+              mood="curious"
+              reaction={shopReaction}
+              interactive
+            />
+          )}
+          <Text style={styles.eyebrowText}>Weapon Shop</Text>
+        </View>
         <View style={styles.eyebrowRight}>
           <View style={styles.moneyBadge}>
             <Text style={styles.moneyText}>${playerMoney}</Text>
           </View>
-          <GameMenu playerStats={playerStats} playerWeapons={playerWeapons} onExitGame={onExitGame} />
+          <GameMenu playerStats={playerStats} playerWeapons={playerWeapons} character={character} onExitGame={onExitGame} />
         </View>
       </View>
 

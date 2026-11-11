@@ -43,6 +43,7 @@ import {
 import { useGameTimer } from '@/hooks/useGameTimer';
 import { useParticles } from '@/hooks/useParticles';
 import { useRoundStats } from '@/hooks/useRoundStats';
+import { useFighterConductor } from '@/hooks/useFighterConductor';
 import { createEnemy, createDummyEnemy, applyEnemyStatModifiers, getRandomEnemies, getRandomEnemyOptions } from '@/utils/enemyFactory';
 import { generateChallengeBonus, getChallengeBonusMoney } from '@/utils/rewardUtils';
 import '@/utils/enemies'; // Trigger enemy self-registration
@@ -67,6 +68,7 @@ import VictoryScreen from './VictoryScreen';
 import RoundProgressChart, { RoundScore } from './RoundProgressChart';
 import CharacterUnlockScreen from './CharacterUnlockScreen';
 import Icon from './Icon';
+import { FighterAvatar } from './fighters';
 import MainMenu from './MainMenu';
 import DifficultySelection from './DifficultySelection';
 import LevelSelection from './LevelSelection';
@@ -289,6 +291,24 @@ const Game: React.FC<GameProps> = ({
 
   // Particle effects for match celebrations
   const { spawnParticles, Particles } = useParticles();
+
+  // Live animated fighter conductor (tracks match joy/streaks, mistakes/pain, grace relief, low-HP grit, sleepy idle & clock panic)
+  const liveFighterStats = calculatePlayerTotalStats(state.player);
+  const fighter = useFighterConductor({
+    health: liveFighterStats.health,
+    maxHealth: liveFighterStats.maxHealth,
+    remainingTime: gamePhase === 'round' ? state.remainingTime : undefined,
+    score: state.score,
+    targetScore: state.targetScore,
+    isActiveRound: gamePhase === 'round' || gamePhase === 'free_play',
+  });
+
+  // Trigger a battle-ready fighter salute whenever a round or free play begins
+  useEffect(() => {
+    if (gamePhase === 'round' || gamePhase === 'free_play') {
+      fighter.triggerEntrance();
+    }
+  }, [gamePhase, state.round]);
 
   // Round stats tracking for enemy defeat conditions
   const {
@@ -1525,6 +1545,7 @@ const Game: React.FC<GameProps> = ({
       message: `Acquired ${weapon.name}!`,
       type: 'success'
     });
+    fighter.triggerPowerup();
 
     // Clear enemy defeated state after receiving any slayer bonus
     setEnemyDefeated(false);
@@ -1596,6 +1617,7 @@ const Game: React.FC<GameProps> = ({
       // All level-ups done, close modal and resume game
       setShowLevelUpModal(false);
     }
+    fighter.triggerPowerup();
   };
 
   // Handle in-round level-up reroll
@@ -1915,6 +1937,20 @@ const Game: React.FC<GameProps> = ({
     if (totalMoney > 0) {
       playSound('gainMoney');
     }
+
+    // Trigger joyful / mega / relief / healing fighter animation!
+    const isMegaMatch =
+      Boolean(
+        weaponEffects &&
+          (weaponEffects.explosiveCards.length > 0 ||
+            weaponEffects.laserCards.length > 0 ||
+            weaponEffects.ricochetCards.length > 0 ||
+            weaponEffects.autoMatchedSets.length > 0)
+      ) || connectedCardCount > 0;
+    const didHeal =
+      totalHealing > 0 &&
+      state.player.stats.health < calculatePlayerTotalStats(state.player).maxHealth;
+    fighter.triggerMatch({ isGraceMatch, isMegaMatch, didHeal });
 
     // Show notification for triggered effects
     if (triggerNotifications.length > 0) {
@@ -2312,6 +2348,7 @@ const Game: React.FC<GameProps> = ({
 
     // Grace only saves when exactly 1 attribute is wrong AND player has graces
     if (invalidCount === 1 && totalStats.graces > 0) {
+      fighter.triggerMistake({ savedByGrace: true });
       // Use a grace instead of losing health
       setState(prevState => ({
         ...prevState,
@@ -2339,6 +2376,7 @@ const Game: React.FC<GameProps> = ({
     }
 
     // 2+ attributes wrong OR no graces - decrease health
+    fighter.triggerMistake({ savedByGrace: false });
     // Get enemy damage multiplier
     let damageMultiplier = 1;
     if (state.activeEnemyInstance) {
@@ -2420,6 +2458,7 @@ const Game: React.FC<GameProps> = ({
   const handleUseHint = () => {
     // Track hint usage for enemy defeat conditions
     recordHintUsed();
+    fighter.triggerHint();
 
     setState(prevState => ({
       ...prevState,
@@ -2991,6 +3030,7 @@ const Game: React.FC<GameProps> = ({
             round={state.round}
             playerStats={calculatePlayerTotalStats(state.player)}
             playerWeapons={state.player.weapons}
+            character={state.player.character}
             onExitGame={() => setGamePhase('main_menu')}
           />
         );
@@ -3024,6 +3064,7 @@ const Game: React.FC<GameProps> = ({
             }}
             playerStats={calculatePlayerTotalStats(state.player)}
             playerWeapons={state.player.weapons}
+            character={state.player.character}
             onExitGame={() => setGamePhase('main_menu')}
             roundScores={summaryRoundScores}
             enemy={state.activeEnemyInstance ?? undefined}
@@ -3044,6 +3085,7 @@ const Game: React.FC<GameProps> = ({
             freeRerolls={state.player.stats.freeRerolls}
             playerStats={calculatePlayerTotalStats(state.player)}
             playerWeapons={state.player.weapons}
+            character={state.player.character}
             onExitGame={() => setGamePhase('main_menu')}
             targetLevel={pendingLevelUps[0] || state.player.stats.level}
             hasMoreLevelUps={pendingLevelUps.length > 1}
@@ -3062,6 +3104,7 @@ const Game: React.FC<GameProps> = ({
             onContinue={handleProceedFromShop}
             playerStats={calculatePlayerTotalStats(state.player)}
             playerWeapons={state.player.weapons}
+            character={state.player.character}
             onExitGame={() => setGamePhase('main_menu')}
           />
         );
@@ -3104,6 +3147,10 @@ const Game: React.FC<GameProps> = ({
                 totalTime={getRoundRequirement(state.round).time}
                 playerStats={calculatePlayerTotalStats(state.player)}
                 playerWeapons={state.player.weapons}
+                character={state.player.character}
+                fighterMood={fighter.mood}
+                fighterReaction={fighter.reaction}
+                fighterStreak={fighter.streak}
                 onHintPress={() => setHintTrigger(t => t + 1)}
                 onClearHint={() => setClearHintTrigger(t => t + 1)}
                 hasActiveHint={hasActiveHint}
@@ -3127,6 +3174,8 @@ const Game: React.FC<GameProps> = ({
                 weapons={state.player.weapons}
                 isPlayerTurn={true}
                 activeAttributes={state.activeAttributes}
+                onSelectedCountChange={fighter.setSelectedCount}
+                onBoardIdleChange={fighter.setIsBoardIdle}
                 onHintStateChange={setHasActiveHint}
                 onUseHint={handleUseHint}
                 triggerHint={hintTrigger > 0 ? hintTrigger : undefined}
@@ -3162,6 +3211,7 @@ const Game: React.FC<GameProps> = ({
               freeRerolls={state.player.stats.freeRerolls}
               playerStats={calculatePlayerTotalStats(state.player)}
               playerWeapons={state.player.weapons}
+              character={state.player.character}
               targetLevel={inRoundLevelUpQueue[0] || state.player.stats.level}
               hasMoreLevelUps={inRoundLevelUpQueue.length > 1}
             />
@@ -3181,6 +3231,20 @@ const Game: React.FC<GameProps> = ({
                 >
                   <Text style={freePlayStyles.exitButtonText}>Exit</Text>
                 </TouchableOpacity>
+
+                {/* Free Play fighter portrait */}
+                <FighterAvatar
+                  character={state.player.character}
+                  size={34}
+                  health={calculatePlayerTotalStats(state.player).health}
+                  maxHealth={calculatePlayerTotalStats(state.player).maxHealth}
+                  mood={fighter.mood}
+                  reaction={fighter.reaction}
+                  streak={fighter.streak}
+                  framed
+                  interactive
+                  testID="freeplay-fighter-avatar"
+                />
 
                 {/* Free Play label */}
                 <View style={freePlayStyles.modeBadge}>
@@ -3235,6 +3299,8 @@ const Game: React.FC<GameProps> = ({
                 weapons={state.player.weapons}
                 isPlayerTurn={true}
                 activeAttributes={state.activeAttributes}
+                onSelectedCountChange={fighter.setSelectedCount}
+                onBoardIdleChange={fighter.setIsBoardIdle}
                 onHintStateChange={setHasActiveHint}
                 onUseHint={handleUseHint}
                 triggerHint={hintTrigger > 0 ? hintTrigger : undefined}
@@ -3314,6 +3380,20 @@ const Game: React.FC<GameProps> = ({
             </View>
 
             <View style={gameOverStyles.content}>
+              {/* Defeated / Knocked-Out Fighter Stage */}
+              <View style={{ alignItems: 'center', marginBottom: 12 }}>
+                <FighterAvatar
+                  character={state.player.character}
+                  size={74}
+                  health={calculatePlayerTotalStats(state.player).health}
+                  maxHealth={calculatePlayerTotalStats(state.player).maxHealth}
+                  mood="defeat"
+                  framed
+                  interactive
+                  testID="gameover-fighter-avatar"
+                />
+              </View>
+
               {/* Game over reason */}
               {gameOverReason && (
                 <View style={gameOverStyles.reasonContainer}>

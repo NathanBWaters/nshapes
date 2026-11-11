@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Pressable, StyleSheet, Platform } from 'react-native';
 import { usePWASafeAreaInsets } from '@/utils/usePWASafeAreaInsets';
-import { PlayerStats, Weapon } from '@/types';
+import { Character, PlayerStats, Weapon } from '@/types';
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
 import {
   getDynamicDescription,
@@ -16,6 +16,7 @@ import { ScreenTransition } from './ScreenTransition';
 import KeywordText from './KeywordText';
 import { playSound } from '@/utils/sounds';
 import { getPlayerWeaponCount } from '@/utils/gameDefinitions';
+import { FighterAvatar } from './fighters';
 
 // Weapon option component
 interface WeaponOptionProps {
@@ -98,6 +99,7 @@ interface LevelUpProps {
   freeRerolls: number;
   playerStats: PlayerStats;
   playerWeapons?: Weapon[];
+  character?: Character;
   onExitGame?: () => void;
   targetLevel: number;         // The level this reward is for
   hasMoreLevelUps: boolean;    // True if more level-ups pending after this
@@ -112,6 +114,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
   freeRerolls,
   playerStats,
   playerWeapons = [],
+  character,
   onExitGame,
   targetLevel,
   hasMoreLevelUps,
@@ -143,6 +146,17 @@ const LevelUp: React.FC<LevelUpProps> = ({
       {/* Eyebrow Banner */}
       <View style={styles.eyebrow}>
         <View style={styles.eyebrowLeft}>
+          {character && (
+            <FighterAvatar
+              character={character}
+              size={34}
+              health={playerStats.health}
+              maxHealth={playerStats.maxHealth}
+              mood="streak"
+              reaction={{ type: 'powerup', id: targetLevel }}
+              interactive
+            />
+          )}
           <Text style={styles.eyebrowText}>Level Up!</Text>
           <Text style={styles.levelNumber}>Level {targetLevel}</Text>
           <View style={styles.freeBadge}>
@@ -153,7 +167,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
           <View style={styles.moneyBadge}>
             <Text style={styles.moneyText}>${playerMoney}</Text>
           </View>
-          <GameMenu playerStats={playerStats} playerWeapons={playerWeapons} onExitGame={onExitGame} />
+          <GameMenu playerStats={playerStats} playerWeapons={playerWeapons} character={character} onExitGame={onExitGame} />
         </View>
       </View>
 

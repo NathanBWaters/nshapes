@@ -7,6 +7,7 @@ import { AnimatedCounter } from './ui/AnimatedCounter';
 import { ScreenTransition } from './ScreenTransition';
 import RoundProgressChart, { RoundScore } from './RoundProgressChart';
 import ChallengeCard from './ui/ChallengeCard';
+import { FighterAvatar } from './fighters';
 
 interface VictoryScreenProps {
   player: Player;
@@ -76,9 +77,16 @@ const VictoryScreen: React.FC<VictoryScreenProps> = ({
         <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
           {/* Character Info */}
           <View style={styles.characterSection}>
-            {player.character.icon && (
-              <Icon name={player.character.icon} size={48} color={COLORS.deepOnyx} />
-            )}
+            <FighterAvatar
+              character={player.character}
+              size={84}
+              health={playerStats.health}
+              maxHealth={playerStats.maxHealth}
+              mood="victory"
+              reaction={{ type: 'ecstatic', id: 1 }}
+              framed
+              interactive
+            />
             <Text style={styles.characterName}>{player.character.name}</Text>
             <Text style={styles.subtitle}>Completed all 10 rounds!</Text>
           </View>

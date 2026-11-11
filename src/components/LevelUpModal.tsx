@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Pressable, StyleSheet, Modal, Platform, ScrollView } from 'react-native';
-import { PlayerStats, Weapon } from '@/types';
+import { Character, PlayerStats, Weapon } from '@/types';
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
 import { getPlayerWeaponCount } from '@/utils/gameDefinitions';
 import {
@@ -12,6 +12,7 @@ import {
 import Icon from './Icon';
 import KeywordText from './KeywordText';
 import { playSound } from '@/utils/sounds';
+import { FighterAvatar } from './fighters';
 
 /**
  * LevelUpModal - In-round level-up popup
@@ -36,6 +37,7 @@ interface LevelUpModalProps {
   freeRerolls: number;
   playerStats: PlayerStats;
   playerWeapons?: Weapon[];
+  character?: Character;
   targetLevel: number;
   hasMoreLevelUps: boolean;
 }
@@ -50,6 +52,7 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({
   freeRerolls,
   playerStats,
   playerWeapons = [],
+  character,
   targetLevel,
   hasMoreLevelUps,
 }) => {
@@ -92,6 +95,17 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
+              {character && (
+                <FighterAvatar
+                  character={character}
+                  size={38}
+                  health={playerStats.health}
+                  maxHealth={playerStats.maxHealth}
+                  mood="streak"
+                  reaction={{ type: 'powerup', id: targetLevel }}
+                  interactive
+                />
+              )}
               <Text style={styles.headerTitle}>LEVEL UP!</Text>
               <Text style={styles.headerLevel}>Level {targetLevel}</Text>
             </View>

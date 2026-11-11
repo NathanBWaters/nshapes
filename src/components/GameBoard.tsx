@@ -48,6 +48,7 @@ interface GameBoardProps {
   activeAttributes?: AttributeName[];
   onSelectedCountChange?: (count: number) => void;
   onHintStateChange?: (hasHint: boolean) => void;
+  onBoardIdleChange?: (isIdle: boolean) => void;
   onUseHint?: () => void;
   triggerHint?: number;
   triggerClearHint?: number;
@@ -109,6 +110,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
   activeAttributes = DEFAULT_ATTRIBUTES,
   onSelectedCountChange,
   onHintStateChange,
+  onBoardIdleChange,
   onUseHint,
   triggerHint,
   triggerClearHint,
@@ -133,15 +135,17 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
   // Idle detection for ambient breathing animations
   const [isIdle, setIsIdle] = useState(false);
+  const [isSleepyIdle, setIsSleepyIdle] = useState(false);
   const [suggestionCardId, setSuggestionCardId] = useState<string | null>(null);
   const lastInteractionTimeRef = useRef(Date.now());
 
   // Check for idle state (3+ seconds since last interaction)
-  // Also trigger suggestion card after 10s of idle
+  // Also trigger fighter sleepy state at 8s and suggestion card after 10s of idle
   useEffect(() => {
     const checkIdle = () => {
       const timeSinceInteraction = Date.now() - lastInteractionTimeRef.current;
       setIsIdle(timeSinceInteraction >= 3000);
+      setIsSleepyIdle(timeSinceInteraction >= 8000);
 
       // After 10s of no interaction, show a suggestion card
       if (timeSinceInteraction >= 10000 && !suggestionCardId) {
@@ -182,9 +186,15 @@ const GameBoard: React.FC<GameBoardProps> = ({
     if (selectedCards.length > 0) {
       lastInteractionTimeRef.current = Date.now();
       setIsIdle(false);
+      setIsSleepyIdle(false);
       setSuggestionCardId(null);
     }
   }, [selectedCards]);
+
+  // Report sleepy board-idle state to parent (for fighter drowsy animation)
+  useEffect(() => {
+    onBoardIdleChange?.(isSleepyIdle);
+  }, [isSleepyIdle, onBoardIdleChange]);
 
   // Screen shake for explosions and failures
   const { shakeStyle, triggerShake, shake } = useScreenShake();

@@ -64,6 +64,8 @@ import Icon, { IconName } from './Icon';
 import GameMenu from './GameMenu';
 import { ScreenTransition } from './ScreenTransition';
 import KeywordText from './KeywordText';
+import { FighterAvatar } from './fighters';
+import { FighterReactionEvent } from '@/utils/fighterAnimations';
 
 // IMPORTANT: This game should NOT have scrollable screens.
 // All screens should fill the available height without requiring scrolling.
@@ -138,6 +140,16 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
   const displayedCharacter = hoveredCharacter || selectedCharacter;
   const selectedChar = characters.find(c => c.name === displayedCharacter);
 
+  // Trigger a peppy entrance salute whenever the displayed character changes
+  const [selectReaction, setSelectReaction] = React.useState<FighterReactionEvent | null>(null);
+  const reactionCounterRef = React.useRef(0);
+  React.useEffect(() => {
+    if (selectedChar) {
+      reactionCounterRef.current += 1;
+      setSelectReaction({ type: 'entrance', id: reactionCounterRef.current });
+    }
+  }, [selectedChar?.name]);
+
   return (
     <ScreenTransition>
       <View style={styles.container}>
@@ -159,13 +171,15 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
             >
               {/* Character Header: Icon + Name/Description side by side */}
               <View style={styles.characterHeader}>
-                {/* Character Icon - Square on left */}
+                {/* Animated Fighter Portrait - Tap to pet! */}
                 <View style={styles.previewArea}>
-                  {selectedChar.icon ? (
-                    <Icon name={selectedChar.icon} size={48} color={COLORS.slateCharcoal} />
-                  ) : (
-                    <Text style={styles.previewText}>{selectedChar.name}</Text>
-                  )}
+                  <FighterAvatar
+                    character={selectedChar}
+                    size={64}
+                    reaction={selectReaction}
+                    interactive
+                    testID="character-detail-fighter"
+                  />
                 </View>
 
                 {/* Character Info - Right of icon */}
@@ -317,13 +331,12 @@ const CharacterSelection: React.FC<CharacterSelectionProps> = ({
                 ) : (
                   <>
                     <View style={styles.optionIconArea}>
-                      {character.icon && (
-                        <Icon
-                          name={character.icon}
-                          size={Math.min(36, characterCardSize * 0.5)}
-                          color={COLORS.slateCharcoal}
-                        />
-                      )}
+                      <FighterAvatar
+                        character={character}
+                        size={Math.min(44, Math.round(characterCardSize * 0.56))}
+                        mood={isSelected || hoveredCharacter === character.name ? 'anticipation' : 'idle'}
+                        testID={`character-option-fighter-${character.name}`}
+                      />
                     </View>
                     <View style={styles.optionNameArea}>
                       <Text

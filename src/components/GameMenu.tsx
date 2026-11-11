@@ -6,6 +6,7 @@ import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
 import WeaponGuide from './WeaponGuide';
 import WeaponList from './WeaponList';
 import Icon from './Icon';
+import { FighterAvatar } from './fighters';
 import { WEAPONS, getWeaponByName } from '@/utils/gameDefinitions';
 import { SettingsStorage } from '@/utils/storage';
 import { setAudioEnabled } from '@/utils/sounds';
@@ -366,9 +367,13 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
             </View>
             <View style={styles.characterInfoContainer}>
               <View style={styles.characterIconContainer}>
-                {character.icon && (
-                  <Icon name={character.icon} size={48} color={COLORS.slateCharcoal} />
-                )}
+                <FighterAvatar
+                  character={character}
+                  size={52}
+                  health={playerStats.health}
+                  maxHealth={playerStats.maxHealth}
+                  interactive
+                />
               </View>
               <View style={styles.characterDetails}>
                 <Text style={styles.characterName}>{character.name}</Text>

@@ -4,6 +4,8 @@ import { COLORS, RADIUS } from '@/utils/colors';
 import { triggerHaptic } from '@/utils/haptics';
 import { playSound } from '@/utils/sounds';
 import Icon, { IconName } from './Icon';
+import { FighterAvatar } from './fighters';
+import { CHARACTERS } from '@/utils/gameDefinitions';
 import { SavedGameStorage } from '@/utils/storage';
 import { version } from '../../package.json';
 
@@ -105,13 +107,29 @@ const MainMenu: React.FC<MainMenuProps> = ({
 }) => {
   const hasSavedGame = SavedGameStorage.hasSavedGame();
   const savedGame = hasSavedGame ? SavedGameStorage.load() : null;
+  const [mascotIndex, setMascotIndex] = React.useState(0);
+
+  const mascotCharacter = savedGame?.characterName
+    ? CHARACTERS.find(c => c.name === savedGame.characterName) ?? CHARACTERS[0]
+    : CHARACTERS[mascotIndex % CHARACTERS.length];
 
   return (
     <View style={styles.container}>
       {/* Main Content */}
       <View style={styles.content}>
-        {/* Title Section */}
+        {/* Title Section with Living Mascot */}
         <View style={styles.titleSection}>
+          <FighterAvatar
+            character={mascotCharacter}
+            size={68}
+            interactive
+            onPet={(type) => {
+              if (type === 'dizzy_joy' && !savedGame) {
+                setMascotIndex(i => (i + 1) % CHARACTERS.length);
+              }
+            }}
+            testID="main-menu-mascot"
+          />
           <Text style={styles.title}>NSHAPES</Text>
           <Text style={styles.subtitle}>Roguelike Match-Three Puzzle</Text>
         </View>

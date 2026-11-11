@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Pressable, StyleSheet, ScrollView, Platform } from 'react-native';
 import { usePWASafeAreaInsets } from '@/utils/usePWASafeAreaInsets';
-import { PlayerStats, Weapon, WeaponRarity } from '@/types';
+import { Character, PlayerStats, Weapon, WeaponRarity } from '@/types';
 import type { EnemyInstance, EnemyOption } from '@/types/enemy';
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
 import {
@@ -13,6 +13,7 @@ import {
 import Icon from './Icon';
 import GameMenu from './GameMenu';
 import KeywordText from './KeywordText';
+import { FighterAvatar } from './fighters';
 
 // Tier colors for visual distinction
 const TIER_COLORS: Record<1 | 2 | 3 | 4, string> = {
@@ -28,6 +29,7 @@ interface EnemySelectionProps {
   round: number;
   playerStats: PlayerStats;
   playerWeapons?: Weapon[];
+  character?: Character;
   onExitGame?: () => void;
 }
 
@@ -37,6 +39,7 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
   round,
   playerStats,
   playerWeapons = [],
+  character,
   onExitGame
 }) => {
   const insets = usePWASafeAreaInsets();
@@ -57,8 +60,20 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
     <View style={styles.container}>
       {/* Eyebrow Banner */}
       <View style={styles.eyebrow}>
-        <Text style={styles.eyebrowText}>Round {round} - Choose Enemy</Text>
-        <GameMenu playerStats={playerStats} playerWeapons={playerWeapons} onExitGame={onExitGame} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {character && (
+            <FighterAvatar
+              character={character}
+              size={34}
+              health={playerStats.health}
+              maxHealth={playerStats.maxHealth}
+              mood="curious"
+              interactive
+            />
+          )}
+          <Text style={styles.eyebrowText}>Round {round} - Choose Enemy</Text>
+        </View>
+        <GameMenu playerStats={playerStats} playerWeapons={playerWeapons} character={character} onExitGame={onExitGame} />
       </View>
 
       {/* Top Section - Detail Focus (larger, scrollable) */}

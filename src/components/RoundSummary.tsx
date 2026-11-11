@@ -9,7 +9,7 @@ import ReAnimated, {
   withDelay,
 } from 'react-native-reanimated';
 import { usePWASafeAreaInsets } from '@/utils/usePWASafeAreaInsets';
-import { PlayerStats, Weapon } from '@/types';
+import { Character, PlayerStats, Weapon } from '@/types';
 import type { EnemyInstance, WeaponImpact } from '@/types/enemy';
 import ChallengeCard from './ui/ChallengeCard';
 import { COLORS, RADIUS } from '@/utils/colors';
@@ -18,6 +18,7 @@ import Icon, { IconName } from './Icon';
 import GameMenu from './GameMenu';
 import { ScreenTransition } from './ScreenTransition';
 import RoundProgressChart, { RoundScore } from './RoundProgressChart';
+import { FighterAvatar } from './fighters';
 
 interface RoundSummaryProps {
   round: number;
@@ -33,6 +34,7 @@ interface RoundSummaryProps {
   onContinue: () => void;
   playerStats: PlayerStats;
   playerWeapons?: Weapon[];
+  character?: Character;
   onExitGame?: () => void;
   roundScores: RoundScore[];
   enemy?: EnemyInstance;
@@ -94,6 +96,7 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
   onContinue,
   playerStats,
   playerWeapons = [],
+  character,
   onExitGame,
   roundScores,
   enemy,
@@ -223,22 +226,37 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
         {/* Eyebrow Banner */}
         <View style={styles.eyebrow}>
         <Text style={styles.eyebrowText}>ROUND {round} COMPLETE</Text>
-        <GameMenu playerStats={playerStats} playerWeapons={playerWeapons} onExitGame={onExitGame} />
+        <GameMenu playerStats={playerStats} playerWeapons={playerWeapons} character={character} onExitGame={onExitGame} />
       </View>
 
       <ScrollView style={styles.content} contentContainerStyle={[styles.contentContainer, { paddingBottom: 100 + insets.bottom }]}>
-        {/* Match Counter */}
+        {/* Match Counter + Celebrating Fighter */}
         <Animated.View
           style={[
             styles.matchCounterContainer,
+            character && styles.matchCounterWithFighter,
             {
               opacity: matchCounterOpacity,
               transform: [{ scale: matchCounterScale }],
             },
           ]}
         >
-          <Text style={styles.matchCounterLabel}>MATCHES</Text>
-          <Text style={styles.matchCounterValue}>{animatedMatchCount}</Text>
+          {character && (
+            <FighterAvatar
+              character={character}
+              size={60}
+              health={playerStats.health}
+              maxHealth={playerStats.maxHealth}
+              mood="victory"
+              reaction={{ type: didLevelUp || enemyDefeated ? 'ecstatic' : 'joy', id: round }}
+              framed
+              interactive
+            />
+          )}
+          <View style={styles.matchCounterTextCol}>
+            <Text style={styles.matchCounterLabel}>MATCHES</Text>
+            <Text style={styles.matchCounterValue}>{animatedMatchCount}</Text>
+          </View>
         </Animated.View>
 
         {/* Awards Grid */}
@@ -462,6 +480,14 @@ const styles = StyleSheet.create({
   matchCounterContainer: {
     alignItems: 'center',
     paddingVertical: 24,
+  },
+  matchCounterWithFighter: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 18,
+  },
+  matchCounterTextCol: {
+    alignItems: 'center',
   },
   matchCounterLabel: {
     color: COLORS.slateCharcoal,

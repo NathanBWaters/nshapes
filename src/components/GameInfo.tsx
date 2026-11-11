@@ -1,9 +1,11 @@
 import React, { ReactNode } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
 import { CopilotStep, walkthroughable } from 'react-native-copilot';
-import { PlayerStats, Weapon } from '@/types';
+import { Character, PlayerStats, Weapon } from '@/types';
 import CircularTimer from './CircularTimer';
 import GameMenu, { DevModeCallbacks } from './GameMenu';
+import { FighterAvatar } from './fighters';
+import { FighterAmbientMood, FighterReactionEvent } from '@/utils/fighterAnimations';
 import { COLORS, RADIUS } from '@/utils/colors';
 
 const WalkthroughableView = walkthroughable(View);
@@ -120,6 +122,10 @@ interface GameInfoProps {
   totalTime: number;
   playerStats: PlayerStats;
   playerWeapons?: Weapon[];
+  character?: Character;
+  fighterMood?: FighterAmbientMood;
+  fighterReaction?: FighterReactionEvent | null;
+  fighterStreak?: number;
   onHintPress?: () => void;
   onClearHint?: () => void;
   hasActiveHint?: boolean;
@@ -164,6 +170,10 @@ const GameInfo: React.FC<GameInfoProps> = ({
   totalTime,
   playerStats,
   playerWeapons = [],
+  character,
+  fighterMood = 'idle',
+  fighterReaction = null,
+  fighterStreak = 0,
   onHintPress,
   onClearHint,
   hasActiveHint = false,
@@ -176,6 +186,8 @@ const GameInfo: React.FC<GameInfoProps> = ({
   controlledMenuOpen,
   onMenuOpenChange,
 }) => {
+  const { width: screenWidth } = useWindowDimensions();
+  const isCompactHud = Boolean(character) && screenWidth < 430;
   // Calculate score progress percentage
   const scoreProgress = Math.min((score / targetScore) * 100, 100);
 
@@ -208,113 +220,137 @@ const GameInfo: React.FC<GameInfoProps> = ({
 
   return (
     // IMPORTANT: Top bar must always be 1 row on all screen sizes (including mobile)
-    <View style={styles.container}>
-      {/* Single row layout for all screen sizes */}
-      <View style={styles.statsRow}>
-        <View style={styles.leftSection}>
-          {/* Round */}
-          {withCopilot('round',
-            <Text style={styles.statLabel}>R{round}</Text>,
-            styles.statBadge
-          )}
+    <View
+      style={[
+        styles.container,
+        character && styles.containerWithFighter,
+        isCompactHud && styles.containerCompact,
+      ]}
+    >
+      {character && (
+        <FighterAvatar
+          character={character}
+          size={isCompactHud ? 38 : 46}
+          health={playerStats.health}
+          maxHealth={playerStats.maxHealth}
+          mood={fighterMood}
+          reaction={fighterReaction}
+          streak={fighterStreak}
+          framed
+          interactive
+          testID="hud-fighter-avatar"
+        />
+      )}
 
-          {/* Health */}
-          {withCopilot('health',
-            <>
-              <HeartIcon style={styles.heartIcon} />
-              <Text style={[styles.statValue, playerStats.health <= 1 && styles.criticalValue]}>
-                {playerStats.health}/{playerStats.maxHealth}
-              </Text>
-            </>,
-            styles.statItem
-          )}
+      <View style={styles.hudContentColumn}>
+        {/* Single row layout for all screen sizes */}
+        <View style={styles.statsRow}>
+          <View style={[styles.leftSection, isCompactHud && styles.leftSectionCompact]}>
+            {/* Round */}
+            {withCopilot('round',
+              <Text style={[styles.statLabel, isCompactHud && styles.statLabelCompact]}>R{round}</Text>,
+              [styles.statBadge, isCompactHud && styles.statBadgeCompact]
+            )}
 
-          {/* Money */}
-          {withCopilot('money',
-            <>
-              <Text style={styles.coinIcon}>$</Text>
-              <Text style={styles.statValue}>{playerStats.money}</Text>
-            </>,
-            styles.statItem
-          )}
-
-          {/* Level + XP Progress */}
-          {withCopilot('level',
-            <>
-              <Text style={styles.levelText}>Lv{playerStats.level}</Text>
-              <View style={styles.xpBarContainer}>
-                <View style={[styles.xpBarFill, { width: `${xpProgress}%` }]} />
-              </View>
-            </>,
-            styles.levelContainer
-          )}
-
-          {/* Graces */}
-          {((playerStats.graces ?? 0) > 0 || copilotMode) &&
-            withCopilot('graces',
+            {/* Health */}
+            {withCopilot('health',
               <>
-                <Text style={styles.graceIcon}>🍀</Text>
-                <Text style={styles.graceCount}>{playerStats.graces ?? 0}</Text>
+                <HeartIcon style={styles.heartIcon} />
+                <Text style={[styles.statValue, isCompactHud && styles.statValueCompact, playerStats.health <= 1 && styles.criticalValue]}>
+                  {playerStats.health}/{playerStats.maxHealth}
+                </Text>
               </>,
-              styles.graceBadge
-            )
-          }
+              [styles.statItem, isCompactHud && styles.statItemCompact]
+            )}
 
-          {/* Hints */}
-          {withCopilot('hints',
-            <HintButton
-              hintsAvailable={hintsAvailable}
-              maxHints={maxHints}
-              hasActiveHint={hasActiveHint}
-              onPress={hasActiveHint ? (onClearHint ?? (() => {})) : (onHintPress ?? (() => {}))}
-              disabled={copilotMode || (hintsAvailable <= 0 && !hasActiveHint)}
-            />,
-            undefined
-          )}
+            {/* Money */}
+            {withCopilot('money',
+              <>
+                <Text style={styles.coinIcon}>$</Text>
+                <Text style={[styles.statValue, isCompactHud && styles.statValueCompact]}>{playerStats.money}</Text>
+              </>,
+              [styles.statItem, isCompactHud && styles.statItemCompact]
+            )}
 
-          {/* Timer */}
-          {withCopilot('timer',
-            <CircularTimer
-              currentTime={time}
-              totalTime={totalTime}
-              size={34}
-              strokeWidth={3}
-            />,
-            undefined
-          )}
+            {/* Level + XP Progress */}
+            {withCopilot('level',
+              <>
+                <Text style={[styles.levelText, isCompactHud && styles.statValueCompact]}>Lv{playerStats.level}</Text>
+                <View style={[styles.xpBarContainer, isCompactHud && styles.xpBarCompact]}>
+                  <View style={[styles.xpBarFill, { width: `${xpProgress}%` }]} />
+                </View>
+              </>,
+              [styles.levelContainer, isCompactHud && styles.statItemCompact]
+            )}
 
-          {/* Menu Button */}
-          <GameMenu
-            playerStats={playerStats}
-            playerWeapons={playerWeapons}
-            onExitGame={onExitGame}
-            onEndRoundEarly={onEndRoundEarly}
-            canEndRoundEarly={canEndRoundEarly}
-            devMode={devMode}
-            devCallbacks={devCallbacks}
-            copilotMode={copilotMode}
-            controlledOpen={controlledMenuOpen}
-            onMenuOpenChange={onMenuOpenChange}
-          />
-        </View>
-      </View>
+            {/* Graces */}
+            {((playerStats.graces ?? 0) > 0 || copilotMode) &&
+              withCopilot('graces',
+                <>
+                  <Text style={styles.graceIcon}>🍀</Text>
+                  <Text style={[styles.graceCount, isCompactHud && styles.statValueCompact]}>{playerStats.graces ?? 0}</Text>
+                </>,
+                [styles.graceBadge, isCompactHud && styles.statItemCompact]
+              )
+            }
 
-      {/* Score progress bar */}
-      {withCopilot('score',
-        <>
-          <View style={styles.scoreBarContainer}>
-            <View
-              style={[
-                styles.scoreBarFill,
-                { width: `${scoreProgress}%` },
-                scoreProgress >= 100 && styles.scoreBarComplete,
-              ]}
+            {/* Hints */}
+            {withCopilot('hints',
+              <HintButton
+                hintsAvailable={hintsAvailable}
+                maxHints={maxHints}
+                hasActiveHint={hasActiveHint}
+                onPress={hasActiveHint ? (onClearHint ?? (() => {})) : (onHintPress ?? (() => {}))}
+                disabled={copilotMode || (hintsAvailable <= 0 && !hasActiveHint)}
+              />,
+              undefined
+            )}
+
+            {/* Timer */}
+            {withCopilot('timer',
+              <CircularTimer
+                currentTime={time}
+                totalTime={totalTime}
+                size={isCompactHud ? 30 : 34}
+                strokeWidth={3}
+              />,
+              undefined
+            )}
+
+            {/* Menu Button */}
+            <GameMenu
+              playerStats={playerStats}
+              playerWeapons={playerWeapons}
+              character={character}
+              onExitGame={onExitGame}
+              onEndRoundEarly={onEndRoundEarly}
+              canEndRoundEarly={canEndRoundEarly}
+              devMode={devMode}
+              devCallbacks={devCallbacks}
+              copilotMode={copilotMode}
+              controlledOpen={controlledMenuOpen}
+              onMenuOpenChange={onMenuOpenChange}
             />
           </View>
-          <ScoreText score={score} targetScore={targetScore} style={styles.scoreText} />
-        </>,
-        styles.scoreRow
-      )}
+        </View>
+
+        {/* Score progress bar */}
+        {withCopilot('score',
+          <>
+            <View style={styles.scoreBarContainer}>
+              <View
+                style={[
+                  styles.scoreBarFill,
+                  { width: `${scoreProgress}%` },
+                  scoreProgress >= 100 && styles.scoreBarComplete,
+                ]}
+              />
+            </View>
+            <ScoreText score={score} targetScore={targetScore} style={styles.scoreText} />
+          </>,
+          styles.scoreRow
+        )}
+      </View>
     </View>
   );
 };
@@ -326,6 +362,38 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.slateCharcoal,
     paddingHorizontal: 8,
+  },
+  containerWithFighter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  containerCompact: {
+    paddingHorizontal: 6,
+    gap: 6,
+  },
+  hudContentColumn: {
+    flex: 1,
+  },
+  leftSectionCompact: {
+    gap: 3,
+  },
+  statBadgeCompact: {
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+  },
+  statLabelCompact: {
+    fontSize: 11,
+  },
+  statItemCompact: {
+    paddingHorizontal: 3,
+    paddingVertical: 2,
+  },
+  statValueCompact: {
+    fontSize: 11,
+  },
+  xpBarCompact: {
+    width: 12,
   },
   // Single-row layout (used for all screen sizes)
   statsRow: {
@@ -471,6 +539,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     marginTop: 4,
+  },
+  scoreRowWithCompactFighter: {
+    flex: 1,
+    marginTop: 0,
   },
   scoreBarContainer: {
     flex: 1,
