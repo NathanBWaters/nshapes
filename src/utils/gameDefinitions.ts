@@ -36,6 +36,10 @@ export const DEFAULT_PLAYER_STATS: PlayerStats = {
 
   // New weapon effect stats
   explosionChance: STARTING_STATS.explosionChance,
+  explosionDamage: STARTING_STATS.explosionDamage,
+  laserDamage: STARTING_STATS.laserDamage,
+  ricochetDamage: STARTING_STATS.ricochetDamage,
+  burnDamage: STARTING_STATS.burnDamage,
   autoHintChance: STARTING_STATS.autoHintChance,
   autoHintInterval: STARTING_STATS.autoHintInterval,
   boardGrowthChance: STARTING_STATS.boardGrowthChance,
@@ -115,8 +119,8 @@ export const CHARACTERS: Character[] = [
 ];
 
 // Weapon system - one entry per weapon. A weapon grows stronger through levels
-// (`tierEffects`, Adventure Workshop tiers and reward upgrades), not through
-// separate rare/epic copies.
+// (`perLevel`: flat gains per level, found as Adventure rewards) and Workshop
+// tuning (multipliers on those numbers), not through separate copies.
 export const WEAPONS: Weapon[] = [
   // 1. BLAST POWDER - Explosive adjacent cards on match
   {
@@ -130,41 +134,28 @@ export const WEAPONS: Weapon[] = [
     flavorText: 'After matching, each adjacent card (up/down/left/right) has a chance to explode. Exploded cards are destroyed and award +1 point and +1 coin each.',
     icon: 'lorc/bright-explosion',
     specialEffect: 'explosive',
-    effects: { explosionChance: 10 },
-    tierEffects: [{ explosionChance: 20 }, { explosionChance: 30 }, { explosionChance: 40 }],
+    effects: { explosionChance: 10, explosionDamage: 0.25 },
+    perLevel: { explosionChance: 6, explosionDamage: 0.25 }
   },
 
   // 2. ORACLE EYE - Auto-hint system
   {
-    id: 'oracle-eye-common',
+    id: 'oracle-eye',
     name: 'Oracle Eye',
     rarity: 'common',
     level: 1,
     price: 6,
-    description: '15% chance to reveal 1 card from a valid set 15s after match.',
+    description: '15% chance to reveal 1 card from a valid set after a pause.',
     shortDescription: 'Hint when stuck',
     flavorText: 'After 15 seconds without a match, has a chance to highlight one card guaranteed to be part of a valid set. You still need to find the other two!',
     icon: 'lorc/sheikah-eye',
     specialEffect: 'autoHint',
-    effects: { autoHintChance: 15 }
+    effects: { autoHintChance: 15 },
+    perLevel: { autoHintChance: 5 }
   },
-  {
-    id: 'oracle-eye-rare',
-    name: 'Oracle Eye',
-    rarity: 'rare',
-    level: 1,
-    price: 12,
-    description: '45% chance to reveal 1 card from a valid set 10s after match.',
-    shortDescription: 'Hint when stuck',
-    flavorText: 'After 10 seconds without a match, has a chance to highlight one card guaranteed to be part of a valid set. You still need to find the other two!',
-    icon: 'lorc/sheikah-eye',
-    specialEffect: 'autoHint',
-    effects: { autoHintChance: 45, autoHintInterval: 5000 }
-  },
-
   // 2.5. MYSTIC SIGHT - Enhanced autohint reveals (legendary only)
   {
-    id: 'mystic-sight-legendary',
+    id: 'mystic-sight',
     name: 'Mystic Sight',
     rarity: 'legendary',
     level: 1,
@@ -175,6 +166,7 @@ export const WEAPONS: Weapon[] = [
     icon: 'lorc/third-eye',
     specialEffect: 'enhancedHint',
     effects: { enhancedHintChance: 33 },
+    perLevel: { enhancedHintChance: 10 },
     maxCount: 1  // Unique - only one can be owned
   },
 
@@ -185,12 +177,12 @@ export const WEAPONS: Weapon[] = [
     rarity: 'common',
     level: 1,
     price: 7,
-    description: '+1 starting board size.',
+    description: '+2 starting board size.',
     shortDescription: 'Larger starting board',
     flavorText: 'Start each round with more cards on the board. More cards means more possible matches to find.',
     icon: 'lorc/field',
-    effects: { fieldSize: 1 },
-    tierEffects: [{ fieldSize: 2 }, { fieldSize: 3 }, { fieldSize: 4 }],
+    effects: { fieldSize: 2 },
+    perLevel: { fieldSize: 1 }
   },
 
   // 4. GROWTH SEED - Board grows on match
@@ -200,13 +192,13 @@ export const WEAPONS: Weapon[] = [
     rarity: 'common',
     level: 1,
     price: 6,
-    description: '5% chance to expand board on match.',
+    description: '6% chance to expand board on match.',
     shortDescription: 'Board expands on match',
     flavorText: 'After matching, has a chance to add new cards to the board. A growing board gives you more options and potential matches.',
     icon: 'delapouite/card-exchange',
     specialEffect: 'boardGrowth',
-    effects: { boardGrowthChance: 5 },
-    tierEffects: [{ boardGrowthChance: 10 }, { boardGrowthChance: 15 }, { boardGrowthChance: 20 }],
+    effects: { boardGrowthChance: 6 },
+    perLevel: { boardGrowthChance: 4 }
   },
 
   // 5. FLINT SPARK - Fire starter
@@ -221,8 +213,8 @@ export const WEAPONS: Weapon[] = [
     flavorText: 'After matching, adjacent cards may catch fire. Burning cards are destroyed after 0.25 seconds, awarding points. Fire has a 10% chance to spread to neighbors when a card burns out.',
     icon: 'lorc/campfire',
     specialEffect: 'fire',
-    effects: { fireSpreadChance: 10 },
-    tierEffects: [{ fireSpreadChance: 20 }, { fireSpreadChance: 30 }, { fireSpreadChance: 40 }],
+    effects: { fireSpreadChance: 10, burnDamage: 0.25 },
+    perLevel: { fireSpreadChance: 6, burnDamage: 0.25 }
   },
 
   // 6. SECOND CHANCE - Starting graces
@@ -237,7 +229,7 @@ export const WEAPONS: Weapon[] = [
     flavorText: 'Graces are consumed when they protect you from a near-miss. Once used, they\'re gone!',
     icon: 'lorc/clover',
     effects: { graces: 1 },
-    tierEffects: [{ graces: 2 }, { graces: 3 }, { graces: 4 }],
+    perLevel: { graces: 1 }
   },
 
   // 7. FORTUNE TOKEN - Grace gain on match
@@ -247,28 +239,13 @@ export const WEAPONS: Weapon[] = [
     rarity: 'common',
     level: 1,
     price: 6,
-    description: '5% chance to gain grace on match.',
+    description: '6% chance to gain grace on match.',
     shortDescription: 'Gain graces on match',
     flavorText: 'After a valid match, has a chance to grant +1 grace. Graces protect you from near-miss invalid matches.',
     icon: 'lorc/cycle',
     specialEffect: 'graceGain',
-    effects: { graceGainChance: 5 },
-    tierEffects: [{ graceGainChance: 10 }, { graceGainChance: 15 }, { graceGainChance: 25 }],
-  },
-
-  // 7.5. SNOWBALL - Guaranteed starting grace (Legendary)
-  {
-    id: 'snowball',
-    name: 'Snowball',
-    rarity: 'legendary',
-    level: 1,
-    price: 40,
-    description: 'Guarantees at least 1 grace at the start of each round.',
-    shortDescription: 'Start with 1 grace',
-    flavorText: 'A magical snowball that never melts, providing comfort even in the darkest times.',
-    icon: 'lorc/snowflake-1',
-    maxCount: 1,
-    effects: {}
+    effects: { graceGainChance: 6 },
+    perLevel: { graceGainChance: 4 }
   },
 
   // 8. LIFE VESSEL - Max health
@@ -283,7 +260,7 @@ export const WEAPONS: Weapon[] = [
     flavorText: 'Increases your maximum health pool and restores some health. You lose 1 health when picking an invalid set without a grace to protect you.',
     icon: 'lorc/heart-inside',
     effects: { maxHealth: 1, health: 1 },
-    tierEffects: [{ maxHealth: 2, health: 2 }, { maxHealth: 3, health: 3 }, { maxHealth: 4, health: 4 }],
+    perLevel: { maxHealth: 0.5, health: 0.5 }
   },
 
   // 9. MENDING CHARM - Heal on match
@@ -293,13 +270,13 @@ export const WEAPONS: Weapon[] = [
     rarity: 'common',
     level: 1,
     price: 5,
-    description: '5% chance to heal on match.',
+    description: '6% chance to heal on match.',
     shortDescription: 'Heal on match',
     flavorText: 'After a valid match, has a chance to restore 1 health. Cannot heal above your maximum health.',
     icon: 'lorc/shining-heart',
     specialEffect: 'healing',
-    effects: { healingChance: 5 },
-    tierEffects: [{ healingChance: 10 }, { healingChance: 15 }, { healingChance: 25 }],
+    effects: { healingChance: 6 },
+    perLevel: { healingChance: 4 }
   },
 
   // 10. CRYSTAL ORB - Max hints capacity
@@ -314,7 +291,7 @@ export const WEAPONS: Weapon[] = [
     flavorText: 'Hints highlight a valid set on the board when activated. Earn hints from matches to fill your capacity.',
     icon: 'lorc/floating-crystal',
     effects: { maxHints: 1 },
-    tierEffects: [{ maxHints: 2 }, { maxHints: 3 }, { maxHints: 4 }],
+    perLevel: { maxHints: 1 }
   },
 
   // 11. SEEKER LENS - Hint gain on match
@@ -324,13 +301,13 @@ export const WEAPONS: Weapon[] = [
     rarity: 'common',
     level: 1,
     price: 6,
-    description: '5% chance to gain hint on match.',
+    description: '6% chance to gain hint on match.',
     shortDescription: 'Gain hints on match',
     flavorText: 'After a valid match, has a chance to gain +1 hint. Use hints to highlight valid sets when you\'re stuck.',
     icon: 'lorc/light-bulb',
     specialEffect: 'hintGain',
-    effects: { hintGainChance: 5 },
-    tierEffects: [{ hintGainChance: 10 }, { hintGainChance: 15 }, { hintGainChance: 20 }],
+    effects: { hintGainChance: 6 },
+    perLevel: { hintGainChance: 4 }
   },
 
   // 12. SCHOLAR'S TOME - XP gain on match
@@ -346,7 +323,7 @@ export const WEAPONS: Weapon[] = [
     icon: 'lorc/open-book',
     specialEffect: 'xpGain',
     effects: { xpGainChance: 20 },
-    tierEffects: [{ xpGainChance: 30 }, { xpGainChance: 40 }, { xpGainChance: 50 }],
+    perLevel: { xpGainChance: 8 }
   },
 
   // 13. FORTUNE'S FAVOR - Coin gain on match
@@ -362,7 +339,7 @@ export const WEAPONS: Weapon[] = [
     icon: 'lorc/crown-coin',
     specialEffect: 'coinGain',
     effects: { coinGainChance: 20 },
-    tierEffects: [{ coinGainChance: 30 }, { coinGainChance: 40 }, { coinGainChance: 50 }],
+    perLevel: { coinGainChance: 6 }
   },
 
   // 14. CHRONO SHARD - Starting time bonus
@@ -377,7 +354,7 @@ export const WEAPONS: Weapon[] = [
     flavorText: 'Also raises the cap for time gained during matches, making Time Drop weapons more effective.',
     icon: 'lorc/hourglass',
     effects: { startingTime: 15 },
-    tierEffects: [{ startingTime: 30 }, { startingTime: 45 }, { startingTime: 60 }],
+    perLevel: { startingTime: 10 }
   },
 
   // 15. TIME DROP - Time gain on match (each rolls independently like lasers)
@@ -393,7 +370,7 @@ export const WEAPONS: Weapon[] = [
     icon: 'lorc/stopwatch',
     specialEffect: 'timeGain',
     effects: { timeGainChance: 5, timeGainAmount: 10 },
-    tierEffects: [{ timeGainChance: 10 }, { timeGainChance: 15 }, { timeGainChance: 20 }],
+    perLevel: { timeGainChance: 3, timeGainAmount: 2 }
   },
 
   // 16. PRISMATIC RAY - Laser destroys row/column
@@ -403,13 +380,13 @@ export const WEAPONS: Weapon[] = [
     rarity: 'common',
     level: 1,
     price: 10,
-    description: '3% chance to destroy entire row or column. Destroyed cards give +2 points each.',
+    description: '4% chance to destroy entire row or column. Destroyed cards give +2 points each.',
     shortDescription: 'May destroy a row or column',
     flavorText: 'Each laser weapon rolls independently on every match. When triggered, destroys all cards in either a row or column (randomly chosen). Multiple lasers can fire on the same match. Destroyed cards award +2 points each.',
     icon: 'lorc/laser-warning',
     specialEffect: 'laser',
-    effects: { laserChance: 3 },
-    tierEffects: [{ laserChance: 6 }, { laserChance: 10 }, { laserChance: 15 }],
+    effects: { laserChance: 4, laserDamage: 0.5 },
+    perLevel: { laserChance: 2.5, laserDamage: 0.5 }
   },
 
   // 17. CHAOS SHARD - Ricochet chain destruction
@@ -424,8 +401,8 @@ export const WEAPONS: Weapon[] = [
     flavorText: 'After matching, has a chance to destroy a random card anywhere on the board. Each destroyed card may chain to another random target. Chains can theoretically continue forever with lucky rolls!',
     icon: 'lorc/chained-arrow-heads',
     specialEffect: 'ricochet',
-    effects: { ricochetChance: 10, ricochetChainChance: 5 },
-    tierEffects: [{ ricochetChance: 20, ricochetChainChance: 10 }, { ricochetChance: 30, ricochetChainChance: 15 }, { ricochetChance: 40, ricochetChainChance: 20 }],
+    effects: { ricochetChance: 10, ricochetChainChance: 5, ricochetDamage: 0.25 },
+    perLevel: { ricochetChance: 6, ricochetChainChance: 3, ricochetDamage: 0.25 }
   },
 
   // 18. ECHO STONE - Auto-match another set on the board
@@ -441,12 +418,12 @@ export const WEAPONS: Weapon[] = [
     icon: 'lorc/echo-ripples',
     specialEffect: 'echo',
     effects: { echoChance: 5 },
-    tierEffects: [{ echoChance: 10 }, { echoChance: 15 }, { echoChance: 25 }],
+    perLevel: { echoChance: 3 }
   },
 
   // 19. CHAIN REACTION - Double auto-match (legendary only)
   {
-    id: 'chain-reaction-legendary',
+    id: 'chain-reaction',
     name: 'Chain Reaction',
     rarity: 'legendary',
     level: 1,
@@ -457,206 +434,9 @@ export const WEAPONS: Weapon[] = [
     icon: 'lorc/lightning-branches',
     specialEffect: 'chainReaction',
     effects: { chainReactionChance: 30 },
+    perLevel: { chainReactionChance: 10 },
     maxCount: 1  // Unique - only one can be owned
   },
-
-  // CHALLENGE LEGENDARIES - Temporary time trigger cap bonuses
-  {
-    id: 'prismatic-perfection',
-    name: 'Prismatic Perfection',
-    rarity: 'legendary',
-    level: 1,
-    price: 40,
-    description: 'All-different match: increase the max number of time gains on match you can have for that round by 5. Can only be done once per round.',
-    shortDescription: 'Perfect matches unlock time',
-    flavorText: 'When every attribute aligns in opposition, time itself bends to your will.',
-    icon: 'lorc/rainbow-star',
-    specialEffect: 'challengeLegendary',
-    effects: {},
-    maxCount: 1,
-  },
-  {
-    id: 'tabula-rasa',
-    name: 'Tabula Rasa',
-    rarity: 'legendary',
-    level: 1,
-    price: 40,
-    description: 'Clear the board: increase the max number of time gains on match you can have for that round by 5. Can only be done once per round.',
-    shortDescription: 'Board clear unlocks time',
-    flavorText: 'A clean slate reveals hidden seconds.',
-    icon: 'lorc/radar-sweep',
-    specialEffect: 'challengeLegendary',
-    effects: {},
-    maxCount: 1,
-  },
-  {
-    id: 'desperate-measures',
-    name: 'Desperate Measures',
-    rarity: 'legendary',
-    level: 1,
-    price: 40,
-    description: '3 consecutive invalid matches: increase the max number of time gains on match you can have for that round by 10. Can trigger multiple times.',
-    shortDescription: 'Sacrifice health for time',
-    flavorText: 'Sometimes you have to bleed to buy more seconds.',
-    icon: 'lorc/skull-crack',
-    specialEffect: 'challengeLegendary',
-    effects: {},
-    maxCount: 1,
-  },
-
-  // EPIC WEAPONS - Unique bundles of effects
-
-  // Multi-pack pattern: Combines multiple related effects
-  {
-    id: 'terra-foundation',
-    name: 'Terra Foundation',
-    rarity: 'epic',
-    level: 1,
-    price: 28,
-    description: '+5 field size + 10% board growth chance.',
-    shortDescription: 'Bigger board with growth',
-    flavorText: 'The earth itself expands to accommodate more cards.',
-    icon: 'lorc/stone-block',
-    specialEffect: 'boardGrowth',
-    effects: { fieldSize: 5, boardGrowthChance: 10 },
-  },
-  {
-    id: 'fortunes-shield',
-    name: "Fortune's Shield",
-    rarity: 'epic',
-    level: 1,
-    price: 26,
-    description: '+5 graces + 10% grace gain chance.',
-    shortDescription: 'More graces with gain chance',
-    flavorText: 'A shield blessed by fortune itself.',
-    icon: 'lorc/clover',
-    specialEffect: 'graceGain',
-    effects: { graces: 5, graceGainChance: 10 },
-  },
-  {
-    id: 'clairvoyant-sphere',
-    name: 'Clairvoyant Sphere',
-    rarity: 'epic',
-    level: 1,
-    price: 24,
-    description: '+4 max hints + 10% hint gain chance.',
-    shortDescription: 'More hints with gain chance',
-    flavorText: 'See beyond the veil to find more sets.',
-    icon: 'lorc/crystal-ball',
-    specialEffect: 'hintGain',
-    effects: { maxHints: 4, hintGainChance: 10 },
-  },
-  {
-    id: 'arcane-codex',
-    name: 'Arcane Codex',
-    rarity: 'epic',
-    level: 1,
-    price: 26,
-    description: '25% XP gain chance + 10% coin gain chance.',
-    shortDescription: 'XP and coin gains',
-    flavorText: 'Ancient wisdom that rewards knowledge with wealth.',
-    icon: 'lorc/open-book',
-    specialEffect: 'xpGain',
-    effects: { xpGainChance: 25, coinGainChance: 10 },
-  },
-  {
-    id: 'temporal-core',
-    name: 'Temporal Core',
-    rarity: 'epic',
-    level: 1,
-    price: 30,
-    description: '+60s starting time + 10% time gain chance.',
-    shortDescription: 'More time with gain chance',
-    flavorText: 'A core of frozen time that slowly releases its power.',
-    icon: 'lorc/hourglass',
-    specialEffect: 'timeGain',
-    effects: { startingTime: 60, timeGainChance: 10 },
-  },
-  {
-    id: 'vital-core',
-    name: 'Vital Core',
-    rarity: 'epic',
-    level: 1,
-    price: 28,
-    description: '+5 max HP + 10% healing chance.',
-    shortDescription: 'More health with healing',
-    flavorText: 'A living core that sustains and heals.',
-    icon: 'lorc/heart-bottle',
-    specialEffect: 'healing',
-    effects: { maxHealth: 5, healingChance: 10 },
-  },
-
-  // Cross-system Lite pattern: Main effect + secondary from different system
-  // Note: These are simplified versions - full cross-system triggers are in Section 5
-  {
-    id: 'prophets-vision',
-    name: "Prophet's Vision",
-    rarity: 'epic',
-    level: 1,
-    price: 28,
-    description: '25% auto-hint chance + 10% grace gain on match.',
-    shortDescription: 'Auto-hints with grace gains',
-    flavorText: 'See the future and be blessed for your foresight.',
-    icon: 'lorc/third-eye',
-    specialEffect: 'autoHint',
-    effects: { autoHintChance: 25, graceGainChance: 10 },
-  },
-  {
-    id: 'life-bloom',
-    name: 'Life Bloom',
-    rarity: 'epic',
-    level: 1,
-    price: 26,
-    description: '25% board growth chance + 10% healing chance.',
-    shortDescription: 'Growth with healing',
-    flavorText: 'Where growth flourishes, life follows.',
-    icon: 'lorc/flowers',
-    specialEffect: 'boardGrowth',
-    effects: { boardGrowthChance: 25, healingChance: 10 },
-  },
-  {
-    id: 'enlightened-eye',
-    name: 'Enlightened Eye',
-    rarity: 'epic',
-    level: 1,
-    price: 24,
-    description: '25% hint gain chance + 5% XP gain chance.',
-    shortDescription: 'Hints with XP',
-    flavorText: 'Knowledge begets wisdom, and wisdom begets experience.',
-    icon: 'lorc/third-eye',
-    specialEffect: 'hintGain',
-    effects: { hintGainChance: 25, xpGainChance: 5 },
-  },
-  {
-    id: 'hourglass-of-ages',
-    name: 'Hourglass of Ages',
-    rarity: 'epic',
-    level: 1,
-    price: 28,
-    description: '25% time gain chance + 5% echo chance.',
-    shortDescription: 'Time with echo',
-    flavorText: 'Time flows, and in its wake, patterns repeat.',
-    icon: 'lorc/hourglass',
-    specialEffect: 'timeGain',
-    effects: { timeGainChance: 25, echoChance: 5 },
-  },
-  {
-    id: 'entropy-engine',
-    name: 'Entropy Engine',
-    rarity: 'epic',
-    level: 1,
-    price: 32,
-    description: '25% ricochet chance + 10% explosion chance.',
-    shortDescription: 'Ricochet with explosions',
-    flavorText: 'Chaos begets chaos, destruction begets destruction.',
-    icon: 'lorc/cracked-ball-dunk',
-    specialEffect: 'ricochet',
-    effects: { ricochetChance: 25, explosionChance: 10 },
-  },
-
-  // ═══════════════════════════════════════════════════════════════
-  // LEGENDARY BRIDGE WEAPONS - Cross-system triggers (8 weapons)
-  // ═══════════════════════════════════════════════════════════════
 
   // Chaos Conduit: On explosion → grace
   {
@@ -665,13 +445,14 @@ export const WEAPONS: Weapon[] = [
     rarity: 'legendary',
     level: 1,
     price: 40,
-    description: 'On explosion: 10% chance to gain +1 grace.',
+    description: 'On explosion: 20% chance to gain +1 grace.',
     shortDescription: 'Explosions give grace',
     flavorText: 'Channel the destruction into divine protection.',
     icon: 'lorc/lightning-helix',
     specialEffect: 'bridge',
     effects: {},
-    bridgeEffect: { trigger: 'onExplosion', chance: 10, effect: 'gainGrace', amount: 1 },
+    perLevel: { bridgeChance: 6 },
+    bridgeEffect: { trigger: 'onExplosion', chance: 20, effect: 'gainGrace', amount: 1 },
     maxCount: 3,
   },
 
@@ -682,13 +463,14 @@ export const WEAPONS: Weapon[] = [
     rarity: 'legendary',
     level: 1,
     price: 45,
-    description: 'On time gain: 20% chance to trigger echo.',
+    description: 'On time gain: 25% chance to trigger echo.',
     shortDescription: 'Time gain triggers echo',
     flavorText: 'Bend time, and the echoes of the past return.',
     icon: 'lorc/time-trap',
     specialEffect: 'bridge',
     effects: {},
-    bridgeEffect: { trigger: 'onTimeGain', chance: 20, effect: 'triggerEcho' },
+    perLevel: { bridgeChance: 6 },
+    bridgeEffect: { trigger: 'onTimeGain', chance: 25, effect: 'triggerEcho' },
     maxCount: 2,
   },
 
@@ -699,13 +481,14 @@ export const WEAPONS: Weapon[] = [
     rarity: 'legendary',
     level: 1,
     price: 35,
-    description: 'On card destruction: 5% chance to heal 1 HP.',
+    description: 'On card destruction: 10% chance to heal 1 HP.',
     shortDescription: 'Destruction heals you',
     flavorText: 'Every falling card feeds your life force.',
     icon: 'lorc/death-note',
     specialEffect: 'bridge',
     effects: {},
-    bridgeEffect: { trigger: 'onDestruction', chance: 5, effect: 'heal', amount: 1 },
+    perLevel: { bridgeChance: 3 },
+    bridgeEffect: { trigger: 'onDestruction', chance: 10, effect: 'heal', amount: 1 },
     maxCount: 3,
   },
 
@@ -716,13 +499,14 @@ export const WEAPONS: Weapon[] = [
     rarity: 'legendary',
     level: 1,
     price: 40,
-    description: 'On echo: 15% chance to set a random card on fire.',
+    description: 'On echo: 20% chance to set a random card on fire.',
     shortDescription: 'Echoes ignite cards',
     flavorText: 'The ripples of resonance carry flames.',
     icon: 'lorc/fire-ring',
     specialEffect: 'bridge',
     effects: {},
-    bridgeEffect: { trigger: 'onEcho', chance: 15, effect: 'fireCard', amount: 1 },
+    perLevel: { bridgeChance: 6 },
+    bridgeEffect: { trigger: 'onEcho', chance: 20, effect: 'fireCard', amount: 1 },
     maxCount: 2,
   },
 
@@ -733,13 +517,14 @@ export const WEAPONS: Weapon[] = [
     rarity: 'legendary',
     level: 1,
     price: 35,
-    description: 'On coin gain: 10% chance to gain +1 hint.',
+    description: 'On coin gain: 20% chance to gain +1 hint.',
     shortDescription: 'Coins reveal hints',
     flavorText: 'Wealth brings wisdom to those who seek it.',
     icon: 'lorc/crown-coin',
     specialEffect: 'bridge',
     effects: {},
-    bridgeEffect: { trigger: 'onCoinGain', chance: 10, effect: 'gainHint', amount: 1 },
+    perLevel: { bridgeChance: 6 },
+    bridgeEffect: { trigger: 'onCoinGain', chance: 20, effect: 'gainHint', amount: 1 },
     maxCount: 3,
   },
 
@@ -750,13 +535,14 @@ export const WEAPONS: Weapon[] = [
     rarity: 'legendary',
     level: 1,
     price: 30,
-    description: 'On XP gain: 15% chance to gain +1 coin.',
+    description: 'On XP gain: 20% chance to gain +1 coin.',
     shortDescription: 'XP yields coins',
     flavorText: 'Knowledge has always been worth its weight in gold.',
     icon: 'lorc/bookmarklet',
     specialEffect: 'bridge',
     effects: {},
-    bridgeEffect: { trigger: 'onXPGain', chance: 15, effect: 'gainCoin', amount: 1 },
+    perLevel: { bridgeChance: 6 },
+    bridgeEffect: { trigger: 'onXPGain', chance: 20, effect: 'gainCoin', amount: 1 },
     maxCount: 3,
   },
 
@@ -767,13 +553,14 @@ export const WEAPONS: Weapon[] = [
     rarity: 'legendary',
     level: 1,
     price: 45,
-    description: 'On grace use: 25% chance to fire a laser.',
+    description: 'On grace use: 30% chance to fire a laser.',
     shortDescription: 'Grace fires laser',
     flavorText: 'Divine mercy becomes divine wrath.',
     icon: 'lorc/angel-outfit',
     specialEffect: 'bridge',
     effects: {},
-    bridgeEffect: { trigger: 'onGraceUse', chance: 25, effect: 'triggerLaser' },
+    perLevel: { bridgeChance: 8 },
+    bridgeEffect: { trigger: 'onGraceUse', chance: 30, effect: 'triggerLaser' },
     maxCount: 2,
   },
 
@@ -790,23 +577,9 @@ export const WEAPONS: Weapon[] = [
     icon: 'lorc/broken-heart',
     specialEffect: 'bridge',
     effects: {},
+    perLevel: { bridgeChance: 8 },
     bridgeEffect: { trigger: 'onHealthLoss', chance: 30, effect: 'explosion' },
     maxCount: 2,
-  },
-
-  // FORTUNE'S EYE - Increases luck stat for better item appearance rates
-  {
-    id: 'fortunes-eye',
-    name: "Fortune's Eye",
-    rarity: 'rare',
-    level: 1,
-    price: 15,
-    description: '+1 luck. Each luck point increases Epic/Legendary appearance by 10%.',
-    shortDescription: 'Better item finds',
-    flavorText: 'See the future, seize the fortune.',
-    icon: 'lorc/crystal-ball',
-    effects: { luck: 1 },
-    maxCount: 10,
   },
 
   // CONNECTOR WEAPONS - Link board positions together
@@ -823,7 +596,7 @@ export const WEAPONS: Weapon[] = [
     icon: 'lorc/chained-heart',
     specialEffect: 'connector',
     effects: { connectionChance: 15 },
-    tierEffects: [{ connectionChance: 20 }, { connectionChance: 25 }, { connectionChance: 30 }],
+    perLevel: { connectionChance: 5 }
   },
 
   // REVENGE LINKER - Create connections when taking damage
@@ -855,7 +628,7 @@ export const WEAPONS: Weapon[] = [
     icon: 'lorc/cobweb',
     specialEffect: 'webWeaver',
     effects: { startingConnections: 1 },
-    tierEffects: [{ startingConnections: 2 }, { startingConnections: 3 }, { startingConnections: 4 }],
+    perLevel: { startingConnections: 1 }
   },
 
   // ECHO CHAMBER - Time bonus on connected destruction
@@ -871,7 +644,7 @@ export const WEAPONS: Weapon[] = [
     icon: 'lorc/linked-rings',
     specialEffect: 'echoChamber',
     effects: { echoTimeBonusPerLink: 1 },
-    tierEffects: [{ echoTimeBonusPerLink: 2 }, { echoTimeBonusPerLink: 3 }, { echoTimeBonusPerLink: 4 }],
+    perLevel: { echoTimeBonusPerLink: 0.5 }
   },
 
   // SYMPATHETIC FLAMES - Fire spreads faster on connected positions
@@ -902,6 +675,7 @@ export const WEAPONS: Weapon[] = [
     icon: 'lorc/brainstorm',
     specialEffect: 'neuralNetwork',
     effects: { bonusConnectionChance: 30 },
+    perLevel: { bonusConnectionChance: 10 },
     maxCount: 1,
   },
 ];
@@ -909,9 +683,10 @@ export const WEAPONS: Weapon[] = [
 /**
  * Weapons that no longer exist under these ids, for reading old saves. Each
  * family of rare/epic/legendary copies is now one weapon that grows through
- * levels: an old copy maps to that weapon and to the upgrade tier whose
- * numbers match it (tierEffects). The Mastery weapons (cap increases) were
- * removed outright and map to null.
+ * levels: an old copy maps to that weapon and to the level it stands for
+ * (`tier` = level - 1, a floor on the weapon's level). Weapons that bundled
+ * two effects (the epics) map to their main effect. The Mastery weapons and
+ * the cap-raising legendaries were removed outright and map to null.
  */
 export const LEGACY_WEAPON_IDS: Readonly<Record<string, { id: string; tier: number } | null>> = {
   'blast-powder-common': { id: 'blast-powder', tier: 0 },
@@ -974,6 +749,26 @@ export const LEGACY_WEAPON_IDS: Readonly<Record<string, { id: string; tier: numb
   'growth-mastery': null,
   'coin-mastery': null,
   'time-trigger-mastery': null,
+  'oracle-eye-common': { id: 'oracle-eye', tier: 0 },
+  'oracle-eye-rare': { id: 'oracle-eye', tier: 2 },
+  'mystic-sight-legendary': { id: 'mystic-sight', tier: 0 },
+  'chain-reaction-legendary': { id: 'chain-reaction', tier: 0 },
+  'terra-foundation': { id: 'field-stone', tier: 2 },
+  'fortunes-shield': { id: 'second-chance', tier: 3 },
+  'clairvoyant-sphere': { id: 'crystal-orb', tier: 3 },
+  'arcane-codex': { id: 'scholars-tome', tier: 1 },
+  'temporal-core': { id: 'chrono-shard', tier: 3 },
+  'vital-core': { id: 'life-vessel', tier: 3 },
+  'prophets-vision': { id: 'oracle-eye', tier: 1 },
+  'life-bloom': { id: 'growth-seed', tier: 3 },
+  'enlightened-eye': { id: 'seeker-lens', tier: 3 },
+  'hourglass-of-ages': { id: 'time-drop', tier: 3 },
+  'entropy-engine': { id: 'chaos-shard', tier: 2 },
+  'fortunes-eye': null,
+  'prismatic-perfection': null,
+  'tabula-rasa': null,
+  'desperate-measures': null,
+  snowball: null,
 };
 
 /** What an old weapon's rarity was, so a refund of its Workshop tiers uses the price it was bought at. */
@@ -981,9 +776,14 @@ export const LEGACY_WEAPON_RARITY: Readonly<Record<string, WeaponRarity>> = {
   'inferno-charge': 'epic', 'ember-heart': 'epic', 'lucky-charm': 'epic', 'restoration-aura': 'epic',
   'spectrum-annihilator': 'epic', 'resonance-crystal': 'epic', 'golden-touch': 'epic',
   'connector-legendary': 'legendary',
+  'terra-foundation': 'epic', 'fortunes-shield': 'epic', 'clairvoyant-sphere': 'epic', 'arcane-codex': 'epic',
+  'temporal-core': 'epic', 'vital-core': 'epic', 'prophets-vision': 'epic', 'life-bloom': 'epic',
+  'enlightened-eye': 'epic', 'hourglass-of-ages': 'epic', 'entropy-engine': 'epic',
+  'mystic-sight-legendary': 'legendary', 'chain-reaction-legendary': 'legendary', 'fortunes-eye': 'rare',
+  'prismatic-perfection': 'legendary', 'tabula-rasa': 'legendary', 'desperate-measures': 'legendary', snowball: 'legendary',
   ...Object.fromEntries(
     Object.entries(LEGACY_WEAPON_IDS)
-      .filter(([id, to]) => to === null || id.endsWith('-rare'))
+      .filter(([id, to]) => (to === null && !id.endsWith('-mastery') ? false : to === null || id.endsWith('-rare')))
       .map(([id]) => [id, 'rare' as const])
   ),
 };

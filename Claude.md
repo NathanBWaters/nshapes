@@ -62,7 +62,7 @@ NShapes combines the classic SET card matching game with roguelike progression m
 
 > **Full documentation:** [specs/weapons-design.md](./specs/weapons-design.md)
 
-The `WEAPONS` array in `src/utils/gameDefinitions.ts` is the roster (51 weapons). **One item per weapon:** a weapon that only gets bigger numbers has four levels (`tierEffects`), not rare/epic copies. In Adventure its level rises through Workshop tiers and through rewards that name a weapon you already own (`src/adventure/weaponLevels.ts`). The cap-increase Mastery weapons were removed; effect caps are fixed. Old saves map merged ids through `LEGACY_WEAPON_IDS`.
+The `WEAPONS` array in `src/utils/gameDefinitions.ts` is the roster (34 weapons). **One item per weapon, and each does one thing:** combinations of two effects are evolutions, not items (Entropy Engine is now an evolution). Adventure has no rarities: every weapon starts solid at level 1 and grows two ways (`src/adventure/data/weaponStats.ts`): **levels 1-5 are found in the world** (repeat star/bounty rewards; each adds the flat `perLevel` gain to every number), and **Workshop tuning** multiplies one number (×1.1/×1.2/×1.35/×1.5). Old saves map removed ids through `LEGACY_WEAPON_IDS`.
 
 **Key Mechanics:**
 * **Stacking:** In Free Play, copies of the same weapon stack additively (3x 10% = 30%). Adventure fights never offer a weapon you already hold

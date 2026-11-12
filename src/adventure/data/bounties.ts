@@ -148,7 +148,7 @@ export const BOUNTIES: BountyDef[] = [
     icon: 'lorc/fist',
     target: 40,
     progress: s => counter(s, 'biggestHit'),
-    reward: { coins: 200, weapons: ['snowball'] },
+    reward: { coins: 200, weapons: ['blast-powder'] },
   },
 
   // ── Roster Feats ────────────────────────────────────────────────────────
@@ -190,7 +190,7 @@ export const BOUNTIES: BountyDef[] = [
     icon: 'lorc/trophy',
     target: 4,
     progress: uniqueFighterWins,
-    reward: { coins: 160, weapons: ['fortunes-eye'] },
+    reward: { coins: 160, weapons: ['rally-horn'] },
   },
 
   // ── Explorer & Completionist ────────────────────────────────────────────

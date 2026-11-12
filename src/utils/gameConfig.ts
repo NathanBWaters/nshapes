@@ -19,6 +19,10 @@ export const STARTING_STATS = {
 
   // Weapon effect stats (defaults to 0)
   explosionChance: 0,
+  explosionDamage: 0,
+  laserDamage: 0,
+  ricochetDamage: 0,
+  burnDamage: 0,
   autoHintChance: 0,
   autoHintInterval: 0, // ms reduction from 15s base wait (higher = faster hints)
   boardGrowthChance: 0,

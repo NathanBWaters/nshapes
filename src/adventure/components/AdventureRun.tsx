@@ -15,11 +15,12 @@ import { FighterAvatar } from '@/components/fighters';
 import { WeaponAvatar } from '@/components/weapons';
 import { useEnemyConductor } from '@/hooks/useEnemyConductor';
 import { useFighterConductor } from '@/hooks/useFighterConductor';
-import { COLORS, getRarityColor } from '@/utils/colors';
+import { COLORS } from '@/utils/colors';
 import type { Card, CardReward, Weapon } from '@/types';
 import type { WeaponEffectResult } from '@/utils/weaponEffects';
 import { music, sfx } from '@/audio';
 import type { AdventureSave, EvolutionRecipe, LevelDef, PassiveId, RunEvent, RunEventType, RunState } from '../types';
+import type { WeaponBuilds } from '../data/weaponStats';
 import { createRun, runReducer, shopPrice, rerollCost, xpForLevel, type RunAction } from '../engine/run';
 import { challengeProgress } from '../engine/challenges';
 import { MECHANICS } from '../data/mechanics';
@@ -687,7 +688,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
           title="LEVEL UP!"
           subtitle="Pick one for this fight"
           options={run.pickOptions}
-          weaponUpgrades={run.weaponUpgrades}
+          weaponBuilds={run.weaponBuilds}
           onPick={w => { sfx('confirm'); conductor.triggerPowerup(); dispatch({ type: 'PICK', weaponId: w.id }); }}
           onSkip={() => dispatch({ type: 'PICK', weaponId: null })}
         />
@@ -706,11 +707,11 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
             {run.weapons.length > 0 && (
               <View style={st.gearRow}>
                 {run.weapons.map((w, i) => {
-                  const tier = run.weaponUpgrades[w.id] ?? 0;
+                  const level = run.weaponBuilds[w.id]?.level ?? 1;
                   return (
-                    <View key={i} style={[st.gearChip, { borderColor: getRarityColor(w.rarity) }]}>
+                    <View key={i} style={st.gearChip}>
                       <WeaponAvatar weapon={w} size={20} interactive />
-                      <Text style={st.gearText} numberOfLines={1}>{w.name}{weaponLevelSuffix(tier)}</Text>
+                      <Text style={st.gearText} numberOfLines={1}>{w.name}{weaponLevelSuffix(level)}</Text>
                     </View>
                   );
                 })}
@@ -807,19 +808,19 @@ const Hearts: React.FC<{ hearts: number | null; max: number | null }> = ({ heart
   );
 };
 
-const WeaponPick: React.FC<{ title: string; subtitle: string; options: Weapon[]; weaponUpgrades?: Record<string, number>; onPick: (w: Weapon) => void; onSkip: () => void }> = ({ title, subtitle, options, weaponUpgrades, onPick, onSkip }) => (
+const WeaponPick: React.FC<{ title: string; subtitle: string; options: Weapon[]; weaponBuilds?: WeaponBuilds; onPick: (w: Weapon) => void; onSkip: () => void }> = ({ title, subtitle, options, weaponBuilds, onPick, onSkip }) => (
   <Modal visible transparent animationType="fade" onRequestClose={onSkip}>
     <View style={st.overlay}>
       <PopIn style={st.panel}>
         <Eyebrow text={title} />
         <Text style={st.panelSub}>{subtitle}</Text>
         {options.map((w, i) => {
-          const tier = weaponUpgrades?.[w.id] ?? 0;
+          const level = weaponBuilds?.[w.id]?.level ?? 1;
           return (
-            <TouchableOpacity key={`${w.id}-${i}`} testID={`pick-${i}`} onPress={() => onPick(w)} style={[st.pickCard, { borderColor: getRarityColor(w.rarity) }]} activeOpacity={0.85}>
+            <TouchableOpacity key={`${w.id}-${i}`} testID={`pick-${i}`} onPress={() => onPick(w)} style={st.pickCard} activeOpacity={0.85}>
               <View style={[st.pickIcon, { backgroundColor: COLORS.paperBeige }]}><WeaponAvatar weapon={w} size={34} /></View>
               <View style={{ flex: 1 }}>
-                <Text style={st.pickName}>{w.name}{weaponLevelSuffix(tier)} <Text style={[st.pickRarity, { color: getRarityColor(w.rarity) === COLORS.rarityCommon ? TONE.spent : getRarityColor(w.rarity) }]}>{w.rarity.toUpperCase()}</Text></Text>
+                <Text style={st.pickName}>{w.name} <Text style={[st.pickRarity, { color: TONE.spent }]}>LV {level}</Text></Text>
                 <Text style={st.pickDesc}>{w.shortDescription}</Text>
               </View>
             </TouchableOpacity>
@@ -862,12 +863,12 @@ const Intermission: React.FC<{ run: RunState; dispatch: (a: RunAction) => void; 
                           dispatch({ type: 'BUY', index: i });
                         }
                       }}
-                      style={[st.pickCard, { borderColor: getRarityColor(w.rarity), opacity: afford ? 1 : 0.5 }]}
+                      style={[st.pickCard, { opacity: afford ? 1 : 0.5 }]}
                       activeOpacity={0.85}
                     >
                       <View style={st.pickIcon}><WeaponAvatar weapon={w} size={34} triggerKey={tapTriggers[i]} /></View>
                       <View style={{ flex: 1 }}>
-                        <Text style={st.pickName}>{w.name}{weaponLevelSuffix(run.weaponUpgrades[w.id] ?? 0)}</Text>
+                        <Text style={st.pickName}>{w.name}{weaponLevelSuffix(run.weaponBuilds[w.id]?.level ?? 1)}</Text>
                         <Text style={st.pickDesc}>{w.shortDescription}</Text>
                       </View>
                       <CoinPill coins={price} />

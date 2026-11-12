@@ -4,26 +4,32 @@
  * rules and modifiers (rules/types.ts). `effects` stays empty: nothing here
  * touches PlayerStats.
  *
- * Every weapon is one item that grows through levels 2-4 (`levels`): Workshop
- * tiers and free upgrades from star and bounty rewards (data/armory.ts).
+ * Every weapon is one item. Its numbers are `stats`: levels (found as star and
+ * bounty rewards) add `perLevel`, Workshop tuning multiplies the result, and
+ * `build` turns the numbers into rules and wording (data/weaponStats.ts).
  */
 import type { AdventureWeapon } from '../types';
 import type { Rule } from '../rules/types';
 
+const r = Math.round;
+
 const clarity = (pct: number, ms: number): Rule[] => [
   { trigger: { on: 'setsWithin', count: 3, withinMs: 10000 }, when: [{ kind: 'chance', pct }], effects: [{ do: 'simplify', ms }], callout: 'Clarity!' },
 ];
-const warDrum = (count: number, amount: number): Rule[] => [
-  { trigger: { on: 'setsWithin', count, withinMs: 20000 }, effects: [{ do: 'empowerBoard', amount }], callout: 'War Drum!' },
+const warDrum = (withinMs: number, amount: number): Rule[] => [
+  { trigger: { on: 'setsWithin', count: 5, withinMs }, effects: [{ do: 'empowerBoard', amount }], callout: 'War Drum!' },
 ];
-const amplifier = (n: number): Rule => ({ trigger: { on: 'everyNthSet', n }, effects: [{ do: 'doubleNext' }], callout: 'Amplified!' });
-const amplifiedRainbow: Rule = { trigger: { on: 'rainbow' }, effects: [{ do: 'doubleNext' }], callout: 'Amplified!' };
+const amplifier = (pct: number): Rule[] => [
+  { trigger: { on: 'set' }, when: [{ kind: 'chance', pct }], effects: [{ do: 'doubleNext' }], callout: 'Amplified!' },
+];
 const pinata = (pct: number, bounty: number): Rule[] => [
   { trigger: { on: 'set' }, when: [{ kind: 'chance', pct }], effects: [{ do: 'armorCard', extraHealth: 2, bounty }], callout: 'Piñata!' },
 ];
 const rallyHorn = (amount: number): Rule[] => [
   { trigger: { on: 'firstSetOfWave' }, effects: [{ do: 'damage', amount }], callout: 'Rally!' },
 ];
+const revenge = (pct: number): Rule[] =>
+  [0, 1, 2].map(() => ({ trigger: { on: 'hurt' }, when: [{ kind: 'chance', pct }], effects: [{ do: 'link', count: 1 }], callout: 'Revenge!' }) as Rule);
 
 export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
   // ── Clarity Lens (utility): fast play makes the board easier ──────────────
@@ -33,19 +39,22 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     rarity: 'common',
     level: 1,
     price: 9,
-    description: '3 Sets within 10s: 33% chance to simplify the board for 15s. One trait becomes the same on every card.',
-    shortDescription: '3 quick Sets may simplify the board',
+    description: '',
+    shortDescription: '',
     flavorText: 'Squint through it and half the noise just... goes away.',
     icon: 'lorc/magnifying-glass',
     specialEffect: 'enhancedHint',
     effects: {},
     maxCount: 1,
-    rules: clarity(33, 15000),
-    levels: [
-      { rules: clarity(50, 15000), text: '50% chance' },
-      { rules: clarity(60, 17000), text: '60% chance, 17s' },
-      { rules: clarity(70, 20000), text: '70% chance, 20s' },
-    ],
+    stats: {
+      chance: { label: 'Simplify chance', unit: '%', base: 33, perLevel: 9 },
+      seconds: { label: 'Simplify seconds', unit: 's', base: 15, perLevel: 2 },
+    },
+    build: v => ({
+      rules: clarity(r(v.chance), r(v.seconds * 1000)),
+      description: `3 Sets within 10s: ${r(v.chance)}% chance to simplify the board for ${r(v.seconds)}s. One trait becomes the same on every card.`,
+      shortDescription: `3 quick Sets: ${r(v.chance)}% simplify`,
+    }),
   },
 
   // ── War Drum (offense): keep the beat and the whole board gets heavier ─────
@@ -55,41 +64,44 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     rarity: 'common',
     level: 1,
     price: 10,
-    description: '5 Sets within 20s: every card on the board gains +2 power (+2 damage when matched).',
-    shortDescription: '5 Sets in 20s: board +2 power',
+    description: '',
+    shortDescription: '',
     flavorText: 'BOOM. BOOM. BOOM. Every card on the table stands up straighter.',
     icon: 'delapouite/drum',
     specialEffect: 'bridge',
     effects: {},
     maxCount: 1,
-    rules: warDrum(5, 2),
-    levels: [
-      { rules: warDrum(4, 2), text: 'only 4 Sets' },
-      { rules: warDrum(4, 3), text: '4 Sets, board +3 power' },
-      { rules: warDrum(4, 4), text: '4 Sets, board +4 power' },
-    ],
+    stats: {
+      window: { label: 'Seconds for 5 Sets', unit: 's', base: 20, perLevel: 2 },
+      power: { label: 'Power per card', unit: 'dmg', base: 2, perLevel: 0.5 },
+    },
+    build: v => ({
+      rules: warDrum(r(v.window * 1000), r(v.power)),
+      description: `5 Sets within ${r(v.window)}s: every card on the board gains +${r(v.power)} power (+${r(v.power)} damage when matched).`,
+      shortDescription: `5 Sets in ${r(v.window)}s: board +${r(v.power)} power`,
+    }),
   },
 
-  // ── Amplifier Coil (combo): every few Sets, the next weapon fires twice ────
+  // ── Amplifier Coil (combo): sometimes the next weapon fires twice ─────────
   {
     id: 'amplifier-coil',
     name: 'Amplifier Coil',
     rarity: 'common',
     level: 1,
     price: 10,
-    description: 'Every 4th Set: the next weapon trigger (blast, heal, laser, fire...) happens twice.',
-    shortDescription: 'Every 4th Set: next trigger ×2',
+    description: '',
+    shortDescription: '',
     flavorText: 'Whatever goes in comes out twice as loud.',
     icon: 'lorc/tesla-coil',
     specialEffect: 'chainReaction',
     effects: {},
     maxCount: 1,
-    rules: [amplifier(4)],
-    levels: [
-      { rules: [amplifier(3)], text: 'every 3rd Set' },
-      { rules: [amplifier(3), amplifiedRainbow], text: 'every 3rd Set and every Rainbow' },
-      { rules: [amplifier(2), amplifiedRainbow], text: 'every 2nd Set and every Rainbow' },
-    ],
+    stats: { chance: { label: 'Amplify chance', unit: '%', base: 20, perLevel: 6 } },
+    build: v => ({
+      rules: amplifier(r(v.chance)),
+      description: `Each Set: ${r(v.chance)}% chance that the next weapon trigger (blast, heal, laser, fire...) happens twice.`,
+      shortDescription: `${r(v.chance)}% next trigger ×2`,
+    }),
   },
 
   // ── Piñata (offense): armor a card, then smash it for a bounty ────────────
@@ -99,19 +111,22 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     rarity: 'common',
     level: 1,
     price: 9,
-    description: 'Each Set has a 20% chance to give a random card +2 hits. Breaking that card deals +10 damage.',
-    shortDescription: 'Sets may hang a +10 piñata',
+    description: '',
+    shortDescription: '',
     flavorText: 'Whack it. Whack it again. CANDY! (The candy is damage.)',
     icon: 'delapouite/pinata',
     specialEffect: 'bridge',
     effects: {},
     maxCount: 1,
-    rules: pinata(20, 10),
-    levels: [
-      { rules: pinata(35, 10), text: '35% chance' },
-      { rules: pinata(40, 14), text: '40% chance, +14 damage' },
-      { rules: pinata(50, 18), text: '50% chance, +18 damage' },
-    ],
+    stats: {
+      chance: { label: 'Piñata chance', unit: '%', base: 20, perLevel: 6 },
+      bounty: { label: 'Piñata damage', unit: 'dmg', base: 10, perLevel: 3 },
+    },
+    build: v => ({
+      rules: pinata(r(v.chance), r(v.bounty)),
+      description: `Each Set has a ${r(v.chance)}% chance to give a random card +2 hits. Breaking that card deals +${r(v.bounty)} damage.`,
+      shortDescription: `Sets may hang a +${r(v.bounty)} piñata`,
+    }),
   },
 
   // ── Catalyst Prism (evolution): Catalysts show up far more often ──────────
@@ -121,18 +136,21 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     rarity: 'common',
     level: 1,
     price: 10,
-    description: '+6% evolution likelihood on every refill, and +25% more on refills after a Rainbow Strike.',
-    shortDescription: '+6% Catalysts, more on Rainbows',
+    description: '',
+    shortDescription: '',
     flavorText: 'Light bends through it and lands on exactly the card you need.',
     icon: 'delapouite/prism',
     effects: {},
     maxCount: 1,
-    modifiers: { evolutionLikelihood: 6, rainbowEvolutionLikelihood: 25 },
-    levels: [
-      { modifiers: { evolutionLikelihood: 10, rainbowEvolutionLikelihood: 25 }, text: '+10% Catalysts' },
-      { modifiers: { evolutionLikelihood: 14, rainbowEvolutionLikelihood: 30 }, text: '+14% Catalysts, +30% on Rainbows' },
-      { modifiers: { evolutionLikelihood: 18, rainbowEvolutionLikelihood: 35 }, text: '+18% Catalysts, +35% on Rainbows' },
-    ],
+    stats: {
+      likelihood: { label: 'Catalyst chance', unit: '%', base: 6, perLevel: 3 },
+      rainbow: { label: 'Extra after a Rainbow', unit: '%', base: 25, perLevel: 3 },
+    },
+    build: v => ({
+      modifiers: { evolutionLikelihood: r(v.likelihood), rainbowEvolutionLikelihood: r(v.rainbow) },
+      description: `+${r(v.likelihood)}% evolution likelihood on every refill, and +${r(v.rainbow)}% more on refills after a Rainbow Strike.`,
+      shortDescription: `+${r(v.likelihood)}% Catalysts, more on Rainbows`,
+    }),
   },
 
   // ── Rally Horn (offense): open every wave with a haymaker ─────────────────
@@ -142,28 +160,60 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     rarity: 'common',
     level: 1,
     price: 8,
-    description: 'The first Set of each wave deals +6 damage.',
-    shortDescription: 'First Set each wave +6',
+    description: '',
+    shortDescription: '',
     flavorText: 'One blast and the whole meadow knows the fight has started.',
     icon: 'lorc/hunting-horn',
     specialEffect: 'bridge',
     effects: {},
     maxCount: 1,
-    rules: rallyHorn(6),
-    levels: [
-      { rules: rallyHorn(10), text: '+10 damage' },
-      { rules: rallyHorn(14), text: '+14 damage' },
-      { rules: rallyHorn(18), text: '+18 damage' },
-    ],
+    stats: { damage: { label: 'Opening damage', unit: 'dmg', base: 6, perLevel: 3 } },
+    build: v => ({
+      rules: rallyHorn(r(v.damage)),
+      description: `The first Set of each wave deals +${r(v.damage)} damage.`,
+      shortDescription: `First Set each wave +${r(v.damage)}`,
+    }),
+  },
+
+  // ── Revenge Linker (Adventure version): getting hurt wires up the board ───
+  {
+    id: 'revenge-linker',
+    name: 'Revenge Linker',
+    rarity: 'common',
+    level: 1,
+    price: 10,
+    description: '',
+    shortDescription: '',
+    flavorText: 'Every scratch you take is another thread in the web.',
+    icon: 'lorc/linked-rings',
+    specialEffect: 'revengeLinker',
+    effects: {},
+    maxCount: 1,
+    stats: { chance: { label: 'Link chance per roll', unit: '%', base: 20, perLevel: 5 } },
+    build: v => ({
+      rules: revenge(r(v.chance)),
+      description: `Losing a heart: 3 rolls at ${r(v.chance)}% each to link a pair of cards. Linked cards are destroyed together.`,
+      shortDescription: `Lost hearts: 3× ${r(v.chance)}% link`,
+    }),
   },
 ];
+
+// Authored descriptions are the level-1 wording (Free Play, tests, guides)
+for (const w of ADVENTURE_WEAPONS) {
+  if (!w.stats || !w.build) continue;
+  const built = w.build(Object.fromEntries(Object.entries(w.stats).map(([k, d]) => [k, d.base])));
+  w.description = built.description;
+  w.shortDescription = built.shortDescription;
+  if (built.rules) w.rules = built.rules;
+  if (built.modifiers) w.modifiers = built.modifiers;
+}
 
 /**
  * Ids of the old common/rare copies. Each rare copy is now a level of its one
  * weapon, so an old save holding it gets that upgrade tier (save migration).
  */
 export const LEGACY_ADVENTURE_WEAPON_IDS: Record<string, { id: string; tier: number }> = Object.fromEntries(
-  ADVENTURE_WEAPONS.flatMap(w => [
+  ADVENTURE_WEAPONS.filter(w => w.id !== 'revenge-linker').flatMap(w => [
     [`${w.id}-common`, { id: w.id, tier: 0 }],
     [`${w.id}-rare`, { id: w.id, tier: 1 }],
   ])

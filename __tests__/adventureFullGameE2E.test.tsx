@@ -497,12 +497,12 @@ describe('Adventure Mode full-game E2E', () => {
       if (fight.sawEvolutionBanner || fight.sawEvolutionRing) expect(screen.getByTestId('results-evolutions')).toBeTruthy();
 
       save = loadAdventureSave();
-      // The Workshop opens partway through the world: buy and refund a weapon upgrade at 100%
-      if (save.workshopUnlocked && !(save.weaponUpgrades[save.armory[0]] > 0) && save.coins >= 80 && level.id === LEVELS.find(l => starRewards(l).some(r => r.unlockFeature === 'workshop'))?.id) {
+      // The Workshop opens partway through the world: buy and refund a weapon tuning at 100%
+      if (save.workshopUnlocked && !(Object.keys(save.weaponTuning[save.armory[0]] ?? {}).length > 0) && save.coins >= 80 && level.id === LEVELS.find(l => starRewards(l).some(r => r.unlockFeature === 'workshop'))?.id) {
         fireEvent.press(screen.getByTestId('results-camp'));
         fireEvent.press(screen.getByTestId('camp-tab-workshop'));
         const coins = loadAdventureSave().coins;
-        fireEvent.press(screen.getByTestId(`camp-buy-weapon-${save.armory[0]}`));
+        fireEvent.press(screen.getAllByTestId(new RegExp(`^camp-tune-${save.armory[0]}-`))[0]);
         expect(loadAdventureSave().coins).toBeLessThan(coins);
         fireEvent.press(screen.getByTestId(`camp-refund-weapon-${save.armory[0]}`));
         expect(loadAdventureSave().coins).toBe(coins);

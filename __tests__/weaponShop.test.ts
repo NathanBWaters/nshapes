@@ -12,8 +12,8 @@ import { Weapon, WeaponRarity } from '../src/types';
 
 describe('Weapon System', () => {
   describe('WEAPONS array validation', () => {
-    it('has at least one weapon of each rarity', () => {
-      const rarities: WeaponRarity[] = ['common', 'rare', 'epic', 'legendary'];
+    it('has weapons of every rarity the Free Play shop still uses (no epics: bundles became evolutions)', () => {
+      const rarities: WeaponRarity[] = ['common', 'rare', 'legendary'];
 
       for (const rarity of rarities) {
         const weaponsOfRarity = WEAPONS.filter(w => w.rarity === rarity);

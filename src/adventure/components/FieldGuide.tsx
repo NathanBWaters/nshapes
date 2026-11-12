@@ -9,7 +9,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '@/components/Icon';
-import { COLORS, getRarityColor } from '@/utils/colors';
+import { COLORS } from '@/utils/colors';
 import { sfx } from '@/audio';
 import type { AdventureSave, MechanicDef, UnlockableFeature } from '../types';
 import { LEVELS } from '../data/levels';
@@ -222,7 +222,7 @@ const FieldGuide: React.FC<Props> = ({ save, onClose }) => {
                 style={[st.recipeCard, unlocked && st.recipeCardDiscovered]}
               >
                 <View style={st.recipeHead}>
-                  <View style={[st.recipeAvatar, forged && { borderColor: getRarityColor('legendary'), backgroundColor: '#FFFBEB' }, !forged && unlocked && { borderColor: TONE.combo, backgroundColor: TONE.comboPale }]}>
+                  <View style={[st.recipeAvatar, forged && { borderColor: '#FFD700', backgroundColor: '#FFFBEB' }, !forged && unlocked && { borderColor: TONE.combo, backgroundColor: TONE.comboPale }]}>
                     {unlocked ? (
                       <Icon name={r.icon} size={30} color={INK} />
                     ) : (

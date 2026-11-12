@@ -1,7 +1,7 @@
 /**
  * Camp — between fights. Four tabs:
  *   Fighters: each fighter's two passives and their star-bought Skill Tree
- *   Workshop: coin upgrades (Charm Belt, Tarot Deck, Evolution Lab, mechanics, weapons)
+ *   Workshop: coin upgrades (Charm Belt, Tarot Deck, Evolution Lab, mechanics, weapon tuning)
  *   Armory:   weapons unlocked so far (equip them into your charm slots)
  *   Arcana:   tarot wildcards that bend the rules (equip into Arcana slots)
  * Every purchase is refundable at 100%.
@@ -13,41 +13,42 @@ import Icon from '@/components/Icon';
 import { FighterAvatar } from '@/components/fighters';
 import { WeaponAvatar } from '@/components/weapons';
 import type { FighterReactionEvent, FighterReactionType } from '@/utils/fighterAnimations';
-import { COLORS, getRarityColor } from '@/utils/colors';
+import { COLORS } from '@/utils/colors';
 import type { CharacterName, Weapon } from '@/types';
 import { sfx } from '@/audio';
 import type { AdventureSave, UpgradeDef } from '../types';
 import { FIGHTERS } from '../data/fighters';
 import { getPassive } from '../data/passives';
-import { MAX_WEAPON_UPGRADE_TIER } from '../data/upgrades';
+import { MAX_TUNING_TIER, MAX_WEAPON_LEVEL, TUNING_MULTIPLIERS, formatStat, weaponStatLines } from '../data/weaponStats';
 import { ARCANA } from '../data/arcana';
-import { describeWeaponLevel, getArmoryWeapon, weaponLevelSuffix } from '../data/armory';
+import { getArmoryWeapon, weaponLevelSuffix } from '../data/armory';
 import { unlockHint } from '../data/rewards';
 import {
   arcanaSlots,
   branchSpent,
+  buyTuning,
   buyUpgrade,
-  buyWeaponUpgrade,
   canBuyUpgrade,
-  canUpgradeWeapon,
+  canTune,
   charmSlots,
   equippedArcanaOf,
   equippedCharms,
   getUnlockedUpgrades,
   refundAllCamp,
+  refundTuning,
   refundUpgrade,
-  refundWeaponUpgrade,
   refundableCoins,
   toggleArcana,
   toggleCharm,
   upgradeCost,
   upgradeSpentCoins,
   upgradeTier,
-  weaponUpgradeCost,
-  weaponUpgradeSpentCoins,
-  weaponUpgradeTier,
-  freeWeaponTiers,
-  weaponTiers,
+  tuningCost,
+  tuningSpent,
+  weaponBuild,
+  weaponBuilds,
+  weaponLevel,
+  weaponLevelsInWorld,
 } from '../progress';
 import SkillTree, { StarPool } from './SkillTree';
 import { Btn, CoinPill, INK, PopIn, TONE } from './ui';
@@ -278,13 +279,13 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters
               <View style={st.portrait}><Icon name="lorc/padlock" size={30} color={INK} /></View>
               <Text style={st.fighterName}>Workshop Locked</Text>
               <Text style={[st.fighterBlurb, { textAlign: 'center' }]}>
-                {unlockHint({ kind: 'feature', id: 'workshop' })} to unlock the ability to upgrade your unlocked mechanics and Armory weapons!
+                {unlockHint({ kind: 'feature', id: 'workshop' })} to unlock the ability to upgrade your unlocked mechanics and tune your Armory weapons!
               </Text>
             </View>
           ) : (
             <>
               <Text style={st.blurb}>
-                Upgrade your loadout, any mechanic you have met, and your Armory weapons. Refundable at 100% value anytime.
+                Upgrade your loadout, any mechanic you have met, and tune your Armory weapons. Refundable at 100% value anytime.
               </Text>
 
               {loadoutUpgrades.length > 0 && (
@@ -302,63 +303,86 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters
                 mechanicUpgrades.map(renderUpgrade)
               )}
 
-              <Text style={st.sectionLabel}>WEAPON UPGRADES</Text>
+              <Text style={st.sectionLabel}>WEAPON TUNING</Text>
+              <Text style={st.blurb}>
+                Weapons level up when you find them again in the world (repeat star and bounty rewards): every number gets a flat boost. Tuning multiplies one number on top.
+              </Text>
               {save.armory.length === 0 ? (
-                <Text style={st.blurb}>Unlock weapons in your Armory to enhance them here.</Text>
+                <Text style={st.blurb}>Unlock weapons in your Armory to tune them here.</Text>
               ) : (
-                armoryWeapons(save).map(w => {
-                  const tier = weaponUpgradeTier(save, w.id);
-                  const free = freeWeaponTiers(save, w.id);
-                  const cost = weaponUpgradeCost(save, w.id);
-                  const spent = weaponUpgradeSpentCoins(save, w.id);
+                armoryWeapons(save).map(base => {
+                  const build = weaponBuild(save, base.id);
+                  const w = getArmoryWeapon(base.id, { [base.id]: build }) ?? base;
+                  const level = weaponLevel(save, base.id);
+                  const inWorld = weaponLevelsInWorld(base.id);
+                  const spent = tuningSpent(save, base.id);
                   return (
-                    <PopIn key={w.id} style={st.upgrade}>
-                      <View testID={`camp-weapon-upgrade-${w.id}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                        <View style={[st.portrait, { borderColor: getRarityColor(w.rarity) }]}>
+                    <PopIn key={base.id} style={[st.upgrade, { flexDirection: 'column', alignItems: 'stretch' }]}>
+                      <View testID={`camp-weapon-upgrade-${base.id}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <View style={st.portrait}>
                           <WeaponAvatar weapon={w} size={34} interactive />
                         </View>
                         <View style={{ flex: 1, gap: 2 }}>
-                          <Text style={st.fighterName}>
-                            {w.name}{weaponLevelSuffix(tier)}
-                          </Text>
-                          <Text style={st.fighterBlurb}>
-                            {tier > 0
-                              ? `Now: ${describeWeaponLevel(w, tier)}`
-                              : `Next: ${describeWeaponLevel(w, 1)}`}
-                            {free > 0 ? ` · ${free} free level${free === 1 ? '' : 's'} from rewards` : ''}
-                          </Text>
-                          <View style={{ flexDirection: 'row', gap: 3, marginTop: 2 }}>
-                            {Array.from({ length: MAX_WEAPON_UPGRADE_TIER }).map((_, i) => (
-                              <View key={i} style={[st.tierPip, i < tier && st.tierPipOn]} />
+                          <Text style={st.fighterName}>{w.name} · Lv {level}</Text>
+                          <View style={{ flexDirection: 'row', gap: 3 }} accessibilityLabel={`Level ${level} of ${MAX_WEAPON_LEVEL}`}>
+                            {Array.from({ length: MAX_WEAPON_LEVEL }).map((_, i) => (
+                              <View key={i} style={[st.tierPip, i < level && st.tierPipOn, i >= inWorld && st.tierPipAbsent]} />
                             ))}
                           </View>
+                          <Text style={st.fighterBlurb}>
+                            {level < inWorld
+                              ? `${inWorld - level} more ${inWorld - level === 1 ? 'copy' : 'copies'} to find in the world`
+                              : 'Every copy in the world found'}
+                          </Text>
                         </View>
-                        <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                          {cost !== null ? (
-                            <Btn
-                              small
-                              testID={`camp-buy-weapon-${w.id}`}
-                              label={`${cost}¢`}
-                              icon="lorc/crown-coin"
-                              disabled={!canUpgradeWeapon(save, w.id)}
-                              onPress={() => { sfx('unlock'); onChange(buyWeaponUpgrade(save, w.id)); }}
-                            />
-                          ) : (
-                            <Text style={st.maxed}>MAX</Text>
-                          )}
-                          {spent > 0 && (
-                            <TouchableOpacity
-                              testID={`camp-refund-weapon-${w.id}`}
-                              onPress={() => { sfx('coin'); onChange(refundWeaponUpgrade(save, w.id)); }}
-                              style={st.refundChip}
-                              activeOpacity={0.85}
-                            >
-                              <Icon name="lorc/recycle" size={12} color={INK} />
-                              <Text style={st.refundChipText}>+{spent}¢</Text>
-                            </TouchableOpacity>
-                          )}
-                        </View>
+                        {spent > 0 && (
+                          <TouchableOpacity
+                            testID={`camp-refund-weapon-${base.id}`}
+                            onPress={() => { sfx('coin'); onChange(refundTuning(save, base.id)); }}
+                            style={st.refundChip}
+                            activeOpacity={0.85}
+                          >
+                            <Icon name="lorc/recycle" size={12} color={INK} />
+                            <Text style={st.refundChipText}>+{spent}¢</Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
+                      {weaponStatLines(base, build).map(line => {
+                        const cost = tuningCost(save, base.id, line.key);
+                        return (
+                          <View key={line.key} style={st.tuneRow} testID={`camp-tune-row-${base.id}-${line.key}`}>
+                            <View style={{ flex: 1 }}>
+                              <Text style={st.tuneLabel}>{line.label}</Text>
+                              <Text style={st.tuneValue}>
+                                {formatStat(line.unit, line.value)}
+                                {line.tier > 0 ? <Text style={st.tuneMath}>  ({formatStat(line.unit, line.levelled)} ×{line.multiplier})</Text> : null}
+                              </Text>
+                            </View>
+                            {line.tunable ? (
+                              <View style={{ alignItems: 'flex-end', gap: 3 }}>
+                                <View style={{ flexDirection: 'row', gap: 2 }}>
+                                  {Array.from({ length: MAX_TUNING_TIER }).map((_, i) => (
+                                    <View key={i} style={[st.tunePip, i < line.tier && st.tierPipOn]} />
+                                  ))}
+                                </View>
+                                {cost !== null ? (
+                                  <Btn
+                                    small
+                                    testID={`camp-tune-${base.id}-${line.key}`}
+                                    label={`×${TUNING_MULTIPLIERS[line.tier + 1]} · ${cost}¢`}
+                                    disabled={!canTune(save, base.id, line.key)}
+                                    onPress={() => { sfx('unlock'); onChange(buyTuning(save, base.id, line.key)); }}
+                                  />
+                                ) : (
+                                  <Text style={st.maxed}>MAX</Text>
+                                )}
+                              </View>
+                            ) : (
+                              <Text style={st.tuneMath}>levels only</Text>
+                            )}
+                          </View>
+                        );
+                      })}
                     </PopIn>
                   );
                 })
@@ -374,9 +398,9 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters
             </Text>
             <View style={st.slotRow} testID="camp-charm-slots">
               {Array.from({ length: slots }).map((_, i) => {
-                const w = charms[i] ? getArmoryWeapon(charms[i], weaponTiers(save)) : undefined;
+                const w = charms[i] ? getArmoryWeapon(charms[i], weaponBuilds(save)) : undefined;
                 return (
-                  <View key={i} style={[st.slot, w && { borderColor: getRarityColor(w.rarity), backgroundColor: COLORS.canvasWhite }]}>
+                  <View key={i} style={[st.slot, w && { borderColor: INK, backgroundColor: COLORS.canvasWhite }]}>
                     {w ? <WeaponAvatar weapon={w} size={26} /> : <Text style={st.slotEmpty}>+</Text>}
                   </View>
                 );
@@ -390,7 +414,7 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters
             <View style={st.armory}>
               {armoryWeapons(save).map(w => {
                 const equipped = charms.includes(w.id);
-                const wTier = weaponUpgradeTier(save, w.id);
+                const wLevel = weaponLevel(save, w.id);
                 return (
                   <TouchableOpacity
                     key={w.id}
@@ -408,12 +432,12 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters
                     }}
                     activeOpacity={0.85}
                     accessibilityState={{ selected: equipped }}
-                    style={[st.armoryItem, { borderColor: equipped ? COLORS.actionYellow : getRarityColor(w.rarity) }, equipped && { backgroundColor: TONE.selected }]}
+                    style={[st.armoryItem, { borderColor: equipped ? COLORS.actionYellow : TONE.spentEdge }, equipped && { backgroundColor: TONE.selected }]}
                   >
                     <WeaponAvatar weapon={w} size={36} triggerKey={armoryTapCounts[w.id]} />
-                    <Text style={st.armoryName} numberOfLines={1}>{w.name}{weaponLevelSuffix(wTier)}</Text>
-                    <Text style={[st.armoryRarity, { color: getRarityColor(w.rarity) === COLORS.rarityCommon ? TONE.spent : getRarityColor(w.rarity) }]}>{equipped ? 'equipped' : w.rarity}</Text>
-                    <Text style={st.armoryDesc} numberOfLines={2}>{getArmoryWeapon(w.id, weaponTiers(save))?.shortDescription}</Text>
+                    <Text style={st.armoryName} numberOfLines={1}>{w.name}{weaponLevelSuffix(wLevel)}</Text>
+                    <Text style={[st.armoryRarity, { color: TONE.spent }]}>{equipped ? 'equipped' : `level ${wLevel}`}</Text>
+                    <Text style={st.armoryDesc} numberOfLines={2}>{getArmoryWeapon(w.id, weaponBuilds(save))?.shortDescription}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -517,6 +541,12 @@ const st = StyleSheet.create({
   armory: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' },
   armoryItem: { width: 120, backgroundColor: COLORS.canvasWhite, borderRadius: 10, borderWidth: 2.5, padding: 8, alignItems: 'center', gap: 2 },
   armoryName: { fontWeight: '900', fontSize: 12, color: INK },
+  tuneRow: { flexDirection: 'row', alignItems: 'center', gap: 8, borderTopWidth: 1, borderTopColor: '#E2DBCF', paddingTop: 6, marginTop: 6 },
+  tuneLabel: { fontSize: 11, fontWeight: '800', color: INK },
+  tuneValue: { fontSize: 14, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
+  tuneMath: { fontSize: 10, fontWeight: '700', color: TONE.spent },
+  tunePip: { width: 8, height: 5, borderRadius: 2, backgroundColor: '#D8D0C4' },
+  tierPipAbsent: { opacity: 0.25 },
   armoryRarity: { fontSize: 9, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
   armoryDesc: { fontSize: 10, color: INK, textAlign: 'center', opacity: 0.8 },
   refundBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 12, marginBottom: 2, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 2, borderColor: INK, backgroundColor: TONE.coinPale, maxWidth: 536, alignSelf: 'center', width: '94%' },

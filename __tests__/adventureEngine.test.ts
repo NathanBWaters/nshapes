@@ -163,24 +163,37 @@ describe('loadout', () => {
     expect(s.skillNodes).toEqual(tabby);
   });
 
-  it('upgrade tiers take a rule weapon through its levels (War Drum 5 Sets +2 → 4 Sets +4)', () => {
-    const drum = (tier: number) => {
-      const w = getArmoryWeapon('war-drum', { 'war-drum': tier }) as AdventureWeapon;
+  it('levels add flat gains to a rule weapon and tuning multiplies them (War Drum)', () => {
+    const drum = (level: number, tuning: Record<string, number> = {}) => {
+      const w = getArmoryWeapon('war-drum', { 'war-drum': { level, tuning } }) as AdventureWeapon;
       const r = w.rules![0];
       const e = r.effects[0];
-      return [r.trigger.on === 'setsWithin' ? r.trigger.count : NaN, e.do === 'empowerBoard' ? e.amount : NaN];
+      return [r.trigger.on === 'setsWithin' ? r.trigger.withinMs : NaN, e.do === 'empowerBoard' ? e.amount : NaN];
     };
-    expect([0, 1, 2, 3].map(drum)).toEqual([[5, 2], [4, 2], [4, 3], [4, 4]]);
-    expect(getArmoryWeapon('war-drum', { 'war-drum': 2 })!.shortDescription).toContain('(4 Sets, board +3 power)');
+    expect([1, 2, 3, 4, 5].map(l => drum(l))).toEqual([[20000, 2], [22000, 3], [24000, 3], [26000, 4], [28000, 4]]);
+    // ×1.5 on the window, ×1.2 on power, at level 5
+    expect(drum(5, { window: 4, power: 2 })).toEqual([42000, 5]);
+    expect(getArmoryWeapon('war-drum', { 'war-drum': { level: 3, tuning: {} } })!.shortDescription).toBe('5 Sets in 24s: board +3 power');
   });
 
-  it('every adventure weapon has three upgrade levels', () => {
-    for (const w of ADVENTURE_WEAPONS) expect(w.levels).toHaveLength(3);
+  it('every adventure weapon has numbers that grow with level and wording built from them', () => {
+    for (const w of ADVENTURE_WEAPONS) {
+      expect(Object.keys(w.stats ?? {}).length).toBeGreaterThan(0);
+      for (const d of Object.values(w.stats!)) expect(d.perLevel).toBeGreaterThan(0);
+      expect(w.description.length).toBeGreaterThan(10);
+      expect(w.rules ?? w.modifiers).toBeDefined();
+    }
   });
 
-  it('a stat weapon at a tier uses its own level numbers (Blast Powder 10 → 40%)', () => {
-    expect([0, 1, 2, 3].map(t => getArmoryWeapon('blast-powder', { 'blast-powder': t })!.effects.explosionChance)).toEqual([10, 20, 30, 40]);
-    expect(getArmoryWeapon('blast-powder', { 'blast-powder': 1 })!.shortDescription).toContain('+10% blast chance');
+  it('a stat weapon levels every number flatly; tuning multiplies one (Blast Powder)', () => {
+    const blast = (level: number, tuning: Record<string, number> = {}) =>
+      getArmoryWeapon('blast-powder', { 'blast-powder': { level, tuning } })!.effects;
+    expect([1, 2, 3, 4, 5].map(l => blast(l).explosionChance)).toEqual([12, 18, 24, 30, 36]);
+    expect([1, 2, 3, 4, 5].map(l => blast(l).explosionDamage)).toEqual([0.5, 1, 1.5, 2, 2.5]);
+    expect(blast(5, { explosionChance: 4 }).explosionChance).toBe(54);
+    expect(blast(5, { explosionChance: 4 }).explosionDamage).toBe(2.5);
+    expect(getArmoryWeapon('blast-powder', { 'blast-powder': { level: 3, tuning: { explosionChance: 2 } } })!.shortDescription)
+      .toBe('28.8% blast, 2.5 dmg per card');
   });
 });
 

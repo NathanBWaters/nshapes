@@ -12,7 +12,8 @@ import { getFighter } from './data/fighters';
 import { UPGRADES } from './data/upgrades';
 import { arcanaRules } from './data/arcana';
 import { getArmoryWeapon } from './data/armory';
-import { weaponTiers } from './weaponLevels';
+import { weaponBuilds } from './weaponLevels';
+import { WHOLE_STATS } from './data/weaponStats';
 import { armedRecipesFor, evolutionLikelihoodFor, getSkillNode, modifiersOf, EVOLUTION_RULES } from './engine/sources';
 
 export const BASE_CHARM_SLOTS = 3;
@@ -63,6 +64,23 @@ export const getFeaturesForLevel = (level: LevelDef, save: AdventureSave): Set<F
   return set;
 };
 
+/**
+ * Whole-number stats (hearts, graces, board cards...) can be fractional after
+ * Workshop tuning. Round each down, plus one more with the fraction as the
+ * chance: `rand` is the fight's RNG. Without `rand` (previews) they round down.
+ */
+export const resolveWholeStats = <T extends Partial<PlayerStats>>(stats: T, rand?: () => number): T => {
+  let next = stats;
+  for (const k of WHOLE_STATS) {
+    const v = stats[k];
+    if (typeof v !== 'number' || Number.isInteger(v)) continue;
+    if (next === stats) next = { ...stats };
+    const frac = v - Math.floor(v);
+    (next as unknown as Record<string, number>)[k] = Math.floor(v) + (rand && rand() < frac ? 1 : 0);
+  }
+  return next;
+};
+
 /** Add a weapon's effects into baked stats (mirrors calculatePlayerTotalStats). */
 export const applyWeaponToStats = (stats: PlayerStats, weapon: Weapon): PlayerStats => {
   const next: PlayerStats = { ...stats, effectCaps: stats.effectCaps ? { ...stats.effectCaps } : undefined };
@@ -107,7 +125,9 @@ export interface Loadout {
 export const startingLoadout = (
   level: LevelDef,
   save: AdventureSave,
-  features: Set<FeatureFlag> = getFeaturesForLevel(level, save)
+  features: Set<FeatureFlag> = getFeaturesForLevel(level, save),
+  /** The fight's RNG, for rounding tuned whole-number stats by chance (resolveWholeStats) */
+  rand?: () => number
 ): Loadout => {
   const fighter = save.selectedFighter;
   const gear = features.has('gear');
@@ -116,12 +136,13 @@ export const startingLoadout = (
   const arcana = gear ? fightArcana(save) : [];
   const rules = arcanaRules(arcana);
   const weapons: Weapon[] = gear
-    ? fightCharms(save).map(id => getArmoryWeapon(id, weaponTiers(save))).filter((w): w is Weapon => !!w)
+    ? fightCharms(save).map(id => getArmoryWeapon(id, weaponBuilds(save))).filter((w): w is Weapon => !!w)
     : [];
   const modifiers = modifiersOf({ skillNodes, weapons, activeEvolutions: [] });
 
   let stats: PlayerStats = { ...DEFAULT_PLAYER_STATS, hints: 0, graces: 0, effectCaps: { ...DEFAULT_PLAYER_STATS.effectCaps! } };
   for (const w of weapons) stats = applyWeaponToStats(stats, w);
+  stats = resolveWholeStats(stats, rand);
   let bonusDamagePerMatch = 0;
   let coinBonusPercent = modifiers.coinPercent ?? 0;
   for (const u of UPGRADES) {

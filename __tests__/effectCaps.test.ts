@@ -69,8 +69,8 @@ describe('Effect Cap System', () => {
       expect(total.effectCaps).toEqual(DEFAULT_EFFECT_CAPS);
       expect(total.explosionChance).toBeGreaterThan(DEFAULT_PLAYER_STATS.explosionChance);
       const caps: EffectCaps = { ...DEFAULT_EFFECT_CAPS };
-      expect(caps.echo).toBe(25);
-      expect(caps.explosion).toBe(40);
+      expect(caps.echo).toBe(30);
+      expect(caps.explosion).toBe(55);
     });
   });
 });

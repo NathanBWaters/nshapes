@@ -25,9 +25,9 @@ import type { AdventureSave, AdventureWeapon, ArcanaId, FeatureFlag, LevelDef, R
 import type { Effect, WeaponTriggerKind } from '../rules/types';
 import { createRng } from './rng';
 import { allSets, countDifferentAttributes, hasAnySet, isRainbow, isSelectable } from './sets';
-import { applyWeaponToStats, startingLoadout } from '../loadout';
+import { applyWeaponToStats, resolveWholeStats, startingLoadout } from '../loadout';
 import { getArmoryWeapon } from '../data/armory';
-import { weaponTiers } from '../weaponLevels';
+import { weaponBuilds } from '../weaponLevels';
 import { createFoe } from '../data/foes';
 import { arcanaRules } from '../data/arcana';
 import { BASE_RULES } from '../data/rules';
@@ -110,12 +110,13 @@ const syncStats = (d: Draft) => {
 const rollPickOptions = (d: Draft, count = 3): Weapon[] => {
   const weapons = d.armory
     .filter(id => !d.weapons.some(w => w.id === id))
-    .map(id => getArmoryWeapon(id, d.weaponUpgrades))
+    .map(id => getArmoryWeapon(id, d.weaponBuilds))
     .filter((w): w is Weapon => !!w && canObtainWeapon(w, d.weapons));
   return d._rng.shuffle(weapons).slice(0, count);
 };
 
-const acquireWeapon = (d: Draft, weapon: Weapon) => {
+const acquireWeapon = (d: Draft, picked: Weapon) => {
+  const weapon: Weapon = { ...picked, effects: resolveWholeStats(picked.effects, () => d._rng.next()) };
   d.weapons = [...d.weapons, weapon];
   d.stats = applyWeaponToStats(d.stats, weapon);
   const base = { ...d.baseChances };
@@ -478,12 +479,12 @@ export interface CreateRunOptions {
 
 export const createRun = (level: LevelDef, save: AdventureSave, opts: CreateRunOptions): RunState => {
   const fighter = save.selectedFighter;
-  const loadout = startingLoadout(level, save, opts.features);
+  const rng = createRng(opts.seed);
+  const loadout = startingLoadout(level, save, opts.features, () => rng.next());
   const features = loadout.features;
   const gear = features.has('gear');
   const { stats, weapons, maxHearts, timer, bonusDamagePerMatch, coinBonusPercent } = loadout;
   const arcanaIds = gear ? loadout.arcana : [];
-  const rng = createRng(opts.seed);
   const attributes = level.rules.attributes;
   const baseSize = level.rules.boardSize ?? getBoardSizeForAttributes(attributes.length);
   const boardSize = Math.min(MAX_BOARD, Math.max(baseSize, gear ? baseSize + (stats.fieldSize - DEFAULT_PLAYER_STATS.fieldSize) : baseSize));
@@ -545,7 +546,7 @@ export const createRun = (level: LevelDef, save: AdventureSave, opts: CreateRunO
     shopOptions: [],
     rerolls: 0,
     armory: save.armory,
-    weaponUpgrades: weaponTiers(save),
+    weaponBuilds: weaponBuilds(save),
     passives: gear ? loadout.passives : [],
     passive: restingPassiveState(),
     skillNodes: gear ? loadout.skillNodes : [],
@@ -703,7 +704,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
           )
         : [];
       const burned = [idx, ...linked];
-      emit(d, 'hit', dealDamage(d, burned.length * foeMultiplier(d)), 'Burn');
+      emit(d, 'hit', dealDamage(d, burned.length * (1 + (d.stats.burnDamage ?? 0)) * foeMultiplier(d)), 'Burn');
       addCoins(d, burned.length);
       for (const bw of rollBridges(d, 'onDestruction')) if (bw.bridgeEffect?.effect === 'heal') heal(d, bw.bridgeEffect.amount ?? 1);
       // 10% chance the fire jumps to a neighbour

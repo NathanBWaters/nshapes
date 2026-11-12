@@ -121,13 +121,13 @@ describe('Bridge Weapons', () => {
       });
     };
 
-    testBridgeWeapon('Chaos Conduit', 'onExplosion', 'gainGrace', 10, 3);
-    testBridgeWeapon('Temporal Rift', 'onTimeGain', 'triggerEcho', 20, 2);
-    testBridgeWeapon('Soul Harvest', 'onDestruction', 'heal', 5, 3);
-    testBridgeWeapon('Cascade Core', 'onEcho', 'fireCard', 15, 2);
-    testBridgeWeapon("Fortune's Blessing", 'onCoinGain', 'gainHint', 10, 3);
-    testBridgeWeapon('Wisdom Chain', 'onXPGain', 'gainCoin', 15, 3);
-    testBridgeWeapon('Grace Conduit', 'onGraceUse', 'triggerLaser', 25, 2);
+    testBridgeWeapon('Chaos Conduit', 'onExplosion', 'gainGrace', 20, 3);
+    testBridgeWeapon('Temporal Rift', 'onTimeGain', 'triggerEcho', 25, 2);
+    testBridgeWeapon('Soul Harvest', 'onDestruction', 'heal', 10, 3);
+    testBridgeWeapon('Cascade Core', 'onEcho', 'fireCard', 20, 2);
+    testBridgeWeapon("Fortune's Blessing", 'onCoinGain', 'gainHint', 20, 3);
+    testBridgeWeapon('Wisdom Chain', 'onXPGain', 'gainCoin', 20, 3);
+    testBridgeWeapon('Grace Conduit', 'onGraceUse', 'triggerLaser', 30, 2);
     testBridgeWeapon('Life Link', 'onHealthLoss', 'explosion', 30, 2);
   });
 

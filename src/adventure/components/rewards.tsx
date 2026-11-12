@@ -8,7 +8,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import Icon, { IconName } from '@/components/Icon';
 import { FighterAvatar } from '@/components/fighters';
 import { WeaponAvatar } from '@/components/weapons';
-import { COLORS, getRarityColor } from '@/utils/colors';
+import { COLORS } from '@/utils/colors';
 import type { CharacterName, Weapon } from '@/types';
 import type { AdventureSave, RewardDef } from '../types';
 import type { Unlock } from '../progress';
@@ -62,8 +62,8 @@ export const describeUnlockable = (u: Unlockable): UnlockableDisplay => {
       return {
         kind: u.kind, name: w?.name ?? '?', revealed: w?.name ?? '?', secret: 'A new weapon', bountySecret: 'Armory Weapon',
         icon: w?.icon ?? 'lorc/gems', headline: 'New weapon unlocked!', tease: 'Something new for your Armory.',
-        badge: w ? `${w.rarity.toUpperCase()} WEAPON` : null,
-        accent: w && w.rarity !== 'common' ? getRarityColor(w.rarity) : DARK.gold, weapon: w,
+        badge: w ? 'WEAPON' : null,
+        accent: DARK.gold, weapon: w,
       };
     }
     case 'arcana': {
@@ -82,7 +82,7 @@ export const describeUnlockable = (u: Unlockable): UnlockableDisplay => {
         kind: u.kind, name, revealed: `Evolution: ${name}`, secret: 'An evolution', bountySecret: 'An evolution',
         icon: r?.icon ?? 'lorc/crystal-shine', headline: 'New evolution unlocked!',
         tease: 'Two weapon families can now fuse into a 20-second power trip!',
-        badge: 'EVOLUTION RECIPE', accent: getRarityColor('legendary'),
+        badge: 'EVOLUTION RECIPE', accent: '#FFD700',
       };
     }
   }

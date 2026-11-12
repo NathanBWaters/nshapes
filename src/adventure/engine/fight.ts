@@ -409,6 +409,9 @@ export type DestroyKind = 'explosion' | 'laser' | 'ricochet';
 /** Damage a destroyed card pays (spec §1), matching GameBoard's collateral. */
 export const COLLATERAL_DAMAGE = { explosion: 1, laser: 2, ricochet: 1, connected: 1 } as const;
 
+/** The stat that adds to a kind's collateral (weapon levels and tuning: Blast Powder, Prismatic Ray, Chaos Shard). */
+const COLLATERAL_BONUS = { explosion: 'explosionDamage', laser: 'laserDamage', ricochet: 'ricochetDamage' } as const satisfies Record<DestroyKind, keyof PlayerStats>;
+
 const DESTROY_EVENT: Record<DestroyKind, RunEventType> = { explosion: 'blast', laser: 'laser', ricochet: 'ricochet' };
 
 /**
@@ -435,7 +438,7 @@ export const destroyCards = (d: Draft, indices: number[], kind: DestroyKind): nu
   if (destroyed.length + armored.length === 0) return 0;
   d.roundStats.weaponEffectsTriggered.add(kind);
   if (kind === 'explosion') d.explosionsTriggered += 1;
-  const raw = destroyed.length * COLLATERAL_DAMAGE[kind] + linked.length * COLLATERAL_DAMAGE.connected;
+  const raw = destroyed.length * (COLLATERAL_DAMAGE[kind] + (d.stats[COLLATERAL_BONUS[kind]] ?? 0)) + linked.length * COLLATERAL_DAMAGE.connected;
   const dmg = dealDamage(d, raw * foeMultiplier(d));
   addCoins(d, destroyed.length + linked.length);
   emit(d, DESTROY_EVENT[kind], dmg, String(destroyed.length + linked.length));

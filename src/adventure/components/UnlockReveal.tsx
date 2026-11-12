@@ -13,7 +13,7 @@ import { COLORS } from '@/utils/colors';
 import { sfx } from '@/audio';
 import type { CharacterName } from '@/types';
 import type { AdventureSave, ArcanaId, UnlockableFeature } from '../types';
-import { charmSlots, equippedArcanaOf, equippedCharms, weaponTiers, type Unlock } from '../progress';
+import { charmSlots, equippedArcanaOf, equippedCharms, weaponBuilds, type Unlock } from '../progress';
 import { getFighter } from '../data/fighters';
 import { getPassive } from '../data/passives';
 import { getArcana } from '../data/arcana';
@@ -82,7 +82,7 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
   const display = describeUnlock(u);
   const { icon, accent } = display;
   const fighter = u.kind === 'fighter' ? getFighter(u.name) : null;
-  const w = u.kind === 'weapon' ? getArmoryWeapon(u.id, weaponTiers(save)) : null;
+  const w = u.kind === 'weapon' ? getArmoryWeapon(u.id, weaponBuilds(save)) : null;
   const arcana = u.kind === 'arcana' ? getArcana(u.id) : null;
   const evo = u.kind === 'evolution' ? EVOLUTION_RECIPES.find(r => r.id === u.id) ?? null : null;
   const feature = u.kind === 'feature' ? CAMPAIGN_FEATURES[u.feature] : null;
@@ -193,7 +193,6 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                     {u.kind === 'weapon' && u.level !== undefined && (
                       <Text style={[st.rowBody, { color: '#5EEAD4' }]}>
                         Level {u.level}: {w.shortDescription}
-                        {u.refund ? `. It already was at the top level, so the Workshop coins for its last level (${u.refund}¢) come back to you.` : ''}
                       </Text>
                     )}
                     <Text style={st.rowBody}>{adventureText(w.description)}</Text>

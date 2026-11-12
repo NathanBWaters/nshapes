@@ -144,7 +144,7 @@ New weapons, each with a common and a rare tier:
 | Weapon | Role | Effect |
 |---|---|---|
 | Clarity Lens | utility | 3 Sets within 10 s: 33 % (rare 50 %) chance to simplify the board for 15 s. One attribute becomes the same on every card. |
-| War Drum | offense | 5 Sets within 20 s: every card on the board gains +2 power. Workshop upgrades raise it to +3 / +4 / +5. |
+| War Drum | offense | 5 Sets within 20 s: every card on the board gains +2 power. Levels found in the world and Workshop tuning raise it. |
 | Amplifier Coil | combo | Every 4th Set (rare: every 3rd): the next weapon trigger happens twice. |
 | Piñata | offense | Each Set has a 20 % (rare 35 %) chance to give a random card +2 hits; breaking it deals +10. |
 | Catalyst Prism | evolution | +6 % evolution likelihood (rare +10 %); Rainbow refills get +25 % more. |

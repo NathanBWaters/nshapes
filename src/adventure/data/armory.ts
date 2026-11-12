@@ -1,40 +1,28 @@
 /**
  * Looks up any weapon the adventure can hand out (Free Play weapons and the
- * adventure-only ones) at its upgrade tier (Workshop tiers plus free reward
- * upgrades; see `weaponTiers` in progress.ts).
+ * adventure-only ones) at its build: level found in the world and Workshop
+ * tuning (data/weaponStats.ts, weaponLevels.ts).
  */
 import type { Weapon } from '@/types';
 import { LEGACY_WEAPON_IDS, WEAPONS } from '@/utils/gameDefinitions';
 import type { AdventureWeapon } from '../types';
 import type { RuleSource } from '../rules/types';
 import { ADVENTURE_WEAPONS, LEGACY_ADVENTURE_WEAPON_IDS } from './adventureWeapons';
-import { applyWeaponUpgradeTier, describeWeaponUpgradeBonus, MAX_WEAPON_UPGRADE_TIER } from './upgrades';
+import { BASE_BUILD, buildWeapon, type WeaponBuilds } from './weaponStats';
 
-/** A rule weapon at upgrade tier `tier` (0 = level 1): its level's rules and modifiers, and what changed. */
-const upgradeAdventureWeapon = (w: AdventureWeapon, tier: number): AdventureWeapon => {
-  const level = w.levels?.[Math.min(tier, MAX_WEAPON_UPGRADE_TIER) - 1];
-  const withStats: AdventureWeapon = Object.values(w.effects).some(v => typeof v === 'number' && v > 0)
-    ? { ...w, ...applyWeaponUpgradeTier(w, tier) }
-    : w;
-  if (!level) return withStats;
-  return {
-    ...withStats,
-    ...(level.rules ? { rules: level.rules } : {}),
-    ...(level.modifiers ? { modifiers: level.modifiers } : {}),
-    shortDescription: `${withStats.shortDescription} (${level.text})`,
-  };
-};
+/** Free Play weapons Adventure never hands out: their effect only exists in the Free Play game loop. */
+export const FREE_PLAY_ONLY_WEAPONS: readonly string[] = ['sympathetic-flames'];
 
 export const findAdventureWeapon = (id: string): AdventureWeapon | undefined => ADVENTURE_WEAPONS.find(w => w.id === id);
 
-/** Weapon `id` at its tier in `weaponTiers` (absent = level 1). */
-export const getArmoryWeapon = (id: string, weaponTiers?: Record<string, number>): Weapon | undefined => {
-  const tier = weaponTiers?.[id] ?? 0;
-  const adventure = findAdventureWeapon(id);
-  if (adventure) return tier > 0 ? upgradeAdventureWeapon(adventure, tier) : adventure;
-  const base = WEAPONS.find(w => w.id === id);
-  if (!base) return undefined;
-  return tier > 0 ? applyWeaponUpgradeTier(base, tier) : base;
+/** The authored weapon at level 1 (an adventure version wins over a Free Play one with the same id). */
+export const armoryBaseWeapon = (id: string): Weapon | undefined =>
+  findAdventureWeapon(id) ?? (FREE_PLAY_ONLY_WEAPONS.includes(id) ? undefined : WEAPONS.find(w => w.id === id));
+
+/** Weapon `id` at its build in `builds` (absent = level 1, untuned). */
+export const getArmoryWeapon = (id: string, builds?: WeaponBuilds): Weapon | undefined => {
+  const base = armoryBaseWeapon(id);
+  return base ? buildWeapon(base, builds?.[id] ?? BASE_BUILD) : undefined;
 };
 
 /** The rules a held weapon brings into a fight (plain Free Play weapons bring none). */
@@ -44,9 +32,9 @@ export const weaponRuleSource = (w: Weapon): RuleSource => {
 };
 
 /**
- * Where an id from an older save went: the weapon it is now and the upgrade
- * tier that old copy stands for. null: the weapon was removed. Current ids map
- * to themselves at tier 0.
+ * Where an id from an older save went: the weapon it is now and the level
+ * floor (`tier` = level - 1) that old copy stands for. null: the weapon was
+ * removed. Current ids map to themselves at tier 0.
  */
 export const resolveLegacyWeapon = (id: string): { id: string; tier: number } | null => {
   if (id in LEGACY_WEAPON_IDS) return LEGACY_WEAPON_IDS[id];
@@ -54,11 +42,5 @@ export const resolveLegacyWeapon = (id: string): { id: string; tier: number } | 
   return { id, tier: 0 };
 };
 
-/** What upgrade tier `tier` (1-3) gives this weapon over level 1, in a few words. */
-export const describeWeaponLevel = (w: Weapon, tier: number): string => {
-  const level = findAdventureWeapon(w.id)?.levels?.[Math.min(Math.max(1, tier), MAX_WEAPON_UPGRADE_TIER) - 1];
-  return level ? level.text : describeWeaponUpgradeBonus(w, tier);
-};
-
 /** Shown after a weapon's name once it is above level 1 (" Lv 3"). */
-export const weaponLevelSuffix = (tier: number): string => (tier > 0 ? ` Lv ${tier + 1}` : '');
+export const weaponLevelSuffix = (level: number): string => (level > 1 ? ` Lv ${level}` : '');

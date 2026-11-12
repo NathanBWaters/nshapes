@@ -45,7 +45,7 @@ const needsMigration = (stored: Record<string, unknown>): boolean =>
   (stored.activeArcana !== undefined && stored.activeArcana !== null) ||
   hasLegacyWeapon(stored.armory) ||
   hasLegacyWeapon(stored.charms) ||
-  hasLegacyWeapon(stored.weaponUpgrades);
+  (isRecord(stored.weaponUpgrades) && Object.keys(stored.weaponUpgrades).length > 0);
 
 const keepUnreadable = (raw: string, why: unknown): void => {
   console.warn('Adventure save could not be loaded; starting a new one.', why);

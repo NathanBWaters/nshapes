@@ -141,11 +141,12 @@ export interface Weapon {
   effects: Partial<PlayerStats>;
   specialEffect?: 'explosive' | 'autoHint' | 'enhancedHint' | 'boardGrowth' | 'fire' | 'graceGain' | 'healing' | 'hintGain' | 'xpGain' | 'coinGain' | 'timeGain' | 'laser' | 'ricochet' | 'echo' | 'chainReaction' | 'bridge' | 'challengeLegendary' | 'connector' | 'revengeLinker' | 'webWeaver' | 'echoChamber' | 'sympatheticFlames' | 'neuralNetwork';
   /**
-   * Its effects at upgrade levels 2, 3 and 4 (Adventure Workshop tiers 1-3 and
-   * free reward upgrades). Keys left out keep their base value. Without this,
-   * tiers follow the generic formula in adventure/data/upgrades.ts.
+   * Flat gain per level above 1 for each number in `effects` (Adventure: levels
+   * are found as star and bounty rewards). `bridgeChance` raises
+   * `bridgeEffect.chance`. Workshop tuning then multiplies the levelled numbers
+   * (adventure/data/weaponStats.ts).
    */
-  tierEffects?: readonly [Partial<PlayerStats>, Partial<PlayerStats>, Partial<PlayerStats>];
+  perLevel?: Partial<PlayerStats> & { bridgeChance?: number };
   bridgeEffect?: BridgeEffect; // Cross-system trigger: when X happens, Y% chance to cause Z
   icon?: IconName; // Icon path like "delapouite/bamboo" - must be in ICON_REGISTRY
   maxCount?: number; // Maximum number of this weapon that can be owned (e.g., 1 for unique legendaries)
@@ -191,6 +192,11 @@ export interface PlayerStats {
 
   // New weapon effect stats
   explosionChance: number;      // % to explode adjacent cards on match
+  /** Adventure: extra damage per card destroyed by a blast, laser, ricochet or burn (on top of its base collateral) */
+  explosionDamage: number;
+  laserDamage: number;
+  ricochetDamage: number;
+  burnDamage: number;
   autoHintChance: number;       // % for auto-hint to trigger each interval
   autoHintInterval: number;     // ms between auto-hint checks (default 10000)
   boardGrowthChance: number;    // % for board to grow on match

@@ -43,7 +43,7 @@ Map ─tap foe─▶ Preview (foe, skulls, NEW mechanic, hazards, ★ goals + re
 - **Every star pays coins**, shown up front. Coins left out of the level data are filled in by `normalizeRewards` so they always rise ★ → ★★ → ★★★.
 - **Some stars also unlock one thing**: a weapon, a fighter, an Arcana, an evolution recipe, or a campaign system (`unlockFeature`). It stays a silhouette until earned, then gets a full-screen reveal (`UnlockReveal.tsx`).
 - **Each star's reward is granted once.** A new weapon goes straight into a free charm slot.
-- **A weapon reward for a weapon you already own is a free level of it** ("Blast Powder is stronger! (Level 2)"). Free levels are derived from the earned stars and bounties (`weaponLevels.ts`), so re-granting rewards on load never stacks them. A free level on a weapon already at level 4 through the Workshop returns the coins of its top bought tier instead.
+- **A weapon reward for a weapon you already own is +1 level of it** ("Blast Powder is stronger! (Level 2)"). Levels are derived from the earned stars and bounties (`weaponLevels.ts`), so re-granting rewards on load never stacks them. Levels only come from the world; the Workshop tunes (see Weapons).
 - **Campaign systems** (`data/features.ts`): Coin Drops (1-1 ★), Workshop (1-5 ★), and Bounty Board (the first star on 1-8, revealed after that level's star rewards).
 - `reconcileUnlocks` (`progress.ts`) re-grants anything an old save's stars now unlock after a level-table change. It never pays coins twice.
 
@@ -128,7 +128,7 @@ Fighters bring **no gear and no active button**. A fighter's identity is two alw
 `loadout.ts` builds what the fighter walks in with (the preview shows the same thing):
 - **Features**: what is switched on at this level.
 - **Passives and owned skill nodes.**
-- **Equipped charms**, at their levels (free levels from rewards + Workshop tiers).
+- **Equipped charms**, at their builds (level found in the world + Workshop tuning).
 - **Combined Arcana.**
 - **Baked stats**: Workshop items plus the level's starting hints, graces, hearts and clock.
 
@@ -177,47 +177,58 @@ A **Rule** is `trigger` + optional `when` conditions + `effects`, with an option
 
 ## Weapons
 
-**One item per weapon.** There are no rare/epic copies of the same weapon any more: each weapon is a single item with **four levels**. Level 1 is its base numbers; levels 2-4 are reached through the Workshop (coins) and free reward upgrades, up to `MAX_WEAPON_UPGRADE_TIER` = 3 tiers. The cap-increase "Mastery" weapons were removed (effect caps are fixed at their defaults in `game/effectCaps.ts`).
+**One item per weapon, grown two ways** (`data/weaponStats.ts`). There are no rarities in Adventure: every weapon starts solid at level 1, and you make it good by investing in it.
 
-The Free Play roster (`src/utils/gameDefinitions.ts`) is reused; a weapon's levels 2-4 are its `tierEffects` (else the generic formula in `upgrades.ts`). Adventure adds **rule weapons** in `data/adventureWeapons.ts`:
-- Each is a plain `Weapon` plus a `RuleSource`, with `effects: {}` and `maxCount: 1`, and three `levels` (rules/modifiers + a short bonus text).
-- `data/armory.ts` `getArmoryWeapon(id, weaponTiers(save))` finds weapons from either list at their level.
+- **Level (1-5) is found in the world.** The first star or bounty reward that names a weapon unlocks it; every later one is another copy found, +1 level, with a "Blast Powder is stronger!" reveal. Each level adds the weapon's flat `perLevel` gain to **every** number it has. Levels never cost coins, and are derived from earned stars and bounties (`weaponLevels.ts`), so re-granting rewards on load can't stack them.
+- **Tuning is bought at the Workshop** with coins, one track per number: ×1.1 → ×1.2 → ×1.35 → ×1.5 on the levelled value, for 60 / 150 / 320 / 600 coins (`TUNING_MULTIPLIERS`, `TUNING_COSTS`). Tuning never raises the level. Refunds are 100%.
+- Whole-number stats (hearts, graces, board cards, hint slots, links) can come out fractional after tuning. A fight rounds each one by chance with its RNG (2.4 cards = 2, with a 40% chance of 3; `resolveWholeStats` in `loadout.ts`). Previews round down.
+- **Weapons do one thing each.** The old epic bundles (Terra Foundation, Vital Core, Entropy Engine...) are gone: each maps to its main single weapon, and Entropy Engine (ricochet + blast) is now an **evolution**. Combinations come from evolutions, not from items. The cap-raising legendaries (Prismatic Perfection, Tabula Rasa, Desperate Measures), Fortune's Eye (rarity luck) and Snowball (did nothing) were removed.
+- Destructive weapons have a damage number as well as a chance: each card they destroy deals its collateral (blast 1, laser 2, ricochet 1, burn 1) **plus** the weapon's `explosionDamage` / `laserDamage` / `ricochetDamage` / `burnDamage`.
+- `rarity` on a built weapon is only the trim colour of its relic art, and follows its level (`trimForLevel`). UI never shows it.
 
-| Weapon (id) | Level 1 → 2 → 3 → 4 | Was |
-|---|---|---|
-| Blast Powder (`blast-powder`) | explosion 10 → 20 → 30 → 40% | common/rare + Inferno Charge |
-| Flint Spark (`flint-spark`) | fire 10 → 20 → 30 → 40% | + Ember Heart |
-| Fortune Token (`fortune-token`) | grace gain 5 → 10 → 15 → 25% | + Lucky Charm |
-| Mending Charm (`mending-charm`) | heal 5 → 10 → 15 → 25% | + Restoration Aura |
-| Prismatic Ray (`prismatic-ray`) | laser 3 → 6 → 10 → 15% | + Spectrum Annihilator |
-| Echo Stone (`echo-stone`) | echo 5 → 10 → 15 → 25% | + Resonance Crystal |
-| Field Stone (`field-stone`) | board +1 → 2 → 3 → 4 | |
-| Growth Seed (`growth-seed`) | growth 5 → 10 → 15 → 20% | |
-| Second Chance (`second-chance`) | graces 1 → 2 → 3 → 4 | |
-| Life Vessel (`life-vessel`) | hearts +1 → 2 → 3 → 4 | |
-| Crystal Orb (`crystal-orb`) | hint slots +1 → 2 → 3 → 4 | |
-| Seeker Lens (`seeker-lens`) | hint gain 5 → 10 → 15 → 20% | |
-| Scholar's Tome (`scholars-tome`) | XP 20 → 30 → 40 → 50% | |
-| Fortune's Favor (`fortunes-favor`) | coins 20 → 30 → 40 → 50% | + Golden Touch |
-| Chrono Shard (`chrono-shard`) | +15 → 30 → 45 → 60s | |
-| Time Drop (`time-drop`) | time gain 5 → 10 → 15 → 20% (+10s) | |
-| Chaos Shard (`chaos-shard`) | ricochet 10/5 → 20/10 → 30/15 → 40/20% | |
-| Link Stone (`connector`) | link 15 → 20 → 25 → 30% | + Link Chain, Soul Link |
-| Web Spinner (`web-weaver`) | starting links 1 → 2 → 3 → 4 | + Web Master |
-| Echo Chamber (`echo-chamber`) | +1 → 2 → 3 → 4s per link | + Resonance Core |
-| Clarity Lens (`clarity-lens`) | 3 Sets within 10s: 33% → 50% → 60% (17s) → 70% (20s) chance to simplify the board for 15s | |
-| War Drum (`war-drum`) | 5 Sets within 20s: board +2 power → 4 Sets → 4 Sets +3 → 4 Sets +4 | |
-| Amplifier Coil (`amplifier-coil`) | every 4th Set the next trigger ×2 → every 3rd → + every Rainbow → every 2nd + Rainbow | |
-| Piñata (`pinata`) | 20% a card gains +2 hits, breaking it +10 → 35% → 40%/+14 → 50%/+18 | |
-| Catalyst Prism (`catalyst-prism`) | +6% evolution likelihood (+25% after a Rainbow) → +10% → +14%/+30% → +18%/+35% | |
-| Rally Horn (`rally-horn`) | first Set of each wave +6 → +10 → +14 → +18 | |
+The Free Play roster (`src/utils/gameDefinitions.ts`) is reused: `effects` are level 1 and `perLevel` the flat gain per level. Adventure adds **rule weapons** in `data/adventureWeapons.ts`: a plain `Weapon` plus `stats` (their numbers, levelled and tuned the same way) and `build`, which turns the numbers into rules and wording. Revenge Linker has an Adventure version there (its Free Play effect lives in the Free Play loop); Sympathetic Flames is Free Play only (`FREE_PLAY_ONLY_WEAPONS`). `data/armory.ts` `getArmoryWeapon(id, weaponBuilds(save))` finds a weapon at its build.
 
-Weapons with their own mix of effects (Oracle Eye's two entries, Mystic Sight, Chain Reaction, the epic bundles, bridge and challenge legendaries, Revenge Linker, Neural Network, Sympathetic Flames, Fortune's Eye, Snowball) keep the generic tier formula.
+| Weapon (id) | Level 1 | + per level | Tunable numbers |
+|---|---|---|---|
+| Blast Powder (`blast-powder`) | 12% blast, +0.5 dmg/card | +6%, +0.5 | both |
+| Flint Spark (`flint-spark`) | 12% fire, +0.5 dmg/card | +6%, +0.5 | both |
+| Prismatic Ray (`prismatic-ray`) | 5% laser, +1 dmg/card | +2.5%, +0.5 | both |
+| Chaos Shard (`chaos-shard`) | 12% ricochet, 6% bounce, +0.5 dmg | +6%, +3%, +0.5 | all three |
+| Echo Stone (`echo-stone`) | 6% echo | +3% | yes |
+| Chain Reaction (`chain-reaction`) | 30% double echo | +10% | yes |
+| Mending Charm (`mending-charm`) | 8% heal | +4% | yes |
+| Fortune Token (`fortune-token`) | 8% grace | +4% | yes |
+| Seeker Lens (`seeker-lens`) | 8% hint | +4% | yes |
+| Oracle Eye (`oracle-eye`) | 15% auto-hint | +5% | yes |
+| Mystic Sight (`mystic-sight`) | 33% two-card hints | +10% | yes |
+| Growth Seed (`growth-seed`) | 8% growth | +4% | yes |
+| Scholar's Tome (`scholars-tome`) | 25% XP | +8% | yes |
+| Fortune's Favor (`fortunes-favor`) | 25% coin | +6% | yes |
+| Time Drop (`time-drop`) | 6% for +20s | +3%, +2s | both |
+| Chrono Shard (`chrono-shard`) | +15s | +10s | yes |
+| Field Stone (`field-stone`) | +2 board cards | +1 | yes (by chance) |
+| Second Chance (`second-chance`) | +1 grace | +1 | yes (by chance) |
+| Life Vessel (`life-vessel`) | +1 heart | +0.5 | yes (by chance) |
+| Crystal Orb (`crystal-orb`) | +1 hint slot | +1 | yes (by chance) |
+| Link Stone (`connector`) | 15% link | +5% | yes |
+| Web Spinner (`web-weaver`) | 1 starting link | +1 | yes (by chance) |
+| Echo Chamber (`echo-chamber`) | +1s per linked card | +0.5s | yes |
+| Neural Network (`neural-network`) | 30% bonus link | +10% | yes |
+| Bridges (Chaos Conduit, Temporal Rift, Soul Harvest, Cascade Core, Fortune's Blessing, Wisdom Chain, Grace Conduit, Life Link) | 10-30% trigger | +3-8% | yes |
+| Clarity Lens (`clarity-lens`) | 3 Sets in 10s: 33% simplify for 15s | +9%, +2s | both |
+| War Drum (`war-drum`) | 5 Sets in 20s: board +2 power | +2s, +0.5 | both |
+| Amplifier Coil (`amplifier-coil`) | 20% per Set: next trigger ×2 | +6% | yes |
+| Piñata (`pinata`) | 20%: a card gets +2 hits, +10 on break | +6%, +3 | both |
+| Catalyst Prism (`catalyst-prism`) | +6% Catalysts (+25% after a Rainbow) | +3%, +3% | both |
+| Rally Horn (`rally-horn`) | first Set each wave +6 | +3 | yes |
+| Revenge Linker (`revenge-linker`) | lost heart: 3 rolls at 20% to link | +5% | yes |
+
+Effect caps (`game/effectCaps.ts`) were raised so a level-5, fully tuned weapon is never wasted: blast and fire 55%, hints 55%, grace 40%, echo 30%, coins 75%.
 
 - **Early unlock order** alternates offense and support, clearest first:
   - 1-1 ★★ Blast Powder, 1-2 ★★ Mending Charm, 1-4 ★ Flint Spark, 1-4 ★★ Catalyst Prism.
   - 1-5 ★★ Rally Horn, 1-6 ★★ Field Stone, 1-7 ★/★★ Piñata and Clarity Lens, 1-8 ★★ Prismatic Ray.
-- Later rewards that name a weapon you own level it up (where the old rare/epic copy used to drop). No weapon is named by more than 4 rewards, so the rewards alone can take it to level 4.
+- Later rewards that name a weapon you own level it up. No weapon is named by more than 5 rewards (level 5). The Workshop shows how many copies are still out there.
 
 ## Evolutions: a 20-second power trip
 
@@ -326,7 +337,7 @@ The older kinds remain: `noMistakes`, `fullHearts`, `movesLeft`, `timeLeft`, `ra
 - **Coins bank even when you lose.** They only drop once Coin Drops is unlocked (1-1 ★).
 - **Mid-run shop** (taught at 3-4): opens between waves. Price is 2× the weapon's base price; a reroll costs 5 + 5 per reroll. Purchases last for that fight.
 - **Camp spending:**
-  - Workshop items and Armory weapon upgrades.
+  - Workshop items and Armory weapon tuning.
   - Every coin spent there is **100% refundable**, one item at a time or all at once.
   - Old v1 fighter levels are gone and were refunded in full on load.
 
@@ -346,15 +357,7 @@ The Workshop opens at 1-5 ★. Each item goes on sale once its mechanic is known
 | Tarot Deck | +1 Arcana slot (1 → 3) | 2 | 800 / 2400 | Arcana slots (3-6), and you own 2+ Arcana |
 | Evolution Lab | +4% evolution likelihood | 3 | 500 / 1300 / 2800 | Evolutions (1-4) |
 
-**Armory weapon upgrades** take an owned weapon up to level 4 (tier 3). Free levels from rewards count towards that top level, so they lower how many tiers can be bought; the k-th bought tier always costs the k-th price, so a refund returns exactly what was paid. Merged weapons are all common.
-
-| Rarity | Tier costs |
-|---|---|
-| Common | 80 / 180 / 340 |
-| Rare | 120 / 260 / 480 |
-| Epic | 180 / 380 / 680 |
-| Legendary | 250 / 520 / 900 |
-
+**Weapon tuning** multiplies one number of an owned weapon: ×1.1 / ×1.2 / ×1.35 / ×1.5 for 60 / 150 / 320 / 600 coins, per number, on top of its level. Levels are found in the world, never bought. Old saves get every coin they spent on Workshop weapon levels back (at the old rarity prices, `LEGACY_WEAPON_LEVEL_COSTS`).
 Losing a Charm Belt or Tarot Deck tier also unequips whatever no longer fits.
 
 ## Bounty Board
@@ -363,7 +366,7 @@ Losing a Charm Belt or Tarot Deck tier also unequips whatever no longer fits.
 
 - There are **19 cross-run bounties** in four categories: mastery 6, chaos 6, roster 4, explorer 3.
 - Every fight advances lifetime counters (`bountyStats`), whether it was a win, a loss or a replay.
-- Rewards are coins, Armory weapons (or a free level of one you own) and one Arcana (Catalyst Resonance).
+- Rewards are coins, Armory weapons (or +1 level of one you own) and one Arcana (Catalyst Resonance).
 - Completions cascade in one pass, so a coin bounty can complete another.
 
 ## Code map
@@ -380,10 +383,11 @@ src/adventure/
   data/passives.ts      passive tuning keys + player text
   data/skillTrees.ts    120 skill nodes
   data/adventureWeapons.ts  rule weapons
-  data/armory.ts        weapon lookup at a level, rule-weapon levels, old-id resolution
+  data/armory.ts        weapon lookup at a build (level + tuning), old-id resolution
+  data/weaponStats.ts   weapon numbers: levels (flat), tuning (multipliers), wording
   data/evolutions.ts    weapon families + 8 recipes
   data/arcana.ts        8 Arcana + stacking
-  data/upgrades.ts      Workshop items + weapon-upgrade costs
+  data/upgrades.ts      Workshop items (+ old weapon-level prices, for refunds)
   data/bounties.ts      cross-run bounties
   data/features.ts      campaign systems that start locked (coins, workshop, bounties)
   data/rewards.ts       what a reward unlocks, and "Earn ★★ on 1-7…" unlock hints
@@ -393,7 +397,7 @@ src/adventure/
   data/story.ts         story pages (placeholder text)
   loadout.ts            what the fighter brings into a level (slots, features, stats)
   progress.ts           pure rules: unlocks, rewards, star pool, purchases, refunds, migration
-  weaponLevels.ts       a weapon's level: free levels from earned rewards + Workshop tiers
+  weaponLevels.ts       a weapon's level (copies found) and Workshop tuning purchases
   save.ts               MMKV persistence (key adventure_v2_save, version 1)
   lessons.ts            lessons still to play, save-dependent lesson pages
   engine/run.ts         pure reducer for one fight (seeded RNG), createRun, computeStars
@@ -432,7 +436,7 @@ The fight UI reuses the shared `GameBoard` and `Card`, so weapon effects, fire, 
   - Put the behaviour in `rules` / `modifiers`, and its levels 2-4 in `levels` (each with a short `text`).
   - Pick a `specialEffect` (it maps to a weapon trigger kind for Big Scoop's "trigger every weapon").
 - Register the icon in `src/components/Icon.tsx`.
-- Grant it from a star reward (`weapons: [...]` in `levels.ts`) or a bounty, because the Armory only fills from rewards. Naming it again in later rewards (at most 4 in all) gives free levels.
+- Grant it from a star reward (`weapons: [...]` in `levels.ts`) or a bounty, because the Armory only fills from rewards. Naming it again in later rewards (at most 5 in all) gives levels; give it a `perLevel` for every number and wording in `weaponStats.ts`.
 - To let it arm a recipe, add its id prefix to a family in `FAMILIES` (`data/evolutions.ts`).
 
 **An evolution recipe.**
@@ -487,13 +491,13 @@ ADVENTURE_BALANCE_REPORT=1 npx jest __tests__/adventureBalance.test.ts
 - **v1 migration** (`migrateSave`):
   - Fighter levels are refunded in full (`LEGACY_FIGHTER_LEVEL_COSTS` 60 → 1900).
   - `charm` becomes `charms[]`, and `activeArcana` becomes `equippedArcana[]`.
-  - Weapon upgrade tiers are kept.
+  - Workshop weapon levels are refunded (see below).
   - A migrated save is written straight back, so the refund is paid once.
 - **Merged weapons** (`migrateWeaponIds`, ids in `LEGACY_WEAPON_IDS` / `LEGACY_ADVENTURE_WEAPON_IDS`):
   - Old rare/epic/legendary copies become their one weapon; charms map the same way without duplicates.
-  - Owning a stronger copy sets a floor on that weapon's free levels (`legacyWeaponTiers`, e.g. Blast Powder rare/Inferno Charge → level 3).
-  - Workshop tiers bought on the plain (common) copy carry over; tiers bought on a copy that no longer exists (or on a Mastery) are refunded at the rarity price they were bought for.
-  - Mastery weapons are dropped without a refund (they were rewards).
+  - Owning a stronger copy sets a floor on that weapon's level (`legacyWeaponTiers`, e.g. Blast Powder rare/Inferno Charge → level 3). An epic bundle becomes its main weapon with a floor (Terra Foundation → Field Stone level 3, Entropy Engine → Chaos Shard level 3; the Entropy Engine evolution comes from its level's reward).
+  - Every Workshop weapon level ever bought is refunded at the rarity price it was bought for (`LEGACY_WEAPON_LEVEL_COSTS`): levels are world-only now.
+  - Mastery weapons, cap-raising legendaries, Fortune's Eye and Snowball are dropped without a refund (they were rewards).
 
 ## Audio (poteto's approach)
 

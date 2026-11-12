@@ -8,26 +8,30 @@
  * live only during that window, on top of a flat +1 damage per Set
  * (engine/sources.ts EVOLUTION_RULES). Up to 3 evolutions per fight.
  *
- * Families are weapon id prefixes: `oracle-eye` matches `oracle-eye-rare`.
- * The two families of one recipe never share a weapon, so one weapon can't arm
- * a recipe alone.
+ * A family is the weapons that produce (or, for the bridge weapons, react to)
+ * one effect. The two families of one recipe never share a weapon, so one
+ * weapon can't arm a recipe alone.
+ *
+ * Weapons do one thing each; combining them is what evolutions are for. (The
+ * old Entropy Engine weapon, ricochet plus blast in one item, is now the
+ * Entropy Engine evolution.)
  */
 import type { EvolutionRecipe } from '../types';
 
 /** Weapon families (ids from WEAPONS in utils/gameDefinitions.ts and data/adventureWeapons.ts) */
 export const FAMILIES = {
-  explosion: ['blast-powder'],
-  healing: ['mending-charm', 'vital-core', 'soul-harvest'],
-  fire: ['flint-spark', 'sympathetic-flames', 'cascade-core'],
-  echo: ['echo-stone', 'chain-reaction'],
-  laser: ['prismatic-ray'],
-  grace: ['second-chance', 'fortune-token', 'fortunes-shield', 'grace-conduit', 'snowball'],
-  coin: ['fortunes-favor', 'fortunes-blessing'],
-  time: ['chrono-shard', 'time-drop', 'temporal-core', 'hourglass-of-ages', 'temporal-rift'],
-  hint: ['oracle-eye', 'seeker-lens', 'crystal-orb', 'clairvoyant-sphere', 'enlightened-eye', 'prophets-vision', 'mystic-sight'],
-  ricochet: ['chaos-shard', 'entropy-engine'],
-  growth: ['growth-seed', 'field-stone', 'life-bloom', 'terra-foundation'],
-  life: ['life-vessel', 'vital-core', 'life-link'],
+  explosion: ['blast-powder', 'life-link'],
+  healing: ['mending-charm', 'soul-harvest'],
+  fire: ['flint-spark', 'cascade-core'],
+  echo: ['echo-stone', 'chain-reaction', 'temporal-rift'],
+  laser: ['prismatic-ray', 'grace-conduit'],
+  grace: ['second-chance', 'fortune-token', 'chaos-conduit'],
+  coin: ['fortunes-favor', 'wisdom-chain'],
+  time: ['chrono-shard', 'time-drop'],
+  hint: ['oracle-eye', 'seeker-lens', 'crystal-orb', 'mystic-sight', 'fortunes-blessing'],
+  ricochet: ['chaos-shard'],
+  growth: ['growth-seed', 'field-stone'],
+  life: ['life-vessel'],
   connector: ['connector', 'web-weaver', 'echo-chamber', 'revenge-linker', 'neural-network'],
 } as const satisfies Record<string, readonly string[]>;
 
@@ -158,6 +162,25 @@ export const EVOLUTION_RECIPES: EvolutionRecipe[] = [
       rules: [
         { trigger: { on: 'set' }, effects: [{ do: 'link', count: 2 }] },
         { trigger: { on: 'linkDestroyed' }, effects: [{ do: 'time', seconds: 2 }, { do: 'damage', amount: 2 }], callout: 'Overclock!' },
+      ],
+    },
+  },
+  {
+    id: 'entropy-engine',
+    name: 'Entropy Engine',
+    icon: 'lorc/cycle',
+    families: [fam('ricochet'), fam('explosion')],
+    familyText: 'Ricochet + Explosion',
+    activeText: 'Every blast ricochets into 2 cards. Every ricochet has a 50% chance to blast a 2×2 block.',
+    flavor: 'Shards set off charges, charges throw shards. Somewhere in the middle, the foe stops having a plan.',
+    source: {
+      rules: [
+        { trigger: { on: 'weapon', kind: 'explosion' }, effects: [{ do: 'ricochet', count: 2 }], callout: 'Entropy!' },
+        {
+          trigger: { on: 'weapon', kind: 'ricochet' },
+          when: [{ kind: 'chance', pct: 50 }],
+          effects: [{ do: 'explode', area: { shape: 'block', cols: 2, rows: 2 } }],
+        },
       ],
     },
   },

@@ -16,17 +16,17 @@ interface EffectCapConfig {
 }
 
 export const EFFECT_CAPS = {
-  echo: { defaultCap: 25, stats: ['echoChance'] }, // Echo Stone
+  echo: { defaultCap: 30, stats: ['echoChance'] }, // Echo Stone
   laser: { defaultCap: 30, stats: ['laserChance'] }, // Prismatic Ray
-  graceGain: { defaultCap: 30, stats: ['graceGainChance'] }, // Fortune Token
-  explosion: { defaultCap: 40, stats: ['explosionChance'] }, // Blast Powder
-  hint: { defaultCap: 40, stats: ['hintGainChance', 'autoHintChance', 'enhancedHintChance'] }, // Oracle Eye, Seeker Lens
+  graceGain: { defaultCap: 40, stats: ['graceGainChance'] }, // Fortune Token
+  explosion: { defaultCap: 55, stats: ['explosionChance'] }, // Blast Powder
+  hint: { defaultCap: 55, stats: ['hintGainChance', 'autoHintChance', 'enhancedHintChance'] }, // Oracle Eye, Seeker Lens
   timeGain: { defaultCap: 40, stats: ['timeGainChance'] }, // Time Drop
   healing: { defaultCap: 50, stats: ['healingChance'] }, // Mending Charm
-  fire: { defaultCap: 50, stats: ['fireSpreadChance'] }, // Flint Spark
+  fire: { defaultCap: 55, stats: ['fireSpreadChance'] }, // Flint Spark
   ricochet: { defaultCap: 60, stats: ['ricochetChance'] }, // Chaos Shard
   boardGrowth: { defaultCap: 60, stats: ['boardGrowthChance'] }, // Growth Seed
-  coinGain: { defaultCap: 70, stats: ['coinGainChance'] }, // Fortune's Favor
+  coinGain: { defaultCap: 75, stats: ['coinGainChance'] }, // Fortune's Favor
   xpGain: { defaultCap: 100, stats: ['xpGainChance'] }, // Scholar's Tome
 } as const satisfies Record<string, EffectCapConfig>;
 

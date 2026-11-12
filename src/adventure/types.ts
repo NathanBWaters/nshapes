@@ -6,6 +6,7 @@
  * campaign, edit the tables in `src/adventure/data/` — not the engine.
  */
 
+import type { WeaponBuilds, WeaponStatDef } from './data/weaponStats';
 import type { AttributeName, BoardConnection, CharacterName, Card, Weapon, PlayerStats } from '@/types';
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import type { IconName } from '@/components/Icon';
@@ -350,19 +351,14 @@ export interface SkillNode extends RuleSource {
   icon: IconName;
 }
 
-/** A weapon that only exists in Adventure and may carry rules. */
-/** One upgrade level of a rule weapon: the rules and modifiers it has at that level, and what changed. */
-export interface AdventureWeaponLevel extends RuleSource {
-  /** The bonus over level 1 in a few words, shown after the short description ("+50% chance") */
-  text: string;
-}
-
+/**
+ * A weapon that only exists in Adventure and may carry rules. Its numbers are
+ * `stats` (levelled and tuned like any weapon's, data/weaponStats.ts) and
+ * `build` turns them into its rules and wording.
+ */
 export type AdventureWeapon = Weapon & RuleSource & {
-  /**
-   * Levels 2, 3 and 4 (Workshop tiers and free reward upgrades). Each replaces
-   * the weapon's rules/modifiers; whatever a level leaves out stays as authored.
-   */
-  levels?: readonly [AdventureWeaponLevel, AdventureWeaponLevel, AdventureWeaponLevel];
+  stats?: Record<string, WeaponStatDef>;
+  build?: (v: Record<string, number>) => RuleSource & { description: string; shortDescription: string };
 };
 
 /** Two weapon families fused into a 20-second power state. */
@@ -439,9 +435,11 @@ export interface AdventureSave {
   unlockedFighters: CharacterName[];
   armory: string[];                  // unlocked weapon ids
   upgrades: Record<string, number>;  // mechanic upgrade id -> tier
-  /** Workshop tiers bought per Armory weapon (1..3). Free tiers from rewards add to these (weaponLevels.ts). */
+  /** @deprecated Workshop weapon levels from before levels became world-only; refunded and cleared on load */
   weaponUpgrades: Record<string, number>;
-  /** Upgrade tiers carried over from the stronger rare/epic copies an older save owned (a floor on free tiers) */
+  /** Workshop tuning per Armory weapon: number key -> tier 1..4 (data/weaponStats.ts) */
+  weaponTuning: Record<string, Record<string, number>>;
+  /** Levels (minus 1) carried over from the stronger rare/epic copies an older save owned: a floor on found levels */
   legacyWeaponTiers: Record<string, number>;
   /** Campaign systems unlocked so far, one flag per entry of data/features.ts */
   coinsUnlocked: boolean;
@@ -608,8 +606,8 @@ export interface RunState {
   rerolls: number;
   /** Weapon ids that can appear in level-up picks and shops */
   armory: string[];
-  /** Armory weapon upgrade tiers active during this run */
-  weaponUpgrades: Record<string, number>;
+  /** Level and tuning of each Armory weapon during this run */
+  weaponBuilds: WeaponBuilds;
 
   // Fighter passives, skill nodes & rules
   /** Empty on bare levels */

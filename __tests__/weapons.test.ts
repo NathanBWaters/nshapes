@@ -12,8 +12,8 @@ import { Weapon, Player } from '@/types';
 
 describe('Weapon Definitions', () => {
   describe('WEAPONS array', () => {
-    it('should have exactly 51 weapons (one per weapon family + epic bundles + bridge legendaries + connector weapons)', () => {
-      expect(WEAPONS.length).toBe(51);
+    it('should have exactly 34 weapons (one per weapon, each doing one thing; bundles became evolutions)', () => {
+      expect(WEAPONS.length).toBe(34);
     });
 
     it('should have 21 common weapons', () => {
@@ -21,19 +21,19 @@ describe('Weapon Definitions', () => {
       expect(commons.length).toBe(21);
     });
 
-    it('should have 3 rare weapons', () => {
+    it('should have 1 rare weapon (Sympathetic Flames, Free Play only)', () => {
       const rares = WEAPONS.filter(w => w.rarity === 'rare');
-      expect(rares.length).toBe(3);
+      expect(rares.length).toBe(1);
     });
 
-    it('should have 11 epic weapons (bundles of effects)', () => {
+    it('should have no epic weapons (bundles of two effects are evolutions now)', () => {
       const epics = WEAPONS.filter(w => w.rarity === 'epic');
-      expect(epics.length).toBe(11);
+      expect(epics.length).toBe(0);
     });
 
-    it('should have 16 legendary weapons', () => {
+    it('should have 12 legendary weapons (bridges, connector specials, Mystic Sight, Chain Reaction)', () => {
       const legendaries = WEAPONS.filter(w => w.rarity === 'legendary');
-      expect(legendaries.length).toBe(16);
+      expect(legendaries.length).toBe(12);
     });
 
     it('has unique ids and no cap-increase (Mastery) weapons', () => {
@@ -180,24 +180,24 @@ describe('Weapon Definitions', () => {
       });
     });
 
-    it('levels 2-4 (tierEffects) grow every effect they list, never shrinking', () => {
-      const levelled = WEAPONS.filter(w => w.tierEffects);
-      expect(levelled.length).toBe(20);
+    it('every number a weapon has grows by a flat amount per level (perLevel)', () => {
+      const levelled = WEAPONS.filter(w => w.perLevel);
+      expect(levelled.length).toBeGreaterThanOrEqual(30);
       for (const w of levelled) {
-        for (const [key, base] of Object.entries(w.effects)) {
-          const values = [base as number, ...w.tierEffects!.map(t => (t as Record<string, number | undefined>)[key] ?? (base as number))];
-          for (let i = 1; i < values.length; i++) expect(values[i]).toBeGreaterThanOrEqual(values[i - 1]);
+        for (const [key, gain] of Object.entries(w.perLevel!)) {
+          expect(gain).toBeGreaterThan(0);
+          if (key !== 'bridgeChance') expect(w.effects).toHaveProperty(key);
         }
-        // Every level adds something over the one before
-        const main = Object.keys(w.tierEffects![0])[0] as keyof typeof w.effects;
-        const levels = [w.effects[main] as number, ...w.tierEffects!.map(t => t[main] as number)];
-        expect(levels[3]).toBeGreaterThan(levels[0]);
+        for (const [key, base] of Object.entries(w.effects)) {
+          if (typeof base === 'number' && key !== 'health') expect(w.perLevel).toHaveProperty(key);
+        }
       }
     });
 
-    it('Blast Powder grows 10% -> 20% -> 30% -> 40%', () => {
-      const blast = WEAPONS.find(w => w.id === 'blast-powder')!;
-      expect([blast.effects.explosionChance, ...blast.tierEffects!.map(t => t.explosionChance)]).toEqual([10, 20, 30, 40]);
+    it('no weapon bundles two unrelated effects (combos are evolutions)', () => {
+      for (const id of ['entropy-engine', 'terra-foundation', 'vital-core', 'life-bloom', 'hourglass-of-ages']) {
+        expect(WEAPONS.find(w => w.id === id)).toBeUndefined();
+      }
     });
 
     it('Mystic Sight should have enhancedHintChance effect', () => {
@@ -419,7 +419,7 @@ describe('Stats Calculation', () => {
 
       const totalStats = calculatePlayerTotalStats(player);
 
-      expect(totalStats.explosionChance).toBe(10); // Common is 10%
+      expect(totalStats.explosionChance).toBe(12); // Level 1 is 12%
     });
 
     it('should correctly calculate healingChance from Mending Charm', () => {
@@ -430,8 +430,8 @@ describe('Stats Calculation', () => {
 
       const totalStats = calculatePlayerTotalStats(player);
 
-      // Orange Tabby starts with Mending Charm (+5); a second copy stacks (+5) = 10
-      expect(totalStats.healingChance).toBe(10);
+      // Orange Tabby starts with Mending Charm (+8); a second copy stacks (+8) = 16
+      expect(totalStats.healingChance).toBe(16);
     });
 
     it('should correctly calculate laserChance from Prismatic Ray', () => {
@@ -442,8 +442,8 @@ describe('Stats Calculation', () => {
 
       const totalStats = calculatePlayerTotalStats(player);
 
-      // Prismatic Ray is +3 laserChance
-      expect(totalStats.laserChance).toBe(3);
+      // Prismatic Ray is +5 laserChance
+      expect(totalStats.laserChance).toBe(5);
     });
 
     it('should correctly calculate startingTime from Chrono Shard', () => {

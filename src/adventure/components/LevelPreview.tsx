@@ -9,7 +9,7 @@ import Icon, { IconName } from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
 import { WeaponAvatar } from '@/components/weapons';
-import { COLORS, getRarityColor } from '@/utils/colors';
+import { COLORS } from '@/utils/colors';
 import type { CharacterName } from '@/types';
 import type { AdventureSave, ArcanaId, LevelDef, LevelHazards } from '../types';
 import { getBiome } from '../data/biomes';
@@ -31,8 +31,8 @@ import {
   equippedCharms,
   getLockReason,
   recipeFamiliesHeld,
-  weaponUpgradeTier,
-  weaponTiers,
+  weaponLevel,
+  weaponBuilds,
 } from '../progress';
 import { startingLoadout } from '../loadout';
 import { Btn, Eyebrow, Heart, INK, PopIn, Skulls, StarRow, TONE } from './ui';
@@ -243,13 +243,13 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                 <View style={st.slotRow} testID="preview-charm-slots">
                   {Array.from({ length: slots }).map((_, i) => {
                     const id = charms[i];
-                    const w = id ? getArmoryWeapon(id, weaponTiers(save)) : undefined;
+                    const w = id ? getArmoryWeapon(id, weaponBuilds(save)) : undefined;
                     return w ? (
                       <TouchableOpacity
                         key={i}
                         testID={`preview-slot-${i}`}
                         onPress={() => onSelectCharm(id)}
-                        style={[st.slot, { borderColor: getRarityColor(w.rarity), borderStyle: 'solid', backgroundColor: COLORS.canvasWhite }]}
+                        style={[st.slot, { borderColor: INK, borderStyle: 'solid', backgroundColor: COLORS.canvasWhite }]}
                         accessibilityLabel={`Remove ${w.name}`}
                       >
                         <WeaponAvatar weapon={w} size={26} />
@@ -261,11 +261,11 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                 </View>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
                   {save.armory.map(id => {
-                    const w = getArmoryWeapon(id, weaponTiers(save));
+                    const w = getArmoryWeapon(id, weaponBuilds(save));
                     if (!w) return null;
                     const selected = charms.includes(id);
                     const blocked = !selected && charmsFull;
-                    const wTier = weaponUpgradeTier(save, id);
+                    const wLevel = weaponLevel(save, id);
                     return (
                       <TouchableOpacity
                         key={id}
@@ -274,12 +274,12 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                           setCharmTapCounts(prev => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }));
                           onSelectCharm(id);
                         }}
-                        style={[st.charm, { borderColor: selected ? INK : getRarityColor(w.rarity) }, selected && st.charmSel, blocked && { opacity: 0.5 }]}
+                        style={[st.charm, selected && st.charmSel, blocked && { opacity: 0.5 }]}
                         activeOpacity={0.85}
                         accessibilityState={{ selected }}
                       >
                         <WeaponAvatar weapon={w} size={32} triggerKey={charmTapCounts[id]} />
-                        <Text style={st.fighterName} numberOfLines={1}>{w.name}{weaponLevelSuffix(wTier)}</Text>
+                        <Text style={st.fighterName} numberOfLines={1}>{w.name}{weaponLevelSuffix(wLevel)}</Text>
                         <Text style={st.charmDesc} numberOfLines={2}>{w.shortDescription}</Text>
                       </TouchableOpacity>
                     );
