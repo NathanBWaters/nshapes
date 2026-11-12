@@ -19,7 +19,6 @@ interface MainMenuProps {
   onResumeGame?: () => void;
 }
 
-// Menu button component
 function MenuButton({
   onPress,
   variant,
@@ -115,7 +114,6 @@ const MainMenu: React.FC<MainMenuProps> = ({
 
   return (
     <View style={styles.container}>
-      {/* Main Content */}
       <View style={styles.content}>
         {/* Title Section with Living Mascot */}
         <View style={styles.titleSection}>
@@ -134,7 +132,6 @@ const MainMenu: React.FC<MainMenuProps> = ({
           <Text style={styles.subtitle}>Roguelike Match-Three Puzzle</Text>
         </View>
 
-        {/* Menu Buttons */}
         <View style={styles.menuSection}>
           {hasSavedGame && onResumeGame && savedGame && (
             <MenuButton
@@ -217,7 +214,6 @@ const MainMenu: React.FC<MainMenuProps> = ({
           <Text style={styles.discordTitleSmall}>Discord</Text>
         </Pressable>
 
-        {/* Footer */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>v{version}</Text>
         </View>
@@ -345,7 +341,6 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  // Smaller discord button
   discordButtonSmall: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -369,7 +364,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
-  // Legacy styles kept for compatibility
   discordButton: {
     flexDirection: 'row',
     alignItems: 'center',

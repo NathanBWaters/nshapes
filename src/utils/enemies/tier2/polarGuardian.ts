@@ -13,9 +13,6 @@ import {
   composeEffects,
 } from '../../enemyEffects';
 
-/**
- * Creates a fresh Polar Guardian enemy instance.
- */
 export function createPolarGuardian(): EnemyInstance {
   return composeEffects(
     {
@@ -30,7 +27,6 @@ export function createPolarGuardian(): EnemyInstance {
       { behavior: PointsMultiplierEffect, config: { multiplier: 2.0 } },
       { behavior: WeaponCounterEffect, config: { type: 'laser', reduction: 40 } },
     ],
-    // Defeat condition: Take no damage AND trigger at least 1 weapon effect
     (stats: RoundStats) =>
       stats.damageReceived === 0 && stats.weaponEffectsTriggered.size >= 1
   );

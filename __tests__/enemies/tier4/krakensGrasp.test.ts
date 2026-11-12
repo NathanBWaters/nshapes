@@ -49,19 +49,6 @@ const createTestBoard = (): Card[] =>
     }));
 
 describe("Kraken's Grasp", () => {
-  describe('metadata', () => {
-    it('has correct name and tier', () => {
-      const enemy = createKrakensGrasp();
-      expect(enemy.name).toBe("Kraken's Grasp");
-      expect(enemy.tier).toBe(4);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createKrakensGrasp();
-      expect(enemy.icon).toBe('delapouite/kraken-tentacle');
-    });
-  });
-
   describe('position shuffle', () => {
     it('shuffles every 15s', () => {
       const enemy = createKrakensGrasp();

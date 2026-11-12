@@ -156,7 +156,6 @@ export const CorvidRig: React.FC<EnemyRigProps<'magpie'>> = (props) => {
             stroke={STROKE}
             strokeWidth={3.2}
           />
-          {/* Glossy brow sheen */}
           <Path d="M 36 27 Q 50 22 64 27" stroke={sheenColor} strokeWidth={2.4} strokeLinecap="round" fill="none" />
 
           <EnemyEyes
@@ -170,7 +169,6 @@ export const CorvidRig: React.FC<EnemyRigProps<'magpie'>> = (props) => {
             darkMask
           />
 
-          {/* Sharp corvid dagger-beak */}
           {openBeak ? (
             <G>
               <Path
@@ -205,20 +203,17 @@ export const CorvidRig: React.FC<EnemyRigProps<'magpie'>> = (props) => {
       paws={
         isMagpie ? (
           <G>
-            {/* Left talon */}
             <Path d="M 36 82 L 32 88 M 39 82 L 38 89 M 42 82 L 43 88" stroke={STROKE} strokeWidth={2.8} strokeLinecap="round" />
             {/* Shiny stolen gold coin clutched in right talon! */}
             <Circle cx={57} cy={86.5} r={8} fill={COLORS.actionYellow} stroke={STROKE} strokeWidth={2.7} />
             <Circle cx={57} cy={86.5} r={5.2} fill="#F59E0B" />
             <Line x1={57} y1={83.2} x2={57} y2={89.8} stroke={COLORS.actionYellow} strokeWidth={2.1} strokeLinecap="round" />
-            {/* Sparkle glint */}
             <Polygon points="64,77 65.3,79.7 68,81 65.3,82.3 64,85 62.7,82.3 60,81 62.7,79.7" fill="#FFFFFF" />
             {/* Right talon toes gripping top of coin */}
             <Path d="M 53 79 L 52 83 M 57 78.5 L 57 82.5 M 61 79 L 62 83" stroke={STROKE} strokeWidth={2.7} strokeLinecap="round" />
           </G>
         ) : (
           <G>
-            {/* Left raven talon */}
             <Path d="M 35 82 L 31 88 M 38.5 82 L 37.5 89 M 42 82 L 43 88" stroke={STROKE} strokeWidth={2.8} strokeLinecap="round" />
             {/* Swinging gold chain from talon */}
             <Path
@@ -331,7 +326,6 @@ export const NightOwlRig: React.FC<EnemyRigProps> = (props) => {
       }
       head={
         <G>
-          {/* Wide owl head */}
           <Ellipse
             cx={50}
             cy={37.5}
@@ -341,7 +335,6 @@ export const NightOwlRig: React.FC<EnemyRigProps> = (props) => {
             stroke={STROKE}
             strokeWidth={3.2}
           />
-          {/* Feathered horn ear-tufts */}
           <Path
             d={isRuffled ? 'M 33 25 L 20 15 L 26 23 L 23 26 L 38 29 Z' : 'M 33 25 L 21 12 L 40 23 Z'}
             fill={OWL_SLATE}
@@ -364,7 +357,6 @@ export const NightOwlRig: React.FC<EnemyRigProps> = (props) => {
             strokeWidth={2.4}
             strokeLinejoin="round"
           />
-          {/* Luminous amber eyes */}
           <EnemyEyes
             expression={expression}
             gazeOffset={gazeOffset}
@@ -374,7 +366,6 @@ export const NightOwlRig: React.FC<EnemyRigProps> = (props) => {
             radius={5.1}
             irisColor="#F59E0B"
           />
-          {/* Hooked owl beak */}
           {openBeak ? (
             <G>
               <Polygon points="46,44.5 54,44.5 50,49.5" fill="#F59E0B" stroke={STROKE} strokeWidth={2.2} strokeLinejoin="round" />
@@ -393,7 +384,6 @@ export const NightOwlRig: React.FC<EnemyRigProps> = (props) => {
       }
       paws={
         <G>
-          {/* Feathered owl talons */}
           <Ellipse cx={39} cy={85.5} rx={6.5} ry={3.8} fill={OWL_CREAM} stroke={STROKE} strokeWidth={2.5} />
           <Path d="M 35 87 L 34 91.5 M 39 87.5 L 39 92 M 43 87 L 44 91.5" stroke={STROKE} strokeWidth={2.6} strokeLinecap="round" />
           <Ellipse cx={61} cy={85.5} rx={6.5} ry={3.8} fill={OWL_CREAM} stroke={STROKE} strokeWidth={2.5} />
@@ -493,7 +483,6 @@ export const WildGooseRig: React.FC<EnemyRigProps> = (props) => {
             strokeWidth={3.1}
             strokeLinejoin="round"
           />
-          {/* Goose head */}
           <Ellipse
             cx={50}
             cy={23.5}
@@ -541,7 +530,6 @@ export const WildGooseRig: React.FC<EnemyRigProps> = (props) => {
                 strokeLinejoin="round"
               />
               <Path d="M 46 34 Q 50 31 54 34 L 50 38 Z" fill="#FB7185" />
-              {/* Lower orange bill */}
               <Path
                 d="M 43 36.5 Q 50 41 57 36.5"
                 fill={BILL_ORANGE}
@@ -665,7 +653,6 @@ export const CirclingVultureRig: React.FC<EnemyRigProps> = (props) => {
             strokeLinejoin="round"
           />
           <Ellipse cx={50} cy={26} rx={9} ry={3.2} fill="#FB7185" opacity={0.65} />
-          {/* Scavenger brow wrinkles */}
           <Path d="M 42 26 Q 50 24 58 26" stroke="#9F1239" strokeWidth={1.8} strokeLinecap="round" fill="none" />
 
           <EnemyEyes
@@ -1109,7 +1096,6 @@ export const ShadowBatRig: React.FC<EnemyRigProps> = (props) => {
           <Polygon points="71,28 78,13 63,23" fill={EAR_INNER} />
           <Line x1={75} y1={19} x2={67} y2={23} stroke={BAT_DARK} strokeWidth={1.6} strokeLinecap="round" />
 
-          {/* Bat head */}
           <Ellipse
             cx={50}
             cy={37.5}
@@ -1131,7 +1117,6 @@ export const ShadowBatRig: React.FC<EnemyRigProps> = (props) => {
             darkMask
           />
 
-          {/* Upturned vampire leaf-nose */}
           <Polygon
             points="46.5,42 50,37.5 53.5,42 50,44.5"
             fill={EAR_INNER}
@@ -1140,7 +1125,6 @@ export const ShadowBatRig: React.FC<EnemyRigProps> = (props) => {
             strokeLinejoin="round"
           />
 
-          {/* Fanged vampire mouth! */}
           {openMouth ? (
             <G>
               <Path
@@ -1286,7 +1270,6 @@ export const PrismMothRig: React.FC<EnemyRigProps> = (props) => {
           <Path d="M 59 25 C 63 14, 72 9, 79 12" stroke={FACET_GOLD} strokeWidth={3} strokeLinecap="round" fill="none" />
           <Path d="M 64 18 L 69 22 M 68 14 L 73 19 M 73 12 L 76 17" stroke={FACET_GOLD} strokeWidth={2.1} strokeLinecap="round" />
 
-          {/* Twilight moth head */}
           <Ellipse
             cx={50}
             cy={37}

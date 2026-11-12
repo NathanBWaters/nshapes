@@ -12,7 +12,6 @@ const RewardReveal: React.FC<RewardRevealProps> = ({ reward }) => {
   const opacityAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Pop in animation
     Animated.parallel([
       Animated.spring(scaleAnim, {
         toValue: 1,

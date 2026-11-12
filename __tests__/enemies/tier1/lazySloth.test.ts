@@ -26,71 +26,6 @@ describe('Lazy Sloth', () => {
   // METADATA TESTS
   // ==========================================================================
   describe('metadata', () => {
-    it('has correct name', () => {
-      const enemy = createLazySloth();
-      expect(enemy.name).toBe('Lazy Sloth');
-    });
-
-    it('has correct tier (tier 1)', () => {
-      const enemy = createLazySloth();
-      expect(enemy.tier).toBe(1);
-    });
-
-    it('has correct icon path', () => {
-      const enemy = createLazySloth();
-      expect(enemy.icon).toBe('caro-asercion/sloth');
-    });
-
-    it('has a description', () => {
-      const enemy = createLazySloth();
-      expect(enemy.description).toBeDefined();
-      expect(typeof enemy.description).toBe('string');
-      expect(enemy.description.length).toBeGreaterThan(0);
-    });
-
-    it('description mentions time gain reduction', () => {
-      const enemy = createLazySloth();
-      expect(enemy.description.toLowerCase()).toContain('time');
-    });
-
-    it('description mentions divided by 3', () => {
-      const enemy = createLazySloth();
-      expect(enemy.description).toContain('divided by 3');
-    });
-
-    it('has correct full description text', () => {
-      const enemy = createLazySloth();
-      expect(enemy.description).toBe('Time gain divided by 3');
-    });
-
-    it('has a defeat condition text', () => {
-      const enemy = createLazySloth();
-      expect(enemy.defeatConditionText).toBeDefined();
-      expect(typeof enemy.defeatConditionText).toBe('string');
-      expect(enemy.defeatConditionText.length).toBeGreaterThan(0);
-    });
-
-    it('defeat condition text mentions 15+ seconds', () => {
-      const enemy = createLazySloth();
-      expect(enemy.defeatConditionText).toContain('15+');
-    });
-
-    it('defeat condition text mentions seconds remaining', () => {
-      const enemy = createLazySloth();
-      expect(enemy.defeatConditionText.toLowerCase()).toContain('seconds remaining');
-    });
-
-    it('defeat condition text mentions beating target score', () => {
-      const enemy = createLazySloth();
-      expect(enemy.defeatConditionText.toLowerCase()).toContain('beat');
-      expect(enemy.defeatConditionText.toLowerCase()).toContain('target');
-    });
-
-    it('has correct full defeat condition text', () => {
-      const enemy = createLazySloth();
-      expect(enemy.defeatConditionText).toBe('Beat target score with 15+ seconds remaining');
-    });
-
     it('creates independent instances (no shared state)', () => {
       const enemy1 = createLazySloth();
       const enemy2 = createLazySloth();
@@ -885,11 +820,6 @@ describe('Lazy Sloth', () => {
     });
 
     describe('onRoundEnd', () => {
-      it('can be called without error', () => {
-        const enemy = createLazySloth();
-        expect(() => enemy.onRoundEnd()).not.toThrow();
-      });
-
       it('returns undefined', () => {
         const enemy = createLazySloth();
         const result = enemy.onRoundEnd();

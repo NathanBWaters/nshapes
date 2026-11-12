@@ -34,7 +34,6 @@ export function createGoblinSaboteur(): EnemyInstance {
       defeatConditionText: 'Trigger 3 different weapon effects',
     },
     effects,
-    // Defeat condition: Trigger 3 different weapon effects
     (stats: RoundStats) => stats.weaponEffectsTriggered.size >= 3
   );
 }

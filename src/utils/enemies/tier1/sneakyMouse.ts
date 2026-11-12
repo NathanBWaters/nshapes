@@ -8,9 +8,6 @@
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { WeaponCounterEffect, composeEffects } from '../../enemyEffects';
 
-/**
- * Creates a fresh Sneaky Mouse enemy instance.
- */
 export function createSneakyMouse(): EnemyInstance {
   return composeEffects(
     {
@@ -26,7 +23,6 @@ export function createSneakyMouse(): EnemyInstance {
         config: { type: 'grace', reduction: 15 },
       },
     ],
-    // Defeat condition: Never use a grace (must have at least 1 match)
     (stats: RoundStats) => {
       return stats.gracesUsed === 0 && stats.totalMatches >= 1;
     }

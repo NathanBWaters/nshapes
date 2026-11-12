@@ -115,7 +115,6 @@ export const SlyFoxRig: React.FC<CreatureRigProps> = ({
           fill={FOX_CREAM}
         />
 
-        {/* Eyes */}
         <CreatureEyes expression={expression} gazeOffset={gazeOffset} leftX={38} rightX={62} y={42} radius={4.5} />
 
         {/* Signature sly slanted brow when calm */}
@@ -128,7 +127,6 @@ export const SlyFoxRig: React.FC<CreatureRigProps> = ({
           />
         )}
 
-        {/* Pointed button nose */}
         <Ellipse cx={50} cy={52.5} rx={3.8} ry={2.8} fill={STROKE} />
         <Circle cx={48.8} cy={51.6} r={1} fill="#FFFFFF" />
 
@@ -142,7 +140,6 @@ export const SlyFoxRig: React.FC<CreatureRigProps> = ({
               strokeWidth={2.2}
               strokeLinejoin="round"
             />
-            {/* Cute rogue fang */}
             <Polygon points="54,55.5 56.5,55.2 55.2,58.5" fill="#FFFFFF" />
           </G>
         ) : isHurt ? (

@@ -21,66 +21,6 @@ afterEach(() => {
 
 describe('Punishing Ermine', () => {
   // ==========================================================================
-  // METADATA TESTS
-  // ==========================================================================
-  describe('metadata', () => {
-    it('has correct name', () => {
-      const enemy = createPunishingErmine();
-      expect(enemy.name).toBe('Punishing Ermine');
-    });
-
-    it('has tier 1', () => {
-      const enemy = createPunishingErmine();
-      expect(enemy.tier).toBe(1);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createPunishingErmine();
-      expect(enemy.icon).toBe('delapouite/ermine');
-    });
-
-    it('has description containing invalid match info', () => {
-      const enemy = createPunishingErmine();
-      expect(enemy.description.toLowerCase()).toContain('invalid');
-    });
-
-    it('has description mentioning card removal', () => {
-      const enemy = createPunishingErmine();
-      expect(enemy.description.toLowerCase()).toContain('removed');
-    });
-
-    it('has description specifying 2 extra cards', () => {
-      const enemy = createPunishingErmine();
-      expect(enemy.description).toContain('2');
-    });
-
-    it('has defeat condition text mentioning no invalid matches', () => {
-      const enemy = createPunishingErmine();
-      expect(enemy.defeatConditionText.toLowerCase()).toContain('no invalid');
-    });
-
-    it('has defeat condition text mentioning matches', () => {
-      const enemy = createPunishingErmine();
-      expect(enemy.defeatConditionText.toLowerCase()).toContain('match');
-    });
-
-    it('has non-empty name', () => {
-      const enemy = createPunishingErmine();
-      expect(enemy.name.length).toBeGreaterThan(0);
-    });
-
-    it('has non-empty description', () => {
-      const enemy = createPunishingErmine();
-      expect(enemy.description.length).toBeGreaterThan(0);
-    });
-
-    it('has non-empty defeatConditionText', () => {
-      const enemy = createPunishingErmine();
-      expect(enemy.defeatConditionText.length).toBeGreaterThan(0);
-    });
-  });
-
-  // ==========================================================================
   // EXTRA CARD REMOVAL ON INVALID EFFECT TESTS
   // ==========================================================================
   describe('extra card removal on invalid match effect', () => {

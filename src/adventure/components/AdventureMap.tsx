@@ -110,7 +110,6 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
 
   return (
     <View style={[s.root, { paddingTop: insets.top }]}>
-      {/* Top bar */}
       <View style={s.topBar}>
         <TouchableOpacity onPress={onExit} style={s.iconBtn} accessibilityLabel="Back to menu">
           <Icon name="lorc/return-arrow" size={20} color={INK} />
@@ -132,7 +131,6 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
 
       <ScrollView ref={scrollRef} contentContainerStyle={{ alignItems: 'center' }} showsVerticalScrollIndicator={false}>
         <View style={{ width, height }}>
-          {/* Biome bands */}
           {banners.map(b => {
             const biome = BIOMES[b.biomeIndex];
             const open = isBiomeOpen(save, biome.id);
@@ -160,7 +158,6 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
             );
           })}
 
-          {/* Path */}
           <Svg width={width} height={height} style={StyleSheet.absoluteFill} pointerEvents="none">
             <Path d={pathFor(nodes)} stroke="#FFFFFF" strokeWidth={14} fill="none" strokeLinecap="round" opacity={0.9} />
             {lastUnlocked && (
@@ -186,7 +183,6 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
             <MapNode key={n.level.id} node={n} save={save} isFrontier={false} onPress={() => onSelectLevel(n.level)} fighterName={fighter.name} />
           ))}
 
-          {/* Nodes */}
           {nodes.map(n => (
             <MapNode
               key={n.level.id}
@@ -200,7 +196,6 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
         </View>
       </ScrollView>
 
-      {/* Bottom dock */}
       <View style={[s.dock, { paddingBottom: Math.max(insets.bottom, Platform.OS === 'web' ? 12 : 8) }]}>
         <DockButton testID="map-dock-guide" icon="lorc/open-book" label="Guide" onPress={onOpenGuide} />
         {onOpenBounties && (

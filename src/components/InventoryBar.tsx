@@ -14,7 +14,6 @@ interface WeaponGroup {
   count: number;
 }
 
-// Static weapon item
 interface WeaponItemProps {
   weapon: Weapon;
   count: number;

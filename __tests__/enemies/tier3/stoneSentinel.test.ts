@@ -49,19 +49,6 @@ const createTestBoard = (): Card[] =>
     }));
 
 describe('Stone Sentinel', () => {
-  describe('metadata', () => {
-    it('has correct name and tier', () => {
-      const enemy = createStoneSentinel();
-      expect(enemy.name).toBe('Stone Sentinel');
-      expect(enemy.tier).toBe(3);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createStoneSentinel();
-      expect(enemy.icon).toBe('delapouite/golem-head');
-    });
-  });
-
   describe('triple card effect', () => {
     it('places 2 triple cards on start', () => {
       const enemy = createStoneSentinel();

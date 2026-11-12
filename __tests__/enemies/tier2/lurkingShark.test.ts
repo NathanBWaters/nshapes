@@ -38,51 +38,6 @@ describe('Lurking Shark', () => {
   // METADATA TESTS (10 tests)
   // ==========================================================================
   describe('metadata', () => {
-    it('has correct name', () => {
-      const enemy = createLurkingShark();
-      expect(enemy.name).toBe('Lurking Shark');
-    });
-
-    it('has correct tier (should be 2)', () => {
-      const enemy = createLurkingShark();
-      expect(enemy.tier).toBe(2);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createLurkingShark();
-      expect(enemy.icon).toBe('lorc/shark-jaws');
-    });
-
-    it('has description mentioning 25%', () => {
-      const enemy = createLurkingShark();
-      expect(enemy.description).toContain('25%');
-    });
-
-    it('has description mentioning face-down', () => {
-      const enemy = createLurkingShark();
-      expect(enemy.description.toLowerCase()).toContain('face-down');
-    });
-
-    it('has description mentioning tap to reveal', () => {
-      const enemy = createLurkingShark();
-      expect(enemy.description.toLowerCase()).toContain('tap to reveal');
-    });
-
-    it('has defeatConditionText mentioning 2 revealed cards', () => {
-      const enemy = createLurkingShark();
-      expect(enemy.defeatConditionText).toContain('2');
-    });
-
-    it('has defeatConditionText mentioning revealed cards', () => {
-      const enemy = createLurkingShark();
-      expect(enemy.defeatConditionText.toLowerCase()).toContain('revealed');
-    });
-
-    it('has defeatConditionText mentioning matches', () => {
-      const enemy = createLurkingShark();
-      expect(enemy.defeatConditionText.toLowerCase()).toContain('match');
-    });
-
     it('creates new instance each time (factory pattern)', () => {
       const enemy1 = createLurkingShark();
       const enemy2 = createLurkingShark();

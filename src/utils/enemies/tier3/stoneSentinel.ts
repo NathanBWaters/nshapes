@@ -12,9 +12,6 @@ import {
   composeEffects,
 } from '../../enemyEffects';
 
-/**
- * Creates a fresh Stone Sentinel enemy instance.
- */
 export function createStoneSentinel(): EnemyInstance {
   return composeEffects(
     {
@@ -29,7 +26,6 @@ export function createStoneSentinel(): EnemyInstance {
       { behavior: WeaponCounterEffect, config: { type: 'explosion', reduction: 55 } },
       { behavior: WeaponCounterEffect, config: { type: 'laser', reduction: 55 } },
     ],
-    // Defeat condition: Clear both triple cards
     (stats: RoundStats) => stats.tripleCardsCleared >= 2
   );
 }

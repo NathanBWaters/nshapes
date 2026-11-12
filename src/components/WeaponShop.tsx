@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
-import { usePWASafeAreaInsets } from '@/utils/usePWASafeAreaInsets';
+import { usePWASafeAreaInsets } from '@/hooks/usePWASafeAreaInsets';
 import { Character, Weapon, PlayerStats } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import GameMenu from './GameMenu';
@@ -67,7 +67,6 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
   const [lastTappedIndex, setLastTappedIndex] = useState<number | null>(null);
   const DOUBLE_TAP_THRESHOLD = 300; // ms
 
-  // Purchase state
   const [purchaseSuccess, setPurchaseSuccess] = useState(false);
   const [tapTriggers, setTapTriggers] = useState<Record<number, number>>({});
 
@@ -124,7 +123,6 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
   return (
     <ScreenTransition>
       <View style={styles.container}>
-        {/* Eyebrow Banner */}
         <View style={styles.eyebrow}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           {character && (
@@ -148,7 +146,6 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
         </View>
       </View>
 
-      {/* Inventory Bar */}
       <InventoryBar weapons={playerWeapons} />
 
       {/* Top Half - Detail Focus */}
@@ -177,7 +174,6 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
         >
           {weapons.length > 0 ? (
             weapons.map((weapon, index) => {
-              // Handle sold/empty slot
               if (weapon === null) {
                 return (
                   <View
@@ -212,7 +208,6 @@ const WeaponShop: React.FC<WeaponShopProps> = ({
         </ScrollView>
       </View>
 
-      {/* Action Buttons */}
       <View style={[styles.actionSection, { paddingBottom: 16 + insets.bottom }]}>
         <View style={styles.actionRow}>
           <View style={{ flex: 1 }}>

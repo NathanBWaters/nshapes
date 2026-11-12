@@ -8,9 +8,6 @@
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { ExtraCardRemovalOnMatchEffect, CardRemovalEffect, composeEffects } from '../../enemyEffects';
 
-/**
- * Creates a fresh Hoarding Beaver enemy instance.
- */
 export function createHoardingBeaver(): EnemyInstance {
   return composeEffects(
     {
@@ -24,7 +21,6 @@ export function createHoardingBeaver(): EnemyInstance {
       { behavior: ExtraCardRemovalOnMatchEffect, config: { count: 1, minBoardSize: 6 } },
       { behavior: CardRemovalEffect, config: { intervalMs: 18000, minBoardSize: 6 } },
     ],
-    // Defeat condition: Beat target with 6+ cards remaining
     (stats: RoundStats) =>
       stats.currentScore >= stats.targetScore && stats.cardsRemaining >= 6
   );

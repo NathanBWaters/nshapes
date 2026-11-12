@@ -10,9 +10,6 @@ import type { Card } from '@/types';
 import type { RoundStats } from '@/types/enemy';
 import { addWeaponImpact, createInitialRoundStats, getSortedWeaponImpacts, WeaponImpactDelta } from '@/game/roundStats';
 
-// Re-exported for existing importers; new code should import from '@/game/roundStats'.
-export { createInitialRoundStats };
-
 /**
  * Hook to track round statistics for enemy defeat conditions.
  * Returns mutable ref for performance (avoid re-renders on every stat update).
@@ -49,14 +46,12 @@ export function useRoundStats() {
       const now = Date.now();
       const timeSinceLastMatch = now - lastMatchTimeRef.current;
 
-      // Match tracking
       stats.totalMatches += 1;
       stats.currentStreak += 1;
       stats.maxStreak = Math.max(stats.maxStreak, stats.currentStreak);
       stats.matchTimes.push(timeSinceLastMatch);
       lastMatchTimeRef.current = now;
 
-      // Attribute tracking
       for (const card of matchedCards) {
         stats.shapesMatched.add(card.shape);
         stats.colorsMatched.add(card.color);
@@ -75,7 +70,6 @@ export function useRoundStats() {
         stats.squiggleMatches += 1;
       }
 
-      // Card state tracking
       const faceDownCount = matchedCards.filter((c) => c.isFaceDown).length;
       stats.faceDownCardsMatched += faceDownCount;
 
@@ -85,7 +79,6 @@ export function useRoundStats() {
       const countdownCount = matchedCards.filter((c) => c.hasCountdown).length;
       stats.countdownCardsMatched += countdownCount;
 
-      // Score tracking
       if (options.pointsEarned) {
         stats.currentScore += options.pointsEarned;
       }

@@ -6,10 +6,6 @@
 import type { AttributeName, AdventureDifficulty } from '../types';
 import { EFFECT_CAPS, STAT_TO_CAP_TYPE } from '../game/effectCaps';
 
-// =============================================================================
-// PLAYER STARTING VALUES
-// =============================================================================
-
 export const STARTING_STATS = {
   hints: 0, // Start with 0 hints
   maxHints: 3, // Maximum hints player can hold
@@ -45,17 +41,9 @@ export const STARTING_STATS = {
   chainReactionChance: 0,   // % chance for echo to trigger twice (2 additional matches)
 } as const;
 
-// =============================================================================
-// BOARD & CARDS
-// =============================================================================
-
 export const BOARD = {
   initialCardCount: 12,
 } as const;
-
-// =============================================================================
-// ECONOMY
-// =============================================================================
 
 export const ECONOMY = {
   baseRerollCost: 5,
@@ -80,10 +68,6 @@ export const getNextRerollCost = (currentCost: number, pricing: RerollPricing): 
  */
 export const getBaseRerollCostForRound = (round: number): number =>
   Math.max(1, Math.round(1 + (round - 1) * (20 - 1) / (10 - 1)));
-
-// =============================================================================
-// WEAPON SYSTEM
-// =============================================================================
 
 /**
  * Get rarity chances that scale by round.
@@ -118,10 +102,6 @@ export const getRarityChancesForRound = (round: number): { common: number; rare:
 
   return { common, rare, epic, legendary };
 };
-
-// =============================================================================
-// EFFECT CAPS - Maximum effective percentages for weapon effects
-// =============================================================================
 
 // The cap table and everything derived from it live in game/effectCaps.ts
 // (a module without imports, so src/types.ts can derive its types from the table).
@@ -181,10 +161,6 @@ export const getCapInfoForStat = (statKey: string, playerCaps?: Record<string, n
   return { cap, capIncrease: capConfig.capIncrease };
 };
 
-// =============================================================================
-// REWARDS (per matched card)
-// =============================================================================
-
 export const MATCH_REWARDS = {
   basePoints: 1,
   baseMoney: 1,
@@ -192,18 +168,10 @@ export const MATCH_REWARDS = {
   hintDropChance: 0.01, // 1% chance per card
 } as const;
 
-// =============================================================================
-// LEVEL UP
-// =============================================================================
-
 export const LEVEL_UP = {
   /** XP for a level is level * level * xpMultiplier / LEVEL_SYSTEM.xpMultiplierReduction. */
   xpMultiplier: 10,
 } as const;
-
-// =============================================================================
-// ATTRIBUTE SCALING
-// =============================================================================
 
 export const ALL_ATTRIBUTES: readonly AttributeName[] = ['shape', 'color', 'number', 'shading', 'background'];
 
@@ -268,9 +236,6 @@ export const getBoardSizeForAttributes = (attributeCount: number): number => {
   return sizes[attributeCount] || BOARD.initialCardCount;
 };
 
-// =============================================================================
-// LEGACY RUN: ROUNDS
-// =============================================================================
 // Which of the two round tables applies where is decided in game/rounds.ts.
 
 export const LEVEL_SYSTEM = {
@@ -329,10 +294,6 @@ export const LEVEL_ROUND_REQUIREMENTS: readonly { roundInLevel: number; targetSc
   { roundInLevel: 4, targetScore: 25, time: 120 },
   { roundInLevel: 5, targetScore: 35, time: 120 },
 ];
-
-// =============================================================================
-// LEVELLING (XP)
-// =============================================================================
 
 /**
  * Total XP at which the player reaches `level`: the exact inverse of

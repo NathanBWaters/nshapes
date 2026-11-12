@@ -92,7 +92,6 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({
     >
       <View style={styles.overlay}>
         <View style={styles.modal}>
-          {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
               {character && (
@@ -149,7 +148,6 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({
             </View>
           )}
 
-          {/* Weapon Options Grid */}
           <View style={styles.optionsGrid}>
             {options.map((weapon, index) => {
               const rarityColor = getRarityColor(weapon.rarity);
@@ -186,9 +184,7 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({
             })}
           </View>
 
-          {/* Actions */}
           <View style={styles.actions}>
-            {/* Reroll Button */}
             <TouchableOpacity
               style={[
                 styles.rerollButton,
@@ -204,7 +200,6 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({
               </Text>
             </TouchableOpacity>
 
-            {/* Select Button */}
             <TouchableOpacity
               style={styles.selectButton}
               onPress={handleSelect}
@@ -215,7 +210,6 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({
             </TouchableOpacity>
           </View>
 
-          {/* More level-ups indicator */}
           {hasMoreLevelUps && (
             <Text style={styles.moreIndicator}>
               More level-ups pending...

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Pressable, StyleSheet, ScrollView, Platform } from 'react-native';
-import { usePWASafeAreaInsets } from '@/utils/usePWASafeAreaInsets';
+import { usePWASafeAreaInsets } from '@/hooks/usePWASafeAreaInsets';
 import { Character, PlayerStats, Weapon } from '@/types';
 import type { EnemyOption } from '@/types/enemy';
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
@@ -55,12 +55,10 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
   const focusedReward = focusedOption?.stretchGoalReward ?? null;
   const focusedMoney = focusedOption?.stretchGoalMoney ?? 0;
 
-  // Get tier color for focused enemy
   const tierColor = focusedEnemy ? TIER_COLORS[focusedEnemy.tier] : COLORS.slateCharcoal;
 
   return (
     <View style={styles.container}>
-      {/* Eyebrow Banner */}
       <View style={styles.eyebrow}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           {character && (
@@ -82,7 +80,6 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
       <ScrollView style={styles.detailSection} contentContainerStyle={styles.detailScrollContent}>
         {focusedEnemy ? (
           <View style={styles.detailCard}>
-            {/* Enemy Icon */}
             <View style={styles.previewArea}>
               <EnemyAvatar
                 enemy={focusedEnemy}
@@ -93,7 +90,6 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
               />
             </View>
 
-            {/* Enemy Name */}
             <Text style={styles.detailName}>{focusedEnemy.name}</Text>
 
             {/* Effect & Stretch Goal */}
@@ -297,7 +293,6 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
         </View>
       </View>
 
-      {/* Action Button */}
       <View style={[styles.actionSection, { paddingBottom: 16 + insets.bottom }]}>
         <TouchableOpacity
           testID="fight-enemy-button"
@@ -644,7 +639,6 @@ const styles = StyleSheet.create({
   optionTextSelected: {
     fontWeight: '700',
   },
-  // Action Section
   actionSection: {
     padding: 16,
     backgroundColor: COLORS.canvasWhite,

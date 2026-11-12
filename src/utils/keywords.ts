@@ -15,9 +15,6 @@ export interface KeywordDefinition {
 }
 
 export const KEYWORDS: Record<string, KeywordDefinition> = {
-  // =============================================================================
-  // CORE MECHANICS
-  // =============================================================================
 
   set: {
     terms: ['set', 'valid set', 'sets'],
@@ -61,10 +58,6 @@ export const KEYWORDS: Record<string, KeywordDefinition> = {
     detailed: 'Cards have up to 5 attributes, each with 3 possible values. Shape (diamond/squiggle/oval), color (red/green/purple), number (1/2/3), shading (solid/striped/open), and background color. More attributes = harder puzzles.',
   },
 
-  // =============================================================================
-  // CARD EFFECTS
-  // =============================================================================
-
   fire: {
     terms: ['fire', 'burning', 'burns', 'ignite', 'ignites', 'on fire'],
     brief: 'Cards on fire are destroyed after 0.25 seconds.',
@@ -106,10 +99,6 @@ export const KEYWORDS: Record<string, KeywordDefinition> = {
     brief: 'Makes echo trigger twice instead of once.',
     detailed: 'When you have Chain Reaction and echo triggers, it finds and matches TWO additional SETs instead of one. Combined with on-match effects, this creates massive cascading combos.',
   },
-
-  // =============================================================================
-  // RESOURCES & STATS
-  // =============================================================================
 
   coin: {
     terms: ['coin', 'coins', 'money'],
@@ -159,10 +148,6 @@ export const KEYWORDS: Record<string, KeywordDefinition> = {
     detailed: 'Adjacent means the 4 cards in cardinal directions (not diagonals). Explosion and fire spread effects target adjacent cards. Corner cards have only 2 adjacent cards; edge cards have 3.',
   },
 
-  // =============================================================================
-  // WEAPON SYSTEM
-  // =============================================================================
-
   cap: {
     terms: ['cap', 'capped', 'effect cap'],
     brief: 'Maximum percentage an effect can reach.',
@@ -193,10 +178,6 @@ export const KEYWORDS: Record<string, KeywordDefinition> = {
     detailed: 'When you gain a grace but are at max capacity, it\'s lost. Starting max graces is 5.',
   },
 
-  // =============================================================================
-  // RARITY
-  // =============================================================================
-
   common: {
     terms: ['common'],
     brief: 'Most frequent weapon rarity with modest effects.',
@@ -221,19 +202,11 @@ export const KEYWORDS: Record<string, KeywordDefinition> = {
     detailed: 'Legendary weapons create "bridge" effects that connect different systems - like gaining grace from explosions or firing lasers when using a grace. Very rare but game-changing.',
   },
 
-  // =============================================================================
-  // TRIGGERS
-  // =============================================================================
-
   onMatch: {
     terms: ['on match', 'when you match', 'after matching', 'per match'],
     brief: 'Effect triggers each time you successfully match.',
     detailed: 'Many weapon effects have a percentage chance to trigger on each successful match. Effects like explosion, healing, coin drops, and time gains all roll their chances after you complete a match.',
   },
-
-  // =============================================================================
-  // ENEMY CARD STATES
-  // =============================================================================
 
   unmatchable: {
     terms: ['unmatchable', 'dud', 'duds'],
@@ -265,10 +238,6 @@ export const KEYWORDS: Record<string, KeywordDefinition> = {
     detailed: 'Triple-health cards are extra durable. Each time you include one in a valid match, it loses one "health" but stays on the board. After being matched 3 times total, it\'s finally removed. The card shows its remaining health.',
   },
 
-  // =============================================================================
-  // ENEMY PLAYER ACTIONS
-  // =============================================================================
-
   invalidMatch: {
     terms: ['invalid match', 'invalid', 'wrong match'],
     brief: 'Selecting 3 cards that do NOT form a valid SET.',
@@ -293,10 +262,6 @@ export const KEYWORDS: Record<string, KeywordDefinition> = {
     detailed: 'Face-down cards must be revealed before you can use them in a match. Tap the card to flip it over and see its shape, color, and other attributes. Some enemies require you to include revealed cards in your matches.',
   },
 
-  // =============================================================================
-  // ENEMY BOARD EFFECTS
-  // =============================================================================
-
   cardRemoval: {
     terms: ['card removal', 'removes card', 'cards removed', 'removed'],
     brief: 'Cards disappearing from the board without being matched.',
@@ -314,10 +279,6 @@ export const KEYWORDS: Record<string, KeywordDefinition> = {
     brief: 'Card attributes randomly change to different values.',
     detailed: 'Unlike shuffling, attribute shifts actually modify the cards themselves. A red card might become green, or a diamond might become an oval. This can break SETs you were planning and create new unexpected combinations.',
   },
-
-  // =============================================================================
-  // ENEMY TIME/RESOURCE EFFECTS
-  // =============================================================================
 
   timeSteal: {
     terms: ['time stolen', 'stolen', 'lose time', 'loses time', '-s per match'],
@@ -349,10 +310,6 @@ export const KEYWORDS: Record<string, KeywordDefinition> = {
     detailed: 'Normally you lose 1 health per invalid match. Some enemies deal double damage (2 health lost per mistake). Combined with limited health, this makes every selection critical - one wrong move is twice as costly.',
   },
 
-  // =============================================================================
-  // ENEMY MATCH TYPES
-  // =============================================================================
-
   allDifferent: {
     terms: ['all-different', 'all different'],
     brief: 'A match where each attribute has 3 different values.',
@@ -364,10 +321,6 @@ export const KEYWORDS: Record<string, KeywordDefinition> = {
     brief: 'A match where an attribute has the same value on all 3 cards.',
     detailed: 'An all-same match for an attribute means all 3 cards share that value. Example: 3 red cards (all-same color). Most matches have a mix of all-same and all-different attributes across the active attribute set.',
   },
-
-  // =============================================================================
-  // ENEMY WEAPON COUNTERS
-  // =============================================================================
 
   weaponCounter: {
     terms: ['divided', 'divided by 3', '÷3'],
@@ -386,10 +339,6 @@ export const KEYWORDS: Record<string, KeywordDefinition> = {
     brief: 'Any effect that removes cards from the board.',
     detailed: 'Destruction effects include explosions, lasers, fire burnout, and ricochet. These clear cards beyond your normal match, earning bonus points and coins. Some enemies require triggering destruction effects for their stretch goal.',
   },
-
-  // =============================================================================
-  // ENEMY DEFEAT CONDITIONS
-  // =============================================================================
 
   stretchGoal: {
     terms: ['stretch goal', 'defeat condition', 'bonus objective'],

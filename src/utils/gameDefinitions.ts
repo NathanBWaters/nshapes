@@ -116,9 +116,7 @@ export const CHARACTERS: Character[] = [
 
 // Weapon system - 15 types × 3 rarities = 45 weapons
 export const WEAPONS: Weapon[] = [
-  // ============================================================================
   // 1. BLAST POWDER - Explosive adjacent cards on match
-  // ============================================================================
   {
     id: 'blast-powder-common',
     name: 'Blast Powder',
@@ -146,9 +144,7 @@ export const WEAPONS: Weapon[] = [
     effects: { explosionChance: 30 }
   },
 
-  // ============================================================================
   // 2. ORACLE EYE - Auto-hint system
-  // ============================================================================
   {
     id: 'oracle-eye-common',
     name: 'Oracle Eye',
@@ -176,9 +172,7 @@ export const WEAPONS: Weapon[] = [
     effects: { autoHintChance: 45, autoHintInterval: 5000 }
   },
 
-  // ============================================================================
   // 2.5. MYSTIC SIGHT - Enhanced autohint reveals (legendary only)
-  // ============================================================================
   {
     id: 'mystic-sight-legendary',
     name: 'Mystic Sight',
@@ -194,9 +188,7 @@ export const WEAPONS: Weapon[] = [
     maxCount: 1  // Unique - only one can be owned
   },
 
-  // ============================================================================
   // 3. FIELD STONE - Starting board size
-  // ============================================================================
   {
     id: 'field-stone-common',
     name: 'Field Stone',
@@ -222,9 +214,7 @@ export const WEAPONS: Weapon[] = [
     effects: { fieldSize: 3 }
   },
 
-  // ============================================================================
   // 4. GROWTH SEED - Board grows on match
-  // ============================================================================
   {
     id: 'growth-seed-common',
     name: 'Growth Seed',
@@ -252,9 +242,7 @@ export const WEAPONS: Weapon[] = [
     effects: { boardGrowthChance: 15 }
   },
 
-  // ============================================================================
   // 5. FLINT SPARK - Fire starter
-  // ============================================================================
   {
     id: 'flint-spark-common',
     name: 'Flint Spark',
@@ -282,9 +270,7 @@ export const WEAPONS: Weapon[] = [
     effects: { fireSpreadChance: 30 }
   },
 
-  // ============================================================================
   // 6. SECOND CHANCE - Starting graces
-  // ============================================================================
   {
     id: 'second-chance-common',
     name: 'Second Chance',
@@ -310,9 +296,7 @@ export const WEAPONS: Weapon[] = [
     effects: { graces: 3 }
   },
 
-  // ============================================================================
   // 7. FORTUNE TOKEN - Grace gain on match
-  // ============================================================================
   {
     id: 'fortune-token-common',
     name: 'Fortune Token',
@@ -340,9 +324,7 @@ export const WEAPONS: Weapon[] = [
     effects: { graceGainChance: 15 }
   },
 
-  // ============================================================================
   // 7.5. SNOWBALL - Guaranteed starting grace (Legendary)
-  // ============================================================================
   {
     id: 'snowball',
     name: 'Snowball',
@@ -357,9 +339,7 @@ export const WEAPONS: Weapon[] = [
     effects: {}
   },
 
-  // ============================================================================
   // 8. LIFE VESSEL - Max health
-  // ============================================================================
   {
     id: 'life-vessel-common',
     name: 'Life Vessel',
@@ -385,9 +365,7 @@ export const WEAPONS: Weapon[] = [
     effects: { maxHealth: 3, health: 3 }
   },
 
-  // ============================================================================
   // 9. MENDING CHARM - Heal on match
-  // ============================================================================
   {
     id: 'mending-charm-common',
     name: 'Mending Charm',
@@ -415,9 +393,7 @@ export const WEAPONS: Weapon[] = [
     effects: { healingChance: 15 }
   },
 
-  // ============================================================================
   // 10. CRYSTAL ORB - Max hints capacity
-  // ============================================================================
   {
     id: 'crystal-orb-common',
     name: 'Crystal Orb',
@@ -443,9 +419,7 @@ export const WEAPONS: Weapon[] = [
     effects: { maxHints: 2 }
   },
 
-  // ============================================================================
   // 11. SEEKER LENS - Hint gain on match
-  // ============================================================================
   {
     id: 'seeker-lens-common',
     name: 'Seeker Lens',
@@ -473,9 +447,7 @@ export const WEAPONS: Weapon[] = [
     effects: { hintGainChance: 15 }
   },
 
-  // ============================================================================
   // 12. SCHOLAR'S TOME - XP gain on match
-  // ============================================================================
   {
     id: 'scholars-tome-common',
     name: 'Scholar\'s Tome',
@@ -503,9 +475,7 @@ export const WEAPONS: Weapon[] = [
     effects: { xpGainChance: 40 }
   },
 
-  // ============================================================================
   // 13. FORTUNE'S FAVOR - Coin gain on match
-  // ============================================================================
   {
     id: 'fortunes-favor-common',
     name: 'Fortune\'s Favor',
@@ -533,9 +503,7 @@ export const WEAPONS: Weapon[] = [
     effects: { coinGainChance: 40 }
   },
 
-  // ============================================================================
   // 14. CHRONO SHARD - Starting time bonus
-  // ============================================================================
   {
     id: 'chrono-shard-common',
     name: 'Chrono Shard',
@@ -561,9 +529,7 @@ export const WEAPONS: Weapon[] = [
     effects: { startingTime: 45 }
   },
 
-  // ============================================================================
   // 15. TIME DROP - Time gain on match (each rolls independently like lasers)
-  // ============================================================================
   {
     id: 'time-drop-common',
     name: 'Time Drop',
@@ -591,9 +557,7 @@ export const WEAPONS: Weapon[] = [
     effects: { timeGainChance: 15, timeGainAmount: 10 }
   },
 
-  // ============================================================================
   // 16. PRISMATIC RAY - Laser destroys row/column
-  // ============================================================================
   {
     id: 'prismatic-ray-common',
     name: 'Prismatic Ray',
@@ -621,9 +585,7 @@ export const WEAPONS: Weapon[] = [
     effects: { laserChance: 9 }
   },
 
-  // ============================================================================
   // 17. CHAOS SHARD - Ricochet chain destruction
-  // ============================================================================
   {
     id: 'chaos-shard-common',
     name: 'Chaos Shard',
@@ -651,9 +613,7 @@ export const WEAPONS: Weapon[] = [
     effects: { ricochetChance: 30, ricochetChainChance: 15 }
   },
 
-  // ============================================================================
   // 18. ECHO STONE - Auto-match another set on the board
-  // ============================================================================
   {
     id: 'echo-stone-common',
     name: 'Echo Stone',
@@ -681,9 +641,7 @@ export const WEAPONS: Weapon[] = [
     effects: { echoChance: 15 }
   },
 
-  // ============================================================================
   // 19. CHAIN REACTION - Double auto-match (legendary only)
-  // ============================================================================
   {
     id: 'chain-reaction-legendary',
     name: 'Chain Reaction',
@@ -699,10 +657,8 @@ export const WEAPONS: Weapon[] = [
     maxCount: 1  // Unique - only one can be owned
   },
 
-  // ============================================================================
   // CAP INCREASER WEAPONS - Increase the cap for each effect type
   // All are Rare rarity, increase cap for their respective effect
-  // ============================================================================
   {
     id: 'echo-mastery',
     name: 'Echo Mastery',
@@ -858,9 +814,7 @@ export const WEAPONS: Weapon[] = [
     capIncrease: { type: 'coinGain', amount: 15 },
   },
 
-  // ============================================================================
   // TIME TRIGGER MASTERY - Increases time gain trigger cap per round
-  // ============================================================================
   {
     id: 'time-trigger-mastery',
     name: 'Time Trigger Mastery',
@@ -876,9 +830,7 @@ export const WEAPONS: Weapon[] = [
     capIncrease: { type: 'timeGain', amount: 10 },
   },
 
-  // ============================================================================
   // CHALLENGE LEGENDARIES - Temporary time trigger cap bonuses
-  // ============================================================================
   {
     id: 'prismatic-perfection',
     name: 'Prismatic Perfection',
@@ -922,10 +874,8 @@ export const WEAPONS: Weapon[] = [
     maxCount: 1,
   },
 
-  // ============================================================================
   // EPIC WEAPON VARIANTS - Unique epic versions with bundled effects
   // Pattern: 25% effect OR cap bundle OR multi-pack OR cross-system lite
-  // ============================================================================
 
   // Cap Bundle pattern: 25% effect + cap increase
   {
@@ -1315,9 +1265,7 @@ export const WEAPONS: Weapon[] = [
     maxCount: 2,
   },
 
-  // ============================================================================
   // FORTUNE'S EYE - Increases luck stat for better item appearance rates
-  // ============================================================================
   {
     id: 'fortunes-eye',
     name: "Fortune's Eye",
@@ -1332,10 +1280,8 @@ export const WEAPONS: Weapon[] = [
     maxCount: 10,
   },
 
-  // ============================================================================
   // CONNECTOR WEAPONS - Link board positions together
   // When a card at a connected position is destroyed, the linked card is too
-  // ============================================================================
   {
     id: 'connector-common',
     name: 'Link Stone',
@@ -1377,9 +1323,7 @@ export const WEAPONS: Weapon[] = [
     maxCount: 1,
   },
 
-  // ============================================================================
   // REVENGE LINKER - Create connections when taking damage
-  // ============================================================================
   {
     id: 'revenge-linker',
     name: 'Revenge Linker',
@@ -1395,9 +1339,7 @@ export const WEAPONS: Weapon[] = [
     maxCount: 1,
   },
 
-  // ============================================================================
   // WEB WEAVER - Start rounds with connections
-  // ============================================================================
   {
     id: 'web-weaver-common',
     name: 'Web Spinner',
@@ -1425,9 +1367,7 @@ export const WEAPONS: Weapon[] = [
     effects: { startingConnections: 2 },
   },
 
-  // ============================================================================
   // ECHO CHAMBER - Time bonus on connected destruction
-  // ============================================================================
   {
     id: 'echo-chamber-common',
     name: 'Echo Chamber',
@@ -1455,9 +1395,7 @@ export const WEAPONS: Weapon[] = [
     effects: { echoTimeBonusPerLink: 2 },
   },
 
-  // ============================================================================
   // SYMPATHETIC FLAMES - Fire spreads faster on connected positions
-  // ============================================================================
   {
     id: 'sympathetic-flames',
     name: 'Sympathetic Flames',
@@ -1472,9 +1410,7 @@ export const WEAPONS: Weapon[] = [
     effects: { linkedFireMultiplier: 2 },
   },
 
-  // ============================================================================
   // NEURAL NETWORK - Bonus connections on link creation
-  // ============================================================================
   {
     id: 'neural-network',
     name: 'Neural Network',

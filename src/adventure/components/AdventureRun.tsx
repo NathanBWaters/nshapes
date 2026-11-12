@@ -155,7 +155,6 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
     music.play(level.isBoss ? 'boss' : biome.music);
   }, [level.isBoss, biome.music]);
 
-  // Clock
   const playing = run.status === 'playing' && !paused && !tip;
 
   // First fight with a new mechanic: walk through its tips before anything moves
@@ -195,7 +194,6 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
     : 0;
   const enemyConductor = useEnemyConductor({
     enemyName: run.foeName,
-    tier: run.foe.tier,
     hp: run.foeHp,
     maxHp: run.foeMaxHp,
     isBoss: level.isBoss,
@@ -205,11 +203,11 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   const enemyMood = run.status === 'lost' ? 'victory' : enemyConductor.mood;
 
   const { triggerEntrance } = conductor;
-  const { triggerEntrance: triggerEnemyEntrance } = enemyConductor;
+  const { triggerReaction: triggerEnemyReaction } = enemyConductor;
   useEffect(() => {
     triggerEntrance();
-    triggerEnemyEntrance();
-  }, [triggerEntrance, triggerEnemyEntrance]);
+    triggerEnemyReaction('entrance');
+  }, [triggerEntrance, triggerEnemyReaction]);
 
   useEffect(() => {
     if (secondsLeft !== null && secondsLeft <= 5 && secondsLeft > 0 && run.status === 'playing') sfx('tick');
@@ -242,12 +240,12 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
         case 'entrance': conductor.triggerEntrance(); break;
       }
       switch (show.enemy) {
-        case 'criticalHit': enemyConductor.triggerHit({ isCritical: true }); break;
-        case 'hit': enemyConductor.triggerHit(); break;
-        case 'gloat': enemyConductor.triggerMistakeGloat(); break;
-        case 'attack': enemyConductor.triggerAttack(); break;
-        case 'regen': enemyConductor.triggerRegen(); break;
-        case 'entrance': enemyConductor.triggerEntrance(); break;
+        case 'criticalHit': enemyConductor.triggerReaction('crit_pain'); break;
+        case 'hit': enemyConductor.triggerReaction('pain'); break;
+        case 'gloat': enemyConductor.triggerReaction('taunt'); break;
+        case 'attack': enemyConductor.triggerReaction('attack'); break;
+        case 'regen': enemyConductor.triggerReaction('regen'); break;
+        case 'entrance': enemyConductor.triggerReaction('entrance'); break;
       }
       if (e.type === 'scoop') {
         const ids = runRef.current.ability?.scooped ?? [];
@@ -289,7 +287,6 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
     return () => clearTimeout(t);
   }, [ended]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Board callbacks
   const handleMatch = useCallback((cards: Card[], rewards: CardReward[], effects?: WeaponEffectResult) => {
     setLastMatchTime(Date.now());
     const graceUsed = rewards.some(r => r.effectType === 'grace');
@@ -307,7 +304,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
 
   const handleInvalid = useCallback((cards: Card[]) => {
     conductor.triggerMistake();
-    enemyConductor.triggerMistakeGloat();
+    enemyConductor.triggerReaction('taunt');
     dispatch({ type: 'INVALID', cards });
     const ids = cards.map(c => c.id);
     later(() => dispatch({ type: 'REPLACE', ids }), 520);
@@ -377,7 +374,6 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
             interactive
           />
 
-          {/* Floating damage numbers */}
           <View style={st.floaters} pointerEvents="none">
             {floaters.map(f => <Floater key={f.id} text={f.text} color={f.color} />)}
           </View>
@@ -557,7 +553,6 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
         );
       })()}
 
-      {/* Level-up pick */}
       {run.status === 'pick' && (
         <WeaponPick
           title="LEVEL UP!"
@@ -574,7 +569,6 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
         <Intermission run={run} dispatch={dispatch} onPurchase={() => conductor.triggerPowerup()} />
       )}
 
-      {/* Pause */}
       <Modal visible={paused} transparent animationType="fade" onRequestClose={() => setPaused(false)}>
         <View style={st.overlay}>
           <PopIn style={st.panel}>

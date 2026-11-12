@@ -5,7 +5,7 @@ import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
 import { AnimatedCounter } from './ui/AnimatedCounter';
 import { ScreenTransition } from './ScreenTransition';
 import RoundProgressChart, { RoundScore } from './RoundProgressChart';
-import ChallengeCard from './ui/ChallengeCard';
+import { DifficultyChallengeCard } from './ui/ChallengeCard';
 import { FighterAvatar } from './fighters';
 import { WeaponAvatar } from './weapons';
 
@@ -67,7 +67,6 @@ const VictoryScreen: React.FC<VictoryScreenProps> = ({
       <View style={styles.container}>
 
       <View style={styles.card}>
-        {/* Victory Banner */}
         <View style={styles.banner}>
           <Text style={styles.bannerEmoji}>!</Text>
           <Text style={styles.bannerTitle}>VICTORY</Text>
@@ -75,7 +74,6 @@ const VictoryScreen: React.FC<VictoryScreenProps> = ({
         </View>
 
         <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-          {/* Character Info */}
           <View style={styles.characterSection}>
             <FighterAvatar
               character={player.character}
@@ -91,15 +89,13 @@ const VictoryScreen: React.FC<VictoryScreenProps> = ({
             <Text style={styles.subtitle}>Completed all 10 rounds!</Text>
           </View>
 
-          {/* Challenge Completed Section */}
           <View style={styles.challengeSection}>
-            <ChallengeCard
+            <DifficultyChallengeCard
               difficulty={difficulty}
               showAchievement={true}
             />
           </View>
 
-          {/* Stats */}
           <View style={styles.statsSection}>
             <View style={styles.statItem}>
               <AnimatedCounter
@@ -130,7 +126,6 @@ const VictoryScreen: React.FC<VictoryScreenProps> = ({
             </View>
           </View>
 
-          {/* Weapons Collected */}
           <View style={styles.weaponsSection}>
             <Text style={styles.sectionTitle}>Weapons Collected</Text>
             {groupedWeapons.length === 0 ? (
@@ -160,7 +155,6 @@ const VictoryScreen: React.FC<VictoryScreenProps> = ({
             )}
           </View>
 
-          {/* Final Stats Summary */}
           <View style={styles.finalStatsSection}>
             <Text style={styles.sectionTitle}>Final Stats</Text>
             <View style={styles.finalStatsGrid}>
@@ -183,7 +177,6 @@ const VictoryScreen: React.FC<VictoryScreenProps> = ({
             </View>
           </View>
 
-          {/* Round Progress Chart */}
           <View style={styles.roundProgressSection}>
             <Text style={styles.sectionTitle}>Round Progress</Text>
             <RoundProgressChart
@@ -194,7 +187,6 @@ const VictoryScreen: React.FC<VictoryScreenProps> = ({
           </View>
         </ScrollView>
 
-        {/* Action Buttons */}
         <View style={styles.buttonSection}>
           <TouchableOpacity style={styles.endlessButton} onPress={onContinueEndless}>
             <Text style={styles.endlessButtonText}>CONTINUE TO ENDLESS</Text>

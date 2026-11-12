@@ -74,7 +74,6 @@ const PredatorMaw: React.FC<PredatorMawProps> = ({
           d={`M ${cx - width * 0.55} ${y + 5.4} Q ${cx} ${y + 2.5} ${cx + width * 0.55} ${y + 5.4}`}
           fill="#F43F5E"
         />
-        {/* Upper predator fangs */}
         <Polygon
           points={`${cx - width * 0.78},${y - 0.4} ${cx - width * 0.4},${y - 0.2} ${cx - width * 0.58},${y + fangSize}`}
           fill="#FFFFFF"
@@ -89,7 +88,6 @@ const PredatorMaw: React.FC<PredatorMawProps> = ({
           strokeWidth={1.4}
           strokeLinejoin="round"
         />
-        {/* Lower teeth row */}
         <Polygon
           points={`${cx - width * 0.3},${y + 5.8} ${cx},${y + 3.2} ${cx + width * 0.3},${y + 5.8}`}
           fill="#FEF2F2"
@@ -225,7 +223,6 @@ export const WolfRig: React.FC<EnemyRigProps<'dire'>> = ({
           strokeWidth={3.2}
           strokeLinejoin="round"
         />
-        {/* Wolf facial mask */}
         <Path
           d="M 33 49 C 33 41, 41 44, 50 48 C 59 44, 67 41, 67 49 C 67 59, 59 63, 50 63 C 41 63, 33 59, 33 49 Z"
           fill={chest}
@@ -415,7 +412,6 @@ export const HyenaRig: React.FC<EnemyRigProps<'pickpocket' | 'haggling' | 'boss'
           strokeLinejoin="round"
         />
 
-        {/* Head silhouette */}
         <Path
           d="M 25 44 C 25 27, 36 22, 50 22 C 64 22, 75 27, 75 44 C 76 56, 64 64, 50 64 C 36 64, 24 56, 25 44 Z"
           fill={ochre}
@@ -423,7 +419,6 @@ export const HyenaRig: React.FC<EnemyRigProps<'pickpocket' | 'haggling' | 'boss'
           strokeWidth={3.2}
           strokeLinejoin="round"
         />
-        {/* Forehead spots */}
         <Circle cx={33} cy={34} r={2} fill={spot} />
         <Circle cx={67} cy={35} r={2.2} fill={spot} />
 
@@ -605,7 +600,6 @@ export const BoarRig: React.FC<EnemyRigProps<'armored'>> = ({
 
       {/* 5. Head + Iron War-Helm (Armored Tusks) + Curved Tusks + Flat Snout */}
       <RigLayer style={headStyle}>
-        {/* Dorsal bristle ridge */}
         <Polygon
           points="40,24 44,13 50,18 56,13 60,24"
           fill={bristle}
@@ -614,7 +608,6 @@ export const BoarRig: React.FC<EnemyRigProps<'armored'>> = ({
           strokeLinejoin="round"
         />
 
-        {/* Broad warthog head */}
         <Path
           d="M 23 45 C 23 27, 35 22, 50 22 C 65 22, 77 27, 77 45 C 78 57, 66 64, 50 64 C 34 64, 22 57, 23 45 Z"
           fill={russet}
@@ -1206,7 +1199,6 @@ export const MammothRig: React.FC<EnemyRigProps<'dusty'>> = ({
 
       {/* 5. Domed Furry Crown + Heavy Brow + Curling S-Shaped Trunk */}
       <RigLayer style={headStyle}>
-        {/* Domed woolly crown */}
         <Path
           d="M 25 43 C 25 22, 36 14, 50 14 C 64 14, 75 22, 75 43 C 75 55, 64 61, 50 61 C 36 61, 25 55, 25 43 Z"
           fill={fur}
@@ -1214,7 +1206,6 @@ export const MammothRig: React.FC<EnemyRigProps<'dusty'>> = ({
           strokeWidth={3.3}
           strokeLinejoin="round"
         />
-        {/* Shaggy topknot fur */}
         <Polygon
           points="40,18 45,8 50,14 55,7 60,18"
           fill={isDusty ? '#D97706' : fur}
@@ -1247,7 +1238,6 @@ export const MammothRig: React.FC<EnemyRigProps<'dusty'>> = ({
           strokeWidth={3.1}
           strokeLinejoin="round"
         />
-        {/* Trunk ridges */}
         <Path
           d="M 46 50 L 53 50 M 45 57 L 52 57 M 46 64 L 52 64"
           stroke={STROKE}
@@ -1389,7 +1379,6 @@ export const ApexPredatorRig: React.FC<EnemyRigProps<'saber'>> = ({
           strokeLinejoin="round"
         />
 
-        {/* Forehead apex crest */}
         <Polygon points="46,24 50,34 54,24" fill={glow} />
 
         <EnemyEyes

@@ -11,7 +11,6 @@ export const ELEMENTAL_COMBAT_WEAPON_RELICS: Record<string, WeaponRelic> = {
     <Svg width="100%" height="100%" viewBox="0 0 100 100">
       {/* Soft explosive warm back-glow */}
       <Circle cx={44} cy={58} r={30} fill="#FF9538" opacity={0.16} />
-      {/* Fuse cord */}
       <Path
         d="M 55 31 C 60 19, 71 17, 76 23"
         fill="none"
@@ -83,7 +82,6 @@ export const ELEMENTAL_COMBAT_WEAPON_RELICS: Record<string, WeaponRelic> = {
     tapStyle: 'explosive',
     art: (trim) => (
     <Svg width="100%" height="100%" viewBox="0 0 100 100">
-      {/* Magma aura */}
       <Circle cx={50} cy={52} r={33} fill="#EF4444" opacity={0.18} />
       {/* Exhaust flame plume at tail */}
       <Path
@@ -117,7 +115,6 @@ export const ELEMENTAL_COMBAT_WEAPON_RELICS: Record<string, WeaponRelic> = {
         strokeWidth={3.3}
         strokeLinejoin="round"
       />
-      {/* Nosecone rarity cap */}
       <Path
         d="M 64 25 C 71 20, 77 19, 82 18 C 81 23, 80 29, 75 36 Q 68 31 64 25 Z"
         fill={trim.metal}
@@ -181,7 +178,6 @@ export const ELEMENTAL_COMBAT_WEAPON_RELICS: Record<string, WeaponRelic> = {
         strokeWidth={3.3}
         strokeLinejoin="round"
       />
-      {/* Mid impact-orange flame */}
       <Path
         d="M 51 24 C 62 35, 68 48, 65 63 C 63 73, 57 80, 50 80 C 43 80, 37 73, 35 63 C 33 51, 41 40, 51 24 Z"
         fill="#FF9538"
@@ -218,7 +214,6 @@ export const ELEMENTAL_COMBAT_WEAPON_RELICS: Record<string, WeaponRelic> = {
       />
       <Polygon points="31,35 43,39 58,54 48,57" fill="#64748B" />
       <Line x1={33} y1={37} x2={42} y2={40} stroke="#FFFFFF" strokeWidth={2.2} strokeLinecap="round" />
-      {/* Strike-point spark burst */}
       <Polygon
         points="50,45 53,52 60,55 53,58 50,65 47,58 40,55 47,52"
         fill="#FFFFFF"
@@ -248,7 +243,6 @@ export const ELEMENTAL_COMBAT_WEAPON_RELICS: Record<string, WeaponRelic> = {
         d="M 50 18 C 56 25, 59 31, 57 38 C 65 32, 74 37, 75 49 C 75 63, 63 75, 50 83 C 37 75, 25 63, 25 49 C 26 37, 35 32, 43 38 C 41 31, 44 25, 50 18 Z"
         fill={COLORS.actionYellow}
       />
-      {/* Rarity crown vessels */}
       <Rect
         x={44}
         y={28}
@@ -267,7 +261,6 @@ export const ELEMENTAL_COMBAT_WEAPON_RELICS: Record<string, WeaponRelic> = {
         strokeWidth={3.3}
         strokeLinejoin="round"
       />
-      {/* Cel-shaded crimson depth */}
       <Path
         d="M 50 80 C 64 70, 72 58, 73 47 C 70 57, 61 66, 50 73 Z"
         fill="#9F1239"
@@ -295,7 +288,6 @@ export const ELEMENTAL_COMBAT_WEAPON_RELICS: Record<string, WeaponRelic> = {
     tapStyle: 'explosive',
     art: (trim) => (
     <Svg width="100%" height="100%" viewBox="0 0 100 100">
-      {/* Solar corona aura */}
       <Circle cx={50} cy={50} r={38} fill={COLORS.actionYellow} opacity={0.2} />
       {/* Swirling outer solar flame-ring with directional tongues */}
       <Path
@@ -410,7 +402,6 @@ export const ELEMENTAL_COMBAT_WEAPON_RELICS: Record<string, WeaponRelic> = {
         <Line x1={63} y1={57} x2={91} y2={74} stroke={STROKE} strokeWidth={7.5} />
         <Line x1={63} y1={57} x2={91} y2={74} stroke={COLORS.logicTeal} strokeWidth={3.8} />
       </G>
-      {/* Rarity pedestal base */}
       <Path
         d="M 22 74 L 74 74 L 70 82 L 26 82 Z"
         fill={trim.metal}
@@ -430,7 +421,6 @@ export const ELEMENTAL_COMBAT_WEAPON_RELICS: Record<string, WeaponRelic> = {
       <Polygon points="48,23 48,72 70,72" fill="#38BDF8" opacity={0.55} />
       <Polygon points="48,23 35,72 48,72" fill="#E0F2FE" />
       <Line x1={48} y1={22} x2={48} y2={73} stroke={STROKE} strokeWidth={2.2} />
-      {/* Apex star gleam */}
       <Polygon
         points="48,11 50.5,17.5 57,20 50.5,22.5 48,29 45.5,22.5 39,20 45.5,17.5"
         fill="#FFFFFF"
@@ -446,7 +436,6 @@ export const ELEMENTAL_COMBAT_WEAPON_RELICS: Record<string, WeaponRelic> = {
     tapStyle: 'laser',
     art: (trim) => (
     <Svg width="100%" height="100%" viewBox="0 0 100 100">
-      {/* Rainbow muzzle blast */}
       <Polygon
         points="72,28 89,11 83,26 94,25 79,36"
         fill={COLORS.actionYellow}
@@ -457,7 +446,6 @@ export const ELEMENTAL_COMBAT_WEAPON_RELICS: Record<string, WeaponRelic> = {
       <Circle cx={79} cy={21} r={5.5} fill="#FFFFFF" stroke={STROKE} strokeWidth={2.2} />
       {/* Heavy arcane cannon chassis (angled 45 deg) */}
       <G transform="rotate(-45 48 54)">
-        {/* Rear stock */}
         <Rect
           x={14}
           y={42}
@@ -494,7 +482,6 @@ export const ELEMENTAL_COMBAT_WEAPON_RELICS: Record<string, WeaponRelic> = {
           stroke={STROKE}
           strokeWidth={2.6}
         />
-        {/* Focusing rings */}
         <Rect
           x={66}
           y={35}
@@ -515,7 +502,6 @@ export const ELEMENTAL_COMBAT_WEAPON_RELICS: Record<string, WeaponRelic> = {
           stroke={STROKE}
           strokeWidth={2.8}
         />
-        {/* Barrel highlight */}
         <Line x1={30} y1={40} x2={62} y2={40} stroke="#FFFFFF" strokeWidth={2.2} strokeLinecap="round" />
       </G>
     </Svg>
@@ -536,7 +522,6 @@ export const ELEMENTAL_COMBAT_WEAPON_RELICS: Record<string, WeaponRelic> = {
       <Polygon points="92,50 61,61 50,50 61,39" fill={COLORS.actionYellow} stroke={STROKE} strokeWidth={3.2} strokeLinejoin="round" />
       <Polygon points="50,92 39,61 50,50 61,61" fill="#06B6D4" stroke={STROKE} strokeWidth={3.2} strokeLinejoin="round" />
       <Polygon points="8,50 39,39 50,50 39,61" fill="#A855F7" stroke={STROKE} strokeWidth={3.2} strokeLinejoin="round" />
-      {/* Facet specular splits */}
       <Polygon points="50,12 58,38 50,47" fill="#FFFFFF" opacity={0.35} />
       <Polygon points="88,50 62,42 53,50" fill="#FFFFFF" opacity={0.4} />
       {/* Rarity center bezel & white diamond core */}
@@ -556,7 +541,6 @@ export const ELEMENTAL_COMBAT_WEAPON_RELICS: Record<string, WeaponRelic> = {
     tapStyle: 'explosive',
     art: (trim) => (
     <Svg width="100%" height="100%" viewBox="0 0 100 100">
-      {/* Ricochet orbit path */}
       <Ellipse
         cx={50}
         cy={52}
@@ -608,7 +592,6 @@ export const ELEMENTAL_COMBAT_WEAPON_RELICS: Record<string, WeaponRelic> = {
         strokeWidth={2.8}
         strokeLinejoin="round"
       />
-      {/* Shard glint */}
       <Line x1={37} y1={37} x2={48} y2={22} stroke="#FFFFFF" strokeWidth={2.6} strokeLinecap="round" />
     </Svg>
     ),
@@ -673,7 +656,6 @@ export const ELEMENTAL_COMBAT_WEAPON_RELICS: Record<string, WeaponRelic> = {
         stroke="#D97706"
         strokeWidth={4}
       />
-      {/* Escaping lightning bolts */}
       <Path
         d="M 50 28 L 46 16 L 54 15 L 50 7"
         fill="none"
@@ -690,7 +672,6 @@ export const ELEMENTAL_COMBAT_WEAPON_RELICS: Record<string, WeaponRelic> = {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      {/* Bearing gems */}
       <Circle cx={18} cy={71} r={3.6} fill={trim.gem} stroke={STROKE} strokeWidth={2.2} />
       <Circle cx={82} cy={29} r={3.6} fill={trim.gem} stroke={STROKE} strokeWidth={2.2} />
     </Svg>
@@ -712,7 +693,6 @@ export const ELEMENTAL_COMBAT_WEAPON_RELICS: Record<string, WeaponRelic> = {
         stroke={STROKE}
         strokeWidth={3}
       />
-      {/* Cyan helix coil */}
       <Path
         d="M 30 72 C 30 58, 70 58, 70 44 C 70 30, 34 30, 36 18"
         fill="none"
@@ -727,7 +707,6 @@ export const ELEMENTAL_COMBAT_WEAPON_RELICS: Record<string, WeaponRelic> = {
         strokeWidth={4.2}
         strokeLinecap="round"
       />
-      {/* Golden helix coil */}
       <Path
         d="M 70 72 C 70 58, 30 58, 30 44 C 30 30, 66 30, 64 18"
         fill="none"
@@ -770,7 +749,6 @@ export const ELEMENTAL_COMBAT_WEAPON_RELICS: Record<string, WeaponRelic> = {
     tapStyle: 'explosive',
     art: (trim) => (
     <Svg width="100%" height="100%" viewBox="0 0 100 100">
-      {/* Branching chain-lightning bolts */}
       <G stroke={STROKE} strokeWidth={6.5} strokeLinecap="round" strokeLinejoin="round" fill="none">
         <Path d="M 38 40 L 23 28 L 28 21 L 15 13" />
         <Path d="M 62 40 L 77 27 L 72 20 L 86 13" />

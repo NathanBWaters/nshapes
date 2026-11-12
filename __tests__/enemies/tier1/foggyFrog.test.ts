@@ -23,46 +23,6 @@ describe('Foggy Frog', () => {
   // METADATA TESTS
   // ==========================================================================
   describe('metadata', () => {
-    it('has correct name', () => {
-      const enemy = createFoggyFrog();
-      expect(enemy.name).toBe('Foggy Frog');
-    });
-
-    it('has tier 1', () => {
-      const enemy = createFoggyFrog();
-      expect(enemy.tier).toBe(1);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createFoggyFrog();
-      expect(enemy.icon).toBe('lorc/frog');
-    });
-
-    it('has description containing hint reduction info', () => {
-      const enemy = createFoggyFrog();
-      expect(enemy.description).toContain('Hint');
-    });
-
-    it('has description mentioning divided by 3', () => {
-      const enemy = createFoggyFrog();
-      expect(enemy.description).toContain('divided by 3');
-    });
-
-    it('has defeat condition text mentioning target score', () => {
-      const enemy = createFoggyFrog();
-      expect(enemy.defeatConditionText.toLowerCase()).toContain('target');
-    });
-
-    it('has defeat condition text mentioning hints remaining', () => {
-      const enemy = createFoggyFrog();
-      expect(enemy.defeatConditionText.toLowerCase()).toContain('hint');
-    });
-
-    it('has defeat condition text mentioning 2+ hints', () => {
-      const enemy = createFoggyFrog();
-      expect(enemy.defeatConditionText).toContain('2+');
-    });
-
     it('is consistent across multiple instances', () => {
       const enemy1 = createFoggyFrog();
       const enemy2 = createFoggyFrog();

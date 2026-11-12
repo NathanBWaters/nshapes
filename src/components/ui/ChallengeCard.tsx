@@ -18,21 +18,6 @@ const getRarityLabel = (rarity: WeaponRarity): string => {
   }
 };
 
-interface ChallengeCardProps {
-  // For round complete - show enemy challenge
-  enemy?: EnemyInstance;
-  // For victory - show difficulty challenge
-  difficulty?: AdventureDifficulty;
-  // Whether the enemy was actually defeated (for round complete)
-  enemyDefeated?: boolean;
-  // Whether to show achievement badge (for victory screen only)
-  showAchievement?: boolean;
-  // The specific stretch goal reward weapon (pre-determined)
-  stretchGoalReward?: Weapon | null;
-  // The specific stretch goal bonus money (pre-determined)
-  stretchGoalMoney?: number | null;
-}
-
 // Tier colors for enemies
 const TIER_COLORS: Record<1 | 2 | 3 | 4, string> = {
   1: COLORS.logicTeal,
@@ -48,7 +33,6 @@ const TIER_LABELS: Record<1 | 2 | 3 | 4, string> = {
   4: 'Boss',
 };
 
-// Difficulty display info
 const getDifficultyInfo = (diff: AdventureDifficulty) => {
   switch (diff) {
     case 'easy':
@@ -88,7 +72,6 @@ export const EnemyChallengeCard: React.FC<EnemyChallengeCardProps> = ({
       </View>
 
       <View style={[styles.card, { borderColor: tierColor }]}>
-        {/* Enemy Header */}
         <View style={styles.enemyHeader}>
           <View style={styles.enemyIconContainer}>
             <EnemyAvatar
@@ -108,7 +91,6 @@ export const EnemyChallengeCard: React.FC<EnemyChallengeCardProps> = ({
           </View>
         </View>
 
-        {/* Enemy Effect */}
         <View style={styles.infoSection}>
           <Text style={styles.infoLabel}>Enemy Effects</Text>
           {enemy.description.split(', ').map((effect, index) => (
@@ -116,13 +98,11 @@ export const EnemyChallengeCard: React.FC<EnemyChallengeCardProps> = ({
           ))}
         </View>
 
-        {/* Defeat Condition */}
         <View style={styles.infoSection}>
           <Text style={[styles.infoLabel, { color: COLORS.logicTeal }]}>Challenge Requirement</Text>
           <Text style={styles.infoText}>{enemy.defeatConditionText}</Text>
         </View>
 
-        {/* Result Badge */}
         {enemyDefeated ? (
           <View style={styles.successBadge} testID="enemy-defeated-indicator">
             <Icon name="lorc/checked-shield" size={14} color={COLORS.logicTeal} />
@@ -169,7 +149,6 @@ export const EnemyChallengeCard: React.FC<EnemyChallengeCardProps> = ({
               }
             </Text>
           )}
-          {/* Bonus Money Display */}
           {stretchGoalMoney != null && stretchGoalMoney > 0 && (
             <View style={styles.rewardMoneyRow}>
               <Icon
@@ -245,27 +224,6 @@ export const DifficultyChallengeCard: React.FC<DifficultyChallengeCardProps> = (
   );
 };
 
-/**
- * Legacy combined entry point: renders the enemy card when `enemy` is given,
- * otherwise the difficulty card when `difficulty` is given.
- */
-const ChallengeCard: React.FC<ChallengeCardProps> = ({ enemy, difficulty, enemyDefeated, showAchievement, stretchGoalReward, stretchGoalMoney }) => {
-  if (enemy) {
-    return (
-      <EnemyChallengeCard
-        enemy={enemy}
-        enemyDefeated={enemyDefeated}
-        stretchGoalReward={stretchGoalReward}
-        stretchGoalMoney={stretchGoalMoney}
-      />
-    );
-  }
-  if (difficulty) {
-    return <DifficultyChallengeCard difficulty={difficulty} showAchievement={showAchievement} />;
-  }
-  return null;
-};
-
 const styles = StyleSheet.create({
   container: {
     width: '100%',
@@ -291,7 +249,6 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 12,
   },
-  // Enemy styles
   enemyHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -340,7 +297,6 @@ const styles = StyleSheet.create({
     color: COLORS.slateCharcoal,
     lineHeight: 18,
   },
-  // Difficulty styles
   difficultyRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -368,7 +324,6 @@ const styles = StyleSheet.create({
     color: COLORS.slateCharcoal,
     opacity: 0.8,
   },
-  // Shared styles
   achievementBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -489,4 +444,3 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ChallengeCard;

@@ -14,9 +14,6 @@ import {
   composeEffects,
 } from '../../enemyEffects';
 
-/**
- * Creates a fresh Merciless Porcupine enemy instance.
- */
 export function createMercilessPorcupine(): EnemyInstance {
   return composeEffects(
     {
@@ -32,7 +29,6 @@ export function createMercilessPorcupine(): EnemyInstance {
       { behavior: PointsMultiplierEffect, config: { multiplier: 2.0 } },
       { behavior: InactivityEffect, config: { maxMs: 35000, penalty: 'death' } },
     ],
-    // Defeat condition: No invalid matches (must have at least 1 match)
     (stats: RoundStats) => stats.invalidMatches === 0 && stats.totalMatches >= 1
   );
 }

@@ -16,9 +16,6 @@ import {
   composeEffects,
 } from '../../enemyEffects';
 
-/**
- * Creates a fresh Ancient Dragon enemy instance.
- */
 export function createAncientDragon(): EnemyInstance {
   return composeEffects(
     {
@@ -36,7 +33,6 @@ export function createAncientDragon(): EnemyInstance {
       { behavior: PointsMultiplierEffect, config: { multiplier: 2.0 } },
       { behavior: ScoreDecayEffect, config: { ratePerSecond: 0.33 } },
     ],
-    // Defeat condition: Clear all 2 triple cards AND get 2 all-different matches
     (stats: RoundStats) =>
       stats.tripleCardsCleared >= 2 && stats.allDifferentMatches >= 2
   );

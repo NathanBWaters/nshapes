@@ -13,9 +13,6 @@ import {
   composeEffects,
 } from '../../enemyEffects';
 
-/**
- * Creates a fresh Fierce Wolverine enemy instance.
- */
 export function createFierceWolverine(): EnemyInstance {
   return composeEffects(
     {
@@ -30,7 +27,6 @@ export function createFierceWolverine(): EnemyInstance {
       { behavior: DamageMultiplierEffect, config: { multiplier: 2.0 } },
       { behavior: PointsMultiplierEffect, config: { multiplier: 2.0 } },
     ],
-    // Defeat condition: No invalid matches AND no damage taken
     (stats: RoundStats) =>
       stats.invalidMatches === 0 &&
       stats.damageReceived === 0 &&

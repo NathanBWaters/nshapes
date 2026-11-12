@@ -13,9 +13,6 @@ import {
   composeEffects,
 } from '../../enemyEffects';
 
-/**
- * Creates a fresh Swarming Ants enemy instance.
- */
 export function createSwarmingAnts(): EnemyInstance {
   return composeEffects(
     {
@@ -31,7 +28,6 @@ export function createSwarmingAnts(): EnemyInstance {
       { behavior: WeaponCounterEffect, config: { type: 'fire', reduction: 55 } },
       { behavior: CountdownEffect, config: { countdownMs: 8000 } },
     ],
-    // Defeat condition: Defuse 5 bombs
     (stats: RoundStats) => stats.bombsDefused >= 5
   );
 }

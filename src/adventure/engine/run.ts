@@ -685,7 +685,6 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], effects: Wea
     emit(d, 'grace');
   }
 
-  // Rewards
   const money = rewards.reduce((a, r) => a + (r.money ?? 0), 0) + (fx?.bonusCoins ?? 0) + purityCoins;
   addCoins(d, money);
   const xp = rewards.reduce((a, r) => a + (r.experience ?? 0), 0) + (fx?.bonusExperience ?? 0);

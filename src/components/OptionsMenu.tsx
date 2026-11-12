@@ -22,7 +22,6 @@ const OptionsMenu: React.FC<OptionsMenuProps> = ({ visible, onClose }) => {
     >
       <View style={styles.overlay}>
         <View style={styles.container}>
-          {/* Header */}
           <View style={styles.header}>
             <Text style={styles.headerText}>OPTIONS</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
@@ -30,9 +29,7 @@ const OptionsMenu: React.FC<OptionsMenuProps> = ({ visible, onClose }) => {
             </TouchableOpacity>
           </View>
 
-          {/* Settings */}
           <View style={styles.content}>
-            {/* Sound Toggle Row */}
             <View style={styles.settingRow}>
               <View style={styles.settingLabel}>
                 <Icon name="delapouite/sound-on" size={24} color={COLORS.slateCharcoal} />
@@ -55,7 +52,6 @@ const OptionsMenu: React.FC<OptionsMenuProps> = ({ visible, onClose }) => {
             </View>
           </View>
 
-          {/* Close Button */}
           <TouchableOpacity style={styles.doneButton} onPress={onClose}>
             <Text style={styles.doneButtonText}>DONE</Text>
           </TouchableOpacity>

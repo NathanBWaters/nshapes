@@ -63,7 +63,6 @@ export const CorgiRig: React.FC<CreatureRigProps> = ({
           strokeWidth={2.4}
           strokeLinejoin="round"
         />
-        {/* Teal bone/tag collar */}
         <Path
           d="M 35 60 Q 50 65 65 60"
           stroke={COLORS.logicTeal}
@@ -139,7 +138,6 @@ export const CorgiRig: React.FC<CreatureRigProps> = ({
         <Ellipse cx={38} cy={35} rx={3.2} ry={2} fill="#FEF3C7" />
         <Ellipse cx={62} cy={35} rx={3.2} ry={2} fill="#FEF3C7" />
 
-        {/* Eyes */}
         <CreatureEyes expression={expression} gazeOffset={gazeOffset} leftX={37.5} rightX={62.5} y={42.5} radius={4.7} />
 
         {/* Shiny oval dog nose */}

@@ -5,7 +5,6 @@ import { SvgProps } from 'react-native-svg';
 // Static imports for the icons we use in the game
 // Add new icons here as needed
 
-// Characters
 import Cat from '../../assets/icons/lorc/cat.svg';
 import Fox from '../../assets/icons/caro-asercion/fox.svg';
 import SittingDog from '../../assets/icons/delapouite/sitting-dog.svg';
@@ -16,7 +15,6 @@ import BarnOwl from '../../assets/icons/caro-asercion/barn-owl.svg';
 import Hedgehog from '../../assets/icons/caro-asercion/hedgehog.svg';
 import Sloth from '../../assets/icons/caro-asercion/sloth.svg';
 
-// Enemies
 import JumpingDog from '../../assets/icons/delapouite/jumping-dog.svg';
 import Jellyfish from '../../assets/icons/lorc/jellyfish.svg';
 import Snake from '../../assets/icons/lorc/snake.svg';
@@ -75,12 +73,10 @@ import KrakenTentacle from '../../assets/icons/delapouite/kraken-tentacle.svg';
 import GrimReaper from '../../assets/icons/lorc/grim-reaper.svg';
 import DaemonSkull from '../../assets/icons/lorc/daemon-skull.svg';
 
-// Weapons
 import Bamboo from '../../assets/icons/delapouite/bamboo.svg';
 import StonePile from '../../assets/icons/delapouite/stone-pile.svg';
 import ClawSlashes from '../../assets/icons/lorc/claw-slashes.svg';
 
-// Items
 import Field from '../../assets/icons/lorc/field.svg';
 import MirrorMirror from '../../assets/icons/lorc/mirror-mirror.svg';
 import LightBulb from '../../assets/icons/lorc/light-bulb.svg';
@@ -88,18 +84,15 @@ import Clover from '../../assets/icons/lorc/clover.svg';
 import Snowflake1 from '../../assets/icons/lorc/snowflake-1.svg';
 import Token from '../../assets/icons/delapouite/token.svg';
 
-// Menu Icons
 import ArcheryTarget from '../../assets/icons/lorc/archery-target.svg';
 import OpenBook from '../../assets/icons/lorc/open-book.svg';
 import CrownCoin from '../../assets/icons/lorc/crown-coin.svg';
 import ReturnArrow from '../../assets/icons/lorc/return-arrow.svg';
 
-// Difficulty Icons
 import Feather from '../../assets/icons/lorc/feather.svg';
 import DiamondHard from '../../assets/icons/lorc/diamond-hard.svg';
 import Brain from '../../assets/icons/lorc/brain.svg';
 
-// Stat Icons
 import HeartInside from '../../assets/icons/lorc/heart-inside.svg';
 import Cash from '../../assets/icons/lorc/cash.svg';
 import FlatStar from '../../assets/icons/lorc/flat-star.svg';
@@ -116,7 +109,6 @@ import Recycle from '../../assets/icons/lorc/recycle.svg';
 import TimeBomb from '../../assets/icons/lorc/time-bomb.svg';
 import Bullseye from '../../assets/icons/skoll/bullseye.svg';
 
-// New weapon icons
 import SheikahEye from '../../assets/icons/lorc/sheikah-eye.svg';
 import FloatingCrystal from '../../assets/icons/lorc/floating-crystal.svg';
 import CrystalShine from '../../assets/icons/lorc/crystal-shine.svg';
@@ -126,7 +118,6 @@ import ChainedArrowHeads from '../../assets/icons/lorc/chained-arrow-heads.svg';
 import EchoRipples from '../../assets/icons/lorc/echo-ripples.svg';
 import LightningBranches from '../../assets/icons/lorc/lightning-branches.svg';
 
-// Bridge weapon icons
 import LightningHelix from '../../assets/icons/lorc/lightning-helix.svg';
 import TimeTrap from '../../assets/icons/lorc/time-trap.svg';
 import DeathNote from '../../assets/icons/lorc/death-note.svg';
@@ -136,7 +127,6 @@ import AngelOutfit from '../../assets/icons/lorc/angel-outfit.svg';
 import CrystalWand from '../../assets/icons/lorc/crystal-wand.svg';
 import BrokenHeart from '../../assets/icons/lorc/broken-heart.svg';
 
-// Epic weapon icons
 import Fireball from '../../assets/icons/lorc/fireball.svg';
 import HeartBottle from '../../assets/icons/lorc/heart-bottle.svg';
 import CoinsPile from '../../assets/icons/delapouite/coins-pile.svg';
@@ -146,25 +136,21 @@ import CrystalBall from '../../assets/icons/lorc/crystal-ball.svg';
 import Flowers from '../../assets/icons/lorc/flowers.svg';
 import CrackedBallDunk from '../../assets/icons/lorc/cracked-ball-dunk.svg';
 
-// UI Icons
 import Padlock from '../../assets/icons/lorc/padlock.svg';
 import GearHammer from '../../assets/icons/lorc/gear-hammer.svg';
 import SoundOn from '../../assets/icons/delapouite/sound-on.svg';
 import ThirdEye from '../../assets/icons/lorc/third-eye.svg';
 import DiscordSymbol from '../../assets/icons/discord-symbol.svg';
 
-// ChallengeCard Icons
 import SwordClash from '../../assets/icons/lorc/sword-clash.svg';
 import CheckedShield from '../../assets/icons/lorc/checked-shield.svg';
 import CrossMark from '../../assets/icons/lorc/cross-mark.svg';
 import Trophy from '../../assets/icons/lorc/trophy.svg';
 
-// Challenge Legendary Icons
 import RainbowStar from '../../assets/icons/lorc/rainbow-star.svg';
 import RadarSweep from '../../assets/icons/lorc/radar-sweep.svg';
 import SkullCrack from '../../assets/icons/lorc/skull-crack.svg';
 
-// Connector Weapon Icons
 import ChainedHeart from '../../assets/icons/lorc/chained-heart.svg';
 import BrokenHeartZone from '../../assets/icons/lorc/broken-heart-zone.svg';
 import Cobweb from '../../assets/icons/lorc/cobweb.svg';
@@ -175,7 +161,6 @@ import Brainstorm from '../../assets/icons/lorc/brainstorm.svg';
 // NOTE: When adding new icons, also add the import above and the path here.
 // TypeScript will catch any usage of icon paths not in this registry.
 const ICON_REGISTRY = {
-  // Characters
   'lorc/cat': Cat,
   'caro-asercion/fox': Fox,
   'delapouite/sitting-dog': SittingDog,
@@ -186,7 +171,6 @@ const ICON_REGISTRY = {
   'caro-asercion/hedgehog': Hedgehog,
   'caro-asercion/sloth': Sloth,
 
-  // Enemies
   'delapouite/jumping-dog': JumpingDog,
   'lorc/jellyfish': Jellyfish,
   'lorc/snake': Snake,
@@ -245,12 +229,10 @@ const ICON_REGISTRY = {
   'lorc/grim-reaper': GrimReaper,
   'lorc/daemon-skull': DaemonSkull,
 
-  // Weapons
   'delapouite/bamboo': Bamboo,
   'delapouite/stone-pile': StonePile,
   'lorc/claw-slashes': ClawSlashes,
 
-  // Items
   'lorc/field': Field,
   'lorc/mirror-mirror': MirrorMirror,
   'lorc/light-bulb': LightBulb,
@@ -258,18 +240,15 @@ const ICON_REGISTRY = {
   'lorc/snowflake-1': Snowflake1,
   'delapouite/token': Token,
 
-  // Menu
   'lorc/archery-target': ArcheryTarget,
   'lorc/open-book': OpenBook,
   'lorc/crown-coin': CrownCoin,
   'lorc/return-arrow': ReturnArrow,
 
-  // Difficulty
   'lorc/feather': Feather,
   'lorc/diamond-hard': DiamondHard,
   'lorc/brain': Brain,
 
-  // Stats
   'lorc/heart-inside': HeartInside,
   'lorc/cash': Cash,
   'lorc/flat-star': FlatStar,
@@ -286,7 +265,6 @@ const ICON_REGISTRY = {
   'lorc/time-bomb': TimeBomb,
   'skoll/bullseye': Bullseye,
 
-  // New weapon icons
   'lorc/sheikah-eye': SheikahEye,
   'lorc/floating-crystal': FloatingCrystal,
   'lorc/crystal-shine': CrystalShine,
@@ -296,7 +274,6 @@ const ICON_REGISTRY = {
   'lorc/echo-ripples': EchoRipples,
   'lorc/lightning-branches': LightningBranches,
 
-  // Bridge weapon icons
   'lorc/lightning-helix': LightningHelix,
   'lorc/time-trap': TimeTrap,
   'lorc/death-note': DeathNote,
@@ -306,7 +283,6 @@ const ICON_REGISTRY = {
   'lorc/crystal-wand': CrystalWand,
   'lorc/broken-heart': BrokenHeart,
 
-  // Epic weapon icons
   'lorc/fireball': Fireball,
   'lorc/heart-bottle': HeartBottle,
   'delapouite/coins-pile': CoinsPile,
@@ -316,25 +292,21 @@ const ICON_REGISTRY = {
   'lorc/flowers': Flowers,
   'lorc/cracked-ball-dunk': CrackedBallDunk,
 
-  // UI Icons
   'lorc/padlock': Padlock,
   'lorc/gear-hammer': GearHammer,
   'delapouite/sound-on': SoundOn,
   'lorc/third-eye': ThirdEye,
   'discord-symbol': DiscordSymbol,
 
-  // ChallengeCard Icons
   'lorc/sword-clash': SwordClash,
   'lorc/checked-shield': CheckedShield,
   'lorc/cross-mark': CrossMark,
   'lorc/trophy': Trophy,
 
-  // Challenge Legendary Icons
   'lorc/rainbow-star': RainbowStar,
   'lorc/radar-sweep': RadarSweep,
   'lorc/skull-crack': SkullCrack,
 
-  // Connector Weapon Icons
   'lorc/chained-heart': ChainedHeart,
   'lorc/broken-heart-zone': BrokenHeartZone,
   'lorc/cobweb': Cobweb,
@@ -387,7 +359,6 @@ const Icon: React.FC<IconProps> = ({
           />
         </View>
       )}
-      {/* Main icon */}
       <SvgComponent
         width={size}
         height={size}

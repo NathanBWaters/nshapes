@@ -42,7 +42,6 @@ export function useAutoPlayer({
   const isSelectingRef = useRef(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (timeoutRef.current) {
@@ -62,7 +61,6 @@ export function useAutoPlayer({
 
     if (availableCards.length < 3) return;
 
-    // Find valid sets
     const validSets = findAllCombinations(availableCards, activeAttributes);
 
     let targetSet: Card[];

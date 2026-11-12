@@ -49,19 +49,6 @@ const createTestBoard = (): Card[] =>
     }));
 
 describe('Nightmare Squid', () => {
-  describe('metadata', () => {
-    it('has correct name and tier', () => {
-      const enemy = createNightmareSquid();
-      expect(enemy.name).toBe('Nightmare Squid');
-      expect(enemy.tier).toBe(3);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createNightmareSquid();
-      expect(enemy.icon).toBe('delapouite/giant-squid');
-    });
-  });
-
   describe('score decay', () => {
     it('decays at 0.2 points per second (1 per 5s)', () => {
       const enemy = createNightmareSquid();

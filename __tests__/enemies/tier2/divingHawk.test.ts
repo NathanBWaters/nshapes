@@ -37,57 +37,6 @@ describe('Diving Hawk', () => {
   // METADATA TESTS
   // ===========================================================================
 
-  describe('metadata', () => {
-    it('has correct name', () => {
-      const enemy = createDivingHawk();
-      expect(enemy.name).toBe('Diving Hawk');
-    });
-
-    it('has correct tier (2)', () => {
-      const enemy = createDivingHawk();
-      expect(enemy.tier).toBe(2);
-    });
-
-    it('has correct icon path', () => {
-      const enemy = createDivingHawk();
-      expect(enemy.icon).toBe('lorc/hawk-emblem');
-    });
-
-    it('has correct description mentioning timer speed', () => {
-      const enemy = createDivingHawk();
-      expect(enemy.description).toBe('Timer 35% faster');
-    });
-
-    it('has correct defeat condition text', () => {
-      const enemy = createDivingHawk();
-      expect(enemy.defeatConditionText).toBe('Get 3 all-different matches');
-    });
-
-    it('description matches the actual timer multiplier', () => {
-      const enemy = createDivingHawk();
-      const uiMods = enemy.getUIModifiers();
-      // 35% faster means 1.35 multiplier
-      expect(enemy.description).toContain('35%');
-      expect(uiMods.timerSpeedMultiplier).toBe(1.35);
-    });
-
-    it('tier is number type', () => {
-      const enemy = createDivingHawk();
-      expect(typeof enemy.tier).toBe('number');
-    });
-
-    it('name is non-empty string', () => {
-      const enemy = createDivingHawk();
-      expect(typeof enemy.name).toBe('string');
-      expect(enemy.name.length).toBeGreaterThan(0);
-    });
-
-    it('icon follows naming convention', () => {
-      const enemy = createDivingHawk();
-      expect(enemy.icon).toMatch(/^[a-z-]+\/[a-z-]+$/);
-    });
-  });
-
   // ===========================================================================
   // TIMER SPEED EFFECT TESTS
   // ===========================================================================

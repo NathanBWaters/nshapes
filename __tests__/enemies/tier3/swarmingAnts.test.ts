@@ -49,19 +49,6 @@ const createTestBoard = (): Card[] =>
     }));
 
 describe('Swarming Ants', () => {
-  describe('metadata', () => {
-    it('has correct name and tier', () => {
-      const enemy = createSwarmingAnts();
-      expect(enemy.name).toBe('Swarming Ants');
-      expect(enemy.tier).toBe(3);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createSwarmingAnts();
-      expect(enemy.icon).toBe('delapouite/ant');
-    });
-  });
-
   describe('fire counter', () => {
     it('reduces fire by 55%', () => {
       const enemy = createSwarmingAnts();

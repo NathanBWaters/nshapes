@@ -8,9 +8,6 @@
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { InactivityEffect, composeEffects } from '../../enemyEffects';
 
-/**
- * Creates a fresh Stalking Wolf enemy instance.
- */
 export function createStalkingWolf(): EnemyInstance {
   return composeEffects(
     {
@@ -26,7 +23,6 @@ export function createStalkingWolf(): EnemyInstance {
         config: { maxMs: 45000, penalty: 'damage' as const },
       },
     ],
-    // Defeat condition: 3 consecutive matches within 10 seconds total
     // matchTimes[i] = time from match (i-1) to match i
     // So time from match A to match C = matchTimes[B] + matchTimes[C]
     (stats: RoundStats) => {

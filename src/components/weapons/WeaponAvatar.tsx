@@ -12,7 +12,7 @@ import Animated, {
 import { Svg, Circle, G, Line } from 'react-native-svg';
 import { Sparkle4 } from '@/components/illustration/primitives';
 import { Weapon, WeaponRarity } from '@/types';
-import { useReducedMotion } from '@/utils/animation';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { COLORS } from '@/utils/colors';
 import { getRarityTrimPalette, WeaponTapStyle } from './types';
 import { getWeaponTapStyle, WeaponArtwork } from './WeaponArtwork';

@@ -167,7 +167,6 @@ describe('Custom Enemy Rigs & Procedural Animation Engine', () => {
     const { result } = renderHook(() =>
       useEnemyConductor({
         enemyName: 'Ancient Dragon',
-        tier: 4,
         hp: 12,
         maxHp: 30,
         isBoss: true,
@@ -176,19 +175,19 @@ describe('Custom Enemy Rigs & Procedural Animation Engine', () => {
 
     expect(result.current.mood).toBe('enraged');
 
-    act(() => result.current.triggerHit());
+    act(() => result.current.triggerReaction('pain'));
     expect(result.current.reaction?.type).toBe('pain');
 
-    act(() => result.current.triggerHit({ isCritical: true }));
+    act(() => result.current.triggerReaction('crit_pain'));
     expect(result.current.reaction?.type).toBe('crit_pain');
 
-    act(() => result.current.triggerMistakeGloat());
+    act(() => result.current.triggerReaction('taunt'));
     expect(result.current.reaction?.type).toBe('taunt');
 
-    act(() => result.current.triggerAttack());
+    act(() => result.current.triggerReaction('attack'));
     expect(result.current.reaction?.type).toBe('attack');
 
-    act(() => result.current.triggerRegen());
+    act(() => result.current.triggerReaction('regen'));
     expect(result.current.reaction?.type).toBe('regen');
   });
 });

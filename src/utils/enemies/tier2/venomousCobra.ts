@@ -8,9 +8,6 @@
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { AttributeChangeEffect, BombEffect, composeEffects } from '../../enemyEffects';
 
-/**
- * Creates a fresh Venomous Cobra enemy instance.
- */
 export function createVenomousCobra(): EnemyInstance {
   return composeEffects(
     {
@@ -24,7 +21,6 @@ export function createVenomousCobra(): EnemyInstance {
       { behavior: AttributeChangeEffect, config: { intervalMs: 15000 } },
       { behavior: BombEffect, config: { bombChance: 15, bombTimerMs: 10000, minBoardSize: 6 } },
     ],
-    // Defeat condition: Defuse 4 bombs
     (stats: RoundStats) => stats.bombsDefused >= 4
   );
 }

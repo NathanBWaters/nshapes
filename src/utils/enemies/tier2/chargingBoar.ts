@@ -8,9 +8,6 @@
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { InactivityEffect, composeEffects } from '../../enemyEffects';
 
-/**
- * Creates a fresh Charging Boar enemy instance.
- */
 export function createChargingBoar(): EnemyInstance {
   return composeEffects(
     {
@@ -23,7 +20,6 @@ export function createChargingBoar(): EnemyInstance {
     [
       { behavior: InactivityEffect, config: { maxMs: 35000, penalty: 'damage' } },
     ],
-    // Defeat condition: 3 matches each under 10 seconds
     (stats: RoundStats) => {
       const fastMatches = stats.matchTimes.filter((t) => t < 10000).length;
       return fastMatches >= 3;

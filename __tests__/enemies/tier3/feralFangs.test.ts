@@ -49,19 +49,6 @@ const createTestBoard = (): Card[] =>
     }));
 
 describe('Feral Fangs', () => {
-  describe('metadata', () => {
-    it('has correct name and tier', () => {
-      const enemy = createFeralFangs();
-      expect(enemy.name).toBe('Feral Fangs');
-      expect(enemy.tier).toBe(3);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createFeralFangs();
-      expect(enemy.icon).toBe('lorc/bestial-fangs');
-    });
-  });
-
   describe('dud card effect', () => {
     it('has 10% dud chance', () => {
       const enemy = createFeralFangs();

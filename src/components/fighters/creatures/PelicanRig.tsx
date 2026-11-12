@@ -105,7 +105,6 @@ export const PelicanRig: React.FC<CreatureRigProps> = ({
           strokeWidth={3.2}
           strokeLinejoin="round"
         />
-        {/* Pouch rib lines */}
         <Path
           d="M 55 47 Q 58 56 64 57 M 65 47 Q 68 55 73 55"
           stroke="#EA580C"
@@ -139,7 +138,6 @@ export const PelicanRig: React.FC<CreatureRigProps> = ({
           strokeWidth={2.9}
           strokeLinejoin="round"
         />
-        {/* Rounded Pelican Head */}
         <Circle
           cx={42}
           cy={35}

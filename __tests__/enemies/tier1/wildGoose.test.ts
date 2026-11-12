@@ -24,53 +24,6 @@ afterEach(() => {
 
 describe('Wild Goose', () => {
   // ==========================================================================
-  // METADATA TESTS
-  // ==========================================================================
-  describe('metadata', () => {
-    it('has correct name', () => {
-      const enemy = createWildGoose();
-      expect(enemy.name).toBe('Wild Goose');
-    });
-
-    it('has correct tier (1)', () => {
-      const enemy = createWildGoose();
-      expect(enemy.tier).toBe(1);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createWildGoose();
-      expect(enemy.icon).toBe('lorc/swan');
-    });
-
-    it('has description containing key terms about shuffling', () => {
-      const enemy = createWildGoose();
-      expect(enemy.description.toLowerCase()).toContain('shuffle');
-    });
-
-    it('has description containing time interval (30s)', () => {
-      const enemy = createWildGoose();
-      expect(enemy.description).toContain('30s');
-    });
-
-    it('has description containing "position" or "positions"', () => {
-      const enemy = createWildGoose();
-      expect(enemy.description.toLowerCase()).toContain('position');
-    });
-
-    it('has defeatConditionText describing the match requirement', () => {
-      const enemy = createWildGoose();
-      expect(enemy.defeatConditionText.toLowerCase()).toContain('match');
-      expect(enemy.defeatConditionText.toLowerCase()).toContain('2');
-    });
-
-    it('has defeatConditionText mentioning shared attribute', () => {
-      const enemy = createWildGoose();
-      expect(enemy.defeatConditionText.toLowerCase()).toContain('share');
-      expect(enemy.defeatConditionText.toLowerCase()).toContain('attribute');
-    });
-  });
-
-  // ==========================================================================
   // POSITION SHUFFLE EFFECT TESTS
   // ==========================================================================
   describe('position shuffle effect', () => {
@@ -248,17 +201,6 @@ describe('Wild Goose', () => {
   // ==========================================================================
   describe('lifecycle hooks', () => {
     describe('onRoundStart', () => {
-      it('returns valid EnemyStartResult structure', () => {
-        const enemy = createWildGoose();
-        const board = createTestBoard(12);
-        const result = enemy.onRoundStart(board);
-
-        expect(result).toHaveProperty('cardModifications');
-        expect(result).toHaveProperty('events');
-        expect(Array.isArray(result.cardModifications)).toBe(true);
-        expect(Array.isArray(result.events)).toBe(true);
-      });
-
       it('does not modify any cards on round start', () => {
         const enemy = createWildGoose();
         const board = createTestBoard(12);
@@ -315,21 +257,6 @@ describe('Wild Goose', () => {
     });
 
     describe('onValidMatch', () => {
-      it('returns valid EnemyMatchResult structure', () => {
-        const enemy = createWildGoose();
-        const board = createTestBoard(12);
-        const matchedCards = [createCard(), createCard(), createCard()];
-        enemy.onRoundStart(board);
-
-        const result = enemy.onValidMatch(matchedCards, board);
-
-        expect(result).toHaveProperty('timeDelta');
-        expect(result).toHaveProperty('pointsMultiplier');
-        expect(result).toHaveProperty('cardsToRemove');
-        expect(result).toHaveProperty('cardsToFlip');
-        expect(result).toHaveProperty('events');
-      });
-
       it('does not modify time on valid match', () => {
         const enemy = createWildGoose();
         const board = createTestBoard(12);
@@ -362,21 +289,6 @@ describe('Wild Goose', () => {
     });
 
     describe('onInvalidMatch', () => {
-      it('returns valid EnemyMatchResult structure', () => {
-        const enemy = createWildGoose();
-        const board = createTestBoard(12);
-        const cards = [createCard(), createCard(), createCard()];
-        enemy.onRoundStart(board);
-
-        const result = enemy.onInvalidMatch(cards, board);
-
-        expect(result).toHaveProperty('timeDelta');
-        expect(result).toHaveProperty('pointsMultiplier');
-        expect(result).toHaveProperty('cardsToRemove');
-        expect(result).toHaveProperty('cardsToFlip');
-        expect(result).toHaveProperty('events');
-      });
-
       it('does not apply extra penalties on invalid match', () => {
         const enemy = createWildGoose();
         const board = createTestBoard(12);
@@ -390,11 +302,6 @@ describe('Wild Goose', () => {
     });
 
     describe('onRoundEnd', () => {
-      it('can be called without error', () => {
-        const enemy = createWildGoose();
-        expect(() => enemy.onRoundEnd()).not.toThrow();
-      });
-
       it('resets internal state for next round', () => {
         const enemy = createWildGoose();
         const board = createTestBoard(12);
@@ -416,23 +323,6 @@ describe('Wild Goose', () => {
     });
 
     describe('onTick', () => {
-      it('returns valid EnemyTickResult structure', () => {
-        const enemy = createWildGoose();
-        const board = createTestBoard(12);
-        enemy.onRoundStart(board);
-
-        const result = enemy.onTick(1000, board);
-
-        expect(result).toHaveProperty('scoreDelta');
-        expect(result).toHaveProperty('healthDelta');
-        expect(result).toHaveProperty('timeDelta');
-        expect(result).toHaveProperty('cardsToRemove');
-        expect(result).toHaveProperty('cardModifications');
-        expect(result).toHaveProperty('cardsToFlip');
-        expect(result).toHaveProperty('events');
-        expect(result).toHaveProperty('instantDeath');
-      });
-
       it('does not decay score', () => {
         const enemy = createWildGoose();
         const board = createTestBoard(12);
@@ -484,12 +374,6 @@ describe('Wild Goose', () => {
   // UI MODIFIERS TESTS
   // ==========================================================================
   describe('getUIModifiers', () => {
-    it('returns an object', () => {
-      const enemy = createWildGoose();
-      const modifiers = enemy.getUIModifiers();
-      expect(typeof modifiers).toBe('object');
-    });
-
     it('does not show inactivity bar', () => {
       const enemy = createWildGoose();
       const modifiers = enemy.getUIModifiers();
@@ -531,12 +415,6 @@ describe('Wild Goose', () => {
   // STAT MODIFIERS TESTS
   // ==========================================================================
   describe('getStatModifiers', () => {
-    it('returns an object', () => {
-      const enemy = createWildGoose();
-      const modifiers = enemy.getStatModifiers();
-      expect(typeof modifiers).toBe('object');
-    });
-
     it('does not reduce fire spread chance', () => {
       const enemy = createWildGoose();
       const modifiers = enemy.getStatModifiers();

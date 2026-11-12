@@ -8,9 +8,6 @@
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { DamageMultiplierEffect, PointsMultiplierEffect, composeEffects } from '../../enemyEffects';
 
-/**
- * Creates a fresh Stinging Scorpion enemy instance.
- */
 export function createStingingScorpion(): EnemyInstance {
   return composeEffects(
     {
@@ -30,7 +27,6 @@ export function createStingingScorpion(): EnemyInstance {
         config: { multiplier: 2.0 },
       },
     ],
-    // Defeat condition: Make no invalid matches
     (stats: RoundStats) => {
       // Must have made at least 1 match AND no invalid matches
       return stats.totalMatches >= 1 && stats.invalidMatches === 0;

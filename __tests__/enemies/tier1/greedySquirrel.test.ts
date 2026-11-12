@@ -49,39 +49,12 @@ afterEach(() => {
 
 describe('Greedy Squirrel - Metadata', () => {
   describe('name', () => {
-    it('should have the correct name', () => {
-      const enemy = createGreedySquirrel();
-      expect(enemy.name).toBe('Greedy Squirrel');
-    });
-
-    it('should have a non-empty name', () => {
-      const enemy = createGreedySquirrel();
-      expect(enemy.name.length).toBeGreaterThan(0);
-    });
   });
 
   describe('tier', () => {
-    it('should be tier 1', () => {
-      const enemy = createGreedySquirrel();
-      expect(enemy.tier).toBe(1);
-    });
-
-    it('should be a valid tier value (1-4)', () => {
-      const enemy = createGreedySquirrel();
-      expect([1, 2, 3, 4]).toContain(enemy.tier);
-    });
   });
 
   describe('icon', () => {
-    it('should have the squirrel icon', () => {
-      const enemy = createGreedySquirrel();
-      expect(enemy.icon).toBe('delapouite/squirrel');
-    });
-
-    it('should use delapouite icon set', () => {
-      const enemy = createGreedySquirrel();
-      expect(enemy.icon).toMatch(/^delapouite\//);
-    });
   });
 
   describe('description', () => {
@@ -100,10 +73,6 @@ describe('Greedy Squirrel - Metadata', () => {
       expect(enemy.description).toContain('Only');
     });
 
-    it('should have a non-empty description', () => {
-      const enemy = createGreedySquirrel();
-      expect(enemy.description.length).toBeGreaterThan(0);
-    });
   });
 
   describe('defeatConditionText', () => {

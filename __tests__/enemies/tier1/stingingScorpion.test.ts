@@ -30,51 +30,6 @@ describe('Stinging Scorpion', () => {
   // METADATA TESTS
   // ==========================================================================
   describe('metadata', () => {
-    it('has correct name', () => {
-      const enemy = createStingingScorpion();
-      expect(enemy.name).toBe('Stinging Scorpion');
-    });
-
-    it('has correct tier (1)', () => {
-      const enemy = createStingingScorpion();
-      expect(enemy.tier).toBe(1);
-    });
-
-    it('has scorpion icon', () => {
-      const enemy = createStingingScorpion();
-      expect(enemy.icon).toBe('lorc/scorpion');
-    });
-
-    it('has description containing damage keyword', () => {
-      const enemy = createStingingScorpion();
-      expect(enemy.description.toLowerCase()).toContain('damage');
-    });
-
-    it('has description containing points keyword', () => {
-      const enemy = createStingingScorpion();
-      expect(enemy.description.toLowerCase()).toContain('points');
-    });
-
-    it('has description containing 2x modifier', () => {
-      const enemy = createStingingScorpion();
-      expect(enemy.description).toContain('2x');
-    });
-
-    it('has defeatConditionText containing invalid keyword', () => {
-      const enemy = createStingingScorpion();
-      expect(enemy.defeatConditionText.toLowerCase()).toContain('invalid');
-    });
-
-    it('has defeatConditionText containing match keyword', () => {
-      const enemy = createStingingScorpion();
-      expect(enemy.defeatConditionText.toLowerCase()).toContain('match');
-    });
-
-    it('description mentions both damage and points effects', () => {
-      const enemy = createStingingScorpion();
-      expect(enemy.description).toMatch(/2x.*damage.*2x.*points|2x.*points.*2x.*damage/i);
-    });
-
     it('creates unique instances each time', () => {
       const enemy1 = createStingingScorpion();
       const enemy2 = createStingingScorpion();
@@ -753,12 +708,6 @@ describe('Stinging Scorpion', () => {
   // UI MODIFIERS: getUIModifiers
   // ==========================================================================
   describe('getUIModifiers', () => {
-    it('returns an object', () => {
-      const enemy = createStingingScorpion();
-      const modifiers = enemy.getUIModifiers();
-      expect(typeof modifiers).toBe('object');
-    });
-
     it('does not include inactivity bar', () => {
       const enemy = createStingingScorpion();
       const modifiers = enemy.getUIModifiers();

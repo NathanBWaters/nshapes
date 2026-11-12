@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
-import { usePWASafeAreaInsets } from '@/utils/usePWASafeAreaInsets';
+import { usePWASafeAreaInsets } from '@/hooks/usePWASafeAreaInsets';
 import { Character, PlayerStats, Weapon } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import GameMenu from './GameMenu';
@@ -62,7 +62,6 @@ const LevelUp: React.FC<LevelUpProps> = ({
   return (
     <ScreenTransition>
       <View style={styles.container}>
-      {/* Eyebrow Banner */}
       <View style={styles.eyebrow}>
         <View style={styles.eyebrowLeft}>
           {character && (
@@ -90,7 +89,6 @@ const LevelUp: React.FC<LevelUpProps> = ({
         </View>
       </View>
 
-      {/* Inventory Bar */}
       <InventoryBar weapons={playerWeapons} />
 
       {/* Top Half - Detail Focus */}
@@ -138,7 +136,6 @@ const LevelUp: React.FC<LevelUpProps> = ({
         </ScrollView>
       </View>
 
-      {/* Action Button */}
       <View style={[styles.actionSection, { paddingBottom: 16 + insets.bottom }]}>
         <TouchableOpacity
           onPress={() => {

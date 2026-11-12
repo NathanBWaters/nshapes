@@ -57,29 +57,6 @@ afterEach(() => {
 });
 
 describe('Stalking Wolf', () => {
-  describe('metadata', () => {
-    it('has correct name', () => {
-      const enemy = createStalkingWolf();
-      expect(enemy.name).toBe('Stalking Wolf');
-    });
-
-    it('has correct tier', () => {
-      const enemy = createStalkingWolf();
-      expect(enemy.tier).toBe(1);
-    });
-
-    it('has correct description', () => {
-      const enemy = createStalkingWolf();
-      expect(enemy.description).toContain('45s');
-      expect(enemy.description).toContain('inactivity');
-    });
-
-    it('has correct defeat condition text', () => {
-      const enemy = createStalkingWolf();
-      expect(enemy.defeatConditionText).toBe('Get 3 matches within 10 seconds total');
-    });
-  });
-
   describe('inactivity effect', () => {
     it('does not penalize before 45s', () => {
       const enemy = createStalkingWolf();

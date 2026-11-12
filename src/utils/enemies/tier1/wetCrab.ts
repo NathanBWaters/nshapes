@@ -8,9 +8,6 @@
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { WeaponCounterEffect, composeEffects } from '../../enemyEffects';
 
-/**
- * Creates a fresh Wet Crab enemy instance.
- */
 export function createWetCrab(): EnemyInstance {
   return composeEffects(
     {
@@ -26,7 +23,6 @@ export function createWetCrab(): EnemyInstance {
         config: { type: 'fire', reduction: 15 },
       },
     ],
-    // Defeat condition: Get 2 all-same color matches
     (stats: RoundStats) => stats.allSameColorMatches >= 2
   );
 }

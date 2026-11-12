@@ -127,7 +127,6 @@ const WINGED: EnemyTraits = { pivots: WINGED_PIVOTS };
  * Tier 1–4 enemy, Adventure foe, legacy name and the sparring dummy.
  */
 const ENEMY_CREATURES: Record<string, EnemyCreature> = {
-  // Rodents & woodland
   'Junk Rat': creature(RatMouseRig, { ...FAST, variant: 'junk' }),
   'Sneaky Mouse': creature(RatMouseRig, FAST),
   'Greedy Squirrel': creature(SquirrelRig, FAST),
@@ -146,7 +145,6 @@ const ENEMY_CREATURES: Record<string, EnemyCreature> = {
   'Lazy Sloth': creature(LazySlothRig, { naturallySleepy: true }),
   'Chihuahua': creature(ChihuahuaRig, FAST),
 
-  // Beasts & predators
   'Stalking Wolf': creature(WolfRig),
   'Prowling Direwolf': creature(WolfRig, { variant: 'dire' }),
   'Cackling Hyena': creature(HyenaRig),
@@ -164,7 +162,6 @@ const ENEMY_CREATURES: Record<string, EnemyCreature> = {
   'Feral Fangs': creature(ApexPredatorRig, { variant: 'saber' }),
   'Savage Claws': creature(ApexPredatorRig),
 
-  // Winged & avian
   'Thieving Raven': creature(CorvidRig, WINGED),
   'Magpie': creature(CorvidRig, { ...WINGED, variant: 'magpie' }),
   'Night Owl': creature(NightOwlRig, WINGED),

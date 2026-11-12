@@ -9,8 +9,6 @@ import { isNaturallySleepyEnemy } from '@/components/enemies/enemyRegistry';
 
 interface UseEnemyConductorOptions {
   enemyName?: string | null;
-  /** Accepted for callers that pass it; mood does not depend on tier. */
-  tier?: number;
   hp?: number;
   maxHp?: number;
   isBoss?: boolean;
@@ -21,11 +19,6 @@ interface UseEnemyConductorOptions {
 interface EnemyConductorState {
   mood: EnemyAmbientMood;
   reaction: EnemyReactionEvent | null;
-  triggerHit: (opts?: { isCritical?: boolean }) => void;
-  triggerMistakeGloat: () => void;
-  triggerAttack: () => void;
-  triggerRegen: () => void;
-  triggerEntrance: () => void;
   triggerReaction: (type: EnemyReactionType) => void;
 }
 
@@ -53,29 +46,6 @@ export function useEnemyConductor(options: UseEnemyConductorOptions): EnemyCondu
     setReaction({ type, id: reactionCounterRef.current });
   }, []);
 
-  const triggerHit = useCallback(
-    (opts?: { isCritical?: boolean }) => {
-      emitReaction(opts?.isCritical ? 'crit_pain' : 'pain');
-    },
-    [emitReaction]
-  );
-
-  const triggerMistakeGloat = useCallback(() => {
-    emitReaction('taunt');
-  }, [emitReaction]);
-
-  const triggerAttack = useCallback(() => {
-    emitReaction('attack');
-  }, [emitReaction]);
-
-  const triggerRegen = useCallback(() => {
-    emitReaction('regen');
-  }, [emitReaction]);
-
-  const triggerEntrance = useCallback(() => {
-    emitReaction('entrance');
-  }, [emitReaction]);
-
   const mood = useMemo(
     () =>
       resolveEnemyAmbientMood({
@@ -92,11 +62,6 @@ export function useEnemyConductor(options: UseEnemyConductorOptions): EnemyCondu
   return {
     mood,
     reaction,
-    triggerHit,
-    triggerMistakeGloat,
-    triggerAttack,
-    triggerRegen,
-    triggerEntrance,
     triggerReaction: emitReaction,
   };
 }

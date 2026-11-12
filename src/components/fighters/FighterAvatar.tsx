@@ -8,7 +8,7 @@ import {
   useCreatureMotion,
 } from '@/components/creatures/useCreatureMotion';
 import { Character } from '@/types';
-import { useReducedMotion } from '@/utils/animation';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { COLORS } from '@/utils/colors';
 import {
   FIGHTER_MOOD_MOTION,
@@ -142,7 +142,6 @@ const FIGHTER_MOTION: CreatureMotionConfig<FighterAmbientMood, FighterReactionTy
       withSpring(0, { damping: 8, stiffness: 180 })
     );
   } else if (roll < 0.66) {
-    // Cozy mini-sigh puff
     ch.reactionScaleY.value = withSequence(
       withTiming(1.035, { duration: 220, easing: Easing.out(Easing.sin) }),
       withSpring(1, { damping: 11, stiffness: 160 })

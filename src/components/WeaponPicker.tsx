@@ -16,10 +16,6 @@ import {
 import KeywordText from './KeywordText';
 import { WeaponAvatar } from './weapons';
 
-// =============================================================================
-// Grid tile
-// =============================================================================
-
 interface WeaponOptionTileProps {
   weapon: Weapon;
   index: number;
@@ -97,9 +93,7 @@ export function WeaponOptionTile({
   );
 }
 
-// =============================================================================
 // Stat preview (before -> after, plus the cap increase of Mastery weapons)
-// =============================================================================
 
 /**
  * The three screens draw the same preview with slightly different spacing,
@@ -220,9 +214,7 @@ export function WeaponStatPreview({ weapon, playerStats, variant }: WeaponStatPr
   );
 }
 
-// =============================================================================
 // Detail card (WeaponShop and LevelUp)
-// =============================================================================
 
 interface WeaponDetailCardProps {
   weapon: Weapon;
@@ -277,9 +269,7 @@ export function WeaponDetailCard({ weapon, playerStats, playerWeapons, variant }
   );
 }
 
-// =============================================================================
 // Reroll button (WeaponShop and LevelUp)
-// =============================================================================
 
 interface RerollButtonProps {
   onReroll: () => void;
@@ -305,10 +295,6 @@ export function RerollButton({ onReroll, rerollCost, playerMoney, freeRerolls }:
     </TouchableOpacity>
   );
 }
-
-// =============================================================================
-// Styles
-// =============================================================================
 
 /** Layout shared by the full-screen pickers (WeaponShop, LevelUp). */
 export const weaponPickerStyles = StyleSheet.create({
@@ -576,7 +562,6 @@ export const weaponPickerStyles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 9,
   },
-  // Action bar
   actionSection: {
     padding: 16,
     backgroundColor: COLORS.canvasWhite,

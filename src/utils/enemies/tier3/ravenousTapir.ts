@@ -12,9 +12,6 @@ import {
   composeEffects,
 } from '../../enemyEffects';
 
-/**
- * Creates a fresh Ravenous Tapir enemy instance.
- */
 export function createRavenousTapir(): EnemyInstance {
   return composeEffects(
     {
@@ -28,7 +25,6 @@ export function createRavenousTapir(): EnemyInstance {
       { behavior: ExtraCardRemovalOnMatchEffect, config: { count: 1, minBoardSize: 5 } },
       { behavior: CardRemovalEffect, config: { intervalMs: 15000, minBoardSize: 5 } },
     ],
-    // Defeat condition: Beat target with 5+ cards remaining
     (stats: RoundStats) =>
       stats.currentScore >= stats.targetScore && stats.cardsRemaining >= 5
   );

@@ -45,7 +45,6 @@ export const simulateRun = (level: LevelDef, save: AdventureSave, bot: BotProfil
       if (s.ability?.id === 'big_scoop' && s.ability.scooped.length) s = runReducer(s, { type: 'REPLACE', ids: s.ability.scooped });
       continue;
     }
-    // Think
     const think = bot.secondsPerAttribute * s.attributes.length * (0.6 + rng.next() * 0.8);
     const ticks = Math.max(1, Math.round(think));
     for (let i = 0; i < ticks && s.status === 'playing'; i++) s = runReducer(s, { type: 'TICK', ms: 1000 });

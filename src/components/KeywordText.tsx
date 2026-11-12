@@ -68,7 +68,6 @@ const KeywordText: React.FC<KeywordTextProps> = ({
         });
       }
 
-      // Add the keyword
       result.push({
         type: 'keyword',
         content: match.term,

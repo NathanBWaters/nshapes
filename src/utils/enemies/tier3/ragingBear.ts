@@ -14,9 +14,6 @@ import {
   composeEffects,
 } from '../../enemyEffects';
 
-/**
- * Creates a fresh Raging Bear enemy instance.
- */
 export function createRagingBear(): EnemyInstance {
   return composeEffects(
     {
@@ -32,7 +29,6 @@ export function createRagingBear(): EnemyInstance {
       { behavior: PointsMultiplierEffect, config: { multiplier: 2.0 } },
       { behavior: ScoreDecayEffect, config: { ratePerSecond: 0.2 } },
     ],
-    // Defeat condition: 7-match streak with no invalid matches
     (stats: RoundStats) => stats.maxStreak >= 7 && stats.invalidMatches === 0
   );
 }

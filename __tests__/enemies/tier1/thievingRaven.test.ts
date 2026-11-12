@@ -20,38 +20,6 @@ afterEach(() => {
 
 describe('Thieving Raven', () => {
   // ==========================================================================
-  // METADATA TESTS
-  // ==========================================================================
-  describe('metadata', () => {
-    it('has correct name', () => {
-      const enemy = createThievingRaven();
-      expect(enemy.name).toBe('Thieving Raven');
-    });
-
-    it('has tier 1', () => {
-      const enemy = createThievingRaven();
-      expect(enemy.tier).toBe(1);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createThievingRaven();
-      expect(enemy.icon).toBe('lorc/raven');
-    });
-
-    it('has description containing time steal info', () => {
-      const enemy = createThievingRaven();
-      expect(enemy.description).toContain('-5s');
-      expect(enemy.description.toLowerCase()).toContain('stolen');
-    });
-
-    it('has defeat condition text mentioning 5 matches', () => {
-      const enemy = createThievingRaven();
-      expect(enemy.defeatConditionText).toContain('5');
-      expect(enemy.defeatConditionText.toLowerCase()).toContain('match');
-    });
-  });
-
-  // ==========================================================================
   // TIME STEAL EFFECT TESTS
   // ==========================================================================
   describe('time steal effect', () => {

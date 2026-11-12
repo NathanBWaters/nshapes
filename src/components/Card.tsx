@@ -41,7 +41,6 @@ const Card: React.FC<CardProps> = ({
   // Cards that cannot be selected (dud or face-down)
   const isUnselectable = isDud || isFaceDown;
 
-  // Animation values
   const scale = useSharedValue(1);
   const translateY = useSharedValue(0);
   const opacity = useSharedValue(1);
@@ -109,7 +108,6 @@ const Card: React.FC<CardProps> = ({
     );
   }
 
-  // Get card styles
   const getCardStyle = () => {
     const cardStyles: any[] = [
       styles.card,
@@ -175,12 +173,10 @@ const Card: React.FC<CardProps> = ({
   const renderStateIndicators = () => {
     const indicators: { icon: string; color: string }[] = [];
 
-    // Fire indicator
     if (card.onFire && !isDud && !isFaceDown) {
       indicators.push({ icon: 'lorc/campfire', color: '#EF4444' }); // Red fire
     }
 
-    // Connection indicator
     if (isConnected && !isDud && !isFaceDown) {
       indicators.push({ icon: 'lorc/linked-rings', color: COLORS.slateCharcoal }); // Gray connection
     }
@@ -202,7 +198,6 @@ const Card: React.FC<CardProps> = ({
   const renderFaceDownContent = () => (
     <View style={styles.faceDownContent}>
       <View style={styles.faceDownPattern}>
-        {/* Question mark symbol */}
         <Text style={styles.faceDownSymbol}>?</Text>
       </View>
     </View>
@@ -215,7 +210,6 @@ const Card: React.FC<CardProps> = ({
     </View>
   );
 
-  // Render countdown timer overlay
   const renderCountdownOverlay = () => {
     if (!hasCountdown || countdownTimer === undefined) return null;
 
@@ -230,7 +224,6 @@ const Card: React.FC<CardProps> = ({
     );
   };
 
-  // Render bomb timer overlay
   const renderBombOverlay = () => {
     if (!hasBomb) return null;
 
@@ -357,7 +350,6 @@ const Card: React.FC<CardProps> = ({
   );
 };
 
-// Shape components
 interface ShapeProps {
   color: string;
   shading: string;
@@ -391,7 +383,6 @@ const getShapeColor = (color: string, background?: Background) => {
   return getBorderColor(color);
 };
 
-// Get the card background color
 const getCardBackgroundColor = (background?: Background) => {
   if (!background || background === 'white') {
     return COLORS.canvasWhite;
@@ -561,7 +552,6 @@ const styles = StyleSheet.create({
     // Minimum touch target size for accessibility (48x48)
     minWidth: 48,
     minHeight: 48,
-    // Base shadow
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,

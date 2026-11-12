@@ -8,9 +8,6 @@
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { TimeStealEffect, WeaponCounterEffect, composeEffects } from '../../enemyEffects';
 
-/**
- * Creates a fresh Cackling Hyena enemy instance.
- */
 export function createCacklingHyena(): EnemyInstance {
   return composeEffects(
     {
@@ -24,7 +21,6 @@ export function createCacklingHyena(): EnemyInstance {
       { behavior: TimeStealEffect, config: { amount: 3 } },
       { behavior: WeaponCounterEffect, config: { type: 'grace', reduction: 35 } },
     ],
-    // Defeat condition: 6 matches with no grace used
     (stats: RoundStats) => stats.totalMatches >= 6 && stats.gracesUsed === 0
   );
 }

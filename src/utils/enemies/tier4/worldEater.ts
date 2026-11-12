@@ -15,9 +15,6 @@ import {
   composeEffects,
 } from '../../enemyEffects';
 
-/**
- * Creates a fresh World Eater enemy instance.
- */
 export function createWorldEater(): EnemyInstance {
   return composeEffects(
     {
@@ -34,7 +31,6 @@ export function createWorldEater(): EnemyInstance {
       { behavior: InactivityEffect, config: { maxMs: 25000, penalty: 'death' } },
       { behavior: TimerSpeedEffect, config: { multiplier: 1.5 } },
     ],
-    // Defeat condition: Beat target with 4+ cards AND no invalid matches
     (stats: RoundStats) =>
       stats.currentScore >= stats.targetScore &&
       stats.cardsRemaining >= 4 &&

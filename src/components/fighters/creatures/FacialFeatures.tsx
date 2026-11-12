@@ -118,7 +118,6 @@ export const CreatureEyes: React.FC<CreatureEyesProps> = ({
         );
 
       case 'sleepy':
-        // Heavy half-closed lids!
         return <SleepyLidEye cx={cx} cy={y} r={radius} stroke={strokeColor} irisColor={irisColor} />;
 
       case 'sad':
@@ -128,7 +127,6 @@ export const CreatureEyes: React.FC<CreatureEyesProps> = ({
             {darkMask && <Circle cx={cx} cy={y + 0.8} r={radius * 1.2} fill="#FFFFFF" />}
             <Circle cx={cx} cy={y + 0.8} r={radius} fill={irisColor} />
             <Circle cx={cx - radius * 0.3} cy={y - radius * 0.2} r={radius * 0.38} fill="#FFFFFF" />
-            {/* Worried outer-slanted brow */}
             <Line
               x1={cx - dir * radius * 1.1}
               y1={y - radius * 1.45}
@@ -178,7 +176,6 @@ export const CreatureEyes: React.FC<CreatureEyesProps> = ({
             {darkMask && <Circle cx={cx} cy={y} r={radius * 1.2} fill="#FFFFFF" />}
             <Circle cx={cx + gx} cy={y + gy} r={radius} fill={irisColor} />
             <Circle cx={cx - radius * 0.32 + hx} cy={y - radius * 0.32 + hy} r={radius * 0.36} fill="#FFFFFF" />
-            {/* Fierce angled brow */}
             <Line
               x1={cx - radius * 1.2}
               y1={y - radius * 1.35}
@@ -216,7 +213,6 @@ export const CreatureEyes: React.FC<CreatureEyesProps> = ({
           <G>
             {darkMask && <Circle cx={cx} cy={y} r={bigR * 1.18} fill="#FFFFFF" />}
             <Circle cx={cx + gx} cy={y + gy} r={bigR} fill={irisColor} />
-            {/* Double catchlight sparkle! */}
             <Circle cx={cx - bigR * 0.32 + hx} cy={y - bigR * 0.34 + hy} r={bigR * 0.42} fill="#FFFFFF" />
             <Circle cx={cx + bigR * 0.34 + hx * 0.75} cy={y + bigR * 0.3 + hy * 0.75} r={bigR * 0.2} fill="#FFFFFF" />
             {expression === 'aha' && (

@@ -13,9 +13,6 @@ import {
   composeEffects,
 } from '../../enemyEffects';
 
-/**
- * Creates a fresh Feral Fangs enemy instance.
- */
 export function createFeralFangs(): EnemyInstance {
   return composeEffects(
     {
@@ -30,7 +27,6 @@ export function createFeralFangs(): EnemyInstance {
       { behavior: TripleCardEffect, config: { count: 1 } },
       { behavior: CardRemovalEffect, config: { intervalMs: 12000, minBoardSize: 6 } },
     ],
-    // Defeat condition: Clear triple card (cardsRemovedByEnemy tracking would be ideal, but simplified)
     (stats: RoundStats) => stats.tripleCardsCleared >= 1
   );
 }

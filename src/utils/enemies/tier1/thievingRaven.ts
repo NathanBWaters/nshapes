@@ -8,9 +8,6 @@
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { TimeStealEffect, composeEffects } from '../../enemyEffects';
 
-/**
- * Creates a fresh Thieving Raven enemy instance.
- */
 export function createThievingRaven(): EnemyInstance {
   return composeEffects(
     {
@@ -26,7 +23,6 @@ export function createThievingRaven(): EnemyInstance {
         config: { amount: 5 }, // 5 seconds stolen per match
       },
     ],
-    // Defeat condition: Complete 5 matches total
     (stats: RoundStats) => {
       return stats.totalMatches >= 5;
     }

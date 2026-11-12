@@ -66,7 +66,6 @@ const RoundProgressChart: React.FC<RoundProgressChartProps> = ({
   // Calculate middle y-axis value (round to nice number)
   const midValue = Math.round(maxValue / 2 / 10) * 10;
 
-  // Bar dimensions
   const barWidth = 24;
   const barGap = 6;
   const chartHeight = height - 40; // Leave room for labels
@@ -83,16 +82,13 @@ const RoundProgressChart: React.FC<RoundProgressChartProps> = ({
 
   return (
     <View style={styles.container}>
-      {/* Y-axis labels */}
       <View style={[styles.yAxis, { height: chartHeight }]}>
         <Text style={styles.yAxisLabel}>{maxValue}</Text>
         <Text style={styles.yAxisLabel}>{midValue}</Text>
         <Text style={styles.yAxisLabel}>0</Text>
       </View>
 
-      {/* Chart area */}
       <View style={styles.chartArea}>
-        {/* Bars container */}
         <View style={[styles.barsContainer, { height: chartHeight }]}>
           {roundScores.map((round) => {
             const targetHeight = getBarHeight(round.target);
@@ -117,7 +113,6 @@ const RoundProgressChart: React.FC<RoundProgressChartProps> = ({
                   { width: barWidth, marginHorizontal: barGap / 2 }
                 ]}
               >
-                {/* Stacked bar */}
                 <View style={styles.barStack}>
                   {/* Blue excess (on top) - animated only for current round */}
                   {isCurrentRound ? (
@@ -162,7 +157,6 @@ const RoundProgressChart: React.FC<RoundProgressChartProps> = ({
           })}
         </View>
 
-        {/* X-axis labels */}
         <View style={styles.xAxis}>
           {roundScores.map((round) => (
             <View

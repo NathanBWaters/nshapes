@@ -8,9 +8,6 @@
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { DudCardEffect, composeEffects } from '../../enemyEffects';
 
-/**
- * Creates a fresh Junk Rat enemy instance.
- */
 export function createJunkRat(): EnemyInstance {
   return composeEffects(
     {
@@ -21,7 +18,6 @@ export function createJunkRat(): EnemyInstance {
       defeatConditionText: 'Get a 4-match streak',
     },
     [{ behavior: DudCardEffect, config: { chance: 4 } }],
-    // Defeat condition: 4-match streak
     (stats: RoundStats) => stats.maxStreak >= 4
   );
 }

@@ -9,9 +9,6 @@ import type { RoundStats } from '@/types/enemy';
 import { ATTRIBUTE_VALUES } from '../../gameUtils';
 import { HintDisableEffect, WeaponCounterEffect, composeEffects } from '../../enemyEffects';
 
-/**
- * Creates a fresh Creeping Shadow enemy instance.
- */
 export function createCreepingShadow() {
   return composeEffects(
     {
@@ -25,7 +22,6 @@ export function createCreepingShadow() {
       { behavior: HintDisableEffect, config: { disableAuto: true, disableManual: true } },
       { behavior: WeaponCounterEffect, config: { type: 'hint', reduction: 35 } },
     ],
-    // Defeat condition: Match each color (red, green, purple) at least 3 times
     (stats: RoundStats) => {
       return ATTRIBUTE_VALUES.color.every(color => (stats.colorMatchCounts.get(color) || 0) >= 3);
     }

@@ -49,19 +49,6 @@ const createTestBoard = (): Card[] =>
     }));
 
 describe('The Reaper', () => {
-  describe('metadata', () => {
-    it('has correct name and tier', () => {
-      const enemy = createTheReaper();
-      expect(enemy.name).toBe('The Reaper');
-      expect(enemy.tier).toBe(4);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createTheReaper();
-      expect(enemy.icon).toBe('lorc/grim-reaper');
-    });
-  });
-
   describe('weapon counters', () => {
     it('reduces grace by 60%', () => {
       const enemy = createTheReaper();

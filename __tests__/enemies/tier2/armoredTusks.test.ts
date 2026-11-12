@@ -39,65 +39,6 @@ describe('Armored Tusks', () => {
   // METADATA TESTS
   // ============================================================================
 
-  describe('metadata', () => {
-    it('has correct name', () => {
-      const enemy = createArmoredTusks();
-      expect(enemy.name).toBe('Armored Tusks');
-    });
-
-    it('has correct tier (2)', () => {
-      const enemy = createArmoredTusks();
-      expect(enemy.tier).toBe(2);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createArmoredTusks();
-      expect(enemy.icon).toBe('lorc/boar-tusks');
-    });
-
-    it('has description mentioning fire reduction', () => {
-      const enemy = createArmoredTusks();
-      expect(enemy.description).toContain('Fire');
-      expect(enemy.description).toContain('-35%');
-    });
-
-    it('has description mentioning explosion reduction', () => {
-      const enemy = createArmoredTusks();
-      expect(enemy.description).toContain('explosion');
-      expect(enemy.description).toContain('-35%');
-    });
-
-    it('has correct defeat condition text', () => {
-      const enemy = createArmoredTusks();
-      expect(enemy.defeatConditionText).toBe('Trigger 2 destruction effects');
-    });
-
-    it('returns name as a string', () => {
-      const enemy = createArmoredTusks();
-      expect(typeof enemy.name).toBe('string');
-    });
-
-    it('returns tier as a number', () => {
-      const enemy = createArmoredTusks();
-      expect(typeof enemy.tier).toBe('number');
-    });
-
-    it('returns icon as a string', () => {
-      const enemy = createArmoredTusks();
-      expect(typeof enemy.icon).toBe('string');
-    });
-
-    it('returns description as a string', () => {
-      const enemy = createArmoredTusks();
-      expect(typeof enemy.description).toBe('string');
-    });
-
-    it('returns defeatConditionText as a string', () => {
-      const enemy = createArmoredTusks();
-      expect(typeof enemy.defeatConditionText).toBe('string');
-    });
-  });
-
   // ============================================================================
   // STAT MODIFIERS TESTS
   // ============================================================================

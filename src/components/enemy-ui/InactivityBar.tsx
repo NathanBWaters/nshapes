@@ -31,7 +31,6 @@ const InactivityBar: React.FC<InactivityBarProps> = ({ current, max, penalty }) 
     return COLORS.logicTeal;
   };
 
-  // Calculate remaining seconds
   const remainingSeconds = Math.max(0, Math.ceil((max - current) / 1000));
 
   return (
@@ -45,7 +44,6 @@ const InactivityBar: React.FC<InactivityBarProps> = ({ current, max, penalty }) 
         />
       </View>
 
-      {/* Progress bar */}
       <View style={styles.barContainer}>
         <View
           style={[
@@ -58,7 +56,6 @@ const InactivityBar: React.FC<InactivityBarProps> = ({ current, max, penalty }) 
         />
       </View>
 
-      {/* Timer text */}
       <Text style={[styles.timerText, isDanger && styles.timerTextDanger]}>
         {remainingSeconds}s
       </Text>

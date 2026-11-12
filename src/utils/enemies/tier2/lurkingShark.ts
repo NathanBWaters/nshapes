@@ -8,9 +8,6 @@
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { FaceDownEffect, composeEffects } from '../../enemyEffects';
 
-/**
- * Creates a fresh Lurking Shark enemy instance.
- */
 export function createLurkingShark(): EnemyInstance {
   return composeEffects(
     {
@@ -23,7 +20,6 @@ export function createLurkingShark(): EnemyInstance {
     [
       { behavior: FaceDownEffect, config: { chance: 25, flipChance: 60 } },
     ],
-    // Defeat condition: Match at least 2 face-down cards total
     (stats: RoundStats) => stats.faceDownCardsMatched >= 2
   );
 }

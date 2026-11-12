@@ -56,9 +56,9 @@ NShapes combines the classic SET card matching game with roguelike progression m
 
 ## Weapon System
 
-> **Full documentation:** [docs/weapons-design.md](./docs/weapons-design.md)
+> **Full documentation:** [specs/weapons-design.md](./specs/weapons-design.md)
 
-20 weapon types with 56 total weapons. Most have 3 rarities (Common 70%, Rare 25%, Legendary 5%), with 2 legendary-only types.
+The `WEAPONS` array in `src/utils/gameDefinitions.ts` is the roster. Most weapons come in 3 rarities (Common 70%, Rare 25%, Legendary 5%); some are legendary-only.
 
 **Key Mechanics:**
 * **Stacking:** Multiple weapons of the same type stack additively (3x 10% = 30%)
@@ -86,8 +86,8 @@ This rule ensures visual consistency and prevents confusion with selection state
 
 ## Key Features
 
-* 6 playable characters (Orange Tabby, Sly Fox, Corgi unlocked; Emperor Penguin, Pelican, Badger locked)
-* 56 weapons across 20 types (see [weapons-design.md](./docs/weapons-design.md))
+* 6 playable characters (Orange Tabby, Sly Fox, Emperor Penguin unlocked by default in `storage.ts`; Corgi, Pelican, Badger locked)
+* Weapon roster in `WEAPONS` (see [weapons-design.md](./specs/weapons-design.md))
 * Grace auto-use system (prevents health loss on near-misses)
 * Match trigger effects (healing, hints, time, graces, explosions, lasers, fire)
 * Auto-hint system (shows 1 card from valid set after idle time)
@@ -120,11 +120,13 @@ This rule ensures visual consistency and prevents confusion with selection state
 app/                        # Expo Router routes only
 ├── _layout.tsx             # Root navigation layout
 ├── index.tsx               # App entry point (home screen)
-└── dev/
-    ├── play.tsx            # Dev play page (/dev/play) - full game with dev tools
-    └── store.tsx           # Dev store page (/dev/store) - weapon shop testing with $50k
+└── dev/                    # play, store, adventure, fighters, victory dev pages
 
 src/                        # Shared code (imported via @/ alias)
+├── adventure/              # Adventure Mode (data-driven; see docs/adventure-design.md)
+├── game/                   # Pure game rules: board, rounds, inventory, effect caps, round stats
+├── hooks/                  # React hooks (timers, conductors, auto-hint, safe-area, reduced motion)
+├── audio/                # Synth sound effects and songs
 ├── components/
 │   ├── Game.tsx            # Main controller (handles game phases, weapon effects)
 │   ├── GameBoard.tsx       # Card display (auto-hint system)
@@ -132,17 +134,22 @@ src/                        # Shared code (imported via @/ alias)
 │   ├── WeaponShop.tsx      # Weapon purchase interface (double-tap, stats preview)
 │   ├── LevelUp.tsx         # Weapon selection on level up (FREE indicator)
 │   ├── InventoryBar.tsx    # Horizontal weapon inventory display
-│   ├── AttributeUnlockScreen.tsx  # New attribute explanation screen
 │   ├── CharacterUnlockScreen.tsx  # Character unlock celebration
 │   ├── VictoryScreen.tsx   # End-game celebration screen
 │   ├── OptionsMenu.tsx     # Sound settings modal
-│   └── RoundSummary.tsx
+│   ├── RoundSummary.tsx
+│   ├── creatures/          # Shared creature rig, motion and damage overlay
+│   ├── fighters/ enemies/ weapons/  # Animated avatars
+│   ├── illustration/       # SVG drawing primitives
+│   └── ui/                 # Shared UI pieces
 ├── context/                # Tutorial and keyword-tooltip state
-├── types.ts                # Interfaces for Cards, Weapons, PlayerStats
+├── types.ts / types/       # Interfaces for Cards, Weapons, PlayerStats, enemies
 └── utils/
     ├── gameDefinitions.ts  # Characters, weapons (WEAPONS array)
     ├── gameConfig.ts       # Game constants, default stats, difficulty progressions
     ├── gameUtils.ts        # Modular SET validation for N-attributes
+    ├── matchResolution.ts  # What one successful Set does to the board (effects, links, echoes, rewards)
+    ├── weaponEffects.ts    # Weapon trigger rolls (capped via src/game/effectCaps.ts)
     └── storage.ts          # MMKV persistence (settings, character unlocks, wins)
 
 ```
@@ -281,6 +288,6 @@ This ensures builds can be verified to contain the latest changes.
 When working on specific systems, load the relevant design doc for detailed specifications:
 
 * **[Adventure Mode](./docs/adventure-design.md)** - Map, levels, stars, economy, fighters, audio synth, balance bots
-* **[Weapon System](./docs/weapons-design.md)** - Complete weapon roster, rarities, effects, synergies, and balance notes
-* **[Enemy System](./docs/enemy-design.md)** - Enemy roster, tier scaling, defeat conditions, and weapon counters (in development)
+* **[Weapon System](./specs/weapons-design.md)** - Complete weapon roster, rarities, effects, synergies, and balance notes
+* **[Enemy System](./specs/enemy-design.md)** - Enemy roster, tier scaling, defeat conditions, and weapon counters (in development)
 * **[Style Guide](./style_guide.md)** - UI design system including colors, typography, and component styles

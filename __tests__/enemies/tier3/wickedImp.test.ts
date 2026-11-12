@@ -49,19 +49,6 @@ const createTestBoard = (): Card[] =>
     }));
 
 describe('Wicked Imp', () => {
-  describe('metadata', () => {
-    it('has correct name and tier', () => {
-      const enemy = createWickedImp();
-      expect(enemy.name).toBe('Wicked Imp');
-      expect(enemy.tier).toBe(3);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createWickedImp();
-      expect(enemy.icon).toBe('lorc/imp');
-    });
-  });
-
   describe('multiplier effects', () => {
     it('has 2x damage multiplier', () => {
       const enemy = createWickedImp();

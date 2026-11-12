@@ -189,7 +189,6 @@ export default function DevFightersPage() {
         </View>
       </View>
 
-      {/* Studio Tabs */}
       <View style={styles.tabRow}>
         {(
           [

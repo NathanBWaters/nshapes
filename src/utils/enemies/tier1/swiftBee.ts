@@ -8,9 +8,6 @@
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { TimerSpeedEffect, PointsMultiplierEffect, composeEffects } from '../../enemyEffects';
 
-/**
- * Creates a fresh Swift Bee enemy instance.
- */
 export function createSwiftBee(): EnemyInstance {
   return composeEffects(
     {
@@ -30,7 +27,6 @@ export function createSwiftBee(): EnemyInstance {
         config: { multiplier: 1.2 },
       },
     ],
-    // Defeat condition: Get a 5-match streak
     (stats: RoundStats) => {
       return stats.maxStreak >= 5;
     }

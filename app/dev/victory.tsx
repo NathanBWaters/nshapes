@@ -81,7 +81,6 @@ const mockPlayerStats: PlayerStats = {
   bonusConnectionChance: 0,
 };
 
-// Mock player
 const mockPlayer: Player = {
   id: 'dev-player',
   username: 'DevPlayer',

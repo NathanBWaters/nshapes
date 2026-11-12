@@ -8,9 +8,6 @@
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { WeaponCounterEffect, composeEffects } from '../../enemyEffects';
 
-/**
- * Creates a fresh Lazy Sloth enemy instance.
- */
 export function createLazySloth(): EnemyInstance {
   return composeEffects(
     {
@@ -26,7 +23,6 @@ export function createLazySloth(): EnemyInstance {
         config: { type: 'time', reduction: 20 },
       },
     ],
-    // Defeat condition: Achieve minimum with 15+ seconds remaining
     (stats: RoundStats) => stats.currentScore >= stats.targetScore && stats.timeRemaining >= 15
   );
 }

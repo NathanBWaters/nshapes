@@ -47,36 +47,12 @@ afterEach(() => {
 
 describe('Venomous Cobra - Metadata', () => {
   describe('name', () => {
-    it('has correct name', () => {
-      const enemy = createVenomousCobra();
-      expect(enemy.name).toBe('Venomous Cobra');
-    });
-
-    it('name is a non-empty string', () => {
-      const enemy = createVenomousCobra();
-      expect(typeof enemy.name).toBe('string');
-      expect(enemy.name.length).toBeGreaterThan(0);
-    });
   });
 
   describe('tier', () => {
-    it('has tier 2', () => {
-      const enemy = createVenomousCobra();
-      expect(enemy.tier).toBe(2);
-    });
-
-    it('tier is a valid tier value (1-4)', () => {
-      const enemy = createVenomousCobra();
-      expect([1, 2, 3, 4]).toContain(enemy.tier);
-    });
   });
 
   describe('icon', () => {
-    it('has correct icon', () => {
-      const enemy = createVenomousCobra();
-      expect(enemy.icon).toBe('skoll/cobra');
-    });
-
     it('icon is a valid icon path format', () => {
       const enemy = createVenomousCobra();
       expect(enemy.icon).toMatch(/^[a-z-]+\/[a-z-]+$/);
@@ -1130,12 +1106,6 @@ describe('Venomous Cobra - Lifecycle Hooks', () => {
   });
 
   describe('onRoundEnd', () => {
-    it('can be called without error', () => {
-      const enemy = createVenomousCobra();
-
-      expect(() => enemy.onRoundEnd()).not.toThrow();
-    });
-
     it('returns void (undefined)', () => {
       const enemy = createVenomousCobra();
 

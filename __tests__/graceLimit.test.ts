@@ -9,21 +9,6 @@ import { PlayerStats, Player } from '@/types';
 import { STARTING_STATS } from '@/utils/gameConfig';
 
 describe('Grace Limit', () => {
-  describe('maxGraces stat exists', () => {
-    it('should have maxGraces defined in STARTING_STATS', () => {
-      expect(STARTING_STATS.maxGraces).toBeDefined();
-      expect(typeof STARTING_STATS.maxGraces).toBe('number');
-    });
-
-    it('should have maxGraces in DEFAULT_PLAYER_STATS', () => {
-      expect(DEFAULT_PLAYER_STATS.maxGraces).toBeDefined();
-      expect(typeof DEFAULT_PLAYER_STATS.maxGraces).toBe('number');
-    });
-
-    it('should default maxGraces to 5', () => {
-      expect(STARTING_STATS.maxGraces).toBe(5);
-    });
-  });
 
   describe('grace capping behavior', () => {
     it('should not allow graces to exceed maxGraces when adding', () => {

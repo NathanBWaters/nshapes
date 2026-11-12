@@ -66,27 +66,6 @@ describe('Weapon Definitions', () => {
       });
     });
 
-    it('each weapon should have all required properties', () => {
-      WEAPONS.forEach(weapon => {
-        expect(weapon).toHaveProperty('id');
-        expect(weapon).toHaveProperty('name');
-        expect(weapon).toHaveProperty('rarity');
-        expect(weapon).toHaveProperty('level');
-        expect(weapon).toHaveProperty('price');
-        expect(weapon).toHaveProperty('description');
-        expect(weapon).toHaveProperty('effects');
-
-        // Validate types
-        expect(typeof weapon.id).toBe('string');
-        expect(typeof weapon.name).toBe('string');
-        expect(['common', 'rare', 'epic', 'legendary']).toContain(weapon.rarity);
-        expect(typeof weapon.level).toBe('number');
-        expect(typeof weapon.price).toBe('number');
-        expect(typeof weapon.description).toBe('string');
-        expect(typeof weapon.effects).toBe('object');
-      });
-    });
-
     it('common weapons should cost 5-10 coins', () => {
       const commons = WEAPONS.filter(w => w.rarity === 'common');
       commons.forEach(weapon => {

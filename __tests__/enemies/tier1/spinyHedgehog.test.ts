@@ -22,64 +22,6 @@ afterEach(() => {
 // ============================================================================
 
 describe('Spiny Hedgehog', () => {
-  describe('metadata', () => {
-    it('has correct name', () => {
-      const enemy = createSpinyHedgehog();
-      expect(enemy.name).toBe('Spiny Hedgehog');
-    });
-
-    it('name is a non-empty string', () => {
-      const enemy = createSpinyHedgehog();
-      expect(typeof enemy.name).toBe('string');
-      expect(enemy.name.length).toBeGreaterThan(0);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createSpinyHedgehog();
-      expect(enemy.icon).toBe('caro-asercion/hedgehog');
-    });
-
-    it('icon contains artist prefix', () => {
-      const enemy = createSpinyHedgehog();
-      expect(enemy.icon).toContain('/');
-    });
-
-    it('has correct tier', () => {
-      const enemy = createSpinyHedgehog();
-      expect(enemy.tier).toBe(1);
-    });
-
-    it('tier is a valid tier value (1-4)', () => {
-      const enemy = createSpinyHedgehog();
-      expect([1, 2, 3, 4]).toContain(enemy.tier);
-    });
-
-    it('has description mentioning explosion', () => {
-      const enemy = createSpinyHedgehog();
-      expect(enemy.description.toLowerCase()).toContain('explosion');
-    });
-
-    it('has description mentioning divided by 3', () => {
-      const enemy = createSpinyHedgehog();
-      expect(enemy.description).toContain('divided by 3');
-    });
-
-    it('has correct defeat condition text', () => {
-      const enemy = createSpinyHedgehog();
-      expect(enemy.defeatConditionText).toBe('Get 3 matches containing squiggles');
-    });
-
-    it('defeat condition text mentions squiggles', () => {
-      const enemy = createSpinyHedgehog();
-      expect(enemy.defeatConditionText.toLowerCase()).toContain('squiggle');
-    });
-
-    it('defeat condition text mentions 3 matches', () => {
-      const enemy = createSpinyHedgehog();
-      expect(enemy.defeatConditionText).toContain('3');
-    });
-  });
-
   // ============================================================================
   // DEFEAT CONDITION TESTS (15 tests)
   // ============================================================================

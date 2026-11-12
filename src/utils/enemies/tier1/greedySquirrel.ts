@@ -8,9 +8,6 @@
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { ExtraCardRemovalOnMatchEffect, composeEffects } from '../../enemyEffects';
 
-/**
- * Creates a fresh Greedy Squirrel enemy instance.
- */
 export function createGreedySquirrel(): EnemyInstance {
   return composeEffects(
     {
@@ -26,7 +23,6 @@ export function createGreedySquirrel(): EnemyInstance {
         config: { count: 1, minBoardSize: 6 },
       },
     ],
-    // Defeat condition: Achieve minimum score with <8 cards remaining (cleared most of board)
     (stats: RoundStats) => {
       return stats.currentScore >= stats.targetScore && stats.cardsRemaining < 8;
     }

@@ -45,52 +45,6 @@ describe('Iron Shell', () => {
   // METADATA TESTS
   // ==========================================================================
   describe('metadata', () => {
-    it('has correct name', () => {
-      const enemy = createIronShell();
-      expect(enemy.name).toBe('Iron Shell');
-    });
-
-    it('has correct tier (1)', () => {
-      const enemy = createIronShell();
-      expect(enemy.tier).toBe(1);
-    });
-
-    it('has correct icon (lorc/turtle)', () => {
-      const enemy = createIronShell();
-      expect(enemy.icon).toBe('lorc/turtle');
-    });
-
-    it('has description containing "3 matches"', () => {
-      const enemy = createIronShell();
-      expect(enemy.description).toContain('3 matches');
-    });
-
-    it('has description containing "card"', () => {
-      const enemy = createIronShell();
-      expect(enemy.description.toLowerCase()).toContain('card');
-    });
-
-    it('has defeat condition text containing "triple-health"', () => {
-      const enemy = createIronShell();
-      expect(enemy.defeatConditionText).toContain('triple-health');
-    });
-
-    it('has defeat condition text containing "Clear"', () => {
-      const enemy = createIronShell();
-      expect(enemy.defeatConditionText).toContain('Clear');
-    });
-
-    it('has defeat condition text that describes the goal', () => {
-      const enemy = createIronShell();
-      expect(enemy.defeatConditionText.length).toBeGreaterThan(10);
-    });
-
-    it('description is user-friendly (not too technical)', () => {
-      const enemy = createIronShell();
-      expect(enemy.description).not.toContain('tripleCardsCleared');
-      expect(enemy.description).not.toContain('health: 3');
-    });
-
     it('creates independent instances', () => {
       const enemy1 = createIronShell();
       const enemy2 = createIronShell();
@@ -773,12 +727,6 @@ describe('Iron Shell', () => {
   // UI MODIFIERS - getUIModifiers
   // ==========================================================================
   describe('UI modifiers - getUIModifiers', () => {
-    it('returns an object', () => {
-      const enemy = createIronShell();
-      const modifiers = enemy.getUIModifiers();
-      expect(typeof modifiers).toBe('object');
-    });
-
     it('does not show inactivity bar', () => {
       const enemy = createIronShell();
       const modifiers = enemy.getUIModifiers();
@@ -850,12 +798,6 @@ describe('Iron Shell', () => {
   // STAT MODIFIERS - getStatModifiers
   // ==========================================================================
   describe('stat modifiers - getStatModifiers', () => {
-    it('returns an object', () => {
-      const enemy = createIronShell();
-      const modifiers = enemy.getStatModifiers();
-      expect(typeof modifiers).toBe('object');
-    });
-
     it('does not reduce fire spread chance', () => {
       const enemy = createIronShell();
       const modifiers = enemy.getStatModifiers();

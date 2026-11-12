@@ -221,7 +221,6 @@ export const EnemyEffectsOverlay: React.FC<EnemyEffectsOverlayProps> = ({
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {/* Cross-fading Sleepy zZz */}
       <Animated.View style={[StyleSheet.absoluteFill, sleepyStyle]}>
         <Svg width="100%" height="100%" viewBox="0 0 100 100">
           <G testID={mood === 'sleepy' ? 'enemy-ambient-sleepy' : undefined}>

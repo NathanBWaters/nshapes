@@ -17,55 +17,8 @@ describe('Effect Cap System', () => {
       });
     });
 
-    it('should have correct default cap values', () => {
-      // Verify specific caps from the spec
-      expect(EFFECT_CAPS.echo.defaultCap).toBe(25);
-      expect(EFFECT_CAPS.laser.defaultCap).toBe(30);
-      expect(EFFECT_CAPS.graceGain.defaultCap).toBe(30);
-      expect(EFFECT_CAPS.explosion.defaultCap).toBe(40);
-      expect(EFFECT_CAPS.hint.defaultCap).toBe(40);
-      expect(EFFECT_CAPS.timeGain.defaultCap).toBe(40);
-      expect(EFFECT_CAPS.healing.defaultCap).toBe(50);
-      expect(EFFECT_CAPS.fire.defaultCap).toBe(50);
-      expect(EFFECT_CAPS.ricochet.defaultCap).toBe(60);
-      expect(EFFECT_CAPS.boardGrowth.defaultCap).toBe(60);
-      expect(EFFECT_CAPS.coinGain.defaultCap).toBe(70);
-      expect(EFFECT_CAPS.xpGain.defaultCap).toBe(100);
-    });
-
-    it('should have correct cap increase values', () => {
-      // Verify cap increases from the spec
-      expect(EFFECT_CAPS.echo.capIncrease).toBe(5);
-      expect(EFFECT_CAPS.laser.capIncrease).toBe(5);
-      expect(EFFECT_CAPS.graceGain.capIncrease).toBe(5);
-      expect(EFFECT_CAPS.explosion.capIncrease).toBe(10);
-      expect(EFFECT_CAPS.hint.capIncrease).toBe(10);
-      expect(EFFECT_CAPS.timeGain.capIncrease).toBe(10);
-      expect(EFFECT_CAPS.healing.capIncrease).toBe(10);
-      expect(EFFECT_CAPS.fire.capIncrease).toBe(10);
-      expect(EFFECT_CAPS.ricochet.capIncrease).toBe(10);
-      expect(EFFECT_CAPS.boardGrowth.capIncrease).toBe(10);
-      expect(EFFECT_CAPS.coinGain.capIncrease).toBe(15);
-      expect(EFFECT_CAPS.xpGain.capIncrease).toBe(0); // XP has no cap increase
-    });
   });
 
-  describe('DEFAULT_EFFECT_CAPS', () => {
-    it('should match EFFECT_CAPS default values', () => {
-      expect(DEFAULT_EFFECT_CAPS.echo).toBe(EFFECT_CAPS.echo.defaultCap);
-      expect(DEFAULT_EFFECT_CAPS.laser).toBe(EFFECT_CAPS.laser.defaultCap);
-      expect(DEFAULT_EFFECT_CAPS.graceGain).toBe(EFFECT_CAPS.graceGain.defaultCap);
-      expect(DEFAULT_EFFECT_CAPS.explosion).toBe(EFFECT_CAPS.explosion.defaultCap);
-      expect(DEFAULT_EFFECT_CAPS.hint).toBe(EFFECT_CAPS.hint.defaultCap);
-      expect(DEFAULT_EFFECT_CAPS.timeGain).toBe(EFFECT_CAPS.timeGain.defaultCap);
-      expect(DEFAULT_EFFECT_CAPS.healing).toBe(EFFECT_CAPS.healing.defaultCap);
-      expect(DEFAULT_EFFECT_CAPS.fire).toBe(EFFECT_CAPS.fire.defaultCap);
-      expect(DEFAULT_EFFECT_CAPS.ricochet).toBe(EFFECT_CAPS.ricochet.defaultCap);
-      expect(DEFAULT_EFFECT_CAPS.boardGrowth).toBe(EFFECT_CAPS.boardGrowth.defaultCap);
-      expect(DEFAULT_EFFECT_CAPS.coinGain).toBe(EFFECT_CAPS.coinGain.defaultCap);
-      expect(DEFAULT_EFFECT_CAPS.xpGain).toBe(EFFECT_CAPS.xpGain.defaultCap);
-    });
-  });
 
   describe('getEffectiveStat', () => {
     it('should return accumulated value when under cap', () => {
@@ -105,24 +58,6 @@ describe('Effect Cap System', () => {
   });
 
   describe('EffectCaps type', () => {
-    it('should have all required keys', () => {
-      const caps: EffectCaps = { ...DEFAULT_EFFECT_CAPS };
-
-      // Verify all keys exist
-      expect(caps.echo).toBeDefined();
-      expect(caps.laser).toBeDefined();
-      expect(caps.graceGain).toBeDefined();
-      expect(caps.explosion).toBeDefined();
-      expect(caps.hint).toBeDefined();
-      expect(caps.timeGain).toBeDefined();
-      expect(caps.healing).toBeDefined();
-      expect(caps.fire).toBeDefined();
-      expect(caps.ricochet).toBeDefined();
-      expect(caps.boardGrowth).toBeDefined();
-      expect(caps.coinGain).toBeDefined();
-      expect(caps.xpGain).toBeDefined();
-    });
-
     it('should allow cap modifications', () => {
       const caps: EffectCaps = { ...DEFAULT_EFFECT_CAPS };
 

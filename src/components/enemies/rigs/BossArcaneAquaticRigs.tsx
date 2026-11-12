@@ -276,7 +276,6 @@ const renderLurkingShark = (s: SubRigState) => {
             strokeWidth={3.2}
             strokeLinejoin="round"
           />
-          {/* Counter-shaded pale belly */}
           <Path d="M 34 55 L 32 85 L 68 85 L 66 55 Z" fill={SHARK_BELLY} />
           {/* Three dark curved gill slits per flank */}
           <G stroke={STROKE} strokeWidth={2.2} strokeLinecap="round" fill="none">
@@ -291,7 +290,6 @@ const renderLurkingShark = (s: SubRigState) => {
       }
       head={
         <G>
-          {/* Conical apex-predator snout */}
           <Path
             d="M 24 56 C 23 36, 35 19, 50 17 C 65 19, 77 36, 76 56 C 72 64, 62 66, 50 66 C 38 66, 28 64, 24 56 Z"
             fill={SHARK_BLUE}
@@ -299,7 +297,6 @@ const renderLurkingShark = (s: SubRigState) => {
             strokeWidth={3.2}
             strokeLinejoin="round"
           />
-          {/* Counter-shaded lower jaw */}
           <Path
             d="M 28 48 Q 50 41 72 48 C 70 61, 61 65, 50 65 C 39 65, 30 61, 28 48 Z"
             fill={SHARK_BELLY}
@@ -313,11 +310,9 @@ const renderLurkingShark = (s: SubRigState) => {
             </G>
           )}
 
-          {/* Nostrils */}
           <Circle cx={44} cy={32} r={1.4} fill={STROKE} />
           <Circle cx={56} cy={32} r={1.4} fill={STROKE} />
 
-          {/* Fierce shark eyes */}
           <EnemyEyes
             expression={s.expression}
             gazeOffset={s.gazeOffset}
@@ -414,7 +409,6 @@ const renderJellyfish = (s: SubRigState) => {
       }
       body={
         <G>
-          {/* Ruffled sub-umbrella skirt */}
           <Path
             d="M 22 48 Q 30 60 39 54 Q 50 62 61 54 Q 70 60 78 48 Z"
             fill={SKIRT}
@@ -489,10 +483,8 @@ const renderJellyfish = (s: SubRigState) => {
           {/* Glowing inner bio-nucleus core */}
           <Ellipse cx={50} cy={29} rx={13} ry={8} fill={CORE_GLOW} stroke={RIBBON} strokeWidth={2} />
           <Ellipse cx={50} cy={29} rx={6.5} ry={3.8} fill={RIBBON} />
-          {/* Specular dome highlight */}
           <Path d="M 27 32 C 29 23, 36 18, 43 17" stroke={CORE_GLOW} strokeWidth={2.8} strokeLinecap="round" fill="none" />
 
-          {/* Bioluminescent eyes */}
           <EnemyEyes
             expression={s.expression}
             gazeOffset={s.gazeOffset}
@@ -668,7 +660,6 @@ const renderAbyssalOctopus = (s: SubRigState) => {
             strokeWidth={3.2}
             strokeLinejoin="round"
           />
-          {/* Side siphon tube */}
           <Path
             d="M 73 46 L 82 43 L 80 51 L 72 52 Z"
             fill={MANTLE_DARK}
@@ -691,7 +682,6 @@ const renderAbyssalOctopus = (s: SubRigState) => {
             <Path d="M 44 16 L 41 24 L 46 28" stroke={BIO_CORE} strokeWidth={2} strokeLinecap="round" fill="none" />
           )}
 
-          {/* Abyssal eyes */}
           <EnemyEyes
             expression={s.expression}
             gazeOffset={s.gazeOffset}
@@ -1196,7 +1186,6 @@ const renderWickedImp = (s: SubRigState) => {
             strokeLinejoin="round"
           />
 
-          {/* Pointed imp ears */}
           <Polygon points="27,36 15,32 25,44" fill={IMP_DARK} stroke={STROKE} strokeWidth={2.6} strokeLinejoin="round" />
           <Polygon points="73,36 85,32 75,44" fill={IMP_DARK} stroke={STROKE} strokeWidth={2.6} strokeLinejoin="round" />
 
@@ -1221,7 +1210,6 @@ const renderWickedImp = (s: SubRigState) => {
             slitPupil
           />
 
-          {/* Mischievous fanged grin */}
           <Path
             d="M 37 47 Q 50 55 63 47"
             stroke={STROKE}
@@ -1238,7 +1226,6 @@ const renderWickedImp = (s: SubRigState) => {
           {/* Gleaming mini 3-pronged pitchfork */}
           <Line x1={26} y1={87} x2={69} y2={58} stroke={STROKE} strokeWidth={5.2} strokeLinecap="round" />
           <Line x1={26} y1={87} x2={69} y2={58} stroke={HORN} strokeWidth={2.4} strokeLinecap="round" />
-          {/* Trident head */}
           <Path
             d="M 64 52 L 73 65 M 64 52 L 75 45 M 68.5 58.5 L 80 51 M 73 65 L 84 58"
             stroke={STROKE}
@@ -1524,7 +1511,6 @@ const renderOneEyedTerror = (s: SubRigState) => {
       }
       paws={
         <G>
-          {/* Hulking granite-knuckled fists */}
           <Rect x={16} y={73} width={17} height={15} rx={5} fill={GRANITE_LIGHT} stroke={STROKE} strokeWidth={3} />
           <Line x1={21.5} y1={80} x2={21.5} y2={87} stroke={STROKE} strokeWidth={2} />
           <Line x1={27.5} y1={80} x2={27.5} y2={87} stroke={STROKE} strokeWidth={2} />
@@ -1623,7 +1609,6 @@ const renderStoneSentinel = (s: SubRigState) => {
             strokeWidth={3.2}
             strokeLinejoin="round"
           />
-          {/* Dark visor recess */}
           <Polygon points="31,36 69,36 67,47 33,47" fill={STONE_DARK} stroke={STROKE} strokeWidth={2} />
 
           {/* Glowing cyan brow rune fissure */}
@@ -1631,7 +1616,6 @@ const renderStoneSentinel = (s: SubRigState) => {
           <Line x1={36} y1={27} x2={44} y2={27} stroke={RUNE} strokeWidth={2.4} strokeLinecap="round" />
           <Line x1={56} y1={27} x2={64} y2={27} stroke={RUNE} strokeWidth={2.4} strokeLinecap="round" />
 
-          {/* Arcane Sentinel eyes */}
           <EnemyEyes
             expression={s.expression}
             gazeOffset={s.gazeOffset}
@@ -1850,7 +1834,6 @@ const renderAncientDragon = (s: SubRigState) => {
           />
           <Circle cx={79} cy={53} r={2.3} fill={GOLD_BRIGHT} stroke={STROKE} strokeWidth={1.5} />
 
-          {/* Armored wyrm talons */}
           <Polygon points="25,84 31,79 37,84 34,91 27,91" fill={WYRM_DARK} stroke={STROKE} strokeWidth={2.6} strokeLinejoin="round" />
           <Polygon points="63,84 69,79 75,84 73,91 66,91" fill={WYRM_DARK} stroke={STROKE} strokeWidth={2.6} strokeLinejoin="round" />
         </G>
@@ -2212,7 +2195,6 @@ const renderKrakensGrasp = (s: SubRigState) => {
         <G>
           {/* Snapping chitinous parrot-beak maw */}
           <Circle cx={50} cy={65} r={12} fill="#7F1D1D" stroke={STROKE} strokeWidth={2.8} />
-          {/* Upper hooked beak */}
           <Path
             d="M 40 60 Q 50 52 60 60 L 50 69 Z"
             fill={COLORS.deepOnyx}
@@ -2220,7 +2202,6 @@ const renderKrakensGrasp = (s: SubRigState) => {
             strokeWidth={2}
             strokeLinejoin="round"
           />
-          {/* Lower hooked beak */}
           <Path
             d="M 43 68 L 50 63 L 57 68 Q 50 76 43 68 Z"
             fill={KRAKEN_MIDNIGHT}
@@ -2323,7 +2304,6 @@ const renderTheReaper = (s: SubRigState) => {
             strokeWidth={3.3}
             strokeLinejoin="round"
           />
-          {/* Pitch-dark hood interior */}
           <Path d="M 50 14 C 64 21, 71 34, 69 55 L 31 55 C 29 34, 36 21, 50 14 Z" fill={VOID} />
 
           {/* Pale bone skull visage */}
@@ -2360,7 +2340,6 @@ const renderTheReaper = (s: SubRigState) => {
       }
       paws={
         <G>
-          {/* Sweeping scythe shaft */}
           <Line x1={20} y1={89} x2={79} y2={19} stroke={STROKE} strokeWidth={6.2} strokeLinecap="round" />
           <Line x1={20} y1={89} x2={79} y2={19} stroke="#475569" strokeWidth={3} strokeLinecap="round" />
 
@@ -2452,7 +2431,6 @@ const renderWorldEater = (s: SubRigState) => {
       }
       head={
         <G>
-          {/* Cracked obsidian cranium */}
           <Polygon
             points="32,15 68,15 77,31 73,53 62,57 55,51 50,57 45,51 38,57 27,53 23,31"
             fill={OBSIDIAN_PLATE}
@@ -2499,7 +2477,6 @@ const renderWorldEater = (s: SubRigState) => {
             strokeWidth={2.4}
             strokeLinejoin="round"
           />
-          {/* Void-claw gauntlets */}
           <Polygon points="15,74 25,70 28,83 18,86" fill={OBSIDIAN_PLATE} stroke={MOLTEN_CRIMSON} strokeWidth={2} strokeLinejoin="round" />
           <Polygon points="85,74 75,70 72,83 82,86" fill={OBSIDIAN_PLATE} stroke={VOID_CRYSTAL} strokeWidth={2} strokeLinejoin="round" />
         </G>
@@ -2565,7 +2542,6 @@ const renderTrainingDummy = (s: SubRigState) => {
             strokeLinejoin="round"
           />
           <Rect x={35} y={63} width={11} height={11} rx={1.5} fill={BURLAP_PATCH} stroke={STROKE} strokeWidth={2} />
-          {/* Rope belt lashing */}
           <Line x1={30} y1={78} x2={70} y2={78} stroke={STROKE} strokeWidth={3.2} />
         </G>
       }
@@ -2584,7 +2560,6 @@ const renderTrainingDummy = (s: SubRigState) => {
             <Polygon points="57,19 63,12 61,21 67,17 62,24" fill={STRAW} stroke={STROKE} strokeWidth={1.9} strokeLinejoin="round" />
           )}
 
-          {/* Painted/button eyes */}
           <EnemyEyes
             expression={s.expression}
             gazeOffset={s.gazeOffset}
@@ -2595,7 +2570,6 @@ const renderTrainingDummy = (s: SubRigState) => {
             irisColor={STROKE}
           />
 
-          {/* Stitched burlap mouth */}
           <Path d="M 40 48 L 60 48" stroke={STROKE} strokeWidth={2.4} strokeLinecap="round" />
           <Line x1={44} y1={45.5} x2={44} y2={50.5} stroke={STROKE} strokeWidth={2} />
           <Line x1={50} y1={45.5} x2={50} y2={50.5} stroke={STROKE} strokeWidth={2} />

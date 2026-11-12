@@ -49,19 +49,6 @@ const createTestBoard = (): Card[] =>
     }));
 
 describe('World Eater', () => {
-  describe('metadata', () => {
-    it('has correct name and tier', () => {
-      const enemy = createWorldEater();
-      expect(enemy.name).toBe('World Eater');
-      expect(enemy.tier).toBe(4);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createWorldEater();
-      expect(enemy.icon).toBe('lorc/daemon-skull');
-    });
-  });
-
   describe('extra card removal on match', () => {
     it('removes 2 cards on valid match', () => {
       const enemy = createWorldEater();

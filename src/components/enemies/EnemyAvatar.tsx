@@ -8,7 +8,7 @@ import {
   useCreatureMotion,
 } from '@/components/creatures/useCreatureMotion';
 import type { EnemyInstance } from '@/types/enemy';
-import { useReducedMotion } from '@/utils/animation';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { COLORS } from '@/utils/colors';
 import {
   ENEMY_MOOD_MOTION,

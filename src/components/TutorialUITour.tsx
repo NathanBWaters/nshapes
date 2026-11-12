@@ -92,7 +92,6 @@ const TourContent: React.FC<TutorialUITourProps> = ({ onComplete, onSkip }) => {
 
   return (
     <View style={styles.container}>
-      {/* Tutorial Header Banner */}
       <View style={styles.tutorialBanner}>
         <Text style={styles.tutorialTitle}>Game Interface Tour</Text>
         <Text style={styles.tutorialSubtitle}>Tap to learn each element</Text>
@@ -122,7 +121,6 @@ const TourContent: React.FC<TutorialUITourProps> = ({ onComplete, onSkip }) => {
         />
       </View>
 
-      {/* Skip button */}
       <TouchableOpacity style={styles.skipButton} onPress={onSkip}>
         <Text style={styles.skipButtonText}>Skip Tutorial</Text>
       </TouchableOpacity>

@@ -8,9 +8,6 @@
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { WeaponCounterEffect, composeEffects } from '../../enemyEffects';
 
-/**
- * Creates a fresh Armored Tusks enemy instance.
- */
 export function createArmoredTusks(): EnemyInstance {
   return composeEffects(
     {
@@ -24,7 +21,6 @@ export function createArmoredTusks(): EnemyInstance {
       { behavior: WeaponCounterEffect, config: { type: 'fire', reduction: 35 } },
       { behavior: WeaponCounterEffect, config: { type: 'explosion', reduction: 35 } },
     ],
-    // Defeat condition: Trigger 2 destruction effects (fire/explosion/laser)
     (stats: RoundStats) => {
       const destructiveEffects = ['fire', 'explosion', 'laser'];
       let count = 0;

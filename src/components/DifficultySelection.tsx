@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable, TouchableOpacity, StyleSheet } from 'react-native';
-import { usePWASafeAreaInsets } from '@/utils/usePWASafeAreaInsets';
+import { usePWASafeAreaInsets } from '@/hooks/usePWASafeAreaInsets';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { FreePlayDifficulty } from '@/types';
 import Icon, { IconName } from './Icon';
@@ -25,20 +25,17 @@ const DifficultySelection: React.FC<DifficultySelectionProps> = ({ onStart, onEx
 
   return (
     <View style={styles.container}>
-      {/* Eyebrow Banner */}
       <View style={styles.eyebrow}>
         <Text style={styles.eyebrowText}>Free Play - Select Difficulty</Text>
         <GameMenu onExitGame={onExitGame} />
       </View>
 
-      {/* Main Content */}
       <View style={[styles.content, { paddingBottom: 24 + insets.bottom }]}>
         <View style={styles.headerSection}>
           <Text style={styles.title}>Choose Difficulty</Text>
           <Text style={styles.subtitle}>Select the number of attributes to match</Text>
         </View>
 
-        {/* Difficulty Options */}
         <View style={styles.difficultyGrid}>
           {(['easy', 'medium', 'hard', 'omega'] as FreePlayDifficulty[]).map(difficulty => {
             const info = DIFFICULTY_INFO[difficulty];
@@ -81,14 +78,12 @@ const DifficultySelection: React.FC<DifficultySelectionProps> = ({ onStart, onEx
           })}
         </View>
 
-        {/* Info Section */}
         <View style={styles.infoSection}>
           <Text style={styles.infoText}>
             Free Play has no timer or score targets. Play at your own pace and practice matching sets.
           </Text>
         </View>
 
-        {/* Start Button */}
         <TouchableOpacity
           onPress={() => onStart(selectedDifficulty)}
           style={styles.startButton}

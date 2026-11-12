@@ -15,9 +15,6 @@ import {
   composeEffects,
 } from '../../enemyEffects';
 
-/**
- * Creates a fresh The Reaper enemy instance.
- */
 export function createTheReaper(): EnemyInstance {
   return composeEffects(
     {
@@ -35,7 +32,6 @@ export function createTheReaper(): EnemyInstance {
       { behavior: ScoreDecayEffect, config: { ratePerSecond: 0.33 } },
       { behavior: HintDisableEffect, config: { disableAuto: true, disableManual: true } },
     ],
-    // Defeat condition: Beat target with 10+ seconds AND no damage
     // Note: timeRemaining is in seconds, not milliseconds
     (stats: RoundStats) =>
       stats.currentScore >= stats.targetScore &&

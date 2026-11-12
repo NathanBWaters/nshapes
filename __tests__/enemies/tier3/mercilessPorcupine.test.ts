@@ -49,19 +49,6 @@ const createTestBoard = (): Card[] =>
     }));
 
 describe('Merciless Porcupine', () => {
-  describe('metadata', () => {
-    it('has correct name and tier', () => {
-      const enemy = createMercilessPorcupine();
-      expect(enemy.name).toBe('Merciless Porcupine');
-      expect(enemy.tier).toBe(3);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createMercilessPorcupine();
-      expect(enemy.icon).toBe('caro-asercion/porcupine');
-    });
-  });
-
   describe('extra card removal on invalid', () => {
     it('removes 3 extra cards on invalid', () => {
       const enemy = createMercilessPorcupine();

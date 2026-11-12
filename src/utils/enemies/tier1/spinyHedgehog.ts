@@ -8,9 +8,6 @@
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { WeaponCounterEffect, composeEffects } from '../../enemyEffects';
 
-/**
- * Creates a fresh Spiny Hedgehog enemy instance.
- */
 export function createSpinyHedgehog(): EnemyInstance {
   return composeEffects(
     {
@@ -26,7 +23,6 @@ export function createSpinyHedgehog(): EnemyInstance {
         config: { type: 'explosion', reduction: 15 },
       },
     ],
-    // Defeat condition: Get 3 matches containing squiggles
     (stats: RoundStats) => {
       return stats.squiggleMatches >= 3;
     }

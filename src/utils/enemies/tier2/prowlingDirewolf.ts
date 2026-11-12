@@ -8,9 +8,6 @@
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { DudCardEffect, PositionShuffleEffect, composeEffects } from '../../enemyEffects';
 
-/**
- * Creates a fresh Prowling Direwolf enemy instance.
- */
 export function createProwlingDirewolf(): EnemyInstance {
   return composeEffects(
     {
@@ -24,7 +21,6 @@ export function createProwlingDirewolf(): EnemyInstance {
       { behavior: DudCardEffect, config: { chance: 6 } },
       { behavior: PositionShuffleEffect, config: { intervalMs: 25000 } },
     ],
-    // Defeat condition: 6-match streak
     (stats: RoundStats) => stats.maxStreak >= 6
   );
 }

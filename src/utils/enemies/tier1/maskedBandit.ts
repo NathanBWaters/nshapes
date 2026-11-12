@@ -8,9 +8,6 @@
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { HintDisableEffect, composeEffects } from '../../enemyEffects';
 
-/**
- * Creates a fresh Masked Bandit enemy instance.
- */
 export function createMaskedBandit(): EnemyInstance {
   return composeEffects(
     {
@@ -26,7 +23,6 @@ export function createMaskedBandit(): EnemyInstance {
         config: { disableAuto: true, disableManual: false },
       },
     ],
-    // Defeat condition: Get 3 matches without hesitating >10s
     // All 3 first matches must be under 10s (10000ms)
     (stats: RoundStats) => {
       if (stats.matchTimes.length < 3) return false;

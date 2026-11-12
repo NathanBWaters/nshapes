@@ -92,7 +92,6 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
           </View>
 
           <ScrollView contentContainerStyle={st.body} bounces={false}>
-            {/* New mechanic */}
             <TouchableOpacity onPress={() => onShowMechanic(level.introduces)} style={st.mech} activeOpacity={0.85}>
               <Icon name={mech.icon} size={28} color={INK} />
               <View style={{ flex: 1 }}>
@@ -103,7 +102,6 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
               <Icon name="lorc/open-book" size={18} color={INK} />
             </TouchableOpacity>
 
-            {/* Rules strip */}
             <View style={st.rules}>
               {accuracy ? (
                 <Rule icon="lorc/archery-target" text={`Make ${Math.ceil(totalHp / 3)} Sets`} />
@@ -167,7 +165,6 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
               })}
             </View>
 
-            {/* Fighter picker */}
             <Text style={st.section}>FIGHTER</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4, paddingTop: 6 }}>
               {FIGHTERS.filter(f => save.unlockedFighters.includes(f.name)).map(f => {
@@ -190,7 +187,6 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
             </ScrollView>
             {!gearOn && <Text style={st.note}>Fighter abilities and weapons switch on after this first fight.</Text>}
 
-            {/* Charm picker */}
             {gearOn && save.armory.length > 0 && (
               <>
                 <Text style={st.section}>CHARM <Text style={st.sectionHint}>one weapon from your Armory</Text></Text>

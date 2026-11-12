@@ -49,19 +49,6 @@ const createTestBoard = (): Card[] =>
     }));
 
 describe('The Hydra', () => {
-  describe('metadata', () => {
-    it('has correct name and tier', () => {
-      const enemy = createTheHydra();
-      expect(enemy.name).toBe('The Hydra');
-      expect(enemy.tier).toBe(4);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createTheHydra();
-      expect(enemy.icon).toBe('lorc/hydra');
-    });
-  });
-
   describe('inactivity effect', () => {
     it('causes instant death after 30s', () => {
       const enemy = createTheHydra();

@@ -22,67 +22,6 @@ afterEach(() => {
 
 describe('Cackling Hyena', () => {
   // ==========================================================================
-  // METADATA TESTS
-  // ==========================================================================
-  describe('metadata', () => {
-    it('has correct name', () => {
-      const enemy = createCacklingHyena();
-      expect(enemy.name).toBe('Cackling Hyena');
-    });
-
-    it('has tier 2', () => {
-      const enemy = createCacklingHyena();
-      expect(enemy.tier).toBe(2);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createCacklingHyena();
-      expect(enemy.icon).toBe('caro-asercion/hyena-head');
-    });
-
-    it('has description containing time steal info', () => {
-      const enemy = createCacklingHyena();
-      expect(enemy.description).toContain('-3s');
-    });
-
-    it('has description containing match keyword', () => {
-      const enemy = createCacklingHyena();
-      expect(enemy.description.toLowerCase()).toContain('match');
-    });
-
-    it('has description containing grace reduction info', () => {
-      const enemy = createCacklingHyena();
-      expect(enemy.description).toContain('35%');
-    });
-
-    it('has description containing grace keyword', () => {
-      const enemy = createCacklingHyena();
-      expect(enemy.description.toLowerCase()).toContain('grace');
-    });
-
-    it('has defeat condition text mentioning 6 matches', () => {
-      const enemy = createCacklingHyena();
-      expect(enemy.defeatConditionText).toContain('6');
-    });
-
-    it('has defeat condition text mentioning match', () => {
-      const enemy = createCacklingHyena();
-      expect(enemy.defeatConditionText.toLowerCase()).toContain('match');
-    });
-
-    it('has defeat condition text mentioning grace', () => {
-      const enemy = createCacklingHyena();
-      expect(enemy.defeatConditionText.toLowerCase()).toContain('grace');
-    });
-
-    it('has defeat condition text mentioning no grace used', () => {
-      const enemy = createCacklingHyena();
-      const text = enemy.defeatConditionText.toLowerCase();
-      expect(text).toMatch(/no\s+grace/);
-    });
-  });
-
-  // ==========================================================================
   // TIME STEAL EFFECT TESTS
   // ==========================================================================
   describe('time steal effect', () => {

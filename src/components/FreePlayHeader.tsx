@@ -33,7 +33,6 @@ const FreePlayHeader: React.FC<FreePlayHeaderProps> = ({
 }) => (
                 <View style={styles.header}>
       <View style={styles.statsRow}>
-        {/* Exit button */}
         <TouchableOpacity
           style={styles.exitButton}
           onPress={onExit}
@@ -55,12 +54,10 @@ const FreePlayHeader: React.FC<FreePlayHeaderProps> = ({
           testID="freeplay-fighter-avatar"
         />
 
-        {/* Free Play label */}
         <View style={styles.modeBadge}>
           <Text style={styles.modeBadgeText}>Free Play</Text>
         </View>
 
-        {/* Health */}
         <View style={styles.statItem}>
           <Text style={styles.heartIcon}>♥</Text>
           <Text style={styles.statValue}>
@@ -68,12 +65,10 @@ const FreePlayHeader: React.FC<FreePlayHeaderProps> = ({
           </Text>
         </View>
 
-        {/* Level */}
         <View style={styles.statItem}>
           <Text style={styles.levelText}>Lv{playerStats.level}</Text>
         </View>
 
-        {/* Hints */}
         <TouchableOpacity
           style={[
             styles.hintButton,
@@ -89,7 +84,6 @@ const FreePlayHeader: React.FC<FreePlayHeaderProps> = ({
           </Text>
         </TouchableOpacity>
 
-        {/* Matches counter */}
         <View style={styles.statItem}>
           <Text style={styles.matchLabel}>Matches</Text>
           <Text style={styles.statValue}>{matchCount}</Text>

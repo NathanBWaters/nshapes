@@ -26,7 +26,6 @@ export function useBurnTimer({
   const lastTickRef = useRef<number | null>(null);
   const completeCalledRef = useRef(false);
 
-  // Stable callback reference
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
 
@@ -39,7 +38,6 @@ export function useBurnTimer({
     }
   }, [isOnFire, fireStartTime]);
 
-  // Update progress
   useEffect(() => {
     if (!isOnFire || !fireStartTime) {
       setProgress(0);

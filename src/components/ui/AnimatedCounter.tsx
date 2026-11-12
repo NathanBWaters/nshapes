@@ -47,7 +47,6 @@ export function AnimatedCounter({
       const elapsed = Date.now() - startTime;
       const progress = Math.min(elapsed / duration, 1);
 
-      // easeOutExpo easing
       const eased = 1 - Math.pow(2, -10 * progress);
 
       const currentValue = startValue + (endValue - startValue) * eased;

@@ -8,10 +8,10 @@ import ReAnimated, {
   withTiming,
   withDelay,
 } from 'react-native-reanimated';
-import { usePWASafeAreaInsets } from '@/utils/usePWASafeAreaInsets';
+import { usePWASafeAreaInsets } from '@/hooks/usePWASafeAreaInsets';
 import { Character, PlayerStats, Weapon } from '@/types';
 import type { EnemyInstance, WeaponImpact } from '@/types/enemy';
-import ChallengeCard from './ui/ChallengeCard';
+import { EnemyChallengeCard } from './ui/ChallengeCard';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { DURATION } from '@/utils/animation';
 import Icon, { IconName } from './Icon';
@@ -114,7 +114,6 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
     }))
   ).current;
 
-  // Match counter animation
   const matchCounterScale = useRef(new Animated.Value(0.5)).current;
   const matchCounterOpacity = useRef(new Animated.Value(0)).current;
 
@@ -122,7 +121,6 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
   const [showButtonContainer, setShowButtonContainer] = useState(false);
   const buttonOpacity = useRef(new Animated.Value(0)).current;
 
-  // Animated number values
   const animatedMatchCount = useAnimatedNumber(matchCount, 500, 200);
 
   // Define award tiles (using icons from the existing registry)
@@ -221,7 +219,6 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
   return (
     <ScreenTransition>
       <View style={styles.container} testID="round-summary">
-        {/* Eyebrow Banner */}
         <View style={styles.eyebrow}>
         <Text style={styles.eyebrowText}>ROUND {round} COMPLETE</Text>
         <GameMenu playerStats={playerStats} playerWeapons={playerWeapons} character={character} onExitGame={onExitGame} />
@@ -257,7 +254,6 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
           </View>
         </Animated.View>
 
-        {/* Awards Grid */}
         <View style={styles.awardsGrid}>
           <View style={styles.awardsRow}>
             {awards.slice(0, 3).map((award, index) => renderAwardTile(award, index))}
@@ -270,7 +266,7 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
         {/* Challenge Card - Only show if there's an enemy */}
         {enemy && (
           <View style={styles.challengeSection} testID="stretch-goal-status">
-            <ChallengeCard
+            <EnemyChallengeCard
               enemy={enemy}
               enemyDefeated={enemyDefeated}
               stretchGoalReward={stretchGoalReward}
@@ -279,7 +275,6 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
           </View>
         )}
 
-        {/* Weapon Impacts Section */}
         {weaponImpacts.length > 0 && (
           <View style={styles.weaponImpactsSection}>
             <Text style={styles.weaponImpactsTitle}>WEAPON IMPACT</Text>
@@ -346,7 +341,6 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
           </View>
         )}
 
-        {/* Round Progress Chart */}
         <View style={styles.chartSection}>
           <Text style={styles.chartTitle}>ROUND PROGRESS</Text>
           <RoundProgressChart
@@ -593,7 +587,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     letterSpacing: 1,
   },
-  // Weapon Impacts Section
   weaponImpactsSection: {
     backgroundColor: COLORS.canvasWhite,
     borderRadius: RADIUS.module,

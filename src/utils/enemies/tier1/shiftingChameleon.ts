@@ -8,9 +8,6 @@
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { AttributeChangeEffect, composeEffects } from '../../enemyEffects';
 
-/**
- * Creates a fresh Shifting Chameleon enemy instance.
- */
 export function createShiftingChameleon(): EnemyInstance {
   return composeEffects(
     {
@@ -21,7 +18,6 @@ export function createShiftingChameleon(): EnemyInstance {
       defeatConditionText: 'Get 2 all-different matches',
     },
     [{ behavior: AttributeChangeEffect, config: { intervalMs: 20000 } }],
-    // Defeat condition: 2 all-different matches
     (stats: RoundStats) => stats.allDifferentMatches >= 2
   );
 }

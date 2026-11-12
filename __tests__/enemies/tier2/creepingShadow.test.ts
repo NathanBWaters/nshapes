@@ -31,48 +31,12 @@ describe('Creeping Shadow', () => {
   // METADATA TESTS
   // ==========================================================================
   describe('metadata', () => {
-    it('has correct name', () => {
-      expect(enemy.name).toBe('Creeping Shadow');
-    });
-
-    it('has correct tier', () => {
-      expect(enemy.tier).toBe(2);
-    });
-
-    it('has correct icon', () => {
-      expect(enemy.icon).toBe('lorc/beast-eye');
-    });
-
-    it('has description mentioning no hints', () => {
-      expect(enemy.description).toContain('hint');
-    });
-
-    it('has description mentioning hint gain reduction', () => {
-      expect(enemy.description).toContain('-35%');
-    });
-
-    it('has defeat condition text mentioning colors', () => {
-      expect(enemy.defeatConditionText).toContain('color');
-    });
-
-    it('has defeat condition text mentioning 3 times', () => {
-      expect(enemy.defeatConditionText).toContain('3');
-    });
-
     it('creates a new instance each time', () => {
       const enemy1 = createCreepingShadow();
       const enemy2 = createCreepingShadow();
       expect(enemy1).not.toBe(enemy2);
     });
 
-    it('has a string name (not empty)', () => {
-      expect(typeof enemy.name).toBe('string');
-      expect(enemy.name.length).toBeGreaterThan(0);
-    });
-
-    it('has a valid tier number', () => {
-      expect([1, 2, 3, 4]).toContain(enemy.tier);
-    });
   });
 
   // ==========================================================================

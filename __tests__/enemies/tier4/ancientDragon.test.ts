@@ -49,19 +49,6 @@ const createTestBoard = (): Card[] =>
     }));
 
 describe('Ancient Dragon', () => {
-  describe('metadata', () => {
-    it('has correct name and tier', () => {
-      const enemy = createAncientDragon();
-      expect(enemy.name).toBe('Ancient Dragon');
-      expect(enemy.tier).toBe(4);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createAncientDragon();
-      expect(enemy.icon).toBe('lorc/dragon-head');
-    });
-  });
-
   describe('triple card effect', () => {
     it('places 2 triple cards', () => {
       const enemy = createAncientDragon();

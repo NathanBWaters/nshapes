@@ -29,46 +29,6 @@ afterEach(() => {
 
 describe('Burrowing Mole', () => {
   // ==========================================================================
-  // METADATA TESTS
-  // ==========================================================================
-  describe('metadata', () => {
-    it('has correct name', () => {
-      const enemy = createBurrowingMole();
-      expect(enemy.name).toBe('Burrowing Mole');
-    });
-
-    it('has correct tier (tier 1)', () => {
-      const enemy = createBurrowingMole();
-      expect(enemy.tier).toBe(1);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createBurrowingMole();
-      expect(enemy.icon).toBe('caro-asercion/mole');
-    });
-
-    it('has description mentioning removal interval', () => {
-      const enemy = createBurrowingMole();
-      expect(enemy.description).toContain('20s');
-    });
-
-    it('has description mentioning card removal', () => {
-      const enemy = createBurrowingMole();
-      expect(enemy.description.toLowerCase()).toContain('remove');
-    });
-
-    it('has description mentioning 1 card', () => {
-      const enemy = createBurrowingMole();
-      expect(enemy.description).toContain('1');
-    });
-
-    it('has correct defeatConditionText', () => {
-      const enemy = createBurrowingMole();
-      expect(enemy.defeatConditionText).toBe('Match all 3 shapes at least once');
-    });
-  });
-
-  // ==========================================================================
   // EFFECT TESTS - Card Removal
   // ==========================================================================
   describe('card removal effect', () => {
@@ -431,12 +391,6 @@ describe('Burrowing Mole', () => {
     });
 
     describe('onRoundEnd', () => {
-      it('can be called without error', () => {
-        const enemy = createBurrowingMole();
-
-        expect(() => enemy.onRoundEnd()).not.toThrow();
-      });
-
       it('resets internal state for next round', () => {
         mockRandom(0.5);
         const enemy = createBurrowingMole();

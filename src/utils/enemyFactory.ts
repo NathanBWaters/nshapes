@@ -14,19 +14,11 @@ import { createDummyEnemy, WEAPON_COUNTERS, applyWeaponCounter } from './enemyEf
 import { ENEMY_CREATORS } from './enemies';
 import { generateChallengeBonus, getChallengeBonusMoney } from './rewardUtils';
 
-// ============================================================================
-// ENEMY REGISTRY
-// ============================================================================
-
 const ENEMY_REGISTRY: Record<string, { create: () => EnemyInstance; tier: EnemyInstance['tier'] }> = {};
 for (const create of ENEMY_CREATORS) {
   const { name, tier } = create();
   ENEMY_REGISTRY[name] = { create, tier };
 }
-
-// ============================================================================
-// FACTORY FUNCTIONS
-// ============================================================================
 
 /**
  * Create an enemy instance by name.
@@ -128,10 +120,6 @@ export function getRandomEnemyOptions(
 export function isEnemyRegistered(name: string): boolean {
   return name in ENEMY_REGISTRY;
 }
-
-// ============================================================================
-// STAT MODIFIER UTILITIES
-// ============================================================================
 
 /**
  * Apply enemy stat modifiers to player stats.

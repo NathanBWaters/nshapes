@@ -251,14 +251,12 @@ const TutorialScreen: React.FC<TutorialScreenProps> = ({ onComplete, onExit }) =
     }
   };
 
-  // Calculate progress
   const steps: TutorialStep[] = ['intro', 'quiz_1', 'quiz_2', 'quiz_3', 'complexity', 'practice', 'ui_tour', 'complete'];
   const currentIndex = steps.indexOf(state.currentStep);
   const progress = ((currentIndex + 1) / steps.length) * 100;
 
   return (
     <View style={styles.container}>
-      {/* Progress Bar */}
       <View style={styles.progressBar}>
         <View style={[styles.progressFill, { width: `${progress}%` }]} />
       </View>
@@ -411,7 +409,6 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
-  // Complexity styles
   progressionContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -488,7 +485,6 @@ const styles = StyleSheet.create({
     color: COLORS.slateCharcoal,
     lineHeight: 20,
   },
-  // UI Tour styles
   uiSection: {
     gap: 12,
   },
@@ -528,7 +524,6 @@ const styles = StyleSheet.create({
     opacity: 0.8,
     marginTop: 2,
   },
-  // Complete styles
   completeSection: {
     flex: 1,
     justifyContent: 'center',

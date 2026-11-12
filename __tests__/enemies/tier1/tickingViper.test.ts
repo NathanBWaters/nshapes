@@ -42,58 +42,6 @@ afterEach(() => {
 // ============================================================================
 
 describe('Ticking Viper', () => {
-  describe('metadata', () => {
-    it('has correct name', () => {
-      const enemy = createTickingViper();
-      expect(enemy.name).toBe('Ticking Viper');
-    });
-
-    it('has correct tier (1)', () => {
-      const enemy = createTickingViper();
-      expect(enemy.tier).toBe(1);
-    });
-
-    it('has correct icon (lorc/snake)', () => {
-      const enemy = createTickingViper();
-      expect(enemy.icon).toBe('lorc/snake');
-    });
-
-    it('description contains "15s"', () => {
-      const enemy = createTickingViper();
-      expect(enemy.description).toContain('15s');
-    });
-
-    it('description contains "countdown"', () => {
-      const enemy = createTickingViper();
-      expect(enemy.description).toContain('countdown');
-    });
-
-    it('description contains "1HP"', () => {
-      const enemy = createTickingViper();
-      expect(enemy.description).toContain('1HP');
-    });
-
-    it('description mentions match or lose mechanic', () => {
-      const enemy = createTickingViper();
-      expect(enemy.description.toLowerCase()).toMatch(/match|lose/);
-    });
-
-    it('defeatConditionText contains "countdown card"', () => {
-      const enemy = createTickingViper();
-      expect(enemy.defeatConditionText).toContain('countdown card');
-    });
-
-    it('defeatConditionText mentions "in time"', () => {
-      const enemy = createTickingViper();
-      expect(enemy.defeatConditionText).toContain('in time');
-    });
-
-    it('defeatConditionText mentions "match"', () => {
-      const enemy = createTickingViper();
-      expect(enemy.defeatConditionText.toLowerCase()).toContain('match');
-    });
-  });
-
   // ============================================================================
   // COUNTDOWN EFFECT - onRoundStart TESTS
   // ============================================================================

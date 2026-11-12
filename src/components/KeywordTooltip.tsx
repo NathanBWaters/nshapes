@@ -30,7 +30,6 @@ const KeywordTooltip: React.FC = () => {
   const { isOpen, activeKeyword, activeDefinition, closeKeyword } = useKeyword();
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
-  // Animate slide up/down
   useEffect(() => {
     if (isOpen) {
       Animated.spring(slideAnim, {
@@ -79,10 +78,8 @@ const KeywordTooltip: React.FC = () => {
                 { transform: [{ translateY: slideAnim }] },
               ]}
             >
-              {/* Handle bar */}
               <View style={styles.handleBar} />
 
-              {/* Header */}
               <View style={styles.header}>
                 <Text style={styles.title}>{displayName}</Text>
                 <TouchableOpacity
@@ -94,15 +91,12 @@ const KeywordTooltip: React.FC = () => {
                 </TouchableOpacity>
               </View>
 
-              {/* Content */}
               <View style={styles.content}>
                 {/* Brief - one liner at top */}
                 <Text style={styles.brief}>{activeDefinition.brief}</Text>
 
-                {/* Divider */}
                 <View style={styles.divider} />
 
-                {/* Detailed explanation */}
                 <Text style={styles.detailed}>{activeDefinition.detailed}</Text>
               </View>
             </Animated.View>

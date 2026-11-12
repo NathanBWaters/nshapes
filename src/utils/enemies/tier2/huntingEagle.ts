@@ -8,9 +8,6 @@
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { TripleCardEffect, WeaponCounterEffect, composeEffects } from '../../enemyEffects';
 
-/**
- * Creates a fresh Hunting Eagle enemy instance.
- */
 export function createHuntingEagle(): EnemyInstance {
   return composeEffects(
     {
@@ -24,7 +21,6 @@ export function createHuntingEagle(): EnemyInstance {
       { behavior: TripleCardEffect, config: { count: 1 } },
       { behavior: WeaponCounterEffect, config: { type: 'time', reduction: 35 } },
     ],
-    // Defeat condition: Clear triple card with 20+ seconds remaining
     // Note: timeRemaining is in seconds, not milliseconds
     (stats: RoundStats) =>
       stats.tripleCardsCleared >= 1 && stats.timeRemaining >= 20

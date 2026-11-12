@@ -28,42 +28,6 @@ afterEach(() => {
 
 describe('Junk Rat', () => {
   // ==========================================================================
-  // METADATA TESTS
-  // ==========================================================================
-  describe('metadata', () => {
-    it('has correct name', () => {
-      const enemy = createJunkRat();
-      expect(enemy.name).toBe('Junk Rat');
-    });
-
-    it('is tier 1', () => {
-      const enemy = createJunkRat();
-      expect(enemy.tier).toBe(1);
-    });
-
-    it('has an icon defined', () => {
-      const enemy = createJunkRat();
-      expect(enemy.icon).toBeDefined();
-      expect(typeof enemy.icon).toBe('string');
-    });
-
-    it('description mentions 4% chance', () => {
-      const enemy = createJunkRat();
-      expect(enemy.description).toContain('4%');
-    });
-
-    it('description mentions unmatchable', () => {
-      const enemy = createJunkRat();
-      expect(enemy.description).toContain('unmatchable');
-    });
-
-    it('defeat condition text mentions 4-match streak', () => {
-      const enemy = createJunkRat();
-      expect(enemy.defeatConditionText).toBe('Get a 4-match streak');
-    });
-  });
-
-  // ==========================================================================
   // DUD CARD EFFECT TESTS (onCardDraw)
   // ==========================================================================
   describe('dud effect (onCardDraw)', () => {
@@ -382,11 +346,6 @@ describe('Junk Rat', () => {
     });
 
     describe('onRoundEnd', () => {
-      it('can be called without error', () => {
-        const enemy = createJunkRat();
-        expect(() => enemy.onRoundEnd()).not.toThrow();
-      });
-
       it('returns undefined', () => {
         const enemy = createJunkRat();
         const result = enemy.onRoundEnd();

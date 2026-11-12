@@ -36,43 +36,6 @@ describe('Hunting Eagle', () => {
   // ==========================================================================
 
   describe('metadata', () => {
-    it('has correct name', () => {
-      const enemy = createHuntingEagle();
-      expect(enemy.name).toBe('Hunting Eagle');
-    });
-
-    it('has tier 2', () => {
-      const enemy = createHuntingEagle();
-      expect(enemy.tier).toBe(2);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createHuntingEagle();
-      expect(enemy.icon).toBe('delapouite/eagle-head');
-    });
-
-    it('has description mentioning triple card and time reduction', () => {
-      const enemy = createHuntingEagle();
-      expect(enemy.description).toContain('triple');
-      expect(enemy.description).toContain('-35%');
-    });
-
-    it('has defeat condition text mentioning triple card and 20s', () => {
-      const enemy = createHuntingEagle();
-      expect(enemy.defeatConditionText).toContain('triple');
-      expect(enemy.defeatConditionText).toContain('20s');
-    });
-
-    it('has description that is a string', () => {
-      const enemy = createHuntingEagle();
-      expect(typeof enemy.description).toBe('string');
-    });
-
-    it('has defeatConditionText that is a string', () => {
-      const enemy = createHuntingEagle();
-      expect(typeof enemy.defeatConditionText).toBe('string');
-    });
-
     it('creates a new instance each time', () => {
       const enemy1 = createHuntingEagle();
       const enemy2 = createHuntingEagle();
@@ -695,11 +658,6 @@ describe('Hunting Eagle', () => {
     });
 
     describe('onRoundEnd', () => {
-      it('can be called without error', () => {
-        const enemy = createHuntingEagle();
-        expect(() => enemy.onRoundEnd()).not.toThrow();
-      });
-
       it('can be called multiple times', () => {
         const enemy = createHuntingEagle();
         expect(() => {

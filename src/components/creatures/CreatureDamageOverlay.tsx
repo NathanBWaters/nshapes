@@ -124,7 +124,6 @@ export const CreatureDamageOverlay: React.FC<CreatureDamageOverlayProps> = ({
       pointerEvents="none"
       testID={testID ?? `fighter-damage-${healthState}`}
     >
-      {/* Torso scuff scratches */}
       <View style={StyleSheet.absoluteFill}>
         <Svg width="100%" height="100%" viewBox="0 0 100 100">
           {showScuffed && (

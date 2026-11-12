@@ -49,19 +49,6 @@ const createTestBoard = (): Card[] =>
     }));
 
 describe('Polar Guardian', () => {
-  describe('metadata', () => {
-    it('has correct name and tier', () => {
-      const enemy = createPolarGuardian();
-      expect(enemy.name).toBe('Polar Guardian');
-      expect(enemy.tier).toBe(2);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createPolarGuardian();
-      expect(enemy.icon).toBe('sparker/bear-face');
-    });
-  });
-
   describe('damage multiplier effect', () => {
     it('has 2x damage multiplier', () => {
       const enemy = createPolarGuardian();

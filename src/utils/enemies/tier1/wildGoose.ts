@@ -8,9 +8,6 @@
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { PositionShuffleEffect, composeEffects } from '../../enemyEffects';
 
-/**
- * Creates a fresh Wild Goose enemy instance.
- */
 export function createWildGoose(): EnemyInstance {
   return composeEffects(
     {
@@ -26,7 +23,6 @@ export function createWildGoose(): EnemyInstance {
         config: { intervalMs: 30000 },
       },
     ],
-    // Defeat condition: Match 2 sets that share a card attribute
     // This is tracked by totalMatches >= 2 AND at least one "shared attribute" match
     // For simplicity, we interpret this as: any 2 matches where at least one has all-same attribute
     // Actually the spec says "share a card attribute" meaning two consecutive matches have something in common

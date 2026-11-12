@@ -18,7 +18,6 @@ const Notification: React.FC<NotificationProps> = ({
   const opacity = React.useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Fade in
     Animated.timing(opacity, {
       toValue: 1,
       duration: 150,
@@ -27,7 +26,6 @@ const Notification: React.FC<NotificationProps> = ({
 
     // Auto close after duration
     const timer = setTimeout(() => {
-      // Fade out
       Animated.timing(opacity, {
         toValue: 0,
         duration: 150,

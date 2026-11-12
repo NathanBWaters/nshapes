@@ -15,9 +15,6 @@ import {
   composeEffects,
 } from '../../enemyEffects';
 
-/**
- * Creates a fresh The Hydra enemy instance.
- */
 export function createTheHydra(): EnemyInstance {
   return composeEffects(
     {
@@ -35,7 +32,6 @@ export function createTheHydra(): EnemyInstance {
       { behavior: FaceDownEffect, config: { chance: 40, flipChance: 40 } },
       { behavior: TimeStealEffect, config: { amount: 4 } },
     ],
-    // Defeat condition: Match 10 times with no invalid matches
     (stats: RoundStats) => stats.totalMatches >= 10 && stats.invalidMatches === 0
   );
 }

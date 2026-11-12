@@ -8,9 +8,6 @@
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { WeaponCounterEffect, composeEffects } from '../../enemyEffects';
 
-/**
- * Creates a fresh Shadow Bat enemy instance.
- */
 export function createShadowBat(): EnemyInstance {
   return composeEffects(
     {
@@ -26,7 +23,6 @@ export function createShadowBat(): EnemyInstance {
         config: { type: 'laser', reduction: 20 },
       },
     ],
-    // Defeat condition: Get an all-different match
     (stats: RoundStats) => {
       return stats.allDifferentMatches >= 1;
     }

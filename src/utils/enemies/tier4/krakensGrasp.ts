@@ -17,9 +17,6 @@ import {
 // All weapon types for -75% counter
 const WEAPON_TYPES = ['fire', 'explosion', 'laser', 'hint', 'grace', 'time', 'healing'] as const;
 
-/**
- * Creates a fresh Kraken's Grasp enemy instance.
- */
 export function createKrakensGrasp(): EnemyInstance {
   // All weapon types at -50%
   const counterEffects = WEAPON_TYPES.map((type) => ({
@@ -41,7 +38,6 @@ export function createKrakensGrasp(): EnemyInstance {
       { behavior: DudCardEffect, config: { chance: 15 } },
       ...counterEffects,
     ],
-    // Defeat condition: Survive with 5+ cards remaining
     (stats: RoundStats) =>
       stats.currentScore >= stats.targetScore && stats.cardsRemaining >= 5
   );

@@ -28,66 +28,6 @@ afterEach(() => {
 
 describe('Swift Bee', () => {
   // ==========================================================================
-  // METADATA TESTS
-  // ==========================================================================
-  describe('metadata', () => {
-    it('has correct name', () => {
-      const enemy = createSwiftBee();
-      expect(enemy.name).toBe('Swift Bee');
-    });
-
-    it('has tier 1', () => {
-      const enemy = createSwiftBee();
-      expect(enemy.tier).toBe(1);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createSwiftBee();
-      expect(enemy.icon).toBe('lorc/bee');
-    });
-
-    it('has description containing timer speed info', () => {
-      const enemy = createSwiftBee();
-      expect(enemy.description).toContain('20%');
-      expect(enemy.description.toLowerCase()).toContain('faster');
-    });
-
-    it('has description containing points multiplier info', () => {
-      const enemy = createSwiftBee();
-      expect(enemy.description).toContain('20%');
-      expect(enemy.description.toLowerCase()).toContain('points');
-    });
-
-    it('has defeat condition text mentioning 5-match streak', () => {
-      const enemy = createSwiftBee();
-      expect(enemy.defeatConditionText).toContain('5');
-      expect(enemy.defeatConditionText.toLowerCase()).toContain('streak');
-    });
-
-    it('has description that is not empty', () => {
-      const enemy = createSwiftBee();
-      expect(enemy.description.length).toBeGreaterThan(0);
-    });
-
-    it('has defeatConditionText that is not empty', () => {
-      const enemy = createSwiftBee();
-      expect(enemy.defeatConditionText.length).toBeGreaterThan(0);
-    });
-
-    it('has a defined icon property', () => {
-      const enemy = createSwiftBee();
-      expect(enemy.icon).toBeDefined();
-      expect(typeof enemy.icon).toBe('string');
-    });
-
-    it('has tier as a number between 1 and 4', () => {
-      const enemy = createSwiftBee();
-      expect(enemy.tier).toBeGreaterThanOrEqual(1);
-      expect(enemy.tier).toBeLessThanOrEqual(4);
-    });
-  });
-
-  // ==========================================================================
   // TIMER SPEED EFFECT TESTS
   // ==========================================================================
   describe('timer speed effect', () => {

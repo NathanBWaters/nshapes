@@ -13,9 +13,6 @@ import {
   composeEffects,
 } from '../../enemyEffects';
 
-/**
- * Creates a fresh Wicked Imp enemy instance.
- */
 export function createWickedImp(): EnemyInstance {
   return composeEffects(
     {
@@ -31,7 +28,6 @@ export function createWickedImp(): EnemyInstance {
       { behavior: WeaponCounterEffect, config: { type: 'grace', reduction: 55 } },
       { behavior: WeaponCounterEffect, config: { type: 'time', reduction: 55 } },
     ],
-    // Defeat condition: Beat target with 3+ graces unused
     (stats: RoundStats) =>
       stats.currentScore >= stats.targetScore && stats.gracesRemaining >= 3
   );

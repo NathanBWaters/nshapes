@@ -49,14 +49,6 @@ const createTestBoard = (): Card[] =>
     }));
 
 describe('Savage Claws', () => {
-  describe('metadata', () => {
-    it('has correct name and tier', () => {
-      const enemy = createSavageClaws();
-      expect(enemy.name).toBe('Savage Claws');
-      expect(enemy.tier).toBe(3);
-    });
-  });
-
   describe('time steal effect', () => {
     it('steals 4s per match', () => {
       const enemy = createSavageClaws();

@@ -8,9 +8,6 @@
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { WeaponCounterEffect, composeEffects } from '../../enemyEffects';
 
-/**
- * Creates a fresh Foggy Frog enemy instance.
- */
 export function createFoggyFrog(): EnemyInstance {
   return composeEffects(
     {
@@ -26,7 +23,6 @@ export function createFoggyFrog(): EnemyInstance {
         config: { type: 'hint', reduction: 15 },
       },
     ],
-    // Defeat condition: Achieve minimum score with 2+ hints remaining
     (stats: RoundStats) => {
       return stats.currentScore >= stats.targetScore && stats.hintsRemaining >= 2;
     }

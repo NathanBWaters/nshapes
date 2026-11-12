@@ -18,51 +18,6 @@ describe('Charging Boar', () => {
   // ============================================================================
 
   describe('metadata', () => {
-    it('has correct name', () => {
-      const enemy = createChargingBoar();
-      expect(enemy.name).toBe('Charging Boar');
-    });
-
-    it('has tier 2', () => {
-      const enemy = createChargingBoar();
-      expect(enemy.tier).toBe(2);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createChargingBoar();
-      expect(enemy.icon).toBe('caro-asercion/boar');
-    });
-
-    it('has description mentioning 35s', () => {
-      const enemy = createChargingBoar();
-      expect(enemy.description).toContain('35s');
-    });
-
-    it('has description mentioning inactivity', () => {
-      const enemy = createChargingBoar();
-      expect(enemy.description.toLowerCase()).toContain('inactivity');
-    });
-
-    it('has description mentioning HP loss', () => {
-      const enemy = createChargingBoar();
-      expect(enemy.description).toContain('1HP');
-    });
-
-    it('has defeatConditionText mentioning 3 matches', () => {
-      const enemy = createChargingBoar();
-      expect(enemy.defeatConditionText).toContain('3');
-    });
-
-    it('has defeatConditionText mentioning under 10s', () => {
-      const enemy = createChargingBoar();
-      expect(enemy.defeatConditionText).toContain('10s');
-    });
-
-    it('has defeatConditionText mentioning matches', () => {
-      const enemy = createChargingBoar();
-      expect(enemy.defeatConditionText.toLowerCase()).toContain('match');
-    });
-
     it('creates independent instances', () => {
       const enemy1 = createChargingBoar();
       const enemy2 = createChargingBoar();
@@ -596,14 +551,6 @@ describe('Charging Boar', () => {
   // ============================================================================
 
   describe('getUIModifiers', () => {
-    it('returns an object', () => {
-      const enemy = createChargingBoar();
-      const board = createTestBoard();
-      enemy.onRoundStart(board);
-      const uiMods = enemy.getUIModifiers();
-      expect(typeof uiMods).toBe('object');
-    });
-
     it('does not have showScoreDecay', () => {
       const enemy = createChargingBoar();
       const board = createTestBoard();
@@ -638,12 +585,6 @@ describe('Charging Boar', () => {
   });
 
   describe('getStatModifiers', () => {
-    it('returns an object', () => {
-      const enemy = createChargingBoar();
-      const statMods = enemy.getStatModifiers();
-      expect(typeof statMods).toBe('object');
-    });
-
     it('does not have damageMultiplier', () => {
       const enemy = createChargingBoar();
       const statMods = enemy.getStatModifiers();

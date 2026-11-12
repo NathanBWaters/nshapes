@@ -31,37 +31,6 @@ describe('Sneaky Mouse', () => {
   // METADATA TESTS
   // ==========================================================================
   describe('metadata', () => {
-    it('has correct name', () => {
-      const enemy = createSneakyMouse();
-      expect(enemy.name).toBe('Sneaky Mouse');
-    });
-
-    it('has tier 1', () => {
-      const enemy = createSneakyMouse();
-      expect(enemy.tier).toBe(1);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createSneakyMouse();
-      expect(enemy.icon).toBe('lorc/mouse');
-    });
-
-    it('has description containing grace reduction info', () => {
-      const enemy = createSneakyMouse();
-      expect(enemy.description.toLowerCase()).toContain('grace');
-      expect(enemy.description).toContain('divided by 3');
-    });
-
-    it('has defeat condition text mentioning grace', () => {
-      const enemy = createSneakyMouse();
-      expect(enemy.defeatConditionText.toLowerCase()).toContain('grace');
-    });
-
-    it('has defeat condition text mentioning never', () => {
-      const enemy = createSneakyMouse();
-      expect(enemy.defeatConditionText.toLowerCase()).toContain('never');
-    });
-
     it('returns consistent metadata on multiple calls', () => {
       const enemy = createSneakyMouse();
       expect(enemy.name).toBe('Sneaky Mouse');

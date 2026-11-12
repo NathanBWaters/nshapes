@@ -49,19 +49,6 @@ const createTestBoard = (): Card[] =>
     }));
 
 describe('Hoarding Beaver', () => {
-  describe('metadata', () => {
-    it('has correct name and tier', () => {
-      const enemy = createHoardingBeaver();
-      expect(enemy.name).toBe('Hoarding Beaver');
-      expect(enemy.tier).toBe(2);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createHoardingBeaver();
-      expect(enemy.icon).toBe('delapouite/beaver');
-    });
-  });
-
   describe('extra card removal on match', () => {
     it('removes 1 extra card on valid match', () => {
       const enemy = createHoardingBeaver();

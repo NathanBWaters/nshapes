@@ -8,9 +8,6 @@
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { TimerSpeedEffect, composeEffects } from '../../enemyEffects';
 
-/**
- * Creates a fresh Diving Hawk enemy instance.
- */
 export function createDivingHawk(): EnemyInstance {
   return composeEffects(
     {
@@ -23,7 +20,6 @@ export function createDivingHawk(): EnemyInstance {
     [
       { behavior: TimerSpeedEffect, config: { multiplier: 1.35 } },
     ],
-    // Defeat condition: 3 all-different matches
     (stats: RoundStats) => stats.allDifferentMatches >= 3
   );
 }

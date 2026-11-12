@@ -13,9 +13,6 @@ import {
   composeEffects,
 } from '../../enemyEffects';
 
-/**
- * Creates a fresh Nightmare Squid enemy instance.
- */
 export function createNightmareSquid(): EnemyInstance {
   return composeEffects(
     {
@@ -30,7 +27,6 @@ export function createNightmareSquid(): EnemyInstance {
       { behavior: PositionShuffleEffect, config: { intervalMs: 15000 } },
       { behavior: ScoreDecayEffect, config: { ratePerSecond: 0.2 } },
     ],
-    // Defeat condition: Score 200% of target
     (stats: RoundStats) => stats.currentScore >= stats.targetScore * 2
   );
 }

@@ -80,7 +80,6 @@ export const EmperorPenguinRig: React.FC<CreatureRigProps> = ({
           strokeWidth={3.3}
           strokeLinejoin="round"
         />
-        {/* Snow-white belly */}
         <Ellipse cx={50} cy={70} rx={16.5} ry={17} fill="#FFFFFF" />
         {/* Warm Emperor golden-amber upper chest glow */}
         <Path
@@ -99,7 +98,6 @@ export const EmperorPenguinRig: React.FC<CreatureRigProps> = ({
 
       {/* 5. Royal Head, Golden Crown & Beak (pivots at 50, 39) */}
       <RigLayer style={headStyle}>
-        {/* Sleek Penguin Hood */}
         <Ellipse
           cx={50}
           cy={38}
@@ -128,13 +126,10 @@ export const EmperorPenguinRig: React.FC<CreatureRigProps> = ({
           <Circle cx={50} cy={17.5} r={2.2} fill={COLORS.logicTeal} />
         </G>
 
-        {/* Eyes */}
         <CreatureEyes expression={expression} gazeOffset={gazeOffset} leftX={39.5} rightX={60.5} y={39} radius={4.3} />
 
-        {/* Golden-Orange Diamond Beak */}
         {isOpenBeak ? (
           <G>
-            {/* Open trumpeting beak! */}
             <Polygon
               points="43,45 57,45 50,40.5"
               fill={COLORS.actionYellow}

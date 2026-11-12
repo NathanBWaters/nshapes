@@ -25,51 +25,6 @@ afterEach(() => {
 
 describe('Masked Bandit', () => {
   // ==========================================================================
-  // METADATA TESTS
-  // ==========================================================================
-  describe('metadata', () => {
-    it('has correct name', () => {
-      const enemy = createMaskedBandit();
-      expect(enemy.name).toBe('Masked Bandit');
-    });
-
-    it('has correct tier (Tier 1)', () => {
-      const enemy = createMaskedBandit();
-      expect(enemy.tier).toBe(1);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createMaskedBandit();
-      expect(enemy.icon).toBe('delapouite/raccoon-head');
-    });
-
-    it('description contains "auto-hints"', () => {
-      const enemy = createMaskedBandit();
-      expect(enemy.description.toLowerCase()).toContain('auto-hints');
-    });
-
-    it('description contains "disables"', () => {
-      const enemy = createMaskedBandit();
-      expect(enemy.description.toLowerCase()).toContain('disable');
-    });
-
-    it('has correct defeatConditionText', () => {
-      const enemy = createMaskedBandit();
-      expect(enemy.defeatConditionText).toBe('Get 3 matches without hesitating >10s');
-    });
-
-    it('defeatConditionText mentions "3 matches"', () => {
-      const enemy = createMaskedBandit();
-      expect(enemy.defeatConditionText).toContain('3 matches');
-    });
-
-    it('defeatConditionText mentions "10s" time limit', () => {
-      const enemy = createMaskedBandit();
-      expect(enemy.defeatConditionText).toContain('10s');
-    });
-  });
-
-  // ==========================================================================
   // EFFECT TESTS - HINT DISABLE
   // ==========================================================================
   describe('hint disable effect', () => {

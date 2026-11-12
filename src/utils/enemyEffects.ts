@@ -19,10 +19,6 @@ import type {
   RoundStats,
 } from '@/types/enemy';
 
-// ============================================================================
-// DUMMY ENEMY
-// ============================================================================
-
 /**
  * Create a no-op enemy for testing.
  * All hooks return empty/neutral deltas.
@@ -79,10 +75,6 @@ export function createDummyEnemy(): EnemyInstance {
     getStatModifiers: (): EnemyStatModifiers => ({}),
   };
 }
-
-// ============================================================================
-// INDIVIDUAL EFFECT BEHAVIORS
-// ============================================================================
 
 /**
  * DudCardEffect - Creates dud cards that cannot be selected or matched
@@ -807,10 +799,6 @@ export const TripleCardEffect: EffectBehavior = {
     return {};
   },
 };
-
-// ============================================================================
-// COMPOSITION HELPER
-// ============================================================================
 
 /**
  * Composes multiple effect behaviors into a single EnemyInstance.

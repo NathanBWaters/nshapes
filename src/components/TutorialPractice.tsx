@@ -68,7 +68,6 @@ const TutorialPractice: React.FC<TutorialPracticeProps> = ({ onComplete, onSkip 
 
   // Handle valid match - same signature as real game
   const handleValidMatch = useCallback((matchedCards: CardType[], rewards: CardReward[]) => {
-    // Show success feedback
     setFeedbackData({
       isValid: true,
       explanation: "Great job! You found a valid SET!",
@@ -143,7 +142,6 @@ const TutorialPractice: React.FC<TutorialPracticeProps> = ({ onComplete, onSkip 
 
   return (
     <View style={styles.container}>
-      {/* Tutorial Header Banner */}
       <View style={styles.tutorialBanner}>
         <Text style={styles.tutorialTitle}>Practice Mode</Text>
         <Text style={styles.tutorialSubtitle}>Find {tutorialTarget - matchCount} more SET{tutorialTarget - matchCount !== 1 ? 's' : ''} to continue</Text>
@@ -186,7 +184,6 @@ const TutorialPractice: React.FC<TutorialPracticeProps> = ({ onComplete, onSkip 
         />
       </View>
 
-      {/* Skip button */}
       <TouchableOpacity style={styles.skipButton} onPress={onSkip}>
         <Text style={styles.skipButtonText}>Skip Tutorial</Text>
       </TouchableOpacity>
@@ -199,7 +196,6 @@ const TutorialPractice: React.FC<TutorialPracticeProps> = ({ onComplete, onSkip 
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            {/* Result Banner */}
             <View style={[
               styles.resultBanner,
               feedbackData?.isValid ? styles.resultCorrect : styles.resultIncorrect,
@@ -212,7 +208,6 @@ const TutorialPractice: React.FC<TutorialPracticeProps> = ({ onComplete, onSkip 
               </Text>
             </View>
 
-            {/* Selected cards display */}
             <View style={styles.selectedCardsRow}>
               {feedbackData?.matchedCards.map(card => (
                 <View key={card.id} style={styles.miniCardWrapper}>
@@ -221,12 +216,10 @@ const TutorialPractice: React.FC<TutorialPracticeProps> = ({ onComplete, onSkip 
               ))}
             </View>
 
-            {/* Explanation */}
             <View style={styles.explanationBox}>
               <Text style={styles.explanationText}>{feedbackData?.explanation}</Text>
             </View>
 
-            {/* Continue button */}
             <TouchableOpacity style={styles.continueButton} onPress={handleContinueFeedback}>
               <Text style={styles.continueButtonText}>
                 {matchCount >= 2 ? "Finish Practice" : "Continue"}
@@ -300,7 +293,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     opacity: 0.6,
   },
-  // Modal styles
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(18, 18, 18, 0.8)',

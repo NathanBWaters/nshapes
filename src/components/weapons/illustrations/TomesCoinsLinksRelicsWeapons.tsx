@@ -20,7 +20,6 @@ const MasteryGrimoireFrame: React.FC<MasteryGrimoireFrameProps> = ({
   <Svg width="100%" height="100%" viewBox="0 0 100 100">
     {/* Elemental aura behind rising crest */}
     <Circle cx={50} cy={36} r={24} fill={accentColor} opacity={0.18} />
-    {/* Hardcover leather binding */}
     <Path
       d="M 10 56 L 46 62 L 54 62 L 90 56 L 86 84 L 54 88 L 46 88 L 14 84 Z"
       fill={bindingColor}
@@ -28,7 +27,6 @@ const MasteryGrimoireFrame: React.FC<MasteryGrimoireFrameProps> = ({
       strokeWidth={3.3}
       strokeLinejoin="round"
     />
-    {/* Rarity corner clasps */}
     <Polygon points="10,56 20,57.5 19,65 11,64" fill={trim.metal} stroke={STROKE} strokeWidth={2} strokeLinejoin="round" />
     <Polygon points="90,56 80,57.5 81,65 89,64" fill={trim.metal} stroke={STROKE} strokeWidth={2} strokeLinejoin="round" />
     {/* Open fanned cream pages */}
@@ -48,7 +46,6 @@ const MasteryGrimoireFrame: React.FC<MasteryGrimoireFrameProps> = ({
       strokeWidth={2.1}
       strokeLinecap="round"
     />
-    {/* Notched ribbon bookmark */}
     <Polygon
       points="46,83 54,83 55,95 50,91 45,95"
       fill={accentColor}
@@ -66,7 +63,6 @@ export const TOMES_COINS_LINKS_RELICS_WEAPON_RELICS: Record<string, WeaponRelic>
     tapStyle: 'tome',
     art: () => (
     <Svg width="100%" height="100%" viewBox="0 0 100 100">
-      {/* Sapphire-bound leather covers */}
       <Path
         d="M 11 32 L 46 39 L 54 39 L 89 32 L 86 78 L 54 84 L 46 84 L 14 78 Z"
         fill="#1D4ED8"
@@ -74,7 +70,6 @@ export const TOMES_COINS_LINKS_RELICS_WEAPON_RELICS: Record<string, WeaponRelic>
         strokeWidth={3.3}
         strokeLinejoin="round"
       />
-      {/* Cream open pages */}
       <Path
         d="M 16 26 C 28 22, 41 25, 50 33 C 59 25, 72 22, 84 26 L 81 71 C 70 67, 59 70, 50 77 C 41 70, 30 67, 19 71 Z"
         fill="#FFF7ED"
@@ -89,7 +84,6 @@ export const TOMES_COINS_LINKS_RELICS_WEAPON_RELICS: Record<string, WeaponRelic>
         <Line x1={25} y1={47} x2={42} y2={50} />
         <Line x1={25} y1={56} x2={38} y2={58} />
       </G>
-      {/* Red ribbon bookmark */}
       <Polygon
         points="46,76 54,76 55,92 50,87 45,92"
         fill="#E11D48"
@@ -114,7 +108,6 @@ export const TOMES_COINS_LINKS_RELICS_WEAPON_RELICS: Record<string, WeaponRelic>
     tapStyle: 'tome',
     art: () => (
     <Svg width="100%" height="100%" viewBox="0 0 100 100">
-      {/* Epic purple-and-gold spellbook */}
       <Path
         d="M 10 52 L 46 58 L 54 58 L 90 52 L 86 83 L 54 88 L 46 88 L 14 83 Z"
         fill="#7E22CE"
@@ -151,7 +144,6 @@ export const TOMES_COINS_LINKS_RELICS_WEAPON_RELICS: Record<string, WeaponRelic>
     tapStyle: 'connector',
     art: (trim) => (
     <Svg width="100%" height="100%" viewBox="0 0 100 100">
-      {/* Floating gold coin-runes */}
       <Circle cx={24} cy={21} r={7.5} fill={COLORS.actionYellow} stroke={STROKE} strokeWidth={2.6} />
       <Circle cx={50} cy={15} r={8.5} fill={COLORS.actionYellow} stroke={STROKE} strokeWidth={2.6} />
       <Circle cx={76} cy={21} r={7.5} fill={COLORS.actionYellow} stroke={STROKE} strokeWidth={2.6} />
@@ -167,7 +159,6 @@ export const TOMES_COINS_LINKS_RELICS_WEAPON_RELICS: Record<string, WeaponRelic>
         strokeWidth={3.4}
       />
       <Rect x={20} y={34} width={11} height={50} rx={4} fill="#172554" stroke={STROKE} strokeWidth={3} />
-      {/* Crossed golden chains */}
       <G stroke={STROKE} strokeWidth={7.5} strokeLinecap="round">
         <Line x1={22} y1={42} x2={78} y2={76} />
         <Line x1={78} y1={42} x2={22} y2={76} />
@@ -408,7 +399,6 @@ export const TOMES_COINS_LINKS_RELICS_WEAPON_RELICS: Record<string, WeaponRelic>
     tapStyle: 'tome',
     art: (trim) => (
     <MasteryGrimoireFrame bindingColor="#0E7490" accentColor="#22D3EE" trim={trim}>
-      {/* Mini side wings */}
       <Path
         d="M 33 32 L 18 23 L 22 35 L 33 38 Z M 67 32 L 82 23 L 78 35 L 67 38 Z"
         fill="#FFFFFF"
@@ -501,10 +491,8 @@ export const TOMES_COINS_LINKS_RELICS_WEAPON_RELICS: Record<string, WeaponRelic>
     tapStyle: 'coin',
     art: () => (
     <Svg width="100%" height="100%" viewBox="0 0 100 100">
-      {/* Radiant halo above */}
       <Ellipse cx={50} cy={17} rx={22} ry={6.5} fill="none" stroke={STROKE} strokeWidth={6.5} />
       <Ellipse cx={50} cy={17} rx={22} ry={6.5} fill="none" stroke={COLORS.actionYellow} strokeWidth={3} />
-      {/* Seraph white wings */}
       <Path
         d="M 30 50 L 7 32 C 7 46, 13 55, 22 57 C 13 61, 17 72, 31 67 Z"
         fill="#FFFFFF"
@@ -519,7 +507,6 @@ export const TOMES_COINS_LINKS_RELICS_WEAPON_RELICS: Record<string, WeaponRelic>
         strokeWidth={3.1}
         strokeLinejoin="round"
       />
-      {/* Sovereign golden coin */}
       <Circle cx={50} cy={57} r={25} fill="#F59E0B" stroke={STROKE} strokeWidth={3.3} />
       <Circle cx={50} cy={57} r={19} fill={COLORS.actionYellow} stroke={STROKE} strokeWidth={2.6} />
       <Polygon
@@ -537,7 +524,6 @@ export const TOMES_COINS_LINKS_RELICS_WEAPON_RELICS: Record<string, WeaponRelic>
     tapStyle: 'connector',
     art: (trim) => (
     <Svg width="100%" height="100%" viewBox="0 0 100 100">
-      {/* Carved rose-stone heart */}
       <Path
         d="M 50 86 C 28 72, 18 55, 20 40 C 22 27, 34 22, 44 29 L 50 35 L 56 29 C 66 22, 78 27, 80 40 C 82 55, 72 72, 50 86 Z"
         fill="#FB7185"
@@ -650,7 +636,6 @@ export const TOMES_COINS_LINKS_RELICS_WEAPON_RELICS: Record<string, WeaponRelic>
         strokeWidth={3.2}
         strokeLinejoin="round"
       />
-      {/* Binding central diamond */}
       <Polygon
         points="50,39 58,50 50,61 42,50"
         fill="#FFFFFF"
@@ -730,7 +715,6 @@ export const TOMES_COINS_LINKS_RELICS_WEAPON_RELICS: Record<string, WeaponRelic>
         strokeWidth={2.6}
         strokeLinejoin="round"
       />
-      {/* Glistening dewdrops */}
       <Circle cx={50} cy={50} r={6} fill="#38BDF8" stroke={STROKE} strokeWidth={2.5} />
       <Circle cx={74} cy={26} r={4} fill="#FFFFFF" stroke={STROKE} strokeWidth={2} />
       <Circle cx={26} cy={74} r={3.8} fill="#BAE6FD" stroke={STROKE} strokeWidth={2} />
@@ -782,7 +766,6 @@ export const TOMES_COINS_LINKS_RELICS_WEAPON_RELICS: Record<string, WeaponRelic>
       {/* Right teal metallic sonic ring */}
       <Circle cx={61} cy={50} r={24} fill="none" stroke={STROKE} strokeWidth={11} />
       <Circle cx={61} cy={50} r={24} fill="none" stroke={COLORS.logicTeal} strokeWidth={5.2} />
-      {/* Interlock over-pass */}
       <Path d="M 50 29 A 24 24 0 0 1 63 50" fill="none" stroke={STROKE} strokeWidth={11} />
       <Path d="M 50 29 A 24 24 0 0 1 63 50" fill="none" stroke="#F59E0B" strokeWidth={5.2} />
       <Circle cx={50} cy={50} r={5} fill="#FFFFFF" stroke={STROKE} strokeWidth={2.4} />
@@ -845,7 +828,6 @@ export const TOMES_COINS_LINKS_RELICS_WEAPON_RELICS: Record<string, WeaponRelic>
         stroke="#22D3EE"
         strokeWidth={3.2}
       />
-      {/* Turquoise core */}
       <Circle cx={50} cy={50} r={13} fill="#06B6D4" stroke={STROKE} strokeWidth={3.2} />
       <Circle cx={50} cy={50} r={6} fill="#FFFFFF" />
     </Svg>
@@ -856,7 +838,6 @@ export const TOMES_COINS_LINKS_RELICS_WEAPON_RELICS: Record<string, WeaponRelic>
     tapStyle: 'connector',
     art: () => (
     <Svg width="100%" height="100%" viewBox="0 0 100 100">
-      {/* Synaptic connecting lines */}
       <G stroke={STROKE} strokeWidth={6} strokeLinecap="round">
         <Line x1={50} y1={50} x2={24} y2={28} />
         <Line x1={50} y1={50} x2={76} y2={28} />
@@ -888,7 +869,6 @@ export const TOMES_COINS_LINKS_RELICS_WEAPON_RELICS: Record<string, WeaponRelic>
       <Circle cx={20} cy={64} r={7} fill="#EC4899" stroke={STROKE} strokeWidth={2.8} />
       <Circle cx={80} cy={64} r={7} fill="#EC4899" stroke={STROKE} strokeWidth={2.8} />
       <Circle cx={50} cy={84} r={7} fill="#22D3EE" stroke={STROKE} strokeWidth={2.8} />
-      {/* Central nexus node */}
       <Circle cx={50} cy={50} r={12} fill="#A855F7" stroke={STROKE} strokeWidth={3.2} />
       <Circle cx={50} cy={50} r={5.5} fill="#FFFFFF" />
     </Svg>
@@ -899,7 +879,6 @@ export const TOMES_COINS_LINKS_RELICS_WEAPON_RELICS: Record<string, WeaponRelic>
     tapStyle: 'explosive',
     art: () => (
     <Svg width="100%" height="100%" viewBox="0 0 100 100">
-      {/* Ivory skull silhouette */}
       <Path
         d="M 24 46 C 24 23, 36 14, 50 14 C 64 14, 76 23, 76 46 C 76 57, 70 63, 64 66 L 64 79 L 36 79 L 36 66 C 30 63, 24 57, 24 46 Z"
         fill="#FFF7ED"
@@ -907,7 +886,6 @@ export const TOMES_COINS_LINKS_RELICS_WEAPON_RELICS: Record<string, WeaponRelic>
         strokeWidth={3.4}
         strokeLinejoin="round"
       />
-      {/* Skull teeth lines */}
       <Line x1={45} y1={70} x2={45} y2={79} stroke={STROKE} strokeWidth={2.6} />
       <Line x1={55} y1={70} x2={55} y2={79} stroke={STROKE} strokeWidth={2.6} />
       {/* Eye sockets (one glowing crimson!) & nasal cavity */}
@@ -947,10 +925,8 @@ export const TOMES_COINS_LINKS_RELICS_WEAPON_RELICS: Record<string, WeaponRelic>
         strokeWidth={3.4}
       />
       <Rect x={19} y={14} width={11} height={72} rx={4} fill="#27272A" stroke={STROKE} strokeWidth={3} />
-      {/* Rarity corner brackets */}
       <Polygon points="81,14 69,14 81,26" fill={trim.metal} stroke={STROKE} strokeWidth={2.2} />
       <Polygon points="81,86 69,86 81,74" fill={trim.metal} stroke={STROKE} strokeWidth={2.2} />
-      {/* Silver crescent moon */}
       <Path
         d="M 57 27 A 18 18 0 1 0 57 73 A 14 14 0 1 1 57 27 Z"
         fill="#E2E8F0"
@@ -958,7 +934,6 @@ export const TOMES_COINS_LINKS_RELICS_WEAPON_RELICS: Record<string, WeaponRelic>
         strokeWidth={2.6}
         strokeLinejoin="round"
       />
-      {/* Glowing ruby soul-orb */}
       <Circle cx={57} cy={50} r={10} fill="#E11D48" stroke={STROKE} strokeWidth={2.8} />
       <Circle cx={55} cy={47} r={3.5} fill="#FDA4AF" />
     </Svg>
@@ -993,7 +968,6 @@ export const TOMES_COINS_LINKS_RELICS_WEAPON_RELICS: Record<string, WeaponRelic>
         strokeLinejoin="round"
       />
       <Line x1={50} y1={14} x2={50} y2={88} stroke="#FFFFFF" strokeWidth={2.8} strokeLinecap="round" />
-      {/* Golden wing-guard ring */}
       <Circle cx={50} cy={52} r={12} fill={COLORS.actionYellow} stroke={STROKE} strokeWidth={3.1} />
       <Circle cx={50} cy={52} r={5.5} fill="#FFFFFF" stroke={STROKE} strokeWidth={2.2} />
     </Svg>
@@ -1027,7 +1001,6 @@ export const TOMES_COINS_LINKS_RELICS_WEAPON_RELICS: Record<string, WeaponRelic>
         strokeWidth={2.2}
         strokeLinejoin="round"
       />
-      {/* Kintsugi crimson heart */}
       <Path
         d="M 50 88 C 28 74, 18 57, 20 42 C 22 29, 34 25, 44 32 L 50 38 L 56 32 C 66 25, 78 29, 80 42 C 82 57, 72 74, 50 88 Z"
         fill="#E11D48"

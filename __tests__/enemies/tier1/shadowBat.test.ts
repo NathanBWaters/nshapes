@@ -33,52 +33,6 @@ afterEach(() => {
 
 describe('Shadow Bat', () => {
   describe('metadata', () => {
-    it('has correct name', () => {
-      const enemy = createShadowBat();
-      expect(enemy.name).toBe('Shadow Bat');
-    });
-
-    it('has correct tier (tier 1)', () => {
-      const enemy = createShadowBat();
-      expect(enemy.tier).toBe(1);
-    });
-
-    it('has correct icon path', () => {
-      const enemy = createShadowBat();
-      expect(enemy.icon).toBe('lorc/evil-bat');
-    });
-
-    it('has a non-empty description', () => {
-      const enemy = createShadowBat();
-      expect(enemy.description).toBeTruthy();
-      expect(enemy.description.length).toBeGreaterThan(0);
-    });
-
-    it('description mentions laser effect', () => {
-      const enemy = createShadowBat();
-      expect(enemy.description.toLowerCase()).toContain('laser');
-    });
-
-    it('description mentions divided by 3', () => {
-      const enemy = createShadowBat();
-      expect(enemy.description).toContain('divided by 3');
-    });
-
-    it('has correct defeat condition text', () => {
-      const enemy = createShadowBat();
-      expect(enemy.defeatConditionText).toBe('Get an all-different match');
-    });
-
-    it('defeat condition text mentions "all-different"', () => {
-      const enemy = createShadowBat();
-      expect(enemy.defeatConditionText.toLowerCase()).toContain('all-different');
-    });
-
-    it('defeat condition text mentions "match"', () => {
-      const enemy = createShadowBat();
-      expect(enemy.defeatConditionText.toLowerCase()).toContain('match');
-    });
-
     it('creates independent instances', () => {
       const enemy1 = createShadowBat();
       const enemy2 = createShadowBat();

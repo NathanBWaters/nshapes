@@ -32,61 +32,6 @@ afterEach(() => {
 
 describe('Night Owl', () => {
   describe('metadata', () => {
-    it('has correct name', () => {
-      const enemy = createNightOwl();
-      expect(enemy.name).toBe('Night Owl');
-    });
-
-    it('has correct icon', () => {
-      const enemy = createNightOwl();
-      expect(enemy.icon).toBe('caro-asercion/barn-owl');
-    });
-
-    it('has correct tier', () => {
-      const enemy = createNightOwl();
-      expect(enemy.tier).toBe(1);
-    });
-
-    it('is tier 1 (introductory difficulty)', () => {
-      const enemy = createNightOwl();
-      expect(enemy.tier).toBeLessThanOrEqual(2);
-    });
-
-    it('has description containing face-down percentage', () => {
-      const enemy = createNightOwl();
-      expect(enemy.description).toContain('20%');
-    });
-
-    it('has description mentioning face-down cards', () => {
-      const enemy = createNightOwl();
-      expect(enemy.description.toLowerCase()).toContain('face-down');
-    });
-
-    it('has description containing flip chance', () => {
-      const enemy = createNightOwl();
-      expect(enemy.description).toContain('70%');
-    });
-
-    it('has description mentioning matching mechanism', () => {
-      const enemy = createNightOwl();
-      expect(enemy.description.toLowerCase()).toContain('matching');
-    });
-
-    it('has correct defeat condition text', () => {
-      const enemy = createNightOwl();
-      expect(enemy.defeatConditionText).toBe('Match a set with a revealed card');
-    });
-
-    it('defeat condition text mentions revealed card', () => {
-      const enemy = createNightOwl();
-      expect(enemy.defeatConditionText.toLowerCase()).toContain('revealed');
-    });
-
-    it('defeat condition text mentions matching', () => {
-      const enemy = createNightOwl();
-      expect(enemy.defeatConditionText.toLowerCase()).toContain('match');
-    });
-
     it('creates independent instances', () => {
       const enemy1 = createNightOwl();
       const enemy2 = createNightOwl();

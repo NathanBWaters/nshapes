@@ -12,7 +12,6 @@ export default function Root({ children }: PropsWithChildren) {
           content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover"
         />
 
-        {/* PWA manifest */}
         <link rel="manifest" href="/nshapes/manifest.json" />
 
         {/* Apple touch icons for iOS */}

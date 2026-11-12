@@ -236,10 +236,6 @@ export const SavedGameStorage = {
   },
 };
 
-// =============================================================================
-// NEW LEVEL-BASED PROGRESSION STORAGE
-// =============================================================================
-
 // Level completion record: tracks which characters beat which levels
 interface LevelCompletionRecord {
   levelNumber: number;

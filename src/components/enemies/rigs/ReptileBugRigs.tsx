@@ -173,7 +173,6 @@ export const FrogRig: React.FC<EnemyRigProps<'bramble'>> = (props) => {
             irisColor={iris}
           />
 
-          {/* Frog nostrils */}
           <Circle cx={46.5} cy={43.5} r={1.3} fill={STROKE} />
           <Circle cx={53.5} cy={43.5} r={1.3} fill={STROKE} />
 
@@ -361,7 +360,6 @@ export const IronShellRig: React.FC<EnemyRigProps> = (props) => {
             strokeWidth={2.5}
             strokeLinejoin="round"
           />
-          {/* Cheek spikes */}
           <Polygon points="32,57 25,55 32,62" fill={STEEL_LIGHT} stroke={STROKE} strokeWidth={2} strokeLinejoin="round" />
           <Polygon points="68,57 75,55 68,62" fill={STEEL_LIGHT} stroke={STROKE} strokeWidth={2} strokeLinejoin="round" />
 
@@ -375,7 +373,6 @@ export const IronShellRig: React.FC<EnemyRigProps> = (props) => {
             irisColor="#EF4444"
           />
 
-          {/* Jagged snapping-turtle beak */}
           {openMouth ? (
             <G>
               <Polygon
@@ -601,7 +598,6 @@ export const SerpentRig: React.FC<EnemyRigProps<'viper' | 'cobra'>> = (props) =>
             stroke={STROKE}
             strokeWidth={3.1}
           />
-          {/* Diamond scale markings */}
           <Polygon points="35,69 39,72 35,75 31,72" fill={scaleDark} />
           <Polygon points="50,69 54,72 50,75 46,72" fill={bellyGold} />
           <Polygon points="65,69 69,72 65,75 61,72" fill={scaleDark} />
@@ -617,7 +613,6 @@ export const SerpentRig: React.FC<EnemyRigProps<'viper' | 'cobra'>> = (props) =>
             strokeWidth={3.2}
             strokeLinejoin="round"
           />
-          {/* Crown diamond scale */}
           <Polygon points="50,24 54,29 50,34 46,29" fill={bellyGold} />
 
           <EnemyEyes
@@ -761,7 +756,6 @@ export const ChameleonRig: React.FC<EnemyRigProps> = (props) => {
       }
       body={
         <G>
-          {/* Dorsal spine spikes */}
           <Polygon points="34,54 38,47 43,53 48,46 53,53 58,47 64,54" fill={CHAM_GOLD} stroke={STROKE} strokeWidth={2.2} strokeLinejoin="round" />
           {/* Arched color-shifting rainbow body */}
           <Path
@@ -788,7 +782,6 @@ export const ChameleonRig: React.FC<EnemyRigProps> = (props) => {
           />
           <Polygon points="41,29 50,15 59,29" fill={CHAM_GOLD} />
 
-          {/* Chameleon head */}
           <Ellipse
             cx={50}
             cy={40}
@@ -827,7 +820,6 @@ export const ChameleonRig: React.FC<EnemyRigProps> = (props) => {
       }
       paws={
         <G>
-          {/* Perch branch */}
           <Line x1={20} y1={88} x2={80} y2={88} stroke="#78350F" strokeWidth={5} strokeLinecap="round" />
           <Line x1={20} y1={88} x2={80} y2={88} stroke={STROKE} strokeWidth={1.8} strokeLinecap="round" />
           {/* Gripping split-mitten zygodactyl feet */}
@@ -929,7 +921,6 @@ export const ScorpionRig: React.FC<EnemyRigProps> = (props) => {
             <Path d="M 68 69 L 83 73 L 87 82" />
             <Path d="M 65 75 L 78 81 L 81 89" />
           </G>
-          {/* Segmented dark-crimson/obsidian carapace */}
           <Ellipse
             cx={50}
             cy={66}
@@ -965,7 +956,6 @@ export const ScorpionRig: React.FC<EnemyRigProps> = (props) => {
           <Circle cx={34.5} cy={55} r={1.6} fill={TOXIC_GREEN} />
           <Circle cx={65.5} cy={55} r={1.6} fill={TOXIC_GREEN} />
 
-          {/* Chelicerae mouth */}
           {openMouth ? (
             <Path d="M 43 62 L 47 66 L 50 62 L 53 66 L 57 62" stroke="#FFFFFF" strokeWidth={2.2} strokeLinecap="round" fill="none" />
           ) : (
@@ -1022,7 +1012,6 @@ export const TrapWeaverRig: React.FC<EnemyRigProps> = (props) => {
           <Path d="M 75 76 Q 82 79 89 76" stroke={HOURGLASS_RED} strokeWidth={2.5} fill="none" />
           <Rect x={79.5} y={66.5} width={5} height={3} rx={1} fill="#64748B" stroke={STROKE} strokeWidth={1.6} />
           <Path d="M 82 66.5 Q 86 62 89 64" stroke={STROKE} strokeWidth={2.1} strokeLinecap="round" fill="none" />
-          {/* Lit bomb spark! */}
           <Polygon
             points="90,58 91.5,62 95.5,63.5 91.5,65 90,69 88.5,65 84.5,63.5 88.5,62"
             fill={COLORS.actionYellow}
@@ -1065,7 +1054,6 @@ export const TrapWeaverRig: React.FC<EnemyRigProps> = (props) => {
             <Path d="M 68 69 L 86 71 L 90 84" />
             <Path d="M 64 75 L 78 82 L 81 91" />
           </G>
-          {/* Bulbous velvet-black abdomen */}
           <Ellipse
             cx={50}
             cy={67}
@@ -1085,7 +1073,6 @@ export const TrapWeaverRig: React.FC<EnemyRigProps> = (props) => {
       }
       head={
         <G>
-          {/* Spider cephalothorax head */}
           <Ellipse
             cx={50}
             cy={43}
@@ -1307,7 +1294,6 @@ export const AntRig: React.FC<EnemyRigProps<'scout' | 'soldier' | 'queen' | 'swa
             <Path d="M 64 62 L 81 64 L 86 76" />
             <Path d="M 62 70 L 77 76 L 81 87" />
           </G>
-          {/* Segmented insect thorax */}
           <Ellipse
             cx={50}
             cy={63}
@@ -1377,7 +1363,6 @@ export const AntRig: React.FC<EnemyRigProps<'scout' | 'soldier' | 'queen' | 'swa
             </G>
           )}
 
-          {/* Chitinous ant head */}
           <Path
             d="M 31 36 C 31 24, 39 21, 50 21 C 61 21, 69 24, 69 36 C 69 46, 59 52, 50 52 C 41 52, 31 46, 31 36 Z"
             fill={chitinFill}

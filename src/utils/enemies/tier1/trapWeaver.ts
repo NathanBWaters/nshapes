@@ -38,9 +38,6 @@ const SpawnBombEffect: EffectBehavior = {
   },
 };
 
-/**
- * Creates a fresh Trap Weaver enemy instance.
- */
 export function createTrapWeaver(): EnemyInstance {
   return composeEffects(
     {
@@ -60,7 +57,6 @@ export function createTrapWeaver(): EnemyInstance {
         config: { bombChance: 0, bombTimerMs: 10000, minBoardSize: 6 },
       },
     ],
-    // Defeat condition: Defuse 1 bomb
     (stats: RoundStats) => stats.bombsDefused >= 1
   );
 }

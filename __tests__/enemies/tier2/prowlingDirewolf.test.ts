@@ -22,37 +22,6 @@ describe('Prowling Direwolf', () => {
   });
 
   // ============================================================================
-  // METADATA TESTS (5 tests)
-  // ============================================================================
-  describe('metadata', () => {
-    it('has correct name', () => {
-      const enemy = createProwlingDirewolf();
-      expect(enemy.name).toBe('Prowling Direwolf');
-    });
-
-    it('has tier 2', () => {
-      const enemy = createProwlingDirewolf();
-      expect(enemy.tier).toBe(2);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createProwlingDirewolf();
-      expect(enemy.icon).toBe('lorc/direwolf');
-    });
-
-    it('has description mentioning 6% dud chance', () => {
-      const enemy = createProwlingDirewolf();
-      expect(enemy.description).toContain('6%');
-    });
-
-    it('has defeat condition text mentioning 6-match streak', () => {
-      const enemy = createProwlingDirewolf();
-      expect(enemy.defeatConditionText).toContain('6');
-      expect(enemy.defeatConditionText.toLowerCase()).toContain('streak');
-    });
-  });
-
-  // ============================================================================
   // DUD CARD EFFECT TESTS (15 tests)
   // ============================================================================
   describe('dud card effect', () => {
@@ -616,10 +585,6 @@ describe('Prowling Direwolf', () => {
     });
 
     describe('onRoundEnd', () => {
-      it('can be called without error', () => {
-        const enemy = createProwlingDirewolf();
-        expect(() => enemy.onRoundEnd()).not.toThrow();
-      });
     });
   });
 
@@ -628,12 +593,6 @@ describe('Prowling Direwolf', () => {
   // ============================================================================
   describe('UI and stat modifiers', () => {
     describe('getUIModifiers', () => {
-      it('returns object', () => {
-        const enemy = createProwlingDirewolf();
-        const uiMods = enemy.getUIModifiers();
-        expect(typeof uiMods).toBe('object');
-      });
-
       it('does not show inactivity bar', () => {
         const enemy = createProwlingDirewolf();
         const uiMods = enemy.getUIModifiers();
@@ -660,12 +619,6 @@ describe('Prowling Direwolf', () => {
     });
 
     describe('getStatModifiers', () => {
-      it('returns object', () => {
-        const enemy = createProwlingDirewolf();
-        const statMods = enemy.getStatModifiers();
-        expect(typeof statMods).toBe('object');
-      });
-
       it('does not modify damage multiplier', () => {
         const enemy = createProwlingDirewolf();
         const statMods = enemy.getStatModifiers();

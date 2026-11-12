@@ -8,9 +8,6 @@
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { FaceDownEffect, composeEffects } from '../../enemyEffects';
 
-/**
- * Creates a fresh Night Owl enemy instance.
- */
 export function createNightOwl(): EnemyInstance {
   return composeEffects(
     {
@@ -26,7 +23,6 @@ export function createNightOwl(): EnemyInstance {
         config: { chance: 20, flipChance: 70 },
       },
     ],
-    // Defeat condition: Match at least 1 face-down card
     (stats: RoundStats) => {
       return stats.faceDownCardsMatched >= 1;
     }

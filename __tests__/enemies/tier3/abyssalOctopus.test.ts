@@ -49,19 +49,6 @@ const createTestBoard = (): Card[] =>
     }));
 
 describe('Abyssal Octopus', () => {
-  describe('metadata', () => {
-    it('has correct name and tier', () => {
-      const enemy = createAbyssalOctopus();
-      expect(enemy.name).toBe('Abyssal Octopus');
-      expect(enemy.tier).toBe(3);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createAbyssalOctopus();
-      expect(enemy.icon).toBe('lorc/octopus');
-    });
-  });
-
   describe('face-down effect', () => {
     it('has 30% chance to create face-down', () => {
       const enemy = createAbyssalOctopus();

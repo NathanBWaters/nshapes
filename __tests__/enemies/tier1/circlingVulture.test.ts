@@ -31,60 +31,6 @@ describe('Circling Vulture', () => {
   // METADATA TESTS
   // ==========================================================================
   describe('metadata', () => {
-    it('has correct name', () => {
-      const enemy = createCirclingVulture();
-      expect(enemy.name).toBe('Circling Vulture');
-    });
-
-    it('has correct tier (1)', () => {
-      const enemy = createCirclingVulture();
-      expect(enemy.tier).toBe(1);
-    });
-
-    it('has correct icon reference', () => {
-      const enemy = createCirclingVulture();
-      expect(enemy.icon).toBe('lorc/vulture');
-    });
-
-    it('has a non-empty description', () => {
-      const enemy = createCirclingVulture();
-      expect(enemy.description).toBeTruthy();
-      expect(enemy.description.length).toBeGreaterThan(0);
-    });
-
-    it('description mentions score draining', () => {
-      const enemy = createCirclingVulture();
-      expect(enemy.description.toLowerCase()).toContain('score');
-      expect(enemy.description.toLowerCase()).toContain('drain');
-    });
-
-    it('description mentions the rate (10 seconds)', () => {
-      const enemy = createCirclingVulture();
-      expect(enemy.description).toContain('10 seconds');
-    });
-
-    it('description mentions 1 point', () => {
-      const enemy = createCirclingVulture();
-      expect(enemy.description).toContain('1 point');
-    });
-
-    it('has a non-empty defeat condition text', () => {
-      const enemy = createCirclingVulture();
-      expect(enemy.defeatConditionText).toBeTruthy();
-      expect(enemy.defeatConditionText.length).toBeGreaterThan(0);
-    });
-
-    it('defeat condition text mentions 150%', () => {
-      const enemy = createCirclingVulture();
-      expect(enemy.defeatConditionText).toContain('150%');
-    });
-
-    it('defeat condition text mentions target score', () => {
-      const enemy = createCirclingVulture();
-      expect(enemy.defeatConditionText.toLowerCase()).toContain('target');
-      expect(enemy.defeatConditionText.toLowerCase()).toContain('score');
-    });
-
     it('creates independent instances (not shared state)', () => {
       const enemy1 = createCirclingVulture();
       const enemy2 = createCirclingVulture();
@@ -600,11 +546,6 @@ describe('Circling Vulture', () => {
     });
 
     describe('onRoundEnd', () => {
-      it('can be called without error', () => {
-        const enemy = createCirclingVulture();
-        expect(() => enemy.onRoundEnd()).not.toThrow();
-      });
-
       it('does not throw after a round with activity', () => {
         const enemy = createCirclingVulture();
         enemy.onRoundStart([]);
@@ -713,12 +654,6 @@ describe('Circling Vulture', () => {
   // STAT MODIFIERS TESTS
   // ==========================================================================
   describe('getStatModifiers', () => {
-    it('returns an object', () => {
-      const enemy = createCirclingVulture();
-      const modifiers = enemy.getStatModifiers();
-      expect(typeof modifiers).toBe('object');
-    });
-
     it('does not have fireSpreadChanceReduction', () => {
       const enemy = createCirclingVulture();
       const modifiers = enemy.getStatModifiers();

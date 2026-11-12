@@ -13,9 +13,6 @@ import {
   composeEffects,
 } from '../../enemyEffects';
 
-/**
- * Creates a fresh Abyssal Octopus enemy instance.
- */
 export function createAbyssalOctopus(): EnemyInstance {
   return composeEffects(
     {
@@ -30,7 +27,6 @@ export function createAbyssalOctopus(): EnemyInstance {
       { behavior: PositionShuffleEffect, config: { intervalMs: 20000 } },
       { behavior: CountdownEffect, config: { countdownMs: 10000 } },
     ],
-    // Defeat condition: Match 5 face-down cards
     (stats: RoundStats) => stats.faceDownCardsMatched >= 5
   );
 }

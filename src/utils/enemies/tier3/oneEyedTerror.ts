@@ -13,9 +13,6 @@ import {
   composeEffects,
 } from '../../enemyEffects';
 
-/**
- * Creates a fresh One-Eyed Terror enemy instance.
- */
 export function createOneEyedTerror(): EnemyInstance {
   return composeEffects(
     {
@@ -30,7 +27,6 @@ export function createOneEyedTerror(): EnemyInstance {
       { behavior: AttributeChangeEffect, config: { intervalMs: 12000 } },
       { behavior: WeaponCounterEffect, config: { type: 'hint', reduction: 55 } },
     ],
-    // Defeat condition: 3 all-different matches
     (stats: RoundStats) => stats.allDifferentMatches >= 3
   );
 }

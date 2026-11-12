@@ -20,13 +20,11 @@ const CharacterUnlockScreen: React.FC<CharacterUnlockScreenProps> = ({
     <ScreenTransition>
       <View style={styles.container}>
         <View style={styles.card}>
-          {/* Banner */}
           <View style={styles.banner}>
             <Text style={styles.bannerTitle}>CHARACTER UNLOCKED!</Text>
           </View>
 
           <View style={styles.content}>
-            {/* Animated Character Showcase */}
             <View style={styles.iconSection}>
               <View style={styles.iconContainer}>
                 <FighterAvatar
@@ -39,13 +37,10 @@ const CharacterUnlockScreen: React.FC<CharacterUnlockScreenProps> = ({
               </View>
             </View>
 
-            {/* Character Name */}
             <Text style={styles.characterName}>{character.name}</Text>
 
-            {/* Character Description */}
             <Text style={styles.characterDescription}>{character.description}</Text>
 
-            {/* Starting Weapons */}
             {character.startingWeapons.length > 0 && (
               <View style={styles.weaponsSection}>
                 <Text style={styles.sectionLabel}>STARTING WEAPONS</Text>
@@ -66,7 +61,6 @@ const CharacterUnlockScreen: React.FC<CharacterUnlockScreenProps> = ({
             )}
           </View>
 
-          {/* Continue Button */}
           <TouchableOpacity style={styles.continueButton} onPress={onContinue}>
             <Text style={styles.continueButtonText}>CONTINUE</Text>
           </TouchableOpacity>

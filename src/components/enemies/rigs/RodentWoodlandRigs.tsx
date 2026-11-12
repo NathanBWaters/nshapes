@@ -292,7 +292,6 @@ export const RatMouseRig: React.FC<EnemyRigProps<'junk'>> = ({
 
       {/* 5. Head + Tin-Can Lid Crown (Junk Rat) + Eyes + Whiskers + Mouth */}
       <RigLayer style={headStyle}>
-        {/* Head silhouette */}
         <Path
           d={
             isJunkRat
@@ -307,7 +306,6 @@ export const RatMouseRig: React.FC<EnemyRigProps<'junk'>> = ({
           strokeLinejoin="round"
         />
 
-        {/* Pointed snout bridge */}
         <Ellipse cx={50} cy={52.5} rx={11.5} ry={7.8} fill={belly} />
 
         {/* Bent Tin-Can Lid Crown for Junk Rat */}
@@ -321,12 +319,10 @@ export const RatMouseRig: React.FC<EnemyRigProps<'junk'>> = ({
               strokeLinejoin="round"
             />
             <Path d="M 38 22 Q 50 24.5 62 22" stroke="#64748B" strokeWidth={1.8} fill="none" />
-            {/* Tin pull-tab ring */}
             <Circle cx={50} cy={10} r={3} fill="none" stroke={STROKE} strokeWidth={2.2} />
           </G>
         )}
 
-        {/* Whiskers */}
         <G stroke={STROKE} strokeWidth={2} strokeLinecap="round">
           <Line x1={16} y1={47} x2={29} y2={49} />
           <Line x1={15} y1={53} x2={29} y2={52.5} />
@@ -367,19 +363,15 @@ export const RatMouseRig: React.FC<EnemyRigProps<'junk'>> = ({
       <RigLayer style={pawStyle}>
         {isJunkRat ? (
           <G transform={isFierce ? 'translate(0, -14)' : undefined}>
-            {/* Picked-clean alley fishbone */}
             <Line x1={26} y1={79} x2={72} y2={74} stroke="#F8FAFC" strokeWidth={3.4} strokeLinecap="round" />
             <Line x1={26} y1={79} x2={72} y2={74} stroke={STROKE} strokeWidth={1.4} strokeLinecap="round" />
-            {/* Fish ribs */}
             <Path
               d="M 42 72 L 43 82 M 49 71 L 50 81 M 56 70.5 L 57 80.5"
               stroke={STROKE}
               strokeWidth={2.3}
               strokeLinecap="round"
             />
-            {/* Fish tailfin */}
             <Polygon points="71,74 79,68 78,80" fill="#F8FAFC" stroke={STROKE} strokeWidth={2.2} strokeLinejoin="round" />
-            {/* Fish skull */}
             <Path
               d="M 29 73 C 21 73, 19 82, 28 84 L 33 78 Z"
               fill="#F8FAFC"
@@ -399,7 +391,6 @@ export const RatMouseRig: React.FC<EnemyRigProps<'junk'>> = ({
           </G>
         ) : (
           <G>
-            {/* Sneaky tiptoe paws */}
             <Ellipse cx={43} cy={86.5} rx={5.8} ry={4.2} fill={earInner} stroke={STROKE} strokeWidth={2.6} />
             <Ellipse cx={57} cy={86.5} rx={5.8} ry={4.2} fill={earInner} stroke={STROKE} strokeWidth={2.6} />
             <Line x1={43} y1={84.5} x2={43} y2={88.5} stroke={STROKE} strokeWidth={1.5} />
@@ -513,7 +504,6 @@ export const SquirrelRig: React.FC<EnemyRigProps<'nutkin'>> = ({
         <Path d="M 24 47 Q 21 51.5 24 56" stroke={STROKE} strokeWidth={2} strokeLinecap="round" fill="none" />
         <Path d="M 76 47 Q 79 51.5 76 56" stroke={STROKE} strokeWidth={2} strokeLinecap="round" fill="none" />
 
-        {/* Muzzle patch */}
         <Ellipse cx={50} cy={52.5} rx={12} ry={7.8} fill={cream} />
 
         <EnemyEyes
@@ -526,7 +516,6 @@ export const SquirrelRig: React.FC<EnemyRigProps<'nutkin'>> = ({
           irisColor={isNutkin ? '#9A3412' : '#92400E'}
         />
 
-        {/* Dark woodland nose */}
         <Ellipse cx={50} cy={48.5} rx={3.6} ry={2.6} fill="#451A03" stroke={STROKE} strokeWidth={1.6} />
 
         <WoodlandMouth expression={expression} y={53.2} hasBuckTeeth toothColor="#FFFFFF" />
@@ -535,7 +524,6 @@ export const SquirrelRig: React.FC<EnemyRigProps<'nutkin'>> = ({
       {/* 6. Paws Clutching Giant Oak Acorn */}
       <RigLayer style={pawStyle}>
         <G transform={isFierce ? 'translate(0, -13)' : undefined}>
-          {/* Acorn nut body */}
           <Path
             d="M 40 73 C 40 85, 46 90, 50 92 C 54 90, 60 85, 60 73 Z"
             fill="#B45309"
@@ -698,7 +686,6 @@ export const LagomorphRig: React.FC<EnemyRigProps<'dozy' | 'snow' | 'rabbit'>> =
           />
         )}
 
-        {/* Plump bunny muzzle */}
         <Ellipse cx={50} cy={53} rx={12} ry={7.5} fill={belly} />
 
         <EnemyEyes
@@ -916,7 +903,6 @@ export const QuillBeastRig: React.FC<EnemyRigProps<'porcupine' | 'prickle'>> = (
           strokeWidth={3.2}
           strokeLinejoin="round"
         />
-        {/* Brow cap */}
         <Path
           d="M 26 39 C 28 26, 38 23, 50 23 C 62 23, 72 26, 74 39 L 58 34 L 50 40 L 42 34 Z"
           fill={capFill}
@@ -947,7 +933,6 @@ export const QuillBeastRig: React.FC<EnemyRigProps<'porcupine' | 'prickle'>> = (
           irisColor={isPorcupine ? '#EF4444' : '#B45309'}
         />
 
-        {/* Pointed snout nose */}
         <Circle
           cx={50}
           cy={49.5}
@@ -1157,7 +1142,6 @@ export const BeaverRig: React.FC<EnemyRigProps<'hoarding'>> = ({
           strokeWidth={3.1}
           strokeLinejoin="round"
         />
-        {/* Cross-hatch paddle texture */}
         <G stroke={STROKE} strokeWidth={1.6}>
           <Line x1={74} y1={58} x2={89} y2={71} />
           <Line x1={70} y1={66} x2={83} y2={78} />
@@ -1215,7 +1199,6 @@ export const BeaverRig: React.FC<EnemyRigProps<'hoarding'>> = ({
           </G>
         )}
 
-        {/* Chubby peanut muzzle */}
         <Ellipse cx={43} cy={52.5} rx={8.5} ry={6.5} fill={muzzle} />
         <Ellipse cx={57} cy={52.5} rx={8.5} ry={6.5} fill={muzzle} />
 
@@ -1250,7 +1233,6 @@ export const BeaverRig: React.FC<EnemyRigProps<'hoarding'>> = ({
       {/* 6. Paws + Chewed Timber + Gold Coins (Hoarding Beaver) */}
       <RigLayer style={pawStyle}>
         <G transform={isFierce ? 'translate(0, -13)' : undefined}>
-          {/* Gnawed timber log */}
           <Path
             d="M 26 80 L 45 80 L 48 83 L 52 80 L 74 80 L 74 88 L 26 88 Z"
             fill="#92400E"
@@ -1468,15 +1450,12 @@ export const MaskedBanditRig: React.FC<EnemyRigProps> = ({
           strokeLinecap="round"
           fill="none"
         />
-        {/* Dark bandit eye-mask */}
         <Path
           d="M 23 43 C 29 35, 42 36, 50 41 C 58 36, 71 35, 77 43 C 78 50, 65 53, 55 48 L 50 46 L 45 48 C 35 53, 22 50, 23 43 Z"
           fill={mask}
         />
-        {/* Forehead center streak */}
         <Line x1={50} y1={23} x2={50} y2={39} stroke={mask} strokeWidth={3.5} strokeLinecap="round" />
 
-        {/* Crisp white muzzle */}
         <Ellipse cx={50} cy={53.5} rx={11.5} ry={7.2} fill="#F8FAFC" />
 
         <EnemyEyes
@@ -1497,7 +1476,6 @@ export const MaskedBanditRig: React.FC<EnemyRigProps> = ({
       {/* 6. Bandit Paws Holding Stolen Coin Sack */}
       <RigLayer style={pawStyle}>
         <G transform={isFierce ? 'translate(0, -13)' : undefined}>
-          {/* Stolen coin sack */}
           <Path
             d="M 45 68 L 41 63 L 59 63 L 55 68 C 63 72, 64 87, 50 89 C 36 87, 37 72, 45 68 Z"
             fill="#D97706"
@@ -1592,7 +1570,6 @@ export const LazySlothRig: React.FC<EnemyRigProps> = ({
 
       {/* 5. Sloth Head + Dark Teardrop Eye-Patches */}
       <RigLayer style={headStyle}>
-        {/* Shaggy outer hood */}
         <Path
           d="M 24 44 C 24 26, 35 21, 50 21 C 65 21, 76 26, 76 44 C 76 57, 64 63, 50 63 C 36 63, 24 57, 24 44 Z"
           fill={mossBrown}
@@ -1696,7 +1673,6 @@ export const ChihuahuaRig: React.FC<EnemyRigProps> = ({
           strokeLinejoin="round"
         />
         <Ellipse cx={50} cy={76} rx={10} ry={9.5} fill={cream} />
-        {/* Studded red collar */}
         <Path
           d="M 33 61 Q 50 67 67 61 L 66 66 Q 50 72 34 66 Z"
           fill="#DC2626"
@@ -1704,7 +1680,6 @@ export const ChihuahuaRig: React.FC<EnemyRigProps> = ({
           strokeWidth={2.4}
           strokeLinejoin="round"
         />
-        {/* Silver collar spikes */}
         <Polygon points="38,64 35,69 41,66" fill="#F8FAFC" stroke={STROKE} strokeWidth={1.5} />
         <Polygon points="50,66 48,72 52,72" fill="#F8FAFC" stroke={STROKE} strokeWidth={1.5} />
         <Polygon points="62,64 59,66 65,69" fill="#F8FAFC" stroke={STROKE} strokeWidth={1.5} />

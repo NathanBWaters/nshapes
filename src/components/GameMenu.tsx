@@ -216,7 +216,6 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
 
   const renderMenuOptions = () => (
     <View style={styles.menuContainer}>
-      {/* Header */}
       <View style={styles.modalHeader}>
         <Text style={styles.modalTitle}>Menu</Text>
         {!copilotMode && (
@@ -226,7 +225,6 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
         )}
       </View>
 
-      {/* Menu Options */}
       <View style={styles.menuOptionsContainer}>
         {(playerStats || copilotMode) && withMenuCopilot('menu_stats',
           <TouchableOpacity
@@ -324,7 +322,6 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
         )}
       </View>
 
-      {/* Close Button */}
       <TouchableOpacity onPress={closeModal} style={styles.closeModalButton}>
         <Text style={styles.closeModalButtonText}>CLOSE</Text>
       </TouchableOpacity>
@@ -338,7 +335,6 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
 
   const renderStats = (stats: PlayerStats) => (
     <View style={styles.statsContainer}>
-      {/* Modal Header */}
       <View style={styles.modalHeader}>
         <TouchableOpacity onPress={() => setCurrentScreen('menu')} style={styles.backButton}>
           <Text style={styles.backButtonText}>‹</Text>
@@ -350,7 +346,6 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
       </View>
 
       <ScrollView style={styles.modalContent}>
-        {/* Character Info Section */}
         {character && (
           <View style={styles.categoryContainer}>
             <View style={styles.categoryHeader}>
@@ -374,7 +369,6 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
           </View>
         )}
 
-        {/* Equipped Weapons Section */}
         <WeaponList
           weapons={playerWeapons.length > 0 ? playerWeapons : startingWeapons}
           title={playerWeapons.length > 0 ? 'EQUIPPED WEAPONS' : (startingWeapons.length > 0 ? 'STARTING WEAPONS' : 'EQUIPPED WEAPONS')}
@@ -418,7 +412,6 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
         ))}
       </ScrollView>
 
-      {/* Close Button */}
       <TouchableOpacity onPress={closeModal} style={styles.closeModalButton}>
         <Text style={styles.closeModalButtonText}>CLOSE</Text>
       </TouchableOpacity>
@@ -431,7 +424,6 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
 
   const renderOptions = () => (
     <View style={styles.statsContainer}>
-      {/* Header */}
       <View style={styles.modalHeader}>
         <TouchableOpacity onPress={() => setCurrentScreen('menu')} style={styles.backButton}>
           <Text style={styles.backButtonText}>‹</Text>
@@ -443,7 +435,6 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
       </View>
 
       <View style={styles.modalContent}>
-        {/* Sound Toggle */}
         <View style={styles.categoryContainer}>
           <View style={styles.categoryHeader}>
             <Text style={styles.categoryTitle}>SOUND</Text>
@@ -482,7 +473,6 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
 
   const renderDevTools = () => (
     <View style={styles.statsContainer}>
-      {/* Header */}
       <View style={[styles.modalHeader, styles.devModalHeader]}>
         <TouchableOpacity onPress={() => setCurrentScreen('menu')} style={styles.backButton}>
           <Text style={styles.backButtonText}>‹</Text>
@@ -494,7 +484,6 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
       </View>
 
       <ScrollView style={styles.modalContent}>
-        {/* Game Controls */}
         <View style={styles.categoryContainer}>
           <View style={[styles.categoryHeader, styles.devCategoryHeader]}>
             <Text style={styles.categoryTitle}>GAME CONTROLS</Text>
@@ -533,7 +522,6 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
           </View>
         </View>
 
-        {/* Round Selector */}
         <View style={styles.categoryContainer}>
           <View style={[styles.categoryHeader, styles.devCategoryHeader]}>
             <Text style={styles.categoryTitle}>ROUND SELECT</Text>
@@ -583,7 +571,6 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
           </View>
         </View>
 
-        {/* Card Modifiers */}
         <View style={styles.categoryContainer}>
           <View style={[styles.categoryHeader, styles.devCategoryHeader]}>
             <Text style={styles.categoryTitle}>CARD MODIFIERS</Text>
@@ -604,7 +591,6 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
           </View>
         </View>
 
-        {/* Weapon Controls */}
         <View style={styles.categoryContainer}>
           <View style={[styles.categoryHeader, styles.devCategoryHeader]}>
             <Text style={styles.categoryTitle}>ADD LEGENDARY WEAPONS</Text>
@@ -628,7 +614,6 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
           </TouchableOpacity>
         </View>
 
-        {/* Current Weapons Display */}
         <View style={{ marginBottom: 16 }}>
           <WeaponList
             weapons={playerWeapons}
@@ -638,7 +623,6 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
           />
         </View>
 
-        {/* Current Stats Display */}
         <View style={styles.categoryContainer}>
           <View style={[styles.categoryHeader, styles.devCategoryHeader]}>
             <Text style={styles.categoryTitle}>ACTIVE WEAPON STATS</Text>
@@ -668,7 +652,6 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
         </View>
       </ScrollView>
 
-      {/* Close Button */}
       <TouchableOpacity onPress={closeModal} style={styles.closeModalButton}>
         <Text style={styles.closeModalButtonText}>CLOSE</Text>
       </TouchableOpacity>
@@ -698,7 +681,6 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
     }
   };
 
-  // Menu button content
   const menuButtonContent = (
     <TouchableOpacity
       testID="game-menu-button"
@@ -727,7 +709,6 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
         menuButtonContent
       )}
 
-      {/* Menu Modal */}
       <Modal
         visible={isModalOpen}
         transparent={true}
@@ -741,7 +722,6 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
         </View>
       </Modal>
 
-      {/* Exit Confirmation Modal */}
       <Modal
         visible={showExitConfirm}
         transparent={true}
@@ -964,7 +944,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     letterSpacing: 1,
   },
-  // Weapons display styles
   weaponsGrid: {
     padding: 12,
     gap: 8,
@@ -1027,7 +1006,6 @@ const styles = StyleSheet.create({
     opacity: 0.6,
     fontStyle: 'italic',
   },
-  // Character info styles
   characterInfoContainer: {
     flexDirection: 'row',
     padding: 12,
@@ -1238,7 +1216,6 @@ const styles = StyleSheet.create({
   devRoundButtonTextActive: {
     color: COLORS.canvasWhite,
   },
-  // Options screen styles
   optionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

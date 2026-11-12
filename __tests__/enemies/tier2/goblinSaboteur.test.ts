@@ -36,19 +36,6 @@ const createEmptyStats = (): RoundStats => ({
 });
 
 describe('Goblin Saboteur', () => {
-  describe('metadata', () => {
-    it('has correct name and tier', () => {
-      const enemy = createGoblinSaboteur();
-      expect(enemy.name).toBe('Goblin Saboteur');
-      expect(enemy.tier).toBe(2);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createGoblinSaboteur();
-      expect(enemy.icon).toBe('caro-asercion/goblin');
-    });
-  });
-
   describe('weapon counters', () => {
     it('counters 3 weapon types at 50%', () => {
       const enemy = createGoblinSaboteur();

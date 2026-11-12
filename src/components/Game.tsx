@@ -100,7 +100,6 @@ const Game: React.FC<GameProps> = ({
   forcedEnemy,
   disableTimeout = false,
 }) => {
-  // Character selection state
   const [selectedCharacter, setSelectedCharacter] = useState<string | null>(devMode ? 'Orange Tabby' : null);
   const [gameMode, setGameMode] = useState<GameMode>('adventure');
   const [adventureDifficulty, setAdventureDifficulty] = useState<AdventureDifficulty>('medium');
@@ -130,7 +129,6 @@ const Game: React.FC<GameProps> = ({
   // Track round scores for progress chart
   const [roundHistory, setRoundHistory] = useState<RoundHistoryEntry[]>([]);
 
-  // Tutorial context
   const { startTutorial } = useTutorial();
 
   const [state, setState] = useState<GameState>(() => {
@@ -216,7 +214,6 @@ const Game: React.FC<GameProps> = ({
   // Last match timestamp for auto-hint timing (triggers 15s after last match)
   const [lastMatchTime, setLastMatchTime] = useState<number>(Date.now());
 
-  // Game over reason
   const [gameOverReason, setGameOverReason] = useState<string | null>(null);
 
   // Keyboard shortcut for hints (web only)
@@ -228,10 +225,8 @@ const Game: React.FC<GameProps> = ({
         const hintsAvailable = totalStats.hints ?? 0;
 
         if (hasActiveHint) {
-          // Clear active hint
           setClearHintTrigger(t => t + 1);
         } else if (hintsAvailable > 0) {
-          // Use a hint
           setHintTrigger(t => t + 1);
         }
       }
@@ -280,11 +275,9 @@ const Game: React.FC<GameProps> = ({
   const [showLevelUpModal, setShowLevelUpModal] = useState(false);
   const [inRoundLevelUpQueue, setInRoundLevelUpQueue] = useState<number[]>([]);
 
-  // Dev mode state
   const [devTimerEnabled, setDevTimerEnabled] = useState(!devMode); // Timer disabled by default in dev mode
   const [autoPlayerEnabled, setAutoPlayerEnabled] = useState(autoPlayer); // Start with URL param value
 
-  // Function declarations
   // Add an endGame function
   const endGame = (reason?: string) => {
     // Clear saved adventure game on game end (win or loss)
@@ -441,7 +434,6 @@ const Game: React.FC<GameProps> = ({
 
   useGameTimer(isTimerActive, () => {
     setState(prev => {
-      // Basic time decrement
       let newTime = Math.max(0, prev.remainingTime - 1);
       let newScore = prev.score;
       let newHealth = prev.player.stats.health;
@@ -461,10 +453,8 @@ const Game: React.FC<GameProps> = ({
         // Apply score delta (clamp to 0, ensure integer)
         newScore = Math.max(0, Math.round(prev.score + tickResult.scoreDelta));
 
-        // Apply health delta
         newHealth = prev.player.stats.health + tickResult.healthDelta;
 
-        // Handle instant death
         if (tickResult.instantDeath) {
           newHealth = 0;
         }
@@ -474,7 +464,6 @@ const Game: React.FC<GameProps> = ({
           newBoard = prev.board.filter(card => !tickResult.cardsToRemove.includes(card.id));
         }
 
-        // Apply card modifications
         if (tickResult.cardModifications.length > 0) {
           newBoard = newBoard.map(card => {
             const mod = tickResult.cardModifications.find(m => m.cardId === card.id);
@@ -482,7 +471,6 @@ const Game: React.FC<GameProps> = ({
           });
         }
 
-        // Flip cards
         if (tickResult.cardsToFlip.length > 0) {
           newBoard = newBoard.map(card =>
             tickResult.cardsToFlip.includes(card.id)
@@ -557,7 +545,6 @@ const Game: React.FC<GameProps> = ({
         // Use the existing option
         handleEnemySelect(existingOption);
       } else {
-        // Create the enemy directly and use it
         const enemy = createEnemy(forcedEnemy);
         const option: EnemyOption = {
           enemy,
@@ -604,7 +591,6 @@ const Game: React.FC<GameProps> = ({
     state.board,
   ]);
 
-  // Initialize the game
   // startGame param ensures all game start state is set atomically to avoid React batching issues
   const initGame = useCallback((characterName: string, activeAttributes: AttributeName[], startGame: boolean = false) => {
     const player = initializePlayer('player1', 'Player 1', characterName);
@@ -676,7 +662,6 @@ const Game: React.FC<GameProps> = ({
       }
     }
 
-    // Get the character
     const character = CHARACTERS.find(c => c.name === savedGame.characterName);
     if (!character) {
       setNotification({
@@ -687,7 +672,6 @@ const Game: React.FC<GameProps> = ({
       return;
     }
 
-    // Set up game mode and difficulty
     setGameMode('adventure');
     setAdventureDifficulty(savedGame.adventureDifficulty);
     setSelectedCharacter(savedGame.characterName);
@@ -743,7 +727,6 @@ const Game: React.FC<GameProps> = ({
     });
   };
 
-  // Handle tutorial start
   const handleTutorialStart = () => {
     startTutorial();
     setGamePhase('tutorial');
@@ -789,7 +772,6 @@ const Game: React.FC<GameProps> = ({
       startTime: Date.now()
     }));
 
-    // Start the round
     setGamePhase('round');
   };
 
@@ -866,7 +848,6 @@ const Game: React.FC<GameProps> = ({
     // Clear enemy defeated state after receiving any slayer bonus
     setEnemyDefeated(false);
 
-    // Proceed to shop
     setGamePhase('shop');
   };
 
@@ -972,7 +953,6 @@ const Game: React.FC<GameProps> = ({
       enemyCardsToRemove = matchResult.cardsToRemove;
       enemyCardsToFlip = matchResult.cardsToFlip;
 
-      // Check defeat condition
       const isDefeated = state.activeEnemyInstance.checkDefeatCondition(roundStatsRef.current);
       if (isDefeated) {
         // TODO: Show defeat notification and award slayer bonus
@@ -1010,7 +990,6 @@ const Game: React.FC<GameProps> = ({
     // === WEAPON BONUS EFFECTS (from GameBoard's processWeaponEffects) ===
     const triggerNotifications: string[] = [];
 
-    // Show grace used notification
     if (isGraceMatch) {
       triggerNotifications.push('Grace!');
     }
@@ -1033,7 +1012,6 @@ const Game: React.FC<GameProps> = ({
         playSound('gainGrace');
       }
 
-      // Set fire on cards
       if (weaponEffects.fireCards.length > 0) {
         igniteCards(weaponEffects.fireCards);
         recordWeaponEffect('fire');
@@ -1117,9 +1095,7 @@ const Game: React.FC<GameProps> = ({
       bonusWeaponsEarned: prev.bonusWeaponsEarned + bonusWeaponsCount,
     }));
 
-    // Update game state with rewards
     setState(prevState => {
-      // Calculate new level
       const currentExperience = prevState.player.stats.experience || 0;
       const newExperience = currentExperience + adjustedExperience;
       const currentLevel = prevState.player.stats.level || 0;
@@ -1135,7 +1111,6 @@ const Game: React.FC<GameProps> = ({
 
       // Trigger in-round level-up modal (NEW level-based system)
       if (hasLeveledUp && gameMode === 'adventure' && !state.isEndlessMode) {
-        // Calculate all levels gained
         const levelsGained = newLevel - currentLevel;
         const levelQueue = Array.from(
           { length: levelsGained },
@@ -1243,7 +1218,6 @@ const Game: React.FC<GameProps> = ({
 
           // Check for Neural Network bonus connection
           if (shouldCreateBonusConnection(totalStats)) {
-            // Create a random bonus connection
             const bonusConnections = createRandomConnections(
               state.board.length,
               1,
@@ -1294,14 +1268,12 @@ const Game: React.FC<GameProps> = ({
         replaceMatchedCards(cardsToReplace);
       }
 
-      // Handle board growth if triggered
       if (weaponEffects && weaponEffects.boardGrowth > 0) {
         growBoard(weaponEffects.boardGrowth);
       }
     }, 1500);
   };
 
-  // Set cards on fire
   const igniteCards = (cardsToIgnite: Card[]) => {
     setState(prevState => {
       const updatedBoard = prevState.board.map(card => {
@@ -1432,7 +1404,6 @@ const Game: React.FC<GameProps> = ({
       const newCards: Card[] = [];
       const remainingDeck = [...prevState.deck];
 
-      // Generate new cards
       for (let i = 0; i < cardsToAdd; i++) {
         if (remainingDeck.length === 0) {
           // Refill deck if necessary
@@ -1512,7 +1483,6 @@ const Game: React.FC<GameProps> = ({
 
     // 2+ attributes wrong OR no graces - decrease health
     fighter.triggerMistake({ savedByGrace: false });
-    // Get enemy damage multiplier
     let damageMultiplier = 1;
     if (state.activeEnemyInstance) {
       const statMods = state.activeEnemyInstance.getStatModifiers();
@@ -1540,7 +1510,6 @@ const Game: React.FC<GameProps> = ({
           endGame('You ran out of health from invalid matches!');
         }, 100);
       } else {
-        // Show damage notification
         setNotification({
           message: `-1 ♥`,
           type: 'error'
@@ -1605,7 +1574,6 @@ const Game: React.FC<GameProps> = ({
     }));
   };
 
-  // Dev mode callbacks
   const devCallbacks: DevModeCallbacks | undefined = devMode ? {
     onAddWeapon: (weapon: Weapon) => {
       setState(prevState => ({
@@ -1720,9 +1688,7 @@ const Game: React.FC<GameProps> = ({
     currentAttributes: state.activeAttributes.length,
   } : undefined;
 
-  // Replace matched cards
   const replaceMatchedCards = (matchedCards: Card[]) => {
-    // Get new cards from the deck
     const newCards: Card[] = [];
     const remainingDeck = [...state.deck];
 
@@ -1744,7 +1710,6 @@ const Game: React.FC<GameProps> = ({
     // Generate replacement cards for ALL cards being destroyed (matched + linked)
     // Note: Card modifiers (health, bombs, etc.) are applied by the enemy system via onCardDraw
     for (let i = 0; i < allCardsToReplace.length; i++) {
-      // Check if we need to refill the deck
       if (remainingDeck.length === 0) {
         // Refill the deck with active attributes, excluding cards already on board or being added
         const additionalCards = createDeck(state.activeAttributes);
@@ -1758,7 +1723,6 @@ const Game: React.FC<GameProps> = ({
       }
 
       if (remainingDeck.length > 0) {
-        // Get a random card from the deck
         const randomIndex = Math.floor(Math.random() * remainingDeck.length);
         let newCard = { ...remainingDeck[randomIndex], selected: false };
 
@@ -1947,7 +1911,6 @@ const Game: React.FC<GameProps> = ({
     connections: state.connections,
   };
 
-  // Render the appropriate game phase
   const renderGamePhase = () => {
     switch (gamePhase) {
       case 'main_menu':

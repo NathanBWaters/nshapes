@@ -37,7 +37,6 @@ export const OrangeTabbyRig: React.FC<CreatureRigProps> = ({
           strokeWidth={3.2}
           strokeLinejoin="round"
         />
-        {/* Tail tiger rings */}
         <Path d="M 82 69 L 88 67" stroke={TABBY_STRIPE} strokeWidth={2.8} strokeLinecap="round" />
         <Path d="M 84 58 L 90 56" stroke={TABBY_STRIPE} strokeWidth={2.8} strokeLinecap="round" />
       </RigLayer>
@@ -51,12 +50,9 @@ export const OrangeTabbyRig: React.FC<CreatureRigProps> = ({
           strokeWidth={3.3}
           strokeLinejoin="round"
         />
-        {/* Cream belly patch */}
         <Ellipse cx={50} cy={76} rx={12.5} ry={10.5} fill={TABBY_CREAM} />
-        {/* Side tabby stripes */}
         <Path d="M 29 70 L 35 71 M 28 77 L 35 77" stroke={TABBY_STRIPE} strokeWidth={2.6} strokeLinecap="round" />
         <Path d="M 71 70 L 65 71 M 72 77 L 65 77" stroke={TABBY_STRIPE} strokeWidth={2.6} strokeLinecap="round" />
-        {/* Logic-Teal Collar */}
         <Path
           d="M 34 61 Q 50 67 66 61"
           stroke={COLORS.logicTeal}
@@ -71,7 +67,6 @@ export const OrangeTabbyRig: React.FC<CreatureRigProps> = ({
           strokeLinecap="round"
           fill="none"
         />
-        {/* Golden Jingle Bell */}
         <Circle cx={50} cy={66.5} r={4.2} fill={COLORS.actionYellow} stroke={STROKE} strokeWidth={2.2} />
         <Circle cx={50} cy={67.5} r={1.1} fill={STROKE} />
       </RigLayer>
@@ -106,7 +101,6 @@ export const OrangeTabbyRig: React.FC<CreatureRigProps> = ({
 
       {/* 5. Expressive Tabby Head & Whiskers (pivots at 50, 48) */}
       <RigLayer style={headStyle}>
-        {/* Fluffy cheek silhouette */}
         <Path
           d={
             isRuffled
@@ -125,10 +119,8 @@ export const OrangeTabbyRig: React.FC<CreatureRigProps> = ({
           strokeWidth={2.8}
           strokeLinecap="round"
         />
-        {/* Cream muzzle peanut */}
         <Ellipse cx={50} cy={52.5} rx={12.5} ry={7.5} fill={TABBY_CREAM} />
 
-        {/* Side whiskers */}
         <G stroke={STROKE} strokeWidth={2.1} strokeLinecap="round">
           <Line x1={17} y1={46} x2={28} y2={48} />
           <Line x1={16} y1={52} x2={28} y2={52} />
@@ -136,7 +128,6 @@ export const OrangeTabbyRig: React.FC<CreatureRigProps> = ({
           <Line x1={84} y1={52} x2={72} y2={52} />
         </G>
 
-        {/* Eyes */}
         <CreatureEyes expression={expression} gazeOffset={gazeOffset} leftX={38.5} rightX={61.5} y={42.5} radius={4.6} />
 
         {/* Cute pink triangle nose */}
@@ -148,7 +139,6 @@ export const OrangeTabbyRig: React.FC<CreatureRigProps> = ({
           strokeLinejoin="round"
         />
 
-        {/* Mouth */}
         {isCheering ? (
           // Big joyful 'meow!' open mouth
           <Path
@@ -193,7 +183,6 @@ export const OrangeTabbyRig: React.FC<CreatureRigProps> = ({
           </G>
         ) : (
           <G>
-            {/* Neat sitting mittens */}
             <Ellipse cx={41} cy={87} rx={7} ry={4.6} fill={TABBY_CREAM} stroke={STROKE} strokeWidth={2.8} />
             <Ellipse cx={59} cy={87} rx={7} ry={4.6} fill={TABBY_CREAM} stroke={STROKE} strokeWidth={2.8} />
           </G>

@@ -37,7 +37,6 @@ import type { EnemyReactionEvent } from '@/utils/enemyAnimations';
 /** How long a matched card's reward stays on screen before the card is replaced. */
 const REWARD_REVEAL_MS = 1500;
 
-// Default to 4 attributes for backward compatibility
 const DEFAULT_ATTRIBUTES: AttributeName[] = ['shape', 'color', 'number', 'shading'];
 
 interface GameBoardProps {
@@ -59,7 +58,6 @@ interface GameBoardProps {
   isPaused?: boolean; // When true, pauses auto-hint timer and card burn timers (e.g., when menu is open)
   lastMatchTime?: number; // Timestamp of last successful match - auto-hint only triggers 15s after this
   autoPlayer?: boolean; // When true, automatically finds and selects valid SETs (for testing/review)
-  // Enemy system integration
   enemy?: EnemyInstance | null; // Active enemy for current round
   roundStats?: React.MutableRefObject<RoundStats>; // Mutable ref to round stats (from useRoundStats)
   // Time gain trigger cap system
@@ -68,7 +66,6 @@ interface GameBoardProps {
     effectiveCap: number;
   };
   onTimeGainTriggered?: () => void; // Called when time gain triggers (for tracking)
-  // Connector weapon system
   connections?: BoardConnection[]; // Active connections between board positions
   hideEnemyOverlay?: boolean; // Adventure mode renders its own foe HUD
 }
@@ -168,7 +165,6 @@ const GameBoard: React.FC<GameBoardProps> = ({
     return { backgroundColor };
   });
 
-  // Flash overlay animations
   const successFlashOpacity = useSharedValue(0);
   const failureFlashOpacity = useSharedValue(0);
 
@@ -180,7 +176,6 @@ const GameBoard: React.FC<GameBoardProps> = ({
     opacity: failureFlashOpacity.value,
   }));
 
-  // Trigger success flash
   const triggerSuccessFlash = useCallback(() => {
     successFlashOpacity.value = withSequence(
       withTiming(0.15, { duration: 50 }),
@@ -229,7 +224,6 @@ const GameBoard: React.FC<GameBoardProps> = ({
   // Reward reveal state - managed internally, supports multiple concurrent matches
   const [revealingRewards, setRevealingRewards] = useState<(CardReward & { matchId: number })[]>([]);
 
-  // Create a map for quick reward lookup
   const rewardsByCardId = new Map<string, CardReward>();
   revealingRewards.forEach(reward => {
     rewardsByCardId.set(reward.cardId, reward);
@@ -310,7 +304,6 @@ const GameBoard: React.FC<GameBoardProps> = ({
     onUseHint?.();
   }, [cards, matchedCardIds, onUseHint, enemyUIModifiers.disableManualHint, activeAttributes]);
 
-  // Clear hint
   const clearHint = useCallback(() => {
     setHintCards([]);
   }, []);
@@ -366,7 +359,6 @@ const GameBoard: React.FC<GameBoardProps> = ({
     onTrigger: showAutoHint,
   });
 
-  // Handle card click
   const handleCardClick = (card: CardType) => {
     if (!isPlayerTurn || card.isDud || card.isFaceDown) return;
 
@@ -515,17 +507,14 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
   return (
     <Animated.View testID="game-board" nativeID="gameboard-container" style={[styles.container, shakeStyle]}>
-      {/* Success flash overlay */}
       <Animated.View
         style={[styles.flashOverlay, styles.successFlash, successFlashStyle]}
         pointerEvents="none"
       />
-      {/* Failure flash overlay */}
       <Animated.View
         style={[styles.flashOverlay, styles.failureFlash, failureFlashStyle]}
         pointerEvents="none"
       />
-      {/* Particle effects */}
       <Particles />
 
       {/* Enemy UI Overlay - Shows enemy info and status effects */}
@@ -554,7 +543,6 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
           {/* Status effects row: Inactivity bar, score decay, timer speed, weapon counters */}
           <View style={styles.enemyStatusRow}>
-            {/* Inactivity bar */}
             {enemyUIModifiers.showInactivityBar && (
               <InactivityBar
                 current={enemyUIModifiers.showInactivityBar.current}
@@ -563,17 +551,14 @@ const GameBoard: React.FC<GameBoardProps> = ({
               />
             )}
 
-            {/* Score decay indicator */}
             {enemyUIModifiers.showScoreDecay && (
               <ScoreDecayIndicator rate={enemyUIModifiers.showScoreDecay.rate} />
             )}
 
-            {/* Timer speed badge */}
             {enemyUIModifiers.timerSpeedMultiplier && enemyUIModifiers.timerSpeedMultiplier !== 1 && (
               <TimerSpeedBadge multiplier={enemyUIModifiers.timerSpeedMultiplier} />
             )}
 
-            {/* Weapon counter badges */}
             {enemyUIModifiers.weaponCounters?.map((counter, index) => (
               <WeaponCounterBadge
                 key={`${counter.type}-${index}`}

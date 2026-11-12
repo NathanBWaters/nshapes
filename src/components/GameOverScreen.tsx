@@ -34,7 +34,6 @@ const GameOverScreen: React.FC<GameOverScreenProps> = ({
   onPlayAgain,
 }) => (
     <View style={styles.container}>
-      {/* Eyebrow Banner */}
       <View style={styles.eyebrow}>
         <Text style={styles.eyebrowText}>GAME OVER</Text>
       </View>
@@ -54,7 +53,6 @@ const GameOverScreen: React.FC<GameOverScreenProps> = ({
           />
         </View>
 
-        {/* Game over reason */}
         {reason && (
           <View style={styles.reasonContainer}>
             <Text style={styles.reasonText}>{reason}</Text>
@@ -79,7 +77,6 @@ const GameOverScreen: React.FC<GameOverScreenProps> = ({
           </View>
         )}
 
-        {/* Stats Section */}
         <View style={styles.statsContainer}>
           <View style={styles.statRow}>
             <Text style={styles.statLabel}>ROUND REACHED</Text>
@@ -109,7 +106,6 @@ const GameOverScreen: React.FC<GameOverScreenProps> = ({
           ) : null}
         </View>
 
-        {/* Round Progress Chart */}
         <View style={styles.chartContainer}>
           <Text style={styles.chartTitle}>ROUND PROGRESS</Text>
           <RoundProgressChart
@@ -119,7 +115,6 @@ const GameOverScreen: React.FC<GameOverScreenProps> = ({
           />
         </View>
 
-        {/* Play Again Button */}
         <View style={styles.buttonContainer}>
           <TouchableOpacity
             style={styles.playAgainButton}

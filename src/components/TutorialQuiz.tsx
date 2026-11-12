@@ -64,7 +64,6 @@ const TutorialQuiz: React.FC<TutorialQuizProps> = ({
   const [selectedAnswer, setSelectedAnswer] = useState<boolean | null>(null);
   const [showHint, setShowHint] = useState(false);
 
-  // Reset state when quiz number changes
   useEffect(() => {
     setAnswered(false);
     setSelectedAnswer(null);
@@ -89,13 +88,11 @@ const TutorialQuiz: React.FC<TutorialQuizProps> = ({
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Quiz {quizNumber} of 3</Text>
         <Text style={styles.headerSubtitle}>Is this a valid SET?</Text>
       </View>
 
-      {/* Cards Display */}
       <View style={styles.cardsContainer}>
         <View style={styles.cardsRow}>
           {scenario.cards.map(card => (
@@ -105,14 +102,12 @@ const TutorialQuiz: React.FC<TutorialQuizProps> = ({
           ))}
         </View>
 
-        {/* Hint button */}
         {!answered && !showHint && (
           <TouchableOpacity style={styles.hintButton} onPress={() => setShowHint(true)}>
             <Text style={styles.hintButtonText}>Need a hint?</Text>
           </TouchableOpacity>
         )}
 
-        {/* Hint text */}
         {showHint && !answered && (
           <View style={styles.hintBox}>
             <Text style={styles.hintText}>{scenario.hint}</Text>
@@ -120,7 +115,6 @@ const TutorialQuiz: React.FC<TutorialQuizProps> = ({
         )}
       </View>
 
-      {/* Answer Section */}
       {!answered ? (
         <View style={styles.answerSection}>
           <Text style={styles.questionText}>Do these 3 cards form a valid SET?</Text>
@@ -141,7 +135,6 @@ const TutorialQuiz: React.FC<TutorialQuizProps> = ({
         </View>
       ) : (
         <View style={styles.resultSection}>
-          {/* Result indicator */}
           <View style={[styles.resultBanner, isCorrect ? styles.resultCorrect : styles.resultIncorrect]}>
             <Text style={styles.resultEmoji}>{isCorrect ? '✓' : '✗'}</Text>
             <Text style={styles.resultText}>
@@ -149,19 +142,16 @@ const TutorialQuiz: React.FC<TutorialQuizProps> = ({
             </Text>
           </View>
 
-          {/* Explanation */}
           <View style={styles.explanationBox}>
             <Text style={styles.explanationText}>{scenario.explanation}</Text>
           </View>
 
-          {/* Continue button */}
           <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
             <Text style={styles.continueButtonText}>Continue</Text>
           </TouchableOpacity>
         </View>
       )}
 
-      {/* Skip button */}
       {!answered && (
         <TouchableOpacity style={styles.skipButton} onPress={onSkip}>
           <Text style={styles.skipButtonText}>Skip Tutorial</Text>

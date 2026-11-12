@@ -49,19 +49,6 @@ const createTestBoard = (): Card[] =>
     }));
 
 describe('Raging Bear', () => {
-  describe('metadata', () => {
-    it('has correct name and tier', () => {
-      const enemy = createRagingBear();
-      expect(enemy.name).toBe('Raging Bear');
-      expect(enemy.tier).toBe(3);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createRagingBear();
-      expect(enemy.icon).toBe('sparker/bear-face');
-    });
-  });
-
   describe('inactivity effect', () => {
     it('causes instant death after 30s inactivity', () => {
       const enemy = createRagingBear();

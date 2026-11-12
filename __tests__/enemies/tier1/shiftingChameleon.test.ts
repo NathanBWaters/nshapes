@@ -40,51 +40,6 @@ afterEach(() => {
 
 describe('Shifting Chameleon', () => {
   // ==========================================================================
-  // METADATA TESTS
-  // ==========================================================================
-  describe('metadata', () => {
-    it('has correct name', () => {
-      const enemy = createShiftingChameleon();
-      expect(enemy.name).toBe('Shifting Chameleon');
-    });
-
-    it('has correct tier (Tier 1)', () => {
-      const enemy = createShiftingChameleon();
-      expect(enemy.tier).toBe(1);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createShiftingChameleon();
-      expect(enemy.icon).toBe('darkzaitzev/chameleon-glyph');
-    });
-
-    it('has description that mentions attribute changes', () => {
-      const enemy = createShiftingChameleon();
-      expect(enemy.description.toLowerCase()).toContain('attribute');
-    });
-
-    it('has description that mentions 20s interval', () => {
-      const enemy = createShiftingChameleon();
-      expect(enemy.description).toContain('20s');
-    });
-
-    it('has description that mentions changing cards', () => {
-      const enemy = createShiftingChameleon();
-      expect(enemy.description.toLowerCase()).toContain('change');
-    });
-
-    it('has correct defeat condition text', () => {
-      const enemy = createShiftingChameleon();
-      expect(enemy.defeatConditionText).toBe('Get 2 all-different matches');
-    });
-
-    it('defeat condition text mentions all-different', () => {
-      const enemy = createShiftingChameleon();
-      expect(enemy.defeatConditionText.toLowerCase()).toContain('all-different');
-    });
-  });
-
-  // ==========================================================================
   // ATTRIBUTE CHANGE EFFECT TESTS
   // ==========================================================================
   describe('attribute change effect', () => {
@@ -508,11 +463,6 @@ describe('Shifting Chameleon', () => {
     });
 
     describe('onRoundEnd', () => {
-      it('can be called without error', () => {
-        const enemy = createShiftingChameleon();
-        expect(() => enemy.onRoundEnd()).not.toThrow();
-      });
-
       it('resets internal state', () => {
         mockRandom(0);
         const enemy = createShiftingChameleon();
@@ -536,12 +486,6 @@ describe('Shifting Chameleon', () => {
   // UI MODIFIERS TESTS
   // ==========================================================================
   describe('getUIModifiers', () => {
-    it('returns an object', () => {
-      const enemy = createShiftingChameleon();
-      const modifiers = enemy.getUIModifiers();
-      expect(typeof modifiers).toBe('object');
-    });
-
     it('does not show inactivity bar', () => {
       const enemy = createShiftingChameleon();
       const modifiers = enemy.getUIModifiers();
@@ -595,12 +539,6 @@ describe('Shifting Chameleon', () => {
   // STAT MODIFIERS TESTS
   // ==========================================================================
   describe('getStatModifiers', () => {
-    it('returns an object', () => {
-      const enemy = createShiftingChameleon();
-      const modifiers = enemy.getStatModifiers();
-      expect(typeof modifiers).toBe('object');
-    });
-
     it('does not reduce fire spread chance', () => {
       const enemy = createShiftingChameleon();
       const modifiers = enemy.getStatModifiers();

@@ -36,7 +36,6 @@ const WeaponGuide: React.FC<WeaponGuideProps> = ({ onClose }) => {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Weapon Guide</Text>
         <TouchableOpacity onPress={onClose} style={styles.closeButton}>
@@ -44,14 +43,12 @@ const WeaponGuide: React.FC<WeaponGuideProps> = ({ onClose }) => {
         </TouchableOpacity>
       </View>
 
-      {/* Intro text */}
       <View style={styles.introContainer}>
         <Text style={styles.introText}>
           Weapons provide special effects during gameplay. Collect multiple of the same type to stack their effects!
         </Text>
       </View>
 
-      {/* Weapon list */}
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {Array.from(weaponGroups.entries()).map(([weaponName, variants]) => (
           <View key={weaponName} style={styles.weaponCard}>
@@ -66,7 +63,6 @@ const WeaponGuide: React.FC<WeaponGuideProps> = ({ onClose }) => {
               </View>
             </View>
 
-            {/* Rarity tiers */}
             <View style={styles.rarityContainer}>
               {variants.map((weapon) => (
                 <View key={weapon.id} style={styles.rarityRow}>
@@ -84,7 +80,6 @@ const WeaponGuide: React.FC<WeaponGuideProps> = ({ onClose }) => {
               ))}
             </View>
 
-            {/* Detailed explanation */}
             {variants[0].flavorText && (
               <View style={styles.flavorTextContainer}>
                 <Text style={styles.flavorText}>{variants[0].flavorText}</Text>
@@ -94,7 +89,6 @@ const WeaponGuide: React.FC<WeaponGuideProps> = ({ onClose }) => {
         ))}
       </ScrollView>
 
-      {/* Close button */}
       <TouchableOpacity onPress={onClose} style={styles.closeModalButton}>
         <Text style={styles.closeModalButtonText}>CLOSE</Text>
       </TouchableOpacity>

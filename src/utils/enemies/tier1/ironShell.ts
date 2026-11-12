@@ -8,9 +8,6 @@
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { TripleCardEffect, composeEffects } from '../../enemyEffects';
 
-/**
- * Creates a fresh Iron Shell enemy instance.
- */
 export function createIronShell(): EnemyInstance {
   return composeEffects(
     {
@@ -21,7 +18,6 @@ export function createIronShell(): EnemyInstance {
       defeatConditionText: 'Clear the triple-health card',
     },
     [{ behavior: TripleCardEffect, config: { count: 1 } }],
-    // Defeat condition: Clear 1 triple card
     (stats: RoundStats) => stats.tripleCardsCleared >= 1
   );
 }

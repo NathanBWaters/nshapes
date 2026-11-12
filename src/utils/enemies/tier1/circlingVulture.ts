@@ -8,9 +8,6 @@
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { ScoreDecayEffect, composeEffects } from '../../enemyEffects';
 
-/**
- * Creates a fresh Circling Vulture enemy instance.
- */
 export function createCirclingVulture(): EnemyInstance {
   return composeEffects(
     {
@@ -26,7 +23,6 @@ export function createCirclingVulture(): EnemyInstance {
         config: { ratePerSecond: 0.1 },
       },
     ],
-    // Defeat condition: Reach 150% of target score
     (stats: RoundStats) => {
       return stats.currentScore >= stats.targetScore * 1.5;
     }

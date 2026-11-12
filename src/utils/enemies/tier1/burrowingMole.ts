@@ -8,9 +8,6 @@
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { CardRemovalEffect, composeEffects } from '../../enemyEffects';
 
-/**
- * Creates a fresh Burrowing Mole enemy instance.
- */
 export function createBurrowingMole(): EnemyInstance {
   return composeEffects(
     {
@@ -26,7 +23,6 @@ export function createBurrowingMole(): EnemyInstance {
         config: { intervalMs: 20000, minBoardSize: 6 },
       },
     ],
-    // Defeat condition: Match all 3 shapes at least once
     (stats: RoundStats) => {
       return stats.shapesMatched.size >= 3;
     }

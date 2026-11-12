@@ -13,9 +13,6 @@ import {
   composeEffects,
 } from '../../enemyEffects';
 
-/**
- * Creates a fresh Savage Claws enemy instance.
- */
 export function createSavageClaws(): EnemyInstance {
   return composeEffects(
     {
@@ -30,7 +27,6 @@ export function createSavageClaws(): EnemyInstance {
       { behavior: TimerSpeedEffect, config: { multiplier: 1.5 } },
       { behavior: BombEffect, config: { bombChance: 15, bombTimerMs: 10000, minBoardSize: 6 } },
     ],
-    // Defeat condition: Match 8 times total
     (stats: RoundStats) => stats.totalMatches >= 8
   );
 }

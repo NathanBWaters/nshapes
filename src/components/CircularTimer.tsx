@@ -25,7 +25,6 @@ const CircularTimer: React.FC<CircularTimerProps> = ({
   // Calculate progress (0 to 1) - how much time REMAINS (starts full, empties as time runs out)
   const progress = isInfinite ? 1 : Math.min(Math.max(currentTime / totalTime, 0), 1);
 
-  // SVG circle calculations
   const center = size / 2;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;

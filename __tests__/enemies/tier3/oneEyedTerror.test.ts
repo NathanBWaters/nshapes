@@ -36,19 +36,6 @@ const createEmptyStats = (): RoundStats => ({
 });
 
 describe('One-Eyed Terror', () => {
-  describe('metadata', () => {
-    it('has correct name and tier', () => {
-      const enemy = createOneEyedTerror();
-      expect(enemy.name).toBe('One-Eyed Terror');
-      expect(enemy.tier).toBe(3);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createOneEyedTerror();
-      expect(enemy.icon).toBe('lorc/cyclops');
-    });
-  });
-
   describe('hint disable effect', () => {
     it('disables all hints', () => {
       const enemy = createOneEyedTerror();

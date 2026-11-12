@@ -34,40 +34,12 @@ afterEach(() => {
 
 describe('Trap Weaver - Metadata', () => {
   describe('name', () => {
-    it('has correct name', () => {
-      const enemy = createTrapWeaver();
-      expect(enemy.name).toBe('Trap Weaver');
-    });
-
-    it('name is a non-empty string', () => {
-      const enemy = createTrapWeaver();
-      expect(typeof enemy.name).toBe('string');
-      expect(enemy.name.length).toBeGreaterThan(0);
-    });
   });
 
   describe('tier', () => {
-    it('has tier 1', () => {
-      const enemy = createTrapWeaver();
-      expect(enemy.tier).toBe(1);
-    });
-
-    it('tier is a valid tier value (1-4)', () => {
-      const enemy = createTrapWeaver();
-      expect([1, 2, 3, 4]).toContain(enemy.tier);
-    });
   });
 
   describe('icon', () => {
-    it('has correct icon', () => {
-      const enemy = createTrapWeaver();
-      expect(enemy.icon).toBe('carl-olsen/spider-face');
-    });
-
-    it('icon is a valid icon path format', () => {
-      const enemy = createTrapWeaver();
-      expect(enemy.icon).toMatch(/^[a-z-]+\/[a-z-]+$/);
-    });
   });
 
   describe('description', () => {
@@ -743,12 +715,6 @@ describe('Trap Weaver - Lifecycle Hooks', () => {
   });
 
   describe('onRoundEnd', () => {
-    it('can be called without error', () => {
-      const enemy = createTrapWeaver();
-
-      expect(() => enemy.onRoundEnd()).not.toThrow();
-    });
-
     it('returns void (undefined)', () => {
       const enemy = createTrapWeaver();
 

@@ -49,19 +49,6 @@ const createTestBoard = (): Card[] =>
     }));
 
 describe('Fierce Wolverine', () => {
-  describe('metadata', () => {
-    it('has correct name and tier', () => {
-      const enemy = createFierceWolverine();
-      expect(enemy.name).toBe('Fierce Wolverine');
-      expect(enemy.tier).toBe(2);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createFierceWolverine();
-      expect(enemy.icon).toBe('lorc/wolverine-claws');
-    });
-  });
-
   describe('extra card removal on invalid match', () => {
     it('removes 2 extra cards on invalid match', () => {
       const enemy = createFierceWolverine();

@@ -11,7 +11,6 @@ import { getAdjustedXPForLevel } from '@/utils/gameConfig';
 
 const WalkthroughableView = walkthroughable(View);
 
-// Static heart icon
 interface HeartIconProps {
   style?: any;
 }
@@ -61,7 +60,6 @@ function HintButton({
   );
 }
 
-// Styles for HintButton
 const hintButtonStyles = StyleSheet.create({
   hintButtonInner: {
     flexDirection: 'row',
@@ -141,7 +139,6 @@ interface GameInfoProps {
   onMenuOpenChange?: (isOpen: boolean) => void;
 }
 
-// Static score text
 interface ScoreTextProps {
   score: number;
   targetScore: number;
@@ -181,7 +178,6 @@ const GameInfo: React.FC<GameInfoProps> = ({
   const copilotMode = copilot !== undefined;
   const { width: screenWidth } = useWindowDimensions();
   const isCompactHud = Boolean(character) && screenWidth < 430;
-  // Calculate score progress percentage
   const scoreProgress = Math.min((score / targetScore) * 100, 100);
 
   // Calculate XP progress to next level
@@ -239,13 +235,11 @@ const GameInfo: React.FC<GameInfoProps> = ({
         {/* Single row layout for all screen sizes */}
         <View style={styles.statsRow}>
           <View style={[styles.leftSection, isCompactHud && styles.leftSectionCompact]}>
-            {/* Round */}
             {withCopilot('round',
               <Text style={[styles.statLabel, isCompactHud && styles.statLabelCompact]}>R{round}</Text>,
               [styles.statBadge, isCompactHud && styles.statBadgeCompact]
             )}
 
-            {/* Health */}
             {withCopilot('health',
               <>
                 <HeartIcon style={styles.heartIcon} />
@@ -256,7 +250,6 @@ const GameInfo: React.FC<GameInfoProps> = ({
               [styles.statItem, isCompactHud && styles.statItemCompact]
             )}
 
-            {/* Money */}
             {withCopilot('money',
               <>
                 <Text style={styles.coinIcon}>$</Text>
@@ -276,7 +269,6 @@ const GameInfo: React.FC<GameInfoProps> = ({
               [styles.levelContainer, isCompactHud && styles.statItemCompact]
             )}
 
-            {/* Graces */}
             {((playerStats.graces ?? 0) > 0 || copilotMode) &&
               withCopilot('graces',
                 <>
@@ -287,7 +279,6 @@ const GameInfo: React.FC<GameInfoProps> = ({
               )
             }
 
-            {/* Hints */}
             {withCopilot('hints',
               <HintButton
                 hintsAvailable={hintsAvailable}
@@ -299,7 +290,6 @@ const GameInfo: React.FC<GameInfoProps> = ({
               undefined
             )}
 
-            {/* Timer */}
             {withCopilot('timer',
               <CircularTimer
                 currentTime={time}
@@ -310,7 +300,6 @@ const GameInfo: React.FC<GameInfoProps> = ({
               undefined
             )}
 
-            {/* Menu Button */}
             <GameMenu
               playerStats={playerStats}
               playerWeapons={playerWeapons}
@@ -325,7 +314,6 @@ const GameInfo: React.FC<GameInfoProps> = ({
           </View>
         </View>
 
-        {/* Score progress bar */}
         {withCopilot('score',
           <>
             <View style={styles.scoreBarContainer}>

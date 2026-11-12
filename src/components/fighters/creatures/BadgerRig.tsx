@@ -49,7 +49,6 @@ export const BadgerRig: React.FC<CreatureRigProps> = ({
           strokeWidth={3.4}
           strokeLinejoin="round"
         />
-        {/* Ash-grey brawler belly */}
         <Ellipse cx={50} cy={76} rx={16} ry={11} fill={BADGER_ASH} />
         {/* Champion gold belt buckle accent */}
         <Path d="M 30 80 Q 50 84 70 80" stroke={STROKE} strokeWidth={4} fill="none" />

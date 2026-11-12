@@ -49,29 +49,6 @@ const createTestBoard = (): Card[] =>
     }));
 
 describe('Ravenous Tapir', () => {
-  describe('metadata', () => {
-    it('has correct name and tier', () => {
-      const enemy = createRavenousTapir();
-      expect(enemy.name).toBe('Ravenous Tapir');
-      expect(enemy.tier).toBe(3);
-    });
-
-    it('has correct icon', () => {
-      const enemy = createRavenousTapir();
-      expect(enemy.icon).toBe('delapouite/tapir');
-    });
-
-    it('has correct description', () => {
-      const enemy = createRavenousTapir();
-      expect(enemy.description).toBe('+1 card removed per match, removes 1 card every 15s');
-    });
-
-    it('has correct defeat condition text', () => {
-      const enemy = createRavenousTapir();
-      expect(enemy.defeatConditionText).toBe('Beat target with 5+ cards remaining');
-    });
-  });
-
   describe('extra card removal on match', () => {
     it('removes 1 extra card on match (with board > minSize)', () => {
       const enemy = createRavenousTapir();

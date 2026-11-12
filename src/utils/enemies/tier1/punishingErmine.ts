@@ -8,9 +8,6 @@
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { ExtraCardRemovalOnInvalidEffect, composeEffects } from '../../enemyEffects';
 
-/**
- * Creates a fresh Punishing Ermine enemy instance.
- */
 export function createPunishingErmine(): EnemyInstance {
   return composeEffects(
     {
@@ -26,7 +23,6 @@ export function createPunishingErmine(): EnemyInstance {
         config: { count: 2, minBoardSize: 6 },
       },
     ],
-    // Defeat condition: Make no invalid matches (must have at least 1 valid match)
     (stats: RoundStats) => {
       return stats.invalidMatches === 0 && stats.totalMatches >= 1;
     }
