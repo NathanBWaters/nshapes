@@ -3,7 +3,7 @@
  */
 
 import { Weapon, PlayerStats, EffectCaps } from '../types';
-import { getCapInfoForStat, isStatCapped, shouldShowCapInfo, STAT_TO_CAP_TYPE, EFFECT_CAPS } from './gameConfig';
+import { getCapInfoForStat, isStatCapped, shouldShowCapInfo, getMainStatForCap, EFFECT_CAPS } from './gameConfig';
 
 /**
  * Format stat key from camelCase to Title Case
@@ -68,11 +68,7 @@ export const getCapIncreaseInfo = (weapon: Weapon, playerStats: PlayerStats): Ca
   if (!weapon.capIncrease) return null;
 
   const capType = weapon.capIncrease.type;
-  const statKey = STAT_TO_CAP_TYPE[`${capType}Chance` as keyof typeof STAT_TO_CAP_TYPE]
-    ? `${capType}Chance`
-    : Object.entries(STAT_TO_CAP_TYPE).find(([_, type]) => type === capType)?.[0];
-
-  if (!statKey) return null;
+  const statKey = getMainStatForCap(capType);
 
   const effectCaps = playerStats.effectCaps as Record<string, number> | undefined;
   const currentCap = effectCaps?.[capType] ?? EFFECT_CAPS[capType as keyof typeof EFFECT_CAPS]?.defaultCap ?? 0;

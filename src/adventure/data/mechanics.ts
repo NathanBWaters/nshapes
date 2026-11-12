@@ -3,8 +3,7 @@
  * The intro card, map badge, field guide, and in-run coach marks are all
  * generated from this table.
  */
-import type { AdventureSave, LessonPage, MechanicDef } from '../types';
-import { getEvolutionRecipe } from './evolutions';
+import type { MechanicDef } from '../types';
 
 export const MECHANICS: Record<string, MechanicDef> = {
   // ── Rules ──────────────────────────────────────────────────────────────
@@ -897,84 +896,4 @@ export const getMechanic = (id: string): MechanicDef => {
   const m = MECHANICS[id];
   if (!m) throw new Error(`Unknown mechanic: ${id}`);
   return m;
-};
-
-/**
- * Seen-flag tracking whichever of World 1's two Combo stages (`1-5E` vs `1-7`)
- * the player reaches FIRST, so the pre-fight discovery intro adapts to that path
- * and never repeats on the second one.
- */
-export const COMBO_DISCOVERY_SEEN_ID = 'combo_hunt_intro';
-
-export const buildComboDiscoveryPages = (levelId: string, save: AdventureSave): LessonPage[] => {
-  if (save.seenMechanics.includes(COMBO_DISCOVERY_SEEN_ID) || save.unlockedEvolutions.length > 0) return [];
-  if (levelId === '1-5E') {
-    // Reached the World 1 Elite FIRST (before 1-7 — do NOT mention clocks/timers!)
-    return [
-      {
-        title: 'Combo Vault: First Weapon Combo',
-        body: [
-          'You discovered World 1\'s Elite branch! Knocking out Hoarding Beaver (★★) unlocks your very first WEAPON COMBO recipe: Solar Cataclysm (fusing Blast Powder + Flint Spark).',
-          'Once you unlock a Combo recipe, hidden Catalyst crystals begin appearing behind cards in future fights! (Another World 1 Combo also awaits ahead on 1-7.)',
-        ],
-        demo: {
-          type: 'icons',
-          items: [
-            { icon: 'lorc/daemon-skull', label: '1-5E Elite' },
-            { icon: 'lorc/fireball', label: 'Unlock Combo' },
-            { icon: 'lorc/crystal-shine', label: 'Awaken Catalysts' },
-          ],
-        },
-      },
-    ];
-  }
-  if (levelId === '1-7') {
-    // Reached 1-7 FIRST on the main path (having skipped or not yet played 1-5E)
-    return [
-      {
-        title: 'Milestone Reward: First Weapon Combo',
-        body: [
-          'Knocking out Lazy Sloth (★★) unlocks your very first WEAPON COMBO recipe: Immortal Aegis (fusing Mending Charm + Life Vessel)!',
-          'Once you unlock a Combo recipe, hidden Catalyst crystals begin appearing behind cards in future fights. (Tip: World 1\'s 1-5E Elite branch also guards a second Combo recipe whenever you\'re ready!)',
-        ],
-        demo: {
-          type: 'icons',
-          items: [
-            { icon: 'lorc/crossed-swords', label: 'Beat 1-7 (★★)' },
-            { icon: 'lorc/angel-outfit', label: 'Unlock Combo' },
-            { icon: 'lorc/crystal-shine', label: 'Awaken Catalysts' },
-          ],
-        },
-      },
-    ];
-  }
-  return [];
-};
-
-/**
- * Build a context-aware `weapon_evolutions` lesson tailored to whichever Combo
- * recipe the player actually unlocked first (`1-5E`'s Solar Cataclysm vs `1-7`'s Immortal Aegis).
- */
-export const buildAdaptiveEvolutionMechanic = (save: AdventureSave): MechanicDef => {
-  const base = MECHANICS.weapon_evolutions;
-  const firstId = save.unlockedEvolutions[0];
-  if (!firstId) return base;
-  const recipe = getEvolutionRecipe(firstId);
-  return {
-    ...base,
-    tagline: `Your ${recipe.result.name} combo is live — watch for a hidden Catalyst card!`,
-    body: [
-      `You unlocked ${recipe.result.name}! Bring ${recipe.gearRequirementText}, and complete its condition (${recipe.primeRequirementText.toLowerCase()}).`,
-      'At most ONE card on screen hides an Evolution Catalyst. Wait until its badge turns gold (EVO) before matching on it — matching too early shatters and loses it!',
-      'Check the Recipe Guide in the Field Guide anytime to review your unlocked combos.',
-    ],
-    demo: {
-      type: 'icons',
-      items: [
-        { icon: 'lorc/gems', label: 'Pair Gear' },
-        { icon: 'lorc/crystal-shine', label: 'Wait for EVO' },
-        { icon: recipe.result.icon ?? 'lorc/fireball', label: recipe.result.name },
-      ],
-    },
-  };
 };

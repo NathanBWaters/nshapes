@@ -1,9 +1,6 @@
 /** ★★★ challenge descriptions, live progress, and checks. */
-import { createEnemy, isEnemyRegistered } from '@/utils/enemyFactory';
 import type { ChallengeDef, LevelDef, RunState } from '../types';
-
-const lastRegisteredFoe = (level: LevelDef): string | undefined =>
-  [...level.foes].reverse().find(f => f.enemy && isEnemyRegistered(f.enemy))?.enemy;
+import { levelDefeatCondition } from '../data/foes';
 
 export const describeChallenge = (level: LevelDef): string => {
   const c = level.challenge;
@@ -16,10 +13,7 @@ export const describeChallenge = (level: LevelDef): string => {
     case 'streak': return `Make ${c.n} Sets in a row without a mistake`;
     case 'noGrace': return 'Win without using a grace';
     case 'hintsLeft': return `Win with ${c.n}+ hints unused`;
-    case 'enemy': {
-      const name = lastRegisteredFoe(level);
-      return name ? createEnemy(name).defeatConditionText : 'Defeat the foe';
-    }
+    case 'enemy': return levelDefeatCondition(level) ?? 'Defeat the foe';
   }
 };
 

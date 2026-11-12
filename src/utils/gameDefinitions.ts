@@ -1,21 +1,7 @@
-import { Character, Weapon, PlayerStats, Player, WeaponRarity, WeaponName, EffectCaps, BridgeTriggerType, BridgeEffectType } from '../types';
-import { STARTING_STATS, getRarityChancesForRound, EFFECT_CAPS } from './gameConfig';
+import { Character, Weapon, PlayerStats, Player, WeaponRarity, BridgeTriggerType, BridgeEffectType } from '../types';
+import { STARTING_STATS, getRarityChancesForRound, DEFAULT_EFFECT_CAPS, EFFECT_CAP_TYPES, getBuildStatsForCap } from './gameConfig';
 
-// Default effect caps - initialized from EFFECT_CAPS configuration
-export const DEFAULT_EFFECT_CAPS: EffectCaps = {
-  echo: EFFECT_CAPS.echo.defaultCap,
-  laser: EFFECT_CAPS.laser.defaultCap,
-  graceGain: EFFECT_CAPS.graceGain.defaultCap,
-  explosion: EFFECT_CAPS.explosion.defaultCap,
-  hint: EFFECT_CAPS.hint.defaultCap,
-  timeGain: EFFECT_CAPS.timeGain.defaultCap,
-  healing: EFFECT_CAPS.healing.defaultCap,
-  fire: EFFECT_CAPS.fire.defaultCap,
-  ricochet: EFFECT_CAPS.ricochet.defaultCap,
-  boardGrowth: EFFECT_CAPS.boardGrowth.defaultCap,
-  coinGain: EFFECT_CAPS.coinGain.defaultCap,
-  xpGain: EFFECT_CAPS.xpGain.defaultCap,
-};
+export { DEFAULT_EFFECT_CAPS };
 
 // Default player stats - uses values from gameConfig for easy tweaking
 export const DEFAULT_PLAYER_STATS: PlayerStats = {
@@ -24,17 +10,12 @@ export const DEFAULT_PLAYER_STATS: PlayerStats = {
   experience: 0,
   experienceGainPercent: 100,
   luck: 0,
-  maxWeapons: 99, // Effectively unlimited for new weapon system
-  commerce: 0,
   scavengingPercent: 0,
-  scavengeAmount: 1,
   health: STARTING_STATS.health,
   maxHealth: STARTING_STATS.maxHealth,
   fieldSize: STARTING_STATS.fieldSize,
   freeRerolls: STARTING_STATS.freeRerolls,
   drawIncrease: 0,
-  drawIncreasePercent: 0,
-  chanceOfFire: 0,
   explosion: 0,
   damage: 1,
   damagePercent: 0,
@@ -43,22 +24,15 @@ export const DEFAULT_PLAYER_STATS: PlayerStats = {
   matchHints: 0,
   matchPossibilityHints: 0,
   matchIntervalHintPercent: 0,
-  matchIntervalSpeed: 15,
-  dodgePercent: 0,
   dodgeAttackBackPercent: 0,
   dodgeAttackBackAmount: 1,
   graces: STARTING_STATS.graces,
   maxGraces: STARTING_STATS.maxGraces,
   bombTimer: 20,
   additionalPoints: 0,
-  deflectPercent: 0,
-  criticalChance: 0,
   timeFreezePercent: 0,
-  timeFreezeAmount: 15,
   hints: STARTING_STATS.hints,
   maxHints: STARTING_STATS.maxHints,
-  // Co-op specific
-  hintPasses: 0,
 
   // New weapon effect stats
   explosionChance: STARTING_STATS.explosionChance,
@@ -1518,7 +1492,7 @@ export const WEAPONS: Weapon[] = [
 ];
 
 // Count how many of a specific weapon (by name) the player owns
-export const getPlayerWeaponCount = (weaponName: WeaponName | string, playerWeapons: Weapon[]): number => {
+export const getPlayerWeaponCount = (weaponName: string, playerWeapons: Weapon[]): number => {
   return playerWeapons.filter(w => w.name === weaponName).length;
 };
 
@@ -1527,22 +1501,6 @@ export const canObtainWeapon = (weapon: Weapon, playerWeapons: Weapon[]): boolea
   if (weapon.maxCount === undefined) return true; // No limit
   const currentCount = getPlayerWeaponCount(weapon.name, playerWeapons);
   return currentCount < weapon.maxCount;
-};
-
-// Mapping from CapIncreaseType to the stat keys that are boosted
-const CAP_TYPE_TO_RELATED_STATS: Record<string, string[]> = {
-  echo: ['echoChance'],
-  laser: ['laserChance'],
-  graceGain: ['graceGainChance'],
-  explosion: ['explosionChance'],
-  hint: ['hintGainChance', 'autoHintChance', 'enhancedHintChance'],
-  timeGain: ['timeGainChance', 'timeGainAmount'],
-  healing: ['healingChance', 'healingAmount'],
-  fire: ['fireSpreadChance', 'fireStartChance'],
-  ricochet: ['ricochetChance'],
-  boardGrowth: ['boardGrowthChance'],
-  coinGain: ['coinGainChance', 'coinGainAmount'],
-  xpGain: ['xpGainChance', 'xpGainAmount'],
 };
 
 /**
@@ -1578,8 +1536,8 @@ export const calculateLikelihoodBonus = (
   // Check each stat in the weapon's effects
   for (const statKey of Object.keys(weapon.effects)) {
     // Find which cap-increase type this stat belongs to
-    for (const [capType, relatedStats] of Object.entries(CAP_TYPE_TO_RELATED_STATS)) {
-      if (relatedStats.includes(statKey)) {
+    for (const capType of EFFECT_CAP_TYPES) {
+      if (getBuildStatsForCap(capType).includes(statKey)) {
         const capCount = capIncreaseCounts.get(capType) ?? 0;
         if (capCount > 0) {
           bonus *= Math.pow(1.1, capCount);
@@ -1688,39 +1646,6 @@ export const generateShopWeapons = (count: number, playerWeapons?: Weapon[], rou
 // Get weapons by rarity
 export const getWeaponsByRarity = (rarity: WeaponRarity): Weapon[] => {
   return WEAPONS.filter(w => w.rarity === rarity);
-};
-
-// Round requirements
-export const ROUND_REQUIREMENTS = [
-  { round: 1, targetScore: 3, time: 30 },
-  { round: 2, targetScore: 4, time: 45 },
-  { round: 3, targetScore: 6, time: 45 },
-  { round: 4, targetScore: 8, time: 45 },
-  { round: 5, targetScore: 10, time: 60 },
-  { round: 6, targetScore: 14, time: 60 },
-  { round: 7, targetScore: 20, time: 60 },
-  { round: 8, targetScore: 27, time: 60 },
-  { round: 9, targetScore: 35, time: 60 },
-  { round: 10, targetScore: 100, time: 60 },
-];
-
-// Endless mode round requirements (slightly exponential scaling)
-// Round 11: 120, Round 12: 144, Round 13: 173, Round 14: 208, Round 15: 250...
-export const getEndlessRoundRequirement = (round: number): { round: number; targetScore: number; time: number } => {
-  const baseScore = 100; // Round 10 target
-  const baseIncrement = 20;
-  const scaleFactor = 1.2; // 20% increase per round
-
-  let target = baseScore;
-  for (let r = 11; r <= round; r++) {
-    target += Math.floor(baseIncrement * Math.pow(scaleFactor, r - 11));
-  }
-
-  return {
-    round,
-    targetScore: target,
-    time: 60, // Keep 60s timer for all endless rounds
-  };
 };
 
 // Helper functions for character and weapon selection

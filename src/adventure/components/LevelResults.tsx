@@ -5,18 +5,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
-import { WeaponAvatar } from '@/components/weapons';
 import { COLORS } from '@/utils/colors';
-import { WEAPONS } from '@/utils/gameDefinitions';
 import { sfx } from '@/audio';
 import type { LevelDef, RunState } from '../types';
 import type { ResultApplication } from '../progress';
 import { getBiome } from '../data/biomes';
 import { BOUNTIES } from '../data/bounties';
-import { getEvolutionRecipe } from '../data/evolutions';
-import { Btn, CoinPill, INK, PopIn, StarRow } from './ui';
-import { unlockInfo } from './LevelPreview';
-import { Silhouette } from './UnlockReveal';
+import { Btn, CoinPill, INK, PopIn, starPopDelayMs, StarRow, TONE } from './ui';
+import { Silhouette, UnlockableAvatar, describeRewardUnlocks } from './rewards';
 
 interface Props {
   level: LevelDef;
@@ -56,7 +52,7 @@ const LevelResults: React.FC<Props> = ({ level, run, stars, result, unlocksRevea
 
   useEffect(() => {
     const ts: ReturnType<typeof setTimeout>[] = [];
-    for (let i = 1; i <= stars; i++) ts.push(setTimeout(() => sfx(i === 1 ? 'star1' : i === 2 ? 'star2' : 'star3'), 350 + (i - 1) * 450));
+    for (let i = 1; i <= stars; i++) ts.push(setTimeout(() => sfx(i === 1 ? 'star1' : i === 2 ? 'star2' : 'star3'), starPopDelayMs(i - 1)));
     return () => ts.forEach(clearTimeout);
   }, [stars]);
 
@@ -69,6 +65,7 @@ const LevelResults: React.FC<Props> = ({ level, run, stars, result, unlocksRevea
       : null;
 
   const totalCoins = result.starCoins + result.coinsBanked + result.bountyCoins;
+  const starUnlocks = result.granted.flatMap(g => describeRewardUnlocks(g.reward).map(unlock => ({ star: g.star, unlock })));
   const activeBountyHooks = result.save.bountiesUnlocked
     ? BOUNTIES
         .filter(b => !result.save.completedBounties.includes(b.id) && b.progress(result.save) > 0)
@@ -164,32 +161,20 @@ const LevelResults: React.FC<Props> = ({ level, run, stars, result, unlocksRevea
             </View>
           )}
 
-          {result.granted.some(g => unlockInfo(g.reward)) && (
+          {starUnlocks.length > 0 && (
             <View style={{ gap: 6, alignSelf: 'stretch' }}>
               <Text style={st.section}>UNLOCKED</Text>
-              {result.granted.map(g => {
-                const u = unlockInfo(g.reward);
-                if (!u) return null;
-                return (
-                  <View key={g.star} style={st.reward}>
-                    <StarRow stars={g.star} max={g.star} size={14} />
-                    {unlocksRevealed ? (
-                      g.reward.character ? (
-                        <FighterAvatar character={g.reward.character} size={24} mood="victory" />
-                      ) : g.reward.weapons?.length ? (
-                        <WeaponAvatar weapon={WEAPONS.find(w => w.id === g.reward.weapons![0])} size={24} interactive />
-                      ) : g.reward.evolution ? (
-                        <WeaponAvatar weapon={getEvolutionRecipe(g.reward.evolution).result} size={24} interactive />
-                      ) : (
-                        <Icon name={u.icon} size={22} color={COLORS.actionYellow} />
-                      )
-                    ) : (
-                      <Silhouette icon={u.icon} size={16} />
-                    )}
-                    <Text style={st.rewardText}>{unlocksRevealed ? u.revealed : u.secret}</Text>
-                  </View>
-                );
-              })}
+              {starUnlocks.map(({ star, unlock }, k) => (
+                <View key={k} style={st.reward}>
+                  <StarRow stars={star} max={star} size={14} />
+                  {unlocksRevealed ? (
+                    <UnlockableAvatar display={unlock} size={24} fighterMood="victory" iconSize={22} iconColor={COLORS.actionYellow} interactive />
+                  ) : (
+                    <Silhouette icon={unlock.icon} size={16} />
+                  )}
+                  <Text style={st.rewardText}>{unlocksRevealed ? unlock.revealed : unlock.secret}</Text>
+                </View>
+              ))}
             </View>
           )}
 
@@ -240,7 +225,7 @@ const st = StyleSheet.create({
   stat: { flex: 1, alignItems: 'center', backgroundColor: COLORS.paperBeige, borderRadius: 8, borderWidth: 1.5, borderColor: INK, paddingVertical: 8 },
   statValue: { fontWeight: '900', fontSize: 20, color: INK, fontVariant: ['tabular-nums'] },
   statLabel: { fontSize: 11, fontWeight: '700', color: INK, opacity: 0.7 },
-  bank: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#FFF6C2', borderRadius: 8, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 12, paddingVertical: 8 },
+  bank: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: TONE.coinPale, borderRadius: 8, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 12, paddingVertical: 8 },
   bankLabel: { fontWeight: '900', color: INK },
   bankLine: { fontSize: 12, color: INK, opacity: 0.8, fontVariant: ['tabular-nums'] },
   section: { fontWeight: '900', letterSpacing: 2, fontSize: 12, color: INK },
@@ -253,7 +238,7 @@ const st = StyleSheet.create({
   bountyHookHeader: { fontSize: 10, fontWeight: '900', letterSpacing: 1.5, color: INK, opacity: 0.7 },
   bountyHookRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   bountyHookName: { flex: 1, fontSize: 12, fontWeight: '800', color: INK },
-  bountyHookFrac: { fontSize: 12, fontWeight: '900', color: '#0F766E', fontVariant: ['tabular-nums'] },
+  bountyHookFrac: { fontSize: 12, fontWeight: '900', color: TONE.upside, fontVariant: ['tabular-nums'] },
   biomeOpen: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: INK, borderRadius: 8, padding: 10 },
   biomeOpenText: { color: COLORS.canvasWhite, fontWeight: '800' },
   tip: { fontSize: 13, color: INK, fontStyle: 'italic', textAlign: 'center', opacity: 0.85 },

@@ -1,28 +1,22 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform, Dimensions } from 'react-native';
-import { Card, CardReward, GameState, Weapon, AttributeName, AdventureDifficulty, Character, LevelNumber, GameMode, FreePlayDifficulty } from '@/types';
-import { COLORS, RADIUS } from '@/utils/colors';
-import { createDeck, shuffleArray, isValidCombination, generateGameBoard, sameCardAttributes } from '@/utils/gameUtils';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { View, StyleSheet, Platform, Dimensions } from 'react-native';
+import { Card, CardReward, Weapon, AttributeName, AdventureDifficulty, Character, GameMode, FreePlayDifficulty } from '@/types';
+import { COLORS } from '@/utils/colors';
+import { createDeck, isValidCombination, sameCardAttributes } from '@/utils/gameUtils';
 import {
   CHARACTERS,
   WEAPONS,
-  ROUND_REQUIREMENTS,
   initializePlayer,
   calculatePlayerTotalStats,
   generateShopWeapons,
-  getRandomShopWeapon,
-  getEndlessRoundRequirement
 } from '@/utils/gameDefinitions';
 import {
   getActiveAttributesForRound,
-  getBoardSizeForAttributes,
   ATTRIBUTE_SCALING,
-  LEVEL_SYSTEM,
-  getLevelDefinition,
-  getEnemyForLevelRound,
-  getNewRoundRequirement,
+  ALL_ATTRIBUTES,
+  LEGACY_RUN_LEVEL,
   getAdjustedLevelFromXP,
-  NEW_ROUND_REQUIREMENTS,
+  getBaseRerollCostForRound,
 } from '@/utils/gameConfig';
 import { getAdjacentIndices, WeaponEffectResult } from '@/utils/weaponEffects';
 import {
@@ -42,6 +36,31 @@ import { useFighterConductor } from '@/hooks/useFighterConductor';
 import { createEnemy, applyEnemyStatModifiers, getRandomEnemyOptions } from '@/utils/enemyFactory';
 import { generateChallengeBonus, getChallengeBonusMoney } from '@/utils/rewardUtils';
 import type { EnemyOption } from '@/types/enemy';
+import type { GameState } from '@/game/types';
+import { createInitialGameState } from '@/game/gameState';
+import { dealBoard, dealBoardAndDeck } from '@/game/board';
+import { grantWeapon, generateLevelUpOptions as rollLevelUpOptions, canAffordReroll, payForReroll } from '@/game/inventory';
+import {
+  RoundHistoryEntry,
+  buildRoundScores,
+  getEnemyTierForRound,
+  getLevelRoundRequirement,
+  getMaxRoundTime,
+  getNextRoundAttributes,
+  getRoundStartTimeBonus,
+  getRunRoundRequirement,
+  getRunVictory,
+  recordRoundInHistory,
+} from '@/game/rounds';
+import {
+  canTriggerTabulaRasa,
+  desperateMeasuresChallenge,
+  getTimeGainTriggerCap,
+  guaranteedRoundStartGraces,
+  linksOnDamage,
+  prismaticPerfectionChallenge,
+  tabulaRasaChallenge,
+} from '@/game/weaponRules';
 import GameBoard from './GameBoard';
 import GameInfo from './GameInfo';
 import { DevModeCallbacks } from './GameMenu';
@@ -51,12 +70,10 @@ import LevelUp from './LevelUp';
 import EnemySelection from './EnemySelection';
 import RoundSummary from './RoundSummary';
 import TutorialScreen from './TutorialScreen';
-import AttributeUnlockScreen from './AttributeUnlockScreen';
 import VictoryScreen from './VictoryScreen';
-import RoundProgressChart, { RoundScore } from './RoundProgressChart';
+import GameOverScreen from './GameOverScreen';
+import FreePlayHeader from './FreePlayHeader';
 import CharacterUnlockScreen from './CharacterUnlockScreen';
-import { EnemyAvatar } from './enemies';
-import { FighterAvatar } from './fighters';
 import MainMenu from './MainMenu';
 import AdventureMode from '@/adventure/AdventureMode';
 import DifficultySelection from './DifficultySelection';
@@ -67,49 +84,6 @@ import { CharacterWinsStorage, EndlessHighScoresStorage, AdventureHighRoundStora
 import { playSound, playCardDealing } from '@/utils/sounds';
 
 const MAX_BOARD_SIZE = 21;
-const BASE_REROLL_COST = 5;
-
-// Get base roll price for a round (linear interpolation: R1=$1, R10=$20)
-const getBaseRollPrice = (round: number): number => {
-  // Formula: startPrice = Math.round(1 + (round - 1) * (20 - 1) / (10 - 1))
-  // Results: R1=$1, R2=$3, R3=$5, R4=$7, R5=$9, R6=$11, R7=$13, R8=$15, R9=$17, R10=$20
-  // For rounds > 10, continue the linear progression
-  return Math.max(1, Math.round(1 + (round - 1) * (20 - 1) / (10 - 1)));
-};
-
-// Get round requirement (handles both regular and endless rounds)
-const getRoundRequirement = (round: number) => {
-  if (round > 10) {
-    return getEndlessRoundRequirement(round);
-  }
-  return ROUND_REQUIREMENTS.find(r => r.round === round) ||
-         { round: 1, targetScore: 3, time: 60 };
-};
-
-// Get enemy tier based on round number (legacy - for old system)
-// Tier 1: Rounds 1-4
-// Tier 2: Rounds 5-7
-// Tier 3: Rounds 8-9
-// Tier 4: Round 10+ (bosses)
-const getTierForRound = (round: number): 1 | 2 | 3 | 4 => {
-  if (round >= 10) return 4;
-  if (round >= 8) return 3;
-  if (round >= 5) return 2;
-  return 1;
-};
-
-// Create a single enemy option for a specific enemy name (for level-based system)
-const createEnemyOptionForName = (
-  enemyName: string,
-  awardedWeaponIds: string[] = []
-): EnemyOption => {
-  const enemy = createEnemy(enemyName);
-  return {
-    enemy,
-    stretchGoalReward: generateChallengeBonus(enemy.tier, awardedWeaponIds),
-    stretchGoalMoney: getChallengeBonusMoney(enemy.tier),
-  };
-};
 
 interface GameProps {
   devMode?: boolean;
@@ -140,7 +114,6 @@ const Game: React.FC<GameProps> = ({
     'round_summary' |
     'level_up' |
     'shop' |
-    'attribute_unlock' |
     'character_unlock' |
     'victory' |
     'enemy_select' |
@@ -148,91 +121,33 @@ const Game: React.FC<GameProps> = ({
     'free_play'
   >(devMode ? 'round' : 'main_menu');
 
-  // NEW: Track current level (1-10) and round within level (1-5)
-  const [currentLevel] = useState<number>(1);
+  // Position of the current round within the level (1-5; keeps counting in endless mode)
   const [roundInLevel, setRoundInLevel] = useState<number>(1);
-
-  // Track pending attribute unlock for next round
-  const [pendingUnlockedAttribute, setPendingUnlockedAttribute] = useState<AttributeName | null>(null);
 
   // Track unlocked character for character unlock screen
   const [unlockedCharacter, setUnlockedCharacter] = useState<Character | null>(null);
 
   // Track round scores for progress chart
-  const [roundHistory, setRoundHistory] = useState<Array<{ round: number; target: number; actual: number }>>([]);
+  const [roundHistory, setRoundHistory] = useState<RoundHistoryEntry[]>([]);
 
   // Tutorial context
   const { startTutorial } = useTutorial();
 
   const [state, setState] = useState<GameState>(() => {
     const activeAttributes = getActiveAttributesForRound(1);
-    const boardSize = getBoardSizeForAttributes(activeAttributes.length);
 
-    // In dev mode, initialize with a ready-to-play board
+    // In dev mode, start on a ready-to-play board
     if (devMode) {
-      const initialBoard = generateGameBoard(boardSize, 1, 1, activeAttributes);
-      const deck = shuffleArray(createDeck(activeAttributes));
-      const remainingDeck = deck.filter(card =>
-        !initialBoard.some(boardCard => boardCard.id === card.id)
-      );
-
-      return {
-        deck: remainingDeck,
-        board: initialBoard,
-        foundCombinations: [],
-        score: 0,
-        gameStarted: true,
-        gameEnded: false,
-        startTime: Date.now(),
-        endTime: null,
-        activeAttributes,
-        round: 1,
-        targetScore: getRoundRequirement(1).targetScore,
-        remainingTime: getRoundRequirement(1).time,
-        roundCompleted: false,
-        player: initializePlayer('dev', 'Dev Player', 'Orange Tabby'),
-        shopWeapons: [],
-        levelUpOptions: [],
-        rerollCost: BASE_REROLL_COST,
-        currentEnemies: [],
-        activeEnemyInstance: null,
-        selectedEnemyReward: null,
-        selectedEnemyMoney: null,
-        defeatedEnemies: [],
-        awardedStretchGoalWeapons: [],
-        isEndlessMode: false,
-        connections: [],
-      };
+      const player = initializePlayer('dev', 'Dev Player', 'Orange Tabby');
+      const { board, deck } = dealBoardAndDeck(activeAttributes, calculatePlayerTotalStats(player).fieldSize, 1);
+      return createInitialGameState({ player, activeAttributes, board, deck, started: true });
     }
 
-    // Normal mode - empty board until character selection
-    return {
-      deck: [],
-      board: [],
-      foundCombinations: [],
-      score: 0,
-      gameStarted: false,
-      gameEnded: false,
-      startTime: null,
-      endTime: null,
-      activeAttributes,
-      round: 1,
-      targetScore: getRoundRequirement(1).targetScore,
-      remainingTime: getRoundRequirement(1).time,
-      roundCompleted: false,
+    // Normal mode - empty board until a mode is picked
+    return createInitialGameState({
       player: initializePlayer('player1', 'Player 1', 'Orange Tabby'),
-      shopWeapons: [],
-      levelUpOptions: [],
-      rerollCost: BASE_REROLL_COST,
-      currentEnemies: [],
-      activeEnemyInstance: null,
-      selectedEnemyReward: null,
-      selectedEnemyMoney: null,
-      defeatedEnemies: [],
-      awardedStretchGoalWeapons: [],
-      isEndlessMode: false,
-      connections: [],
-    };
+      activeAttributes,
+    });
   });
 
   const [notification, setNotification] = useState<{
@@ -244,10 +159,10 @@ const Game: React.FC<GameProps> = ({
   const { spawnParticles, Particles } = useParticles();
 
   // Live animated fighter conductor (tracks match joy/streaks, mistakes/pain, grace relief, low-HP grit, sleepy idle & clock panic)
-  const liveFighterStats = calculatePlayerTotalStats(state.player);
+  const totalStats = useMemo(() => calculatePlayerTotalStats(state.player), [state.player]);
   const fighter = useFighterConductor({
-    health: liveFighterStats.health,
-    maxHealth: liveFighterStats.maxHealth,
+    health: totalStats.health,
+    maxHealth: totalStats.maxHealth,
     remainingTime: gamePhase === 'round' ? state.remainingTime : undefined,
     score: state.score,
     targetScore: state.targetScore,
@@ -310,8 +225,7 @@ const Game: React.FC<GameProps> = ({
 
     const handleKeyPress = (e: KeyboardEvent) => {
       if (e.key === 'h' || e.key === 'H') {
-        const playerStats = calculatePlayerTotalStats(state.player);
-        const hintsAvailable = playerStats.hints ?? 0;
+        const hintsAvailable = totalStats.hints ?? 0;
 
         if (hasActiveHint) {
           // Clear active hint
@@ -325,7 +239,7 @@ const Game: React.FC<GameProps> = ({
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [gamePhase, hasActiveHint, state.player]);
+  }, [gamePhase, hasActiveHint, totalStats]);
 
   // Save adventure game state when entering round_summary or enemy_select (between rounds)
   // This ensures we capture state after all setState calls have been committed
@@ -442,12 +356,7 @@ const Game: React.FC<GameProps> = ({
       setEnemyDefeated(false);
     }
 
-    // Record this round's score in history (using roundInLevel for 5-round system)
-    const newRoundReq = getNewRoundRequirement(roundInLevel);
-    setRoundHistory(prev => [
-      ...prev.filter(r => r.round !== roundInLevel), // Replace if exists
-      { round: roundInLevel, target: newRoundReq.targetScore, actual: state.score }
-    ]);
+    setRoundHistory(prev => recordRoundInHistory(prev, roundInLevel, state.score));
 
     // Record adventure mode high round (max across all runs)
     if (!state.isEndlessMode && selectedCharacter) {
@@ -467,8 +376,7 @@ const Game: React.FC<GameProps> = ({
       return;
     }
 
-    // Check if this is the final round (Round 10) - if so, check for character unlock then victory
-    if (state.round >= 10) {
+    if (getRunVictory('round_completed', { round: state.round, roundInLevel, isEndlessMode: state.isEndlessMode })) {
       // Clear saved adventure game on victory
       SavedGameStorage.clear();
 
@@ -699,97 +607,30 @@ const Game: React.FC<GameProps> = ({
   // Initialize the game
   // startGame param ensures all game start state is set atomically to avoid React batching issues
   const initGame = useCallback((characterName: string, activeAttributes: AttributeName[], startGame: boolean = false) => {
-    // Initialize player first to get their starting weapons and stats
     const player = initializePlayer('player1', 'Player 1', characterName);
-    const totalStats = calculatePlayerTotalStats(player);
+    const playerTotalStats = calculatePlayerTotalStats(player);
+    const { board, deck } = dealBoardAndDeck(activeAttributes, playerTotalStats.fieldSize, 1);
 
-    // Calculate board size: max of player's fieldSize (with weapon bonuses) and minimum for attributes
-    const baseBoardSize = getBoardSizeForAttributes(activeAttributes.length);
-    const boardSize = Math.max(baseBoardSize, totalStats.fieldSize);
+    resetRoundStats(getRunRoundRequirement(1).targetScore, playerTotalStats.hints || 0, playerTotalStats.graces || 0);
 
-    // Generate initial board with modifiers based on difficulty
-    const initialBoard = generateGameBoard(boardSize, 1, 1, activeAttributes);
-    const deck = shuffleArray(createDeck(activeAttributes));
-    const remainingDeck = deck.filter(card =>
-      !initialBoard.some(boardCard => sameCardAttributes(boardCard, card))
-    );
-
-    // Get round 1 requirements
-    const roundReq = getRoundRequirement(1);
-
-    // Calculate time with starting bonus if game is starting
-    // Also add bonus time for excess health (health > 3 = +3s per extra HP)
-    const weaponTimeBonus = startGame ? (totalStats.startingTime || 0) : 0;
-    const excessHealth = Math.max(0, totalStats.health - 3);
-    const healthTimeBonus = startGame ? (excessHealth * 3) : 0; // +3 seconds per excess HP
-    const timeBonus = weaponTimeBonus + healthTimeBonus;
-
-    // Reset enemy round stats for defeat condition tracking
-    resetRoundStats(roundReq.targetScore, totalStats.hints || 0, totalStats.graces || 0);
-
-    // Don't apply enemy effects during init - that happens when player selects enemy
-    const finalBoard = initialBoard;
-
-    setState({
-      // Core game
-      deck: remainingDeck,
-      board: finalBoard,
-      foundCombinations: [],
-      score: 0,
-      gameStarted: startGame,
-      gameEnded: false,
-      startTime: startGame ? Date.now() : null,
-      endTime: null,
-
-      // Attribute scaling
-      activeAttributes,
-
-      // Roguelike properties
-      round: 1,
-      targetScore: roundReq.targetScore,
-      remainingTime: roundReq.time + timeBonus,
-      roundCompleted: false,
-
-      // Player (already initialized above for fieldSize calculation)
+    setState(createInitialGameState({
       player,
-
-      // Shop and upgrades - to be filled during gameplay
-      shopWeapons: generateShopWeapons(4, undefined, 1),  // Round 1 rarity scaling
-      levelUpOptions: [],
-      rerollCost: BASE_REROLL_COST,
-
-      // Enemy - to be selected during gameplay (with pre-determined rewards)
-      currentEnemies: getRandomEnemyOptions(getTierForRound(1), 3, [], []),  // No defeated enemies or awarded weapons at start
-      activeEnemyInstance: null,  // Set when player selects enemy
-      selectedEnemyReward: null,
-      selectedEnemyMoney: null,
-      defeatedEnemies: [],  // Track which enemies have been defeated
-      awardedStretchGoalWeapons: [],  // Track which weapons have been awarded as stretch goals
-
-      // Endless mode
-      isEndlessMode: false,
-
-      // Connector weapon system
-      connections: [],
-    });
+      activeAttributes,
+      board,
+      deck,
+      started: startGame,
+      timeBonus: startGame ? getRoundStartTimeBonus(playerTotalStats) : 0,
+      overrides: {
+        shopWeapons: generateShopWeapons(4, undefined, 1),
+        // Enemies are picked (with pre-determined rewards) on the enemy selection screen
+        currentEnemies: getRandomEnemyOptions(getEnemyTierForRound(1), 3, [], []),
+      },
+    }));
 
     setNotification(null);
   }, [resetRoundStats]);
 
-  // Generate random level up options - WEAPONS ONLY
-  const generateLevelUpOptions = () => {
-    const options: Weapon[] = [];
-    const optionsSize = 4 + (state.player?.stats?.drawIncrease || 0);
-
-    // Generate only weapon options
-    for (let i = 0; i < optionsSize; i++) {
-      // Get a random shop weapon
-      const weapon = getRandomShopWeapon();
-      options.push(weapon);
-    }
-
-    return options;
-  };
+  const generateLevelUpOptions = () => rollLevelUpOptions(state.player?.stats?.drawIncrease || 0);
 
   // Start Free Play Mode (called from Difficulty Selection)
   const startFreePlay = (difficulty: FreePlayDifficulty) => {
@@ -851,23 +692,9 @@ const Game: React.FC<GameProps> = ({
     setAdventureDifficulty(savedGame.adventureDifficulty);
     setSelectedCharacter(savedGame.characterName);
 
-    // Get active attributes for the round
-    const activeAttributes = getActiveAttributesForRound(savedGame.round + 1, savedGame.adventureDifficulty);
-
-    // Calculate board size based on saved stats
-    const baseBoardSize = getBoardSizeForAttributes(activeAttributes.length);
-    const boardSize = Math.max(baseBoardSize, savedGame.playerStats.fieldSize);
-
-    // Generate initial board for the next round
     const nextRound = savedGame.round + 1;
-    const initialBoard = generateGameBoard(boardSize, nextRound, nextRound, activeAttributes);
-    const deck = shuffleArray(createDeck(activeAttributes));
-    const remainingDeck = deck.filter(card =>
-      !initialBoard.some(boardCard => sameCardAttributes(boardCard, card))
-    );
-
-    // Get round requirements
-    const roundReq = getRoundRequirement(nextRound);
+    const activeAttributes = getActiveAttributesForRound(nextRound, savedGame.adventureDifficulty);
+    const { board, deck } = dealBoardAndDeck(activeAttributes, savedGame.playerStats.fieldSize, nextRound);
 
     // Rebuild player with validated weapons and saved stats
     const player = {
@@ -877,59 +704,35 @@ const Game: React.FC<GameProps> = ({
       stats: savedGame.playerStats,
       weapons: validWeapons,
     };
+    const playerTotalStats = calculatePlayerTotalStats(player);
 
-    // Calculate time bonus
-    const totalStats = calculatePlayerTotalStats(player);
-    const weaponTimeBonus = totalStats.startingTime || 0;
-    const excessHealth = Math.max(0, totalStats.health - 3);
-    const healthTimeBonus = excessHealth * 3;
-    const timeBonus = weaponTimeBonus + healthTimeBonus;
-
-    // Reset round stats
-    resetRoundStats(roundReq.targetScore, totalStats.hints || 0, totalStats.graces || 0);
-
-    // Clear round history for resumed game
+    resetRoundStats(getRunRoundRequirement(nextRound).targetScore, playerTotalStats.hints || 0, playerTotalStats.graces || 0);
     setRoundHistory([]);
-
-    // Reset hint triggers
     setHintTrigger(0);
     setClearHintTrigger(0);
 
-    // Set the game state
-    setState({
-      deck: remainingDeck,
-      board: initialBoard,
-      foundCombinations: [],
-      score: 0,
-      gameStarted: false,
-      gameEnded: false,
-      startTime: null,
-      endTime: null,
-      activeAttributes,
-      round: nextRound,
-      targetScore: roundReq.targetScore,
-      remainingTime: roundReq.time + timeBonus,
-      roundCompleted: false,
+    setState(createInitialGameState({
       player,
-      shopWeapons: generateShopWeapons(4, validWeapons, nextRound, totalStats.luck),
-      levelUpOptions: [],
-      rerollCost: getBaseRollPrice(nextRound),
-      currentEnemies: getRandomEnemyOptions(
-        getTierForRound(nextRound),
-        3,
-        savedGame.defeatedEnemies,
-        savedGame.awardedStretchGoalWeapons,
-        totalStats,
-        validWeapons
-      ),
-      activeEnemyInstance: null,
-      selectedEnemyReward: null,
-      selectedEnemyMoney: null,
-      defeatedEnemies: savedGame.defeatedEnemies,
-      awardedStretchGoalWeapons: savedGame.awardedStretchGoalWeapons,
-      isEndlessMode: false,
-      connections: [],
-    });
+      activeAttributes,
+      board,
+      deck,
+      round: nextRound,
+      timeBonus: getRoundStartTimeBonus(playerTotalStats),
+      overrides: {
+        shopWeapons: generateShopWeapons(4, validWeapons, nextRound, playerTotalStats.luck),
+        rerollCost: getBaseRerollCostForRound(nextRound),
+        currentEnemies: getRandomEnemyOptions(
+          getEnemyTierForRound(nextRound),
+          3,
+          savedGame.defeatedEnemies,
+          savedGame.awardedStretchGoalWeapons,
+          playerTotalStats,
+          validWeapons
+        ),
+        defeatedEnemies: savedGame.defeatedEnemies,
+        awardedStretchGoalWeapons: savedGame.awardedStretchGoalWeapons,
+      },
+    }));
 
     // Go to enemy selection
     setGamePhase('enemy_select');
@@ -946,15 +749,7 @@ const Game: React.FC<GameProps> = ({
     setGamePhase('tutorial');
   };
 
-  // Handle tutorial complete - return to main menu
-  const handleTutorialComplete = () => {
-    setGamePhase('main_menu');
-  };
-
-  // Handle tutorial exit - return to main menu
-  const handleTutorialExit = () => {
-    setGamePhase('main_menu');
-  };
+  const exitToMenu = () => setGamePhase('main_menu');
 
   // Handle enemy selection - player has chosen which enemy to fight
   const handleEnemySelect = (enemyOption: EnemyOption) => {
@@ -1011,45 +806,14 @@ const Game: React.FC<GameProps> = ({
       return;
     }
 
-    // Purchase the weapon - weapons stack, so no limit check
+    // Weapons stack, so no limit check
     setState(prevState => {
-      // Calculate the new max values after adding this weapon
-      const newWeapons = [...prevState.player.weapons, weapon];
-      const newPlayer = { ...prevState.player, weapons: newWeapons };
-      const newTotalStats = calculatePlayerTotalStats(newPlayer);
-
-      // Grant immediate bonuses for capacity-increasing weapons
-      let hintsBonus = 0;
-      let gracesBonus = 0;
-      let healthBonus = 0;
-
-      // If weapon increases maxHints, grant +1 immediate hint (up to new max)
-      if (weapon.effects.maxHints && typeof weapon.effects.maxHints === 'number') {
-        hintsBonus = Math.min(1, newTotalStats.maxHints - prevState.player.stats.hints);
-      }
-
-      // If weapon grants graces (Second Chance), grant them immediately
-      if (weapon.effects.graces && typeof weapon.effects.graces === 'number') {
-        gracesBonus = weapon.effects.graces;
-      }
-
-      // If weapon grants health (Life Vessel), heal immediately (clamped to new max)
-      if (weapon.effects.health && typeof weapon.effects.health === 'number') {
-        healthBonus = weapon.effects.health;
-      }
-
+      const player = grantWeapon(prevState.player, weapon);
       return {
         ...prevState,
         player: {
-          ...prevState.player,
-          stats: {
-            ...prevState.player.stats,
-            money: prevState.player.stats.money - weapon.price,
-            hints: Math.min(prevState.player.stats.hints + hintsBonus, newTotalStats.maxHints),
-            graces: Math.min(prevState.player.stats.graces + gracesBonus, newTotalStats.maxGraces),
-            health: Math.min(prevState.player.stats.health + healthBonus, newTotalStats.maxHealth),
-          },
-          weapons: newWeapons
+          ...player,
+          stats: { ...player.stats, money: player.stats.money - weapon.price },
         },
         // Mark the slot as sold (null) instead of removing to preserve layout
         shopWeapons: prevState.shopWeapons.map((shopWeapon, index) =>
@@ -1059,95 +823,39 @@ const Game: React.FC<GameProps> = ({
     });
   };
 
-  // Handle weapon shop reroll
-  const handleWeaponShopReroll = () => {
-    if (state.player.stats.money < state.rerollCost && state.player.stats.freeRerolls <= 0) {
-      setNotification({
-        message: 'Not enough money to reroll the shop',
-        type: 'error'
-      });
+  // Pay for a reroll (free reroll first, else money) and replace what is offered.
+  const reroll = (notAffordableMessage: string, rerolled: (prev: GameState) => Partial<GameState>) => {
+    const { money, freeRerolls } = state.player.stats;
+    if (!canAffordReroll({ money, freeRerolls, rerollCost: state.rerollCost })) {
+      setNotification({ message: notAffordableMessage, type: 'error' });
       return;
     }
-
-    // Check if player has free rerolls
-    if (state.player.stats.freeRerolls > 0) {
-      setState(prevState => {
-        const totalStats = calculatePlayerTotalStats(prevState.player);
-        return {
-          ...prevState,
-          shopWeapons: generateShopWeapons(4, prevState.player.weapons, prevState.round, totalStats.luck),
-          player: {
-            ...prevState.player,
-            stats: {
-              ...prevState.player.stats,
-              freeRerolls: prevState.player.stats.freeRerolls - 1
-            }
-          }
-        };
-      });
-    } else {
-      // Charge for the reroll
-      setState(prevState => {
-        const totalStats = calculatePlayerTotalStats(prevState.player);
-        return {
-          ...prevState,
-          shopWeapons: generateShopWeapons(4, prevState.player.weapons, prevState.round, totalStats.luck),
-          player: {
-            ...prevState.player,
-            stats: {
-              ...prevState.player.stats,
-              money: prevState.player.stats.money - prevState.rerollCost
-            }
-          },
-          rerollCost: Math.max(1, Math.round(prevState.rerollCost * 1.2)) // Increase reroll cost by 20%
-        };
-      });
-    }
+    setState(prevState => {
+      const paid = payForReroll(
+        { money: prevState.player.stats.money, freeRerolls: prevState.player.stats.freeRerolls, rerollCost: prevState.rerollCost },
+        'run'
+      );
+      if (!paid) return prevState;
+      return {
+        ...prevState,
+        ...rerolled(prevState),
+        rerollCost: paid.rerollCost,
+        player: {
+          ...prevState.player,
+          stats: { ...prevState.player.stats, money: paid.money, freeRerolls: paid.freeRerolls },
+        },
+      };
+    });
   };
+
+  const handleWeaponShopReroll = () =>
+    reroll('Not enough money to reroll the shop', prev => ({
+      shopWeapons: generateShopWeapons(4, prev.player.weapons, prev.round, calculatePlayerTotalStats(prev.player).luck),
+    }));
 
   // Handle level up selection - receives the selected weapon directly
   const handleLevelUpSelection = (weapon: Weapon) => {
-    // Add the weapon to player's inventory (weapons stack) with immediate bonuses
-    setState(prevState => {
-      // Calculate the new max values after adding this weapon
-      const newWeapons = [...prevState.player.weapons, weapon];
-      const newPlayer = { ...prevState.player, weapons: newWeapons };
-      const newTotalStats = calculatePlayerTotalStats(newPlayer);
-
-      // Grant immediate bonuses for capacity-increasing weapons
-      let hintsBonus = 0;
-      let gracesBonus = 0;
-      let healthBonus = 0;
-
-      // If weapon increases maxHints, grant +1 immediate hint (up to new max)
-      if (weapon.effects.maxHints && typeof weapon.effects.maxHints === 'number') {
-        hintsBonus = Math.min(1, newTotalStats.maxHints - prevState.player.stats.hints);
-      }
-
-      // If weapon grants graces (Second Chance), grant them immediately
-      if (weapon.effects.graces && typeof weapon.effects.graces === 'number') {
-        gracesBonus = weapon.effects.graces;
-      }
-
-      // If weapon grants health (Life Vessel), heal immediately (clamped to new max)
-      if (weapon.effects.health && typeof weapon.effects.health === 'number') {
-        healthBonus = weapon.effects.health;
-      }
-
-      return {
-        ...prevState,
-        player: {
-          ...prevState.player,
-          stats: {
-            ...prevState.player.stats,
-            hints: Math.min(prevState.player.stats.hints + hintsBonus, newTotalStats.maxHints),
-            graces: Math.min(prevState.player.stats.graces + gracesBonus, newTotalStats.maxGraces),
-            health: Math.min(prevState.player.stats.health + healthBonus, newTotalStats.maxHealth),
-          },
-          weapons: newWeapons
-        }
-      };
-    });
+    setState(prevState => ({ ...prevState, player: grantWeapon(prevState.player, weapon) }));
 
     setNotification({
       message: `Acquired ${weapon.name}!`,
@@ -1164,41 +872,7 @@ const Game: React.FC<GameProps> = ({
 
   // Handle in-round level-up selection (NEW level-based system)
   const handleInRoundLevelUpSelect = (weapon: Weapon) => {
-    // Apply the weapon (same logic as handleLevelUpSelection)
-    setState(prevState => {
-      const newWeapons = [...prevState.player.weapons, weapon];
-      const newPlayer = { ...prevState.player, weapons: newWeapons };
-      const newTotalStats = calculatePlayerTotalStats(newPlayer);
-
-      // Grant immediate bonuses for capacity-increasing weapons
-      let hintsBonus = 0;
-      let gracesBonus = 0;
-      let healthBonus = 0;
-
-      if (weapon.effects.maxHints && typeof weapon.effects.maxHints === 'number') {
-        hintsBonus = Math.min(1, newTotalStats.maxHints - prevState.player.stats.hints);
-      }
-      if (weapon.effects.graces && typeof weapon.effects.graces === 'number') {
-        gracesBonus = weapon.effects.graces;
-      }
-      if (weapon.effects.health && typeof weapon.effects.health === 'number') {
-        healthBonus = weapon.effects.health;
-      }
-
-      return {
-        ...prevState,
-        player: {
-          ...prevState.player,
-          weapons: newWeapons,
-          stats: {
-            ...prevState.player.stats,
-            hints: Math.min(prevState.player.stats.hints + hintsBonus, newTotalStats.maxHints),
-            graces: Math.min(prevState.player.stats.graces + gracesBonus, newTotalStats.maxGraces),
-            health: Math.min(prevState.player.stats.health + healthBonus, newTotalStats.maxHealth),
-          }
-        }
-      };
-    });
+    setState(prevState => ({ ...prevState, player: grantWeapon(prevState.player, weapon) }));
 
     // Check if there are more level-ups pending
     const remaining = inRoundLevelUpQueue.slice(1);
@@ -1215,83 +889,11 @@ const Game: React.FC<GameProps> = ({
     fighter.triggerPowerup();
   };
 
-  // Handle in-round level-up reroll
-  const handleInRoundLevelUpReroll = () => {
-    if (state.player.stats.money < state.rerollCost && state.player.stats.freeRerolls <= 0) {
-      setNotification({
-        message: 'Not enough money to reroll',
-        type: 'error'
-      });
-      return;
-    }
+  const handleInRoundLevelUpReroll = () =>
+    reroll('Not enough money to reroll', () => ({ levelUpOptions: generateLevelUpOptions() }));
 
-    if (state.player.stats.freeRerolls > 0) {
-      setState(prevState => ({
-        ...prevState,
-        levelUpOptions: generateLevelUpOptions(),
-        player: {
-          ...prevState.player,
-          stats: {
-            ...prevState.player.stats,
-            freeRerolls: prevState.player.stats.freeRerolls - 1
-          }
-        }
-      }));
-    } else {
-      setState(prevState => ({
-        ...prevState,
-        levelUpOptions: generateLevelUpOptions(),
-        player: {
-          ...prevState.player,
-          stats: {
-            ...prevState.player.stats,
-            money: prevState.player.stats.money - prevState.rerollCost
-          }
-        },
-        rerollCost: Math.max(1, Math.round(prevState.rerollCost * 1.2))
-      }));
-    }
-  };
-
-  // Handle level up reroll
-  const handleLevelUpReroll = () => {
-    if (state.player.stats.money < state.rerollCost && state.player.stats.freeRerolls <= 0) {
-      setNotification({
-        message: 'Not enough money to reroll the level up options',
-        type: 'error'
-      });
-      return;
-    }
-
-    // Check if player has free rerolls
-    if (state.player.stats.freeRerolls > 0) {
-      setState(prevState => ({
-        ...prevState,
-        levelUpOptions: generateLevelUpOptions(),
-        player: {
-          ...prevState.player,
-          stats: {
-            ...prevState.player.stats,
-            freeRerolls: prevState.player.stats.freeRerolls - 1
-          }
-        }
-      }));
-    } else {
-      // Charge for the reroll
-      setState(prevState => ({
-        ...prevState,
-        levelUpOptions: generateLevelUpOptions(),
-        player: {
-          ...prevState.player,
-          stats: {
-            ...prevState.player.stats,
-            money: prevState.player.stats.money - prevState.rerollCost
-          }
-        },
-        rerollCost: Math.max(1, Math.round(prevState.rerollCost * 1.2)) // Increase reroll cost by 20%
-      }));
-    }
-  };
+  const handleLevelUpReroll = () =>
+    reroll('Not enough money to reroll the level up options', () => ({ levelUpOptions: generateLevelUpOptions() }));
 
   // Handle match start - called immediately when a valid match is detected (before animations)
   const handleMatchStart = useCallback(() => {
@@ -1326,18 +928,18 @@ const Game: React.FC<GameProps> = ({
     // Reset consecutive invalid matches on valid match
     resetConsecutiveInvalidMatches();
 
-    // Check for Prismatic Perfection (all-different match)
-    const hasPrismaticPerfection = state.player.weapons.some(w => w.id === 'prismatic-perfection');
-    if (hasPrismaticPerfection && !isPrismaticPerfectionTriggered() && isAllDifferent) {
-      addTimeGainTriggerCapBonus(5);
+    const prismatic = prismaticPerfectionChallenge(state.player.weapons, {
+      isAllDifferent,
+      alreadyTriggered: isPrismaticPerfectionTriggered(),
+    });
+    if (prismatic) {
+      addTimeGainTriggerCapBonus(prismatic.capBonus);
       markPrismaticPerfectionTriggered();
-      setNotification({ message: 'Prismatic Perfection! +5 time triggers', type: 'success' });
+      setNotification({ message: prismatic.message, type: 'success' });
     }
 
-    // Check for Tabula Rasa (board clear) - board will be empty after removing matched cards and weapon effect cards
-    const hasTabulaRasa = state.player.weapons.some(w => w.id === 'tabula-rasa');
-    if (hasTabulaRasa && !isTabulaRasaTriggered()) {
-      // Calculate remaining cards after match and weapon effects
+    if (canTriggerTabulaRasa(state.player.weapons, isTabulaRasaTriggered())) {
+      // The board is cleared if nothing is left after the match and the weapon effects
       const cardsBeingRemoved = new Set(cards.map(c => c.id));
       if (weaponEffects) {
         weaponEffects.explosiveCards.forEach(c => cardsBeingRemoved.add(c.id));
@@ -1345,11 +947,11 @@ const Game: React.FC<GameProps> = ({
         weaponEffects.ricochetCards.forEach(c => cardsBeingRemoved.add(c.id));
         weaponEffects.autoMatchedSets.flat().forEach(c => cardsBeingRemoved.add(c.id));
       }
-      const remainingCards = state.board.filter(c => !cardsBeingRemoved.has(c.id)).length;
-      if (remainingCards === 0) {
-        addTimeGainTriggerCapBonus(5);
+      const tabulaRasa = tabulaRasaChallenge(state.board.filter(c => !cardsBeingRemoved.has(c.id)).length);
+      if (tabulaRasa) {
+        addTimeGainTriggerCapBonus(tabulaRasa.capBonus);
         markTabulaRasaTriggered();
-        setNotification({ message: 'Tabula Rasa! +5 time triggers', type: 'success' });
+        setNotification({ message: tabulaRasa.message, type: 'success' });
       }
     }
 
@@ -1452,14 +1054,13 @@ const Game: React.FC<GameProps> = ({
     // Award time bonus for linked destruction (Echo Chamber weapon)
     const connectedCardCount = rewards.filter(r => r.effectType === 'connected').length;
     if (connectedCardCount > 0) {
-      const playerTotalStats = calculatePlayerTotalStats(state.player);
-      const timeBonus = (playerTotalStats.echoTimeBonusPerLink || 0) * connectedCardCount;
+      const timeBonus = (totalStats.echoTimeBonusPerLink || 0) * connectedCardCount;
       if (timeBonus > 0) {
         setState(prevState => ({
           ...prevState,
           remainingTime: Math.min(
             prevState.remainingTime + timeBonus,
-            getRoundRequirement(prevState.round).time + (calculatePlayerTotalStats(prevState.player).startingTime || 0)
+            getMaxRoundTime(prevState.round, calculatePlayerTotalStats(prevState.player))
           )
         }));
         setNotification({ message: `+${timeBonus}s from links!`, type: 'info' });
@@ -1491,7 +1092,7 @@ const Game: React.FC<GameProps> = ({
       ) || connectedCardCount > 0;
     const didHeal =
       totalHealing > 0 &&
-      state.player.stats.health < calculatePlayerTotalStats(state.player).maxHealth;
+      state.player.stats.health < totalStats.maxHealth;
     fighter.triggerMatch({ isGraceMatch, isMegaMatch, didHeal });
 
     // Show notification for triggered effects
@@ -1572,7 +1173,7 @@ const Game: React.FC<GameProps> = ({
       // Apply enemy time delta (can be negative for time steal)
       const weaponTimeBonus = weaponEffects?.bonusTime || 0;
       const totalTimeChange = weaponTimeBonus + enemyTimeDelta;
-      const maxTime = getRoundRequirement(prevState.round).time + (calculatePlayerTotalStats(prevState.player).startingTime || 0);
+      const maxTime = getMaxRoundTime(prevState.round, playerTotalStats);
       const newRemainingTime = Math.min(Math.max(0, prevState.remainingTime + totalTimeChange), maxTime);
 
       // Apply enemy card removals (NO replacement)
@@ -1607,12 +1208,12 @@ const Game: React.FC<GameProps> = ({
             // Cap hints at maxHints (including weapon bonuses)
             hints: Math.min(
               prevState.player.stats.hints + totalHints,
-              calculatePlayerTotalStats(prevState.player).maxHints
+              playerTotalStats.maxHints
             ),
             // Cap graces at maxGraces (including weapon bonuses)
             graces: Math.min(
               prevState.player.stats.graces + graceDelta,
-              calculatePlayerTotalStats(prevState.player).maxGraces
+              playerTotalStats.maxGraces
             )
           }
         }
@@ -1621,8 +1222,7 @@ const Game: React.FC<GameProps> = ({
 
     // === CONNECTOR WEAPON EFFECTS ===
     // Roll for connection creation on match
-    const playerTotalStatsForConnector = calculatePlayerTotalStats(state.player);
-    if (shouldCreateConnection(playerTotalStatsForConnector)) {
+    if (shouldCreateConnection(totalStats)) {
       // Get positions of matched cards on the board
       const matchedPositions = matchedCards.map(card =>
         state.board.findIndex(bc => bc.id === card.id)
@@ -1642,7 +1242,7 @@ const Game: React.FC<GameProps> = ({
           setNotification({ message: 'Link Created!', type: 'info' });
 
           // Check for Neural Network bonus connection
-          if (shouldCreateBonusConnection(playerTotalStatsForConnector)) {
+          if (shouldCreateBonusConnection(totalStats)) {
             // Create a random bonus connection
             const bonusConnections = createRandomConnections(
               state.board.length,
@@ -1807,7 +1407,7 @@ const Game: React.FC<GameProps> = ({
         score: prevState.score + 1 + linkedBonus, // +1 per card destroyed
         remainingTime: Math.min(
           prevState.remainingTime + linkedTimeBonus,
-          getRoundRequirement(prevState.round).time + (playerTotalStats.startingTime || 0)
+          getMaxRoundTime(prevState.round, playerTotalStats)
         ),
         player: {
           ...prevState.player,
@@ -1871,16 +1471,12 @@ const Game: React.FC<GameProps> = ({
     // Track consecutive invalid matches for Desperate Measures
     incrementConsecutiveInvalidMatches();
 
-    // Check for Desperate Measures (3 consecutive invalid matches)
-    const hasDesperateMeasures = state.player.weapons.some(w => w.id === 'desperate-measures');
-    if (hasDesperateMeasures && getConsecutiveInvalidMatches() >= 3) {
-      addTimeGainTriggerCapBonus(10);
-      resetConsecutiveInvalidMatches(); // Reset so it can trigger again
-      setNotification({ message: 'Desperate Measures! +10 time triggers', type: 'success' });
+    const desperate = desperateMeasuresChallenge(state.player.weapons, getConsecutiveInvalidMatches());
+    if (desperate) {
+      addTimeGainTriggerCapBonus(desperate.capBonus);
+      resetConsecutiveInvalidMatches(); // So it can trigger again
+      setNotification({ message: desperate.message, type: 'success' });
     }
-
-    // Get current total stats to check graces
-    const totalStats = calculatePlayerTotalStats(state.player);
 
     // Check how many attributes are invalid
     const validationResult = isValidCombination(cardsToReplace, state.activeAttributes);
@@ -1971,8 +1567,7 @@ const Game: React.FC<GameProps> = ({
     });
 
     // === REVENGE LINKER: Create connections when taking damage ===
-    const hasRevengeLinker = state.player.weapons.some(w => w.specialEffect === 'revengeLinker');
-    if (hasRevengeLinker && state.board.length >= 3) {
+    if (linksOnDamage(state.player.weapons) && state.board.length >= 3) {
       const revengeConnections = rollRevengeLinkerConnections(state.board.length, state.connections);
       if (revengeConnections.length > 0) {
         setState(prevState => ({
@@ -2066,18 +1661,12 @@ const Game: React.FC<GameProps> = ({
       setDevTimerEnabled(prev => !prev);
     },
     onResetBoard: () => {
-      const totalStats = calculatePlayerTotalStats(state.player);
-      const boardSize = Math.max(totalStats.fieldSize, getBoardSizeForAttributes(state.activeAttributes.length));
-      const newBoard = generateGameBoard(boardSize, state.round, state.round, state.activeAttributes);
-      const deck = shuffleArray(createDeck(state.activeAttributes));
-      const remainingDeck = deck.filter(card =>
-        !newBoard.some(boardCard => boardCard.id === card.id)
-      );
+      const { board, deck } = dealBoardAndDeck(state.activeAttributes, totalStats.fieldSize, state.round);
       setState(prevState => ({
         ...prevState,
-        deck: remainingDeck,
-        board: newBoard,
-        remainingTime: getRoundRequirement(state.round).time,
+        deck,
+        board,
+        remainingTime: getRunRoundRequirement(state.round).time,
       }));
       setNotification({ message: 'Board reset!', type: 'info' });
     },
@@ -2099,39 +1688,27 @@ const Game: React.FC<GameProps> = ({
     },
     onChangeRound: (round: number) => {
       const activeAttributes = getActiveAttributesForRound(round, adventureDifficulty);
-      const totalStats = calculatePlayerTotalStats(state.player);
-      const boardSize = Math.max(totalStats.fieldSize, getBoardSizeForAttributes(activeAttributes.length));
-      const newBoard = generateGameBoard(boardSize, round, round, activeAttributes);
-      const deck = shuffleArray(createDeck(activeAttributes));
-      const remainingDeck = deck.filter(card =>
-        !newBoard.some(boardCard => boardCard.id === card.id)
-      );
+      const { board, deck } = dealBoardAndDeck(activeAttributes, totalStats.fieldSize, round);
+      const requirement = getRunRoundRequirement(round);
       setState(prevState => ({
         ...prevState,
         round,
         activeAttributes,
-        deck: remainingDeck,
-        board: newBoard,
-        targetScore: getRoundRequirement(round).targetScore,
-        remainingTime: getRoundRequirement(round).time,
+        deck,
+        board,
+        targetScore: requirement.targetScore,
+        remainingTime: requirement.time,
       }));
     },
     onChangeAttributes: (count: number) => {
-      // Get attributes based on count (3=shape/color/number, 4=+shading, 5=+background)
-      const allAttributes: AttributeName[] = ['shape', 'color', 'number', 'shading', 'background'];
-      const activeAttributes = allAttributes.slice(0, count);
-      const totalStats = calculatePlayerTotalStats(state.player);
-      const boardSize = Math.max(totalStats.fieldSize, getBoardSizeForAttributes(count));
-      const newBoard = generateGameBoard(boardSize, state.round, state.round, activeAttributes);
-      const deck = shuffleArray(createDeck(activeAttributes));
-      const remainingDeck = deck.filter(card =>
-        !newBoard.some(boardCard => boardCard.id === card.id)
-      );
+      // 3 = shape/color/number, 4 = +shading, 5 = +background
+      const activeAttributes = ALL_ATTRIBUTES.slice(0, count);
+      const { board, deck } = dealBoardAndDeck(activeAttributes, totalStats.fieldSize, state.round);
       setState(prevState => ({
         ...prevState,
         activeAttributes,
-        deck: remainingDeck,
-        board: newBoard,
+        deck,
+        board,
       }));
       setNotification({ message: `Difficulty set to ${count} attributes`, type: 'info' });
     },
@@ -2222,39 +1799,9 @@ const Game: React.FC<GameProps> = ({
     });
   };
 
-  // Handle proceeding from shop - check for attribute unlocks before starting next round
+  // The legacy run never changes attributes between rounds (one 3-attribute level,
+  // then endless with all five), so the shop always leads straight to the next round.
   const handleProceedFromShop = () => {
-    // In endless mode, skip attribute unlock screens (all 5 attributes already active)
-    if (state.isEndlessMode) {
-      startNextRound();
-      return;
-    }
-
-    // Check if next round is in a new level with different attributes
-    const nextRoundInLevelCheck = roundInLevel + 1;
-    const isNewLevel = nextRoundInLevelCheck > LEVEL_SYSTEM.roundsPerLevel;
-
-    if (isNewLevel) {
-      // Moving to next level - check if new level has more attributes
-      const nextLevel = currentLevel + 1;
-      if (nextLevel <= LEVEL_SYSTEM.totalLevels) {
-        const currentLevelDef = getLevelDefinition(currentLevel as LevelNumber);
-        const nextLevelDef = getLevelDefinition(nextLevel as LevelNumber);
-        const previousAttributes = currentLevelDef.attributes;
-        const newActiveAttributes = nextLevelDef.attributes;
-
-        // Check if a new attribute is being unlocked
-        const newAttribute = newActiveAttributes.find(attr => !previousAttributes.includes(attr));
-
-        if (newAttribute) {
-          setPendingUnlockedAttribute(newAttribute as AttributeName);
-          setGamePhase('attribute_unlock');
-          return;
-        }
-      }
-    }
-
-    // No attribute unlock needed, proceed directly to next round
     startNextRound();
   };
 
@@ -2272,74 +1819,44 @@ const Game: React.FC<GameProps> = ({
     setGamePhase('level_up');
   };
 
-  // Start the next round
   const startNextRound = () => {
-    // Calculate next round in level (1-5 per level)
     const nextRoundInLevel = roundInLevel + 1;
-    const isNewLevel = nextRoundInLevel > LEVEL_SYSTEM.roundsPerLevel;
 
-    // If we've completed 5 rounds, handle level completion
-    if (isNewLevel && !state.isEndlessMode) {
-      // Level is complete - record completion and unlock next level
-      LevelProgressStorage.recordCompletion(currentLevel as LevelNumber, selectedCharacter!);
-      LevelProgressStorage.unlockNextLevel(currentLevel);
+    if (getRunVictory('starting_next_round', { round: state.round, roundInLevel, isEndlessMode: state.isEndlessMode })) {
+      LevelProgressStorage.recordCompletion(LEGACY_RUN_LEVEL.number, selectedCharacter!);
+      LevelProgressStorage.unlockNextLevel(LEGACY_RUN_LEVEL.number);
 
-      // Try to unlock a new character
       const nextLockedCharacter = CharacterUnlockStorage.getNextLockedCharacter();
       if (nextLockedCharacter) {
         CharacterUnlockStorage.unlockCharacter(nextLockedCharacter);
         setNotification({
-          message: `Level ${currentLevel} Complete! Unlocked ${nextLockedCharacter}!`,
+          message: `Level ${LEGACY_RUN_LEVEL.number} Complete! Unlocked ${nextLockedCharacter}!`,
           type: 'success'
         });
-      } else if (currentLevel < LEVEL_SYSTEM.totalLevels) {
+      } else {
         setNotification({
-          message: `Level ${currentLevel} Complete!`,
+          message: `Level ${LEGACY_RUN_LEVEL.number} Complete!`,
           type: 'success'
         });
       }
 
-      // Go to victory screen
       setGamePhase('victory');
       return;
     }
 
-    // Update roundInLevel state
     setRoundInLevel(nextRoundInLevel);
 
-    // Use new round requirements for level-based system (120s rounds)
-    const roundReq = getNewRoundRequirement(nextRoundInLevel);
-    const nextRound = state.round + 1; // Still track overall round for compatibility
+    const roundReq = getLevelRoundRequirement(nextRoundInLevel);
+    const nextRound = state.round + 1;
 
     // Reset hint triggers to prevent auto-triggering on round start
     setHintTrigger(0);
     setClearHintTrigger(0);
 
-    // Get active attributes from level definition (not difficulty-based)
-    // In endless mode, always use all 5 attributes
-    const levelDef = getLevelDefinition(currentLevel as LevelNumber);
-    const newActiveAttributes: AttributeName[] = state.isEndlessMode
-      ? ['shape', 'color', 'number', 'shading', 'background']
-      : [...levelDef.attributes];
+    const newActiveAttributes = getNextRoundAttributes(state.isEndlessMode);
+    // The draw deck carries over from the previous round; only the board is dealt fresh.
+    const newBoard = dealBoard(newActiveAttributes, totalStats.fieldSize, nextRound);
 
-    // Note: Attribute unlock is now handled via the AttributeUnlockScreen before this function is called
-
-    // Calculate board size: max of player's fieldSize (with weapon bonuses) and minimum for attributes
-    const totalStats = calculatePlayerTotalStats(state.player);
-    const boardSize = Math.max(
-      totalStats.fieldSize,
-      getBoardSizeForAttributes(newActiveAttributes.length)
-    );
-
-    // Generate a new board with the new attributes
-    const newBoard = generateGameBoard(
-      boardSize,
-      nextRound,
-      nextRound,
-      newActiveAttributes
-    );
-
-    // Reset round stats for the new round
     setRoundStats({
       moneyEarned: 0,
       experienceEarned: 0,
@@ -2349,128 +1866,85 @@ const Game: React.FC<GameProps> = ({
       startLevel: state.player.stats.level,
     });
 
-    // Reset enemy round stats for defeat condition tracking
-    const playerTotalStats = calculatePlayerTotalStats(state.player);
-    resetRoundStats(roundReq.targetScore, playerTotalStats.hints || 0, playerTotalStats.graces || 0);
-
-    // Don't apply enemy effects yet - that happens when player selects enemy
-    const finalBoard = newBoard;
+    resetRoundStats(roundReq.targetScore, totalStats.hints || 0, totalStats.graces || 0);
 
     setState(prevState => {
-      // Reset health to max at the start of each round
-      const playerTotalStats = calculatePlayerTotalStats(prevState.player);
+      const prevTotalStats = calculatePlayerTotalStats(prevState.player);
 
-      // Only generate random enemies for endless mode
+      // Only endless mode offers enemies (on the enemy selection screen)
       const enemies = prevState.isEndlessMode
-        ? getRandomEnemyOptions(getTierForRound(nextRound), 3, prevState.defeatedEnemies, prevState.awardedStretchGoalWeapons, calculatePlayerTotalStats(prevState.player), prevState.player.weapons)
-        : []; // Level-based enemies are set up later
+        ? getRandomEnemyOptions(getEnemyTierForRound(nextRound), 3, prevState.defeatedEnemies, prevState.awardedStretchGoalWeapons, prevTotalStats, prevState.player.weapons)
+        : [];
+      const shopWeapons = generateShopWeapons(4, prevState.player.weapons, nextRound, prevTotalStats.luck);
+
+      // Health is refilled every round; graces are topped up if a weapon guarantees some
+      const guaranteedGraces = guaranteedRoundStartGraces(prevState.player.weapons);
+      const player = {
+        ...prevState.player,
+        stats: {
+          ...prevState.player.stats,
+          health: prevTotalStats.maxHealth,
+          graces: Math.max(prevState.player.stats.graces, guaranteedGraces),
+        },
+      };
+      const roundStartStats = calculatePlayerTotalStats(player);
+
+      const startingConnections = roundStartStats.startingConnections || 0;
+      const connections = startingConnections > 0 && newBoard.length >= 2
+        ? createRandomConnections(newBoard.length, startingConnections, [])
+        : [];
 
       return {
         ...prevState,
         round: nextRound,
         activeAttributes: newActiveAttributes,
         targetScore: roundReq.targetScore,
-        remainingTime: roundReq.time,
+        remainingTime: roundReq.time + getRoundStartTimeBonus(roundStartStats),
         score: 0,
-        board: finalBoard,
+        board: newBoard,
         foundCombinations: [],
         roundCompleted: false,
-        gameStarted: false,  // Not started yet - may need enemy setup
+        gameStarted: !prevState.isEndlessMode,
+        startTime: prevState.isEndlessMode ? prevState.startTime : Date.now(),
         currentEnemies: enemies,
-        shopWeapons: generateShopWeapons(4, prevState.player.weapons, nextRound, playerTotalStats.luck),   // Refill weapon shop with round-scaled rarity
-        rerollCost: getBaseRollPrice(nextRound),  // Reset roll price for new round
-        activeEnemyInstance: null,  // Set when player selects enemy
+        shopWeapons,
+        rerollCost: getBaseRerollCostForRound(nextRound),
+        activeEnemyInstance: null,
         selectedEnemyReward: null,
         selectedEnemyMoney: null,
-        connections: [],  // Clear connections at round start
-        player: {
-          ...prevState.player,
-          stats: {
-            ...prevState.player.stats,
-            health: playerTotalStats.maxHealth,  // Reset health to max
-          },
-        },
+        connections,
+        player,
       };
     });
 
-    // Apply startingTime bonus from weapons and excess health
-    // Health > 3 = +3s per extra HP
-    setState(prevState => {
-      const totalStats = calculatePlayerTotalStats(prevState.player);
-      const weaponTimeBonus = totalStats.startingTime || 0;
-      const excessHealth = Math.max(0, totalStats.health - 3);
-      const healthTimeBonus = excessHealth * 3; // +3 seconds per excess HP
-      const timeBonus = weaponTimeBonus + healthTimeBonus;
-      return {
-        ...prevState,
-        remainingTime: prevState.remainingTime + timeBonus
-      };
-    });
+    setGamePhase(state.isEndlessMode ? 'enemy_select' : 'round');
+  };
 
-    // Apply Snowball effect: guarantee at least 1 grace at round start
-    setState(prevState => {
-      const hasSnowball = prevState.player.weapons.some(w => w.name === 'Snowball');
-      if (hasSnowball && prevState.player.stats.graces < 1) {
-        return {
-          ...prevState,
-          player: {
-            ...prevState.player,
-            stats: {
-              ...prevState.player.stats,
-              graces: 1
-            }
-          }
-        };
-      }
-      return prevState;
-    });
-
-    // Apply Web Weaver effect: create starting connections
-    setState(prevState => {
-      const totalStats = calculatePlayerTotalStats(prevState.player);
-      const startingConnections = totalStats.startingConnections || 0;
-      if (startingConnections > 0 && prevState.board.length >= 2) {
-        const newConnections = createRandomConnections(prevState.board.length, startingConnections, []);
-        return {
-          ...prevState,
-          connections: newConnections,
-        };
-      }
-      return prevState;
-    });
-
-    // NEW: Level-based enemy selection
-    // In level-based system, only rounds 3 and 5 have enemies
-    const enemyName = getEnemyForLevelRound(currentLevel as LevelNumber, nextRoundInLevel);
-
-    if (enemyName && !state.isEndlessMode) {
-      // Round 3 or 5 - spawn the specific boss from level definition
-      const enemyOption = createEnemyOptionForName(enemyName, state.awardedStretchGoalWeapons);
-      // Set up the enemy directly without selection screen
-      setState(prevState => ({
-        ...prevState,
-        currentEnemies: [enemyOption],
-        activeEnemyInstance: enemyOption.enemy,
-        selectedEnemyReward: enemyOption.stretchGoalReward,
-        selectedEnemyMoney: enemyOption.stretchGoalMoney,
-        gameStarted: true,
-        startTime: Date.now(),
-      }));
-      // Apply enemy start effects
-      enemyOption.enemy.onRoundStart(state.board);
-      setGamePhase('round');
-    } else if (state.isEndlessMode) {
-      // Endless mode - use the old random enemy selection
-      setGamePhase('enemy_select');
-    } else {
-      // Rounds 1, 2, 4 - no enemy, start directly
-      setState(prevState => ({
-        ...prevState,
-        gameStarted: true,
-        startTime: Date.now(),
-      }));
-      setGamePhase('round');
-    }
+  // GameBoard props shared by the round and free play screens
+  const gameBoardProps = {
+    cards: state.board,
+    onMatch: handleValidMatch,
+    onMatchStart: handleMatchStart,
+    onInvalidSelection: handleInvalidMatch,
+    weapons: state.player.weapons,
+    isPlayerTurn: true,
+    activeAttributes: state.activeAttributes,
+    onSelectedCountChange: fighter.setSelectedCount,
+    onBoardIdleChange: fighter.setIsBoardIdle,
+    onHintStateChange: setHasActiveHint,
+    onUseHint: handleUseHint,
+    triggerHint: hintTrigger > 0 ? hintTrigger : undefined,
+    triggerClearHint: clearHintTrigger > 0 ? clearHintTrigger : undefined,
+    onCardBurn: handleCardBurn,
+    isPaused: isMenuOpen,
+    lastMatchTime,
+    autoPlayer: autoPlayerEnabled,
+    timeGainContext: {
+      triggersThisRound: getTimeGainTriggers(),
+      effectiveCap: getTimeGainTriggerCap(totalStats, state.player.weapons, getTimeGainTriggerCapBonus()),
+    },
+    onTimeGainTriggered: recordTimeGainTrigger,
+    connections: state.connections,
   };
 
   // Render the appropriate game phase
@@ -2494,21 +1968,21 @@ const Game: React.FC<GameProps> = ({
         );
 
       case 'adventure':
-        return <AdventureMode onExit={() => setGamePhase('main_menu')} autoPlayer={autoPlayerEnabled} />;
+        return <AdventureMode onExit={exitToMenu} autoPlayer={autoPlayerEnabled} />;
 
       case 'difficulty_select':
         return (
           <DifficultySelection
             onStart={startFreePlay}
-            onExitGame={() => setGamePhase('main_menu')}
+            onExitGame={exitToMenu}
           />
         );
 
       case 'tutorial':
         return (
           <TutorialScreen
-            onComplete={handleTutorialComplete}
-            onExit={handleTutorialExit}
+            onComplete={exitToMenu}
+            onExit={exitToMenu}
           />
         );
 
@@ -2518,24 +1992,14 @@ const Game: React.FC<GameProps> = ({
             enemies={state.currentEnemies}
             onSelect={handleEnemySelect}
             round={state.round}
-            playerStats={calculatePlayerTotalStats(state.player)}
+            playerStats={totalStats}
             playerWeapons={state.player.weapons}
             character={state.player.character}
-            onExitGame={() => setGamePhase('main_menu')}
+            onExitGame={exitToMenu}
           />
         );
 
       case 'round_summary':
-        // Build roundScores from NEW_ROUND_REQUIREMENTS and roundHistory (5-round system)
-        const summaryRoundScores: RoundScore[] = NEW_ROUND_REQUIREMENTS.map(req => {
-          const historyEntry = roundHistory.find(h => h.round === req.roundInLevel);
-          return {
-            round: req.roundInLevel,
-            target: req.targetScore,
-            actual: historyEntry?.actual,
-          };
-        });
-
         return (
           <RoundSummary
             round={roundInLevel}
@@ -2551,11 +2015,11 @@ const Game: React.FC<GameProps> = ({
               // Level ups now happen during gameplay via modal
               setGamePhase('shop');
             }}
-            playerStats={calculatePlayerTotalStats(state.player)}
+            playerStats={totalStats}
             playerWeapons={state.player.weapons}
             character={state.player.character}
-            onExitGame={() => setGamePhase('main_menu')}
-            roundScores={summaryRoundScores}
+            onExitGame={exitToMenu}
+            roundScores={buildRoundScores(roundHistory)}
             enemy={state.activeEnemyInstance ?? undefined}
             enemyDefeated={enemyDefeated}
             stretchGoalReward={state.selectedEnemyReward}
@@ -2572,10 +2036,10 @@ const Game: React.FC<GameProps> = ({
             rerollCost={state.rerollCost}
             playerMoney={state.player.stats.money}
             freeRerolls={state.player.stats.freeRerolls}
-            playerStats={calculatePlayerTotalStats(state.player)}
+            playerStats={totalStats}
             playerWeapons={state.player.weapons}
             character={state.player.character}
-            onExitGame={() => setGamePhase('main_menu')}
+            onExitGame={exitToMenu}
             targetLevel={state.player.stats.level}
           />
         );
@@ -2590,22 +2054,10 @@ const Game: React.FC<GameProps> = ({
             rerollCost={state.rerollCost}
             freeRerolls={state.player.stats.freeRerolls}
             onContinue={handleProceedFromShop}
-            playerStats={calculatePlayerTotalStats(state.player)}
+            playerStats={totalStats}
             playerWeapons={state.player.weapons}
             character={state.player.character}
-            onExitGame={() => setGamePhase('main_menu')}
-          />
-        );
-
-      case 'attribute_unlock':
-        return (
-          <AttributeUnlockScreen
-            newAttribute={pendingUnlockedAttribute || 'shading'}
-            onContinue={() => {
-              setPendingUnlockedAttribute(null);
-              startNextRound();
-            }}
-            onExitGame={() => setGamePhase('main_menu')}
+            onExitGame={exitToMenu}
           />
         );
 
@@ -2630,8 +2082,8 @@ const Game: React.FC<GameProps> = ({
                 score={state.score}
                 targetScore={state.targetScore}
                 time={state.remainingTime}
-                totalTime={getRoundRequirement(state.round).time}
-                playerStats={calculatePlayerTotalStats(state.player)}
+                totalTime={getRunRoundRequirement(state.round).time}
+                playerStats={totalStats}
                 playerWeapons={state.player.weapons}
                 character={state.player.character}
                 fighterMood={fighter.mood}
@@ -2640,10 +2092,9 @@ const Game: React.FC<GameProps> = ({
                 onHintPress={() => setHintTrigger(t => t + 1)}
                 onClearHint={() => setClearHintTrigger(t => t + 1)}
                 hasActiveHint={hasActiveHint}
-                onExitGame={() => setGamePhase('main_menu')}
+                onExitGame={exitToMenu}
                 onEndRoundEarly={completeRound}
                 canEndRoundEarly={state.score >= state.targetScore}
-                devMode={devMode}
                 devCallbacks={devCallbacks}
                 onMenuOpenChange={setIsMenuOpen}
               />
@@ -2652,37 +2103,10 @@ const Game: React.FC<GameProps> = ({
             {/* Game board area - 90% of screen */}
             <View nativeID="round-gameboard" className="h-[90%]">
               <GameBoard
-                cards={state.board}
-                onMatch={handleValidMatch}
-                onMatchStart={handleMatchStart}
-                onInvalidSelection={handleInvalidMatch}
-                playerStats={applyEnemyStatModifiers(calculatePlayerTotalStats(state.player), state.activeEnemyInstance)}
-                weapons={state.player.weapons}
-                isPlayerTurn={true}
-                activeAttributes={state.activeAttributes}
-                onSelectedCountChange={fighter.setSelectedCount}
-                onBoardIdleChange={fighter.setIsBoardIdle}
-                onHintStateChange={setHasActiveHint}
-                onUseHint={handleUseHint}
-                triggerHint={hintTrigger > 0 ? hintTrigger : undefined}
-                triggerClearHint={clearHintTrigger > 0 ? clearHintTrigger : undefined}
-                onCardBurn={handleCardBurn}
-                isPaused={isMenuOpen}
-                lastMatchTime={lastMatchTime}
-                autoPlayer={autoPlayerEnabled}
+                {...gameBoardProps}
+                playerStats={applyEnemyStatModifiers(totalStats, state.activeEnemyInstance)}
                 enemy={state.activeEnemyInstance}
                 roundStats={roundStatsRef}
-                timeGainContext={{
-                  triggersThisRound: getTimeGainTriggers(),
-                  effectiveCap: (() => {
-                    const totalStats = calculatePlayerTotalStats(state.player);
-                    const baseCap = totalStats.timeGainTriggerCap || 5;
-                    const masteryCount = state.player.weapons.filter(w => w.id === 'time-trigger-mastery').length;
-                    return baseCap + (masteryCount * 2) + getTimeGainTriggerCapBonus();
-                  })(),
-                }}
-                onTimeGainTriggered={recordTimeGainTrigger}
-                connections={state.connections}
               />
             </View>
 
@@ -2695,7 +2119,7 @@ const Game: React.FC<GameProps> = ({
               rerollCost={state.rerollCost}
               playerMoney={state.player.stats.money}
               freeRerolls={state.player.stats.freeRerolls}
-              playerStats={calculatePlayerTotalStats(state.player)}
+              playerStats={totalStats}
               playerWeapons={state.player.weapons}
               character={state.player.character}
               targetLevel={inRoundLevelUpQueue[0] || state.player.stats.level}
@@ -2707,128 +2131,34 @@ const Game: React.FC<GameProps> = ({
       case 'free_play':
         return (
           <View nativeID="free-play-screen" style={freePlayStyles.container}>
-            {/* Minimal header for free play */}
-            <View style={freePlayStyles.header}>
-              <View style={freePlayStyles.statsRow}>
-                {/* Exit button */}
-                <TouchableOpacity
-                  style={freePlayStyles.exitButton}
-                  onPress={() => setGamePhase('main_menu')}
-                >
-                  <Text style={freePlayStyles.exitButtonText}>Exit</Text>
-                </TouchableOpacity>
-
-                {/* Free Play fighter portrait */}
-                <FighterAvatar
-                  character={state.player.character}
-                  size={34}
-                  health={calculatePlayerTotalStats(state.player).health}
-                  maxHealth={calculatePlayerTotalStats(state.player).maxHealth}
-                  mood={fighter.mood}
-                  reaction={fighter.reaction}
-                  streak={fighter.streak}
-                  framed
-                  interactive
-                  testID="freeplay-fighter-avatar"
-                />
-
-                {/* Free Play label */}
-                <View style={freePlayStyles.modeBadge}>
-                  <Text style={freePlayStyles.modeBadgeText}>Free Play</Text>
-                </View>
-
-                {/* Health */}
-                <View style={freePlayStyles.statItem}>
-                  <Text style={freePlayStyles.heartIcon}>♥</Text>
-                  <Text style={freePlayStyles.statValue}>
-                    {calculatePlayerTotalStats(state.player).health}/{calculatePlayerTotalStats(state.player).maxHealth}
-                  </Text>
-                </View>
-
-                {/* Level */}
-                <View style={freePlayStyles.statItem}>
-                  <Text style={freePlayStyles.levelText}>Lv{calculatePlayerTotalStats(state.player).level}</Text>
-                </View>
-
-                {/* Hints */}
-                <TouchableOpacity
-                  style={[
-                    freePlayStyles.hintButton,
-                    calculatePlayerTotalStats(state.player).hints > 0 ? freePlayStyles.hintButtonEnabled : freePlayStyles.hintButtonDisabled,
-                    hasActiveHint && freePlayStyles.hintButtonActive,
-                  ]}
-                  onPress={hasActiveHint ? () => setClearHintTrigger(t => t + 1) : () => setHintTrigger(t => t + 1)}
-                  disabled={calculatePlayerTotalStats(state.player).hints <= 0 && !hasActiveHint}
-                >
-                  <Text style={freePlayStyles.hintIcon}>?</Text>
-                  <Text style={freePlayStyles.hintCount}>
-                    {hasActiveHint ? 'x' : calculatePlayerTotalStats(state.player).hints}
-                  </Text>
-                </TouchableOpacity>
-
-                {/* Matches counter */}
-                <View style={freePlayStyles.statItem}>
-                  <Text style={freePlayStyles.matchLabel}>Matches</Text>
-                  <Text style={freePlayStyles.statValue}>{state.foundCombinations.length}</Text>
-                </View>
-              </View>
-            </View>
+            <FreePlayHeader
+              character={state.player.character}
+              playerStats={totalStats}
+              fighterMood={fighter.mood}
+              fighterReaction={fighter.reaction}
+              fighterStreak={fighter.streak}
+              hasActiveHint={hasActiveHint}
+              onHintPress={() => setHintTrigger(t => t + 1)}
+              onClearHint={() => setClearHintTrigger(t => t + 1)}
+              matchCount={state.foundCombinations.length}
+              onExit={exitToMenu}
+            />
 
             {/* Game board area - fills remaining space */}
             <View style={freePlayStyles.boardContainer}>
-              <GameBoard
-                cards={state.board}
-                onMatch={handleValidMatch}
-                onMatchStart={handleMatchStart}
-                onInvalidSelection={handleInvalidMatch}
-                playerStats={calculatePlayerTotalStats(state.player)}
-                weapons={state.player.weapons}
-                isPlayerTurn={true}
-                activeAttributes={state.activeAttributes}
-                onSelectedCountChange={fighter.setSelectedCount}
-                onBoardIdleChange={fighter.setIsBoardIdle}
-                onHintStateChange={setHasActiveHint}
-                onUseHint={handleUseHint}
-                triggerHint={hintTrigger > 0 ? hintTrigger : undefined}
-                triggerClearHint={clearHintTrigger > 0 ? clearHintTrigger : undefined}
-                onCardBurn={handleCardBurn}
-                isPaused={isMenuOpen}
-                lastMatchTime={lastMatchTime}
-                autoPlayer={autoPlayerEnabled}
-                timeGainContext={{
-                  triggersThisRound: getTimeGainTriggers(),
-                  effectiveCap: (() => {
-                    const totalStats = calculatePlayerTotalStats(state.player);
-                    const baseCap = totalStats.timeGainTriggerCap || 5;
-                    const masteryCount = state.player.weapons.filter(w => w.id === 'time-trigger-mastery').length;
-                    return baseCap + (masteryCount * 2) + getTimeGainTriggerCapBonus();
-                  })(),
-                }}
-                onTimeGainTriggered={recordTimeGainTrigger}
-                connections={state.connections}
-              />
+              <GameBoard {...gameBoardProps} playerStats={totalStats} />
             </View>
           </View>
         );
 
       case 'victory':
-        // Build roundScores from NEW_ROUND_REQUIREMENTS and roundHistory (5-round system)
-        const victoryRoundScores: RoundScore[] = NEW_ROUND_REQUIREMENTS.map(req => {
-          const historyEntry = roundHistory.find(h => h.round === req.roundInLevel);
-          return {
-            round: req.roundInLevel,
-            target: req.targetScore,
-            actual: historyEntry?.actual,
-          };
-        });
-
         return (
           <VictoryScreen
             player={state.player}
             finalScore={state.score}
             matchCount={state.foundCombinations.length}
-            playerStats={calculatePlayerTotalStats(state.player)}
-            roundScores={victoryRoundScores}
+            playerStats={totalStats}
+            roundScores={buildRoundScores(roundHistory)}
             difficulty={adventureDifficulty}
             onReturnToMenu={() => {
               setState(prev => ({ ...prev, isEndlessMode: false }));
@@ -2839,127 +2169,23 @@ const Game: React.FC<GameProps> = ({
         );
 
       case 'game_over':
-        // Build roundScores including the current failed round (5-round system)
-        const gameOverRoundScores: RoundScore[] = NEW_ROUND_REQUIREMENTS.map(req => {
-          // Check if this round was completed in history
-          const historyEntry = roundHistory.find(h => h.round === req.roundInLevel);
-          // If this is the current (failed) round, include the score
-          if (req.roundInLevel === roundInLevel) {
-            return {
-              round: req.roundInLevel,
-              target: req.targetScore,
-              actual: state.score,
-            };
-          }
-          return {
-            round: req.roundInLevel,
-            target: req.targetScore,
-            actual: historyEntry?.actual,
-          };
-        });
-
         return (
-          <View style={gameOverStyles.container}>
-            {/* Eyebrow Banner */}
-            <View style={gameOverStyles.eyebrow}>
-              <Text style={gameOverStyles.eyebrowText}>GAME OVER</Text>
-            </View>
-
-            <View style={gameOverStyles.content}>
-              {/* Defeated / Knocked-Out Fighter Stage */}
-              <View style={{ alignItems: 'center', marginBottom: 12 }}>
-                <FighterAvatar
-                  character={state.player.character}
-                  size={74}
-                  health={calculatePlayerTotalStats(state.player).health}
-                  maxHealth={calculatePlayerTotalStats(state.player).maxHealth}
-                  mood="defeat"
-                  framed
-                  interactive
-                  testID="gameover-fighter-avatar"
-                />
-              </View>
-
-              {/* Game over reason */}
-              {gameOverReason && (
-                <View style={gameOverStyles.reasonContainer}>
-                  <Text style={gameOverStyles.reasonText}>{gameOverReason}</Text>
-                </View>
-              )}
-
-              {/* Enemy that defeated the player */}
-              {state.activeEnemyInstance && (
-                <View style={gameOverStyles.enemyContainer}>
-                  <EnemyAvatar
-                    enemy={state.activeEnemyInstance}
-                    size={42}
-                    mood="victory"
-                    reaction={{ type: 'taunt', id: 1 }}
-                    interactive
-                    testID="gameover-enemy-avatar"
-                  />
-                  <View style={gameOverStyles.enemyInfo}>
-                    <Text style={gameOverStyles.enemyLabel}>DEFEATED BY</Text>
-                    <Text style={gameOverStyles.enemyName}>{state.activeEnemyInstance.name}</Text>
-                  </View>
-                </View>
-              )}
-
-              {/* Stats Section */}
-              <View style={gameOverStyles.statsContainer}>
-                <View style={gameOverStyles.statRow}>
-                  <Text style={gameOverStyles.statLabel}>ROUND REACHED</Text>
-                  <Text style={gameOverStyles.statValue}>{state.round}</Text>
-                </View>
-                <View style={gameOverStyles.statRow}>
-                  <Text style={gameOverStyles.statLabel}>FINAL SCORE</Text>
-                  <Text style={gameOverStyles.statValue}>{state.score}</Text>
-                </View>
-                <View style={gameOverStyles.statRow}>
-                  <Text style={gameOverStyles.statLabel}>TARGET SCORE</Text>
-                  <Text style={gameOverStyles.statValue}>{state.targetScore}</Text>
-                </View>
-
-                {!gameOverReason && state.score >= state.targetScore ? (
-                  <View style={[gameOverStyles.resultBadge, gameOverStyles.successBadge]}>
-                    <Text style={[gameOverStyles.resultText, gameOverStyles.successText]}>
-                      TARGET ACHIEVED!
-                    </Text>
-                  </View>
-                ) : !gameOverReason ? (
-                  <View style={[gameOverStyles.resultBadge, gameOverStyles.failBadge]}>
-                    <Text style={[gameOverStyles.resultText, gameOverStyles.failText]}>
-                      TARGET NOT REACHED
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-
-              {/* Round Progress Chart */}
-              <View style={gameOverStyles.chartContainer}>
-                <Text style={gameOverStyles.chartTitle}>ROUND PROGRESS</Text>
-                <RoundProgressChart
-                  roundScores={gameOverRoundScores}
-                  currentRound={state.round}
-                  height={140}
-                />
-              </View>
-
-              {/* Play Again Button */}
-              <View style={gameOverStyles.buttonContainer}>
-                <TouchableOpacity
-                  style={gameOverStyles.playAgainButton}
-                  onPress={() => {
-                    setGameOverReason(null);
-                    setState(prev => ({ ...prev, isEndlessMode: false }));
-                    setGamePhase('main_menu');
-                  }}
-                >
-                  <Text style={gameOverStyles.playAgainText}>PLAY AGAIN</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
+          <GameOverScreen
+            character={state.player.character}
+            health={totalStats.health}
+            maxHealth={totalStats.maxHealth}
+            reason={gameOverReason}
+            enemy={state.activeEnemyInstance}
+            round={state.round}
+            score={state.score}
+            targetScore={state.targetScore}
+            roundScores={buildRoundScores(roundHistory, { roundInLevel, score: state.score })}
+            onPlayAgain={() => {
+              setGameOverReason(null);
+              setState(prev => ({ ...prev, isEndlessMode: false }));
+              setGamePhase('main_menu');
+            }}
+          />
         );
 
       default:
@@ -2985,275 +2211,11 @@ const Game: React.FC<GameProps> = ({
   );
 };
 
-// Game Over screen styles
-const gameOverStyles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.paperBeige,
-  },
-  eyebrow: {
-    height: 48,
-    backgroundColor: '#CC4444', // Muted red - less harsh, more encouraging
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: COLORS.slateCharcoal,
-  },
-  eyebrowText: {
-    color: COLORS.canvasWhite,
-    fontWeight: '700',
-    fontSize: 18,
-    letterSpacing: 3,
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  reasonContainer: {
-    backgroundColor: '#FEF2F2', // Soft pink-white instead of deep onyx
-    borderRadius: RADIUS.module,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#CC4444', // Muted red
-  },
-  reasonText: {
-    color: '#383838', // Slate charcoal instead of bright red
-    fontWeight: '600',
-    fontSize: 14,
-    textAlign: 'center',
-    letterSpacing: 0.5,
-  },
-  enemyContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEE2E2', // Light red/pink
-    borderRadius: RADIUS.module,
-    padding: 12,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: COLORS.impactRed,
-    gap: 12,
-  },
-  enemyInfo: {
-    flex: 1,
-  },
-  enemyLabel: {
-    color: COLORS.impactRed,
-    fontWeight: '600',
-    fontSize: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  enemyName: {
-    color: COLORS.slateCharcoal,
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  statsContainer: {
-    backgroundColor: COLORS.canvasWhite,
-    borderRadius: RADIUS.module,
-    borderWidth: 1,
-    borderColor: COLORS.slateCharcoal,
-    padding: 16,
-    marginBottom: 16,
-  },
-  statRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.paperBeige,
-  },
-  statLabel: {
-    color: COLORS.slateCharcoal,
-    fontWeight: '600',
-    fontSize: 12,
-    letterSpacing: 0.5,
-  },
-  statValue: {
-    color: COLORS.slateCharcoal,
-    fontWeight: '700',
-    fontSize: 18,
-    fontFamily: 'monospace',
-  },
-  resultBadge: {
-    marginTop: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: RADIUS.button,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.slateCharcoal,
-  },
-  successBadge: {
-    backgroundColor: COLORS.logicTeal,
-  },
-  failBadge: {
-    backgroundColor: '#CC4444', // Muted red - encouraging, not punishing
-  },
-  resultText: {
-    fontWeight: '700',
-    fontSize: 14,
-    letterSpacing: 1,
-  },
-  successText: {
-    color: COLORS.canvasWhite,
-  },
-  failText: {
-    color: COLORS.canvasWhite,
-  },
-  chartContainer: {
-    backgroundColor: COLORS.canvasWhite,
-    borderRadius: RADIUS.module,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: COLORS.slateCharcoal,
-    marginBottom: 16,
-  },
-  chartTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.slateCharcoal,
-    textAlign: 'center',
-    letterSpacing: 1,
-    marginBottom: 8,
-  },
-  buttonContainer: {
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  playAgainButton: {
-    backgroundColor: COLORS.actionYellow,
-    paddingVertical: 16,
-    paddingHorizontal: 40,
-    borderRadius: RADIUS.button,
-    borderWidth: 1,
-    borderColor: COLORS.slateCharcoal,
-    shadowColor: COLORS.deepOnyx,
-    shadowOffset: { width: 2, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 0,
-    elevation: 4,
-  },
-  playAgainText: {
-    color: COLORS.slateCharcoal,
-    fontWeight: '700',
-    fontSize: 16,
-    letterSpacing: 1,
-  },
-});
-
 // Free Play mode styles
 const freePlayStyles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.paperBeige,
-  },
-  header: {
-    backgroundColor: COLORS.canvasWhite,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.slateCharcoal,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  exitButton: {
-    backgroundColor: COLORS.slateCharcoal,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: RADIUS.button,
-    borderWidth: 1,
-    borderColor: COLORS.deepOnyx,
-  },
-  exitButtonText: {
-    color: COLORS.canvasWhite,
-    fontWeight: '600',
-    fontSize: 12,
-    textTransform: 'uppercase',
-  },
-  modeBadge: {
-    backgroundColor: COLORS.logicTeal,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: RADIUS.button,
-    borderWidth: 1,
-    borderColor: COLORS.slateCharcoal,
-  },
-  modeBadgeText: {
-    color: COLORS.canvasWhite,
-    fontWeight: '700',
-    fontSize: 12,
-    textTransform: 'uppercase',
-  },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.paperBeige,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: RADIUS.button,
-    gap: 4,
-    borderWidth: 1,
-    borderColor: COLORS.slateCharcoal,
-  },
-  heartIcon: {
-    color: COLORS.impactRed,
-    fontSize: 12,
-  },
-  statValue: {
-    color: COLORS.slateCharcoal,
-    fontSize: 12,
-    fontWeight: '600',
-    fontFamily: 'monospace',
-  },
-  levelText: {
-    color: COLORS.logicTeal,
-    fontSize: 12,
-    fontWeight: '700',
-    fontFamily: 'monospace',
-  },
-  matchLabel: {
-    color: COLORS.slateCharcoal,
-    fontSize: 10,
-    fontWeight: '600',
-    marginRight: 2,
-  },
-  hintButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: RADIUS.button,
-    gap: 2,
-    borderWidth: 1,
-    borderColor: COLORS.slateCharcoal,
-  },
-  hintButtonEnabled: {
-    backgroundColor: COLORS.actionYellow,
-  },
-  hintButtonDisabled: {
-    backgroundColor: COLORS.paperBeige,
-  },
-  hintButtonActive: {
-    backgroundColor: COLORS.impactOrange,
-  },
-  hintIcon: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.slateCharcoal,
-  },
-  hintCount: {
-    fontSize: 12,
-    fontWeight: '600',
-    fontFamily: 'monospace',
-    color: COLORS.slateCharcoal,
   },
   boardContainer: {
     flex: 1,

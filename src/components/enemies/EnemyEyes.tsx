@@ -1,6 +1,13 @@
 import React from 'react';
 import { Circle, Ellipse, G, Line, Path } from 'react-native-svg';
-import { GazeOffset } from '@/components/fighters/creatures/types';
+import {
+  CrescentEye,
+  KoCrossEye,
+  SleepyLidEye,
+  WinceChevronEye,
+  eyeGazeShift,
+} from '@/components/creatures/eyes';
+import { GazeOffset } from '@/components/creatures/types';
 import { COLORS } from '@/utils/colors';
 import { EnemyExpression } from '@/utils/enemyAnimations';
 
@@ -39,10 +46,7 @@ export const EnemyEyes: React.FC<EnemyEyesProps> = ({
   slitPupil = false,
 }) => {
   const strokeColor = darkMask ? '#FFFFFF' : COLORS.slateCharcoal;
-  const gx = (gazeOffset?.x ?? 0) * radius * 0.34;
-  const gy = (gazeOffset?.y ?? 0) * radius * 0.28;
-  const hx = gx * 1.24;
-  const hy = gy * 1.24;
+  const { gx, gy, hx, hy } = eyeGazeShift(gazeOffset, radius);
 
   const renderEyeAt = (cx: number, cy: number, r: number, side: 'left' | 'right' | 'center') => {
     const dir = side === 'right' ? 1 : side === 'left' ? -1 : 0;
@@ -60,29 +64,8 @@ export const EnemyEyes: React.FC<EnemyEyesProps> = ({
         );
 
       case 'wince':
-        if (side === 'left') {
-          return (
-            <Path
-              d={`M ${cx - r * 1.15} ${cy - r * 0.95} L ${cx + r * 0.95} ${cy} L ${cx - r * 1.15} ${cy + r * 0.95}`}
-              stroke={strokeColor}
-              strokeWidth={3}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              fill="none"
-            />
-          );
-        }
-        if (side === 'right') {
-          return (
-            <Path
-              d={`M ${cx + r * 1.15} ${cy - r * 0.95} L ${cx - r * 0.95} ${cy} L ${cx + r * 1.15} ${cy + r * 0.95}`}
-              stroke={strokeColor}
-              strokeWidth={3}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              fill="none"
-            />
-          );
+        if (side !== 'center') {
+          return <WinceChevronEye cx={cx} cy={cy} r={r} stroke={strokeColor} side={side} />;
         }
         return (
           <G>
@@ -104,41 +87,13 @@ export const EnemyEyes: React.FC<EnemyEyesProps> = ({
         );
 
       case 'ko':
-        return (
-          <G>
-            {darkMask && <Circle cx={cx} cy={cy} r={r * 1.22} fill="#FFFFFF" />}
-            <Line
-              x1={cx - r * 0.95}
-              y1={cy - r * 0.95}
-              x2={cx + r * 0.95}
-              y2={cy + r * 0.95}
-              stroke={COLORS.slateCharcoal}
-              strokeWidth={2.8}
-              strokeLinecap="round"
-            />
-            <Line
-              x1={cx + r * 0.95}
-              y1={cy - r * 0.95}
-              x2={cx - r * 0.95}
-              y2={cy + r * 0.95}
-              stroke={COLORS.slateCharcoal}
-              strokeWidth={2.8}
-              strokeLinecap="round"
-            />
-          </G>
-        );
+        return <KoCrossEye cx={cx} cy={cy} r={r} backingRadius={darkMask ? r * 1.22 : undefined} />;
 
       case 'wicked_glee':
         // Sinister smug crescent eyes with sharp inner slant!
         return (
           <G>
-            <Path
-              d={`M ${cx - r * 1.2} ${cy + r * 0.45} Q ${cx} ${cy - r * 1.25} ${cx + r * 1.2} ${cy + r * 0.45}`}
-              stroke={strokeColor}
-              strokeWidth={3}
-              strokeLinecap="round"
-              fill="none"
-            />
+            <CrescentEye cx={cx} cy={cy} r={r} stroke={strokeColor} />
             {dir !== 0 && (
               <Line
                 x1={cx - dir * r * 1.1}
@@ -154,23 +109,7 @@ export const EnemyEyes: React.FC<EnemyEyesProps> = ({
         );
 
       case 'sleepy':
-        return (
-          <G>
-            <Path
-              d={`M ${cx - r * 1.1} ${cy} A ${r * 1.05} ${r * 0.95} 0 0 0 ${cx + r * 1.1} ${cy} Z`}
-              fill={irisColor}
-            />
-            <Line
-              x1={cx - r * 1.25}
-              y1={cy - 0.3}
-              x2={cx + r * 1.25}
-              y2={cy - 0.3}
-              stroke={strokeColor}
-              strokeWidth={2.8}
-              strokeLinecap="round"
-            />
-          </G>
-        );
+        return <SleepyLidEye cx={cx} cy={cy} r={r} stroke={strokeColor} irisColor={irisColor} />;
 
       case 'startled':
         return (

@@ -3,7 +3,8 @@
  * All game balance values and rules in one place for easy tweaking.
  */
 
-import { AttributeName, AdventureDifficulty, LevelDefinition, LevelNumber, EnemyName } from '../types';
+import type { AttributeName, AdventureDifficulty } from '../types';
+import { EFFECT_CAPS, STAT_TO_CAP_TYPE } from '../game/effectCaps';
 
 // =============================================================================
 // PLAYER STARTING VALUES
@@ -58,8 +59,27 @@ export const BOARD = {
 
 export const ECONOMY = {
   baseRerollCost: 5,
+  /** A paid reroll in a run multiplies the next reroll's cost by this. */
+  rerollCostGrowth: 1.2,
+  /** A paid reroll in the dev store adds this to the next reroll's cost. */
   rerollCostIncrement: 2,
 } as const;
+
+/** Where a reroll is being bought; the two places raise the price differently. */
+export type RerollPricing = 'run' | 'devStore';
+
+/** The reroll cost after a paid reroll. */
+export const getNextRerollCost = (currentCost: number, pricing: RerollPricing): number =>
+  pricing === 'run'
+    ? Math.max(1, Math.round(currentCost * ECONOMY.rerollCostGrowth))
+    : currentCost + ECONOMY.rerollCostIncrement;
+
+/**
+ * The reroll cost a run's shop resets to at the start of a round.
+ * Linear from $1 at round 1 to $20 at round 10 (R2=$3, R3=$5, ... R9=$17), continuing past 10.
+ */
+export const getBaseRerollCostForRound = (round: number): number =>
+  Math.max(1, Math.round(1 + (round - 1) * (20 - 1) / (10 - 1)));
 
 // =============================================================================
 // WEAPON SYSTEM
@@ -103,29 +123,17 @@ export const getRarityChancesForRound = (round: number): { common: number; rare:
 // EFFECT CAPS - Maximum effective percentages for weapon effects
 // =============================================================================
 
-/**
- * Effect caps limit how much a stat can actually be used, even if accumulated higher.
- * This encourages build diversity and prevents one-dimensional strategies.
- * Players can increase caps by acquiring Cap Increaser weapons.
- */
-export const EFFECT_CAPS = {
-  // Effect name -> { defaultCap, capIncrease }
-  echo: { defaultCap: 25, capIncrease: 5 },           // Echo Stone
-  laser: { defaultCap: 30, capIncrease: 5 },          // Prismatic Ray
-  graceGain: { defaultCap: 30, capIncrease: 5 },      // Fortune Token
-  explosion: { defaultCap: 40, capIncrease: 10 },     // Blast Powder
-  hint: { defaultCap: 40, capIncrease: 10 },          // Oracle Eye, Seeker Lens
-  timeGain: { defaultCap: 40, capIncrease: 10 },      // Time Drop
-  healing: { defaultCap: 50, capIncrease: 10 },       // Mending Charm
-  fire: { defaultCap: 50, capIncrease: 10 },          // Flint Spark
-  ricochet: { defaultCap: 60, capIncrease: 10 },      // Chaos Shard
-  boardGrowth: { defaultCap: 60, capIncrease: 10 },   // Growth Seed
-  coinGain: { defaultCap: 70, capIncrease: 15 },      // Fortune's Favor
-  xpGain: { defaultCap: 100, capIncrease: 0 },        // Scholar's Tome (no cap increase)
-} as const;
-
-// Type for effect cap keys
-export type EffectCapType = keyof typeof EFFECT_CAPS;
+// The cap table and everything derived from it live in game/effectCaps.ts
+// (a module without imports, so src/types.ts can derive its types from the table).
+export {
+  EFFECT_CAPS,
+  EFFECT_CAP_TYPES,
+  DEFAULT_EFFECT_CAPS,
+  STAT_TO_CAP_TYPE,
+  getMainStatForCap,
+  getBuildStatsForCap,
+} from '../game/effectCaps';
+export type { EffectCapType, EffectCaps, CappedStat } from '../game/effectCaps';
 
 /**
  * Get the effective (capped) value for an accumulated stat
@@ -160,27 +168,6 @@ export const shouldShowCapInfo = (currentValue: number, cap: number): boolean =>
 };
 
 /**
- * Mapping from PlayerStats field names to EffectCapType
- * Used by UI to show cap information for stats
- */
-export const STAT_TO_CAP_TYPE: Record<string, EffectCapType> = {
-  echoChance: 'echo',
-  laserChance: 'laser',
-  graceGainChance: 'graceGain',
-  explosionChance: 'explosion',
-  hintGainChance: 'hint',
-  autoHintChance: 'hint',
-  enhancedHintChance: 'hint',
-  timeGainChance: 'timeGain',
-  healingChance: 'healing',
-  fireSpreadChance: 'fire',
-  ricochetChance: 'ricochet',
-  boardGrowthChance: 'boardGrowth',
-  coinGainChance: 'coinGain',
-  xpGainChance: 'xpGain',
-};
-
-/**
  * Get cap info for a stat if it has one
  * Returns null if the stat is not capped
  */
@@ -210,7 +197,7 @@ export const MATCH_REWARDS = {
 // =============================================================================
 
 export const LEVEL_UP = {
-  /** Formula: level * level * 10 (Level 1 = 10 XP, Level 2 = 40 XP, etc.) */
+  /** XP for a level is level * level * xpMultiplier / LEVEL_SYSTEM.xpMultiplierReduction. */
   xpMultiplier: 10,
 } as const;
 
@@ -218,8 +205,12 @@ export const LEVEL_UP = {
 // ATTRIBUTE SCALING
 // =============================================================================
 
-// Adventure mode difficulty progressions
-export const ADVENTURE_DIFFICULTY_PROGRESSIONS: Record<AdventureDifficulty, { rounds: number[]; attributes: AttributeName[] }[]> = {
+export const ALL_ATTRIBUTES: readonly AttributeName[] = ['shape', 'color', 'number', 'shading', 'background'];
+
+// Attributes by run round for the legacy run's first round, resumed saved games and the
+// dev "change round" tool. New saves are always 'medium'; 'easy' and 'hard' only come
+// from saved games written by older versions.
+const ADVENTURE_DIFFICULTY_PROGRESSIONS: Record<AdventureDifficulty, { rounds: number[]; attributes: AttributeName[] }[]> = {
   easy: [
     // Easy: 3 attributes (shape, color, number) all 10 rounds
     { rounds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], attributes: ['shape', 'color', 'number'] },
@@ -263,7 +254,7 @@ export const BACKGROUND_COLORS = {
   charcoal: '#383838',
 } as const;
 
-/** Get active attributes for a given round (Adventure Mode) */
+/** Get active attributes for a given run round (see ADVENTURE_DIFFICULTY_PROGRESSIONS for where this applies) */
 export const getActiveAttributesForRound = (round: number, difficulty: AdventureDifficulty = 'medium'): AttributeName[] => {
   const progression = ADVENTURE_DIFFICULTY_PROGRESSIONS[difficulty].find(
     p => (p.rounds as readonly number[]).includes(round)
@@ -278,192 +269,82 @@ export const getBoardSizeForAttributes = (attributeCount: number): number => {
 };
 
 // =============================================================================
-// NEW LEVEL-BASED SYSTEM
+// LEGACY RUN: ROUNDS
 // =============================================================================
-
-/**
- * New level-based progression replaces the old easy/medium/hard difficulty system.
- * - 10 levels total, each with 5 rounds
- * - Round timer is 120 seconds (doubled from 60)
- * - Rounds 1, 2, 4: No enemies
- * - Round 3: Mini-boss
- * - Round 5: Boss (harder)
- * - Level 1 is tutorial (no bosses)
- * - Levels 1-3: 3 attributes
- * - Levels 4-7: 4 attributes
- * - Levels 8-10: 5 attributes
- */
+// Which of the two round tables applies where is decided in game/rounds.ts.
 
 export const LEVEL_SYSTEM = {
-  totalLevels: 10,
   roundsPerLevel: 5,
   xpMultiplierReduction: 3, // XP requirements reduced to 1/3
 } as const;
 
 /**
- * Level definitions with names, attributes, and boss assignments.
- * Mini-boss appears on round 3, main boss on round 5.
- * Level 1 (tutorial) has no bosses.
+ * The legacy run plays exactly one level: five rounds with three attributes and
+ * no fixed bosses (enemies only appear in endless mode and in resumed saved
+ * games, through the enemy selection screen).
  */
-export const LEVEL_DEFINITIONS: LevelDefinition[] = [
-  {
-    number: 1,
-    name: 'First Steps',
-    description: 'Learn the basics of matching. No enemies, just pure matching practice.',
-    attributes: ['shape', 'color', 'number'],
-    miniBoss: null,
-    boss: null,
-  },
-  {
-    number: 2,
-    name: 'The Awakening',
-    description: 'Your first real challenge. Simple enemies test your skills.',
-    attributes: ['shape', 'color', 'number'],
-    miniBoss: 'Chihuahua',
-    boss: 'Jellyfish',
-  },
-  {
-    number: 3,
-    name: 'Rising Tide',
-    description: 'The difficulty rises. Stay sharp and match quickly.',
-    attributes: ['shape', 'color', 'number'],
-    miniBoss: 'Jellyfish',
-    boss: 'Snake',
-  },
-  {
-    number: 4,
-    name: 'Shifting Shadows',
-    description: 'A new attribute enters the fray. Shading matters now.',
-    attributes: ['shape', 'color', 'number', 'shading'],
-    miniBoss: 'Snake',
-    boss: 'Rabbit',
-  },
-  {
-    number: 5,
-    name: 'The Crucible',
-    description: 'Your skills are tested. Only the worthy progress.',
-    attributes: ['shape', 'color', 'number', 'shading'],
-    miniBoss: 'Rabbit',
-    boss: 'Squid',
-  },
-  {
-    number: 6,
-    name: "Storm's Edge",
-    description: 'The storm intensifies. Enemies grow fiercer.',
-    attributes: ['shape', 'color', 'number', 'shading'],
-    miniBoss: 'Squid',
-    boss: 'Porcupine',
-  },
-  {
-    number: 7,
-    name: 'Dark Descent',
-    description: 'Descend into darkness. The hardest tier 2 challenges await.',
-    attributes: ['shape', 'color', 'number', 'shading'],
-    miniBoss: 'Porcupine',
-    boss: 'Hyena',
-  },
-  {
-    number: 8,
-    name: 'Prismatic Chaos',
-    description: 'All five attributes unlock. Background color joins the game.',
-    attributes: ['shape', 'color', 'number', 'shading', 'background'],
-    miniBoss: 'Hyena',
-    boss: 'Tiger',
-  },
-  {
-    number: 9,
-    name: 'The Gauntlet',
-    description: 'A brutal gauntlet of the toughest enemies.',
-    attributes: ['shape', 'color', 'number', 'shading', 'background'],
-    miniBoss: 'Tiger',
-    boss: 'Mammoth',
-  },
-  {
-    number: 10,
-    name: 'Final Stand',
-    description: 'The ultimate challenge. Prove you are a true master.',
-    attributes: ['shape', 'color', 'number', 'shading', 'background'],
-    miniBoss: 'Mammoth',
-    boss: 'Mammoth', // Final boss is Mammoth again but harder
-  },
+export const LEGACY_RUN_LEVEL = {
+  number: 1,
+  attributes: ['shape', 'color', 'number'],
+} as const satisfies { number: number; attributes: readonly AttributeName[] };
+
+/** Targets and clocks by run round (1-10). */
+export const ROUND_REQUIREMENTS: readonly { round: number; targetScore: number; time: number }[] = [
+  { round: 1, targetScore: 3, time: 30 },
+  { round: 2, targetScore: 4, time: 45 },
+  { round: 3, targetScore: 6, time: 45 },
+  { round: 4, targetScore: 8, time: 45 },
+  { round: 5, targetScore: 10, time: 60 },
+  { round: 6, targetScore: 14, time: 60 },
+  { round: 7, targetScore: 20, time: 60 },
+  { round: 8, targetScore: 27, time: 60 },
+  { round: 9, targetScore: 35, time: 60 },
+  { round: 10, targetScore: 100, time: 60 },
 ];
 
-/**
- * Get level definition by level number
- */
-export const getLevelDefinition = (levelNumber: LevelNumber): LevelDefinition => {
-  const level = LEVEL_DEFINITIONS.find(l => l.number === levelNumber);
-  if (!level) {
-    throw new Error(`Level ${levelNumber} not found`);
+// Run rounds past 10 (slightly exponential scaling)
+// Round 11: 120, Round 12: 144, Round 13: 173, Round 14: 208, Round 15: 250...
+export const getEndlessRoundRequirement = (round: number): { round: number; targetScore: number; time: number } => {
+  const baseScore = 100; // Round 10 target
+  const baseIncrement = 20;
+  const scaleFactor = 1.2; // 20% increase per round
+
+  let target = baseScore;
+  for (let r = 11; r <= round; r++) {
+    target += Math.floor(baseIncrement * Math.pow(scaleFactor, r - 11));
   }
-  return level;
+
+  return {
+    round,
+    targetScore: target,
+    time: 60,
+  };
 };
 
-/**
- * Get attributes for a specific level
- */
-export const getAttributesForLevel = (levelNumber: LevelNumber): AttributeName[] => {
-  return [...getLevelDefinition(levelNumber).attributes];
-};
-
-/**
- * Get enemy for a specific round within a level.
- * Rounds 1, 2, 4: No enemy
- * Round 3: Mini-boss
- * Round 5: Boss
- */
-export const getEnemyForLevelRound = (levelNumber: LevelNumber, roundInLevel: number): EnemyName | null => {
-  const level = getLevelDefinition(levelNumber);
-  if (roundInLevel === 3) return level.miniBoss;
-  if (roundInLevel === 5) return level.boss;
-  return null;
-};
-
-/**
- * Check if a round within a level has an enemy
- */
-export const roundHasEnemy = (roundInLevel: number): boolean => {
-  return roundInLevel === 3 || roundInLevel === 5;
-};
-
-/**
- * Round requirements for the new 5-round system.
- * Score targets are balanced for 120-second rounds.
- */
-export const NEW_ROUND_REQUIREMENTS: readonly { roundInLevel: number; targetScore: number; time: number }[] = [
+/** Targets and clocks by position in the 5-round level. */
+export const LEVEL_ROUND_REQUIREMENTS: readonly { roundInLevel: number; targetScore: number; time: number }[] = [
   { roundInLevel: 1, targetScore: 8, time: 120 },
   { roundInLevel: 2, targetScore: 12, time: 120 },
-  { roundInLevel: 3, targetScore: 18, time: 120 }, // Mini-boss round
+  { roundInLevel: 3, targetScore: 18, time: 120 },
   { roundInLevel: 4, targetScore: 25, time: 120 },
-  { roundInLevel: 5, targetScore: 35, time: 120 }, // Boss round
+  { roundInLevel: 5, targetScore: 35, time: 120 },
 ];
 
-/**
- * Get round requirement for a round within a level
- */
-export const getNewRoundRequirement = (roundInLevel: number): { targetScore: number; time: number } => {
-  const req = NEW_ROUND_REQUIREMENTS.find(r => r.roundInLevel === roundInLevel);
-  if (!req) {
-    // Fallback for invalid round
-    return { targetScore: 10, time: 120 };
-  }
-  return { targetScore: req.targetScore, time: req.time };
-};
+// =============================================================================
+// LEVELLING (XP)
+// =============================================================================
 
 /**
- * Get adjusted XP for level (1/3 of original requirement for faster leveling)
+ * Total XP at which the player reaches `level`: the exact inverse of
+ * getAdjustedLevelFromXP, so progress bars and levelling agree.
  */
 export const getAdjustedXPForLevel = (level: number): number => {
-  // Original: level * level * 10
-  // New: level * level * 10 / 3 (rounded down)
-  return Math.floor((level * level * LEVEL_UP.xpMultiplier) / LEVEL_SYSTEM.xpMultiplierReduction);
+  return Math.ceil((level * level * LEVEL_UP.xpMultiplier) / LEVEL_SYSTEM.xpMultiplierReduction);
 };
 
 /**
- * Get level from XP using adjusted formula (level up 3x faster)
+ * Get level from total XP: floor(sqrt(xp * 3 / 10)), i.e. 3x faster than the original curve.
  */
 export const getAdjustedLevelFromXP = (experience: number): number => {
-  // Original: sqrt(experience / 10)
-  // New: sqrt(experience * 3 / 10) = sqrt(experience / 3.33)
   return Math.floor(Math.sqrt((experience * LEVEL_SYSTEM.xpMultiplierReduction) / LEVEL_UP.xpMultiplier));
 };

@@ -31,7 +31,7 @@ import { BOUNTIES } from '@/adventure/data/bounties';
 import { applyLevelResult, createNewSave, isLevelUnlocked, maxStars, totalStars } from '@/adventure/progress';
 import { loadAdventureSave } from '@/adventure/save';
 import { createRng } from '@/adventure/engine/rng';
-import { countDifferentAttributes } from '@/adventure/engine/run';
+import { countDifferentAttributes } from '@/adventure/engine/sets';
 import { isValidCombination } from '@/utils/gameUtils';
 import type { AttributeName, Background, Card, Color, Number as CardNumber, Shading, Shape } from '@/types';
 

@@ -60,176 +60,209 @@ const getDifficultyInfo = (diff: AdventureDifficulty) => {
   }
 };
 
-const ChallengeCard: React.FC<ChallengeCardProps> = ({ enemy, difficulty, enemyDefeated = false, showAchievement = false, stretchGoalReward, stretchGoalMoney }) => {
-  // Determine what to display
-  const isEnemyChallenge = !!enemy;
-  const isDifficultyChallenge = !!difficulty;
+interface EnemyChallengeCardProps {
+  enemy: EnemyInstance;
+  // Whether the enemy was actually defeated
+  enemyDefeated?: boolean;
+  // The specific stretch goal reward weapon (pre-determined)
+  stretchGoalReward?: Weapon | null;
+  // The specific stretch goal bonus money (pre-determined)
+  stretchGoalMoney?: number | null;
+}
 
-  if (!isEnemyChallenge && !isDifficultyChallenge) {
-    return null;
-  }
+/** Round-complete stretch goal: the enemy's challenge and whether its bonus was earned. */
+export const EnemyChallengeCard: React.FC<EnemyChallengeCardProps> = ({
+  enemy,
+  enemyDefeated = false,
+  stretchGoalReward,
+  stretchGoalMoney,
+}) => {
+  const tierColor = TIER_COLORS[enemy.tier];
+  const tierLabel = TIER_LABELS[enemy.tier];
 
-  // Enemy challenge rendering
-  if (isEnemyChallenge && enemy) {
-    const tierColor = TIER_COLORS[enemy.tier];
-    const tierLabel = TIER_LABELS[enemy.tier];
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Icon name="lorc/sword-clash" size={20} color={COLORS.slateCharcoal} />
+        <Text style={styles.headerTitle}>Extra Challenge</Text>
+      </View>
 
-    return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Icon name="lorc/sword-clash" size={20} color={COLORS.slateCharcoal} />
-          <Text style={styles.headerTitle}>Extra Challenge</Text>
+      <View style={[styles.card, { borderColor: tierColor }]}>
+        {/* Enemy Header */}
+        <View style={styles.enemyHeader}>
+          <View style={styles.enemyIconContainer}>
+            <EnemyAvatar
+              enemy={enemy}
+              size={38}
+              hp={enemyDefeated ? 0 : 3}
+              maxHp={3}
+              mood={enemyDefeated ? 'cornered' : 'victory'}
+              interactive
+            />
+          </View>
+          <View style={styles.enemyInfo}>
+            <Text style={styles.enemyName}>{enemy.name}</Text>
+            <Text style={[styles.enemyTier, { color: tierColor }]}>
+              Tier {enemy.tier} · {tierLabel}
+            </Text>
+          </View>
         </View>
 
-        <View style={[styles.card, { borderColor: tierColor }]}>
-          {/* Enemy Header */}
-          <View style={styles.enemyHeader}>
-            <View style={styles.enemyIconContainer}>
-              <EnemyAvatar
-                enemy={enemy}
-                size={38}
-                hp={enemyDefeated ? 0 : 3}
-                maxHp={3}
-                mood={enemyDefeated ? 'cornered' : 'victory'}
+        {/* Enemy Effect */}
+        <View style={styles.infoSection}>
+          <Text style={styles.infoLabel}>Enemy Effects</Text>
+          {enemy.description.split(', ').map((effect, index) => (
+            <Text key={index} style={styles.infoText}>• {effect}</Text>
+          ))}
+        </View>
+
+        {/* Defeat Condition */}
+        <View style={styles.infoSection}>
+          <Text style={[styles.infoLabel, { color: COLORS.logicTeal }]}>Challenge Requirement</Text>
+          <Text style={styles.infoText}>{enemy.defeatConditionText}</Text>
+        </View>
+
+        {/* Result Badge */}
+        {enemyDefeated ? (
+          <View style={styles.successBadge} testID="enemy-defeated-indicator">
+            <Icon name="lorc/checked-shield" size={14} color={COLORS.logicTeal} />
+            <Text style={styles.successText}>Stretch Goal Complete!</Text>
+          </View>
+        ) : (
+          <View style={styles.failureBadge} testID="enemy-defeated-indicator">
+            <Icon name="lorc/cross-mark" size={14} color={COLORS.impactRed} />
+            <Text style={styles.failureText}>Stretch Goal Failed</Text>
+          </View>
+        )}
+
+        {/* Reward Info - Clear messaging about what the player gets */}
+        <View style={[styles.rewardSection, { backgroundColor: enemyDefeated ? '#FEF3C7' : COLORS.slateCharcoal + '10' }]}>
+          <Text style={[styles.rewardLabel, { color: enemyDefeated ? '#D97706' : COLORS.slateCharcoal }]}>
+            {enemyDefeated ? '🎁 BONUS REWARDS EARNED!' : '💔 REWARDS MISSED'}
+          </Text>
+          {stretchGoalReward ? (
+            <View style={styles.rewardWeaponRow}>
+              <WeaponAvatar
+                weapon={stretchGoalReward}
+                size={28}
                 interactive
+                style={{ opacity: enemyDefeated ? 1 : 0.4 }}
               />
-            </View>
-            <View style={styles.enemyInfo}>
-              <Text style={styles.enemyName}>{enemy.name}</Text>
-              <Text style={[styles.enemyTier, { color: tierColor }]}>
-                Tier {enemy.tier} · {tierLabel}
-              </Text>
-            </View>
-          </View>
-
-          {/* Enemy Effect */}
-          <View style={styles.infoSection}>
-            <Text style={styles.infoLabel}>Enemy Effects</Text>
-            {enemy.description.split(', ').map((effect, index) => (
-              <Text key={index} style={styles.infoText}>• {effect}</Text>
-            ))}
-          </View>
-
-          {/* Defeat Condition */}
-          <View style={styles.infoSection}>
-            <Text style={[styles.infoLabel, { color: COLORS.logicTeal }]}>Challenge Requirement</Text>
-            <Text style={styles.infoText}>{enemy.defeatConditionText}</Text>
-          </View>
-
-          {/* Result Badge */}
-          {enemyDefeated ? (
-            <View style={styles.successBadge} testID="enemy-defeated-indicator">
-              <Icon name="lorc/checked-shield" size={14} color={COLORS.logicTeal} />
-              <Text style={styles.successText}>Stretch Goal Complete!</Text>
-            </View>
-          ) : (
-            <View style={styles.failureBadge} testID="enemy-defeated-indicator">
-              <Icon name="lorc/cross-mark" size={14} color={COLORS.impactRed} />
-              <Text style={styles.failureText}>Stretch Goal Failed</Text>
-            </View>
-          )}
-
-          {/* Reward Info - Clear messaging about what the player gets */}
-          <View style={[styles.rewardSection, { backgroundColor: enemyDefeated ? '#FEF3C7' : COLORS.slateCharcoal + '10' }]}>
-            <Text style={[styles.rewardLabel, { color: enemyDefeated ? '#D97706' : COLORS.slateCharcoal }]}>
-              {enemyDefeated ? '🎁 BONUS REWARDS EARNED!' : '💔 REWARDS MISSED'}
-            </Text>
-            {stretchGoalReward ? (
-              <View style={styles.rewardWeaponRow}>
-                <WeaponAvatar
-                  weapon={stretchGoalReward}
-                  size={28}
-                  interactive
-                  style={{ opacity: enemyDefeated ? 1 : 0.4 }}
-                />
-                <View style={styles.rewardWeaponInfo}>
-                  <Text style={[
-                    styles.rewardWeaponName,
-                    { color: enemyDefeated ? getRarityColor(stretchGoalReward.rarity) : COLORS.slateCharcoal },
-                    !enemyDefeated && { opacity: 0.5, textDecorationLine: 'line-through' }
-                  ]}>
-                    {stretchGoalReward.name}
-                  </Text>
-                  <Text style={[styles.rewardWeaponRarity, { opacity: enemyDefeated ? 0.8 : 0.4 }]}>
-                    {getRarityLabel(stretchGoalReward.rarity)} Weapon
-                  </Text>
-                </View>
-              </View>
-            ) : (
-              <Text style={[styles.rewardText, { opacity: enemyDefeated ? 1 : 0.6, fontWeight: enemyDefeated ? '700' : '600' }]}>
-                {enemyDefeated
-                  ? `You'll get an extra ${tierLabel} weapon at the next Level Up screen!`
-                  : `Would have earned an extra ${tierLabel} weapon`
-                }
-              </Text>
-            )}
-            {/* Bonus Money Display */}
-            {stretchGoalMoney != null && stretchGoalMoney > 0 && (
-              <View style={styles.rewardMoneyRow}>
-                <Icon
-                  name="lorc/cash"
-                  size={20}
-                  color={enemyDefeated ? COLORS.actionYellow : COLORS.slateCharcoal}
-                  style={{ opacity: enemyDefeated ? 1 : 0.4 }}
-                />
+              <View style={styles.rewardWeaponInfo}>
                 <Text style={[
-                  styles.rewardMoneyText,
-                  { color: enemyDefeated ? COLORS.actionYellow : COLORS.slateCharcoal },
+                  styles.rewardWeaponName,
+                  { color: enemyDefeated ? getRarityColor(stretchGoalReward.rarity) : COLORS.slateCharcoal },
                   !enemyDefeated && { opacity: 0.5, textDecorationLine: 'line-through' }
                 ]}>
-                  +${stretchGoalMoney} Gold
+                  {stretchGoalReward.name}
+                </Text>
+                <Text style={[styles.rewardWeaponRarity, { opacity: enemyDefeated ? 0.8 : 0.4 }]}>
+                  {getRarityLabel(stretchGoalReward.rarity)} Weapon
                 </Text>
               </View>
-            )}
-            {enemyDefeated && stretchGoalReward && (
-              <Text style={styles.rewardSubtext}>Added to your inventory!</Text>
-            )}
-          </View>
-        </View>
-      </View>
-    );
-  }
-
-  // Difficulty challenge rendering
-  if (isDifficultyChallenge && difficulty) {
-    const difficultyInfo = getDifficultyInfo(difficulty);
-
-    return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Icon name="lorc/trophy" size={20} color={COLORS.actionYellow} />
-          <Text style={styles.headerTitle}>Challenge Completed</Text>
-        </View>
-
-        <View style={[styles.card, { borderColor: difficultyInfo.color }]}>
-          <View style={styles.difficultyRow}>
-            <Icon name={difficultyInfo.icon} size={24} color={difficultyInfo.color} />
-            <View style={styles.difficultyInfo}>
-              <Text style={styles.difficultyLabel}>Difficulty</Text>
-              <Text style={[styles.difficultyName, { color: difficultyInfo.color }]}>
-                {difficultyInfo.label}
+            </View>
+          ) : (
+            <Text style={[styles.rewardText, { opacity: enemyDefeated ? 1 : 0.6, fontWeight: enemyDefeated ? '700' : '600' }]}>
+              {enemyDefeated
+                ? `You'll get an extra ${tierLabel} weapon at the next Level Up screen!`
+                : `Would have earned an extra ${tierLabel} weapon`
+              }
+            </Text>
+          )}
+          {/* Bonus Money Display */}
+          {stretchGoalMoney != null && stretchGoalMoney > 0 && (
+            <View style={styles.rewardMoneyRow}>
+              <Icon
+                name="lorc/cash"
+                size={20}
+                color={enemyDefeated ? COLORS.actionYellow : COLORS.slateCharcoal}
+                style={{ opacity: enemyDefeated ? 1 : 0.4 }}
+              />
+              <Text style={[
+                styles.rewardMoneyText,
+                { color: enemyDefeated ? COLORS.actionYellow : COLORS.slateCharcoal },
+                !enemyDefeated && { opacity: 0.5, textDecorationLine: 'line-through' }
+              ]}>
+                +${stretchGoalMoney} Gold
               </Text>
             </View>
-          </View>
-          <Text style={styles.difficultyDesc}>{difficultyInfo.desc}</Text>
-
-          {showAchievement && (
-            <View style={styles.achievementBadge}>
-              <Icon name="lorc/checked-shield" size={14} color={COLORS.logicTeal} />
-              <Text style={styles.achievementText}>Achievement Unlocked</Text>
-            </View>
+          )}
+          {enemyDefeated && stretchGoalReward && (
+            <Text style={styles.rewardSubtext}>Added to your inventory!</Text>
           )}
         </View>
+      </View>
+    </View>
+  );
+};
+
+interface DifficultyChallengeCardProps {
+  difficulty: AdventureDifficulty;
+  // Whether to show the achievement badge
+  showAchievement?: boolean;
+}
+
+/** Victory screen: the difficulty the run was completed on. */
+export const DifficultyChallengeCard: React.FC<DifficultyChallengeCardProps> = ({
+  difficulty,
+  showAchievement = false,
+}) => {
+  const difficultyInfo = getDifficultyInfo(difficulty);
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Icon name="lorc/trophy" size={20} color={COLORS.actionYellow} />
+        <Text style={styles.headerTitle}>Challenge Completed</Text>
+      </View>
+
+      <View style={[styles.card, { borderColor: difficultyInfo.color }]}>
+        <View style={styles.difficultyRow}>
+          <Icon name={difficultyInfo.icon} size={24} color={difficultyInfo.color} />
+          <View style={styles.difficultyInfo}>
+            <Text style={styles.difficultyLabel}>Difficulty</Text>
+            <Text style={[styles.difficultyName, { color: difficultyInfo.color }]}>
+              {difficultyInfo.label}
+            </Text>
+          </View>
+        </View>
+        <Text style={styles.difficultyDesc}>{difficultyInfo.desc}</Text>
 
         {showAchievement && (
-          <Text style={styles.rewardText}>
-            🎉 Reward: Character unlock progress increased!
-          </Text>
+          <View style={styles.achievementBadge}>
+            <Icon name="lorc/checked-shield" size={14} color={COLORS.logicTeal} />
+            <Text style={styles.achievementText}>Achievement Unlocked</Text>
+          </View>
         )}
       </View>
+
+      {showAchievement && (
+        <Text style={styles.rewardText}>
+          🎉 Reward: Character unlock progress increased!
+        </Text>
+      )}
+    </View>
+  );
+};
+
+/**
+ * Legacy combined entry point: renders the enemy card when `enemy` is given,
+ * otherwise the difficulty card when `difficulty` is given.
+ */
+const ChallengeCard: React.FC<ChallengeCardProps> = ({ enemy, difficulty, enemyDefeated, showAchievement, stretchGoalReward, stretchGoalMoney }) => {
+  if (enemy) {
+    return (
+      <EnemyChallengeCard
+        enemy={enemy}
+        enemyDefeated={enemyDefeated}
+        stretchGoalReward={stretchGoalReward}
+        stretchGoalMoney={stretchGoalMoney}
+      />
     );
   }
-
+  if (difficulty) {
+    return <DifficultyChallengeCard difficulty={difficulty} showAchievement={showAchievement} />;
+  }
   return null;
 };
 

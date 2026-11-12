@@ -1,21 +1,15 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import Animated, {
-  Easing,
-  interpolate,
-  useAnimatedStyle,
-  useFrameCallback,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
-import { Svg, Circle, G, Line, Path, Polygon, Text as SvgText } from 'react-native-svg';
+import Animated, { interpolate, useAnimatedStyle } from 'react-native-reanimated';
+import { Svg, Circle, G, Line, Path, Text as SvgText } from 'react-native-svg';
+import { useEffectsDriver } from '@/components/creatures/useEffectsDriver';
+import { STROKE, StarBurst } from '@/components/illustration/primitives';
 import { COLORS } from '@/utils/colors';
 import {
   EnemyAmbientMood,
   EnemyPersonalityProfile,
   EnemyReactionType,
 } from '@/utils/enemyAnimations';
-import { advancePhase, expApproach } from '@/utils/proceduralMotion';
 
 interface EnemyEffectsOverlayProps {
   activeReaction: EnemyReactionType | null;
@@ -23,36 +17,6 @@ interface EnemyEffectsOverlayProps {
   mood: EnemyAmbientMood;
   personality: EnemyPersonalityProfile;
   animate?: boolean;
-}
-
-const STROKE = COLORS.slateCharcoal;
-
-function ImpactStar({
-  cx,
-  cy,
-  r,
-  fill = COLORS.actionYellow,
-}: {
-  cx: number;
-  cy: number;
-  r: number;
-  fill?: string;
-}) {
-  const pts: string[] = [];
-  for (let i = 0; i < 16; i++) {
-    const a = -Math.PI / 2 + (i * Math.PI) / 8;
-    const d = i % 2 === 0 ? r : r * 0.44;
-    pts.push(`${(cx + Math.cos(a) * d).toFixed(1)},${(cy + Math.sin(a) * d).toFixed(1)}`);
-  }
-  return (
-    <Polygon
-      points={pts.join(' ')}
-      fill={fill}
-      stroke={STROKE}
-      strokeWidth={1.6}
-      strokeLinejoin="round"
-    />
-  );
 }
 
 function AngerVein({ cx, cy, scale = 1 }: { cx: number; cy: number; scale?: number }) {
@@ -81,64 +45,26 @@ export const EnemyEffectsOverlay: React.FC<EnemyEffectsOverlayProps> = ({
   personality,
   animate = true,
 }) => {
-  const burstProgress = useSharedValue(0);
-  const ambientPhase = useSharedValue(0);
-  const ambientFreqHz = useSharedValue(0.7);
-
   const showAmbient = !activeReaction;
-  const sleepyTarget = showAmbient && mood === 'sleepy' ? 1 : 0;
-  const enragedTarget = showAmbient && (mood === 'enraged' || mood === 'victory') ? 1 : 0;
-  const corneredTarget = showAmbient && mood === 'cornered' ? 1 : 0;
-
-  const sleepyPresence = useSharedValue(sleepyTarget);
-  const enragedPresence = useSharedValue(enragedTarget);
-  const corneredPresence = useSharedValue(corneredTarget);
-
-  useFrameCallback((frameInfo) => {
-    const dtMs = frameInfo.timeSincePreviousFrame;
-    if (dtMs === null || dtMs <= 0) return;
-    const dt = Math.min(dtMs / 1000, 0.05);
-    const desiredHz = mood === 'enraged' ? 1.65 : mood === 'sleepy' ? 0.42 : 0.95;
-    ambientFreqHz.value = expApproach(ambientFreqHz.value, desiredHz, 8, dt);
-    ambientPhase.value = advancePhase(ambientPhase.value, ambientFreqHz.value, dt);
-  }, animate);
-
-  useEffect(() => {
-    if (!animate) {
-      sleepyPresence.value = sleepyTarget;
-      enragedPresence.value = enragedTarget;
-      corneredPresence.value = corneredTarget;
-      return;
-    }
-    const cfg = { duration: 220, easing: Easing.inOut(Easing.quad) };
-    sleepyPresence.value = withTiming(sleepyTarget, cfg);
-    enragedPresence.value = withTiming(enragedTarget, cfg);
-    corneredPresence.value = withTiming(corneredTarget, cfg);
-  }, [
-    sleepyTarget,
-    enragedTarget,
-    corneredTarget,
+  const {
+    burstProgress,
+    ambientPhase,
+    presences: [sleepyPresence, enragedPresence, corneredPresence],
+  } = useEffectsDriver({
     animate,
-    sleepyPresence,
-    enragedPresence,
-    corneredPresence,
-  ]);
-
-  useEffect(() => {
-    if (!activeReaction) {
-      burstProgress.value = 0;
-      return;
-    }
-    if (!animate) {
-      burstProgress.value = 0.5;
-      return;
-    }
-    burstProgress.value = 0;
-    burstProgress.value = withTiming(1, {
-      duration: 680,
-      easing: Easing.out(Easing.cubic),
-    });
-  }, [activeReaction, reactionId, animate, burstProgress]);
+    initialAmbientHz: 0.7,
+    ambientHz: mood === 'enraged' ? 1.65 : mood === 'sleepy' ? 0.42 : 0.95,
+    presenceTargets: [
+      showAmbient && mood === 'sleepy' ? 1 : 0,
+      showAmbient && (mood === 'enraged' || mood === 'victory') ? 1 : 0,
+      showAmbient && mood === 'cornered' ? 1 : 0,
+    ],
+    fadeMs: 220,
+    activeReaction,
+    reactionId,
+    burstMs: 680,
+    staticBurstProgress: 0.5,
+  });
 
   const burstStyle = useAnimatedStyle(() => {
     const p = burstProgress.value;
@@ -187,8 +113,8 @@ export const EnemyEffectsOverlay: React.FC<EnemyEffectsOverlayProps> = ({
       case 'pain':
         return (
           <G testID="enemy-fx-pain">
-            <ImpactStar cx={76} cy={22} r={11} fill={COLORS.actionYellow} />
-            <ImpactStar cx={22} cy={30} r={7.5} fill={COLORS.impactOrange} />
+            <StarBurst cx={76} cy={22} outer={11} inner={11 * 0.44} tips={8} fill={COLORS.actionYellow} />
+            <StarBurst cx={22} cy={30} outer={7.5} inner={7.5 * 0.44} tips={8} fill={COLORS.impactOrange} />
             <Line x1={12} y1={18} x2={22} y2={24} stroke={COLORS.impactRed} strokeWidth={2.8} strokeLinecap="round" />
             <Line x1={88} y1={14} x2={78} y2={20} stroke={COLORS.impactRed} strokeWidth={2.8} strokeLinecap="round" />
           </G>
@@ -206,9 +132,9 @@ export const EnemyEffectsOverlay: React.FC<EnemyEffectsOverlayProps> = ({
               strokeWidth={3.2}
               strokeDasharray="6 4"
             />
-            <ImpactStar cx={78} cy={18} r={13} fill={COLORS.actionYellow} />
-            <ImpactStar cx={20} cy={20} r={10} fill="#EC4899" />
-            <ImpactStar cx={82} cy={72} r={8.5} fill={COLORS.logicTeal} />
+            <StarBurst cx={78} cy={18} outer={13} inner={13 * 0.44} tips={8} fill={COLORS.actionYellow} />
+            <StarBurst cx={20} cy={20} outer={10} inner={10 * 0.44} tips={8} fill="#EC4899" />
+            <StarBurst cx={82} cy={72} outer={8.5} inner={8.5 * 0.44} tips={8} fill={COLORS.logicTeal} />
           </G>
         );
 

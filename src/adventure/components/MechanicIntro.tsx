@@ -16,13 +16,13 @@ import { isValidCombination } from '@/utils/gameUtils';
 import { sfx } from '@/audio';
 import type { Card as CardType } from '@/types';
 import type { DemoCard, LessonPage, MechanicDef, MechanicDemo, QuizQuestion } from '../types';
-import { INK } from './ui';
+import { DARK, INK } from './ui';
 
 const GOLD = COLORS.actionYellow;
-const PANEL = '#1C1B19';
-const STAGE = '#2A2826';
-const TEXT = '#F1ECE4';
-const MUTED = '#B9B1A5';
+const PANEL = DARK.panel;
+const STAGE = DARK.stage;
+const TEXT = DARK.text;
+const MUTED = DARK.muted;
 
 const KIND_LABEL: Record<MechanicDef['kind'], string> = {
   rule: 'New Rule',
@@ -247,7 +247,7 @@ const MechanicIntro: React.FC<{
 
 const st = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(10,10,10,0.82)', alignItems: 'center', justifyContent: 'center', padding: 14 },
-  panel: { width: '100%', maxWidth: 460, maxHeight: '94%', backgroundColor: PANEL, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,222,0,0.35)', overflow: 'hidden' },
+  panel: { width: '100%', maxWidth: 460, maxHeight: '94%', backgroundColor: PANEL, borderRadius: 16, borderWidth: 1, borderColor: DARK.goldEdge(0.35), overflow: 'hidden' },
   goldRule: { height: 4, backgroundColor: GOLD },
   close: { position: 'absolute', top: 12, right: 12, zIndex: 5, width: 30, height: 30, borderRadius: 15, borderWidth: 1, borderColor: MUTED, alignItems: 'center', justifyContent: 'center' },
   closeText: { color: TEXT, fontWeight: '800' },
@@ -277,7 +277,7 @@ const st = StyleSheet.create({
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, minHeight: 6 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.18)' },
   dotOn: { width: 18, backgroundColor: GOLD },
-  dotDone: { backgroundColor: 'rgba(255,222,0,0.5)' },
+  dotDone: { backgroundColor: DARK.goldEdge(0.5) },
   footerButtons: { flexDirection: 'row', gap: 10, minHeight: 50 },
   back: { paddingHorizontal: 16, justifyContent: 'center', borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)' },
   backText: { color: TEXT, fontWeight: '700' },

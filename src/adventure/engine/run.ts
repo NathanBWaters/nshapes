@@ -9,40 +9,42 @@
  * Note: foes are EnemyInstance objects with internal timers (mutable). They're
  * owned by the run and only touched inside the reducer.
  */
-import type { BoardConnection, BridgeTriggerType, Card, CardReward, PlayerStats, Weapon, AttributeName } from '@/types';
-import type { EnemyEvent, EnemyInstance } from '@/types/enemy';
+import type { BoardConnection, BridgeTriggerType, Card, CardReward, Weapon } from '@/types';
+import type { EnemyEvent } from '@/types/enemy';
 import type { WeaponEffectResult } from '@/utils/weaponEffects';
-import type { IconName } from '@/components/Icon';
 import { createDeck } from '@/utils/gameUtils';
-import { allSets, hasAnySet } from './sets';
-import { getBoardSizeForAttributes } from '@/utils/gameConfig';
+import { allSets, countDifferentAttributes, hasAnySet, isRainbow, isSelectable } from './sets';
+import { MATCH_REWARDS, getBoardSizeForAttributes } from '@/utils/gameConfig';
 import { getAdjacentIndices } from '@/utils/weaponEffects';
 import {
   arePositionsConnected,
   getLinkedDestructionPositions,
   selectPositionsToConnect,
 } from '@/utils/connectionUtils';
-import { DEFAULT_PLAYER_STATS, WEAPONS, canObtainWeapon } from '@/utils/gameDefinitions';
-import { createEnemy, isEnemyRegistered } from '@/utils/enemyFactory';
-import { createDummyEnemy } from '@/utils/enemyEffects';
-import { createInitialRoundStats } from '@/hooks/useRoundStats';
-import type { AdventureSave, ArcanaId, FoeDef, LevelDef, RunEvent, RunEventType, RunState } from '../types';
+import { DEFAULT_PLAYER_STATS, canObtainWeapon } from '@/utils/gameDefinitions';
+import { createInitialRoundStats } from '@/game/roundStats';
+import type { AbilityState, AdventureSave, ArcanaId, LevelDef, RunEvent, RunEventType, RunState } from '../types';
 import { createRng, type Rng } from './rng';
-import { getFeaturesForLevel, fighterLevel } from '../progress';
-import { getLoadout, getPerkStats } from '../data/fighters';
-import { UPGRADES, applyWeaponUpgradeTier } from '../data/upgrades';
+import { applyWeaponToStats, startingLoadout } from '../loadout';
+import { getArmoryWeapon } from '../data/armory';
+import { createFoe } from '../data/foes';
 import { challengeProgress } from './challenges';
-import { ABILITY_TUNING, abilityFor } from '../data/abilities';
-import { findEvolvedWeapon, getActiveEvolutionStatus, type EvolutionRecipe } from '../data/evolutions';
+import { ABILITY_TUNING, abilityFor, type AbilityId } from '../data/abilities';
+import { arcanaRules } from '../data/arcana';
+import { BASE_RULES } from '../data/rules';
+import { getActiveEvolutionStatus, type EvolutionRecipe } from '../data/evolutions';
 
 const MAX_BOARD = 21;
-const COIN_CARD_CHANCE = 0.1;
-const COIN_CARD_VALUE = 3;
-const POWER_CARD_CHANCE = 0.12;
-const POWER_CARD_BONUS = 2;
-const RAINBOW_MULTIPLIER = 2;
 const CATALYST_DEAL_CHANCE = 0.45;
 const CATALYST_REFILL_CHANCE = 0.35;
+
+/** What one matched card is worth before weapons and foes get involved. */
+export const baseCardReward = (c: Card): CardReward => ({
+  cardId: c.id,
+  points: MATCH_REWARDS.basePoints + (c.bonusPoints ?? 0),
+  money: MATCH_REWARDS.baseMoney + (c.bonusMoney ?? 0),
+  experience: MATCH_REWARDS.baseExperience,
+});
 
 export const xpForLevel = (lvl: number): number => 6 + lvl * 5;
 
@@ -62,38 +64,6 @@ export type RunAction =
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-const weaponById = (id: string, weaponUpgrades?: Record<string, number>): Weapon | undefined => {
-  const base = WEAPONS.find(w => w.id === id) ?? findEvolvedWeapon(id);
-  if (!base) return undefined;
-  const tier = weaponUpgrades?.[id] ?? 0;
-  return tier > 0 ? applyWeaponUpgradeTier(base, tier) : base;
-};
-
-/** Add a weapon's effects into baked stats (mirrors calculatePlayerTotalStats). */
-const applyWeaponToStats = (stats: PlayerStats, weapon: Weapon): PlayerStats => {
-  const next: PlayerStats = { ...stats, effectCaps: stats.effectCaps ? { ...stats.effectCaps } : undefined };
-  for (const [k, v] of Object.entries(weapon.effects)) {
-    const cur = (next as unknown as Record<string, unknown>)[k];
-    if (typeof v === 'number' && typeof cur === 'number') {
-      (next as unknown as Record<string, number>)[k] = cur + v;
-    }
-  }
-  if (weapon.capIncrease && next.effectCaps) {
-    const caps = next.effectCaps as unknown as Record<string, number>;
-    if (caps[weapon.capIncrease.type] !== undefined) caps[weapon.capIncrease.type] += weapon.capIncrease.amount;
-  }
-  return next;
-};
-
-const addStats = (stats: PlayerStats, delta: Partial<PlayerStats>): PlayerStats => {
-  const next = { ...stats };
-  for (const [k, v] of Object.entries(delta)) {
-    const cur = (next as unknown as Record<string, unknown>)[k];
-    if (typeof v === 'number' && typeof cur === 'number') (next as unknown as Record<string, number>)[k] = cur + v;
-  }
-  return next;
-};
-
 let cardSeq = 0;
 const freshCard = (base: Card): Card => ({
   id: `${base.shape}-${base.color}-${base.number}-${base.shading}-${base.background ?? 'w'}-a${++cardSeq}`,
@@ -110,30 +80,9 @@ const toDeckCard = (c: Card): Card => ({
   id: c.id, shape: c.shape, color: c.color, number: c.number, shading: c.shading, background: c.background, selected: false,
 });
 
-const selectable = (c: Card) => !c.isDud && !c.isFaceDown;
-
-const isRainbow = (cards: Card[], attrs: AttributeName[]): boolean =>
-  cards.length === 3 && attrs.every(a => new Set(cards.map(c => c[a as keyof Card])).size === 3);
-
-/** Count how many active attributes are all-different across the 3 matched cards. */
-export const countDifferentAttributes = (cards: Card[], attrs: AttributeName[]): number => {
-  if (cards.length !== 3) return 0;
-  return attrs.filter(a => new Set(cards.map(c => c[a as keyof Card])).size === 3).length;
-};
-
 const scaledFoeHp = (baseHp: number, arcana: ArcanaId | null): number => {
-  if (arcana === 'overkill_harvest') return Math.max(1, Math.round(baseHp * 1.15));
-  if (arcana === 'catalyst_resonance') return Math.max(1, Math.round(baseHp * 1.1));
-  return baseHp;
-};
-
-const makeFoe = (def: FoeDef): { foe: EnemyInstance; name: string; icon: IconName } => {
-  if (def.enemy && isEnemyRegistered(def.enemy)) {
-    const foe = createEnemy(def.enemy);
-    return { foe, name: def.name ?? foe.name, icon: def.icon ?? foe.icon };
-  }
-  const foe = createDummyEnemy();
-  return { foe, name: def.name ?? 'Sparring Foe', icon: def.icon ?? 'lorc/crossed-swords' };
+  const scale = arcanaRules(arcana).foeHpScale;
+  return scale === undefined ? baseHp : Math.max(1, Math.round(baseHp * scale));
 };
 
 const ENEMY_EVENT_MAP: Partial<Record<EnemyEvent['type'], RunEventType>> = {
@@ -162,6 +111,14 @@ interface Draft extends RunState {
 const begin = (s: RunState): Draft => ({
   ...s,
   ability: s.ability ? { ...s.ability } : null,
+  roundStats: {
+    ...s.roundStats,
+    matchTimes: [...s.roundStats.matchTimes],
+    shapesMatched: new Set(s.roundStats.shapesMatched),
+    colorsMatched: new Set(s.roundStats.colorsMatched),
+    colorMatchCounts: new Map(s.roundStats.colorMatchCounts),
+    weaponEffectsTriggered: new Set(s.roundStats.weaponEffectsTriggered),
+  },
   deck: [...s.deck],
   connections: [...s.connections],
   events: [...s.events],
@@ -187,15 +144,20 @@ const emitEnemyEvents = (d: Draft, events: EnemyEvent[]) => {
   }
 };
 
+interface DrawOptions {
+  /** Deal the card as-is: the foe doesn't get to turn it into a dud, bomb, etc. */
+  skipFoeDrawEffects?: boolean;
+}
+
 /** Draw one card from the deck top (recycling is handled by the caller). */
-const drawCard = (d: Draft, clean = false): Card => {
+const drawCard = (d: Draft, opts?: DrawOptions): Card => {
   if (d.deck.length === 0) d.deck = d._rng.shuffle(createDeck(d.attributes)).map(toDeckCard);
   const base = d.deck.shift()!;
   let card = freshCard(base);
-  const specialMult = d.activeArcana === 'glass_prism' ? 3 : 1;
-  if (d.features.has('coins') && d._rng.next() < COIN_CARD_CHANCE * specialMult) card.bonusMoney = COIN_CARD_VALUE;
-  if (d.features.has('power') && d._rng.next() < POWER_CARD_CHANCE * specialMult) card.bonusPoints = POWER_CARD_BONUS;
-  if (clean) return card;
+  const specialMult = arcanaRules(d.activeArcana).specialCardChanceScale ?? 1;
+  if (d.features.has('coins') && d._rng.next() < BASE_RULES.coinCardChance * specialMult) card.bonusMoney = BASE_RULES.coinCardValue;
+  if (d.features.has('power') && d._rng.next() < BASE_RULES.powerCardChance * specialMult) card.bonusPoints = BASE_RULES.powerCardBonus;
+  if (opts?.skipFoeDrawEffects) return card;
   card = d.foe.onCardDraw(card);
   if (card.isDud) emit(d, 'dud');
   if (card.isFaceDown) emit(d, 'face_down');
@@ -208,10 +170,10 @@ const drawCard = (d: Draft, clean = false): Card => {
  * Replace the cards at `indices` with fresh draws. If that leaves the board
  * without any Set, redraw (a few times) — the game should never deadlock.
  */
-const refill = (d: Draft, indices: number[], clean = false) => {
+const refill = (d: Draft, indices: number[], opts?: DrawOptions) => {
   if (indices.length === 0) return;
   for (let attempt = 0; attempt < 12; attempt++) {
-    const drawn = indices.map(() => drawCard(d, clean));
+    const drawn = indices.map(() => drawCard(d, opts));
     const candidate = [...d.board];
     indices.forEach((idx, i) => (candidate[idx] = drawn[i]));
     if (hasAnySet(candidate, d.attributes) || attempt === 11) {
@@ -234,7 +196,7 @@ const syncStats = (d: Draft) => {
 
 const rollPickOptions = (d: Draft, count = 3): Weapon[] => {
   const weapons = d.armory
-    .map(id => weaponById(id, d.weaponUpgrades))
+    .map(id => getArmoryWeapon(id, d.weaponUpgrades))
     .filter((w): w is Weapon => !!w && canObtainWeapon(w, d.weapons));
   return d._rng.shuffle(weapons).slice(0, count);
 };
@@ -280,18 +242,13 @@ const hurt = (d: Draft, amount: number) => {
   d.hearts = Math.max(0, d.hearts - amount);
   d.roundStats.damageReceived += amount;
   emit(d, 'hurt', amount);
-  // Orange Tabby — Nine Lives: shrug off one knockout per fight
-  if (d.hearts === 0 && d.ability?.id === 'nine_lives' && !d.ability.spent) {
-    d.ability.spent = true;
-    d.hearts = 1;
-    emit(d, 'nine_lives');
-  }
+  if (d.hearts === 0 && d.ability && ABILITY_RULES[d.ability.id].survivesKnockout?.(d, d.ability)) d.hearts = 1;
   // Life Link bridge weapon — health loss can trigger retaliatory board explosions
   if (d.hearts > 0) {
     for (const w of rollSeededBridges(d, 'onHealthLoss')) {
       if (w.bridgeEffect?.effect === 'explosion') {
         const candidates = d.board
-          .map((c, i) => (selectable(c) && (c.health ?? 1) <= 1 && !c.hasEvolutionItem ? i : -1))
+          .map((c, i) => (isSelectable(c) && (c.health ?? 1) <= 1 && !c.hasEvolutionItem ? i : -1))
           .filter(i => i >= 0);
         const exploded = d._rng.shuffle(candidates).slice(0, 2);
         if (exploded.length > 0) {
@@ -304,25 +261,6 @@ const hurt = (d: Draft, amount: number) => {
       }
     }
   }
-};
-
-/** Bonus damage from passive abilities for a Set made right now. */
-const abilityBonusDamage = (d: Draft): number => {
-  const a = d.ability;
-  if (!a) return 0;
-  if (a.id === 'combo') {
-    const inWindow = d.matches > 0 && d.elapsedMs - d.lastMatchAtMs <= ABILITY_TUNING.comboWindowMs;
-    a.combo = inWindow ? Math.min(ABILITY_TUNING.comboMax, a.combo + 1) : 0;
-    if (a.combo > 0) emit(d, 'combo', a.combo);
-    return a.combo;
-  }
-  if (a.id === 'grudge' && a.grudge > 0) {
-    const bonus = a.grudge * ABILITY_TUNING.grudgeDamage;
-    emit(d, 'grudge_release', bonus);
-    a.grudge = 0;
-    return bonus;
-  }
-  return 0;
 };
 
 const chargeAbility = (d: Draft) => {
@@ -345,8 +283,9 @@ const dealDamage = (d: Draft, amount: number) => {
   if (hpBefore > 0 && dmg > hpBefore) {
     const overkill = dmg - hpBefore;
     d.overkillDamage = Math.max(d.overkillDamage, overkill);
-    if (d.activeArcana === 'overkill_harvest') {
-      addCoins(d, overkill * 2);
+    const coinsPerDamage = arcanaRules(d.activeArcana).overkillCoinsPerDamage;
+    if (coinsPerDamage !== undefined) {
+      addCoins(d, overkill * coinsPerDamage);
       emit(d, 'overkill', overkill);
     }
   }
@@ -363,7 +302,7 @@ const addCoins = (d: Draft, base: number) => {
 
 const addXp = (d: Draft, amount: number) => {
   if (!d.features.has('xp') || amount <= 0) return;
-  const gained = d.activeArcana === 'scholars_gambit' ? amount * 2 : amount;
+  const gained = amount * (arcanaRules(d.activeArcana).xpScale ?? 1);
   d.xp += gained;
   while (d.xp >= xpForLevel(d.xpLevel)) {
     d.xp -= xpForLevel(d.xpLevel);
@@ -374,7 +313,7 @@ const addXp = (d: Draft, amount: number) => {
 };
 
 const isEligibleCatalystCard = (c: Card | undefined): boolean =>
-  !!c && selectable(c) && (c.health ?? 1) === 1 && !c.hasBomb && !c.hasCountdown;
+  !!c && isSelectable(c) && (c.health ?? 1) === 1 && !c.hasBomb && !c.hasCountdown;
 
 /**
  * Keep `evolutionReady` synced on the single board Catalyst card (if any).
@@ -407,7 +346,7 @@ const maybePlaceCatalyst = (d: Draft, candidateIndices: number[], baseChance: nu
   if (!d.unlockedEvolutions.some(id => !d.evolvedRecipes.includes(id))) return;
   const eligible = candidateIndices.filter(i => isEligibleCatalystCard(d.board[i]));
   if (eligible.length === 0) return;
-  const chance = Math.min(1, baseChance * (d.activeArcana === 'catalyst_resonance' ? 2 : 1));
+  const chance = Math.min(1, baseChance * (arcanaRules(d.activeArcana).catalystChanceScale ?? 1));
   if (d._rng.next() >= chance) return;
   const targetIdx = d._rng.pick(eligible);
   const ready = Boolean(getActiveEvolutionStatus(d.weapons, d.evolvedRecipes, d, d.unlockedEvolutions)?.ready);
@@ -428,26 +367,31 @@ const loseCatalyst = (d: Draft) => {
   emit(d, 'catalyst_lost');
 };
 
+const acquireWeapon = (d: Draft, weapon: Weapon) => {
+  d.weapons = [...d.weapons, weapon];
+  d.stats = applyWeaponToStats(d.stats, weapon);
+  const heartsLocked = arcanaRules(d.activeArcana).maxHeartsLock !== undefined;
+  if (weapon.effects.maxHealth && d.hearts !== null && d.maxHearts !== null && !heartsLocked) {
+    d.maxHearts += weapon.effects.maxHealth;
+    d.hearts = Math.min(d.maxHearts, d.hearts + (weapon.effects.health ?? 0));
+  }
+};
+
 const triggerEvolution = (d: Draft, recipe: EvolutionRecipe, excludedCards: Card[], nowMs: number) => {
   const evolved = recipe.result;
-  d.weapons = [...d.weapons, evolved];
-  d.stats = applyWeaponToStats(d.stats, evolved);
-  if (evolved.effects.maxHealth && d.hearts !== null && d.maxHearts !== null && d.activeArcana !== 'glass_prism') {
-    d.maxHearts += evolved.effects.maxHealth;
-    d.hearts = Math.min(d.maxHearts, d.hearts + (evolved.effects.health ?? 0));
-  }
+  acquireWeapon(d, evolved);
   d.evolvedRecipes = [...d.evolvedRecipes, recipe.id];
   d.catalystState = 'evolved';
 
   const b = recipe.burst;
-  const resonance = d.activeArcana === 'catalyst_resonance';
-  const burstDamage = (b.damage ?? 0) + (resonance ? 8 : 0);
+  const burstBonus = arcanaRules(d.activeArcana).evolutionBurstBonus;
+  const burstDamage = (b.damage ?? 0) + (burstBonus?.damage ?? 0);
   if (burstDamage > 0) {
     dealDamage(d, burstDamage * (d.foe.getStatModifiers().pointsMultiplier || 1));
   }
   if (b.heal) heal(d, b.heal);
   if (b.coins) addCoins(d, b.coins);
-  const burstTime = (b.timeBonus ?? 0) + (resonance ? 8 : 0);
+  const burstTime = (b.timeBonus ?? 0) + (burstBonus?.time ?? 0);
   if (burstTime > 0 && d.timeLeft !== null) {
     const cap = (d.level.rules.timer ?? 0) + d.stats.startingTime + 15;
     d.timeLeft = Math.min(cap, d.timeLeft + burstTime);
@@ -465,7 +409,7 @@ const triggerEvolution = (d: Draft, recipe: EvolutionRecipe, excludedCards: Card
   if (b.igniteCards) {
     const excludedIds = new Set(excludedCards.map(c => c.id));
     const candidates = d.board
-      .map((c, i) => (selectable(c) && !c.onFire && !excludedIds.has(c.id) ? i : -1))
+      .map((c, i) => (isSelectable(c) && !c.onFire && !excludedIds.has(c.id) ? i : -1))
       .filter(i => i >= 0);
     const chosen = new Set(d._rng.shuffle(candidates).slice(0, b.igniteCards));
     if (chosen.size > 0) {
@@ -489,6 +433,7 @@ const triggerEvolution = (d: Draft, recipe: EvolutionRecipe, excludedCards: Card
 const resolve = (d: Draft) => {
   if (d.status === 'won' || d.status === 'lost') return;
   syncStats(d);
+  if (d.status !== 'playing') return;
 
   if (d.foeHp <= 0) {
     if (d.wave < d.level.foes.length - 1) {
@@ -520,8 +465,8 @@ const resolve = (d: Draft) => {
     emit(d, 'time_up');
     return;
   }
-  if (d.status === 'playing' && d.pendingPicks > 0) {
-    d.pickOptions = rollPickOptions(d, d.activeArcana === 'scholars_gambit' ? 4 : 3);
+  if (d.pendingPicks > 0) {
+    d.pickOptions = rollPickOptions(d, arcanaRules(d.activeArcana).pickOptions ?? BASE_RULES.pickOptions);
     if (d.pickOptions.length === 0) d.pendingPicks = 0;
     else d.status = 'pick';
   }
@@ -529,66 +474,20 @@ const resolve = (d: Draft) => {
 
 // ─── Setup ──────────────────────────────────────────────────────────────────
 
-interface RunSetupOptions {
-  seed: number;
-}
-
-const computeStartingStats = (level: LevelDef, save: AdventureSave, fighter: string) => {
-  const features = getFeaturesForLevel(level, save);
-  const activeArcana: ArcanaId | null =
-    features.has('gear') && save.activeArcana && save.unlockedArcana.includes(save.activeArcana)
-      ? save.activeArcana
-      : null;
-  const lvl = fighterLevel(save, fighter);
-  const weapons: Weapon[] = features.has('gear')
-    ? getLoadout(fighter, lvl).map(id => weaponById(id, save.weaponUpgrades)).filter((w): w is Weapon => !!w)
-    : [];
-  // Charm: one equipped Armory weapon on top of the fighter's own gear
-  const charm = features.has('gear') && save.charm && save.armory.includes(save.charm)
-    ? weaponById(save.charm, save.weaponUpgrades)
-    : undefined;
-  if (charm) weapons.push(charm);
-  let stats: PlayerStats = { ...DEFAULT_PLAYER_STATS, hints: 0, graces: 0, effectCaps: { ...DEFAULT_PLAYER_STATS.effectCaps! } };
-  for (const w of weapons) stats = applyWeaponToStats(stats, w);
-  stats = addStats(stats, getPerkStats(lvl));
-  let bonusDamagePerMatch = 0;
-  let coinBonusPercent = 0;
-  for (const u of UPGRADES) {
-    const tier = save.upgrades[u.id] ?? 0;
-    if (tier <= 0) continue;
-    stats = u.apply(stats, tier, { timed: !!level.rules.timer });
-    bonusDamagePerMatch += u.bonusDamage?.(tier) ?? 0;
-    coinBonusPercent += u.coinBonusPercent?.(tier) ?? 0;
-  }
-  // Features gate whole systems: no hints/graces before they're taught
-  stats.hints = features.has('hints') ? stats.hints + (level.rules.startingHints ?? 0) : 0;
-  stats.maxHints = Math.max(stats.maxHints, stats.hints);
-  stats.graces = features.has('graces') ? stats.graces + (level.rules.startingGraces ?? 0) : 0;
-  if (activeArcana === 'controlled_burn') stats.graces = 0;
-  if (!features.has('graces')) stats.graceGainChance = 0;
-  if (!features.has('hints')) stats.hintGainChance = 0;
-  stats.maxGraces = Math.max(stats.maxGraces, stats.graces);
-
-  const heartBonus = stats.maxHealth - DEFAULT_PLAYER_STATS.maxHealth;
-  let maxHearts = features.has('hearts') ? Math.max(1, level.rules.hearts + heartBonus) : null;
-  if (maxHearts !== null && activeArcana === 'scholars_gambit') maxHearts = Math.max(1, maxHearts - 1);
-  if (maxHearts !== null && activeArcana === 'glass_prism') maxHearts = 1;
-  return { features, activeArcana, weapons, stats, maxHearts, bonusDamagePerMatch, coinBonusPercent };
-};
-
-export const createRun = (level: LevelDef, save: AdventureSave, opts: RunSetupOptions): RunState => {
+export const createRun = (level: LevelDef, save: AdventureSave, opts: { seed: number }): RunState => {
   const fighter = save.selectedFighter;
-  const { features, activeArcana, weapons, stats, maxHearts, bonusDamagePerMatch, coinBonusPercent } = computeStartingStats(level, save, fighter);
+  const { features, activeArcana, weapons, stats, maxHearts, bonusDamagePerMatch, coinBonusPercent } = startingLoadout(level, save);
   const rng = createRng(opts.seed);
   const attributes = level.rules.attributes;
   const baseSize = level.rules.boardSize ?? getBoardSizeForAttributes(attributes.length);
   const boardSize = Math.min(MAX_BOARD, Math.max(baseSize, features.has('gear') ? baseSize + (stats.fieldSize - DEFAULT_PLAYER_STATS.fieldSize) : baseSize));
-  const first = makeFoe(level.foes[0]);
+  const first = createFoe(level.foes[0]);
   const timer = level.rules.timer ? level.rules.timer + stats.startingTime : null;
+  const untimedMoves = arcanaRules(activeArcana).untimedMoves;
   const startingMoves =
     level.rules.moves !== undefined
-      ? activeArcana === 'tempo_surge' && !level.rules.timer
-        ? Math.max(4, level.rules.moves - 1)
+      ? untimedMoves && !level.rules.timer
+        ? Math.max(untimedMoves.min, level.rules.moves + untimedMoves.delta)
         : level.rules.moves
       : null;
   const firstFoeHp = scaledFoeHp(level.foes[0].hp, activeArcana);
@@ -648,7 +547,7 @@ export const createRun = (level: LevelDef, save: AdventureSave, opts: RunSetupOp
     threeStepPuritiesTriggered: 0,
     unlockedEvolutions: save.unlockedEvolutions,
     catalystState: 'available',
-    catalystRespawnsLeft: activeArcana === 'catalyst_resonance' ? 1 : 0,
+    catalystRespawnsLeft: arcanaRules(activeArcana).catalystRespawns ?? 0,
     catalystsLost: 0,
     evolvedRecipes: [],
   };
@@ -687,6 +586,275 @@ const startFoe = (d: Draft) => {
   if (d.board.some(c => c.isFaceDown)) emit(d, 'face_down');
 };
 
+/** Score a Set: foe reaction, damage, rewards, weapon and catalyst effects. */
+const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], effects: WeaponEffectResult | undefined, nowMs: number) => {
+  const matched = cards.slice(0, 3);
+  const graceUsed = rewards.some(r => r.effectType === 'grace');
+  const fx = effects;
+
+  // Snapshot Evolution readiness BEFORE this Set updates counters:
+  // matching on a Catalyst card before you are already ready shatters it!
+  const preMatchEvo = d.features.has('evolutions')
+    ? getActiveEvolutionStatus(d.weapons, d.evolvedRecipes, d, d.unlockedEvolutions)
+    : null;
+  const matchedIds = new Set(matched.map(c => c.id));
+  const matchedCatalyst =
+    d.features.has('evolutions') &&
+    d.board.some(c => matchedIds.has(c.id) && c.hasEvolutionItem);
+
+  // Enemy reaction first (time theft, extra removals, flips)
+  const enemyResult = d.foe.onValidMatch(matched, d.board);
+  const statMods = d.foe.getStatModifiers();
+  emitEnemyEvents(d, enemyResult.events);
+
+  // Attribute diversity, Escalating Purity & Arcana modifiers
+  const diffCount = !graceUsed ? countDifferentAttributes(matched, d.attributes) : 0;
+  const rainbow = d.features.has('rainbow') && !graceUsed && isRainbow(matched, d.attributes);
+  let purityDamage = 0;
+  let purityCoins = 0;
+  if (d.features.has('purity')) {
+    if (graceUsed || diffCount === 0) {
+      d.purityChain = 0;
+      d.lastDiffCount = 0;
+    } else if (d.purityChain === 0) {
+      d.purityChain = 1;
+      d.lastDiffCount = diffCount;
+    } else if (diffCount > d.lastDiffCount) {
+      d.purityChain += 1;
+      d.lastDiffCount = diffCount;
+      d.maxPurityChain = Math.max(d.maxPurityChain, d.purityChain);
+      d.purityChainsTriggered += 1;
+      if (d.purityChain >= 3) d.threeStepPuritiesTriggered += 1;
+      purityDamage = d.purityChain === 2 ? 1 : d.purityChain === 3 ? 3 : d.purityChain === 4 ? 5 : 8;
+      purityCoins = d.purityChain - 1;
+      const reachedMax = diffCount === d.attributes.length;
+      emit(d, reachedMax ? 'purity_max' : 'purity', d.purityChain, `Purity ×${d.purityChain}`);
+      if (reachedMax) {
+        // Completed the full diversity climb — reset cleanly so next Set starts a fresh climb!
+        d.purityChain = 0;
+        d.lastDiffCount = 0;
+      }
+    } else {
+      // Repeated or dropped diversity starts a new Step 1 baseline at this diversity
+      d.purityChain = 1;
+      d.lastDiffCount = diffCount;
+    }
+  }
+
+  let points = rewards.reduce((a, r) => a + (r.points ?? 0), 0);
+  const rules = arcanaRules(d.activeArcana);
+  if (rules.nonRainbowDamageDelta !== undefined && !rainbow) {
+    points = Math.max(1, points + rules.nonRainbowDamageDelta);
+  }
+  if (rules.singleTraitBonusDamage !== undefined && !graceUsed && diffCount === 1) {
+    points += rules.singleTraitBonusDamage;
+  }
+  const rainbowMult = rainbow ? rules.rainbowMultiplier ?? BASE_RULES.rainbowMultiplier : 1;
+  const tempoMult = rules.damageScale ?? 1;
+  const enemyMult = (enemyResult.pointsMultiplier || 1) * (statMods.pointsMultiplier || 1);
+  const dmg = (points + d.bonusDamagePerMatch + (d.ability ? ABILITY_RULES[d.ability.id].setBonusDamage?.(d, d.ability) ?? 0 : 0)) * rainbowMult * tempoMult * enemyMult + purityDamage * enemyMult;
+  dealDamage(d, dmg);
+  emit(d, rainbow ? 'rainbow' : 'hit', Math.round(dmg));
+
+  chargeAbility(d);
+
+  // Bookkeeping & stats for defeat conditions
+  d.matches += 1;
+  if (d.movesLeft !== null) d.movesLeft -= 1;
+  const s = d.roundStats;
+  s.totalMatches += 1;
+  s.currentStreak += 1;
+  s.maxStreak = Math.max(s.maxStreak, s.currentStreak);
+  s.matchTimes.push(d.elapsedMs - d.lastMatchAtMs);
+  s.consecutiveInvalidMatches = 0;
+  d.lastMatchAtMs = d.elapsedMs;
+  for (const c of matched) {
+    s.shapesMatched.add(c.shape);
+    s.colorsMatched.add(c.color);
+    s.colorMatchCounts.set(c.color, (s.colorMatchCounts.get(c.color) ?? 0) + 1);
+  }
+  if (isRainbow(matched, d.attributes)) s.allDifferentMatches += 1;
+  if (matched.every(c => c.color === matched[0].color)) s.allSameColorMatches += 1;
+  if (matched.some(c => c.shape === 'squiggle')) s.squiggleMatches += 1;
+  s.faceDownCardsMatched += matched.filter(c => c.wasOriginallyFaceDown || c.isFaceDown).length;
+  s.bombsDefused += matched.filter(c => c.hasBomb).length;
+  s.countdownCardsMatched += matched.filter(c => c.hasCountdown).length;
+  if (graceUsed) {
+    d.stats = { ...d.stats, graces: Math.max(0, d.stats.graces - 1) };
+    s.gracesUsed += 1;
+    emit(d, 'grace');
+  }
+
+  // Rewards
+  const money = rewards.reduce((a, r) => a + (r.money ?? 0), 0) + (fx?.bonusCoins ?? 0) + purityCoins;
+  addCoins(d, money);
+  const xp = rewards.reduce((a, r) => a + (r.experience ?? 0), 0) + (fx?.bonusExperience ?? 0);
+  addXp(d, xp);
+  const healing = rewards.reduce((a, r) => a + (r.healing ?? 0), 0) + (fx?.bonusHealing ?? 0);
+  heal(d, healing);
+  let hints = rewards.reduce((a, r) => a + (r.hint ?? 0), 0) + (fx?.bonusHints ?? 0);
+  if (d.features.has('coins') && money > 0 && !(fx && fx.bonusCoins > 0)) {
+    for (const bw of rollSeededBridges(d, 'onCoinGain')) {
+      if (bw.bridgeEffect?.effect === 'gainHint') hints += bw.bridgeEffect.amount ?? 1;
+    }
+  }
+  if (d.features.has('xp') && xp > 0 && !(fx && fx.bonusExperience > 0)) {
+    for (const bw of rollSeededBridges(d, 'onXPGain')) {
+      if (bw.bridgeEffect?.effect === 'gainCoin') addCoins(d, bw.bridgeEffect.amount ?? 1);
+    }
+  }
+  if (hints > 0 && d.features.has('hints')) {
+    d.stats = { ...d.stats, hints: Math.min(d.stats.maxHints, d.stats.hints + hints) };
+    emit(d, 'hint', hints);
+  }
+  if (fx?.bonusGraces && d.features.has('graces')) {
+    d.stats = { ...d.stats, graces: Math.min(d.stats.maxGraces, d.stats.graces + fx.bonusGraces) };
+  }
+  const connectedCount = rewards.filter(r => r.effectType === 'connected').length;
+  const linkTimeBonus = connectedCount > 0 ? connectedCount * (d.stats.echoTimeBonusPerLink || 0) : 0;
+  const arcanaTimeBonus = (rainbow ? rules.rainbowTimeBonus ?? 0 : 0) + (rules.setTimeBonus ?? 0);
+  const timeDelta = (fx?.bonusTime ?? 0) + (enemyResult.timeDelta ?? 0) + arcanaTimeBonus + linkTimeBonus;
+  if (d.timeLeft !== null && timeDelta !== 0) {
+    const cap = (d.level.rules.timer ?? 0) + d.stats.startingTime;
+    d.timeLeft = Math.max(0, Math.min(cap, d.timeLeft + timeDelta));
+  }
+  if (fx) {
+    if (fx.explosiveCards.length) s.weaponEffectsTriggered.add('explosion');
+    if (fx.laserCards.length) s.weaponEffectsTriggered.add('laser');
+    if (fx.ricochetCards.length) s.weaponEffectsTriggered.add('ricochet');
+    if (fx.fireCards.length) {
+      s.weaponEffectsTriggered.add('fire');
+      const ids = new Set(fx.fireCards.map(c => c.id));
+      const now = nowMs;
+      d.board = d.board.map(c => (ids.has(c.id) && !c.onFire ? { ...c, onFire: true, fireStartTime: now } : c));
+      emit(d, 'fire');
+    }
+  }
+
+  // Enemy board effects (no replacement)
+  if (enemyResult.cardsToFlip.length) {
+    const flip = new Set(enemyResult.cardsToFlip);
+    d.board = d.board.map(c => (flip.has(c.id) ? { ...c, isFaceDown: false, wasOriginallyFaceDown: true } : c));
+  }
+  if (enemyResult.cardsToRemove.length) {
+    const rm = new Set(enemyResult.cardsToRemove);
+    const matchedIds = new Set(cards.map(c => c.id));
+    d.board = d.board.filter(c => !rm.has(c.id) || matchedIds.has(c.id));
+    pruneConnections(d);
+    emit(d, 'card_removed');
+  }
+  if (fx?.boardGrowth) {
+    const extra = Math.min(fx.boardGrowth, MAX_BOARD - d.board.length);
+    const added: Card[] = [];
+    for (let i = 0; i < extra; i++) added.push(drawCard(d));
+    d.board = [...d.board, ...added];
+  }
+
+  // Connector weapons — chance to link two of the matched board positions for the wave
+  if (d.stats.connectionChance > 0 && d._rng.next() * 100 < d.stats.connectionChance) {
+    const matchedPositions = matched
+      .map(mc => d.board.findIndex(bc => bc.id === mc.id))
+      .filter(pos => pos >= 0);
+    const pair = selectPositionsToConnect(matchedPositions, d.connections);
+    if (pair) {
+      d.connections = [...d.connections, makeSeededConnection(pair[0], pair[1], d.elapsedMs)];
+      if (d.stats.bonusConnectionChance > 0 && d._rng.next() * 100 < d.stats.bonusConnectionChance) {
+        addSeededRandomConnections(d, 1);
+      }
+    }
+  }
+
+  // Resolve Evolution Catalyst if one of the 3 matched Set cards carried it
+  if (matchedCatalyst) {
+    d.board = d.board.map(c => (matchedIds.has(c.id) && c.hasEvolutionItem ? { ...c, hasEvolutionItem: false, evolutionReady: false } : c));
+    if (preMatchEvo?.ready) {
+      triggerEvolution(d, preMatchEvo.recipe, cards, nowMs);
+    } else {
+      loseCatalyst(d);
+    }
+  } else {
+    syncCatalystCardState(d);
+  }
+};
+
+// ─── Fighter abilities ──────────────────────────────────────────────────────
+
+/** What a fighter's ability does at each point the fight consults it. Tuning lives in data/abilities.ts. */
+interface AbilityRules {
+  /** Hearts just reached 0: return true to stay standing on 1 heart */
+  survivesKnockout?(d: Draft, a: AbilityState): boolean;
+  /** Extra damage for the Set being scored right now */
+  setBonusDamage?(d: Draft, a: AbilityState): number;
+  onMistake?(d: Draft, a: AbilityState): void;
+  /** Fire a fully charged active ability */
+  activate?(d: Draft, a: AbilityState): void;
+}
+
+const ABILITY_RULES: Record<AbilityId, AbilityRules> = {
+  nine_lives: {
+    survivesKnockout: (d, a) => {
+      if (a.spent) return false;
+      a.spent = true;
+      emit(d, 'nine_lives');
+      return true;
+    },
+  },
+  combo: {
+    setBonusDamage: (d, a) => {
+      const inWindow = d.matches > 0 && d.elapsedMs - d.lastMatchAtMs <= ABILITY_TUNING.comboWindowMs;
+      a.combo = inWindow ? Math.min(ABILITY_TUNING.comboMax, a.combo + 1) : 0;
+      if (a.combo > 0) emit(d, 'combo', a.combo);
+      return a.combo;
+    },
+    onMistake: (_d, a) => {
+      a.combo = 0;
+    },
+  },
+  grudge: {
+    setBonusDamage: (d, a) => {
+      if (a.grudge === 0) return 0;
+      const bonus = a.grudge * ABILITY_TUNING.grudgeDamage;
+      emit(d, 'grudge_release', bonus);
+      a.grudge = 0;
+      return bonus;
+    },
+    onMistake: (d, a) => {
+      if (a.grudge >= ABILITY_TUNING.grudgeMax) return;
+      a.grudge += 1;
+      emit(d, 'grudge', a.grudge);
+    },
+  },
+  deep_freeze: {
+    activate: (d, a) => {
+      a.frozenMs = ABILITY_TUNING.freezeMs;
+      emit(d, 'freeze');
+    },
+  },
+  zoomies: {
+    activate: d => {
+      // Armored cards stay; everything else, duds and hidden cards included, is re-dealt
+      const idx = d.board.map((c, i) => ((c.health ?? 1) > 1 ? -1 : i)).filter(i => i >= 0);
+      idx.forEach(i => d.deck.push(toDeckCard(d.board[i])));
+      d.deck = d._rng.shuffle(d.deck);
+      refill(d, idx, { skipFoeDrawEffects: true });
+      maybePlaceCatalyst(d, idx, CATALYST_DEAL_CHANCE);
+      syncCatalystCardState(d);
+      emit(d, 'redeal');
+    },
+  },
+  big_scoop: {
+    activate: (d, a) => {
+      const sets = allSets(d.board, d.attributes);
+      if (sets.length === 0) return;
+      const set = d._rng.pick(sets);
+      a.scooped = set.map(c => c.id);
+      emit(d, 'scoop');
+      // Still fully charged while this Set is scored, so the free Set doesn't recharge the meter
+      applyMatch(d, set, set.map(baseCardReward), undefined, Date.now());
+    },
+  },
+};
+
 // ─── Reducer ────────────────────────────────────────────────────────────────
 
 export const runReducer = (state: RunState, action: RunAction): RunState => {
@@ -701,203 +869,8 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
   switch (action.type) {
     case 'MATCH': {
       if (d.status !== 'playing') return state;
-      const matched = action.cards.slice(0, 3);
-      const graceUsed = action.rewards.some(r => r.effectType === 'grace');
-      const fx = action.effects;
-
-      // Snapshot Evolution readiness BEFORE this Set updates counters:
-      // matching on a Catalyst card before you are already ready shatters it!
-      const preMatchEvo = d.features.has('evolutions')
-        ? getActiveEvolutionStatus(d.weapons, d.evolvedRecipes, d, d.unlockedEvolutions)
-        : null;
-      const matchedIds = new Set(matched.map(c => c.id));
-      const matchedCatalyst =
-        d.features.has('evolutions') &&
-        d.board.some(c => matchedIds.has(c.id) && c.hasEvolutionItem);
-
-      // Enemy reaction first (time theft, extra removals, flips)
-      const enemyResult = d.foe.onValidMatch(matched, d.board);
-      const statMods = d.foe.getStatModifiers();
-      emitEnemyEvents(d, enemyResult.events);
-
-      // Attribute diversity, Escalating Purity & Arcana modifiers
-      const diffCount = !graceUsed ? countDifferentAttributes(matched, d.attributes) : 0;
-      const rainbow = d.features.has('rainbow') && !graceUsed && isRainbow(matched, d.attributes);
-      let purityDamage = 0;
-      let purityCoins = 0;
-      if (d.features.has('purity')) {
-        if (graceUsed || diffCount === 0) {
-          d.purityChain = 0;
-          d.lastDiffCount = 0;
-        } else if (d.purityChain === 0) {
-          d.purityChain = 1;
-          d.lastDiffCount = diffCount;
-        } else if (diffCount > d.lastDiffCount) {
-          d.purityChain += 1;
-          d.lastDiffCount = diffCount;
-          d.maxPurityChain = Math.max(d.maxPurityChain, d.purityChain);
-          d.purityChainsTriggered += 1;
-          if (d.purityChain >= 3) d.threeStepPuritiesTriggered += 1;
-          purityDamage = d.purityChain === 2 ? 1 : d.purityChain === 3 ? 3 : d.purityChain === 4 ? 5 : 8;
-          purityCoins = d.purityChain - 1;
-          const reachedMax = diffCount === d.attributes.length;
-          emit(d, reachedMax ? 'purity_max' : 'purity', d.purityChain, `Purity ×${d.purityChain}`);
-          if (reachedMax) {
-            // Completed the full diversity climb — reset cleanly so next Set starts a fresh climb!
-            d.purityChain = 0;
-            d.lastDiffCount = 0;
-          }
-        } else {
-          // Repeated or dropped diversity starts a new Step 1 baseline at this diversity
-          d.purityChain = 1;
-          d.lastDiffCount = diffCount;
-        }
-      }
-
-      let points = action.rewards.reduce((a, r) => a + (r.points ?? 0), 0);
-      if (d.activeArcana === 'prismatic_fever' && !rainbow) {
-        points = Math.max(1, points - 1);
-      }
-      if (d.activeArcana === 'monochrome_pact' && !graceUsed && diffCount === 1) {
-        points += 3;
-      }
-      const rainbowMult = rainbow
-        ? d.activeArcana === 'monochrome_pact'
-          ? 1
-          : d.activeArcana === 'prismatic_fever'
-            ? 3
-            : RAINBOW_MULTIPLIER
-        : 1;
-      const tempoMult = d.activeArcana === 'tempo_surge' ? 1.25 : 1;
-      const enemyMult = (enemyResult.pointsMultiplier || 1) * (statMods.pointsMultiplier || 1);
-      const dmg = (points + d.bonusDamagePerMatch + abilityBonusDamage(d)) * rainbowMult * tempoMult * enemyMult + purityDamage * enemyMult;
-      dealDamage(d, dmg);
-      emit(d, rainbow ? 'rainbow' : 'hit', Math.round(dmg));
-
-      chargeAbility(d);
-
-      // Bookkeeping & stats for defeat conditions
-      d.matches += 1;
-      if (d.movesLeft !== null) d.movesLeft -= 1;
-      const s = d.roundStats;
-      s.totalMatches += 1;
-      s.currentStreak += 1;
-      s.maxStreak = Math.max(s.maxStreak, s.currentStreak);
-      s.matchTimes.push(d.elapsedMs - d.lastMatchAtMs);
-      s.consecutiveInvalidMatches = 0;
-      d.lastMatchAtMs = d.elapsedMs;
-      for (const c of matched) {
-        s.shapesMatched.add(c.shape);
-        s.colorsMatched.add(c.color);
-        s.colorMatchCounts.set(c.color, (s.colorMatchCounts.get(c.color) ?? 0) + 1);
-      }
-      if (isRainbow(matched, d.attributes)) s.allDifferentMatches += 1;
-      if (matched.every(c => c.color === matched[0].color)) s.allSameColorMatches += 1;
-      if (matched.some(c => c.shape === 'squiggle')) s.squiggleMatches += 1;
-      s.faceDownCardsMatched += matched.filter(c => c.wasOriginallyFaceDown || c.isFaceDown).length;
-      s.bombsDefused += matched.filter(c => c.hasBomb).length;
-      s.countdownCardsMatched += matched.filter(c => c.hasCountdown).length;
-      if (graceUsed) {
-        d.stats = { ...d.stats, graces: Math.max(0, d.stats.graces - 1) };
-        s.gracesUsed += 1;
-        emit(d, 'grace');
-      }
-
-      // Rewards
-      const money = action.rewards.reduce((a, r) => a + (r.money ?? 0), 0) + (fx?.bonusCoins ?? 0) + purityCoins;
-      addCoins(d, money);
-      const xp = action.rewards.reduce((a, r) => a + (r.experience ?? 0), 0) + (fx?.bonusExperience ?? 0);
-      addXp(d, xp);
-      const healing = action.rewards.reduce((a, r) => a + (r.healing ?? 0), 0) + (fx?.bonusHealing ?? 0);
-      heal(d, healing);
-      let hints = action.rewards.reduce((a, r) => a + (r.hint ?? 0), 0) + (fx?.bonusHints ?? 0);
-      if (d.features.has('coins') && money > 0 && !(fx && fx.bonusCoins > 0)) {
-        for (const bw of rollSeededBridges(d, 'onCoinGain')) {
-          if (bw.bridgeEffect?.effect === 'gainHint') hints += bw.bridgeEffect.amount ?? 1;
-        }
-      }
-      if (d.features.has('xp') && xp > 0 && !(fx && fx.bonusExperience > 0)) {
-        for (const bw of rollSeededBridges(d, 'onXPGain')) {
-          if (bw.bridgeEffect?.effect === 'gainCoin') addCoins(d, bw.bridgeEffect.amount ?? 1);
-        }
-      }
-      if (hints > 0 && d.features.has('hints')) {
-        d.stats = { ...d.stats, hints: Math.min(d.stats.maxHints, d.stats.hints + hints) };
-        emit(d, 'hint', hints);
-      }
-      if (fx?.bonusGraces && d.features.has('graces')) {
-        d.stats = { ...d.stats, graces: Math.min(d.stats.maxGraces, d.stats.graces + fx.bonusGraces) };
-      }
-      const connectedCount = action.rewards.filter(r => r.effectType === 'connected').length;
-      const linkTimeBonus = connectedCount > 0 ? connectedCount * (d.stats.echoTimeBonusPerLink || 0) : 0;
-      const arcanaTimeBonus =
-        (d.activeArcana === 'prismatic_fever' && rainbow ? 4 : 0) +
-        (d.activeArcana === 'tempo_surge' ? 2 : 0);
-      const timeDelta = (fx?.bonusTime ?? 0) + (enemyResult.timeDelta ?? 0) + arcanaTimeBonus + linkTimeBonus;
-      if (d.timeLeft !== null && timeDelta !== 0) {
-        const cap = (d.level.rules.timer ?? 0) + d.stats.startingTime;
-        d.timeLeft = Math.max(0, Math.min(cap, d.timeLeft + timeDelta));
-      }
-      if (fx) {
-        if (fx.explosiveCards.length) s.weaponEffectsTriggered.add('explosion');
-        if (fx.laserCards.length) s.weaponEffectsTriggered.add('laser');
-        if (fx.ricochetCards.length) s.weaponEffectsTriggered.add('ricochet');
-        if (fx.fireCards.length) {
-          s.weaponEffectsTriggered.add('fire');
-          const ids = new Set(fx.fireCards.map(c => c.id));
-          const now = action.nowMs ?? Date.now();
-          d.board = d.board.map(c => (ids.has(c.id) && !c.onFire ? { ...c, onFire: true, fireStartTime: now } : c));
-          emit(d, 'fire');
-        }
-      }
-
-      // Enemy board effects (no replacement)
-      if (enemyResult.cardsToFlip.length) {
-        const flip = new Set(enemyResult.cardsToFlip);
-        d.board = d.board.map(c => (flip.has(c.id) ? { ...c, isFaceDown: false, wasOriginallyFaceDown: true } : c));
-      }
-      if (enemyResult.cardsToRemove.length) {
-        const rm = new Set(enemyResult.cardsToRemove);
-        const matchedIds = new Set(action.cards.map(c => c.id));
-        d.board = d.board.filter(c => !rm.has(c.id) || matchedIds.has(c.id));
-        pruneConnections(d);
-        emit(d, 'card_removed');
-      }
-      if (fx?.boardGrowth) {
-        const extra = Math.min(fx.boardGrowth, MAX_BOARD - d.board.length);
-        const added: Card[] = [];
-        for (let i = 0; i < extra; i++) added.push(drawCard(d));
-        d.board = [...d.board, ...added];
-      }
-
-      // Connector weapons — chance to link two of the matched board positions for the wave
-      if (d.stats.connectionChance > 0 && d._rng.next() * 100 < d.stats.connectionChance) {
-        const matchedPositions = matched
-          .map(mc => d.board.findIndex(bc => bc.id === mc.id))
-          .filter(pos => pos >= 0);
-        const pair = selectPositionsToConnect(matchedPositions, d.connections);
-        if (pair) {
-          d.connections = [...d.connections, makeSeededConnection(pair[0], pair[1], d.elapsedMs)];
-          if (d.stats.bonusConnectionChance > 0 && d._rng.next() * 100 < d.stats.bonusConnectionChance) {
-            addSeededRandomConnections(d, 1);
-          }
-        }
-      }
-
-      // Resolve Evolution Catalyst if one of the 3 matched Set cards carried it
-      if (matchedCatalyst) {
-        d.board = d.board.map(c => (matchedIds.has(c.id) && c.hasEvolutionItem ? { ...c, hasEvolutionItem: false, evolutionReady: false } : c));
-        if (preMatchEvo?.ready) {
-          triggerEvolution(d, preMatchEvo.recipe, action.cards, action.nowMs ?? Date.now());
-        } else {
-          loseCatalyst(d);
-        }
-      } else {
-        syncCatalystCardState(d);
-      }
-
-      resolve(d);
-      return finish(d);
+      applyMatch(d, action.cards, action.rewards, action.effects, action.nowMs ?? Date.now());
+      break;
     }
 
     case 'INVALID': {
@@ -910,13 +883,14 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       s.currentStreak = 0;
       s.consecutiveInvalidMatches += 1;
       const mods = d.foe.getStatModifiers();
-      if (d.activeArcana === 'controlled_burn' && d.arcanaBurnCooldownMs <= 0) {
-        d.arcanaBurnCooldownMs = 12000;
+      const mistakeBurn = arcanaRules(d.activeArcana).mistakeBurn;
+      if (mistakeBurn && d.arcanaBurnCooldownMs <= 0) {
+        d.arcanaBurnCooldownMs = mistakeBurn.cooldownMs;
         const pickedIds = new Set(action.cards.map(c => c.id));
         const candidates = d.board
-          .map((c, i) => (selectable(c) && !c.onFire && !pickedIds.has(c.id) ? i : -1))
+          .map((c, i) => (isSelectable(c) && !c.onFire && !pickedIds.has(c.id) ? i : -1))
           .filter(i => i >= 0);
-        const toIgnite = new Set(d._rng.shuffle(candidates).slice(0, 2));
+        const toIgnite = new Set(d._rng.shuffle(candidates).slice(0, mistakeBurn.cards));
         if (toIgnite.size > 0) {
           s.weaponEffectsTriggered.add('fire');
           d.board = d.board.map((c, i) => (toIgnite.has(i) ? { ...c, onFire: true, fireStartTime: Date.now() } : c));
@@ -926,11 +900,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
         hurt(d, Math.floor(1 * (mods.damageMultiplier || 1)));
       }
       emit(d, 'mistake');
-      if (d.ability?.id === 'combo') d.ability.combo = 0;
-      if (d.ability?.id === 'grudge' && d.ability.grudge < ABILITY_TUNING.grudgeMax) {
-        d.ability.grudge += 1;
-        emit(d, 'grudge', d.ability.grudge);
-      }
+      if (d.ability) ABILITY_RULES[d.ability.id].onMistake?.(d, d.ability);
       const pickedCatalystIds = new Set(action.cards.map(c => c.id));
       if (d.features.has('evolutions') && d.board.some(c => pickedCatalystIds.has(c.id) && c.hasEvolutionItem)) {
         d.board = d.board.map(c => (pickedCatalystIds.has(c.id) && c.hasEvolutionItem ? { ...c, hasEvolutionItem: false, evolutionReady: false } : c));
@@ -947,9 +917,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
         emit(d, 'card_removed');
       }
       emitEnemyEvents(d, res.events);
-      syncCatalystCardState(d);
-      resolve(d);
-      return finish(d);
+      break;
     }
 
     case 'REPLACE': {
@@ -969,9 +937,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       }
       refill(d, indices);
       maybePlaceCatalyst(d, indices, CATALYST_REFILL_CHANCE);
-      syncCatalystCardState(d);
-      syncStats(d);
-      return finish(d);
+      break;
     }
 
     case 'BURN': {
@@ -1005,15 +971,13 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       burnedPositions.forEach(p => d.deck.push(toDeckCard(d.board[p])));
       refill(d, burnedPositions);
       maybePlaceCatalyst(d, burnedPositions, CATALYST_REFILL_CHANCE);
-      syncCatalystCardState(d);
-      resolve(d);
-      return finish(d);
+      break;
     }
 
     case 'TICK': {
       if (d.status !== 'playing') return state;
       const mods = d.foe.getUIModifiers();
-      const speed = (mods.timerSpeedMultiplier || 1) * (d.activeArcana === 'tempo_surge' ? 1.2 : 1);
+      const speed = (mods.timerSpeedMultiplier || 1) * (arcanaRules(d.activeArcana).timerSpeedScale ?? 1);
       d.elapsedMs += action.ms;
       if (d.arcanaBurnCooldownMs > 0) {
         d.arcanaBurnCooldownMs = Math.max(0, d.arcanaBurnCooldownMs - action.ms);
@@ -1021,8 +985,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       // Emperor Penguin — Deep Freeze: clock and foe stand still
       if (d.ability && d.ability.frozenMs > 0) {
         d.ability.frozenMs = Math.max(0, d.ability.frozenMs - action.ms);
-        resolve(d);
-        return finish(d);
+        break;
       }
       if (d.timeLeft !== null) d.timeLeft = Math.max(0, d.timeLeft - (action.ms / 1000) * speed);
 
@@ -1053,41 +1016,28 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       if (tick.events.some(e => e.type === 'positions_shuffled')) d.board = d._rng.shuffle(d.board);
       // A shrinking or shifting board must never deadlock
       if (!hasAnySet(d.board, d.attributes) && d.board.length >= 3) {
-        const victims = d._rng.shuffle(d.board.map((_, i) => i).filter(i => selectable(d.board[i]) && (d.board[i].health ?? 1) <= 1)).slice(0, 3);
+        const victims = d._rng.shuffle(d.board.map((_, i) => i).filter(i => isSelectable(d.board[i]) && (d.board[i].health ?? 1) <= 1)).slice(0, 3);
         victims.forEach(i => d.deck.push(toDeckCard(d.board[i])));
         refill(d, victims);
         maybePlaceCatalyst(d, victims, CATALYST_REFILL_CHANCE);
       }
-      syncCatalystCardState(d);
-      resolve(d);
-      return finish(d);
+      break;
     }
 
     case 'USE_HINT': {
       d.stats = { ...d.stats, hints: Math.max(0, d.stats.hints - 1) };
       d.roundStats.hintsUsed += 1;
-      syncCatalystCardState(d);
-      syncStats(d);
-      return finish(d);
+      break;
     }
 
     case 'PICK': {
       if (d.status !== 'pick') return state;
       const w = action.weaponId ? d.pickOptions.find(x => x.id === action.weaponId) : undefined;
-      if (w) {
-        d.weapons = [...d.weapons, w];
-        d.stats = applyWeaponToStats(d.stats, w);
-        if (w.effects.maxHealth && d.hearts !== null && d.maxHearts !== null && d.activeArcana !== 'glass_prism') {
-          d.maxHearts += w.effects.maxHealth;
-          d.hearts += w.effects.health ?? 0;
-        }
-      }
+      if (w) acquireWeapon(d, w);
       d.pendingPicks = Math.max(0, d.pendingPicks - 1);
       d.pickOptions = [];
       d.status = 'playing';
-      syncCatalystCardState(d);
-      resolve(d);
-      return finish(d);
+      break;
     }
 
     case 'BUY': {
@@ -1095,15 +1045,9 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       const w = d.shopOptions[action.index];
       if (!w || d.coins < shopPrice(w)) return state;
       d.coins -= shopPrice(w);
-      d.weapons = [...d.weapons, w];
-      d.stats = applyWeaponToStats(d.stats, w);
-      if (w.effects.maxHealth && d.hearts !== null && d.maxHearts !== null && d.activeArcana !== 'glass_prism') {
-        d.maxHearts += w.effects.maxHealth;
-        d.hearts += w.effects.health ?? 0;
-      }
+      acquireWeapon(d, w);
       d.shopOptions = d.shopOptions.filter((_, i) => i !== action.index);
-      syncCatalystCardState(d);
-      return finish(d);
+      break;
     }
 
     case 'REROLL': {
@@ -1113,16 +1057,16 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       d.coins -= cost;
       d.rerolls += 1;
       d.shopOptions = rollPickOptions(d, 3);
-      return finish(d);
+      break;
     }
 
     case 'NEXT_WAVE': {
       if (d.status !== 'intermission') return state;
       d.foe.onRoundEnd();
-      if (d.activeArcana === 'overkill_harvest') heal(d, 1);
+      heal(d, arcanaRules(d.activeArcana).waveClearHeal ?? 0);
       d.wave += 1;
       const def = d.level.foes[d.wave];
-      const next = makeFoe(def);
+      const next = createFoe(def);
       const hp = scaledFoeHp(def.hp, d.activeArcana);
       d.foe = next.foe;
       d.foeName = next.name;
@@ -1139,44 +1083,21 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       startFoe(d);
       if (d.stats.startingConnections > 0) addSeededRandomConnections(d, d.stats.startingConnections);
       maybePlaceCatalyst(d, d.board.map((_, i) => i), CATALYST_DEAL_CHANCE);
-      syncCatalystCardState(d);
-      resolve(d);
-      return finish(d);
+      break;
     }
 
     case 'ABILITY': {
       const a = d.ability;
       if (d.status !== 'playing' || !a || a.max <= 0 || a.charge < a.max) return state;
+      ABILITY_RULES[a.id].activate?.(d, a);
       a.charge = 0;
-      if (a.id === 'deep_freeze') {
-        a.frozenMs = ABILITY_TUNING.freezeMs;
-        emit(d, 'freeze');
-        return finish(d);
-      }
-      if (a.id === 'zoomies') {
-        // Re-deal every card that isn't armored; duds and hidden cards are swept away
-        const idx = d.board.map((c, i) => ((c.health ?? 1) > 1 ? -1 : i)).filter(i => i >= 0);
-        idx.forEach(i => d.deck.push(toDeckCard(d.board[i])));
-        d.deck = d._rng.shuffle(d.deck);
-        refill(d, idx, true); // a clean board: the foe's draw effects don't apply
-        maybePlaceCatalyst(d, idx, CATALYST_DEAL_CHANCE);
-        syncCatalystCardState(d);
-        emit(d, 'redeal');
-        return finish(d);
-      }
-      if (a.id === 'big_scoop') {
-        const set = findSetOnBoard(d.board, d.attributes, d._rng);
-        if (!set) return finish(d);
-        a.scooped = set.map(c => c.id);
-        emit(d, 'scoop');
-        const rewards = set.map(c => ({ cardId: c.id, points: 1 + (c.bonusPoints ?? 0), money: 1 + (c.bonusMoney ?? 0), experience: 1 }));
-        const after = runReducer(finish(d), { type: 'MATCH', cards: set, rewards });
-        // the free Set doesn't recharge the meter it just spent
-        return after.ability ? { ...after, ability: { ...after.ability, charge: 0 } } : after;
-      }
-      return finish(d);
+      break;
     }
   }
+
+  syncCatalystCardState(d);
+  resolve(d);
+  return finish(d);
 };
 
 export const shopPrice = (w: Weapon): number => Math.round(w.price * 2);
@@ -1189,11 +1110,4 @@ export const computeStars = (s: RunState): number => {
   if (rule?.kind === 'accuracy') return s.mistakes <= rule.threeStarMax ? 3 : s.mistakes <= rule.twoStarMax ? 2 : 1;
   if (s.endReason === 'survived') return 1;
   return s.challengeMet ? 3 : 2;
-};
-
-/** Cards a selection would remove that are still selectable (for bots / hints). */
-const findSetOnBoard = (board: Card[], attrs: AttributeName[], rng?: Rng): Card[] | null => {
-  const sets = allSets(board, attrs);
-  if (sets.length === 0) return null;
-  return rng ? rng.pick(sets) : sets[0];
 };

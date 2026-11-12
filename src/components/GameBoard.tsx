@@ -14,10 +14,9 @@ import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import Card from './Card';
 import RewardReveal from './RewardReveal';
 import { COLORS } from '@/utils/colors';
-import { MATCH_REWARDS } from '@/utils/gameConfig';
-import { processWeaponEffects, WeaponEffectResult } from '@/utils/weaponEffects';
+import type { WeaponEffectResult } from '@/utils/weaponEffects';
 import { isValidCombination } from '@/utils/gameUtils';
-import { getLinkedDestructionPositions } from '@/utils/connectionUtils';
+import { findSet, resolveMatch } from '@/utils/matchResolution';
 import { useAutoHint } from '@/hooks/useAutoHint';
 import { useAutoPlayer } from '@/hooks/useAutoPlayer';
 import { useScreenShake } from '@/hooks/useScreenShake';
@@ -34,6 +33,9 @@ import {
   DefeatProgress,
 } from './enemy-ui';
 import type { EnemyReactionEvent } from '@/utils/enemyAnimations';
+
+/** How long a matched card's reward stays on screen before the card is replaced. */
+const REWARD_REVEAL_MS = 1500;
 
 // Default to 4 attributes for backward compatibility
 const DEFAULT_ATTRIBUTES: AttributeName[] = ['shape', 'color', 'number', 'shading'];
@@ -70,36 +72,6 @@ interface GameBoardProps {
   connections?: BoardConnection[]; // Active connections between board positions
   hideEnemyOverlay?: boolean; // Adventure mode renders its own foe HUD
 }
-
-// Calculate rewards for a single card
-const calculateCardReward = (card: CardType): CardReward => {
-  const reward: CardReward = {
-    cardId: card.id,
-    points: MATCH_REWARDS.basePoints,
-    money: MATCH_REWARDS.baseMoney,
-    experience: MATCH_REWARDS.baseExperience,
-  };
-
-  if (card.bonusPoints) {
-    reward.points = (reward.points || 0) + card.bonusPoints;
-  }
-  if (card.bonusMoney) {
-    reward.money = (reward.money || 0) + card.bonusMoney;
-  }
-  if (card.healing) {
-    reward.healing = 1;
-  }
-  if (card.lootBox) {
-    reward.lootBox = true;
-  }
-
-  // Chance to get a hint
-  if (Math.random() < MATCH_REWARDS.hintDropChance) {
-    reward.hint = 1;
-  }
-
-  return reward;
-};
 
 const GameBoard: React.FC<GameBoardProps> = ({
   cards,
@@ -312,20 +284,8 @@ const GameBoard: React.FC<GameBoardProps> = ({
     // Clear this card's reward after 1.5s (independent of other cards)
     setTimeout(() => {
       setRevealingRewards(prev => prev.filter(r => r.matchId !== burnMatchId));
-    }, 1500);
+    }, REWARD_REVEAL_MS);
   }, []);
-
-  // Check if three cards form a valid set using active attributes
-  const isValidSet = (cards: CardType[]): boolean => {
-    if (cards.length !== 3) return false;
-
-    return activeAttributes.every(attr => {
-      const values = cards.map(card => card[attr as keyof CardType]);
-      const allSame = values.every(v => v === values[0]);
-      const allDifferent = values.length === new Set(values).size;
-      return allSame || allDifferent;
-    });
-  };
 
   // Find a hint (a valid set on the board)
   // Excludes dud cards and face-down cards from hint calculation
@@ -344,20 +304,11 @@ const GameBoard: React.FC<GameBoardProps> = ({
       !card.isFaceDown
     );
 
-    for (let i = 0; i < availableCards.length - 2; i++) {
-      for (let j = i + 1; j < availableCards.length - 1; j++) {
-        for (let k = j + 1; k < availableCards.length; k++) {
-          const potentialSet = [availableCards[i], availableCards[j], availableCards[k]];
-          if (isValidSet(potentialSet)) {
-            setHintCards(potentialSet.map(c => c.id));
-            // Decrement hint count when successfully showing a hint
-            onUseHint?.();
-            return;
-          }
-        }
-      }
-    }
-  }, [cards, matchedCardIds, onUseHint, enemyUIModifiers.disableManualHint]);
+    const set = findSet(availableCards, activeAttributes);
+    if (!set) return;
+    setHintCards(set.map(c => c.id));
+    onUseHint?.();
+  }, [cards, matchedCardIds, onUseHint, enemyUIModifiers.disableManualHint, activeAttributes]);
 
   // Clear hint
   const clearHint = useCallback(() => {
@@ -388,32 +339,19 @@ const GameBoard: React.FC<GameBoardProps> = ({
       !card.isFaceDown
     );
 
-    for (let i = 0; i < availableCards.length - 2; i++) {
-      for (let j = i + 1; j < availableCards.length - 1; j++) {
-        for (let k = j + 1; k < availableCards.length; k++) {
-          const potentialSet = [availableCards[i], availableCards[j], availableCards[k]];
-          if (isValidSet(potentialSet)) {
-            // Determine how many cards to show (1 default, 2 with enhancedHintChance from Mystic Sight)
-            const enhancedHintChance = playerStats.enhancedHintChance || 0;
-            const showTwoCards = enhancedHintChance > 0 && Math.random() * 100 < enhancedHintChance;
-            const cardsToShow = showTwoCards ? 2 : 1;
+    const set = findSet(availableCards, activeAttributes);
+    if (!set) return false;
 
-            // Randomly select which card(s) to reveal from the valid set
-            const shuffled = [...potentialSet].sort(() => Math.random() - 0.5);
-            const hintCardIds = shuffled.slice(0, cardsToShow).map(c => c.id);
-
-            setHintCards(hintCardIds);
-            // Auto-clear after 1.5 seconds
-            setTimeout(() => {
-              setHintCards([]);
-            }, 1500);
-            return true;
-          }
-        }
-      }
-    }
-    return false;
-  }, [cards, matchedCardIds, playerStats.enhancedHintChance]);
+    // 1 card by default; Mystic Sight's enhancedHintChance can reveal 2
+    const enhancedHintChance = playerStats.enhancedHintChance || 0;
+    const showTwoCards = enhancedHintChance > 0 && Math.random() * 100 < enhancedHintChance;
+    const shuffled = [...set].sort(() => Math.random() - 0.5);
+    setHintCards(shuffled.slice(0, showTwoCards ? 2 : 1).map(c => c.id));
+    setTimeout(() => {
+      setHintCards([]);
+    }, REWARD_REVEAL_MS);
+    return true;
+  }, [cards, matchedCardIds, playerStats.enhancedHintChance, activeAttributes]);
 
   // Auto-hint - triggers after period of inactivity
   // Auto-hint disabled by enemy (e.g., Masked Bandit)
@@ -460,494 +398,71 @@ const GameBoard: React.FC<GameBoardProps> = ({
     // If we have 3 cards selected, check if they form a valid set
     if (newSelectedCards.length === 3) {
       setTimeout(() => {
-        if (isValidSet(newSelectedCards)) {
-          // Immediately notify parent that match started (for particle effects)
+        // A selection that is exactly one attribute off still counts if a grace can cover it
+        const validation = isValidCombination(newSelectedCards, activeAttributes);
+        const graceUsed = !validation.isValid && validation.invalidAttributes.length === 1 && playerStats.graces > 0;
+
+        if (validation.isValid || graceUsed) {
           onMatchStart?.();
-
-          // Trigger success flash, haptic, and sound
           triggerSuccessFlash();
-          triggerHaptic('success');
-          playSound('matchValid');
+          triggerHaptic(graceUsed ? 'warning' : 'success');
+          playSound(graceUsed ? 'graceUsed' : 'matchValid');
 
-          // Generate unique match ID for this match
           const matchId = ++matchCounterRef.current;
+          const { cards: affectedCards, rewards, weaponEffects, connectedCards } = resolveMatch({
+            board: cards,
+            selected: newSelectedCards,
+            playerStats,
+            weapons,
+            activeAttributes,
+            connections,
+            timeGainContext,
+            graceUsed,
+          });
 
-          // Calculate rewards for matched cards
-          const matchedRewards = newSelectedCards.map(c => calculateCardReward(c));
+          if (weaponEffects.timeGainTriggered) onTimeGainTriggered?.();
 
-          // Process weapon effects to get additional cards to destroy
-          // Pass weapons array for independent laser rolls, and activeAttributes for echo
-          const weaponEffects = processWeaponEffects(cards, newSelectedCards, playerStats, weapons, activeAttributes, false, timeGainContext);
-
-          // Track time gain trigger if it happened
-          if (weaponEffects.timeGainTriggered && onTimeGainTriggered) {
-            onTimeGainTriggered();
-          }
-
-          // Trigger screen shake, particles, and sound for explosions
           if (weaponEffects.explosiveCards.length > 0) {
             triggerShake(weaponEffects.explosiveCards.length);
             triggerExplosionParticles(weaponEffects.explosiveCards.length);
-            playSound('explosion');
           }
-
-          // Play laser sound
-          if (weaponEffects.laserCount > 0) {
-            playSound('laser');
+          // A grace save is announced by its own sound, so the weapon sounds stay quiet
+          if (!graceUsed) {
+            if (weaponEffects.explosiveCards.length > 0) playSound('explosion');
+            if (weaponEffects.laserCount > 0) playSound('laser');
+            if (weaponEffects.ricochetCards.length > 0) playSound('ricochet');
           }
+          if (connectedCards.length > 0) playSound('ricochet');
 
-          // Play ricochet sound
-          if (weaponEffects.ricochetCards.length > 0) {
-            playSound('ricochet');
-          }
-
-          // Create rewards for exploded cards
-          const explosionRewards: CardReward[] = weaponEffects.explosiveCards.map(c => ({
-            cardId: c.id,
-            points: 1,
-            money: 1,
-            effectType: 'explosion' as const,
-          }));
-
-          // Create rewards for laser-destroyed cards
-          const laserRewards: CardReward[] = weaponEffects.laserCards.map(c => ({
-            cardId: c.id,
-            points: 2,
-            money: 1,
-            effectType: 'laser' as const,
-          }));
-
-          // Create rewards for ricocheted cards
-          const ricochetRewards: CardReward[] = weaponEffects.ricochetCards.map(c => ({
-            cardId: c.id,
-            points: 1,
-            money: 1,
-            effectType: 'ricochet' as const,
-          }));
-
-          // Process connected cards (connector weapon system)
-          const connectedCards: CardType[] = [];
-          const connectedRewards: CardReward[] = [];
-          if (connections && connections.length > 0) {
-            // Get indices of all cards being destroyed so far
-            const destroyedIndices = new Set<number>();
-            [...newSelectedCards, ...weaponEffects.explosiveCards, ...weaponEffects.laserCards, ...weaponEffects.ricochetCards].forEach(card => {
-              const idx = cards.findIndex(c => c.id === card.id);
-              if (idx !== -1) destroyedIndices.add(idx);
-            });
-
-            // Find linked positions for all destroyed cards
-            const processedPositions = new Set<number>();
-            const linkedPositions: number[] = [];
-            for (const pos of destroyedIndices) {
-              if (!processedPositions.has(pos)) {
-                const chainedPositions = getLinkedDestructionPositions(
-                  connections,
-                  pos,
-                  processedPositions
-                );
-                linkedPositions.push(...chainedPositions);
-              }
-            }
-
-            // Get linked cards that aren't already being destroyed
-            linkedPositions
-              .filter(pos => pos >= 0 && pos < cards.length)
-              .filter(pos => !destroyedIndices.has(pos))
-              .forEach(pos => {
-                const card = cards[pos];
-                if (card && !connectedCards.some(c => c.id === card.id)) {
-                  connectedCards.push(card);
-                  connectedRewards.push({
-                    cardId: card.id,
-                    points: 1,
-                    money: 1,
-                    effectType: 'connected' as const,
-                  });
-                }
-              });
-
-            // Play sound if cards were linked
-            if (connectedCards.length > 0) {
-              playSound('ricochet'); // Reuse ricochet sound for now
-            }
-          }
-
-          // Process auto-matched sets from Echo Stone
-          const echoRewards: CardReward[] = [];
-          const echoCards: CardType[] = [];
-
-          // Track all cards already being processed to exclude from echo weapon effects
-          let allProcessedCards = [
-            ...newSelectedCards,
-            ...weaponEffects.explosiveCards,
-            ...weaponEffects.laserCards,
-            ...weaponEffects.ricochetCards,
-            ...connectedCards,
-          ];
-
-          for (const echoSet of weaponEffects.autoMatchedSets) {
-            // Add rewards for the echo-matched cards
-            echoSet.forEach(c => {
-              echoRewards.push({
-                cardId: c.id,
-                points: MATCH_REWARDS.basePoints + (c.bonusPoints || 0),
-                money: MATCH_REWARDS.baseMoney + (c.bonusMoney || 0),
-                experience: MATCH_REWARDS.baseExperience,
-              });
-              echoCards.push(c);
-            });
-
-            // Process weapon effects for the echo match (but with isEchoMatch=true to prevent infinite loops)
-            // Note: Echo matches don't pass timeGainContext - time gain tracking is handled by the parent match
-            const echoEffects = processWeaponEffects(
-              cards,
-              echoSet,
-              playerStats,
-              weapons,
-              activeAttributes,
-              true // isEchoMatch - prevents more echoes
-            );
-
-            // Add explosion rewards from echo
-            echoEffects.explosiveCards.forEach(c => {
-              if (!allProcessedCards.some(pc => pc.id === c.id)) {
-                echoRewards.push({ cardId: c.id, points: 1, money: 1, effectType: 'explosion' as const });
-                echoCards.push(c);
-                allProcessedCards.push(c);
-              }
-            });
-
-            // Add laser rewards from echo
-            echoEffects.laserCards.forEach(c => {
-              if (!allProcessedCards.some(pc => pc.id === c.id)) {
-                echoRewards.push({ cardId: c.id, points: 2, money: 1, effectType: 'laser' as const });
-                echoCards.push(c);
-                allProcessedCards.push(c);
-              }
-            });
-
-            // Add ricochet rewards from echo
-            echoEffects.ricochetCards.forEach(c => {
-              if (!allProcessedCards.some(pc => pc.id === c.id)) {
-                echoRewards.push({ cardId: c.id, points: 1, money: 1, effectType: 'ricochet' as const });
-                echoCards.push(c);
-                allProcessedCards.push(c);
-              }
-            });
-
-            // Accumulate bonus stats from echo effects
-            weaponEffects.bonusHealing += echoEffects.bonusHealing;
-            weaponEffects.bonusHints += echoEffects.bonusHints;
-            weaponEffects.bonusTime += echoEffects.bonusTime;
-            weaponEffects.bonusGraces += echoEffects.bonusGraces;
-            weaponEffects.bonusPoints += echoEffects.bonusPoints;
-            weaponEffects.bonusMoney += echoEffects.bonusMoney;
-            weaponEffects.boardGrowth += echoEffects.boardGrowth;
-            weaponEffects.notifications.push(...echoEffects.notifications);
-
-            // Mark the echo set as processed
-            allProcessedCards.push(...echoSet);
-          }
-
-          // Combine all rewards
-          const allRewards = [...matchedRewards, ...explosionRewards, ...laserRewards, ...ricochetRewards, ...connectedRewards, ...echoRewards];
-          const rewardsWithMatchId = allRewards.map(r => ({ ...r, matchId }));
-
-          // Collect all affected cards
-          const allAffectedCards = [
-            ...newSelectedCards,
-            ...weaponEffects.explosiveCards,
-            ...weaponEffects.laserCards,
-            ...weaponEffects.ricochetCards,
-            ...connectedCards,
-            ...echoCards,
-          ];
-
-          // Filter out multi-hit cards (health > 1) - they stay on board with decremented health
-          const cardsToRemove = allAffectedCards.filter(c => c.health === undefined || c.health <= 1);
-          const cardsToRemoveIds = cardsToRemove.map(c => c.id);
-
-          // Mark only removable cards as matched (multi-hit cards stay visible)
-          setMatchedCardIds(prev => [...prev, ...cardsToRemoveIds]);
+          // Multi-hit cards (health > 1) stay on the board with one less health
+          const removedIds = affectedCards.filter(c => c.health === undefined || c.health <= 1).map(c => c.id);
+          setMatchedCardIds(prev => [...prev, ...removedIds]);
           setSelectedCards(prev => prev.filter(c => !newSelectedCards.some(mc => mc.id === c.id)));
-          setRevealingRewards(prev => [...prev, ...rewardsWithMatchId]);
+          setRevealingRewards(prev => [...prev, ...rewards.map(r => ({ ...r, matchId }))]);
 
-          // Collect all cards to replace (matched + weapon effects + connected + echo)
-          const allCardsToReplace = [
-            ...newSelectedCards,
-            ...weaponEffects.explosiveCards,
-            ...weaponEffects.laserCards,
-            ...weaponEffects.ricochetCards,
-            ...connectedCards,
-            ...echoCards,
-          ];
-
-          // IMMEDIATELY notify parent of the match (score updates instantly)
-          // This ensures score is credited even if timer runs out during animation
+          const weaponsFired =
+            weaponEffects.explosiveCards.length > 0 || weaponEffects.laserCount > 0 || weaponEffects.ricochetCards.length > 0;
           enemyReactionSeq.current += 1;
-          setEnemyReaction({
-            type:
-              weaponEffects.explosiveCards.length > 0 ||
-              weaponEffects.laserCount > 0 ||
-              weaponEffects.ricochetCards.length > 0
-                ? 'crit_pain'
-                : 'pain',
-            id: enemyReactionSeq.current,
-          });
-          onMatch(allCardsToReplace, allRewards, weaponEffects);
+          setEnemyReaction({ type: weaponsFired ? 'crit_pain' : 'pain', id: enemyReactionSeq.current });
 
-          // After 1.5 seconds, clear this match's rewards (visual cleanup only)
+          // Tell the parent straight away, so the score counts even if the timer runs out mid-animation
+          onMatch(affectedCards, rewards, weaponEffects);
+
           setTimeout(() => {
             setRevealingRewards(prev => prev.filter(r => r.matchId !== matchId));
-          }, 1500);
+          }, REWARD_REVEAL_MS);
         } else {
-          // Invalid match - check if grace can save (ONLY when exactly 1 attribute is wrong)
-          const validationResult = isValidCombination(newSelectedCards, activeAttributes);
-          const invalidCount = validationResult.invalidAttributes.length;
-          const graceCanSave = invalidCount === 1 && playerStats.graces > 0;
+          triggerFailureFlash();
+          triggerHaptic('error');
+          playSound('matchInvalid');
 
-          if (graceCanSave) {
-            // Grace saves! (exactly 1 attribute wrong) - treat as valid match with full rewards
-            // Immediately notify parent that match started (for particle effects)
-            onMatchStart?.();
+          enemyReactionSeq.current += 1;
+          setEnemyReaction({ type: 'taunt', id: enemyReactionSeq.current });
+          onInvalidSelection(newSelectedCards);
 
-            // Trigger success flash (grace is still a success!) with warning haptic and sound
-            triggerSuccessFlash();
-            triggerHaptic('warning'); // Warning to indicate grace was used
-            playSound('graceUsed');
-
-            const matchId = ++matchCounterRef.current;
-
-            // Calculate full rewards for matched cards (same as valid match)
-            const matchedRewards = newSelectedCards.map(c => calculateCardReward(c));
-
-            // Process weapon effects (explosions, lasers, etc.)
-            const weaponEffects = processWeaponEffects(cards, newSelectedCards, playerStats, weapons, activeAttributes, false, timeGainContext, true);
-
-            // Track time gain trigger if it happened
-            if (weaponEffects.timeGainTriggered && onTimeGainTriggered) {
-              onTimeGainTriggered();
-            }
-
-            // Trigger screen shake and particles for explosions
-            if (weaponEffects.explosiveCards.length > 0) {
-              triggerShake(weaponEffects.explosiveCards.length);
-              triggerExplosionParticles(weaponEffects.explosiveCards.length);
-            }
-
-            // Create rewards for exploded cards
-            const explosionRewards: CardReward[] = weaponEffects.explosiveCards.map(c => ({
-              cardId: c.id,
-              points: 1,
-              money: 1,
-              effectType: 'explosion' as const,
-            }));
-
-            // Create rewards for laser-destroyed cards
-            const laserRewards: CardReward[] = weaponEffects.laserCards.map(c => ({
-              cardId: c.id,
-              points: 2,
-              money: 1,
-              effectType: 'laser' as const,
-            }));
-
-            // Create rewards for ricocheted cards
-            const ricochetRewards: CardReward[] = weaponEffects.ricochetCards.map(c => ({
-              cardId: c.id,
-              points: 1,
-              money: 1,
-              effectType: 'ricochet' as const,
-            }));
-
-            // Process connected cards (connector weapon system)
-            const connectedCards: CardType[] = [];
-            const connectedRewards: CardReward[] = [];
-            if (connections && connections.length > 0) {
-              // Get indices of all cards being destroyed so far
-              const destroyedIndices = new Set<number>();
-              [...newSelectedCards, ...weaponEffects.explosiveCards, ...weaponEffects.laserCards, ...weaponEffects.ricochetCards].forEach(card => {
-                const idx = cards.findIndex(c => c.id === card.id);
-                if (idx !== -1) destroyedIndices.add(idx);
-              });
-
-              // Find linked positions for all destroyed cards
-              const processedPositions = new Set<number>();
-              const linkedPositions: number[] = [];
-              for (const pos of destroyedIndices) {
-                if (!processedPositions.has(pos)) {
-                  const chainedPositions = getLinkedDestructionPositions(
-                    connections,
-                    pos,
-                    processedPositions
-                  );
-                  linkedPositions.push(...chainedPositions);
-                }
-              }
-
-              // Get linked cards that aren't already being destroyed
-              linkedPositions
-                .filter(pos => pos >= 0 && pos < cards.length)
-                .filter(pos => !destroyedIndices.has(pos))
-                .forEach(pos => {
-                  const card = cards[pos];
-                  if (card && !connectedCards.some(c => c.id === card.id)) {
-                    connectedCards.push(card);
-                    connectedRewards.push({
-                      cardId: card.id,
-                      points: 1,
-                      money: 1,
-                      effectType: 'connected' as const,
-                    });
-                  }
-                });
-
-              // Play sound if cards were linked
-              if (connectedCards.length > 0) {
-                playSound('ricochet'); // Reuse ricochet sound for now
-              }
-            }
-
-            // Process auto-matched sets from Echo Stone (grace matches can trigger echo too!)
-            const echoRewards: CardReward[] = [];
-            const echoCards: CardType[] = [];
-
-            let allProcessedCards = [
-              ...newSelectedCards,
-              ...weaponEffects.explosiveCards,
-              ...weaponEffects.laserCards,
-              ...weaponEffects.ricochetCards,
-              ...connectedCards,
-            ];
-
-            for (const echoSet of weaponEffects.autoMatchedSets) {
-              echoSet.forEach(c => {
-                echoRewards.push({
-                  cardId: c.id,
-                  points: MATCH_REWARDS.basePoints + (c.bonusPoints || 0),
-                  money: MATCH_REWARDS.baseMoney + (c.bonusMoney || 0),
-                  experience: MATCH_REWARDS.baseExperience,
-                });
-                echoCards.push(c);
-              });
-
-              // Note: Echo matches don't pass timeGainContext - time gain tracking is handled by parent match
-              const echoEffects = processWeaponEffects(
-                cards,
-                echoSet,
-                playerStats,
-                weapons,
-                activeAttributes,
-                true // isEchoMatch - prevents more echoes
-              );
-
-              echoEffects.explosiveCards.forEach(c => {
-                if (!allProcessedCards.some(pc => pc.id === c.id)) {
-                  echoRewards.push({ cardId: c.id, points: 1, money: 1, effectType: 'explosion' as const });
-                  echoCards.push(c);
-                  allProcessedCards.push(c);
-                }
-              });
-
-              echoEffects.laserCards.forEach(c => {
-                if (!allProcessedCards.some(pc => pc.id === c.id)) {
-                  echoRewards.push({ cardId: c.id, points: 2, money: 1, effectType: 'laser' as const });
-                  echoCards.push(c);
-                  allProcessedCards.push(c);
-                }
-              });
-
-              echoEffects.ricochetCards.forEach(c => {
-                if (!allProcessedCards.some(pc => pc.id === c.id)) {
-                  echoRewards.push({ cardId: c.id, points: 1, money: 1, effectType: 'ricochet' as const });
-                  echoCards.push(c);
-                  allProcessedCards.push(c);
-                }
-              });
-
-              weaponEffects.bonusHealing += echoEffects.bonusHealing;
-              weaponEffects.bonusHints += echoEffects.bonusHints;
-              weaponEffects.bonusTime += echoEffects.bonusTime;
-              weaponEffects.bonusGraces += echoEffects.bonusGraces;
-              weaponEffects.bonusPoints += echoEffects.bonusPoints;
-              weaponEffects.bonusMoney += echoEffects.bonusMoney;
-              weaponEffects.boardGrowth += echoEffects.boardGrowth;
-              weaponEffects.notifications.push(...echoEffects.notifications);
-
-              allProcessedCards.push(...echoSet);
-            }
-
-            // Mark the first matched reward as a grace so Game.tsx knows to decrement graces
-            if (matchedRewards.length > 0) {
-              matchedRewards[0].effectType = 'grace';
-            }
-
-            // Combine all rewards
-            const allRewards = [...matchedRewards, ...explosionRewards, ...laserRewards, ...ricochetRewards, ...connectedRewards, ...echoRewards];
-            const rewardsWithMatchId = allRewards.map(r => ({ ...r, matchId }));
-
-            // Collect all affected cards
-            const allAffectedCards = [
-              ...newSelectedCards,
-              ...weaponEffects.explosiveCards,
-              ...weaponEffects.laserCards,
-              ...weaponEffects.ricochetCards,
-              ...connectedCards,
-              ...echoCards,
-            ];
-
-            // Filter out multi-hit cards (health > 1) - they stay on board with decremented health
-            const cardsToRemove = allAffectedCards.filter(c => c.health === undefined || c.health <= 1);
-            const cardsToRemoveIds = cardsToRemove.map(c => c.id);
-
-            // Mark only removable cards as matched (multi-hit cards stay visible)
-            setMatchedCardIds(prev => [...prev, ...cardsToRemoveIds]);
+          setTimeout(() => {
             setSelectedCards(prev => prev.filter(c => !newSelectedCards.some(mc => mc.id === c.id)));
-            setRevealingRewards(prev => [...prev, ...rewardsWithMatchId]);
-
-            // Collect all cards to replace
-            const allCardsToReplace = [
-              ...newSelectedCards,
-              ...weaponEffects.explosiveCards,
-              ...weaponEffects.laserCards,
-              ...weaponEffects.ricochetCards,
-              ...connectedCards,
-              ...echoCards,
-            ];
-
-            // IMMEDIATELY notify parent of the grace match (score updates instantly)
-            // This ensures score is credited even if timer runs out during animation
-            enemyReactionSeq.current += 1;
-            setEnemyReaction({
-              type:
-                weaponEffects.explosiveCards.length > 0 ||
-                weaponEffects.laserCount > 0 ||
-                weaponEffects.ricochetCards.length > 0
-                  ? 'crit_pain'
-                  : 'pain',
-              id: enemyReactionSeq.current,
-            });
-            onMatch(allCardsToReplace, allRewards, weaponEffects);
-
-            // After 1.5 seconds, clear this match's rewards (visual cleanup only)
-            setTimeout(() => {
-              setRevealingRewards(prev => prev.filter(r => r.matchId !== matchId));
-            }, 1500);
-          } else {
-            // 2+ attributes wrong OR no graces - full invalid match (lose health)
-            // Trigger failure flash, shake, error haptic, and sound
-            triggerFailureFlash();
-            triggerHaptic('error');
-            playSound('matchInvalid');
-
-            enemyReactionSeq.current += 1;
-            setEnemyReaction({ type: 'taunt', id: enemyReactionSeq.current });
-            onInvalidSelection(newSelectedCards);
-
-            setTimeout(() => {
-              setSelectedCards(prev => prev.filter(c => !newSelectedCards.some(mc => mc.id === c.id)));
-            }, 500);
-          }
+          }, 500);
         }
       }, 200);
     }

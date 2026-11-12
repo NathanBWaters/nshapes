@@ -6,6 +6,7 @@
  */
 
 import type { RoundStats } from '@/types/enemy';
+import { ATTRIBUTE_VALUES } from '../../gameUtils';
 import { HintDisableEffect, WeaponCounterEffect, composeEffects } from '../../enemyEffects';
 
 /**
@@ -26,8 +27,7 @@ export function createCreepingShadow() {
     ],
     // Defeat condition: Match each color (red, green, purple) at least 3 times
     (stats: RoundStats) => {
-      const colors = ['red', 'green', 'purple'] as const;
-      return colors.every(color => (stats.colorMatchCounts.get(color) || 0) >= 3);
+      return ATTRIBUTE_VALUES.color.every(color => (stats.colorMatchCounts.get(color) || 0) >= 3);
     }
   );
 }

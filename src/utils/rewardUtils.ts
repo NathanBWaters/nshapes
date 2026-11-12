@@ -4,24 +4,9 @@
  * Utility functions for generating rewards, extracted to avoid circular dependencies.
  */
 
-import type { Weapon, WeaponRarity, CapIncreaseType, PlayerStats } from '@/types';
+import type { Weapon, WeaponRarity, PlayerStats } from '@/types';
+import { getMainStatForCap } from './gameConfig';
 import { getWeaponsByRarity, countCapIncreaseWeapons, calculateLikelihoodBonus, selectWeightedWeapon } from './gameDefinitions';
-
-// Mapping from CapIncreaseType to the corresponding PlayerStats key
-const CAP_TYPE_TO_STAT: Record<CapIncreaseType, keyof PlayerStats> = {
-  echo: 'echoChance',
-  laser: 'laserChance',
-  graceGain: 'graceGainChance',
-  explosion: 'explosionChance',
-  hint: 'hintGainChance',
-  timeGain: 'timeGainChance',
-  healing: 'healingChance',
-  fire: 'fireSpreadChance',
-  ricochet: 'ricochetChance',
-  boardGrowth: 'boardGrowthChance',
-  coinGain: 'coinGainChance',
-  xpGain: 'xpGainChance',
-};
 
 // Bonus money ranges by enemy tier (min, max)
 export const CHALLENGE_BONUS_MONEY: Record<1 | 2 | 3 | 4, [number, number]> = {
@@ -57,7 +42,7 @@ const isCapIncreaseUseful = (weapon: Weapon, playerStats?: PlayerStats): boolean
   if (!weapon.capIncrease) return true;
 
   // Check if player has at least 10% in the corresponding stat
-  const statKey = CAP_TYPE_TO_STAT[weapon.capIncrease.type];
+  const statKey = getMainStatForCap(weapon.capIncrease.type) as keyof PlayerStats;
   const statValue = playerStats[statKey] as number | undefined;
   return (statValue ?? 0) >= 10;
 };

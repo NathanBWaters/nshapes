@@ -7,12 +7,16 @@ import { WeaponAvatar } from '@/components/weapons';
 import { WeaponRarity } from '@/types';
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
 import {
+  ENEMY_AMBIENT_MOODS,
+  ENEMY_REACTION_TYPES,
   EnemyAmbientMood,
   EnemyReactionEvent,
   EnemyReactionType,
   getEnemyHealthState,
 } from '@/utils/enemyAnimations';
 import {
+  FIGHTER_AMBIENT_MOODS,
+  FIGHTER_REACTION_TYPES,
   FighterAmbientMood,
   FighterReactionEvent,
   FighterReactionType,
@@ -22,49 +26,38 @@ import { CHARACTERS, WEAPONS } from '@/utils/gameDefinitions';
 
 type StudioTab = 'fighters' | 'enemies' | 'weapons';
 
-const FIGHTER_MOODS: FighterAmbientMood[] = [
-  'idle',
-  'curious',
-  'anticipation',
-  'streak',
-  'urgent',
-  'sleepy',
-  'victory',
-  'defeat',
-];
+const FIGHTER_MOODS = FIGHTER_AMBIENT_MOODS;
 
-const FIGHTER_REACTIONS: { type: FighterReactionType; label: string }[] = [
-  { type: 'joy', label: 'Match Joy' },
-  { type: 'ecstatic', label: 'Mega / 3x Streak' },
-  { type: 'pain', label: 'Mistake Pain' },
-  { type: 'relief', label: 'Grace Phew!' },
-  { type: 'heal', label: 'Heal +♥' },
-  { type: 'powerup', label: 'Level Up!' },
-  { type: 'hint', label: 'Hint Aha!' },
-  { type: 'pet', label: 'Pet Blush' },
-  { type: 'dizzy_joy', label: '5x Zoomie!' },
-  { type: 'entrance', label: 'Salute' },
-];
+const FIGHTER_REACTION_LABELS: Record<FighterReactionType, string> = {
+  joy: 'Match Joy',
+  ecstatic: 'Mega / 3x Streak',
+  pain: 'Mistake Pain',
+  relief: 'Grace Phew!',
+  heal: 'Heal +♥',
+  powerup: 'Level Up!',
+  hint: 'Hint Aha!',
+  pet: 'Pet Blush',
+  dizzy_joy: '5x Zoomie!',
+  entrance: 'Salute',
+};
 
-const ENEMY_MOODS: EnemyAmbientMood[] = [
-  'idle',
-  'menacing',
-  'enraged',
-  'cornered',
-  'sleepy',
-  'victory',
-];
+const FIGHTER_REACTIONS = FIGHTER_REACTION_TYPES.map((type) => ({ type, label: FIGHTER_REACTION_LABELS[type] }));
 
-const ENEMY_REACTIONS: { type: EnemyReactionType; label: string }[] = [
-  { type: 'pain', label: 'Set Hit!' },
-  { type: 'crit_pain', label: 'Rainbow Crit!' },
-  { type: 'taunt', label: 'Mistake Gloat' },
-  { type: 'attack', label: 'Ability Attack!' },
-  { type: 'regen', label: 'Regen +HP' },
-  { type: 'poke', label: 'Tap Poke' },
-  { type: 'rage_spin', label: '5x Rage!' },
-  { type: 'entrance', label: 'Stomp In' },
-];
+// 'defeat' is reached through the 0/4 KO preset, not offered as a mood chip.
+const ENEMY_MOODS = ENEMY_AMBIENT_MOODS.filter((m) => m !== 'defeat');
+
+const ENEMY_REACTION_LABELS: Record<EnemyReactionType, string> = {
+  pain: 'Set Hit!',
+  crit_pain: 'Rainbow Crit!',
+  taunt: 'Mistake Gloat',
+  attack: 'Ability Attack!',
+  regen: 'Regen +HP',
+  poke: 'Tap Poke',
+  rage_spin: '5x Rage!',
+  entrance: 'Stomp In',
+};
+
+const ENEMY_REACTIONS = ENEMY_REACTION_TYPES.map((type) => ({ type, label: ENEMY_REACTION_LABELS[type] }));
 
 const HP_PRESETS: { label: string; health: number; maxHealth: number }[] = [
   { label: '4/4 Pristine', health: 4, maxHealth: 4 },

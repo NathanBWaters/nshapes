@@ -1,133 +1,21 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
-import Animated from 'react-native-reanimated';
-import { Svg, Circle, Ellipse, G, Line, Path, Polygon, Rect } from 'react-native-svg';
+import { Circle, Ellipse, G, Line, Path, Polygon, Rect } from 'react-native-svg';
+import { RigLayers } from '@/components/creatures/RigLayers';
+import { isBattleWorn, isMouthOpenExpression } from '@/components/creatures/expressions';
+import { STROKE } from '@/components/illustration/primitives';
 import { COLORS } from '@/utils/colors';
 import { EnemyEyes } from '../EnemyEyes';
 import { EnemyRigProps } from './types';
-
-const STROKE = COLORS.slateCharcoal;
-
-export const REPTILE_BUG_ENEMY_NAMES: readonly string[] = [
-  'Foggy Frog',
-  'Bramble Frog',
-  'Iron Shell',
-  'Ticking Viper',
-  'Venomous Cobra',
-  'Snake',
-  'Shifting Chameleon',
-  'Stinging Scorpion',
-  'Trap Weaver',
-  'Swarming Ants',
-  'Scout Ant',
-  'Soldier Ant',
-  'Queen Ant',
-];
-
-interface LayeredReptileBugSvgProps {
-  rigProps: EnemyRigProps;
-  tail: React.ReactNode;
-  leftAppendage: React.ReactNode;
-  rightAppendage: React.ReactNode;
-  body: React.ReactNode;
-  head: React.ReactNode;
-  paws: React.ReactNode;
-  /** Render left/right appendages in front of carapace body (e.g. Scorpion pincers) */
-  earsAfterBody?: boolean;
-}
-
-const LayeredReptileBugSvg: React.FC<LayeredReptileBugSvgProps> = ({
-  rigProps,
-  tail,
-  leftAppendage,
-  rightAppendage,
-  body,
-  head,
-  paws,
-  earsAfterBody = false,
-}) => {
-  const { tailStyle, leftEarStyle, rightEarStyle, headStyle, pawStyle } = rigProps;
-
-  const earLayers = (
-    <>
-      <Animated.View style={[StyleSheet.absoluteFill, leftEarStyle]}>
-        <Svg width="100%" height="100%" viewBox="0 0 100 100">
-          {leftAppendage}
-        </Svg>
-      </Animated.View>
-      <Animated.View style={[StyleSheet.absoluteFill, rightEarStyle]}>
-        <Svg width="100%" height="100%" viewBox="0 0 100 100">
-          {rightAppendage}
-        </Svg>
-      </Animated.View>
-    </>
-  );
-
-  return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {/* 1. Tail / Mist / Fuse / Stinger / Web-Bomb */}
-      <Animated.View style={[StyleSheet.absoluteFill, tailStyle]}>
-        <Svg width="100%" height="100%" viewBox="0 0 100 100">
-          {tail}
-        </Svg>
-      </Animated.View>
-
-      {/* 2a. Left & Right Appendages behind body (hoods, wings, antennae, spikes) */}
-      {!earsAfterBody && earLayers}
-
-      {/* 3. Static Body / Carapace / Iron Shell */}
-      <View style={StyleSheet.absoluteFill}>
-        <Svg width="100%" height="100%" viewBox="0 0 100 100">
-          {body}
-        </Svg>
-      </View>
-
-      {/* 2b. Left & Right Appendages in front of body (Scorpion pincers) */}
-      {earsAfterBody && earLayers}
-
-      {/* 4. Head, Eyes & Jaws/Fangs */}
-      <Animated.View style={[StyleSheet.absoluteFill, headStyle]}>
-        <Svg width="100%" height="100%" viewBox="0 0 100 100">
-          {head}
-        </Svg>
-      </Animated.View>
-
-      {/* 5. Front Feet / Claws / Snapping Mandibles */}
-      <Animated.View style={[StyleSheet.absoluteFill, pawStyle]}>
-        <Svg width="100%" height="100%" viewBox="0 0 100 100">
-          {paws}
-        </Svg>
-      </Animated.View>
-    </View>
-  );
-};
-
-function isMouthOpen(expression: EnemyRigProps['expression']): boolean {
-  return (
-    expression === 'enraged' ||
-    expression === 'wicked_glee' ||
-    expression === 'wince' ||
-    expression === 'startled'
-  );
-}
-
-function isBattleRuffled(healthState: EnemyRigProps['healthState']): boolean {
-  return (
-    healthState === 'battered' ||
-    healthState === 'critical' ||
-    healthState === 'knocked_out'
-  );
-}
 
 /**
  * Foggy Frog (slate-teal wreathed in swirling pale mist clouds)
  * & Bramble Frog (mossy green with thorny bramble leaves & berry crown)
  */
-const FrogRig: React.FC<EnemyRigProps> = (props) => {
-  const { enemyName, expression, healthState, gazeOffset } = props;
-  const isBramble = enemyName === 'Bramble Frog';
-  const isRuffled = isBattleRuffled(healthState);
-  const openMouth = isMouthOpen(expression);
+export const FrogRig: React.FC<EnemyRigProps<'bramble'>> = (props) => {
+  const { variant, expression, healthState, gazeOffset } = props;
+  const isBramble = variant === 'bramble';
+  const isRuffled = isBattleWorn(healthState);
+  const openMouth = isMouthOpenExpression(expression);
 
   const skinFill = isBramble ? '#4D7C0F' : '#0F766E';
   const skinSpot = isBramble ? '#BEF264' : '#115E59';
@@ -135,8 +23,8 @@ const FrogRig: React.FC<EnemyRigProps> = (props) => {
   const iris = isBramble ? '#F59E0B' : '#38BDF8';
 
   return (
-    <LayeredReptileBugSvg
-      rigProps={props}
+    <RigLayers
+      partStyles={props}
       tail={
         isBramble ? (
           <G>
@@ -174,7 +62,7 @@ const FrogRig: React.FC<EnemyRigProps> = (props) => {
           </G>
         )
       }
-      leftAppendage={
+      leftEar={
         isBramble ? (
           <G>
             {/* Left thorny bramble leaf */}
@@ -201,7 +89,7 @@ const FrogRig: React.FC<EnemyRigProps> = (props) => {
           />
         )
       }
-      rightAppendage={
+      rightEar={
         isBramble ? (
           <G>
             <Path
@@ -353,10 +241,10 @@ const FrogRig: React.FC<EnemyRigProps> = (props) => {
  * Iron Shell: armored snapping tortoise with a heavy riveted steel dome shell
  * (bolts, metal plates, glowing seam), sturdy clawed feet, and grumpy horned turtle head!
  */
-const IronShellRig: React.FC<EnemyRigProps> = (props) => {
+export const IronShellRig: React.FC<EnemyRigProps> = (props) => {
   const { expression, healthState, gazeOffset } = props;
-  const isRuffled = isBattleRuffled(healthState);
-  const openMouth = isMouthOpen(expression);
+  const isRuffled = isBattleWorn(healthState);
+  const openMouth = isMouthOpenExpression(expression);
 
   const STEEL_DARK = '#334155';
   const STEEL_MID = '#64748B';
@@ -365,8 +253,8 @@ const IronShellRig: React.FC<EnemyRigProps> = (props) => {
   const GLOW_SEAM = COLORS.impactOrange;
 
   return (
-    <LayeredReptileBugSvg
-      rigProps={props}
+    <RigLayers
+      partStyles={props}
       tail={
         <G>
           {/* Spiked iron tortoise tail + furnace puff */}
@@ -380,7 +268,7 @@ const IronShellRig: React.FC<EnemyRigProps> = (props) => {
           <Circle cx={90} cy={66} r={3.5} fill="#E2E8F0" opacity={0.75} />
         </G>
       }
-      leftAppendage={
+      leftEar={
         <Polygon
           points={isRuffled ? '29,39 16,27 21,35 18,38 25,45' : '29,39 15,26 24,45'}
           fill={STEEL_LIGHT}
@@ -389,7 +277,7 @@ const IronShellRig: React.FC<EnemyRigProps> = (props) => {
           strokeLinejoin="round"
         />
       }
-      rightAppendage={
+      rightEar={
         <Polygon
           points="71,39 85,26 76,45"
           fill={STEEL_LIGHT}
@@ -550,12 +438,12 @@ const IronShellRig: React.FC<EnemyRigProps> = (props) => {
  * Venomous Cobra (flared purple-and-gold king cobra hood + spectacle markings + neon-green venom),
  * & Snake (classic emerald-and-gold coiled serpent)
  */
-const SerpentRig: React.FC<EnemyRigProps> = (props) => {
-  const { enemyName, expression, healthState, gazeOffset } = props;
-  const isViper = enemyName === 'Ticking Viper';
-  const isCobra = enemyName === 'Venomous Cobra';
-  const isRuffled = isBattleRuffled(healthState);
-  const openMouth = isMouthOpen(expression);
+export const SerpentRig: React.FC<EnemyRigProps<'viper' | 'cobra'>> = (props) => {
+  const { variant, expression, healthState, gazeOffset } = props;
+  const isViper = variant === 'viper';
+  const isCobra = variant === 'cobra';
+  const isRuffled = isBattleWorn(healthState);
+  const openMouth = isMouthOpenExpression(expression);
 
   const scalePrimary = isCobra ? '#6B21A8' : isViper ? '#65A30D' : '#059669';
   const scaleDark = isCobra ? '#3B0764' : isViper ? '#365314' : '#064E3B';
@@ -563,8 +451,8 @@ const SerpentRig: React.FC<EnemyRigProps> = (props) => {
   const iris = isCobra ? '#84CC16' : isViper ? '#FACC15' : '#F59E0B';
 
   return (
-    <LayeredReptileBugSvg
-      rigProps={props}
+    <RigLayers
+      partStyles={props}
       tail={
         isViper ? (
           <G>
@@ -618,7 +506,7 @@ const SerpentRig: React.FC<EnemyRigProps> = (props) => {
           </G>
         )
       }
-      leftAppendage={
+      leftEar={
         isCobra ? (
           <G>
             {/* Wide flared purple-and-gold King Cobra left hood + spectacle marking */}
@@ -656,7 +544,7 @@ const SerpentRig: React.FC<EnemyRigProps> = (props) => {
           />
         )
       }
-      rightAppendage={
+      rightEar={
         isCobra ? (
           <G>
             <Path
@@ -819,10 +707,10 @@ const SerpentRig: React.FC<EnemyRigProps> = (props) => {
  * vibrant color-shifting rainbow body stripes (teal, magenta, gold),
  * gripping zygodactyl feet, and big swiveling turret eyes!
  */
-const ChameleonRig: React.FC<EnemyRigProps> = (props) => {
+export const ChameleonRig: React.FC<EnemyRigProps> = (props) => {
   const { expression, healthState, gazeOffset } = props;
-  const isRuffled = isBattleRuffled(healthState);
-  const openMouth = isMouthOpen(expression);
+  const isRuffled = isBattleWorn(healthState);
+  const openMouth = isMouthOpenExpression(expression);
 
   const CHAM_TEAL = '#14B8A6';
   const CHAM_MAGENTA = '#EC4899';
@@ -830,8 +718,8 @@ const ChameleonRig: React.FC<EnemyRigProps> = (props) => {
   const CHAM_VIOLET = '#8B5CF6';
 
   return (
-    <LayeredReptileBugSvg
-      rigProps={props}
+    <RigLayers
+      partStyles={props}
       tail={
         <G>
           {/* Tightly wound spiral curled chameleon tail */}
@@ -853,7 +741,7 @@ const ChameleonRig: React.FC<EnemyRigProps> = (props) => {
           <Circle cx={82} cy={46} r={1.8} fill={CHAM_MAGENTA} />
         </G>
       }
-      leftAppendage={
+      leftEar={
         <Polygon
           points={isRuffled ? '34,34 19,21 24,30 20,33 32,42' : '34,34 19,20 26,42'}
           fill={CHAM_MAGENTA}
@@ -862,7 +750,7 @@ const ChameleonRig: React.FC<EnemyRigProps> = (props) => {
           strokeLinejoin="round"
         />
       }
-      rightAppendage={
+      rightEar={
         <Polygon
           points="66,34 81,20 74,42"
           fill={CHAM_MAGENTA}
@@ -968,10 +856,10 @@ const ChameleonRig: React.FC<EnemyRigProps> = (props) => {
  * two big snapping pincer claws, and a high-arched segmented tail
  * tipped with a glowing toxic-green stinger!
  */
-const ScorpionRig: React.FC<EnemyRigProps> = (props) => {
+export const ScorpionRig: React.FC<EnemyRigProps> = (props) => {
   const { expression, healthState, gazeOffset } = props;
-  const isRuffled = isBattleRuffled(healthState);
-  const openMouth = isMouthOpen(expression);
+  const isRuffled = isBattleWorn(healthState);
+  const openMouth = isMouthOpenExpression(expression);
 
   const SCORP_CRIMSON = '#991B1B';
   const SCORP_DARK = '#450A0A';
@@ -979,9 +867,9 @@ const ScorpionRig: React.FC<EnemyRigProps> = (props) => {
   const TOXIC_GREEN = '#4ADE80';
 
   return (
-    <LayeredReptileBugSvg
-      rigProps={props}
-      earsAfterBody
+    <RigLayers
+      partStyles={props}
+      earsInFront
       tail={
         <G>
           {/* High-arched segmented scorpion metasoma tail (pivots at 56, 38) */}
@@ -1000,7 +888,7 @@ const ScorpionRig: React.FC<EnemyRigProps> = (props) => {
           <Circle cx={32.5} cy={33} r={2.1} fill="#A3E635" />
         </G>
       }
-      leftAppendage={
+      leftEar={
         <G>
           {/* Left big snapping pincer claw (pivots at 24, 58) */}
           <Path d="M 29 59 L 17 51" stroke={OBSIDIAN} strokeWidth={6} strokeLinecap="round" />
@@ -1017,7 +905,7 @@ const ScorpionRig: React.FC<EnemyRigProps> = (props) => {
           />
         </G>
       }
-      rightAppendage={
+      rightEar={
         <G>
           {/* Right big snapping pincer claw (pivots at 76, 58) */}
           <Path d="M 71 59 L 83 51" stroke={OBSIDIAN} strokeWidth={6} strokeLinecap="round" />
@@ -1114,18 +1002,18 @@ const ScorpionRig: React.FC<EnemyRigProps> = (props) => {
  * <EnemyEyes variant="spider" ... />, gleaming chelicerae fangs, spiny legs,
  * and a silk thread with a dangling lit bomb!
  */
-const TrapWeaverRig: React.FC<EnemyRigProps> = (props) => {
+export const TrapWeaverRig: React.FC<EnemyRigProps> = (props) => {
   const { expression, healthState, gazeOffset } = props;
-  const isRuffled = isBattleRuffled(healthState);
-  const openMouth = isMouthOpen(expression);
+  const isRuffled = isBattleWorn(healthState);
+  const openMouth = isMouthOpenExpression(expression);
 
   const SPIDER_VELVET = '#0F172A';
   const SPIDER_HIGHLIGHT = '#334155';
   const HOURGLASS_RED = '#EF4444';
 
   return (
-    <LayeredReptileBugSvg
-      rigProps={props}
+    <RigLayers
+      partStyles={props}
       tail={
         <G>
           {/* Silk thread with a dangling lit bomb! */}
@@ -1143,7 +1031,7 @@ const TrapWeaverRig: React.FC<EnemyRigProps> = (props) => {
           />
         </G>
       }
-      leftAppendage={
+      leftEar={
         <Path
           d={isRuffled ? 'M 35 38 L 22 24 L 18 32' : 'M 35 38 L 21 23 L 15 33'}
           stroke={SPIDER_VELVET}
@@ -1153,7 +1041,7 @@ const TrapWeaverRig: React.FC<EnemyRigProps> = (props) => {
           fill="none"
         />
       }
-      rightAppendage={
+      rightEar={
         <Path
           d="M 65 38 L 79 23 L 85 33"
           stroke={SPIDER_VELVET}
@@ -1253,14 +1141,14 @@ const TrapWeaverRig: React.FC<EnemyRigProps> = (props) => {
  * Soldier Ant (heavy steel legionnaire helmet + oversized jaws),
  * & Queen Ant (translucent royal wings + larger abdomen + golden crown)
  */
-const AntRig: React.FC<EnemyRigProps> = (props) => {
-  const { enemyName, expression, healthState, gazeOffset } = props;
-  const isScout = enemyName === 'Scout Ant';
-  const isSoldier = enemyName === 'Soldier Ant';
-  const isQueen = enemyName === 'Queen Ant';
-  const isSwarm = enemyName === 'Swarming Ants';
-  const isRuffled = isBattleRuffled(healthState);
-  const openJaws = isMouthOpen(expression);
+export const AntRig: React.FC<EnemyRigProps<'scout' | 'soldier' | 'queen' | 'swarm'>> = (props) => {
+  const { variant, expression, healthState, gazeOffset } = props;
+  const isScout = variant === 'scout';
+  const isSoldier = variant === 'soldier';
+  const isQueen = variant === 'queen';
+  const isSwarm = variant === 'swarm';
+  const isRuffled = isBattleWorn(healthState);
+  const openJaws = isMouthOpenExpression(expression);
 
   const chitinFill = isQueen
     ? '#6B21A8'
@@ -1285,8 +1173,8 @@ const AntRig: React.FC<EnemyRigProps> = (props) => {
         : '#F59E0B';
 
   return (
-    <LayeredReptileBugSvg
-      rigProps={props}
+    <RigLayers
+      partStyles={props}
       tail={
         <G>
           {/* Segmented ant gaster abdomen (larger royal gaster for Queen Ant!) */}
@@ -1348,7 +1236,7 @@ const AntRig: React.FC<EnemyRigProps> = (props) => {
           )}
         </G>
       }
-      leftAppendage={
+      leftEar={
         isQueen ? (
           /* Queen Ant's translucent royal left wing */
           <G opacity={0.88}>
@@ -1380,7 +1268,7 @@ const AntRig: React.FC<EnemyRigProps> = (props) => {
           </G>
         )
       }
-      rightAppendage={
+      rightEar={
         isQueen ? (
           <G opacity={0.88}>
             <Path
@@ -1621,30 +1509,4 @@ const AntRig: React.FC<EnemyRigProps> = (props) => {
       }
     />
   );
-};
-
-export const ReptileBugEnemyRig: React.FC<EnemyRigProps> = (props) => {
-  switch (props.enemyName) {
-    case 'Foggy Frog':
-    case 'Bramble Frog':
-      return <FrogRig {...props} />;
-    case 'Iron Shell':
-      return <IronShellRig {...props} />;
-    case 'Ticking Viper':
-    case 'Venomous Cobra':
-    case 'Snake':
-      return <SerpentRig {...props} />;
-    case 'Shifting Chameleon':
-      return <ChameleonRig {...props} />;
-    case 'Stinging Scorpion':
-      return <ScorpionRig {...props} />;
-    case 'Trap Weaver':
-      return <TrapWeaverRig {...props} />;
-    case 'Swarming Ants':
-    case 'Scout Ant':
-    case 'Soldier Ant':
-    case 'Queen Ant':
-    default:
-      return <AntRig {...props} />;
-  }
 };

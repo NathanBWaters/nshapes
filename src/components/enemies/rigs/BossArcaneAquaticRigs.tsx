@@ -1,131 +1,17 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
-import Animated from 'react-native-reanimated';
-import { Svg, Circle, Ellipse, G, Line, Path, Polygon, Rect } from 'react-native-svg';
+import { Circle, Ellipse, G, Line, Path, Polygon, Rect } from 'react-native-svg';
+import { RigLayers } from '@/components/creatures/RigLayers';
+import { isBattleWorn, isFierceExpression, isHurtExpression } from '@/components/creatures/expressions';
+import { STROKE } from '@/components/illustration/primitives';
 import { COLORS } from '@/utils/colors';
 import { EnemyEyes } from '../EnemyEyes';
 import { EnemyRigProps } from './types';
 
-const STROKE = COLORS.slateCharcoal;
-
-export const BOSS_ARCANE_AQUATIC_ENEMY_NAMES: readonly string[] = [
-  'Wet Crab',
-  'Lurking Shark',
-  'Jellyfish',
-  'Abyssal Octopus',
-  'Nightmare Squid',
-  'Goblin Saboteur',
-  'Wicked Imp',
-  'Creeping Shadow',
-  'One-Eyed Terror',
-  'Stone Sentinel',
-  'Ancient Dragon',
-  'The Hydra',
-  "Kraken's Grasp",
-  'The Reaper',
-  'World Eater',
-  'Sparring Foe',
-  'Dummy',
-] as const;
-
-interface RigLayerFrameProps {
-  headStyle?: EnemyRigProps['headStyle'];
-  leftEarStyle?: EnemyRigProps['leftEarStyle'];
-  rightEarStyle?: EnemyRigProps['rightEarStyle'];
-  tailStyle?: EnemyRigProps['tailStyle'];
-  pawStyle?: EnemyRigProps['pawStyle'];
-  earsBehindBody?: boolean;
-  tail: React.ReactNode;
-  body: React.ReactNode;
-  leftEar: React.ReactNode;
-  rightEar: React.ReactNode;
-  head: React.ReactNode;
-  paws: React.ReactNode;
-}
-
-const RigLayerFrame: React.FC<RigLayerFrameProps> = ({
-  headStyle,
-  leftEarStyle,
-  rightEarStyle,
-  tailStyle,
-  pawStyle,
-  earsBehindBody = false,
-  tail,
-  body,
-  leftEar,
-  rightEar,
-  head,
-  paws,
-}) => (
-  <View style={StyleSheet.absoluteFill} pointerEvents="none">
-    <Animated.View style={[StyleSheet.absoluteFill, tailStyle]}>
-      <Svg width="100%" height="100%" viewBox="0 0 100 100">
-        {tail}
-      </Svg>
-    </Animated.View>
-
-    {earsBehindBody && (
-      <>
-        <Animated.View style={[StyleSheet.absoluteFill, leftEarStyle]}>
-          <Svg width="100%" height="100%" viewBox="0 0 100 100">
-            {leftEar}
-          </Svg>
-        </Animated.View>
-        <Animated.View style={[StyleSheet.absoluteFill, rightEarStyle]}>
-          <Svg width="100%" height="100%" viewBox="0 0 100 100">
-            {rightEar}
-          </Svg>
-        </Animated.View>
-      </>
-    )}
-
-    <View style={StyleSheet.absoluteFill}>
-      <Svg width="100%" height="100%" viewBox="0 0 100 100">
-        {body}
-      </Svg>
-    </View>
-
-    {!earsBehindBody && (
-      <>
-        <Animated.View style={[StyleSheet.absoluteFill, leftEarStyle]}>
-          <Svg width="100%" height="100%" viewBox="0 0 100 100">
-            {leftEar}
-          </Svg>
-        </Animated.View>
-        <Animated.View style={[StyleSheet.absoluteFill, rightEarStyle]}>
-          <Svg width="100%" height="100%" viewBox="0 0 100 100">
-            {rightEar}
-          </Svg>
-        </Animated.View>
-      </>
-    )}
-
-    <Animated.View style={[StyleSheet.absoluteFill, headStyle]}>
-      <Svg width="100%" height="100%" viewBox="0 0 100 100">
-        {head}
-      </Svg>
-    </Animated.View>
-
-    <Animated.View style={[StyleSheet.absoluteFill, pawStyle]}>
-      <Svg width="100%" height="100%" viewBox="0 0 100 100">
-        {paws}
-      </Svg>
-    </Animated.View>
-  </View>
-);
-
-interface SubRigState {
-  expression: EnemyRigProps['expression'];
-  gazeOffset?: EnemyRigProps['gazeOffset'];
+type SubRigState = EnemyRigProps & {
   isRuffled: boolean;
   isHurt: boolean;
   isFierce: boolean;
-  headStyle?: EnemyRigProps['headStyle'];
-  leftEarStyle?: EnemyRigProps['leftEarStyle'];
-  rightEarStyle?: EnemyRigProps['rightEarStyle'];
-  tailStyle?: EnemyRigProps['tailStyle'];
-  pawStyle?: EnemyRigProps['pawStyle'];
-}
+};
 
 /* ============================================================================
  * 1. WET CRAB — Glossy coral-red reef crab, notched shell, big pincers, eyestalks & bubbles
@@ -139,12 +25,9 @@ const renderWetCrab = (s: SubRigState) => {
   const BUBBLE_SHINE = '#E0F2FE';
 
   return (
-    <RigLayerFrame
-      headStyle={s.headStyle}
-      leftEarStyle={s.leftEarStyle}
-      rightEarStyle={s.rightEarStyle}
-      tailStyle={s.tailStyle}
-      pawStyle={s.pawStyle}
+    <RigLayers
+      partStyles={s}
+      earsInFront
       tail={
         <G>
           <Circle cx={60} cy={27} r={5.4} fill={BUBBLE} stroke={STROKE} strokeWidth={2.5} />
@@ -340,13 +223,8 @@ const renderLurkingShark = (s: SubRigState) => {
   const FOAM = '#E0F2FE';
 
   return (
-    <RigLayerFrame
-      headStyle={s.headStyle}
-      leftEarStyle={s.leftEarStyle}
-      rightEarStyle={s.rightEarStyle}
-      tailStyle={s.tailStyle}
-      pawStyle={s.pawStyle}
-      earsBehindBody
+    <RigLayers
+      partStyles={s}
       tail={
         <G>
           {/* Tall iconic battle-nicked dorsal fin + rear caudal tail tip */}
@@ -515,12 +393,9 @@ const renderJellyfish = (s: SubRigState) => {
   const SKIRT = '#6D28D9';
 
   return (
-    <RigLayerFrame
-      headStyle={s.headStyle}
-      leftEarStyle={s.leftEarStyle}
-      rightEarStyle={s.rightEarStyle}
-      tailStyle={s.tailStyle}
-      pawStyle={s.pawStyle}
+    <RigLayers
+      partStyles={s}
+      earsInFront
       tail={
         <G>
           {/* Central undulating beaded stinging filaments */}
@@ -679,12 +554,9 @@ const renderAbyssalOctopus = (s: SubRigState) => {
   const SUCKER = '#F472B6';
 
   return (
-    <RigLayerFrame
-      headStyle={s.headStyle}
-      leftEarStyle={s.leftEarStyle}
-      rightEarStyle={s.rightEarStyle}
-      tailStyle={s.tailStyle}
-      pawStyle={s.pawStyle}
+    <RigLayers
+      partStyles={s}
+      earsInFront
       tail={
         <G>
           {/* Tentacles #7 & #8 curling behind */}
@@ -885,12 +757,9 @@ const renderNightmareSquid = (s: SubRigState) => {
   const HYPNO_GOLD = '#FACC15';
 
   return (
-    <RigLayerFrame
-      headStyle={s.headStyle}
-      leftEarStyle={s.leftEarStyle}
-      rightEarStyle={s.rightEarStyle}
-      tailStyle={s.tailStyle}
-      pawStyle={s.pawStyle}
+    <RigLayers
+      partStyles={s}
+      earsInFront
       tail={
         <G>
           {/* Rear writhing squid arms */}
@@ -1059,12 +928,9 @@ const renderGoblinSaboteur = (s: SubRigState) => {
   const DYNAMITE = '#EF4444';
 
   return (
-    <RigLayerFrame
-      headStyle={s.headStyle}
-      leftEarStyle={s.leftEarStyle}
-      rightEarStyle={s.rightEarStyle}
-      tailStyle={s.tailStyle}
-      pawStyle={s.pawStyle}
+    <RigLayers
+      partStyles={s}
+      earsInFront
       tail={
         <G>
           {/* Saboteur demolition pack & coiled fuse */}
@@ -1236,13 +1102,8 @@ const renderWickedImp = (s: SubRigState) => {
   const SILVER = '#E2E8F0';
 
   return (
-    <RigLayerFrame
-      headStyle={s.headStyle}
-      leftEarStyle={s.leftEarStyle}
-      rightEarStyle={s.rightEarStyle}
-      tailStyle={s.tailStyle}
-      pawStyle={s.pawStyle}
-      earsBehindBody
+    <RigLayers
+      partStyles={s}
       tail={
         <G>
           {/* Whipping devil tail + arrow-spade tip */}
@@ -1413,12 +1274,9 @@ const renderCreepingShadow = (s: SubRigState) => {
   const EYE_GOLD = '#FACC15';
 
   return (
-    <RigLayerFrame
-      headStyle={s.headStyle}
-      leftEarStyle={s.leftEarStyle}
-      rightEarStyle={s.rightEarStyle}
-      tailStyle={s.tailStyle}
-      pawStyle={s.pawStyle}
+    <RigLayers
+      partStyles={s}
+      earsInFront
       tail={
         <G>
           {/* Billowing smoky shadow tendrils at base */}
@@ -1547,12 +1405,9 @@ const renderOneEyedTerror = (s: SubRigState) => {
   const PELT = '#78350F';
 
   return (
-    <RigLayerFrame
-      headStyle={s.headStyle}
-      leftEarStyle={s.leftEarStyle}
-      rightEarStyle={s.rightEarStyle}
-      tailStyle={s.tailStyle}
-      pawStyle={s.pawStyle}
+    <RigLayers
+      partStyles={s}
+      earsInFront
       tail={
         <G>
           {/* Iron-spiked brute club slung behind shoulder */}
@@ -1694,12 +1549,9 @@ const renderStoneSentinel = (s: SubRigState) => {
   const RUNE_GLOW = '#CCFBF1';
 
   return (
-    <RigLayerFrame
-      headStyle={s.headStyle}
-      leftEarStyle={s.leftEarStyle}
-      rightEarStyle={s.rightEarStyle}
-      tailStyle={s.tailStyle}
-      pawStyle={s.pawStyle}
+    <RigLayers
+      partStyles={s}
+      earsInFront
       tail={
         <G>
           {/* Levitating arcane spire shards behind monolith */}
@@ -1829,13 +1681,8 @@ const renderAncientDragon = (s: SubRigState) => {
   const WING_GOLD = '#D97706';
 
   return (
-    <RigLayerFrame
-      headStyle={s.headStyle}
-      leftEarStyle={s.leftEarStyle}
-      rightEarStyle={s.rightEarStyle}
-      tailStyle={s.tailStyle}
-      pawStyle={s.pawStyle}
-      earsBehindBody
+    <RigLayers
+      partStyles={s}
       tail={
         <G>
           {/* Spiked crimson-and-gold dragon tail */}
@@ -2045,13 +1892,8 @@ const renderTheHydra = (s: SubRigState) => {
   const TONGUE = '#EF4444';
 
   return (
-    <RigLayerFrame
-      headStyle={s.headStyle}
-      leftEarStyle={s.leftEarStyle}
-      rightEarStyle={s.rightEarStyle}
-      tailStyle={s.tailStyle}
-      pawStyle={s.pawStyle}
-      earsBehindBody
+    <RigLayers
+      partStyles={s}
       tail={
         <G>
           {/* Whip-like scaled hydra tail */}
@@ -2230,12 +2072,9 @@ const renderKrakensGrasp = (s: SubRigState) => {
   const FOAM = '#E0F2FE';
 
   return (
-    <RigLayerFrame
-      headStyle={s.headStyle}
-      leftEarStyle={s.leftEarStyle}
-      rightEarStyle={s.rightEarStyle}
-      tailStyle={s.tailStyle}
-      pawStyle={s.pawStyle}
+    <RigLayers
+      partStyles={s}
+      earsInFront
       tail={
         <G>
           {/* Towering rear abyssal tentacles */}
@@ -2424,12 +2263,9 @@ const renderTheReaper = (s: SubRigState) => {
   const SILVER_EDGE = '#94A3B8';
 
   return (
-    <RigLayerFrame
-      headStyle={s.headStyle}
-      leftEarStyle={s.leftEarStyle}
-      rightEarStyle={s.rightEarStyle}
-      tailStyle={s.tailStyle}
-      pawStyle={s.pawStyle}
+    <RigLayers
+      partStyles={s}
+      earsInFront
       tail={
         <G>
           {/* Floating ghostly cloak wisps */}
@@ -2560,12 +2396,9 @@ const renderWorldEater = (s: SubRigState) => {
   const STAR_CORE = '#FEF08A';
 
   return (
-    <RigLayerFrame
-      headStyle={s.headStyle}
-      leftEarStyle={s.leftEarStyle}
-      rightEarStyle={s.rightEarStyle}
-      tailStyle={s.tailStyle}
-      pawStyle={s.pawStyle}
+    <RigLayers
+      partStyles={s}
+      earsInFront
       tail={
         <G>
           {/* Orbiting void-crystal shards & cosmic singularity ring */}
@@ -2686,13 +2519,8 @@ const renderTrainingDummy = (s: SubRigState) => {
   const TARGET_RED = '#EF4444';
 
   return (
-    <RigLayerFrame
-      headStyle={s.headStyle}
-      leftEarStyle={s.leftEarStyle}
-      rightEarStyle={s.rightEarStyle}
-      tailStyle={s.tailStyle}
-      pawStyle={s.pawStyle}
-      earsBehindBody
+    <RigLayers
+      partStyles={s}
       tail={
         <G>
           {/* Wooden timber post & horizontal crossbar */}
@@ -2803,12 +2631,9 @@ const renderMonsterCrestFallback = (s: SubRigState) => {
   const CREST_GOLD = '#F59E0B';
 
   return (
-    <RigLayerFrame
-      headStyle={s.headStyle}
-      leftEarStyle={s.leftEarStyle}
-      rightEarStyle={s.rightEarStyle}
-      tailStyle={s.tailStyle}
-      pawStyle={s.pawStyle}
+    <RigLayers
+      partStyles={s}
+      earsInFront
       tail={
         <Polygon
           points="50,10 84,24 78,68 50,92 22,68 16,24"
@@ -2880,71 +2705,31 @@ const renderMonsterCrestFallback = (s: SubRigState) => {
   );
 };
 
-export const BossArcaneAquaticEnemyRig: React.FC<EnemyRigProps> = ({
-  enemyName,
-  expression,
-  healthState,
-  gazeOffset,
-  headStyle,
-  leftEarStyle,
-  rightEarStyle,
-  tailStyle,
-  pawStyle,
-}) => {
-  const isRuffled =
-    healthState === 'battered' || healthState === 'critical' || healthState === 'knocked_out';
-  const isHurt = expression === 'wince' || expression === 'ko';
-  const isFierce = expression === 'enraged' || expression === 'wicked_glee';
+const bossRig =
+  (render: (s: SubRigState) => React.ReactElement): React.FC<EnemyRigProps> =>
+  (props) =>
+    render({
+      ...props,
+      isRuffled: isBattleWorn(props.healthState),
+      isHurt: isHurtExpression(props.expression),
+      isFierce: isFierceExpression(props.expression),
+    });
 
-  const state: SubRigState = {
-    expression,
-    gazeOffset,
-    isRuffled,
-    isHurt,
-    isFierce,
-    headStyle,
-    leftEarStyle,
-    rightEarStyle,
-    tailStyle,
-    pawStyle,
-  };
-
-  switch (enemyName) {
-    case 'Wet Crab':
-      return renderWetCrab(state);
-    case 'Lurking Shark':
-      return renderLurkingShark(state);
-    case 'Jellyfish':
-      return renderJellyfish(state);
-    case 'Abyssal Octopus':
-      return renderAbyssalOctopus(state);
-    case 'Nightmare Squid':
-      return renderNightmareSquid(state);
-    case 'Goblin Saboteur':
-      return renderGoblinSaboteur(state);
-    case 'Wicked Imp':
-      return renderWickedImp(state);
-    case 'Creeping Shadow':
-      return renderCreepingShadow(state);
-    case 'One-Eyed Terror':
-      return renderOneEyedTerror(state);
-    case 'Stone Sentinel':
-      return renderStoneSentinel(state);
-    case 'Ancient Dragon':
-      return renderAncientDragon(state);
-    case 'The Hydra':
-      return renderTheHydra(state);
-    case "Kraken's Grasp":
-      return renderKrakensGrasp(state);
-    case 'The Reaper':
-      return renderTheReaper(state);
-    case 'World Eater':
-      return renderWorldEater(state);
-    case 'Sparring Foe':
-    case 'Dummy':
-    case '':
-      return renderTrainingDummy(state);
-    default:
-      return renderMonsterCrestFallback(state);
-  }
-};
+export const WetCrabRig = bossRig(renderWetCrab);
+export const LurkingSharkRig = bossRig(renderLurkingShark);
+export const JellyfishRig = bossRig(renderJellyfish);
+export const AbyssalOctopusRig = bossRig(renderAbyssalOctopus);
+export const NightmareSquidRig = bossRig(renderNightmareSquid);
+export const GoblinSaboteurRig = bossRig(renderGoblinSaboteur);
+export const WickedImpRig = bossRig(renderWickedImp);
+export const CreepingShadowRig = bossRig(renderCreepingShadow);
+export const OneEyedTerrorRig = bossRig(renderOneEyedTerror);
+export const StoneSentinelRig = bossRig(renderStoneSentinel);
+export const AncientDragonRig = bossRig(renderAncientDragon);
+export const TheHydraRig = bossRig(renderTheHydra);
+export const KrakensGraspRig = bossRig(renderKrakensGrasp);
+export const TheReaperRig = bossRig(renderTheReaper);
+export const WorldEaterRig = bossRig(renderWorldEater);
+export const TrainingDummyRig = bossRig(renderTrainingDummy);
+/** Heraldic crest drawn for any enemy name with no bespoke rig. */
+export const MonsterCrestFallbackRig = bossRig(renderMonsterCrestFallback);

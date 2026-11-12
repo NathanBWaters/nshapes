@@ -1,20 +1,14 @@
 import { LEVELS, getLevel } from '@/adventure/data/levels';
 import { FIGHTERS, getLoadout } from '@/adventure/data/fighters';
 import { ARCANA, getArcana } from '@/adventure/data/arcana';
-import { BOUNTIES, BOUNTY_UNLOCK_LEVEL_ID } from '@/adventure/data/bounties';
+import { BOUNTIES } from '@/adventure/data/bounties';
+import { CAMPAIGN_FEATURES } from '@/adventure/data/features';
 import { EVOLUTION_RECIPES, findEvolvedWeapon, getActiveEvolutionStatus, getEvolutionRecipe } from '@/adventure/data/evolutions';
+import { MECHANICS } from '@/adventure/data/mechanics';
+import { buildAdaptiveEvolutionMechanic, buildComboDiscoveryPages } from '@/adventure/lessons';
+import { applyWeaponUpgradeTier, describeWeaponUpgradeBonus } from '@/adventure/data/upgrades';
 import {
-  COMBO_DISCOVERY_SEEN_ID,
-  MECHANICS,
-  buildAdaptiveEvolutionMechanic,
-  buildComboDiscoveryPages,
-} from '@/adventure/data/mechanics';
-import {
-  applyWeaponUpgradeTier,
-  describeWeaponUpgradeBonus,
-  getUnlockedUpgrades,
-} from '@/adventure/data/upgrades';
-import {
+  LESSON_KEYS,
   applyLevelResult,
   buyUpgrade,
   buyWeaponUpgrade,
@@ -23,9 +17,8 @@ import {
   createMaxedSave,
   createNewSave,
   equipArcana,
-  fighterLevel,
   fighterSpentCoins,
-  getFeaturesForLevel,
+  getUnlockedUpgrades,
   levelFighter,
   markMechanicSeen,
   reconcileUnlocks,
@@ -39,12 +32,16 @@ import {
   weaponUpgradeSpentCoins,
   weaponUpgradeTier,
 } from '@/adventure/progress';
-import { createRun, computeStars, countDifferentAttributes, runReducer } from '@/adventure/engine/run';
+import { fighterLevel, getFeaturesForLevel } from '@/adventure/loadout';
+import { createRun, computeStars, runReducer } from '@/adventure/engine/run';
+import { countDifferentAttributes } from '@/adventure/engine/sets';
 import { allSets } from '@/adventure/engine/sets';
 import { WEAPONS } from '@/utils/gameDefinitions';
 import { processWeaponEffects } from '@/utils/weaponEffects';
 import type { Card, CardReward } from '@/types';
 import type { AdventureSave, ArcanaId, RunState } from '@/adventure/types';
+
+const BOUNTY_UNLOCK_LEVEL_ID = CAMPAIGN_FEATURES.bounties.clearLevel!;
 
 const rewardsFor = (cards: Card[], grace = false): CardReward[] =>
   cards.map((c, idx) => ({
@@ -612,7 +609,7 @@ describe('Cross-Run Bounties', () => {
     save = r1.save;
 
     expect(save.bountiesUnlocked).toBe(true);
-    expect(r1.unlocks.some(u => u.kind === 'bounty_board')).toBe(true);
+    expect(r1.unlocks.some(u => u.kind === 'feature' && u.feature === 'bounties')).toBe(true);
     // 1-8 ★★★ also awards Monochrome Pact Arcana directly!
     expect(save.unlockedArcana).toContain('monochrome_pact');
     // Completed bounties granted coins + Armory weapon + Prismatic Fever Arcana
@@ -768,7 +765,7 @@ describe('World 1 Unlock Cadence & Order-Aware Combo Tutorials (1-5E vs 1-7)', (
     expect(fullText15E.toLowerCase()).not.toContain('clock');
     expect(fullText15E.toLowerCase()).not.toContain('timer');
 
-    save = markMechanicSeen(markMechanicSeen(save, 'elite'), COMBO_DISCOVERY_SEEN_ID);
+    save = markMechanicSeen(markMechanicSeen(save, 'elite'), LESSON_KEYS.comboDiscovery);
 
     // Beating 1-5E (★★) unlocks Solar Cataclysm as firstEvolution = true
     const rElite = applyLevelResult(save, getLevel('1-5E'), 2, 0);
@@ -813,7 +810,7 @@ describe('World 1 Unlock Cadence & Order-Aware Combo Tutorials (1-5E vs 1-7)', (
     expect(fullText17).toContain('Immortal Aegis');
     expect(fullText17).toContain('1-5E');
 
-    save = markMechanicSeen(markMechanicSeen(save, 'timer'), COMBO_DISCOVERY_SEEN_ID);
+    save = markMechanicSeen(markMechanicSeen(save, 'timer'), LESSON_KEYS.comboDiscovery);
 
     // Beating 1-7 (★★) unlocks Immortal Aegis as firstEvolution = true
     const r17 = applyLevelResult(save, getLevel('1-7'), 2, 0);

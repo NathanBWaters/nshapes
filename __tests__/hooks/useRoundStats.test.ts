@@ -5,7 +5,7 @@
  * The hook itself is a thin wrapper around useRef and useCallback.
  */
 
-import { createInitialRoundStats } from '@/hooks/useRoundStats';
+import { createInitialRoundStats } from '@/game/roundStats';
 import type { RoundStats } from '@/types/enemy';
 import type { Card } from '@/types';
 

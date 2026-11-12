@@ -1,5 +1,6 @@
 import { getLevel, LEVELS, MAIN_LEVELS } from '@/adventure/data/levels';
-import { createNewSave, applyLevelResult, getFeaturesForLevel, getLockReason, isLevelUnlocked, levelFighter, buyUpgrade, reconcileUnlocks, totalStars } from '@/adventure/progress';
+import { createNewSave, applyLevelResult, getLockReason, isLevelUnlocked, levelFighter, buyUpgrade, reconcileUnlocks, totalStars } from '@/adventure/progress';
+import { getFeaturesForLevel } from '@/adventure/loadout';
 import { createRun, runReducer, computeStars } from '@/adventure/engine/run';
 import { allSets, hasAnySet } from '@/adventure/engine/sets';
 import type { Card, CardReward } from '@/types';

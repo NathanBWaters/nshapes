@@ -141,18 +141,79 @@ export type ArcanaId =
   | 'catalyst_resonance'
   | 'tempo_surge';
 
+/**
+ * How an Arcana bends the rules of a fight. Every field is optional; a missing
+ * field means the standard rule applies. The engine reads only these numbers,
+ * and the card text in data/arcana.ts is written from the same numbers.
+ */
+export interface ArcanaRules {
+  foeHpScale?: number;
+  /** Replaces the starting Grace count */
+  startingGraces?: number;
+  maxHeartsDelta?: number;
+  /** Max Hearts are fixed at this value for the whole fight */
+  maxHeartsLock?: number;
+  /** On move-limited fights without a clock */
+  untimedMoves?: { delta: number; min: number };
+  /** Scales how often Power and Gold cards are dealt */
+  specialCardChanceScale?: number;
+  nonRainbowDamageDelta?: number;
+  /** Bonus damage for a Set with exactly one all-different trait */
+  singleTraitBonusDamage?: number;
+  rainbowMultiplier?: number;
+  damageScale?: number;
+  setTimeBonus?: number;
+  rainbowTimeBonus?: number;
+  timerSpeedScale?: number;
+  /** A wrong Set ignites cards instead of costing a heart, at most once per cooldown */
+  mistakeBurn?: { cooldownMs: number; cards: number };
+  overkillCoinsPerDamage?: number;
+  waveClearHeal?: number;
+  xpScale?: number;
+  pickOptions?: number;
+  catalystChanceScale?: number;
+  catalystRespawns?: number;
+  evolutionBurstBonus?: { damage: number; time: number };
+}
+
 export interface ArcanaDef {
   id: ArcanaId;
+  rules: ArcanaRules;
   numeral: string;
   name: string;
   icon: IconName;
   tagline: string;
   upside: string;
   tradeoff: string;
-  unlockHint: string;
 }
 
-export type UnlockableFeature = 'coins' | 'workshop';
+/** A campaign system that starts locked. Each one is described once in data/features.ts. */
+export type UnlockableFeature = 'coins' | 'workshop' | 'bounties';
+
+/** Where "open it now" leads after a feature's unlock reveal */
+export type FeatureDestination = { screen: 'camp'; tab: 'workshop' } | { screen: 'bounties' };
+
+export interface CampaignFeatureDef {
+  id: UnlockableFeature;
+  /** The AdventureSave boolean this feature sets (persisted, so the names are fixed) */
+  saveFlag: 'coinsUnlocked' | 'workshopUnlocked' | 'bountiesUnlocked';
+  /** Mechanic that explains it (icon, "How it works" text, Field Guide entry) */
+  mechanic: string;
+  name: string;
+  /** Shown in place of the name while a reward is still secret */
+  secret: string;
+  headline: string;
+  tease: string;
+  badge: string;
+  accent?: string;
+  /**
+   * Unlocked by the first star on this level instead of by a star reward. Its
+   * reveal plays after that result's star rewards and it is not listed among them.
+   */
+  clearLevel?: string;
+  /** Offered as the last step of the unlock reveal */
+  open?: { label: string; destination: FeatureDestination };
+}
 
 /**
  * Every star pays coins (shown up front). Some stars ALSO unlock a weapon,
@@ -167,7 +228,7 @@ export interface RewardDef {
   arcana?: ArcanaId;
   /** Weapon Evolution recipe id unlocked for the Recipe Guide & Hidden Catalysts */
   evolution?: string;
-  /** Campaign system unlocked by this star (e.g. 'coins' on 1-1, 'workshop' on 1-4) */
+  /** Campaign system unlocked by this star */
   unlockFeature?: UnlockableFeature;
 }
 
@@ -238,8 +299,8 @@ export interface UpgradeDef {
   description: (tier: number) => string;
   costs: number[];       // cost for tier 1..N
   apply: (stats: PlayerStats, tier: number, ctx: { timed: boolean }) => PlayerStats;
-  /** Only show & allow buying once the player has unlocked this mechanic */
-  isUnlocked: (save: AdventureSave) => boolean;
+  /** The mechanic this improves. Shown and sold once the player has met that mechanic. */
+  mechanic: string;
   /** Bonus damage per match etc. that is not a PlayerStats field */
   bonusDamage?: (tier: number) => number;
   coinBonusPercent?: (tier: number) => number;
@@ -285,8 +346,10 @@ export interface AdventureSave {
   armory: string[];                  // unlocked weapon ids
   upgrades: Record<string, number>;  // mechanic upgrade id -> tier
   weaponUpgrades: Record<string, number>; // armory weapon id -> tier (1..3)
-  coinsUnlocked: boolean;            // unlocked in 1-1 (enables Coin Drops & Golden Cards)
-  workshopUnlocked: boolean;         // unlocked in 1-4 (enables Workshop mechanic & weapon upgrades)
+  /** Campaign systems unlocked so far, one flag per entry of data/features.ts */
+  coinsUnlocked: boolean;
+  workshopUnlocked: boolean;
+  /** Lessons already played and in-fight tips already accepted; keys are built by LESSON_KEYS / COACH_KEYS in progress.ts */
   seenMechanics: string[];
   seenCoachMarks: string[];
   selectedFighter: CharacterName;
@@ -295,8 +358,8 @@ export interface AdventureSave {
   /** Unlocked Arcana tarot modifiers & currently active wildcard (null = standard rules) */
   unlockedArcana: ArcanaId[];
   activeArcana: ArcanaId | null;
-  /** Cross-run Bounty Board unlock state, completed ids & lifetime counters */
   bountiesUnlocked: boolean;
+  /** Completed bounty ids & lifetime counters */
   completedBounties: string[];
   bountyStats: BountyStats;
   /** Weapon Combo (Evolution) recipe ids unlocked via level/bounty rewards */
@@ -325,8 +388,10 @@ export type RunEventType =
   | 'purity' | 'purity_max' | 'catalyst_spawn' | 'catalyst_ready' | 'catalyst_lost' | 'catalyst_saved'
   | 'evolution' | 'arcana_burn' | 'overkill';
 
+export type AbilityId = 'nine_lives' | 'combo' | 'grudge' | 'deep_freeze' | 'zoomies' | 'big_scoop';
+
 export interface AbilityState {
-  id: import('./data/abilities').AbilityId;
+  id: AbilityId;
   /** active abilities: Sets banked toward the next use */
   charge: number;
   max: number;

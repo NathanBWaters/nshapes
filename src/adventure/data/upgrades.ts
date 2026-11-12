@@ -1,10 +1,9 @@
 /**
  * Permanent Camp Workshop upgrades — both Mechanic Upgrades and Armory Weapon
- * Upgrades. Only mechanics and Armory items the player has actually unlocked
- * are shown or purchasable, and the Workshop itself is an unlockable feature.
+ * Upgrades. Which of them a player may buy is decided in progress.ts.
  */
 import type { Weapon, WeaponRarity } from '@/types';
-import type { AdventureSave, UpgradeDef } from '../types';
+import type { UpgradeDef } from '../types';
 
 export const UPGRADES: UpgradeDef[] = [
   {
@@ -15,7 +14,7 @@ export const UPGRADES: UpgradeDef[] = [
     costs: [300, 900, 2200],
     apply: s => s,
     bonusDamage: t => t,
-    isUnlocked: s => (s.stars['1-1'] ?? 0) >= 1 || s.seenMechanics.includes('set_rule') || (s.upgrades.heavy_hitter ?? 0) > 0,
+    mechanic: 'set_rule',
   },
   {
     id: 'tough_hide',
@@ -24,7 +23,7 @@ export const UPGRADES: UpgradeDef[] = [
     description: t => `+${t} max heart${t === 1 ? '' : 's'} in every fight`,
     costs: [250, 750, 1800],
     apply: (s, t) => ({ ...s, maxHealth: s.maxHealth + t, health: s.health + t }),
-    isUnlocked: s => (s.stars['1-2'] ?? 0) >= 1 || s.seenMechanics.includes('hearts') || (s.upgrades.tough_hide ?? 0) > 0,
+    mechanic: 'hearts',
   },
   {
     id: 'lucky_purse',
@@ -34,7 +33,7 @@ export const UPGRADES: UpgradeDef[] = [
     costs: [150, 400, 900, 1600, 2600],
     apply: s => s,
     coinBonusPercent: t => t * 10,
-    isUnlocked: s => s.coinsUnlocked || s.seenMechanics.includes('coins') || (s.upgrades.lucky_purse ?? 0) > 0,
+    mechanic: 'coins',
   },
   {
     id: 'hourglass',
@@ -43,7 +42,7 @@ export const UPGRADES: UpgradeDef[] = [
     description: t => `+${t * 8}s on timed levels`,
     costs: [200, 600, 1500],
     apply: (s, t, ctx) => (ctx.timed ? { ...s, startingTime: s.startingTime + t * 8 } : s),
-    isUnlocked: s => (s.stars['1-7'] ?? 0) >= 1 || s.seenMechanics.includes('timer') || (s.upgrades.hourglass ?? 0) > 0,
+    mechanic: 'timer',
   },
   {
     id: 'sharp_eyes',
@@ -52,7 +51,7 @@ export const UPGRADES: UpgradeDef[] = [
     description: t => `+${t} starting hint${t === 1 ? '' : 's'}`,
     costs: [200, 600, 1400],
     apply: (s, t) => ({ ...s, hints: s.hints + t, maxHints: s.maxHints + t }),
-    isUnlocked: s => (s.stars['2-1'] ?? 0) >= 1 || s.seenMechanics.includes('hints') || (s.upgrades.sharp_eyes ?? 0) > 0,
+    mechanic: 'hints',
   },
   {
     id: 'second_wind',
@@ -61,7 +60,7 @@ export const UPGRADES: UpgradeDef[] = [
     description: t => `+${t} starting grace${t === 1 ? '' : 's'}`,
     costs: [250, 700, 1600],
     apply: (s, t) => ({ ...s, graces: s.graces + t }),
-    isUnlocked: s => (s.stars['2-4'] ?? 0) >= 1 || s.seenMechanics.includes('graces') || (s.upgrades.second_wind ?? 0) > 0,
+    mechanic: 'graces',
   },
 ];
 
@@ -198,6 +197,3 @@ export const describeWeaponUpgradeBonus = (weapon: Weapon, tier: number): string
   }
   return parts.join(' · ') || `+${t * 5}% potency`;
 };
-
-export const getUnlockedUpgrades = (save: AdventureSave): UpgradeDef[] =>
-  UPGRADES.filter(u => u.isUnlocked(save));

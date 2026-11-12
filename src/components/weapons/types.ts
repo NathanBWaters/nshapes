@@ -1,3 +1,4 @@
+import React from 'react';
 import { WeaponRarity } from '@/types';
 import { COLORS } from '@/utils/colors';
 
@@ -61,4 +62,11 @@ export function getRarityTrimPalette(rarity: WeaponRarity = 'common'): RarityTri
         glow: '#BAE6FD',
       };
   }
+}
+
+/** How one named weapon is drawn and how it moves when tapped. */
+export interface WeaponRelic {
+  tapStyle: WeaponTapStyle;
+  /** Draws the relic, tinting its trim to the weapon's rarity */
+  art: (trim: RarityTrimPalette) => React.ReactElement;
 }

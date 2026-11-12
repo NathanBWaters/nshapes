@@ -3,12 +3,13 @@ import {
   EnemyAmbientMood,
   EnemyReactionEvent,
   EnemyReactionType,
-  getEnemyPersonality,
   resolveEnemyAmbientMood,
 } from '@/utils/enemyAnimations';
+import { isNaturallySleepyEnemy } from '@/components/enemies/enemyRegistry';
 
 interface UseEnemyConductorOptions {
   enemyName?: string | null;
+  /** Accepted for callers that pass it; mood does not depend on tier. */
   tier?: number;
   hp?: number;
   maxHp?: number;
@@ -35,7 +36,6 @@ interface EnemyConductorState {
 export function useEnemyConductor(options: UseEnemyConductorOptions): EnemyConductorState {
   const {
     enemyName,
-    tier,
     hp,
     maxHp = 100,
     isBoss = false,
@@ -46,10 +46,7 @@ export function useEnemyConductor(options: UseEnemyConductorOptions): EnemyCondu
   const [reaction, setReaction] = useState<EnemyReactionEvent | null>(null);
   const reactionCounterRef = useRef(0);
 
-  const personality = useMemo(
-    () => getEnemyPersonality(enemyName, tier),
-    [enemyName, tier]
-  );
+  const naturallySleepy = isNaturallySleepyEnemy(enemyName);
 
   const emitReaction = useCallback((type: EnemyReactionType) => {
     reactionCounterRef.current += 1;
@@ -87,9 +84,9 @@ export function useEnemyConductor(options: UseEnemyConductorOptions): EnemyCondu
         isBoss,
         inactivityRatio,
         isActiveCombat,
-        naturallySleepy: personality.naturallySleepy,
+        naturallySleepy,
       }),
-    [hp, maxHp, isBoss, inactivityRatio, isActiveCombat, personality.naturallySleepy]
+    [hp, maxHp, isBoss, inactivityRatio, isActiveCombat, naturallySleepy]
   );
 
   return {

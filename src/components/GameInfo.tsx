@@ -3,10 +3,11 @@ import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'r
 import { CopilotStep, walkthroughable } from 'react-native-copilot';
 import { Character, PlayerStats, Weapon } from '@/types';
 import CircularTimer from './CircularTimer';
-import GameMenu, { DevModeCallbacks } from './GameMenu';
+import GameMenu, { CopilotControl, DevModeCallbacks } from './GameMenu';
 import { FighterAvatar } from './fighters';
 import { FighterAmbientMood, FighterReactionEvent } from '@/utils/fighterAnimations';
 import { COLORS, RADIUS } from '@/utils/colors';
+import { getAdjustedXPForLevel } from '@/utils/gameConfig';
 
 const WalkthroughableView = walkthroughable(View);
 
@@ -132,20 +133,13 @@ interface GameInfoProps {
   onExitGame?: () => void;
   onEndRoundEarly?: () => void;  // Callback when player ends round early (only available when target met)
   canEndRoundEarly?: boolean;    // True when score target has been met
-  devMode?: boolean;
+  /** Dev tools in the menu (only given in dev mode) */
   devCallbacks?: DevModeCallbacks;
-  // Tutorial mode - when true, wraps elements with CopilotStep
-  copilotMode?: boolean;
-  // Controlled menu open state for tutorial
-  controlledMenuOpen?: boolean;
+  /** Tutorial tour: wraps elements in CopilotSteps and lets the tour open/close the menu */
+  copilot?: CopilotControl;
   // Callback when menu open state changes (for pausing game)
   onMenuOpenChange?: (isOpen: boolean) => void;
 }
-
-// Calculate XP thresholds for level progression
-const getXPForLevel = (level: number): number => {
-  return level * level * 10; // Level 1 = 10, Level 2 = 40, Level 3 = 90, etc.
-};
 
 // Static score text
 interface ScoreTextProps {
@@ -180,20 +174,19 @@ const GameInfo: React.FC<GameInfoProps> = ({
   onExitGame,
   onEndRoundEarly,
   canEndRoundEarly = false,
-  devMode = false,
   devCallbacks,
-  copilotMode = false,
-  controlledMenuOpen,
+  copilot,
   onMenuOpenChange,
 }) => {
+  const copilotMode = copilot !== undefined;
   const { width: screenWidth } = useWindowDimensions();
   const isCompactHud = Boolean(character) && screenWidth < 430;
   // Calculate score progress percentage
   const scoreProgress = Math.min((score / targetScore) * 100, 100);
 
   // Calculate XP progress to next level
-  const currentLevelXP = getXPForLevel(playerStats.level);
-  const nextLevelXP = getXPForLevel(playerStats.level + 1);
+  const currentLevelXP = getAdjustedXPForLevel(playerStats.level);
+  const nextLevelXP = getAdjustedXPForLevel(playerStats.level + 1);
   const xpInCurrentLevel = playerStats.experience - currentLevelXP;
   const xpNeededForNextLevel = nextLevelXP - currentLevelXP;
   const xpProgress = Math.min((xpInCurrentLevel / xpNeededForNextLevel) * 100, 100);
@@ -325,10 +318,8 @@ const GameInfo: React.FC<GameInfoProps> = ({
               onExitGame={onExitGame}
               onEndRoundEarly={onEndRoundEarly}
               canEndRoundEarly={canEndRoundEarly}
-              devMode={devMode}
               devCallbacks={devCallbacks}
-              copilotMode={copilotMode}
-              controlledOpen={controlledMenuOpen}
+              copilot={copilot}
               onMenuOpenChange={onMenuOpenChange}
             />
           </View>

@@ -6,43 +6,30 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, Easing, cancelAnimation } from 'react-native-reanimated';
-import Icon, { IconName } from '@/components/Icon';
+import Icon from '@/components/Icon';
 import { FighterAvatar } from '@/components/fighters';
 import { WeaponAvatar } from '@/components/weapons';
-import { COLORS, getRarityColor } from '@/utils/colors';
-import { WEAPONS } from '@/utils/gameDefinitions';
+import { COLORS } from '@/utils/colors';
 import { sfx } from '@/audio';
 import type { CharacterName } from '@/types';
-import type { AdventureSave, ArcanaId } from '../types';
+import type { AdventureSave, ArcanaId, UnlockableFeature } from '../types';
 import type { Unlock } from '../progress';
 import { getFighter, getLoadout } from '../data/fighters';
 import { abilityFor } from '../data/abilities';
 import { getArcana } from '../data/arcana';
-import { findEvolvedWeapon, getEvolutionRecipe } from '../data/evolutions';
-import { MECHANICS } from '../data/mechanics';
-import { INK } from './ui';
+import { getArmoryWeapon } from '../data/armory';
+import { getEvolutionRecipe } from '../data/evolutions';
+import { CAMPAIGN_FEATURES } from '../data/features';
+import { MECHANICS, getMechanic } from '../data/mechanics';
+import { DARK, INK } from './ui';
+import { describeUnlock } from './rewards';
 
-const GOLD = COLORS.actionYellow;
-const TEXT = '#F1ECE4';
-const MUTED = '#B9B1A5';
-
-const weapon = (id: string) => WEAPONS.find(w => w.id === id) ?? findEvolvedWeapon(id);
+const GOLD = DARK.gold;
+const TEXT = DARK.text;
+const MUTED = DARK.muted;
 
 /** Weapon text was written for score-based modes. In Adventure a point is a point of damage. */
 const adventureText = (t: string) => t.replace(/\+(\d+) points?/g, '+$1 damage');
-
-/** A dark cut-out of an icon with a question mark — used wherever a reward is still secret. */
-export const Silhouette: React.FC<{ icon: IconName; size?: number; light?: boolean }> = ({ icon, size = 28, light }) => (
-  <View style={[sil.wrap, { width: size * 1.5, height: size * 1.5, borderRadius: size * 0.75, backgroundColor: light ? '#E6DFD5' : '#2A2826' }]}>
-    <Icon name={icon} size={size} color={light ? '#3A3632' : '#0B0B0B'} />
-    <Text style={[sil.q, { fontSize: size * 0.6, color: light ? COLORS.canvasWhite : GOLD }]}>?</Text>
-  </View>
-);
-
-const sil = StyleSheet.create({
-  wrap: { alignItems: 'center', justifyContent: 'center' },
-  q: { position: 'absolute', fontWeight: '900' },
-});
 
 const Rays: React.FC<{ color: string }> = ({ color }) => {
   const rot = useSharedValue(0);
@@ -66,12 +53,12 @@ interface Props {
   onUseFighter: (name: CharacterName) => void;
   onEquipCharm: (id: string) => void;
   onEquipArcana?: (id: ArcanaId) => void;
-  onOpenBounties?: () => void;
-  onOpenWorkshop?: () => void;
+  /** Go to the screen a newly unlocked feature lives on (offered on the last reveal only) */
+  onOpenFeature?: (feature: UnlockableFeature) => void;
   onDone: () => void;
 }
 
-const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCharm, onEquipArcana, onOpenBounties, onOpenWorkshop, onDone }) => {
+const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCharm, onEquipArcana, onOpenFeature, onDone }) => {
   const [i, setI] = useState(0);
   const [revealed, setRevealed] = useState(false);
   const flash = useSharedValue(0);
@@ -90,33 +77,16 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
   const u = unlocks[i];
   if (!u) return null;
 
+  const display = describeUnlock(u);
+  const { icon, accent } = display;
   const fighter = u.kind === 'fighter' ? getFighter(u.name) : null;
-  const w = u.kind === 'weapon' ? weapon(u.id) : null;
+  const w = u.kind === 'weapon' ? getArmoryWeapon(u.id) : null;
   const arcana = u.kind === 'arcana' ? getArcana(u.id) : null;
   const evo = u.kind === 'evolution' ? getEvolutionRecipe(u.id) : null;
-  const featureMech = u.kind === 'feature' ? (u.feature === 'coins' ? MECHANICS.coins : MECHANICS.workshop) : null;
-  const isBountyBoard = u.kind === 'bounty_board';
-  const icon: IconName =
-    fighter?.icon ??
-    w?.icon ??
-    evo?.result.icon ??
-    arcana?.icon ??
-    featureMech?.icon ??
-    (isBountyBoard ? 'lorc/trophy' : 'lorc/gems');
-  const accent =
-    fighter
-      ? GOLD
-      : evo
-        ? getRarityColor('legendary')
-        : arcana
-          ? '#A855F7'
-          : featureMech
-            ? GOLD
-            : isBountyBoard
-              ? '#F59E0B'
-              : w && w.rarity !== 'common'
-                ? getRarityColor(w.rarity)
-                : GOLD;
+  const feature = u.kind === 'feature' ? CAMPAIGN_FEATURES[u.feature] : null;
+  const last = i + 1 >= unlocks.length;
+  // Offered only when it is the final reveal, so the remaining ones are not skipped
+  const openFeature = feature?.open && last && onOpenFeature ? feature.open : null;
   const ability = fighter ? abilityFor(fighter.name) : null;
   const signature = fighter ? MECHANICS[fighter.signature] : null;
 
@@ -139,42 +109,13 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
   const charmEquipped = u.kind === 'weapon' && save.charm === u.id;
   const arcanaEquipped = u.kind === 'arcana' && save.activeArcana === u.id;
   const sourceLabel = u.star === 0 ? 'Bounty reward' : `${'★'.repeat(u.star)} reward`;
-  const headline =
-    u.kind === 'fighter'
-      ? 'New fighter unlocked!'
-      : u.kind === 'weapon'
-        ? 'New weapon unlocked!'
-        : u.kind === 'evolution'
-          ? 'New weapon combo unlocked!'
-          : u.kind === 'arcana'
-            ? 'New Arcana unlocked!'
-            : u.kind === 'feature'
-              ? u.feature === 'coins'
-                ? 'Coin Drops unlocked!'
-                : 'The Workshop unlocked!'
-              : 'Bounty Board unlocked!';
-  const tease =
-    u.kind === 'fighter'
-      ? 'Someone wants to join your team.'
-      : u.kind === 'weapon'
-        ? 'Something new for your Armory.'
-        : u.kind === 'evolution'
-          ? 'Two weapons can now fuse into a Legendary power!'
-          : u.kind === 'arcana'
-            ? 'A tarot wildcard that twists the rules of battle.'
-            : u.kind === 'feature'
-              ? u.feature === 'coins'
-                ? 'Every fight can now drop shiny coins for Camp!'
-                : 'Upgrade your unlocked mechanics and Armory weapons at Camp!'
-              : 'Your feats across every fight now earn extra loot!';
-
   return (
     <Modal visible transparent animationType="fade">
       <View testID="unlock-modal" style={st.overlay}>
         <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: '#FFFFFF' }, flashStyle]} pointerEvents="none" />
         <ScrollView contentContainerStyle={st.scroll} bounces={false}>
           <Text style={st.eyebrow}>{sourceLabel}{unlocks.length > 1 ? `  ·  ${i + 1} of ${unlocks.length}` : ''}</Text>
-          <Text style={st.headline}>{headline}</Text>
+          <Text style={st.headline}>{display.headline}</Text>
 
           <View style={st.heroWrap}>
             <Rays color={accent} />
@@ -204,26 +145,15 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
 
           {!revealed ? (
             <>
-              <Text style={st.tease}>{tease}</Text>
+              <Text style={st.tease}>{display.tease}</Text>
               <TouchableOpacity testID="unlock-reveal" onPress={reveal} style={st.cta} activeOpacity={0.85}>
                 <Text style={st.ctaText}>Reveal</Text>
               </TouchableOpacity>
             </>
           ) : (
             <Animated.View style={[{ alignSelf: 'stretch', gap: 12, alignItems: 'center' }, detailStyle]}>
-              <Text style={st.name}>
-                {fighter?.name ??
-                  w?.name ??
-                  evo?.result.name ??
-                  featureMech?.title ??
-                  (arcana ? `Arcana ${arcana.numeral}: ${arcana.name}` : 'Cross-Run Bounties')}
-              </Text>
-              {w && <Text style={[st.rarity, { color: accent }]}>{w.rarity.toUpperCase()} WEAPON</Text>}
-              {evo && <Text style={[st.rarity, { color: accent }]}>WEAPON COMBO RECIPE</Text>}
-              {fighter && <Text style={[st.rarity, { color: accent }]}>FIGHTER</Text>}
-              {arcana && <Text style={[st.rarity, { color: accent }]}>ARCANA WILDCARD</Text>}
-              {featureMech && <Text style={[st.rarity, { color: accent }]}>NEW ABILITY UNLOCKED</Text>}
-              {isBountyBoard && <Text style={[st.rarity, { color: accent }]}>NEW SYSTEM UNLOCKED</Text>}
+              <Text style={st.name}>{display.name}</Text>
+              {display.badge && <Text style={[st.rarity, { color: accent }]}>{display.badge}</Text>}
 
               <View style={st.card}>
                 <Text style={st.cardTitle}>How it works</Text>
@@ -237,7 +167,7 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                       </View>
                     </View>
                     {getLoadout(fighter.name, 1).map((id, k) => {
-                      const g = weapon(id);
+                      const g = getArmoryWeapon(id);
                       return g ? (
                         <View key={k} style={st.row}>
                           <View style={st.rowIcon}><WeaponAvatar weapon={g} size={28} interactive /></View>
@@ -277,26 +207,15 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                     )}
                   </>
                 )}
-                {featureMech && (
-                  <>
-                    {featureMech.body.map((p, k) => (
-                      <Text key={k} style={st.rowBody}>{p}</Text>
-                    ))}
-                  </>
-                )}
+                {feature && getMechanic(feature.mechanic).body.map((p, k) => (
+                  <Text key={k} style={st.rowBody}>{p}</Text>
+                ))}
                 {arcana && (
                   <>
                     <Text style={st.rowBody}>{arcana.tagline}</Text>
                     <Text style={[st.rowBody, { color: '#5EEAD4' }]}>▲ {arcana.upside}</Text>
                     <Text style={[st.rowBody, { color: '#FCD34D' }]}>▼ {arcana.tradeoff}</Text>
                     <Text style={st.note}>Toggle your active Arcana anytime at Camp or on the level preview sheet.</Text>
-                  </>
-                )}
-                {isBountyBoard && (
-                  <>
-                    {MECHANICS.bounty_board.body.map((p, k) => (
-                      <Text key={k} style={st.rowBody}>{p}</Text>
-                    ))}
                   </>
                 )}
               </View>
@@ -329,23 +248,23 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
               )}
               {evo && (
                 <TouchableOpacity testID="unlock-primary" onPress={() => { sfx('confirm'); advance(); }} style={st.cta} activeOpacity={0.85}>
-                  <Text style={st.ctaText}>{i + 1 < unlocks.length ? 'Continue' : 'Awesome!'}</Text>
+                  <Text style={st.ctaText}>{last ? 'Awesome!' : 'Continue'}</Text>
                 </TouchableOpacity>
               )}
-              {u.kind === 'feature' && (
-                u.feature === 'workshop' && i + 1 >= unlocks.length && onOpenWorkshop ? (
+              {feature && (
+                openFeature ? (
                   <>
                     <TouchableOpacity
                       testID="unlock-primary"
                       onPress={() => {
                         sfx('confirm');
                         onDone();
-                        onOpenWorkshop();
+                        onOpenFeature?.(feature.id);
                       }}
                       style={st.cta}
                       activeOpacity={0.85}
                     >
-                      <Text style={st.ctaText}>Open Workshop</Text>
+                      <Text style={st.ctaText}>{openFeature.label}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={advance} style={st.secondary}>
                       <Text style={st.secondaryText}>Stay on results</Text>
@@ -353,7 +272,7 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                   </>
                 ) : (
                   <TouchableOpacity testID="unlock-primary" onPress={() => { sfx('confirm'); advance(); }} style={st.cta} activeOpacity={0.85}>
-                    <Text style={st.ctaText}>{i + 1 < unlocks.length ? 'Continue' : 'Awesome!'}</Text>
+                    <Text style={st.ctaText}>{last ? 'Awesome!' : 'Continue'}</Text>
                   </TouchableOpacity>
                 )
               )}
@@ -378,31 +297,6 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                   </>
                 )
               )}
-              {isBountyBoard && (
-                <>
-                  <TouchableOpacity
-                    testID="unlock-primary"
-                    onPress={() => {
-                      sfx('confirm');
-                      if (i + 1 >= unlocks.length && onOpenBounties) {
-                        onDone();
-                        onOpenBounties();
-                      } else {
-                        advance();
-                      }
-                    }}
-                    style={st.cta}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={st.ctaText}>{i + 1 >= unlocks.length && onOpenBounties ? 'View Bounty Board' : 'Continue'}</Text>
-                  </TouchableOpacity>
-                  {i + 1 >= unlocks.length && onOpenBounties && (
-                    <TouchableOpacity onPress={advance} style={st.secondary}>
-                      <Text style={st.secondaryText}>Stay on results</Text>
-                    </TouchableOpacity>
-                  )}
-                </>
-              )}
             </Animated.View>
           )}
         </ScrollView>
@@ -424,7 +318,7 @@ const st = StyleSheet.create({
   tease: { color: MUTED, fontSize: 16, textAlign: 'center' },
   name: { color: COLORS.canvasWhite, fontWeight: '900', fontSize: 30, textAlign: 'center' },
   rarity: { fontWeight: '900', letterSpacing: 2, fontSize: 12 },
-  card: { alignSelf: 'stretch', backgroundColor: '#1C1B19', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,222,0,0.3)', padding: 14, gap: 12 },
+  card: { alignSelf: 'stretch', backgroundColor: DARK.panel, borderRadius: 12, borderWidth: 1, borderColor: DARK.goldEdge(0.3), padding: 14, gap: 12 },
   cardTitle: { color: GOLD, fontWeight: '800', letterSpacing: 2, fontSize: 11, textTransform: 'uppercase' },
   row: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   rowIcon: { width: 40, height: 40, borderRadius: 8, backgroundColor: COLORS.paperBeige, alignItems: 'center', justifyContent: 'center' },

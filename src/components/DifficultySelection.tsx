@@ -2,8 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, Pressable, TouchableOpacity, StyleSheet } from 'react-native';
 import { usePWASafeAreaInsets } from '@/utils/usePWASafeAreaInsets';
 import { COLORS, RADIUS } from '@/utils/colors';
-import { PlayerStats, FreePlayDifficulty } from '@/types';
-import { DEFAULT_PLAYER_STATS } from '@/utils/gameDefinitions';
+import { FreePlayDifficulty } from '@/types';
 import Icon, { IconName } from './Icon';
 import GameMenu from './GameMenu';
 
@@ -29,7 +28,7 @@ const DifficultySelection: React.FC<DifficultySelectionProps> = ({ onStart, onEx
       {/* Eyebrow Banner */}
       <View style={styles.eyebrow}>
         <Text style={styles.eyebrowText}>Free Play - Select Difficulty</Text>
-        <GameMenu playerStats={DEFAULT_PLAYER_STATS as PlayerStats} onExitGame={onExitGame} />
+        <GameMenu onExitGame={onExitGame} />
       </View>
 
       {/* Main Content */}

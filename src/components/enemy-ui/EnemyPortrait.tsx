@@ -5,7 +5,7 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { COLORS, RADIUS } from '@/utils/colors';
-import { EnemyAmbientMood, EnemyReactionEvent } from '@/utils/enemyAnimations';
+import { EnemyAmbientMood, EnemyReactionEvent, EnemyTier, TIER_AURA_COLORS } from '@/utils/enemyAnimations';
 import type { EnemyInstance } from '@/types/enemy';
 import { EnemyAvatar } from '../enemies';
 
@@ -22,14 +22,6 @@ interface EnemyPortraitProps {
   reaction?: EnemyReactionEvent | null;
 }
 
-// Tier badge colors
-const TIER_COLORS: Record<number, string> = {
-  1: COLORS.logicTeal,
-  2: COLORS.impactOrange,
-  3: COLORS.impactRed,
-  4: '#7C3AED', // Purple for boss tier
-};
-
 const EnemyPortrait: React.FC<EnemyPortraitProps> = ({
   enemy,
   hp,
@@ -37,7 +29,7 @@ const EnemyPortrait: React.FC<EnemyPortraitProps> = ({
   mood = 'menacing',
   reaction = null,
 }) => {
-  const tierColor = TIER_COLORS[enemy.tier] || COLORS.slateCharcoal;
+  const tierColor = TIER_AURA_COLORS[enemy.tier as EnemyTier] || COLORS.slateCharcoal;
 
   return (
     <View style={styles.containerCompact}>

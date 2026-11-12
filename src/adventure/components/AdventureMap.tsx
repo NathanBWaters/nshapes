@@ -20,7 +20,7 @@ import { getFighter } from '../data/fighters';
 import { BOUNTIES } from '../data/bounties';
 import { getArcana } from '../data/arcana';
 import { getFrontierLevel, getLockReason, maxStars, totalStars, isBiomeOpen } from '../progress';
-import { Bob, CoinPill, INK, StarRow } from './ui';
+import { Bob, CoinPill, INK, StarRow, TONE } from './ui';
 
 const ELITE = '#5B2333';
 const ROW = 112;
@@ -119,7 +119,7 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
         <View style={{ flex: 1 }} />
         {save.activeArcana && save.unlockedArcana.includes(save.activeArcana) && (
           <View style={s.arcanaPill}>
-            <Icon name={getArcana(save.activeArcana).icon} size={13} color="#6D28D9" />
+            <Icon name={getArcana(save.activeArcana).icon} size={13} color={TONE.arcana} />
             <Text style={s.arcanaGlyph}>{getArcana(save.activeArcana).numeral}</Text>
           </View>
         )}
@@ -320,8 +320,8 @@ const s = StyleSheet.create({
   starPill: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: COLORS.canvasWhite, borderColor: INK, borderWidth: 2, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
   starGlyph: { color: '#E0A800', fontSize: 15 },
   starCount: { fontWeight: '800', color: INK, fontSize: 14 },
-  arcanaPill: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#FAF5FF', borderColor: '#6D28D9', borderWidth: 2, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
-  arcanaGlyph: { fontWeight: '900', color: '#6D28D9', fontSize: 11 },
+  arcanaPill: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: TONE.arcanaPale, borderColor: TONE.arcana, borderWidth: 2, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
+  arcanaGlyph: { fontWeight: '900', color: TONE.arcana, fontSize: 11 },
   iconBtn: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: INK, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.paperBeige },
   title: { fontWeight: '900', letterSpacing: 2, color: INK, fontSize: 16 },
   band: { position: 'absolute', left: 0, right: 0, overflow: 'hidden' },
@@ -337,7 +337,7 @@ const s = StyleSheet.create({
   node: { alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderBottomWidth: 6, borderColor: INK },
   nodeLocked: { backgroundColor: '#E9E4DC', borderColor: '#B8B0A4' },
   nodeOpen: { backgroundColor: COLORS.canvasWhite },
-  nodeDone: { backgroundColor: '#FFF6C2' },
+  nodeDone: { backgroundColor: TONE.coinPale },
   nodePerfect: { backgroundColor: COLORS.actionYellow },
   nodeElite: { backgroundColor: ELITE, borderColor: COLORS.deepOnyx },
   skull: { position: 'absolute', top: -10, right: -6, backgroundColor: COLORS.canvasWhite, borderRadius: 11, borderWidth: 2, borderColor: INK, padding: 1 },

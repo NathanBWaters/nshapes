@@ -3,6 +3,7 @@ import { generateShopWeapons, DEFAULT_PLAYER_STATS } from '@/utils/gameDefinitio
 import { ECONOMY } from '@/utils/gameConfig';
 import { Weapon, PlayerStats } from '@/types';
 import WeaponShop from '@/components/WeaponShop';
+import { payForReroll } from '@/game/inventory';
 
 /**
  * Dev Store Page
@@ -42,14 +43,11 @@ export default function DevStore() {
   }, [shopWeapons, money]);
 
   const handleReroll = useCallback(() => {
-    if (freeRerolls > 0) {
-      setFreeRerolls(prev => prev - 1);
-    } else if (money >= rerollCost) {
-      setMoney(prev => prev - rerollCost);
-      setRerollCost(prev => prev + ECONOMY.rerollCostIncrement);
-    } else {
-      return;
-    }
+    const paid = payForReroll({ money, freeRerolls, rerollCost }, 'devStore');
+    if (!paid) return;
+    setMoney(paid.money);
+    setFreeRerolls(paid.freeRerolls);
+    setRerollCost(paid.rerollCost);
     setShopWeapons(generateShopWeapons(4));
   }, [freeRerolls, money, rerollCost]);
 

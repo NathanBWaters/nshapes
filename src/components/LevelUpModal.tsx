@@ -5,11 +5,10 @@ import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
 import { getPlayerWeaponCount } from '@/utils/gameDefinitions';
 import {
   getDynamicDescription,
-  getStatComparison,
-  getCapIncreaseInfo,
   getRarityLabel,
 } from '@/utils/weaponDisplay';
 import KeywordText from './KeywordText';
+import { WeaponStatPreview } from './WeaponPicker';
 import { playSound } from '@/utils/sounds';
 import { FighterAvatar } from './fighters';
 import { WeaponAvatar } from './weapons';
@@ -145,70 +144,7 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({
                   <KeywordText style={styles.detailFlavor}>{focusedWeapon.flavorText}</KeywordText>
                 )}
 
-                {/* Stats Preview - Before → After */}
-                {Object.keys(focusedWeapon.effects).length > 0 && (
-                  <View style={styles.effectsBox}>
-                    <Text style={styles.effectsLabel}>Stat Changes</Text>
-                    {getStatComparison(focusedWeapon, playerStats).map((stat, i) => (
-                      <View key={i} style={styles.effectRow}>
-                        <Text style={styles.effectKey}>{stat.key}</Text>
-                        <View style={styles.statComparisonRow}>
-                          {stat.isPerWeapon ? (
-                            <>
-                              <Text style={[
-                                styles.statAfter,
-                                stat.isIncrease ? styles.statIncrease : styles.statDecrease,
-                              ]}>
-                                {stat.after}
-                              </Text>
-                              <Text style={styles.capIndicator}>(per weapon)</Text>
-                            </>
-                          ) : (
-                            <>
-                              <Text style={styles.statBefore}>{stat.before}</Text>
-                              <Text style={styles.statArrow}>→</Text>
-                              <Text style={[
-                                styles.statAfter,
-                                stat.isIncrease ? styles.statIncrease : styles.statDecrease,
-                                stat.isCapped && styles.statCapped,
-                              ]}>
-                                {stat.after}
-                              </Text>
-                            </>
-                          )}
-                          {stat.cap !== null && (
-                            <Text style={[styles.capIndicator, stat.isCapped && styles.capIndicatorCapped]}>
-                              (max {stat.cap}%)
-                            </Text>
-                          )}
-                        </View>
-                      </View>
-                    ))}
-                  </View>
-                )}
-
-                {/* Cap Increase Info (for Mastery weapons) */}
-                {focusedWeapon.capIncrease && (() => {
-                  const capInfo = getCapIncreaseInfo(focusedWeapon, playerStats);
-                  if (!capInfo) return null;
-                  return (
-                    <View style={[styles.effectsBox, { marginTop: 8 }]}>
-                      <Text style={styles.effectsLabel}>Cap Increase</Text>
-                      <View style={styles.effectRow}>
-                        <Text style={styles.effectKey}>Current {capInfo.statName}</Text>
-                        <Text style={styles.statBefore}>{capInfo.currentValue}%</Text>
-                      </View>
-                      <View style={styles.effectRow}>
-                        <Text style={styles.effectKey}>Current Cap</Text>
-                        <Text style={styles.statBefore}>{capInfo.currentCap}%</Text>
-                      </View>
-                      <View style={styles.effectRow}>
-                        <Text style={styles.effectKey}>New Cap</Text>
-                        <Text style={styles.statIncrease}>{capInfo.newCap}%</Text>
-                      </View>
-                    </View>
-                  );
-                })()}
+                <WeaponStatPreview weapon={focusedWeapon} playerStats={playerStats} variant="modal" />
               </ScrollView>
             </View>
           )}
@@ -428,77 +364,6 @@ const styles = StyleSheet.create({
     color: COLORS.canvasWhite,
     fontWeight: '700',
     fontSize: 9,
-  },
-  effectsBox: {
-    backgroundColor: COLORS.paperBeige,
-    borderRadius: 8,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: COLORS.logicTeal,
-  },
-  effectsLabel: {
-    color: COLORS.logicTeal,
-    fontWeight: '600',
-    fontSize: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 6,
-  },
-  effectRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 2,
-  },
-  effectKey: {
-    color: COLORS.slateCharcoal,
-    fontWeight: '400',
-    fontSize: 11,
-    flex: 1,
-    flexShrink: 1,
-  },
-  statComparisonRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    flexShrink: 0,
-  },
-  statBefore: {
-    color: COLORS.slateCharcoal,
-    fontSize: 11,
-    fontFamily: 'monospace',
-    opacity: 0.7,
-    flexShrink: 0,
-  },
-  statArrow: {
-    color: COLORS.slateCharcoal,
-    fontSize: 10,
-    opacity: 0.5,
-  },
-  statAfter: {
-    fontSize: 12,
-    fontWeight: '700',
-    fontFamily: 'monospace',
-  },
-  statIncrease: {
-    color: COLORS.logicTeal,
-  },
-  statDecrease: {
-    color: COLORS.impactRed,
-  },
-  statCapped: {
-    color: '#EAB308',
-  },
-  capIndicator: {
-    fontSize: 10,
-    color: COLORS.slateCharcoal,
-    opacity: 0.6,
-    marginLeft: 4,
-    fontWeight: '500',
-  },
-  capIndicatorCapped: {
-    color: '#EAB308',
-    opacity: 1,
   },
   actions: {
     flexDirection: 'row',

@@ -1,120 +1,21 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
-import Animated from 'react-native-reanimated';
-import { Svg, Circle, Ellipse, G, Line, Path, Polygon } from 'react-native-svg';
+import { Circle, Ellipse, G, Line, Path, Polygon } from 'react-native-svg';
+import { RigLayers } from '@/components/creatures/RigLayers';
+import { isBattleWorn, isMouthOpenExpression } from '@/components/creatures/expressions';
+import { STROKE } from '@/components/illustration/primitives';
 import { COLORS } from '@/utils/colors';
 import { EnemyEyes } from '../EnemyEyes';
 import { EnemyRigProps } from './types';
-
-const STROKE = COLORS.slateCharcoal;
-
-export const WINGED_AVIAN_ENEMY_NAMES: readonly string[] = [
-  'Thieving Raven',
-  'Magpie',
-  'Night Owl',
-  'Wild Goose',
-  'Circling Vulture',
-  'Diving Hawk',
-  'Hunting Eagle',
-  'Shadow Bat',
-  'Prism Moth',
-  'Swift Bee',
-];
-
-interface LayeredSvgRigProps {
-  rigProps: EnemyRigProps;
-  tail: React.ReactNode;
-  leftWing: React.ReactNode;
-  rightWing: React.ReactNode;
-  body: React.ReactNode;
-  head: React.ReactNode;
-  paws: React.ReactNode;
-}
-
-const LayeredWingedSvg: React.FC<LayeredSvgRigProps> = ({
-  rigProps,
-  tail,
-  leftWing,
-  rightWing,
-  body,
-  head,
-  paws,
-}) => {
-  const { tailStyle, leftEarStyle, rightEarStyle, headStyle, pawStyle } = rigProps;
-
-  return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {/* 1. Tail feathers / stinger / wing-tails (pivots at 50, 78) */}
-      <Animated.View style={[StyleSheet.absoluteFill, tailStyle]}>
-        <Svg width="100%" height="100%" viewBox="0 0 100 100">
-          {tail}
-        </Svg>
-      </Animated.View>
-
-      {/* 2. Left Wing (pivots at shoulder 24, 54) */}
-      <Animated.View style={[StyleSheet.absoluteFill, leftEarStyle]}>
-        <Svg width="100%" height="100%" viewBox="0 0 100 100">
-          {leftWing}
-        </Svg>
-      </Animated.View>
-
-      {/* 3. Right Wing (pivots at shoulder 76, 54) */}
-      <Animated.View style={[StyleSheet.absoluteFill, rightEarStyle]}>
-        <Svg width="100%" height="100%" viewBox="0 0 100 100">
-          {rightWing}
-        </Svg>
-      </Animated.View>
-
-      {/* 4. Static Plumage / Thorax Body */}
-      <View style={StyleSheet.absoluteFill}>
-        <Svg width="100%" height="100%" viewBox="0 0 100 100">
-          {body}
-        </Svg>
-      </View>
-
-      {/* 5. Head, Eyes & Beak/Fangs (pivots at 50, 40) */}
-      <Animated.View style={[StyleSheet.absoluteFill, headStyle]}>
-        <Svg width="100%" height="100%" viewBox="0 0 100 100">
-          {head}
-        </Svg>
-      </Animated.View>
-
-      {/* 6. Talons / Claws / Stolen Loot (pivots at 50, 80) */}
-      <Animated.View style={[StyleSheet.absoluteFill, pawStyle]}>
-        <Svg width="100%" height="100%" viewBox="0 0 100 100">
-          {paws}
-        </Svg>
-      </Animated.View>
-    </View>
-  );
-};
-
-function isBeakOpen(expression: EnemyRigProps['expression']): boolean {
-  return (
-    expression === 'enraged' ||
-    expression === 'wicked_glee' ||
-    expression === 'wince' ||
-    expression === 'startled'
-  );
-}
-
-function isBattleRuffled(healthState: EnemyRigProps['healthState']): boolean {
-  return (
-    healthState === 'battered' ||
-    healthState === 'critical' ||
-    healthState === 'knocked_out'
-  );
-}
 
 /**
  * Thieving Raven (glossy midnight-indigo corvid + stolen gold stopwatch)
  * & Magpie (crisp black-and-white pied magpie + iridescent teal tail + shiny gold coin)
  */
-const CorvidRig: React.FC<EnemyRigProps> = (props) => {
-  const { enemyName, expression, healthState, gazeOffset } = props;
-  const isMagpie = enemyName === 'Magpie';
-  const isRuffled = isBattleRuffled(healthState);
-  const openBeak = isBeakOpen(expression);
+export const CorvidRig: React.FC<EnemyRigProps<'magpie'>> = (props) => {
+  const { variant, expression, healthState, gazeOffset } = props;
+  const isMagpie = variant === 'magpie';
+  const isRuffled = isBattleWorn(healthState);
+  const openBeak = isMouthOpenExpression(expression);
 
   const mainCoat = isMagpie ? '#0F172A' : '#1E1B4B';
   const sheenColor = isMagpie ? '#14B8A6' : '#4338CA';
@@ -122,8 +23,8 @@ const CorvidRig: React.FC<EnemyRigProps> = (props) => {
   const beakFill = isMagpie ? '#334155' : '#475569';
 
   return (
-    <LayeredWingedSvg
-      rigProps={props}
+    <RigLayers
+      partStyles={props}
       tail={
         isMagpie ? (
           <G>
@@ -152,7 +53,7 @@ const CorvidRig: React.FC<EnemyRigProps> = (props) => {
           </G>
         )
       }
-      leftWing={
+      leftEar={
         <G>
           <Path
             d={
@@ -175,7 +76,7 @@ const CorvidRig: React.FC<EnemyRigProps> = (props) => {
           )}
         </G>
       }
-      rightWing={
+      rightEar={
         <G>
           <Path
             d={
@@ -348,18 +249,18 @@ const CorvidRig: React.FC<EnemyRigProps> = (props) => {
  * Night Owl: nocturnal barn/horned owl with cream heart-shaped facial disc,
  * feathered ear-tufts, scalloped brown/slate wings, and luminous amber eyes.
  */
-const NightOwlRig: React.FC<EnemyRigProps> = (props) => {
+export const NightOwlRig: React.FC<EnemyRigProps> = (props) => {
   const { expression, healthState, gazeOffset } = props;
-  const isRuffled = isBattleRuffled(healthState);
-  const openBeak = isBeakOpen(expression);
+  const isRuffled = isBattleWorn(healthState);
+  const openBeak = isMouthOpenExpression(expression);
 
   const OWL_BROWN = '#6B4226';
   const OWL_SLATE = '#475569';
   const OWL_CREAM = '#FEF3C7';
 
   return (
-    <LayeredWingedSvg
-      rigProps={props}
+    <RigLayers
+      partStyles={props}
       tail={
         <G>
           <Path
@@ -372,7 +273,7 @@ const NightOwlRig: React.FC<EnemyRigProps> = (props) => {
           <Path d="M 37 86 L 63 86" stroke={OWL_CREAM} strokeWidth={2.5} strokeLinecap="round" />
         </G>
       }
-      leftWing={
+      leftEar={
         <G>
           {/* Scalloped brown/slate nocturnal wing */}
           <Path
@@ -390,7 +291,7 @@ const NightOwlRig: React.FC<EnemyRigProps> = (props) => {
           <Path d="M 25 59 C 19 59, 15 62, 14 66" stroke={OWL_CREAM} strokeWidth={2.2} strokeLinecap="round" fill="none" />
         </G>
       }
-      rightWing={
+      rightEar={
         <G>
           <Path
             d={
@@ -507,9 +408,9 @@ const NightOwlRig: React.FC<EnemyRigProps> = (props) => {
  * Wild Goose: chaotic white goose with long S-curved neck, wide flapping wings,
  * webbed orange feet, and angry open honking orange bill!
  */
-const WildGooseRig: React.FC<EnemyRigProps> = (props) => {
+export const WildGooseRig: React.FC<EnemyRigProps> = (props) => {
   const { expression, healthState, gazeOffset } = props;
-  const isRuffled = isBattleRuffled(healthState);
+  const isRuffled = isBattleWorn(healthState);
   const quietBill = expression === 'sleepy' || expression === 'ko' || expression === 'blink';
 
   const GOOSE_WHITE = '#FFFFFF';
@@ -517,8 +418,8 @@ const WildGooseRig: React.FC<EnemyRigProps> = (props) => {
   const BILL_ORANGE = COLORS.impactOrange;
 
   return (
-    <LayeredWingedSvg
-      rigProps={props}
+    <RigLayers
+      partStyles={props}
       tail={
         <G>
           <Polygon
@@ -531,7 +432,7 @@ const WildGooseRig: React.FC<EnemyRigProps> = (props) => {
           <Path d="M 45 81 L 43 89 M 55 81 L 57 89" stroke="#CBD5E1" strokeWidth={2.2} strokeLinecap="round" />
         </G>
       }
-      leftWing={
+      leftEar={
         <G>
           {/* Wide chaotic flapping white wing */}
           <Path
@@ -548,7 +449,7 @@ const WildGooseRig: React.FC<EnemyRigProps> = (props) => {
           <Path d="M 26 59 C 19 54, 14 48, 12 41" stroke={GOOSE_SHADE} strokeWidth={3.2} strokeLinecap="round" fill="none" />
         </G>
       }
-      rightWing={
+      rightEar={
         <G>
           <Path
             d={
@@ -679,18 +580,18 @@ const WildGooseRig: React.FC<EnemyRigProps> = (props) => {
  * Circling Vulture: hunched scavenger vulture, fluffy white neck ruff collar,
  * crimson bald head, hooked yellow-tip beak, broad dark wings!
  */
-const CirclingVultureRig: React.FC<EnemyRigProps> = (props) => {
+export const CirclingVultureRig: React.FC<EnemyRigProps> = (props) => {
   const { expression, healthState, gazeOffset } = props;
-  const isRuffled = isBattleRuffled(healthState);
-  const openBeak = isBeakOpen(expression);
+  const isRuffled = isBattleWorn(healthState);
+  const openBeak = isMouthOpenExpression(expression);
 
   const VULTURE_DARK = '#292524';
   const VULTURE_WING = '#44403C';
   const BALD_CRIMSON = '#E11D48';
 
   return (
-    <LayeredWingedSvg
-      rigProps={props}
+    <RigLayers
+      partStyles={props}
       tail={
         <Path
           d="M 39 76 L 34 92 L 45 90 L 50 95 L 55 90 L 66 92 L 61 76 Z"
@@ -700,7 +601,7 @@ const CirclingVultureRig: React.FC<EnemyRigProps> = (props) => {
           strokeLinejoin="round"
         />
       }
-      leftWing={
+      leftEar={
         <G>
           <Path
             d={
@@ -716,7 +617,7 @@ const CirclingVultureRig: React.FC<EnemyRigProps> = (props) => {
           <Path d="M 28 53 C 20 49, 14 51, 11 56 L 26 60 Z" fill={VULTURE_WING} />
         </G>
       }
-      rightWing={
+      rightEar={
         <G>
           <Path
             d={
@@ -821,11 +722,11 @@ const CirclingVultureRig: React.FC<EnemyRigProps> = (props) => {
  * Diving Hawk (sleek slate-blue & rust peregrine/hawk with swept pointed wings)
  * & Hunting Eagle (majestic dark-brown raptor with snowy white head, golden brow & talons)
  */
-const RaptorRig: React.FC<EnemyRigProps> = (props) => {
-  const { enemyName, expression, healthState, gazeOffset } = props;
-  const isEagle = enemyName === 'Hunting Eagle';
-  const isRuffled = isBattleRuffled(healthState);
-  const openBeak = isBeakOpen(expression);
+export const RaptorRig: React.FC<EnemyRigProps<'eagle'>> = (props) => {
+  const { variant, expression, healthState, gazeOffset } = props;
+  const isEagle = variant === 'eagle';
+  const isRuffled = isBattleWorn(healthState);
+  const openBeak = isMouthOpenExpression(expression);
 
   const wingPrimary = isEagle ? '#3E2723' : '#334155';
   const wingTrim = isEagle ? '#6D4C41' : '#64748B';
@@ -833,8 +734,8 @@ const RaptorRig: React.FC<EnemyRigProps> = (props) => {
   const iris = isEagle ? '#EAB308' : '#F59E0B';
 
   return (
-    <LayeredWingedSvg
-      rigProps={props}
+    <RigLayers
+      partStyles={props}
       tail={
         isEagle ? (
           <G>
@@ -863,7 +764,7 @@ const RaptorRig: React.FC<EnemyRigProps> = (props) => {
           </G>
         )
       }
-      leftWing={
+      leftEar={
         isEagle ? (
           <G>
             <Path
@@ -897,7 +798,7 @@ const RaptorRig: React.FC<EnemyRigProps> = (props) => {
           </G>
         )
       }
-      rightWing={
+      rightEar={
         isEagle ? (
           <G>
             <Path
@@ -1102,10 +1003,10 @@ const RaptorRig: React.FC<EnemyRigProps> = (props) => {
 /**
  * Shadow Bat: fanged purple-black vampire bat with scalloped leathery wings & pointed radar ears!
  */
-const ShadowBatRig: React.FC<EnemyRigProps> = (props) => {
+export const ShadowBatRig: React.FC<EnemyRigProps> = (props) => {
   const { expression, healthState, gazeOffset } = props;
-  const isRuffled = isBattleRuffled(healthState);
-  const openMouth = isBeakOpen(expression);
+  const isRuffled = isBattleWorn(healthState);
+  const openMouth = isMouthOpenExpression(expression);
 
   const BAT_DARK = '#1E1B4B';
   const BAT_MEMBRANE = '#4C1D95';
@@ -1113,8 +1014,8 @@ const ShadowBatRig: React.FC<EnemyRigProps> = (props) => {
   const EAR_INNER = '#DB2777';
 
   return (
-    <LayeredWingedSvg
-      rigProps={props}
+    <RigLayers
+      partStyles={props}
       tail={
         <G>
           {/* Forked bat tail-membrane & shadow wisps */}
@@ -1128,7 +1029,7 @@ const ShadowBatRig: React.FC<EnemyRigProps> = (props) => {
           <Path d="M 32 88 Q 27 93 23 90 M 68 88 Q 73 93 77 90" stroke={BAT_RIB} strokeWidth={2.2} strokeLinecap="round" fill="none" />
         </G>
       }
-      leftWing={
+      leftEar={
         <G>
           {/* Scalloped leathery left vampire wing */}
           <Path
@@ -1147,7 +1048,7 @@ const ShadowBatRig: React.FC<EnemyRigProps> = (props) => {
           <Path d="M 15 32 L 14 57 M 15 32 L 23 63" stroke={BAT_RIB} strokeWidth={2} strokeLinecap="round" />
         </G>
       }
-      rightWing={
+      rightEar={
         <G>
           <Path
             d={
@@ -1276,10 +1177,10 @@ const ShadowBatRig: React.FC<EnemyRigProps> = (props) => {
  * Prism Moth: radiant twilight moth whose left/right wings have stained-glass
  * rainbow geometric facets (red/gold/teal/violet) + feathery antennae!
  */
-const PrismMothRig: React.FC<EnemyRigProps> = (props) => {
+export const PrismMothRig: React.FC<EnemyRigProps> = (props) => {
   const { expression, healthState, gazeOffset } = props;
-  const isRuffled = isBattleRuffled(healthState);
-  const openMouth = isBeakOpen(expression);
+  const isRuffled = isBattleWorn(healthState);
+  const openMouth = isMouthOpenExpression(expression);
 
   const MOTH_INDIGO = '#312E81';
   const FACET_RED = '#EF4444';
@@ -1288,8 +1189,8 @@ const PrismMothRig: React.FC<EnemyRigProps> = (props) => {
   const FACET_VIOLET = '#8B5CF6';
 
   return (
-    <LayeredWingedSvg
-      rigProps={props}
+    <RigLayers
+      partStyles={props}
       tail={
         <G>
           {/* Shimmering swallowtail prism hind-tails */}
@@ -1311,7 +1212,7 @@ const PrismMothRig: React.FC<EnemyRigProps> = (props) => {
           <Circle cx={61} cy={92.5} r={2} fill={FACET_GOLD} />
         </G>
       }
-      leftWing={
+      leftEar={
         <G>
           {/* Left Stained-Glass Forewing + Hindwing */}
           <Path
@@ -1333,7 +1234,7 @@ const PrismMothRig: React.FC<EnemyRigProps> = (props) => {
           <Circle cx={17.5} cy={46} r={2.4} fill="#FFFFFF" />
         </G>
       }
-      rightWing={
+      rightEar={
         <G>
           <Path
             d={
@@ -1437,18 +1338,18 @@ const PrismMothRig: React.FC<EnemyRigProps> = (props) => {
  * Swift Bee: plump fuzzy gold-and-black striped bee, translucent sky-blue wings,
  * bobbing antennae, and sharp stinger!
  */
-const SwiftBeeRig: React.FC<EnemyRigProps> = (props) => {
+export const SwiftBeeRig: React.FC<EnemyRigProps> = (props) => {
   const { expression, healthState, gazeOffset } = props;
-  const isRuffled = isBattleRuffled(healthState);
-  const openMouth = isBeakOpen(expression);
+  const isRuffled = isBattleWorn(healthState);
+  const openMouth = isMouthOpenExpression(expression);
 
   const BEE_GOLD = COLORS.actionYellow;
   const BEE_BLACK = '#1E293B';
   const WING_BLUE = '#BAE6FD';
 
   return (
-    <LayeredWingedSvg
-      rigProps={props}
+    <RigLayers
+      partStyles={props}
       tail={
         <G>
           {/* Sharp venomous bee stinger */}
@@ -1462,7 +1363,7 @@ const SwiftBeeRig: React.FC<EnemyRigProps> = (props) => {
           <Circle cx={50} cy={95} r={1.8} fill="#A3E635" />
         </G>
       }
-      leftWing={
+      leftEar={
         <G opacity={0.88}>
           {/* Translucent sky-blue left bee forewing + hindwing */}
           <Path
@@ -1480,7 +1381,7 @@ const SwiftBeeRig: React.FC<EnemyRigProps> = (props) => {
           <Path d="M 30 52 L 13 45 M 22 49 L 16 54" stroke="#0284C7" strokeWidth={1.8} strokeLinecap="round" />
         </G>
       }
-      rightWing={
+      rightEar={
         <G opacity={0.88}>
           <Path
             d={
@@ -1589,28 +1490,4 @@ const SwiftBeeRig: React.FC<EnemyRigProps> = (props) => {
       }
     />
   );
-};
-
-export const WingedAvianEnemyRig: React.FC<EnemyRigProps> = (props) => {
-  switch (props.enemyName) {
-    case 'Thieving Raven':
-    case 'Magpie':
-      return <CorvidRig {...props} />;
-    case 'Night Owl':
-      return <NightOwlRig {...props} />;
-    case 'Wild Goose':
-      return <WildGooseRig {...props} />;
-    case 'Circling Vulture':
-      return <CirclingVultureRig {...props} />;
-    case 'Diving Hawk':
-    case 'Hunting Eagle':
-      return <RaptorRig {...props} />;
-    case 'Shadow Bat':
-      return <ShadowBatRig {...props} />;
-    case 'Prism Moth':
-      return <PrismMothRig {...props} />;
-    case 'Swift Bee':
-    default:
-      return <SwiftBeeRig {...props} />;
-  }
 };

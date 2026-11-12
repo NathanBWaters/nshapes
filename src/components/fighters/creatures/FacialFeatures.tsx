@@ -1,8 +1,16 @@
 import React from 'react';
-import { Circle, Ellipse, G, Line, Path, Polygon } from 'react-native-svg';
+import { Circle, Ellipse, G, Line, Path } from 'react-native-svg';
+import {
+  CrescentEye,
+  KoCrossEye,
+  SleepyLidEye,
+  WinceChevronEye,
+  eyeGazeShift,
+} from '@/components/creatures/eyes';
+import { GazeOffset } from '@/components/creatures/types';
+import { StarBurst } from '@/components/illustration/primitives';
 import { COLORS } from '@/utils/colors';
 import { FighterExpression } from '@/utils/fighterAnimations';
-import { GazeOffset } from './types';
 
 interface CreatureEyesProps {
   expression: FighterExpression;
@@ -16,29 +24,6 @@ interface CreatureEyesProps {
   irisColor?: string;
   /** Whether the eye sits on a dark background and needs a white sclera backing */
   darkMask?: boolean;
-}
-
-/**
- * Draws a crisp 4-point or 5-point star centered at (cx, cy).
- */
-function StarEye({ cx, cy, r, fill = COLORS.actionYellow }: { cx: number; cy: number; r: number; fill?: string }) {
-  const outer = r * 1.45;
-  const inner = r * 0.58;
-  const pts: string[] = [];
-  for (let i = 0; i < 10; i++) {
-    const angle = -Math.PI / 2 + (i * Math.PI) / 5;
-    const dist = i % 2 === 0 ? outer : inner;
-    pts.push(`${(cx + Math.cos(angle) * dist).toFixed(1)},${(cy + Math.sin(angle) * dist).toFixed(1)}`);
-  }
-  return (
-    <Polygon
-      points={pts.join(' ')}
-      fill={fill}
-      stroke={COLORS.slateCharcoal}
-      strokeWidth={1.6}
-      strokeLinejoin="round"
-    />
-  );
 }
 
 /**
@@ -56,11 +41,7 @@ export const CreatureEyes: React.FC<CreatureEyesProps> = ({
   darkMask = false,
 }) => {
   const strokeColor = darkMask ? '#FFFFFF' : COLORS.slateCharcoal;
-  const gx = (gazeOffset?.x ?? 0) * radius * 0.34;
-  const gy = (gazeOffset?.y ?? 0) * radius * 0.28;
-  // Corneal highlight moves slightly farther than iris center -> 3D spherical eye depth
-  const hx = gx * 1.24;
-  const hy = gy * 1.24;
+  const { gx, gy, hx, hy } = eyeGazeShift(gazeOffset, radius);
 
   const renderSingleEye = (cx: number, isRight: boolean) => {
     const dir = isRight ? 1 : -1;
@@ -80,15 +61,7 @@ export const CreatureEyes: React.FC<CreatureEyesProps> = ({
       case 'happy':
       case 'blush':
         // Joyful upward '^ ^' crescents!
-        return (
-          <Path
-            d={`M ${cx - radius * 1.2} ${y + radius * 0.45} Q ${cx} ${y - radius * 1.25} ${cx + radius * 1.2} ${y + radius * 0.45}`}
-            stroke={strokeColor}
-            strokeWidth={3}
-            strokeLinecap="round"
-            fill="none"
-          />
-        );
+        return <CrescentEye cx={cx} cy={y} r={radius} stroke={strokeColor} />;
 
       case 'relieved':
         // Left eye happy arc '^', right eye tilted 'phew' wink '~'
@@ -114,57 +87,18 @@ export const CreatureEyes: React.FC<CreatureEyesProps> = ({
         );
 
       case 'starry':
-        return <StarEye cx={cx} cy={y} r={radius} />;
+        return <StarBurst cx={cx} cy={y} outer={radius * 1.45} inner={radius * 0.58} />;
 
       case 'wince':
         // Sharp '> <' pain chevrons!
-        if (!isRight) {
-          return (
-            <Path
-              d={`M ${cx - radius * 1.15} ${y - radius * 0.95} L ${cx + radius * 0.95} ${y} L ${cx - radius * 1.15} ${y + radius * 0.95}`}
-              stroke={strokeColor}
-              strokeWidth={3}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              fill="none"
-            />
-          );
-        }
         return (
-          <Path
-            d={`M ${cx + radius * 1.15} ${y - radius * 0.95} L ${cx - radius * 0.95} ${y} L ${cx + radius * 1.15} ${y + radius * 0.95}`}
-            stroke={strokeColor}
-            strokeWidth={3}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            fill="none"
-          />
+          <WinceChevronEye cx={cx} cy={y} r={radius} stroke={strokeColor} side={isRight ? 'right' : 'left'} />
         );
 
       case 'ko':
         // Classic cartoon 'X X' / dizzy KO eyes!
         return (
-          <G>
-            {darkMask && <Circle cx={cx} cy={y} r={radius * 1.25} fill="#FFFFFF" />}
-            <Line
-              x1={cx - radius * 0.95}
-              y1={y - radius * 0.95}
-              x2={cx + radius * 0.95}
-              y2={y + radius * 0.95}
-              stroke={COLORS.slateCharcoal}
-              strokeWidth={2.8}
-              strokeLinecap="round"
-            />
-            <Line
-              x1={cx + radius * 0.95}
-              y1={y - radius * 0.95}
-              x2={cx - radius * 0.95}
-              y2={y + radius * 0.95}
-              stroke={COLORS.slateCharcoal}
-              strokeWidth={2.8}
-              strokeLinecap="round"
-            />
-          </G>
+          <KoCrossEye cx={cx} cy={y} r={radius} backingRadius={darkMask ? radius * 1.25 : undefined} />
         );
 
       case 'panic':
@@ -185,23 +119,7 @@ export const CreatureEyes: React.FC<CreatureEyesProps> = ({
 
       case 'sleepy':
         // Heavy half-closed lids!
-        return (
-          <G>
-            <Path
-              d={`M ${cx - radius * 1.1} ${y} A ${radius * 1.05} ${radius * 0.95} 0 0 0 ${cx + radius * 1.1} ${y} Z`}
-              fill={irisColor}
-            />
-            <Line
-              x1={cx - radius * 1.25}
-              y1={y - 0.3}
-              x2={cx + radius * 1.25}
-              y2={y - 0.3}
-              stroke={strokeColor}
-              strokeWidth={2.8}
-              strokeLinecap="round"
-            />
-          </G>
-        );
+        return <SleepyLidEye cx={cx} cy={y} r={radius} stroke={strokeColor} irisColor={irisColor} />;
 
       case 'sad':
         // Teary droopy eyes + slanted worried brow + glinting tear!

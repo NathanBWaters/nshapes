@@ -1,8 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { COLORS, RADIUS } from '@/utils/colors';
-import { AttributeName, Card as CardType, PlayerStats } from '@/types';
-import { DEFAULT_PLAYER_STATS } from '@/utils/gameDefinitions';
+import { AttributeName, Card as CardType } from '@/types';
 import Card from './Card';
 import GameMenu from './GameMenu';
 
@@ -96,7 +95,7 @@ const AttributeUnlockScreen: React.FC<AttributeUnlockScreenProps> = ({
       <View style={styles.card}>
         <View style={styles.banner}>
           <Text style={styles.bannerText}>NEW ATTRIBUTE</Text>
-          <GameMenu playerStats={DEFAULT_PLAYER_STATS as PlayerStats} onExitGame={onExitGame} />
+          <GameMenu onExitGame={onExitGame} />
         </View>
 
         <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>

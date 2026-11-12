@@ -4,15 +4,18 @@ import { LEVELS } from '@/adventure/data/levels';
 import { foeDisplay } from '@/adventure/data/foes';
 import { EnemyAvatar } from '@/components/enemies';
 import { ALL_CUSTOM_ENEMY_RIG_NAMES } from '@/components/enemies/rigs';
+import { hasEnemyCreature } from '@/components/enemies/enemyRegistry';
+import { GENERIC_GEM_WEAPON_NAMES } from '@/components/weapons/WeaponArtwork';
+import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
 import { WeaponAvatar, ALL_CUSTOM_WEAPON_NAMES, getWeaponTapStyle } from '@/components/weapons';
 import { useEnemyConductor } from '@/hooks/useEnemyConductor';
 import {
-  computeEnemyMoodLoopRates,
-  computeEnemyMoodPoseTargets,
+  ENEMY_MOOD_MOTION,
   getEnemyHealthState,
   resolveEnemyAmbientMood,
   resolveEnemyExpression,
 } from '@/utils/enemyAnimations';
+import { computeMoodLoopRates, computeMoodPoseTargets } from '@/utils/creatureAnimations';
 import { getEnemyNames } from '@/utils/enemyFactory';
 import { WEAPONS } from '@/utils/gameDefinitions';
 
@@ -38,6 +41,18 @@ describe('Custom Enemy Rigs & Procedural Animation Engine', () => {
 
     const missing = Array.from(adventureFoeNames).filter((name) => !rigSet.has(name));
     expect(missing).toEqual([]);
+  });
+
+  it('resolves every registered enemy and adventure foe to a registry creature (none fall back to the crest)', () => {
+    const names = new Set<string>(getEnemyNames());
+    for (const level of LEVELS) {
+      for (const foeSpec of level.foes) names.add(foeDisplay(foeSpec).name);
+    }
+    const usingFallbackCrest: string[] = [];
+    const unresolved = Array.from(names).filter(
+      (name) => !hasEnemyCreature(name) && !usingFallbackCrest.includes(name)
+    );
+    expect(unresolved).toEqual([]);
   });
 
   it('renders every custom enemy rig cleanly without errors', () => {
@@ -116,11 +131,11 @@ describe('Custom Enemy Rigs & Procedural Animation Engine', () => {
       })
     ).toBe('enraged');
 
-    const rates = computeEnemyMoodLoopRates(2400, 1400, 'enraged', 'battered');
+    const rates = computeMoodLoopRates(ENEMY_MOOD_MOTION, 'enraged', 'battered', 2400, 1400);
     expect(rates.breathHz).toBeGreaterThan(0);
     expect(rates.wagHz).toBeGreaterThan(0);
 
-    const pose = computeEnemyMoodPoseTargets('menacing', 'pristine', 64, -0.3, 0);
+    const pose = computeMoodPoseTargets(ENEMY_MOOD_MOTION, 'menacing', 'pristine', 64, -0.3, 0);
     expect(pose.leanX).toBeLessThan(0);
     expect(pose.leanY).toBeGreaterThan(0);
     expect(pose.postureStretchY).toBeLessThan(1);
@@ -186,6 +201,15 @@ describe('Custom Weapon Relics & Single-Tap Animation', () => {
     const customSet = new Set(ALL_CUSTOM_WEAPON_NAMES);
     const missing = uniqueWeaponNames.filter((name) => !customSet.has(name));
     expect(missing).toEqual([]);
+  });
+
+  it('gives every weapon and evolution result its own relic or an explicit generic-gem entry', () => {
+    const custom = new Set(ALL_CUSTOM_WEAPON_NAMES);
+    const gem = new Set(GENERIC_GEM_WEAPON_NAMES);
+    const names = new Set([...WEAPONS.map((w) => w.name), ...EVOLUTION_RECIPES.map((r) => r.result.name)]);
+    const unresolved = Array.from(names).filter((name) => !custom.has(name) && !gem.has(name));
+    expect(unresolved).toEqual([]);
+    expect(GENERIC_GEM_WEAPON_NAMES.filter((name) => custom.has(name))).toEqual([]);
   });
 
   it('maps weapons across all 8 category tap-animation archetypes', () => {

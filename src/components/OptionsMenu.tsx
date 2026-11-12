@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
 import { COLORS, RADIUS } from '@/utils/colors';
-import { SettingsStorage } from '@/utils/storage';
-import { setAudioEnabled } from '@/utils/sounds';
+import { useSoundSetting } from '@/hooks/useSoundSetting';
 import Icon from './Icon';
 
 interface OptionsMenuProps {
@@ -11,19 +10,8 @@ interface OptionsMenuProps {
 }
 
 const OptionsMenu: React.FC<OptionsMenuProps> = ({ visible, onClose }) => {
-  const [soundEnabled, setSoundEnabled] = useState(false);
-
-  // Load setting on mount
-  useEffect(() => {
-    setSoundEnabled(SettingsStorage.getSoundEnabled());
-  }, [visible]);
-
-  const handleToggleSound = () => {
-    const newValue = !soundEnabled;
-    setSoundEnabled(newValue);
-    setAudioEnabled(newValue);
-    SettingsStorage.setSoundEnabled(newValue);
-  };
+  // Re-read each time the modal opens: the in-game menu may have changed it
+  const [soundEnabled, handleToggleSound] = useSoundSetting(visible);
 
   return (
     <Modal

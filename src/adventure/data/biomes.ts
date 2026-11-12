@@ -44,3 +44,6 @@ export const getBiome = (id: BiomeId): BiomeDef => {
   if (!b) throw new Error(`Unknown biome ${id}`);
   return b;
 };
+
+/** "World 2" style number of a region, in map order. */
+export const worldNumber = (id: BiomeId): number => BIOMES.findIndex(b => b.id === id) + 1;

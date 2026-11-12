@@ -1,5 +1,7 @@
 import type { IconName } from './components/Icon';
-import type { EnemyInstance, EnemyOption } from './types/enemy';
+import type { EffectCapType, EffectCaps } from './game/effectCaps';
+
+export type { EffectCaps };
 
 export type Shape = 'oval' | 'squiggle' | 'diamond';
 export type Color = 'red' | 'green' | 'purple';
@@ -8,25 +10,13 @@ export type Shading = 'solid' | 'striped' | 'open';
 export type Background = 'white' | 'beige' | 'charcoal';
 export type AttributeName = 'shape' | 'color' | 'number' | 'shading' | 'background';
 
-// Adventure mode difficulty setting (legacy - to be removed)
+// Attribute progression of the legacy run. Only 'medium' is ever started now;
+// 'easy'/'hard' can still arrive in saved games written by older versions.
 export type AdventureDifficulty = 'easy' | 'medium' | 'hard';
 
 // Game mode and Free Play difficulty selection
 export type GameMode = 'adventure' | 'free_play';
 export type FreePlayDifficulty = 'easy' | 'medium' | 'hard' | 'omega';
-
-// New level-based progression system
-export type LevelNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
-
-// Level definition with bosses and attributes
-export interface LevelDefinition {
-  number: LevelNumber;
-  name: string;
-  description: string;
-  attributes: AttributeName[];
-  miniBoss: EnemyName | null; // Round 3 boss (null for tutorial level 1)
-  boss: EnemyName | null;     // Round 5 boss (null for tutorial level 1)
-}
 
 // =============================================================================
 // CONNECTOR WEAPON SYSTEM
@@ -59,19 +49,11 @@ export interface Card {
   lootBox?: boolean;
   bonusMoney?: number;
   bonusPoints?: number;
-  fireStarter?: boolean;
   bomb?: boolean;
   bombTimer?: number;
   healing?: boolean;
   spikes?: boolean;
-  isFragile?: boolean;
-  boobyTrap?: boolean;
   clover?: boolean;
-  cardClear?: boolean;
-  broom?: boolean;
-  selfHealing?: boolean;
-  timedReward?: boolean;
-  timedRewardAmount?: number;
 
   // New weapon effect states
   onFire?: boolean;         // Card is burning
@@ -101,7 +83,6 @@ export interface CardReward {
   lootBox?: boolean;
   item?: string; // Future: item name/id
   timeBonus?: number; // Seconds to add to timer
-  graceBonus?: number; // Graces to add
   boardGrowth?: number; // Cards to add to board
   // Weapon effect types for visual distinction
   effectType?: 'explosion' | 'laser' | 'fire' | 'grace' | 'ricochet' | 'connected';
@@ -111,26 +92,10 @@ export type CharacterName =
   'Orange Tabby' | 'Sly Fox' | 'Corgi' | 'Emperor Penguin' |
   'Pelican' | 'Badger';
 
-export type EnemyName =
-  'Chihuahua' | 'Jellyfish' | 'Snake' | 'Mammoth' |
-  'Rabbit' | 'Squid' | 'Porcupine' | 'Hyena' | 'Tiger';
-
-export type WeaponName =
-  'Blast Powder' | 'Oracle Eye' | 'Mystic Sight' | 'Field Stone' | 'Growth Seed' |
-  'Flint Spark' | 'Second Chance' | 'Fortune Token' | 'Life Vessel' |
-  'Mending Charm' | 'Crystal Orb' | 'Seeker Lens' | 'Scholar\'s Tome' | 'Fortune\'s Favor' |
-  'Chrono Shard' | 'Time Drop' | 'Prismatic Ray' | 'Chaos Shard' |
-  'Echo Stone' | 'Chain Reaction' | 'Time Trigger Mastery' |
-  'Prismatic Perfection' | 'Tabula Rasa' | 'Desperate Measures' |
-  // Connector weapons
-  'Link Stone' | 'Link Chain' | 'Soul Link' | 'Revenge Linker' |
-  'Web Spinner' | 'Web Master' | 'Echo Chamber' | 'Resonance Core' |
-  'Sympathetic Flames' | 'Neural Network';
-
 export type WeaponRarity = 'common' | 'rare' | 'epic' | 'legendary';
 
-// Cap increase effect types - must match EffectCapType in gameConfig.ts
-export type CapIncreaseType = 'echo' | 'laser' | 'graceGain' | 'explosion' | 'hint' | 'timeGain' | 'healing' | 'fire' | 'ricochet' | 'boardGrowth' | 'coinGain' | 'xpGain';
+// The effect whose cap a Cap Increaser weapon raises
+export type CapIncreaseType = EffectCapType;
 
 export interface CapIncreaseEffect {
   type: CapIncreaseType;
@@ -170,9 +135,9 @@ export interface BridgeEffect {
 
 export interface Weapon {
   id: string; // Unique identifier for stacking
-  name: WeaponName | string; // Allow string for new weapon names
+  name: string;
   rarity: WeaponRarity;
-  level: number; // 1-4
+  level: number; // Base weapons are 1; adventure evolutions are 4
   description: string; // Technical description with percentages
   shortDescription: string; // 3-8 word summary shown in lists
   flavorText?: string; // Longer fun description for weapon guide
@@ -188,7 +153,7 @@ export interface Weapon {
 export interface Character {
   name: CharacterName;
   description: string;
-  startingWeapons: WeaponName[];
+  startingWeapons: string[]; // Weapon names; initializePlayer throws if one is not in WEAPONS
   baseStats: Partial<PlayerStats>;
   icon?: IconName; // Icon path like "lorc/cat" - must be in ICON_REGISTRY
 }
@@ -199,17 +164,12 @@ export interface PlayerStats {
   experience: number; // Total accumulated experience points
   experienceGainPercent: number;
   luck: number;
-  maxWeapons: number;
-  commerce: number;
   scavengingPercent: number;
-  scavengeAmount: number;
   health: number;
   maxHealth: number;
   fieldSize: number;
   freeRerolls: number;
   drawIncrease: number;
-  drawIncreasePercent: number;
-  chanceOfFire: number;
   explosion: number;
   damage: number;
   damagePercent: number;
@@ -218,22 +178,15 @@ export interface PlayerStats {
   matchHints: number;
   matchPossibilityHints: number;
   matchIntervalHintPercent: number;
-  matchIntervalSpeed: number;
-  dodgePercent: number;
   dodgeAttackBackPercent: number;
   dodgeAttackBackAmount: number;
   graces: number;
   maxGraces: number; // Maximum graces player can hold
   bombTimer: number;
   additionalPoints: number;
-  deflectPercent: number;
-  criticalChance: number;
   timeFreezePercent: number;
-  timeFreezeAmount: number;
   hints: number; // Number of hints available for finding valid sets
   maxHints: number; // Maximum hints player can hold
-  // Co-op specific
-  hintPasses: number;
 
   // New weapon effect stats
   explosionChance: number;      // % to explode adjacent cards on match
@@ -270,69 +223,10 @@ export interface PlayerStats {
   effectCaps?: EffectCaps;
 }
 
-// Interface for tracking effect cap increases per effect type
-export interface EffectCaps {
-  echo: number;           // Current cap for echo chance
-  laser: number;          // Current cap for laser chance
-  graceGain: number;      // Current cap for grace gain chance
-  explosion: number;      // Current cap for explosion chance
-  hint: number;           // Current cap for hint gain chance
-  timeGain: number;       // Current cap for time gain chance
-  healing: number;        // Current cap for healing chance
-  fire: number;           // Current cap for fire spread chance
-  ricochet: number;       // Current cap for ricochet chance
-  boardGrowth: number;    // Current cap for board growth chance
-  coinGain: number;       // Current cap for coin gain chance
-  xpGain: number;         // Current cap for XP gain chance
-}
-
 export interface Player {
   id: string;
   username: string;
   character: Character;
   stats: PlayerStats;
   weapons: Weapon[];
-}
-
-export interface GameState {
-  // Core game
-  deck: Card[];
-  board: Card[];
-  foundCombinations: Card[][];
-  score: number;
-  gameStarted: boolean;
-  gameEnded: boolean;
-  startTime: number | null;
-  endTime: number | null;
-
-  // Attribute scaling
-  activeAttributes: AttributeName[];
-
-  // Roguelike properties
-  round: number;
-  targetScore: number;
-  remainingTime: number;
-  roundCompleted: boolean;
-
-  // Player
-  player: Player;
-
-  // Shop and upgrades
-  shopWeapons: (Weapon | null)[];  // Weapon shop items
-  levelUpOptions: Weapon[];  // Now weapons only
-  rerollCost: number;
-
-  // Enemy
-  currentEnemies: EnemyOption[];  // Enemies with pre-determined rewards to choose from
-  activeEnemyInstance: EnemyInstance | null;  // Active enemy for current round
-  selectedEnemyReward: Weapon | null;  // Pre-determined stretch goal reward for selected enemy
-  selectedEnemyMoney: number | null;  // Pre-determined stretch goal bonus money for selected enemy
-  defeatedEnemies: string[];  // Names of enemies whose stretch goals have been completed
-  awardedStretchGoalWeapons: string[];  // IDs of stretch goal weapons that have been awarded
-
-  // Endless mode
-  isEndlessMode: boolean;
-
-  // Connector weapon system
-  connections: BoardConnection[];  // Active connections between board positions
 }

@@ -38,7 +38,7 @@ describe('Weapon Definitions', () => {
 
     it('should have all required weapon types', () => {
       const weaponNames = new Set(WEAPONS.map(w => w.name));
-      const expectedTypes: import('@/types').WeaponName[] = [
+      const expectedTypes: string[] = [
         'Blast Powder',
         'Oracle Eye',
         'Mystic Sight',  // Legendary only

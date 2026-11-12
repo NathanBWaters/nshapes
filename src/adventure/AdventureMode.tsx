@@ -5,11 +5,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { music, setMusicEnabled, sfx } from '@/audio';
-import type { AdventureSave, LessonPage, LevelDef, MechanicDef, RunState } from './types';
+import type { AdventureSave, FeatureDestination, LevelDef, MechanicDef, RunState } from './types';
 import { MAIN_LEVELS, getLevel, mainIndexOf } from './data/levels';
-import { COMBO_DISCOVERY_SEEN_ID, MECHANICS, buildAdaptiveEvolutionMechanic, buildComboDiscoveryPages } from './data/mechanics';
+import { CAMPAIGN_FEATURES } from './data/features';
+import { MECHANICS } from './data/mechanics';
 import { STORY } from './data/story';
 import { applyLevelResult, equipArcana, equipCharm, isLevelUnlocked, markCoachMarkSeen, markMechanicSeen, type ResultApplication, type Unlock } from './progress';
+import { isFirstVisit, lessonsDueBefore, type LessonPlan } from './lessons';
 import { loadAdventureSave, writeAdventureSave } from './save';
 import { computeStars } from './engine/run';
 import { randomSeed } from './engine/rng';
@@ -22,6 +24,7 @@ import UnlockReveal from './components/UnlockReveal';
 import Camp, { type CampTab } from './components/Camp';
 import FieldGuide from './components/FieldGuide';
 import BountyBoard from './components/BountyBoard';
+import { starsLandedMs } from './components/ui';
 
 type Screen =
   | { kind: 'map'; highlight?: string | null }
@@ -31,14 +34,22 @@ type Screen =
   | { kind: 'guide' }
   | { kind: 'bounties' };
 
-interface LessonRequest {
-  mechanic: MechanicDef;
-  cta?: string;
-  quiz?: boolean;
-  prelude?: LessonPage[];
-  dismissible?: boolean;
-  then?: () => void;
+/** Lessons still to play before a fight starts; the first one is on screen. */
+interface Teaching {
+  plans: LessonPlan[];
+  level: LevelDef;
 }
+
+const screenFor = (d: FeatureDestination): Screen =>
+  d.screen === 'camp' ? { kind: 'camp', tab: d.tab } : { kind: 'bounties' };
+
+/** First visit ever: story → lessons → "Is this a Set?" checks → straight into the first level. */
+const onboarding = (save: AdventureSave): Teaching | null => {
+  const first = MAIN_LEVELS[0];
+  if (!isFirstVisit(save)) return null;
+  const [lesson, ...rest] = lessonsDueBefore(first, save);
+  return { plans: [{ ...lesson, prelude: STORY.welcome }, ...rest], level: first };
+};
 
 interface Props {
   onExit: () => void;
@@ -51,7 +62,9 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
   const [save, setSaveState] = useState<AdventureSave>(() => initialSave ?? loadAdventureSave());
   const [screen, setScreen] = useState<Screen>({ kind: 'map' });
   const [preview, setPreview] = useState<LevelDef | null>(null);
-  const [lesson, setLesson] = useState<LessonRequest | null>(null);
+  const [teaching, setTeaching] = useState<Teaching | null>(() => onboarding(save));
+  /** A mechanic opened just to read about it (no fight follows) */
+  const [reference, setReference] = useState<MechanicDef | null>(null);
   const [unlocks, setUnlocks] = useState<Unlock[]>([]);
   const [unlocksRevealed, setUnlocksRevealed] = useState(true);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -90,66 +103,20 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
     setScreen({ kind: 'run', levelId: level.id, seed: randomSeed() });
   }, [clearPendingTimers]);
 
-  /** Teach a level's mechanic the first time, then fight. */
-  const teachThenFight = useCallback((level: LevelDef, prelude?: LessonPage[]) => {
-    setLesson({
-      mechanic: MECHANICS[level.introduces],
-      cta: 'Start the fight',
-      prelude,
-      then: () => {
-        setSave(s => markMechanicSeen(s, level.introduces));
-        startRun(level);
-      },
-    });
-  }, [setSave, startRun]);
-
-  // First visit ever: story → lessons → "Is this a Set?" checks → straight into 1-1
-  useEffect(() => {
-    const first = MAIN_LEVELS[0];
-    if (Object.keys(save.plays).length === 0 && !save.seenMechanics.includes(first.introduces)) {
-      teachThenFight(first, STORY.welcome);
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
   const handlePlay = (level: LevelDef) => {
     sfx('confirm');
     setPreview(null);
-    const discoveryPages = buildComboDiscoveryPages(level.id, save);
-    const needsIntro = !save.seenMechanics.includes(level.introduces);
-    const needsEvoTutorial =
-      !level.rules.noGear &&
-      save.unlockedEvolutions.length > 0 &&
-      !save.seenMechanics.includes('weapon_evolutions');
+    const plans = lessonsDueBefore(level, save);
+    if (plans.length > 0) setTeaching({ plans, level });
+    else startRun(level);
+  };
 
-    const launchEvoThenFight = () => {
-      setLesson({
-        mechanic: buildAdaptiveEvolutionMechanic(save),
-        cta: 'Start the fight',
-        then: () => {
-          setSave(s => markMechanicSeen(s, 'weapon_evolutions'));
-          startRun(level);
-        },
-      });
-    };
-
-    if (needsIntro) {
-      setLesson({
-        mechanic: MECHANICS[level.introduces],
-        cta: needsEvoTutorial ? 'Next: Weapon Combos' : 'Start the fight',
-        prelude: discoveryPages.length > 0 ? discoveryPages : undefined,
-        then: () => {
-          setSave(s => {
-            let updated = markMechanicSeen(s, level.introduces);
-            if (discoveryPages.length > 0) updated = markMechanicSeen(updated, COMBO_DISCOVERY_SEEN_ID);
-            return updated;
-          });
-          if (needsEvoTutorial) launchEvoThenFight();
-          else startRun(level);
-        },
-      });
-    } else if (needsEvoTutorial) {
-      launchEvoThenFight();
-    } else {
+  /** The lesson on screen was accepted: record it, then show the next one or start the fight. */
+  const finishLesson = ({ plans: [done, ...rest], level }: Teaching) => {
+    setSave(s => done.marks.reduce(markMechanicSeen, s));
+    if (rest.length > 0) setTeaching({ plans: rest, level });
+    else {
+      setTeaching(null);
       startRun(level);
     }
   };
@@ -162,7 +129,7 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
     if (result.unlocks.length > 0) {
       // Let the stars land first, then give each unlock its own moment
       setUnlocksRevealed(false);
-      timers.current.push(setTimeout(() => setUnlocks(result.unlocks), 600 + stars * 450));
+      timers.current.push(setTimeout(() => setUnlocks(result.unlocks), starsLandedMs(stars)));
     } else {
       setUnlocksRevealed(true);
     }
@@ -220,8 +187,12 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
         onCamp={() => {
           clearPendingTimers();
           setUnlocks([]);
-          const unlockedWorkshop = screen.result.unlocks.some(u => u.kind === 'feature' && u.feature === 'workshop');
-          setScreen({ kind: 'camp', tab: unlockedWorkshop ? 'workshop' : undefined });
+          // Land on the Camp tab this result just unlocked, if any
+          const tab = screen.result.unlocks.flatMap(u => {
+            const d = u.kind === 'feature' ? CAMPAIGN_FEATURES[u.feature].open?.destination : undefined;
+            return d?.screen === 'camp' ? [d.tab] : [];
+          })[0];
+          setScreen({ kind: 'camp', tab });
         }}
         onBounties={() => { clearPendingTimers(); setUnlocks([]); setScreen({ kind: 'bounties' }); }}
       />
@@ -245,20 +216,18 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
         onSelectFighter={f => { sfx('click'); setSave(s => ({ ...s, selectedFighter: f })); }}
         onSelectCharm={id => { sfx('click'); setSave(s => equipCharm(s, id)); }}
         onSelectArcana={id => { sfx('click'); setSave(s => equipArcana(s, id)); }}
-        onShowMechanic={id => setLesson({ mechanic: MECHANICS[id], cta: 'Close', quiz: false, dismissible: true })}
+        onShowMechanic={id => setReference(MECHANICS[id])}
       />
-      <MechanicIntro
-        mechanic={lesson?.mechanic ?? null}
-        cta={lesson?.cta}
-        quiz={lesson?.quiz}
-        prelude={lesson?.prelude}
-        dismissible={lesson?.dismissible}
-        onClose={() => {
-          const then = lesson?.then;
-          setLesson(null);
-          then?.();
-        }}
-      />
+      {teaching ? (
+        <MechanicIntro
+          mechanic={teaching.plans[0].mechanic}
+          prelude={teaching.plans[0].prelude}
+          cta={teaching.plans.length > 1 ? `Next: ${teaching.plans[1].mechanic.title}` : 'Start the fight'}
+          onClose={() => finishLesson(teaching)}
+        />
+      ) : (
+        <MechanicIntro mechanic={reference} cta="Close" quiz={false} dismissible onClose={() => setReference(null)} />
+      )}
       {unlocks.length > 0 && (
         <UnlockReveal
           unlocks={unlocks}
@@ -266,8 +235,10 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
           onUseFighter={name => setSave(s => ({ ...s, selectedFighter: name }))}
           onEquipCharm={id => setSave(s => equipCharm(s, id))}
           onEquipArcana={id => setSave(s => equipArcana(s, id))}
-          onOpenBounties={() => setScreen({ kind: 'bounties' })}
-          onOpenWorkshop={() => setScreen({ kind: 'camp', tab: 'workshop' })}
+          onOpenFeature={feature => {
+            const open = CAMPAIGN_FEATURES[feature].open;
+            if (open) setScreen(screenFor(open.destination));
+          }}
           onDone={() => {
             setUnlocks([]);
             setUnlocksRevealed(true);

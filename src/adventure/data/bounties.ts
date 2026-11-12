@@ -1,9 +1,9 @@
 /**
  * Cross-run Bounties.
  *
- * The Bounty Board unlocks upon clearing 1-8 (Meadow Boss). Once open, every
- * fight — win, lose, or replay — advances cumulative counters across runs and
- * cashes out coins, Armory weapons, and Arcana wildcards.
+ * Once the Bounty Board is open (see data/features.ts), every fight — win,
+ * lose, or replay — advances cumulative counters across runs and cashes out
+ * coins, Armory weapons, and Arcana wildcards.
  */
 import type { AdventureSave, BountyDef } from '../types';
 import { LEVELS } from './levels';
@@ -16,8 +16,6 @@ const uniqueFighterWins = (save: AdventureSave): number =>
 
 const perfectCount = (save: AdventureSave): number =>
   Object.values(save.stars).filter(s => s >= 3).length;
-
-export const BOUNTY_UNLOCK_LEVEL_ID = '1-8';
 
 export const BOUNTIES: BountyDef[] = [
   // ── Mastery & Escalating Purity ─────────────────────────────────────────

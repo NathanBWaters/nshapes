@@ -43,7 +43,6 @@ export interface EvolutionRecipe {
   gearRequirementText: string;
   primeRequirementText: string;
   mysteryHint: string;
-  unlockHint: string;
   hasGear: (weapons: Weapon[]) => boolean;
   primeProgress: (ctx: EvolutionCheckContext) => EvolutionPrimeProgress;
 }
@@ -94,7 +93,6 @@ export const EVOLUTION_RECIPES: EvolutionRecipe[] = [
     gearRequirementText: 'Prismatic Ray or Chaos Shard + any 2nd weapon',
     primeRequirementText: 'Reach a 3-step Purity Chain or 2 Rainbow Strikes',
     mysteryHint: 'Combine beam or ricochet gear with prismatic mastery.',
-    unlockHint: 'Earn ★★★ on 3-1 Fourth Dimension',
     hasGear: ws => ws.length >= 2 && hasAnyId(ws, LASER_CHAOS_IDS),
     primeProgress: ctx => {
       const score = Math.max(ctx.roundStats.allDifferentMatches, ctx.maxPurityChain >= 3 ? 2 : Math.floor(ctx.maxPurityChain / 2));
@@ -123,7 +121,6 @@ export const EVOLUTION_RECIPES: EvolutionRecipe[] = [
     gearRequirementText: 'Any 2 Chrono or Echo weapons',
     primeRequirementText: 'Land 2 Rainbow Strikes (or 3 Sets on 2-trait boards)',
     mysteryHint: 'Pair two time-bending or echoing relics and strike with every color.',
-    unlockHint: 'Earn ★★★ on 3-2 Marching Ants',
     hasGear: ws => countMatchingWeapons(ws, CHRONO_ECHO_IDS) >= 2,
     primeProgress: ctx => {
       if (ctx.attributes.length <= 2) {
@@ -155,7 +152,6 @@ export const EVOLUTION_RECIPES: EvolutionRecipe[] = [
     gearRequirementText: "Fortune's Favor or Scholar's Tome + any 2nd weapon",
     primeRequirementText: 'Collect 8+ coins during this fight',
     mysteryHint: 'Carry wealth or wisdom gear and fill your purse mid-fight.',
-    unlockHint: 'Earn ★★★ on 2-6 Tick Tock',
     hasGear: ws => ws.length >= 2 && hasAnyId(ws, WEALTH_TOME_IDS),
     primeProgress: ctx => {
       const cur = Math.min(8, ctx.coins);
@@ -184,7 +180,6 @@ export const EVOLUTION_RECIPES: EvolutionRecipe[] = [
     gearRequirementText: 'Flint Spark + Blast Powder families',
     primeRequirementText: 'Make 3 Sets in this fight',
     mysteryHint: "Sly Fox's twin elements—spark and powder—primed by three clean strikes.",
-    unlockHint: "Earn ★★ on 1-5E Hoarder's Den (World 1 Elite)",
     hasGear: ws => hasAnyId(ws, FIRE_IDS) && hasAnyId(ws, BLAST_IDS),
     primeProgress: ctx => {
       const cur = Math.min(3, ctx.matches);
@@ -213,7 +208,6 @@ export const EVOLUTION_RECIPES: EvolutionRecipe[] = [
     gearRequirementText: 'Mending Charm + Life Vessel families',
     primeRequirementText: 'Reach a 3-Set streak without mistakes',
     mysteryHint: "Orange Tabby's vitality pair awakened by a 3-Set streak.",
-    unlockHint: 'Earn ★★ on 1-7 Ticking Clock',
     hasGear: ws => hasAnyId(ws, HEAL_IDS) && hasAnyId(ws, LIFE_IDS),
     primeProgress: ctx => {
       const cur = Math.min(3, ctx.roundStats.maxStreak);
@@ -242,7 +236,6 @@ export const EVOLUTION_RECIPES: EvolutionRecipe[] = [
     gearRequirementText: 'Second Chance + Fortune Token families',
     primeRequirementText: 'Make 3 Sets in this fight',
     mysteryHint: "Badger's lucky charms charged across three Sets.",
-    unlockHint: 'Earn ★★★ on 2-4 Near Miss',
     hasGear: ws => hasAnyId(ws, GRACE_CAP_IDS) && hasAnyId(ws, GRACE_GAIN_IDS),
     primeProgress: ctx => {
       const cur = Math.min(3, ctx.matches);
@@ -271,7 +264,6 @@ export const EVOLUTION_RECIPES: EvolutionRecipe[] = [
     gearRequirementText: 'Growth Seed + Field Stone families',
     primeRequirementText: 'Trigger an Escalating Purity Chain (2+ step)',
     mysteryHint: "Corgi's field and seed awakened by an escalating Purity combo.",
-    unlockHint: 'Earn ★★★ on 2-2 Junk Drawer',
     hasGear: ws => hasAnyId(ws, GROWTH_IDS) && hasAnyId(ws, FIELD_IDS),
     primeProgress: ctx => {
       const cur = ctx.maxPurityChain >= 2 ? 1 : 0;
@@ -300,7 +292,6 @@ export const EVOLUTION_RECIPES: EvolutionRecipe[] = [
     gearRequirementText: 'Any 2 Vision or Hint weapons (Oracle Eye, Seeker Lens, Crystal Orb)',
     primeRequirementText: 'Make 3 Sets without pressing the manual Hint button',
     mysteryHint: 'Carry twin eyes of foresight and prove your own sight across 3 Sets.',
-    unlockHint: 'Earn ★★★ on 3-5 Color Me Gone',
     hasGear: ws => countMatchingWeapons(ws, VISION_IDS) >= 2,
     primeProgress: ctx => {
       if (ctx.roundStats.hintsUsed > 0) {

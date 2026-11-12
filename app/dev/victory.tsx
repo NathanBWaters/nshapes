@@ -3,7 +3,8 @@ import { Alert } from 'react-native';
 import VictoryScreen from '@/components/VictoryScreen';
 import { RoundScore } from '@/components/RoundProgressChart';
 import { Player, PlayerStats } from '@/types';
-import { ROUND_REQUIREMENTS, WEAPONS } from '@/utils/gameDefinitions';
+import { WEAPONS } from '@/utils/gameDefinitions';
+import { ROUND_REQUIREMENTS } from '@/utils/gameConfig';
 
 /**
  * Dev Victory Page
@@ -28,17 +29,12 @@ const mockPlayerStats: PlayerStats = {
   experience: 850,
   experienceGainPercent: 100,
   luck: 0,
-  maxWeapons: 99,
-  commerce: 0,
   scavengingPercent: 0,
-  scavengeAmount: 1,
   health: 4,
   maxHealth: 7,
   fieldSize: 12,
   freeRerolls: 1,
   drawIncrease: 0,
-  drawIncreasePercent: 0,
-  chanceOfFire: 0,
   explosion: 0,
   damage: 1,
   damagePercent: 0,
@@ -47,21 +43,15 @@ const mockPlayerStats: PlayerStats = {
   matchHints: 0,
   matchPossibilityHints: 0,
   matchIntervalHintPercent: 0,
-  matchIntervalSpeed: 15,
-  dodgePercent: 0,
   dodgeAttackBackPercent: 0,
   dodgeAttackBackAmount: 1,
   graces: 3,
   maxGraces: 5,
   bombTimer: 20,
   additionalPoints: 0,
-  deflectPercent: 0,
-  criticalChance: 0,
   timeFreezePercent: 0,
-  timeFreezeAmount: 15,
   hints: 2,
   maxHints: 3,
-  hintPasses: 0,
   explosionChance: 70,
   autoHintChance: 100,
   autoHintInterval: 12000,

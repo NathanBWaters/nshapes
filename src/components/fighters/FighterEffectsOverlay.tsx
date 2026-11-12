@@ -1,14 +1,9 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import Animated, {
-  Easing,
-  interpolate,
-  useAnimatedStyle,
-  useFrameCallback,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
+import Animated, { interpolate, useAnimatedStyle } from 'react-native-reanimated';
 import { Svg, Circle, G, Line, Path, Polygon, Text as SvgText } from 'react-native-svg';
+import { useEffectsDriver } from '@/components/creatures/useEffectsDriver';
+import { STROKE, Sparkle4 } from '@/components/illustration/primitives';
 import { COLORS } from '@/utils/colors';
 import {
   FIGHTER_REACTION_HOLD_MS,
@@ -16,7 +11,6 @@ import {
   FighterPersonalityProfile,
   FighterReactionType,
 } from '@/utils/fighterAnimations';
-import { advancePhase, expApproach } from '@/utils/proceduralMotion';
 
 interface FighterEffectsOverlayProps {
   activeReaction: FighterReactionType | null;
@@ -24,30 +18,6 @@ interface FighterEffectsOverlayProps {
   mood: FighterAmbientMood;
   personality: FighterPersonalityProfile;
   animate?: boolean;
-}
-
-const STROKE = COLORS.slateCharcoal;
-
-function Sparkle4({
-  cx,
-  cy,
-  r,
-  fill = COLORS.actionYellow,
-}: {
-  cx: number;
-  cy: number;
-  r: number;
-  fill?: string;
-}) {
-  return (
-    <Path
-      d={`M ${cx} ${cy - r} Q ${cx} ${cy} ${cx + r} ${cy} Q ${cx} ${cy} ${cx} ${cy + r} Q ${cx} ${cy} ${cx - r} ${cy} Q ${cx} ${cy} ${cx} ${cy - r} Z`}
-      fill={fill}
-      stroke={STROKE}
-      strokeWidth={1.4}
-      strokeLinejoin="round"
-    />
-  );
 }
 
 function HeartShape({
@@ -88,60 +58,27 @@ export const FighterEffectsOverlay: React.FC<FighterEffectsOverlayProps> = ({
   personality,
   animate = true,
 }) => {
-  const burstProgress = useSharedValue(0);
-  const ambientPhase = useSharedValue(0);
-  const ambientFreqHz = useSharedValue(0.6);
-
   const showAmbient = !activeReaction;
-  const sleepyTarget = showAmbient && mood === 'sleepy' ? 1 : 0;
-  const urgentTarget = showAmbient && mood === 'urgent' ? 1 : 0;
-  const streakTarget = showAmbient && (mood === 'streak' || mood === 'victory') ? 1 : 0;
-
-  const sleepyPresence = useSharedValue(sleepyTarget);
-  const urgentPresence = useSharedValue(urgentTarget);
-  const streakPresence = useSharedValue(streakTarget);
-
-  useFrameCallback((frameInfo) => {
-    const dtMs = frameInfo.timeSincePreviousFrame;
-    if (dtMs === null || dtMs <= 0) return;
-    const dt = Math.min(dtMs / 1000, 0.05);
-    const desiredHz = mood === 'urgent' ? 1.55 : mood === 'sleepy' ? 0.42 : 0.78;
-    ambientFreqHz.value = expApproach(ambientFreqHz.value, desiredHz, 8, dt);
-    ambientPhase.value = advancePhase(ambientPhase.value, ambientFreqHz.value, dt);
-  }, animate);
-
-  useEffect(() => {
-    if (!animate) {
-      sleepyPresence.value = sleepyTarget;
-      urgentPresence.value = urgentTarget;
-      streakPresence.value = streakTarget;
-      return;
-    }
-    const cfg = { duration: 240, easing: Easing.inOut(Easing.quad) };
-    sleepyPresence.value = withTiming(sleepyTarget, cfg);
-    urgentPresence.value = withTiming(urgentTarget, cfg);
-    streakPresence.value = withTiming(streakTarget, cfg);
-  }, [
+  const {
+    burstProgress,
+    ambientPhase,
+    presences: [sleepyPresence, urgentPresence, streakPresence],
+  } = useEffectsDriver({
     animate,
-    sleepyTarget,
-    urgentTarget,
-    streakTarget,
-    sleepyPresence,
-    urgentPresence,
-    streakPresence,
-  ]);
-
-  useEffect(() => {
-    if (!animate || !activeReaction) {
-      burstProgress.value = activeReaction ? 0.55 : 0;
-      return;
-    }
-    burstProgress.value = 0;
-    burstProgress.value = withTiming(1, {
-      duration: FIGHTER_REACTION_HOLD_MS[activeReaction] ?? 850,
-      easing: Easing.out(Easing.cubic),
-    });
-  }, [activeReaction, reactionId, animate, burstProgress, personality]);
+    initialAmbientHz: 0.6,
+    ambientHz: mood === 'urgent' ? 1.55 : mood === 'sleepy' ? 0.42 : 0.78,
+    presenceTargets: [
+      showAmbient && mood === 'sleepy' ? 1 : 0,
+      showAmbient && mood === 'urgent' ? 1 : 0,
+      showAmbient && (mood === 'streak' || mood === 'victory') ? 1 : 0,
+    ],
+    fadeMs: 240,
+    activeReaction,
+    reactionId,
+    burstMs: activeReaction ? FIGHTER_REACTION_HOLD_MS[activeReaction] ?? 850 : 850,
+    staticBurstProgress: 0.55,
+    restartKey: personality,
+  });
 
   // Curved arc + overshoot pop-and-settle for one-shot reaction particles
   const burstStyle = useAnimatedStyle(() => {

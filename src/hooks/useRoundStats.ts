@@ -6,68 +6,12 @@
  */
 
 import { useCallback, useRef } from 'react';
-import type { Card, Shape, Color } from '@/types';
+import type { Card } from '@/types';
 import type { RoundStats } from '@/types/enemy';
+import { addWeaponImpact, createInitialRoundStats, getSortedWeaponImpacts, WeaponImpactDelta } from '@/game/roundStats';
 
-/**
- * Initial round stats with all values reset
- */
-export function createInitialRoundStats(
-  targetScore: number = 0,
-  hintsRemaining: number = 0,
-  gracesRemaining: number = 0
-): RoundStats {
-  return {
-    // Match tracking
-    totalMatches: 0,
-    currentStreak: 0,
-    maxStreak: 0,
-    invalidMatches: 0,
-
-    // Timing
-    matchTimes: [],
-    timeRemaining: 60,
-
-    // Card tracking
-    cardsRemaining: 12,
-    tripleCardsCleared: 0,
-    faceDownCardsMatched: 0,
-    bombsDefused: 0,
-    countdownCardsMatched: 0,
-
-    // Attribute tracking
-    shapesMatched: new Set<Shape>(),
-    colorsMatched: new Set<Color>(),
-    colorMatchCounts: new Map<Color, number>(),
-    allDifferentMatches: 0,
-    allSameColorMatches: 0,
-    squiggleMatches: 0,
-
-    // Resource tracking
-    gracesUsed: 0,
-    hintsUsed: 0,
-    hintsRemaining,
-    gracesRemaining,
-    damageReceived: 0,
-    weaponEffectsTriggered: new Set<string>(),
-
-    // Score
-    currentScore: 0,
-    targetScore,
-
-    // Time gain trigger tracking
-    timeGainTriggersThisRound: 0,
-    timeGainTriggerCapBonus: 0,
-    consecutiveInvalidMatches: 0,
-
-    // Challenge legendary trigger flags
-    prismaticPerfectionTriggered: false,
-    tabulaRasaTriggered: false,
-
-    // Weapon impact tracking
-    weaponImpacts: new Map(),
-  };
-}
+// Re-exported for existing importers; new code should import from '@/game/roundStats'.
+export { createInitialRoundStats };
 
 /**
  * Hook to track round statistics for enemy defeat conditions.
@@ -327,49 +271,9 @@ export function useRoundStats() {
       weaponId: string,
       weaponName: string,
       weaponIcon: string,
-      impact: {
-        pointsEarned?: number;
-        cardsDestroyed?: number;
-        moneyEarned?: number;
-        heartsEarned?: number;
-        xpEarned?: number;
-        timeGained?: number;
-        gracesEarned?: number;
-        hintsEarned?: number;
-      }
+      impact: WeaponImpactDelta
     ) => {
-      const stats = statsRef.current;
-      if (!stats.weaponImpacts) {
-        stats.weaponImpacts = new Map();
-      }
-      const existing = stats.weaponImpacts.get(weaponId);
-
-      if (existing) {
-        // Add to existing impact
-        existing.pointsEarned += impact.pointsEarned || 0;
-        existing.cardsDestroyed += impact.cardsDestroyed || 0;
-        existing.moneyEarned += impact.moneyEarned || 0;
-        existing.heartsEarned += impact.heartsEarned || 0;
-        existing.xpEarned += impact.xpEarned || 0;
-        existing.timeGained += impact.timeGained || 0;
-        existing.gracesEarned += impact.gracesEarned || 0;
-        existing.hintsEarned += impact.hintsEarned || 0;
-      } else {
-        // Create new impact entry
-        stats.weaponImpacts.set(weaponId, {
-          weaponId,
-          weaponName,
-          weaponIcon,
-          pointsEarned: impact.pointsEarned || 0,
-          cardsDestroyed: impact.cardsDestroyed || 0,
-          moneyEarned: impact.moneyEarned || 0,
-          heartsEarned: impact.heartsEarned || 0,
-          xpEarned: impact.xpEarned || 0,
-          timeGained: impact.timeGained || 0,
-          gracesEarned: impact.gracesEarned || 0,
-          hintsEarned: impact.hintsEarned || 0,
-        });
-      }
+      addWeaponImpact(statsRef.current, weaponId, weaponName, weaponIcon, impact);
     },
     []
   );
@@ -377,31 +281,7 @@ export function useRoundStats() {
   /**
    * Get weapon impacts sorted by total value (descending)
    */
-  const getWeaponImpacts = useCallback(() => {
-    if (!statsRef.current.weaponImpacts) {
-      return [];
-    }
-    const impacts = Array.from(statsRef.current.weaponImpacts.values());
-    return impacts.sort((a, b) => {
-      const totalA =
-        a.pointsEarned +
-        a.cardsDestroyed * 2 +
-        a.moneyEarned +
-        a.heartsEarned * 10 +
-        a.timeGained +
-        a.gracesEarned * 5 +
-        a.hintsEarned * 3;
-      const totalB =
-        b.pointsEarned +
-        b.cardsDestroyed * 2 +
-        b.moneyEarned +
-        b.heartsEarned * 10 +
-        b.timeGained +
-        b.gracesEarned * 5 +
-        b.hintsEarned * 3;
-      return totalB - totalA;
-    });
-  }, []);
+  const getWeaponImpacts = useCallback(() => getSortedWeaponImpacts(statsRef.current), []);
 
   return {
     statsRef,

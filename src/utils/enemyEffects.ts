@@ -6,6 +6,7 @@
  */
 
 import type { Card, PlayerStats } from '@/types';
+import { ATTRIBUTE_VALUES } from './gameUtils';
 import type {
   EnemyInstance,
   EnemyStartResult,
@@ -501,17 +502,10 @@ export const AttributeChangeEffect: EffectBehavior = {
       const attributes = ['shape', 'color', 'number', 'shading'] as const;
       const attribute = attributes[Math.floor(Math.random() * attributes.length)];
 
-      // Get possible values for this attribute
-      const values: Record<string, readonly string[] | readonly number[]> = {
-        shape: ['oval', 'squiggle', 'diamond'] as const,
-        color: ['red', 'green', 'purple'] as const,
-        number: [1, 2, 3] as const,
-        shading: ['solid', 'striped', 'open'] as const,
-      };
-
       // Pick a different value than current
       const currentValue = target[attribute];
-      const possibleValues = values[attribute].filter((v) => v !== currentValue);
+      const values: readonly (string | number)[] = ATTRIBUTE_VALUES[attribute];
+      const possibleValues = values.filter((v) => v !== currentValue);
       const newValue = possibleValues[Math.floor(Math.random() * possibleValues.length)];
 
       return {

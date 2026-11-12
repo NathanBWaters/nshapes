@@ -4,24 +4,17 @@
  * (round base time + startingTime bonus from Chrono Shards).
  */
 
-import { ROUND_REQUIREMENTS, getEndlessRoundRequirement } from '@/utils/gameDefinitions';
+import { getMaxRoundTime } from '@/game/rounds';
+import { DEFAULT_PLAYER_STATS } from '@/utils/gameDefinitions';
 
-// Helper function that mirrors the capping logic in Game.tsx
+// Time gained during a round is capped at the round's base time (by run round) + startingTime
 const calculateCappedTime = (
   currentTime: number,
   bonusTime: number,
   roundNumber: number,
   startingTimeBonus: number
-): number => {
-  const roundBaseTime = roundNumber > 10
-    ? getEndlessRoundRequirement(roundNumber).time
-    : (ROUND_REQUIREMENTS.find(r => r.round === roundNumber)?.time || 60);
-
-  const startingMax = roundBaseTime + startingTimeBonus;
-  const newTime = currentTime + bonusTime;
-
-  return Math.min(newTime, startingMax);
-};
+): number =>
+  Math.min(currentTime + bonusTime, getMaxRoundTime(roundNumber, { ...DEFAULT_PLAYER_STATS, startingTime: startingTimeBonus }));
 
 describe('Time Gain Capping', () => {
   describe('Without Chrono Shard (no startingTime bonus)', () => {

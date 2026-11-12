@@ -1,11 +1,19 @@
 import { Card, Shape, Color, Number, Shading, Background, AttributeName } from '../types';
 
-// All possible values for each attribute
-const ALL_SHAPES: Shape[] = ['oval', 'squiggle', 'diamond'];
-const ALL_COLORS: Color[] = ['red', 'green', 'purple'];
-const ALL_NUMBERS: Number[] = [1, 2, 3];
-const ALL_SHADINGS: Shading[] = ['solid', 'striped', 'open'];
-const ALL_BACKGROUNDS: Background[] = ['white', 'beige', 'charcoal'];
+/** The three values each card attribute can take. */
+export const ATTRIBUTE_VALUES = {
+  shape: ['oval', 'squiggle', 'diamond'],
+  color: ['red', 'green', 'purple'],
+  number: [1, 2, 3],
+  shading: ['solid', 'striped', 'open'],
+  background: ['white', 'beige', 'charcoal'],
+} as const satisfies { shape: readonly Shape[]; color: readonly Color[]; number: readonly Number[]; shading: readonly Shading[]; background: readonly Background[] };
+
+const ALL_SHAPES = ATTRIBUTE_VALUES.shape;
+const ALL_COLORS = ATTRIBUTE_VALUES.color;
+const ALL_NUMBERS = ATTRIBUTE_VALUES.number;
+const ALL_SHADINGS = ATTRIBUTE_VALUES.shading;
+const ALL_BACKGROUNDS = ATTRIBUTE_VALUES.background;
 
 // Default to 4 attributes for backward compatibility
 const DEFAULT_ATTRIBUTES: AttributeName[] = ['shape', 'color', 'number', 'shading'];

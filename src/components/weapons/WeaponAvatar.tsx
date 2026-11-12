@@ -9,7 +9,8 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
-import { Svg, Circle, G, Line, Path } from 'react-native-svg';
+import { Svg, Circle, G, Line } from 'react-native-svg';
+import { Sparkle4 } from '@/components/illustration/primitives';
 import { Weapon, WeaponRarity } from '@/types';
 import { useReducedMotion } from '@/utils/animation';
 import { COLORS } from '@/utils/colors';
@@ -37,20 +38,6 @@ interface WeaponAvatarProps {
   style?: StyleProp<ViewStyle>;
   /** Optional testID */
   testID?: string;
-}
-
-const STROKE = COLORS.slateCharcoal;
-
-function Sparkle4({ cx, cy, r, fill }: { cx: number; cy: number; r: number; fill: string }) {
-  return (
-    <Path
-      d={`M ${cx} ${cy - r} Q ${cx} ${cy} ${cx + r} ${cy} Q ${cx} ${cy} ${cx} ${cy + r} Q ${cx} ${cy} ${cx - r} ${cy} Q ${cx} ${cy} ${cx} ${cy - r} Z`}
-      fill={fill}
-      stroke={STROKE}
-      strokeWidth={1.5}
-      strokeLinejoin="round"
-    />
-  );
 }
 
 /**
@@ -353,8 +340,8 @@ export const WeaponAvatar: React.FC<WeaponAvatarProps> = ({
               strokeWidth={2.4}
               strokeDasharray="6 6"
             />
-            <Sparkle4 cx={82} cy={18} r={8.5} fill={COLORS.actionYellow} />
-            <Sparkle4 cx={18} cy={22} r={6.5} fill={trim.glow} />
+            <Sparkle4 cx={82} cy={18} r={8.5} fill={COLORS.actionYellow} strokeWidth={1.5} />
+            <Sparkle4 cx={18} cy={22} r={6.5} fill={trim.glow} strokeWidth={1.5} />
             <Line x1={50} y1={4} x2={50} y2={12} stroke={COLORS.actionYellow} strokeWidth={2.4} strokeLinecap="round" />
           </G>
         </Svg>

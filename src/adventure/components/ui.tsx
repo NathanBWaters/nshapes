@@ -7,6 +7,43 @@ import { COLORS } from '@/utils/colors';
 
 export const INK = COLORS.slateCharcoal;
 
+/** Adventure tones that the core style-guide palette (COLORS) has no name for. */
+export const TONE = {
+  /** Text and icons of something already earned, claimed or common */
+  spent: '#8E877D',
+  spentEdge: '#CFC8BD',
+  lockedEdge: '#B8B0A4',
+  emptyPip: '#D9D2C7',
+  coin: '#B07D00',
+  coinBright: '#E0A800',
+  coinPale: '#FFF6C2',
+  selected: '#FFFBE0',
+  arcana: '#6D28D9',
+  arcanaPale: '#FAF5FF',
+  combo: '#7C3AED',
+  comboPale: '#F5F3FF',
+  upside: '#0F766E',
+  tradeoff: '#B45309',
+  evoReady: '#D97706',
+  /** Text on the dark Camp and Bounty Board backdrops */
+  onDusk: '#E9DCCB',
+} as const;
+
+/** The dark cards used for lessons, in-fight tips and unlock reveals. */
+export const DARK = {
+  panel: '#1C1B19',
+  stage: '#2A2826',
+  text: '#F1ECE4',
+  muted: '#B9B1A5',
+  gold: COLORS.actionYellow,
+  /** Thin gold outline of a dark card */
+  goldEdge: (alpha: number) => `rgba(255,222,0,${alpha})`,
+} as const;
+
+/** Results screen: earned stars pop one after another, then the unlock reveals start. */
+export const starPopDelayMs = (index: number): number => 350 + index * 450;
+export const starsLandedMs = (stars: number): number => 600 + stars * 450;
+
 export const Btn: React.FC<{
   label: string;
   onPress: () => void;
@@ -37,7 +74,7 @@ export const Btn: React.FC<{
 export const StarRow: React.FC<{ stars: number; size?: number; max?: number; animateFrom?: number; color?: string }> = ({ stars, size = 18, max = 3, animateFrom, color = '#F5B800' }) => (
   <View style={{ flexDirection: 'row', gap: 2 }}>
     {Array.from({ length: max }).map((_, i) => (
-      <AnimatedStar key={i} filled={i < stars} size={size} delay={animateFrom !== undefined && i >= animateFrom && i < stars ? 350 + (i - animateFrom) * 450 : -1} color={color} />
+      <AnimatedStar key={i} filled={i < stars} size={size} delay={animateFrom !== undefined && i >= animateFrom && i < stars ? starPopDelayMs(i - animateFrom) : -1} color={color} />
     ))}
   </View>
 );

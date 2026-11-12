@@ -18,7 +18,7 @@ import { COLORS, getRarityColor } from '@/utils/colors';
 import type { Card, CardReward, Weapon } from '@/types';
 import type { WeaponEffectResult } from '@/utils/weaponEffects';
 import { music, sfx } from '@/audio';
-import type { AdventureSave, LevelDef, RunEvent, RunState } from '../types';
+import type { AdventureSave, LevelDef, RunEvent, RunEventType, RunState } from '../types';
 import { createRun, runReducer, shopPrice, rerollCost, xpForLevel, type RunAction } from '../engine/run';
 import { challengeProgress } from '../engine/challenges';
 import { MECHANICS } from '../data/mechanics';
@@ -27,7 +27,8 @@ import { foeDisplay } from '../data/foes';
 import { ABILITIES, ABILITY_TUNING } from '../data/abilities';
 import { getArcana } from '../data/arcana';
 import { getActiveEvolutionStatus } from '../data/evolutions';
-import { Btn, CoinPill, Eyebrow, Heart, INK, PopIn } from './ui';
+import { COACH_KEYS } from '../progress';
+import { Btn, CoinPill, DARK, Eyebrow, Heart, INK, PopIn, TONE } from './ui';
 
 const TICK_MS = 250;
 const REPLACE_DELAY_MS = 950;
@@ -43,12 +44,62 @@ interface Props {
   onCoachMarkSeen: (mechanicId: string) => void;
 }
 
-const SFX_FOR_EVENT: Partial<Record<RunEvent['type'], Parameters<typeof sfx>[0]>> = {
-  hit: 'hit', rainbow: 'rainbow', hurt: 'hurt', coins: 'coin', levelup: 'levelup', heal: 'heart',
-  foe_defeated: 'foeDefeated', wave: 'wave', regen: 'graceGain', time_stolen: 'back', shuffle: 'whoosh',
-  nine_lives: 'heart', grudge_release: 'explosion', ability_ready: 'star2', freeze: 'freeze', redeal: 'whoosh', scoop: 'match',
-  purity: 'match', purity_max: 'rainbow', catalyst_ready: 'star2', catalyst_lost: 'hurt', catalyst_saved: 'graceGain',
-  evolution: 'unlock', arcana_burn: 'explosion', overkill: 'coin',
+type FighterReaction = 'ecstatic' | 'heal' | 'powerup' | 'pain' | 'entrance';
+type EnemyReaction = 'criticalHit' | 'hit' | 'gloat' | 'attack' | 'regen' | 'entrance';
+
+/** How each run event looks and sounds. A full Record, so a new event type has to be given a row. */
+interface EventPresentation {
+  sfx?: Parameters<typeof sfx>[0];
+  floater?: (e: RunEvent) => { text: string; color: string };
+  fighter?: FighterReaction;
+  enemy?: EnemyReaction;
+  /** Foe portrait shakes */
+  shake?: boolean;
+}
+
+const EVENT_PRESENTATION: Record<RunEventType, EventPresentation> = {
+  hit: { sfx: 'hit', shake: true, floater: e => ({ text: `−${e.amount}`, color: COLORS.impactRed }), enemy: 'hit' },
+  rainbow: { sfx: 'rainbow', shake: true, floater: e => ({ text: `RAINBOW −${e.amount}`, color: '#9333EA' }), fighter: 'ecstatic', enemy: 'criticalHit' },
+  heal: { sfx: 'heart', fighter: 'heal' },
+  hurt: { sfx: 'hurt', enemy: 'gloat' },
+  grace: {},
+  coins: { sfx: 'coin', floater: e => ({ text: `+${e.amount}¢`, color: TONE.coin }) },
+  levelup: { sfx: 'levelup', fighter: 'powerup' },
+  foe_defeated: { sfx: 'foeDefeated', fighter: 'ecstatic' },
+  wave: { sfx: 'wave', fighter: 'entrance', enemy: 'entrance' },
+  regen: { sfx: 'graceGain', floater: e => ({ text: `+${e.amount}`, color: COLORS.logicTeal }), enemy: 'regen' },
+  dud: {},
+  face_down: {},
+  countdown: {},
+  bomb: {},
+  triple: {},
+  shuffle: { sfx: 'whoosh', enemy: 'attack' },
+  attr_shift: {},
+  card_removed: {},
+  time_stolen: { sfx: 'back', fighter: 'pain', enemy: 'attack' },
+  inactivity: { fighter: 'pain', enemy: 'attack' },
+  fire: {},
+  hint: {},
+  mistake: {},
+  time_up: {},
+  moves_out: {},
+  nine_lives: { sfx: 'heart', floater: () => ({ text: 'NINE LIVES!', color: COLORS.logicTeal }), fighter: 'heal' },
+  combo: { floater: e => ({ text: `COMBO ×${e.amount}`, color: COLORS.impactOrange }), fighter: 'ecstatic', enemy: 'criticalHit' },
+  grudge: {},
+  grudge_release: { sfx: 'explosion', floater: e => ({ text: `GRUDGE +${e.amount}`, color: '#7A3E00' }), fighter: 'ecstatic', enemy: 'criticalHit' },
+  ability_ready: { sfx: 'star2' },
+  freeze: { sfx: 'freeze', fighter: 'ecstatic' },
+  redeal: { sfx: 'whoosh', fighter: 'ecstatic' },
+  scoop: { sfx: 'match', fighter: 'ecstatic', enemy: 'criticalHit' },
+  purity: { sfx: 'match', floater: e => ({ text: `PURITY ×${e.amount}!`, color: '#0D9488' }) },
+  purity_max: { sfx: 'rainbow', floater: e => ({ text: `MAX PURITY ×${e.amount}!`, color: TONE.combo }), fighter: 'ecstatic', enemy: 'criticalHit' },
+  catalyst_spawn: {},
+  catalyst_ready: { sfx: 'star2', floater: () => ({ text: 'EVO READY!', color: TONE.evoReady }) },
+  catalyst_lost: { sfx: 'hurt', floater: () => ({ text: 'CATALYST LOST!', color: COLORS.impactRed }) },
+  catalyst_saved: { sfx: 'graceGain', floater: () => ({ text: 'CATALYST SAVED!', color: COLORS.logicTeal }) },
+  evolution: { sfx: 'unlock', floater: e => ({ text: `EVOLVED: ${e.text}!`, color: TONE.evoReady }), fighter: 'ecstatic', enemy: 'criticalHit' },
+  arcana_burn: { sfx: 'explosion', floater: () => ({ text: 'CONTROLLED BURN!', color: COLORS.impactOrange }) },
+  overkill: { sfx: 'coin', floater: e => ({ text: `OVERKILL +${e.amount}`, color: TONE.coin }) },
 };
 
 /** A tip the player has to accept. The fight is paused while one is showing. */
@@ -62,11 +113,13 @@ interface Tip {
   label?: string;
 }
 
-// first-time tips keyed by the run event that triggers them
-const COACH_BY_EVENT = Object.values(MECHANICS).reduce<Record<string, Tip>>((acc, m) => {
-  if (m.coachMark) acc[m.coachMark.on] = { id: m.id, title: m.title, text: m.coachMark.text, icon: m.icon };
-  return acc;
-}, {});
+/** First-time tips for each run event (several mechanics may wait on the same event). */
+const COACH_BY_EVENT = new Map<RunEventType, Tip[]>();
+for (const m of Object.values(MECHANICS)) {
+  if (!m.coachMark) continue;
+  const tip: Tip = { id: COACH_KEYS.event(m.id), title: m.title, text: m.coachMark.text, icon: m.icon };
+  COACH_BY_EVENT.set(m.coachMark.on, [...(COACH_BY_EVENT.get(m.coachMark.on) ?? []), tip]);
+}
 
 const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish, onQuit, onRestart, onCoachMarkSeen }) => {
   const insets = useSafeAreaInsets();
@@ -108,7 +161,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   // First fight with a new mechanic: walk through its tips before anything moves
   useEffect(() => {
     const m = MECHANICS[level.introduces];
-    const key = `start_${m.id}`;
+    const key = COACH_KEYS.fightStart(m.id);
     if (!m.fightTips?.length || seenCoach.current.has(key)) return;
     seenCoach.current.add(key);
     onCoachMarkSeen(key);
@@ -171,66 +224,30 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
     if (fresh.length === 0) return;
     lastEventId.current = fresh[fresh.length - 1].id;
     for (const e of fresh) {
-      const s = SFX_FOR_EVENT[e.type];
-      if (s) sfx(s);
-      if (e.type === 'hit' || e.type === 'rainbow') {
+      const show = EVENT_PRESENTATION[e.type];
+      if (show.sfx) sfx(show.sfx);
+      if (show.shake) {
         foeShake.value = withSequence(withTiming(-8, { duration: 40 }), withTiming(8, { duration: 60 }), withTiming(-4, { duration: 50 }), withTiming(0, { duration: 50 }));
         foeScale.value = withSequence(withTiming(0.9, { duration: 60 }), withTiming(1, { duration: 120, easing: Easing.out(Easing.quad) }));
-        addFloater(e.type === 'rainbow' ? `RAINBOW −${e.amount}` : `−${e.amount}`, e.type === 'rainbow' ? '#9333EA' : COLORS.impactRed);
       }
-      if (e.type === 'regen') addFloater(`+${e.amount}`, COLORS.logicTeal);
-      if (e.type === 'combo') addFloater(`COMBO ×${e.amount}`, COLORS.impactOrange);
-      if (e.type === 'grudge_release') addFloater(`GRUDGE +${e.amount}`, '#7A3E00');
-      if (e.type === 'nine_lives') addFloater('NINE LIVES!', COLORS.logicTeal);
-      if (e.type === 'purity') addFloater(`PURITY ×${e.amount}!`, '#0D9488');
-      if (e.type === 'purity_max') addFloater(`MAX PURITY ×${e.amount}!`, '#7C3AED');
-      if (e.type === 'catalyst_ready') addFloater('EVO READY!', '#D97706');
-      if (e.type === 'catalyst_lost') addFloater('CATALYST LOST!', COLORS.impactRed);
-      if (e.type === 'catalyst_saved') addFloater('CATALYST SAVED!', COLORS.logicTeal);
-      if (e.type === 'evolution') addFloater(`EVOLVED: ${e.text}!`, '#D97706');
-      if (e.type === 'arcana_burn') addFloater('CONTROLLED BURN!', COLORS.impactOrange);
-      if (e.type === 'overkill') addFloater(`OVERKILL +${e.amount}`, '#B07D00');
-      if (
-        e.type === 'rainbow' ||
-        e.type === 'purity_max' ||
-        e.type === 'evolution' ||
-        e.type === 'combo' ||
-        e.type === 'grudge_release' ||
-        e.type === 'foe_defeated' ||
-        e.type === 'scoop' ||
-        e.type === 'freeze' ||
-        e.type === 'redeal'
-      ) {
-        conductor.triggerReaction('ecstatic');
-      } else if (e.type === 'nine_lives' || e.type === 'heal') {
-        conductor.triggerHeal();
-      } else if (e.type === 'levelup') {
-        conductor.triggerPowerup();
-      } else if (e.type === 'time_stolen' || e.type === 'inactivity') {
-        conductor.triggerReaction('pain');
-      } else if (e.type === 'wave') {
-        conductor.triggerEntrance();
+      if (show.floater) {
+        const f = show.floater(e);
+        addFloater(f.text, f.color);
       }
-
-      if (
-        e.type === 'rainbow' ||
-        e.type === 'purity_max' ||
-        e.type === 'evolution' ||
-        e.type === 'combo' ||
-        e.type === 'grudge_release' ||
-        e.type === 'scoop'
-      ) {
-        enemyConductor.triggerHit({ isCritical: true });
-      } else if (e.type === 'hit') {
-        enemyConductor.triggerHit();
-      } else if (e.type === 'hurt') {
-        enemyConductor.triggerMistakeGloat();
-      } else if (e.type === 'time_stolen' || e.type === 'inactivity' || e.type === 'shuffle') {
-        enemyConductor.triggerAttack();
-      } else if (e.type === 'regen') {
-        enemyConductor.triggerRegen();
-      } else if (e.type === 'wave') {
-        enemyConductor.triggerEntrance();
+      switch (show.fighter) {
+        case 'ecstatic': conductor.triggerReaction('ecstatic'); break;
+        case 'pain': conductor.triggerReaction('pain'); break;
+        case 'heal': conductor.triggerHeal(); break;
+        case 'powerup': conductor.triggerPowerup(); break;
+        case 'entrance': conductor.triggerEntrance(); break;
+      }
+      switch (show.enemy) {
+        case 'criticalHit': enemyConductor.triggerHit({ isCritical: true }); break;
+        case 'hit': enemyConductor.triggerHit(); break;
+        case 'gloat': enemyConductor.triggerMistakeGloat(); break;
+        case 'attack': enemyConductor.triggerAttack(); break;
+        case 'regen': enemyConductor.triggerRegen(); break;
+        case 'entrance': enemyConductor.triggerEntrance(); break;
       }
       if (e.type === 'scoop') {
         const ids = runRef.current.ability?.scooped ?? [];
@@ -239,16 +256,15 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
       }
       if (e.type === 'ability_ready' && runRef.current.ability) {
         const def = ABILITIES[runRef.current.ability.id];
-        const key = `ability_${def.id}`;
+        const key = COACH_KEYS.abilityReady(def.id);
         if (!seenCoach.current.has(key)) {
           seenCoach.current.add(key);
           onCoachMarkSeen(key);
           pushTip({ id: key, title: `${def.name} is ready`, text: `${def.short} Tap the glowing button to use it.`, icon: def.icon, anchor: 'top' });
         }
       }
-      if (e.type === 'coins') addFloater(`+${e.amount}¢`, '#B07D00');
-      const cm = COACH_BY_EVENT[e.type];
-      if (cm && !seenCoach.current.has(cm.id)) {
+      for (const cm of COACH_BY_EVENT.get(e.type) ?? []) {
+        if (seenCoach.current.has(cm.id)) continue;
         seenCoach.current.add(cm.id);
         onCoachMarkSeen(cm.id);
         pushTip(cm);
@@ -428,13 +444,13 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
             <View style={st.synergyRow}>
               {run.activeArcana && (
                 <View testID="run-arcana-chip" style={st.arcanaChip}>
-                  <Icon name={getArcana(run.activeArcana).icon} size={12} color="#6D28D9" />
+                  <Icon name={getArcana(run.activeArcana).icon} size={12} color={TONE.arcana} />
                   <Text style={st.arcanaChipText}>{getArcana(run.activeArcana).numeral}</Text>
                 </View>
               )}
               {run.features.has('purity') && run.purityChain > 0 && (
                 <View testID="run-purity-chip" style={[st.purityChip, run.purityChain >= 2 && st.purityChipHot]}>
-                  <Icon name="lorc/lightning-branches" size={12} color={run.purityChain >= 2 ? '#0F766E' : INK} />
+                  <Icon name="lorc/lightning-branches" size={12} color={run.purityChain >= 2 ? TONE.upside : INK} />
                   <Text style={st.purityChipText}>
                     {run.purityChain >= 2 ? `Purity ×${run.purityChain}` : `Purity 1`} · &gt;{run.lastDiffCount} diff next
                   </Text>
@@ -452,7 +468,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
                   <Icon
                     name="lorc/crystal-shine"
                     size={12}
-                    color={evoStatus?.ready && run.catalystState === 'available' ? INK : '#6D28D9'}
+                    color={evoStatus?.ready && run.catalystState === 'available' ? INK : TONE.arcana}
                   />
                   <Text style={st.evoChipText} numberOfLines={1}>
                     {run.catalystState === 'evolved'
@@ -674,7 +690,7 @@ const WeaponPick: React.FC<{ title: string; subtitle: string; options: Weapon[];
             <TouchableOpacity key={`${w.id}-${i}`} testID={`pick-${i}`} onPress={() => onPick(w)} style={[st.pickCard, { borderColor: getRarityColor(w.rarity) }]} activeOpacity={0.85}>
               <View style={[st.pickIcon, { backgroundColor: COLORS.paperBeige }]}><WeaponAvatar weapon={w} size={34} /></View>
               <View style={{ flex: 1 }}>
-                <Text style={st.pickName}>{w.name}{tier > 0 ? ` +${tier}` : ''} <Text style={[st.pickRarity, { color: getRarityColor(w.rarity) === COLORS.rarityCommon ? '#8E877D' : getRarityColor(w.rarity) }]}>{w.rarity.toUpperCase()}</Text></Text>
+                <Text style={st.pickName}>{w.name}{tier > 0 ? ` +${tier}` : ''} <Text style={[st.pickRarity, { color: getRarityColor(w.rarity) === COLORS.rarityCommon ? TONE.spent : getRarityColor(w.rarity) }]}>{w.rarity.toUpperCase()}</Text></Text>
                 <Text style={st.pickDesc}>{w.shortDescription}</Text>
               </View>
             </TouchableOpacity>
@@ -772,12 +788,12 @@ const st = StyleSheet.create({
   xpFill: { position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: '#7AC8FF' },
   xpText: { fontSize: 9, fontWeight: '900', color: INK, textAlign: 'center' },
   synergyRow: { flexDirection: 'row', alignItems: 'center', gap: 5, flexWrap: 'wrap' },
-  arcanaChip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#FAF5FF', borderRadius: 999, borderWidth: 1.5, borderColor: '#6D28D9', paddingHorizontal: 7, paddingVertical: 2 },
-  arcanaChipText: { fontSize: 10, fontWeight: '900', color: '#6D28D9' },
+  arcanaChip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: TONE.arcanaPale, borderRadius: 999, borderWidth: 1.5, borderColor: TONE.arcana, paddingHorizontal: 7, paddingVertical: 2 },
+  arcanaChipText: { fontSize: 10, fontWeight: '900', color: TONE.arcana },
   purityChip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: COLORS.paperBeige, borderRadius: 999, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 7, paddingVertical: 2 },
-  purityChipHot: { backgroundColor: '#CCFBF1', borderColor: '#0F766E' },
+  purityChipHot: { backgroundColor: '#CCFBF1', borderColor: TONE.upside },
   purityChipText: { fontSize: 10, fontWeight: '800', color: INK },
-  evoChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F5F3FF', borderRadius: 999, borderWidth: 1.5, borderColor: '#6D28D9', paddingHorizontal: 7, paddingVertical: 2 },
+  evoChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: TONE.comboPale, borderRadius: 999, borderWidth: 1.5, borderColor: TONE.arcana, paddingHorizontal: 7, paddingVertical: 2 },
   evoChipReady: { backgroundColor: COLORS.actionYellow, borderColor: INK },
   evoChipText: { fontSize: 10, fontWeight: '900', color: INK },
   ability: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 2, borderBottomWidth: 3, borderColor: '#B8B0A4', backgroundColor: COLORS.paperBeige },
@@ -793,14 +809,14 @@ const st = StyleSheet.create({
   tipDim: { position: 'absolute', left: 0, right: 0, zIndex: 299, backgroundColor: 'rgba(10,10,10,0.5)' },
   tipWrap: { position: 'absolute', left: 0, right: 0, zIndex: 300, alignItems: 'center', paddingHorizontal: 12 },
   tipArrow: { width: 18, height: 18, backgroundColor: COLORS.actionYellow, transform: [{ rotate: '45deg' }], marginBottom: -11, alignSelf: 'flex-start', marginLeft: 70 },
-  tipCard: { width: '100%', maxWidth: 460, backgroundColor: '#1C1B19', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,222,0,0.4)', overflow: 'hidden' },
+  tipCard: { width: '100%', maxWidth: 460, backgroundColor: DARK.panel, borderRadius: 14, borderWidth: 1, borderColor: DARK.goldEdge(0.4), overflow: 'hidden' },
   tipRule: { height: 4, backgroundColor: COLORS.actionYellow },
   tipBody: { padding: 16, gap: 12 },
   tipHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   tipIcon: { width: 42, height: 42, borderRadius: 10, backgroundColor: COLORS.actionYellow, alignItems: 'center', justifyContent: 'center' },
   tipEyebrow: { color: COLORS.actionYellow, fontWeight: '800', letterSpacing: 2, fontSize: 10, textTransform: 'uppercase' },
   tipTitle: { color: COLORS.canvasWhite, fontWeight: '900', fontSize: 20 },
-  tipText: { color: '#F1ECE4', fontSize: 16, lineHeight: 23 },
+  tipText: { color: DARK.text, fontSize: 16, lineHeight: 23 },
   tipBtn: { backgroundColor: COLORS.actionYellow, borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
   tipBtnText: { color: INK, fontWeight: '900', letterSpacing: 1.5, textTransform: 'uppercase' },
   overlay: { flex: 1, backgroundColor: 'rgba(18,18,18,0.6)', alignItems: 'center', justifyContent: 'center', padding: 16 },

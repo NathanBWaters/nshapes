@@ -11,14 +11,32 @@ import Icon from '@/components/Icon';
 import { WeaponAvatar } from '@/components/weapons';
 import { COLORS, getRarityColor } from '@/utils/colors';
 import { sfx } from '@/audio';
-import type { AdventureSave, MechanicDef } from '../types';
+import type { AdventureSave, MechanicDef, UnlockableFeature } from '../types';
 import { LEVELS } from '../data/levels';
 import { FIGHTERS } from '../data/fighters';
-import { MECHANICS, buildAdaptiveEvolutionMechanic } from '../data/mechanics';
+import { MECHANICS } from '../data/mechanics';
 import { EVOLUTION_RECIPES } from '../data/evolutions';
+import { CAMPAIGN_FEATURES } from '../data/features';
+import { unlockHint, unlockSource } from '../data/rewards';
+import { buildAdaptiveEvolutionMechanic } from '../lessons';
+import { isMechanicKnown } from '../progress';
 import MechanicIntro from './MechanicIntro';
-import { Silhouette } from './UnlockReveal';
-import { INK } from './ui';
+import { Silhouette } from './rewards';
+import { INK, TONE } from './ui';
+
+interface Entry {
+  m: MechanicDef;
+  where: string;
+  known: boolean;
+}
+
+const featureEntry = (save: AdventureSave, id: UnlockableFeature): Entry => {
+  const feature = CAMPAIGN_FEATURES[id];
+  const source = unlockSource({ kind: 'feature', id });
+  // "1-8+": from that level on, rather than one of its star rewards
+  const where = !source || source.via === 'bounty' ? '' : source.via === 'clear' ? `${source.level.id}+` : source.level.id;
+  return { m: MECHANICS[feature.mechanic], where, known: save[feature.saveFlag] };
+};
 
 interface Props {
   save: AdventureSave;
@@ -29,14 +47,14 @@ const FieldGuide: React.FC<Props> = ({ save, onClose }) => {
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<'mechanics' | 'recipes'>('mechanics');
   const [open, setOpen] = useState<MechanicDef | null>(null);
-  const entries: Array<{ m: MechanicDef; where: string; known: boolean }> = [
-    ...LEVELS.map(l => ({ m: MECHANICS[l.introduces], where: l.id, known: save.seenMechanics.includes(l.introduces) || (save.stars[l.id] ?? 0) > 0 })),
+  const entries: Entry[] = [
+    ...LEVELS.map(l => ({ m: MECHANICS[l.introduces], where: l.id, known: isMechanicKnown(save, l.introduces) })),
     ...FIGHTERS.map(f => ({ m: MECHANICS[f.signature], where: 'Fighter', known: save.unlockedFighters.includes(f.name) })),
-    { m: MECHANICS.coins, where: '1-1', known: save.coinsUnlocked },
-    { m: MECHANICS.workshop, where: '1-4', known: save.workshopUnlocked },
+    featureEntry(save, 'coins'),
+    featureEntry(save, 'workshop'),
     { m: buildAdaptiveEvolutionMechanic(save), where: 'Combos', known: save.unlockedEvolutions.length > 0 || save.discoveredEvolutions.length > 0 },
     { m: MECHANICS.arcana_cards, where: 'Arcana', known: save.unlockedArcana.length > 0 },
-    { m: MECHANICS.bounty_board, where: '1-8+', known: save.bountiesUnlocked },
+    featureEntry(save, 'bounties'),
   ];
   const known = entries.filter(e => e.known).length;
   const unlockedRecipeCount = new Set([...save.unlockedEvolutions, ...save.discoveredEvolutions]).size;
@@ -88,7 +106,7 @@ const FieldGuide: React.FC<Props> = ({ save, onClose }) => {
         <ScrollView contentContainerStyle={[st.recipesWrap, { paddingBottom: insets.bottom + 24 }]}>
           <View style={st.howCard}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Icon name="lorc/crystal-shine" size={20} color="#7C3AED" />
+              <Icon name="lorc/crystal-shine" size={20} color={TONE.combo} />
               <Text style={st.howTitle}>How Weapon Combos Work</Text>
             </View>
             <Text style={st.howBody}>
@@ -108,7 +126,7 @@ const FieldGuide: React.FC<Props> = ({ save, onClose }) => {
                 style={[st.recipeCard, unlocked && st.recipeCardDiscovered]}
               >
                 <View style={st.recipeHead}>
-                  <View style={[st.recipeAvatar, forged && { borderColor: getRarityColor('legendary'), backgroundColor: '#FFFBEB' }, !forged && unlocked && { borderColor: '#7C3AED', backgroundColor: '#F5F3FF' }]}>
+                  <View style={[st.recipeAvatar, forged && { borderColor: getRarityColor('legendary'), backgroundColor: '#FFFBEB' }, !forged && unlocked && { borderColor: TONE.combo, backgroundColor: TONE.comboPale }]}>
                     {unlocked ? (
                       <WeaponAvatar weapon={r.result} size={42} interactive />
                     ) : (
@@ -117,7 +135,7 @@ const FieldGuide: React.FC<Props> = ({ save, onClose }) => {
                   </View>
                   <View style={{ flex: 1, gap: 2 }}>
                     <Text style={st.recipeName}>{unlocked ? r.result.name : '??? Weapon Combo'}</Text>
-                    <Text style={[st.recipeBadge, { color: forged ? '#B45309' : unlocked ? '#7C3AED' : '#6B7280' }]}>
+                    <Text style={[st.recipeBadge, { color: forged ? TONE.tradeoff : unlocked ? TONE.combo : '#6B7280' }]}>
                       {forged ? 'FORGED COMBO' : unlocked ? 'UNLOCKED RECIPE · READY TO FORGE' : 'LOCKED COMBO'}
                     </Text>
                   </View>
@@ -141,7 +159,7 @@ const FieldGuide: React.FC<Props> = ({ save, onClose }) => {
                       <Text style={st.reqText}><Text style={{ fontWeight: '900' }}>Weapons: </Text>{r.gearRequirementText}</Text>
                     </View>
                     <View style={st.reqRow}>
-                      <Icon name="lorc/crystal-shine" size={14} color="#7C3AED" />
+                      <Icon name="lorc/crystal-shine" size={14} color={TONE.combo} />
                       <Text style={st.reqText}><Text style={{ fontWeight: '900' }}>Awaken: </Text>{r.primeRequirementText} + match Catalyst card</Text>
                     </View>
                   </View>
@@ -149,7 +167,7 @@ const FieldGuide: React.FC<Props> = ({ save, onClose }) => {
                   <View style={st.recipeReqs}>
                     <View style={st.reqRow}>
                       <Icon name="lorc/padlock" size={14} color="#6B7280" />
-                      <Text style={st.reqText}><Text style={{ fontWeight: '900' }}>Unlock: </Text>{r.unlockHint}</Text>
+                      <Text style={st.reqText}><Text style={{ fontWeight: '900' }}>Unlock: </Text>{unlockHint({ kind: 'evolution', id: r.id })}</Text>
                     </View>
                   </View>
                 )}
@@ -175,12 +193,12 @@ const st = StyleSheet.create({
   tabText: { fontSize: 11, fontWeight: '900', letterSpacing: 1, color: INK },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, padding: 12, justifyContent: 'center', maxWidth: 620, alignSelf: 'center' },
   entry: { width: 104, alignItems: 'center', gap: 4, backgroundColor: COLORS.canvasWhite, borderRadius: 10, borderWidth: 2, borderBottomWidth: 4, borderColor: INK, padding: 8 },
-  entryLocked: { borderColor: '#CFC8BD', backgroundColor: '#EFEAE2' },
+  entryLocked: { borderColor: TONE.spentEdge, backgroundColor: '#EFEAE2' },
   icon: { width: 48, height: 48, borderRadius: 24, backgroundColor: COLORS.paperBeige, alignItems: 'center', justifyContent: 'center' },
   name: { fontSize: 12, fontWeight: '800', color: INK, textAlign: 'center' },
   where: { fontSize: 10, fontWeight: '700', color: INK, opacity: 0.6 },
   recipesWrap: { padding: 12, gap: 10, maxWidth: 560, width: '100%', alignSelf: 'center' },
-  howCard: { backgroundColor: '#F5F3FF', borderRadius: 10, borderWidth: 2, borderColor: INK, padding: 12, gap: 6 },
+  howCard: { backgroundColor: TONE.comboPale, borderRadius: 10, borderWidth: 2, borderColor: INK, padding: 12, gap: 6 },
   howTitle: { fontWeight: '900', fontSize: 14, color: INK },
   howBody: { fontSize: 12, lineHeight: 18, color: INK },
   recipeCard: { backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 2, borderBottomWidth: 4, borderColor: '#B8B0A4', padding: 12, gap: 8 },
@@ -190,7 +208,7 @@ const st = StyleSheet.create({
   recipeName: { fontWeight: '900', fontSize: 16, color: INK },
   recipeBadge: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
   recipeDesc: { fontSize: 13, color: INK, fontWeight: '700' },
-  recipeBurst: { fontSize: 12, color: '#0F766E', fontWeight: '800' },
+  recipeBurst: { fontSize: 12, color: TONE.upside, fontWeight: '800' },
   recipeHint: { fontSize: 12, color: INK, fontStyle: 'italic', opacity: 0.85 },
   recipeReqs: { backgroundColor: COLORS.paperBeige, borderRadius: 8, padding: 8, gap: 4 },
   reqRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },

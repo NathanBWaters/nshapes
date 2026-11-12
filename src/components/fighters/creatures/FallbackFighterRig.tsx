@@ -1,14 +1,14 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import Animated from 'react-native-reanimated';
 import Icon, { IconName } from '@/components/Icon';
+import { RigLayerStack } from '@/components/creatures/RigLayers';
 import { COLORS } from '@/utils/colors';
-import { CHARACTERS } from '@/utils/gameDefinitions';
 import { CreatureRigProps } from './types';
 
 interface FallbackFighterRigProps extends CreatureRigProps {
-  characterName?: string | null;
-  iconOverride?: IconName;
+  /** The character's registered icon */
+  icon?: IconName;
 }
 
 /**
@@ -18,21 +18,15 @@ interface FallbackFighterRigProps extends CreatureRigProps {
  */
 export const FallbackFighterRig: React.FC<FallbackFighterRigProps> = ({
   size,
-  characterName,
-  iconOverride,
+  icon = 'lorc/cat',
   headStyle,
-}) => {
-  const matched = CHARACTERS.find((c) => c.name === characterName);
-  const iconName: IconName = iconOverride ?? matched?.icon ?? 'lorc/cat';
-
-  return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      <Animated.View style={[styles.center, headStyle]}>
-        <Icon name={iconName} size={Math.round(size * 0.78)} color={COLORS.slateCharcoal} />
-      </Animated.View>
-    </View>
-  );
-};
+}) => (
+  <RigLayerStack>
+    <Animated.View style={[styles.center, headStyle]}>
+      <Icon name={icon} size={Math.round(size * 0.78)} color={COLORS.slateCharcoal} />
+    </Animated.View>
+  </RigLayerStack>
+);
 
 const styles = StyleSheet.create({
   center: {

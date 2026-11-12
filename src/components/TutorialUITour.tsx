@@ -107,8 +107,7 @@ const TourContent: React.FC<TutorialUITourProps> = ({ onComplete, onSkip }) => {
         totalTime={60}
         playerStats={TOUR_PLAYER_STATS}
         playerWeapons={[]}
-        copilotMode={true}
-        controlledMenuOpen={isMenuOpen}
+        copilot={{ menuOpen: isMenuOpen }}
       />
 
       {/* Game Board (non-interactive during tour) */}

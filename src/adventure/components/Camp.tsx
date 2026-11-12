@@ -14,13 +14,16 @@ import { WeaponAvatar } from '@/components/weapons';
 import type { FighterReactionEvent, FighterReactionType } from '@/utils/fighterAnimations';
 import { COLORS, getRarityColor } from '@/utils/colors';
 import { WEAPONS } from '@/utils/gameDefinitions';
+import type { Weapon } from '@/types';
 import { sfx } from '@/audio';
 import type { CharacterName } from '@/types';
 import type { AdventureSave } from '../types';
 import { FIGHTERS, FIGHTER_PERK_TEXT, MAX_FIGHTER_LEVEL, getLevelUpCost, getLoadout } from '../data/fighters';
-import { MAX_WEAPON_UPGRADE_TIER, applyWeaponUpgradeTier, describeWeaponUpgradeBonus, getUnlockedUpgrades } from '../data/upgrades';
+import { MAX_WEAPON_UPGRADE_TIER, describeWeaponUpgradeBonus } from '../data/upgrades';
 import { ARCANA } from '../data/arcana';
+import { getArmoryWeapon } from '../data/armory';
 import { MECHANICS } from '../data/mechanics';
+import { unlockHint } from '../data/rewards';
 import {
   buyUpgrade,
   buyWeaponUpgrade,
@@ -29,8 +32,8 @@ import {
   canUpgradeWeapon,
   equipArcana,
   equipCharm,
-  fighterLevel,
   fighterSpentCoins,
+  getUnlockedUpgrades,
   levelFighter,
   refundAllCamp,
   refundFighter,
@@ -44,7 +47,8 @@ import {
   weaponUpgradeSpentCoins,
   weaponUpgradeTier,
 } from '../progress';
-import { Btn, CoinPill, INK, PopIn } from './ui';
+import { fighterLevel } from '../loadout';
+import { Btn, CoinPill, INK, PopIn, TONE } from './ui';
 
 export type CampTab = 'fighters' | 'workshop' | 'armory' | 'arcana';
 
@@ -55,7 +59,8 @@ interface Props {
   initialTab?: CampTab;
 }
 
-const weapon = (id: string) => WEAPONS.find(w => w.id === id);
+/** The player's Armory, in catalogue order. */
+const armoryWeapons = (save: AdventureSave): Weapon[] => WEAPONS.filter(w => save.armory.includes(w.id));
 
 const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters' }) => {
   const insets = useSafeAreaInsets();
@@ -133,7 +138,7 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters
           const sig = MECHANICS[f.signature];
           const selected = save.selectedFighter === f.name;
           return (
-            <View key={f.name} style={[st.fighter, !unlocked && { opacity: 0.55 }, selected && { borderColor: COLORS.deepOnyx, backgroundColor: '#FFFBE0' }]}>
+            <View key={f.name} style={[st.fighter, !unlocked && { opacity: 0.55 }, selected && { borderColor: COLORS.deepOnyx, backgroundColor: TONE.selected }]}>
               <View style={st.fighterHead}>
                 {unlocked ? (
                   <FighterAvatar
@@ -171,7 +176,7 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters
                 <>
                   <View style={st.gearRow}>
                     {now.map((id, i) => {
-                      const w = weapon(id);
+                      const w = getArmoryWeapon(id);
                       const wTier = weaponUpgradeTier(save, id);
                       return (
                         <View key={i} style={[st.gear, { borderColor: w ? getRarityColor(w.rarity) : INK }]}>
@@ -189,7 +194,7 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters
                       <>
                         <Text style={st.nextText} numberOfLines={2}>
                           Lv {lvl + 1}: {[...gearChanges.map(id => {
-                            const w = weapon(id);
+                            const w = getArmoryWeapon(id);
                             return w ? `${w.name} (${w.rarity})` : id;
                           }), nextPerk].filter(Boolean).join(' · ') || 'Stronger gear'}
                         </Text>
@@ -245,7 +250,7 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters
               <View style={st.portrait}><Icon name="lorc/padlock" size={30} color={INK} /></View>
               <Text style={st.fighterName}>Workshop Locked</Text>
               <Text style={[st.fighterBlurb, { textAlign: 'center' }]}>
-                Earn ★ on 1-4 Power Up to unlock the ability to upgrade your unlocked mechanics and Armory weapons!
+                {unlockHint({ kind: 'feature', id: 'workshop' })} to unlock the ability to upgrade your unlocked mechanics and Armory weapons!
               </Text>
             </View>
           ) : (
@@ -308,7 +313,7 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters
               {save.armory.length === 0 ? (
                 <Text style={st.blurb}>Unlock weapons in your Armory to enhance them here.</Text>
               ) : (
-                WEAPONS.filter(w => save.armory.includes(w.id)).map(w => {
+                armoryWeapons(save).map(w => {
                   const tier = weaponUpgradeTier(save, w.id);
                   const cost = weaponUpgradeCost(save, w.id);
                   const spent = weaponUpgradeSpentCoins(save, w.id);
@@ -372,7 +377,7 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters
             <Text style={st.blurb}>Weapons you've unlocked. Tap one to equip it as your charm. They also show up in level-up picks and shops.</Text>
             {save.armory.length === 0 && <Text style={st.blurb}>Nothing here yet. Some stars unlock a weapon.</Text>}
             <View style={st.armory}>
-              {WEAPONS.filter(w => save.armory.includes(w.id)).map(w => {
+              {armoryWeapons(save).map(w => {
                 const equipped = save.charm === w.id;
                 const wTier = weaponUpgradeTier(save, w.id);
                 return (
@@ -384,12 +389,12 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters
                       onChange(equipCharm(save, w.id));
                     }}
                     activeOpacity={0.85}
-                    style={[st.armoryItem, { borderColor: equipped ? COLORS.actionYellow : getRarityColor(w.rarity) }, equipped && { backgroundColor: '#FFFBE0' }]}
+                    style={[st.armoryItem, { borderColor: equipped ? COLORS.actionYellow : getRarityColor(w.rarity) }, equipped && { backgroundColor: TONE.selected }]}
                   >
                     <WeaponAvatar weapon={w} size={36} triggerKey={armoryTapCounts[w.id]} />
                     <Text style={st.armoryName} numberOfLines={1}>{w.name}{wTier > 0 ? ` +${wTier}` : ''}</Text>
-                    <Text style={[st.armoryRarity, { color: getRarityColor(w.rarity) === COLORS.rarityCommon ? '#8E877D' : getRarityColor(w.rarity) }]}>{equipped ? 'equipped' : w.rarity}</Text>
-                    <Text style={st.armoryDesc} numberOfLines={2}>{applyWeaponUpgradeTier(w, wTier).shortDescription}</Text>
+                    <Text style={[st.armoryRarity, { color: getRarityColor(w.rarity) === COLORS.rarityCommon ? TONE.spent : getRarityColor(w.rarity) }]}>{equipped ? 'equipped' : w.rarity}</Text>
+                    <Text style={st.armoryDesc} numberOfLines={2}>{getArmoryWeapon(w.id, save.weaponUpgrades)?.shortDescription}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -419,7 +424,7 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters
                   style={[
                     st.arcanaCard,
                     !unlocked && { opacity: 0.6, backgroundColor: '#EFEAE2' },
-                    equipped && { borderColor: COLORS.actionYellow, backgroundColor: '#FFFBE0' },
+                    equipped && { borderColor: COLORS.actionYellow, backgroundColor: TONE.selected },
                   ]}
                 >
                   <View style={[st.arcanaTarot, equipped && { backgroundColor: COLORS.actionYellow }]}>
@@ -438,7 +443,7 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters
                         <Text style={st.arcanaTradeoff}>▼ {a.tradeoff}</Text>
                       </>
                     ) : (
-                      <Text style={st.fighterBlurb}>Unlock: {a.unlockHint}</Text>
+                      <Text style={st.fighterBlurb}>Unlock: {unlockHint({ kind: 'arcana', id: a.id })}</Text>
                     )}
                   </View>
                 </TouchableOpacity>
@@ -466,9 +471,9 @@ const st = StyleSheet.create({
   tabs: { flexDirection: 'row', gap: 6, padding: 10 },
   tab: { flex: 1, paddingVertical: 8, borderRadius: 6, borderWidth: 2, borderColor: '#6B5A49', alignItems: 'center' },
   tabOn: { backgroundColor: COLORS.actionYellow, borderColor: INK },
-  tabText: { fontWeight: '900', color: '#E9DCCB', letterSpacing: 1.5, fontSize: 12 },
+  tabText: { fontWeight: '900', color: TONE.onDusk, letterSpacing: 1.5, fontSize: 12 },
   body: { padding: 12, gap: 10, maxWidth: 560, width: '100%', alignSelf: 'center' },
-  blurb: { color: '#E9DCCB', fontSize: 13, textAlign: 'center', marginVertical: 4 },
+  blurb: { color: TONE.onDusk, fontSize: 13, textAlign: 'center', marginVertical: 4 },
   fighter: { backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 2.5, borderBottomWidth: 5, borderColor: INK, padding: 12, gap: 8 },
   fighterHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   portrait: { width: 54, height: 54, borderRadius: 27, borderWidth: 2, borderColor: INK, backgroundColor: COLORS.paperBeige, alignItems: 'center', justifyContent: 'center' },
@@ -496,7 +501,7 @@ const st = StyleSheet.create({
   armoryName: { fontWeight: '900', fontSize: 12, color: INK },
   armoryRarity: { fontSize: 9, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
   armoryDesc: { fontSize: 10, color: INK, textAlign: 'center', opacity: 0.8 },
-  refundBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 12, marginBottom: 2, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 2, borderColor: INK, backgroundColor: '#FFF6C2', maxWidth: 536, alignSelf: 'center', width: '94%' },
+  refundBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 12, marginBottom: 2, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 2, borderColor: INK, backgroundColor: TONE.coinPale, maxWidth: 536, alignSelf: 'center', width: '94%' },
   refundBannerTitle: { fontWeight: '900', fontSize: 13, color: INK },
   refundBannerSub: { fontSize: 11, color: INK, opacity: 0.8 },
   refundAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: COLORS.canvasWhite, borderRadius: 8, borderWidth: 2, borderBottomWidth: 3, borderColor: INK, paddingHorizontal: 10, paddingVertical: 6 },
@@ -506,8 +511,8 @@ const st = StyleSheet.create({
   arcanaCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 2.5, borderBottomWidth: 5, borderColor: INK, padding: 12 },
   arcanaTarot: { width: 56, height: 74, borderRadius: 8, borderWidth: 2, borderColor: INK, backgroundColor: COLORS.paperBeige, alignItems: 'center', justifyContent: 'center', gap: 4 },
   arcanaNumeral: { fontSize: 11, fontWeight: '900', letterSpacing: 1.5, color: INK },
-  arcanaUpside: { fontSize: 12, fontWeight: '800', color: '#0F766E' },
-  arcanaTradeoff: { fontSize: 12, fontWeight: '700', color: '#B45309' },
+  arcanaUpside: { fontSize: 12, fontWeight: '800', color: TONE.upside },
+  arcanaTradeoff: { fontSize: 12, fontWeight: '700', color: TONE.tradeoff },
 });
 
 export default Camp;

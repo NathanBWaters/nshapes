@@ -171,8 +171,8 @@ describe('Adventure Workshop, Recipe Guide & Dual-Path Tutorial UI', () => {
         save={save}
         onUseFighter={() => {}}
         onEquipCharm={() => {}}
-        onOpenWorkshop={() => {
-          openedWorkshop = true;
+        onOpenFeature={feature => {
+          openedWorkshop = feature === 'workshop';
         }}
         onDone={() => {}}
       />

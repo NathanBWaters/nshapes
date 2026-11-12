@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Modal, ScrollView, StyleSheet } from 'react-native';
 import { CopilotStep, walkthroughable } from 'react-native-copilot';
 import { PlayerStats, Weapon, Character } from '@/types';
@@ -7,8 +7,7 @@ import WeaponGuide from './WeaponGuide';
 import WeaponList from './WeaponList';
 import { FighterAvatar } from './fighters';
 import { WEAPONS, getWeaponByName } from '@/utils/gameDefinitions';
-import { SettingsStorage } from '@/utils/storage';
-import { setAudioEnabled } from '@/utils/sounds';
+import { useSoundSetting } from '@/hooks/useSoundSetting';
 import { STAT_TO_CAP_TYPE, EFFECT_CAPS, EffectCapType } from '@/utils/gameConfig';
 
 const WalkthroughableView = walkthroughable(View);
@@ -54,45 +53,37 @@ export interface DevModeCallbacks {
   currentAttributes: number;
 }
 
+/** Given only by the tutorial tour, which drives the menu itself. */
+export interface CopilotControl {
+  menuOpen: boolean;
+}
+
 interface GameMenuProps {
-  playerStats: PlayerStats;
+  /** Without stats (screens outside a run) the menu has no Character Stats page. */
+  playerStats?: PlayerStats;
   playerWeapons?: Weapon[];
   character?: Character;  // Optional character to display in stats
   onExitGame?: () => void;
   onEndRoundEarly?: () => void;  // Callback when player ends round early (only available when target met)
   canEndRoundEarly?: boolean;    // True when score target has been met
-  devMode?: boolean;
+  /** Dev tools page (only given in dev mode) */
   devCallbacks?: DevModeCallbacks;
-  // Tutorial mode - when true, wraps menu button with CopilotStep
-  copilotMode?: boolean;
-  // Controlled mode for tutorial - parent controls whether menu is open
-  controlledOpen?: boolean;
+  copilot?: CopilotControl;
   // Callback when menu open state changes (for pausing game)
   onMenuOpenChange?: (isOpen: boolean) => void;
 }
 
 type MenuScreen = 'menu' | 'stats' | 'weapons' | 'options' | 'dev';
 
-const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], character, onExitGame, onEndRoundEarly, canEndRoundEarly = false, devMode = false, devCallbacks, copilotMode = false, controlledOpen, onMenuOpenChange }) => {
+const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], character, onExitGame, onEndRoundEarly, canEndRoundEarly = false, devCallbacks, copilot, onMenuOpenChange }) => {
+  const copilotMode = copilot !== undefined;
   const [internalModalOpen, setInternalModalOpen] = useState(false);
   const [currentScreen, setCurrentScreen] = useState<MenuScreen>('menu');
   const [showExitConfirm, setShowExitConfirm] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(false);
-
-  // Load sound setting on mount
-  useEffect(() => {
-    setSoundEnabled(SettingsStorage.getSoundEnabled());
-  }, []);
-
-  const handleToggleSound = () => {
-    const newValue = !soundEnabled;
-    setSoundEnabled(newValue);
-    setAudioEnabled(newValue);
-    SettingsStorage.setSoundEnabled(newValue);
-  };
+  const [soundEnabled, handleToggleSound] = useSoundSetting();
 
   // Use controlled mode when copilotMode is true, otherwise use internal state
-  const isModalOpen = copilotMode ? (controlledOpen ?? false) : internalModalOpen;
+  const isModalOpen = copilot ? copilot.menuOpen : internalModalOpen;
 
   const openModal = () => {
     setCurrentScreen('menu');
@@ -159,12 +150,13 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
     if (!capConfig) return null;
 
     // Check if player has custom caps from cap-increasing weapons
-    const effectCaps = playerStats.effectCaps as Record<string, number> | undefined;
+    const effectCaps = playerStats?.effectCaps as Record<string, number> | undefined;
     return effectCaps?.[capType] ?? capConfig.defaultCap;
   };
 
   // Format stat for display with max limits and caps
   const formatStat = (
+    stats: PlayerStats,
     key: string,
     value: number | string | object,
     maxKey?: string,
@@ -175,7 +167,7 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
 
     // For stats with a max, show current/max
     if (maxKey) {
-      const maxValue = playerStats[maxKey as keyof PlayerStats];
+      const maxValue = stats[maxKey as keyof PlayerStats];
       if (typeof maxValue === 'number') {
         return `${value}/${maxValue}`;
       }
@@ -236,7 +228,7 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
 
       {/* Menu Options */}
       <View style={styles.menuOptionsContainer}>
-        {withMenuCopilot('menu_stats',
+        {(playerStats || copilotMode) && withMenuCopilot('menu_stats',
           <TouchableOpacity
             style={styles.menuOption}
             onPress={copilotMode ? undefined : () => setCurrentScreen('stats')}
@@ -282,7 +274,7 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
         )}
 
         {/* Dev Tools Option - only shown in dev mode, not in tutorial */}
-        {devMode && !copilotMode && (
+        {devCallbacks && !copilotMode && (
           <TouchableOpacity
             style={[styles.menuOption, styles.devMenuOption]}
             onPress={() => setCurrentScreen('dev')}
@@ -344,7 +336,7 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
     ? character.startingWeapons.map(name => getWeaponByName(name)).filter((w): w is Weapon => w !== undefined)
     : [];
 
-  const renderStats = () => (
+  const renderStats = (stats: PlayerStats) => (
     <View style={styles.statsContainer}>
       {/* Modal Header */}
       <View style={styles.modalHeader}>
@@ -369,8 +361,8 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
                 <FighterAvatar
                   character={character}
                   size={52}
-                  health={playerStats.health}
-                  maxHealth={playerStats.maxHealth}
+                  health={stats.health}
+                  maxHealth={stats.maxHealth}
                   interactive
                 />
               </View>
@@ -397,8 +389,8 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
             <View style={styles.statsGrid}>
               {statDefs.map((statDef) => {
                 const key = statDef.key;
-                const value = playerStats[key as keyof PlayerStats] || 0;
-                const displayValue = formatStat(key, value, statDef.maxKey, statDef.cap);
+                const value = stats[key as keyof PlayerStats] || 0;
+                const displayValue = formatStat(stats, key, value, statDef.maxKey, statDef.cap);
 
                 // Skip stats that are 0/0 or show 0% for capped stats with 0 value
                 if (typeof value === 'number' && value === 0 && !statDef.maxKey) {
@@ -654,23 +646,23 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
           <View style={styles.statsGrid}>
             <View style={styles.statRow}>
               <Text style={styles.statKey}>Explosion Chance</Text>
-              <Text style={styles.statValue}>{playerStats.explosionChance || 0}%</Text>
+              <Text style={styles.statValue}>{playerStats?.explosionChance || 0}%</Text>
             </View>
             <View style={styles.statRow}>
               <Text style={styles.statKey}>Fire Spread</Text>
-              <Text style={styles.statValue}>{playerStats.fireSpreadChance || 0}%</Text>
+              <Text style={styles.statValue}>{playerStats?.fireSpreadChance || 0}%</Text>
             </View>
             <View style={styles.statRow}>
               <Text style={styles.statKey}>Laser Chance</Text>
-              <Text style={styles.statValue}>{playerStats.laserChance || 0}%</Text>
+              <Text style={styles.statValue}>{playerStats?.laserChance || 0}%</Text>
             </View>
             <View style={styles.statRow}>
               <Text style={styles.statKey}>Graces</Text>
-              <Text style={styles.statValue}>{playerStats.graces || 0}</Text>
+              <Text style={styles.statValue}>{playerStats?.graces || 0}</Text>
             </View>
             <View style={styles.statRow}>
               <Text style={styles.statKey}>Hints</Text>
-              <Text style={styles.statValue}>{playerStats.hints || 0}</Text>
+              <Text style={styles.statValue}>{playerStats?.hints || 0}</Text>
             </View>
           </View>
         </View>
@@ -686,7 +678,7 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
   const renderContent = () => {
     switch (currentScreen) {
       case 'stats':
-        return renderStats();
+        return playerStats ? renderStats(playerStats) : renderMenuOptions();
       case 'weapons':
         return renderWeapons();
       case 'options':

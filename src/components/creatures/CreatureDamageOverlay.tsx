@@ -8,21 +8,20 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
-import { Svg, Circle, Ellipse, G, Line, Path, Polygon, Rect } from 'react-native-svg';
+import { Svg, Circle, Ellipse, G, Line, Path, Rect } from 'react-native-svg';
 import { COLORS } from '@/utils/colors';
-import { FighterHealthState } from '@/utils/fighterAnimations';
+import { STROKE, StarBurst } from '@/components/illustration/primitives';
+import { CreatureHealthState } from '@/utils/creatureAnimations';
 import { advancePhase } from '@/utils/proceduralMotion';
 
-interface FighterDamageOverlayProps {
-  healthState: FighterHealthState;
+interface CreatureDamageOverlayProps {
+  healthState: CreatureHealthState;
   headStyle?: StyleProp<ViewStyle>;
   animate?: boolean;
   testID?: string;
 }
 
-const STROKE = COLORS.slateCharcoal;
-
-const HEALTH_SEVERITY: Record<FighterHealthState, number> = {
+const HEALTH_SEVERITY: Record<CreatureHealthState, number> = {
   pristine: 0,
   scuffed: 1,
   battered: 2,
@@ -30,26 +29,8 @@ const HEALTH_SEVERITY: Record<FighterHealthState, number> = {
   knocked_out: 4,
 };
 
-function MiniStar({ cx, cy, r, fill }: { cx: number; cy: number; r: number; fill: string }) {
-  const pts: string[] = [];
-  for (let i = 0; i < 10; i++) {
-    const a = -Math.PI / 2 + (i * Math.PI) / 5;
-    const d = i % 2 === 0 ? r : r * 0.45;
-    pts.push(`${(cx + Math.cos(a) * d).toFixed(1)},${(cy + Math.sin(a) * d).toFixed(1)}`);
-  }
-  return (
-    <Polygon
-      points={pts.join(' ')}
-      fill={fill}
-      stroke={STROKE}
-      strokeWidth={1.5}
-      strokeLinejoin="round"
-    />
-  );
-}
-
 /**
- * Renders progressive cartoon battle-wear over the fighter rig with continuous
+ * Renders progressive cartoon battle-wear over a fighter or enemy rig with continuous
  * phase-integrated KO star orbits, smooth gravity-eased sweat drips, and spring pop-in:
  * - pristine: none
  * - scuffed: cheek band-aid + minor fur/feather scuff marks
@@ -57,7 +38,7 @@ function MiniStar({ cx, cy, r, fill }: { cx: number; cy: number; r: number; fill
  * - critical: + wrapped white gauze forehead bandage + dripping sweat
  * - knocked_out: + elliptical 3D-feel orbiting dizzy KO stars above head
  */
-export const FighterDamageOverlay: React.FC<FighterDamageOverlayProps> = ({
+export const CreatureDamageOverlay: React.FC<CreatureDamageOverlayProps> = ({
   healthState,
   headStyle,
   animate = true,
@@ -252,9 +233,9 @@ export const FighterDamageOverlay: React.FC<FighterDamageOverlayProps> = ({
               strokeWidth={2}
               strokeDasharray="5 4"
             />
-            <MiniStar cx={26} cy={13} r={5.5} fill={COLORS.actionYellow} />
-            <MiniStar cx={50} cy={7.5} r={6.5} fill="#FF9538" />
-            <MiniStar cx={74} cy={13} r={5.5} fill={COLORS.actionYellow} />
+            <StarBurst cx={26} cy={13} outer={5.5} inner={5.5 * 0.45} fill={COLORS.actionYellow} strokeWidth={1.5} />
+            <StarBurst cx={50} cy={7.5} outer={6.5} inner={6.5 * 0.45} fill="#FF9538" strokeWidth={1.5} />
+            <StarBurst cx={74} cy={13} outer={5.5} inner={5.5 * 0.45} fill={COLORS.actionYellow} strokeWidth={1.5} />
           </Svg>
         </Animated.View>
       )}

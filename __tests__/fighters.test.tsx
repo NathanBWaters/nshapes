@@ -5,21 +5,21 @@ import { useFighterConductor } from '@/hooks/useFighterConductor';
 import { CHARACTERS } from '@/utils/gameDefinitions';
 import {
   getFighterHealthState,
-  getFighterPersonality,
+  FIGHTER_MOOD_MOTION,
   resolveFighterAmbientMood,
   resolveFighterExpression,
 } from '@/utils/fighterAnimations';
 import {
   TAU,
   advancePhase,
-  computeMoodLoopRates,
-  computeMoodPoseTargets,
   computeVolumePreservedScale,
   createSecondOrderState,
   sampleOrganicBreath,
   sampleOverlappingWave,
   stepSecondOrder,
 } from '@/utils/proceduralMotion';
+import { getFighterPersonality } from '@/components/fighters/fighterRegistry';
+import { computeMoodLoopRates, computeMoodPoseTargets } from '@/utils/creatureAnimations';
 import { createNewSave } from '@/adventure/progress';
 import { getLevel } from '@/adventure/data/levels';
 import AdventureRun from '@/adventure/components/AdventureRun';
@@ -558,11 +558,11 @@ describe('Fighter Animation System', () => {
     });
 
     it('renders grounded contact shadow and transitions rapidly across moods & reactions cleanly', () => {
-      const rates = computeMoodLoopRates('anticipation', 'pristine', 2400, 1400);
-      const idleRates = computeMoodLoopRates('idle', 'pristine', 2400, 1400);
+      const rates = computeMoodLoopRates(FIGHTER_MOOD_MOTION, 'anticipation', 'pristine', 2400, 1400);
+      const idleRates = computeMoodLoopRates(FIGHTER_MOOD_MOTION, 'idle', 'pristine', 2400, 1400);
       expect(rates.wagHz).toBeGreaterThan(idleRates.wagHz);
 
-      const curiousPose = computeMoodPoseTargets('curious', 'pristine', 64, 0.65, -0.32);
+      const curiousPose = computeMoodPoseTargets(FIGHTER_MOOD_MOTION, 'curious', 'pristine', 64, 0.65, -0.32);
       expect(curiousPose.headTiltDeg).toBeGreaterThan(5);
 
       const { getByTestId, rerender } = render(

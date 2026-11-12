@@ -1,23 +1,20 @@
 /**
  * Cross-Run Bounty Board.
  *
- * Unlocked upon clearing 1-8 (Meadow Boss). Every Set, Rainbow Strike,
- * Escalating Purity combo, and Weapon Evolution across all fights advances
- * these milestones and cashes out coins, Armory weapons, and Arcana wildcards.
+ * Every Set, Rainbow Strike, Escalating Purity combo, and Weapon Evolution
+ * across all fights advances these milestones and cashes out coins, Armory
+ * weapons, and Arcana wildcards.
  */
 import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '@/components/Icon';
-import { WeaponAvatar } from '@/components/weapons';
 import { COLORS } from '@/utils/colors';
-import { WEAPONS } from '@/utils/gameDefinitions';
 import { sfx } from '@/audio';
 import type { AdventureSave, BountyCategory } from '../types';
 import { BOUNTIES } from '../data/bounties';
-import { getArcana } from '../data/arcana';
-import { CoinPill, INK, PopIn } from './ui';
-import { Silhouette } from './UnlockReveal';
+import { CoinPill, INK, PopIn, TONE } from './ui';
+import { Silhouette, UnlockableAvatar, describeRewardUnlocks } from './rewards';
 
 type Filter = 'all' | BountyCategory;
 
@@ -88,8 +85,6 @@ const BountyBoard: React.FC<Props> = ({ save, onClose }) => {
           const raw = b.progress(save);
           const cur = done ? b.target : Math.min(b.target, raw);
           const pct = Math.min(1, cur / b.target);
-          const rewardWeapon = b.reward.weapons?.[0] ? WEAPONS.find(w => w.id === b.reward.weapons![0]) : undefined;
-          const rewardArcana = b.reward.arcana ? getArcana(b.reward.arcana) : undefined;
 
           return (
             <PopIn key={b.id} style={[st.card, done && st.cardDone]}>
@@ -117,41 +112,25 @@ const BountyBoard: React.FC<Props> = ({ save, onClose }) => {
 
               <View style={st.rewardsRow}>
                 <View style={[st.coinChip, done && st.chipDone]}>
-                  <Icon name="lorc/crown-coin" size={13} color={done ? '#8E877D' : '#B07D00'} />
-                  <Text style={[st.coinText, done && { color: '#8E877D' }]}>+{b.reward.coins}¢</Text>
+                  <Icon name="lorc/crown-coin" size={13} color={done ? TONE.spent : TONE.coin} />
+                  <Text style={[st.coinText, done && { color: TONE.spent }]}>+{b.reward.coins}¢</Text>
                 </View>
 
-                {rewardWeapon && (
-                  <View style={[st.unlockChip, done && st.chipDone]}>
+                {describeRewardUnlocks(b.reward).map((unlock, k) => (
+                  <View key={k} style={[st.unlockChip, done && st.chipDone]}>
                     {done ? (
                       <>
-                        <WeaponAvatar weapon={rewardWeapon} size={18} />
-                        <Text style={[st.unlockText, { color: '#8E877D' }]}>{rewardWeapon.name}</Text>
+                        <UnlockableAvatar display={unlock} size={18} fighterMood="idle" iconSize={15} iconColor={TONE.spent} />
+                        <Text style={[st.unlockText, { color: TONE.spent }]}>{unlock.revealed}</Text>
                       </>
                     ) : (
                       <>
-                        <Silhouette icon={rewardWeapon.icon ?? 'lorc/crossed-swords'} size={13} />
-                        <Text style={st.unlockText}>Armory Weapon</Text>
+                        <Silhouette icon={unlock.icon} size={13} />
+                        <Text style={st.unlockText}>{unlock.bountySecret}</Text>
                       </>
                     )}
                   </View>
-                )}
-
-                {rewardArcana && (
-                  <View style={[st.unlockChip, done && st.chipDone]}>
-                    {done ? (
-                      <>
-                        <Icon name={rewardArcana.icon} size={15} color="#8E877D" />
-                        <Text style={[st.unlockText, { color: '#8E877D' }]}>Arcana {rewardArcana.numeral}: {rewardArcana.name}</Text>
-                      </>
-                    ) : (
-                      <>
-                        <Silhouette icon={rewardArcana.icon} size={13} />
-                        <Text style={st.unlockText}>Arcana Wildcard</Text>
-                      </>
-                    )}
-                  </View>
-                )}
+                ))}
               </View>
             </PopIn>
           );
@@ -166,13 +145,13 @@ const st = StyleSheet.create({
   top: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, backgroundColor: COLORS.canvasWhite, borderBottomWidth: 2, borderBottomColor: INK },
   back: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: INK, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.paperBeige },
   title: { fontWeight: '900', letterSpacing: 2, color: INK, fontSize: 17 },
-  count: { fontWeight: '900', fontSize: 13, color: '#8E877D' },
+  count: { fontWeight: '900', fontSize: 13, color: TONE.spent },
   filters: { flexDirection: 'row', gap: 5, paddingHorizontal: 10, paddingTop: 10, maxWidth: 560, width: '100%', alignSelf: 'center' },
   filterBtn: { flex: 1, paddingVertical: 7, borderRadius: 6, borderWidth: 2, borderColor: '#6B5A49', alignItems: 'center' },
   filterBtnOn: { backgroundColor: COLORS.actionYellow, borderColor: INK },
-  filterText: { fontSize: 10, fontWeight: '900', letterSpacing: 1, color: '#E9DCCB' },
+  filterText: { fontSize: 10, fontWeight: '900', letterSpacing: 1, color: TONE.onDusk },
   body: { padding: 12, gap: 10, maxWidth: 560, width: '100%', alignSelf: 'center' },
-  blurb: { color: '#E9DCCB', fontSize: 12, textAlign: 'center', marginBottom: 2 },
+  blurb: { color: TONE.onDusk, fontSize: 12, textAlign: 'center', marginBottom: 2 },
   card: { backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 2.5, borderBottomWidth: 5, borderColor: INK, padding: 12, gap: 8 },
   cardDone: { backgroundColor: '#F4F1EC', borderColor: '#ABA397' },
   head: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -185,11 +164,11 @@ const st = StyleSheet.create({
   barFill: { position: 'absolute', left: 0, top: 0, bottom: 0 },
   barText: { textAlign: 'center', fontSize: 11, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
   rewardsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  coinChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FFF6C2', borderRadius: 999, borderWidth: 1.5, borderColor: '#B07D00', paddingHorizontal: 8, paddingVertical: 2 },
+  coinChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: TONE.coinPale, borderRadius: 999, borderWidth: 1.5, borderColor: TONE.coin, paddingHorizontal: 8, paddingVertical: 2 },
   coinText: { fontSize: 12, fontWeight: '900', color: '#7A5600' },
   unlockChip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.deepOnyx, borderRadius: 999, paddingLeft: 4, paddingRight: 10, paddingVertical: 2 },
   unlockText: { fontSize: 11, fontWeight: '800', color: COLORS.actionYellow },
-  chipDone: { backgroundColor: '#EAE5DD', borderColor: '#CFC8BD', paddingLeft: 8 },
+  chipDone: { backgroundColor: '#EAE5DD', borderColor: TONE.spentEdge, paddingLeft: 8 },
 });
 
 export default BountyBoard;
