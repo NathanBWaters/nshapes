@@ -1,5 +1,5 @@
 /**
- * Adventure progression: save migration, the shared star pool, skill trees,
+ * Adventure progression: save migration, per-fighter star pools, skill trees,
  * charm and Arcana slots, the Workshop, rewards and bounties. Pure logic, no UI.
  */
 import { LEVELS, MAIN_LEVELS, getLevel } from '@/adventure/data/levels';
@@ -9,7 +9,7 @@ import { BOUNTIES } from '@/adventure/data/bounties';
 import { BIOMES } from '@/adventure/data/biomes';
 import { CAMPAIGN_FEATURES } from '@/adventure/data/features';
 import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
-import { SEALED_AT, SKILL_NODES, getSkillNode, skillTreeOf, skillTreeRoots } from '@/adventure/data/skillTrees';
+import { CAMPAIGN_STARS, SEALED_AT, SKILL_NODES, TREE_BUDGET, TREE_SLACK, getSkillNode, scaleCosts, skillTreeOf, skillTreeRoots } from '@/adventure/data/skillTrees';
 import { UPGRADES } from '@/adventure/data/upgrades';
 import { getArmoryWeapon } from '@/adventure/data/armory';
 import { starRewards } from '@/adventure/data/rewards';
@@ -37,6 +37,7 @@ import {
   getLockReason,
   getUnlockedUpgrades,
   isBiomeOpen,
+  maxStars,
   migrateSave,
   nodeStatus,
   reconcileUnlocks,
@@ -49,7 +50,6 @@ import {
   refundFighter,
   refundUpgrade,
   refundableCoins,
-  starsSpent,
   toggleArcana,
   toggleCharm,
   totalStarsEarned,
@@ -163,18 +163,24 @@ describe('Save migration from the v1 shape', () => {
   });
 });
 
-describe('Star pool', () => {
-  it('available = earned − spent across every tree; star gates read earned stars', () => {
+describe('Star pools', () => {
+  it('every fighter spends from all stars earned: one fighter buying costs the others nothing', () => {
     const fighter: CharacterName = 'Orange Tabby';
+    const other: CharacterName = 'Sly Fox';
     const [n1, n2] = rootAdjacent(fighter);
-    let save = withStars(createNewSave(), 30);
+    let save: AdventureSave = { ...withStars(createNewSave(), 30), unlockedFighters: [fighter, other] };
     expect(totalStarsEarned(save)).toBe(30);
-    expect(starsSpent(save)).toBe(0);
-    expect(availableStars(save)).toBe(30);
+    expect(availableStars(save, fighter)).toBe(30);
 
     save = buyNode(buyNode(save, n1.id), n2.id);
-    expect(starsSpent(save)).toBe(n1.cost + n2.cost);
-    expect(availableStars(save)).toBe(30 - n1.cost - n2.cost);
+    expect(fighterStarsSpent(save, fighter)).toBe(n1.cost + n2.cost);
+    expect(availableStars(save, fighter)).toBe(30 - n1.cost - n2.cost);
+    // The Fox still has all 30 and can grow at the same time
+    expect(availableStars(save, other)).toBe(30);
+    const fox = rootAdjacent(other)[0];
+    save = buyNode(save, fox.id);
+    expect(availableStars(save, other)).toBe(30 - fox.cost);
+    expect(availableStars(save, fighter)).toBe(30 - n1.cost - n2.cost);
     expect(totalStarsEarned(save)).toBe(30);
 
     // Spending never re-locks a world
@@ -234,18 +240,13 @@ describe('Skill trees', () => {
     }
   });
 
-  it('costs follow the role: cheap next to the passives, 1-6 each, 60-75 per fighter, one sealed capstone', () => {
+  it('costs follow the role: cheap next to the passives, tips cost the most, one sealed capstone', () => {
     for (const f of FIGHTERS) {
       const nodes = skillTreeOf(f.name);
-      const total = nodes.reduce((sum, n) => sum + n.cost, 0);
-      expect(total).toBeGreaterThanOrEqual(60);
-      expect(total).toBeLessThanOrEqual(75);
-      for (const n of nodes) {
-        expect(n.cost).toBeGreaterThanOrEqual(1);
-        expect(n.cost).toBeLessThanOrEqual(6);
-      }
-      // Every passive has a 1-star way in
-      for (const p of f.passives) expect(nodes.some(n => n.roots.includes(p) && n.cost === 1)).toBe(true);
+      const cheapest = Math.min(...nodes.map(n => n.cost));
+      // Every passive has a way in at the cheapest price, and a tip costs several entries
+      for (const p of f.passives) expect(nodes.some(n => n.roots.includes(p) && n.cost === cheapest)).toBe(true);
+      expect(Math.max(...nodes.map(n => n.cost))).toBeGreaterThanOrEqual(cheapest * 5);
       const sealed = nodes.filter(n => n.requires);
       expect(sealed).toHaveLength(1);
       expect(sealed[0].requires).toEqual({ starsEarned: SEALED_AT });
@@ -299,10 +300,10 @@ describe('Skill trees', () => {
   });
 
   it('not enough stars, sealed capstones and locked fighters', () => {
-    let save = withStars(createNewSave(), 3);
+    let save = withStars(createNewSave(), tabby('0-1').cost + tabby('1-2').cost);
     save = buyNode(save, tabby('0-1').id);
     save = buyNode(save, tabby('1-2').id);
-    expect(availableStars(save)).toBe(0);
+    expect(availableStars(save, 'Orange Tabby')).toBe(0);
     expect(nodeStatus(save, tabby('0-3').id)).toBe('needsStars');
 
     // The claw tip is sealed until World 4's star gate, even with a path to it
@@ -312,7 +313,7 @@ describe('Skill trees', () => {
     const early = { ...withStars(createNewSave(), SEALED_AT - 1), skillNodes: path };
     expect(nodeStatus(early, cap.id)).toBe('sealed');
     expect(buyNode(early, cap.id)).toBe(early);
-    const late = { ...withStars(createNewSave(), SEALED_AT + 4), skillNodes: path };
+    const late = { ...withStars(createNewSave(), SEALED_AT + 40), skillNodes: path };
     expect(nodeStatus(late, cap.id)).toBe('buyable');
     expect(buyNode(late, cap.id).skillNodes['Orange Tabby']).toContain(cap.id);
 
@@ -322,7 +323,7 @@ describe('Skill trees', () => {
 
   it('refunds one node when nothing hangs off it, or the whole fighter, for free', () => {
     const fighter: CharacterName = 'Orange Tabby';
-    let save = withStars(createNewSave(), 60);
+    let save = withStars(createNewSave(), 90);
     for (const key of ['0-1', '0-5', '1-2', '0-3']) save = buyNode(save, tabby(key).id);
     const spent = ['0-1', '0-5', '1-2', '0-3'].reduce((sum, k) => sum + tabby(k).cost, 0);
     expect(fighterStarsSpent(save, fighter)).toBe(spent);
@@ -335,7 +336,7 @@ describe('Skill trees', () => {
     // Lick Wounds sits in a loop (Purr Punch and Spare Life both touch Nine Lives): free to go
     expect(canRefundNode(save, tabby('1-2').id)).toBe(true);
     save = refundNode(save, tabby('0-5').id);
-    expect(availableStars(save)).toBe(60 - spent + tabby('0-5').cost);
+    expect(availableStars(save, fighter)).toBe(90 - spent + tabby('0-5').cost);
     save = refundNode(save, tabby('0-1').id);
     expect(save.skillNodes[fighter]).toEqual([tabby('1-2').id, tabby('0-3').id]);
     // Not owned: nothing to refund
@@ -343,7 +344,7 @@ describe('Skill trees', () => {
 
     const afterFighter = refundFighter(save, fighter);
     expect(afterFighter.skillNodes[fighter]).toBeUndefined();
-    expect(availableStars(afterFighter)).toBe(60);
+    expect(availableStars(afterFighter, fighter)).toBe(90);
   });
 
   it('reconcileUnlocks keeps only nodes still connected to a passive, and hands everything back if the trees cost more than earned', () => {
@@ -355,8 +356,32 @@ describe('Skill trees', () => {
     };
     expect(reconcileUnlocks(broken).skillNodes).toEqual({ [fighter]: [tabby('0-1').id] });
 
-    const overspent: AdventureSave = { ...withStars(createNewSave(), 2), skillNodes: { [fighter]: [tabby('0-1').id, tabby('1-2').id, tabby('0-3').id] } };
-    expect(reconcileUnlocks(overspent).skillNodes).toEqual({});
+    // Only the fighter whose tree now costs more than the stars earned gets its stars back
+    const fox = rootAdjacent('Sly Fox')[0];
+    const overspent: AdventureSave = {
+      ...withStars(createNewSave(), fox.cost),
+      skillNodes: { [fighter]: [tabby('0-1').id, tabby('1-2').id, tabby('0-3').id], 'Sly Fox': [fox.id] },
+    };
+    expect(reconcileUnlocks(overspent).skillNodes).toEqual({ 'Sly Fox': [fox.id] });
+  });
+
+  it('a full tree costs the campaign\'s stars minus a little slack, and stays tied to the level list', () => {
+    expect(CAMPAIGN_STARS).toBe(LEVELS.length * 3);
+    expect(maxStars()).toBe(CAMPAIGN_STARS);
+    expect(TREE_BUDGET).toBe(CAMPAIGN_STARS - TREE_SLACK);
+    expect(TREE_SLACK).toBeGreaterThanOrEqual(0);
+    for (const f of FIGHTERS) {
+      const nodes = skillTreeOf(f.name);
+      expect(nodes.reduce((sum, n) => sum + n.cost, 0)).toBe(TREE_BUDGET);
+      for (const n of nodes) expect(n.cost).toBeGreaterThanOrEqual(1);
+      // Sealed capstones open before the stars to finish the tree are in
+      expect(SEALED_AT).toBeLessThan(TREE_BUDGET);
+    }
+    // More levels → more stars → the same weights cost proportionally more, and still sum exactly
+    const weights = [1, 1, 2, 3, 5, 6];
+    expect(scaleCosts(weights, 160).reduce((a, b) => a + b, 0)).toBe(160);
+    expect(scaleCosts(weights, 200).reduce((a, b) => a + b, 0)).toBe(200);
+    expect(scaleCosts(weights, 200)[5]).toBeGreaterThan(scaleCosts(weights, 160)[5]);
   });
 });
 
@@ -646,7 +671,7 @@ describe('Rewards & unlocks', () => {
     expect(maxed.unlockedArcana).toHaveLength(ARCANA.length);
     expect(maxed.unlockedEvolutions).toHaveLength(EVOLUTION_RECIPES.length);
     expect(maxed.skillNodes).toEqual({});
-    expect(availableStars(maxed)).toBe(LEVELS.length * 3);
+    for (const f of FIGHTERS) expect(availableStars(maxed, f.name)).toBe(LEVELS.length * 3);
     expect(charmSlots(maxed)).toBe(MAX_CHARM_SLOTS);
     expect(arcanaSlots(maxed)).toBe(MAX_ARCANA_SLOTS);
     expect(equippedCharms(maxed)).toHaveLength(Math.min(MAX_CHARM_SLOTS, maxed.armory.length));

@@ -457,14 +457,14 @@ describe('Adventure Mode full-game E2E', () => {
     expect(screen.getByText('🔒 WORKSHOP')).toBeTruthy();
     const tabby = getFighter(save.selectedFighter);
     fireEvent.press(screen.getByTestId(`camp-open-tree-${tabby.name}`));
-    const root = skillTreeOf(tabby.name).find(n => n.roots.includes(tabby.passives[0]) && n.cost === 1)!;
-    const starsBefore = availableStars(save);
+    const root = skillTreeOf(tabby.name).filter(n => n.roots.length > 0).sort((a, b) => a.cost - b.cost)[0];
+    const starsBefore = availableStars(save, tabby.name);
     expect(starsBefore).toBeGreaterThanOrEqual(root.cost);
     fireEvent.press(screen.getByTestId(`skill-node-${root.id}`));
     fireEvent.press(screen.getByTestId('skill-buy'));
     save = loadAdventureSave();
     expect(save.skillNodes[tabby.name]).toEqual([root.id]);
-    expect(availableStars(save)).toBe(starsBefore - root.cost);
+    expect(availableStars(save, tabby.name)).toBe(starsBefore - root.cost);
     expect(totalStarsEarned(save)).toBe(save.stars[first.id]);
     fireEvent.press(screen.getByTestId('skill-tree-back'));
     fireEvent.press(screen.getByLabelText('Back to map'));

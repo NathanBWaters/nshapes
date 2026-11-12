@@ -11,8 +11,10 @@
  *    nodes of one flavour sit together. "Crossroads" nodes (`x-*`) sit where
  *    the two halves meet and use both passives. Capstones (`cap-*`) sit at the
  *    tips; one per fighter is sealed until World 4's star gate (SEALED_AT).
- *  - Costs follow the node's role, not its distance: 1 next to a root, 2-4 in
- *    the body, 5-6 for build-defining tips. About 70-75 stars per fighter.
+ *  - Costs are authored as WEIGHTS that follow the node's role, not its
+ *    distance: 1 next to a root, 2-4 in the body, 5-6 for build-defining tips.
+ *    The real star costs are those weights scaled so every fighter's full tree
+ *    costs exactly TREE_BUDGET (see the star budget below).
  *  - `text` is exact and short (≤ 90 chars) and true in ANY buying order:
  *    passive tuning nodes say "+1 more", never "was X".
  *  - No bare "+1 heart" nodes.
@@ -24,9 +26,46 @@ import type { IconName } from '@/components/Icon';
 import type { PassiveId, SkillNode, TreePos } from '../types';
 import type { Area, Condition, Effect, Modifiers, Rule, Trigger } from '../rules/types';
 import { FIGHTERS } from './fighters';
+import { LEVELS } from './levels';
+import { getBiome } from './biomes';
+
+// ─── Star budget ────────────────────────────────────────────────────────────
+//
+// Stars are earned once (3 per level) and EVERY fighter may spend all of them:
+// each fighter's tree has its own pool of "stars earned" (progress.ts
+// availableStars). A full tree costs the whole campaign minus a little slack,
+// so maxing a fighter takes (almost) every star, and you can grow every fighter
+// at once without refunding one to fund another.
+//
+// The budget is derived from the level list. Adding levels (or elite
+// branches) adds 3 stars each and every tree's node costs scale up with it,
+// keeping "a full tree ≈ a full campaign". If you'd rather new levels give
+// headroom instead, raise TREE_SLACK. __tests__/adventureProgressionSystems
+// checks every tree sums to TREE_BUDGET and fits inside CAMPAIGN_STARS.
+
+/** Every star the campaign can award: 3 per level, elite branches included (168 with 56 levels). */
+export const CAMPAIGN_STARS = LEVELS.length * 3;
+/** Stars a fully bought tree leaves unspent, so the last few stars aren't required to finish a tree. */
+export const TREE_SLACK = 8;
+/** What one fighter's whole tree costs (160 with 168 campaign stars). */
+export const TREE_BUDGET = CAMPAIGN_STARS - TREE_SLACK;
 
 /** Stars a player must have earned before a sealed capstone opens (World 4's gate). */
-export const SEALED_AT = 56;
+export const SEALED_AT = getBiome('peaks').starGate;
+
+/**
+ * Scale authored weights to whole star costs that sum to exactly `budget`
+ * (largest remainder; every node costs at least 1).
+ */
+export const scaleCosts = (weights: readonly number[], budget: number = TREE_BUDGET): number[] => {
+  const total = weights.reduce((a, b) => a + b, 0);
+  const raw = weights.map(w => (w / total) * budget);
+  const costs = raw.map(r => Math.max(1, Math.floor(r)));
+  let left = budget - costs.reduce((a, b) => a + b, 0);
+  const order = raw.map((r, i) => [r - Math.floor(r), i] as const).sort((a, b) => b[0] - a[0] || a[1] - b[1]);
+  for (let k = 0; left > 0; k = (k + 1) % order.length, left--) costs[order[k][1]] += 1;
+  return costs;
+};
 
 const SLUG: Record<CharacterName, string> = {
   'Orange Tabby': 'tabby',
@@ -41,7 +80,7 @@ const SLUG: Record<CharacterName, string> = {
 
 type Body = { rules?: Rule[]; modifiers?: Modifiers };
 type Spot = [col: number, row: number];
-/** name, icon, text, body, cost, where it sits, and whether it is sealed until SEALED_AT stars */
+/** name, icon, text, body, cost weight (scaled to stars by scaleCosts), where it sits, and whether it is sealed until SEALED_AT stars */
 type Row = [name: string, icon: IconName, text: string, body: Body, cost: number, at: Spot, sealed?: 'sealed'];
 
 interface TreeSpec {
@@ -469,12 +508,13 @@ const buildTree = (fighter: CharacterName): SkillNode[] => {
       }
     }
   }
-  return Object.entries(spec.nodes).map(([key, [name, icon, text, body, cost, [col, row], sealed]]): SkillNode => ({
+  const costs = scaleCosts(Object.values(spec.nodes).map(row => row[4]));
+  return Object.entries(spec.nodes).map(([key, [name, icon, text, body, , [col, row], sealed]], i): SkillNode => ({
     id: idOf(key),
     fighter,
     name,
     text,
-    cost,
+    cost: costs[i],
     icon,
     pos: { col, row },
     links: [...(links.get(key) ?? [])].map(idOf),

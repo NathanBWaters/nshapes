@@ -25,7 +25,7 @@ import { ARCANA } from './data/arcana';
 import { getArmoryWeapon, resolveLegacyWeapon } from './data/armory';
 import { MAX_WEAPON_LEVEL } from './data/weaponStats';
 import { LEGACY_WEAPON_RARITY, WEAPONS } from '@/utils/gameDefinitions';
-import { SKILL_NODES } from './data/skillTrees';
+import { SKILL_NODES, skillTreeOf, CAMPAIGN_STARS } from './data/skillTrees';
 import { BOUNTIES } from './data/bounties';
 import { EVOLUTION_RECIPES } from './data/evolutions';
 import { CAMPAIGN_FEATURES, FEATURES } from './data/features';
@@ -90,7 +90,7 @@ export const totalStarsEarned = (save: AdventureSave): number =>
 /** @alias totalStarsEarned */
 export const totalStars = totalStarsEarned;
 
-export const maxStars = (): number => LEVELS.length * 3;
+export const maxStars = (): number => CAMPAIGN_STARS;
 
 export const isBiomeOpen = (save: AdventureSave, biomeId: LevelDef['biome']): boolean =>
   totalStarsEarned(save) >= getBiome(biomeId).starGate;
@@ -101,15 +101,17 @@ const NODES_BY_ID = new Map<string, SkillNode>(SKILL_NODES.map(n => [n.id, n]));
 
 const findNode = (id: string): SkillNode | undefined => NODES_BY_ID.get(id);
 
-/** Stars currently spent across every fighter's skill tree (one shared pool). */
-export const starsSpent = (save: AdventureSave): number =>
-  Object.values(save.skillNodes).reduce(
-    (sum, ids) => sum + ids.reduce((s, id) => s + (findNode(id)?.cost ?? 0), 0),
-    0
-  );
+/**
+ * Stars this fighter can still spend. Every fighter spends from every star
+ * earned (data/skillTrees.ts, star budget): what one fighter buys never
+ * costs another anything.
+ */
+export const availableStars = (save: AdventureSave, fighter: CharacterName): number =>
+  totalStarsEarned(save) - fighterStarsSpent(save, fighter);
 
-/** Stars free to spend: earned minus spent. */
-export const availableStars = (save: AdventureSave): number => totalStarsEarned(save) - starsSpent(save);
+/** Some unlocked fighter has stars left to spend (the Camp badge on the map). */
+export const hasUnspentStars = (save: AdventureSave): boolean =>
+  save.unlockedFighters.some(f => availableStars(save, f) > 0 && skillTreeOf(f).some(n => !ownsNode(save, n.id)));
 
 export const ownedNodes = (save: AdventureSave, fighter: CharacterName): string[] => save.skillNodes[fighter] ?? [];
 
@@ -168,7 +170,7 @@ export const nodeStatus = (save: AdventureSave, nodeId: string): NodeStatus => {
   if (ownsNode(save, nodeId)) return 'owned';
   if (!isLinked(save, node)) return 'needsLink';
   if (isNodeSealed(save, node)) return 'sealed';
-  return availableStars(save) >= node.cost ? 'buyable' : 'needsStars';
+  return availableStars(save, node.fighter) >= node.cost ? 'buyable' : 'needsStars';
 };
 
 export const canBuyNode = (save: AdventureSave, nodeId: string): boolean => nodeStatus(save, nodeId) === 'buyable';
@@ -214,8 +216,9 @@ export const refundFighter = (save: AdventureSave, fighter: CharacterName): Adve
 
 /**
  * Keep only nodes that still exist, belong to the fighter they are filed under
- * and still connect to a passive through owned nodes. If the trees now cost
- * more than the player earned (a rebalance), every star is handed back.
+ * and still connect to a passive through owned nodes. If a fighter's tree now
+ * costs more than the player earned (a rebalance, or more levels scaling the
+ * costs up), that fighter's stars are handed back.
  */
 const normalizeSkillNodes = (save: AdventureSave): AdventureSave => {
   // Without tree data (a partial build) leave the save alone rather than wiping it
@@ -225,10 +228,10 @@ const normalizeSkillNodes = (save: AdventureSave): AdventureSave => {
     const owned = new Set(ids.filter(id => findNode(id)?.fighter === fighter));
     const connected = connectedFromRoots(owned);
     const keep = [...owned].filter(id => connected.has(id));
-    if (keep.length > 0) skillNodes[fighter] = keep;
+    const spent = keep.reduce((sum, id) => sum + (findNode(id)?.cost ?? 0), 0);
+    if (keep.length > 0 && spent <= totalStarsEarned(save)) skillNodes[fighter] = keep;
   }
-  const next = { ...save, skillNodes };
-  return starsSpent(next) > totalStarsEarned(next) ? { ...next, skillNodes: {} } : next;
+  return { ...save, skillNodes };
 };
 
 // ─── Charm & Arcana slots ───────────────────────────────────────────────────

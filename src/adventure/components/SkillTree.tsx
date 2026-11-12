@@ -1,9 +1,10 @@
 /**
  * One fighter's skill tree, drawn as a map (Clair Obscur style): round nodes
  * on a 7-column grid, linked by lines, grown from the fighter's two passive
- * roots. A node can be bought once anything it links to is owned. Stars come
- * from one shared pool; refunds are free (a single node when nothing hangs off
- * it, or the whole fighter). Camp's ScrollView scrolls the map.
+ * roots. A node can be bought once anything it links to is owned. Every
+ * fighter spends from all the stars earned (stars are not shared out between
+ * fighters); refunds are free (a single node when nothing hangs off it, or the
+ * whole fighter). Camp's ScrollView scrolls the map.
  */
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, type LayoutChangeEvent } from 'react-native';
@@ -19,6 +20,7 @@ import { getPassive } from '../data/passives';
 import { getSkillNode, skillTreeOf, skillTreeRoots } from '../data/skillTrees';
 import {
   availableStars,
+  maxStars,
   buyNode,
   fighterStarsSpent,
   nodeStatus,
@@ -53,14 +55,22 @@ const STATUS_LABEL: Record<NodeStatus, string> = {
   fighterLocked: 'locked',
 };
 
-/** Stars available out of stars earned, as shown on Camp and the tree. */
-export const StarPool: React.FC<{ save: AdventureSave; testID?: string }> = ({ save, testID }) => (
-  <View testID={testID} style={st.pool} accessibilityLabel={`${availableStars(save)} of ${totalStarsEarned(save)} stars available`}>
-    <Text style={st.poolGlyph}>★</Text>
-    <Text style={st.poolText}>{availableStars(save)}</Text>
-    <Text style={st.poolSub}>/ {totalStarsEarned(save)}</Text>
-  </View>
-);
+/**
+ * With a fighter: the stars that fighter can still spend, out of stars earned.
+ * Without one (Camp header): stars earned, out of the campaign's total.
+ */
+export const StarPool: React.FC<{ save: AdventureSave; fighter?: CharacterName; testID?: string }> = ({ save, fighter, testID }) => {
+  const value = fighter ? availableStars(save, fighter) : totalStarsEarned(save);
+  const of = fighter ? totalStarsEarned(save) : maxStars();
+  const label = fighter ? `${value} of ${of} stars left for ${fighter}` : `${value} of ${of} stars earned`;
+  return (
+    <View testID={testID} style={st.pool} accessibilityLabel={label}>
+      <Text style={st.poolGlyph}>★</Text>
+      <Text style={st.poolText}>{value}</Text>
+      <Text style={st.poolSub}>/ {of}</Text>
+    </View>
+  );
+};
 
 /** Pixel geometry of the map for a given width. */
 const geometry = (width: number, rows: number) => {
@@ -113,7 +123,7 @@ const SkillTree: React.FC<Props> = ({ save, fighter, onChange, onBack }) => {
           <Text style={st.title}>{fighter}</Text>
           <Text style={st.sub}>Skill tree · {spentHere}★ spent here</Text>
         </View>
-        <StarPool save={save} testID="skill-tree-stars" />
+        <StarPool save={save} fighter={fighter} testID="skill-tree-stars" />
       </View>
 
       <View style={st.passives}>
@@ -311,7 +321,7 @@ const NodeDetail: React.FC<{
           ) : status === 'sealed' ? (
             <Text style={st.detailNote}>Sealed until you have earned {node.requires?.starsEarned}★ in all (you have {totalStarsEarned(save)}★).</Text>
           ) : status === 'needsStars' ? (
-            <Text style={st.detailNote}>Needs {node.cost}★, you have {availableStars(save)}★. Earn more stars on the map or refund some nodes.</Text>
+            <Text style={st.detailNote}>Needs {node.cost}★, {node.fighter} has {availableStars(save, node.fighter)}★ left. Earn more stars on the map or refund some of {node.fighter}'s nodes.</Text>
           ) : status === 'fighterLocked' ? (
             <Text style={st.detailNote}>Unlock this fighter first.</Text>
           ) : null}

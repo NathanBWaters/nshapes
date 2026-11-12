@@ -129,13 +129,17 @@ Trees follow *Clair Obscur: Expedition 33*: each fighter's tree is a uniquely sh
   | Pelican | Two waves braided together, crossing at Riptide and High Tide | Big Scoop strand (free Sets), Keen Eye strand (hints) |
 
 - **Crossroads** (`x-*` keys) sit where the two halves meet and use both passives (e.g. Tabby's Ninth Life Scrap tunes Nine Lives *and* Scrappy). **Capstones** (`cap-*`, drawn as diamonds, like every 5★+ node) sit at the tips.
-- **Sealed capstone:** one per fighter is sealed until the player has earned `SEALED_AT` = 56 stars (World 4's gate), like E33's story-gated skills.
-- **Cost by role, not depth:** 1 next to a root, 2–4 in the body, 5–6 at the tips. 73–75 stars per fighter; the campaign pays out 168 stars, enough to max about two fighters.
-- **One shared star pool:** available = stars earned − stars spent across all trees.
+- **Sealed capstone:** one per fighter is sealed until the player has earned `SEALED_AT` stars (World 4's star gate, read from `biomes.ts`: 56), like E33's story-gated skills.
+- **Cost by role, not depth:** each node is authored with a weight (1 next to a root, 2–4 in the body, 5–6 at the tips). `scaleCosts` turns the weights into star costs so every fighter's full tree costs exactly `TREE_BUDGET`.
+- **Every fighter spends every star earned** (no shared pool): a fighter's available stars = stars earned − stars spent on *that* fighter. Growing one never costs another anything, so there is no refunding one fighter to fund the next.
+- **Star budget, tied to the level list** (`data/skillTrees.ts`): `CAMPAIGN_STARS` = 3 × the number of levels (168 with 56 levels, elites included), `TREE_BUDGET` = `CAMPAIGN_STARS − TREE_SLACK` (8) = 160. A full campaign maxes any fighter with 8 stars to spare.
+  - **Adding levels** adds 3 stars each, and every tree's node costs scale up with it, so "full tree ≈ full campaign" stays true without touching the trees. Raise `TREE_SLACK` instead if new levels should make trees easier to finish.
+  - A save whose tree now costs more than it has earned gets that fighter's stars back on load.
+  - `__tests__/adventureProgressionSystems.test.ts` checks each tree sums to `TREE_BUDGET` and that `maxStars()` is `CAMPAIGN_STARS`.
 - **Refunds are free and any time:** a single node when nothing would be cut off from both passives without it (the sheet names what blocks it), or the whole fighter.
 - **Content:** about a third of the nodes tune the passive (`tune('combo.max', 2)`); their text says "+1 more", never "was X", because nodes can be bought in any order. The rest chain systems together (heal → explode, explosion → combo step, Rainbow → spawn Catalyst, mistake → laser), nudge a play pattern, or change how weapons behave. No node is a bare "+1 heart".
 - Node ids are `<fighter slug>-<key>` (e.g. `fox-0-4`, `fox-x-1`). Keys `0-n`/`1-n` are the old two-branch ids, kept so saves keep what they own.
-- On load, `normalizeSkillNodes` keeps only nodes still connected to a passive through owned nodes. If a rebalance makes the trees cost more than the player has earned, every star is refunded.
+- On load, `normalizeSkillNodes` keeps only nodes still connected to a passive through owned nodes. If a rebalance (or more levels scaling costs up) makes a fighter's tree cost more than the player has earned, that fighter's stars are refunded.
 
 ## Loadout: charms and Arcana
 

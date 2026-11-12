@@ -96,7 +96,7 @@ const renderCamp = (initial: AdventureSave, tab: React.ComponentProps<typeof Cam
 };
 
 describe('Camp', () => {
-  it('Fighters tab shows both passives; the skill tree buys in order with stars and refunds a whole branch', () => {
+  it('Fighters tab shows both passives; the skill tree buys linked nodes from its own star pool and refunds them', () => {
     const fighter = 'Orange Tabby';
     const def = getFighter(fighter);
     const camp = renderCamp({ ...createNewSave(), coinsUnlocked: true, stars: starred(4) }, 'fighters');
@@ -116,7 +116,8 @@ describe('Camp', () => {
     }
     const nodes = skillTreeOf(fighter);
     for (const n of nodes) expect(camp.getByTestId(`skill-node-${n.id}`)).toBeTruthy();
-    const entry = nodes.find(n => n.roots.length > 0 && n.cost === 1)!;
+    const entry = nodes.filter(n => n.roots.length > 0).sort((a, b) => a.cost - b.cost)[0];
+    expect(entry.cost).toBeLessThanOrEqual(4);
     const beyond = nodes.find(n => n.roots.length === 0 && n.links.includes(entry.id))!;
     expect(camp.getByTestId(`skill-node-${beyond.id}`).props.accessibilityLabel).toMatch(/locked/);
 
@@ -135,7 +136,8 @@ describe('Camp', () => {
     camp.sync();
     expect(camp.getByTestId(`skill-node-${entry.id}`).props.accessibilityLabel).toMatch(/owned/);
     expect(camp.getByTestId(`skill-node-${beyond.id}`).props.accessibilityLabel).not.toMatch(/locked/);
-    expect(camp.getByTestId('skill-tree-stars')).toHaveTextContent(/3/);
+    // This fighter's own pool: 4 earned minus what it spent
+    expect(camp.getByTestId('skill-tree-stars')).toHaveTextContent(new RegExp(`${4 - entry.cost}/ 4`));
 
     // Refund it from its detail sheet
     fireEvent.press(camp.getByTestId(`skill-node-${entry.id}`));

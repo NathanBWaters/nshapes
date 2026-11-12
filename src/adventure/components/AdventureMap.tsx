@@ -22,7 +22,7 @@ import { getFighter } from '../data/fighters';
 import { BOUNTIES } from '../data/bounties';
 import { getArcana } from '../data/arcana';
 import { isFighterTrial } from '../data/rewards';
-import { availableStars, equippedArcanaOf, getFrontierLevel, getLockReason, maxStars, totalStars, isBiomeOpen } from '../progress';
+import { hasUnspentStars, equippedArcanaOf, getFrontierLevel, getLockReason, maxStars, totalStars, isBiomeOpen } from '../progress';
 import { Bob, CoinPill, INK, StarRow, TONE } from './ui';
 
 const ELITE = '#5B2333';
@@ -236,7 +236,7 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
             <Text style={s.playNextSub} numberOfLines={1}>{frontier.name}</Text>
           </View>
         </TouchableOpacity>
-        <DockButton testID="map-dock-camp" icon="lorc/campfire" label="Camp" onPress={onOpenCamp} disabled={!campUnlocked} badge={campUnlocked && availableStars(save) > 0} />
+        <DockButton testID="map-dock-camp" icon="lorc/campfire" label="Camp" onPress={onOpenCamp} disabled={!campUnlocked} badge={campUnlocked && hasUnspentStars(save)} />
       </View>
     </View>
   );

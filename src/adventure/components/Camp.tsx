@@ -25,6 +25,7 @@ import { getArmoryWeapon, weaponLevelSuffix } from '../data/armory';
 import { unlockHint } from '../data/rewards';
 import {
   arcanaSlots,
+  availableStars,
   fighterStarsSpent,
   buyTuning,
   buyUpgrade,
@@ -194,7 +195,7 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters
 
         {tab === 'fighters' && !treeFighter && (
           <>
-            <Text style={st.blurb}>Every fighter plays by two passives. Spend stars in their skill trees to bend those rules. Refunds are free.</Text>
+            <Text style={st.blurb}>Every fighter plays by two passives. Spend stars in their skill trees to bend those rules. Every fighter can spend every star you have earned, so grow them all at once. Refunds are free.</Text>
             {FIGHTERS.map(f => {
               const unlocked = save.unlockedFighters.includes(f.name);
               const selected = save.selectedFighter === f.name;
@@ -263,7 +264,7 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters
                       >
                         <Icon name="lorc/tree-branch" size={16} color={INK} />
                         <Text style={st.treeBtnText}>Skill tree</Text>
-                        <Text style={st.treeBtnSub}>{spent > 0 ? `${spent}★ spent` : 'nothing bought yet'}</Text>
+                        <Text style={st.treeBtnSub}>{`${availableStars(save, f.name)}★ left`}{spent > 0 ? ` · ${spent}★ spent` : ''}</Text>
                       </TouchableOpacity>
                     </>
                   )}

@@ -62,9 +62,11 @@ Passive numbers live as **tuning keys** (e.g. `combo.windowMs`, `combo.max`,
   sealed until 56 stars are earned; costs follow the node's role (73–75 per
   fighter); single nodes refund when nothing would be cut off. See
   `docs/adventure-design.md` → Skill trees for the current rules.
-- **Call: stars are the currency, in one shared pool across fighters.**
-  Available = total stars earned − stars spent in all trees. Biome star gates
-  still count *earned* stars, so spending never re-locks a world.
+- **Call: stars are the currency, and every fighter spends every star earned**
+  (changed from one shared pool: refunding one fighter to fund another was a
+  chore). Available = stars earned − stars spent on that fighter. A full tree
+  costs the campaign's stars minus 8 (`TREE_BUDGET`). Biome star gates count
+  *earned* stars, so spending never re-locks a world.
 - Content rules: about a third of the nodes tune the passive; the rest build
   cross-system chains (heal → explode, explosion → combo step, rainbow → spawn
   Catalyst, mistake → laser, …), encourage a play pattern, or change how weapons
