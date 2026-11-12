@@ -3,11 +3,10 @@ import {
   FighterAmbientMood,
   FighterReactionEvent,
   FighterReactionType,
-  getFighterHealthState,
   resolveFighterAmbientMood,
 } from '@/utils/fighterAnimations';
 
-export interface UseFighterConductorOptions {
+interface UseFighterConductorOptions {
   health: number;
   maxHealth: number;
   remainingTime?: number;
@@ -16,7 +15,7 @@ export interface UseFighterConductorOptions {
   isActiveRound?: boolean;
 }
 
-export interface TriggerMatchOptions {
+interface TriggerMatchOptions {
   /** Match used a Grace to forgive 1 mismatched attribute */
   isGraceMatch?: boolean;
   /** Match triggered explosion, laser, ricochet, echo, or big multi-card clear */
@@ -25,7 +24,7 @@ export interface TriggerMatchOptions {
   didHeal?: boolean;
 }
 
-export interface TriggerMistakeOptions {
+interface TriggerMistakeOptions {
   /** Mistake damage was prevented by a Grace / Second Chance */
   savedByGrace?: boolean;
 }
@@ -145,11 +144,6 @@ export function useFighterConductor({
     }
   }, []);
 
-  const healthState = useMemo(
-    () => getFighterHealthState(health, maxHealth),
-    [health, maxHealth]
-  );
-
   const mood: FighterAmbientMood = useMemo(
     () =>
       resolveFighterAmbientMood({
@@ -167,10 +161,7 @@ export function useFighterConductor({
   return {
     reaction,
     mood,
-    healthState,
     streak,
-    selectedCount,
-    isBoardIdle,
     setSelectedCount: handleSelectedCountChange,
     setIsBoardIdle,
     triggerReaction: fireReaction,
@@ -182,5 +173,3 @@ export function useFighterConductor({
     triggerEntrance,
   };
 }
-
-export default useFighterConductor;

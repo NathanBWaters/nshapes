@@ -7,7 +7,6 @@
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { WeaponCounterEffect, composeEffects } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Sneaky Mouse enemy instance.
@@ -33,6 +32,3 @@ export function createSneakyMouse(): EnemyInstance {
     }
   );
 }
-
-// Register with factory
-registerEnemy('Sneaky Mouse', createSneakyMouse);

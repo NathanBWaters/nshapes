@@ -33,9 +33,8 @@ describe('adventure data integrity', () => {
     }
   });
 
-  it('level ids are unique and indices are ordered', () => {
+  it('level ids are unique', () => {
     expect(new Set(LEVELS.map(l => l.id)).size).toBe(LEVELS.length);
-    LEVELS.forEach((l, i) => expect(l.index).toBe(i));
   });
 });
 

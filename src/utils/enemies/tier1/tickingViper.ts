@@ -7,7 +7,6 @@
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { CountdownEffect, composeEffects } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Ticking Viper enemy instance.
@@ -26,6 +25,3 @@ export function createTickingViper(): EnemyInstance {
     (stats: RoundStats) => stats.countdownCardsMatched >= 1
   );
 }
-
-// Register with factory
-registerEnemy('Ticking Viper', createTickingViper);

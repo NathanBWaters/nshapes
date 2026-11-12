@@ -98,7 +98,6 @@ interface LevelUpProps {
   character?: Character;
   onExitGame?: () => void;
   targetLevel: number;         // The level this reward is for
-  hasMoreLevelUps: boolean;    // True if more level-ups pending after this
 }
 
 const LevelUp: React.FC<LevelUpProps> = ({
@@ -113,7 +112,6 @@ const LevelUp: React.FC<LevelUpProps> = ({
   character,
   onExitGame,
   targetLevel,
-  hasMoreLevelUps,
 }) => {
   const insets = usePWASafeAreaInsets();
   const [focusedIndex, setFocusedIndex] = useState<number>(0);
@@ -356,7 +354,7 @@ const LevelUp: React.FC<LevelUpProps> = ({
           style={[styles.actionButton, !focusedWeapon && styles.actionButtonDisabled]}
         >
           <Text style={styles.actionButtonText}>
-            {hasMoreLevelUps ? 'Next Level Up' : 'Select Weapon'}
+            Select Weapon
           </Text>
         </TouchableOpacity>
       </View>

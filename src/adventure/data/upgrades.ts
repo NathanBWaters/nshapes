@@ -75,7 +75,7 @@ export const getUpgrade = (id: string): UpgradeDef => {
 
 export const MAX_WEAPON_UPGRADE_TIER = 3;
 
-export const WEAPON_UPGRADE_COSTS: Record<WeaponRarity, [number, number, number]> = {
+const WEAPON_UPGRADE_COSTS: Record<WeaponRarity, [number, number, number]> = {
   common: [80, 180, 340],
   rare: [120, 260, 480],
   epic: [180, 380, 680],

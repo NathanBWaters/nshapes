@@ -17,7 +17,7 @@ import { WEAPONS } from '@/utils/gameDefinitions';
 import { sfx } from '@/audio';
 import type { CharacterName } from '@/types';
 import type { AdventureSave } from '../types';
-import { FIGHTERS, MAX_FIGHTER_LEVEL, getLevelUpCost, getLoadout } from '../data/fighters';
+import { FIGHTERS, FIGHTER_PERK_TEXT, MAX_FIGHTER_LEVEL, getLevelUpCost, getLoadout } from '../data/fighters';
 import { MAX_WEAPON_UPGRADE_TIER, applyWeaponUpgradeTier, describeWeaponUpgradeBonus, getUnlockedUpgrades } from '../data/upgrades';
 import { ARCANA } from '../data/arcana';
 import { MECHANICS } from '../data/mechanics';
@@ -128,7 +128,7 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters
           const cost = getLevelUpCost(lvl);
           const now = getLoadout(f.name, lvl);
           const next = lvl < MAX_FIGHTER_LEVEL ? getLoadout(f.name, lvl + 1) : null;
-          const nextPerk = lvl < MAX_FIGHTER_LEVEL ? f.perkText[lvl] : null;
+          const nextPerk = lvl < MAX_FIGHTER_LEVEL ? FIGHTER_PERK_TEXT[lvl] : null;
           const gearChanges = next ? next.filter((id, i) => now[i] !== id) : [];
           const sig = MECHANICS[f.signature];
           const selected = save.selectedFighter === f.name;

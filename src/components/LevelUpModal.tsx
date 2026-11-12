@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Pressable, StyleSheet, Modal, Platform, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, Pressable, StyleSheet, Modal, ScrollView } from 'react-native';
 import { Character, PlayerStats, Weapon } from '@/types';
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
 import { getPlayerWeaponCount } from '@/utils/gameDefinitions';

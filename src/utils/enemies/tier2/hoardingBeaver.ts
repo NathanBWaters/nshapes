@@ -7,7 +7,6 @@
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { ExtraCardRemovalOnMatchEffect, CardRemovalEffect, composeEffects } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Hoarding Beaver enemy instance.
@@ -30,6 +29,3 @@ export function createHoardingBeaver(): EnemyInstance {
       stats.currentScore >= stats.targetScore && stats.cardsRemaining >= 6
   );
 }
-
-// Register with factory
-registerEnemy('Hoarding Beaver', createHoardingBeaver);

@@ -1,15 +1,13 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   EnemyAmbientMood,
-  EnemyHealthState,
   EnemyReactionEvent,
   EnemyReactionType,
-  getEnemyHealthState,
   getEnemyPersonality,
   resolveEnemyAmbientMood,
 } from '@/utils/enemyAnimations';
 
-export interface UseEnemyConductorOptions {
+interface UseEnemyConductorOptions {
   enemyName?: string | null;
   tier?: number;
   hp?: number;
@@ -19,8 +17,7 @@ export interface UseEnemyConductorOptions {
   isActiveCombat?: boolean;
 }
 
-export interface EnemyConductorState {
-  healthState: EnemyHealthState;
+interface EnemyConductorState {
   mood: EnemyAmbientMood;
   reaction: EnemyReactionEvent | null;
   triggerHit: (opts?: { isCritical?: boolean }) => void;
@@ -82,8 +79,6 @@ export function useEnemyConductor(options: UseEnemyConductorOptions): EnemyCondu
     emitReaction('entrance');
   }, [emitReaction]);
 
-  const healthState = useMemo(() => getEnemyHealthState(hp, maxHp), [hp, maxHp]);
-
   const mood = useMemo(
     () =>
       resolveEnemyAmbientMood({
@@ -98,7 +93,6 @@ export function useEnemyConductor(options: UseEnemyConductorOptions): EnemyCondu
   );
 
   return {
-    healthState,
     mood,
     reaction,
     triggerHit,

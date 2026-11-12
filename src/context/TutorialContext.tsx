@@ -15,10 +15,7 @@ export type TutorialStep =
 
 export interface TutorialState {
   hasCompletedTutorial: boolean;
-  hasBeenOfferedTutorial: boolean;
   currentStep: TutorialStep;
-  quizScore: number;
-  practiceMatchCount: number;
   isActive: boolean;
 }
 
@@ -28,18 +25,11 @@ interface TutorialContextType {
   endTutorial: (completed: boolean) => void;
   nextStep: () => void;
   setStep: (step: TutorialStep) => void;
-  incrementQuizScore: () => void;
-  incrementPracticeMatch: () => void;
-  markTutorialOffered: () => void;
-  resetTutorial: () => void;
 }
 
 const defaultState: TutorialState = {
   hasCompletedTutorial: false,
-  hasBeenOfferedTutorial: false,
   currentStep: 'intro',
-  quizScore: 0,
-  practiceMatchCount: 0,
   isActive: false,
 };
 
@@ -59,7 +49,6 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
           setState(prev => ({
             ...prev,
             hasCompletedTutorial: parsed.hasCompletedTutorial ?? false,
-            hasBeenOfferedTutorial: parsed.hasBeenOfferedTutorial ?? false,
           }));
         }
       } catch (error) {
@@ -76,7 +65,6 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
     try {
       const toPersist = {
         hasCompletedTutorial: updates.hasCompletedTutorial ?? state.hasCompletedTutorial,
-        hasBeenOfferedTutorial: updates.hasBeenOfferedTutorial ?? state.hasBeenOfferedTutorial,
       };
       await AsyncStorage.setItem(TUTORIAL_STORAGE_KEY, JSON.stringify(toPersist));
     } catch (error) {
@@ -89,19 +77,14 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
       ...prev,
       isActive: true,
       currentStep: 'intro',
-      quizScore: 0,
-      practiceMatchCount: 0,
     }));
   };
 
   const endTutorial = (completed: boolean) => {
     const updates = {
       hasCompletedTutorial: completed,
-      hasBeenOfferedTutorial: true,
       isActive: false,
       currentStep: 'intro' as TutorialStep,
-      quizScore: 0,
-      practiceMatchCount: 0,
     };
     setState(prev => ({ ...prev, ...updates }));
     persistState(updates);
@@ -130,29 +113,6 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
     setState(prev => ({ ...prev, currentStep: step }));
   };
 
-  const incrementQuizScore = () => {
-    setState(prev => ({ ...prev, quizScore: prev.quizScore + 1 }));
-  };
-
-  const incrementPracticeMatch = () => {
-    setState(prev => ({ ...prev, practiceMatchCount: prev.practiceMatchCount + 1 }));
-  };
-
-  const markTutorialOffered = () => {
-    const updates = { hasBeenOfferedTutorial: true };
-    setState(prev => ({ ...prev, ...updates }));
-    persistState(updates);
-  };
-
-  const resetTutorial = async () => {
-    setState(defaultState);
-    try {
-      await AsyncStorage.removeItem(TUTORIAL_STORAGE_KEY);
-    } catch (error) {
-      console.error('Failed to reset tutorial state:', error);
-    }
-  };
-
   // Don't render children until state is loaded
   if (!isLoaded) {
     return null;
@@ -166,10 +126,6 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
         endTutorial,
         nextStep,
         setStep,
-        incrementQuizScore,
-        incrementPracticeMatch,
-        markTutorialOffered,
-        resetTutorial,
       }}
     >
       {children}

@@ -1,7 +1,8 @@
 /**
  * Unit tests for applyEnemyStatModifiers function
  */
-import { applyEnemyStatModifiers, createDummyEnemy } from '@/utils/enemyFactory';
+import { applyEnemyStatModifiers } from '@/utils/enemyFactory';
+import { createDummyEnemy } from '@/utils/enemyEffects';
 import type { PlayerStats } from '@/types';
 import type { EnemyInstance, EnemyStatModifiers } from '@/types/enemy';
 

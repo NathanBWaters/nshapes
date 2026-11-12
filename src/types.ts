@@ -11,15 +11,12 @@ export type AttributeName = 'shape' | 'color' | 'number' | 'shading' | 'backgrou
 // Adventure mode difficulty setting (legacy - to be removed)
 export type AdventureDifficulty = 'easy' | 'medium' | 'hard';
 
+// Game mode and Free Play difficulty selection
+export type GameMode = 'adventure' | 'free_play';
+export type FreePlayDifficulty = 'easy' | 'medium' | 'hard' | 'omega';
+
 // New level-based progression system
 export type LevelNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
-
-// Level completion tracking per character
-export interface LevelCompletion {
-  levelNumber: LevelNumber;
-  characterName: string;
-  completedAt: number; // Timestamp
-}
 
 // Level definition with bosses and attributes
 export interface LevelDefinition {
@@ -46,17 +43,6 @@ export interface BoardConnection {
   positionB: number; // Board index
   createdAt: number; // Timestamp
 }
-
-/**
- * Connection state for the current round.
- * Connections are cleared at the end of each round.
- */
-export interface ConnectionState {
-  connections: BoardConnection[];
-}
-
-// Ordered list of attributes for progressive unlock
-export const ATTRIBUTE_ORDER: AttributeName[] = ['shape', 'color', 'number', 'shading', 'background'];
 
 export interface Card {
   id: string;
@@ -123,9 +109,7 @@ export interface CardReward {
 
 export type CharacterName =
   'Orange Tabby' | 'Sly Fox' | 'Corgi' | 'Emperor Penguin' |
-  'Pelican' | 'Badger' | 'Cow' | 'Tortoise' |
-  'Chimp' | 'Eagle' | 'Lemur' | 'Hedgehog' |
-  'Armadillo' | 'Raccoon' | 'Polar Bear' | 'Chameleon';
+  'Pelican' | 'Badger';
 
 export type EnemyName =
   'Chihuahua' | 'Jellyfish' | 'Snake' | 'Mammoth' |
@@ -144,16 +128,6 @@ export type WeaponName =
   'Sympathetic Flames' | 'Neural Network';
 
 export type WeaponRarity = 'common' | 'rare' | 'epic' | 'legendary';
-
-export type ItemName =
-  'Great Field' | 'Mirror Trinket' | 'Hint Booster' | 'Lucky Token' |
-  'Crimson Lens' | 'Crystal Ball' | 'Chrono Stop' |
-  'Subtle Nudge' | 'Weapon Holster' | 'Culling Scroll' | 'Agile Treads' |
-  'Fate\'s Bargain' | 'Fractured Gains' | 'Self-Destructing Timer' |
-  'Card Cycler' | 'Team Reroll' | 'Molotov Catalyst' | 'Tempo Tuner' |
-  'Sharp Edge' | 'Fortune Map' | 'Ghost Grace';
-
-export type ItemRarity = 'Tier 1' | 'Tier 2' | 'Tier 3' | 'Tier 4';
 
 // Cap increase effect types - must match EffectCapType in gameConfig.ts
 export type CapIncreaseType = 'echo' | 'laser' | 'graceGain' | 'explosion' | 'hint' | 'timeGain' | 'healing' | 'fire' | 'ricochet' | 'boardGrowth' | 'coinGain' | 'xpGain';
@@ -209,27 +183,6 @@ export interface Weapon {
   bridgeEffect?: BridgeEffect; // Cross-system trigger: when X happens, Y% chance to cause Z
   icon?: IconName; // Icon path like "delapouite/bamboo" - must be in ICON_REGISTRY
   maxCount?: number; // Maximum number of this weapon that can be owned (e.g., 1 for unique legendaries)
-}
-
-export interface Item {
-  name: ItemName;
-  description: string;
-  rarity: ItemRarity;
-  price: number;
-  limit: number | null; // null means no limit
-  effects: Partial<PlayerStats>;
-  drawbacks: Partial<PlayerStats>;
-  icon?: IconName; // Icon path like "lorc/clover" - must be in ICON_REGISTRY
-}
-
-export interface Enemy {
-  name: EnemyName;
-  description: string;
-  effect: string;
-  reward: string;
-  icon?: IconName; // Icon path like "lorc/jellyfish" - must be in ICON_REGISTRY
-  applyEffect: (gameState: GameState) => GameState;
-  applyReward: (gameState: GameState) => GameState;
 }
 
 export interface Character {
@@ -339,21 +292,18 @@ export interface Player {
   character: Character;
   stats: PlayerStats;
   weapons: Weapon[];
-  items: Item[];
 }
 
 export interface GameState {
   // Core game
   deck: Card[];
   board: Card[];
-  selectedCards: Card[];
   foundCombinations: Card[][];
   score: number;
   gameStarted: boolean;
   gameEnded: boolean;
   startTime: number | null;
   endTime: number | null;
-  hintUsed: boolean;
 
   // Attribute scaling
   activeAttributes: AttributeName[];
@@ -368,26 +318,17 @@ export interface GameState {
   player: Player;
 
   // Shop and upgrades
-  shopItems: (Item | null)[];  // null represents a sold/empty slot
   shopWeapons: (Weapon | null)[];  // Weapon shop items
   levelUpOptions: Weapon[];  // Now weapons only
   rerollCost: number;
 
   // Enemy
   currentEnemies: EnemyOption[];  // Enemies with pre-determined rewards to choose from
-  selectedEnemy: EnemyInstance | null;  // The enemy selected for this round
-  activeEnemyInstance: EnemyInstance | null;  // Active enemy for current round (same as selectedEnemy)
+  activeEnemyInstance: EnemyInstance | null;  // Active enemy for current round
   selectedEnemyReward: Weapon | null;  // Pre-determined stretch goal reward for selected enemy
   selectedEnemyMoney: number | null;  // Pre-determined stretch goal bonus money for selected enemy
   defeatedEnemies: string[];  // Names of enemies whose stretch goals have been completed
   awardedStretchGoalWeapons: string[];  // IDs of stretch goal weapons that have been awarded
-
-  // Loot and rewards
-  lootCrates: number;
-
-  // Co-op
-  isCoOp: boolean;
-  players: Player[];
 
   // Endless mode
   isEndlessMode: boolean;

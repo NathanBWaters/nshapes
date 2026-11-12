@@ -8,8 +8,7 @@ export const storage = createMMKV({
 });
 
 // Storage keys
-export const STORAGE_KEYS = {
-  TUTORIAL_VIEWED: 'tutorial_viewed',
+const STORAGE_KEYS = {
   CHARACTER_WINS: 'character_wins',
   ENDLESS_HIGH_SCORES: 'endless_high_scores',
   ADVENTURE_HIGH_ROUNDS: 'adventure_high_rounds',
@@ -28,22 +27,7 @@ export type CharacterWins = Record<string, number>;
 export type EndlessHighScores = Record<string, number>;
 
 // Adventure high rounds type: maps character name to furthest round reached
-export type AdventureHighRounds = Record<string, number>;
-
-// Tutorial storage helpers
-export const TutorialStorage = {
-  hasViewedTutorial: (): boolean => {
-    return storage.getBoolean(STORAGE_KEYS.TUTORIAL_VIEWED) ?? false;
-  },
-
-  markTutorialViewed: (): void => {
-    storage.set(STORAGE_KEYS.TUTORIAL_VIEWED, true);
-  },
-
-  resetTutorialViewed: (): void => {
-    storage.remove(STORAGE_KEYS.TUTORIAL_VIEWED);
-  },
-};
+type AdventureHighRounds = Record<string, number>;
 
 // Character wins storage helpers
 export const CharacterWinsStorage = {
@@ -190,7 +174,7 @@ export const CharacterUnlockStorage = {
 // Version allows for future migrations if the save format changes
 const SAVED_GAME_VERSION = 1;
 
-export interface SavedGameState {
+interface SavedGameState {
   version: number;
   savedAt: number; // Timestamp
 
@@ -257,7 +241,7 @@ export const SavedGameStorage = {
 // =============================================================================
 
 // Level completion record: tracks which characters beat which levels
-export interface LevelCompletionRecord {
+interface LevelCompletionRecord {
   levelNumber: number;
   characterName: string;
   completedAt: number;

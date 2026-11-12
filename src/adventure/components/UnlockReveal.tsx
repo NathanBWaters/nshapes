@@ -29,7 +29,7 @@ const MUTED = '#B9B1A5';
 const weapon = (id: string) => WEAPONS.find(w => w.id === id) ?? findEvolvedWeapon(id);
 
 /** Weapon text was written for score-based modes. In Adventure a point is a point of damage. */
-export const adventureText = (t: string) => t.replace(/\+(\d+) points?/g, '+$1 damage');
+const adventureText = (t: string) => t.replace(/\+(\d+) points?/g, '+$1 damage');
 
 /** A dark cut-out of an icon with a question mark — used wherever a reward is still secret. */
 export const Silhouette: React.FC<{ icon: IconName; size?: number; light?: boolean }> = ({ icon, size = 28, light }) => (

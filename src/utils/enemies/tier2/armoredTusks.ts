@@ -7,7 +7,6 @@
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { WeaponCounterEffect, composeEffects } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Armored Tusks enemy instance.
@@ -36,6 +35,3 @@ export function createArmoredTusks(): EnemyInstance {
     }
   );
 }
-
-// Register with factory
-registerEnemy('Armored Tusks', createArmoredTusks);

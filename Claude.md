@@ -92,7 +92,6 @@ This rule ensures visual consistency and prevents confusion with selection state
 * Match trigger effects (healing, hints, time, graces, explosions, lasers, fire)
 * Auto-hint system (shows 1 card from valid set after idle time)
 * Options menu with sound toggle (persisted to MMKV storage)
-* Optional multiplayer via Socket.io (not a priority - ignore multiplayer code)
 
 ### UI Features
 
@@ -104,7 +103,6 @@ This rule ensures visual consistency and prevents confusion with selection state
 
 ## Notes
 
-* **Multiplayer is NOT a priority.** Do not worry about the multiplayer code or fixing multiplayer bugs. Focus on single-player gameplay.
 * **Enemy selection is skipped.** The game goes directly from character selection to the round phase.
 * **Shop shows only weapons.** Items have been replaced by the weapon system.
 * **Level-up shows only weapons.** No stat upgrade options.
@@ -115,7 +113,6 @@ This rule ensures visual consistency and prevents confusion with selection state
 * **React Native** for iOS, Android, and Web
 * **TypeScript**
 * **NativeWind/TailwindCSS** for styling
-* **Socket.io** for multiplayer
 
 ## Project Structure
 
@@ -132,7 +129,6 @@ src/                        # Shared code (imported via @/ alias)
 │   ├── Game.tsx            # Main controller (handles game phases, weapon effects)
 │   ├── GameBoard.tsx       # Card display (auto-hint system)
 │   ├── Card.tsx            # Renders shapes, fills, holographic shimmer, fire effects
-│   ├── CharacterSelection.tsx
 │   ├── WeaponShop.tsx      # Weapon purchase interface (double-tap, stats preview)
 │   ├── LevelUp.tsx         # Weapon selection on level up (FREE indicator)
 │   ├── InventoryBar.tsx    # Horizontal weapon inventory display
@@ -141,8 +137,7 @@ src/                        # Shared code (imported via @/ alias)
 │   ├── VictoryScreen.tsx   # End-game celebration screen
 │   ├── OptionsMenu.tsx     # Sound settings modal
 │   └── RoundSummary.tsx
-├── context/
-│   └── SocketContext.tsx   # Multiplayer state management
+├── context/                # Tutorial and keyword-tooltip state
 ├── types.ts                # Interfaces for Cards, Weapons, PlayerStats
 └── utils/
     ├── gameDefinitions.ts  # Characters, weapons (WEAPONS array)

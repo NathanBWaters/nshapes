@@ -6,12 +6,12 @@
  * When a card at a connected position is destroyed, the card at the linked position is also destroyed.
  */
 
-import type { BoardConnection, Card, PlayerStats } from '../types';
+import type { BoardConnection, PlayerStats } from '../types';
 
 /**
  * Generate a unique connection ID
  */
-export const generateConnectionId = (): string => {
+const generateConnectionId = (): string => {
   return `conn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 };
 
@@ -45,7 +45,7 @@ export const arePositionsConnected = (
 /**
  * Get all positions connected to a given position
  */
-export const getConnectedPositions = (
+const getConnectedPositions = (
   connections: BoardConnection[],
   position: number
 ): number[] => {
@@ -233,17 +233,4 @@ export const getFireSpreadMultiplier = (
     conn => conn.positionA === position || conn.positionB === position
   );
   return isConnected ? linkedFireMultiplier : 1;
-};
-
-/**
- * Remove all connections involving a specific position
- * (used when a position is destroyed to clean up stale connections)
- */
-export const removeConnectionsForPosition = (
-  connections: BoardConnection[],
-  position: number
-): BoardConnection[] => {
-  return connections.filter(
-    conn => conn.positionA !== position && conn.positionB !== position
-  );
 };

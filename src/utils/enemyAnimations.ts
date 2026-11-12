@@ -54,12 +54,7 @@ export type EnemyExpression =
 
 export interface EnemyPersonalityProfile {
   name: string;
-  tier: 1 | 2 | 3 | 4;
-  primaryColor: string;
-  secondaryColor: string;
-  accentColor: string;
   auraColor: string;
-  irisColor: string;
   /** Idle breathing cycle duration in ms (fast for bugs/rodents, slow & heavy for bosses/golems) */
   breathCycleMs: number;
   /** Idle breathing vertical scale intensity */
@@ -74,11 +69,10 @@ export interface EnemyPersonalityProfile {
   idleTiltDeg: number;
   /** Whether this foe naturally snoozes when idle (e.g. Dozy Bunny, Lazy Sloth) */
   naturallySleepy?: boolean;
-  /** Duration (ms) a one-shot reaction holds its expression before settling */
-  reactionHoldMs: Record<EnemyReactionType, number>;
 }
 
-const DEFAULT_ENEMY_REACTION_HOLD_MS: Record<EnemyReactionType, number> = {
+/** Duration (ms) a one-shot enemy reaction holds its expression before settling */
+export const ENEMY_REACTION_HOLD_MS: Record<EnemyReactionType, number> = {
   pain: 760,
   crit_pain: 1050,
   taunt: 920,
@@ -181,23 +175,9 @@ export function getEnemyPersonality(enemyName?: string | null, tierOverride?: nu
   const idleTiltDeg = isHeavy ? 1.6 : isFast ? 2.8 : 2.1;
 
   const auraColor = TIER_AURA_COLORS[inferredTier];
-  const irisColor =
-    inferredTier === 4
-      ? '#EF4444'
-      : inferredTier === 3
-        ? '#DC2626'
-        : inferredTier === 2
-          ? '#D97706'
-          : COLORS.slateCharcoal;
-
   return {
     name,
-    tier: inferredTier,
-    primaryColor: COLORS.slateCharcoal,
-    secondaryColor: COLORS.paperBeige,
-    accentColor: auraColor,
     auraColor,
-    irisColor,
     breathCycleMs,
     breathIntensity,
     earSwayDeg,
@@ -205,7 +185,6 @@ export function getEnemyPersonality(enemyName?: string | null, tierOverride?: nu
     tailWagDeg,
     idleTiltDeg,
     naturallySleepy: isSleepy,
-    reactionHoldMs: DEFAULT_ENEMY_REACTION_HOLD_MS,
   };
 }
 

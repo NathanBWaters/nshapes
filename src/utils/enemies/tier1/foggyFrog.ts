@@ -7,7 +7,6 @@
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { WeaponCounterEffect, composeEffects } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Foggy Frog enemy instance.
@@ -33,6 +32,3 @@ export function createFoggyFrog(): EnemyInstance {
     }
   );
 }
-
-// Register with factory
-registerEnemy('Foggy Frog', createFoggyFrog);

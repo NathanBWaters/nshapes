@@ -7,7 +7,6 @@
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { DudCardEffect, PositionShuffleEffect, composeEffects } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Prowling Direwolf enemy instance.
@@ -29,6 +28,3 @@ export function createProwlingDirewolf(): EnemyInstance {
     (stats: RoundStats) => stats.maxStreak >= 6
   );
 }
-
-// Register with factory
-registerEnemy('Prowling Direwolf', createProwlingDirewolf);

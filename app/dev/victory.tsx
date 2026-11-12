@@ -104,7 +104,6 @@ const mockPlayer: Player = {
   },
   stats: mockPlayerStats,
   weapons: mockWeapons,
-  items: [],
 };
 
 // Mock round scores using ROUND_REQUIREMENTS for targets

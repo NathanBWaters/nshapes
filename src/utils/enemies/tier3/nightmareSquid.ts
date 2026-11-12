@@ -12,7 +12,6 @@ import {
   ScoreDecayEffect,
   composeEffects,
 } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Nightmare Squid enemy instance.
@@ -35,6 +34,3 @@ export function createNightmareSquid(): EnemyInstance {
     (stats: RoundStats) => stats.currentScore >= stats.targetScore * 2
   );
 }
-
-// Register with factory
-registerEnemy('Nightmare Squid', createNightmareSquid);

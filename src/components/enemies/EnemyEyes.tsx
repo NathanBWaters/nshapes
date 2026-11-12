@@ -4,7 +4,7 @@ import { GazeOffset } from '@/components/fighters/creatures/types';
 import { COLORS } from '@/utils/colors';
 import { EnemyExpression } from '@/utils/enemyAnimations';
 
-export interface EnemyEyesProps {
+interface EnemyEyesProps {
   expression: EnemyExpression;
   leftX?: number;
   rightX?: number;

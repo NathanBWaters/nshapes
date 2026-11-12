@@ -7,7 +7,6 @@
 
 import type { RoundStats } from '@/types/enemy';
 import { HintDisableEffect, WeaponCounterEffect, composeEffects } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Creeping Shadow enemy instance.
@@ -32,6 +31,3 @@ export function createCreepingShadow() {
     }
   );
 }
-
-// Register with factory
-registerEnemy('Creeping Shadow', createCreepingShadow);

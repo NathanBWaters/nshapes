@@ -5,9 +5,9 @@
 import type { Card, CardReward } from '@/types';
 import { MATCH_REWARDS } from '@/utils/gameConfig';
 import { processWeaponEffects } from '@/utils/weaponEffects';
-import type { AdventureSave, LevelDef, RunState } from '../types';
+import type { AdventureSave, LevelDef } from '../types';
 import { createRng } from './rng';
-import { computeStars, createRun, runReducer, type RunAction } from './run';
+import { computeStars, createRun, runReducer } from './run';
 import { allSets } from './sets';
 
 export interface BotProfile {
@@ -33,32 +33,30 @@ const rewardFor = (c: Card): CardReward => ({
   experience: MATCH_REWARDS.baseExperience,
 });
 
-const step = (s: RunState, a: RunAction) => runReducer(s, a);
-
 export const simulateRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: number) => {
   const rng = createRng(seed ^ 0x9e3779b9);
   let s = createRun(level, save, { seed });
   let guard = 0;
   while ((s.status === 'playing' || s.status === 'pick' || s.status === 'intermission') && guard++ < 2000) {
     if (s.status === 'pick') {
-      s = step(s, { type: 'PICK', weaponId: s.pickOptions[0]?.id ?? null });
+      s = runReducer(s, { type: 'PICK', weaponId: s.pickOptions[0]?.id ?? null });
       continue;
     }
     if (s.status === 'intermission') {
-      if (s.shopOptions.length && s.coins > 60) s = step(s, { type: 'BUY', index: 0 });
-      s = step(s, { type: 'NEXT_WAVE' });
+      if (s.shopOptions.length && s.coins > 60) s = runReducer(s, { type: 'BUY', index: 0 });
+      s = runReducer(s, { type: 'NEXT_WAVE' });
       continue;
     }
     // Fire a charged active ability straight away
     if (s.ability && s.ability.max > 0 && s.ability.charge >= s.ability.max) {
-      s = step(s, { type: 'ABILITY' });
-      if (s.ability?.id === 'big_scoop' && s.ability.scooped.length) s = step(s, { type: 'REPLACE', ids: s.ability.scooped });
+      s = runReducer(s, { type: 'ABILITY' });
+      if (s.ability?.id === 'big_scoop' && s.ability.scooped.length) s = runReducer(s, { type: 'REPLACE', ids: s.ability.scooped });
       continue;
     }
     // Think
     const think = bot.secondsPerAttribute * s.attributes.length * (0.6 + rng.next() * 0.8);
     const ticks = Math.max(1, Math.round(think));
-    for (let i = 0; i < ticks && s.status === 'playing'; i++) s = step(s, { type: 'TICK', ms: 1000 });
+    for (let i = 0; i < ticks && s.status === 'playing'; i++) s = runReducer(s, { type: 'TICK', ms: 1000 });
     if (s.status !== 'playing') break;
 
     const selectableCards = s.board.filter(c => !c.isDud && !c.isFaceDown);
@@ -71,20 +69,20 @@ export const simulateRun = (level: LevelDef, save: AdventureSave, bot: BotProfil
     }
     if (!set || rng.next() < bot.mistakeRate) {
       if (selectableCards.length < 3) {
-        s = step(s, { type: 'TICK', ms: 1000 });
+        s = runReducer(s, { type: 'TICK', ms: 1000 });
         continue;
       }
       const wrong = rng.shuffle(selectableCards).slice(0, 3);
-      s = step(s, { type: 'INVALID', cards: wrong });
-      s = step(s, { type: 'REPLACE', ids: wrong.map(c => c.id) });
+      s = runReducer(s, { type: 'INVALID', cards: wrong });
+      s = runReducer(s, { type: 'REPLACE', ids: wrong.map(c => c.id) });
       continue;
     }
     const fx = s.features.has('gear') ? processWeaponEffects(s.board, set, s.stats, s.weapons, s.attributes) : undefined;
     const extra = fx ? [...fx.explosiveCards, ...fx.laserCards, ...fx.ricochetCards, ...fx.autoMatchedSets.flat()] : [];
     const all = [...set, ...extra.filter(c => !set!.some(x => x.id === c.id))];
     const rewards = all.map(rewardFor);
-    s = step(s, { type: 'MATCH', cards: all, rewards, effects: fx, nowMs: 0 });
-    s = step(s, { type: 'REPLACE', ids: all.map(c => c.id) });
+    s = runReducer(s, { type: 'MATCH', cards: all, rewards, effects: fx, nowMs: 0 });
+    s = runReducer(s, { type: 'REPLACE', ids: all.map(c => c.id) });
   }
   return { stars: computeStars(s), coins: s.coins, state: s };
 };

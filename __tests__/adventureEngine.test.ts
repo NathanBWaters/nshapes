@@ -1,7 +1,7 @@
 import { getLevel, LEVELS, MAIN_LEVELS } from '@/adventure/data/levels';
 import { createNewSave, applyLevelResult, getFeaturesForLevel, getLockReason, isLevelUnlocked, levelFighter, buyUpgrade, reconcileUnlocks, totalStars } from '@/adventure/progress';
-import { createRun, runReducer, computeStars, boardHasSet } from '@/adventure/engine/run';
-import { allSets } from '@/adventure/engine/sets';
+import { createRun, runReducer, computeStars } from '@/adventure/engine/run';
+import { allSets, hasAnySet } from '@/adventure/engine/sets';
 import type { Card, CardReward } from '@/types';
 import type { RunState } from '@/adventure/types';
 
@@ -16,11 +16,11 @@ const playSet = (s: RunState): RunState => {
 
 describe('features accumulate along the map', () => {
   it('1-1 has no hearts, 1-2 introduces them, later levels keep them', () => {
-    expect(getFeaturesForLevel(getLevel('1-1')).has('hearts')).toBe(false);
-    expect(getFeaturesForLevel(getLevel('1-2')).has('hearts')).toBe(true);
-    expect(getFeaturesForLevel(getLevel('4-5')).has('hearts')).toBe(true);
-    expect(getFeaturesForLevel(getLevel('2-8')).has('shop')).toBe(false);
-    expect(getFeaturesForLevel(getLevel('3-3')).has('shop')).toBe(true);
+    expect(getFeaturesForLevel(getLevel('1-1'), createNewSave()).has('hearts')).toBe(false);
+    expect(getFeaturesForLevel(getLevel('1-2'), createNewSave()).has('hearts')).toBe(true);
+    expect(getFeaturesForLevel(getLevel('4-5'), createNewSave()).has('hearts')).toBe(true);
+    expect(getFeaturesForLevel(getLevel('2-8'), createNewSave()).has('shop')).toBe(false);
+    expect(getFeaturesForLevel(getLevel('3-3'), createNewSave()).has('shop')).toBe(true);
   });
 
   it('first level: infinite hearts, no gear, no hints', () => {
@@ -28,7 +28,7 @@ describe('features accumulate along the map', () => {
     expect(run.hearts).toBeNull();
     expect(run.weapons).toHaveLength(0);
     expect(run.stats.hints).toBe(0);
-    expect(boardHasSet(run.board, run.attributes)).toBe(true);
+    expect(hasAnySet(run.board, run.attributes)).toBe(true);
   });
 });
 
@@ -145,7 +145,7 @@ describe('fighter abilities', () => {
   });
 
   it('Orange Tabby — Nine Lives survives one knockout', () => {
-    let s = createRun(getLevel('2-1'), caughtUp(), { seed: 2, fighter: 'Orange Tabby' });
+    let s = createRun(getLevel('2-1'), { ...caughtUp(), selectedFighter: 'Orange Tabby' }, { seed: 2 });
     const hearts = s.hearts!;
     for (let i = 0; i < hearts; i++) s = runReducer(s, { type: 'INVALID', cards: s.board.slice(0, 3) });
     expect(s.status).toBe('playing');
@@ -156,7 +156,7 @@ describe('fighter abilities', () => {
   });
 
   it('Sly Fox — quick Sets build a combo; a mistake breaks it', () => {
-    let s = createRun(getLevel('2-1'), caughtUp(), { seed: 3, fighter: 'Sly Fox' });
+    let s = createRun(getLevel('2-1'), { ...caughtUp(), selectedFighter: 'Sly Fox' }, { seed: 3 });
     s = playSet(s);
     const hp1 = s.foeHp;
     s = runReducer(s, { type: 'TICK', ms: 1000 });
@@ -168,7 +168,7 @@ describe('fighter abilities', () => {
   });
 
   it('Badger — mistakes store grudges released on the next Set', () => {
-    let s = createRun(getLevel('2-1'), caughtUp(), { seed: 4, fighter: 'Badger' });
+    let s = createRun(getLevel('2-1'), { ...caughtUp(), selectedFighter: 'Badger' }, { seed: 4 });
     s = runReducer(s, { type: 'INVALID', cards: s.board.slice(0, 3) });
     s = runReducer(s, { type: 'INVALID', cards: s.board.slice(0, 3) });
     expect(s.ability!.grudge).toBe(2);
@@ -179,7 +179,7 @@ describe('fighter abilities', () => {
   });
 
   it('Emperor Penguin — Deep Freeze stops the clock', () => {
-    let s = createRun(getLevel('2-1'), caughtUp(), { seed: 5, fighter: 'Emperor Penguin' });
+    let s = createRun(getLevel('2-1'), { ...caughtUp(), selectedFighter: 'Emperor Penguin' }, { seed: 5 });
     for (let i = 0; i < 4; i++) s = playSet(s);
     expect(s.ability!.charge).toBe(4);
     s = runReducer(s, { type: 'ABILITY' });
@@ -192,17 +192,17 @@ describe('fighter abilities', () => {
   });
 
   it.each([6, 11, 21, 34, 55, 89, 144, 233])('Corgi — Zoomies re-deals a clean board (seed %i)', seed => {
-    let s = createRun(getLevel('2-2'), caughtUp(), { seed, fighter: 'Corgi' });
+    let s = createRun(getLevel('2-2'), { ...caughtUp(), selectedFighter: 'Corgi' }, { seed });
     for (let i = 0; i < 3; i++) s = playSet(s);
     const before = s.board.map(c => c.id);
     s = runReducer(s, { type: 'ABILITY' });
     expect(s.board.map(c => c.id)).not.toEqual(before);
     expect(s.board.some(c => c.isDud)).toBe(false);
-    expect(boardHasSet(s.board, s.attributes)).toBe(true);
+    expect(hasAnySet(s.board, s.attributes)).toBe(true);
   });
 
   it('Pelican — Big Scoop plays a Set for you', () => {
-    let s = createRun(getLevel('2-1'), caughtUp(), { seed: 7, fighter: 'Pelican' });
+    let s = createRun(getLevel('2-1'), { ...caughtUp(), selectedFighter: 'Pelican' }, { seed: 7 });
     for (let i = 0; i < 4; i++) s = playSet(s);
     const m = s.matches;
     s = runReducer(s, { type: 'ABILITY' });

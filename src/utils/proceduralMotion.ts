@@ -12,18 +12,6 @@ export interface SecondOrderState {
   xp: number;
 }
 
-/**
- * Parameterized second-order system `(f, z, r)` inspired by t3ssel8r's procedural motion model:
- * - `f`: natural frequency in Hz (speed of response)
- * - `z`: damping ratio (`< 1` underdamped overshoot, `1` critical, `> 1` overdamped)
- * - `r`: initial velocity response (`0` smooth lag, `> 0` immediate/anticipatory)
- */
-export interface SecondOrderParams {
-  f: number;
-  z: number;
-  r: number;
-}
-
 export interface MoodPoseTargets {
   leanX: number;
   leanY: number;
@@ -53,7 +41,7 @@ export function createSecondOrderState(initial = 0): SecondOrderState {
 /**
  * Wraps an angle in radians into `[0, 2π)` without discontinuities.
  */
-export function wrapPhase(phase: number): number {
+function wrapPhase(phase: number): number {
   'worklet';
   const wrapped = phase % TAU;
   return wrapped < 0 ? wrapped + TAU : wrapped;

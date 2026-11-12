@@ -7,7 +7,6 @@
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { TimeStealEffect, composeEffects } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Thieving Raven enemy instance.
@@ -33,6 +32,3 @@ export function createThievingRaven(): EnemyInstance {
     }
   );
 }
-
-// Register with factory
-registerEnemy('Thieving Raven', createThievingRaven);

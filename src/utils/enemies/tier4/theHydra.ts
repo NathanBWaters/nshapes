@@ -14,7 +14,6 @@ import {
   TimeStealEffect,
   composeEffects,
 } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh The Hydra enemy instance.
@@ -40,6 +39,3 @@ export function createTheHydra(): EnemyInstance {
     (stats: RoundStats) => stats.totalMatches >= 10 && stats.invalidMatches === 0
   );
 }
-
-// Register with factory
-registerEnemy('The Hydra', createTheHydra);

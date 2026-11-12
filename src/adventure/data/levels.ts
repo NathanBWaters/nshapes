@@ -21,7 +21,7 @@ const A5: AttributeName[] = ['shape', 'color', 'number', 'shading', 'background'
 
 /** Authoring shape: coins may be omitted on a star and are filled in by `normalizeRewards`. */
 type RewardInput = Partial<RewardDef>;
-type LevelInput = Omit<LevelDef, 'index' | 'rewards'> & {
+type LevelInput = Omit<LevelDef, 'rewards'> & {
   rewards: { star1: RewardInput; star2: RewardInput; star3: RewardInput };
 };
 
@@ -354,7 +354,7 @@ const ELITES: LevelInput[] = [
   },
 ];
 
-export const LEVELS: LevelDef[] = [...RAW_LEVELS, ...ELITES].map((l, index) => ({ ...l, index, rewards: normalizeRewards(l) }));
+export const LEVELS: LevelDef[] = [...RAW_LEVELS, ...ELITES].map(l => ({ ...l, rewards: normalizeRewards(l) }));
 
 /** The main path, in order (elite branches excluded). */
 export const MAIN_LEVELS: LevelDef[] = LEVELS.filter(l => !l.branchOf);
@@ -367,8 +367,6 @@ export const getLevel = (id: string): LevelDef => {
   if (!l) throw new Error(`Unknown level ${id}`);
   return l;
 };
-
-export const levelsInBiome = (biome: string): LevelDef[] => LEVELS.filter(l => l.biome === biome);
 
 /** Position on the main path: a branch sits at its parent's position. */
 export const mainIndexOf = (level: LevelDef): number => {

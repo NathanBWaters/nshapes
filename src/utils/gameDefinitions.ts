@@ -1,5 +1,5 @@
-import { Character, Enemy, Item, Weapon, PlayerStats, GameState, Player, WeaponRarity, WeaponName, EffectCaps, BridgeTriggerType, BridgeEffectType } from '../types';
-import { STARTING_STATS, WEAPON_SYSTEM, getRarityChancesForRound, EFFECT_CAPS } from './gameConfig';
+import { Character, Weapon, PlayerStats, Player, WeaponRarity, WeaponName, EffectCaps, BridgeTriggerType, BridgeEffectType } from '../types';
+import { STARTING_STATS, getRarityChancesForRound, EFFECT_CAPS } from './gameConfig';
 
 // Default effect caps - initialized from EFFECT_CAPS configuration
 export const DEFAULT_EFFECT_CAPS: EffectCaps = {
@@ -138,240 +138,6 @@ export const CHARACTERS: Character[] = [
     icon: 'caro-asercion/badger',
     baseStats: {}
   },
-  // {
-  //   name: 'Cow',
-  //   description: 'Healing-focused character',
-  //   startingWeapon: 'Bamboo',
-  //   startingItems: [],
-  //   baseStats: {
-  //     maxHealth: 1, // +1 max HP
-  //     health: 1, // +1 starting healing
-  //     damage: -0.15, // -15% damage
-  //   }
-  // },
-  // {
-  //   name: 'Tortoise',
-  //   description: 'Time-focused with slower time passage',
-  //   startingWeapon: 'Carrot',
-  //   startingItems: [],
-  //   baseStats: {
-  //     timeWarpPercent: 10, // Time moves 1.1× slower
-  //     // All time-based bonuses are 25% more potent
-  //     additionalPoints: -30, // -30% points at the end of each round
-  //   }
-  // },
-  // {
-  //   name: 'Chimp',
-  //   description: 'Can hold more weapons',
-  //   startingWeapon: 'Bamboo',
-  //   startingItems: [],
-  //   baseStats: {
-  //     maxWeapons: 1, // +1 weapon slot (4 total)
-  //     // Shop prices are +20%
-  //   }
-  // },
-  // {
-  //   name: 'Eagle',
-  //   description: 'Can remove duds from the field',
-  //   startingWeapon: 'Talon',
-  //   startingItems: [],
-  //   baseStats: {
-  //     // 25% chance on each successful match to permanently remove 1 Dud card
-  //     maxHealth: -1, // -1 starting max HP
-  //   }
-  // },
-  // {
-  //   name: 'Lemur',
-  //   description: 'Gets cheaper rerolls',
-  //   startingWeapon: 'Dirt',
-  //   startingItems: [],
-  //   baseStats: {
-  //     // Reroll cost is halved
-  //     luck: -10, // -10 starting Luck
-  //   }
-  // },
-  // {
-  //   name: 'Hedgehog',
-  //   description: 'Can automatically destroy spikes',
-  //   startingWeapon: 'Flint',
-  //   startingItems: [],
-  //   baseStats: {
-  //     // Luck-scaled chance to destroy Spikes cards
-  //     maxHealth: -1, // Starts with only 2 max HP
-  //   }
-  // },
-  // {
-  //   name: 'Armadillo',
-  //   description: 'Deflects damage back to cards',
-  //   startingWeapon: 'Bamboo',
-  //   startingItems: [],
-  //   baseStats: {
-  //     deflectPercent: 20, // +20% Deflect chance
-  //     maxHealth: -2, // -2 initial max HP
-  //   }
-  // },
-  // {
-  //   name: 'Raccoon',
-  //   description: 'Gets more crates but starts with duds',
-  //   startingWeapon: 'Dirt',
-  //   startingItems: [],
-  //   baseStats: {
-  //     // +5% chance that a match will drop a small crate
-  //     // deck starts with 10 duds
-  //   }
-  // },
-  // {
-  //   name: 'Polar Bear',
-  //   description: 'Can freeze a row of cards to add time',
-  //   startingWeapon: 'Carrot',
-  //   startingItems: [],
-  //   baseStats: {
-  //     // Once per round, "freeze" a row of cards for +10s to the timer
-  //     freeRerolls: -1, // -1 free reroll permanently
-  //   }
-  // },
-  // {
-  //   name: 'Chameleon',
-  //   description: 'Better chance of transforming field cards',
-  //   startingWeapon: 'Beak',
-  //   startingItems: [],
-  //   baseStats: {
-  //     // Cards that can transform field cards have an additional 30% chance of activating
-  //     graces: -2,
-  //     matchHints: -2,
-  //   }
-  // },
-];
-
-// Enemies
-export const ENEMIES: Enemy[] = [
-  {
-    name: 'Chihuahua',
-    description: 'If you draw a card with only 1 shape or 1 color, the field-draw stops immediately',
-    effect: 'Stops field draw on single shape/color cards',
-    reward: 'Permanently +1 Field Size if defeated',
-    icon: 'delapouite/jumping-dog',
-    applyEffect: (gameState: GameState): GameState => {
-      // Implementation would restrict the draw logic when a card with number 1 is drawn
-      return gameState;
-    },
-    applyReward: (gameState: GameState): GameState => {
-      return {
-        ...gameState,
-        player: {
-          ...gameState.player,
-          stats: {
-            ...gameState.player.stats,
-            fieldSize: gameState.player.stats.fieldSize + 1
-          }
-        }
-      };
-    }
-  },
-  {
-    name: 'Jellyfish',
-    description: '50% chance of +1 extra damage taken whenever you\'re hurt',
-    effect: 'Increases damage received',
-    reward: '+1 max HP permanently if defeated',
-    icon: 'lorc/jellyfish',
-    applyEffect: (gameState: GameState): GameState => {
-      // Implementation would add a 50% chance to increase damage taken
-      return gameState;
-    },
-    applyReward: (gameState: GameState): GameState => {
-      return {
-        ...gameState,
-        player: {
-          ...gameState.player,
-          stats: {
-            ...gameState.player.stats,
-            maxHealth: gameState.player.stats.maxHealth + 1,
-            health: gameState.player.stats.health + 1
-          }
-        }
-      };
-    }
-  },
-  {
-    name: 'Snake',
-    description: 'Lose your bottom row of the field',
-    effect: 'Reduces available field space',
-    reward: '+1 Field Size permanently if defeated',
-    icon: 'lorc/snake',
-    applyEffect: (gameState: GameState): GameState => {
-      // Implementation would reduce the active field size
-      return {
-        ...gameState,
-        player: {
-          ...gameState.player,
-          stats: {
-            ...gameState.player.stats,
-            fieldSize: gameState.player.stats.fieldSize - (Math.sqrt(gameState.player.stats.fieldSize) || 3)
-          }
-        }
-      };
-    },
-    applyReward: (gameState: GameState): GameState => {
-      return {
-        ...gameState,
-        player: {
-          ...gameState.player,
-          stats: {
-            ...gameState.player.stats,
-            fieldSize: gameState.player.stats.fieldSize + 1
-          }
-        }
-      };
-    }
-  },
-  // Add the remaining enemies following the pattern above
-  {
-    name: 'Mammoth',
-    description: '10% of drawn cards have +1 HP',
-    effect: 'Increases card health',
-    reward: '10% chance to heal +1 each time you match for the rest of the game',
-    icon: 'delapouite/mammoth',
-    applyEffect: (gameState: GameState): GameState => {
-      // Implementation would add health to 10% of cards
-      return gameState;
-    },
-    applyReward: (gameState: GameState): GameState => {
-      // Implementation would add a 10% healing chance on matches
-      return gameState;
-    }
-  },
-  {
-    name: 'Rabbit',
-    description: 'Time moves 1.2× faster',
-    effect: 'Speeds up time',
-    reward: 'Time now moves 1.1× slower after victory',
-    icon: 'delapouite/rabbit',
-    applyEffect: (gameState: GameState): GameState => {
-      return {
-        ...gameState,
-        player: {
-          ...gameState.player,
-          stats: {
-            ...gameState.player.stats,
-            timeWarpPercent: gameState.player.stats.timeWarpPercent - 20
-          }
-        }
-      };
-    },
-    applyReward: (gameState: GameState): GameState => {
-      return {
-        ...gameState,
-        player: {
-          ...gameState.player,
-          stats: {
-            ...gameState.player.stats,
-            timeWarpPercent: gameState.player.stats.timeWarpPercent + 10
-          }
-        }
-      };
-    }
-  },
-  // Complete the implementation for remaining enemies
 ];
 
 // Weapon system - 15 types × 3 rarities = 45 weapons
@@ -1924,71 +1690,6 @@ export const getWeaponsByRarity = (rarity: WeaponRarity): Weapon[] => {
   return WEAPONS.filter(w => w.rarity === rarity);
 };
 
-// Items
-export const ITEMS: Item[] = [
-  {
-    name: 'Great Field',
-    description: 'Provides a larger field and commerce boost',
-    rarity: 'Tier 2',
-    price: 12,
-    limit: null, // unlimited
-    icon: 'lorc/field',
-    effects: {
-      fieldSize: 3,
-      commerce: 1
-    },
-    drawbacks: {
-      additionalPoints: -2
-    }
-  },
-  {
-    name: 'Mirror Trinket',
-    description: 'Mirrors another item at 50% potency',
-    rarity: 'Tier 3',
-    price: 15,
-    limit: 1,
-    icon: 'lorc/mirror-mirror',
-    effects: {
-      luck: 5
-      // Special mirroring effect would be implemented in game logic
-    },
-    drawbacks: {
-      experienceGainPercent: -5
-    }
-  },
-  {
-    name: 'Hint Booster',
-    description: 'Provides extra match possibility hints',
-    rarity: 'Tier 1',
-    price: 6,
-    limit: null,
-    icon: 'lorc/light-bulb',
-    effects: {
-      matchPossibilityHints: 1,
-      dodgeAttackBackPercent: 5
-    },
-    drawbacks: {
-      timeWarpPercent: -5
-    }
-  },
-  {
-    name: 'Lucky Token',
-    description: 'Grants a free reroll each wave',
-    rarity: 'Tier 1',
-    price: 5,
-    limit: null,
-    icon: 'delapouite/token',
-    effects: {
-      freeRerolls: 1,
-      scavengingPercent: 2
-    },
-    drawbacks: {
-      damage: -1
-    }
-  },
-  // Implement the remaining items following the pattern above
-];
-
 // Round requirements
 export const ROUND_REQUIREMENTS = [
   { round: 1, targetScore: 3, time: 30 },
@@ -2022,21 +1723,13 @@ export const getEndlessRoundRequirement = (round: number): { round: number; targ
   };
 };
 
-// Helper functions for character, weapon, and item selection
+// Helper functions for character and weapon selection
 export const getCharacterByName = (name: string): Character | undefined => {
   return CHARACTERS.find(character => character.name === name);
 };
 
 export const getWeaponByName = (name: string): Weapon | undefined => {
   return WEAPONS.find(weapon => weapon.name === name);
-};
-
-export const getItemByName = (name: string): Item | undefined => {
-  return ITEMS.find(item => item.name === name);
-};
-
-export const getEnemyByName = (name: string): Enemy | undefined => {
-  return ENEMIES.find(enemy => enemy.name === name);
 };
 
 // Helper function to initialize a player with a character
@@ -2062,12 +1755,11 @@ export const initializePlayer = (id: string, username: string, characterName: st
       ...DEFAULT_PLAYER_STATS,
       ...character.baseStats
     },
-    weapons: startingWeapons,
-    items: []
+    weapons: startingWeapons
   };
 };
 
-// Helper function to calculate total player stats with all effects from weapons and items
+// Helper function to calculate total player stats with all effects from weapons
 export const calculatePlayerTotalStats = (player: Player): PlayerStats => {
   const totalStats = { ...player.stats };
 
@@ -2076,7 +1768,7 @@ export const calculatePlayerTotalStats = (player: Player): PlayerStats => {
     totalStats.effectCaps = { ...totalStats.effectCaps };
   }
 
-  // Keys that should not be modified by weapon/item effects (non-numeric)
+  // Keys that should not be modified by weapon effects (non-numeric)
   const nonNumericKeys = new Set(['effectCaps']);
 
   // Apply weapon effects
@@ -2099,27 +1791,6 @@ export const calculatePlayerTotalStats = (player: Player): PlayerStats => {
         caps[type] += amount;
       }
     }
-  });
-
-  // Apply item effects and drawbacks
-  player.items.forEach((item: Item) => {
-    // Apply effects
-    Object.entries(item.effects).forEach(([key, value]) => {
-      if (nonNumericKeys.has(key)) return;
-      const currentValue = totalStats[key as keyof PlayerStats];
-      if (typeof value === 'number' && typeof currentValue === 'number') {
-        (totalStats as unknown as Record<string, number>)[key] = currentValue + value;
-      }
-    });
-
-    // Apply drawbacks
-    Object.entries(item.drawbacks).forEach(([key, value]) => {
-      if (nonNumericKeys.has(key)) return;
-      const currentValue = totalStats[key as keyof PlayerStats];
-      if (typeof value === 'number' && typeof currentValue === 'number') {
-        (totalStats as unknown as Record<string, number>)[key] = currentValue + value;
-      }
-    });
   });
 
   return totalStats;
@@ -2154,19 +1825,12 @@ export const getBridgeWeaponsForTrigger = (
  * 
  * @param trigger - The type of event that occurred
  * @param playerWeapons - Player's current weapons
- * @param isCascade - If true, we're already in a bridge resolution (prevents infinite loops)
  * @returns Array of bridge effects that should be applied
  */
 export const rollBridgeEffects = (
   trigger: BridgeTriggerType,
-  playerWeapons: Weapon[],
-  isCascade: boolean = false
+  playerWeapons: Weapon[]
 ): BridgeEffectResult[] => {
-  // Prevent cascade - bridge effects don't trigger other bridge effects
-  if (isCascade) {
-    return [];
-  }
-
   const bridgeWeapons = getBridgeWeaponsForTrigger(trigger, playerWeapons);
   const results: BridgeEffectResult[] = [];
 

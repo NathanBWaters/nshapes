@@ -7,7 +7,6 @@
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { ScoreDecayEffect, composeEffects } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Circling Vulture enemy instance.
@@ -33,6 +32,3 @@ export function createCirclingVulture(): EnemyInstance {
     }
   );
 }
-
-// Register with factory
-registerEnemy('Circling Vulture', createCirclingVulture);

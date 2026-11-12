@@ -7,7 +7,6 @@
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { InactivityEffect, composeEffects } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Stalking Wolf enemy instance.
@@ -43,6 +42,3 @@ export function createStalkingWolf(): EnemyInstance {
     }
   );
 }
-
-// Register with factory
-registerEnemy('Stalking Wolf', createStalkingWolf);

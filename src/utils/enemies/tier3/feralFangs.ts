@@ -12,7 +12,6 @@ import {
   CardRemovalEffect,
   composeEffects,
 } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Feral Fangs enemy instance.
@@ -35,6 +34,3 @@ export function createFeralFangs(): EnemyInstance {
     (stats: RoundStats) => stats.tripleCardsCleared >= 1
   );
 }
-
-// Register with factory
-registerEnemy('Feral Fangs', createFeralFangs);

@@ -11,7 +11,6 @@ import {
   WeaponCounterEffect,
   composeEffects,
 } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Stone Sentinel enemy instance.
@@ -34,6 +33,3 @@ export function createStoneSentinel(): EnemyInstance {
     (stats: RoundStats) => stats.tripleCardsCleared >= 2
   );
 }
-
-// Register with factory
-registerEnemy('Stone Sentinel', createStoneSentinel);

@@ -6,7 +6,6 @@ import { EnemyAvatar } from '@/components/enemies';
 import { ALL_CUSTOM_ENEMY_RIG_NAMES } from '@/components/enemies/rigs';
 import { WeaponAvatar, ALL_CUSTOM_WEAPON_NAMES, getWeaponTapStyle } from '@/components/weapons';
 import { useEnemyConductor } from '@/hooks/useEnemyConductor';
-import '@/utils/enemies';
 import {
   computeEnemyMoodLoopRates,
   computeEnemyMoodPoseTargets,
@@ -161,7 +160,6 @@ describe('Custom Enemy Rigs & Procedural Animation Engine', () => {
     );
 
     expect(result.current.mood).toBe('enraged');
-    expect(result.current.healthState).toBe('battered');
 
     act(() => result.current.triggerHit());
     expect(result.current.reaction?.type).toBe('pain');

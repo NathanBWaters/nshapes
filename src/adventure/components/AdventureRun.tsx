@@ -662,7 +662,7 @@ const Floater: React.FC<{ text: string; color: string }> = ({ text, color }) => 
   return <Animated.Text style={[st.floater, { color }, s]}>{text}</Animated.Text>;
 };
 
-export const WeaponPick: React.FC<{ title: string; subtitle: string; options: Weapon[]; weaponUpgrades?: Record<string, number>; onPick: (w: Weapon) => void; onSkip: () => void }> = ({ title, subtitle, options, weaponUpgrades, onPick, onSkip }) => (
+const WeaponPick: React.FC<{ title: string; subtitle: string; options: Weapon[]; weaponUpgrades?: Record<string, number>; onPick: (w: Weapon) => void; onSkip: () => void }> = ({ title, subtitle, options, weaponUpgrades, onPick, onSkip }) => (
   <Modal visible transparent animationType="fade" onRequestClose={onSkip}>
     <View style={st.overlay}>
       <PopIn style={st.panel}>

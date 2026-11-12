@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -14,6 +14,7 @@ import { Character } from '@/types';
 import { COLORS } from '@/utils/colors';
 import { useReducedMotion } from '@/utils/animation';
 import {
+  FIGHTER_REACTION_HOLD_MS,
   FighterAmbientMood,
   FighterReactionEvent,
   FighterReactionType,
@@ -50,7 +51,7 @@ import {
 import { FighterDamageOverlay } from './FighterDamageOverlay';
 import { FighterEffectsOverlay } from './FighterEffectsOverlay';
 
-export interface FighterAvatarProps {
+interface FighterAvatarProps {
   /** Character object or character name (defaults to 'Orange Tabby') */
   character?: Character | string | null;
   /** Pixel width & height of the avatar (default 56) */
@@ -73,8 +74,6 @@ export interface FighterAvatarProps {
   onPet?: (reactionType: 'pet' | 'dizzy_joy') => void;
   /** Render inside a tactile NShapes portrait frame badge (ideal for HUD & headers) */
   framed?: boolean;
-  /** Optional container style */
-  style?: StyleProp<ViewStyle>;
   /** Optional testID */
   testID?: string;
 }
@@ -139,7 +138,6 @@ export const FighterAvatar: React.FC<FighterAvatarProps> = ({
   interactive = false,
   onPet,
   framed = false,
-  style,
   testID,
 }) => {
   const reducedMotion = useReducedMotion();
@@ -409,7 +407,7 @@ export const FighterAvatar: React.FC<FighterAvatarProps> = ({
       setActiveReaction(type);
       setActiveReactionKey(id);
 
-      const holdMs = personality.reactionHoldMs[type] ?? 850;
+      const holdMs = FIGHTER_REACTION_HOLD_MS[type] ?? 850;
       reactionTimerRef.current = setTimeout(() => {
         setActiveReaction(null);
       }, holdMs);
@@ -679,7 +677,6 @@ export const FighterAvatar: React.FC<FighterAvatarProps> = ({
       }
     },
     [
-      personality,
       shouldAnimate,
       size,
       bodyTx,
@@ -1069,7 +1066,7 @@ export const FighterAvatar: React.FC<FighterAvatarProps> = ({
 
   const stageContent = (
     <View
-      style={[styles.stageBase, frameDynamicStyle, style]}
+      style={[styles.stageBase, frameDynamicStyle]}
       testID={testID ?? 'fighter-avatar'}
       accessibilityRole={interactive ? 'button' : 'image'}
       accessibilityLabel={`${characterName} fighter (${healthState})`}
@@ -1159,5 +1156,3 @@ const styles = StyleSheet.create({
     color: COLORS.slateCharcoal,
   },
 });
-
-export default FighterAvatar;

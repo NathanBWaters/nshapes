@@ -205,15 +205,9 @@ describe('Bridge Weapons', () => {
     });
 
     describe('rollBridgeEffects', () => {
-      it('should return empty array when isCascade is true', () => {
-        const testWeapons = [soulHarvest];
-        const result = rollBridgeEffects('onDestruction', testWeapons, true);
-        expect(result).toEqual([]);
-      });
-
       it('should return empty array when no matching bridge weapons', () => {
         const testWeapons = [soulHarvest];
-        const result = rollBridgeEffects('onExplosion', testWeapons, false);
+        const result = rollBridgeEffects('onExplosion', testWeapons);
         expect(result).toEqual([]);
       });
 
@@ -233,7 +227,7 @@ describe('Bridge Weapons', () => {
 
         // Should always trigger with 100% chance
         for (let i = 0; i < 10; i++) {
-          const result = rollBridgeEffects('onDestruction', testWeapons, false);
+          const result = rollBridgeEffects('onDestruction', testWeapons);
           expect(result.length).toBe(1);
           expect(result[0].effect).toBe('heal');
           expect(result[0].amount).toBe(1);
@@ -255,7 +249,7 @@ describe('Bridge Weapons', () => {
 
         // Should never trigger with 0% chance
         for (let i = 0; i < 10; i++) {
-          const result = rollBridgeEffects('onDestruction', testWeapons, false);
+          const result = rollBridgeEffects('onDestruction', testWeapons);
           expect(result.length).toBe(0);
         }
       });
@@ -272,7 +266,7 @@ describe('Bridge Weapons', () => {
           },
         };
         const testWeapons = [guaranteedWeapon];
-        const result = rollBridgeEffects('onDestruction', testWeapons, false);
+        const result = rollBridgeEffects('onDestruction', testWeapons);
         expect(result[0].weaponName).toBe('Soul Harvest');
       });
 
@@ -289,27 +283,10 @@ describe('Bridge Weapons', () => {
           bridgeEffect: { trigger: 'onDestruction', chance: 100, effect: 'heal', amount: 2 },
         };
         const testWeapons = [weapon1, weapon2];
-        const result = rollBridgeEffects('onDestruction', testWeapons, false);
+        const result = rollBridgeEffects('onDestruction', testWeapons);
         expect(result.length).toBe(2);
         expect(result[0].amount).toBe(1);
         expect(result[1].amount).toBe(2);
-      });
-    });
-
-    describe('Cascade Prevention', () => {
-      it('should prevent bridge-triggered effects from triggering other bridges', () => {
-        // This simulates: explosion triggers Chaos Conduit (gainGrace)
-        // If gaining grace would trigger another bridge, it should be prevented
-        const testWeapons = [chaosConduit];
-
-        // First roll (not a cascade) - should work
-        const firstResult = rollBridgeEffects('onExplosion', testWeapons, false);
-        // Result depends on RNG, but function should work
-        expect(Array.isArray(firstResult)).toBe(true);
-
-        // Second roll (is a cascade) - should return empty
-        const cascadeResult = rollBridgeEffects('onGraceUse', testWeapons, true);
-        expect(cascadeResult).toEqual([]);
       });
     });
   });

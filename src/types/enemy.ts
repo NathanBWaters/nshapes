@@ -311,11 +311,3 @@ export interface EffectBehavior {
   getStatModifiers?: (config: unknown) => Partial<EnemyStatModifiers>;
   getUIModifiers?: (internalState: Record<string, unknown>, config: unknown) => Partial<EnemyUIModifiers>;
 }
-
-/**
- * Configuration for composing effects into an enemy
- */
-export interface EffectConfig {
-  behavior: EffectBehavior;
-  config: unknown;
-}

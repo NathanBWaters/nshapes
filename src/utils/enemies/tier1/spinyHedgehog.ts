@@ -7,7 +7,6 @@
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { WeaponCounterEffect, composeEffects } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Spiny Hedgehog enemy instance.
@@ -33,6 +32,3 @@ export function createSpinyHedgehog(): EnemyInstance {
     }
   );
 }
-
-// Register with factory
-registerEnemy('Spiny Hedgehog', createSpinyHedgehog);

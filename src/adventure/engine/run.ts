@@ -13,7 +13,7 @@ import type { BoardConnection, BridgeTriggerType, Card, CardReward, PlayerStats,
 import type { EnemyEvent, EnemyInstance } from '@/types/enemy';
 import type { WeaponEffectResult } from '@/utils/weaponEffects';
 import type { IconName } from '@/components/Icon';
-import { createDeck, isValidCombination } from '@/utils/gameUtils';
+import { createDeck } from '@/utils/gameUtils';
 import { allSets, hasAnySet } from './sets';
 import { getBoardSizeForAttributes } from '@/utils/gameConfig';
 import { getAdjacentIndices } from '@/utils/weaponEffects';
@@ -23,9 +23,9 @@ import {
   selectPositionsToConnect,
 } from '@/utils/connectionUtils';
 import { DEFAULT_PLAYER_STATS, WEAPONS, canObtainWeapon } from '@/utils/gameDefinitions';
-import { createEnemy, createDummyEnemy, isEnemyRegistered } from '@/utils/enemyFactory';
+import { createEnemy, isEnemyRegistered } from '@/utils/enemyFactory';
+import { createDummyEnemy } from '@/utils/enemyEffects';
 import { createInitialRoundStats } from '@/hooks/useRoundStats';
-import '@/utils/enemies';
 import type { AdventureSave, ArcanaId, FoeDef, LevelDef, RunEvent, RunEventType, RunState } from '../types';
 import { createRng, type Rng } from './rng';
 import { getFeaturesForLevel, fighterLevel } from '../progress';
@@ -35,14 +35,14 @@ import { challengeProgress } from './challenges';
 import { ABILITY_TUNING, abilityFor } from '../data/abilities';
 import { findEvolvedWeapon, getActiveEvolutionStatus, type EvolutionRecipe } from '../data/evolutions';
 
-export const MAX_BOARD = 21;
-export const COIN_CARD_CHANCE = 0.1;
-export const COIN_CARD_VALUE = 3;
-export const POWER_CARD_CHANCE = 0.12;
-export const POWER_CARD_BONUS = 2;
-export const RAINBOW_MULTIPLIER = 2;
-export const CATALYST_DEAL_CHANCE = 0.45;
-export const CATALYST_REFILL_CHANCE = 0.35;
+const MAX_BOARD = 21;
+const COIN_CARD_CHANCE = 0.1;
+const COIN_CARD_VALUE = 3;
+const POWER_CARD_CHANCE = 0.12;
+const POWER_CARD_BONUS = 2;
+const RAINBOW_MULTIPLIER = 2;
+const CATALYST_DEAL_CHANCE = 0.45;
+const CATALYST_REFILL_CHANCE = 0.35;
 
 export const xpForLevel = (lvl: number): number => 6 + lvl * 5;
 
@@ -58,8 +58,7 @@ export type RunAction =
   | { type: 'REROLL' }
   | { type: 'NEXT_WAVE' }
   | { type: 'ABILITY' }
-  | { type: 'CLEAR_EVENTS'; upTo: number }
-  | { type: 'FORFEIT' };
+  | { type: 'CLEAR_EVENTS'; upTo: number };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -71,7 +70,7 @@ const weaponById = (id: string, weaponUpgrades?: Record<string, number>): Weapon
 };
 
 /** Add a weapon's effects into baked stats (mirrors calculatePlayerTotalStats). */
-export const applyWeaponToStats = (stats: PlayerStats, weapon: Weapon): PlayerStats => {
+const applyWeaponToStats = (stats: PlayerStats, weapon: Weapon): PlayerStats => {
   const next: PlayerStats = { ...stats, effectCaps: stats.effectCaps ? { ...stats.effectCaps } : undefined };
   for (const [k, v] of Object.entries(weapon.effects)) {
     const cur = (next as unknown as Record<string, unknown>)[k];
@@ -112,8 +111,6 @@ const toDeckCard = (c: Card): Card => ({
 });
 
 const selectable = (c: Card) => !c.isDud && !c.isFaceDown;
-
-export const boardHasSet = (board: Card[], attrs: AttributeName[]): boolean => hasAnySet(board, attrs);
 
 const isRainbow = (cards: Card[], attrs: AttributeName[]): boolean =>
   cards.length === 3 && attrs.every(a => new Set(cards.map(c => c[a as keyof Card])).size === 3);
@@ -217,7 +214,7 @@ const refill = (d: Draft, indices: number[], clean = false) => {
     const drawn = indices.map(() => drawCard(d, clean));
     const candidate = [...d.board];
     indices.forEach((idx, i) => (candidate[idx] = drawn[i]));
-    if (boardHasSet(candidate, d.attributes) || attempt === 11) {
+    if (hasAnySet(candidate, d.attributes) || attempt === 11) {
       d.board = candidate;
       return;
     }
@@ -532,12 +529,11 @@ const resolve = (d: Draft) => {
 
 // ─── Setup ──────────────────────────────────────────────────────────────────
 
-export interface RunSetupOptions {
+interface RunSetupOptions {
   seed: number;
-  fighter?: string;
 }
 
-export const computeStartingStats = (level: LevelDef, save: AdventureSave, fighter: string) => {
+const computeStartingStats = (level: LevelDef, save: AdventureSave, fighter: string) => {
   const features = getFeaturesForLevel(level, save);
   const activeArcana: ArcanaId | null =
     features.has('gear') && save.activeArcana && save.unlockedArcana.includes(save.activeArcana)
@@ -554,7 +550,7 @@ export const computeStartingStats = (level: LevelDef, save: AdventureSave, fight
   if (charm) weapons.push(charm);
   let stats: PlayerStats = { ...DEFAULT_PLAYER_STATS, hints: 0, graces: 0, effectCaps: { ...DEFAULT_PLAYER_STATS.effectCaps! } };
   for (const w of weapons) stats = applyWeaponToStats(stats, w);
-  stats = addStats(stats, getPerkStats(fighter, lvl));
+  stats = addStats(stats, getPerkStats(lvl));
   let bonusDamagePerMatch = 0;
   let coinBonusPercent = 0;
   for (const u of UPGRADES) {
@@ -581,7 +577,7 @@ export const computeStartingStats = (level: LevelDef, save: AdventureSave, fight
 };
 
 export const createRun = (level: LevelDef, save: AdventureSave, opts: RunSetupOptions): RunState => {
-  const fighter = opts.fighter ?? save.selectedFighter;
+  const fighter = save.selectedFighter;
   const { features, activeArcana, weapons, stats, maxHearts, bonusDamagePerMatch, coinBonusPercent } = computeStartingStats(level, save, fighter);
   const rng = createRng(opts.seed);
   const attributes = level.rules.attributes;
@@ -600,7 +596,7 @@ export const createRun = (level: LevelDef, save: AdventureSave, opts: RunSetupOp
 
   const state: RunState = {
     level,
-    fighter: fighter as RunState['fighter'],
+    fighter,
     features,
     rng: rng.state,
     attributes,
@@ -669,7 +665,7 @@ export const createRun = (level: LevelDef, save: AdventureSave, opts: RunSetupOp
     const dealt: Card[] = [];
     for (let i = 0; i < boardSize; i++) dealt.push(drawCard(d));
     d.board = dealt;
-    if (boardHasSet(d.board, attributes)) break;
+    if (hasAnySet(d.board, attributes)) break;
   }
   d.events = []; // don't coach-mark the deal itself
   startFoe(d);
@@ -1056,7 +1052,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       }
       if (tick.events.some(e => e.type === 'positions_shuffled')) d.board = d._rng.shuffle(d.board);
       // A shrinking or shifting board must never deadlock
-      if (!boardHasSet(d.board, d.attributes) && d.board.length >= 3) {
+      if (!hasAnySet(d.board, d.attributes) && d.board.length >= 3) {
         const victims = d._rng.shuffle(d.board.map((_, i) => i).filter(i => selectable(d.board[i]) && (d.board[i].health ?? 1) <= 1)).slice(0, 3);
         victims.forEach(i => d.deck.push(toDeckCard(d.board[i])));
         refill(d, victims);
@@ -1180,14 +1176,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       }
       return finish(d);
     }
-
-    case 'FORFEIT': {
-      d.status = 'lost';
-      d.endReason = 'hearts';
-      return finish(d);
-    }
   }
-  return state;
 };
 
 export const shopPrice = (w: Weapon): number => Math.round(w.price * 2);
@@ -1195,7 +1184,6 @@ export const rerollCost = (s: RunState): number => 5 + s.rerolls * 5;
 
 /** ★ = survived, ★★ = every foe defeated, ★★★ = defeated + challenge. */
 export const computeStars = (s: RunState): number => {
-  if (s.status === 'lost') return 0;
   if (s.status !== 'won') return 0;
   const rule = s.level.starRule;
   if (rule?.kind === 'accuracy') return s.mistakes <= rule.threeStarMax ? 3 : s.mistakes <= rule.twoStarMax ? 2 : 1;
@@ -1204,11 +1192,8 @@ export const computeStars = (s: RunState): number => {
 };
 
 /** Cards a selection would remove that are still selectable (for bots / hints). */
-export const findSetOnBoard = (board: Card[], attrs: AttributeName[], rng?: Rng): Card[] | null => {
+const findSetOnBoard = (board: Card[], attrs: AttributeName[], rng?: Rng): Card[] | null => {
   const sets = allSets(board, attrs);
   if (sets.length === 0) return null;
   return rng ? rng.pick(sets) : sets[0];
 };
-
-export const invalidCount = (cards: Card[], attrs: AttributeName[]): number =>
-  isValidCombination(cards, attrs).invalidAttributes.length;

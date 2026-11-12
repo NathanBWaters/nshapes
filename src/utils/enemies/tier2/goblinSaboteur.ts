@@ -7,7 +7,6 @@
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { WeaponCounterEffect, composeEffects } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 // All possible weapon types for countering
 const WEAPON_TYPES = ['fire', 'explosion', 'laser', 'hint', 'grace', 'time', 'healing'] as const;
@@ -39,6 +38,3 @@ export function createGoblinSaboteur(): EnemyInstance {
     (stats: RoundStats) => stats.weaponEffectsTriggered.size >= 3
   );
 }
-
-// Register with factory
-registerEnemy('Goblin Saboteur', createGoblinSaboteur);

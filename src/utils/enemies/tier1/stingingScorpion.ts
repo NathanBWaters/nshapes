@@ -7,7 +7,6 @@
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { DamageMultiplierEffect, PointsMultiplierEffect, composeEffects } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Stinging Scorpion enemy instance.
@@ -38,6 +37,3 @@ export function createStingingScorpion(): EnemyInstance {
     }
   );
 }
-
-// Register with factory
-registerEnemy('Stinging Scorpion', createStingingScorpion);

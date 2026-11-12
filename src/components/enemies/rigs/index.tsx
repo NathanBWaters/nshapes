@@ -10,7 +10,6 @@ import { EnemyRigProps, getEnemyRigPivots } from './types';
 import { WINGED_AVIAN_ENEMY_NAMES, WingedAvianEnemyRig } from './WingedAvianRigs';
 
 export { getEnemyRigPivots };
-export type { EnemyJointPivots, EnemyRigProps } from './types';
 
 const RODENT_SET = new Set<string>(RODENT_WOODLAND_ENEMY_NAMES);
 const BEAST_SET = new Set<string>(BEAST_PREDATOR_ENEMY_NAMES);

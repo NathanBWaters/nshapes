@@ -20,11 +20,9 @@ export const setMusicEnabled = (on: boolean) => {
   if (!on) music.halt();
   else if (music.current) music.play(music.current);
 };
-export const isMusicEnabled = () => musicEnabled;
 export const setSfxEnabled = (on: boolean) => {
   sfxEnabled = on;
 };
-export const isSfxEnabled = () => sfxEnabled;
 
 /**
  * Unlock audio inside a real user gesture. iOS (Safari, Chrome, and installed
@@ -273,11 +271,6 @@ export const sfx = (name: SfxName) => {
       chip.noise({ at: t, dur: 0.5, vol: 0.25, short: true, filter: 9000, sweepTo: 3000, bus: 'sfx' });
       break;
   }
-};
-
-// For tests
-export const __resetSfxDedupe = () => {
-  lastPlayed = {};
 };
 
 /**

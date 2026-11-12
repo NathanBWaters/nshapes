@@ -12,7 +12,6 @@ import {
   WeaponCounterEffect,
   composeEffects,
 } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Wicked Imp enemy instance.
@@ -37,6 +36,3 @@ export function createWickedImp(): EnemyInstance {
       stats.currentScore >= stats.targetScore && stats.gracesRemaining >= 3
   );
 }
-
-// Register with factory
-registerEnemy('Wicked Imp', createWickedImp);

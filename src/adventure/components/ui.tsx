@@ -1,6 +1,6 @@
 /** Small shared UI primitives for Adventure screens (Retro-Modern style guide). */
 import React, { useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ViewStyle, TextStyle, StyleProp } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ViewStyle, StyleProp } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, withDelay, Easing } from 'react-native-reanimated';
 import Icon, { IconName } from '@/components/Icon';
 import { COLORS } from '@/utils/colors';
@@ -72,13 +72,6 @@ export const CoinPill: React.FC<{ coins: number; style?: ViewStyle; dark?: boole
   </View>
 );
 
-export const Pill: React.FC<{ icon: IconName; text: string; color?: string; style?: ViewStyle; textStyle?: TextStyle }> = ({ icon, text, color = INK, style, textStyle }) => (
-  <View style={[styles.pill, style]}>
-    <Icon name={icon} size={14} color={color} />
-    <Text style={[styles.pillText, textStyle]}>{text}</Text>
-  </View>
-);
-
 export const Eyebrow: React.FC<{ text: string; color?: string }> = ({ text, color = COLORS.actionYellow }) => (
   <View style={[styles.eyebrow, { backgroundColor: color }]}>
     <Text style={styles.eyebrowText}>{text}</Text>
@@ -117,7 +110,7 @@ export const Skulls: React.FC<{ n: number; size?: number }> = ({ n, size = 14 })
   </View>
 );
 
-export const styles = StyleSheet.create({
+const styles = StyleSheet.create({
   btn: {
     flexDirection: 'row',
     alignItems: 'center',

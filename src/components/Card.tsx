@@ -1,28 +1,18 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, Platform, TouchableOpacity } from 'react-native';
-import Svg, { Ellipse, Path, Polygon, Defs, Pattern, Rect, Circle, Line } from 'react-native-svg';
+import Svg, { Ellipse, Path, Polygon, Defs, Pattern, Rect } from 'react-native-svg';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
-  withSequence,
-  withTiming,
-  withRepeat,
-  interpolateColor,
-  Easing,
-} from 'react-native-reanimated';
+  withTiming } from 'react-native-reanimated';
 import { Card as CardType, Background } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { BACKGROUND_COLORS } from '@/utils/gameConfig';
 import { useBurnTimer } from '@/hooks/useBurnTimer';
-import { EASING, DURATION, SHADOWS } from '@/utils/designSystem';
+import { DURATION } from '@/utils/animation';
 import Icon from './Icon';
 
 const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
-
-// Debug: Track render counts per card (only in development)
-const renderCounts = new Map<string, number>();
-const DEBUG_RENDERS = false;
 
 // SVG viewBox dimensions (1:2 width:height ratio)
 const SVG_WIDTH = 20;
@@ -35,11 +25,6 @@ interface CardProps {
   disabled?: boolean;
   onBurnComplete?: (card: CardType) => void;
   isPaused?: boolean;
-  isNew?: boolean; // Whether this card was just added to the board
-  entryDelay?: number; // Stagger delay for entry animation in ms
-  isIdle?: boolean; // Whether the game board is idle (for ambient breathing)
-  breathingOffset?: number; // Stagger offset in ms for breathing animation
-  isSuggestion?: boolean; // Whether this card is a subtle suggestion (after 10s idle)
   isConnected?: boolean; // Whether this card is part of a connection (connector weapons)
 }
 
@@ -49,11 +34,6 @@ const Card: React.FC<CardProps> = ({
   disabled = false,
   onBurnComplete,
   isPaused = false,
-  isNew = false,
-  entryDelay = 0,
-  isIdle = false,
-  breathingOffset = 0,
-  isSuggestion = false,
   isConnected = false,
 }) => {
   const { shape, color, number, shading, selected, isHint, isDud, isFaceDown, hasCountdown, countdownTimer, hasBomb, bombTimer } = card;
@@ -62,39 +42,11 @@ const Card: React.FC<CardProps> = ({
   const isUnselectable = isDud || isFaceDown;
 
   // Animation values
-  const scale = useSharedValue(isNew ? 0.8 : 1);
-  const translateY = useSharedValue(isNew ? -50 : 0);
-  const opacity = useSharedValue(isNew ? 0 : 1);
+  const scale = useSharedValue(1);
+  const translateY = useSharedValue(0);
+  const opacity = useSharedValue(1);
   const shadowRadius = useSharedValue(0);
-  const fireFlicker = useSharedValue(0.7);
   const hoverGlow = useSharedValue(0); // Web-only hover glow
-  
-  // Entry animation for new cards
-  useEffect(() => {
-    if (isNew) {
-      const timeout = setTimeout(() => {
-        opacity.value = withTiming(1, { duration: DURATION.fast });
-        scale.value = withSpring(1, {
-          damping: EASING.bounce.friction,
-          stiffness: EASING.bounce.tension,
-        });
-        translateY.value = withSpring(0, {
-          damping: EASING.bounce.friction,
-          stiffness: EASING.bounce.tension,
-        });
-      }, entryDelay);
-      return () => clearTimeout(timeout);
-    }
-  }, [isNew, entryDelay, opacity, scale, translateY]);
-
-  // Debug: Track renders
-  if (DEBUG_RENDERS) {
-    const count = (renderCounts.get(card.id) || 0) + 1;
-    renderCounts.set(card.id, count);
-    if (count > 1) {
-      console.log(`[Card ${card.id}] render #${count}, selected=${selected}`);
-    }
-  }
 
   const handleBurnComplete = useCallback(() => {
     onBurnComplete?.(card);
@@ -106,22 +58,6 @@ const Card: React.FC<CardProps> = ({
     isPaused,
     onComplete: handleBurnComplete,
   });
-
-  // Fire flicker animation
-  useEffect(() => {
-    if (card.onFire) {
-      fireFlicker.value = withRepeat(
-        withSequence(
-          withTiming(1, { duration: 100 + Math.random() * 50 }),
-          withTiming(0.7, { duration: 100 + Math.random() * 50 })
-        ),
-        -1,
-        true
-      );
-    } else {
-      fireFlicker.value = 0.7;
-    }
-  }, [card.onFire, fireFlicker]);
 
   // Web-only hover handlers
   const handleHoverIn = useCallback(() => {
@@ -145,21 +81,9 @@ const Card: React.FC<CardProps> = ({
     opacity: opacity.value,
   }));
 
-  // Fire flicker style
-  const fireStyle = useAnimatedStyle(() => {
-    if (!card.onFire) return {};
-
-    return {
-      shadowOpacity: fireFlicker.value,
-    };
-  });
-
   // Multi-hit cards: health > 1 shows badge, health = 1 is regular (no badge), health = 0 means removed
   // Default health is 1 (undefined treated as 1). Badge shows remaining hits needed.
   const hasHealthBadge = card.health !== undefined && card.health > 1;
-
-  // Check if card has any special enemy state requiring overlay
-  const hasEnemyState = isDud || isFaceDown || hasCountdown || hasBomb;
 
   // Get shape component based on shape type
   const getShapeComponent = () => {

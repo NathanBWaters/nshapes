@@ -4,7 +4,6 @@
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, StyleSheet } from 'react-native';
-import type { CharacterName } from '@/types';
 import { music, setMusicEnabled, sfx } from '@/audio';
 import type { AdventureSave, LessonPage, LevelDef, MechanicDef, RunState } from './types';
 import { MAIN_LEVELS, getLevel, mainIndexOf } from './data/levels';
@@ -26,7 +25,7 @@ import BountyBoard from './components/BountyBoard';
 
 type Screen =
   | { kind: 'map'; highlight?: string | null }
-  | { kind: 'run'; levelId: string; seed: number; attempt: number }
+  | { kind: 'run'; levelId: string; seed: number }
   | { kind: 'results'; levelId: string; run: RunState; stars: number; result: ResultApplication }
   | { kind: 'camp'; tab?: CampTab }
   | { kind: 'guide' }
@@ -84,11 +83,11 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
     clearPendingTimers();
   }, [clearPendingTimers]);
 
-  const startRun = useCallback((level: LevelDef, attempt = 0) => {
+  const startRun = useCallback((level: LevelDef) => {
     clearPendingTimers();
     setUnlocks([]);
     setUnlocksRevealed(true);
-    setScreen({ kind: 'run', levelId: level.id, seed: randomSeed(), attempt });
+    setScreen({ kind: 'run', levelId: level.id, seed: randomSeed() });
   }, [clearPendingTimers]);
 
   /** Teach a level's mechanic the first time, then fight. */
@@ -112,7 +111,7 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handlePlay = (level: LevelDef, _fighter: CharacterName) => {
+  const handlePlay = (level: LevelDef) => {
     sfx('confirm');
     setPreview(null);
     const discoveryPages = buildComboDiscoveryPages(level.id, save);
@@ -199,7 +198,7 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
         autoPlayer={autoPlayer}
         onFinish={run => handleFinish(level, run)}
         onQuit={() => setScreen({ kind: 'map', highlight: level.id })}
-        onRestart={() => startRun(level, screen.attempt + 1)}
+        onRestart={() => startRun(level)}
         onCoachMarkSeen={id => setSave(s => markCoachMarkSeen(s, id))}
       />
     );

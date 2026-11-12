@@ -37,8 +37,6 @@ import Scorpion from '../../assets/icons/lorc/scorpion.svg';
 import Mole from '../../assets/icons/caro-asercion/mole.svg';
 import RaccoonHead from '../../assets/icons/delapouite/raccoon-head.svg';
 import Uncertainty from '../../assets/icons/lorc/uncertainty.svg';
-import AngularSpider from '../../assets/icons/lorc/angular-spider.svg';
-import MaskedSpider from '../../assets/icons/lorc/masked-spider.svg';
 import SpiderFace from '../../assets/icons/carl-olsen/spider-face.svg';
 import Turtle from '../../assets/icons/lorc/turtle.svg';
 import TurtleShell from '../../assets/icons/lorc/turtle-shell.svg';
@@ -78,13 +76,9 @@ import GrimReaper from '../../assets/icons/lorc/grim-reaper.svg';
 import DaemonSkull from '../../assets/icons/lorc/daemon-skull.svg';
 
 // Weapons
-import FlintSpark from '../../assets/icons/delapouite/flint-spark.svg';
 import Bamboo from '../../assets/icons/delapouite/bamboo.svg';
-import Carrot from '../../assets/icons/delapouite/carrot.svg';
-import BirdClaw from '../../assets/icons/lorc/bird-claw.svg';
 import StonePile from '../../assets/icons/delapouite/stone-pile.svg';
 import ClawSlashes from '../../assets/icons/lorc/claw-slashes.svg';
-import Rake from '../../assets/icons/delapouite/rake.svg';
 
 // Items
 import Field from '../../assets/icons/lorc/field.svg';
@@ -92,7 +86,6 @@ import MirrorMirror from '../../assets/icons/lorc/mirror-mirror.svg';
 import LightBulb from '../../assets/icons/lorc/light-bulb.svg';
 import Clover from '../../assets/icons/lorc/clover.svg';
 import Snowflake1 from '../../assets/icons/lorc/snowflake-1.svg';
-import Sunglasses from '../../assets/icons/delapouite/sunglasses.svg';
 import Token from '../../assets/icons/delapouite/token.svg';
 
 // Menu Icons
@@ -119,12 +112,9 @@ import BrightExplosion from '../../assets/icons/lorc/bright-explosion.svg';
 import Fist from '../../assets/icons/lorc/fist.svg';
 import Hourglass from '../../assets/icons/lorc/hourglass.svg';
 import Stopwatch from '../../assets/icons/lorc/stopwatch.svg';
-import ShieldBounces from '../../assets/icons/lorc/shield-bounces.svg';
 import Recycle from '../../assets/icons/lorc/recycle.svg';
 import TimeBomb from '../../assets/icons/lorc/time-bomb.svg';
-import ArrowsShield from '../../assets/icons/lorc/arrows-shield.svg';
 import Bullseye from '../../assets/icons/skoll/bullseye.svg';
-import SandsOfTime from '../../assets/icons/lorc/sands-of-time.svg';
 
 // New weapon icons
 import SheikahEye from '../../assets/icons/lorc/sheikah-eye.svg';
@@ -217,8 +207,6 @@ const ICON_REGISTRY = {
   'caro-asercion/mole': Mole,
   'delapouite/raccoon-head': RaccoonHead,
   'lorc/uncertainty': Uncertainty,
-  'lorc/angular-spider': AngularSpider,
-  'lorc/masked-spider': MaskedSpider,
   'carl-olsen/spider-face': SpiderFace,
   'lorc/turtle': Turtle,
   'lorc/turtle-shell': TurtleShell,
@@ -258,13 +246,9 @@ const ICON_REGISTRY = {
   'lorc/daemon-skull': DaemonSkull,
 
   // Weapons
-  'delapouite/flint-spark': FlintSpark,
   'delapouite/bamboo': Bamboo,
-  'delapouite/carrot': Carrot,
-  'lorc/bird-claw': BirdClaw,
   'delapouite/stone-pile': StonePile,
   'lorc/claw-slashes': ClawSlashes,
-  'delapouite/rake': Rake,
 
   // Items
   'lorc/field': Field,
@@ -272,7 +256,6 @@ const ICON_REGISTRY = {
   'lorc/light-bulb': LightBulb,
   'lorc/clover': Clover,
   'lorc/snowflake-1': Snowflake1,
-  'delapouite/sunglasses': Sunglasses,
   'delapouite/token': Token,
 
   // Menu
@@ -299,12 +282,9 @@ const ICON_REGISTRY = {
   'lorc/fist': Fist,
   'lorc/hourglass': Hourglass,
   'lorc/stopwatch': Stopwatch,
-  'lorc/shield-bounces': ShieldBounces,
   'lorc/recycle': Recycle,
   'lorc/time-bomb': TimeBomb,
-  'lorc/arrows-shield': ArrowsShield,
   'skoll/bullseye': Bullseye,
-  'lorc/sands-of-time': SandsOfTime,
 
   // New weapon icons
   'lorc/sheikah-eye': SheikahEye,
@@ -365,96 +345,6 @@ const ICON_REGISTRY = {
 // TypeScript union type of all valid icon names - use this for type-safe icon references
 export type IconName = keyof typeof ICON_REGISTRY;
 
-// Mapping from stat keys to icon paths
-export const STAT_ICONS: Record<string, IconName> = {
-  // Health
-  health: 'lorc/heart-inside',
-  maxHealth: 'lorc/heart-inside',
-
-  // Money & Commerce
-  money: 'lorc/cash',
-  commerce: 'lorc/cash',
-
-  // Experience & Points
-  experience: 'lorc/flat-star',
-  experienceGainPercent: 'lorc/flat-star',
-  additionalPoints: 'lorc/flat-star',
-
-  // Luck
-  luck: 'lorc/clover',
-
-  // Weapons
-  maxWeapons: 'lorc/crossed-swords',
-
-  // Economy
-  xpGainChance: 'lorc/open-book',
-  coinGainChance: 'lorc/crown-coin',
-
-  // Scavenging
-  scavengingPercent: 'lorc/gems',
-  scavengeAmount: 'lorc/gems',
-
-  // Field
-  fieldSize: 'lorc/field',
-
-  // Rerolls & Graces
-  freeRerolls: 'lorc/cycle',
-  graces: 'lorc/clover',
-
-  // Card Draw
-  drawIncrease: 'delapouite/card-exchange',
-  drawIncreasePercent: 'delapouite/card-exchange',
-
-  // Fire & Explosion
-  chanceOfFire: 'lorc/campfire',
-  explosion: 'lorc/bright-explosion',
-
-  // Damage
-  damage: 'lorc/fist',
-  damagePercent: 'lorc/fist',
-
-  // Time
-  maxTimeIncrease: 'lorc/hourglass',
-  timeWarpPercent: 'lorc/hourglass',
-  matchIntervalSpeed: 'lorc/stopwatch',
-  timeFreezePercent: 'lorc/sands-of-time',
-  timeFreezeAmount: 'lorc/sands-of-time',
-  bombTimer: 'lorc/time-bomb',
-
-  // Hints
-  matchHints: 'lorc/light-bulb',
-  matchPossibilityHints: 'lorc/light-bulb',
-  matchIntervalHintPercent: 'lorc/light-bulb',
-  hints: 'lorc/light-bulb',
-  hintPasses: 'lorc/light-bulb',
-
-  // Dodge & Deflect
-  dodgePercent: 'lorc/shield-bounces',
-  dodgeAttackBackPercent: 'lorc/shield-bounces',
-  dodgeAttackBackAmount: 'lorc/shield-bounces',
-  deflectPercent: 'lorc/arrows-shield',
-
-  // Critical
-  criticalChance: 'skoll/bullseye',
-
-  // New weapon effect stats
-  explosionChance: 'lorc/bright-explosion',
-  autoHintChance: 'lorc/sheikah-eye',
-  autoHintInterval: 'lorc/sheikah-eye',
-  boardGrowthChance: 'delapouite/card-exchange',
-  boardGrowthAmount: 'delapouite/card-exchange',
-  fireSpreadChance: 'lorc/campfire',
-  graceGainChance: 'lorc/clover',
-  healingChance: 'lorc/shining-heart',
-  hintGainChance: 'lorc/light-bulb',
-  timeGainChance: 'lorc/stopwatch',
-  timeGainAmount: 'lorc/stopwatch',
-  laserChance: 'lorc/laser-warning',
-  startingTime: 'lorc/hourglass',
-  ricochetChance: 'lorc/chained-arrow-heads',
-  ricochetChainChance: 'lorc/chained-arrow-heads',
-};
-
 interface IconProps {
   /** Icon path like "delapouite/token" or "lorc/cat" */
   name: IconName;
@@ -509,6 +399,3 @@ const Icon: React.FC<IconProps> = ({
 };
 
 export default Icon;
-
-// Export the registry for reference
-export { ICON_REGISTRY };

@@ -18,11 +18,10 @@ import type {
 import { LEVELS, MAIN_LEVELS, BRANCH_STAR_REQUIREMENT, getLevel, mainIndexOf } from './data/levels';
 import { BIOMES, getBiome } from './data/biomes';
 import { MECHANICS } from './data/mechanics';
-import { FIGHTERS, FIGHTER_LEVEL_COSTS, STARTING_FIGHTERS, getFighter, getLevelUpCost } from './data/fighters';
+import { FIGHTERS, FIGHTER_LEVEL_COSTS, STARTING_FIGHTERS, getLevelUpCost } from './data/fighters';
 import {
   MAX_WEAPON_UPGRADE_TIER,
   UPGRADES,
-  getUnlockedUpgrades,
   getUpgrade,
   getWeaponUpgradeCosts,
 } from './data/upgrades';
@@ -67,7 +66,6 @@ export const createNewSave = (): AdventureSave => ({
   seenMechanics: [],
   seenCoachMarks: [],
   selectedFighter: 'Orange Tabby',
-  lastLevelId: null,
   musicOn: true,
 });
 
@@ -81,7 +79,7 @@ export const maxStars = (): number => LEVELS.length * 3;
 export const isBiomeOpen = (save: AdventureSave, biomeId: LevelDef['biome']): boolean =>
   totalStars(save) >= getBiome(biomeId).starGate;
 
-export type LockReason =
+type LockReason =
   | { kind: 'previous' }
   | { kind: 'stars'; need: number; have: number }
   | { kind: 'branch'; parentId: string; need: number };
@@ -121,7 +119,7 @@ export const getFrontierLevel = (save: AdventureSave): LevelDef => {
 };
 
 /** Features accumulate: every `feature` mechanic introduced at or before this level is on, plus save unlocks. */
-export const getFeaturesForLevel = (level: LevelDef, save?: AdventureSave): Set<FeatureFlag> => {
+export const getFeaturesForLevel = (level: LevelDef, save: AdventureSave): Set<FeatureFlag> => {
   const set = new Set<FeatureFlag>();
   const pos = mainIndexOf(level);
   for (let i = 0; i <= pos; i++) {
@@ -133,13 +131,13 @@ export const getFeaturesForLevel = (level: LevelDef, save?: AdventureSave): Set<
 
   // Coin Drops unlock on 1-1 ★: off during first-time 1-1, on everywhere once unlocked
   if (level.rules.noGear) {
-    if (save?.coinsUnlocked) set.add('coins');
-  } else if (save?.coinsUnlocked || !save || pos >= mainIndexOf(getLevel('1-6'))) {
+    if (save.coinsUnlocked) set.add('coins');
+  } else if (save.coinsUnlocked || pos >= mainIndexOf(getLevel('1-6'))) {
     set.add('coins');
   }
 
   // Hidden Evolution Catalysts & Weapon Combos switch on once the player unlocks their first Combo recipe
-  if (!level.rules.noGear && (save ? save.unlockedEvolutions.length > 0 : pos >= mainIndexOf(getLevel('2-1')))) {
+  if (!level.rules.noGear && save.unlockedEvolutions.length > 0) {
     set.add('evolutions');
   }
   return set;
@@ -147,7 +145,7 @@ export const getFeaturesForLevel = (level: LevelDef, save?: AdventureSave): Set<
 
 // ─── Applying results ───────────────────────────────────────────────────────
 
-export interface GrantedReward {
+interface GrantedReward {
   star: number;
   reward: RewardDef;
 }
@@ -164,8 +162,6 @@ export type Unlock =
 export interface ResultApplication {
   save: AdventureSave;
   granted: GrantedReward[];
-  newStars: number;
-  previousStars: number;
   /** Coins dropped during the fight */
   coinsBanked: number;
   /** Coins from newly earned stars */
@@ -174,7 +170,6 @@ export interface ResultApplication {
   bountyCoins: number;
   completedBounties: BountyDef[];
   unlocks: Unlock[];
-  newlyUnlockedLevels: string[];
   newlyOpenedBiomes: string[];
 }
 
@@ -252,7 +247,6 @@ export const applyLevelResult = (
     coins: save.coins + runCoins,
     lifetimeCoins: save.lifetimeCoins + runCoins,
     plays: { ...save.plays, [level.id]: (save.plays[level.id] ?? 0) + 1 },
-    lastLevelId: level.id,
   };
   if (run) {
     next = recordRunBountyStats(next, level, stars, run);
@@ -336,20 +330,16 @@ export const applyLevelResult = (
     }
   }
 
-  const newlyUnlockedLevels = LEVELS.filter(l => !isLevelUnlocked(before, l) && isLevelUnlocked(next, l)).map(l => l.id);
   const newlyOpenedBiomes = BIOMES.filter(b => b.starGate > 0 && !isBiomeOpen(before, b.id) && isBiomeOpen(next, b.id)).map(b => b.id);
 
   return {
     save: next,
     granted,
-    newStars: stars,
-    previousStars,
     coinsBanked: runCoins,
     starCoins,
     bountyCoins,
     completedBounties,
     unlocks,
-    newlyUnlockedLevels,
     newlyOpenedBiomes,
   };
 };
@@ -398,7 +388,6 @@ export const levelFighter = (save: AdventureSave, name: CharacterName): Adventur
   const lvl = fighterLevel(save, name);
   const cost = getLevelUpCost(lvl)!;
   const newLevel = lvl + 1;
-  getFighter(name); // validate
   return {
     ...save,
     coins: save.coins - cost,
@@ -423,11 +412,6 @@ export const refundFighter = (save: AdventureSave, name: CharacterName): Adventu
   };
 };
 
-export const isUpgradeUnlocked = (save: AdventureSave, id: string): boolean =>
-  getUpgrade(id).isUnlocked(save);
-
-export { getUnlockedUpgrades };
-
 export const upgradeTier = (save: AdventureSave, id: string): number => save.upgrades[id] ?? 0;
 
 export const upgradeCost = (save: AdventureSave, id: string): number | null => {
@@ -437,7 +421,7 @@ export const upgradeCost = (save: AdventureSave, id: string): number | null => {
 };
 
 export const canBuyUpgrade = (save: AdventureSave, id: string): boolean => {
-  if (!save.workshopUnlocked || !isUpgradeUnlocked(save, id)) return false;
+  if (!save.workshopUnlocked || !getUpgrade(id).isUnlocked(save)) return false;
   const cost = upgradeCost(save, id);
   return cost !== null && save.coins >= cost;
 };
@@ -554,8 +538,6 @@ export const markMechanicSeen = (save: AdventureSave, id: string): AdventureSave
 
 export const markCoachMarkSeen = (save: AdventureSave, id: string): AdventureSave =>
   save.seenCoachMarks.includes(id) ? save : { ...save, seenCoachMarks: [...save.seenCoachMarks, id] };
-
-export const allUpgrades = UPGRADES;
 
 /** Dev helper: unlock everything. */
 export const createMaxedSave = (): AdventureSave => {

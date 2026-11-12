@@ -23,12 +23,11 @@ import { INK } from './ui';
 interface Props {
   save: AdventureSave;
   onClose: () => void;
-  initialTab?: 'mechanics' | 'recipes';
 }
 
-const FieldGuide: React.FC<Props> = ({ save, onClose, initialTab = 'mechanics' }) => {
+const FieldGuide: React.FC<Props> = ({ save, onClose }) => {
   const insets = useSafeAreaInsets();
-  const [tab, setTab] = useState<'mechanics' | 'recipes'>(initialTab);
+  const [tab, setTab] = useState<'mechanics' | 'recipes'>('mechanics');
   const [open, setOpen] = useState<MechanicDef | null>(null);
   const entries: Array<{ m: MechanicDef; where: string; known: boolean }> = [
     ...LEVELS.map(l => ({ m: MECHANICS[l.introduces], where: l.id, known: save.seenMechanics.includes(l.introduces) || (save.stars[l.id] ?? 0) > 0 })),

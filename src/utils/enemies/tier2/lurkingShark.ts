@@ -7,7 +7,6 @@
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { FaceDownEffect, composeEffects } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Lurking Shark enemy instance.
@@ -28,6 +27,3 @@ export function createLurkingShark(): EnemyInstance {
     (stats: RoundStats) => stats.faceDownCardsMatched >= 2
   );
 }
-
-// Register with factory
-registerEnemy('Lurking Shark', createLurkingShark);

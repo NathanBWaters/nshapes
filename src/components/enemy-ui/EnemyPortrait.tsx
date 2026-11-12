@@ -1,9 +1,9 @@
 /**
  * EnemyPortrait Component
- * Shows the active enemy with icon and name.
+ * Shows the active enemy as a compact avatar badge with a tier dot.
  */
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { EnemyAmbientMood, EnemyReactionEvent } from '@/utils/enemyAnimations';
 import type { EnemyInstance } from '@/types/enemy';
@@ -12,8 +12,6 @@ import { EnemyAvatar } from '../enemies';
 interface EnemyPortraitProps {
   /** The active enemy instance */
   enemy: EnemyInstance;
-  /** Optional compact mode for smaller display */
-  compact?: boolean;
   /** Optional current HP for progressive battle wear */
   hp?: number;
   /** Optional max HP */
@@ -34,7 +32,6 @@ const TIER_COLORS: Record<number, string> = {
 
 const EnemyPortrait: React.FC<EnemyPortraitProps> = ({
   enemy,
-  compact = false,
   hp,
   maxHp,
   mood = 'menacing',
@@ -42,58 +39,23 @@ const EnemyPortrait: React.FC<EnemyPortraitProps> = ({
 }) => {
   const tierColor = TIER_COLORS[enemy.tier] || COLORS.slateCharcoal;
 
-  if (compact) {
-    return (
-      <View style={styles.containerCompact}>
-        <EnemyAvatar
-          enemy={enemy}
-          size={28}
-          hp={hp}
-          maxHp={maxHp}
-          mood={mood}
-          reaction={reaction}
-          interactive
-        />
-        <View style={[styles.tierDot, { backgroundColor: tierColor }]} />
-      </View>
-    );
-  }
-
   return (
-    <View style={styles.container}>
-      <View style={[styles.iconContainer, { borderColor: tierColor }]}>
-        <EnemyAvatar
-          enemy={enemy}
-          size={36}
-          hp={hp}
-          maxHp={maxHp}
-          mood={mood}
-          reaction={reaction}
-          interactive
-        />
-      </View>
-      <View style={styles.info}>
-        <Text style={styles.name} numberOfLines={1}>{enemy.name}</Text>
-        <View style={[styles.tierBadge, { backgroundColor: tierColor }]}>
-          <Text style={styles.tierText}>T{enemy.tier}</Text>
-        </View>
-      </View>
+    <View style={styles.containerCompact}>
+      <EnemyAvatar
+        enemy={enemy}
+        size={28}
+        hp={hp}
+        maxHp={maxHp}
+        mood={mood}
+        reaction={reaction}
+        interactive
+      />
+      <View style={[styles.tierDot, { backgroundColor: tierColor }]} />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: RADIUS.module,
-    borderWidth: 2,
-    borderColor: COLORS.slateCharcoal,
-  },
   containerCompact: {
     position: 'relative',
     padding: 6,
@@ -101,36 +63,6 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.button,
     borderWidth: 1,
     borderColor: COLORS.slateCharcoal,
-  },
-  iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: RADIUS.button,
-    backgroundColor: COLORS.paperBeige,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-  },
-  info: {
-    flexDirection: 'column',
-    gap: 2,
-  },
-  name: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.slateCharcoal,
-    maxWidth: 100,
-  },
-  tierBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: RADIUS.button,
-    alignSelf: 'flex-start',
-  },
-  tierText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.canvasWhite,
   },
   tierDot: {
     position: 'absolute',

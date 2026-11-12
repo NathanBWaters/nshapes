@@ -1,6 +1,5 @@
 /** Display info (name/icon/description) for a level's foes, cached. */
 import { createEnemy, isEnemyRegistered } from '@/utils/enemyFactory';
-import '@/utils/enemies';
 import type { IconName } from '@/components/Icon';
 import type { FoeDef, LevelDef } from '../types';
 

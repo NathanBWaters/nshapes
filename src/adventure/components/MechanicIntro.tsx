@@ -53,7 +53,7 @@ const CardRow: React.FC<{ cards: DemoCard[] }> = ({ cards }) => (
   </View>
 );
 
-export const DemoView: React.FC<{ demo: MechanicDemo }> = ({ demo }) => {
+const DemoView: React.FC<{ demo: MechanicDemo }> = ({ demo }) => {
   if (demo.type === 'icons') {
     return (
       <View style={st.iconsRow}>
@@ -81,18 +81,18 @@ export const DemoView: React.FC<{ demo: MechanicDemo }> = ({ demo }) => {
 
 // ─── Steps ──────────────────────────────────────────────────────────────────
 
-export type LessonStep =
+type LessonStep =
   | { type: 'page'; eyebrow: string; title: string; tagline?: string; body: string[]; demo?: MechanicDemo; icon?: IconName }
   | { type: 'quiz'; question: QuizQuestion; index: number; total: number };
 
-export const stepsForMechanic = (
+const stepsForMechanic = (
   m: MechanicDef,
-  opts: { quiz?: boolean; prelude?: LessonPage[]; eyebrow?: string } = {}
+  opts: { quiz?: boolean; prelude?: LessonPage[] } = {}
 ): LessonStep[] => {
   const steps: LessonStep[] = [];
   for (const p of opts.prelude ?? []) steps.push({ type: 'page', eyebrow: 'Adventure', title: p.title, body: p.body, demo: p.demo });
   (m.lessons ?? []).forEach((p, i, all) => steps.push({ type: 'page', eyebrow: `Lesson ${i + 1} of ${all.length}`, title: p.title, body: p.body, demo: p.demo }));
-  steps.push({ type: 'page', eyebrow: opts.eyebrow ?? KIND_LABEL[m.kind], title: m.title, tagline: m.tagline, body: m.body, demo: m.demo, icon: m.icon });
+  steps.push({ type: 'page', eyebrow: KIND_LABEL[m.kind], title: m.title, tagline: m.tagline, body: m.body, demo: m.demo, icon: m.icon });
   if (opts.quiz !== false) {
     const qs = m.quiz ?? [];
     qs.forEach((question, index) => steps.push({ type: 'quiz', question, index, total: qs.length }));
@@ -109,7 +109,7 @@ interface LessonProps {
   dismissible?: boolean;
 }
 
-export const Lesson: React.FC<LessonProps> = ({ steps, onDone, cta = 'Got it', dismissible }) => {
+const Lesson: React.FC<LessonProps> = ({ steps, onDone, cta = 'Got it', dismissible }) => {
   const [i, setI] = useState(0);
   const [answer, setAnswer] = useState<boolean | null>(null);
   const fade = useSharedValue(0);
@@ -234,14 +234,13 @@ const MechanicIntro: React.FC<{
   mechanic: MechanicDef | null;
   onClose: () => void;
   cta?: string;
-  eyebrowOverride?: string;
   quiz?: boolean;
   prelude?: LessonPage[];
   dismissible?: boolean;
-}> = ({ mechanic, onClose, cta, eyebrowOverride, quiz, prelude, dismissible }) => {
+}> = ({ mechanic, onClose, cta, quiz, prelude, dismissible }) => {
   const steps = useMemo(
-    () => (mechanic ? stepsForMechanic(mechanic, { quiz, prelude, eyebrow: eyebrowOverride }) : null),
-    [mechanic, quiz, prelude, eyebrowOverride]
+    () => (mechanic ? stepsForMechanic(mechanic, { quiz, prelude }) : null),
+    [mechanic, quiz, prelude]
   );
   return <Lesson steps={steps} onDone={onClose} cta={cta} dismissible={dismissible} />;
 };

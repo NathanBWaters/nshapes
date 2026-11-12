@@ -1,4 +1,3 @@
-import { IconName } from '@/components/Icon';
 import { WeaponRarity } from '@/types';
 import { COLORS } from '@/utils/colors';
 
@@ -21,8 +20,6 @@ export interface WeaponIllustrationProps {
   name: string;
   /** Rarity drives subtle trim/gem accents (silver/bronze -> teal/sapphire -> violet -> radiant gold) */
   rarity?: WeaponRarity;
-  /** Optional fallback icon name */
-  icon?: IconName;
 }
 
 export interface RarityTrimPalette {

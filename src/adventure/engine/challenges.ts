@@ -1,6 +1,5 @@
 /** ★★★ challenge descriptions, live progress, and checks. */
 import { createEnemy, isEnemyRegistered } from '@/utils/enemyFactory';
-import '@/utils/enemies';
 import type { ChallengeDef, LevelDef, RunState } from '../types';
 
 const lastRegisteredFoe = (level: LevelDef): string | undefined =>

@@ -7,7 +7,6 @@
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { HintDisableEffect, composeEffects } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Masked Bandit enemy instance.
@@ -37,6 +36,3 @@ export function createMaskedBandit(): EnemyInstance {
     }
   );
 }
-
-// Register with factory
-registerEnemy('Masked Bandit', createMaskedBandit);

@@ -12,7 +12,6 @@ import {
   WeaponCounterEffect,
   composeEffects,
 } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh One-Eyed Terror enemy instance.
@@ -35,6 +34,3 @@ export function createOneEyedTerror(): EnemyInstance {
     (stats: RoundStats) => stats.allDifferentMatches >= 3
   );
 }
-
-// Register with factory
-registerEnemy('One-Eyed Terror', createOneEyedTerror);

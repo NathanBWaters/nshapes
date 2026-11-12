@@ -42,7 +42,8 @@ const buildLoadouts = (k: Kit): string[][] => {
   ];
 };
 
-const PERKS: Array<Partial<PlayerStats> | null> = [
+/** Extra base stats at each fighter level, shared by every fighter (cumulative is computed). */
+const FIGHTER_PERKS: Array<Partial<PlayerStats> | null> = [
   null,
   { maxHealth: 1, health: 1 },
   null,
@@ -55,7 +56,7 @@ const PERKS: Array<Partial<PlayerStats> | null> = [
   null,
 ];
 
-const PERK_TEXT: Array<string | null> = [
+export const FIGHTER_PERK_TEXT: Array<string | null> = [
   null, '+1 heart', null, '+15% coin chance', null, '+1 heart', null, null, '+1 grace & hint', null,
 ];
 
@@ -74,8 +75,6 @@ export const FIGHTERS: FighterDef[] = KITS.map(k => ({
   signature: k.signature,
   blurb: k.blurb,
   loadouts: buildLoadouts(k),
-  perks: PERKS,
-  perkText: PERK_TEXT,
 }));
 
 export const STARTING_FIGHTERS: CharacterName[] = ['Orange Tabby'];
@@ -93,11 +92,10 @@ export const getLoadout = (name: string, level: number): string[] => {
 };
 
 /** Sum of perks up to and including `level`. */
-export const getPerkStats = (name: string, level: number): Partial<PlayerStats> => {
-  const f = getFighter(name);
+export const getPerkStats = (level: number): Partial<PlayerStats> => {
   const out: Record<string, number> = {};
-  for (let i = 0; i < Math.min(level, f.perks.length); i++) {
-    const p = f.perks[i];
+  for (let i = 0; i < Math.min(level, FIGHTER_PERKS.length); i++) {
+    const p = FIGHTER_PERKS[i];
     if (!p) continue;
     for (const [k, v] of Object.entries(p)) {
       if (typeof v === 'number') out[k] = (out[k] ?? 0) + v;

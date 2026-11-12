@@ -22,7 +22,7 @@ import { useAutoHint } from '@/hooks/useAutoHint';
 import { useAutoPlayer } from '@/hooks/useAutoPlayer';
 import { useScreenShake } from '@/hooks/useScreenShake';
 import { useParticles } from '@/hooks/useParticles';
-import { DURATION } from '@/utils/designSystem';
+import { DURATION } from '@/utils/animation';
 import { triggerHaptic, selectionHaptic } from '@/utils/haptics';
 import { playSound } from '@/utils/sounds';
 import {
@@ -139,47 +139,15 @@ const GameBoard: React.FC<GameBoardProps> = ({
   const [enemyReaction, setEnemyReaction] = useState<EnemyReactionEvent | null>(null);
   const enemyReactionSeq = useRef(0);
 
-  // Idle detection for ambient breathing animations
-  const [isIdle, setIsIdle] = useState(false);
+  // Idle detection for the fighter's sleepy state
   const [isSleepyIdle, setIsSleepyIdle] = useState(false);
-  const [suggestionCardId, setSuggestionCardId] = useState<string | null>(null);
   const lastInteractionTimeRef = useRef(Date.now());
 
-  // Check for idle state (3+ seconds since last interaction)
-  // Also trigger fighter sleepy state at 8s and suggestion card after 10s of idle
+  // Trigger fighter sleepy state after 8s without interaction
   useEffect(() => {
     const checkIdle = () => {
       const timeSinceInteraction = Date.now() - lastInteractionTimeRef.current;
-      setIsIdle(timeSinceInteraction >= 3000);
       setIsSleepyIdle(timeSinceInteraction >= 8000);
-
-      // After 10s of no interaction, show a suggestion card
-      if (timeSinceInteraction >= 10000 && !suggestionCardId) {
-        // Find a valid set and pick one random card from it
-        const availableCards = cards.filter(
-          card => !matchedCardIds.includes(card.id) && !card.isDud && !card.isFaceDown
-        );
-        for (let i = 0; i < availableCards.length - 2; i++) {
-          for (let j = i + 1; j < availableCards.length - 1; j++) {
-            for (let k = j + 1; k < availableCards.length; k++) {
-              const potentialSet = [availableCards[i], availableCards[j], availableCards[k]];
-              // Check if valid set using active attributes
-              const isValid = activeAttributes.every(attr => {
-                const values = potentialSet.map(card => card[attr as keyof CardType]);
-                const allSame = values.every(v => v === values[0]);
-                const allDifferent = values.length === new Set(values).size;
-                return allSame || allDifferent;
-              });
-              if (isValid) {
-                // Pick a random card from the valid set
-                const randomCard = potentialSet[Math.floor(Math.random() * 3)];
-                setSuggestionCardId(randomCard.id);
-                return;
-              }
-            }
-          }
-        }
-      }
     };
 
     // Check immediately and then every second
@@ -187,15 +155,13 @@ const GameBoard: React.FC<GameBoardProps> = ({
     const interval = setInterval(checkIdle, 1000);
 
     return () => clearInterval(interval);
-  }, [cards, matchedCardIds, activeAttributes, suggestionCardId]);
+  }, []);
 
-  // Reset idle timer and clear suggestion on any card selection
+  // Reset idle timer on any card selection
   useEffect(() => {
     if (selectedCards.length > 0) {
       lastInteractionTimeRef.current = Date.now();
-      setIsIdle(false);
       setIsSleepyIdle(false);
-      setSuggestionCardId(null);
     }
   }, [selectedCards]);
 
@@ -261,9 +227,6 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
   // Particle effects for explosions
   const { spawnParticles, Particles } = useParticles();
-
-  // Card position refs for particle spawning (we'll estimate center of board)
-  const boardRef = useRef<View>(null);
 
   // Trigger explosion particles at estimated card positions
   const triggerExplosionParticles = useCallback((cardCount: number) => {
@@ -1064,7 +1027,6 @@ const GameBoard: React.FC<GameBoardProps> = ({
               return (
                 <EnemyPortrait
                   enemy={enemy}
-                  compact
                   hp={stretchDefeated ? 0 : Math.max(1, 4 - matchWear)}
                   maxHp={4}
                   mood={enemy.tier >= 4 ? 'enraged' : 'menacing'}

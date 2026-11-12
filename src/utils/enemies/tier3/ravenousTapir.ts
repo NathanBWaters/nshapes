@@ -11,7 +11,6 @@ import {
   CardRemovalEffect,
   composeEffects,
 } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Ravenous Tapir enemy instance.
@@ -34,6 +33,3 @@ export function createRavenousTapir(): EnemyInstance {
       stats.currentScore >= stats.targetScore && stats.cardsRemaining >= 5
   );
 }
-
-// Register with factory
-registerEnemy('Ravenous Tapir', createRavenousTapir);

@@ -50,8 +50,6 @@ export const STARTING_STATS = {
 
 export const BOARD = {
   initialCardCount: 12,
-  maxBoardSize: 21,
-  columns: 3,
 } as const;
 
 // =============================================================================
@@ -61,30 +59,11 @@ export const BOARD = {
 export const ECONOMY = {
   baseRerollCost: 5,
   rerollCostIncrement: 2,
-  shopSize: 4,
-  levelUpOptionsCount: 4,
 } as const;
 
 // =============================================================================
 // WEAPON SYSTEM
 // =============================================================================
-
-export const WEAPON_SYSTEM = {
-  // Base rarity drop rates for shop generation (used as fallback)
-  rarityChances: {
-    common: 0.60,    // 60% chance
-    rare: 0.25,      // 25% chance
-    epic: 0.12,      // 12% chance
-    legendary: 0.03, // 3% chance
-  },
-
-  // Fire system
-  fireBurnDuration: 250, // 0.25 seconds
-  fireSpreadOnDeathChance: 0.10, // 10% to spread when burning out
-
-  // Auto-hint display duration
-  autoHintDisplayDuration: 1500, // 1.5 seconds
-} as const;
 
 /**
  * Get rarity chances that scale by round.
@@ -233,107 +212,7 @@ export const MATCH_REWARDS = {
 export const LEVEL_UP = {
   /** Formula: level * level * 10 (Level 1 = 10 XP, Level 2 = 40 XP, etc.) */
   xpMultiplier: 10,
-  statUpgradeChance: 0.7, // 70% stat upgrade, 30% weapon upgrade
-  weaponLevelCap: 4,
-  statUpgradeValues: {
-    flat: 1,       // damage, maxHealth
-    fieldSize: 2,  // fieldSize gets +2
-    percent: 5,    // percentage stats get +5%
-  },
 } as const;
-
-// =============================================================================
-// COMBAT & PENALTIES
-// =============================================================================
-
-export const COMBAT = {
-  invalidMatchPenalty: 1, // health lost per invalid match
-} as const;
-
-// =============================================================================
-// TIMING (milliseconds)
-// =============================================================================
-
-export const TIMING = {
-  matchRevealDelay: 200,
-  rewardDisplayDuration: 1500,
-  invalidMatchDelay: 500,
-  timerTickInterval: 1000,
-} as const;
-
-// =============================================================================
-// TIMER THRESHOLDS
-// =============================================================================
-
-export const TIMER = {
-  criticalThreshold: 5,  // seconds - red, pulsing
-  warningThreshold: 10,  // seconds - orange
-} as const;
-
-// =============================================================================
-// CARD MODIFIER GENERATION
-// =============================================================================
-
-export const CARD_MODIFIERS = {
-  /** Base chance formula: baseChance * difficulty + roundMultiplier * round */
-  baseChance: 0.05,
-  roundMultiplier: 0.02,
-
-  // Individual modifier chances (multiplied by base modifier chance)
-  chances: {
-    health: 0.70,
-    lootBox: 0.30,
-    bonusMoney: 0.50,
-    bonusPoints: 0.50,
-    fireStarter: 0.20,
-    bomb: 0.15,
-    healing: 0.25,
-    spikes: 0.20,
-    dud: 0.10,
-    fragile: 0.20,
-    boobyTrap: 0.15,
-    clover: 0.30,
-    cardClear: 0.10,
-    broom: 0.05,
-    selfHealing: 0.20,
-    timedReward: 0.40,
-  },
-
-  // Round requirements for certain modifiers
-  roundRequirements: {
-    bomb: 2,
-    spikes: 3,
-    dud: 4,
-    fragile: 3,
-    boobyTrap: 5,
-    cardClear: 6,
-    broom: 7,
-    selfHealing: 4,
-  },
-
-  // Value ranges
-  ranges: {
-    health: { min: 2, max: 5 },
-    bonusMoney: { min: 1, max: 5 },
-    bonusPoints: { min: 1, max: 3 },
-    bombTimer: { min: 10, max: 20 },
-    timedReward: { min: 3, max: 7 },
-  },
-} as const;
-
-// =============================================================================
-// HELPER FUNCTIONS
-// =============================================================================
-
-/** Calculate XP required for a given level */
-export const getXPForLevel = (level: number): number => {
-  return level * level * LEVEL_UP.xpMultiplier;
-};
-
-/** Calculate level from total XP */
-export const getLevelFromXP = (experience: number): number => {
-  return Math.floor(Math.sqrt(experience / LEVEL_UP.xpMultiplier));
-};
 
 // =============================================================================
 // ATTRIBUTE SCALING
@@ -359,13 +238,6 @@ export const ADVENTURE_DIFFICULTY_PROGRESSIONS: Record<AdventureDifficulty, { ro
 };
 
 export const ATTRIBUTE_SCALING = {
-  // Round-based attribute progression for Adventure Mode (legacy - use ADVENTURE_DIFFICULTY_PROGRESSIONS)
-  roundProgression: [
-    { rounds: [1, 2, 3], attributes: ['shape', 'color', 'number'] as AttributeName[] },
-    { rounds: [4, 5, 6, 7, 8, 9], attributes: ['shape', 'color', 'number', 'shading'] as AttributeName[] },
-    { rounds: [10], attributes: ['shape', 'color', 'number', 'shading', 'background'] as AttributeName[] },
-  ],
-
   // Free Play difficulty presets
   difficultyPresets: {
     easy: ['shape', 'color'] as AttributeName[],
@@ -425,7 +297,6 @@ export const getBoardSizeForAttributes = (attributeCount: number): number => {
 export const LEVEL_SYSTEM = {
   totalLevels: 10,
   roundsPerLevel: 5,
-  baseRoundTime: 120, // Doubled from 60 seconds
   xpMultiplierReduction: 3, // XP requirements reduced to 1/3
 } as const;
 

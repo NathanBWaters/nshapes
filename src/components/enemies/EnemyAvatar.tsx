@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, View, ViewStyle } from 'react-native';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -17,6 +17,7 @@ import type { EnemyInstance } from '@/types/enemy';
 import { useReducedMotion } from '@/utils/animation';
 import { COLORS } from '@/utils/colors';
 import {
+  ENEMY_REACTION_HOLD_MS,
   EnemyAmbientMood,
   EnemyReactionEvent,
   EnemyReactionType,
@@ -42,13 +43,9 @@ import {
 import { EnemyEffectsOverlay } from './EnemyEffectsOverlay';
 import { EnemyCreatureRig, getEnemyRigPivots } from './rigs';
 
-export interface EnemyAvatarProps {
+interface EnemyAvatarProps {
   /** EnemyInstance, FoeDisplay-like object, or enemy name string */
   enemy?: EnemyInstance | { name: string; icon?: IconName; tier?: number } | string | null;
-  /** Optional fallback icon name */
-  icon?: IconName;
-  /** Optional tier override (1..4) */
-  tier?: number;
   /** Pixel width & height (default 56) */
   size?: number;
   /** Current enemy HP (defaults to maxHp = pristine) */
@@ -59,8 +56,6 @@ export interface EnemyAvatarProps {
   mood?: EnemyAmbientMood;
   /** Discrete one-shot reaction event ({ type, id }) */
   reaction?: EnemyReactionEvent | null;
-  /** Whether continuous idle/reaction animations run (default true) */
-  animate?: boolean;
   /**
    * Lightweight mode for dense lists/maps (e.g. 37 nodes on AdventureMap):
    * renders the custom illustrated rig + gentle UI-thread breath while skipping
@@ -73,8 +68,6 @@ export interface EnemyAvatarProps {
   onPoke?: (reactionType: 'poke' | 'rage_spin') => void;
   /** Render inside a tactile NShapes portrait frame badge */
   framed?: boolean;
-  /** Optional container style */
-  style?: StyleProp<ViewStyle>;
   /** Optional testID */
   testID?: string;
 }
@@ -123,32 +116,25 @@ const ENEMY_GAZE_CANDIDATES: GazeOffset[] = [
 
 export const EnemyAvatar: React.FC<EnemyAvatarProps> = ({
   enemy,
-  icon: iconOverride,
-  tier: tierOverride,
   size = 56,
   hp,
   maxHp = 3,
   mood = 'idle',
   reaction = null,
-  animate = true,
   lightweight = false,
   interactive = false,
   onPoke,
   framed = false,
-  style,
   testID,
 }) => {
   const reducedMotion = useReducedMotion();
-  const shouldAnimate = animate && !reducedMotion;
+  const shouldAnimate = !reducedMotion;
 
   const enemyName =
     typeof enemy === 'string'
       ? enemy
       : enemy?.name ?? 'Sparring Foe';
-  const resolvedIcon: IconName | undefined =
-    iconOverride ?? (typeof enemy === 'object' && enemy ? enemy.icon : undefined);
-  const rawTier =
-    tierOverride ?? (typeof enemy === 'object' && enemy && enemy.tier ? enemy.tier : 1);
+  const rawTier = typeof enemy === 'object' && enemy && enemy.tier ? enemy.tier : 1;
   const resolvedTier = Math.max(1, Math.min(4, rawTier)) as 1 | 2 | 3 | 4;
 
   const personality = useMemo(
@@ -363,7 +349,7 @@ export const EnemyAvatar: React.FC<EnemyAvatarProps> = ({
       if (reactionTimerRef.current) {
         clearTimeout(reactionTimerRef.current);
       }
-      const holdMs = personality.reactionHoldMs[type] ?? 850;
+      const holdMs = ENEMY_REACTION_HOLD_MS[type] ?? 850;
       reactionTimerRef.current = setTimeout(() => {
         setActiveReaction(null);
       }, holdMs);
@@ -576,7 +562,6 @@ export const EnemyAvatar: React.FC<EnemyAvatarProps> = ({
       }
     },
     [
-      personality,
       shouldAnimate,
       size,
       bodyTx,
@@ -887,7 +872,7 @@ export const EnemyAvatar: React.FC<EnemyAvatarProps> = ({
 
   const stageContent = (
     <View
-      style={[styles.stageBase, frameDynamicStyle, style]}
+      style={[styles.stageBase, frameDynamicStyle]}
       testID={testID ?? 'enemy-avatar'}
       accessibilityRole={interactive ? 'button' : 'image'}
       accessibilityLabel={`${enemyName} enemy (${healthState})`}
@@ -912,9 +897,6 @@ export const EnemyAvatar: React.FC<EnemyAvatarProps> = ({
       <Animated.View style={[StyleSheet.absoluteFill, rigRootStyle]}>
         <EnemyCreatureRig
           enemyName={enemyName}
-          icon={resolvedIcon}
-          tier={resolvedTier}
-          size={size}
           expression={expression}
           healthState={healthState}
           gazeOffset={effectiveGaze}
@@ -973,5 +955,3 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.slateCharcoal,
   },
 });
-
-export default EnemyAvatar;

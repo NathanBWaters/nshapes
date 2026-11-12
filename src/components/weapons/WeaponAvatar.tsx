@@ -10,20 +10,17 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Svg, Circle, G, Line, Path } from 'react-native-svg';
-import { IconName } from '@/components/Icon';
 import { Weapon, WeaponRarity } from '@/types';
 import { useReducedMotion } from '@/utils/animation';
 import { COLORS } from '@/utils/colors';
 import { getRarityTrimPalette, WeaponTapStyle } from './types';
 import { getWeaponTapStyle, WeaponArtwork } from './WeaponArtwork';
 
-export interface WeaponAvatarProps {
+interface WeaponAvatarProps {
   /** Weapon object or weapon name */
   weapon?: Weapon | string | null;
   /** Optional rarity when passing weapon as a string name */
   rarity?: WeaponRarity;
-  /** Optional fallback icon name */
-  icon?: IconName;
   /** Pixel width & height (default 32) */
   size?: number;
   /**
@@ -63,7 +60,6 @@ function Sparkle4({ cx, cy, r, fill }: { cx: number; cy: number; r: number; fill
 export const WeaponAvatar: React.FC<WeaponAvatarProps> = ({
   weapon,
   rarity: rarityOverride,
-  icon: iconOverride,
   size = 32,
   interactive = false,
   triggerKey,
@@ -79,8 +75,6 @@ export const WeaponAvatar: React.FC<WeaponAvatarProps> = ({
       : weapon?.name ?? 'Field Stone';
   const resolvedRarity: WeaponRarity =
     rarityOverride ?? (typeof weapon === 'object' && weapon ? weapon.rarity : 'common');
-  const resolvedIcon: IconName | undefined =
-    iconOverride ?? (typeof weapon === 'object' && weapon ? weapon.icon : undefined);
 
   const tapStyle: WeaponTapStyle = useMemo(
     () => getWeaponTapStyle(weaponName),
@@ -339,7 +333,7 @@ export const WeaponAvatar: React.FC<WeaponAvatarProps> = ({
       accessibilityLabel={`${weaponName} (${resolvedRarity})`}
     >
       <Animated.View style={[StyleSheet.absoluteFill, artworkAnimatedStyle]}>
-        <WeaponArtwork name={weaponName} rarity={resolvedRarity} icon={resolvedIcon} />
+        <WeaponArtwork name={weaponName} rarity={resolvedRarity} />
       </Animated.View>
 
       {/* Transient tap sparkle ring — invisible (opacity 0) until tapped */}
@@ -391,5 +385,3 @@ const styles = StyleSheet.create({
     overflow: 'visible',
   },
 });
-
-export default WeaponAvatar;

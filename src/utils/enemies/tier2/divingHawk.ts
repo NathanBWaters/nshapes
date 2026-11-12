@@ -7,7 +7,6 @@
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { TimerSpeedEffect, composeEffects } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Diving Hawk enemy instance.
@@ -28,6 +27,3 @@ export function createDivingHawk(): EnemyInstance {
     (stats: RoundStats) => stats.allDifferentMatches >= 3
   );
 }
-
-// Register with factory
-registerEnemy('Diving Hawk', createDivingHawk);

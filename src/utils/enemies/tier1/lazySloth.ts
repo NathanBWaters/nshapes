@@ -7,7 +7,6 @@
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { WeaponCounterEffect, composeEffects } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Lazy Sloth enemy instance.
@@ -31,6 +30,3 @@ export function createLazySloth(): EnemyInstance {
     (stats: RoundStats) => stats.currentScore >= stats.targetScore && stats.timeRemaining >= 15
   );
 }
-
-// Register with factory
-registerEnemy('Lazy Sloth', createLazySloth);

@@ -6,15 +6,13 @@
  */
 import { Card, Shape, Color } from '@/types';
 import type { RoundStats } from '@/types/enemy';
+import { createDummyEnemy } from '@/utils/enemyEffects';
 import {
-  createDummyEnemy,
   createEnemy,
   getEnemyNames,
   getEnemiesByTier,
   getRandomEnemies,
   isEnemyRegistered,
-  registerEnemy,
-  ENEMY_REGISTRY,
 } from '@/utils/enemyFactory';
 
 // Helper to create a minimal test card
@@ -196,196 +194,67 @@ describe('createEnemy', () => {
 });
 
 describe('getRandomEnemies', () => {
-  it('should return correct count of dummy enemies when registry is empty', () => {
-    // Registry starts empty, so this should return dummy enemies
+  it('returns the requested number of distinct enemies from the tier', () => {
     const enemies = getRandomEnemies(1, 3);
 
     expect(enemies.length).toBe(3);
-    enemies.forEach(enemy => {
-      expect(enemy.name).toBe('Dummy');
-    });
+    expect(new Set(enemies.map(e => e.name)).size).toBe(3);
+    enemies.forEach(enemy => expect(enemy.tier).toBe(1));
   });
 
-  it('should return requested count when asking for fewer than available', () => {
-    const enemies = getRandomEnemies(1, 2);
-    expect(enemies.length).toBe(2);
+  it('defaults to 3 enemies when count is not specified', () => {
+    expect(getRandomEnemies(1).length).toBe(3);
   });
 
-  it('should return fresh instances (not same reference)', () => {
-    const enemies = getRandomEnemies(1, 2);
-
-    // Each should be a different object
-    expect(enemies[0]).not.toBe(enemies[1]);
-
-    // But both should be dummy enemies
-    expect(enemies[0].name).toBe('Dummy');
-    expect(enemies[1].name).toBe('Dummy');
-  });
-
-  it('should default to 3 enemies when count not specified', () => {
-    const enemies = getRandomEnemies(1);
-    expect(enemies.length).toBe(3);
+  it('never returns more enemies than the tier has', () => {
+    const tier4 = getEnemiesByTier(4);
+    expect(getRandomEnemies(4, tier4.length + 5).length).toBe(tier4.length);
   });
 
   describe('exclude parameter', () => {
-    beforeEach(() => {
-      // Register some test enemies for exclusion tests
-      registerEnemy('Enemy A', () => ({
-        ...createDummyEnemy(),
-        name: 'Enemy A',
-        tier: 1 as const,
-      }));
-      registerEnemy('Enemy B', () => ({
-        ...createDummyEnemy(),
-        name: 'Enemy B',
-        tier: 1 as const,
-      }));
-      registerEnemy('Enemy C', () => ({
-        ...createDummyEnemy(),
-        name: 'Enemy C',
-        tier: 1 as const,
-      }));
-    });
-
-    afterEach(() => {
-      // Clean up registered test enemies
-      delete ENEMY_REGISTRY['Enemy A'];
-      delete ENEMY_REGISTRY['Enemy B'];
-      delete ENEMY_REGISTRY['Enemy C'];
-    });
-
-    it('should exclude specified enemies from selection', () => {
-      // Run multiple times to verify exclusion is consistent
-      for (let i = 0; i < 10; i++) {
-        const enemies = getRandomEnemies(1, 3, ['Enemy A']);
-        const names = enemies.map(e => e.name);
-        expect(names).not.toContain('Enemy A');
-      }
-    });
-
-    it('should exclude multiple enemies', () => {
-      for (let i = 0; i < 10; i++) {
-        const enemies = getRandomEnemies(1, 3, ['Enemy A', 'Enemy B']);
-        const names = enemies.map(e => e.name);
-        expect(names).not.toContain('Enemy A');
-        expect(names).not.toContain('Enemy B');
-      }
-    });
-
-    it('should return dummy enemies when all are excluded', () => {
-      const enemies = getRandomEnemies(1, 3, ['Enemy A', 'Enemy B', 'Enemy C']);
-      enemies.forEach(enemy => {
-        expect(enemy.name).toBe('Dummy');
-      });
-    });
-
-    it('should handle empty exclude array', () => {
-      const enemies = getRandomEnemies(1, 3, []);
-      expect(enemies.length).toBe(3);
-      // Should still work normally
-    });
-
-    it('should handle exclude with non-existent enemy names', () => {
-      // Excluding a name that doesn't exist shouldn't cause issues
-      const enemies = getRandomEnemies(1, 3, ['Non-existent Enemy']);
-      expect(enemies.length).toBe(3);
-    });
-  });
-});
-
-describe('getEnemyNames', () => {
-  it('should return array of registered enemy names', () => {
-    const names = getEnemyNames();
-
-    expect(Array.isArray(names)).toBe(true);
-    // Initially empty or may have registered enemies from other tests
-    expect(typeof names.length).toBe('number');
-  });
-});
-
-describe('getEnemiesByTier', () => {
-  it('should return empty array for tier with no enemies', () => {
-    // Assuming no enemies registered for tier 4 yet
     const tier4 = getEnemiesByTier(4);
-    expect(Array.isArray(tier4)).toBe(true);
-  });
 
-  it('should only return enemies of specified tier', () => {
-    // This test will be more meaningful once enemies are registered
-    const tier1 = getEnemiesByTier(1);
-    expect(Array.isArray(tier1)).toBe(true);
-  });
-});
-
-describe('isEnemyRegistered', () => {
-  it('should return false for unregistered enemy', () => {
-    expect(isEnemyRegistered('Nonexistent Enemy')).toBe(false);
-  });
-
-  it('should return false for empty string', () => {
-    expect(isEnemyRegistered('')).toBe(false);
-  });
-});
-
-describe('registerEnemy', () => {
-  const originalWarn = console.warn;
-
-  beforeEach(() => {
-    console.warn = jest.fn();
-  });
-
-  afterEach(() => {
-    console.warn = originalWarn;
-    // Clean up registered test enemies
-    delete ENEMY_REGISTRY['Test Enemy'];
-    delete ENEMY_REGISTRY['Another Test'];
-  });
-
-  it('should register a new enemy', () => {
-    const testFactory = () => ({
-      ...createDummyEnemy(),
-      name: 'Test Enemy',
-      tier: 2 as const,
+    it('excludes the specified enemies from selection', () => {
+      const excluded = tier4.slice(0, 2);
+      for (let i = 0; i < 10; i++) {
+        const names = getRandomEnemies(4, 3, excluded).map(e => e.name);
+        excluded.forEach(name => expect(names).not.toContain(name));
+      }
     });
 
-    registerEnemy('Test Enemy', testFactory);
+    it('returns dummy enemies when every enemy in the tier is excluded', () => {
+      const enemies = getRandomEnemies(4, 3, tier4);
+      expect(enemies.length).toBe(3);
+      enemies.forEach(enemy => expect(enemy.name).toBe('Dummy'));
+      expect(enemies[0]).not.toBe(enemies[1]);
+    });
 
-    expect(isEnemyRegistered('Test Enemy')).toBe(true);
-    expect(createEnemy('Test Enemy').name).toBe('Test Enemy');
-    expect(createEnemy('Test Enemy').tier).toBe(2);
+    it('ignores excluded names that are not enemies', () => {
+      expect(getRandomEnemies(1, 3, ['Non-existent Enemy']).length).toBe(3);
+    });
   });
+});
 
-  it('should warn when overwriting existing enemy', () => {
-    const factory1 = () => ({ ...createDummyEnemy(), name: 'Another Test' });
-    const factory2 = () => ({ ...createDummyEnemy(), name: 'Another Test V2' });
-
-    registerEnemy('Another Test', factory1);
-    registerEnemy('Another Test', factory2);
-
-    expect(console.warn).toHaveBeenCalledWith(
-      'Enemy "Another Test" is already registered, overwriting'
-    );
-    expect(createEnemy('Another Test').name).toBe('Another Test V2');
-  });
-
-  it('registered enemy should appear in getEnemyNames', () => {
-    registerEnemy('Test Enemy', () => ({
-      ...createDummyEnemy(),
-      name: 'Test Enemy',
-    }));
-
+describe('enemy registry', () => {
+  it('lists every enemy exactly once under the name its instance reports', () => {
     const names = getEnemyNames();
-    expect(names).toContain('Test Enemy');
+    expect(names.length).toBeGreaterThan(0);
+    expect(new Set(names).size).toBe(names.length);
+    names.forEach(name => expect(createEnemy(name).name).toBe(name));
   });
 
-  it('registered enemy should appear in getEnemiesByTier', () => {
-    registerEnemy('Test Enemy', () => ({
-      ...createDummyEnemy(),
-      name: 'Test Enemy',
-      tier: 1 as const,
-    }));
+  it('groups enemies by the tier their instance reports', () => {
+    const byTier = ([1, 2, 3, 4] as const).map(tier => getEnemiesByTier(tier));
+    byTier.forEach((names, i) => {
+      expect(names.length).toBeGreaterThan(0);
+      names.forEach(name => expect(createEnemy(name).tier).toBe(i + 1));
+    });
+    expect(byTier.flat().sort()).toEqual(getEnemyNames().sort());
+  });
 
-    const tier1 = getEnemiesByTier(1);
-    expect(tier1).toContain('Test Enemy');
+  it('knows which names are registered', () => {
+    expect(isEnemyRegistered(getEnemyNames()[0])).toBe(true);
+    expect(isEnemyRegistered('Nonexistent Enemy')).toBe(false);
+    expect(isEnemyRegistered('')).toBe(false);
   });
 });

@@ -7,7 +7,6 @@
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { PositionShuffleEffect, composeEffects } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Wild Goose enemy instance.
@@ -38,6 +37,3 @@ export function createWildGoose(): EnemyInstance {
     }
   );
 }
-
-// Register with factory
-registerEnemy('Wild Goose', createWildGoose);

@@ -54,7 +54,7 @@ interface Props {
   level: LevelDef | null;
   save: AdventureSave;
   onClose: () => void;
-  onPlay: (level: LevelDef, fighter: CharacterName) => void;
+  onPlay: (level: LevelDef) => void;
   onSelectFighter: (f: CharacterName) => void;
   onSelectCharm: (id: string) => void;
   onSelectArcana?: (id: ArcanaId | null) => void;
@@ -335,7 +335,7 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                 </Text>
               </View>
             ) : (
-              <Btn testID="preview-play" label={best > 0 ? 'Play again' : 'Fight!'} icon="lorc/crossed-swords" onPress={() => onPlay(level, save.selectedFighter)} />
+              <Btn testID="preview-play" label={best > 0 ? 'Play again' : 'Fight!'} icon="lorc/crossed-swords" onPress={() => onPlay(level)} />
             )}
           </View>
         </PopIn>

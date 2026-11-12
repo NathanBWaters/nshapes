@@ -20,9 +20,6 @@ export const EASING = {
   bounce: { tension: 180, friction: 12 },
 } as const;
 
-export type DurationKey = keyof typeof DURATION;
-export type EasingKey = keyof typeof EASING;
-
 /**
  * Hook to detect if the user prefers reduced motion.
  * On native: uses AccessibilityInfo.isReduceMotionEnabled
@@ -57,30 +54,4 @@ export function useReducedMotion(): boolean {
   }, []);
 
   return reducedMotion;
-}
-
-/**
- * Get duration value that respects reduced motion preference.
- * When reduced motion is enabled, returns instant duration for all animations.
- */
-export function getAnimationDuration(
-  key: DurationKey,
-  reducedMotion: boolean
-): number {
-  return reducedMotion ? DURATION.instant : DURATION[key];
-}
-
-/**
- * Get spring config that respects reduced motion preference.
- * When reduced motion is enabled, returns a stiff spring (essentially no bounce).
- */
-export function getSpringConfig(
-  key: 'spring' | 'bounce',
-  reducedMotion: boolean
-): { tension: number; friction: number } {
-  if (reducedMotion) {
-    // High friction, high tension = very stiff, minimal motion
-    return { tension: 300, friction: 30 };
-  }
-  return EASING[key];
 }

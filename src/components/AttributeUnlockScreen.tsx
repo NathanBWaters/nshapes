@@ -10,7 +10,6 @@ interface AttributeUnlockScreenProps {
   newAttribute: AttributeName;
   onContinue: () => void;
   onPractice?: () => void;
-  isFinalRound?: boolean;
   onExitGame?: () => void;
 }
 
@@ -88,53 +87,9 @@ const AttributeUnlockScreen: React.FC<AttributeUnlockScreenProps> = ({
   newAttribute,
   onContinue,
   onPractice,
-  isFinalRound = false,
   onExitGame,
 }) => {
   const info = ATTRIBUTE_INFO[newAttribute];
-
-  if (isFinalRound) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.card}>
-          <View style={styles.finalBanner}>
-            <Text style={styles.finalTitle}>FINAL ROUND</Text>
-            <GameMenu playerStats={DEFAULT_PLAYER_STATS as PlayerStats} onExitGame={onExitGame} />
-          </View>
-
-          <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-            <Text style={styles.finalSubtitle}>The Ultimate Challenge</Text>
-
-            <View style={styles.infoBox}>
-              <Text style={styles.infoText}>
-                All 5 attributes are now active. Every match must satisfy:
-              </Text>
-              <View style={styles.attributeList}>
-                <Text style={styles.attributeItem}>Shape</Text>
-                <Text style={styles.attributeItem}>Color</Text>
-                <Text style={styles.attributeItem}>Number</Text>
-                <Text style={styles.attributeItem}>Shading</Text>
-                <Text style={styles.attributeItem}>Background</Text>
-              </View>
-              <Text style={styles.infoTextSmall}>
-                Each attribute must be all the same OR all different across your 3 cards.
-              </Text>
-            </View>
-
-            <Text style={styles.encouragement}>
-              You've made it this far. Trust your pattern recognition!
-            </Text>
-          </ScrollView>
-
-          <View style={styles.buttonRow}>
-            <TouchableOpacity style={styles.continueButton} onPress={onContinue}>
-              <Text style={styles.continueButtonText}>I'M READY</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    );
-  }
 
   return (
     <View style={styles.container}>
@@ -234,20 +189,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 2,
-  },
-  finalBanner: {
-    backgroundColor: COLORS.impactOrange,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  finalTitle: {
-    color: COLORS.canvasWhite,
-    fontSize: 20,
-    fontWeight: '800',
-    letterSpacing: 3,
   },
   content: {
     flex: 1,
@@ -383,49 +324,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 13,
     letterSpacing: 1,
-  },
-  finalSubtitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: COLORS.deepOnyx,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  infoBox: {
-    backgroundColor: COLORS.paperBeige,
-    padding: 16,
-    borderRadius: RADIUS.button,
-    borderWidth: 1,
-    borderColor: COLORS.slateCharcoal,
-    marginBottom: 16,
-  },
-  infoText: {
-    fontSize: 14,
-    color: COLORS.slateCharcoal,
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  infoTextSmall: {
-    fontSize: 12,
-    color: COLORS.slateCharcoal,
-    textAlign: 'center',
-    marginTop: 12,
-    fontStyle: 'italic',
-  },
-  attributeList: {
-    alignItems: 'center',
-    gap: 4,
-  },
-  attributeItem: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.deepOnyx,
-  },
-  encouragement: {
-    fontSize: 14,
-    color: COLORS.logicTeal,
-    textAlign: 'center',
-    fontWeight: '600',
   },
 });
 

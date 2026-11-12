@@ -3,7 +3,6 @@ import { useEffect } from "react";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { SocketProvider } from "@/context/SocketContext";
 import { TutorialProvider } from "@/context/TutorialContext";
 import { KeywordProvider } from "@/context/KeywordContext";
 import KeywordTooltip from "@/components/KeywordTooltip";
@@ -23,15 +22,13 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <KeywordProvider>
         <TutorialProvider>
-          <SocketProvider>
-            <Stack
-              screenOptions={{
-                headerShown: false,
-              }}
-            />
-            <StatusBar style="auto" />
-            <KeywordTooltip />
-          </SocketProvider>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+            }}
+          />
+          <StatusBar style="auto" />
+          <KeywordTooltip />
         </TutorialProvider>
       </KeywordProvider>
     </SafeAreaProvider>

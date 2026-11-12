@@ -1,16 +1,11 @@
 import React, { useEffect, useRef } from 'react';
 import { Text, TextStyle, StyleSheet, Platform } from 'react-native';
-import Animated, {
+import {
   useSharedValue,
-  useAnimatedProps,
   withTiming,
   Easing,
-  useDerivedValue,
 } from 'react-native-reanimated';
-import { DURATION } from '@/utils/designSystem';
-
-// For web, we need a different approach since AnimatedProps on Text doesn't work well
-const AnimatedText = Animated.createAnimatedComponent(Text);
+import { DURATION } from '@/utils/animation';
 
 interface AnimatedCounterProps {
   value: number;

@@ -7,7 +7,6 @@
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { TripleCardEffect, WeaponCounterEffect, composeEffects } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Hunting Eagle enemy instance.
@@ -31,6 +30,3 @@ export function createHuntingEagle(): EnemyInstance {
       stats.tripleCardsCleared >= 1 && stats.timeRemaining >= 20
   );
 }
-
-// Register with factory
-registerEnemy('Hunting Eagle', createHuntingEagle);

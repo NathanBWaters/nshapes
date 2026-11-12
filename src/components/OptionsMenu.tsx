@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { SettingsStorage } from '@/utils/storage';
-import { setAudioEnabled, isAudioEnabled } from '@/utils/sounds';
+import { setAudioEnabled } from '@/utils/sounds';
 import Icon from './Icon';
 
 interface OptionsMenuProps {

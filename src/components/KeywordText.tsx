@@ -7,7 +7,7 @@
 
 import React, { useMemo } from 'react';
 import { Text, TextStyle, StyleProp } from 'react-native';
-import { findKeywords, KeywordMatch } from '../utils/keywords';
+import { findKeywords } from '../utils/keywords';
 import { useKeyword } from '../context/KeywordContext';
 import { COLORS } from '../utils/colors';
 

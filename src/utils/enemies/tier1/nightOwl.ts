@@ -7,7 +7,6 @@
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { FaceDownEffect, composeEffects } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Night Owl enemy instance.
@@ -33,6 +32,3 @@ export function createNightOwl(): EnemyInstance {
     }
   );
 }
-
-// Register with factory
-registerEnemy('Night Owl', createNightOwl);

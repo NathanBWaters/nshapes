@@ -11,6 +11,7 @@ import Animated, {
 import { Svg, Circle, G, Line, Path, Polygon, Text as SvgText } from 'react-native-svg';
 import { COLORS } from '@/utils/colors';
 import {
+  FIGHTER_REACTION_HOLD_MS,
   FighterAmbientMood,
   FighterPersonalityProfile,
   FighterReactionType,
@@ -137,7 +138,7 @@ export const FighterEffectsOverlay: React.FC<FighterEffectsOverlayProps> = ({
     }
     burstProgress.value = 0;
     burstProgress.value = withTiming(1, {
-      duration: personality.reactionHoldMs[activeReaction] ?? 850,
+      duration: FIGHTER_REACTION_HOLD_MS[activeReaction] ?? 850,
       easing: Easing.out(Easing.cubic),
     });
   }, [activeReaction, reactionId, animate, burstProgress, personality]);

@@ -7,7 +7,6 @@
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { AttributeChangeEffect, composeEffects } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Shifting Chameleon enemy instance.
@@ -26,6 +25,3 @@ export function createShiftingChameleon(): EnemyInstance {
     (stats: RoundStats) => stats.allDifferentMatches >= 2
   );
 }
-
-// Register with factory
-registerEnemy('Shifting Chameleon', createShiftingChameleon);

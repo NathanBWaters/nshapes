@@ -12,7 +12,6 @@ import {
   CountdownEffect,
   composeEffects,
 } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Swarming Ants enemy instance.
@@ -36,6 +35,3 @@ export function createSwarmingAnts(): EnemyInstance {
     (stats: RoundStats) => stats.bombsDefused >= 5
   );
 }
-
-// Register with factory
-registerEnemy('Swarming Ants', createSwarmingAnts);

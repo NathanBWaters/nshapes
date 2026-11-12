@@ -54,16 +54,3 @@ export const RADIUS = {
   container: 24,  // Top-level screen containers
 };
 
-// Border widths
-export const BORDERS = {
-  thin: 1,
-  standard: 2,
-};
-
-// Typography weights (Inter font family)
-export const FONT_WEIGHTS = {
-  light: '300' as const,
-  regular: '400' as const,
-  semiBold: '600' as const,
-  bold: '700' as const,
-};

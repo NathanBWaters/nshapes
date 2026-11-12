@@ -188,9 +188,3 @@ export const BOUNTIES: BountyDef[] = [
     reward: { coins: 200 },
   },
 ];
-
-export const getBounty = (id: string): BountyDef => {
-  const b = BOUNTIES.find(x => x.id === id);
-  if (!b) throw new Error(`Unknown bounty: ${id}`);
-  return b;
-};

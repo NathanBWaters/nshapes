@@ -7,7 +7,6 @@
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { CardRemovalEffect, composeEffects } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Burrowing Mole enemy instance.
@@ -33,6 +32,3 @@ export function createBurrowingMole(): EnemyInstance {
     }
   );
 }
-
-// Register with factory
-registerEnemy('Burrowing Mole', createBurrowingMole);

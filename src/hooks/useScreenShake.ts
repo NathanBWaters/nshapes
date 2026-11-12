@@ -129,7 +129,5 @@ export function useScreenShake() {
     shakeStyle,
     triggerShake,
     shake,
-    translateX,
-    translateY,
   };
 }

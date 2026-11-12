@@ -7,7 +7,6 @@
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { ExtraCardRemovalOnMatchEffect, composeEffects } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Greedy Squirrel enemy instance.
@@ -33,6 +32,3 @@ export function createGreedySquirrel(): EnemyInstance {
     }
   );
 }
-
-// Register with factory
-registerEnemy('Greedy Squirrel', createGreedySquirrel);

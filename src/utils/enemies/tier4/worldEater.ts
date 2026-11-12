@@ -14,7 +14,6 @@ import {
   TimerSpeedEffect,
   composeEffects,
 } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh World Eater enemy instance.
@@ -42,6 +41,3 @@ export function createWorldEater(): EnemyInstance {
       stats.invalidMatches === 0
   );
 }
-
-// Register with factory
-registerEnemy('World Eater', createWorldEater);

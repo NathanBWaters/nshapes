@@ -12,7 +12,6 @@ import {
   CountdownEffect,
   composeEffects,
 } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Abyssal Octopus enemy instance.
@@ -35,6 +34,3 @@ export function createAbyssalOctopus(): EnemyInstance {
     (stats: RoundStats) => stats.faceDownCardsMatched >= 5
   );
 }
-
-// Register with factory
-registerEnemy('Abyssal Octopus', createAbyssalOctopus);

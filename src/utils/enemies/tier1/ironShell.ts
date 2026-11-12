@@ -7,7 +7,6 @@
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { TripleCardEffect, composeEffects } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Iron Shell enemy instance.
@@ -26,6 +25,3 @@ export function createIronShell(): EnemyInstance {
     (stats: RoundStats) => stats.tripleCardsCleared >= 1
   );
 }
-
-// Register with factory
-registerEnemy('Iron Shell', createIronShell);

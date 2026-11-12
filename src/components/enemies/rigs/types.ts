@@ -1,19 +1,12 @@
 import { StyleProp, ViewStyle } from 'react-native';
-import { IconName } from '@/components/Icon';
 import { CreatureJointPivots, DEFAULT_CREATURE_PIVOTS, GazeOffset } from '@/components/fighters/creatures/types';
 import { EnemyExpression, EnemyHealthState } from '@/utils/enemyAnimations';
 
-export type EnemyJointPivots = CreatureJointPivots;
+type EnemyJointPivots = CreatureJointPivots;
 
 export interface EnemyRigProps {
   /** Enemy species or Adventure foe name (e.g. 'Junk Rat', 'The Hydra', 'Dozy Bunny') */
   enemyName: string;
-  /** Optional fallback icon name */
-  icon?: IconName;
-  /** Enemy tier (1..4) for visual scale/trim accents */
-  tier?: 1 | 2 | 3 | 4;
-  /** Pixel width & height of the avatar stage */
-  size: number;
   /** Current resolved enemy facial expression */
   expression: EnemyExpression;
   /** Current progressive battle-wear state */

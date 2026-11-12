@@ -1,7 +1,7 @@
 import { LEVELS, getLevel } from '@/adventure/data/levels';
 import { FIGHTERS, getLoadout } from '@/adventure/data/fighters';
 import { ARCANA, getArcana } from '@/adventure/data/arcana';
-import { BOUNTIES, BOUNTY_UNLOCK_LEVEL_ID, getBounty } from '@/adventure/data/bounties';
+import { BOUNTIES, BOUNTY_UNLOCK_LEVEL_ID } from '@/adventure/data/bounties';
 import { EVOLUTION_RECIPES, findEvolvedWeapon, getActiveEvolutionStatus, getEvolutionRecipe } from '@/adventure/data/evolutions';
 import {
   COMBO_DISCOVERY_SEEN_ID,
@@ -150,8 +150,8 @@ describe('100% Free Money Refunds at Camp', () => {
 
 describe('Escalating Purity Combos', () => {
   it('unlocks at 1-6 and escalates 1-diff → 2-diff → 3-diff (Rainbow) with bonus damage, coins & clean reset', () => {
-    expect(getFeaturesForLevel(getLevel('1-5')).has('purity')).toBe(false);
-    expect(getFeaturesForLevel(getLevel('1-6')).has('purity')).toBe(true);
+    expect(getFeaturesForLevel(getLevel('1-5'), createNewSave()).has('purity')).toBe(false);
+    expect(getFeaturesForLevel(getLevel('1-6'), createNewSave()).has('purity')).toBe(true);
 
     // Level 2-1 uses 3 attributes: shape, color, number
     let run = createRun(getLevel('2-1'), createNewSave(), { seed: 10 });
@@ -354,7 +354,7 @@ describe('Arcana (Wildcard Tarots)', () => {
       upgrades: { tough_hide: 3 },
       fighterLevels: { 'Orange Tabby': 6 },
     };
-    const run = createRun(getLevel('2-1'), save, { seed: 6, fighter: 'Orange Tabby' });
+    const run = createRun(getLevel('2-1'), { ...save, selectedFighter: 'Orange Tabby' }, { seed: 6 });
     expect(run.maxHearts).toBe(1);
     expect(run.hearts).toBe(1);
 
@@ -437,7 +437,7 @@ describe('Weapon Evolutions, Hidden Catalyst Cards & Recipe Guide', () => {
     };
     expect(getFeaturesForLevel(getLevel('2-1'), noCombosSave).has('evolutions')).toBe(false);
     for (let seed = 1; seed <= 12; seed++) {
-      const s = createRun(getLevel('2-1'), noCombosSave, { seed, fighter: 'Sly Fox' });
+      const s = createRun(getLevel('2-1'), { ...noCombosSave, selectedFighter: 'Sly Fox' }, { seed });
       expect(s.board.some(c => c.hasEvolutionItem)).toBe(false);
       expect(getActiveEvolutionStatus(s.weapons, s.evolvedRecipes, s, s.unlockedEvolutions)).toBeNull();
     }
@@ -445,7 +445,7 @@ describe('Weapon Evolutions, Hidden Catalyst Cards & Recipe Guide', () => {
 
   it('never places more than ONE Evolution Catalyst card on screen at a time across deals & refills', () => {
     for (let seed = 1; seed <= 25; seed++) {
-      let s = createRun(getLevel('2-1'), foxUnlockedSave(), { seed, fighter: 'Sly Fox' });
+      let s = createRun(getLevel('2-1'), { ...foxUnlockedSave(), selectedFighter: 'Sly Fox' }, { seed });
       expect(s.board.filter(c => c.hasEvolutionItem).length).toBeLessThanOrEqual(1);
       for (let step = 0; step < 6 && s.status === 'playing'; step++) {
         const set = allSets(s.board, s.attributes)[0];
@@ -459,7 +459,7 @@ describe('Weapon Evolutions, Hidden Catalyst Cards & Recipe Guide', () => {
   });
 
   it('loses the Catalyst permanently for the wave if matched BEFORE the recipe is primed', () => {
-    let run = createRun(getLevel('2-1'), foxUnlockedSave(), { seed: 20, fighter: 'Sly Fox' });
+    let run = createRun(getLevel('2-1'), { ...foxUnlockedSave(), selectedFighter: 'Sly Fox' }, { seed: 20 });
     run = { ...run, foeHp: 200, foeMaxHp: 200 };
 
     // Sly Fox starts with Flint Spark + Blast Powder -> solar-cataclysm requires 3 Sets first
@@ -497,7 +497,7 @@ describe('Weapon Evolutions, Hidden Catalyst Cards & Recipe Guide', () => {
       { ...foxUnlockedSave(), unlockedArcana: ['catalyst_resonance'] },
       'catalyst_resonance'
     );
-    let run = createRun(getLevel('2-1'), save, { seed: 21, fighter: 'Sly Fox' });
+    let run = createRun(getLevel('2-1'), { ...save, selectedFighter: 'Sly Fox' }, { seed: 21 });
     expect(run.catalystRespawnsLeft).toBe(1);
 
     const set = allSets(run.board, run.attributes)[0];
@@ -516,7 +516,7 @@ describe('Weapon Evolutions, Hidden Catalyst Cards & Recipe Guide', () => {
 
   it('awakens the Catalyst once primed, evolves into the Legendary weapon on match, and unlocks its Recipe Guide entry', () => {
     const save = foxUnlockedSave();
-    let run = createRun(getLevel('2-1'), save, { seed: 30, fighter: 'Sly Fox' });
+    let run = createRun(getLevel('2-1'), { ...save, selectedFighter: 'Sly Fox' }, { seed: 30 });
     run = { ...run, foeHp: 250, foeMaxHp: 250 };
 
     // Put the Catalyst on a non-matched card while priming 3 clean Sets
@@ -622,9 +622,9 @@ describe('Cross-Run Bounties', () => {
     expect(save.armory).toContain('echo-stone-rare');
     expect(save.unlockedArcana).toContain('prismatic_fever');
     expect(r1.bountyCoins).toBe(
-      getBounty('bounty_sets_40').reward.coins +
-      getBounty('bounty_rainbow_12').reward.coins +
-      getBounty('bounty_purity_10').reward.coins
+      BOUNTIES.find(b => b.id === 'bounty_sets_40')!.reward.coins +
+      BOUNTIES.find(b => b.id === 'bounty_rainbow_12')!.reward.coins +
+      BOUNTIES.find(b => b.id === 'bounty_purity_10')!.reward.coins
     );
 
     // Replaying does NOT re-pay already-completed bounties, and reconcileUnlocks is idempotent
@@ -1022,7 +1022,7 @@ describe('Cross-System Integration & Edge-Case Invariants', () => {
       fighterLevels: { 'Orange Tabby': 1, 'Sly Fox': 1 },
       unlockedEvolutions: ['solar-cataclysm'],
     };
-    let run = createRun(getLevel('2-2'), save, { seed: 33, fighter: 'Sly Fox' });
+    let run = createRun(getLevel('2-2'), { ...save, selectedFighter: 'Sly Fox' }, { seed: 33 });
     const targetId = run.board[0].id;
     // Place Catalyst on slot 0, then simulate an enemy turning slot 0 into a Dud!
     run = {

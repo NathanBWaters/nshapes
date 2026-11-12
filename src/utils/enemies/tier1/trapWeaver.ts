@@ -8,7 +8,6 @@
 import type { Card } from '@/types';
 import type { EnemyInstance, RoundStats, EnemyStartResult, EffectBehavior } from '@/types/enemy';
 import { BombEffect, composeEffects } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Custom effect that spawns a bomb card at round start
@@ -65,6 +64,3 @@ export function createTrapWeaver(): EnemyInstance {
     (stats: RoundStats) => stats.bombsDefused >= 1
   );
 }
-
-// Register with factory
-registerEnemy('Trap Weaver', createTrapWeaver);

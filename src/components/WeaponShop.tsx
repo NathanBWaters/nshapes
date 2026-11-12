@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Pressable, StyleSheet, Platform } from 'react-native';
 import { usePWASafeAreaInsets } from '@/utils/usePWASafeAreaInsets';
-import { Character, Weapon, PlayerStats, WeaponRarity } from '@/types';
+import { Character, Weapon, PlayerStats } from '@/types';
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
 import { getPlayerWeaponCount } from '@/utils/gameDefinitions';
 import {

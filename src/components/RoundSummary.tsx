@@ -13,7 +13,7 @@ import { Character, PlayerStats, Weapon } from '@/types';
 import type { EnemyInstance, WeaponImpact } from '@/types/enemy';
 import ChallengeCard from './ui/ChallengeCard';
 import { COLORS, RADIUS } from '@/utils/colors';
-import { DURATION } from '@/utils/designSystem';
+import { DURATION } from '@/utils/animation';
 import Icon, { IconName } from './Icon';
 import GameMenu from './GameMenu';
 import { ScreenTransition } from './ScreenTransition';
@@ -24,7 +24,6 @@ interface RoundSummaryProps {
   round: number;
   matchCount: number;
   score: number;
-  targetScore: number;
   moneyEarned: number;
   experienceEarned: number;
   bonusWeapons: number;
@@ -86,7 +85,6 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
   round,
   matchCount,
   score,
-  targetScore,
   moneyEarned,
   experienceEarned,
   bonusWeapons,

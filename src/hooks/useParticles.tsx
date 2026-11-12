@@ -4,10 +4,9 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  runOnJS,
 } from 'react-native-reanimated';
 
-export type ParticleType = 'sparkle' | 'confetti' | 'explosion';
+type ParticleType = 'sparkle' | 'explosion';
 
 interface Particle {
   id: string;
@@ -32,7 +31,6 @@ interface ParticleOrigin {
 
 const PARTICLE_COLORS = {
   sparkle: ['#FFDE00', '#FFFFFF', '#FFE54C'],
-  confetti: ['#FFDE00', '#16AA98', '#FF9538', '#FF7169', '#1976D2', '#FFFFFF'],
   explosion: ['#FF9538', '#FF7169', '#FFDE00', '#383838'],
 };
 
@@ -52,10 +50,6 @@ const generateParticle = (
     case 'sparkle':
       speed = 1 + Math.random() * 2;
       lifetime = 1000 + Math.random() * 500;
-      break;
-    case 'confetti':
-      speed = 3 + Math.random() * 4;
-      lifetime = 1500 + Math.random() * 1000;
       break;
     case 'explosion':
       speed = 5 + Math.random() * 8;
@@ -95,7 +89,7 @@ function ParticleComponent({ particle }: ParticleComponentProps) {
   const scale = useSharedValue(particle.scale);
 
   useEffect(() => {
-    const gravity = particle.type === 'confetti' ? 0.15 : particle.type === 'explosion' ? 0.1 : -0.02;
+    const gravity = particle.type === 'explosion' ? 0.1 : -0.02;
 
     // Animate to final position
     translateX.value = withTiming(particle.x + particle.vx * 60, {
@@ -131,13 +125,6 @@ function ParticleComponent({ particle }: ParticleComponentProps) {
           width: 6,
           height: 6,
           borderRadius: 3,
-          backgroundColor: particle.color,
-        };
-      case 'confetti':
-        return {
-          width: 8,
-          height: 12,
-          borderRadius: 2,
           backgroundColor: particle.color,
         };
       case 'explosion':
@@ -177,12 +164,6 @@ export function useParticles() {
     []
   );
 
-  const clearParticles = useCallback(() => {
-    setParticles([]);
-    cleanupTimeouts.current.forEach(clearTimeout);
-    cleanupTimeouts.current = [];
-  }, []);
-
   useEffect(() => {
     return () => {
       cleanupTimeouts.current.forEach(clearTimeout);
@@ -202,8 +183,6 @@ export function useParticles() {
 
   return {
     spawnParticles,
-    clearParticles,
     Particles: ParticlesComponent,
-    particleCount: particles.length,
   };
 }

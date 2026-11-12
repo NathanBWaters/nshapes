@@ -1,6 +1,6 @@
 import { Card, PlayerStats, Weapon, AttributeName, EffectCaps } from '../types';
 import { isValidCombination } from './gameUtils';
-import { EFFECT_CAPS, getEffectiveStat, EffectCapType } from './gameConfig';
+import { getEffectiveStat, EffectCapType } from './gameConfig';
 import { DEFAULT_EFFECT_CAPS, rollBridgeEffects } from './gameDefinitions';
 
 // Grid dimensions (assumes 3 columns)

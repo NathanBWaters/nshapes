@@ -193,7 +193,6 @@ export interface LevelRules {
 
 export interface LevelDef {
   id: string;            // e.g. "1-3"
-  index: number;         // global order, 0-based
   biome: BiomeId;
   name: string;
   /** The ONE new thing this level teaches */
@@ -230,9 +229,6 @@ export interface FighterDef {
   blurb: string;
   /** Weapon ids by character level (index 0 = level 1). */
   loadouts: string[][];
-  /** Extra base stats at each level (cumulative is computed). */
-  perks: Array<Partial<PlayerStats> | null>;
-  perkText: Array<string | null>;
 }
 
 export interface UpgradeDef {
@@ -307,7 +303,6 @@ export interface AdventureSave {
   unlockedEvolutions: string[];
   /** Evolution recipe ids forged at least once (unlocks full details in Recipe Guide) */
   discoveredEvolutions: string[];
-  lastLevelId: string | null;
   musicOn: boolean;
 }
 
@@ -414,12 +409,4 @@ export interface RunState {
   catalystRespawnsLeft: number;
   catalystsLost: number;
   evolvedRecipes: string[];
-}
-
-export interface LevelResult {
-  levelId: string;
-  stars: number;
-  coins: number;
-  won: boolean;
-  defeated: boolean;
 }

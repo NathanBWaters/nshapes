@@ -1,7 +1,7 @@
 import { StyleProp, ViewStyle } from 'react-native';
 import { FighterExpression, FighterHealthState } from '@/utils/fighterAnimations';
 
-export interface JointPivot {
+interface JointPivot {
   /** X in 0..100 SVG space */
   x: number;
   /** Y in 0..100 SVG space */

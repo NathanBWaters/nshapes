@@ -13,7 +13,6 @@ import {
   InactivityEffect,
   composeEffects,
 } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Merciless Porcupine enemy instance.
@@ -37,6 +36,3 @@ export function createMercilessPorcupine(): EnemyInstance {
     (stats: RoundStats) => stats.invalidMatches === 0 && stats.totalMatches >= 1
   );
 }
-
-// Register with factory
-registerEnemy('Merciless Porcupine', createMercilessPorcupine);

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Pressable, StyleSheet, ScrollView, Platform } from 'react-native';
 import { usePWASafeAreaInsets } from '@/utils/usePWASafeAreaInsets';
-import { Character, PlayerStats, Weapon, WeaponRarity } from '@/types';
-import type { EnemyInstance, EnemyOption } from '@/types/enemy';
+import { Character, PlayerStats, Weapon } from '@/types';
+import type { EnemyOption } from '@/types/enemy';
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
 import {
   getDynamicDescription,
@@ -12,6 +12,7 @@ import {
 } from '@/utils/weaponDisplay';
 import GameMenu from './GameMenu';
 import KeywordText from './KeywordText';
+import { WEAPON_COUNTERS, applyWeaponCounter } from '@/utils/enemyEffects';
 import { EnemyAvatar } from './enemies';
 import { FighterAvatar } from './fighters';
 import { WeaponAvatar } from './weapons';
@@ -121,26 +122,11 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
                   statChanges.push(`Score: -${uiModifiers.showScoreDecay.rate} pts/sec`);
                 }
 
-                // Weapon counter effects - show before → after (division by 3)
-                if (modifiers.fireSpreadChanceReduction) {
-                  const before = playerStats.fireSpreadChance || 0;
-                  const after = Math.round(before / 3);
-                  statChanges.push(`Fire Spread: ${before}% → ${after}% (÷3)`);
-                }
-                if (modifiers.explosionChanceReduction) {
-                  const before = playerStats.explosionChance || 0;
-                  const after = Math.round(before / 3);
-                  statChanges.push(`Explosion: ${before}% → ${after}% (÷3)`);
-                }
-                if (modifiers.laserChanceReduction) {
-                  const before = playerStats.laserChance || 0;
-                  const after = Math.round(before / 3);
-                  statChanges.push(`Laser: ${before}% → ${after}% (÷3)`);
-                }
-                if (modifiers.healingChanceReduction) {
-                  const before = playerStats.healingChance || 0;
-                  const after = Math.round(before / 3);
-                  statChanges.push(`Healing: ${before}% → ${after}% (÷3)`);
+                for (const { modifier, stat, label } of Object.values(WEAPON_COUNTERS)) {
+                  if (modifiers[modifier]) {
+                    const before = playerStats[stat] || 0;
+                    statChanges.push(`${label}: ${before}% → ${applyWeaponCounter(before)}% (÷3)`);
+                  }
                 }
 
                 if (statChanges.length > 0) {

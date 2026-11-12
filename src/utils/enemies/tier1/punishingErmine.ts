@@ -7,7 +7,6 @@
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { ExtraCardRemovalOnInvalidEffect, composeEffects } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Punishing Ermine enemy instance.
@@ -33,6 +32,3 @@ export function createPunishingErmine(): EnemyInstance {
     }
   );
 }
-
-// Register with factory
-registerEnemy('Punishing Ermine', createPunishingErmine);

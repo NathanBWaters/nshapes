@@ -7,7 +7,6 @@
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { InactivityEffect, composeEffects } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Charging Boar enemy instance.
@@ -31,6 +30,3 @@ export function createChargingBoar(): EnemyInstance {
     }
   );
 }
-
-// Register with factory
-registerEnemy('Charging Boar', createChargingBoar);

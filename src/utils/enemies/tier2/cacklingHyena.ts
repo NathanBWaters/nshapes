@@ -7,7 +7,6 @@
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { TimeStealEffect, WeaponCounterEffect, composeEffects } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Cackling Hyena enemy instance.
@@ -29,6 +28,3 @@ export function createCacklingHyena(): EnemyInstance {
     (stats: RoundStats) => stats.totalMatches >= 6 && stats.gracesUsed === 0
   );
 }
-
-// Register with factory
-registerEnemy('Cackling Hyena', createCacklingHyena);

@@ -7,7 +7,6 @@
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { WeaponCounterEffect, composeEffects } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Shadow Bat enemy instance.
@@ -33,6 +32,3 @@ export function createShadowBat(): EnemyInstance {
     }
   );
 }
-
-// Register with factory
-registerEnemy('Shadow Bat', createShadowBat);

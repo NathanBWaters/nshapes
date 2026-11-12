@@ -101,7 +101,6 @@ describe('LevelUp Component', () => {
         <LevelUp
           {...defaultProps}
           targetLevel={7}
-          hasMoreLevelUps={false}
         />
       );
 
@@ -113,7 +112,6 @@ describe('LevelUp Component', () => {
         <LevelUp
           {...defaultProps}
           targetLevel={1}
-          hasMoreLevelUps={false}
         />
       );
 
@@ -125,7 +123,6 @@ describe('LevelUp Component', () => {
         <LevelUp
           {...defaultProps}
           targetLevel={15}
-          hasMoreLevelUps={false}
         />
       );
 
@@ -134,24 +131,11 @@ describe('LevelUp Component', () => {
   });
 
   describe('Button text', () => {
-    it('shows "Next Level Up" when more level-ups pending', () => {
-      const { getByText } = render(
-        <LevelUp
-          {...defaultProps}
-          targetLevel={6}
-          hasMoreLevelUps={true}
-        />
-      );
-
-      expect(getByText('Next Level Up')).toBeTruthy();
-    });
-
     it('shows "Select Weapon" on final level-up', () => {
       const { getByText } = render(
         <LevelUp
           {...defaultProps}
           targetLevel={8}
-          hasMoreLevelUps={false}
         />
       );
 
@@ -160,27 +144,12 @@ describe('LevelUp Component', () => {
   });
 
   describe('Multi-level-up sequence', () => {
-    it('first screen of double level-up shows correct state', () => {
-      // Simulating first screen when player gained 2 levels (5 → 7)
-      const { getByText } = render(
-        <LevelUp
-          {...defaultProps}
-          targetLevel={6}
-          hasMoreLevelUps={true}
-        />
-      );
-
-      expect(getByText('Level 6')).toBeTruthy();
-      expect(getByText('Next Level Up')).toBeTruthy();
-    });
-
     it('second screen of double level-up shows correct state', () => {
       // Simulating second screen when player gained 2 levels (5 → 7)
       const { getByText } = render(
         <LevelUp
           {...defaultProps}
           targetLevel={7}
-          hasMoreLevelUps={false}
         />
       );
 

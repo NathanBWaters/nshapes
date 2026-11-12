@@ -1,16 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, Platform, Dimensions } from 'react-native';
-import { Card, CardReward, GameState, Weapon, PlayerStats, AttributeName, AdventureDifficulty, Character, LevelNumber } from '@/types';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, Dimensions } from 'react-native';
+import { Card, CardReward, GameState, Weapon, AttributeName, AdventureDifficulty, Character, LevelNumber, GameMode, FreePlayDifficulty } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
-import { createDeck, shuffleArray, isValidCombination, findAllCombinations, generateGameBoard, formatTime, sameCardAttributes } from '@/utils/gameUtils';
+import { createDeck, shuffleArray, isValidCombination, generateGameBoard, sameCardAttributes } from '@/utils/gameUtils';
 import {
   CHARACTERS,
-  ITEMS,
   WEAPONS,
   ROUND_REQUIREMENTS,
   initializePlayer,
   calculatePlayerTotalStats,
-  DEFAULT_PLAYER_STATS,
   generateShopWeapons,
   getRandomShopWeapon,
   getEndlessRoundRequirement
@@ -20,16 +18,13 @@ import {
   getBoardSizeForAttributes,
   ATTRIBUTE_SCALING,
   LEVEL_SYSTEM,
-  LEVEL_DEFINITIONS,
   getLevelDefinition,
-  getAttributesForLevel,
   getEnemyForLevelRound,
-  roundHasEnemy,
   getNewRoundRequirement,
   getAdjustedLevelFromXP,
   NEW_ROUND_REQUIREMENTS,
 } from '@/utils/gameConfig';
-import { getAdjacentIndices, getFireSpreadCards, WeaponEffectResult } from '@/utils/weaponEffects';
+import { getAdjacentIndices, WeaponEffectResult } from '@/utils/weaponEffects';
 import {
   createConnection,
   createRandomConnections,
@@ -44,43 +39,33 @@ import { useGameTimer } from '@/hooks/useGameTimer';
 import { useParticles } from '@/hooks/useParticles';
 import { useRoundStats } from '@/hooks/useRoundStats';
 import { useFighterConductor } from '@/hooks/useFighterConductor';
-import { createEnemy, createDummyEnemy, applyEnemyStatModifiers, getRandomEnemies, getRandomEnemyOptions } from '@/utils/enemyFactory';
+import { createEnemy, applyEnemyStatModifiers, getRandomEnemyOptions } from '@/utils/enemyFactory';
 import { generateChallengeBonus, getChallengeBonusMoney } from '@/utils/rewardUtils';
-import '@/utils/enemies'; // Trigger enemy self-registration
-import type { EnemyInstance, EnemyOption } from '@/types/enemy';
+import type { EnemyOption } from '@/types/enemy';
 import GameBoard from './GameBoard';
 import GameInfo from './GameInfo';
 import { DevModeCallbacks } from './GameMenu';
 import Notification from './Notification';
-import { useSocket } from '@/context/SocketContext';
-import MultiplayerLobby from './MultiplayerLobby';
-import MultiplayerToggle from './MultiplayerToggle';
-import CharacterSelection, { GameMode, FreePlayDifficulty } from './CharacterSelection';
-import ItemShop from './ItemShop';
 import WeaponShop from './WeaponShop';
 import LevelUp from './LevelUp';
 import EnemySelection from './EnemySelection';
-import RoundScoreboard from './RoundScoreboard';
 import RoundSummary from './RoundSummary';
 import TutorialScreen from './TutorialScreen';
 import AttributeUnlockScreen from './AttributeUnlockScreen';
 import VictoryScreen from './VictoryScreen';
 import RoundProgressChart, { RoundScore } from './RoundProgressChart';
 import CharacterUnlockScreen from './CharacterUnlockScreen';
-import Icon from './Icon';
 import { EnemyAvatar } from './enemies';
 import { FighterAvatar } from './fighters';
 import MainMenu from './MainMenu';
 import AdventureMode from '@/adventure/AdventureMode';
 import DifficultySelection from './DifficultySelection';
-import LevelSelection from './LevelSelection';
 import LevelUpModal from './LevelUpModal';
 import OptionsMenu from './OptionsMenu';
 import { useTutorial } from '@/context/TutorialContext';
 import { CharacterWinsStorage, EndlessHighScoresStorage, AdventureHighRoundStorage, CharacterUnlockStorage, SavedGameStorage, LevelProgressStorage } from '@/utils/storage';
 import { playSound, playCardDealing } from '@/utils/sounds';
 
-const INITIAL_CARD_COUNT = 12;
 const MAX_BOARD_SIZE = 21;
 const BASE_REROLL_COST = 5;
 
@@ -101,20 +86,6 @@ const getRoundRequirement = (round: number) => {
          { round: 1, targetScore: 3, time: 60 };
 };
 
-// Helper function to check if an option is a weapon
-const isWeapon = (option: Partial<PlayerStats> | Weapon): option is Weapon => {
-  return 'name' in option && 'level' in option;
-};
-
-// Calculate player level based on experience points
-// NEW level-based system: Uses 3x faster leveling formula
-const calculateLevel = (experience: number): number => {
-  // Use adjusted formula: level up 3x faster than before
-  // Original: level = floor(sqrt(experience/10))
-  // New: level = floor(sqrt(experience * 3 / 10))
-  return getAdjustedLevelFromXP(experience);
-};
-
 // Get enemy tier based on round number (legacy - for old system)
 // Tier 1: Rounds 1-4
 // Tier 2: Rounds 5-7
@@ -131,9 +102,8 @@ const getTierForRound = (round: number): 1 | 2 | 3 | 4 => {
 const createEnemyOptionForName = (
   enemyName: string,
   awardedWeaponIds: string[] = []
-): EnemyOption | null => {
+): EnemyOption => {
   const enemy = createEnemy(enemyName);
-  if (!enemy) return null;
   return {
     enemy,
     stretchGoalReward: generateChallengeBonus(enemy.tier, awardedWeaponIds),
@@ -146,8 +116,6 @@ interface GameProps {
   autoPlayer?: boolean;
   /** Force a specific enemy by name (skips enemy selection screen) */
   forcedEnemy?: string;
-  /** Speed up animations for faster test runs */
-  speedMode?: boolean;
   /** Disable round timer for deterministic testing */
   disableTimeout?: boolean;
 }
@@ -156,25 +124,20 @@ const Game: React.FC<GameProps> = ({
   devMode = false,
   autoPlayer = false,
   forcedEnemy,
-  speedMode = false,
   disableTimeout = false,
 }) => {
   // Character selection state
   const [selectedCharacter, setSelectedCharacter] = useState<string | null>(devMode ? 'Orange Tabby' : null);
   const [gameMode, setGameMode] = useState<GameMode>('adventure');
-  const [freePlayDifficulty, setFreePlayDifficulty] = useState<FreePlayDifficulty>('medium');
   const [adventureDifficulty, setAdventureDifficulty] = useState<AdventureDifficulty>('medium');
   const [showOptionsModal, setShowOptionsModal] = useState(false);
   const [gamePhase, setGamePhase] = useState<
     'main_menu' |
     'adventure' |         // Map-based adventure (src/adventure)
-    'character_select' |
-    'level_select' |      // NEW: Level selection screen
     'difficulty_select' |
     'tutorial' |
     'round' |
     'round_summary' |
-    'loot' |
     'level_up' |
     'shop' |
     'attribute_unlock' |
@@ -186,12 +149,11 @@ const Game: React.FC<GameProps> = ({
   >(devMode ? 'round' : 'main_menu');
 
   // NEW: Track current level (1-10) and round within level (1-5)
-  const [currentLevel, setCurrentLevel] = useState<number>(1);
+  const [currentLevel] = useState<number>(1);
   const [roundInLevel, setRoundInLevel] = useState<number>(1);
 
   // Track pending attribute unlock for next round
   const [pendingUnlockedAttribute, setPendingUnlockedAttribute] = useState<AttributeName | null>(null);
-  const [isFinalRoundWarning, setIsFinalRoundWarning] = useState(false);
 
   // Track unlocked character for character unlock screen
   const [unlockedCharacter, setUnlockedCharacter] = useState<Character | null>(null);
@@ -200,7 +162,7 @@ const Game: React.FC<GameProps> = ({
   const [roundHistory, setRoundHistory] = useState<Array<{ round: number; target: number; actual: number }>>([]);
 
   // Tutorial context
-  const { state: tutorialState, startTutorial, markTutorialOffered } = useTutorial();
+  const { startTutorial } = useTutorial();
 
   const [state, setState] = useState<GameState>(() => {
     const activeAttributes = getActiveAttributesForRound(1);
@@ -217,34 +179,27 @@ const Game: React.FC<GameProps> = ({
       return {
         deck: remainingDeck,
         board: initialBoard,
-        selectedCards: [],
         foundCombinations: [],
         score: 0,
         gameStarted: true,
         gameEnded: false,
         startTime: Date.now(),
         endTime: null,
-        hintUsed: false,
         activeAttributes,
         round: 1,
         targetScore: getRoundRequirement(1).targetScore,
         remainingTime: getRoundRequirement(1).time,
         roundCompleted: false,
         player: initializePlayer('dev', 'Dev Player', 'Orange Tabby'),
-        shopItems: [],
         shopWeapons: [],
         levelUpOptions: [],
         rerollCost: BASE_REROLL_COST,
         currentEnemies: [],
-        selectedEnemy: null,
         activeEnemyInstance: null,
         selectedEnemyReward: null,
         selectedEnemyMoney: null,
         defeatedEnemies: [],
         awardedStretchGoalWeapons: [],
-        lootCrates: 0,
-        isCoOp: false,
-        players: [],
         isEndlessMode: false,
         connections: [],
       };
@@ -254,34 +209,27 @@ const Game: React.FC<GameProps> = ({
     return {
       deck: [],
       board: [],
-      selectedCards: [],
       foundCombinations: [],
       score: 0,
       gameStarted: false,
       gameEnded: false,
       startTime: null,
       endTime: null,
-      hintUsed: false,
       activeAttributes,
       round: 1,
       targetScore: getRoundRequirement(1).targetScore,
       remainingTime: getRoundRequirement(1).time,
       roundCompleted: false,
       player: initializePlayer('player1', 'Player 1', 'Orange Tabby'),
-      shopItems: [],
       shopWeapons: [],
       levelUpOptions: [],
       rerollCost: BASE_REROLL_COST,
       currentEnemies: [],
-      selectedEnemy: null,
       activeEnemyInstance: null,
       selectedEnemyReward: null,
       selectedEnemyMoney: null,
       defeatedEnemies: [],
       awardedStretchGoalWeapons: [],
-      lootCrates: 0,
-      isCoOp: false,
-      players: [],
       isEndlessMode: false,
       connections: [],
     };
@@ -413,10 +361,6 @@ const Game: React.FC<GameProps> = ({
 
   // Track if current enemy was defeated (for slayer bonus in level up)
   const [enemyDefeated, setEnemyDefeated] = useState(false);
-  const [defeatedEnemyTier, setDefeatedEnemyTier] = useState<1 | 2 | 3 | 4>(1);
-
-  // Queue of pending level-ups (for multi-level-up support)
-  const [pendingLevelUps, setPendingLevelUps] = useState<number[]>([]);
 
   // In-round level-up modal state (NEW level-based system)
   const [showLevelUpModal, setShowLevelUpModal] = useState(false);
@@ -426,21 +370,9 @@ const Game: React.FC<GameProps> = ({
   const [devTimerEnabled, setDevTimerEnabled] = useState(!devMode); // Timer disabled by default in dev mode
   const [autoPlayerEnabled, setAutoPlayerEnabled] = useState(autoPlayer); // Start with URL param value
 
-  // Socket context for multiplayer
-  const {
-    isMultiplayer,
-    roomId,
-    isHost,
-    startGame: startMultiplayerGame,
-    selectCard: selectMultiplayerCard,
-    combinationFound: sendCombinationFound,
-    addCards: sendAddCards,
-    showHint: sendShowHint
-  } = useSocket();
-
   // Function declarations
   // Add an endGame function
-  const endGame = (victory: boolean, reason?: string) => {
+  const endGame = (reason?: string) => {
     // Clear saved adventure game on game end (win or loss)
     SavedGameStorage.clear();
 
@@ -460,21 +392,13 @@ const Game: React.FC<GameProps> = ({
       endTime: Date.now()
     }));
 
-    if (victory) {
-      setGameOverReason(null);
-      setNotification({
-        message: 'Congratulations! You completed all rounds!',
-        type: 'success'
-      });
-    } else {
-      const lossReason = reason || 'You ran out of time.';
-      setGameOverReason(lossReason);
-      setNotification({
-        message: `Game Over! ${lossReason}`,
-        type: 'error'
-      });
-      playSound('gameOver');
-    }
+    const lossReason = reason || 'You ran out of time.';
+    setGameOverReason(lossReason);
+    setNotification({
+      message: `Game Over! ${lossReason}`,
+      type: 'error'
+    });
+    playSound('gameOver');
 
     setGamePhase('game_over');
   };
@@ -487,7 +411,6 @@ const Game: React.FC<GameProps> = ({
     if (state.activeEnemyInstance) {
       wasEnemyDefeated = state.activeEnemyInstance.checkDefeatCondition(roundStatsRef.current);
       setEnemyDefeated(wasEnemyDefeated);
-      setDefeatedEnemyTier(state.activeEnemyInstance.tier);
       // Track defeated enemy to prevent them from appearing again
       // Also add stretch goal reward directly to inventory and track awarded weapon ID
       if (wasEnemyDefeated) {
@@ -517,7 +440,6 @@ const Game: React.FC<GameProps> = ({
       state.activeEnemyInstance.onRoundEnd();
     } else {
       setEnemyDefeated(false);
-      setDefeatedEnemyTier(1);
     }
 
     // Record this round's score in history (using roundInLevel for 5-round system)
@@ -710,7 +632,7 @@ const Game: React.FC<GameProps> = ({
         completeRound();
       } else {
         // Failure - game over
-        endGame(false);
+        endGame();
       }
     }
   }, [gamePhase, state.gameStarted, state.gameEnded, state.roundCompleted, state.remainingTime, state.score, state.targetScore, completeRound, endGame]);
@@ -812,14 +734,12 @@ const Game: React.FC<GameProps> = ({
       // Core game
       deck: remainingDeck,
       board: finalBoard,
-      selectedCards: [],
       foundCombinations: [],
       score: 0,
       gameStarted: startGame,
       gameEnded: false,
       startTime: startGame ? Date.now() : null,
       endTime: null,
-      hintUsed: false,
 
       // Attribute scaling
       activeAttributes,
@@ -834,26 +754,17 @@ const Game: React.FC<GameProps> = ({
       player,
 
       // Shop and upgrades - to be filled during gameplay
-      shopItems: generateRandomShopItems(),
       shopWeapons: generateShopWeapons(4, undefined, 1),  // Round 1 rarity scaling
       levelUpOptions: [],
       rerollCost: BASE_REROLL_COST,
 
       // Enemy - to be selected during gameplay (with pre-determined rewards)
       currentEnemies: getRandomEnemyOptions(getTierForRound(1), 3, [], []),  // No defeated enemies or awarded weapons at start
-      selectedEnemy: null,
       activeEnemyInstance: null,  // Set when player selects enemy
       selectedEnemyReward: null,
       selectedEnemyMoney: null,
       defeatedEnemies: [],  // Track which enemies have been defeated
       awardedStretchGoalWeapons: [],  // Track which weapons have been awarded as stretch goals
-
-      // Loot and rewards
-      lootCrates: 0,
-
-      // Co-op
-      isCoOp: isMultiplayer,
-      players: [],
 
       // Endless mode
       isEndlessMode: false,
@@ -863,70 +774,7 @@ const Game: React.FC<GameProps> = ({
     });
 
     setNotification(null);
-  }, [isMultiplayer, resetRoundStats]);
-
-  // Save adventure game state for resume functionality
-  const saveAdventureGame = useCallback((
-    currentState: GameState,
-    character: string,
-    difficulty: AdventureDifficulty,
-    phase: string
-  ) => {
-    // Only save for adventure mode (not endless or free play)
-    if (currentState.isEndlessMode) return;
-
-    SavedGameStorage.save({
-      characterName: character,
-      playerStats: currentState.player.stats,
-      weaponIds: currentState.player.weapons.map(w => w.id),
-      round: currentState.round,
-      adventureDifficulty: difficulty,
-      defeatedEnemies: currentState.defeatedEnemies,
-      awardedStretchGoalWeapons: currentState.awardedStretchGoalWeapons,
-      gamePhase: phase,
-    });
-  }, []);
-
-  // Generate 3 random enemies from the appropriate tier for the round (with pre-determined rewards)
-  const generateEnemiesForRound = (
-    round: number,
-    defeatedEnemies: string[] = [],
-    awardedWeaponIds: string[] = [],
-    playerStats?: PlayerStats,
-    playerWeapons?: Weapon[]
-  ): EnemyOption[] => {
-    const tier = getTierForRound(round);
-    return getRandomEnemyOptions(tier, 3, defeatedEnemies, awardedWeaponIds, playerStats, playerWeapons);
-  };
-
-  // Generate random shop items
-  const generateRandomShopItems = () => {
-    const shopSize = 4 + (state?.player?.stats?.drawIncrease || 0);
-    const availableItems = [...ITEMS];
-    const selectedItems = [];
-
-    const playerItems = state?.player?.items || [];
-    const playerItemNames = playerItems.map(item => item.name);
-
-    // Filter out limited items the player already has
-    const filteredItems = availableItems.filter(item => {
-      if (item.limit === null) return true;
-
-      // Count how many of this item the player already has
-      const count = playerItemNames.filter(name => name === item.name).length;
-      return count < item.limit;
-    });
-
-    for (let i = 0; i < shopSize; i++) {
-      if (filteredItems.length === 0) break;
-
-      const randomIndex = Math.floor(Math.random() * filteredItems.length);
-      selectedItems.push(filteredItems[randomIndex]);
-      filteredItems.splice(randomIndex, 1);
-    }
-
-    return selectedItems;
-  };
+  }, [resetRoundStats]);
 
   // Generate random level up options - WEAPONS ONLY
   const generateLevelUpOptions = () => {
@@ -943,120 +791,9 @@ const Game: React.FC<GameProps> = ({
     return options;
   };
 
-  // Tutorial prompt modal state
-  const [showTutorialPrompt, setShowTutorialPrompt] = useState(false);
-  const [pendingGameStart, setPendingGameStart] = useState<{
-    mode: GameMode;
-    levelNumber?: LevelNumber;
-  } | null>(null);
-
-  // Start the game
-  // Start Adventure Mode (called from Character Selection)
-  const startAdventure = (difficulty: AdventureDifficulty) => {
-    if (!selectedCharacter) {
-      setNotification({
-        message: 'Please select a character first',
-        type: 'warning'
-      });
-      return;
-    }
-
-    // Check if we should show tutorial prompt for Adventure mode
-    if (!tutorialState.hasCompletedTutorial && !tutorialState.hasBeenOfferedTutorial) {
-      setPendingGameStart({ mode: 'adventure' });
-      setAdventureDifficulty(difficulty);
-      setShowTutorialPrompt(true);
-      return;
-    }
-
-    // Clear any saved adventure game when starting a new one
-    SavedGameStorage.clear();
-
-    setGameMode('adventure');
-    setAdventureDifficulty(difficulty);
-
-    // Adventure mode - start with round 1 attributes based on difficulty
-    const activeAttributes = getActiveAttributesForRound(1, difficulty);
-
-    // Initialize the game with the selected character and attributes
-    // Don't start game yet - player needs to select enemy first
-    initGame(selectedCharacter, activeAttributes, false);
-
-    // Reset hint triggers to prevent auto-triggering on game start
-    setHintTrigger(0);
-    setClearHintTrigger(0);
-
-    // Clear round history for new game
-    setRoundHistory([]);
-
-    // Go to enemy selection screen
-    setGamePhase('enemy_select');
-  };
-
-  // Start a specific level (NEW level-based system)
-  const startLevel = (levelNumber: LevelNumber) => {
-    if (!selectedCharacter) {
-      setNotification({
-        message: 'Please select a character first',
-        type: 'warning'
-      });
-      return;
-    }
-
-    // Check if we should show tutorial prompt (only for level 1)
-    if (levelNumber === 1 && !tutorialState.hasCompletedTutorial && !tutorialState.hasBeenOfferedTutorial) {
-      setPendingGameStart({ mode: 'adventure', levelNumber });
-      setShowTutorialPrompt(true);
-      return;
-    }
-
-    // Clear any saved adventure game when starting a new one
-    SavedGameStorage.clear();
-
-    setGameMode('adventure');
-    setCurrentLevel(levelNumber);
-    setRoundInLevel(1);
-
-    // Get level definition
-    const levelDef = getLevelDefinition(levelNumber);
-    const activeAttributes = [...levelDef.attributes];
-
-    // Initialize the game with the selected character and attributes
-    // Don't start game yet - check if there's an enemy for round 1
-    initGame(selectedCharacter, activeAttributes, false);
-
-    // Reset hint triggers to prevent auto-triggering on game start
-    setHintTrigger(0);
-    setClearHintTrigger(0);
-
-    // Clear round history for new game
-    setRoundHistory([]);
-
-    // Check if first round has an enemy (it shouldn't in the new system)
-    const enemyForRound = getEnemyForLevelRound(levelNumber, 1);
-    if (enemyForRound) {
-      // Generate enemy options and go to enemy selection
-      setGamePhase('enemy_select');
-    } else {
-      // No enemy for round 1 - start the round directly
-      // Update state to use new round timing
-      const roundReq = getNewRoundRequirement(1);
-      setState(prev => ({
-        ...prev,
-        round: 1,
-        targetScore: roundReq.targetScore,
-        remainingTime: roundReq.time + (prev.player.stats.startingTime || 0),
-        gameStarted: true,
-        startTime: Date.now(),
-      }));
-      setGamePhase('round');
-    }
-  };
-
   // Start Free Play Mode (called from Difficulty Selection)
   const startFreePlay = (difficulty: FreePlayDifficulty) => {
     setGameMode('free_play');
-    setFreePlayDifficulty(difficulty);
 
     // Free Play - use selected difficulty
     const activeAttributes = [...ATTRIBUTE_SCALING.difficultyPresets[difficulty]];
@@ -1139,7 +876,6 @@ const Game: React.FC<GameProps> = ({
       character,
       stats: savedGame.playerStats,
       weapons: validWeapons,
-      items: [], // Items not currently saved
     };
 
     // Calculate time bonus
@@ -1163,21 +899,18 @@ const Game: React.FC<GameProps> = ({
     setState({
       deck: remainingDeck,
       board: initialBoard,
-      selectedCards: [],
       foundCombinations: [],
       score: 0,
       gameStarted: false,
       gameEnded: false,
       startTime: null,
       endTime: null,
-      hintUsed: false,
       activeAttributes,
       round: nextRound,
       targetScore: roundReq.targetScore,
       remainingTime: roundReq.time + timeBonus,
       roundCompleted: false,
       player,
-      shopItems: generateRandomShopItems(),
       shopWeapons: generateShopWeapons(4, validWeapons, nextRound, totalStats.luck),
       levelUpOptions: [],
       rerollCost: getBaseRollPrice(nextRound),
@@ -1189,15 +922,11 @@ const Game: React.FC<GameProps> = ({
         totalStats,
         validWeapons
       ),
-      selectedEnemy: null,
       activeEnemyInstance: null,
       selectedEnemyReward: null,
       selectedEnemyMoney: null,
       defeatedEnemies: savedGame.defeatedEnemies,
       awardedStretchGoalWeapons: savedGame.awardedStretchGoalWeapons,
-      lootCrates: 0,
-      isCoOp: false,
-      players: [],
       isEndlessMode: false,
       connections: [],
     });
@@ -1209,11 +938,6 @@ const Game: React.FC<GameProps> = ({
       message: `Resumed game at Round ${nextRound}`,
       type: 'success'
     });
-  };
-
-  // Handle character selection
-  const handleCharacterSelect = (characterName: string) => {
-    setSelectedCharacter(characterName);
   };
 
   // Handle tutorial start
@@ -1230,41 +954,6 @@ const Game: React.FC<GameProps> = ({
   // Handle tutorial exit - return to main menu
   const handleTutorialExit = () => {
     setGamePhase('main_menu');
-  };
-
-  // Handle tutorial prompt - user wants to do tutorial
-  const handleTutorialPromptYes = () => {
-    setShowTutorialPrompt(false);
-    markTutorialOffered();
-    handleTutorialStart();
-  };
-
-  // Handle tutorial prompt - user wants to skip and start adventure
-  const handleTutorialPromptSkip = () => {
-    setShowTutorialPrompt(false);
-    markTutorialOffered();
-    const pending = pendingGameStart;
-    setPendingGameStart(null);
-
-    // If we have a level number, use the new level-based flow
-    if (pending?.levelNumber) {
-      // Re-call startLevel now that tutorial has been offered
-      // The check will pass since hasBeenOfferedTutorial is now true
-      startLevel(pending.levelNumber);
-      return;
-    }
-
-    // Legacy fallback: Continue with adventure mode start using stored difficulty
-    setGameMode('adventure');
-    const activeAttributes = getActiveAttributesForRound(1, adventureDifficulty);
-
-    // Don't start game yet - player needs to select enemy first
-    initGame(selectedCharacter!, activeAttributes, false);
-    setHintTrigger(0);
-    setClearHintTrigger(0);
-
-    // Go to enemy selection screen
-    setGamePhase('enemy_select');
   };
 
   // Handle enemy selection - player has chosen which enemy to fight
@@ -1298,7 +987,6 @@ const Game: React.FC<GameProps> = ({
     setState(prevState => ({
       ...prevState,
       board: finalBoard,
-      selectedEnemy: enemy,
       activeEnemyInstance: enemy,  // Set the active enemy instance
       selectedEnemyReward: stretchGoalReward,  // Store the pre-determined reward
       selectedEnemyMoney: stretchGoalMoney,  // Store the pre-determined bonus money
@@ -1308,49 +996,6 @@ const Game: React.FC<GameProps> = ({
 
     // Start the round
     setGamePhase('round');
-  };
-
-  // Handle item purchase (legacy - kept for backwards compatibility)
-  const handleItemPurchase = (itemIndex: number) => {
-    const item = state.shopItems[itemIndex];
-    if (!item) return;
-
-    if (state.player.stats.money < item.price) {
-      setNotification({
-        message: 'Not enough money to purchase this item',
-        type: 'error'
-      });
-      return;
-    }
-
-    // Check if item has a limit and player already has max
-    if (item.limit !== null) {
-      const playerItemCount = state.player.items.filter(i => i.name === item.name).length;
-      if (playerItemCount >= item.limit) {
-        setNotification({
-          message: 'You already have the maximum number of this item',
-          type: 'error'
-        });
-        return;
-      }
-    }
-
-    // Purchase the item
-    setState(prevState => ({
-      ...prevState,
-      player: {
-        ...prevState.player,
-        stats: {
-          ...prevState.player.stats,
-          money: prevState.player.stats.money - item.price
-        },
-        items: [...prevState.player.items, item]
-      },
-      // Mark the slot as sold (null) instead of removing to preserve layout
-      shopItems: prevState.shopItems.map((shopItem, index) =>
-        index === itemIndex ? null : shopItem
-      )
-    }));
   };
 
   // Handle weapon purchase in the new weapon shop
@@ -1460,46 +1105,6 @@ const Game: React.FC<GameProps> = ({
     }
   };
 
-  // Handle shop reroll
-  const handleShopReroll = () => {
-    if (state.player.stats.money < state.rerollCost && state.player.stats.freeRerolls <= 0) {
-      setNotification({
-        message: 'Not enough money to reroll the shop',
-        type: 'error'
-      });
-      return;
-    }
-
-    // Check if player has free rerolls
-    if (state.player.stats.freeRerolls > 0) {
-      setState(prevState => ({
-        ...prevState,
-        shopItems: generateRandomShopItems(),
-        player: {
-          ...prevState.player,
-          stats: {
-            ...prevState.player.stats,
-            freeRerolls: prevState.player.stats.freeRerolls - 1
-          }
-        }
-      }));
-    } else {
-      // Charge for the reroll
-      setState(prevState => ({
-        ...prevState,
-        shopItems: generateRandomShopItems(),
-        player: {
-          ...prevState.player,
-          stats: {
-            ...prevState.player.stats,
-            money: prevState.player.stats.money - prevState.rerollCost
-          }
-        },
-        rerollCost: Math.max(1, Math.round(prevState.rerollCost * 1.2)) // Increase reroll cost by 20%
-      }));
-    }
-  };
-
   // Handle level up selection - receives the selected weapon directly
   const handleLevelUpSelection = (weapon: Weapon) => {
     // Add the weapon to player's inventory (weapons stack) with immediate bonuses
@@ -1553,21 +1158,8 @@ const Game: React.FC<GameProps> = ({
     // Clear enemy defeated state after receiving any slayer bonus
     setEnemyDefeated(false);
 
-    // Remove current level from queue
-    const remaining = pendingLevelUps.slice(1);
-    setPendingLevelUps(remaining);
-
-    if (remaining.length > 0) {
-      // Generate new options and stay in level_up phase
-      setState(prevState => ({
-        ...prevState,
-        levelUpOptions: generateLevelUpOptions()
-      }));
-      // Don't change phase - stay in 'level_up'
-    } else {
-      // No more level-ups, proceed to shop
-      setGamePhase('shop');
-    }
+    // Proceed to shop
+    setGamePhase('shop');
   };
 
   // Handle in-round level-up selection (NEW level-based system)
@@ -1701,53 +1293,6 @@ const Game: React.FC<GameProps> = ({
     }
   };
 
-  // Handle card selection
-  const handleCardClick = (card: Card) => {
-    if (state.gameEnded || !state.gameStarted) return;
-
-    // In multiplayer, send the selection to the server
-    if (isMultiplayer) {
-      selectMultiplayerCard(card.id, state.board);
-      return;
-    }
-
-    // Check if card is already selected
-    if (state.selectedCards.some(c => c.id === card.id)) {
-      // Deselect the card
-      setState(prevState => ({
-        ...prevState,
-        selectedCards: prevState.selectedCards.filter(c => c.id !== card.id)
-      }));
-      return;
-    }
-
-    // Add card to selection
-    const newSelectedCards = [...state.selectedCards, card];
-
-    // If we have 3 cards selected, check if they form a valid set
-    if (newSelectedCards.length === 3) {
-      if (isValidCombination(newSelectedCards, state.activeAttributes).isValid) {
-        // Valid set found! (Legacy path - GameBoard normally handles rewards)
-        const rewards: CardReward[] = newSelectedCards.map(card => ({
-          cardId: card.id,
-          points: 1,
-          money: 1,
-          experience: 1
-        }));
-        handleValidMatch(newSelectedCards, rewards);
-      } else {
-        // Invalid selection
-        handleInvalidMatch(newSelectedCards);
-      }
-    } else {
-      // Update selected cards
-      setState(prevState => ({
-        ...prevState,
-        selectedCards: newSelectedCards
-      }));
-    }
-  };
-
   // Handle match start - called immediately when a valid match is detected (before animations)
   const handleMatchStart = useCallback(() => {
     // Spawn sparkle particles from the top bar area immediately
@@ -1759,12 +1304,6 @@ const Game: React.FC<GameProps> = ({
   const handleValidMatch = (cards: Card[], rewards: CardReward[], weaponEffects?: WeaponEffectResult) => {
     // Update last match time for auto-hint timing
     setLastMatchTime(Date.now());
-
-    // In multiplayer, send the match to the server
-    if (isMultiplayer) {
-      sendCombinationFound(state);
-      return;
-    }
 
     // Check if this is a grace match (invalid match saved by grace)
     const isGraceMatch = rewards.length > 0 && rewards[0].effectType === 'grace';
@@ -1983,7 +1522,7 @@ const Game: React.FC<GameProps> = ({
       const currentExperience = prevState.player.stats.experience || 0;
       const newExperience = currentExperience + adjustedExperience;
       const currentLevel = prevState.player.stats.level || 0;
-      const newLevel = calculateLevel(newExperience);
+      const newLevel = getAdjustedLevelFromXP(newExperience);
       const hasLeveledUp = newLevel > currentLevel;
 
       // Calculate new health (capped at max including weapon bonuses)
@@ -2055,9 +1594,7 @@ const Game: React.FC<GameProps> = ({
         ...prevState,
         score: prevState.score + adjustedPoints,
         board: newBoard,
-        selectedCards: prevState.selectedCards.filter(c => !cards.some(mc => mc.id === c.id)),
         foundCombinations: [...prevState.foundCombinations, cards],
-        lootCrates: prevState.lootCrates + bonusWeaponsCount,
         remainingTime: newRemainingTime,
         player: {
           ...prevState.player,
@@ -2355,7 +1892,6 @@ const Game: React.FC<GameProps> = ({
       // Use a grace instead of losing health
       setState(prevState => ({
         ...prevState,
-        selectedCards: prevState.selectedCards.filter(c => !cardsToReplace.some(mc => mc.id === c.id)),
         player: {
           ...prevState.player,
           stats: {
@@ -2405,7 +1941,7 @@ const Game: React.FC<GameProps> = ({
       if (newHealth <= 0) {
         // Delay the game over slightly so the state update completes
         setTimeout(() => {
-          endGame(false, 'You ran out of health from invalid matches!');
+          endGame('You ran out of health from invalid matches!');
         }, 100);
       } else {
         // Show damage notification
@@ -2424,7 +1960,6 @@ const Game: React.FC<GameProps> = ({
       return {
         ...prevState,
         board: newBoard,
-        selectedCards: prevState.selectedCards.filter(c => !cardsToReplace.some(mc => mc.id === c.id)),
         player: {
           ...prevState.player,
           stats: {
@@ -2542,7 +2077,6 @@ const Game: React.FC<GameProps> = ({
         ...prevState,
         deck: remainingDeck,
         board: newBoard,
-        selectedCards: [],
         remainingTime: getRoundRequirement(state.round).time,
       }));
       setNotification({ message: 'Board reset!', type: 'info' });
@@ -2578,7 +2112,6 @@ const Game: React.FC<GameProps> = ({
         activeAttributes,
         deck: remainingDeck,
         board: newBoard,
-        selectedCards: [],
         targetScore: getRoundRequirement(round).targetScore,
         remainingTime: getRoundRequirement(round).time,
       }));
@@ -2599,7 +2132,6 @@ const Game: React.FC<GameProps> = ({
         activeAttributes,
         deck: remainingDeck,
         board: newBoard,
-        selectedCards: [],
       }));
       setNotification({ message: `Difficulty set to ${count} attributes`, type: 'info' });
     },
@@ -2688,11 +2220,6 @@ const Game: React.FC<GameProps> = ({
         deck: remainingDeck
       };
     });
-
-    // In multiplayer, send the new cards to the server
-    if (isMultiplayer && newCards.length > 0) {
-      sendAddCards(state);
-    }
   };
 
   // Handle proceeding from shop - check for attribute unlocks before starting next round
@@ -2721,7 +2248,6 @@ const Game: React.FC<GameProps> = ({
 
         if (newAttribute) {
           setPendingUnlockedAttribute(newAttribute as AttributeName);
-          setIsFinalRoundWarning(false); // Not used in level-based system
           setGamePhase('attribute_unlock');
           return;
         }
@@ -2795,7 +2321,6 @@ const Game: React.FC<GameProps> = ({
     const newActiveAttributes: AttributeName[] = state.isEndlessMode
       ? ['shape', 'color', 'number', 'shading', 'background']
       : [...levelDef.attributes];
-    const previousAttributes = state.activeAttributes;
 
     // Note: Attribute unlock is now handled via the AttributeUnlockScreen before this function is called
 
@@ -2848,15 +2373,12 @@ const Game: React.FC<GameProps> = ({
         remainingTime: roundReq.time,
         score: 0,
         board: finalBoard,
-        selectedCards: [],
         foundCombinations: [],
         roundCompleted: false,
         gameStarted: false,  // Not started yet - may need enemy setup
         currentEnemies: enemies,
-        shopItems: generateRandomShopItems(),  // Refill shop for next round
         shopWeapons: generateShopWeapons(4, prevState.player.weapons, nextRound, playerTotalStats.luck),   // Refill weapon shop with round-scaled rarity
         rerollCost: getBaseRollPrice(nextRound),  // Reset roll price for new round
-        selectedEnemy: null,
         activeEnemyInstance: null,  // Set when player selects enemy
         selectedEnemyReward: null,
         selectedEnemyMoney: null,
@@ -2924,30 +2446,19 @@ const Game: React.FC<GameProps> = ({
     if (enemyName && !state.isEndlessMode) {
       // Round 3 or 5 - spawn the specific boss from level definition
       const enemyOption = createEnemyOptionForName(enemyName, state.awardedStretchGoalWeapons);
-      if (enemyOption) {
-        // Set up the enemy directly without selection screen
-        setState(prevState => ({
-          ...prevState,
-          currentEnemies: [enemyOption],
-          selectedEnemy: enemyOption.enemy,
-          activeEnemyInstance: enemyOption.enemy,
-          selectedEnemyReward: enemyOption.stretchGoalReward,
-          selectedEnemyMoney: enemyOption.stretchGoalMoney,
-          gameStarted: true,
-          startTime: Date.now(),
-        }));
-        // Apply enemy start effects
-        enemyOption.enemy.onRoundStart(state.board);
-        setGamePhase('round');
-      } else {
-        // Enemy not found - start without enemy
-        setState(prevState => ({
-          ...prevState,
-          gameStarted: true,
-          startTime: Date.now(),
-        }));
-        setGamePhase('round');
-      }
+      // Set up the enemy directly without selection screen
+      setState(prevState => ({
+        ...prevState,
+        currentEnemies: [enemyOption],
+        activeEnemyInstance: enemyOption.enemy,
+        selectedEnemyReward: enemyOption.stretchGoalReward,
+        selectedEnemyMoney: enemyOption.stretchGoalMoney,
+        gameStarted: true,
+        startTime: Date.now(),
+      }));
+      // Apply enemy start effects
+      enemyOption.enemy.onRoundStart(state.board);
+      setGamePhase('round');
     } else if (state.isEndlessMode) {
       // Endless mode - use the old random enemy selection
       setGamePhase('enemy_select');
@@ -2984,33 +2495,6 @@ const Game: React.FC<GameProps> = ({
 
       case 'adventure':
         return <AdventureMode onExit={() => setGamePhase('main_menu')} autoPlayer={autoPlayerEnabled} />;
-
-      case 'character_select':
-        return (
-          <CharacterSelection
-            characters={CHARACTERS}
-            selectedCharacter={selectedCharacter}
-            onSelect={handleCharacterSelect}
-            onStart={() => setGamePhase('level_select')}  // Go to level selection instead of starting adventure
-            onExitGame={() => setGamePhase('main_menu')}
-          />
-        );
-
-      case 'level_select':
-        const selectedChar = CHARACTERS.find(c => c.name === selectedCharacter);
-        if (!selectedChar) {
-          // Fallback - shouldn't happen
-          setGamePhase('character_select');
-          return null;
-        }
-        return (
-          <LevelSelection
-            selectedCharacter={selectedChar}
-            onSelectLevel={(levelNumber) => startLevel(levelNumber)}
-            onBack={() => setGamePhase('character_select')}
-            onExitGame={() => setGamePhase('main_menu')}
-          />
-        );
 
       case 'difficulty_select':
         return (
@@ -3057,7 +2541,6 @@ const Game: React.FC<GameProps> = ({
             round={roundInLevel}
             matchCount={state.foundCombinations.length}
             score={state.score}
-            targetScore={state.targetScore}
             moneyEarned={roundStats.moneyEarned}
             experienceEarned={roundStats.experienceEarned}
             bonusWeapons={roundStats.bonusWeaponsEarned}
@@ -3093,8 +2576,7 @@ const Game: React.FC<GameProps> = ({
             playerWeapons={state.player.weapons}
             character={state.player.character}
             onExitGame={() => setGamePhase('main_menu')}
-            targetLevel={pendingLevelUps[0] || state.player.stats.level}
-            hasMoreLevelUps={pendingLevelUps.length > 1}
+            targetLevel={state.player.stats.level}
           />
         );
 
@@ -3121,10 +2603,8 @@ const Game: React.FC<GameProps> = ({
             newAttribute={pendingUnlockedAttribute || 'shading'}
             onContinue={() => {
               setPendingUnlockedAttribute(null);
-              setIsFinalRoundWarning(false);
               startNextRound();
             }}
-            isFinalRound={isFinalRoundWarning}
             onExitGame={() => setGamePhase('main_menu')}
           />
         );
@@ -3497,126 +2977,13 @@ const Game: React.FC<GameProps> = ({
         />
       )}
 
-      {isMultiplayer && gamePhase === 'character_select' && roomId && (
-        <MultiplayerLobby
-          roomId={roomId}
-          isHost={isHost}
-          onStartGame={() => startMultiplayerGame(state)}
-        />
-      )}
-
-      {/* {gamePhase === 'character_select' && (
-        <MultiplayerToggle />
-      )} */}
-
       {renderGamePhase()}
 
       {/* Particle effects layer - rendered last to appear on top */}
       <Particles />
-
-      {/* Tutorial Prompt Modal */}
-      <Modal
-        visible={showTutorialPrompt}
-        transparent={true}
-        animationType="fade"
-      >
-        <View style={tutorialPromptStyles.overlay}>
-          <View style={tutorialPromptStyles.container}>
-            <View style={tutorialPromptStyles.header}>
-              <Text style={tutorialPromptStyles.headerText}>New to NShapes?</Text>
-            </View>
-            <View style={tutorialPromptStyles.content}>
-              <Text style={tutorialPromptStyles.messageText}>
-                Would you like to play through a quick tutorial to learn how the game works?
-              </Text>
-            </View>
-            <View style={tutorialPromptStyles.buttons}>
-              <TouchableOpacity
-                style={tutorialPromptStyles.tutorialButton}
-                onPress={handleTutorialPromptYes}
-              >
-                <Text style={tutorialPromptStyles.tutorialButtonText}>Yes, show me!</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={tutorialPromptStyles.skipButton}
-                onPress={handleTutorialPromptSkip}
-                testID="skip-tutorial-button"
-              >
-                <Text style={tutorialPromptStyles.skipButtonText}>Skip - Start Adventure</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 };
-
-// Tutorial Prompt Modal styles
-const tutorialPromptStyles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(18, 18, 18, 0.85)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  container: {
-    backgroundColor: COLORS.canvasWhite,
-    borderRadius: RADIUS.module,
-    borderWidth: 2,
-    borderColor: COLORS.slateCharcoal,
-    width: '100%',
-    maxWidth: 350,
-    overflow: 'hidden',
-  },
-  header: {
-    backgroundColor: COLORS.logicTeal,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-  },
-  headerText: {
-    color: COLORS.canvasWhite,
-    fontSize: 20,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  content: {
-    padding: 20,
-  },
-  messageText: {
-    color: COLORS.slateCharcoal,
-    fontSize: 16,
-    lineHeight: 24,
-    textAlign: 'center',
-  },
-  buttons: {
-    padding: 16,
-    gap: 12,
-  },
-  tutorialButton: {
-    backgroundColor: COLORS.actionYellow,
-    paddingVertical: 14,
-    borderRadius: RADIUS.button,
-    borderWidth: 1,
-    borderColor: COLORS.slateCharcoal,
-    alignItems: 'center',
-  },
-  tutorialButtonText: {
-    color: COLORS.slateCharcoal,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  skipButton: {
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  skipButtonText: {
-    color: COLORS.slateCharcoal,
-    fontSize: 14,
-    opacity: 0.7,
-  },
-});
 
 // Game Over screen styles
 const gameOverStyles = StyleSheet.create({
@@ -3736,9 +3103,6 @@ const gameOverStyles = StyleSheet.create({
   },
   failText: {
     color: COLORS.canvasWhite,
-  },
-  scoreboardContainer: {
-    marginBottom: 16,
   },
   chartContainer: {
     backgroundColor: COLORS.canvasWhite,

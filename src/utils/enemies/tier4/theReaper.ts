@@ -14,7 +14,6 @@ import {
   HintDisableEffect,
   composeEffects,
 } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh The Reaper enemy instance.
@@ -44,6 +43,3 @@ export function createTheReaper(): EnemyInstance {
       stats.damageReceived === 0
   );
 }
-
-// Register with factory
-registerEnemy('The Reaper', createTheReaper);

@@ -12,7 +12,6 @@ import {
   WeaponCounterEffect,
   composeEffects,
 } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Polar Guardian enemy instance.
@@ -36,6 +35,3 @@ export function createPolarGuardian(): EnemyInstance {
       stats.damageReceived === 0 && stats.weaponEffectsTriggered.size >= 1
   );
 }
-
-// Register with factory
-registerEnemy('Polar Guardian', createPolarGuardian);

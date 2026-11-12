@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { useTutorial, TutorialStep } from '@/context/TutorialContext';
@@ -21,7 +21,7 @@ const SAMPLE_CARDS: CardType[] = [
 ];
 
 const TutorialScreen: React.FC<TutorialScreenProps> = ({ onComplete, onExit }) => {
-  const { state, nextStep, setStep, endTutorial } = useTutorial();
+  const { state, nextStep, endTutorial } = useTutorial();
 
   const handleSkip = () => {
     endTutorial(false);

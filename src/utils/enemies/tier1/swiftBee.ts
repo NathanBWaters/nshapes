@@ -7,7 +7,6 @@
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { TimerSpeedEffect, PointsMultiplierEffect, composeEffects } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Swift Bee enemy instance.
@@ -37,6 +36,3 @@ export function createSwiftBee(): EnemyInstance {
     }
   );
 }
-
-// Register with factory
-registerEnemy('Swift Bee', createSwiftBee);

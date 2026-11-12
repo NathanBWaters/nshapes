@@ -5,7 +5,7 @@
  * Each effect is independent and can be combined with others using composeEffects().
  */
 
-import type { Card } from '@/types';
+import type { Card, PlayerStats } from '@/types';
 import type {
   EnemyInstance,
   EnemyStartResult,
@@ -15,8 +15,69 @@ import type {
   EnemyUIModifiers,
   EnemyEvent,
   EffectBehavior,
+  RoundStats,
 } from '@/types/enemy';
-import { createDummyEnemy } from './enemyFactory';
+
+// ============================================================================
+// DUMMY ENEMY
+// ============================================================================
+
+/**
+ * Create a no-op enemy for testing.
+ * All hooks return empty/neutral deltas.
+ * checkDefeatCondition always returns true (always "defeated").
+ */
+export function createDummyEnemy(): EnemyInstance {
+  return {
+    name: 'Dummy',
+    icon: 'lorc/uncertainty',
+    tier: 1,
+    description: 'No effect',
+    defeatConditionText: 'Always defeated',
+
+    onRoundStart: (_board: Card[]): EnemyStartResult => ({
+      cardModifications: [],
+      events: [],
+    }),
+
+    onTick: (_deltaMs: number, _board: Card[]): EnemyTickResult => ({
+      scoreDelta: 0,
+      healthDelta: 0,
+      timeDelta: 0,
+      cardsToRemove: [],
+      cardModifications: [],
+      cardsToFlip: [],
+      events: [],
+      instantDeath: false,
+    }),
+
+    onValidMatch: (_matchedCards: Card[], _board: Card[]): EnemyMatchResult => ({
+      timeDelta: 0,
+      pointsMultiplier: 1,
+      cardsToRemove: [],
+      cardsToFlip: [],
+      events: [],
+    }),
+
+    onInvalidMatch: (_cards: Card[], _board: Card[]): EnemyMatchResult => ({
+      timeDelta: 0,
+      pointsMultiplier: 1,
+      cardsToRemove: [],
+      cardsToFlip: [],
+      events: [],
+    }),
+
+    onCardDraw: (card: Card): Card => card,
+
+    checkDefeatCondition: (_stats: RoundStats): boolean => true,
+
+    onRoundEnd: (): void => {},
+
+    getUIModifiers: (): EnemyUIModifiers => ({}),
+
+    getStatModifiers: (): EnemyStatModifiers => ({}),
+  };
+}
 
 // ============================================================================
 // INDIVIDUAL EFFECT BEHAVIORS
@@ -201,39 +262,31 @@ export const TimerSpeedEffect: EffectBehavior = {
 };
 
 /**
+ * The weapon effects an enemy can counter: which modifier the enemy reports,
+ * which player stat it weakens, and how the stat is named to the player.
+ */
+export const WEAPON_COUNTERS = {
+  fire: { modifier: 'fireSpreadChanceReduction', stat: 'fireSpreadChance', label: 'Fire Spread' },
+  explosion: { modifier: 'explosionChanceReduction', stat: 'explosionChance', label: 'Explosion' },
+  laser: { modifier: 'laserChanceReduction', stat: 'laserChance', label: 'Laser' },
+  hint: { modifier: 'hintGainChanceReduction', stat: 'hintGainChance', label: 'Hint Gain' },
+  grace: { modifier: 'graceGainChanceReduction', stat: 'graceGainChance', label: 'Grace Gain' },
+  time: { modifier: 'timeGainChanceReduction', stat: 'timeGainChance', label: 'Time Gain' },
+  healing: { modifier: 'healingChanceReduction', stat: 'healingChance', label: 'Healing' },
+} as const satisfies Record<string, { modifier: keyof EnemyStatModifiers; stat: keyof PlayerStats; label: string }>;
+
+/** A countered stat keeps a third of its value, so the player never loses the effect outright. */
+export const applyWeaponCounter = (statValue: number): number => Math.round(statValue / 3);
+
+/**
  * WeaponCounterEffect - Reduces effectiveness of player weapons
- * Config: { type: string, reduction: number }
+ * Config: { type: keyof typeof WEAPON_COUNTERS, reduction: number }
  */
 export const WeaponCounterEffect: EffectBehavior = {
   getStatModifiers: (config: unknown): Partial<EnemyStatModifiers> => {
     const { type, reduction } = config as { type: string; reduction: number };
-    const modifiers: Partial<EnemyStatModifiers> = {};
-
-    switch (type) {
-      case 'fire':
-        modifiers.fireSpreadChanceReduction = reduction;
-        break;
-      case 'explosion':
-        modifiers.explosionChanceReduction = reduction;
-        break;
-      case 'laser':
-        modifiers.laserChanceReduction = reduction;
-        break;
-      case 'hint':
-        modifiers.hintGainChanceReduction = reduction;
-        break;
-      case 'grace':
-        modifiers.graceGainChanceReduction = reduction;
-        break;
-      case 'time':
-        modifiers.timeGainChanceReduction = reduction;
-        break;
-      case 'healing':
-        modifiers.healingChanceReduction = reduction;
-        break;
-    }
-
-    return modifiers;
+    const counter = WEAPON_COUNTERS[type as keyof typeof WEAPON_COUNTERS];
+    return counter ? { [counter.modifier]: reduction } : {};
   },
 
   getUIModifiers: (
@@ -950,15 +1003,4 @@ export function composeEffects(
       return modifiers;
     },
   };
-}
-
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
-/**
- * Resets inactivity timer - call from onValidMatch
- */
-export function resetInactivityTimer(internalState: Record<string, unknown>): void {
-  internalState.timeSinceMatch = 0;
 }

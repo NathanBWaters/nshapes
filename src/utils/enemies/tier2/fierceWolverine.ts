@@ -12,7 +12,6 @@ import {
   PointsMultiplierEffect,
   composeEffects,
 } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Fierce Wolverine enemy instance.
@@ -38,6 +37,3 @@ export function createFierceWolverine(): EnemyInstance {
       stats.totalMatches >= 1
   );
 }
-
-// Register with factory
-registerEnemy('Fierce Wolverine', createFierceWolverine);

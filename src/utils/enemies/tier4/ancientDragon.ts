@@ -15,7 +15,6 @@ import {
   ScoreDecayEffect,
   composeEffects,
 } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Ancient Dragon enemy instance.
@@ -42,6 +41,3 @@ export function createAncientDragon(): EnemyInstance {
       stats.tripleCardsCleared >= 2 && stats.allDifferentMatches >= 2
   );
 }
-
-// Register with factory
-registerEnemy('Ancient Dragon', createAncientDragon);

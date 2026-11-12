@@ -13,7 +13,6 @@ import {
   WeaponCounterEffect,
   composeEffects,
 } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 // All weapon types for -75% counter
 const WEAPON_TYPES = ['fire', 'explosion', 'laser', 'hint', 'grace', 'time', 'healing'] as const;
@@ -47,6 +46,3 @@ export function createKrakensGrasp(): EnemyInstance {
       stats.currentScore >= stats.targetScore && stats.cardsRemaining >= 5
   );
 }
-
-// Register with factory
-registerEnemy("Kraken's Grasp", createKrakensGrasp);

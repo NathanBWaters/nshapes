@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Modal, ScrollView, StyleSheet, Alert, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, ScrollView, StyleSheet } from 'react-native';
 import { CopilotStep, walkthroughable } from 'react-native-copilot';
-import { PlayerStats, Weapon, Card, Character } from '@/types';
-import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
+import { PlayerStats, Weapon, Character } from '@/types';
+import { COLORS, RADIUS } from '@/utils/colors';
 import WeaponGuide from './WeaponGuide';
 import WeaponList from './WeaponList';
-import Icon from './Icon';
 import { FighterAvatar } from './fighters';
 import { WEAPONS, getWeaponByName } from '@/utils/gameDefinitions';
 import { SettingsStorage } from '@/utils/storage';

@@ -7,7 +7,6 @@
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { AttributeChangeEffect, BombEffect, composeEffects } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Venomous Cobra enemy instance.
@@ -29,6 +28,3 @@ export function createVenomousCobra(): EnemyInstance {
     (stats: RoundStats) => stats.bombsDefused >= 4
   );
 }
-
-// Register with factory
-registerEnemy('Venomous Cobra', createVenomousCobra);

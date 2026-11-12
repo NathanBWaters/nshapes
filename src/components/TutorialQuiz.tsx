@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { COLORS, RADIUS } from '@/utils/colors';
 import Card from './Card';
-import { Card as CardType, AttributeName } from '@/types';
-import { isValidCombination } from '@/utils/gameUtils';
+import { Card as CardType } from '@/types';
 
 interface TutorialQuizProps {
   quizNumber: number;
@@ -87,9 +86,6 @@ const TutorialQuiz: React.FC<TutorialQuizProps> = ({
       onIncorrect();
     }
   };
-
-  // Active attributes for validation (3 attributes for tutorial)
-  const activeAttributes: AttributeName[] = ['shape', 'color', 'number'];
 
   return (
     <View style={styles.container}>

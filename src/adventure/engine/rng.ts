@@ -1,7 +1,6 @@
 /** Tiny deterministic RNG (mulberry32). State is a plain number so it lives in reducer state. */
 export interface Rng {
   next(): number;
-  int(maxExclusive: number): number;
   pick<T>(arr: readonly T[]): T;
   shuffle<T>(arr: readonly T[]): T[];
   readonly state: number;
@@ -18,7 +17,6 @@ export const createRng = (seed: number): Rng => {
   };
   const rng: Rng = {
     next,
-    int: (n: number) => Math.floor(next() * n),
     pick: <T,>(arr: readonly T[]) => arr[Math.floor(next() * arr.length)],
     shuffle: <T,>(arr: readonly T[]) => {
       const out = [...arr];

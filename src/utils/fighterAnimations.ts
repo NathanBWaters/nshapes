@@ -71,9 +71,6 @@ export type FighterExpression =
  */
 export interface FighterPersonalityProfile {
   name: CharacterName | string;
-  primaryColor: string;
-  secondaryColor: string;
-  accentColor: string;
   auraColor: string;
   /** Idle breathing cycle duration in ms (lower = peppier) */
   breathCycleMs: number;
@@ -89,11 +86,10 @@ export interface FighterPersonalityProfile {
   idleTiltDeg: number;
   /** Signature particle motif spawned during joy/ecstatic reactions */
   signatureMotif: 'hearts' | 'embers' | 'frost' | 'stars' | 'splash' | 'shockwave';
-  /** Duration (ms) a one-shot reaction holds its expression before settling */
-  reactionHoldMs: Record<FighterReactionType, number>;
 }
 
-const DEFAULT_REACTION_HOLD_MS: Record<FighterReactionType, number> = {
+/** Duration (ms) a one-shot fighter reaction holds its expression before settling */
+export const FIGHTER_REACTION_HOLD_MS: Record<FighterReactionType, number> = {
   joy: 900,
   ecstatic: 1200,
   pain: 800,
@@ -106,12 +102,9 @@ const DEFAULT_REACTION_HOLD_MS: Record<FighterReactionType, number> = {
   entrance: 750,
 };
 
-export const CHARACTER_PERSONALITIES: Record<string, FighterPersonalityProfile> = {
+const CHARACTER_PERSONALITIES: Record<string, FighterPersonalityProfile> = {
   'Orange Tabby': {
     name: 'Orange Tabby',
-    primaryColor: '#FF9538',
-    secondaryColor: '#FFF7ED',
-    accentColor: '#FF7169',
     auraColor: '#FF9538',
     breathCycleMs: 2600,
     breathIntensity: 0.032,
@@ -120,13 +113,9 @@ export const CHARACTER_PERSONALITIES: Record<string, FighterPersonalityProfile> 
     tailWagDeg: 14,
     idleTiltDeg: 1.5,
     signatureMotif: 'hearts',
-    reactionHoldMs: DEFAULT_REACTION_HOLD_MS,
   },
   'Sly Fox': {
     name: 'Sly Fox',
-    primaryColor: '#EA580C',
-    secondaryColor: '#FFFBF5',
-    accentColor: '#FFDE00',
     auraColor: '#FF6B00',
     breathCycleMs: 2300,
     breathIntensity: 0.028,
@@ -135,13 +124,9 @@ export const CHARACTER_PERSONALITIES: Record<string, FighterPersonalityProfile> 
     tailWagDeg: 16,
     idleTiltDeg: 2.2,
     signatureMotif: 'embers',
-    reactionHoldMs: DEFAULT_REACTION_HOLD_MS,
   },
   'Emperor Penguin': {
     name: 'Emperor Penguin',
-    primaryColor: '#1E293B',
-    secondaryColor: '#FFFFFF',
-    accentColor: '#FFDE00',
     auraColor: '#16AA98',
     breathCycleMs: 3000,
     breathIntensity: 0.026,
@@ -150,13 +135,9 @@ export const CHARACTER_PERSONALITIES: Record<string, FighterPersonalityProfile> 
     tailWagDeg: 8,
     idleTiltDeg: 3.2, // Regal waddle sway!
     signatureMotif: 'frost',
-    reactionHoldMs: DEFAULT_REACTION_HOLD_MS,
   },
   'Corgi': {
     name: 'Corgi',
-    primaryColor: '#F59E0B',
-    secondaryColor: '#FFFFFF',
-    accentColor: '#FF7169',
     auraColor: '#FFDE00',
     breathCycleMs: 1650, // Peppy happy pant!
     breathIntensity: 0.04,
@@ -165,13 +146,9 @@ export const CHARACTER_PERSONALITIES: Record<string, FighterPersonalityProfile> 
     tailWagDeg: 22,
     idleTiltDeg: 2.5,
     signatureMotif: 'stars',
-    reactionHoldMs: DEFAULT_REACTION_HOLD_MS,
   },
   'Pelican': {
     name: 'Pelican',
-    primaryColor: '#FFFFFF',
-    secondaryColor: '#FF9538',
-    accentColor: '#FFDE00',
     auraColor: '#16AA98',
     breathCycleMs: 2800,
     breathIntensity: 0.03,
@@ -180,13 +157,9 @@ export const CHARACTER_PERSONALITIES: Record<string, FighterPersonalityProfile> 
     tailWagDeg: 10,
     idleTiltDeg: 1.8,
     signatureMotif: 'splash',
-    reactionHoldMs: DEFAULT_REACTION_HOLD_MS,
   },
   'Badger': {
     name: 'Badger',
-    primaryColor: '#383838',
-    secondaryColor: '#FFFFFF',
-    accentColor: '#FFDE00',
     auraColor: '#16AA98',
     breathCycleMs: 2100, // Grounded boxer bob!
     breathIntensity: 0.036,
@@ -195,15 +168,11 @@ export const CHARACTER_PERSONALITIES: Record<string, FighterPersonalityProfile> 
     tailWagDeg: 8,
     idleTiltDeg: 2.0,
     signatureMotif: 'shockwave',
-    reactionHoldMs: DEFAULT_REACTION_HOLD_MS,
   },
 };
 
 const FALLBACK_PERSONALITY: FighterPersonalityProfile = {
   name: 'Fighter',
-  primaryColor: COLORS.slateCharcoal,
-  secondaryColor: COLORS.paperBeige,
-  accentColor: COLORS.actionYellow,
   auraColor: COLORS.logicTeal,
   breathCycleMs: 2500,
   breathIntensity: 0.03,
@@ -212,7 +181,6 @@ const FALLBACK_PERSONALITY: FighterPersonalityProfile = {
   tailWagDeg: 12,
   idleTiltDeg: 2.0,
   signatureMotif: 'stars',
-  reactionHoldMs: DEFAULT_REACTION_HOLD_MS,
 };
 
 export function getFighterPersonality(characterName?: string | null): FighterPersonalityProfile {

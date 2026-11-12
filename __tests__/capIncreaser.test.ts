@@ -69,8 +69,7 @@ describe('Cap Increaser Weapons', () => {
           startingWeapons: []
         },
         stats: { ...DEFAULT_PLAYER_STATS },
-        weapons,
-        items: []
+        weapons
       };
     };
 

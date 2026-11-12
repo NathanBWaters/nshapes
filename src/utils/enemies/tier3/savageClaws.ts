@@ -12,7 +12,6 @@ import {
   BombEffect,
   composeEffects,
 } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Savage Claws enemy instance.
@@ -35,6 +34,3 @@ export function createSavageClaws(): EnemyInstance {
     (stats: RoundStats) => stats.totalMatches >= 8
   );
 }
-
-// Register with factory
-registerEnemy('Savage Claws', createSavageClaws);

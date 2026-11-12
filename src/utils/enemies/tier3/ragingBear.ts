@@ -13,7 +13,6 @@ import {
   ScoreDecayEffect,
   composeEffects,
 } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Raging Bear enemy instance.
@@ -37,6 +36,3 @@ export function createRagingBear(): EnemyInstance {
     (stats: RoundStats) => stats.maxStreak >= 7 && stats.invalidMatches === 0
   );
 }
-
-// Register with factory
-registerEnemy('Raging Bear', createRagingBear);

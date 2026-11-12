@@ -38,11 +38,3 @@ export const writeAdventureSave = (save: AdventureSave): void => {
     // storage unavailable (private mode etc.) — progress lives in memory only
   }
 };
-
-export const resetAdventureSave = (): void => {
-  try {
-    storage.remove(KEY);
-  } catch {
-    // ignore
-  }
-};

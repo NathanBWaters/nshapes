@@ -195,7 +195,7 @@ export const initAudio = async (): Promise<void> => {
  * Preload a sound category for instant playback.
  * Call during app initialization or screen load.
  */
-export const preloadSound = async (category: SoundCategory): Promise<void> => {
+const preloadSound = async (category: SoundCategory): Promise<void> => {
   if (!Audio || useChip) return; // Audio not available, or synthesized instead
   if (soundPools.has(category)) return; // Already preloaded
 
@@ -226,7 +226,7 @@ export const preloadSound = async (category: SoundCategory): Promise<void> => {
 /**
  * Preload multiple sound categories.
  */
-export const preloadSounds = async (categories: SoundCategory[]): Promise<void> => {
+const preloadSounds = async (categories: SoundCategory[]): Promise<void> => {
   await Promise.all(categories.map(preloadSound));
 };
 
@@ -327,20 +327,3 @@ export const setAudioEnabled = (enabled: boolean): void => {
  * Check if audio is enabled.
  */
 export const isAudioEnabled = (): boolean => audioEnabled;
-
-/**
- * Unload all sounds to free memory.
- * Call when leaving game screens.
- */
-export const unloadAllSounds = async (): Promise<void> => {
-  for (const pool of soundPools.values()) {
-    for (const sound of pool.sounds) {
-      try {
-        await sound.unloadAsync();
-      } catch {
-        // Ignore unload errors
-      }
-    }
-  }
-  soundPools.clear();
-};

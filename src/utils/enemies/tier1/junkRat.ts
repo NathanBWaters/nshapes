@@ -7,7 +7,6 @@
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import { DudCardEffect, composeEffects } from '../../enemyEffects';
-import { registerEnemy } from '../../enemyFactory';
 
 /**
  * Creates a fresh Junk Rat enemy instance.
@@ -26,6 +25,3 @@ export function createJunkRat(): EnemyInstance {
     (stats: RoundStats) => stats.maxStreak >= 4
   );
 }
-
-// Register with factory
-registerEnemy('Junk Rat', createJunkRat);
