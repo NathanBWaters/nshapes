@@ -1,3 +1,4 @@
+import type { StyleProp, ViewStyle } from 'react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   SharedValue,
@@ -42,7 +43,12 @@ export interface ReactionChannels {
   pawBounce: SharedValue<number>;
 }
 
-type PartStyle = ReturnType<typeof useAnimatedStyle>;
+/**
+ * Reanimated types animated styles as text-capable styles, but these only carry
+ * view transforms and opacity, which is what the rigs and stage accept.
+ */
+export type PartStyle = StyleProp<ViewStyle>;
+const asPart = (style: ReturnType<typeof useAnimatedStyle>): PartStyle => style as PartStyle;
 
 /** (frequency, damping, response) of one second-order posture channel. */
 type Spring = readonly [f: number, z: number, r: number];
@@ -722,12 +728,12 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
     isBlinking,
     gaze,
     handlePress,
-    rigRootStyle,
-    groundShadowStyle,
-    headStyle,
-    leftEarStyle,
-    rightEarStyle,
-    tailStyle,
-    pawStyle,
+    rigRootStyle: asPart(rigRootStyle),
+    groundShadowStyle: asPart(groundShadowStyle),
+    headStyle: asPart(headStyle),
+    leftEarStyle: asPart(leftEarStyle),
+    rightEarStyle: asPart(rightEarStyle),
+    tailStyle: asPart(tailStyle),
+    pawStyle: asPart(pawStyle),
   };
 }

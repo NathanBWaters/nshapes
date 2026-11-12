@@ -15,7 +15,7 @@ import type { Unlock } from '../progress';
 import { getFighter } from '../data/fighters';
 import { getArcana } from '../data/arcana';
 import { getArmoryWeapon } from '../data/armory';
-import { getEvolutionRecipe } from '../data/evolutions';
+import { EVOLUTION_RECIPES } from '../data/evolutions';
 import { CAMPAIGN_FEATURES } from '../data/features';
 import { getMechanic } from '../data/mechanics';
 import { unlockablesOf, type Unlockable } from '../data/rewards';
@@ -76,12 +76,13 @@ export const describeUnlockable = (u: Unlockable): UnlockableDisplay => {
       };
     }
     case 'evolution': {
-      const { result } = getEvolutionRecipe(u.id);
+      const r = EVOLUTION_RECIPES.find(x => x.id === u.id);
+      const name = r?.name ?? 'Evolution';
       return {
-        kind: u.kind, name: result.name, revealed: `Combo: ${result.name}`, secret: 'A weapon combo', bountySecret: 'A weapon combo',
-        icon: result.icon ?? 'lorc/crystal-shine', headline: 'New weapon combo unlocked!',
-        tease: 'Two weapons can now fuse into a Legendary power!',
-        badge: 'WEAPON COMBO RECIPE', accent: getRarityColor('legendary'), weapon: result,
+        kind: u.kind, name, revealed: `Evolution: ${name}`, secret: 'An evolution', bountySecret: 'An evolution',
+        icon: r?.icon ?? 'lorc/crystal-shine', headline: 'New evolution unlocked!',
+        tease: 'Two weapon families can now fuse into a 20-second power trip!',
+        badge: 'EVOLUTION RECIPE', accent: getRarityColor('legendary'),
       };
     }
   }

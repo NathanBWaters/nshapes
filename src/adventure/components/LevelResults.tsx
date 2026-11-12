@@ -59,7 +59,7 @@ const LevelResults: React.FC<Props> = ({ level, run, stars, result, unlocksRevea
   const tip = !won
     ? run.mistakes > 3
       ? 'Tip: check one trait at a time: shape, then color, then number…'
-      : 'Tip: level up your fighter at Camp, or try a fighter marked STRONG here.'
+      : 'Tip: spend stars in a skill tree at Camp, or try a fighter marked STRONG here.'
     : stars === 1 && !accuracy
       ? 'Tip: Rainbow Strikes (every trait different) hit twice as hard.'
       : null;
@@ -113,9 +113,15 @@ const LevelResults: React.FC<Props> = ({ level, run, stars, result, unlocksRevea
           <Text style={st.sub}>{sub}</Text>
 
           <View style={st.statsRow}>
-            <Stat icon="lorc/crossed-swords" label="Damage" value={`${run.totalDamage}`} />
+            <Stat testID="results-total-damage" icon="lorc/crossed-swords" label="Total damage" value={`${run.totalDamage}`} />
+            <Stat testID="results-biggest-hit" icon="lorc/bright-explosion" label="Biggest hit" value={`${run.biggestHit}`} hot={run.biggestHit >= 25} />
+          </View>
+          <View style={st.statsRow}>
             <Stat icon="lorc/checked-shield" label="Sets" value={`${run.matches}`} />
             <Stat icon="lorc/cross-mark" label="Mistakes" value={`${run.mistakes}`} />
+            {(run.evolutionsTriggered > 0 || run.armedRecipes.length > 0) && (
+              <Stat testID="results-evolutions" icon="lorc/crystal-shine" label="Evolutions" value={`${run.evolutionsTriggered}`} />
+            )}
           </View>
 
           {totalCoins > 0 && (
@@ -206,8 +212,8 @@ const LevelResults: React.FC<Props> = ({ level, run, stars, result, unlocksRevea
   );
 };
 
-const Stat: React.FC<{ icon: React.ComponentProps<typeof Icon>['name']; label: string; value: string }> = ({ icon, label, value }) => (
-  <View style={st.stat}>
+const Stat: React.FC<{ icon: React.ComponentProps<typeof Icon>['name']; label: string; value: string; testID?: string; hot?: boolean }> = ({ icon, label, value, testID, hot }) => (
+  <View style={[st.stat, hot && { backgroundColor: COLORS.actionYellow }]} testID={testID}>
     <Icon name={icon} size={18} color={INK} />
     <Text style={st.statValue}>{value}</Text>
     <Text style={st.statLabel}>{label}</Text>

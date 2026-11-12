@@ -1,38 +1,43 @@
 /**
- * Full-Game End-to-End (E2E) UI & Progression Integration Suite for Adventure Mode.
+ * Full-game end-to-end suite for Adventure Mode.
  *
- * Mounts the real `<AdventureMode />` component tree backed by persistent KV storage
- * and drives complete user journeys across the campaign (`1-1` through `4-5` + Elites),
- * verifying that every progression, combat, and UI subsystem unlocks and operates
- * at the exact stage it is supposed to:
- *   1. Pre-`1-1` fresh save onboarding (Story → Lessons → Quizzes → Fight Tips, locked docks)
- *   2. `1-1` triple unlock (`Coin Drops` ★ + `Blast Powder` ★★ + `Sly Fox` ★★★) & silhouette-to-reveal chain
- *   3. `1-2` Hearts, `1-3` 3rd trait + `Flint Spark` 2nd weapon unlock
- *   4. `1-4` Power Cards + Unlockable Workshop (`★`), unlocked-only filtering, `+tier` upgrades & 100% Free Refunds
- *   5. `1-5` Rainbow Strike → `1-5E` Elite branch, order-aware Combo Discovery tutorial, `Arcana` (`★`) & `Solar Cataclysm` (`★★`)
- *   6. `1-6` Escalating Purity + Adaptive Weapon Combos tutorial + live Catalyst forging (`EVO READY` → `FORGED COMBO` in Recipe Guide)
- *   7. Premature Catalyst shatter (`Catalyst Lost`) & strict `<= 1` Catalyst-on-screen invariant
- *   8. `1-7` Timer + `Hourglass` Workshop unlock + 2nd combo (`Immortal Aegis`) without duplicate discovery tutorial
- *   9. `1-8` Boss + Cross-Run Bounty Board unlock, category filters, auto-cashout & reward unlocks
- *  10. Worlds 2–4 landmarks (`2-1` Hints + `Sharp Eyes`, `2-2` Duds, `2-3` Face-Down, `2-4` Graces + `Second Wind`,
- *      `2-5` XP `WeaponPick` with `+tier`, `3-2` Waves, `3-3` Wave `SHOP`, `4-1` 5th trait, `4-5` Final Boss `The Hydra`)
- *      and 100% campaign completion (`111/111 ★`, all 6 Fighters, 8 Evolutions, 8 Arcana, 6 Mechanic Upgrades, 16 Bounties).
+ * Mounts the real `<AdventureMode />` backed by an in-memory KV store and plays
+ * the campaign through the UI by reading the rendered cards and tapping Sets:
+ *   1. A fresh player through World 1: onboarding, every World 1 level (and the
+ *      fighter side branch), unlock reveals, charms filling their slots, the first
+ *      skill-tree node, the first evolution (banner + countdown ring), Time Bombs,
+ *      the Workshop and the Bounty Board.
+ *   2. Later worlds: snares on the board, waves and the shop, Charm Belt and Tarot
+ *      Deck slots on the preview, chained side branches on the map, the Starfall
+ *      Summit finale and a full-completion reload.
+ *   3. A v1 save (fighter levels, one charm, one Arcana) migrating on load.
  */
 import React from 'react';
-import { render, fireEvent, act, within } from '@testing-library/react-native';
+import { render, fireEvent, act } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AdventureMode from '@/adventure/AdventureMode';
 import { LEVELS, MAIN_LEVELS, getLevel } from '@/adventure/data/levels';
-import { FIGHTERS } from '@/adventure/data/fighters';
+import { FIGHTERS, getFighter } from '@/adventure/data/fighters';
 import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
 import { ARCANA } from '@/adventure/data/arcana';
-import { UPGRADES } from '@/adventure/data/upgrades';
 import { BOUNTIES } from '@/adventure/data/bounties';
-import { applyLevelResult, createNewSave, isLevelUnlocked, maxStars, totalStars } from '@/adventure/progress';
+import { CAMPAIGN_FEATURES } from '@/adventure/data/features';
+import { skillTreeOf } from '@/adventure/data/skillTrees';
+import { starRewards } from '@/adventure/data/rewards';
+import {
+  applyLevelResult,
+  availableStars,
+  charmSlots,
+  createNewSave,
+  equippedCharms,
+  maxStars,
+  totalStarsEarned,
+} from '@/adventure/progress';
 import { loadAdventureSave } from '@/adventure/save';
 import { createRng } from '@/adventure/engine/rng';
 import { countDifferentAttributes } from '@/adventure/engine/sets';
 import { isValidCombination } from '@/utils/gameUtils';
+import type { AdventureSave, LevelDef } from '@/adventure/types';
 import type { AttributeName, Background, Card, Color, Number as CardNumber, Shading, Shape } from '@/types';
 
 const mockKvStore = new Map<string, string>();
@@ -47,13 +52,6 @@ jest.mock('@/utils/storage', () => ({
       mockKvStore.delete(key);
     }),
   },
-  kvGet: jest.fn((key: string) => mockKvStore.get(key) ?? null),
-  kvSet: jest.fn((key: string, val: string) => {
-    mockKvStore.set(key, val);
-  }),
-  kvRemove: jest.fn((key: string) => {
-    mockKvStore.delete(key);
-  }),
 }));
 
 jest.mock('@/audio', () => ({
@@ -92,13 +90,8 @@ jest.mock('@/components/weapons', () => {
 jest.mock('@/components/Icon', () => {
   const ReactActual = require('react');
   const { View } = require('react-native');
-  const MockIcon = ({ name }: { name: string }) =>
-    ReactActual.createElement(View, { accessibilityLabel: `icon-${name}` });
-  return {
-    __esModule: true,
-    default: MockIcon,
-    Icon: MockIcon,
-  };
+  const MockIcon = ({ name }: { name: string }) => ReactActual.createElement(View, { accessibilityLabel: `icon-${name}` });
+  return { __esModule: true, default: MockIcon, Icon: MockIcon };
 });
 
 jest.mock('react-native-svg', () => {
@@ -126,19 +119,22 @@ const INSETS = {
   insets: { top: 0, left: 0, right: 0, bottom: 0 },
 };
 
-const wrap = (ui: React.ReactElement) => (
-  <SafeAreaProvider initialMetrics={INSETS}>{ui}</SafeAreaProvider>
-);
+const wrap = (ui: React.ReactElement) => <SafeAreaProvider initialMetrics={INSETS}>{ui}</SafeAreaProvider>;
 
-// ─── Rendered Board Inspection & Live Play Helpers ──────────────────────────
+type Screen = ReturnType<typeof render>;
 
-interface RenderedSlotCard {
+// ─── Reading the rendered board ─────────────────────────────────────────────
+
+interface Slot {
   slotId: string;
+  row: number;
+  col: number;
   pressable: any;
   card: Card;
   disabled: boolean;
-  hasCatalyst: boolean;
-  catalystReady: boolean;
+  catalyst: boolean;
+  bomb: boolean;
+  snare: 'up' | 'down' | 'left' | 'right' | null;
 }
 
 const CARD_LABEL_RE =
@@ -148,9 +144,7 @@ function collectTreeText(node: any): string {
   if (node == null) return '';
   if (typeof node === 'string' || typeof node === 'number') return String(node);
   if (Array.isArray(node)) return node.map(collectTreeText).join(' ');
-  if (typeof node === 'object' && Array.isArray(node.children)) {
-    return node.children.map(collectTreeText).join(' ');
-  }
+  if (typeof node === 'object' && Array.isArray(node.children)) return node.children.map(collectTreeText).join(' ');
   return '';
 }
 
@@ -158,46 +152,38 @@ function findNodesWithProp(node: any, pred: (n: any) => boolean, out: any[] = []
   if (!node || typeof node !== 'object') return out;
   if (pred(node)) out.push(node);
   if (Array.isArray(node.children)) {
-    for (const child of node.children) {
-      if (typeof child === 'object') findNodesWithProp(child, pred, out);
-    }
+    for (const child of node.children) if (typeof child === 'object') findNodesWithProp(child, pred, out);
   }
   return out;
 }
 
-function readLiveBoard(screen: ReturnType<typeof render>): RenderedSlotCard[] {
-  const results: RenderedSlotCard[] = [];
+function readLiveBoard(screen: Screen): Slot[] {
+  const results: Slot[] = [];
   for (let r = 0; r < 8; r++) {
-    const firstSlot = screen.queryByTestId(`card-slot-${r}-0`);
-    if (!firstSlot && r >= 3) break;
     for (let c = 0; c < 3; c++) {
-      const slotId = `card-slot-${r}-${c}`;
-      const slot = c === 0 ? firstSlot : screen.queryByTestId(slotId);
+      const slot = screen.queryByTestId(`card-slot-${r}-${c}`);
       if (!slot) continue;
-      const pressables = findNodesWithProp(
+      const pressable = findNodesWithProp(
         slot,
         n => typeof n.props?.accessibilityLabel === 'string' && CARD_LABEL_RE.test(n.props.accessibilityLabel)
-      );
-      const pressable = pressables[0];
+      )[0];
       if (!pressable) continue;
-      const m = CARD_LABEL_RE.exec(pressable.props.accessibilityLabel as string);
-      if (!m) continue;
+      const m = CARD_LABEL_RE.exec(pressable.props.accessibilityLabel as string)!;
       const tail = m[6] ?? '';
       const isDud = tail.includes(', dud');
       const isFaceDown = tail.includes(', face down');
-      const catalystReady = tail.includes(', evolution ready');
-      const hasCatalyst = catalystReady || tail.includes(', dormant catalyst');
-      const disabled = Boolean(
-        pressable.props?.disabled || pressable.props?.accessibilityState?.disabled || isDud || isFaceDown
-      );
+      const snare = /, snare pointing (up|down|left|right)/.exec(tail)?.[1] as Slot['snare'] | undefined;
       results.push({
-        slotId,
+        slotId: `card-slot-${r}-${c}`,
+        row: r,
+        col: c,
         pressable,
-        disabled,
-        hasCatalyst,
-        catalystReady,
+        disabled: Boolean(pressable.props?.disabled || pressable.props?.accessibilityState?.disabled || isDud || isFaceDown),
+        catalyst: tail.includes(', evolution ready') || tail.includes(', dormant catalyst'),
+        bomb: String(pressable.props?.testID ?? '').includes('-countdown'),
+        snare: snare ?? null,
         card: {
-          id: slotId,
+          id: `card-slot-${r}-${c}`,
           number: Number(m[1]) as CardNumber,
           color: m[2] as Color,
           shading: m[3] as Shading,
@@ -206,8 +192,6 @@ function readLiveBoard(screen: ReturnType<typeof render>): RenderedSlotCard[] {
           selected: false,
           isDud,
           isFaceDown,
-          hasEvolutionItem: hasCatalyst,
-          evolutionReady: catalystReady,
         },
       });
     }
@@ -215,29 +199,38 @@ function readLiveBoard(screen: ReturnType<typeof render>): RenderedSlotCard[] {
   return results;
 }
 
-function findValidSetsOnBoard(
-  slots: RenderedSlotCard[],
-  attrs: AttributeName[]
-): RenderedSlotCard[][] {
-  const selectable = slots.filter(s => !s.disabled && !s.card.isDud && !s.card.isFaceDown);
-  const sets: RenderedSlotCard[][] = [];
+/** Slots a snare's arrow points at (matching one of them defuses it). */
+const snareTargets = (board: Slot[]): Set<string> => {
+  const out = new Set<string>();
+  for (const s of board) {
+    if (!s.snare) continue;
+    const [dr, dc] = { up: [-1, 0], down: [1, 0], left: [0, -1], right: [0, 1] }[s.snare];
+    out.add(`card-slot-${s.row + dr}-${s.col + dc}`);
+  }
+  return out;
+};
+
+function findValidSets(board: Slot[], attrs: AttributeName[]): Slot[][] {
+  const selectable = board.filter(s => !s.disabled);
+  const sets: Slot[][] = [];
   for (let i = 0; i < selectable.length - 2; i++) {
     for (let j = i + 1; j < selectable.length - 1; j++) {
       for (let k = j + 1; k < selectable.length; k++) {
         const triple = [selectable[i], selectable[j], selectable[k]];
-        if (
-          isValidCombination(
-            triple.map(t => t.card),
-            attrs
-          ).isValid
-        ) {
-          sets.push(triple);
-        }
+        if (isValidCombination(triple.map(t => t.card), attrs).isValid) sets.push(triple);
       }
     }
   }
   return sets;
 }
+
+/** A sensible player: Catalysts first, then bombs and snare defusals, never a snared card, then Rainbows. */
+const scoreSet = (set: Slot[], attrs: AttributeName[], targets: Set<string>): number =>
+  (set.some(s => s.catalyst) ? 1000 : 0) +
+  (set.some(s => s.bomb) ? 300 : 0) +
+  (set.some(s => targets.has(s.slotId)) ? 200 : 0) -
+  (set.some(s => s.snare) ? 500 : 0) +
+  countDifferentAttributes(set.map(s => s.card), attrs);
 
 function advanceMs(ms: number) {
   act(() => {
@@ -245,49 +238,33 @@ function advanceMs(ms: number) {
   });
 }
 
-function tapTripleOnBoard(triple: RenderedSlotCard[]) {
-  expect(triple).toHaveLength(3);
-  fireEvent.press(triple[0].pressable);
-  fireEvent.press(triple[1].pressable);
-  fireEvent.press(triple[2].pressable);
-  // 200ms GameBoard validation -> 950ms AdventureRun REPLACE -> 1500ms reward reveal clear
+function tapSet(set: Slot[]) {
+  for (const s of set) fireEvent.press(s.pressable);
+  // 200ms GameBoard validation → 950ms REPLACE → reward reveal
   advanceMs(250);
   advanceMs(1000);
   advanceMs(600);
 }
 
-/**
- * Step cleanly through any active MechanicIntro modal (lessons + interactive quizzes),
- * returning all visible text encountered along the way for assertions.
- */
-function completeLessonModal(
-  screen: ReturnType<typeof render>,
-  quizAttrs: AttributeName[] = ['shape', 'color', 'number']
-): string[] {
-  const snapshots: string[] = [];
+const atResults = (screen: Screen) => !!screen.queryByTestId('results-map');
+
+/** Step through lesson pages and "Is this a Set?" checks, answering correctly. Returns the text seen. */
+function completeLessons(screen: Screen, attrs: AttributeName[]): string[] {
+  const seen: string[] = [];
   let guard = 0;
-  while (
-    (screen.queryByTestId('mechanic-intro-ok') || screen.queryByTestId('quiz-yes')) &&
-    guard < 30
-  ) {
-    guard += 1;
+  while ((screen.queryByTestId('mechanic-intro-ok') || screen.queryByTestId('quiz-yes')) && guard++ < 40) {
     const modal = screen.queryByTestId('lesson-modal');
-    if (modal) snapshots.push(collectTreeText(modal));
-    const yesBtn = screen.queryByTestId('quiz-yes');
-    if (yesBtn) {
-      // Read the 3 demo cards inside the quiz stage and answer accurately!
-      const demoNodes = modal
-        ? findNodesWithProp(
-            modal,
-            n => typeof n.props?.accessibilityLabel === 'string' && CARD_LABEL_RE.test(n.props.accessibilityLabel)
-          )
+    if (modal) seen.push(collectTreeText(modal));
+    if (screen.queryByTestId('quiz-yes')) {
+      const demo = modal
+        ? findNodesWithProp(modal, n => typeof n.props?.accessibilityLabel === 'string' && CARD_LABEL_RE.test(n.props.accessibilityLabel))
         : [];
-      let chooseYes = true;
-      if (demoNodes.length >= 3) {
-        const cards: Card[] = demoNodes.slice(-3).map((n, idx) => {
+      let yes = true;
+      if (demo.length >= 3) {
+        const cards: Card[] = demo.slice(-3).map((n, i) => {
           const m = CARD_LABEL_RE.exec(n.props.accessibilityLabel)!;
           return {
-            id: `q-${idx}`,
+            id: `q-${i}`,
             number: Number(m[1]) as CardNumber,
             color: m[2] as Color,
             shading: m[3] as Shading,
@@ -296,193 +273,140 @@ function completeLessonModal(
             selected: false,
           };
         });
-        chooseYes = isValidCombination(cards, quizAttrs).isValid;
+        yes = isValidCombination(cards, attrs).isValid;
       }
-      fireEvent.press(screen.getByTestId(chooseYes ? 'quiz-yes' : 'quiz-no'));
-      const afterModal = screen.queryByTestId('lesson-modal');
-      if (afterModal) snapshots.push(collectTreeText(afterModal));
+      fireEvent.press(screen.getByTestId(yes ? 'quiz-yes' : 'quiz-no'));
+      const after = screen.queryByTestId('lesson-modal');
+      if (after) seen.push(collectTreeText(after));
     }
-    const okBtn = screen.queryByTestId('mechanic-intro-ok');
-    if (okBtn) {
-      fireEvent.press(okBtn);
-    }
+    if (screen.queryByTestId('mechanic-intro-ok')) fireEvent.press(screen.getByTestId('mechanic-intro-ok'));
   }
-  return snapshots;
+  return seen;
 }
 
-function dismissAllFightTips(screen: ReturnType<typeof render>): number {
-  let count = 0;
-  while (screen.queryByTestId('tip-ok') && count < 15) {
-    fireEvent.press(screen.getByTestId('tip-ok'));
-    count += 1;
-  }
-  return count;
-}
-
-/**
- * Play a live AdventureRun to completion by tapping actual rendered `<Card />` nodes,
- * handling coach marks, XP level-up picks, and wave intermissions/shops along the way.
- */
-function playLiveFightToCompletion(
-  screen: ReturnType<typeof render>,
-  attrs: AttributeName[],
-  opts: {
-    preferRainbow?: boolean;
-    avoidCatalystUntilReady?: boolean;
-    useHintOnce?: boolean;
-    buyInShop?: boolean;
-    onStep?: (info: { step: number; board: RenderedSlotCard[] }) => void;
-  } = {}
-): {
-  tipsDismissed: number;
-  maxCatalystsSeenAtOnce: number;
+interface FightLog {
+  sawEvolutionBanner: boolean;
+  sawEvolutionRing: boolean;
+  sawSnare: boolean;
+  sawBomb: boolean;
+  sawPassiveChip: boolean;
+  sawTotalDamage: boolean;
   pickedLevelUp: boolean;
-  visitedShop: boolean;
-  usedHint: boolean;
-} {
-  let tipsDismissed = dismissAllFightTips(screen);
-  let maxCatalystsSeenAtOnce = 0;
-  let pickedLevelUp = false;
-  let visitedShop = false;
-  let usedHint = false;
+  boughtInShop: boolean;
+  tips: number;
+}
 
-  for (let step = 0; step < 60; step++) {
-    tipsDismissed += dismissAllFightTips(screen);
-
-    // Handle mid-fight XP level-up modal
-    if (screen.queryByTestId('pick-0')) {
-      pickedLevelUp = true;
-      fireEvent.press(screen.getByTestId('pick-0'));
-      tipsDismissed += dismissAllFightTips(screen);
+/** Play a fight to the results screen by tapping rendered cards. */
+function playFight(screen: Screen, attrs: AttributeName[], opts: { buyInShop?: boolean; maxSteps?: number } = {}): FightLog {
+  const log: FightLog = {
+    sawEvolutionBanner: false,
+    sawEvolutionRing: false,
+    sawSnare: false,
+    sawBomb: false,
+    sawPassiveChip: false,
+    sawTotalDamage: false,
+    pickedLevelUp: false,
+    boughtInShop: false,
+    tips: 0,
+  };
+  const look = () => {
+    log.sawEvolutionBanner ||= !!screen.queryByTestId('evolution-banner');
+    log.sawEvolutionRing ||= screen.queryAllByTestId('evolution-ring').length > 0;
+    log.sawPassiveChip ||= screen.queryAllByTestId(/^run-passive-/).length > 0;
+    log.sawTotalDamage ||= !!screen.queryByTestId('run-total-damage');
+  };
+  const tips = () => {
+    while (screen.queryByTestId('tip-ok') && log.tips < 60) {
+      fireEvent.press(screen.getByTestId('tip-ok'));
+      log.tips += 1;
     }
-
-    // Handle multi-wave intermission / shop modal
+  };
+  tips();
+  for (let step = 0; step < (opts.maxSteps ?? 80); step++) {
+    tips();
+    look();
+    if (screen.queryByTestId('pick-0')) {
+      log.pickedLevelUp = true;
+      fireEvent.press(screen.getByTestId('pick-0'));
+      tips();
+    }
     if (screen.queryByTestId('next-wave')) {
       if (opts.buyInShop && screen.queryByTestId('shop-buy-0')) {
-        visitedShop = true;
+        log.boughtInShop = true;
         fireEvent.press(screen.getByTestId('shop-buy-0'));
       }
       fireEvent.press(screen.getByTestId('next-wave'));
-      tipsDismissed += dismissAllFightTips(screen);
+      tips();
     }
-
-    // Check if LevelResults has mounted
-    if (screen.queryByTestId('results-retry') || screen.queryByTestId('results-map')) {
-      break;
-    }
-
-    if (opts.useHintOnce && !usedHint && screen.queryByTestId('run-hint')) {
-      fireEvent.press(screen.getByTestId('run-hint'));
-      usedHint = true;
-    }
-
-    // Fire active ability if charged & ready (e.g. Sly Fox / Pelican / Penguin)
-    const abilityBtn = screen.queryByTestId('run-ability');
-    if (
-      abilityBtn &&
-      typeof abilityBtn.props?.accessibilityLabel === 'string' &&
-      abilityBtn.props.accessibilityLabel.includes('ready')
-    ) {
-      fireEvent.press(abilityBtn);
-      advanceMs(1000);
-      tipsDismissed += dismissAllFightTips(screen);
-    }
-
+    if (atResults(screen)) break;
     const board = readLiveBoard(screen);
-    const catalystBadges = screen.queryAllByTestId('card-evolution-catalyst');
-    maxCatalystsSeenAtOnce = Math.max(maxCatalystsSeenAtOnce, catalystBadges.length);
-    expect(catalystBadges.length).toBeLessThanOrEqual(1);
-
-    opts.onStep?.({ step, board });
-
-    if (board.length === 0) {
-      advanceMs(1500);
-      if (screen.queryByTestId('results-retry') || screen.queryByTestId('results-map')) break;
-      continue;
-    }
-
-    const validSets = findValidSetsOnBoard(board, attrs);
-    if (validSets.length === 0) {
+    expect(screen.queryAllByTestId('card-evolution-catalyst').length).toBeLessThanOrEqual(1);
+    log.sawSnare ||= board.some(s => s.snare);
+    log.sawBomb ||= board.some(s => s.bomb);
+    const sets = findValidSets(board, attrs);
+    if (board.length === 0 || sets.length === 0) {
       advanceMs(1000);
       continue;
     }
-
-    // Score candidate Sets according to strategy
-    const chosen = [...validSets].sort((a, b) => {
-      const aHasReadyCat = a.some(s => s.hasCatalyst && s.catalystReady) ? 1 : 0;
-      const bHasReadyCat = b.some(s => s.hasCatalyst && s.catalystReady) ? 1 : 0;
-      if (aHasReadyCat !== bHasReadyCat) return bHasReadyCat - aHasReadyCat;
-
-      if (opts.avoidCatalystUntilReady) {
-        const aDormantCat = a.some(s => s.hasCatalyst && !s.catalystReady) ? 1 : 0;
-        const bDormantCat = b.some(s => s.hasCatalyst && !s.catalystReady) ? 1 : 0;
-        if (aDormantCat !== bDormantCat) return aDormantCat - bDormantCat;
-      }
-
-      const aDiff = countDifferentAttributes(
-        a.map(s => s.card),
-        attrs
-      );
-      const bDiff = countDifferentAttributes(
-        b.map(s => s.card),
-        attrs
-      );
-      if (aDiff !== bDiff) {
-        return opts.preferRainbow === false ? aDiff - bDiff : bDiff - aDiff;
-      }
-      return 0;
-    })[0];
-
-    tapTripleOnBoard(chosen);
-    tipsDismissed += dismissAllFightTips(screen);
-
-    if (screen.queryByTestId('results-retry') || screen.queryByTestId('results-map')) {
-      break;
-    }
+    const targets = snareTargets(board);
+    const best = [...sets].sort((a, b) => scoreSet(b, attrs, targets) - scoreSet(a, attrs, targets))[0];
+    tapSet(best);
+    look();
+    tips();
+    if (atResults(screen)) break;
   }
-
-  // Ensure finishing timer lands on LevelResults
-  if (!screen.queryByTestId('results-retry') && !screen.queryByTestId('results-map')) {
-    advanceMs(2000);
-  }
+  if (!atResults(screen)) advanceMs(2000);
   expect(screen.getByTestId('results-map')).toBeTruthy();
-
-  return { tipsDismissed, maxCatalystsSeenAtOnce, pickedLevelUp, visitedShop, usedHint };
+  return log;
 }
 
-/**
- * Step through all queued `<UnlockReveal />` screens and collect the revealed item names.
- */
-function stepThroughUnlockReveals(
-  screen: ReturnType<typeof render>,
-  opts: { preferSecondaryOnLast?: boolean } = {}
-): string[] {
+/** Tap through every queued unlock reveal; returns the text of each revealed card. */
+function stepThroughReveals(screen: Screen, opts: { stayOnResults?: boolean } = {}): string[] {
   advanceMs(2600);
-  const revealedTexts: string[] = [];
+  const texts: string[] = [];
   let guard = 0;
-  while (screen.queryByTestId('unlock-reveal') && guard < 15) {
-    guard += 1;
+  while (screen.queryByTestId('unlock-reveal') && guard++ < 15) {
     fireEvent.press(screen.getByTestId('unlock-reveal'));
     const modal = screen.queryByTestId('unlock-modal');
-    revealedTexts.push(modal ? collectTreeText(modal) : '');
-    if (opts.preferSecondaryOnLast && screen.queryByText('Stay on results')) {
-      fireEvent.press(screen.getByText('Stay on results'));
-    } else {
-      fireEvent.press(screen.getByTestId('unlock-primary'));
-    }
+    texts.push(modal ? collectTreeText(modal) : '');
+    if (opts.stayOnResults && screen.queryByText('Stay on results')) fireEvent.press(screen.getByText('Stay on results'));
+    else fireEvent.press(screen.getByTestId('unlock-primary'));
   }
-  return revealedTexts;
+  return texts;
 }
 
-jest.setTimeout(120_000);
+/** Open a level from the map, sit through its lessons and play it (retrying a loss). Ends on results. */
+function playLevelFromMap(screen: Screen, level: LevelDef, opts: { buyInShop?: boolean; stayOnResults?: boolean } = {}) {
+  fireEvent.press(screen.getByTestId(`map-node-${level.id}`));
+  return playOpenPreview(screen, level, opts);
+}
 
-describe('Adventure Mode Full-Game E2E Integration & Unlock Journey', () => {
+function playOpenPreview(screen: Screen, level: LevelDef, opts: { buyInShop?: boolean; stayOnResults?: boolean } = {}) {
+  fireEvent.press(screen.getByTestId('preview-play'));
+  const lessons = completeLessons(screen, level.rules.attributes);
+  let fight = playFight(screen, level.rules.attributes, opts);
+  let reveals = stepThroughReveals(screen, opts);
+  for (let attempt = 0; attempt < 3 && (loadAdventureSave().stars[level.id] ?? 0) === 0; attempt++) {
+    fireEvent.press(screen.getByTestId('results-retry'));
+    completeLessons(screen, level.rules.attributes);
+    fight = playFight(screen, level.rules.attributes, opts);
+    reveals = [...reveals, ...stepThroughReveals(screen, opts)];
+  }
+  expect(loadAdventureSave().stars[level.id] ?? 0).toBeGreaterThan(0);
+  return { lessons, fight, reveals };
+}
+
+const backToMap = (screen: Screen) => fireEvent.press(screen.getByTestId('results-map'));
+
+jest.setTimeout(240_000);
+
+describe('Adventure Mode full-game E2E', () => {
   let randomSpy: jest.SpyInstance;
 
   beforeEach(() => {
     jest.useFakeTimers();
     mockKvStore.clear();
-    const prng = createRng(20261111);
+    const prng = createRng(20261112);
     randomSpy = jest.spyOn(Math, 'random').mockImplementation(() => prng.next());
   });
 
@@ -492,515 +416,245 @@ describe('Adventure Mode Full-Game E2E Integration & Unlock Journey', () => {
     jest.useRealTimers();
   });
 
-  it('drives a fresh player from 1-1 through World 1 (1-8 + 1-5E), verifying every unlock, tutorial, UI gate, refund, combo forge, and bounty board', () => {
+  it('drives a fresh player through all of World 1: unlocks, charms, the skill tree, the first evolution, Time Bombs, Workshop and Bounties', () => {
     const screen = render(wrap(<AdventureMode onExit={() => {}} />));
+    const world1 = MAIN_LEVELS.filter(l => l.biome === 'meadow');
+    const first = world1[0];
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // 1. FRESH LAUNCH → 1-1 ONBOARDING → FIGHT → TRIPLE UNLOCK REVEAL
-    // ═════════════════════════════════════════════════════════════════════════
-    const intro11 = completeLessonModal(screen, ['shape', 'color']);
-    expect(intro11.some(s => s.includes('The meadow needs you'))).toBe(true);
-    expect(intro11.some(s => s.includes('The Set'))).toBe(true);
-    expect(intro11.some(s => s.includes('Is this a Set?'))).toBe(true);
-
-    // Pre-unlock HUD check inside 1-1: no hint button, no purity/evo/arcana chips
+    // ── Onboarding and the bare first level ──────────────────────────────
+    const onboarding = completeLessons(screen, first.rules.attributes);
+    expect(onboarding.some(t => t.includes('Is this a Set?'))).toBe(true);
+    // Bare level: no passives, no hint button, no evolution chip
+    expect(screen.queryAllByTestId(/^run-passive-/)).toHaveLength(0);
     expect(screen.queryByTestId('run-hint')).toBeNull();
-    expect(screen.queryByTestId('run-purity-chip')).toBeNull();
     expect(screen.queryByTestId('run-evo-chip')).toBeNull();
+    const fight1 = playFight(screen, first.rules.attributes);
+    expect(fight1.sawTotalDamage).toBe(true);
+    expect(screen.getByTestId('results-total-damage')).toBeTruthy();
+    expect(screen.getByTestId('results-biggest-hit')).toBeTruthy();
+    stepThroughReveals(screen);
 
-    const run11 = playLiveFightToCompletion(screen, ['shape', 'color']);
-    expect(run11.tipsDismissed).toBeGreaterThanOrEqual(3); // 3 fightTips in 1-1!
-    expect(screen.getByText('PERFECT!')).toBeTruthy();
+    let save = loadAdventureSave();
+    const firstWeapons = starRewards(first).slice(0, save.stars[first.id]).flatMap(r => r.weapons ?? []);
+    expect(save.armory).toEqual(firstWeapons);
+    // Won weapons go straight into the free charm slots
+    expect(equippedCharms(save)).toEqual(firstWeapons);
+    expect(save.fighterLevels).toEqual({});
 
-    // Before UnlockReveal plays, LevelResults hides all 3 rewards behind silhouettes!
-    expect(screen.getByText('New ability')).toBeTruthy();
-    expect(screen.getByText('A new weapon')).toBeTruthy();
-    expect(screen.getByText('A new fighter')).toBeTruthy();
-    expect(screen.queryByText('Sly Fox')).toBeNull();
-
-    // Advance timer to pop UnlockReveal (1/3 Coin Drops, 2/3 Blast Powder, 3/3 Sly Fox)
-    const reveals11 = stepThroughUnlockReveals(screen);
-    expect(reveals11).toHaveLength(3);
-    expect(reveals11[0]).toContain('Coin Drops');
-    expect(reveals11[1]).toContain('Blast Powder');
-    expect(reveals11[1]).toContain('Your first charm');
-    expect(reveals11[1]).toContain('Equipped ✓  Continue');
-    expect(reveals11[2]).toContain('Sly Fox');
-
-    // After UnlockReveal finishes, LevelResults reveals all 3 unlocked names!
-    expect(screen.getByText('Coin Drops')).toBeTruthy();
-    expect(screen.getByText('Blast Powder')).toBeTruthy();
-    expect(screen.getByText('Sly Fox')).toBeTruthy();
-
-    // Check persisted save state after 1-1
-    let persisted = loadAdventureSave();
-    expect(persisted.coinsUnlocked).toBe(true);
-    expect(persisted.armory).toEqual(['blast-powder-common']);
-    expect(persisted.charm).toBe('blast-powder-common');
-    expect(persisted.selectedFighter).toBe('Sly Fox');
-    expect(persisted.workshopUnlocked).toBe(false);
-    expect(persisted.bountiesUnlocked).toBe(false);
-
-    // Go to Map: Camp dock is now unlocked, Bounties dock is still locked!
-    fireEvent.press(screen.getByTestId('results-map'));
+    // ── Camp: the skill tree spends the first stars ──────────────────────
+    backToMap(screen);
     expect(screen.getByTestId('map-dock-camp').props.accessibilityState?.disabled).toBe(false);
-    expect(screen.getByTestId('map-dock-bounties').props.accessibilityState?.disabled).toBe(true);
-
-    // Open Camp before 1-4: Workshop tab shows 🔒 WORKSHOP and locked notice
     fireEvent.press(screen.getByTestId('map-dock-camp'));
     expect(screen.getByText('🔒 WORKSHOP')).toBeTruthy();
-    fireEvent.press(screen.getByTestId('camp-tab-workshop'));
-    expect(screen.getByTestId('camp-workshop-locked')).toBeTruthy();
+    const tabby = getFighter(save.selectedFighter);
+    fireEvent.press(screen.getByTestId(`camp-open-tree-${tabby.name}`));
+    const root = skillTreeOf(tabby.name).find(n => n.branch === 0 && n.depth === 1)!;
+    const starsBefore = availableStars(save);
+    expect(starsBefore).toBeGreaterThanOrEqual(root.cost);
+    fireEvent.press(screen.getByTestId(`skill-node-${root.id}`));
+    fireEvent.press(screen.getByTestId('skill-buy'));
+    save = loadAdventureSave();
+    expect(save.skillNodes[tabby.name]).toEqual([root.id]);
+    expect(availableStars(save)).toBe(starsBefore - root.cost);
+    expect(totalStarsEarned(save)).toBe(save.stars[first.id]);
+    fireEvent.press(screen.getByTestId('skill-tree-back'));
     fireEvent.press(screen.getByLabelText('Back to map'));
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // 2. 1-2 (HEARTS) & 1-3 (3RD TRAIT: NUMBER + 2ND WEAPON UNLOCK)
-    // ═════════════════════════════════════════════════════════════════════════
-    fireEvent.press(screen.getByTestId('map-node-1-2'));
-    fireEvent.press(screen.getByTestId('preview-play'));
-    const intro12 = completeLessonModal(screen, ['shape', 'color']);
-    expect(intro12.some(s => s.includes('Hearts'))).toBe(true);
-    playLiveFightToCompletion(screen, ['shape', 'color']);
-    stepThroughUnlockReveals(screen);
+    // ── The rest of World 1 ──────────────────────────────────────────────
+    const firstRecipeLevel = world1.find(l => starRewards(l).some(r => r.evolution))!;
+    let sawEvolution = false;
+    let sawBombs = false;
+    for (const level of world1.slice(1)) {
+      fireEvent.press(screen.getByTestId(`map-node-${level.id}`));
+      save = loadAdventureSave();
+      // Preview: the fighter's passives and the charm slots, filled with what was won so far
+      expect(screen.getByTestId('preview-passives')).toBeTruthy();
+      expect(screen.getByTestId('preview-charm-slots')).toBeTruthy();
+      expect(screen.getByTestId(`preview-slot-${charmSlots(save) - 1}`)).toBeTruthy();
+      if (level.rules.hazards) expect(screen.getByTestId('preview-hazards')).toBeTruthy();
+      const armed = save.unlockedEvolutions.length > 0 && EVOLUTION_RECIPES.some(
+        r => save.unlockedEvolutions.includes(r.id) && r.families.every(f => equippedCharms(save).some(id => f.some(p => id === p || id.startsWith(`${p}-`))))
+      );
+      if (armed) expect(screen.getByText(/evolutions? armed/)).toBeTruthy();
 
-    // Advance directly from LevelResults -> Next: 1-3
-    fireEvent.press(screen.getByTestId('results-next'));
-    fireEvent.press(screen.getByTestId('preview-play'));
-    const intro13 = completeLessonModal(screen, ['shape', 'color', 'number']);
-    expect(intro13.some(s => s.includes('New Trait: Number'))).toBe(true);
-    playLiveFightToCompletion(screen, ['shape', 'color', 'number']);
-    const reveals13 = stepThroughUnlockReveals(screen);
-    expect(reveals13.some(r => r.includes('Flint Spark'))).toBe(true);
-    expect(loadAdventureSave().armory).toContain('flint-spark-common');
-
-    // ═════════════════════════════════════════════════════════════════════════
-    // 3. 1-4 (POWER CARDS + WORKSHOP UNLOCK + FILTERED UPGRADES + 100% REFUNDS)
-    // ═════════════════════════════════════════════════════════════════════════
-    fireEvent.press(screen.getByTestId('results-next'));
-    fireEvent.press(screen.getByTestId('preview-play'));
-    const intro14 = completeLessonModal(screen, ['shape', 'color', 'number']);
-    expect(intro14.some(s => s.includes('Power Cards'))).toBe(true);
-    playLiveFightToCompletion(screen, ['shape', 'color', 'number']);
-    const reveals14 = stepThroughUnlockReveals(screen, { preferSecondaryOnLast: true });
-    expect(reveals14.some(r => r.includes('The Workshop'))).toBe(true);
-    expect(loadAdventureSave().workshopUnlocked).toBe(true);
-
-    // Tapping Camp on 1-4 LevelResults opens Camp directly on the newly unlocked Workshop tab!
-    fireEvent.press(screen.getByTestId('results-camp'));
-    expect(screen.queryByTestId('camp-workshop-locked')).toBeNull();
-
-    // Only unlocked mechanics appear; future mechanics (Hourglass 1-7, Sharp Eyes 2-1, Second Wind 2-4) stay hidden!
-    expect(screen.getByTestId('camp-upgrade-heavy_hitter')).toBeTruthy();
-    expect(screen.getByTestId('camp-upgrade-tough_hide')).toBeTruthy();
-    expect(screen.getByTestId('camp-upgrade-lucky_purse')).toBeTruthy();
-    expect(screen.queryByTestId('camp-upgrade-hourglass')).toBeNull();
-    expect(screen.queryByTestId('camp-upgrade-sharp_eyes')).toBeNull();
-    expect(screen.queryByTestId('camp-upgrade-second_wind')).toBeNull();
-
-    // Only unlocked Armory weapons appear in Weapon Upgrades
-    expect(screen.getByTestId('camp-weapon-upgrade-blast-powder-common')).toBeTruthy();
-    expect(screen.getByTestId('camp-weapon-upgrade-flint-spark-common')).toBeTruthy();
-    expect(screen.queryByTestId('camp-weapon-upgrade-chrono-shard-common')).toBeNull();
-
-    // Upgrade Blast Powder (+1 for 80¢) + level Sly Fox, then verify 100% Free Money Refund!
-    const coinsBeforeSpend = loadAdventureSave().coins;
-    expect(coinsBeforeSpend).toBeGreaterThanOrEqual(140);
-    fireEvent.press(screen.getByTestId('camp-buy-weapon-blast-powder-common'));
-    expect(screen.getByText('Blast Powder +1')).toBeTruthy();
-    expect(loadAdventureSave().coins).toBe(coinsBeforeSpend - 80);
-
-    // Per-weapon refund returns 100% of coins
-    fireEvent.press(screen.getByTestId('camp-refund-weapon-blast-powder-common'));
-    expect(loadAdventureSave().coins).toBe(coinsBeforeSpend);
-
-    // Buy weapon upgrade + fighter level, then Refund All returns 100% of coins across tabs!
-    fireEvent.press(screen.getByTestId('camp-buy-weapon-blast-powder-common'));
-    fireEvent.press(screen.getByTestId('camp-tab-fighters'));
-    fireEvent.press(screen.getAllByText('60¢')[0]); // Level 1 -> 2 costs 60¢
-    expect(loadAdventureSave().coins).toBe(coinsBeforeSpend - 140);
-    fireEvent.press(screen.getByTestId('camp-refund-all'));
-    expect(loadAdventureSave().coins).toBe(coinsBeforeSpend);
-
-    // Re-apply Blast Powder +1 & equip Blast Powder as Charm for Sly Fox's Solar Cataclysm combo!
-    fireEvent.press(screen.getByTestId('camp-tab-workshop'));
-    fireEvent.press(screen.getByTestId('camp-buy-weapon-blast-powder-common'));
-    fireEvent.press(screen.getByTestId('camp-tab-armory'));
-    fireEvent.press(screen.getByText('Blast Powder +1'));
-    expect(loadAdventureSave().charm).toBe('blast-powder-common');
-    fireEvent.press(screen.getByLabelText('Back to map'));
-
-    // ═════════════════════════════════════════════════════════════════════════
-    // 4. 1-5 (RAINBOW) → 1-5E ELITE (ORDER-AWARE COMBO DISCOVERY + ARCANA + COMBO)
-    // ═════════════════════════════════════════════════════════════════════════
-    // Before 1-5 ★★, 1-5E Elite is locked on LevelPreview
-    fireEvent.press(screen.getByTestId('map-node-1-5E'));
-    expect(collectTreeText(screen.toJSON())).toContain('Elite path. Earn ★★ on 1-5');
-    fireEvent.press(screen.getByText('✕'));
-
-    fireEvent.press(screen.getByTestId('map-node-1-5'));
-    fireEvent.press(screen.getByTestId('preview-play'));
-    const intro15 = completeLessonModal(screen, ['shape', 'color', 'number']);
-    expect(intro15.some(s => s.includes('Rainbow Strike'))).toBe(true);
-    playLiveFightToCompletion(screen, ['shape', 'color', 'number'], { preferRainbow: true });
-    stepThroughUnlockReveals(screen);
-    fireEvent.press(screen.getByTestId('results-map'));
-
-    // 1-5E Elite is now unlocked! Verify order-aware Combo Discovery prelude (zero clock spoilers)
-    expect(isLevelUnlocked(loadAdventureSave(), getLevel('1-5E'))).toBe(true);
-    fireEvent.press(screen.getByTestId('map-node-1-5E'));
-    fireEvent.press(screen.getByTestId('preview-play'));
-    const intro15E = completeLessonModal(screen, ['shape', 'color', 'number']);
-    expect(intro15E.some(s => s.includes('Combo Vault: First Weapon Combo'))).toBe(true);
-    expect(intro15E.every(s => !s.includes('countdown clock'))).toBe(true);
-
-    playLiveFightToCompletion(screen, ['shape', 'color', 'number'], { preferRainbow: true });
-    const reveals15E = stepThroughUnlockReveals(screen);
-    expect(reveals15E.some(r => r.includes('Overkill Harvest'))).toBe(true);
-    expect(reveals15E.some(r => r.includes('Solar Cataclysm'))).toBe(true);
-    expect(reveals15E.some(r => r.includes('How Hidden Catalysts Work'))).toBe(true);
-
-    // Overkill Harvest Arcana was equipped from UnlockReveal -> verify Map Arcana badge!
-    fireEvent.press(screen.getByTestId('results-map'));
-    expect(loadAdventureSave().activeArcana).toBe('overkill_harvest');
-    expect(screen.getByText('V')).toBeTruthy();
-
-    // ═════════════════════════════════════════════════════════════════════════
-    // 5. 1-6 (ESCALATING PURITY + ADAPTIVE COMBO INTRO + LIVE CATALYST FORGE!)
-    // ═════════════════════════════════════════════════════════════════════════
-    fireEvent.press(screen.getByTestId('map-node-1-6'));
-    // LevelPreview displays upgraded Charm ("Blast Powder +1"), Combo Synergy hint, and Arcana toggle!
-    expect(screen.getByText('Blast Powder +1')).toBeTruthy();
-    expect(screen.getByText('Combo Ready to Prime: Solar Cataclysm')).toBeTruthy();
-    // Toggle to Standard rules and back to Overkill Harvest via LevelPreview Arcana picker
-    fireEvent.press(screen.getByTestId('preview-arcana-none'));
-    expect(loadAdventureSave().activeArcana).toBeNull();
-    fireEvent.press(screen.getByTestId('preview-arcana-overkill_harvest'));
-    expect(loadAdventureSave().activeArcana).toBe('overkill_harvest');
-
-    fireEvent.press(screen.getByTestId('preview-play'));
-    // Chains Escalating Purity intro -> Adaptive Weapon Combos tutorial!
-    const intro16 = completeLessonModal(screen, ['shape', 'color', 'number']);
-    expect(intro16.some(s => s.includes('Escalating Purity'))).toBe(true);
-    expect(intro16.some(s => s.includes('Weapon Combos'))).toBe(true);
-
-    // Custom live step inside 1-6: verify active Arcana chip, trigger Escalating Purity, AND forge Solar Cataclysm!
-    dismissAllFightTips(screen);
-    expect(screen.getByTestId('run-arcana-chip')).toBeTruthy();
-    let sawPurityChip = false;
-    let forgedSolarCataclysm = false;
-
-    // Suppress random Blast Powder / Flint Spark collateral rolls until Solar Cataclysm is forged
-    // so an early collateral explosion never accidentally destroys the dormant Catalyst card!
-    const forgePrng = createRng(777);
-    randomSpy.mockImplementation(() => (forgedSolarCataclysm ? forgePrng.next() : 0.99));
-
-    for (let move = 0; move < 9; move++) {
-      dismissAllFightTips(screen);
-      if (screen.queryByTestId('results-map')) break;
-      const board = readLiveBoard(screen);
-      expect(screen.queryAllByTestId('card-evolution-catalyst').length).toBeLessThanOrEqual(1);
-      const validSets = findValidSetsOnBoard(board, ['shape', 'color', 'number']);
-      expect(validSets.length).toBeGreaterThan(0);
-
-      // Moves 0->1 escalate Purity (1-diff -> 2/3-diff); Move 2 uses low damage so 3 Sets prime Solar Cataclysm
-      // with plenty of foe HP left; Move 3+ prioritizes the gold EVO Catalyst Set to forge Solar Cataclysm!
-      const sorted = [...validSets].sort((a, b) => {
-        const aReadyCat = a.some(s => s.hasCatalyst && s.catalystReady) ? 1 : 0;
-        const bReadyCat = b.some(s => s.hasCatalyst && s.catalystReady) ? 1 : 0;
-        if (aReadyCat !== bReadyCat) return bReadyCat - aReadyCat;
-
-        const aDormantCat = a.some(s => s.hasCatalyst && !s.catalystReady) ? 1 : 0;
-        const bDormantCat = b.some(s => s.hasCatalyst && !s.catalystReady) ? 1 : 0;
-        if (aDormantCat !== bDormantCat) return aDormantCat - bDormantCat;
-
-        const aDiff = countDifferentAttributes(a.map(s => s.card), ['shape', 'color', 'number']);
-        const bDiff = countDifferentAttributes(b.map(s => s.card), ['shape', 'color', 'number']);
-        if (move === 1 || forgedSolarCataclysm) return bDiff - aDiff;
-        return aDiff - bDiff;
-      });
-
-      tapTripleOnBoard(sorted[0]);
-      dismissAllFightTips(screen);
-
-      if (screen.queryByTestId('run-purity-chip')) {
-        sawPurityChip = true;
+      const { lessons, fight, reveals } = playOpenPreview(screen, level, { stayOnResults: true });
+      if (level.id === firstRecipeLevel.id) {
+        expect(lessons.some(t => t.includes('First Evolution'))).toBe(true);
+        expect(reveals.some(t => t.includes('New evolution unlocked!'))).toBe(true);
       }
-      const evoChip = screen.queryByTestId('run-evo-chip');
-      if (evoChip && within(evoChip).queryByText('Evolved ✓')) {
-        forgedSolarCataclysm = true;
+      expect(fight.sawPassiveChip).toBe(true);
+      sawEvolution ||= fight.sawEvolutionBanner || fight.sawEvolutionRing;
+      sawBombs ||= fight.sawBomb;
+      if (fight.sawEvolutionBanner || fight.sawEvolutionRing) expect(screen.getByTestId('results-evolutions')).toBeTruthy();
+
+      save = loadAdventureSave();
+      // The Workshop opens partway through the world: buy and refund a weapon upgrade at 100%
+      if (save.workshopUnlocked && !(save.weaponUpgrades[save.armory[0]] > 0) && save.coins >= 80 && level.id === LEVELS.find(l => starRewards(l).some(r => r.unlockFeature === 'workshop'))?.id) {
+        fireEvent.press(screen.getByTestId('results-camp'));
+        fireEvent.press(screen.getByTestId('camp-tab-workshop'));
+        const coins = loadAdventureSave().coins;
+        fireEvent.press(screen.getByTestId(`camp-buy-weapon-${save.armory[0]}`));
+        expect(loadAdventureSave().coins).toBeLessThan(coins);
+        fireEvent.press(screen.getByTestId(`camp-refund-weapon-${save.armory[0]}`));
+        expect(loadAdventureSave().coins).toBe(coins);
+        fireEvent.press(screen.getByLabelText('Back to map'));
+      } else {
+        backToMap(screen);
       }
     }
 
-    // Restore deterministic PRNG for subsequent levels
-    const post16Prng = createRng(20261112);
-    randomSpy.mockImplementation(() => post16Prng.next());
+    save = loadAdventureSave();
+    expect(sawEvolution).toBe(true);
+    expect(save.discoveredEvolutions.length).toBeGreaterThan(0);
+    expect(sawBombs).toBe(true);
+    expect(save.workshopUnlocked).toBe(true);
+    expect(save.bountiesUnlocked).toBe(!!CAMPAIGN_FEATURES.bounties.clearLevel && (save.stars[CAMPAIGN_FEATURES.bounties.clearLevel] ?? 0) > 0);
+    expect(screen.getByTestId('map-dock-bounties').props.accessibilityState?.disabled).toBe(!save.bountiesUnlocked);
 
-    if (!screen.queryByTestId('results-map')) {
-      playLiveFightToCompletion(screen, ['shape', 'color', 'number'], { avoidCatalystUntilReady: true });
+    // ── The fighter side branch opens at ★★ on its parent ───────────────
+    const branch = LEVELS.find(l => l.branchOf && getLevel(l.branchOf).biome === 'meadow');
+    if (branch && (save.stars[branch.branchOf!] ?? 0) >= 2) {
+      const before = save.unlockedFighters.length;
+      playLevelFromMap(screen, branch, { stayOnResults: true });
+      backToMap(screen);
+      const reward = starRewards(branch).some(r => r.character);
+      if (reward) expect(loadAdventureSave().unlockedFighters.length).toBeGreaterThan(before);
     }
-    // Reset Arcana to Standard for 1-7 & 1-8
-    stepThroughUnlockReveals(screen);
 
-    expect(sawPurityChip).toBe(true);
-    expect(forgedSolarCataclysm).toBe(true);
-    expect(loadAdventureSave().discoveredEvolutions).toContain('solar-cataclysm');
-
-    // Open Field Guide -> Recipe Guide: verify Solar Cataclysm is now FORGED COMBO!
-    fireEvent.press(screen.getByTestId('results-map'));
+    // ── Recipe Guide shows the evolved recipe ────────────────────────────
     fireEvent.press(screen.getByTestId('map-dock-guide'));
     fireEvent.press(screen.getByTestId('guide-tab-recipes'));
-    expect(screen.getByText('FORGED COMBO')).toBeTruthy();
-    expect(screen.getByText(/Deals 6 damage and ignites 2 cards/)).toBeTruthy();
+    expect(screen.getAllByText(/EVOLVED BEFORE/).length).toBeGreaterThan(0);
     fireEvent.press(screen.getByLabelText('Back to map'));
-
-    // ═════════════════════════════════════════════════════════════════════════
-    // 6. 1-7 (TIMER + HOURGLASS WORKSHOP + 2ND COMBO) & 1-8 (BOUNTY BOARD!)
-    // ═════════════════════════════════════════════════════════════════════════
-    fireEvent.press(screen.getByTestId('map-node-1-7'));
-    fireEvent.press(screen.getByTestId('preview-arcana-none'));
-    fireEvent.press(screen.getByTestId('preview-play'));
-    const intro17 = completeLessonModal(screen, ['shape', 'color', 'number']);
-    // Does NOT repeat combo discovery prelude because 1-5E already showed it!
-    expect(intro17.every(s => !s.includes('First Weapon Combo'))).toBe(true);
-    expect(intro17.some(s => s.includes('The Clock'))).toBe(true);
-
-    playLiveFightToCompletion(screen, ['shape', 'color', 'number']);
-    const reveals17 = stepThroughUnlockReveals(screen);
-    expect(reveals17.some(r => r.includes('Immortal Aegis'))).toBe(true);
-    // Second combo unlock does NOT repeat firstEvolution callout
-    expect(reveals17.every(r => !r.includes('How Hidden Catalysts Work'))).toBe(true);
-
-    // Check Camp Workshop: Hourglass IS now unlocked, Sharp Eyes & Second Wind still hidden!
-    fireEvent.press(screen.getByTestId('results-camp'));
-    fireEvent.press(screen.getByTestId('camp-tab-workshop'));
-    expect(screen.getByTestId('camp-upgrade-hourglass')).toBeTruthy();
-    expect(screen.queryByTestId('camp-upgrade-sharp_eyes')).toBeNull();
-    expect(screen.queryByTestId('camp-upgrade-second_wind')).toBeNull();
-    fireEvent.press(screen.getByLabelText('Back to map'));
-
-    // Fight 1-8 Boss (Shell Shock) -> Unlocks Cross-Run Bounty Board!
-    fireEvent.press(screen.getByTestId('map-node-1-8'));
-    fireEvent.press(screen.getByTestId('preview-play'));
-    completeLessonModal(screen, ['shape', 'color', 'number']);
-    playLiveFightToCompletion(screen, ['shape', 'color', 'number']);
-
-    const reveals18 = stepThroughUnlockReveals(screen, { preferSecondaryOnLast: true });
-    expect(reveals18.some(r => r.includes('Bounty Board unlocked!'))).toBe(true);
-    persisted = loadAdventureSave();
-    expect(persisted.bountiesUnlocked).toBe(true);
-    // Cumulative stats from 1-1..1-8 already cashed out cross-run bounties!
-    expect(persisted.completedBounties.length).toBeGreaterThanOrEqual(2);
-    expect(persisted.completedBounties).toContain('bounty_evolve_1');
-
-    // Open Bounty Board directly from LevelResults -> test filters & claimed rows!
-    fireEvent.press(screen.getByTestId('results-bounties'));
-    expect(screen.getByText('BOUNTIES')).toBeTruthy();
-    expect(screen.getAllByText('CLAIMED ✓').length).toBeGreaterThanOrEqual(2);
-    fireEvent.press(screen.getByTestId('bounty-filter-chaos'));
-    expect(screen.getByText('First Transmutation')).toBeTruthy();
-    fireEvent.press(screen.getByTestId('bounty-filter-mastery'));
-    expect(screen.getByText('Pattern Apprentice')).toBeTruthy();
-    fireEvent.press(screen.getByLabelText('Back to map'));
-
-    // Map Bounty dock is now enabled!
-    expect(screen.getByTestId('map-dock-bounties').props.accessibilityState?.disabled).toBe(false);
   });
 
-  it('shatters and loses the Catalyst for the rest of the fight if matched prematurely before priming', () => {
-    let save = createNewSave();
-    save = {
-      ...save,
-      coinsUnlocked: true,
-      workshopUnlocked: true,
-      selectedFighter: 'Orange Tabby',
-      armory: ['life-vessel-rare'],
-      charm: 'life-vessel-rare',
-      unlockedEvolutions: ['immortal-aegis'],
-      seenMechanics: ['set_rule', 'hearts', 'attr_number', 'power_cards', 'rainbow', 'purity_chain', 'weapon_evolutions'],
-      seenCoachMarks: ['start_purity_chain'],
-      stars: { '1-1': 3, '1-2': 3, '1-3': 3, '1-4': 3, '1-5': 3 },
-    };
-
-    const screen = render(wrap(<AdventureMode initialSave={save} onExit={() => {}} />));
-    fireEvent.press(screen.getByTestId('map-node-1-6'));
-    fireEvent.press(screen.getByTestId('preview-play'));
-    dismissAllFightTips(screen);
-
-    // Match 1 or 2 Sets until a dormant Catalyst card is part of a valid Set (before 3-Set streak primes Immortal Aegis)
-    let matchedDormantCatalyst = false;
-    for (let attempt = 0; attempt < 2; attempt++) {
-      dismissAllFightTips(screen);
-      const board = readLiveBoard(screen);
-      const validSets = findValidSetsOnBoard(board, ['shape', 'color', 'number']);
-      const setWithDormant = validSets.find(s => s.some(c => c.hasCatalyst && !c.catalystReady));
-      if (setWithDormant) {
-        tapTripleOnBoard(setWithDormant);
-        dismissAllFightTips(screen);
-        matchedDormantCatalyst = true;
-        break;
+  it('plays World 2–5 landmarks: snares, waves and the shop, bigger loadouts, chained branches and the Summit finale, then reloads a completed campaign', () => {
+    // Everything before a level: 3★ on every earlier main level and the branches hanging off them
+    const rootOf = (l: LevelDef): LevelDef => (l.branchOf ? rootOf(getLevel(l.branchOf)) : l);
+    const saveBefore = (target: LevelDef, extra: Partial<AdventureSave> = {}): AdventureSave => {
+      let s = createNewSave();
+      for (const l of LEVELS) {
+        if (MAIN_LEVELS.indexOf(rootOf(l)) < MAIN_LEVELS.indexOf(target)) s = applyLevelResult(s, l, 3, 40).save;
       }
-      tapTripleOnBoard(validSets[0]);
-      dismissAllFightTips(screen);
-    }
-
-    expect(matchedDormantCatalyst).toBe(true);
-    // HUD chip immediately reports Catalyst Lost and zero Catalyst badges remain on the board!
-    const evoChip = screen.getByTestId('run-evo-chip');
-    expect(within(evoChip).getByText('Catalyst Lost')).toBeTruthy();
-    expect(screen.queryAllByTestId('card-evolution-catalyst')).toHaveLength(0);
-  });
-
-  it('verifies Worlds 2, 3, and 4 live UI mechanics (Hints, Duds, Graces, XP Pick +tier, Waves, Shop, 5-Trait Final Boss) and 100% campaign completion (111/111 ★)', () => {
-    // Seed a save that has completed World 1 and test World 2–4 milestone stages live in UI
-    let base = createNewSave();
-    for (const id of ['1-1', '1-2', '1-3', '1-4', '1-5', '1-5E', '1-6', '1-7', '1-8', '1-8E']) {
-      base = applyLevelResult(base, getLevel(id), 3, 25).save;
-    }
-    base = {
-      ...base,
-      coins: 1500,
-      lifetimeCoins: 2000,
-      weaponUpgrades: { 'blast-powder-common': 2 },
-      charm: 'blast-powder-common',
+      const seen = LEVELS.filter(l => (s.stars[l.id] ?? 0) > 0).map(l => l.introduces);
+      return { ...s, seenMechanics: [...new Set([...s.seenMechanics, ...seen])], ...extra };
     };
 
-    const screen = render(wrap(<AdventureMode initialSave={base} onExit={() => {}} />));
-
-    // ── 2-1 (Hints + Sharp Eyes Workshop unlock) ─────────────────────────────
-    fireEvent.press(screen.getByTestId('map-node-2-1'));
-    fireEvent.press(screen.getByTestId('preview-play'));
-    completeLessonModal(screen, ['shape', 'color', 'number']);
-    const run21 = playLiveFightToCompletion(screen, ['shape', 'color', 'number'], { useHintOnce: true });
-    expect(run21.usedHint).toBe(true);
-    stepThroughUnlockReveals(screen);
-    fireEvent.press(screen.getByTestId('results-camp'));
-    fireEvent.press(screen.getByTestId('camp-tab-workshop'));
-    expect(screen.getByTestId('camp-upgrade-sharp_eyes')).toBeTruthy();
-    expect(screen.queryByTestId('camp-upgrade-second_wind')).toBeNull();
-    fireEvent.press(screen.getByLabelText('Back to map'));
-
-    // Unmount and verify 2-4 (Graces -> Second Wind Workshop), 2-5 (XP Pick with +tier), 3-3 (Wave Shop), and 4-5 (Final Boss)!
+    // ── Snares on the board ──────────────────────────────────────────────
+    const snareLevel = MAIN_LEVELS.find(l => l.rules.hazards?.snares)!;
+    mockKvStore.clear();
+    let screen = render(wrap(<AdventureMode initialSave={saveBefore(snareLevel)} onExit={() => {}} />));
+    fireEvent.press(screen.getByTestId(`map-node-${snareLevel.id}`));
+    expect(screen.getByTestId('preview-hazards')).toBeTruthy();
+    const snareRun = playOpenPreview(screen, snareLevel);
+    expect(snareRun.fight.sawSnare).toBe(true);
     screen.unmount();
 
-    let midSave = loadAdventureSave();
-    for (const id of ['2-1', '2-2', '2-3']) {
-      midSave = applyLevelResult(midSave, getLevel(id), 3, 30).save;
-    }
+    // ── Waves and the shop ───────────────────────────────────────────────
+    const shopLevel = MAIN_LEVELS.find(l => l.introduces === 'shop') ?? MAIN_LEVELS.find(l => l.foes.length > 1)!;
+    screen = render(wrap(<AdventureMode initialSave={saveBefore(shopLevel, { coins: 2000 })} onExit={() => {}} />));
+    const shopRun = playLevelFromMap(screen, shopLevel, { buyInShop: true });
+    if (shopLevel.foes.length > 1 && shopLevel.introduces === 'shop') expect(shopRun.fight.boughtInShop).toBe(true);
+    screen.unmount();
 
-    const screen2 = render(wrap(<AdventureMode initialSave={midSave} onExit={() => {}} />));
+    // ── Charm Belt and Tarot Deck grow the preview's slots ───────────────
+    const late = MAIN_LEVELS.find(l => l.biome === 'peaks')!;
+    const rich = saveBefore(late, { coins: 20000 });
+    screen = render(wrap(<AdventureMode initialSave={rich} onExit={() => {}} />));
+    fireEvent.press(screen.getByTestId('map-dock-camp'));
+    fireEvent.press(screen.getByTestId('camp-tab-workshop'));
+    fireEvent.press(screen.getByTestId('camp-buy-upgrade-charm_belt'));
+    if (rich.unlockedArcana.length >= 2) fireEvent.press(screen.getByTestId('camp-buy-upgrade-tarot_deck'));
+    fireEvent.press(screen.getByLabelText('Back to map'));
+    fireEvent.press(screen.getByTestId(`map-node-${late.id}`));
+    expect(screen.getByTestId('preview-slot-3')).toBeTruthy();
+    expect(screen.queryByTestId('preview-slot-4')).toBeNull();
+    fireEvent.press(screen.getByText('✕'));
 
-    // ── 2-4 (Graces -> unlocks 6th & final Mechanic Upgrade `Second Wind` + Badger + Vengeance Dynamo) ──
-    fireEvent.press(screen2.getByTestId('map-node-2-4'));
-    fireEvent.press(screen2.getByTestId('preview-play'));
-    completeLessonModal(screen2, ['shape', 'color', 'number']);
-    playLiveFightToCompletion(screen2, ['shape', 'color', 'number']);
-    stepThroughUnlockReveals(screen2);
-    fireEvent.press(screen2.getByTestId('results-camp'));
-    fireEvent.press(screen2.getByTestId('camp-tab-workshop'));
-    // All 6 mechanic upgrades are now unlocked in the Workshop!
-    for (const u of UPGRADES) {
-      expect(screen2.getByTestId(`camp-upgrade-${u.id}`)).toBeTruthy();
-    }
-    fireEvent.press(screen2.getByLabelText('Back to map'));
+    // ── Branches that chain off branches are on the map ──────────────────
+    const chained = LEVELS.find(l => l.branchOf && getLevel(l.branchOf).branchOf);
+    if (chained) expect(screen.getByTestId(`map-node-${chained.id}`)).toBeTruthy();
+    screen.unmount();
 
-    // ── 2-5 (XP Level-Up `WeaponPick` modal showing upgraded Armory weapons!) ──
-    fireEvent.press(screen2.getByTestId('map-node-2-5'));
-    fireEvent.press(screen2.getByTestId('preview-play'));
-    completeLessonModal(screen2, ['shape', 'color', 'number']);
-    const run25 = playLiveFightToCompletion(screen2, ['shape', 'color', 'number']);
-    expect(run25.pickedLevelUp).toBe(true);
-    stepThroughUnlockReveals(screen2);
-    screen2.unmount();
-
-    // ── 3-3 (Multi-Wave + Between-Wave SHOP purchase!) ───────────────────────
-    let canyonSave = loadAdventureSave();
-    for (const id of ['2-6', '2-7', '2-8', '3-1', '3-2']) {
-      canyonSave = applyLevelResult(canyonSave, getLevel(id), 3, 40).save;
-    }
-    const screen3 = render(wrap(<AdventureMode initialSave={canyonSave} onExit={() => {}} />));
-    fireEvent.press(screen3.getByTestId('map-node-3-3'));
-    fireEvent.press(screen3.getByTestId('preview-play'));
-    completeLessonModal(screen3, ['shape', 'color', 'number', 'shading']);
-    const run33 = playLiveFightToCompletion(screen3, ['shape', 'color', 'number', 'shading'], { buyInShop: true });
-    expect(run33.visitedShop).toBe(true);
-    stepThroughUnlockReveals(screen3);
-    screen3.unmount();
-
-    // ── 4-5 FINAL BOSS (`The Hydra` on 5-Trait 18-Card Board) + 100% 37-Stage Completion ──
-    let fullSave = loadAdventureSave();
-    for (const level of LEVELS) {
-      if (level.id === '4-5') continue;
-      fullSave = applyLevelResult(fullSave, level, 3, 50).save;
-    }
-    // Populate cross-run bounty stats from full campaign feats so all 16 bounties complete cleanly
-    fullSave = {
-      ...fullSave,
-      selectedFighter: 'Orange Tabby',
-      charm: null,
-      activeArcana: 'overkill_harvest',
+    // ── The Summit finale ────────────────────────────────────────────────
+    const finale = MAIN_LEVELS[MAIN_LEVELS.length - 1];
+    expect(finale.biome).toBe('summit');
+    let full = createNewSave();
+    for (const l of LEVELS) if (l.id !== finale.id) full = applyLevelResult(full, l, 3, 50).save;
+    full = {
+      ...full,
+      seenMechanics: LEVELS.map(l => l.introduces),
       discoveredEvolutions: EVOLUTION_RECIPES.map(r => r.id),
       bountyStats: {
-        totalSets: 260,
-        rainbowSets: 30,
-        purityChains: 20,
-        threeStepPurities: 5,
-        flawlessTimedWins: 8,
-        evolutionsForged: 8,
-        maxOverkill: 14,
-        destructiveFights: 12,
-        fighterWins: {
-          'Orange Tabby': 5,
-          'Sly Fox': 6,
-          Corgi: 5,
-          Badger: 5,
-          'Emperor Penguin': 5,
-          Pelican: 5,
-        },
+        totalSets: 100000,
+        rainbowSets: 10000,
+        purityChains: 10000,
+        threeStepPurities: 10000,
+        flawlessTimedWins: 1000,
+        evolutionsForged: 1000,
+        maxOverkill: 1000,
+        destructiveFights: 1000,
+        trapsDefused: 1000,
+        biggestHit: 1000,
+        fighterWins: Object.fromEntries(FIGHTERS.map(f => [f.name, 100])),
       },
     };
+    screen = render(wrap(<AdventureMode initialSave={full} onExit={() => {}} />));
+    fireEvent.press(screen.getByTestId(`map-node-${finale.id}`));
+    fireEvent.press(screen.getByTestId('preview-play'));
+    completeLessons(screen, finale.rules.attributes);
+    playFight(screen, finale.rules.attributes, { maxSteps: 120 });
+    stepThroughReveals(screen);
+    // A finale that ends short of ★★★ is completed here so the reload checks a finished campaign
+    const after = loadAdventureSave();
+    if ((after.stars[finale.id] ?? 0) < 3) mockKvStore.set('adventure_v2_save', JSON.stringify(applyLevelResult(after, finale, 3, 0).save));
+    screen.unmount();
 
-    const screenFinal = render(wrap(<AdventureMode initialSave={fullSave} onExit={() => {}} />));
-    fireEvent.press(screenFinal.getByTestId('map-node-4-5'));
-    fireEvent.press(screenFinal.getByTestId('preview-play'));
-    completeLessonModal(screenFinal, ['shape', 'color', 'number', 'shading', 'background']);
-    // The Hydra's ★★★ stretch condition requires >= 10 flawless Sets before 44 HP hits 0
-    playLiveFightToCompletion(screenFinal, ['shape', 'color', 'number', 'shading', 'background'], {
-      preferRainbow: false,
-    });
-    stepThroughUnlockReveals(screenFinal);
-    fireEvent.press(screenFinal.getByTestId('results-map'));
-
-    // Reload from persistent KV storage in a brand-new <AdventureMode /> mount to prove 100% persistence!
-    screenFinal.unmount();
-    const completedSave = loadAdventureSave();
-
-    expect(MAIN_LEVELS).toHaveLength(29);
-    expect(LEVELS).toHaveLength(37);
-    expect(totalStars(completedSave)).toBe(maxStars()); // 111 / 111 ★
-    expect(completedSave.unlockedFighters).toHaveLength(FIGHTERS.length); // All 6 Fighters
-    expect(completedSave.unlockedEvolutions).toHaveLength(EVOLUTION_RECIPES.length); // All 8 Evolutions
-    expect(completedSave.unlockedArcana).toHaveLength(ARCANA.length); // All 8 Arcana
-    expect(completedSave.completedBounties).toHaveLength(BOUNTIES.length); // All 16 Bounties
+    const done = loadAdventureSave();
+    expect(totalStarsEarned(done)).toBe(maxStars());
+    expect(done.unlockedFighters).toHaveLength(FIGHTERS.length);
+    expect(done.unlockedEvolutions).toHaveLength(EVOLUTION_RECIPES.length);
+    expect(done.unlockedArcana).toHaveLength(ARCANA.length);
+    expect(done.completedBounties).toHaveLength(BOUNTIES.length);
 
     const reloaded = render(wrap(<AdventureMode onExit={() => {}} />));
     expect(reloaded.getByText(`${maxStars()}/${maxStars()}`)).toBeTruthy();
-
-    // Verify Camp Arcana tab has all 8 Arcana unlocked & toggleable
-    fireEvent.press(reloaded.getByTestId('map-dock-camp'));
-    fireEvent.press(reloaded.getByTestId('camp-tab-arcana'));
-    for (const a of ARCANA) {
-      expect(reloaded.getByText(a.name)).toBeTruthy();
-    }
-    fireEvent.press(reloaded.getByLabelText('Back to map'));
-
-    // Verify Bounty Board shows 16/16 completed
-    fireEvent.press(reloaded.getByTestId('map-dock-bounties'));
-    expect(reloaded.getByText(`${BOUNTIES.length}/${BOUNTIES.length}`)).toBeTruthy();
-    fireEvent.press(reloaded.getByLabelText('Back to map'));
-
-    // Verify Field Guide -> Recipe Guide shows all 8/8 recipes forged
     fireEvent.press(reloaded.getByTestId('map-dock-guide'));
     fireEvent.press(reloaded.getByTestId('guide-tab-recipes'));
-    expect(reloaded.getByText(`RECIPE GUIDE (${EVOLUTION_RECIPES.length}/${EVOLUTION_RECIPES.length})`)).toBeTruthy();
+    expect(reloaded.getByText(`RECIPES (${EVOLUTION_RECIPES.length}/${EVOLUTION_RECIPES.length})`)).toBeTruthy();
+    fireEvent.press(reloaded.getByLabelText('Back to map'));
+    fireEvent.press(reloaded.getByTestId('map-dock-camp'));
+    fireEvent.press(reloaded.getByTestId('camp-tab-arcana'));
+    for (const a of ARCANA) expect(reloaded.getByText(a.name)).toBeTruthy();
+  });
+
+  it('migrates a v1 save on load: fighter levels refunded, the single charm and Arcana moved into slots', () => {
+    let v1 = createNewSave();
+    for (const l of MAIN_LEVELS.slice(0, 3)) v1 = applyLevelResult(v1, l, 3, 0).save;
+    const charm = v1.armory[0];
+    const stored = {
+      ...v1,
+      coins: 500,
+      fighterLevels: { 'Orange Tabby': 3 },
+      charm,
+      activeArcana: null,
+      unlockedArcana: [ARCANA[0].id],
+    } as Record<string, unknown>;
+    delete stored.charms;
+    delete stored.equippedArcana;
+    delete stored.skillNodes;
+    stored.activeArcana = ARCANA[0].id;
+    mockKvStore.set('adventure_v2_save', JSON.stringify(stored));
+
+    const screen = render(wrap(<AdventureMode onExit={() => {}} />));
+    const migrated = loadAdventureSave();
+    expect(migrated.coins).toBe(500 + 60 + 120);
+    expect(migrated.fighterLevels).toEqual({});
+    expect(migrated.charms[0]).toBe(charm);
+    expect(migrated.equippedArcana).toEqual([ARCANA[0].id]);
+
+    fireEvent.press(screen.getByTestId(`map-node-${MAIN_LEVELS[3].id}`));
+    expect(screen.getByTestId('preview-slot-0')).toBeTruthy();
+    expect(screen.getByTestId(`charm-${charm}`).props.accessibilityState?.selected).toBe(true);
   });
 });

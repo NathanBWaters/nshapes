@@ -1,215 +1,321 @@
 import { getLevel, LEVELS, MAIN_LEVELS } from '@/adventure/data/levels';
-import { createNewSave, applyLevelResult, getLockReason, isLevelUnlocked, levelFighter, buyUpgrade, reconcileUnlocks, totalStars } from '@/adventure/progress';
-import { getFeaturesForLevel } from '@/adventure/loadout';
+import { createNewSave, applyLevelResult, getLockReason, isLevelUnlocked, totalStars } from '@/adventure/progress';
+import { getFeaturesForLevel, startingLoadout } from '@/adventure/loadout';
 import { createRun, runReducer, computeStars } from '@/adventure/engine/run';
-import { allSets, hasAnySet } from '@/adventure/engine/sets';
-import type { Card, CardReward } from '@/types';
-import type { RunState } from '@/adventure/types';
-
-const rewards = (cards: Card[]): CardReward[] => cards.map(c => ({ cardId: c.id, points: 1, money: 1, experience: 1 }));
-
-const playSet = (s: RunState): RunState => {
-  const set = allSets(s.board, s.attributes)[0];
-  let next = runReducer(s, { type: 'MATCH', cards: set, rewards: rewards(set) });
-  next = runReducer(next, { type: 'REPLACE', ids: set.map(c => c.id) });
-  return next;
-};
+import { allSets, hasAnySet, isRainbow } from '@/adventure/engine/sets';
+import { getArmoryWeapon } from '@/adventure/data/armory';
+import { SKILL_NODES } from '@/adventure/data/skillTrees';
+import type { AdventureWeapon, RunState } from '@/adventure/types';
+import { eventsOf, findSet, miss, playSet, startFight, testLevel, tick } from './testUtils/adventureFight';
 
 describe('features accumulate along the map', () => {
   it('1-1 has no hearts, 1-2 introduces them, later levels keep them', () => {
     expect(getFeaturesForLevel(getLevel('1-1'), createNewSave()).has('hearts')).toBe(false);
     expect(getFeaturesForLevel(getLevel('1-2'), createNewSave()).has('hearts')).toBe(true);
-    expect(getFeaturesForLevel(getLevel('4-5'), createNewSave()).has('hearts')).toBe(true);
-    expect(getFeaturesForLevel(getLevel('2-8'), createNewSave()).has('shop')).toBe(false);
-    expect(getFeaturesForLevel(getLevel('3-3'), createNewSave()).has('shop')).toBe(true);
+    expect(getFeaturesForLevel(MAIN_LEVELS[MAIN_LEVELS.length - 1], createNewSave()).has('hearts')).toBe(true);
   });
 
-  it('first level: infinite hearts, no gear, no hints', () => {
+  it('first level: infinite hearts, no gear, no passives, no hints', () => {
     const run = createRun(getLevel('1-1'), createNewSave(), { seed: 1 });
     expect(run.hearts).toBeNull();
     expect(run.weapons).toHaveLength(0);
+    expect(run.passives).toHaveLength(0);
     expect(run.stats.hints).toBe(0);
     expect(hasAnySet(run.board, run.attributes)).toBe(true);
   });
 });
 
 describe('run reducer', () => {
-  it('1-1: five Sets win it, and it cannot be lost', () => {
-    let s = createRun(getLevel('1-1'), createNewSave(), { seed: 42 });
-    expect(s.foeHp).toBe(15);
-    expect(s.hearts).toBeNull();
-    expect(s.movesLeft).toBeNull();
-    expect(s.timeLeft).toBeNull();
+  it('a Set deals its points and counts as a match', () => {
+    let s = startFight({ level: testLevel({ foes: [{ name: 'Dummy', hp: 15 }] }), features: ['hearts'] });
     s = playSet(s);
     expect(s.foeHp).toBe(12);
+    expect(s.matches).toBe(1);
     while (s.status === 'playing') s = playSet(s);
-    expect(s.matches).toBe(5);
     expect(s.status).toBe('won');
-    expect(computeStars(s)).toBe(3); // no mistakes
+    expect(s.endReason).toBe('defeated');
   });
 
-  it.each([[0, 3], [1, 2], [2, 1], [5, 1]])('1-1 stars are about accuracy: %i mistakes → %i stars', (mistakes, stars) => {
-    let s = createRun(getLevel('1-1'), createNewSave(), { seed: 8 });
-    for (let i = 0; i < mistakes; i++) {
-      const wrong = s.board.slice(0, 3);
-      s = runReducer(s, { type: 'INVALID', cards: wrong });
-      s = runReducer(s, { type: 'REPLACE', ids: wrong.map(c => c.id) });
-    }
+  it.each([[0, 3], [1, 2], [2, 1], [5, 1]])('accuracy levels: %i mistakes → %i stars', (mistakes, stars) => {
+    const level = testLevel({ foes: [{ name: 'Dummy', hp: 15 }], starRule: { kind: 'accuracy', threeStarMax: 0, twoStarMax: 1 } });
+    let s = startFight({ level, features: [] });
+    for (let i = 0; i < mistakes; i++) s = miss(s);
     expect(s.status).toBe('playing');
     while (s.status === 'playing') s = playSet(s);
     expect(computeStars(s)).toBe(stars);
   });
 
-  it('move-limited levels count down moves', () => {
-    let s = createRun(getLevel('1-3'), createNewSave(), { seed: 42 });
-    const moves = s.movesLeft!;
+  it('move-limited levels count down moves and end survived', () => {
+    let s = startFight({ level: testLevel({ rules: { moves: 2 } }), features: ['hearts'] });
     s = playSet(s);
-    expect(s.movesLeft).toBe(moves - 1);
+    expect(s.movesLeft).toBe(1);
+    s = playSet(s);
+    expect(s.status).toBe('won');
+    expect(computeStars(s)).toBe(1);
   });
 
   it('mistakes cost hearts and can lose the level', () => {
-    let s = createRun(getLevel('1-2'), { ...createNewSave(), stars: { '1-1': 1 } }, { seed: 7 });
-    const hearts = s.hearts!;
-    expect(hearts).toBeGreaterThanOrEqual(3);
-    // +1: Orange Tabby's Nine Lives absorbs one knockout
-    for (let i = 0; i < hearts + 1; i++) s = runReducer(s, { type: 'INVALID', cards: s.board.slice(0, 3) });
+    let s = startFight({ level: testLevel({ rules: { hearts: 3 } }), features: ['hearts'] });
+    for (let i = 0; i < 3; i++) s = miss(s);
     expect(s.hearts).toBe(0);
     expect(s.status).toBe('lost');
     expect(computeStars(s)).toBe(0);
   });
 
   it('timed levels give 1 star for surviving the clock', () => {
-    let s = createRun(getLevel('1-7'), createNewSave(), { seed: 3 });
-    for (let i = 0; i < 200 && s.status === 'playing'; i++) s = runReducer(s, { type: 'TICK', ms: 1000 });
+    let s = startFight({ level: testLevel({ rules: { timer: 20 } }), features: ['hearts'] });
+    s = tick(s, 21000, 1000);
     expect(s.status).toBe('won');
     expect(s.endReason).toBe('survived');
-    expect(computeStars(s)).toBe(1);
   });
 
   it('waves advance through an intermission', () => {
-    let s = createRun(getLevel('3-2'), createNewSave(), { seed: 5 });
-    while (s.status === 'playing' || s.status === 'pick') {
-      s = s.status === 'pick' ? runReducer(s, { type: 'PICK', weaponId: null }) : playSet(s);
-    }
+    const level = testLevel({ foes: [{ name: 'A', hp: 6 }, { name: 'B', hp: 9 }] });
+    let s = startFight({ level, features: ['hearts'] });
+    while (s.status === 'playing') s = playSet(s);
     expect(s.status).toBe('intermission');
     s = runReducer(s, { type: 'NEXT_WAVE' });
     expect(s.wave).toBe(1);
-    expect(s.foeHp).toBe(getLevel('3-2').foes[1].hp);
+    expect(s.foeHp).toBe(9);
+    expect(s.setsThisWave).toBe(0);
   });
 
   it('the board keeps the same reference across quiet ticks', () => {
-    const s = createRun(getLevel('1-7'), createNewSave(), { seed: 9 });
+    const s = startFight({ level: testLevel({ rules: { timer: 60 } }), features: ['hearts'] });
     const t = runReducer(s, { type: 'TICK', ms: 250 });
     expect(t.board).toBe(s.board);
   });
 
   it('is deterministic for a given seed', () => {
-    const a = createRun(getLevel('2-1'), createNewSave(), { seed: 123 });
-    const b = createRun(getLevel('2-1'), createNewSave(), { seed: 123 });
+    const play = () => {
+      let s = startFight({ seed: 123, save: { selectedFighter: 'Corgi' } });
+      for (let i = 0; i < 8; i++) s = playSet(tick(s, 1500));
+      return s;
+    };
+    const a = play();
+    const b = play();
     expect(a.board.map(c => `${c.shape}${c.color}${c.number}`)).toEqual(b.board.map(c => `${c.shape}${c.color}${c.number}`));
+    expect(a.totalDamage).toBe(b.totalDamage);
+    expect(a.rng).toBe(b.rng);
+  });
+
+  it('cards waiting to be replaced are left alone until REPLACE', () => {
+    let s = startFight();
+    const set = findSet(s)!;
+    s = runReducer(s, { type: 'MATCH', cards: set, rewards: set.map(c => ({ cardId: c.id, points: 1 })) });
+    expect(s.replacing).toEqual(set.map(c => c.id));
+    s = runReducer(s, { type: 'REPLACE', ids: set.map(c => c.id) });
+    expect(s.replacing).toEqual([]);
+    expect(s.board.some(c => set.some(x => x.id === c.id))).toBe(false);
+  });
+
+  it('tracks the biggest hit and total damage', () => {
+    let s = startFight({ features: ['hearts'] });
+    s = playSet(s);
+    expect(s.biggestHit).toBe(3);
+    expect(s.totalDamage).toBe(3);
   });
 });
 
-describe('fighter abilities', () => {
-  const caughtUp = () => {
-    const base = createNewSave();
-    const stars = Object.fromEntries(LEVELS.map(l => [l.id, 3]));
-    return { ...base, stars, unlockedFighters: ['Orange Tabby', 'Sly Fox', 'Badger', 'Emperor Penguin', 'Corgi', 'Pelican'] as const } as unknown as ReturnType<typeof createNewSave>;
-  };
+describe('loadout', () => {
+  const armory = ['blast-powder-common', 'mending-charm-common', 'flint-spark-common', 'war-drum-common', 'pinata-common'];
 
-  it('the bare first level has no ability or gear; everything after does', () => {
-    const first = createRun(getLevel('1-1'), createNewSave(), { seed: 1 });
-    expect(first.ability).toBeNull();
-    expect(first.weapons).toHaveLength(0);
-    const second = createRun(getLevel('1-2'), createNewSave(), { seed: 1 });
-    expect(second.ability?.id).toBe('nine_lives');
-    expect(second.weapons.length).toBeGreaterThan(0);
+  it('fighters bring no gear: charms are the whole weapon loadout, capped at the slots', () => {
+    const level = testLevel();
+    const bare = startingLoadout(level, { ...createNewSave(), armory });
+    expect(bare.weapons).toHaveLength(0);
+    const save = { ...createNewSave(), armory, charms: [...armory, 'not-owned'] };
+    expect(startingLoadout(level, save).weapons.map(w => w.id)).toEqual(armory.slice(0, 3));
+    const belted = { ...save, upgrades: { charm_belt: 2 } };
+    expect(startingLoadout(level, belted).weapons.map(w => w.id)).toEqual(armory);
+    expect(startingLoadout(level, { ...save, upgrades: { charm_belt: 9 } }).charmSlots).toBe(6);
   });
 
-  it('the equipped charm joins the fighter gear', () => {
-    const save = { ...createNewSave(), armory: ['blast-powder-rare'], charm: 'blast-powder-rare' };
-    const withCharm = createRun(getLevel('1-2'), save, { seed: 1 });
-    const without = createRun(getLevel('1-2'), createNewSave(), { seed: 1 });
-    expect(withCharm.weapons.map(w => w.id)).toContain('blast-powder-rare');
-    expect(withCharm.weapons).toHaveLength(without.weapons.length + 1);
-    expect(withCharm.stats.explosionChance).toBeGreaterThan(without.stats.explosionChance);
+  it('duplicate and unowned charms are dropped', () => {
+    const save = { ...createNewSave(), armory: ['blast-powder-common'], charms: ['blast-powder-common', 'blast-powder-common', 'pinata-common'] };
+    expect(startingLoadout(testLevel(), save).weapons.map(w => w.id)).toEqual(['blast-powder-common']);
   });
 
-  it('power cards appear from 1-4 on and add damage', () => {
-    const before = createRun(getLevel('1-3'), createNewSave(), { seed: 2 });
-    expect(before.features.has('power')).toBe(false);
-    let found = false;
-    for (let seed = 1; seed < 30 && !found; seed++) {
-      found = createRun(getLevel('1-4'), createNewSave(), { seed }).board.some(c => c.bonusPoints === 2);
-    }
-    expect(found).toBe(true);
+  it('bare levels stay bare even with charms, Arcana and nodes equipped', () => {
+    const save = {
+      ...createNewSave(),
+      armory: ['blast-powder-common'],
+      charms: ['blast-powder-common'],
+      unlockedArcana: ['tempo_surge' as const],
+      equippedArcana: ['tempo_surge' as const],
+    };
+    const l = startingLoadout(testLevel({ rules: { noGear: true } }), save);
+    expect(l.weapons).toHaveLength(0);
+    expect(l.arcana).toHaveLength(0);
+    expect(l.passives).toHaveLength(0);
   });
+
+  it('passives come from the fighter', () => {
+    expect(startFight({ save: { selectedFighter: 'Sly Fox' } }).passives).toEqual(['combo', 'hot_streak']);
+    expect(startFight({ save: { selectedFighter: 'Pelican' } }).passives).toEqual(['big_scoop', 'keen_eye']);
+  });
+
+  it('owned skill nodes of the fighter are live; other fighters’ nodes are ignored', () => {
+    const tabby = SKILL_NODES.filter(n => n.fighter === 'Orange Tabby').slice(0, 2).map(n => n.id);
+    const fox = SKILL_NODES.find(n => n.fighter === 'Sly Fox')!.id;
+    const s = startFight({ save: { skillNodes: { 'Orange Tabby': [...tabby, fox] } } });
+    expect(s.skillNodes).toEqual(tabby);
+  });
+
+  it('Workshop tiers scale a rule weapon (War Drum +2 → +5)', () => {
+    const drum = (tier: number) => {
+      const w = getArmoryWeapon('war-drum-common', { 'war-drum-common': tier }) as AdventureWeapon;
+      const e = w.rules![0].effects[0];
+      return e.do === 'empowerBoard' ? e.amount : NaN;
+    };
+    expect([0, 1, 2, 3].map(drum)).toEqual([2, 3, 4, 5]);
+  });
+});
+
+describe('fighter passives', () => {
+  const fight = (fighter: RunState['fighter'], over: Parameters<typeof startFight>[0] = {}) =>
+    startFight({ ...over, save: { selectedFighter: fighter, ...over.save } });
 
   it('Orange Tabby — Nine Lives survives one knockout', () => {
-    let s = createRun(getLevel('2-1'), { ...caughtUp(), selectedFighter: 'Orange Tabby' }, { seed: 2 });
-    const hearts = s.hearts!;
-    for (let i = 0; i < hearts; i++) s = runReducer(s, { type: 'INVALID', cards: s.board.slice(0, 3) });
+    let s = fight('Orange Tabby', { level: testLevel({ rules: { hearts: 3 } }) });
+    for (let i = 0; i < 3; i++) s = miss(s);
     expect(s.status).toBe('playing');
     expect(s.hearts).toBe(1);
-    expect(s.events.some(e => e.type === 'nine_lives')).toBe(true);
-    s = runReducer(s, { type: 'INVALID', cards: s.board.slice(0, 3) });
+    expect(s.passive.nineLivesLeft).toBe(0);
+    s = miss(s);
     expect(s.status).toBe('lost');
   });
 
-  it('Sly Fox — quick Sets build a combo; a mistake breaks it', () => {
-    let s = createRun(getLevel('2-1'), { ...caughtUp(), selectedFighter: 'Sly Fox' }, { seed: 3 });
-    s = playSet(s);
-    const hp1 = s.foeHp;
-    s = runReducer(s, { type: 'TICK', ms: 1000 });
-    s = playSet(s); // combo 1
-    expect(s.ability!.combo).toBe(1);
-    expect(hp1 - s.foeHp).toBeGreaterThanOrEqual(4);
-    s = runReducer(s, { type: 'INVALID', cards: s.board.slice(0, 3) });
-    expect(s.ability!.combo).toBe(0);
-  });
-
-  it('Badger — mistakes store grudges released on the next Set', () => {
-    let s = createRun(getLevel('2-1'), { ...caughtUp(), selectedFighter: 'Badger' }, { seed: 4 });
-    s = runReducer(s, { type: 'INVALID', cards: s.board.slice(0, 3) });
-    s = runReducer(s, { type: 'INVALID', cards: s.board.slice(0, 3) });
-    expect(s.ability!.grudge).toBe(2);
+  it('Orange Tabby — Scrappy adds damage per missing heart', () => {
+    let s = fight('Orange Tabby', { features: ['hearts', 'gear'] });
+    s = miss(miss(s));
     const before = s.foeHp;
     s = playSet(s);
-    expect(before - s.foeHp).toBeGreaterThanOrEqual(3 + 6);
-    expect(s.ability!.grudge).toBe(0);
+    expect(before - s.foeHp).toBe(3 + 2);
   });
 
-  it('Emperor Penguin — Deep Freeze stops the clock', () => {
-    let s = createRun(getLevel('2-1'), { ...caughtUp(), selectedFighter: 'Emperor Penguin' }, { seed: 5 });
+  it('Sly Fox — quick Sets chain a combo, a mistake breaks it, max combo arms Hot Streak', () => {
+    let s = fight('Sly Fox', { features: ['hearts', 'gear'] });
+    const hit = (st: RunState) => {
+      const before = st.foeHp;
+      const next = playSet(tick(st, 1000));
+      return { next, dmg: before - next.foeHp };
+    };
+    let r = hit(s);
+    expect(r.next.combo).toBe(1);
+    expect(r.dmg).toBe(3);
+    r = hit(r.next);
+    expect(r.next.combo).toBe(2);
+    expect(r.dmg).toBe(4);
+    r = hit(hit(hit(r.next).next).next); // combo 5 = 4 steps = max
+    expect(r.next.combo).toBe(5);
+    expect(r.next.passive.hotStreak).toBe(true);
+    r = hit(r.next);
+    expect(r.dmg).toBe((3 + 4) * 2);
+    s = miss(r.next);
+    expect(s.combo).toBe(0);
+    expect(s.passive.hotStreak).toBe(false);
+    expect(s.maxCombo).toBe(6);
+  });
+
+  it('every fighter has a combo counter (it just deals no damage)', () => {
+    let s = fight('Orange Tabby', { features: ['gear'] });
+    s = playSet(tick(s, 500));
+    s = playSet(tick(s, 500));
+    expect(s.combo).toBe(2);
+    s = tick(s, 6000);
+    expect(s.combo).toBe(0);
+  });
+
+  it('Badger — Grudge stores mistakes for the next Set; Thick Hide spares the first heart each wave', () => {
+    let s = fight('Badger', { features: ['hearts', 'gear'] });
+    const hearts = s.hearts!;
+    s = miss(s);
+    expect(s.hearts).toBe(hearts);
+    expect(eventsOf(s, 'thick_hide')).toHaveLength(1);
+    s = miss(s);
+    expect(s.hearts).toBe(hearts - 1);
+    expect(s.passive.grudge).toBe(2);
+    const before = s.foeHp;
+    s = playSet(s);
+    expect(before - s.foeHp).toBe(3 + 6);
+    expect(s.passive.grudge).toBe(0);
+  });
+
+  it('Emperor Penguin — Patience rewards slow Sets; Deep Freeze stops the clock on Rainbows', () => {
+    let s = fight('Emperor Penguin', { level: testLevel({ rules: { timer: 120 } }), features: ['hearts', 'gear'] });
+    s = tick(s, 6000, 1000);
+    let before = s.foeHp;
+    s = playSet(s);
+    expect(before - s.foeHp).toBe(3 + 3);
+    before = s.foeHp;
+    s = playSet(tick(s, 1000));
+    expect(before - s.foeHp).toBe(3);
+
+    let r = fight('Emperor Penguin', { level: testLevel({ rules: { timer: 120 } }), features: ['hearts', 'gear', 'rainbow'], seed: 3 });
+    for (let i = 0; i < 40 && !findSet(r, set => isRainbow(set, r.attributes)); i++) r = playSet(r);
+    const rainbow = findSet(r, set => isRainbow(set, r.attributes))!;
+    r = playSet(r, rainbow);
+    expect(r.frozenMs).toBe(4000);
+    const t = r.timeLeft;
+    r = tick(r, 3000, 1000);
+    expect(r.timeLeft).toBe(t);
+    r = tick(r, 2000, 1000);
+    expect(r.timeLeft).toBeLessThan(t!);
+  });
+
+  it.each([6, 11, 21, 34])('Corgi — every 5th Set re-deals a clean board (seed %i)', seed => {
+    let s = fight('Corgi', { seed });
     for (let i = 0; i < 4; i++) s = playSet(s);
-    expect(s.ability!.charge).toBe(4);
-    s = runReducer(s, { type: 'ABILITY' });
-    const t = s.timeLeft;
-    s = runReducer(s, { type: 'TICK', ms: 3000 });
-    expect(s.timeLeft).toBe(t);
-    s = runReducer(s, { type: 'TICK', ms: 3000 });
-    s = runReducer(s, { type: 'TICK', ms: 1000 });
-    expect(s.timeLeft).toBeLessThan(t!);
+    expect(s.passive.zoomiesIn).toBe(1);
+    const set = findSet(s)!;
+    const others = s.board.filter(c => !set.some(x => x.id === c.id) && (c.health ?? 1) <= 1).map(c => c.id);
+    s = playSet(s, set);
+    expect(eventsOf(s, 'redeal')).toHaveLength(1);
+    expect(s.board.some(c => others.includes(c.id))).toBe(false);
+    expect(s.board.some(c => c.isDud || c.isFaceDown)).toBe(false);
+    expect(hasAnySet(s.board, s.attributes)).toBe(true);
+    expect(s.passive.zoomiesIn).toBe(5);
   });
 
-  it.each([6, 11, 21, 34, 55, 89, 144, 233])('Corgi — Zoomies re-deals a clean board (seed %i)', seed => {
-    let s = createRun(getLevel('2-2'), { ...caughtUp(), selectedFighter: 'Corgi' }, { seed });
-    for (let i = 0; i < 3; i++) s = playSet(s);
-    const before = s.board.map(c => c.id);
-    s = runReducer(s, { type: 'ABILITY' });
-    expect(s.board.map(c => c.id)).not.toEqual(before);
-    expect(s.board.some(c => c.isDud)).toBe(false);
+  it('Corgi — Fetch brings a new power card when one is matched', () => {
+    let s = fight('Corgi', { features: ['gear', 'power'] });
+    for (let i = 0; i < 30 && !findSet(s, set => set.some(c => (c.bonusPoints ?? 0) > 0)); i++) s = playSet(s);
+    const set = findSet(s, x => x.some(c => (c.bonusPoints ?? 0) > 0))!;
+    const ids = new Set(set.map(c => c.id));
+    const powerOthers = (st: RunState) => st.board.filter(c => (c.bonusPoints ?? 0) > 0 && !ids.has(c.id)).length;
+    const before = powerOthers(s);
+    s = runReducer(s, { type: 'MATCH', cards: set, rewards: set.map(c => ({ cardId: c.id, points: 1 + (c.bonusPoints ?? 0) })) });
+    expect(eventsOf(s, 'fetch').length).toBeGreaterThan(0);
+    expect(powerOthers(s)).toBe(before + 1);
+  });
+
+  it('Pelican — every 6th Set scoops a free Set (no move spent, not counted toward the next scoop)', () => {
+    let s = fight('Pelican', { level: testLevel({ rules: { moves: 30 } }) });
+    for (let i = 0; i < 5; i++) s = playSet(s);
+    expect(s.matches).toBe(5);
+    s = playSet(s);
+    expect(s.matches).toBe(7);
+    expect(s.movesLeft).toBe(24);
+    expect(eventsOf(s, 'scoop')).toHaveLength(1);
+    expect(s.passive.scoopIn).toBe(6);
     expect(hasAnySet(s.board, s.attributes)).toBe(true);
   });
 
-  it('Pelican — Big Scoop plays a Set for you', () => {
-    let s = createRun(getLevel('2-1'), { ...caughtUp(), selectedFighter: 'Pelican' }, { seed: 7 });
-    for (let i = 0; i < 4; i++) s = playSet(s);
-    const m = s.matches;
-    s = runReducer(s, { type: 'ABILITY' });
-    expect(s.matches).toBe(m + 1);
-    expect(s.ability!.scooped).toHaveLength(3);
-    expect(s.ability!.charge).toBe(0);
+  it('Pelican — Keen Eye lights a card of a Set after 8s; a skill node makes it 6s', () => {
+    let s = fight('Pelican');
+    s = tick(s, 7000, 1000);
+    expect(s.passive.keenEyeCardId).toBeNull();
+    s = tick(s, 1000, 1000);
+    const id = s.passive.keenEyeCardId!;
+    expect(allSets(s.board, s.attributes).some(set => set.some(c => c.id === id))).toBe(true);
+    s = playSet(s);
+    expect(s.passive.keenEyeCardId).toBeNull();
+
+    const sharp = SKILL_NODES.find(n => n.fighter === 'Pelican' && n.modifiers?.passiveTuning?.['keenEye.ms'] === -2000)!;
+    let t = fight('Pelican', { save: { skillNodes: { Pelican: [sharp.id] } } });
+    t = tick(t, 6000, 1000);
+    expect(t.passive.keenEyeCardId).not.toBeNull();
   });
 });
 
@@ -223,75 +329,21 @@ describe('progression', () => {
     }
   });
 
-  it('1-1 unlocks coins at ★, explosive Blast Powder at ★★, and Sly Fox at ★★★, each once', () => {
-    const save = createNewSave();
-    const lvl = getLevel('1-1');
-    const r1 = applyLevelResult(save, lvl, 1, 0);
-    expect(r1.unlocks).toEqual([{ kind: 'feature', feature: 'coins', star: 1 }]);
-    expect(r1.save.coinsUnlocked).toBe(true);
-    expect(r1.save.coins).toBe(20);
-    const r2 = applyLevelResult(r1.save, lvl, 2, 5);
-    expect(r2.unlocks).toEqual([{ kind: 'weapon', id: 'blast-powder-common', star: 2, firstWeapon: true }]);
-    expect(r2.save.armory).toEqual(['blast-powder-common']);
-    expect(r2.save.charm).toBe('blast-powder-common'); // first weapon is equipped automatically
-    expect(r2.save.coins).toBe(20 + 30 + 5);
-    const r3 = applyLevelResult(r2.save, lvl, 2, 0);
-    expect(r3.granted).toHaveLength(0);
-    expect(r3.unlocks).toHaveLength(0);
-    const r4 = applyLevelResult(r3.save, lvl, 3, 0);
-    expect(r4.unlocks).toEqual([{ kind: 'fighter', name: 'Sly Fox', star: 3 }]);
-    expect(r4.save.unlockedFighters).toContain('Sly Fox');
-    expect(r4.granted.map(g => g.star)).toEqual([3]);
-    expect(r4.starCoins).toBe(50);
-  });
-
   it('elite branches open at ★★ on their parent and never block the main path', () => {
+    const elite = LEVELS.find(l => l.branchOf)!;
+    const parent = getLevel(elite.branchOf!);
     let save = createNewSave();
-    for (const id of ['1-1', '1-2', '1-3', '1-4']) save = applyLevelResult(save, getLevel(id), 1, 0).save;
-    save = applyLevelResult(save, getLevel('1-5'), 1, 0).save;
-    expect(getLockReason(save, getLevel('1-5E'))).toEqual({ kind: 'branch', parentId: '1-5', need: 2 });
-    expect(isLevelUnlocked(save, getLevel('1-6'))).toBe(true);
-    save = applyLevelResult(save, getLevel('1-5'), 2, 0).save;
-    expect(isLevelUnlocked(save, getLevel('1-5E'))).toBe(true);
+    for (const l of MAIN_LEVELS.slice(0, MAIN_LEVELS.indexOf(parent) + 1)) save = applyLevelResult(save, l, 1, 0).save;
+    expect(getLockReason(save, elite)).toEqual({ kind: 'branch', parentId: parent.id, need: 2 });
+    save = applyLevelResult(save, parent, 2, 0).save;
+    expect(isLevelUnlocked(save, elite)).toBe(true);
   });
 
-  it('levels unlock in order and biomes are star-gated', () => {
+  it('levels unlock in order', () => {
     let save = createNewSave();
-    expect(isLevelUnlocked(save, getLevel('1-2'))).toBe(false);
-    save = applyLevelResult(save, getLevel('1-1'), 1, 0).save;
-    expect(isLevelUnlocked(save, getLevel('1-2'))).toBe(true);
-    // Beat all of meadow with 1 star each: 8 stars < 12 gate for woods
-    for (const l of MAIN_LEVELS.filter(x => x.biome === 'meadow')) save = applyLevelResult(save, l, 1, 0).save;
-    expect(totalStars(save)).toBe(8);
-    expect(isLevelUnlocked(save, getLevel('2-1'))).toBe(false);
-  });
-
-  it('boss star rewards unlock fighters', () => {
-    const r = applyLevelResult(createNewSave(), getLevel('1-8'), 2, 0);
-    expect(r.save.unlockedFighters).toContain('Corgi');
-  });
-
-  it('an older save gets unlocks that moved onto levels it already cleared', () => {
-    // A save from before fighters unlocked early: stars but no Sly Fox, no weapons
-    const old = { ...createNewSave(), stars: { '1-1': 3, '1-2': 2 }, coins: 70 };
-    const fixed = reconcileUnlocks(old);
-    expect(fixed.unlockedFighters).toContain('Sly Fox');
-    expect(fixed.armory).toContain('blast-powder-common');
-    expect(fixed.charm).toBe('blast-powder-common');
-    expect(fixed.coins).toBe(70); // no coins paid twice
-    expect(reconcileUnlocks(fixed)).toEqual(fixed);
-  });
-
-  it('camp purchases spend coins once Workshop and target mechanics are unlocked', () => {
-    let save = { ...createNewSave(), coins: 1000 };
-    save = levelFighter(save, 'Orange Tabby');
-    expect(save.fighterLevels['Orange Tabby']).toBe(2);
-    expect(save.coins).toBe(940);
-    // Blocked before Workshop and Hearts (1-2) are unlocked
-    expect(buyUpgrade(save, 'tough_hide')).toBe(save);
-    save = { ...save, workshopUnlocked: true, stars: { '1-2': 1 } };
-    save = buyUpgrade(save, 'tough_hide');
-    expect(save.upgrades.tough_hide).toBe(1);
-    expect(save.coins).toBe(690);
+    expect(isLevelUnlocked(save, MAIN_LEVELS[1])).toBe(false);
+    save = applyLevelResult(save, MAIN_LEVELS[0], 1, 0).save;
+    expect(isLevelUnlocked(save, MAIN_LEVELS[1])).toBe(true);
+    expect(totalStars(save)).toBe(1);
   });
 });

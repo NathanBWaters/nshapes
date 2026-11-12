@@ -28,6 +28,12 @@ const withDefaults = (defaults: unknown, stored: unknown): unknown => {
   return stored;
 };
 
+/** A stored save still in the v1 shape: it has fighter levels, or a single charm or Arcana. */
+const needsMigration = (stored: Record<string, unknown>): boolean =>
+  (isRecord(stored.fighterLevels) && Object.keys(stored.fighterLevels).length > 0) ||
+  (stored.charm !== undefined && stored.charm !== null) ||
+  (stored.activeArcana !== undefined && stored.activeArcana !== null);
+
 const keepUnreadable = (raw: string, why: unknown): void => {
   console.warn('Adventure save could not be loaded; starting a new one.', why);
   try {
@@ -49,7 +55,11 @@ export const loadAdventureSave = (): AdventureSave => {
   try {
     const parsed: unknown = JSON.parse(raw);
     if (!isRecord(parsed) || parsed.version !== 1) throw new Error(`unsupported save version ${isRecord(parsed) ? String(parsed.version) : typeof parsed}`);
-    return reconcileUnlocks(withDefaults(createNewSave(), parsed) as AdventureSave);
+    // reconcileUnlocks also migrates the v1 shape (fighter levels refunded, single charm/Arcana into slots)
+    const save = reconcileUnlocks(withDefaults(createNewSave(), parsed) as AdventureSave);
+    // Store a migrated save right away so a refund can never be paid from the old shape twice
+    if (needsMigration(parsed)) writeAdventureSave(save);
+    return save;
   } catch (e) {
     keepUnreadable(raw, e);
     return createNewSave();

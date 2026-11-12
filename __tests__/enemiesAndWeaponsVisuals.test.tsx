@@ -6,7 +6,6 @@ import { EnemyAvatar } from '@/components/enemies';
 import { ALL_CUSTOM_ENEMY_RIG_NAMES } from '@/components/enemies/rigs';
 import { hasEnemyCreature } from '@/components/enemies/enemyRegistry';
 import { GENERIC_GEM_WEAPON_NAMES } from '@/components/weapons/WeaponArtwork';
-import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
 import { WeaponAvatar, ALL_CUSTOM_WEAPON_NAMES, getWeaponTapStyle } from '@/components/weapons';
 import { useEnemyConductor } from '@/hooks/useEnemyConductor';
 import {
@@ -202,10 +201,10 @@ describe('Custom Weapon Relics & Single-Tap Animation', () => {
     expect(missing).toEqual([]);
   });
 
-  it('gives every weapon and evolution result its own relic or an explicit generic-gem entry', () => {
+  it('gives every weapon its own relic or an explicit generic-gem entry', () => {
     const custom = new Set(ALL_CUSTOM_WEAPON_NAMES);
     const gem = new Set(GENERIC_GEM_WEAPON_NAMES);
-    const names = new Set([...WEAPONS.map((w) => w.name), ...EVOLUTION_RECIPES.map((r) => r.result.name)]);
+    const names = new Set(WEAPONS.map((w) => w.name));
     const unresolved = Array.from(names).filter((name) => !custom.has(name) && !gem.has(name));
     expect(unresolved).toEqual([]);
     expect(GENERIC_GEM_WEAPON_NAMES.filter((name) => custom.has(name))).toEqual([]);

@@ -1,6 +1,8 @@
 /**
- * The adventure map — a winding path of foe nodes through four biomes
- * (Angry Birds / Bloons style). Tap a node to open the level preview.
+ * The adventure map — a winding path of foe nodes through the worlds
+ * (Angry Birds / Bloons style). Elite branches hang off the path as side
+ * routes, and a branch can lead on to further branches. Tap a node to open
+ * the level preview.
  */
 import React, { useEffect, useMemo, useRef } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, useWindowDimensions, Platform } from 'react-native';
@@ -19,16 +21,22 @@ import { getMechanic } from '../data/mechanics';
 import { getFighter } from '../data/fighters';
 import { BOUNTIES } from '../data/bounties';
 import { getArcana } from '../data/arcana';
-import { getFrontierLevel, getLockReason, maxStars, totalStars, isBiomeOpen } from '../progress';
+import { isFighterTrial } from '../data/rewards';
+import { availableStars, equippedArcanaOf, getFrontierLevel, getLockReason, maxStars, totalStars, isBiomeOpen } from '../progress';
 import { Bob, CoinPill, INK, StarRow, TONE } from './ui';
 
 const ELITE = '#5B2333';
 const ROW = 112;
+/** Vertical step between branches that chain off one another */
+const BRANCH_STEP = 92;
 const BANNER = 132;
 const TOP_PAD = 24;
 
 interface NodePos { level: LevelDef; x: number; y: number; parent?: { x: number; y: number } }
 interface BannerPos { biomeIndex: number; y: number; height: number }
+
+/** A branch and every branch that chains off it, depth first. */
+const branchChain = (level: LevelDef): LevelDef[] => [level, ...branchesOf(level.id).flatMap(branchChain)];
 
 const layout = (width: number) => {
   const nodes: NodePos[] = [];
@@ -45,14 +53,24 @@ const layout = (width: number) => {
       lastBiome = level.biome;
     }
     const x = width / 2 + Math.sin(i * 0.95) * amp;
-    nodes.push({ level, x, y: y + ROW / 2 });
-    // Elite side paths branch off sideways, toward whichever side has room
-    branchesOf(level.id).forEach(b => {
-      const side = x < width / 2 ? 1 : -1;
+    const cy = y + ROW / 2;
+    nodes.push({ level, x, y: cy });
+    // Elite side paths branch off sideways, toward whichever side has room; a
+    // second branch off the same level takes the other side. Chained branches
+    // step down their side path.
+    let longest = 1;
+    branchesOf(level.id).forEach((b, k) => {
+      const roomy = x < width / 2 ? 1 : -1;
+      const side = k % 2 === 0 ? roomy : -roomy;
       const bx = Math.max(58, Math.min(width - 58, x + side * Math.min(150, width * 0.4)));
-      branches.push({ level: b, x: bx, y: y + ROW / 2 + 6, parent: { x, y: y + ROW / 2 } });
+      const chain = branchChain(b);
+      longest = Math.max(longest, chain.length);
+      chain.forEach((c, depth) => {
+        const parent = depth === 0 ? { x, y: cy } : { x: bx, y: cy + 6 + (depth - 1) * BRANCH_STEP };
+        branches.push({ level: c, x: bx, y: cy + 6 + depth * BRANCH_STEP, parent });
+      });
     });
-    y += ROW;
+    y += ROW + (longest - 1) * BRANCH_STEP;
   });
   // biome band heights
   banners.forEach((b, i) => {
@@ -116,12 +134,12 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
         </TouchableOpacity>
         <Text style={s.title}>ADVENTURE</Text>
         <View style={{ flex: 1 }} />
-        {save.activeArcana && save.unlockedArcana.includes(save.activeArcana) && (
-          <View style={s.arcanaPill}>
-            <Icon name={getArcana(save.activeArcana).icon} size={13} color={TONE.arcana} />
-            <Text style={s.arcanaGlyph}>{getArcana(save.activeArcana).numeral}</Text>
+        {equippedArcanaOf(save).map(id => (
+          <View key={id} style={s.arcanaPill}>
+            <Icon name={getArcana(id).icon} size={13} color={TONE.arcana} />
+            <Text style={s.arcanaGlyph}>{getArcana(id).numeral}</Text>
           </View>
-        )}
+        ))}
         <TouchableOpacity onPress={onToggleMusic} style={[s.iconBtn, !musicOn && { opacity: 0.4 }]} accessibilityLabel={musicOn ? 'Mute music' : 'Play music'}>
           <Icon name="delapouite/sound-on" size={18} color={INK} />
         </TouchableOpacity>
@@ -218,7 +236,7 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
             <Text style={s.playNextSub} numberOfLines={1}>{frontier.name}</Text>
           </View>
         </TouchableOpacity>
-        <DockButton testID="map-dock-camp" icon="lorc/campfire" label="Camp" onPress={onOpenCamp} disabled={!campUnlocked} badge={campUnlocked && save.coins >= 60} />
+        <DockButton testID="map-dock-camp" icon="lorc/campfire" label="Camp" onPress={onOpenCamp} disabled={!campUnlocked} badge={campUnlocked && availableStars(save) > 0} />
       </View>
     </View>
   );
@@ -278,7 +296,9 @@ const MapNode: React.FC<{ node: NodePos; save: AdventureSave; isFrontier: boolea
       </Bob>
       <View style={s.nodeMeta} pointerEvents="none">
         {!locked && <StarRow stars={stars} size={15} />}
-        <Text style={[s.nodeLabel, locked && { color: '#A69F95' }]}>{elite ? (locked ? 'ELITE ★★' : 'ELITE') : level.id}</Text>
+        <Text style={[s.nodeLabel, locked && { color: '#A69F95' }]}>
+          {elite ? `${isFighterTrial(level) ? 'TRIAL' : 'ELITE'}${locked ? ' ★★' : ''}` : level.id}
+        </Text>
       </View>
       {isNew && (
         <View style={s.newTag} pointerEvents="none">

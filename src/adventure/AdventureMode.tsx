@@ -10,7 +10,18 @@ import { MAIN_LEVELS, getLevel, mainIndexOf } from './data/levels';
 import { CAMPAIGN_FEATURES } from './data/features';
 import { MECHANICS } from './data/mechanics';
 import { STORY } from './data/story';
-import { applyLevelResult, equipArcana, equipCharm, isLevelUnlocked, markCoachMarkSeen, markMechanicSeen, type ResultApplication, type Unlock } from './progress';
+import {
+  applyLevelResult,
+  equipArcana,
+  equipCharm,
+  isLevelUnlocked,
+  markCoachMarkSeen,
+  markMechanicSeen,
+  toggleArcana,
+  toggleCharm,
+  type ResultApplication,
+  type Unlock,
+} from './progress';
 import { isFirstVisit, lessonsDueBefore, type LessonPlan } from './lessons';
 import { loadAdventureSave, writeAdventureSave } from './save';
 import { computeStars } from './engine/run';
@@ -214,8 +225,8 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
         onClose={() => setPreview(null)}
         onPlay={handlePlay}
         onSelectFighter={f => { sfx('click'); setSave(s => ({ ...s, selectedFighter: f })); }}
-        onSelectCharm={id => { sfx('click'); setSave(s => equipCharm(s, id)); }}
-        onSelectArcana={id => { sfx('click'); setSave(s => equipArcana(s, id)); }}
+        onSelectCharm={id => { sfx('click'); setSave(s => toggleCharm(s, id)); }}
+        onSelectArcana={id => { sfx('click'); setSave(s => toggleArcana(s, id)); }}
         onShowMechanic={id => setReference(MECHANICS[id])}
       />
       {teaching ? (

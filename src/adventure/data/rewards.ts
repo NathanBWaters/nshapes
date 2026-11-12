@@ -9,6 +9,10 @@ import { LEVELS, getLevel } from './levels';
 import { worldNumber } from './biomes';
 import { BOUNTIES } from './bounties';
 import { FEATURES } from './features';
+import { MECHANICS } from './mechanics';
+
+/** A side branch that teaches a fighter (rather than an Elite foe). */
+export const isFighterTrial = (level: LevelDef): boolean => !!level.branchOf && MECHANICS[level.introduces]?.kind === 'fighter';
 
 export type Unlockable =
   | { kind: 'feature'; id: UnlockableFeature }
@@ -62,7 +66,7 @@ export const unlockSource = (u: Unlockable): UnlockSource | null => unlockSource
 const describeSource = (s: UnlockSource): string => {
   if (s.via === 'bounty') return `Complete the ${s.bounty.name} bounty`;
   const { level } = s;
-  const elite = level.branchOf ? ` (World ${worldNumber(level.biome)} Elite)` : '';
+  const elite = level.branchOf ? ` (World ${worldNumber(level.biome)} ${isFighterTrial(level) ? 'trial' : 'Elite'})` : '';
   return `Earn ${'★'.repeat(s.via === 'star' ? s.star : 1)} on ${level.id} ${level.name}${elite}`;
 };
 

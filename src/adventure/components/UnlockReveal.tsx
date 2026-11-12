@@ -13,16 +13,18 @@ import { COLORS } from '@/utils/colors';
 import { sfx } from '@/audio';
 import type { CharacterName } from '@/types';
 import type { AdventureSave, ArcanaId, UnlockableFeature } from '../types';
-import type { Unlock } from '../progress';
-import { getFighter, getLoadout } from '../data/fighters';
-import { abilityFor } from '../data/abilities';
+import { charmSlots, equippedArcanaOf, equippedCharms, type Unlock } from '../progress';
+import { getFighter } from '../data/fighters';
+import { getPassive } from '../data/passives';
 import { getArcana } from '../data/arcana';
 import { getArmoryWeapon } from '../data/armory';
-import { getEvolutionRecipe } from '../data/evolutions';
+import { EVOLUTION_RECIPES } from '../data/evolutions';
 import { CAMPAIGN_FEATURES } from '../data/features';
+import { LEVELS } from '../data/levels';
 import { MECHANICS, getMechanic } from '../data/mechanics';
 import { DARK, INK } from './ui';
 import { describeUnlock } from './rewards';
+import { evolutionsMechanicId } from '../lessons';
 
 const GOLD = DARK.gold;
 const TEXT = DARK.text;
@@ -82,13 +84,17 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
   const fighter = u.kind === 'fighter' ? getFighter(u.name) : null;
   const w = u.kind === 'weapon' ? getArmoryWeapon(u.id) : null;
   const arcana = u.kind === 'arcana' ? getArcana(u.id) : null;
-  const evo = u.kind === 'evolution' ? getEvolutionRecipe(u.id) : null;
+  const evo = u.kind === 'evolution' ? EVOLUTION_RECIPES.find(r => r.id === u.id) ?? null : null;
   const feature = u.kind === 'feature' ? CAMPAIGN_FEATURES[u.feature] : null;
   const last = i + 1 >= unlocks.length;
   // Offered only when it is the final reveal, so the remaining ones are not skipped
   const openFeature = feature?.open && last && onOpenFeature ? feature.open : null;
-  const ability = fighter ? abilityFor(fighter.name) : null;
-  const signature = fighter ? MECHANICS[fighter.signature] : null;
+  // A fighter with a trial still to play learns its passives there, so the reveal stays short
+  const trial = fighter && !save.seenMechanics.includes(fighter.signature)
+    ? LEVELS.find(l => l.branchOf && l.introduces === fighter.signature) ?? null
+    : null;
+  const evoId = evolutionsMechanicId();
+  const evoMechanic = evo && evoId ? MECHANICS[evoId] : null;
 
   const reveal = () => {
     sfx('unlock');
@@ -106,8 +112,9 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
     } else onDone();
   };
 
-  const charmEquipped = u.kind === 'weapon' && save.charm === u.id;
-  const arcanaEquipped = u.kind === 'arcana' && save.activeArcana === u.id;
+  const charmEquipped = u.kind === 'weapon' && equippedCharms(save).includes(u.id);
+  const charmsFull = equippedCharms(save).length >= charmSlots(save);
+  const arcanaEquipped = u.kind === 'arcana' && equippedArcanaOf(save).includes(u.id);
   const sourceLabel = u.star === 0 ? 'Bounty reward' : `${'★'.repeat(u.star)} reward`;
   return (
     <Modal visible transparent animationType="fade">
@@ -129,10 +136,10 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                   reaction={{ type: 'ecstatic', id: i + 1 }}
                   interactive
                 />
-              ) : revealed && (w || evo) ? (
+              ) : revealed && w ? (
                 <WeaponAvatar
                   testID="unlock-revealed-weapon"
-                  weapon={w ?? evo!.result}
+                  weapon={w}
                   size={108}
                   interactive
                 />
@@ -157,30 +164,30 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
 
               <View style={st.card}>
                 <Text style={st.cardTitle}>How it works</Text>
-                {fighter && ability && (
+                {fighter && (trial ? (
                   <>
-                    <View style={st.row}>
-                      <View style={st.rowIcon}><Icon name={ability.icon} size={22} color={INK} /></View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={st.rowTitle}>{ability.name} <Text style={st.rowTag}>{ability.kind === 'active' ? 'TAP TO USE' : 'ALWAYS ON'}</Text></Text>
-                        <Text style={st.rowBody}>{ability.short}</Text>
-                      </View>
-                    </View>
-                    {getLoadout(fighter.name, 1).map((id, k) => {
-                      const g = getArmoryWeapon(id);
-                      return g ? (
-                        <View key={k} style={st.row}>
-                          <View style={st.rowIcon}><WeaponAvatar weapon={g} size={28} interactive /></View>
+                    <Text style={st.rowBody}>
+                      Plays by two passives: {fighter.passives.map(id => getPassive(id).name).join(' & ')}.
+                    </Text>
+                    <Text style={st.note}>Their trial, {trial.id} {trial.name}, now hangs off the map: it teaches both passives.</Text>
+                  </>
+                ) : (
+                  <>
+                    {fighter.passives.map(id => {
+                      const p = getPassive(id);
+                      return (
+                        <View key={id} style={st.row}>
+                          <View style={st.rowIcon}><Icon name={p.icon} size={22} color={INK} /></View>
                           <View style={{ flex: 1 }}>
-                            <Text style={st.rowTitle}>{g.name} <Text style={st.rowTag}>STARTING GEAR</Text></Text>
-                            <Text style={st.rowBody}>{adventureText(g.description)}</Text>
+                            <Text style={st.rowTitle}>{p.name} <Text style={st.rowTag}>ALWAYS ON</Text></Text>
+                            <Text style={st.rowBody}>{p.text}</Text>
                           </View>
                         </View>
-                      ) : null;
+                      );
                     })}
-                    {signature && <Text style={st.note}>{signature.tagline}</Text>}
+                    <Text style={st.note}>Spend stars in {fighter.name}'s skill tree at Camp to grow these passives.</Text>
                   </>
-                )}
+                ))}
                 {w && (
                   <>
                     <Text style={st.rowBody}>{adventureText(w.description)}</Text>
@@ -188,21 +195,20 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                     {u.kind === 'weapon' && u.firstWeapon && (
                       <View style={st.charmBox}>
                         <Text style={st.rowTitle}>Your first charm</Text>
-                        {MECHANICS.charm.body.map((p, k) => <Text key={k} style={st.rowBody}>{p}</Text>)}
+                        {(MECHANICS.charm?.body ?? []).map((p, k) => <Text key={k} style={st.rowBody}>{p}</Text>)}
                       </View>
                     )}
                   </>
                 )}
                 {evo && (
                   <>
-                    <Text style={st.rowBody}>{adventureText(evo.result.description)}</Text>
-                    <Text style={[st.rowBody, { color: '#5EEAD4' }]}>Weapons: {evo.gearRequirementText}</Text>
-                    <Text style={[st.rowBody, { color: '#FCD34D' }]}>Awaken: {evo.primeRequirementText} + match Catalyst card</Text>
-                    <Text style={st.note}>Evolution Burst: {evo.burstText}</Text>
-                    {u.kind === 'evolution' && u.firstEvolution && (
+                    <Text style={[st.rowBody, { color: '#5EEAD4' }]}>Armed by: {evo.familyText}</Text>
+                    <Text style={st.rowBody}>For 20 seconds: {evo.activeText}</Text>
+                    <Text style={st.note}>{evo.flavor}</Text>
+                    {u.kind === 'evolution' && u.firstEvolution && evoMechanic && (
                       <View style={st.charmBox}>
-                        <Text style={st.rowTitle}>How Hidden Catalysts Work</Text>
-                        {MECHANICS.weapon_evolutions.body.map((p, k) => <Text key={k} style={st.rowBody}>{p}</Text>)}
+                        <Text style={st.rowTitle}>How evolutions work</Text>
+                        {evoMechanic.body.map((p, k) => <Text key={k} style={st.rowBody}>{p}</Text>)}
                       </View>
                     )}
                   </>
@@ -215,7 +221,7 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                     <Text style={st.rowBody}>{arcana.tagline}</Text>
                     <Text style={[st.rowBody, { color: '#5EEAD4' }]}>▲ {arcana.upside}</Text>
                     <Text style={[st.rowBody, { color: '#FCD34D' }]}>▼ {arcana.tradeoff}</Text>
-                    <Text style={st.note}>Toggle your active Arcana anytime at Camp or on the level preview sheet.</Text>
+                    <Text style={st.note}>Equip or remove Arcana anytime at Camp or on the level preview sheet.</Text>
                   </>
                 )}
               </View>
@@ -231,17 +237,20 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                 </>
               )}
               {w && (
-                charmEquipped ? (
-                  <TouchableOpacity testID="unlock-primary" onPress={() => { sfx('confirm'); advance(); }} style={st.cta} activeOpacity={0.85}>
-                    <Text style={st.ctaText}>Equipped ✓  Continue</Text>
-                  </TouchableOpacity>
+                charmEquipped || charmsFull ? (
+                  <>
+                    {!charmEquipped && <Text style={st.note}>Your charm slots are full. Swap charms on the level preview or at Camp.</Text>}
+                    <TouchableOpacity testID="unlock-primary" onPress={() => { sfx('confirm'); advance(); }} style={st.cta} activeOpacity={0.85}>
+                      <Text style={st.ctaText}>{charmEquipped ? 'Equipped ✓  Continue' : 'Continue'}</Text>
+                    </TouchableOpacity>
+                  </>
                 ) : (
                   <>
                     <TouchableOpacity testID="unlock-primary" onPress={() => { sfx('confirm'); onEquipCharm(w.id); advance(); }} style={st.cta} activeOpacity={0.85}>
                       <Text style={st.ctaText}>Equip as charm</Text>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={advance} style={st.secondary}>
-                      <Text style={st.secondaryText}>Keep my current charm</Text>
+                      <Text style={st.secondaryText}>Leave it in the Armory</Text>
                     </TouchableOpacity>
                   </>
                 )

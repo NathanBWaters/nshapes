@@ -11,19 +11,29 @@ import { FighterAvatar } from '@/components/fighters';
 import { WeaponAvatar } from '@/components/weapons';
 import { COLORS, getRarityColor } from '@/utils/colors';
 import type { CharacterName } from '@/types';
-import type { AdventureSave, ArcanaId, LevelDef } from '../types';
+import type { AdventureSave, ArcanaId, LevelDef, LevelHazards } from '../types';
 import { getBiome } from '../data/biomes';
 import { foeDisplay, levelFoe } from '../data/foes';
 import { getMechanic } from '../data/mechanics';
-import { FIGHTERS } from '../data/fighters';
+import { FIGHTERS, getFighter } from '../data/fighters';
+import { getPassive } from '../data/passives';
 import { ARCANA, getArcana } from '../data/arcana';
 import { getArmoryWeapon } from '../data/armory';
 import { EVOLUTION_RECIPES } from '../data/evolutions';
 import { getLevel } from '../data/levels';
-import { starRewards } from '../data/rewards';
+import { isFighterTrial, starRewards } from '../data/rewards';
 import { starGoals } from '../engine/challenges';
-import { getLockReason, weaponUpgradeTier } from '../progress';
-import { fighterLevel, startingLoadout } from '../loadout';
+import {
+  arcanaSlots,
+  branchSpent,
+  charmSlots,
+  equippedArcanaOf,
+  equippedCharms,
+  getLockReason,
+  recipeFamiliesHeld,
+  weaponUpgradeTier,
+} from '../progress';
+import { startingLoadout } from '../loadout';
 import { Btn, Eyebrow, Heart, INK, PopIn, Skulls, StarRow, TONE } from './ui';
 import { Silhouette, UnlockableAvatar, describeRewardUnlocks } from './rewards';
 
@@ -35,8 +45,10 @@ interface Props {
   onClose: () => void;
   onPlay: (level: LevelDef) => void;
   onSelectFighter: (f: CharacterName) => void;
+  /** Equip the charm if a slot is free, take it off if worn */
   onSelectCharm: (id: string) => void;
-  onSelectArcana?: (id: ArcanaId | null) => void;
+  /** Equip the Arcana (swapping out the oldest when full), take it off if worn */
+  onSelectArcana?: (id: ArcanaId) => void;
   onShowMechanic: (id: string) => void;
 }
 
@@ -56,6 +68,14 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
   const loadout = startingLoadout(level, save);
   const gearOn = !level.rules.noGear;
   const totalHp = level.foes.reduce((a, f) => a + f.hp, 0);
+  const charms = equippedCharms(save);
+  const slots = charmSlots(save);
+  const arcana = equippedArcanaOf(save);
+  // The engine's view: it also counts skill nodes and charms that add evolution likelihood
+  const armed = EVOLUTION_RECIPES.filter(r => loadout.armedRecipes.includes(r.id));
+  const evolutionsOn = gearOn && loadout.features.has('evolutions');
+  const fighter = getFighter(save.selectedFighter);
+  const charmsFull = charms.length >= slots;
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
@@ -65,7 +85,7 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
           <View style={[st.header, { backgroundColor: biome.colors.sky }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Text style={[st.levelId, { color: biome.colors.ink }]}>
-                {biome.name.toUpperCase()} · {level.id}{level.isBoss ? ' · BOSS' : ''}{level.branchOf ? ' · ELITE' : ''}
+                {biome.name.toUpperCase()} · {level.id}{level.isBoss ? ' · BOSS' : ''}{level.branchOf ? (isFighterTrial(level) ? ' · TRIAL' : ' · ELITE') : ''}
               </Text>
               <TouchableOpacity onPress={onClose} style={st.close}><Text style={st.closeText}>✕</Text></TouchableOpacity>
             </View>
@@ -128,6 +148,8 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
               ) : null;
             })}
 
+            {level.rules.hazards && <Hazards hazards={level.rules.hazards} />}
+
             {/* Star goals: coins up front, unlocks kept secret */}
             <Text style={st.section}>REWARDS</Text>
             <View style={{ gap: 6 }}>
@@ -170,8 +192,16 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
               {FIGHTERS.filter(f => save.unlockedFighters.includes(f.name)).map(f => {
                 const selected = f.name === save.selectedFighter;
                 const rec = level.recommended?.includes(f.name);
+                const spent = branchSpent(save, f.name, 0) + branchSpent(save, f.name, 1);
                 return (
-                  <TouchableOpacity key={f.name} onPress={() => onSelectFighter(f.name)} style={[st.fighter, selected && st.fighterSel]} activeOpacity={0.85}>
+                  <TouchableOpacity
+                    key={f.name}
+                    testID={`preview-fighter-${f.name}`}
+                    onPress={() => onSelectFighter(f.name)}
+                    style={[st.fighter, selected && st.fighterSel]}
+                    activeOpacity={0.85}
+                    accessibilityState={{ selected }}
+                  >
                     <FighterAvatar
                       character={f.name}
                       size={42}
@@ -179,22 +209,61 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                       reaction={selected ? { type: 'entrance', id: 1 } : null}
                     />
                     <Text style={st.fighterName} numberOfLines={1}>{f.name}</Text>
-                    <Text style={st.fighterLvl}>LV {fighterLevel(save, f.name)}</Text>
+                    <View style={st.passiveIcons}>
+                      {f.passives.map(id => <Icon key={id} name={getPassive(id).icon} size={13} color={INK} />)}
+                      {spent > 0 && <Text style={st.fighterLvl}>{spent}★</Text>}
+                    </View>
                     {rec && <View style={st.rec}><Text style={st.recText}>STRONG</Text></View>}
                   </TouchableOpacity>
                 );
               })}
             </ScrollView>
-            {!gearOn && <Text style={st.note}>Fighter abilities and weapons switch on after this first fight.</Text>}
+            {gearOn ? (
+              <View style={st.passiveBox} testID="preview-passives">
+                {fighter.passives.map(id => {
+                  const p = getPassive(id);
+                  return (
+                    <View key={id} style={st.passiveRow}>
+                      <Icon name={p.icon} size={16} color={INK} />
+                      <Text style={st.passiveText}><Text style={{ fontWeight: '900' }}>{p.name}: </Text>{p.text}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            ) : (
+              <Text style={st.note}>Fighter passives and weapons switch on after this first fight.</Text>
+            )}
 
             {gearOn && save.armory.length > 0 && (
               <>
-                <Text style={st.section}>CHARM <Text style={st.sectionHint}>one weapon from your Armory</Text></Text>
+                <Text style={st.section}>
+                  CHARMS <Text style={st.sectionHint}>{charms.length}/{slots} equipped · tap to equip or remove</Text>
+                </Text>
+                <View style={st.slotRow} testID="preview-charm-slots">
+                  {Array.from({ length: slots }).map((_, i) => {
+                    const id = charms[i];
+                    const w = id ? getArmoryWeapon(id, save.weaponUpgrades) : undefined;
+                    return w ? (
+                      <TouchableOpacity
+                        key={i}
+                        testID={`preview-slot-${i}`}
+                        onPress={() => onSelectCharm(id)}
+                        style={[st.slot, { borderColor: getRarityColor(w.rarity), borderStyle: 'solid', backgroundColor: COLORS.canvasWhite }]}
+                        accessibilityLabel={`Remove ${w.name}`}
+                      >
+                        <WeaponAvatar weapon={w} size={26} />
+                      </TouchableOpacity>
+                    ) : (
+                      <View key={i} testID={`preview-slot-${i}`} style={st.slot}><Text style={st.slotEmpty}>+</Text></View>
+                    );
+                  })}
+                </View>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
                   {save.armory.map(id => {
                     const w = getArmoryWeapon(id, save.weaponUpgrades);
                     if (!w) return null;
-                    const selected = save.charm === id;
+                    const selected = charms.includes(id);
+                    const blocked = !selected && charmsFull;
                     const wTier = weaponUpgradeTier(save, id);
                     return (
                       <TouchableOpacity
@@ -204,8 +273,9 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                           setCharmTapCounts(prev => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }));
                           onSelectCharm(id);
                         }}
-                        style={[st.charm, { borderColor: selected ? INK : getRarityColor(w.rarity) }, selected && st.charmSel]}
+                        style={[st.charm, { borderColor: selected ? INK : getRarityColor(w.rarity) }, selected && st.charmSel, blocked && { opacity: 0.5 }]}
                         activeOpacity={0.85}
+                        accessibilityState={{ selected }}
                       >
                         <WeaponAvatar weapon={w} size={32} triggerKey={charmTapCounts[id]} />
                         <Text style={st.fighterName} numberOfLines={1}>{w.name}{wTier > 0 ? ` +${wTier}` : ''}</Text>
@@ -214,50 +284,61 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                     );
                   })}
                 </ScrollView>
+                {charmsFull && save.armory.length > charms.length && (
+                  <Text style={st.note}>Slots full. Tap an equipped charm to swap it out.</Text>
+                )}
               </>
             )}
 
-            {/* Evolution synergy preview when Evolutions are unlocked */}
-            {gearOn && loadout.features.has('evolutions') && (() => {
-              const recipe = EVOLUTION_RECIPES.find(r => save.unlockedEvolutions.includes(r.id) && r.hasGear(loadout.weapons));
-              if (!recipe) return null;
-              return (
-                <View style={st.evoHint}>
-                  <Icon name="lorc/crystal-shine" size={18} color={TONE.combo} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={st.evoHintTitle}>
-                      {`Combo Ready to Prime: ${recipe.result.name}`}
-                    </Text>
-                    <Text style={st.evoHintSub}>{recipe.primeRequirementText}, then match the hidden Catalyst card.</Text>
-                  </View>
+            {/* Evolutions: which unlocked recipes the current charms arm */}
+            {evolutionsOn && save.unlockedEvolutions.length > 0 && (
+              <View style={st.evoBox} testID="preview-evolutions">
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Icon name="lorc/crystal-shine" size={16} color={TONE.combo} />
+                  <Text style={st.evoHintTitle}>
+                    {armed.length > 0 ? `${armed.length} evolution${armed.length === 1 ? '' : 's'} armed` : 'No evolution armed'}
+                  </Text>
                 </View>
-              );
-            })()}
+                {EVOLUTION_RECIPES.filter(r => save.unlockedEvolutions.includes(r.id)).map(r => {
+                  const isArmed = armed.some(a => a.id === r.id);
+                  const held = recipeFamiliesHeld(save, r);
+                  return (
+                    <View key={r.id} style={[st.evoRow, !isArmed && { opacity: 0.6 }]} testID={`preview-recipe-${r.id}`}>
+                      <Icon name={r.icon} size={16} color={isArmed ? TONE.evoReady : INK} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={st.evoName}>{r.name}{isArmed ? ' · ARMED' : ''}</Text>
+                        <Text style={st.evoHintSub}>
+                          {isArmed ? r.activeText : `Needs ${r.familyText}${held[0] || held[1] ? ' (one family equipped)' : ''}`}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })}
+                {armed.length > 0 && (
+                  <Text style={st.evoHintSub} testID="preview-evo-likelihood">
+                    Catalyst chance {Math.round(loadout.evolutionLikelihood)}% per refill · up to {loadout.evolutionCap} evolutions this fight. Match the Catalyst to evolve for 20 s.
+                  </Text>
+                )}
+              </View>
+            )}
 
-            {/* Arcana tarot wildcard picker */}
+            {/* Arcana slots */}
             {gearOn && save.unlockedArcana.length > 0 && onSelectArcana && (
               <>
-                <Text style={st.section}>ARCANA <Text style={st.sectionHint}>optional rule twist</Text></Text>
+                <Text style={st.section}>
+                  ARCANA <Text style={st.sectionHint}>{arcana.length}/{arcanaSlots(save)} · optional rule twists</Text>
+                </Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
-                  <TouchableOpacity
-                    testID="preview-arcana-none"
-                    onPress={() => onSelectArcana(null)}
-                    style={[st.arcanaItem, save.activeArcana === null && st.charmSel, { borderColor: save.activeArcana === null ? INK : TONE.spentEdge }]}
-                    activeOpacity={0.85}
-                  >
-                    <Icon name="lorc/crossed-swords" size={22} color={INK} />
-                    <Text style={st.fighterName}>Standard</Text>
-                    <Text style={st.charmDesc} numberOfLines={2}>No rule modifier</Text>
-                  </TouchableOpacity>
                   {ARCANA.filter(a => save.unlockedArcana.includes(a.id)).map(a => {
-                    const selected = save.activeArcana === a.id;
+                    const selected = arcana.includes(a.id);
                     return (
                       <TouchableOpacity
                         key={a.id}
                         testID={`preview-arcana-${a.id}`}
-                        onPress={() => onSelectArcana(selected ? null : a.id)}
+                        onPress={() => onSelectArcana(a.id)}
                         style={[st.arcanaItem, { borderColor: selected ? INK : '#A855F7' }, selected && st.charmSel]}
                         activeOpacity={0.85}
+                        accessibilityState={{ selected }}
                       >
                         <Text style={st.arcanaNum}>{a.numeral}</Text>
                         <Icon name={a.icon} size={22} color={INK} />
@@ -266,15 +347,20 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                     );
                   })}
                 </ScrollView>
-                {save.activeArcana && save.unlockedArcana.includes(save.activeArcana) && (() => {
-                  const active = getArcana(save.activeArcana);
-                  return (
-                    <View style={st.arcanaSummary}>
-                      <Text style={st.arcanaUp}>▲ {active.upside}</Text>
-                      <Text style={st.arcanaDown}>▼ {active.tradeoff}</Text>
-                    </View>
-                  );
-                })()}
+                {arcana.length === 0 ? (
+                  <Text style={st.note}>Standard rules. Tap an Arcana to bring it along.</Text>
+                ) : (
+                  arcana.map(id => {
+                    const active = getArcana(id);
+                    return (
+                      <View key={id} style={st.arcanaSummary}>
+                        <Text style={st.evoName}>{active.numeral} · {active.name}</Text>
+                        <Text style={st.arcanaUp}>▲ {active.upside}</Text>
+                        <Text style={st.arcanaDown}>▼ {active.tradeoff}</Text>
+                      </View>
+                    );
+                  })
+                )}
               </>
             )}
           </ScrollView>
@@ -287,7 +373,7 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                   {lock.kind === 'previous'
                     ? 'Earn a star on the previous level to unlock.'
                     : lock.kind === 'branch'
-                      ? `Elite path. Earn ${'★'.repeat(lock.need)} on ${lock.parentId} ${getLevel(lock.parentId).name} to open it.`
+                      ? `${isFighterTrial(level) ? 'Fighter trial' : 'Elite path'}. Earn ${'★'.repeat(lock.need)} on ${lock.parentId} ${getLevel(lock.parentId).name} to open it.`
                       : `Need ${lock.need} ★ total to enter ${biome.name} (you have ${lock.have}).`}
                 </Text>
               </View>
@@ -300,6 +386,30 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
     </Modal>
   );
 };
+
+/** Traps the level itself places on the board. */
+const Hazards: React.FC<{ hazards: LevelHazards }> = ({ hazards }) => (
+  <View style={{ gap: 6 }} testID="preview-hazards">
+    {hazards.timeBombs && (
+      <View style={st.hazard}>
+        <Icon name="lorc/time-bomb" size={20} color={INK} />
+        <Text style={st.abilityText}>
+          <Text style={{ fontWeight: '900' }}>Time Bombs: </Text>
+          match a bomb card within {hazards.timeBombs.seconds}s or lose a heart.
+        </Text>
+      </View>
+    )}
+    {hazards.snares && (
+      <View style={st.hazard}>
+        <Icon name="lorc/wolf-trap" size={20} color={INK} />
+        <Text style={st.abilityText}>
+          <Text style={{ fontWeight: '900' }}>Snares: </Text>
+          matching a snared card costs a heart. Match the card its arrow points at to defuse it for +4 damage.
+        </Text>
+      </View>
+    )}
+  </View>
+);
 
 const Rule: React.FC<{ icon: IconName; text: string }> = ({ icon, text }) => (
   <View style={st.rule}>
@@ -355,7 +465,17 @@ const st = StyleSheet.create({
   charm: { width: 112, alignItems: 'center', padding: 8, borderRadius: 10, borderWidth: 2, backgroundColor: COLORS.paperBeige, gap: 2 },
   charmSel: { backgroundColor: COLORS.actionYellow, borderBottomWidth: 4 },
   charmDesc: { fontSize: 10, color: INK, textAlign: 'center', opacity: 0.8 },
-  evoHint: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: TONE.comboPale, borderRadius: 8, borderWidth: 1.5, borderColor: TONE.combo, padding: 8 },
+  evoBox: { gap: 6, backgroundColor: TONE.comboPale, borderRadius: 8, borderWidth: 1.5, borderColor: TONE.combo, padding: 8 },
+  evoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  evoName: { fontSize: 12, fontWeight: '900', color: INK },
+  hazard: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFF3E0', borderRadius: 8, padding: 8, borderWidth: 1.5, borderColor: TONE.tradeoff },
+  passiveBox: { gap: 4, backgroundColor: COLORS.paperBeige, borderRadius: 8, padding: 8 },
+  passiveRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  passiveText: { flex: 1, fontSize: 12, color: INK },
+  passiveIcons: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  slotRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+  slot: { width: 42, height: 42, borderRadius: 8, borderWidth: 2, borderStyle: 'dashed', borderColor: TONE.spentEdge, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.paperBeige },
+  slotEmpty: { color: TONE.spent, fontWeight: '900', fontSize: 18 },
   evoHintTitle: { fontSize: 12, fontWeight: '900', color: INK },
   evoHintSub: { fontSize: 11, color: INK, opacity: 0.85 },
   arcanaItem: { width: 102, alignItems: 'center', justifyContent: 'center', padding: 8, borderRadius: 10, borderWidth: 2, backgroundColor: COLORS.paperBeige, gap: 2 },

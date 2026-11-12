@@ -1,13 +1,17 @@
 /**
  * Headless bot that plays a level through the same reducer the UI uses.
- * Used to tune foe HP / timers against target star rates.
+ * Used to tune foe HP / timers against target star rates. It plays the save
+ * it is given: equip charms, Arcana and skill nodes on the save beforehand.
  */
-import type { Card } from '@/types';
-import { processWeaponEffects } from '@/utils/weaponEffects';
-import type { AdventureSave, LevelDef } from '../types';
-import { createRng } from './rng';
-import { baseCardReward, computeStars, createRun, runReducer } from './run';
-import { allSets, isRainbow, isSelectable } from './sets';
+import type { AttributeName, Card } from '@/types';
+import { isValidCombination } from '@/utils/gameUtils';
+import { resolveMatch } from '@/utils/matchResolution';
+import type { AdventureSave, ChallengeDef, LevelDef, RunState } from '../types';
+import { createRng, type Rng } from './rng';
+import { computeStars, createRun, runReducer, shopPrice } from './run';
+import { allSets, countDifferentAttributes, isRainbow, isSelectable } from './sets';
+import { challengeCount } from './challenges';
+import { snareTarget } from './fight';
 
 export interface BotProfile {
   name: string;
@@ -17,63 +21,234 @@ export interface BotProfile {
   mistakeRate: number;
   /** Prefers rainbow Sets when one exists */
   huntsRainbows: boolean;
+  /** Chance to press the hint bulb when a search is running slow */
+  hintEagerness: number;
+  /** Share of mistakes that are near misses (one trait off): what graces forgive */
+  nearMissRate: number;
+  /** Chance to guess boldly on a slow search while a grace would cover a near miss */
+  boldness: number;
 }
 
 export const BOTS: Record<'novice' | 'average' | 'expert', BotProfile> = {
-  novice: { name: 'novice', secondsPerAttribute: 3.2, mistakeRate: 0.18, huntsRainbows: false },
-  average: { name: 'average', secondsPerAttribute: 2.2, mistakeRate: 0.1, huntsRainbows: true },
-  expert: { name: 'expert', secondsPerAttribute: 1.4, mistakeRate: 0.04, huntsRainbows: true },
+  novice: { name: 'novice', secondsPerAttribute: 3.2, mistakeRate: 0.18, huntsRainbows: false, hintEagerness: 0.75, nearMissRate: 0.6, boldness: 0.4 },
+  average: { name: 'average', secondsPerAttribute: 2.2, mistakeRate: 0.1, huntsRainbows: true, hintEagerness: 0.5, nearMissRate: 0.7, boldness: 0.3 },
+  expert: { name: 'expert', secondsPerAttribute: 1.4, mistakeRate: 0.04, huntsRainbows: true, hintEagerness: 0.3, nearMissRate: 0.8, boldness: 0.2 },
 };
 
+/** Cards a snare points at (matching one defuses it) and snared cards (matching one hurts). */
+const trapCards = (s: RunState) => {
+  const defusers = new Set<string>();
+  const snared = new Set<string>();
+  s.board.forEach((c, i) => {
+    if (!c.snare) return;
+    snared.add(c.id);
+    const t = snareTarget(i, c.snare, s.board.length);
+    if (t !== null) defusers.add(s.board[t].id);
+  });
+  // Level time bombs and a foe's bomb / countdown cards all blow up if left alone
+  const bombs = new Set([...s.timeBombIds, ...s.board.filter(c => c.hasBomb || c.hasCountdown).map(c => c.id)]);
+  return { defusers, snared, bombs };
+};
+
+type Goal = ChallengeDef['kind'] | 'triple' | 'faceDown' | 'safe';
+
+/** What a foe's own defeat condition asks the player to go for (read off its text, as a player would). */
+const ENEMY_GOALS: [RegExp, Goal][] = [
+  [/all-different/i, 'rainbows'],
+  [/triple/i, 'triple'],
+  [/bomb|countdown/i, 'defuseTraps'],
+  [/face-down|revealed/i, 'faceDown'],
+  [/damage/i, 'safe'],
+];
+
+/** The live ★★★ goals, while they still need work (a real player reads the challenge and chases it). */
+const chasing = (s: RunState): Goal[] => {
+  const c = s.level.challenge;
+  if (c.kind === 'enemy') {
+    if (s.foe.checkDefeatCondition(s.roundStats)) return [];
+    const text = s.foe.defeatConditionText ?? '';
+    return ENEMY_GOALS.filter(([re]) => re.test(text)).map(([, goal]) => goal);
+  }
+  if (c.kind === 'fullHearts') return s.roundStats.damageReceived === 0 ? ['fullHearts'] : [];
+  if (!('n' in c) || c.n === undefined) return [];
+  const count = challengeCount(s, c);
+  return count !== null && count < c.n ? [c.kind] : [];
+};
+
+/**
+ * Which Set a player who can see the board picks: a careful player goes for
+ * the Catalyst, defuses traps and avoids snared cards more often than not,
+ * and leans hard into whatever the ★★★ challenge asks for.
+ */
+const chooseSet = (s: RunState, sets: Card[][], bot: BotProfile, rng: Rng): Card[] => {
+  const care = bot.huntsRainbows ? 0.6 : 0.3;
+  const focus = bot.huntsRainbows ? 0.85 : 0.6;
+  const { defusers, snared, bombs } = trapCards(s);
+  const has = (set: Card[], ids: Set<string>) => set.some(c => ids.has(c.id));
+  const prefer = (pred: (set: Card[]) => boolean, chance = care) => {
+    const hits = sets.filter(pred);
+    return hits.length && rng.next() < chance ? rng.pick(hits) : null;
+  };
+  const rainbow = (set: Card[]) => isRainbow(set, s.attributes);
+  const goalPick = (goal: Goal): Card[] | null => {
+    switch (goal) {
+      case 'evolutions': return prefer(set => set.some(c => c.hasEvolutionItem), focus);
+      case 'defuseTraps': return prefer(set => has(set, bombs) || has(set, defusers), focus);
+      case 'fullHearts':
+      case 'safe':
+        // Untouched: clear the traps before they bite, and never touch a snared card
+        return prefer(set => has(set, bombs) || has(set, defusers), focus) ?? prefer(set => !has(set, snared), focus);
+      case 'triple': return prefer(set => set.some(c => (c.health ?? 1) > 1), focus);
+      case 'faceDown': return prefer(set => set.some(c => c.wasOriginallyFaceDown), focus);
+      case 'bonusCards': return prefer(set => set.some(c => (c.bonusPoints ?? 0) > 0 || (c.bonusMoney ?? 0) > 0), focus);
+      case 'rainbows':
+      case 'bigHit': return s.features.has('rainbow') ? prefer(rainbow, focus) : null;
+      case 'purityChain': {
+        if (!s.features.has('purity') || rng.next() >= focus) return null;
+        // Climb on purpose: the least diverse Set that still beats the last step
+        const floor = s.purityChain > 0 ? s.lastDiffCount : 0;
+        const climbing = sets.filter(set => countDifferentAttributes(set, s.attributes) > floor);
+        if (!climbing.length) return null;
+        const low = Math.min(...climbing.map(set => countDifferentAttributes(set, s.attributes)));
+        return rng.pick(climbing.filter(set => countDifferentAttributes(set, s.attributes) === low));
+      }
+      default: return null;
+    }
+  };
+  let picked: Card[] | null = null;
+  for (const goal of chasing(s)) picked ??= goalPick(goal);
+  return (
+    picked ??
+    prefer(set => set.some(c => c.hasEvolutionItem)) ??
+    prefer(set => has(set, bombs) || has(set, defusers)) ??
+    (bot.huntsRainbows && s.features.has('rainbow') && rng.next() < 0.5 ? prefer(rainbow) : null) ??
+    prefer(set => !has(set, snared)) ??
+    rng.pick(sets)
+  );
+};
+
+/** Three selectable cards exactly one trait off a Set (what a grace forgives), or null. */
+const nearMiss = (cards: Card[], attrs: AttributeName[], rng: Rng): Card[] | null => {
+  const pool = rng.shuffle(cards);
+  for (let i = 0; i < pool.length; i++)
+    for (let j = i + 1; j < pool.length; j++)
+      for (let k = j + 1; k < pool.length; k++) {
+        const v = isValidCombination([pool[i], pool[j], pool[k]], attrs);
+        if (!v.isValid && v.invalidAttributes.length === 1) return [pool[i], pool[j], pool[k]];
+      }
+  return null;
+};
+
+/**
+ * GameBoard rolls weapon effects with Math.random, so the bot swaps in a seeded
+ * source while it plays; that keeps balance numbers reproducible run to run.
+ */
 export const simulateRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: number) => {
+  const realRandom = Math.random;
+  const boardRng = createRng(seed ^ 0x5bd1e995);
+  Math.random = boardRng.next;
+  try {
+    return playRun(level, save, bot, seed);
+  } finally {
+    Math.random = realRandom;
+  }
+};
+
+/**
+ * Submit three picked cards the way GameBoard does: a Set (or a near miss a
+ * grace covers) scores through the same match resolution, anything else is a
+ * mistake. Either way the cards are replaced.
+ */
+const submit = (s: RunState, picked: Card[]): RunState => {
+  const v = isValidCombination(picked, s.attributes);
+  const graceUsed = !v.isValid && v.invalidAttributes.length === 1 && s.stats.graces > 0;
+  if (v.isValid || graceUsed) {
+    const { cards, rewards, weaponEffects } = resolveMatch({
+      board: s.board,
+      selected: picked,
+      playerStats: s.stats,
+      weapons: s.weapons,
+      activeAttributes: s.attributes,
+      connections: s.connections,
+      graceUsed,
+    });
+    const next = runReducer(s, { type: 'MATCH', cards, rewards, effects: weaponEffects });
+    return runReducer(next, { type: 'REPLACE', ids: cards.map(c => c.id) });
+  }
+  const next = runReducer(s, { type: 'INVALID', cards: picked });
+  return runReducer(next, { type: 'REPLACE', ids: picked.map(c => c.id) });
+};
+
+/** Between waves: buy the cheapest weapon the purse covers (and keep buying while the ★★★ asks for it). */
+const shop = (s: RunState): RunState => {
+  for (let guard = 0; guard < 3 && s.shopOptions.length; guard++) {
+    const prices = s.shopOptions.map(shopPrice);
+    const cheapest = prices.indexOf(Math.min(...prices));
+    if (prices[cheapest] > s.coins) break;
+    s = runReducer(s, { type: 'BUY', index: cheapest });
+    if (!chasing(s).includes('shopBuys')) break;
+  }
+  return s;
+};
+
+const playRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: number) => {
   const rng = createRng(seed ^ 0x9e3779b9);
   let s = createRun(level, save, { seed });
   let guard = 0;
   while ((s.status === 'playing' || s.status === 'pick' || s.status === 'intermission') && guard++ < 2000) {
     if (s.status === 'pick') {
+      // Level up: take a free weapon
       s = runReducer(s, { type: 'PICK', weaponId: s.pickOptions[0]?.id ?? null });
       continue;
     }
     if (s.status === 'intermission') {
-      if (s.shopOptions.length && s.coins > 60) s = runReducer(s, { type: 'BUY', index: 0 });
+      s = shop(s);
       s = runReducer(s, { type: 'NEXT_WAVE' });
       continue;
     }
-    // Fire a charged active ability straight away
-    if (s.ability && s.ability.max > 0 && s.ability.charge >= s.ability.max) {
-      s = runReducer(s, { type: 'ABILITY' });
-      if (s.ability?.id === 'big_scoop' && s.ability.scooped.length) s = runReducer(s, { type: 'REPLACE', ids: s.ability.scooped });
-      continue;
+    // Keen Eye lights a card of a Set: the bot finds one twice as fast
+    const glow = s.passive.keenEyeCardId ? 0.5 : 1;
+    const pace = 0.6 + rng.next() * 0.8;
+    let think = bot.secondsPerAttribute * s.attributes.length * pace * glow;
+    // A slow search (or a "use hints" goal) is when a real player presses the bulb
+    const slow = pace > 1;
+    const goals = chasing(s);
+    const canHint = s.features.has('hints') && s.stats.hints > 0;
+    const hinted = canHint && (goals.includes('useHints') || (slow && rng.next() < bot.hintEagerness));
+    if (hinted) {
+      s = runReducer(s, { type: 'USE_HINT' });
+      think *= 0.5;
     }
-    const think = bot.secondsPerAttribute * s.attributes.length * (0.6 + rng.next() * 0.8);
+    // With a grace in hand a near miss is free, so a slow search ends in a bold guess
+    const graces = s.features.has('graces') ? s.stats.graces : 0;
+    const bold = !hinted && graces > 0 && (goals.includes('graceSaves') ? pace > 0.8 : slow && rng.next() < bot.boldness);
+    if (bold) think *= 0.5;
     const ticks = Math.max(1, Math.round(think));
     for (let i = 0; i < ticks && s.status === 'playing'; i++) s = runReducer(s, { type: 'TICK', ms: 1000 });
-    if (s.status !== 'playing') break;
+    if (s.status !== 'playing') continue; // won, lost, or the foe fell between Sets (wave over)
+
+    // Burning cards burn out (GameBoard does this a quarter second after they catch)
+    for (const c of s.board.filter(x => x.onFire)) {
+      if (s.status !== 'playing') break;
+      s = runReducer(s, { type: 'BURN', card: c });
+    }
+    if (s.status !== 'playing') continue; // won, lost, or the foe fell between Sets (wave over)
 
     const selectableCards = s.board.filter(isSelectable);
-    const sets = allSets(s.board, s.attributes);
-    let set: Card[] | null = sets.length ? rng.pick(sets) : null;
-    if (set && bot.huntsRainbows && s.features.has('rainbow')) {
-      // a rainbow-hunter spots one about half the time when it exists
-      const rainbows = sets.filter(cand => isRainbow(cand, s.attributes));
-      if (rainbows.length && rng.next() < 0.5) set = rng.pick(rainbows);
-    }
-    if (!set || rng.next() < bot.mistakeRate) {
-      if (selectableCards.length < 3) {
-        s = runReducer(s, { type: 'TICK', ms: 1000 });
-        continue;
-      }
-      const wrong = rng.shuffle(selectableCards).slice(0, 3);
-      s = runReducer(s, { type: 'INVALID', cards: wrong });
-      s = runReducer(s, { type: 'REPLACE', ids: wrong.map(c => c.id) });
+    if (selectableCards.length < 3) {
+      s = runReducer(s, { type: 'TICK', ms: 1000 });
       continue;
     }
-    const fx = s.features.has('gear') ? processWeaponEffects(s.board, set, s.stats, s.weapons, s.attributes) : undefined;
-    const extra = fx ? [...fx.explosiveCards, ...fx.laserCards, ...fx.ricochetCards, ...fx.autoMatchedSets.flat()] : [];
-    const all = [...set, ...extra.filter(c => !set!.some(x => x.id === c.id))];
-    const rewards = all.map(baseCardReward);
-    s = runReducer(s, { type: 'MATCH', cards: all, rewards, effects: fx, nowMs: 0 });
-    s = runReducer(s, { type: 'REPLACE', ids: all.map(c => c.id) });
+    const sets = allSets(s.board, s.attributes);
+    // A hinted card makes a slip half as likely
+    const slip = rng.next() < bot.mistakeRate * (hinted ? 0.5 : 1);
+    if (bold || !sets.length || slip) {
+      // Mistakes are mostly near misses (one trait off), which a grace forgives
+      const near = bold || rng.next() < bot.nearMissRate ? nearMiss(selectableCards, s.attributes, rng) : null;
+      s = submit(s, near ?? rng.shuffle(selectableCards).slice(0, 3));
+      continue;
+    }
+    s = submit(s, chooseSet(s, sets, bot, rng));
   }
   return { stars: computeStars(s), coins: s.coins, state: s };
 };

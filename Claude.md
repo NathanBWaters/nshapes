@@ -30,17 +30,20 @@ NShapes combines the classic SET card matching game with roguelike progression m
 
 **Adventure Mode** - Map campaign (Angry Birds / Bloons map + Vampire Survivors meta-progression):
 
-> **Full documentation:** [docs/adventure-design.md](./docs/adventure-design.md). All code lives in `src/adventure/` and is **data-driven**: edit `src/adventure/data/*.ts`, not the engine.
+> **Full documentation:** [docs/adventure-design.md](./docs/adventure-design.md) and the v3 build spec [docs/adventure-v3-design.md](./docs/adventure-v3-design.md). All code lives in `src/adventure/` and is **data-driven**: edit `src/adventure/data/*.ts`, not the engine.
 
-* A tappable map of 29 main levels plus 8 optional elite branches across 4 star-gated regions. Each node is a foe; tapping one opens a preview showing the foe, difficulty, star goals, rewards, and a fighter pick.
-* **One new mechanic per level.** The game is the tutorial: 1-1 is 2 traits, make 5 Sets, cannot be lost, no gear, one foe. Teaching uses paged lesson cards, "Is this a Set?" yes/no checks, and in-fight tips that pause until accepted. First entry plays an onboarding (`data/story.ts` holds placeholder story text). Hearts, gear, rainbows, coins, the clock, hints, graces, level-ups, waves and the shop are introduced one at a time, with an intro card plus in-run coach marks.
-* **Stars:** ★ survive (moves used up / clock runs out) · ★★ knock out the foe · ★★★ knock out + challenge. 1-1 instead scores accuracy (0 / 1 / 2+ mistakes). Levels are replayable.
-* **Rewards:** every star pays coins, shown up front. Some stars also unlock one weapon or fighter, hidden as a silhouette until earned and then revealed in a full-screen modal. Each reward is granted once.
-* **Charm slot:** one unlocked Armory weapon is equipped on top of the fighter's own gear.
-* **Elite branches:** optional tougher side levels (`branchOf`), open at ★★ on the parent level.
-* **Coins** drop from matches, bank even on a loss, and are spent mid-run (shop between waves) or at **Camp** (fighter levels 1–10 upgrade starting gear; expensive Workshop upgrades).
-* **Unlocks:** weapons enter the Armory (charm slot, level-up and shop pool) through star rewards. Fighters unlock early and often: Sly Fox at 1-1 ★, then Corgi, Badger, Emperor Penguin, Pelican.
-* **Fighter abilities** (`src/adventure/data/abilities.ts`): each fighter adds a new rule. Nine Lives (Tabby), Combo (Fox), Grudge (Badger) are passives; Deep Freeze (Penguin), Zoomies (Corgi), Big Scoop (Pelican) are actives that charge from Sets.
+* A tappable map of 5 star-gated worlds (8 / 9 / 10 / 11 / 5 main levels) with side routes that open at ★★ on their parent (`branchOf`, which can chain). Side routes are elites or **fighter trials** that teach a newly recruited fighter. Each node opens a preview: foe, difficulty, star goals, rewards, fighter, charm and Arcana loadout, armed evolutions and hazards.
+* **One new mechanic per level**, and the level that introduces a mechanic rewards *using* it: its ★★★ challenge asks for it (e.g. "use 3 hints") and its ★★ reward makes that easier. Teaching uses lesson cards, "Is this a Set?" checks and in-fight tips that pause until accepted. 1-1 is bare: 2 traits, no gear, can't be lost.
+* **Stars:** ★ survive · ★★ knock out every foe · ★★★ knock out + challenge (1-1 scores accuracy). Stars are also the skill-tree currency (spent stars never re-lock worlds).
+* **Rewards:** every star pays coins; some also unlock a weapon, fighter, Arcana, evolution recipe or campaign system, hidden as a silhouette until earned.
+* **One rule vocabulary** (`src/adventure/rules/types.ts`, interpreted by `rules/engine.ts`): fighter passives, skill-tree nodes, adventure weapons, evolutions and Arcana are all data written as `Rule` (trigger + conditions + effects) and `Modifiers`, so any source can chain into any other (a heal can cause an explosion, an explosion can add a Combo step).
+* **Fighters** (`data/fighters.ts`, `data/passives.ts`): no starting gear; each has two passives that change how you play (e.g. Sly Fox: Combo + Hot Streak; Badger: Grudge + Thick Hide).
+* **Skill trees** (`data/skillTrees.ts`): 20 nodes per fighter, two branches of 10 growing from the passives, bought in order with stars from one shared pool; whole branches refund for free. Best nodes are deepest.
+* **Charms & Arcana:** charms are your whole weapon loadout, 3 slots (up to 6 with the Workshop's Charm Belt). Arcana: 1 slot (up to 3 with Tarot Deck); stacked Arcana combine.
+* **Evolutions** (`data/evolutions.ts`): two weapon families from different roles arm a recipe; refills may spawn the Catalyst card (chance = evolution likelihood, raised by Evolution Lab and Catalyst Prism); matching it starts a 20 s power state. Up to 3 per fight, several can overlap. First recipe unlocks at 1-3.
+* **Hazards** (`LevelRules.hazards`): Time Bombs (match before the fuse runs out) from 1-7, Snares (matching it hurts; matching the card its arrow points at defuses it) from 2-2.
+* **Coins** drop from matches, bank even on a loss (not on retreat), and are spent mid-run (shop between waves) or at **Camp** (Workshop upgrades and weapon upgrades).
+* Adventure-only weapons (`data/adventureWeapons.ts`, e.g. War Drum, Amplifier Coil, Piñata) join the Armory through `getArmoryWeapon`; Free Play doesn't use them.
 * Balance is checked by headless bots: `ADVENTURE_BALANCE_REPORT=1 npx jest __tests__/adventureBalance.test.ts`.
 * The legacy 10-round adventure flow is still in `Game.tsx` but is no longer reachable from the main menu.
 

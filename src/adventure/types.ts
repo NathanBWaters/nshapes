@@ -9,6 +9,7 @@
 import type { AttributeName, BoardConnection, CharacterName, Card, Weapon, PlayerStats } from '@/types';
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import type { IconName } from '@/components/Icon';
+import type { RuleSource } from './rules/types';
 
 // ---------------------------------------------------------------------------
 // Mechanics (the "tutorial is the game" backbone)
@@ -95,7 +96,7 @@ export interface DemoCard {
 // Levels
 // ---------------------------------------------------------------------------
 
-export type BiomeId = 'meadow' | 'woods' | 'canyon' | 'peaks';
+export type BiomeId = 'meadow' | 'woods' | 'canyon' | 'peaks' | 'summit';
 
 export interface BiomeDef {
   id: BiomeId;
@@ -129,7 +130,28 @@ export type ChallengeDef =
   | { kind: 'streak'; n: number }
   | { kind: 'noGrace' }
   | { kind: 'hintsLeft'; n: number }
-  | { kind: 'enemy' };   // use the registered enemy's own defeat condition
+  | { kind: 'enemy' }   // use the registered enemy's own defeat condition
+  // "Use the new thing" challenges for the level that introduces it
+  | { kind: 'useHints'; n: number }
+  | { kind: 'graceSaves'; n: number }
+  | { kind: 'evolutions'; n: number }
+  | { kind: 'defuseTraps'; n: number }
+  | { kind: 'comboReach'; n: number }
+  | { kind: 'bonusCards'; n: number }
+  | { kind: 'explosions'; n: number }
+  | { kind: 'purityChain'; n: number }
+  | { kind: 'levelUps'; n: number }
+  | { kind: 'shopBuys'; n: number }
+  /** A single Set dealing at least n damage */
+  | { kind: 'bigHit'; n: number };
+
+/** Board traps placed by the level itself (any foe). `every` = refilled cards per new trap. */
+export interface LevelHazards {
+  /** Match it before the fuse runs out, or lose a heart */
+  timeBombs?: { every: number; seconds: number };
+  /** Matching it hurts; matching the card its arrow points at defuses it */
+  snares?: { every: number };
+}
 
 export type ArcanaId =
   | 'monochrome_pact'
@@ -248,8 +270,11 @@ export interface LevelRules {
   hearts: number;
   startingHints?: number;
   startingGraces?: number;
-  /** Bare level: no fighter gear, ability or charm (the very first level) */
+  /** Bare level: no passives, charms, Arcana or evolutions (the very first level) */
   noGear?: boolean;
+  hazards?: LevelHazards;
+  /** Percentage points added to the Catalyst chance on every refill (e.g. the level that teaches evolutions) */
+  evolutionLikelihood?: number;
 }
 
 export interface LevelDef {
@@ -287,9 +312,64 @@ export interface FighterDef {
   icon: IconName;
   /** Mechanic this fighter introduces when unlocked */
   signature: string; // mechanic id
+  /** One line on the playstyle */
   blurb: string;
-  /** Weapon ids by character level (index 0 = level 1). */
-  loadouts: string[][];
+  /** The fighter's two passives, in branch order (branch 0 grows from the first) */
+  passives: [PassiveId, PassiveId];
+}
+
+export type PassiveId =
+  | 'nine_lives' | 'scrappy'
+  | 'combo' | 'hot_streak'
+  | 'grudge' | 'thick_hide'
+  | 'patience' | 'deep_freeze'
+  | 'zoomies' | 'fetch'
+  | 'big_scoop' | 'keen_eye';
+
+export interface PassiveDef {
+  id: PassiveId;
+  name: string;
+  icon: IconName;
+  /** Player-facing text, written from `tuning` */
+  text: string;
+  /** Numbers the engine reads; skill nodes adjust them through Modifiers.passiveTuning */
+  tuning: Record<string, number>;
+}
+
+/** One node of a fighter's skill tree. Branch 0 grows from passive 1, branch 1 from passive 2. */
+export interface SkillNode extends RuleSource {
+  id: string;
+  fighter: CharacterName;
+  branch: 0 | 1;
+  /** 1..10; a node needs the node at depth-1 of its branch (depth 1 needs only the passive) */
+  depth: number;
+  name: string;
+  text: string;
+  /** Stars */
+  cost: number;
+  icon: IconName;
+}
+
+/** A weapon that only exists in Adventure and may carry rules. */
+export type AdventureWeapon = Weapon & RuleSource & {
+  /** Workshop upgrade tiers scale this rule number (e.g. War Drum +2 → +5) */
+  upgradeText?: (tier: number) => string;
+};
+
+/** Two weapon families fused into a 20-second power state. */
+export interface EvolutionRecipe {
+  id: string;
+  name: string;
+  icon: IconName;
+  /** Weapon id prefixes; armed when the fighter holds one of each list */
+  families: [string[], string[]];
+  /** e.g. "Explosion + Healing" */
+  familyText: string;
+  /** What happens while it is active, for the Recipe Guide and the banner */
+  activeText: string;
+  flavor: string;
+  /** Live only while the evolution is active */
+  source: RuleSource;
 }
 
 export interface UpgradeDef {
@@ -319,6 +399,8 @@ export interface BountyStats {
   maxOverkill: number;         // biggest overkill blow past 0 HP
   evolutionsForged: number;    // total evolutions triggered across runs
   destructiveFights: number;   // fights where fire/explosion/laser triggered
+  trapsDefused: number;        // lifetime traps defused
+  biggestHit: number;          // best single-action damage ever
   fighterWins: Partial<Record<CharacterName, number>>;
 }
 
@@ -341,7 +423,10 @@ export interface AdventureSave {
   lifetimeCoins: number;
   stars: Record<string, number>;     // levelId -> best stars (0-3)
   plays: Record<string, number>;     // levelId -> attempts
+  /** @deprecated v1 field; refunded and cleared on load */
   fighterLevels: Record<string, number>;
+  /** Owned skill-tree node ids per fighter */
+  skillNodes: Record<string, string[]>;
   unlockedFighters: CharacterName[];
   armory: string[];                  // unlocked weapon ids
   upgrades: Record<string, number>;  // mechanic upgrade id -> tier
@@ -353,11 +438,16 @@ export interface AdventureSave {
   seenMechanics: string[];
   seenCoachMarks: string[];
   selectedFighter: CharacterName;
-  /** Equipped Armory weapon (one charm slot, on top of the fighter's own gear) */
+  /** @deprecated v1 single charm; migrated into `charms` on load */
   charm: string | null;
+  /** Equipped Armory weapons (3 slots, up to 6 with Charm Belt) */
+  charms: string[];
   /** Unlocked Arcana tarot modifiers & currently active wildcard (null = standard rules) */
   unlockedArcana: ArcanaId[];
+  /** @deprecated v1 single Arcana; migrated into `equippedArcana` on load */
   activeArcana: ArcanaId | null;
+  /** Equipped Arcana (1 slot, up to 3 with Tarot Deck) */
+  equippedArcana: ArcanaId[];
   bountiesUnlocked: boolean;
   /** Completed bounty ids & lifetime counters */
   completedBounties: string[];
@@ -375,40 +465,84 @@ export interface AdventureSave {
 
 export type RunStatus = 'playing' | 'pick' | 'intermission' | 'won' | 'lost';
 
-export type CatalystState = 'available' | 'lost' | 'evolved';
-
+/**
+ * Things that happen in a fight, for floaters, sounds and coach marks.
+ * `amount` is the number to show (damage, hearts, coins...), `text` a short label.
+ */
 export type RunEventType =
+  /** Damage to the foe. A Set's own hit has no text; other sources name themselves in `text`. */
   | 'hit' | 'rainbow' | 'heal' | 'hurt' | 'grace' | 'coins' | 'levelup'
   | 'foe_defeated' | 'wave' | 'regen' | 'dud' | 'face_down' | 'countdown'
   | 'bomb' | 'triple' | 'shuffle' | 'attr_shift' | 'card_removed' | 'time_stolen'
   | 'inactivity' | 'fire' | 'hint' | 'mistake' | 'time_up' | 'moves_out'
-  // fighter abilities
-  | 'nine_lives' | 'combo' | 'grudge' | 'grudge_release' | 'ability_ready' | 'freeze' | 'redeal' | 'scoop'
-  // purity, evolutions & arcana
-  | 'purity' | 'purity_max' | 'catalyst_spawn' | 'catalyst_ready' | 'catalyst_lost' | 'catalyst_saved'
-  | 'evolution' | 'arcana_burn' | 'overkill';
-
-export type AbilityId = 'nine_lives' | 'combo' | 'grudge' | 'deep_freeze' | 'zoomies' | 'big_scoop';
-
-export interface AbilityState {
-  id: AbilityId;
-  /** active abilities: Sets banked toward the next use */
-  charge: number;
-  max: number;
-  /** Nine Lives used this fight */
-  spent: boolean;
-  combo: number;
-  grudge: number;
-  frozenMs: number;
-  /** ids of cards Big Scoop just matched (UI schedules their replacement) */
-  scooped: string[];
-}
+  /** Seconds added to the clock */
+  | 'time_gain'
+  // fighter passives
+  | 'nine_lives' | 'combo' | 'hot_streak' | 'hot_streak_hit' | 'grudge' | 'grudge_release'
+  | 'thick_hide' | 'patience' | 'freeze' | 'redeal' | 'scoop' | 'keen_eye' | 'fetch'
+  /** A mistake was forgiven by a free-mistake modifier */
+  | 'free_mistake'
+  // rule effects
+  /** A rule with a callout fired (`text` = the callout) */
+  | 'rule'
+  /** Cards destroyed by an area effect; amount = damage dealt, text = cards destroyed */
+  | 'blast' | 'laser' | 'ricochet'
+  /** The next weapon trigger was doubled (text '×2', amount = how many doubles are still queued) */
+  | 'doubled'
+  /** A doubled trigger is armed and waiting */
+  | 'double_ready'
+  /** The next Set is multiplied (amount = multiplier) */
+  | 'charged'
+  | 'empowered' | 'simplified' | 'simplify_end' | 'pinata' | 'pinata_break' | 'link'
+  // purity, evolutions, hazards & arcana
+  | 'purity' | 'purity_max' | 'catalyst_spawn'
+  | 'evolution_start' | 'evolution_end'
+  | 'trap_placed' | 'trap_defused' | 'trap_sprung'
+  | 'arcana_burn' | 'overkill';
 
 export interface RunEvent {
   id: number;
   type: RunEventType;
   amount?: number;
   text?: string;
+}
+
+/** Live state of the fighter's two passives (fields of passives the fighter lacks stay at rest). */
+export interface PassiveState {
+  /** Nine Lives: knockouts it can still absorb this fight */
+  nineLivesLeft: number;
+  /** Hot Streak: the next Set is multiplied */
+  hotStreak: boolean;
+  /** Grudge: stored grudges */
+  grudge: number;
+  /** Thick Hide: free mistakes left this wave */
+  thickHideLeft: number;
+  /** Zoomies: Sets until the next re-deal */
+  zoomiesIn: number;
+  /** Big Scoop: Sets until the next free Set */
+  scoopIn: number;
+  /** Keen Eye: the card glowing right now (part of a Set) */
+  keenEyeCardId: string | null;
+}
+
+export interface ActiveEvolution {
+  id: string;
+  remainingMs: number;
+  durationMs: number;
+}
+
+/** Per-rule bookkeeping (sliding windows, once-only triggers). Keyed by rule key. */
+export interface RuleRuntime {
+  /** setsWithin: times of recent Sets */
+  times?: number[];
+  /** idle / foeBelow: already fired (idle resets on a Set, foeBelow on a new wave) */
+  fired?: boolean;
+}
+
+export interface SimplifyState {
+  attribute: AttributeName;
+  value: string | number;
+  remainingMs: number;
 }
 
 export interface RunState {
@@ -420,8 +554,10 @@ export interface RunState {
   deck: Card[];
   board: Card[];
   connections: BoardConnection[];
-  stats: PlayerStats;           // baked totals (base + gear + upgrades)
-  weapons: Weapon[];            // for laser rolls & inventory display
+  stats: PlayerStats;           // baked totals (base + gear + upgrades), chances scaled by modifiers
+  /** Weapon chance stats before `weaponChanceScale` modifiers */
+  baseChances: Record<string, number>;
+  weapons: Weapon[];            // charms + picks + buys (for laser rolls, rules & inventory)
   hearts: number | null;        // null = infinite (very first level)
   maxHearts: number | null;
   wave: number;
@@ -431,12 +567,18 @@ export interface RunState {
   foeHp: number;
   foeMaxHp: number;
   totalDamage: number;
+  /** Most damage dealt by one action (a Set and everything it set off) */
+  biggestHit: number;
   matches: number;
   mistakes: number;
   movesLeft: number | null;
   timeLeft: number | null;
+  /** Rule and weapon time gains can't push the clock past this */
+  timeCap: number | null;
   elapsedMs: number;
   lastMatchAtMs: number;
+  /** Cards scored or missed that the UI will REPLACE shortly; nothing else touches them meanwhile */
+  replacing: string[];
   coins: number;
   xp: number;
   xpLevel: number;
@@ -456,22 +598,66 @@ export interface RunState {
   armory: string[];
   /** Armory weapon upgrade tiers active during this run */
   weaponUpgrades: Record<string, number>;
-  /** Fighter signature ability (null before gear is taught at 1-4) */
-  ability: AbilityState | null;
-  /** Active Arcana tarot modifier for this run */
-  activeArcana: ArcanaId | null;
+
+  // Fighter passives, skill nodes & rules
+  /** Empty on bare levels */
+  passives: PassiveId[];
+  passive: PassiveState;
+  /** Owned skill-node ids that are live this fight */
+  skillNodes: string[];
+  ruleState: Record<string, RuleRuntime>;
+  /** Weapon triggers still to be doubled */
+  doubleNext: number;
+  /** The next Set's damage is multiplied by this (1 = normal) */
+  nextSetMultiplier: number;
+  /** Clock, foe, fuses and evolutions stand still */
+  frozenMs: number;
+  simplified: SimplifyState | null;
+  /** Sets chained inside the combo window (every fighter; Sly Fox turns it into damage) */
+  combo: number;
+  maxCombo: number;
+  setsThisWave: number;
+  freeMistakesLeft: number;
+
+  // Arcana
+  arcana: ArcanaId[];
   arcanaBurnCooldownMs: number;
   overkillDamage: number;
-  /** Escalating Purity Combo tracking */
+
+  // Escalating Purity
   purityChain: number;
   lastDiffCount: number;
   maxPurityChain: number;
   purityChainsTriggered: number;
   threeStepPuritiesTriggered: number;
-  /** Weapon Evolution & hidden card Catalyst tracking */
+
+  // Evolutions
   unlockedEvolutions: string[];
-  catalystState: CatalystState;
-  catalystRespawnsLeft: number;
-  catalystsLost: number;
-  evolvedRecipes: string[];
+  /** Recipes whose two weapon families are held right now */
+  armedRecipes: string[];
+  activeEvolutions: ActiveEvolution[];
+  evolutionsTriggered: number;
+  evolutionCap: number;
+  /** Workshop Evolution Lab tier (feeds the likelihood) */
+  evolutionLabTier: number;
+  /** % chance per refill that a Catalyst appears (Rainbow refills add more) */
+  evolutionLikelihood: number;
+  /** Recipe ids triggered this fight (for the Recipe Guide) */
+  forgedRecipes: string[];
+  /** The next refill comes from a Rainbow Strike */
+  rainbowRefill: boolean;
+
+  // Hazards
+  /** Cards carrying a level time bomb (their fuse is `countdownTimer`, in seconds) */
+  timeBombIds: string[];
+  /** Refilled cards counted toward the next trap of each kind */
+  hazardRefills: { timeBombs: number; snares: number };
+
+  // Counters for challenges, results & bounties
+  trapsDefused: number;
+  trapsSprung: number;
+  explosionsTriggered: number;
+  bonusCardsMatched: number;
+  levelUpsTaken: number;
+  shopBuys: number;
 }

@@ -1,5 +1,6 @@
 /**
- * Mechanic registry — every level introduces exactly one of these.
+ * Mechanic registry — every level introduces exactly one of these (fighter
+ * mechanics are introduced by fighter-trial side branches).
  * The intro card, map badge, field guide, and in-run coach marks are all
  * generated from this table.
  */
@@ -119,13 +120,15 @@ export const MECHANICS: Record<string, MechanicDef> = {
     kind: 'feature',
     enables: 'hearts',
     title: 'Hearts',
-    tagline: 'Wrong Sets cost a heart.',
+    tagline: 'Wrong Sets cost a heart. Hearts are a resource too.',
     body: [
       'A wrong Set now costs you a heart. Run out and you lose the level.',
       'The three cards are still swapped out, so when you are stuck, a mistake shuffles in fresh cards. It just costs you.',
+      'Orange Tabby fights better hurt: Scrappy adds +1 damage to every Set for each heart you are missing.',
     ],
     fightTips: [
       { title: 'Your hearts', text: 'These are your hearts. A wrong Set costs one. Lose them all and the fight is over.', anchor: 'top' },
+      { title: 'One big hit', text: 'Third star: land ONE Set that deals 6. Tabby hits +1 harder per missing heart, so a heart or two down is a weapon.', anchor: 'top' },
     ],
     icon: 'lorc/shining-heart',
     demo: {
@@ -183,6 +186,29 @@ export const MECHANICS: Record<string, MechanicDef> = {
       },
     ],
   },
+  skill_tree: {
+    id: 'skill_tree',
+    kind: 'feature',
+    title: 'Skill Trees',
+    tagline: 'Spend stars to grow your fighter.',
+    body: [
+      'Every fighter has two passives and a skill tree: two branches of 10 nodes, one growing from each passive.',
+      'Stars are the currency. Buy nodes in order at Camp; deeper nodes cost more and change how you play. Refunds are free.',
+      'Spending stars never locks a world: star gates count every star you have earned.',
+    ],
+    lessons: [
+      {
+        title: 'Build a big hit',
+        body: ['Old Quillback has thick skin. The third star wants a single Set that deals 8 or more.', 'Try Tabby\'s Scrappy branch or Sly Fox\'s Combo branch, then come back swinging.'],
+        demo: { type: 'icons', items: [{ icon: 'lorc/cat', label: 'Scrappy' }, { icon: 'caro-asercion/fox', label: 'Combo' }, { icon: 'lorc/fist', label: '9+ in one Set' }] },
+      },
+    ],
+    fightTips: [
+      { title: 'Hit hard once', text: 'Land a single Set that deals 8 or more. Scrappy, Combo and your skill nodes all stack.', anchor: 'top' },
+    ],
+    icon: 'lorc/tree-branch',
+    demo: { type: 'icons', items: [{ icon: 'lorc/flat-star', label: 'Earn stars' }, { icon: 'lorc/tree-branch', label: 'Buy nodes' }, { icon: 'lorc/fist', label: 'Hit harder' }] },
+  },
   power_cards: {
     id: 'power_cards',
     kind: 'feature',
@@ -191,10 +217,12 @@ export const MECHANICS: Record<string, MechanicDef> = {
     tagline: 'Cards marked +2 hit harder.',
     body: [
       'Some cards now carry a +2 badge. Use one in a Set and that Set deals 2 extra damage.',
-      'Building your Sets around power cards is how you beat tougher foes with moves to spare.',
+      'Greedy Squirrel only refills 2 cards per Set, so the board shrinks. Grab power cards while they last.',
+      'Corgi loves these: its Fetch brings a fresh bonus card every time you match one.',
     ],
     fightTips: [
       { title: 'Power cards', text: 'Look for cards with a +2 badge in the corner. A Set that uses one hits for 2 more.', anchor: 'bottom' },
+      { title: 'Bonus hunter', text: 'Match 5 power or gold cards for the third star.', anchor: 'top' },
     ],
     icon: 'lorc/fist',
     demo: {
@@ -212,14 +240,14 @@ export const MECHANICS: Record<string, MechanicDef> = {
   charm: {
     id: 'charm',
     kind: 'feature',
-    title: 'Charm Slot',
-    tagline: 'Equip one unlocked weapon in every fight.',
+    title: 'Charms',
+    tagline: 'Equip up to 3 Armory weapons in every fight.',
     body: [
-      'Weapons you unlock go into your Armory. You can equip ONE as a charm, on top of the gear your fighter already carries.',
-      'Change your charm on the screen before each fight. Different foes call for different charms.',
+      'Weapons you unlock go into your Armory. Equip up to 3 as charms: they are your whole loadout.',
+      'Pick charms on the screen before each fight. Mix different jobs: two weapon families together can arm an evolution.',
     ],
     icon: 'lorc/gems',
-    demo: { type: 'icons', items: [{ icon: 'lorc/gems', label: 'Unlock' }, { icon: 'lorc/gear-hammer', label: 'Equip 1' }, { icon: 'lorc/crossed-swords', label: 'Fight' }] },
+    demo: { type: 'icons', items: [{ icon: 'lorc/gems', label: 'Unlock' }, { icon: 'lorc/gear-hammer', label: 'Equip 3' }, { icon: 'lorc/crossed-swords', label: 'Fight' }] },
   },
   rainbow: {
     id: 'rainbow',
@@ -248,6 +276,31 @@ export const MECHANICS: Record<string, MechanicDef> = {
     },
     coachMark: { on: 'rainbow', text: 'RAINBOW STRIKE! Double damage!' },
   },
+  time_bombs: {
+    id: 'time_bombs',
+    kind: 'rule',
+    title: 'Time Bombs',
+    tagline: 'Match the fused card before it blows.',
+    body: [
+      'Some new cards arrive with a lit fuse and a seconds counter. The fuse burns in real time, even without a clock.',
+      'Use the bomb card in a Set before it hits 0 and it is defused. Let it blow and you lose a heart.',
+    ],
+    fightTips: [
+      { title: 'Build around the bomb', text: 'Find a Set that INCLUDES the bomb card. Defuse 5 bombs for the third star.', anchor: 'bottom' },
+    ],
+    icon: 'lorc/time-bomb',
+    demo: {
+      type: 'set',
+      attributes: ['shape', 'color', 'number'],
+      valid: true,
+      caption: 'Use the fused card in a Set to defuse it',
+      cards: [
+        { shape: 'diamond', color: 'green', number: 2, shading: 'solid', modifiers: { hasCountdown: true, countdownTimer: 9 } },
+        { shape: 'oval', color: 'green', number: 2, shading: 'solid' },
+        { shape: 'squiggle', color: 'green', number: 2, shading: 'solid' },
+      ],
+    },
+  },
   coins: {
     id: 'coins',
     kind: 'feature',
@@ -256,7 +309,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
     tagline: 'Matched cards now drop coins.',
     body: [
       'From now on every matched card drops coins on top of your star rewards. Golden cards drop extra!',
-      'Dropped coins are yours even when you lose. Spend them at Camp to level up fighters and buy permanent upgrades.',
+      'Dropped coins are yours even when you lose. Spend them at Camp on permanent Workshop upgrades.',
       'Tougher foes pay more. Replaying levels is a good way to save up.',
     ],
     fightTips: [
@@ -290,6 +343,21 @@ export const MECHANICS: Record<string, MechanicDef> = {
     icon: 'lorc/stopwatch',
     demo: { type: 'icons', items: [{ icon: 'lorc/stopwatch', label: 'Survive = ★' }, { icon: 'lorc/crossed-swords', label: 'KO = ★★' }, { icon: 'lorc/flat-star', label: 'Challenge = ★★★' }] },
   },
+  snares: {
+    id: 'snares',
+    kind: 'rule',
+    title: 'Snares',
+    tagline: 'Leave the snared card. Match the one it points at.',
+    body: [
+      'A snared card shows an arrow in its corner, pointing at a neighbour.',
+      'Matching the snared card itself still scores, but costs a heart. Match the card its arrow points at instead to defuse the snare for +4 damage.',
+    ],
+    fightTips: [
+      { title: 'Follow the arrow', text: 'An arrow in a card\'s corner? Leave that card alone and use the card it points at. Defuse 6 snares for the third star.', anchor: 'bottom' },
+    ],
+    icon: 'lorc/wolf-trap',
+    demo: { type: 'icons', items: [{ icon: 'lorc/wolf-trap', label: 'Snared: −1 ♥' }, { icon: 'delapouite/plain-arrow', label: 'Points at…' }, { icon: 'lorc/flat-star', label: 'Defuse: +4' }] },
+  },
   triple_card: {
     id: 'triple_card',
     kind: 'threat',
@@ -297,7 +365,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
     tagline: 'One card takes 3 matches to break.',
     body: [
       'Iron Shell hides behind an armored card. It stays on the board until you\'ve used it in three Sets.',
-      'Break the armor for the third star.',
+      'Lasers and blasts chip off a plate too. Break the armor for the third star.',
     ],
     icon: 'lorc/turtle-shell',
     demo: {
@@ -321,20 +389,23 @@ export const MECHANICS: Record<string, MechanicDef> = {
     tagline: 'Stuck? Tap the bulb to reveal a Set.',
     body: [
       'You now carry hints. Tap the light bulb to reveal a Set on the board.',
-      'Hints are limited, so save them for when you\'re truly stuck. Some gear refills them.',
+      'Masked Bandit switches off auto-hints, so this time the bulb is all yours. Use it: the third star wants 3 hints spent.',
+      'Seeker Lens and Crystal Orb keep you stocked.',
     ],
     fightTips: [
-      { title: 'Hints', text: 'Stuck? Tap the yellow bulb to light up a Set. The number shows how many hints you have left.', anchor: 'top' },
+      { title: 'Hints', text: 'Tap the yellow bulb to light up a Set. Spend 3 hints in this fight for the third star, so press it!', anchor: 'top' },
     ],
     icon: 'lorc/light-bulb',
     demo: { type: 'icons', items: [{ icon: 'lorc/light-bulb', label: 'Reveal a Set' }, { icon: 'lorc/floating-crystal', label: 'Hold more' }] },
+    coachMark: { on: 'hint', text: 'Those glowing cards make a Set. Tap them!' },
   },
   duds: {
     id: 'duds',
     kind: 'threat',
     title: 'Duds',
     tagline: 'Junk cards that can\'t be matched.',
-    body: ['Junk Rat leaves duds on the board. Dud cards can\'t be used in Sets.', 'Work around them. They get cleared when blasts, fire or lasers hit them.'],
+    body: ['Junk Rat leaves duds on the board. Dud cards can\'t be used in Sets.', 'Blasts, fire and lasers clear them. Set off 4 explosions for the third star.'],
+    fightTips: [{ title: 'Blow up the junk', text: 'Equip Blast Powder: every explosion clears junk and counts toward the third star (4).', anchor: 'bottom' }],
     icon: 'lorc/cross-mark',
     demo: {
       type: 'set', attributes: ['shape', 'color', 'number'], valid: false, caption: 'Dud cards can\'t be selected',
@@ -372,9 +443,10 @@ export const MECHANICS: Record<string, MechanicDef> = {
     body: [
       'If only ONE trait is wrong, that\'s a near miss. A grace counts it as a Set instead of costing a heart.',
       'Two or more wrong traits still hurt.',
+      'While you hold graces, a bold guess is cheap. The third star wants 2 grace saves.',
     ],
     fightTips: [
-      { title: 'Graces', text: 'The clover shows your graces. If only one trait is wrong, a grace turns the mistake into a Set.', anchor: 'top' },
+      { title: 'Graces', text: 'The clover shows your graces. If only one trait is wrong, a grace turns the mistake into a Set. Save 2 for the third star.', anchor: 'top' },
     ],
     icon: 'lorc/clover',
     demo: {
@@ -398,11 +470,27 @@ export const MECHANICS: Record<string, MechanicDef> = {
       'Weapons you pick last for this level only. Winning more stars unlocks more weapons for the Armory.',
     ],
     fightTips: [
-      { title: 'Level up', text: 'The blue bar fills as you match. When it is full, the fight pauses and you pick a weapon.', anchor: 'top' },
+      { title: 'Level up', text: 'The blue bar fills as you match. When it is full, the fight pauses and you pick a weapon. Level up twice for the third star.', anchor: 'top' },
     ],
     icon: 'lorc/open-book',
     demo: { type: 'icons', items: [{ icon: 'lorc/flat-star', label: 'Fill XP' }, { icon: 'lorc/gems', label: 'Pick 1 of 3' }] },
     coachMark: { on: 'levelup', text: 'Level up! Pick a weapon for this fight.' },
+  },
+  arcana_slots: {
+    id: 'arcana_slots',
+    kind: 'feature',
+    title: 'Arcana Slots',
+    tagline: 'Stack two Arcana for a wilder fight.',
+    body: [
+      'You start with one Arcana slot. The Tarot Deck in the Workshop adds a second, then a third.',
+      'Stacked Arcana combine: bonuses add up, multipliers multiply, and the harshest limit wins.',
+      'Wicked Imp doubles every hit, both ways. Stack Arcana and land one Set of 15+ for the third star.',
+    ],
+    fightTips: [
+      { title: 'One huge Set', text: 'Deal 15+ damage with a single Set for the third star. Rainbows under Prismatic Fever hit ×3.', anchor: 'top' },
+    ],
+    icon: 'lorc/crystal-wand',
+    demo: { type: 'icons', items: [{ icon: 'lorc/crystal-wand', label: 'Slot 1' }, { icon: 'lorc/crystal-wand', label: 'Slot 2: Tarot' }, { icon: 'lorc/crossed-swords', label: 'Rules stack' }] },
   },
   countdown: {
     id: 'countdown',
@@ -484,12 +572,28 @@ export const MECHANICS: Record<string, MechanicDef> = {
       },
     ],
   },
+  charm_slots: {
+    id: 'charm_slots',
+    kind: 'feature',
+    title: 'Charm Slots',
+    tagline: 'Three charms, three different jobs.',
+    body: [
+      'You carry 3 charm slots. The Charm Belt in the Workshop adds one per tier, up to 6.',
+      'Goblin Saboteur halves three kinds of weapon at random, so never bring three of a kind. Give every slot a different job.',
+      'Trigger 3 different weapon effects for the third star.',
+    ],
+    fightTips: [
+      { title: 'Spread out', text: 'Blasts, fire, lasers, heals, coins, time: set off 3 different kinds to beat the Saboteur\'s challenge.', anchor: 'top' },
+    ],
+    icon: 'lorc/gems',
+    demo: { type: 'icons', items: [{ icon: 'lorc/bright-explosion', label: 'Slot 1' }, { icon: 'lorc/shining-heart', label: 'Slot 2' }, { icon: 'lorc/laser-warning', label: 'Slot 3' }, { icon: 'lorc/gear-hammer', label: 'Belt: up to 6' }] },
+  },
   waves: {
     id: 'waves',
     kind: 'rule',
     title: 'Waves',
     tagline: 'Several foes, one after another.',
-    body: ['The ants come in waves. Beat one and the next marches in.', 'Knock out every wave for ★★.'],
+    body: ['The ants come in waves. Beat one and the next marches in.', 'Open every wave with your biggest Set: Rally Horn adds damage to it. One Set of 10+ earns the third star.'],
     fightTips: [
       { title: 'Waves', text: 'This fight has three foes in a row. The clock keeps running between them.', anchor: 'top' },
     ],
@@ -506,6 +610,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
     body: [
       'Between waves, a shop opens. Spend coins on weapons for the rest of this level.',
       'Or skip it and bank every coin for Camp. Grow stronger now or save for later. It\'s your call.',
+      'This time, shop: buy 2 weapons for the third star.',
     ],
     icon: 'lorc/cash',
     demo: { type: 'icons', items: [{ icon: 'lorc/cash', label: 'Buy now' }, { icon: 'delapouite/coins-pile', label: 'or bank it' }] },
@@ -545,7 +650,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
     kind: 'threat',
     title: 'Regeneration',
     tagline: 'The foe heals over time.',
-    body: ['Circling Vulture heals 1 health every 10 seconds. Keep up the pressure!'],
+    body: ['Circling Vulture heals 1 health every 10 seconds. Keep up the pressure!', 'Out-damage the healing with blasts: set off 6 explosions for the third star.'],
     icon: 'lorc/vulture',
     demo: { type: 'icons', items: [{ icon: 'lorc/heart-bottle', label: '+1 HP / 10s' }] },
     coachMark: { on: 'regen', text: 'The foe is healing. Keep the pressure on!' },
@@ -618,10 +723,52 @@ export const MECHANICS: Record<string, MechanicDef> = {
     id: 'final_boss',
     kind: 'threat',
     title: 'The Hydra',
-    tagline: 'Everything you\'ve learned, all at once.',
-    body: ['Bombs, countdowns, hidden cards, time theft, and instant death if you stop matching.', 'Everything you\'ve learned leads here.'],
+    tagline: 'Three heads. Everything you\'ve learned, all at once.',
+    body: ['Three heads, one after another: bombs, countdowns, hidden cards, time theft, and instant death if you stop matching. Both traps are back too.', 'Bring your best build. The third star wants a single hit of 20 or more.'],
     icon: 'lorc/hydra',
     demo: { type: 'icons', items: [{ icon: 'lorc/time-bomb', label: 'Bombs' }, { icon: 'caro-asercion/barn-owl', label: 'Hidden' }, { icon: 'lorc/stopwatch', label: 'Countdown' }] },
+  },
+  polar: {
+    id: 'polar', kind: 'threat', title: 'Polar Guardian',
+    tagline: 'Hits hurt double. Lasers fizzle.',
+    body: ['Polar Guardian doubles damage both ways and weakens lasers by 40%.', 'Third star: win without losing a heart, and trigger at least one weapon effect.'],
+    icon: 'sparker/bear-face',
+    demo: { type: 'icons', items: [{ icon: 'lorc/broken-heart', label: '×2 hurt' }, { icon: 'lorc/laser-warning', label: 'Lasers −40%' }] },
+  },
+  one_eyed: {
+    id: 'one_eyed', kind: 'threat', title: 'The Glare',
+    tagline: 'No hints, shifting traits, ticking bombs.',
+    body: ['One-Eyed Terror switches off hints and shifts traits on random cards every 12 seconds.', 'Pelican\'s Keen Eye still glows, and Rainbows still freeze. Land 3 Rainbows for the third star.'],
+    icon: 'lorc/cyclops',
+    demo: { type: 'icons', items: [{ icon: 'lorc/light-bulb', label: 'No hints' }, { icon: 'darkzaitzev/chameleon-glyph', label: 'Shifts' }] },
+  },
+  feral: {
+    id: 'feral', kind: 'threat', title: 'Feral Fangs',
+    tagline: 'Duds, armor and a shrinking board.',
+    body: ['Feral Fangs drops duds, armors one card, and steals a card every 12 seconds. Snares cover the rest.', 'Break the armored card before 5 cards are gone for the third star.'],
+    icon: 'lorc/bestial-fangs',
+    demo: { type: 'icons', items: [{ icon: 'lorc/cross-mark', label: 'Duds' }, { icon: 'lorc/turtle-shell', label: 'Armor' }, { icon: 'caro-asercion/mole', label: '−1 card / 12s' }] },
+  },
+  kraken: {
+    id: 'kraken', kind: 'threat', title: 'Drowned Gear',
+    tagline: 'Every weapon works half as well.',
+    body: ['Kraken\'s Grasp shuffles the board, steals cards, drops duds, and halves every weapon you carry.', 'Your passives, skill nodes and evolutions are untouched. Trigger 3 evolutions for the third star.'],
+    icon: 'delapouite/kraken-tentacle',
+    demo: { type: 'icons', items: [{ icon: 'lorc/gear-hammer', label: 'Weapons −50%' }, { icon: 'lorc/cycle', label: 'Shuffles' }, { icon: 'lorc/crystal-shine', label: 'Evolve ×3' }] },
+  },
+  world_eater: {
+    id: 'world_eater', kind: 'threat', title: 'World Eater',
+    tagline: 'The board is being eaten.',
+    body: ['World Eater swallows 2 extra cards per Set and more every 10 seconds. The clock runs 50% faster, and 25 seconds without a Set ends the fight.', 'Grow the board, re-deal it, and keep defusing: 5 traps for the third star.'],
+    icon: 'lorc/daemon-skull',
+    demo: { type: 'icons', items: [{ icon: 'lorc/cross-mark', label: '−2 cards / Set' }, { icon: 'lorc/stopwatch', label: 'Fast clock' }, { icon: 'lorc/wolf-trap', label: 'Defuse ×5' }] },
+  },
+  porcupine: {
+    id: 'porcupine', kind: 'threat', title: 'Needles',
+    tagline: 'One wrong Set costs three cards.',
+    body: ['Merciless Porcupine removes 3 cards on every mistake and doubles damage both ways. 35 seconds without a Set is a knockout.', 'Play clean and keep moving. No mistakes for the third star.'],
+    icon: 'caro-asercion/porcupine',
+    demo: { type: 'icons', items: [{ icon: 'lorc/cross-mark', label: 'Mistake: −3 cards' }, { icon: 'lorc/broken-heart', label: '×2 hurt' }, { icon: 'lorc/stopwatch', label: '35s idle = KO' }] },
   },
 
   // ── Elite branches (optional, tougher foes) ────────────────────────────
@@ -635,7 +782,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
   sabotage: {
     id: 'sabotage', kind: 'threat', title: 'Sabotage',
     tagline: 'Your weapons work half as well.',
-    body: ['Goblin Saboteur tampers with three kinds of weapon at random. Each works half as often in this fight.', 'Lean on plain Sets and your fighter ability.'],
+    body: ['Goblin Saboteur tampers with three kinds of weapon at random. Each works half as often in this fight.', 'Lean on plain Sets and your fighter\'s passives.'],
     icon: 'caro-asercion/goblin',
     demo: { type: 'icons', items: [{ icon: 'lorc/gear-hammer', label: '3 weapons −50%' }] },
   },
@@ -656,7 +803,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
   bomb_swarm: {
     id: 'bomb_swarm', kind: 'threat', title: 'Bomb Swarm',
     tagline: 'Bombs keep coming.',
-    body: ['Swarming Ants wire a bomb into about one in four new cards, and plant an 8-second countdown card.', 'Defuse five bombs for the third star.'],
+    body: ['Elite foes sit on side paths. They are optional, much tougher, and guard better loot. Some lead to even harder elites.', 'Swarming Ants wire a bomb into about one in four new cards, and plant an 8-second countdown card. Defuse five bombs for the third star.'],
     icon: 'delapouite/ant',
     demo: { type: 'icons', items: [{ icon: 'lorc/time-bomb', label: 'Many bombs' }, { icon: 'lorc/stopwatch', label: '8s countdown' }] },
   },
@@ -670,7 +817,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
   dragon: {
     id: 'dragon', kind: 'threat', title: 'Ancient Dragon',
     tagline: 'Armor, shifting traits and a racing clock.',
-    body: ['Two armored cards. Traits shift every 8 seconds. The clock runs 40% faster. Mistakes cost 2 hearts.', 'Come back with a levelled fighter.'],
+    body: ['Two armored cards. Traits shift every 8 seconds. The clock runs 40% faster. Mistakes cost 2 hearts.', 'Come back with a deeper skill tree.'],
     icon: 'lorc/dragon-head',
     demo: { type: 'icons', items: [{ icon: 'lorc/turtle-shell', label: 'Armor' }, { icon: 'darkzaitzev/chameleon-glyph', label: 'Shifts' }, { icon: 'lorc/stopwatch', label: 'Fast clock' }] },
   },
@@ -681,73 +828,117 @@ export const MECHANICS: Record<string, MechanicDef> = {
     icon: 'lorc/grim-reaper',
     demo: { type: 'icons', items: [{ icon: 'lorc/light-bulb', label: 'No hints' }, { icon: 'lorc/broken-heart', label: '×2 hurt' }] },
   },
+  cobra: {
+    id: 'cobra', kind: 'threat', title: 'Viper Pit',
+    tagline: 'Shifting traits, fused cards and snares.',
+    body: ['Venomous Cobra shifts traits every 15 seconds and wires bomb timers onto random cards.', 'Snares cover the board too. Defuse 4 traps for the third star.'],
+    icon: 'skoll/cobra',
+    demo: { type: 'icons', items: [{ icon: 'darkzaitzev/chameleon-glyph', label: 'Shifts' }, { icon: 'lorc/time-bomb', label: 'Bombs' }, { icon: 'lorc/wolf-trap', label: 'Snares' }] },
+  },
+  savage: {
+    id: 'savage', kind: 'threat', title: 'Savage Claws',
+    tagline: 'A sprinting clock that bites every Set.',
+    body: ['Savage Claws runs the clock 50% faster, takes 4 seconds per match, and plants bombs.', 'Few, huge Sets win here. Combo, Hot Streak and evolutions are your friends.'],
+    icon: 'lorc/claw-slashes',
+    demo: { type: 'icons', items: [{ icon: 'lorc/stopwatch', label: '×1.5 clock' }, { icon: 'lorc/hourglass', label: '−4s / Set' }, { icon: 'lorc/time-bomb', label: 'Bombs' }] },
+  },
+  abyss: {
+    id: 'abyss', kind: 'threat', title: 'Ink Grotto',
+    tagline: 'Hidden cards, shuffles and a short fuse.',
+    body: ['Abyssal Octopus hides 30% of new cards, shuffles every 20 seconds, and plants a 10-second countdown card.', 'Match 5 face-down cards once they flip for the third star.'],
+    icon: 'lorc/octopus',
+    demo: { type: 'icons', items: [{ icon: 'caro-asercion/barn-owl', label: 'Hidden' }, { icon: 'lorc/cycle', label: 'Shuffle' }, { icon: 'lorc/stopwatch', label: '10s countdown' }] },
+  },
 
   // ── Fighters (shown when a fighter is unlocked) ────────────────────────
-  // Each fighter brings a NEW rule (src/adventure/data/abilities.ts) plus
-  // themed starting gear.
+  // Each fighter brings two passives (data/passives.ts) and a skill tree
+  // (data/skillTrees.ts). Fighter trials (side branches) introduce them.
   fighter_healing: {
-    id: 'fighter_healing', kind: 'fighter', title: 'Orange Tabby: Nine Lives',
-    tagline: 'Once per fight, a knockout leaves you on 1 heart.',
+    id: 'fighter_healing', kind: 'fighter', title: 'Orange Tabby: Nine Lives & Scrappy',
+    tagline: 'Low health is a weapon.',
     body: [
-      'Ability, passive: the first time you would run out of hearts, Tabby lands on its feet with 1 heart left.',
-      'Gear: Mending Charm heals on match, and Life Vessel adds a heart.',
+      'Nine Lives: once per fight, a knockout leaves you on 1 heart instead.',
+      'Scrappy: every Set deals +1 damage for each heart you are missing.',
+      'Skill tree: one branch heals into blasts and lasers, the other turns a 1-heart Tabby into a wrecking ball.',
     ],
     icon: 'lorc/cat',
-    demo: { type: 'icons', items: [{ icon: 'lorc/broken-heart', label: '0 hearts…' }, { icon: 'lorc/cat', label: '…Nine Lives!' }, { icon: 'lorc/shining-heart', label: 'Back on 1' }] },
-    coachMark: { on: 'nine_lives', text: 'Nine Lives! Tabby landed on its feet with 1 heart.' },
+    demo: { type: 'icons', items: [{ icon: 'lorc/broken-heart', label: '2 hearts down…' }, { icon: 'lorc/fist', label: '…+2 per Set' }, { icon: 'lorc/cat', label: 'Nine Lives' }] },
+    coachMark: { on: 'nine_lives', text: 'Nine Lives! Tabby landed on its feet with 1 heart, and Scrappy makes every Set hit harder now.' },
   },
   fighter_fire: {
-    id: 'fighter_fire', kind: 'fighter', title: 'Sly Fox: Combo',
-    tagline: 'Fast Sets chain into a combo for bonus damage.',
+    id: 'fighter_fire', kind: 'fighter', title: 'Sly Fox: Combo & Hot Streak',
+    tagline: 'Never stop moving.',
     body: [
-      'Ability, passive: a Set within 5 seconds of your last one adds +1 combo, which is +1 damage per step, up to +4. A mistake or a pause breaks it.',
-      'Gear: Flint Spark sets cards on fire, and Blast Powder explodes neighbours.',
+      'Combo: a Set within 5 seconds of your last one adds a step, +1 damage each, up to +4. A mistake breaks it.',
+      'Hot Streak: at max Combo, your next Set deals ×2.',
+      'Skill tree: stretch the window and turn Combo into lasers and blasts, or keep Hot Streak burning for ×4 hits.',
+    ],
+    fightTips: [
+      { title: 'Reach Combo 3', text: 'Make Sets less than 5 seconds apart. The wolf hates it. Hit Combo 3 for the third star.', anchor: 'top' },
     ],
     icon: 'caro-asercion/fox',
-    demo: { type: 'icons', items: [{ icon: 'lorc/stopwatch', label: '< 5s apart' }, { icon: 'lorc/lightning-branches', label: 'Combo +1…+4' }] },
-    coachMark: { on: 'combo', text: 'Combo! Keep matching within 5 seconds for more damage.' },
+    demo: { type: 'icons', items: [{ icon: 'lorc/stopwatch', label: '< 5s apart' }, { icon: 'lorc/lightning-branches', label: 'Combo +1…+4' }, { icon: 'lorc/fireball', label: 'Hot Streak ×2' }] },
+    coachMark: { on: 'combo', text: 'Combo! Keep matching within 5 seconds. At max Combo your next Set hits ×2.' },
   },
   fighter_grace: {
-    id: 'fighter_grace', kind: 'fighter', title: 'Badger: Grudge',
-    tagline: 'Mistakes make Badger angry, and angry hits hard.',
+    id: 'fighter_grace', kind: 'fighter', title: 'Badger: Grudge & Thick Hide',
+    tagline: 'Guessing is allowed. Even good.',
     body: [
-      'Ability, passive: every mistake stores a grudge, up to 3. Your next Set deals +3 damage per grudge.',
-      'Gear: Second Chance gives starting graces, and Fortune Token earns more.',
-      'A sacrifice play, swapping in 3 new cards for a heart, now pays you back.',
+      'Grudge: every mistake stores a grudge, up to 3. Your next Set releases +3 damage per grudge.',
+      'Thick Hide: your first mistake each wave costs no heart.',
+      'Skill tree: turn mistakes into lasers and free Sets, or make them almost free.',
+    ],
+    fightTips: [
+      { title: 'Miss on purpose', text: 'Store grudges with wrong guesses, then release them in one Set of 12+ for the third star.', anchor: 'top' },
     ],
     icon: 'caro-asercion/badger',
-    demo: { type: 'icons', items: [{ icon: 'lorc/cross-mark', label: 'Mistake' }, { icon: 'lorc/fist', label: '+3 next hit' }] },
+    demo: { type: 'icons', items: [{ icon: 'lorc/cross-mark', label: 'Mistake' }, { icon: 'lorc/fist', label: '+3 per grudge' }, { icon: 'lorc/turtle-shell', label: '1st one free' }] },
     coachMark: { on: 'grudge', text: 'Grudge stored! Your next Set hits harder.' },
   },
   fighter_foresight: {
-    id: 'fighter_foresight', kind: 'fighter', title: 'Emperor Penguin: Deep Freeze',
-    tagline: 'Charge it, then freeze time.',
+    id: 'fighter_foresight', kind: 'fighter', title: 'Emperor Penguin: Patience & Deep Freeze',
+    tagline: 'Slow, deliberate, deadly.',
     body: [
-      'Ability, active: every Set charges the button. At 4 charges, tap it to freeze the clock and the foe for 6 seconds. Bombs, countdowns and regeneration all stop.',
-      'Gear: Crystal Orb holds more hints, and Seeker Lens earns them.',
+      'Patience: a Set made 6 seconds or more after your last one deals +3.',
+      'Deep Freeze: every Rainbow Strike freezes the clock and the foe for 4 seconds.',
+      'Skill tree: make every patient Set a laser or a free Set, or turn Rainbows into Catalysts and 3×3 shatters.',
+    ],
+    fightTips: [
+      { title: 'Hunt Rainbows', text: 'The hawk speeds up the clock, and every Rainbow Strike freezes it. Land 5 Rainbows for the third star.', anchor: 'top' },
     ],
     icon: 'delapouite/penguin',
-    demo: { type: 'icons', items: [{ icon: 'lorc/checked-shield', label: '4 Sets' }, { icon: 'lorc/snowflake-1', label: 'Freeze 6s' }] },
+    demo: { type: 'icons', items: [{ icon: 'lorc/hourglass', label: '6s+ wait: +3' }, { icon: 'lorc/rainbow-star', label: 'Rainbow' }, { icon: 'lorc/snowflake-1', label: 'Freeze 4s' }] },
+    coachMark: { on: 'freeze', text: 'Deep Freeze! The clock and the foe stand still. Take your time.' },
   },
   fighter_growth: {
-    id: 'fighter_growth', kind: 'fighter', title: 'Corgi: Zoomies',
-    tagline: 'Charge it, then re-deal the whole board.',
+    id: 'fighter_growth', kind: 'fighter', title: 'Corgi: Zoomies & Fetch',
+    tagline: 'Shape the board.',
     body: [
-      'Ability, active: after 3 Sets, tap to zoom around and re-deal every card. Duds and hidden cards are cleared, and the new board always has a Set.',
-      'Gear: Field Stone gives a bigger board, and Growth Seed grows it.',
+      'Zoomies: every 5th Set re-deals the board clean. Duds and hidden cards are gone.',
+      'Fetch: matching a power or gold card brings a new one onto the board.',
+      'Skill tree: grow huge boards that explode, or fetch bonus cards that power up everything.',
+    ],
+    fightTips: [
+      { title: 'Keep fetching', text: 'Every power or gold card you match brings another. Match 8 for the third star.', anchor: 'bottom' },
     ],
     icon: 'delapouite/sitting-dog',
-    demo: { type: 'icons', items: [{ icon: 'lorc/checked-shield', label: '3 Sets' }, { icon: 'delapouite/jumping-dog', label: 'Fresh board' }] },
+    demo: { type: 'icons', items: [{ icon: 'delapouite/jumping-dog', label: '5th Set: re-deal' }, { icon: 'lorc/fist', label: 'Match a +2…' }, { icon: 'delapouite/sitting-dog', label: '…fetch another' }] },
+    coachMark: { on: 'redeal', text: 'Zoomies! A fresh, clean board.' },
   },
   fighter_oracle: {
-    id: 'fighter_oracle', kind: 'fighter', title: 'Pelican: Big Scoop',
-    tagline: 'Charge it, then scoop up a Set automatically.',
+    id: 'fighter_oracle', kind: 'fighter', title: 'Pelican: Big Scoop & Keen Eye',
+    tagline: 'Let the board do the work.',
     body: [
-      'Ability, active: after 4 Sets, tap to have Pelican find and match a Set for you, damage and all.',
-      'Gear: two Oracle Eyes flash part of a Set when you stall. A lifesaver with five traits.',
+      'Big Scoop: every 6th Set, Pelican scoops a free Set for you, damage and all.',
+      'Keen Eye: after 8 seconds without a Set, one card of a Set glows. Free: no hint spent.',
+      'Skill tree: scoop more and more free Sets, or turn every hint into damage.',
+    ],
+    fightTips: [
+      { title: 'Free XP', text: 'Scooped Sets fill your XP bar too. Level up 3 times for the third star.', anchor: 'top' },
     ],
     icon: 'delapouite/eating-pelican',
-    demo: { type: 'icons', items: [{ icon: 'lorc/checked-shield', label: '4 Sets' }, { icon: 'delapouite/eating-pelican', label: 'Free Set' }] },
+    demo: { type: 'icons', items: [{ icon: 'lorc/checked-shield', label: '6th Set' }, { icon: 'delapouite/eating-pelican', label: 'Free Set' }, { icon: 'lorc/light-bulb', label: '8s: a card glows' }] },
+    coachMark: { on: 'scoop', text: 'Big Scoop! Pelican grabbed a Set for you.' },
   },
 
   // ── Advanced Systems (Workshop, Purity, Evolutions, Arcana, Bounties) ──
@@ -755,17 +946,18 @@ export const MECHANICS: Record<string, MechanicDef> = {
     id: 'workshop',
     kind: 'feature',
     title: 'The Workshop',
-    tagline: 'Spend coins to upgrade unlocked mechanics and Armory weapons.',
+    tagline: 'Spend coins on permanent upgrades at Camp.',
     body: [
-      'The Workshop at Camp is now open! You can enhance any mechanic or Armory weapon you have actually unlocked.',
-      'Experiment freely — every Workshop and Fighter upgrade can be refunded for 100% of your coins anytime.',
+      'The Workshop at Camp is open! Spend coins on upgrades for mechanics you have met, and on your Armory weapons.',
+      'Watch for the Charm Belt (more charm slots), the Tarot Deck (more Arcana slots) and the Evolution Lab (more Catalysts).',
+      'Experiment freely: every Workshop upgrade can be refunded for 100% of its coins, anytime.',
     ],
     icon: 'lorc/gear-hammer',
     demo: {
       type: 'icons',
       items: [
-        { icon: 'lorc/gear-hammer', label: 'Upgrade Stats' },
-        { icon: 'lorc/gems', label: 'Boost Weapons' },
+        { icon: 'lorc/gear-hammer', label: 'Upgrade' },
+        { icon: 'lorc/gems', label: 'More slots' },
         { icon: 'lorc/recycle', label: '100% Refund' },
       ],
     },
@@ -794,46 +986,38 @@ export const MECHANICS: Record<string, MechanicDef> = {
     },
     coachMark: { on: 'purity', text: 'Escalating Purity! Each Set with more all-different traits hits harder and drops bonus coins.' },
   },
-  weapon_evolutions: {
-    id: 'weapon_evolutions',
+  evolutions: {
+    id: 'evolutions',
     kind: 'feature',
-    title: 'Weapon Combos',
-    tagline: 'Prime a weapon combo, then match on the hidden Catalyst card.',
+    enables: 'evolutions',
+    title: 'Evolutions',
+    tagline: 'Two weapon families + a Catalyst card = 20 seconds of chaos.',
     body: [
-      'At most ONE card on the board hides a shimmering Evolution Catalyst behind its shapes.',
-      'Hold off on matching that card until your weapon recipe says EVO READY! Matching a Catalyst card too early shatters it for the wave.',
-      'Check the Recipe Guide in the Field Guide to track every unlocked combo.',
+      'A recipe fuses two weapon families. Equip a charm from each and the recipe is ARMED.',
+      'While a recipe is armed, a glowing Catalyst card can turn up on the board. Match it in any Set and the evolution runs for 20 seconds: new rules, plus +1 damage on every Set.',
+      'Up to 3 evolutions per fight. Your first recipe, Phoenix Pyre, fuses Blast Powder and Mending Charm.',
     ],
     lessons: [
       {
-        title: 'Do NOT match a dormant Catalyst early!',
-        body: [
-          'Only ONE Evolution Catalyst can appear on screen at a time, marked by a faint crystal behind a card.',
-          'While its badge is purple, your combo is NOT primed yet. If you match a Set containing that card too early, the Catalyst shatters and is lost!',
-        ],
+        title: 'Arm the recipe',
+        body: ['Before the fight, equip Blast Powder and Mending Charm as charms.', 'Holding both families arms Phoenix Pyre. The fight preview shows it lit up.'],
         demo: {
-          type: 'set',
-          attributes: ['shape', 'color', 'number'],
-          valid: false,
-          caption: 'Dormant purple Catalyst: matching too early loses it!',
-          cards: [
-            { shape: 'diamond', color: 'red', number: 1, shading: 'solid', modifiers: { hasEvolutionItem: true, evolutionReady: false } },
-            { shape: 'diamond', color: 'red', number: 2, shading: 'solid' },
-            { shape: 'diamond', color: 'red', number: 3, shading: 'solid' },
+          type: 'icons',
+          items: [
+            { icon: 'lorc/bright-explosion', label: 'Blast Powder' },
+            { icon: 'lorc/shining-heart', label: 'Mending Charm' },
+            { icon: 'lorc/fireball', label: 'Phoenix Pyre' },
           ],
         },
       },
       {
-        title: 'Wait for gold EVO, then strike!',
-        body: [
-          'Bring the combo\'s required weapons and complete its in-fight condition on other cards first.',
-          'Once primed, the Catalyst card glows gold with EVO — match a valid Set containing it to forge your Legendary weapon!',
-        ],
+        title: 'Match the Catalyst',
+        body: ['Armed recipes make a Catalyst card appear on refills, one at a time.', 'Match it in ANY valid Set. There is nothing to wait for and nothing to lose: the sooner, the better.'],
         demo: {
           type: 'set',
           attributes: ['shape', 'color', 'number'],
           valid: true,
-          caption: 'Gold EVO Catalyst: match a Set with it to evolve!',
+          caption: 'A Set with the Catalyst starts the evolution',
           cards: [
             { shape: 'oval', color: 'red', number: 1, shading: 'solid', modifiers: { hasEvolutionItem: true, evolutionReady: true } },
             { shape: 'oval', color: 'green', number: 2, shading: 'solid' },
@@ -841,26 +1025,34 @@ export const MECHANICS: Record<string, MechanicDef> = {
           ],
         },
       },
+      {
+        title: '20 seconds of fire',
+        body: ['Phoenix Pyre: every heal OR lost heart blasts a 3×2 block, and Sets heal 1 on a 25% roll.', 'So while it runs, getting hit is good. A ring counts down the seconds you have left.'],
+      },
+    ],
+    fightTips: [
+      { title: 'Watch for the Catalyst', text: 'With Blast Powder and Mending Charm equipped, a glowing Catalyst card turns up. Match it in any Set to evolve!', anchor: 'bottom' },
+      { title: 'Evolve three times', text: 'Trigger 3 evolutions in this fight for the third star.', anchor: 'top' },
     ],
     icon: 'lorc/crystal-shine',
     demo: {
       type: 'icons',
       items: [
-        { icon: 'lorc/gems', label: 'Pair Gear' },
-        { icon: 'lorc/crystal-shine', label: 'Prime Catalyst' },
-        { icon: 'lorc/fireball', label: 'Evolve!' },
+        { icon: 'lorc/gems', label: 'Equip 2 families' },
+        { icon: 'lorc/crystal-shine', label: 'Match the Catalyst' },
+        { icon: 'lorc/fireball', label: '20s of power' },
       ],
     },
-    coachMark: { on: 'catalyst_spawn', text: 'Hidden Catalyst spotted! Wait until your recipe says EVO READY before matching that card, or it is lost!' },
+    coachMark: { on: 'catalyst_spawn', text: 'A Catalyst! Match it in any Set to evolve for 20 seconds.' },
   },
   arcana_cards: {
     id: 'arcana_cards',
     kind: 'feature',
     title: 'Arcana Wildcards',
-    tagline: 'Equip one kiss-curse tarot rule twist before a fight.',
+    tagline: 'Kiss-curse tarot cards that twist the rules of a fight.',
     body: [
       'Arcana cards bend the rules of a fight — turning simple Sets into boulders, igniting cards on mistakes, or tripling Rainbow Strikes.',
-      'Every upside comes with a tradeoff, and you can toggle your Arcana on or off anytime at Camp or before a fight.',
+      'Every upside comes with a tradeoff. You start with one Arcana slot; the Tarot Deck in the Workshop adds more. Swap them anytime at Camp or before a fight.',
     ],
     icon: 'lorc/crystal-wand',
     demo: {
@@ -891,6 +1083,12 @@ export const MECHANICS: Record<string, MechanicDef> = {
     },
   },
 };
+
+/**
+ * @deprecated Old key for the evolutions lesson; the same entry as `evolutions`.
+ * Not enumerable, so lists built from MECHANICS show it once.
+ */
+Object.defineProperty(MECHANICS, 'weapon_evolutions', { value: MECHANICS.evolutions, enumerable: false });
 
 export const getMechanic = (id: string): MechanicDef => {
   const m = MECHANICS[id];

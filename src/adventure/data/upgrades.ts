@@ -1,5 +1,7 @@
 /**
- * Permanent Camp Workshop upgrades — both Mechanic Upgrades and Armory Weapon
+ * Permanent Camp Workshop upgrades — Mechanic Upgrades (stats), loadout-size
+ * items (Charm Belt, Tarot Deck, Evolution Lab: they change nothing in
+ * PlayerStats; the engine reads `save.upgrades[id]`) and Armory Weapon
  * Upgrades. Which of them a player may buy is decided in progress.ts.
  */
 import type { Weapon, WeaponRarity } from '@/types';
@@ -61,6 +63,35 @@ export const UPGRADES: UpgradeDef[] = [
     costs: [250, 700, 1600],
     apply: (s, t) => ({ ...s, graces: s.graces + t }),
     mechanic: 'graces',
+  },
+
+  // ── Loadout size: nothing to stats; the engine and Camp read save.upgrades[id] ──
+  {
+    id: 'charm_belt',
+    name: 'Charm Belt',
+    icon: 'lorc/belt-buckles',
+    description: t => `${3 + t} charm slots (+${t})`,
+    costs: [300, 900, 2000],
+    apply: s => s,
+    mechanic: 'charm_slots',
+  },
+  {
+    id: 'tarot_deck',
+    name: 'Tarot Deck',
+    icon: 'caro-asercion/tarot-10-wheel-of-fortune',
+    description: t => `${1 + t} Arcana slots (+${t})`,
+    costs: [800, 2400],
+    apply: s => s,
+    mechanic: 'arcana_slots',
+  },
+  {
+    id: 'evolution_lab',
+    name: 'Evolution Lab',
+    icon: 'lorc/fizzing-flask',
+    description: t => `+${t * 4}% evolution likelihood on every refill`,
+    costs: [500, 1300, 2800],
+    apply: s => s,
+    mechanic: 'evolutions',
   },
 ];
 

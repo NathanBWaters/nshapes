@@ -10,7 +10,10 @@ import { COLORS, RADIUS } from '@/utils/colors';
 import { BACKGROUND_COLORS } from '@/utils/gameConfig';
 import { useBurnTimer } from '@/hooks/useBurnTimer';
 import { DURATION } from '@/utils/animation';
-import Icon from './Icon';
+import Icon, { type IconName } from './Icon';
+
+/** The snare icon points down; turn it to face the card the snare points at. */
+const SNARE_ROTATION: Record<NonNullable<CardType['snare']>, string> = { down: '0deg', left: '90deg', up: '180deg', right: '-90deg' };
 
 const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
 
@@ -171,14 +174,25 @@ const Card: React.FC<CardProps> = ({
   // These are small icons (1/5 size of shapes) that show card state
   // IMPORTANT: Outlines/borders are ONLY for selection - use icons for other states
   const renderStateIndicators = () => {
-    const indicators: { icon: string; color: string }[] = [];
+    const indicators: { icon: IconName; color: string; rotate?: string; label?: string }[] = [];
+    const visible = !isDud && !isFaceDown;
 
-    if (card.onFire && !isDud && !isFaceDown) {
+    if (card.onFire && visible) {
       indicators.push({ icon: 'lorc/campfire', color: '#EF4444' }); // Red fire
     }
 
-    if (isConnected && !isDud && !isFaceDown) {
+    if (isConnected && visible) {
       indicators.push({ icon: 'lorc/linked-rings', color: COLORS.slateCharcoal }); // Gray connection
+    }
+
+    // Snare trap: an arrow pointing at the neighbour that defuses it
+    if (card.snare && visible) {
+      indicators.push({ icon: 'delapouite/plain-arrow', color: '#B45309', rotate: SNARE_ROTATION[card.snare] });
+    }
+
+    // Piñata bounty: bonus damage when this armored card finally breaks
+    if (card.bounty && visible) {
+      indicators.push({ icon: 'delapouite/pinata', color: '#DB2777', label: `${card.bounty}` });
     }
 
     if (indicators.length === 0) return null;
@@ -187,7 +201,10 @@ const Card: React.FC<CardProps> = ({
       <View style={styles.stateIndicatorContainer}>
         {indicators.map((indicator, index) => (
           <View key={index} style={styles.stateIndicator}>
-            <Icon name={indicator.icon as any} size={10} color={indicator.color} noShadow />
+            <View style={indicator.rotate ? { transform: [{ rotate: indicator.rotate }] } : undefined}>
+              <Icon name={indicator.icon} size={10} color={indicator.color} noShadow />
+            </View>
+            {indicator.label && <Text style={[styles.stateIndicatorLabel, { color: indicator.color }]}>{indicator.label}</Text>}
           </View>
         ))}
       </View>
@@ -250,7 +267,7 @@ const Card: React.FC<CardProps> = ({
   return (
     <AnimatedTouchableOpacity
       testID={`card-${shape}-${color}-${number}-${shading}${isDud ? '-dud' : ''}${isFaceDown ? '-facedown' : ''}${hasBomb ? '-bomb' : ''}${hasCountdown ? '-countdown' : ''}`}
-      accessibilityLabel={`${number} ${color} ${shading} ${shape}${card.background ? ` on ${card.background}` : ''}${isDud ? ', dud' : ''}${isFaceDown ? ', face down' : ''}${card.hasEvolutionItem ? (card.evolutionReady ? ', evolution ready' : ', dormant catalyst') : ''}`}
+      accessibilityLabel={`${number} ${color} ${shading} ${shape}${card.background ? ` on ${card.background}` : ''}${isDud ? ', dud' : ''}${isFaceDown ? ', face down' : ''}${card.hasEvolutionItem ? (card.evolutionReady ? ', evolution ready' : ', dormant catalyst') : ''}${card.snare ? `, snare pointing ${card.snare}` : ''}${card.bounty ? `, bounty ${card.bounty}` : ''}`}
       style={[
         getCardStyle(),
         animatedCardStyle,
@@ -579,7 +596,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     borderRadius: RADIUS.module - 2, // Slightly smaller to not overlap card border
   },
-  // State indicator icons (fire, connection) in bottom left corner
+  // State indicator icons (fire, connection, snare, bounty) in bottom left corner
   // Size is ~1/5 of the shapes on the card
   stateIndicatorContainer: {
     position: 'absolute',
@@ -590,14 +607,22 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   stateIndicator: {
-    width: 14,
+    minWidth: 14,
     height: 14,
     borderRadius: 7,
+    flexDirection: 'row',
+    gap: 1,
+    paddingHorizontal: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: COLORS.slateCharcoal,
+  },
+  stateIndicatorLabel: {
+    fontSize: 8,
+    fontWeight: '900',
+    paddingRight: 1,
   },
   disabled: {
     opacity: 0.6,

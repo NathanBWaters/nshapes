@@ -1,81 +1,56 @@
 /**
- * Fighters (characters) — each one introduces a signature mechanic and can be
- * levelled 1→10 at Camp. Levelling upgrades the starting gear.
+ * Fighters (characters). A fighter brings no gear: its identity is two
+ * passives that change HOW you play (data/passives.ts), grown through a
+ * 20-node skill tree bought with stars (data/skillTrees.ts). Charms are the
+ * whole weapon loadout.
  */
-import type { CharacterName, PlayerStats } from '@/types';
+import type { CharacterName } from '@/types';
 import type { FighterDef } from '../types';
-import type { IconName } from '@/components/Icon';
 
-export const MAX_FIGHTER_LEVEL = 10;
-
-/** Coins to go from level N to N+1 (index = current level - 1). */
-export const FIGHTER_LEVEL_COSTS = [60, 120, 200, 320, 480, 700, 1000, 1400, 1900];
-
-interface Kit {
-  name: CharacterName;
-  icon: IconName;
-  signature: string;
-  blurb: string;
-  a: string;       // weapon family A (id prefix without rarity)
-  b: string;       // weapon family B
-  epic: string;    // weapon id granted at level 8
-  capstone: string; // weapon id granted at level 10
-}
-
-const withRarity = (family: string, rarity: 'common' | 'rare') => `${family}-${rarity}`;
-
-/** Shared growth curve so every fighter feels the same way to level up. */
-const buildLoadouts = (k: Kit): string[][] => {
-  const A = (r: 'common' | 'rare') => withRarity(k.a, r);
-  const B = (r: 'common' | 'rare') => withRarity(k.b, r);
-  return [
-    /* 1 */ [A('common'), B('common')],
-    /* 2 */ [A('common'), B('common')],
-    /* 3 */ [A('rare'), B('common')],
-    /* 4 */ [A('rare'), B('common')],
-    /* 5 */ [A('rare'), B('rare')],
-    /* 6 */ [A('rare'), B('rare')],
-    /* 7 */ [A('rare'), B('rare'), A('common')],
-    /* 8 */ [A('rare'), B('rare'), A('common'), k.epic],
-    /* 9 */ [A('rare'), B('rare'), A('common'), k.epic],
-    /* 10 */ [A('rare'), B('rare'), A('rare'), k.epic, k.capstone],
-  ];
-};
-
-/** Extra base stats at each fighter level, shared by every fighter (cumulative is computed). */
-const FIGHTER_PERKS: Array<Partial<PlayerStats> | null> = [
-  null,
-  { maxHealth: 1, health: 1 },
-  null,
-  { coinGainChance: 15 },
-  null,
-  { maxHealth: 1, health: 1 },
-  null,
-  null,
-  { graces: 1, hints: 1 },
-  null,
+export const FIGHTERS: FighterDef[] = [
+  {
+    name: 'Orange Tabby',
+    icon: 'lorc/cat',
+    signature: 'fighter_healing',
+    blurb: 'Risky brawler: every missing heart hits harder, and one knockout is never the end.',
+    passives: ['nine_lives', 'scrappy'],
+  },
+  {
+    name: 'Sly Fox',
+    icon: 'caro-asercion/fox',
+    signature: 'fighter_fire',
+    blurb: 'Speed demon: chain Sets inside 5 seconds, then cash a max Combo in for double damage.',
+    passives: ['combo', 'hot_streak'],
+  },
+  {
+    name: 'Badger',
+    icon: 'caro-asercion/badger',
+    signature: 'fighter_grace',
+    blurb: 'Gambler: guess boldly. Every mistake is ammo, and the first one each wave is free.',
+    passives: ['grudge', 'thick_hide'],
+  },
+  {
+    name: 'Emperor Penguin',
+    icon: 'delapouite/penguin',
+    signature: 'fighter_foresight',
+    blurb: 'Sniper: wait for the perfect Set, then freeze the world with a Rainbow Strike.',
+    passives: ['patience', 'deep_freeze'],
+  },
+  {
+    name: 'Corgi',
+    icon: 'delapouite/sitting-dog',
+    signature: 'fighter_growth',
+    blurb: 'Board shaper: fetches power and gold cards, then zooms the whole board clean.',
+    passives: ['zoomies', 'fetch'],
+  },
+  {
+    name: 'Pelican',
+    icon: 'delapouite/eating-pelican',
+    signature: 'fighter_oracle',
+    blurb: 'Laid-back: free Sets, free glows. The board does half the work for you.',
+    passives: ['big_scoop', 'keen_eye'],
+  },
 ];
-
-export const FIGHTER_PERK_TEXT: Array<string | null> = [
-  null, '+1 heart', null, '+15% coin chance', null, '+1 heart', null, null, '+1 grace & hint', null,
-];
-
-const KITS: Kit[] = [
-  { name: 'Orange Tabby', icon: 'lorc/cat', signature: 'fighter_healing', blurb: 'Nine Lives: shrugs off one knockout per fight.', a: 'mending-charm', b: 'life-vessel', epic: 'restoration-aura', capstone: 'vital-core' },
-  { name: 'Sly Fox', icon: 'caro-asercion/fox', signature: 'fighter_fire', blurb: 'Combo: fast Sets chain into bonus damage.', a: 'flint-spark', b: 'blast-powder', epic: 'ember-heart', capstone: 'inferno-charge' },
-  { name: 'Badger', icon: 'caro-asercion/badger', signature: 'fighter_grace', blurb: 'Grudge: mistakes power up the next hit.', a: 'fortune-token', b: 'second-chance', epic: 'lucky-charm', capstone: 'fortunes-shield' },
-  { name: 'Emperor Penguin', icon: 'delapouite/penguin', signature: 'fighter_foresight', blurb: 'Deep Freeze: charge up, then stop time.', a: 'seeker-lens', b: 'crystal-orb', epic: 'clairvoyant-sphere', capstone: 'enlightened-eye' },
-  { name: 'Corgi', icon: 'delapouite/sitting-dog', signature: 'fighter_growth', blurb: 'Zoomies: charge up, then re-deal the board.', a: 'growth-seed', b: 'field-stone', epic: 'life-bloom', capstone: 'terra-foundation' },
-  { name: 'Pelican', icon: 'delapouite/eating-pelican', signature: 'fighter_oracle', blurb: 'Big Scoop: charge up, then grab a free Set.', a: 'oracle-eye', b: 'oracle-eye', epic: 'prophets-vision', capstone: 'mystic-sight-legendary' },
-];
-
-export const FIGHTERS: FighterDef[] = KITS.map(k => ({
-  name: k.name,
-  icon: k.icon,
-  signature: k.signature,
-  blurb: k.blurb,
-  loadouts: buildLoadouts(k),
-}));
 
 export const STARTING_FIGHTERS: CharacterName[] = ['Orange Tabby'];
 
@@ -84,25 +59,3 @@ export const getFighter = (name: string): FighterDef => {
   if (!f) throw new Error(`Unknown fighter ${name}`);
   return f;
 };
-
-export const getLoadout = (name: string, level: number): string[] => {
-  const f = getFighter(name);
-  const i = Math.max(1, Math.min(MAX_FIGHTER_LEVEL, level)) - 1;
-  return f.loadouts[i];
-};
-
-/** Sum of perks up to and including `level`. */
-export const getPerkStats = (level: number): Partial<PlayerStats> => {
-  const out: Record<string, number> = {};
-  for (let i = 0; i < Math.min(level, FIGHTER_PERKS.length); i++) {
-    const p = FIGHTER_PERKS[i];
-    if (!p) continue;
-    for (const [k, v] of Object.entries(p)) {
-      if (typeof v === 'number') out[k] = (out[k] ?? 0) + v;
-    }
-  }
-  return out as Partial<PlayerStats>;
-};
-
-export const getLevelUpCost = (currentLevel: number): number | null =>
-  currentLevel >= MAX_FIGHTER_LEVEL ? null : FIGHTER_LEVEL_COSTS[currentLevel - 1];

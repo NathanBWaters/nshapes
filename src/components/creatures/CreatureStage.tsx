@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, View, ViewStyle } from 'react-native';
-import Animated, { useAnimatedStyle } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
+import type { PartStyle } from './useCreatureMotion';
 import { COLORS } from '@/utils/colors';
 
 interface CreatureStageProps {
@@ -100,7 +101,6 @@ export const CreatureStage: React.FC<CreatureStageProps> = ({
   return stage;
 };
 
-type PartStyle = ReturnType<typeof useAnimatedStyle>;
 
 const styles = StyleSheet.create({
   stageBase: {

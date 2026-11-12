@@ -68,6 +68,8 @@ interface GameBoardProps {
   onTimeGainTriggered?: () => void; // Called when time gain triggers (for tracking)
   connections?: BoardConnection[]; // Active connections between board positions
   hideEnemyOverlay?: boolean; // Adventure mode renders its own foe HUD
+  /** Cards the parent wants lit as hints (e.g. a free hint from a fighter passive) */
+  glowingCardIds?: string[];
 }
 
 const GameBoard: React.FC<GameBoardProps> = ({
@@ -95,6 +97,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
   onTimeGainTriggered,
   connections = [],
   hideEnemyOverlay = false,
+  glowingCardIds,
 }) => {
   const [selectedCards, setSelectedCards] = useState<CardType[]>([]);
   const [matchedCardIds, setMatchedCardIds] = useState<string[]>([]);
@@ -580,7 +583,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
               {row.map((card, colIndex) => {
                 const isSelected = selectedCards.some(c => c.id === card.id);
                 const isMatched = matchedCardIds.includes(card.id);
-                const isHint = hintCards.includes(card.id);
+                const isHint = hintCards.includes(card.id) || (glowingCardIds?.includes(card.id) ?? false);
                 const reward = rewardsByCardId.get(card.id);
 
                 // Calculate board index for connection checking

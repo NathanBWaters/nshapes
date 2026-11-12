@@ -4,15 +4,43 @@
  */
 import type { PlayerStats, Weapon } from '@/types';
 import { DEFAULT_PLAYER_STATS } from '@/utils/gameDefinitions';
-import type { AdventureSave, ArcanaId, FeatureFlag, LevelDef } from './types';
-import { MAIN_LEVELS, getLevel, mainIndexOf } from './data/levels';
+import type { AdventureSave, ArcanaId, ArcanaRules, FeatureFlag, LevelDef, PassiveId } from './types';
+import type { Modifiers } from './rules/types';
+import { MAIN_LEVELS, mainIndexOf } from './data/levels';
 import { MECHANICS } from './data/mechanics';
-import { getLoadout, getPerkStats } from './data/fighters';
+import { getFighter } from './data/fighters';
 import { UPGRADES } from './data/upgrades';
 import { arcanaRules } from './data/arcana';
 import { getArmoryWeapon } from './data/armory';
+import { armedRecipesFor, evolutionLikelihoodFor, getSkillNode, modifiersOf, EVOLUTION_RULES } from './engine/sources';
 
-export const fighterLevel = (save: AdventureSave, name: string): number => save.fighterLevels[name] ?? 1;
+export const BASE_CHARM_SLOTS = 3;
+export const MAX_CHARM_SLOTS = 6;
+export const BASE_ARCANA_SLOTS = 1;
+export const MAX_ARCANA_SLOTS = 3;
+
+export const charmSlotsOf = (save: AdventureSave): number =>
+  Math.min(MAX_CHARM_SLOTS, BASE_CHARM_SLOTS + (save.upgrades.charm_belt ?? 0));
+
+export const arcanaSlotsOf = (save: AdventureSave): number =>
+  Math.min(MAX_ARCANA_SLOTS, BASE_ARCANA_SLOTS + (save.upgrades.tarot_deck ?? 0));
+
+/** Equipped charms that come into a fight: owned, unique, within the slots. */
+export const fightCharms = (save: AdventureSave): string[] =>
+  [...new Set(save.charms ?? [])].filter(id => save.armory.includes(id)).slice(0, charmSlotsOf(save));
+
+/** Equipped Arcana that come into a fight: unlocked, unique, within the slots. */
+export const fightArcana = (save: AdventureSave): ArcanaId[] =>
+  [...new Set(save.equippedArcana ?? [])].filter(id => save.unlockedArcana.includes(id)).slice(0, arcanaSlotsOf(save));
+
+export const fighterPassives = (fighter: string): [PassiveId, PassiveId] => getFighter(fighter).passives;
+
+/** Owned skill nodes of this fighter that exist in the tree data. */
+export const fightSkillNodes = (save: AdventureSave, fighter: string): string[] =>
+  (save.skillNodes?.[fighter] ?? []).filter(id => {
+    const n = getSkillNode(id);
+    return !!n && n.fighter === fighter;
+  });
 
 /** Features accumulate: every `feature` mechanic introduced at or before this level is on, plus save unlocks. */
 export const getFeaturesForLevel = (level: LevelDef, save: AdventureSave): Set<FeatureFlag> => {
@@ -22,20 +50,15 @@ export const getFeaturesForLevel = (level: LevelDef, save: AdventureSave): Set<F
     const m = MECHANICS[MAIN_LEVELS[i].introduces];
     if (m?.enables) set.add(m.enables);
   }
-  // Fighter gear, ability and charm are on everywhere except bare levels (1-1)
+  // Passives, charms and Arcana are on everywhere except bare levels (1-1)
   if (!level.rules.noGear) set.add('gear');
 
-  // Coin Drops unlock on 1-1 ★: off during first-time 1-1, on everywhere once unlocked
-  if (level.rules.noGear) {
-    if (save.coinsUnlocked) set.add('coins');
-  } else if (save.coinsUnlocked || pos >= mainIndexOf(getLevel('1-6'))) {
-    set.add('coins');
-  }
+  // Coin Drops are a campaign unlock (data/features.ts): on everywhere once unlocked
+  if (save.coinsUnlocked) set.add('coins');
+  else if (level.rules.noGear) set.delete('coins');
 
-  // Hidden Evolution Catalysts & Weapon Combos switch on once the player unlocks their first Combo recipe
-  if (!level.rules.noGear && save.unlockedEvolutions.length > 0) {
-    set.add('evolutions');
-  }
+  // Catalysts & evolutions switch on once the player unlocks their first recipe
+  if (!level.rules.noGear && save.unlockedEvolutions.length > 0) set.add('evolutions');
   return set;
 };
 
@@ -55,40 +78,55 @@ export const applyWeaponToStats = (stats: PlayerStats, weapon: Weapon): PlayerSt
   return next;
 };
 
-const addStats = (stats: PlayerStats, delta: Partial<PlayerStats>): PlayerStats => {
-  const next = { ...stats };
-  for (const [k, v] of Object.entries(delta)) {
-    const cur = (next as unknown as Record<string, unknown>)[k];
-    if (typeof v === 'number' && typeof cur === 'number') (next as unknown as Record<string, number>)[k] = cur + v;
-  }
-  return next;
-};
+export interface Loadout {
+  features: Set<FeatureFlag>;
+  passives: PassiveId[];
+  skillNodes: string[];
+  weapons: Weapon[];
+  arcana: ArcanaId[];
+  arcanaRules: ArcanaRules;
+  /** Standing modifiers from skill nodes and charms (evolutions add theirs in the fight) */
+  modifiers: Modifiers;
+  stats: PlayerStats;
+  maxHearts: number | null;
+  /** Seconds on the clock (null = untimed) */
+  timer: number | null;
+  bonusDamagePerMatch: number;
+  coinBonusPercent: number;
+  charmSlots: number;
+  arcanaSlots: number;
+  armedRecipes: string[];
+  /** % Catalyst chance per refill */
+  evolutionLikelihood: number;
+  evolutionCap: number;
+  evolutionLabTier: number;
+}
 
 /**
  * Everything the selected fighter walks into a level with: which systems are
- * switched on, gear (own kit + charm, with upgrade tiers), baked stats and hearts.
+ * on, passives and skill nodes, equipped charms (at their upgrade tiers),
+ * combined Arcana, baked stats, hearts and clock.
  */
-export const startingLoadout = (level: LevelDef, save: AdventureSave) => {
+export const startingLoadout = (
+  level: LevelDef,
+  save: AdventureSave,
+  features: Set<FeatureFlag> = getFeaturesForLevel(level, save)
+): Loadout => {
   const fighter = save.selectedFighter;
-  const features = getFeaturesForLevel(level, save);
-  const activeArcana: ArcanaId | null =
-    features.has('gear') && save.activeArcana && save.unlockedArcana.includes(save.activeArcana)
-      ? save.activeArcana
-      : null;
-  const lvl = fighterLevel(save, fighter);
-  const weapons: Weapon[] = features.has('gear')
-    ? getLoadout(fighter, lvl).map(id => getArmoryWeapon(id, save.weaponUpgrades)).filter((w): w is Weapon => !!w)
+  const gear = features.has('gear');
+  const passives = gear ? [...fighterPassives(fighter)] : [];
+  const skillNodes = gear ? fightSkillNodes(save, fighter) : [];
+  const arcana = gear ? fightArcana(save) : [];
+  const rules = arcanaRules(arcana);
+  const weapons: Weapon[] = gear
+    ? fightCharms(save).map(id => getArmoryWeapon(id, save.weaponUpgrades)).filter((w): w is Weapon => !!w)
     : [];
-  // Charm: one equipped Armory weapon on top of the fighter's own gear
-  const charm = features.has('gear') && save.charm && save.armory.includes(save.charm)
-    ? getArmoryWeapon(save.charm, save.weaponUpgrades)
-    : undefined;
-  if (charm) weapons.push(charm);
+  const modifiers = modifiersOf({ skillNodes, weapons, activeEvolutions: [] });
+
   let stats: PlayerStats = { ...DEFAULT_PLAYER_STATS, hints: 0, graces: 0, effectCaps: { ...DEFAULT_PLAYER_STATS.effectCaps! } };
   for (const w of weapons) stats = applyWeaponToStats(stats, w);
-  stats = addStats(stats, getPerkStats(lvl));
   let bonusDamagePerMatch = 0;
-  let coinBonusPercent = 0;
+  let coinBonusPercent = modifiers.coinPercent ?? 0;
   for (const u of UPGRADES) {
     const tier = save.upgrades[u.id] ?? 0;
     if (tier <= 0) continue;
@@ -97,18 +135,42 @@ export const startingLoadout = (level: LevelDef, save: AdventureSave) => {
     coinBonusPercent += u.coinBonusPercent?.(tier) ?? 0;
   }
   // Features gate whole systems: no hints/graces before they're taught
-  stats.hints = features.has('hints') ? stats.hints + (level.rules.startingHints ?? 0) : 0;
+  stats.hints = features.has('hints') ? stats.hints + (level.rules.startingHints ?? 0) + (modifiers.startingHints ?? 0) : 0;
   stats.maxHints = Math.max(stats.maxHints, stats.hints);
-  stats.graces = features.has('graces') ? stats.graces + (level.rules.startingGraces ?? 0) : 0;
-  const rules = arcanaRules(activeArcana);
+  stats.graces = features.has('graces') ? stats.graces + (level.rules.startingGraces ?? 0) + (modifiers.startingGraces ?? 0) : 0;
   if (rules.startingGraces !== undefined) stats.graces = rules.startingGraces;
   if (!features.has('graces')) stats.graceGainChance = 0;
   if (!features.has('hints')) stats.hintGainChance = 0;
   stats.maxGraces = Math.max(stats.maxGraces, stats.graces);
 
-  const heartBonus = stats.maxHealth - DEFAULT_PLAYER_STATS.maxHealth;
+  const heartBonus = stats.maxHealth - DEFAULT_PLAYER_STATS.maxHealth + (modifiers.maxHearts ?? 0);
   let maxHearts = features.has('hearts') ? Math.max(1, level.rules.hearts + heartBonus) : null;
   if (maxHearts !== null && rules.maxHeartsDelta !== undefined) maxHearts = Math.max(1, maxHearts + rules.maxHeartsDelta);
   if (maxHearts !== null && rules.maxHeartsLock !== undefined) maxHearts = rules.maxHeartsLock;
-  return { features, activeArcana, weapons, stats, maxHearts, bonusDamagePerMatch, coinBonusPercent };
+
+  const timer = level.rules.timer ? level.rules.timer + stats.startingTime + (modifiers.startingSeconds ?? 0) : null;
+  const evolutionLabTier = save.upgrades.evolution_lab ?? 0;
+  const evolutions = features.has('evolutions');
+  const likelihood = evolutionLikelihoodFor(evolutionLabTier, modifiers, rules.catalystChanceScale ?? 1) + (level.rules.evolutionLikelihood ?? 0);
+
+  return {
+    features,
+    passives,
+    skillNodes,
+    weapons,
+    arcana,
+    arcanaRules: rules,
+    modifiers,
+    stats,
+    maxHearts,
+    timer,
+    bonusDamagePerMatch,
+    coinBonusPercent,
+    charmSlots: charmSlotsOf(save),
+    arcanaSlots: arcanaSlotsOf(save),
+    armedRecipes: evolutions ? armedRecipesFor(weapons, save.unlockedEvolutions) : [],
+    evolutionLikelihood: evolutions ? likelihood : 0,
+    evolutionCap: EVOLUTION_RULES.perFight + (modifiers.extraEvolutionsPerFight ?? 0),
+    evolutionLabTier,
+  };
 };

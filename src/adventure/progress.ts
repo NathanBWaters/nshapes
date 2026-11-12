@@ -4,26 +4,26 @@
  */
 import type { CharacterName } from '@/types';
 import type {
-  AbilityId,
   AdventureSave,
   ArcanaId,
   BountyDef,
   BountyStats,
+  EvolutionRecipe,
   LevelDef,
   RewardDef,
   RunState,
+  SkillNode,
   UnlockableFeature,
   UpgradeDef,
 } from './types';
 import { LEVELS, MAIN_LEVELS, BRANCH_STAR_REQUIREMENT, mainIndexOf } from './data/levels';
 import { BIOMES, getBiome } from './data/biomes';
 import { MECHANICS } from './data/mechanics';
-import { FIGHTERS, FIGHTER_LEVEL_COSTS, STARTING_FIGHTERS } from './data/fighters';
+import { FIGHTERS, STARTING_FIGHTERS } from './data/fighters';
 import { UPGRADES, getUpgrade, getWeaponUpgradeCosts } from './data/upgrades';
-import { ABILITIES } from './data/abilities';
 import { ARCANA } from './data/arcana';
 import { getArmoryWeapon } from './data/armory';
-import { fighterLevel } from './loadout';
+import { SKILL_NODES } from './data/skillTrees';
 import { BOUNTIES } from './data/bounties';
 import { EVOLUTION_RECIPES } from './data/evolutions';
 import { CAMPAIGN_FEATURES, FEATURES } from './data/features';
@@ -39,13 +39,16 @@ export const createNewSave = (): AdventureSave => ({
   lifetimeCoins: 0,
   stars: {},
   plays: {},
-  fighterLevels: { 'Orange Tabby': 1 },
+  fighterLevels: {},
+  skillNodes: {},
   unlockedFighters: [...STARTING_FIGHTERS],
-  // Only weapons won from star/bounty rewards. Fighter gear is separate.
+  // Only weapons won from star/bounty rewards
   armory: [],
   charm: null,
+  charms: [],
   unlockedArcana: [],
   activeArcana: null,
+  equippedArcana: [],
   bountiesUnlocked: false,
   completedBounties: [],
   bountyStats: {
@@ -58,6 +61,8 @@ export const createNewSave = (): AdventureSave => ({
     evolutionsForged: 0,
     destructiveFights: 0,
     fighterWins: {},
+    trapsDefused: 0,
+    biggestHit: 0,
   },
   unlockedEvolutions: [],
   discoveredEvolutions: [],
@@ -73,13 +78,234 @@ export const createNewSave = (): AdventureSave => ({
 
 // ─── Stars & unlocks ────────────────────────────────────────────────────────
 
-export const totalStars = (save: AdventureSave): number =>
+/** Every star ever earned (best result per level). Star gates read this, so spending never re-locks a world. */
+export const totalStarsEarned = (save: AdventureSave): number =>
   Object.values(save.stars).reduce((a, b) => a + b, 0);
+
+/** @alias totalStarsEarned */
+export const totalStars = totalStarsEarned;
 
 export const maxStars = (): number => LEVELS.length * 3;
 
 export const isBiomeOpen = (save: AdventureSave, biomeId: LevelDef['biome']): boolean =>
-  totalStars(save) >= getBiome(biomeId).starGate;
+  totalStarsEarned(save) >= getBiome(biomeId).starGate;
+
+// ─── Star pool & skill trees ────────────────────────────────────────────────
+
+const NODES_BY_ID = new Map<string, SkillNode>(SKILL_NODES.map(n => [n.id, n]));
+
+const findNode = (id: string): SkillNode | undefined => NODES_BY_ID.get(id);
+
+/** Stars currently spent across every fighter's skill tree (one shared pool). */
+export const starsSpent = (save: AdventureSave): number =>
+  Object.values(save.skillNodes).reduce(
+    (sum, ids) => sum + ids.reduce((s, id) => s + (findNode(id)?.cost ?? 0), 0),
+    0
+  );
+
+/** Stars free to spend: earned minus spent. */
+export const availableStars = (save: AdventureSave): number => totalStarsEarned(save) - starsSpent(save);
+
+export const ownedNodes = (save: AdventureSave, fighter: CharacterName): string[] => save.skillNodes[fighter] ?? [];
+
+export const ownsNode = (save: AdventureSave, nodeId: string): boolean => {
+  const node = findNode(nodeId);
+  return !!node && ownedNodes(save, node.fighter).includes(nodeId);
+};
+
+const branchChain = (fighter: string, branch: 0 | 1): SkillNode[] =>
+  SKILL_NODES.filter(n => n.fighter === fighter && n.branch === branch).sort((a, b) => a.depth - b.depth);
+
+/** How deep the player has bought into one branch (0 = only the free passive root). */
+export const branchDepth = (save: AdventureSave, fighter: CharacterName, branch: 0 | 1): number => {
+  const owned = new Set(ownedNodes(save, fighter));
+  let depth = 0;
+  for (const n of branchChain(fighter, branch)) {
+    if (!owned.has(n.id) || n.depth !== depth + 1) break;
+    depth = n.depth;
+  }
+  return depth;
+};
+
+export type NodeStatus =
+  | 'owned'
+  /** Its parent is owned and the stars are there */
+  | 'buyable'
+  /** Its parent is owned but stars are short */
+  | 'needsStars'
+  /** The node before it in its branch is not owned yet */
+  | 'needsParent'
+  | 'fighterLocked';
+
+export const nodeStatus = (save: AdventureSave, nodeId: string): NodeStatus => {
+  const node = findNode(nodeId);
+  if (!node || !save.unlockedFighters.includes(node.fighter)) return 'fighterLocked';
+  if (ownsNode(save, nodeId)) return 'owned';
+  if (branchDepth(save, node.fighter, node.branch) !== node.depth - 1) return 'needsParent';
+  return availableStars(save) >= node.cost ? 'buyable' : 'needsStars';
+};
+
+export const canBuyNode = (save: AdventureSave, nodeId: string): boolean => nodeStatus(save, nodeId) === 'buyable';
+
+export const buyNode = (save: AdventureSave, nodeId: string): AdventureSave => {
+  if (!canBuyNode(save, nodeId)) return save;
+  const node = findNode(nodeId)!;
+  return { ...save, skillNodes: { ...save.skillNodes, [node.fighter]: [...ownedNodes(save, node.fighter), nodeId] } };
+};
+
+/** Stars put into one branch of one fighter. */
+export const branchSpent = (save: AdventureSave, fighter: CharacterName, branch: 0 | 1): number =>
+  ownedNodes(save, fighter).reduce((sum, id) => {
+    const n = findNode(id);
+    return n && n.branch === branch ? sum + n.cost : sum;
+  }, 0);
+
+const withFighterNodes = (save: AdventureSave, fighter: CharacterName, ids: string[]): AdventureSave => {
+  const skillNodes = { ...save.skillNodes };
+  if (ids.length > 0) skillNodes[fighter] = ids;
+  else delete skillNodes[fighter];
+  return { ...save, skillNodes };
+};
+
+/** Give back every star in one branch. Whole branches only, so no kept node is missing its parent. */
+export const refundBranch = (save: AdventureSave, fighter: CharacterName, branch: 0 | 1): AdventureSave =>
+  withFighterNodes(save, fighter, ownedNodes(save, fighter).filter(id => findNode(id)?.branch !== branch));
+
+/** Give back every star spent on this fighter. Free, any time. */
+export const refundFighter = (save: AdventureSave, fighter: CharacterName): AdventureSave =>
+  withFighterNodes(save, fighter, []);
+
+/**
+ * Keep only nodes that still exist and still sit on an unbroken path from their
+ * passive. If the trees now cost more than the player earned (a rebalance),
+ * every star is handed back.
+ */
+const normalizeSkillNodes = (save: AdventureSave): AdventureSave => {
+  // Without tree data (a partial build) leave the save alone rather than wiping it
+  if (SKILL_NODES.length === 0) return save;
+  const skillNodes: Record<string, string[]> = {};
+  for (const [fighter, ids] of Object.entries(save.skillNodes)) {
+    const owned = new Set(ids);
+    const keep: string[] = [];
+    for (const branch of [0, 1] as const) {
+      for (const n of branchChain(fighter, branch)) {
+        if (!owned.has(n.id)) break;
+        keep.push(n.id);
+      }
+    }
+    if (keep.length > 0) skillNodes[fighter] = keep;
+  }
+  const next = { ...save, skillNodes };
+  return starsSpent(next) > totalStarsEarned(next) ? { ...next, skillNodes: {} } : next;
+};
+
+// ─── Charm & Arcana slots ───────────────────────────────────────────────────
+
+import { arcanaSlotsOf, charmSlotsOf, fightArcana, fightCharms } from './loadout';
+
+const charmSlots = charmSlotsOf;
+const arcanaSlots = arcanaSlotsOf;
+const equippedCharms = fightCharms;
+const equippedArcanaOf = fightArcana;
+
+export {
+  BASE_CHARM_SLOTS,
+  MAX_CHARM_SLOTS,
+  BASE_ARCANA_SLOTS,
+  MAX_ARCANA_SLOTS,
+} from './loadout';
+export { charmSlots, arcanaSlots, equippedCharms, equippedArcanaOf };
+
+/** Equip an Armory weapon into a free charm slot. No duplicates; does nothing when every slot is full. */
+export const equipCharm = (save: AdventureSave, weaponId: string): AdventureSave => {
+  const charms = equippedCharms(save);
+  if (!save.armory.includes(weaponId) || charms.includes(weaponId) || charms.length >= charmSlots(save)) return save;
+  return { ...save, charms: [...charms, weaponId] };
+};
+
+export const unequipCharm = (save: AdventureSave, weaponId: string): AdventureSave =>
+  save.charms.includes(weaponId) ? { ...save, charms: save.charms.filter(id => id !== weaponId) } : save;
+
+/** Equip if free, unequip if worn. */
+export const toggleCharm = (save: AdventureSave, weaponId: string): AdventureSave =>
+  equippedCharms(save).includes(weaponId) ? unequipCharm(save, weaponId) : equipCharm(save, weaponId);
+
+/**
+ * Equip an unlocked Arcana. When every slot is taken, the one equipped
+ * longest ago makes room (with one slot this is a plain swap).
+ */
+export const equipArcana = (save: AdventureSave, arcanaId: ArcanaId): AdventureSave => {
+  const worn = equippedArcanaOf(save);
+  if (!save.unlockedArcana.includes(arcanaId) || worn.includes(arcanaId)) return save;
+  const room = worn.length >= arcanaSlots(save) ? worn.slice(worn.length - arcanaSlots(save) + 1) : worn;
+  return { ...save, equippedArcana: [...room, arcanaId] };
+};
+
+export const unequipArcana = (save: AdventureSave, arcanaId: ArcanaId): AdventureSave =>
+  save.equippedArcana.includes(arcanaId) ? { ...save, equippedArcana: save.equippedArcana.filter(id => id !== arcanaId) } : save;
+
+export const toggleArcana = (save: AdventureSave, arcanaId: ArcanaId): AdventureSave =>
+  equippedArcanaOf(save).includes(arcanaId) ? unequipArcana(save, arcanaId) : equipArcana(save, arcanaId);
+
+/** A weapon belongs to a recipe family when its id is the family id or a tier of it (`blast-powder-rare`). */
+const inFamily = (weaponId: string, family: readonly string[]): boolean =>
+  family.some(p => weaponId === p || weaponId.startsWith(`${p}-`));
+
+/** Unlocked recipes whose two families are both among these weapons. */
+export const recipesArmedBy = (weaponIds: readonly string[], unlockedEvolutions: readonly string[]): EvolutionRecipe[] =>
+  EVOLUTION_RECIPES.filter(
+    r => unlockedEvolutions.includes(r.id) && r.families.every(f => weaponIds.some(id => inFamily(id, f)))
+  );
+
+/** Recipes the equipped charms arm before the fight starts (picks and shop buys can arm more). */
+export const armedRecipes = (save: AdventureSave): EvolutionRecipe[] => recipesArmedBy(equippedCharms(save), save.unlockedEvolutions);
+
+/** For one recipe: which of its two families the equipped charms already cover. */
+export const recipeFamiliesHeld = (save: AdventureSave, recipe: EvolutionRecipe): [boolean, boolean] => {
+  const charms = equippedCharms(save);
+  return [charms.some(id => inFamily(id, recipe.families[0])), charms.some(id => inFamily(id, recipe.families[1]))];
+};
+
+/** Drop anything equipped that is no longer owned or no longer fits the slots. */
+const trimEquipped = (save: AdventureSave): AdventureSave => {
+  const charms = equippedCharms(save);
+  const equippedArcana = equippedArcanaOf(save);
+  const same = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
+  return same(charms, save.charms) && same(equippedArcana, save.equippedArcana) ? save : { ...save, charms, equippedArcana };
+};
+
+// ─── Migration from the v1 save shape ───────────────────────────────────────
+
+/** What each fighter level used to cost in coins (level N → N+1). Used only to refund old saves. */
+export const LEGACY_FIGHTER_LEVEL_COSTS = [60, 120, 200, 320, 480, 700, 1000, 1400, 1900] as const;
+
+/** Coins a v1 save spent levelling fighters. */
+export const legacyFighterRefund = (fighterLevels: Record<string, number> | undefined): number =>
+  Object.values(fighterLevels ?? {}).reduce((sum, level) => {
+    const gained = Math.max(0, Math.min(LEGACY_FIGHTER_LEVEL_COSTS.length, Math.floor(Number(level) || 1) - 1));
+    return sum + LEGACY_FIGHTER_LEVEL_COSTS.slice(0, gained).reduce((a, b) => a + b, 0);
+  }, 0);
+
+/**
+ * Bring a v1 save to the current shape: fighter levels are refunded in full
+ * (they no longer exist), the single charm joins `charms`, and the single
+ * Arcana joins `equippedArcana`. Safe to run more than once.
+ */
+export const migrateSave = (save: AdventureSave): AdventureSave => {
+  const next: AdventureSave = {
+    ...save,
+    coins: save.coins + legacyFighterRefund(save.fighterLevels),
+    fighterLevels: {},
+    skillNodes: save.skillNodes ?? {},
+    charms: save.charms ?? [],
+    equippedArcana: save.equippedArcana ?? [],
+    charm: null,
+    activeArcana: null,
+  };
+  if (save.charm && !next.charms.includes(save.charm)) next.charms = [save.charm, ...next.charms];
+  if (save.activeArcana && !next.equippedArcana.includes(save.activeArcana)) next.equippedArcana = [save.activeArcana, ...next.equippedArcana];
+  return normalizeSkillNodes(next);
+};
 
 type LockReason =
   | { kind: 'previous' }
@@ -158,7 +384,13 @@ const unlockFeature = (save: AdventureSave, feature: UnlockableFeature): Adventu
  * Pay out a reward. Returns the new save and what in it was new to the player,
  * in reveal order. Things the save already has are not unlocked again.
  */
-const grant = (save: AdventureSave, reward: RewardDef, star = 0): { save: AdventureSave; unlocks: Unlock[] } => {
+const grant = (
+  save: AdventureSave,
+  reward: RewardDef,
+  star = 0,
+  /** Put newly won weapons straight into free charm slots (not when quietly reconciling an old save) */
+  autoEquip = true
+): { save: AdventureSave; unlocks: Unlock[] } => {
   let next = { ...save };
   const unlocks: Unlock[] = [];
   if (reward.coins) {
@@ -177,13 +409,14 @@ const grant = (save: AdventureSave, reward: RewardDef, star = 0): { save: Advent
         if (!next.unlockedFighters.includes(u.id)) {
           unlocks.push({ kind: 'fighter', name: u.id, star });
           next.unlockedFighters = [...next.unlockedFighters, u.id];
-          next.fighterLevels = { ...next.fighterLevels, [u.id]: 1 };
         }
         break;
       case 'weapon':
         if (!next.armory.includes(u.id)) {
           unlocks.push({ kind: 'weapon', id: u.id, star, firstWeapon: next.armory.length === 0 });
           next.armory = [...next.armory, u.id];
+          // A new weapon goes straight into a free charm slot
+          if (autoEquip) next = equipCharm(next, u.id);
         }
         break;
       case 'arcana':
@@ -200,8 +433,6 @@ const grant = (save: AdventureSave, reward: RewardDef, star = 0): { save: Advent
         break;
     }
   }
-  // With no charm equipped, a weapon reward is equipped straight away
-  if (reward.weapons && !next.charm && next.armory.length > 0) next.charm = reward.weapons[0];
   return { save: next, unlocks };
 };
 
@@ -222,13 +453,16 @@ const recordRunBountyStats = (save: AdventureSave, level: LevelDef, stars: numbe
     threeStepPurities: prev.threeStepPurities + run.threeStepPuritiesTriggered,
     flawlessTimedWins: prev.flawlessTimedWins + (knockedOut && !!level.rules.timer && run.mistakes === 0 ? 1 : 0),
     maxOverkill: Math.max(prev.maxOverkill, run.overkillDamage),
-    evolutionsForged: prev.evolutionsForged + run.evolvedRecipes.length,
-    destructiveFights: prev.destructiveFights + (destructive ? 1 : 0),
+    evolutionsForged: prev.evolutionsForged + run.evolutionsTriggered,
+    destructiveFights: prev.destructiveFights + (destructive || run.explosionsTriggered > 0 ? 1 : 0),
+    trapsDefused: (prev.trapsDefused ?? 0) + run.trapsDefused,
+    biggestHit: Math.max(prev.biggestHit ?? 0, run.biggestHit),
     fighterWins,
   };
+
   const discoveredEvolutions =
-    run.evolvedRecipes.length > 0
-      ? [...new Set([...save.discoveredEvolutions, ...run.evolvedRecipes])]
+    run.forgedRecipes.length > 0
+      ? [...new Set([...save.discoveredEvolutions, ...run.forgedRecipes])]
       : save.discoveredEvolutions;
   return { ...save, bountyStats, discoveredEvolutions };
 };
@@ -326,9 +560,9 @@ const USED_BEFORE_FLAG: Record<UnlockableFeature, (save: AdventureSave) => boole
  * campaign feature that moved there in an update) is granted. Coins are never paid twice.
  */
 export const reconcileUnlocks = (save: AdventureSave): AdventureSave => {
-  let next = save;
+  let next = migrateSave(save);
   const regrant = (reward: RewardDef) => {
-    next = grant(next, { ...reward, coins: 0 }).save;
+    next = grant(next, { ...reward, coins: 0 }, 0, false).save;
   };
   for (const level of LEVELS) {
     starRewards(level).slice(0, save.stars[level.id] ?? 0).forEach(regrant);
@@ -341,9 +575,15 @@ export const reconcileUnlocks = (save: AdventureSave): AdventureSave => {
     const b = BOUNTIES.find(x => x.id === id);
     if (b) regrant(b.reward);
   }
-  if (next.charm && !next.armory.includes(next.charm)) next = { ...next, charm: next.armory[0] ?? null };
-  if (next.activeArcana && !next.unlockedArcana.includes(next.activeArcana)) next = { ...next, activeArcana: null };
-  return next;
+  // Recipes and weapons that no longer exist (renamed in an update) are dropped
+  const known = new Set(EVOLUTION_RECIPES.map(r => r.id));
+  next = {
+    ...next,
+    armory: next.armory.filter(id => !!getArmoryWeapon(id)),
+    unlockedEvolutions: next.unlockedEvolutions.filter(id => known.has(id)),
+    discoveredEvolutions: next.discoveredEvolutions.filter(id => known.has(id)),
+  };
+  return trimEquipped(normalizeSkillNodes(next));
 };
 
 // ─── What the player has met so far ─────────────────────────────────────────
@@ -354,9 +594,18 @@ export const isMechanicKnown = (save: AdventureSave, mechanicId: string): boolea
   LEVELS.some(l => l.introduces === mechanicId && (save.stars[l.id] ?? 0) >= 1) ||
   FEATURES.some(f => f.mechanic === mechanicId && save[f.saveFlag]);
 
+/**
+ * Extra conditions some Workshop items have on top of their mechanic being
+ * known. Tarot Deck only makes sense once there are two Arcana to wear.
+ */
+const UPGRADE_GATES: Record<string, (save: AdventureSave) => boolean> = {
+  tarot_deck: s => s.unlockedArcana.length >= 2,
+};
+
 /** A Workshop upgrade is on sale once its mechanic is known (and stays listed while any tier is owned). */
 const isUpgradeUnlocked = (save: AdventureSave, upgrade: UpgradeDef): boolean =>
-  (save.upgrades[upgrade.id] ?? 0) > 0 || isMechanicKnown(save, upgrade.mechanic);
+  (save.upgrades[upgrade.id] ?? 0) > 0 ||
+  (isMechanicKnown(save, upgrade.mechanic) && (UPGRADE_GATES[upgrade.id]?.(save) ?? true));
 
 export const getUnlockedUpgrades = (save: AdventureSave): UpgradeDef[] =>
   UPGRADES.filter(u => isUpgradeUnlocked(save, u));
@@ -406,17 +655,11 @@ const withTier = (tiers: Record<string, number>, key: string, tier: number): Rec
   return next;
 };
 
-const fighterTrack = purchaseTrack<CharacterName>({
-  costs: () => FIGHTER_LEVEL_COSTS,
-  steps: (save, name) => fighterLevel(save, name) - 1,
-  withSteps: (save, name, steps) => ({ ...save, fighterLevels: { ...save.fighterLevels, [name]: steps + 1 } }),
-  onSale: (save, name) => save.unlockedFighters.includes(name),
-});
-
 const upgradeTrack = purchaseTrack<string>({
-  costs: id => getUpgrade(id).costs,
+  costs: id => UPGRADES.find(u => u.id === id)?.costs ?? null,
   steps: (save, id) => save.upgrades[id] ?? 0,
-  withSteps: (save, id, steps) => ({ ...save, upgrades: withTier(save.upgrades, id, steps) }),
+  // Losing a Charm Belt or Tarot Deck tier also takes off what no longer fits
+  withSteps: (save, id, steps) => trimEquipped({ ...save, upgrades: withTier(save.upgrades, id, steps) }),
   onSale: (save, id) => save.workshopUnlocked && isUpgradeUnlocked(save, getUpgrade(id)),
 });
 
@@ -430,8 +673,6 @@ const weaponUpgradeTrack = purchaseTrack<string>({
   onSale: (save, id) => save.workshopUnlocked && save.armory.includes(id),
 });
 
-export const { canBuy: canLevelFighter, buy: levelFighter, spent: fighterSpentCoins, refund: refundFighter } = fighterTrack;
-
 export const upgradeTier = (save: AdventureSave, id: string): number => save.upgrades[id] ?? 0;
 export const { cost: upgradeCost, canBuy: canBuyUpgrade, buy: buyUpgrade, spent: upgradeSpentCoins, refund: refundUpgrade } = upgradeTrack;
 
@@ -444,32 +685,17 @@ export const {
   refund: refundWeaponUpgrade,
 } = weaponUpgradeTrack;
 
-/** Total coins currently refundable across all fighters, mechanic upgrades, and weapon upgrades. */
+/** Total coins currently refundable across mechanic upgrades and weapon upgrades. */
 export const refundableCoins = (save: AdventureSave): number =>
-  sum(FIGHTERS.map(f => fighterSpentCoins(save, f.name))) +
   sum(UPGRADES.map(u => upgradeSpentCoins(save, u.id))) +
   sum(Object.keys(save.weaponUpgrades).map(id => weaponUpgradeSpentCoins(save, id)));
 
-/** One-tap respec: refund 100% of coins spent on every fighter, mechanic upgrade, and weapon upgrade. */
+/** One-tap respec: refund 100% of coins spent on every Workshop item and weapon upgrade. */
 export const refundAllCamp = (save: AdventureSave): AdventureSave => {
   const refund = refundableCoins(save);
   if (refund <= 0) return save;
-  const resetLevels: Record<string, number> = {};
-  for (const name of Object.keys(save.fighterLevels)) resetLevels[name] = 1;
-  return {
-    ...save,
-    coins: save.coins + refund,
-    fighterLevels: resetLevels,
-    upgrades: {},
-    weaponUpgrades: {},
-  };
+  return trimEquipped({ ...save, coins: save.coins + refund, upgrades: {}, weaponUpgrades: {} });
 };
-
-export const equipCharm = (save: AdventureSave, weaponId: string | null): AdventureSave =>
-  weaponId === null || save.armory.includes(weaponId) ? { ...save, charm: weaponId } : save;
-
-export const equipArcana = (save: AdventureSave, arcanaId: ArcanaId | null): AdventureSave =>
-  arcanaId === null || save.unlockedArcana.includes(arcanaId) ? { ...save, activeArcana: arcanaId } : save;
 
 // ─── Lessons and tips already shown ─────────────────────────────────────────
 
@@ -480,7 +706,7 @@ export const equipArcana = (save: AdventureSave, arcanaId: ArcanaId | null): Adv
  */
 export const LESSON_KEYS = {
   mechanic: (mechanicId: string) => mechanicId,
-  /** The "your first Weapon Combo is near" page (lessons.ts) */
+  /** The "your first evolution is near" page (lessons.ts) */
   comboDiscovery: 'combo_hunt_intro',
 } as const;
 
@@ -490,7 +716,12 @@ export const COACH_KEYS = {
   event: (mechanicId: string) => mechanicId,
   /** A mechanic's tips at the start of its first fight (`MechanicDef.fightTips`) */
   fightStart: (mechanicId: string) => `start_${mechanicId}`,
-  abilityReady: (abilityId: AbilityId) => `ability_${abilityId}`,
+  /** The first fight with a fighter: what its two passives do */
+  passives: (fighter: CharacterName) => `passives_${fighter}`,
+  /** The first fight where a level places this hazard */
+  hazard: (kind: 'timeBombs' | 'snares') => `hazard_${kind}`,
+  /** The first time an evolution starts */
+  evolution: 'evolution_first',
 } as const;
 
 export const markMechanicSeen = (save: AdventureSave, key: string): AdventureSave =>
@@ -499,7 +730,10 @@ export const markMechanicSeen = (save: AdventureSave, key: string): AdventureSav
 export const markCoachMarkSeen = (save: AdventureSave, key: string): AdventureSave =>
   save.seenCoachMarks.includes(key) ? save : { ...save, seenCoachMarks: [...save.seenCoachMarks, key] };
 
-/** Dev helper: unlock everything. */
+/**
+ * Dev helper: every star, unlock and Workshop item. Skill trees are left
+ * empty so the stars can be spent by hand.
+ */
 export const createMaxedSave = (): AdventureSave => {
   const mechanicIds = Object.keys(MECHANICS);
   let save: AdventureSave = {
@@ -510,9 +744,13 @@ export const createMaxedSave = (): AdventureSave => {
     seenCoachMarks: [
       ...mechanicIds.map(COACH_KEYS.event),
       ...mechanicIds.map(COACH_KEYS.fightStart),
-      ...(Object.keys(ABILITIES) as AbilityId[]).map(COACH_KEYS.abilityReady),
+      ...FIGHTERS.map(f => COACH_KEYS.passives(f.name)),
+      COACH_KEYS.hazard('timeBombs'),
+      COACH_KEYS.hazard('snares'),
+      COACH_KEYS.evolution,
     ],
     coins: 50000,
+    upgrades: Object.fromEntries(UPGRADES.map(u => [u.id, u.costs.length])),
     unlockedArcana: ARCANA.map(a => a.id),
     unlockedEvolutions: EVOLUTION_RECIPES.map(r => r.id),
     discoveredEvolutions: EVOLUTION_RECIPES.map(r => r.id),

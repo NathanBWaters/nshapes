@@ -1,11 +1,12 @@
 /**
  * One fight. Wraps the shared GameBoard with the adventure HUD:
- * foe HP bar, hearts, moves/clock, coins, XP, challenge ticker, coach marks,
- * level-up picks and the between-wave shop.
+ * foe HP bar with running damage / combo / biggest-hit counters, hearts,
+ * moves/clock, coins, XP, live passive chips, evolution rings, challenge
+ * ticker, coach marks, level-up picks and the between-wave shop.
  */
-import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Platform } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, Easing } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, Easing } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GameBoard from '@/components/GameBoard';
 import Icon from '@/components/Icon';
@@ -18,17 +19,19 @@ import { COLORS, getRarityColor } from '@/utils/colors';
 import type { Card, CardReward, Weapon } from '@/types';
 import type { WeaponEffectResult } from '@/utils/weaponEffects';
 import { music, sfx } from '@/audio';
-import type { AdventureSave, LevelDef, RunEvent, RunEventType, RunState } from '../types';
+import type { AdventureSave, EvolutionRecipe, LevelDef, PassiveId, RunEvent, RunEventType, RunState } from '../types';
 import { createRun, runReducer, shopPrice, rerollCost, xpForLevel, type RunAction } from '../engine/run';
 import { challengeProgress } from '../engine/challenges';
 import { MECHANICS } from '../data/mechanics';
 import { getBiome } from '../data/biomes';
 import { foeDisplay } from '../data/foes';
-import { ABILITIES, ABILITY_TUNING } from '../data/abilities';
+import { getFighter } from '../data/fighters';
+import { getPassive, DEFAULT_COMBO_WINDOW_MS, PASSIVE_TUNING } from '../data/passives';
 import { getArcana } from '../data/arcana';
-import { getActiveEvolutionStatus } from '../data/evolutions';
+import { EVOLUTION_RECIPES } from '../data/evolutions';
 import { COACH_KEYS } from '../progress';
 import { Btn, CoinPill, DARK, Eyebrow, Heart, INK, PopIn, TONE } from './ui';
+import { EvolutionBanner, EvolutionRing, Floater, MegaFlash, hitTier, type FloaterSpec } from './RunFx';
 
 const TICK_MS = 250;
 const REPLACE_DELAY_MS = 950;
@@ -51,23 +54,33 @@ type EnemyReaction = 'criticalHit' | 'hit' | 'gloat' | 'attack' | 'regen' | 'ent
 interface EventPresentation {
   sfx?: Parameters<typeof sfx>[0];
   floater?: (e: RunEvent) => { text: string; color: string };
+  /** Damage to the foe: the floater grows with `amount` (big ≥10, huge ≥25 + screen shake, MEGA ≥50 + flash) */
+  damage?: boolean;
   fighter?: FighterReaction;
   enemy?: EnemyReaction;
   /** Foe portrait shakes */
   shake?: boolean;
 }
 
+const RAINBOW = '#9333EA';
+const amount = (e: RunEvent) => e.amount ?? 0;
+/** "−12", or "BLAST −12" when the event names its source */
+const dmg = (label?: string) => (e: RunEvent) => {
+  const source = e.text ?? label;
+  return { text: source ? `${source} −${amount(e)}` : `−${amount(e)}`, color: COLORS.impactRed };
+};
+
 const EVENT_PRESENTATION: Record<RunEventType, EventPresentation> = {
-  hit: { sfx: 'hit', shake: true, floater: e => ({ text: `−${e.amount}`, color: COLORS.impactRed }), enemy: 'hit' },
-  rainbow: { sfx: 'rainbow', shake: true, floater: e => ({ text: `RAINBOW −${e.amount}`, color: '#9333EA' }), fighter: 'ecstatic', enemy: 'criticalHit' },
-  heal: { sfx: 'heart', fighter: 'heal' },
+  hit: { sfx: 'hit', shake: true, damage: true, floater: dmg(), enemy: 'hit' },
+  rainbow: { sfx: 'rainbow', shake: true, damage: true, floater: e => ({ text: `RAINBOW −${amount(e)}`, color: RAINBOW }), fighter: 'ecstatic', enemy: 'criticalHit' },
+  heal: { sfx: 'heart', fighter: 'heal', floater: e => ({ text: `+${amount(e) || 1}♥`, color: COLORS.logicTeal }) },
   hurt: { sfx: 'hurt', enemy: 'gloat' },
   grace: {},
-  coins: { sfx: 'coin', floater: e => ({ text: `+${e.amount}¢`, color: TONE.coin }) },
+  coins: { sfx: 'coin', floater: e => ({ text: `+${amount(e)}¢`, color: TONE.coin }) },
   levelup: { sfx: 'levelup', fighter: 'powerup' },
   foe_defeated: { sfx: 'foeDefeated', fighter: 'ecstatic' },
   wave: { sfx: 'wave', fighter: 'entrance', enemy: 'entrance' },
-  regen: { sfx: 'graceGain', floater: e => ({ text: `+${e.amount}`, color: COLORS.logicTeal }), enemy: 'regen' },
+  regen: { sfx: 'graceGain', floater: e => ({ text: `+${amount(e)}`, color: COLORS.logicTeal }), enemy: 'regen' },
   dud: {},
   face_down: {},
   countdown: {},
@@ -83,24 +96,52 @@ const EVENT_PRESENTATION: Record<RunEventType, EventPresentation> = {
   mistake: {},
   time_up: {},
   moves_out: {},
+  time_gain: { floater: e => ({ text: `+${amount(e)}s`, color: COLORS.logicTeal }) },
+  // fighter passives
   nine_lives: { sfx: 'heart', floater: () => ({ text: 'NINE LIVES!', color: COLORS.logicTeal }), fighter: 'heal' },
-  combo: { floater: e => ({ text: `COMBO ×${e.amount}`, color: COLORS.impactOrange }), fighter: 'ecstatic', enemy: 'criticalHit' },
-  grudge: {},
-  grudge_release: { sfx: 'explosion', floater: e => ({ text: `GRUDGE +${e.amount}`, color: '#7A3E00' }), fighter: 'ecstatic', enemy: 'criticalHit' },
-  ability_ready: { sfx: 'star2' },
-  freeze: { sfx: 'freeze', fighter: 'ecstatic' },
-  redeal: { sfx: 'whoosh', fighter: 'ecstatic' },
-  scoop: { sfx: 'match', fighter: 'ecstatic', enemy: 'criticalHit' },
-  purity: { sfx: 'match', floater: e => ({ text: `PURITY ×${e.amount}!`, color: '#0D9488' }) },
-  purity_max: { sfx: 'rainbow', floater: e => ({ text: `MAX PURITY ×${e.amount}!`, color: TONE.combo }), fighter: 'ecstatic', enemy: 'criticalHit' },
-  catalyst_spawn: {},
-  catalyst_ready: { sfx: 'star2', floater: () => ({ text: 'EVO READY!', color: TONE.evoReady }) },
-  catalyst_lost: { sfx: 'hurt', floater: () => ({ text: 'CATALYST LOST!', color: COLORS.impactRed }) },
-  catalyst_saved: { sfx: 'graceGain', floater: () => ({ text: 'CATALYST SAVED!', color: COLORS.logicTeal }) },
-  evolution: { sfx: 'unlock', floater: e => ({ text: `EVOLVED: ${e.text}!`, color: TONE.evoReady }), fighter: 'ecstatic', enemy: 'criticalHit' },
+  combo: { floater: e => ({ text: `COMBO ×${amount(e)}`, color: COLORS.impactOrange }), fighter: 'ecstatic' },
+  hot_streak: { sfx: 'star2', floater: () => ({ text: 'HOT STREAK READY', color: COLORS.impactOrange }), fighter: 'powerup' },
+  hot_streak_hit: { sfx: 'explosion', shake: true, damage: true, floater: dmg('HOT STREAK'), fighter: 'ecstatic', enemy: 'criticalHit' },
+  grudge: { floater: e => ({ text: `GRUDGE ${amount(e) || ''}`.trim(), color: '#7A3E00' }) },
+  grudge_release: { sfx: 'explosion', shake: true, damage: true, floater: dmg('GRUDGE'), fighter: 'ecstatic', enemy: 'criticalHit' },
+  thick_hide: { sfx: 'graceGain', floater: () => ({ text: 'THICK HIDE!', color: COLORS.logicTeal }), fighter: 'heal' },
+  patience: { damage: true, floater: dmg('PATIENCE'), enemy: 'hit' },
+  freeze: { sfx: 'freeze', fighter: 'ecstatic', floater: () => ({ text: 'FROZEN!', color: '#1D4ED8' }) },
+  redeal: { sfx: 'whoosh', fighter: 'ecstatic', floater: () => ({ text: 'ZOOMIES!', color: COLORS.impactOrange }) },
+  scoop: { sfx: 'match', fighter: 'ecstatic', enemy: 'criticalHit', floater: () => ({ text: 'BIG SCOOP!', color: COLORS.logicTeal }) },
+  keen_eye: { sfx: 'hint' },
+  fetch: { sfx: 'deal', floater: () => ({ text: 'FETCH!', color: TONE.coin }) },
+  free_mistake: { sfx: 'graceGain', floater: () => ({ text: 'NO HARM', color: COLORS.logicTeal }) },
+  // rule effects
+  rule: { floater: e => ({ text: e.text ?? '!', color: TONE.combo }) },
+  blast: { sfx: 'explosion', shake: true, damage: true, floater: dmg('BLAST'), enemy: 'hit' },
+  laser: { sfx: 'laser', shake: true, damage: true, floater: dmg('LASER'), enemy: 'hit' },
+  ricochet: { sfx: 'ricochet', damage: true, floater: dmg('RICOCHET'), enemy: 'hit' },
+  doubled: { sfx: 'star2', floater: () => ({ text: '×2!', color: TONE.combo }) },
+  double_ready: { floater: () => ({ text: 'NEXT ×2', color: TONE.combo }) },
+  charged: { sfx: 'star1', floater: e => ({ text: `NEXT SET ×${amount(e)}`, color: COLORS.impactOrange }) },
+  empowered: { sfx: 'levelup', floater: e => ({ text: `WAR DRUM +${amount(e)}`, color: COLORS.impactOrange }), fighter: 'powerup' },
+  simplified: { sfx: 'whoosh', floater: () => ({ text: 'CLARITY!', color: COLORS.logicTeal }) },
+  simplify_end: {},
+  pinata: { sfx: 'deal', floater: () => ({ text: 'PIÑATA!', color: '#DB2777' }) },
+  pinata_break: { sfx: 'coin', shake: true, damage: true, floater: dmg('PIÑATA'), fighter: 'ecstatic', enemy: 'criticalHit' },
+  link: {},
+  // purity, evolutions, hazards & arcana
+  purity: { sfx: 'match', floater: e => ({ text: `PURITY ×${amount(e)}!`, color: '#0D9488' }) },
+  purity_max: { sfx: 'rainbow', floater: e => ({ text: `MAX PURITY ×${amount(e)}!`, color: TONE.combo }), fighter: 'ecstatic', enemy: 'criticalHit' },
+  catalyst_spawn: { sfx: 'star1', floater: () => ({ text: 'CATALYST!', color: TONE.evoReady }) },
+  evolution_start: { sfx: 'unlock', fighter: 'ecstatic', enemy: 'criticalHit' },
+  evolution_end: { floater: () => ({ text: 'EVOLUTION ENDS', color: TONE.spent }) },
+  trap_placed: {},
+  trap_defused: { sfx: 'confirm', damage: true, floater: e => ({ text: `DEFUSED −${amount(e)}`, color: COLORS.logicTeal }), enemy: 'hit' },
+  trap_sprung: { sfx: 'hurt', floater: () => ({ text: 'SPRUNG!', color: COLORS.impactRed }), fighter: 'pain', enemy: 'gloat' },
   arcana_burn: { sfx: 'explosion', floater: () => ({ text: 'CONTROLLED BURN!', color: COLORS.impactOrange }) },
-  overkill: { sfx: 'coin', floater: e => ({ text: `OVERKILL +${e.amount}`, color: TONE.coin }) },
+  overkill: { sfx: 'coin', floater: e => ({ text: `OVERKILL +${amount(e)}`, color: TONE.coin }) },
 };
+
+/** The recipe an evolution event is about (the engine names it by id or by name). */
+const recipeFor = (key: string | undefined): EvolutionRecipe | undefined =>
+  key ? EVOLUTION_RECIPES.find(r => r.id === key || r.name === key) : undefined;
 
 /** A tip the player has to accept. The fight is paused while one is showing. */
 interface Tip {
@@ -131,7 +172,9 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   const [hudHeight, setHudHeight] = useState(150);
   const [hintTrigger, setHintTrigger] = useState(0);
   const [lastMatchTime, setLastMatchTime] = useState(Date.now());
-  const [floaters, setFloaters] = useState<{ id: number; text: string; color: string }[]>([]);
+  const [floaters, setFloaters] = useState<FloaterSpec[]>([]);
+  const [megaFlash, setMegaFlash] = useState(0);
+  const [banner, setBanner] = useState<{ recipe: EvolutionRecipe | null; text: string; seq: number } | null>(null);
   const [tips, setTips] = useState<Tip[]>([]);
   const tip = tips[0] ?? null;
   const pushTip = useCallback((t: Tip) => setTips(q => (q.some(x => x.id === t.id) ? q : [...q, t])), []);
@@ -166,6 +209,47 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
     onCoachMarkSeen(key);
     const n = m.fightTips.length;
     m.fightTips.forEach((t, i) => pushTip({ id: `${key}_${i}`, title: t.title, text: t.text, icon: m.icon, anchor: t.anchor, label: n > 1 ? `Tip ${i + 1} of ${n}` : 'Tip' }));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // First fight with a fighter: what its two passives do. First fight with a hazard: how it works.
+  useEffect(() => {
+    const once = (key: string, tip: Omit<Tip, 'id'>) => {
+      if (seenCoach.current.has(key)) return;
+      seenCoach.current.add(key);
+      onCoachMarkSeen(key);
+      pushTip({ id: key, ...tip });
+    };
+    // A fighter's own lesson (its trial) already explained the passives
+    const taught = save.seenMechanics.includes(getFighter(run.fighter).signature);
+    if (run.passives.length > 0 && !taught) {
+      const [a, b] = run.passives.map(getPassive);
+      once(COACH_KEYS.passives(run.fighter), {
+        title: `${run.fighter}: ${a.name} & ${b?.name ?? ''}`.replace(/ & $/, ''),
+        text: run.passives.map(id => `${getPassive(id).name}: ${getPassive(id).text}`).join('\n'),
+        icon: a.icon,
+        anchor: 'top',
+        label: 'Your passives',
+      });
+    }
+    const hazards = level.rules.hazards;
+    if (hazards?.timeBombs) {
+      once(COACH_KEYS.hazard('timeBombs'), {
+        title: 'Time Bombs',
+        text: `A card with a fuse counts down from ${hazards.timeBombs.seconds}s. Match it in a Set before it reaches 0, or you lose a heart.`,
+        icon: 'lorc/time-bomb',
+        anchor: 'bottom',
+        label: 'Hazard',
+      });
+    }
+    if (hazards?.snares) {
+      once(COACH_KEYS.hazard('snares'), {
+        title: 'Snares',
+        text: 'A card with an arrow in its corner is snared. Matching it costs a heart. Match the card the arrow points at instead to defuse it for +4 damage.',
+        icon: 'lorc/wolf-trap',
+        anchor: 'bottom',
+        label: 'Hazard',
+      });
+    }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!playing) return;
@@ -213,24 +297,32 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
     if (secondsLeft !== null && secondsLeft <= 5 && secondsLeft > 0 && run.status === 'playing') sfx('tick');
   }, [secondsLeft, run.status]);
 
-  // Events → sfx, floating numbers, foe shake, coach marks
+  // Events → sfx, floating numbers (sized by the hit), shakes, flashes, banners, coach marks
   const foeShake = useSharedValue(0);
   const foeScale = useSharedValue(1);
+  const screenShake = useSharedValue(0);
   const lastEventId = useRef(0);
   useEffect(() => {
     const fresh = run.events.filter(e => e.id > lastEventId.current);
     if (fresh.length === 0) return;
     lastEventId.current = fresh[fresh.length - 1].id;
+    let burst = 0;
     for (const e of fresh) {
       const show = EVENT_PRESENTATION[e.type];
       if (show.sfx) sfx(show.sfx);
+      const tier = show.damage ? hitTier(e.amount ?? 0) : 0;
       if (show.shake) {
         foeShake.value = withSequence(withTiming(-8, { duration: 40 }), withTiming(8, { duration: 60 }), withTiming(-4, { duration: 50 }), withTiming(0, { duration: 50 }));
         foeScale.value = withSequence(withTiming(0.9, { duration: 60 }), withTiming(1, { duration: 120, easing: Easing.out(Easing.quad) }));
       }
+      if (tier >= 2) {
+        const amp = tier === 3 ? 10 : 6;
+        screenShake.value = withSequence(withTiming(-amp, { duration: 40 }), withTiming(amp, { duration: 60 }), withTiming(-amp / 2, { duration: 50 }), withTiming(amp / 2, { duration: 50 }), withTiming(0, { duration: 50 }));
+      }
+      if (tier === 3) setMegaFlash(f => f + 1);
       if (show.floater) {
         const f = show.floater(e);
-        addFloater(f.text, f.color);
+        addFloater(tier === 3 ? `MEGA ${f.text}` : f.text, f.color, tier, burst++);
       }
       switch (show.fighter) {
         case 'ecstatic': conductor.triggerReaction('ecstatic'); break;
@@ -247,18 +339,21 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
         case 'regen': enemyConductor.triggerReaction('regen'); break;
         case 'entrance': enemyConductor.triggerReaction('entrance'); break;
       }
-      if (e.type === 'scoop') {
-        const ids = runRef.current.ability?.scooped ?? [];
-        setLastMatchTime(Date.now());
-        later(() => dispatch({ type: 'REPLACE', ids }), REPLACE_DELAY_MS);
-      }
-      if (e.type === 'ability_ready' && runRef.current.ability) {
-        const def = ABILITIES[runRef.current.ability.id];
-        const key = COACH_KEYS.abilityReady(def.id);
-        if (!seenCoach.current.has(key)) {
-          seenCoach.current.add(key);
-          onCoachMarkSeen(key);
-          pushTip({ id: key, title: `${def.name} is ready`, text: `${def.short} Tap the glowing button to use it.`, icon: def.icon, anchor: 'top' });
+      if (e.type === 'evolution_start') {
+        const recipe = recipeFor(e.text);
+        setBanner(b => ({ recipe: recipe ?? null, text: recipe?.activeText ?? e.text ?? '', seq: (b?.seq ?? 0) + 1 }));
+        later(() => setBanner(null), 2700);
+        if (!seenCoach.current.has(COACH_KEYS.evolution)) {
+          seenCoach.current.add(COACH_KEYS.evolution);
+          onCoachMarkSeen(COACH_KEYS.evolution);
+          pushTip({
+            id: COACH_KEYS.evolution,
+            title: `${recipe?.name ?? 'Evolution'} is live!`,
+            text: `For 20 seconds: ${recipe?.activeText ?? 'your evolved rules are on.'} Every Set also deals +1. The ring by the HP bar shows the time left.`,
+            icon: recipe?.icon ?? 'lorc/crystal-shine',
+            anchor: 'top',
+            label: 'Evolution',
+          });
         }
       }
       for (const cm of COACH_BY_EVENT.get(e.type) ?? []) {
@@ -272,10 +367,11 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   }, [run.events]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const floaterSeq = useRef(0);
-  const addFloater = (text: string, color: string) => {
+  const addFloater = (text: string, color: string, tier: FloaterSpec['tier'], index: number) => {
     const id = ++floaterSeq.current;
-    setFloaters(f => [...f.slice(-5), { id, text, color }]);
-    later(() => setFloaters(f => f.filter(x => x.id !== id)), 1100);
+    const dx = ((index % 3) - 1) * 34 + (tier > 0 ? -10 : 0);
+    setFloaters(f => [...f.slice(-6), { id, text, color, tier, dx }]);
+    later(() => setFloaters(f => f.filter(x => x.id !== id)), 1100 + tier * 250);
   };
 
   // End of run → hand off to results after the finishing blow lands
@@ -318,12 +414,19 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   }, [dispatch, conductor]);
 
   const foeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: foeShake.value }, { scale: foeScale.value }] }));
+  const screenStyle = useAnimatedStyle(() => ({ transform: [{ translateX: screenShake.value }] }));
   const hpPct = run.foeMaxHp > 0 ? run.foeHp / run.foeMaxHp : 0;
   const challenge = challengeProgress(run);
   const xpNeed = xpForLevel(run.xpLevel);
+  const comboLive = run.elapsedMs - run.lastMatchAtMs <= comboWindowMs(run);
+  const purityLive = run.features.has('purity') && run.purityChain > 0;
+  const evolutionsOn = run.features.has('evolutions') && (run.armedRecipes.length > 0 || run.activeEvolutions.length > 0);
+  const catalystOnBoard = run.board.some(c => c.hasEvolutionItem);
+  const evolutionsLeft = run.evolutionCap - run.evolutionsTriggered;
 
+  const keenEyeIds = useMemo(() => (run.passive.keenEyeCardId ? [run.passive.keenEyeCardId] : undefined), [run.passive.keenEyeCardId]);
   return (
-    <View style={[st.root, { backgroundColor: biome.colors.sky, paddingTop: insets.top }]}>
+    <Animated.View style={[st.root, { backgroundColor: biome.colors.sky, paddingTop: insets.top }, screenStyle]}>
       {/* ── HUD ─────────────────────────────────────────── */}
       <View style={st.hud} onLayout={e => setHudHeight(e.nativeEvent.layout.height)}>
         <View style={st.hudTop}>
@@ -358,6 +461,13 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
                 <View style={[st.idleFill, { width: `${Math.min(100, (ui.showInactivityBar.current / ui.showInactivityBar.max) * 100)}%` }]} />
               </View>
             )}
+            <View style={st.counters}>
+              <Text testID="run-total-damage" style={st.counter} accessibilityLabel={`${run.totalDamage} total damage`}>⚔ {run.totalDamage}</Text>
+              {run.combo > 1 && comboLive && (
+                <Text testID="run-combo" style={[st.counter, st.counterHot]}>COMBO ×{run.combo}</Text>
+              )}
+              {run.biggestHit > 0 && <Text testID="run-biggest-hit" style={st.counterDim}>best {run.biggestHit}</Text>}
+            </View>
           </View>
 
           {/* Player's living fighter */}
@@ -375,7 +485,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
           />
 
           <View style={st.floaters} pointerEvents="none">
-            {floaters.map(f => <Floater key={f.id} text={f.text} color={f.color} />)}
+            {floaters.map(f => <Floater key={f.id} spec={f} />)}
           </View>
         </View>
 
@@ -393,7 +503,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
               <Text style={st.statText}>{secondsLeft}s</Text>
             </View>
           )}
-          {run.ability && <AbilityWidget run={run} onFire={() => dispatch({ type: 'ABILITY' })} />}
+          {run.passives.map(id => <PassiveChip key={id} id={id} run={run} />)}
           {run.features.has('graces') && (
             <View style={st.stat}>
               <Icon name="lorc/clover" size={16} color={COLORS.logicTeal} />
@@ -422,68 +532,71 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
           </View>
         )}
 
-        {/* Live Arcana, Escalating Purity & Evolution Catalyst status strip */}
-        {(run.activeArcana ||
-          (run.features.has('purity') && run.purityChain > 0) ||
-          run.features.has('evolutions')) && (() => {
-          const evoStatus = run.features.has('evolutions')
-            ? getActiveEvolutionStatus(run.weapons, run.evolvedRecipes, run, run.unlockedEvolutions)
-            : null;
-          const catalystOnBoard = run.board.some(c => c.hasEvolutionItem);
-          const showEvo =
-            run.features.has('evolutions') &&
-            (run.catalystState !== 'available' || Boolean(evoStatus) || catalystOnBoard);
-          if (!run.activeArcana && !(run.features.has('purity') && run.purityChain > 0) && !showEvo) {
-            return null;
-          }
-          return (
-            <View style={st.synergyRow}>
-              {run.activeArcana && (
-                <View testID="run-arcana-chip" style={st.arcanaChip}>
-                  <Icon name={getArcana(run.activeArcana).icon} size={12} color={TONE.arcana} />
-                  <Text style={st.arcanaChipText}>{getArcana(run.activeArcana).numeral}</Text>
-                </View>
-              )}
-              {run.features.has('purity') && run.purityChain > 0 && (
-                <View testID="run-purity-chip" style={[st.purityChip, run.purityChain >= 2 && st.purityChipHot]}>
-                  <Icon name="lorc/lightning-branches" size={12} color={run.purityChain >= 2 ? TONE.upside : INK} />
-                  <Text style={st.purityChipText}>
-                    {run.purityChain >= 2 ? `Purity ×${run.purityChain}` : `Purity 1`} · &gt;{run.lastDiffCount} diff next
-                  </Text>
-                </View>
-              )}
-              {showEvo && (
-                <View
-                  testID="run-evo-chip"
-                  style={[
-                    st.evoChip,
-                    evoStatus?.ready && run.catalystState === 'available' && st.evoChipReady,
-                    run.catalystState === 'lost' && { opacity: 0.55 },
-                  ]}
-                >
-                  <Icon
-                    name="lorc/crystal-shine"
-                    size={12}
-                    color={evoStatus?.ready && run.catalystState === 'available' ? INK : TONE.arcana}
-                  />
-                  <Text style={st.evoChipText} numberOfLines={1}>
-                    {run.catalystState === 'evolved'
-                      ? 'Evolved ✓'
-                      : run.catalystState === 'lost'
-                        ? 'Catalyst Lost'
-                        : evoStatus?.ready
-                          ? catalystOnBoard
-                            ? 'EVO READY! Match crystal'
-                            : 'EVO READY! Await crystal'
-                          : evoStatus
-                            ? evoStatus.progress.label
-                            : 'Catalyst on board (no recipe)'}
-                  </Text>
-                </View>
-              )}
-            </View>
-          );
-        })()}
+        {/* Live Arcana, Escalating Purity, board effects & Evolution status strip */}
+        {(run.arcana.length > 0 || purityLive || evolutionsOn || run.simplified || run.doubleNext > 0 || run.nextSetMultiplier > 1) && (
+          <View style={st.synergyRow}>
+            {run.arcana.map(id => (
+              <View key={id} testID="run-arcana-chip" style={st.arcanaChip}>
+                <Icon name={getArcana(id).icon} size={12} color={TONE.arcana} />
+                <Text style={st.arcanaChipText}>{getArcana(id).numeral}</Text>
+              </View>
+            ))}
+            {purityLive && (
+              <View testID="run-purity-chip" style={[st.purityChip, run.purityChain >= 2 && st.purityChipHot]}>
+                <Icon name="lorc/lightning-branches" size={12} color={run.purityChain >= 2 ? TONE.upside : INK} />
+                <Text style={st.purityChipText}>
+                  {run.purityChain >= 2 ? `Purity ×${run.purityChain}` : `Purity 1`} · &gt;{run.lastDiffCount} diff next
+                </Text>
+              </View>
+            )}
+            {run.doubleNext > 0 && (
+              <View testID="run-double-chip" style={[st.purityChip, st.purityChipHot]}>
+                <Text style={st.purityChipText}>NEXT TRIGGER ×2{run.doubleNext > 1 ? ` (${run.doubleNext})` : ''}</Text>
+              </View>
+            )}
+            {run.nextSetMultiplier > 1 && (
+              <View testID="run-charged-chip" style={[st.purityChip, { backgroundColor: '#FFE8CC', borderColor: COLORS.impactOrange }]}>
+                <Text style={st.purityChipText}>NEXT SET ×{run.nextSetMultiplier}</Text>
+              </View>
+            )}
+            {run.simplified && (
+              <View testID="run-simplified-chip" style={[st.purityChip, st.purityChipHot]}>
+                <Icon name="lorc/third-eye" size={12} color={TONE.upside} />
+                <Text style={st.purityChipText}>
+                  All {run.simplified.attribute} {String(run.simplified.value)} · {Math.ceil(run.simplified.remainingMs / 1000)}s
+                </Text>
+              </View>
+            )}
+            {evolutionsOn && (
+              <View
+                testID="run-evo-chip"
+                accessibilityLabel={`${run.armedRecipes.length} evolutions armed, ${run.evolutionsTriggered} of ${run.evolutionCap} used, ${Math.round(run.evolutionLikelihood)} percent catalyst chance`}
+                style={[st.evoChip, catalystOnBoard && st.evoChipReady, evolutionsLeft <= 0 && { opacity: 0.55 }]}
+              >
+                <Icon name="lorc/crystal-shine" size={12} color={catalystOnBoard ? INK : TONE.arcana} />
+                <Text style={st.evoChipText} numberOfLines={1}>
+                  {evolutionsLeft <= 0
+                    ? `Evolutions ${run.evolutionsTriggered}/${run.evolutionCap}`
+                    : catalystOnBoard
+                      ? 'CATALYST! Match it to evolve'
+                      : `${run.armedRecipes.length} armed · ${Math.round(run.evolutionLikelihood)}% · ${run.evolutionsTriggered}/${run.evolutionCap}`}
+                </Text>
+              </View>
+            )}
+            {run.activeEvolutions.map(a => {
+              const recipe = recipeFor(a.id);
+              return (
+                <EvolutionRing
+                  key={a.id}
+                  icon={recipe?.icon ?? 'lorc/crystal-shine'}
+                  name={recipe?.name ?? a.id}
+                  remainingMs={a.remainingMs}
+                  durationMs={a.durationMs}
+                />
+              );
+            })}
+          </View>
+        )}
 
         <View style={[st.challenge, challenge.met && { backgroundColor: '#D4F4EE' }, challenge.failed && { opacity: 0.55 }]}>
           <Text style={st.challengeStar}>★★★</Text>
@@ -494,10 +607,12 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
 
       {/* ── Board ───────────────────────────────────────── */}
       <View style={st.boardWrap}>
-        {!!run.ability?.frozenMs && (
+        {/* Evolution pulse: a glow behind the cards, never a card border */}
+        {run.activeEvolutions.length > 0 && <EvolutionGlow />}
+        {run.frozenMs > 0 && (
           <View style={st.frozen} pointerEvents="none">
             <Icon name="lorc/snowflake-1" size={18} color="#1D4ED8" />
-            <Text style={st.frozenText}>FROZEN {Math.ceil(run.ability.frozenMs / 1000)}s</Text>
+            <Text style={st.frozenText}>FROZEN {Math.ceil(run.frozenMs / 1000)}s</Text>
           </View>
         )}
         <GameBoard
@@ -517,10 +632,23 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
           autoPlayer={autoPlayer}
           enemy={run.foe}
           hideEnemyOverlay
+          glowingCardIds={keenEyeIds}
           onSelectedCountChange={conductor.setSelectedCount}
           onBoardIdleChange={conductor.setIsBoardIdle}
         />
       </View>
+
+      {banner && (
+        <View style={[st.bannerWrap, { top: insets.top + hudHeight / 2 }]} pointerEvents="none">
+          <EvolutionBanner
+            name={banner.recipe?.name ?? 'Evolution'}
+            icon={banner.recipe?.icon ?? 'lorc/crystal-shine'}
+            text={banner.text}
+            seq={banner.seq}
+          />
+        </View>
+      )}
+      <MegaFlash trigger={megaFlash} />
 
       {/* Tip: pauses the fight until accepted. The part it talks about stays lit. */}
       {tip && !ended && (() => {
@@ -594,45 +722,62 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
           </PopIn>
         </View>
       </Modal>
-    </View>
+    </Animated.View>
   );
 };
 
-/** Fighter ability: active = charge button, passive = live status chip. */
-const AbilityWidget: React.FC<{ run: RunState; onFire: () => void }> = ({ run, onFire }) => {
-  const a = run.ability!;
-  const def = ABILITIES[a.id];
-  if (def.kind === 'active') {
-    const ready = a.charge >= a.max && run.status === 'playing';
-    return (
-      <TouchableOpacity
-        testID="run-ability"
-        onPress={() => ready && onFire()}
-        activeOpacity={0.85}
-        accessibilityLabel={`${def.name}${ready ? ' ready' : ` ${a.charge} of ${a.max}`}`}
-        style={[st.ability, ready && st.abilityReady]}
-      >
-        <Icon name={def.icon} size={18} color={INK} />
-        <View style={{ flexDirection: 'row', gap: 2 }}>
-          {Array.from({ length: a.max }).map((_, i) => <View key={i} style={[st.pip, i < a.charge && st.pipOn]} />)}
-        </View>
-      </TouchableOpacity>
-    );
-  }
+/** Base tuning for a passive number (skill nodes can move it; the chips are a guide, the engine decides). */
+const tune = (id: PassiveId, key: string): number => (PASSIVE_TUNING[id] as Record<string, number>)[key] ?? 0;
+
+const comboWindowMs = (run: RunState): number =>
+  run.passives.includes('combo') ? tune('combo', 'combo.windowMs') : DEFAULT_COMBO_WINDOW_MS;
+
+/** One passive's live state. Lit when it is about to matter. */
+const PassiveChip: React.FC<{ id: PassiveId; run: RunState }> = ({ id, run }) => {
+  const def = getPassive(id);
+  const p = run.passive;
+  const sinceSet = run.elapsedMs - run.lastMatchAtMs;
   let label = '';
   let lit = false;
-  if (a.id === 'nine_lives') { label = a.spent ? 'used' : '1 life'; lit = !a.spent; }
-  if (a.id === 'combo') {
-    const live = a.combo > 0 && run.elapsedMs - run.lastMatchAtMs <= ABILITY_TUNING.comboWindowMs;
-    label = live ? `×${a.combo}` : 'combo'; lit = live;
+  switch (id) {
+    case 'nine_lives': label = p.nineLivesLeft > 0 ? `${p.nineLivesLeft} life` : 'used'; lit = p.nineLivesLeft > 0; break;
+    case 'scrappy': {
+      const missing = run.hearts !== null && run.maxHearts !== null ? run.maxHearts - run.hearts : 0;
+      label = missing > 0 ? `+${missing * tune('scrappy', 'scrappy.perHeart')}` : '+0'; lit = missing > 0; break;
+    }
+    case 'combo': {
+      const live = run.combo > 0 && sinceSet <= comboWindowMs(run);
+      label = live ? `×${run.combo}` : 'combo'; lit = live; break;
+    }
+    case 'hot_streak': label = p.hotStreak ? '×2 ready' : 'streak'; lit = p.hotStreak; break;
+    case 'grudge': label = p.grudge > 0 ? `+${p.grudge * tune('grudge', 'grudge.damage')}` : 'calm'; lit = p.grudge > 0; break;
+    case 'thick_hide': label = p.thickHideLeft > 0 ? `${p.thickHideLeft} free` : 'spent'; lit = p.thickHideLeft > 0; break;
+    case 'patience': {
+      const wait = tune('patience', 'patience.ms') - sinceSet;
+      label = run.matches === 0 || wait <= 0 ? 'ready' : `${Math.ceil(wait / 1000)}s`; lit = run.matches > 0 && wait <= 0; break;
+    }
+    case 'deep_freeze': label = run.frozenMs > 0 ? `${Math.ceil(run.frozenMs / 1000)}s` : 'rainbow'; lit = run.frozenMs > 0; break;
+    case 'zoomies': label = `in ${p.zoomiesIn}`; lit = p.zoomiesIn <= 1; break;
+    case 'fetch': label = 'fetch'; lit = false; break;
+    case 'big_scoop': label = `in ${p.scoopIn}`; lit = p.scoopIn <= 1; break;
+    case 'keen_eye': label = p.keenEyeCardId ? 'look!' : 'eye'; lit = !!p.keenEyeCardId; break;
   }
-  if (a.id === 'grudge') { label = a.grudge > 0 ? `+${a.grudge * ABILITY_TUNING.grudgeDamage}` : 'calm'; lit = a.grudge > 0; }
   return (
-    <View style={[st.stat, lit && { backgroundColor: '#FFF1C7' }, !lit && { opacity: 0.6 }]} accessibilityLabel={`${def.name}: ${label}`}>
+    <View testID={`run-passive-${id}`} style={[st.stat, lit && { backgroundColor: '#FFF1C7' }, !lit && { opacity: 0.6 }]} accessibilityLabel={`${def.name}: ${label}`}>
       <Icon name={def.icon} size={15} color={INK} />
       <Text style={st.statText}>{label}</Text>
     </View>
   );
+};
+
+/** Soft pulsing glow behind the board while an evolution runs. */
+const EvolutionGlow: React.FC = () => {
+  const o = useSharedValue(0.25);
+  useEffect(() => {
+    o.value = withRepeat(withSequence(withTiming(0.6, { duration: 500 }), withTiming(0.25, { duration: 500 })), -1);
+  }, [o]);
+  const style = useAnimatedStyle(() => ({ opacity: o.value }));
+  return <Animated.View testID="evolution-glow" pointerEvents="none" style={[st.glow, style]} />;
 };
 
 const Hearts: React.FC<{ hearts: number | null; max: number | null }> = ({ hearts, max }) => {
@@ -659,17 +804,6 @@ const Hearts: React.FC<{ hearts: number | null; max: number | null }> = ({ heart
       ))}
     </View>
   );
-};
-
-const Floater: React.FC<{ text: string; color: string }> = ({ text, color }) => {
-  const y = useSharedValue(0);
-  const o = useSharedValue(1);
-  useEffect(() => {
-    y.value = withTiming(-46, { duration: 1000, easing: Easing.out(Easing.cubic) });
-    o.value = withSequence(withTiming(1, { duration: 600 }), withTiming(0, { duration: 400 }));
-  }, [y, o]);
-  const s = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }], opacity: o.value }));
-  return <Animated.Text style={[st.floater, { color }, s]}>{text}</Animated.Text>;
 };
 
 const WeaponPick: React.FC<{ title: string; subtitle: string; options: Weapon[]; weaponUpgrades?: Record<string, number>; onPick: (w: Weapon) => void; onSkip: () => void }> = ({ title, subtitle, options, weaponUpgrades, onPick, onSkip }) => (
@@ -771,8 +905,13 @@ const st = StyleSheet.create({
   hpText: { textAlign: 'center', fontWeight: '900', fontSize: 11, color: INK, fontVariant: ['tabular-nums'] },
   idleTrack: { height: 5, borderRadius: 3, backgroundColor: '#EEE', overflow: 'hidden' },
   idleFill: { height: '100%', backgroundColor: COLORS.impactOrange },
-  floaters: { position: 'absolute', left: 100, top: 0, alignItems: 'flex-start' },
-  floater: { position: 'absolute', fontWeight: '900', fontSize: 20, textShadowColor: '#FFF', textShadowRadius: 4 },
+  floaters: { position: 'absolute', left: 120, top: 0, alignItems: 'flex-start' },
+  counters: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  counter: { fontSize: 11, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
+  counterHot: { color: COLORS.impactOrange },
+  counterDim: { fontSize: 10, fontWeight: '700', color: TONE.spent, fontVariant: ['tabular-nums'] },
+  glow: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, borderRadius: 18, backgroundColor: '#FDE68A' },
+  bannerWrap: { position: 'absolute', left: 0, right: 0, zIndex: 250 },
   hudRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   stat: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, borderWidth: 2, borderColor: INK, backgroundColor: COLORS.canvasWhite },
   statWarn: { backgroundColor: '#FFE1DE', borderColor: COLORS.impactRed },
@@ -790,10 +929,6 @@ const st = StyleSheet.create({
   evoChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: TONE.comboPale, borderRadius: 999, borderWidth: 1.5, borderColor: TONE.arcana, paddingHorizontal: 7, paddingVertical: 2 },
   evoChipReady: { backgroundColor: COLORS.actionYellow, borderColor: INK },
   evoChipText: { fontSize: 10, fontWeight: '900', color: INK },
-  ability: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 2, borderBottomWidth: 3, borderColor: '#B8B0A4', backgroundColor: COLORS.paperBeige },
-  abilityReady: { borderColor: INK, backgroundColor: '#9BE3D8' },
-  pip: { width: 6, height: 10, borderRadius: 2, backgroundColor: '#D9D2C7' },
-  pipOn: { backgroundColor: COLORS.logicTeal },
   frozen: { position: 'absolute', top: 10, alignSelf: 'center', zIndex: 60, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#DBEAFE', borderWidth: 2, borderColor: '#1D4ED8', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 4 },
   frozenText: { fontWeight: '900', color: '#1D4ED8', letterSpacing: 1 },
   challenge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.paperBeige, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3 },

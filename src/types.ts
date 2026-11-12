@@ -70,6 +70,10 @@ export interface Card {
   // Adventure Mode weapon evolution catalyst (at most 1 on screen at a time)
   hasEvolutionItem?: boolean; // Hidden evolution catalyst tucked behind this card
   evolutionReady?: boolean;   // Whether a weapon evolution recipe is currently primed
+  /** Adventure snare trap: matching this card hurts; matching the neighbour it points at defuses it */
+  snare?: 'up' | 'down' | 'left' | 'right';
+  /** Bonus damage dealt when this armored card is finally broken (Piñata) */
+  bounty?: number;
 }
 
 // Rewards revealed when a card is matched

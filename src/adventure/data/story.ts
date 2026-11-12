@@ -12,14 +12,14 @@ export const STORY: Record<'welcome', LessonPage[]> = {
       body: [
         'Something has stirred up the creatures of the meadow, and they are picking fights with everyone.',
         'You fight back with your wits. Spot a Set of three cards and you land a hit.',
-        'Win stars, earn coins, and recruit new fighters as you go.',
+        'Every star you win grows your fighter\'s skill tree. Recruit new fighters, collect weapons, and climb all the way to Starfall Summit.',
       ],
       demo: {
         type: 'icons',
         items: [
           { icon: 'lorc/crossed-swords', label: 'Beat foes' },
           { icon: 'lorc/crown-coin', label: 'Earn coins' },
-          { icon: 'lorc/trophy', label: 'Unlock fighters' },
+          { icon: 'lorc/tree-branch', label: 'Grow your fighter' },
         ],
       },
     },

@@ -1,9 +1,8 @@
 /**
- * Arcana — toggleable tarot wildcards that rewrite the rules of a fight.
+ * Arcana — tarot wildcards that rewrite the rules of a fight.
  *
- * Unlike Camp Workshop upgrades (which only add flat numbers), every Arcana is
- * a qualitative kiss-curse rule twist: you equip at most ONE before a run (or
- * leave the slot empty for standard rules).
+ * Every Arcana is a kiss-curse rule twist. One slot to start, up to three
+ * with the Tarot Deck; equipped Arcana combine through `arcanaRules`.
  */
 import type { ArcanaDef, ArcanaId, ArcanaRules } from '../types';
 import { BASE_RULES } from './rules';
@@ -18,7 +17,6 @@ const overkillHarvest = { overkillCoinsPerDamage: 2, waveClearHeal: 1, foeHpScal
 const scholarsGambit = { xpScale: 2, pickOptions: 4, maxHeartsDelta: -1 } satisfies ArcanaRules;
 const catalystResonance = {
   catalystChanceScale: 2,
-  catalystRespawns: 1,
   evolutionBurstBonus: { damage: 8, time: 8 },
   foeHpScale: 1.1,
 } satisfies ArcanaRules;
@@ -96,8 +94,8 @@ export const ARCANA: ArcanaDef[] = [
     numeral: 'VII',
     name: 'Catalyst Resonance',
     icon: 'lorc/crystal-wand',
-    tagline: 'Attuned to hidden Evolution Catalysts.',
-    upside: `Catalysts appear twice as fast, respawn once if lost, and Evolutions burst ${catalystResonance.evolutionBurstBonus.damage} damage + ${catalystResonance.evolutionBurstBonus.time}s.`,
+    tagline: 'Attuned to Evolution Catalysts.',
+    upside: `Catalysts appear twice as often, and every Evolution bursts for ${catalystResonance.evolutionBurstBonus.damage} damage + ${catalystResonance.evolutionBurstBonus.time}s.`,
     tradeoff: `Foes enter the arena with +${percentMore(catalystResonance.foeHpScale)}% HP.`,
   },
   {
@@ -114,7 +112,59 @@ export const ARCANA: ArcanaDef[] = [
 
 const NO_RULES: ArcanaRules = {};
 
-export const arcanaRules = (id: ArcanaId | null): ArcanaRules => (id ? getArcana(id).rules : NO_RULES);
+const ADDITIVE = [
+  'maxHeartsDelta', 'nonRainbowDamageDelta', 'singleTraitBonusDamage', 'setTimeBonus', 'rainbowTimeBonus',
+  'overkillCoinsPerDamage', 'waveClearHeal', 'catalystRespawns',
+] as const;
+const SCALES = ['foeHpScale', 'specialCardChanceScale', 'damageScale', 'timerSpeedScale', 'xpScale', 'catalystChanceScale'] as const;
+
+const minDefined = (a: number | undefined, b: number | undefined) => (a === undefined ? b : b === undefined ? a : Math.min(a, b));
+
+/**
+ * Several equipped Arcana as one rule set (spec §4): additive fields add,
+ * `*Scale` fields multiply, `maxHeartsLock` and the Grace override take the
+ * lowest, `mistakeBurn` takes the shortest cooldown, `pickOptions` the most.
+ * Rainbow multipliers combine relative to the standard ×2 (×1 and ×3 → ×1.5).
+ */
+export const combineArcana = (list: ArcanaRules[]): ArcanaRules => {
+  if (list.length === 0) return NO_RULES;
+  if (list.length === 1) return list[0];
+  const out: ArcanaRules = {};
+  const num = out as Record<string, number | undefined>;
+  for (const r of list) {
+    const src = r as Record<string, unknown>;
+    for (const k of ADDITIVE) if (typeof src[k] === 'number') num[k] = (num[k] ?? 0) + (src[k] as number);
+    for (const k of SCALES) if (typeof src[k] === 'number') num[k] = (num[k] ?? 1) * (src[k] as number);
+    out.maxHeartsLock = minDefined(out.maxHeartsLock, r.maxHeartsLock);
+    out.startingGraces = minDefined(out.startingGraces, r.startingGraces);
+    if (r.pickOptions !== undefined) out.pickOptions = Math.max(out.pickOptions ?? 0, r.pickOptions);
+    if (r.rainbowMultiplier !== undefined) {
+      const base = BASE_RULES.rainbowMultiplier;
+      out.rainbowMultiplier = (out.rainbowMultiplier ?? base) * (r.rainbowMultiplier / base);
+    }
+    if (r.mistakeBurn && (!out.mistakeBurn || r.mistakeBurn.cooldownMs < out.mistakeBurn.cooldownMs)) out.mistakeBurn = r.mistakeBurn;
+    if (r.untimedMoves) {
+      out.untimedMoves = {
+        delta: (out.untimedMoves?.delta ?? 0) + r.untimedMoves.delta,
+        min: Math.max(out.untimedMoves?.min ?? 0, r.untimedMoves.min),
+      };
+    }
+    if (r.evolutionBurstBonus) {
+      out.evolutionBurstBonus = {
+        damage: (out.evolutionBurstBonus?.damage ?? 0) + r.evolutionBurstBonus.damage,
+        time: (out.evolutionBurstBonus?.time ?? 0) + r.evolutionBurstBonus.time,
+      };
+    }
+  }
+  return out;
+};
+
+/** The rules of one Arcana, or of several equipped together. */
+export const arcanaRules = (ids: ArcanaId | readonly ArcanaId[] | null | undefined): ArcanaRules => {
+  if (!ids) return NO_RULES;
+  if (typeof ids === 'string') return getArcana(ids).rules;
+  return combineArcana(ids.map(id => getArcana(id).rules));
+};
 
 export const getArcana = (id: ArcanaId): ArcanaDef => {
   const found = ARCANA.find(a => a.id === id);

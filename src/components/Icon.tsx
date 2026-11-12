@@ -156,6 +156,21 @@ import BrokenHeartZone from '../../assets/icons/lorc/broken-heart-zone.svg';
 import Cobweb from '../../assets/icons/lorc/cobweb.svg';
 import LinkedRings from '../../assets/icons/lorc/linked-rings.svg';
 import Brainstorm from '../../assets/icons/lorc/brainstorm.svg';
+import TreeBranch from '../../assets/icons/lorc/tree-branch.svg';
+import PlainArrow from '../../assets/icons/delapouite/plain-arrow.svg';
+import Pinata from '../../assets/icons/delapouite/pinata.svg';
+import WolfTrap from '../../assets/icons/lorc/wolf-trap.svg';
+import Drum from '../../assets/icons/delapouite/drum.svg';
+import HuntingHorn from '../../assets/icons/lorc/hunting-horn.svg';
+import TeslaCoil from '../../assets/icons/lorc/tesla-coil.svg';
+import Prism from '../../assets/icons/delapouite/prism.svg';
+import MagnifyingGlass from '../../assets/icons/lorc/magnifying-glass.svg';
+import BeltBuckles from '../../assets/icons/lorc/belt-buckles.svg';
+import TarotWheelOfFortune from '../../assets/icons/caro-asercion/tarot-10-wheel-of-fortune.svg';
+import FizzingFlask from '../../assets/icons/lorc/fizzing-flask.svg';
+import Mountaintop from '../../assets/icons/lorc/mountaintop.svg';
+import FallingStar from '../../assets/icons/delapouite/falling-star.svg';
+import CometSpark from '../../assets/icons/lorc/comet-spark.svg';
 
 // Icon registry: maps path (e.g., "delapouite/token") to the imported component
 // NOTE: When adding new icons, also add the import above and the path here.
@@ -312,6 +327,21 @@ const ICON_REGISTRY = {
   'lorc/cobweb': Cobweb,
   'lorc/linked-rings': LinkedRings,
   'lorc/brainstorm': Brainstorm,
+  'lorc/tree-branch': TreeBranch,
+  'delapouite/plain-arrow': PlainArrow,
+  'delapouite/pinata': Pinata,
+  'lorc/wolf-trap': WolfTrap,
+  'delapouite/drum': Drum,
+  'lorc/hunting-horn': HuntingHorn,
+  'lorc/tesla-coil': TeslaCoil,
+  'delapouite/prism': Prism,
+  'lorc/magnifying-glass': MagnifyingGlass,
+  'lorc/belt-buckles': BeltBuckles,
+  'caro-asercion/tarot-10-wheel-of-fortune': TarotWheelOfFortune,
+  'lorc/fizzing-flask': FizzingFlask,
+  'lorc/mountaintop': Mountaintop,
+  'delapouite/falling-star': FallingStar,
+  'lorc/comet-spark': CometSpark,
 } as const satisfies Record<string, React.FC<SvgProps>>;
 
 // TypeScript union type of all valid icon names - use this for type-safe icon references

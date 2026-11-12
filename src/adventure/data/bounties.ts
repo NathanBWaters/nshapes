@@ -14,6 +14,14 @@ const eliteClears = (save: AdventureSave): number =>
 const uniqueFighterWins = (save: AdventureSave): number =>
   Object.values(save.bountyStats.fighterWins).filter(n => (n ?? 0) >= 1).length;
 
+/**
+ * Lifetime counters the v3 save adds to `bountyStats` (trapsDefused: sum of
+ * traps defused; biggestHit: best single-action damage). Read defensively so
+ * an older save without them simply reads 0.
+ */
+const counter = (save: AdventureSave, key: 'trapsDefused' | 'biggestHit'): number =>
+  (save.bountyStats as unknown as Partial<Record<string, number>>)[key] ?? 0;
+
 const perfectCount = (save: AdventureSave): number =>
   Object.values(save.stars).filter(s => s >= 3).length;
 
@@ -37,7 +45,7 @@ export const BOUNTIES: BountyDef[] = [
     icon: 'lorc/rainbow-star',
     target: 12,
     progress: s => s.bountyStats.rainbowSets,
-    reward: { coins: 110, arcana: 'prismatic_fever' },
+    reward: { coins: 110, weapons: ['time-mastery'] },
   },
   {
     id: 'bounty_purity_10',
@@ -47,7 +55,7 @@ export const BOUNTIES: BountyDef[] = [
     icon: 'lorc/lightning-branches',
     target: 10,
     progress: s => s.bountyStats.purityChains,
-    reward: { coins: 90, weapons: ['echo-stone-rare'] },
+    reward: { coins: 90, weapons: ['scholars-tome-rare'] },
   },
   {
     id: 'bounty_purity_triple_3',
@@ -57,7 +65,7 @@ export const BOUNTIES: BountyDef[] = [
     icon: 'lorc/crystal-shine',
     target: 3,
     progress: s => s.bountyStats.threeStepPurities,
-    reward: { coins: 150, weapons: ['resonance-crystal'] },
+    reward: { coins: 150, weapons: ['time-trigger-mastery'] },
   },
   {
     id: 'bounty_flawless_timed_3',
@@ -67,7 +75,7 @@ export const BOUNTIES: BountyDef[] = [
     icon: 'lorc/diamond-hard',
     target: 3,
     progress: s => s.bountyStats.flawlessTimedWins,
-    reward: { coins: 130, arcana: 'glass_prism' },
+    reward: { coins: 130, weapons: ['chrono-shard-rare'] },
   },
 
   // ── Chaos, Overkill & Evolutions ────────────────────────────────────────
@@ -79,7 +87,7 @@ export const BOUNTIES: BountyDef[] = [
     icon: 'lorc/bright-explosion',
     target: 6,
     progress: s => s.bountyStats.destructiveFights,
-    reward: { coins: 95, weapons: ['chaos-conduit'] },
+    reward: { coins: 95, weapons: ['fire-mastery'] },
   },
   {
     id: 'bounty_overkill_10',
@@ -89,13 +97,13 @@ export const BOUNTIES: BountyDef[] = [
     icon: 'lorc/skull-crack',
     target: 8,
     progress: s => s.bountyStats.maxOverkill,
-    reward: { coins: 120, weapons: ['wisdom-chain'] },
+    reward: { coins: 120, weapons: ['coin-mastery'] },
   },
   {
     id: 'bounty_evolve_1',
     category: 'chaos',
     name: 'First Transmutation',
-    description: 'Prime a weapon recipe and match on a hidden Catalyst card.',
+    description: 'Arm a recipe, then match its Catalyst card to trigger an evolution.',
     icon: 'lorc/crystal-wand',
     target: 1,
     progress: s => s.bountyStats.evolutionsForged,
@@ -110,6 +118,37 @@ export const BOUNTIES: BountyDef[] = [
     target: 3,
     progress: s => s.discoveredEvolutions.length,
     reward: { coins: 180, arcana: 'catalyst_resonance' },
+  },
+
+  {
+    id: 'bounty_evolve_10',
+    category: 'chaos',
+    name: 'Power Trip',
+    description: 'Trigger 10 evolutions across all fights.',
+    icon: 'lorc/crystal-shine',
+    target: 10,
+    progress: s => s.bountyStats.evolutionsForged,
+    reward: { coins: 220, weapons: ['ricochet-mastery'] },
+  },
+  {
+    id: 'bounty_traps_15',
+    category: 'mastery',
+    name: 'Trap Sweeper',
+    description: 'Defuse 15 traps (Time Bombs and Snares) across all fights.',
+    icon: 'lorc/wolf-trap',
+    target: 15,
+    progress: s => counter(s, 'trapsDefused'),
+    reward: { coins: 150, weapons: ['hint-mastery'] },
+  },
+  {
+    id: 'bounty_big_hit_40',
+    category: 'chaos',
+    name: 'Haymaker',
+    description: 'Deal 40+ damage with a single Set (everything it sets off counts).',
+    icon: 'lorc/fist',
+    target: 40,
+    progress: s => counter(s, 'biggestHit'),
+    reward: { coins: 200, weapons: ['snowball'] },
   },
 
   // ── Roster Feats ────────────────────────────────────────────────────────
@@ -131,7 +170,7 @@ export const BOUNTIES: BountyDef[] = [
     icon: 'delapouite/sitting-dog',
     target: 3,
     progress: s => s.bountyStats.fighterWins['Corgi'] ?? 0,
-    reward: { coins: 95, weapons: ['connector-rare'] },
+    reward: { coins: 95, weapons: ['web-weaver-common'] },
   },
   {
     id: 'bounty_badger_wins_3',
@@ -141,7 +180,7 @@ export const BOUNTIES: BountyDef[] = [
     icon: 'caro-asercion/badger',
     target: 3,
     progress: s => s.bountyStats.fighterWins['Badger'] ?? 0,
-    reward: { coins: 110, weapons: ['grace-conduit'] },
+    reward: { coins: 110, weapons: ['grace-mastery'] },
   },
   {
     id: 'bounty_roster_4',
@@ -151,7 +190,7 @@ export const BOUNTIES: BountyDef[] = [
     icon: 'lorc/trophy',
     target: 4,
     progress: uniqueFighterWins,
-    reward: { coins: 160, weapons: ['fortunes-blessing'] },
+    reward: { coins: 160, weapons: ['fortunes-eye'] },
   },
 
   // ── Explorer & Completionist ────────────────────────────────────────────
@@ -169,7 +208,7 @@ export const BOUNTIES: BountyDef[] = [
     id: 'bounty_elites_2',
     category: 'explorer',
     name: 'Giant Slayer',
-    description: 'Knock out 2 optional Elite branch foes (★★+).',
+    description: 'Knock out 2 optional side-branch foes (★★+).',
     icon: 'lorc/daemon-skull',
     target: 2,
     progress: eliteClears,

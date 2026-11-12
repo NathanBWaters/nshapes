@@ -24,7 +24,7 @@ export const CAMPAIGN_FEATURES: Record<UnlockableFeature, CampaignFeatureDef> = 
     name: 'The Workshop',
     secret: 'Camp upgrade',
     headline: 'The Workshop unlocked!',
-    tease: 'Upgrade your unlocked mechanics and Armory weapons at Camp!',
+    tease: 'Spend coins at Camp on permanent upgrades, bigger loadouts and stronger Armory weapons!',
     badge: 'NEW ABILITY UNLOCKED',
     open: { label: 'Open Workshop', destination: { screen: 'camp', tab: 'workshop' } },
   },
