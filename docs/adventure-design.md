@@ -489,6 +489,8 @@ The fight UI reuses the shared `GameBoard` and `Card`, so weapon effects, fire, 
 
 ## Balance bots
 
+Target feel (bare vs invested player, by world): [balance-philosophy.md](./balance-philosophy.md).
+
 ```
 ADVENTURE_BALANCE_REPORT=1 npx jest __tests__/adventureBalance.test.ts
 ```

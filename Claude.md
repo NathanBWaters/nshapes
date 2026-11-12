@@ -294,4 +294,5 @@ When working on specific systems, load the relevant design doc for detailed spec
 * **[Adventure Mode](./docs/adventure-design.md)** - Map, levels, stars, economy, fighters, audio synth, balance bots
 * **[Weapon System](./specs/weapons-design.md)** - Complete weapon roster, rarities, effects, synergies, and balance notes
 * **[Enemy System](./specs/enemy-design.md)** - Enemy roster, tier scaling, defeat conditions, and weapon counters (in development)
+* **[Balance Philosophy](./docs/balance-philosophy.md)** - Rough target win rates by world for a bare vs a fully invested player
 * **[Style Guide](./style_guide.md)** - UI design system including colors, typography, and component styles
