@@ -4,6 +4,7 @@ import { usePWASafeAreaInsets } from '@/hooks/usePWASafeAreaInsets';
 import { Character, PlayerStats, Weapon } from '@/types';
 import type { EnemyOption } from '@/types/enemy';
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
+import { TIER_AURA_COLORS } from '@/utils/enemyAnimations';
 import {
   getDynamicDescription,
   getStatComparison,
@@ -17,13 +18,6 @@ import { EnemyAvatar } from './enemies';
 import { FighterAvatar } from './fighters';
 import { WeaponAvatar } from './weapons';
 
-// Tier colors for visual distinction
-const TIER_COLORS: Record<1 | 2 | 3 | 4, string> = {
-  1: COLORS.logicTeal,
-  2: COLORS.actionYellow,
-  3: COLORS.impactOrange,
-  4: COLORS.impactRed,
-};
 
 interface EnemySelectionProps {
   enemies: EnemyOption[];
@@ -55,7 +49,7 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
   const focusedReward = focusedOption?.stretchGoalReward ?? null;
   const focusedMoney = focusedOption?.stretchGoalMoney ?? 0;
 
-  const tierColor = focusedEnemy ? TIER_COLORS[focusedEnemy.tier] : COLORS.slateCharcoal;
+  const tierColor = focusedEnemy ? TIER_AURA_COLORS[focusedEnemy.tier] : COLORS.slateCharcoal;
 
   return (
     <View style={styles.container}>
@@ -252,7 +246,7 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
           {enemies.map((enemyOption, index) => {
             const { enemy } = enemyOption;
             const isFocused = focusedIndex === index;
-            const enemyTierColor = TIER_COLORS[enemy.tier];
+            const enemyTierColor = TIER_AURA_COLORS[enemy.tier];
 
             return (
               <Pressable

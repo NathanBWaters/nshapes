@@ -107,9 +107,8 @@ export interface CreatureMotionConfig<Mood extends string, Reaction extends stri
   drift: { base: number; perBreathHz: number };
   /**
    * Posture springs that carry the pose toward each new mood/gaze target.
-   * Omit to hold the mount pose while animating.
    */
-  poseSprings?: {
+  poseSprings: {
     leanX: Spring;
     leanY: Spring;
     bodyTilt: Spring;
@@ -409,25 +408,23 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
       driftPhase: advancePhase(cur.driftPhase, drift.base + drift.perBreathHz * breathHz, dt),
     };
 
-    if (poseSprings) {
-      const p = tgt.pose;
-      const k = poseSprings;
-      next.leanX = stepSecondOrder(cur.leanX, p.leanX, dt, k.leanX[0], k.leanX[1], k.leanX[2]);
-      next.leanY = stepSecondOrder(cur.leanY, p.leanY, dt, k.leanY[0], k.leanY[1], k.leanY[2]);
-      next.bodyTilt = stepSecondOrder(cur.bodyTilt, p.bodyTiltDeg, dt, k.bodyTilt[0], k.bodyTilt[1], k.bodyTilt[2]);
-      next.headTilt = stepSecondOrder(cur.headTilt, p.headTiltDeg, dt, k.headTilt[0], k.headTilt[1], k.headTilt[2]);
-      next.headY = stepSecondOrder(cur.headY, p.headY, dt, k.headY[0], k.headY[1], k.headY[2]);
-      next.leftEar = stepSecondOrder(cur.leftEar, p.leftEarDeg, dt, k.leftEar[0], k.leftEar[1], k.leftEar[2]);
-      next.rightEar = stepSecondOrder(cur.rightEar, p.rightEarDeg, dt, k.rightEar[0], k.rightEar[1], k.rightEar[2]);
-      next.postureStretchY = stepSecondOrder(
-        cur.postureStretchY,
-        p.postureStretchY,
-        dt,
-        k.postureStretchY[0],
-        k.postureStretchY[1],
-        k.postureStretchY[2]
-      );
-    }
+    const p = tgt.pose;
+    const k = poseSprings;
+    next.leanX = stepSecondOrder(cur.leanX, p.leanX, dt, k.leanX[0], k.leanX[1], k.leanX[2]);
+    next.leanY = stepSecondOrder(cur.leanY, p.leanY, dt, k.leanY[0], k.leanY[1], k.leanY[2]);
+    next.bodyTilt = stepSecondOrder(cur.bodyTilt, p.bodyTiltDeg, dt, k.bodyTilt[0], k.bodyTilt[1], k.bodyTilt[2]);
+    next.headTilt = stepSecondOrder(cur.headTilt, p.headTiltDeg, dt, k.headTilt[0], k.headTilt[1], k.headTilt[2]);
+    next.headY = stepSecondOrder(cur.headY, p.headY, dt, k.headY[0], k.headY[1], k.headY[2]);
+    next.leftEar = stepSecondOrder(cur.leftEar, p.leftEarDeg, dt, k.leftEar[0], k.leftEar[1], k.leftEar[2]);
+    next.rightEar = stepSecondOrder(cur.rightEar, p.rightEarDeg, dt, k.rightEar[0], k.rightEar[1], k.rightEar[2]);
+    next.postureStretchY = stepSecondOrder(
+      cur.postureStretchY,
+      p.postureStretchY,
+      dt,
+      k.postureStretchY[0],
+      k.postureStretchY[1],
+      k.postureStretchY[2]
+    );
 
     sim.value = next;
   }, animate);

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { AdventureDifficulty, Weapon, WeaponRarity } from '@/types';
 import type { EnemyInstance } from '@/types/enemy';
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
+import { TIER_AURA_COLORS } from '@/utils/enemyAnimations';
 import Icon from '../Icon';
 import { EnemyAvatar } from '../enemies';
 import { WeaponAvatar } from '../weapons';
@@ -18,13 +19,6 @@ const getRarityLabel = (rarity: WeaponRarity): string => {
   }
 };
 
-// Tier colors for enemies
-const TIER_COLORS: Record<1 | 2 | 3 | 4, string> = {
-  1: COLORS.logicTeal,
-  2: COLORS.actionYellow,
-  3: COLORS.impactOrange,
-  4: COLORS.impactRed,
-};
 
 const TIER_LABELS: Record<1 | 2 | 3 | 4, string> = {
   1: 'Common',
@@ -61,7 +55,7 @@ export const EnemyChallengeCard: React.FC<EnemyChallengeCardProps> = ({
   stretchGoalReward,
   stretchGoalMoney,
 }) => {
-  const tierColor = TIER_COLORS[enemy.tier];
+  const tierColor = TIER_AURA_COLORS[enemy.tier];
   const tierLabel = TIER_LABELS[enemy.tier];
 
   return (

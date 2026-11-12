@@ -590,7 +590,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
             <Btn label="Resume" onPress={() => setPaused(false)} />
             <Btn label="Restart" variant="secondary" onPress={() => { setPaused(false); onRestart(); }} />
             <Btn label="Retreat to map" variant="secondary" onPress={() => { setPaused(false); music.stop(); onQuit(); }} />
-            <Text style={st.panelHint}>Retreating forfeits this attempt. Coins you've collected are still banked.</Text>
+            <Text style={st.panelHint}>Retreating forfeits this attempt, including the coins you've collected in it.</Text>
           </PopIn>
         </View>
       </Modal>

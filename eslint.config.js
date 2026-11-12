@@ -13,7 +13,6 @@ module.exports = defineConfig([
       'test-results/*',
       'public/*',
       'specs/*',
-      'nshapes_audio/*',
     ],
   },
   {

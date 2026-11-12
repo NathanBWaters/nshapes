@@ -125,7 +125,17 @@ const ENEMY_MOTION: CreatureMotionConfig<EnemyAmbientMood, EnemyReactionType> = 
 
   easing: { breathHz: 7.5, wagHz: 8.5, swayHz: 6.5, breathAmp: 6.5, wagAmp: 7.0, swayAmp: 6.0, bounce: 5.5, tremor: 7.0 },
   drift: { base: 0, perBreathHz: 0.236 },
-  // No poseSprings: enemies hold the posture they mounted in while animating.
+  // Heavier than fighters: slower, snappier anticipation, ears/horns overshoot more
+  poseSprings: {
+    leanX: [2.7, 0.72, 0.6],
+    leanY: [2.5, 0.68, 0.75],
+    bodyTilt: [2.4, 0.66, 0.7],
+    headTilt: [3.0, 0.6, 0.85],
+    headY: [2.8, 0.66, 0.75],
+    leftEar: [3.7, 0.5, 1.1],
+    rightEar: [3.5, 0.5, 1.1],
+    postureStretchY: [2.8, 0.68, 0.7],
+  },
 
   look: {
     hop: 0.09,
