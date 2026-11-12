@@ -25,7 +25,7 @@ import { getArmoryWeapon, weaponLevelSuffix } from '../data/armory';
 import { unlockHint } from '../data/rewards';
 import {
   arcanaSlots,
-  branchSpent,
+  fighterStarsSpent,
   buyTuning,
   buyUpgrade,
   canBuyUpgrade,
@@ -198,7 +198,7 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters
             {FIGHTERS.map(f => {
               const unlocked = save.unlockedFighters.includes(f.name);
               const selected = save.selectedFighter === f.name;
-              const spent = branchSpent(save, f.name, 0) + branchSpent(save, f.name, 1);
+              const spent = fighterStarsSpent(save, f.name);
               return (
                 <View
                   key={f.name}

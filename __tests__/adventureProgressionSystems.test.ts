@@ -9,7 +9,7 @@ import { BOUNTIES } from '@/adventure/data/bounties';
 import { BIOMES } from '@/adventure/data/biomes';
 import { CAMPAIGN_FEATURES } from '@/adventure/data/features';
 import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
-import { SKILL_NODES, skillTreeOf } from '@/adventure/data/skillTrees';
+import { SEALED_AT, SKILL_NODES, getSkillNode, skillTreeOf, skillTreeRoots } from '@/adventure/data/skillTrees';
 import { UPGRADES } from '@/adventure/data/upgrades';
 import { getArmoryWeapon } from '@/adventure/data/armory';
 import { starRewards } from '@/adventure/data/rewards';
@@ -21,7 +21,6 @@ import {
   arcanaSlots,
   armedRecipes,
   availableStars,
-  branchDepth,
   buyNode,
   buyUpgrade,
   buyTuning,
@@ -43,7 +42,10 @@ import {
   reconcileUnlocks,
   recipesArmedBy,
   refundAllCamp,
-  refundBranch,
+  refundBlockers,
+  refundNode,
+  canRefundNode,
+  fighterStarsSpent,
   refundFighter,
   refundUpgrade,
   refundableCoins,
@@ -82,8 +84,11 @@ const starsOnFirst = (n: number, stars = 3): Record<string, number> =>
 
 const ALL_MAIN_STARS = starsOnFirst(MAIN_LEVELS.length);
 
-const branch = (fighter: CharacterName, b: 0 | 1): SkillNode[] =>
-  skillTreeOf(fighter).filter(n => n.branch === b).sort((x, y) => x.depth - y.depth);
+/** Nodes that hang straight off one of the fighter's passives. */
+const rootAdjacent = (fighter: CharacterName): SkillNode[] => skillTreeOf(fighter).filter(n => n.roots.length > 0);
+
+/** Tabby node by its key (`0-1`, `x-1`, `cap-1`...). */
+const tabby = (key: string): SkillNode => getSkillNode(`tabby-${key}`)!;
 
 /** A save that has earned exactly `total` stars. */
 const withStars = (save: AdventureSave, total: number): AdventureSave => {
@@ -161,7 +166,7 @@ describe('Save migration from the v1 shape', () => {
 describe('Star pool', () => {
   it('available = earned − spent across every tree; star gates read earned stars', () => {
     const fighter: CharacterName = 'Orange Tabby';
-    const [n1, n2] = branch(fighter, 0);
+    const [n1, n2] = rootAdjacent(fighter);
     let save = withStars(createNewSave(), 30);
     expect(totalStarsEarned(save)).toBe(30);
     expect(starsSpent(save)).toBe(0);
@@ -178,78 +183,179 @@ describe('Star pool', () => {
 });
 
 describe('Skill trees', () => {
-  it('every fighter has two branches of 10 nodes with the spec cost curve (28 per branch)', () => {
-    const DEPTH_COSTS = [1, 1, 1, 2, 2, 3, 3, 4, 5, 6];
-    for (const f of FIGHTERS) {
-      expect(skillTreeOf(f.name)).toHaveLength(20);
-      for (const b of [0, 1] as const) {
-        const chain = branch(f.name, b);
-        expect(chain.map(n => n.depth)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-        expect(chain.map(n => n.cost)).toEqual(DEPTH_COSTS);
-      }
-    }
+  const SLUGS: Record<CharacterName, string> = {
+    'Orange Tabby': 'tabby', 'Sly Fox': 'fox', Badger: 'badger', 'Emperor Penguin': 'penguin', Corgi: 'corgi', Pelican: 'pelican',
+  };
+
+  it('every fighter has a connected web: symmetric links, unique cells, reachable from the passives, with loops', () => {
     expect(new Set(SKILL_NODES.map(n => n.id)).size).toBe(SKILL_NODES.length);
+    for (const f of FIGHTERS) {
+      const nodes = skillTreeOf(f.name);
+      const ids = new Set(nodes.map(n => n.id));
+      expect(nodes.length).toBeGreaterThanOrEqual(22);
+      expect(nodes.length).toBeLessThanOrEqual(26);
+
+      // Every old two-branch node is still there, so saves keep what they own
+      for (const b of [0, 1]) for (let d = 1; d <= 10; d++) expect(ids.has(`${SLUGS[f.name]}-${b}-${d}`)).toBe(true);
+
+      // One node per cell (the passive roots included), all inside the 7-column grid
+      const roots = skillTreeRoots(f.name);
+      expect(roots.map(r => r.passive)).toEqual(f.passives);
+      const cells = [...nodes.map(n => n.pos), ...roots.map(r => r.pos)].map(p => `${p.col},${p.row}`);
+      expect(new Set(cells).size).toBe(cells.length);
+      for (const n of nodes) {
+        expect(n.pos.col).toBeGreaterThanOrEqual(0);
+        expect(n.pos.col).toBeLessThanOrEqual(6);
+      }
+
+      // Links are symmetric, stay inside the tree and never point at themselves
+      let edges = 0;
+      for (const n of nodes) {
+        for (const other of n.links) {
+          expect(other).not.toBe(n.id);
+          expect(ids.has(other)).toBe(true);
+          expect(getSkillNode(other)!.links).toContain(n.id);
+          edges++;
+        }
+        for (const p of n.roots) expect(f.passives).toContain(p);
+      }
+      edges /= 2;
+
+      // Both passives grow something, and every node can be reached from them
+      for (const p of f.passives) expect(nodes.some(n => n.roots.includes(p))).toBe(true);
+      const seen = new Set(nodes.filter(n => n.roots.length > 0).map(n => n.id));
+      const queue = [...seen];
+      while (queue.length) for (const next of getSkillNode(queue.shift()!)!.links) if (!seen.has(next)) { seen.add(next); queue.push(next); }
+      expect(seen.size).toBe(nodes.length);
+
+      // Branches fork and rejoin: more links than a plain tree would need
+      const rootLinks = nodes.reduce((sum, n) => sum + n.roots.length, 0);
+      expect(edges + rootLinks).toBeGreaterThan(nodes.length + 2);
+    }
   });
 
-  it('buys in order only: depth 1 first, never skipping, never past the stars you have', () => {
-    const fighter: CharacterName = 'Orange Tabby';
-    const chain = branch(fighter, 0);
-    let save = withStars(createNewSave(), 4);
+  it('costs follow the role: cheap next to the passives, 1-6 each, 60-75 per fighter, one sealed capstone', () => {
+    for (const f of FIGHTERS) {
+      const nodes = skillTreeOf(f.name);
+      const total = nodes.reduce((sum, n) => sum + n.cost, 0);
+      expect(total).toBeGreaterThanOrEqual(60);
+      expect(total).toBeLessThanOrEqual(75);
+      for (const n of nodes) {
+        expect(n.cost).toBeGreaterThanOrEqual(1);
+        expect(n.cost).toBeLessThanOrEqual(6);
+      }
+      // Every passive has a 1-star way in
+      for (const p of f.passives) expect(nodes.some(n => n.roots.includes(p) && n.cost === 1)).toBe(true);
+      const sealed = nodes.filter(n => n.requires);
+      expect(sealed).toHaveLength(1);
+      expect(sealed[0].requires).toEqual({ starsEarned: SEALED_AT });
+      // Sealed at World 4's star gate
+      expect(BIOMES.some(b => b.starGate === SEALED_AT)).toBe(true);
+    }
+  });
 
-    expect(nodeStatus(save, chain[0].id)).toBe('buyable');
-    expect(nodeStatus(save, chain[1].id)).toBe('needsParent');
-    expect(canBuyNode(save, chain[1].id)).toBe(false);
-    expect(buyNode(save, chain[1].id)).toBe(save);
+  it('node text is short and true in any buying order (no "was X" claims)', () => {
+    for (const n of SKILL_NODES) {
+      expect(n.text.length).toBeLessThanOrEqual(90);
+      expect(n.text).not.toMatch(/\(was /);
+      expect(n.rules?.length || n.modifiers).toBeTruthy();
+    }
+  });
 
-    save = buyNode(save, chain[0].id);
-    expect(nodeStatus(save, chain[0].id)).toBe('owned');
-    expect(branchDepth(save, fighter, 0)).toBe(1);
+  it('buys by adjacency: a node opens once anything it links to (or its passive) is owned', () => {
+    let save = withStars(createNewSave(), 30);
+    // Purr Punch hangs off Nine Lives; Lick Wounds and Catnip hang off Purr Punch
+    expect(tabby('0-1').roots).toEqual(['nine_lives']);
+    expect(nodeStatus(save, tabby('0-1').id)).toBe('buyable');
+    expect(nodeStatus(save, tabby('1-2').id)).toBe('needsLink');
+    expect(canBuyNode(save, tabby('1-2').id)).toBe(false);
+    expect(buyNode(save, tabby('1-2').id)).toBe(save);
+
+    save = buyNode(save, tabby('0-1').id);
+    expect(nodeStatus(save, tabby('0-1').id)).toBe('owned');
     // Buying an owned node again changes nothing
-    expect(buyNode(save, chain[0].id)).toBe(save);
-
-    save = buyNode(save, chain[1].id);
-    save = buyNode(save, chain[2].id);
-    expect(branchDepth(save, fighter, 0)).toBe(3);
-    expect(availableStars(save)).toBe(1);
-    // Depth 4 costs 2: not enough stars
-    expect(nodeStatus(save, chain[3].id)).toBe('needsStars');
-    expect(buyNode(save, chain[3].id)).toBe(save);
-    // The other branch only needs its passive
-    expect(nodeStatus(save, branch(fighter, 1)[0].id)).toBe('buyable');
+    expect(buyNode(save, tabby('0-1').id)).toBe(save);
+    expect(nodeStatus(save, tabby('1-2').id)).toBe('buyable');
+    expect(nodeStatus(save, tabby('0-5').id)).toBe('buyable');
+    // Scrappy's side needs only its own passive
+    expect(nodeStatus(save, tabby('1-1').id)).toBe('buyable');
   });
 
-  it('locked fighters cannot buy nodes', () => {
+  it('branches rejoin: the crossroads opens from either passive', () => {
+    const base = withStars(createNewSave(), 40);
+    const x = tabby('x-1');
+    expect(nodeStatus(base, x.id)).toBe('needsLink');
+
+    // Nine Lives side: Warm Lap → Hot-Blooded → crossroads
+    let left = buyNode(buyNode(base, tabby('0-2').id), tabby('1-3').id);
+    expect(nodeStatus(left, x.id)).toBe('buyable');
+    left = buyNode(left, x.id);
+    expect(left.skillNodes['Orange Tabby']).toContain(x.id);
+
+    // Scrappy side: Street Smarts → Last Breath → crossroads
+    const right = buyNode(buyNode(base, tabby('1-4').id), tabby('0-6').id);
+    expect(right.skillNodes['Orange Tabby']).toEqual([tabby('1-4').id, tabby('0-6').id]);
+    expect(nodeStatus(right, x.id)).toBe('buyable');
+  });
+
+  it('not enough stars, sealed capstones and locked fighters', () => {
+    let save = withStars(createNewSave(), 3);
+    save = buyNode(save, tabby('0-1').id);
+    save = buyNode(save, tabby('1-2').id);
+    expect(availableStars(save)).toBe(0);
+    expect(nodeStatus(save, tabby('0-3').id)).toBe('needsStars');
+
+    // The claw tip is sealed until World 4's star gate, even with a path to it
+    const cap = tabby('cap-1');
+    expect(cap.requires?.starsEarned).toBe(SEALED_AT);
+    const path = { 'Orange Tabby': [tabby('0-2').id, tabby('1-5').id, tabby('1-6').id] };
+    const early = { ...withStars(createNewSave(), SEALED_AT - 1), skillNodes: path };
+    expect(nodeStatus(early, cap.id)).toBe('sealed');
+    expect(buyNode(early, cap.id)).toBe(early);
+    const late = { ...withStars(createNewSave(), SEALED_AT + 4), skillNodes: path };
+    expect(nodeStatus(late, cap.id)).toBe('buyable');
+    expect(buyNode(late, cap.id).skillNodes['Orange Tabby']).toContain(cap.id);
+
     const locked = FIGHTERS.find(f => !createNewSave().unlockedFighters.includes(f.name))!;
-    const save = withStars(createNewSave(), 20);
-    expect(nodeStatus(save, branch(locked.name, 0)[0].id)).toBe('fighterLocked');
+    expect(nodeStatus(withStars(createNewSave(), 20), rootAdjacent(locked.name)[0].id)).toBe('fighterLocked');
   });
 
-  it('refunds whole branches (tip down) and whole fighters for free', () => {
+  it('refunds one node when nothing hangs off it, or the whole fighter, for free', () => {
     const fighter: CharacterName = 'Orange Tabby';
     let save = withStars(createNewSave(), 60);
-    for (const n of branch(fighter, 0).slice(0, 5)) save = buyNode(save, n.id);
-    for (const n of branch(fighter, 1).slice(0, 3)) save = buyNode(save, n.id);
-    const spentB0 = branch(fighter, 0).slice(0, 5).reduce((a, n) => a + n.cost, 0);
-    const spentB1 = branch(fighter, 1).slice(0, 3).reduce((a, n) => a + n.cost, 0);
-    expect(starsSpent(save)).toBe(spentB0 + spentB1);
+    for (const key of ['0-1', '0-5', '1-2', '0-3']) save = buyNode(save, tabby(key).id);
+    const spent = ['0-1', '0-5', '1-2', '0-3'].reduce((sum, k) => sum + tabby(k).cost, 0);
+    expect(fighterStarsSpent(save, fighter)).toBe(spent);
 
-    const afterBranch = refundBranch(save, fighter, 0);
-    expect(branchDepth(afterBranch, fighter, 0)).toBe(0);
-    expect(branchDepth(afterBranch, fighter, 1)).toBe(3);
-    expect(availableStars(afterBranch)).toBe(60 - spentB1);
+    // Catnip hangs only off Purr Punch: Purr Punch can't go first
+    expect(refundBlockers(save, tabby('0-1').id).map(n => n.id)).toEqual([tabby('0-5').id]);
+    expect(canRefundNode(save, tabby('0-1').id)).toBe(false);
+    expect(refundNode(save, tabby('0-1').id)).toBe(save);
+
+    // Lick Wounds sits in a loop (Purr Punch and Spare Life both touch Nine Lives): free to go
+    expect(canRefundNode(save, tabby('1-2').id)).toBe(true);
+    save = refundNode(save, tabby('0-5').id);
+    expect(availableStars(save)).toBe(60 - spent + tabby('0-5').cost);
+    save = refundNode(save, tabby('0-1').id);
+    expect(save.skillNodes[fighter]).toEqual([tabby('1-2').id, tabby('0-3').id]);
+    // Not owned: nothing to refund
+    expect(refundNode(save, tabby('0-1').id)).toBe(save);
 
     const afterFighter = refundFighter(save, fighter);
     expect(afterFighter.skillNodes[fighter]).toBeUndefined();
     expect(availableStars(afterFighter)).toBe(60);
   });
 
-  it('reconcileUnlocks drops nodes with a missing parent and hands back everything if the trees cost more than earned', () => {
+  it('reconcileUnlocks keeps only nodes still connected to a passive, and hands everything back if the trees cost more than earned', () => {
     const fighter: CharacterName = 'Orange Tabby';
-    const chain = branch(fighter, 0);
-    const broken: AdventureSave = { ...withStars(createNewSave(), 30), skillNodes: { [fighter]: [chain[0].id, chain[2].id, 'no-such-node'] } };
-    expect(reconcileUnlocks(broken).skillNodes).toEqual({ [fighter]: [chain[0].id] });
+    const broken: AdventureSave = {
+      ...withStars(createNewSave(), 30),
+      // Sunbeam's only way in is Catnip (not owned); a Fox node filed under Tabby; a removed node
+      skillNodes: { [fighter]: [tabby('0-1').id, tabby('0-9').id, 'fox-0-1', 'no-such-node'] },
+    };
+    expect(reconcileUnlocks(broken).skillNodes).toEqual({ [fighter]: [tabby('0-1').id] });
 
-    const overspent: AdventureSave = { ...withStars(createNewSave(), 2), skillNodes: { [fighter]: chain.slice(0, 4).map(n => n.id) } };
+    const overspent: AdventureSave = { ...withStars(createNewSave(), 2), skillNodes: { [fighter]: [tabby('0-1').id, tabby('1-2').id, tabby('0-3').id] } };
     expect(reconcileUnlocks(overspent).skillNodes).toEqual({});
   });
 });

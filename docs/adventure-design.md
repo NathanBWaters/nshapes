@@ -2,7 +2,7 @@
 
 Adventure Mode is a map campaign in the style of Angry Birds and Bloons, with Vampire Survivors–style meta-progression and a Brotato + Set fight feel. **The game is the tutorial.** Every level teaches exactly one new thing.
 
-The fun is in stacking a build: **2 fighter passives + a 20-node skill tree + up to 6 charms + timed evolutions + up to 3 Arcana**. All of them are written in one shared rule vocabulary (`src/adventure/rules/types.ts`) and run by one interpreter (`rules/engine.ts`), so any source can chain into any other.
+The fun is in stacking a build: **2 fighter passives + a web-shaped skill tree + up to 6 charms + timed evolutions + up to 3 Arcana**. All of them are written in one shared rule vocabulary (`src/adventure/rules/types.ts`) and run by one interpreter (`rules/engine.ts`), so any source can chain into any other.
 
 Everything is **data-driven**. To change the campaign, edit `src/adventure/data/*.ts`, not the engine. `docs/adventure-v3-design.md` is the build spec this was made from. Where it and the code disagree, the code wins and this doc follows the code.
 
@@ -98,7 +98,7 @@ Three systems are switched on by the save rather than by map position:
 
 Fighters bring **no gear and no active button**. A fighter's identity is two always-on passives that change *how you play*. Charms are the whole weapon loadout. Passives are hand-coded in `engine/passives.ts`, and every number is a **tuning key** in `data/passives.ts` that skill nodes adjust through `passiveTuning`.
 
-| Fighter | Passive 1 (branch 0) | Passive 2 (branch 1) | Plays like | Unlock |
+| Fighter | Passive 1 | Passive 2 | Plays like | Unlock |
 |---|---|---|---|---|
 | Orange Tabby | **Nine Lives**: once per fight, a knockout leaves you on 1 heart | **Scrappy**: +1 damage per missing heart on every Set | Risky brawler | Start |
 | Sly Fox | **Combo**: Sets within 5s chain, +1 damage per step (max +4); a mistake breaks it | **Hot Streak**: at max Combo, your next Set deals ×2 | Speed | 1-3 ★★ |
@@ -114,14 +114,28 @@ Fighters bring **no gear and no active button**. A fighter's identity is two alw
 
 `data/skillTrees.ts` · UI `SkillTree.tsx` (Camp → Fighters)
 
-- **20 nodes per fighter (120 total)**: two branches of 10. Branch 0 grows from passive 1 and branch 1 from passive 2. The passives are the free roots.
-- **Strict order:** a node needs the node one depth above it in its branch. Every node is visible; locked ones show dimmed with a lock.
-- **Cost by depth:** `1, 1, 1, 2, 2, 3, 3, 4, 5, 6`, which is 28 per branch and 56 per fighter. The campaign pays out 168 stars, enough to max about three fighters.
+Trees follow *Clair Obscur: Expedition 33*: each fighter's tree is a uniquely shaped **web**, not a list.
+
+- **Adjacency rule:** a node can be bought once **any** node it links to is owned, or straight away if it hangs off one of the two passives (the free roots). Branches fork and rejoin, so most nodes can be reached more than one way. Every node is visible and readable; locked ones show dimmed with a padlock.
+- **Shapes and clusters** (each passive's themes sit together, like Lune's elements). Every fighter has 23–24 nodes:
+
+  | Fighter | Shape | Clusters |
+  |---|---|---|
+  | Orange Tabby | Paw print: both passives in the main pad, four toes, the heel below | heal → blast (outer left toe), heal → power (inner left), rage (inner right), 1-heart wrecking ball (outer right) |
+  | Sly Fox | Two zigzag lightning bolts that fuse into one tail tip, sparks off every bend | Combo bolt (speed, coins, time), Hot Streak bolt (fire, echoes, multipliers) |
+  | Badger | Burrows dug down from the surface, two galleries across, a den at the bottom | Grudge tunnel (mistakes are ammo), Thick Hide tunnel (mistakes are cheap and lucky) |
+  | Emperor Penguin | Snowflake: six arms around the two passives, twigs close it into rings | Patience arms (heavy slow hits), Deep Freeze arms (Rainbow hunting), power arm up, evolution arm down |
+  | Corgi | Dog bone: a loop in each knob, a ladder for the shaft | board size, re-deals, rewards, fetch count; crossroads on the shaft |
+  | Pelican | Two waves braided together, crossing at Riptide and High Tide | Big Scoop strand (free Sets), Keen Eye strand (hints) |
+
+- **Crossroads** (`x-*` keys) sit where the two halves meet and use both passives (e.g. Tabby's Ninth Life Scrap tunes Nine Lives *and* Scrappy). **Capstones** (`cap-*`, drawn as diamonds, like every 5★+ node) sit at the tips.
+- **Sealed capstone:** one per fighter is sealed until the player has earned `SEALED_AT` = 56 stars (World 4's gate), like E33's story-gated skills.
+- **Cost by role, not depth:** 1 next to a root, 2–4 in the body, 5–6 at the tips. 73–75 stars per fighter; the campaign pays out 168 stars, enough to max about two fighters.
 - **One shared star pool:** available = stars earned − stars spent across all trees.
-- **Refunds are free and any time**, either a whole branch at a time or the whole fighter, so a kept node never misses its parent.
-- **Content:** about a third of the nodes tune the passive (`tune('combo.max', 2)`). The rest chain systems together (heal → explode, explosion → combo step, Rainbow → spawn Catalyst, mistake → laser), nudge a play pattern, or change how weapons behave. Depths 8–10 define a build. No node is a bare "+1 heart".
-- Node ids are `<fighter slug>-<branch>-<depth>` (e.g. `fox-0-4`).
-- On load, `normalizeSkillNodes` keeps only nodes on an unbroken path. If a rebalance makes the trees cost more than the player has earned, every star is refunded.
+- **Refunds are free and any time:** a single node when nothing would be cut off from both passives without it (the sheet names what blocks it), or the whole fighter.
+- **Content:** about a third of the nodes tune the passive (`tune('combo.max', 2)`); their text says "+1 more", never "was X", because nodes can be bought in any order. The rest chain systems together (heal → explode, explosion → combo step, Rainbow → spawn Catalyst, mistake → laser), nudge a play pattern, or change how weapons behave. No node is a bare "+1 heart".
+- Node ids are `<fighter slug>-<key>` (e.g. `fox-0-4`, `fox-x-1`). Keys `0-n`/`1-n` are the old two-branch ids, kept so saves keep what they own.
+- On load, `normalizeSkillNodes` keeps only nodes still connected to a passive through owned nodes. If a rebalance makes the trees cost more than the player has earned, every star is refunded.
 
 ## Loadout: charms and Arcana
 
@@ -420,10 +434,10 @@ The fight UI reuses the shared `GameBoard` and `Card`, so weapon effects, fire, 
 ## How to add X
 
 **A skill node.**
-- Edit the fighter's branch in `TREES` (`data/skillTrees.ts`). Each branch has exactly 10 rows, and its cost comes from `SKILL_NODE_COSTS` by depth. Replacing a row is the normal edit.
-- A row is `[name, icon, text, body]`. Build `body` with the helpers: `rule(T.x, [E.y], [C.z], 'Callout!')`, `tune('key', delta)`, or `{ modifiers: … }`.
-- Keep `text` exact and ≤ 90 chars.
-- Rows' ids follow their position, so moving rows changes ids. Saves are normalized on load, as described under Skill trees.
+- Add a row to the fighter's `nodes` in `TREES` (`data/skillTrees.ts`) and link it into `paths` (consecutive keys in a path are linked; `P1`/`P2` are the passives).
+- A row is `[name, icon, text, body, cost, [col, row], 'sealed'?]`. Build `body` with the helpers: `rule(T.x, [E.y], [C.z], 'Callout!')`, `tune('key', delta)`, or `{ modifiers: … }`. Cells are on a 7-column grid; one node per cell.
+- Keep `text` exact, ≤ 90 chars and true in any buying order.
+- Never rename a key: ids come from keys. Saves are normalized on load, as described under Skill trees.
 - A new tuning key goes in `PASSIVE_TUNING` and the passive's `TEXT` (`data/passives.ts`), and is read with `tuning(d, key)` in `engine/passives.ts`.
 - A new trigger, condition or effect needs:
   - The type in `rules/types.ts`.

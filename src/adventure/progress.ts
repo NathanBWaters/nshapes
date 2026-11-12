@@ -118,35 +118,56 @@ export const ownsNode = (save: AdventureSave, nodeId: string): boolean => {
   return !!node && ownedNodes(save, node.fighter).includes(nodeId);
 };
 
-const branchChain = (fighter: string, branch: 0 | 1): SkillNode[] =>
-  SKILL_NODES.filter(n => n.fighter === fighter && n.branch === branch).sort((a, b) => a.depth - b.depth);
+/** Stars spent on one fighter's tree. */
+export const fighterStarsSpent = (save: AdventureSave, fighter: CharacterName): number =>
+  ownedNodes(save, fighter).reduce((sum, id) => sum + (findNode(id)?.cost ?? 0), 0);
 
-/** How deep the player has bought into one branch (0 = only the free passive root). */
-export const branchDepth = (save: AdventureSave, fighter: CharacterName, branch: 0 | 1): number => {
-  const owned = new Set(ownedNodes(save, fighter));
-  let depth = 0;
-  for (const n of branchChain(fighter, branch)) {
-    if (!owned.has(n.id) || n.depth !== depth + 1) break;
-    depth = n.depth;
+/**
+ * The owned nodes that still hang together: reachable from a passive root
+ * through owned nodes only (breadth-first from every node that touches a root).
+ */
+const connectedFromRoots = (owned: ReadonlySet<string>): Set<string> => {
+  const seen = new Set<string>();
+  const queue = [...owned].filter(id => (findNode(id)?.roots.length ?? 0) > 0);
+  for (const id of queue) seen.add(id);
+  while (queue.length > 0) {
+    const n = findNode(queue.shift()!);
+    for (const next of n?.links ?? []) {
+      if (owned.has(next) && !seen.has(next)) {
+        seen.add(next);
+        queue.push(next);
+      }
+    }
   }
-  return depth;
+  return seen;
 };
+
+/** True when the node touches a passive root or a node the player owns. */
+const isLinked = (save: AdventureSave, node: SkillNode): boolean =>
+  node.roots.length > 0 || node.links.some(id => ownsNode(save, id));
+
+/** True while the node is sealed behind a star requirement the player hasn't earned. */
+export const isNodeSealed = (save: AdventureSave, node: SkillNode): boolean =>
+  !!node.requires && totalStarsEarned(save) < node.requires.starsEarned;
 
 export type NodeStatus =
   | 'owned'
-  /** Its parent is owned and the stars are there */
+  /** Linked to something owned (or a passive) and the stars are there */
   | 'buyable'
-  /** Its parent is owned but stars are short */
+  /** Linked, but stars are short */
   | 'needsStars'
-  /** The node before it in its branch is not owned yet */
-  | 'needsParent'
+  /** Nothing it links to is owned yet */
+  | 'needsLink'
+  /** Linked, but sealed until more stars have been earned */
+  | 'sealed'
   | 'fighterLocked';
 
 export const nodeStatus = (save: AdventureSave, nodeId: string): NodeStatus => {
   const node = findNode(nodeId);
   if (!node || !save.unlockedFighters.includes(node.fighter)) return 'fighterLocked';
   if (ownsNode(save, nodeId)) return 'owned';
-  if (branchDepth(save, node.fighter, node.branch) !== node.depth - 1) return 'needsParent';
+  if (!isLinked(save, node)) return 'needsLink';
+  if (isNodeSealed(save, node)) return 'sealed';
   return availableStars(save) >= node.cost ? 'buyable' : 'needsStars';
 };
 
@@ -158,13 +179,6 @@ export const buyNode = (save: AdventureSave, nodeId: string): AdventureSave => {
   return { ...save, skillNodes: { ...save.skillNodes, [node.fighter]: [...ownedNodes(save, node.fighter), nodeId] } };
 };
 
-/** Stars put into one branch of one fighter. */
-export const branchSpent = (save: AdventureSave, fighter: CharacterName, branch: 0 | 1): number =>
-  ownedNodes(save, fighter).reduce((sum, id) => {
-    const n = findNode(id);
-    return n && n.branch === branch ? sum + n.cost : sum;
-  }, 0);
-
 const withFighterNodes = (save: AdventureSave, fighter: CharacterName, ids: string[]): AdventureSave => {
   const skillNodes = { ...save.skillNodes };
   if (ids.length > 0) skillNodes[fighter] = ids;
@@ -172,32 +186,45 @@ const withFighterNodes = (save: AdventureSave, fighter: CharacterName, ids: stri
   return { ...save, skillNodes };
 };
 
-/** Give back every star in one branch. Whole branches only, so no kept node is missing its parent. */
-export const refundBranch = (save: AdventureSave, fighter: CharacterName, branch: 0 | 1): AdventureSave =>
-  withFighterNodes(save, fighter, ownedNodes(save, fighter).filter(id => findNode(id)?.branch !== branch));
+/**
+ * Owned nodes that would be cut off from both passives if this node were
+ * refunded. Empty means the node can be refunded on its own.
+ */
+export const refundBlockers = (save: AdventureSave, nodeId: string): SkillNode[] => {
+  const node = findNode(nodeId);
+  if (!node || !ownsNode(save, nodeId)) return [];
+  const rest = new Set(ownedNodes(save, node.fighter).filter(id => id !== nodeId));
+  const kept = connectedFromRoots(rest);
+  return [...rest].filter(id => !kept.has(id)).map(id => findNode(id)!);
+};
+
+export const canRefundNode = (save: AdventureSave, nodeId: string): boolean =>
+  ownsNode(save, nodeId) && refundBlockers(save, nodeId).length === 0;
+
+/** Give back one node's stars. Only when every other owned node stays connected to a passive. */
+export const refundNode = (save: AdventureSave, nodeId: string): AdventureSave => {
+  if (!canRefundNode(save, nodeId)) return save;
+  const node = findNode(nodeId)!;
+  return withFighterNodes(save, node.fighter, ownedNodes(save, node.fighter).filter(id => id !== nodeId));
+};
 
 /** Give back every star spent on this fighter. Free, any time. */
 export const refundFighter = (save: AdventureSave, fighter: CharacterName): AdventureSave =>
   withFighterNodes(save, fighter, []);
 
 /**
- * Keep only nodes that still exist and still sit on an unbroken path from their
- * passive. If the trees now cost more than the player earned (a rebalance),
- * every star is handed back.
+ * Keep only nodes that still exist, belong to the fighter they are filed under
+ * and still connect to a passive through owned nodes. If the trees now cost
+ * more than the player earned (a rebalance), every star is handed back.
  */
 const normalizeSkillNodes = (save: AdventureSave): AdventureSave => {
   // Without tree data (a partial build) leave the save alone rather than wiping it
   if (SKILL_NODES.length === 0) return save;
   const skillNodes: Record<string, string[]> = {};
   for (const [fighter, ids] of Object.entries(save.skillNodes)) {
-    const owned = new Set(ids);
-    const keep: string[] = [];
-    for (const branch of [0, 1] as const) {
-      for (const n of branchChain(fighter, branch)) {
-        if (!owned.has(n.id)) break;
-        keep.push(n.id);
-      }
-    }
+    const owned = new Set(ids.filter(id => findNode(id)?.fighter === fighter));
+    const connected = connectedFromRoots(owned);
+    const keep = [...owned].filter(id => connected.has(id));
     if (keep.length > 0) skillNodes[fighter] = keep;
   }
   const next = { ...save, skillNodes };

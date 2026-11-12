@@ -192,14 +192,14 @@ export const MECHANICS: Record<string, MechanicDef> = {
     title: 'Skill Trees',
     tagline: 'Spend stars to grow your fighter.',
     body: [
-      'Every fighter has two passives and a skill tree: two branches of 10 nodes, one growing from each passive.',
-      'Stars are the currency. Buy nodes in order at Camp; deeper nodes cost more and change how you play. Refunds are free.',
+      'Every fighter has two passives and a skill tree: a web of nodes that grows out from both passives.',
+      'Stars are the currency. At Camp, buy any node linked to one you own. Paths fork and meet again, and the tips change how you play. Refunds are free.',
       'Spending stars never locks a world: star gates count every star you have earned.',
     ],
     lessons: [
       {
         title: 'Build a big hit',
-        body: ['Old Quillback has thick skin. The third star wants a single Set that deals 8 or more.', 'Try Tabby\'s Scrappy branch or Sly Fox\'s Combo branch, then come back swinging.'],
+        body: ['Old Quillback has thick skin. The third star wants a single Set that deals 8 or more.', 'Try the Scrappy side of Tabby\'s tree or the Combo side of Sly Fox\'s, then come back swinging.'],
         demo: { type: 'icons', items: [{ icon: 'lorc/cat', label: 'Scrappy' }, { icon: 'caro-asercion/fox', label: 'Combo' }, { icon: 'lorc/fist', label: '9+ in one Set' }] },
       },
     ],
@@ -859,7 +859,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
     body: [
       'Nine Lives: once per fight, a knockout leaves you on 1 heart instead.',
       'Scrappy: every Set deals +1 damage for each heart you are missing.',
-      'Skill tree: one branch heals into blasts and lasers, the other turns a 1-heart Tabby into a wrecking ball.',
+      'Skill tree: a paw print. One side heals into blasts and lasers, the other turns a 1-heart Tabby into a wrecking ball.',
     ],
     icon: 'lorc/cat',
     demo: { type: 'icons', items: [{ icon: 'lorc/broken-heart', label: '2 hearts down…' }, { icon: 'lorc/fist', label: '…+2 per Set' }, { icon: 'lorc/cat', label: 'Nine Lives' }] },

@@ -163,7 +163,7 @@ const FieldGuide: React.FC<Props> = ({ save, onClose }) => {
               <Text style={st.howTitle}>Passives & Skill Trees</Text>
             </View>
             <Text style={st.howBody}>
-              Every fighter plays by two passives that are always on. Each passive grows a branch of 10 skill nodes.{'\n'}
+              Every fighter plays by two passives that are always on. Their skill tree is a web that grows out from both passives.{'\n'}
               Spend stars on nodes at Camp. Stars come from one shared pool, and spending never re-locks a world.{'\n'}
               A node needs the one above it. Refunding a whole branch is free, any time.
             </Text>
