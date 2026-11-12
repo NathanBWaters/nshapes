@@ -3,7 +3,7 @@
  */
 
 import { Weapon, PlayerStats, EffectCaps } from '../types';
-import { getCapInfoForStat, isStatCapped, shouldShowCapInfo, getMainStatForCap, EFFECT_CAPS } from './gameConfig';
+import { getCapInfoForStat, isStatCapped, shouldShowCapInfo } from './gameConfig';
 
 /**
  * Format stat key from camelCase to Title Case
@@ -33,53 +33,6 @@ export const INDEPENDENT_ROLL_EFFECTS = [
   'timeGainChance',
   'timeGainAmount',
 ];
-
-/**
- * Generate dynamic description for cap-increase weapons
- */
-export const getDynamicDescription = (weapon: Weapon, playerStats: PlayerStats): string => {
-  if (!weapon.capIncrease) return weapon.description;
-
-  const capType = weapon.capIncrease.type;
-  const effectCaps = playerStats.effectCaps as Record<string, number> | undefined;
-  const currentCap = effectCaps?.[capType] ?? EFFECT_CAPS[capType as keyof typeof EFFECT_CAPS]?.defaultCap ?? 0;
-  const newCap = currentCap + weapon.capIncrease.amount;
-
-  // Format cap type for display
-  const capTypeName = capType.replace(/([A-Z])/g, ' $1').toLowerCase().trim();
-
-  return `Raises your ${capTypeName} cap to ${newCap}%`;
-};
-
-/**
- * Cap increase info for Mastery weapons
- */
-export interface CapIncreaseInfo {
-  statName: string;
-  currentValue: number;
-  currentCap: number;
-  newCap: number;
-}
-
-/**
- * Get cap-increase info for display (for Mastery weapons)
- */
-export const getCapIncreaseInfo = (weapon: Weapon, playerStats: PlayerStats): CapIncreaseInfo | null => {
-  if (!weapon.capIncrease) return null;
-
-  const capType = weapon.capIncrease.type;
-  const statKey = getMainStatForCap(capType);
-
-  const effectCaps = playerStats.effectCaps as Record<string, number> | undefined;
-  const currentCap = effectCaps?.[capType] ?? EFFECT_CAPS[capType as keyof typeof EFFECT_CAPS]?.defaultCap ?? 0;
-  const newCap = currentCap + weapon.capIncrease.amount;
-  const currentValue = (playerStats as Record<string, any>)[statKey] ?? 0;
-
-  // Format the stat name
-  const statName = formatStatName(statKey);
-
-  return { statName, currentValue, currentCap, newCap };
-};
 
 /**
  * Stat comparison result for displaying weapon effects

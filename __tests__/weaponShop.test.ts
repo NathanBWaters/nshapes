@@ -170,16 +170,6 @@ describe('Weapon System', () => {
       }
     });
 
-    it('cap increaser weapons have capIncrease property', () => {
-      const capIncreasers = WEAPONS.filter(w => w.specialEffect === 'capIncrease');
-
-      for (const weapon of capIncreasers) {
-        expect(weapon.capIncrease).toBeDefined();
-        expect(weapon.capIncrease?.type).toBeDefined();
-        expect(weapon.capIncrease?.amount).toBeGreaterThan(0);
-      }
-    });
-
     it('bridge weapons have bridgeEffect property', () => {
       const bridgeWeapons = WEAPONS.filter(w => w.specialEffect === 'bridge');
 

@@ -19,9 +19,9 @@ import { sfx } from '@/audio';
 import type { AdventureSave, UpgradeDef } from '../types';
 import { FIGHTERS } from '../data/fighters';
 import { getPassive } from '../data/passives';
-import { MAX_WEAPON_UPGRADE_TIER, describeWeaponUpgradeBonus } from '../data/upgrades';
+import { MAX_WEAPON_UPGRADE_TIER } from '../data/upgrades';
 import { ARCANA } from '../data/arcana';
-import { getArmoryWeapon } from '../data/armory';
+import { describeWeaponLevel, getArmoryWeapon, weaponLevelSuffix } from '../data/armory';
 import { unlockHint } from '../data/rewards';
 import {
   arcanaSlots,
@@ -46,6 +46,8 @@ import {
   weaponUpgradeCost,
   weaponUpgradeSpentCoins,
   weaponUpgradeTier,
+  freeWeaponTiers,
+  weaponTiers,
 } from '../progress';
 import SkillTree, { StarPool } from './SkillTree';
 import { Btn, CoinPill, INK, PopIn, TONE } from './ui';
@@ -306,6 +308,7 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters
               ) : (
                 armoryWeapons(save).map(w => {
                   const tier = weaponUpgradeTier(save, w.id);
+                  const free = freeWeaponTiers(save, w.id);
                   const cost = weaponUpgradeCost(save, w.id);
                   const spent = weaponUpgradeSpentCoins(save, w.id);
                   return (
@@ -316,12 +319,13 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters
                         </View>
                         <View style={{ flex: 1, gap: 2 }}>
                           <Text style={st.fighterName}>
-                            {w.name}{tier > 0 ? ` +${tier}` : ''}
+                            {w.name}{weaponLevelSuffix(tier)}
                           </Text>
                           <Text style={st.fighterBlurb}>
                             {tier > 0
-                              ? `Now: ${describeWeaponUpgradeBonus(w, tier)}`
-                              : `Next: ${describeWeaponUpgradeBonus(w, 1)}`}
+                              ? `Now: ${describeWeaponLevel(w, tier)}`
+                              : `Next: ${describeWeaponLevel(w, 1)}`}
+                            {free > 0 ? ` · ${free} free level${free === 1 ? '' : 's'} from rewards` : ''}
                           </Text>
                           <View style={{ flexDirection: 'row', gap: 3, marginTop: 2 }}>
                             {Array.from({ length: MAX_WEAPON_UPGRADE_TIER }).map((_, i) => (
@@ -370,7 +374,7 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters
             </Text>
             <View style={st.slotRow} testID="camp-charm-slots">
               {Array.from({ length: slots }).map((_, i) => {
-                const w = charms[i] ? getArmoryWeapon(charms[i], save.weaponUpgrades) : undefined;
+                const w = charms[i] ? getArmoryWeapon(charms[i], weaponTiers(save)) : undefined;
                 return (
                   <View key={i} style={[st.slot, w && { borderColor: getRarityColor(w.rarity), backgroundColor: COLORS.canvasWhite }]}>
                     {w ? <WeaponAvatar weapon={w} size={26} /> : <Text style={st.slotEmpty}>+</Text>}
@@ -407,9 +411,9 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters
                     style={[st.armoryItem, { borderColor: equipped ? COLORS.actionYellow : getRarityColor(w.rarity) }, equipped && { backgroundColor: TONE.selected }]}
                   >
                     <WeaponAvatar weapon={w} size={36} triggerKey={armoryTapCounts[w.id]} />
-                    <Text style={st.armoryName} numberOfLines={1}>{w.name}{wTier > 0 ? ` +${wTier}` : ''}</Text>
+                    <Text style={st.armoryName} numberOfLines={1}>{w.name}{weaponLevelSuffix(wTier)}</Text>
                     <Text style={[st.armoryRarity, { color: getRarityColor(w.rarity) === COLORS.rarityCommon ? TONE.spent : getRarityColor(w.rarity) }]}>{equipped ? 'equipped' : w.rarity}</Text>
-                    <Text style={st.armoryDesc} numberOfLines={2}>{getArmoryWeapon(w.id, save.weaponUpgrades)?.shortDescription}</Text>
+                    <Text style={st.armoryDesc} numberOfLines={2}>{getArmoryWeapon(w.id, weaponTiers(save))?.shortDescription}</Text>
                   </TouchableOpacity>
                 );
               })}

@@ -17,7 +17,7 @@ export type WeaponTapStyle =
   | 'connector'; // Twin-link magnetic snap-in -> elastic ring pulse -> settle
 
 export interface WeaponIllustrationProps {
-  /** Exact weapon name (e.g. 'Blast Powder', 'Oracle Eye', 'Fire Mastery') */
+  /** Exact weapon name (e.g. 'Blast Powder', 'Oracle Eye', "Scholar's Tome") */
   name: string;
   /** Rarity drives subtle trim/gem accents (silver/bronze -> teal/sapphire -> violet -> radiant gold) */
   rarity?: WeaponRarity;

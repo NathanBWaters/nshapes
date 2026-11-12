@@ -6,9 +6,7 @@ import type { EnemyOption } from '@/types/enemy';
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
 import { TIER_AURA_COLORS } from '@/utils/enemyAnimations';
 import {
-  getDynamicDescription,
   getStatComparison,
-  getCapIncreaseInfo,
   getRarityLabel,
 } from '@/utils/weaponDisplay';
 import GameMenu from './GameMenu';
@@ -159,7 +157,7 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
                   <Text style={[styles.rewardWeaponName, { color: getRarityColor(focusedReward.rarity) }]}>
                     {focusedReward.name}
                   </Text>
-                  <KeywordText style={styles.rewardDescription}>{getDynamicDescription(focusedReward, playerStats)}</KeywordText>
+                  <KeywordText style={styles.rewardDescription}>{focusedReward.description}</KeywordText>
                   {focusedReward.flavorText && (
                     <KeywordText style={styles.rewardFlavor}>{focusedReward.flavorText}</KeywordText>
                   )}
@@ -206,28 +204,6 @@ const EnemySelection: React.FC<EnemySelectionProps> = ({
                     </View>
                   )}
 
-                  {/* Cap Increase Info (for Mastery weapons) */}
-                  {focusedReward.capIncrease && (() => {
-                    const capInfo = getCapIncreaseInfo(focusedReward, playerStats);
-                    if (!capInfo) return null;
-                    return (
-                      <View style={[styles.rewardEffectsBox, { marginTop: 8 }]}>
-                        <Text style={styles.rewardEffectsLabel}>Cap Increase</Text>
-                        <View style={styles.statComparisonRow}>
-                          <Text style={styles.effectKey}>Current {capInfo.statName}</Text>
-                          <Text style={styles.statBefore}>{capInfo.currentValue}%</Text>
-                        </View>
-                        <View style={styles.statComparisonRow}>
-                          <Text style={styles.effectKey}>Current Cap</Text>
-                          <Text style={styles.statBefore}>{capInfo.currentCap}%</Text>
-                        </View>
-                        <View style={styles.statComparisonRow}>
-                          <Text style={styles.effectKey}>New Cap</Text>
-                          <Text style={styles.statIncrease}>{capInfo.newCap}%</Text>
-                        </View>
-                      </View>
-                    );
-                  })()}
                 </>
               )}
             </View>

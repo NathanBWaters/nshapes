@@ -45,7 +45,7 @@ export const BOUNTIES: BountyDef[] = [
     icon: 'lorc/rainbow-star',
     target: 12,
     progress: s => s.bountyStats.rainbowSets,
-    reward: { coins: 110, weapons: ['time-mastery'] },
+    reward: { coins: 110, weapons: ['time-drop'] },
   },
   {
     id: 'bounty_purity_10',
@@ -55,7 +55,7 @@ export const BOUNTIES: BountyDef[] = [
     icon: 'lorc/lightning-branches',
     target: 10,
     progress: s => s.bountyStats.purityChains,
-    reward: { coins: 90, weapons: ['scholars-tome-rare'] },
+    reward: { coins: 90, weapons: ['scholars-tome'] },
   },
   {
     id: 'bounty_purity_triple_3',
@@ -65,7 +65,7 @@ export const BOUNTIES: BountyDef[] = [
     icon: 'lorc/crystal-shine',
     target: 3,
     progress: s => s.bountyStats.threeStepPurities,
-    reward: { coins: 150, weapons: ['time-trigger-mastery'] },
+    reward: { coins: 150, weapons: ['time-drop'] },
   },
   {
     id: 'bounty_flawless_timed_3',
@@ -75,7 +75,7 @@ export const BOUNTIES: BountyDef[] = [
     icon: 'lorc/diamond-hard',
     target: 3,
     progress: s => s.bountyStats.flawlessTimedWins,
-    reward: { coins: 130, weapons: ['chrono-shard-rare'] },
+    reward: { coins: 130, weapons: ['chrono-shard'] },
   },
 
   // ── Chaos, Overkill & Evolutions ────────────────────────────────────────
@@ -87,7 +87,7 @@ export const BOUNTIES: BountyDef[] = [
     icon: 'lorc/bright-explosion',
     target: 6,
     progress: s => s.bountyStats.destructiveFights,
-    reward: { coins: 95, weapons: ['fire-mastery'] },
+    reward: { coins: 95, weapons: ['flint-spark'] },
   },
   {
     id: 'bounty_overkill_10',
@@ -97,7 +97,7 @@ export const BOUNTIES: BountyDef[] = [
     icon: 'lorc/skull-crack',
     target: 8,
     progress: s => s.bountyStats.maxOverkill,
-    reward: { coins: 120, weapons: ['coin-mastery'] },
+    reward: { coins: 120, weapons: ['fortunes-favor'] },
   },
   {
     id: 'bounty_evolve_1',
@@ -128,7 +128,7 @@ export const BOUNTIES: BountyDef[] = [
     icon: 'lorc/crystal-shine',
     target: 10,
     progress: s => s.bountyStats.evolutionsForged,
-    reward: { coins: 220, weapons: ['ricochet-mastery'] },
+    reward: { coins: 220, weapons: ['chaos-shard'] },
   },
   {
     id: 'bounty_traps_15',
@@ -138,7 +138,7 @@ export const BOUNTIES: BountyDef[] = [
     icon: 'lorc/wolf-trap',
     target: 15,
     progress: s => counter(s, 'trapsDefused'),
-    reward: { coins: 150, weapons: ['hint-mastery'] },
+    reward: { coins: 150, weapons: ['seeker-lens'] },
   },
   {
     id: 'bounty_big_hit_40',
@@ -170,7 +170,7 @@ export const BOUNTIES: BountyDef[] = [
     icon: 'delapouite/sitting-dog',
     target: 3,
     progress: s => s.bountyStats.fighterWins['Corgi'] ?? 0,
-    reward: { coins: 95, weapons: ['web-weaver-common'] },
+    reward: { coins: 95, weapons: ['web-weaver'] },
   },
   {
     id: 'bounty_badger_wins_3',
@@ -180,7 +180,7 @@ export const BOUNTIES: BountyDef[] = [
     icon: 'caro-asercion/badger',
     target: 3,
     progress: s => s.bountyStats.fighterWins['Badger'] ?? 0,
-    reward: { coins: 110, weapons: ['grace-mastery'] },
+    reward: { coins: 110, weapons: ['fortune-token'] },
   },
   {
     id: 'bounty_roster_4',

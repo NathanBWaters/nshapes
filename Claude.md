@@ -41,6 +41,7 @@ NShapes combines the classic SET card matching game with roguelike progression m
 * **Skill trees** (`data/skillTrees.ts`): 20 nodes per fighter, two branches of 10 growing from the passives, bought in order with stars from one shared pool; whole branches refund for free. Best nodes are deepest.
 * **Charms & Arcana:** charms are your whole weapon loadout, 3 slots (up to 6 with the Workshop's Charm Belt). Arcana: 1 slot (up to 3 with Tarot Deck); stacked Arcana combine.
 * **Evolutions** (`data/evolutions.ts`): two weapon families from different roles arm a recipe; refills may spawn the Catalyst card (chance = evolution likelihood, raised by Evolution Lab and Catalyst Prism); matching it starts a 20 s power state. Up to 3 per fight, several can overlap. First recipe unlocks at 1-3.
+* **Long rounds from World 2:** foes have double HP and clocks double time (`LONG_ROUNDS` in `data/levels.ts`), so builds have time to snowball.
 * **Hazards** (`LevelRules.hazards`): Time Bombs (match before the fuse runs out) from 1-7, Snares (matching it hurts; matching the card its arrow points at defuses it) from 2-2.
 * **Coins** drop from matches, bank even on a loss (not on retreat), and are spent mid-run (shop between waves) or at **Camp** (Workshop upgrades and weapon upgrades).
 * Adventure-only weapons (`data/adventureWeapons.ts`, e.g. War Drum, Amplifier Coil, Piñata) join the Armory through `getArmoryWeapon`; Free Play doesn't use them.
@@ -61,10 +62,10 @@ NShapes combines the classic SET card matching game with roguelike progression m
 
 > **Full documentation:** [specs/weapons-design.md](./specs/weapons-design.md)
 
-The `WEAPONS` array in `src/utils/gameDefinitions.ts` is the roster. Most weapons come in 3 rarities (Common 70%, Rare 25%, Legendary 5%); some are legendary-only.
+The `WEAPONS` array in `src/utils/gameDefinitions.ts` is the roster (51 weapons). **One item per weapon:** a weapon that only gets bigger numbers has four levels (`tierEffects`), not rare/epic copies. In Adventure its level rises through Workshop tiers and through rewards that name a weapon you already own (`src/adventure/weaponLevels.ts`). The cap-increase Mastery weapons were removed; effect caps are fixed. Old saves map merged ids through `LEGACY_WEAPON_IDS`.
 
 **Key Mechanics:**
-* **Stacking:** Multiple weapons of the same type stack additively (3x 10% = 30%)
+* **Stacking:** In Free Play, copies of the same weapon stack additively (3x 10% = 30%). Adventure fights never offer a weapon you already hold
 * **Independent Rolls:** Destructive effects (Laser, Time Drop) roll separately per weapon
 * **Max Count:** Some weapons limited to 1 copy (Mystic Sight, Chain Reaction)
 * **Purchase:** Buy in shop between rounds; choose free weapon on level up
@@ -256,7 +257,7 @@ This means Field Stone weapons can increase the starting board size beyond the m
 * Change round (1-10) and difficulty (3-5 attributes)
 * Set cards on fire, make holographic
 * Add graces
-* Add legendary weapons by category
+* Add the rarest weapon of a category
 
 **`/dev/adventure`** - Adventure map (`?save=maxed` everything unlocked + 50k coins, `?save=fresh`, `?autoplay=true`)
 

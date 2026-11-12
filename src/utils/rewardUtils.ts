@@ -4,9 +4,8 @@
  * Utility functions for generating rewards, extracted to avoid circular dependencies.
  */
 
-import type { Weapon, WeaponRarity, PlayerStats } from '@/types';
-import { getMainStatForCap } from './gameConfig';
-import { getWeaponsByRarity, countCapIncreaseWeapons, calculateLikelihoodBonus, selectWeightedWeapon } from './gameDefinitions';
+import type { Weapon, WeaponRarity } from '@/types';
+import { getWeaponsByRarity } from './gameDefinitions';
 
 // Bonus money ranges by enemy tier (min, max)
 export const CHALLENGE_BONUS_MONEY: Record<1 | 2 | 3 | 4, [number, number]> = {
@@ -27,39 +26,14 @@ export const getChallengeBonusMoney = (tier: 1 | 2 | 3 | 4): number => {
 };
 
 /**
- * Check if a cap-increase weapon is useful for the player.
- * A cap-increase is only useful if the player has at least 10% in the corresponding stat.
- *
- * @param weapon - The weapon to check
- * @param playerStats - The player's current stats (optional)
- * @returns true if the weapon is useful (not a cap-increase, or player has >=10% in that stat)
- */
-const isCapIncreaseUseful = (weapon: Weapon, playerStats?: PlayerStats): boolean => {
-  // If no player stats provided, assume all weapons are useful
-  if (!playerStats) return true;
-
-  // If weapon doesn't have a cap increase, it's useful
-  if (!weapon.capIncrease) return true;
-
-  // Check if player has at least 10% in the corresponding stat
-  const statKey = getMainStatForCap(weapon.capIncrease.type) as keyof PlayerStats;
-  const statValue = playerStats[statKey] as number | undefined;
-  return (statValue ?? 0) >= 10;
-};
-
-/**
  * Generate a challenge bonus weapon based on enemy tier.
  * Higher tiers have better chances for legendary weapons.
- * Excludes cap-increase weapons if player has <10% in that stat.
- * Applies likelihood bonus based on player's cap-increase weapons.
  *
  * @param tier - Enemy tier (1-4)
  * @param excludeIds - Weapon IDs to exclude (already awarded weapons)
- * @param playerStats - Player's current stats (for filtering useless cap-increases)
- * @param playerWeapons - Player's current weapons (for likelihood bonus)
  * @returns A weapon of appropriate rarity for the tier
  */
-export const generateChallengeBonus = (tier: 1 | 2 | 3 | 4, excludeIds: string[] = [], playerStats?: PlayerStats, playerWeapons?: Weapon[]): Weapon => {
+export const generateChallengeBonus = (tier: 1 | 2 | 3 | 4, excludeIds: string[] = []): Weapon => {
   let targetRarity: WeaponRarity;
 
   switch (tier) {
@@ -101,36 +75,14 @@ export const generateChallengeBonus = (tier: 1 | 2 | 3 | 4, excludeIds: string[]
       targetRarity = 'rare';
   }
 
-  // Get a random weapon of the target rarity, excluding:
-  // 1. Already-awarded weapons
-  // 2. Cap-increase weapons where player has <10% in that stat
-  const weaponsOfRarity = getWeaponsByRarity(targetRarity)
-    .filter(w => !excludeIds.includes(w.id))
-    .filter(w => isCapIncreaseUseful(w, playerStats));
+  // A random weapon of the target rarity that was not awarded yet
+  const pick = (weapons: Weapon[]): Weapon => weapons[Math.floor(Math.random() * weapons.length)];
+  const weaponsOfRarity = getWeaponsByRarity(targetRarity).filter(w => !excludeIds.includes(w.id));
+  if (weaponsOfRarity.length > 0) return pick(weaponsOfRarity);
 
-  // Helper to select with likelihood bonus if playerWeapons provided
-  const selectWithBonus = (weapons: Weapon[]): Weapon => {
-    if (playerWeapons && playerWeapons.length > 0) {
-      const capIncreaseCounts = countCapIncreaseWeapons(playerWeapons);
-      if (capIncreaseCounts.size > 0) {
-        const weights = weapons.map(w => calculateLikelihoodBonus(w, capIncreaseCounts));
-        return selectWeightedWeapon(weapons, weights);
-      }
-    }
-    return weapons[Math.floor(Math.random() * weapons.length)];
-  };
-
-  if (weaponsOfRarity.length === 0) {
-    // Fallback to rare if no weapons of target rarity (excluding already awarded and useless cap-increases)
-    const rareWeapons = getWeaponsByRarity('rare')
-      .filter(w => !excludeIds.includes(w.id))
-      .filter(w => isCapIncreaseUseful(w, playerStats));
-    if (rareWeapons.length === 0) {
-      // Last resort: return any weapon (shouldn't happen in practice)
-      const allWeapons = getWeaponsByRarity('rare');
-      return allWeapons[Math.floor(Math.random() * allWeapons.length)];
-    }
-    return selectWithBonus(rareWeapons);
-  }
-  return selectWithBonus(weaponsOfRarity);
+  // Fall back to any rare, then any weapon at all, so an empty bucket never breaks the reward
+  const rareWeapons = getWeaponsByRarity('rare').filter(w => !excludeIds.includes(w.id));
+  if (rareWeapons.length > 0) return pick(rareWeapons);
+  const anyRare = getWeaponsByRarity('rare');
+  return pick(anyRare.length > 0 ? anyRare : getWeaponsByRarity('common'));
 };

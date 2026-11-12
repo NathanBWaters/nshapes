@@ -43,6 +43,7 @@ Map ─tap foe─▶ Preview (foe, skulls, NEW mechanic, hazards, ★ goals + re
 - **Every star pays coins**, shown up front. Coins left out of the level data are filled in by `normalizeRewards` so they always rise ★ → ★★ → ★★★.
 - **Some stars also unlock one thing**: a weapon, a fighter, an Arcana, an evolution recipe, or a campaign system (`unlockFeature`). It stays a silhouette until earned, then gets a full-screen reveal (`UnlockReveal.tsx`).
 - **Each star's reward is granted once.** A new weapon goes straight into a free charm slot.
+- **A weapon reward for a weapon you already own is a free level of it** ("Blast Powder is stronger! (Level 2)"). Free levels are derived from the earned stars and bounties (`weaponLevels.ts`), so re-granting rewards on load never stacks them. A free level on a weapon already at level 4 through the Workshop returns the coins of its top bought tier instead.
 - **Campaign systems** (`data/features.ts`): Coin Drops (1-1 ★), Workshop (1-5 ★), and Bounty Board (the first star on 1-8, revealed after that level's star rewards).
 - `reconcileUnlocks` (`progress.ts`) re-grants anything an old save's stars now unlock after a level-table change. It never pays coins twice.
 
@@ -66,6 +67,7 @@ The player always has to accept a teaching step. Nothing auto-dismisses.
 | 5 Starfall Summit | `summit` | 90 | 5 | 0 | the gauntlet: every system at once | `boss` |
 | **Total** | | | **43** | **13** | 56 levels, **168** stars max | |
 
+- **Long rounds from World 2:** every level outside the Meadow gets double foe HP and a double clock (`LONG_ROUNDS` / `withRoundLength` in `data/levels.ts`; numbers in the level table are written before this). Longer fights give snowballing builds (stacked weapons, evolutions, combos) time to pay off.
 - **Main path:** a level opens when the previous main level has ★ and its world's star gate is met. Gates count stars *earned*, so spending stars on skill trees never re-locks a world.
 - **Side branches** (`branchOf`) open at ★★ on their parent (`BRANCH_STAR_REQUIREMENT = 2`) and never block the main path.
   - **Fighter trials** (ids ending `F`/`C`/`B`/`P`) hang off the level whose ★★ recruits that fighter, so you always own the fighter they teach.
@@ -126,7 +128,7 @@ Fighters bring **no gear and no active button**. A fighter's identity is two alw
 `loadout.ts` builds what the fighter walks in with (the preview shows the same thing):
 - **Features**: what is switched on at this level.
 - **Passives and owned skill nodes.**
-- **Equipped charms**, at their Workshop tiers.
+- **Equipped charms**, at their levels (free levels from rewards + Workshop tiers).
 - **Combined Arcana.**
 - **Baked stats**: Workshop items plus the level's starting hints, graces, hearts and clock.
 
@@ -135,7 +137,7 @@ Fighters bring **no gear and no active button**. A fighter's identity is two alw
 | Charms (Armory weapons) | 3 | 6 | Workshop **Charm Belt** (+1 per tier) |
 | Arcana | 1 | 3 | Workshop **Tarot Deck** (+1 per tier) |
 
-- **Charms** are Armory weapons, with no duplicate ids. The Armory only holds weapons won from star and bounty rewards. Level-up picks and the shop also draw only from the Armory, and anything picked or bought lasts for that fight only.
+- **Charms** are Armory weapons, with no duplicate ids. The Armory only holds weapons won from star and bounty rewards. Level-up picks and the shop also draw only from the Armory, never offer a weapon already held in the fight, and anything picked or bought lasts for that fight only.
 - On `noGear` levels, passives, nodes, charms, Arcana and evolutions are all off.
 
 ## The rule vocabulary
@@ -175,36 +177,53 @@ A **Rule** is `trigger` + optional `when` conditions + `effects`, with an option
 
 ## Weapons
 
-The Free Play roster (`src/utils/gameDefinitions.ts`) is reused as-is. Adventure adds **rule weapons** in `data/adventureWeapons.ts`:
-- Each is a plain `Weapon` plus a `RuleSource`, with `effects: {}` and `maxCount: 1`.
-- They come in a common and a rare tier.
-- `data/armory.ts` `getArmoryWeapon` finds weapons from either list, at their Workshop tier.
+**One item per weapon.** There are no rare/epic copies of the same weapon any more: each weapon is a single item with **four levels**. Level 1 is its base numbers; levels 2-4 are reached through the Workshop (coins) and free reward upgrades, up to `MAX_WEAPON_UPGRADE_TIER` = 3 tiers. The cap-increase "Mastery" weapons were removed (effect caps are fixed at their defaults in `game/effectCaps.ts`).
 
-| Weapon | Role | Common | Rare | Unlocked at |
-|---|---|---|---|---|
-| Clarity Lens | utility | 3 Sets within 10s: 33% chance to simplify the board for 15s (one trait the same on every card) | 50% | 1-7 ★★ · 2-9 ★★ |
-| War Drum | offense | 5 Sets within 20s: every card on the board gains +2 power | 4 Sets within 20s | 2-4 ★ · 2-4C ★★★ |
-| Amplifier Coil | combo | Every 4th Set: the next weapon trigger happens twice | every 3rd Set | 1-3F ★★★ · 3-1 ★★ |
-| Piñata | offense | Each Set: 20% chance a random card gains +2 hits; breaking it deals +10 | 35% | 1-7 ★ · 4-8 ★★ |
-| Catalyst Prism | evolution | +6% evolution likelihood; +25% more on refills after a Rainbow | +10% | 1-4 ★★ · 3-6 ★★★ |
-| Rally Horn | offense | First Set of each wave deals +6 | +10 | 1-5 ★★ · 3-3 ★★ |
+The Free Play roster (`src/utils/gameDefinitions.ts`) is reused; a weapon's levels 2-4 are its `tierEffects` (else the generic formula in `upgrades.ts`). Adventure adds **rule weapons** in `data/adventureWeapons.ts`:
+- Each is a plain `Weapon` plus a `RuleSource`, with `effects: {}` and `maxCount: 1`, and three `levels` (rules/modifiers + a short bonus text).
+- `data/armory.ts` `getArmoryWeapon(id, weaponTiers(save))` finds weapons from either list at their level.
+
+| Weapon (id) | Level 1 → 2 → 3 → 4 | Was |
+|---|---|---|
+| Blast Powder (`blast-powder`) | explosion 10 → 20 → 30 → 40% | common/rare + Inferno Charge |
+| Flint Spark (`flint-spark`) | fire 10 → 20 → 30 → 40% | + Ember Heart |
+| Fortune Token (`fortune-token`) | grace gain 5 → 10 → 15 → 25% | + Lucky Charm |
+| Mending Charm (`mending-charm`) | heal 5 → 10 → 15 → 25% | + Restoration Aura |
+| Prismatic Ray (`prismatic-ray`) | laser 3 → 6 → 10 → 15% | + Spectrum Annihilator |
+| Echo Stone (`echo-stone`) | echo 5 → 10 → 15 → 25% | + Resonance Crystal |
+| Field Stone (`field-stone`) | board +1 → 2 → 3 → 4 | |
+| Growth Seed (`growth-seed`) | growth 5 → 10 → 15 → 20% | |
+| Second Chance (`second-chance`) | graces 1 → 2 → 3 → 4 | |
+| Life Vessel (`life-vessel`) | hearts +1 → 2 → 3 → 4 | |
+| Crystal Orb (`crystal-orb`) | hint slots +1 → 2 → 3 → 4 | |
+| Seeker Lens (`seeker-lens`) | hint gain 5 → 10 → 15 → 20% | |
+| Scholar's Tome (`scholars-tome`) | XP 20 → 30 → 40 → 50% | |
+| Fortune's Favor (`fortunes-favor`) | coins 20 → 30 → 40 → 50% | + Golden Touch |
+| Chrono Shard (`chrono-shard`) | +15 → 30 → 45 → 60s | |
+| Time Drop (`time-drop`) | time gain 5 → 10 → 15 → 20% (+10s) | |
+| Chaos Shard (`chaos-shard`) | ricochet 10/5 → 20/10 → 30/15 → 40/20% | |
+| Link Stone (`connector`) | link 15 → 20 → 25 → 30% | + Link Chain, Soul Link |
+| Web Spinner (`web-weaver`) | starting links 1 → 2 → 3 → 4 | + Web Master |
+| Echo Chamber (`echo-chamber`) | +1 → 2 → 3 → 4s per link | + Resonance Core |
+| Clarity Lens (`clarity-lens`) | 3 Sets within 10s: 33% → 50% → 60% (17s) → 70% (20s) chance to simplify the board for 15s | |
+| War Drum (`war-drum`) | 5 Sets within 20s: board +2 power → 4 Sets → 4 Sets +3 → 4 Sets +4 | |
+| Amplifier Coil (`amplifier-coil`) | every 4th Set the next trigger ×2 → every 3rd → + every Rainbow → every 2nd + Rainbow | |
+| Piñata (`pinata`) | 20% a card gains +2 hits, breaking it +10 → 35% → 40%/+14 → 50%/+18 | |
+| Catalyst Prism (`catalyst-prism`) | +6% evolution likelihood (+25% after a Rainbow) → +10% → +14%/+30% → +18%/+35% | |
+| Rally Horn (`rally-horn`) | first Set of each wave +6 → +10 → +14 → +18 | |
+
+Weapons with their own mix of effects (Oracle Eye's two entries, Mystic Sight, Chain Reaction, the epic bundles, bridge and challenge legendaries, Revenge Linker, Neural Network, Sympathetic Flames, Fortune's Eye, Snowball) keep the generic tier formula.
 
 - **Early unlock order** alternates offense and support, clearest first:
   - 1-1 ★★ Blast Powder, 1-2 ★★ Mending Charm, 1-4 ★ Flint Spark, 1-4 ★★ Catalyst Prism.
   - 1-5 ★★ Rally Horn, 1-6 ★★ Field Stone, 1-7 ★/★★ Piñata and Clarity Lens, 1-8 ★★ Prismatic Ray.
-- **Workshop tiers for rule weapons** (`RULE_TIER_SCALING`). Each tier adds:
-  - +1 `empowerBoard`, +2 `damage`, +3 Piñata bounty.
-  - +5 percentage points to `chance` conditions, +1 coin, +1s.
-  - +1000ms to `simplify`/`freeze`/`extendEvolutions`.
-  - +2 evolution likelihood, +5 Rainbow likelihood.
-  - Counts, every-Nth and multipliers stay as authored.
-- **Workshop tiers for Free Play weapons** go through `applyWeaponUpgradeTier` in `upgrades.ts`.
+- Later rewards that name a weapon you own level it up (where the old rare/epic copy used to drop). No weapon is named by more than 4 rewards, so the rewards alone can take it to level 4.
 
 ## Evolutions: a 20-second power trip
 
 `data/evolutions.ts` (recipes, families) · `engine/evolutions.ts` · `EVOLUTION_RULES` in `engine/sources.ts`
 
-1. **Arming.** A recipe is two weapon families from different roles. It is **armed** while you hold one weapon of each family among your charms, picks or buys, and the recipe is unlocked. Families are id prefixes, so `blast-powder` matches `blast-powder-rare`. The two families of a recipe share no weapon.
+1. **Arming.** A recipe is two weapon families from different roles. It is **armed** while you hold one weapon of each family among your charms, picks or buys, and the recipe is unlocked. Families are id prefixes, so `oracle-eye` matches `oracle-eye-rare`. The two families of a recipe share no weapon.
 2. **The Catalyst.** While anything is armed, each refill batch may bring the **Evolution Catalyst** card. Only one can be on the board at a time.
    - **Likelihood** = (12% base + 4% per Evolution Lab tier + `evolutionLikelihood` modifiers) × Arcana `catalystChanceScale`, plus the level's own `rules.evolutionLikelihood` (1-4 adds +30).
    - Refills caused by a Rainbow Strike add `rainbowEvolutionLikelihood`.
@@ -327,7 +346,7 @@ The Workshop opens at 1-5 ★. Each item goes on sale once its mechanic is known
 | Tarot Deck | +1 Arcana slot (1 → 3) | 2 | 800 / 2400 | Arcana slots (3-6), and you own 2+ Arcana |
 | Evolution Lab | +4% evolution likelihood | 3 | 500 / 1300 / 2800 | Evolutions (1-4) |
 
-**Armory weapon upgrades** go up to tier 3 for any owned weapon:
+**Armory weapon upgrades** take an owned weapon up to level 4 (tier 3). Free levels from rewards count towards that top level, so they lower how many tiers can be bought; the k-th bought tier always costs the k-th price, so a refund returns exactly what was paid. Merged weapons are all common.
 
 | Rarity | Tier costs |
 |---|---|
@@ -344,7 +363,7 @@ Losing a Charm Belt or Tarot Deck tier also unequips whatever no longer fits.
 
 - There are **19 cross-run bounties** in four categories: mastery 6, chaos 6, roster 4, explorer 3.
 - Every fight advances lifetime counters (`bountyStats`), whether it was a win, a loss or a replay.
-- Rewards are coins, Armory weapons and one Arcana (Catalyst Resonance).
+- Rewards are coins, Armory weapons (or a free level of one you own) and one Arcana (Catalyst Resonance).
 - Completions cascade in one pass, so a coin bounty can complete another.
 
 ## Code map
@@ -361,7 +380,7 @@ src/adventure/
   data/passives.ts      passive tuning keys + player text
   data/skillTrees.ts    120 skill nodes
   data/adventureWeapons.ts  rule weapons
-  data/armory.ts        weapon lookup at Workshop tier, rule-weapon tier scaling
+  data/armory.ts        weapon lookup at a level, rule-weapon levels, old-id resolution
   data/evolutions.ts    weapon families + 8 recipes
   data/arcana.ts        8 Arcana + stacking
   data/upgrades.ts      Workshop items + weapon-upgrade costs
@@ -374,6 +393,7 @@ src/adventure/
   data/story.ts         story pages (placeholder text)
   loadout.ts            what the fighter brings into a level (slots, features, stats)
   progress.ts           pure rules: unlocks, rewards, star pool, purchases, refunds, migration
+  weaponLevels.ts       a weapon's level: free levels from earned rewards + Workshop tiers
   save.ts               MMKV persistence (key adventure_v2_save, version 1)
   lessons.ts            lessons still to play, save-dependent lesson pages
   engine/run.ts         pure reducer for one fight (seeded RNG), createRun, computeStars
@@ -407,14 +427,13 @@ The fight UI reuses the shared `GameBoard` and `Card`, so weapon effects, fire, 
   - An `enqueue` from the primitive that causes the event.
 
 **A weapon with rules.**
-- Add common and rare entries to `ADVENTURE_WEAPONS` (`data/adventureWeapons.ts`):
-  - Ids are `<family>-common` / `<family>-rare`, with `effects: {}` and `maxCount: 1`.
-  - Put the behaviour in `rules` / `modifiers`.
+- Add one entry to `ADVENTURE_WEAPONS` (`data/adventureWeapons.ts`):
+  - A plain id (no rarity suffix), with `effects: {}` and `maxCount: 1`.
+  - Put the behaviour in `rules` / `modifiers`, and its levels 2-4 in `levels` (each with a short `text`).
   - Pick a `specialEffect` (it maps to a weapon trigger kind for Big Scoop's "trigger every weapon").
 - Register the icon in `src/components/Icon.tsx`.
-- Grant it from a star reward (`weapons: [...]` in `levels.ts`) or a bounty, because the Armory only fills from rewards.
+- Grant it from a star reward (`weapons: [...]` in `levels.ts`) or a bounty, because the Armory only fills from rewards. Naming it again in later rewards (at most 4 in all) gives free levels.
 - To let it arm a recipe, add its id prefix to a family in `FAMILIES` (`data/evolutions.ts`).
-- Check that `RULE_TIER_SCALING` (`data/armory.ts`) scales its numbers sensibly. Add `upgradeText` if the tier bonus needs words.
 
 **An evolution recipe.**
 - Add an entry to `EVOLUTION_RECIPES` (`data/evolutions.ts`): two `FAMILIES` from different roles that share no weapon, `familyText`, `activeText`, `flavor`, and the `source` rules that are live for 20s.
@@ -470,6 +489,11 @@ ADVENTURE_BALANCE_REPORT=1 npx jest __tests__/adventureBalance.test.ts
   - `charm` becomes `charms[]`, and `activeArcana` becomes `equippedArcana[]`.
   - Weapon upgrade tiers are kept.
   - A migrated save is written straight back, so the refund is paid once.
+- **Merged weapons** (`migrateWeaponIds`, ids in `LEGACY_WEAPON_IDS` / `LEGACY_ADVENTURE_WEAPON_IDS`):
+  - Old rare/epic/legendary copies become their one weapon; charms map the same way without duplicates.
+  - Owning a stronger copy sets a floor on that weapon's free levels (`legacyWeaponTiers`, e.g. Blast Powder rare/Inferno Charge → level 3).
+  - Workshop tiers bought on the plain (common) copy carry over; tiers bought on a copy that no longer exists (or on a Mastery) are refunded at the rarity price they were bought for.
+  - Mastery weapons are dropped without a refund (they were rewards).
 
 ## Audio (poteto's approach)
 

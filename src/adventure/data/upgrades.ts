@@ -142,10 +142,12 @@ const EFFECT_LABELS: Record<string, string> = {
   maxHealth: 'max heart',
   graces: 'starting grace',
   hints: 'starting hint',
+  maxHints: 'hint slot',
+  echoTimeBonusPerLink: 's per link',
 };
 
-const computeEffectDeltas = (weapon: Weapon, tier: number): Record<string, number> => {
-  if (tier <= 0) return {};
+/** The generic tier formula, for weapons without their own `tierEffects`. */
+const formulaDeltas = (weapon: Weapon, tier: number): Record<string, number> => {
   const deltas: Record<string, number> = {};
   const entries = Object.entries(weapon.effects).filter(([, v]) => typeof v === 'number' && v > 0) as Array<[string, number]>;
 
@@ -172,6 +174,20 @@ const computeEffectDeltas = (weapon: Weapon, tier: number): Record<string, numbe
   return deltas;
 };
 
+/** What Workshop `tier` adds to each effect: the weapon's own `tierEffects` level, else the generic formula. */
+const computeEffectDeltas = (weapon: Weapon, tier: number): Record<string, number> => {
+  if (tier <= 0) return {};
+  const level = weapon.tierEffects?.[Math.min(tier, MAX_WEAPON_UPGRADE_TIER) - 1];
+  if (!level) return formulaDeltas(weapon, tier);
+  const deltas: Record<string, number> = {};
+  for (const [k, v] of Object.entries(level)) {
+    if (typeof v !== 'number') continue;
+    const base = (weapon.effects as Record<string, unknown>)[k];
+    deltas[k] = v - (typeof base === 'number' ? base : 0);
+  }
+  return deltas;
+};
+
 /** Return a copy of `weapon` enhanced by Workshop `tier` (0..3). Never mutates `WEAPONS`. */
 export const applyWeaponUpgradeTier = (weapon: Weapon, tier: number): Weapon => {
   if (tier <= 0) return weapon;
@@ -187,9 +203,6 @@ export const applyWeaponUpgradeTier = (weapon: Weapon, tier: number): Weapon => 
         chance: Math.min(95, weapon.bridgeEffect.chance + Math.max(5, Math.round(weapon.bridgeEffect.chance * 0.2)) * tier),
       }
     : undefined;
-  const nextCap = weapon.capIncrease
-    ? { ...weapon.capIncrease, amount: weapon.capIncrease.amount + 3 * tier }
-    : undefined;
 
   const bonusText = describeWeaponUpgradeBonus(weapon, tier);
 
@@ -198,7 +211,6 @@ export const applyWeaponUpgradeTier = (weapon: Weapon, tier: number): Weapon => 
     shortDescription: `${weapon.shortDescription} (${bonusText})`,
     effects: nextEffects as Weapon['effects'],
     ...(nextBridge ? { bridgeEffect: nextBridge } : {}),
-    ...(nextCap ? { capIncrease: nextCap } : {}),
   };
 };
 
@@ -213,7 +225,7 @@ export const describeWeaponUpgradeBonus = (weapon: Weapon, tier: number): string
     if (!label) continue;
     if (k.endsWith('Chance') || k.endsWith('Percent')) {
       parts.push(`+${delta}% ${label}`);
-    } else if (k === 'startingTime' || k === 'timeGainAmount') {
+    } else if (k === 'startingTime' || k === 'timeGainAmount' || k === 'echoTimeBonusPerLink') {
       parts.push(`+${delta}${label}`);
     } else {
       parts.push(`+${delta} ${label}${delta > 1 && !label.endsWith('s') && !label.endsWith('size') ? 's' : ''}`);
@@ -222,9 +234,6 @@ export const describeWeaponUpgradeBonus = (weapon: Weapon, tier: number): string
   if (weapon.bridgeEffect) {
     const boost = Math.max(5, Math.round(weapon.bridgeEffect.chance * 0.2)) * t;
     parts.push(`+${boost}% trigger chance`);
-  }
-  if (weapon.capIncrease) {
-    parts.push(`+${3 * t}% ${weapon.capIncrease.type} cap`);
   }
   return parts.join(' · ') || `+${t * 5}% potency`;
 };

@@ -116,7 +116,7 @@ const BountyBoard: React.FC<Props> = ({ save, onClose }) => {
                   <Text style={[st.coinText, done && { color: TONE.spent }]}>+{b.reward.coins}¢</Text>
                 </View>
 
-                {describeRewardUnlocks(b.reward).map((unlock, k) => (
+                {describeRewardUnlocks(b.reward, save).map((unlock, k) => (
                   <View key={k} style={[st.unlockChip, done && st.chipDone]}>
                     {done ? (
                       <>

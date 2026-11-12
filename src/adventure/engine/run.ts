@@ -27,6 +27,7 @@ import { createRng } from './rng';
 import { allSets, countDifferentAttributes, hasAnySet, isRainbow, isSelectable } from './sets';
 import { applyWeaponToStats, startingLoadout } from '../loadout';
 import { getArmoryWeapon } from '../data/armory';
+import { weaponTiers } from '../weaponLevels';
 import { createFoe } from '../data/foes';
 import { arcanaRules } from '../data/arcana';
 import { BASE_RULES } from '../data/rules';
@@ -105,8 +106,10 @@ const syncStats = (d: Draft) => {
   s.currentScore = d.totalDamage;
 };
 
+/** Armory weapons not already held: each weapon is one item, so a fight never offers a second copy. */
 const rollPickOptions = (d: Draft, count = 3): Weapon[] => {
   const weapons = d.armory
+    .filter(id => !d.weapons.some(w => w.id === id))
     .map(id => getArmoryWeapon(id, d.weaponUpgrades))
     .filter((w): w is Weapon => !!w && canObtainWeapon(w, d.weapons));
   return d._rng.shuffle(weapons).slice(0, count);
@@ -542,7 +545,7 @@ export const createRun = (level: LevelDef, save: AdventureSave, opts: CreateRunO
     shopOptions: [],
     rerolls: 0,
     armory: save.armory,
-    weaponUpgrades: save.weaponUpgrades,
+    weaponUpgrades: weaponTiers(save),
     passives: gear ? loadout.passives : [],
     passive: restingPassiveState(),
     skillNodes: gear ? loadout.skillNodes : [],
@@ -848,12 +851,17 @@ const tickClock = (d: Draft, ms: number) => {
     d.board = d.board.map(c => (flip.has(c.id) ? { ...c, isFaceDown: false } : c));
   }
   if (tick.events.some(e => e.type === 'positions_shuffled')) d.board = d._rng.shuffle(d.board);
-  // A shrinking or shifting board must never deadlock
+  // A shrinking or shifting board must never deadlock. Dud and face-down cards
+  // go first: when foes have hidden every card, they are the only way out.
   if (!hasAnySet(d.board, d.attributes) && d.board.length >= 3) {
-    const victims = d._rng
-      .shuffle(d.board.map((_, i) => i).filter(i => isSelectable(d.board[i]) && (d.board[i].health ?? 1) <= 1 && !d.replacing.includes(d.board[i].id)))
-      .slice(0, 3);
-    recycle(d, victims);
+    const recyclable = d.board
+      .map((_, i) => i)
+      .filter(i => (d.board[i].health ?? 1) <= 1 && !d.replacing.includes(d.board[i].id));
+    const stuck = d._rng.shuffle(recyclable.filter(i => !isSelectable(d.board[i])));
+    const open = d._rng.shuffle(recyclable.filter(i => isSelectable(d.board[i])));
+    // With hardly anything open, three new cards rarely make a Set: replace every stuck card
+    const count = open.length < 6 ? Math.max(3, stuck.length) : 3;
+    recycle(d, [...stuck, ...open].slice(0, count));
   }
 };
 

@@ -1,6 +1,6 @@
 import { EFFECT_CAPS, getEffectiveStat, isStatCapped, EffectCapType } from '@/utils/gameConfig';
-import { DEFAULT_EFFECT_CAPS } from '@/utils/gameDefinitions';
-import { EffectCaps } from '@/types';
+import { DEFAULT_EFFECT_CAPS, DEFAULT_PLAYER_STATS, WEAPONS, calculatePlayerTotalStats } from '@/utils/gameDefinitions';
+import { EffectCaps, Player } from '@/types';
 
 describe('Effect Cap System', () => {
   describe('EFFECT_CAPS configuration', () => {
@@ -13,7 +13,6 @@ describe('Effect Cap System', () => {
       expectedEffects.forEach(effect => {
         expect(EFFECT_CAPS[effect]).toBeDefined();
         expect(EFFECT_CAPS[effect].defaultCap).toBeGreaterThan(0);
-        expect(EFFECT_CAPS[effect].capIncrease).toBeGreaterThanOrEqual(0);
       });
     });
 
@@ -57,17 +56,21 @@ describe('Effect Cap System', () => {
     });
   });
 
-  describe('EffectCaps type', () => {
-    it('should allow cap modifications', () => {
+  describe('caps are fixed', () => {
+    it('weapons add to stats but never change the caps', () => {
+      const player: Player = {
+        id: 'p',
+        username: 'p',
+        character: { name: 'Orange Tabby', description: '', icon: 'lorc/cat', baseStats: {}, startingWeapons: [] },
+        stats: { ...DEFAULT_PLAYER_STATS },
+        weapons: WEAPONS,
+      };
+      const total = calculatePlayerTotalStats(player);
+      expect(total.effectCaps).toEqual(DEFAULT_EFFECT_CAPS);
+      expect(total.explosionChance).toBeGreaterThan(DEFAULT_PLAYER_STATS.explosionChance);
       const caps: EffectCaps = { ...DEFAULT_EFFECT_CAPS };
-
-      // Increase echo cap
-      caps.echo += EFFECT_CAPS.echo.capIncrease;
-      expect(caps.echo).toBe(30); // 25 + 5
-
-      // Increase explosion cap
-      caps.explosion += EFFECT_CAPS.explosion.capIncrease;
-      expect(caps.explosion).toBe(50); // 40 + 10
+      expect(caps.echo).toBe(25);
+      expect(caps.explosion).toBe(40);
     });
   });
 });

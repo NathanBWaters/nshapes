@@ -121,7 +121,7 @@ export const KEYWORDS: Record<string, KeywordDefinition> = {
   timeGain: {
     terms: ['time gain', 'time gains', 'gain time', 'gains time', '+time', 'time on match'],
     brief: 'Chance to add bonus seconds when matching. Limited to 5 triggers per round by default.',
-    detailed: 'Time Gain weapons have a chance to add bonus seconds on each match. However, you can only trigger time gains up to 5 times per round by default. The Time Trigger Mastery weapon increases this cap by 10 per copy. The Time Gain chance itself caps at 40% by default.',
+    detailed: 'Time Gain weapons have a chance to add bonus seconds on each match. However, you can only trigger time gains up to 5 times per round by default (challenge legendaries raise this for a round). The Time Gain chance itself caps at 40%.',
   },
 
   board: {
@@ -151,7 +151,7 @@ export const KEYWORDS: Record<string, KeywordDefinition> = {
   cap: {
     terms: ['cap', 'capped', 'effect cap'],
     brief: 'Maximum percentage an effect can reach.',
-    detailed: 'Effect caps prevent any single stat from becoming too dominant. For example, explosion chance caps at 40% by default. Mastery weapons can raise these caps, letting you push effects higher.',
+    detailed: 'Effect caps prevent any single stat from becoming too dominant. For example, explosion chance caps at 40%: anything you stack past a cap is wasted.',
   },
 
   luck: {
@@ -181,19 +181,19 @@ export const KEYWORDS: Record<string, KeywordDefinition> = {
   common: {
     terms: ['common'],
     brief: 'Most frequent weapon rarity with modest effects.',
-    detailed: 'Common weapons appear most often in shops and level-up rewards. They provide smaller bonuses but are cheap and stack well. Good for building consistent effects.',
+    detailed: 'Common weapons appear most often in shops and level-up rewards. Most of the roster is common: each one is a single item that grows stronger through upgrade levels in Adventure.',
   },
 
   rare: {
     terms: ['rare'],
     brief: 'Uncommon weapons with stronger effects.',
-    detailed: 'Rare weapons have roughly 3x the effect of common versions. They cost more but provide better value. Includes Mastery weapons that raise effect caps.',
+    detailed: 'Rare weapons are special items with unusual effects. They cost more but provide better value.',
   },
 
   epic: {
     terms: ['epic'],
     brief: 'Powerful weapons with bundled or hybrid effects.',
-    detailed: 'Epic weapons combine multiple effects or include cap increases. They\'re expensive but provide unique combinations not possible with common/rare stacking.',
+    detailed: 'Epic weapons combine multiple effects. They\'re expensive but provide unique combinations no single weapon offers.',
   },
 
   legendary: {

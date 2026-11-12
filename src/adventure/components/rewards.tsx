@@ -10,7 +10,7 @@ import { FighterAvatar } from '@/components/fighters';
 import { WeaponAvatar } from '@/components/weapons';
 import { COLORS, getRarityColor } from '@/utils/colors';
 import type { CharacterName, Weapon } from '@/types';
-import type { RewardDef } from '../types';
+import type { AdventureSave, RewardDef } from '../types';
 import type { Unlock } from '../progress';
 import { getFighter } from '../data/fighters';
 import { getArcana } from '../data/arcana';
@@ -88,14 +88,33 @@ export const describeUnlockable = (u: Unlockable): UnlockableDisplay => {
   }
 };
 
-/** Everything a reward unlocks besides its coins. */
-export const describeRewardUnlocks = (reward: RewardDef): UnlockableDisplay[] =>
-  unlockablesOf(reward).map(describeUnlockable);
+/**
+ * Everything a reward unlocks besides its coins. With the player's save, a
+ * weapon they already own is shown as what it will be: a free level of it.
+ */
+export const describeRewardUnlocks = (reward: RewardDef, save?: AdventureSave): UnlockableDisplay[] =>
+  unlockablesOf(reward).map(u => {
+    const d = describeUnlockable(u);
+    return u.kind === 'weapon' && save?.armory.includes(u.id)
+      ? { ...d, secret: `${d.name} level-up`, bountySecret: `${d.name} level-up` }
+      : d;
+  });
 
-export const describeUnlock = (u: Unlock): UnlockableDisplay =>
-  describeUnlockable(
+export const describeUnlock = (u: Unlock): UnlockableDisplay => {
+  if (u.kind === 'weapon' && u.level !== undefined) {
+    const d = describeUnlockable(u);
+    return {
+      ...d,
+      revealed: `${d.name} Lv ${u.level}`,
+      headline: `${d.name} is stronger!`,
+      tease: 'A weapon you already own levels up.',
+      badge: `LEVEL ${u.level}${u.refund ? ` · +${u.refund}¢ REFUNDED` : ''}`,
+    };
+  }
+  return describeUnlockable(
     u.kind === 'fighter' ? { kind: 'fighter', id: u.name } : u.kind === 'feature' ? { kind: 'feature', id: u.feature } : u
   );
+};
 
 /** The unlocked thing itself: a fighter, a weapon relic, or its icon. */
 export const UnlockableAvatar: React.FC<{

@@ -42,22 +42,24 @@ import type { AttributeName, Background, Card, Color, Number as CardNumber, Shad
 
 const mockKvStore = new Map<string, string>();
 
+// Plain functions, not jest.fn: a whole campaign makes thousands of these calls,
+// and jest.fn keeps every call's arguments in memory (whole save JSON strings).
 jest.mock('@/utils/storage', () => ({
   storage: {
-    getString: jest.fn((key: string) => mockKvStore.get(key)),
-    set: jest.fn((key: string, val: string) => {
+    getString: (key: string) => mockKvStore.get(key),
+    set: (key: string, val: string) => {
       mockKvStore.set(key, val);
-    }),
-    remove: jest.fn((key: string) => {
+    },
+    remove: (key: string) => {
       mockKvStore.delete(key);
-    }),
+    },
   },
 }));
 
 jest.mock('@/audio', () => ({
-  sfx: jest.fn(),
-  music: { play: jest.fn(), stop: jest.fn() },
-  setMusicEnabled: jest.fn(),
+  sfx: () => undefined,
+  music: { play: () => undefined, stop: () => undefined },
+  setMusicEnabled: () => undefined,
 }));
 
 jest.mock('@/components/fighters', () => {
@@ -237,6 +239,10 @@ function advanceMs(ms: number) {
   act(() => {
     jest.advanceTimersByTime(ms);
   });
+  // React Native's preset mocks (e.g. setNativeProps, which Reanimated calls on every
+  // animation frame) record every call; nothing here reads them, so drop the history
+  // or a whole campaign runs out of memory.
+  jest.clearAllMocks();
 }
 
 function tapSet(set: Slot[]) {
@@ -399,20 +405,22 @@ function playOpenPreview(screen: Screen, level: LevelDef, opts: { buyInShop?: bo
 
 const backToMap = (screen: Screen) => fireEvent.press(screen.getByTestId('results-map'));
 
-jest.setTimeout(240_000);
+// A whole campaign of (deliberately long) fights, played through the UI
+jest.setTimeout(480_000);
 
 describe('Adventure Mode full-game E2E', () => {
-  let randomSpy: jest.SpyInstance;
+  const realRandom = Math.random;
 
   beforeEach(() => {
     jest.useFakeTimers();
     mockKvStore.clear();
     const prng = createRng(20261112);
-    randomSpy = jest.spyOn(Math, 'random').mockImplementation(() => prng.next());
+    // Assigned directly rather than spied: a spy records every returned number
+    Math.random = () => prng.next();
   });
 
   afterEach(() => {
-    randomSpy.mockRestore();
+    Math.random = realRandom;
     jest.clearAllTimers();
     jest.useRealTimers();
   });

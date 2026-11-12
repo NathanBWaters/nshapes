@@ -573,34 +573,6 @@ export const MYSTIC_NATURE_CHRONO_WEAPON_RELICS: Record<string, WeaponRelic> = {
     ),
   },
 
-  'Lucky Charm': {
-    tapStyle: 'vitality',
-    art: () => (
-    <Svg width="100%" height="100%" viewBox="0 0 100 100">
-      {/* Gilded golden U-shaped horseshoe */}
-      <Path
-        d="M 24 20 L 36 20 L 36 53 C 36 64, 42 71, 50 71 C 58 71, 64 64, 64 53 L 64 20 L 76 20 L 76 54 C 76 74, 65 86, 50 86 C 35 86, 24 74, 24 54 Z"
-        fill={COLORS.actionYellow}
-        stroke={STROKE}
-        strokeWidth={3.4}
-        strokeLinejoin="round"
-      />
-      <Circle cx={30} cy={34} r={2} fill={STROKE} />
-      <Circle cx={30} cy={48} r={2} fill={STROKE} />
-      <Circle cx={70} cy={34} r={2} fill={STROKE} />
-      <Circle cx={70} cy={48} r={2} fill={STROKE} />
-      {/* Framed 4-leaf emerald clover */}
-      <G fill="#10B981" stroke={STROKE} strokeWidth={2.5}>
-        <Circle cx={50} cy={35} r={7.5} />
-        <Circle cx={50} cy={53} r={7.5} />
-        <Circle cx={41} cy={44} r={7.5} />
-        <Circle cx={59} cy={44} r={7.5} />
-      </G>
-      <Circle cx={50} cy={44} r={3.5} fill="#FEF08A" stroke={STROKE} strokeWidth={2} />
-    </Svg>
-    ),
-  },
-
   "Fortune's Shield": {
     tapStyle: 'vitality',
     art: (trim) => (
@@ -774,36 +746,6 @@ export const MYSTIC_NATURE_CHRONO_WEAPON_RELICS: Record<string, WeaponRelic> = {
         strokeLinejoin="round"
       />
       <Path d="M 32 42 C 34 37, 38 36, 42 37" fill="none" stroke="#FFE4E6" strokeWidth={2.8} strokeLinecap="round" />
-    </Svg>
-    ),
-  },
-
-  'Restoration Aura': {
-    tapStyle: 'vitality',
-    art: () => (
-    <Svg width="100%" height="100%" viewBox="0 0 100 100">
-      {/* Rising emerald aura rings */}
-      <Ellipse cx={50} cy={74} rx={36} ry={9} fill="none" stroke="#34D399" strokeWidth={3} />
-      <Ellipse cx={50} cy={52} rx={39} ry={10} fill="none" stroke={COLORS.actionYellow} strokeWidth={2.8} strokeDasharray="7 5" />
-      {/* Ornate gilded elixir bottle */}
-      <Rect x={42} y={14} width={16} height={9} rx={3} fill="#F59E0B" stroke={STROKE} strokeWidth={3} />
-      <Path
-        d="M 39 23 L 61 23 L 58 34 L 72 44 L 72 78 C 72 84, 65 88, 50 88 C 35 88, 28 84, 28 78 L 28 44 L 42 34 Z"
-        fill="#ECFDF5"
-        stroke={STROKE}
-        strokeWidth={3.3}
-        strokeLinejoin="round"
-      />
-      {/* Gilded shoulder & base bands */}
-      <Path d="M 28 45 L 72 45" stroke="#F59E0B" strokeWidth={5} />
-      <Path d="M 28 45 L 72 45" stroke={STROKE} strokeWidth={2} />
-      <Path
-        d="M 46 52 L 54 52 L 54 59 L 61 59 L 61 67 L 54 67 L 54 74 L 46 74 L 46 67 L 39 67 L 39 59 L 46 59 Z"
-        fill="#10B981"
-        stroke={STROKE}
-        strokeWidth={2.6}
-        strokeLinejoin="round"
-      />
     </Svg>
     ),
   },
@@ -1060,34 +1002,6 @@ export const MYSTIC_NATURE_CHRONO_WEAPON_RELICS: Record<string, WeaponRelic> = {
         strokeWidth={3.2}
         strokeLinecap="round"
       />
-    </Svg>
-    ),
-  },
-
-  'Resonance Crystal': {
-    tapStyle: 'arcane',
-    art: (trim) => (
-    <Svg width="100%" height="100%" viewBox="0 0 100 100">
-      {/* Radiating golden harmonic wave arcs */}
-      <Path
-        d="M 20 24 A 30 30 0 0 0 20 58 M 80 24 A 30 30 0 0 1 80 58"
-        fill="none"
-        stroke={COLORS.actionYellow}
-        strokeWidth={3.4}
-        strokeLinecap="round"
-      />
-      {/* Twin-pronged harmonic tuning crystal */}
-      <Path
-        d="M 30 20 L 38 12 L 44 20 L 44 52 L 56 52 L 56 20 L 62 12 L 70 20 L 70 58 C 70 66, 63 70, 55 71 L 55 88 L 45 88 L 45 71 C 37 70, 30 66, 30 58 Z"
-        fill="#22D3EE"
-        stroke={STROKE}
-        strokeWidth={3.3}
-        strokeLinejoin="round"
-      />
-      {/* Rarity collar at base */}
-      <Rect x={41} y={70} width={18} height={8} rx={2.5} fill={trim.metal} stroke={STROKE} strokeWidth={2.6} />
-      {/* Harmonic spark between prongs */}
-      <Line x1={44} y1={30} x2={56} y2={30} stroke="#FFFFFF" strokeWidth={3} strokeLinecap="round" />
     </Svg>
     ),
   },

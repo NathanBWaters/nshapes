@@ -8,9 +8,7 @@ import { PlayerStats, Weapon } from '@/types';
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
 import { getPlayerWeaponCount } from '@/utils/gameDefinitions';
 import {
-  getDynamicDescription,
   getStatComparison,
-  getCapIncreaseInfo,
   getRarityLabel,
 } from '@/utils/weaponDisplay';
 import KeywordText from './KeywordText';
@@ -93,7 +91,7 @@ export function WeaponOptionTile({
   );
 }
 
-// Stat preview (before -> after, plus the cap increase of Mastery weapons)
+// Stat preview (before -> after)
 
 /**
  * The three screens draw the same preview with slightly different spacing,
@@ -107,7 +105,6 @@ const statPreviewVariant = (variant: StatPreviewVariant) => {
       return {
         label: 'Stat Changes',
         box: [shopPreview.effectsBox, preview.effectsBoxPositive] as StyleProp<ViewStyle>,
-        capBox: [shopPreview.effectsBox, preview.effectsBoxPositive, { marginTop: 8 }] as StyleProp<ViewStyle>,
         row: shopPreview.effectRow,
         values: shopPreview.statComparisonRow,
         statBefore: shopPreview.statBefore,
@@ -118,7 +115,6 @@ const statPreviewVariant = (variant: StatPreviewVariant) => {
       return {
         label: 'Stats Change',
         box: [levelUpPreview.effectsBox, preview.effectsBoxPositive] as StyleProp<ViewStyle>,
-        capBox: [levelUpPreview.effectsBox, preview.effectsBoxPositive, { marginTop: 8 }] as StyleProp<ViewStyle>,
         row: levelUpPreview.statComparisonRow,
         values: levelUpPreview.statValues,
         statBefore: levelUpPreview.statBefore,
@@ -129,7 +125,6 @@ const statPreviewVariant = (variant: StatPreviewVariant) => {
       return {
         label: 'Stat Changes',
         box: modalPreview.effectsBox as StyleProp<ViewStyle>,
-        capBox: [modalPreview.effectsBox, { marginTop: 8 }] as StyleProp<ViewStyle>,
         row: shopPreview.effectRow,
         values: shopPreview.statComparisonRow,
         statBefore: shopPreview.statBefore,
@@ -147,7 +142,6 @@ interface WeaponStatPreviewProps {
 
 export function WeaponStatPreview({ weapon, playerStats, variant }: WeaponStatPreviewProps) {
   const v = statPreviewVariant(variant);
-  const capInfo = weapon.capIncrease ? getCapIncreaseInfo(weapon, playerStats) : null;
 
   return (
     <>
@@ -193,23 +187,6 @@ export function WeaponStatPreview({ weapon, playerStats, variant }: WeaponStatPr
         </View>
       )}
 
-      {capInfo && (
-        <View style={v.capBox}>
-          <Text style={preview.effectsLabelPositive}>Cap Increase</Text>
-          <View style={v.row}>
-            <Text style={preview.effectKey}>Current {capInfo.statName}</Text>
-            <Text style={v.statBefore}>{capInfo.currentValue}%</Text>
-          </View>
-          <View style={v.row}>
-            <Text style={preview.effectKey}>Current Cap</Text>
-            <Text style={v.statBefore}>{capInfo.currentCap}%</Text>
-          </View>
-          <View style={v.row}>
-            <Text style={preview.effectKey}>New Cap</Text>
-            <Text style={preview.statIncrease}>{capInfo.newCap}%</Text>
-          </View>
-        </View>
-      )}
     </>
   );
 }
@@ -256,7 +233,7 @@ export function WeaponDetailCard({ weapon, playerStats, playerWeapons, variant }
         <Text style={[weaponPickerStyles.detailName, { color: rarityColor }]}>
           {weapon.name}
         </Text>
-        <KeywordText style={weaponPickerStyles.detailDescription}>{getDynamicDescription(weapon, playerStats)}</KeywordText>
+        <KeywordText style={weaponPickerStyles.detailDescription}>{weapon.description}</KeywordText>
         {weapon.flavorText && (
           <KeywordText style={weaponPickerStyles.detailFlavor}>{weapon.flavorText}</KeywordText>
         )}

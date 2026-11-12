@@ -12,6 +12,7 @@ import { getFighter } from './data/fighters';
 import { UPGRADES } from './data/upgrades';
 import { arcanaRules } from './data/arcana';
 import { getArmoryWeapon } from './data/armory';
+import { weaponTiers } from './weaponLevels';
 import { armedRecipesFor, evolutionLikelihoodFor, getSkillNode, modifiersOf, EVOLUTION_RULES } from './engine/sources';
 
 export const BASE_CHARM_SLOTS = 3;
@@ -71,10 +72,6 @@ export const applyWeaponToStats = (stats: PlayerStats, weapon: Weapon): PlayerSt
       (next as unknown as Record<string, number>)[k] = cur + v;
     }
   }
-  if (weapon.capIncrease && next.effectCaps) {
-    const caps = next.effectCaps as unknown as Record<string, number>;
-    if (caps[weapon.capIncrease.type] !== undefined) caps[weapon.capIncrease.type] += weapon.capIncrease.amount;
-  }
   return next;
 };
 
@@ -119,7 +116,7 @@ export const startingLoadout = (
   const arcana = gear ? fightArcana(save) : [];
   const rules = arcanaRules(arcana);
   const weapons: Weapon[] = gear
-    ? fightCharms(save).map(id => getArmoryWeapon(id, save.weaponUpgrades)).filter((w): w is Weapon => !!w)
+    ? fightCharms(save).map(id => getArmoryWeapon(id, weaponTiers(save))).filter((w): w is Weapon => !!w)
     : [];
   const modifiers = modifiersOf({ skillNodes, weapons, activeEvolutions: [] });
 

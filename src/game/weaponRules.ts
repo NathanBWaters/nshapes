@@ -17,18 +17,13 @@ export const guaranteedRoundStartGraces = (weapons: Weapon[]): number =>
 // --- Time-gain trigger cap ---------------------------------------------------
 // Time Drop style weapons may only trigger a limited number of times per round.
 // Three "challenge legendaries" raise that limit for the current round when
-// their condition is met, and Time Trigger Mastery raises it permanently.
+// their condition is met.
 
-const TIME_TRIGGER_MASTERY_ID = 'time-trigger-mastery';
-const TIME_TRIGGER_MASTERY_CAP_BONUS = 2;
 const DEFAULT_TIME_GAIN_TRIGGER_CAP = 5;
 
 /** How many time gains may trigger this round. `roundBonus` is what the challenge legendaries added so far. */
-export const getTimeGainTriggerCap = (totalStats: PlayerStats, weapons: Weapon[], roundBonus: number): number => {
-  const baseCap = totalStats.timeGainTriggerCap || DEFAULT_TIME_GAIN_TRIGGER_CAP;
-  const masteryCount = weapons.filter(w => w.id === TIME_TRIGGER_MASTERY_ID).length;
-  return baseCap + masteryCount * TIME_TRIGGER_MASTERY_CAP_BONUS + roundBonus;
-};
+export const getTimeGainTriggerCap = (totalStats: PlayerStats, roundBonus: number): number =>
+  (totalStats.timeGainTriggerCap || DEFAULT_TIME_GAIN_TRIGGER_CAP) + roundBonus;
 
 export interface TimeTriggerChallenge {
   /** Extra time-gain triggers granted for the rest of the round. */

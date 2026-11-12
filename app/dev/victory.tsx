@@ -14,13 +14,13 @@ import { ROUND_REQUIREMENTS } from '@/utils/gameConfig';
 
 // Pick some actual weapons from game definitions for the mock run
 const mockWeapons = [
-  WEAPONS.find(w => w.id === 'blast-powder-legendary')!,
-  WEAPONS.find(w => w.id === 'oracle-eye-rare')!,
-  WEAPONS.find(w => w.id === 'life-vessel-common')!,
-  WEAPONS.find(w => w.id === 'life-vessel-common')!, // Duplicate
-  WEAPONS.find(w => w.id === 'second-chance-rare')!,
-  WEAPONS.find(w => w.id === 'prism-glass-common')!,
-].filter(Boolean);
+  WEAPONS.find(w => w.id === 'chain-reaction-legendary'),
+  WEAPONS.find(w => w.id === 'oracle-eye-rare'),
+  WEAPONS.find(w => w.id === 'life-vessel'),
+  WEAPONS.find(w => w.id === 'life-vessel'), // Duplicate
+  WEAPONS.find(w => w.id === 'second-chance'),
+  WEAPONS.find(w => w.id === 'blast-powder'),
+].filter((w): w is NonNullable<typeof w> => !!w);
 
 // Mock player stats after victory
 const mockPlayerStats: PlayerStats = {

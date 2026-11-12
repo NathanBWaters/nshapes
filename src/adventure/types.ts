@@ -351,9 +351,18 @@ export interface SkillNode extends RuleSource {
 }
 
 /** A weapon that only exists in Adventure and may carry rules. */
+/** One upgrade level of a rule weapon: the rules and modifiers it has at that level, and what changed. */
+export interface AdventureWeaponLevel extends RuleSource {
+  /** The bonus over level 1 in a few words, shown after the short description ("+50% chance") */
+  text: string;
+}
+
 export type AdventureWeapon = Weapon & RuleSource & {
-  /** Workshop upgrade tiers scale this rule number (e.g. War Drum +2 → +5) */
-  upgradeText?: (tier: number) => string;
+  /**
+   * Levels 2, 3 and 4 (Workshop tiers and free reward upgrades). Each replaces
+   * the weapon's rules/modifiers; whatever a level leaves out stays as authored.
+   */
+  levels?: readonly [AdventureWeaponLevel, AdventureWeaponLevel, AdventureWeaponLevel];
 };
 
 /** Two weapon families fused into a 20-second power state. */
@@ -430,7 +439,10 @@ export interface AdventureSave {
   unlockedFighters: CharacterName[];
   armory: string[];                  // unlocked weapon ids
   upgrades: Record<string, number>;  // mechanic upgrade id -> tier
-  weaponUpgrades: Record<string, number>; // armory weapon id -> tier (1..3)
+  /** Workshop tiers bought per Armory weapon (1..3). Free tiers from rewards add to these (weaponLevels.ts). */
+  weaponUpgrades: Record<string, number>;
+  /** Upgrade tiers carried over from the stronger rare/epic copies an older save owned (a floor on free tiers) */
+  legacyWeaponTiers: Record<string, number>;
   /** Campaign systems unlocked so far, one flag per entry of data/features.ts */
   coinsUnlocked: boolean;
   workshopUnlocked: boolean;

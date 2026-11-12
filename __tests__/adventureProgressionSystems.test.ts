@@ -56,6 +56,8 @@ import {
   upgradeSpentCoins,
   upgradeTier,
   weaponUpgradeSpentCoins,
+  weaponUpgradeTier,
+  weaponTiers,
 } from '@/adventure/progress';
 import { loadAdventureSave } from '@/adventure/save';
 import type { AdventureSave, ArcanaId, SkillNode } from '@/adventure/types';
@@ -377,6 +379,110 @@ describe('Workshop', () => {
     expect(canUpgradeWeapon(open, armory[0])).toBe(true);
     expect(canUpgradeWeapon(open, CAMPAIGN_WEAPONS[1])).toBe(false);
     expect(buyWeaponUpgrade(open, CAMPAIGN_WEAPONS[1])).toBe(open);
+  });
+});
+
+describe('Weapon levels: one item per weapon', () => {
+  /** Main-path levels whose star rewards name this weapon, in campaign order. */
+  const sourcesOf = (id: string) =>
+    MAIN_LEVELS.flatMap(l => starRewards(l).flatMap((r, i) => ((r.weapons ?? []).includes(id) ? [{ level: l, star: i + 1 }] : [])));
+
+  /** Earn the given star on a level (and every star before it) with a save that has stars up to there. */
+  const earn = (save: AdventureSave, levelId: string, star: number) =>
+    applyLevelResult({ ...save, stars: { ...save.stars, [levelId]: star - 1 } }, getLevel(levelId), star, 0);
+
+  it('no reward names a merged copy or a Mastery weapon, and no weapon is handed out more than 4 times', () => {
+    const named = [...LEVELS.flatMap(l => starRewards(l)), ...BOUNTIES.map(b => b.reward)].flatMap(r => r.weapons ?? []);
+    for (const id of named) expect(getArmoryWeapon(id)?.id).toBe(id);
+    expect(named.filter(id => /-(common|rare)$/.test(id) && !id.startsWith('oracle-eye'))).toEqual([]);
+    expect(named.filter(id => id.includes('mastery'))).toEqual([]);
+    const counts = new Map<string, number>();
+    for (const id of named) counts.set(id, (counts.get(id) ?? 0) + 1);
+    for (const [, n] of counts) expect(n).toBeLessThanOrEqual(4);
+  });
+
+  it('the first reward unlocks the weapon; a later one makes it stronger, with a reveal', () => {
+    const [first, second] = sourcesOf('blast-powder');
+    const a = earn(createNewSave(), first.level.id, first.star);
+    expect(a.save.armory).toContain('blast-powder');
+    expect(a.unlocks.find(u => u.kind === 'weapon')).toMatchObject({ id: 'blast-powder', firstWeapon: true });
+    expect(weaponUpgradeTier(a.save, 'blast-powder')).toBe(0);
+
+    const b = earn(a.save, second.level.id, second.star);
+    expect(b.save.armory.filter(id => id === 'blast-powder')).toHaveLength(1);
+    expect(weaponUpgradeTier(b.save, 'blast-powder')).toBe(1);
+    expect(b.unlocks.find(u => u.kind === 'weapon')).toMatchObject({ id: 'blast-powder', level: 2 });
+    expect(getArmoryWeapon('blast-powder', weaponTiers(b.save))!.effects.explosionChance).toBe(20);
+    // Free levels are not Workshop purchases: nothing to refund
+    expect(b.save.weaponUpgrades).toEqual({});
+    expect(refundableCoins(b.save)).toBe(0);
+
+    // Loading the save again (which re-grants every earned reward) never stacks the level twice
+    const reloaded = reconcileUnlocks(reconcileUnlocks(b.save));
+    expect(weaponUpgradeTier(reloaded, 'blast-powder')).toBe(1);
+    expect(reloaded.coins).toBe(b.save.coins);
+  });
+
+  it('a free level on a weapon already maxed at the Workshop returns the coins of its top bought tier', () => {
+    const [first, second] = sourcesOf('blast-powder');
+    let save: AdventureSave = { ...earn(createNewSave(), first.level.id, first.star).save, workshopUnlocked: true, coins: 5000 };
+    for (let i = 0; i < 3; i++) save = buyWeaponUpgrade(save, 'blast-powder');
+    expect(weaponUpgradeTier(save, 'blast-powder')).toBe(3);
+    expect(canUpgradeWeapon(save, 'blast-powder')).toBe(false);
+    const coins = save.coins;
+    const r = earn(save, second.level.id, second.star);
+    expect(weaponUpgradeTier(r.save, 'blast-powder')).toBe(3);
+    expect(r.save.weaponUpgrades['blast-powder']).toBe(2);
+    expect(r.unlocks.find(u => u.kind === 'weapon')).toMatchObject({ id: 'blast-powder', level: 4, refund: 340 });
+    expect(r.save.coins).toBe(coins + 340 + starRewards(second.level)[second.star - 1].coins);
+    // Refunding the Workshop now returns only what is still bought
+    expect(weaponUpgradeSpentCoins(r.save, 'blast-powder')).toBe(80 + 180);
+  });
+
+  it('free levels lower how many Workshop tiers can be bought, at the first-tier price', () => {
+    const [first, second] = sourcesOf('blast-powder');
+    let save = earn(createNewSave(), first.level.id, first.star).save;
+    save = { ...earn(save, second.level.id, second.star).save, workshopUnlocked: true, coins: 5000 };
+    expect(weaponUpgradeTier(save, 'blast-powder')).toBe(1);
+    save = buyWeaponUpgrade(save, 'blast-powder');
+    save = buyWeaponUpgrade(save, 'blast-powder');
+    expect(5000 - save.coins).toBe(80 + 180);
+    expect(weaponUpgradeTier(save, 'blast-powder')).toBe(3);
+    expect(canUpgradeWeapon(save, 'blast-powder')).toBe(false);
+  });
+
+  it('migrates old weapon ids: copies merge, stronger copies give levels, Masteries go, removed Workshop tiers are refunded', () => {
+    const old: AdventureSave = {
+      ...createNewSave(),
+      coins: 1000,
+      armory: ['blast-powder-common', 'blast-powder-rare', 'inferno-charge', 'explosion-mastery', 'war-drum-rare', 'oracle-eye-rare'],
+      charms: ['blast-powder-rare', 'blast-powder-common', 'explosion-mastery'],
+      weaponUpgrades: { 'blast-powder-common': 1, 'inferno-charge': 2, 'explosion-mastery': 1 },
+    };
+    const m = migrateSave(old);
+    expect(m.armory).toEqual(['blast-powder', 'war-drum', 'oracle-eye-rare']);
+    expect(m.charms).toEqual(['blast-powder']);
+    expect(m.legacyWeaponTiers).toEqual({ 'blast-powder': 2, 'war-drum': 1 });
+    expect(m.weaponUpgrades).toEqual({ 'blast-powder': 1 });
+    // Inferno Charge (epic) tiers 1-2 and Explosion Mastery (rare) tier 1, at the prices they were bought for
+    expect(m.coins).toBe(1000 + 180 + 380 + 120);
+    expect(migrateSave(m)).toEqual(m);
+
+    const loaded = reconcileUnlocks(old);
+    // Free level 2 from the old copies plus the bought tier: level 4
+    expect(weaponUpgradeTier(loaded, 'blast-powder')).toBe(3);
+    expect(weaponUpgradeTier(loaded, 'war-drum')).toBe(1);
+  });
+
+  it('loadAdventureSave writes a migrated weapon save back once', () => {
+    mockKvStore.clear();
+    const stored = { ...createNewSave(), coins: 10, armory: ['flint-spark-rare'], charms: ['flint-spark-rare'], weaponUpgrades: { 'flint-spark-rare': 1 } };
+    mockKvStore.set('adventure_v2_save', JSON.stringify(stored));
+    const loaded = loadAdventureSave();
+    expect(loaded.armory).toEqual(['flint-spark']);
+    expect(loaded.coins).toBe(10 + 120);
+    expect(JSON.parse(mockKvStore.get('adventure_v2_save')!).armory).toEqual(['flint-spark']);
+    expect(loadAdventureSave().coins).toBe(loaded.coins);
   });
 });
 

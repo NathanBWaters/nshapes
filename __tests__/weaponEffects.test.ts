@@ -976,18 +976,16 @@ describe('Multi-Laser Independent Rolls', () => {
     const matchedCards = [board[4]];
     const stats: PlayerStats = { ...DEFAULT_PLAYER_STATS };
 
-    // Get the epic laser weapon from WEAPONS (base-type legendary removed, epic is highest)
-    const epicLaser = WEAPONS.find(
-      w => w.name === 'Spectrum Annihilator' && w.rarity === 'epic'
-    );
+    // The one laser weapon in WEAPONS
+    const laser = WEAPONS.find(w => w.id === 'prismatic-ray');
 
     // Verify the structure is correct for our filter
-    expect(epicLaser).toBeDefined();
-    expect(epicLaser?.specialEffect).toBe('laser');
-    expect(epicLaser?.effects.laserChance).toBe(25); // Epic is 25%
+    expect(laser).toBeDefined();
+    expect(laser?.specialEffect).toBe('laser');
+    expect(laser?.effects.laserChance).toBe(3);
 
-    // Create 28 epic lasers (simulating user's scenario)
-    const weapons: Weapon[] = Array(28).fill(epicLaser) as Weapon[];
+    // Create 28 copies (Free Play stacks copies; each rolls independently)
+    const weapons: Weapon[] = Array(28).fill(laser) as Weapon[];
 
     // Run the function and check the filter works
     // Mock Math.random to always return 0 (100% success)
@@ -1009,8 +1007,8 @@ describe('Multi-Laser Independent Rolls', () => {
       w => w.specialEffect === 'laser' && w.effects.laserChance
     );
 
-    // There should be 3 laser weapons (common, rare, epic - base legendary removed)
-    expect(allLaserWeapons.length).toBe(3);
+    // Prismatic Ray is one weapon now (its rare/epic copies became its levels)
+    expect(allLaserWeapons.map(w => w.id)).toEqual(['prismatic-ray']);
 
     // Verify each has the correct structure
     allLaserWeapons.forEach(weapon => {

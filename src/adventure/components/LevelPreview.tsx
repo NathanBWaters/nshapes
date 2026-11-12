@@ -18,7 +18,7 @@ import { getMechanic } from '../data/mechanics';
 import { FIGHTERS, getFighter } from '../data/fighters';
 import { getPassive } from '../data/passives';
 import { ARCANA, getArcana } from '../data/arcana';
-import { getArmoryWeapon } from '../data/armory';
+import { getArmoryWeapon, weaponLevelSuffix } from '../data/armory';
 import { EVOLUTION_RECIPES } from '../data/evolutions';
 import { getLevel } from '../data/levels';
 import { isFighterTrial, starRewards } from '../data/rewards';
@@ -32,6 +32,7 @@ import {
   getLockReason,
   recipeFamiliesHeld,
   weaponUpgradeTier,
+  weaponTiers,
 } from '../progress';
 import { startingLoadout } from '../loadout';
 import { Btn, Eyebrow, Heart, INK, PopIn, Skulls, StarRow, TONE } from './ui';
@@ -155,7 +156,7 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
             <View style={{ gap: 6 }}>
               {goals.map(g => {
                 const done = best >= g.star;
-                const unlocks = describeRewardUnlocks(g.reward);
+                const unlocks = describeRewardUnlocks(g.reward, save);
                 return (
                   <View key={g.star} style={[st.goal, done && st.goalDone]}>
                     <View style={st.goalTop}>
@@ -242,7 +243,7 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                 <View style={st.slotRow} testID="preview-charm-slots">
                   {Array.from({ length: slots }).map((_, i) => {
                     const id = charms[i];
-                    const w = id ? getArmoryWeapon(id, save.weaponUpgrades) : undefined;
+                    const w = id ? getArmoryWeapon(id, weaponTiers(save)) : undefined;
                     return w ? (
                       <TouchableOpacity
                         key={i}
@@ -260,7 +261,7 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                 </View>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
                   {save.armory.map(id => {
-                    const w = getArmoryWeapon(id, save.weaponUpgrades);
+                    const w = getArmoryWeapon(id, weaponTiers(save));
                     if (!w) return null;
                     const selected = charms.includes(id);
                     const blocked = !selected && charmsFull;
@@ -278,7 +279,7 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                         accessibilityState={{ selected }}
                       >
                         <WeaponAvatar weapon={w} size={32} triggerKey={charmTapCounts[id]} />
-                        <Text style={st.fighterName} numberOfLines={1}>{w.name}{wTier > 0 ? ` +${wTier}` : ''}</Text>
+                        <Text style={st.fighterName} numberOfLines={1}>{w.name}{weaponLevelSuffix(wTier)}</Text>
                         <Text style={st.charmDesc} numberOfLines={2}>{w.shortDescription}</Text>
                       </TouchableOpacity>
                     );

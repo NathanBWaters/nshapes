@@ -8,7 +8,7 @@ This document details the complete weapon system, including all weapon types, ra
 
 1. **Weapons are the primary progression mechanic** - Characters start with 2 weapons and collect more throughout the run
 2. **Effects should synergize** - Weapons work together (e.g., Echo Stone triggers explosion effects again)
-3. **Higher rarity = bigger numbers, not different effects** - Common/Rare/Legendary versions of the same weapon do the same thing at different magnitudes
+3. **One item per weapon** - a weapon that only gets bigger numbers is one item with four levels (`tierEffects`), not separate Common/Rare/Epic copies. In Adventure, Workshop tiers and repeat rewards raise its level; Free Play stacks copies of it instead
 4. **Independent rolls for destructive effects** - Multiple copies of the same weapon roll separately (see Laser Mechanic below)
 5. **No weapon limits (except unique)** - Players can stack as many of the same weapon as they want, unless marked `maxCount: 1`
 
@@ -25,7 +25,7 @@ This document details the complete weapon system, including all weapon types, ra
 
 All weapon effects stack additively:
 - 3x Common Blast Powder (10% each) = 30% explosion chance per adjacent card
-- 2x Rare Mending Charm (15% each) = 30% healing chance per match
+- 2x Mending Charm (5% each) = 10% healing chance per match
 
 **Over 100% Effects:** When stacked chances exceed 100%, the effect is guaranteed with a chance for additional triggers.
 - 120% healing chance = guaranteed heal + 20% chance for second heal
@@ -39,11 +39,7 @@ All weapon effects stack additively:
 **Effect:** After matching, each adjacent card (up/down/left/right) has a chance to explode.
 **On Explosion:** Card destroyed, awards +1 point and +1 coin.
 
-| Rarity | Explosion Chance | Price |
-|--------|------------------|-------|
-| Common | 10% | 8 |
-| Rare | 30% | 16 |
-| Legendary | 70% | 24 |
+**Levels 1 → 4** (one item; Adventure Workshop tiers and reward upgrades raise its level): explosion chance 10% → 20% → 30% → 40% (price 8)
 
 **Icon:** `lorc/bright-explosion`
 
@@ -86,11 +82,7 @@ All weapon effects stack additively:
 **Effect:** Increases the number of cards on the board at round start.
 **Benefit:** More cards = more possible matches to find.
 
-| Rarity | Field Size Bonus | Price |
-|--------|------------------|-------|
-| Common | +1 | 7 |
-| Rare | +3 | 14 |
-| Legendary | +7 | 21 |
+**Levels 1 → 4** (one item; Adventure Workshop tiers and reward upgrades raise its level): starting board +1 → +2 → +3 → +4 cards
 
 **Icon:** `lorc/field`
 
@@ -103,11 +95,7 @@ All weapon effects stack additively:
 **Effect:** After matching, has a chance to add new cards to the board.
 **Growth Amount:** 1 card (2 for legendary)
 
-| Rarity | Growth Chance | Amount | Price |
-|--------|---------------|--------|-------|
-| Common | 5% | 1 | 6 |
-| Rare | 15% | 1 | 12 |
-| Legendary | 35% | 2 | 18 |
+**Levels 1 → 4** (one item; Adventure Workshop tiers and reward upgrades raise its level): growth chance 5% → 10% → 15% → 20%
 
 **Icon:** `delapouite/card-exchange`
 
@@ -123,11 +111,7 @@ All weapon effects stack additively:
 - Destroyed cards award points
 - 10% chance to spread to neighbors when burning out (`fireSpreadOnDeathChance: 0.10`)
 
-| Rarity | Ignition Chance | Price |
-|--------|-----------------|-------|
-| Common | 10% | 8 |
-| Rare | 30% | 16 |
-| Legendary | 70% | 24 |
+**Levels 1 → 4** (one item; Adventure Workshop tiers and reward upgrades raise its level): fire chance 10% → 20% → 30% → 40%
 
 **Icon:** `lorc/campfire`
 
@@ -140,11 +124,7 @@ All weapon effects stack additively:
 **Effect:** Start each round with additional graces.
 **Grace Mechanic:** Graces protect from near-miss invalid matches (only 1 attribute wrong). Consumed instead of losing health.
 
-| Rarity | Starting Graces | Price |
-|--------|-----------------|-------|
-| Common | +1 | 5 |
-| Rare | +3 | 10 |
-| Legendary | +7 | 15 |
+**Levels 1 → 4** (one item; Adventure Workshop tiers and reward upgrades raise its level): starting graces 1 → 2 → 3 → 4
 
 **Icon:** `lorc/clover`
 
@@ -156,11 +136,7 @@ All weapon effects stack additively:
 
 **Effect:** After a valid match, has a chance to gain +1 grace.
 
-| Rarity | Gain Chance | Price |
-|--------|-------------|-------|
-| Common | 5% | 6 |
-| Rare | 15% | 12 |
-| Legendary | 35% | 18 |
+**Levels 1 → 4** (one item; Adventure Workshop tiers and reward upgrades raise its level): grace gain 5% → 10% → 15% → 25%
 
 **Icon:** `lorc/cycle`
 
@@ -170,11 +146,7 @@ All weapon effects stack additively:
 
 **Effect:** Increases maximum health pool.
 
-| Rarity | Max Health Bonus | Price |
-|--------|------------------|-------|
-| Common | +1 | 6 |
-| Rare | +3 | 12 |
-| Legendary | +7 | 18 |
+**Levels 1 → 4** (one item; Adventure Workshop tiers and reward upgrades raise its level): max hearts +1 → +2 → +3 → +4
 
 **Icon:** `lorc/heart-inside`
 
@@ -187,11 +159,7 @@ All weapon effects stack additively:
 **Effect:** After a valid match, has a chance to restore 1 health.
 **Cap:** Cannot heal above maximum health.
 
-| Rarity | Heal Chance | Price |
-|--------|-------------|-------|
-| Common | 5% | 5 |
-| Rare | 15% | 10 |
-| Legendary | 35% | 15 |
+**Levels 1 → 4** (one item; Adventure Workshop tiers and reward upgrades raise its level): heal chance 5% → 10% → 15% → 25%
 
 **Icon:** `lorc/shining-heart`
 
@@ -201,11 +169,7 @@ All weapon effects stack additively:
 
 **Effect:** Increases maximum hints the player can hold.
 
-| Rarity | Max Hints Bonus | Price |
-|--------|-----------------|-------|
-| Common | +1 | 5 |
-| Rare | +2 | 10 |
-| Legendary | +3 | 15 |
+**Levels 1 → 4** (one item; Adventure Workshop tiers and reward upgrades raise its level): hint slots +1 → +2 → +3 → +4
 
 **Icon:** `lorc/floating-crystal`
 
@@ -217,11 +181,7 @@ All weapon effects stack additively:
 
 **Effect:** After a valid match, has a chance to gain +1 hint.
 
-| Rarity | Gain Chance | Price |
-|--------|-------------|-------|
-| Common | 5% | 6 |
-| Rare | 15% | 12 |
-| Legendary | 35% | 18 |
+**Levels 1 → 4** (one item; Adventure Workshop tiers and reward upgrades raise its level): hint gain 5% → 10% → 15% → 20%
 
 **Icon:** `lorc/light-bulb`
 
@@ -233,11 +193,7 @@ All weapon effects stack additively:
 
 **Effect:** After a valid match, has a chance to gain +1 XP.
 
-| Rarity | XP Chance | Price |
-|--------|-----------|-------|
-| Common | 20% | 8 |
-| Rare | 40% | 16 |
-| Legendary | 80% | 24 |
+**Levels 1 → 4** (one item; Adventure Workshop tiers and reward upgrades raise its level): XP chance 20% → 30% → 40% → 50%
 
 **Icon:** `lorc/open-book`
 
@@ -249,11 +205,7 @@ All weapon effects stack additively:
 
 **Effect:** After a valid match, has a chance to gain +1 coin.
 
-| Rarity | Coin Chance | Price |
-|--------|-------------|-------|
-| Common | 20% | 8 |
-| Rare | 40% | 16 |
-| Legendary | 80% | 24 |
+**Levels 1 → 4** (one item; Adventure Workshop tiers and reward upgrades raise its level): coin chance 20% → 30% → 40% → 50%
 
 **Icon:** `lorc/crown-coin`
 
@@ -264,11 +216,7 @@ All weapon effects stack additively:
 **Effect:** Start rounds with additional time. Also raises the time cap.
 **Time Cap:** Time gained during matches (via Time Drop) cannot exceed starting time.
 
-| Rarity | Starting Time | Price |
-|--------|---------------|-------|
-| Common | +15s | 7 |
-| Rare | +45s | 14 |
-| Legendary | +105s | 21 |
+**Levels 1 → 4** (one item; Adventure Workshop tiers and reward upgrades raise its level): starting time +15s → +30s → +45s → +60s
 
 **Icon:** `lorc/hourglass`
 
@@ -281,11 +229,7 @@ All weapon effects stack additively:
 **Effect:** After a valid match, has a chance to gain time.
 **Time Cap:** Cannot exceed starting time (60s base + Chrono Shard bonuses).
 
-| Rarity | Time Chance | Time Amount | Price |
-|--------|-------------|-------------|-------|
-| Common | 5% | +10s | 6 |
-| Rare | 15% | +10s | 12 |
-| Legendary | 35% | +15s | 18 |
+**Levels 1 → 4** (one item; Adventure Workshop tiers and reward upgrades raise its level): time-gain chance 5% → 10% → 15% → 20% (+10s each)
 
 **Icon:** `lorc/stopwatch`
 
@@ -299,11 +243,7 @@ All weapon effects stack additively:
 **Independent Rolls:** Each laser weapon rolls separately per match.
 **Reward:** Destroyed cards award +2 points each.
 
-| Rarity | Laser Chance | Price |
-|--------|--------------|-------|
-| Common | 3% | 10 |
-| Rare | 9% | 20 |
-| Legendary | 21% | 30 |
+**Levels 1 → 4** (one item; Adventure Workshop tiers and reward upgrades raise its level): laser chance 3% → 6% → 10% → 15%
 
 **Icon:** `lorc/laser-warning`
 
@@ -321,11 +261,7 @@ All weapon effects stack additively:
 **Effect:** After matching, has a chance to destroy a random card anywhere on the board.
 **Chain:** Each destroyed card may chain to another random target.
 
-| Rarity | Initial Chance | Chain Chance | Price |
-|--------|----------------|--------------|-------|
-| Common | 10% | 5% | 8 |
-| Rare | 30% | 15% | 16 |
-| Legendary | 70% | 35% | 24 |
+**Levels 1 → 4** (one item; Adventure Workshop tiers and reward upgrades raise its level): ricochet 10%/5% chain → 20/10 → 30/15 → 40/20
 
 **Icon:** `lorc/chained-arrow-heads`
 
@@ -338,11 +274,7 @@ All weapon effects stack additively:
 **Effect:** After matching, has a chance to automatically find and match another valid set on the board.
 **Triggers Effects:** The echoed match triggers all on-match effects (explosions, healing, etc.)!
 
-| Rarity | Echo Chance | Price |
-|--------|-------------|-------|
-| Common | 5% | 8 |
-| Rare | 15% | 16 |
-| Legendary | 35% | 24 |
+**Levels 1 → 4** (one item; Adventure Workshop tiers and reward upgrades raise its level): echo chance 5% → 10% → 15% → 25%
 
 **Icon:** `lorc/echo-ripples`
 
@@ -390,12 +322,12 @@ All weapon effects stack additively:
 | 19 | Echo Stone | % to trigger | 3 | Additive |
 | 20 | Chain Reaction | % enhancement | 1 (L) | maxCount: 1 |
 
-**Total Weapons:** 95 weapons
-- 18 base types × 3 rarities = 54 weapons
-- 2 legendary-only (Mystic Sight, Chain Reaction)
-- 11 cap increaser rare weapons
-- 18 epic weapon variants
-- 10 legendary bridge weapons
+**Total Weapons:** 51 weapons
+- 20 weapons with four levels (one item each; their old rare/epic copies became levels 2-4)
+- Oracle Eye (common and rare entries; the rare one also shortens the interval)
+- Mystic Sight, Chain Reaction, Snowball and the three challenge legendaries
+- 11 epic bundles, 8 legendary bridge weapons, Fortune's Eye, and the connector extras (Revenge Linker, Sympathetic Flames, Neural Network)
+- The cap-increase Mastery weapons were removed: caps are fixed
 
 ---
 
@@ -502,61 +434,30 @@ Effects are capped to prevent overpowered stacking. Players see both:
 - **Accumulated %**: Total from all purchased weapons
 - **Effective %**: Capped value actually applied
 
-| Effect | Weapon | Default Cap | Cap Increase |
-|--------|--------|-------------|--------------|
-| Echo | Echo Stone | 25% | +5% |
-| Lasers | Prismatic Ray | 30% | +5% |
-| Grace gain | Fortune Token | 30% | +5% |
-| Explosions | Blast Powder | 40% | +10% |
-| Hints | Seeker Lens | 40% | +10% |
-| Time gain | Time Drop | 40% | +10% |
-| Healing | Mending Charm | 50% | +10% |
-| Fire | Flint Spark | 50% | +10% |
-| Ricochets | Chaos Shard | 60% | +10% |
-| Board expansion | Growth Seed | 60% | +10% |
-| Coins | Fortune's Favor | 70% | +15% |
-| XP | Scholar's Tome | 100% | None needed |
+| Effect | Weapon | Cap |
+|--------|--------|-----|
+| Echo | Echo Stone | 25% |
+| Lasers | Prismatic Ray | 30% |
+| Grace gain | Fortune Token | 30% |
+| Explosions | Blast Powder | 40% |
+| Hints | Seeker Lens | 40% |
+| Time gain | Time Drop | 40% |
+| Healing | Mending Charm | 50% |
+| Fire | Flint Spark | 50% |
+| Ricochets | Chaos Shard | 60% |
+| Board expansion | Growth Seed | 60% |
+| Coins | Fortune's Favor | 70% |
+| XP | Scholar's Tome | 100% |
+
+Caps are fixed (`src/game/effectCaps.ts`). The old Mastery weapons that raised them were removed: weapons now grow through levels outside battle instead.
 
 ---
 
-## Cap Increaser Weapons (11 Rare-Only)
+## Epic Weapons (11 Epic-Only)
 
-One per effect type. Purchasing these permanently raises the cap.
+Two design patterns. (The old "Cap Bundle" epics — Inferno Charge, Ember Heart, Lucky Charm, Restoration Aura, Golden Touch, Spectrum Annihilator, Resonance Crystal — were stronger copies of one weapon and became its levels.)
 
-| Weapon Name | Effect | Cap Increase | Price |
-|-------------|--------|--------------|-------|
-| Echo Mastery | +Echo cap | +5% | 15 |
-| Laser Mastery | +Laser cap | +5% | 18 |
-| Grace Mastery | +Grace gain cap | +5% | 12 |
-| Explosion Mastery | +Explosion cap | +10% | 15 |
-| Hint Mastery | +Hint cap | +10% | 12 |
-| Time Mastery | +Time gain cap | +10% | 15 |
-| Healing Mastery | +Healing cap | +10% | 12 |
-| Fire Mastery | +Fire cap | +10% | 15 |
-| Ricochet Mastery | +Ricochet cap | +10% | 15 |
-| Growth Mastery | +Board growth cap | +10% | 12 |
-| Coin Mastery | +Coin gain cap | +15% | 18 |
-
----
-
-## Epic Weapon Variants (18 Epic-Only)
-
-Three design patterns:
-
-### 1. Cap Bundle Pattern
-25% effect + includes cap increase for that effect.
-
-| Weapon | Effect | Cap Increase | Price |
-|--------|--------|--------------|-------|
-| Inferno Charge | 25% fire | +10% fire cap | 28 |
-| Ember Heart | 25% explosion | +10% explosion cap | 28 |
-| Lucky Charm | 25% grace gain | +5% grace cap | 24 |
-| Restoration Aura | 25% healing | +10% healing cap | 26 |
-| Golden Touch | 25% coin gain | +15% coin cap | 30 |
-| Spectrum Annihilator | 25% laser | +5% laser cap | 32 |
-| Resonance Crystal | 25% echo | +5% echo cap | 30 |
-
-### 2. Multi-pack Pattern
+### 1. Multi-pack Pattern
 Combines multiple related effects.
 
 | Weapon | Effects | Price |
@@ -568,7 +469,7 @@ Combines multiple related effects.
 | Temporal Core | +60s starting time + 10% time gain | 30 |
 | Vital Core | +5 max HP + 10% healing | 28 |
 
-### 3. Cross-system Lite Pattern
+### 2. Cross-system Lite Pattern
 Main effect + secondary from different system.
 
 | Weapon | Main Effect | Secondary Effect | Price |

@@ -35,6 +35,8 @@ const WEAPON_CATEGORIES = {
   'Laser': WEAPONS.filter(w => w.specialEffect === 'laser'),
 };
 
+const RARITY_RANK: Weapon['rarity'][] = ['common', 'rare', 'epic', 'legendary'];
+
 export interface DevModeCallbacks {
   onAddWeapon: (weapon: Weapon) => void;
   onClearWeapons: () => void;
@@ -463,11 +465,12 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
     </View>
   );
 
-  const addLegendaryFromCategory = (category: string) => {
+  /** Adds the rarest weapon of a category (most categories are one common weapon now). */
+  const addStrongestFromCategory = (category: string) => {
     const weapons = WEAPON_CATEGORIES[category as keyof typeof WEAPON_CATEGORIES];
     if (weapons && weapons.length > 0 && devCallbacks) {
-      const legendary = weapons.find(w => w.rarity === 'legendary');
-      if (legendary) devCallbacks.onAddWeapon(legendary);
+      const rank = (w: Weapon) => RARITY_RANK.indexOf(w.rarity);
+      devCallbacks.onAddWeapon(weapons.reduce((best, w) => (rank(w) > rank(best) ? w : best)));
     }
   };
 
@@ -593,14 +596,14 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
 
         <View style={styles.categoryContainer}>
           <View style={[styles.categoryHeader, styles.devCategoryHeader]}>
-            <Text style={styles.categoryTitle}>ADD LEGENDARY WEAPONS</Text>
+            <Text style={styles.categoryTitle}>ADD WEAPONS</Text>
           </View>
           <View style={styles.devWeaponGrid}>
             {Object.keys(WEAPON_CATEGORIES).map(category => (
               <TouchableOpacity
                 key={category}
                 style={[styles.devButton, styles.devButtonGold]}
-                onPress={() => addLegendaryFromCategory(category)}
+                onPress={() => addStrongestFromCategory(category)}
               >
                 <Text style={styles.devButtonTextSmall}>{category}</Text>
               </TouchableOpacity>

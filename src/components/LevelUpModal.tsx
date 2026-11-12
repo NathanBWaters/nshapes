@@ -3,10 +3,7 @@ import { View, Text, TouchableOpacity, Pressable, StyleSheet, Modal, ScrollView 
 import { Character, PlayerStats, Weapon } from '@/types';
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
 import { getPlayerWeaponCount } from '@/utils/gameDefinitions';
-import {
-  getDynamicDescription,
-  getRarityLabel,
-} from '@/utils/weaponDisplay';
+import { getRarityLabel } from '@/utils/weaponDisplay';
 import KeywordText from './KeywordText';
 import { WeaponStatPreview } from './WeaponPicker';
 import { playSound } from '@/utils/sounds';
@@ -137,7 +134,7 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({
                   )}
                 </View>
                 <KeywordText style={styles.detailDesc}>
-                  {getDynamicDescription(focusedWeapon, playerStats)}
+                  {focusedWeapon.description}
                 </KeywordText>
                 {focusedWeapon.flavorText && (
                   <KeywordText style={styles.detailFlavor}>{focusedWeapon.flavorText}</KeywordText>

@@ -194,8 +194,8 @@ describe('Custom Enemy Rigs & Procedural Animation Engine', () => {
 describe('Custom Weapon Relics & Single-Tap Animation', () => {
   const uniqueWeaponNames = Array.from(new Set(WEAPONS.map((w) => w.name)));
 
-  it('explicitly covers all 73 unique weapons in ALL_CUSTOM_WEAPON_NAMES', () => {
-    expect(uniqueWeaponNames.length).toBe(73);
+  it('explicitly covers all 50 unique weapons in ALL_CUSTOM_WEAPON_NAMES', () => {
+    expect(uniqueWeaponNames.length).toBe(50);
     const customSet = new Set(ALL_CUSTOM_WEAPON_NAMES);
     const missing = uniqueWeaponNames.filter((name) => !customSet.has(name));
     expect(missing).toEqual([]);
@@ -215,9 +215,9 @@ describe('Custom Weapon Relics & Single-Tap Animation', () => {
     expect(getWeaponTapStyle('Prismatic Ray')).toBe('laser');
     expect(getWeaponTapStyle('Chrono Shard')).toBe('chrono');
     expect(getWeaponTapStyle('Life Vessel')).toBe('vitality');
-    expect(getWeaponTapStyle('Fire Mastery')).toBe('tome');
-    expect(getWeaponTapStyle('Golden Touch')).toBe('coin');
-    expect(getWeaponTapStyle('Soul Link')).toBe('connector');
+    expect(getWeaponTapStyle("Scholar's Tome")).toBe('tome');
+    expect(getWeaponTapStyle("Fortune's Favor")).toBe('coin');
+    expect(getWeaponTapStyle('Link Stone')).toBe('connector');
     expect(getWeaponTapStyle('Oracle Eye')).toBe('arcane');
   });
 

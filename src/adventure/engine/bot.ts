@@ -5,6 +5,7 @@
  */
 import type { AttributeName, Card } from '@/types';
 import { isValidCombination } from '@/utils/gameUtils';
+import { getBoardSizeForAttributes } from '@/utils/gameConfig';
 import { resolveMatch } from '@/utils/matchResolution';
 import type { AdventureSave, ChallengeDef, LevelDef, RunState } from '../types';
 import { createRng, type Rng } from './rng';
@@ -154,6 +155,12 @@ export const simulateRun = (level: LevelDef, save: AdventureSave, bot: BotProfil
   }
 };
 
+/** Seconds of standing still the foe punishes, read off its ability text ("30s inactivity → …"), or null. */
+const inactivityLimit = (s: RunState): number | null => {
+  const m = /(\d+)s inactivity/.exec(s.foe.description ?? '');
+  return m ? Number(m[1]) : null;
+};
+
 /**
  * Submit three picked cards the way GameBoard does: a Set (or a near miss a
  * grace covers) scores through the same match resolution, anything else is a
@@ -208,13 +215,16 @@ const playRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: nu
     }
     // Keen Eye lights a card of a Set: the bot finds one twice as fast
     const glow = s.passive.keenEyeCardId ? 0.5 : 1;
+    // Fewer cards to scan is a faster search: a board eaten down to half size takes ~70% as long
+    const fullBoard = s.level.rules.boardSize ?? getBoardSizeForAttributes(s.attributes.length);
+    const crowd = Math.sqrt(Math.min(1, Math.max(0.25, s.board.filter(isSelectable).length / fullBoard)));
     const pace = 0.6 + rng.next() * 0.8;
-    let think = bot.secondsPerAttribute * s.attributes.length * pace * glow;
+    let think = bot.secondsPerAttribute * s.attributes.length * pace * glow * crowd;
     // A slow search (or a "use hints" goal) is when a real player presses the bulb
     const slow = pace > 1;
     const goals = chasing(s);
     const canHint = s.features.has('hints') && s.stats.hints > 0;
-    const hinted = canHint && (goals.includes('useHints') || (slow && rng.next() < bot.hintEagerness));
+    let hinted = canHint && (goals.includes('useHints') || (slow && rng.next() < bot.hintEagerness));
     if (hinted) {
       s = runReducer(s, { type: 'USE_HINT' });
       think *= 0.5;
@@ -223,6 +233,22 @@ const playRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: nu
     const graces = s.features.has('graces') ? s.stats.graces : 0;
     const bold = !hinted && graces > 0 && (goals.includes('graceSaves') ? pace > 0.8 : slow && rng.next() < bot.boldness);
     if (bold) think *= 0.5;
+    // A foe that punishes standing still (its card says "30s inactivity"): with the
+    // deadline close, press the bulb, and failing that, rush (and slip more often)
+    let rushed = false;
+    const limit = inactivityLimit(s);
+    if (limit !== null) {
+      const left = limit - (s.elapsedMs - s.lastMatchAtMs) / 1000 - 2;
+      if (think > left && !hinted && s.features.has('hints') && s.stats.hints > 0) {
+        s = runReducer(s, { type: 'USE_HINT' });
+        think *= 0.5;
+        hinted = true;
+      }
+      if (think > left) {
+        think = Math.max(1, left);
+        rushed = true;
+      }
+    }
     const ticks = Math.max(1, Math.round(think));
     for (let i = 0; i < ticks && s.status === 'playing'; i++) s = runReducer(s, { type: 'TICK', ms: 1000 });
     if (s.status !== 'playing') continue; // won, lost, or the foe fell between Sets (wave over)
@@ -241,7 +267,7 @@ const playRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: nu
     }
     const sets = allSets(s.board, s.attributes);
     // A hinted card makes a slip half as likely
-    const slip = rng.next() < bot.mistakeRate * (hinted ? 0.5 : 1);
+    const slip = rng.next() < bot.mistakeRate * (hinted ? 0.5 : 1) * (rushed ? 2 : 1);
     if (bold || !sets.length || slip) {
       // Mistakes are mostly near misses (one trait off), which a grace forgives
       const near = bold || rng.next() < bot.nearMissRate ? nearMiss(selectableCards, s.attributes, rng) : null;

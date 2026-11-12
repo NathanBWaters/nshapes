@@ -1,8 +1,8 @@
 /**
  * Adventure balance — headless bots play every level through the real reducer.
  *
- * Targets (fresh skill trees, no Workshop upgrades, only the gear won on the
- * levels before this one, the first three weapons won as charms):
+ * Targets (fresh skill trees, no Workshop upgrades, only the gear and free
+ * weapon levels won on the levels before this one, charms as the game fills them):
  *   - Every level is survivable (★) by an average player most of the time.
  *   - The meadow tutorial is very forgiving for novices.
  *   - ★★★ is NOT routine for an average player on the harder levels — that's
@@ -17,9 +17,8 @@
  * Set ADVENTURE_BALANCE_REPORT=1 to print the full table.
  */
 import { LEVELS, MAIN_LEVELS, getLevel, mainIndexOf } from '@/adventure/data/levels';
-import { starRewards } from '@/adventure/data/rewards';
-import { createNewSave, createMaxedSave } from '@/adventure/progress';
-import { BOTS, starDistribution } from '@/adventure/engine/bot';
+import { applyLevelResult, createNewSave, createMaxedSave } from '@/adventure/progress';
+import { BOTS, simulateRun, starDistribution } from '@/adventure/engine/bot';
 import { MECHANICS } from '@/adventure/data/mechanics';
 import type { AdventureSave, LevelDef } from '@/adventure/types';
 
@@ -40,7 +39,7 @@ const isUseItChallenge = (level: LevelDef) => 'n' in level.challenge;
  * slots: "fill every slot with a DIFFERENT kind and trigger three of them".
  */
 const PUZZLE_CHARMS: Record<string, string[]> = {
-  '3-2': ['blast-powder-common', 'flint-spark-common', 'prismatic-ray-common'],
+  '3-2': ['blast-powder', 'flint-spark', 'prismatic-ray'],
 };
 
 /** Target bands for the average bot: [min, max] fractions of runs. */
@@ -87,24 +86,21 @@ const earnedBefore = (level: LevelDef): LevelDef[] => {
 };
 
 /**
- * What the player owns when they reach this level: every star reward of the
- * levels before it (weapons, recipes, Arcana), with the first three weapons won
- * in the charm slots (where the game puts them). A World 1 level is played with
- * World 1 gear, not the whole Armory.
+ * What the player owns when they reach this level: a fresh save that has
+ * earned all three stars on every level before it, paid out through the real
+ * reward pipeline (applyLevelResult). That gives the right weapons, recipes,
+ * Arcana, fighters and campaign features, the auto-filled charm slots, and the
+ * free weapon levels repeat rewards grant. No Workshop or skill-tree spending.
+ * A World 1 level is played with World 1 gear, not the whole Armory.
  */
-const campaignSave = (level: LevelDef, base: AdventureSave): AdventureSave => {
-  const rewards = earnedBefore(level).flatMap(starRewards);
-  const armory = [...new Set(rewards.flatMap(r => r.weapons ?? []))];
-  const evolutions = [...new Set(rewards.flatMap(r => (r.evolution ? [r.evolution] : [])))];
-  const arcana = [...new Set(rewards.flatMap(r => (r.arcana ? [r.arcana] : [])))];
-  return {
-    ...base,
-    armory,
-    charms: armory.slice(0, 3),
-    unlockedEvolutions: evolutions,
-    discoveredEvolutions: evolutions,
-    unlockedArcana: arcana,
-  };
+const campaignSaves = new Map<string, AdventureSave>();
+const campaignSave = (level: LevelDef): AdventureSave => {
+  const hit = campaignSaves.get(level.id);
+  if (hit) return hit;
+  let save = createNewSave();
+  for (const l of earnedBefore(level)) save = applyLevelResult(save, l, 3, 0).save;
+  campaignSaves.set(level.id, save);
+  return save;
 };
 
 describe('adventure data integrity', () => {
@@ -123,7 +119,6 @@ describe('adventure data integrity', () => {
 });
 
 describe('adventure balance (headless bots)', () => {
-  const save = progressedSave();
   const report: string[] = [];
   /** avg ★≥2 per main non-boss level, by world (checked after every level has run) */
   const knockouts = new Map<number, number[]>();
@@ -136,9 +131,9 @@ describe('adventure balance (headless bots)', () => {
     const elite = !!level.branchOf;
     it(elite ? `${level.id} ${level.name} (elite) is beatable but not a free win` : `${level.id} ${level.name} is survivable by an average player`, () => {
       // The final boss expects some Camp investment (2 Tough Hide)
-      const geared: AdventureSave = { ...save, upgrades: { tough_hide: 2 } };
       const finalBoss = MAIN_LEVELS[MAIN_LEVELS.length - 1];
-      const base = level.id === MAIN_LEVELS[0].id ? createNewSave() : campaignSave(level, level.id === finalBoss.id ? geared : save);
+      const earned = campaignSave(level);
+      const base: AdventureSave = level.id === finalBoss.id ? { ...earned, upgrades: { ...earned.upgrades, tough_hide: 2 } } : earned;
       // A fighter trial is played with the fighter it teaches (you recruit it on the parent level)
       const fighter: AdventureSave = isTrial(level) ? { ...base, selectedFighter: level.recommended![0] } : base;
       const fresh: AdventureSave = PUZZLE_CHARMS[level.id] ? { ...fighter, charms: PUZZLE_CHARMS[level.id] } : fighter;
@@ -184,6 +179,17 @@ describe('adventure balance (headless bots)', () => {
       if (world < 4) expect(nov.dist[0]).toBeLessThanOrEqual(BANDS.noviceLoss);
     });
   }
+
+  it('the level that teaches evolutions shows most players their first one', () => {
+    const level = LEVELS.find(l => l.introduces === 'evolutions')!;
+    const earned = campaignSave(level);
+    for (const bot of [BOTS.novice, BOTS.average]) {
+      let evolved = 0;
+      for (let i = 0; i < RUNS; i++) if (simulateRun(level, earned, bot, 1000 + i * 7919).state.evolutionsTriggered > 0) evolved += 1;
+      report.push(`${level.id} first evolution fires (${bot.name}): ${Math.round((evolved / RUNS) * 100)}%`);
+      expect(evolved / RUNS).toBeGreaterThanOrEqual(0.75);
+    }
+  });
 
   it('the main path gets harder world by world (mean ★★ rate falls each world)', () => {
     const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;

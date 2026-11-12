@@ -2,14 +2,33 @@
  * Adventure-only weapons. Each one is a plain Weapon (so the Armory, shop,
  * picks and inventory treat it like any other) whose behaviour lives in its
  * rules and modifiers (rules/types.ts). `effects` stays empty: nothing here
- * touches PlayerStats. Workshop tiers scale the rule numbers (data/armory.ts).
+ * touches PlayerStats.
+ *
+ * Every weapon is one item that grows through levels 2-4 (`levels`): Workshop
+ * tiers and free upgrades from star and bounty rewards (data/armory.ts).
  */
 import type { AdventureWeapon } from '../types';
+import type { Rule } from '../rules/types';
+
+const clarity = (pct: number, ms: number): Rule[] => [
+  { trigger: { on: 'setsWithin', count: 3, withinMs: 10000 }, when: [{ kind: 'chance', pct }], effects: [{ do: 'simplify', ms }], callout: 'Clarity!' },
+];
+const warDrum = (count: number, amount: number): Rule[] => [
+  { trigger: { on: 'setsWithin', count, withinMs: 20000 }, effects: [{ do: 'empowerBoard', amount }], callout: 'War Drum!' },
+];
+const amplifier = (n: number): Rule => ({ trigger: { on: 'everyNthSet', n }, effects: [{ do: 'doubleNext' }], callout: 'Amplified!' });
+const amplifiedRainbow: Rule = { trigger: { on: 'rainbow' }, effects: [{ do: 'doubleNext' }], callout: 'Amplified!' };
+const pinata = (pct: number, bounty: number): Rule[] => [
+  { trigger: { on: 'set' }, when: [{ kind: 'chance', pct }], effects: [{ do: 'armorCard', extraHealth: 2, bounty }], callout: 'Piñata!' },
+];
+const rallyHorn = (amount: number): Rule[] => [
+  { trigger: { on: 'firstSetOfWave' }, effects: [{ do: 'damage', amount }], callout: 'Rally!' },
+];
 
 export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
   // ── Clarity Lens (utility): fast play makes the board easier ──────────────
   {
-    id: 'clarity-lens-common',
+    id: 'clarity-lens',
     name: 'Clarity Lens',
     rarity: 'common',
     level: 1,
@@ -21,27 +40,17 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     specialEffect: 'enhancedHint',
     effects: {},
     maxCount: 1,
-    rules: [{ trigger: { on: 'setsWithin', count: 3, withinMs: 10000 }, when: [{ kind: 'chance', pct: 33 }], effects: [{ do: 'simplify', ms: 15000 }], callout: 'Clarity!' }],
-  },
-  {
-    id: 'clarity-lens-rare',
-    name: 'Clarity Lens',
-    rarity: 'rare',
-    level: 1,
-    price: 18,
-    description: '3 Sets within 10s: 50% chance to simplify the board for 15s. One trait becomes the same on every card.',
-    shortDescription: '3 quick Sets may simplify the board',
-    flavorText: 'Polished until the board has nowhere left to hide.',
-    icon: 'lorc/magnifying-glass',
-    specialEffect: 'enhancedHint',
-    effects: {},
-    maxCount: 1,
-    rules: [{ trigger: { on: 'setsWithin', count: 3, withinMs: 10000 }, when: [{ kind: 'chance', pct: 50 }], effects: [{ do: 'simplify', ms: 15000 }], callout: 'Clarity!' }],
+    rules: clarity(33, 15000),
+    levels: [
+      { rules: clarity(50, 15000), text: '50% chance' },
+      { rules: clarity(60, 17000), text: '60% chance, 17s' },
+      { rules: clarity(70, 20000), text: '70% chance, 20s' },
+    ],
   },
 
   // ── War Drum (offense): keep the beat and the whole board gets heavier ─────
   {
-    id: 'war-drum-common',
+    id: 'war-drum',
     name: 'War Drum',
     rarity: 'common',
     level: 1,
@@ -53,29 +62,17 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     specialEffect: 'bridge',
     effects: {},
     maxCount: 1,
-    rules: [{ trigger: { on: 'setsWithin', count: 5, withinMs: 20000 }, effects: [{ do: 'empowerBoard', amount: 2 }], callout: 'War Drum!' }],
-    upgradeText: tier => `board +${2 + tier} power`,
-  },
-  {
-    id: 'war-drum-rare',
-    name: 'War Drum',
-    rarity: 'rare',
-    level: 1,
-    price: 20,
-    description: '4 Sets within 20s: every card on the board gains +2 power (+2 damage when matched).',
-    shortDescription: '4 Sets in 20s: board +2 power',
-    flavorText: 'A faster beat for a meaner march.',
-    icon: 'delapouite/drum',
-    specialEffect: 'bridge',
-    effects: {},
-    maxCount: 1,
-    rules: [{ trigger: { on: 'setsWithin', count: 4, withinMs: 20000 }, effects: [{ do: 'empowerBoard', amount: 2 }], callout: 'War Drum!' }],
-    upgradeText: tier => `board +${2 + tier} power`,
+    rules: warDrum(5, 2),
+    levels: [
+      { rules: warDrum(4, 2), text: 'only 4 Sets' },
+      { rules: warDrum(4, 3), text: '4 Sets, board +3 power' },
+      { rules: warDrum(4, 4), text: '4 Sets, board +4 power' },
+    ],
   },
 
   // ── Amplifier Coil (combo): every few Sets, the next weapon fires twice ────
   {
-    id: 'amplifier-coil-common',
+    id: 'amplifier-coil',
     name: 'Amplifier Coil',
     rarity: 'common',
     level: 1,
@@ -87,27 +84,17 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     specialEffect: 'chainReaction',
     effects: {},
     maxCount: 1,
-    rules: [{ trigger: { on: 'everyNthSet', n: 4 }, effects: [{ do: 'doubleNext' }], callout: 'Amplified!' }],
-  },
-  {
-    id: 'amplifier-coil-rare',
-    name: 'Amplifier Coil',
-    rarity: 'rare',
-    level: 1,
-    price: 20,
-    description: 'Every 3rd Set: the next weapon trigger (blast, heal, laser, fire...) happens twice.',
-    shortDescription: 'Every 3rd Set: next trigger ×2',
-    flavorText: 'Wound tighter. Hums louder. Doubles more.',
-    icon: 'lorc/tesla-coil',
-    specialEffect: 'chainReaction',
-    effects: {},
-    maxCount: 1,
-    rules: [{ trigger: { on: 'everyNthSet', n: 3 }, effects: [{ do: 'doubleNext' }], callout: 'Amplified!' }],
+    rules: [amplifier(4)],
+    levels: [
+      { rules: [amplifier(3)], text: 'every 3rd Set' },
+      { rules: [amplifier(3), amplifiedRainbow], text: 'every 3rd Set and every Rainbow' },
+      { rules: [amplifier(2), amplifiedRainbow], text: 'every 2nd Set and every Rainbow' },
+    ],
   },
 
   // ── Piñata (offense): armor a card, then smash it for a bounty ────────────
   {
-    id: 'pinata-common',
+    id: 'pinata',
     name: 'Piñata',
     rarity: 'common',
     level: 1,
@@ -119,27 +106,17 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     specialEffect: 'bridge',
     effects: {},
     maxCount: 1,
-    rules: [{ trigger: { on: 'set' }, when: [{ kind: 'chance', pct: 20 }], effects: [{ do: 'armorCard', extraHealth: 2, bounty: 10 }], callout: 'Piñata!' }],
-  },
-  {
-    id: 'pinata-rare',
-    name: 'Piñata',
-    rarity: 'rare',
-    level: 1,
-    price: 18,
-    description: 'Each Set has a 35% chance to give a random card +2 hits. Breaking that card deals +10 damage.',
-    shortDescription: 'Sets often hang a +10 piñata',
-    flavorText: 'Party-sized, with extra candy.',
-    icon: 'delapouite/pinata',
-    specialEffect: 'bridge',
-    effects: {},
-    maxCount: 1,
-    rules: [{ trigger: { on: 'set' }, when: [{ kind: 'chance', pct: 35 }], effects: [{ do: 'armorCard', extraHealth: 2, bounty: 10 }], callout: 'Piñata!' }],
+    rules: pinata(20, 10),
+    levels: [
+      { rules: pinata(35, 10), text: '35% chance' },
+      { rules: pinata(40, 14), text: '40% chance, +14 damage' },
+      { rules: pinata(50, 18), text: '50% chance, +18 damage' },
+    ],
   },
 
   // ── Catalyst Prism (evolution): Catalysts show up far more often ──────────
   {
-    id: 'catalyst-prism-common',
+    id: 'catalyst-prism',
     name: 'Catalyst Prism',
     rarity: 'common',
     level: 1,
@@ -148,30 +125,19 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     shortDescription: '+6% Catalysts, more on Rainbows',
     flavorText: 'Light bends through it and lands on exactly the card you need.',
     icon: 'delapouite/prism',
-    specialEffect: 'capIncrease',
     effects: {},
     maxCount: 1,
     modifiers: { evolutionLikelihood: 6, rainbowEvolutionLikelihood: 25 },
-  },
-  {
-    id: 'catalyst-prism-rare',
-    name: 'Catalyst Prism',
-    rarity: 'rare',
-    level: 1,
-    price: 20,
-    description: '+10% evolution likelihood on every refill, and +25% more on refills after a Rainbow Strike.',
-    shortDescription: '+10% Catalysts, more on Rainbows',
-    flavorText: 'Cut by a jeweler who really, really wanted to evolve.',
-    icon: 'delapouite/prism',
-    specialEffect: 'capIncrease',
-    effects: {},
-    maxCount: 1,
-    modifiers: { evolutionLikelihood: 10, rainbowEvolutionLikelihood: 25 },
+    levels: [
+      { modifiers: { evolutionLikelihood: 10, rainbowEvolutionLikelihood: 25 }, text: '+10% Catalysts' },
+      { modifiers: { evolutionLikelihood: 14, rainbowEvolutionLikelihood: 30 }, text: '+14% Catalysts, +30% on Rainbows' },
+      { modifiers: { evolutionLikelihood: 18, rainbowEvolutionLikelihood: 35 }, text: '+18% Catalysts, +35% on Rainbows' },
+    ],
   },
 
   // ── Rally Horn (offense): open every wave with a haymaker ─────────────────
   {
-    id: 'rally-horn-common',
+    id: 'rally-horn',
     name: 'Rally Horn',
     rarity: 'common',
     level: 1,
@@ -183,21 +149,22 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     specialEffect: 'bridge',
     effects: {},
     maxCount: 1,
-    rules: [{ trigger: { on: 'firstSetOfWave' }, effects: [{ do: 'damage', amount: 6 }], callout: 'Rally!' }],
-  },
-  {
-    id: 'rally-horn-rare',
-    name: 'Rally Horn',
-    rarity: 'rare',
-    level: 1,
-    price: 16,
-    description: 'The first Set of each wave deals +10 damage.',
-    shortDescription: 'First Set each wave +10',
-    flavorText: 'Louder. Brassier. Every wave starts with a bruise.',
-    icon: 'lorc/hunting-horn',
-    specialEffect: 'bridge',
-    effects: {},
-    maxCount: 1,
-    rules: [{ trigger: { on: 'firstSetOfWave' }, effects: [{ do: 'damage', amount: 10 }], callout: 'Rally!' }],
+    rules: rallyHorn(6),
+    levels: [
+      { rules: rallyHorn(10), text: '+10 damage' },
+      { rules: rallyHorn(14), text: '+14 damage' },
+      { rules: rallyHorn(18), text: '+18 damage' },
+    ],
   },
 ];
+
+/**
+ * Ids of the old common/rare copies. Each rare copy is now a level of its one
+ * weapon, so an old save holding it gets that upgrade tier (save migration).
+ */
+export const LEGACY_ADVENTURE_WEAPON_IDS: Record<string, { id: string; tier: number }> = Object.fromEntries(
+  ADVENTURE_WEAPONS.flatMap(w => [
+    [`${w.id}-common`, { id: w.id, tier: 0 }],
+    [`${w.id}-rare`, { id: w.id, tier: 1 }],
+  ])
+);

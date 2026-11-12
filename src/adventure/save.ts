@@ -2,6 +2,7 @@
 import { storage } from '@/utils/storage';
 import type { AdventureSave } from './types';
 import { createNewSave, reconcileUnlocks } from './progress';
+import { resolveLegacyWeapon } from './data/armory';
 
 const KEY = 'adventure_v2_save';
 /** A stored save that could not be loaded is copied here before anything overwrites it. */
@@ -28,11 +29,23 @@ const withDefaults = (defaults: unknown, stored: unknown): unknown => {
   return stored;
 };
 
-/** A stored save still in the v1 shape: it has fighter levels, or a single charm or Arcana. */
+/** Some id in this list or record's keys names a weapon that was merged or removed. */
+const hasLegacyWeapon = (ids: unknown): boolean => {
+  const list = Array.isArray(ids) ? ids : isRecord(ids) ? Object.keys(ids) : [];
+  return list.some(id => typeof id === 'string' && resolveLegacyWeapon(id)?.id !== id);
+};
+
+/**
+ * A stored save in an older shape: it has fighter levels, a single charm or
+ * Arcana, or weapon ids from before each weapon family became one weapon.
+ */
 const needsMigration = (stored: Record<string, unknown>): boolean =>
   (isRecord(stored.fighterLevels) && Object.keys(stored.fighterLevels).length > 0) ||
   (stored.charm !== undefined && stored.charm !== null) ||
-  (stored.activeArcana !== undefined && stored.activeArcana !== null);
+  (stored.activeArcana !== undefined && stored.activeArcana !== null) ||
+  hasLegacyWeapon(stored.armory) ||
+  hasLegacyWeapon(stored.charms) ||
+  hasLegacyWeapon(stored.weaponUpgrades);
 
 const keepUnreadable = (raw: string, why: unknown): void => {
   console.warn('Adventure save could not be loaded; starting a new one.', why);
@@ -55,7 +68,7 @@ export const loadAdventureSave = (): AdventureSave => {
   try {
     const parsed: unknown = JSON.parse(raw);
     if (!isRecord(parsed) || parsed.version !== 1) throw new Error(`unsupported save version ${isRecord(parsed) ? String(parsed.version) : typeof parsed}`);
-    // reconcileUnlocks also migrates the v1 shape (fighter levels refunded, single charm/Arcana into slots)
+    // reconcileUnlocks also migrates older shapes (fighter levels refunded, single charm/Arcana into slots, merged weapon ids)
     const save = reconcileUnlocks(withDefaults(createNewSave(), parsed) as AdventureSave);
     // Store a migrated save right away so a refund can never be paid from the old shape twice
     if (needsMigration(parsed)) writeAdventureSave(save);

@@ -252,21 +252,21 @@ describe('rule interpreter', () => {
 describe('evolutions', () => {
   const phoenix = EVOLUTION_RECIPES.find(r => r.id === 'phoenix-pyre')!;
   const armedSave = {
-    armory: ['blast-powder-common', 'mending-charm-common'],
-    charms: ['blast-powder-common', 'mending-charm-common'],
+    armory: ['blast-powder', 'mending-charm'],
+    charms: ['blast-powder', 'mending-charm'],
     unlockedEvolutions: [phoenix.id],
   };
 
   it('a recipe is armed only when unlocked and both families are held', () => {
     expect(startFight({ save: armedSave }).armedRecipes).toEqual([phoenix.id]);
     expect(startFight({ save: { ...armedSave, unlockedEvolutions: [] } }).armedRecipes).toEqual([]);
-    expect(startFight({ save: { ...armedSave, charms: ['blast-powder-common'] } }).armedRecipes).toEqual([]);
+    expect(startFight({ save: { ...armedSave, charms: ['blast-powder'] } }).armedRecipes).toEqual([]);
   });
 
   it('likelihood = 12% base + 4% per Evolution Lab tier + modifiers', () => {
     expect(startFight({ save: armedSave }).evolutionLikelihood).toBe(12);
     expect(startFight({ save: { ...armedSave, upgrades: { evolution_lab: 3 } } }).evolutionLikelihood).toBe(24);
-    const prism = { ...armedSave, armory: [...armedSave.armory, 'catalyst-prism-common'], charms: [...armedSave.charms, 'catalyst-prism-common'] };
+    const prism = { ...armedSave, armory: [...armedSave.armory, 'catalyst-prism'], charms: [...armedSave.charms, 'catalyst-prism'] };
     expect(startFight({ save: prism }).evolutionLikelihood).toBe(18);
   });
 
@@ -323,7 +323,7 @@ describe('evolutions', () => {
   it('several recipes can run at once; the Catalyst picks one that is not running', () => {
     const second = EVOLUTION_RECIPES.find(r => r.id !== phoenix.id)!;
     const ids = [phoenix.id, second.id];
-    const held = [...armedSave.charms, ...second.families.map(f => `${f[0]}-common`)];
+    const held = [...armedSave.charms, ...second.families.map(f => f[0])];
     let s = startFight({ save: { armory: held, charms: held, unlockedEvolutions: ids, upgrades: { charm_belt: 3 } } });
     expect(new Set(s.armedRecipes)).toEqual(new Set(ids));
     s = catalystOn(s);
@@ -515,5 +515,17 @@ describe('rule sources on the board', () => {
     s = playSet(s, set);
     expect(s.board.some(c => c.id === other.id && c.hasEvolutionItem)).toBe(true);
     expect(allSets(s.board, s.attributes).length).toBeGreaterThan(0);
+  });
+});
+
+describe('board deadlock guard', () => {
+  it('frees a board where foes have hidden every card', () => {
+    const start = startFight();
+    const hidden: RunState = { ...start, board: start.board.map(c => ({ ...c, isFaceDown: true })) };
+    expect(hasAnySet(hidden.board, hidden.attributes)).toBe(false);
+
+    const after = tick(hidden, 250);
+    expect(after.board.some(c => !c.isFaceDown)).toBe(true);
+    expect(hasAnySet(after.board, after.attributes)).toBe(true);
   });
 });

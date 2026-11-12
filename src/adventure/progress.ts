@@ -20,14 +20,23 @@ import { LEVELS, MAIN_LEVELS, BRANCH_STAR_REQUIREMENT, mainIndexOf } from './dat
 import { BIOMES, getBiome } from './data/biomes';
 import { MECHANICS } from './data/mechanics';
 import { FIGHTERS, STARTING_FIGHTERS } from './data/fighters';
-import { UPGRADES, getUpgrade, getWeaponUpgradeCosts } from './data/upgrades';
+import { UPGRADES, getUpgrade, getWeaponUpgradeCosts, MAX_WEAPON_UPGRADE_TIER } from './data/upgrades';
 import { ARCANA } from './data/arcana';
-import { getArmoryWeapon } from './data/armory';
+import { getArmoryWeapon, resolveLegacyWeapon } from './data/armory';
+import { LEGACY_WEAPON_RARITY } from '@/utils/gameDefinitions';
 import { SKILL_NODES } from './data/skillTrees';
 import { BOUNTIES } from './data/bounties';
 import { EVOLUTION_RECIPES } from './data/evolutions';
 import { CAMPAIGN_FEATURES, FEATURES } from './data/features';
 import { starRewards, unlockablesOf } from './data/rewards';
+import {
+  boughtWeaponTiers,
+  freeWeaponTiers,
+  overflowRefund,
+  settleWeaponTiers,
+  weaponUpgradeCosts,
+  weaponUpgradeTier,
+} from './weaponLevels';
 
 /**
  * The shape of a brand-new save. Loading fills anything a stored save lacks
@@ -68,6 +77,7 @@ export const createNewSave = (): AdventureSave => ({
   discoveredEvolutions: [],
   upgrades: {},
   weaponUpgrades: {},
+  legacyWeaponTiers: {},
   coinsUnlocked: false,
   workshopUnlocked: false,
   seenMechanics: [],
@@ -247,7 +257,7 @@ export const unequipArcana = (save: AdventureSave, arcanaId: ArcanaId): Adventur
 export const toggleArcana = (save: AdventureSave, arcanaId: ArcanaId): AdventureSave =>
   equippedArcanaOf(save).includes(arcanaId) ? unequipArcana(save, arcanaId) : equipArcana(save, arcanaId);
 
-/** A weapon belongs to a recipe family when its id is the family id or a tier of it (`blast-powder-rare`). */
+/** A weapon belongs to a recipe family when its id is the family id or a tier of it (`oracle-eye-rare`). */
 const inFamily = (weaponId: string, family: readonly string[]): boolean =>
   family.some(p => weaponId === p || weaponId.startsWith(`${p}-`));
 
@@ -287,9 +297,46 @@ export const legacyFighterRefund = (fighterLevels: Record<string, number> | unde
   }, 0);
 
 /**
- * Bring a v1 save to the current shape: fighter levels are refunded in full
- * (they no longer exist), the single charm joins `charms`, and the single
- * Arcana joins `equippedArcana`. Safe to run more than once.
+ * Weapons from before each family became one weapon with levels: every old id
+ * maps to its weapon (the Mastery weapons are dropped), owning a stronger
+ * rare/epic copy gives that weapon the matching upgrade tier, and Workshop
+ * tiers bought on a copy that no longer exists are refunded at the price paid.
+ * Tiers bought on the plain (common) copy carry over. Safe to run more than once.
+ */
+export const migrateWeaponIds = (save: AdventureSave): AdventureSave => {
+  const legacyWeaponTiers: Record<string, number> = { ...(save.legacyWeaponTiers ?? {}) };
+  const armory: string[] = [];
+  for (const old of save.armory) {
+    const to = resolveLegacyWeapon(old);
+    if (!to) continue;
+    if (!armory.includes(to.id)) armory.push(to.id);
+    if (to.tier > 0) legacyWeaponTiers[to.id] = Math.min(MAX_WEAPON_UPGRADE_TIER, Math.max(legacyWeaponTiers[to.id] ?? 0, to.tier));
+  }
+  const weaponUpgrades: Record<string, number> = {};
+  let refund = 0;
+  for (const [old, tier] of Object.entries(save.weaponUpgrades)) {
+    const to = resolveLegacyWeapon(old);
+    if (to && to.tier === 0) {
+      weaponUpgrades[to.id] = Math.max(weaponUpgrades[to.id] ?? 0, tier);
+    } else {
+      refund += getWeaponUpgradeCosts(LEGACY_WEAPON_RARITY[old] ?? 'common')
+        .slice(0, Math.max(0, Math.min(MAX_WEAPON_UPGRADE_TIER, Math.floor(Number(tier) || 0))))
+        .reduce((a, b) => a + b, 0);
+    }
+  }
+  const charms: string[] = [];
+  for (const old of save.charms) {
+    const to = resolveLegacyWeapon(old);
+    if (to && !charms.includes(to.id)) charms.push(to.id);
+  }
+  return { ...save, coins: save.coins + refund, armory, charms, weaponUpgrades, legacyWeaponTiers };
+};
+
+/**
+ * Bring an older save to the current shape: fighter levels are refunded in full
+ * (they no longer exist), the single charm joins `charms`, the single Arcana
+ * joins `equippedArcana`, and old weapon ids become their one weapon
+ * (migrateWeaponIds). Safe to run more than once.
  */
 export const migrateSave = (save: AdventureSave): AdventureSave => {
   const next: AdventureSave = {
@@ -304,7 +351,7 @@ export const migrateSave = (save: AdventureSave): AdventureSave => {
   };
   if (save.charm && !next.charms.includes(save.charm)) next.charms = [save.charm, ...next.charms];
   if (save.activeArcana && !next.equippedArcana.includes(save.activeArcana)) next.equippedArcana = [save.activeArcana, ...next.equippedArcana];
-  return normalizeSkillNodes(next);
+  return normalizeSkillNodes(migrateWeaponIds(next));
 };
 
 type LockReason =
@@ -356,7 +403,12 @@ interface GrantedReward {
 /** One thing to reveal with fanfare after a level. `star === 0` indicates a Bounty reward. */
 export type Unlock =
   | { kind: 'fighter'; name: CharacterName; star: number }
-  | { kind: 'weapon'; id: string; star: number; firstWeapon: boolean }
+  /**
+   * A new weapon, or (with `level`) a reward naming a weapon already owned:
+   * it is now at that level. `refund`: coins returned for Workshop tiers the
+   * free upgrade pushed past the top level.
+   */
+  | { kind: 'weapon'; id: string; star: number; firstWeapon: boolean; level?: number; refund?: number }
   | { kind: 'arcana'; id: ArcanaId; star: number }
   | { kind: 'evolution'; id: string; star: number; firstEvolution: boolean }
   | { kind: 'feature'; feature: UnlockableFeature; star: number };
@@ -389,7 +441,13 @@ const grant = (
   reward: RewardDef,
   star = 0,
   /** Put newly won weapons straight into free charm slots (not when quietly reconciling an old save) */
-  autoEquip = true
+  autoEquip = true,
+  /**
+   * The save before this reward was earned (before its star or bounty counted).
+   * A weapon already owned is then revealed as levelled up. Left out when quietly
+   * reconciling an old save.
+   */
+  before?: AdventureSave
 ): { save: AdventureSave; unlocks: Unlock[] } => {
   let next = { ...save };
   const unlocks: Unlock[] = [];
@@ -417,6 +475,13 @@ const grant = (
           next.armory = [...next.armory, u.id];
           // A new weapon goes straight into a free charm slot
           if (autoEquip) next = equipCharm(next, u.id);
+        } else if (before) {
+          // Already owned: this reward is a free level (derived from the earned star/bounty, see weaponLevels.ts)
+          const tier = weaponUpgradeTier(next, u.id);
+          const refund = overflowRefund(next, u.id);
+          if (tier > weaponUpgradeTier(before, u.id) || refund > 0) {
+            unlocks.push({ kind: 'weapon', id: u.id, star, firstWeapon: false, level: tier + 1, ...(refund > 0 ? { refund } : {}) });
+          }
         }
         break;
       case 'arcana':
@@ -433,7 +498,7 @@ const grant = (
         break;
     }
   }
-  return { save: next, unlocks };
+  return { save: settleWeaponTiers(next), unlocks };
 };
 
 const recordRunBountyStats = (save: AdventureSave, level: LevelDef, stars: number, run: RunState): AdventureSave => {
@@ -492,7 +557,10 @@ export const applyLevelResult = (
   const rewards = starRewards(level);
   for (let s = previousStars + 1; s <= stars; s++) {
     const reward = rewards[s - 1];
-    const result = grant(next, reward, s);
+    // The star counts before its reward is paid, so a weapon it names again is a free level
+    const earnedBefore = next;
+    next = { ...next, stars: { ...next.stars, [level.id]: s } };
+    const result = grant(next, reward, s, true, earnedBefore);
     next = result.save;
     unlocks.push(...result.unlocks);
     starCoins += reward.coins;
@@ -520,7 +588,7 @@ export const applyLevelResult = (
         if (b.progress(next) >= b.target) {
           progressed = true;
           completedBounties.push(b);
-          const result = grant({ ...next, completedBounties: [...next.completedBounties, b.id] }, b.reward);
+          const result = grant({ ...next, completedBounties: [...next.completedBounties, b.id] }, b.reward, 0, true, next);
           next = result.save;
           unlocks.push(...result.unlocks);
           bountyCoins += b.reward.coins;
@@ -583,7 +651,7 @@ export const reconcileUnlocks = (save: AdventureSave): AdventureSave => {
     unlockedEvolutions: next.unlockedEvolutions.filter(id => known.has(id)),
     discoveredEvolutions: next.discoveredEvolutions.filter(id => known.has(id)),
   };
-  return trimEquipped(normalizeSkillNodes(next));
+  return trimEquipped(normalizeSkillNodes(settleWeaponTiers(next)));
 };
 
 // ─── What the player has met so far ─────────────────────────────────────────
@@ -621,13 +689,19 @@ interface TrackDef<K extends string> {
   withSteps: (save: AdventureSave, key: K, steps: number) => AdventureSave;
   /** Whether the item is on sale at all, before looking at the price */
   onSale: (save: AdventureSave, key: K) => boolean;
+  /** Steps that can be bought at most (default: every listed price) */
+  maxSteps?: (save: AdventureSave, key: K) => number;
 }
 
 const sum = (xs: readonly number[]) => xs.reduce((a, b) => a + b, 0);
 
 const purchaseTrack = <K extends string>(def: TrackDef<K>) => {
   /** Price of the next step, or null when maxed out */
-  const cost = (save: AdventureSave, key: K): number | null => def.costs(key)?.[def.steps(save, key)] ?? null;
+  const cost = (save: AdventureSave, key: K): number | null => {
+    const steps = def.steps(save, key);
+    if (def.maxSteps && steps >= def.maxSteps(save, key)) return null;
+    return def.costs(key)?.[steps] ?? null;
+  };
   const canBuy = (save: AdventureSave, key: K): boolean => {
     const price = cost(save, key);
     return price !== null && def.onSale(save, key) && save.coins >= price;
@@ -663,20 +737,23 @@ const upgradeTrack = purchaseTrack<string>({
   onSale: (save, id) => save.workshopUnlocked && isUpgradeUnlocked(save, getUpgrade(id)),
 });
 
+/**
+ * Workshop tiers of an Armory weapon. The k-th tier bought costs the k-th
+ * price, whatever free tiers the weapon has, so a refund returns exactly what
+ * was paid; free tiers only lower how many can still be bought.
+ */
 const weaponUpgradeTrack = purchaseTrack<string>({
-  costs: id => {
-    const weapon = getArmoryWeapon(id);
-    return weapon ? getWeaponUpgradeCosts(weapon.rarity) : null;
-  },
-  steps: (save, id) => save.weaponUpgrades[id] ?? 0,
+  costs: weaponUpgradeCosts,
+  steps: boughtWeaponTiers,
   withSteps: (save, id, steps) => ({ ...save, weaponUpgrades: withTier(save.weaponUpgrades, id, steps) }),
   onSale: (save, id) => save.workshopUnlocked && save.armory.includes(id),
+  maxSteps: (save, id) => MAX_WEAPON_UPGRADE_TIER - freeWeaponTiers(save, id),
 });
 
 export const upgradeTier = (save: AdventureSave, id: string): number => save.upgrades[id] ?? 0;
 export const { cost: upgradeCost, canBuy: canBuyUpgrade, buy: buyUpgrade, spent: upgradeSpentCoins, refund: refundUpgrade } = upgradeTrack;
 
-export const weaponUpgradeTier = (save: AdventureSave, weaponId: string): number => save.weaponUpgrades[weaponId] ?? 0;
+export { weaponUpgradeTier, freeWeaponTiers, weaponTiers } from './weaponLevels';
 export const {
   cost: weaponUpgradeCost,
   canBuy: canUpgradeWeapon,

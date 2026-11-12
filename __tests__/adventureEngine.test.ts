@@ -4,6 +4,7 @@ import { getFeaturesForLevel, startingLoadout } from '@/adventure/loadout';
 import { createRun, runReducer, computeStars } from '@/adventure/engine/run';
 import { allSets, hasAnySet, isRainbow } from '@/adventure/engine/sets';
 import { getArmoryWeapon } from '@/adventure/data/armory';
+import { ADVENTURE_WEAPONS } from '@/adventure/data/adventureWeapons';
 import { SKILL_NODES } from '@/adventure/data/skillTrees';
 import type { AdventureWeapon, RunState } from '@/adventure/types';
 import { eventsOf, findSet, miss, playSet, startFight, testLevel, tick } from './testUtils/adventureFight';
@@ -118,7 +119,7 @@ describe('run reducer', () => {
 });
 
 describe('loadout', () => {
-  const armory = ['blast-powder-common', 'mending-charm-common', 'flint-spark-common', 'war-drum-common', 'pinata-common'];
+  const armory = ['blast-powder', 'mending-charm', 'flint-spark', 'war-drum', 'pinata'];
 
   it('fighters bring no gear: charms are the whole weapon loadout, capped at the slots', () => {
     const level = testLevel();
@@ -132,15 +133,15 @@ describe('loadout', () => {
   });
 
   it('duplicate and unowned charms are dropped', () => {
-    const save = { ...createNewSave(), armory: ['blast-powder-common'], charms: ['blast-powder-common', 'blast-powder-common', 'pinata-common'] };
-    expect(startingLoadout(testLevel(), save).weapons.map(w => w.id)).toEqual(['blast-powder-common']);
+    const save = { ...createNewSave(), armory: ['blast-powder'], charms: ['blast-powder', 'blast-powder', 'pinata'] };
+    expect(startingLoadout(testLevel(), save).weapons.map(w => w.id)).toEqual(['blast-powder']);
   });
 
   it('bare levels stay bare even with charms, Arcana and nodes equipped', () => {
     const save = {
       ...createNewSave(),
-      armory: ['blast-powder-common'],
-      charms: ['blast-powder-common'],
+      armory: ['blast-powder'],
+      charms: ['blast-powder'],
       unlockedArcana: ['tempo_surge' as const],
       equippedArcana: ['tempo_surge' as const],
     };
@@ -162,13 +163,24 @@ describe('loadout', () => {
     expect(s.skillNodes).toEqual(tabby);
   });
 
-  it('Workshop tiers scale a rule weapon (War Drum +2 → +5)', () => {
+  it('upgrade tiers take a rule weapon through its levels (War Drum 5 Sets +2 → 4 Sets +4)', () => {
     const drum = (tier: number) => {
-      const w = getArmoryWeapon('war-drum-common', { 'war-drum-common': tier }) as AdventureWeapon;
-      const e = w.rules![0].effects[0];
-      return e.do === 'empowerBoard' ? e.amount : NaN;
+      const w = getArmoryWeapon('war-drum', { 'war-drum': tier }) as AdventureWeapon;
+      const r = w.rules![0];
+      const e = r.effects[0];
+      return [r.trigger.on === 'setsWithin' ? r.trigger.count : NaN, e.do === 'empowerBoard' ? e.amount : NaN];
     };
-    expect([0, 1, 2, 3].map(drum)).toEqual([2, 3, 4, 5]);
+    expect([0, 1, 2, 3].map(drum)).toEqual([[5, 2], [4, 2], [4, 3], [4, 4]]);
+    expect(getArmoryWeapon('war-drum', { 'war-drum': 2 })!.shortDescription).toContain('(4 Sets, board +3 power)');
+  });
+
+  it('every adventure weapon has three upgrade levels', () => {
+    for (const w of ADVENTURE_WEAPONS) expect(w.levels).toHaveLength(3);
+  });
+
+  it('a stat weapon at a tier uses its own level numbers (Blast Powder 10 → 40%)', () => {
+    expect([0, 1, 2, 3].map(t => getArmoryWeapon('blast-powder', { 'blast-powder': t })!.effects.explosionChance)).toEqual([10, 20, 30, 40]);
+    expect(getArmoryWeapon('blast-powder', { 'blast-powder': 1 })!.shortDescription).toContain('+10% blast chance');
   });
 });
 

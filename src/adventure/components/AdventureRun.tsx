@@ -29,6 +29,7 @@ import { getFighter } from '../data/fighters';
 import { getPassive, DEFAULT_COMBO_WINDOW_MS, PASSIVE_TUNING } from '../data/passives';
 import { getArcana } from '../data/arcana';
 import { EVOLUTION_RECIPES } from '../data/evolutions';
+import { weaponLevelSuffix } from '../data/armory';
 import { COACH_KEYS } from '../progress';
 import { Btn, CoinPill, DARK, Eyebrow, Heart, INK, PopIn, TONE } from './ui';
 import { EvolutionBanner, EvolutionRing, Floater, MegaFlash, hitTier, type FloaterSpec } from './RunFx';
@@ -709,7 +710,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
                   return (
                     <View key={i} style={[st.gearChip, { borderColor: getRarityColor(w.rarity) }]}>
                       <WeaponAvatar weapon={w} size={20} interactive />
-                      <Text style={st.gearText} numberOfLines={1}>{w.name}{tier > 0 ? ` +${tier}` : ''}</Text>
+                      <Text style={st.gearText} numberOfLines={1}>{w.name}{weaponLevelSuffix(tier)}</Text>
                     </View>
                   );
                 })}
@@ -818,7 +819,7 @@ const WeaponPick: React.FC<{ title: string; subtitle: string; options: Weapon[];
             <TouchableOpacity key={`${w.id}-${i}`} testID={`pick-${i}`} onPress={() => onPick(w)} style={[st.pickCard, { borderColor: getRarityColor(w.rarity) }]} activeOpacity={0.85}>
               <View style={[st.pickIcon, { backgroundColor: COLORS.paperBeige }]}><WeaponAvatar weapon={w} size={34} /></View>
               <View style={{ flex: 1 }}>
-                <Text style={st.pickName}>{w.name}{tier > 0 ? ` +${tier}` : ''} <Text style={[st.pickRarity, { color: getRarityColor(w.rarity) === COLORS.rarityCommon ? TONE.spent : getRarityColor(w.rarity) }]}>{w.rarity.toUpperCase()}</Text></Text>
+                <Text style={st.pickName}>{w.name}{weaponLevelSuffix(tier)} <Text style={[st.pickRarity, { color: getRarityColor(w.rarity) === COLORS.rarityCommon ? TONE.spent : getRarityColor(w.rarity) }]}>{w.rarity.toUpperCase()}</Text></Text>
                 <Text style={st.pickDesc}>{w.shortDescription}</Text>
               </View>
             </TouchableOpacity>
@@ -866,7 +867,7 @@ const Intermission: React.FC<{ run: RunState; dispatch: (a: RunAction) => void; 
                     >
                       <View style={st.pickIcon}><WeaponAvatar weapon={w} size={34} triggerKey={tapTriggers[i]} /></View>
                       <View style={{ flex: 1 }}>
-                        <Text style={st.pickName}>{w.name}{(run.weaponUpgrades[w.id] ?? 0) > 0 ? ` +${run.weaponUpgrades[w.id]}` : ''}</Text>
+                        <Text style={st.pickName}>{w.name}{weaponLevelSuffix(run.weaponUpgrades[w.id] ?? 0)}</Text>
                         <Text style={st.pickDesc}>{w.shortDescription}</Text>
                       </View>
                       <CoinPill coins={price} />

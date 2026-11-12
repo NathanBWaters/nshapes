@@ -5,7 +5,7 @@
  * Each call to createEnemy() returns a fresh instance with reset internal state.
  */
 
-import type { Weapon, PlayerStats } from '@/types';
+import type { PlayerStats } from '@/types';
 import type {
   EnemyInstance,
   EnemyOption } from '@/types/enemy';
@@ -91,22 +91,18 @@ export function getRandomEnemies(tier: 1 | 2 | 3 | 4, count: number = 3, exclude
  * @param count - How many to return (default 3)
  * @param excludeEnemies - Enemy names to exclude from selection (e.g., already defeated enemies)
  * @param excludeWeaponIds - Weapon IDs to exclude from rewards (e.g., already awarded weapons)
- * @param playerStats - Player's current stats (for filtering useless cap-increase weapons)
- * @param playerWeapons - Player's current weapons (for likelihood bonus)
  * @returns Array of EnemyOption objects (enemy + pre-determined reward)
  */
 export function getRandomEnemyOptions(
   tier: 1 | 2 | 3 | 4,
   count: number = 3,
   excludeEnemies: string[] = [],
-  excludeWeaponIds: string[] = [],
-  playerStats?: PlayerStats,
-  playerWeapons?: Weapon[]
+  excludeWeaponIds: string[] = []
 ): EnemyOption[] {
   const enemies = getRandomEnemies(tier, count, excludeEnemies);
   return enemies.map(enemy => ({
     enemy,
-    stretchGoalReward: generateChallengeBonus(enemy.tier, excludeWeaponIds, playerStats, playerWeapons),
+    stretchGoalReward: generateChallengeBonus(enemy.tier, excludeWeaponIds),
     stretchGoalMoney: getChallengeBonusMoney(enemy.tier),
   }));
 }

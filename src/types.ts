@@ -1,5 +1,5 @@
 import type { IconName } from './components/Icon';
-import type { EffectCapType, EffectCaps } from './game/effectCaps';
+import type { EffectCaps } from './game/effectCaps';
 
 export type { EffectCaps };
 
@@ -98,14 +98,6 @@ export type CharacterName =
 
 export type WeaponRarity = 'common' | 'rare' | 'epic' | 'legendary';
 
-// The effect whose cap a Cap Increaser weapon raises
-export type CapIncreaseType = EffectCapType;
-
-export interface CapIncreaseEffect {
-  type: CapIncreaseType;
-  amount: number;
-}
-
 // Bridge effect trigger types - when X happens, there's a chance to trigger Y
 export type BridgeTriggerType =
   | 'onHeal'           // When player heals
@@ -147,8 +139,13 @@ export interface Weapon {
   flavorText?: string; // Longer fun description for weapon guide
   price: number;
   effects: Partial<PlayerStats>;
-  specialEffect?: 'explosive' | 'autoHint' | 'enhancedHint' | 'boardGrowth' | 'fire' | 'graceGain' | 'healing' | 'hintGain' | 'xpGain' | 'coinGain' | 'timeGain' | 'laser' | 'ricochet' | 'echo' | 'chainReaction' | 'capIncrease' | 'bridge' | 'challengeLegendary' | 'connector' | 'revengeLinker' | 'webWeaver' | 'echoChamber' | 'sympatheticFlames' | 'neuralNetwork';
-  capIncrease?: CapIncreaseEffect; // When acquired, increases the cap for an effect type
+  specialEffect?: 'explosive' | 'autoHint' | 'enhancedHint' | 'boardGrowth' | 'fire' | 'graceGain' | 'healing' | 'hintGain' | 'xpGain' | 'coinGain' | 'timeGain' | 'laser' | 'ricochet' | 'echo' | 'chainReaction' | 'bridge' | 'challengeLegendary' | 'connector' | 'revengeLinker' | 'webWeaver' | 'echoChamber' | 'sympatheticFlames' | 'neuralNetwork';
+  /**
+   * Its effects at upgrade levels 2, 3 and 4 (Adventure Workshop tiers 1-3 and
+   * free reward upgrades). Keys left out keep their base value. Without this,
+   * tiers follow the generic formula in adventure/data/upgrades.ts.
+   */
+  tierEffects?: readonly [Partial<PlayerStats>, Partial<PlayerStats>, Partial<PlayerStats>];
   bridgeEffect?: BridgeEffect; // Cross-system trigger: when X happens, Y% chance to cause Z
   icon?: IconName; // Icon path like "delapouite/bamboo" - must be in ICON_REGISTRY
   maxCount?: number; // Maximum number of this weapon that can be owned (e.g., 1 for unique legendaries)
@@ -222,8 +219,7 @@ export interface PlayerStats {
   linkedFireMultiplier: number; // Fire spread multiplier for connected positions
   bonusConnectionChance: number; // % chance to create bonus connection when creating one
 
-  // Effect cap system - tracks player's current caps for each effect type
-  // Caps can be increased by acquiring Cap Increaser weapons
+  // Effect cap system - the player's cap for each effect type (the defaults in game/effectCaps.ts)
   effectCaps?: EffectCaps;
 }
 

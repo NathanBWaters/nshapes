@@ -6,6 +6,7 @@ import { createDeck, isValidCombination, sameCardAttributes } from '@/utils/game
 import {
   CHARACTERS,
   WEAPONS,
+  LEGACY_WEAPON_IDS,
   initializePlayer,
   calculatePlayerTotalStats,
   generateShopWeapons,
@@ -651,14 +652,15 @@ const Game: React.FC<GameProps> = ({
       return;
     }
 
-    // Validate weapons - filter out any that no longer exist
+    // Validate weapons - merged rare/epic copies load as their one weapon; removed ones are skipped
     const validWeapons: Weapon[] = [];
-    for (const weaponId of savedGame.weaponIds) {
+    for (const savedId of savedGame.weaponIds) {
+      const weaponId = savedId in LEGACY_WEAPON_IDS ? LEGACY_WEAPON_IDS[savedId]?.id : savedId;
       const weapon = WEAPONS.find(w => w.id === weaponId);
       if (weapon) {
         validWeapons.push(weapon);
       } else {
-        console.warn(`Saved weapon ${weaponId} no longer exists, skipping`);
+        console.warn(`Saved weapon ${savedId} no longer exists, skipping`);
       }
     }
 
@@ -709,9 +711,7 @@ const Game: React.FC<GameProps> = ({
           getEnemyTierForRound(nextRound),
           3,
           savedGame.defeatedEnemies,
-          savedGame.awardedStretchGoalWeapons,
-          playerTotalStats,
-          validWeapons
+          savedGame.awardedStretchGoalWeapons
         ),
         defeatedEnemies: savedGame.defeatedEnemies,
         awardedStretchGoalWeapons: savedGame.awardedStretchGoalWeapons,
@@ -1837,7 +1837,7 @@ const Game: React.FC<GameProps> = ({
 
       // Only endless mode offers enemies (on the enemy selection screen)
       const enemies = prevState.isEndlessMode
-        ? getRandomEnemyOptions(getEnemyTierForRound(nextRound), 3, prevState.defeatedEnemies, prevState.awardedStretchGoalWeapons, prevTotalStats, prevState.player.weapons)
+        ? getRandomEnemyOptions(getEnemyTierForRound(nextRound), 3, prevState.defeatedEnemies, prevState.awardedStretchGoalWeapons)
         : [];
       const shopWeapons = generateShopWeapons(4, prevState.player.weapons, nextRound, prevTotalStats.luck);
 
@@ -1905,7 +1905,7 @@ const Game: React.FC<GameProps> = ({
     autoPlayer: autoPlayerEnabled,
     timeGainContext: {
       triggersThisRound: getTimeGainTriggers(),
-      effectiveCap: getTimeGainTriggerCap(totalStats, state.player.weapons, getTimeGainTriggerCapBonus()),
+      effectiveCap: getTimeGainTriggerCap(totalStats, getTimeGainTriggerCapBonus()),
     },
     onTimeGainTriggered: recordTimeGainTrigger,
     connections: state.connections,

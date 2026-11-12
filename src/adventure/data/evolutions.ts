@@ -8,7 +8,7 @@
  * live only during that window, on top of a flat +1 damage per Set
  * (engine/sources.ts EVOLUTION_RULES). Up to 3 evolutions per fight.
  *
- * Families are weapon id prefixes: `blast-powder` matches `blast-powder-rare`.
+ * Families are weapon id prefixes: `oracle-eye` matches `oracle-eye-rare`.
  * The two families of one recipe never share a weapon, so one weapon can't arm
  * a recipe alone.
  */
@@ -16,13 +16,13 @@ import type { EvolutionRecipe } from '../types';
 
 /** Weapon families (ids from WEAPONS in utils/gameDefinitions.ts and data/adventureWeapons.ts) */
 export const FAMILIES = {
-  explosion: ['blast-powder', 'inferno-charge'],
-  healing: ['mending-charm', 'restoration-aura', 'vital-core', 'soul-harvest'],
-  fire: ['flint-spark', 'ember-heart', 'sympathetic-flames', 'cascade-core'],
-  echo: ['echo-stone', 'resonance-crystal', 'chain-reaction'],
-  laser: ['prismatic-ray', 'spectrum-annihilator'],
-  grace: ['second-chance', 'fortune-token', 'lucky-charm', 'fortunes-shield', 'grace-conduit', 'snowball'],
-  coin: ['fortunes-favor', 'golden-touch', 'fortunes-blessing'],
+  explosion: ['blast-powder'],
+  healing: ['mending-charm', 'vital-core', 'soul-harvest'],
+  fire: ['flint-spark', 'sympathetic-flames', 'cascade-core'],
+  echo: ['echo-stone', 'chain-reaction'],
+  laser: ['prismatic-ray'],
+  grace: ['second-chance', 'fortune-token', 'fortunes-shield', 'grace-conduit', 'snowball'],
+  coin: ['fortunes-favor', 'fortunes-blessing'],
   time: ['chrono-shard', 'time-drop', 'temporal-core', 'hourglass-of-ages', 'temporal-rift'],
   hint: ['oracle-eye', 'seeker-lens', 'crystal-orb', 'clairvoyant-sphere', 'enlightened-eye', 'prophets-vision', 'mystic-sight'],
   ricochet: ['chaos-shard', 'entropy-engine'],

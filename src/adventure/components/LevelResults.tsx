@@ -12,7 +12,7 @@ import type { ResultApplication } from '../progress';
 import { getBiome } from '../data/biomes';
 import { BOUNTIES } from '../data/bounties';
 import { Btn, CoinPill, INK, PopIn, starPopDelayMs, StarRow, TONE } from './ui';
-import { Silhouette, UnlockableAvatar, describeRewardUnlocks } from './rewards';
+import { Silhouette, UnlockableAvatar, describeRewardUnlocks, describeUnlock } from './rewards';
 
 interface Props {
   level: LevelDef;
@@ -65,7 +65,17 @@ const LevelResults: React.FC<Props> = ({ level, run, stars, result, unlocksRevea
       : null;
 
   const totalCoins = result.starCoins + result.coinsBanked + result.bountyCoins;
-  const starUnlocks = result.granted.flatMap(g => describeRewardUnlocks(g.reward).map(unlock => ({ star: g.star, unlock })));
+  // A weapon the player already owned came back as a free level: name the level it reached
+  const levelOf = (star: number, name: string) => {
+    const u = result.unlocks.find(x => x.kind === 'weapon' && x.star === star && x.level !== undefined && describeUnlock(x).name === name);
+    return u ? describeUnlock(u).revealed : null;
+  };
+  const starUnlocks = result.granted.flatMap(g =>
+    describeRewardUnlocks(g.reward).map(unlock => {
+      const levelled = unlock.kind === 'weapon' ? levelOf(g.star, unlock.name) : null;
+      return { star: g.star, unlock: levelled ? { ...unlock, revealed: levelled, secret: levelled } : unlock };
+    })
+  );
   const activeBountyHooks = result.save.bountiesUnlocked
     ? BOUNTIES
         .filter(b => !result.save.completedBounties.includes(b.id) && b.progress(result.save) > 0)

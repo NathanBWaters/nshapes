@@ -197,7 +197,7 @@ describe('Level preview loadout', () => {
   it('shows charm slots, the fighter passives, armed evolutions and Arcana slots', () => {
     const level = MAIN_LEVELS.find(l => !l.rules.noGear)!;
     const recipe = EVOLUTION_RECIPES[0];
-    const armory = recipe.families.map(f => `${f[0]}-common`);
+    const armory = recipe.families.map(f => f[0]);
     let save: AdventureSave = {
       ...createNewSave(),
       coinsUnlocked: true,
@@ -242,7 +242,7 @@ describe('Level preview loadout', () => {
 describe('Field Guide', () => {
   it('Recipe Guide shows locked, unlocked, armed and evolved recipes with their families and effects', () => {
     const [armedR, forgedR, lockedR] = EVOLUTION_RECIPES;
-    const charms = armedR.families.map(f => `${f[0]}-common`);
+    const charms = armedR.families.map(f => f[0]);
     const save: AdventureSave = {
       ...createNewSave(),
       armory: charms,

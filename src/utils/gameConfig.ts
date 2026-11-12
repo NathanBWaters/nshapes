@@ -111,7 +111,6 @@ export {
   DEFAULT_EFFECT_CAPS,
   STAT_TO_CAP_TYPE,
   getMainStatForCap,
-  getBuildStatsForCap,
 } from '../game/effectCaps';
 export type { EffectCapType, EffectCaps, CappedStat } from '../game/effectCaps';
 
@@ -151,14 +150,11 @@ export const shouldShowCapInfo = (currentValue: number, cap: number): boolean =>
  * Get cap info for a stat if it has one
  * Returns null if the stat is not capped
  */
-export const getCapInfoForStat = (statKey: string, playerCaps?: Record<string, number>): { cap: number; capIncrease: number } | null => {
+export const getCapInfoForStat = (statKey: string, playerCaps?: Record<string, number>): { cap: number } | null => {
   const capType = STAT_TO_CAP_TYPE[statKey];
   if (!capType) return null;
-
-  const capConfig = EFFECT_CAPS[capType];
   // If player has custom caps, use those
-  const cap = playerCaps?.[capType] ?? capConfig.defaultCap;
-  return { cap, capIncrease: capConfig.capIncrease };
+  return { cap: playerCaps?.[capType] ?? EFFECT_CAPS[capType].defaultCap };
 };
 
 export const MATCH_REWARDS = {
