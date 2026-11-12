@@ -285,10 +285,12 @@ const Card: React.FC<CardProps> = ({
       {/* Health badge for multi-hit cards */}
       {getHealthBadge()}
 
-      {/* Power card: extra damage when matched (adventure mode) */}
-      {!!card.bonusPoints && card.bonusPoints > 0 && !isDud && !isFaceDown && (
+      {/* Power card: extra damage when matched (adventure mode). A charged card (board-wide boost) shows its extra damage in a plainer badge. */}
+      {((card.bonusPoints ?? 0) > 0 || (card.charge ?? 0) > 0) && !isDud && !isFaceDown && (
         <View style={[styles.badge, styles.powerBadge]} pointerEvents="none">
-          <Text style={styles.powerBadgeText}>+{card.bonusPoints}</Text>
+          <Text style={[styles.powerBadgeText, !(card.bonusPoints ?? 0) && styles.chargeBadgeText]}>
+            +{(card.bonusPoints ?? 0) + (card.charge ?? 0)}
+          </Text>
         </View>
       )}
 
@@ -514,6 +516,9 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '900',
     color: '#FFDE00',
+  },
+  chargeBadgeText: {
+    color: '#FFFFFF',
   },
   coinBadge: {
     top: 3,

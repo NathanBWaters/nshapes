@@ -6,4 +6,10 @@ export const BASE_RULES = {
   powerCardChance: 0.12,
   powerCardBonus: 2,
   pickOptions: 3,
+  /**
+   * "Your next Set deals ×N" effects add up rather than multiply (×2 and ×2
+   * make ×3), and the next Set's multiplier (with Hot Streak) tops out here.
+   * Multiplying let a few cheap triggers before one Set snowball to ×8, ×16...
+   */
+  maxNextSetMultiplier: 4,
 } as const;

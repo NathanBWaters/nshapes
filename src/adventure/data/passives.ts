@@ -12,7 +12,7 @@ export const PASSIVE_TUNING = {
   hot_streak: { 'hotStreak.multiplier': 2 },
   grudge: { 'grudge.max': 3, 'grudge.damage': 3 },
   thick_hide: { 'thickHide.perWave': 1 },
-  patience: { 'patience.ms': 6000, 'patience.damage': 3 },
+  patience: { 'patience.msPerTrait': 2500, 'patience.damage': 2 },
   deep_freeze: { 'deepFreeze.ms': 4000 },
   zoomies: { 'zoomies.every': 5, 'zoomies.powerCards': 0 },
   fetch: { 'fetch.count': 1 },
@@ -46,7 +46,8 @@ const TEXT: Record<PassiveId, (t: Tuning) => string> = {
     const n = t['thickHide.perWave'];
     return n === 1 ? 'Your first mistake each wave costs no heart.' : `Your first ${n} mistakes each wave cost no heart.`;
   },
-  patience: t => `A Set made ${secs(t['patience.ms'])}+ after the last one deals +${t['patience.damage']}.`,
+  patience: t =>
+    `A Set made ${secs(t['patience.msPerTrait'])}+ per trait after the last one deals +${t['patience.damage']} (${secs(t['patience.msPerTrait'] * 4)}+ with 4 traits).`,
   deep_freeze: t => `Every Rainbow Strike freezes the clock and the foe for ${secs(t['deepFreeze.ms'])}.`,
   zoomies: t =>
     `Every ${nth(t['zoomies.every'])} Set re-deals the board clean (duds and hidden cards gone).` +

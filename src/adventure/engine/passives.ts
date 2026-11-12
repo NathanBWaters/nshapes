@@ -77,6 +77,12 @@ export const consumeHotStreak = (d: Draft): number => {
 // ─── Set scoring ────────────────────────────────────────────────────────────
 
 /** Flat damage the passives add to the Set being scored (Scrappy, Combo, Grudge, Patience). */
+/**
+ * Emperor Penguin's Patience window: a fixed time per active trait, so about
+ * the same share of Sets count as "patient" at 2 traits as at 5.
+ */
+export const patienceMs = (d: Draft): number => tuning(d, 'patience.msPerTrait') * d.attributes.length;
+
 export const passiveSetDamage = (d: Draft, sinceLastMs: number): number => {
   let bonus = 0;
   if (hasPassive(d, 'scrappy') && d.hearts !== null && d.maxHearts !== null) {
@@ -89,7 +95,7 @@ export const passiveSetDamage = (d: Draft, sinceLastMs: number): number => {
     d.passive.grudge = 0;
     bonus += release;
   }
-  if (hasPassive(d, 'patience') && sinceLastMs >= tuning(d, 'patience.ms')) {
+  if (hasPassive(d, 'patience') && sinceLastMs >= patienceMs(d)) {
     const p = tuning(d, 'patience.damage');
     emit(d, 'patience', p);
     bonus += p;

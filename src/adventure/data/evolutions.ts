@@ -121,7 +121,7 @@ export const EVOLUTION_RECIPES: EvolutionRecipe[] = [
     icon: 'lorc/bright-explosion',
     families: [fam('growth'), fam('explosion')],
     familyText: 'Growth + Explosion',
-    activeText: 'Every Set grows the board by 2. At 18+ cards, a Set detonates a 3×3 block.',
+    activeText: 'Every Set grows the board by 2. At 18+ cards, a Set detonates a 3×2 block.',
     flavor: 'Grow the universe until it can not hold itself. Then let it go.',
     source: {
       rules: [
@@ -129,7 +129,7 @@ export const EVOLUTION_RECIPES: EvolutionRecipe[] = [
         {
           trigger: { on: 'set' },
           when: [{ kind: 'boardAtLeast', n: 18 }],
-          effects: [{ do: 'explode', area: { shape: 'block', cols: 3, rows: 3 } }],
+          effects: [{ do: 'explode', area: { shape: 'block', cols: 3, rows: 2 } }],
           callout: 'BIG BANG!',
         },
       ],

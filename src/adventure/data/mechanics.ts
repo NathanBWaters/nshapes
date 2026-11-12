@@ -899,7 +899,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
     id: 'fighter_foresight', kind: 'fighter', title: 'Emperor Penguin: Patience & Deep Freeze',
     tagline: 'Slow, deliberate, deadly.',
     body: [
-      'Patience: a Set made 6 seconds or more after your last one deals +3.',
+      'Patience: a Set made 2.5 seconds per trait or more after your last one deals +2 (7.5s with 3 traits).',
       'Deep Freeze: every Rainbow Strike freezes the clock and the foe for 4 seconds.',
       'Skill tree: make every patient Set a laser or a free Set, or turn Rainbows into Catalysts and 3×3 shatters.',
     ],
@@ -907,7 +907,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
       { title: 'Hunt Rainbows', text: 'The hawk speeds up the clock, and every Rainbow Strike freezes it. Land 5 Rainbows for the third star.', anchor: 'top' },
     ],
     icon: 'delapouite/penguin',
-    demo: { type: 'icons', items: [{ icon: 'lorc/hourglass', label: '6s+ wait: +3' }, { icon: 'lorc/rainbow-star', label: 'Rainbow' }, { icon: 'lorc/snowflake-1', label: 'Freeze 4s' }] },
+    demo: { type: 'icons', items: [{ icon: 'lorc/hourglass', label: 'Slow Set: +2' }, { icon: 'lorc/rainbow-star', label: 'Rainbow' }, { icon: 'lorc/snowflake-1', label: 'Freeze 4s' }] },
     coachMark: { on: 'freeze', text: 'Deep Freeze! The clock and the foe stand still. Take your time.' },
   },
   fighter_growth: {

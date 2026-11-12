@@ -1,9 +1,10 @@
 /**
  * Headless bot that plays a level through the same reducer the UI uses.
  * Used to tune foe HP / timers against target star rates. It plays the save
- * it is given: equip charms, Arcana and skill nodes on the save beforehand.
+ * it is given, or with a BuildPlan gears up first like a player at the
+ * preview (botBuilds.ts: skill nodes for the stars earned, charms, recipes).
  */
-import type { AttributeName, Card } from '@/types';
+import type { AttributeName, Card, Weapon } from '@/types';
 import { isValidCombination } from '@/utils/gameUtils';
 import { getBoardSizeForAttributes } from '@/utils/gameConfig';
 import { resolveMatch } from '@/utils/matchResolution';
@@ -13,6 +14,8 @@ import { computeStars, createRun, runReducer, shopPrice } from './run';
 import { allSets, countDifferentAttributes, isRainbow, isSelectable } from './sets';
 import { challengeCount } from './challenges';
 import { snareTarget } from './fight';
+import { armedRecipesFor } from './sources';
+import { gearUp, type BuildPlan } from './botBuilds';
 
 export interface BotProfile {
   name: string;
@@ -144,12 +147,12 @@ const nearMiss = (cards: Card[], attrs: AttributeName[], rng: Rng): Card[] | nul
  * GameBoard rolls weapon effects with Math.random, so the bot swaps in a seeded
  * source while it plays; that keeps balance numbers reproducible run to run.
  */
-export const simulateRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: number) => {
+export const simulateRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: number, plan?: BuildPlan) => {
   const realRandom = Math.random;
   const boardRng = createRng(seed ^ 0x5bd1e995);
   Math.random = boardRng.next;
   try {
-    return playRun(level, save, bot, seed);
+    return playRun(level, plan ? gearUp(save, plan, seed) : save, bot, seed);
   } finally {
     Math.random = realRandom;
   }
@@ -186,13 +189,24 @@ const submit = (s: RunState, picked: Card[]): RunState => {
   return runReducer(next, { type: 'REPLACE', ids: picked.map(c => c.id) });
 };
 
-/** Between waves: buy the cheapest weapon the purse covers (and keep buying while the ★★★ asks for it). */
-const shop = (s: RunState): RunState => {
+/**
+ * A weapon a player would grab: one that arms a new evolution recipe first,
+ * otherwise any (a spread of picks across runs, not always the first card).
+ */
+const preferred = (s: RunState, options: Weapon[], rng: Rng): number => {
+  if (!options.length) return -1;
+  const armed = s.armedRecipes.length;
+  const arming = options.map((w, i) => [w, i] as const).filter(([w]) => armedRecipesFor([...s.weapons, w], s.unlockedEvolutions).length > armed);
+  return arming.length ? rng.pick(arming)[1] : Math.floor(rng.next() * options.length);
+};
+
+/** Between waves: buy what the purse covers (a recipe piece first; keep buying while the ★★★ asks for it). */
+const shop = (s: RunState, rng: Rng): RunState => {
   for (let guard = 0; guard < 3 && s.shopOptions.length; guard++) {
-    const prices = s.shopOptions.map(shopPrice);
-    const cheapest = prices.indexOf(Math.min(...prices));
-    if (prices[cheapest] > s.coins) break;
-    s = runReducer(s, { type: 'BUY', index: cheapest });
+    const affordable = s.shopOptions.filter(w => shopPrice(w) <= s.coins);
+    if (!affordable.length) break;
+    const pick = affordable[preferred(s, affordable, rng)];
+    s = runReducer(s, { type: 'BUY', index: s.shopOptions.indexOf(pick) });
     if (!chasing(s).includes('shopBuys')) break;
   }
   return s;
@@ -205,11 +219,11 @@ const playRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: nu
   while ((s.status === 'playing' || s.status === 'pick' || s.status === 'intermission') && guard++ < 2000) {
     if (s.status === 'pick') {
       // Level up: take a free weapon
-      s = runReducer(s, { type: 'PICK', weaponId: s.pickOptions[0]?.id ?? null });
+      s = runReducer(s, { type: 'PICK', weaponId: s.pickOptions[preferred(s, s.pickOptions, rng)]?.id ?? null });
       continue;
     }
     if (s.status === 'intermission') {
-      s = shop(s);
+      s = shop(s, rng);
       s = runReducer(s, { type: 'NEXT_WAVE' });
       continue;
     }
@@ -279,11 +293,12 @@ const playRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: nu
   return { stars: computeStars(s), coins: s.coins, state: s };
 };
 
-export const starDistribution = (level: LevelDef, save: AdventureSave, bot: BotProfile, runs = 60) => {
+/** Star spread over `runs` seeded runs; with a plan, each run gears up its own build (gearUp). */
+export const starDistribution = (level: LevelDef, save: AdventureSave, bot: BotProfile, runs = 60, plan?: BuildPlan) => {
   const dist = [0, 0, 0, 0];
   let coins = 0;
   for (let i = 0; i < runs; i++) {
-    const r = simulateRun(level, save, bot, 1000 + i * 7919);
+    const r = simulateRun(level, save, bot, 1000 + i * 7919, plan);
     dist[r.stars] += 1;
     coins += r.coins;
   }

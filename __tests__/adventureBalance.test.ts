@@ -1,8 +1,17 @@
 /**
  * Adventure balance — headless bots play every level through the real reducer.
  *
- * Targets (fresh skill trees, no Workshop upgrades, only the gear and free
- * weapon levels won on the levels before this one, charms as the game fills them):
+ * What a bot brings (engine/botBuilds.ts), per run, like a player at the preview:
+ *   - the gear, recipes, Arcana and free weapon levels won on the levels before this one;
+ *   - a skill tree bought with the stars a player of its skill has by now
+ *     (STAR_SHARE of the stars on offer before the level: every fighter
+ *     spends every star earned), in a random buying style;
+ *   - a random unlocked fighter, and charms it picks itself: often both halves
+ *     of an evolution recipe, the rest at random;
+ *   - level-up picks and shop buys that complete a recipe when they can.
+ * No Workshop spending.
+ *
+ * Targets:
  *   - Every level is survivable (★) by an average player most of the time.
  *   - The meadow tutorial is very forgiving for novices.
  *   - ★★★ is NOT routine for an average player on the harder levels — that's
@@ -16,9 +25,10 @@
  *
  * Set ADVENTURE_BALANCE_REPORT=1 to print the full table.
  */
-import { LEVELS, MAIN_LEVELS, getLevel, mainIndexOf } from '@/adventure/data/levels';
+import { LEVELS, MAIN_LEVELS } from '@/adventure/data/levels';
 import { applyLevelResult, createNewSave, createMaxedSave } from '@/adventure/progress';
-import { BOTS, simulateRun, starDistribution } from '@/adventure/engine/bot';
+import { BOTS, simulateRun, starDistribution, type BotProfile } from '@/adventure/engine/bot';
+import { levelsBefore, starsOnReaching, STAR_SHARE, type BuildPlan } from '@/adventure/engine/botBuilds';
 import { MECHANICS } from '@/adventure/data/mechanics';
 import { levelDefeatCondition } from '@/adventure/data/foes';
 import type { AdventureSave, LevelDef } from '@/adventure/types';
@@ -29,6 +39,7 @@ import type { AdventureSave, LevelDef } from '@/adventure/types';
 const RUNS = 60;
 
 const isTrial = (level: LevelDef) => level.introduces.startsWith('fighter_');
+
 
 const WORLD: Record<string, number> = { meadow: 1, woods: 2, canyon: 3, peaks: 4, summit: 5 };
 
@@ -46,6 +57,17 @@ const isFlawless = (level: LevelDef) =>
 const PUZZLE_CHARMS: Record<string, string[]> = {
   '3-2': ['blast-powder', 'flint-spark', 'prismatic-ray'],
 };
+
+/**
+ * How a bot of this skill gears up for the level: its stars (STAR_SHARE of
+ * those on offer so far), any unlocked fighter (a fighter trial is played with
+ * the fighter it teaches), its own charms (unless the level's puzzle names them).
+ */
+const planFor = (level: LevelDef, bot: BotProfile): BuildPlan => ({
+  stars: starsOnReaching(level, STAR_SHARE[bot.name as keyof typeof STAR_SHARE]),
+  fighter: isTrial(level) ? level.recommended![0] : 'any',
+  keepCharms: !!PUZZLE_CHARMS[level.id],
+});
 
 /** Target bands for the average bot: [min, max] fractions of runs. */
 const BANDS = {
@@ -84,23 +106,12 @@ const progressedSave = (): AdventureSave => {
   return { ...maxed, upgrades: {}, skillNodes: {}, equippedArcana: [], charms: maxed.armory.slice(0, 3) };
 };
 
-/** Levels a caught-up player has finished before this one: the main path so far (and, for a branch, the levels it hangs off). */
-const earnedBefore = (level: LevelDef): LevelDef[] => {
-  const idx = mainIndexOf(level);
-  const ancestors = new Set<string>();
-  for (let at = level; at.branchOf; ) {
-    at = getLevel(at.branchOf);
-    ancestors.add(at.id);
-  }
-  return LEVELS.filter(l => mainIndexOf(l) < idx || ancestors.has(l.id));
-};
-
 /**
  * What the player owns when they reach this level: a fresh save that has
  * earned all three stars on every level before it, paid out through the real
  * reward pipeline (applyLevelResult). That gives the right weapons, recipes,
- * Arcana, fighters and campaign features, the auto-filled charm slots, and the
- * free weapon levels repeat rewards grant. No Workshop or skill-tree spending.
+ * Arcana, fighters and campaign features, and the free weapon levels repeat
+ * rewards grant. The bot spends its stars and picks its charms per run (plan below).
  * A World 1 level is played with World 1 gear, not the whole Armory.
  */
 const campaignSaves = new Map<string, AdventureSave>();
@@ -108,7 +119,7 @@ const campaignSave = (level: LevelDef): AdventureSave => {
   const hit = campaignSaves.get(level.id);
   if (hit) return hit;
   let save = createNewSave();
-  for (const l of earnedBefore(level)) save = applyLevelResult(save, l, 3, 0).save;
+  for (const l of levelsBefore(level)) save = applyLevelResult(save, l, 3, 0).save;
   campaignSaves.set(level.id, save);
   return save;
 };
@@ -144,11 +155,9 @@ describe('adventure balance (headless bots)', () => {
       const finalBoss = MAIN_LEVELS[MAIN_LEVELS.length - 1];
       const earned = campaignSave(level);
       const base: AdventureSave = level.id === finalBoss.id ? { ...earned, upgrades: { ...earned.upgrades, tough_hide: 2 } } : earned;
-      // A fighter trial is played with the fighter it teaches (you recruit it on the parent level)
-      const fighter: AdventureSave = isTrial(level) ? { ...base, selectedFighter: level.recommended![0] } : base;
-      const fresh: AdventureSave = PUZZLE_CHARMS[level.id] ? { ...fighter, charms: PUZZLE_CHARMS[level.id] } : fighter;
-      const avg = starDistribution(level, fresh, BOTS.average, RUNS);
-      const nov = starDistribution(level, fresh, BOTS.novice, RUNS);
+      const fresh: AdventureSave = PUZZLE_CHARMS[level.id] ? { ...base, charms: PUZZLE_CHARMS[level.id] } : base;
+      const avg = starDistribution(level, fresh, BOTS.average, RUNS, planFor(level, BOTS.average));
+      const nov = starDistribution(level, fresh, BOTS.novice, RUNS, planFor(level, BOTS.novice));
       const pct = (x: number) => `${Math.round(x * 100)}%`.padStart(4);
       report.push(
         `${level.id.padEnd(4)} ${level.name.padEnd(18)} ` +
@@ -158,7 +167,7 @@ describe('adventure balance (headless bots)', () => {
       if (elite) {
         // Elites are optional and hard: an expert can at least survive, and
         // an average player on a level-1 fighter does not three-star them for free.
-        const exp = starDistribution(level, fresh, BOTS.expert, RUNS);
+        const exp = starDistribution(level, fresh, BOTS.expert, RUNS, planFor(level, BOTS.expert));
         expect(1 - exp.dist[0]).toBeGreaterThanOrEqual(0.5);
         expect(avg.dist[3]).toBeLessThanOrEqual(0.7); // small samples are noisy
         const ko = avg.dist[2] + avg.dist[3];
@@ -198,7 +207,7 @@ describe('adventure balance (headless bots)', () => {
     const earned = campaignSave(level);
     for (const bot of [BOTS.novice, BOTS.average]) {
       let evolved = 0;
-      for (let i = 0; i < RUNS; i++) if (simulateRun(level, earned, bot, 1000 + i * 7919).state.evolutionsTriggered > 0) evolved += 1;
+      for (let i = 0; i < RUNS; i++) if (simulateRun(level, earned, bot, 1000 + i * 7919, planFor(level, bot)).state.evolutionsTriggered > 0) evolved += 1;
       report.push(`${level.id} first evolution fires (${bot.name}): ${Math.round((evolved / RUNS) * 100)}%`);
       expect(evolved / RUNS).toBeGreaterThanOrEqual(0.75);
     }

@@ -45,7 +45,7 @@ NShapes combines the classic SET card matching game with roguelike progression m
 * **Hazards** (`LevelRules.hazards`): Time Bombs (match before the fuse runs out) from 1-7, Snares (matching it hurts; matching the card its arrow points at defuses it) from 2-2.
 * **Coins** drop from matches, bank even on a loss (not on retreat), and are spent mid-run (shop between waves) or at **Camp** (Workshop upgrades and weapon upgrades).
 * Adventure-only weapons (`data/adventureWeapons.ts`, e.g. War Drum, Amplifier Coil, Piñata) join the Armory through `getArmoryWeapon`; Free Play doesn't use them.
-* Balance is checked by headless bots: `ADVENTURE_BALANCE_REPORT=1 npx jest __tests__/adventureBalance.test.ts`.
+* Balance is checked by headless bots: `ADVENTURE_BALANCE_REPORT=1 npx jest __tests__/adventureBalance.test.ts`. Each run gears up like a player (`engine/botBuilds.ts`): skill nodes bought with the stars its skill level would have by then, a random fighter, charms that often arm an evolution. `__tests__/adventureBuilds.test.ts` sweeps every weapon pair, evolution, full tree and random endgame build for broken combinations.
 * The legacy 10-round adventure flow is still in `Game.tsx` but is no longer reachable from the main menu.
 
 **Free Play Mode** - Relaxed Practice:

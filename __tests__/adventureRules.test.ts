@@ -2,7 +2,7 @@
  * The rule interpreter, evolutions, traps, challenges and Arcana stacking.
  * Rules are injected as test relics so these tests don't depend on content.
  */
-import { runReducer } from '@/adventure/engine/run';
+import { baseCardReward, runReducer } from '@/adventure/engine/run';
 import { allSets, hasAnySet } from '@/adventure/engine/sets';
 import { MAX_FIRINGS_PER_ACTION } from '@/adventure/rules/engine';
 import { arcanaRules, combineArcana } from '@/adventure/data/arcana';
@@ -164,18 +164,21 @@ describe('rule interpreter', () => {
     expect(damageOf(tick(first.next, 1000, 1000)).dmg).toBe(3 + 1);
   });
 
-  it('empowered cards count as bonus cards', () => {
+  it('charged cards hit harder but are not power cards (power-card effects cannot feed on a board-wide boost)', () => {
     let s = withWeapons(
       startFight({ save: { selectedFighter: 'Pelican' }, features: ['hearts', 'gear'] }),
       relic([{ trigger: { on: 'set' }, effects: [{ do: 'empowerBoard', amount: 2 }] }]),
       relic([{ trigger: { on: 'bonusCardMatched' }, effects: [{ do: 'damage', amount: 1 }] }], undefined, 'b')
     );
     s = playSet(s);
+    const set = findSet(s, x => x.every(c => (c.charge ?? 0) >= 2 && !c.bonusPoints && !c.bonusMoney))!;
+    const before = s.foeHp;
+    // Score with the real card values (playSet pays a flat 1 per card)
+    s = runReducer(s, { type: 'MATCH', cards: set, rewards: set.map(baseCardReward) });
     expect(s.bonusCardsMatched).toBe(0);
-    const set = findSet(s, x => x.some(c => (c.bonusPoints ?? 0) > 0))!;
-    s = playSet(s, set);
-    expect(s.bonusCardsMatched).toBeGreaterThan(0);
-    expect(eventsOf(s, 'hit').some(e => e.text === 'Bonus')).toBe(true);
+    expect(eventsOf(s, 'hit').some(e => e.text === 'Bonus')).toBe(false);
+    // 3 cards × (1 + 2 charge)
+    expect(before - s.foeHp).toBe(3 * 3);
   });
 
   it('modifiers: flat and conditional Set damage', () => {
@@ -230,9 +233,28 @@ describe('rule interpreter', () => {
     expect(eventsOf(s, 'simplify_end')).toHaveLength(1);
   });
 
-  it('empowerBoard adds power to every card on the board', () => {
+  it('empowerBoard charges every card on the board', () => {
     const s = playSet(withWeapons(base(), relic([{ trigger: { on: 'set' }, effects: [{ do: 'empowerBoard', amount: 2 }] }])));
-    expect(s.board.filter(c => !s.replacing.includes(c.id)).some(c => (c.bonusPoints ?? 0) >= 2)).toBe(true);
+    expect(s.board.filter(c => !s.replacing.includes(c.id)).some(c => (c.charge ?? 0) >= 2)).toBe(true);
+  });
+
+  it('next-Set multipliers add up and cap at ×4; the board-growth trigger needs room to grow', () => {
+    const times = relic([{ trigger: { on: 'mistake' }, effects: [{ do: 'nextSetMultiplier', times: 2 }] }]);
+    let s = withWeapons(base(), times);
+    s = miss(miss(s));
+    expect(s.nextSetMultiplier).toBe(3);
+    s = miss(miss(s));
+    expect(s.nextSetMultiplier).toBe(4);
+
+    const grow = withWeapons(
+      base(),
+      relic([{ trigger: { on: 'set' }, effects: [{ do: 'growBoard', count: 30 }] }]),
+      relic([{ trigger: { on: 'weapon', kind: 'growth' }, effects: [{ do: 'damage', amount: 1 }] }], undefined, 'b')
+    );
+    const grown = playSet(grow);
+    const full = playSet(grown);
+    expect(eventsOf(grown, 'hit').filter(e => e.text === 'Bonus')).toHaveLength(1);
+    expect(eventsOf(full, 'hit').filter(e => e.text === 'Bonus')).toHaveLength(1); // no new growth, no new trigger
   });
 
   it('nextSetMultiplier and comboStep feed the next Set', () => {

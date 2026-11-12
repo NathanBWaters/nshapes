@@ -53,7 +53,7 @@ export { passiveTuningOf } from './fight';
 /** What one matched card is worth before weapons and foes get involved. */
 export const baseCardReward = (c: Card): CardReward => ({
   cardId: c.id,
-  points: MATCH_REWARDS.basePoints + (c.bonusPoints ?? 0),
+  points: MATCH_REWARDS.basePoints + (c.bonusPoints ?? 0) + (c.charge ?? 0),
   money: MATCH_REWARDS.baseMoney + (c.bonusMoney ?? 0),
   experience: MATCH_REWARDS.baseExperience,
 });
@@ -272,7 +272,8 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
     d.activeEvolutions.length * EVOLUTION_RULES.setDamage;
   const rainbowMult = rainbow ? (a.rainbowMultiplier ?? BASE_RULES.rainbowMultiplier) + (m.rainbowMultiplierBonus ?? 0) : 1;
   const enemyMult = (enemyResult.pointsMultiplier || 1) * (statMods.pointsMultiplier || 1);
-  const setMult = d.nextSetMultiplier * hotStreak;
+  // "Next Set ×N" effects and Hot Streak together top out at the same cap (data/rules.ts)
+  const setMult = Math.min(BASE_RULES.maxNextSetMultiplier, d.nextSetMultiplier * hotStreak);
   d.nextSetMultiplier = 1;
   const dmg = flat * rainbowMult * (a.damageScale ?? 1) * enemyMult * setMult + (purity.damage + traps.bonus) * enemyMult;
   emit(d, rainbow ? 'rainbow' : 'hit', dealDamage(d, dmg));
@@ -367,9 +368,11 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
     pruneConnections(d);
     emit(d, 'card_removed');
   }
+  // A full board can't grow: no cards, and no "whenever the board grows" trigger
+  let grown = 0;
   if (fx?.boardGrowth) {
-    const extra = Math.min(fx.boardGrowth, MAX_BOARD - d.board.length);
-    for (let i = 0; i < extra; i++) d.board = [...d.board, drawCard(d)];
+    grown = Math.max(0, Math.min(fx.boardGrowth, MAX_BOARD - d.board.length));
+    for (let i = 0; i < grown; i++) d.board = [...d.board, drawCard(d)];
   }
 
   // Connector weapons: chance to link two of the matched board positions for the wave
@@ -386,7 +389,7 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   resolveCatalyst(d, matched);
 
   // Rule triggers (resolved by drain at the end of the action)
-  if (fx) fireBoardWeapons(d, fx);
+  if (fx) fireBoardWeapons(d, { ...fx, boardGrowth: grown });
   enqueue(d, 'set');
   if (rainbow) enqueue(d, 'rainbow');
   if (bonusCards > 0) enqueue(d, 'bonusCardMatched');

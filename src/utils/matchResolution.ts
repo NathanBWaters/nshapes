@@ -18,17 +18,29 @@ const COLLATERAL_REWARDS: Record<CollateralEffect, { points: number; money: numb
   connected: { points: 1, money: 1 },
 };
 
-const collateralReward = (card: Card, effectType: CollateralEffect): CardReward => ({
-  cardId: card.id,
-  ...COLLATERAL_REWARDS[effectType],
-  effectType,
-});
+/** The stat that adds damage per card to an effect (Blast Powder, Prismatic Ray, Chaos Shard levels and tuning). */
+const COLLATERAL_BONUS: Partial<Record<CollateralEffect, 'explosionDamage' | 'laserDamage' | 'ricochetDamage'>> = {
+  explosion: 'explosionDamage',
+  laser: 'laserDamage',
+  ricochet: 'ricochetDamage',
+};
+
+const collateralReward = (card: Card, effectType: CollateralEffect, stats?: PlayerStats): CardReward => {
+  const bonus = COLLATERAL_BONUS[effectType];
+  const base = COLLATERAL_REWARDS[effectType];
+  return {
+    cardId: card.id,
+    ...base,
+    points: base.points + (bonus && stats ? stats[bonus] ?? 0 : 0),
+    effectType,
+  };
+};
 
 /** The reward for a card the player picked as part of a Set. */
 export const selectedCardReward = (card: Card): CardReward => {
   const reward: CardReward = {
     cardId: card.id,
-    points: MATCH_REWARDS.basePoints + (card.bonusPoints ?? 0),
+    points: MATCH_REWARDS.basePoints + (card.bonusPoints ?? 0) + (card.charge ?? 0),
     money: MATCH_REWARDS.baseMoney + (card.bonusMoney ?? 0),
     experience: MATCH_REWARDS.baseExperience,
   };
@@ -83,7 +95,7 @@ export const resolveMatch = (input: {
   const rewards = [...selectedRewards];
   const add = (card: Card, effectType: CollateralEffect) => {
     cards.push(card);
-    rewards.push(collateralReward(card, effectType));
+    rewards.push(collateralReward(card, effectType, playerStats));
   };
   weaponEffects.explosiveCards.forEach(c => add(c, 'explosion'));
   weaponEffects.laserCards.forEach(c => add(c, 'laser'));
@@ -118,7 +130,7 @@ export const resolveMatch = (input: {
       cards.push(c);
       rewards.push({
         cardId: c.id,
-        points: MATCH_REWARDS.basePoints + (c.bonusPoints ?? 0),
+        points: MATCH_REWARDS.basePoints + (c.bonusPoints ?? 0) + (c.charge ?? 0),
         money: MATCH_REWARDS.baseMoney + (c.bonusMoney ?? 0),
         experience: MATCH_REWARDS.baseExperience,
       });

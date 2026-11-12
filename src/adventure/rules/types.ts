@@ -62,6 +62,8 @@ export type Condition =
   | { kind: 'noMistakesThisFight' }
   | { kind: 'evolutionActive' }
   | { kind: 'timeSinceLastSetAtLeast'; ms: number }
+  /** A Patience Set: Emperor Penguin's per-trait window (engine/passives.ts patienceMs) has passed since the last Set */
+  | { kind: 'patient' }
   | { kind: 'timeSinceLastSetAtMost'; ms: number }
   | { kind: 'boardAtLeast'; n: number };
 

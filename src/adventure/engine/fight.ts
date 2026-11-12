@@ -474,7 +474,8 @@ export const growBoard = (d: Draft, count: number): number => {
 
 export const empowerBoard = (d: Draft, amount: number) => {
   if (amount <= 0 || d.board.length === 0) return;
-  d.board = d.board.map(c => ({ ...c, bonusPoints: (c.bonusPoints ?? 0) + amount }));
+  // Charge, not power: a charged card hits harder but isn't a power card (so power-card effects can't feed on it)
+  d.board = d.board.map(c => ({ ...c, charge: (c.charge ?? 0) + amount }));
   emit(d, 'empowered', amount);
 };
 

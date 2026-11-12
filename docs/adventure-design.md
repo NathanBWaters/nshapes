@@ -104,7 +104,7 @@ Fighters bring **no gear and no active button**. A fighter's identity is two alw
 | Sly Fox | **Combo**: Sets within 5s chain, +1 damage per step (max +4); a mistake breaks it | **Hot Streak**: at max Combo, your next Set deals ×2 | Speed | 1-3 ★★ |
 | Corgi | **Zoomies**: every 5th Set re-deals the board clean (duds and hidden cards gone) | **Fetch**: matching a power or gold card brings a new one onto the board | Board shaper | 2-4 ★★ |
 | Badger | **Grudge**: each mistake stores a grudge (max 3); the next Set releases +3 per grudge | **Thick Hide**: your first mistake each wave costs no heart | Gambler | 2-7 ★★ |
-| Emperor Penguin | **Patience**: a Set made 6s+ after the last one deals +3 | **Deep Freeze**: every Rainbow Strike freezes the clock and the foe for 4s | Precision, Rainbow hunter | 2-8 ★★ |
+| Emperor Penguin | **Patience**: a Set made 2.5s+ per trait after the last one deals +2 (10s with 4 traits) | **Deep Freeze**: every Rainbow Strike freezes the clock and the foe for 4s | Precision, Rainbow hunter | 2-8 ★★ |
 | Pelican | **Big Scoop**: every 6th Set, a free Set is scooped for you | **Keen Eye**: after 8s without a Set, one card of a Set glows (free) | Relaxed | 3-5 ★★ |
 
 - The combo counter runs for **every** fighter: it feeds the HUD and the `comboReach` challenge. Only Sly Fox turns it into damage.
@@ -270,7 +270,7 @@ Effect caps (`game/effectCaps.ts`) were raised so a level-5, fully tuned weapon 
 | Judgement Beam | Laser + Grace | Every grace save fires a row laser. Every 3rd Set fires a column laser. | 2-7 ★★★ |
 | Golden Hour | Coin + Time | Every coin gained adds +1s. Every time gain hits the foe for 3. | 3-2 ★★★ |
 | Seeker Swarm | Hint + Ricochet | Every hint ricochets into 2 cards. Every 2nd Set gives a hint. | 2-3 ★★★ |
-| Big Bang | Growth + Explosion | Every Set grows the board by 2. At 18+ cards, a Set detonates a 3×3 block. | 2-2 ★★★ |
+| Big Bang | Growth + Explosion | Every Set grows the board by 2. At 18+ cards, a Set detonates a 3×2 block. | 2-2 ★★★ |
 | Bloodline | Life + Laser | Every lost heart fires a row laser. Every heal makes your next Set deal ×2. | 3-8 ★★★ |
 | Overclock | Connector + Time | Every Set links 2 new pairs. A destroyed linked card adds +2s and deals 2. | 4-3 ★★★ |
 
@@ -342,7 +342,7 @@ The older kinds remain: `noMistakes`, `fullHearts`, `movesLeft`, `timeLeft`, `ra
   - Rainbow (×2, plus Arcana and modifier changes).
   - Arcana `damageScale`.
   - The foe's multiplier.
-  - `nextSetMultiplier` × Hot Streak.
+  - `nextSetMultiplier` × Hot Streak. "Next Set ×N" effects add up rather than multiply (×2 and ×2 make ×3), and together with Hot Streak top out at ×4 (`BASE_RULES.maxNextSetMultiplier`).
 - **Escalating Purity** (taught at 2-8): consecutive Sets with a rising number of all-different traits climb a chain.
   - Bonus damage by step is `[0, 0, 1, 3, 5, 8]`, and each step pays step − 1 coins.
   - A grace Set, a mistake, or a lower/equal diversity restarts the climb.
@@ -427,6 +427,7 @@ src/adventure/
   engine/challenges.ts  ★★★ text / progress / checks, star goals
   engine/sets.ts        Set finder
   engine/bot.ts         headless bot that plays through the reducer
+  engine/botBuilds.ts   how a bot gears up: stars by skill, skill-tree buying, charms and recipes
   components/           Map, Preview, MechanicIntro, Run (+RunFx), Results, UnlockReveal,
                         Camp, SkillTree, BountyBoard, FieldGuide
   AdventureMode.tsx     screen router, onboarding
@@ -493,14 +494,34 @@ ADVENTURE_BALANCE_REPORT=1 npx jest __tests__/adventureBalance.test.ts
 ```
 
 - Novice, average and expert bots (`engine/bot.ts`) play every level through the real reducer and print star distributions.
-- Each bot plays the save it is given, so equip charms, Arcana and skill nodes on the save first.
+- **Each run gears up like a player** (`engine/botBuilds.ts`, a `BuildPlan` passed to `starDistribution`):
+  - **Stars:** a bot has earned `STAR_SHARE` of the stars on offer before the level (novice 0.6, average 0.75, expert 0.9 — "best result on each level, replays counted"). Every fighter spends every star earned, so that is also its skill-tree budget. The sealed capstone opens only once that many stars reach `SEALED_AT`.
+  - **Skill tree:** bought from scratch each run in one of three styles: `plan` (pick a capstone, buy the cheapest path, repeat), `spread` (always the cheapest reachable node), `random`.
+  - **Fighter:** a different unlocked fighter each run (fighter trials use the fighter they teach).
+  - **Charms:** 60% of the time both halves of an unlocked recipe, the rest of the slots at random. 3-2's puzzle keeps its named charms.
+  - **In the fight:** level-up picks and shop buys prefer a weapon that arms a new recipe, otherwise any.
+  - Gear, recipes, Arcana and free weapon levels come from 3★ on every earlier level (`applyLevelResult`). No Workshop spending (the final boss assumes 2 Tough Hide).
 - The test checks that:
   - Every level is survivable by an average player.
   - The meadow is forgiving for novices.
   - ★★★ is not routine on hard levels.
   - Elites are beatable but not free.
   - Harder levels pay more.
-- Foe HP in `levels.ts` is a first pass for the bots to retune. Re-run the report after changing HP, timers, moves, weapon numbers, or Workshop and Arcana values.
+- Foe HP in `levels.ts` is tuned against these geared-up bots. Re-run the report after changing HP, timers, moves, weapon numbers, skill nodes, or Workshop and Arcana values. **If you change `STAR_SHARE`, the tree budget or node power, foe HP needs retuning**: the bots' trees grow with the stars.
+
+### Broken builds
+
+```
+ADVENTURE_BUILDS_REPORT=1 npx jest __tests__/adventureBuilds.test.ts
+```
+
+Plays a training dummy (a World 4 board, 25 Sets, a foe that can't fall) with endgame gear (every weapon at level 5, every number tuned to ×1.5) and compares damage per Set:
+
+- every weapon alone, and every pair of weapons that arms each evolution (a recipe may beat the best single weapon by up to 1.75×, and every recipe must actually fire);
+- every fighter's full tree with the best single weapons and with each recipe (≤ 2× that fighter's best single; no fighter's best build over 1.6× the median fighter's);
+- 30 random endgame builds (fighter, full tree, 3–6 charms, 0–3 Arcana): none over 2.75× the median.
+
+Limits live in `LIMITS` at the top of the test. Things this sweep caught: next-Set ×N effects multiplied (now they add up, max ×4), board-wide power turned every card into a power card (now it's a separate charge), the board-growth trigger fired on a full board, Blast/Laser/Ricochet damage levels didn't reach the weapons' own procs, Patience counted almost every Set at 4–5 traits (now 2.5 s per trait), Sly Fox's "Combo 4+" payoffs fed their own Combo steps, and Corgi's power-card nodes fired on every Set.
 
 ## Save and migration
 

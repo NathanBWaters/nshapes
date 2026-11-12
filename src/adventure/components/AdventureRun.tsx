@@ -755,7 +755,7 @@ const PassiveChip: React.FC<{ id: PassiveId; run: RunState }> = ({ id, run }) =>
     case 'grudge': label = p.grudge > 0 ? `+${p.grudge * tune('grudge', 'grudge.damage')}` : 'calm'; lit = p.grudge > 0; break;
     case 'thick_hide': label = p.thickHideLeft > 0 ? `${p.thickHideLeft} free` : 'spent'; lit = p.thickHideLeft > 0; break;
     case 'patience': {
-      const wait = tune('patience', 'patience.ms') - sinceSet;
+      const wait = tune('patience', 'patience.msPerTrait') * run.attributes.length - sinceSet;
       label = run.matches === 0 || wait <= 0 ? 'ready' : `${Math.ceil(wait / 1000)}s`; lit = run.matches > 0 && wait <= 0; break;
     }
     case 'deep_freeze': label = run.frozenMs > 0 ? `${Math.ceil(run.frozenMs / 1000)}s` : 'rainbow'; lit = run.frozenMs > 0; break;

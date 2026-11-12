@@ -77,8 +77,8 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     },
     build: v => ({
       rules: warDrum(r(v.window * 1000), r(v.power)),
-      description: `5 Sets within ${r(v.window)}s: every card on the board gains +${r(v.power)} power (+${r(v.power)} damage when matched).`,
-      shortDescription: `5 Sets in ${r(v.window)}s: board +${r(v.power)} power`,
+      description: `5 Sets within ${r(v.window)}s: every card on the board deals +${r(v.power)} more when matched.`,
+      shortDescription: `5 Sets in ${r(v.window)}s: board +${r(v.power)} damage`,
     }),
   },
 

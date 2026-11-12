@@ -8,13 +8,14 @@
  * or through other rules), and one action resolves at most 32 rule firings.
  */
 import type { Condition, Effect, Trigger, WeaponTriggerKind } from './types';
+import { BASE_RULES } from '../data/rules';
 import {
   addCoins, addGraces, addHints, addRandomConnections, addTime, addXp, areaIndices, armorCard, canSpawnCatalyst,
   dealDamage, destroyCards, emit, empowerBoard, enqueue, foeMultiplier, growBoard, heal, igniteCards, liveRulesOf,
   placeCatalyst, redeal, simplify, type Draft, type FightEvent,
 } from '../engine/fight';
 import { extendEvolutions } from '../engine/evolutions';
-import { addComboSteps } from '../engine/passives';
+import { addComboSteps, patienceMs } from '../engine/passives';
 import type { KeyedRule } from '../engine/sources';
 
 export const MAX_FIRINGS_PER_ACTION = 32;
@@ -34,6 +35,7 @@ const holds = (d: Draft, c: Condition): boolean => {
     case 'noMistakesThisFight': return d.mistakes === 0;
     case 'evolutionActive': return d.activeEvolutions.length > 0;
     case 'timeSinceLastSetAtLeast': return sinceLastSet(d) >= c.ms;
+    case 'patient': return sinceLastSet(d) >= patienceMs(d);
     case 'timeSinceLastSetAtMost': return sinceLastSet(d) <= c.ms;
     case 'boardAtLeast': return d.board.length >= c.n;
   }
@@ -210,7 +212,10 @@ export const applyEffect = (d: Draft, e: Effect, label?: string) => {
   if (kind) {
     const times = takeDouble(d) ? 2 : 1;
     for (let i = 0; i < times; i++) {
+      // A full board can't grow, so "whenever the board grows" doesn't fire
+      const before = d.board.length;
       runWeaponEffect(d, e);
+      if (kind === 'growth' && d.board.length === before) continue;
       enqueue(d, 'weapon', kind);
     }
     return;
@@ -238,7 +243,8 @@ export const applyEffect = (d: Draft, e: Effect, label?: string) => {
     case 'spawnCatalyst': if (canSpawnCatalyst(d)) placeCatalyst(d, []); break;
     case 'extendEvolutions': extendEvolutions(d, e.ms); break;
     case 'nextSetMultiplier':
-      d.nextSetMultiplier *= e.times;
+      // Stacks add up (×2 + ×2 = ×3), capped (data/rules.ts)
+      d.nextSetMultiplier = Math.min(BASE_RULES.maxNextSetMultiplier, d.nextSetMultiplier + (e.times - 1));
       emit(d, 'charged', d.nextSetMultiplier);
       break;
     case 'link': if (addRandomConnections(d, e.count) > 0) emit(d, 'link', e.count); break;

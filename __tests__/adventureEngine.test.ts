@@ -173,7 +173,7 @@ describe('loadout', () => {
     expect([1, 2, 3, 4, 5].map(l => drum(l))).toEqual([[20000, 2], [22000, 3], [24000, 3], [26000, 4], [28000, 4]]);
     // ×1.5 on the window, ×1.2 on power, at level 5
     expect(drum(5, { window: 4, power: 2 })).toEqual([42000, 5]);
-    expect(getArmoryWeapon('war-drum', { 'war-drum': { level: 3, tuning: {} } })!.shortDescription).toBe('5 Sets in 24s: board +3 power');
+    expect(getArmoryWeapon('war-drum', { 'war-drum': { level: 3, tuning: {} } })!.shortDescription).toBe('5 Sets in 24s: board +3 damage');
   });
 
   it('every adventure weapon has numbers that grow with level and wording built from them', () => {
@@ -269,10 +269,11 @@ describe('fighter passives', () => {
 
   it('Emperor Penguin — Patience rewards slow Sets; Deep Freeze stops the clock on Rainbows', () => {
     let s = fight('Emperor Penguin', { level: testLevel({ rules: { timer: 120 } }), features: ['hearts', 'gear'] });
-    s = tick(s, 6000, 1000);
+    // The window is 2.5s per active trait
+    s = tick(s, 2500 * s.attributes.length, 500);
     let before = s.foeHp;
     s = playSet(s);
-    expect(before - s.foeHp).toBe(3 + 3);
+    expect(before - s.foeHp).toBe(3 + 2);
     before = s.foeHp;
     s = playSet(tick(s, 1000));
     expect(before - s.foeHp).toBe(3);

@@ -49,6 +49,8 @@ export interface Card {
   lootBox?: boolean;
   bonusMoney?: number;
   bonusPoints?: number;
+  /** Extra damage from a board-wide boost (War Drum, Corgi). Not a power card: power-card effects ignore it. */
+  charge?: number;
   bomb?: boolean;
   bombTimer?: number;
   healing?: boolean;

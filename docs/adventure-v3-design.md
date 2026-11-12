@@ -47,7 +47,7 @@ weapon loadout. The three old actives become passives.
 | Pelican | **Big Scoop**: every 6th Set, a free Set is scooped for you | **Keen Eye**: after 8 s without a Set, one card of a Set glows (free) | Relaxed: the board helps you |
 
 Passive numbers live as **tuning keys** (e.g. `combo.windowMs`, `combo.max`,
-`grudge.max`, `grudge.damage`, `patience.ms`, `patience.damage`,
+`grudge.max`, `grudge.damage`, `patience.msPerTrait`, `patience.damage`,
 `deepFreeze.ms`, `zoomies.every`, `scoop.every`, `keenEye.ms`,
 `scrappy.perHeart`, `thickHide.perWave`, `hotStreak.multiplier`,
 `nineLives.charges`). Skill nodes change them through `passiveTuning`.
@@ -124,7 +124,7 @@ Passive numbers live as **tuning keys** (e.g. `combo.windowMs`, `combo.max`,
 | Judgement Beam | laser + grace | Grace saves fire a row laser; every 3rd Set fires a column laser. |
 | Golden Hour | coin + time | Every coin gained adds +1 s; every 5 s gained deals 5 damage. |
 | Seeker Swarm | hint + ricochet | Each hint (manual or auto) makes the hinted cards ricochet into 2 others. |
-| Big Bang | growth + explosion | Sets grow the board by 2; at 18+ cards the next Set detonates a 3×3 block. |
+| Big Bang | growth + explosion | Sets grow the board by 2; at 18+ cards the next Set detonates a 3×2 block. |
 | Bloodline | life (max hearts) + laser | Heart lost: lasers a row; heal: next Set ×2. |
 | Overclock | connector + time | New links form on every Set; a linked card destroyed adds +2 s and 2 damage. |
 
@@ -143,7 +143,7 @@ New weapons, each with a common and a rare tier:
 | Weapon | Role | Effect |
 |---|---|---|
 | Clarity Lens | utility | 3 Sets within 10 s: 33 % (rare 50 %) chance to simplify the board for 15 s. One attribute becomes the same on every card. |
-| War Drum | offense | 5 Sets within 20 s: every card on the board gains +2 power. Levels found in the world and Workshop tuning raise it. |
+| War Drum | offense | 5 Sets within 20 s: every card on the board deals +2 more when matched. Levels found in the world and Workshop tuning raise it. |
 | Amplifier Coil | combo | Every 4th Set (rare: every 3rd): the next weapon trigger happens twice. |
 | Piñata | offense | Each Set has a 20 % (rare 35 %) chance to give a random card +2 hits; breaking it deals +10. |
 | Catalyst Prism | evolution | +6 % evolution likelihood (rare +10 %); Rainbow refills get +25 % more. |
