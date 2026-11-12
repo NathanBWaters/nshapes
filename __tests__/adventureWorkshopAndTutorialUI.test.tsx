@@ -109,29 +109,37 @@ describe('Camp', () => {
 
     fireEvent.press(camp.getByTestId(`camp-open-tree-${fighter}`));
     expect(camp.getByTestId(`skill-tree-${fighter}`)).toBeTruthy();
-    // Both passive roots and all 20 nodes are visible and readable, even the locked ones
-    for (const id of def.passives) expect(camp.getByTestId(`skill-passive-${id}`)).toBeTruthy();
-    const chain = skillTreeOf(fighter).filter(n => n.branch === 0).sort((a, b) => a.depth - b.depth);
-    for (const n of skillTreeOf(fighter)) expect(camp.getByTestId(`skill-node-${n.id}`)).toBeTruthy();
-    expect(camp.getByText(chain[9].name)).toBeTruthy();
-    expect(camp.getByTestId(`skill-node-${chain[1].id}`).props.accessibilityLabel).toMatch(/locked/);
+    // Both passives and every node are on the map and readable, even the locked ones
+    for (const id of def.passives) {
+      expect(camp.getByTestId(`skill-passive-${id}`)).toBeTruthy();
+      expect(camp.getByTestId(`skill-root-${id}`)).toBeTruthy();
+    }
+    const nodes = skillTreeOf(fighter);
+    for (const n of nodes) expect(camp.getByTestId(`skill-node-${n.id}`)).toBeTruthy();
+    const entry = nodes.find(n => n.roots.length > 0 && n.cost === 1)!;
+    const beyond = nodes.find(n => n.roots.length === 0 && n.links.includes(entry.id))!;
+    expect(camp.getByTestId(`skill-node-${beyond.id}`).props.accessibilityLabel).toMatch(/locked/);
 
     // A locked node can be read but not bought
-    fireEvent.press(camp.getByTestId(`skill-node-${chain[1].id}`));
+    fireEvent.press(camp.getByTestId(`skill-node-${beyond.id}`));
     expect(camp.getByTestId('skill-detail')).toBeTruthy();
-    expect(camp.getAllByText(chain[1].text).length).toBeGreaterThan(0);
+    expect(camp.getAllByText(beyond.text).length).toBeGreaterThan(0);
+    expect(camp.getByText(new RegExp(`Links to: .*${entry.name}`))).toBeTruthy();
     fireEvent.press(camp.getByTestId('skill-buy'));
     expect(camp.current().skillNodes[fighter]).toBeUndefined();
 
-    // Depth 1 is buyable
-    fireEvent.press(camp.getByTestId(`skill-node-${chain[0].id}`));
+    // A node next to a passive is buyable
+    fireEvent.press(camp.getByTestId(`skill-node-${entry.id}`));
     fireEvent.press(camp.getByTestId('skill-buy'));
-    expect(camp.current().skillNodes[fighter]).toEqual([chain[0].id]);
+    expect(camp.current().skillNodes[fighter]).toEqual([entry.id]);
     camp.sync();
-    expect(camp.getByTestId(`skill-node-${chain[0].id}`).props.accessibilityLabel).toMatch(/owned/);
+    expect(camp.getByTestId(`skill-node-${entry.id}`).props.accessibilityLabel).toMatch(/owned/);
+    expect(camp.getByTestId(`skill-node-${beyond.id}`).props.accessibilityLabel).not.toMatch(/locked/);
     expect(camp.getByTestId('skill-tree-stars')).toHaveTextContent(/3/);
 
-    fireEvent.press(camp.getByTestId('skill-refund-branch-0'));
+    // Refund it from its detail sheet
+    fireEvent.press(camp.getByTestId(`skill-node-${entry.id}`));
+    fireEvent.press(camp.getByTestId('skill-refund-node'));
     expect(camp.current().skillNodes[fighter]).toBeUndefined();
   });
 

@@ -1,7 +1,7 @@
 /**
  * Fighters (characters). A fighter brings no gear: its identity is two
  * passives that change HOW you play (data/passives.ts), grown through a
- * 20-node skill tree bought with stars (data/skillTrees.ts). Charms are the
+ * web-shaped skill tree bought with stars (data/skillTrees.ts). Charms are the
  * whole weapon loadout.
  */
 import type { CharacterName } from '@/types';

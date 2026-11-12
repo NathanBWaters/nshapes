@@ -457,7 +457,7 @@ describe('Adventure Mode full-game E2E', () => {
     expect(screen.getByText('🔒 WORKSHOP')).toBeTruthy();
     const tabby = getFighter(save.selectedFighter);
     fireEvent.press(screen.getByTestId(`camp-open-tree-${tabby.name}`));
-    const root = skillTreeOf(tabby.name).find(n => n.branch === 0 && n.depth === 1)!;
+    const root = skillTreeOf(tabby.name).find(n => n.roots.includes(tabby.passives[0]) && n.cost === 1)!;
     const starsBefore = availableStars(save);
     expect(starsBefore).toBeGreaterThanOrEqual(root.cost);
     fireEvent.press(screen.getByTestId(`skill-node-${root.id}`));

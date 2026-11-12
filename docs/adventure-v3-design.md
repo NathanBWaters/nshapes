@@ -54,26 +54,23 @@ Passive numbers live as **tuning keys** (e.g. `combo.windowMs`, `combo.max`,
 
 ## 3. Skill trees (stars)
 
-- **Call:** 20 nodes per fighter: two branches of 10, one rooted at each passive.
-  The roots (the passives) are owned for free.
-- A node can be bought only if the node before it in its branch is owned, so
-  there is no skipping. Every node is visible and readable; locked nodes show
-  their text dimmed with a lock.
+- **Superseded:** trees are now Clair Obscur–style webs, not two
+  branches of 10. Each fighter has 23–24 nodes in a unique silhouette (paw,
+  lightning tail, burrows, snowflake, bone, braided waves). A node is buyable
+  once anything it links to (or its passive) is owned; branches fork and
+  rejoin; crossroads nodes use both passives; one capstone per fighter is
+  sealed until 56 stars are earned; costs follow the node's role (73–75 per
+  fighter); single nodes refund when nothing would be cut off. See
+  `docs/adventure-design.md` → Skill trees for the current rules.
 - **Call: stars are the currency, in one shared pool across fighters.**
   Available = total stars earned − stars spent in all trees. Biome star gates
   still count *earned* stars, so spending never re-locks a world.
-- Node costs by depth: `1, 1, 1, 2, 2, 3, 3, 4, 5, 6` (28 per branch, 56 per
-  fighter). The campaign pays out about 160 stars, so a player can max roughly
-  two or three fighters. That keeps choices real while refunds keep it painless.
-- **Refunds:** a full refund per fighter, free and any time, in Camp. **Call:**
-  you can only refund whole branches, from the tip down, so nothing you keep
-  needs a missing parent.
 - Content rules: about a third of the nodes tune the passive; the rest build
   cross-system chains (heal → explode, explosion → combo step, rainbow → spawn
   Catalyst, mistake → laser, …), encourage a play pattern, or change how weapons
-  behave. Depths 8–10 hold the build-defining nodes. No node is a bare "+1 heart".
-- Data: `src/adventure/data/skillTrees.ts`; each node is `{ id, branch: 0|1,
-  depth: 1..10, name, text, cost, source: RuleSource }`.
+  behave. No node is a bare "+1 heart".
+- Data: `src/adventure/data/skillTrees.ts`; each node is `{ id, name, text,
+  cost, icon, pos, links, roots, requires?, ...RuleSource }`.
 
 ## 4. Charms and Arcana slots
 

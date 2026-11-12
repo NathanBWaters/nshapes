@@ -336,18 +336,32 @@ export interface PassiveDef {
   tuning: Record<string, number>;
 }
 
-/** One node of a fighter's skill tree. Branch 0 grows from passive 1, branch 1 from passive 2. */
+/** A cell on a fighter's skill-tree map: col 0-6, row 0 at the top. */
+export interface TreePos {
+  col: number;
+  row: number;
+}
+
+/**
+ * One node of a fighter's skill tree. Trees are webs (Clair Obscur style): a
+ * node can be bought once any node it links to is owned, or straight away if
+ * it hangs off one of the fighter's passives (`roots`).
+ */
 export interface SkillNode extends RuleSource {
   id: string;
   fighter: CharacterName;
-  branch: 0 | 1;
-  /** 1..10; a node needs the node at depth-1 of its branch (depth 1 needs only the passive) */
-  depth: number;
   name: string;
   text: string;
   /** Stars */
   cost: number;
   icon: IconName;
+  pos: TreePos;
+  /** Ids of the nodes this one links to (always symmetric) */
+  links: string[];
+  /** Passives this node hangs off directly */
+  roots: PassiveId[];
+  /** Sealed until the player has earned this many stars in total */
+  requires?: { starsEarned: number };
 }
 
 /** A weapon that only exists in Adventure and may carry rules. */

@@ -25,7 +25,7 @@ import { isFighterTrial, starRewards } from '../data/rewards';
 import { starGoals } from '../engine/challenges';
 import {
   arcanaSlots,
-  branchSpent,
+  fighterStarsSpent,
   charmSlots,
   equippedArcanaOf,
   equippedCharms,
@@ -193,7 +193,7 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
               {FIGHTERS.filter(f => save.unlockedFighters.includes(f.name)).map(f => {
                 const selected = f.name === save.selectedFighter;
                 const rec = level.recommended?.includes(f.name);
-                const spent = branchSpent(save, f.name, 0) + branchSpent(save, f.name, 1);
+                const spent = fighterStarsSpent(save, f.name);
                 return (
                   <TouchableOpacity
                     key={f.name}
