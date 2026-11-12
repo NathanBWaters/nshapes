@@ -560,7 +560,7 @@ describe('processWeaponEffects', () => {
   it('should process laser effect when laserChance triggers', () => {
     const board = createTestBoard();
     const matchedCards = [board[4]];
-    const stats: PlayerStats = { ...DEFAULT_PLAYER_STATS, laserChance: 100 };
+    const stats: PlayerStats = { ...DEFAULT_PLAYER_STATS, laserChance: 100, effectCaps: UNCAPPED_EFFECT_CAPS };
 
     let hasLaser = false;
     for (let i = 0; i < 10; i++) {

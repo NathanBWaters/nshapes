@@ -104,11 +104,12 @@ jest.mock('react-native-svg', () => {
   };
   const SvgRoot = makeSvgMock('Svg');
   return new Proxy(
-    { __esModule: true, default: SvgRoot, Svg: SvgRoot },
+    { __esModule: true, default: SvgRoot, Svg: SvgRoot } as Record<string, any>,
     {
+      // One mock per element name, so re-renders keep component identity instead of remounting
       get(target, prop: string) {
-        if (prop in target) return (target as any)[prop];
-        return makeSvgMock(String(prop));
+        if (!(prop in target)) target[prop] = makeSvgMock(String(prop));
+        return target[prop];
       },
     }
   );
