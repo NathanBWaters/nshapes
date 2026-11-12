@@ -1,7 +1,7 @@
 import { Card, PlayerStats, Weapon, AttributeName, EffectCaps } from '../types';
 import { isValidCombination } from './gameUtils';
 import { EFFECT_CAPS, getEffectiveStat, EffectCapType } from './gameConfig';
-import { DEFAULT_EFFECT_CAPS } from './gameDefinitions';
+import { DEFAULT_EFFECT_CAPS, rollBridgeEffects } from './gameDefinitions';
 
 // Grid dimensions (assumes 3 columns)
 const GRID_COLS = 3;
@@ -295,7 +295,8 @@ export const processWeaponEffects = (
   timeGainContext?: {
     triggersThisRound: number;
     effectiveCap: number;
-  }
+  },
+  isGraceMatch: boolean = false
 ): WeaponEffectResult => {
   const result: WeaponEffectResult = {
     explosiveCards: [],
@@ -533,6 +534,116 @@ export const processWeaponEffects = (
   if (effectiveBoardGrowthChance > 0 && Math.random() * 100 < effectiveBoardGrowthChance) {
     result.boardGrowth = playerStats.boardGrowthAmount || 1;
     result.notifications.push(`+${result.boardGrowth} Cards`);
+  }
+
+  // Bridge weapon cross-system triggers (non-cascading, player matches only)
+  if (!isEchoMatch && weapons && weapons.some(w => w.specialEffect === 'bridge')) {
+    if (isGraceMatch) {
+      for (const b of rollBridgeEffects('onGraceUse', weapons)) {
+        if (b.effect === 'triggerLaser') {
+          const bridgeLaserCards = getLaserCards(board, matchedCards).filter(
+            lc =>
+              !result.explosiveCards.some(ec => ec.id === lc.id) &&
+              !result.laserCards.some(existing => existing.id === lc.id) &&
+              !echoCardIds.has(lc.id)
+          );
+          result.laserCount += 1;
+          if (bridgeLaserCards.length > 0) {
+            result.laserCards.push(...bridgeLaserCards);
+            result.bonusPoints += bridgeLaserCards.length * 2;
+            result.bonusMoney += bridgeLaserCards.length;
+            result.notifications.push(`${b.weaponName}: Laser! +${bridgeLaserCards.length * 2}`);
+          }
+        }
+      }
+    }
+
+    if (result.explosiveCards.length > 0) {
+      for (const b of rollBridgeEffects('onExplosion', weapons)) {
+        if (b.effect === 'gainGrace') {
+          const amt = b.amount ?? 1;
+          result.bonusGraces += amt;
+          result.notifications.push(`${b.weaponName}: +${amt} Grace`);
+        }
+      }
+    }
+
+    if (result.timeGainTriggered && activeAttributes) {
+      for (const b of rollBridgeEffects('onTimeGain', weapons)) {
+        if (b.effect === 'triggerEcho') {
+          const excluded = [
+            ...matchedCards,
+            ...result.explosiveCards,
+            ...result.laserCards,
+            ...result.ricochetCards,
+            ...result.autoMatchedSets.flat(),
+          ];
+          const bridgeEcho = findValidSet(board, excluded, activeAttributes);
+          if (bridgeEcho) {
+            result.autoMatchedSets.push(bridgeEcho);
+            result.notifications.push(`${b.weaponName}: Echo!`);
+          }
+        }
+      }
+    }
+
+    if (result.autoMatchedSets.length > 0) {
+      for (const b of rollBridgeEffects('onEcho', weapons)) {
+        if (b.effect === 'fireCard') {
+          const count = b.amount ?? 1;
+          const busyIds = new Set([
+            ...matchedCards.map(c => c.id),
+            ...result.explosiveCards.map(c => c.id),
+            ...result.laserCards.map(c => c.id),
+            ...result.ricochetCards.map(c => c.id),
+            ...result.autoMatchedSets.flat().map(c => c.id),
+            ...result.fireCards.map(c => c.id),
+          ]);
+          const candidates = board.filter(c => !c.onFire && !busyIds.has(c.id));
+          for (let i = 0; i < count && candidates.length > 0; i++) {
+            const pickIdx = Math.floor(Math.random() * candidates.length);
+            const [picked] = candidates.splice(pickIdx, 1);
+            busyIds.add(picked.id);
+            result.fireCards.push(picked);
+          }
+          if (result.fireCards.length > 0) {
+            result.notifications.push(`${b.weaponName}: Fire!`);
+          }
+        }
+      }
+    }
+
+    const destroyedCount =
+      result.explosiveCards.length + result.laserCards.length + result.ricochetCards.length;
+    if (destroyedCount > 0) {
+      for (const b of rollBridgeEffects('onDestruction', weapons)) {
+        if (b.effect === 'heal') {
+          const amt = b.amount ?? 1;
+          result.bonusHealing += amt;
+          result.notifications.push(`${b.weaponName}: +${amt} HP`);
+        }
+      }
+    }
+
+    if (result.bonusCoins > 0) {
+      for (const b of rollBridgeEffects('onCoinGain', weapons)) {
+        if (b.effect === 'gainHint') {
+          const amt = b.amount ?? 1;
+          result.bonusHints += amt;
+          result.notifications.push(`${b.weaponName}: +${amt} Hint`);
+        }
+      }
+    }
+
+    if (result.bonusExperience > 0) {
+      for (const b of rollBridgeEffects('onXPGain', weapons)) {
+        if (b.effect === 'gainCoin') {
+          const amt = b.amount ?? 1;
+          result.bonusCoins += amt;
+          result.notifications.push(`${b.weaponName}: +${amt} Coin`);
+        }
+      }
+    }
   }
 
   return result;

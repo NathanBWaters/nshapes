@@ -25,6 +25,8 @@ import { MECHANICS } from '../data/mechanics';
 import { getBiome } from '../data/biomes';
 import { foeDisplay } from '../data/foes';
 import { ABILITIES, ABILITY_TUNING } from '../data/abilities';
+import { getArcana } from '../data/arcana';
+import { getActiveEvolutionStatus } from '../data/evolutions';
 import { Btn, CoinPill, Eyebrow, Heart, INK, PopIn } from './ui';
 
 const TICK_MS = 250;
@@ -45,6 +47,8 @@ const SFX_FOR_EVENT: Partial<Record<RunEvent['type'], Parameters<typeof sfx>[0]>
   hit: 'hit', rainbow: 'rainbow', hurt: 'hurt', coins: 'coin', levelup: 'levelup', heal: 'heart',
   foe_defeated: 'foeDefeated', wave: 'wave', regen: 'graceGain', time_stolen: 'back', shuffle: 'whoosh',
   nine_lives: 'heart', grudge_release: 'explosion', ability_ready: 'star2', freeze: 'freeze', redeal: 'whoosh', scoop: 'match',
+  purity: 'match', purity_max: 'rainbow', catalyst_ready: 'star2', catalyst_lost: 'hurt', catalyst_saved: 'graceGain',
+  evolution: 'unlock', arcana_burn: 'explosion', overkill: 'coin',
 };
 
 /** A tip the player has to accept. The fight is paused while one is showing. */
@@ -178,8 +182,18 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
       if (e.type === 'combo') addFloater(`COMBO ×${e.amount}`, COLORS.impactOrange);
       if (e.type === 'grudge_release') addFloater(`GRUDGE +${e.amount}`, '#7A3E00');
       if (e.type === 'nine_lives') addFloater('NINE LIVES!', COLORS.logicTeal);
+      if (e.type === 'purity') addFloater(`PURITY ×${e.amount}!`, '#0D9488');
+      if (e.type === 'purity_max') addFloater(`MAX PURITY ×${e.amount}!`, '#7C3AED');
+      if (e.type === 'catalyst_ready') addFloater('EVO READY!', '#D97706');
+      if (e.type === 'catalyst_lost') addFloater('CATALYST LOST!', COLORS.impactRed);
+      if (e.type === 'catalyst_saved') addFloater('CATALYST SAVED!', COLORS.logicTeal);
+      if (e.type === 'evolution') addFloater(`EVOLVED: ${e.text}!`, '#D97706');
+      if (e.type === 'arcana_burn') addFloater('CONTROLLED BURN!', COLORS.impactOrange);
+      if (e.type === 'overkill') addFloater(`OVERKILL +${e.amount}`, '#B07D00');
       if (
         e.type === 'rainbow' ||
+        e.type === 'purity_max' ||
+        e.type === 'evolution' ||
         e.type === 'combo' ||
         e.type === 'grudge_release' ||
         e.type === 'foe_defeated' ||
@@ -200,6 +214,8 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
 
       if (
         e.type === 'rainbow' ||
+        e.type === 'purity_max' ||
+        e.type === 'evolution' ||
         e.type === 'combo' ||
         e.type === 'grudge_release' ||
         e.type === 'scoop'
@@ -394,6 +410,69 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
           </View>
         )}
 
+        {/* Live Arcana, Escalating Purity & Evolution Catalyst status strip */}
+        {(run.activeArcana ||
+          (run.features.has('purity') && run.purityChain > 0) ||
+          run.features.has('evolutions')) && (() => {
+          const evoStatus = run.features.has('evolutions')
+            ? getActiveEvolutionStatus(run.weapons, run.evolvedRecipes, run, run.unlockedEvolutions)
+            : null;
+          const catalystOnBoard = run.board.some(c => c.hasEvolutionItem);
+          const showEvo =
+            run.features.has('evolutions') &&
+            (run.catalystState !== 'available' || Boolean(evoStatus) || catalystOnBoard);
+          if (!run.activeArcana && !(run.features.has('purity') && run.purityChain > 0) && !showEvo) {
+            return null;
+          }
+          return (
+            <View style={st.synergyRow}>
+              {run.activeArcana && (
+                <View testID="run-arcana-chip" style={st.arcanaChip}>
+                  <Icon name={getArcana(run.activeArcana).icon} size={12} color="#6D28D9" />
+                  <Text style={st.arcanaChipText}>{getArcana(run.activeArcana).numeral}</Text>
+                </View>
+              )}
+              {run.features.has('purity') && run.purityChain > 0 && (
+                <View testID="run-purity-chip" style={[st.purityChip, run.purityChain >= 2 && st.purityChipHot]}>
+                  <Icon name="lorc/lightning-branches" size={12} color={run.purityChain >= 2 ? '#0F766E' : INK} />
+                  <Text style={st.purityChipText}>
+                    {run.purityChain >= 2 ? `Purity ×${run.purityChain}` : `Purity 1`} · &gt;{run.lastDiffCount} diff next
+                  </Text>
+                </View>
+              )}
+              {showEvo && (
+                <View
+                  testID="run-evo-chip"
+                  style={[
+                    st.evoChip,
+                    evoStatus?.ready && run.catalystState === 'available' && st.evoChipReady,
+                    run.catalystState === 'lost' && { opacity: 0.55 },
+                  ]}
+                >
+                  <Icon
+                    name="lorc/crystal-shine"
+                    size={12}
+                    color={evoStatus?.ready && run.catalystState === 'available' ? INK : '#6D28D9'}
+                  />
+                  <Text style={st.evoChipText} numberOfLines={1}>
+                    {run.catalystState === 'evolved'
+                      ? 'Evolved ✓'
+                      : run.catalystState === 'lost'
+                        ? 'Catalyst Lost'
+                        : evoStatus?.ready
+                          ? catalystOnBoard
+                            ? 'EVO READY! Match crystal'
+                            : 'EVO READY! Await crystal'
+                          : evoStatus
+                            ? evoStatus.progress.label
+                            : 'Catalyst on board (no recipe)'}
+                  </Text>
+                </View>
+              )}
+            </View>
+          );
+        })()}
+
         <View style={[st.challenge, challenge.met && { backgroundColor: '#D4F4EE' }, challenge.failed && { opacity: 0.55 }]}>
           <Text style={st.challengeStar}>★★★</Text>
           <Text style={[st.challengeText, challenge.failed && { textDecorationLine: 'line-through' }]} numberOfLines={1}>{challenge.text}</Text>
@@ -411,6 +490,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
         )}
         <GameBoard
           cards={run.board}
+          connections={run.connections}
           onMatch={handleMatch}
           onInvalidSelection={handleInvalid}
           playerStats={run.stats}
@@ -467,6 +547,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
           title="LEVEL UP!"
           subtitle="Pick one for this fight"
           options={run.pickOptions}
+          weaponUpgrades={run.weaponUpgrades}
           onPick={w => { sfx('confirm'); conductor.triggerPowerup(); dispatch({ type: 'PICK', weaponId: w.id }); }}
           onSkip={() => dispatch({ type: 'PICK', weaponId: null })}
         />
@@ -485,12 +566,15 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
             <Text style={st.panelSub}>{level.id} · {level.name}</Text>
             {run.weapons.length > 0 && (
               <View style={st.gearRow}>
-                {run.weapons.map((w, i) => (
-                  <View key={i} style={[st.gearChip, { borderColor: getRarityColor(w.rarity) }]}>
-                    <WeaponAvatar weapon={w} size={20} interactive />
-                    <Text style={st.gearText} numberOfLines={1}>{w.name}</Text>
-                  </View>
-                ))}
+                {run.weapons.map((w, i) => {
+                  const tier = run.weaponUpgrades[w.id] ?? 0;
+                  return (
+                    <View key={i} style={[st.gearChip, { borderColor: getRarityColor(w.rarity) }]}>
+                      <WeaponAvatar weapon={w} size={20} interactive />
+                      <Text style={st.gearText} numberOfLines={1}>{w.name}{tier > 0 ? ` +${tier}` : ''}</Text>
+                    </View>
+                  );
+                })}
               </View>
             )}
             <Btn label="Resume" onPress={() => setPaused(false)} />
@@ -578,21 +662,24 @@ const Floater: React.FC<{ text: string; color: string }> = ({ text, color }) => 
   return <Animated.Text style={[st.floater, { color }, s]}>{text}</Animated.Text>;
 };
 
-export const WeaponPick: React.FC<{ title: string; subtitle: string; options: Weapon[]; onPick: (w: Weapon) => void; onSkip: () => void }> = ({ title, subtitle, options, onPick, onSkip }) => (
+export const WeaponPick: React.FC<{ title: string; subtitle: string; options: Weapon[]; weaponUpgrades?: Record<string, number>; onPick: (w: Weapon) => void; onSkip: () => void }> = ({ title, subtitle, options, weaponUpgrades, onPick, onSkip }) => (
   <Modal visible transparent animationType="fade" onRequestClose={onSkip}>
     <View style={st.overlay}>
       <PopIn style={st.panel}>
         <Eyebrow text={title} />
         <Text style={st.panelSub}>{subtitle}</Text>
-        {options.map((w, i) => (
-          <TouchableOpacity key={`${w.id}-${i}`} testID={`pick-${i}`} onPress={() => onPick(w)} style={[st.pickCard, { borderColor: getRarityColor(w.rarity) }]} activeOpacity={0.85}>
-            <View style={[st.pickIcon, { backgroundColor: COLORS.paperBeige }]}><WeaponAvatar weapon={w} size={34} /></View>
-            <View style={{ flex: 1 }}>
-              <Text style={st.pickName}>{w.name} <Text style={[st.pickRarity, { color: getRarityColor(w.rarity) === COLORS.rarityCommon ? '#8E877D' : getRarityColor(w.rarity) }]}>{w.rarity.toUpperCase()}</Text></Text>
-              <Text style={st.pickDesc}>{w.shortDescription}</Text>
-            </View>
-          </TouchableOpacity>
-        ))}
+        {options.map((w, i) => {
+          const tier = weaponUpgrades?.[w.id] ?? 0;
+          return (
+            <TouchableOpacity key={`${w.id}-${i}`} testID={`pick-${i}`} onPress={() => onPick(w)} style={[st.pickCard, { borderColor: getRarityColor(w.rarity) }]} activeOpacity={0.85}>
+              <View style={[st.pickIcon, { backgroundColor: COLORS.paperBeige }]}><WeaponAvatar weapon={w} size={34} /></View>
+              <View style={{ flex: 1 }}>
+                <Text style={st.pickName}>{w.name}{tier > 0 ? ` +${tier}` : ''} <Text style={[st.pickRarity, { color: getRarityColor(w.rarity) === COLORS.rarityCommon ? '#8E877D' : getRarityColor(w.rarity) }]}>{w.rarity.toUpperCase()}</Text></Text>
+                <Text style={st.pickDesc}>{w.shortDescription}</Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
         <Btn label="Skip" variant="ghost" small onPress={onSkip} />
       </PopIn>
     </View>
@@ -621,6 +708,7 @@ const Intermission: React.FC<{ run: RunState; dispatch: (a: RunAction) => void; 
                   return (
                     <TouchableOpacity
                       key={`${w.id}-${i}`}
+                      testID={`shop-buy-${i}`}
                       onPress={() => {
                         setTapTriggers(prev => ({ ...prev, [i]: (prev[i] ?? 0) + 1 }));
                         if (afford) {
@@ -634,7 +722,7 @@ const Intermission: React.FC<{ run: RunState; dispatch: (a: RunAction) => void; 
                     >
                       <View style={st.pickIcon}><WeaponAvatar weapon={w} size={34} triggerKey={tapTriggers[i]} /></View>
                       <View style={{ flex: 1 }}>
-                        <Text style={st.pickName}>{w.name}</Text>
+                        <Text style={st.pickName}>{w.name}{(run.weaponUpgrades[w.id] ?? 0) > 0 ? ` +${run.weaponUpgrades[w.id]}` : ''}</Text>
                         <Text style={st.pickDesc}>{w.shortDescription}</Text>
                       </View>
                       <CoinPill coins={price} />
@@ -683,6 +771,15 @@ const st = StyleSheet.create({
   xpTrack: { height: 12, borderRadius: 3, borderWidth: 1.5, borderColor: INK, backgroundColor: COLORS.paperBeige, overflow: 'hidden', justifyContent: 'center' },
   xpFill: { position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: '#7AC8FF' },
   xpText: { fontSize: 9, fontWeight: '900', color: INK, textAlign: 'center' },
+  synergyRow: { flexDirection: 'row', alignItems: 'center', gap: 5, flexWrap: 'wrap' },
+  arcanaChip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#FAF5FF', borderRadius: 999, borderWidth: 1.5, borderColor: '#6D28D9', paddingHorizontal: 7, paddingVertical: 2 },
+  arcanaChipText: { fontSize: 10, fontWeight: '900', color: '#6D28D9' },
+  purityChip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: COLORS.paperBeige, borderRadius: 999, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 7, paddingVertical: 2 },
+  purityChipHot: { backgroundColor: '#CCFBF1', borderColor: '#0F766E' },
+  purityChipText: { fontSize: 10, fontWeight: '800', color: INK },
+  evoChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F5F3FF', borderRadius: 999, borderWidth: 1.5, borderColor: '#6D28D9', paddingHorizontal: 7, paddingVertical: 2 },
+  evoChipReady: { backgroundColor: COLORS.actionYellow, borderColor: INK },
+  evoChipText: { fontSize: 10, fontWeight: '900', color: INK },
   ability: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 2, borderBottomWidth: 3, borderColor: '#B8B0A4', backgroundColor: COLORS.paperBeige },
   abilityReady: { borderColor: INK, backgroundColor: '#9BE3D8' },
   pip: { width: 6, height: 10, borderRadius: 2, backgroundColor: '#D9D2C7' },

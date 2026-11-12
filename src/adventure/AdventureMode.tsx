@@ -8,9 +8,9 @@ import type { CharacterName } from '@/types';
 import { music, setMusicEnabled, sfx } from '@/audio';
 import type { AdventureSave, LessonPage, LevelDef, MechanicDef, RunState } from './types';
 import { MAIN_LEVELS, getLevel, mainIndexOf } from './data/levels';
-import { MECHANICS } from './data/mechanics';
+import { COMBO_DISCOVERY_SEEN_ID, MECHANICS, buildAdaptiveEvolutionMechanic, buildComboDiscoveryPages } from './data/mechanics';
 import { STORY } from './data/story';
-import { applyLevelResult, equipCharm, isLevelUnlocked, markCoachMarkSeen, markMechanicSeen, type ResultApplication, type Unlock } from './progress';
+import { applyLevelResult, equipArcana, equipCharm, isLevelUnlocked, markCoachMarkSeen, markMechanicSeen, type ResultApplication, type Unlock } from './progress';
 import { loadAdventureSave, writeAdventureSave } from './save';
 import { computeStars } from './engine/run';
 import { randomSeed } from './engine/rng';
@@ -20,15 +20,17 @@ import MechanicIntro from './components/MechanicIntro';
 import AdventureRun from './components/AdventureRun';
 import LevelResults from './components/LevelResults';
 import UnlockReveal from './components/UnlockReveal';
-import Camp from './components/Camp';
+import Camp, { type CampTab } from './components/Camp';
 import FieldGuide from './components/FieldGuide';
+import BountyBoard from './components/BountyBoard';
 
 type Screen =
   | { kind: 'map'; highlight?: string | null }
   | { kind: 'run'; levelId: string; seed: number; attempt: number }
   | { kind: 'results'; levelId: string; run: RunState; stars: number; result: ResultApplication }
-  | { kind: 'camp' }
-  | { kind: 'guide' };
+  | { kind: 'camp'; tab?: CampTab }
+  | { kind: 'guide' }
+  | { kind: 'bounties' };
 
 interface LessonRequest {
   mechanic: MechanicDef;
@@ -69,17 +71,25 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
 
   // Map / camp music
   useEffect(() => {
-    if (screen.kind === 'map' || screen.kind === 'camp' || screen.kind === 'guide') music.play('map');
+    if (screen.kind === 'map' || screen.kind === 'camp' || screen.kind === 'guide' || screen.kind === 'bounties') music.play('map');
   }, [screen.kind]);
+
+  const clearPendingTimers = useCallback(() => {
+    timers.current.forEach(clearTimeout);
+    timers.current = [];
+  }, []);
 
   useEffect(() => () => {
     music.stop();
-    timers.current.forEach(clearTimeout);
-  }, []);
+    clearPendingTimers();
+  }, [clearPendingTimers]);
 
   const startRun = useCallback((level: LevelDef, attempt = 0) => {
+    clearPendingTimers();
+    setUnlocks([]);
+    setUnlocksRevealed(true);
     setScreen({ kind: 'run', levelId: level.id, seed: randomSeed(), attempt });
-  }, []);
+  }, [clearPendingTimers]);
 
   /** Teach a level's mechanic the first time, then fight. */
   const teachThenFight = useCallback((level: LevelDef, prelude?: LessonPage[]) => {
@@ -105,13 +115,49 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
   const handlePlay = (level: LevelDef, _fighter: CharacterName) => {
     sfx('confirm');
     setPreview(null);
-    if (!save.seenMechanics.includes(level.introduces)) teachThenFight(level);
-    else startRun(level);
+    const discoveryPages = buildComboDiscoveryPages(level.id, save);
+    const needsIntro = !save.seenMechanics.includes(level.introduces);
+    const needsEvoTutorial =
+      !level.rules.noGear &&
+      save.unlockedEvolutions.length > 0 &&
+      !save.seenMechanics.includes('weapon_evolutions');
+
+    const launchEvoThenFight = () => {
+      setLesson({
+        mechanic: buildAdaptiveEvolutionMechanic(save),
+        cta: 'Start the fight',
+        then: () => {
+          setSave(s => markMechanicSeen(s, 'weapon_evolutions'));
+          startRun(level);
+        },
+      });
+    };
+
+    if (needsIntro) {
+      setLesson({
+        mechanic: MECHANICS[level.introduces],
+        cta: needsEvoTutorial ? 'Next: Weapon Combos' : 'Start the fight',
+        prelude: discoveryPages.length > 0 ? discoveryPages : undefined,
+        then: () => {
+          setSave(s => {
+            let updated = markMechanicSeen(s, level.introduces);
+            if (discoveryPages.length > 0) updated = markMechanicSeen(updated, COMBO_DISCOVERY_SEEN_ID);
+            return updated;
+          });
+          if (needsEvoTutorial) launchEvoThenFight();
+          else startRun(level);
+        },
+      });
+    } else if (needsEvoTutorial) {
+      launchEvoThenFight();
+    } else {
+      startRun(level);
+    }
   };
 
   const handleFinish = (level: LevelDef, run: RunState) => {
     const stars = computeStars(run);
-    const result = applyLevelResult(save, level, stars, run.coins);
+    const result = applyLevelResult(save, level, stars, run.coins, run);
     setSave(result.save);
     setScreen({ kind: 'results', levelId: level.id, run, stars, result });
     if (result.unlocks.length > 0) {
@@ -136,6 +182,7 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
         onSelectLevel={l => { sfx('click'); setPreview(l); }}
         onOpenCamp={() => { sfx('confirm'); setScreen({ kind: 'camp' }); }}
         onOpenGuide={() => { sfx('confirm'); setScreen({ kind: 'guide' }); }}
+        onOpenBounties={() => { sfx('confirm'); setScreen({ kind: 'bounties' }); }}
         onExit={() => { music.stop(); onExit(); }}
         musicOn={save.musicOn}
         onToggleMusic={() => setSave(s => ({ ...s, musicOn: !s.musicOn }))}
@@ -170,14 +217,22 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
         nextUnlocked={!!next && isLevelUnlocked(save, next)}
         onRetry={() => startRun(level)}
         onNext={() => next && setPreview(next)}
-        onMap={() => setScreen({ kind: 'map', highlight: next && isLevelUnlocked(save, next) ? next.id : level.id })}
-        onCamp={() => setScreen({ kind: 'camp' })}
+        onMap={() => { clearPendingTimers(); setUnlocks([]); setScreen({ kind: 'map', highlight: next && isLevelUnlocked(save, next) ? next.id : level.id }); }}
+        onCamp={() => {
+          clearPendingTimers();
+          setUnlocks([]);
+          const unlockedWorkshop = screen.result.unlocks.some(u => u.kind === 'feature' && u.feature === 'workshop');
+          setScreen({ kind: 'camp', tab: unlockedWorkshop ? 'workshop' : undefined });
+        }}
+        onBounties={() => { clearPendingTimers(); setUnlocks([]); setScreen({ kind: 'bounties' }); }}
       />
     );
   } else if (screen.kind === 'camp') {
-    body = <Camp save={save} onChange={setSave} onClose={() => setScreen({ kind: 'map' })} />;
+    body = <Camp save={save} initialTab={screen.tab} onChange={setSave} onClose={() => setScreen({ kind: 'map' })} />;
   } else if (screen.kind === 'guide') {
     body = <FieldGuide save={save} onClose={() => setScreen({ kind: 'map' })} />;
+  } else if (screen.kind === 'bounties') {
+    body = <BountyBoard save={save} onClose={() => setScreen({ kind: 'map' })} />;
   }
 
   return (
@@ -190,6 +245,7 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
         onPlay={handlePlay}
         onSelectFighter={f => { sfx('click'); setSave(s => ({ ...s, selectedFighter: f })); }}
         onSelectCharm={id => { sfx('click'); setSave(s => equipCharm(s, id)); }}
+        onSelectArcana={id => { sfx('click'); setSave(s => equipArcana(s, id)); }}
         onShowMechanic={id => setLesson({ mechanic: MECHANICS[id], cta: 'Close', quiz: false, dismissible: true })}
       />
       <MechanicIntro
@@ -210,6 +266,9 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
           save={save}
           onUseFighter={name => setSave(s => ({ ...s, selectedFighter: name }))}
           onEquipCharm={id => setSave(s => equipCharm(s, id))}
+          onEquipArcana={id => setSave(s => equipArcana(s, id))}
+          onOpenBounties={() => setScreen({ kind: 'bounties' })}
+          onOpenWorkshop={() => setScreen({ kind: 'camp', tab: 'workshop' })}
           onDone={() => {
             setUnlocks([]);
             setUnlocksRevealed(true);

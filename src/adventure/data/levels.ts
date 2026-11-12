@@ -48,8 +48,12 @@ const RAW_LEVELS: LevelInput[] = [
     foes: [{ name: 'Dozy Bunny', icon: 'delapouite/rabbit', hp: 15, taunt: 'Zzz… huh? A challenger?' }],
     challenge: { kind: 'noMistakes' }, starRule: { kind: 'accuracy', threeStarMax: 0, twoStarMax: 1 },
     coinMultiplier: 1, difficulty: 1,
-    // Early unlocks on purpose: a second fighter and a first weapon right away
-    rewards: { star1: { coins: 20, character: 'Sly Fox' }, star2: { coins: 30, weapons: ['blast-powder-common'] }, star3: { coins: 50 } },
+    // Early unlocks on purpose: Coin Drops, explosive weapon #1, and a second fighter right away
+    rewards: {
+      star1: { coins: 20, unlockFeature: 'coins' },
+      star2: { coins: 30, weapons: ['blast-powder-common'] },
+      star3: { coins: 50, character: 'Sly Fox' },
+    },
   },
   {
     id: '1-2', biome: 'meadow', name: 'Ouch!', introduces: 'hearts',
@@ -63,14 +67,14 @@ const RAW_LEVELS: LevelInput[] = [
     rules: { attributes: A3, boardSize: 12, moves: 8, hearts: 3 },
     foes: [{ name: 'Nutkin', icon: 'delapouite/squirrel', hp: 29, taunt: 'One, two, three… mine!' }],
     challenge: { kind: 'streak', n: 4 }, coinMultiplier: 1, difficulty: 1,
-    rewards: { star1: { coins: 15 }, star2: { coins: 25 }, star3: { weapons: ['mending-charm-rare'] } },
+    rewards: { star1: { coins: 15 }, star2: { coins: 25, weapons: ['flint-spark-common'] }, star3: { coins: 50 } },
   },
   {
     id: '1-4', biome: 'meadow', name: 'Power Up', introduces: 'power_cards',
     rules: { attributes: A3, boardSize: 12, moves: 8, hearts: 3 },
     foes: [{ name: 'Bramble Frog', icon: 'lorc/frog', hp: 34, taunt: 'Ribbit. Hit me with your best shot.' }],
     challenge: { kind: 'movesLeft', n: 1 }, coinMultiplier: 1.1, difficulty: 2,
-    rewards: { star1: { coins: 15 }, star2: { weapons: ['life-vessel-rare'] }, star3: { coins: 40 } },
+    rewards: { star1: { coins: 15, unlockFeature: 'workshop' }, star2: { weapons: ['life-vessel-rare'] }, star3: { coins: 40 } },
   },
   {
     id: '1-5', biome: 'meadow', name: 'Rainbow Strike', introduces: 'rainbow',
@@ -80,25 +84,25 @@ const RAW_LEVELS: LevelInput[] = [
     rewards: { star1: { coins: 20 }, star2: { coins: 30 }, star3: { weapons: ['echo-stone-common'] } },
   },
   {
-    id: '1-6', biome: 'meadow', name: 'Gold Rush', introduces: 'coins',
+    id: '1-6', biome: 'meadow', name: 'Prism Rush', introduces: 'purity_chain',
     rules: { attributes: A3, boardSize: 12, moves: 9, hearts: 3 },
     foes: [{ name: 'Magpie', icon: 'lorc/raven', hp: 39, taunt: 'Shiny! Shiny! MINE!' }],
     challenge: { kind: 'noMistakes' }, coinMultiplier: 1.5, difficulty: 2,
-    rewards: { star1: { coins: 30 }, star2: { weapons: ['fortunes-favor-common'] }, star3: { coins: 60 } },
+    rewards: { star1: { coins: 30 }, star2: { weapons: ['fortunes-favor-common'] }, star3: { coins: 60, weapons: ['mending-charm-rare'] } },
   },
   {
     id: '1-7', biome: 'meadow', name: 'Ticking Clock', introduces: 'timer',
     rules: { attributes: A3, boardSize: 12, timer: 50, hearts: 3 },
     foes: [{ enemy: 'Lazy Sloth', hp: 34, taunt: 'Take… your… time…' }],
     challenge: { kind: 'timeLeft', n: 10 }, coinMultiplier: 1.2, difficulty: 2,
-    rewards: { star1: { coins: 25 }, star2: { weapons: ['chrono-shard-common'] }, star3: { coins: 50 } },
+    rewards: { star1: { coins: 25 }, star2: { evolution: 'immortal-aegis' }, star3: { coins: 50, weapons: ['chrono-shard-common'] } },
   },
   {
     id: '1-8', biome: 'meadow', name: 'Shell Shock', introduces: 'triple_card', isBoss: true,
     rules: { attributes: A3, boardSize: 12, timer: 60, hearts: 3 },
     foes: [{ enemy: 'Iron Shell', hp: 39, taunt: 'Nothing gets through this shell.' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 1.6, difficulty: 3,
-    rewards: { star1: { coins: 40 }, star2: { character: 'Corgi' }, star3: { coins: 100 } },
+    rewards: { star1: { coins: 40 }, star2: { character: 'Corgi' }, star3: { coins: 100, arcana: 'monochrome_pact' } },
     recommended: ['Sly Fox'],
   },
 
@@ -115,7 +119,7 @@ const RAW_LEVELS: LevelInput[] = [
     rules: { attributes: A3, timer: 60, hearts: 3, startingHints: 1 },
     foes: [{ enemy: 'Junk Rat', hp: 54, taunt: 'One rat\'s junk is… still junk.' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 1.6, difficulty: 3,
-    rewards: { star1: { coins: 35 }, star2: { weapons: ['blast-powder-rare'] }, star3: { coins: 80 } },
+    rewards: { star1: { coins: 35 }, star2: { weapons: ['blast-powder-rare'] }, star3: { coins: 80, evolution: 'world-tree' } },
     recommended: ['Corgi', 'Sly Fox'],
   },
   {
@@ -131,7 +135,7 @@ const RAW_LEVELS: LevelInput[] = [
     rules: { attributes: A3, timer: 60, hearts: 3, startingHints: 1, startingGraces: 2 },
     foes: [{ enemy: 'Sneaky Mouse', hp: 56, taunt: 'Close only counts in horseshoes!' }],
     challenge: { kind: 'noGrace' }, coinMultiplier: 1.7, difficulty: 3,
-    rewards: { star1: { coins: 40 }, star2: { character: 'Badger' }, star3: { coins: 90 } },
+    rewards: { star1: { coins: 40 }, star2: { character: 'Badger' }, star3: { coins: 90, evolution: 'vengeance-dynamo' } },
     recommended: ['Badger'],
   },
   {
@@ -139,14 +143,14 @@ const RAW_LEVELS: LevelInput[] = [
     rules: { attributes: A3, timer: 70, hearts: 3, startingHints: 1, startingGraces: 1 },
     foes: [{ name: 'Busy Beaver', icon: 'delapouite/beaver', hp: 52, taunt: 'I\'ve been training all season.' }],
     challenge: { kind: 'fullHearts' }, coinMultiplier: 1.7, difficulty: 3,
-    rewards: { star1: { coins: 40 }, star2: { weapons: ['scholars-tome-common'] }, star3: { coins: 100 } },
+    rewards: { star1: { coins: 40 }, star2: { weapons: ['scholars-tome-common'] }, star3: { coins: 100, arcana: 'scholars_gambit' } },
   },
   {
     id: '2-6', biome: 'woods', name: 'Tick Tock', introduces: 'countdown',
     rules: { attributes: A3, timer: 60, hearts: 4, startingHints: 1, startingGraces: 1 },
     foes: [{ enemy: 'Ticking Viper', hp: 54, taunt: 'Tick… tock… hisss.' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 1.8, difficulty: 3,
-    rewards: { star1: { coins: 45 }, star2: { weapons: ['time-drop-common'] }, star3: { coins: 100 } },
+    rewards: { star1: { coins: 45 }, star2: { weapons: ['time-drop-common'] }, star3: { coins: 100, evolution: 'golden-philosopher' } },
     recommended: ['Emperor Penguin'],
   },
   {
@@ -161,7 +165,7 @@ const RAW_LEVELS: LevelInput[] = [
     rules: { attributes: A3, timer: 70, hearts: 3, startingHints: 1, startingGraces: 1 },
     foes: [{ enemy: 'Trap Weaver', hp: 57, taunt: 'Step lightly. Everything here is wired.' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 2.4, difficulty: 4,
-    rewards: { star1: { coins: 70 }, star2: { character: 'Emperor Penguin' }, star3: { coins: 160 } },
+    rewards: { star1: { coins: 70 }, star2: { character: 'Emperor Penguin' }, star3: { coins: 160, arcana: 'controlled_burn' } },
     recommended: ['Emperor Penguin'],
   },
 
@@ -171,7 +175,7 @@ const RAW_LEVELS: LevelInput[] = [
     rules: { attributes: A4, boardSize: 15, timer: 75, hearts: 3, startingHints: 2, startingGraces: 1 },
     foes: [{ name: 'Dusty Mammoth', icon: 'delapouite/mammoth', hp: 39, taunt: 'Solid. Striped. Open. Crushed.' }],
     challenge: { kind: 'noMistakes' }, coinMultiplier: 2.2, difficulty: 3,
-    rewards: { star1: { coins: 60 }, star2: { weapons: ['prismatic-ray-common'] }, star3: { coins: 140 } },
+    rewards: { star1: { coins: 60 }, star2: { weapons: ['prismatic-ray-common'] }, star3: { coins: 140, evolution: 'prism-annihilator' } },
   },
   {
     id: '3-2', biome: 'canyon', name: 'Marching Ants', introduces: 'waves',
@@ -182,7 +186,7 @@ const RAW_LEVELS: LevelInput[] = [
       { name: 'Queen Ant', icon: 'delapouite/ant', hp: 17, taunt: 'You squashed my children!' },
     ],
     challenge: { kind: 'timeLeft', n: 10 }, coinMultiplier: 2.4, difficulty: 3,
-    rewards: { star1: { coins: 70 }, star2: { weapons: ['growth-seed-rare'] }, star3: { coins: 150 } },
+    rewards: { star1: { coins: 70 }, star2: { weapons: ['growth-seed-rare'] }, star3: { coins: 150, evolution: 'chrono-singularity' } },
   },
   {
     id: '3-3', biome: 'canyon', name: 'Market Day', introduces: 'shop',
@@ -208,7 +212,7 @@ const RAW_LEVELS: LevelInput[] = [
     rules: { attributes: A4, boardSize: 15, timer: 75, hearts: 3, startingHints: 2, startingGraces: 1 },
     foes: [{ enemy: 'Shifting Chameleon', hp: 42, taunt: 'Now you see me…' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 2.6, difficulty: 4,
-    rewards: { star1: { coins: 80 }, star2: { character: 'Pelican' }, star3: { coins: 180 } },
+    rewards: { star1: { coins: 80 }, star2: { character: 'Pelican' }, star3: { coins: 180, evolution: 'astral-omniscience' } },
     recommended: ['Pelican', 'Corgi'],
   },
   {
@@ -232,7 +236,7 @@ const RAW_LEVELS: LevelInput[] = [
     rules: { attributes: A4, boardSize: 15, timer: 90, hearts: 4, startingHints: 2, startingGraces: 1 },
     foes: [{ enemy: 'Charging Boar', hp: 55, taunt: 'Stand still and I\'ll flatten you.' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 3.5, difficulty: 5,
-    rewards: { star1: { coins: 130 }, star2: { weapons: ['mystic-sight-legendary'] }, star3: { coins: 300 } },
+    rewards: { star1: { coins: 130 }, star2: { weapons: ['mystic-sight-legendary'] }, star3: { coins: 300, arcana: 'tempo_surge' } },
     recommended: ['Sly Fox', 'Pelican'],
   },
 
@@ -287,9 +291,9 @@ const ELITES: LevelInput[] = [
   {
     id: '1-5E', branchOf: '1-5', biome: 'meadow', name: "Hoarder's Den", introduces: 'elite',
     rules: { attributes: A3, boardSize: 12, moves: 9, hearts: 3 },
-    foes: [{ enemy: 'Hoarding Beaver', hp: 62, taunt: 'Mine. Mine. Also mine.' }],
+    foes: [{ enemy: 'Hoarding Beaver', hp: 66, taunt: 'Mine. Mine. Also mine.' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 2.2, difficulty: 3,
-    rewards: { star1: { coins: 60 }, star2: { weapons: ['fortunes-favor-rare'] }, star3: { weapons: ['golden-touch'] } },
+    rewards: { star1: { coins: 60, arcana: 'overkill_harvest' }, star2: { evolution: 'solar-cataclysm' }, star3: { weapons: ['golden-touch'] } },
     recommended: ['Orange Tabby'],
   },
   {

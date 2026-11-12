@@ -11,15 +11,18 @@ import { FighterAvatar } from '@/components/fighters';
 import { WeaponAvatar } from '@/components/weapons';
 import { COLORS, getRarityColor } from '@/utils/colors';
 import { WEAPONS } from '@/utils/gameDefinitions';
-import type { CharacterName } from '@/types';
-import type { AdventureSave, LevelDef, RewardDef } from '../types';
+import type { CharacterName, Weapon } from '@/types';
+import type { AdventureSave, ArcanaId, LevelDef, RewardDef } from '../types';
 import { getBiome } from '../data/biomes';
 import { foeDisplay, levelFoe } from '../data/foes';
 import { getMechanic } from '../data/mechanics';
-import { FIGHTERS, getFighter } from '../data/fighters';
+import { FIGHTERS, getFighter, getLoadout } from '../data/fighters';
+import { applyWeaponUpgradeTier } from '../data/upgrades';
+import { ARCANA, getArcana } from '../data/arcana';
+import { EVOLUTION_RECIPES, getEvolutionRecipe } from '../data/evolutions';
 import { getLevel } from '../data/levels';
 import { starGoals } from '../engine/challenges';
-import { fighterLevel, getLockReason } from '../progress';
+import { fighterLevel, getFeaturesForLevel, getLockReason, weaponUpgradeTier } from '../progress';
 import { Btn, Eyebrow, Heart, INK, PopIn, Skulls, StarRow } from './ui';
 import { Silhouette } from './UnlockReveal';
 
@@ -29,10 +32,20 @@ const weapon = (id: string) => WEAPONS.find(w => w.id === id);
 
 /** What a star unlocks besides coins. Secret until earned. */
 export const unlockInfo = (r: RewardDef): { secret: string; revealed: string; icon: IconName } | null => {
+  if (r.unlockFeature === 'coins') return { secret: 'New ability', revealed: 'Coin Drops', icon: 'lorc/crown-coin' };
+  if (r.unlockFeature === 'workshop') return { secret: 'Camp upgrade', revealed: 'The Workshop', icon: 'lorc/gear-hammer' };
   if (r.character) return { secret: 'A new fighter', revealed: r.character, icon: getFighter(r.character).icon };
   if (r.weapons?.length) {
     const ws = r.weapons.map(weapon);
     return { secret: r.weapons.length > 1 ? 'New weapons' : 'A new weapon', revealed: ws.map(w => w?.name ?? '?').join(' + '), icon: ws[0]?.icon ?? 'lorc/gems' };
+  }
+  if (r.evolution) {
+    const evo = getEvolutionRecipe(r.evolution);
+    return { secret: 'A weapon combo', revealed: `Combo: ${evo.result.name}`, icon: evo.result.icon ?? 'lorc/crystal-shine' };
+  }
+  if (r.arcana) {
+    const a = getArcana(r.arcana);
+    return { secret: 'A new Arcana', revealed: `Arcana ${a.numeral}: ${a.name}`, icon: a.icon };
   }
   return null;
 };
@@ -44,10 +57,11 @@ interface Props {
   onPlay: (level: LevelDef, fighter: CharacterName) => void;
   onSelectFighter: (f: CharacterName) => void;
   onSelectCharm: (id: string) => void;
+  onSelectArcana?: (id: ArcanaId | null) => void;
   onShowMechanic: (id: string) => void;
 }
 
-const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectFighter, onSelectCharm, onShowMechanic }) => {
+const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectFighter, onSelectCharm, onSelectArcana, onShowMechanic }) => {
   const [charmTapCounts, setCharmTapCounts] = useState<Record<string, number>>({});
   if (!level) return null;
   const biome = getBiome(level.biome);
@@ -165,6 +179,8 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                               <FighterAvatar character={g.reward.character} size={20} mood="idle" />
                             ) : g.reward.weapons?.length && weapon(g.reward.weapons[0]) ? (
                               <WeaponAvatar weapon={weapon(g.reward.weapons[0])} size={20} interactive />
+                            ) : g.reward.evolution ? (
+                              <WeaponAvatar weapon={getEvolutionRecipe(g.reward.evolution).result} size={20} interactive />
                             ) : (
                               <Icon name={unlock.icon} size={16} color="#8E877D" />
                             )}
@@ -215,6 +231,7 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                     const w = weapon(id);
                     if (!w) return null;
                     const selected = save.charm === id;
+                    const wTier = weaponUpgradeTier(save, id);
                     return (
                       <TouchableOpacity
                         key={id}
@@ -227,12 +244,80 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                         activeOpacity={0.85}
                       >
                         <WeaponAvatar weapon={w} size={32} triggerKey={charmTapCounts[id]} />
-                        <Text style={st.fighterName} numberOfLines={1}>{w.name}</Text>
-                        <Text style={st.charmDesc} numberOfLines={2}>{w.shortDescription}</Text>
+                        <Text style={st.fighterName} numberOfLines={1}>{w.name}{wTier > 0 ? ` +${wTier}` : ''}</Text>
+                        <Text style={st.charmDesc} numberOfLines={2}>{applyWeaponUpgradeTier(w, wTier).shortDescription}</Text>
                       </TouchableOpacity>
                     );
                   })}
                 </ScrollView>
+              </>
+            )}
+
+            {/* Evolution synergy preview when Evolutions are unlocked */}
+            {gearOn && getFeaturesForLevel(level, save).has('evolutions') && (() => {
+              const previewWeapons: Weapon[] = getLoadout(save.selectedFighter, fighterLevel(save, save.selectedFighter))
+                .map(weapon)
+                .filter((w): w is Weapon => !!w);
+              if (save.charm && save.armory.includes(save.charm)) {
+                const cw = weapon(save.charm);
+                if (cw) previewWeapons.push(cw);
+              }
+              const recipe = EVOLUTION_RECIPES.find(r => save.unlockedEvolutions.includes(r.id) && r.hasGear(previewWeapons));
+              if (!recipe) return null;
+              return (
+                <View style={st.evoHint}>
+                  <Icon name="lorc/crystal-shine" size={18} color="#7C3AED" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={st.evoHintTitle}>
+                      {`Combo Ready to Prime: ${recipe.result.name}`}
+                    </Text>
+                    <Text style={st.evoHintSub}>{recipe.primeRequirementText}, then match the hidden Catalyst card.</Text>
+                  </View>
+                </View>
+              );
+            })()}
+
+            {/* Arcana tarot wildcard picker */}
+            {gearOn && save.unlockedArcana.length > 0 && onSelectArcana && (
+              <>
+                <Text style={st.section}>ARCANA <Text style={st.sectionHint}>optional rule twist</Text></Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
+                  <TouchableOpacity
+                    testID="preview-arcana-none"
+                    onPress={() => onSelectArcana(null)}
+                    style={[st.arcanaItem, save.activeArcana === null && st.charmSel, { borderColor: save.activeArcana === null ? INK : '#CFC8BD' }]}
+                    activeOpacity={0.85}
+                  >
+                    <Icon name="lorc/crossed-swords" size={22} color={INK} />
+                    <Text style={st.fighterName}>Standard</Text>
+                    <Text style={st.charmDesc} numberOfLines={2}>No rule modifier</Text>
+                  </TouchableOpacity>
+                  {ARCANA.filter(a => save.unlockedArcana.includes(a.id)).map(a => {
+                    const selected = save.activeArcana === a.id;
+                    return (
+                      <TouchableOpacity
+                        key={a.id}
+                        testID={`preview-arcana-${a.id}`}
+                        onPress={() => onSelectArcana(selected ? null : a.id)}
+                        style={[st.arcanaItem, { borderColor: selected ? INK : '#A855F7' }, selected && st.charmSel]}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={st.arcanaNum}>{a.numeral}</Text>
+                        <Icon name={a.icon} size={22} color={INK} />
+                        <Text style={st.fighterName} numberOfLines={1}>{a.name}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+                {save.activeArcana && save.unlockedArcana.includes(save.activeArcana) && (() => {
+                  const active = getArcana(save.activeArcana);
+                  return (
+                    <View style={st.arcanaSummary}>
+                      <Text style={st.arcanaUp}>▲ {active.upside}</Text>
+                      <Text style={st.arcanaDown}>▼ {active.tradeoff}</Text>
+                    </View>
+                  );
+                })()}
               </>
             )}
           </ScrollView>
@@ -313,6 +398,14 @@ const st = StyleSheet.create({
   charm: { width: 112, alignItems: 'center', padding: 8, borderRadius: 10, borderWidth: 2, backgroundColor: COLORS.paperBeige, gap: 2 },
   charmSel: { backgroundColor: COLORS.actionYellow, borderBottomWidth: 4 },
   charmDesc: { fontSize: 10, color: INK, textAlign: 'center', opacity: 0.8 },
+  evoHint: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F5F3FF', borderRadius: 8, borderWidth: 1.5, borderColor: '#7C3AED', padding: 8 },
+  evoHintTitle: { fontSize: 12, fontWeight: '900', color: INK },
+  evoHintSub: { fontSize: 11, color: INK, opacity: 0.85 },
+  arcanaItem: { width: 102, alignItems: 'center', justifyContent: 'center', padding: 8, borderRadius: 10, borderWidth: 2, backgroundColor: COLORS.paperBeige, gap: 2 },
+  arcanaNum: { fontSize: 9, fontWeight: '900', letterSpacing: 1, color: '#6D28D9' },
+  arcanaSummary: { backgroundColor: '#FAF5FF', borderRadius: 8, borderWidth: 1.5, borderColor: INK, padding: 8, gap: 2 },
+  arcanaUp: { fontSize: 11, fontWeight: '800', color: '#0F766E' },
+  arcanaDown: { fontSize: 11, fontWeight: '700', color: '#B45309' },
   footer: { padding: 14, borderTopWidth: 2, borderTopColor: INK, backgroundColor: COLORS.paperBeige },
   locked: { flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center' },
   lockedText: { color: INK, fontWeight: '700', flexShrink: 1 },

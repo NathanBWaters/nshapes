@@ -98,6 +98,10 @@ export interface Card {
   hasCountdown?: boolean;   // Card has countdown timer that damages player when expired
   countdownTimer?: number;  // Seconds remaining on countdown
   hasBomb?: boolean;        // Card has bomb that explodes if not matched in time
+
+  // Adventure Mode weapon evolution catalyst (at most 1 on screen at a time)
+  hasEvolutionItem?: boolean; // Hidden evolution catalyst tucked behind this card
+  evolutionReady?: boolean;   // Whether a weapon evolution recipe is currently primed
 }
 
 // Rewards revealed when a card is matched

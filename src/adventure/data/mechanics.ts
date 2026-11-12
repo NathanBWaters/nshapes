@@ -3,7 +3,8 @@
  * The intro card, map badge, field guide, and in-run coach marks are all
  * generated from this table.
  */
-import type { MechanicDef } from '../types';
+import type { AdventureSave, LessonPage, MechanicDef } from '../types';
+import { getEvolutionRecipe } from './evolutions';
 
 export const MECHANICS: Record<string, MechanicDef> = {
   // ── Rules ──────────────────────────────────────────────────────────────
@@ -749,10 +750,231 @@ export const MECHANICS: Record<string, MechanicDef> = {
     icon: 'delapouite/eating-pelican',
     demo: { type: 'icons', items: [{ icon: 'lorc/checked-shield', label: '4 Sets' }, { icon: 'delapouite/eating-pelican', label: 'Free Set' }] },
   },
+
+  // ── Advanced Systems (Workshop, Purity, Evolutions, Arcana, Bounties) ──
+  workshop: {
+    id: 'workshop',
+    kind: 'feature',
+    title: 'The Workshop',
+    tagline: 'Spend coins to upgrade unlocked mechanics and Armory weapons.',
+    body: [
+      'The Workshop at Camp is now open! You can enhance any mechanic or Armory weapon you have actually unlocked.',
+      'Experiment freely — every Workshop and Fighter upgrade can be refunded for 100% of your coins anytime.',
+    ],
+    icon: 'lorc/gear-hammer',
+    demo: {
+      type: 'icons',
+      items: [
+        { icon: 'lorc/gear-hammer', label: 'Upgrade Stats' },
+        { icon: 'lorc/gems', label: 'Boost Weapons' },
+        { icon: 'lorc/recycle', label: '100% Refund' },
+      ],
+    },
+  },
+  purity_chain: {
+    id: 'purity_chain',
+    kind: 'feature',
+    enables: 'purity',
+    title: 'Escalating Purity',
+    tagline: 'Chain Sets with rising trait variety for escalating damage & gold.',
+    body: [
+      'Start with a simple Set (1 trait different), then follow with 2 traits different, then a full Rainbow Strike!',
+      'Every step up the diversity ladder deals bonus damage and drops extra coins. Repeating or dropping diversity starts a fresh climb; mistakes break the chain.',
+    ],
+    fightTips: [
+      { title: 'Climb the ladder', text: 'Match a simple 1-diff Set first, then a 2-diff Set, then a 3-diff Rainbow Strike for bonus damage and coins!', anchor: 'top' },
+    ],
+    icon: 'lorc/lightning-branches',
+    demo: {
+      type: 'icons',
+      items: [
+        { icon: 'lorc/stone-block', label: '1-Diff' },
+        { icon: 'lorc/lightning-branches', label: '2-Diff (+dmg)' },
+        { icon: 'lorc/rainbow-star', label: 'Rainbow (Max!)' },
+      ],
+    },
+    coachMark: { on: 'purity', text: 'Escalating Purity! Each Set with more all-different traits hits harder and drops bonus coins.' },
+  },
+  weapon_evolutions: {
+    id: 'weapon_evolutions',
+    kind: 'feature',
+    title: 'Weapon Combos',
+    tagline: 'Prime a weapon combo, then match on the hidden Catalyst card.',
+    body: [
+      'At most ONE card on the board hides a shimmering Evolution Catalyst behind its shapes.',
+      'Hold off on matching that card until your weapon recipe says EVO READY! Matching a Catalyst card too early shatters it for the wave.',
+      'Check the Recipe Guide in the Field Guide to track every unlocked combo.',
+    ],
+    lessons: [
+      {
+        title: 'Do NOT match a dormant Catalyst early!',
+        body: [
+          'Only ONE Evolution Catalyst can appear on screen at a time, marked by a faint crystal behind a card.',
+          'While its badge is purple, your combo is NOT primed yet. If you match a Set containing that card too early, the Catalyst shatters and is lost!',
+        ],
+        demo: {
+          type: 'set',
+          attributes: ['shape', 'color', 'number'],
+          valid: false,
+          caption: 'Dormant purple Catalyst: matching too early loses it!',
+          cards: [
+            { shape: 'diamond', color: 'red', number: 1, shading: 'solid', modifiers: { hasEvolutionItem: true, evolutionReady: false } },
+            { shape: 'diamond', color: 'red', number: 2, shading: 'solid' },
+            { shape: 'diamond', color: 'red', number: 3, shading: 'solid' },
+          ],
+        },
+      },
+      {
+        title: 'Wait for gold EVO, then strike!',
+        body: [
+          'Bring the combo\'s required weapons and complete its in-fight condition on other cards first.',
+          'Once primed, the Catalyst card glows gold with EVO — match a valid Set containing it to forge your Legendary weapon!',
+        ],
+        demo: {
+          type: 'set',
+          attributes: ['shape', 'color', 'number'],
+          valid: true,
+          caption: 'Gold EVO Catalyst: match a Set with it to evolve!',
+          cards: [
+            { shape: 'oval', color: 'red', number: 1, shading: 'solid', modifiers: { hasEvolutionItem: true, evolutionReady: true } },
+            { shape: 'oval', color: 'green', number: 2, shading: 'solid' },
+            { shape: 'oval', color: 'purple', number: 3, shading: 'solid' },
+          ],
+        },
+      },
+    ],
+    icon: 'lorc/crystal-shine',
+    demo: {
+      type: 'icons',
+      items: [
+        { icon: 'lorc/gems', label: 'Pair Gear' },
+        { icon: 'lorc/crystal-shine', label: 'Prime Catalyst' },
+        { icon: 'lorc/fireball', label: 'Evolve!' },
+      ],
+    },
+    coachMark: { on: 'catalyst_spawn', text: 'Hidden Catalyst spotted! Wait until your recipe says EVO READY before matching that card, or it is lost!' },
+  },
+  arcana_cards: {
+    id: 'arcana_cards',
+    kind: 'feature',
+    title: 'Arcana Wildcards',
+    tagline: 'Equip one kiss-curse tarot rule twist before a fight.',
+    body: [
+      'Arcana cards bend the rules of a fight — turning simple Sets into boulders, igniting cards on mistakes, or tripling Rainbow Strikes.',
+      'Every upside comes with a tradeoff, and you can toggle your Arcana on or off anytime at Camp or before a fight.',
+    ],
+    icon: 'lorc/crystal-wand',
+    demo: {
+      type: 'icons',
+      items: [
+        { icon: 'lorc/crystal-wand', label: 'Pick 1 Arcana' },
+        { icon: 'lorc/crossed-swords', label: 'Twist Rules' },
+      ],
+    },
+  },
+  bounty_board: {
+    id: 'bounty_board',
+    kind: 'feature',
+    title: 'Bounty Board',
+    tagline: 'Cross-run feats that pay out even when you lose.',
+    body: [
+      'Every Set, Rainbow Strike, Purity combo, and Evolution counts toward lifetime Bounties across all runs.',
+      'Claim coins, rare Armory weapons, and new Arcana wildcards from the Bounty Board on the map.',
+    ],
+    icon: 'lorc/trophy',
+    demo: {
+      type: 'icons',
+      items: [
+        { icon: 'lorc/archery-target', label: 'Play Runs' },
+        { icon: 'lorc/trophy', label: 'Finish Feats' },
+        { icon: 'lorc/crown-coin', label: 'Win Loot' },
+      ],
+    },
+  },
 };
 
 export const getMechanic = (id: string): MechanicDef => {
   const m = MECHANICS[id];
   if (!m) throw new Error(`Unknown mechanic: ${id}`);
   return m;
+};
+
+/**
+ * Seen-flag tracking whichever of World 1's two Combo stages (`1-5E` vs `1-7`)
+ * the player reaches FIRST, so the pre-fight discovery intro adapts to that path
+ * and never repeats on the second one.
+ */
+export const COMBO_DISCOVERY_SEEN_ID = 'combo_hunt_intro';
+
+export const buildComboDiscoveryPages = (levelId: string, save: AdventureSave): LessonPage[] => {
+  if (save.seenMechanics.includes(COMBO_DISCOVERY_SEEN_ID) || save.unlockedEvolutions.length > 0) return [];
+  if (levelId === '1-5E') {
+    // Reached the World 1 Elite FIRST (before 1-7 — do NOT mention clocks/timers!)
+    return [
+      {
+        title: 'Combo Vault: First Weapon Combo',
+        body: [
+          'You discovered World 1\'s Elite branch! Knocking out Hoarding Beaver (★★) unlocks your very first WEAPON COMBO recipe: Solar Cataclysm (fusing Blast Powder + Flint Spark).',
+          'Once you unlock a Combo recipe, hidden Catalyst crystals begin appearing behind cards in future fights! (Another World 1 Combo also awaits ahead on 1-7.)',
+        ],
+        demo: {
+          type: 'icons',
+          items: [
+            { icon: 'lorc/daemon-skull', label: '1-5E Elite' },
+            { icon: 'lorc/fireball', label: 'Unlock Combo' },
+            { icon: 'lorc/crystal-shine', label: 'Awaken Catalysts' },
+          ],
+        },
+      },
+    ];
+  }
+  if (levelId === '1-7') {
+    // Reached 1-7 FIRST on the main path (having skipped or not yet played 1-5E)
+    return [
+      {
+        title: 'Milestone Reward: First Weapon Combo',
+        body: [
+          'Knocking out Lazy Sloth (★★) unlocks your very first WEAPON COMBO recipe: Immortal Aegis (fusing Mending Charm + Life Vessel)!',
+          'Once you unlock a Combo recipe, hidden Catalyst crystals begin appearing behind cards in future fights. (Tip: World 1\'s 1-5E Elite branch also guards a second Combo recipe whenever you\'re ready!)',
+        ],
+        demo: {
+          type: 'icons',
+          items: [
+            { icon: 'lorc/crossed-swords', label: 'Beat 1-7 (★★)' },
+            { icon: 'lorc/angel-outfit', label: 'Unlock Combo' },
+            { icon: 'lorc/crystal-shine', label: 'Awaken Catalysts' },
+          ],
+        },
+      },
+    ];
+  }
+  return [];
+};
+
+/**
+ * Build a context-aware `weapon_evolutions` lesson tailored to whichever Combo
+ * recipe the player actually unlocked first (`1-5E`'s Solar Cataclysm vs `1-7`'s Immortal Aegis).
+ */
+export const buildAdaptiveEvolutionMechanic = (save: AdventureSave): MechanicDef => {
+  const base = MECHANICS.weapon_evolutions;
+  const firstId = save.unlockedEvolutions[0];
+  if (!firstId) return base;
+  const recipe = getEvolutionRecipe(firstId);
+  return {
+    ...base,
+    tagline: `Your ${recipe.result.name} combo is live — watch for a hidden Catalyst card!`,
+    body: [
+      `You unlocked ${recipe.result.name}! Bring ${recipe.gearRequirementText}, and complete its condition (${recipe.primeRequirementText.toLowerCase()}).`,
+      'At most ONE card on screen hides an Evolution Catalyst. Wait until its badge turns gold (EVO) before matching on it — matching too early shatters and loses it!',
+      'Check the Recipe Guide in the Field Guide anytime to review your unlocked combos.',
+    ],
+    demo: {
+      type: 'icons',
+      items: [
+        { icon: 'lorc/gems', label: 'Pair Gear' },
+        { icon: 'lorc/crystal-shine', label: 'Wait for EVO' },
+        { icon: recipe.result.icon ?? 'lorc/fireball', label: recipe.result.name },
+      ],
+    },
+  };
 };

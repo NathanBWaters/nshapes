@@ -1,10 +1,11 @@
 /**
- * Camp — spend coins. Two tabs:
+ * Camp — spend (and freely refund!) coins. Four tabs:
  *   Fighters: level each fighter 1→10 (upgrades their starting gear)
  *   Workshop: expensive permanent upgrades
- * Plus a read-only Armory of every weapon unlocked so far.
+ *   Armory:   weapons unlocked so far (equip one as your Charm)
+ *   Arcana:   toggleable kiss-curse tarot wildcards
  */
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '@/components/Icon';
@@ -17,32 +18,62 @@ import { sfx } from '@/audio';
 import type { CharacterName } from '@/types';
 import type { AdventureSave } from '../types';
 import { FIGHTERS, MAX_FIGHTER_LEVEL, getLevelUpCost, getLoadout } from '../data/fighters';
-import { UPGRADES } from '../data/upgrades';
+import { MAX_WEAPON_UPGRADE_TIER, applyWeaponUpgradeTier, describeWeaponUpgradeBonus, getUnlockedUpgrades } from '../data/upgrades';
+import { ARCANA } from '../data/arcana';
 import { MECHANICS } from '../data/mechanics';
-import { buyUpgrade, canLevelFighter, equipCharm, fighterLevel, levelFighter, upgradeCost, upgradeTier } from '../progress';
+import {
+  buyUpgrade,
+  buyWeaponUpgrade,
+  canBuyUpgrade,
+  canLevelFighter,
+  canUpgradeWeapon,
+  equipArcana,
+  equipCharm,
+  fighterLevel,
+  fighterSpentCoins,
+  levelFighter,
+  refundAllCamp,
+  refundFighter,
+  refundUpgrade,
+  refundWeaponUpgrade,
+  refundableCoins,
+  upgradeCost,
+  upgradeSpentCoins,
+  upgradeTier,
+  weaponUpgradeCost,
+  weaponUpgradeSpentCoins,
+  weaponUpgradeTier,
+} from '../progress';
 import { Btn, CoinPill, INK, PopIn } from './ui';
 
-type Tab = 'fighters' | 'workshop' | 'armory';
+export type CampTab = 'fighters' | 'workshop' | 'armory' | 'arcana';
 
 interface Props {
   save: AdventureSave;
   onChange: (save: AdventureSave) => void;
   onClose: () => void;
+  initialTab?: CampTab;
 }
 
 const weapon = (id: string) => WEAPONS.find(w => w.id === id);
 
-const Camp: React.FC<Props> = ({ save, onChange, onClose }) => {
+const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters' }) => {
   const insets = useSafeAreaInsets();
-  const [tab, setTab] = useState<Tab>('fighters');
+  const [tab, setTab] = useState<CampTab>(initialTab);
   const [reactions, setReactions] = useState<Partial<Record<CharacterName, FighterReactionEvent>>>({});
   const [armoryTapCounts, setArmoryTapCounts] = useState<Record<string, number>>({});
   const reactionSeq = useRef(0);
+
+  useEffect(() => {
+    setTab(initialTab);
+  }, [initialTab]);
 
   const fireFighterReaction = (name: CharacterName, type: FighterReactionType) => {
     reactionSeq.current += 1;
     setReactions(prev => ({ ...prev, [name]: { type, id: reactionSeq.current } }));
   };
+
+  const totalRefundable = refundableCoins(save);
 
   return (
     <View style={[st.root, { paddingTop: insets.top }]}>
@@ -56,17 +87,44 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose }) => {
         <CoinPill coins={save.coins} />
       </View>
       <View style={st.tabs}>
-        {(['fighters', 'workshop', 'armory'] as Tab[]).map(t => (
-          <TouchableOpacity key={t} onPress={() => { sfx('click'); setTab(t); }} style={[st.tab, tab === t && st.tabOn]}>
-            <Text style={[st.tabText, tab === t && { color: INK }]}>{t.toUpperCase()}</Text>
+        {(['fighters', 'workshop', 'armory', 'arcana'] as CampTab[]).map(t => (
+          <TouchableOpacity
+            key={t}
+            testID={`camp-tab-${t}`}
+            onPress={() => { sfx('click'); setTab(t); }}
+            style={[st.tab, tab === t && st.tabOn]}
+          >
+            <Text style={[st.tabText, tab === t && { color: INK }]} numberOfLines={1}>
+              {t === 'workshop' && !save.workshopUnlocked ? '🔒 WORKSHOP' : t.toUpperCase()}
+              {t === 'arcana' && save.activeArcana ? ' •' : ''}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
+
+      {totalRefundable > 0 && (tab === 'fighters' || (tab === 'workshop' && save.workshopUnlocked)) && (
+        <View style={st.refundBanner}>
+          <View style={{ flex: 1 }}>
+            <Text style={st.refundBannerTitle}>100% Free Respec</Text>
+            <Text style={st.refundBannerSub}>Experiment freely — get every spent coin back anytime.</Text>
+          </View>
+          <TouchableOpacity
+            testID="camp-refund-all"
+            onPress={() => { sfx('coin'); onChange(refundAllCamp(save)); }}
+            style={st.refundAllBtn}
+            activeOpacity={0.85}
+          >
+            <Icon name="lorc/recycle" size={15} color={INK} />
+            <Text style={st.refundAllText}>Refund All (+{totalRefundable}¢)</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <ScrollView contentContainerStyle={[st.body, { paddingBottom: insets.bottom + 24 }]}>
         {tab === 'fighters' && FIGHTERS.map(f => {
           const unlocked = save.unlockedFighters.includes(f.name);
           const lvl = fighterLevel(save, f.name);
+          const spent = fighterSpentCoins(save, f.name);
           const cost = getLevelUpCost(lvl);
           const now = getLoadout(f.name, lvl);
           const next = lvl < MAX_FIGHTER_LEVEL ? getLoadout(f.name, lvl + 1) : null;
@@ -114,38 +172,67 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose }) => {
                   <View style={st.gearRow}>
                     {now.map((id, i) => {
                       const w = weapon(id);
+                      const wTier = weaponUpgradeTier(save, id);
                       return (
                         <View key={i} style={[st.gear, { borderColor: w ? getRarityColor(w.rarity) : INK }]}>
                           {w && <WeaponAvatar weapon={w} size={20} interactive />}
-                          <Text style={st.gearText} numberOfLines={1}>{w?.name ?? id}</Text>
+                          <Text style={st.gearText} numberOfLines={1}>
+                            {w?.name ?? id}{wTier > 0 ? ` +${wTier}` : ''}
+                          </Text>
                         </View>
                       );
                     })}
                   </View>
                   {sig && <Text style={st.sigText}><Text style={{ fontWeight: '900' }}>Signature: </Text>{sig.tagline}</Text>}
-                  {cost !== null ? (
-                    <View style={st.levelUpRow}>
-                      <Text style={st.nextText} numberOfLines={2}>
-                        Lv {lvl + 1}: {[...gearChanges.map(id => {
-                          const w = weapon(id);
-                          return w ? `${w.name} (${w.rarity})` : id;
-                        }), nextPerk].filter(Boolean).join(' · ') || 'Stronger gear'}
-                      </Text>
-                      <Btn
-                        small
-                        label={`${cost}¢`}
-                        icon="lorc/crown-coin"
-                        disabled={!canLevelFighter(save, f.name)}
-                        onPress={() => {
-                          sfx('levelup');
-                          fireFighterReaction(f.name, 'powerup');
-                          onChange(levelFighter(save, f.name));
-                        }}
-                      />
-                    </View>
-                  ) : (
-                    <Text style={st.maxed}>MAX LEVEL</Text>
-                  )}
+                  <View style={st.levelUpRow}>
+                    {cost !== null ? (
+                      <>
+                        <Text style={st.nextText} numberOfLines={2}>
+                          Lv {lvl + 1}: {[...gearChanges.map(id => {
+                            const w = weapon(id);
+                            return w ? `${w.name} (${w.rarity})` : id;
+                          }), nextPerk].filter(Boolean).join(' · ') || 'Stronger gear'}
+                        </Text>
+                        {spent > 0 && (
+                          <TouchableOpacity
+                            testID={`camp-refund-fighter-${f.name}`}
+                            onPress={() => { sfx('coin'); onChange(refundFighter(save, f.name)); }}
+                            style={st.refundChip}
+                            activeOpacity={0.85}
+                          >
+                            <Icon name="lorc/recycle" size={13} color={INK} />
+                            <Text style={st.refundChipText}>+{spent}¢</Text>
+                          </TouchableOpacity>
+                        )}
+                        <Btn
+                          small
+                          label={`${cost}¢`}
+                          icon="lorc/crown-coin"
+                          disabled={!canLevelFighter(save, f.name)}
+                          onPress={() => {
+                            sfx('levelup');
+                            fireFighterReaction(f.name, 'powerup');
+                            onChange(levelFighter(save, f.name));
+                          }}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <Text style={[st.maxed, { flex: 1 }]}>MAX LEVEL</Text>
+                        {spent > 0 && (
+                          <TouchableOpacity
+                            testID={`camp-refund-fighter-${f.name}`}
+                            onPress={() => { sfx('coin'); onChange(refundFighter(save, f.name)); }}
+                            style={st.refundChip}
+                            activeOpacity={0.85}
+                          >
+                            <Icon name="lorc/recycle" size={13} color={INK} />
+                            <Text style={st.refundChipText}>Reset (+{spent}¢)</Text>
+                          </TouchableOpacity>
+                        )}
+                      </>
+                    )}
+                  </View>
                 </>
               )}
             </View>
@@ -153,30 +240,131 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose }) => {
         })}
 
         {tab === 'workshop' && (
-          <>
-            <Text style={st.blurb}>Permanent upgrades for every fighter. They're pricey, so replay levels to save up. Tougher foes pay more.</Text>
-            {UPGRADES.map(u => {
-              const tier = upgradeTier(save, u.id);
-              const cost = upgradeCost(save, u.id);
-              return (
-                <PopIn key={u.id} style={st.upgrade}>
-                  <View style={st.portrait}><Icon name={u.icon} size={30} color={INK} /></View>
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <Text style={st.fighterName}>{u.name}</Text>
-                    <Text style={st.fighterBlurb}>{tier > 0 ? `Now: ${u.description(tier)}` : u.description(1)}</Text>
-                    <View style={{ flexDirection: 'row', gap: 3, marginTop: 2 }}>
-                      {u.costs.map((_, i) => <View key={i} style={[st.tierPip, i < tier && st.tierPipOn]} />)}
-                    </View>
-                  </View>
-                  {cost !== null ? (
-                    <Btn small label={`${cost}¢`} icon="lorc/crown-coin" disabled={save.coins < cost} onPress={() => { sfx('unlock'); onChange(buyUpgrade(save, u.id)); }} />
-                  ) : (
-                    <Text style={st.maxed}>MAX</Text>
-                  )}
-                </PopIn>
-              );
-            })}
-          </>
+          !save.workshopUnlocked ? (
+            <View testID="camp-workshop-locked" style={st.lockedWorkshop}>
+              <View style={st.portrait}><Icon name="lorc/padlock" size={30} color={INK} /></View>
+              <Text style={st.fighterName}>Workshop Locked</Text>
+              <Text style={[st.fighterBlurb, { textAlign: 'center' }]}>
+                Earn ★ on 1-4 Power Up to unlock the ability to upgrade your unlocked mechanics and Armory weapons!
+              </Text>
+            </View>
+          ) : (
+            <>
+              <Text style={st.blurb}>
+                Upgrade any mechanic or Armory weapon you have unlocked. Refundable at 100% value anytime.
+              </Text>
+
+              <Text style={st.sectionLabel}>MECHANIC UPGRADES</Text>
+              {getUnlockedUpgrades(save).length === 0 ? (
+                <Text style={st.blurb}>Play further in the campaign to unlock mechanics to upgrade.</Text>
+              ) : (
+                getUnlockedUpgrades(save).map(u => {
+                  const tier = upgradeTier(save, u.id);
+                  const cost = upgradeCost(save, u.id);
+                  const spent = upgradeSpentCoins(save, u.id);
+                  return (
+                    <PopIn key={u.id} style={st.upgrade}>
+                      <View testID={`camp-upgrade-${u.id}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                        <View style={st.portrait}><Icon name={u.icon} size={30} color={INK} /></View>
+                        <View style={{ flex: 1, gap: 2 }}>
+                          <Text style={st.fighterName}>{u.name}</Text>
+                          <Text style={st.fighterBlurb}>{tier > 0 ? `Now: ${u.description(tier)}` : u.description(1)}</Text>
+                          <View style={{ flexDirection: 'row', gap: 3, marginTop: 2 }}>
+                            {u.costs.map((_, i) => <View key={i} style={[st.tierPip, i < tier && st.tierPipOn]} />)}
+                          </View>
+                        </View>
+                        <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                          {cost !== null ? (
+                            <Btn
+                              small
+                              testID={`camp-buy-upgrade-${u.id}`}
+                              label={`${cost}¢`}
+                              icon="lorc/crown-coin"
+                              disabled={!canBuyUpgrade(save, u.id)}
+                              onPress={() => { sfx('unlock'); onChange(buyUpgrade(save, u.id)); }}
+                            />
+                          ) : (
+                            <Text style={st.maxed}>MAX</Text>
+                          )}
+                          {spent > 0 && (
+                            <TouchableOpacity
+                              testID={`camp-refund-upgrade-${u.id}`}
+                              onPress={() => { sfx('coin'); onChange(refundUpgrade(save, u.id)); }}
+                              style={st.refundChip}
+                              activeOpacity={0.85}
+                            >
+                              <Icon name="lorc/recycle" size={12} color={INK} />
+                              <Text style={st.refundChipText}>+{spent}¢</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </View>
+                    </PopIn>
+                  );
+                })
+              )}
+
+              <Text style={st.sectionLabel}>WEAPON UPGRADES</Text>
+              {save.armory.length === 0 ? (
+                <Text style={st.blurb}>Unlock weapons in your Armory to enhance them here.</Text>
+              ) : (
+                WEAPONS.filter(w => save.armory.includes(w.id)).map(w => {
+                  const tier = weaponUpgradeTier(save, w.id);
+                  const cost = weaponUpgradeCost(save, w.id);
+                  const spent = weaponUpgradeSpentCoins(save, w.id);
+                  return (
+                    <PopIn key={w.id} style={st.upgrade}>
+                      <View testID={`camp-weapon-upgrade-${w.id}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                        <View style={[st.portrait, { borderColor: getRarityColor(w.rarity) }]}>
+                          <WeaponAvatar weapon={w} size={34} interactive />
+                        </View>
+                        <View style={{ flex: 1, gap: 2 }}>
+                          <Text style={st.fighterName}>
+                            {w.name}{tier > 0 ? ` +${tier}` : ''}
+                          </Text>
+                          <Text style={st.fighterBlurb}>
+                            {tier > 0
+                              ? `Now: ${describeWeaponUpgradeBonus(w, tier)}`
+                              : `Next: ${describeWeaponUpgradeBonus(w, 1)}`}
+                          </Text>
+                          <View style={{ flexDirection: 'row', gap: 3, marginTop: 2 }}>
+                            {Array.from({ length: MAX_WEAPON_UPGRADE_TIER }).map((_, i) => (
+                              <View key={i} style={[st.tierPip, i < tier && st.tierPipOn]} />
+                            ))}
+                          </View>
+                        </View>
+                        <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                          {cost !== null ? (
+                            <Btn
+                              small
+                              testID={`camp-buy-weapon-${w.id}`}
+                              label={`${cost}¢`}
+                              icon="lorc/crown-coin"
+                              disabled={!canUpgradeWeapon(save, w.id)}
+                              onPress={() => { sfx('unlock'); onChange(buyWeaponUpgrade(save, w.id)); }}
+                            />
+                          ) : (
+                            <Text style={st.maxed}>MAX</Text>
+                          )}
+                          {spent > 0 && (
+                            <TouchableOpacity
+                              testID={`camp-refund-weapon-${w.id}`}
+                              onPress={() => { sfx('coin'); onChange(refundWeaponUpgrade(save, w.id)); }}
+                              style={st.refundChip}
+                              activeOpacity={0.85}
+                            >
+                              <Icon name="lorc/recycle" size={12} color={INK} />
+                              <Text style={st.refundChipText}>+{spent}¢</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </View>
+                    </PopIn>
+                  );
+                })
+              )}
+            </>
+          )
         )}
 
         {tab === 'armory' && (
@@ -186,6 +374,7 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose }) => {
             <View style={st.armory}>
               {WEAPONS.filter(w => save.armory.includes(w.id)).map(w => {
                 const equipped = save.charm === w.id;
+                const wTier = weaponUpgradeTier(save, w.id);
                 return (
                   <TouchableOpacity
                     key={w.id}
@@ -198,14 +387,63 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose }) => {
                     style={[st.armoryItem, { borderColor: equipped ? COLORS.actionYellow : getRarityColor(w.rarity) }, equipped && { backgroundColor: '#FFFBE0' }]}
                   >
                     <WeaponAvatar weapon={w} size={36} triggerKey={armoryTapCounts[w.id]} />
-                    <Text style={st.armoryName} numberOfLines={1}>{w.name}</Text>
+                    <Text style={st.armoryName} numberOfLines={1}>{w.name}{wTier > 0 ? ` +${wTier}` : ''}</Text>
                     <Text style={[st.armoryRarity, { color: getRarityColor(w.rarity) === COLORS.rarityCommon ? '#8E877D' : getRarityColor(w.rarity) }]}>{equipped ? 'equipped' : w.rarity}</Text>
-                    <Text style={st.armoryDesc} numberOfLines={2}>{w.shortDescription}</Text>
+                    <Text style={st.armoryDesc} numberOfLines={2}>{applyWeaponUpgradeTier(w, wTier).shortDescription}</Text>
                   </TouchableOpacity>
                 );
               })}
             </View>
             <Text style={st.blurb}>More weapons are out there…</Text>
+          </>
+        )}
+
+        {tab === 'arcana' && (
+          <>
+            <Text style={st.blurb}>
+              Equip up to ONE Arcana tarot wildcard to twist the rules of a fight. Tap an equipped Arcana again to return to standard rules.
+            </Text>
+            {ARCANA.map(a => {
+              const unlocked = save.unlockedArcana.includes(a.id);
+              const equipped = save.activeArcana === a.id;
+              return (
+                <TouchableOpacity
+                  key={a.id}
+                  testID={`camp-arcana-${a.id}`}
+                  disabled={!unlocked}
+                  onPress={() => {
+                    sfx('confirm');
+                    onChange(equipArcana(save, equipped ? null : a.id));
+                  }}
+                  activeOpacity={0.85}
+                  style={[
+                    st.arcanaCard,
+                    !unlocked && { opacity: 0.6, backgroundColor: '#EFEAE2' },
+                    equipped && { borderColor: COLORS.actionYellow, backgroundColor: '#FFFBE0' },
+                  ]}
+                >
+                  <View style={[st.arcanaTarot, equipped && { backgroundColor: COLORS.actionYellow }]}>
+                    <Text style={st.arcanaNumeral}>{a.numeral}</Text>
+                    <Icon name={unlocked ? a.icon : 'lorc/padlock'} size={26} color={INK} />
+                  </View>
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                      <Text style={st.fighterName}>{unlocked ? a.name : `Arcana ${a.numeral}: ???`}</Text>
+                      {equipped && <View style={st.usingTag}><Text style={st.usingText}>ACTIVE</Text></View>}
+                    </View>
+                    {unlocked ? (
+                      <>
+                        <Text style={st.fighterBlurb}>{a.tagline}</Text>
+                        <Text style={st.arcanaUpside}>▲ {a.upside}</Text>
+                        <Text style={st.arcanaTradeoff}>▼ {a.tradeoff}</Text>
+                      </>
+                    ) : (
+                      <Text style={st.fighterBlurb}>Unlock: {a.unlockHint}</Text>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
           </>
         )}
       </ScrollView>
@@ -249,6 +487,8 @@ const st = StyleSheet.create({
   lvPip: { width: 10, height: 6, borderRadius: 2, backgroundColor: '#E2DBD0' },
   lvPipOn: { backgroundColor: COLORS.actionYellow, borderWidth: 1, borderColor: INK },
   upgrade: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 2.5, borderBottomWidth: 5, borderColor: INK, padding: 12 },
+  lockedWorkshop: { alignItems: 'center', gap: 8, backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 2.5, borderBottomWidth: 5, borderColor: INK, padding: 20, marginTop: 8 },
+  sectionLabel: { color: COLORS.actionYellow, fontWeight: '900', fontSize: 11, letterSpacing: 2, marginTop: 8, marginBottom: 2 },
   tierPip: { width: 18, height: 6, borderRadius: 2, backgroundColor: '#E2DBD0' },
   tierPipOn: { backgroundColor: COLORS.logicTeal },
   armory: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' },
@@ -256,6 +496,18 @@ const st = StyleSheet.create({
   armoryName: { fontWeight: '900', fontSize: 12, color: INK },
   armoryRarity: { fontSize: 9, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
   armoryDesc: { fontSize: 10, color: INK, textAlign: 'center', opacity: 0.8 },
+  refundBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 12, marginBottom: 2, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 2, borderColor: INK, backgroundColor: '#FFF6C2', maxWidth: 536, alignSelf: 'center', width: '94%' },
+  refundBannerTitle: { fontWeight: '900', fontSize: 13, color: INK },
+  refundBannerSub: { fontSize: 11, color: INK, opacity: 0.8 },
+  refundAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: COLORS.canvasWhite, borderRadius: 8, borderWidth: 2, borderBottomWidth: 3, borderColor: INK, paddingHorizontal: 10, paddingVertical: 6 },
+  refundAllText: { fontWeight: '900', fontSize: 12, color: INK },
+  refundChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: COLORS.canvasWhite, borderRadius: 6, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 7, paddingVertical: 4 },
+  refundChipText: { fontSize: 11, fontWeight: '800', color: INK },
+  arcanaCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 2.5, borderBottomWidth: 5, borderColor: INK, padding: 12 },
+  arcanaTarot: { width: 56, height: 74, borderRadius: 8, borderWidth: 2, borderColor: INK, backgroundColor: COLORS.paperBeige, alignItems: 'center', justifyContent: 'center', gap: 4 },
+  arcanaNumeral: { fontSize: 11, fontWeight: '900', letterSpacing: 1.5, color: INK },
+  arcanaUpside: { fontSize: 12, fontWeight: '800', color: '#0F766E' },
+  arcanaTradeoff: { fontSize: 12, fontWeight: '700', color: '#B45309' },
 });
 
 export default Camp;

@@ -12,6 +12,8 @@ import { sfx } from '@/audio';
 import type { LevelDef, RunState } from '../types';
 import type { ResultApplication } from '../progress';
 import { getBiome } from '../data/biomes';
+import { BOUNTIES } from '../data/bounties';
+import { getEvolutionRecipe } from '../data/evolutions';
 import { Btn, CoinPill, INK, PopIn, StarRow } from './ui';
 import { unlockInfo } from './LevelPreview';
 import { Silhouette } from './UnlockReveal';
@@ -29,9 +31,10 @@ interface Props {
   onNext: () => void;
   onMap: () => void;
   onCamp: () => void;
+  onBounties?: () => void;
 }
 
-const LevelResults: React.FC<Props> = ({ level, run, stars, result, unlocksRevealed, nextLevel, nextUnlocked, onRetry, onNext, onMap, onCamp }) => {
+const LevelResults: React.FC<Props> = ({ level, run, stars, result, unlocksRevealed, nextLevel, nextUnlocked, onRetry, onNext, onMap, onCamp, onBounties }) => {
   const insets = useSafeAreaInsets();
   const biome = getBiome(level.biome);
   const won = stars > 0;
@@ -65,7 +68,13 @@ const LevelResults: React.FC<Props> = ({ level, run, stars, result, unlocksRevea
       ? 'Tip: Rainbow Strikes (every trait different) hit twice as hard.'
       : null;
 
-  const totalCoins = result.starCoins + result.coinsBanked;
+  const totalCoins = result.starCoins + result.coinsBanked + result.bountyCoins;
+  const activeBountyHooks = result.save.bountiesUnlocked
+    ? BOUNTIES
+        .filter(b => !result.save.completedBounties.includes(b.id) && b.progress(result.save) > 0)
+        .sort((a, b) => b.progress(result.save) / b.target - a.progress(result.save) / a.target)
+        .slice(0, 2)
+    : [];
   const hasHearts = run.hearts !== null && run.maxHearts !== null && run.maxHearts > 0;
   const resultFighterHealth = won
     ? (hasHearts ? Math.max(1, run.hearts!) : 3)
@@ -120,8 +129,38 @@ const LevelResults: React.FC<Props> = ({ level, run, stars, result, unlocksRevea
                   <Text key={g.star} style={st.bankLine}>{'★'.repeat(g.star)} reward  +{g.reward.coins}</Text>
                 ))}
                 {result.coinsBanked > 0 && <Text style={st.bankLine}>Coin drops  +{result.coinsBanked}</Text>}
+                {result.bountyCoins > 0 && <Text style={st.bankLine}>Bounties  +{result.bountyCoins}</Text>}
               </View>
               <CoinPill coins={totalCoins} />
+            </View>
+          )}
+
+          {result.completedBounties.length > 0 && (
+            <View style={st.bountyDoneBox}>
+              <Text style={st.section}>BOUNTIES COMPLETED</Text>
+              {result.completedBounties.map(b => (
+                <View key={b.id} style={st.bountyDoneRow}>
+                  <Icon name={b.icon} size={18} color={COLORS.actionYellow} />
+                  <Text style={st.rewardText}>{b.name}</Text>
+                  <Text style={st.bountyCoinTag}>+{b.reward.coins}¢</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {activeBountyHooks.length > 0 && result.completedBounties.length === 0 && (
+            <View style={st.bountyHookBox}>
+              <Text style={st.bountyHookHeader}>CROSS-RUN BOUNTY PROGRESS</Text>
+              {activeBountyHooks.map(b => {
+                const cur = Math.min(b.target, b.progress(result.save));
+                return (
+                  <View key={b.id} style={st.bountyHookRow}>
+                    <Icon name={b.icon} size={14} color={INK} />
+                    <Text style={st.bountyHookName} numberOfLines={1}>{b.name}</Text>
+                    <Text style={st.bountyHookFrac}>{cur}/{b.target}</Text>
+                  </View>
+                );
+              })}
             </View>
           )}
 
@@ -139,6 +178,8 @@ const LevelResults: React.FC<Props> = ({ level, run, stars, result, unlocksRevea
                         <FighterAvatar character={g.reward.character} size={24} mood="victory" />
                       ) : g.reward.weapons?.length ? (
                         <WeaponAvatar weapon={WEAPONS.find(w => w.id === g.reward.weapons![0])} size={24} interactive />
+                      ) : g.reward.evolution ? (
+                        <WeaponAvatar weapon={getEvolutionRecipe(g.reward.evolution).result} size={24} interactive />
                       ) : (
                         <Icon name={u.icon} size={22} color={COLORS.actionYellow} />
                       )
@@ -167,8 +208,11 @@ const LevelResults: React.FC<Props> = ({ level, run, stars, result, unlocksRevea
             ) : null}
             <Btn testID="results-retry" label={stars >= 3 ? 'Play again' : won ? 'Retry for more ★' : 'Try again'} variant={won && nextLevel && nextUnlocked ? 'secondary' : 'primary'} onPress={onRetry} />
             <View style={{ flexDirection: 'row', gap: 8 }}>
-              <Btn label="Map" variant="secondary" icon="lorc/field" onPress={onMap} style={{ flex: 1 }} />
-              <Btn label="Camp" variant="secondary" icon="lorc/campfire" onPress={onCamp} style={{ flex: 1 }} />
+              <Btn testID="results-map" label="Map" variant="secondary" icon="lorc/field" onPress={onMap} style={{ flex: 1 }} />
+              {result.save.bountiesUnlocked && onBounties && (
+                <Btn testID="results-bounties" label="Bounties" variant="secondary" icon="lorc/trophy" onPress={onBounties} style={{ flex: 1 }} />
+              )}
+              <Btn testID="results-camp" label="Camp" variant="secondary" icon="lorc/campfire" onPress={onCamp} style={{ flex: 1 }} />
             </View>
           </View>
         </PopIn>
@@ -202,6 +246,14 @@ const st = StyleSheet.create({
   section: { fontWeight: '900', letterSpacing: 2, fontSize: 12, color: INK },
   reward: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.deepOnyx, borderRadius: 8, padding: 8 },
   rewardText: { flex: 1, fontWeight: '900', color: COLORS.actionYellow, fontSize: 14 },
+  bountyDoneBox: { alignSelf: 'stretch', gap: 6 },
+  bountyDoneRow: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.deepOnyx, borderRadius: 8, padding: 8 },
+  bountyCoinTag: { fontWeight: '900', color: '#FDE68A', fontSize: 12 },
+  bountyHookBox: { alignSelf: 'stretch', backgroundColor: COLORS.paperBeige, borderRadius: 8, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 10, paddingVertical: 8, gap: 4 },
+  bountyHookHeader: { fontSize: 10, fontWeight: '900', letterSpacing: 1.5, color: INK, opacity: 0.7 },
+  bountyHookRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  bountyHookName: { flex: 1, fontSize: 12, fontWeight: '800', color: INK },
+  bountyHookFrac: { fontSize: 12, fontWeight: '900', color: '#0F766E', fontVariant: ['tabular-nums'] },
   biomeOpen: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: INK, borderRadius: 8, padding: 10 },
   biomeOpenText: { color: COLORS.canvasWhite, fontWeight: '800' },
   tip: { fontSize: 13, color: INK, fontStyle: 'italic', textAlign: 'center', opacity: 0.85 },

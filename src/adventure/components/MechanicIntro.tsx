@@ -151,7 +151,7 @@ export const Lesson: React.FC<LessonProps> = ({ steps, onDone, cta = 'Got it', d
   return (
     <Modal visible transparent animationType="fade" onRequestClose={dismissible ? onDone : undefined}>
       <View style={st.overlay}>
-        <View style={st.panel}>
+        <View testID="lesson-modal" style={st.panel}>
           <View style={st.goldRule} />
           {dismissible && (
             <TouchableOpacity onPress={onDone} style={st.close} accessibilityLabel="Close">

@@ -333,6 +333,7 @@ const Card: React.FC<CardProps> = ({
   return (
     <AnimatedTouchableOpacity
       testID={`card-${shape}-${color}-${number}-${shading}${isDud ? '-dud' : ''}${isFaceDown ? '-facedown' : ''}${hasBomb ? '-bomb' : ''}${hasCountdown ? '-countdown' : ''}`}
+      accessibilityLabel={`${number} ${color} ${shading} ${shape}${card.background ? ` on ${card.background}` : ''}${isDud ? ', dud' : ''}${isFaceDown ? ', face down' : ''}${card.hasEvolutionItem ? (card.evolutionReady ? ', evolution ready' : ', dormant catalyst') : ''}`}
       style={[
         getCardStyle(),
         animatedCardStyle,
@@ -362,6 +363,40 @@ const Card: React.FC<CardProps> = ({
         <View style={[styles.badge, styles.coinBadge]} pointerEvents="none">
           <Text style={styles.coinBadgeText}>+{card.bonusMoney}¢</Text>
         </View>
+      )}
+
+      {/* Hidden Evolution Catalyst: crystal watermark behind shapes + corner indicator (no card border!) */}
+      {!!card.hasEvolutionItem && !isDud && !isFaceDown && (
+        <>
+          <View
+            style={[styles.catalystBackdrop, { opacity: card.evolutionReady ? 0.24 : 0.14 }]}
+            pointerEvents="none"
+          >
+            <Icon
+              name="lorc/crystal-shine"
+              size={34}
+              color={card.evolutionReady ? '#D97706' : '#7C3AED'}
+              noShadow
+            />
+          </View>
+          <View
+            testID="card-evolution-catalyst"
+            style={[
+              styles.badge,
+              styles.badgeTopRight,
+              card.evolutionReady ? styles.catalystBadgeReady : styles.catalystBadgeDormant,
+            ]}
+            pointerEvents="none"
+          >
+            <Icon
+              name="lorc/crystal-shine"
+              size={10}
+              color={card.evolutionReady ? COLORS.deepOnyx : '#5B21B6'}
+              noShadow
+            />
+            {card.evolutionReady && <Text style={styles.catalystBadgeText}>EVO</Text>}
+          </View>
+        </>
       )}
 
       {/* State indicator icons (fire, connection) in bottom left */}
@@ -559,6 +594,33 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '900',
     color: '#5C3D00',
+  },
+  catalystBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  catalystBadgeDormant: {
+    flexDirection: 'row',
+    gap: 2,
+    backgroundColor: '#EDE9FE',
+    borderColor: '#6D28D9',
+  },
+  catalystBadgeReady: {
+    flexDirection: 'row',
+    gap: 2,
+    backgroundColor: COLORS.actionYellow,
+    borderColor: COLORS.deepOnyx,
+  },
+  catalystBadgeText: {
+    fontSize: 8,
+    fontWeight: '900',
+    color: COLORS.deepOnyx,
+    letterSpacing: 0.5,
   },
   card: {
     position: 'relative',

@@ -6,7 +6,7 @@
  * campaign, edit the tables in `src/adventure/data/` — not the engine.
  */
 
-import type { AttributeName, CharacterName, Card, Weapon, PlayerStats } from '@/types';
+import type { AttributeName, BoardConnection, CharacterName, Card, Weapon, PlayerStats } from '@/types';
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import type { IconName } from '@/components/Icon';
 
@@ -26,10 +26,12 @@ export type FeatureFlag =
   | 'gear'        // fighter gear, ability and charm are active (everywhere except bare levels)
   | 'power'       // power cards: +2 damage when matched
   | 'rainbow'     // all-different sets hit twice as hard
+  | 'purity'      // escalating attribute-diversity combos (1-diff -> 2-diff -> Rainbow)
   | 'coins'       // coins drop & bank to your purse
   | 'hints'       // hint button
   | 'graces'      // near-miss forgiveness
   | 'xp'          // in-level level-ups: pick a weapon
+  | 'evolutions'  // hidden evolution catalysts on cards + weapon fusions
   | 'shop';       // shop between waves
 
 export interface MechanicDef {
@@ -86,7 +88,7 @@ export interface DemoCard {
   number: Card['number'];
   shading: Card['shading'];
   background?: Card['background'];
-  modifiers?: Partial<Pick<Card, 'isDud' | 'isFaceDown' | 'health' | 'hasCountdown' | 'countdownTimer' | 'hasBomb' | 'bombTimer' | 'onFire' | 'bonusMoney' | 'bonusPoints'>>;
+  modifiers?: Partial<Pick<Card, 'isDud' | 'isFaceDown' | 'health' | 'hasCountdown' | 'countdownTimer' | 'hasBomb' | 'bombTimer' | 'onFire' | 'bonusMoney' | 'bonusPoints' | 'hasEvolutionItem' | 'evolutionReady'>>;
 }
 
 // ---------------------------------------------------------------------------
@@ -129,15 +131,44 @@ export type ChallengeDef =
   | { kind: 'hintsLeft'; n: number }
   | { kind: 'enemy' };   // use the registered enemy's own defeat condition
 
+export type ArcanaId =
+  | 'monochrome_pact'
+  | 'prismatic_fever'
+  | 'controlled_burn'
+  | 'glass_prism'
+  | 'overkill_harvest'
+  | 'scholars_gambit'
+  | 'catalyst_resonance'
+  | 'tempo_surge';
+
+export interface ArcanaDef {
+  id: ArcanaId;
+  numeral: string;
+  name: string;
+  icon: IconName;
+  tagline: string;
+  upside: string;
+  tradeoff: string;
+  unlockHint: string;
+}
+
+export type UnlockableFeature = 'coins' | 'workshop';
+
 /**
- * Every star pays coins (shown up front). Some stars ALSO unlock a weapon or a
- * fighter — hidden as a silhouette until earned, then revealed with fanfare.
+ * Every star pays coins (shown up front). Some stars ALSO unlock a weapon,
+ * fighter, Arcana, Weapon Combo recipe, or campaign system — hidden as a
+ * silhouette until earned, then revealed with fanfare.
  */
 export interface RewardDef {
   coins: number;
   /** Weapon ids added to the Armory (charm slot, shop and level-up pool) */
   weapons?: string[];
   character?: CharacterName;
+  arcana?: ArcanaId;
+  /** Weapon Evolution recipe id unlocked for the Recipe Guide & Hidden Catalysts */
+  evolution?: string;
+  /** Campaign system unlocked by this star (e.g. 'coins' on 1-1, 'workshop' on 1-4) */
+  unlockFeature?: UnlockableFeature;
 }
 
 /** How stars are earned. Default 'combat': survive / knock out / knock out + challenge. */
@@ -211,14 +242,41 @@ export interface UpgradeDef {
   description: (tier: number) => string;
   costs: number[];       // cost for tier 1..N
   apply: (stats: PlayerStats, tier: number, ctx: { timed: boolean }) => PlayerStats;
+  /** Only show & allow buying once the player has unlocked this mechanic */
+  isUnlocked: (save: AdventureSave) => boolean;
   /** Bonus damage per match etc. that is not a PlayerStats field */
   bonusDamage?: (tier: number) => number;
   coinBonusPercent?: (tier: number) => number;
 }
 
 // ---------------------------------------------------------------------------
-// Save data
+// Cross-run Bounties & Save data
 // ---------------------------------------------------------------------------
+
+export interface BountyStats {
+  totalSets: number;
+  rainbowSets: number;
+  purityChains: number;        // 2+ step escalations triggered
+  threeStepPurities: number;   // 3+ step escalations triggered
+  flawlessTimedWins: number;   // timed stage knocked out (≥2★) with 0 mistakes
+  maxOverkill: number;         // biggest overkill blow past 0 HP
+  evolutionsForged: number;    // total evolutions triggered across runs
+  destructiveFights: number;   // fights where fire/explosion/laser triggered
+  fighterWins: Partial<Record<CharacterName, number>>;
+}
+
+export type BountyCategory = 'mastery' | 'chaos' | 'roster' | 'explorer';
+
+export interface BountyDef {
+  id: string;
+  category: BountyCategory;
+  name: string;
+  description: string;
+  icon: IconName;
+  target: number;
+  progress: (save: AdventureSave) => number;
+  reward: RewardDef;
+}
 
 export interface AdventureSave {
   version: 1;
@@ -229,12 +287,26 @@ export interface AdventureSave {
   fighterLevels: Record<string, number>;
   unlockedFighters: CharacterName[];
   armory: string[];                  // unlocked weapon ids
-  upgrades: Record<string, number>;  // upgrade id -> tier
+  upgrades: Record<string, number>;  // mechanic upgrade id -> tier
+  weaponUpgrades: Record<string, number>; // armory weapon id -> tier (1..3)
+  coinsUnlocked: boolean;            // unlocked in 1-1 (enables Coin Drops & Golden Cards)
+  workshopUnlocked: boolean;         // unlocked in 1-4 (enables Workshop mechanic & weapon upgrades)
   seenMechanics: string[];
   seenCoachMarks: string[];
   selectedFighter: CharacterName;
   /** Equipped Armory weapon (one charm slot, on top of the fighter's own gear) */
   charm: string | null;
+  /** Unlocked Arcana tarot modifiers & currently active wildcard (null = standard rules) */
+  unlockedArcana: ArcanaId[];
+  activeArcana: ArcanaId | null;
+  /** Cross-run Bounty Board unlock state, completed ids & lifetime counters */
+  bountiesUnlocked: boolean;
+  completedBounties: string[];
+  bountyStats: BountyStats;
+  /** Weapon Combo (Evolution) recipe ids unlocked via level/bounty rewards */
+  unlockedEvolutions: string[];
+  /** Evolution recipe ids forged at least once (unlocks full details in Recipe Guide) */
+  discoveredEvolutions: string[];
   lastLevelId: string | null;
   musicOn: boolean;
 }
@@ -245,13 +317,18 @@ export interface AdventureSave {
 
 export type RunStatus = 'playing' | 'pick' | 'intermission' | 'won' | 'lost';
 
+export type CatalystState = 'available' | 'lost' | 'evolved';
+
 export type RunEventType =
   | 'hit' | 'rainbow' | 'heal' | 'hurt' | 'grace' | 'coins' | 'levelup'
   | 'foe_defeated' | 'wave' | 'regen' | 'dud' | 'face_down' | 'countdown'
   | 'bomb' | 'triple' | 'shuffle' | 'attr_shift' | 'card_removed' | 'time_stolen'
   | 'inactivity' | 'fire' | 'hint' | 'mistake' | 'time_up' | 'moves_out'
   // fighter abilities
-  | 'nine_lives' | 'combo' | 'grudge' | 'grudge_release' | 'ability_ready' | 'freeze' | 'redeal' | 'scoop';
+  | 'nine_lives' | 'combo' | 'grudge' | 'grudge_release' | 'ability_ready' | 'freeze' | 'redeal' | 'scoop'
+  // purity, evolutions & arcana
+  | 'purity' | 'purity_max' | 'catalyst_spawn' | 'catalyst_ready' | 'catalyst_lost' | 'catalyst_saved'
+  | 'evolution' | 'arcana_burn' | 'overkill';
 
 export interface AbilityState {
   id: import('./data/abilities').AbilityId;
@@ -282,6 +359,7 @@ export interface RunState {
   attributes: AttributeName[];
   deck: Card[];
   board: Card[];
+  connections: BoardConnection[];
   stats: PlayerStats;           // baked totals (base + gear + upgrades)
   weapons: Weapon[];            // for laser rolls & inventory display
   hearts: number | null;        // null = infinite (very first level)
@@ -316,8 +394,26 @@ export interface RunState {
   rerolls: number;
   /** Weapon ids that can appear in level-up picks and shops */
   armory: string[];
+  /** Armory weapon upgrade tiers active during this run */
+  weaponUpgrades: Record<string, number>;
   /** Fighter signature ability (null before gear is taught at 1-4) */
   ability: AbilityState | null;
+  /** Active Arcana tarot modifier for this run */
+  activeArcana: ArcanaId | null;
+  arcanaBurnCooldownMs: number;
+  overkillDamage: number;
+  /** Escalating Purity Combo tracking */
+  purityChain: number;
+  lastDiffCount: number;
+  maxPurityChain: number;
+  purityChainsTriggered: number;
+  threeStepPuritiesTriggered: number;
+  /** Weapon Evolution & hidden card Catalyst tracking */
+  unlockedEvolutions: string[];
+  catalystState: CatalystState;
+  catalystRespawnsLeft: number;
+  catalystsLost: number;
+  evolvedRecipes: string[];
 }
 
 export interface LevelResult {

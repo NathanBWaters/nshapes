@@ -55,8 +55,10 @@ export function useAutoPlayer({
   const findAndSelectSet = useCallback(() => {
     if (isSelectingRef.current) return;
 
-    // Get available cards (exclude matched ones)
-    const availableCards = cards.filter(card => !matchedCardIds.includes(card.id));
+    // Get available cards (exclude matched, dud, and face-down cards)
+    const availableCards = cards.filter(
+      card => !matchedCardIds.includes(card.id) && !card.isDud && !card.isFaceDown
+    );
 
     if (availableCards.length < 3) return;
 

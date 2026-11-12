@@ -156,7 +156,9 @@ const GameBoard: React.FC<GameBoardProps> = ({
       // After 10s of no interaction, show a suggestion card
       if (timeSinceInteraction >= 10000 && !suggestionCardId) {
         // Find a valid set and pick one random card from it
-        const availableCards = cards.filter(card => !matchedCardIds.includes(card.id));
+        const availableCards = cards.filter(
+          card => !matchedCardIds.includes(card.id) && !card.isDud && !card.isFaceDown
+        );
         for (let i = 0; i < availableCards.length - 2; i++) {
           for (let j = i + 1; j < availableCards.length - 1; j++) {
             for (let k = j + 1; k < availableCards.length; k++) {
@@ -465,7 +467,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
   // Handle card click
   const handleCardClick = (card: CardType) => {
-    if (!isPlayerTurn) return;
+    if (!isPlayerTurn || card.isDud || card.isFaceDown) return;
 
     // Don't allow clicking on cards that are currently being revealed as rewards
     if (revealingRewards.some(r => r.cardId === card.id)) return;
@@ -758,7 +760,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
             const matchedRewards = newSelectedCards.map(c => calculateCardReward(c));
 
             // Process weapon effects (explosions, lasers, etc.)
-            const weaponEffects = processWeaponEffects(cards, newSelectedCards, playerStats, weapons, activeAttributes, false, timeGainContext);
+            const weaponEffects = processWeaponEffects(cards, newSelectedCards, playerStats, weapons, activeAttributes, false, timeGainContext, true);
 
             // Track time gain trigger if it happened
             if (weaponEffects.timeGainTriggered && onTimeGainTriggered) {
@@ -1132,7 +1134,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
                 };
 
                 return (
-                  <View key={`${rowIndex}-${colIndex}-${card.id}`} nativeID={`card-slot-${rowIndex}-${colIndex}`} style={styles.cardWrapper}>
+                  <View key={`${rowIndex}-${colIndex}-${card.id}`} nativeID={`card-slot-${rowIndex}-${colIndex}`} testID={`card-slot-${rowIndex}-${colIndex}`} style={styles.cardWrapper}>
                     {/* Show reward instead of card when revealing */}
                     {reward ? (
                       <RewardReveal reward={reward} />

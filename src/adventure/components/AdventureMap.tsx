@@ -17,6 +17,8 @@ import { BIOMES } from '../data/biomes';
 import { levelFoe } from '../data/foes';
 import { getMechanic } from '../data/mechanics';
 import { getFighter } from '../data/fighters';
+import { BOUNTIES } from '../data/bounties';
+import { getArcana } from '../data/arcana';
 import { getFrontierLevel, getLockReason, maxStars, totalStars, isBiomeOpen } from '../progress';
 import { Bob, CoinPill, INK, StarRow } from './ui';
 
@@ -77,13 +79,14 @@ interface Props {
   onSelectLevel: (level: LevelDef) => void;
   onOpenCamp: () => void;
   onOpenGuide: () => void;
+  onOpenBounties?: () => void;
   onExit: () => void;
   highlightLevelId?: string | null;
   musicOn: boolean;
   onToggleMusic: () => void;
 }
 
-const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpenGuide, onExit, highlightLevelId, musicOn, onToggleMusic }) => {
+const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpenGuide, onOpenBounties, onExit, highlightLevelId, musicOn, onToggleMusic }) => {
   const { width: winW } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const width = Math.min(winW, 560);
@@ -92,7 +95,7 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
   const scrollRef = useRef<ScrollView>(null);
   const stars = totalStars(save);
   const fighter = getFighter(save.selectedFighter);
-  const campUnlocked = (save.stars['1-6'] ?? 0) > 0 || save.coins > 0 || save.lifetimeCoins > 0;
+  const campUnlocked = save.coinsUnlocked || save.armory.length > 0 || save.unlockedFighters.length > 1 || save.coins > 0 || save.lifetimeCoins > 0;
 
   // Scroll so the frontier node is in view
   useEffect(() => {
@@ -114,11 +117,17 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
         </TouchableOpacity>
         <Text style={s.title}>ADVENTURE</Text>
         <View style={{ flex: 1 }} />
+        {save.activeArcana && save.unlockedArcana.includes(save.activeArcana) && (
+          <View style={s.arcanaPill}>
+            <Icon name={getArcana(save.activeArcana).icon} size={13} color="#6D28D9" />
+            <Text style={s.arcanaGlyph}>{getArcana(save.activeArcana).numeral}</Text>
+          </View>
+        )}
         <TouchableOpacity onPress={onToggleMusic} style={[s.iconBtn, !musicOn && { opacity: 0.4 }]} accessibilityLabel={musicOn ? 'Mute music' : 'Play music'}>
           <Icon name="delapouite/sound-on" size={18} color={INK} />
         </TouchableOpacity>
         <View style={s.starPill}><Text style={s.starGlyph}>★</Text><Text style={s.starCount}>{stars}/{maxStars()}</Text></View>
-        <CoinPill coins={save.coins} />
+        {(save.coinsUnlocked || save.coins > 0 || save.lifetimeCoins > 0) && <CoinPill coins={save.coins} />}
       </View>
 
       <ScrollView ref={scrollRef} contentContainerStyle={{ alignItems: 'center' }} showsVerticalScrollIndicator={false}>
@@ -193,7 +202,20 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
 
       {/* Bottom dock */}
       <View style={[s.dock, { paddingBottom: Math.max(insets.bottom, Platform.OS === 'web' ? 12 : 8) }]}>
-        <DockButton icon="lorc/open-book" label="Field Guide" onPress={onOpenGuide} />
+        <DockButton testID="map-dock-guide" icon="lorc/open-book" label="Guide" onPress={onOpenGuide} />
+        {onOpenBounties && (
+          <DockButton
+            testID="map-dock-bounties"
+            icon="lorc/trophy"
+            label="Bounties"
+            onPress={onOpenBounties}
+            disabled={!save.bountiesUnlocked}
+            badge={
+              save.bountiesUnlocked &&
+              BOUNTIES.some(b => !save.completedBounties.includes(b.id) && b.progress(save) / b.target >= 0.75)
+            }
+          />
+        )}
         <TouchableOpacity testID="map-play-next" onPress={() => onSelectLevel(frontier)} style={s.playNext} activeOpacity={0.85}>
           <FighterAvatar character={fighter.name} size={34} mood="anticipation" />
           <View style={{ flex: 1 }}>
@@ -201,14 +223,14 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
             <Text style={s.playNextSub} numberOfLines={1}>{frontier.name}</Text>
           </View>
         </TouchableOpacity>
-        <DockButton icon="lorc/campfire" label="Camp" onPress={onOpenCamp} disabled={!campUnlocked} badge={campUnlocked && save.coins >= 60} />
+        <DockButton testID="map-dock-camp" icon="lorc/campfire" label="Camp" onPress={onOpenCamp} disabled={!campUnlocked} badge={campUnlocked && save.coins >= 60} />
       </View>
     </View>
   );
 };
 
-const DockButton: React.FC<{ icon: React.ComponentProps<typeof Icon>['name']; label: string; onPress: () => void; disabled?: boolean; badge?: boolean }> = ({ icon, label, onPress, disabled, badge }) => (
-  <TouchableOpacity onPress={onPress} disabled={disabled} style={[s.dockBtn, disabled && { opacity: 0.35 }]} accessibilityLabel={label}>
+const DockButton: React.FC<{ testID?: string; icon: React.ComponentProps<typeof Icon>['name']; label: string; onPress: () => void; disabled?: boolean; badge?: boolean }> = ({ testID, icon, label, onPress, disabled, badge }) => (
+  <TouchableOpacity testID={testID} onPress={onPress} disabled={disabled} accessibilityState={{ disabled: !!disabled }} style={[s.dockBtn, disabled && { opacity: 0.35 }]} accessibilityLabel={label}>
     <Icon name={disabled ? 'lorc/padlock' : icon} size={26} color={INK} />
     <Text style={s.dockLabel}>{label}</Text>
     {badge && <View style={s.badgeDot} />}
@@ -298,6 +320,8 @@ const s = StyleSheet.create({
   starPill: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: COLORS.canvasWhite, borderColor: INK, borderWidth: 2, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
   starGlyph: { color: '#E0A800', fontSize: 15 },
   starCount: { fontWeight: '800', color: INK, fontSize: 14 },
+  arcanaPill: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#FAF5FF', borderColor: '#6D28D9', borderWidth: 2, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
+  arcanaGlyph: { fontWeight: '900', color: '#6D28D9', fontSize: 11 },
   iconBtn: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: INK, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.paperBeige },
   title: { fontWeight: '900', letterSpacing: 2, color: INK, fontSize: 16 },
   band: { position: 'absolute', left: 0, right: 0, overflow: 'hidden' },
@@ -325,10 +349,10 @@ const s = StyleSheet.create({
   newTagText: { fontSize: 9, fontWeight: '900', color: INK, letterSpacing: 1 },
   avatar: { position: 'absolute', left: -6, top: 4 },
   avatarBubble: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.canvasWhite, borderWidth: 2, borderColor: INK, alignItems: 'center', justifyContent: 'center' },
-  dock: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingTop: 10, backgroundColor: COLORS.canvasWhite, borderTopWidth: 2, borderTopColor: INK, gap: 10 },
-  dockBtn: { alignItems: 'center', width: 72 },
-  dockLabel: { fontSize: 11, fontWeight: '800', color: INK, marginTop: 2 },
-  badgeDot: { position: 'absolute', top: -2, right: 14, width: 12, height: 12, borderRadius: 6, backgroundColor: COLORS.impactRed, borderWidth: 2, borderColor: COLORS.canvasWhite },
+  dock: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10, paddingTop: 10, backgroundColor: COLORS.canvasWhite, borderTopWidth: 2, borderTopColor: INK, gap: 6 },
+  dockBtn: { alignItems: 'center', width: 58 },
+  dockLabel: { fontSize: 10, fontWeight: '800', color: INK, marginTop: 2 },
+  badgeDot: { position: 'absolute', top: -2, right: 8, width: 12, height: 12, borderRadius: 6, backgroundColor: COLORS.impactRed, borderWidth: 2, borderColor: COLORS.canvasWhite },
   playNext: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.actionYellow, borderWidth: 2, borderBottomWidth: 5, borderColor: INK, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, maxWidth: 260 },
   playNextLabel: { fontWeight: '900', fontSize: 16, color: INK, letterSpacing: 1 },
   playNextSub: { fontSize: 12, fontWeight: '600', color: INK },

@@ -222,12 +222,12 @@ describe('progression', () => {
     }
   });
 
-  it('1-1 unlocks a fighter at ★ and a weapon at ★★, each once', () => {
+  it('1-1 unlocks coins at ★, explosive Blast Powder at ★★, and Sly Fox at ★★★, each once', () => {
     const save = createNewSave();
     const lvl = getLevel('1-1');
     const r1 = applyLevelResult(save, lvl, 1, 0);
-    expect(r1.unlocks).toEqual([{ kind: 'fighter', name: 'Sly Fox', star: 1 }]);
-    expect(r1.save.unlockedFighters).toContain('Sly Fox');
+    expect(r1.unlocks).toEqual([{ kind: 'feature', feature: 'coins', star: 1 }]);
+    expect(r1.save.coinsUnlocked).toBe(true);
     expect(r1.save.coins).toBe(20);
     const r2 = applyLevelResult(r1.save, lvl, 2, 5);
     expect(r2.unlocks).toEqual([{ kind: 'weapon', id: 'blast-powder-common', star: 2, firstWeapon: true }]);
@@ -238,6 +238,8 @@ describe('progression', () => {
     expect(r3.granted).toHaveLength(0);
     expect(r3.unlocks).toHaveLength(0);
     const r4 = applyLevelResult(r3.save, lvl, 3, 0);
+    expect(r4.unlocks).toEqual([{ kind: 'fighter', name: 'Sly Fox', star: 3 }]);
+    expect(r4.save.unlockedFighters).toContain('Sly Fox');
     expect(r4.granted.map(g => g.star)).toEqual([3]);
     expect(r4.starCoins).toBe(50);
   });
@@ -279,11 +281,14 @@ describe('progression', () => {
     expect(reconcileUnlocks(fixed)).toEqual(fixed);
   });
 
-  it('camp purchases spend coins', () => {
+  it('camp purchases spend coins once Workshop and target mechanics are unlocked', () => {
     let save = { ...createNewSave(), coins: 1000 };
     save = levelFighter(save, 'Orange Tabby');
     expect(save.fighterLevels['Orange Tabby']).toBe(2);
     expect(save.coins).toBe(940);
+    // Blocked before Workshop and Hearts (1-2) are unlocked
+    expect(buyUpgrade(save, 'tough_hide')).toBe(save);
+    save = { ...save, workshopUnlocked: true, stars: { '1-2': 1 } };
     save = buyUpgrade(save, 'tough_hide');
     expect(save.upgrades.tough_hide).toBe(1);
     expect(save.coins).toBe(690);
