@@ -520,7 +520,7 @@ describe('Weapon levels (found in the world) and tuning (Workshop)', () => {
     expect(b.save.armory.filter(id => id === 'blast-powder')).toHaveLength(1);
     expect(weaponLevel(b.save, 'blast-powder')).toBe(2);
     expect(b.unlocks.find(u => u.kind === 'weapon')).toMatchObject({ id: 'blast-powder', level: 2 });
-    expect(getArmoryWeapon('blast-powder', weaponBuilds(b.save))!.effects.explosionChance).toBe(18);
+    expect(getArmoryWeapon('blast-powder', weaponBuilds(b.save))!.effects.explosionChance).toBe(16);
     // Levels are not purchases: nothing to refund
     expect(refundableCoins(b.save)).toBe(0);
 
@@ -538,13 +538,13 @@ describe('Weapon levels (found in the world) and tuning (Workshop)', () => {
     expect(5000 - save.coins).toBe(60 + 150 + 320 + 600);
     expect(canTune(save, 'blast-powder', 'explosionChance')).toBe(false);
     const w = getArmoryWeapon('blast-powder', weaponBuilds(save))!;
-    // Level 2: 18% blast ×1.5; damage per card untouched (+1)
-    expect(w.effects.explosionChance).toBe(27);
-    expect(w.effects.explosionDamage).toBe(1);
+    // Level 2: 16% blast ×1.5; damage per card untouched (+0.5)
+    expect(w.effects.explosionChance).toBe(24);
+    expect(w.effects.explosionDamage).toBe(0.5);
     // A later copy found raises the base; the multiplier keeps applying
     const third = sourcesOf('blast-powder')[2];
     const leveled = earn(save, third.level.id, third.star).save;
-    expect(getArmoryWeapon('blast-powder', weaponBuilds(leveled))!.effects.explosionChance).toBe(36);
+    expect(getArmoryWeapon('blast-powder', weaponBuilds(leveled))!.effects.explosionChance).toBe(33);
     expect(tuningSpent(save, 'blast-powder')).toBe(1130);
     expect(refundAllCamp(save).coins).toBe(5000);
   });

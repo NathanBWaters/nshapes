@@ -204,21 +204,21 @@ The Free Play roster (`src/utils/gameDefinitions.ts`) is reused: `effects` are l
 
 | Weapon (id) | Level 1 | + per level | Tunable numbers |
 |---|---|---|---|
-| Blast Powder (`blast-powder`) | 12% blast, +0.5 dmg/card | +6%, +0.5 | both |
-| Flint Spark (`flint-spark`) | 12% fire, +0.5 dmg/card | +6%, +0.5 | both |
-| Prismatic Ray (`prismatic-ray`) | 5% laser, +1 dmg/card | +2.5%, +0.5 | both |
-| Chaos Shard (`chaos-shard`) | 12% ricochet, 6% bounce, +0.5 dmg | +6%, +3%, +0.5 | all three |
-| Echo Stone (`echo-stone`) | 6% echo | +3% | yes |
+| Blast Powder (`blast-powder`) | 10% blast, +0.25 dmg/card | +6%, +0.25 | both |
+| Flint Spark (`flint-spark`) | 10% fire, +0.25 dmg/card | +6%, +0.25 | both |
+| Prismatic Ray (`prismatic-ray`) | 4% laser, +0.5 dmg/card | +2.5%, +0.5 | both |
+| Chaos Shard (`chaos-shard`) | 10% ricochet, 5% bounce, +0.25 dmg | +6%, +3%, +0.25 | all three |
+| Echo Stone (`echo-stone`) | 5% echo | +3% | yes |
 | Chain Reaction (`chain-reaction`) | 30% double echo | +10% | yes |
-| Mending Charm (`mending-charm`) | 8% heal | +4% | yes |
-| Fortune Token (`fortune-token`) | 8% grace | +4% | yes |
-| Seeker Lens (`seeker-lens`) | 8% hint | +4% | yes |
+| Mending Charm (`mending-charm`) | 6% heal | +4% | yes |
+| Fortune Token (`fortune-token`) | 6% grace | +4% | yes |
+| Seeker Lens (`seeker-lens`) | 6% hint | +4% | yes |
 | Oracle Eye (`oracle-eye`) | 15% auto-hint | +5% | yes |
 | Mystic Sight (`mystic-sight`) | 33% two-card hints | +10% | yes |
-| Growth Seed (`growth-seed`) | 8% growth | +4% | yes |
-| Scholar's Tome (`scholars-tome`) | 25% XP | +8% | yes |
-| Fortune's Favor (`fortunes-favor`) | 25% coin | +6% | yes |
-| Time Drop (`time-drop`) | 6% for +20s | +3%, +2s | both |
+| Growth Seed (`growth-seed`) | 6% growth | +4% | yes |
+| Scholar's Tome (`scholars-tome`) | 20% XP | +8% | yes |
+| Fortune's Favor (`fortunes-favor`) | 20% coin | +6% | yes |
+| Time Drop (`time-drop`) | 5% for +20s | +3%, +2s | both |
 | Chrono Shard (`chrono-shard`) | +15s | +10s | yes |
 | Field Stone (`field-stone`) | +2 board cards | +1 | yes (by chance) |
 | Second Chance (`second-chance`) | +1 grace | +1 | yes (by chance) |

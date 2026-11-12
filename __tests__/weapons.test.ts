@@ -419,7 +419,7 @@ describe('Stats Calculation', () => {
 
       const totalStats = calculatePlayerTotalStats(player);
 
-      expect(totalStats.explosionChance).toBe(12); // Level 1 is 12%
+      expect(totalStats.explosionChance).toBe(10); // Level 1 is 10%
     });
 
     it('should correctly calculate healingChance from Mending Charm', () => {
@@ -430,8 +430,8 @@ describe('Stats Calculation', () => {
 
       const totalStats = calculatePlayerTotalStats(player);
 
-      // Orange Tabby starts with Mending Charm (+8); a second copy stacks (+8) = 16
-      expect(totalStats.healingChance).toBe(16);
+      // Orange Tabby starts with Mending Charm (+6); a second copy stacks (+6) = 12
+      expect(totalStats.healingChance).toBe(12);
     });
 
     it('should correctly calculate laserChance from Prismatic Ray', () => {
@@ -442,8 +442,8 @@ describe('Stats Calculation', () => {
 
       const totalStats = calculatePlayerTotalStats(player);
 
-      // Prismatic Ray is +5 laserChance
-      expect(totalStats.laserChance).toBe(5);
+      // Prismatic Ray is +4 laserChance
+      expect(totalStats.laserChance).toBe(4);
     });
 
     it('should correctly calculate startingTime from Chrono Shard', () => {

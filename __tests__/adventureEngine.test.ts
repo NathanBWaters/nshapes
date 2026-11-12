@@ -188,12 +188,12 @@ describe('loadout', () => {
   it('a stat weapon levels every number flatly; tuning multiplies one (Blast Powder)', () => {
     const blast = (level: number, tuning: Record<string, number> = {}) =>
       getArmoryWeapon('blast-powder', { 'blast-powder': { level, tuning } })!.effects;
-    expect([1, 2, 3, 4, 5].map(l => blast(l).explosionChance)).toEqual([12, 18, 24, 30, 36]);
-    expect([1, 2, 3, 4, 5].map(l => blast(l).explosionDamage)).toEqual([0.5, 1, 1.5, 2, 2.5]);
-    expect(blast(5, { explosionChance: 4 }).explosionChance).toBe(54);
-    expect(blast(5, { explosionChance: 4 }).explosionDamage).toBe(2.5);
+    expect([1, 2, 3, 4, 5].map(l => blast(l).explosionChance)).toEqual([10, 16, 22, 28, 34]);
+    expect([1, 2, 3, 4, 5].map(l => blast(l).explosionDamage)).toEqual([0.25, 0.5, 0.75, 1, 1.25]);
+    expect(blast(5, { explosionChance: 4 }).explosionChance).toBe(51);
+    expect(blast(5, { explosionChance: 4 }).explosionDamage).toBe(1.25);
     expect(getArmoryWeapon('blast-powder', { 'blast-powder': { level: 3, tuning: { explosionChance: 2 } } })!.shortDescription)
-      .toBe('28.8% blast, 2.5 dmg per card');
+      .toBe('26.4% blast, 1.8 dmg per card');
   });
 });
 

@@ -30,7 +30,7 @@ import { BOUNTIES } from './data/bounties';
 import { EVOLUTION_RECIPES } from './data/evolutions';
 import { CAMPAIGN_FEATURES, FEATURES } from './data/features';
 import { starRewards, unlockablesOf } from './data/rewards';
-import { refundTuning, tuningSpent, weaponLevel } from './weaponLevels';
+import { tuningSpent, weaponLevel } from './weaponLevels';
 
 /**
  * The shape of a brand-new save. Loading fills anything a stored save lacks

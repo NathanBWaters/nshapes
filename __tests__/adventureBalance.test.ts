@@ -20,6 +20,7 @@ import { LEVELS, MAIN_LEVELS, getLevel, mainIndexOf } from '@/adventure/data/lev
 import { applyLevelResult, createNewSave, createMaxedSave } from '@/adventure/progress';
 import { BOTS, simulateRun, starDistribution } from '@/adventure/engine/bot';
 import { MECHANICS } from '@/adventure/data/mechanics';
+import { levelDefeatCondition } from '@/adventure/data/foes';
 import type { AdventureSave, LevelDef } from '@/adventure/types';
 
 // The bot is seeded, so a run count gives exact, repeatable numbers. The bands
@@ -33,6 +34,10 @@ const WORLD: Record<string, number> = { meadow: 1, woods: 2, canyon: 3, peaks: 4
 
 /** ★★★ asks you to DO something a number of times (the "use the new thing" goals) rather than a pass/fail rule. */
 const isUseItChallenge = (level: LevelDef) => 'n' in level.challenge;
+
+/** ★★★ is the foe's own condition and it asks for a fight with no damage taken. */
+const isFlawless = (level: LevelDef) =>
+  level.challenge.kind === 'enemy' && /0 damage taken/.test(levelDefeatCondition(level) ?? '');
 
 /**
  * The player reads the level's puzzle and equips for it. 3-2 teaches charm
@@ -57,6 +62,11 @@ const BANDS = {
    * mechanic (Rainbow Strike), ★★★ may track ★★ closely.
    */
   useItWorld1: [0.15, 0.85] as [number, number],
+  /**
+   * A flawless ★★★ (the foe's condition needs 0 damage taken, e.g. The Reaper)
+   * on the finale world is meant to be rare: reachable, not routine.
+   */
+  flawless: [0.03, 0.7] as [number, number],
   /** novice ★0 on main levels before World 4 */
   noviceLoss: 0.35,
   elite: { knockout: [0.25, 0.65] as [number, number], loss: 0.3 },
@@ -175,7 +185,10 @@ describe('adventure balance (headless bots)', () => {
       expect(1 - avg.dist[0]).toBeGreaterThanOrEqual(BANDS.survive(world));
       if (!level.isBoss) knockouts.set(world, [...(knockouts.get(world) ?? []), ko]);
       inBand(ko, level.isBoss ? BANDS.boss : BANDS.knockout(world));
-      inBand(avg.dist[3], isUseItChallenge(level) ? (world === 1 ? BANDS.useItWorld1 : BANDS.useIt) : BANDS.threeStar);
+      inBand(
+        avg.dist[3],
+        isUseItChallenge(level) ? (world === 1 ? BANDS.useItWorld1 : BANDS.useIt) : isFlawless(level) && world === 5 ? BANDS.flawless : BANDS.threeStar
+      );
       if (world < 4) expect(nov.dist[0]).toBeLessThanOrEqual(BANDS.noviceLoss);
     });
   }

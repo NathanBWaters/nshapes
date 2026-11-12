@@ -343,7 +343,7 @@ const RAW_LEVELS: LevelInput[] = [
   {
     id: '4-1', biome: 'peaks', name: 'Fifth Element', introduces: 'attr_background',
     rules: { attributes: A5, boardSize: 18, timer: 90, hearts: 4, startingHints: 3, startingGraces: 2 },
-    foes: [{ name: 'Snow Hare', icon: 'delapouite/rabbit', hp: 84, taunt: 'Five traits. Can you keep up?' }],
+    foes: [{ name: 'Snow Hare', icon: 'delapouite/rabbit', hp: 89, taunt: 'Five traits. Can you keep up?' }],
     challenge: { kind: 'streak', n: 5 }, coinMultiplier: 3.2, difficulty: 4,
     rewards: { star1: { coins: 120 }, star2: { weapons: ['fortune-token'] }, star3: { coins: 260 } },
     recommended: ['Pelican'],
@@ -367,7 +367,7 @@ const RAW_LEVELS: LevelInput[] = [
   {
     id: '4-4', biome: 'peaks', name: 'Glass Cannon', introduces: 'double_damage',
     rules: { attributes: A5, boardSize: 18, timer: 90, hearts: 4, startingHints: 3, startingGraces: 2 },
-    foes: [{ enemy: 'Stinging Scorpion', hp: 272, taunt: 'One sting is all it takes.' }],
+    foes: [{ enemy: 'Stinging Scorpion', hp: 294, taunt: 'One sting is all it takes.' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 3.6, difficulty: 5,
     rewards: { star1: { coins: 140 }, star2: { weapons: ['life-vessel'] }, star3: { coins: 300, weapons: ['life-link'] } },
     recommended: ['Orange Tabby'],
@@ -383,7 +383,7 @@ const RAW_LEVELS: LevelInput[] = [
   {
     id: '4-6', biome: 'peaks', name: 'Tick Tock', introduces: 'countdown',
     rules: { attributes: A5, boardSize: 18, timer: 90, hearts: 9, startingHints: 3, startingGraces: 2, hazards: { timeBombs: { every: 20, seconds: 30 } } },
-    foes: [{ enemy: 'Ticking Viper', hp: 118, taunt: 'Tick… tock… hisss.' }],
+    foes: [{ enemy: 'Ticking Viper', hp: 124, taunt: 'Tick… tock… hisss.' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 3.8, difficulty: 5,
     rewards: { star1: { coins: 150 }, star2: { weapons: ['field-stone'] }, star3: { coins: 320, weapons: ['seeker-lens'] } },
     recommended: ['Emperor Penguin'],
@@ -391,7 +391,7 @@ const RAW_LEVELS: LevelInput[] = [
   {
     id: '4-7', biome: 'peaks', name: 'Wild Goose Chase', introduces: 'shuffle',
     rules: { attributes: A5, boardSize: 18, timer: 95, hearts: 4, startingHints: 3, startingGraces: 2 },
-    foes: [{ enemy: 'Wild Goose', hp: 89, taunt: 'HONK! Where\'d your Set go?' }],
+    foes: [{ enemy: 'Wild Goose', hp: 93, taunt: 'HONK! Where\'d your Set go?' }],
     challenge: { kind: 'streak', n: 6 }, coinMultiplier: 3.9, difficulty: 5,
     rewards: { star1: { coins: 155 }, star2: { weapons: ['growth-seed'] }, star3: { coins: 330, weapons: ['fortunes-blessing'] } },
   },
@@ -399,7 +399,7 @@ const RAW_LEVELS: LevelInput[] = [
     id: '4-8', biome: 'peaks', name: 'Polar Night', introduces: 'polar',
     // Puzzle: hits hurt double and lasers fizzle. Win untouched with any other weapon.
     rules: { attributes: A5, boardSize: 18, timer: 95, hearts: 4, startingHints: 3, startingGraces: 2 },
-    foes: [{ enemy: 'Polar Guardian', hp: 298, taunt: 'The cold forgives nothing.' }],
+    foes: [{ enemy: 'Polar Guardian', hp: 316, taunt: 'The cold forgives nothing.' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 4, difficulty: 5,
     rewards: { star1: { coins: 160 }, star2: { weapons: ['pinata'] }, star3: { coins: 340, weapons: ['connector'] } },
     recommended: ['Pelican', 'Badger'],
@@ -408,7 +408,7 @@ const RAW_LEVELS: LevelInput[] = [
     id: '4-9', biome: 'peaks', name: 'The Glare', introduces: 'one_eyed',
     // Puzzle: no hints and shifting traits, with bombs ticking. Keen Eye and Rainbows carry you.
     rules: { attributes: A5, boardSize: 18, timer: 95, hearts: 7, startingGraces: 2, hazards: { timeBombs: { every: 16, seconds: 24 } } },
-    foes: [{ enemy: 'One-Eyed Terror', hp: 90, taunt: 'I see everything. You see nothing.' }],
+    foes: [{ enemy: 'One-Eyed Terror', hp: 97, taunt: 'I see everything. You see nothing.' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 4.1, difficulty: 5,
     rewards: { star1: { coins: 165 }, star2: { weapons: ['echo-chamber'] }, star3: { coins: 350, weapons: ['chaos-conduit'] } },
     recommended: ['Pelican', 'Emperor Penguin'],
@@ -416,7 +416,7 @@ const RAW_LEVELS: LevelInput[] = [
   {
     id: '4-10', biome: 'peaks', name: 'Fang Gully', introduces: 'feral',
     rules: { attributes: A5, boardSize: 18, timer: 95, hearts: 8, startingHints: 3, startingGraces: 2, hazards: { snares: { every: 7 } } },
-    foes: [{ enemy: 'Feral Fangs', hp: 138, taunt: 'Duds, armor, and teeth. Pick one.' }],
+    foes: [{ enemy: 'Feral Fangs', hp: 149, taunt: 'Duds, armor, and teeth. Pick one.' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 4.2, difficulty: 5,
     rewards: { star1: { coins: 170 }, star2: { weapons: ['fortune-token'] }, star3: { coins: 360, weapons: ['echo-chamber'] } },
     recommended: ['Corgi'],
@@ -424,10 +424,10 @@ const RAW_LEVELS: LevelInput[] = [
   {
     id: '4-11', biome: 'peaks', name: 'Dragon\'s Roost', introduces: 'dragon', isBoss: true,
     rules: {
-      attributes: A5, boardSize: 21, timer: 180, hearts: 7, startingHints: 3, startingGraces: 2,
+      attributes: A5, boardSize: 21, timer: 180, hearts: 7, startingHints: 5, startingGraces: 2,
       hazards: { snares: { every: 7 } },
     },
-    foes: [{ enemy: 'Ancient Dragon', hp: 560, taunt: 'I was old when the mountains were young.' }],
+    foes: [{ enemy: 'Ancient Dragon', hp: 594, taunt: 'I was old when the mountains were young.' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 6, difficulty: 5,
     rewards: { star1: { coins: 300 }, star2: { weapons: ['second-chance'] }, star3: { coins: 900, weapons: ['prismatic-ray'] } },
     recommended: ['Emperor Penguin', 'Pelican'],
@@ -464,7 +464,7 @@ const RAW_LEVELS: LevelInput[] = [
       attributes: A5, boardSize: 18, timer: 110, hearts: 5, startingGraces: 2,
       hazards: { timeBombs: { every: 40, seconds: 60 }, snares: { every: 20 } },
     },
-    foes: [{ enemy: 'The Reaper', hp: 363, taunt: 'Everyone runs out of time.' }],
+    foes: [{ enemy: 'The Reaper', hp: 381, taunt: 'Everyone runs out of time.' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 7, difficulty: 5,
     rewards: { star1: { coins: 340 }, star2: { weapons: ['mending-charm'] }, star3: { coins: 1000, weapons: ['prismatic-ray'] } },
     recommended: ['Orange Tabby', 'Emperor Penguin'],
@@ -488,7 +488,7 @@ const RAW_LEVELS: LevelInput[] = [
       attributes: A5, boardSize: 18, timer: 120, hearts: 9, startingHints: 3, startingGraces: 2,
       hazards: { snares: { every: 10 } },
     },
-    foes: [{ enemy: 'The Hydra', hp: 152, taunt: 'Cut one head off, two more grow back. Everything you learned, all at once.' }],
+    foes: [{ enemy: 'The Hydra', hp: 158, taunt: 'Cut one head off, two more grow back. Everything you learned, all at once.' }],
     challenge: { kind: 'bigHit', n: 20 }, coinMultiplier: 8, difficulty: 5,
     rewards: { star1: { coins: 400 }, star2: { weapons: ['chain-reaction'] }, star3: { coins: 1500, weapons: ['mystic-sight'] } },
     recommended: ['Emperor Penguin', 'Orange Tabby', 'Sly Fox'],
@@ -526,7 +526,7 @@ const BRANCHES: LevelInput[] = [
     id: '2-7B', branchOf: '2-7', biome: 'woods', name: 'Badger\'s Sett', introduces: 'fighter_grace',
     // Fighter trial: miss on purpose, stack grudges, release one massive Set. Mending Charm rare (★★) keeps you standing.
     rules: { attributes: A3, timer: 70, hearts: 4, startingHints: 1, startingGraces: 1 },
-    foes: [{ name: 'Bully Boar', icon: 'caro-asercion/boar', hp: 102, taunt: 'Go on. Take a swing. Miss.' }],
+    foes: [{ name: 'Bully Boar', icon: 'caro-asercion/boar', hp: 97, taunt: 'Go on. Take a swing. Miss.' }],
     challenge: { kind: 'bigHit', n: 12 }, coinMultiplier: 2.1, difficulty: 3,
     rewards: { star1: { coins: 55 }, star2: { weapons: ['mending-charm'] }, star3: { coins: 120, weapons: ['fortune-token'] } },
     recommended: ['Badger'],
@@ -562,7 +562,7 @@ const BRANCHES: LevelInput[] = [
     id: '3-5P', branchOf: '3-5', biome: 'canyon', name: 'Pelican\'s Wharf', introduces: 'fighter_oracle',
     // Fighter trial: the crab douses fire builds; Pelican does not need any. Seeker Lens rare (★★) keeps hints flowing.
     rules: { attributes: A4, boardSize: 15, timer: 85, hearts: 3, startingHints: 2, startingGraces: 1 },
-    foes: [{ enemy: 'Wet Crab', hp: 105, taunt: 'Bring fire. I dare you.' }],
+    foes: [{ enemy: 'Wet Crab', hp: 102, taunt: 'Bring fire. I dare you.' }],
     challenge: { kind: 'levelUps', n: 3 }, coinMultiplier: 3, difficulty: 4,
     rewards: { star1: { coins: 100 }, star2: { weapons: ['seeker-lens'] }, star3: { coins: 220, weapons: ['oracle-eye'] } },
     recommended: ['Pelican'],

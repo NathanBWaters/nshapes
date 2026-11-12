@@ -982,7 +982,7 @@ describe('Multi-Laser Independent Rolls', () => {
     // Verify the structure is correct for our filter
     expect(laser).toBeDefined();
     expect(laser?.specialEffect).toBe('laser');
-    expect(laser?.effects.laserChance).toBe(5);
+    expect(laser?.effects.laserChance).toBe(4);
 
     // Create 28 copies (Free Play stacks copies; each rolls independently)
     const weapons: Weapon[] = Array(28).fill(laser) as Weapon[];

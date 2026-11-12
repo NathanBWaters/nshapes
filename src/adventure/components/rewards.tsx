@@ -108,7 +108,7 @@ export const describeUnlock = (u: Unlock): UnlockableDisplay => {
       revealed: `${d.name} Lv ${u.level}`,
       headline: `${d.name} is stronger!`,
       tease: 'A weapon you already own levels up.',
-      badge: `LEVEL ${u.level}${u.refund ? ` · +${u.refund}¢ REFUNDED` : ''}`,
+      badge: `LEVEL ${u.level}`,
     };
   }
   return describeUnlockable(
