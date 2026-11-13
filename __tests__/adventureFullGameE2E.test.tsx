@@ -56,11 +56,11 @@ jest.mock('@/utils/storage', () => ({
   },
 }));
 
-jest.mock('@/audio', () => ({
-  sfx: () => undefined,
-  music: { play: () => undefined, stop: () => undefined },
-  setMusicEnabled: () => undefined,
-}));
+jest.mock('@/audio', () => {
+  // The band is silent here: every call on it is a no-op, and it is never "in a fight"
+  const band = new Proxy({}, { get: (_t, key) => (key === 'inFight' ? false : () => undefined) });
+  return { sfx: () => undefined, music: band, band, setMusicEnabled: () => undefined, setSfxOverride: () => undefined };
+});
 
 jest.mock('@/components/fighters', () => {
   const ReactActual = require('react');

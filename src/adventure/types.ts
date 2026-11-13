@@ -529,6 +529,8 @@ export interface RunEvent {
   type: RunEventType;
   amount?: number;
   text?: string;
+  /** Rule key of the skill node, weapon or evolution that caused it ("w2:war-drum#0"), when a rule did */
+  source?: string;
 }
 
 // ─── Fight log (results-screen replay) ────────────────────────────────────

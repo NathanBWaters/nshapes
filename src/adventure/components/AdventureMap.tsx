@@ -140,7 +140,7 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
             <Text style={s.arcanaGlyph}>{getArcana(id).numeral}</Text>
           </View>
         ))}
-        <TouchableOpacity onPress={onToggleMusic} style={[s.iconBtn, !musicOn && { opacity: 0.4 }]} accessibilityLabel={musicOn ? 'Mute music' : 'Play music'}>
+        <TouchableOpacity onPress={onToggleMusic} style={[s.iconBtn, !musicOn && { opacity: 0.4 }]} accessibilityLabel={musicOn ? 'Mute sound' : 'Turn sound on'}>
           <Icon name="delapouite/sound-on" size={18} color={INK} />
         </TouchableOpacity>
         <View style={s.starPill}><Text style={s.starGlyph}>★</Text><Text style={s.starCount}>{stars}/{maxStars()}</Text></View>

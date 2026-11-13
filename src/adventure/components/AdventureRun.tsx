@@ -18,7 +18,8 @@ import { useFighterConductor } from '@/hooks/useFighterConductor';
 import { COLORS } from '@/utils/colors';
 import type { Card, CardReward, Weapon } from '@/types';
 import type { WeaponEffectResult } from '@/utils/weaponEffects';
-import { music, sfx } from '@/audio';
+import { band, music, sfx } from '@/audio';
+import { moodOf, playSounds, soundsFor } from '@/audio/fightAudio';
 import type { AdventureSave, EvolutionRecipe, LevelDef, PassiveId, RunEvent, RunEventType, RunState } from '../types';
 import type { WeaponBuilds } from '../data/weaponStats';
 import { createRun, runReducer, shopPrice, rerollCost, xpForLevel, type RunAction } from '../engine/run';
@@ -53,9 +54,11 @@ interface Props {
 type FighterReaction = 'ecstatic' | 'heal' | 'powerup' | 'pain' | 'entrance';
 type EnemyReaction = 'criticalHit' | 'hit' | 'gloat' | 'attack' | 'regen' | 'entrance';
 
-/** How each run event looks and sounds. A full Record, so a new event type has to be given a row. */
+/**
+ * How each run event looks. A full Record, so a new event type has to be given a row.
+ * How it SOUNDS is the band's job (src/audio/fightAudio.ts EVENT_CUE).
+ */
 interface EventPresentation {
-  sfx?: Parameters<typeof sfx>[0];
   floater?: (e: RunEvent) => { text: string; color: string };
   /** Damage to the foe: the floater grows with `amount` (big ≥10, huge ≥25 + screen shake, MEGA ≥50 + flash) */
   damage?: boolean;
@@ -74,25 +77,25 @@ const dmg = (label?: string) => (e: RunEvent) => {
 };
 
 const EVENT_PRESENTATION: Record<RunEventType, EventPresentation> = {
-  hit: { sfx: 'hit', shake: true, damage: true, floater: dmg(), enemy: 'hit' },
-  rainbow: { sfx: 'rainbow', shake: true, damage: true, floater: e => ({ text: `RAINBOW −${amount(e)}`, color: RAINBOW }), fighter: 'ecstatic', enemy: 'criticalHit' },
-  heal: { sfx: 'heart', fighter: 'heal', floater: e => ({ text: `+${amount(e) || 1}♥`, color: COLORS.logicTeal }) },
-  hurt: { sfx: 'hurt', enemy: 'gloat' },
+  hit: { shake: true, damage: true, floater: dmg(), enemy: 'hit' },
+  rainbow: { shake: true, damage: true, floater: e => ({ text: `RAINBOW −${amount(e)}`, color: RAINBOW }), fighter: 'ecstatic', enemy: 'criticalHit' },
+  heal: { fighter: 'heal', floater: e => ({ text: `+${amount(e) || 1}♥`, color: COLORS.logicTeal }) },
+  hurt: { enemy: 'gloat' },
   grace: {},
-  coins: { sfx: 'coin', floater: e => ({ text: `+${amount(e)}¢`, color: TONE.coin }) },
-  levelup: { sfx: 'levelup', fighter: 'powerup' },
-  foe_defeated: { sfx: 'foeDefeated', fighter: 'ecstatic' },
-  wave: { sfx: 'wave', fighter: 'entrance', enemy: 'entrance' },
-  regen: { sfx: 'graceGain', floater: e => ({ text: `+${amount(e)}`, color: COLORS.logicTeal }), enemy: 'regen' },
+  coins: { floater: e => ({ text: `+${amount(e)}¢`, color: TONE.coin }) },
+  levelup: { fighter: 'powerup' },
+  foe_defeated: { fighter: 'ecstatic' },
+  wave: { fighter: 'entrance', enemy: 'entrance' },
+  regen: { floater: e => ({ text: `+${amount(e)}`, color: COLORS.logicTeal }), enemy: 'regen' },
   dud: {},
   face_down: {},
   countdown: {},
   bomb: {},
   triple: {},
-  shuffle: { sfx: 'whoosh', enemy: 'attack' },
+  shuffle: { enemy: 'attack' },
   attr_shift: {},
   card_removed: {},
-  time_stolen: { sfx: 'back', fighter: 'pain', enemy: 'attack' },
+  time_stolen: { fighter: 'pain', enemy: 'attack' },
   inactivity: { fighter: 'pain', enemy: 'attack' },
   fire: {},
   hint: {},
@@ -101,45 +104,45 @@ const EVENT_PRESENTATION: Record<RunEventType, EventPresentation> = {
   moves_out: {},
   time_gain: { floater: e => ({ text: `+${amount(e)}s`, color: COLORS.logicTeal }) },
   // fighter passives
-  nine_lives: { sfx: 'heart', floater: () => ({ text: 'NINE LIVES!', color: COLORS.logicTeal }), fighter: 'heal' },
+  nine_lives: { floater: () => ({ text: 'NINE LIVES!', color: COLORS.logicTeal }), fighter: 'heal' },
   combo: { floater: e => ({ text: `COMBO ×${amount(e)}`, color: COLORS.impactOrange }), fighter: 'ecstatic' },
-  hot_streak: { sfx: 'star2', floater: () => ({ text: 'HOT STREAK READY', color: COLORS.impactOrange }), fighter: 'powerup' },
-  hot_streak_hit: { sfx: 'explosion', shake: true, damage: true, floater: dmg('HOT STREAK'), fighter: 'ecstatic', enemy: 'criticalHit' },
+  hot_streak: { floater: () => ({ text: 'HOT STREAK READY', color: COLORS.impactOrange }), fighter: 'powerup' },
+  hot_streak_hit: { shake: true, damage: true, floater: dmg('HOT STREAK'), fighter: 'ecstatic', enemy: 'criticalHit' },
   grudge: { floater: e => ({ text: `GRUDGE ${amount(e) || ''}`.trim(), color: '#7A3E00' }) },
-  grudge_release: { sfx: 'explosion', shake: true, damage: true, floater: dmg('GRUDGE'), fighter: 'ecstatic', enemy: 'criticalHit' },
-  thick_hide: { sfx: 'graceGain', floater: () => ({ text: 'THICK HIDE!', color: COLORS.logicTeal }), fighter: 'heal' },
+  grudge_release: { shake: true, damage: true, floater: dmg('GRUDGE'), fighter: 'ecstatic', enemy: 'criticalHit' },
+  thick_hide: { floater: () => ({ text: 'THICK HIDE!', color: COLORS.logicTeal }), fighter: 'heal' },
   patience: { damage: true, floater: dmg('PATIENCE'), enemy: 'hit' },
-  freeze: { sfx: 'freeze', fighter: 'ecstatic', floater: () => ({ text: 'FROZEN!', color: '#1D4ED8' }) },
-  redeal: { sfx: 'whoosh', fighter: 'ecstatic', floater: () => ({ text: 'ZOOMIES!', color: COLORS.impactOrange }) },
-  scoop: { sfx: 'match', fighter: 'ecstatic', enemy: 'criticalHit', floater: () => ({ text: 'BIG SCOOP!', color: COLORS.logicTeal }) },
-  keen_eye: { sfx: 'hint' },
-  fetch: { sfx: 'deal', floater: () => ({ text: 'FETCH!', color: TONE.coin }) },
-  free_mistake: { sfx: 'graceGain', floater: () => ({ text: 'NO HARM', color: COLORS.logicTeal }) },
+  freeze: { fighter: 'ecstatic', floater: () => ({ text: 'FROZEN!', color: '#1D4ED8' }) },
+  redeal: { fighter: 'ecstatic', floater: () => ({ text: 'ZOOMIES!', color: COLORS.impactOrange }) },
+  scoop: { fighter: 'ecstatic', enemy: 'criticalHit', floater: () => ({ text: 'BIG SCOOP!', color: COLORS.logicTeal }) },
+  keen_eye: {},
+  fetch: { floater: () => ({ text: 'FETCH!', color: TONE.coin }) },
+  free_mistake: { floater: () => ({ text: 'NO HARM', color: COLORS.logicTeal }) },
   // rule effects
   rule: { floater: e => ({ text: e.text ?? '!', color: TONE.combo }) },
-  blast: { sfx: 'explosion', shake: true, damage: true, floater: dmg('BLAST'), enemy: 'hit' },
-  laser: { sfx: 'laser', shake: true, damage: true, floater: dmg('LASER'), enemy: 'hit' },
-  ricochet: { sfx: 'ricochet', damage: true, floater: dmg('RICOCHET'), enemy: 'hit' },
-  doubled: { sfx: 'star2', floater: () => ({ text: '×2!', color: TONE.combo }) },
+  blast: { shake: true, damage: true, floater: dmg('BLAST'), enemy: 'hit' },
+  laser: { shake: true, damage: true, floater: dmg('LASER'), enemy: 'hit' },
+  ricochet: { damage: true, floater: dmg('RICOCHET'), enemy: 'hit' },
+  doubled: { floater: () => ({ text: '×2!', color: TONE.combo }) },
   double_ready: { floater: () => ({ text: 'NEXT ×2', color: TONE.combo }) },
-  charged: { sfx: 'star1', floater: e => ({ text: `NEXT SET ×${amount(e)}`, color: COLORS.impactOrange }) },
-  empowered: { sfx: 'levelup', floater: e => ({ text: `WAR DRUM +${amount(e)}`, color: COLORS.impactOrange }), fighter: 'powerup' },
-  simplified: { sfx: 'whoosh', floater: () => ({ text: 'CLARITY!', color: COLORS.logicTeal }) },
+  charged: { floater: e => ({ text: `NEXT SET ×${amount(e)}`, color: COLORS.impactOrange }) },
+  empowered: { floater: e => ({ text: `WAR DRUM +${amount(e)}`, color: COLORS.impactOrange }), fighter: 'powerup' },
+  simplified: { floater: () => ({ text: 'CLARITY!', color: COLORS.logicTeal }) },
   simplify_end: {},
-  pinata: { sfx: 'deal', floater: () => ({ text: 'PIÑATA!', color: '#DB2777' }) },
-  pinata_break: { sfx: 'coin', shake: true, damage: true, floater: dmg('PIÑATA'), fighter: 'ecstatic', enemy: 'criticalHit' },
+  pinata: { floater: () => ({ text: 'PIÑATA!', color: '#DB2777' }) },
+  pinata_break: { shake: true, damage: true, floater: dmg('PIÑATA'), fighter: 'ecstatic', enemy: 'criticalHit' },
   link: {},
   // purity, evolutions, hazards & arcana
-  purity: { sfx: 'match', floater: e => ({ text: `PURITY ×${amount(e)}!`, color: '#0D9488' }) },
-  purity_max: { sfx: 'rainbow', floater: e => ({ text: `MAX PURITY ×${amount(e)}!`, color: TONE.combo }), fighter: 'ecstatic', enemy: 'criticalHit' },
-  catalyst_spawn: { sfx: 'star1', floater: () => ({ text: 'CATALYST!', color: TONE.evoReady }) },
-  evolution_start: { sfx: 'unlock', fighter: 'ecstatic', enemy: 'criticalHit' },
+  purity: { floater: e => ({ text: `PURITY ×${amount(e)}!`, color: '#0D9488' }) },
+  purity_max: { floater: e => ({ text: `MAX PURITY ×${amount(e)}!`, color: TONE.combo }), fighter: 'ecstatic', enemy: 'criticalHit' },
+  catalyst_spawn: { floater: () => ({ text: 'CATALYST!', color: TONE.evoReady }) },
+  evolution_start: { fighter: 'ecstatic', enemy: 'criticalHit' },
   evolution_end: { floater: () => ({ text: 'EVOLUTION ENDS', color: TONE.spent }) },
   trap_placed: {},
-  trap_defused: { sfx: 'confirm', damage: true, floater: e => ({ text: `DEFUSED −${amount(e)}`, color: COLORS.logicTeal }), enemy: 'hit' },
-  trap_sprung: { sfx: 'hurt', floater: () => ({ text: 'SPRUNG!', color: COLORS.impactRed }), fighter: 'pain', enemy: 'gloat' },
-  arcana_burn: { sfx: 'explosion', floater: () => ({ text: 'CONTROLLED BURN!', color: COLORS.impactOrange }) },
-  overkill: { sfx: 'coin', floater: e => ({ text: `OVERKILL +${amount(e)}`, color: TONE.coin }) },
+  trap_defused: { damage: true, floater: e => ({ text: `DEFUSED −${amount(e)}`, color: COLORS.logicTeal }), enemy: 'hit' },
+  trap_sprung: { floater: () => ({ text: 'SPRUNG!', color: COLORS.impactRed }), fighter: 'pain', enemy: 'gloat' },
+  arcana_burn: { floater: () => ({ text: 'CONTROLLED BURN!', color: COLORS.impactOrange }) },
+  overkill: { floater: e => ({ text: `OVERKILL +${amount(e)}`, color: TONE.coin }) },
 };
 
 /** The recipe an evolution event is about (the engine names it by id or by name). */
@@ -196,10 +199,20 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
     timeouts.current.push(setTimeout(fn, ms));
   }, []);
 
-  // Music: battle arrangement for this biome, boss arrangement for bosses
+  // Music: the band follows the fight (src/audio/director.ts says what each state sounds like).
+  // Battle arrangement for this biome, boss arrangement for bosses.
+  const arrangement = level.isBoss ? 'boss' : biome.music;
+  const timeTotal = useRef(run.timeLeft);
+  const moodNow = (r: RunState, halted: boolean) =>
+    moodOf(r, { arrangement, paused: halted, timeTotal: timeTotal.current, glassWindowMs: gearModifiers(r).glassWindowMs });
   useEffect(() => {
-    music.play(level.isBoss ? 'boss' : biome.music);
-  }, [level.isBoss, biome.music]);
+    band.enterFight(moodNow(runRef.current, false));
+    return () => band.leaveFight();
+  }, [arrangement]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (run.status === 'won' || run.status === 'lost') return;
+    if (band.inFight) band.setMood(moodNow(run, paused || Boolean(tip)));
+  }, [run, paused, tip]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const playing = run.status === 'playing' && !paused && !tip;
 
@@ -296,11 +309,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
     triggerEnemyReaction('entrance');
   }, [triggerEntrance, triggerEnemyReaction]);
 
-  useEffect(() => {
-    if (secondsLeft !== null && secondsLeft <= 5 && secondsLeft > 0 && run.status === 'playing') sfx('tick');
-  }, [secondsLeft, run.status]);
-
-  // Events → sfx, floating numbers (sized by the hit), shakes, flashes, banners, coach marks
+  // Events → the band's cues, floating numbers (sized by the hit), shakes, flashes, banners, coach marks
   const foeShake = useSharedValue(0);
   const foeScale = useSharedValue(1);
   const screenShake = useSharedValue(0);
@@ -309,10 +318,10 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
     const fresh = run.events.filter(e => e.id > lastEventId.current);
     if (fresh.length === 0) return;
     lastEventId.current = fresh[fresh.length - 1].id;
+    playSounds(soundsFor(fresh, { weapons: run.weapons.map(w => w.id), combo: run.combo }));
     let burst = 0;
     for (const e of fresh) {
       const show = EVENT_PRESENTATION[e.type];
-      if (show.sfx) sfx(show.sfx);
       const tier = show.damage ? hitTier(e.amount ?? 0) : 0;
       if (show.shake) {
         foeShake.value = withSequence(withTiming(-8, { duration: 40 }), withTiming(8, { duration: 60 }), withTiming(-4, { duration: 50 }), withTiming(0, { duration: 50 }));
@@ -380,8 +389,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   // End of run → hand off to results after the finishing blow lands
   useEffect(() => {
     if (!ended) return;
-    music.stop();
-    sfx(run.status === 'won' ? 'victory' : 'gameOver');
+    band.finale(run.status === 'won');
     const t = setTimeout(() => onFinish(runRef.current), 1300);
     return () => clearTimeout(t);
   }, [ended]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -413,7 +421,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   const handleUseHint = useCallback(() => {
     conductor.triggerHint();
     dispatch({ type: 'USE_HINT' });
-    sfx('hint');
+    band.cue('hint');
   }, [dispatch, conductor]);
 
   const foeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: foeShake.value }, { scale: foeScale.value }] }));
@@ -692,7 +700,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
           subtitle="Pick one for this fight"
           options={run.pickOptions}
           weaponBuilds={run.weaponBuilds}
-          onPick={w => { sfx('confirm'); conductor.triggerPowerup(); dispatch({ type: 'PICK', weaponId: w.id }); }}
+          onPick={w => { band.cue('weaponGet'); band.fire(w.id, 4); conductor.triggerPowerup(); dispatch({ type: 'PICK', weaponId: w.id }); }}
           onSkip={() => dispatch({ type: 'PICK', weaponId: null })}
         />
       )}
@@ -861,7 +869,8 @@ const Intermission: React.FC<{ run: RunState; dispatch: (a: RunAction) => void; 
                       onPress={() => {
                         setTapTriggers(prev => ({ ...prev, [i]: (prev[i] ?? 0) + 1 }));
                         if (afford) {
-                          sfx('coin');
+                          band.cue('register');
+                          band.fire(w.id, 4);
                           onPurchase?.();
                           dispatch({ type: 'BUY', index: i });
                         }
@@ -880,7 +889,7 @@ const Intermission: React.FC<{ run: RunState; dispatch: (a: RunAction) => void; 
                 })}
                 {run.shopOptions.length === 0 && <Text style={st.panelSub}>Sold out!</Text>}
               </ScrollView>
-              <Btn small variant="secondary" label={`Reroll (${rerollCost(run)}¢)`} disabled={run.coins < rerollCost(run)} onPress={() => dispatch({ type: 'REROLL' })} />
+              <Btn small variant="secondary" label={`Reroll (${rerollCost(run)}¢)`} disabled={run.coins < rerollCost(run)} onPress={() => { band.cue('reelSpin'); dispatch({ type: 'REROLL' }); }} />
             </>
           )}
           {next && nextDisplay && (
@@ -889,7 +898,7 @@ const Intermission: React.FC<{ run: RunState; dispatch: (a: RunAction) => void; 
               <Text style={st.panelSub}>Next: {nextDisplay.name} · {next.hp} HP</Text>
             </View>
           )}
-          <Btn testID="next-wave" label="Next wave" icon="lorc/crossed-swords" onPress={() => { sfx('wave'); dispatch({ type: 'NEXT_WAVE' }); }} />
+          <Btn testID="next-wave" label="Next wave" icon="lorc/crossed-swords" onPress={() => { band.cue('tap'); dispatch({ type: 'NEXT_WAVE' }); }} />
         </PopIn>
       </View>
     </Modal>

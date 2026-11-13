@@ -527,7 +527,7 @@ src/adventure/
   components/           Map, Preview, MechanicIntro, Run (+RunFx), Results, UnlockReveal,
                         Camp, SkillTree, BountyBoard, FieldGuide
   AdventureMode.tsx     screen router, onboarding
-src/audio/              Game Boy–style synth (no audio files)
+src/audio/              the adaptive score: synth, band, director, weapon voices (no audio files)
 ```
 
 The fight UI reuses the shared `GameBoard` and `Card`, so weapon effects, fire, lasers and auto-hints behave as in Free Play.
@@ -635,14 +635,19 @@ Limits live in `LIMITS` at the top of the test. Things this sweep caught: next-S
   - Every Workshop weapon level ever bought is refunded at the rarity price it was bought for (`LEGACY_WEAPON_LEVEL_COSTS`): levels are world-only now.
   - Mastery weapons, cap-raising legendaries, Fortune's Eye and Snowball are dropped without a refund (they were rewards).
 
-## Audio (poteto's approach)
+## Audio: the adaptive score
 
-- **The synth:** every sound is synthesized live by `src/audio/chip.ts`, a Game Boy–style chip: two pulse voices with selectable duty, a 4-bit wavetable bass and LFSR noise drums.
-- **Songs are text** in `src/audio/songs.ts`. One theme melody plays under several arrangements: `map`, each world (`meadow`, `woods`, `canyon`, `peaks`) and `boss`, which World 5 also uses.
-- **Switching arrangement** waits for the next bar line, so moving from the map into a fight sounds like the song continuing.
-- **Platforms:** on the web, `playSound()` routes to the chip. Native keeps the bundled samples.
-- **Debugging:** in the browser console (dev builds), `__nshapesAudio.sfx('rainbow')`, `__nshapesAudio.music.play('boss')`.
-- **Verifying without speakers:** `renderOffline({ plan: [{ arrangement: 'map', bars: 4 }, { arrangement: 'boss', bars: 4 }], sfxReel: ['coin', 'hit'] })` renders through an `OfflineAudioContext` into an `AudioBuffer`. Measure peak/RMS, run Goertzel pitch checks, or encode a WAV.
+> **Full documentation:** [sound-design.md](./sound-design.md). Try everything at `/dev/sound`.
+
+- **One piece of music that the fight plays.** Every sound is synthesized live in `src/audio/` (no audio files) and written in scale steps, so the tune, each weapon's riff, every coin and every jackpot are in the same key and on the same beat.
+- **The music tells you the state of the fight:** the tune turns minor as you lose hearts (a heartbeat on the last one), ticks when the clock is short, fills in as the foe falls and your streak grows, thins out when you stall, and rolls the drums when the foe is nearly down. `src/audio/director.ts` is the one place that decides.
+- **Every weapon is a band member** (`src/audio/voices.ts`): an instrument and a one-bar riff that joins the music while you hold it and plays a sting when it fires. Tap a weapon in the Armory to hear it.
+- **Every evolution is a duet** of its two weapons: a fanfare, both riffs an octave up, a key lift, a brighter mode and its own drum groove. All 204 are different.
+- **The casino layer:** three card taps spell the chord; a Set strums it and rings one rung higher up the streak ladder for every Set in the combo; a chain of effects plays one 32nd note apart and ends on the cash register; big hits duck the music under a sub-bass drop.
+- **Worlds:** the same tune in each world's own key and mode (`WORLD_TONE`), over the arrangements in `src/audio/songs.ts` (`map`, `meadow`, `woods`, `canyon`, `peaks`, `boss`). Switching arrangement waits for the next bar line.
+- **The sound button on the map** turns the whole score on and off.
+- **Platforms:** web only (Web Audio). Native keeps the bundled samples.
+- **Checking without speakers:** `npx jest __tests__/audioScore.test.ts`; `/dev/sound` → Check levels; `__nshapesAudio.renderOffline({ script })` in a dev build.
 
 ## Dev
 - `/dev/adventure?save=maxed`: every star, unlock and Workshop item, plus 50k coins. Skill trees are left empty to spend by hand. The save is persisted once you play.

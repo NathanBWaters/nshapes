@@ -6,7 +6,7 @@
 
 import { Platform } from 'react-native';
 import { SettingsStorage } from './storage';
-import { sfx, audioSupported, setSfxEnabled, type SfxName } from '@/audio';
+import { sfx, band, audioSupported, setSfxEnabled, type SfxName } from '@/audio';
 
 /**
  * On the web, every sound is synthesized by the chip (src/audio) — no files
@@ -30,6 +30,25 @@ const CHIP_SFX: Record<SoundCategory, SfxName> = {
   confirm: 'confirm',
   confirmExit: 'back',
   gameOver: 'gameOver',
+};
+
+/** Sounds the band takes over during an Adventure fight */
+const BAND_OWNED: ReadonlySet<SoundCategory> = new Set<SoundCategory>(['matchValid', 'matchInvalid', 'graceUsed', 'explosion', 'laser', 'ricochet', 'click']);
+
+/**
+ * A card was tapped. In an Adventure fight the first, second and third card
+ * sound the root, third and fifth of the chord the music is on, so a Set
+ * spells a chord. Everywhere else it is the plain click.
+ */
+export const playSelect = (selectedCount: number): void => {
+  // The band has its own switch (Adventure's sound button), so ask it first
+  if (useChip && band.inFight) {
+    if (selectedCount > 0) band.select(selectedCount);
+    else band.deselect();
+    return;
+  }
+  if (!audioEnabled) return;
+  void playSound('click');
 };
 
 // Dynamically import expo-av to handle missing native module gracefully
@@ -247,6 +266,8 @@ export const preloadAllSounds = async (): Promise<void> => {
 export const playSound = async (category: SoundCategory): Promise<void> => {
   if (!audioEnabled) return;
   if (useChip) {
+    // In an Adventure fight the band plays these itself, in key and on the beat (src/audio/fightAudio.ts)
+    if (band.inFight && BAND_OWNED.has(category)) return;
     sfx(CHIP_SFX[category]);
     return;
   }

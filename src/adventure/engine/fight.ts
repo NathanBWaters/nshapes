@@ -116,11 +116,11 @@ export const finish = (d: Draft): RunState => {
 
 export const emit = (d: Draft, type: RunEventType, amount?: number, text?: string) => {
   d.eventSeq += 1;
-  const e: RunEvent = { id: d.eventSeq, type, amount, text };
+  // Which rule (if any) caused it: the fight log names it, and the band plays that weapon's voice
+  const source = d._chain[d._chain.length - 1];
+  const e: RunEvent = source ? { id: d.eventSeq, type, amount, text, source } : { id: d.eventSeq, type, amount, text };
   d.events.push(e);
   if (d.events.length > 60) d.events.shift();
-  // The fight log keeps everything, and which rule (if any) caused it
-  const source = d._chain[d._chain.length - 1];
   d._lines.push(source ? { type, amount, text, source } : { type, amount, text });
 };
 

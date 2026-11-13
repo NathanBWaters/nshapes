@@ -4,7 +4,7 @@
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, StyleSheet } from 'react-native';
-import { music, setMusicEnabled, sfx } from '@/audio';
+import { music, setMusicEnabled, setSfxOverride, sfx } from '@/audio';
 import type { AdventureSave, FeatureDestination, LevelDef, MechanicDef, RunState } from './types';
 import { MAIN_LEVELS, getLevel, mainIndexOf } from './data/levels';
 import { CAMPAIGN_FEATURES } from './data/features';
@@ -88,9 +88,13 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
     });
   }, []);
 
+  // One switch for the whole score: in Adventure the effects are part of the music
+  // (src/audio/band.ts), so the map's sound button turns both on and off.
   useEffect(() => {
     setMusicEnabled(save.musicOn);
+    setSfxOverride(save.musicOn);
   }, [save.musicOn]);
+  useEffect(() => () => setSfxOverride(null), []);
 
   // Map / camp music
   useEffect(() => {

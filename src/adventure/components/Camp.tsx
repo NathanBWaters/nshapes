@@ -15,7 +15,7 @@ import { WeaponAvatar } from '@/components/weapons';
 import type { FighterReactionEvent, FighterReactionType } from '@/utils/fighterAnimations';
 import { COLORS } from '@/utils/colors';
 import type { CharacterName, Weapon } from '@/types';
-import { sfx } from '@/audio';
+import { band, sfx } from '@/audio';
 import type { AdventureSave, UpgradeDef } from '../types';
 import { FIGHTERS } from '../data/fighters';
 import { getPassive } from '../data/passives';
@@ -443,7 +443,8 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters
                         setSlotsFullNote('charms');
                         return;
                       }
-                      sfx('confirm');
+                      // Every weapon has a voice in the band: tapping it plays its riff
+                      band.audition(w.id);
                       setSlotsFullNote(null);
                       onChange(toggleCharm(save, w.id));
                     }}

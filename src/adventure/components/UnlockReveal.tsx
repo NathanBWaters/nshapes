@@ -10,7 +10,7 @@ import Icon from '@/components/Icon';
 import { FighterAvatar } from '@/components/fighters';
 import { WeaponAvatar } from '@/components/weapons';
 import { COLORS } from '@/utils/colors';
-import { sfx } from '@/audio';
+import { band, sfx } from '@/audio';
 import type { CharacterName } from '@/types';
 import type { AdventureSave, ArcanaId, UnlockableFeature } from '../types';
 import { charmSlots, equippedArcanaOf, equippedCharms, weaponBuilds, type Unlock } from '../progress';
@@ -97,7 +97,10 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
   const evoMechanic = evo && evoId ? MECHANICS[evoId] : null;
 
   const reveal = () => {
-    sfx('unlock');
+    // A weapon is introduced by its own voice, a recipe by its fanfare
+    if (u.kind === 'weapon') band.audition(u.id);
+    else if (u.kind === 'evolution') band.auditionEvolution(u.id);
+    else sfx('unlock');
     setRevealed(true);
     flash.value = withSequence(withTiming(0.9, { duration: 70 }), withTiming(0, { duration: 380, easing: Easing.out(Easing.quad) }));
     scale.value = withSequence(withTiming(1.12, { duration: 140, easing: Easing.out(Easing.cubic) }), withTiming(1, { duration: 160, easing: Easing.inOut(Easing.quad) }));

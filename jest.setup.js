@@ -38,6 +38,7 @@ jest.mock('@/utils/sounds', () => ({
   isAudioEnabled: jest.fn(() => true),
   initAudio: jest.fn(),
   playCardDealing: jest.fn(),
+  playSelect: jest.fn(),
 }));
 
 // Silence console warnings during tests

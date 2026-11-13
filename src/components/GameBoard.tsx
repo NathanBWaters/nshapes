@@ -23,7 +23,7 @@ import { useScreenShake } from '@/hooks/useScreenShake';
 import { useParticles } from '@/hooks/useParticles';
 import { DURATION } from '@/utils/animation';
 import { triggerHaptic, selectionHaptic } from '@/utils/haptics';
-import { playSound } from '@/utils/sounds';
+import { playSelect, playSound } from '@/utils/sounds';
 import {
   InactivityBar,
   ScoreDecayIndicator,
@@ -374,13 +374,13 @@ const GameBoard: React.FC<GameBoardProps> = ({
     if (selectedCards.some(c => c.id === card.id)) {
       setSelectedCards(selectedCards.filter(c => c.id !== card.id));
       selectionHaptic(); // Light haptic on deselect
-      playSound('click');
+      playSelect(0);
       return;
     }
 
     // Haptic feedback for card selection
     selectionHaptic();
-    playSound('click');
+    playSelect(Math.min(3, selectedCards.length + 1));
 
     // If already have 3 cards selected, replace the first one
     let newSelectedCards;

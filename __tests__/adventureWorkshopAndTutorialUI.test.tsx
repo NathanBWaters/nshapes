@@ -48,11 +48,11 @@ jest.mock('@/utils/storage', () => ({
   storage: { getString: jest.fn(() => undefined), set: jest.fn() },
 }));
 
-jest.mock('@/audio', () => ({
-  sfx: jest.fn(),
-  music: { play: jest.fn(), stop: jest.fn() },
-  setMusicEnabled: jest.fn(),
-}));
+jest.mock('@/audio', () => {
+  // The band is silent here: every call on it is a no-op, and it is never "in a fight"
+  const band = new Proxy({}, { get: (_t, key) => (key === 'inFight' ? false : () => undefined) });
+  return { sfx: jest.fn(), music: band, band, setMusicEnabled: jest.fn(), setSfxOverride: jest.fn() };
+});
 
 jest.mock('@/components/Icon', () => {
   const { View: RNView, Text: RNText } = require('react-native');

@@ -6,7 +6,7 @@ import Icon from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
 import { COLORS } from '@/utils/colors';
-import { sfx } from '@/audio';
+import { band } from '@/audio';
 import type { LevelDef, RunState } from '../types';
 import type { ResultApplication } from '../progress';
 import { getBiome } from '../data/biomes';
@@ -54,9 +54,11 @@ const LevelResults: React.FC<Props> = ({ level, run, stars, result, unlocksRevea
 
   useEffect(() => {
     const ts: ReturnType<typeof setTimeout>[] = [];
-    for (let i = 1; i <= stars; i++) ts.push(setTimeout(() => sfx(i === 1 ? 'star1' : i === 2 ? 'star2' : 'star3'), starPopDelayMs(i - 1)));
+    // Each star rings a step higher up the chord; then the coins count out like a payout
+    for (let i = 1; i <= stars; i++) ts.push(setTimeout(() => band.cue('star', { amount: i }), starPopDelayMs(i - 1)));
+    if (run.coins > 0) ts.push(setTimeout(() => band.cue('coinRoll', { amount: Math.min(24, 4 + Math.round(run.coins / 5)) }), starPopDelayMs(stars) + 250));
     return () => ts.forEach(clearTimeout);
-  }, [stars]);
+  }, [stars]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const tip = !won
     ? run.mistakes > 3

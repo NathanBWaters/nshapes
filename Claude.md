@@ -79,6 +79,17 @@ The `WEAPONS` array in `src/utils/gameDefinitions.ts` is the roster (34 weapons)
 * **On Fire:** Burns after 0.25s, 10% spread chance
 * **Connected:** Part of a connector weapon link
 
+## Sound (IMPORTANT)
+
+> **Full documentation:** [docs/sound-design.md](./docs/sound-design.md). Sound studio: `/dev/sound`.
+
+Adventure's sound is one adaptive score, synthesized live in `src/audio/` (no audio files, web only). Everything is written in scale steps and lands on the beat, so every sound is in key with the music.
+
+* **The music shows the state of the fight** (hearts, clock, foe HP, streak, evolutions, what is on the board). `src/audio/director.ts` is the only place that decides what a state sounds like.
+* **Every weapon has a voice** (`src/audio/voices.ts`): when you add a weapon, add its row (instrument, riff, why). Unvoiced weapons fail `__tests__/audioScore.test.ts`.
+* **Every run event has a cue** (`src/audio/fightAudio.ts` `EVENT_CUE`, a full Record): when you add a `RunEventType`, give it a row.
+* **Never play a raw frequency in a fight.** Use a cue (`band.cue`), in scale steps, so it stays in key.
+
 ## Card Visual Rules (IMPORTANT)
 
 **Borders/outlines are EXCLUSIVELY for selection.** Never use card borders or outlines to indicate any other state (fire, connections, etc.).
@@ -270,6 +281,8 @@ This means Field Stone weapons can increase the starting board size beyond the m
 
 **`/dev/adventure`** - Adventure map (`?save=maxed` everything unlocked + 50k coins, `?save=fresh`, `?autoplay=true`)
 
+**`/dev/sound`** - Sound studio: start the band, change the fight state and hear the music follow; audition every weapon voice, evolution theme and cue; "Check levels" renders a fight offline and reports peak/RMS
+
 **`/dev/fighters`** - Interactive fighter animation & battle wear-and-tear studio (all 6 creatures, health tiers, reactions, moods, tap-to-pet)
 
 **`/dev/store`** - Standalone weapon shop tester:
@@ -302,6 +315,7 @@ When working on specific systems, load the relevant design doc for detailed spec
 
 * **[Adventure Mode](./docs/adventure-design.md)** - Map, levels, stars, economy, fighters, audio synth, balance bots
 * **[Balance System](./docs/balance-system.md)** - The lab, the generated report, level balance and the HP tuner; **[Balance Philosophy](./docs/balance-philosophy.md)** - what we are aiming at
+* **[Sound](./docs/sound-design.md)** - The adaptive score: what the music tells you, weapon voices, evolution themes, the casino layer
 * **[Weapon System](./specs/weapons-design.md)** - Complete weapon roster, rarities, effects, synergies, and balance notes
 * **[Enemy System](./specs/enemy-design.md)** - Enemy roster, tier scaling, defeat conditions, and weapon counters (in development)
 * **[Balance Philosophy](./docs/balance-philosophy.md)** - Rough target win rates by world for a bare vs a fully invested player
