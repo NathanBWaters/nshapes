@@ -4,6 +4,9 @@ import { STROKE } from '@/components/illustration/primitives';
 import { ELEMENTAL_COMBAT_WEAPON_RELICS } from './illustrations/ElementalCombatWeapons';
 import { MYSTIC_NATURE_CHRONO_WEAPON_RELICS } from './illustrations/MysticNatureChronoWeapons';
 import { TOMES_COINS_LINKS_RELICS_WEAPON_RELICS } from './illustrations/TomesCoinsLinksRelicsWeapons';
+import { ADVENTURE_UTILITY_WEAPON_RELICS } from './illustrations/AdventureUtilityWeapons';
+import { ADVENTURE_TRICK_WEAPON_RELICS } from './illustrations/AdventureTrickWeapons';
+import { ADVENTURE_GAMBLE_WEAPON_RELICS } from './illustrations/AdventureGambleWeapons';
 import { WeaponIllustrationProps, WeaponRelic, WeaponTapStyle, getRarityTrimPalette } from './types';
 
 /** The single place a weapon name is tied to its illustration and tap animation. */
@@ -11,9 +14,12 @@ const WEAPON_RELICS: Record<string, WeaponRelic> = {
   ...ELEMENTAL_COMBAT_WEAPON_RELICS,
   ...MYSTIC_NATURE_CHRONO_WEAPON_RELICS,
   ...TOMES_COINS_LINKS_RELICS_WEAPON_RELICS,
+  ...ADVENTURE_UTILITY_WEAPON_RELICS,
+  ...ADVENTURE_TRICK_WEAPON_RELICS,
+  ...ADVENTURE_GAMBLE_WEAPON_RELICS,
 };
 
-/** Crisp faceted NShapes gem: the look of every weapon without its own illustration. */
+/** Crisp faceted NShapes gem: fallback for names with no illustration (e.g. synthetic test weapons). */
 const GENERIC_GEM_RELIC: WeaponRelic = {
   tapStyle: 'arcane',
   art: (trim) => (
@@ -51,20 +57,6 @@ const GENERIC_GEM_RELIC: WeaponRelic = {
 /** Weapons with their own illustration. */
 export const ALL_CUSTOM_WEAPON_NAMES: readonly string[] = Object.keys(WEAPON_RELICS);
 
-/**
- * Real weapons knowingly drawn as the generic gem (no bespoke art yet).
- * Any other unregistered name (e.g. a synthetic test weapon) gets the gem too.
- */
-export const GENERIC_GEM_WEAPON_NAMES: readonly string[] = [
-  'Prism Annihilator',
-  'Chrono Singularity',
-  "Philosopher's Crown",
-  'Solar Cataclysm',
-  'Immortal Aegis',
-  'Vengeance Dynamo',
-  'World Tree Seed',
-  'Astral Omniscience',
-];
 
 function getWeaponRelic(weaponName: string): WeaponRelic {
   return Object.prototype.hasOwnProperty.call(WEAPON_RELICS, weaponName)
