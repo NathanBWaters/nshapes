@@ -85,6 +85,36 @@ export interface Card {
   /** Fog Lantern: fight time (ms) at which this face-down card flips up, and the damage it gains when it does */
   fogFlipAt?: number;
   fogBonus?: number;
+  /** Visible but unmatchable (cursed or frozen) */
+  locked?: boolean;
+  /** Cursed Idol: fight time (ms) at which the curse lifts; then ×2 or the curse moves on */
+  cursedUntil?: number;
+  /** Cursed Idol: a Set that includes this card deals ×2 */
+  doubler?: boolean;
+  /** Chain Gang: id of the card this one is chained to */
+  shackle?: string;
+  /** Leaves the board only on its next match (a chained card matched alone, a fresh Tar Pit card) */
+  stay?: boolean;
+  /** Thorn Bush: fight time (ms) at which the thorns cost a heart */
+  thornAt?: number;
+  /** Rust: Sets this card has sat through (each takes 1 damage off it); `rusted` once it has turned golden */
+  rust?: number;
+  rusted?: boolean;
+  /** Tar Pit: in the sticky row; 1 = needs two matches, 2 = one more */
+  tar?: 1 | 2;
+  /** Decoy: id of the card this one nearly copies (never shown) */
+  decoyOf?: string;
+  /** Long Fuse: fight time (ms) at which the card burns out; `fuseHot` in its last seconds; `fuseDud` once burnt */
+  fuseAt?: number;
+  fuseHot?: boolean;
+  fuseDud?: boolean;
+  /** Ice Block: Sets left until it thaws; `thawed` once it has */
+  frozen?: number;
+  thawed?: boolean;
+  /** Greedy Chest: damage the chest holds */
+  chest?: number;
+  /** Hot Potato: the hot card */
+  hot?: boolean;
 }
 
 // Rewards revealed when a card is matched

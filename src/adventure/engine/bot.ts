@@ -6,6 +6,7 @@
  */
 import type { AttributeName, Card, Weapon } from '@/types';
 import { isValidCombination } from '@/utils/gameUtils';
+import { getAdjacentIndices } from '@/utils/weaponEffects';
 import { getBoardSizeForAttributes } from '@/utils/gameConfig';
 import { resolveMatch } from '@/utils/matchResolution';
 import type { AdventureSave, ChallengeDef, LevelDef, RunState } from '../types';
@@ -121,9 +122,14 @@ const chooseSet = (s: RunState, sets: Card[][], bot: BotProfile, rng: Rng): Card
       default: return null;
     }
   };
-  const held = (key: 'mirrorDamage' | 'albumDamage') => s.weapons.some(w => !!(w as { modifiers?: Modifiers }).modifiers?.[key]);
+  const held = (key: 'mirrorDamage' | 'albumDamage' | 'tightropeDamage') => s.weapons.some(w => !!(w as { modifiers?: Modifiers }).modifiers?.[key]);
   const mirrorHeld = held('mirrorDamage');
   const albumHeld = held('albumDamage');
+  // Tightrope: stay on or next to the last Set's spots
+  const ropeHeld = held('tightropeDamage');
+  const rope = new Set(
+    ropeHeld ? s.gear.lastSetSlots.flatMap(i => [i, ...getAdjacentIndices(i, s.board.length)]).map(i => s.board[i]?.id) : []
+  );
   const lastSlots = new Set(mirrorHeld ? s.gear.lastSetSlots.map(i => s.board[i]?.id) : []);
   let picked: Card[] | null = null;
   for (const goal of chasing(s)) picked ??= goalPick(goal);
@@ -132,7 +138,10 @@ const chooseSet = (s: RunState, sets: Card[][], bot: BotProfile, rng: Rng): Card
     prefer(set => set.some(c => c.hasEvolutionItem)) ??
     prefer(set => has(set, bombs) || has(set, defusers)) ??
     // Trick weapons give a player something to hunt: the marked card, a spot from the last Set
-    prefer(set => set.some(c => c.magnet)) ??
+    prefer(set => set.some(c => c.magnet || c.hot || c.doubler || c.fuseHot || c.thornAt !== undefined || c.thawed || (c.chest ?? 0) >= 16)) ??
+    prefer(set => set.some(c => c.thornAt !== undefined), focus) ??
+    prefer(set => set.some(c => (c.shackle && set.some(o => o.id === c.shackle)) || (c.decoyOf && set.some(o => o.id === c.decoyOf)))) ??
+    (ropeHeld && rope.size ? prefer(set => set.some(c => rope.has(c.id)), 0.8) : null) ??
     (mirrorHeld ? prefer(set => set.some(c => lastSlots.has(c.id))) : null) ??
     (albumHeld ? prefer(set => albumPageOf(set, s.attributes, s.gear.album) !== null) : null) ??
     (bot.huntsRainbows && s.features.has('rainbow') && rng.next() < 0.5 ? prefer(rainbow) : null) ??

@@ -42,7 +42,7 @@ const Card: React.FC<CardProps> = ({
   const { shape, color, number, shading, selected, isHint, isDud, isFaceDown, hasCountdown, countdownTimer, hasBomb, bombTimer } = card;
 
   // Cards that cannot be selected (dud or face-down)
-  const isUnselectable = isDud || isFaceDown;
+  const isUnselectable = isDud || isFaceDown || !!card.locked;
 
   const scale = useSharedValue(1);
   const translateY = useSharedValue(0);
@@ -199,6 +199,18 @@ const Card: React.FC<CardProps> = ({
     if (card.twinOf && visible) {
       indicators.push({ icon: 'delapouite/gemini', color: '#7C3AED' });
     }
+
+    // Board tricks (adventure/engine/gear.ts). Decoys are unmarked on purpose.
+    if (card.cursedUntil !== undefined && visible) indicators.push({ icon: 'lorc/cursed-star', color: '#7E22CE' });
+    if (card.doubler && visible) indicators.push({ icon: 'lorc/cursed-star', color: '#B45309', label: '×2' });
+    if (card.shackle && visible) indicators.push({ icon: 'lorc/crossed-chains', color: '#475569' });
+    if (card.thornAt !== undefined && visible) indicators.push({ icon: 'lorc/thorny-vine', color: '#15803D' });
+    if ((card.rust ?? 0) > 0 && visible) indicators.push({ icon: 'delapouite/rusty-sword', color: '#B45309', label: `-${card.rust}` });
+    if (card.tar && visible) indicators.push({ icon: 'delapouite/sticky-boot', color: '#1F2937', label: card.tar === 1 ? '2' : '1' });
+    if (card.fuseAt !== undefined && visible) indicators.push({ icon: 'delapouite/time-dynamite', color: card.fuseHot ? '#DC2626' : '#6B7280' });
+    if ((card.frozen ?? 0) > 0 && visible) indicators.push({ icon: 'lorc/ice-cube', color: '#0284C7', label: `${card.frozen}` });
+    if (card.chest !== undefined && visible) indicators.push({ icon: 'delapouite/mimic-chest', color: '#B45309', label: `${Math.round(card.chest)}` });
+    if (card.hot && visible) indicators.push({ icon: 'delapouite/potato', color: '#EA580C' });
 
     // Piñata bounty: bonus damage when this armored card finally breaks
     if (card.bounty && visible) {
@@ -375,6 +387,11 @@ const Card: React.FC<CardProps> = ({
       {/* Timer overlays for countdown and bomb cards */}
       {renderCountdownOverlay()}
       {renderBombOverlay()}
+
+      {/* Cursed or frozen: visible but out of play (a wash over the card, never a border) */}
+      {card.locked && !isDud && !isFaceDown && (
+        <View testID="card-locked" pointerEvents="none" style={[styles.lockedOverlay, (card.frozen ?? 0) > 0 ? styles.frozenOverlay : styles.cursedOverlay]} />
+      )}
 
       {/* Fire overlay - progressive darkening (no border, borders are for selection only) */}
       {card.onFire && !isDud && !isFaceDown && (
@@ -624,6 +641,9 @@ const styles = StyleSheet.create({
     bottom: 0,
     borderRadius: RADIUS.module - 2, // Slightly smaller to not overlap card border
   },
+  lockedOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 6 },
+  cursedOverlay: { backgroundColor: 'rgba(88, 28, 135, 0.38)' },
+  frozenOverlay: { backgroundColor: 'rgba(125, 211, 252, 0.5)' },
   wildContent: { alignItems: 'center', justifyContent: 'center', gap: 2 },
   wildText: { fontSize: 10, fontWeight: '900', letterSpacing: 1, color: '#7C3AED' },
   // State indicator icons (fire, connection, snare, bounty) in bottom left corner

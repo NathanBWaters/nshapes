@@ -298,7 +298,8 @@ const GameBoard: React.FC<GameBoardProps> = ({
     const availableCards = cards.filter(card =>
       !matchedCardIds.includes(card.id) &&
       !card.isDud &&
-      !card.isFaceDown
+      !card.isFaceDown &&
+      !card.locked
     );
 
     const set = findSet(availableCards, activeAttributes);
@@ -332,7 +333,8 @@ const GameBoard: React.FC<GameBoardProps> = ({
     const availableCards = cards.filter(card =>
       !matchedCardIds.includes(card.id) &&
       !card.isDud &&
-      !card.isFaceDown
+      !card.isFaceDown &&
+      !card.locked
     );
 
     const set = findSet(availableCards, activeAttributes);
@@ -363,7 +365,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
   });
 
   const handleCardClick = (card: CardType) => {
-    if (!isPlayerTurn || card.isDud || card.isFaceDown) return;
+    if (!isPlayerTurn || card.isDud || card.isFaceDown || card.locked) return;
 
     // Don't allow clicking on cards that are currently being revealed as rewards
     if (revealingRewards.some(r => r.cardId === card.id)) return;

@@ -46,9 +46,10 @@ NShapes combines the classic SET card matching game with roguelike progression m
 * **Coins** drop from matches, bank even on a loss (not on retreat), and are spent mid-run (shop between waves) or at **Camp** (Workshop upgrades and weapon upgrades).
 * Adventure-only weapons (`data/adventureWeapons.ts`, e.g. War Drum, Amplifier Coil, Piñata) join the Armory through `getArmoryWeapon`; Free Play doesn't use them.
 * **Weapons in Adventure:** every weapon does something visible alone at level 1, support weapons also hit the foe, and weapons that react to another effect bring a little of it themselves. Adventure's numbers for the shared weapons live in `src/adventure/data/weaponTuning.ts` (Free Play's stay in `gameDefinitions.ts`).
-* **Trick weapons** (`src/adventure/engine/gear.ts`): Magnet, Bounty Poster, Mirror Shard, Odd One Out, Collector's Album, Snowball, Glass Sword, Devil's Bargain, Wild Card, Twin Seed, Fog Lantern, Understudy, Encore Mask. They give the player something to hunt for or keep up; live state shows as HUD chips or small card icons.
+* **Trick weapons** (`src/adventure/engine/gear.ts`): Magnet, Bounty Poster, Mirror Shard, Odd One Out, Collector's Album, Snowball, Glass Sword, Devil's Bargain, Tightrope, Wild Card, Understudy, Encore Mask, and the **board gambles** that make the board harder for a bigger payoff: Cursed Idol, Chain Gang, Thorn Bush, Rust, Tar Pit, Decoy, Long Fuse, Ice Block, Greedy Chest, Hot Potato, Twin Seed, Fog Lantern. Live state shows as HUD chips or small card icons (Decoy is unmarked on purpose). Each sits in 3 evolution recipes.
+* **Balance system** ([docs/balance-system.md](./docs/balance-system.md)): `src/adventure/balance/` measures every weapon and recipe as a with/without counterfactual at three stages and three skill tiers, against bands in `balance/targets.ts`. After changing a weapon, recipe or rule: run `npx jest __tests__/adventureBalanceLab.test.ts`, then `npm run balance:report` (writes `docs/balance-report.md`), then `npm run balance:levels`, and `npm run balance:tune` if levels drifted.
 * **Evolutions:** matching the Catalyst hits the foe for 10 and starts 30 seconds in which every Set deals ×1.5 and +2, on top of the recipe's own rules.
-* Balance is checked by headless bots: `ADVENTURE_BALANCE_REPORT=1 npx jest __tests__/adventureBalance.test.ts`. `__tests__/adventureBuilds.test.ts` checks that no build runs away and that no weapon or evolution is a dead pick. They play every level as two players (see [balance-philosophy.md](./docs/balance-philosophy.md)): a **bare** player (no stars, coins or recipe chasing; target wins 50/30/10/0/0% by world) and an **invested** one (every star, the Workshop maxed, a solid recipe build; 97/90/80/70/50%). `__tests__/adventureBuilds.test.ts` sweeps every weapon pair, evolution, full tree and random endgame build for broken combinations.
+* Balance is checked by headless bots: `ADVENTURE_BALANCE_REPORT=1 npx jest __tests__/adventureBalance.test.ts`. `__tests__/adventureBuilds.test.ts` checks that no build runs away and that no evolution is a dead pick. They play every level as two players (see [balance-philosophy.md](./docs/balance-philosophy.md)): a **bare** player (no stars, coins or recipe chasing; target wins 50/30/10/0/0% by world) and an **invested** one (every star, the Workshop maxed, a solid recipe build; 97/90/80/70/50%). `__tests__/adventureBuilds.test.ts` sweeps every weapon pair, evolution, full tree and random endgame build for broken combinations.
 * The legacy 10-round adventure flow is still in `Game.tsx` but is no longer reachable from the main menu.
 
 **Free Play Mode** - Relaxed Practice:
@@ -90,6 +91,9 @@ The `WEAPONS` array in `src/utils/gameDefinitions.ts` is the roster (34 weapons)
   * 🔗 Connection: `lorc/linked-rings` (gray)
   * 🧲 Magnet mark: `lorc/magnet` (red)
   * ♊ Twin: `delapouite/gemini` (purple)
+  * Board gambles: curse `lorc/cursed-star`, chain `lorc/crossed-chains`, thorns `lorc/thorny-vine`, rust `delapouite/rusty-sword`, tar `delapouite/sticky-boot`, fuse `delapouite/time-dynamite`, ice `lorc/ice-cube`, chest `delapouite/mimic-chest`, hot potato `delapouite/potato`
+
+Cursed and frozen cards are out of play: they get a colour wash over the card (never a border).
 
 This rule ensures visual consistency and prevents confusion with selection state.
 
@@ -297,6 +301,7 @@ This ensures builds can be verified to contain the latest changes.
 When working on specific systems, load the relevant design doc for detailed specifications:
 
 * **[Adventure Mode](./docs/adventure-design.md)** - Map, levels, stars, economy, fighters, audio synth, balance bots
+* **[Balance System](./docs/balance-system.md)** - The lab, the generated report, level balance and the HP tuner; **[Balance Philosophy](./docs/balance-philosophy.md)** - what we are aiming at
 * **[Weapon System](./specs/weapons-design.md)** - Complete weapon roster, rarities, effects, synergies, and balance notes
 * **[Enemy System](./specs/enemy-design.md)** - Enemy roster, tier scaling, defeat conditions, and weapon counters (in development)
 * **[Balance Philosophy](./docs/balance-philosophy.md)** - Rough target win rates by world for a bare vs a fully invested player

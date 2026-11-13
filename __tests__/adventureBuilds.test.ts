@@ -14,9 +14,10 @@
  * a recipe is meant to beat its two halves.
  *
  * The last block is the other end (docs/balance-philosophy.md, "Weapons and
- * evolutions"): nothing is a dead pick. In a real timed fight with nothing
- * picked up along the way, every weapon alone out-damages no weapon at all,
- * and every evolution out-damages its two weapons without it.
+ * evolutions"): no evolution is a dead pick. In a real timed fight with
+ * nothing picked up along the way, every evolution out-damages its two
+ * weapons without it. (Weapons are judged by the balance lab:
+ * __tests__/adventureBalanceLab.test.ts, docs/balance-system.md.)
  * ADVENTURE_BUILDS_REPORT=1 prints the tables.
  */
 import { getLevel } from '@/adventure/data/levels';
@@ -49,19 +50,11 @@ const LIMITS = {
 
 /** How little a weapon or an evolution may add before it counts as a dead pick. */
 const FLOORS = {
-  /** A weapon alone vs no weapon, total damage in a timed fight */
-  single: 1.15,
-  /** The same for weapons that only wake up when you lose hearts, played by the bot that slips most */
-  singleWhenHurt: 1.05,
   /** A recipe's pair with evolutions on vs the same pair with evolutions off */
   evolutionLift: 1.04,
   /** The middle recipe's lift: evolutions as a whole are a power trip, not a rounding error */
   medianEvolutionLift: 1.2,
 };
-/** Weapons whose own effect needs a lost heart */
-const HURT_WEAPONS = ['life-link', 'revenge-linker'];
-/** Weapons that only work beside something else: the Understudy copies a charm, the Encore Mask needs an evolution */
-const PARTNER_WEAPONS = ['understudy', 'encore-mask'];
 
 const ref = getLevel('4-4');
 const DUMMY: LevelDef = {
@@ -252,19 +245,7 @@ describe('no broken builds (endgame weapons on a training dummy)', () => {
   });
 });
 
-describe('nothing is a dead pick (endgame weapons, a timed fight, no picks)', () => {
-  it('every weapon alone out-damages no weapon at all', () => {
-    const none = totalDamage({ ...SAVE, charms: [] });
-    const noneHurt = totalDamage({ ...SAVE, charms: [] }, BOTS.novice);
-    const rows = SAVE.armory.filter(id => !PARTNER_WEAPONS.includes(id)).map(id => {
-      const hurt = HURT_WEAPONS.includes(id);
-      const dmg = totalDamage({ ...SAVE, charms: [id] }, hurt ? BOTS.novice : BOTS.average);
-      return { id, hurt, ratio: dmg / (hurt ? noneHurt : none) };
-    });
-    report.push('weapons alone vs none: ' + [...rows].sort((a, b) => a.ratio - b.ratio).map(r => `${r.id} ×${fmt(r.ratio)}`).join(', '));
-    for (const r of rows) expect({ id: r.id, ok: r.ratio >= (r.hurt ? FLOORS.singleWhenHurt : FLOORS.single) }).toEqual({ id: r.id, ok: true });
-  });
-
+describe('no evolution is a dead pick (endgame weapons, a timed fight, no picks)', () => {
   it('the Understudy and the Encore Mask add damage beside what they need', () => {
     const blast = totalDamage({ ...SAVE, charms: ['blast-powder'] });
     const copied = totalDamage({ ...SAVE, charms: ['blast-powder', 'understudy'] });

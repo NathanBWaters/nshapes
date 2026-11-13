@@ -101,7 +101,7 @@ Fighters bring **no gear and no active button**. A fighter's identity is two alw
 | Fighter | Passive 1 | Passive 2 | Plays like | Unlock |
 |---|---|---|---|---|
 | Orange Tabby | **Nine Lives**: once per fight, a knockout leaves you on 1 heart | **Scrappy**: +1 damage per missing heart on every Set | Risky brawler | Start |
-| Sly Fox | **Combo**: Sets within 5s chain (+0.75s per trait beyond 3: 6.5s with 5 traits), +1 damage per step (max +4); a mistake breaks it | **Hot Streak**: at max Combo, your next Set deals ×2 | Speed | 1-3 ★★ |
+| Sly Fox | **Combo**: Sets within 5s chain (+0.5s per trait beyond 3: 6s with 5 traits), +1 damage per step (max +4); a mistake breaks it | **Hot Streak**: at max Combo, your next Set deals ×2 | Speed | 1-3 ★★ |
 | Corgi | **Zoomies**: every 5th Set re-deals the board clean (duds and hidden cards gone) | **Fetch**: matching a power or gold card brings a new one onto the board | Board shaper | 2-4 ★★ |
 | Badger | **Grudge**: each mistake stores a grudge (max 3); the next Set releases +3 per grudge | **Thick Hide**: your first mistake each wave costs no heart | Gambler | 2-7 ★★ |
 | Emperor Penguin | **Patience**: a Set made 2.5s+ per trait after the last one deals +2 (10s with 4 traits) | **Deep Freeze**: every Rainbow Strike freezes the clock and the foe for 4s | Precision, Rainbow hunter | 2-8 ★★ |
@@ -259,7 +259,7 @@ The Free Play roster (`src/utils/gameDefinitions.ts`) is reused, with **Adventur
 
 `data/adventureWeapons.ts` ("Trick weapons") · `engine/gear.ts` · `RunState.gear`
 
-Thirteen weapons that give you something to hunt for or keep up, rather than a chance that fires on its own. Their numbers arrive as modifiers (`magnetDamage`, `snowballMax`…), so a trick is on while its number is above zero; their state lives in `RunState.gear` and a few card flags.
+Twenty-four weapons that give you something to hunt for or keep up, rather than a chance that fires on its own. Their numbers arrive as modifiers (`magnetDamage`, `snowballMax`…), so a trick is on while its number is above zero; their state lives in `RunState.gear` and a few card flags.
 
 | Weapon | What you do | Where its state shows |
 |---|---|---|
@@ -277,14 +277,33 @@ Thirteen weapons that give you something to hunt for or keep up, rather than a c
 | Understudy | Copies the charm to its left, at the Understudy's own level, untuned. | Armory shows what it copies |
 | Encore Mask | When an evolution ends it hits for 10 and its opening rules fire again. | |
 
+**Board gambles** make the board harder for a bigger payoff:
+
+| Weapon | What it does to your board | The payoff | Where it shows |
+|---|---|---|---|
+| Cursed Idol | 5% of new cards arrive cursed: unmatchable for 10s | Then a coin flip: the card becomes a ×2 card, or the curse moves to a neighbour | Purple wash and star; ×2 label |
+| Chain Gang | Two cards (of a Set on the board) are chained; one matched alone stays | Both in one Set: +8 | Chain icon on both |
+| Thorn Bush | 10% of new cards have thorns (one at a time); left 15s (+5s per trait beyond 3), it costs a heart | Matched in time: +8 | Thorn icon |
+| Rust | Every card loses 1 damage per Set it sits through (never below 0) | The oldest card, after 7 Sets, turns golden: +15 and 5 coins | Rust count; then power and coin badges |
+| Tar Pit | One row is sticky each wave: its cards take two matches | Every Set that uses that row: +5 | Boot icon with matches left |
+| Decoy | 15% of new cards are an unmarked near-copy of a board card (one trait changed) | Decoy and original in one Set: +15 | Nothing, on purpose |
+| Long Fuse | 20% of new cards carry a 20s fuse; burnt out, they are duds (3 at most) | Matched in the last 5s: +6 | Dynamite icon, red when hot |
+| Ice Block | One card is frozen and unmatchable | After 7 of your Sets it thaws worth +25; then another freezes | Blue wash and Sets left |
+| Greedy Chest | A mistake empties the chest | One card holds 10 damage and grows +2 every Set you leave it | Chest icon with its value |
+| Tightrope | A Set away from your last one deals half | A Set on or next to your last Set's spots: +4 | |
+| Hot Potato | While it is out, a mistake costs an extra heart | One hot card jumps to a neighbour every 10s; matching it: +8 | Potato icon |
+
+- `syncGear` keeps a Set on the board whatever the tricks lock away (`ensureSet`: clears burnt fuses, then lifts curses, then re-deals a few plain cards).
+- Rules can react to a trick paying out: `{ on: 'trick', kind: 'magnet' | 'chest' | … }` (`TrickKind` in `rules/types.ts`).
+
 - **Wild cards and Set rules:** `isValidCombination` (utils/gameUtils.ts) and `engine/sets.ts` treat a wild card as completing any Set; for Rainbows, Purity and Odd One Out a trait counts as different when the other two cards differ in it.
 - **Understudy** is resolved where charms become weapons (`charmWeapons` / `understudyOf` in `data/armory.ts`); picked up mid-fight it copies the weapon picked up before it. It keeps its own id, so it never arms the copied weapon's evolutions.
-- Trick weapons don't arm evolutions yet (`TRICK_WEAPON_IDS`), so the "4 recipes per weapon" count excludes them.
+- Every trick weapon sits in 3 evolution recipes (48 in all, at the end of `data/evolutionPairs.ts`): one with a classic weapon and two with other trick weapons. A trick recipe makes its trick pay more (modifiers such as `magnetDamage`) or pays for pulling it off (`trick` triggers).
 - The bots hunt the way a player would (`engine/bot.ts`): they prefer a Set with the marked card, a reused spot or an empty Album page, and find Sets faster while a wild card is out.
 
 ### Armory shelves
 
-The Armory shelves weapons by job (`data/weaponRoles.ts`): Damage, Tricks, Board, Hearts & graces, Hints/coins/XP, Time & evolutions, Echoes & links. Charm slots are numbered and an equipped weapon shows its slot, because slot order matters to the Understudy.
+The Armory shelves weapons by job (`data/weaponRoles.ts`): Damage, Tricks, Board gambles, Board, Hearts & graces, Hints/coins/XP, Time & evolutions, Echoes & links. Charm slots are numbered and an equipped weapon shows its slot, because slot order matters to the Understudy.
 
 Time gains are exactly the seconds a weapon says (Free Play adds them to a 10s base), and all time gains in a fight together can add at most the fight's starting clock (`BASE_RULES.maxTimeGainShare`, the run's `timeBank`): a 3-minute fight can stretch to 6, never to 12.
 
@@ -299,7 +318,7 @@ Effect caps (`game/effectCaps.ts`) were raised so a level-5, fully tuned weapon 
 
 `data/evolutions.ts` (recipes, families) · `engine/evolutions.ts` · `EVOLUTION_RULES` in `engine/sources.ts`
 
-1. **Arming.** There are **156 recipes: 4 per Armory weapon.** A recipe is **armed** while you hold one weapon of each of its two families among your charms, picks or buys, once the player knows any recipe (the first is taught at 1-3). Families are id prefixes, so `oracle-eye` matches `oracle-eye-rare`.
+1. **Arming.** There are **204 recipes: 4 per classic weapon (156) and 2 per trick weapon (48).** A recipe is **armed** while you hold one weapon of each of its two families among your charms, picks or buys, once the player knows any recipe (the first is taught at 1-3). Families are id prefixes, so `oracle-eye` matches `oracle-eye-rare`.
    - **9 signature recipes** (`data/evolutions.ts`, table below) arm from whole weapon families and are taught by star rewards.
    - **147 pair recipes** (`data/evolutionPairs.ts`) each arm from one exact pair of weapons and are **discovered**: the Recipe Guide shows them as "??? Evolution" until forged once, and the preview shows an armed one as "??? Evolution · ARMED". Every weapon sits in 6–12 recipes, and no pair of weapons arms two.
    - Each pair recipe has its own twist rather than "A also does B": finales (`finale` trigger, when the 30 s run out), cashing hints or graces in for damage (`cashIn`), turning cards gold or power (`convert`), free mistakes (`shield`), clearing traps and face-down cards (`cleanse`), damage that scales with the fight (`damage` `per` board card, missing heart, link, burning card…), or "while the foe is below 50%" (`foeHpBelow`).
@@ -324,7 +343,7 @@ Effect caps (`game/effectCaps.ts`) were raised so a level-5, fully tuned weapon 
 | Seeker Swarm | Hint + Ricochet | Every hint you use ricochets into 3 cards and deals 3. Every 2nd Set gives a hint. | 2-3 ★★★ |
 | Big Bang | Growth + Explosion | Every Set grows the board by 2. At 18+ cards, a Set detonates a 3×2 block. | 2-2 ★★★ |
 | Bloodline | Life + Laser | Fires a row and a column laser. Every lost heart fires a row laser. Every heal makes your next Set deal ×2. | 3-8 ★★★ |
-| Overclock | Connector + Time | Every 2nd Set links a new pair. A destroyed linked card adds +1s and deals 3. | 4-3 ★★★ |
+| Overclock | Connector + Time | Every 3rd Set links a new pair. A destroyed linked card adds +1s and deals 3. | 4-3 ★★★ |
 
 The player owns both Phoenix Pyre families (Blast Powder, Mending Charm) by the time 1-3 ★ unlocks it. 1-4 teaches it with a boosted likelihood, and its ★★★ asks for 2 evolutions.
 
@@ -477,7 +496,8 @@ src/adventure/
   data/weaponStats.ts   weapon numbers: levels (flat), tuning (multipliers), wording
   data/weaponTuning.ts  Adventure's numbers and extra effects for the weapons shared with Free Play
   data/weaponRoles.ts   which Armory shelf each weapon sits on
-  engine/gear.ts        trick weapons: marks, bounties, stacks, album pages, twins, fog
+  engine/gear.ts        trick weapons: marks, bounties, stacks, album pages, twins, fog, curses, chains, chest…
+  balance/              the balance lab, its targets, the report and the HP tuner (docs/balance-system.md)
   data/evolutions.ts    weapon families + 8 recipes
   data/arcana.ts        8 Arcana + stacking
   data/upgrades.ts      Workshop items (+ old weapon-level prices, for refunds)
@@ -564,6 +584,8 @@ The fight UI reuses the shared `GameBoard` and `Card`, so weapon effects, fire, 
 **A feature flag.** Add it to `FeatureFlag`, set `enables` on its mechanic, and read it from `run.features` in the engine and HUD. If it should be unlocked by a star instead of by map position, add a `data/features.ts` row and its save flag.
 
 ## Balance bots
+
+The whole system (the lab, the report, level balance and the HP tuner) is described in [balance-system.md](./balance-system.md). The notes below cover the level-balance and build checks.
 
 Target feel (bare vs invested player, by world): [balance-philosophy.md](./balance-philosophy.md).
 

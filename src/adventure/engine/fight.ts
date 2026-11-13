@@ -11,7 +11,7 @@ import type { AttributeName, BoardConnection, BridgeTriggerType, Card, PlayerSta
 import { ATTRIBUTE_VALUES, createDeck } from '@/utils/gameUtils';
 import { getLinkedDestructionPositions, arePositionsConnected } from '@/utils/connectionUtils';
 import type { ArcanaRules, FightLogLine, FightLogSetMath, PassiveId, RunEvent, RunEventType, RunState } from '../types';
-import type { Area, Modifiers, WeaponTriggerKind } from '../rules/types';
+import type { Area, Modifiers, TrickKind, WeaponTriggerKind } from '../rules/types';
 import { arcanaRules } from '../data/arcana';
 import { BASE_RULES, TRICK_RULES } from '../data/rules';
 import { PASSIVE_TUNING } from '../data/passives';
@@ -32,11 +32,12 @@ export const TIME_HEADROOM = 15;
 export type FightEventKind =
   | 'set' | 'rainbow' | 'mistake' | 'healed' | 'hurt' | 'weapon'
   | 'fightStart' | 'waveStart' | 'evolutionStart' | 'evolutionEnd' | 'trapDefused'
-  | 'bonusCardMatched' | 'cardBroken' | 'hintUsed' | 'graceUsed' | 'cardBurned' | 'linkDestroyed';
+  | 'bonusCardMatched' | 'cardBroken' | 'hintUsed' | 'graceUsed' | 'cardBurned' | 'linkDestroyed' | 'trick';
 
 export interface FightEvent {
   on: FightEventKind;
   kind?: WeaponTriggerKind;
+  trick?: TrickKind;
 }
 
 /** The Set being scored, for set triggers and set conditions. */
@@ -123,8 +124,8 @@ export const emit = (d: Draft, type: RunEventType, amount?: number, text?: strin
   d._lines.push(source ? { type, amount, text, source } : { type, amount, text });
 };
 
-export const enqueue = (d: Draft, on: FightEventKind, kind?: WeaponTriggerKind) => {
-  d._queue.push({ ev: kind ? { on, kind } : { on }, chain: d._chain, setCtx: d._setCtx });
+export const enqueue = (d: Draft, on: FightEventKind, kind?: WeaponTriggerKind, trick?: TrickKind) => {
+  d._queue.push({ ev: { on, ...(kind ? { kind } : {}), ...(trick ? { trick } : {}) }, chain: d._chain, setCtx: d._setCtx });
 };
 
 // ─── Sources, modifiers & tuning ────────────────────────────────────────────
@@ -221,7 +222,21 @@ const dealTricks = (d: Draft, card: Card): Card => {
       card = { ...card, shape: t.shape, color: t.color, number: t.number, shading: t.shading, background: t.background, twinOf: t.id };
     }
   }
-  if (roll(m.fogChance)) card = { ...card, isFaceDown: true, fogFlipAt: d.elapsedMs + FOG_MS, fogBonus: m.fogBonus ?? 0 };
+  if (roll(m.decoyChance) && !card.twinOf) {
+    // Decoy: a board card with one trait changed. Unmarked on purpose: spotting it is the game.
+    const originals = d.board.filter(c => isSelectable(c) && !c.isWild && !c.hasEvolutionItem && !d.replacing.includes(c.id));
+    if (originals.length) {
+      const t = d._rng.pick(originals);
+      const attribute = d._rng.pick(d.attributes);
+      const current = attribute === 'background' ? t.background ?? 'white' : t[attribute];
+      const value = d._rng.pick((ATTRIBUTE_VALUES[attribute] as readonly (string | number)[]).filter(v => v !== current));
+      card = { ...card, shape: t.shape, color: t.color, number: t.number, shading: t.shading, background: t.background, [attribute]: value, decoyOf: t.id } as Card;
+    }
+  }
+  if (roll(m.fogChance)) return { ...card, isFaceDown: true, fogFlipAt: d.elapsedMs + FOG_MS, fogBonus: m.fogBonus ?? 0 };
+  if (roll(m.curseChance)) return { ...card, locked: true, cursedUntil: d.elapsedMs + TRICK_RULES.curseMs };
+  if (roll(m.thornChance) && d.board.filter(c => c.thornAt !== undefined).length < TRICK_RULES.thornCards) card = { ...card, thornAt: d.elapsedMs + TRICK_RULES.thornMs + TRICK_RULES.thornMsPerExtraTrait * Math.max(0, d.attributes.length - 3) };
+  if (roll(m.fuseChance)) card = { ...card, fuseAt: d.elapsedMs + TRICK_RULES.fuseMs };
   return card;
 };
 

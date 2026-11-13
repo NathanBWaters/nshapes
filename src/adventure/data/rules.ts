@@ -26,4 +26,27 @@ export const TRICK_RULES = {
   fogMs: 8000,
   /** Bounty Poster: wanted cards to match before the poster changes */
   bountyCards: 3,
+  /** Cursed Idol: how long a curse holds a card, and what a card that survives it multiplies a Set by */
+  curseMs: 10000,
+  curseMultiplier: 2,
+  /** Thorn Bush: how long before a thorn card costs a heart */
+  thornMs: 15000,
+  /** Thorn Bush: extra time per trait beyond 3 (a Set takes longer to find with more traits) */
+  thornMsPerExtraTrait: 5000,
+  /** Thorn Bush: thorn cards on the board at once */
+  thornCards: 1,
+  /** Rust: Sets a card sits through before it turns golden, and the coins a golden card pays */
+  rustSets: 7,
+  rustCoins: 5,
+  /** Long Fuse: fuse length, the window at the end that pays, and how many burnt-out duds may sit on the board */
+  fuseMs: 20000,
+  fuseHotMs: 5000,
+  fuseDuds: 3,
+  /** Ice Block: Sets it takes to thaw */
+  iceSets: 7,
+  /** Tightrope: what a Set away from your last one is multiplied by */
+  offRopeMultiplier: 0.5,
+  /** Hot Potato: how often it jumps, and the extra hearts a mistake costs while you hold it */
+  potatoMs: 10000,
+  potatoHearts: 1,
 } as const;

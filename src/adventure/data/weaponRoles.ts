@@ -3,11 +3,12 @@
  * instead of in the order they were found. One role per weapon;
  * __tests__/adventureTrickWeapons.test.ts checks none is missing.
  */
-export type WeaponRole = 'damage' | 'board' | 'survival' | 'insight' | 'tempo' | 'chains' | 'tricks';
+export type WeaponRole = 'damage' | 'gambles' | 'board' | 'survival' | 'insight' | 'tempo' | 'chains' | 'tricks';
 
 export const WEAPON_ROLES: { id: WeaponRole; label: string; blurb: string }[] = [
   { id: 'damage', label: 'Damage', blurb: 'Blasts, fire, lasers and big hits.' },
-  { id: 'tricks', label: 'Tricks', blurb: 'Something to hunt for or keep up. Play around them and they pay the most.' },
+  { id: 'tricks', label: 'Tricks', blurb: 'Something to hunt for or keep up, every Set.' },
+  { id: 'gambles', label: 'Board gambles', blurb: 'They make your board harder. Pull it off and they pay the most.' },
   { id: 'board', label: 'Board', blurb: 'Bigger, stranger, stronger boards.' },
   { id: 'survival', label: 'Hearts & graces', blurb: 'Stay alive, and hit back while you do.' },
   { id: 'insight', label: 'Hints, coins & XP', blurb: 'See more, earn more, level faster.' },
@@ -17,8 +18,9 @@ export const WEAPON_ROLES: { id: WeaponRole; label: string; blurb: string }[] = 
 
 const BY_ROLE: Record<WeaponRole, string[]> = {
   damage: ['blast-powder', 'flint-spark', 'prismatic-ray', 'chaos-shard', 'war-drum', 'rally-horn', 'pinata', 'amplifier-coil'],
-  tricks: ['magnet', 'bounty-poster', 'mirror-shard', 'odd-one-out', 'collectors-album', 'snowball', 'glass-sword', 'devils-bargain', 'understudy'],
-  board: ['field-stone', 'growth-seed', 'clarity-lens', 'wild-card', 'twin-seed', 'fog-lantern'],
+  tricks: ['magnet', 'bounty-poster', 'mirror-shard', 'odd-one-out', 'collectors-album', 'snowball', 'glass-sword', 'devils-bargain', 'tightrope', 'understudy'],
+  gambles: ['cursed-idol', 'chain-gang', 'thorn-bush', 'rust', 'tar-pit', 'decoy', 'long-fuse', 'ice-block', 'greedy-chest', 'hot-potato', 'twin-seed', 'fog-lantern'],
+  board: ['field-stone', 'growth-seed', 'clarity-lens', 'wild-card'],
   survival: ['mending-charm', 'life-vessel', 'life-link', 'soul-harvest', 'revenge-linker', 'second-chance', 'fortune-token', 'grace-conduit', 'chaos-conduit'],
   insight: ['seeker-lens', 'crystal-orb', 'oracle-eye', 'mystic-sight', 'fortunes-favor', 'fortunes-blessing', 'scholars-tome', 'wisdom-chain'],
   tempo: ['chrono-shard', 'time-drop', 'temporal-rift', 'catalyst-prism', 'encore-mask'],

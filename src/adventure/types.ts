@@ -667,6 +667,10 @@ export interface GearState {
   /** Glass Sword: shattered for this wave, and when its clock last restarted */
   glassBroken: boolean;
   glassSinceMs: number;
+  /** Tar Pit: the sticky row this wave */
+  tarRow: number | null;
+  /** Hot Potato: fight time (ms) of its next jump */
+  potatoAtMs: number;
 }
 
 export interface RunState {

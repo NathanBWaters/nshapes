@@ -254,3 +254,224 @@ describe('trick weapons in real fights', () => {
     }
   });
 });
+
+// ─── Board gambles: a harder board for a bigger payoff ──────────────────────
+
+const lastLines = (s: RunState) => s.log[s.log.length - 1].lines;
+
+describe('Cursed Idol', () => {
+  it('a cursed card is out of play, then becomes a ×2 card or passes the curse on', () => {
+    let s = withTrick({ curseChance: 100 });
+    s = playSet(s);
+    const cursed = s.board.filter(c => c.cursedUntil !== undefined);
+    expect(cursed.length).toBeGreaterThan(0);
+    expect(cursed.every(c => c.locked)).toBe(true);
+    expect(allSets(s.board, s.attributes).flat().some(c => c.locked)).toBe(false);
+    s = tick(s, 11000, 1000);
+    // Each of those curses ended one of two ways
+    for (const c of cursed) {
+      const now = s.board.find(b => b.id === c.id);
+      if (now) expect(!!now.doubler || !now.locked).toBe(true);
+    }
+    const doubled = findSet(s, set => set.some(c => c.doubler));
+    if (!doubled) return;
+    s = playSet(s, doubled);
+    expect(lastLines(s)).toContainEqual({ type: 'rule', amount: 2, text: 'Curse broken ×2' });
+  });
+});
+
+describe('Chain Gang', () => {
+  it('chains two cards; together they pay, alone a chained card stays', () => {
+    let s = tick(withTrick({ chainDamage: 12 }), 1000);
+    const chained = s.board.filter(c => c.shackle);
+    expect(chained).toHaveLength(2);
+    expect(chained[0].shackle).toBe(chained[1].id);
+    const alone = findSet(s, set => set.filter(c => c.shackle).length === 1);
+    if (alone) {
+      const after = playSet(s, alone);
+      const kept = alone.find(c => c.shackle)!;
+      expect(after.board.some(c => c.id === kept.id)).toBe(true);
+    }
+    const both = findSet(s, set => set.filter(c => c.shackle).length === 2);
+    if (!both) return;
+    s = playSet(s, both);
+    expect(lastLines(s)).toContainEqual({ type: 'rule', amount: 12, text: 'Chain Gang!' });
+    expect(s.board.filter(c => c.shackle)).toHaveLength(2);
+  });
+});
+
+describe('Thorn Bush', () => {
+  it('thorn cards pay when matched in time and cost a heart when left', () => {
+    let s = withTrick({ thornChance: 100, thornDamage: 6 }, startFight({ features: ['hearts', 'gear'] }));
+    s = playSet(s);
+    const thorny = s.board.filter(c => c.thornAt !== undefined);
+    expect(thorny.length).toBeGreaterThan(0);
+    const paid = playSet(s, findSet(s, set => set.some(c => c.thornAt !== undefined)));
+    expect(lastLines(paid).some(l => l.text === 'Thorns' && (l.amount ?? 0) >= 6)).toBe(true);
+    const hearts = s.hearts!;
+    s = tick(s, 16000 + 5000 * Math.max(0, s.attributes.length - 3), 1000);
+    expect(s.hearts).toBeLessThan(hearts);
+    expect(s.board.some(c => thorny.some(t => t.id === c.id) && c.thornAt !== undefined)).toBe(false);
+  });
+});
+
+describe('Rust', () => {
+  it('cards lose damage as they sit, never below nothing, and the oldest turns golden after 7 Sets', () => {
+    let s = withTrick({ rustGold: 15 });
+    s = playSet(s);
+    expect(s.board.some(c => c.rust === 1)).toBe(true);
+    for (let i = 0; i < 12; i++) s = playSet(s, findSet(s, set => !set.some(c => c.rusted)) ?? findSet(s));
+    const golden = s.board.filter(c => c.rusted);
+    expect(golden.length).toBeGreaterThan(0);
+    expect(golden.every(c => (c.bonusPoints ?? 0) >= 15 && (c.bonusMoney ?? 0) >= 5 && c.rust === undefined)).toBe(true);
+    // Three fully rusted plain cards are worth nothing, not less
+    const rusty = findSet(s, set => set.every(c => (c.rust ?? 0) >= 1 && !c.bonusPoints && !c.charge));
+    if (!rusty) return;
+    const before = s.totalDamage;
+    s = playSet(s, rusty);
+    expect(s.totalDamage).toBeGreaterThanOrEqual(before);
+    expect(s.log[s.log.length - 1].setDamage).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('Tar Pit', () => {
+  it('one row is sticky: its cards take two matches, and Sets there pay', () => {
+    let s = tick(withTrick({ tarDamage: 5 }), 1000);
+    const row = s.gear.tarRow!;
+    expect(row).not.toBeNull();
+    const inRow = s.board.filter((_, i) => Math.floor(i / 3) === row);
+    expect(inRow.every(c => c.tar === 1)).toBe(true);
+    expect(s.board.filter((_, i) => Math.floor(i / 3) !== row).some(c => c.tar)).toBe(false);
+    const set = findSet(s, cards => cards.some(c => c.tar));
+    if (!set) return;
+    const sticky = set.filter(c => c.tar);
+    s = playSet(s, set);
+    expect(lastLines(s)).toContainEqual({ type: 'rule', amount: 5, text: 'Tar Pit' });
+    for (const c of sticky) expect(s.board.find(b => b.id === c.id)?.tar).toBe(2);
+  });
+});
+
+describe('Decoy', () => {
+  it('deals unmarked near-copies; matching one with its original pays', () => {
+    let s = withTrick({ decoyChance: 100, decoyDamage: 10 });
+    s = playSet(s);
+    const decoys = s.board.filter(c => c.decoyOf && s.board.some(o => o.id === c.decoyOf));
+    expect(decoys.length).toBeGreaterThan(0);
+    for (const dcy of decoys) {
+      const original = s.board.find(o => o.id === dcy.decoyOf)!;
+      expect(s.attributes.filter(a => (dcy as unknown as Record<string, unknown>)[a] !== (original as unknown as Record<string, unknown>)[a])).toHaveLength(1);
+    }
+    const pair = findSet(s, set => set.some(c => c.decoyOf && set.some(o => o.id === c.decoyOf)));
+    if (!pair) return;
+    s = playSet(s, pair);
+    expect(lastLines(s)).toContainEqual({ type: 'rule', amount: 10, text: 'Decoy found!' });
+  });
+});
+
+describe('Long Fuse', () => {
+  it('fused cards pay in their last 5 seconds and burn out as duds, without ever leaving the board Set-less', () => {
+    let s = withTrick({ fuseChance: 100, fuseDamage: 6 });
+    s = playSet(s);
+    expect(s.board.some(c => c.fuseAt !== undefined)).toBe(true);
+    s = tick(s, 16000, 1000);
+    expect(s.board.some(c => c.fuseHot)).toBe(true);
+    const hot = findSet(s, set => set.some(c => c.fuseHot));
+    if (hot) expect(lastLines(playSet(s, hot)).some(l => l.text === 'Short fuse' && (l.amount ?? 0) >= 6)).toBe(true);
+    s = tick(s, 6000, 1000);
+    expect(s.board.filter(c => c.fuseDud).length).toBeLessThanOrEqual(3);
+    for (let i = 0; i < 20; i++) {
+      expect(findSet(s)).toBeDefined();
+      s = tick(playSet(s), 21000, 1000);
+    }
+  });
+});
+
+describe('Ice Block', () => {
+  it('one card is frozen out of play, thaws after 7 Sets worth +25, then another freezes', () => {
+    let s = tick(withTrick({ frozenDamage: 25 }), 1000);
+    const ice = s.board.find(c => (c.frozen ?? 0) > 0)!;
+    expect(ice).toMatchObject({ frozen: 7, locked: true });
+    for (let i = 0; i < 7; i++) s = playSet(s, findSet(s, set => !set.some(c => c.id === ice.id)));
+    const thawed = s.board.find(c => c.id === ice.id);
+    if (!thawed) return; // destroyed by something else on the way
+    expect(thawed).toMatchObject({ thawed: true });
+    expect(thawed.locked).toBeFalsy();
+    expect(thawed.bonusPoints).toBeGreaterThanOrEqual(25);
+    expect(s.board.filter(c => (c.frozen ?? 0) > 0)).toHaveLength(0);
+    const set = findSet(s, cards => cards.some(c => c.id === ice.id));
+    if (!set) return;
+    s = playSet(s, set);
+    expect(s.board.filter(c => (c.frozen ?? 0) > 0)).toHaveLength(1);
+  });
+});
+
+describe('Greedy Chest', () => {
+  it('grows every Set you leave it, pays when matched, and a mistake empties it', () => {
+    let s = tick(withTrick({ chestStart: 10, chestGrowth: 2 }), 1000);
+    const chest = s.board.find(c => c.chest !== undefined)!;
+    expect(chest.chest).toBe(10);
+    s = playSet(s, findSet(s, set => !set.some(c => c.id === chest.id)));
+    expect(s.board.find(c => c.id === chest.id)?.chest).toBe(12);
+    const open = findSet(s, set => set.some(c => c.id === chest.id));
+    if (open) {
+      const paid = playSet(s, open);
+      expect(lastLines(paid)).toContainEqual({ type: 'rule', amount: 12, text: 'Greedy Chest!' });
+      expect(paid.board.filter(c => c.chest !== undefined)).toHaveLength(1);
+    }
+    s = miss(s);
+    const after = s.board.find(c => c.chest !== undefined);
+    if (after?.id === chest.id) expect(after.chest).toBe(0);
+  });
+});
+
+describe('Tightrope', () => {
+  it('pays Sets that touch the last Set and halves the others', () => {
+    let s = withTrick({ tightropeDamage: 5 });
+    const first = findSet(s)!;
+    const slots = slotsOf(s, first);
+    s = playSet(s, first);
+    expect(lastLines(s)).toContainEqual({ type: 'rule', amount: 5, text: 'Tightrope' });
+    const near = new Set(slots.flatMap(i => [i, i - 3, i + 3, ...(i % 3 > 0 ? [i - 1] : []), ...(i % 3 < 2 ? [i + 1] : [])]));
+    const off = findSet(s, set => !slotsOf(s, set).some(i => near.has(i)));
+    if (off) {
+      const r = playSet(s, off);
+      expect(lastLines(r)).toContainEqual({ type: 'rule', amount: 0.5, text: 'Off the rope' });
+      expect(r.log[r.log.length - 1].set!.multiplier % 1).toBe(r.log[r.log.length - 1].set!.rainbow ? 0 : 0.5);
+    }
+    const onRope = findSet(s, set => slotsOf(s, set).some(i => near.has(i)));
+    if (onRope) expect(lastLines(playSet(s, onRope))).toContainEqual({ type: 'rule', amount: 5, text: 'Tightrope' });
+  });
+});
+
+describe('Hot Potato', () => {
+  it('one hot card that jumps every 10s, pays when matched, and makes mistakes cost more', () => {
+    let s = tick(withTrick({ potatoDamage: 8 }, startFight({ features: ['hearts', 'gear'] })), 1000);
+    const hot = s.board.find(c => c.hot)!;
+    expect(s.board.filter(c => c.hot)).toHaveLength(1);
+    const moved = tick(s, 11000, 1000);
+    expect(moved.board.filter(c => c.hot)).toHaveLength(1);
+    expect(moved.board.find(c => c.hot)!.id).not.toBe(hot.id);
+    const set = findSet(s, cards => cards.some(c => c.hot));
+    if (set) expect(lastLines(playSet(s, set))).toContainEqual({ type: 'rule', amount: 8, text: 'Hot Potato!' });
+    const plain = miss(startFight({ features: ['hearts', 'gear'] }));
+    const lostPlain = plain.maxHearts! - plain.hearts!;
+    const burned = miss(s);
+    expect(s.hearts! - burned.hearts!).toBe(lostPlain + 1);
+  });
+});
+
+describe('every board gamble keeps the board playable', () => {
+  it('bots finish fights holding them all, the log adds up, and a Set is always there', () => {
+    const base = { ...createMaxedSave(), skillNodes: {}, equippedArcana: [], upgrades: {} };
+    const gambles = ['cursed-idol', 'chain-gang', 'thorn-bush', 'rust', 'tar-pit', 'decoy', 'long-fuse', 'ice-block', 'greedy-chest', 'tightrope', 'hot-potato'];
+    for (const id of ['2-3', '3-5', '4-2', '5-3']) {
+      for (let i = 0; i < gambles.length; i += 4) {
+        const { state } = simulateRun(getLevel(id), { ...base, charms: ['blast-powder', ...gambles.slice(i, i + 4)] }, BOTS.average, 11 + i);
+        expect(['won', 'lost']).toContain(state.status);
+        expect(state.log.reduce((a, e) => a + e.damage, 0)).toBe(state.totalDamage);
+        expect(state.log.every(e => e.setDamage >= 0)).toBe(true);
+        expect(state.matches).toBeGreaterThan(3);
+      }
+    }
+  });
+});

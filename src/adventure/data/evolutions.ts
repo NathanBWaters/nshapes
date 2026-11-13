@@ -168,11 +168,11 @@ export const SIGNATURE_RECIPES: EvolutionRecipe[] = [
     icon: 'lorc/time-trap',
     families: [fam('connector'), fam('time')],
     familyText: 'Connector + Time',
-    activeText: 'Every 2nd Set links a new pair of cards. A linked card destroyed adds +1s and deals 3.',
+    activeText: 'Every 3rd Set links a new pair of cards. A linked card destroyed adds +1s and deals 3.',
     flavor: 'Wire the whole board into one clock, then pull the pin.',
     source: {
       rules: [
-        { trigger: { on: 'everyNthSet', n: 2 }, effects: [{ do: 'link', count: 1 }] },
+        { trigger: { on: 'everyNthSet', n: 3 }, effects: [{ do: 'link', count: 1 }] },
         { trigger: { on: 'linkDestroyed' }, effects: [{ do: 'time', seconds: 1 }, { do: 'damage', amount: 3 }], callout: 'Overclock!' },
       ],
     },
@@ -183,14 +183,14 @@ export const SIGNATURE_RECIPES: EvolutionRecipe[] = [
     icon: 'lorc/cycle',
     families: [fam('ricochet'), fam('explosion')],
     familyText: 'Ricochet + Explosion',
-    activeText: 'Every blast ricochets into 2 cards. Every ricochet has a 50% chance to blast a 2×2 block.',
+    activeText: 'Every blast ricochets into 2 cards. Every ricochet has a 35% chance to blast a 2×2 block.',
     flavor: 'Shards set off charges, charges throw shards. Somewhere in the middle, the foe stops having a plan.',
     source: {
       rules: [
         { trigger: { on: 'weapon', kind: 'explosion' }, effects: [{ do: 'ricochet', count: 2 }], callout: 'Entropy!' },
         {
           trigger: { on: 'weapon', kind: 'ricochet' },
-          when: [{ kind: 'chance', pct: 50 }],
+          when: [{ kind: 'chance', pct: 35 }],
           effects: [{ do: 'explode', area: { shape: 'block', cols: 2, rows: 2 } }],
         },
       ],

@@ -315,6 +315,68 @@ import TrickLanternFlame from '../../assets/icons/lorc/lantern-flame.svg';
 import TrickTwoShadows from '../../assets/icons/lorc/two-shadows.svg';
 import TrickCurtains from '../../assets/icons/delapouite/theater-curtains.svg';
 import TrickFog from '../../assets/icons/delapouite/fog.svg';
+// Evolution recipes of the trick weapons (data/evolutionPairs.ts)
+import Evo2LodestoneBomb from '../../assets/icons/lorc/magnet-blast.svg';
+import Evo2DeadOrAlive from '../../assets/icons/delapouite/cowboy-holster.svg';
+import Evo2HallOfMirrors from '../../assets/icons/lorc/portal.svg';
+import Evo2SpotTheDifference from '../../assets/icons/lorc/spectacles.svg';
+import Evo2FaustianHeart from '../../assets/icons/zeromancer/heart-minus.svg';
+import Evo2Avalanche from '../../assets/icons/lorc/snowing.svg';
+import Evo2Scrapbook from '../../assets/icons/delapouite/notebook.svg';
+import Evo2JokersRainbow from '../../assets/icons/delapouite/jester-hat.svg';
+import Evo2BurningTwins from '../../assets/icons/lorc/twin-shell.svg';
+import Evo2TemperedGlass from '../../assets/icons/lorc/anvil-impact.svg';
+import Evo2LighthouseFog from '../../assets/icons/delapouite/fog-light.svg';
+import Evo2DressRehearsal from '../../assets/icons/delapouite/theater.svg';
+import Evo2SecondAct from '../../assets/icons/delapouite/ticket.svg';
+import Evo2EvilEye from '../../assets/icons/skoll/evil-eyes.svg';
+import Evo2ShackleLine from '../../assets/icons/lorc/manacles.svg';
+import Evo2RoseGarden from '../../assets/icons/lorc/rose.svg';
+import Evo2Patina from '../../assets/icons/delapouite/amphora.svg';
+import Evo2Mangrove from '../../assets/icons/delapouite/swamp.svg';
+import Evo2PrivateEye from '../../assets/icons/lorc/fedora.svg';
+import Evo2Countdown from '../../assets/icons/delapouite/alarm-clock.svg';
+import Evo2GlacierClock from '../../assets/icons/delapouite/iceberg.svg';
+import Evo2TreasureHunt from '../../assets/icons/skoll/open-treasure-chest.svg';
+import Evo2HighWire from '../../assets/icons/darkzaitzev/acrobatic.svg';
+import Evo2HotShrapnel from '../../assets/icons/delapouite/fried-eggs.svg';
+import Evo2CompassWalk from '../../assets/icons/delapouite/direction-signs.svg';
+import Evo2GoldDetector from '../../assets/icons/delapouite/metal-detector.svg';
+import Evo2WitchHunt from '../../assets/icons/delapouite/pitchfork.svg';
+import Evo2MostWanted from '../../assets/icons/delapouite/prisoner.svg';
+import Evo2Reflection from '../../assets/icons/lorc/water-splash.svg';
+import Evo2LookingGlass from '../../assets/icons/delapouite/door.svg';
+import Evo2StickerSwap from '../../assets/icons/delapouite/stamper.svg';
+import Evo2SnowAngel from '../../assets/icons/lorc/angel-wings.svg';
+import Evo2BloodRoses from '../../assets/icons/lorc/crown-of-thorns.svg';
+import Evo2PlayingWithFire from '../../assets/icons/delapouite/matchbox.svg';
+import Evo2DeepWinter from '../../assets/icons/lorc/pine-tree.svg';
+import Evo2TradingCards from '../../assets/icons/quoting/card-pickup.svg';
+import Evo2BodyDouble from '../../assets/icons/lorc/backup.svg';
+import Evo2Doppelganger from '../../assets/icons/lorc/double-face-mask.svg';
+import Evo2KnifeEdge from '../../assets/icons/lorc/bowie-knife.svg';
+import Evo2SmokeBomb from '../../assets/icons/darkzaitzev/smoke-bomb.svg';
+import Evo2Whiteout from '../../assets/icons/lorc/fluffy-cloud.svg';
+import Evo2StandingOvation from '../../assets/icons/delapouite/hand-ok.svg';
+import Evo2CurtainOfGold from '../../assets/icons/delapouite/gold-stack.svg';
+import Evo2AncientRelic from '../../assets/icons/lorc/tribal-mask.svg';
+import Evo2Quicksand from '../../assets/icons/lorc/quicksand.svg';
+import Evo2BallAndChain from '../../assets/icons/delapouite/flail.svg';
+import Evo2BramblePatch from '../../assets/icons/lorc/thorny-tentacle.svg';
+import Evo2OldPowder from '../../assets/icons/lorc/powder.svg';
+import TrickCursedStar from '../../assets/icons/lorc/cursed-star.svg';
+import TrickTotemHead from '../../assets/icons/lorc/totem-head.svg';
+import TrickCrossedChains from '../../assets/icons/lorc/crossed-chains.svg';
+import TrickThornyVine from '../../assets/icons/lorc/thorny-vine.svg';
+import TrickRustySword from '../../assets/icons/delapouite/rusty-sword.svg';
+import TrickStickyBoot from '../../assets/icons/delapouite/sticky-boot.svg';
+import TrickPlasticDuck from '../../assets/icons/delapouite/plastic-duck.svg';
+import TrickTimeDynamite from '../../assets/icons/delapouite/time-dynamite.svg';
+import TrickFrozenBlock from '../../assets/icons/lorc/frozen-block.svg';
+import TrickIceCube from '../../assets/icons/lorc/ice-cube.svg';
+import TrickMimicChest from '../../assets/icons/delapouite/mimic-chest.svg';
+import TrickTightrope from '../../assets/icons/delapouite/tightrope.svg';
+import TrickPotato from '../../assets/icons/delapouite/potato.svg';
 
 // Icon registry: maps path (e.g., "delapouite/token") to the imported component
 // NOTE: When adding new icons, also add the import above and the path here.
@@ -629,6 +691,67 @@ const ICON_REGISTRY = {
   'lorc/two-shadows': TrickTwoShadows,
   'delapouite/theater-curtains': TrickCurtains,
   'delapouite/fog': TrickFog,
+  'lorc/magnet-blast': Evo2LodestoneBomb,
+  'delapouite/cowboy-holster': Evo2DeadOrAlive,
+  'lorc/portal': Evo2HallOfMirrors,
+  'lorc/spectacles': Evo2SpotTheDifference,
+  'zeromancer/heart-minus': Evo2FaustianHeart,
+  'lorc/snowing': Evo2Avalanche,
+  'delapouite/notebook': Evo2Scrapbook,
+  'delapouite/jester-hat': Evo2JokersRainbow,
+  'lorc/twin-shell': Evo2BurningTwins,
+  'lorc/anvil-impact': Evo2TemperedGlass,
+  'delapouite/fog-light': Evo2LighthouseFog,
+  'delapouite/theater': Evo2DressRehearsal,
+  'delapouite/ticket': Evo2SecondAct,
+  'skoll/evil-eyes': Evo2EvilEye,
+  'lorc/manacles': Evo2ShackleLine,
+  'lorc/rose': Evo2RoseGarden,
+  'delapouite/amphora': Evo2Patina,
+  'delapouite/swamp': Evo2Mangrove,
+  'lorc/fedora': Evo2PrivateEye,
+  'delapouite/alarm-clock': Evo2Countdown,
+  'delapouite/iceberg': Evo2GlacierClock,
+  'skoll/open-treasure-chest': Evo2TreasureHunt,
+  'darkzaitzev/acrobatic': Evo2HighWire,
+  'delapouite/fried-eggs': Evo2HotShrapnel,
+  'delapouite/direction-signs': Evo2CompassWalk,
+  'delapouite/metal-detector': Evo2GoldDetector,
+  'delapouite/pitchfork': Evo2WitchHunt,
+  'delapouite/prisoner': Evo2MostWanted,
+  'lorc/water-splash': Evo2Reflection,
+  'delapouite/door': Evo2LookingGlass,
+  'delapouite/stamper': Evo2StickerSwap,
+  'lorc/angel-wings': Evo2SnowAngel,
+  'lorc/crown-of-thorns': Evo2BloodRoses,
+  'delapouite/matchbox': Evo2PlayingWithFire,
+  'lorc/pine-tree': Evo2DeepWinter,
+  'quoting/card-pickup': Evo2TradingCards,
+  'lorc/backup': Evo2BodyDouble,
+  'lorc/double-face-mask': Evo2Doppelganger,
+  'lorc/bowie-knife': Evo2KnifeEdge,
+  'darkzaitzev/smoke-bomb': Evo2SmokeBomb,
+  'lorc/fluffy-cloud': Evo2Whiteout,
+  'delapouite/hand-ok': Evo2StandingOvation,
+  'delapouite/gold-stack': Evo2CurtainOfGold,
+  'lorc/tribal-mask': Evo2AncientRelic,
+  'lorc/quicksand': Evo2Quicksand,
+  'delapouite/flail': Evo2BallAndChain,
+  'lorc/thorny-tentacle': Evo2BramblePatch,
+  'lorc/powder': Evo2OldPowder,
+  'lorc/cursed-star': TrickCursedStar,
+  'lorc/totem-head': TrickTotemHead,
+  'lorc/crossed-chains': TrickCrossedChains,
+  'lorc/thorny-vine': TrickThornyVine,
+  'delapouite/rusty-sword': TrickRustySword,
+  'delapouite/sticky-boot': TrickStickyBoot,
+  'delapouite/plastic-duck': TrickPlasticDuck,
+  'delapouite/time-dynamite': TrickTimeDynamite,
+  'lorc/frozen-block': TrickFrozenBlock,
+  'lorc/ice-cube': TrickIceCube,
+  'delapouite/mimic-chest': TrickMimicChest,
+  'delapouite/tightrope': TrickTightrope,
+  'delapouite/potato': TrickPotato,
 } as const satisfies Record<string, React.FC<SvgProps>>;
 
 // TypeScript union type of all valid icon names - use this for type-safe icon references

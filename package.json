@@ -1,6 +1,6 @@
 {
   "name": "nshapes",
-  "version": "0.1.103",
+  "version": "0.1.104",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
@@ -15,6 +15,9 @@
     "test:coverage": "jest --coverage",
     "typecheck": "tsc --noEmit",
     "validate:icons": "npx tsx scripts/validate-icons.ts",
+    "balance:report": "BALANCE_REPORT=1 jest __tests__/adventureBalanceLab.test.ts",
+    "balance:levels": "ADVENTURE_BALANCE_REPORT=1 jest __tests__/adventureBalance.test.ts",
+    "balance:tune": "BALANCE_TUNE=1 jest __tests__/adventureBalanceTuner.test.ts",
     "prebuild": "npm run typecheck"
   },
   "dependencies": {

@@ -41,7 +41,7 @@ import {
 } from './fight';
 import { EVOLUTION_RULES } from './sources';
 import { recordFightStart, recordLog } from './fightLog';
-import { afterSetGear, gearSetBonus, initGear, onMistakeGear, onWaveStartGear, resolveTwins, syncGear, tickGear, type GearSet } from './gear';
+import { afterSetGear, gearSetBonus, holdCards, initGear, onMistakeGear, onWaveStartGear, resolveTwins, syncGear, tickGear, type GearSet } from './gear';
 import { refreshArmedRecipes, resolveCatalyst, tickEvolutions } from './evolutions';
 import { placeOpeningTraps, resolveTrapsOnSet, springSnares, tickTimeBombs } from './hazards';
 import {
@@ -115,7 +115,9 @@ const rollPickOptions = (d: Draft, count = 3): Weapon[] => {
     .filter(id => !d.weapons.some(w => w.id === id))
     .map(id => getArmoryWeapon(id, d.weaponBuilds))
     .filter((w): w is Weapon => !!w && canObtainWeapon(w, d.weapons));
-  return d._rng.shuffle(weapons).slice(0, count);
+  // Offers come from their own stream: what you are shown never changes how the fight itself plays out
+  const offers = createRng((d._rng.state ^ 0x51ed270b) + d.levelUpsTaken * 7919 + d.rerolls * 104729 + d.wave * 1299709);
+  return offers.shuffle(weapons).slice(0, count);
 };
 
 const acquireWeapon = (d: Draft, picked: Weapon) => {
@@ -279,15 +281,19 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
     graceUsed,
     auto: !!opts.auto,
   };
-  const flat =
-    points + d.bonusDamagePerMatch + (m.setDamage ?? 0) + conditional + passiveSetDamage(d, sinceLastMs) + gearSetBonus(d, gearSet) +
-    d.activeEvolutions.length * EVOLUTION_RULES.setDamage;
+  const tricks = gearSetBonus(d, gearSet);
+  // Rust can take damage off a Set, never below nothing
+  const flat = Math.max(
+    0,
+    points + d.bonusDamagePerMatch + (m.setDamage ?? 0) + conditional + passiveSetDamage(d, sinceLastMs) + tricks.flat +
+      d.activeEvolutions.length * EVOLUTION_RULES.setDamage
+  );
   const rainbowMult =
     (rainbow ? (a.rainbowMultiplier ?? BASE_RULES.rainbowMultiplier) + (m.rainbowMultiplierBonus ?? 0) : 1) *
     (d.activeEvolutions.length > 0 ? EVOLUTION_RULES.setMultiplier : 1);
   const enemyMult = (enemyResult.pointsMultiplier || 1) * (statMods.pointsMultiplier || 1);
   // "Next Set ×N" effects and Hot Streak together top out at the same cap (data/rules.ts)
-  const setMult = Math.min(BASE_RULES.maxNextSetMultiplier, d.nextSetMultiplier * hotStreak);
+  const setMult = Math.min(BASE_RULES.maxNextSetMultiplier, d.nextSetMultiplier * hotStreak) * tricks.multiplier;
   d.nextSetMultiplier = 1;
   const dmg = flat * rainbowMult * (a.damageScale ?? 1) * enemyMult * setMult + (purity.damage + traps.bonus) * enemyMult;
   const hit = dealDamage(d, dmg);
@@ -317,6 +323,7 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   }
   if (hotStreak > 1) emit(d, 'hot_streak_hit', hotStreak);
   resolveTwins(d, matched);
+  holdCards(d, matched);
   afterSetGear(d, gearSet);
   springSnares(d, traps.sprung);
 
@@ -450,6 +457,8 @@ const replaceCards = (d: Draft, ids: Set<string>, ended: boolean): number[] => {
   const broken: number[] = [];
   d.board = d.board.map((c, i) => {
     if (!ids.has(c.id)) return c;
+    // A chained card matched alone and a fresh Tar Pit card stay for one more match (engine/gear.ts holdCards)
+    if (c.stay) return { ...c, stay: false, selected: false };
     if ((c.health ?? 1) > 1) return { ...c, health: (c.health ?? 1) - 1, selected: false };
     if (c.health === 1) broken.push(i);
     indices.push(i);

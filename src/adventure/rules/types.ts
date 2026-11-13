@@ -12,6 +12,11 @@ export type WeaponTriggerKind =
   | 'explosion' | 'laser' | 'fire' | 'ricochet' | 'echo'
   | 'heal' | 'coin' | 'time' | 'hint' | 'grace' | 'xp' | 'growth';
 
+/** Payouts of the trick weapons (engine/gear.ts) that rules can react to. */
+export type TrickKind =
+  | 'magnet' | 'bounty' | 'mirror' | 'odd' | 'album' | 'twin' | 'fog' | 'curse' | 'chain' | 'thorn' | 'rust'
+  | 'tar' | 'decoy' | 'fuse' | 'ice' | 'chest' | 'tightrope' | 'potato' | 'wild';
+
 export type Trigger =
   /** A Set was scored (after damage is dealt) */
   | { on: 'set' }
@@ -29,6 +34,8 @@ export type Trigger =
   | { on: 'hurt' }
   /** A weapon effect fired (from a weapon, a rule, or an evolution) */
   | { on: 'weapon'; kind: WeaponTriggerKind }
+  /** A trick weapon paid out (the marked card matched, the chest opened…) */
+  | { on: 'trick'; kind: TrickKind }
   /** No Set for this long (fires once per idle stretch) */
   | { on: 'idle'; ms: number }
   | { on: 'fightStart' }
@@ -203,6 +210,32 @@ export interface Modifiers {
   fogBonus?: number;
   /** Encore Mask: damage when an evolution ends (its opening rules also fire again) */
   encoreDamage?: number;
+  /** Cursed Idol: % chance a dealt card is cursed (unmatchable for a while; then ×2 or the curse moves to a neighbour) */
+  curseChance?: number;
+  /** Chain Gang: damage for matching both chained cards in one Set */
+  chainDamage?: number;
+  /** Thorn Bush: % chance a dealt card has thorns, and the damage for matching one in time */
+  thornChance?: number;
+  thornDamage?: number;
+  /** Rust: cards lose 1 damage per Set they sit through; a card that turns golden is worth this much */
+  rustGold?: number;
+  /** Tar Pit: damage for a Set that touches the sticky row */
+  tarDamage?: number;
+  /** Decoy: % chance a dealt card nearly copies a board card, and the damage for matching the two together */
+  decoyChance?: number;
+  decoyDamage?: number;
+  /** Long Fuse: % chance a dealt card carries a fuse, and the damage for matching it in its last seconds */
+  fuseChance?: number;
+  fuseDamage?: number;
+  /** Ice Block: what the thawed card is worth */
+  frozenDamage?: number;
+  /** Greedy Chest: what a new chest holds and how much it grows per Set that leaves it alone */
+  chestStart?: number;
+  chestGrowth?: number;
+  /** Tightrope: damage for a Set that touches your last one (others deal half) */
+  tightropeDamage?: number;
+  /** Hot Potato: damage for matching the hot card (mistakes cost an extra heart while it is out) */
+  potatoDamage?: number;
 }
 
 /** Anything that can bring rules into a fight. */

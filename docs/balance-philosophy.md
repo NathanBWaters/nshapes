@@ -64,6 +64,11 @@ tuned to these, in order:
    should be the top of the field, not ten times it. Loops that made fights
    last forever are capped (all time gains together can at most double a
    fight's clock).
+6. **A harder board should pay more.** The board gambles (Cursed Idol, Chain
+   Gang, Rust, Greedy Chest…) take something away from the board and give it
+   back with interest if you play around them. They may swing more than a
+   staple weapon; they may not be free, and they may never leave the board
+   without a Set.
 
 Rough bands, measured on a training dummy with endgame gear (level 5, fully
 tuned), as damage per fight against no weapons at all:
@@ -82,8 +87,13 @@ At level 1 every weapon adds something (typically +5% to +35% in an early
 fight); levels and Workshop tuning are still where most of its power comes
 from, which is what keeps the bare and invested players apart.
 
-`__tests__/adventureBuilds.test.ts` holds both ends: ceilings (nothing runs
-away) and floors (every weapon alone, and every evolution, pulls its weight).
+These are enforced by the balance lab ([balance-system.md](./balance-system.md)):
+every weapon is measured with and without, alone and inside real builds, for
+novice, average and expert bots, against the bands in
+`src/adventure/balance/targets.ts`. A weapon is overpowered if it is too
+strong for any of those players and underpowered only if it is too weak for
+all of them. `__tests__/adventureBuilds.test.ts` adds the build-level checks
+(no fighter, pairing or random build runs away; every evolution adds damage).
 
 ## How the balance bots use this
 

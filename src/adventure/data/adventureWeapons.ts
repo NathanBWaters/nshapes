@@ -12,6 +12,7 @@ import type { AdventureWeapon } from '../types';
 import type { Rule } from '../rules/types';
 import { TRICK_RULES } from './rules';
 
+const T = TRICK_RULES;
 const FOG_MS = TRICK_RULES.fogMs;
 const BOUNTY_CARDS = TRICK_RULES.bountyCards;
 
@@ -424,7 +425,7 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     icon: 'lorc/shard-sword',
     effects: {},
     maxCount: 1,
-    stats: { damage: { label: 'Glass Sword damage', unit: 'dmg', base: 6, perLevel: 1.5 }, window: { label: 'Seconds between Sets', unit: 's', base: 6, perLevel: 0.5 } },
+    stats: { damage: { label: 'Glass Sword damage', unit: 'dmg', base: 6, perLevel: 0.4 }, window: { label: 'Seconds between Sets', unit: 's', base: 6, perLevel: 0.25 } },
     build: v => ({
       modifiers: { glassDamage: r(v.damage), glassWindowMs: r(v.window * 1000) },
       description: `Every Set deals +${r(v.damage)}. The sword shatters for the rest of the wave on your first mistake, or if ${num(v.window)}s pass without a Set.`,
@@ -494,6 +495,239 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
       shortDescription: `Evolutions end with +${r(v.damage)} and replay their opening`,
     }),
   },
+
+  // ═══ Board tricks: a harder board for a bigger payoff (engine/gear.ts) ════
+
+  // ── Cursed Idol: locked cards that may come back doubled
+  {
+    id: 'cursed-idol',
+    name: 'Cursed Idol',
+    rarity: 'common',
+    level: 1,
+    price: 12,
+    description: '',
+    shortDescription: '',
+    flavorText: 'Do not look at it. Do not match it. Wait.',
+    icon: 'lorc/totem-head',
+    effects: {},
+    maxCount: 1,
+    stats: { chance: { label: 'Curse chance', unit: '%', base: 5, perLevel: 1 } },
+    build: v => ({
+      modifiers: { curseChance: r(v.chance) },
+      description: `${r(v.chance)}% chance that a new card arrives cursed: it can't be matched for ${T.curseMs / 1000}s. Then it is a coin flip: the card becomes a ×${T.curseMultiplier} card (a Set that includes it deals ×${T.curseMultiplier}), or the curse moves to the card next to it.`,
+      shortDescription: `${r(v.chance)}% cursed cards: wait ${T.curseMs / 1000}s for ×${T.curseMultiplier}, or the curse spreads`,
+    }),
+  },
+
+  // ── Chain Gang: two cards that want to leave together
+  {
+    id: 'chain-gang',
+    name: 'Chain Gang',
+    rarity: 'common',
+    level: 1,
+    price: 10,
+    description: '',
+    shortDescription: '',
+    flavorText: 'Where one goes, the other goes. That is the deal.',
+    icon: 'lorc/crossed-chains',
+    effects: {},
+    maxCount: 1,
+    stats: { damage: { label: 'Chain damage', unit: 'dmg', base: 8, perLevel: 1.5 } },
+    build: v => ({
+      modifiers: { chainDamage: r(v.damage) },
+      description: `Two cards on the board are chained together. Match both in the same Set for +${r(v.damage)}. A chained card matched alone stays on the board.`,
+      shortDescription: `Match both chained cards together: +${r(v.damage)}`,
+    }),
+  },
+
+  // ── Thorn Bush: cards on a deadline
+  {
+    id: 'thorn-bush',
+    name: 'Thorn Bush',
+    rarity: 'common',
+    level: 1,
+    price: 10,
+    description: '',
+    shortDescription: '',
+    flavorText: 'Pretty. Pick it quickly.',
+    icon: 'lorc/thorny-vine',
+    effects: {},
+    maxCount: 1,
+    stats: { chance: { label: 'Thorn chance', unit: '%', base: 10, perLevel: 0.5 }, damage: { label: 'Thorn damage', unit: 'dmg', base: 8, perLevel: 1.5 } },
+    build: v => ({
+      modifiers: { thornChance: r(v.chance), thornDamage: r(v.damage) },
+      description: `${r(v.chance)}% chance that a new card has thorns. Match it within ${T.thornMs / 1000}s (+${T.thornMsPerExtraTrait / 1000}s per trait beyond 3) for +${r(v.damage)}; leave it and it costs a heart. One at a time.`,
+      shortDescription: `${r(v.chance)}% thorn cards: +${r(v.damage)} in time, a heart if not`,
+    }),
+  },
+
+  // ── Rust: old cards fade, then turn to gold
+  {
+    id: 'rust',
+    name: 'Rust',
+    rarity: 'common',
+    level: 1,
+    price: 10,
+    description: '',
+    shortDescription: '',
+    flavorText: 'Everything you leave lying around gets worse. Then, suddenly, much better.',
+    icon: 'delapouite/rusty-sword',
+    effects: {},
+    maxCount: 1,
+    stats: { gold: { label: 'Golden card damage', unit: 'dmg', base: 15, perLevel: 0.5 } },
+    build: v => ({
+      modifiers: { rustGold: r(v.gold) },
+      description: `Every card loses 1 damage for each Set it sits through (never below 0). The card that has sat longest, once it has sat through ${T.rustSets} Sets, turns golden: +${r(v.gold)} damage and +${T.rustCoins} coins when matched.`,
+      shortDescription: `Cards rust by 1 per Set; after ${T.rustSets} they turn golden (+${r(v.gold)})`,
+    }),
+  },
+
+  // ── Tar Pit: a row that pays every time you wade in
+  {
+    id: 'tar-pit',
+    name: 'Tar Pit',
+    rarity: 'common',
+    level: 1,
+    price: 10,
+    description: '',
+    shortDescription: '',
+    flavorText: 'You can leave any time you like. Twice.',
+    icon: 'delapouite/sticky-boot',
+    effects: {},
+    maxCount: 1,
+    stats: { damage: { label: 'Tar Pit damage', unit: 'dmg', base: 5, perLevel: 1 } },
+    build: v => ({
+      modifiers: { tarDamage: r(v.damage) },
+      description: `One row of the board is sticky each wave: its cards take two matches to clear. Every Set that uses a card in that row deals +${r(v.damage)}.`,
+      shortDescription: `A sticky row: two matches per card, +${r(v.damage)} per Set there`,
+    }),
+  },
+
+  // ── Decoy: a secret pair to spot
+  {
+    id: 'decoy',
+    name: 'Decoy',
+    rarity: 'common',
+    level: 1,
+    price: 10,
+    description: '',
+    shortDescription: '',
+    flavorText: 'One of these is not quite like the other.',
+    icon: 'delapouite/plastic-duck',
+    effects: {},
+    maxCount: 1,
+    stats: { chance: { label: 'Decoy chance', unit: '%', base: 15, perLevel: 2 }, damage: { label: 'Decoy damage', unit: 'dmg', base: 15, perLevel: 4 } },
+    build: v => ({
+      modifiers: { decoyChance: r(v.chance), decoyDamage: r(v.damage) },
+      description: `${r(v.chance)}% chance that a new card is a decoy: a copy of a card on the board with one trait changed. Nothing marks it. Match a decoy and its original in the same Set for +${r(v.damage)}.`,
+      shortDescription: `${r(v.chance)}% unmarked near-copies; match one with its original: +${r(v.damage)}`,
+    }),
+  },
+
+  // ── Long Fuse: cards worth more the longer you dare
+  {
+    id: 'long-fuse',
+    name: 'Long Fuse',
+    rarity: 'common',
+    level: 1,
+    price: 10,
+    description: '',
+    shortDescription: '',
+    flavorText: 'Wait for it. Not that long.',
+    icon: 'delapouite/time-dynamite',
+    effects: {},
+    maxCount: 1,
+    stats: { chance: { label: 'Fuse chance', unit: '%', base: 20, perLevel: 2 }, damage: { label: 'Short-fuse damage', unit: 'dmg', base: 6, perLevel: 1.5 } },
+    build: v => ({
+      modifiers: { fuseChance: r(v.chance), fuseDamage: r(v.damage) },
+      description: `${r(v.chance)}% chance that a new card carries a ${T.fuseMs / 1000}s fuse. Matched in its last ${T.fuseHotMs / 1000}s it deals +${r(v.damage)}. If it burns out it becomes a dud.`,
+      shortDescription: `${r(v.chance)}% fused cards: +${r(v.damage)} in the last ${T.fuseHotMs / 1000}s, a dud after`,
+    }),
+  },
+
+  // ── Ice Block: one card out of play, then a big hit
+  {
+    id: 'ice-block',
+    name: 'Ice Block',
+    rarity: 'common',
+    level: 1,
+    price: 10,
+    description: '',
+    shortDescription: '',
+    flavorText: 'Something is in there. Keep chipping.',
+    icon: 'lorc/frozen-block',
+    effects: {},
+    maxCount: 1,
+    stats: { damage: { label: 'Thawed card damage', unit: 'dmg', base: 25, perLevel: 5 } },
+    build: v => ({
+      modifiers: { frozenDamage: r(v.damage) },
+      description: `One card on the board is frozen and can't be matched. It thaws after ${T.iceSets} of your Sets, worth +${r(v.damage)} when you match it. Then another card freezes.`,
+      shortDescription: `A frozen card thaws after ${T.iceSets} Sets: +${r(v.damage)}`,
+    }),
+  },
+
+  // ── Greedy Chest: cash in now, or one more Set?
+  {
+    id: 'greedy-chest',
+    name: 'Greedy Chest',
+    rarity: 'common',
+    level: 1,
+    price: 12,
+    description: '',
+    shortDescription: '',
+    flavorText: 'It gets heavier every time you walk past. So do you.',
+    icon: 'delapouite/mimic-chest',
+    effects: {},
+    maxCount: 1,
+    stats: { start: { label: 'Chest starts at', unit: 'dmg', base: 10, perLevel: 2 }, growth: { label: 'Growth per Set', unit: 'dmg', base: 2, perLevel: 0.5 } },
+    build: v => ({
+      modifiers: { chestStart: r(v.start), chestGrowth: v.growth },
+      description: `One card is a chest holding ${r(v.start)} damage. It grows by ${num(v.growth)} every Set you leave it, and pays out when you match it. A mistake empties it.`,
+      shortDescription: `A chest card: ${r(v.start)} damage, +${num(v.growth)} per Set you wait; mistakes empty it`,
+    }),
+  },
+
+  // ── Tightrope: every Set next to the last
+  {
+    id: 'tightrope',
+    name: 'Tightrope',
+    rarity: 'common',
+    level: 1,
+    price: 10,
+    description: '',
+    shortDescription: '',
+    flavorText: 'One foot in front of the other. Do not look at the rest of the board.',
+    icon: 'delapouite/tightrope',
+    effects: {},
+    maxCount: 1,
+    stats: { damage: { label: 'Tightrope damage', unit: 'dmg', base: 4, perLevel: 0.5 } },
+    build: v => ({
+      modifiers: { tightropeDamage: r(v.damage) },
+      description: `A Set that uses a spot from your last Set, or one next to it, deals +${r(v.damage)}. Any other Set deals half damage.`,
+      shortDescription: `Sets touching your last Set +${r(v.damage)}; others deal half`,
+    }),
+  },
+
+  // ── Hot Potato: a moving target with a price
+  {
+    id: 'hot-potato',
+    name: 'Hot Potato',
+    rarity: 'common',
+    level: 1,
+    price: 10,
+    description: '',
+    shortDescription: '',
+    flavorText: 'Whatever you do, do not be holding it when you slip.',
+    icon: 'delapouite/potato',
+    effects: {},
+    maxCount: 1,
+    stats: { damage: { label: 'Hot Potato damage', unit: 'dmg', base: 8, perLevel: 2 } },
+    build: v => ({
+      modifiers: { potatoDamage: r(v.damage) },
+      description: `One card is hot and jumps to a neighbour every ${T.potatoMs / 1000}s. Matching it deals +${r(v.damage)}. While it is out, a mistake costs an extra heart.`,
+      shortDescription: `A hot card: +${r(v.damage)} when matched; mistakes cost an extra heart`,
+    }),
+  },
 ];
 
 // Authored descriptions are the level-1 wording (Free Play, tests, guides)
@@ -517,9 +751,10 @@ export const LEGACY_ADVENTURE_WEAPON_IDS: Record<string, { id: string; tier: num
   ])
 );
 
-/** The trick weapons (engine/gear.ts). They don't arm evolutions yet. */
+/** The trick weapons (engine/gear.ts). */
 export const TRICK_WEAPON_IDS: readonly string[] = [
   'magnet', 'bounty-poster', 'mirror-shard', 'odd-one-out', 'devils-bargain', 'snowball', 'collectors-album',
   'wild-card', 'twin-seed', 'glass-sword', 'fog-lantern', 'understudy', 'encore-mask',
+  'cursed-idol', 'chain-gang', 'thorn-bush', 'rust', 'tar-pit', 'decoy', 'long-fuse', 'ice-block', 'greedy-chest', 'tightrope', 'hot-potato',
 ];
 export const UNDERSTUDY_ID = 'understudy';

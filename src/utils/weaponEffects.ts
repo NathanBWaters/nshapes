@@ -235,7 +235,7 @@ export const findValidSet = (
   activeAttributes: AttributeName[]
 ): Card[] | null => {
   const excludedIds = new Set(excludedCards.map(c => c.id));
-  const availableCards = board.filter(c => !excludedIds.has(c.id));
+  const availableCards = board.filter(c => !excludedIds.has(c.id) && !c.isDud && !c.isFaceDown && !c.locked);
 
   // Try all combinations of 3 cards
   for (let i = 0; i < availableCards.length; i++) {

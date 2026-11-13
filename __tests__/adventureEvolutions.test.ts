@@ -10,14 +10,15 @@ import { runReducer } from '@/adventure/engine/run';
 import { findSet, miss, playSet, startFight, tick } from './testUtils/adventureFight';
 import type { RunState } from '@/adventure/types';
 
-// The trick weapons don't arm evolutions yet
-const ARMORY = createMaxedSave().armory.filter(id => !TRICK_WEAPON_IDS.includes(id));
+const ARMORY = createMaxedSave().armory;
+/** The classic weapons have 4 recipes each (about 8 they sit in); the trick weapons have 2 each (3 they sit in) */
+const CLASSIC = ARMORY.filter(id => !TRICK_WEAPON_IDS.includes(id));
 const arms = (families: [string[], string[]], a: string, b: string) =>
   (families[0].includes(a) && families[1].includes(b)) || (families[0].includes(b) && families[1].includes(a));
 
 describe('evolution roster', () => {
-  it('has 4 evolutions per Armory weapon', () => {
-    expect(EVOLUTION_RECIPES).toHaveLength(ARMORY.length * 4);
+  it('has 4 evolutions per classic weapon and 2 per trick weapon', () => {
+    expect(EVOLUTION_RECIPES).toHaveLength(CLASSIC.length * 4 + TRICK_WEAPON_IDS.length * 2);
     expect(SIGNATURE_RECIPES.length + PAIR_RECIPES.length).toBe(EVOLUTION_RECIPES.length);
   });
 
@@ -41,9 +42,10 @@ describe('evolution roster', () => {
     }
   });
 
-  it('every weapon sits in at least 6 recipes', () => {
+  it('every classic weapon sits in at least 6 recipes and every trick weapon in at least 3', () => {
     for (const id of ARMORY) {
-      expect(EVOLUTION_RECIPES.filter(r => r.families.some(f => f.includes(id))).length).toBeGreaterThanOrEqual(6);
+      const n = EVOLUTION_RECIPES.filter(r => r.families.some(f => f.includes(id))).length;
+      expect({ id, enough: n >= (TRICK_WEAPON_IDS.includes(id) ? 3 : 6) }).toEqual({ id, enough: true });
     }
   });
 });
@@ -67,7 +69,8 @@ describe('every evolution runs', () => {
     if (s.status === 'playing') s = miss(s);
     if (s.status === 'playing') s = runReducer(s, { type: 'USE_HINT' });
     s = tick(s, 35000, 1000); // freezes pause the evolution clock too
-    expect(s.activeEvolutions).toEqual([]);
+    // (a fight that ended on the way, e.g. thorns on a Devil's Bargain, stops its clock)
+    if (s.status === 'playing') expect(s.activeEvolutions).toEqual([]);
     expect(Number.isFinite(s.foeHp)).toBe(true);
   });
 });

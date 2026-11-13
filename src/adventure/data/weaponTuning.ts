@@ -168,7 +168,7 @@ export const ADVENTURE_TUNING: Record<string, AdventureTuning> = {
 
   // ── Time ──────────────────────────────────────────────────────────────────
   'chrono-shard': { effects: { startingTime: 20 }, perLevel: { startingTime: 10 } },
-  'time-drop': { effects: { timeGainChance: 10, timeGainAmount: 5 }, perLevel: { timeGainChance: 3, timeGainAmount: 1 } },
+  'time-drop': { effects: { timeGainChance: 10, timeGainAmount: 4 }, perLevel: { timeGainChance: 2.5, timeGainAmount: 0.75 } },
   'temporal-rift': {
     effects: { timeGainChance: 8, timeGainAmount: 4, bridgeChance: 30 },
     perLevel: { timeGainChance: 2, timeGainAmount: 0.5, bridgeChance: 8 },

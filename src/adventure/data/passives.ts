@@ -24,8 +24,8 @@ export const PASSIVE_TUNING = {
 export const DEFAULT_COMBO_WINDOW_MS = PASSIVE_TUNING.combo['combo.windowMs'];
 
 /** More traits take longer to read, so the Combo window grows a little with them (Patience grows the same way). */
-export const COMBO_MS_PER_EXTRA_TRAIT = 750;
-/** The Combo window on a board with this many traits: the tuned window, plus 0.75s per trait beyond 3 (6.5s at 5 traits). */
+export const COMBO_MS_PER_EXTRA_TRAIT = 500;
+/** The Combo window on a board with this many traits: the tuned window, plus 0.5s per trait beyond 3 (6s at 5 traits). */
 export const comboWindowFor = (windowMs: number, traits: number): number => windowMs + COMBO_MS_PER_EXTRA_TRAIT * Math.max(0, traits - 3);
 
 type Tuning = Record<string, number>;

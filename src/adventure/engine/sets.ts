@@ -19,8 +19,8 @@ const thirdKey = (x: Card, y: Card, attrs: AttributeName[]) =>
     })
     .join('|');
 
-/** A card the player can pick: duds and face-down cards can't be part of a Set. */
-export const isSelectable = (c: Card) => !c.isDud && !c.isFaceDown;
+/** A card the player can pick: duds, face-down and locked (cursed, frozen) cards can't be part of a Set. */
+export const isSelectable = (c: Card) => !c.isDud && !c.isFaceDown && !c.locked;
 
 /**
  * Index triples [i, j, k] (i < j < k) of every Set among `cards`, found pair by

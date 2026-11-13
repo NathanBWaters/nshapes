@@ -66,6 +66,7 @@ const triggerMatches = (d: Draft, key: string, t: Trigger, ev: FightEvent): bool
       return full;
     }
     case 'weapon': return ev.on === 'weapon' && ev.kind === t.kind;
+    case 'trick': return ev.on === 'trick' && ev.trick === t.kind;
     case 'idle':
     case 'foeBelow':
     case 'finale':
