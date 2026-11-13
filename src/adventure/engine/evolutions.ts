@@ -1,5 +1,5 @@
 /**
- * Evolutions (spec §5): matching the Catalyst starts a 20-second window in
+ * Evolutions (spec §5): matching the Catalyst starts a 30-second window in
  * which an armed recipe's rules are live. Several can run at once; triggers
  * per fight are capped.
  */
@@ -34,11 +34,10 @@ export const startEvolution = (d: Draft, id: string) => {
   if (!d.forgedRecipes.includes(id)) d.forgedRecipes = [...d.forgedRecipes, id];
   refreshSources(d);
   emit(d, 'evolution_start', durationMs, recipe.name);
+  // The opening burst (and the Arcana that makes it bigger)
   const burst = arcana(d).evolutionBurstBonus;
-  if (burst) {
-    if (burst.damage > 0) emit(d, 'hit', dealDamage(d, burst.damage * foeMultiplier(d)), recipe.name);
-    if (burst.time > 0) addTime(d, burst.time);
-  }
+  emit(d, 'hit', dealDamage(d, (EVOLUTION_RULES.startDamage + (burst?.damage ?? 0)) * foeMultiplier(d)), recipe.name);
+  if (burst && burst.time > 0) addTime(d, burst.time);
   enqueue(d, 'evolutionStart');
 };
 

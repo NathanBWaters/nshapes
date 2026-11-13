@@ -147,12 +147,17 @@ const nearMiss = (cards: Card[], attrs: AttributeName[], rng: Rng): Card[] | nul
  * GameBoard rolls weapon effects with Math.random, so the bot swaps in a seeded
  * source while it plays; that keeps balance numbers reproducible run to run.
  */
-export const simulateRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: number, plan?: BuildPlan) => {
+export interface SimOptions {
+  /** Pass on every level-up pick and shop offer, so the fight measures only what was brought in */
+  skipPicks?: boolean;
+}
+
+export const simulateRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: number, plan?: BuildPlan, opts: SimOptions = {}) => {
   const realRandom = Math.random;
   const boardRng = createRng(seed ^ 0x5bd1e995);
   Math.random = boardRng.next;
   try {
-    return playRun(level, plan ? gearUp(save, plan, seed) : save, bot, seed, plan?.chaseRecipes !== false);
+    return playRun(level, plan ? gearUp(save, plan, seed) : save, bot, seed, plan?.chaseRecipes !== false, opts);
   } finally {
     Math.random = realRandom;
   }
@@ -213,18 +218,19 @@ const shop = (s: RunState, rng: Rng, chase: boolean): RunState => {
   return s;
 };
 
-const playRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: number, chase: boolean) => {
+const playRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: number, chase: boolean, opts: SimOptions = {}) => {
   const rng = createRng(seed ^ 0x9e3779b9);
   let s = createRun(level, save, { seed });
   let guard = 0;
   while ((s.status === 'playing' || s.status === 'pick' || s.status === 'intermission') && guard++ < 2000) {
     if (s.status === 'pick') {
       // Level up: take a free weapon
-      s = runReducer(s, { type: 'PICK', weaponId: s.pickOptions[preferred(s, s.pickOptions, rng, chase)]?.id ?? null });
+      const pick = opts.skipPicks ? null : s.pickOptions[preferred(s, s.pickOptions, rng, chase)]?.id ?? null;
+      s = runReducer(s, { type: 'PICK', weaponId: pick });
       continue;
     }
     if (s.status === 'intermission') {
-      s = shop(s, rng, chase);
+      if (!opts.skipPicks) s = shop(s, rng, chase);
       s = runReducer(s, { type: 'NEXT_WAVE' });
       continue;
     }
@@ -234,7 +240,9 @@ const playRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: nu
     const fullBoard = s.level.rules.boardSize ?? getBoardSizeForAttributes(s.attributes.length);
     const crowd = Math.sqrt(Math.min(1, Math.max(0.25, s.board.filter(isSelectable).length / fullBoard)));
     const pace = 0.6 + rng.next() * 0.8;
-    let think = bot.secondsPerAttribute * s.attributes.length * pace * glow * crowd;
+    // A simplified board has one trait the same on every card: one less thing to compare
+    const traits = Math.max(1, s.attributes.length - (s.simplified ? 1 : 0));
+    let think = bot.secondsPerAttribute * traits * pace * glow * crowd;
     // A slow search (or a "use hints" goal) is when a real player presses the bulb
     const slow = pace > 1;
     const goals = chasing(s);

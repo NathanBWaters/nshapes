@@ -101,7 +101,7 @@ Fighters bring **no gear and no active button**. A fighter's identity is two alw
 | Fighter | Passive 1 | Passive 2 | Plays like | Unlock |
 |---|---|---|---|---|
 | Orange Tabby | **Nine Lives**: once per fight, a knockout leaves you on 1 heart | **Scrappy**: +1 damage per missing heart on every Set | Risky brawler | Start |
-| Sly Fox | **Combo**: Sets within 5s chain, +1 damage per step (max +4); a mistake breaks it | **Hot Streak**: at max Combo, your next Set deals ×2 | Speed | 1-3 ★★ |
+| Sly Fox | **Combo**: Sets within 5s chain (+0.75s per trait beyond 3: 6.5s with 5 traits), +1 damage per step (max +4); a mistake breaks it | **Hot Streak**: at max Combo, your next Set deals ×2 | Speed | 1-3 ★★ |
 | Corgi | **Zoomies**: every 5th Set re-deals the board clean (duds and hidden cards gone) | **Fetch**: matching a power or gold card brings a new one onto the board | Board shaper | 2-4 ★★ |
 | Badger | **Grudge**: each mistake stores a grudge (max 3); the next Set releases +3 per grudge | **Thick Hide**: your first mistake each wave costs no heart | Gambler | 2-7 ★★ |
 | Emperor Penguin | **Patience**: a Set made 2.5s+ per trait after the last one deals +2 (10s with 4 traits) | **Deep Freeze**: every Rainbow Strike freezes the clock and the foe for 4s | Precision, Rainbow hunter | 2-8 ★★ |
@@ -205,42 +205,57 @@ A **Rule** is `trigger` + optional `when` conditions + `effects`, with an option
 - Destructive weapons have a damage number as well as a chance: each card they destroy deals its collateral (blast 1, laser 2, ricochet 1, burn 1) **plus** the weapon's `explosionDamage` / `laserDamage` / `ricochetDamage` / `burnDamage`.
 - `rarity` on a built weapon is only the trim colour of its relic art, and follows its level (`trimForLevel`). UI never shows it.
 
-The Free Play roster (`src/utils/gameDefinitions.ts`) is reused: `effects` are level 1 and `perLevel` the flat gain per level. Adventure adds **rule weapons** in `data/adventureWeapons.ts`: a plain `Weapon` plus `stats` (their numbers, levelled and tuned the same way) and `build`, which turns the numbers into rules and wording. Revenge Linker has an Adventure version there (its Free Play effect lives in the Free Play loop); Sympathetic Flames is Free Play only (`FREE_PLAY_ONLY_WEAPONS`). `data/armory.ts` `getArmoryWeapon(id, weaponBuilds(save))` finds a weapon at its build.
+The Free Play roster (`src/utils/gameDefinitions.ts`) is reused, with **Adventure's own numbers and extras in `data/weaponTuning.ts`** (`ADVENTURE_TUNING`): `effects` are level 1 and `perLevel` the flat gain per level, `extra` are numbers only Adventure uses, and `rider` builds rules and modifiers from the weapon's current numbers. Free Play's numbers are untouched. Adventure adds **rule weapons** in `data/adventureWeapons.ts`: a plain `Weapon` plus `stats` (their numbers, levelled and tuned the same way) and `build`, which turns the numbers into rules and wording. Revenge Linker has an Adventure version there (its Free Play effect lives in the Free Play loop); Sympathetic Flames is Free Play only (`FREE_PLAY_ONLY_WEAPONS`). `data/armory.ts` `getArmoryWeapon(id, weaponBuilds(save))` finds a weapon at its build.
 
-| Weapon (id) | Level 1 | + per level | Tunable numbers |
-|---|---|---|---|
-| Blast Powder (`blast-powder`) | 10% blast, +0.25 dmg/card | +6%, +0.25 | both |
-| Flint Spark (`flint-spark`) | 10% fire, +0.25 dmg/card | +6%, +0.25 | both |
-| Prismatic Ray (`prismatic-ray`) | 4% laser, +0.5 dmg/card | +2.5%, +0.5 | both |
-| Chaos Shard (`chaos-shard`) | 10% ricochet, 5% bounce, +0.25 dmg | +6%, +3%, +0.25 | all three |
-| Echo Stone (`echo-stone`) | 5% echo | +3% | yes |
-| Chain Reaction (`chain-reaction`) | 30% double echo | +10% | yes |
-| Mending Charm (`mending-charm`) | 6% heal | +4% | yes |
-| Fortune Token (`fortune-token`) | 6% grace | +4% | yes |
-| Seeker Lens (`seeker-lens`) | 6% hint | +4% | yes |
-| Oracle Eye (`oracle-eye`) | 15% auto-hint | +5% | yes |
-| Mystic Sight (`mystic-sight`) | 33% two-card hints | +10% | yes |
-| Growth Seed (`growth-seed`) | 6% growth | +4% | yes |
-| Scholar's Tome (`scholars-tome`) | 20% XP | +8% | yes |
-| Fortune's Favor (`fortunes-favor`) | 20% coin | +6% | yes |
-| Time Drop (`time-drop`) | 5% for +20s | +3%, +2s | both |
-| Chrono Shard (`chrono-shard`) | +15s | +10s | yes |
-| Field Stone (`field-stone`) | +2 board cards | +1 | yes (by chance) |
-| Second Chance (`second-chance`) | +1 grace | +1 | yes (by chance) |
-| Life Vessel (`life-vessel`) | +1 heart | +0.5 | yes (by chance) |
-| Crystal Orb (`crystal-orb`) | +1 hint slot | +1 | yes (by chance) |
-| Link Stone (`connector`) | 15% link | +5% | yes |
-| Web Spinner (`web-weaver`) | 1 starting link | +1 | yes (by chance) |
-| Echo Chamber (`echo-chamber`) | +1s per linked card | +0.5s | yes |
-| Neural Network (`neural-network`) | 30% bonus link | +10% | yes |
-| Bridges (Chaos Conduit, Temporal Rift, Soul Harvest, Cascade Core, Fortune's Blessing, Wisdom Chain, Grace Conduit, Life Link) | 10-30% trigger | +3-8% | yes |
-| Clarity Lens (`clarity-lens`) | 3 Sets in 10s: 33% simplify for 15s | +9%, +2s | both |
-| War Drum (`war-drum`) | 5 Sets in 20s: board +2 power | +2s, +0.5 | both |
-| Amplifier Coil (`amplifier-coil`) | 20% per Set: next trigger ×2 | +6% | yes |
-| Piñata (`pinata`) | 20%: a card gets +2 hits, +10 on break | +6%, +3 | both |
-| Catalyst Prism (`catalyst-prism`) | +6% Catalysts (+25% after a Rainbow) | +3%, +3% | both |
-| Rally Horn (`rally-horn`) | first Set each wave +6 | +3 | yes |
-| Revenge Linker (`revenge-linker`) | lost heart: 3 rolls at 20% to link | +5% | yes |
+**Three rules every weapon follows** (see [balance-philosophy.md](./balance-philosophy.md), "Weapons and evolutions"):
+
+1. **It does something you can see, alone, at level 1.** Proc weapons fire about once in five Sets from the start. Timing weapons use beats an average player hits at any trait count (every Nth Set, 3 Sets in 15s), not "5 Sets in 20s".
+2. **Support weapons hit back.** Hearts, hints, graces, coins and XP each come with a strike on the foe: Mending Charm overheals for damage, Second Chance's grace saves hit, Crystal Orb's hints hit when used, Life Vessel adds Set damage at full hearts.
+3. **Reacting weapons bring their own trigger.** The old "bridge" weapons (Chaos Conduit, Temporal Rift, Cascade Core...) used to do nothing without a second weapon. Each now carries a small version of the effect it reacts to (Chaos Conduit blasts a little, Temporal Rift adds a little time), so it works alone and takes off when paired.
+
+| Weapon (id) | Level 1 | Level 5 (untuned) |
+|---|---|---|
+| Blast Powder (`blast-powder`) | 18% chance per Set to blast the cards next to it. Each blasted card deals 1.5 damage. | 34% blast, 2.5 dmg per card |
+| Mending Charm (`mending-charm`) | 12% chance per Set to heal 1 heart. While at full hearts, it also hits the foe for 4. | 28% heal, overheal hits for 8 |
+| Flint Spark (`flint-spark`) | 18% chance per Set to set the cards next to it on fire. Each burned card deals 1.5 damage. | 34% fire, 2.5 dmg per card |
+| Catalyst Prism (`catalyst-prism`) | Rainbow Strikes hit for 4 more. +6% Catalyst chance on every refill, and +25% more on refills after a Rainbow Strike. | Rainbows +12, +18% Catalysts |
+| Rally Horn (`rally-horn`) | The first Set of each wave, and every 4th Set of the fight, deals +5 damage. | Wave openers and every 4th Set +15 |
+| Field Stone (`field-stone`) | Every fight starts with 2 extra cards. Every card on a wave's opening board deals +1 when matched. | +6 cards, opening board +3 |
+| Piñata (`pinata`) | Each Set has a 20% chance to give a random card +1 hit. Breaking that card deals +8 damage. | Sets may hang a +20 piñata |
+| Clarity Lens (`clarity-lens`) | Every 5th Set hits the foe for 5 and simplifies the board for 10s: one trait becomes the same on every card. | Every 5th Set: +15 and simplify |
+| Prismatic Ray (`prismatic-ray`) | 10% chance per Set to fire a laser through a row or column. Each card hit deals 2.5 damage. | 20% laser, 5.5 dmg per card |
+| Chrono Shard (`chrono-shard`) | +20s on the clock in timed fights. | +60s clock |
+| Growth Seed (`growth-seed`) | 15% chance per Set to add a card to the board. Each time it does, every card on the board deals +1 more when matched. | 35% growth, board +1 each time |
+| Chaos Shard (`chaos-shard`) | 18% chance per Set to ricochet into a random card, 20% to keep bouncing. Each hit deals 1.5 damage. | 40% ricochet, 3.5 dmg per hit |
+| Seeker Lens (`seeker-lens`) | 15% chance per Set to gain a hint and hit the foe for 3. | 35% hint + 6 dmg |
+| War Drum (`war-drum`) | 3 Sets within 15s: every card on the board deals +1 more when matched. | 3 Sets in 21s: board +2 damage |
+| Link Stone (`connector`) | 25% chance per Set to link two of its spots. Linked cards are destroyed together. | 49% link per Set |
+| Oracle Eye (`oracle-eye`) | 25% chance to point out a card of a Set when you go quiet. Sets made 8s or more after the last deal +2. | 49% auto-hint, slow Sets +5 |
+| Time Drop (`time-drop`) | 10% chance per Set to add 5s to the clock. | 22% chance of +9s |
+| Second Chance (`second-chance`) | Start every fight with 1 extra grace. Every grace save hits the foe for 4. | +5 graces, saves hit for 12 |
+| Amplifier Coil (`amplifier-coil`) | Each Set: 25% chance to shock the foe for 2 and make the next weapon trigger (blast, heal, laser, fire...) happen twice. | 49%: +4 and next trigger ×2 |
+| Fortune's Favor (`fortunes-favor`) | 20% chance per Set to gain +1 coin and hit the foe for 2. | 44% bonus coin + 3 dmg |
+| Life Vessel (`life-vessel`) | +1 max heart in every fight. While at full hearts, every Set deals +1. | +3 hearts, full hearts +3 |
+| Scholar's Tome (`scholars-tome`) | 20% chance per Set to gain +1 XP and hit the foe for 2. | 52% bonus XP + 3 dmg |
+| Echo Stone (`echo-stone`) | 10% chance per Set to match another Set for you (an echo). Every echo also hits the foe for 3. | 20% echo, +9 per echo |
+| Fortune Token (`fortune-token`) | 12% chance per Set to gain a grace and hit the foe for 4. | 26% grace + 8 dmg |
+| Life Link (`life-link`) | +1 max heart. Every heart you lose: 50% chance to blast 4 cards. | +1 heart; lost hearts: 90% blast |
+| Grace Conduit (`grace-conduit`) | Start every fight with 1 extra grace. Every grace used: 40% chance to fire a laser (2.5 per card). | +3 graces; graces: 80% laser |
+| Fortune's Blessing (`fortunes-blessing`) | 15% chance per Set to gain +1 coin and hit the foe for 2. Every coin you gain: 30% chance to gain a hint. | 31% coin + 3 dmg; coins: 62% hint |
+| Echo Chamber (`echo-chamber`) | Start every fight with 1 link. +0.5s on the clock for every card destroyed through a link. | +2 links, +1.5s per linked card |
+| Chaos Conduit (`chaos-conduit`) | 8% chance per Set to blast the cards next to it. Every explosion: 30% chance to gain a grace. | 16% blast; blasts: 62% grace |
+| Chain Reaction (`chain-reaction`) | 6% chance per Set to echo (match another Set for you). 30% of echoes match 2 Sets, and every echo hits the foe for 2. | 14% echo, 70% double, +6 each |
+| Mystic Sight (`mystic-sight`) | Every 3rd Set hits the foe for 3 more. 12% auto-hint chance, and 33% of auto-hints point out 2 cards. | Every 3rd Set +9, 2-card hints |
+| Crystal Orb (`crystal-orb`) | +1 hint slot, filled when the fight starts. Every hint you use hits the foe for 3. | +5 hints, each use hits for 9 |
+| Temporal Rift (`temporal-rift`) | 8% chance per Set to add 4s. Every time gain: 30% chance to echo (match another Set for you). | 16% +6s; time gains: 62% echo |
+| Soul Harvest (`soul-harvest`) | 10% chance per Set to ricochet into a random card for 1.5. Every card you destroy: 15% chance to heal 1 heart. | 22% ricochet; destroyed cards: 35% heal |
+| Cascade Core (`cascade-core`) | 6% chance per Set to echo (match another Set for you). Every echo: 40% chance to set a card on fire. Burned cards deal 2. | 14% echo; echoes: 80% fire |
+| Neural Network (`neural-network`) | 12% chance per Set to link two of its spots, and 30% chance that a new link makes a second one. | 24% link, 70% bonus link |
+| Revenge Linker (`revenge-linker`) | Losing a heart hits the foe for 4, with 3 rolls at 30% each to link a pair of cards. Linked cards are destroyed together. | Lost hearts: 12 dmg, 3× 58% link |
+| Web Spinner (`web-weaver`) | Start every fight with 2 links already placed. Linked cards are destroyed together. | +6 starting links |
+| Wisdom Chain (`wisdom-chain`) | 15% chance per Set to gain +1 XP and hit the foe for 2. Every XP you gain: 30% chance to gain a coin. | 31% XP + 3 dmg; XP: 62% coin |
+
+Time gains are exactly the seconds a weapon says (Free Play adds them to a 10s base), and all time gains in a fight together can add at most the fight's starting clock (`BASE_RULES.maxTimeGainShare`, the run's `timeBank`): a 3-minute fight can stretch to 6, never to 12.
 
 Effect caps (`game/effectCaps.ts`) were raised so a level-5, fully tuned weapon is never wasted: blast and fire 55%, hints 55%, grace 40%, echo 30%, coins 75%.
 
@@ -249,23 +264,24 @@ Effect caps (`game/effectCaps.ts`) were raised so a level-5, fully tuned weapon 
   - 1-5 ★★ Rally Horn, 1-6 ★★ Field Stone, 1-7 ★/★★ Piñata and Clarity Lens, 1-8 ★★ Prismatic Ray.
 - Later rewards that name a weapon you own level it up. No weapon is named by more than 5 rewards (level 5). The Workshop shows how many copies are still out there.
 
-## Evolutions: a 20-second power trip
+## Evolutions: a 30-second power trip
 
 `data/evolutions.ts` (recipes, families) · `engine/evolutions.ts` · `EVOLUTION_RULES` in `engine/sources.ts`
 
 1. **Arming.** There are **156 recipes: 4 per Armory weapon.** A recipe is **armed** while you hold one weapon of each of its two families among your charms, picks or buys, once the player knows any recipe (the first is taught at 1-3). Families are id prefixes, so `oracle-eye` matches `oracle-eye-rare`.
    - **9 signature recipes** (`data/evolutions.ts`, table below) arm from whole weapon families and are taught by star rewards.
    - **147 pair recipes** (`data/evolutionPairs.ts`) each arm from one exact pair of weapons and are **discovered**: the Recipe Guide shows them as "??? Evolution" until forged once, and the preview shows an armed one as "??? Evolution · ARMED". Every weapon sits in 6–12 recipes, and no pair of weapons arms two.
-   - Each pair recipe has its own twist rather than "A also does B": finales (`finale` trigger, when the 20 s run out), cashing hints or graces in for damage (`cashIn`), turning cards gold or power (`convert`), free mistakes (`shield`), clearing traps and face-down cards (`cleanse`), damage that scales with the fight (`damage` `per` board card, missing heart, link, burning card…), or "while the foe is below 30%" (`foeHpBelow`).
+   - Each pair recipe has its own twist rather than "A also does B": finales (`finale` trigger, when the 30 s run out), cashing hints or graces in for damage (`cashIn`), turning cards gold or power (`convert`), free mistakes (`shield`), clearing traps and face-down cards (`cleanse`), damage that scales with the fight (`damage` `per` board card, missing heart, link, burning card…), or "while the foe is below 50%" (`foeHpBelow`).
+   - **Every recipe is worth chasing.** It opens with something (hints, links, a blast, free mistakes) or works on every Set or every Nth Set; a recipe that only reacts to a rare event (a mistake, a lost heart) also brings a steady part. `__tests__/adventureBuilds.test.ts` checks that every recipe adds damage over its two weapons alone.
    - `__tests__/adventureEvolutions.test.ts` checks the count, uniqueness, that no pair arms two recipes, and that every recipe forges and runs through its finale in a real fight.
 2. **The Catalyst.** While anything is armed, each refill batch may bring the **Evolution Catalyst** card. Only one can be on the board at a time.
-   - **Likelihood** = (12% base + 4% per Evolution Lab tier + `evolutionLikelihood` modifiers) × Arcana `catalystChanceScale`, plus the level's own `rules.evolutionLikelihood` (1-4 adds +30).
+   - **Likelihood** = (16% base + 4% per Evolution Lab tier + `evolutionLikelihood` modifiers) × Arcana `catalystChanceScale`, plus the level's own `rules.evolutionLikelihood` (1-4 adds +30).
    - Refills caused by a Rainbow Strike add `rainbowEvolutionLikelihood`.
    - A rule can also `spawnCatalyst` directly.
-3. **Triggering.** Matching a Set that includes the Catalyst starts an evolution for **20s** (+ `evolutionDurationMs`). There is no priming and no shattering.
+3. **Triggering.** Matching a Set that includes the Catalyst hits the foe for **10** and starts an evolution for **30s** (+ `evolutionDurationMs`). There is no priming and no shattering.
 4. **Which recipe starts.** The first armed recipe, in table order, that isn't running. If all of them are running, the one closest to ending is refreshed. Several can run at once.
 5. **The cap.** **Up to 3 triggers per fight**, shared across recipes. `extraEvolutionsPerFight` raises it.
-6. **While active.** The recipe's rules are live, and every Set deals +1 damage per active evolution. The UI shows a full-width banner, countdown rings and a board pulse (a background glow, never a card border).
+6. **While active.** The recipe's rules are live, every Set's own hit is **×1.5** (once, however many evolutions run), and every Set deals +2 per active evolution (`EVOLUTION_RULES.setMultiplier`, `setDamage`). The UI shows a full-width banner, countdown rings and a board pulse (a background glow, never a card border).
 7. **Catalyst safety.** If a foe makes the Catalyst card unmatchable, or the card leaves unmatched, the Catalyst moves to another card.
 
 | Recipe | Families | While active | Unlocked at |
@@ -273,11 +289,11 @@ Effect caps (`game/effectCaps.ts`) were raised so a level-5, fully tuned weapon 
 | Phoenix Pyre | Explosion + Healing | Every heal or lost heart blasts a 3×2 block. Every Set has a 25% chance to heal 1. | 1-3 ★ |
 | Wildfire Echo | Fire + Echo | Every echo ignites 2 cards. Every card that burns out sets another alight. | 2-1 ★★★ |
 | Judgement Beam | Laser + Grace | Every grace save fires a row laser. Every 3rd Set fires a column laser. | 2-7 ★★★ |
-| Golden Hour | Coin + Time | Every coin gained adds +1s. Every time gain hits the foe for 3. | 3-2 ★★★ |
-| Seeker Swarm | Hint + Ricochet | Every hint ricochets into 2 cards. Every 2nd Set gives a hint. | 2-3 ★★★ |
+| Golden Hour | Coin + Time | Every coin gained adds +1s and deals 2. Every time gain hits the foe for 4. | 3-2 ★★★ |
+| Seeker Swarm | Hint + Ricochet | Every hint you use ricochets into 3 cards and deals 3. Every 2nd Set gives a hint. | 2-3 ★★★ |
 | Big Bang | Growth + Explosion | Every Set grows the board by 2. At 18+ cards, a Set detonates a 3×2 block. | 2-2 ★★★ |
-| Bloodline | Life + Laser | Every lost heart fires a row laser. Every heal makes your next Set deal ×2. | 3-8 ★★★ |
-| Overclock | Connector + Time | Every Set links 2 new pairs. A destroyed linked card adds +2s and deals 2. | 4-3 ★★★ |
+| Bloodline | Life + Laser | Fires a row and a column laser. Every lost heart fires a row laser. Every heal makes your next Set deal ×2. | 3-8 ★★★ |
+| Overclock | Connector + Time | Every 2nd Set links a new pair. A destroyed linked card adds +1s and deals 3. | 4-3 ★★★ |
 
 The player owns both Phoenix Pyre families (Blast Powder, Mending Charm) by the time 1-3 ★ unlocks it. 1-4 teaches it with a boosted likelihood, and its ★★★ asks for 2 evolutions.
 
@@ -343,8 +359,9 @@ The older kinds remain: `noMistakes`, `fullHearts`, `movesLeft`, `timeLeft`, `ra
 `engine/run.ts` `applyMatch`
 
 - **Card value:** each matched card is worth 1 damage (+2 on a power card), 1 coin (+3 on a gold card) and 1 XP. Power cards are dealt at 12% and gold at 10% (`data/rules.ts`), times Glass Prism's scale.
-- **Set damage** = (card points + Heavy Hitter + `setDamage` + `conditionalDamage` + passive bonuses + 1 per active evolution) × the multipliers, then the purity and snare bonuses are added. The multipliers are:
+- **Set damage** = (card points + Heavy Hitter + `setDamage` + `conditionalDamage` + passive bonuses + 2 per active evolution) × the multipliers, then the purity and snare bonuses are added. The multipliers are:
   - Rainbow (×2, plus Arcana and modifier changes).
+  - Evolved (×1.5 while any evolution is active).
   - Arcana `damageScale`.
   - The foe's multiplier.
   - `nextSetMultiplier` × Hot Streak. "Next Set ×N" effects add up rather than multiply (×2 and ×2 make ×3), and together with Hot Streak top out at ×4 (`BASE_RULES.maxNextSetMultiplier`).
@@ -427,6 +444,7 @@ src/adventure/
   data/adventureWeapons.ts  rule weapons
   data/armory.ts        weapon lookup at a build (level + tuning), old-id resolution
   data/weaponStats.ts   weapon numbers: levels (flat), tuning (multipliers), wording
+  data/weaponTuning.ts  Adventure's numbers and extra effects for the weapons shared with Free Play
   data/evolutions.ts    weapon families + 8 recipes
   data/arcana.ts        8 Arcana + stacking
   data/upgrades.ts      Workshop items (+ old weapon-level prices, for refunds)
@@ -526,7 +544,7 @@ ADVENTURE_BALANCE_REPORT=1 npx jest __tests__/adventureBalance.test.ts
   - "Win" is a knockout. Bosses and elites are a step harder for the invested player, fighter trials a step kinder; `winTargets` in `engine/botBuilds.ts` has the per-level rules.
 - How a run gears up (`engine/botBuilds.ts`, a `BuildPlan` passed to `starDistribution`): gear, recipes, Arcana and free weapon levels come from 3★ on every earlier level (`applyLevelResult`); then the plan buys a skill tree (`plan` / `spread` / `random` style), picks a random unlocked fighter (trials use their fighter) and charms ('random', 'solid' or 'mixed'), and optionally maxes the Workshop and tunes the charms. 3-2's puzzle keeps its named charms.
 - The test checks every level is within 20 points of both targets, every world's mean within 10, both players find each world harder than the last, and the evolution level shows the invested player an evolution.
-- Foe HP in `levels.ts` is tuned so both players land as close to their targets as one number allows. **If you change skill trees, the Workshop, tuning or evolutions, retune HP**: the invested curve moves with them.
+- Foe HP in `levels.ts` is tuned so both players land as close to their targets as one number allows. **If you change skill trees, the Workshop, tuning, weapons or evolutions, retune HP**: both curves move with them.
 
 ### Broken builds
 
@@ -539,6 +557,11 @@ Plays a training dummy (a World 4 board, 25 Sets, a foe that can't fall) with en
 - every weapon alone, and every pair of weapons that arms each evolution (a recipe may beat the best single weapon by up to 1.75×, and every recipe must actually fire);
 - every fighter's full tree with the best single weapons and with each recipe (≤ 2× that fighter's best single; no fighter's best build over 1.6× the median fighter's);
 - 30 random endgame builds (fighter, full tree, 3–6 charms, 0–3 Arcana): none over 2.75× the median.
+
+The same file checks the other end, **nothing is a dead pick** (`FLOORS`): in a real timed fight (3 minutes, 5 hearts, the same foe that can't fall, nothing picked up or bought on the way, `simulateRun(..., { skipPicks: true })`):
+
+- every weapon alone deals at least 1.15× the damage of no weapon at all (weapons that only wake up on a lost heart are played by the bot that slips most, and must reach 1.05×);
+- every evolution deals more than its two weapons with evolutions switched off (≥ 1.04×), and the middle recipe at least 1.2×.
 
 Limits live in `LIMITS` at the top of the test. Things this sweep caught: next-Set ×N effects multiplied (now they add up, max ×4), board-wide power turned every card into a power card (now it's a separate charge), the board-growth trigger fired on a full board, Blast/Laser/Ricochet damage levels didn't reach the weapons' own procs, Patience counted almost every Set at 4–5 traits (now 2.5 s per trait), Sly Fox's "Combo 4+" payoffs fed their own Combo steps, and Corgi's power-card nodes fired on every Set.
 

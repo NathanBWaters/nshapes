@@ -285,15 +285,15 @@ describe('evolutions', () => {
     expect(startFight({ save: { ...armedSave, charms: ['blast-powder'] } }).armedRecipes).toEqual([]);
   });
 
-  it('likelihood = 12% base + 4% per Evolution Lab tier + modifiers', () => {
-    expect(startFight({ save: armedSave }).evolutionLikelihood).toBe(12);
-    expect(startFight({ save: { ...armedSave, upgrades: { evolution_lab: 3 } } }).evolutionLikelihood).toBe(24);
+  it('likelihood = 16% base + 4% per Evolution Lab tier + modifiers', () => {
+    expect(startFight({ save: armedSave }).evolutionLikelihood).toBe(16);
+    expect(startFight({ save: { ...armedSave, upgrades: { evolution_lab: 3 } } }).evolutionLikelihood).toBe(28);
     const prism = { ...armedSave, armory: [...armedSave.armory, 'catalyst-prism'], charms: [...armedSave.charms, 'catalyst-prism'] };
-    expect(startFight({ save: prism }).evolutionLikelihood).toBe(18);
+    expect(startFight({ save: prism }).evolutionLikelihood).toBe(22);
   });
 
   it('a level can add to the likelihood', () => {
-    expect(startFight({ save: armedSave, level: testLevel({ rules: { evolutionLikelihood: 30 } }) }).evolutionLikelihood).toBe(42);
+    expect(startFight({ save: armedSave, level: testLevel({ rules: { evolutionLikelihood: 30 } }) }).evolutionLikelihood).toBe(46);
   });
 
   const catalystOn = (s: RunState): RunState => {
@@ -311,10 +311,13 @@ describe('evolutions', () => {
     expect(s.board.filter(c => c.hasEvolutionItem)).toHaveLength(1);
   });
 
-  it('matching the Catalyst starts a 20s evolution whose rules are live, plus +1 damage per Set', () => {
+  it('matching the Catalyst hits the foe and starts a 30s evolution: its rules are live, and every Set deals ×1.5 and +2', () => {
     let s = catalystOn(startFight({ save: armedSave, features: ['hearts', 'gear', 'evolutions'] }));
+    const plain = damageOf(s, findSet(s, set => !set.some(c => c.hasEvolutionItem))).dmg;
     s = playSet(s, catalystSet(s));
-    expect(s.activeEvolutions).toEqual([{ id: phoenix.id, remainingMs: 20000, durationMs: 20000 }]);
+    expect(s.activeEvolutions).toEqual([{ id: phoenix.id, remainingMs: 30000, durationMs: 30000 }]);
+    // The opening burst, named after the recipe in the fight log
+    expect(s.log[s.log.length - 1].lines).toContainEqual({ type: 'hit', amount: 10, text: phoenix.name });
     expect(s.evolutionsTriggered).toBe(1);
     expect(s.forgedRecipes).toEqual([phoenix.id]);
     expect(eventsOf(s, 'evolution_start')[0].text).toBe(phoenix.name);
@@ -323,8 +326,8 @@ describe('evolutions', () => {
     expect(eventsOf(s, 'blast').length).toBeGreaterThan(0);
     expect(s.foeHp).toBeLessThan(before);
     const r = damageOf(s, findSet(s));
-    expect(r.dmg).toBeGreaterThanOrEqual(4);
-    s = tick(r.next, 20000, 1000);
+    expect(r.dmg).toBeGreaterThanOrEqual(Math.max(4, plain));
+    s = tick(r.next, 30000, 1000);
     expect(s.activeEvolutions).toEqual([]);
     expect(eventsOf(s, 'evolution_end')).toHaveLength(1);
   });

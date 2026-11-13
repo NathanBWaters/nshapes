@@ -36,7 +36,7 @@ import {
   addCoins, addConnection, addRandomConnections, addTime, addXp, arcana, begin, chanceStatsOf, dealDamage, drawCard,
   emit, enqueue, finish, foeMultiplier, heal, hurt, igniteCards, keepCatalystMatchable, mods, placeCatalyst,
   pruneConnections, recycle, refill, refreshSources, rollBridges, syncTraps, toDeckCard, tuning, updateCards,
-  MAX_BOARD, type Draft, type FightHooks,
+  MAX_BOARD, type Draft, type FightHooks, TIME_HEADROOM,
 } from './fight';
 import { EVOLUTION_RULES } from './sources';
 import { recordFightStart, recordLog } from './fightLog';
@@ -271,7 +271,9 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   const flat =
     points + d.bonusDamagePerMatch + (m.setDamage ?? 0) + conditional + passiveSetDamage(d, sinceLastMs) +
     d.activeEvolutions.length * EVOLUTION_RULES.setDamage;
-  const rainbowMult = rainbow ? (a.rainbowMultiplier ?? BASE_RULES.rainbowMultiplier) + (m.rainbowMultiplierBonus ?? 0) : 1;
+  const rainbowMult =
+    (rainbow ? (a.rainbowMultiplier ?? BASE_RULES.rainbowMultiplier) + (m.rainbowMultiplierBonus ?? 0) : 1) *
+    (d.activeEvolutions.length > 0 ? EVOLUTION_RULES.setMultiplier : 1);
   const enemyMult = (enemyResult.pointsMultiplier || 1) * (statMods.pointsMultiplier || 1);
   // "Next Set ×N" effects and Hot Streak together top out at the same cap (data/rules.ts)
   const setMult = Math.min(BASE_RULES.maxNextSetMultiplier, d.nextSetMultiplier * hotStreak);
@@ -554,7 +556,8 @@ export const createRun = (level: LevelDef, save: AdventureSave, opts: CreateRunO
     mistakes: 0,
     movesLeft: startingMoves,
     timeLeft: timer,
-    timeCap: timer === null ? null : timer + 15,
+    timeCap: timer === null ? null : timer + TIME_HEADROOM,
+    timeBank: timer === null ? null : Math.round(timer * BASE_RULES.maxTimeGainShare),
     elapsedMs: 0,
     lastMatchAtMs: 0,
     replacing: [],

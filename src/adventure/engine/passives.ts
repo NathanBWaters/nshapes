@@ -4,6 +4,7 @@
  * can reshape them. The combo counter itself runs for every fighter (it feeds
  * the HUD and `comboReach` challenges); Sly Fox turns it into damage.
  */
+import { comboWindowFor } from '../data/passives';
 import type { Card } from '@/types';
 import type { PassiveId, PassiveState } from '../types';
 import { BASE_RULES } from '../data/rules';
@@ -49,7 +50,7 @@ const noteCombo = (d: Draft) => {
   }
 };
 
-export const comboWindowMs = (d: Draft) => tuning(d, 'combo.windowMs');
+export const comboWindowMs = (d: Draft) => comboWindowFor(tuning(d, 'combo.windowMs'), d.attributes.length);
 
 /** A Set extends the chain if it lands inside the window, else starts a new one. */
 export const advanceCombo = (d: Draft) => {

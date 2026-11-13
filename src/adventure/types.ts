@@ -375,7 +375,7 @@ export type AdventureWeapon = Weapon & RuleSource & {
   build?: (v: Record<string, number>) => RuleSource & { description: string; shortDescription: string };
 };
 
-/** Two weapon families fused into a 20-second power state. */
+/** Two weapon families fused into a 30-second power state. */
 export interface EvolutionRecipe {
   id: string;
   name: string;
@@ -684,6 +684,8 @@ export interface RunState {
   timeLeft: number | null;
   /** Rule and weapon time gains can't push the clock past this */
   timeCap: number | null;
+  /** Seconds the clock can still gain this fight (a fight can at most double its clock); null when untimed */
+  timeBank: number | null;
   elapsedMs: number;
   lastMatchAtMs: number;
   /** Cards scored or missed that the UI will REPLACE shortly; nothing else touches them meanwhile */

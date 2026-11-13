@@ -27,7 +27,7 @@ import { MECHANICS } from '../data/mechanics';
 import { getBiome } from '../data/biomes';
 import { foeDisplay } from '../data/foes';
 import { getFighter } from '../data/fighters';
-import { getPassive, DEFAULT_COMBO_WINDOW_MS, PASSIVE_TUNING } from '../data/passives';
+import { comboWindowFor, getPassive, DEFAULT_COMBO_WINDOW_MS, PASSIVE_TUNING } from '../data/passives';
 import { getArcana } from '../data/arcana';
 import { EVOLUTION_RECIPES } from '../data/evolutions';
 import { weaponLevelSuffix } from '../data/armory';
@@ -351,7 +351,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
           pushTip({
             id: COACH_KEYS.evolution,
             title: `${recipe?.name ?? 'Evolution'} is live!`,
-            text: `For 20 seconds: ${recipe?.activeText ?? 'your evolved rules are on.'} Every Set also deals +1. The ring by the HP bar shows the time left.`,
+            text: `For 30 seconds: ${recipe?.activeText ?? 'your evolved rules are on.'} Every Set also deals ×1.5 and +2. The ring by the HP bar shows the time left.`,
             icon: recipe?.icon ?? 'lorc/crystal-shine',
             anchor: 'top',
             label: 'Evolution',
@@ -732,7 +732,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
 const tune = (id: PassiveId, key: string): number => (PASSIVE_TUNING[id] as Record<string, number>)[key] ?? 0;
 
 const comboWindowMs = (run: RunState): number =>
-  run.passives.includes('combo') ? tune('combo', 'combo.windowMs') : DEFAULT_COMBO_WINDOW_MS;
+  comboWindowFor(run.passives.includes('combo') ? tune('combo', 'combo.windowMs') : DEFAULT_COMBO_WINDOW_MS, run.attributes.length);
 
 /** One passive's live state. Lit when it is about to matter. */
 const PassiveChip: React.FC<{ id: PassiveId; run: RunState }> = ({ id, run }) => {

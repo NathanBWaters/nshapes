@@ -991,10 +991,10 @@ export const MECHANICS: Record<string, MechanicDef> = {
     kind: 'feature',
     enables: 'evolutions',
     title: 'Evolutions',
-    tagline: 'Two weapon families + a Catalyst card = 20 seconds of chaos.',
+    tagline: 'Two weapon families + a Catalyst card = 30 seconds of chaos.',
     body: [
       'A recipe fuses two weapon families. Equip a charm from each and the recipe is ARMED.',
-      'While a recipe is armed, a glowing Catalyst card can turn up on the board. Match it in any Set and the evolution runs for 20 seconds: new rules, plus +1 damage on every Set.',
+      'While a recipe is armed, a glowing Catalyst card can turn up on the board. Match it in any Set: the foe takes 10 at once and the evolution runs for 30 seconds, with new rules and every Set dealing ×1.5 and +2.',
       'Up to 3 evolutions per fight. Your first recipe, Phoenix Pyre, fuses Blast Powder and Mending Charm.',
     ],
     lessons: [
@@ -1026,7 +1026,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
         },
       },
       {
-        title: '20 seconds of fire',
+        title: '30 seconds of fire',
         body: ['Phoenix Pyre: every heal OR lost heart blasts a 3×2 block, and Sets heal 1 on a 25% roll.', 'So while it runs, getting hit is good. A ring counts down the seconds you have left.'],
       },
     ],
@@ -1043,7 +1043,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
         { icon: 'lorc/fireball', label: '20s of power' },
       ],
     },
-    coachMark: { on: 'catalyst_spawn', text: 'A Catalyst! Match it in any Set to evolve for 20 seconds.' },
+    coachMark: { on: 'catalyst_spawn', text: 'A Catalyst! Match it in any Set to evolve for 30 seconds.' },
   },
   arcana_cards: {
     id: 'arcana_cards',

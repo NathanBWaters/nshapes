@@ -9,15 +9,29 @@ import type { AdventureWeapon } from '../types';
 import type { RuleSource } from '../rules/types';
 import { ADVENTURE_WEAPONS, LEGACY_ADVENTURE_WEAPON_IDS } from './adventureWeapons';
 import { BASE_BUILD, buildWeapon, type WeaponBuilds } from './weaponStats';
+import { ADVENTURE_TUNING } from './weaponTuning';
 
 /** Free Play weapons Adventure never hands out: their effect only exists in the Free Play game loop. */
 export const FREE_PLAY_ONLY_WEAPONS: readonly string[] = ['sympathetic-flames'];
 
 export const findAdventureWeapon = (id: string): AdventureWeapon | undefined => ADVENTURE_WEAPONS.find(w => w.id === id);
 
+/** A Free Play weapon with Adventure's numbers (data/weaponTuning.ts). */
+const tuned = (w: Weapon): Weapon => {
+  const t = ADVENTURE_TUNING[w.id];
+  if (!t) return w;
+  const { bridgeChance, ...effects } = t.effects ?? {};
+  return {
+    ...w,
+    effects: { ...w.effects, ...effects } as Weapon['effects'],
+    perLevel: { ...w.perLevel, ...t.perLevel },
+    ...(w.bridgeEffect && bridgeChance !== undefined ? { bridgeEffect: { ...w.bridgeEffect, chance: bridgeChance } } : {}),
+  };
+};
+const TUNED: Weapon[] = WEAPONS.filter(w => !FREE_PLAY_ONLY_WEAPONS.includes(w.id)).map(tuned);
+
 /** The authored weapon at level 1 (an adventure version wins over a Free Play one with the same id). */
-export const armoryBaseWeapon = (id: string): Weapon | undefined =>
-  findAdventureWeapon(id) ?? (FREE_PLAY_ONLY_WEAPONS.includes(id) ? undefined : WEAPONS.find(w => w.id === id));
+export const armoryBaseWeapon = (id: string): Weapon | undefined => findAdventureWeapon(id) ?? TUNED.find(w => w.id === id);
 
 /** Weapon `id` at its build in `builds` (absent = level 1, untuned). */
 export const getArmoryWeapon = (id: string, builds?: WeaponBuilds): Weapon | undefined => {

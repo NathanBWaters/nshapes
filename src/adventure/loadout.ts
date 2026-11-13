@@ -140,7 +140,8 @@ export const startingLoadout = (
     : [];
   const modifiers = modifiersOf({ skillNodes, weapons, activeEvolutions: [] });
 
-  let stats: PlayerStats = { ...DEFAULT_PLAYER_STATS, hints: 0, graces: 0, effectCaps: { ...DEFAULT_PLAYER_STATS.effectCaps! } };
+  // Time gains are exactly the seconds the weapons say (Free Play adds them to a 10s base)
+  let stats: PlayerStats = { ...DEFAULT_PLAYER_STATS, hints: 0, graces: 0, timeGainAmount: 0, effectCaps: { ...DEFAULT_PLAYER_STATS.effectCaps! } };
   for (const w of weapons) stats = applyWeaponToStats(stats, w);
   stats = resolveWholeStats(stats, rand);
   let bonusDamagePerMatch = 0;

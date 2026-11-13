@@ -1,5 +1,5 @@
 /**
- * Evolutions: a 20-second power trip.
+ * Evolutions: a 30-second power trip.
  *
  * There are 4 evolutions per Armory weapon (156). The 9 SIGNATURE recipes here
  * arm from two weapon FAMILIES and are taught by star rewards; the other 147
@@ -10,9 +10,13 @@
  * A signature recipe is two weapon families from different roles. It is ARMED in a fight
  * while the player holds one weapon of each family (charms, picks or buys).
  * While a recipe is armed, refills may bring the Evolution Catalyst card;
- * matching it in a Set starts the evolution for 20 s. Its rules (below) are
- * live only during that window, on top of a flat +1 damage per Set
+ * matching it in a Set hits the foe for 10 and starts the evolution for 30 s.
+ * Its rules (below) are live only during that window, on top of what every
+ * evolution gives: every Set's own hit ×1.5 and +2 per active evolution
  * (engine/sources.ts EVOLUTION_RULES). Up to 3 evolutions per fight.
+ *
+ * Every recipe must be worth chasing (__tests__/adventureBuilds.test.ts): it
+ * opens with something or works on every Set, not only on a rare event.
  *
  * A family is the weapons that produce (or, for the bridge weapons, react to)
  * one effect. The two families of one recipe never share a weapon, so one
@@ -98,12 +102,12 @@ export const SIGNATURE_RECIPES: EvolutionRecipe[] = [
     icon: 'delapouite/coins-pile',
     families: [fam('coin'), fam('time')],
     familyText: 'Coin + Time',
-    activeText: 'Every coin you gain adds +1s. Every time gain hits the foe for 3.',
+    activeText: 'Every coin you gain adds +1s and deals 2. Every time gain hits the foe for 4.',
     flavor: 'Time is money. Money is time. Both of them hurt, if you throw them hard enough.',
     source: {
       rules: [
-        { trigger: { on: 'weapon', kind: 'coin' }, effects: [{ do: 'time', seconds: 1 }] },
-        { trigger: { on: 'weapon', kind: 'time' }, effects: [{ do: 'damage', amount: 3 }], callout: 'Golden!' },
+        { trigger: { on: 'weapon', kind: 'coin' }, effects: [{ do: 'time', seconds: 1 }, { do: 'damage', amount: 2 }] },
+        { trigger: { on: 'weapon', kind: 'time' }, effects: [{ do: 'damage', amount: 4 }], callout: 'Golden!' },
       ],
     },
   },
@@ -113,11 +117,11 @@ export const SIGNATURE_RECIPES: EvolutionRecipe[] = [
     icon: 'lorc/chained-arrow-heads',
     families: [fam('hint'), fam('ricochet')],
     familyText: 'Hint + Ricochet',
-    activeText: 'Every hint ricochets into 2 cards. Every 2nd Set gives you a hint.',
+    activeText: 'Every hint you use ricochets into 3 cards and deals 3. Every 2nd Set gives you a hint.',
     flavor: 'Point at a Set, and a swarm of shards points at everything else.',
     source: {
       rules: [
-        { trigger: { on: 'hintUsed' }, effects: [{ do: 'ricochet', count: 2 }], callout: 'Swarm!' },
+        { trigger: { on: 'hintUsed' }, effects: [{ do: 'ricochet', count: 3 }, { do: 'damage', amount: 3 }], callout: 'Swarm!' },
         { trigger: { on: 'everyNthSet', n: 2 }, effects: [{ do: 'hint', amount: 1 }] },
       ],
     },
@@ -148,10 +152,11 @@ export const SIGNATURE_RECIPES: EvolutionRecipe[] = [
     icon: 'lorc/broken-heart-zone',
     families: [fam('life'), fam('laser')],
     familyText: 'Life + Laser',
-    activeText: 'Every lost heart fires a row laser. Every heal makes your next Set deal ×2.',
+    activeText: 'Fires a row laser and a column laser. Every lost heart fires a row laser. Every heal makes your next Set deal ×2.',
     flavor: 'Every drop you spill is a beam. Every drop you win back is a promise.',
     source: {
       rules: [
+        { trigger: { on: 'evolutionStart' }, effects: [{ do: 'laser', area: { shape: 'row' } }, { do: 'laser', area: { shape: 'column' } }] },
         { trigger: { on: 'hurt' }, effects: [{ do: 'laser', area: { shape: 'row' } }], callout: 'Bloodline!' },
         { trigger: { on: 'healed' }, effects: [{ do: 'nextSetMultiplier', times: 2 }] },
       ],
@@ -163,12 +168,12 @@ export const SIGNATURE_RECIPES: EvolutionRecipe[] = [
     icon: 'lorc/time-trap',
     families: [fam('connector'), fam('time')],
     familyText: 'Connector + Time',
-    activeText: 'Every Set links 2 new pairs of cards. A linked card destroyed adds +2s and deals 2.',
+    activeText: 'Every 2nd Set links a new pair of cards. A linked card destroyed adds +1s and deals 3.',
     flavor: 'Wire the whole board into one clock, then pull the pin.',
     source: {
       rules: [
-        { trigger: { on: 'set' }, effects: [{ do: 'link', count: 2 }] },
-        { trigger: { on: 'linkDestroyed' }, effects: [{ do: 'time', seconds: 2 }, { do: 'damage', amount: 2 }], callout: 'Overclock!' },
+        { trigger: { on: 'everyNthSet', n: 2 }, effects: [{ do: 'link', count: 1 }] },
+        { trigger: { on: 'linkDestroyed' }, effects: [{ do: 'time', seconds: 1 }, { do: 'damage', amount: 3 }], callout: 'Overclock!' },
       ],
     },
   },

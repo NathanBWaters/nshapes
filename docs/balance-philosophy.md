@@ -40,6 +40,51 @@ They should win roughly:
   and World 5 is a coin flip at best.
 - Raw puzzle skill can carry the bare player early, but not past World 3.
 
+## Weapons and evolutions: everything should be worth picking
+
+The game should be exciting to play, not just fair. Weapons and evolutions are
+tuned to these, in order:
+
+1. **Nothing is a dead pick.** Every weapon, held alone, adds damage you can
+   see from level 1, and every evolution adds damage on top of its two weapons.
+   Before this pass two thirds of the weapons added nothing alone (support
+   weapons had no payoff, "bridge" weapons needed a partner to do anything),
+   and the typical evolution lasted two Sets.
+2. **Things happen often.** A proc weapon fires about once in five Sets at
+   level 1 and about once in two at its best. Timing weapons use beats an
+   average player can hit at five traits (about 10 s a Set): every Nth Set,
+   3 Sets in 15 s. Not "5 Sets in 20 s".
+3. **Support hits back.** Hearts, hints, graces, coins and XP all come with a
+   strike on the foe, so a survival build still ends fights.
+4. **An evolution is a power trip.** Matching the Catalyst hits the foe at
+   once, and for 30 s every Set deals ×1.5 and +2 on top of the recipe's own
+   rules. A recipe opens with something or works on every Set; it never waits
+   only for a rare event.
+5. **Strong is fine, runaway is not.** Two damage weapons with their evolution
+   should be the top of the field, not ten times it. Loops that made fights
+   last forever are capped (all time gains together can at most double a
+   fight's clock).
+
+Rough bands, measured on a training dummy with endgame gear (level 5, fully
+tuned), as damage per fight against no weapons at all:
+
+| | Weakest | Typical | Strongest |
+|---|---|---|---|
+| A damage weapon alone (Blast, Flint, Chaos Shard, War Drum, Ray) | ×2.7 | ×3 | ×4 |
+| A support or engine weapon alone | ×1.3 | ×1.9 | ×2.4 |
+| An evolution, over its two weapons without it | ×1.1 | ×1.35 | ×2 (link-and-time recipes up to ×2.5) |
+
+Life Link and Revenge Linker only wake up when you lose a heart, so they add
+little on a dummy that never hits back (about ×1.1 with the bot that slips
+most) and more against real foes.
+
+At level 1 every weapon adds something (typically +5% to +35% in an early
+fight); levels and Workshop tuning are still where most of its power comes
+from, which is what keeps the bare and invested players apart.
+
+`__tests__/adventureBuilds.test.ts` holds both ends: ceilings (nothing runs
+away) and floors (every weapon alone, and every evolution, pulls its weight).
+
 ## How the balance bots use this
 
 `__tests__/adventureBalance.test.ts` plays every level with both players
@@ -64,4 +109,4 @@ players win them about 85%. 1-1 can't be lost.
 
 Foe HP is the knob: each level's HP is set so both players land as close to
 their targets as one number allows. If a change to progression (skill trees,
-Workshop, tuning, evolutions) moves one curve, retune HP and check both.
+Workshop, tuning, weapons, evolutions) moves one curve, retune HP and check both.

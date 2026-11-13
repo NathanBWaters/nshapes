@@ -23,6 +23,11 @@ export const PASSIVE_TUNING = {
 /** The combo window every fighter's combo counter uses when Sly Fox's tuning doesn't apply. */
 export const DEFAULT_COMBO_WINDOW_MS = PASSIVE_TUNING.combo['combo.windowMs'];
 
+/** More traits take longer to read, so the Combo window grows a little with them (Patience grows the same way). */
+export const COMBO_MS_PER_EXTRA_TRAIT = 750;
+/** The Combo window on a board with this many traits: the tuned window, plus 0.75s per trait beyond 3 (6.5s at 5 traits). */
+export const comboWindowFor = (windowMs: number, traits: number): number => windowMs + COMBO_MS_PER_EXTRA_TRAIT * Math.max(0, traits - 3);
+
 type Tuning = Record<string, number>;
 
 const s = (n: number) => (n === 1 ? '' : 's');
@@ -38,7 +43,7 @@ const TEXT: Record<PassiveId, (t: Tuning) => string> = {
   },
   scrappy: t => `+${t['scrappy.perHeart']} damage per missing heart on every Set.`,
   combo: t =>
-    `Sets within ${secs(t['combo.windowMs'])} chain: +${t['combo.perStep']} damage per step (max +${t['combo.max'] * t['combo.perStep']}). A mistake breaks it.`,
+    `Sets within ${secs(t['combo.windowMs'])} chain (a little longer with 4 or 5 traits): +${t['combo.perStep']} damage per step (max +${t['combo.max'] * t['combo.perStep']}). A mistake breaks it.`,
   hot_streak: t => `At max Combo, your next Set deals ×${t['hotStreak.multiplier']}.`,
   grudge: t =>
     `Each mistake stores a grudge (max ${t['grudge.max']}). Your next Set releases +${t['grudge.damage']} damage per grudge.`,

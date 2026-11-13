@@ -56,7 +56,7 @@ const comboDiscoveryPage = (stage: ComboStage): LessonPage => {
   const stars = '★'.repeat(stage.star);
   const unlocks = `unlocks your very first EVOLUTION: ${name}${recipe ? ` (${recipe.familyText})` : ''}`;
   const knockout = stage.star >= 2 ? `Knocking out ${levelFoe(level).name} (${stars})` : `Earning ${stars} against ${levelFoe(level).name}`;
-  const catalysts = 'Carry both of its weapon families as charms and a Catalyst card can turn up on the board. Match it in a Set to evolve for 20 seconds';
+  const catalysts = 'Carry both of its weapon families as charms and a Catalyst card can turn up on the board. Match it in a Set to evolve for 30 seconds';
   const comboIcon = recipe?.icon ?? 'lorc/fireball';
   if (level.branchOf) {
     // Reached before the main-path evolution level, so nothing taught there (the clock) may be mentioned
@@ -113,11 +113,11 @@ export const buildAdaptiveEvolutionMechanic = (save: AdventureSave): MechanicDef
   if (!recipe) return base;
   return {
     ...base,
-    tagline: `${recipe.name} is ready: match the Catalyst card to evolve for 20 seconds!`,
+    tagline: `${recipe.name} is ready: match the Catalyst card to evolve for 30 seconds!`,
     body: [
       `You unlocked ${recipe.name}! It is ARMED in any fight where your charms include both of its families: ${recipe.familyText}.`,
-      'While a recipe is armed, refills can bring an Evolution Catalyst card. Match it in any Set and the evolution runs for 20 seconds.',
-      `While it runs: ${recipe.activeText} Every Set also deals +1 damage.`,
+      'While a recipe is armed, refills can bring an Evolution Catalyst card. Match it in any Set: the foe takes 10 at once and the evolution runs for 30 seconds, with every Set dealing ×1.5.',
+      `While it runs: ${recipe.activeText} Every Set also deals ×1.5 and +2.`,
       'Up to 3 evolutions per fight. The Recipe Guide in the Field Guide lists every recipe.',
     ],
     demo: {

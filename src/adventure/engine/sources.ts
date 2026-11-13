@@ -12,13 +12,17 @@ import { weaponRuleSource } from '../data/armory';
 
 export const EVOLUTION_RULES = {
   /** % chance per refill batch while a recipe is armed */
-  baseLikelihood: 12,
+  baseLikelihood: 16,
   /** Workshop "Evolution Lab": % per tier */
   labPerTier: 4,
-  durationMs: 20000,
+  durationMs: 30000,
   perFight: 3,
   /** Every active evolution adds this to every Set */
-  setDamage: 1,
+  setDamage: 2,
+  /** While any evolution is active, every Set's own hit is multiplied by this */
+  setMultiplier: 1.5,
+  /** Starting an evolution hits the foe for this much */
+  startDamage: 10,
 } as const;
 
 export { getSkillNode };

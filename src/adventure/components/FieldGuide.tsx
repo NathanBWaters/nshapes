@@ -3,7 +3,7 @@
  *   Mechanics: every mechanic you've met, in campaign order, plus level hazards.
  *   Fighters:  each fighter's two passives and how skill trees work.
  *   Recipes:   every evolution — the two families that arm it, what it does
- *              for 20 seconds, and whether your current charms arm it.
+ *              for 30 seconds, and whether your current charms arm it.
  */
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
@@ -208,7 +208,7 @@ const FieldGuide: React.FC<Props> = ({ save, onClose }) => {
             <Text style={st.howBody}>
               1. Learn your first recipe in the campaign. From then on EVERY recipe is ARMED in any fight where your charms (or picks and buys) hold both of its weapons. There are {EVOLUTION_RECIPES.length}: a few are taught by stars, the rest you discover by forging them.{'\n'}
               2. While a recipe is armed, refills can bring an Evolution Catalyst card. The Evolution Lab and some weapons make it more likely.{'\n'}
-              3. Match the Catalyst in any Set: the evolution runs for 20 seconds, with its own rules and +1 damage on every Set. Up to 3 per fight.
+              3. Match the Catalyst in any Set: the foe takes 10 at once and the evolution runs for 30 seconds, with its own rules and every Set dealing ×1.5 and +2. Up to 3 per fight.
             </Text>
           </View>
 

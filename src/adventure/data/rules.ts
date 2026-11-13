@@ -12,4 +12,10 @@ export const BASE_RULES = {
    * Multiplying let a few cheap triggers before one Set snowball to ×8, ×16...
    */
   maxNextSetMultiplier: 4,
+  /**
+   * Time gains (weapons, rules, evolutions) can add at most this share of the
+   * fight's starting clock in total. Without it, link-and-time loops ran
+   * 3-minute fights for 12 minutes.
+   */
+  maxTimeGainShare: 1,
 } as const;

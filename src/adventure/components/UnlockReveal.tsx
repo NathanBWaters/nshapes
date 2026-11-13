@@ -208,7 +208,7 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                 {evo && (
                   <>
                     <Text style={[st.rowBody, { color: '#5EEAD4' }]}>Armed by: {evo.familyText}</Text>
-                    <Text style={st.rowBody}>For 20 seconds: {evo.activeText}</Text>
+                    <Text style={st.rowBody}>For 30 seconds: {evo.activeText}</Text>
                     <Text style={st.note}>{evo.flavor}</Text>
                     {u.kind === 'evolution' && u.firstEvolution && evoMechanic && (
                       <View style={st.charmBox}>

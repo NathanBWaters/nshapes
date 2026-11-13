@@ -11,7 +11,13 @@
  *     signature recipes and the 20 strongest pair recipes;
  *   - a spread of random endgame builds (fighter, full tree, charms, Arcana).
  * "Broken" means far ahead of the field (limits below), not merely strong:
- * a recipe is meant to beat its two halves. ADVENTURE_BUILDS_REPORT=1 prints the tables.
+ * a recipe is meant to beat its two halves.
+ *
+ * The last block is the other end (docs/balance-philosophy.md, "Weapons and
+ * evolutions"): nothing is a dead pick. In a real timed fight with nothing
+ * picked up along the way, every weapon alone out-damages no weapon at all,
+ * and every evolution out-damages its two weapons without it.
+ * ADVENTURE_BUILDS_REPORT=1 prints the tables.
  */
 import { getLevel } from '@/adventure/data/levels';
 import { createMaxedSave } from '@/adventure/progress';
@@ -41,6 +47,20 @@ const LIMITS = {
   randomVsMedian: 2.75,
 };
 
+/** How little a weapon or an evolution may add before it counts as a dead pick. */
+const FLOORS = {
+  /** A weapon alone vs no weapon, total damage in a timed fight */
+  single: 1.15,
+  /** The same for weapons that only wake up when you lose hearts, played by the bot that slips most */
+  singleWhenHurt: 1.05,
+  /** A recipe's pair with evolutions on vs the same pair with evolutions off */
+  evolutionLift: 1.04,
+  /** The middle recipe's lift: evolutions as a whole are a power trip, not a rounding error */
+  medianEvolutionLift: 1.2,
+};
+/** Weapons whose own effect needs a lost heart */
+const HURT_WEAPONS = ['life-link', 'revenge-linker'];
+
 const ref = getLevel('4-4');
 const DUMMY: LevelDef = {
   ...ref,
@@ -65,6 +85,16 @@ const endgameSave = (): AdventureSave => {
 };
 
 const SAVE = endgameSave();
+
+/** A real timed fight (3 minutes, 5 hearts) against the same foe that can't fall. */
+const TIMED: LevelDef = { ...DUMMY, rules: { ...DUMMY.rules, moves: undefined, timer: 180, hearts: 5 } };
+const FLOOR_RUNS = 10;
+/** Mean total damage in the timed fight, with nothing picked up or bought on the way. */
+const totalDamage = (save: AdventureSave, bot = BOTS.average) => {
+  let sum = 0;
+  for (let i = 0; i < FLOOR_RUNS; i++) sum += simulateRun(TIMED, save, bot, 1000 + i * 7919, undefined, { skipPicks: true }).state.totalDamage;
+  return sum / FLOOR_RUNS;
+};
 const DAMAGE_WEAPONS = ['blast-powder', 'flint-spark', 'prismatic-ray', 'chaos-shard'];
 
 /** Mean damage per Set on the dummy (`dps` below), and mean evolutions started. */
@@ -217,5 +247,33 @@ describe('no broken builds (endgame weapons on a training dummy)', () => {
     const sorted = [...builds].sort((a, b) => b.dps - a.dps);
     report.push(`random builds: median ${fmt(mid)}, top: ` + sorted.slice(0, 3).map(b => `${fmt(b.dps)} ${b.label}`).join(' | '));
     expect(sorted[0].dps).toBeLessThanOrEqual(mid * LIMITS.randomVsMedian);
+  });
+});
+
+describe('nothing is a dead pick (endgame weapons, a timed fight, no picks)', () => {
+  it('every weapon alone out-damages no weapon at all', () => {
+    const none = totalDamage({ ...SAVE, charms: [] });
+    const noneHurt = totalDamage({ ...SAVE, charms: [] }, BOTS.novice);
+    const rows = SAVE.armory.map(id => {
+      const hurt = HURT_WEAPONS.includes(id);
+      const dmg = totalDamage({ ...SAVE, charms: [id] }, hurt ? BOTS.novice : BOTS.average);
+      return { id, hurt, ratio: dmg / (hurt ? noneHurt : none) };
+    });
+    report.push('weapons alone vs none: ' + [...rows].sort((a, b) => a.ratio - b.ratio).map(r => `${r.id} ×${fmt(r.ratio)}`).join(', '));
+    for (const r of rows) expect({ id: r.id, ok: r.ratio >= (r.hurt ? FLOORS.singleWhenHurt : FLOORS.single) }).toEqual({ id: r.id, ok: true });
+  });
+
+  it('every evolution out-damages its two weapons without it, and the typical one by a lot', () => {
+    const lifts = armableRecipes(SAVE).map(recipe => {
+      const charms = [recipe.options[0][0], recipe.options[1][0]];
+      const on = totalDamage({ ...SAVE, charms });
+      const off = totalDamage({ ...SAVE, charms, unlockedEvolutions: [] });
+      return { id: recipe.id, lift: on / off };
+    });
+    const sorted = [...lifts].sort((a, b) => a.lift - b.lift);
+    report.push(`evolution lift: median ×${fmt(median(lifts.map(l => l.lift)))}, weakest ` + sorted.slice(0, 8).map(l => `${l.id} ×${fmt(l.lift)}`).join(', '));
+    report.push('evolution lift, strongest: ' + sorted.slice(-8).map(l => `${l.id} ×${fmt(l.lift)}`).join(', '));
+    for (const l of lifts) expect({ id: l.id, ok: l.lift >= FLOORS.evolutionLift }).toEqual({ id: l.id, ok: true });
+    expect(median(lifts.map(l => l.lift))).toBeGreaterThanOrEqual(FLOORS.medianEvolutionLift);
   });
 });

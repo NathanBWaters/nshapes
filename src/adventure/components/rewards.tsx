@@ -81,7 +81,7 @@ export const describeUnlockable = (u: Unlockable): UnlockableDisplay => {
       return {
         kind: u.kind, name, revealed: `Evolution: ${name}`, secret: 'An evolution', bountySecret: 'An evolution',
         icon: r?.icon ?? 'lorc/crystal-shine', headline: 'New evolution unlocked!',
-        tease: 'Two weapon families can now fuse into a 20-second power trip!',
+        tease: 'Two weapon families can now fuse into a 30-second power trip!',
         badge: 'EVOLUTION RECIPE', accent: '#FFD700',
       };
     }

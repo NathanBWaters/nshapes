@@ -50,7 +50,7 @@ export type Trigger =
   | { on: 'cardBurned' }
   /** A card was destroyed because it was linked to a destroyed card */
   | { on: 'linkDestroyed' }
-  /** This evolution's 20 seconds ran out (only an evolution's own rules hear it) */
+  /** This evolution's 30 seconds ran out (only an evolution's own rules hear it) */
   | { on: 'finale' };
 
 export type Condition =

@@ -170,10 +170,10 @@ describe('loadout', () => {
       const e = r.effects[0];
       return [r.trigger.on === 'setsWithin' ? r.trigger.withinMs : NaN, e.do === 'empowerBoard' ? e.amount : NaN];
     };
-    expect([1, 2, 3, 4, 5].map(l => drum(l))).toEqual([[20000, 2], [22000, 3], [24000, 3], [26000, 4], [28000, 4]]);
-    // ×1.5 on the window, ×1.2 on power, at level 5
-    expect(drum(5, { window: 4, power: 2 })).toEqual([42000, 5]);
-    expect(getArmoryWeapon('war-drum', { 'war-drum': { level: 3, tuning: {} } })!.shortDescription).toBe('5 Sets in 24s: board +3 damage');
+    expect([1, 2, 3, 4, 5].map(l => drum(l))).toEqual([[15000, 1], [16500, 1], [18000, 2], [19500, 2], [21000, 2]]);
+    // ×1.5 on the window and on power, at level 5
+    expect(drum(5, { window: 4, power: 4 })).toEqual([31500, 3]);
+    expect(getArmoryWeapon('war-drum', { 'war-drum': { level: 3, tuning: {} } })!.shortDescription).toBe('3 Sets in 18s: board +2 damage');
   });
 
   it('every adventure weapon has numbers that grow with level and wording built from them', () => {
@@ -188,12 +188,12 @@ describe('loadout', () => {
   it('a stat weapon levels every number flatly; tuning multiplies one (Blast Powder)', () => {
     const blast = (level: number, tuning: Record<string, number> = {}) =>
       getArmoryWeapon('blast-powder', { 'blast-powder': { level, tuning } })!.effects;
-    expect([1, 2, 3, 4, 5].map(l => blast(l).explosionChance)).toEqual([10, 16, 22, 28, 34]);
-    expect([1, 2, 3, 4, 5].map(l => blast(l).explosionDamage)).toEqual([0.25, 0.5, 0.75, 1, 1.25]);
+    expect([1, 2, 3, 4, 5].map(l => blast(l).explosionChance)).toEqual([18, 22, 26, 30, 34]);
+    expect([1, 2, 3, 4, 5].map(l => blast(l).explosionDamage)).toEqual([0.5, 0.75, 1, 1.25, 1.5]);
     expect(blast(5, { explosionChance: 4 }).explosionChance).toBe(51);
-    expect(blast(5, { explosionChance: 4 }).explosionDamage).toBe(1.25);
+    expect(blast(5, { explosionChance: 4 }).explosionDamage).toBe(1.5);
     expect(getArmoryWeapon('blast-powder', { 'blast-powder': { level: 3, tuning: { explosionChance: 2 } } })!.shortDescription)
-      .toBe('26.4% blast, 1.8 dmg per card');
+      .toBe('31.2% blast, 2 dmg per card');
   });
 });
 
@@ -248,7 +248,7 @@ describe('fighter passives', () => {
     s = playSet(tick(s, 500));
     s = playSet(tick(s, 500));
     expect(s.combo).toBe(2);
-    s = tick(s, 6000);
+    s = tick(s, 7000);
     expect(s.combo).toBe(0);
   });
 

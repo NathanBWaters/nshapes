@@ -313,7 +313,7 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                 })}
                 {armed.length > 0 && (
                   <Text style={st.evoHintSub} testID="preview-evo-likelihood">
-                    Catalyst chance {Math.round(loadout.evolutionLikelihood)}% per refill · up to {loadout.evolutionCap} evolutions this fight. Match the Catalyst to evolve for 20 s.
+                    Catalyst chance {Math.round(loadout.evolutionLikelihood)}% per refill · up to {loadout.evolutionCap} evolutions this fight. Match the Catalyst to evolve for 30 s.
                   </Text>
                 )}
               </View>

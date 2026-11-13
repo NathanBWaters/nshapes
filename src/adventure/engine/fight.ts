@@ -345,18 +345,24 @@ export const hurt = (d: Draft, amount: number) => {
   }
   if (d.hearts > 0) {
     for (const w of rollBridges(d, 'onHealthLoss')) {
-      if (w.bridgeEffect?.effect === 'explosion') destroyCards(d, areaIndices(d, { shape: 'random', count: 2 }), 'explosion');
+      if (w.bridgeEffect?.effect === 'explosion') destroyCards(d, areaIndices(d, { shape: 'random', count: 4 }), 'explosion');
     }
   }
 };
 
-/** Add seconds to the clock (timed fights only), up to `timeCap`. */
+/** Add seconds to the clock (timed fights only), up to `timeCap` and what is left in the fight's `timeBank`. */
 export const addTime = (d: Draft, seconds: number, cap: number | null = d.timeCap) => {
   if (d.timeLeft === null || seconds === 0) return;
   const before = d.timeLeft;
-  d.timeLeft = Math.max(0, cap === null ? d.timeLeft + seconds : Math.min(Math.max(cap, d.timeLeft), d.timeLeft + seconds));
+  // (`typeof`: a run saved before the bank existed has none, and plays without the limit)
+  const banked = typeof d.timeBank === 'number';
+  const allowed = seconds > 0 && banked ? Math.min(seconds, d.timeBank!) : seconds;
+  d.timeLeft = Math.max(0, cap === null ? d.timeLeft + allowed : Math.min(Math.max(cap, d.timeLeft), d.timeLeft + allowed));
   const gained = d.timeLeft - before;
-  if (gained > 0) emit(d, 'time_gain', Math.round(gained * 10) / 10);
+  if (gained > 0) {
+    if (banked) d.timeBank = Math.max(0, d.timeBank! - gained);
+    emit(d, 'time_gain', Math.round(gained * 10) / 10);
+  }
 };
 
 export const addHints = (d: Draft, n: number) => {
