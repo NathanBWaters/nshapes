@@ -103,14 +103,19 @@ export interface Mix {
   alerts: FightAlerts;
 }
 
-/** Each world's home key (semitones above C) and mode. The tune is the same; the colour is not. */
+/**
+ * Each world's home key (semitones above C) and mode. Every world shares the
+ * map's key, so walking from the map into a fight never transposes the tune:
+ * the home note stays put and only the colour (the mode) changes. Key changes
+ * are kept for things that happen IN a fight (a new wave, an evolution).
+ */
 export const WORLD_TONE: Record<string, { key: number; mode: ModeName }> = {
   map: { key: 0, mode: 'ionian' },
   meadow: { key: 0, mode: 'ionian' },
-  woods: { key: -3, mode: 'dorian' },
-  canyon: { key: 2, mode: 'mixolydian' },
-  peaks: { key: 4, mode: 'lydian' },
-  boss: { key: -5, mode: 'aeolian' },
+  woods: { key: 0, mode: 'dorian' },
+  canyon: { key: 0, mode: 'mixolydian' },
+  peaks: { key: 0, mode: 'lydian' },
+  boss: { key: 0, mode: 'aeolian' },
 };
 export const worldTone = (arrangement: string) => WORLD_TONE[arrangement] ?? WORLD_TONE.map;
 

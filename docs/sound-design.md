@@ -42,10 +42,12 @@ fight, tap a weapon, hold it to add it to the band, tap a recipe.
 | A high glass ping twice a bar | The Glass Sword's window is nearly shut | `alerts.glassLow` |
 | A loud tick on every beat | A foe's bomb or countdown card is close | `alerts.bombSoon` |
 
-Each world plays the same tune in its own key and mode: Meadow in C major,
-Woods in A dorian, Canyon in D mixolydian, Peaks in E lydian, bosses in G minor
-(`WORLD_TONE`). Each mode swaps the one chord of the loop that would turn sour
-in it (`theory.ts` `PROGRESSIONS`).
+Every world plays the same tune in the same key as the map (C), each in its
+own mode: Meadow major, Woods dorian, Canyon mixolydian, Peaks lydian, bosses
+minor (`WORLD_TONE`). Walking from the map into a fight never transposes the
+tune; only its colour changes. Key changes are kept for things that happen in
+a fight (a new wave, an evolution). Each mode swaps the one chord of the loop
+that would turn sour in it (`theory.ts` `PROGRESSIONS`).
 
 ## The casino layer
 

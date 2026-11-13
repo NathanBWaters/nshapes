@@ -644,7 +644,7 @@ Limits live in `LIMITS` at the top of the test. Things this sweep caught: next-S
 - **Every weapon is a band member** (`src/audio/voices.ts`): an instrument and a one-bar riff that joins the music while you hold it and plays a sting when it fires. Tap a weapon in the Armory to hear it.
 - **Every evolution is a duet** of its two weapons: a fanfare, both riffs an octave up, a key lift, a brighter mode and its own drum groove. All 204 are different.
 - **The casino layer:** three card taps spell the chord; a Set strums it and rings one rung higher up the streak ladder for every Set in the combo; a chain of effects plays one 32nd note apart and ends on the cash register; big hits duck the music under a sub-bass drop.
-- **Worlds:** the same tune in each world's own key and mode (`WORLD_TONE`), over the arrangements in `src/audio/songs.ts` (`map`, `meadow`, `woods`, `canyon`, `peaks`, `boss`). Switching arrangement waits for the next bar line.
+- **Worlds:** the same tune in the map's key, in each world's own mode (`WORLD_TONE`), so entering a fight never changes key, over the arrangements in `src/audio/songs.ts` (`map`, `meadow`, `woods`, `canyon`, `peaks`, `boss`). Switching arrangement waits for the next bar line.
 - **The sound button on the map** turns the whole score on and off.
 - **Platforms:** web only (Web Audio). Native keeps the bundled samples.
 - **Checking without speakers:** `npx jest __tests__/audioScore.test.ts`; `/dev/sound` → Check levels; `__nshapesAudio.renderOffline({ script })` in a dev build.

@@ -244,6 +244,8 @@ describe('the director', () => {
     for (const name of Object.keys(ARRANGEMENTS)) expect(worldTone(name).mode).toBeDefined();
     for (const b of Object.values(BIOMES)) expect({ music: b.music, known: b.music in ARRANGEMENTS }).toEqual({ music: b.music, known: true });
     expect(restingMix('map').lead).toBe(true);
+    // Walking from the map into any fight never changes key
+    for (const name of Object.keys(ARRANGEMENTS)) expect({ name, key: worldTone(name).key }).toEqual({ name, key: worldTone('map').key });
   });
 
   it('losing hearts turns the tune darker, and the last heart adds a heartbeat and muffles the band', () => {
