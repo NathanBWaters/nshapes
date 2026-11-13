@@ -255,6 +255,37 @@ The Free Play roster (`src/utils/gameDefinitions.ts`) is reused, with **Adventur
 | Web Spinner (`web-weaver`) | Start every fight with 2 links already placed. Linked cards are destroyed together. | +6 starting links |
 | Wisdom Chain (`wisdom-chain`) | 15% chance per Set to gain +1 XP and hit the foe for 2. Every XP you gain: 30% chance to gain a coin. | 31% XP + 3 dmg; XP: 62% coin |
 
+### Trick weapons
+
+`data/adventureWeapons.ts` ("Trick weapons") · `engine/gear.ts` · `RunState.gear`
+
+Thirteen weapons that give you something to hunt for or keep up, rather than a chance that fires on its own. Their numbers arrive as modifiers (`magnetDamage`, `snowballMax`…), so a trick is on while its number is above zero; their state lives in `RunState.gear` and a few card flags.
+
+| Weapon | What you do | Where its state shows |
+|---|---|---|
+| Magnet | One card is marked. A Set that includes it deals +5; the mark moves. | Magnet icon on the card |
+| Bounty Poster | One trait value is wanted. Each wanted card matched deals +1.5; changes after 3. | WANTED chip in the HUD |
+| Mirror Shard | A Set that uses a spot from your last Set deals +4. | (the spots that just refilled) |
+| Odd One Out | Sets with exactly 1 trait different deal +4 (at 4+ traits, exactly 1 the same too). | |
+| Collector's Album | One "all the same but X" Set per trait (number, shape, color, shading when in play). The Set that fills the last page deals +15, then it resets. At 4+ traits one other trait may differ too. | Page pips in the HUD |
+| Snowball | Each Set adds +1 to later Sets this wave (max +3, +1 per level). A mistake halves it. | Stack chip in the HUD |
+| Glass Sword | Every Set +6, until a mistake or 6s without a Set shatters it for the wave. | Countdown chip in the HUD |
+| Devil's Bargain | 1 heart fewer; +1 per missing heart (the lost one counts). | |
+| Wild Card | 10% of new cards are wild: a wild card makes a Set with any two cards. One at a time. | The card shows a joker |
+| Twin Seed | 15% of new cards are exact twins of a card on the board. Matching one destroys the other for 5. | Twin icon on both cards |
+| Fog Lantern | 10% of new cards arrive face-down; after 8s they flip up as power cards worth +7. | Lantern on the card back |
+| Understudy | Copies the charm to its left, at the Understudy's own level, untuned. | Armory shows what it copies |
+| Encore Mask | When an evolution ends it hits for 10 and its opening rules fire again. | |
+
+- **Wild cards and Set rules:** `isValidCombination` (utils/gameUtils.ts) and `engine/sets.ts` treat a wild card as completing any Set; for Rainbows, Purity and Odd One Out a trait counts as different when the other two cards differ in it.
+- **Understudy** is resolved where charms become weapons (`charmWeapons` / `understudyOf` in `data/armory.ts`); picked up mid-fight it copies the weapon picked up before it. It keeps its own id, so it never arms the copied weapon's evolutions.
+- Trick weapons don't arm evolutions yet (`TRICK_WEAPON_IDS`), so the "4 recipes per weapon" count excludes them.
+- The bots hunt the way a player would (`engine/bot.ts`): they prefer a Set with the marked card, a reused spot or an empty Album page, and find Sets faster while a wild card is out.
+
+### Armory shelves
+
+The Armory shelves weapons by job (`data/weaponRoles.ts`): Damage, Tricks, Board, Hearts & graces, Hints/coins/XP, Time & evolutions, Echoes & links. Charm slots are numbered and an equipped weapon shows its slot, because slot order matters to the Understudy.
+
 Time gains are exactly the seconds a weapon says (Free Play adds them to a 10s base), and all time gains in a fight together can add at most the fight's starting clock (`BASE_RULES.maxTimeGainShare`, the run's `timeBank`): a 3-minute fight can stretch to 6, never to 12.
 
 Effect caps (`game/effectCaps.ts`) were raised so a level-5, fully tuned weapon is never wasted: blast and fire 55%, hints 55%, grace 40%, echo 30%, coins 75%.
@@ -445,6 +476,8 @@ src/adventure/
   data/armory.ts        weapon lookup at a build (level + tuning), old-id resolution
   data/weaponStats.ts   weapon numbers: levels (flat), tuning (multipliers), wording
   data/weaponTuning.ts  Adventure's numbers and extra effects for the weapons shared with Free Play
+  data/weaponRoles.ts   which Armory shelf each weapon sits on
+  engine/gear.ts        trick weapons: marks, bounties, stacks, album pages, twins, fog
   data/evolutions.ts    weapon families + 8 recipes
   data/arcana.ts        8 Arcana + stacking
   data/upgrades.ts      Workshop items (+ old weapon-level prices, for refunds)

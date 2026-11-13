@@ -11,7 +11,7 @@ import { MECHANICS } from './data/mechanics';
 import { getFighter } from './data/fighters';
 import { UPGRADES } from './data/upgrades';
 import { arcanaRules } from './data/arcana';
-import { getArmoryWeapon } from './data/armory';
+import { charmWeapons } from './data/armory';
 import { weaponBuilds } from './weaponLevels';
 import { WHOLE_STATS } from './data/weaponStats';
 import { armedRecipesFor, evolutionLikelihoodFor, getSkillNode, modifiersOf, EVOLUTION_RULES } from './engine/sources';
@@ -136,7 +136,7 @@ export const startingLoadout = (
   const arcana = gear ? fightArcana(save) : [];
   const rules = arcanaRules(arcana);
   const weapons: Weapon[] = gear
-    ? fightCharms(save).map(id => getArmoryWeapon(id, weaponBuilds(save))).filter((w): w is Weapon => !!w)
+    ? charmWeapons(fightCharms(save), weaponBuilds(save))
     : [];
   const modifiers = modifiersOf({ skillNodes, weapons, activeEvolutions: [] });
 

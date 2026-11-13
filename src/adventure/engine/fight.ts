@@ -13,7 +13,7 @@ import { getLinkedDestructionPositions, arePositionsConnected } from '@/utils/co
 import type { ArcanaRules, FightLogLine, FightLogSetMath, PassiveId, RunEvent, RunEventType, RunState } from '../types';
 import type { Area, Modifiers, WeaponTriggerKind } from '../rules/types';
 import { arcanaRules } from '../data/arcana';
-import { BASE_RULES } from '../data/rules';
+import { BASE_RULES, TRICK_RULES } from '../data/rules';
 import { PASSIVE_TUNING } from '../data/passives';
 import { createRng, type Rng } from './rng';
 import { hasAnySet, isSelectable } from './sets';
@@ -22,6 +22,7 @@ import { EVOLUTION_RULES, evolutionLikelihoodFor, liveRules, modifiersOf, type K
 export const MAX_BOARD = 21;
 export const GRID_COLS = 3;
 export const MAX_TRAPS_PER_KIND = 2;
+export const FOG_MS = TRICK_RULES.fogMs;
 export const SNARE_DEFUSE_DAMAGE = 4;
 /** Rule and evolution time gains can lift the clock this far above its start */
 export const TIME_HEADROOM = 15;
@@ -79,6 +80,7 @@ export interface Draft extends RunState {
 export const begin = (s: RunState, hooks: FightHooks): Draft => ({
   ...s,
   passive: { ...s.passive },
+  gear: { ...s.gear },
   ruleState: { ...s.ruleState },
   activeEvolutions: s.activeEvolutions.map(e => ({ ...e })),
   hazardRefills: { ...s.hazardRefills },
@@ -204,6 +206,25 @@ export const toDeckCard = (c: Card): Card => ({
 const withAttribute = (c: Card, attribute: AttributeName, value: string | number): Card =>
   ({ ...c, [attribute]: value }) as Card;
 
+/**
+ * Trick weapons that change what gets dealt (engine/gear.ts has the rest):
+ * a wild card, a twin of a card on the board, or a card hidden in fog.
+ */
+const dealTricks = (d: Draft, card: Card): Card => {
+  const m = mods(d);
+  const roll = (pct: number | undefined) => (pct ?? 0) > 0 && d._rng.next() * 100 < pct!;
+  if (roll(m.wildChance) && !d.board.some(c => c.isWild)) return { ...card, isWild: true };
+  if (roll(m.twinChance)) {
+    const originals = d.board.filter(c => isSelectable(c) && !c.isWild && !c.twinOf && !c.hasEvolutionItem && !d.replacing.includes(c.id));
+    if (originals.length) {
+      const t = d._rng.pick(originals);
+      card = { ...card, shape: t.shape, color: t.color, number: t.number, shading: t.shading, background: t.background, twinOf: t.id };
+    }
+  }
+  if (roll(m.fogChance)) card = { ...card, isFaceDown: true, fogFlipAt: d.elapsedMs + FOG_MS, fogBonus: m.fogBonus ?? 0 };
+  return card;
+};
+
 export interface DrawOptions {
   /** Deal the card as-is: the foe doesn't get to turn it into a dud, bomb, etc. */
   skipFoeDrawEffects?: boolean;
@@ -218,6 +239,7 @@ export const drawCard = (d: Draft, opts?: DrawOptions): Card => {
   const specialMult = arcana(d).specialCardChanceScale ?? 1;
   if (d.features.has('coins') && d._rng.next() < BASE_RULES.coinCardChance * specialMult) card.bonusMoney = BASE_RULES.coinCardValue;
   if (d.features.has('power') && d._rng.next() < BASE_RULES.powerCardChance * specialMult) card.bonusPoints = BASE_RULES.powerCardBonus;
+  card = dealTricks(d, card);
   if (opts?.skipFoeDrawEffects) return card;
   card = d.foe.onCardDraw(card);
   if (card.isDud) emit(d, 'dud');

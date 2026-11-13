@@ -190,6 +190,16 @@ const Card: React.FC<CardProps> = ({
       indicators.push({ icon: 'delapouite/plain-arrow', color: '#B45309', rotate: SNARE_ROTATION[card.snare] });
     }
 
+    // Magnet: the marked card (a Set that includes it hits harder)
+    if (card.magnet && visible) {
+      indicators.push({ icon: 'lorc/magnet', color: '#DC2626' });
+    }
+
+    // Twin Seed: this card has an identical twin on the board
+    if (card.twinOf && visible) {
+      indicators.push({ icon: 'delapouite/gemini', color: '#7C3AED' });
+    }
+
     // Piñata bounty: bonus damage when this armored card finally breaks
     if (card.bounty && visible) {
       indicators.push({ icon: 'delapouite/pinata', color: '#DB2777', label: `${card.bounty}` });
@@ -215,7 +225,12 @@ const Card: React.FC<CardProps> = ({
   const renderFaceDownContent = () => (
     <View style={styles.faceDownContent}>
       <View style={styles.faceDownPattern}>
-        <Text style={styles.faceDownSymbol}>?</Text>
+        {card.fogFlipAt !== undefined ? (
+          // Fog Lantern: this one flips up by itself, stronger
+          <Icon name="lorc/lantern-flame" size={22} color="#FDE68A" noShadow />
+        ) : (
+          <Text style={styles.faceDownSymbol}>?</Text>
+        )}
       </View>
     </View>
   );
@@ -345,7 +360,15 @@ const Card: React.FC<CardProps> = ({
         renderFaceDownContent()
       ) : (
         <View nativeID="card-shapes" style={styles.shapesContainer}>
-          {shapes}
+          {card.isWild ? (
+            // Wild Card: no shapes of its own; it completes any Set
+            <View testID="card-wild" style={styles.wildContent}>
+              <Icon name="delapouite/card-joker" size={30} color="#7C3AED" noShadow />
+              <Text style={styles.wildText}>WILD</Text>
+            </View>
+          ) : (
+            shapes
+          )}
         </View>
       )}
 
@@ -601,6 +624,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     borderRadius: RADIUS.module - 2, // Slightly smaller to not overlap card border
   },
+  wildContent: { alignItems: 'center', justifyContent: 'center', gap: 2 },
+  wildText: { fontSize: 10, fontWeight: '900', letterSpacing: 1, color: '#7C3AED' },
   // State indicator icons (fire, connection, snare, bounty) in bottom left corner
   // Size is ~1/5 of the shapes on the card
   stateIndicatorContainer: {

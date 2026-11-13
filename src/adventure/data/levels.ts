@@ -157,7 +157,7 @@ const RAW_LEVELS: LevelInput[] = [
     rules: { attributes: A3, timer: 65, hearts: 4, hazards: { snares: { every: 5 } } },
     foes: [{ name: 'Thicket Spider', icon: 'carl-olsen/spider-face', hp: 164, taunt: 'Step where I point. Or don\'t.' }],
     challenge: { kind: 'defuseTraps', n: 6 }, coinMultiplier: 1.6, difficulty: 3,
-    rewards: { star1: { coins: 35 }, star2: { weapons: ['growth-seed'] }, star3: { coins: 80, evolution: 'big-bang' } },
+    rewards: { star1: { coins: 35, weapons: ['magnet'] }, star2: { weapons: ['growth-seed'] }, star3: { coins: 80, evolution: 'big-bang' } },
   },
   {
     id: '2-3', biome: 'woods', name: 'A Little Help', introduces: 'hints',
@@ -187,7 +187,7 @@ const RAW_LEVELS: LevelInput[] = [
     rules: { attributes: A3, timer: 60, hearts: 3, startingHints: 1 },
     foes: [{ enemy: 'Junk Rat', hp: 178, taunt: 'One rat\'s junk is… still junk.' }],
     challenge: { kind: 'explosions', n: 4 }, coinMultiplier: 1.7, difficulty: 3,
-    rewards: { star1: { coins: 40 }, star2: { weapons: ['blast-powder'] }, star3: { coins: 90, weapons: ['connector'] } },
+    rewards: { star1: { coins: 40, weapons: ['snowball'] }, star2: { weapons: ['blast-powder'] }, star3: { coins: 90, weapons: ['connector'] } },
     recommended: ['Corgi'],
   },
   {
@@ -196,7 +196,7 @@ const RAW_LEVELS: LevelInput[] = [
     rules: { attributes: A3, timer: 60, hearts: 3, startingHints: 1 },
     foes: [{ enemy: 'Night Owl', hp: 188, taunt: 'Whooo can see in the dark?' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 1.7, difficulty: 3,
-    rewards: { star1: { coins: 40 }, star2: { weapons: ['oracle-eye'] }, star3: { coins: 90, weapons: ['time-drop'] } },
+    rewards: { star1: { coins: 40, weapons: ['odd-one-out'] }, star2: { weapons: ['oracle-eye'] }, star3: { coins: 90, weapons: ['time-drop'] } },
     recommended: ['Corgi'],
   },
   {
@@ -239,7 +239,7 @@ const RAW_LEVELS: LevelInput[] = [
     rules: { attributes: A4, boardSize: 15, timer: 75, hearts: 3, startingHints: 2, startingGraces: 1 },
     foes: [{ name: 'Dusty Mammoth', icon: 'delapouite/mammoth', hp: 312, taunt: 'Solid. Striped. Open. Crushed.' }],
     challenge: { kind: 'rainbows', n: 3 }, coinMultiplier: 2.2, difficulty: 3,
-    rewards: { star1: { coins: 60 }, star2: { weapons: ['amplifier-coil'] }, star3: { coins: 140 } },
+    rewards: { star1: { coins: 60, weapons: ['bounty-poster'] }, star2: { weapons: ['amplifier-coil'] }, star3: { coins: 140, weapons: ['mirror-shard'] } },
   },
   {
     id: '3-2', biome: 'canyon', name: 'Sabotage!', introduces: 'charm_slots',
@@ -248,7 +248,7 @@ const RAW_LEVELS: LevelInput[] = [
     rules: { attributes: A4, boardSize: 15, timer: 80, hearts: 3, startingHints: 2, startingGraces: 1 },
     foes: [{ enemy: 'Goblin Saboteur', hp: 324, taunt: 'Nice gear. Shame if something happened to it.' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 2.3, difficulty: 3,
-    rewards: { star1: { coins: 65 }, star2: { weapons: ['fortunes-favor'] }, star3: { coins: 150, evolution: 'golden-hour' } },
+    rewards: { star1: { coins: 65, weapons: ['devils-bargain'] }, star2: { weapons: ['fortunes-favor'] }, star3: { coins: 150, evolution: 'golden-hour' } },
   },
   {
     id: '3-3', biome: 'canyon', name: 'Marching Ants', introduces: 'waves',
@@ -260,7 +260,7 @@ const RAW_LEVELS: LevelInput[] = [
       { name: 'Queen Ant', icon: 'delapouite/ant', hp: 184, taunt: 'You squashed my children!' },
     ],
     challenge: { kind: 'bigHit', n: 10 }, coinMultiplier: 2.4, difficulty: 3,
-    rewards: { star1: { coins: 70 }, star2: { weapons: ['rally-horn'] }, star3: { coins: 150, weapons: ['life-vessel'] } },
+    rewards: { star1: { coins: 70, weapons: ['collectors-album'] }, star2: { weapons: ['rally-horn'] }, star3: { coins: 150, weapons: ['life-vessel'] } },
   },
   {
     id: '3-4', biome: 'canyon', name: 'Market Day', introduces: 'shop',
@@ -272,7 +272,7 @@ const RAW_LEVELS: LevelInput[] = [
       { name: 'Hyena Boss', icon: 'caro-asercion/hyena-head', hp: 223, taunt: 'Everything has a price!' },
     ],
     challenge: { kind: 'shopBuys', n: 2 }, coinMultiplier: 2.5, difficulty: 3,
-    rewards: { star1: { coins: 80 }, star2: { weapons: ['fortunes-favor'] }, star3: { coins: 170, arcana: 'overkill_harvest' } },
+    rewards: { star1: { coins: 80, weapons: ['twin-seed'] }, star2: { weapons: ['fortunes-favor'] }, star3: { coins: 170, arcana: 'overkill_harvest' } },
   },
   {
     id: '3-5', biome: 'canyon', name: 'Level Up!', introduces: 'xp',
@@ -305,7 +305,7 @@ const RAW_LEVELS: LevelInput[] = [
     rules: { attributes: A4, boardSize: 15, timer: 75, hearts: 3, startingHints: 2, startingGraces: 1 },
     foes: [{ enemy: 'Burrowing Mole', hp: 510, taunt: 'Dig, dig, dig… gone!' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 2.6, difficulty: 4,
-    rewards: { star1: { coins: 80 }, star2: { weapons: ['growth-seed'] }, star3: { coins: 180, weapons: ['echo-stone'] } },
+    rewards: { star1: { coins: 80, weapons: ['fog-lantern'] }, star2: { weapons: ['growth-seed'] }, star3: { coins: 180, weapons: ['echo-stone'] } },
     recommended: ['Corgi'],
   },
   {
@@ -314,7 +314,7 @@ const RAW_LEVELS: LevelInput[] = [
     rules: { attributes: A4, boardSize: 15, timer: 75, hearts: 3, startingHints: 2, startingGraces: 1 },
     foes: [{ enemy: 'Shifting Chameleon', hp: 532, taunt: 'Now you see me…' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 2.7, difficulty: 4,
-    rewards: { star1: { coins: 90 }, star2: { weapons: ['chaos-shard'] }, star3: { coins: 190, evolution: 'bloodline' } },
+    rewards: { star1: { coins: 90, weapons: ['wild-card'] }, star2: { weapons: ['chaos-shard'] }, star3: { coins: 190, evolution: 'bloodline' } },
     recommended: ['Pelican', 'Sly Fox'],
   },
   {
@@ -323,7 +323,7 @@ const RAW_LEVELS: LevelInput[] = [
     rules: { attributes: A4, boardSize: 15, timer: 90, hearts: 3, startingHints: 2, startingGraces: 1 },
     foes: [{ enemy: 'Thieving Raven', hp: 431, taunt: 'Your seconds look delicious.' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 2.8, difficulty: 4,
-    rewards: { star1: { coins: 90 }, star2: { weapons: ['chrono-shard'] }, star3: { coins: 200, weapons: ['flint-spark'] } },
+    rewards: { star1: { coins: 90, weapons: ['glass-sword'] }, star2: { weapons: ['chrono-shard'] }, star3: { coins: 200, weapons: ['flint-spark'] } },
     recommended: ['Emperor Penguin'],
   },
   {
@@ -345,7 +345,7 @@ const RAW_LEVELS: LevelInput[] = [
     rules: { attributes: A5, boardSize: 18, timer: 90, hearts: 4, startingHints: 3, startingGraces: 2 },
     foes: [{ name: 'Snow Hare', icon: 'delapouite/rabbit', hp: 585, taunt: 'Five traits. Can you keep up?' }],
     challenge: { kind: 'streak', n: 5 }, coinMultiplier: 3.2, difficulty: 4,
-    rewards: { star1: { coins: 120 }, star2: { weapons: ['fortune-token'] }, star3: { coins: 260 } },
+    rewards: { star1: { coins: 120, weapons: ['understudy'] }, star2: { weapons: ['fortune-token'] }, star3: { coins: 260, weapons: ['encore-mask'] } },
     recommended: ['Pelican'],
   },
   {
@@ -353,7 +353,7 @@ const RAW_LEVELS: LevelInput[] = [
     rules: { attributes: A5, boardSize: 18, timer: 90, hearts: 4, startingHints: 3, startingGraces: 2 },
     foes: [{ enemy: 'Swift Bee', hp: 644, taunt: 'Bzzz! Faster! FASTER!' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 3.4, difficulty: 4,
-    rewards: { star1: { coins: 130 }, star2: { weapons: ['time-drop'] }, star3: { coins: 280, weapons: ['echo-stone'] } },
+    rewards: { star1: { coins: 130, weapons: ['mirror-shard'] }, star2: { weapons: ['time-drop'] }, star3: { coins: 280, weapons: ['echo-stone'] } },
     recommended: ['Sly Fox', 'Emperor Penguin'],
   },
   {
@@ -362,14 +362,14 @@ const RAW_LEVELS: LevelInput[] = [
     rules: { attributes: A5, boardSize: 18, timer: 90, hearts: 4, startingHints: 3, startingGraces: 2 },
     foes: [{ enemy: 'Circling Vulture', hp: 531, taunt: 'I can wait. I always wait.' }],
     challenge: { kind: 'explosions', n: 6 }, coinMultiplier: 3.5, difficulty: 4,
-    rewards: { star1: { coins: 135 }, star2: { weapons: ['fortunes-favor'] }, star3: { coins: 290, evolution: 'overclock' } },
+    rewards: { star1: { coins: 135, weapons: ['bounty-poster'] }, star2: { weapons: ['fortunes-favor'] }, star3: { coins: 290, evolution: 'overclock' } },
   },
   {
     id: '4-4', biome: 'peaks', name: 'Glass Cannon', introduces: 'double_damage',
     rules: { attributes: A5, boardSize: 18, timer: 90, hearts: 4, startingHints: 3, startingGraces: 2 },
     foes: [{ enemy: 'Stinging Scorpion', hp: 1907, taunt: 'One sting is all it takes.' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 3.6, difficulty: 5,
-    rewards: { star1: { coins: 140 }, star2: { weapons: ['life-vessel'] }, star3: { coins: 300, weapons: ['life-link'] } },
+    rewards: { star1: { coins: 140, weapons: ['odd-one-out'] }, star2: { weapons: ['life-vessel'] }, star3: { coins: 300, weapons: ['life-link'] } },
     recommended: ['Orange Tabby'],
   },
   {
@@ -377,7 +377,7 @@ const RAW_LEVELS: LevelInput[] = [
     rules: { attributes: A5, boardSize: 18, timer: 90, hearts: 4, startingHints: 3, startingGraces: 2 },
     foes: [{ enemy: 'Punishing Ermine', hp: 617, taunt: 'Every mistake will be punished.' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 3.7, difficulty: 5,
-    rewards: { star1: { coins: 145 }, star2: { weapons: ['second-chance'] }, star3: { coins: 310, weapons: ['grace-conduit'] } },
+    rewards: { star1: { coins: 145, weapons: ['fog-lantern'] }, star2: { weapons: ['second-chance'] }, star3: { coins: 310, weapons: ['grace-conduit'] } },
     recommended: ['Emperor Penguin', 'Pelican'],
   },
   {
@@ -429,7 +429,7 @@ const RAW_LEVELS: LevelInput[] = [
     },
     foes: [{ enemy: 'Ancient Dragon', hp: 3584, taunt: 'I was old when the mountains were young.' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 6, difficulty: 5,
-    rewards: { star1: { coins: 300 }, star2: { weapons: ['second-chance'] }, star3: { coins: 900, weapons: ['prismatic-ray'] } },
+    rewards: { star1: { coins: 300, weapons: ['magnet'] }, star2: { weapons: ['second-chance'] }, star3: { coins: 900, weapons: ['prismatic-ray'] } },
     recommended: ['Emperor Penguin', 'Pelican'],
   },
 
@@ -443,7 +443,7 @@ const RAW_LEVELS: LevelInput[] = [
     },
     foes: [{ enemy: 'Kraken\'s Grasp', hp: 1066, taunt: 'Your toys sink. You sink.' }],
     challenge: { kind: 'evolutions', n: 3 }, coinMultiplier: 6, difficulty: 5,
-    rewards: { star1: { coins: 300 }, star2: { weapons: ['oracle-eye'] }, star3: { coins: 900, weapons: ['blast-powder'] } },
+    rewards: { star1: { coins: 300, weapons: ['snowball'] }, star2: { weapons: ['oracle-eye'] }, star3: { coins: 900, weapons: ['blast-powder'] } },
     recommended: ['Emperor Penguin', 'Corgi'],
   },
   {
@@ -455,7 +455,7 @@ const RAW_LEVELS: LevelInput[] = [
     },
     foes: [{ enemy: 'World Eater', hp: 492, taunt: 'Every card you play, I swallow two.' }],
     challenge: { kind: 'defuseTraps', n: 5 }, coinMultiplier: 6.5, difficulty: 5,
-    rewards: { star1: { coins: 320 }, star2: { weapons: ['life-vessel'] }, star3: { coins: 950, weapons: ['growth-seed'] } },
+    rewards: { star1: { coins: 320, weapons: ['wild-card'] }, star2: { weapons: ['life-vessel'] }, star3: { coins: 950, weapons: ['growth-seed'] } },
     recommended: ['Corgi'],
   },
   {
@@ -466,7 +466,7 @@ const RAW_LEVELS: LevelInput[] = [
     },
     foes: [{ enemy: 'The Reaper', hp: 3017, taunt: 'Everyone runs out of time.' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 7, difficulty: 5,
-    rewards: { star1: { coins: 340 }, star2: { weapons: ['mending-charm'] }, star3: { coins: 1000, weapons: ['prismatic-ray'] } },
+    rewards: { star1: { coins: 340, weapons: ['twin-seed'] }, star2: { weapons: ['mending-charm'] }, star3: { coins: 1000, weapons: ['prismatic-ray'] } },
     recommended: ['Orange Tabby', 'Emperor Penguin'],
   },
   {
@@ -477,7 +477,7 @@ const RAW_LEVELS: LevelInput[] = [
     },
     foes: [{ enemy: 'Merciless Porcupine', hp: 4160, taunt: 'One wrong move. That\'s all I need.' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 7.5, difficulty: 5,
-    rewards: { star1: { coins: 360 }, star2: { weapons: ['echo-stone'] }, star3: { coins: 1100, weapons: ['chain-reaction'] } },
+    rewards: { star1: { coins: 360, weapons: ['collectors-album'] }, star2: { weapons: ['echo-stone'] }, star3: { coins: 1100, weapons: ['chain-reaction'] } },
     recommended: ['Emperor Penguin', 'Pelican'],
   },
   {
@@ -490,7 +490,7 @@ const RAW_LEVELS: LevelInput[] = [
     },
     foes: [{ enemy: 'The Hydra', hp: 925, taunt: 'Cut one head off, two more grow back. Everything you learned, all at once.' }],
     challenge: { kind: 'bigHit', n: 20 }, coinMultiplier: 8, difficulty: 5,
-    rewards: { star1: { coins: 400 }, star2: { weapons: ['chain-reaction'] }, star3: { coins: 1500, weapons: ['mystic-sight'] } },
+    rewards: { star1: { coins: 400, weapons: ['glass-sword'] }, star2: { weapons: ['chain-reaction'] }, star3: { coins: 1500, weapons: ['mystic-sight'] } },
     recommended: ['Emperor Penguin', 'Orange Tabby', 'Sly Fox'],
   },
 ];

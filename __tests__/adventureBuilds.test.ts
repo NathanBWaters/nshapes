@@ -60,6 +60,8 @@ const FLOORS = {
 };
 /** Weapons whose own effect needs a lost heart */
 const HURT_WEAPONS = ['life-link', 'revenge-linker'];
+/** Weapons that only work beside something else: the Understudy copies a charm, the Encore Mask needs an evolution */
+const PARTNER_WEAPONS = ['understudy', 'encore-mask'];
 
 const ref = getLevel('4-4');
 const DUMMY: LevelDef = {
@@ -254,13 +256,23 @@ describe('nothing is a dead pick (endgame weapons, a timed fight, no picks)', ()
   it('every weapon alone out-damages no weapon at all', () => {
     const none = totalDamage({ ...SAVE, charms: [] });
     const noneHurt = totalDamage({ ...SAVE, charms: [] }, BOTS.novice);
-    const rows = SAVE.armory.map(id => {
+    const rows = SAVE.armory.filter(id => !PARTNER_WEAPONS.includes(id)).map(id => {
       const hurt = HURT_WEAPONS.includes(id);
       const dmg = totalDamage({ ...SAVE, charms: [id] }, hurt ? BOTS.novice : BOTS.average);
       return { id, hurt, ratio: dmg / (hurt ? noneHurt : none) };
     });
     report.push('weapons alone vs none: ' + [...rows].sort((a, b) => a.ratio - b.ratio).map(r => `${r.id} ×${fmt(r.ratio)}`).join(', '));
     for (const r of rows) expect({ id: r.id, ok: r.ratio >= (r.hurt ? FLOORS.singleWhenHurt : FLOORS.single) }).toEqual({ id: r.id, ok: true });
+  });
+
+  it('the Understudy and the Encore Mask add damage beside what they need', () => {
+    const blast = totalDamage({ ...SAVE, charms: ['blast-powder'] });
+    const copied = totalDamage({ ...SAVE, charms: ['blast-powder', 'understudy'] });
+    const pair = totalDamage({ ...SAVE, charms: ['blast-powder', 'mending-charm'] });
+    const encore = totalDamage({ ...SAVE, charms: ['blast-powder', 'mending-charm', 'encore-mask'] });
+    report.push(`understudy beside Blast Powder ×${fmt(copied / blast)}, Encore Mask beside Phoenix Pyre ×${fmt(encore / pair)}`);
+    expect(copied).toBeGreaterThan(blast * 1.1);
+    expect(encore).toBeGreaterThan(pair * 1.02);
   });
 
   it('every evolution out-damages its two weapons without it, and the typical one by a lot', () => {

@@ -46,6 +46,7 @@ NShapes combines the classic SET card matching game with roguelike progression m
 * **Coins** drop from matches, bank even on a loss (not on retreat), and are spent mid-run (shop between waves) or at **Camp** (Workshop upgrades and weapon upgrades).
 * Adventure-only weapons (`data/adventureWeapons.ts`, e.g. War Drum, Amplifier Coil, Piñata) join the Armory through `getArmoryWeapon`; Free Play doesn't use them.
 * **Weapons in Adventure:** every weapon does something visible alone at level 1, support weapons also hit the foe, and weapons that react to another effect bring a little of it themselves. Adventure's numbers for the shared weapons live in `src/adventure/data/weaponTuning.ts` (Free Play's stay in `gameDefinitions.ts`).
+* **Trick weapons** (`src/adventure/engine/gear.ts`): Magnet, Bounty Poster, Mirror Shard, Odd One Out, Collector's Album, Snowball, Glass Sword, Devil's Bargain, Wild Card, Twin Seed, Fog Lantern, Understudy, Encore Mask. They give the player something to hunt for or keep up; live state shows as HUD chips or small card icons.
 * **Evolutions:** matching the Catalyst hits the foe for 10 and starts 30 seconds in which every Set deals ×1.5 and +2, on top of the recipe's own rules.
 * Balance is checked by headless bots: `ADVENTURE_BALANCE_REPORT=1 npx jest __tests__/adventureBalance.test.ts`. `__tests__/adventureBuilds.test.ts` checks that no build runs away and that no weapon or evolution is a dead pick. They play every level as two players (see [balance-philosophy.md](./docs/balance-philosophy.md)): a **bare** player (no stars, coins or recipe chasing; target wins 50/30/10/0/0% by world) and an **invested** one (every star, the Workshop maxed, a solid recipe build; 97/90/80/70/50%). `__tests__/adventureBuilds.test.ts` sweeps every weapon pair, evolution, full tree and random endgame build for broken combinations.
 * The legacy 10-round adventure flow is still in `Game.tsx` but is no longer reachable from the main menu.
@@ -87,6 +88,8 @@ The `WEAPONS` array in `src/utils/gameDefinitions.ts` is the roster (34 weapons)
 * Current icons:
   * 🔥 Fire: `lorc/campfire` (red)
   * 🔗 Connection: `lorc/linked-rings` (gray)
+  * 🧲 Magnet mark: `lorc/magnet` (red)
+  * ♊ Twin: `delapouite/gemini` (purple)
 
 This rule ensures visual consistency and prevents confusion with selection state.
 

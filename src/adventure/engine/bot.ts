@@ -12,6 +12,8 @@ import type { AdventureSave, ChallengeDef, LevelDef, RunState } from '../types';
 import { createRng, type Rng } from './rng';
 import { computeStars, createRun, runReducer, shopPrice } from './run';
 import { allSets, countDifferentAttributes, isRainbow, isSelectable } from './sets';
+import { albumPageOf } from './gear';
+import type { Modifiers } from '../rules/types';
 import { challengeCount } from './challenges';
 import { snareTarget } from './fight';
 import { armedRecipesFor } from './sources';
@@ -119,12 +121,20 @@ const chooseSet = (s: RunState, sets: Card[][], bot: BotProfile, rng: Rng): Card
       default: return null;
     }
   };
+  const held = (key: 'mirrorDamage' | 'albumDamage') => s.weapons.some(w => !!(w as { modifiers?: Modifiers }).modifiers?.[key]);
+  const mirrorHeld = held('mirrorDamage');
+  const albumHeld = held('albumDamage');
+  const lastSlots = new Set(mirrorHeld ? s.gear.lastSetSlots.map(i => s.board[i]?.id) : []);
   let picked: Card[] | null = null;
   for (const goal of chasing(s)) picked ??= goalPick(goal);
   return (
     picked ??
     prefer(set => set.some(c => c.hasEvolutionItem)) ??
     prefer(set => has(set, bombs) || has(set, defusers)) ??
+    // Trick weapons give a player something to hunt: the marked card, a spot from the last Set
+    prefer(set => set.some(c => c.magnet)) ??
+    (mirrorHeld ? prefer(set => set.some(c => lastSlots.has(c.id))) : null) ??
+    (albumHeld ? prefer(set => albumPageOf(set, s.attributes, s.gear.album) !== null) : null) ??
     (bot.huntsRainbows && s.features.has('rainbow') && rng.next() < 0.5 ? prefer(rainbow) : null) ??
     prefer(set => !has(set, snared)) ??
     rng.pick(sets)
@@ -242,7 +252,9 @@ const playRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: nu
     const pace = 0.6 + rng.next() * 0.8;
     // A simplified board has one trait the same on every card: one less thing to compare
     const traits = Math.max(1, s.attributes.length - (s.simplified ? 1 : 0));
-    let think = bot.secondsPerAttribute * traits * pace * glow * crowd;
+    // A wild card makes a Set with any two cards: nothing to search for
+    const wild = s.board.some(c => c.isWild && isSelectable(c)) ? 0.4 : 1;
+    let think = bot.secondsPerAttribute * traits * pace * glow * crowd * wild;
     // A slow search (or a "use hints" goal) is when a real player presses the bulb
     const slow = pace > 1;
     const goals = chasing(s);

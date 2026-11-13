@@ -96,8 +96,8 @@ export const ADVENTURE_TUNING: Record<string, AdventureTuning> = {
     perLevel: { ricochetChance: 3, ricochetDamage: 0.25, bridgeChance: 5 },
   },
   'life-link': {
-    effects: { maxHealth: 1, health: 1, bridgeChance: 50 },
-    perLevel: { bridgeChance: 10 },
+    effects: { maxHealth: 1, health: 1, explosionChance: 8, bridgeChance: 50 },
+    perLevel: { explosionChance: 2, bridgeChance: 10 },
   },
 
   // ── Graces ────────────────────────────────────────────────────────────────

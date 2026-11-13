@@ -242,9 +242,9 @@ const ROWS: Row[] = [
     [on(T.within(3, 10000), [E.laser(A.column)], undefined, 'Drop!'), on(T.w('laser'), [E.convert('power', 1)])]],
   // Chaos Shard
   ['pinball', 'Pinball', 'lorc/bouncing-sword', ['chaos', 'pinata'],
-    'Opens with 2 piñatas (+1 hit, +15 on break). Ricochets have a 50% chance to bounce into another card.',
+    'Opens with 2 piñatas (+1 hit, +15 on break). Every Set ricochets into a card. Ricochets have a 50% chance to bounce on.',
     'Tilt.',
-    [on(T.start, [E.armor(1, 15), E.armor(1, 15)]), on(T.w('ricochet'), [E.ricochet(1)], [C.chance(50)], 'Bounce!')]],
+    [on(T.start, [E.armor(1, 15), E.armor(1, 15)]), on(T.set, [E.ricochet(1)]), on(T.w('ricochet'), [E.ricochet(1)], [C.chance(50)], 'Bounce!')]],
   ['rebound', 'Rebound', 'delapouite/boomerang', ['chaos', 'echo'],
     'Every echo ricochets into 3 cards. Ricochets have a 20% chance to echo.',
     'What goes around comes back with friends.',

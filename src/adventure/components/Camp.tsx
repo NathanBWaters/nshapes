@@ -21,7 +21,8 @@ import { FIGHTERS } from '../data/fighters';
 import { getPassive } from '../data/passives';
 import { MAX_TUNING_TIER, MAX_WEAPON_LEVEL, TUNING_MULTIPLIERS, formatStat, weaponStatLines } from '../data/weaponStats';
 import { ARCANA } from '../data/arcana';
-import { getArmoryWeapon, weaponLevelSuffix } from '../data/armory';
+import { charmWeapons, getArmoryWeapon, weaponLevelSuffix } from '../data/armory';
+import { WEAPON_ROLES, weaponRole } from '../data/weaponRoles';
 import { unlockHint } from '../data/rewards';
 import {
   arcanaSlots,
@@ -395,14 +396,17 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters
         {tab === 'armory' && (
           <>
             <Text style={st.blurb}>
-              Tap a weapon to equip or remove it. Your charms are your whole weapon loadout. They also show up in level-up picks and shops.
+              Tap a weapon to equip or remove it. Your charms are your whole weapon loadout, in the order you equip them. They also show up in level-up picks and shops.
             </Text>
             <View style={st.slotRow} testID="camp-charm-slots">
               {Array.from({ length: slots }).map((_, i) => {
                 const w = charms[i] ? getArmoryWeapon(charms[i], weaponBuilds(save)) : undefined;
                 return (
-                  <View key={i} style={[st.slot, w && { borderColor: INK, backgroundColor: COLORS.canvasWhite }]}>
-                    {w ? <WeaponAvatar weapon={w} size={26} /> : <Text style={st.slotEmpty}>+</Text>}
+                  <View key={i} style={st.slotWrap}>
+                    <View style={[st.slot, w && { borderColor: INK, backgroundColor: COLORS.canvasWhite }]}>
+                      {w ? <WeaponAvatar weapon={w} size={26} /> : <Text style={st.slotEmpty}>+</Text>}
+                    </View>
+                    <Text style={st.slotNo}>{i + 1}</Text>
                   </View>
                 );
               })}
@@ -412,10 +416,22 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters
               <Text testID="camp-charms-full" style={st.fullNote}>All {slots} charm slots are full. Tap an equipped charm to take it off{slots < 6 ? ', or add a slot with the Charm Belt in the Workshop' : ''}.</Text>
             )}
             {save.armory.length === 0 && <Text style={st.blurb}>Nothing here yet. Some stars unlock a weapon.</Text>}
+            {WEAPON_ROLES.map(role => {
+              const shelf = armoryWeapons(save).filter(w => weaponRole(w.id) === role.id);
+              if (shelf.length === 0) return null;
+              return (
+            <View key={role.id} testID={`camp-armory-shelf-${role.id}`} style={st.shelf}>
+            <View style={st.shelfHead}>
+              <Text style={st.shelfTitle}>{role.label}</Text>
+              <Text style={st.shelfBlurb}>{role.blurb}</Text>
+            </View>
             <View style={st.armory}>
-              {armoryWeapons(save).map(w => {
-                const equipped = charms.includes(w.id);
+              {shelf.map(w => {
+                const slot = charms.indexOf(w.id);
+                const equipped = slot >= 0;
                 const wLevel = weaponLevel(save, w.id);
+                // Equipped weapons read as they will in the fight (an Understudy shows what it copies)
+                const shown = equipped ? charmWeapons(charms, weaponBuilds(save))[slot] : getArmoryWeapon(w.id, weaponBuilds(save));
                 return (
                   <TouchableOpacity
                     key={w.id}
@@ -437,12 +453,15 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters
                   >
                     <WeaponAvatar weapon={w} size={36} triggerKey={armoryTapCounts[w.id]} />
                     <Text style={st.armoryName} numberOfLines={1}>{w.name}{weaponLevelSuffix(wLevel)}</Text>
-                    <Text style={[st.armoryRarity, { color: TONE.spent }]}>{equipped ? 'equipped' : `level ${wLevel}`}</Text>
-                    <Text style={st.armoryDesc} numberOfLines={2}>{getArmoryWeapon(w.id, weaponBuilds(save))?.shortDescription}</Text>
+                    <Text style={[st.armoryRarity, { color: TONE.spent }]}>{equipped ? `slot ${slot + 1}` : `level ${wLevel}`}</Text>
+                    <Text style={st.armoryDesc} numberOfLines={3}>{shown?.shortDescription}</Text>
                   </TouchableOpacity>
                 );
               })}
             </View>
+            </View>
+              );
+            })}
             <Text style={st.blurb}>More weapons are out there…</Text>
           </>
         )}
@@ -540,6 +559,12 @@ const st = StyleSheet.create({
   tierPip: { width: 18, height: 6, borderRadius: 2, backgroundColor: '#E2DBD0' },
   tierPipOn: { backgroundColor: COLORS.logicTeal },
   armory: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' },
+  shelf: { gap: 6, marginTop: 14 },
+  shelfHead: { alignItems: 'center', gap: 1 },
+  shelfTitle: { fontSize: 14, fontWeight: '900', letterSpacing: 1.5, textTransform: 'uppercase', color: COLORS.actionYellow },
+  shelfBlurb: { fontSize: 11, color: TONE.onDusk, opacity: 0.85, textAlign: 'center' },
+  slotWrap: { alignItems: 'center', gap: 1 },
+  slotNo: { fontSize: 9, fontWeight: '900', color: INK, opacity: 0.6 },
   armoryItem: { width: 120, backgroundColor: COLORS.canvasWhite, borderRadius: 10, borderWidth: 2.5, padding: 8, alignItems: 'center', gap: 2 },
   armoryName: { fontWeight: '900', fontSize: 12, color: INK },
   tuneRow: { flexDirection: 'row', alignItems: 'center', gap: 8, borderTopWidth: 1, borderTopColor: '#E2DBCF', paddingTop: 6, marginTop: 6 },

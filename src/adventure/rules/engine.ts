@@ -120,6 +120,13 @@ export const fireFinale = (d: Draft, recipeId: string) => {
   }
 };
 
+/** Encore Mask: an evolution's opening rules (`evolutionStart`) fire once more as it ends. */
+export const fireOpening = (d: Draft, recipeId: string) => {
+  for (const kr of liveRulesOf(d)) {
+    if (kr.rule.trigger.on === 'evolutionStart' && kr.key.startsWith(`evo:${recipeId}#`)) fireRule(d, kr, []);
+  }
+};
+
 /** Idle rules fire once per stretch without a Set. */
 export const checkIdle = (d: Draft) => {
   const since = d.elapsedMs - d.lastMatchAtMs;

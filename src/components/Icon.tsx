@@ -301,6 +301,20 @@ import EvoPentacle from '../../assets/icons/skoll/pentacle.svg';
 import EvoSoundWaves from '../../assets/icons/skoll/sound-waves.svg';
 import EvoInfinity from '../../assets/icons/various-artists/infinity.svg';
 import EvoGoldBar from '../../assets/icons/willdabeast/gold-bar.svg';
+// Trick weapons (data/adventureWeapons.ts) and their card markers
+import TrickMagnet from '../../assets/icons/lorc/magnet.svg';
+import TrickWanted from '../../assets/icons/delapouite/wanted-reward.svg';
+import TrickPuzzle from '../../assets/icons/delapouite/puzzle.svg';
+import TrickDevilMask from '../../assets/icons/delapouite/devil-mask.svg';
+import TrickSnowman from '../../assets/icons/lorc/snowman.svg';
+import TrickPostStamp from '../../assets/icons/delapouite/post-stamp.svg';
+import TrickJoker from '../../assets/icons/delapouite/card-joker.svg';
+import TrickGemini from '../../assets/icons/delapouite/gemini.svg';
+import TrickShardSword from '../../assets/icons/lorc/shard-sword.svg';
+import TrickLanternFlame from '../../assets/icons/lorc/lantern-flame.svg';
+import TrickTwoShadows from '../../assets/icons/lorc/two-shadows.svg';
+import TrickCurtains from '../../assets/icons/delapouite/theater-curtains.svg';
+import TrickFog from '../../assets/icons/delapouite/fog.svg';
 
 // Icon registry: maps path (e.g., "delapouite/token") to the imported component
 // NOTE: When adding new icons, also add the import above and the path here.
@@ -602,6 +616,19 @@ const ICON_REGISTRY = {
   'skoll/sound-waves': EvoSoundWaves,
   'various-artists/infinity': EvoInfinity,
   'willdabeast/gold-bar': EvoGoldBar,
+  'lorc/magnet': TrickMagnet,
+  'delapouite/wanted-reward': TrickWanted,
+  'delapouite/puzzle': TrickPuzzle,
+  'delapouite/devil-mask': TrickDevilMask,
+  'lorc/snowman': TrickSnowman,
+  'delapouite/post-stamp': TrickPostStamp,
+  'delapouite/card-joker': TrickJoker,
+  'delapouite/gemini': TrickGemini,
+  'lorc/shard-sword': TrickShardSword,
+  'lorc/lantern-flame': TrickLanternFlame,
+  'lorc/two-shadows': TrickTwoShadows,
+  'delapouite/theater-curtains': TrickCurtains,
+  'delapouite/fog': TrickFog,
 } as const satisfies Record<string, React.FC<SvgProps>>;
 
 // TypeScript union type of all valid icon names - use this for type-safe icon references

@@ -654,6 +654,21 @@ export interface SimplifyState {
   remainingMs: number;
 }
 
+/** What the trick weapons remember during a fight (engine/gear.ts). */
+export interface GearState {
+  /** Bounty Poster: the wanted value and how many more wanted cards until it changes */
+  bounty: { attribute: AttributeName; value: string | number; left: number } | null;
+  /** Mirror Shard: board slots of the player's previous Set */
+  lastSetSlots: number[];
+  /** Snowball: stacks this wave */
+  snowball: number;
+  /** Collector's Album: traits whose page is filled */
+  album: AttributeName[];
+  /** Glass Sword: shattered for this wave, and when its clock last restarted */
+  glassBroken: boolean;
+  glassSinceMs: number;
+}
+
 export interface RunState {
   level: LevelDef;
   fighter: CharacterName;
@@ -686,6 +701,8 @@ export interface RunState {
   timeCap: number | null;
   /** Seconds the clock can still gain this fight (a fight can at most double its clock); null when untimed */
   timeBank: number | null;
+  /** State of the trick weapons (engine/gear.ts) */
+  gear: GearState;
   elapsedMs: number;
   lastMatchAtMs: number;
   /** Cards scored or missed that the UI will REPLACE shortly; nothing else touches them meanwhile */

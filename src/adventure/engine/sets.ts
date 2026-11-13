@@ -22,20 +22,39 @@ const thirdKey = (x: Card, y: Card, attrs: AttributeName[]) =>
 /** A card the player can pick: duds and face-down cards can't be part of a Set. */
 export const isSelectable = (c: Card) => !c.isDud && !c.isFaceDown;
 
-/** Index triples [i, j, k] (i < j < k) of every Set among `cards`, found pair by pair. */
+/**
+ * Index triples [i, j, k] (i < j < k) of every Set among `cards`, found pair by
+ * pair. A wild card (Wild Card weapon) makes a Set with any two other cards.
+ */
 function* setTriples(cards: Card[], attrs: AttributeName[]): Generator<[number, number, number]> {
   const index = new Map<string, number[]>();
+  const wilds: number[] = [];
   cards.forEach((c, i) => {
+    if (c.isWild) {
+      wilds.push(i);
+      return;
+    }
     const k = keyOf(c, attrs);
     const list = index.get(k);
     if (list) list.push(i);
     else index.set(k, [i]);
   });
   for (let i = 0; i < cards.length; i++) {
+    if (cards[i].isWild) continue;
     for (let j = i + 1; j < cards.length; j++) {
+      if (cards[j].isWild) continue;
       const ks = index.get(thirdKey(cards[i], cards[j], attrs));
       if (!ks) continue;
       for (const k of ks) if (k > j) yield [i, j, k];
+    }
+  }
+  for (const w of wilds) {
+    for (let i = 0; i < cards.length; i++) {
+      if (i === w || (cards[i].isWild && i < w)) continue;
+      for (let j = i + 1; j < cards.length; j++) {
+        if (j === w || (cards[j].isWild && j < w)) continue;
+        yield [i, j, w].sort((x, y) => x - y) as [number, number, number];
+      }
     }
   }
 }
@@ -49,10 +68,25 @@ export const allSets = (board: Card[], attrs: AttributeName[]): Card[][] => {
 export const hasAnySet = (board: Card[], attrs: AttributeName[]): boolean =>
   !setTriples(board.filter(isSelectable), attrs).next().done;
 
-/** How many of the active attributes are all-different across three cards. */
+/**
+ * How many of the active attributes are all-different across three cards. A
+ * wild card takes the completing value: a trait differs if the other two do.
+ */
 export const countDifferentAttributes = (cards: Card[], attrs: AttributeName[]): number => {
   if (cards.length !== 3) return 0;
-  return attrs.filter(a => new Set(cards.map(c => c[a as keyof Card])).size === 3).length;
+  const plain = cards.filter(c => !c.isWild);
+  if (plain.length === 2) return attrs.filter(a => valueOf(plain[0], a) !== valueOf(plain[1], a)).length;
+  if (plain.length < 2) return 0;
+  return attrs.filter(a => new Set(cards.map(c => valueOf(c, a))).size === 3).length;
+};
+
+/** The attributes that are all-different across the three cards of a Set (wild cards as above). */
+export const differingAttributes = (cards: Card[], attrs: AttributeName[]): AttributeName[] => {
+  if (cards.length !== 3) return [];
+  const plain = cards.filter(c => !c.isWild);
+  if (plain.length === 2) return attrs.filter(a => valueOf(plain[0], a) !== valueOf(plain[1], a));
+  if (plain.length < 2) return [];
+  return attrs.filter(a => new Set(cards.map(c => valueOf(c, a))).size === 3);
 };
 
 /** A Rainbow: three cards that differ in every active attribute. */

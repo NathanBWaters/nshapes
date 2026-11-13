@@ -173,6 +173,36 @@ export interface Modifiers {
   trapImmunity?: boolean;
   /** Tuning for the fighter's own passives, keyed by tuning name (see data/passives.ts) */
   passiveTuning?: Record<string, number>;
+
+  // ── Trick weapons (engine/gear.ts): a trick is on while its number is above zero ──
+  /** Magnet: damage for a Set that includes the marked card */
+  magnetDamage?: number;
+  /** Bounty Poster: damage per matched card with the wanted value */
+  bountyDamage?: number;
+  /** Mirror Shard: damage for a Set that reuses a slot of the previous Set */
+  mirrorDamage?: number;
+  /** Odd One Out: damage for a Set with exactly one trait different (or, at 4+ traits, exactly one the same) */
+  oddOneOutDamage?: number;
+  /** Devil's Bargain: Set damage per missing heart (the heart it took counts) */
+  missingHeartDamage?: number;
+  /** Snowball: Set damage per stack, and how many stacks a wave can hold */
+  snowballStep?: number;
+  snowballMax?: number;
+  /** Collector's Album: damage for the Set that fills the last page */
+  albumDamage?: number;
+  /** Glass Sword: Set damage while intact, and how long it survives without a Set */
+  glassDamage?: number;
+  glassWindowMs?: number;
+  /** Wild Card: % chance a dealt card is wild (one on the board at a time) */
+  wildChance?: number;
+  /** Twin Seed: % chance a dealt card copies a card on the board, and the damage when a twin is destroyed */
+  twinChance?: number;
+  twinDamage?: number;
+  /** Fog Lantern: % chance a dealt card starts face-down, and the damage it gains when it flips */
+  fogChance?: number;
+  fogBonus?: number;
+  /** Encore Mask: damage when an evolution ends (its opening rules also fire again) */
+  encoreDamage?: number;
 }
 
 /** Anything that can bring rules into a fight. */

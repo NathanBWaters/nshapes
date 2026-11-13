@@ -10,8 +10,13 @@
  */
 import type { AdventureWeapon } from '../types';
 import type { Rule } from '../rules/types';
+import { TRICK_RULES } from './rules';
+
+const FOG_MS = TRICK_RULES.fogMs;
+const BOUNTY_CARDS = TRICK_RULES.bountyCards;
 
 const r = Math.round;
+const num = (n: number) => String(Math.round(n * 10) / 10);
 
 /** Clarity Lens fires on every Nth Set */
 const CLARITY_EVERY = 5;
@@ -214,6 +219,281 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
       shortDescription: `Lost hearts: ${r(v.strike)} dmg, 3× ${r(v.chance)}% link`,
     }),
   },
+
+  // ═══ Trick weapons: something to hunt for or keep up (engine/gear.ts) ═════
+
+  // ── Magnet: one marked card to build your next Set around
+  {
+    id: 'magnet',
+    name: 'Magnet',
+    rarity: 'common',
+    level: 1,
+    price: 10,
+    description: '',
+    shortDescription: '',
+    flavorText: 'It always points at one card. Trust it.',
+    icon: 'lorc/magnet',
+    effects: {},
+    maxCount: 1,
+    stats: { damage: { label: 'Magnet damage', unit: 'dmg', base: 5, perLevel: 1.5 } },
+    build: v => ({
+      modifiers: { magnetDamage: r(v.damage) },
+      description: `One card on the board is always marked. A Set that includes it deals +${r(v.damage)}, then the mark moves.`,
+      shortDescription: `Sets with the marked card +${r(v.damage)}`,
+    }),
+  },
+
+  // ── Bounty Poster: a wanted value that keeps changing
+  {
+    id: 'bounty-poster',
+    name: 'Bounty Poster',
+    rarity: 'common',
+    level: 1,
+    price: 10,
+    description: '',
+    shortDescription: '',
+    flavorText: 'WANTED: anything purple. Reward: pain, for someone else.',
+    icon: 'delapouite/wanted-reward',
+    effects: {},
+    maxCount: 1,
+    stats: { damage: { label: 'Damage per wanted card', unit: 'dmg', base: 1.5, perLevel: 0.5 } },
+    build: v => ({
+      modifiers: { bountyDamage: v.damage },
+      description: `One trait value is wanted (say, purple). Every wanted card you match deals +${num(v.damage)}. The poster changes after ${BOUNTY_CARDS} wanted cards.`,
+      shortDescription: `Wanted cards +${num(v.damage)} each`,
+    }),
+  },
+
+  // ── Mirror Shard: play where the new cards just landed
+  {
+    id: 'mirror-shard',
+    name: 'Mirror Shard',
+    rarity: 'common',
+    level: 1,
+    price: 10,
+    description: '',
+    shortDescription: '',
+    flavorText: 'Look where you just were. Something new is standing there.',
+    icon: 'lorc/mirror-mirror',
+    effects: {},
+    maxCount: 1,
+    stats: { damage: { label: 'Mirror damage', unit: 'dmg', base: 4, perLevel: 1 } },
+    build: v => ({
+      modifiers: { mirrorDamage: r(v.damage) },
+      description: `A Set that uses a spot from your last Set deals +${r(v.damage)}.`,
+      shortDescription: `Reuse a spot from your last Set: +${r(v.damage)}`,
+    }),
+  },
+
+  // ── Odd One Out: the extreme Sets, not the middle ones
+  {
+    id: 'odd-one-out',
+    name: 'Odd One Out',
+    rarity: 'common',
+    level: 1,
+    price: 10,
+    description: '',
+    shortDescription: '',
+    flavorText: 'Nearly identical. Nearly.',
+    icon: 'delapouite/puzzle',
+    effects: {},
+    maxCount: 1,
+    stats: { damage: { label: 'Odd-one-out damage', unit: 'dmg', base: 4, perLevel: 1 } },
+    build: v => ({
+      modifiers: { oddOneOutDamage: r(v.damage) },
+      description: `Sets with exactly 1 trait different deal +${r(v.damage)}. With 4 or more traits, so do Sets with exactly 1 trait the same.`,
+      shortDescription: `Exactly 1 trait different (or the same): +${r(v.damage)}`,
+    }),
+  },
+
+  // ── Devil's Bargain: a heart for damage
+  {
+    id: 'devils-bargain',
+    name: "Devil's Bargain",
+    rarity: 'common',
+    level: 1,
+    price: 10,
+    description: '',
+    shortDescription: '',
+    flavorText: 'Sign here. And here. And in blood, here.',
+    icon: 'delapouite/devil-mask',
+    effects: {},
+    maxCount: 1,
+    stats: { damage: { label: 'Damage per missing heart', unit: 'dmg', base: 1, perLevel: 0.5 } },
+    build: v => ({
+      modifiers: { maxHearts: -1, missingHeartDamage: v.damage },
+      description: `Start every fight with 1 heart fewer. Every Set deals +${num(v.damage)} for that heart and for every other heart you are missing.`,
+      shortDescription: `-1 heart; +${num(v.damage)} per missing heart`,
+    }),
+  },
+
+  // ── Snowball: clean streaks stack up over a wave
+  {
+    id: 'snowball',
+    name: 'Snowball',
+    rarity: 'common',
+    level: 1,
+    price: 10,
+    description: '',
+    shortDescription: '',
+    flavorText: 'Small at the top of the hill. Not small at the bottom.',
+    icon: 'lorc/snowman',
+    effects: {},
+    maxCount: 1,
+    stats: { max: { label: 'Most stacks', unit: 'count', base: 3, perLevel: 1 } },
+    build: v => ({
+      modifiers: { snowballStep: 1, snowballMax: r(v.max) },
+      description: `Every Set you make adds +1 damage to all your later Sets this wave, up to +${r(v.max)}. A mistake halves it.`,
+      shortDescription: `Each Set: later Sets +1 (max +${r(v.max)}); mistakes halve it`,
+    }),
+  },
+
+  // ── Collector's Album: one page per trait, then a big hit
+  {
+    id: 'collectors-album',
+    name: "Collector's Album",
+    rarity: 'common',
+    level: 1,
+    price: 10,
+    description: '',
+    shortDescription: '',
+    flavorText: 'Three empty pages. You know what to do.',
+    icon: 'delapouite/post-stamp',
+    effects: {},
+    maxCount: 1,
+    stats: { damage: { label: 'Album damage', unit: 'dmg', base: 15, perLevel: 3 } },
+    build: v => ({
+      modifiers: { albumDamage: r(v.damage) },
+      description: `Fill one page per trait: a Set where everything is the same except the number, one except the shape, one except the color (and the shading, when it is in play). With 4 or more traits, one other trait may differ too. The Set that fills the last page deals +${r(v.damage)}, then the album starts over.`,
+      shortDescription: `One "all the same but X" Set per trait: +${r(v.damage)}`,
+    }),
+  },
+
+  // ── Wild Card: a card that completes any Set
+  {
+    id: 'wild-card',
+    name: 'Wild Card',
+    rarity: 'common',
+    level: 1,
+    price: 12,
+    description: '',
+    shortDescription: '',
+    flavorText: 'It is whatever you need it to be.',
+    icon: 'delapouite/card-joker',
+    effects: {},
+    maxCount: 1,
+    stats: { chance: { label: 'Wild card chance', unit: '%', base: 10, perLevel: 2 } },
+    build: v => ({
+      modifiers: { wildChance: r(v.chance) },
+      description: `${r(v.chance)}% chance that a new card is a wild card: it makes a Set with any two other cards. One on the board at a time.`,
+      shortDescription: `${r(v.chance)}% of new cards are wild`,
+    }),
+  },
+
+  // ── Twin Seed: a harder board that pays when you clear it
+  {
+    id: 'twin-seed',
+    name: 'Twin Seed',
+    rarity: 'common',
+    level: 1,
+    price: 10,
+    description: '',
+    shortDescription: '',
+    flavorText: 'Two of a kind is a problem. Until it is a plan.',
+    icon: 'delapouite/gemini',
+    effects: {},
+    maxCount: 1,
+    stats: { chance: { label: 'Twin chance', unit: '%', base: 15, perLevel: 2 }, damage: { label: 'Twin damage', unit: 'dmg', base: 5, perLevel: 1.5 } },
+    build: v => ({
+      modifiers: { twinChance: r(v.chance), twinDamage: r(v.damage) },
+      description: `${r(v.chance)}% chance that a new card is an exact twin of a card on the board. Twins can never share a Set, but matching one destroys the other for ${r(v.damage)}.`,
+      shortDescription: `${r(v.chance)}% twins; match one, the other hits for ${r(v.damage)}`,
+    }),
+  },
+
+  // ── Glass Sword: fast and flawless, or nothing
+  {
+    id: 'glass-sword',
+    name: 'Glass Sword',
+    rarity: 'common',
+    level: 1,
+    price: 10,
+    description: '',
+    shortDescription: '',
+    flavorText: 'The sharpest thing you will ever drop.',
+    icon: 'lorc/shard-sword',
+    effects: {},
+    maxCount: 1,
+    stats: { damage: { label: 'Glass Sword damage', unit: 'dmg', base: 6, perLevel: 1.5 }, window: { label: 'Seconds between Sets', unit: 's', base: 6, perLevel: 0.5 } },
+    build: v => ({
+      modifiers: { glassDamage: r(v.damage), glassWindowMs: r(v.window * 1000) },
+      description: `Every Set deals +${r(v.damage)}. The sword shatters for the rest of the wave on your first mistake, or if ${num(v.window)}s pass without a Set.`,
+      shortDescription: `Sets +${r(v.damage)} until a mistake or ${num(v.window)}s without a Set`,
+    }),
+  },
+
+  // ── Fog Lantern: fewer cards now, stronger cards soon
+  {
+    id: 'fog-lantern',
+    name: 'Fog Lantern',
+    rarity: 'common',
+    level: 1,
+    price: 10,
+    description: '',
+    shortDescription: '',
+    flavorText: 'What comes out of the fog is never what went in.',
+    icon: 'lorc/lantern-flame',
+    effects: {},
+    maxCount: 1,
+    stats: { chance: { label: 'Fog chance', unit: '%', base: 10, perLevel: 1 }, bonus: { label: 'Damage when the fog lifts', unit: 'dmg', base: 7, perLevel: 1 } },
+    build: v => ({
+      modifiers: { fogChance: r(v.chance), fogBonus: r(v.bonus) },
+      description: `${r(v.chance)}% chance that a new card arrives face-down. After ${FOG_MS / 1000}s it flips up as a power card worth +${r(v.bonus)}.`,
+      shortDescription: `${r(v.chance)}% face-down cards flip up at +${r(v.bonus)}`,
+    }),
+  },
+
+  // ── Understudy: a second copy of your favourite weapon (data/armory.ts fills it in)
+  {
+    id: 'understudy',
+    name: 'Understudy',
+    rarity: 'common',
+    level: 1,
+    price: 12,
+    description: '',
+    shortDescription: '',
+    flavorText: 'Knows every line. Has never once been asked.',
+    icon: 'lorc/two-shadows',
+    effects: {},
+    maxCount: 1,
+    stats: { level: { label: 'Level it copies at', unit: 'count', base: 1, perLevel: 1, tunable: false } },
+    build: v => ({
+      modifiers: {},
+      description: `Copies the charm to its left, at level ${r(v.level)} and untuned. Does nothing in the first slot.`,
+      shortDescription: `Copies the charm to its left (level ${r(v.level)})`,
+    }),
+  },
+
+  // ── Encore Mask: evolutions go out the way they came in
+  {
+    id: 'encore-mask',
+    name: 'Encore Mask',
+    rarity: 'common',
+    level: 1,
+    price: 12,
+    description: '',
+    shortDescription: '',
+    flavorText: 'The show is over. The show is never over.',
+    icon: 'delapouite/theater-curtains',
+    effects: {},
+    maxCount: 1,
+    stats: { damage: { label: 'Encore damage', unit: 'dmg', base: 10, perLevel: 3 } },
+    build: v => ({
+      modifiers: { encoreDamage: r(v.damage) },
+      description: `When an evolution ends, it hits the foe for ${r(v.damage)} and its opening effect happens again.`,
+      shortDescription: `Evolutions end with +${r(v.damage)} and replay their opening`,
+    }),
+  },
 ];
 
 // Authored descriptions are the level-1 wording (Free Play, tests, guides)
@@ -236,3 +516,10 @@ export const LEGACY_ADVENTURE_WEAPON_IDS: Record<string, { id: string; tier: num
     [`${w.id}-rare`, { id: w.id, tier: 1 }],
   ])
 );
+
+/** The trick weapons (engine/gear.ts). They don't arm evolutions yet. */
+export const TRICK_WEAPON_IDS: readonly string[] = [
+  'magnet', 'bounty-poster', 'mirror-shard', 'odd-one-out', 'devils-bargain', 'snowball', 'collectors-album',
+  'wild-card', 'twin-seed', 'glass-sword', 'fog-lantern', 'understudy', 'encore-mask',
+];
+export const UNDERSTUDY_ID = 'understudy';

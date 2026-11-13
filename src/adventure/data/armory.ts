@@ -7,7 +7,7 @@ import type { Weapon } from '@/types';
 import { LEGACY_WEAPON_IDS, WEAPONS } from '@/utils/gameDefinitions';
 import type { AdventureWeapon } from '../types';
 import type { RuleSource } from '../rules/types';
-import { ADVENTURE_WEAPONS, LEGACY_ADVENTURE_WEAPON_IDS } from './adventureWeapons';
+import { ADVENTURE_WEAPONS, LEGACY_ADVENTURE_WEAPON_IDS, UNDERSTUDY_ID } from './adventureWeapons';
 import { BASE_BUILD, buildWeapon, type WeaponBuilds } from './weaponStats';
 import { ADVENTURE_TUNING } from './weaponTuning';
 
@@ -38,6 +38,37 @@ export const getArmoryWeapon = (id: string, builds?: WeaponBuilds): Weapon | und
   const base = armoryBaseWeapon(id);
   return base ? buildWeapon(base, builds?.[id] ?? BASE_BUILD) : undefined;
 };
+
+/**
+ * The Understudy standing in for `leftId`: the Understudy item with that
+ * weapon's numbers, rules and wording at the Understudy's own level, untuned.
+ * It keeps its own id, so it never arms the copied weapon's evolutions.
+ */
+export const understudyOf = (understudy: Weapon, leftId: string | undefined, builds?: WeaponBuilds): Weapon => {
+  if (!leftId || leftId === UNDERSTUDY_ID) return understudy;
+  const level = builds?.[UNDERSTUDY_ID]?.level ?? 1;
+  const copy = getArmoryWeapon(leftId, { [leftId]: { level, tuning: {} } }) as AdventureWeapon | undefined;
+  if (!copy) return understudy;
+  return {
+    ...understudy,
+    effects: copy.effects,
+    specialEffect: copy.specialEffect,
+    bridgeEffect: copy.bridgeEffect,
+    rules: copy.rules,
+    modifiers: copy.modifiers,
+    description: `Copying ${copy.name} at level ${level}: ${copy.description}`,
+    shortDescription: `${copy.name} again: ${copy.shortDescription}`,
+  } as Weapon;
+};
+
+/** The weapons these charm ids bring into a fight, in slot order (an Understudy copies the charm to its left). */
+export const charmWeapons = (ids: readonly string[], builds?: WeaponBuilds): Weapon[] =>
+  ids
+    .map((id, i) => {
+      const w = getArmoryWeapon(id, builds);
+      return w && id === UNDERSTUDY_ID ? understudyOf(w, ids[i - 1], builds) : w;
+    })
+    .filter((w): w is Weapon => !!w);
 
 /** The rules a held weapon brings into a fight (plain Free Play weapons bring none). */
 export const weaponRuleSource = (w: Weapon): RuleSource => {

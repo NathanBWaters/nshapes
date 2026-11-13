@@ -4,12 +4,14 @@
  */
 import { EVOLUTION_RECIPES, SIGNATURE_RECIPES } from '@/adventure/data/evolutions';
 import { PAIR_RECIPES } from '@/adventure/data/evolutionPairs';
+import { TRICK_WEAPON_IDS } from '@/adventure/data/adventureWeapons';
 import { createMaxedSave } from '@/adventure/progress';
 import { runReducer } from '@/adventure/engine/run';
 import { findSet, miss, playSet, startFight, tick } from './testUtils/adventureFight';
 import type { RunState } from '@/adventure/types';
 
-const ARMORY = createMaxedSave().armory;
+// The trick weapons don't arm evolutions yet
+const ARMORY = createMaxedSave().armory.filter(id => !TRICK_WEAPON_IDS.includes(id));
 const arms = (families: [string[], string[]], a: string, b: string) =>
   (families[0].includes(a) && families[1].includes(b)) || (families[0].includes(b) && families[1].includes(a));
 

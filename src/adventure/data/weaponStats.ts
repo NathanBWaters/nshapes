@@ -280,7 +280,7 @@ const STAT_TEXT: Record<string, (v: V) => Text> = {
     shortDescription: `+${count(v.graces)} ${plural(v.graces, 'grace')}; graces: ${pct(v.bridgeChance)} laser`,
   }),
   'life-link': v => ({
-    description: `+${count(v.maxHealth)} max ${plural(v.maxHealth, 'heart')}. Every heart you lose: ${pct(v.bridgeChance)} chance to blast 4 cards.`,
+    description: `+${count(v.maxHealth)} max ${plural(v.maxHealth, 'heart')} and a ${pct(v.explosionChance)} chance per Set to blast the cards next to it. Every heart you lose: ${pct(v.bridgeChance)} chance to blast 4 cards.`,
     shortDescription: `+${count(v.maxHealth)} heart; lost hearts: ${pct(v.bridgeChance)} blast`,
   }),
 };

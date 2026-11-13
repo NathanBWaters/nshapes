@@ -76,6 +76,15 @@ export interface Card {
   snare?: 'up' | 'down' | 'left' | 'right';
   /** Bonus damage dealt when this armored card is finally broken (Piñata) */
   bounty?: number;
+  /** Wild Card: counts as whatever value completes a Set with any two other cards */
+  isWild?: boolean;
+  /** Magnet: this card is marked; a Set that includes it hits harder */
+  magnet?: boolean;
+  /** Twin Seed: id of this card's identical twin on the board */
+  twinOf?: string;
+  /** Fog Lantern: fight time (ms) at which this face-down card flips up, and the damage it gains when it does */
+  fogFlipAt?: number;
+  fogBonus?: number;
 }
 
 // Rewards revealed when a card is matched

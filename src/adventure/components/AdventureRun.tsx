@@ -23,6 +23,7 @@ import type { AdventureSave, EvolutionRecipe, LevelDef, PassiveId, RunEvent, Run
 import type { WeaponBuilds } from '../data/weaponStats';
 import { createRun, runReducer, shopPrice, rerollCost, xpForLevel, type RunAction } from '../engine/run';
 import { challengeProgress } from '../engine/challenges';
+import { GearChips, gearModifiers, hasGearChips } from './GearChips';
 import { MECHANICS } from '../data/mechanics';
 import { getBiome } from '../data/biomes';
 import { foeDisplay } from '../data/foes';
@@ -419,6 +420,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   const screenStyle = useAnimatedStyle(() => ({ transform: [{ translateX: screenShake.value }] }));
   const hpPct = run.foeMaxHp > 0 ? run.foeHp / run.foeMaxHp : 0;
   const challenge = challengeProgress(run);
+  const gearMods = gearModifiers(run);
   const xpNeed = xpForLevel(run.xpLevel);
   const comboLive = run.elapsedMs - run.lastMatchAtMs <= comboWindowMs(run);
   const purityLive = run.features.has('purity') && run.purityChain > 0;
@@ -535,7 +537,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
         )}
 
         {/* Live Arcana, Escalating Purity, board effects & Evolution status strip */}
-        {(run.arcana.length > 0 || purityLive || evolutionsOn || run.simplified || run.doubleNext > 0 || run.nextSetMultiplier > 1) && (
+        {(run.arcana.length > 0 || purityLive || evolutionsOn || run.simplified || run.doubleNext > 0 || run.nextSetMultiplier > 1 || hasGearChips(gearMods)) && (
           <View style={st.synergyRow}>
             {run.arcana.map(id => (
               <View key={id} testID="run-arcana-chip" style={st.arcanaChip}>
@@ -543,6 +545,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
                 <Text style={st.arcanaChipText}>{getArcana(id).numeral}</Text>
               </View>
             ))}
+            <GearChips run={run} mods={gearMods} />
             {purityLive && (
               <View testID="run-purity-chip" style={[st.purityChip, run.purityChain >= 2 && st.purityChipHot]}>
                 <Icon name="lorc/lightning-branches" size={12} color={run.purityChain >= 2 ? TONE.upside : INK} />

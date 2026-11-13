@@ -26,7 +26,8 @@ import type { Effect, WeaponTriggerKind } from '../rules/types';
 import { createRng } from './rng';
 import { allSets, countDifferentAttributes, hasAnySet, isRainbow, isSelectable } from './sets';
 import { applyWeaponToStats, resolveWholeStats, startingLoadout } from '../loadout';
-import { getArmoryWeapon } from '../data/armory';
+import { getArmoryWeapon, understudyOf } from '../data/armory';
+import { UNDERSTUDY_ID } from '../data/adventureWeapons';
 import { weaponBuilds } from '../weaponLevels';
 import { createFoe } from '../data/foes';
 import { arcanaRules } from '../data/arcana';
@@ -40,6 +41,7 @@ import {
 } from './fight';
 import { EVOLUTION_RULES } from './sources';
 import { recordFightStart, recordLog } from './fightLog';
+import { afterSetGear, gearSetBonus, initGear, onMistakeGear, onWaveStartGear, resolveTwins, syncGear, tickGear, type GearSet } from './gear';
 import { refreshArmedRecipes, resolveCatalyst, tickEvolutions } from './evolutions';
 import { placeOpeningTraps, resolveTrapsOnSet, springSnares, tickTimeBombs } from './hazards';
 import {
@@ -117,7 +119,9 @@ const rollPickOptions = (d: Draft, count = 3): Weapon[] => {
 };
 
 const acquireWeapon = (d: Draft, picked: Weapon) => {
-  const weapon: Weapon = { ...picked, effects: resolveWholeStats(picked.effects, () => d._rng.next()) };
+  // An Understudy picked up mid-fight copies the weapon picked up before it
+  const built = picked.id === UNDERSTUDY_ID ? understudyOf(picked, d.weapons[d.weapons.length - 1]?.id, d.weaponBuilds) : picked;
+  const weapon: Weapon = { ...built, effects: resolveWholeStats(built.effects, () => d._rng.next()) };
   d.weapons = [...d.weapons, weapon];
   d.stats = applyWeaponToStats(d.stats, weapon);
   const base = { ...d.baseChances };
@@ -268,8 +272,15 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   if (a.nonRainbowDamageDelta !== undefined && !rainbow) points = Math.max(1, points + a.nonRainbowDamageDelta);
   if (a.singleTraitBonusDamage !== undefined && !graceUsed && diffCount === 1) points += a.singleTraitBonusDamage;
   const conditional = (m.conditionalDamage ?? []).reduce((sum, c) => sum + (conditionsHold(d, c.when) ? c.amount : 0), 0);
+  const gearSet: GearSet = {
+    matched,
+    slots: matched.map(mc => d.board.findIndex(bc => bc.id === mc.id)).filter(i => i >= 0),
+    diffCount,
+    graceUsed,
+    auto: !!opts.auto,
+  };
   const flat =
-    points + d.bonusDamagePerMatch + (m.setDamage ?? 0) + conditional + passiveSetDamage(d, sinceLastMs) +
+    points + d.bonusDamagePerMatch + (m.setDamage ?? 0) + conditional + passiveSetDamage(d, sinceLastMs) + gearSetBonus(d, gearSet) +
     d.activeEvolutions.length * EVOLUTION_RULES.setDamage;
   const rainbowMult =
     (rainbow ? (a.rainbowMultiplier ?? BASE_RULES.rainbowMultiplier) + (m.rainbowMultiplierBonus ?? 0) : 1) *
@@ -305,6 +316,8 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
     };
   }
   if (hotStreak > 1) emit(d, 'hot_streak_hit', hotStreak);
+  resolveTwins(d, matched);
+  afterSetGear(d, gearSet);
   springSnares(d, traps.sprung);
 
   // Bookkeeping & stats for defeat conditions
@@ -558,6 +571,7 @@ export const createRun = (level: LevelDef, save: AdventureSave, opts: CreateRunO
     timeLeft: timer,
     timeCap: timer === null ? null : timer + TIME_HEADROOM,
     timeBank: timer === null ? null : Math.round(timer * BASE_RULES.maxTimeGainShare),
+    gear: initGear(),
     elapsedMs: 0,
     lastMatchAtMs: 0,
     replacing: [],
@@ -639,6 +653,7 @@ export const createRun = (level: LevelDef, save: AdventureSave, opts: CreateRunO
   enqueue(d, 'fightStart');
   enqueue(d, 'waveStart');
   drain(d);
+  syncGear(d);
   syncStats(d);
   recordFightStart(d);
   return finish(d);
@@ -700,6 +715,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       } else {
         hurt(d, Math.floor(1 * (d.foe.getStatModifiers().damageMultiplier || 1)));
       }
+      onMistakeGear(d);
       emit(d, 'mistake');
       enqueue(d, 'mistake');
       const res = d.foe.onInvalidMatch(action.cards, d.board);
@@ -772,6 +788,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       }
       checkIdle(d);
       tickPassives(d);
+      tickGear(d);
       drain(d);
       break;
     }
@@ -833,6 +850,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       d.setsThisWave = 0;
       d.status = 'playing';
       onWaveStartPassives(d);
+      onWaveStartGear(d);
       resetFoeBelowRules(d);
       emit(d, 'wave', d.wave + 1);
       startFoe(d);
@@ -845,6 +863,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
 
   keepCatalystMatchable(d);
   syncTraps(d);
+  syncGear(d);
   resolve(d);
   recordLog(d, state, action);
   return finish(d);

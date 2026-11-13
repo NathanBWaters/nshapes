@@ -136,6 +136,9 @@ export const isValidCombination = (
     };
   }
 
+  // A wild card takes whatever value completes the Set, so any two cards plus a wild card are a Set
+  if (cards.some(c => c.isWild)) return result;
+
   // Check each attribute: must be all same or all different
   const checkAttribute = <T>(attribute: string, getAttribute: (card: Card) => T): boolean => {
     const values = cards.map(getAttribute);

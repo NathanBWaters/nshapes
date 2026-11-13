@@ -19,3 +19,11 @@ export const BASE_RULES = {
    */
   maxTimeGainShare: 1,
 } as const;
+
+/** Fixed numbers of the trick weapons (engine/gear.ts); the rest are levelled stats on the weapons. */
+export const TRICK_RULES = {
+  /** Fog Lantern: how long a fogged card stays face-down */
+  fogMs: 8000,
+  /** Bounty Poster: wanted cards to match before the poster changes */
+  bountyCards: 3,
+} as const;
