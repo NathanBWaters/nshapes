@@ -15,7 +15,6 @@
  * Pure data and pure functions. __tests__/audioVoices.test.ts checks every
  * Armory weapon has a voice and no two weapons or recipes sound the same.
  */
-import type { RunEventType } from '@/adventure/types';
 import type { DrumId, InstrumentId } from './instruments';
 import { hashOf, type ModeName } from './theory';
 
@@ -34,10 +33,6 @@ export interface WeaponVoice {
   drum2?: DrumId;
   /** Where it sits between the left (-1) and right (1) speaker */
   pan: number;
-  /** Fight events with no rule behind them that this weapon is the cause of (a blast, a heal…) */
-  events?: RunEventType[];
-  /** Callout texts that mean this weapon paid out (trick weapons announce themselves by name) */
-  calls?: string[];
   /** One line for the sound studio and the Armory: why it sounds like this */
   why: string;
 }
@@ -46,80 +41,80 @@ type Row = [inst: InstrumentId, octave: number, riff: string, why: string, extra
 
 const ROWS: Record<string, Row> = {
   // ── Damage: the brass and the big drums ───────────────────────────────────
-  'blast-powder': ['brass', 2, '0.......0..4....', 'Low brass and a kettledrum: every boom lands on the beat.', { beat: 'x.......x..x....', drum: 'timpani', events: ['blast'] }],
-  'flint-spark': ['banjo', 4, '..4.7...4.7.9...', 'A flicking banjo over a crackling fire.', { beat: '..x...x...x...x.', drum: 'crackle', events: ['fire'] }],
-  'prismatic-ray': ['saw', 4, '0247....0247....', 'A beam of light sweeping up the chord.', { events: ['laser'] }],
-  'chaos-shard': ['steel', 5, '7.0.9.2.7.4.0.9.', 'Steel-drum pings that leap about like a ricochet.', { events: ['ricochet'] }],
-  'war-drum': ['horn', 2, '0---------------', 'A taiko pattern with a war horn held under it.', { beat: 'x..x..x.x..x.xx.', drum: 'taiko', events: ['empowered'] }],
-  'rally-horn': ['horn', 3, '0.4.7---....4.7-', 'A hunting-horn call: charge!', { events: ['charged'] }],
-  pinata: ['toy', 5, '4.2.4.7.4.2.0...', 'A toy piano and a rattle full of sweets.', { beat: '.x.x.x.x.x.x.x.x', drum: 'shaker', events: ['pinata', 'pinata_break'] }],
-  'amplifier-coil': ['clav', 3, '0.07.0.70.07.4..', 'A funky electric clavinet: plugged in and humming.', { events: ['doubled', 'double_ready'] }],
+  'blast-powder': ['brass', 2, '0.......0..4....', 'Low brass and a kettledrum: every boom lands on the beat.', { beat: 'x.......x..x....', drum: 'timpani' }],
+  'flint-spark': ['banjo', 4, '..4.7...4.7.9...', 'A flicking banjo over a crackling fire.', { beat: '..x...x...x...x.', drum: 'crackle' }],
+  'prismatic-ray': ['saw', 4, '0247....0247....', 'A beam of light sweeping up the chord.'],
+  'chaos-shard': ['steel', 5, '7.0.9.2.7.4.0.9.', 'Steel-drum pings that leap about like a ricochet.'],
+  'war-drum': ['horn', 2, '0---------------', 'A taiko pattern with a war horn held under it.', { beat: 'x..x..x.x..x.xx.', drum: 'taiko' }],
+  'rally-horn': ['horn', 3, '0.4.7---....4.7-', 'A hunting-horn call: charge!'],
+  pinata: ['toy', 5, '4.2.4.7.4.2.0...', 'A toy piano and a rattle full of sweets.', { beat: '.x.x.x.x.x.x.x.x', drum: 'shaker' }],
+  'amplifier-coil': ['clav', 3, '0.07.0.70.07.4..', 'A funky electric clavinet: plugged in and humming.'],
 
   // ── Tricks: one clear solo instrument each, something to listen for ───────
-  magnet: ['theremin', 4, '4-------2-----0-', 'A theremin sliding down: the pull of the magnet.', { calls: ['Magnet'] }],
-  'bounty-poster': ['whistle', 5, '7-4.7-9-7---4...', 'A lone whistle from a western.', { calls: ['Bounty'] }],
-  'mirror-shard': ['vibes', 5, '0.2.4.7..7.4.2.0', 'A phrase and its mirror image.', { calls: ['Mirror'] }],
-  'odd-one-out': ['pizz', 4, '2.2.2.2.2.2.5.2.', 'The same plucked note, with one that does not belong.', { calls: ['Odd one out'] }],
-  'collectors-album': ['musicbox', 5, '0..2..4..7......', 'Three pages, then the music box plays the fourth note.', { calls: ['Album'] }],
-  snowball: ['glock', 6, '0.......0...0.00', 'Sleigh bells and a glockenspiel that gets busier as it rolls.', { beat: '....x...x.x.xxxx', drum: 'sleigh', calls: ['Snowball'] }],
-  'glass-sword': ['glass', 6, '7-------9-------', 'A glass harmonica: pure, high and easy to break.', { calls: ['Glass Sword'] }],
-  'devils-bargain': ['organ', 3, '0-----6-5-----4-', 'A church organ walking downstairs.', { calls: ["Devil's Bargain"] }],
-  tightrope: ['flute', 5, '0.1.2.3.4.3.2.1.', 'A flute placing one careful step after another.', { calls: ['Tightrope'] }],
+  magnet: ['theremin', 4, '4-------2-----0-', 'A theremin sliding down: the pull of the magnet.'],
+  'bounty-poster': ['whistle', 5, '7-4.7-9-7---4...', 'A lone whistle from a western.'],
+  'mirror-shard': ['vibes', 5, '0.2.4.7..7.4.2.0', 'A phrase and its mirror image.'],
+  'odd-one-out': ['pizz', 4, '2.2.2.2.2.2.5.2.', 'The same plucked note, with one that does not belong.'],
+  'collectors-album': ['musicbox', 5, '0..2..4..7......', 'Three pages, then the music box plays the fourth note.'],
+  snowball: ['glock', 6, '0.......0...0.00', 'Sleigh bells and a glockenspiel that gets busier as it rolls.', { beat: '....x...x.x.xxxx', drum: 'sleigh' }],
+  'glass-sword': ['glass', 6, '7-------9-------', 'A glass harmonica: pure, high and easy to break.'],
+  'devils-bargain': ['organ', 3, '0-----6-5-----4-', 'A church organ walking downstairs.'],
+  tightrope: ['flute', 5, '0.1.2.3.4.3.2.1.', 'A flute placing one careful step after another.'],
   understudy: ['chipSoft', 5, '2...2...4...2...', 'A quiet blip shadowing the tune from the wings.'],
 
   // ── Board gambles: the uneasy corner of the band ──────────────────────────
-  'cursed-idol': ['choir', 3, '0-------1-------', 'A low choir leaning on a note that wants to move.', { calls: ['Curse'] }],
-  'chain-gang': ['pizz', 2, '0..0....0..0....', 'A work song: bass plucks and chains on the backbeat.', { beat: '....x.......x..o', drum: 'chain', drum2: 'anvil', calls: ['Chain Gang'] }],
-  'thorn-bush': ['pluck', 5, '9..7..9..7..9.7.', 'Prickly plucks that cut across the beat.', { calls: ['Thorns'] }],
+  'cursed-idol': ['choir', 3, '0-------1-------', 'A low choir leaning on a note that wants to move.'],
+  'chain-gang': ['pizz', 2, '0..0....0..0....', 'A work song: bass plucks and chains on the backbeat.', { beat: '....x.......x..o', drum: 'chain', drum2: 'anvil' }],
+  'thorn-bush': ['pluck', 5, '9..7..9..7..9.7.', 'Prickly plucks that cut across the beat.'],
   rust: ['accordion', 3, '7-6-5-4-........', 'A wheezing old squeezebox running out of air.'],
-  'tar-pit': ['sub', 2, '0-----0---4-----', 'A slow, sticky sub-bass you can feel.', { beat: 'x.........x.....', drum: 'thud', calls: ['Tar Pit'] }],
-  decoy: ['celesta', 5, '4.5.....4.5.....', 'Two notes a step apart: which one is real?', { calls: ['Decoy'] }],
-  'long-fuse': ['clav', 4, '........0.2.4567', 'A fuse ticking, then racing up to the bang.', { beat: 'x...x...x.x.xxxx', drum: 'tick', calls: ['Short fuse', 'Fuse'] }],
-  'ice-block': ['celesta', 6, '7-----9-----4---', 'Slow icicles, high up.', { calls: ['Thawed', 'Ice'] }],
-  'greedy-chest': ['glock', 5, '0...02..024.0247', 'One more coin each time: the run grows as you wait.', { calls: ['Greedy Chest'] }],
-  'hot-potato': ['marimba', 4, '0..7..0..7..0.7.', 'A marimba bouncing from hand to hand.', { calls: ['Hot Potato'] }],
-  'twin-seed': ['kalimba', 4, '0.0.4.4.2.2.7.7.', 'Every note comes as a pair.', { calls: ['Twin'] }],
-  'fog-lantern': ['horn', 2, '0-----------4---', 'A foghorn across the water.', { calls: ['The fog lifts'] }],
+  'tar-pit': ['sub', 2, '0-----0---4-----', 'A slow, sticky sub-bass you can feel.', { beat: 'x.........x.....', drum: 'thud' }],
+  decoy: ['celesta', 5, '4.5.....4.5.....', 'Two notes a step apart: which one is real?'],
+  'long-fuse': ['clav', 4, '........0.2.4567', 'A fuse ticking, then racing up to the bang.', { beat: 'x...x...x.x.xxxx', drum: 'tick' }],
+  'ice-block': ['celesta', 6, '7-----9-----4---', 'Slow icicles, high up.'],
+  'greedy-chest': ['glock', 5, '0...02..024.0247', 'One more coin each time: the run grows as you wait.'],
+  'hot-potato': ['marimba', 4, '0..7..0..7..0.7.', 'A marimba bouncing from hand to hand.'],
+  'twin-seed': ['kalimba', 4, '0.0.4.4.2.2.7.7.', 'Every note comes as a pair.'],
+  'fog-lantern': ['horn', 2, '0-----------4---', 'A foghorn across the water.'],
 
   // ── Board: the wide, slow instruments ─────────────────────────────────────
   'field-stone': ['strings', 3, '0-------4-------', 'Strings spreading out: a bigger field.'],
-  'growth-seed': ['kalimba', 5, '0.2.4.7.9.......', 'A kalimba growing up the chord like a shoot.', { calls: ['Bloom'] }],
-  'clarity-lens': ['bell', 5, '0.......4.......', 'Two clear bells and a lot of space.', { events: ['simplified'] }],
+  'growth-seed': ['kalimba', 5, '0.2.4.7.9.......', 'A kalimba growing up the chord like a shoot.'],
+  'clarity-lens': ['bell', 5, '0.......4.......', 'Two clear bells and a lot of space.'],
   'wild-card': ['accordion', 4, '0.4.2.7.1.5.3.9.', 'A circus accordion that goes anywhere it likes.'],
 
   // ── Hearts & graces: the warm instruments ─────────────────────────────────
-  'mending-charm': ['harp', 4, '0.2.4.7.4.2.....', 'A harp rolling the chord: the sound of a heart coming back.', { events: ['heal'] }],
+  'mending-charm': ['harp', 4, '0.2.4.7.4.2.....', 'A harp rolling the chord: the sound of a heart coming back.'],
   'life-vessel': ['strings', 4, '2---------------', 'One warm held note. More hearts, more warmth.'],
   'life-link': ['choir', 4, '4-------2-------', 'A choir that answers when you are hurt.'],
   'soul-harvest': ['theremin', 3, '0---4---7---4---', 'A ghostly theremin collecting what is left.'],
   'revenge-linker': ['brass', 3, '....0.0.....0.4.', 'Angry brass stabs on the off-beat.'],
-  'second-chance': ['vibes', 4, '4.....2.....0...', 'A close call, falling gently back home.', { events: ['grace'] }],
+  'second-chance': ['vibes', 4, '4.....2.....0...', 'A close call, falling gently back home.'],
   'fortune-token': ['musicbox', 6, '7...4...9...7...', 'A lucky charm on a music box.'],
   'grace-conduit': ['harp', 5, '7.4.2.0.........', 'A harp falling like a held breath let go.'],
   'chaos-conduit': ['steel', 4, '0..2..4..9..7...', 'Steel drums stumbling into a blast.'],
 
   // ── Hints, coins & XP: glass, coins and books ─────────────────────────────
-  'seeker-lens': ['pluck', 4, '0...4...0...7...', 'A plucked question: is it here? Or here?', { events: ['hint'] }],
+  'seeker-lens': ['pluck', 4, '0...4...0...7...', 'A plucked question: is it here? Or here?'],
   'crystal-orb': ['glass', 5, '4-----------7---', 'A crystal bowl ringing.'],
-  'oracle-eye': ['flute', 4, '0-----2-----4---', 'A patient flute: wait, and it tells you.', { events: ['patience'] }],
+  'oracle-eye': ['flute', 4, '0-----2-----4---', 'A patient flute: wait, and it tells you.'],
   'mystic-sight': ['celesta', 4, '0.4.9.....0.4.9.', 'Three notes, the third one the surprise.'],
-  'fortunes-favor': ['glock', 6, '4.7.4.7.........', 'Two coins clinking.', { events: ['coins'] }],
+  'fortunes-favor': ['glock', 6, '4.7.4.7.........', 'Two coins clinking.'],
   'fortunes-blessing': ['bell', 6, '0...2...4...7...', 'Bells counting out a small fortune.'],
   'scholars-tome': ['organ', 4, '0-2-4-2-0-2-4-7-', 'A patient study in thirds.'],
   'wisdom-chain': ['marimba', 5, '0.2.0.4.0.7.0.9.', 'Each answer reaches one step further.'],
 
   // ── Time & evolutions: clocks and curtain calls ───────────────────────────
   'chrono-shard': ['bell', 4, '0-------........', 'A clock tower and the tick-tock under it.', { beat: 'x...o...x...o...', drum: 'woodblock', drum2: 'woodblockLo' }],
-  'time-drop': ['toy', 4, '7.....4.....7...', 'Drops of time landing in a tin cup.', { beat: '..x...x...x...x.', drum: 'woodblockLo', events: ['time_gain'] }],
+  'time-drop': ['toy', 4, '7.....4.....7...', 'Drops of time landing in a tin cup.', { beat: '..x...x...x...x.', drum: 'woodblockLo' }],
   'temporal-rift': ['saw', 3, '7654............', 'Time running backwards.'],
-  'catalyst-prism': ['bell', 5, '0.4.7.9.7.4.....', 'Light through a prism, up and back.', { events: ['catalyst_spawn'] }],
+  'catalyst-prism': ['bell', 5, '0.4.7.9.7.4.....', 'Light through a prism, up and back.'],
   'encore-mask': ['brass', 4, '0.0.4---....7---', 'The theatre band strikes up again: encore!'],
 
   // ── Echoes & links: things that repeat ────────────────────────────────────
   'echo-stone': ['pluck', 5, '7...7.7.........', 'A note, and its echo, and its echo.'],
   'chain-reaction': ['clav', 5, '0.2.4.0.2.4.0.2.', 'Three notes knocking each other over, round and round.'],
   'cascade-core': ['harp', 6, '9.7.4.2.0.......', 'A waterfall down the harp.'],
-  connector: ['pizz', 5, '0...7...0...7...', 'Two plucked notes, tied together.', { events: ['link'] }],
+  connector: ['pizz', 5, '0...7...0...7...', 'Two plucked notes, tied together.'],
   'web-weaver': ['vibes', 6, '0.4.7.4.0.4.7.4.', 'A web spun out of one chord.'],
   'neural-network': ['chipSoft', 6, '0.7.2.9.4.7.2.0.', 'Blips firing across the network.'],
   'echo-chamber': ['flute', 6, '4-------....4...', 'A flute in a very large room.'],
@@ -193,17 +188,6 @@ export const stingOf = (voice: WeaponVoice): number[] => {
 
 /** Everything that makes one voice different from another, as one string. */
 export const voiceSignature = (v: WeaponVoice): string => `${v.inst}|${v.octave}|${v.riff}|${v.beat ?? ''}|${v.drum ?? ''}`;
-
-/** Which held weapon a sourceless event belongs to (the first that claims it). */
-export const ownerOfEvent = (type: RunEventType, text: string | undefined, held: readonly string[]): string | null => {
-  for (const id of held) {
-    const v = WEAPON_VOICES[id];
-    if (!v) continue;
-    if (text && v.calls?.some(c => text.startsWith(c))) return id;
-  }
-  for (const id of held) if (WEAPON_VOICES[id]?.events?.includes(type)) return id;
-  return null;
-};
 
 // ─── Evolutions ─────────────────────────────────────────────────────────────
 

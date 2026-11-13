@@ -79,6 +79,15 @@ The `WEAPONS` array in `src/utils/gameDefinitions.ts` is the roster (34 weapons)
 * **On Fire:** Burns after 0.25s, 10% spread chance
 * **Connected:** Part of a connector weapon link
 
+## Explaining weapons (IMPORTANT)
+
+A weapon is explained by ONE card, `src/adventure/components/WeaponExplainer.tsx`, used before a fight (level preview, under the charms) and after it (fight replay, "Your gear this fight", with what the weapon did). Never write a second weapon description UI: use this card.
+
+* **What it does** comes from the weapon itself (`description`, built from its current numbers). Never hand-copy numbers into other text.
+* **When it works, what to look for on a card, how to play it** come from the weapon's row in `src/adventure/data/weaponGuide.ts`. The same row tells the fight replay and the band which fight events the weapon caused (`events`, `calls`).
+* **Adding a weapon:** add its row to `weaponGuide.ts` (and `weaponRoles.ts`, `src/audio/voices.ts`). `__tests__/weaponGuide.test.tsx` fails for any Armory weapon without a guide row, a role, a voice or a description, and renders the card for every weapon.
+* **If the weapon marks a card,** put the same icon and colour in its guide row's `look` that `Card.tsx` draws.
+
 ## Sound (IMPORTANT)
 
 > **Full documentation:** [docs/sound-design.md](./docs/sound-design.md). Sound studio: `/dev/sound`.

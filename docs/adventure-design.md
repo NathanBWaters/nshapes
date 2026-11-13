@@ -635,6 +635,17 @@ Limits live in `LIMITS` at the top of the test. Things this sweep caught: next-S
   - Every Workshop weapon level ever bought is refunded at the rarity price it was bought for (`LEGACY_WEAPON_LEVEL_COSTS`): levels are world-only now.
   - Mastery weapons, cap-raising legendaries, Fortune's Eye and Snowball are dropped without a refund (they were rewards).
 
+## Explaining weapons
+
+One card explains a weapon everywhere: `components/WeaponExplainer.tsx`.
+
+- **Closed:** picture, name and level, a tag for when it works (Always on, Luck, Rhythm, Hunt, Gamble, Reaction), its shelf, and what it does in full sentences at a readable size.
+- **Open (tap it):** what the tag means, what to look for on a card (the same icon the card shows), how to play it, its numbers at your level and tuning, and a button to hear its voice.
+- **Before a fight** (level preview): one card per equipped charm under the charm row. Tapping a charm you can't equip (slots full) still shows its card.
+- **After a fight** (replay): "In short" says the fight in three sentences; "Your gear this fight" lists every weapon with what it did (times fired, damage, share of the fight), busiest first, plus the evolutions and fighter skills that fired. In a move's details, tap "from X" to read what X is.
+- **Data:** `data/weaponGuide.ts` has one row per weapon (kind, tip, what to look for, which fight events it causes). The description and numbers come from the weapon itself. Fight-log lines carry `sourceRef` (`weapon:<id>`, `evo:<id>`, `node:<id>`), and `fightReplayText.ts` `gearStats` adds them up.
+- **Guard:** `__tests__/weaponGuide.test.tsx` fails for an Armory weapon with no guide row, and renders the card for every weapon.
+
 ## Audio: the adaptive score
 
 > **Full documentation:** [sound-design.md](./sound-design.md). Try everything at `/dev/sound`.

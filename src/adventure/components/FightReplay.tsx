@@ -15,12 +15,16 @@ import Svg, { Rect, Path, Line, Text as SvgText } from 'react-native-svg';
 import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Card from '@/components/Card';
-import Icon from '@/components/Icon';
+import Icon, { type IconName } from '@/components/Icon';
 import { COLORS } from '@/utils/colors';
 import type { Card as CardType } from '@/types';
 import type { FightLogCard, FightLogEntry, RunState } from '../types';
 import { Btn, INK, TONE } from './ui';
-import { describeLines, entrySummary, entryTitle, fmtClock, setMathRows } from './fightReplayText';
+import { getArmoryWeapon } from '../data/armory';
+import { weaponGuide } from '../data/weaponGuide';
+import { getRecipe, getSkillNode } from '../engine/sources';
+import { describeLines, entrySummary, entryTitle, fightSummary, fmtClock, gearStats, gearStatText, setMathRows } from './fightReplayText';
+import WeaponExplainer from './WeaponExplainer';
 
 /** Categorical slots 1–3 of the validated chart palette, plus the reserved "critical" status color. */
 const SERIES = {
@@ -84,6 +88,24 @@ interface Props {
   visible: boolean;
   onClose: () => void;
 }
+
+/** What a log source is, in the words the rest of the game uses for it. */
+const explainRef = (ref: string, run: RunState): { name: string; text: string; kind: string; icon?: IconName } => {
+  const [type, id] = [ref.slice(0, ref.indexOf(':')), ref.slice(ref.indexOf(':') + 1)];
+  if (type === 'weapon') {
+    const w = run.weapons.find(x => x.id === id) ?? getArmoryWeapon(id, run.weaponBuilds);
+    return { name: w?.name ?? id, text: w?.description ?? '', kind: 'weapon', icon: w?.icon };
+  }
+  if (type === 'evo') {
+    const r = getRecipe(id);
+    return { name: r?.name ?? id, text: r ? `${r.activeText} Live for 30 seconds once a Catalyst is matched (${r.familyText}).` : '', kind: 'evolution', icon: r?.icon };
+  }
+  if (type === 'node') {
+    const n = getSkillNode(id);
+    return { name: n?.name ?? id, text: n?.text ?? '', kind: 'fighter skill', icon: n?.icon };
+  }
+  return { name: '', text: '', kind: '' };
+};
 
 const FightReplay: React.FC<Props> = ({ run, visible, onClose }) => {
   const insets = useSafeAreaInsets();
@@ -164,9 +186,31 @@ const FightReplay: React.FC<Props> = ({ run, visible, onClose }) => {
   }, [log, pps, durationS, hasHearts, heartsMax]);
 
   const select = (i: number, scroll = false) => {
+    setOpenLine(null);
     setSelected(i);
     if (scroll) scrollRef.current?.scrollTo({ y: Math.max(0, inspectorY.current - 8), animated: true });
   };
+
+  // Your gear: every weapon held (once each), what it is and what it did, busiest first
+  const heldIds = useMemo(() => [...new Set(run.weapons.map(w => w.id))], [run.weapons]);
+  const stats = useMemo(() => gearStats(log, heldIds), [log, heldIds]);
+  const gear = useMemo(
+    () => heldIds
+      .map(id => ({ id, weapon: run.weapons.find(w => w.id === id)!, stat: stats[`weapon:${id}`] }))
+      .sort((a, b) => (b.stat?.damage ?? 0) - (a.stat?.damage ?? 0) || (b.stat?.fired ?? 0) - (a.stat?.fired ?? 0)),
+    [heldIds, run.weapons, stats]
+  );
+  /** Evolutions and skill nodes that did something, by ref */
+  const others = useMemo(
+    () => Object.keys(stats).filter(ref => !ref.startsWith('weapon:')).map(ref => ({ ref, stat: stats[ref], ...explainRef(ref, run) })).filter(o => o.name),
+    [stats, run]
+  );
+  const summary = useMemo(() => {
+    const best = [...gear.map(g => ({ name: g.weapon.name, damage: g.stat?.damage ?? 0 })), ...others.map(o => ({ name: o.name, damage: o.stat.damage }))]
+      .sort((a, b) => b.damage - a.damage)[0];
+    return fightSummary({ totalDamage: run.totalDamage, ms: run.elapsedMs, sets: run.matches, mistakes: run.mistakes, setDamage: totals.set, best });
+  }, [gear, others, run, totals.set]);
+  const [openLine, setOpenLine] = useState<number | null>(null);
 
   const copyJson = async () => {
     const payload = {
@@ -184,7 +228,7 @@ const FightReplay: React.FC<Props> = ({ run, visible, onClose }) => {
 
   if (!entry) return null;
   const selX = x(entry.t);
-  const lines = describeLines(entry.lines);
+  const lines = describeLines(entry.lines, heldIds);
   const s = split(entry);
 
   return (
@@ -202,6 +246,41 @@ const FightReplay: React.FC<Props> = ({ run, visible, onClose }) => {
 
         <ScrollView ref={scrollRef} contentContainerStyle={st.scroll}>
           <View style={[st.body, { width: contentW }]}>
+            {/* In plain words first */}
+            <View style={st.panel} testID="replay-summary">
+              <Text style={st.panelTitle}>In short</Text>
+              <Text style={st.summary}>{summary}</Text>
+            </View>
+
+            {/* Your gear: what each thing is, and what it did */}
+            {(gear.length > 0 || others.length > 0) && (
+              <View style={{ gap: 8 }} testID="replay-gear">
+                <Text style={st.gearTitle}>YOUR GEAR THIS FIGHT <Text style={st.gearHint}>· tap one for how it works</Text></Text>
+                {gear.map(g => (
+                  <WeaponExplainer
+                    key={g.id}
+                    weapon={g.weapon}
+                    build={run.weaponBuilds[g.id]}
+                    result={{
+                      text: gearStatText(g.stat, run.totalDamage, weaponGuide(g.id).kind === 'always' ? 'always' : 'other'),
+                      share: run.totalDamage > 0 ? (g.stat?.damage ?? 0) / run.totalDamage : 0,
+                    }}
+                  />
+                ))}
+                {others.map(o => (
+                  <View key={o.ref} style={st.otherCard} testID={`replay-gear-${o.ref}`}>
+                    <View style={st.otherHead}>
+                      {o.icon && <Icon name={o.icon} size={22} color={INK} />}
+                      <Text style={st.otherName} numberOfLines={1}>{o.name}</Text>
+                      <Text style={st.otherKind}>{o.kind}</Text>
+                    </View>
+                    <Text style={st.otherText}>{o.text}</Text>
+                    <Text style={st.otherStat}>{gearStatText(o.stat, run.totalDamage, 'other')}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
             {/* Totals double as the legend: each series' swatch, name and share */}
             <View style={st.tiles}>
               {(Object.keys(SERIES) as Series[]).map(k => (
@@ -347,15 +426,37 @@ const FightReplay: React.FC<Props> = ({ run, visible, onClose }) => {
                 {lines.length === 0 ? (
                   <Text style={st.empty}>Nothing else happened.</Text>
                 ) : (
-                  lines.map((l, i) => (
-                    <View key={i} style={st.row}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={st.rowLabel}>{l.label}{l.count > 1 ? ` ×${l.count}` : ''}</Text>
-                        {l.source && <Text style={st.source}>from {l.source}</Text>}
-                      </View>
-                      {l.damage !== undefined && <Text style={st.rowValue}>{l.damage} dmg</Text>}
-                    </View>
-                  ))
+                  lines.map((l, i) => {
+                    const about = l.sourceRef ? explainRef(l.sourceRef, run) : null;
+                    const from = l.source ?? about?.name;
+                    const isOpen = openLine === i && !!about?.text;
+                    return (
+                      <TouchableOpacity
+                        key={i}
+                        testID={`replay-line-${i}`}
+                        disabled={!about?.text}
+                        onPress={() => setOpenLine(isOpen ? null : i)}
+                        activeOpacity={0.8}
+                        accessibilityRole={about?.text ? 'button' : undefined}
+                        accessibilityState={about?.text ? { expanded: isOpen } : undefined}
+                        style={st.lineBlock}
+                      >
+                        <View style={st.row}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={st.rowLabel}>{l.label}{l.count > 1 ? ` ×${l.count}` : ''}</Text>
+                            {from && <Text style={st.source}>from {from}{about?.text ? (isOpen ? '  ▲' : '  ▼ what is that?') : ''}</Text>}
+                          </View>
+                          {l.damage !== undefined && <Text style={st.rowValue}>{l.damage} dmg</Text>}
+                        </View>
+                        {isOpen && about && (
+                          <View style={st.about} testID={`replay-line-about-${i}`}>
+                            {about.icon && <Icon name={about.icon} size={18} color={INK} />}
+                            <Text style={st.aboutText}><Text style={st.bold}>{about.name} ({about.kind}): </Text>{about.text}</Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })
                 )}
               </View>
             </View>
@@ -410,6 +511,18 @@ const Chip: React.FC<{ label: string; value: string; bad?: boolean }> = ({ label
 const mono = Platform.select({ ios: 'Menlo', android: 'monospace', default: undefined });
 
 const st = StyleSheet.create({
+  summary: { fontSize: 15, lineHeight: 22, color: INK },
+  gearTitle: { fontSize: 12, fontWeight: '900', letterSpacing: 2, color: INK },
+  gearHint: { fontSize: 11, fontWeight: '600', letterSpacing: 0, opacity: 0.7 },
+  otherCard: { backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 2, borderColor: INK, padding: 12, gap: 6 },
+  otherHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  otherName: { flex: 1, fontSize: 15, fontWeight: '900', color: INK },
+  otherKind: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5, color: INK, opacity: 0.6, textTransform: 'uppercase' },
+  otherText: { fontSize: 14, lineHeight: 20, color: INK },
+  otherStat: { fontSize: 13, fontWeight: '700', color: INK, opacity: 0.8 },
+  lineBlock: { gap: 4 },
+  about: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: COLORS.paperBeige, borderRadius: 8, padding: 8, marginBottom: 4 },
+  aboutText: { flex: 1, fontSize: 13, lineHeight: 19, color: INK },
   root: { flex: 1, backgroundColor: COLORS.paperBeige },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 8, gap: 10 },
   eyebrow: { fontSize: 11, fontWeight: '900', letterSpacing: 1.5, color: MUTED },

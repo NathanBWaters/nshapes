@@ -1,4 +1,5 @@
 /** Plain-language text for the fight replay (FightReplay.tsx): titles, damage math and "what got triggered" lines. */
+import { ownerOfEvent } from '../data/weaponGuide';
 import type { FightLogEntry, FightLogLine, FightLogSetMath, RunEventType } from '../types';
 
 /** Events whose amount is damage dealt to the foe. */
@@ -78,13 +79,15 @@ const humanize = (t: string) => t.charAt(0).toUpperCase() + t.slice(1).replace(/
 export interface ReplayLine {
   label: string;
   source?: string;
+  /** "weapon:<id>", "node:<id>" or "evo:<id>": what to explain when the line is opened */
+  sourceRef?: string;
   /** Damage dealt (summed over repeats) */
   damage?: number;
   count: number;
 }
 
 /** What happened during an entry beyond the Set's own hit, with repeats folded together ("Burn ×4 · 8 dmg"). */
-export const describeLines = (lines: FightLogLine[]): ReplayLine[] => {
+export const describeLines = (lines: FightLogLine[], held: readonly string[] = []): ReplayLine[] => {
   const out: ReplayLine[] = [];
   const byKey = new Map<string, ReplayLine>();
   for (const l of lines) {
@@ -92,14 +95,22 @@ export const describeLines = (lines: FightLogLine[]): ReplayLine[] => {
     const label = fn ? fn(l) : `${humanize(l.type)}${l.amount !== undefined ? ` ${l.amount}` : ''}`;
     if (!label) continue;
     const isDamage = DAMAGE.has(l.type);
-    const key = `${label}|${l.source ?? ''}|${isDamage}`;
+    // A blast or a callout with no rule behind it still has an owner: the held weapon that causes that kind of thing
+    const owner = l.sourceRef ? null : ownerOfEvent(l.type, l.text, held);
+    const sourceRef = l.sourceRef ?? (owner ? `weapon:${owner}` : undefined);
+    const key = `${label}|${l.source ?? sourceRef ?? ''}|${isDamage}`;
     const prev = byKey.get(key);
     if (prev) {
       prev.count += 1;
       if (isDamage) prev.damage = (prev.damage ?? 0) + (l.amount ?? 0);
       continue;
     }
-    const line: ReplayLine = { label, count: 1, ...(l.source ? { source: l.source } : {}), ...(isDamage ? { damage: l.amount ?? 0 } : {}) };
+    const line: ReplayLine = {
+      label, count: 1,
+      ...(l.source ? { source: l.source } : {}),
+      ...(sourceRef ? { sourceRef } : {}),
+      ...(isDamage ? { damage: l.amount ?? 0 } : {}),
+    };
     byKey.set(key, line);
     out.push(line);
   }
@@ -158,4 +169,70 @@ export const entrySummary = (e: FightLogEntry): string => {
   if (e.kind === 'mistake') return e.heartsDelta < 0 ? `lost ${plural(-e.heartsDelta, 'heart')}` : 'no heart lost';
   const lines = describeLines(e.lines);
   return lines.slice(0, 2).map(l => l.source ?? l.label).join(', ');
+};
+
+// ─── What each piece of gear did ────────────────────────────────────────────
+
+export interface GearStat {
+  /** Times it did something (a blast, a callout, a rule firing) */
+  fired: number;
+  /** Damage it dealt itself or added to Sets */
+  damage: number;
+}
+
+/** The weapon a log line belongs to: the rule that caused it, or the held weapon that owns that kind of event. */
+export const weaponOfLine = (l: FightLogLine, held: readonly string[]): string | null => {
+  if (l.sourceRef?.startsWith('weapon:')) return l.sourceRef.slice(7);
+  if (l.sourceRef) return null;
+  return ownerOfEvent(l.type, l.text, held);
+};
+
+/** A callout that carries a multiplier, not damage ("Curse broken ×2") */
+const isMultiplier = (l: FightLogLine) => l.type === 'rule' && (l.text?.includes('×') ?? false);
+
+/** What every weapon, evolution and skill node did over the whole fight, by ref ("weapon:<id>", "evo:<id>", "node:<id>"). */
+export const gearStats = (log: readonly FightLogEntry[], held: readonly string[]): Record<string, GearStat> => {
+  const out: Record<string, GearStat> = {};
+  for (const e of log) {
+    // One entry can hold several lines of one firing (a callout and its damage): count the source once per entry
+    const seen = new Set<string>();
+    for (const l of e.lines) {
+      const weapon = weaponOfLine(l, held);
+      const ref = weapon ? `weapon:${weapon}` : l.sourceRef;
+      if (!ref) continue;
+      const stat = (out[ref] ??= { fired: 0, damage: 0 });
+      if (!seen.has(ref)) {
+        seen.add(ref);
+        stat.fired += 1;
+      }
+      const amount = l.amount ?? 0;
+      if (DAMAGE.has(l.type) || (l.type === 'rule' && amount > 0 && !isMultiplier(l) && Number.isFinite(amount))) stat.damage += amount;
+    }
+  }
+  for (const stat of Object.values(out)) stat.damage = Math.round(stat.damage * 10) / 10;
+  return out;
+};
+
+/** "Fired 6 times · 48 damage (20% of the fight)", in words. */
+export const gearStatText = (stat: GearStat | undefined, totalDamage: number, kind: 'always' | 'other'): string => {
+  if (!stat || stat.fired === 0) return kind === 'always' ? 'Always on: its bonus is inside your Set hits.' : 'Did not fire this fight.';
+  const times = `Fired ${stat.fired} ${stat.fired === 1 ? 'time' : 'times'}`;
+  if (stat.damage <= 0) return `${times}.`;
+  const share = totalDamage > 0 ? Math.round((stat.damage / totalDamage) * 100) : 0;
+  return `${times} · ${fmt(stat.damage)} damage${share >= 1 ? ` (${share}% of the fight)` : ''}.`;
+};
+
+/** The fight in two or three plain sentences. */
+export const fightSummary = (o: {
+  totalDamage: number; ms: number; sets: number; mistakes: number; setDamage: number;
+  /** The gear that dealt the most, by name */
+  best?: { name: string; damage: number };
+}): string => {
+  const parts = [`You dealt ${Math.round(o.totalDamage)} damage in ${fmtClock(o.ms)}, with ${plural(o.sets, 'Set')} and ${plural(o.mistakes, 'mistake')}.`];
+  if (o.totalDamage > 0) {
+    const own = Math.max(0, Math.min(100, Math.round((o.setDamage / o.totalDamage) * 100)));
+    parts.push(own >= 100 ? 'All of it came from your Sets.' : `${own}% came from your Sets and ${100 - own}% from what they set off.`);
+  }
+  if (o.best && o.best.damage > 0) parts.push(`${o.best.name} did the most: ${fmt(o.best.damage)} damage.`);
+  return parts.join(' ');
 };

@@ -57,8 +57,15 @@ const totalXp = (s: RunState): number => {
   return sum;
 };
 
+/** Rule key → "weapon:<id>" | "node:<id>" | "evo:<id>", for looking the source up after the fight. */
+const sourceRef = (d: RunState, key: string): string => {
+  const base = key.split('#')[0];
+  const slot = /^w(\d+):(.*)$/.exec(base);
+  return slot ? `weapon:${d.weapons[Number(slot[1])]?.id ?? slot[2]}` : base;
+};
+
 const takeLines = (d: Draft): FightLogLine[] => {
-  const lines = d._lines.map(l => (l.source ? { ...l, source: sourceName(d, l.source) } : l));
+  const lines = d._lines.map(l => (l.source ? { ...l, source: sourceName(d, l.source), sourceRef: sourceRef(d, l.source) } : l));
   d._lines = [];
   return lines;
 };

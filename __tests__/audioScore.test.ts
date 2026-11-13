@@ -14,9 +14,10 @@ import {
   midiToFreq, nextGridTime, parseNote, shade, strum,
 } from '@/audio/theory';
 import {
-  WEAPON_VOICES, evolutionTheme, hasWeaponVoice, ownerOfEvent, recipeIdOf, riffNotes, stingOf, themeSignature, voiceSignature, weaponIdOf, weaponVoice,
+  WEAPON_VOICES, evolutionTheme, hasWeaponVoice, recipeIdOf, riffNotes, stingOf, themeSignature, voiceSignature, weaponIdOf, weaponVoice,
 } from '@/audio/voices';
 import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
+import { ownerOfEvent } from '@/adventure/data/weaponGuide';
 import { BIOMES } from '@/adventure/data/biomes';
 import { getArmoryWeapon } from '@/adventure/data/armory';
 import { createMaxedSave } from '@/adventure/progress';

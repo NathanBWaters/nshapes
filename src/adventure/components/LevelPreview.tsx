@@ -19,6 +19,8 @@ import { FIGHTERS, getFighter } from '../data/fighters';
 import { getPassive } from '../data/passives';
 import { ARCANA, getArcana } from '../data/arcana';
 import { getArmoryWeapon, weaponLevelSuffix } from '../data/armory';
+import { WEAPON_KINDS, weaponGuide } from '../data/weaponGuide';
+import WeaponExplainer from './WeaponExplainer';
 import { EVOLUTION_RECIPES } from '../data/evolutions';
 import { getLevel } from '../data/levels';
 import { isFighterTrial, starRewards } from '../data/rewards';
@@ -54,6 +56,8 @@ interface Props {
 
 const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectFighter, onSelectCharm, onSelectArcana, onShowMechanic }) => {
   const [charmTapCounts, setCharmTapCounts] = useState<Record<string, number>>({});
+  /** The charm tapped last: explained below the row even when it could not be equipped */
+  const [focusCharm, setFocusCharm] = useState<string | null>(null);
   if (!level) return null;
   const biome = getBiome(level.biome);
   const foe = levelFoe(level);
@@ -271,6 +275,7 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                         testID={`charm-${id}`}
                         onPress={() => {
                           setCharmTapCounts(prev => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }));
+                          setFocusCharm(id);
                           onSelectCharm(id);
                         }}
                         style={[st.charm, selected && st.charmSel, blocked && { opacity: 0.5 }]}
@@ -278,8 +283,10 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                         accessibilityState={{ selected }}
                       >
                         <WeaponAvatar weapon={w} size={32} triggerKey={charmTapCounts[id]} />
-                        <Text style={st.fighterName} numberOfLines={1}>{w.name}{weaponLevelSuffix(wLevel)}</Text>
-                        <Text style={st.charmDesc} numberOfLines={2}>{w.shortDescription}</Text>
+                        <Text style={[st.fighterName, { textAlign: 'center' }]} numberOfLines={2}>{w.name}{weaponLevelSuffix(wLevel)}</Text>
+                        <View style={[st.kindDot, { backgroundColor: WEAPON_KINDS[weaponGuide(id).kind].color }]}>
+                          <Text style={st.kindDotText}>{WEAPON_KINDS[weaponGuide(id).kind].label.toUpperCase()}</Text>
+                        </View>
                       </TouchableOpacity>
                     );
                   })}
@@ -287,6 +294,22 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                 {charmsFull && save.armory.length > charms.length && (
                   <Text style={st.note}>Slots full. Tap an equipped charm to swap it out.</Text>
                 )}
+
+                {/* What each charm does, in full sentences. Tap one for what to look for and how to play it. */}
+                <View style={{ gap: 8 }} testID="preview-charm-guide">
+                  {focusCharm && !charms.includes(focusCharm) && (() => {
+                    const w = getArmoryWeapon(focusCharm, weaponBuilds(save));
+                    return w ? (
+                      <WeaponExplainer key={`look-${focusCharm}`} weapon={w} build={weaponBuilds(save)[focusCharm]} badge={charmsFull ? 'Slots full' : 'Not equipped'} defaultOpen />
+                    ) : null;
+                  })()}
+                  {charms.length > 0 && <Text style={st.sectionHint}>WHAT YOUR CHARMS DO · tap one for tips</Text>}
+                  {charms.map(id => {
+                    const w = getArmoryWeapon(id, weaponBuilds(save));
+                    return w ? <WeaponExplainer key={id} weapon={w} build={weaponBuilds(save)[id]} defaultOpen={id === focusCharm} /> : null;
+                  })}
+                  {charms.length === 0 && !focusCharm && <Text style={st.note}>Tap a charm above to equip it and see what it does.</Text>}
+                </View>
               </>
             )}
 
@@ -459,9 +482,10 @@ const st = StyleSheet.create({
   fighterLvl: { fontSize: 10, fontWeight: '700', color: INK, opacity: 0.7 },
   rec: { position: 'absolute', top: -6, right: -4, backgroundColor: COLORS.logicTeal, borderRadius: 4, paddingHorizontal: 4, borderWidth: 1, borderColor: INK },
   recText: { fontSize: 8, fontWeight: '900', color: COLORS.canvasWhite, letterSpacing: 1 },
-  charm: { width: 112, alignItems: 'center', padding: 8, borderRadius: 10, borderWidth: 2, backgroundColor: COLORS.paperBeige, gap: 2 },
+  charm: { width: 96, alignItems: 'center', padding: 8, borderRadius: 10, borderWidth: 2, backgroundColor: COLORS.paperBeige, gap: 2 },
   charmSel: { backgroundColor: COLORS.actionYellow, borderBottomWidth: 4 },
-  charmDesc: { fontSize: 10, color: INK, textAlign: 'center', opacity: 0.8 },
+  kindDot: { borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1, marginTop: 2 },
+  kindDotText: { fontSize: 8, fontWeight: '900', letterSpacing: 0.4, color: COLORS.canvasWhite },
   evoBox: { gap: 6, backgroundColor: TONE.comboPale, borderRadius: 8, borderWidth: 1.5, borderColor: TONE.combo, padding: 8 },
   evoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   evoName: { fontSize: 12, fontWeight: '900', color: INK },

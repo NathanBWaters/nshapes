@@ -13,7 +13,8 @@
 import type { RunEvent, RunEventType, RunState } from '@/adventure/types';
 import { band, type CueName } from './band';
 import type { FightAlerts, FightMood } from './director';
-import { ownerOfEvent, weaponIdOf } from './voices';
+import { ownerOfEvent } from '@/adventure/data/weaponGuide';
+import { weaponIdOf } from './voices';
 
 /**
  * What each fight event sounds like. A full Record, so a new event type has

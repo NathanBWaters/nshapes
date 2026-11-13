@@ -567,6 +567,8 @@ export interface FightLogLine {
   text?: string;
   /** Skill node, weapon or evolution whose rule caused it (by name) */
   source?: string;
+  /** The same source as something to look up: "weapon:<id>", "node:<id>" or "evo:<id>" */
+  sourceRef?: string;
 }
 
 /** How a Set's own hit was worked out. */

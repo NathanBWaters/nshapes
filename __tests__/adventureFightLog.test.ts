@@ -48,7 +48,7 @@ describe('fight log', () => {
     expect(e.damage - e.setDamage).toBe(5);
     const lines = describeLines(e.lines);
     // The callout and its damage fold into one line
-    expect(lines.filter(l => l.label === 'Zap!')).toEqual([{ label: 'Zap!', source: 'Test Relic', count: 1, damage: 5 }]);
+    expect(lines.filter(l => l.label === 'Zap!')).toEqual([{ label: 'Zap!', source: 'Test Relic', sourceRef: 'weapon:test-relic', count: 1, damage: 5 }]);
     expect(entryTitle(e, 1)).toBe('Set #1');
   });
 
