@@ -28,11 +28,15 @@ export const getRecipe = (id: string): EvolutionRecipe | undefined => EVOLUTION_
 /** A weapon id belongs to a family when it is listed in it (or is an old copy id of one, `x-rare`). */
 const inFamily = (weaponId: string, family: string[]) => family.some(p => weaponId === p || weaponId.startsWith(`${p}-`));
 
-/** Unlocked recipes whose two families are both held, in recipe order. */
-export const armedRecipesFor = (weapons: Weapon[], unlocked: readonly string[]): string[] =>
-  EVOLUTION_RECIPES.filter(
-    r => unlocked.includes(r.id) && r.families.every(fam => weapons.some(w => inFamily(w.id, fam)))
-  ).map(r => r.id);
+/**
+ * Recipes whose two families are both held, in recipe order. Once the player
+ * knows any recipe (`known` is non-empty: evolutions are unlocked), EVERY
+ * recipe arms from its weapons: the rest are discovered by forging them.
+ */
+export const armedRecipesFor = (weapons: Weapon[], known: readonly string[]): string[] =>
+  known.length === 0
+    ? []
+    : EVOLUTION_RECIPES.filter(r => r.families.every(fam => weapons.some(w => inFamily(w.id, fam)))).map(r => r.id);
 
 export interface KeyedRule {
   /** Stable for the whole fight: `node:<id>#i`, `w<slot>:<weaponId>#i`, `evo:<id>#i` */

@@ -152,7 +152,7 @@ export const simulateRun = (level: LevelDef, save: AdventureSave, bot: BotProfil
   const boardRng = createRng(seed ^ 0x5bd1e995);
   Math.random = boardRng.next;
   try {
-    return playRun(level, plan ? gearUp(save, plan, seed) : save, bot, seed);
+    return playRun(level, plan ? gearUp(save, plan, seed) : save, bot, seed, plan?.chaseRecipes !== false);
   } finally {
     Math.random = realRandom;
   }
@@ -193,37 +193,38 @@ const submit = (s: RunState, picked: Card[]): RunState => {
  * A weapon a player would grab: one that arms a new evolution recipe first,
  * otherwise any (a spread of picks across runs, not always the first card).
  */
-const preferred = (s: RunState, options: Weapon[], rng: Rng): number => {
+const preferred = (s: RunState, options: Weapon[], rng: Rng, chase = true): number => {
   if (!options.length) return -1;
+  if (!chase) return Math.floor(rng.next() * options.length);
   const armed = s.armedRecipes.length;
   const arming = options.map((w, i) => [w, i] as const).filter(([w]) => armedRecipesFor([...s.weapons, w], s.unlockedEvolutions).length > armed);
   return arming.length ? rng.pick(arming)[1] : Math.floor(rng.next() * options.length);
 };
 
 /** Between waves: buy what the purse covers (a recipe piece first; keep buying while the ★★★ asks for it). */
-const shop = (s: RunState, rng: Rng): RunState => {
+const shop = (s: RunState, rng: Rng, chase: boolean): RunState => {
   for (let guard = 0; guard < 3 && s.shopOptions.length; guard++) {
     const affordable = s.shopOptions.filter(w => shopPrice(w) <= s.coins);
     if (!affordable.length) break;
-    const pick = affordable[preferred(s, affordable, rng)];
+    const pick = affordable[preferred(s, affordable, rng, chase)];
     s = runReducer(s, { type: 'BUY', index: s.shopOptions.indexOf(pick) });
     if (!chasing(s).includes('shopBuys')) break;
   }
   return s;
 };
 
-const playRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: number) => {
+const playRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: number, chase: boolean) => {
   const rng = createRng(seed ^ 0x9e3779b9);
   let s = createRun(level, save, { seed });
   let guard = 0;
   while ((s.status === 'playing' || s.status === 'pick' || s.status === 'intermission') && guard++ < 2000) {
     if (s.status === 'pick') {
       // Level up: take a free weapon
-      s = runReducer(s, { type: 'PICK', weaponId: s.pickOptions[preferred(s, s.pickOptions, rng)]?.id ?? null });
+      s = runReducer(s, { type: 'PICK', weaponId: s.pickOptions[preferred(s, s.pickOptions, rng, chase)]?.id ?? null });
       continue;
     }
     if (s.status === 'intermission') {
-      s = shop(s, rng);
+      s = shop(s, rng, chase);
       s = runReducer(s, { type: 'NEXT_WAVE' });
       continue;
     }

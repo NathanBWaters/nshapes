@@ -347,7 +347,8 @@ describe('evolutions', () => {
     const ids = [phoenix.id, second.id];
     const held = [...armedSave.charms, ...second.families.map(f => f[0])];
     let s = startFight({ save: { armory: held, charms: held, unlockedEvolutions: ids, upgrades: { charm_belt: 3 } } });
-    expect(new Set(s.armedRecipes)).toEqual(new Set(ids));
+    // Both are armed (the four weapons also arm some pair recipes, which come later in recipe order)
+    expect(s.armedRecipes.slice(0, 2)).toEqual(ids);
     s = catalystOn(s);
     s = playSet(s, catalystSet(s));
     s = catalystOn({ ...s, board: s.board.map(c => ({ ...c, hasEvolutionItem: false })) });

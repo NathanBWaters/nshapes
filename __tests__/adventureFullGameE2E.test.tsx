@@ -18,7 +18,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AdventureMode from '@/adventure/AdventureMode';
 import { LEVELS, MAIN_LEVELS, getLevel } from '@/adventure/data/levels';
 import { FIGHTERS, getFighter } from '@/adventure/data/fighters';
-import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
+import { EVOLUTION_RECIPES, SIGNATURE_RECIPES } from '@/adventure/data/evolutions';
 import { ARCANA } from '@/adventure/data/arcana';
 import { BOUNTIES } from '@/adventure/data/bounties';
 import { CAMPAIGN_FEATURES } from '@/adventure/data/features';
@@ -622,7 +622,8 @@ describe('Adventure Mode full-game E2E', () => {
     const done = loadAdventureSave();
     expect(totalStarsEarned(done)).toBe(maxStars());
     expect(done.unlockedFighters).toHaveLength(FIGHTERS.length);
-    expect(done.unlockedEvolutions).toHaveLength(EVOLUTION_RECIPES.length);
+    // Star rewards teach the signature recipes; the pair recipes are discovered by forging
+    expect(done.unlockedEvolutions).toHaveLength(SIGNATURE_RECIPES.length);
     expect(done.unlockedArcana).toHaveLength(ARCANA.length);
     expect(done.completedBounties).toHaveLength(BOUNTIES.length);
 

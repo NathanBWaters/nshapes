@@ -171,6 +171,136 @@ import FizzingFlask from '../../assets/icons/lorc/fizzing-flask.svg';
 import Mountaintop from '../../assets/icons/lorc/mountaintop.svg';
 import FallingStar from '../../assets/icons/delapouite/falling-star.svg';
 import CometSpark from '../../assets/icons/lorc/comet-spark.svg';
+// Evolution icons (data/evolutionPairs.ts)
+import EvoScythe from '../../assets/icons/lorc/scythe.svg';
+import EvoFireGem from '../../assets/icons/delapouite/fire-gem.svg';
+import EvoAngryEyes from '../../assets/icons/delapouite/angry-eyes.svg';
+import EvoBackwardTime from '../../assets/icons/delapouite/backward-time.svg';
+import EvoBarrel from '../../assets/icons/delapouite/barrel.svg';
+import EvoBeamSatellite from '../../assets/icons/delapouite/beam-satellite.svg';
+import EvoBirdCage from '../../assets/icons/delapouite/bird-cage.svg';
+import EvoBookPile from '../../assets/icons/delapouite/book-pile.svg';
+import EvoBoomerang from '../../assets/icons/delapouite/boomerang.svg';
+import EvoBroom from '../../assets/icons/delapouite/broom.svg';
+import EvoBurningForest from '../../assets/icons/delapouite/burning-forest.svg';
+import EvoChurch from '../../assets/icons/delapouite/church.svg';
+import EvoDynamite from '../../assets/icons/delapouite/dynamite.svg';
+import EvoEyeTarget from '../../assets/icons/delapouite/eye-target.svg';
+import EvoFlagObjective from '../../assets/icons/delapouite/flag-objective.svg';
+import EvoFlowerEmblem from '../../assets/icons/delapouite/flower-emblem.svg';
+import EvoGalaxy from '../../assets/icons/delapouite/galaxy.svg';
+import EvoGraduateCap from '../../assets/icons/delapouite/graduate-cap.svg';
+import EvoHarp from '../../assets/icons/delapouite/harp.svg';
+import EvoIdea from '../../assets/icons/delapouite/idea.svg';
+import EvoLighthouse from '../../assets/icons/delapouite/lighthouse.svg';
+import EvoLockedBox from '../../assets/icons/delapouite/locked-box.svg';
+import EvoMetronome from '../../assets/icons/delapouite/metronome.svg';
+import EvoMoonBats from '../../assets/icons/delapouite/moon-bats.svg';
+import EvoMoonOrbit from '../../assets/icons/delapouite/moon-orbit.svg';
+import EvoMountainCave from '../../assets/icons/delapouite/mountain-cave.svg';
+import EvoRollingDices from '../../assets/icons/delapouite/rolling-dices.svg';
+import EvoRopeCoil from '../../assets/icons/delapouite/rope-coil.svg';
+import EvoScrollQuill from '../../assets/icons/delapouite/scroll-quill.svg';
+import EvoSparkles from '../../assets/icons/delapouite/sparkles.svg';
+import EvoStack from '../../assets/icons/delapouite/stack.svg';
+import EvoStarFormation from '../../assets/icons/delapouite/star-formation.svg';
+import EvoStoneWall from '../../assets/icons/delapouite/stone-wall.svg';
+import EvoSunflower from '../../assets/icons/delapouite/sunflower.svg';
+import EvoTempleGate from '../../assets/icons/delapouite/temple-gate.svg';
+import EvoTimeSynchronization from '../../assets/icons/delapouite/time-synchronization.svg';
+import EvoTorch from '../../assets/icons/delapouite/torch.svg';
+import EvoTrumpetFlag from '../../assets/icons/delapouite/trumpet-flag.svg';
+import EvoTwoCoins from '../../assets/icons/delapouite/two-coins.svg';
+import EvoWell from '../../assets/icons/delapouite/well.svg';
+import EvoYinYang from '../../assets/icons/delapouite/yin-yang.svg';
+import EvoAnvil from '../../assets/icons/lorc/anvil.svg';
+import EvoBeamWake from '../../assets/icons/lorc/beam-wake.svg';
+import EvoBleedingHeart from '../../assets/icons/lorc/bleeding-heart.svg';
+import EvoBodySwapping from '../../assets/icons/lorc/body-swapping.svg';
+import EvoBombingRun from '../../assets/icons/lorc/bombing-run.svg';
+import EvoBookCover from '../../assets/icons/lorc/book-cover.svg';
+import EvoBouncingSword from '../../assets/icons/lorc/bouncing-sword.svg';
+import EvoBrokenShield from '../../assets/icons/lorc/broken-shield.svg';
+import EvoBurningBook from '../../assets/icons/lorc/burning-book.svg';
+import EvoBurningEye from '../../assets/icons/lorc/burning-eye.svg';
+import EvoBurningPassion from '../../assets/icons/lorc/burning-passion.svg';
+import EvoCandleFlame from '../../assets/icons/lorc/candle-flame.svg';
+import EvoCircuitry from '../../assets/icons/lorc/circuitry.svg';
+import EvoClockwork from '../../assets/icons/lorc/clockwork.svg';
+import EvoCompass from '../../assets/icons/lorc/compass.svg';
+import EvoCrown from '../../assets/icons/lorc/crown.svg';
+import EvoCrystalBars from '../../assets/icons/lorc/crystal-bars.svg';
+import EvoCrystalGrowth from '../../assets/icons/lorc/crystal-growth.svg';
+import EvoDominoMask from '../../assets/icons/lorc/domino-mask.svg';
+import EvoDramaMasks from '../../assets/icons/lorc/drama-masks.svg';
+import EvoEmptyHourglass from '../../assets/icons/lorc/empty-hourglass.svg';
+import EvoEvilBook from '../../assets/icons/lorc/evil-book.svg';
+import EvoEyeShield from '../../assets/icons/lorc/eye-shield.svg';
+import EvoEyeball from '../../assets/icons/lorc/eyeball.svg';
+import EvoFireShield from '../../assets/icons/lorc/fire-shield.svg';
+import EvoFlameSpin from '../../assets/icons/lorc/flame-spin.svg';
+import EvoFlameTunnel from '../../assets/icons/lorc/flame-tunnel.svg';
+import EvoFlowerPot from '../../assets/icons/lorc/flower-pot.svg';
+import EvoFlowerTwirl from '../../assets/icons/lorc/flower-twirl.svg';
+import EvoFrozenOrb from '../../assets/icons/lorc/frozen-orb.svg';
+import EvoGemChain from '../../assets/icons/lorc/gem-chain.svg';
+import EvoGemPendant from '../../assets/icons/lorc/gem-pendant.svg';
+import EvoGhost from '../../assets/icons/lorc/ghost.svg';
+import EvoGlassHeart from '../../assets/icons/lorc/glass-heart.svg';
+import EvoGoldScarab from '../../assets/icons/lorc/gold-scarab.svg';
+import EvoGuillotine from '../../assets/icons/lorc/guillotine.svg';
+import EvoHeartOrgan from '../../assets/icons/lorc/heart-organ.svg';
+import EvoLaserPrecision from '../../assets/icons/lorc/laser-precision.svg';
+import EvoLightningArc from '../../assets/icons/lorc/lightning-arc.svg';
+import EvoLockedChest from '../../assets/icons/lorc/locked-chest.svg';
+import EvoMagicPortal from '../../assets/icons/lorc/magic-portal.svg';
+import EvoMeditation from '../../assets/icons/lorc/meditation.svg';
+import EvoMolecule from '../../assets/icons/lorc/molecule.svg';
+import EvoMoon from '../../assets/icons/lorc/moon.svg';
+import EvoOak from '../../assets/icons/lorc/oak.svg';
+import EvoPokerHand from '../../assets/icons/lorc/poker-hand.svg';
+import EvoPowerLightning from '../../assets/icons/lorc/power-lightning.svg';
+import EvoProcessor from '../../assets/icons/lorc/processor.svg';
+import EvoPsychicWaves from '../../assets/icons/lorc/psychic-waves.svg';
+import EvoResonance from '../../assets/icons/lorc/resonance.svg';
+import EvoSandsOfTime from '../../assets/icons/lorc/sands-of-time.svg';
+import EvoSatellite from '../../assets/icons/lorc/satellite.svg';
+import EvoScrollUnfurled from '../../assets/icons/lorc/scroll-unfurled.svg';
+import EvoSewingNeedle from '../../assets/icons/lorc/sewing-needle.svg';
+import EvoShatteredGlass from '../../assets/icons/lorc/shattered-glass.svg';
+import EvoShieldReflect from '../../assets/icons/lorc/shield-reflect.svg';
+import EvoShouting from '../../assets/icons/lorc/shouting.svg';
+import EvoSmokingOrb from '../../assets/icons/lorc/smoking-orb.svg';
+import EvoSonicBoom from '../../assets/icons/lorc/sonic-boom.svg';
+import EvoSonicShout from '../../assets/icons/lorc/sonic-shout.svg';
+import EvoSparkSpirit from '../../assets/icons/lorc/spark-spirit.svg';
+import EvoSparkyBomb from '../../assets/icons/lorc/sparky-bomb.svg';
+import EvoSpectacleLenses from '../../assets/icons/lorc/spectacle-lenses.svg';
+import EvoSpiderWeb from '../../assets/icons/lorc/spider-web.svg';
+import EvoSpikedHalo from '../../assets/icons/lorc/spiked-halo.svg';
+import EvoSpiralArrow from '../../assets/icons/lorc/spiral-arrow.svg';
+import EvoSprout from '../../assets/icons/lorc/sprout.svg';
+import EvoStarSwirl from '../../assets/icons/lorc/star-swirl.svg';
+import EvoStoneSphere from '../../assets/icons/lorc/stone-sphere.svg';
+import EvoStoneTablet from '../../assets/icons/lorc/stone-tablet.svg';
+import EvoSun from '../../assets/icons/lorc/sun.svg';
+import EvoSunrise from '../../assets/icons/lorc/sunrise.svg';
+import EvoSwapBag from '../../assets/icons/lorc/swap-bag.svg';
+import EvoThunderStruck from '../../assets/icons/lorc/thunder-struck.svg';
+import EvoTreasureMap from '../../assets/icons/lorc/treasure-map.svg';
+import EvoVineFlower from '../../assets/icons/lorc/vine-flower.svg';
+import EvoVineLeaf from '../../assets/icons/lorc/vine-leaf.svg';
+import EvoVortex from '../../assets/icons/lorc/vortex.svg';
+import EvoCloverSpiked from '../../assets/icons/sbed/clover-spiked.svg';
+import EvoElectric from '../../assets/icons/sbed/electric.svg';
+import EvoWaterDrop from '../../assets/icons/sbed/water-drop.svg';
+import EvoBurningSkull from '../../assets/icons/skoll/burning-skull.svg';
+import EvoHearts from '../../assets/icons/skoll/hearts.svg';
+import EvoLaserBurst from '../../assets/icons/skoll/laser-burst.svg';
+import EvoPentacle from '../../assets/icons/skoll/pentacle.svg';
+import EvoSoundWaves from '../../assets/icons/skoll/sound-waves.svg';
+import EvoInfinity from '../../assets/icons/various-artists/infinity.svg';
+import EvoGoldBar from '../../assets/icons/willdabeast/gold-bar.svg';
 
 // Icon registry: maps path (e.g., "delapouite/token") to the imported component
 // NOTE: When adding new icons, also add the import above and the path here.
@@ -342,6 +472,136 @@ const ICON_REGISTRY = {
   'lorc/mountaintop': Mountaintop,
   'delapouite/falling-star': FallingStar,
   'lorc/comet-spark': CometSpark,
+  // Evolutions
+  'lorc/scythe': EvoScythe,
+  'delapouite/fire-gem': EvoFireGem,
+  'delapouite/angry-eyes': EvoAngryEyes,
+  'delapouite/backward-time': EvoBackwardTime,
+  'delapouite/barrel': EvoBarrel,
+  'delapouite/beam-satellite': EvoBeamSatellite,
+  'delapouite/bird-cage': EvoBirdCage,
+  'delapouite/book-pile': EvoBookPile,
+  'delapouite/boomerang': EvoBoomerang,
+  'delapouite/broom': EvoBroom,
+  'delapouite/burning-forest': EvoBurningForest,
+  'delapouite/church': EvoChurch,
+  'delapouite/dynamite': EvoDynamite,
+  'delapouite/eye-target': EvoEyeTarget,
+  'delapouite/flag-objective': EvoFlagObjective,
+  'delapouite/flower-emblem': EvoFlowerEmblem,
+  'delapouite/galaxy': EvoGalaxy,
+  'delapouite/graduate-cap': EvoGraduateCap,
+  'delapouite/harp': EvoHarp,
+  'delapouite/idea': EvoIdea,
+  'delapouite/lighthouse': EvoLighthouse,
+  'delapouite/locked-box': EvoLockedBox,
+  'delapouite/metronome': EvoMetronome,
+  'delapouite/moon-bats': EvoMoonBats,
+  'delapouite/moon-orbit': EvoMoonOrbit,
+  'delapouite/mountain-cave': EvoMountainCave,
+  'delapouite/rolling-dices': EvoRollingDices,
+  'delapouite/rope-coil': EvoRopeCoil,
+  'delapouite/scroll-quill': EvoScrollQuill,
+  'delapouite/sparkles': EvoSparkles,
+  'delapouite/stack': EvoStack,
+  'delapouite/star-formation': EvoStarFormation,
+  'delapouite/stone-wall': EvoStoneWall,
+  'delapouite/sunflower': EvoSunflower,
+  'delapouite/temple-gate': EvoTempleGate,
+  'delapouite/time-synchronization': EvoTimeSynchronization,
+  'delapouite/torch': EvoTorch,
+  'delapouite/trumpet-flag': EvoTrumpetFlag,
+  'delapouite/two-coins': EvoTwoCoins,
+  'delapouite/well': EvoWell,
+  'delapouite/yin-yang': EvoYinYang,
+  'lorc/anvil': EvoAnvil,
+  'lorc/beam-wake': EvoBeamWake,
+  'lorc/bleeding-heart': EvoBleedingHeart,
+  'lorc/body-swapping': EvoBodySwapping,
+  'lorc/bombing-run': EvoBombingRun,
+  'lorc/book-cover': EvoBookCover,
+  'lorc/bouncing-sword': EvoBouncingSword,
+  'lorc/broken-shield': EvoBrokenShield,
+  'lorc/burning-book': EvoBurningBook,
+  'lorc/burning-eye': EvoBurningEye,
+  'lorc/burning-passion': EvoBurningPassion,
+  'lorc/candle-flame': EvoCandleFlame,
+  'lorc/circuitry': EvoCircuitry,
+  'lorc/clockwork': EvoClockwork,
+  'lorc/compass': EvoCompass,
+  'lorc/crown': EvoCrown,
+  'lorc/crystal-bars': EvoCrystalBars,
+  'lorc/crystal-growth': EvoCrystalGrowth,
+  'lorc/domino-mask': EvoDominoMask,
+  'lorc/drama-masks': EvoDramaMasks,
+  'lorc/empty-hourglass': EvoEmptyHourglass,
+  'lorc/evil-book': EvoEvilBook,
+  'lorc/eye-shield': EvoEyeShield,
+  'lorc/eyeball': EvoEyeball,
+  'lorc/fire-shield': EvoFireShield,
+  'lorc/flame-spin': EvoFlameSpin,
+  'lorc/flame-tunnel': EvoFlameTunnel,
+  'lorc/flower-pot': EvoFlowerPot,
+  'lorc/flower-twirl': EvoFlowerTwirl,
+  'lorc/frozen-orb': EvoFrozenOrb,
+  'lorc/gem-chain': EvoGemChain,
+  'lorc/gem-pendant': EvoGemPendant,
+  'lorc/ghost': EvoGhost,
+  'lorc/glass-heart': EvoGlassHeart,
+  'lorc/gold-scarab': EvoGoldScarab,
+  'lorc/guillotine': EvoGuillotine,
+  'lorc/heart-organ': EvoHeartOrgan,
+  'lorc/laser-precision': EvoLaserPrecision,
+  'lorc/lightning-arc': EvoLightningArc,
+  'lorc/locked-chest': EvoLockedChest,
+  'lorc/magic-portal': EvoMagicPortal,
+  'lorc/meditation': EvoMeditation,
+  'lorc/molecule': EvoMolecule,
+  'lorc/moon': EvoMoon,
+  'lorc/oak': EvoOak,
+  'lorc/poker-hand': EvoPokerHand,
+  'lorc/power-lightning': EvoPowerLightning,
+  'lorc/processor': EvoProcessor,
+  'lorc/psychic-waves': EvoPsychicWaves,
+  'lorc/resonance': EvoResonance,
+  'lorc/sands-of-time': EvoSandsOfTime,
+  'lorc/satellite': EvoSatellite,
+  'lorc/scroll-unfurled': EvoScrollUnfurled,
+  'lorc/sewing-needle': EvoSewingNeedle,
+  'lorc/shattered-glass': EvoShatteredGlass,
+  'lorc/shield-reflect': EvoShieldReflect,
+  'lorc/shouting': EvoShouting,
+  'lorc/smoking-orb': EvoSmokingOrb,
+  'lorc/sonic-boom': EvoSonicBoom,
+  'lorc/sonic-shout': EvoSonicShout,
+  'lorc/spark-spirit': EvoSparkSpirit,
+  'lorc/sparky-bomb': EvoSparkyBomb,
+  'lorc/spectacle-lenses': EvoSpectacleLenses,
+  'lorc/spider-web': EvoSpiderWeb,
+  'lorc/spiked-halo': EvoSpikedHalo,
+  'lorc/spiral-arrow': EvoSpiralArrow,
+  'lorc/sprout': EvoSprout,
+  'lorc/star-swirl': EvoStarSwirl,
+  'lorc/stone-sphere': EvoStoneSphere,
+  'lorc/stone-tablet': EvoStoneTablet,
+  'lorc/sun': EvoSun,
+  'lorc/sunrise': EvoSunrise,
+  'lorc/swap-bag': EvoSwapBag,
+  'lorc/thunder-struck': EvoThunderStruck,
+  'lorc/treasure-map': EvoTreasureMap,
+  'lorc/vine-flower': EvoVineFlower,
+  'lorc/vine-leaf': EvoVineLeaf,
+  'lorc/vortex': EvoVortex,
+  'sbed/clover-spiked': EvoCloverSpiked,
+  'sbed/electric': EvoElectric,
+  'sbed/water-drop': EvoWaterDrop,
+  'skoll/burning-skull': EvoBurningSkull,
+  'skoll/hearts': EvoHearts,
+  'skoll/laser-burst': EvoLaserBurst,
+  'skoll/pentacle': EvoPentacle,
+  'skoll/sound-waves': EvoSoundWaves,
+  'various-artists/infinity': EvoInfinity,
+  'willdabeast/gold-bar': EvoGoldBar,
 } as const satisfies Record<string, React.FC<SvgProps>>;
 
 // TypeScript union type of all valid icon names - use this for type-safe icon references

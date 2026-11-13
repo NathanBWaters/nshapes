@@ -16,7 +16,7 @@ import { LEVELS } from '../data/levels';
 import { FIGHTERS } from '../data/fighters';
 import { getPassive } from '../data/passives';
 import { MECHANICS } from '../data/mechanics';
-import { EVOLUTION_RECIPES } from '../data/evolutions';
+import { EVOLUTION_RECIPES, SIGNATURE_RECIPES } from '../data/evolutions';
 import { CAMPAIGN_FEATURES } from '../data/features';
 import { unlockHint, unlockSource } from '../data/rewards';
 import { buildAdaptiveEvolutionMechanic, evolutionsMechanicId } from '../lessons';
@@ -24,6 +24,8 @@ import { armedRecipes, isMechanicKnown, recipeFamiliesHeld } from '../progress';
 import MechanicIntro from './MechanicIntro';
 import { Silhouette } from './rewards';
 import { INK, TONE } from './ui';
+
+const SIGNATURE_IDS = new Set(SIGNATURE_RECIPES.map(r => r.id));
 
 interface Entry {
   m: MechanicDef;
@@ -204,7 +206,7 @@ const FieldGuide: React.FC<Props> = ({ save, onClose }) => {
               <Text style={st.howTitle}>How Evolutions Work</Text>
             </View>
             <Text style={st.howBody}>
-              1. Unlock a recipe in the campaign. It is ARMED in any fight where your charms (or picks and buys) hold both of its weapon families.{'\n'}
+              1. Learn your first recipe in the campaign. From then on EVERY recipe is ARMED in any fight where your charms (or picks and buys) hold both of its weapons. There are {EVOLUTION_RECIPES.length}: a few are taught by stars, the rest you discover by forging them.{'\n'}
               2. While a recipe is armed, refills can bring an Evolution Catalyst card. The Evolution Lab and some weapons make it more likely.{'\n'}
               3. Match the Catalyst in any Set: the evolution runs for 20 seconds, with its own rules and +1 damage on every Set. Up to 3 per fight.
             </Text>
@@ -232,12 +234,16 @@ const FieldGuide: React.FC<Props> = ({ save, onClose }) => {
                   <View style={{ flex: 1, gap: 2 }}>
                     <Text style={st.recipeName}>{unlocked ? r.name : '??? Evolution'}</Text>
                     <Text style={[st.recipeBadge, { color: isArmed ? TONE.upside : forged ? TONE.tradeoff : unlocked ? TONE.combo : '#6B7280' }]}>
-                      {!unlocked ? 'LOCKED' : [isArmed ? 'ARMED BY YOUR CHARMS' : forged ? null : 'UNLOCKED', forged ? 'EVOLVED BEFORE' : null].filter(Boolean).join(' · ')}
+                      {isArmed && !unlocked
+                        ? 'ARMED BY YOUR CHARMS · UNDISCOVERED'
+                        : !unlocked
+                          ? 'UNDISCOVERED'
+                          : [isArmed ? 'ARMED BY YOUR CHARMS' : forged ? null : 'UNLOCKED', forged ? 'EVOLVED BEFORE' : null].filter(Boolean).join(' · ')}
                     </Text>
                   </View>
                 </View>
 
-                {unlocked ? (
+                {unlocked || isArmed ? (
                   <>
                     <Text style={st.recipeDesc}>{r.activeText}</Text>
                     {forged && <Text style={st.recipeHint}>“{r.flavor}”</Text>}
@@ -255,7 +261,10 @@ const FieldGuide: React.FC<Props> = ({ save, onClose }) => {
                   <View style={st.recipeReqs}>
                     <View style={st.reqRow}>
                       <Icon name="lorc/padlock" size={14} color="#6B7280" />
-                      <Text style={st.reqText}><Text style={{ fontWeight: '900' }}>Unlock: </Text>{unlockHint({ kind: 'evolution', id: r.id })}</Text>
+                      <Text style={st.reqText}>
+                        <Text style={{ fontWeight: '900' }}>{SIGNATURE_IDS.has(r.id) ? 'Unlock: ' : 'Discover: '}</Text>
+                        {SIGNATURE_IDS.has(r.id) ? unlockHint({ kind: 'evolution', id: r.id }) : 'hold the right two weapons and match a Catalyst.'}
+                      </Text>
                     </View>
                   </View>
                 )}

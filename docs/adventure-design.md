@@ -175,8 +175,9 @@ A **Rule** is `trigger` + optional `when` conditions + `effects`, with an option
 |---|---|
 | Triggers | `set`, `firstSetOfWave`, `everyNthSet n`, `setsWithin count/withinMs`, `rainbow`, `mistake`, `healed`, `hurt`, `weapon <kind>`, `idle ms`, `fightStart`, `waveStart`, `evolutionStart`, `evolutionEnd`, `trapDefused`, `bonusCardMatched`, `cardBroken`, `foeBelow fraction`, `hintUsed`, `graceUsed`, `cardBurned`, `linkDestroyed` |
 | Conditions | `chance pct`, `heartsAtMost n`, `heartsFull`, `comboAtLeast n`, `diffCount n`, `rainbowSet`, `noMistakesThisFight`, `evolutionActive`, `timeSinceLastSetAtLeast/AtMost ms`, `boardAtLeast n` |
-| Effects | `damage`, `explode area`, `laser area`, `ignite`, `heal`, `coins`, `time`, `hint`, `grace`, `xp`, `growBoard`, `empowerBoard`, `armorCard`, `simplify`, `doubleNext`, `freeze`, `redeal`, `autoSet`, `comboStep`, `spawnCatalyst`, `extendEvolutions`, `nextSetMultiplier`, `trigger <kind>`, `ricochet`, `link` |
+| Effects | `damage` (optionally `per` a count), `cashIn`, `convert`, `shield`, `cleanse`, `explode area`, `laser area`, `ignite`, `heal`, `coins`, `time`, `hint`, `grace`, `xp`, `growBoard`, `empowerBoard`, `armorCard`, `simplify`, `doubleNext`, `freeze`, `redeal`, `autoSet`, `comboStep`, `spawnCatalyst`, `extendEvolutions`, `nextSetMultiplier`, `trigger <kind>`, `ricochet`, `link` |
 | Areas | `block cols×rows` (random anchor that fits the 3-column grid), `row`, `column`, `random count` |
+| Conditions (new) | `foeHpBelow` · Trigger `finale` (an evolution's own end) |
 | Modifiers | `setDamage`, `conditionalDamage`, `rainbowMultiplierBonus`, `weaponChanceScale`, `evolutionLikelihood`, `rainbowEvolutionLikelihood`, `evolutionDurationMs`, `extraEvolutionsPerFight`, `maxHearts`, `startingHints/Graces/Seconds`, `coinPercent`, `pickOptions`, `freeMistakes`, `trapImmunity`, `passiveTuning` |
 
 ### Combining and chaining
@@ -252,7 +253,11 @@ Effect caps (`game/effectCaps.ts`) were raised so a level-5, fully tuned weapon 
 
 `data/evolutions.ts` (recipes, families) · `engine/evolutions.ts` · `EVOLUTION_RULES` in `engine/sources.ts`
 
-1. **Arming.** A recipe is two weapon families from different roles. It is **armed** while you hold one weapon of each family among your charms, picks or buys, and the recipe is unlocked. Families are id prefixes, so `oracle-eye` matches `oracle-eye-rare`. The two families of a recipe share no weapon.
+1. **Arming.** There are **156 recipes: 4 per Armory weapon.** A recipe is **armed** while you hold one weapon of each of its two families among your charms, picks or buys, once the player knows any recipe (the first is taught at 1-3). Families are id prefixes, so `oracle-eye` matches `oracle-eye-rare`.
+   - **9 signature recipes** (`data/evolutions.ts`, table below) arm from whole weapon families and are taught by star rewards.
+   - **147 pair recipes** (`data/evolutionPairs.ts`) each arm from one exact pair of weapons and are **discovered**: the Recipe Guide shows them as "??? Evolution" until forged once, and the preview shows an armed one as "??? Evolution · ARMED". Every weapon sits in 6–12 recipes, and no pair of weapons arms two.
+   - Each pair recipe has its own twist rather than "A also does B": finales (`finale` trigger, when the 20 s run out), cashing hints or graces in for damage (`cashIn`), turning cards gold or power (`convert`), free mistakes (`shield`), clearing traps and face-down cards (`cleanse`), damage that scales with the fight (`damage` `per` board card, missing heart, link, burning card…), or "while the foe is below 30%" (`foeHpBelow`).
+   - `__tests__/adventureEvolutions.test.ts` checks the count, uniqueness, that no pair arms two recipes, and that every recipe forges and runs through its finale in a real fight.
 2. **The Catalyst.** While anything is armed, each refill batch may bring the **Evolution Catalyst** card. Only one can be on the board at a time.
    - **Likelihood** = (12% base + 4% per Evolution Lab tier + `evolutionLikelihood` modifiers) × Arcana `catalystChanceScale`, plus the level's own `rules.evolutionLikelihood` (1-4 adds +30).
    - Refills caused by a Rainbow Strike add `rainbowEvolutionLikelihood`.
@@ -495,21 +500,13 @@ Target feel (bare vs invested player, by world): [balance-philosophy.md](./balan
 ADVENTURE_BALANCE_REPORT=1 npx jest __tests__/adventureBalance.test.ts
 ```
 
-- Novice, average and expert bots (`engine/bot.ts`) play every level through the real reducer and print star distributions.
-- **Each run gears up like a player** (`engine/botBuilds.ts`, a `BuildPlan` passed to `starDistribution`):
-  - **Stars:** a bot has earned `STAR_SHARE` of the stars on offer before the level (novice 0.6, average 0.75, expert 0.9 — "best result on each level, replays counted"). Every fighter spends every star earned, so that is also its skill-tree budget. The sealed capstone opens only once that many stars reach `SEALED_AT`.
-  - **Skill tree:** bought from scratch each run in one of three styles: `plan` (pick a capstone, buy the cheapest path, repeat), `spread` (always the cheapest reachable node), `random`.
-  - **Fighter:** a different unlocked fighter each run (fighter trials use the fighter they teach).
-  - **Charms:** 60% of the time both halves of an unlocked recipe, the rest of the slots at random. 3-2's puzzle keeps its named charms.
-  - **In the fight:** level-up picks and shop buys prefer a weapon that arms a new recipe, otherwise any.
-  - Gear, recipes, Arcana and free weapon levels come from 3★ on every earlier level (`applyLevelResult`). No Workshop spending (the final boss assumes 2 Tough Hide).
-- The test checks that:
-  - Every level is survivable by an average player.
-  - The meadow is forgiving for novices.
-  - ★★★ is not routine on hard levels.
-  - Elites are beatable but not free.
-  - Harder levels pay more.
-- Foe HP in `levels.ts` is tuned against these geared-up bots. Re-run the report after changing HP, timers, moves, weapon numbers, skill nodes, or Workshop and Arcana values. **If you change `STAR_SHARE`, the tree budget or node power, foe HP needs retuning**: the bots' trees grow with the stars.
+- **Two players, by world** ([balance-philosophy.md](./balance-philosophy.md)): the same average-skill bot plays every level twice.
+  - **Bare** (`barePlan`): no stars, no Workshop, random charms, random picks and buys. Target wins 50 / 30 / 10 / 0 / 0%.
+  - **Invested** (`investedPlan`): every star on offer spent (plan style), every Workshop upgrade on sale maxed, its charms tuned to ×1.5, a solid build (a recipe pair plus damage weapons), picks and buys that chase recipes. Target wins 97 / 90 / 80 / 70 / 50%.
+  - "Win" is a knockout. Bosses and elites are a step harder for the invested player, fighter trials a step kinder; `winTargets` in `engine/botBuilds.ts` has the per-level rules.
+- How a run gears up (`engine/botBuilds.ts`, a `BuildPlan` passed to `starDistribution`): gear, recipes, Arcana and free weapon levels come from 3★ on every earlier level (`applyLevelResult`); then the plan buys a skill tree (`plan` / `spread` / `random` style), picks a random unlocked fighter (trials use their fighter) and charms ('random', 'solid' or 'mixed'), and optionally maxes the Workshop and tunes the charms. 3-2's puzzle keeps its named charms.
+- The test checks every level is within 20 points of both targets, every world's mean within 10, both players find each world harder than the last, and the evolution level shows the invested player an evolution.
+- Foe HP in `levels.ts` is tuned so both players land as close to their targets as one number allows. **If you change skill trees, the Workshop, tuning or evolutions, retune HP**: the invested curve moves with them.
 
 ### Broken builds
 

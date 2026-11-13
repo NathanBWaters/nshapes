@@ -289,7 +289,7 @@ const inFamily = (weaponId: string, family: readonly string[]): boolean =>
 /** Unlocked recipes whose two families are both among these weapons. */
 export const recipesArmedBy = (weaponIds: readonly string[], unlockedEvolutions: readonly string[]): EvolutionRecipe[] =>
   EVOLUTION_RECIPES.filter(
-    r => unlockedEvolutions.includes(r.id) && r.families.every(f => weaponIds.some(id => inFamily(id, f)))
+    r => unlockedEvolutions.length > 0 && r.families.every(f => weaponIds.some(id => inFamily(id, f)))
   );
 
 /** Recipes the equipped charms arm before the fight starts (picks and shop buys can arm more). */

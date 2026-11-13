@@ -7,12 +7,14 @@
  * Loop safety: a rule never reacts to events its own effects caused (directly
  * or through other rules), and one action resolves at most 32 rule firings.
  */
-import type { Condition, Effect, Trigger, WeaponTriggerKind } from './types';
+import type { Condition, Effect, Scale, Trigger, WeaponTriggerKind } from './types';
+import { cleanseBoard } from '../engine/hazards';
+import { isSelectable } from '../engine/sets';
 import { BASE_RULES } from '../data/rules';
 import {
   addCoins, addGraces, addHints, addRandomConnections, addTime, addXp, areaIndices, armorCard, canSpawnCatalyst,
   dealDamage, destroyCards, emit, empowerBoard, enqueue, foeMultiplier, growBoard, heal, igniteCards, liveRulesOf,
-  placeCatalyst, redeal, simplify, type Draft, type FightEvent,
+  placeCatalyst, redeal, simplify, touchable as touchableIdx, type Draft, type FightEvent,
 } from '../engine/fight';
 import { extendEvolutions } from '../engine/evolutions';
 import { addComboSteps, patienceMs } from '../engine/passives';
@@ -38,6 +40,7 @@ const holds = (d: Draft, c: Condition): boolean => {
     case 'patient': return sinceLastSet(d) >= patienceMs(d);
     case 'timeSinceLastSetAtMost': return sinceLastSet(d) <= c.ms;
     case 'boardAtLeast': return d.board.length >= c.n;
+    case 'foeHpBelow': return d.foeMaxHp > 0 && d.foeHp > 0 && d.foeHp / d.foeMaxHp < c.fraction;
   }
 };
 
@@ -65,6 +68,7 @@ const triggerMatches = (d: Draft, key: string, t: Trigger, ev: FightEvent): bool
     case 'weapon': return ev.on === 'weapon' && ev.kind === t.kind;
     case 'idle':
     case 'foeBelow':
+    case 'finale':
       return false;
     default: return ev.on === t.on;
   }
@@ -109,6 +113,13 @@ export const drain = (d: Draft) => {
   } while (d._queue.length);
 };
 
+/** An evolution ran out: its own `finale` rules fire (call before its rules leave the fight). */
+export const fireFinale = (d: Draft, recipeId: string) => {
+  for (const kr of liveRulesOf(d)) {
+    if (kr.rule.trigger.on === 'finale' && kr.key.startsWith(`evo:${recipeId}#`)) fireRule(d, kr, []);
+  }
+};
+
 /** Idle rules fire once per stretch without a Set. */
 export const checkIdle = (d: Draft) => {
   const since = d.elapsedMs - d.lastMatchAtMs;
@@ -130,6 +141,36 @@ export const resetIdleRules = (d: Draft) => resetFired(d, 'idle');
 export const resetFoeBelowRules = (d: Draft) => resetFired(d, 'foeBelow');
 
 // ─── Effects ────────────────────────────────────────────────────────────────
+
+/** What a scaling effect counts right now. */
+export const scaleCount = (d: Draft, per: Scale): number => {
+  switch (per) {
+    case 'boardCard': return d.board.length;
+    case 'missingHeart': return d.hearts !== null && d.maxHearts !== null ? Math.max(0, d.maxHearts - d.hearts) : 0;
+    case 'heart': return d.hearts ?? 0;
+    case 'hint': return d.stats.hints;
+    case 'grace': return d.stats.graces;
+    case 'link': return d.connections.length;
+    case 'combo': return d.combo;
+    case 'bonusCard': return d.board.filter(c => (c.bonusPoints ?? 0) > 0 || (c.bonusMoney ?? 0) > 0).length;
+    case 'burning': return d.board.filter(c => c.onFire).length;
+    case 'evolution': return d.activeEvolutions.length;
+  }
+};
+
+/** Turn random plain cards into power or gold cards. */
+const convertCards = (d: Draft, to: 'power' | 'gold', count: number) => {
+  const plain = d.board
+    .map((c, i) => (touchableIdx(d, i) && isSelectable(c) && !c.snare && !c.bonusPoints && !c.bonusMoney ? i : -1))
+    .filter(i => i >= 0);
+  const chosen = d._rng.shuffle(plain).slice(0, count);
+  if (!chosen.length) return;
+  const set = new Set(chosen);
+  d.board = d.board.map((c, i) =>
+    !set.has(i) ? c : to === 'power' ? { ...c, bonusPoints: BASE_RULES.powerCardBonus } : { ...c, bonusMoney: BASE_RULES.coinCardValue }
+  );
+  emit(d, 'fetch', chosen.length, to);
+};
 
 const WEAPON_KIND: Partial<Record<Effect['do'], WeaponTriggerKind>> = {
   explode: 'explosion',
@@ -222,10 +263,25 @@ export const applyEffect = (d: Draft, e: Effect, label?: string) => {
   }
   switch (e.do) {
     case 'damage': {
-      const dealt = dealDamage(d, e.amount * foeMultiplier(d));
+      const times = e.per ? scaleCount(d, e.per) : 1;
+      const dealt = dealDamage(d, e.amount * times * foeMultiplier(d));
       if (dealt > 0) emit(d, 'hit', dealt, label ?? 'Bonus');
       break;
     }
+    case 'cashIn': {
+      const held = e.resource === 'hints' ? d.stats.hints : d.stats.graces;
+      if (held <= 0) break;
+      d.stats = { ...d.stats, [e.resource]: 0 };
+      const dealt = dealDamage(d, held * e.damageEach * foeMultiplier(d));
+      emit(d, 'hit', dealt, label ?? 'Cash in');
+      break;
+    }
+    case 'convert': convertCards(d, e.to, e.count); break;
+    case 'shield':
+      d.freeMistakesLeft += e.count;
+      emit(d, 'free_mistake', d.freeMistakesLeft);
+      break;
+    case 'cleanse': cleanseBoard(d); break;
     case 'empowerBoard': empowerBoard(d, e.amount); break;
     case 'armorCard': armorCard(d, e.extraHealth, e.bounty); break;
     case 'simplify': simplify(d, e.ms); break;

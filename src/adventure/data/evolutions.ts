@@ -1,7 +1,13 @@
 /**
  * Evolutions: a 20-second power trip.
  *
- * A recipe is two weapon families from different roles. It is ARMED in a fight
+ * There are 4 evolutions per Armory weapon (156). The 9 SIGNATURE recipes here
+ * arm from two weapon FAMILIES and are taught by star rewards; the other 147
+ * (data/evolutionPairs.ts) arm from one exact pair of weapons and are
+ * discovered by forging them. Once the player knows any recipe, every recipe
+ * arms from its weapons.
+ *
+ * A signature recipe is two weapon families from different roles. It is ARMED in a fight
  * while the player holds one weapon of each family (charms, picks or buys).
  * While a recipe is armed, refills may bring the Evolution Catalyst card;
  * matching it in a Set starts the evolution for 20 s. Its rules (below) are
@@ -17,6 +23,7 @@
  * Entropy Engine evolution.)
  */
 import type { EvolutionRecipe } from '../types';
+import { PAIR_RECIPES } from './evolutionPairs';
 
 /** Weapon families (ids from WEAPONS in utils/gameDefinitions.ts and data/adventureWeapons.ts) */
 export const FAMILIES = {
@@ -37,8 +44,8 @@ export const FAMILIES = {
 
 const fam = (k: keyof typeof FAMILIES): string[] => [...FAMILIES[k]];
 
-/** In recipe order: when several are armed, the Catalyst starts the first one not already running. */
-export const EVOLUTION_RECIPES: EvolutionRecipe[] = [
+/** Taught by star rewards; they arm from whole weapon families. */
+export const SIGNATURE_RECIPES: EvolutionRecipe[] = [
   {
     id: 'phoenix-pyre',
     name: 'Phoenix Pyre',
@@ -185,6 +192,9 @@ export const EVOLUTION_RECIPES: EvolutionRecipe[] = [
     },
   },
 ];
+
+/** In recipe order: when several are armed, the Catalyst starts the first one not already running. */
+export const EVOLUTION_RECIPES: EvolutionRecipe[] = [...SIGNATURE_RECIPES, ...PAIR_RECIPES];
 
 export const getEvolutionRecipe = (id: string): EvolutionRecipe => {
   const r = EVOLUTION_RECIPES.find(x => x.id === id);

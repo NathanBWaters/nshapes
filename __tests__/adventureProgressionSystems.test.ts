@@ -8,7 +8,7 @@ import { ARCANA, getArcana } from '@/adventure/data/arcana';
 import { BOUNTIES } from '@/adventure/data/bounties';
 import { BIOMES } from '@/adventure/data/biomes';
 import { CAMPAIGN_FEATURES } from '@/adventure/data/features';
-import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
+import { EVOLUTION_RECIPES, SIGNATURE_RECIPES } from '@/adventure/data/evolutions';
 import { CAMPAIGN_STARS, SEALED_AT, SKILL_NODES, TREE_BUDGET, TREE_SLACK, getSkillNode, scaleCosts, skillTreeOf, skillTreeRoots } from '@/adventure/data/skillTrees';
 import { UPGRADES } from '@/adventure/data/upgrades';
 import { getArmoryWeapon } from '@/adventure/data/armory';
@@ -651,7 +651,8 @@ describe('Rewards & unlocks', () => {
     LEVELS.forEach(l => starRewards(l).forEach(check));
     BOUNTIES.forEach(b => check(b.reward));
     expect(arcana.size).toBe(ARCANA.length);
-    expect(recipes.size).toBe(EVOLUTION_RECIPES.length);
+    // Every signature recipe is a reward; the pair recipes are discovered by forging them
+    expect(recipes.size).toBe(SIGNATURE_RECIPES.length);
   });
 
   it('branches open at ★★ on their parent, even when the parent is itself a branch', () => {

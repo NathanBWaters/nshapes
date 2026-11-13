@@ -40,23 +40,28 @@ They should win roughly:
   and World 5 is a coin flip at best.
 - Raw puzzle skill can carry the bare player early, but not past World 3.
 
-## How it could map onto the balance bots (not done yet)
+## How the balance bots use this
 
-The current bots (`__tests__/adventureBalance.test.ts`, `engine/botBuilds.ts`)
-balance one middle player: the average bot with 75% of the stars on offer, a
-random fighter and charms, no Workshop. Its mean knockout rate by world at
-v0.1.98 is 86% > 68% > 66% > 60% > 54%, which sits between the two rows above.
+`__tests__/adventureBalance.test.ts` plays every level with both players
+(`engine/botBuilds.ts` `barePlan` / `investedPlan`) and asserts the rates above
+(`WIN_TARGETS`, per level ±20 points, per world mean ±10). Both are the same
+average-skill bot, so the gap between them is progression alone.
 
-To balance against this sentiment directly, two bot setups could bracket every level:
+- **Bare:** 0 stars spent, no Workshop, random charms, random level-up picks
+  and shop buys (never chases a recipe).
+- **Invested:** every star on offer before the level spent (plan style:
+  capstones first), every Workshop upgrade on sale by then at its top tier,
+  the charms it brings tuned to ×1.5 on every number, a solid build (both
+  halves of a random recipe, then damage weapons), picks and buys that chase
+  recipes. "Maxed out as far as you could be at this point" is read as
+  everything *on sale by then* maxed, not grinding later content.
+- **Win** = knockout (★★). "Winning could vary", so per level some slack.
 
-- **Bare:** average bot, 0 stars spent, no Workshop, random charms with no
-  recipe preference, picks/buys at random. Assert knockout ≈ the bare row (by world).
-- **Invested:** average or expert bot, every star available by then spent
-  (`plan` style), the Workshop and weapon tuning bought with the coins a player
-  would plausibly have banked by then, the best non-counter build from the
-  Armory (a recipe pair plus damage charms). Assert knockout ≈ the invested row.
+Adjustments in `winTargets`: bosses and elite branches are a step harder for
+the invested player (−10 / −15 points), fighter trials a step kinder, and the
+meadow's first lessons (1-2, 1-3) come before any progression exists, so both
+players win them about 85%. 1-1 can't be lost.
 
-Foe HP would then be tuned so each level lands between the two curves, with
-the gap widening world by world. The open question is how many coins
-"maxed out at this point" means; it needs a coins-banked-by-level estimate
-(e.g. the average bot's coins per level, replays included).
+Foe HP is the knob: each level's HP is set so both players land as close to
+their targets as one number allows. If a change to progression (skill trees,
+Workshop, tuning, evolutions) moves one curve, retune HP and check both.

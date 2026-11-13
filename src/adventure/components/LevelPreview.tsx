@@ -30,7 +30,6 @@ import {
   equippedArcanaOf,
   equippedCharms,
   getLockReason,
-  recipeFamiliesHeld,
   weaponLevel,
   weaponBuilds,
 } from '../progress';
@@ -300,17 +299,14 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                     {armed.length > 0 ? `${armed.length} evolution${armed.length === 1 ? '' : 's'} armed` : 'No evolution armed'}
                   </Text>
                 </View>
-                {EVOLUTION_RECIPES.filter(r => save.unlockedEvolutions.includes(r.id)).map(r => {
-                  const isArmed = armed.some(a => a.id === r.id);
-                  const held = recipeFamiliesHeld(save, r);
+                {armed.map(r => {
+                  const known = save.unlockedEvolutions.includes(r.id) || save.discoveredEvolutions.includes(r.id);
                   return (
-                    <View key={r.id} style={[st.evoRow, !isArmed && { opacity: 0.6 }]} testID={`preview-recipe-${r.id}`}>
-                      <Icon name={r.icon} size={16} color={isArmed ? TONE.evoReady : INK} />
+                    <View key={r.id} style={st.evoRow} testID={`preview-recipe-${r.id}`}>
+                      <Icon name={r.icon} size={16} color={TONE.evoReady} />
                       <View style={{ flex: 1 }}>
-                        <Text style={st.evoName}>{r.name}{isArmed ? ' · ARMED' : ''}</Text>
-                        <Text style={st.evoHintSub}>
-                          {isArmed ? r.activeText : `Needs ${r.familyText}${held[0] || held[1] ? ' (one family equipped)' : ''}`}
-                        </Text>
+                        <Text style={st.evoName}>{known ? r.name : '??? Evolution'} · ARMED</Text>
+                        <Text style={st.evoHintSub}>{known ? r.activeText : `${r.familyText}: forge it to find out what it does.`}</Text>
                       </View>
                     </View>
                   );

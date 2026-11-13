@@ -12,6 +12,9 @@ import { LEVELS, getLevel, mainIndexOf } from '../data/levels';
 import { skillTreeOf } from '../data/skillTrees';
 import { EVOLUTION_RECIPES } from '../data/evolutions';
 import { charmSlotsOf } from '../loadout';
+import { getUnlockedUpgrades } from '../progress';
+import { getArmoryWeapon } from '../data/armory';
+import { MAX_TUNING_TIER, weaponStatLines } from '../data/weaponStats';
 import { createRng, type Rng } from './rng';
 
 // ─── Stars ──────────────────────────────────────────────────────────────────
@@ -123,9 +126,9 @@ export const buyTree = (fighter: CharacterName, stars: number, style: TreeStyle,
 
 // ─── Charms ─────────────────────────────────────────────────────────────────
 
-/** Unlocked recipes the armory can arm: [recipe id, a weapon of each family] options. */
+/** Recipes the armory can arm (every recipe, once evolutions are unlocked): [recipe id, a weapon of each family] options. */
 export const armableRecipes = (save: AdventureSave) =>
-  EVOLUTION_RECIPES.filter(r => save.unlockedEvolutions.includes(r.id))
+  EVOLUTION_RECIPES.filter(() => save.unlockedEvolutions.length > 0)
     .map(r => ({ id: r.id, options: r.families.map(fam => save.armory.filter(id => fam.includes(id))) as [string[], string[]] }))
     .filter(r => r.options.every(o => o.length > 0));
 
@@ -148,6 +151,44 @@ export const chooseCharms = (save: AdventureSave, rng: Rng, recipeChance = RECIP
   return charms;
 };
 
+/** Weapons that hit hard on their own: a solid build leans on these. */
+export const DAMAGE_WEAPONS = ['blast-powder', 'flint-spark', 'prismatic-ray', 'chaos-shard', 'war-drum'];
+
+/**
+ * A solid build, not a counter: both halves of a random recipe, then the damage
+ * weapons it owns, then anything.
+ */
+export const solidCharms = (save: AdventureSave, rng: Rng): string[] => {
+  const slots = charmSlotsOf(save);
+  const charms: string[] = [];
+  const recipes = armableRecipes(save);
+  if (recipes.length && slots >= 2) {
+    const r = rng.pick(recipes);
+    charms.push(rng.pick(r.options[0]), rng.pick(r.options[1]));
+  }
+  const damage = rng.shuffle(save.armory.filter(id => DAMAGE_WEAPONS.includes(id)));
+  for (const id of [...damage, ...rng.shuffle(save.armory)]) if (charms.length < slots && !charms.includes(id)) charms.push(id);
+  return charms;
+};
+
+/** Every Workshop upgrade on sale bought to its top tier. */
+export const maxedWorkshop = (save: AdventureSave): AdventureSave['upgrades'] => ({
+  ...save.upgrades,
+  ...Object.fromEntries(getUnlockedUpgrades(save).map(u => [u.id, u.costs.length])),
+});
+
+/** These weapons with every number tuned to the top Workshop tier. */
+export const maxedTuning = (save: AdventureSave, ids: readonly string[]): AdventureSave['weaponTuning'] => {
+  const tuning = { ...(save.weaponTuning ?? {}) };
+  for (const id of ids) {
+    const w = getArmoryWeapon(id);
+    if (!w) continue;
+    const lines = weaponStatLines(w, { level: 1, tuning: {} }).filter(l => l.tunable);
+    tuning[id] = Object.fromEntries(lines.map(l => [l.key, MAX_TUNING_TIER]));
+  }
+  return tuning;
+};
+
 // ─── Whole build ────────────────────────────────────────────────────────────
 
 export interface BuildPlan {
@@ -159,6 +200,15 @@ export interface BuildPlan {
   treeStyle?: TreeStyle;
   /** Keep the save's charms instead of choosing (a puzzle level that asks for a loadout) */
   keepCharms?: boolean;
+  /**
+   * How charms are picked: 'random' (never chases a recipe), 'solid' (a recipe
+   * pair plus damage weapons), or 'mixed' (default: a recipe pair 60% of the time)
+   */
+  charms?: 'random' | 'solid' | 'mixed';
+  /** Every Workshop upgrade on sale maxed, and the charms brought fully tuned */
+  workshop?: boolean;
+  /** Level-up picks and shop buys prefer a weapon that arms a new recipe (default true) */
+  chaseRecipes?: boolean;
 }
 
 /** The save a bot walks into the fight with, for one seeded run. */
@@ -167,10 +217,71 @@ export const gearUp = (save: AdventureSave, plan: BuildPlan, seed: number): Adve
   const fighter = plan.fighter === 'any' ? rng.pick(save.unlockedFighters) : plan.fighter ?? save.selectedFighter;
   const style = plan.treeStyle ?? rng.pick(TREE_STYLES);
   const nodes = buyTree(fighter, plan.stars, style, rng);
+  const upgrades = plan.workshop ? maxedWorkshop(save) : save.upgrades;
+  // Charm slots come from the Workshop, so buy first and pick after
+  const bought = { ...save, upgrades };
+  const charms = plan.keepCharms
+    ? save.charms
+    : plan.charms === 'random'
+      ? chooseCharms(bought, rng, 0)
+      : plan.charms === 'solid'
+        ? solidCharms(bought, rng)
+        : chooseCharms(bought, rng);
   return {
-    ...save,
+    ...bought,
     selectedFighter: fighter,
     skillNodes: { ...save.skillNodes, [fighter]: nodes },
-    charms: plan.keepCharms ? save.charms : chooseCharms(save, rng),
+    charms,
+    weaponTuning: plan.workshop ? maxedTuning(save, charms) : save.weaponTuning,
   };
 };
+
+// ─── The two players balance is aimed at (docs/balance-philosophy.md) ───────
+
+/** Knockout (★★) rate by world, 1-5, for each player. */
+export const WIN_TARGETS = {
+  /** No stars or coins spent, random charms, never chases a recipe */
+  bare: [0.5, 0.3, 0.1, 0, 0],
+  /** Everything available by then: every star, the Workshop maxed, charms tuned, a solid recipe build */
+  invested: [0.97, 0.9, 0.8, 0.7, 0.5],
+} as const;
+
+const WORLD_OF: Record<LevelDef['biome'], number> = { meadow: 1, woods: 2, canyon: 3, peaks: 4, summit: 5 };
+export const worldOf = (level: LevelDef): number => WORLD_OF[level.biome];
+
+/** A fighter trial (an elite branch that teaches a fighter) */
+export const isTrial = (level: LevelDef) => level.introduces.startsWith('fighter_');
+
+/**
+ * This level's targets. Bosses and elites are a step harder for the invested
+ * player; fighter trials should feel good; the first meadow levels still teach.
+ */
+export const winTargets = (level: LevelDef): { bare: number; invested: number } => {
+  const w = worldOf(level) - 1;
+  const bare = WIN_TARGETS.bare[w];
+  const invested = WIN_TARGETS.invested[w];
+  if (level.starRule?.kind === 'accuracy') return { bare: 1, invested: 1 };
+  if (isTrial(level)) return { bare: Math.min(1, bare + 0.2), invested: Math.min(0.97, invested + 0.05) };
+  if (level.branchOf) return { bare: Math.max(0, bare - 0.1), invested: invested - 0.15 };
+  if (level.isBoss) return { bare: Math.max(0, bare - 0.1), invested: invested - 0.1 };
+  // The meadow's first lessons come before any progression exists, so both players play them alike
+  const tutorial: Record<string, number> = { '1-2': 0.85, '1-3': 0.85 };
+  return { bare: tutorial[level.id] ?? bare, invested };
+};
+
+/** The bare player: no stars, no Workshop, random charms, never chases recipes. */
+export const barePlan = (level: LevelDef): BuildPlan => ({
+  stars: 0,
+  fighter: isTrial(level) ? level.recommended![0] : 'any',
+  charms: 'random',
+  chaseRecipes: false,
+});
+
+/** The invested player: every star on offer spent with a plan, the Workshop maxed, a solid recipe build. */
+export const investedPlan = (level: LevelDef): BuildPlan => ({
+  stars: starsOnReaching(level, 1),
+  fighter: isTrial(level) ? level.recommended![0] : 'any',
+  treeStyle: 'plan',
+  charms: 'solid',
+  workshop: true,
+});

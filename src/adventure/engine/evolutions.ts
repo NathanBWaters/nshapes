@@ -7,6 +7,7 @@ import type { Card } from '@/types';
 import { EVOLUTION_RECIPES } from '../data/evolutions';
 import { addTime, arcana, dealDamage, emit, enqueue, foeMultiplier, mods, refreshSources, updateCards, type Draft } from './fight';
 import { armedRecipesFor, EVOLUTION_RULES, getRecipe } from './sources';
+import { fireFinale } from '../rules/engine';
 
 export const refreshArmedRecipes = (d: Draft) => {
   d.armedRecipes = d.features.has('evolutions') ? armedRecipesFor(d.weapons, d.unlockedEvolutions) : [];
@@ -61,8 +62,14 @@ export const tickEvolutions = (d: Draft, ms: number) => {
   if (d.activeEvolutions.length === 0) return;
   const next = d.activeEvolutions.map(e => ({ ...e, remainingMs: e.remainingMs - ms }));
   const ended = next.filter(e => e.remainingMs <= 0);
+  if (ended.length === 0) {
+    d.activeEvolutions = next;
+    return;
+  }
+  // Finales fire while the ending evolution's rules are still live
+  d.activeEvolutions = next;
+  for (const e of ended) fireFinale(d, e.id);
   d.activeEvolutions = next.filter(e => e.remainingMs > 0);
-  if (ended.length === 0) return;
   refreshSources(d);
   for (const e of ended) {
     emit(d, 'evolution_end', undefined, getRecipe(e.id)?.name ?? e.id);

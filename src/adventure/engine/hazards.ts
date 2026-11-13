@@ -85,3 +85,23 @@ export const placeOpeningTraps = (d: Draft) => {
   if (d.level.rules.hazards?.timeBombs) placeTimeBomb(d, all);
   if (d.level.rules.hazards?.snares) placeSnare(d, all);
 };
+
+/** Defuse every trap on the board and turn every face-down card up (an evolution's Cleanse). */
+export const cleanseBoard = (d: Draft) => {
+  const bombIds = new Set(d.timeBombIds);
+  const idx: number[] = [];
+  d.board.forEach((c, i) => {
+    if (c.snare || c.isFaceDown || bombIds.has(c.id)) idx.push(i);
+  });
+  for (const c of d.board) {
+    if (c.snare) defused(d, 'snare');
+    if (bombIds.has(c.id)) defused(d, 'bomb');
+  }
+  d.timeBombIds = [];
+  updateCards(d, idx, c => ({
+    ...c,
+    snare: undefined,
+    isFaceDown: false,
+    ...(bombIds.has(c.id) ? { hasCountdown: false, countdownTimer: undefined } : {}),
+  }));
+};

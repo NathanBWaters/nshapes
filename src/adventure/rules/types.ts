@@ -49,7 +49,9 @@ export type Trigger =
   /** A burning card burned out */
   | { on: 'cardBurned' }
   /** A card was destroyed because it was linked to a destroyed card */
-  | { on: 'linkDestroyed' };
+  | { on: 'linkDestroyed' }
+  /** This evolution's 20 seconds ran out (only an evolution's own rules hear it) */
+  | { on: 'finale' };
 
 export type Condition =
   | { kind: 'chance'; pct: number }
@@ -65,7 +67,14 @@ export type Condition =
   /** A Patience Set: Emperor Penguin's per-trait window (engine/passives.ts patienceMs) has passed since the last Set */
   | { kind: 'patient' }
   | { kind: 'timeSinceLastSetAtMost'; ms: number }
-  | { kind: 'boardAtLeast'; n: number };
+  | { kind: 'boardAtLeast'; n: number }
+  /** The foe is below this fraction of its max HP */
+  | { kind: 'foeHpBelow'; fraction: number };
+
+/** What a scaling effect counts (damage `per` one of these). */
+export type Scale =
+  | 'boardCard' | 'missingHeart' | 'hint' | 'grace' | 'link' | 'combo'
+  | 'bonusCard' | 'burning' | 'evolution' | 'heart';
 
 /** Board shapes for area effects. Positions follow the 3-column grid. */
 export type Area =
@@ -75,7 +84,16 @@ export type Area =
   | { shape: 'random'; count: number };
 
 export type Effect =
-  | { do: 'damage'; amount: number }
+  /** Hit the foe; with `per`, the amount is multiplied by that count (e.g. 1 per card on the board) */
+  | { do: 'damage'; amount: number; per?: Scale }
+  /** Spend every hint or grace you hold: `damageEach` per one spent */
+  | { do: 'cashIn'; resource: 'hints' | 'graces'; damageEach: number }
+  /** Turn random plain cards into power cards (+2 damage) or gold cards (+3 coins) */
+  | { do: 'convert'; to: 'power' | 'gold'; count: number }
+  /** The next `count` mistakes cost no heart */
+  | { do: 'shield'; count: number }
+  /** Defuse every trap and turn every face-down card up */
+  | { do: 'cleanse' }
   /** Destroy cards (they pay their normal collateral reward) */
   | { do: 'explode'; area: Area }
   | { do: 'laser'; area: Area }
