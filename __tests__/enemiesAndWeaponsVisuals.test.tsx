@@ -5,7 +5,7 @@ import { foeDisplay } from '@/adventure/data/foes';
 import { EnemyAvatar } from '@/components/enemies';
 import { ALL_CUSTOM_ENEMY_RIG_NAMES } from '@/components/enemies/rigs';
 import { hasEnemyCreature } from '@/components/enemies/enemyRegistry';
-import { GENERIC_GEM_WEAPON_NAMES } from '@/components/weapons/WeaponArtwork';
+import { ADVENTURE_WEAPONS } from '@/adventure/data/adventureWeapons';
 import { WeaponAvatar, ALL_CUSTOM_WEAPON_NAMES, getWeaponTapStyle } from '@/components/weapons';
 import { useEnemyConductor } from '@/hooks/useEnemyConductor';
 import {
@@ -201,13 +201,9 @@ describe('Custom Weapon Relics & Single-Tap Animation', () => {
     expect(missing).toEqual([]);
   });
 
-  it('gives every weapon its own relic or an explicit generic-gem entry', () => {
+  it('gives every Adventure weapon its own relic instead of the generic gem', () => {
     const custom = new Set(ALL_CUSTOM_WEAPON_NAMES);
-    const gem = new Set(GENERIC_GEM_WEAPON_NAMES);
-    const names = new Set(WEAPONS.map((w) => w.name));
-    const unresolved = Array.from(names).filter((name) => !custom.has(name) && !gem.has(name));
-    expect(unresolved).toEqual([]);
-    expect(GENERIC_GEM_WEAPON_NAMES.filter((name) => custom.has(name))).toEqual([]);
+    expect(ADVENTURE_WEAPONS.map((w) => w.name).filter((name) => !custom.has(name))).toEqual([]);
   });
 
   it('maps weapons across all 8 category tap-animation archetypes', () => {
