@@ -10,7 +10,7 @@
 import type { AttributeName, BoardConnection, BridgeTriggerType, Card, PlayerStats, Weapon } from '@/types';
 import { ATTRIBUTE_VALUES, createDeck } from '@/utils/gameUtils';
 import { getLinkedDestructionPositions, arePositionsConnected } from '@/utils/connectionUtils';
-import type { ArcanaRules, PassiveId, RunEvent, RunEventType, RunState } from '../types';
+import type { ArcanaRules, FightLogLine, FightLogSetMath, PassiveId, RunEvent, RunEventType, RunState } from '../types';
 import type { Area, Modifiers, WeaponTriggerKind } from '../rules/types';
 import { arcanaRules } from '../data/arcana';
 import { BASE_RULES } from '../data/rules';
@@ -65,6 +65,10 @@ export interface Draft extends RunState {
   _arcana: ArcanaRules | null;
   _setCtx: SetContext | null;
   _hooks: FightHooks;
+  /** Events emitted during this action, with the rule that caused them (engine/fightLog.ts) */
+  _lines: FightLogLine[];
+  /** How the player's Set in this action was scored */
+  _logSet: FightLogSetMath | null;
 }
 
 /**
@@ -98,10 +102,12 @@ export const begin = (s: RunState, hooks: FightHooks): Draft => ({
   _arcana: null,
   _setCtx: null,
   _hooks: hooks,
+  _lines: [],
+  _logSet: null,
 });
 
 export const finish = (d: Draft): RunState => {
-  const { _rng, _queue, _chain, _firings, _mods, _rules, _arcana, _setCtx, _hooks, ...rest } = d;
+  const { _rng, _queue, _chain, _firings, _mods, _rules, _arcana, _setCtx, _hooks, _lines, _logSet, ...rest } = d;
   return { ...rest, rng: _rng.state };
 };
 
@@ -110,6 +116,9 @@ export const emit = (d: Draft, type: RunEventType, amount?: number, text?: strin
   const e: RunEvent = { id: d.eventSeq, type, amount, text };
   d.events.push(e);
   if (d.events.length > 60) d.events.shift();
+  // The fight log keeps everything, and which rule (if any) caused it
+  const source = d._chain[d._chain.length - 1];
+  d._lines.push(source ? { type, amount, text, source } : { type, amount, text });
 };
 
 export const enqueue = (d: Draft, on: FightEventKind, kind?: WeaponTriggerKind) => {

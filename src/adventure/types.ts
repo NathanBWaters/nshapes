@@ -7,7 +7,7 @@
  */
 
 import type { WeaponBuilds, WeaponStatDef } from './data/weaponStats';
-import type { AttributeName, BoardConnection, CharacterName, Card, Weapon, PlayerStats } from '@/types';
+import type { AttributeName, BoardConnection, CharacterName, Card, CardReward, Weapon, PlayerStats } from '@/types';
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import type { IconName } from '@/components/Icon';
 import type { RuleSource } from './rules/types';
@@ -531,6 +531,91 @@ export interface RunEvent {
   text?: string;
 }
 
+// ─── Fight log (results-screen replay) ────────────────────────────────────
+
+/** What one log entry records: a move the player made, or something the clock or a foe did. */
+export type FightLogKind =
+  /** A Set the player made */
+  | 'set'
+  /** A wrong pick (3 cards that weren't a Set) */
+  | 'mistake'
+  /** A burning card burned up (nearby burns merge into one entry) */
+  | 'burn'
+  /** Something happened on the clock: foe attacks, evolutions ending, fuses… (merged per second) */
+  | 'time'
+  | 'hint'
+  | 'pick'
+  | 'buy'
+  | 'wave';
+
+export interface FightLogCard {
+  shape: Card['shape'];
+  color: Card['color'];
+  number: Card['number'];
+  shading: Card['shading'];
+  background?: Card['background'];
+  /** Short notes on what was special about the card: "+2 dmg", "Catalyst", "On fire"… */
+  tags: string[];
+}
+
+/** One thing that happened during an entry (a RunEvent plus the rule source that caused it). */
+export interface FightLogLine {
+  type: RunEventType;
+  amount?: number;
+  text?: string;
+  /** Skill node, weapon or evolution whose rule caused it (by name) */
+  source?: string;
+}
+
+/** How a Set's own hit was worked out. */
+export interface FightLogSetMath {
+  /** Points on the three matched cards (base 1 each + bonus + charge) */
+  cards: number;
+  /** Points on cards the Set's weapon procs destroyed (explosion, laser, ricochet…) by kind */
+  collateral: Partial<Record<NonNullable<CardReward['effectType']>, number>>;
+  /** Flat per-Set bonuses (gear, skill nodes, passives, conditional damage, active evolutions) */
+  flatBonus: number;
+  /** Everything the flat total was multiplied by (rainbow, Hot Streak / next-Set ×N, foe, arcana) */
+  multiplier: number;
+  rainbow: boolean;
+  /** Purity chain and trap bonus damage, added after the multiplier */
+  extra: number;
+  /** Damage the Set itself dealt */
+  hit: number;
+  /** How many traits were all different */
+  diffTraits: number;
+  graceUsed: boolean;
+  /** Time since the previous Set */
+  sinceLastMs: number;
+  /** Combo count after this Set */
+  combo: number;
+}
+
+export interface FightLogEntry {
+  /** Fight clock (elapsedMs) when it happened */
+  t: number;
+  /** 0-based wave */
+  wave: number;
+  kind: FightLogKind;
+  /** The three picked cards (sets and mistakes) */
+  cards?: FightLogCard[];
+  set?: FightLogSetMath;
+  /** Weapon name for picks and buys */
+  label?: string;
+  /** All damage dealt to the foe during the entry */
+  damage: number;
+  /** Damage from the Set's own hit; the rest of `damage` was triggered by something */
+  setDamage: number;
+  coins: number;
+  xp: number;
+  /** Hearts after the entry (null = infinite) */
+  hearts: number | null;
+  heartsDelta: number;
+  foeHp: number;
+  foeMaxHp: number;
+  lines: FightLogLine[];
+}
+
 /** Live state of the fighter's two passives (fields of passives the fighter lacks stay at rest). */
 export interface PassiveState {
   /** Nine Lives: knockouts it can still absorb this fight */
@@ -614,6 +699,8 @@ export interface RunState {
   roundStats: RoundStats;
   events: RunEvent[];
   eventSeq: number;
+  /** Everything that happened this fight, for the results-screen replay (engine/fightLog.ts) */
+  log: FightLogEntry[];
   bonusDamagePerMatch: number;
   coinBonusPercent: number;
   shopOptions: Weapon[];

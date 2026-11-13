@@ -39,6 +39,7 @@ import {
   MAX_BOARD, type Draft, type FightHooks,
 } from './fight';
 import { EVOLUTION_RULES } from './sources';
+import { recordFightStart, recordLog } from './fightLog';
 import { refreshArmedRecipes, resolveCatalyst, tickEvolutions } from './evolutions';
 import { placeOpeningTraps, resolveTrapsOnSet, springSnares, tickTimeBombs } from './hazards';
 import {
@@ -276,7 +277,31 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   const setMult = Math.min(BASE_RULES.maxNextSetMultiplier, d.nextSetMultiplier * hotStreak);
   d.nextSetMultiplier = 1;
   const dmg = flat * rainbowMult * (a.damageScale ?? 1) * enemyMult * setMult + (purity.damage + traps.bonus) * enemyMult;
-  emit(d, rainbow ? 'rainbow' : 'hit', dealDamage(d, dmg));
+  const hit = dealDamage(d, dmg);
+  emit(d, rainbow ? 'rainbow' : 'hit', hit);
+  if (opts.auto) {
+    d._lines[d._lines.length - 1].text = 'Free Set';
+  } else {
+    const matchedIds = new Set(matched.map(c => c.id));
+    const collateral: NonNullable<RunState['log'][number]['set']>['collateral'] = {};
+    for (const r of rewards) {
+      if (matchedIds.has(r.cardId) || !r.effectType) continue;
+      collateral[r.effectType] = (collateral[r.effectType] ?? 0) + (r.points ?? 0);
+    }
+    d._logSet = {
+      cards: rewards.filter(r => matchedIds.has(r.cardId)).reduce((sum, r) => sum + (r.points ?? 0), 0),
+      collateral,
+      flatBonus: flat - points,
+      multiplier: rainbowMult * (a.damageScale ?? 1) * enemyMult * setMult,
+      rainbow,
+      extra: (purity.damage + traps.bonus) * enemyMult,
+      hit,
+      diffTraits: diffCount,
+      graceUsed,
+      sinceLastMs,
+      combo: d.combo,
+    };
+  }
   if (hotStreak > 1) emit(d, 'hot_streak_hit', hotStreak);
   springSnares(d, traps.sprung);
 
@@ -544,6 +569,7 @@ export const createRun = (level: LevelDef, save: AdventureSave, opts: CreateRunO
     roundStats: createInitialRoundStats(totalFoeHp, stats.hints, stats.graces),
     events: [],
     eventSeq: 0,
+    log: [],
     bonusDamagePerMatch,
     coinBonusPercent,
     shopOptions: [],
@@ -603,6 +629,7 @@ export const createRun = (level: LevelDef, save: AdventureSave, opts: CreateRunO
     if (hasAnySet(d.board, attributes)) break;
   }
   d.events = []; // don't coach-mark the deal itself
+  d._lines = [];
   startFoe(d);
   placeOpeningTraps(d);
   if (d.stats.startingConnections > 0) addRandomConnections(d, d.stats.startingConnections);
@@ -610,6 +637,7 @@ export const createRun = (level: LevelDef, save: AdventureSave, opts: CreateRunO
   enqueue(d, 'waveStart');
   drain(d);
   syncStats(d);
+  recordFightStart(d);
   return finish(d);
 };
 
@@ -815,6 +843,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
   keepCatalystMatchable(d);
   syncTraps(d);
   resolve(d);
+  recordLog(d, state, action);
   return finish(d);
 };
 

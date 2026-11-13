@@ -1,5 +1,5 @@
 /** End-of-level screen: stars pop in one by one, coins are paid out, unlocks wait for their reveal. */
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '@/components/Icon';
@@ -13,6 +13,7 @@ import { getBiome } from '../data/biomes';
 import { BOUNTIES } from '../data/bounties';
 import { Btn, CoinPill, INK, PopIn, starPopDelayMs, StarRow, TONE } from './ui';
 import { Silhouette, UnlockableAvatar, describeRewardUnlocks, describeUnlock } from './rewards';
+import FightReplay from './FightReplay';
 
 interface Props {
   level: LevelDef;
@@ -32,6 +33,7 @@ interface Props {
 
 const LevelResults: React.FC<Props> = ({ level, run, stars, result, unlocksRevealed, nextLevel, nextUnlocked, onRetry, onNext, onMap, onCamp, onBounties }) => {
   const insets = useSafeAreaInsets();
+  const [replayOpen, setReplayOpen] = useState(false);
   const biome = getBiome(level.biome);
   const won = stars > 0;
   const accuracy = level.starRule?.kind === 'accuracy';
@@ -203,6 +205,10 @@ const LevelResults: React.FC<Props> = ({ level, run, stars, result, unlocksRevea
 
           {tip && <Text style={st.tip}>{tip}</Text>}
 
+          {run.log.length > 1 && (
+            <Btn testID="results-replay" label="What happened? See the fight" variant="secondary" icon="lorc/magnifying-glass" small onPress={() => setReplayOpen(true)} style={{ alignSelf: 'stretch' }} />
+          )}
+
           <View style={st.buttons}>
             {won && nextLevel && nextUnlocked ? (
               <Btn testID="results-next" label={`Next: ${nextLevel.id}`} icon="lorc/crossed-swords" onPress={onNext} />
@@ -218,6 +224,7 @@ const LevelResults: React.FC<Props> = ({ level, run, stars, result, unlocksRevea
           </View>
         </PopIn>
       </ScrollView>
+      {replayOpen && <FightReplay run={run} visible onClose={() => setReplayOpen(false)} />}
     </View>
   );
 };

@@ -354,6 +354,25 @@ The older kinds remain: `noMistakes`, `fullHearts`, `movesLeft`, `timeLeft`, `ra
 - **XP:** levelling needs 6 + 5 × level XP. Each level-up offers a free pick from the Armory (3 choices by default).
 - **Big numbers:** damage floaters are big at ≥10, huge at ≥25 (with screen shake) and MEGA at ≥50 (with a flash). The HUD shows running damage, combo and biggest-hit counters, and Results shows total damage and the biggest hit.
 
+### Fight log and replay
+
+Every fight is recorded as data in `RunState.log` (`engine/fightLog.ts`), and Results has a **"What happened? See the fight"** button that opens it (`components/FightReplay.tsx`).
+
+- **What's recorded:** one entry per move: a Set, a mistake, a hint, a level-up pick, a shop buy or a new wave. Burns and clock events (foe attacks, fuses, evolutions ending) are entries too, merged per second. Each entry holds:
+  - the fight time and wave;
+  - the three cards, with their power, gold and Catalyst tags;
+  - the damage, split into the Set's own hit and what it triggered;
+  - coins, XP, hearts and the foe's HP afterwards;
+  - every event in it, with the skill node, weapon or evolution whose rule caused it.
+- **Set math:** for a Set, the entry also records how the hit was worked out: card points, collateral cards from weapon procs, flat bonuses, the multiplier, purity and trap extras.
+- **How it's recorded:** `emit` copies each event, plus the rule key running at the time, into the draft. `recordLog` turns them into an entry at the end of every reducer action. Entry damage always adds up to `totalDamage` (tested in `adventureFightLog.test.ts`).
+- **The replay shows:**
+  - a timeline of damage per move (Set hit / triggered / burns and clock), with mistakes, heart losses, picks, buys and waves marked;
+  - the foe's HP and your hearts underneath on the same clock;
+  - an inspector for any moment, the top damage sources for the fight and a list of every move;
+  - **Copy log as JSON** for debugging.
+- **Bots:** `simulateRun(...).state.log` holds the same data for any bot fight.
+
 ## Money
 
 - **Coins drop** from every matched card and every destroyed card, and from purity steps and coin weapons. Each drop is scaled by the level's `coinMultiplier` and by Lucky Purse and `coinPercent`.
@@ -431,6 +450,7 @@ src/adventure/
   engine/hazards.ts     Time Bomb and Snare resolution
   engine/challenges.ts  ★★★ text / progress / checks, star goals
   engine/sets.ts        Set finder
+  engine/fightLog.ts    the per-fight log behind the results-screen replay
   engine/bot.ts         headless bot that plays through the reducer
   engine/botBuilds.ts   how a bot gears up: stars by skill, skill-tree buying, charms and recipes
   components/           Map, Preview, MechanicIntro, Run (+RunFx), Results, UnlockReveal,
