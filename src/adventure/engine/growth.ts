@@ -24,6 +24,7 @@ export type GrowthEvent =
   | { on: 'weapon'; kind: WeaponTriggerKind }
   | { on: 'trick'; kind: TrickKind }
   | { on: 'own'; weaponId: string }
+  | { on: 'feat'; name: string }
   | { on: 'doubled' | 'catalyst' | 'healed' | 'hurt' | 'hintUsed' | 'graceUsed' | 'cardBurned' | 'linkDestroyed' | 'cardBroken' | 'evolutionEnd' };
 
 const valueOf = (c: Card, a: AttributeName) => (a === 'background' ? c.background ?? 'white' : c[a]);
@@ -63,6 +64,7 @@ const counts = (d: Draft, def: GrowthDef, weaponId: string, ev: GrowthEvent): bo
     case 'weapon': return (w as { kind: WeaponTriggerKind }).kind === ev.kind ? true : null;
     case 'trick': return (w as { kind: TrickKind }).kind === ev.kind ? true : null;
     case 'own': return ev.weaponId === weaponId ? true : null;
+    case 'feat': return (w as { name: string }).name === ev.name ? true : null;
     default: return true;
   }
 };
@@ -106,6 +108,9 @@ const gain = (d: Draft, weaponId: string, slot: number, index: number, def: Grow
   d._chain = prev;
 };
 
+/** How deep growth is inside its own effects (a proc's effect can cause the event that procs it) */
+let procDepth = 0;
+
 /** The balance lab plays fights with growth off, to measure what it adds. */
 let enabled = true;
 export const setGrowthEnabled = (on: boolean) => {
@@ -138,6 +143,27 @@ export const noteGrowth = (d: Draft, ev: GrowthEvent) => {
       gain(d, w.id, slot, index, def);
     });
   });
+
+  // Stacks that make something more likely: each one adds its % that this event brings the effect too
+  if (procDepth < 2) {
+    procDepth += 1;
+    const rolled = new Set<string>();
+    d.weapons.forEach((w, slot) => {
+      if (w.id === UNDERSTUDY_ID || rolled.has(w.id)) return;
+      rolled.add(w.id);
+      (WEAPON_GROWTH[w.id] ?? []).forEach((def, index) => {
+        const stacks = d.growth[growthKey(w.id, index)]?.stacks ?? 0;
+        if (!def.proc || stacks <= 0) return;
+        if (counts(d, { ...def, watch: def.proc.on }, w.id, ev) !== true) return;
+        if (d._rng.next() * 100 >= def.proc.pct * stacks) return;
+        const prev = d._chain;
+        d._chain = [...prev, `w${slot}:${w.id}#grow`];
+        applyEffect(d, def.proc.effect);
+        d._chain = prev;
+      });
+    });
+    procDepth -= 1;
+  }
 
   // What growth changes about the events themselves
   if (ev.on === 'weapon' && ev.kind === 'ricochet') {
@@ -177,7 +203,7 @@ const SIMPLE: Partial<Record<FightEventKind, GrowthEvent['on']>> = {
 
 // Every queued fight event passes through here (fight.ts `enqueue`); Sets and mistakes are told with their cards by run.ts
 setGrowthHook((d, ev) => {
-  if (ev.on === 'own') noteGrowth(d, ev);
+  if (ev.on === 'own' || ev.on === 'feat') noteGrowth(d, ev);
   else if (ev.on === 'doubled' || ev.on === 'catalyst') noteGrowth(d, { on: ev.on });
   else if (ev.on === 'weapon' && ev.kind) noteGrowth(d, { on: 'weapon', kind: ev.kind });
   else if (ev.on === 'trick' && ev.trick) noteGrowth(d, { on: 'trick', kind: ev.trick });

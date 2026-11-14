@@ -141,7 +141,7 @@ export const emit = (d: Draft, type: RunEventType, amount?: number, text?: strin
 };
 
 /** Things weapon growth watches that are not queued fight events */
-export type GrowthSignal = FightEvent | { on: 'own'; weaponId: string } | { on: 'doubled' } | { on: 'catalyst' };
+export type GrowthSignal = FightEvent | { on: 'own'; weaponId: string } | { on: 'doubled' } | { on: 'catalyst' } | { on: 'feat'; name: string };
 /** engine/growth.ts listens to every queued event and signal (set from there, so this file does not depend on it) */
 let growthHook: ((d: Draft, ev: GrowthSignal) => void) | null = null;
 export const setGrowthHook = (hook: (d: Draft, ev: GrowthSignal) => void) => {
@@ -248,7 +248,7 @@ const withAttribute = (c: Card, attribute: AttributeName, value: string | number
 const dealTricks = (d: Draft, card: Card): Card => {
   const m = mods(d);
   const roll = (pct: number | undefined) => (pct ?? 0) > 0 && d._rng.next() * 100 < pct!;
-  if (roll(m.wildChance) && !d.board.some(c => c.isWild)) return { ...card, isWild: true };
+  if (roll(m.wildChance) && d.board.filter(c => c.isWild).length < 1 + Math.round(m.wildMax ?? 0)) return { ...card, isWild: true };
   if (roll(m.twinChance)) {
     const originals = d.board.filter(c => isSelectable(c) && !c.isWild && !c.twinOf && !c.hasEvolutionItem && !d.replacing.includes(c.id));
     if (originals.length) {
@@ -429,6 +429,8 @@ export const hurt = (d: Draft, amount: number) => {
     d.hearts = 1;
     emit(d, 'nine_lives', d.passive.nineLivesLeft);
   }
+  // Down to the last heart: some weapons grow on the edge (data/weaponGrowth.ts)
+  if (d.hearts === 1) signalGrowth(d, { on: 'feat', name: 'lastHeart' });
   if (d.hearts > 0) {
     for (const w of rollBridges(d, 'onHealthLoss')) {
       if (w.bridgeEffect?.effect === 'explosion') destroyCards(d, areaIndices(d, { shape: 'random', count: 4 }), 'explosion');

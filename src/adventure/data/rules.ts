@@ -69,5 +69,7 @@ export const TRICK_RULES = {
   offRopeMultiplier: 0.5,
   /** Hot Potato: how often it jumps, and the extra hearts a mistake costs while you hold it */
   potatoMs: 10000,
+  /** Hot Potato: however much it has grown, it never jumps faster than this */
+  potatoMinMs: 4000,
   potatoHearts: 1,
 } as const;

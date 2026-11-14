@@ -682,8 +682,8 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     stats: { start: { label: 'Chest starts at', unit: 'dmg', base: 10, perLevel: 2 }, growth: { label: 'Growth per Set', unit: 'dmg', base: 2, perLevel: 0.5 } },
     build: v => ({
       modifiers: { chestStart: r(v.start), chestGrowth: v.growth },
-      description: `One card is a chest holding ${r(v.start)} damage. It grows by ${num(v.growth)} every Set you leave it, and pays out when you match it. A mistake empties it.`,
-      shortDescription: `A chest card: ${r(v.start)} damage, +${num(v.growth)} per Set you wait; mistakes empty it`,
+      description: `One card is a chest holding ${r(v.start)} damage. It grows by ${num(v.growth)} every Set you leave it, and pays out when you match it. A mistake drops it back to ${r(v.start)}, its floor.`,
+      shortDescription: `A chest card: ${r(v.start)} damage, +${num(v.growth)} per Set you wait; a mistake drops it back to ${r(v.start)}`,
     }),
   },
 

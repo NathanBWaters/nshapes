@@ -249,7 +249,8 @@ describe('trick weapons in real fights', () => {
         const { state } = simulateRun(getLevel(id), { ...base, charms }, BOTS.average, 7 + i);
         expect(['won', 'lost']).toContain(state.status);
         expect(state.log.reduce((a, e) => a + e.damage, 0)).toBe(state.totalDamage);
-        expect(state.board.filter(c => c.isWild).length).toBeLessThanOrEqual(1);
+        // One wild card at a time, plus the two more its growth can allow
+        expect(state.board.filter(c => c.isWild).length).toBeLessThanOrEqual(3);
       }
     }
   });
@@ -406,7 +407,7 @@ describe('Ice Block', () => {
 });
 
 describe('Greedy Chest', () => {
-  it('grows every Set you leave it, pays when matched, and a mistake empties it', () => {
+  it('grows every Set you leave it, pays when matched, and a mistake drops it back to its floor', () => {
     let s = tick(withTrick({ chestStart: 10, chestGrowth: 2 }), 1000);
     const chest = s.board.find(c => c.chest !== undefined)!;
     expect(chest.chest).toBe(10);
@@ -419,8 +420,8 @@ describe('Greedy Chest', () => {
       expect(paid.board.filter(c => c.chest !== undefined)).toHaveLength(1);
     }
     s = miss(s);
-    const after = s.board.find(c => c.chest !== undefined);
-    if (after?.id === chest.id) expect(after.chest).toBe(0);
+    // A mistake loses what the chest grew, never its floor
+    expect(s.board.find(c => c.chest !== undefined)?.chest).toBe(10);
   });
 });
 

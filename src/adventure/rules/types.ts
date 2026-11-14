@@ -202,6 +202,28 @@ export interface Modifiers {
   magnetMarks?: number;
   /** Above zero: links stay on the board when a new wave starts */
   keepLinks?: number;
+  /** Bounty Poster: extra wanted cards on each poster */
+  bountyCards?: number;
+  /** Mirror Shard: how many Sets further back the mirror remembers */
+  mirrorDepth?: number;
+  /** Hot Potato: it jumps this many ms sooner */
+  potatoFasterMs?: number;
+  /** Ice Block: it thaws this many Sets sooner */
+  iceSetsLess?: number;
+  /** Cursed Idol: added to what a ×2 card multiplies by */
+  curseMultiplierBonus?: number;
+  /** Rust: cards turn golden this many Sets sooner */
+  rustSetsLess?: number;
+  /** Tar Pit: extra sticky rows */
+  tarRows?: number;
+  /** Long Fuse: the short-fuse window is this many ms longer */
+  fuseHotMs?: number;
+  /** Tightrope: added to what a Set off the rope is multiplied by */
+  offRopeBonus?: number;
+  /** Glass Sword: shatters it can survive this fight */
+  glassSpares?: number;
+  /** Wild Card: extra wild cards allowed on the board at once */
+  wildMax?: number;
 
   // ── Trick weapons (engine/gear.ts): a trick is on while its number is above zero ──
   /** Magnet: damage for a Set that includes the marked card */
@@ -251,7 +273,7 @@ export interface Modifiers {
   fuseDamage?: number;
   /** Ice Block: what the thawed card is worth */
   frozenDamage?: number;
-  /** Greedy Chest: what a new chest holds and how much it grows per Set that leaves it alone */
+  /** Greedy Chest: the floor a new chest starts at (before opened chests raise it) and how much it grows per Set that leaves it alone */
   chestStart?: number;
   chestGrowth?: number;
   /** Tightrope: damage for a Set that touches your last one (others deal half) */

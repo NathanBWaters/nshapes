@@ -10,7 +10,7 @@ import { PAIR_RECIPES } from '@/adventure/data/evolutionPairs';
 import { createMaxedSave } from '@/adventure/progress';
 import { runReducer } from '@/adventure/engine/run';
 import { cornerSlots } from '@/adventure/engine/growth';
-import type { RunState } from '@/adventure/types';
+import type { AdventureWeapon, RunState } from '@/adventure/types';
 import { eventsOf, plainRewards, startFight, testLevel, tick } from './testUtils/adventureFight';
 
 const ARMORY = createMaxedSave().armory;
@@ -40,7 +40,7 @@ const GREEN: Traits[] = RED.map(t => ({ ...t, color: 'green' as const }));
 const RAINBOW: Traits[] = [{ shape: 'oval', color: 'red', number: 1 }, { shape: 'diamond', color: 'green', number: 2 }, { shape: 'squiggle', color: 'purple', number: 3 }];
 const SAME_NUMBER: Traits[] = [{ shape: 'oval', color: 'red', number: 2 }, { shape: 'diamond', color: 'red', number: 2 }, { shape: 'squiggle', color: 'red', number: 2 }];
 const stacksOf = (s: RunState, id: string, track = 0) => s.growth[growthKey(id, track)]?.stacks ?? 0;
-const weapon = (s: RunState, id: string) => s.weapons.find(w => w.id === id)!;
+const weapon = (s: RunState, id: string) => s.weapons.find(w => w.id === id)! as AdventureWeapon;
 
 describe('the growth table', () => {
   it('covers every Armory weapon: each one grows, or says why it does not', () => {
@@ -53,7 +53,7 @@ describe('the growth table', () => {
       const stats = weaponStatDefs(armoryBaseWeapon(id)!);
       for (const def of defs) {
         for (const key of Object.keys(def.stat ?? {})) expect({ id, key, ok: key in stats }).toEqual({ id, key, ok: true });
-        expect(def.stat || def.mods || def.now).toBeTruthy();
+        expect(def.stat || def.mods || def.now || def.proc).toBeTruthy();
         expect(growthText(def)).toMatch(/\((no limit|up to \d+ times)\)\.$/);
       }
     }
@@ -179,6 +179,111 @@ describe('weapons grow during a fight', () => {
     expect(ups[0]).toMatchObject({ amount: 1, text: 'Rally hits +1 harder' });
     expect(growthStacks(s.growth, 'rally-horn')).toBe(1);
     expect(growthStacks(s.growth, 'mending-charm')).toBe(0);
+  });
+});
+
+describe('every trick weapon changes its own game as it grows', () => {
+  const grown = (id: string, stacks: number, over: Parameters<typeof startFight>[0] = {}): RunState => {
+    const s = held([id], over);
+    // Stacks are put in by hand, then one plain Set lets the fight catch up with them
+    return matchAt({ ...s, growth: { [growthKey(id, 0)]: { stacks, progress: 0 } } }, [3, 4, 5], SAME_NUMBER);
+  };
+
+  it('no two weapons share a scaling line', () => {
+    const lines = Object.values(WEAPON_GROWTH).flat().map(def => def.gives);
+    const repeats = lines.filter((line, i) => lines.indexOf(line) !== i);
+    // Only the two vessels (Life Vessel, Soul Harvest) reach the same reward, by different roads
+    expect(repeats).toEqual(['+1 max heart (it arrives empty)']);
+  });
+
+  it('Wild Card: more wild cards may be on the board at once', () => {
+    const s = grown('wild-card', 2);
+    const three = { ...s, board: s.board.map((c, i) => (i < 4 ? { ...c, isWild: true } : c)) };
+    const after = runReducer(three, { type: 'TICK', ms: 250 });
+    expect(after.board.filter(c => c.isWild)).toHaveLength(3);
+    const plain = runReducer({ ...three, growth: {} }, { type: 'TICK', ms: 250 });
+    expect(plain.board.filter(c => c.isWild)).toHaveLength(1);
+  });
+
+  it('Greedy Chest: every chest you open raises its floor, and a mistake never drops it lower', () => {
+    let s = tick(held(['greedy-chest']), 1000);
+    const floor = weapon(s, 'greedy-chest').modifiers!.chestStart!;
+    const chestSlot = () => s.board.findIndex(c => c.chest !== undefined);
+    expect(s.board[chestSlot()].chest).toBe(floor);
+    for (let opened = 1; opened <= 4; opened++) {
+      const at = chestSlot();
+      const others = [0, 1, 2, 3].filter(i => i !== at).slice(0, 2);
+      s = tick(matchAt(s, [at, ...others], SAME_NUMBER), 1000);
+      // Three opens raise it, the fourth is past the limit
+      expect(stacksOf(s, 'greedy-chest')).toBe(Math.min(3, opened));
+      expect(s.board[chestSlot()].chest).toBe(floor + Math.min(3, opened));
+    }
+    // Leave it one Set, then miss: what it grew is lost, the raised floor is not
+    const away = [0, 1, 2, 3, 4].filter(i => i !== chestSlot()).slice(0, 3);
+    s = matchAt(s, away, SAME_NUMBER);
+    expect(s.board[chestSlot()].chest).toBeGreaterThan(floor + 3);
+    const cards = away.map(i => s.board[i]);
+    s = runReducer(s, { type: 'INVALID', cards });
+    expect(s.board[chestSlot()].chest).toBe(floor + 3);
+  });
+
+  it('Tar Pit: the pit spreads to more rows', () => {
+    expect(new Set(held(['tar-pit']).board.map((c, i) => (c.tar ? Math.floor(i / 3) : -1)).filter(r => r >= 0)).size).toBe(1);
+    const s = grown('tar-pit', 2);
+    expect(new Set(s.board.map((c, i) => (c.tar ? Math.floor(i / 3) : -1)).filter(r => r >= 0)).size).toBe(3);
+  });
+
+  it('Glass Sword: a reforged sword survives a shatter, once per stack', () => {
+    let s = grown('glass-sword', 1, { level: testLevel({ rules: { hearts: 30 } }) });
+    s = missWith(s, [RED[0], RED[0], GREEN[1]]);
+    expect(s.gear.glassBroken).toBe(false);
+    expect(s.gear.glassSparesUsed).toBe(1);
+    s = missWith(s, [RED[0], RED[0], GREEN[1]]);
+    expect(s.gear.glassBroken).toBe(true);
+  });
+
+  it('Snowball: reaching its limit raises the limit', () => {
+    let s = held(['snowball']);
+    const cap = Math.round(weapon(s, 'snowball').modifiers!.snowballMax!);
+    for (let i = 0; i < cap; i++) s = matchAt(s, [0, 1, 2], SAME_NUMBER);
+    expect(stacksOf(s, 'snowball')).toBe(1);
+    expect(Math.round(weapon(s, 'snowball').modifiers!.snowballMax!)).toBe(cap + 1);
+  });
+
+  it('Mirror Shard: reusing two spots makes it remember one Set further back', () => {
+    let s = held(['mirror-shard']);
+    s = matchAt(s, [0, 1, 2], SAME_NUMBER);
+    s = matchAt(s, [0, 1, 5], SAME_NUMBER);
+    expect(stacksOf(s, 'mirror-shard')).toBe(1);
+    // Two Sets ago used slot 2; the last one did not
+    s = runReducer(s, { type: 'CLEAR_EVENTS', upTo: s.eventSeq });
+    s = matchAt(s, [2, 7, 8], SAME_NUMBER);
+    expect(eventsOf(s, 'rule').some(e => e.text === 'Mirror!')).toBe(true);
+  });
+
+  it('Bounty Poster: finished posters get bigger', () => {
+    const s = grown('bounty-poster', 2);
+    const next = runReducer({ ...s, gear: { ...s.gear, bounty: null } }, { type: 'TICK', ms: 250 });
+    expect(next.gear.bounty!.left).toBe(5);
+  });
+
+  it('a stack that makes something more likely: Grace Conduit\'s spent graces start coming back', () => {
+    const level = testLevel({ rules: { startingGraces: 1 }, foes: [{ name: 'Dummy', hp: 1e6 }] });
+    let back = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      let s = held(['grace-conduit'], { level, seed });
+      s = { ...s, growth: { [growthKey('grace-conduit', 0)]: { stacks: 4, progress: 0 } } };
+      const before = s.stats.graces;
+      // A near miss that a grace covers
+      const board = s.board.map((c, i) => (i < 3 ? { ...c, ...[RED[0], RED[1], { ...RED[2], color: 'green' as const }][i], shading: 'solid' as const } : c));
+      const cards = board.slice(0, 3);
+      const rewards = plainRewards(cards).map((r, i) => (i === 0 ? { ...r, effectType: 'grace' as const } : r));
+      s = runReducer({ ...s, board }, { type: 'MATCH', cards, rewards });
+      if (s.stats.graces >= before) back += 1;
+    }
+    // 4 stacks × 15% = 60%
+    expect(back).toBeGreaterThan(12);
+    expect(back).toBeLessThan(36);
   });
 });
 

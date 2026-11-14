@@ -31,8 +31,9 @@ export const BALANCE_TARGETS = {
    */
   soloLate: {
     damage: [1.6, 4.6],
-    tricks: [1.15, 3.6],
-    gambles: [1.15, 3.8],
+    // (the hunts and gambles change their own rules as they grow in a fight: a little room for that)
+    tricks: [1.15, 4.0],
+    gambles: [1.15, 4.2],
     // The support roles have headroom for what they grow into during a fight (data/weaponGrowth.ts):
     // that growth is where a build snowballs, so their ceilings sit closer to the damage weapons'
     board: [1.15, 3.6],
@@ -42,7 +43,7 @@ export const BALANCE_TARGETS = {
     chains: [1.15, 3.6],
   } satisfies Record<WeaponRole, Band>,
   /** A weapon alone the day you find it (level 1, untuned), early game: felt, never dominant */
-  soloEarly: [1.0, 1.8] as Band,
+  soloEarly: [1.0, 2.0] as Band,
   /** The average level-1 weapon should add at least this much early */
   soloEarlyMean: 1.08,
   /**

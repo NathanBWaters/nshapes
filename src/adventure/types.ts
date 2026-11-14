@@ -736,6 +736,10 @@ export interface GearState {
   tarRow: number | null;
   /** Hot Potato: fight time (ms) of its next jump */
   potatoAtMs: number;
+  /** Mirror Shard: slots of earlier Sets it still remembers (once it has grown), newest first */
+  mirrorMemory: number[][];
+  /** Glass Sword: shatters survived so far (its growth grants spares) */
+  glassSparesUsed: number;
 }
 
 export interface RunState {

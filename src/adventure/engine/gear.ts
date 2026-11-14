@@ -26,7 +26,7 @@
  *   Decoy             an unmarked near-copy pays when matched with its original
  *   Long Fuse         fused cards pay in their last seconds and burn out as duds
  *   Ice Block         one frozen card thaws after 7 Sets into a big hit
- *   Greedy Chest      a chest that grows every Set you leave it; a mistake empties it
+ *   Greedy Chest      a chest that grows every Set you leave it; a mistake drops it back to its floor (what a new chest holds)
  *   Tightrope         Sets that touch your last Set pay; others deal half
  *   Hot Potato        a hot card that jumps around; mistakes cost extra while it is out
  *
@@ -38,7 +38,7 @@ import type { GearState } from '../types';
 import type { TrickKind } from '../rules/types';
 import { TRICK_RULES } from '../data/rules';
 import { getAdjacentIndices } from '@/utils/weaponEffects';
-import { dealDamage, emit, enqueue, foeMultiplier, GRID_COLS, hurt, mods, recycle, touchable, updateCards, type Draft } from './fight';
+import { dealDamage, emit, enqueue, foeMultiplier, GRID_COLS, hurt, mods, recycle, signalGrowth, touchable, updateCards, type Draft } from './fight';
 import { allSets, differingAttributes, hasAnySet, isSelectable } from './sets';
 
 /** Traits the Collector's Album has a page for (background is a board dressing, not a page) */
@@ -56,6 +56,8 @@ export const initGear = (): GearState => ({
   glassSinceMs: 0,
   tarRow: null,
   potatoAtMs: 0,
+  mirrorMemory: [],
+  glassSparesUsed: 0,
 });
 
 const on = (n: number | undefined): n is number => (n ?? 0) > 0;
@@ -66,7 +68,7 @@ const rollBounty = (d: Draft) => {
   const options = d.attributes.flatMap(attribute =>
     (ATTRIBUTE_VALUES[attribute] as readonly (string | number)[]).map(value => ({ attribute, value }))
   ).filter(o => !prev || o.attribute !== prev.attribute || o.value !== prev.value);
-  d.gear.bounty = { ...d._rng.pick(options), left: BOUNTY_CARDS };
+  d.gear.bounty = { ...d._rng.pick(options), left: BOUNTY_CARDS + Math.round(mods(d).bountyCards ?? 0) };
 };
 
 /** How many cards the Magnet marks (its growth adds marks). */
@@ -80,7 +82,31 @@ const placeMagnet = (d: Draft) => {
   if (candidates.length) updateCards(d, d._rng.shuffle(candidates).slice(0, magnetMarks(d)), c => ({ ...c, magnet: true }));
 };
 
+
+/** Greedy Chest's floor: what a new chest holds, and what a mistake drops it back to (its growth raises it). */
+const chestFloor = (d: Draft) => Math.round(mods(d).chestStart ?? 0);
+const feat = (d: Draft, name: string) => signalGrowth(d, { on: 'feat', name });
+
+/** How long the Hot Potato sits before it jumps (its growth makes it jumpier). */
+const potatoMs = (d: Draft) => Math.max(TRICK_RULES.potatoMinMs, TRICK_RULES.potatoMs - (mods(d).potatoFasterMs ?? 0));
+/** Sets a card sits through before it turns golden (Rust's growth shortens it). */
+const rustSets = (d: Draft) => Math.max(3, TRICK_RULES.rustSets - Math.round(mods(d).rustSetsLess ?? 0));
+/** The sticky rows: the wave's row and, once the Tar Pit has grown, the rows after it. */
+const tarRows = (d: Draft): number[] => {
+  if (d.gear.tarRow === null) return [];
+  const rows = Math.max(1, Math.ceil(d.board.length / GRID_COLS));
+  const count = Math.min(rows, 1 + Math.round(mods(d).tarRows ?? 0));
+  return Array.from({ length: count }, (_, k) => (d.gear.tarRow! + k) % rows);
+};
+
 const shatterGlass = (d: Draft, why: string) => {
+  // A reforged sword (its growth) takes the blow once and starts its clock again
+  if (Math.round(mods(d).glassSpares ?? 0) > d.gear.glassSparesUsed) {
+    d.gear.glassSparesUsed += 1;
+    d.gear.glassSinceMs = d.elapsedMs;
+    emit(d, 'rule', undefined, 'Glass Sword held!');
+    return;
+  }
   d.gear.glassBroken = true;
   emit(d, 'rule', undefined, `Glass Sword shattered (${why})`);
 };
@@ -132,8 +158,9 @@ export const gearSetBonus = (d: Draft, set: GearSet): { flat: number; multiplier
   const ids = new Set(set.matched.map(c => c.id));
 
   if (set.matched.some(c => c.doubler)) {
-    multiplier *= TRICK_RULES.curseMultiplier;
-    emit(d, 'rule', TRICK_RULES.curseMultiplier, 'Curse broken ×2');
+    const times = TRICK_RULES.curseMultiplier + (m.curseMultiplierBonus ?? 0);
+    multiplier *= times;
+    emit(d, 'rule', times, `Curse broken ×${times}`);
     paid(d, 'curse');
   }
   if (set.matched.some(c => c.isWild)) paid(d, 'wild');
@@ -145,7 +172,7 @@ export const gearSetBonus = (d: Draft, set: GearSet): { flat: number; multiplier
     add(-lost, 'Rust');
     if (set.matched.some(c => c.rusted)) paid(d, 'rust');
   }
-  if (on(m.tarDamage) && g.tarRow !== null && set.slots.some(i => Math.floor(i / GRID_COLS) === g.tarRow)) add(m.tarDamage, 'Tar Pit', 'tar');
+  if (on(m.tarDamage) && set.slots.some(i => tarRows(d).includes(Math.floor(i / GRID_COLS)))) add(m.tarDamage, 'Tar Pit', 'tar');
   if (on(m.decoyDamage) && set.matched.some(c => c.decoyOf && ids.has(c.decoyOf))) add(m.decoyDamage, 'Decoy found!', 'decoy');
   if (on(m.fuseDamage)) add(set.matched.filter(c => c.fuseHot).length * m.fuseDamage, 'Short fuse', 'fuse');
   if (set.matched.some(c => c.thawed)) paid(d, 'ice');
@@ -166,7 +193,12 @@ export const gearSetBonus = (d: Draft, set: GearSet): { flat: number; multiplier
   if (on(m.snowballStep) && g.snowball > 0) add(g.snowball * m.snowballStep, 'Snowball');
   if (set.auto) return { flat: bonus, multiplier };
 
-  if (on(m.mirrorDamage) && set.slots.some(i => g.lastSetSlots.includes(i))) add(m.mirrorDamage, 'Mirror!', 'mirror');
+  if (on(m.mirrorDamage)) {
+    // The mirror remembers your last Set, and further back once it has grown
+    const remembered = [g.lastSetSlots, ...g.mirrorMemory.slice(0, Math.round(m.mirrorDepth ?? 0))].flat();
+    if (set.slots.some(i => remembered.includes(i))) add(m.mirrorDamage, 'Mirror!', 'mirror');
+    if (set.slots.filter(i => g.lastSetSlots.includes(i)).length >= 2) feat(d, 'doubleMirror');
+  }
   if (on(m.oddOneOutDamage) && !set.graceUsed) {
     const n = d.attributes.length;
     if (set.diffCount === 1 || (n >= 4 && set.diffCount === n - 1)) add(m.oddOneOutDamage, 'Odd one out!', 'odd');
@@ -179,6 +211,7 @@ export const gearSetBonus = (d: Draft, set: GearSet): { flat: number; multiplier
       if (albumTraits(d.attributes).every(a => g.album.includes(a))) {
         g.album = [];
         add(m.albumDamage, 'Album complete!', 'album');
+        feat(d, 'albumDone');
       } else {
         emit(d, 'rule', undefined, `Album: ${page}`);
         paid(d, 'album');
@@ -189,8 +222,9 @@ export const gearSetBonus = (d: Draft, set: GearSet): { flat: number; multiplier
     // The first Set of a wave starts the rope; after that, stay next to your last Set
     if (g.lastSetSlots.length === 0 || set.slots.some(i => touching(d, g.lastSetSlots).has(i))) add(m.tightropeDamage, 'Tightrope', 'tightrope');
     else {
-      multiplier *= TRICK_RULES.offRopeMultiplier;
-      emit(d, 'rule', TRICK_RULES.offRopeMultiplier, 'Off the rope');
+      const off = Math.min(1, TRICK_RULES.offRopeMultiplier + (m.offRopeBonus ?? 0));
+      multiplier *= off;
+      if (off < 1) emit(d, 'rule', off, 'Off the rope');
     }
   }
   return { flat: bonus, multiplier };
@@ -228,7 +262,11 @@ export const afterSetGear = (d: Draft, set: GearSet) => {
   if (on(m.bountyDamage) && g.bounty) {
     const wanted = set.matched.filter(c => !c.isWild && valueOf(c, g.bounty!.attribute) === g.bounty!.value).length;
     g.bounty = { ...g.bounty, left: g.bounty.left - wanted };
-    if (g.bounty.left <= 0) rollBounty(d);
+    if (g.bounty.left <= 0) {
+      // Told first, so the next poster is already the bigger one
+      feat(d, 'posterDone');
+      rollBounty(d);
+    }
   }
   if (on(m.magnetDamage)) placeMagnet(d);
   const ids = new Set(set.matched.map(c => c.id));
@@ -236,9 +274,9 @@ export const afterSetGear = (d: Draft, set: GearSet) => {
   if (on(m.rustGold)) {
     // Every card that sat through this Set rusts; at the limit it turns golden instead
     const rusting = sitting.filter(i => !d.board[i].rusted && isSelectable(d.board[i]));
-    updateCards(d, rusting, c => ({ ...c, rust: Math.min(TRICK_RULES.rustSets, (c.rust ?? 0) + 1) }));
+    updateCards(d, rusting, c => ({ ...c, rust: Math.min(rustSets(d), (c.rust ?? 0) + 1) }));
     // One card a Set turns golden: the first that has sat long enough
-    const ripe = rusting.find(i => (d.board[i].rust ?? 0) >= TRICK_RULES.rustSets);
+    const ripe = rusting.find(i => (d.board[i].rust ?? 0) >= rustSets(d));
     if (ripe !== undefined) {
       updateCards(d, [ripe], c => {
         const { rust: _r, ...rest } = c;
@@ -255,22 +293,30 @@ export const afterSetGear = (d: Draft, set: GearSet) => {
     const { frozen: _f, locked: _l, ...rest } = c;
     return { ...rest, thawed: true, bonusPoints: (c.bonusPoints ?? 0) + Math.round(m.frozenDamage ?? 0) };
   });
+  g.mirrorMemory = [g.lastSetSlots, ...g.mirrorMemory].filter(slots => slots.length > 0).slice(0, 3);
   g.lastSetSlots = set.slots;
   g.glassSinceMs = d.elapsedMs;
-  if (on(m.snowballStep)) g.snowball = Math.min(Math.max(1, Math.round(m.snowballMax ?? 0)), g.snowball + 1);
+  if (on(m.snowballStep)) {
+    const cap = Math.max(1, Math.round(m.snowballMax ?? 0));
+    const before = g.snowball;
+    g.snowball = Math.min(cap, g.snowball + 1);
+    // Rolled all the way up: an avalanche (its growth raises the cap)
+    if (g.snowball >= cap && before < cap) feat(d, 'fullSnowball');
+  }
 };
 
 export const onMistakeGear = (d: Draft) => {
   const m = mods(d);
   d.gear.snowball = Math.floor(d.gear.snowball / 2);
-  // Greedy Chest: a mistake empties it. Hot Potato: a mistake costs more while it is out.
-  updateCards(d, d.board.map((c, i) => (c.chest ? i : -1)).filter(i => i >= 0), c => ({ ...c, chest: 0 }));
+  // Greedy Chest: a mistake loses what the chest grew, never its floor. Hot Potato: a mistake costs more while it is out.
+  const floor = chestFloor(d);
+  updateCards(d, d.board.map((c, i) => ((c.chest ?? 0) > floor ? i : -1)).filter(i => i >= 0), c => ({ ...c, chest: floor }));
   if (on(m.potatoDamage) && d.board.some(c => c.hot)) hurt(d, TRICK_RULES.potatoHearts);
   if (on(m.glassDamage) && !d.gear.glassBroken) shatterGlass(d, 'mistake');
 };
 
 export const onWaveStartGear = (d: Draft) => {
-  d.gear = { ...d.gear, snowball: 0, glassBroken: false, glassSinceMs: d.elapsedMs, lastSetSlots: [], tarRow: null };
+  d.gear = { ...d.gear, snowball: 0, glassBroken: false, glassSinceMs: d.elapsedMs, lastSetSlots: [], mirrorMemory: [], tarRow: null };
 };
 
 /** On the fight clock: the Glass Sword's deadline and the Fog Lantern's flips. */
@@ -314,7 +360,7 @@ export const tickGear = (d: Draft) => {
   // Long Fuse: hot in the last seconds, then a dud
   const fused = d.board.map((c, i) => (c.fuseAt !== undefined ? i : -1)).filter(i => i >= 0);
   const burnt = fused.filter(i => d.elapsedMs >= d.board[i].fuseAt! && touchable(d, i));
-  const hot = fused.filter(i => !burnt.includes(i) && !d.board[i].fuseHot && d.board[i].fuseAt! - d.elapsedMs <= TRICK_RULES.fuseHotMs);
+  const hot = fused.filter(i => !burnt.includes(i) && !d.board[i].fuseHot && d.board[i].fuseAt! - d.elapsedMs <= TRICK_RULES.fuseHotMs + (m.fuseHotMs ?? 0));
   updateCards(d, hot, c => ({ ...c, fuseHot: true }));
   if (burnt.length) {
     updateCards(d, burnt, c => {
@@ -332,7 +378,7 @@ export const tickGear = (d: Draft) => {
       updateCards(d, [i], c => ({ ...c, hot: false }));
       updateCards(d, [d._rng.pick(next)], c => ({ ...c, hot: true }));
     }
-    d.gear.potatoAtMs = d.elapsedMs + TRICK_RULES.potatoMs;
+    d.gear.potatoAtMs = d.elapsedMs + potatoMs(d);
   }
 };
 
@@ -398,7 +444,8 @@ export const syncGear = (d: Draft) => {
   }
   // One wild card at a time
   const wilds = d.board.map((c, i) => (c.isWild ? i : -1)).filter(i => i >= 0);
-  if (wilds.length > 1) updateCards(d, wilds.slice(1), c => ({ ...c, isWild: false }));
+  const wildMax = 1 + Math.round(m.wildMax ?? 0);
+  if (wilds.length > wildMax) updateCards(d, wilds.slice(wildMax), c => ({ ...c, isWild: false }));
 
   // Chain Gang: exactly two cards chained to each other
   const byId = new Map(d.board.map(c => [c.id, c]));
@@ -427,7 +474,8 @@ export const syncGear = (d: Draft) => {
   // Tar Pit: one sticky row a wave; a card that lands in it is sticky, one that leaves it isn't
   if (on(m.tarDamage) && d.gear.tarRow === null) d.gear.tarRow = Math.floor(d._rng.next() * Math.ceil(d.board.length / GRID_COLS));
   if (!on(m.tarDamage)) d.gear.tarRow = null;
-  const inTar = (i: number) => d.gear.tarRow !== null && Math.floor(i / GRID_COLS) === d.gear.tarRow;
+  const sticky = tarRows(d);
+  const inTar = (i: number) => sticky.includes(Math.floor(i / GRID_COLS));
   updateCards(d, d.board.map((c, i) => (inTar(i) !== !!c.tar ? i : -1)).filter(i => i >= 0), (c): Card => {
     if (!c.tar) return { ...c, tar: 1 };
     const { tar: _t, ...rest } = c;
@@ -436,14 +484,14 @@ export const syncGear = (d: Draft) => {
 
   // One Ice Block (frozen, or thawed and waiting to be matched), one Greedy Chest, one Hot Potato
   keepOne(d, on(m.frozenDamage), c => (c.frozen ?? 0) > 0 || !!c.thawed,
-    c => ({ ...c, frozen: TRICK_RULES.iceSets, locked: true }),
+    c => ({ ...c, frozen: Math.max(2, TRICK_RULES.iceSets - Math.round(m.iceSetsLess ?? 0)), locked: true }),
     c => { const { frozen: _f, locked: _l, ...rest } = c; return (c.frozen ?? 0) > 0 ? rest : c; });
   keepOne(d, on(m.chestStart), c => c.chest !== undefined,
-    c => ({ ...c, chest: Math.round(m.chestStart ?? 0) }),
+    c => ({ ...c, chest: chestFloor(d) }),
     c => { const { chest: _c, ...rest } = c; return rest; });
   const hadPotato = d.board.some(c => c.hot);
   keepOne(d, on(m.potatoDamage), c => !!c.hot, c => ({ ...c, hot: true }), c => ({ ...c, hot: false }));
-  if (on(m.potatoDamage) && !hadPotato) d.gear.potatoAtMs = d.elapsedMs + TRICK_RULES.potatoMs;
+  if (on(m.potatoDamage) && !hadPotato) d.gear.potatoAtMs = d.elapsedMs + potatoMs(d);
 
   ensureSet(d);
 };
