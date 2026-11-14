@@ -25,10 +25,8 @@ import { BIOMES } from '../data/biomes';
 import { levelFoe } from '../data/foes';
 import { getMechanic } from '../data/mechanics';
 import { getFighter } from '../data/fighters';
-import { BOUNTIES } from '../data/bounties';
-import { getArcana } from '../data/arcana';
 import { isFighterTrial } from '../data/rewards';
-import { freshPaths, hasUnspentStars, equippedArcanaOf, getFrontierLevel, getLockReason, maxStars, openPaths, totalStars, isBiomeOpen } from '../progress';
+import { freshPaths, hasUnspentStars, getFrontierLevel, getLockReason, maxStars, openPaths, totalStars, isBiomeOpen } from '../progress';
 import { Bob, CoinPill, INK, StarRow, TONE } from './ui';
 
 const ELITE = '#5B2333';
@@ -132,16 +130,13 @@ interface Props {
   onSelectLevel: (level: LevelDef) => void;
   onOpenCamp: () => void;
   onOpenGuide: () => void;
-  onOpenBounties?: () => void;
   onExit: () => void;
   highlightLevelId?: string | null;
   /** The arrival of these secret paths has played: remember it, so it plays once */
   onPathsRevealed?: (ids: string[]) => void;
-  musicOn: boolean;
-  onToggleMusic: () => void;
 }
 
-const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpenGuide, onOpenBounties, onExit, highlightLevelId, onPathsRevealed, musicOn, onToggleMusic }) => {
+const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpenGuide, onExit, highlightLevelId, onPathsRevealed }) => {
   const { width: winW } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
@@ -197,22 +192,16 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
 
   return (
     <View style={[s.root, { paddingTop: insets.top }]}>
-      <View style={s.topBar}>
+      {/* Only where you are and what you have: everything else lives at Camp */}
+      <View style={s.topBar} testID="map-top-bar">
         <TouchableOpacity onPress={onExit} style={s.iconBtn} accessibilityLabel="Back to menu">
           <Icon name="lorc/return-arrow" size={20} color={INK} />
         </TouchableOpacity>
-        <Text style={s.title}>ADVENTURE</Text>
-        <View style={{ flex: 1 }} />
-        {equippedArcanaOf(save).map(id => (
-          <View key={id} style={s.arcanaPill}>
-            <Icon name={getArcana(id).icon} size={13} color={TONE.arcana} />
-            <Text style={s.arcanaGlyph}>{getArcana(id).numeral}</Text>
-          </View>
-        ))}
-        <TouchableOpacity onPress={onToggleMusic} style={[s.iconBtn, !musicOn && { opacity: 0.4 }]} accessibilityLabel={musicOn ? 'Mute sound' : 'Turn sound on'}>
-          <Icon name="delapouite/sound-on" size={18} color={INK} />
-        </TouchableOpacity>
-        <View style={s.starPill}><Text style={s.starGlyph}>★</Text><Text style={s.starCount}>{stars}/{maxStars()}</Text></View>
+        <Text style={s.title} numberOfLines={1}>ADVENTURE</Text>
+        <View style={s.starPill} testID="map-stars" accessibilityLabel={`${stars} of ${maxStars()} stars`}>
+          <Text style={s.starGlyph}>★</Text>
+          <Text style={s.starCount}>{stars}</Text>
+        </View>
         {(save.coinsUnlocked || save.coins > 0 || save.lifetimeCoins > 0) && <CoinPill coins={save.coins} />}
       </View>
 
@@ -304,19 +293,6 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
 
       <View style={[s.dock, { paddingBottom: Math.max(insets.bottom, Platform.OS === 'web' ? 12 : 8) }]}>
         <DockButton testID="map-dock-guide" icon="lorc/open-book" label="Guide" onPress={onOpenGuide} />
-        {onOpenBounties && (
-          <DockButton
-            testID="map-dock-bounties"
-            icon="lorc/trophy"
-            label="Bounties"
-            onPress={onOpenBounties}
-            disabled={!save.bountiesUnlocked}
-            badge={
-              save.bountiesUnlocked &&
-              BOUNTIES.some(b => !save.completedBounties.includes(b.id) && b.progress(save) / b.target >= 0.75)
-            }
-          />
-        )}
         <TouchableOpacity testID="map-play-next" onPress={() => onSelectLevel(frontier)} style={s.playNext} activeOpacity={0.85}>
           <FighterAvatar character={fighter.name} size={34} mood="anticipation" />
           <View style={{ flex: 1 }}>
@@ -480,10 +456,9 @@ const s = StyleSheet.create({
   starPill: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: COLORS.canvasWhite, borderColor: INK, borderWidth: 2, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
   starGlyph: { color: '#E0A800', fontSize: 15 },
   starCount: { fontWeight: '800', color: INK, fontSize: 14 },
-  arcanaPill: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: TONE.arcanaPale, borderColor: TONE.arcana, borderWidth: 2, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
-  arcanaGlyph: { fontWeight: '900', color: TONE.arcana, fontSize: 11 },
   iconBtn: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: INK, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.paperBeige },
-  title: { fontWeight: '900', letterSpacing: 2, color: INK, fontSize: 16 },
+  // The title gives way first on a narrow screen, so the stars and coins are never cut off
+  title: { flex: 1, fontWeight: '900', letterSpacing: 2, color: INK, fontSize: 16 },
   band: { position: 'absolute', left: 0, right: 0, overflow: 'hidden' },
   ground: { position: 'absolute', left: -40, right: -40, bottom: -60, height: 120, borderRadius: 200, opacity: 0.6 },
   decor: { position: 'absolute', opacity: 0.55 },

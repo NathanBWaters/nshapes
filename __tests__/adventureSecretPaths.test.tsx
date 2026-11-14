@@ -322,7 +322,7 @@ describe('on the map', () => {
   /** The map with its animated avatars started, so it can be taken down cleanly. */
   const mapOf = (save: AdventureSave, onPathsRevealed: (ids: string[]) => void = noop) => {
     const view = render(wrap(
-      <AdventureMap save={save} onSelectLevel={noop} onOpenCamp={noop} onOpenGuide={noop} onExit={noop} musicOn onToggleMusic={noop} onPathsRevealed={onPathsRevealed} />
+      <AdventureMap save={save} onSelectLevel={noop} onOpenCamp={noop} onOpenGuide={noop} onExit={noop} onPathsRevealed={onPathsRevealed} />
     ));
     pass(50);
     return view;

@@ -640,8 +640,21 @@ const catalystEligible = (d: Draft, c: Card | undefined): boolean =>
 
 export const catalystOnBoard = (d: Draft) => d.board.some(c => c.hasEvolutionItem);
 
+/** Armed recipes that are not running right now: the ones a Catalyst could start. */
+export const idleRecipes = (d: Draft): string[] => d.armedRecipes.filter(id => !d.activeEvolutions.some(e => e.id === id));
+
+/**
+ * A Catalyst appears only when it would start something new: there must be an
+ * armed recipe that is not already running. An evolution cannot be re-triggered
+ * while you are in it (a Catalyst that kept turning up mid-evolution made them
+ * cheap), though a second, different recipe can still start beside it. Never
+ * beside another Catalyst, and not once the fight's evolutions are used up.
+ */
 export const canSpawnCatalyst = (d: Draft) =>
-  d.features.has('evolutions') && d.armedRecipes.length > 0 && !catalystOnBoard(d) && d.evolutionsTriggered < d.evolutionCap;
+  d.features.has('evolutions') &&
+  idleRecipes(d).length > 0 &&
+  !catalystOnBoard(d) &&
+  d.evolutionsTriggered < d.evolutionCap;
 
 /** Put the (single) Catalyst on one of `candidates`, or anywhere eligible if none of them fits. */
 export const placeCatalyst = (d: Draft, candidates: number[]): boolean => {

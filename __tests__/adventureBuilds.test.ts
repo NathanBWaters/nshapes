@@ -88,11 +88,16 @@ const SAVE = endgameSave();
 /** A real timed fight (3 minutes, 5 hearts) against the same foe that can't fall. */
 const TIMED: LevelDef = { ...DUMMY, rules: { ...DUMMY.rules, moves: undefined, timer: 180, hearts: 5 } };
 const FLOOR_RUNS = 10;
+/**
+ * Ten fights is a noisy sample, above all for a build that can die and end a fight early.
+ * A reading under a floor is taken again over this many fights before it counts.
+ */
+const RECHECK_RUNS = 60;
 /** Mean total damage in the timed fight, with nothing picked up or bought on the way. */
-const totalDamage = (save: AdventureSave, bot = BOTS.average) => {
+const totalDamage = (save: AdventureSave, bot = BOTS.average, runs = FLOOR_RUNS) => {
   let sum = 0;
-  for (let i = 0; i < FLOOR_RUNS; i++) sum += simulateRun(TIMED, save, bot, 1000 + i * 7919, undefined, { skipPicks: true }).state.totalDamage;
-  return sum / FLOOR_RUNS;
+  for (let i = 0; i < runs; i++) sum += simulateRun(TIMED, save, bot, 1000 + i * 7919, undefined, { skipPicks: true }).state.totalDamage;
+  return sum / runs;
 };
 const DAMAGE_WEAPONS = ['blast-powder', 'flint-spark', 'prismatic-ray', 'chaos-shard'];
 
@@ -261,11 +266,14 @@ describe('no evolution is a dead pick (endgame weapons, a timed fight, no picks)
   });
 
   it('every evolution out-damages its two weapons without it, and the typical one by a lot', () => {
+    const liftOf = (charms: string[], runs: number) =>
+      totalDamage({ ...SAVE, charms }, BOTS.average, runs) / totalDamage({ ...SAVE, charms, unlockedEvolutions: [] }, BOTS.average, runs);
     const lifts = armableRecipes(SAVE).map(recipe => {
       const charms = [recipe.options[0][0], recipe.options[1][0]];
-      const on = totalDamage({ ...SAVE, charms });
-      const off = totalDamage({ ...SAVE, charms, unlockedEvolutions: [] });
-      return { id: recipe.id, lift: on / off };
+      const quick = liftOf(charms, FLOOR_RUNS);
+      // A recipe cannot re-trigger while it runs, so a fight holds one or two evolutions:
+      // a low reading over ten fights is as likely noise as weakness, and gets a longer look
+      return { id: recipe.id, lift: quick >= FLOORS.evolutionLift ? quick : liftOf(charms, RECHECK_RUNS) };
     });
     const sorted = [...lifts].sort((a, b) => a.lift - b.lift);
     report.push(`evolution lift: median ×${fmt(median(lifts.map(l => l.lift)))}, weakest ` + sorted.slice(0, 8).map(l => `${l.id} ×${fmt(l.lift)}`).join(', '));

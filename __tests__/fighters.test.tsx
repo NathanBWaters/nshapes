@@ -448,7 +448,7 @@ describe('Fighter Animation System', () => {
       const save = createNewSave(); // Orange Tabby unlocked, others locked
       const { getByTestId, queryByTestId } = render(
         <SafeAreaProvider initialMetrics={SAFE_AREA_METRICS}>
-          <Camp save={save} onChange={() => {}} onClose={() => {}} />
+          <Camp save={save} initialTab="fighters" onChange={() => {}} onClose={() => {}} />
         </SafeAreaProvider>
       );
 

@@ -1,22 +1,29 @@
 /**
- * Camp — between fights. Four tabs:
+ * Camp — between fights. It opens on a menu of its sections; each section's
+ * back button returns to the menu:
  *   Fighters: each fighter's two passives and their star-bought Skill Tree
- *   Workshop: coin upgrades (Charm Belt, Tarot Deck, Evolution Lab, mechanics, weapon tuning)
  *   Armory:   weapons unlocked so far (equip them into your charm slots)
  *   Arcana:   tarot wildcards that bend the rules (equip into Arcana slots)
+ *   Workshop: coin upgrades (Charm Belt, Tarot Deck, Evolution Lab, mechanics, weapon tuning)
+ *   Bounties: cross-run milestones (BountyBoard.tsx)
+ *   History:  every battle fought, with its damage per minute (BattleHistory.tsx)
+ * The menu also holds the sound and effects switches.
  * Every purchase is refundable at 100%.
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Icon from '@/components/Icon';
+import Icon, { type IconName } from '@/components/Icon';
 import { FighterAvatar } from '@/components/fighters';
 import { WeaponAvatar } from '@/components/weapons';
 import type { FighterReactionEvent, FighterReactionType } from '@/utils/fighterAnimations';
 import { COLORS } from '@/utils/colors';
 import type { CharacterName, Weapon } from '@/types';
 import { band, sfx } from '@/audio';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import type { AdventureSave, UpgradeDef } from '../types';
+import { BOUNTIES } from '../data/bounties';
+import { summarize, type BattleRecord } from '../history';
 import { FIGHTERS } from '../data/fighters';
 import { getPassive } from '../data/passives';
 import { MAX_TUNING_TIER, MAX_WEAPON_LEVEL, TUNING_MULTIPLIERS, formatStat, weaponStatLines } from '../data/weaponStats';
@@ -36,6 +43,7 @@ import {
   equippedArcanaOf,
   equippedCharms,
   getUnlockedUpgrades,
+  hasUnspentStars,
   refundAllCamp,
   refundTuning,
   refundUpgrade,
@@ -53,16 +61,42 @@ import {
   weaponLevelsInWorld,
 } from '../progress';
 import SkillTree, { StarPool } from './SkillTree';
+import BattleHistory from './BattleHistory';
+import BountyBoard from './BountyBoard';
 import { Btn, CoinPill, INK, PopIn, TONE } from './ui';
 
-export type CampTab = 'fighters' | 'workshop' | 'armory' | 'arcana';
+export type CampTab = 'fighters' | 'armory' | 'arcana' | 'workshop' | 'bounties' | 'history';
+
+/** The sections of Camp, in menu order. */
+const SECTIONS: { id: CampTab; title: string; icon: IconName }[] = [
+  { id: 'fighters', title: 'Fighters', icon: 'lorc/tree-branch' },
+  { id: 'armory', title: 'Armory', icon: 'lorc/gems' },
+  { id: 'arcana', title: 'Arcana', icon: 'lorc/crystal-wand' },
+  { id: 'workshop', title: 'Workshop', icon: 'lorc/gear-hammer' },
+  { id: 'bounties', title: 'Bounties', icon: 'lorc/trophy' },
+  { id: 'history', title: 'History', icon: 'delapouite/scroll-quill' },
+];
+
+/** How one section reads on the menu. */
+interface SectionStatus {
+  sub: string;
+  /** Not open yet: `sub` says how to open it */
+  locked?: boolean;
+  /** Something here wants attention */
+  badge?: boolean;
+}
 
 interface Props {
   save: AdventureSave;
+  /** Every battle fought, oldest first */
+  history?: readonly BattleRecord[];
   onChange: (save: AdventureSave) => void;
   onClose: () => void;
+  /** Open straight on this section (its back button still leads to the menu) */
   initialTab?: CampTab;
 }
+
+const NO_BATTLES: readonly BattleRecord[] = [];
 
 /** The player's Armory, in the order it was won. */
 const armoryWeapons = (save: AdventureSave): Weapon[] =>
@@ -71,9 +105,11 @@ const armoryWeapons = (save: AdventureSave): Weapon[] =>
 /** Workshop items that change the loadout itself, listed first. */
 const LOADOUT_UPGRADES = ['charm_belt', 'tarot_deck', 'evolution_lab'];
 
-const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters' }) => {
+const Camp: React.FC<Props> = ({ save, history = NO_BATTLES, onChange, onClose, initialTab }) => {
   const insets = useSafeAreaInsets();
-  const [tab, setTab] = useState<CampTab>(initialTab);
+  const reducedMotion = useReducedMotion();
+  /** The open section; null is the menu */
+  const [tab, setTab] = useState<CampTab | null>(initialTab ?? null);
   const [treeFighter, setTreeFighter] = useState<CharacterName | null>(null);
   const [reactions, setReactions] = useState<Partial<Record<CharacterName, FighterReactionEvent>>>({});
   const [armoryTapCounts, setArmoryTapCounts] = useState<Record<string, number>>({});
@@ -81,8 +117,14 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters
   const reactionSeq = useRef(0);
 
   useEffect(() => {
-    setTab(initialTab);
+    setTab(initialTab ?? null);
   }, [initialTab]);
+
+  const open = (next: CampTab | null) => {
+    setTab(next);
+    setTreeFighter(null);
+    setSlotsFullNote(null);
+  };
 
   const fireFighterReaction = (name: CharacterName, type: FighterReactionType) => {
     reactionSeq.current += 1;
@@ -143,32 +185,50 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters
     );
   };
 
+  const battles = summarize(history);
+  const statusOf = (id: CampTab): SectionStatus => {
+    switch (id) {
+      case 'fighters':
+        return { sub: `${save.selectedFighter} · ${availableStars(save, save.selectedFighter)}★ to spend on skills`, badge: hasUnspentStars(save) };
+      case 'armory':
+        return { sub: save.armory.length === 0 ? 'No weapons yet. Some stars unlock one.' : `${charms.length}/${slots} charms equipped · ${save.armory.length} weapons` };
+      case 'arcana':
+        return { sub: save.unlockedArcana.length === 0 ? 'None found yet' : `${arcana.length}/${arcanaSlots(save)} equipped · ${save.unlockedArcana.length} found` };
+      case 'workshop':
+        return save.workshopUnlocked
+          ? { sub: totalRefundable > 0 ? `Upgrades and weapon tuning · ${totalRefundable}¢ invested` : 'Upgrades and weapon tuning' }
+          : { sub: `${unlockHint({ kind: 'feature', id: 'workshop' }, save) ?? 'Keep playing'} to open`, locked: true };
+      case 'bounties':
+        return save.bountiesUnlocked
+          ? {
+              sub: `${save.completedBounties.length}/${BOUNTIES.length} claimed`,
+              badge: BOUNTIES.some(b => !save.completedBounties.includes(b.id) && b.progress(save) / b.target >= 0.75),
+            }
+          : { sub: `${unlockHint({ kind: 'feature', id: 'bounties' }, save) ?? 'Keep playing'} to open`, locked: true };
+      case 'history':
+        return { sub: battles.battles === 0 ? 'No battles yet' : `${battles.battles} ${battles.battles === 1 ? 'battle' : 'battles'} · best ${battles.bestDpm.toLocaleString()} damage / min` };
+    }
+  };
+
+  // Bounties bring their own screen; its back button returns to the menu
+  if (tab === 'bounties') return <BountyBoard save={save} onClose={() => open(null)} backLabel="Back to camp" />;
+
+  const section = SECTIONS.find(x => x.id === tab);
   return (
     <View style={[st.root, { paddingTop: insets.top }]}>
       <View style={st.top}>
-        <TouchableOpacity onPress={() => { sfx('back'); onClose(); }} style={st.back} accessibilityLabel="Back to map">
+        <TouchableOpacity
+          onPress={() => { sfx('back'); if (tab) open(null); else onClose(); }}
+          style={st.back}
+          accessibilityLabel={tab ? 'Back to camp' : 'Back to map'}
+        >
           <Icon name="lorc/return-arrow" size={20} color={INK} />
         </TouchableOpacity>
-        <Icon name="lorc/campfire" size={24} color={COLORS.impactOrange} />
-        <Text style={st.title}>CAMP</Text>
+        <Icon name={section?.icon ?? 'lorc/campfire'} size={24} color={section ? INK : COLORS.impactOrange} />
+        <Text style={st.title} numberOfLines={1}>{(section?.title ?? 'Camp').toUpperCase()}</Text>
         <View style={{ flex: 1 }} />
-        <StarPool save={save} testID="camp-stars" />
-        <CoinPill coins={save.coins} />
-      </View>
-      <View style={st.tabs}>
-        {(['fighters', 'workshop', 'armory', 'arcana'] as CampTab[]).map(t => (
-          <TouchableOpacity
-            key={t}
-            testID={`camp-tab-${t}`}
-            onPress={() => { sfx('click'); setTab(t); setTreeFighter(null); setSlotsFullNote(null); }}
-            style={[st.tab, tab === t && st.tabOn]}
-          >
-            <Text style={[st.tabText, tab === t && { color: INK }]} numberOfLines={1}>
-              {t === 'workshop' && !save.workshopUnlocked ? '🔒 WORKSHOP' : t.toUpperCase()}
-              {t === 'arcana' && arcana.length > 0 ? ' •' : ''}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        {/* Only what this page spends: stars on fighters, coins everywhere else */}
+        {tab === 'fighters' ? <StarPool save={save} testID="camp-stars" /> : <CoinPill coins={save.coins} />}
       </View>
 
       {totalRefundable > 0 && tab === 'workshop' && save.workshopUnlocked && (
@@ -190,6 +250,69 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters
       )}
 
       <ScrollView contentContainerStyle={[st.body, { paddingBottom: insets.bottom + 24 }]}>
+        {tab === null && (
+          <>
+            {SECTIONS.map(x => {
+              const status = statusOf(x.id);
+              return (
+                <TouchableOpacity
+                  key={x.id}
+                  testID={`camp-tab-${x.id}`}
+                  disabled={status.locked}
+                  onPress={() => { sfx('click'); open(x.id); }}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${x.title}: ${status.sub}`}
+                  accessibilityState={{ disabled: !!status.locked }}
+                  style={[st.menuRow, status.locked && st.menuRowLocked]}
+                >
+                  <View style={st.menuIcon}>
+                    <Icon name={status.locked ? 'lorc/padlock' : x.icon} size={28} color={INK} />
+                    {status.badge && <View style={st.menuBadge} testID={`camp-badge-${x.id}`} />}
+                  </View>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={st.menuTitle}>{x.title}</Text>
+                    <Text style={st.menuSub} numberOfLines={2}>{status.sub}</Text>
+                  </View>
+                  {!status.locked && <Text style={st.menuChevron}>›</Text>}
+                </TouchableOpacity>
+              );
+            })}
+
+            <Text style={st.sectionLabel}>SETTINGS</Text>
+            <View style={st.settings}>
+              <Btn
+                testID="camp-toggle-sound"
+                small
+                variant="secondary"
+                icon="delapouite/sound-on"
+                label={save.musicOn ? 'Sound: on' : 'Sound: off'}
+                onPress={() => onChange({ ...save, musicOn: !save.musicOn })}
+                style={{ flex: 1 }}
+              />
+              {/* A device that asks for reduced motion keeps effects off */}
+              {!reducedMotion && (
+                <Btn
+                  testID="camp-toggle-effects"
+                  small
+                  variant="secondary"
+                  icon="lorc/bright-explosion"
+                  label={save.effectsOn ? 'Effects: on' : 'Effects: off'}
+                  onPress={() => { sfx('click'); onChange({ ...save, effectsOn: !save.effectsOn }); }}
+                  style={{ flex: 1 }}
+                />
+              )}
+            </View>
+            {!reducedMotion && (
+              <Text style={st.blurb}>
+                {save.effectsOn ? 'Effects on: the fight clock waits while they play.' : 'Effects off: numbers only, and the clock never waits.'}
+              </Text>
+            )}
+          </>
+        )}
+
+        {tab === 'history' && <BattleHistory history={history} />}
+
         {tab === 'fighters' && treeFighter && (
           <SkillTree save={save} fighter={treeFighter} onChange={onChange} onBack={() => setTreeFighter(null)} />
         )}
@@ -525,11 +648,15 @@ const st = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#2B2118' },
   top: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, backgroundColor: COLORS.canvasWhite, borderBottomWidth: 2, borderBottomColor: INK },
   back: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: INK, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.paperBeige },
-  title: { fontWeight: '900', letterSpacing: 2, color: INK, fontSize: 18 },
-  tabs: { flexDirection: 'row', gap: 6, padding: 10 },
-  tab: { flex: 1, paddingVertical: 8, borderRadius: 6, borderWidth: 2, borderColor: '#6B5A49', alignItems: 'center' },
-  tabOn: { backgroundColor: COLORS.actionYellow, borderColor: INK },
-  tabText: { fontWeight: '900', color: TONE.onDusk, letterSpacing: 1.5, fontSize: 12 },
+  title: { fontWeight: '900', letterSpacing: 2, color: INK, fontSize: 18, flexShrink: 1 },
+  menuRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 2.5, borderBottomWidth: 5, borderColor: INK, paddingVertical: 10, paddingHorizontal: 12 },
+  menuRowLocked: { backgroundColor: '#E9E4DC', borderColor: '#8E877D', opacity: 0.8 },
+  menuIcon: { width: 50, height: 50, borderRadius: 10, borderWidth: 2, borderColor: INK, backgroundColor: COLORS.paperBeige, alignItems: 'center', justifyContent: 'center' },
+  menuBadge: { position: 'absolute', top: -5, right: -5, width: 14, height: 14, borderRadius: 7, backgroundColor: COLORS.impactRed, borderWidth: 2, borderColor: COLORS.canvasWhite },
+  menuTitle: { fontWeight: '900', fontSize: 17, color: INK, letterSpacing: 1, textTransform: 'uppercase' },
+  menuSub: { fontSize: 12, color: INK, opacity: 0.8 },
+  menuChevron: { fontSize: 26, fontWeight: '900', color: INK, opacity: 0.5 },
+  settings: { flexDirection: 'row', gap: 8 },
   body: { padding: 12, gap: 10, maxWidth: 560, width: '100%', alignSelf: 'center' },
   blurb: { color: TONE.onDusk, fontSize: 13, textAlign: 'center', marginVertical: 4 },
   fighter: { backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 2.5, borderBottomWidth: 5, borderColor: INK, padding: 12, gap: 8 },

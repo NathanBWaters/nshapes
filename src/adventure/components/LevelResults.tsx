@@ -9,6 +9,7 @@ import { COLORS } from '@/utils/colors';
 import { band } from '@/audio';
 import type { LevelDef, RunState } from '../types';
 import type { ResultApplication } from '../progress';
+import { damagePerMinute } from '../history';
 import { getBiome } from '../data/biomes';
 import { BOUNTIES } from '../data/bounties';
 import { Btn, CoinPill, INK, PopIn, starPopDelayMs, StarRow, TONE } from './ui';
@@ -20,6 +21,8 @@ interface Props {
   run: RunState;
   stars: number;
   result: ResultApplication;
+  /** The best damage per minute on this level before this battle (null: it had not been fought) */
+  bestDpm?: number | null;
   /** False until the unlock reveal has played, so rewards stay secret */
   unlocksRevealed: boolean;
   nextLevel: LevelDef | null;
@@ -28,10 +31,9 @@ interface Props {
   onNext: () => void;
   onMap: () => void;
   onCamp: () => void;
-  onBounties?: () => void;
 }
 
-const LevelResults: React.FC<Props> = ({ level, run, stars, result, unlocksRevealed, nextLevel, nextUnlocked, onRetry, onNext, onMap, onCamp, onBounties }) => {
+const LevelResults: React.FC<Props> = ({ level, run, stars, result, bestDpm = null, unlocksRevealed, nextLevel, nextUnlocked, onRetry, onNext, onMap, onCamp }) => {
   const insets = useSafeAreaInsets();
   const [replayOpen, setReplayOpen] = useState(false);
   const biome = getBiome(level.biome);
@@ -75,6 +77,9 @@ const LevelResults: React.FC<Props> = ({ level, run, stars, result, unlocksRevea
       : null;
 
   const totalCoins = result.starCoins + result.coinsBanked + result.bountyCoins;
+  // The battle's score: damage per minute of fight clock, against the best on this level so far
+  const dpm = damagePerMinute(run);
+  const newBest = bestDpm !== null && dpm > bestDpm;
   // A weapon the player already owned came back as a free level: name the level it reached
   const levelOf = (star: number, name: string) => {
     const u = result.unlocks.find(x => x.kind === 'weapon' && x.star === star && x.level !== undefined && describeUnlock(x).name === name);
@@ -137,13 +142,21 @@ const LevelResults: React.FC<Props> = ({ level, run, stars, result, unlocksRevea
           <View style={st.statsRow}>
             <Stat testID="results-total-damage" icon="lorc/crossed-swords" label="Total damage" value={`${run.totalDamage}`} />
             <Stat testID="results-biggest-hit" icon="lorc/bright-explosion" label="Biggest hit" value={`${run.biggestHit}`} hot={run.biggestHit >= 25} />
-            {practice && run.matches > 0 && (
-              <Stat testID="results-per-set" icon="lorc/target-dummy" label="Per Set" value={`${Math.round(run.totalDamage / run.matches)}`} />
-            )}
+            <Stat
+              testID="results-dpm"
+              icon="delapouite/speedometer"
+              label="Damage / min"
+              value={`${dpm}`}
+              hot={newBest}
+              note={newBest ? 'NEW BEST' : bestDpm !== null ? `best ${bestDpm}` : undefined}
+            />
           </View>
           <View style={st.statsRow}>
             <Stat icon="lorc/checked-shield" label="Sets" value={`${run.matches}`} />
             <Stat icon="lorc/cross-mark" label="Mistakes" value={`${run.mistakes}`} />
+            {practice && run.matches > 0 && (
+              <Stat testID="results-per-set" icon="lorc/target-dummy" label="Per Set" value={`${Math.round(run.totalDamage / run.matches)}`} />
+            )}
             {(run.evolutionsTriggered > 0 || run.armedRecipes.length > 0) && (
               <Stat testID="results-evolutions" icon="lorc/crystal-shine" label="Evolutions" value={`${run.evolutionsTriggered}`} />
             )}
@@ -239,9 +252,6 @@ const LevelResults: React.FC<Props> = ({ level, run, stars, result, unlocksRevea
             <Btn testID="results-retry" label={practice ? 'Practice again' : stars >= 3 ? 'Play again' : won ? 'Retry for more ★' : 'Try again'} variant={won && nextLevel && nextUnlocked ? 'secondary' : 'primary'} onPress={onRetry} />
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <Btn testID="results-map" label="Map" variant="secondary" icon="lorc/field" onPress={onMap} style={{ flex: 1 }} />
-              {result.save.bountiesUnlocked && onBounties && (
-                <Btn testID="results-bounties" label="Bounties" variant="secondary" icon="lorc/trophy" onPress={onBounties} style={{ flex: 1 }} />
-              )}
               <Btn testID="results-camp" label="Camp" variant="secondary" icon="lorc/campfire" onPress={onCamp} style={{ flex: 1 }} />
             </View>
           </View>
@@ -252,11 +262,12 @@ const LevelResults: React.FC<Props> = ({ level, run, stars, result, unlocksRevea
   );
 };
 
-const Stat: React.FC<{ icon: React.ComponentProps<typeof Icon>['name']; label: string; value: string; testID?: string; hot?: boolean }> = ({ icon, label, value, testID, hot }) => (
+const Stat: React.FC<{ icon: React.ComponentProps<typeof Icon>['name']; label: string; value: string; testID?: string; hot?: boolean; note?: string }> = ({ icon, label, value, testID, hot, note }) => (
   <View style={[st.stat, hot && { backgroundColor: COLORS.actionYellow }]} testID={testID}>
     <Icon name={icon} size={18} color={INK} />
     <Text style={st.statValue}>{value}</Text>
     <Text style={st.statLabel}>{label}</Text>
+    {note && <Text style={st.statNote}>{note}</Text>}
   </View>
 );
 
@@ -271,6 +282,7 @@ const st = StyleSheet.create({
   stat: { flex: 1, alignItems: 'center', backgroundColor: COLORS.paperBeige, borderRadius: 8, borderWidth: 1.5, borderColor: INK, paddingVertical: 8 },
   statValue: { fontWeight: '900', fontSize: 20, color: INK, fontVariant: ['tabular-nums'] },
   statLabel: { fontSize: 11, fontWeight: '700', color: INK, opacity: 0.7 },
+  statNote: { fontSize: 9, fontWeight: '900', letterSpacing: 0.5, color: INK, opacity: 0.75 },
   bank: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: TONE.coinPale, borderRadius: 8, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 12, paddingVertical: 8 },
   bankLabel: { fontWeight: '900', color: INK },
   bankLine: { fontSize: 12, color: INK, opacity: 0.8, fontVariant: ['tabular-nums'] },

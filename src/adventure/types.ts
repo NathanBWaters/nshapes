@@ -216,7 +216,7 @@ export interface ArcanaDef {
 export type UnlockableFeature = 'coins' | 'workshop' | 'bounties';
 
 /** Where "open it now" leads after a feature's unlock reveal */
-export type FeatureDestination = { screen: 'camp'; tab: 'workshop' } | { screen: 'bounties' };
+export type FeatureDestination = { screen: 'camp'; tab: 'workshop' | 'bounties' };
 
 export interface CampaignFeatureDef {
   id: UnlockableFeature;

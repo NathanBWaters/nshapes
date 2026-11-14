@@ -342,11 +342,27 @@ describe('evolutions', () => {
     for (let i = 0; i < 3; i++) {
       s = catalystOn({ ...s, board: s.board.map(c => ({ ...c, hasEvolutionItem: false })) });
       s = playSet(s, catalystSet(s));
+      // A recipe cannot be triggered again while it runs: let it end before the next
+      s = tick(s, 31000, 1000);
+      expect(s.activeEvolutions).toEqual([]);
     }
     expect(s.evolutionsTriggered).toBe(3);
     expect(s.evolutionCap).toBe(3);
     s = { ...s, evolutionLikelihood: 100, board: s.board.map(c => ({ ...c, hasEvolutionItem: false })) };
     for (let i = 0; i < 5; i++) s = playSet(s);
+    expect(s.board.some(c => c.hasEvolutionItem)).toBe(false);
+  });
+
+  it('a Catalyst matched while its only recipe is running is spent without restarting it', () => {
+    let s = catalystOn(startFight({ save: armedSave, features: ['hearts', 'gear', 'evolutions'] }));
+    s = playSet(s, catalystSet(s));
+    s = tick(s, 5000, 1000);
+    const left = s.activeEvolutions[0].remainingMs;
+    // (none can spawn now; this one is put there by hand)
+    s = catalystOn(s);
+    s = playSet(s, catalystSet(s));
+    expect(s.evolutionsTriggered).toBe(1);
+    expect(s.activeEvolutions).toEqual([{ id: phoenix.id, remainingMs: left, durationMs: 30000 }]);
     expect(s.board.some(c => c.hasEvolutionItem)).toBe(false);
   });
 

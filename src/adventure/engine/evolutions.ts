@@ -1,11 +1,12 @@
 /**
  * Evolutions (spec §5): matching the Catalyst starts a 30-second window in
- * which an armed recipe's rules are live. Several can run at once; triggers
- * per fight are capped.
+ * which an armed recipe's rules are live. Different recipes can run at once,
+ * but a recipe is never re-triggered while it is running (no Catalyst appears
+ * unless some armed recipe is idle); triggers per fight are capped.
  */
 import type { Card } from '@/types';
 import { EVOLUTION_RECIPES } from '../data/evolutions';
-import { addTime, arcana, dealDamage, emit, enqueue, foeMultiplier, mods, refreshSources, updateCards, type Draft } from './fight';
+import { addTime, arcana, dealDamage, emit, enqueue, foeMultiplier, idleRecipes, mods, refreshSources, updateCards, type Draft } from './fight';
 import { armedRecipesFor, EVOLUTION_RULES, getRecipe } from './sources';
 import { fireFinale, fireOpening } from '../rules/engine';
 
@@ -13,16 +14,10 @@ export const refreshArmedRecipes = (d: Draft) => {
   d.armedRecipes = d.features.has('evolutions') ? armedRecipesFor(d.weapons, d.unlockedEvolutions) : [];
 };
 
-/**
- * The recipe a Catalyst starts: the first armed one (recipe order) that isn't
- * running; if all are running, the one closest to ending is refreshed.
- */
+/** The recipe a Catalyst starts: the first armed one (recipe order) that isn't running. A running one is never restarted. */
 const recipeToStart = (d: Draft): string | null => {
-  const ordered = EVOLUTION_RECIPES.map(r => r.id).filter(id => d.armedRecipes.includes(id));
-  if (ordered.length === 0) return null;
-  const idle = ordered.find(id => !d.activeEvolutions.some(e => e.id === id));
-  if (idle) return idle;
-  return [...d.activeEvolutions].sort((a, b) => a.remainingMs - b.remainingMs)[0].id;
+  const idle = idleRecipes(d);
+  return EVOLUTION_RECIPES.map(r => r.id).find(id => idle.includes(id)) ?? null;
 };
 
 /** `slot` is the Catalyst card it started from, when there was one. */

@@ -54,8 +54,9 @@ interface Props {
   seed: number;
   autoPlayer?: boolean;
   onFinish: (run: RunState) => void;
-  onQuit: () => void;
-  onRestart: () => void;
+  /** The player retreated or restarted: the fight as it stood */
+  onQuit: (run: RunState) => void;
+  onRestart: (run: RunState) => void;
   onCoachMarkSeen: (mechanicId: string) => void;
   /** Play the fight's effects (and hold the clock while they play). Off: numbers only, nothing waits. */
   effects?: boolean;
@@ -378,6 +379,8 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   const evolutionsLeft = run.evolutionCap - run.evolutionsTriggered;
   /** "2/3", or just the count where there is no limit (practice) */
   const evolutionsUsed = Number.isFinite(run.evolutionCap) ? `${run.evolutionsTriggered}/${run.evolutionCap}` : `${run.evolutionsTriggered} so far`;
+  /** Armed recipes a Catalyst could still start: one that is running cannot be triggered again until it ends */
+  const idleArmed = run.armedRecipes.filter(id => !run.activeEvolutions.some(a => a.id === id)).length;
   const leavePractice = () => { music.stop(); onFinish(runRef.current); };
 
   const movesChip = run.movesLeft !== null && (
@@ -558,7 +561,11 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
             {evolutionsOn && (
               <View
                 testID="run-evo-chip"
-                accessibilityLabel={`${run.armedRecipes.length} evolutions armed, ${evolutionsUsed} used, ${Math.round(run.evolutionLikelihood)} percent catalyst chance`}
+                accessibilityLabel={
+                  idleArmed === 0
+                    ? `Evolving, ${evolutionsUsed} used. No Catalyst until an evolution ends`
+                    : `${idleArmed} evolutions armed, ${evolutionsUsed} used, ${Math.round(run.evolutionLikelihood)} percent catalyst chance`
+                }
                 style={[st.evoChip, catalystOnBoard && st.evoChipReady, evolutionsLeft <= 0 && { opacity: 0.55 }]}
               >
                 <Icon name="lorc/crystal-shine" size={12} color={catalystOnBoard ? INK : TONE.arcana} />
@@ -567,7 +574,9 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
                     ? `Evolutions ${evolutionsUsed}`
                     : catalystOnBoard
                       ? 'CATALYST! Match it to evolve'
-                      : `${run.armedRecipes.length} armed · ${Math.round(run.evolutionLikelihood)}% · ${evolutionsUsed}`}
+                      : idleArmed === 0
+                        ? `Evolving · ${evolutionsUsed}`
+                        : `${idleArmed} armed · ${Math.round(run.evolutionLikelihood)}% · ${evolutionsUsed}`}
                 </Text>
               </View>
             )}
@@ -750,7 +759,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
                 onPress={onToggleEffects}
               />
             )}
-            <Btn label={practice ? 'Start over' : 'Restart'} variant="secondary" onPress={() => { setPaused(false); onRestart(); }} />
+            <Btn label={practice ? 'Start over' : 'Restart'} variant="secondary" onPress={() => { setPaused(false); onRestart(runRef.current); }} />
             {practice ? (
               <>
                 <Btn testID="pause-done" label="Done practising" variant="secondary" onPress={() => { setPaused(false); leavePractice(); }} />
@@ -758,7 +767,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
               </>
             ) : (
               <>
-                <Btn label="Retreat to map" variant="secondary" onPress={() => { setPaused(false); music.stop(); onQuit(); }} />
+                <Btn label="Retreat to map" variant="secondary" onPress={() => { setPaused(false); music.stop(); onQuit(runRef.current); }} />
                 <Text style={st.panelHint}>Retreating forfeits this attempt, including the coins you've collected in it.</Text>
               </>
             )}

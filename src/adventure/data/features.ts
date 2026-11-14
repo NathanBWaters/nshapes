@@ -39,7 +39,7 @@ export const CAMPAIGN_FEATURES: Record<UnlockableFeature, CampaignFeatureDef> = 
     badge: 'NEW SYSTEM UNLOCKED',
     accent: '#F59E0B',
     clearLevel: '1-8',
-    open: { label: 'View Bounty Board', destination: { screen: 'bounties' } },
+    open: { label: 'View Bounty Board', destination: { screen: 'camp', tab: 'bounties' } },
   },
 };
 

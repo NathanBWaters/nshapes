@@ -87,9 +87,11 @@ const RAW_LEVELS: LevelInput[] = [
     id: '1-4', biome: 'meadow', name: 'Phoenix Rising', introduces: 'evolutions',
     // Puzzle: equip Blast Powder + Mending Charm, match the Catalyst, then take a hit on purpose:
     // every heal or lost heart blasts a 3×2 block. Catalyst Prism (★★) brings Catalysts twice as often.
+    // ★★★ asks for two evolutions: no Catalyst appears while Phoenix Pyre is running, so a third
+    // would only reward playing slowly.
     rules: { attributes: A3, boardSize: 12, moves: 12, hearts: 4, evolutionLikelihood: 15 },
     foes: [{ name: 'Cinder Toad', icon: 'lorc/frog', hp: 205, taunt: 'Ribbit. I was born in a bonfire.' }],
-    challenge: { kind: 'evolutions', n: 3 }, coinMultiplier: 1.1, difficulty: 2,
+    challenge: { kind: 'evolutions', n: 2 }, coinMultiplier: 1.1, difficulty: 2,
     rewards: {
       star1: { coins: 15, weapons: ['flint-spark'] },
       star2: { weapons: ['catalyst-prism'] },

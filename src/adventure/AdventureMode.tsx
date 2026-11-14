@@ -1,6 +1,7 @@
 /**
  * Adventure Mode root: map ⇄ preview ⇄ lesson ⇄ run ⇄ results ⇄ unlock reveals,
- * plus Camp and the Field Guide. Owns the save and persists every change.
+ * plus Camp (fighters, armory, Arcana, Workshop, Bounties, battle history) and
+ * the Field Guide. Owns the save and the battle history and persists every change.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, StyleSheet } from 'react-native';
@@ -25,7 +26,8 @@ import {
   type Unlock,
 } from './progress';
 import { isFirstVisit, lessonsDueBefore, type LessonPlan } from './lessons';
-import { loadAdventureSave, writeAdventureSave } from './save';
+import { loadAdventureSave, loadBattleHistory, recordBattle, writeAdventureSave } from './save';
+import { battleRecord, bestDpmOn, wasFought, type BattleRecord } from './history';
 import { computeStars } from './engine/run';
 import { randomSeed } from './engine/rng';
 import AdventureMap from './components/AdventureMap';
@@ -36,16 +38,15 @@ import LevelResults from './components/LevelResults';
 import UnlockReveal from './components/UnlockReveal';
 import Camp, { type CampTab } from './components/Camp';
 import FieldGuide from './components/FieldGuide';
-import BountyBoard from './components/BountyBoard';
 import { starsLandedMs } from './components/ui';
 
 type Screen =
   | { kind: 'map'; highlight?: string | null }
   | { kind: 'run'; levelId: string; seed: number }
-  | { kind: 'results'; levelId: string; run: RunState; stars: number; result: ResultApplication }
+  /** `bestDpm`: the best damage per minute on this level before this battle (null: first time) */
+  | { kind: 'results'; levelId: string; run: RunState; stars: number; result: ResultApplication; bestDpm: number | null }
   | { kind: 'camp'; tab?: CampTab }
-  | { kind: 'guide' }
-  | { kind: 'bounties' };
+  | { kind: 'guide' };
 
 /** Lessons still to play before a fight starts; the first one is on screen. */
 interface Teaching {
@@ -53,8 +54,7 @@ interface Teaching {
   level: LevelDef;
 }
 
-const screenFor = (d: FeatureDestination): Screen =>
-  d.screen === 'camp' ? { kind: 'camp', tab: d.tab } : { kind: 'bounties' };
+const screenFor = (d: FeatureDestination): Screen => ({ kind: 'camp', tab: d.tab });
 
 /** First visit ever: story → lessons → "Is this a Set?" checks → straight into the first level. */
 const onboarding = (save: AdventureSave): Teaching | null => {
@@ -73,6 +73,7 @@ interface Props {
 
 const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => {
   const [save, setSaveState] = useState<AdventureSave>(() => initialSave ?? loadAdventureSave());
+  const [history, setHistory] = useState<BattleRecord[]>(loadBattleHistory);
   const [screen, setScreen] = useState<Screen>({ kind: 'map' });
   const reducedMotion = useReducedMotion();
   const [preview, setPreview] = useState<LevelDef | null>(null);
@@ -101,7 +102,7 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
 
   // Map / camp music
   useEffect(() => {
-    if (screen.kind === 'map' || screen.kind === 'camp' || screen.kind === 'guide' || screen.kind === 'bounties') music.play('map');
+    if (screen.kind === 'map' || screen.kind === 'camp' || screen.kind === 'guide') music.play('map');
   }, [screen.kind]);
 
   const clearPendingTimers = useCallback(() => {
@@ -139,11 +140,15 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
     }
   };
 
+  const remember = (record: BattleRecord) => setHistory(h => recordBattle(h, record));
+
   const handleFinish = (level: LevelDef, run: RunState) => {
     const stars = computeStars(run);
     const result = applyLevelResult(save, level, stars, run.coins, run);
     setSave(result.save);
-    setScreen({ kind: 'results', levelId: level.id, run, stars, result });
+    const bestDpm = bestDpmOn(history, level.id);
+    remember(battleRecord(level, run, { at: Date.now(), stars, coins: result.coinsBanked + result.starCoins + result.bountyCoins }));
+    setScreen({ kind: 'results', levelId: level.id, run, stars, result, bestDpm });
     if (result.unlocks.length > 0) {
       // Let the stars land first, then give each unlock its own moment
       setUnlocksRevealed(false);
@@ -151,6 +156,11 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
     } else {
       setUnlocksRevealed(true);
     }
+  };
+
+  /** A fight left partway through (retreat or restart) is still a battle, once a move was made. */
+  const handleLeft = (level: LevelDef, run: RunState) => {
+    if (wasFought(run)) remember(battleRecord(level, run, { at: Date.now(), left: true }));
   };
 
   /** Next stop on the main path (an elite branch leads back to the map). */
@@ -167,10 +177,7 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
         onSelectLevel={l => { sfx('click'); setPreview(l); }}
         onOpenCamp={() => { sfx('confirm'); setScreen({ kind: 'camp' }); }}
         onOpenGuide={() => { sfx('confirm'); setScreen({ kind: 'guide' }); }}
-        onOpenBounties={() => { sfx('confirm'); setScreen({ kind: 'bounties' }); }}
         onExit={() => { music.stop(); onExit(); }}
-        musicOn={save.musicOn}
-        onToggleMusic={() => setSave(s => ({ ...s, musicOn: !s.musicOn }))}
       />
     );
   } else if (screen.kind === 'run') {
@@ -183,8 +190,8 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
         seed={screen.seed}
         autoPlayer={autoPlayer}
         onFinish={run => handleFinish(level, run)}
-        onQuit={() => setScreen({ kind: 'map', highlight: level.id })}
-        onRestart={() => startRun(level)}
+        onQuit={run => { handleLeft(level, run); setScreen({ kind: 'map', highlight: level.id }); }}
+        onRestart={run => { handleLeft(level, run); startRun(level); }}
         onCoachMarkSeen={id => setSave(s => markCoachMarkSeen(s, id))}
         effects={save.effectsOn && !reducedMotion}
         // A device that asks for reduced motion keeps effects off
@@ -200,6 +207,7 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
         run={screen.run}
         stars={screen.stars}
         result={screen.result}
+        bestDpm={screen.bestDpm}
         unlocksRevealed={unlocksRevealed}
         nextLevel={next}
         nextUnlocked={!!next && isLevelUnlocked(save, next)}
@@ -209,22 +217,18 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
         onCamp={() => {
           clearPendingTimers();
           setUnlocks([]);
-          // Land on the Camp tab this result just unlocked, if any
-          const tab = screen.result.unlocks.flatMap(u => {
-            const d = u.kind === 'feature' ? CAMPAIGN_FEATURES[u.feature].open?.destination : undefined;
-            return d?.screen === 'camp' ? [d.tab] : [];
-          })[0];
+          // Land on the part of Camp this result just unlocked, or on Bounties if it claimed one
+          const tab: CampTab | undefined =
+            screen.result.unlocks.flatMap(u => (u.kind === 'feature' ? [CAMPAIGN_FEATURES[u.feature].open?.destination.tab] : []))[0] ??
+            (screen.result.completedBounties.length > 0 ? 'bounties' : undefined);
           setScreen({ kind: 'camp', tab });
         }}
-        onBounties={() => { clearPendingTimers(); setUnlocks([]); setScreen({ kind: 'bounties' }); }}
       />
     );
   } else if (screen.kind === 'camp') {
-    body = <Camp save={save} initialTab={screen.tab} onChange={setSave} onClose={() => setScreen({ kind: 'map' })} />;
+    body = <Camp save={save} history={history} initialTab={screen.tab} onChange={setSave} onClose={() => setScreen({ kind: 'map' })} />;
   } else if (screen.kind === 'guide') {
     body = <FieldGuide save={save} onClose={() => setScreen({ kind: 'map' })} />;
-  } else if (screen.kind === 'bounties') {
-    body = <BountyBoard save={save} onClose={() => setScreen({ kind: 'map' })} />;
   }
 
   return (

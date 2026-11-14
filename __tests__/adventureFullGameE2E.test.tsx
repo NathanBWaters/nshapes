@@ -33,7 +33,7 @@ import {
   maxStars,
   totalStarsEarned,
 } from '@/adventure/progress';
-import { loadAdventureSave } from '@/adventure/save';
+import { loadAdventureSave, loadBattleHistory } from '@/adventure/save';
 import { createRng } from '@/adventure/engine/rng';
 import { countDifferentAttributes } from '@/adventure/engine/sets';
 import { isValidCombination } from '@/utils/gameUtils';
@@ -414,6 +414,17 @@ function playOpenPreview(screen: Screen, level: LevelDef, opts: { buyInShop?: bo
 
 const backToMap = (screen: Screen) => fireEvent.press(screen.getByTestId('results-map'));
 
+/** From anywhere in Camp back to the map: a section's back button leads to the Camp menu first. */
+const leaveCamp = (screen: Screen) => {
+  if (screen.queryByLabelText('Back to camp')) fireEvent.press(screen.getByLabelText('Back to camp'));
+  fireEvent.press(screen.getByLabelText('Back to map'));
+};
+
+/** Open a section of Camp from its menu (a result can also open Camp straight on a section). */
+const openCampSection = (screen: Screen, id: string) => {
+  if (screen.queryByTestId(`camp-tab-${id}`)) fireEvent.press(screen.getByTestId(`camp-tab-${id}`));
+};
+
 // A whole campaign of (deliberately long) fights, played through the UI
 jest.setTimeout(480_000);
 
@@ -450,6 +461,7 @@ describe('Adventure Mode full-game E2E', () => {
     expect(fight1.sawTotalDamage).toBe(true);
     expect(screen.getByTestId('results-total-damage')).toBeTruthy();
     expect(screen.getByTestId('results-biggest-hit')).toBeTruthy();
+    expect(screen.getByTestId('results-dpm')).toBeTruthy();
     stepThroughReveals(screen);
 
     let save = loadAdventureSave();
@@ -463,8 +475,14 @@ describe('Adventure Mode full-game E2E', () => {
     backToMap(screen);
     expect(screen.getByTestId('map-dock-camp').props.accessibilityState?.disabled).toBe(false);
     fireEvent.press(screen.getByTestId('map-dock-camp'));
-    expect(screen.getByText('🔒 WORKSHOP')).toBeTruthy();
+    // Camp opens on its menu: the Workshop and the Bounties are still locked, the History has the first battle
+    expect(screen.getByTestId('camp-tab-workshop').props.accessibilityState?.disabled).toBe(true);
+    expect(screen.getByTestId('camp-tab-bounties').props.accessibilityState?.disabled).toBe(true);
+    openCampSection(screen, 'history');
+    expect(screen.getAllByTestId('history-battle')).toHaveLength(1);
+    fireEvent.press(screen.getByLabelText('Back to camp'));
     const tabby = getFighter(save.selectedFighter);
+    openCampSection(screen, 'fighters');
     fireEvent.press(screen.getByTestId(`camp-open-tree-${tabby.name}`));
     const root = skillTreeOf(tabby.name).filter(n => n.roots.length > 0).sort((a, b) => a.cost - b.cost)[0];
     const starsBefore = availableStars(save, tabby.name);
@@ -476,7 +494,7 @@ describe('Adventure Mode full-game E2E', () => {
     expect(availableStars(save, tabby.name)).toBe(starsBefore - root.cost);
     expect(totalStarsEarned(save)).toBe(save.stars[first.id]);
     fireEvent.press(screen.getByTestId('skill-tree-back'));
-    fireEvent.press(screen.getByLabelText('Back to map'));
+    leaveCamp(screen);
 
     // ── The rest of World 1 ──────────────────────────────────────────────
     const firstRecipeLevel = world1.find(l => starRewards(l).some(r => r.evolution))!;
@@ -518,13 +536,13 @@ describe('Adventure Mode full-game E2E', () => {
       // The Workshop opens partway through the world: buy and refund a weapon tuning at 100%
       if (save.workshopUnlocked && !(Object.keys(save.weaponTuning[save.armory[0]] ?? {}).length > 0) && save.coins >= 80 && level.id === LEVELS.find(l => starRewards(l).some(r => r.unlockFeature === 'workshop'))?.id) {
         fireEvent.press(screen.getByTestId('results-camp'));
-        fireEvent.press(screen.getByTestId('camp-tab-workshop'));
+        openCampSection(screen, 'workshop');
         const coins = loadAdventureSave().coins;
         fireEvent.press(screen.getAllByTestId(new RegExp(`^camp-tune-${save.armory[0]}-`))[0]);
         expect(loadAdventureSave().coins).toBeLessThan(coins);
         fireEvent.press(screen.getByTestId(`camp-refund-weapon-${save.armory[0]}`));
         expect(loadAdventureSave().coins).toBe(coins);
-        fireEvent.press(screen.getByLabelText('Back to map'));
+        leaveCamp(screen);
       } else {
         backToMap(screen);
       }
@@ -536,7 +554,19 @@ describe('Adventure Mode full-game E2E', () => {
     expect(sawBombs).toBe(true);
     expect(save.workshopUnlocked).toBe(true);
     expect(save.bountiesUnlocked).toBe(!!CAMPAIGN_FEATURES.bounties.clearLevel && (save.stars[CAMPAIGN_FEATURES.bounties.clearLevel] ?? 0) > 0);
-    expect(screen.getByTestId('map-dock-bounties').props.accessibilityState?.disabled).toBe(!save.bountiesUnlocked);
+    // Bounties live at Camp now, not on the map's dock; so does every battle fought so far
+    expect(screen.queryByTestId('map-dock-bounties')).toBeNull();
+    fireEvent.press(screen.getByTestId('map-dock-camp'));
+    expect(screen.getByTestId('camp-tab-bounties').props.accessibilityState?.disabled).toBe(!save.bountiesUnlocked);
+    if (save.bountiesUnlocked) {
+      openCampSection(screen, 'bounties');
+      expect(screen.getByTestId('bounty-filter-all')).toBeTruthy();
+      fireEvent.press(screen.getByLabelText('Back to camp'));
+    }
+    openCampSection(screen, 'history');
+    expect(screen.getAllByTestId('history-battle').length).toBeGreaterThanOrEqual(world1.length);
+    expect(loadBattleHistory().length).toBeGreaterThanOrEqual(world1.length);
+    leaveCamp(screen);
 
     // ── The surprise behind 1-4: a dummy to practise on ──────────────────
     const dummy = PRACTICE_LEVELS[0];
@@ -626,10 +656,10 @@ describe('Adventure Mode full-game E2E', () => {
     const rich = saveBefore(late, { coins: 20000 });
     screen = render(wrap(<AdventureMode initialSave={rich} onExit={() => {}} />));
     fireEvent.press(screen.getByTestId('map-dock-camp'));
-    fireEvent.press(screen.getByTestId('camp-tab-workshop'));
+    openCampSection(screen, 'workshop');
     fireEvent.press(screen.getByTestId('camp-buy-upgrade-charm_belt'));
     if (rich.unlockedArcana.length >= 2) fireEvent.press(screen.getByTestId('camp-buy-upgrade-tarot_deck'));
-    fireEvent.press(screen.getByLabelText('Back to map'));
+    leaveCamp(screen);
     fireEvent.press(screen.getByTestId(`map-node-${late.id}`));
     expect(screen.getByTestId('preview-slot-3')).toBeTruthy();
     expect(screen.queryByTestId('preview-slot-4')).toBeNull();
@@ -683,7 +713,7 @@ describe('Adventure Mode full-game E2E', () => {
     expect(done.completedBounties).toHaveLength(BOUNTIES.length);
 
     const reloaded = render(wrap(<AdventureMode onExit={() => {}} />));
-    expect(reloaded.getByText(`${maxStars()}/${maxStars()}`)).toBeTruthy();
+    expect(reloaded.getByTestId('map-stars').props.accessibilityLabel).toBe(`${maxStars()} of ${maxStars()} stars`);
     fireEvent.press(reloaded.getByTestId('map-dock-guide'));
     fireEvent.press(reloaded.getByTestId('guide-tab-recipes'));
     expect(reloaded.getByText(`RECIPES (${EVOLUTION_RECIPES.length}/${EVOLUTION_RECIPES.length})`)).toBeTruthy();

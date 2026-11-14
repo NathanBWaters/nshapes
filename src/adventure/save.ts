@@ -3,8 +3,11 @@ import { storage } from '@/utils/storage';
 import type { AdventureSave } from './types';
 import { createNewSave, pathsSeenBeforeSecrets, reconcileUnlocks } from './progress';
 import { resolveLegacyWeapon } from './data/armory';
+import { HISTORY_LIMIT, isBattleRecord, withBattle, type BattleRecord } from './history';
 
 const KEY = 'adventure_v2_save';
+/** Kept apart from the save: it grows with every fight, and the save is rewritten on every change */
+const HISTORY_KEY = 'adventure_v2_history';
 /** A stored save that could not be loaded is copied here before anything overwrites it. */
 const BACKUP_KEY = 'adventure_v2_save_unreadable';
 
@@ -86,4 +89,28 @@ export const writeAdventureSave = (save: AdventureSave): void => {
   } catch {
     // storage unavailable (private mode etc.) — progress lives in memory only
   }
+};
+
+/** Every battle fought, oldest first (the most recent HISTORY_LIMIT). Entries that cannot be read are dropped. */
+export const loadBattleHistory = (): BattleRecord[] => {
+  try {
+    const raw = storage.getString(HISTORY_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter(isBattleRecord).slice(-HISTORY_LIMIT) : [];
+  } catch (e) {
+    console.warn('Battle history could not be loaded; starting a new one.', e);
+    return [];
+  }
+};
+
+/** Add a battle to the stored history; returns the new list. */
+export const recordBattle = (history: readonly BattleRecord[], record: BattleRecord): BattleRecord[] => {
+  const next = withBattle(history, record);
+  try {
+    storage.set(HISTORY_KEY, JSON.stringify(next));
+  } catch {
+    // storage unavailable: the history lives in memory only
+  }
+  return next;
 };

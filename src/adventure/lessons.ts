@@ -118,7 +118,7 @@ export const buildAdaptiveEvolutionMechanic = (save: AdventureSave): MechanicDef
       `You unlocked ${recipe.name}! It is ARMED in any fight where your charms include both of its families: ${recipe.familyText}.`,
       'While a recipe is armed, refills can bring an Evolution Catalyst card. Match it in any Set: the foe takes 10 at once and the evolution runs for 30 seconds, with every Set dealing ×1.5.',
       `While it runs: ${recipe.activeText} Every Set also deals ×1.5 and +2.`,
-      'Up to 3 evolutions per fight. The Recipe Guide in the Field Guide lists every recipe.',
+      'Up to 3 evolutions per fight, and no new Catalyst turns up for an evolution that is already running. The Recipe Guide in the Field Guide lists every recipe.',
     ],
     demo: {
       type: 'icons',

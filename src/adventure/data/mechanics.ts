@@ -1015,7 +1015,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
     body: [
       'A recipe fuses two weapon families. Equip a charm from each and the recipe is ARMED.',
       'While a recipe is armed, a glowing Catalyst card can turn up on the board. Match it in any Set: the foe takes 10 at once and the evolution runs for 30 seconds, with new rules and every Set dealing ×1.5 and +2.',
-      'Up to 3 evolutions per fight. Your first recipe, Phoenix Pyre, fuses Blast Powder and Mending Charm.',
+      'Up to 3 evolutions per fight, and no new Catalyst turns up for an evolution that is already running. Your first recipe, Phoenix Pyre, fuses Blast Powder and Mending Charm.',
     ],
     lessons: [
       {
@@ -1052,7 +1052,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
     ],
     fightTips: [
       { title: 'Watch for the Catalyst', text: 'With Blast Powder and Mending Charm equipped, a glowing Catalyst card turns up. Match it in any Set to evolve!', anchor: 'bottom' },
-      { title: 'Evolve three times', text: 'Trigger 3 evolutions in this fight for the third star.', anchor: 'top' },
+      { title: 'Evolve twice', text: 'Trigger 2 evolutions in this fight for the third star. A new Catalyst can turn up once the first evolution has ended.', anchor: 'top' },
     ],
     icon: 'lorc/crystal-shine',
     demo: {

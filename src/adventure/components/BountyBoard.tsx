@@ -1,5 +1,5 @@
 /**
- * Cross-Run Bounty Board.
+ * Cross-Run Bounty Board, a section of Camp.
  *
  * Every Set, Rainbow Strike, Escalating Purity combo, and Weapon Evolution
  * across all fights advances these milestones and cashes out coins, Armory
@@ -29,9 +29,11 @@ const FILTERS: Array<{ id: Filter; label: string }> = [
 interface Props {
   save: AdventureSave;
   onClose: () => void;
+  /** Where the back button leads, for screen readers */
+  backLabel?: string;
 }
 
-const BountyBoard: React.FC<Props> = ({ save, onClose }) => {
+const BountyBoard: React.FC<Props> = ({ save, onClose, backLabel = 'Back to map' }) => {
   const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState<Filter>('all');
 
@@ -52,7 +54,7 @@ const BountyBoard: React.FC<Props> = ({ save, onClose }) => {
   return (
     <View style={[st.root, { paddingTop: insets.top }]}>
       <View style={st.top}>
-        <TouchableOpacity onPress={() => { sfx('back'); onClose(); }} style={st.back} accessibilityLabel="Back to map">
+        <TouchableOpacity onPress={() => { sfx('back'); onClose(); }} style={st.back} accessibilityLabel={backLabel}>
           <Icon name="lorc/return-arrow" size={20} color={INK} />
         </TouchableOpacity>
         <Icon name="lorc/trophy" size={22} color="#D97706" />

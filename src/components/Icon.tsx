@@ -86,6 +86,7 @@ import Token from '../../assets/icons/delapouite/token.svg';
 
 import ArcheryTarget from '../../assets/icons/lorc/archery-target.svg';
 import TargetDummy from '../../assets/icons/lorc/target-dummy.svg';
+import Speedometer from '../../assets/icons/delapouite/speedometer.svg';
 import OpenBook from '../../assets/icons/lorc/open-book.svg';
 import CrownCoin from '../../assets/icons/lorc/crown-coin.svg';
 import ReturnArrow from '../../assets/icons/lorc/return-arrow.svg';
@@ -465,6 +466,7 @@ const ICON_REGISTRY = {
 
   'lorc/archery-target': ArcheryTarget,
   'lorc/target-dummy': TargetDummy,
+  'delapouite/speedometer': Speedometer,
   'lorc/open-book': OpenBook,
   'lorc/crown-coin': CrownCoin,
   'lorc/return-arrow': ReturnArrow,

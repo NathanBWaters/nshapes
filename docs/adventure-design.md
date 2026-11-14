@@ -16,14 +16,17 @@ Map ─tap foe─▶ Preview (foe, skulls, NEW mechanic, hazards, ★ goals + re
      │                 ▼
      │               Fight (one foe, or waves + intermission shop)
      │                 ▼
-     │               Results (stars pop, coins bank, unlocks revealed, biggest hit)
+     │               Results (stars pop, coins bank, unlocks revealed, damage / min)
      │                 │
-     └── Camp: Fighters (skill trees) · Workshop · Armory · Arcana ◀┘
-         Bounty Board · Field Guide (mechanics, fighters, recipes)
+     └── Camp menu: Fighters (skill trees) · Armory · Arcana · Workshop ◀┘
+         · Bounties · History · sound and effects switches
+         Field Guide (mechanics, fighters, recipes)
 ```
 
 ### Map and preview
 - **Map** (`AdventureMap.tsx`): a winding path of foe nodes through the five worlds. Tap a node to open the preview.
+  - **Top bar:** only the way back, the title, the stars earned and the coins. The title gives way first on a narrow screen, so nothing is cut off. Sound, equipped Arcana and Bounties are at Camp.
+  - **Dock:** Guide · Play next · Camp.
   - **Side paths are secrets.** A side path (elite, fighter trial or practice) is not drawn at all until it opens: no locked node, no trail, no gap where it will go. The result that opens one ends with a "You found a secret path!" reveal (`Unlock` kind `path`) whose button leads to the map, and the first time the map shows it the trail draws itself out, dash by dash, from the level it hangs off, and the node pops in under a "SECRET PATH!" tag. The save remembers which arrivals have played (`revealedPaths`), so each plays once. Some paths lead on to further paths.
   - Nothing else names a path that is still hidden: the Field Guide lists its mechanic as "???" on a "Secret path", and unlock hints say "Hidden on a secret path in World N" (`unlockHint(u, save)`).
 - **Preview** (`LevelPreview.tsx`): foe and taunt, 1–5 skulls, the NEW mechanic, level rules and hazards, the three star goals with their coins, and unlocks shown as silhouettes. Below that:
@@ -335,12 +338,12 @@ Effect caps (`game/effectCaps.ts`) were raised so a level-5, fully tuned weapon 
    - Each pair recipe has its own twist rather than "A also does B": finales (`finale` trigger, when the 30 s run out), cashing hints or graces in for damage (`cashIn`), turning cards gold or power (`convert`), free mistakes (`shield`), clearing traps and face-down cards (`cleanse`), damage that scales with the fight (`damage` `per` board card, missing heart, link, burning card…), or "while the foe is below 50%" (`foeHpBelow`).
    - **Every recipe is worth chasing.** It opens with something (hints, links, a blast, free mistakes) or works on every Set or every Nth Set; a recipe that only reacts to a rare event (a mistake, a lost heart) also brings a steady part. `__tests__/adventureBuilds.test.ts` checks that every recipe adds damage over its two weapons alone.
    - `__tests__/adventureEvolutions.test.ts` checks the count, uniqueness, that no pair arms two recipes, and that every recipe forges and runs through its finale in a real fight.
-2. **The Catalyst.** While anything is armed, each refill batch may bring the **Evolution Catalyst** card. Only one can be on the board at a time.
+2. **The Catalyst.** While an armed recipe is **not already running**, each refill batch may bring the **Evolution Catalyst** card. Only one can be on the board at a time, and none appears when every armed recipe is running: an evolution cannot be re-triggered while you are in it (`canSpawnCatalyst`, `idleRecipes` in `engine/fight.ts`).
    - **Likelihood** = (16% base + 4% per Evolution Lab tier + `evolutionLikelihood` modifiers) × Arcana `catalystChanceScale`, plus the level's own `rules.evolutionLikelihood` (1-4 adds +30).
    - Refills caused by a Rainbow Strike add `rainbowEvolutionLikelihood`.
    - A rule can also `spawnCatalyst` directly.
 3. **Triggering.** Matching a Set that includes the Catalyst hits the foe for **10** and starts an evolution for **30s** (+ `evolutionDurationMs`). There is no priming and no shattering.
-4. **Which recipe starts.** The first armed recipe, in table order, that isn't running. If all of them are running, the one closest to ending is refreshed. Several can run at once.
+4. **Which recipe starts.** The first armed recipe, in table order, that isn't running. A running recipe is never restarted. Different recipes can run at once.
 5. **The cap.** **Up to 3 triggers per fight**, shared across recipes. `extraEvolutionsPerFight` raises it.
 6. **While active.** The recipe's rules are live, every Set's own hit is **×1.5** (once, however many evolutions run), and every Set deals +2 per active evolution (`EVOLUTION_RULES.setMultiplier`, `setDamage`). The UI shows a full-width banner, countdown rings and a board pulse (a background glow, never a card border).
 7. **Catalyst safety.** If a foe makes the Catalyst card unmatchable, or the card leaves unmatched, the Catalyst moves to another card.
@@ -480,9 +483,33 @@ The Workshop opens at 1-5 ★. Each item goes on sale once its mechanic is known
 **Weapon tuning** multiplies one number of an owned weapon: ×1.1 / ×1.2 / ×1.35 / ×1.5 for 60 / 150 / 320 / 600 coins, per number, on top of its level. Levels are found in the world, never bought. Old saves get every coin they spent on Workshop weapon levels back (at the old rarity prices, `LEGACY_WEAPON_LEVEL_COSTS`).
 Losing a Charm Belt or Tarot Deck tier also unequips whatever no longer fits.
 
+## Camp
+
+`components/Camp.tsx`. Camp opens on a **menu** of its sections; a section's back button returns to the menu, the menu's to the map. Each row says where things stand (stars to spend, charms equipped, bounties claimed, battles fought) and shows a red dot when something wants attention; a section that is still locked says how to open it.
+
+| Section | What it holds |
+|---|---|
+| Fighters | Passives and skill trees |
+| Armory | Weapons won so far; equip them as charms |
+| Arcana | Tarot wildcards |
+| Workshop | Coin upgrades and weapon tuning (opens at 1-5 ★) |
+| Bounties | The Bounty Board (opens at 1-8) |
+| History | Every battle fought (below) |
+
+Under the menu: **Sound** and **Effects** switches (the effects switch is hidden on a device that asks for reduced motion). `initialTab` opens Camp straight on a section: results and unlock reveals use it.
+
+### Battle history and damage per minute
+
+`history.ts` (pure) · storage in `save.ts` · UI `BattleHistory.tsx`.
+
+- **The score.** Every battle ends with **damage per minute**: total damage over the fight clock (`damagePerMinute`). The clock stands still while effects play and while the fight is paused, so the score measures play, not waiting. The results screen shows it beside the best on that level so far ("best 132", or NEW BEST).
+- **The record.** Each battle writes one `BattleRecord`: when, level, foe, fighter, how it ended (won, survived, lost, practice, left early), stars, damage, damage per minute, biggest hit, Sets, mistakes, fight clock, coins banked, evolutions and the weapons held. A fight left by retreating or restarting is recorded as "left early" once a move was made; one left before any move is not a battle.
+- **Storage.** The list lives under its own key (`adventure_v2_history`), apart from the save, because it grows with every fight and the save is rewritten on every change. It keeps the most recent `HISTORY_LIMIT` (500) battles. Entries that cannot be read are dropped on load.
+- **Camp → History.** Totals (battles, knockouts, best damage per minute, biggest hit), then every battle newest first, 30 at a time; tap one for the rest of its numbers.
+
 ## Bounty Board
 
-`data/bounties.ts` · UI `BountyBoard.tsx`. The board opens on the first star at 1-8.
+`data/bounties.ts` · UI `BountyBoard.tsx`, shown as Camp's Bounties section. The board opens on the first star at 1-8.
 
 - There are **19 cross-run bounties** in four categories: mastery 6, chaos 6, roster 4, explorer 3.
 - Every fight advances lifetime counters (`bountyStats`), whether it was a win, a loss or a replay.
