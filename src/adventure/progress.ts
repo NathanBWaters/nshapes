@@ -79,6 +79,7 @@ export const createNewSave = (): AdventureSave => ({
   seenCoachMarks: [],
   selectedFighter: 'Orange Tabby',
   musicOn: true,
+  effectsOn: true,
 });
 
 // ─── Stars & unlocks ────────────────────────────────────────────────────────

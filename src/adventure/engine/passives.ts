@@ -107,26 +107,26 @@ export const passiveSetDamage = (d: Draft, sinceLastMs: number): number => {
 const isPower = (c: Card) => (c.bonusPoints ?? 0) > 0;
 const isGold = (c: Card) => (c.bonusMoney ?? 0) > 0;
 
-/** Turn up to `n` ordinary cards (not in `skip`) into power or gold cards. Returns how many changed. */
-const grantBonusCards = (d: Draft, n: number, kind: 'power' | 'gold', skip: Set<string>): number => {
-  if (n <= 0) return 0;
+/** Turn up to `n` ordinary cards (not in `skip`) into power or gold cards. Returns the slots that changed. */
+const grantBonusCards = (d: Draft, n: number, kind: 'power' | 'gold', skip: Set<string>): number[] => {
+  if (n <= 0) return [];
   const has = kind === 'power' ? isPower : isGold;
   const slots = d.board.map((c, i) => (touchable(d, i) && !skip.has(c.id) && !has(c) ? i : -1)).filter(i => i >= 0);
   const chosen = d._rng.shuffle(slots).slice(0, n);
   updateCards(d, chosen, c =>
     kind === 'power' ? { ...c, bonusPoints: (c.bonusPoints ?? 0) + BASE_RULES.powerCardBonus } : { ...c, bonusMoney: BASE_RULES.coinCardValue }
   );
-  return chosen.length;
+  return chosen;
 };
 
 /** Fetch: each kind of bonus card in the Set brings a new one onto the board. */
 const fetchBonusCards = (d: Draft, matched: Card[]) => {
   const n = Math.max(0, tuning(d, 'fetch.count'));
   const ids = new Set(matched.map(c => c.id));
-  let fetched = 0;
-  if (matched.some(isPower)) fetched += grantBonusCards(d, n, 'power', ids);
-  if (d.features.has('coins') && matched.some(isGold)) fetched += grantBonusCards(d, n, 'gold', ids);
-  if (fetched > 0) emit(d, 'fetch', fetched);
+  const fetched: number[] = [];
+  if (matched.some(isPower)) fetched.push(...grantBonusCards(d, n, 'power', ids));
+  if (d.features.has('coins') && matched.some(isGold)) fetched.push(...grantBonusCards(d, n, 'gold', ids));
+  if (fetched.length > 0) emit(d, 'fetch', fetched.length, undefined, { slots: fetched });
 };
 
 /**
@@ -188,5 +188,5 @@ export const tickPassives = (d: Draft) => {
   if (sets.length === 0) return;
   const card = d._rng.pick(d._rng.pick(sets));
   d.passive.keenEyeCardId = card.id;
-  emit(d, 'keen_eye');
+  emit(d, 'keen_eye', undefined, undefined, { slots: [d.board.findIndex(c => c.id === card.id)] });
 };

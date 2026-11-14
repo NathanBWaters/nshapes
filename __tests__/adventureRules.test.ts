@@ -104,7 +104,12 @@ describe('rule interpreter', () => {
     expect(once.explosionsTriggered).toBe(1);
     const twice = blastWith({ ...s, doubleNext: 1 });
     expect(eventsOf(twice, 'doubled')).toHaveLength(1);
-    expect(eventsOf(twice, 'blast')).toHaveLength(1);
+    // The board's own blast says where it happened (its damage is inside the Set's hit); the replay deals its own
+    const blasts = eventsOf(twice, 'blast');
+    expect(blasts).toHaveLength(2);
+    expect(blasts[0].amount).toBeUndefined();
+    expect(blasts[0].slots).toHaveLength(1);
+    expect(blasts[1].amount).toBeGreaterThanOrEqual(1);
     expect(s.foeHp - twice.foeHp).toBeGreaterThanOrEqual(4 + 5 + 5 + 1);
   });
 

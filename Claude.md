@@ -99,6 +99,20 @@ Adventure's sound is one adaptive score, synthesized live in `src/audio/` (no au
 * **Every run event has a cue** (`src/audio/fightAudio.ts` `EVENT_CUE`, a full Record): when you add a `RunEventType`, give it a row.
 * **Never play a raw frequency in a fight.** Use a cue (`band.cue`), in scale steps, so it stays in key.
 
+## Fight effects (IMPORTANT)
+
+> **Full documentation:** [docs/fx-design.md](./docs/fx-design.md). Effects studio: `/dev/fx`.
+
+Everything that happens in an Adventure fight is SHOWN: one move plays as a cascade over the board and HUD (`src/adventure/fx/`), in step with the band, and the fight clock stands still while it plays.
+
+* **Every run event has a look** (`src/adventure/fx/catalog.ts` `EVENT_FX`, a full Record): when you add a `RunEventType`, give it a row (and its sound row in `EVENT_CUE`). `__tests__/fightFx.test.tsx` fails an empty row.
+* **Events say where they happened:** if an event touches cards, pass `{ slots, cards }` to `emit` (`engine/fight.ts`) so the effect plays on those cards.
+* **The same effect looks the same whoever caused it.** Do not draw a second laser; add to the catalog row or the shared pieces in `fx/visuals.tsx`.
+* **Never animate fight feedback inside `AdventureRun.tsx`.** HUD parts are `<Anchor name="…">`; the stage aims at them and makes them jump.
+* **A row is `damage` only if its amount was dealt right then.** Bonuses inside the Set's hit carry no damage of their own (or the HP bar drops twice).
+* **The clock waits for the player's own moves** (`fx.busy`). Events the clock itself causes are emitted with `clock: true` (every `TICK`) and play while it runs; rows that repeat (`ambient`) never hold it either.
+* Players can turn effects off (Pause → Effects); the code path is the same script with `reduced: true`.
+
 ## Card Visual Rules (IMPORTANT)
 
 **Borders/outlines are EXCLUSIVELY for selection.** Never use card borders or outlines to indicate any other state (fire, connections, etc.).
@@ -255,7 +269,7 @@ npm run validate:icons   # Verifies all registered icons have SVG files
 1. Main Menu → Adventure → **Map** (frontier node bobs; your fighter stands beside it).
 2. Tap a foe → **Preview** (foe + taunt, skulls, NEW mechanic, rules, ★/★★/★★★ goals + rewards, fighter pick).
 3. If the level teaches something new → **Intro card** (demo cards/icons).
-4. **Fight**: HUD with foe HP bar, hearts, moves or clock, coins, hint, XP, live ★★★ challenge. Waves → intermission (shop once taught).
+4. **Fight**: HUD with foe HP bar, hearts, moves or clock, coins, hint, XP, the weapon belt, live ★★★ challenge. Every move plays as a cascade of effects while the clock waits; an evolution opens with a tap-to-continue cut-in. Waves → intermission (shop once taught).
 5. **Results**: stars pop in, coins bank, first-time star rewards unlock weapons/fighters/regions → Next / Retry / Map / Camp.
 
 **Free Play Mode:**
@@ -289,6 +303,8 @@ This means Field Stone weapons can increase the starting board size beyond the m
 * Add the rarest weapon of a category
 
 **`/dev/adventure`** - Adventure map (`?save=maxed` everything unlocked + 50k coins, `?save=fresh`, `?autoplay=true`)
+
+**`/dev/fx`** - Effects studio: a button for every fight event, a sample cascade and the evolution cut-in, on a stand-in fight screen; real time or 4×/10× slower; effects on/off
 
 **`/dev/sound`** - Sound studio: start the band, change the fight state and hear the music follow; audition every weapon voice, evolution theme and cue; "Check levels" renders a fight offline and reports peak/RMS
 
@@ -324,6 +340,7 @@ When working on specific systems, load the relevant design doc for detailed spec
 
 * **[Adventure Mode](./docs/adventure-design.md)** - Map, levels, stars, economy, fighters, audio synth, balance bots
 * **[Balance System](./docs/balance-system.md)** - The lab, the generated report, level balance and the HP tuner; **[Balance Philosophy](./docs/balance-philosophy.md)** - what we are aiming at
+* **[Fight effects](./docs/fx-design.md)** - The cascade, the clock hold, the weapon belt, the evolution cut-in, how to add an effect
 * **[Sound](./docs/sound-design.md)** - The adaptive score: what the music tells you, weapon voices, evolution themes, the casino layer
 * **[Weapon System](./specs/weapons-design.md)** - Complete weapon roster, rarities, effects, synergies, and balance notes
 * **[Enemy System](./specs/enemy-design.md)** - Enemy roster, tier scaling, defeat conditions, and weapon counters (in development)

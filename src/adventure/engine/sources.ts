@@ -30,7 +30,7 @@ export { getSkillNode };
 export const getRecipe = (id: string): EvolutionRecipe | undefined => EVOLUTION_RECIPES.find(r => r.id === id);
 
 /** A weapon id belongs to a family when it is listed in it (or is an old copy id of one, `x-rare`). */
-const inFamily = (weaponId: string, family: string[]) => family.some(p => weaponId === p || weaponId.startsWith(`${p}-`));
+export const inFamily = (weaponId: string, family: string[]) => family.some(p => weaponId === p || weaponId.startsWith(`${p}-`));
 
 /**
  * Recipes whose two families are both held, in recipe order. Once the player

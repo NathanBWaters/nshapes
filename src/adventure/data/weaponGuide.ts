@@ -83,7 +83,7 @@ export const WEAPON_GUIDE: Record<string, WeaponGuide> = {
 
   // ── Board ─────────────────────────────────────────────────────────────────
   'field-stone': { kind: 'always', tip: 'More cards means more Sets to choose from. It makes every other weapon a little better.' },
-  'growth-seed': { kind: 'luck', tip: 'Each growth makes the whole board hit harder, for the rest of the fight. Best in long fights.', calls: ['Bloom'] },
+  'growth-seed': { kind: 'luck', tip: 'Each growth makes the whole board hit harder, for the rest of the fight. Best in long fights.', events: ['grow'], calls: ['Bloom'] },
   'clarity-lens': { kind: 'rhythm', tip: 'For 10 seconds one trait stops mattering, so Sets are much easier to see. Go fast while it lasts.', events: ['simplified'] },
   'wild-card': { kind: 'hunt', tip: 'A wild card makes a Set with ANY two other cards. Use it with your two strongest cards.', look: { icon: 'delapouite/card-joker', color: '#7C3AED', text: 'A joker in place of the shapes.' } },
 
@@ -116,10 +116,10 @@ export const WEAPON_GUIDE: Record<string, WeaponGuide> = {
   'encore-mask': { kind: 'reaction', tip: 'Only works with evolutions, so bring two weapons that make a recipe. Does nothing alone.' },
 
   // ── Echoes & links ────────────────────────────────────────────────────────
-  'echo-stone': { kind: 'luck', tip: 'An echo is a free Set made for you. Every weapon that fires on a Set can fire on the echo too.' },
+  'echo-stone': { kind: 'luck', tip: 'An echo is a free Set made for you. Every weapon that fires on a Set can fire on the echo too.', events: ['echo'] },
   'chain-reaction': { kind: 'luck', tip: 'Echoes can come in pairs. Best beside another echo weapon.' },
   'cascade-core': { kind: 'luck', tip: 'Echoes can start fires. Best beside another echo weapon.', look: FIRE },
-  connector: { kind: 'luck', tip: 'Linked cards fall together, so every blast, burn or laser that hits one hits both.', look: LINK, events: ['link'] },
+  connector: { kind: 'luck', tip: 'Linked cards fall together, so every blast, burn or laser that hits one hits both.', look: LINK, events: ['link', 'link_burst'] },
   'web-weaver': { kind: 'always', tip: 'You start with links already on the board. Pair it with weapons that destroy cards.', look: LINK },
   'neural-network': { kind: 'luck', tip: 'Links can make more links. Best beside another link weapon.', look: LINK },
   'echo-chamber': { kind: 'reaction', tip: 'Every card destroyed through a link adds time. Needs links, so bring a link weapon.', look: LINK },

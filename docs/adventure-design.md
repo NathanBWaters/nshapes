@@ -545,6 +545,10 @@ The fight UI reuses the shared `GameBoard` and `Card`, so weapon effects, fire, 
   - Handling in `rules/engine.ts` (`triggerMatches`, `holds`, `applyEffect`).
   - An `enqueue` from the primitive that causes the event.
 
+**A fight event (something the player should see and hear).**
+- Add the type to `RunEventType` and `emit` it from the primitive. If it touches cards, pass `{ slots, cards }`.
+- The type checker then asks for its rows: how it looks (`fx/catalog.ts` `EVENT_FX`) and how it sounds (`src/audio/fightAudio.ts` `EVENT_CUE`). Add its replay wording in `components/fightReplayText.ts` `LABEL`.
+
 **A weapon with rules.**
 - Add one entry to `ADVENTURE_WEAPONS` (`data/adventureWeapons.ts`):
   - A plain id (no rarity suffix), with `effects: {}` and `maxCount: 1`.
@@ -646,6 +650,17 @@ One card explains a weapon everywhere: `components/WeaponExplainer.tsx`.
 - **Data:** `data/weaponGuide.ts` has one row per weapon (kind, tip, what to look for, which fight events it causes). The description and numbers come from the weapon itself. Fight-log lines carry `sourceRef` (`weapon:<id>`, `evo:<id>`, `node:<id>`), and `fightReplayText.ts` `gearStats` adds them up.
 - **Guard:** `__tests__/weaponGuide.test.tsx` fails for an Armory weapon with no guide row, and renders the card for every weapon.
 
+## Fight effects: seeing what happened
+
+> **Full documentation:** [fx-design.md](./fx-design.md). Try everything at `/dev/fx`.
+
+- **One move plays as a cascade** over the board and the HUD: the Set's own hit first (rings on its cards, orbs to the foe, the number where they land), then each thing it set off one step later: bursts on blasted cards, a beam along a lasered row, bolts for ricochets and links, flames, orbs to the purse, the hearts and the clock.
+- **The fight clock stands still while the cascade of your own move plays** (and while an evolution's cut-in waits for a tap), so your effects never cost you time. The clock chip turns teal while it waits. What the clock itself causes (a foe's timed move, a fuse) plays while it runs.
+- **Who did it jumps:** the weapon on the HUD belt (tap it to read it), the passive's chip, the evolution's ring, with a small tag naming it.
+- **An evolution opens with a cut-in:** a slanted band across the screen with its icon, name, the two weapons that fused and what it does. Tap to continue.
+- **One table says what every event looks like** (`fx/catalog.ts` `EVENT_FX`, a full Record like the band's `EVENT_CUE`), the script (`fx/script.ts`) times the beats on the band's steps, and the engine's events carry the board slots they touched.
+- **Pause → Effects** turns it off (numbers only, nothing waits).
+
 ## Audio: the adaptive score
 
 > **Full documentation:** [sound-design.md](./sound-design.md). Try everything at `/dev/sound`.
@@ -665,6 +680,8 @@ One card explains a weapon everywhere: `components/WeaponExplainer.tsx`.
 - `/dev/adventure?save=fresh`: a brand-new save.
 - `/dev/adventure?autoplay=true`: the board plays itself.
 - `/dev/fighters`: fighter animation studio.
+- `/dev/fx`: effects studio (every fight effect, slow motion). `__nshapesFx.slow = 8` in the console slows a real fight's effects.
+- `/dev/sound`: sound studio.
 
 ## Status and next steps
 - The story text in `data/story.ts` is a placeholder waiting for the real story.

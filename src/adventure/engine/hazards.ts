@@ -6,9 +6,9 @@
 import type { Card } from '@/types';
 import { emit, enqueue, hurt, mods, placeSnare, placeTimeBomb, recycle, snareTarget, SNARE_DEFUSE_DAMAGE, updateCards, type Draft } from './fight';
 
-const defused = (d: Draft, kind: 'bomb' | 'snare', bonus?: number) => {
+const defused = (d: Draft, kind: 'bomb' | 'snare', bonus?: number, slot?: number) => {
   d.trapsDefused += 1;
-  emit(d, 'trap_defused', bonus, kind);
+  emit(d, 'trap_defused', bonus, kind, slot === undefined ? undefined : { slots: [slot] });
   enqueue(d, 'trapDefused');
 };
 
@@ -26,7 +26,7 @@ export const resolveTrapsOnSet = (d: Draft, matched: Card[]): { bonus: number; s
   if (bombs.length) {
     d.timeBombIds = d.timeBombIds.filter(id => !ids.has(id));
     updateCards(d, d.board.map((c, i) => (ids.has(c.id) && c.hasCountdown ? i : -1)).filter(i => i >= 0), c => ({ ...c, hasCountdown: false, countdownTimer: undefined }));
-    bombs.forEach(() => defused(d, 'bomb'));
+    bombs.forEach(id => defused(d, 'bomb', undefined, d.board.findIndex(c => c.id === id)));
   }
 
   const clear: number[] = [];
@@ -36,7 +36,7 @@ export const resolveTrapsOnSet = (d: Draft, matched: Card[]): { bonus: number; s
     if (t !== null && ids.has(d.board[t].id)) {
       bonus += SNARE_DEFUSE_DAMAGE;
       clear.push(i);
-      defused(d, 'snare', SNARE_DEFUSE_DAMAGE);
+      defused(d, 'snare', SNARE_DEFUSE_DAMAGE, i);
     } else if (ids.has(c.id)) {
       clear.push(i);
       sprung += 1;
@@ -71,9 +71,9 @@ export const tickTimeBombs = (d: Draft, ms: number) => {
   const gone = new Set(expired.map(i => d.board[i].id));
   d.timeBombIds = d.timeBombIds.filter(id => !gone.has(id));
   updateCards(d, expired, c => ({ ...c, hasCountdown: false, countdownTimer: undefined }));
-  expired.forEach(() => {
+  expired.forEach(i => {
     d.trapsSprung += 1;
-    emit(d, 'trap_sprung', 1, 'bomb');
+    emit(d, 'trap_sprung', 1, 'bomb', { slots: [i], cards: [d.board[i]] });
     hurt(d, 1);
   });
   recycle(d, expired);
@@ -93,10 +93,10 @@ export const cleanseBoard = (d: Draft) => {
   d.board.forEach((c, i) => {
     if (c.snare || c.isFaceDown || bombIds.has(c.id)) idx.push(i);
   });
-  for (const c of d.board) {
-    if (c.snare) defused(d, 'snare');
-    if (bombIds.has(c.id)) defused(d, 'bomb');
-  }
+  d.board.forEach((c, i) => {
+    if (c.snare) defused(d, 'snare', undefined, i);
+    if (bombIds.has(c.id)) defused(d, 'bomb', undefined, i);
+  });
   d.timeBombIds = [];
   updateCards(d, idx, c => ({
     ...c,

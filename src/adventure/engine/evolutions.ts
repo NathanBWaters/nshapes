@@ -25,7 +25,8 @@ const recipeToStart = (d: Draft): string | null => {
   return [...d.activeEvolutions].sort((a, b) => a.remainingMs - b.remainingMs)[0].id;
 };
 
-export const startEvolution = (d: Draft, id: string) => {
+/** `slot` is the Catalyst card it started from, when there was one. */
+export const startEvolution = (d: Draft, id: string, slot?: number) => {
   const recipe = getRecipe(id);
   if (!recipe) return;
   const durationMs = Math.max(1000, EVOLUTION_RULES.durationMs + (mods(d).evolutionDurationMs ?? 0));
@@ -33,7 +34,7 @@ export const startEvolution = (d: Draft, id: string) => {
   d.evolutionsTriggered += 1;
   if (!d.forgedRecipes.includes(id)) d.forgedRecipes = [...d.forgedRecipes, id];
   refreshSources(d);
-  emit(d, 'evolution_start', durationMs, recipe.name);
+  emit(d, 'evolution_start', durationMs, recipe.name, slot === undefined ? undefined : { slots: [slot] });
   // The opening burst (and the Arcana that makes it bigger)
   const burst = arcana(d).evolutionBurstBonus;
   emit(d, 'hit', dealDamage(d, (EVOLUTION_RULES.startDamage + (burst?.damage ?? 0)) * foeMultiplier(d)), recipe.name);
@@ -49,7 +50,7 @@ export const resolveCatalyst = (d: Draft, matched: Card[]) => {
   updateCards(d, [idx], c => ({ ...c, hasEvolutionItem: false, evolutionReady: false }));
   if (d.evolutionsTriggered >= d.evolutionCap) return;
   const id = recipeToStart(d);
-  if (id) startEvolution(d, id);
+  if (id) startEvolution(d, id, idx);
 };
 
 export const extendEvolutions = (d: Draft, ms: number) => {

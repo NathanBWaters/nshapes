@@ -34,8 +34,8 @@ import { arcanaRules } from '../data/arcana';
 import { BASE_RULES } from '../data/rules';
 import { challengeProgress } from './challenges';
 import {
-  addCoins, addConnection, addRandomConnections, addTime, addXp, arcana, begin, chanceStatsOf, dealDamage, drawCard,
-  emit, enqueue, finish, foeMultiplier, heal, hurt, igniteCards, keepCatalystMatchable, mods, placeCatalyst,
+  addCoins, addConnection, addRandomConnections, addTime, addXp, announceDraw, arcana, begin, chanceStatsOf, dealDamage, drawCard,
+  emit, enqueue, finish, foeMultiplier, heal, hurt, igniteCards, keepCatalystMatchable, mods, newLinkSlots, placeCatalyst,
   pruneConnections, recycle, refill, refreshSources, rollBridges, syncTraps, toDeckCard, tuning, updateCards,
   MAX_BOARD, type Draft, type FightHooks, TIME_HEADROOM,
 } from './fight';
@@ -93,10 +93,16 @@ const ENEMY_EVENT_MAP: Partial<Record<EnemyEvent['type'], RunEventType>> = {
   countdown_warning: 'countdown',
 };
 
+/** Board slots of the cards with these ids (cards that already left are skipped). */
+const slotsOf = (d: Draft, ids: readonly string[]): number[] =>
+  ids.map(id => d.board.findIndex(c => c.id === id)).filter(i => i >= 0);
+
 const emitEnemyEvents = (d: Draft, events: EnemyEvent[]) => {
   for (const e of events) {
     const t = ENEMY_EVENT_MAP[e.type];
-    if (t) emit(d, t);
+    if (!t) continue;
+    const ids = 'cardIds' in e ? e.cardIds : 'cardId' in e ? [e.cardId] : [];
+    emit(d, t, undefined, undefined, { slots: slotsOf(d, ids) });
   }
 };
 
@@ -221,6 +227,30 @@ const advancePurity = (d: Draft, diffCount: number, graceUsed: boolean): { damag
   return { damage, coins };
 };
 
+/**
+ * What the Set's weapons did on the board (GameBoard rolled them). Their damage
+ * is already inside the Set's own hit, so these events carry no amount: they
+ * say what happened and where, for the effects, the band and the fight log.
+ */
+const emitBoardWeapons = (d: Draft, rewards: CardReward[], fx: WeaponEffectResult | undefined) => {
+  const place = (cards: readonly Card[]) => {
+    const on = cards.map(c => ({ c, i: d.board.findIndex(b => b.id === c.id) })).filter(x => x.i >= 0);
+    return { slots: on.map(x => x.i), cards: on.map(x => ((x.c.health ?? 1) > 1 ? null : d.board[x.i])) };
+  };
+  const tell = (type: 'blast' | 'laser' | 'ricochet' | 'link_burst' | 'echo', cards: readonly Card[]) => {
+    const at = place(cards);
+    if (at.slots.length) emit(d, type, undefined, String(at.slots.length), type === 'echo' ? { slots: at.slots } : at);
+  };
+  if (fx) {
+    tell('blast', fx.explosiveCards);
+    tell('laser', fx.laserCards);
+    tell('ricochet', fx.ricochetCards);
+    fx.autoMatchedSets.forEach(set => tell('echo', set));
+  }
+  const linked = new Set(rewards.filter(r => r.effectType === 'connected').map(r => r.cardId));
+  if (linked.size) tell('link_burst', d.board.filter(c => linked.has(c.id)));
+};
+
 /** Weapon effects GameBoard rolled for this Set: queue their triggers (and replay one if a double is waiting). */
 const fireBoardWeapons = (d: Draft, fx: WeaponEffectResult) => {
   const fired: [boolean, Parameters<typeof weaponFired>[1], Effect][] = [
@@ -297,7 +327,8 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   d.nextSetMultiplier = 1;
   const dmg = flat * rainbowMult * (a.damageScale ?? 1) * enemyMult * setMult + (purity.damage + traps.bonus) * enemyMult;
   const hit = dealDamage(d, dmg);
-  emit(d, rainbow ? 'rainbow' : 'hit', hit);
+  emit(d, rainbow ? 'rainbow' : 'hit', hit, undefined, { slots: gearSet.slots });
+  if (!opts.auto) emitBoardWeapons(d, rewards, fx);
   if (opts.auto) {
     d._lines[d._lines.length - 1].text = 'Free Set';
   } else {
@@ -399,7 +430,7 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
       const ids = new Set(fx.fireCards.map(c => c.id));
       const stamp = d.elapsedMs + 1;
       d.board = d.board.map(c => (ids.has(c.id) && !c.onFire ? { ...c, onFire: true, fireStartTime: stamp } : c));
-      emit(d, 'fire', fx.fireCards.length);
+      emit(d, 'fire', fx.fireCards.length, undefined, { slots: slotsOf(d, [...ids]) });
     }
   }
 
@@ -419,7 +450,10 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   let grown = 0;
   if (fx?.boardGrowth) {
     grown = Math.max(0, Math.min(fx.boardGrowth, MAX_BOARD - d.board.length));
+    const first = d.board.length;
     for (let i = 0; i < grown; i++) d.board = [...d.board, drawCard(d)];
+    if (grown > 0) emit(d, 'grow', grown, undefined, { slots: Array.from({ length: grown }, (_, i) => first + i) });
+    for (let i = first; i < d.board.length; i++) announceDraw(d, d.board[i], i);
   }
 
   // Connector weapons: chance to link two of the matched board positions for the wave
@@ -427,8 +461,10 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
     const positions = matched.map(mc => d.board.findIndex(bc => bc.id === mc.id)).filter(p => p >= 0);
     const pair = selectPositionsToConnect(positions, d.connections);
     if (pair) {
+      const before = d.connections.length;
       addConnection(d, pair[0], pair[1]);
       if (d.stats.bonusConnectionChance > 0 && d._rng.next() * 100 < d.stats.bonusConnectionChance) addRandomConnections(d, 1);
+      emit(d, 'link', d.connections.length - before, undefined, { slots: newLinkSlots(d, before) });
     }
   }
 
@@ -470,7 +506,7 @@ const replaceCards = (d: Draft, ids: Set<string>, ended: boolean): number[] => {
     d.roundStats.tripleCardsCleared += 1;
     if (ended) continue;
     enqueue(d, 'cardBroken');
-    if (c.bounty) emit(d, 'pinata_break', dealDamage(d, c.bounty * foeMultiplier(d)));
+    if (c.bounty) emit(d, 'pinata_break', dealDamage(d, c.bounty * foeMultiplier(d)), undefined, { slots: [i] });
   }
   return indices;
 };
@@ -763,7 +799,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
           )
         : [];
       const burned = [idx, ...linked];
-      emit(d, 'hit', dealDamage(d, burned.length * (1 + (d.stats.burnDamage ?? 0)) * foeMultiplier(d)), 'Burn');
+      emit(d, 'hit', dealDamage(d, burned.length * (1 + (d.stats.burnDamage ?? 0)) * foeMultiplier(d)), 'Burn', { slots: burned });
       addCoins(d, burned.length);
       for (const bw of rollBridges(d, 'onDestruction')) if (bw.bridgeEffect?.effect === 'heal') heal(d, bw.bridgeEffect.amount ?? 1);
       // 10% chance the fire jumps to a neighbour
@@ -786,6 +822,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
 
     case 'TICK': {
       if (d.status !== 'playing') return state;
+      d._clock = true;
       d.elapsedMs += action.ms;
       if (d.arcanaBurnCooldownMs > 0) d.arcanaBurnCooldownMs = Math.max(0, d.arcanaBurnCooldownMs - action.ms);
       decayCombo(d);

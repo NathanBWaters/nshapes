@@ -5,6 +5,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { music, setMusicEnabled, setSfxOverride, sfx } from '@/audio';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import type { AdventureSave, FeatureDestination, LevelDef, MechanicDef, RunState } from './types';
 import { MAIN_LEVELS, getLevel, mainIndexOf } from './data/levels';
 import { CAMPAIGN_FEATURES } from './data/features';
@@ -72,6 +73,7 @@ interface Props {
 const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => {
   const [save, setSaveState] = useState<AdventureSave>(() => initialSave ?? loadAdventureSave());
   const [screen, setScreen] = useState<Screen>({ kind: 'map' });
+  const reducedMotion = useReducedMotion();
   const [preview, setPreview] = useState<LevelDef | null>(null);
   const [teaching, setTeaching] = useState<Teaching | null>(() => onboarding(save));
   /** A mechanic opened just to read about it (no fight follows) */
@@ -182,6 +184,9 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
         onQuit={() => setScreen({ kind: 'map', highlight: level.id })}
         onRestart={() => startRun(level)}
         onCoachMarkSeen={id => setSave(s => markCoachMarkSeen(s, id))}
+        effects={save.effectsOn && !reducedMotion}
+        // A device that asks for reduced motion keeps effects off
+        onToggleEffects={reducedMotion ? undefined : () => setSave(s => ({ ...s, effectsOn: !s.effectsOn }))}
       />
     );
   } else if (screen.kind === 'results') {

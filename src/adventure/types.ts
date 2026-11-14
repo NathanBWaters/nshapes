@@ -481,6 +481,8 @@ export interface AdventureSave {
   /** Evolution recipe ids forged at least once (unlocks full details in Recipe Guide) */
   discoveredEvolutions: string[];
   musicOn: boolean;
+  /** Play the fight's effects (the clock waits while they play). Off: numbers only. */
+  effectsOn: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -522,7 +524,13 @@ export type RunEventType =
   | 'purity' | 'purity_max' | 'catalyst_spawn'
   | 'evolution_start' | 'evolution_end'
   | 'trap_placed' | 'trap_defused' | 'trap_sprung'
-  | 'arcana_burn' | 'overkill';
+  | 'arcana_burn' | 'overkill'
+  /** An echo matched another Set for you; its damage is part of the Set's own hit (text = cards) */
+  | 'echo'
+  /** Cards went down with their linked partners; their damage is part of the Set's own hit (text = cards) */
+  | 'link_burst'
+  /** The board grew (amount = cards added) */
+  | 'grow';
 
 export interface RunEvent {
   id: number;
@@ -531,6 +539,21 @@ export interface RunEvent {
   text?: string;
   /** Rule key of the skill node, weapon or evolution that caused it ("w2:war-drum#0"), when a rule did */
   source?: string;
+  /** Board slots it touched, so the fight's effects can play where it happened (src/adventure/fx) */
+  slots?: number[];
+  /** The cards that were in `slots` when it removed them (null = that card stayed), for the same effects */
+  cards?: (Card | null)[];
+  /**
+   * It happened on the fight clock (a foe's timer, a fuse, an evolution running out), not because of
+   * something the player just did. Its effects play while the clock runs: only the player's own moves hold it.
+   */
+  clock?: true;
+}
+
+/** Where on the board an event happened (see RunEvent.slots / RunEvent.cards). */
+export interface EventPlace {
+  slots?: number[];
+  cards?: (Card | null)[];
 }
 
 // ─── Fight log (results-screen replay) ────────────────────────────────────

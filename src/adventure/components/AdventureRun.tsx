@@ -1,12 +1,16 @@
 /**
  * One fight. Wraps the shared GameBoard with the adventure HUD:
  * foe HP bar with running damage / combo / biggest-hit counters, hearts,
- * moves/clock, coins, XP, live passive chips, evolution rings, challenge
- * ticker, coach marks, level-up picks and the between-wave shop.
+ * moves/clock, coins, XP, live passive chips, the weapon belt, evolution
+ * rings, challenge ticker, coach marks, level-up picks and the between-wave shop.
+ *
+ * What happens in the fight is SHOWN by the effects stage (src/adventure/fx):
+ * every fresh event becomes a beat of a cascade that plays over the HUD and
+ * the board, and the fight clock stands still while it plays.
  */
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Platform } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, Easing } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withDelay, withRepeat, withSequence, withTiming, Easing } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GameBoard from '@/components/GameBoard';
 import Icon from '@/components/Icon';
@@ -20,7 +24,7 @@ import type { Card, CardReward, Weapon } from '@/types';
 import type { WeaponEffectResult } from '@/utils/weaponEffects';
 import { band, music, sfx } from '@/audio';
 import { moodOf, playSounds, soundsFor } from '@/audio/fightAudio';
-import type { AdventureSave, EvolutionRecipe, LevelDef, PassiveId, RunEvent, RunEventType, RunState } from '../types';
+import type { AdventureSave, EvolutionRecipe, LevelDef, PassiveId, RunEventType, RunState } from '../types';
 import type { WeaponBuilds } from '../data/weaponStats';
 import { createRun, runReducer, shopPrice, rerollCost, xpForLevel, type RunAction } from '../engine/run';
 import { challengeProgress } from '../engine/challenges';
@@ -34,8 +38,11 @@ import { getArcana } from '../data/arcana';
 import { EVOLUTION_RECIPES } from '../data/evolutions';
 import { weaponLevelSuffix } from '../data/armory';
 import { COACH_KEYS } from '../progress';
+import { EVOLUTION_RULES } from '../engine/sources';
+import { Anchor, AnchorsProvider, EVENT_FX, EvolutionCutIn, FxStage, GearBelt, fxClock, scriptFor, useAnchors, useFightFx, type Beat } from '../fx';
 import { Btn, CoinPill, DARK, Eyebrow, Heart, INK, PopIn, TONE } from './ui';
-import { EvolutionBanner, EvolutionRing, Floater, MegaFlash, hitTier, type FloaterSpec } from './RunFx';
+import { EvolutionBanner, EvolutionRing, MegaFlash } from './RunFx';
+import WeaponExplainer from './WeaponExplainer';
 
 const TICK_MS = 250;
 const REPLACE_DELAY_MS = 950;
@@ -49,101 +56,10 @@ interface Props {
   onQuit: () => void;
   onRestart: () => void;
   onCoachMarkSeen: (mechanicId: string) => void;
+  /** Play the fight's effects (and hold the clock while they play). Off: numbers only, nothing waits. */
+  effects?: boolean;
+  onToggleEffects?: () => void;
 }
-
-type FighterReaction = 'ecstatic' | 'heal' | 'powerup' | 'pain' | 'entrance';
-type EnemyReaction = 'criticalHit' | 'hit' | 'gloat' | 'attack' | 'regen' | 'entrance';
-
-/**
- * How each run event looks. A full Record, so a new event type has to be given a row.
- * How it SOUNDS is the band's job (src/audio/fightAudio.ts EVENT_CUE).
- */
-interface EventPresentation {
-  floater?: (e: RunEvent) => { text: string; color: string };
-  /** Damage to the foe: the floater grows with `amount` (big ≥10, huge ≥25 + screen shake, MEGA ≥50 + flash) */
-  damage?: boolean;
-  fighter?: FighterReaction;
-  enemy?: EnemyReaction;
-  /** Foe portrait shakes */
-  shake?: boolean;
-}
-
-const RAINBOW = '#9333EA';
-const amount = (e: RunEvent) => e.amount ?? 0;
-/** "−12", or "BLAST −12" when the event names its source */
-const dmg = (label?: string) => (e: RunEvent) => {
-  const source = e.text ?? label;
-  return { text: source ? `${source} −${amount(e)}` : `−${amount(e)}`, color: COLORS.impactRed };
-};
-
-const EVENT_PRESENTATION: Record<RunEventType, EventPresentation> = {
-  hit: { shake: true, damage: true, floater: dmg(), enemy: 'hit' },
-  rainbow: { shake: true, damage: true, floater: e => ({ text: `RAINBOW −${amount(e)}`, color: RAINBOW }), fighter: 'ecstatic', enemy: 'criticalHit' },
-  heal: { fighter: 'heal', floater: e => ({ text: `+${amount(e) || 1}♥`, color: COLORS.logicTeal }) },
-  hurt: { enemy: 'gloat' },
-  grace: {},
-  coins: { floater: e => ({ text: `+${amount(e)}¢`, color: TONE.coin }) },
-  levelup: { fighter: 'powerup' },
-  foe_defeated: { fighter: 'ecstatic' },
-  wave: { fighter: 'entrance', enemy: 'entrance' },
-  regen: { floater: e => ({ text: `+${amount(e)}`, color: COLORS.logicTeal }), enemy: 'regen' },
-  dud: {},
-  face_down: {},
-  countdown: {},
-  bomb: {},
-  triple: {},
-  shuffle: { enemy: 'attack' },
-  attr_shift: {},
-  card_removed: {},
-  time_stolen: { fighter: 'pain', enemy: 'attack' },
-  inactivity: { fighter: 'pain', enemy: 'attack' },
-  fire: {},
-  hint: {},
-  mistake: {},
-  time_up: {},
-  moves_out: {},
-  time_gain: { floater: e => ({ text: `+${amount(e)}s`, color: COLORS.logicTeal }) },
-  // fighter passives
-  nine_lives: { floater: () => ({ text: 'NINE LIVES!', color: COLORS.logicTeal }), fighter: 'heal' },
-  combo: { floater: e => ({ text: `COMBO ×${amount(e)}`, color: COLORS.impactOrange }), fighter: 'ecstatic' },
-  hot_streak: { floater: () => ({ text: 'HOT STREAK READY', color: COLORS.impactOrange }), fighter: 'powerup' },
-  hot_streak_hit: { shake: true, damage: true, floater: dmg('HOT STREAK'), fighter: 'ecstatic', enemy: 'criticalHit' },
-  grudge: { floater: e => ({ text: `GRUDGE ${amount(e) || ''}`.trim(), color: '#7A3E00' }) },
-  grudge_release: { shake: true, damage: true, floater: dmg('GRUDGE'), fighter: 'ecstatic', enemy: 'criticalHit' },
-  thick_hide: { floater: () => ({ text: 'THICK HIDE!', color: COLORS.logicTeal }), fighter: 'heal' },
-  patience: { damage: true, floater: dmg('PATIENCE'), enemy: 'hit' },
-  freeze: { fighter: 'ecstatic', floater: () => ({ text: 'FROZEN!', color: '#1D4ED8' }) },
-  redeal: { fighter: 'ecstatic', floater: () => ({ text: 'ZOOMIES!', color: COLORS.impactOrange }) },
-  scoop: { fighter: 'ecstatic', enemy: 'criticalHit', floater: () => ({ text: 'BIG SCOOP!', color: COLORS.logicTeal }) },
-  keen_eye: {},
-  fetch: { floater: () => ({ text: 'FETCH!', color: TONE.coin }) },
-  free_mistake: { floater: () => ({ text: 'NO HARM', color: COLORS.logicTeal }) },
-  // rule effects
-  rule: { floater: e => ({ text: e.text ?? '!', color: TONE.combo }) },
-  blast: { shake: true, damage: true, floater: dmg('BLAST'), enemy: 'hit' },
-  laser: { shake: true, damage: true, floater: dmg('LASER'), enemy: 'hit' },
-  ricochet: { damage: true, floater: dmg('RICOCHET'), enemy: 'hit' },
-  doubled: { floater: () => ({ text: '×2!', color: TONE.combo }) },
-  double_ready: { floater: () => ({ text: 'NEXT ×2', color: TONE.combo }) },
-  charged: { floater: e => ({ text: `NEXT SET ×${amount(e)}`, color: COLORS.impactOrange }) },
-  empowered: { floater: e => ({ text: `WAR DRUM +${amount(e)}`, color: COLORS.impactOrange }), fighter: 'powerup' },
-  simplified: { floater: () => ({ text: 'CLARITY!', color: COLORS.logicTeal }) },
-  simplify_end: {},
-  pinata: { floater: () => ({ text: 'PIÑATA!', color: '#DB2777' }) },
-  pinata_break: { shake: true, damage: true, floater: dmg('PIÑATA'), fighter: 'ecstatic', enemy: 'criticalHit' },
-  link: {},
-  // purity, evolutions, hazards & arcana
-  purity: { floater: e => ({ text: `PURITY ×${amount(e)}!`, color: '#0D9488' }) },
-  purity_max: { floater: e => ({ text: `MAX PURITY ×${amount(e)}!`, color: TONE.combo }), fighter: 'ecstatic', enemy: 'criticalHit' },
-  catalyst_spawn: { floater: () => ({ text: 'CATALYST!', color: TONE.evoReady }) },
-  evolution_start: { fighter: 'ecstatic', enemy: 'criticalHit' },
-  evolution_end: { floater: () => ({ text: 'EVOLUTION ENDS', color: TONE.spent }) },
-  trap_placed: {},
-  trap_defused: { damage: true, floater: e => ({ text: `DEFUSED −${amount(e)}`, color: COLORS.logicTeal }), enemy: 'hit' },
-  trap_sprung: { floater: () => ({ text: 'SPRUNG!', color: COLORS.impactRed }), fighter: 'pain', enemy: 'gloat' },
-  arcana_burn: { floater: () => ({ text: 'CONTROLLED BURN!', color: COLORS.impactOrange }) },
-  overkill: { floater: e => ({ text: `OVERKILL +${amount(e)}`, color: TONE.coin }) },
-};
 
 /** The recipe an evolution event is about (the engine names it by id or by name). */
 const recipeFor = (key: string | undefined): EvolutionRecipe | undefined =>
@@ -168,7 +84,7 @@ for (const m of Object.values(MECHANICS)) {
   COACH_BY_EVENT.set(m.coachMark.on, [...(COACH_BY_EVENT.get(m.coachMark.on) ?? []), tip]);
 }
 
-const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish, onQuit, onRestart, onCoachMarkSeen }) => {
+const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish, onQuit, onRestart, onCoachMarkSeen, effects = true, onToggleEffects }) => {
   const insets = useSafeAreaInsets();
   const [run, dispatchRaw] = useReducer(runReducer, undefined, () => createRun(level, save, { seed }));
   const runRef = useRef(run);
@@ -178,9 +94,13 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   const [hudHeight, setHudHeight] = useState(150);
   const [hintTrigger, setHintTrigger] = useState(0);
   const [lastMatchTime, setLastMatchTime] = useState(Date.now());
-  const [floaters, setFloaters] = useState<FloaterSpec[]>([]);
   const [megaFlash, setMegaFlash] = useState(0);
-  const [banner, setBanner] = useState<{ recipe: EvolutionRecipe | null; text: string; seq: number } | null>(null);
+  const [stage, setStage] = useState({ w: 0, h: 0 });
+  /** A weapon on the belt the player tapped to read about (the fight waits) */
+  const [inspect, setInspect] = useState<Weapon | null>(null);
+  /** The first evolution ever: its cut-in also points at the countdown ring */
+  const [evolutionHint, setEvolutionHint] = useState(false);
+  const anchors = useAnchors();
   const [tips, setTips] = useState<Tip[]>([]);
   const tip = tips[0] ?? null;
   const pushTip = useCallback((t: Tip) => setTips(q => (q.some(x => x.id === t.id) ? q : [...q, t])), []);
@@ -195,6 +115,10 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   useEffect(() => {
     if (__DEV__ && Platform.OS === 'web') (window as unknown as { __nshapesRun?: RunState }).__nshapesRun = run;
   }, [run]);
+  // Dev only: `__nshapesFx.slow = 8` plays the effects in slow motion
+  useEffect(() => {
+    if (__DEV__ && Platform.OS === 'web') (window as unknown as { __nshapesFx?: typeof fxClock }).__nshapesFx = fxClock;
+  }, []);
   const later = useCallback((fn: () => void, ms: number) => {
     timeouts.current.push(setTimeout(fn, ms));
   }, []);
@@ -211,10 +135,11 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   }, [arrangement]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (run.status === 'won' || run.status === 'lost') return;
-    if (band.inFight) band.setMood(moodNow(run, paused || Boolean(tip)));
-  }, [run, paused, tip]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (band.inFight) band.setMood(moodNow(run, paused || Boolean(tip) || Boolean(inspect)));
+  }, [run, paused, tip, inspect]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const playing = run.status === 'playing' && !paused && !tip;
+  const halted = paused || Boolean(tip) || Boolean(inspect);
+  const playing = run.status === 'playing' && !halted;
 
   // First fight with a new mechanic: walk through its tips before anything moves
   useEffect(() => {
@@ -267,11 +192,6 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
       });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (!playing) return;
-    const iv = setInterval(() => dispatch({ type: 'TICK', ms: TICK_MS }), TICK_MS);
-    return () => clearInterval(iv);
-  }, [playing, dispatch]);
 
   // Low-time tick sound
   const secondsLeft = run.timeLeft !== null ? Math.ceil(run.timeLeft) : null;
@@ -309,59 +229,74 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
     triggerEnemyReaction('entrance');
   }, [triggerEntrance, triggerEnemyReaction]);
 
-  // Events → the band's cues, floating numbers (sized by the hit), shakes, flashes, banners, coach marks
+  // A beat of the cascade reached its target: the HUD reacts
   const foeShake = useSharedValue(0);
   const foeScale = useSharedValue(1);
   const screenShake = useSharedValue(0);
+  const onLand = (beat: Beat) => {
+    const { row, tier } = beat;
+    if (row.shake) {
+      foeShake.value = withSequence(withTiming(-8, { duration: 40 }), withTiming(8, { duration: 60 }), withTiming(-4, { duration: 50 }), withTiming(0, { duration: 50 }));
+      foeScale.value = withSequence(withTiming(0.9, { duration: 60 }), withTiming(1, { duration: 120, easing: Easing.out(Easing.quad) }));
+    }
+    if (tier >= 2) {
+      const amp = tier === 3 ? 10 : 6;
+      screenShake.value = withSequence(withTiming(-amp, { duration: 40 }), withTiming(amp, { duration: 60 }), withTiming(-amp / 2, { duration: 50 }), withTiming(amp / 2, { duration: 50 }), withTiming(0, { duration: 50 }));
+    }
+    if (tier === 3) setMegaFlash(f => f + 1);
+    switch (row.fighter) {
+      case 'ecstatic': conductor.triggerReaction('ecstatic'); break;
+      case 'pain': conductor.triggerReaction('pain'); break;
+      case 'heal': conductor.triggerHeal(); break;
+      case 'powerup': conductor.triggerPowerup(); break;
+      case 'entrance': conductor.triggerEntrance(); break;
+    }
+    switch (row.enemy) {
+      case 'criticalHit': enemyConductor.triggerReaction('crit_pain'); break;
+      case 'hit': enemyConductor.triggerReaction('pain'); break;
+      case 'gloat': enemyConductor.triggerReaction('taunt'); break;
+      case 'attack': enemyConductor.triggerReaction('attack'); break;
+      case 'regen': enemyConductor.triggerReaction('regen'); break;
+      case 'entrance': enemyConductor.triggerReaction('entrance'); break;
+    }
+  };
+
+  // The stage plays each move as a cascade; the band plays each stretch of it as it starts, in step with it
+  const fx = useFightFx({
+    anchors,
+    reduced: !effects,
+    onSegment: segment =>
+      playSounds(soundsFor(segment.events, { weapons: runRef.current.weapons.map(w => w.id), combo: runRef.current.combo }), segment.stride),
+    onLand,
+  });
+
+  // The fight clock stands still while a cascade plays or a cut-in waits for a tap
+  const ticking = playing && !fx.busy;
+  useEffect(() => {
+    if (!ticking) return;
+    const iv = setInterval(() => dispatch({ type: 'TICK', ms: TICK_MS }), TICK_MS);
+    return () => clearInterval(iv);
+  }, [ticking, dispatch]);
+
+  // Fresh events → a script for the stage, and first-time coach marks
   const lastEventId = useRef(0);
   useEffect(() => {
     const fresh = run.events.filter(e => e.id > lastEventId.current);
     if (fresh.length === 0) return;
     lastEventId.current = fresh[fresh.length - 1].id;
-    playSounds(soundsFor(fresh, { weapons: run.weapons.map(w => w.id), combo: run.combo }));
-    let burst = 0;
+    fx.play(scriptFor(fresh, { weapons: run.weapons, gridMs: band.gridMs, reduced: !effects }));
     for (const e of fresh) {
-      const show = EVENT_PRESENTATION[e.type];
-      const tier = show.damage ? hitTier(e.amount ?? 0) : 0;
-      if (show.shake) {
-        foeShake.value = withSequence(withTiming(-8, { duration: 40 }), withTiming(8, { duration: 60 }), withTiming(-4, { duration: 50 }), withTiming(0, { duration: 50 }));
-        foeScale.value = withSequence(withTiming(0.9, { duration: 60 }), withTiming(1, { duration: 120, easing: Easing.out(Easing.quad) }));
-      }
-      if (tier >= 2) {
-        const amp = tier === 3 ? 10 : 6;
-        screenShake.value = withSequence(withTiming(-amp, { duration: 40 }), withTiming(amp, { duration: 60 }), withTiming(-amp / 2, { duration: 50 }), withTiming(amp / 2, { duration: 50 }), withTiming(0, { duration: 50 }));
-      }
-      if (tier === 3) setMegaFlash(f => f + 1);
-      if (show.floater) {
-        const f = show.floater(e);
-        addFloater(tier === 3 ? `MEGA ${f.text}` : f.text, f.color, tier, burst++);
-      }
-      switch (show.fighter) {
-        case 'ecstatic': conductor.triggerReaction('ecstatic'); break;
-        case 'pain': conductor.triggerReaction('pain'); break;
-        case 'heal': conductor.triggerHeal(); break;
-        case 'powerup': conductor.triggerPowerup(); break;
-        case 'entrance': conductor.triggerEntrance(); break;
-      }
-      switch (show.enemy) {
-        case 'criticalHit': enemyConductor.triggerReaction('crit_pain'); break;
-        case 'hit': enemyConductor.triggerReaction('pain'); break;
-        case 'gloat': enemyConductor.triggerReaction('taunt'); break;
-        case 'attack': enemyConductor.triggerReaction('attack'); break;
-        case 'regen': enemyConductor.triggerReaction('regen'); break;
-        case 'entrance': enemyConductor.triggerReaction('entrance'); break;
-      }
-      if (e.type === 'evolution_start') {
+      if (e.type === 'evolution_start' && !seenCoach.current.has(COACH_KEYS.evolution)) {
+        seenCoach.current.add(COACH_KEYS.evolution);
+        onCoachMarkSeen(COACH_KEYS.evolution);
         const recipe = recipeFor(e.text);
-        setBanner(b => ({ recipe: recipe ?? null, text: recipe?.activeText ?? e.text ?? '', seq: (b?.seq ?? 0) + 1 }));
-        later(() => setBanner(null), 2700);
-        if (!seenCoach.current.has(COACH_KEYS.evolution)) {
-          seenCoach.current.add(COACH_KEYS.evolution);
-          onCoachMarkSeen(COACH_KEYS.evolution);
+        // With effects on, the cut-in itself explains the evolution
+        if (effects) setEvolutionHint(true);
+        else {
           pushTip({
             id: COACH_KEYS.evolution,
             title: `${recipe?.name ?? 'Evolution'} is live!`,
-            text: `For 30 seconds: ${recipe?.activeText ?? 'your evolved rules are on.'} Every Set also deals ×1.5 and +2. The ring by the HP bar shows the time left.`,
+            text: `For ${EVOLUTION_RULES.durationMs / 1000} seconds: ${recipe?.activeText ?? 'your evolved rules are on.'} Every Set also deals ×${EVOLUTION_RULES.setMultiplier} and +${EVOLUTION_RULES.setDamage}. The ring by the HP bar shows the time left.`,
             icon: recipe?.icon ?? 'lorc/crystal-shine',
             anchor: 'top',
             label: 'Evolution',
@@ -378,21 +313,22 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
     dispatch({ type: 'CLEAR_EVENTS', upTo: lastEventId.current - 20 });
   }, [run.events]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const floaterSeq = useRef(0);
-  const addFloater = (text: string, color: string, tier: FloaterSpec['tier'], index: number) => {
-    const id = ++floaterSeq.current;
-    const dx = ((index % 3) - 1) * 34 + (tier > 0 ? -10 : 0);
-    setFloaters(f => [...f.slice(-6), { id, text, color, tier, dx }]);
-    later(() => setFloaters(f => f.filter(x => x.id !== id)), 1100 + tier * 250);
-  };
+  // Where everything is on screen can change with the board, the belt and the chips
+  useEffect(() => {
+    anchors.measure();
+  }, [anchors, run.board.length, run.weapons.length, run.activeEvolutions.length, run.status, stage.w, stage.h, hudHeight]);
+  const slotRef = useCallback((index: number) => anchors.ref(`slot:${index}`), [anchors]);
 
   // End of run → hand off to results after the finishing blow lands
   useEffect(() => {
-    if (!ended) return;
-    band.finale(run.status === 'won');
-    const t = setTimeout(() => onFinish(runRef.current), 1300);
-    return () => clearTimeout(t);
+    if (ended) band.finale(run.status === 'won');
   }, [ended]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    // The last cascade plays out first
+    if (!ended || fx.busy) return;
+    const t = setTimeout(() => onFinish(runRef.current), effects ? 900 : 1300);
+    return () => clearTimeout(t);
+  }, [ended, fx.busy]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleMatch = useCallback((cards: Card[], rewards: CardReward[], effects?: WeaponEffectResult) => {
     setLastMatchTime(Date.now());
@@ -426,7 +362,9 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
 
   const foeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: foeShake.value }, { scale: foeScale.value }] }));
   const screenStyle = useAnimatedStyle(() => ({ transform: [{ translateX: screenShake.value }] }));
-  const hpPct = run.foeMaxHp > 0 ? run.foeHp / run.foeMaxHp : 0;
+  // Damage still in the air has not come off the bar yet (nor has that of events the stage is about to be handed)
+  const incoming = effects ? run.events.reduce((sum, e) => (e.id > lastEventId.current && EVENT_FX[e.type]?.damage ? sum + (e.amount ?? 0) : sum), 0) : 0;
+  const shownHp = Math.min(run.foeMaxHp, Math.round(run.foeHp + fx.pendingDamage + incoming));
   const challenge = challengeProgress(run);
   const gearMods = gearModifiers(run);
   const xpNeed = xpForLevel(run.xpLevel);
@@ -436,9 +374,21 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   const catalystOnBoard = run.board.some(c => c.hasEvolutionItem);
   const evolutionsLeft = run.evolutionCap - run.evolutionsTriggered;
 
+  const movesChip = run.movesLeft !== null && (
+    <View style={[st.stat, run.movesLeft <= 2 && st.statWarn]}>
+      <Icon name="lorc/archery-target" size={16} color={INK} />
+      <Text style={st.statText}>{run.movesLeft} moves</Text>
+    </View>
+  );
   const keenEyeIds = useMemo(() => (run.passive.keenEyeCardId ? [run.passive.keenEyeCardId] : undefined), [run.passive.keenEyeCardId]);
   return (
-    <Animated.View style={[st.root, { backgroundColor: biome.colors.sky, paddingTop: insets.top }, screenStyle]}>
+    <AnchorsProvider value={anchors}>
+    <Animated.View
+      style={[st.root, { backgroundColor: biome.colors.sky, paddingTop: insets.top }, screenStyle]}
+      onLayout={e => setStage({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
+    >
+      {/* What every anchor is measured against: the stage's own top-left corner */}
+      <View ref={anchors.rootRef} collapsable={false} pointerEvents="none" style={StyleSheet.absoluteFill} />
       {/* ── HUD ─────────────────────────────────────────── */}
       <View style={st.hud} onLayout={e => setHudHeight(e.nativeEvent.layout.height)}>
         <View style={st.hudTop}>
@@ -446,6 +396,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
             <Text style={st.pauseText}>II</Text>
           </TouchableOpacity>
 
+          <Anchor name="foe">
           <Animated.View style={[st.foePortrait, level.isBoss && { backgroundColor: COLORS.actionYellow }, foeStyle]}>
             <EnemyAvatar
               testID="adventure-run-enemy"
@@ -458,16 +409,14 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
               interactive
             />
           </Animated.View>
+          </Anchor>
 
           <View style={{ flex: 1, gap: 3 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Text style={st.foeName} numberOfLines={1}>{run.foeName}</Text>
               {level.foes.length > 1 && <Text style={st.wave}>WAVE {run.wave + 1}/{level.foes.length}</Text>}
             </View>
-            <View style={st.hpTrack}>
-              <View style={[st.hpFill, { width: `${Math.max(0, hpPct * 100)}%`, backgroundColor: hpPct > 0.5 ? COLORS.impactRed : hpPct > 0.25 ? COLORS.impactOrange : '#E53935' }]} />
-              <Text style={st.hpText}>{run.foeHp} / {run.foeMaxHp}</Text>
-            </View>
+            <HpBar hp={shownHp} max={run.foeMaxHp} />
             {ui.showInactivityBar && (
               <View style={st.idleTrack}>
                 <View style={[st.idleFill, { width: `${Math.min(100, (ui.showInactivityBar.current / ui.showInactivityBar.max) * 100)}%` }]} />
@@ -476,13 +425,14 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
             <View style={st.counters}>
               <Text testID="run-total-damage" style={st.counter} accessibilityLabel={`${run.totalDamage} total damage`}>⚔ {run.totalDamage}</Text>
               {run.combo > 1 && comboLive && (
-                <Text testID="run-combo" style={[st.counter, st.counterHot]}>COMBO ×{run.combo}</Text>
+                <Anchor name="combo"><Text testID="run-combo" style={[st.counter, st.counterHot]}>COMBO ×{run.combo}</Text></Anchor>
               )}
               {run.biggestHit > 0 && <Text testID="run-biggest-hit" style={st.counterDim}>best {run.biggestHit}</Text>}
             </View>
           </View>
 
           {/* Player's living fighter */}
+          <Anchor name="fighter">
           <FighterAvatar
             testID="adventure-run-fighter"
             character={run.fighter}
@@ -495,36 +445,39 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
             framed
             interactive
           />
-
-          <View style={st.floaters} pointerEvents="none">
-            {floaters.map(f => <Floater key={f.id} spec={f} />)}
-          </View>
+          </Anchor>
         </View>
 
         <View style={st.hudRow}>
-          <Hearts hearts={run.hearts} max={run.maxHearts} />
-          {run.movesLeft !== null && (
-            <View style={[st.stat, run.movesLeft <= 2 && st.statWarn]}>
-              <Icon name="lorc/archery-target" size={16} color={INK} />
-              <Text style={st.statText}>{run.movesLeft} moves</Text>
-            </View>
-          )}
+          <Anchor name="hearts"><Hearts hearts={run.hearts} max={run.maxHearts} /></Anchor>
+          {/* On an untimed level the moves are the clock */}
+          {run.movesLeft !== null && (secondsLeft === null ? <Anchor name="clock">{movesChip}</Anchor> : movesChip)}
           {secondsLeft !== null && (
-            <View style={[st.stat, secondsLeft <= 10 && st.statWarn, ui.timerSpeedMultiplier && ui.timerSpeedMultiplier > 1 ? { borderColor: COLORS.impactOrange } : null]}>
-              <Icon name="lorc/stopwatch" size={16} color={INK} />
-              <Text style={st.statText}>{secondsLeft}s</Text>
-            </View>
+            <Anchor name="clock">
+              {/* Teal while a cascade plays: the clock is standing still */}
+              <View
+                testID="run-clock"
+                accessibilityLabel={`${secondsLeft} seconds left${fx.busy ? ', waiting for effects' : ''}`}
+                style={[st.stat, secondsLeft <= 10 && st.statWarn, ui.timerSpeedMultiplier && ui.timerSpeedMultiplier > 1 ? { borderColor: COLORS.impactOrange } : null, fx.busy && st.statHeld]}
+              >
+                <Icon name="lorc/stopwatch" size={16} color={fx.busy ? COLORS.logicTeal : INK} />
+                <Text style={st.statText}>{secondsLeft}s</Text>
+              </View>
+            </Anchor>
           )}
-          {run.passives.map(id => <PassiveChip key={id} id={id} run={run} />)}
+          {run.passives.map(id => <Anchor key={id} name={`passive:${id}`}><PassiveChip id={id} run={run} /></Anchor>)}
           {run.features.has('graces') && (
-            <View style={st.stat}>
-              <Icon name="lorc/clover" size={16} color={COLORS.logicTeal} />
-              <Text style={st.statText}>{run.stats.graces}</Text>
-            </View>
+            <Anchor name="graces">
+              <View style={st.stat}>
+                <Icon name="lorc/clover" size={16} color={COLORS.logicTeal} />
+                <Text style={st.statText}>{run.stats.graces}</Text>
+              </View>
+            </Anchor>
           )}
           <View style={{ flex: 1 }} />
-          {run.features.has('coins') && <CoinPill coins={run.coins} />}
+          {run.features.has('coins') && <Anchor name="coins"><CoinPill coins={run.coins} /></Anchor>}
           {run.features.has('hints') && (
+            <Anchor name="hint">
             <TouchableOpacity
               testID="run-hint"
               onPress={() => run.stats.hints > 0 && !ui.disableManualHint && setHintTrigger(t => t + 1)}
@@ -534,15 +487,21 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
               <Icon name="lorc/light-bulb" size={18} color={INK} />
               <Text style={st.statText}>{run.stats.hints}</Text>
             </TouchableOpacity>
+            </Anchor>
           )}
         </View>
 
         {run.features.has('xp') && (
-          <View style={st.xpTrack}>
-            <View style={[st.xpFill, { width: `${(run.xp / xpNeed) * 100}%` }]} />
-            <Text style={st.xpText}>LV {run.xpLevel + 1}</Text>
-          </View>
+          <Anchor name="xp">
+            <View style={st.xpTrack}>
+              <View style={[st.xpFill, { width: `${(run.xp / xpNeed) * 100}%` }]} />
+              <Text style={st.xpText}>LV {run.xpLevel + 1}</Text>
+            </View>
+          </Anchor>
         )}
+
+        {/* The weapons in play: each jumps when it fires; tap one to read it */}
+        <GearBelt weapons={run.weapons} width={stage.w} onInspect={setInspect} />
 
         {/* Live Arcana, Escalating Purity, board effects & Evolution status strip */}
         {(run.arcana.length > 0 || purityLive || evolutionsOn || run.simplified || run.doubleNext > 0 || run.nextSetMultiplier > 1 || hasGearChips(gearMods)) && (
@@ -599,13 +558,14 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
             {run.activeEvolutions.map(a => {
               const recipe = recipeFor(a.id);
               return (
-                <EvolutionRing
-                  key={a.id}
-                  icon={recipe?.icon ?? 'lorc/crystal-shine'}
-                  name={recipe?.name ?? a.id}
-                  remainingMs={a.remainingMs}
-                  durationMs={a.durationMs}
-                />
+                <Anchor key={a.id} name={`evo:${a.id}`}>
+                  <EvolutionRing
+                    icon={recipe?.icon ?? 'lorc/crystal-shine'}
+                    name={recipe?.name ?? a.id}
+                    remainingMs={a.remainingMs}
+                    durationMs={a.durationMs}
+                  />
+                </Anchor>
               );
             })}
           </View>
@@ -619,7 +579,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
       </View>
 
       {/* ── Board ───────────────────────────────────────── */}
-      <View style={st.boardWrap}>
+      <View ref={anchors.ref('board')} collapsable={false} style={st.boardWrap}>
         {/* Evolution pulse: a glow behind the cards, never a card border */}
         {run.activeEvolutions.length > 0 && <EvolutionGlow />}
         {run.frozenMs > 0 && (
@@ -635,12 +595,12 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
           onInvalidSelection={handleInvalid}
           playerStats={run.stats}
           weapons={run.weapons}
-          isPlayerTurn={run.status === 'playing' && !paused && !tip}
+          isPlayerTurn={run.status === 'playing' && !halted && !fx.cutIn}
           activeAttributes={run.attributes}
           onUseHint={handleUseHint}
           triggerHint={hintTrigger}
           onCardBurn={handleBurn}
-          isPaused={!playing}
+          isPaused={!ticking}
           lastMatchTime={lastMatchTime}
           autoPlayer={autoPlayer}
           enemy={run.foe}
@@ -648,19 +608,40 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
           glowingCardIds={keenEyeIds}
           onSelectedCountChange={conductor.setSelectedCount}
           onBoardIdleChange={conductor.setIsBoardIdle}
+          slotRef={slotRef}
+          onSlotLayout={anchors.measure}
         />
       </View>
 
-      {banner && (
-        <View style={[st.bannerWrap, { top: insets.top + hudHeight / 2 }]} pointerEvents="none">
-          <EvolutionBanner
-            name={banner.recipe?.name ?? 'Evolution'}
-            icon={banner.recipe?.icon ?? 'lorc/crystal-shine'}
-            text={banner.text}
-            seq={banner.seq}
-          />
-        </View>
+      {/* Everything that is playing right now */}
+      <FxStage fx={fx} anchors={anchors} size={stage} />
+      {fx.cutIn && (
+        <EvolutionCutIn
+          key={fx.cutIn.key}
+          recipes={fx.cutIn.recipes.map(recipeFor).filter((r): r is EvolutionRecipe => !!r)}
+          weapons={run.weapons}
+          seconds={Math.round((run.activeEvolutions.find(a => a.id === fx.cutIn?.recipes[0])?.durationMs ?? EVOLUTION_RULES.durationMs) / 1000)}
+          size={stage}
+          onDone={() => { setEvolutionHint(false); fx.dismissCutIn(); }}
+          autoDismissMs={autoPlayer ? 1600 : undefined}
+          hint={evolutionHint ? 'The ring by the HP bar counts down the time left.' : undefined}
+        />
       )}
+      {/* Effects off: evolutions get a small banner that does not stop the fight */}
+      {fx.banner && (() => {
+        const recipe = recipeFor(fx.banner.recipes[0]);
+        return (
+          <View style={[st.bannerWrap, { top: insets.top + hudHeight / 2 }]} pointerEvents="none">
+            <EvolutionBanner
+              name={recipe?.name ?? 'Evolution'}
+              icon={recipe?.icon ?? 'lorc/crystal-shine'}
+              text={recipe?.activeText ?? ''}
+              seconds={EVOLUTION_RULES.durationMs / 1000}
+              seq={fx.banner.key}
+            />
+          </View>
+        );
+      })()}
       <MegaFlash trigger={megaFlash} />
 
       {/* Tip: pauses the fight until accepted. The part it talks about stays lit. */}
@@ -694,7 +675,8 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
         );
       })()}
 
-      {run.status === 'pick' && (
+      {/* Level-up and shop wait for the cascade that earned them */}
+      {run.status === 'pick' && !fx.busy && (
         <WeaponPick
           title="LEVEL UP!"
           subtitle="Pick one for this fight"
@@ -706,7 +688,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
       )}
 
       {/* Between waves */}
-      {run.status === 'intermission' && (
+      {run.status === 'intermission' && !fx.busy && (
         <Intermission run={run} dispatch={dispatch} onPurchase={() => conductor.triggerPowerup()} />
       )}
 
@@ -729,13 +711,59 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
               </View>
             )}
             <Btn label="Resume" onPress={() => setPaused(false)} />
+            {onToggleEffects && (
+              <Btn
+                testID="toggle-effects"
+                small
+                variant="secondary"
+                label={effects ? 'Effects: on' : 'Effects: off'}
+                onPress={onToggleEffects}
+              />
+            )}
             <Btn label="Restart" variant="secondary" onPress={() => { setPaused(false); onRestart(); }} />
             <Btn label="Retreat to map" variant="secondary" onPress={() => { setPaused(false); music.stop(); onQuit(); }} />
             <Text style={st.panelHint}>Retreating forfeits this attempt, including the coins you've collected in it.</Text>
+            {onToggleEffects && (
+              <Text style={st.panelHint}>
+                {effects ? 'Effects on: the clock waits while they play.' : 'Effects off: numbers only, and the clock never waits.'}
+              </Text>
+            )}
+          </PopIn>
+        </View>
+      </Modal>
+
+      {/* A weapon from the belt, explained (the fight waits) */}
+      <Modal visible={!!inspect} transparent animationType="fade" onRequestClose={() => setInspect(null)}>
+        <View style={st.overlay}>
+          <PopIn style={[st.panel, { padding: 12 }]}>
+            {inspect && <WeaponExplainer weapon={inspect} build={run.weaponBuilds[inspect.id]} defaultOpen />}
+            <Btn testID="inspect-close" label="Back to the fight" onPress={() => setInspect(null)} />
           </PopIn>
         </View>
       </Modal>
     </Animated.View>
+    </AnchorsProvider>
+  );
+};
+
+/** The foe's HP: the bar drops as each hit lands, and a pale trail shows what was just taken. */
+const HpBar: React.FC<{ hp: number; max: number }> = ({ hp, max }) => {
+  const pct = max > 0 ? Math.max(0, Math.min(1, hp / max)) : 0;
+  const fill = useSharedValue(pct);
+  const trail = useSharedValue(pct);
+  useEffect(() => {
+    const rising = pct > fill.value;
+    fill.value = withTiming(pct, { duration: 140, easing: Easing.out(Easing.quad) });
+    trail.value = rising ? pct : withDelay(260, withTiming(pct, { duration: 340, easing: Easing.out(Easing.quad) }));
+  }, [pct, fill, trail]);
+  const fillStyle = useAnimatedStyle(() => ({ width: `${fill.value * 100}%` }));
+  const trailStyle = useAnimatedStyle(() => ({ width: `${trail.value * 100}%` }));
+  return (
+    <View style={st.hpTrack} accessibilityLabel={`Foe health ${hp} of ${max}`}>
+      <Animated.View style={[st.hpFill, st.hpTrail, trailStyle]} />
+      <Animated.View style={[st.hpFill, { backgroundColor: pct > 0.5 ? COLORS.impactRed : pct > 0.25 ? COLORS.impactOrange : '#E53935' }, fillStyle]} />
+      <Text style={st.hpText}>{hp} / {max}</Text>
+    </View>
   );
 };
 
@@ -916,10 +944,10 @@ const st = StyleSheet.create({
   wave: { fontWeight: '900', fontSize: 11, color: INK, letterSpacing: 1 },
   hpTrack: { height: 20, borderRadius: 4, borderWidth: 2, borderColor: INK, backgroundColor: '#F1E9E0', overflow: 'hidden', justifyContent: 'center' },
   hpFill: { position: 'absolute', left: 0, top: 0, bottom: 0 },
+  hpTrail: { backgroundColor: '#FFE9A8' },
   hpText: { textAlign: 'center', fontWeight: '900', fontSize: 11, color: INK, fontVariant: ['tabular-nums'] },
   idleTrack: { height: 5, borderRadius: 3, backgroundColor: '#EEE', overflow: 'hidden' },
   idleFill: { height: '100%', backgroundColor: COLORS.impactOrange },
-  floaters: { position: 'absolute', left: 120, top: 0, alignItems: 'flex-start' },
   counters: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   counter: { fontSize: 11, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
   counterHot: { color: COLORS.impactOrange },
@@ -929,6 +957,7 @@ const st = StyleSheet.create({
   hudRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   stat: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, borderWidth: 2, borderColor: INK, backgroundColor: COLORS.canvasWhite },
   statWarn: { backgroundColor: '#FFE1DE', borderColor: COLORS.impactRed },
+  statHeld: { backgroundColor: '#D4F4EE', borderColor: COLORS.logicTeal },
   statText: { fontWeight: '900', color: INK, fontSize: 13, fontVariant: ['tabular-nums'] },
   hintBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 6, borderWidth: 2, borderBottomWidth: 3, borderColor: INK, backgroundColor: COLORS.actionYellow },
   xpTrack: { height: 12, borderRadius: 3, borderWidth: 1.5, borderColor: INK, backgroundColor: COLORS.paperBeige, overflow: 'hidden', justifyContent: 'center' },

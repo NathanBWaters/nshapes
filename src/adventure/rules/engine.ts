@@ -14,7 +14,7 @@ import { BASE_RULES } from '../data/rules';
 import {
   addCoins, addGraces, addHints, addRandomConnections, addTime, addXp, areaIndices, armorCard, canSpawnCatalyst,
   dealDamage, destroyCards, emit, empowerBoard, enqueue, foeMultiplier, growBoard, heal, igniteCards, liveRulesOf,
-  placeCatalyst, redeal, simplify, touchable as touchableIdx, type Draft, type FightEvent,
+  newLinkSlots, placeCatalyst, redeal, simplify, touchable as touchableIdx, type Draft, type FightEvent,
 } from '../engine/fight';
 import { extendEvolutions } from '../engine/evolutions';
 import { addComboSteps, patienceMs } from '../engine/passives';
@@ -177,7 +177,7 @@ const convertCards = (d: Draft, to: 'power' | 'gold', count: number) => {
   d.board = d.board.map((c, i) =>
     !set.has(i) ? c : to === 'power' ? { ...c, bonusPoints: BASE_RULES.powerCardBonus } : { ...c, bonusMoney: BASE_RULES.coinCardValue }
   );
-  emit(d, 'fetch', chosen.length, to);
+  emit(d, 'fetch', chosen.length, to, { slots: chosen });
 };
 
 const WEAPON_KIND: Partial<Record<Effect['do'], WeaponTriggerKind>> = {
@@ -311,7 +311,11 @@ export const applyEffect = (d: Draft, e: Effect, label?: string) => {
       d.nextSetMultiplier = Math.min(BASE_RULES.maxNextSetMultiplier, d.nextSetMultiplier + (e.times - 1));
       emit(d, 'charged', d.nextSetMultiplier);
       break;
-    case 'link': if (addRandomConnections(d, e.count) > 0) emit(d, 'link', e.count); break;
+    case 'link': {
+      const before = d.connections.length;
+      if (addRandomConnections(d, e.count) > 0) emit(d, 'link', e.count, undefined, { slots: newLinkSlots(d, before) });
+      break;
+    }
     default: break;
   }
 };

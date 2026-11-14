@@ -85,6 +85,9 @@ export const EVENT_CUE: Record<RunEventType, CueName | null> = {
   trap_sprung: 'trapSprung',
   arcana_burn: 'burn',
   overkill: 'overkill',
+  echo: 'ding', // the echo weapon's own sting speaks for it
+  link_burst: 'link',
+  grow: 'twinkle',
 };
 
 /** Events whose `amount` is damage to the foe: together they size the hit */
@@ -98,7 +101,7 @@ export const hitSize = (damage: number): number => HIT_SIZES.filter(s => damage 
 
 /** Callouts that are a trick weapon going wrong */
 export const SOUR_CALLS = ['Off the rope', 'Glass Sword shattered', 'Thorns bite', 'Fuse burnt out', 'The curse spreads', 'Rust'] as const;
-const isSour = (e: RunEvent): boolean =>
+export const isSour = (e: RunEvent): boolean =>
   e.type === 'rule' && ((e.amount ?? 0) < 0 || (e.text !== undefined && SOUR_CALLS.some(c => e.text!.startsWith(c))));
 
 /** A chain this long ends on the cash register */
@@ -111,27 +114,47 @@ export type FightSound =
   | { kind: 'cue'; name: CueName; amount: number; slot: number }
   | { kind: 'sting'; weapon: string; slot: number };
 
+/** The Set's own hit: it is the payout, never a link of the chain */
+export const isSetHit = (e: RunEvent): boolean => e.type === 'hit' && !e.text;
+
+/** The weapon an event speaks for: the one whose rule caused it, or the held weapon that owns that kind of event */
+export const weaponOfEvent = (e: RunEvent, held: readonly string[]): string | null =>
+  (e.source ? weaponIdOf(e.source) : null) ?? ownerOfEvent(e.type, e.text, held);
+
+/**
+ * Does this event take a step of the chain? The effects on screen
+ * (src/adventure/fx/script.ts) ask the same question, so sound and picture
+ * step together. `setHit`: the events include a Set's own hit.
+ */
+export const takesChainSlot = (e: RunEvent, held: readonly string[], setHit: boolean): boolean => {
+  if (isSetHit(e) || (e.type === 'rainbow' && setHit)) return false;
+  if (isSour(e)) return true;
+  return (e.type === 'hit' ? 'ding' : EVENT_CUE[e.type]) !== null || weaponOfEvent(e, held) !== null;
+};
+
+/** The chain's first step when a Set leads it: the payout rings first */
+export const CHAIN_LEAD = 2;
+
 export const soundsFor = (events: readonly RunEvent[], ctx: { weapons: readonly string[]; combo: number }): FightSound[] => {
   const out: FightSound[] = [];
   const damage = events.reduce((sum, e) => sum + (DAMAGE.has(e.type) ? e.amount ?? 0 : 0), 0);
-  const setHit = events.some(e => e.type === 'hit' && !e.text);
+  const setHit = events.some(isSetHit);
   const rainbow = events.some(e => e.type === 'rainbow');
   if (setHit) out.push({ kind: 'payout', combo: Math.max(1, ctx.combo), tier: hitSize(damage), rainbow });
 
-  let slot = setHit ? 2 : 0;
+  let slot = setHit ? CHAIN_LEAD : 0;
   let chain = 0;
   const stung = new Set<string>();
   for (const e of events) {
     if (out.length >= MAX_CHAIN) break;
-    if (e.type === 'hit' && !e.text) continue;
-    if (e.type === 'rainbow' && setHit) continue;
+    if (isSetHit(e) || (e.type === 'rainbow' && setHit)) continue;
     // Bad news from your own gear (a shattered sword, a thorn that bit) never sounds like a win
     if (isSour(e)) {
       out.push({ kind: 'cue', name: 'sour', amount: 0, slot });
       slot += 1;
       continue;
     }
-    const weapon = (e.source ? weaponIdOf(e.source) : null) ?? ownerOfEvent(e.type, e.text, ctx.weapons);
+    const weapon = weaponOfEvent(e, ctx.weapons);
     const cue = e.type === 'hit' ? 'ding' : EVENT_CUE[e.type];
     // A weapon speaks for itself: its sting replaces the plain "ding" of a rule or a bonus hit
     const plain = cue === 'ding' && weapon !== null;
@@ -149,11 +172,16 @@ export const soundsFor = (events: readonly RunEvent[], ctx: { weapons: readonly 
   return out;
 };
 
-export const playSounds = (sounds: readonly FightSound[]): void => {
+/**
+ * `stride`: how many 32nd notes one step of the chain lasts. The effects on
+ * screen pick it (a short chain plays slower, so each step can be read) and
+ * pass it here, so every sound lands with its picture.
+ */
+export const playSounds = (sounds: readonly FightSound[], stride = 1): void => {
   for (const s of sounds) {
     if (s.kind === 'payout') band.payout(s);
-    else if (s.kind === 'cue') band.cue(s.name, { amount: s.amount, slot: s.slot });
-    else band.fire(s.weapon, s.slot);
+    else if (s.kind === 'cue') band.cue(s.name, { amount: s.amount, slot: s.slot * stride });
+    else band.fire(s.weapon, s.slot * stride);
   }
 };
 

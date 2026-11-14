@@ -10,7 +10,7 @@
 import type { AttributeName, BoardConnection, BridgeTriggerType, Card, PlayerStats, Weapon } from '@/types';
 import { ATTRIBUTE_VALUES, createDeck } from '@/utils/gameUtils';
 import { getLinkedDestructionPositions, arePositionsConnected } from '@/utils/connectionUtils';
-import type { ArcanaRules, FightLogLine, FightLogSetMath, PassiveId, RunEvent, RunEventType, RunState } from '../types';
+import type { ArcanaRules, EventPlace, FightLogLine, FightLogSetMath, PassiveId, RunEvent, RunEventType, RunState } from '../types';
 import type { Area, Modifiers, TrickKind, WeaponTriggerKind } from '../rules/types';
 import { arcanaRules } from '../data/arcana';
 import { BASE_RULES, TRICK_RULES } from '../data/rules';
@@ -67,6 +67,8 @@ export interface Draft extends RunState {
   _arcana: ArcanaRules | null;
   _setCtx: SetContext | null;
   _hooks: FightHooks;
+  /** This action is the fight clock ticking: what it emits is marked `clock` (see RunEvent) */
+  _clock: boolean;
   /** Events emitted during this action, with the rule that caused them (engine/fightLog.ts) */
   _lines: FightLogLine[];
   /** How the player's Set in this action was scored */
@@ -105,20 +107,30 @@ export const begin = (s: RunState, hooks: FightHooks): Draft => ({
   _arcana: null,
   _setCtx: null,
   _hooks: hooks,
+  _clock: false,
   _lines: [],
   _logSet: null,
 });
 
 export const finish = (d: Draft): RunState => {
-  const { _rng, _queue, _chain, _firings, _mods, _rules, _arcana, _setCtx, _hooks, _lines, _logSet, ...rest } = d;
+  const { _rng, _queue, _chain, _firings, _mods, _rules, _arcana, _setCtx, _hooks, _clock, _lines, _logSet, ...rest } = d;
   return { ...rest, rng: _rng.state };
 };
 
-export const emit = (d: Draft, type: RunEventType, amount?: number, text?: string) => {
+/**
+ * Something happened. `place` says where on the board (slots, and the cards
+ * that were there if it removed them), so the effects can play on those cards.
+ */
+export const emit = (d: Draft, type: RunEventType, amount?: number, text?: string, place?: EventPlace) => {
   d.eventSeq += 1;
   // Which rule (if any) caused it: the fight log names it, and the band plays that weapon's voice
   const source = d._chain[d._chain.length - 1];
   const e: RunEvent = source ? { id: d.eventSeq, type, amount, text, source } : { id: d.eventSeq, type, amount, text };
+  if (place?.slots?.length) {
+    e.slots = place.slots;
+    if (place.cards) e.cards = place.cards;
+  }
+  if (d._clock) e.clock = true;
   d.events.push(e);
   if (d.events.length > 60) d.events.shift();
   d._lines.push(source ? { type, amount, text, source } : { type, amount, text });
@@ -256,12 +268,16 @@ export const drawCard = (d: Draft, opts?: DrawOptions): Card => {
   if (d.features.has('power') && d._rng.next() < BASE_RULES.powerCardChance * specialMult) card.bonusPoints = BASE_RULES.powerCardBonus;
   card = dealTricks(d, card);
   if (opts?.skipFoeDrawEffects) return card;
-  card = d.foe.onCardDraw(card);
-  if (card.isDud) emit(d, 'dud');
-  if (card.isFaceDown) emit(d, 'face_down');
-  if (card.hasBomb) emit(d, 'bomb');
-  if (card.hasCountdown) emit(d, 'countdown');
-  return card;
+  return d.foe.onCardDraw(card);
+};
+
+/** Say what the foe did to a card that was just dealt into `slot` (call once the card is really on the board). */
+export const announceDraw = (d: Draft, card: Card, slot: number) => {
+  const at = { slots: [slot] };
+  if (card.isDud) emit(d, 'dud', undefined, undefined, at);
+  if (card.isFaceDown && card.fogFlipAt === undefined) emit(d, 'face_down', undefined, undefined, at);
+  if (card.hasBomb) emit(d, 'bomb', undefined, undefined, at);
+  if (card.hasCountdown) emit(d, 'countdown', undefined, undefined, at);
 };
 
 export interface RefillOptions extends DrawOptions {
@@ -283,6 +299,7 @@ export const refill = (d: Draft, indices: number[], opts?: RefillOptions) => {
     indices.forEach((idx, i) => (candidate[idx] = drawn[i]));
     if (hasAnySet(candidate, d.attributes) || attempt === 11) {
       d.board = candidate;
+      if (!opts?.skipFoeDrawEffects) indices.forEach((idx, i) => announceDraw(d, drawn[i], idx));
       break;
     }
     d.deck.push(...drawn.map(toDeckCard));
@@ -493,9 +510,12 @@ export const destroyCards = (d: Draft, indices: number[], kind: DestroyKind): nu
   const raw = destroyed.length * (COLLATERAL_DAMAGE[kind] + (d.stats[COLLATERAL_BONUS[kind]] ?? 0)) + linked.length * COLLATERAL_DAMAGE.connected;
   const dmg = dealDamage(d, raw * foeMultiplier(d));
   addCoins(d, destroyed.length + linked.length);
-  emit(d, DESTROY_EVENT[kind], dmg, String(destroyed.length + linked.length));
-  linked.forEach(() => enqueue(d, 'linkDestroyed'));
   const gone = [...destroyed, ...linked];
+  emit(d, DESTROY_EVENT[kind], dmg, String(gone.length), {
+    slots: [...gone, ...armored],
+    cards: [...gone.map(i => d.board[i]), ...armored.map(() => null)],
+  });
+  linked.forEach(() => enqueue(d, 'linkDestroyed'));
   if (gone.length) recycle(d, gone);
   return gone.length;
 };
@@ -511,7 +531,7 @@ export const igniteCards = (d: Draft, count: number): number => {
   // Only a change key for the burn timer, so elapsed time is enough (and must be non-zero)
   const stamp = d.elapsedMs + 1;
   updateCards(d, chosen, c => ({ ...c, onFire: true, fireStartTime: stamp }));
-  emit(d, 'fire', chosen.length);
+  emit(d, 'fire', chosen.length, undefined, { slots: chosen });
   return chosen.length;
 };
 
@@ -520,7 +540,10 @@ export const growBoard = (d: Draft, count: number): number => {
   if (extra <= 0) return 0;
   const added: Card[] = [];
   for (let i = 0; i < extra; i++) added.push(drawCard(d));
+  const first = d.board.length;
   d.board = [...d.board, ...added];
+  emit(d, 'grow', extra, undefined, { slots: added.map((_, i) => first + i) });
+  added.forEach((c, i) => announceDraw(d, c, first + i));
   return extra;
 };
 
@@ -538,7 +561,7 @@ export const armorCard = (d: Draft, extraHealth: number, bounty: number) => {
   if (candidates.length === 0 || extraHealth <= 0) return;
   const i = d._rng.pick(candidates);
   updateCards(d, [i], c => ({ ...c, health: (c.health ?? 1) + extraHealth, bounty: (c.bounty ?? 0) + bounty }));
-  emit(d, 'pinata', bounty);
+  emit(d, 'pinata', bounty, undefined, { slots: [i] });
 };
 
 /** Re-deal every card that isn't armored or on its way out; the foe's draw effects don't apply. */
@@ -579,6 +602,10 @@ export const addConnection = (d: Draft, posA: number, posB: number) => {
   d.connections = [...d.connections, makeConnection(posA, posB, d.elapsedMs)];
 };
 
+/** Board slots of the links added since there were `before` of them. */
+export const newLinkSlots = (d: Draft, before: number): number[] =>
+  d.connections.slice(before).flatMap(c => [c.positionA, c.positionB]);
+
 export const addRandomConnections = (d: Draft, count: number): number => {
   if (count <= 0 || d.board.length < 2) return 0;
   let added = 0;
@@ -617,7 +644,7 @@ export const placeCatalyst = (d: Draft, candidates: number[]): boolean => {
   if (eligible.length === 0) return false;
   const target = d._rng.pick(eligible);
   updateCards(d, [target], c => ({ ...c, hasEvolutionItem: true, evolutionReady: true }));
-  emit(d, 'catalyst_spawn');
+  emit(d, 'catalyst_spawn', undefined, undefined, { slots: [target] });
   return true;
 };
 
@@ -681,7 +708,7 @@ export const placeTimeBomb = (d: Draft, candidates: number[]): boolean => {
   if (i === null) return false;
   updateCards(d, [i], c => ({ ...c, hasCountdown: true, countdownTimer: bombs.seconds }));
   d.timeBombIds = [...d.timeBombIds, d.board[i].id];
-  emit(d, 'trap_placed', bombs.seconds, 'bomb');
+  emit(d, 'trap_placed', bombs.seconds, 'bomb', { slots: [i] });
   return true;
 };
 
@@ -695,7 +722,7 @@ export const placeSnare = (d: Draft, candidates: number[]): boolean => {
   if (dirs.length === 0) return false;
   const dir = d._rng.pick(dirs);
   updateCards(d, [i], c => ({ ...c, snare: dir }));
-  emit(d, 'trap_placed', undefined, 'snare');
+  emit(d, 'trap_placed', undefined, 'snare', { slots: [i] });
   return true;
 };
 

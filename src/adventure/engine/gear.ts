@@ -212,7 +212,7 @@ export const resolveTwins = (d: Draft, matched: Card[]) => {
   for (const id of twins) {
     const idx = d.board.findIndex(c => c.id === id);
     if (idx < 0 || !touchable(d, idx)) continue;
-    emit(d, 'hit', dealDamage(d, (mods(d).twinDamage ?? 0) * foeMultiplier(d)), 'Twin');
+    emit(d, 'hit', dealDamage(d, (mods(d).twinDamage ?? 0) * foeMultiplier(d)), 'Twin', { slots: [idx], cards: [d.board[idx]] });
     paid(d, 'twin');
     recycle(d, [idx]);
   }
@@ -280,7 +280,7 @@ export const tickGear = (d: Draft) => {
       const { fogFlipAt: _at, fogBonus, ...rest } = c;
       return rest.isFaceDown ? { ...rest, isFaceDown: false, bonusPoints: (rest.bonusPoints ?? 0) + (fogBonus ?? 0) } : rest;
     });
-    emit(d, 'rule', due.length, 'The fog lifts');
+    emit(d, 'rule', due.length, 'The fog lifts', { slots: due });
     paid(d, 'fog');
   }
 
@@ -294,7 +294,7 @@ export const tickGear = (d: Draft) => {
       return spreads ? rest : { ...rest, doubler: true };
     });
     if (spreads) updateCards(d, [d._rng.pick(next)], c => ({ ...c, locked: true, cursedUntil: d.elapsedMs + TRICK_RULES.curseMs }));
-    emit(d, 'rule', undefined, spreads ? 'The curse spreads' : 'Curse lifted: ×2 card');
+    emit(d, 'rule', undefined, spreads ? 'The curse spreads' : 'Curse lifted: ×2 card', { slots: [i] });
   }
 
   // Thorn Bush: thorns left too long bite
@@ -304,7 +304,7 @@ export const tickGear = (d: Draft) => {
       const { thornAt: _t, ...rest } = c;
       return rest;
     });
-    emit(d, 'rule', thorns.length, 'Thorns bite');
+    emit(d, 'rule', thorns.length, 'Thorns bite', { slots: thorns });
     hurt(d, thorns.length);
   }
 
@@ -318,7 +318,7 @@ export const tickGear = (d: Draft) => {
       const { fuseAt: _a, fuseHot: _h, ...rest } = c;
       return { ...rest, isDud: true, fuseDud: true };
     });
-    emit(d, 'rule', burnt.length, 'Fuse burnt out');
+    emit(d, 'rule', burnt.length, 'Fuse burnt out', { slots: burnt });
   }
 
   // Hot Potato: jumps to a neighbour

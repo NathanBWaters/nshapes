@@ -14,6 +14,9 @@ const LABEL: Partial<Record<RunEventType, (l: FightLogLine) => string | null>> =
   blast: l => `Explosion · ${plural(Number(l.text), 'card')}`,
   laser: l => `Laser · ${plural(Number(l.text), 'card')}`,
   ricochet: l => `Ricochet · ${plural(Number(l.text), 'card')}`,
+  link_burst: l => `Linked cards went too · ${plural(Number(l.text), 'card')}`,
+  echo: l => `Echo matched a Set · ${plural(Number(l.text), 'card')}`,
+  grow: l => `Board grew by ${plural(l.amount, 'card')}`,
   pinata_break: () => 'Piñata broke',
   coins: () => null,
   mistake: () => null,
@@ -94,7 +97,8 @@ export const describeLines = (lines: FightLogLine[], held: readonly string[] = [
     const fn = LABEL[l.type];
     const label = fn ? fn(l) : `${humanize(l.type)}${l.amount !== undefined ? ` ${l.amount}` : ''}`;
     if (!label) continue;
-    const isDamage = DAMAGE.has(l.type);
+    // (a blast the board rolled carries no amount: its damage is inside the Set's own hit)
+    const isDamage = DAMAGE.has(l.type) && l.amount !== undefined;
     // A blast or a callout with no rule behind it still has an owner: the held weapon that causes that kind of thing
     const owner = l.sourceRef ? null : ownerOfEvent(l.type, l.text, held);
     const sourceRef = l.sourceRef ?? (owner ? `weapon:${owner}` : undefined);

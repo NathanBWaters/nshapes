@@ -327,6 +327,13 @@ function playFight(screen: Screen, attrs: AttributeName[], opts: { buyInShop?: b
       fireEvent.press(screen.getByTestId('tip-ok'));
       log.tips += 1;
     }
+    // An evolution's cut-in holds the fight until it is tapped (taps in its first half second are ignored)
+    if (screen.queryByTestId('evolution-cutin')) {
+      look();
+      advanceMs(600);
+      fireEvent.press(screen.getByTestId('evolution-cutin'));
+      advanceMs(400);
+    }
   };
   tips();
   for (let step = 0; step < (opts.maxSteps ?? 80); step++) {

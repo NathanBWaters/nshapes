@@ -141,6 +141,12 @@ class Band {
     this.arrName = name;
   }
 
+  /** One 32nd note right now, in ms: the grid every cue lands on. The effects on screen step to the same grid. */
+  get gridMs(): number {
+    const running = this.timer !== null || this.clockOverride !== null;
+    return ((running && this.bpm ? this.stepDur() : 60 / 120 / 4) / 2) * 1000;
+  }
+
   private stepDur(): number {
     return 60 / (this.bpm || 120) / 4;
   }

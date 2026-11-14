@@ -126,7 +126,11 @@ src/audio/
   type checker insists) and, if it needs a new sound, a cue in `band.ts` `CUES`.
 - **To add a weapon,** add a row to `voices.ts`. If its effect has no rule
   behind it, name the event it causes (`events`) or the callout it announces
-  itself with (`calls`), so its sting plays when it fires.
+  itself with (`calls`) in `data/weaponGuide.ts`, so its sting plays when it fires.
+- **The chain steps with the picture.** The effects on screen
+  (`src/adventure/fx`, docs/fx-design.md) take a step exactly when the chain
+  does (`takesChainSlot`) and choose how many 32nd notes a step lasts
+  (`playSounds(sounds, stride)`): a short chain plays slower so it can be read.
 - **Run events carry `source`** (the rule key of the weapon, skill node or
   evolution that caused them), which is how the band knows whose sting to play.
 

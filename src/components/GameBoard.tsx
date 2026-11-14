@@ -70,6 +70,10 @@ interface GameBoardProps {
   hideEnemyOverlay?: boolean; // Adventure mode renders its own foe HUD
   /** Cards the parent wants lit as hints (e.g. a free hint from a fighter passive) */
   glowingCardIds?: string[];
+  /** A ref callback for the slot at this board index, so the parent can find where each card is on screen */
+  slotRef?: (index: number) => (node: View | null) => void;
+  /** A slot changed size or position */
+  onSlotLayout?: () => void;
 }
 
 const GameBoard: React.FC<GameBoardProps> = ({
@@ -98,6 +102,8 @@ const GameBoard: React.FC<GameBoardProps> = ({
   connections = [],
   hideEnemyOverlay = false,
   glowingCardIds,
+  slotRef,
+  onSlotLayout,
 }) => {
   const [selectedCards, setSelectedCards] = useState<CardType[]>([]);
   const [matchedCardIds, setMatchedCardIds] = useState<string[]>([]);
@@ -601,7 +607,15 @@ const GameBoard: React.FC<GameBoardProps> = ({
                 };
 
                 return (
-                  <View key={`${rowIndex}-${colIndex}-${card.id}`} nativeID={`card-slot-${rowIndex}-${colIndex}`} testID={`card-slot-${rowIndex}-${colIndex}`} style={styles.cardWrapper}>
+                  <View
+                    key={`${rowIndex}-${colIndex}-${card.id}`}
+                    ref={slotRef?.(boardIndex)}
+                    collapsable={false}
+                    onLayout={onSlotLayout}
+                    nativeID={`card-slot-${rowIndex}-${colIndex}`}
+                    testID={`card-slot-${rowIndex}-${colIndex}`}
+                    style={styles.cardWrapper}
+                  >
                     {/* Show reward instead of card when revealing */}
                     {reward ? (
                       <RewardReveal reward={reward} />
