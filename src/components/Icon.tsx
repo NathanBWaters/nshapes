@@ -132,6 +132,7 @@ import HeartBottle from '../../assets/icons/lorc/heart-bottle.svg';
 import CoinsPile from '../../assets/icons/delapouite/coins-pile.svg';
 import LaserBlast from '../../assets/icons/lorc/laser-blast.svg';
 import StoneBlock from '../../assets/icons/lorc/stone-block.svg';
+import BigWave from '../../assets/icons/lorc/big-wave.svg';
 import CrystalBall from '../../assets/icons/lorc/crystal-ball.svg';
 import Flowers from '../../assets/icons/lorc/flowers.svg';
 import CrackedBallDunk from '../../assets/icons/lorc/cracked-ball-dunk.svg';
@@ -509,6 +510,7 @@ const ICON_REGISTRY = {
   'delapouite/coins-pile': CoinsPile,
   'lorc/laser-blast': LaserBlast,
   'lorc/stone-block': StoneBlock,
+  'lorc/big-wave': BigWave,
   'lorc/crystal-ball': CrystalBall,
   'lorc/flowers': Flowers,
   'lorc/cracked-ball-dunk': CrackedBallDunk,

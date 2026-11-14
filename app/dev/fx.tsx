@@ -41,6 +41,9 @@ const BOARD: CardType[] = Array.from({ length: 12 }, (_, i) => ({
 const SAMPLE: Partial<Record<RunEventType, Partial<RunEvent>>> = {
   hit: { amount: 7, slots: [0, 4, 8] },
   rainbow: { amount: 14, slots: [0, 4, 8] },
+  surge_hit: { amount: 26, slots: [0, 4, 8] },
+  surge_warn: { amount: 3 },
+  surge_start: { amount: 5 },
   blast: { amount: 6, text: '2', slots: [3, 7], source: 'w0:blast-powder#0' },
   laser: { amount: 8, text: '3', slots: [3, 4, 5], source: 'w1:prismatic-ray#0' },
   ricochet: { amount: 3, text: '3', slots: [1, 6, 11], source: 'w2:chaos-shard#0' },

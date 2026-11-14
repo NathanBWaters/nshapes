@@ -44,6 +44,7 @@ import { recordFightStart, recordLog } from './fightLog';
 import { afterSetGear, gearSetBonus, holdCards, initGear, onMistakeGear, onWaveStartGear, resolveTwins, syncGear, tickGear, type GearSet } from './gear';
 import { refreshArmedRecipes, resolveCatalyst, tickEvolutions } from './evolutions';
 import { placeOpeningTraps, resolveTrapsOnSet, springSnares, tickTimeBombs } from './hazards';
+import { initialSurge, surgeMultiplier, tickSurge } from './surge';
 import {
   advanceCombo, afterSetPassives, consumeHotStreak, decayCombo, initPassives, onMistakePassives, onWaveStartPassives,
   passiveSetDamage, restingPassiveState, tickPassives,
@@ -301,6 +302,9 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   const m = mods(d);
   const a = arcana(d);
   let points = rewards.reduce((sum, r) => sum + (r.points ?? 0), 0);
+  // Shading Surge: the Set's base damage (its cards) is ×5; flat bonuses are added after, multipliers apply on top
+  const surgeMult = surgeMultiplier(d);
+  points *= surgeMult;
   if (a.nonRainbowDamageDelta !== undefined && !rainbow) points = Math.max(1, points + a.nonRainbowDamageDelta);
   if (a.singleTraitBonusDamage !== undefined && !graceUsed && diffCount === 1) points += a.singleTraitBonusDamage;
   const conditional = (m.conditionalDamage ?? []).reduce((sum, c) => sum + (conditionsHold(d, c.when) ? c.amount : 0), 0);
@@ -327,7 +331,8 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   d.nextSetMultiplier = 1;
   const dmg = flat * rainbowMult * (a.damageScale ?? 1) * enemyMult * setMult + (purity.damage + traps.bonus) * enemyMult;
   const hit = dealDamage(d, dmg);
-  emit(d, rainbow ? 'rainbow' : 'hit', hit, undefined, { slots: gearSet.slots });
+  emit(d, surgeMult > 1 ? 'surge_hit' : rainbow ? 'rainbow' : 'hit', hit, undefined, { slots: gearSet.slots });
+  if (surgeMult > 1 && d.surge) d.surge = { ...d.surge, sets: d.surge.sets + 1 };
   if (!opts.auto) emitBoardWeapons(d, rewards, fx);
   if (opts.auto) {
     d._lines[d._lines.length - 1].text = 'Free Set';
@@ -646,6 +651,7 @@ export const createRun = (level: LevelDef, save: AdventureSave, opts: CreateRunO
     nextSetMultiplier: 1,
     frozenMs: 0,
     simplified: null,
+    surge: level.rules.shadingSurge ? initialSurge() : null,
     combo: 0,
     maxCombo: 0,
     setsThisWave: 0,
@@ -919,6 +925,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
 const tickClock = (d: Draft, ms: number) => {
   const speed = (d.foe.getUIModifiers().timerSpeedMultiplier || 1) * (arcana(d).timerSpeedScale ?? 1);
   if (d.timeLeft !== null) d.timeLeft = Math.max(0, d.timeLeft - (ms / 1000) * speed);
+  tickSurge(d, ms * speed);
   tickEvolutions(d, ms);
   if (d.simplified) {
     const remainingMs = d.simplified.remainingMs - ms;

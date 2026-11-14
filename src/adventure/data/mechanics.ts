@@ -539,12 +539,19 @@ export const MECHANICS: Record<string, MechanicDef> = {
   attr_shading: {
     id: 'attr_shading',
     kind: 'rule',
-    title: 'New Trait: Shading',
-    tagline: 'Solid, striped or empty.',
-    body: ['Shading joins the rule: solid, striped, or open.', 'The board grows to 15 cards to keep Sets likely.'],
+    title: 'Shading Surge',
+    tagline: 'Every minute, shading switches on and Sets hit ×5.',
+    body: [
+      'Every card starts solid, so you keep playing with shape, color and number.',
+      'Then a Shading Surge hits: for 15 seconds the cards turn solid, striped or open, and shading joins the rule. Every Set you land during it deals ×5.',
+      'Watch the surge bar above the board. It is short on purpose: find one Set in time and it hits like five.',
+    ],
+    fightTips: [
+      { title: 'The surge bar', text: 'The pink bar above the board fills up toward the next Shading Surge. When it starts, shading counts and every Set deals ×5 for 15 seconds.', anchor: 'top' },
+    ],
     icon: 'lorc/stone-block',
     demo: {
-      type: 'set', attributes: ['shape', 'color', 'number', 'shading'], valid: true, caption: 'Shading: solid, striped, open → all different',
+      type: 'set', attributes: ['shape', 'color', 'number', 'shading'], valid: true, caption: 'During a surge, shading counts too: solid, striped, open → all different',
       cards: [
         { shape: 'oval', color: 'green', number: 2, shading: 'solid' },
         { shape: 'oval', color: 'green', number: 2, shading: 'striped' },
@@ -559,7 +566,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
           { shape: 'oval', color: 'green', number: 2, shading: 'solid' },
           { shape: 'squiggle', color: 'purple', number: 3, shading: 'striped' },
         ],
-        explain: 'Shape, color and number are all different, but shading is solid, solid, striped. That breaks it.',
+        explain: 'Shape, color and number are all different, but during a surge shading is solid, solid, striped. That breaks it.',
       },
       {
         attributes: ['shape', 'color', 'number', 'shading'],
@@ -571,6 +578,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
         explain: 'Shape, number and shading are all the same, and color is all different. Every trait passes.',
       },
     ],
+    coachMark: { on: 'surge_start', text: 'SHADING SURGE! Shading counts now, and every Set deals ×5. Find one fast!' },
   },
   charm_slots: {
     id: 'charm_slots',
@@ -665,32 +673,21 @@ export const MECHANICS: Record<string, MechanicDef> = {
     demo: { type: 'icons', items: [{ icon: 'lorc/stopwatch', label: '35s idle → −1 ♥' }] },
     coachMark: { on: 'inactivity', text: 'The boar charged! Keep matching to hold it off.' },
   },
-  attr_background: {
-    id: 'attr_background',
+  surge_stack: {
+    id: 'surge_stack',
     kind: 'rule',
-    title: 'New Trait: Background',
-    tagline: 'The card itself has a color now.',
-    body: ['The final trait: card background (white, beige, or charcoal).', 'All five traits must pass. The board grows to 18 cards.'],
-    icon: 'lorc/crystal-shine',
-    demo: {
-      type: 'set', attributes: ['shape', 'color', 'number', 'shading', 'background'], valid: true, caption: 'Backgrounds: white, beige, charcoal',
-      cards: [
-        { shape: 'diamond', color: 'red', number: 1, shading: 'open', background: 'white' },
-        { shape: 'diamond', color: 'red', number: 1, shading: 'open', background: 'beige' },
-        { shape: 'diamond', color: 'red', number: 1, shading: 'open', background: 'charcoal' },
-      ],
-    },
-    quiz: [
-      {
-        attributes: ['shape', 'color', 'number', 'shading', 'background'],
-        cards: [
-          { shape: 'oval', color: 'red', number: 3, shading: 'solid', background: 'white' },
-          { shape: 'oval', color: 'purple', number: 3, shading: 'solid', background: 'white' },
-          { shape: 'oval', color: 'green', number: 3, shading: 'solid', background: 'charcoal' },
-        ],
-        explain: 'Backgrounds are white, white and charcoal. Two alike and one odd breaks the Set.',
-      },
+    title: 'Ride the Wave',
+    tagline: 'Every multiplier stacks with the surge.',
+    body: [
+      'The surge\'s ×5 stacks with every multiplier: Rainbows, evolutions, and every "next Set ×2".',
+      'So charge up while shading is off, then spend it all on one Set in the surge. A plain Set deals 3, in a surge 15, and with a ×2 saved for it 30.',
+      'Land one Set of 40+ damage for the third star.',
     ],
+    fightTips: [
+      { title: 'Save it', text: 'Got a NEXT SET ×2 waiting? Hold it until the surge bar turns pink, then make your Set.', anchor: 'top' },
+    ],
+    icon: 'lorc/big-wave',
+    demo: { type: 'icons', items: [{ icon: 'lorc/stopwatch', label: 'Charge ×2' }, { icon: 'lorc/stone-block', label: 'Surge ×5' }, { icon: 'lorc/big-wave', label: '= ×10' }] },
   },
   fast_timer: {
     id: 'fast_timer',

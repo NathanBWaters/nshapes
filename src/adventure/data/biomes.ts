@@ -22,7 +22,7 @@ export const BIOMES: BiomeDef[] = [
   {
     id: 'canyon',
     name: 'Ember Canyon',
-    subtitle: 'Waves, shops & shading',
+    subtitle: 'Waves, shops & shading surges',
     starGate: 30,
     colors: { sky: '#FBE6D2', ground: '#E9A86F', path: '#FFF4E8', accent: '#FF7A2F', ink: '#5C2E12' },
     music: 'canyon',
@@ -31,7 +31,7 @@ export const BIOMES: BiomeDef[] = [
   {
     id: 'peaks',
     name: 'Frozen Peaks',
-    subtitle: 'Five traits, stacked builds',
+    subtitle: 'Ride the surge, stacked builds',
     starGate: 56,
     colors: { sky: '#E3EEF8', ground: '#A8C8E6', path: '#FFFFFF', accent: '#3B82F6', ink: '#1D3557' },
     music: 'peaks',

@@ -36,6 +36,7 @@ import { getFighter } from '../data/fighters';
 import { comboWindowFor, getPassive, DEFAULT_COMBO_WINDOW_MS, PASSIVE_TUNING } from '../data/passives';
 import { getArcana } from '../data/arcana';
 import { EVOLUTION_RECIPES } from '../data/evolutions';
+import { SURGE_RULES } from '../data/rules';
 import { weaponLevelSuffix } from '../data/armory';
 import { COACH_KEYS } from '../progress';
 import { EVOLUTION_RULES } from '../engine/sources';
@@ -578,10 +579,13 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
         </View>
       </View>
 
+      {run.surge && <SurgeBar surge={run.surge} />}
+
       {/* ── Board ───────────────────────────────────────── */}
       <View ref={anchors.ref('board')} collapsable={false} style={st.boardWrap}>
         {/* Evolution pulse: a glow behind the cards, never a card border */}
         {run.activeEvolutions.length > 0 && <EvolutionGlow />}
+        {run.surge?.active && <SurgeGlow />}
         {run.frozenMs > 0 && (
           <View style={st.frozen} pointerEvents="none">
             <Icon name="lorc/snowflake-1" size={18} color="#1D4ED8" />
@@ -821,6 +825,48 @@ const EvolutionGlow: React.FC = () => {
   return <Animated.View testID="evolution-glow" pointerEvents="none" style={[st.glow, style]} />;
 };
 
+/**
+ * Shading Surge meter: fills toward the next surge while shading is off, then
+ * drains through the ×5 window. Pulses in the last seconds before it starts.
+ */
+const SurgeBar: React.FC<{ surge: NonNullable<RunState['surge']> }> = ({ surge }) => {
+  const secs = Math.ceil(surge.msLeft / 1000);
+  const fill = surge.active ? surge.msLeft / SURGE_RULES.surgeMs : 1 - surge.msLeft / SURGE_RULES.calmMs;
+  const imminent = !surge.active && surge.msLeft <= SURGE_RULES.warnMs;
+  const pulse = useSharedValue(1);
+  useEffect(() => {
+    pulse.value = imminent || surge.active
+      ? withRepeat(withSequence(withTiming(1.04, { duration: 260 }), withTiming(1, { duration: 260 })), -1)
+      : withTiming(1, { duration: 120 });
+  }, [imminent, surge.active, pulse]);
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: pulse.value }] }));
+  const label = surge.active
+    ? `SHADING SURGE · SETS ×${SURGE_RULES.multiplier} · ${secs}s`
+    : imminent
+      ? `SURGE IN ${secs}s · GET READY`
+      : `Shading surge in ${secs}s`;
+  return (
+    <Animated.View
+      testID="run-surge-bar"
+      accessibilityLabel={label}
+      style={[st.surgeBar, surge.active && st.surgeBarLive, imminent && st.surgeBarSoon, style]}
+    >
+      <View style={[st.surgeFill, { width: `${Math.max(0, Math.min(1, fill)) * 100}%` }, surge.active && st.surgeFillLive]} />
+      <Icon name="lorc/stone-block" size={13} color={surge.active ? '#FFFFFF' : TONE.surge} />
+      <Text style={[st.surgeText, surge.active && { color: '#FFFFFF' }]} numberOfLines={1}>{label}</Text>
+    </Animated.View>
+  );
+};
+
+const SurgeGlow: React.FC = () => {
+  const o = useSharedValue(0.2);
+  useEffect(() => {
+    o.value = withRepeat(withSequence(withTiming(0.5, { duration: 380 }), withTiming(0.2, { duration: 380 })), -1);
+  }, [o]);
+  const style = useAnimatedStyle(() => ({ opacity: o.value }));
+  return <Animated.View testID="surge-glow" pointerEvents="none" style={[st.glow, { backgroundColor: TONE.surge }, style]} />;
+};
+
 const Hearts: React.FC<{ hearts: number | null; max: number | null }> = ({ hearts, max }) => {
   if (hearts === null || max === null) {
     return (
@@ -978,6 +1024,12 @@ const st = StyleSheet.create({
   challengeStar: { color: '#E0A800', fontSize: 11, fontWeight: '900' },
   challengeText: { flex: 1, fontSize: 12, fontWeight: '700', color: INK },
   boardWrap: { flex: 1, padding: 6 },
+  surgeBar: { marginHorizontal: 10, marginTop: 4, height: 22, borderRadius: 999, borderWidth: 2, borderColor: INK, backgroundColor: TONE.surgePale, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
+  surgeBarSoon: { borderColor: TONE.surge },
+  surgeBarLive: { borderColor: TONE.surge, backgroundColor: '#9D174D' },
+  surgeFill: { position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: '#FBCFE8' },
+  surgeFillLive: { backgroundColor: TONE.surge },
+  surgeText: { fontSize: 11, fontWeight: '900', color: INK, letterSpacing: 0.5 },
   tipDim: { position: 'absolute', left: 0, right: 0, zIndex: 299, backgroundColor: 'rgba(10,10,10,0.5)' },
   tipWrap: { position: 'absolute', left: 0, right: 0, zIndex: 300, alignItems: 'center', paddingHorizontal: 12 },
   tipArrow: { width: 18, height: 18, backgroundColor: COLORS.actionYellow, transform: [{ rotate: '45deg' }], marginBottom: -11, alignSelf: 'flex-start', marginLeft: 70 },

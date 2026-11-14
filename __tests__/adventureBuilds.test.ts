@@ -62,7 +62,11 @@ const DUMMY: LevelDef = {
   // Keeps 4-4's id so the dummy sits at 4-4 on the map and gets every campaign feature taught by then
   id: ref.id,
   foes: [{ name: 'Training Dummy', icon: ref.foes[0].icon, hp: 1e7 }],
-  rules: { ...ref.rules, timer: undefined, moves: 25, hearts: 10, hazards: undefined },
+  // A fixed five-trait board without the Shading Surge, so the comparison stays stable
+  rules: {
+    ...ref.rules, attributes: ['shape', 'color', 'number', 'shading', 'background'], boardSize: 18, shadingSurge: undefined,
+    timer: undefined, moves: 25, hearts: 10, hazards: undefined,
+  },
   challenge: { kind: 'noMistakes' },
 };
 

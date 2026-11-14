@@ -13,6 +13,7 @@
  *   recipe       an evolution vs its two weapons with evolutions off
  *   pair         two weapons together vs what they add separately (synergy)
  */
+import type { AttributeName } from '@/types';
 import type { AdventureSave, LevelDef } from '../types';
 import { getLevel } from '../data/levels';
 import { createMaxedSave } from '../progress';
@@ -33,13 +34,19 @@ export interface Bench {
   save: AdventureSave;
 }
 
-/** A fight against a foe that can't fall and never hits back: what is measured is what the player brings. */
-const dummy = (from: string, timer: number, hearts: number): LevelDef => {
+const TRAITS: AttributeName[] = ['shape', 'color', 'number', 'shading', 'background'];
+const BOARD: Record<number, number | undefined> = { 4: 15, 5: 18 };
+
+/**
+ * A fight against a foe that can't fall and never hits back: what is measured is what the player brings.
+ * The bench pins its trait count and has no Shading Surge, so its numbers stay comparable over time.
+ */
+const dummy = (from: string, timer: number, hearts: number, traits: number): LevelDef => {
   const ref = getLevel(from);
   return {
     ...ref,
     foes: [{ name: 'Training Dummy', icon: ref.foes[0].icon, hp: 1e7 }],
-    rules: { ...ref.rules, hazards: undefined, moves: undefined, timer, hearts },
+    rules: { ...ref.rules, attributes: TRAITS.slice(0, traits), boardSize: BOARD[traits], shadingSurge: undefined, hazards: undefined, moves: undefined, timer, hearts },
     challenge: { kind: 'noMistakes' },
   };
 };
@@ -70,9 +77,9 @@ export const benches = (): Record<BenchId, Bench> => {
   // Six charm slots (so a five-charm build fits) and nothing else from the Workshop
   const base = { ...createMaxedSave(), upgrades: { charm_belt: 3 }, skillNodes: {}, charms: [], equippedArcana: [] } as AdventureSave;
   cached = {
-    early: { id: 'early', label: '3 traits, level-1 gear', level: dummy('2-6', 120, 3), save: { ...base, ...gearAt(1, false) } },
-    mid: { id: 'mid', label: '4 traits, level-3 gear', level: dummy('3-5', 150, 4), save: { ...base, ...gearAt(3, false) } },
-    late: { id: 'late', label: '5 traits, level-5 tuned gear', level: dummy('4-4', 180, 5), save: { ...base, ...gearAt(MAX_WEAPON_LEVEL, true) } },
+    early: { id: 'early', label: '3 traits, level-1 gear', level: dummy('2-6', 120, 3, 3), save: { ...base, ...gearAt(1, false) } },
+    mid: { id: 'mid', label: '4 traits, level-3 gear', level: dummy('3-5', 150, 4, 4), save: { ...base, ...gearAt(3, false) } },
+    late: { id: 'late', label: '5 traits, level-5 tuned gear', level: dummy('4-4', 180, 5, 5), save: { ...base, ...gearAt(MAX_WEAPON_LEVEL, true) } },
   };
   return cached;
 };

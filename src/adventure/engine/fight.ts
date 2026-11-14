@@ -259,9 +259,11 @@ export interface DrawOptions {
 
 /** Draw one card from the deck top (recycling is handled by the caller). */
 export const drawCard = (d: Draft, opts?: DrawOptions): Card => {
-  if (d.deck.length === 0) d.deck = d._rng.shuffle(createDeck(d.attributes)).map(toDeckCard);
+  // The deck holds the level's own traits (a Shading Surge adds shading to cards as they land)
+  if (d.deck.length === 0) d.deck = d._rng.shuffle(createDeck(d.level.rules.attributes)).map(toDeckCard);
   const base = d.deck.shift()!;
   let card = freshCard(base);
+  if (d.surge) card.shading = d.surge.active ? d._rng.pick(ATTRIBUTE_VALUES.shading) : ATTRIBUTE_VALUES.shading[0];
   if (d.simplified) card = withAttribute(card, d.simplified.attribute, d.simplified.value);
   const specialMult = arcana(d).specialCardChanceScale ?? 1;
   if (d.features.has('coins') && d._rng.next() < BASE_RULES.coinCardChance * specialMult) card.bonusMoney = BASE_RULES.coinCardValue;

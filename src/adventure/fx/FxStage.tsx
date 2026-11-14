@@ -35,7 +35,8 @@ const burstSize = (r: Rect): number => Math.min(r.w * 1.3, Math.max(r.h * 1.8, 4
  */
 const labelPoint = (to: AnchorName, r: Rect, lane: number, lead: boolean): Point => {
   if (to !== 'foe') return { x: r.x + r.w / 2, y: r.y + r.h + 13 + (lane % 3) * 18 };
-  if (lead) return { x: r.x + r.w * 0.62, y: r.y + r.h * 0.42 };
+  // (the stage starts the Set's number here and lets it run to the right, so "RAINBOW −14" stays on screen)
+  if (lead) return { x: r.x + r.w * 0.3, y: r.y + r.h * 0.42 };
   const n = Math.max(0, lane - 1);
   return { x: r.x + r.w + 46 + (n % 2) * 92, y: r.y + 13 + (Math.floor(n / 2) % 3) * 20 };
 };
@@ -50,7 +51,7 @@ const BeatView: React.FC<{ beat: Beat; anchors: Anchors; size: Size }> = React.m
   if (beat.quiet) {
     const foe = anchors.rect('foe');
     const at = foe ? labelPoint('foe', foe, beat.lane, beat.lead) : { x: middle.x + 20, y: middle.y + beat.lane * 20 };
-    return beat.label ? <Stamp at={at} text={beat.label} color={labelColor} tier={beat.tier} sticker={!beat.lead} maxX={size.w} /> : null;
+    return beat.label ? <Stamp at={at} text={beat.label} color={labelColor} tier={beat.tier} sticker={!beat.lead} fromLeft={beat.lead && !!foe} maxX={size.w} /> : null;
   }
 
   const cards = rectsOf(beat.slots);
@@ -192,7 +193,9 @@ const BeatView: React.FC<{ beat: Beat; anchors: Anchors; size: Size }> = React.m
         // Three rows, by step, so the names of weapons that fire one after another do not land on each other
         <Tag at={{ x: sourceRect.x + sourceRect.w / 2, y: sourceRect.y + sourceRect.h + 3 + (beat.step % 3) * 16 }} text={beat.source.name} maxX={size.w} />
       )}
-      {label && <Stamp at={labelAt} text={label} color={labelColor} tier={beat.tier} delay={labelDelay} sticker={sticker} sour={beat.sour} maxX={size.w} />}
+      {label && (
+        <Stamp at={labelAt} text={label} color={labelColor} tier={beat.tier} delay={labelDelay} sticker={sticker} sour={beat.sour} fromLeft={beat.lead && !!end} maxX={size.w} />
+      )}
     </>
   );
 });

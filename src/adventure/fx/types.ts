@@ -39,7 +39,7 @@ export type BoardFx =
 export type OrbKind = 'damage' | 'rainbow' | 'coin' | 'heart' | 'time' | 'hint' | 'grace' | 'xp' | 'dark' | 'spark';
 
 /** A wash across the whole board */
-export type SweepKind = 'frost' | 'gold' | 'teal' | 'whirl' | 'dark' | 'rainbow';
+export type SweepKind = 'frost' | 'gold' | 'teal' | 'whirl' | 'dark' | 'rainbow' | 'surge';
 
 export type FighterReaction = 'ecstatic' | 'heal' | 'powerup' | 'pain' | 'entrance';
 export type EnemyReaction = 'criticalHit' | 'hit' | 'gloat' | 'attack' | 'regen' | 'entrance';

@@ -88,11 +88,15 @@ export const EVENT_CUE: Record<RunEventType, CueName | null> = {
   echo: 'ding', // the echo weapon's own sting speaks for it
   link_burst: 'link',
   grow: 'twinkle',
+  surge_warn: 'armed',
+  surge_start: 'charged',
+  surge_end: 'clarityEnd',
+  surge_hit: null, // a Set's own hit: the payout plays it
 };
 
 /** Events whose `amount` is damage to the foe: together they size the hit */
 const DAMAGE: ReadonlySet<RunEventType> = new Set<RunEventType>([
-  'hit', 'rainbow', 'blast', 'laser', 'ricochet', 'hot_streak_hit', 'grudge_release', 'pinata_break', 'trap_defused',
+  'hit', 'rainbow', 'surge_hit', 'blast', 'laser', 'ricochet', 'hot_streak_hit', 'grudge_release', 'pinata_break', 'trap_defused',
 ]);
 
 /** Damage of one move that makes a hit big, huge and MEGA (the same steps the floating numbers grow at) */
@@ -115,7 +119,7 @@ export type FightSound =
   | { kind: 'sting'; weapon: string; slot: number };
 
 /** The Set's own hit: it is the payout, never a link of the chain */
-export const isSetHit = (e: RunEvent): boolean => e.type === 'hit' && !e.text;
+export const isSetHit = (e: RunEvent): boolean => (e.type === 'hit' && !e.text) || e.type === 'surge_hit';
 
 /** The weapon an event speaks for: the one whose rule caused it, or the held weapon that owns that kind of event */
 export const weaponOfEvent = (e: RunEvent, held: readonly string[]): string | null =>

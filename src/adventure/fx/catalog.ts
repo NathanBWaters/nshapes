@@ -38,6 +38,7 @@ export const FX_COLOR = {
   buff: '#D97706',
   evo: '#7C3AED',
   pinata: '#DB2777',
+  surge: '#DB2777',
   shield: COLORS.logicTeal,
   foe: '#9F1239',
   sour: '#B91C1C',
@@ -125,6 +126,12 @@ export const EVENT_FX: Record<RunEventType, FxRow | null> = {
   scoop: { color: C.heal, aura: true, bump: ['passive:big_scoop'], fighter: 'ecstatic', enemy: 'criticalHit', label: () => 'BIG SCOOP!' },
   keen_eye: { color: C.hint, board: 'sparkle', bump: ['passive:keen_eye'], ambient: true },
   fetch: { color: C.coin, board: 'sparkle', bump: ['passive:fetch'], label: () => 'FETCH!' },
+
+  // ── Shading Surge: a wash over the board as shading switches on and off ──
+  surge_warn: { color: C.surge, bump: ['clock'], label: e => `SURGE IN ${n(e)}s` },
+  surge_start: { color: C.surge, sweep: 'surge', fighter: 'powerup', label: e => `SHADING SURGE ×${fmt(n(e))}!` },
+  surge_end: { color: C.surge, sweep: 'surge', label: () => 'SURGE OVER' },
+  surge_hit: { color: C.surge, board: 'ring', orb: 'damage', to: 'foe', damage: true, shake: true, fighter: 'ecstatic', enemy: 'criticalHit', label: e => `SURGE −${fmt(n(e))}` },
 
   // ── Weapons, skills and evolutions that change what comes next ───────────
   rule: { color: C.rainbow, board: 'sparkle', orb: 'spark', to: 'foe', label: ruleLabel },

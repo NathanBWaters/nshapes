@@ -304,6 +304,7 @@ const SWEEPS: Record<SweepKind, { fill: string; edge: string }> = {
   whirl: { fill: 'rgba(255,149,56,0.42)', edge: '#FFE8CC' },
   dark: { fill: 'rgba(60,20,40,0.45)', edge: 'rgba(159,18,57,0.8)' },
   rainbow: { fill: 'rgba(196,181,253,0.45)', edge: '#FDE68A' },
+  surge: { fill: 'rgba(219,39,119,0.38)', edge: '#FBCFE8' },
 };
 
 /** A slanted band of colour that crosses the whole board once. */
@@ -334,14 +335,15 @@ const STICKER_SIZE = 13;
  * and fades. `sticker` gives it a white tag so it reads over the cards.
  * A sour one shakes its head instead of popping.
  */
-export const Stamp: React.FC<{ at: Point; text: string; color: string; tier?: HitTier; delay?: number; sticker?: boolean; sour?: boolean; maxX: number }> = ({ at, text, color, tier = 0, delay = 0, sticker, sour, maxX }) => {
+export const Stamp: React.FC<{ at: Point; text: string; color: string; tier?: HitTier; delay?: number; sticker?: boolean; sour?: boolean; fromLeft?: boolean; maxX: number }> = ({ at, text, color, tier = 0, delay = 0, sticker, sour, fromLeft, maxX }) => {
   const hold = 520 + tier * 200;
   const total = hold + 400;
   const p = useProgress(total, delay);
   const size = sticker ? STICKER_SIZE + tier * 3 : STAMP_SIZE[tier];
   // keep the whole word on screen (a rough width is enough)
   const width = Math.min(maxX - 8, text.length * size * 0.62 + (sticker ? 16 : 0));
-  const left = Math.max(4, Math.min(maxX - width - 4, at.x - width / 2));
+  // `fromLeft`: the word starts at the point instead of being centred on it (a long word next to a small target)
+  const left = Math.max(4, Math.min(maxX - width - 4, fromLeft ? at.x : at.x - width / 2));
   const h = hold / total;
   const style = useAnimatedStyle(() => {
     const t = p.value;
