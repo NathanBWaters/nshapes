@@ -522,7 +522,7 @@ const Camp: React.FC<Props> = ({ save, history = NO_BATTLES, onChange, onClose, 
         {tab === 'armory' && (
           <>
             <Text style={st.blurb}>
-              Tap a weapon to equip or remove it. Your charms are your whole weapon loadout, in the order you equip them. They also show up in level-up picks and shops.
+              Tap a weapon to equip or remove it; what it does shows at the bottom. Your charms are your whole weapon loadout, in the order you equip them. They also show up in level-up picks and shops.
             </Text>
             <View style={st.slotRow} testID="camp-charm-slots">
               {Array.from({ length: slots }).map((_, i) => {
@@ -542,22 +542,6 @@ const Camp: React.FC<Props> = ({ save, history = NO_BATTLES, onChange, onClose, 
               <Text testID="camp-charms-full" style={st.fullNote}>All {slots} charm slots are full. Tap an equipped charm to take it off{slots < 6 ? ', or add a slot with the Charm Belt in the Workshop' : ''}.</Text>
             )}
             {save.armory.length === 0 && <Text style={st.blurb}>Nothing here yet. Some stars unlock a weapon.</Text>}
-            {/* What a weapon does, in full: the one tapped last, else the charms you wear */}
-            <View style={{ gap: 8 }} testID="camp-armory-guide">
-              {(armoryFocus ? [armoryFocus] : charms).map(id => {
-                const w = getArmoryWeapon(id, weaponBuilds(save));
-                return w ? (
-                  <WeaponExplainer
-                    key={id}
-                    weapon={w}
-                    build={weaponBuilds(save)[id]}
-                    badge={charms.includes(id) ? 'Equipped' : 'Not equipped'}
-                    defaultOpen={id === armoryFocus}
-                  />
-                ) : null;
-              })}
-              {armoryFocus && <Text style={st.blurb}>Tap any weapon below to read it here.</Text>}
-            </View>
             {WEAPON_ROLES.map(role => {
               const shelf = armoryWeapons(save).filter(w => weaponRole(w.id) === role.id);
               if (shelf.length === 0) return null;
@@ -660,6 +644,21 @@ const Camp: React.FC<Props> = ({ save, history = NO_BATTLES, onChange, onClose, 
           </>
         )}
       </ScrollView>
+
+      {/* The weapon tapped last, explained. Docked under the list, so reading it never means scrolling back up. */}
+      {tab === 'armory' && armoryFocus && (() => {
+        const w = getArmoryWeapon(armoryFocus, weaponBuilds(save));
+        return w ? (
+          <View style={[st.dock, { paddingBottom: insets.bottom + 8 }]} testID="camp-armory-guide">
+            <TouchableOpacity onPress={() => setArmoryFocus(null)} style={st.dockClose} accessibilityLabel="Hide weapon details">
+              <Text style={st.dockCloseText}>✕</Text>
+            </TouchableOpacity>
+            <ScrollView style={{ maxHeight: 300 }} contentContainerStyle={st.dockBody}>
+              <WeaponExplainer key={armoryFocus} weapon={w} build={weaponBuilds(save)[armoryFocus]} badge={charms.includes(armoryFocus) ? 'Equipped' : 'Not equipped'} defaultOpen />
+            </ScrollView>
+          </View>
+        ) : null;
+      })()}
     </View>
   );
 };
@@ -677,6 +676,10 @@ const st = StyleSheet.create({
   menuSub: { fontSize: 12, color: INK, opacity: 0.8 },
   menuChevron: { fontSize: 26, fontWeight: '900', color: INK, opacity: 0.5 },
   settings: { flexDirection: 'row', gap: 8 },
+  dock: { borderTopWidth: 2, borderTopColor: INK, backgroundColor: '#3A2D21', paddingTop: 8 },
+  dockBody: { paddingHorizontal: 12, maxWidth: 560, width: '100%', alignSelf: 'center' },
+  dockClose: { position: 'absolute', top: -14, right: 12, zIndex: 2, width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: INK, backgroundColor: COLORS.canvasWhite, alignItems: 'center', justifyContent: 'center' },
+  dockCloseText: { fontWeight: '900', color: INK, fontSize: 12 },
   body: { padding: 12, gap: 10, maxWidth: 560, width: '100%', alignSelf: 'center' },
   blurb: { color: TONE.onDusk, fontSize: 13, textAlign: 'center', marginVertical: 4 },
   fighter: { backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 2.5, borderBottomWidth: 5, borderColor: INK, padding: 12, gap: 8 },

@@ -21,7 +21,7 @@ import type { Weapon } from '@/types';
 import { COLORS } from '@/utils/colors';
 import { armoryBaseWeapon, weaponLevelSuffix } from '../data/armory';
 import { WEAPON_KINDS, weaponGuide } from '../data/weaponGuide';
-import { NO_GROWTH, WEAPON_GROWTH, evolvedGrowthText, growthKey, growthText, type GrowthState } from '../data/weaponGrowth';
+import { NO_GROWTH, WEAPON_GROWTH, growthKey, growthText, type GrowthState } from '../data/weaponGrowth';
 import { WEAPON_ROLES, weaponRole } from '../data/weaponRoles';
 import { BASE_BUILD, formatStat, weaponStatLines, type WeaponBuild } from '../data/weaponStats';
 import { INK } from './ui';
@@ -78,22 +78,6 @@ const WeaponExplainer: React.FC<Props> = ({ weapon, build = BASE_BUILD, badge, r
           <Text style={st.caret}>{open ? '▲' : '▼'}</Text>
         </View>
         <Text style={st.what} testID={`weapon-explainer-what-${weapon.id}`}>{weapon.description}</Text>
-        {/* How it gets stronger during a fight: always shown, it is half of what the weapon is */}
-        {(grows.length > 0 || NO_GROWTH[weapon.id]) && (
-          <View style={st.grow} testID={`weapon-explainer-growth-${weapon.id}`}>
-            <Text style={st.growLabel}>GROWS IN A FIGHT</Text>
-            {grows.map((def, i) => {
-              const stacks = growth?.[growthKey(weapon.id, i)]?.stacks ?? 0;
-              return (
-                <Text key={i} style={st.growText}>
-                  {growthText(def)}
-                  {stacks > 0 ? <Text style={st.growNow}>  Now: {Math.round(stacks * 10) / 10}{def.max ? `/${def.max}` : ''}</Text> : null}
-                </Text>
-              );
-            })}
-            {grows.length === 0 && <Text style={st.growText}>{NO_GROWTH[weapon.id]}</Text>}
-          </View>
-        )}
         {result && (
           <View style={st.result} testID={`weapon-explainer-result-${weapon.id}`}>
             <Text style={st.resultLabel}>THIS FIGHT</Text>
@@ -117,7 +101,20 @@ const WeaponExplainer: React.FC<Props> = ({ weapon, build = BASE_BUILD, badge, r
             </View>
           )}
           {!!guide.tip && <Row icon="lorc/light-bulb" title="How to play it" color="#B45309">{guide.tip}</Row>}
-          {grows.length > 0 && <Row icon="lorc/crystal-shine" title="In its evolution" color="#7C3AED">{evolvedGrowthText(grows[0])}</Row>}
+          {(grows.length > 0 || NO_GROWTH[weapon.id]) && (
+            <View style={st.row} testID={`weapon-explainer-scaling-${weapon.id}`}>
+              <View style={[st.mark, { borderColor: '#0F766E' }]}><Icon name="lorc/tree-branch" size={16} color="#0F766E" /></View>
+              <Text style={st.rowText}>
+                <Text style={st.rowTitle}>Scaling: </Text>
+                {grows.length === 0
+                  ? NO_GROWTH[weapon.id]
+                  : grows.map((def, i) => {
+                      const stacks = growth?.[growthKey(weapon.id, i)]?.stacks ?? 0;
+                      return `${growthText(def)}${stacks > 0 ? ` Now: ${stacks}${def.max ? `/${def.max}` : ''}.` : ''}`;
+                    }).join(' ')}
+              </Text>
+            </View>
+          )}
           {stats.length > 0 && (
             <View style={st.numbers}>
               {stats.map(line => (
@@ -166,10 +163,6 @@ const st = StyleSheet.create({
   role: { fontSize: 11, fontWeight: '600', color: INK, opacity: 0.65 },
   caret: { fontSize: 12, color: INK, opacity: 0.6, paddingHorizontal: 4 },
   what: { fontSize: 15, lineHeight: 21, color: INK, marginTop: 8 },
-  grow: { marginTop: 8, gap: 3, backgroundColor: '#FFF7D6', borderRadius: 8, borderWidth: 1.5, borderColor: '#B45309', paddingHorizontal: 9, paddingVertical: 6 },
-  growLabel: { fontSize: 9, fontWeight: '900', letterSpacing: 1.5, color: '#92400E' },
-  growText: { fontSize: 13, lineHeight: 18, color: INK },
-  growNow: { fontWeight: '900', color: '#0F766E' },
   result: { marginTop: 8, backgroundColor: COLORS.paperBeige, borderRadius: 8, padding: 8, gap: 3 },
   resultLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1.5, color: INK, opacity: 0.6 },
   resultText: { fontSize: 14, fontWeight: '700', color: INK },

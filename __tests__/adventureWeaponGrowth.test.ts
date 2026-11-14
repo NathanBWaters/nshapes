@@ -3,7 +3,7 @@
  * stack gives (data/weaponGrowth.ts, engine/growth.ts).
  */
 import type { Card } from '@/types';
-import { WEAPON_GROWTH, NO_GROWTH, EVOLVED_GROWTH, growthKey, growthStacks, growthText } from '@/adventure/data/weaponGrowth';
+import { WEAPON_GROWTH, NO_GROWTH, growthKey, growthStacks, growthText } from '@/adventure/data/weaponGrowth';
 import { armoryBaseWeapon, getArmoryWeapon } from '@/adventure/data/armory';
 import { weaponStatDefs } from '@/adventure/data/weaponStats';
 import { PAIR_RECIPES } from '@/adventure/data/evolutionPairs';
@@ -182,7 +182,7 @@ describe('weapons grow during a fight', () => {
   });
 });
 
-describe('growth during an evolution', () => {
+describe('growth and evolutions', () => {
   const recipe = PAIR_RECIPES.find(r => r.families.some(f => f[0] === 'chrono-shard'))!;
   const weapons = [recipe.families[0][0], recipe.families[1][0]];
   const start = () => {
@@ -194,21 +194,12 @@ describe('growth during an evolution', () => {
     return s;
   };
 
-  it('steps are bigger and the limit is higher while the weapon\'s evolution runs, and the gains stay', () => {
+  it('an evolution does not change how a weapon grows: same step, same limit', () => {
     let s = start();
     s = matchAt(s, [0, 2, 5], SAME_NUMBER);
-    expect(stacksOf(s, 'chrono-shard')).toBeCloseTo(EVOLVED_GROWTH);
+    expect(stacksOf(s, 'chrono-shard')).toBe(1);
     for (let i = 0; i < 8; i++) s = matchAt(s, [0, 2, 5], SAME_NUMBER);
-    // 5 stacks is the limit outside an evolution; inside it is 8 (25% → 40%)
-    expect(stacksOf(s, 'chrono-shard')).toBeCloseTo(5 * EVOLVED_GROWTH);
-    s = tick(s, 60000, 1000);
-    expect(s.activeEvolutions).toEqual([]);
-    expect(stacksOf(s, 'chrono-shard')).toBeCloseTo(5 * EVOLVED_GROWTH);
-    const drain = s.timeLeft! - tick(s, 10000, 1000).timeLeft!;
-    expect(drain).toBeCloseTo(6);
-    // Past the normal limit it no longer grows, but nothing is taken away
-    s = matchAt(s, [0, 2, 5], SAME_NUMBER);
-    expect(stacksOf(s, 'chrono-shard')).toBeCloseTo(5 * EVOLVED_GROWTH);
+    expect(stacksOf(s, 'chrono-shard')).toBe(5);
   });
 
   it('Catalyst Prism: each Catalyst matched makes evolutions 4 seconds longer, starting with that one', () => {

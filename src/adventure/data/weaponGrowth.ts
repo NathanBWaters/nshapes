@@ -14,17 +14,14 @@
  *    off: their growth is where the damage comes from.
  *  - The best growth is something to hunt for that a careless player would
  *    miss, or something that builds by itself from playing well.
- *  - While an evolution made from the weapon is running, its growth steps are
- *    EVOLVED_GROWTH times bigger and may pass the weapon's limit by the same
- *    factor. What was gained stays after the evolution ends.
+ *  - Growth belongs to the weapon alone. Evolutions are their own thing and do
+ *    not change how a weapon grows.
  *
  * ONE table, read by the engine (engine/growth.ts), the weapon explainer and
  * the HUD. Text is written from the numbers, so it cannot drift.
  */
 import type { Effect, Modifiers, TrickKind, WeaponTriggerKind } from '../rules/types';
 
-/** Growth steps and limits are this much bigger while the weapon's evolution runs */
-export const EVOLVED_GROWTH = 1.6;
 /** A Set counts as made "on a hint" when a hint was shown this recently */
 export const HINTED_SET_MS = 12000;
 
@@ -250,9 +247,3 @@ export const growthText = (def: GrowthDef): string => {
   const limit = def.max ? `up to ${def.max} times` : 'no limit';
   return chance ? `${count}${chance}: ${def.gives} (${limit}).` : `${count}: ${def.gives} (${limit}).`;
 };
-
-/** While its evolution runs: "×1.6 per step, up to 16 times". */
-export const evolvedGrowthText = (def: GrowthDef): string =>
-  def.max
-    ? `During its evolution each step counts ×${tidy(EVOLVED_GROWTH)} and the limit rises to ${tidy(def.max * EVOLVED_GROWTH)}. What you gain stays.`
-    : `During its evolution each step counts ×${tidy(EVOLVED_GROWTH)}. What you gain stays.`;

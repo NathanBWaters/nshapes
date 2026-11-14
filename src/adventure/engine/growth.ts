@@ -10,13 +10,12 @@
  */
 import type { AttributeName, Card, PlayerStats, Weapon } from '@/types';
 import { getArmoryWeapon } from '../data/armory';
-import { EVOLVED_GROWTH, HINTED_SET_MS, WEAPON_GROWTH, growthKey, growthStatBonus, type GrowthDef, type SetTest } from '../data/weaponGrowth';
+import { HINTED_SET_MS, WEAPON_GROWTH, growthKey, growthStatBonus, type GrowthDef, type SetTest } from '../data/weaponGrowth';
 import { UNDERSTUDY_ID } from '../data/adventureWeapons';
 import type { TrickKind, WeaponTriggerKind } from '../rules/types';
 import { applyEffect } from '../rules/engine';
 import type { RunState } from '../types';
 import { GRID_COLS, emit, heal, mods, refreshSources, setGrowthHook, type Draft, type FightEventKind } from './fight';
-import { getRecipe, inFamily } from './sources';
 
 /** Something a weapon may be watching for. */
 export type GrowthEvent =
@@ -68,10 +67,6 @@ const counts = (d: Draft, def: GrowthDef, weaponId: string, ev: GrowthEvent): bo
   }
 };
 
-/** Is an evolution made from this weapon running? Its growth is stronger while it does. */
-const evolving = (d: Draft, weaponId: string): boolean =>
-  d.activeEvolutions.some(e => getRecipe(e.id)?.families.some(f => inFamily(weaponId, f)));
-
 /** Put the grown numbers into the held weapons, the baked stats and the weapon chances. */
 const rebuild = (d: Draft, weaponId: string) => {
   const grown = growthStatBonus(d.growth, weaponId);
@@ -97,18 +92,16 @@ const rebuild = (d: Draft, weaponId: string) => {
 const gain = (d: Draft, weaponId: string, slot: number, index: number, def: GrowthDef) => {
   const key = growthKey(weaponId, index);
   const track = d.growth[key] ?? { stacks: 0, progress: 0 };
-  const boosted = evolving(d, weaponId);
-  const cap = def.max === undefined ? Infinity : def.max * (boosted ? EVOLVED_GROWTH : 1);
-  // What was gained past the normal limit during an evolution is kept
+  const cap = def.max ?? Infinity;
   if (track.stacks >= cap) return;
-  const stacks = Math.min(cap, track.stacks + (boosted ? EVOLVED_GROWTH : 1));
+  const stacks = Math.min(cap, track.stacks + 1);
   d.growth = { ...d.growth, [key]: { stacks, progress: 0 } };
   if (def.stat) rebuild(d, weaponId);
   else refreshSources(d);
   // Named after the weapon, so its place on the belt jumps and the fight log credits it
   const prev = d._chain;
   d._chain = [...prev, `w${slot}:${weaponId}#grow`];
-  emit(d, 'power_up', Math.round(stacks * 10) / 10, def.gives);
+  emit(d, 'power_up', stacks, def.gives);
   if (def.now) applyEffect(d, def.now);
   d._chain = prev;
 };
