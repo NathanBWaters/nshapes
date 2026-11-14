@@ -156,6 +156,15 @@ describe('the script: one move as a cascade', () => {
     expect(sourceOfEvent(ev('laser'), ctx)).toBeNull();
   });
 
+  it("a rule's callout and the hit it dealt are named once, on the hit", () => {
+    const source = 'w0:blast-powder#0';
+    const beats = beatsOf([ev('hit', { amount: 5, slots: [0, 1, 2] }), ev('rule', { text: 'Overheal!', source }), ev('hit', { amount: 7, text: 'Overheal!', source })]);
+    expect(beats.map(b => b.label)).toEqual(['−5', null, 'Overheal! −7']);
+    expect(beats[1].flies).toBe(false);
+    // a callout with no hit of its own still speaks
+    expect(beatsOf([ev('rule', { text: 'Mirror!', amount: 4 })])[0].label).toBe('Mirror! +4');
+  });
+
   it('remembers the cards an event removed, so they can be shown breaking', () => {
     const card = { id: 'c', shape: 'oval', color: 'red', number: 1, shading: 'solid', selected: false } as Card;
     const [, blast] = beatsOf([ev('hit', { amount: 3, slots: [0, 1, 2] }), ev('blast', { amount: 2, text: '1', slots: [5], cards: [card] })]);

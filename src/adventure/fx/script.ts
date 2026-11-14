@@ -97,6 +97,9 @@ const beatsOf = (events: RunEvent[], ctx: ScriptContext): Segment => {
   const setSlots = lead?.slots ?? [];
   const lanes = new Map<string, number>();
   const namedSources = new Set<string>();
+  // A rule's callout and the hit it dealt carry the same name: say it once, on the hit
+  const dealt = new Set(events.filter(e => e.type === 'hit' && e.text).map(e => `${e.source ?? ''}|${e.text}`));
+  const echoesHit = (e: RunEvent) => e.type === 'rule' && dealt.has(`${e.source ?? ''}|${e.text}`);
   const beats: Beat[] = [];
   let slot = setHit ? CHAIN_LEAD : 0;
   let taken = 0;
@@ -113,11 +116,11 @@ const beatsOf = (events: RunEvent[], ctx: ScriptContext): Segment => {
     if (!row) continue;
 
     const sour = isSour(e);
-    const flies = !!row.orb && !sour && isContribution(e);
+    const flies = !!row.orb && !sour && isContribution(e) && !echoesHit(e);
     const slots = e.slots ?? [];
     const damage = row.damage ? Math.max(0, e.amount ?? 0) : 0;
     const tier = hitTier(damage);
-    const text = row.label?.(e) ?? null;
+    const text = echoesHit(e) ? null : row.label?.(e) ?? null;
     const label = text && tier === 3 ? `MEGA ${text}` : text;
     const laneKey = flies && row.to ? row.to : slots.length ? `slot:${slots[0]}` : row.from ?? 'board';
     const lane = lanes.get(laneKey) ?? 0;
