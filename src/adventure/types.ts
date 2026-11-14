@@ -284,6 +284,12 @@ export interface LevelRules {
    * harder (engine/surge.ts, numbers in data/rules.ts SURGE_RULES).
    */
   shadingSurge?: boolean;
+  /**
+   * Practice fight: the foe cannot be knocked out, hearts refill when they run
+   * out, every mechanic the player has learned is on, and nothing is banked
+   * (no stars, coins or bounty progress). It ends when the player leaves.
+   */
+  sandbox?: boolean;
 }
 
 export interface LevelDef {
@@ -304,10 +310,12 @@ export interface LevelDef {
   rewards: { star1: RewardDef; star2: RewardDef; star3: RewardDef };
   isBoss?: boolean;
   /**
-   * Elite side branch: hangs off this main-path level on the map, needs ★★
-   * there to unlock, and never blocks the main path.
+   * Secret side path: hangs off this level on the map, stays hidden until
+   * `opensAt` stars are earned there, and never blocks the main path.
    */
   branchOf?: string;
+  /** Stars on `branchOf` that reveal this path (default ★★, BRANCH_STAR_REQUIREMENT) */
+  opensAt?: 1 | 2 | 3;
   /** Fighters that are especially good here (shown on preview) */
   recommended?: CharacterName[];
 }
@@ -491,6 +499,8 @@ export interface AdventureSave {
   musicOn: boolean;
   /** Play the fight's effects (the clock waits while they play). Off: numbers only. */
   effectsOn: boolean;
+  /** Secret side paths whose arrival has played on the map (ids) */
+  revealedPaths: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -540,7 +550,9 @@ export type RunEventType =
   /** The board grew (amount = cards added) */
   | 'grow'
   /** Shading Surge: warning (amount = seconds until it starts), start, end, and a Set scored during it (amount = damage) */
-  | 'surge_warn' | 'surge_start' | 'surge_end' | 'surge_hit';
+  | 'surge_warn' | 'surge_start' | 'surge_end' | 'surge_hit'
+  /** Practice only: out of hearts, so they refill (amount = hearts back) */
+  | 'breather';
 
 export interface RunEvent {
   id: number;

@@ -18,6 +18,7 @@ import {
   isLevelUnlocked,
   markCoachMarkSeen,
   markMechanicSeen,
+  markPathsRevealed,
   toggleArcana,
   toggleCharm,
   type ResultApplication,
@@ -162,6 +163,7 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
       <AdventureMap
         save={save}
         highlightLevelId={screen.highlight}
+        onPathsRevealed={ids => setSave(s => markPathsRevealed(s, ids))}
         onSelectLevel={l => { sfx('click'); setPreview(l); }}
         onOpenCamp={() => { sfx('confirm'); setScreen({ kind: 'camp' }); }}
         onOpenGuide={() => { sfx('confirm'); setScreen({ kind: 'guide' }); }}
@@ -242,7 +244,7 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
         <MechanicIntro
           mechanic={teaching.plans[0].mechanic}
           prelude={teaching.plans[0].prelude}
-          cta={teaching.plans.length > 1 ? `Next: ${teaching.plans[1].mechanic.title}` : 'Start the fight'}
+          cta={teaching.plans.length > 1 ? `Next: ${teaching.plans[1].mechanic.title}` : teaching.level.rules.sandbox ? 'Start practising' : 'Start the fight'}
           onClose={() => finishLesson(teaching)}
         />
       ) : (
@@ -259,6 +261,7 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
             const open = CAMPAIGN_FEATURES[feature].open;
             if (open) setScreen(screenFor(open.destination));
           }}
+          onShowPath={id => { clearPendingTimers(); setScreen({ kind: 'map', highlight: id }); }}
           onDone={() => {
             setUnlocks([]);
             setUnlocksRevealed(true);

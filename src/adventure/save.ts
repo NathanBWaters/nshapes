@@ -1,7 +1,7 @@
 /** Storage wrapper for the adventure save (MMKV). Keep I/O out of progress.ts. */
 import { storage } from '@/utils/storage';
 import type { AdventureSave } from './types';
-import { createNewSave, reconcileUnlocks } from './progress';
+import { createNewSave, pathsSeenBeforeSecrets, reconcileUnlocks } from './progress';
 import { resolveLegacyWeapon } from './data/armory';
 
 const KEY = 'adventure_v2_save';
@@ -69,7 +69,8 @@ export const loadAdventureSave = (): AdventureSave => {
     const parsed: unknown = JSON.parse(raw);
     if (!isRecord(parsed) || parsed.version !== 1) throw new Error(`unsupported save version ${isRecord(parsed) ? String(parsed.version) : typeof parsed}`);
     // reconcileUnlocks also migrates older shapes (fighter levels refunded, single charm/Arcana into slots, merged weapon ids)
-    const save = reconcileUnlocks(withDefaults(createNewSave(), parsed) as AdventureSave);
+    let save = reconcileUnlocks(withDefaults(createNewSave(), parsed) as AdventureSave);
+    if (!Array.isArray(parsed.revealedPaths)) save = { ...save, revealedPaths: pathsSeenBeforeSecrets(save) };
     // Store a migrated save right away so a refund can never be paid from the old shape twice
     if (needsMigration(parsed)) writeAdventureSave(save);
     return save;

@@ -171,9 +171,15 @@ const resolve = (d: Draft) => {
     return;
   }
   if (d.hearts !== null && d.hearts <= 0) {
-    d.status = 'lost';
-    d.endReason = 'hearts';
-    return;
+    if (d.level.rules.sandbox && d.maxHearts !== null) {
+      // Practice cannot be lost: catch your breath and carry on
+      d.hearts = d.maxHearts;
+      emit(d, 'breather', d.maxHearts);
+    } else {
+      d.status = 'lost';
+      d.endReason = 'hearts';
+      return;
+    }
   }
   if (d.movesLeft !== null && d.movesLeft <= 0) {
     d.status = 'won';

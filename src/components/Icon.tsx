@@ -85,6 +85,7 @@ import Snowflake1 from '../../assets/icons/lorc/snowflake-1.svg';
 import Token from '../../assets/icons/delapouite/token.svg';
 
 import ArcheryTarget from '../../assets/icons/lorc/archery-target.svg';
+import TargetDummy from '../../assets/icons/lorc/target-dummy.svg';
 import OpenBook from '../../assets/icons/lorc/open-book.svg';
 import CrownCoin from '../../assets/icons/lorc/crown-coin.svg';
 import ReturnArrow from '../../assets/icons/lorc/return-arrow.svg';
@@ -463,6 +464,7 @@ const ICON_REGISTRY = {
   'delapouite/token': Token,
 
   'lorc/archery-target': ArcheryTarget,
+  'lorc/target-dummy': TargetDummy,
   'lorc/open-book': OpenBook,
   'lorc/crown-coin': CrownCoin,
   'lorc/return-arrow': ReturnArrow,

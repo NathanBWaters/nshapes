@@ -1,17 +1,23 @@
 /**
  * The adventure map — a winding path of foe nodes through the worlds
- * (Angry Birds / Bloons style). Elite branches hang off the path as side
- * routes, and a branch can lead on to further branches. Tap a node to open
- * the level preview.
+ * (Angry Birds / Bloons style). Tap a node to open the level preview.
+ *
+ * Side paths (elite branches, fighter trials, practice) are secrets: a path is
+ * not drawn at all until it opens, and the first time the map shows one its
+ * trail draws itself out from the level it hangs off and its node pops in.
+ * A branch can lead on to further branches.
  */
 import React, { useEffect, useMemo, useRef } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, useWindowDimensions, Platform } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withDelay, withSequence, withTiming, Easing } from 'react-native-reanimated';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
 import { COLORS } from '@/utils/colors';
+import { sfx } from '@/audio';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import type { CharacterName } from '@/types';
 import type { AdventureSave, LevelDef } from '../types';
 import { MAIN_LEVELS, branchesOf } from '../data/levels';
@@ -22,23 +28,52 @@ import { getFighter } from '../data/fighters';
 import { BOUNTIES } from '../data/bounties';
 import { getArcana } from '../data/arcana';
 import { isFighterTrial } from '../data/rewards';
-import { hasUnspentStars, equippedArcanaOf, getFrontierLevel, getLockReason, maxStars, totalStars, isBiomeOpen } from '../progress';
+import { freshPaths, hasUnspentStars, equippedArcanaOf, getFrontierLevel, getLockReason, maxStars, openPaths, totalStars, isBiomeOpen } from '../progress';
 import { Bob, CoinPill, INK, StarRow, TONE } from './ui';
 
 const ELITE = '#5B2333';
+/** Practice paths: straw, not blood */
+const PRACTICE = '#8A6420';
 const ROW = 112;
 /** Vertical step between branches that chain off one another */
 const BRANCH_STEP = 92;
 const BANNER = 132;
 const TOP_PAD = 24;
 
-interface NodePos { level: LevelDef; x: number; y: number; parent?: { x: number; y: number } }
+/** A side path is drawn as dashes this far apart (the SVG trail and the arriving one share it) */
+const DASH_STEP = 12;
+/** A fresh path waits for the map to scroll to it, then lays one dash at a time, then its node pops */
+const ARRIVE = { startMs: 700, dashMs: 55, popMs: 380, tagMs: 2000, betweenMs: 500 } as const;
+
+interface Point { x: number; y: number }
+interface NodePos { level: LevelDef; x: number; y: number; parent?: Point }
 interface BannerPos { biomeIndex: number; y: number; height: number }
 
-/** A branch and every branch that chains off it, depth first. */
-const branchChain = (level: LevelDef): LevelDef[] => [level, ...branchesOf(level.id).flatMap(branchChain)];
+const pathColor = (level: LevelDef): string => (level.rules.sandbox ? PRACTICE : ELITE);
 
-const layout = (width: number) => {
+/** Where each dash of the trail from `from` to `to` sits, and how it is turned. */
+const dashesBetween = (from: Point, to: Point): { points: Point[]; angle: number } => {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const len = Math.max(1, Math.hypot(dx, dy));
+  const count = Math.max(1, Math.floor((len - 1.5) / DASH_STEP) + 1);
+  return {
+    angle: Math.atan2(dy, dx),
+    points: Array.from({ length: count }, (_, k) => {
+      const d = 1.5 + k * DASH_STEP;
+      return { x: from.x + (dx / len) * d, y: from.y + (dy / len) * d };
+    }),
+  };
+};
+
+/** An open side path and every open path that chains off it, depth first. */
+const branchChain = (level: LevelDef, isOpen: (l: LevelDef) => boolean): LevelDef[] => [
+  level,
+  ...branchesOf(level.id).filter(isOpen).flatMap(b => branchChain(b, isOpen)),
+];
+
+/** Only open side paths take up room: a hidden one leaves no gap to give it away. */
+const layout = (width: number, isOpen: (l: LevelDef) => boolean) => {
   const nodes: NodePos[] = [];
   const branches: NodePos[] = [];
   const banners: BannerPos[] = [];
@@ -59,11 +94,11 @@ const layout = (width: number) => {
     // second branch off the same level takes the other side. Chained branches
     // step down their side path.
     let longest = 1;
-    branchesOf(level.id).forEach((b, k) => {
+    branchesOf(level.id).filter(isOpen).forEach((b, k) => {
       const roomy = x < width / 2 ? 1 : -1;
       const side = k % 2 === 0 ? roomy : -roomy;
       const bx = Math.max(58, Math.min(width - 58, x + side * Math.min(150, width * 0.4)));
-      const chain = branchChain(b);
+      const chain = branchChain(b, isOpen);
       longest = Math.max(longest, chain.length);
       chain.forEach((c, depth) => {
         const parent = depth === 0 ? { x, y: cy } : { x: bx, y: cy + 6 + (depth - 1) * BRANCH_STEP };
@@ -100,28 +135,62 @@ interface Props {
   onOpenBounties?: () => void;
   onExit: () => void;
   highlightLevelId?: string | null;
+  /** The arrival of these secret paths has played: remember it, so it plays once */
+  onPathsRevealed?: (ids: string[]) => void;
   musicOn: boolean;
   onToggleMusic: () => void;
 }
 
-const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpenGuide, onOpenBounties, onExit, highlightLevelId, musicOn, onToggleMusic }) => {
+const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpenGuide, onOpenBounties, onExit, highlightLevelId, onPathsRevealed, musicOn, onToggleMusic }) => {
   const { width: winW } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const reducedMotion = useReducedMotion();
   const width = Math.min(winW, 560);
-  const { nodes, branches, banners, height } = useMemo(() => layout(width), [width]);
+  const openKey = openPaths(save).map(l => l.id).join(',');
+  const { nodes, branches, banners, height } = useMemo(() => {
+    const open = new Set(openKey.split(','));
+    return layout(width, l => open.has(l.id));
+  }, [width, openKey]);
   const frontier = getFrontierLevel(save);
   const scrollRef = useRef<ScrollView>(null);
   const stars = totalStars(save);
   const fighter = getFighter(save.selectedFighter);
   const campUnlocked = save.coinsUnlocked || save.armory.length > 0 || save.unlockedFighters.length > 1 || save.coins > 0 || save.lifetimeCoins > 0;
 
-  // Scroll so the frontier node is in view
+  // Secret paths the map is showing for the first time, and when each one arrives
+  const freshKey = freshPaths(save).map(l => l.id).join(',');
+  const arrivals = useMemo(() => {
+    const out = new Map<string, { startMs: number; popMs: number }>();
+    let at: number = reducedMotion ? 0 : ARRIVE.startMs;
+    for (const b of branches) {
+      if (!freshKey.split(',').includes(b.level.id)) continue;
+      const trail = reducedMotion ? 0 : dashesBetween(b.parent!, b).points.length * ARRIVE.dashMs;
+      out.set(b.level.id, { startMs: at, popMs: at + trail });
+      at += trail + (reducedMotion ? 0 : ARRIVE.betweenMs);
+    }
+    return out;
+  }, [branches, freshKey, reducedMotion]);
+
+  // The arrival plays once: a chime as each node lands, then the save remembers it
+  const onRevealedRef = useRef(onPathsRevealed);
+  onRevealedRef.current = onPathsRevealed;
   useEffect(() => {
-    const target = nodes.find(n => n.level.id === (highlightLevelId ?? frontier.id));
+    if (arrivals.size === 0) return;
+    const ids = [...arrivals.keys()];
+    const pops = [...arrivals.values()].map(a => a.popMs);
+    const timers = pops.map(ms => setTimeout(() => sfx('unlock'), ms));
+    timers.push(setTimeout(() => onRevealedRef.current?.(ids), Math.max(...pops) + ARRIVE.popMs + ARRIVE.tagMs));
+    return () => timers.forEach(clearTimeout);
+  }, [arrivals, reducedMotion]);
+
+  // Scroll so a path that just opened, else the level asked for, else the frontier is in view
+  const focusId = [...arrivals.keys()][0] ?? highlightLevelId ?? frontier.id;
+  useEffect(() => {
+    const target = [...nodes, ...branches].find(n => n.level.id === focusId);
     if (!target) return;
     const t = setTimeout(() => scrollRef.current?.scrollTo({ y: Math.max(0, target.y - 260), animated: true }), 120);
     return () => clearTimeout(t);
-  }, [nodes, frontier.id, highlightLevelId]);
+  }, [nodes, branches, focusId]);
 
   const unlockedNodes = nodes.filter(n => getLockReason(save, n.level) === null);
   const lastUnlocked = unlockedNodes[unlockedNodes.length - 1];
@@ -183,22 +252,41 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
             )}
             <Path d={pathFor(nodes)} stroke={INK} strokeWidth={2} fill="none" strokeDasharray="2 10" strokeLinecap="round" opacity={0.35} />
             {nodes.map(n => <Circle key={n.level.id} cx={n.x} cy={n.y} r={6} fill={INK} opacity={0.15} />)}
-            {branches.map(b => (
+            {branches.filter(b => !arrivals.has(b.level.id)).map(b => (
               <Path
                 key={b.level.id}
                 d={`M ${b.parent!.x} ${b.parent!.y} L ${b.x} ${b.y}`}
-                stroke={getLockReason(save, b.level) ? '#B8B0A4' : ELITE}
+                stroke={pathColor(b.level)}
                 strokeWidth={5}
-                strokeDasharray="3 9"
+                strokeDasharray={`3 ${DASH_STEP - 3}`}
                 strokeLinecap="round"
                 fill="none"
               />
             ))}
           </Svg>
 
-          {/* Elite branch nodes */}
+          {/* A path that just opened draws itself out, dash by dash, from the level it hangs off */}
+          {branches.map(b => {
+            const arrival = arrivals.get(b.level.id);
+            if (!arrival) return null;
+            const { points, angle } = dashesBetween(b.parent!, b);
+            return points.map((pt, k) => (
+              <TrailDash key={`${b.level.id}-${k}`} at={pt} angle={angle} color={pathColor(b.level)} delay={arrival.startMs + k * ARRIVE.dashMs} still={reducedMotion} />
+            ));
+          })}
+
+          {/* Side path nodes */}
           {branches.map(n => (
-            <MapNode key={n.level.id} node={n} save={save} isFrontier={false} onPress={() => onSelectLevel(n.level)} fighterName={fighter.name} />
+            <MapNode
+              key={n.level.id}
+              node={n}
+              save={save}
+              isFrontier={false}
+              onPress={() => onSelectLevel(n.level)}
+              fighterName={fighter.name}
+              arriveAtMs={arrivals.get(n.level.id)?.popMs}
+              still={reducedMotion}
+            />
           ))}
 
           {nodes.map(n => (
@@ -250,29 +338,79 @@ const DockButton: React.FC<{ testID?: string; icon: React.ComponentProps<typeof 
   </TouchableOpacity>
 );
 
-const MapNode: React.FC<{ node: NodePos; save: AdventureSave; isFrontier: boolean; onPress: () => void; fighterName: CharacterName }> = ({ node, save, isFrontier, onPress, fighterName }) => {
+/** One dash of a side path, laid down as the path draws itself toward its node. */
+const TrailDash: React.FC<{ at: Point; angle: number; color: string; delay: number; still?: boolean }> = ({ at, angle, color, delay, still }) => {
+  const t = useSharedValue(still ? 1 : 0);
+  useEffect(() => {
+    if (!still) t.value = withDelay(delay, withTiming(1, { duration: 150, easing: Easing.out(Easing.cubic) }));
+  }, [delay, still, t]);
+  const style = useAnimatedStyle(() => ({ opacity: t.value, transform: [{ rotate: `${angle}rad` }, { scale: 0.4 + 0.6 * t.value }] }));
+  return <Animated.View pointerEvents="none" style={[s.dash, { left: at.x - 4, top: at.y - 2.5, backgroundColor: color }, style]} />;
+};
+
+/**
+ * A node that was not on the map a moment ago: it pops in, a ring bursts from it, and a tag names the surprise.
+ * `still` (reduced motion): it is simply there, with its tag.
+ */
+const Arrival: React.FC<{ delay: number; size: number; still?: boolean; children: React.ReactNode }> = ({ delay, size, still, children }) => {
+  const pop = useSharedValue(still ? 1 : 0);
+  const ring = useSharedValue(0);
+  const tag = useSharedValue(still ? 1 : 0);
+  useEffect(() => {
+    if (still) return;
+    pop.value = withDelay(delay, withSequence(withTiming(1.2, { duration: 220, easing: Easing.out(Easing.cubic) }), withTiming(1, { duration: 160, easing: Easing.inOut(Easing.quad) })));
+    ring.value = withDelay(delay, withTiming(1, { duration: 620, easing: Easing.out(Easing.quad) }));
+    tag.value = withDelay(delay + 120, withSequence(withTiming(1, { duration: 180 }), withDelay(ARRIVE.tagMs - 500, withTiming(0, { duration: 300 }))));
+  }, [delay, still, pop, ring, tag]);
+  const popStyle = useAnimatedStyle(() => ({ opacity: Math.min(1, pop.value * 4), transform: [{ scale: pop.value }] }));
+  const ringStyle = useAnimatedStyle(() => ({ opacity: ring.value === 0 ? 0 : 1 - ring.value, transform: [{ scale: 0.6 + ring.value * 1.6 }] }));
+  const tagStyle = useAnimatedStyle(() => ({ opacity: tag.value, transform: [{ translateY: (1 - tag.value) * 6 }] }));
+  return (
+    <View style={s.arrival} pointerEvents="box-none">
+      <Animated.View pointerEvents="none" style={[s.arrivalRing, { width: size, height: size, borderRadius: size / 2, top: 6 }, ringStyle]} />
+      <Animated.View style={[s.arrival, popStyle]} pointerEvents="box-none">{children}</Animated.View>
+      <Animated.View pointerEvents="none" style={[s.secretTag, tagStyle]}>
+        <Text style={s.secretTagText}>SECRET PATH!</Text>
+      </Animated.View>
+    </View>
+  );
+};
+
+const MapNode: React.FC<{
+  node: NodePos;
+  save: AdventureSave;
+  isFrontier: boolean;
+  onPress: () => void;
+  fighterName: CharacterName;
+  /** A secret path the map shows for the first time: when its node pops in */
+  arriveAtMs?: number;
+  /** Reduced motion: arrive without animation */
+  still?: boolean;
+}> = ({ node, save, isFrontier, onPress, fighterName, arriveAtMs, still }) => {
   const { level, x, y } = node;
   const lock = getLockReason(save, level);
   const locked = lock !== null;
   const stars = save.stars[level.id] ?? 0;
   const foe = levelFoe(level);
-  const elite = !!level.branchOf;
-  const size = level.isBoss ? 78 : elite ? 54 : 62;
+  const side = !!level.branchOf;
+  const practice = !!level.rules.sandbox;
+  const elite = side && !practice;
+  const size = level.isBoss ? 78 : side ? 54 : 62;
   const isNew = !locked && !save.seenMechanics.includes(level.introduces);
   const mech = getMechanic(level.introduces);
 
-  return (
-    <View style={[s.nodeWrap, { left: x - 60, top: y - size / 2 - 6 }]} pointerEvents="box-none">
+  const content = (
+    <>
       <Bob active={isFrontier}>
         <TouchableOpacity
           testID={`map-node-${level.id}`}
           onPress={onPress}
           activeOpacity={0.85}
-          accessibilityLabel={`Level ${level.id} ${level.name}${locked ? ' locked' : ''}`}
+          accessibilityLabel={`${practice ? 'Practice' : `Level ${level.id}`} ${level.name}${locked ? ' locked' : ''}`}
           style={[
             s.node,
             { width: size, height: size, borderRadius: size / 2 },
-            locked ? s.nodeLocked : elite ? s.nodeElite : stars === 3 ? s.nodePerfect : stars > 0 ? s.nodeDone : s.nodeOpen,
+            locked ? s.nodeLocked : practice ? s.nodePractice : elite ? s.nodeElite : stars === 3 ? s.nodePerfect : stars > 0 ? s.nodeDone : s.nodeOpen,
             isFrontier && s.nodeFrontier,
           ]}
         >
@@ -295,9 +433,10 @@ const MapNode: React.FC<{ node: NodePos; save: AdventureSave; isFrontier: boolea
         </TouchableOpacity>
       </Bob>
       <View style={s.nodeMeta} pointerEvents="none">
-        {!locked && <StarRow stars={stars} size={15} />}
+        {/* Practice earns no stars */}
+        {!locked && !practice && <StarRow stars={stars} size={15} />}
         <Text style={[s.nodeLabel, locked && { color: '#A69F95' }]}>
-          {elite ? `${isFighterTrial(level) ? 'TRIAL' : 'ELITE'}${locked ? ' ★★' : ''}` : level.id}
+          {practice ? 'PRACTICE' : elite ? (isFighterTrial(level) ? 'TRIAL' : 'ELITE') : level.id}
         </Text>
       </View>
       {isNew && (
@@ -315,6 +454,12 @@ const MapNode: React.FC<{ node: NodePos; save: AdventureSave; isFrontier: boolea
           </Bob>
         </View>
       )}
+    </>
+  );
+
+  return (
+    <View style={[s.nodeWrap, { left: x - 60, top: y - size / 2 - 6 }]} pointerEvents="box-none">
+      {arriveAtMs === undefined ? content : <Arrival delay={arriveAtMs} size={size} still={still}>{content}</Arrival>}
     </View>
   );
 };
@@ -355,6 +500,12 @@ const s = StyleSheet.create({
   nodeDone: { backgroundColor: TONE.coinPale },
   nodePerfect: { backgroundColor: COLORS.actionYellow },
   nodeElite: { backgroundColor: ELITE, borderColor: COLORS.deepOnyx },
+  nodePractice: { backgroundColor: '#F6E3A8', borderColor: PRACTICE },
+  dash: { position: 'absolute', width: 8, height: 5, borderRadius: 2.5 },
+  arrival: { width: '100%', alignItems: 'center' },
+  arrivalRing: { position: 'absolute', borderWidth: 4, borderColor: COLORS.actionYellow },
+  secretTag: { position: 'absolute', top: -30, backgroundColor: COLORS.deepOnyx, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
+  secretTagText: { color: COLORS.actionYellow, fontSize: 10, fontWeight: '900', letterSpacing: 1 },
   skull: { position: 'absolute', top: -10, right: -6, backgroundColor: COLORS.canvasWhite, borderRadius: 11, borderWidth: 2, borderColor: INK, padding: 1 },
   nodeFrontier: { borderColor: COLORS.deepOnyx, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
   crown: { position: 'absolute', top: -14, backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 2, borderColor: INK, padding: 1 },

@@ -224,7 +224,7 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters
                     <View style={{ flex: 1 }}>
                       <Text style={st.fighterName}>{unlocked ? f.name : '???'}</Text>
                       <Text style={st.fighterBlurb}>
-                        {unlocked ? f.blurb : `A fighter you have not met yet. ${unlockHint({ kind: 'fighter', id: f.name }) ?? 'Keep winning stars.'}`}
+                        {unlocked ? f.blurb : `A fighter you have not met yet. ${unlockHint({ kind: 'fighter', id: f.name }, save) ?? 'Keep winning stars.'}`}
                       </Text>
                     </View>
                     {unlocked && !selected && (
@@ -281,7 +281,7 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters
               <View style={st.portrait}><Icon name="lorc/padlock" size={30} color={INK} /></View>
               <Text style={st.fighterName}>Workshop Locked</Text>
               <Text style={[st.fighterBlurb, { textAlign: 'center' }]}>
-                {unlockHint({ kind: 'feature', id: 'workshop' })} to unlock the ability to upgrade your unlocked mechanics and tune your Armory weapons!
+                {unlockHint({ kind: 'feature', id: 'workshop' }, save)} to unlock the ability to upgrade your unlocked mechanics and tune your Armory weapons!
               </Text>
             </View>
           ) : (
@@ -508,7 +508,7 @@ const Camp: React.FC<Props> = ({ save, onChange, onClose, initialTab = 'fighters
                         <Text style={st.arcanaTradeoff}>▼ {a.tradeoff}</Text>
                       </>
                     ) : (
-                      <Text style={st.fighterBlurb}>Unlock: {unlockHint({ kind: 'arcana', id: a.id })}</Text>
+                      <Text style={st.fighterBlurb}>Unlock: {unlockHint({ kind: 'arcana', id: a.id }, save)}</Text>
                     )}
                   </View>
                 </TouchableOpacity>

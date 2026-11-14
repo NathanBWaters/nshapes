@@ -35,10 +35,14 @@ const LevelResults: React.FC<Props> = ({ level, run, stars, result, unlocksRevea
   const insets = useSafeAreaInsets();
   const [replayOpen, setReplayOpen] = useState(false);
   const biome = getBiome(level.biome);
-  const won = stars > 0;
+  /** A practice fight has no result: the player simply left */
+  const practice = !!level.rules.sandbox;
+  const won = stars > 0 || practice;
   const accuracy = level.starRule?.kind === 'accuracy';
-  const title = stars >= 3 ? 'PERFECT!' : stars === 2 ? 'VICTORY!' : stars === 1 ? (accuracy ? 'YOU WON!' : 'SURVIVED') : 'DEFEATED';
-  const sub = accuracy
+  const title = practice ? 'PRACTICE OVER' : stars >= 3 ? 'PERFECT!' : stars === 2 ? 'VICTORY!' : stars === 1 ? (accuracy ? 'YOU WON!' : 'SURVIVED') : 'DEFEATED';
+  const sub = practice
+    ? 'Nothing banked, nothing lost. The dummy is ready whenever you are.'
+    : accuracy
     ? stars >= 3
       ? 'Not a single mistake.'
       : `You beat ${run.foeName} with ${run.mistakes} mistake${run.mistakes === 1 ? '' : 's'}. Fewer mistakes earn more stars.`
@@ -56,11 +60,13 @@ const LevelResults: React.FC<Props> = ({ level, run, stars, result, unlocksRevea
     const ts: ReturnType<typeof setTimeout>[] = [];
     // Each star rings a step higher up the chord; then the coins count out like a payout
     for (let i = 1; i <= stars; i++) ts.push(setTimeout(() => band.cue('star', { amount: i }), starPopDelayMs(i - 1)));
-    if (run.coins > 0) ts.push(setTimeout(() => band.cue('coinRoll', { amount: Math.min(24, 4 + Math.round(run.coins / 5)) }), starPopDelayMs(stars) + 250));
+    if (run.coins > 0 && !level.rules.sandbox) ts.push(setTimeout(() => band.cue('coinRoll', { amount: Math.min(24, 4 + Math.round(run.coins / 5)) }), starPopDelayMs(stars) + 250));
     return () => ts.forEach(clearTimeout);
   }, [stars]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const tip = !won
+  const tip = practice
+    ? null
+    : !won
     ? run.mistakes > 3
       ? 'Tip: check one trait at a time: shape, then color, then number…'
       : 'Tip: spend stars in a skill tree at Camp, or try a fighter marked STRONG here.'
@@ -80,7 +86,9 @@ const LevelResults: React.FC<Props> = ({ level, run, stars, result, unlocksRevea
       return { star: g.star, unlock: levelled ? { ...unlock, revealed: levelled, secret: levelled } : unlock };
     })
   );
-  const activeBountyHooks = result.save.bountiesUnlocked
+  // Secret paths this result opened: named only once their reveal has played
+  const newPaths = result.unlocks.filter(u => u.kind === 'path').map(describeUnlock);
+  const activeBountyHooks = result.save.bountiesUnlocked && !practice
     ? BOUNTIES
         .filter(b => !result.save.completedBounties.includes(b.id) && b.progress(result.save) > 0)
         .sort((a, b) => b.progress(result.save) / b.target - a.progress(result.save) / a.target)
@@ -96,7 +104,7 @@ const LevelResults: React.FC<Props> = ({ level, run, stars, result, unlocksRevea
     <View style={[st.root, { backgroundColor: biome.colors.sky, paddingTop: insets.top + 12, paddingBottom: insets.bottom + 12 }]}>
       <ScrollView contentContainerStyle={st.scroll}>
         <PopIn style={st.card}>
-          <Text style={st.levelId}>{level.id} · {level.name}</Text>
+          <Text style={st.levelId}>{practice ? 'PRACTICE' : level.id} · {level.name}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
             <FighterAvatar
               testID="results-fighter-avatar"
@@ -116,19 +124,22 @@ const LevelResults: React.FC<Props> = ({ level, run, stars, result, unlocksRevea
               size={64}
               hp={run.foeHp}
               maxHp={run.foeMaxHp}
-              mood={won ? 'cornered' : 'victory'}
+              mood={practice ? 'idle' : won ? 'cornered' : 'victory'}
               reaction={!won ? { type: 'taunt', id: 1 } : null}
               framed
               interactive
             />
           </View>
-          <Text style={[st.title, { color: won ? INK : COLORS.impactRed }]}>{title}</Text>
-          <StarRow stars={stars} size={52} animateFrom={0} />
+          <Text style={[st.title, practice && { fontSize: 28 }, { color: won ? INK : COLORS.impactRed }]}>{title}</Text>
+          {!practice && <StarRow stars={stars} size={52} animateFrom={0} />}
           <Text style={st.sub}>{sub}</Text>
 
           <View style={st.statsRow}>
             <Stat testID="results-total-damage" icon="lorc/crossed-swords" label="Total damage" value={`${run.totalDamage}`} />
             <Stat testID="results-biggest-hit" icon="lorc/bright-explosion" label="Biggest hit" value={`${run.biggestHit}`} hot={run.biggestHit >= 25} />
+            {practice && run.matches > 0 && (
+              <Stat testID="results-per-set" icon="lorc/target-dummy" label="Per Set" value={`${Math.round(run.totalDamage / run.matches)}`} />
+            )}
           </View>
           <View style={st.statsRow}>
             <Stat icon="lorc/checked-shield" label="Sets" value={`${run.matches}`} />
@@ -198,6 +209,16 @@ const LevelResults: React.FC<Props> = ({ level, run, stars, result, unlocksRevea
             </View>
           )}
 
+          {newPaths.map((path, k) => (
+            <View key={k} style={st.pathFound} testID="results-secret-path">
+              <Icon name="lorc/treasure-map" size={20} color={COLORS.actionYellow} />
+              <View style={{ flex: 1 }}>
+                <Text style={st.pathFoundTitle}>SECRET PATH FOUND</Text>
+                <Text style={st.pathFoundText}>{unlocksRevealed ? `${path.revealed}. It is on the map now.` : 'Something new is on the map…'}</Text>
+              </View>
+            </View>
+          ))}
+
           {result.newlyOpenedBiomes.length > 0 && (
             <View style={st.biomeOpen}>
               <Icon name="lorc/padlock" size={18} color={COLORS.canvasWhite} />
@@ -215,7 +236,7 @@ const LevelResults: React.FC<Props> = ({ level, run, stars, result, unlocksRevea
             {won && nextLevel && nextUnlocked ? (
               <Btn testID="results-next" label={`Next: ${nextLevel.id}`} icon="lorc/crossed-swords" onPress={onNext} />
             ) : null}
-            <Btn testID="results-retry" label={stars >= 3 ? 'Play again' : won ? 'Retry for more ★' : 'Try again'} variant={won && nextLevel && nextUnlocked ? 'secondary' : 'primary'} onPress={onRetry} />
+            <Btn testID="results-retry" label={practice ? 'Practice again' : stars >= 3 ? 'Play again' : won ? 'Retry for more ★' : 'Try again'} variant={won && nextLevel && nextUnlocked ? 'secondary' : 'primary'} onPress={onRetry} />
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <Btn testID="results-map" label="Map" variant="secondary" icon="lorc/field" onPress={onMap} style={{ flex: 1 }} />
               {result.save.bountiesUnlocked && onBounties && (
@@ -266,6 +287,9 @@ const st = StyleSheet.create({
   bountyHookFrac: { fontSize: 12, fontWeight: '900', color: TONE.upside, fontVariant: ['tabular-nums'] },
   biomeOpen: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: INK, borderRadius: 8, padding: 10 },
   biomeOpenText: { color: COLORS.canvasWhite, fontWeight: '800' },
+  pathFound: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.deepOnyx, borderRadius: 8, padding: 10 },
+  pathFoundTitle: { color: COLORS.actionYellow, fontWeight: '900', letterSpacing: 2, fontSize: 11 },
+  pathFoundText: { color: COLORS.canvasWhite, fontWeight: '700', fontSize: 13 },
   tip: { fontSize: 13, color: INK, fontStyle: 'italic', textAlign: 'center', opacity: 0.85 },
   buttons: { alignSelf: 'stretch', gap: 8, marginTop: 4 },
 });

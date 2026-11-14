@@ -13,14 +13,17 @@
  *  - ★ = survive (moves used up / clock runs out with hearts left)
  *  - ★★ = knock out every foe
  *  - ★★★ = knock out every foe AND meet the challenge
- *  - Side branches (`branchOf`) open at ★★ on their parent and never block the
- *    main path. A branch may hang off another branch (World 3–4 routes).
+ *  - Side branches (`branchOf`) are SECRET: they are not on the map until they
+ *    open (★★ on their parent, or `opensAt`), and they never block the main
+ *    path. A branch may hang off another branch (World 3–4 routes).
  *    Fighter trials hang off the level whose ★★ recruits that fighter.
+ *  - Practice levels (`rules.sandbox`) are secret paths too, but earn nothing:
+ *    they live in PRACTICE_LEVELS, outside the campaign's LEVELS.
  *  - Foe HP is a first pass; the headless bot in
  *    __tests__/adventureBalance.test.ts retunes it.
  */
 import type { AttributeName } from '@/types';
-import type { LevelDef, RewardDef } from '../types';
+import type { AdventureSave, LevelDef, RewardDef } from '../types';
 
 const A2: AttributeName[] = ['shape', 'color'];
 const A3: AttributeName[] = ['shape', 'color', 'number'];
@@ -498,9 +501,9 @@ const RAW_LEVELS: LevelInput[] = [
 ];
 
 // ════════════════════ SIDE BRANCHES — fighter trials & elites ════════════════════
-// Each opens at ★★ on the level it hangs off (a main level or, in Worlds 3–4,
-// another branch). Fighter trials hang off the level that recruits the fighter,
-// so you always own the fighter they teach.
+// Secret until they open: ★★ on the level they hang off (a main level or, in
+// Worlds 3–4, another branch). Fighter trials hang off the level that recruits
+// the fighter, so you always own the fighter they teach.
 export const BRANCH_STAR_REQUIREMENT = 2;
 
 const BRANCHES: LevelInput[] = [
@@ -638,18 +641,52 @@ const withRoundLength = (l: LevelInput): LevelInput =>
         rules: { ...l.rules, ...(l.rules.timer ? { timer: Math.round(l.rules.timer * LONG_ROUNDS.timer) } : {}) },
       };
 
-export const LEVELS: LevelDef[] = [...RAW_LEVELS, ...BRANCHES]
-  .map(withRoundLength)
-  .map(l => ({ ...l, rewards: normalizeRewards(l) }));
+// ════════════════════ PRACTICE — nothing to win, nothing to lose ════════════════════
+// Secret paths like the branches above, but not part of the campaign: no stars
+// and nothing banked, so they stay out of LEVELS (star totals, bots, bounties).
+const NOTHING: LevelInput['rewards'] = { star1: { coins: 0 }, star2: { coins: 0 }, star3: { coins: 0 } };
+
+const PRACTICE: LevelInput[] = [
+  {
+    id: '1-4D', branchOf: '1-4', opensAt: 1, biome: 'meadow', name: 'The Back Field', introduces: 'practice',
+    // The surprise behind 1-4: a dummy that cannot be knocked out, with no clock and no move limit.
+    // It opens on any clear of 1-4, right after evolutions are taught, so there is somewhere to try them.
+    rules: { attributes: A3, boardSize: 12, hearts: 4, sandbox: true, startingHints: 3, startingGraces: 2, evolutionLikelihood: 15 },
+    foes: [{ name: 'Training Dummy', icon: 'lorc/target-dummy', hp: 100, taunt: '…' }],
+    challenge: { kind: 'noMistakes' }, coinMultiplier: 1, difficulty: 1,
+    rewards: NOTHING,
+  },
+];
+
+const build = (levels: LevelInput[]): LevelDef[] =>
+  levels.map(withRoundLength).map(l => ({ ...l, rewards: normalizeRewards(l) }));
+
+/** The campaign: every level that earns stars (the main path and its side branches). */
+export const LEVELS: LevelDef[] = build([...RAW_LEVELS, ...BRANCHES]);
+
+/** Practice fights: on the map, but outside the campaign. */
+export const PRACTICE_LEVELS: LevelDef[] = build(PRACTICE);
+
+const EVERY_LEVEL: LevelDef[] = [...LEVELS, ...PRACTICE_LEVELS];
 
 /** The main path, in order (side branches excluded). */
 export const MAIN_LEVELS: LevelDef[] = LEVELS.filter(l => !l.branchOf);
 
-/** Side branches hanging directly off this level (a main level or another branch). */
-export const branchesOf = (levelId: string): LevelDef[] => LEVELS.filter(l => l.branchOf === levelId);
+/** Every secret side path: campaign branches and practice levels. */
+export const SIDE_PATHS: LevelDef[] = EVERY_LEVEL.filter(l => l.branchOf);
+
+/** Side paths hanging directly off this level (a main level or another branch). */
+export const branchesOf = (levelId: string): LevelDef[] => SIDE_PATHS.filter(l => l.branchOf === levelId);
+
+/** Stars on its parent that open (and reveal) a side path. */
+export const branchStars = (level: LevelDef): number => level.opensAt ?? BRANCH_STAR_REQUIREMENT;
+
+/** A side path the player has not opened yet: it is not on the map, and nothing should name it. */
+export const isPathHidden = (level: LevelDef, save: Pick<AdventureSave, 'stars'>): boolean =>
+  !!level.branchOf && (save.stars[level.branchOf] ?? 0) < branchStars(level);
 
 export const getLevel = (id: string): LevelDef => {
-  const l = LEVELS.find(x => x.id === id);
+  const l = EVERY_LEVEL.find(x => x.id === id);
   if (!l) throw new Error(`Unknown level ${id}`);
   return l;
 };

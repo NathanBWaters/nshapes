@@ -109,6 +109,8 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   const timeouts = useRef<ReturnType<typeof setTimeout>[]>([]);
   const biome = getBiome(level.biome);
   const ended = run.status === 'won' || run.status === 'lost';
+  /** A practice fight never ends by itself: the player leaves with Done */
+  const practice = !!level.rules.sandbox;
 
   useEffect(() => () => timeouts.current.forEach(clearTimeout), []);
 
@@ -374,6 +376,9 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   const evolutionsOn = run.features.has('evolutions') && (run.armedRecipes.length > 0 || run.activeEvolutions.length > 0);
   const catalystOnBoard = run.board.some(c => c.hasEvolutionItem);
   const evolutionsLeft = run.evolutionCap - run.evolutionsTriggered;
+  /** "2/3", or just the count where there is no limit (practice) */
+  const evolutionsUsed = Number.isFinite(run.evolutionCap) ? `${run.evolutionsTriggered}/${run.evolutionCap}` : `${run.evolutionsTriggered} so far`;
+  const leavePractice = () => { music.stop(); onFinish(runRef.current); };
 
   const movesChip = run.movesLeft !== null && (
     <View style={[st.stat, run.movesLeft <= 2 && st.statWarn]}>
@@ -417,7 +422,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
               <Text style={st.foeName} numberOfLines={1}>{run.foeName}</Text>
               {level.foes.length > 1 && <Text style={st.wave}>WAVE {run.wave + 1}/{level.foes.length}</Text>}
             </View>
-            <HpBar hp={shownHp} max={run.foeMaxHp} />
+            <HpBar hp={shownHp} max={run.foeMaxHp} endless={practice} />
             {ui.showInactivityBar && (
               <View style={st.idleTrack}>
                 <View style={[st.idleFill, { width: `${Math.min(100, (ui.showInactivityBar.current / ui.showInactivityBar.max) * 100)}%` }]} />
@@ -429,6 +434,8 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
                 <Anchor name="combo"><Text testID="run-combo" style={[st.counter, st.counterHot]}>COMBO ×{run.combo}</Text></Anchor>
               )}
               {run.biggestHit > 0 && <Text testID="run-biggest-hit" style={st.counterDim}>best {run.biggestHit}</Text>}
+              {/* Practice: what a Set is worth with this build */}
+              {practice && run.matches > 0 && <Text testID="run-per-set" style={st.counterDim} accessibilityLabel={`${Math.round(run.totalDamage / run.matches)} damage per Set on average`}>avg {Math.round(run.totalDamage / run.matches)}</Text>}
             </View>
           </View>
 
@@ -453,6 +460,14 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
           <Anchor name="hearts"><Hearts hearts={run.hearts} max={run.maxHearts} /></Anchor>
           {/* On an untimed level the moves are the clock */}
           {run.movesLeft !== null && (secondsLeft === null ? <Anchor name="clock">{movesChip}</Anchor> : movesChip)}
+          {practice && (
+            <Anchor name="clock">
+              <View testID="run-no-clock" style={st.stat} accessibilityLabel="No clock">
+                <Icon name="lorc/stopwatch" size={16} color={INK} />
+                <Text style={st.statText}>∞</Text>
+              </View>
+            </Anchor>
+          )}
           {secondsLeft !== null && (
             <Anchor name="clock">
               {/* Teal while a cascade plays: the clock is standing still */}
@@ -543,16 +558,16 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
             {evolutionsOn && (
               <View
                 testID="run-evo-chip"
-                accessibilityLabel={`${run.armedRecipes.length} evolutions armed, ${run.evolutionsTriggered} of ${run.evolutionCap} used, ${Math.round(run.evolutionLikelihood)} percent catalyst chance`}
+                accessibilityLabel={`${run.armedRecipes.length} evolutions armed, ${evolutionsUsed} used, ${Math.round(run.evolutionLikelihood)} percent catalyst chance`}
                 style={[st.evoChip, catalystOnBoard && st.evoChipReady, evolutionsLeft <= 0 && { opacity: 0.55 }]}
               >
                 <Icon name="lorc/crystal-shine" size={12} color={catalystOnBoard ? INK : TONE.arcana} />
                 <Text style={st.evoChipText} numberOfLines={1}>
                   {evolutionsLeft <= 0
-                    ? `Evolutions ${run.evolutionsTriggered}/${run.evolutionCap}`
+                    ? `Evolutions ${evolutionsUsed}`
                     : catalystOnBoard
                       ? 'CATALYST! Match it to evolve'
-                      : `${run.armedRecipes.length} armed · ${Math.round(run.evolutionLikelihood)}% · ${run.evolutionsTriggered}/${run.evolutionCap}`}
+                      : `${run.armedRecipes.length} armed · ${Math.round(run.evolutionLikelihood)}% · ${evolutionsUsed}`}
                 </Text>
               </View>
             )}
@@ -572,11 +587,22 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
           </View>
         )}
 
-        <View style={[st.challenge, challenge.met && { backgroundColor: '#D4F4EE' }, challenge.failed && { opacity: 0.55 }]}>
-          <Text style={st.challengeStar}>★★★</Text>
-          <Text style={[st.challengeText, challenge.failed && { textDecorationLine: 'line-through' }]} numberOfLines={1}>{challenge.text}</Text>
-          {challenge.met && <Icon name="lorc/checked-shield" size={14} color={COLORS.logicTeal} />}
-        </View>
+        {practice ? (
+          // Nothing to win here: where the ★★★ goal would be, the way out
+          <View style={st.challenge} testID="run-practice-bar">
+            <Icon name="lorc/target-dummy" size={14} color={INK} />
+            <Text style={st.challengeText} numberOfLines={1}>Practice: nothing to win, nothing to lose</Text>
+            <TouchableOpacity testID="run-done" onPress={leavePractice} style={st.doneBtn} accessibilityRole="button" accessibilityLabel="Done practising">
+              <Text style={st.doneText}>DONE</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={[st.challenge, challenge.met && { backgroundColor: '#D4F4EE' }, challenge.failed && { opacity: 0.55 }]}>
+            <Text style={st.challengeStar}>★★★</Text>
+            <Text style={[st.challengeText, challenge.failed && { textDecorationLine: 'line-through' }]} numberOfLines={1}>{challenge.text}</Text>
+            {challenge.met && <Icon name="lorc/checked-shield" size={14} color={COLORS.logicTeal} />}
+          </View>
+        )}
       </View>
 
       {run.surge && <SurgeBar surge={run.surge} />}
@@ -700,7 +726,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
         <View style={st.overlay}>
           <PopIn style={st.panel}>
             <Text style={st.panelTitle}>PAUSED</Text>
-            <Text style={st.panelSub}>{level.id} · {level.name}</Text>
+            <Text style={st.panelSub}>{practice ? 'Practice' : level.id} · {level.name}</Text>
             {run.weapons.length > 0 && (
               <View style={st.gearRow}>
                 {run.weapons.map((w, i) => {
@@ -724,9 +750,18 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
                 onPress={onToggleEffects}
               />
             )}
-            <Btn label="Restart" variant="secondary" onPress={() => { setPaused(false); onRestart(); }} />
-            <Btn label="Retreat to map" variant="secondary" onPress={() => { setPaused(false); music.stop(); onQuit(); }} />
-            <Text style={st.panelHint}>Retreating forfeits this attempt, including the coins you've collected in it.</Text>
+            <Btn label={practice ? 'Start over' : 'Restart'} variant="secondary" onPress={() => { setPaused(false); onRestart(); }} />
+            {practice ? (
+              <>
+                <Btn testID="pause-done" label="Done practising" variant="secondary" onPress={() => { setPaused(false); leavePractice(); }} />
+                <Text style={st.panelHint}>Practice only: nothing here is banked, and nothing is lost.</Text>
+              </>
+            ) : (
+              <>
+                <Btn label="Retreat to map" variant="secondary" onPress={() => { setPaused(false); music.stop(); onQuit(); }} />
+                <Text style={st.panelHint}>Retreating forfeits this attempt, including the coins you've collected in it.</Text>
+              </>
+            )}
             {onToggleEffects && (
               <Text style={st.panelHint}>
                 {effects ? 'Effects on: the clock waits while they play.' : 'Effects off: numbers only, and the clock never waits.'}
@@ -750,8 +785,11 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   );
 };
 
-/** The foe's HP: the bar drops as each hit lands, and a pale trail shows what was just taken. */
-const HpBar: React.FC<{ hp: number; max: number }> = ({ hp, max }) => {
+/**
+ * The foe's HP: the bar drops as each hit lands, and a pale trail shows what was just taken.
+ * A practice dummy's bar never moves and reads ∞.
+ */
+const HpBar: React.FC<{ hp: number; max: number; endless?: boolean }> = ({ hp, max, endless }) => {
   const pct = max > 0 ? Math.max(0, Math.min(1, hp / max)) : 0;
   const fill = useSharedValue(pct);
   const trail = useSharedValue(pct);
@@ -763,10 +801,10 @@ const HpBar: React.FC<{ hp: number; max: number }> = ({ hp, max }) => {
   const fillStyle = useAnimatedStyle(() => ({ width: `${fill.value * 100}%` }));
   const trailStyle = useAnimatedStyle(() => ({ width: `${trail.value * 100}%` }));
   return (
-    <View style={st.hpTrack} accessibilityLabel={`Foe health ${hp} of ${max}`}>
+    <View testID="run-foe-hp" style={st.hpTrack} accessibilityLabel={endless ? 'Foe health: endless' : `Foe health ${hp} of ${max}`}>
       <Animated.View style={[st.hpFill, st.hpTrail, trailStyle]} />
       <Animated.View style={[st.hpFill, { backgroundColor: pct > 0.5 ? COLORS.impactRed : pct > 0.25 ? COLORS.impactOrange : '#E53935' }, fillStyle]} />
-      <Text style={st.hpText}>{hp} / {max}</Text>
+      <Text style={[st.hpText, endless && st.hpEndless]}>{endless ? '∞' : `${hp} / ${max}`}</Text>
     </View>
   );
 };
@@ -992,6 +1030,9 @@ const st = StyleSheet.create({
   hpFill: { position: 'absolute', left: 0, top: 0, bottom: 0 },
   hpTrail: { backgroundColor: '#FFE9A8' },
   hpText: { textAlign: 'center', fontWeight: '900', fontSize: 11, color: INK, fontVariant: ['tabular-nums'] },
+  hpEndless: { fontSize: 16, lineHeight: 18, color: COLORS.canvasWhite },
+  doneBtn: { backgroundColor: COLORS.actionYellow, borderWidth: 2, borderBottomWidth: 3, borderColor: INK, borderRadius: 6, paddingHorizontal: 12, paddingVertical: 2 },
+  doneText: { fontWeight: '900', fontSize: 12, letterSpacing: 1, color: INK },
   idleTrack: { height: 5, borderRadius: 3, backgroundColor: '#EEE', overflow: 'hidden' },
   idleFill: { height: '100%', backgroundColor: COLORS.impactOrange },
   counters: { flexDirection: 'row', alignItems: 'center', gap: 8 },

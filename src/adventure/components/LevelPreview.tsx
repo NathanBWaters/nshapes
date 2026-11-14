@@ -80,6 +80,8 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
   const evolutionsOn = gearOn && loadout.features.has('evolutions');
   const fighter = getFighter(save.selectedFighter);
   const charmsFull = charms.length >= slots;
+  /** A practice fight: nothing to win or lose, so no goals, rewards or difficulty */
+  const practice = !!level.rules.sandbox;
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
@@ -89,17 +91,17 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
           <View style={[st.header, { backgroundColor: biome.colors.sky }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Text style={[st.levelId, { color: biome.colors.ink }]}>
-                {biome.name.toUpperCase()} · {level.id}{level.isBoss ? ' · BOSS' : ''}{level.branchOf ? (isFighterTrial(level) ? ' · TRIAL' : ' · ELITE') : ''}
+                {biome.name.toUpperCase()}{practice ? ' · PRACTICE' : ` · ${level.id}${level.isBoss ? ' · BOSS' : ''}${level.branchOf ? (isFighterTrial(level) ? ' · TRIAL' : ' · ELITE') : ''}`}
               </Text>
               <TouchableOpacity onPress={onClose} style={st.close}><Text style={st.closeText}>✕</Text></TouchableOpacity>
             </View>
             <View style={st.foeRow}>
-              <View style={[st.foePortrait, level.isBoss && st.foeBoss, level.branchOf && st.foeElite]}>
+              <View style={[st.foePortrait, level.isBoss && st.foeBoss, level.branchOf && !practice && st.foeElite, practice && st.foePractice]}>
                 <EnemyAvatar
                   testID="preview-enemy-avatar"
                   enemy={foe}
                   size={level.isBoss ? 78 : 68}
-                  mood={level.isBoss ? 'enraged' : 'menacing'}
+                  mood={level.isBoss ? 'enraged' : practice ? 'idle' : 'menacing'}
                   reaction={{ type: 'entrance', id: 1 }}
                   interactive
                 />
@@ -107,7 +109,7 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
               <View style={{ flex: 1, gap: 4 }}>
                 <Text style={st.levelName}>{level.name}</Text>
                 <Text style={st.foeName}>vs {level.foes.length > 1 ? `${level.foes.length} waves` : foe.name}</Text>
-                <Skulls n={level.difficulty} />
+                {practice ? <Text style={st.practiceTag}>NO STARS · NO CLOCK · NO LOSING</Text> : <Skulls n={level.difficulty} />}
               </View>
             </View>
             {level.foes[level.foes.length - 1].taunt && (
@@ -127,13 +129,15 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
             </TouchableOpacity>
 
             <View style={st.rules}>
-              {accuracy ? (
+              {practice ? (
+                <Rule icon="lorc/stopwatch" text="No clock" />
+              ) : accuracy ? (
                 <Rule icon="lorc/archery-target" text={`Make ${Math.ceil(totalHp / 3)} Sets`} />
               ) : (
                 <Rule icon={timed ? 'lorc/stopwatch' : 'lorc/archery-target'} text={timed ? `${level.rules.timer}s` : `${level.rules.moves} moves`} />
               )}
-              <View style={st.rule}><Heart size={16} /><Text style={st.ruleText}>{level.rules.hearts === 0 ? "Can't lose" : level.rules.hearts}</Text></View>
-              <Rule icon="lorc/crossed-swords" text={`${totalHp} HP`} />
+              <View style={st.rule}><Heart size={16} /><Text style={st.ruleText}>{practice ? `${loadout.maxHearts ?? level.rules.hearts}, refilling` : level.rules.hearts === 0 ? "Can't lose" : level.rules.hearts}</Text></View>
+              <Rule icon="lorc/crossed-swords" text={practice ? '∞ HP' : `${totalHp} HP`} />
               <View style={st.rule}>
                 <View style={{ flexDirection: 'row' }}>
                   {level.rules.attributes.map(a => <Icon key={a} name={ATTR_ICONS[a]} size={14} color={INK} />)}
@@ -154,10 +158,19 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
 
             {level.rules.hazards && <Hazards hazards={level.rules.hazards} />}
 
+            {practice && (
+              <View style={st.practiceBox} testID="preview-practice">
+                <Text style={st.practiceTitle}>Just for practice</Text>
+                <Text style={st.abilityText}>
+                  Nothing here earns stars or coins, and nothing is lost. Everything you have learned so far is switched on. Stay as long as you like.
+                </Text>
+              </View>
+            )}
+
             {/* Star goals: coins up front, unlocks kept secret */}
-            <Text style={st.section}>REWARDS</Text>
+            {!practice && <Text style={st.section}>REWARDS</Text>}
             <View style={{ gap: 6 }}>
-              {goals.map(g => {
+              {!practice && goals.map(g => {
                 const done = best >= g.star;
                 const unlocks = describeRewardUnlocks(g.reward, save);
                 return (
@@ -336,7 +349,7 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                 })}
                 {armed.length > 0 && (
                   <Text style={st.evoHintSub} testID="preview-evo-likelihood">
-                    Catalyst chance {Math.round(loadout.evolutionLikelihood)}% per refill · up to {loadout.evolutionCap} evolutions this fight. Match the Catalyst to evolve for 30 s.
+                    Catalyst chance {Math.round(loadout.evolutionLikelihood)}% per refill · {Number.isFinite(loadout.evolutionCap) ? `up to ${loadout.evolutionCap} evolutions this fight` : 'as many evolutions as you like'}. Match the Catalyst to evolve for 30 s.
                   </Text>
                 )}
               </View>
@@ -398,7 +411,7 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                 </Text>
               </View>
             ) : (
-              <Btn testID="preview-play" label={best > 0 ? 'Play again' : 'Fight!'} icon="lorc/crossed-swords" onPress={() => onPlay(level)} />
+              <Btn testID="preview-play" label={practice ? 'Practice' : best > 0 ? 'Play again' : 'Fight!'} icon={practice ? 'lorc/target-dummy' : 'lorc/crossed-swords'} onPress={() => onPlay(level)} />
             )}
           </View>
         </PopIn>
@@ -449,6 +462,10 @@ const st = StyleSheet.create({
   foePortrait: { width: 84, height: 84, borderRadius: 42, borderWidth: 3, borderBottomWidth: 6, borderColor: INK, backgroundColor: COLORS.canvasWhite, alignItems: 'center', justifyContent: 'center' },
   foeBoss: { width: 96, height: 96, borderRadius: 48, backgroundColor: COLORS.actionYellow },
   foeElite: { backgroundColor: '#5B2333', borderColor: COLORS.deepOnyx },
+  foePractice: { backgroundColor: '#F6E3A8' },
+  practiceTag: { fontSize: 10, fontWeight: '900', letterSpacing: 1, color: INK, opacity: 0.75 },
+  practiceBox: { gap: 4, backgroundColor: '#FBF3D6', borderRadius: 8, padding: 10, borderWidth: 1.5, borderColor: '#8A6420' },
+  practiceTitle: { fontWeight: '900', fontSize: 14, color: INK },
   levelName: { fontSize: 24, fontWeight: '900', color: INK },
   foeName: { fontSize: 14, fontWeight: '700', color: INK, opacity: 0.8 },
   bubble: { alignSelf: 'flex-start', backgroundColor: COLORS.canvasWhite, borderWidth: 2, borderColor: INK, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, marginLeft: 20 },

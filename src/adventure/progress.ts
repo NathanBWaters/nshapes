@@ -16,7 +16,7 @@ import type {
   UnlockableFeature,
   UpgradeDef,
 } from './types';
-import { LEVELS, MAIN_LEVELS, BRANCH_STAR_REQUIREMENT, mainIndexOf } from './data/levels';
+import { LEVELS, MAIN_LEVELS, SIDE_PATHS, branchStars, isPathHidden, mainIndexOf } from './data/levels';
 import { BIOMES, getBiome } from './data/biomes';
 import { MECHANICS } from './data/mechanics';
 import { FIGHTERS, STARTING_FIGHTERS } from './data/fighters';
@@ -80,6 +80,7 @@ export const createNewSave = (): AdventureSave => ({
   selectedFighter: 'Orange Tabby',
   musicOn: true,
   effectsOn: true,
+  revealedPaths: [],
 });
 
 // ─── Stars & unlocks ────────────────────────────────────────────────────────
@@ -391,12 +392,12 @@ type LockReason =
 
 /**
  * A main level opens when the previous main level has ≥1★ and its region's
- * star gate is met. An elite branch opens at ★★ on its parent level.
+ * star gate is met. A side path opens (and first appears on the map) once its
+ * parent level has the stars it asks for: ★★ unless the path says otherwise.
  */
 export const getLockReason = (save: AdventureSave, level: LevelDef): LockReason | null => {
   if (level.branchOf) {
-    if ((save.stars[level.branchOf] ?? 0) < BRANCH_STAR_REQUIREMENT) return { kind: 'branch', parentId: level.branchOf, need: BRANCH_STAR_REQUIREMENT };
-    return null;
+    return isPathHidden(level, save) ? { kind: 'branch', parentId: level.branchOf, need: branchStars(level) } : null;
   }
   const pos = mainIndexOf(level);
   if (pos > 0) {
@@ -411,6 +412,28 @@ export const getLockReason = (save: AdventureSave, level: LevelDef): LockReason 
 
 export const isLevelUnlocked = (save: AdventureSave, level: LevelDef): boolean =>
   getLockReason(save, level) === null;
+
+// ─── Secret side paths ──────────────────────────────────────────────────────
+
+/** Side paths that are open, and so drawn on the map. */
+export const openPaths = (save: AdventureSave): LevelDef[] => SIDE_PATHS.filter(l => !isPathHidden(l, save));
+
+/** Open paths whose arrival the map has not played yet. */
+export const freshPaths = (save: AdventureSave): LevelDef[] =>
+  openPaths(save).filter(l => !save.revealedPaths.includes(l.id));
+
+export const markPathsRevealed = (save: AdventureSave, ids: readonly string[]): AdventureSave => {
+  const add = ids.filter(id => !save.revealedPaths.includes(id));
+  return add.length > 0 ? { ...save, revealedPaths: [...save.revealedPaths, ...add] } : save;
+};
+
+/**
+ * A save from before side paths were secret: the campaign branches it had open
+ * were already on its map, so they arrive without fanfare. Practice paths are
+ * new, and still get their moment.
+ */
+export const pathsSeenBeforeSecrets = (save: AdventureSave): string[] =>
+  openPaths(save).filter(l => !l.rules.sandbox).map(l => l.id);
 
 /** The next level the player should play: first unlocked level with 0 stars, else the last unlocked. */
 export const getFrontierLevel = (save: AdventureSave): LevelDef => {
@@ -440,7 +463,9 @@ export type Unlock =
   | { kind: 'weapon'; id: string; star: number; firstWeapon: boolean; level?: number }
   | { kind: 'arcana'; id: ArcanaId; star: number }
   | { kind: 'evolution'; id: string; star: number; firstEvolution: boolean }
-  | { kind: 'feature'; feature: UnlockableFeature; star: number };
+  | { kind: 'feature'; feature: UnlockableFeature; star: number }
+  /** A secret side path opened on the map (`star` = the stars on its parent that opened it) */
+  | { kind: 'path'; levelId: string; star: number };
 
 export interface ResultApplication {
   save: AdventureSave;
@@ -558,6 +583,25 @@ const recordRunBountyStats = (save: AdventureSave, level: LevelDef, stars: numbe
   return { ...save, bountyStats, discoveredEvolutions };
 };
 
+/** A practice fight: it is counted as played and its evolutions are remembered; nothing else changes. */
+const applyPracticeResult = (save: AdventureSave, level: LevelDef, run?: RunState): ResultApplication => {
+  const forged = run?.forgedRecipes ?? [];
+  return {
+    save: {
+      ...save,
+      plays: { ...save.plays, [level.id]: (save.plays[level.id] ?? 0) + 1 },
+      discoveredEvolutions: forged.length > 0 ? [...new Set([...save.discoveredEvolutions, ...forged])] : save.discoveredEvolutions,
+    },
+    granted: [],
+    coinsBanked: 0,
+    starCoins: 0,
+    bountyCoins: 0,
+    completedBounties: [],
+    unlocks: [],
+    newlyOpenedBiomes: [],
+  };
+};
+
 /** Bank run coins + grant first-time star rewards + evaluate cross-run bounties. */
 export const applyLevelResult = (
   save: AdventureSave,
@@ -566,6 +610,7 @@ export const applyLevelResult = (
   runCoins: number,
   run?: RunState
 ): ResultApplication => {
+  if (level.rules.sandbox) return applyPracticeResult(save, level, run);
   const before = save;
   const previousStars = save.stars[level.id] ?? 0;
   let next: AdventureSave = {
@@ -624,6 +669,11 @@ export const applyLevelResult = (
   }
 
   const newlyOpenedBiomes = BIOMES.filter(b => b.starGate > 0 && !isBiomeOpen(before, b.id) && isBiomeOpen(next, b.id)).map(b => b.id);
+
+  // Secret paths this result opened are revealed last: the map is where they lead
+  for (const path of SIDE_PATHS) {
+    if (isPathHidden(path, before) && !isPathHidden(path, next)) unlocks.push({ kind: 'path', levelId: path.id, star: branchStars(path) });
+  }
 
   return {
     save: next,
@@ -848,6 +898,7 @@ export const createMaxedSave = (): AdventureSave => {
     unlockedArcana: ARCANA.map(a => a.id),
     unlockedEvolutions: EVOLUTION_RECIPES.map(r => r.id),
     discoveredEvolutions: EVOLUTION_RECIPES.map(r => r.id),
+    revealedPaths: SIDE_PATHS.map(l => l.id),
   };
   for (const f of FEATURES) save = unlockFeature(save, f.id);
   for (const l of LEVELS) {
@@ -855,4 +906,15 @@ export const createMaxedSave = (): AdventureSave => {
   }
   for (const b of BOUNTIES) save = grant(save, { ...b.reward, coins: 0 }).save;
   return save;
+};
+
+/**
+ * Dev helper: ★★★ on every main level before this one, with their lessons
+ * seen, so this level is the next to play (side paths are left to be found).
+ */
+export const createSaveBefore = (levelId: string): AdventureSave => {
+  const earlier = MAIN_LEVELS.slice(0, Math.max(0, MAIN_LEVELS.findIndex(l => l.id === levelId)));
+  let save = createNewSave();
+  for (const l of earlier) save = applyLevelResult(save, l, 3, 0).save;
+  return { ...save, seenMechanics: [...new Set([...save.seenMechanics, ...earlier.map(l => LESSON_KEYS.mechanic(l.introduces))])] };
 };

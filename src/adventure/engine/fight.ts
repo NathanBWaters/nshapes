@@ -17,7 +17,7 @@ import { BASE_RULES, TRICK_RULES } from '../data/rules';
 import { PASSIVE_TUNING } from '../data/passives';
 import { createRng, type Rng } from './rng';
 import { hasAnySet, isSelectable } from './sets';
-import { EVOLUTION_RULES, evolutionLikelihoodFor, liveRules, modifiersOf, type KeyedRule } from './sources';
+import { evolutionCapFor, evolutionLikelihoodFor, liveRules, modifiersOf, type KeyedRule } from './sources';
 
 export const MAX_BOARD = 21;
 export const GRID_COLS = 3;
@@ -184,7 +184,7 @@ export const refreshSources = (d: Draft) => {
   d.evolutionLikelihood = d.features.has('evolutions')
     ? evolutionLikelihoodFor(d.evolutionLabTier, m, arcana(d).catalystChanceScale ?? 1) + (d.level.rules.evolutionLikelihood ?? 0)
     : 0;
-  d.evolutionCap = EVOLUTION_RULES.perFight + (m.extraEvolutionsPerFight ?? 0);
+  d.evolutionCap = evolutionCapFor(d.level, m);
 };
 
 const DEFAULT_TUNING: Record<string, number> = Object.assign({}, ...Object.values(PASSIVE_TUNING));
@@ -337,6 +337,11 @@ export const foeMultiplier = (d: Draft) => d.foe.getStatModifiers().pointsMultip
 
 export const dealDamage = (d: Draft, amount: number): number => {
   const dmg = Math.max(0, Math.round(amount));
+  if (d.level.rules.sandbox) {
+    // A practice dummy soaks it up: the damage counts, its health never moves
+    d.totalDamage += dmg;
+    return dmg;
+  }
   const hpBefore = d.foeHp;
   if (hpBefore > 0 && dmg > hpBefore) {
     const overkill = dmg - hpBefore;

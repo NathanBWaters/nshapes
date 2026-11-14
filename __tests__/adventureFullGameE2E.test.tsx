@@ -16,7 +16,7 @@ import React from 'react';
 import { render, fireEvent, act } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AdventureMode from '@/adventure/AdventureMode';
-import { LEVELS, MAIN_LEVELS, getLevel } from '@/adventure/data/levels';
+import { LEVELS, MAIN_LEVELS, PRACTICE_LEVELS, SIDE_PATHS, getLevel, isPathHidden } from '@/adventure/data/levels';
 import { FIGHTERS, getFighter } from '@/adventure/data/fighters';
 import { EVOLUTION_RECIPES, SIGNATURE_RECIPES } from '@/adventure/data/evolutions';
 import { ARCANA } from '@/adventure/data/arcana';
@@ -384,6 +384,8 @@ function stepThroughReveals(screen: Screen, opts: { stayOnResults?: boolean } = 
     const modal = screen.queryByTestId('unlock-modal');
     texts.push(modal ? collectTreeText(modal) : '');
     if (opts.stayOnResults && screen.queryByText('Stay on results')) fireEvent.press(screen.getByText('Stay on results'));
+    // A secret path's reveal offers the map; these walk-throughs go on from the results screen
+    else if (screen.queryByTestId('unlock-later')) fireEvent.press(screen.getByTestId('unlock-later'));
     else fireEvent.press(screen.getByTestId('unlock-primary'));
   }
   return texts;
@@ -493,7 +495,16 @@ describe('Adventure Mode full-game E2E', () => {
       );
       if (armed) expect(screen.getByText(/evolutions? armed/)).toBeTruthy();
 
+      // A side path is not on the map before the result that opens it
+      const hiddenBefore = SIDE_PATHS.filter(path => path.branchOf === level.id && isPathHidden(path, save));
+      for (const path of hiddenBefore) expect(screen.queryByTestId(`map-node-${path.id}`)).toBeNull();
+
       const { lessons, fight, reveals } = playOpenPreview(screen, level, { stayOnResults: true });
+      const opened = hiddenBefore.filter(path => !isPathHidden(path, loadAdventureSave()));
+      if (opened.length > 0) {
+        expect(reveals.some(t => t.includes('You found a secret path!'))).toBe(true);
+        expect(screen.getByTestId('results-secret-path')).toBeTruthy();
+      }
       if (level.id === firstRecipeLevel.id) {
         expect(lessons.some(t => t.includes('First Evolution'))).toBe(true);
         expect(reveals.some(t => t.includes('New evolution unlocked!'))).toBe(true);
@@ -527,8 +538,45 @@ describe('Adventure Mode full-game E2E', () => {
     expect(save.bountiesUnlocked).toBe(!!CAMPAIGN_FEATURES.bounties.clearLevel && (save.stars[CAMPAIGN_FEATURES.bounties.clearLevel] ?? 0) > 0);
     expect(screen.getByTestId('map-dock-bounties').props.accessibilityState?.disabled).toBe(!save.bountiesUnlocked);
 
+    // ── The surprise behind 1-4: a dummy to practise on ──────────────────
+    const dummy = PRACTICE_LEVELS[0];
+    expect(isPathHidden(dummy, save)).toBe(false);
+    const coinsBefore = save.coins;
+    fireEvent.press(screen.getByTestId(`map-node-${dummy.id}`));
+    expect(screen.getByTestId('preview-practice')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('preview-play'));
+    completeLessons(screen, dummy.rules.attributes);
+    const dismissTips = () => {
+      for (let i = 0; screen.queryByTestId('tip-ok') && i < 10; i++) fireEvent.press(screen.getByTestId('tip-ok'));
+      if (screen.queryByTestId('evolution-cutin')) {
+        advanceMs(600);
+        fireEvent.press(screen.getByTestId('evolution-cutin'));
+        advanceMs(400);
+      }
+    };
+    dismissTips();
+    expect(screen.getByTestId('run-foe-hp').props.accessibilityLabel).toBe('Foe health: endless');
+    expect(screen.queryByTestId('run-clock')).toBeNull();
+    for (let i = 0; i < 6; i++) {
+      dismissTips();
+      const sets = findValidSets(readLiveBoard(screen), dummy.rules.attributes);
+      if (sets.length === 0) { advanceMs(1000); continue; }
+      tapSet(sets[0]);
+    }
+    dismissTips();
+    // Six Sets in and nothing has ended: the dummy is still up and there is no result
+    expect(atResults(screen)).toBe(false);
+    expect(screen.getByTestId('run-per-set')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('run-done'));
+    expect(screen.getByText('PRACTICE OVER')).toBeTruthy();
+    save = loadAdventureSave();
+    expect(save.coins).toBe(coinsBefore);
+    expect(save.stars[dummy.id]).toBeUndefined();
+    backToMap(screen);
+
     // ── The fighter side branch opens at ★★ on its parent ───────────────
     const branch = LEVELS.find(l => l.branchOf && getLevel(l.branchOf).biome === 'meadow');
+    if (branch && (save.stars[branch.branchOf!] ?? 0) < 2) expect(screen.queryByTestId(`map-node-${branch.id}`)).toBeNull();
     if (branch && (save.stars[branch.branchOf!] ?? 0) >= 2) {
       const before = save.unlockedFighters.length;
       playLevelFromMap(screen, branch, { stayOnResults: true });

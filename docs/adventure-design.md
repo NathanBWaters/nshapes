@@ -23,7 +23,9 @@ Map ─tap foe─▶ Preview (foe, skulls, NEW mechanic, hazards, ★ goals + re
 ```
 
 ### Map and preview
-- **Map** (`AdventureMap.tsx`): a winding path of foe nodes through the five worlds. Side branches hang off the path, and some branches lead on to further branches. Tap a node to open the preview.
+- **Map** (`AdventureMap.tsx`): a winding path of foe nodes through the five worlds. Tap a node to open the preview.
+  - **Side paths are secrets.** A side path (elite, fighter trial or practice) is not drawn at all until it opens: no locked node, no trail, no gap where it will go. The result that opens one ends with a "You found a secret path!" reveal (`Unlock` kind `path`) whose button leads to the map, and the first time the map shows it the trail draws itself out, dash by dash, from the level it hangs off, and the node pops in under a "SECRET PATH!" tag. The save remembers which arrivals have played (`revealedPaths`), so each plays once. Some paths lead on to further paths.
+  - Nothing else names a path that is still hidden: the Field Guide lists its mechanic as "???" on a "Secret path", and unlock hints say "Hidden on a secret path in World N" (`unlockHint(u, save)`).
 - **Preview** (`LevelPreview.tsx`): foe and taunt, 1–5 skulls, the NEW mechanic, level rules and hazards, the three star goals with their coins, and unlocks shown as silhouettes. Below that:
   - **Fighter pick.** The preview tags fighters that suit the level as **STRONG** (`recommended` in `levels.ts`), which drives the "come back with the right fighter" loop.
   - **Charm picker**: tap to equip or remove (`n/slots equipped`).
@@ -70,9 +72,17 @@ The player always has to accept a teaching step. Nothing auto-dismisses.
 - **Shading Surge (Worlds 3-5):** a permanent fourth trait was too much to hold in your head, so every fight in Worlds 3-5 plays on **three traits** (shape, color, number) with every card solid. Every **45 s** of fight clock, shading switches on for **15 s**: each card keeps its shape, color and number and takes a shading, shading joins the Set rule, and **every Set's base damage is ×5** (a plain 3-damage Set becomes 15). Then the cards go back to solid. Multipliers ("next Set ×2", Rainbow, evolutions) apply on top, so a ×2 saved for the surge makes a 3-damage Set deal 30; flat weapon bonuses (+N per Set) are added after and are not ×5, which keeps a geared build's surge from running away from a fresh one's. The surge runs on the fight clock (freezes, level-ups and the shop pause it) and a pink bar above the board fills toward the next one, pulses for the last 5 s and drains during it. Numbers in `SURGE_RULES` (`data/rules.ts`), engine in `engine/surge.ts`, levels opt in with `rules.shadingSurge`. Background (the old fifth trait) is no longer used in Adventure; Free Play still has it.
 - **Long rounds from World 2:** every level outside the Meadow gets double foe HP and a double clock (`LONG_ROUNDS` / `withRoundLength` in `data/levels.ts`; numbers in the level table are written before this). Longer fights give snowballing builds (stacked weapons, evolutions, combos) time to pay off.
 - **Main path:** a level opens when the previous main level has ★ and its world's star gate is met. Gates count stars *earned*, so spending stars on skill trees never re-locks a world.
-- **Side branches** (`branchOf`) open at ★★ on their parent (`BRANCH_STAR_REQUIREMENT = 2`) and never block the main path.
+- **Side branches** (`branchOf`) are hidden until they open at ★★ on their parent (`BRANCH_STAR_REQUIREMENT = 2`, or a path's own `opensAt`), and never block the main path.
   - **Fighter trials** (ids ending `F`/`C`/`B`/`P`) hang off the level whose ★★ recruits that fighter, so you always own the fighter they teach.
   - **Elites** (`E`, `E2`) are tougher optional foes. Three of them chain off another branch: 3-3E → 3-3E2, 4-2E → 4-2E2, 4-7E → 4-7E2.
+- **Practice: The Back Field (1-4D).** The surprise behind 1-4: any clear of it (★, `opensAt: 1`) opens a path to a Training Dummy, right after evolutions are taught, so there is somewhere to try them. It is a fight that cannot end (`rules.sandbox`):
+  - the dummy's health never moves (the bar reads ∞) while the damage counters keep counting, with an average per Set;
+  - there is no clock and no move limit, and evolutions are not limited to 3;
+  - hearts are real, so heart mechanics work, but running out refills them (`breather` event) instead of ending the fight;
+  - every mechanic the player has learned is on (`getFeaturesForLevel`: lesson seen or level cleared), wherever it was taught, so the dummy grows with the campaign;
+  - nothing is banked: no stars, coins or bounty progress (`applyLevelResult` returns early). Only the play count and the recipes forged are kept.
+  - The player leaves with **Done** (where the ★★★ goal would be) and gets a short "Practice over" card with the fight replay.
+  - Practice levels live in `PRACTICE_LEVELS`, outside `LEVELS`, so star totals, skill-tree costs, bounties and the balance bots never see them. Two evolutions that need the foe below a share of its health cannot trigger there.
 
 ### Mechanic order (one per level)
 
@@ -565,7 +575,7 @@ The fight UI reuses the shared `GameBoard` and `Card`, so weapon effects, fire, 
 - Unlock it with `evolution: '<id>'` on a star reward. Ideally the level that grants it is one where the player already owns both families.
 
 **A level.**
-- Add an entry to `RAW_LEVELS` (array order is main-path order) or to `BRANCHES` with `branchOf`. It needs:
+- Add an entry to `RAW_LEVELS` (array order is main-path order) or to `BRANCHES` with `branchOf` (a secret side path; `opensAt` changes the stars that reveal it). A fight with nothing at stake goes in `PRACTICE` with `rules.sandbox`. It needs:
   - `introduces`: one `MECHANICS` id. If the mechanic is new, add it with its `kind`, `enables` flag, lessons/quiz/fightTips and coachMark.
   - `rules`: traits, moves or timer, hearts, hints, graces, hazards, evolutionLikelihood.
   - `foes`: `{ enemy: '<registered name>' }` for real foe effects, or a cosmetic `name`/`icon`. Several entries make waves.

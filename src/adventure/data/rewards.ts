@@ -4,8 +4,8 @@
  * follow the level and bounty tables instead of restating them.
  */
 import type { CharacterName } from '@/types';
-import type { ArcanaId, BountyDef, LevelDef, RewardDef, UnlockableFeature } from '../types';
-import { LEVELS, getLevel } from './levels';
+import type { AdventureSave, ArcanaId, BountyDef, LevelDef, RewardDef, UnlockableFeature } from '../types';
+import { LEVELS, getLevel, isPathHidden } from './levels';
 import { worldNumber } from './biomes';
 import { BOUNTIES } from './bounties';
 import { FEATURES } from './features';
@@ -63,15 +63,20 @@ export const unlockSources = (u: Unlockable): UnlockSource[] => SOURCES.get(keyO
 
 export const unlockSource = (u: Unlockable): UnlockSource | null => unlockSources(u)[0] ?? null;
 
-const describeSource = (s: UnlockSource): string => {
+const describeSource = (s: UnlockSource, save?: Pick<AdventureSave, 'stars'>): string => {
   if (s.via === 'bounty') return `Complete the ${s.bounty.name} bounty`;
   const { level } = s;
+  // A side path that has not opened yet stays a secret
+  if (save && isPathHidden(level, save)) return `Hidden on a secret path in World ${worldNumber(level.biome)}`;
   const elite = level.branchOf ? ` (World ${worldNumber(level.biome)} ${isFighterTrial(level) ? 'trial' : 'Elite'})` : '';
   return `Earn ${'★'.repeat(s.via === 'star' ? s.star : 1)} on ${level.id} ${level.name}${elite}`;
 };
 
-/** How to get it, in a few words, or null when nothing in the game grants it. */
-export const unlockHint = (u: Unlockable): string | null => {
+/**
+ * How to get it, in a few words, or null when nothing in the game grants it.
+ * With the player's save, a source on a side path they have not found is not named.
+ */
+export const unlockHint = (u: Unlockable, save?: Pick<AdventureSave, 'stars'>): string | null => {
   const source = unlockSource(u);
-  return source ? describeSource(source) : null;
+  return source ? describeSource(source, save) : null;
 };

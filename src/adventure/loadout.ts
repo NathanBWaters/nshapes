@@ -14,7 +14,7 @@ import { arcanaRules } from './data/arcana';
 import { charmWeapons } from './data/armory';
 import { weaponBuilds } from './weaponLevels';
 import { WHOLE_STATS } from './data/weaponStats';
-import { armedRecipesFor, evolutionLikelihoodFor, getSkillNode, modifiersOf, EVOLUTION_RULES } from './engine/sources';
+import { armedRecipesFor, evolutionCapFor, evolutionLikelihoodFor, getSkillNode, modifiersOf } from './engine/sources';
 
 export const BASE_CHARM_SLOTS = 3;
 export const MAX_CHARM_SLOTS = 6;
@@ -44,14 +44,19 @@ export const fightSkillNodes = (save: AdventureSave, fighter: string): string[] 
     return !!n && n.fighter === fighter;
   });
 
-/** Features accumulate: every `feature` mechanic introduced at or before this level is on, plus save unlocks. */
+/**
+ * Features accumulate: every `feature` mechanic introduced at or before this level is on, plus save unlocks.
+ * A practice fight has everything the player has learned so far, wherever it sits on the map.
+ */
 export const getFeaturesForLevel = (level: LevelDef, save: AdventureSave): Set<FeatureFlag> => {
   const set = new Set<FeatureFlag>();
   const pos = mainIndexOf(level);
-  for (let i = 0; i <= pos; i++) {
-    const m = MECHANICS[MAIN_LEVELS[i].introduces];
+  const learned = (l: LevelDef) => save.seenMechanics.includes(l.introduces) || (save.stars[l.id] ?? 0) >= 1;
+  MAIN_LEVELS.forEach((l, i) => {
+    if (i > pos && !(level.rules.sandbox && learned(l))) return;
+    const m = MECHANICS[l.introduces];
     if (m?.enables) set.add(m.enables);
-  }
+  });
   // Passives, charms and Arcana are on everywhere except bare levels (1-1)
   if (!level.rules.noGear) set.add('gear');
 
@@ -113,6 +118,7 @@ export interface Loadout {
   armedRecipes: string[];
   /** % Catalyst chance per refill */
   evolutionLikelihood: number;
+  /** Evolutions allowed this fight (Infinity in practice) */
   evolutionCap: number;
   evolutionLabTier: number;
 }
@@ -189,7 +195,7 @@ export const startingLoadout = (
     arcanaSlots: arcanaSlotsOf(save),
     armedRecipes: evolutions ? armedRecipesFor(weapons, save.unlockedEvolutions) : [],
     evolutionLikelihood: evolutions ? likelihood : 0,
-    evolutionCap: EVOLUTION_RULES.perFight + (modifiers.extraEvolutionsPerFight ?? 0),
+    evolutionCap: evolutionCapFor(level, modifiers),
     evolutionLabTier,
   };
 };

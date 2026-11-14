@@ -12,7 +12,7 @@ import Icon from '@/components/Icon';
 import { COLORS } from '@/utils/colors';
 import { sfx } from '@/audio';
 import type { AdventureSave, MechanicDef, UnlockableFeature } from '../types';
-import { LEVELS } from '../data/levels';
+import { LEVELS, PRACTICE_LEVELS, isPathHidden } from '../data/levels';
 import { FIGHTERS } from '../data/fighters';
 import { getPassive } from '../data/passives';
 import { MECHANICS } from '../data/mechanics';
@@ -61,7 +61,10 @@ const FieldGuide: React.FC<Props> = ({ save, onClose }) => {
   const evoId = evolutionsMechanicId();
   const evoKnown = save.unlockedEvolutions.length > 0 || save.discoveredEvolutions.length > 0;
   const candidates: (Entry | null)[] = [
-    ...LEVELS.map(l => ({ m: MECHANICS[l.introduces], where: l.id, known: isMechanicKnown(save, l.introduces) })),
+    // A side path that has not opened yet is listed without saying where it is
+    ...LEVELS.map(l => ({ m: MECHANICS[l.introduces], where: isPathHidden(l, save) ? 'Secret path' : l.id, known: isMechanicKnown(save, l.introduces) })),
+    // Practice is not part of the campaign: it is listed only once found
+    ...PRACTICE_LEVELS.filter(l => isMechanicKnown(save, l.introduces)).map(l => ({ m: MECHANICS[l.introduces], where: 'Practice', known: true })),
     ...FIGHTERS.map(f => ({ m: MECHANICS[f.signature], where: 'Fighter', known: save.unlockedFighters.includes(f.name) })),
     featureEntry(save, 'coins'),
     featureEntry(save, 'workshop'),
@@ -180,7 +183,7 @@ const FieldGuide: React.FC<Props> = ({ save, onClose }) => {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={st.recipeName}>{met ? f.name : '??? Fighter'}</Text>
-                    <Text style={st.recipeBadge}>{met ? f.blurb : unlockHint({ kind: 'fighter', id: f.name }) ?? ''}</Text>
+                    <Text style={st.recipeBadge}>{met ? f.blurb : unlockHint({ kind: 'fighter', id: f.name }, save) ?? ''}</Text>
                   </View>
                 </View>
                 {met && f.passives.map(id => {
@@ -263,7 +266,7 @@ const FieldGuide: React.FC<Props> = ({ save, onClose }) => {
                       <Icon name="lorc/padlock" size={14} color="#6B7280" />
                       <Text style={st.reqText}>
                         <Text style={{ fontWeight: '900' }}>{SIGNATURE_IDS.has(r.id) ? 'Unlock: ' : 'Discover: '}</Text>
-                        {SIGNATURE_IDS.has(r.id) ? unlockHint({ kind: 'evolution', id: r.id }) : 'hold the right two weapons and match a Catalyst.'}
+                        {SIGNATURE_IDS.has(r.id) ? unlockHint({ kind: 'evolution', id: r.id }, save) : 'hold the right two weapons and match a Catalyst.'}
                       </Text>
                     </View>
                   </View>

@@ -32,7 +32,8 @@ NShapes combines the classic SET card matching game with roguelike progression m
 
 > **Full documentation:** [docs/adventure-design.md](./docs/adventure-design.md) and the v3 build spec [docs/adventure-v3-design.md](./docs/adventure-v3-design.md). All code lives in `src/adventure/` and is **data-driven**: edit `src/adventure/data/*.ts`, not the engine.
 
-* A tappable map of 5 star-gated worlds (8 / 9 / 10 / 11 / 5 main levels) with side routes that open at ★★ on their parent (`branchOf`, which can chain). Side routes are elites or **fighter trials** that teach a newly recruited fighter. Each node opens a preview: foe, difficulty, star goals, rewards, fighter, charm and Arcana loadout, armed evolutions and hazards.
+* A tappable map of 5 star-gated worlds (8 / 9 / 10 / 11 / 5 main levels) with **secret side paths** (`branchOf`, which can chain): a side path is not on the map at all until it opens (★★ on its parent, or its own `opensAt`), then it is revealed after the result and draws itself onto the map once. Side paths are elites, **fighter trials** that teach a newly recruited fighter, or practice. Each node opens a preview: foe, difficulty, star goals, rewards, fighter, charm and Arcana loadout, armed evolutions and hazards.
+* **The Back Field (1-4D):** the surprise behind 1-4. Any clear of 1-4 opens a Training Dummy with endless health, no clock and no move limit (`rules.sandbox`): hearts refill, everything learned so far is on, nothing is banked, and the player leaves with Done. It lives in `PRACTICE_LEVELS`, outside the campaign's `LEVELS`.
 * **One new mechanic per level**, and the level that introduces a mechanic rewards *using* it: its ★★★ challenge asks for it (e.g. "use 3 hints") and its ★★ reward makes that easier. Teaching uses lesson cards, "Is this a Set?" checks and in-fight tips that pause until accepted. 1-1 is bare: 2 traits, no gear, can't be lost.
 * **Shading Surge (Worlds 3–5):** boards play on 3 traits with every card solid; every 45s of clock, shading switches on for 15s and every Set's base damage is ×5 (3 → 15; "next Set ×2" etc. stack on top). Background is not used in Adventure. Numbers in `SURGE_RULES` (`src/adventure/data/rules.ts`).
 * **Stars:** ★ survive · ★★ knock out every foe · ★★★ knock out + challenge (1-1 scores accuracy). Stars are also the skill-tree currency (spent stars never re-lock worlds).
@@ -271,7 +272,7 @@ npm run validate:icons   # Verifies all registered icons have SVG files
 2. Tap a foe → **Preview** (foe + taunt, skulls, NEW mechanic, rules, ★/★★/★★★ goals + rewards, fighter pick).
 3. If the level teaches something new → **Intro card** (demo cards/icons).
 4. **Fight**: HUD with foe HP bar, hearts, moves or clock, coins, hint, XP, the weapon belt, live ★★★ challenge. Every move plays as a cascade of effects while the clock waits; an evolution opens with a tap-to-continue cut-in. Waves → intermission (shop once taught).
-5. **Results**: stars pop in, coins bank, first-time star rewards unlock weapons/fighters/regions → Next / Retry / Map / Camp.
+5. **Results**: stars pop in, coins bank, first-time star rewards unlock weapons/fighters/regions, and a secret side path the result opened is revealed last → Next / Retry / Map / Camp.
 
 **Free Play Mode:**
 
@@ -303,7 +304,7 @@ This means Field Stone weapons can increase the starting board size beyond the m
 * Add graces
 * Add the rarest weapon of a category
 
-**`/dev/adventure`** - Adventure map (`?save=maxed` everything unlocked + 50k coins, `?save=fresh`, `?autoplay=true`)
+**`/dev/adventure`** - Adventure map (`?save=maxed` everything unlocked + 50k coins, `?save=fresh`, `?save=before:1-4` ★★★ on everything before that level, `?autoplay=true`)
 
 **`/dev/fx`** - Effects studio: a button for every fight event, a sample cascade and the evolution cut-in, on a stand-in fight screen; real time or 4×/10× slower; effects on/off
 

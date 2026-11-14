@@ -212,6 +212,7 @@ const ENEMY_CREATURES: Record<string, EnemyCreature> = {
   'The Reaper': creature(TheReaperRig),
   'World Eater': creature(WorldEaterRig, HEAVY),
   'Sparring Foe': creature(TrainingDummyRig),
+  'Training Dummy': creature(TrainingDummyRig),
   'Dummy': creature(TrainingDummyRig),
 };
 

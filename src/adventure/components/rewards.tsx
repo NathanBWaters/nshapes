@@ -17,12 +17,13 @@ import { getArcana } from '../data/arcana';
 import { getArmoryWeapon } from '../data/armory';
 import { EVOLUTION_RECIPES } from '../data/evolutions';
 import { CAMPAIGN_FEATURES } from '../data/features';
+import { getLevel } from '../data/levels';
 import { getMechanic } from '../data/mechanics';
-import { unlockablesOf, type Unlockable } from '../data/rewards';
+import { isFighterTrial, unlockablesOf, type Unlockable } from '../data/rewards';
 import { DARK } from './ui';
 
 export interface UnlockableDisplay {
-  kind: Unlockable['kind'];
+  kind: Unlockable['kind'] | 'path';
   /** Its name on the unlock reveal */
   name: string;
   /** Its label in a reward row once earned */
@@ -100,7 +101,23 @@ export const describeRewardUnlocks = (reward: RewardDef, save?: AdventureSave): 
       : d;
   });
 
+/** What kind of side path a level is, in a word or two. */
+export const pathKind = (levelId: string): string => {
+  const level = getLevel(levelId);
+  return level.rules.sandbox ? 'Practice' : isFighterTrial(level) ? 'Fighter trial' : 'Elite path';
+};
+
+const describePath = (levelId: string): UnlockableDisplay => {
+  const level = getLevel(levelId);
+  return {
+    kind: 'path', name: level.name, revealed: `${pathKind(levelId)}: ${level.name}`, secret: 'A secret path', bountySecret: 'A secret path',
+    icon: 'lorc/treasure-map', headline: 'You found a secret path!', tease: 'Something on the map was hiding from you.',
+    badge: `${pathKind(levelId).toUpperCase()} · OFF ${level.branchOf}`, accent: level.rules.sandbox ? '#F5B800' : DARK.gold,
+  };
+};
+
 export const describeUnlock = (u: Unlock): UnlockableDisplay => {
+  if (u.kind === 'path') return describePath(u.levelId);
   if (u.kind === 'weapon' && u.level !== undefined) {
     const d = describeUnlockable(u);
     return {

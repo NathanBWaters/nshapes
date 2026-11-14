@@ -38,6 +38,7 @@ const LABEL: Partial<Record<RunEventType, (l: FightLogLine) => string | null>> =
   grudge: l => `Grudge stored (${l.amount})`,
   grudge_release: l => `Grudge released (+${l.amount} to the Set)`,
   nine_lives: () => 'Nine Lives saved you',
+  breather: () => 'Out of hearts: refilled (practice)',
   thick_hide: () => 'Thick Hide took the mistake',
   patience: l => `Patience (+${l.amount} to the Set)`,
   freeze: l => `Frozen ${Math.round((l.amount ?? 0) / 100) / 10}s`,

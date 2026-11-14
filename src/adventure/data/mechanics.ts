@@ -847,6 +847,29 @@ export const MECHANICS: Record<string, MechanicDef> = {
     demo: { type: 'icons', items: [{ icon: 'caro-asercion/barn-owl', label: 'Hidden' }, { icon: 'lorc/cycle', label: 'Shuffle' }, { icon: 'lorc/stopwatch', label: '10s countdown' }] },
   },
 
+  // ── Practice ───────────────────────────────────────────────────────────
+  practice: {
+    id: 'practice', kind: 'rule', title: 'Training Dummy',
+    tagline: 'It never falls and there is no clock. Try anything.',
+    body: [
+      'The dummy has endless health. There is no clock and no move limit: stay as long as you like.',
+      'Everything you have learned so far is switched on. Pick a fighter, charms and Arcana on the way in and see what they do together.',
+      'If you run out of hearts they simply refill. Nothing here earns stars or coins, and nothing is lost. Press Done when you have had enough.',
+    ],
+    fightTips: [
+      { title: 'No pressure', text: 'The dummy never falls and nothing runs out. Try a fighter, a charm, an evolution. Press DONE up here when you have had enough.', anchor: 'top' },
+    ],
+    icon: 'lorc/target-dummy',
+    demo: {
+      type: 'icons',
+      items: [
+        { icon: 'lorc/target-dummy', label: 'Endless health' },
+        { icon: 'lorc/stopwatch', label: 'No clock' },
+        { icon: 'lorc/shining-heart', label: 'Hearts refill' },
+      ],
+    },
+  },
+
   // ── Fighters (shown when a fighter is unlocked) ────────────────────────
   // Each fighter brings two passives (data/passives.ts) and a skill tree
   // (data/skillTrees.ts). Fighter trials (side branches) introduce them.

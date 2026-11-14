@@ -17,6 +17,14 @@ import { getRecipe, getSkillNode } from './sources';
 /** Clock entries and burns closer together than this become one entry. */
 const MERGE_MS = 1000;
 
+/** A practice fight has no end, so its log keeps the opening and the most recent entries. */
+const PRACTICE_LOG_LIMIT = 400;
+
+const append = (d: Draft, entry: FightLogEntry) => {
+  const log = [...d.log, entry];
+  d.log = d.level.rules.sandbox && log.length > PRACTICE_LOG_LIMIT ? [log[0], ...log.slice(2)] : log;
+};
+
 const cardTags = (c: Card): string[] => {
   const tags: string[] = [];
   const bonus = (c.bonusPoints ?? 0) + (c.charge ?? 0);
@@ -115,7 +123,7 @@ export const recordLog = (d: Draft, prev: RunState, action: RunAction) => {
       ...(setMath ? { set: setMath } : {}),
       ...(label ? { label } : {}),
     };
-    d.log = [...d.log, entry];
+    append(d, entry);
     return;
   }
 
@@ -136,5 +144,5 @@ export const recordLog = (d: Draft, prev: RunState, action: RunAction) => {
     }];
     return;
   }
-  d.log = [...d.log, { t: d.elapsedMs, wave: d.wave, kind: foldKind, ...delta, ...after, setDamage: 0, lines }];
+  append(d, { t: d.elapsedMs, wave: d.wave, kind: foldKind, ...delta, ...after, setDamage: 0, lines });
 };

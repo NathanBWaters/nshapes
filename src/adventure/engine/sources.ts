@@ -4,7 +4,7 @@
  * engine and by the pre-fight loadout preview.
  */
 import type { Weapon } from '@/types';
-import type { EvolutionRecipe } from '../types';
+import type { EvolutionRecipe, LevelDef } from '../types';
 import type { Modifiers, Rule, RuleSource, WeaponTriggerKind } from '../rules/types';
 import { getSkillNode } from '../data/skillTrees';
 import { EVOLUTION_RECIPES } from '../data/evolutions';
@@ -110,3 +110,7 @@ export const modifiersOf = (s: SourceInputs): Modifiers => combineModifiers(live
 /** Percent chance that a refill brings a Catalyst (before the Rainbow bonus). */
 export const evolutionLikelihoodFor = (labTier: number, mods: Modifiers, catalystChanceScale = 1): number =>
   Math.max(0, (EVOLUTION_RULES.baseLikelihood + EVOLUTION_RULES.labPerTier * labTier + (mods.evolutionLikelihood ?? 0)) * catalystChanceScale);
+
+/** Evolutions a fight allows (a practice fight has no limit). */
+export const evolutionCapFor = (level: LevelDef, mods: Modifiers): number =>
+  level.rules.sandbox ? Infinity : EVOLUTION_RULES.perFight + (mods.extraEvolutionsPerFight ?? 0);

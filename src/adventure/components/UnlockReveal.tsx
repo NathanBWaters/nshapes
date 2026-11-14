@@ -7,6 +7,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, Easing, cancelAnimation } from 'react-native-reanimated';
 import Icon from '@/components/Icon';
+import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
 import { WeaponAvatar } from '@/components/weapons';
 import { COLORS } from '@/utils/colors';
@@ -20,7 +21,9 @@ import { getArcana } from '../data/arcana';
 import { getArmoryWeapon } from '../data/armory';
 import { EVOLUTION_RECIPES } from '../data/evolutions';
 import { CAMPAIGN_FEATURES } from '../data/features';
-import { LEVELS } from '../data/levels';
+import { LEVELS, getLevel } from '../data/levels';
+import { levelFoe } from '../data/foes';
+import { isFighterTrial } from '../data/rewards';
 import { MECHANICS, getMechanic } from '../data/mechanics';
 import { DARK, INK } from './ui';
 import { describeUnlock } from './rewards';
@@ -57,10 +60,12 @@ interface Props {
   onEquipArcana?: (id: ArcanaId) => void;
   /** Go to the screen a newly unlocked feature lives on (offered on the last reveal only) */
   onOpenFeature?: (feature: UnlockableFeature) => void;
+  /** Go and look at a secret path on the map (offered on the last reveal only) */
+  onShowPath?: (levelId: string) => void;
   onDone: () => void;
 }
 
-const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCharm, onEquipArcana, onOpenFeature, onDone }) => {
+const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCharm, onEquipArcana, onOpenFeature, onShowPath, onDone }) => {
   const [i, setI] = useState(0);
   const [revealed, setRevealed] = useState(false);
   const flash = useSharedValue(0);
@@ -86,6 +91,7 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
   const arcana = u.kind === 'arcana' ? getArcana(u.id) : null;
   const evo = u.kind === 'evolution' ? EVOLUTION_RECIPES.find(r => r.id === u.id) ?? null : null;
   const feature = u.kind === 'feature' ? CAMPAIGN_FEATURES[u.feature] : null;
+  const path = u.kind === 'path' ? getLevel(u.levelId) : null;
   const last = i + 1 >= unlocks.length;
   // Offered only when it is the final reveal, so the remaining ones are not skipped
   const openFeature = feature?.open && last && onOpenFeature ? feature.open : null;
@@ -118,7 +124,7 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
   const charmEquipped = u.kind === 'weapon' && equippedCharms(save).includes(u.id);
   const charmsFull = equippedCharms(save).length >= charmSlots(save);
   const arcanaEquipped = u.kind === 'arcana' && equippedArcanaOf(save).includes(u.id);
-  const sourceLabel = u.star === 0 ? 'Bounty reward' : `${'★'.repeat(u.star)} reward`;
+  const sourceLabel = path ? 'Secret' : u.star === 0 ? 'Bounty reward' : `${'★'.repeat(u.star)} reward`;
   return (
     <Modal visible transparent animationType="fade">
       <View testID="unlock-modal" style={st.overlay}>
@@ -146,6 +152,8 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                   size={108}
                   interactive
                 />
+              ) : revealed && path ? (
+                <EnemyAvatar testID="unlock-revealed-path" enemy={levelFoe(path)} size={108} mood="idle" reaction={{ type: 'entrance', id: i + 1 }} interactive />
               ) : (
                 <Icon name={icon} size={92} color={revealed ? INK : '#050505'} />
               )}
@@ -166,7 +174,20 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
               {display.badge && <Text style={[st.rarity, { color: accent }]}>{display.badge}</Text>}
 
               <View style={st.card}>
-                <Text style={st.cardTitle}>How it works</Text>
+                <Text style={st.cardTitle}>{path ? 'What is it?' : 'How it works'}</Text>
+                {path && (
+                  <>
+                    <Text style={st.rowBody}>
+                      {path.rules.sandbox
+                        ? getMechanic(path.introduces).body[0]
+                        : isFighterTrial(path)
+                          ? `A side level built around one fighter: ${getMechanic(path.introduces).title}. It is optional and has its own stars and rewards.`
+                          : `An optional fight against ${levelFoe(path).name}: tougher than the main path, with its own stars and better loot.`}
+                    </Text>
+                    {path.rules.sandbox && <Text style={st.rowBody}>{getMechanic(path.introduces).body[2]}</Text>}
+                    <Text style={st.note}>It was not on the map until now. Secret paths only show up once you earn them.</Text>
+                  </>
+                )}
                 {fighter && (trial ? (
                   <>
                     <Text style={st.rowBody}>
@@ -290,6 +311,27 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                 ) : (
                   <TouchableOpacity testID="unlock-primary" onPress={() => { sfx('confirm'); advance(); }} style={st.cta} activeOpacity={0.85}>
                     <Text style={st.ctaText}>{last ? 'Awesome!' : 'Continue'}</Text>
+                  </TouchableOpacity>
+                )
+              )}
+              {path && (
+                last && onShowPath ? (
+                  <>
+                    <TouchableOpacity
+                      testID="unlock-primary"
+                      onPress={() => { sfx('confirm'); onDone(); onShowPath(path.id); }}
+                      style={st.cta}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={st.ctaText}>Show me on the map</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity testID="unlock-later" onPress={advance} style={st.secondary}>
+                      <Text style={st.secondaryText}>Later</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <TouchableOpacity testID="unlock-primary" onPress={() => { sfx('confirm'); advance(); }} style={st.cta} activeOpacity={0.85}>
+                    <Text style={st.ctaText}>Continue</Text>
                   </TouchableOpacity>
                 )
               )}

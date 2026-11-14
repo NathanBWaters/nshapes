@@ -2,7 +2,7 @@ import React from 'react';
 import { View } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import AdventureMode from '@/adventure/AdventureMode';
-import { createMaxedSave, createNewSave } from '@/adventure/progress';
+import { createMaxedSave, createNewSave, createSaveBefore } from '@/adventure/progress';
 
 /**
  * Dev Adventure Page (/dev/adventure)
@@ -10,11 +10,16 @@ import { createMaxedSave, createNewSave } from '@/adventure/progress';
  * URL params:
  * - ?save=maxed  — everything unlocked, 3★ everywhere, 50k coins (not persisted until you play)
  * - ?save=fresh  — brand new save
+ * - ?save=before:1-4 — ★★★ on every main level before 1-4, so 1-4 is next (any main level id works)
  * - ?autoplay=true — the board plays itself (for watching flows end to end)
  */
 export default function DevAdventure() {
   const params = useLocalSearchParams<{ save?: string; autoplay?: string }>();
-  const initialSave = params.save === 'maxed' ? createMaxedSave() : params.save === 'fresh' ? createNewSave() : undefined;
+  const initialSave =
+    params.save === 'maxed' ? createMaxedSave()
+    : params.save === 'fresh' ? createNewSave()
+    : params.save?.startsWith('before:') ? createSaveBefore(params.save.slice('before:'.length))
+    : undefined;
   return (
     <View style={{ flex: 1 }}>
       <AdventureMode
