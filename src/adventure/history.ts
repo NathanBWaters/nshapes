@@ -5,6 +5,7 @@
  */
 import type { CharacterName } from '@/types';
 import type { LevelDef, RunState } from './types';
+import { powerMultiplier } from './data/weaponPower';
 
 /** How a battle ended. `left`: the player retreated or restarted partway through. */
 export type BattleOutcome = 'won' | 'survived' | 'lost' | 'practice' | 'left';
@@ -33,6 +34,8 @@ export interface BattleRecord {
   evolutions: number;
   /** Ids of the weapons held when it ended */
   weapons: string[];
+  /** The Power multiplier reached (data/weaponPower.ts); missing on battles from before Power */
+  power?: number;
 }
 
 /** The list keeps this many of the most recent battles. */
@@ -73,6 +76,7 @@ export const battleRecord = (
   coins: o.coins ?? 0,
   evolutions: run.evolutionsTriggered,
   weapons: run.weapons.map(w => w.id),
+  power: Math.round(powerMultiplier(run.power ?? 0) * 10) / 10,
 });
 
 /** A fight the player walked away from before making a move is not a battle. */

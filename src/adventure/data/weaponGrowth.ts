@@ -256,8 +256,8 @@ export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
 
 /** Weapons that are left without growth on purpose, and why (the explainer says so). */
 export const NO_GROWTH: Record<string, string> = {
-  'blast-powder': 'Already the hardest hitter in the Armory. It does not grow in a fight.',
-  'field-stone': 'A bigger board from the first second. It does not grow in a fight.',
+  'blast-powder': 'Already the hardest hitter in the Armory: its own numbers stay as they are.',
+  'field-stone': 'A bigger board from the first second: its own numbers stay as they are.',
   'growth-seed': 'Its own effect is the growth: every card it adds makes the whole board hit harder.',
   understudy: 'It grows with the weapon it copies.',
 };

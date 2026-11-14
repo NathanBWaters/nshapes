@@ -52,13 +52,26 @@ export const ratesAt = (level: LevelDef, scale: number, runs: number): Rates => 
   return { scale, bare, invested, loss: Math.abs(bare - t.bare) + Math.abs(invested - t.invested) + (invested <= bare ? 1 : 0) };
 };
 
+/** A first geometric sweep, for when damage has moved a long way (a new scaling layer, a big rework) */
+export const WIDE = [0.25, 0.5, 1, 2, 4, 8, 16, 32];
 export const COARSE = [0.7, 0.85, 1, 1.2, 1.45];
 export const FINE = [0.92, 1.08];
 
-/** The HP scale that puts this level closest to its targets. Returns 1 when nothing beats the current HP. */
-export const tuneLevel = (level: LevelDef, runs = 60): { best: Rates; tried: Rates[] } => {
-  const tried = COARSE.map(s => ratesAt(level, s, runs));
-  let best = tried.reduce((a, b) => (b.loss < a.loss - 1e-9 ? b : a), tried[COARSE.indexOf(1)]);
+/**
+ * The HP scale that puts this level closest to its targets. Returns 1 when nothing beats the current HP.
+ * `wide`: start with a geometric sweep from ×0.25 to ×32 (fewer runs each), then search around its best.
+ */
+export const tuneLevel = (level: LevelDef, runs = 60, wide = false): { best: Rates; tried: Rates[] } => {
+  const tried: Rates[] = [];
+  let center = 1;
+  if (wide) {
+    const sweep = WIDE.map(s => ratesAt(level, s, Math.max(20, Math.round(runs / 3))));
+    tried.push(...sweep);
+    center = sweep.reduce((a, b) => (b.loss < a.loss - 1e-9 ? b : a), sweep[WIDE.indexOf(1)]).scale;
+  }
+  const coarse = COARSE.map(s => ratesAt(level, +(center * s).toFixed(3), runs));
+  tried.push(...coarse);
+  let best = coarse.reduce((a, b) => (b.loss < a.loss - 1e-9 ? b : a), coarse[COARSE.indexOf(1)]);
   for (const f of FINE) {
     const r = ratesAt(level, +(best.scale * f).toFixed(3), runs);
     tried.push(r);

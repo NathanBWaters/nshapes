@@ -7,6 +7,7 @@
  * rules/engine.ts resolves the queue (`drain`), so any source can chain into
  * any other without the primitives knowing about rules.
  */
+import { damageMultiplier } from '../data/weaponPower';
 import type { AttributeName, BoardConnection, BridgeTriggerType, Card, PlayerStats, Weapon } from '@/types';
 import { ATTRIBUTE_VALUES, createDeck } from '@/utils/gameUtils';
 import { getLinkedDestructionPositions, arePositionsConnected } from '@/utils/connectionUtils';
@@ -361,7 +362,8 @@ export const touchable = (d: Draft, i: number): boolean => {
 export const foeMultiplier = (d: Draft) => d.foe.getStatModifiers().pointsMultiplier || 1;
 
 export const dealDamage = (d: Draft, amount: number): number => {
-  const dmg = Math.max(0, Math.round(amount));
+  // Power (weapon scaling) multiplies every point of damage
+  const dmg = Math.max(0, Math.round(amount * damageMultiplier(d.power ?? 0)));
   if (d.level.rules.sandbox) {
     // A practice dummy soaks it up: the damage counts, its health never moves
     d.totalDamage += dmg;

@@ -23,6 +23,8 @@ export const EVOLUTION_RULES = {
   setMultiplier: 1.5,
   /** Starting an evolution hits the foe for this much */
   startDamage: 10,
+  /** Starting an evolution adds this much Power (data/weaponPower.ts): combining weapons surges your scaling */
+  power: 2,
 } as const;
 
 export { getSkillNode };

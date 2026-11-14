@@ -101,6 +101,7 @@ const BattleHistory: React.FC<Props> = ({ history, now }) => {
                   <Fact label="Fight clock" value={formatDuration(b.durationMs)} />
                   {b.coins > 0 && <Fact label="Coins" value={`+${b.coins}`} />}
                   {b.evolutions > 0 && <Fact label="Evolutions" value={`${b.evolutions}`} />}
+                  {(b.power ?? 1) > 1 && <Fact label="Power" value={`×${b.power}`} />}
                 </View>
                 <Text style={st.sub}>
                   {b.fighter}{weapons.length > 0 ? ` with ${weapons.join(', ')}` : ', no weapons'}

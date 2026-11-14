@@ -16,6 +16,7 @@ import { getLevel } from '@/adventure/data/levels';
 import type { AdventureWeapon, RunState } from '@/adventure/types';
 import type { Modifiers } from '@/adventure/rules/types';
 import { findSet, miss, playSet, relic, startFight, tick, withWeapons } from './testUtils/adventureFight';
+import { setPowerEnabled } from '@/adventure/data/weaponPower';
 
 /** A fight holding a weapon that brings these trick numbers. */
 const withTrick = (modifiers: Modifiers, s: RunState = startFight()): RunState => {
@@ -227,6 +228,9 @@ describe('Understudy', () => {
 });
 
 describe('Encore Mask', () => {
+  // Exact hits: Power (which an evolution surges) is switched off here
+  beforeEach(() => setPowerEnabled(false));
+  afterEach(() => setPowerEnabled(true));
   it('an evolution ends with a hit', () => {
     const save = { ...createMaxedSave(), charms: ['blast-powder', 'mending-charm', 'encore-mask'], skillNodes: {}, equippedArcana: [], upgrades: {} };
     let s = startFight({ save, features: ['hearts', 'gear', 'evolutions'] });

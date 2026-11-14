@@ -14,6 +14,7 @@ import type { WeaponEffectResult } from '@/utils/weaponEffects';
 import type { ChallengeDef, RunState } from '@/adventure/types';
 import type { Rule } from '@/adventure/rules/types';
 import { eventsOf, findSet, miss, playSet, relic, startFight, testLevel, tick, withWeapons } from './testUtils/adventureFight';
+import { setPowerEnabled } from '@/adventure/data/weaponPower';
 
 const damageOf = (s: RunState, set?: Card[]) => {
   const before = s.foeHp;
@@ -277,6 +278,9 @@ describe('rule interpreter', () => {
 });
 
 describe('evolutions', () => {
+  // Exact hits: Power (which an evolution surges) is switched off here
+  beforeEach(() => setPowerEnabled(false));
+  afterEach(() => setPowerEnabled(true));
   const phoenix = EVOLUTION_RECIPES.find(r => r.id === 'phoenix-pyre')!;
   const armedSave = {
     armory: ['blast-powder', 'mending-charm'],

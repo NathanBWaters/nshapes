@@ -4,6 +4,7 @@
  * Always: the text patcher only touches the level it is asked to.
  * BALANCE_TUNE=1 (npm run balance:tune): searches every level's foe HP for the
  * scale closest to its bare/invested targets and rewrites data/levels.ts.
+ * WIDE=1 first sweeps ×0.25 to ×32, for after a big change to damage.
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -26,7 +27,7 @@ describe('HP tuner', () => {
     const lines: string[] = [];
     for (const level of LEVELS) {
       if (level.starRule?.kind === 'accuracy' || (only && !only.includes(level.id))) continue;
-      const { best } = tuneLevel(level, Number(process.env.RUNS ?? 60));
+      const { best } = tuneLevel(level, Number(process.env.RUNS ?? 60), !!process.env.WIDE);
       const t = winTargets(level);
       const pct = (x: number) => `${Math.round(x * 100)}%`;
       lines.push(`${level.id.padEnd(6)} ×${best.scale.toFixed(2)}  bare ${pct(best.bare)} (${pct(t.bare)})  invested ${pct(best.invested)} (${pct(t.invested)})`);

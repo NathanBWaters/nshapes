@@ -21,6 +21,7 @@
  * ADVENTURE_BUILDS_REPORT=1 prints the tables.
  */
 import { getLevel } from '@/adventure/data/levels';
+import { setPowerEnabled } from '@/adventure/data/weaponPower';
 import { createMaxedSave } from '@/adventure/progress';
 import { BOTS, simulateRun } from '@/adventure/engine/bot';
 import { armableRecipes, buyTree, chooseCharms, gearUp, starsOnReaching, STAR_SHARE, TREE_STYLES } from '@/adventure/engine/botBuilds';
@@ -84,6 +85,10 @@ const endgameSave = (): AdventureSave => {
 };
 
 const SAVE = endgameSave();
+
+// Builds are judged without Power (data/weaponPower.ts): it multiplies every build alike and has its own test
+beforeAll(() => setPowerEnabled(false));
+afterAll(() => setPowerEnabled(true));
 
 /** A real timed fight (3 minutes, 5 hearts) against the same foe that can't fall. */
 const TIMED: LevelDef = { ...DUMMY, rules: { ...DUMMY.rules, moves: undefined, timer: 180, hearts: 5 } };

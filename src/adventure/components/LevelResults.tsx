@@ -10,6 +10,7 @@ import { band } from '@/audio';
 import type { LevelDef, RunState } from '../types';
 import type { ResultApplication } from '../progress';
 import { damagePerMinute } from '../history';
+import { formatPower, powerMultiplier } from '../data/weaponPower';
 import { getBiome } from '../data/biomes';
 import { BOUNTIES } from '../data/bounties';
 import { Btn, CoinPill, INK, PopIn, starPopDelayMs, StarRow, TONE } from './ui';
@@ -154,6 +155,9 @@ const LevelResults: React.FC<Props> = ({ level, run, stars, result, bestDpm = nu
           <View style={st.statsRow}>
             <Stat icon="lorc/checked-shield" label="Sets" value={`${run.matches}`} />
             <Stat icon="lorc/cross-mark" label="Mistakes" value={`${run.mistakes}`} />
+            {run.power > 0 && (
+              <Stat testID="results-power" icon="lorc/power-lightning" label="Power reached" value={formatPower(run.power)} hot={powerMultiplier(run.power) >= 5} />
+            )}
             {practice && run.matches > 0 && (
               <Stat testID="results-per-set" icon="lorc/target-dummy" label="Per Set" value={`${Math.round(run.totalDamage / run.matches)}`} />
             )}

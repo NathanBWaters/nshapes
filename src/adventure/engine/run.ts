@@ -659,6 +659,7 @@ export const createRun = (level: LevelDef, save: AdventureSave, opts: CreateRunO
     timeBank: timer === null ? null : Math.round(timer * BASE_RULES.maxTimeGainShare),
     gear: initGear(),
     growth: {},
+    power: 0,
     growthMemo: { lastSetColor: null, lastHintAtMs: -1, plantSet: false },
     elapsedMs: 0,
     lastMatchAtMs: 0,

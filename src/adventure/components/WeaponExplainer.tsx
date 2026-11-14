@@ -22,6 +22,7 @@ import { COLORS } from '@/utils/colors';
 import { armoryBaseWeapon, weaponLevelSuffix } from '../data/armory';
 import { WEAPON_KINDS, weaponGuide } from '../data/weaponGuide';
 import { NO_GROWTH, WEAPON_GROWTH, growthKey, growthText, type GrowthState } from '../data/weaponGrowth';
+import { powerText } from '../data/weaponPower';
 import { WEAPON_ROLES, weaponRole } from '../data/weaponRoles';
 import { BASE_BUILD, formatStat, weaponStatLines, type WeaponBuild } from '../data/weaponStats';
 import { INK } from './ui';
@@ -106,12 +107,15 @@ const WeaponExplainer: React.FC<Props> = ({ weapon, build = BASE_BUILD, badge, r
               <View style={[st.mark, { borderColor: '#0F766E' }]}><Icon name="lorc/tree-branch" size={16} color="#0F766E" /></View>
               <Text style={st.rowText}>
                 <Text style={st.rowTitle}>Scaling: </Text>
-                {grows.length === 0
-                  ? NO_GROWTH[weapon.id]
-                  : grows.map((def, i) => {
-                      const stacks = growth?.[growthKey(weapon.id, i)]?.stacks ?? 0;
-                      return `${growthText(def)}${stacks > 0 ? ` Now: ${stacks}${def.max ? `/${def.max}` : ''}.` : ''}`;
-                    }).join(' ')}
+                {[
+                  grows.length === 0
+                    ? NO_GROWTH[weapon.id]
+                    : grows.map((def, i) => {
+                        const stacks = growth?.[growthKey(weapon.id, i)]?.stacks ?? 0;
+                        return `${growthText(def)}${stacks > 0 ? ` Now: ${stacks}${def.max ? `/${def.max}` : ''}.` : ''}`;
+                      }).join(' '),
+                  powerText(weapon.id),
+                ].filter(Boolean).join(' ')}
               </Text>
             </View>
           )}

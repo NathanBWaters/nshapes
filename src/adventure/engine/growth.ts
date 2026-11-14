@@ -12,6 +12,7 @@ import type { AttributeName, Card, PlayerStats, Weapon } from '@/types';
 import { getArmoryWeapon } from '../data/armory';
 import { HINTED_SET_MS, WEAPON_GROWTH, growthKey, growthStatBonus, type GrowthDef, type SetTest } from '../data/weaponGrowth';
 import { UNDERSTUDY_ID } from '../data/adventureWeapons';
+import { powerLevelFactor, powerPer, powerShare, powerWatches } from '../data/weaponPower';
 import type { TrickKind, WeaponTriggerKind } from '../rules/types';
 import { applyEffect } from '../rules/engine';
 import type { RunState } from '../types';
@@ -122,9 +123,13 @@ export const noteGrowth = (d: Draft, ev: GrowthEvent) => {
   if (!enabled) return;
   if (d.status !== 'playing' && d.status !== 'pick' && d.status !== 'intermission') return;
   const seen = new Set<string>();
+  const share = powerShare(new Set(d.weapons.filter(w => powerWatches(w.id).length > 0).map(w => w.id)).size);
   d.weapons.forEach((w, slot) => {
     if (w.id === UNDERSTUDY_ID || seen.has(w.id)) return;
     seen.add(w.id);
+    // Power: every watch that happens adds the weapon's share, at any stack count (it never stops)
+    const hits = powerWatches(w.id).filter(watch => counts(d, { watch } as GrowthDef, w.id, ev) === true).length;
+    if (hits > 0) d.power = (d.power ?? 0) + hits * share * powerPer(w.id) * powerLevelFactor(d.weaponBuilds[w.id]?.level ?? 1);
     (WEAPON_GROWTH[w.id] ?? []).forEach((def, index) => {
       const ok = counts(d, def, w.id, ev);
       if (ok === null) return;

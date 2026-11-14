@@ -778,6 +778,8 @@ export interface RunState {
   gear: GearState;
   /** How far each held weapon has grown this fight (data/weaponGrowth.ts) */
   growth: GrowthState;
+  /** Power points this fight (data/weaponPower.ts): every held weapon's Scaling feeds them, and they multiply all damage */
+  power: number;
   /** What weapon growth remembers between Sets */
   growthMemo: { lastSetColor: string | null; lastHintAtMs: number; plantSet: boolean };
   elapsedMs: number;

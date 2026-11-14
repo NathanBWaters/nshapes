@@ -44,6 +44,7 @@ import { Anchor, AnchorsProvider, EVENT_FX, EvolutionCutIn, FxStage, GearBelt, f
 import { Btn, CoinPill, DARK, Eyebrow, Heart, INK, PopIn, TONE } from './ui';
 import { EvolutionBanner, EvolutionRing, MegaFlash } from './RunFx';
 import WeaponExplainer from './WeaponExplainer';
+import PowerMeter from './PowerMeter';
 
 const TICK_MS = 250;
 const REPLACE_DELAY_MS = 950;
@@ -433,6 +434,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
             )}
             <View style={st.counters}>
               <Text testID="run-total-damage" style={st.counter} accessibilityLabel={`${run.totalDamage} total damage`}>⚔ {run.totalDamage}</Text>
+              {run.power > 0 && <PowerMeter points={run.power} />}
               {run.combo > 1 && comboLive && (
                 <Anchor name="combo"><Text testID="run-combo" style={[st.counter, st.counterHot]}>COMBO ×{run.combo}</Text></Anchor>
               )}

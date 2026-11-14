@@ -23,6 +23,7 @@ import { createRng } from '../engine/rng';
 import { getArmoryWeapon } from '../data/armory';
 import { MAX_TUNING_TIER, MAX_WEAPON_LEVEL, weaponStatLines } from '../data/weaponStats';
 import type { Tier } from './targets';
+import { isPowerEnabled, powerMultiplier, setPowerEnabled } from '../data/weaponPower';
 
 export type BenchId = 'early' | 'mid' | 'late';
 
@@ -95,8 +96,25 @@ export interface Sample {
 
 const seedOf = (i: number) => 1000 + i * 7919;
 
-/** Play `runs` seeded fights on a bench with these charms. Level-up picks and shops are skipped: only what was brought counts. */
-export const play = (bench: Bench, charms: readonly string[], tier: Tier, runs: number, over: Partial<AdventureSave> = {}): Sample => {
+/** Run with Power switched on or off, and put it back after. */
+const withPower = <T,>(on: boolean, run: () => T): T => {
+  const was = isPowerEnabled();
+  setPowerEnabled(on);
+  try {
+    return run();
+  } finally {
+    setPowerEnabled(was);
+  }
+};
+
+/**
+ * Play `runs` seeded fights on a bench with these charms. Level-up picks and shops are skipped: only what was brought counts.
+ * Power is off: the lab judges what weapons do, and Power has its own targets (`pace` below, BALANCE_TARGETS.power).
+ */
+export const play = (bench: Bench, charms: readonly string[], tier: Tier, runs: number, over: Partial<AdventureSave> = {}): Sample =>
+  withPower(false, () => playRaw(bench, charms, tier, runs, over));
+
+const playRaw = (bench: Bench, charms: readonly string[], tier: Tier, runs: number, over: Partial<AdventureSave>): Sample => {
   const save = { ...bench.save, ...over, charms: [...charms] };
   const out: Sample = { damage: [], events: [], evolutions: [] };
   for (let i = 0; i < runs; i++) {
@@ -194,4 +212,50 @@ export const synergy = (bench: Bench, a: string, b: string, tier: Tier, runs: nu
   const gainB = mean(play(bench, [b], tier, runs).damage) - base;
   const both = mean(play(bench, [a, b], tier, runs).damage) - base;
   return both / Math.max(1, gainA + gainB);
+};
+
+// ─── Power scaling (data/weaponPower.ts) ─────────────────────────────────────
+
+/** The fight that Power is tuned on: 3 minutes, five traits, a foe that can't fall, endgame gear. */
+export const SCALE_FIGHT_MS = 180000;
+/** Power is judged on the damage rate in the last half minute of that fight. */
+export const SCALE_WINDOW_MS = 30000;
+
+let scaleCached: { level: LevelDef; save: AdventureSave } | null = null;
+export const scaleBench = () => {
+  if (scaleCached) return scaleCached;
+  const level = dummy('4-4', SCALE_FIGHT_MS / 1000, 5, 5);
+  const base = { ...createMaxedSave(), upgrades: { charm_belt: 3 }, skillNodes: {}, charms: [], equippedArcana: [] } as AdventureSave;
+  scaleCached = { level, save: { ...base, ...gearAt(MAX_WEAPON_LEVEL, true) } };
+  return scaleCached;
+};
+
+export interface Pace {
+  /** Mean total damage */
+  total: number;
+  /** Mean damage per minute in the last half minute */
+  end: number;
+  /** Mean damage per minute in the first half minute */
+  start: number;
+  /** Mean Power multiplier at the end */
+  power: number;
+}
+
+/** Play `runs` seeded scaling fights with this save (charms, tree, Arcana and all). */
+export const pace = (save: AdventureSave, runs: number, tier: Tier = 'average', level: LevelDef = scaleBench().level): Pace =>
+  withPower(true, () => paceRaw(save, runs, tier, level));
+
+const paceRaw = (save: AdventureSave, runs: number, tier: Tier, level: LevelDef): Pace => {
+  const out = { total: 0, end: 0, start: 0, power: 0 };
+  const perMin = 60000 / SCALE_WINDOW_MS;
+  for (let i = 0; i < runs; i++) {
+    const { state } = simulateRun(level, save, BOTS[tier], seedOf(i), undefined, { skipPicks: true });
+    // The real last half minute: weapons that slow or add time make the fight run past 3 minutes
+    const endFrom = state.elapsedMs - SCALE_WINDOW_MS;
+    out.total += state.totalDamage;
+    out.end += state.log.filter(e => e.t >= endFrom).reduce((a, e) => a + e.damage, 0) * perMin;
+    out.start += state.log.filter(e => e.t < SCALE_WINDOW_MS).reduce((a, e) => a + e.damage, 0) * perMin;
+    out.power += powerMultiplier(state.power);
+  }
+  return { total: out.total / runs, end: out.end / runs, start: out.start / runs, power: out.power / runs };
 };

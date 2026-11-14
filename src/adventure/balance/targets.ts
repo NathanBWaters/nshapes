@@ -25,6 +25,20 @@ export type Band = readonly [number, number];
 
 export const BALANCE_TARGETS = {
   /**
+   * Power (data/weaponPower.ts): damage per minute in the last half minute of a
+   * 3-minute endgame fight, against a player with no gear. One weapon reaches
+   * `single`, a well-chosen pair `pair`, a full build with fighter tree, Arcana
+   * and Workshop `full`. The bands are what the scaling test accepts.
+   */
+  power: {
+    single: 10,
+    singleBand: [6, 16] as Band,
+    pair: 50,
+    pairBand: [30, 90] as Band,
+    full: 300,
+    fullBand: [180, 500] as Band,
+  },
+  /**
    * A weapon alone, at its best (level 5, fully tuned), late game.
    * Damage weapons are meant to be the top of the field; everything else
    * should be clearly felt without matching them.
