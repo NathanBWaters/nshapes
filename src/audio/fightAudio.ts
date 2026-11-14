@@ -85,11 +85,15 @@ export const EVENT_CUE: Record<RunEventType, CueName | null> = {
   trap_sprung: 'trapSprung',
   arcana_burn: 'burn',
   overkill: 'overkill',
+  surge_warn: 'armed',
+  surge_start: 'charged',
+  surge_end: 'clarityEnd',
+  surge_hit: null, // a Set's own hit: the payout plays it
 };
 
 /** Events whose `amount` is damage to the foe: together they size the hit */
 const DAMAGE: ReadonlySet<RunEventType> = new Set<RunEventType>([
-  'hit', 'rainbow', 'blast', 'laser', 'ricochet', 'hot_streak_hit', 'grudge_release', 'pinata_break', 'trap_defused',
+  'hit', 'rainbow', 'surge_hit', 'blast', 'laser', 'ricochet', 'hot_streak_hit', 'grudge_release', 'pinata_break', 'trap_defused',
 ]);
 
 /** Damage of one move that makes a hit big, huge and MEGA (the same steps the floating numbers grow at) */
@@ -114,7 +118,7 @@ export type FightSound =
 export const soundsFor = (events: readonly RunEvent[], ctx: { weapons: readonly string[]; combo: number }): FightSound[] => {
   const out: FightSound[] = [];
   const damage = events.reduce((sum, e) => sum + (DAMAGE.has(e.type) ? e.amount ?? 0 : 0), 0);
-  const setHit = events.some(e => e.type === 'hit' && !e.text);
+  const setHit = events.some(e => (e.type === 'hit' && !e.text) || e.type === 'surge_hit');
   const rainbow = events.some(e => e.type === 'rainbow');
   if (setHit) out.push({ kind: 'payout', combo: Math.max(1, ctx.combo), tier: hitSize(damage), rainbow });
 
@@ -123,7 +127,7 @@ export const soundsFor = (events: readonly RunEvent[], ctx: { weapons: readonly 
   const stung = new Set<string>();
   for (const e of events) {
     if (out.length >= MAX_CHAIN) break;
-    if (e.type === 'hit' && !e.text) continue;
+    if ((e.type === 'hit' && !e.text) || e.type === 'surge_hit') continue;
     if (e.type === 'rainbow' && setHit) continue;
     // Bad news from your own gear (a shattered sword, a thorn that bit) never sounds like a win
     if (isSour(e)) {

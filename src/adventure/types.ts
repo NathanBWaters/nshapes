@@ -144,7 +144,9 @@ export type ChallengeDef =
   | { kind: 'levelUps'; n: number }
   | { kind: 'shopBuys'; n: number }
   /** A single Set dealing at least n damage */
-  | { kind: 'bigHit'; n: number };
+  | { kind: 'bigHit'; n: number }
+  /** Sets made during Shading Surges */
+  | { kind: 'surgeSets'; n: number };
 
 /** Board traps placed by the level itself (any foe). `every` = refilled cards per new trap. */
 export interface LevelHazards {
@@ -276,6 +278,12 @@ export interface LevelRules {
   hazards?: LevelHazards;
   /** Percentage points added to the Catalyst chance on every refill (e.g. the level that teaches evolutions) */
   evolutionLikelihood?: number;
+  /**
+   * Shading Surge (Worlds 3-5): the board plays on `attributes` with every card
+   * solid, then for a short window shading turns on and every Set hits much
+   * harder (engine/surge.ts, numbers in data/rules.ts SURGE_RULES).
+   */
+  shadingSurge?: boolean;
 }
 
 export interface LevelDef {
@@ -522,7 +530,9 @@ export type RunEventType =
   | 'purity' | 'purity_max' | 'catalyst_spawn'
   | 'evolution_start' | 'evolution_end'
   | 'trap_placed' | 'trap_defused' | 'trap_sprung'
-  | 'arcana_burn' | 'overkill';
+  | 'arcana_burn' | 'overkill'
+  /** Shading Surge: warning (amount = seconds until it starts), start, end, and a Set scored during it (amount = damage) */
+  | 'surge_warn' | 'surge_start' | 'surge_end' | 'surge_hit';
 
 export interface RunEvent {
   id: number;
@@ -652,6 +662,17 @@ export interface RuleRuntime {
   fired?: boolean;
 }
 
+/** Shading Surge clock: calm (shading off, every card solid) and surge (shading on, Sets ×5) alternate. */
+export interface SurgeState {
+  active: boolean;
+  /** Time left in the current phase (fight-clock ms) */
+  msLeft: number;
+  /** Surges started so far */
+  count: number;
+  /** Sets made during surges */
+  sets: number;
+}
+
 export interface SimplifyState {
   attribute: AttributeName;
   value: string | number;
@@ -751,6 +772,8 @@ export interface RunState {
   /** Clock, foe, fuses and evolutions stand still */
   frozenMs: number;
   simplified: SimplifyState | null;
+  /** Shading Surge state (null on levels without it) */
+  surge: SurgeState | null;
   /** Sets chained inside the combo window (every fighter; Sly Fox turns it into damage) */
   combo: number;
   maxCombo: number;

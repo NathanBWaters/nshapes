@@ -25,6 +25,9 @@ export const TONE = {
   upside: '#0F766E',
   tradeoff: '#B45309',
   evoReady: '#D97706',
+  /** Shading Surge: the ×5 window */
+  surge: '#DB2777',
+  surgePale: '#FDF2F8',
   /** Text on the dark Camp and Bounty Board backdrops */
   onDusk: '#E9DCCB',
 } as const;

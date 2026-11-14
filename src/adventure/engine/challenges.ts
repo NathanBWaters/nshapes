@@ -27,6 +27,7 @@ export const describeChallenge = (level: LevelDef): string => {
     case 'levelUps': return `Level up ${c.n === 1 ? 'once' : `${c.n} times`}`;
     case 'shopBuys': return `Buy ${plural(c.n, 'weapon')} in the shop`;
     case 'bigHit': return `Deal ${c.n}+ damage in one Set`;
+    case 'surgeSets': return c.n === 1 ? 'Make a Set during a Shading Surge' : `Make ${c.n} Sets during Shading Surges`;
   }
 };
 
@@ -54,6 +55,7 @@ export const challengeCount = (run: RunState, c: ChallengeDef): number | null =>
     case 'levelUps': return run.levelUpsTaken;
     case 'shopBuys': return run.shopBuys;
     case 'bigHit': return run.biggestHit;
+    case 'surgeSets': return run.surge?.sets ?? 0;
     default: return null;
   }
 };

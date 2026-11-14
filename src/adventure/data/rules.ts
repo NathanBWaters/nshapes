@@ -20,6 +20,27 @@ export const BASE_RULES = {
   maxTimeGainShare: 1,
 } as const;
 
+/**
+ * Shading Surge (Worlds 3-5). Four traits all the time was too much to hold in
+ * your head, so the board plays on three traits with every card solid, and
+ * shading only switches on for a short, high-stakes window: every Set made
+ * while it is on has its base damage (its cards) ×5, so a plain 3-damage Set
+ * becomes 15. Multipliers ("next Set ×2", Rainbow, evolutions) apply on top,
+ * so save them for it. Flat weapon bonuses are added after and are not ×5:
+ * multiplying those too made a geared build's surge far stronger than a
+ * fresh one's, and no foe HP suited both.
+ */
+export const SURGE_RULES = {
+  /** Shading off (every card solid) */
+  calmMs: 45000,
+  /** Shading on */
+  surgeMs: 15000,
+  /** A Set's base damage (the points on its cards) during the surge is multiplied by this */
+  multiplier: 5,
+  /** Heads-up before a surge starts */
+  warnMs: 5000,
+} as const;
+
 /** Fixed numbers of the trick weapons (engine/gear.ts); the rest are levelled stats on the weapons. */
 export const TRICK_RULES = {
   /** Fog Lantern: how long a fogged card stays face-down */

@@ -62,11 +62,12 @@ The player always has to accept a teaching step. Nothing auto-dismisses.
 |---|---|---|---|---|---|---|
 | 1 Sunny Meadow | `meadow` | 0 | 8 | 1 | basics, first evolution, Time Bombs (no clock) | `meadow` |
 | 2 Whispering Woods | `woods` | 12 | 9 | 3 | the clock, foe tricks, snares, hints, graces | `woods` |
-| 3 Ember Canyon | `canyon` | 30 | 10 | 4 | shading, charm slots, waves, shop, XP, Arcana | `canyon` |
-| 4 Frozen Peaks | `peaks` | 56 | 11 | 5 | five traits, stacked builds | `peaks` |
+| 3 Ember Canyon | `canyon` | 30 | 10 | 4 | Shading Surge, charm slots, waves, shop, XP, Arcana | `canyon` |
+| 4 Frozen Peaks | `peaks` | 56 | 11 | 5 | riding the surge, stacked builds | `peaks` |
 | 5 Starfall Summit | `summit` | 90 | 5 | 0 | the gauntlet: every system at once | `boss` |
 | **Total** | | | **43** | **13** | 56 levels, **168** stars max | |
 
+- **Shading Surge (Worlds 3-5):** a permanent fourth trait was too much to hold in your head, so every fight in Worlds 3-5 plays on **three traits** (shape, color, number) with every card solid. Every **45 s** of fight clock, shading switches on for **15 s**: each card keeps its shape, color and number and takes a shading, shading joins the Set rule, and **every Set's base damage is ×5** (a plain 3-damage Set becomes 15). Then the cards go back to solid. Multipliers ("next Set ×2", Rainbow, evolutions) apply on top, so a ×2 saved for the surge makes a 3-damage Set deal 30; flat weapon bonuses (+N per Set) are added after and are not ×5, which keeps a geared build's surge from running away from a fresh one's. The surge runs on the fight clock (freezes, level-ups and the shop pause it) and a pink bar above the board fills toward the next one, pulses for the last 5 s and drains during it. Numbers in `SURGE_RULES` (`data/rules.ts`), engine in `engine/surge.ts`, levels opt in with `rules.shadingSurge`. Background (the old fifth trait) is no longer used in Adventure; Free Play still has it.
 - **Long rounds from World 2:** every level outside the Meadow gets double foe HP and a double clock (`LONG_ROUNDS` / `withRoundLength` in `data/levels.ts`; numbers in the level table are written before this). Longer fights give snowballing builds (stacked weapons, evolutions, combos) time to pay off.
 - **Main path:** a level opens when the previous main level has ★ and its world's star gate is met. Gates count stars *earned*, so spending stars on skill trees never re-locks a world.
 - **Side branches** (`branchOf`) open at ★★ on their parent (`BRANCH_STAR_REQUIREMENT = 2`) and never block the main path.
@@ -79,8 +80,8 @@ The player always has to accept a teaching step. Nothing auto-dismisses.
 |---|---|---|
 | 1 | 1-1 The Set (2 traits, no gear) · 1-2 Hearts · 1-3 Number trait · 1-4 Evolutions · 1-5 Skill tree · 1-6 Rainbow Strike · 1-7 Time Bombs · 1-8 **Boss** Iron Shell (armored card) | 1-3F Fox Den (Sly Fox) |
 | 2 | 2-1 The clock · 2-2 Snares · 2-3 Hints · 2-4 Power cards · 2-5 Duds · 2-6 Face-down · 2-7 Graces · 2-8 Escalating Purity · 2-9 **Boss** Trap Weaver (bombs) | 2-4C Corgi's Yard · 2-7B Badger's Sett · 2-8P Ice Floe (Penguin) |
-| 3 | 3-1 Shading trait · 3-2 Charm slots (Goblin Saboteur) · 3-3 Waves · 3-4 Shop · 3-5 XP level-ups · 3-6 Arcana slots · 3-7 Burrowing · 3-8 Trait shift · 3-9 Time theft · 3-10 **Boss** Charging Boar (inactivity) | 3-3E Ant Hill → 3-3E2 Viper Pit · 3-5P Pelican's Wharf · 3-8E The Deep |
-| 4 | 4-1 Background trait · 4-2 Fast clock · 4-3 Regeneration · 4-4 Glass cannon · 4-5 Punishment · 4-6 Countdown · 4-7 Shuffle · 4-8 Polar Guardian · 4-9 One-Eyed Terror · 4-10 Feral Fangs · 4-11 **Boss** Ancient Dragon | 4-2E Bear Country → 4-2E2 Claw Ridge · 4-5E Sentinel Ruins · 4-7E Hoarder's Den → 4-7E2 Ink Grotto |
+| 3 | 3-1 Shading Surge · 3-2 Charm slots (Goblin Saboteur) · 3-3 Waves · 3-4 Shop · 3-5 XP level-ups · 3-6 Arcana slots · 3-7 Burrowing · 3-8 Trait shift · 3-9 Time theft · 3-10 **Boss** Charging Boar (inactivity) | 3-3E Ant Hill → 3-3E2 Viper Pit · 3-5P Pelican's Wharf · 3-8E The Deep |
+| 4 | 4-1 Ride the Wave (stack multipliers into the surge) · 4-2 Fast clock · 4-3 Regeneration · 4-4 Glass cannon · 4-5 Punishment · 4-6 Countdown · 4-7 Shuffle · 4-8 Polar Guardian · 4-9 One-Eyed Terror · 4-10 Feral Fangs · 4-11 **Boss** Ancient Dragon | 4-2E Bear Country → 4-2E2 Claw Ridge · 4-5E Sentinel Ruins · 4-7E Hoarder's Den → 4-7E2 Ink Grotto |
 | 5 | 5-1 Kraken (weapons at half) · 5-2 World Eater · 5-3 The Reaper · 5-4 Merciless Porcupine · 5-5 **Final boss** The Hydra (★★★ = a 50+ hit) | — |
 
 Each mechanic has a `kind` in `data/mechanics.ts`:
