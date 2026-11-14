@@ -93,6 +93,7 @@ export const EVENT_CUE: Record<RunEventType, CueName | null> = {
   surge_end: 'clarityEnd',
   surge_hit: null, // a Set's own hit: the payout plays it
   breather: 'heal',
+  power_up: 'armed',
 };
 
 /** Events whose `amount` is damage to the foe: together they size the hit */

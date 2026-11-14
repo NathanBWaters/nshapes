@@ -140,7 +140,9 @@ export type Effect =
   /** Destroy random cards, 1 damage each (emits a ricochet trigger) */
   | { do: 'ricochet'; count: number }
   /** Link random pairs of board positions (a destroyed linked card takes its partner with it) */
-  | { do: 'link'; count: number };
+  | { do: 'link'; count: number }
+  /** Raise max hearts; the new hearts arrive empty */
+  | { do: 'emptyHeart'; amount: number };
 
 export interface Rule {
   trigger: Trigger;
@@ -180,6 +182,26 @@ export interface Modifiers {
   trapImmunity?: boolean;
   /** Tuning for the fighter's own passives, keyed by tuning name (see data/passives.ts) */
   passiveTuning?: Record<string, number>;
+
+  // ── Reached through weapon growth (data/weaponGrowth.ts) ──
+  /** The fight clock runs this % slower (capped at CLOCK_SLOW_CAP) */
+  clockSlowPct?: number;
+  /** Every weapon chance, and every rule's chance roll, is this % more likely */
+  luckPct?: number;
+  /** Set damage per hint held */
+  hintHeldDamage?: number;
+  /** Damage for a Set made on a hint (a pointed-out card) */
+  hintedSetDamage?: number;
+  /** % chance a simplify unifies a second trait as well */
+  doubleClarityChance?: number;
+  /** % chance the cards that replace a laser's cards hold a Set among themselves */
+  laserSetChance?: number;
+  /** % chance a ricochet heals a heart */
+  ricochetHealChance?: number;
+  /** Magnet: extra marked cards on the board */
+  magnetMarks?: number;
+  /** Above zero: links stay on the board when a new wave starts */
+  keepLinks?: number;
 
   // ── Trick weapons (engine/gear.ts): a trick is on while its number is above zero ──
   /** Magnet: damage for a Set that includes the marked card */

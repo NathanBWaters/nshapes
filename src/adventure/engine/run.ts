@@ -15,7 +15,7 @@
 import type { Card, CardReward, Weapon } from '@/types';
 import type { EnemyEvent } from '@/types/enemy';
 import type { WeaponEffectResult } from '@/utils/weaponEffects';
-import { createDeck } from '@/utils/gameUtils';
+import { ATTRIBUTE_VALUES, createDeck } from '@/utils/gameUtils';
 import { MATCH_REWARDS, getBoardSizeForAttributes } from '@/utils/gameConfig';
 import { getAdjacentIndices } from '@/utils/weaponEffects';
 import { getLinkedDestructionPositions, selectPositionsToConnect } from '@/utils/connectionUtils';
@@ -38,11 +38,13 @@ import {
   emit, enqueue, finish, foeMultiplier, heal, hurt, igniteCards, keepCatalystMatchable, mods, newLinkSlots, placeCatalyst,
   pruneConnections, recycle, refill, refreshSources, rollBridges, syncTraps, toDeckCard, tuning, updateCards,
   MAX_BOARD, type Draft, type FightHooks, TIME_HEADROOM,
+  CLOCK_SLOW_CAP_PCT,
 } from './fight';
 import { EVOLUTION_RULES } from './sources';
 import { recordFightStart, recordLog } from './fightLog';
 import { afterSetGear, gearSetBonus, holdCards, initGear, onMistakeGear, onWaveStartGear, resolveTwins, syncGear, tickGear, type GearSet } from './gear';
 import { refreshArmedRecipes, resolveCatalyst, tickEvolutions } from './evolutions';
+import { isHintedSet, noteGrowth, seedGrowth } from './growth';
 import { placeOpeningTraps, resolveTrapsOnSet, springSnares, tickTimeBombs } from './hazards';
 import { initialSurge, surgeMultiplier, tickSurge } from './surge';
 import {
@@ -63,7 +65,8 @@ export const baseCardReward = (c: Card): CardReward => ({
 });
 
 export type RunAction =
-  | { type: 'MATCH'; cards: Card[]; rewards: CardReward[]; effects?: WeaponEffectResult }
+  /** `hinted`: one of the picked cards was being pointed out (a hint or an auto-hint) */
+  | { type: 'MATCH'; cards: Card[]; rewards: CardReward[]; effects?: WeaponEffectResult; hinted?: boolean }
   | { type: 'INVALID'; cards: Card[] }
   | { type: 'REPLACE'; ids: string[] }
   | { type: 'BURN'; card: Card }
@@ -280,6 +283,8 @@ const fireBoardWeapons = (d: Draft, fx: WeaponEffectResult) => {
 interface MatchOptions {
   /** Scored for the player (Big Scoop, echo triggers): costs no move; the caller replaces the cards at once */
   auto?: boolean;
+  /** One of the picked cards was being pointed out */
+  hinted?: boolean;
 }
 
 /** Score a Set: traps, foe reaction, damage, rewards, weapon triggers, Catalyst, passives. */
@@ -322,10 +327,13 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
     auto: !!opts.auto,
   };
   const tricks = gearSetBonus(d, gearSet);
+  // Weapon growth: hints held are worth damage (Seeker Lens), and so is a Set made on a pointed-out card (Oracle Eye)
+  const hinted = !opts.auto && isHintedSet(d, opts.hinted);
+  const growthDamage = (m.hintHeldDamage ?? 0) * d.stats.hints + (hinted ? m.hintedSetDamage ?? 0 : 0);
   // Rust can take damage off a Set, never below nothing
   const flat = Math.max(
     0,
-    points + d.bonusDamagePerMatch + (m.setDamage ?? 0) + conditional + passiveSetDamage(d, sinceLastMs) + tricks.flat +
+    points + d.bonusDamagePerMatch + (m.setDamage ?? 0) + conditional + passiveSetDamage(d, sinceLastMs) + tricks.flat + growthDamage +
       d.activeEvolutions.length * EVOLUTION_RULES.setDamage
   );
   const rainbowMult =
@@ -480,6 +488,7 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   }
 
   if (rainbow) d.rainbowRefill = true;
+  if (!opts.auto) noteGrowth(d, { on: 'set', cards: matched, slots: gearSet.slots, rainbow, hinted });
   resolveCatalyst(d, matched);
 
   // Rule triggers (resolved by drain at the end of the action)
@@ -528,6 +537,27 @@ const refillAfterLeaving = (d: Draft, indices: number[]) => {
   refill(d, indices, { rainbow: d.rainbowRefill });
   d.rainbowRefill = false;
   if (hadCatalyst) placeCatalyst(d, indices);
+};
+
+/**
+ * Make three of these freshly dealt cards a Set: the third is rewritten into the
+ * card that completes the first two. Only plain cards are touched.
+ */
+const plantSet = (d: Draft, indices: number[]) => {
+  const plain = indices.filter(i => {
+    const c = d.board[i];
+    return !!c && isSelectable(c) && !c.isWild && !c.hasEvolutionItem && !c.twinOf && !c.decoyOf && !d.replacing.includes(c.id);
+  });
+  if (plain.length < 3) return;
+  const [a, b, c] = plain.slice(0, 3).map(i => d.board[i]);
+  let third = c;
+  for (const attribute of d.attributes) {
+    const va = attribute === 'background' ? a.background ?? 'white' : a[attribute];
+    const vb = attribute === 'background' ? b.background ?? 'white' : b[attribute];
+    const value = va === vb ? va : (ATTRIBUTE_VALUES[attribute] as readonly (string | number)[]).find(v => v !== va && v !== vb)!;
+    third = { ...third, [attribute]: value } as Card;
+  }
+  updateCards(d, [plain[2]], () => third);
 };
 
 /** The weapon trigger a held weapon fires when something "triggers every weapon you hold". */
@@ -628,6 +658,8 @@ export const createRun = (level: LevelDef, save: AdventureSave, opts: CreateRunO
     timeCap: timer === null ? null : timer + TIME_HEADROOM,
     timeBank: timer === null ? null : Math.round(timer * BASE_RULES.maxTimeGainShare),
     gear: initGear(),
+    growth: {},
+    growthMemo: { lastSetColor: null, lastHintAtMs: -1, plantSet: false },
     elapsedMs: 0,
     lastMatchAtMs: 0,
     replacing: [],
@@ -707,6 +739,7 @@ export const createRun = (level: LevelDef, save: AdventureSave, opts: CreateRunO
   startFoe(d);
   placeOpeningTraps(d);
   if (d.stats.startingConnections > 0) addRandomConnections(d, d.stats.startingConnections);
+  seedGrowth(d);
   enqueue(d, 'fightStart');
   enqueue(d, 'waveStart');
   drain(d);
@@ -743,7 +776,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
     case 'MATCH': {
       if (d.status !== 'playing') return state;
       const before = d.totalDamage;
-      applyMatch(d, action.cards, action.rewards, action.effects);
+      applyMatch(d, action.cards, action.rewards, action.effects, { hinted: action.hinted });
       drain(d);
       d.biggestHit = Math.max(d.biggestHit, d.totalDamage - before);
       break;
@@ -773,6 +806,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
         hurt(d, Math.floor(1 * (d.foe.getStatModifiers().damageMultiplier || 1)));
       }
       onMistakeGear(d);
+      noteGrowth(d, { on: 'mistake', cards: action.cards });
       emit(d, 'mistake');
       enqueue(d, 'mistake');
       const res = d.foe.onInvalidMatch(action.cards, d.board);
@@ -797,6 +831,11 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
         return finish(d);
       }
       refillAfterLeaving(d, indices);
+      // Prismatic Ray's growth: the cards that replace a laser's cards hold a Set among themselves
+      if (d.growthMemo.plantSet) {
+        d.growthMemo = { ...d.growthMemo, plantSet: false };
+        plantSet(d, indices);
+      }
       drain(d);
       break;
     }
@@ -904,7 +943,8 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       d.foeHp = hp;
       d.foeMaxHp = hp;
       d.shopOptions = [];
-      d.connections = [];
+      // Links are for the wave, unless the Link Stone has grown (then they stay where they are)
+      if (!(mods(d).keepLinks ?? 0)) d.connections = [];
       d.setsThisWave = 0;
       d.status = 'playing';
       onWaveStartPassives(d);
@@ -930,7 +970,9 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
 /** Everything that runs on the fight clock (paused while frozen). */
 const tickClock = (d: Draft, ms: number) => {
   const speed = (d.foe.getUIModifiers().timerSpeedMultiplier || 1) * (arcana(d).timerSpeedScale ?? 1);
-  if (d.timeLeft !== null) d.timeLeft = Math.max(0, d.timeLeft - (ms / 1000) * speed);
+  // Chrono Shard's growth slows the player's clock only: the foe, fuses and evolutions keep their pace
+  const slow = 1 - Math.min(CLOCK_SLOW_CAP_PCT, mods(d).clockSlowPct ?? 0) / 100;
+  if (d.timeLeft !== null) d.timeLeft = Math.max(0, d.timeLeft - (ms / 1000) * speed * slow);
   tickSurge(d, ms * speed);
   tickEvolutions(d, ms);
   if (d.simplified) {

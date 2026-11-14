@@ -34,9 +34,9 @@ const TUNED: Weapon[] = WEAPONS.filter(w => !FREE_PLAY_ONLY_WEAPONS.includes(w.i
 export const armoryBaseWeapon = (id: string): Weapon | undefined => findAdventureWeapon(id) ?? TUNED.find(w => w.id === id);
 
 /** Weapon `id` at its build in `builds` (absent = level 1, untuned). */
-export const getArmoryWeapon = (id: string, builds?: WeaponBuilds): Weapon | undefined => {
+export const getArmoryWeapon = (id: string, builds?: WeaponBuilds, grown?: Readonly<Record<string, number>>): Weapon | undefined => {
   const base = armoryBaseWeapon(id);
-  return base ? buildWeapon(base, builds?.[id] ?? BASE_BUILD) : undefined;
+  return base ? buildWeapon(base, builds?.[id] ?? BASE_BUILD, grown) : undefined;
 };
 
 /**

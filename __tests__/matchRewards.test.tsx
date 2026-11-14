@@ -160,7 +160,8 @@ describe('Match Rewards Display', () => {
         expect.objectContaining({ id: 'card-3' }),
       ]),
       expect.any(Array), // rewards
-      expect.any(Object) // weaponEffects
+      expect.any(Object), // weaponEffects
+      { hinted: false } // none of the picked cards was being pointed out
     );
   });
 

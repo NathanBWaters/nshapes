@@ -334,7 +334,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
     return () => clearTimeout(t);
   }, [ended, fx.busy]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleMatch = useCallback((cards: Card[], rewards: CardReward[], effects?: WeaponEffectResult) => {
+  const handleMatch = useCallback((cards: Card[], rewards: CardReward[], effects?: WeaponEffectResult, info?: { hinted: boolean }) => {
     setLastMatchTime(Date.now());
     const graceUsed = rewards.some(r => r.effectType === 'grace');
     const isMegaMatch =
@@ -344,7 +344,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
       cards.length > 3;
     const didHeal = rewards.some(r => (r.healing ?? 0) > 0) || Boolean(effects?.bonusHealing);
     conductor.triggerMatch({ isGraceMatch: graceUsed, isMegaMatch, didHeal });
-    dispatch({ type: 'MATCH', cards, rewards, effects });
+    dispatch({ type: 'MATCH', cards, rewards, effects, hinted: info?.hinted });
     const ids = cards.map(c => c.id);
     later(() => dispatch({ type: 'REPLACE', ids }), REPLACE_DELAY_MS);
   }, [dispatch, conductor, later]);
@@ -520,7 +520,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
         )}
 
         {/* The weapons in play: each jumps when it fires; tap one to read it */}
-        <GearBelt weapons={run.weapons} width={stage.w} onInspect={setInspect} />
+        <GearBelt weapons={run.weapons} growth={run.growth} width={stage.w} onInspect={setInspect} />
 
         {/* Live Arcana, Escalating Purity, board effects & Evolution status strip */}
         {(run.arcana.length > 0 || purityLive || evolutionsOn || run.simplified || run.doubleNext > 0 || run.nextSetMultiplier > 1 || hasGearChips(gearMods)) && (
@@ -554,7 +554,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
               <View testID="run-simplified-chip" style={[st.purityChip, st.purityChipHot]}>
                 <Icon name="lorc/third-eye" size={12} color={TONE.upside} />
                 <Text style={st.purityChipText}>
-                  All {run.simplified.attribute} {String(run.simplified.value)} · {Math.ceil(run.simplified.remainingMs / 1000)}s
+                  All {run.simplified.attribute} {String(run.simplified.value)}{run.simplified.also ? ` and ${run.simplified.also.attribute} ${String(run.simplified.also.value)}` : ''} · {Math.ceil(run.simplified.remainingMs / 1000)}s
                 </Text>
               </View>
             )}
@@ -784,7 +784,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
       <Modal visible={!!inspect} transparent animationType="fade" onRequestClose={() => setInspect(null)}>
         <View style={st.overlay}>
           <PopIn style={[st.panel, { padding: 12 }]}>
-            {inspect && <WeaponExplainer weapon={inspect} build={run.weaponBuilds[inspect.id]} defaultOpen />}
+            {inspect && <WeaponExplainer weapon={run.weapons.find(w => w.id === inspect.id) ?? inspect} build={run.weaponBuilds[inspect.id]} growth={run.growth} defaultOpen />}
             <Btn testID="inspect-close" label="Back to the fight" onPress={() => setInspect(null)} />
           </PopIn>
         </View>

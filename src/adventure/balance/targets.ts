@@ -33,11 +33,13 @@ export const BALANCE_TARGETS = {
     damage: [1.6, 4.6],
     tricks: [1.15, 3.6],
     gambles: [1.15, 3.8],
-    board: [1.15, 3.2],
-    survival: [1.15, 3.0],
-    insight: [1.15, 3.0],
-    tempo: [1.15, 3.0],
-    chains: [1.15, 3.0],
+    // The support roles have headroom for what they grow into during a fight (data/weaponGrowth.ts):
+    // that growth is where a build snowballs, so their ceilings sit closer to the damage weapons'
+    board: [1.15, 3.6],
+    survival: [1.15, 3.6],
+    insight: [1.15, 3.6],
+    tempo: [1.15, 3.6],
+    chains: [1.15, 3.6],
   } satisfies Record<WeaponRole, Band>,
   /** A weapon alone the day you find it (level 1, untuned), early game: felt, never dominant */
   soloEarly: [1.0, 1.8] as Band,
@@ -47,7 +49,8 @@ export const BALANCE_TARGETS = {
    * Held in a real five-charm build vs the same build without it (restricted
    * play). The honest measure: what the slot is worth next to other weapons.
    */
-  inBuild: [1.02, 2.0] as Band,
+  // (Seconds are worth more now that every weapon grows through a fight: the clock weapons set this ceiling)
+  inBuild: [1.02, 2.6] as Band,
   /** An evolution vs its two weapons with evolutions switched off */
   recipeLift: [1.04, 2.6] as Band,
   /** The middle recipe: evolutions as a whole are a power trip */

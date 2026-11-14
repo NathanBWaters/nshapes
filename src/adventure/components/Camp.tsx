@@ -62,6 +62,7 @@ import {
 } from '../progress';
 import SkillTree, { StarPool } from './SkillTree';
 import BattleHistory from './BattleHistory';
+import WeaponExplainer from './WeaponExplainer';
 import BountyBoard from './BountyBoard';
 import { Btn, CoinPill, INK, PopIn, TONE } from './ui';
 
@@ -114,6 +115,8 @@ const Camp: React.FC<Props> = ({ save, history = NO_BATTLES, onChange, onClose, 
   const [reactions, setReactions] = useState<Partial<Record<CharacterName, FighterReactionEvent>>>({});
   const [armoryTapCounts, setArmoryTapCounts] = useState<Record<string, number>>({});
   const [slotsFullNote, setSlotsFullNote] = useState<'charms' | null>(null);
+  /** The Armory weapon tapped last: explained in full under the slots */
+  const [armoryFocus, setArmoryFocus] = useState<string | null>(null);
   const reactionSeq = useRef(0);
 
   useEffect(() => {
@@ -539,6 +542,22 @@ const Camp: React.FC<Props> = ({ save, history = NO_BATTLES, onChange, onClose, 
               <Text testID="camp-charms-full" style={st.fullNote}>All {slots} charm slots are full. Tap an equipped charm to take it off{slots < 6 ? ', or add a slot with the Charm Belt in the Workshop' : ''}.</Text>
             )}
             {save.armory.length === 0 && <Text style={st.blurb}>Nothing here yet. Some stars unlock a weapon.</Text>}
+            {/* What a weapon does, in full: the one tapped last, else the charms you wear */}
+            <View style={{ gap: 8 }} testID="camp-armory-guide">
+              {(armoryFocus ? [armoryFocus] : charms).map(id => {
+                const w = getArmoryWeapon(id, weaponBuilds(save));
+                return w ? (
+                  <WeaponExplainer
+                    key={id}
+                    weapon={w}
+                    build={weaponBuilds(save)[id]}
+                    badge={charms.includes(id) ? 'Equipped' : 'Not equipped'}
+                    defaultOpen={id === armoryFocus}
+                  />
+                ) : null;
+              })}
+              {armoryFocus && <Text style={st.blurb}>Tap any weapon below to read it here.</Text>}
+            </View>
             {WEAPON_ROLES.map(role => {
               const shelf = armoryWeapons(save).filter(w => weaponRole(w.id) === role.id);
               if (shelf.length === 0) return null;
@@ -561,6 +580,7 @@ const Camp: React.FC<Props> = ({ save, history = NO_BATTLES, onChange, onClose, 
                     testID={`camp-armory-${w.id}`}
                     onPress={() => {
                       setArmoryTapCounts(prev => ({ ...prev, [w.id]: (prev[w.id] ?? 0) + 1 }));
+                      setArmoryFocus(w.id);
                       if (!equipped && charms.length >= slots) {
                         sfx('back');
                         setSlotsFullNote('charms');

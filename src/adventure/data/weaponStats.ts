@@ -19,7 +19,7 @@
  */
 import type { PlayerStats, Weapon, WeaponRarity } from '@/types';
 import type { AdventureWeapon } from '../types';
-import { ADVENTURE_TUNING, MYSTIC_EVERY, ORACLE_PATIENCE_MS } from './weaponTuning';
+import { ADVENTURE_TUNING, MYSTIC_EVERY, ORACLE_PATIENCE_MS, SEEKER_DAMAGE_PER_HINT } from './weaponTuning';
 
 export const MAX_WEAPON_LEVEL = 5;
 /** Workshop tuning multipliers by tier (tier 0 = untuned) */
@@ -200,8 +200,8 @@ const STAT_TEXT: Record<string, (v: V) => Text> = {
     shortDescription: `+${count(v.maxHints)} ${plural(v.maxHints, 'hint')}, each use hits for ${num(v.strike)}`,
   }),
   'seeker-lens': v => ({
-    description: `${pct(v.hintGainChance)} chance per Set to gain a hint and hit the foe for ${num(v.strike)}.`,
-    shortDescription: `${pct(v.hintGainChance)} hint + ${num(v.strike)} dmg`,
+    description: `${pct(v.hintGainChance)} chance per Set to gain a hint and hit the foe for ${num(v.strike)}. Every hint you are holding adds +${SEEKER_DAMAGE_PER_HINT} to every Set.`,
+    shortDescription: `${pct(v.hintGainChance)} hint + ${num(v.strike)} dmg; Sets +${SEEKER_DAMAGE_PER_HINT} per hint held`,
   }),
   'scholars-tome': v => ({
     description: `${pct(v.xpGainChance)} chance per Set to gain +1 XP and hit the foe for ${num(v.strike)}.`,
@@ -292,10 +292,13 @@ export const trimForLevel = (level: number): WeaponRarity => TRIM[clampLevel(lev
 /**
  * A weapon at a build: its numbers, wording and trim. Rule weapons rebuild
  * their rules from the numbers (`build`); plain weapons get their `effects`
- * and bridge chance replaced. Never mutates the weapon tables.
+ * and bridge chance replaced. Never mutates the weapon tables. `grown` are
+ * numbers gained during a fight, added after level and tuning.
  */
-export const buildWeapon = (w: Weapon, build: WeaponBuild = BASE_BUILD): Weapon => {
+export const buildWeapon = (w: Weapon, build: WeaponBuild = BASE_BUILD, grown?: Readonly<Record<string, number>>): Weapon => {
   const v = weaponValues(w, build);
+  // What the weapon has gained during this fight is added on top of its level and tuning (data/weaponGrowth.ts)
+  if (grown) for (const [k, add] of Object.entries(grown)) if (k in v) v[k] = tidy(v[k] + add);
   const level = clampLevel(build.level);
   const a = w as AdventureWeapon;
   if (a.stats && a.build) {

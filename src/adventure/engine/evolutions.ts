@@ -6,7 +6,7 @@
  */
 import type { Card } from '@/types';
 import { EVOLUTION_RECIPES } from '../data/evolutions';
-import { addTime, arcana, dealDamage, emit, enqueue, foeMultiplier, idleRecipes, mods, refreshSources, updateCards, type Draft } from './fight';
+import { addTime, arcana, dealDamage, emit, enqueue, foeMultiplier, idleRecipes, mods, refreshSources, signalGrowth, updateCards, type Draft } from './fight';
 import { armedRecipesFor, EVOLUTION_RULES, getRecipe } from './sources';
 import { fireFinale, fireOpening } from '../rules/engine';
 
@@ -45,7 +45,10 @@ export const resolveCatalyst = (d: Draft, matched: Card[]) => {
   updateCards(d, [idx], c => ({ ...c, hasEvolutionItem: false, evolutionReady: false }));
   if (d.evolutionsTriggered >= d.evolutionCap) return;
   const id = recipeToStart(d);
-  if (id) startEvolution(d, id, idx);
+  if (!id) return;
+  // Told first, so what grows on a matched Catalyst (Catalyst Prism) already counts for this evolution
+  signalGrowth(d, { on: 'catalyst' });
+  startEvolution(d, id, idx);
 };
 
 export const extendEvolutions = (d: Draft, ms: number) => {

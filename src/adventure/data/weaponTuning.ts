@@ -44,6 +44,8 @@ const dmg = (label: string, base: number, perLevel: number): WeaponStatDef => ({
 
 /** Oracle Eye: a Set this long after the last one is a "patient" Set */
 export const ORACLE_PATIENCE_MS = 8000;
+/** Seeker Lens: Set damage per hint you are holding */
+export const SEEKER_DAMAGE_PER_HINT = 1;
 /** Mystic Sight: every Nth Set */
 export const MYSTIC_EVERY = 3;
 
@@ -125,7 +127,8 @@ export const ADVENTURE_TUNING: Record<string, AdventureTuning> = {
     effects: { hintGainChance: 15 },
     perLevel: { hintGainChance: 5 },
     extra: { strike: dmg('Damage per hint found', 3, 0.75) },
-    rider: v => ({ rules: [strike({ on: 'weapon', kind: 'hint' }, v.strike)] }),
+    // Hoard them: every hint you are holding is worth damage on every Set
+    rider: v => ({ rules: [strike({ on: 'weapon', kind: 'hint' }, v.strike)], modifiers: { hintHeldDamage: SEEKER_DAMAGE_PER_HINT } }),
   },
   'crystal-orb': {
     extra: { strike: dmg('Damage per hint used', 3, 1.5) },

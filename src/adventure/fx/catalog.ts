@@ -87,6 +87,9 @@ export const EVENT_FX: Record<RunEventType, FxRow | null> = {
   // The board's own red flash and shake show the miss; the heart it costs is `hurt`
   mistake: null,
   nine_lives: { color: C.shield, aura: true, bump: ['passive:nine_lives', 'hearts'], fighter: 'heal', label: () => 'NINE LIVES!' },
+  // A weapon grew for the rest of the fight: its place on the belt jumps and says what it gained
+  // (what it gained is on the weapon's card; the label stays short so a busy cascade can be read)
+  power_up: { color: C.buff, aura: true, fighter: 'powerup', label: () => 'POWER UP' },
   // Practice: out of hearts, so they come back
   breather: { color: C.heal, aura: true, orb: 'heart', from: 'fighter', to: 'hearts', fighter: 'heal', label: () => 'HEARTS REFILLED' },
   thick_hide: { color: C.shield, aura: true, bump: ['passive:thick_hide'], fighter: 'heal', label: () => 'THICK HIDE!' },

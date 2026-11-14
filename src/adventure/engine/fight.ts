@@ -17,9 +17,13 @@ import { BASE_RULES, TRICK_RULES } from '../data/rules';
 import { PASSIVE_TUNING } from '../data/passives';
 import { createRng, type Rng } from './rng';
 import { hasAnySet, isSelectable } from './sets';
+import { growthModifiers } from '../data/weaponGrowth';
 import { evolutionCapFor, evolutionLikelihoodFor, liveRules, modifiersOf, type KeyedRule } from './sources';
 
 export const MAX_BOARD = 21;
+/** Most that luck can add to a chance, and the most the clock can be slowed (weapon growth) */
+export const LUCK_CAP_PCT = 60;
+export const CLOCK_SLOW_CAP_PCT = 50;
 export const GRID_COLS = 3;
 export const MAX_TRAPS_PER_KIND = 2;
 export const FOG_MS = TRICK_RULES.fogMs;
@@ -136,13 +140,29 @@ export const emit = (d: Draft, type: RunEventType, amount?: number, text?: strin
   d._lines.push(source ? { type, amount, text, source } : { type, amount, text });
 };
 
+/** Things weapon growth watches that are not queued fight events */
+export type GrowthSignal = FightEvent | { on: 'own'; weaponId: string } | { on: 'doubled' } | { on: 'catalyst' };
+/** engine/growth.ts listens to every queued event and signal (set from there, so this file does not depend on it) */
+let growthHook: ((d: Draft, ev: GrowthSignal) => void) | null = null;
+export const setGrowthHook = (hook: (d: Draft, ev: GrowthSignal) => void) => {
+  growthHook = hook;
+};
+export const signalGrowth = (d: Draft, signal: GrowthSignal) => growthHook?.(d, signal);
+
 export const enqueue = (d: Draft, on: FightEventKind, kind?: WeaponTriggerKind, trick?: TrickKind) => {
-  d._queue.push({ ev: { on, ...(kind ? { kind } : {}), ...(trick ? { trick } : {}) }, chain: d._chain, setCtx: d._setCtx });
+  const ev: FightEvent = { on, ...(kind ? { kind } : {}), ...(trick ? { trick } : {}) };
+  d._queue.push({ ev, chain: d._chain, setCtx: d._setCtx });
+  growthHook?.(d, ev);
 };
 
 // ─── Sources, modifiers & tuning ────────────────────────────────────────────
 
-const sourceInputs = (d: RunState) => ({ skillNodes: d.skillNodes, weapons: d.weapons, activeEvolutions: d.activeEvolutions });
+const sourceInputs = (d: RunState) => ({
+  skillNodes: d.skillNodes,
+  weapons: d.weapons,
+  activeEvolutions: d.activeEvolutions,
+  growth: growthModifiers(d.growth ?? {}),
+});
 
 export const mods = (d: Draft): Modifiers => (d._mods ??= modifiersOf(sourceInputs(d)));
 export const liveRulesOf = (d: Draft): KeyedRule[] => (d._rules ??= liveRules(sourceInputs(d)));
@@ -172,9 +192,11 @@ export const refreshSources = (d: Draft) => {
   d._rules = null;
   const m = mods(d);
   const scale = m.weaponChanceScale ?? {};
+  // Luck (Second Chance's growth) lifts every weapon chance
+  const luck = 1 + Math.min(LUCK_CAP_PCT, m.luckPct ?? 0) / 100;
   let stats = d.stats;
   for (const [kind, key] of Object.entries(CHANCE_STATS) as [WeaponTriggerKind, keyof PlayerStats][]) {
-    const want = Math.round((d.baseChances[key] ?? 0) * (scale[kind] ?? 1));
+    const want = Math.round((d.baseChances[key] ?? 0) * (scale[kind] ?? 1) * luck);
     if (stats[key] !== want) {
       if (stats === d.stats) stats = { ...stats };
       (stats as unknown as Record<string, number>)[key] = want;
@@ -264,7 +286,10 @@ export const drawCard = (d: Draft, opts?: DrawOptions): Card => {
   const base = d.deck.shift()!;
   let card = freshCard(base);
   if (d.surge) card.shading = d.surge.active ? d._rng.pick(ATTRIBUTE_VALUES.shading) : ATTRIBUTE_VALUES.shading[0];
-  if (d.simplified) card = withAttribute(card, d.simplified.attribute, d.simplified.value);
+  if (d.simplified) {
+    card = withAttribute(card, d.simplified.attribute, d.simplified.value);
+    if (d.simplified.also) card = withAttribute(card, d.simplified.also.attribute, d.simplified.also.value);
+  }
   const specialMult = arcana(d).specialCardChanceScale ?? 1;
   if (d.features.has('coins') && d._rng.next() < BASE_RULES.coinCardChance * specialMult) card.bonusMoney = BASE_RULES.coinCardValue;
   if (d.features.has('power') && d._rng.next() < BASE_RULES.powerCardChance * specialMult) card.bonusPoints = BASE_RULES.powerCardBonus;
@@ -594,7 +619,16 @@ export const simplify = (d: Draft, ms: number) => {
   const value = d._rng.pick(ATTRIBUTE_VALUES[attribute] as readonly (string | number)[]);
   d.simplified = { attribute, value, remainingMs: ms };
   d.board = d.board.map(c => withAttribute(c, attribute, value));
-  emit(d, 'simplified', ms, attribute);
+  // A double Clarity (Clarity Lens growth): a second trait goes the same way, while at least one stays to tell cards apart
+  const others = d.attributes.filter(a => a !== attribute);
+  const twice = mods(d).doubleClarityChance ?? 0;
+  if (others.length >= 2 && twice > 0 && d._rng.next() * 100 < twice) {
+    const second = d._rng.pick(others);
+    const also = { attribute: second, value: d._rng.pick(ATTRIBUTE_VALUES[second] as readonly (string | number)[]) };
+    d.simplified = { ...d.simplified, also };
+    d.board = d.board.map(c => withAttribute(c, also.attribute, also.value));
+  }
+  emit(d, 'simplified', ms, d.simplified.also ? `${attribute} and ${d.simplified.also.attribute}` : attribute);
 };
 
 let connSeq = 0;

@@ -41,7 +41,8 @@ const DEFAULT_ATTRIBUTES: AttributeName[] = ['shape', 'color', 'number', 'shadin
 
 interface GameBoardProps {
   cards: CardType[];
-  onMatch: (cards: CardType[], rewards: CardReward[], weaponEffects?: WeaponEffectResult) => void;
+  /** `info.hinted`: one of the picked cards was being pointed out (a hint, an auto-hint or a glow) */
+  onMatch: (cards: CardType[], rewards: CardReward[], weaponEffects?: WeaponEffectResult, info?: { hinted: boolean }) => void;
   onMatchStart?: () => void; // Called immediately when a valid match is detected (before animations)
   onInvalidSelection: (cards: CardType[]) => void;
   playerStats: PlayerStats;
@@ -449,7 +450,8 @@ const GameBoard: React.FC<GameBoardProps> = ({
           setEnemyReaction({ type: weaponsFired ? 'crit_pain' : 'pain', id: enemyReactionSeq.current });
 
           // Tell the parent straight away, so the score counts even if the timer runs out mid-animation
-          onMatch(affectedCards, rewards, weaponEffects);
+          const hinted = newSelectedCards.some(c => hintCards.includes(c.id) || (glowingCardIds?.includes(c.id) ?? false));
+          onMatch(affectedCards, rewards, weaponEffects, { hinted });
 
           setTimeout(() => {
             setRevealingRewards(prev => prev.filter(r => r.matchId !== matchId));

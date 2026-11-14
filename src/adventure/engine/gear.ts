@@ -69,12 +69,15 @@ const rollBounty = (d: Draft) => {
   d.gear.bounty = { ...d._rng.pick(options), left: BOUNTY_CARDS };
 };
 
-/** Move the Magnet's mark to a random card that isn't on its way out. */
+/** How many cards the Magnet marks (its growth adds marks). */
+const magnetMarks = (d: Draft) => 1 + Math.round(mods(d).magnetMarks ?? 0);
+
+/** Move the Magnet's marks to random cards that aren't on their way out. */
 const placeMagnet = (d: Draft) => {
   const candidates = d.board.map((c, i) => (touchable(d, i) && isSelectable(c) ? i : -1)).filter(i => i >= 0);
   const marked = d.board.map((c, i) => (c.magnet ? i : -1)).filter(i => i >= 0);
   updateCards(d, marked, c => ({ ...c, magnet: false }));
-  if (candidates.length) updateCards(d, [d._rng.pick(candidates)], c => ({ ...c, magnet: true }));
+  if (candidates.length) updateCards(d, d._rng.shuffle(candidates).slice(0, magnetMarks(d)), c => ({ ...c, magnet: true }));
 };
 
 const shatterGlass = (d: Draft, why: string) => {
@@ -377,7 +380,7 @@ export const syncGear = (d: Draft) => {
   const m = mods(d);
   if (on(m.bountyDamage) && !d.gear.bounty) rollBounty(d);
   const marked = d.board.filter(c => c.magnet).length;
-  if (on(m.magnetDamage) ? marked !== 1 : marked > 0) {
+  if (on(m.magnetDamage) ? marked !== Math.min(magnetMarks(d), d.board.length) : marked > 0) {
     if (on(m.magnetDamage)) placeMagnet(d);
     else updateCards(d, d.board.map((c, i) => (c.magnet ? i : -1)).filter(i => i >= 0), c => ({ ...c, magnet: false }));
   }

@@ -4,6 +4,7 @@
  * it is given, or with a BuildPlan gears up first like a player at the
  * preview (botBuilds.ts: skill nodes for the stars earned, charms, recipes).
  */
+import { setWouldGrow } from './growth';
 import type { AttributeName, Card, Weapon } from '@/types';
 import { isValidCombination } from '@/utils/gameUtils';
 import { getAdjacentIndices } from '@/utils/weaponEffects';
@@ -144,6 +145,8 @@ const chooseSet = (s: RunState, sets: Card[][], bot: BotProfile, rng: Rng): Card
     (ropeHeld && rope.size ? prefer(set => set.some(c => rope.has(c.id)), 0.8) : null) ??
     (mirrorHeld ? prefer(set => set.some(c => lastSlots.has(c.id))) : null) ??
     (albumHeld ? prefer(set => albumPageOf(set, s.attributes, s.gear.album) !== null) : null) ??
+    // A weapon that grows on a kind of Set (two corners, a 1-2-3, the same color twice) is worth hunting for
+    prefer(set => setWouldGrow(s, set, s.attributes)) ??
     (bot.huntsRainbows && s.features.has('rainbow') && rng.next() < 0.5 ? prefer(rainbow) : null) ??
     prefer(set => !has(set, snared)) ??
     rng.pick(sets)
@@ -193,7 +196,7 @@ const inactivityLimit = (s: RunState): number | null => {
  * grace covers) scores through the same match resolution, anything else is a
  * mistake. Either way the cards are replaced.
  */
-const submit = (s: RunState, picked: Card[]): RunState => {
+const submit = (s: RunState, picked: Card[], hinted = false): RunState => {
   const v = isValidCombination(picked, s.attributes);
   const graceUsed = !v.isValid && v.invalidAttributes.length === 1 && s.stats.graces > 0;
   if (v.isValid || graceUsed) {
@@ -206,7 +209,7 @@ const submit = (s: RunState, picked: Card[]): RunState => {
       connections: s.connections,
       graceUsed,
     });
-    const next = runReducer(s, { type: 'MATCH', cards, rewards, effects: weaponEffects });
+    const next = runReducer(s, { type: 'MATCH', cards, rewards, effects: weaponEffects, hinted });
     return runReducer(next, { type: 'REPLACE', ids: cards.map(c => c.id) });
   }
   const next = runReducer(s, { type: 'INVALID', cards: picked });
@@ -273,6 +276,12 @@ const playRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: nu
       s = runReducer(s, { type: 'USE_HINT' });
       think *= 0.5;
     }
+    // An auto-hint (Oracle Eye, Mystic Sight) points a card out when the search drags: free, and just as helpful
+    let pointed = false;
+    if (!hinted && slow && s.stats.autoHintChance > 0 && rng.next() * 100 < s.stats.autoHintChance) {
+      pointed = true;
+      think *= 0.6;
+    }
     // With a grace in hand a near miss is free, so a slow search ends in a bold guess
     const graces = s.features.has('graces') ? s.stats.graces : 0;
     const bold = !hinted && graces > 0 && (goals.includes('graceSaves') ? pace > 0.8 : slow && rng.next() < bot.boldness);
@@ -318,7 +327,7 @@ const playRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: nu
       s = submit(s, near ?? rng.shuffle(selectableCards).slice(0, 3));
       continue;
     }
-    s = submit(s, chooseSet(s, sets, bot, rng));
+    s = submit(s, chooseSet(s, sets, bot, rng), hinted || pointed);
   }
   return { stars: computeStars(s), coins: s.coins, state: s };
 };

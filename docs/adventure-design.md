@@ -483,6 +483,20 @@ The Workshop opens at 1-5 ★. Each item goes on sale once its mechanic is known
 **Weapon tuning** multiplies one number of an owned weapon: ×1.1 / ×1.2 / ×1.35 / ×1.5 for 60 / 150 / 320 / 600 coins, per number, on top of its level. Levels are found in the world, never bought. Old saves get every coin they spent on Workshop weapon levels back (at the old rarity prices, `LEGACY_WEAPON_LEVEL_COSTS`).
 Losing a Charm Belt or Tarot Deck tier also unequips whatever no longer fits.
 
+## Weapon growth (the in-fight snowball)
+
+`data/weaponGrowth.ts` (ONE table) · `engine/growth.ts` · shown by `WeaponExplainer` and the weapon belt.
+
+A fight should end stronger than it started. Every weapon has something to **look for**; each time it happens the weapon gains a **stack**, and a stack lasts until the fight ends.
+
+- **What a stack gives** (one of): `stat` adds to the weapon's own numbers, and the weapon is rebuilt from them with the same `buildWeapon` that levels and tuning use, so rules, chances and wording follow; `mods` adds a standing modifier (luck, a slower clock, damage per hint held…); `now` runs an effect once (an empty heart, a board card, a link).
+- **What it watches:** a kind of Set (`fullHearts`, `rainbow`, `sameColorAgain`, `corners`, `oneTwoThree`, `hinted`), a mistake (all red), a weapon effect, a trick payout, its own rule firing, a doubled trigger, a matched Catalyst, hearts lost or healed, hints and graces used. `every` counts several per stack, `unbroken` restarts the count when a Set fails the test, `chance` makes it a roll, `max` caps it.
+- **Design rules.** Growth adds to a weapon and never changes what it does. Weapons that already deal damage grow sideways and a little (Chaos Shard heals, Prismatic Ray deals friendlier cards). Support weapons are where the snowball is. Blast Powder, Field Stone and Growth Seed do not grow (`NO_GROWTH` says why).
+- **Evolutions.** While an evolution made from the weapon runs, each step counts ×1.6 and its limit is ×1.6 (`EVOLVED_GROWTH`): Chrono Shard's 5% per step to 25% becomes 8% to 40%. What was gained past the normal limit stays when the evolution ends.
+- **Seeing it.** A stack plays a POWER UP on the weapon's place on the belt (`power_up` event) and the belt shows the weapon's stack count. The explainer card shows "GROWS IN A FIGHT" on every weapon: before a fight, when a belt weapon is tapped (with its live stacks), in the replay, and in Camp → Armory for the weapon tapped last.
+- **Bots** hunt for Sets that grow a held weapon (`setWouldGrow`), the way a player who read the card would.
+- **Measured** (average bot, 150 s, three charms at level 3): growth adds 20–60% damage to support builds and about nothing to a pure-damage build; the last third of a fight deals 1.2–1.8× the first third. A fight is only ~17 Sets for that bot, so faster players snowball further.
+
 ## Camp
 
 `components/Camp.tsx`. Camp opens on a **menu** of its sections; a section's back button returns to the menu, the menu's to the map. Each row says where things stand (stars to spend, charms equipped, bounties claimed, battles fought) and shows a red dot when something wants attention; a section that is still locked says how to open it.

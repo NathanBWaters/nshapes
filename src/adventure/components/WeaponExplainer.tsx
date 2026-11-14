@@ -21,6 +21,7 @@ import type { Weapon } from '@/types';
 import { COLORS } from '@/utils/colors';
 import { armoryBaseWeapon, weaponLevelSuffix } from '../data/armory';
 import { WEAPON_KINDS, weaponGuide } from '../data/weaponGuide';
+import { NO_GROWTH, WEAPON_GROWTH, evolvedGrowthText, growthKey, growthText, type GrowthState } from '../data/weaponGrowth';
 import { WEAPON_ROLES, weaponRole } from '../data/weaponRoles';
 import { BASE_BUILD, formatStat, weaponStatLines, type WeaponBuild } from '../data/weaponStats';
 import { INK } from './ui';
@@ -33,6 +34,8 @@ interface Props {
   badge?: string;
   /** After a fight: what it did, in words, and its share of the damage (0..1) for the bar */
   result?: { text: string; share?: number };
+  /** In a fight: how far the weapon has grown so far */
+  growth?: GrowthState;
   /** Start with "more" open */
   defaultOpen?: boolean;
   testID?: string;
@@ -40,7 +43,7 @@ interface Props {
 
 const roleLabel = (id: string) => WEAPON_ROLES.find(r => r.id === weaponRole(id))?.label ?? '';
 
-const WeaponExplainer: React.FC<Props> = ({ weapon, build = BASE_BUILD, badge, result, defaultOpen = false, testID }) => {
+const WeaponExplainer: React.FC<Props> = ({ weapon, build = BASE_BUILD, badge, result, growth, defaultOpen = false, testID }) => {
   const [open, setOpen] = useState(defaultOpen);
   const [taps, setTaps] = useState(0);
   const guide = weaponGuide(weapon.id);
@@ -48,6 +51,7 @@ const WeaponExplainer: React.FC<Props> = ({ weapon, build = BASE_BUILD, badge, r
   const base = armoryBaseWeapon(weapon.id);
   const stats = base ? weaponStatLines(base, build) : [];
   const voice = weaponVoice(weapon.id);
+  const grows = WEAPON_GROWTH[weapon.id] ?? [];
 
   return (
     <View style={st.card} testID={testID ?? `weapon-explainer-${weapon.id}`}>
@@ -74,6 +78,22 @@ const WeaponExplainer: React.FC<Props> = ({ weapon, build = BASE_BUILD, badge, r
           <Text style={st.caret}>{open ? '▲' : '▼'}</Text>
         </View>
         <Text style={st.what} testID={`weapon-explainer-what-${weapon.id}`}>{weapon.description}</Text>
+        {/* How it gets stronger during a fight: always shown, it is half of what the weapon is */}
+        {(grows.length > 0 || NO_GROWTH[weapon.id]) && (
+          <View style={st.grow} testID={`weapon-explainer-growth-${weapon.id}`}>
+            <Text style={st.growLabel}>GROWS IN A FIGHT</Text>
+            {grows.map((def, i) => {
+              const stacks = growth?.[growthKey(weapon.id, i)]?.stacks ?? 0;
+              return (
+                <Text key={i} style={st.growText}>
+                  {growthText(def)}
+                  {stacks > 0 ? <Text style={st.growNow}>  Now: {Math.round(stacks * 10) / 10}{def.max ? `/${def.max}` : ''}</Text> : null}
+                </Text>
+              );
+            })}
+            {grows.length === 0 && <Text style={st.growText}>{NO_GROWTH[weapon.id]}</Text>}
+          </View>
+        )}
         {result && (
           <View style={st.result} testID={`weapon-explainer-result-${weapon.id}`}>
             <Text style={st.resultLabel}>THIS FIGHT</Text>
@@ -97,6 +117,7 @@ const WeaponExplainer: React.FC<Props> = ({ weapon, build = BASE_BUILD, badge, r
             </View>
           )}
           {!!guide.tip && <Row icon="lorc/light-bulb" title="How to play it" color="#B45309">{guide.tip}</Row>}
+          {grows.length > 0 && <Row icon="lorc/crystal-shine" title="In its evolution" color="#7C3AED">{evolvedGrowthText(grows[0])}</Row>}
           {stats.length > 0 && (
             <View style={st.numbers}>
               {stats.map(line => (
@@ -145,6 +166,10 @@ const st = StyleSheet.create({
   role: { fontSize: 11, fontWeight: '600', color: INK, opacity: 0.65 },
   caret: { fontSize: 12, color: INK, opacity: 0.6, paddingHorizontal: 4 },
   what: { fontSize: 15, lineHeight: 21, color: INK, marginTop: 8 },
+  grow: { marginTop: 8, gap: 3, backgroundColor: '#FFF7D6', borderRadius: 8, borderWidth: 1.5, borderColor: '#B45309', paddingHorizontal: 9, paddingVertical: 6 },
+  growLabel: { fontSize: 9, fontWeight: '900', letterSpacing: 1.5, color: '#92400E' },
+  growText: { fontSize: 13, lineHeight: 18, color: INK },
+  growNow: { fontWeight: '900', color: '#0F766E' },
   result: { marginTop: 8, backgroundColor: COLORS.paperBeige, borderRadius: 8, padding: 8, gap: 3 },
   resultLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1.5, color: INK, opacity: 0.6 },
   resultText: { fontSize: 14, fontWeight: '700', color: INK },

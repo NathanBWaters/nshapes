@@ -14,7 +14,7 @@ import { BASE_RULES } from '../data/rules';
 import {
   addCoins, addGraces, addHints, addRandomConnections, addTime, addXp, areaIndices, armorCard, canSpawnCatalyst,
   dealDamage, destroyCards, emit, empowerBoard, enqueue, foeMultiplier, growBoard, heal, igniteCards, liveRulesOf,
-  newLinkSlots, placeCatalyst, redeal, simplify, touchable as touchableIdx, type Draft, type FightEvent,
+  newLinkSlots, placeCatalyst, redeal, simplify, touchable as touchableIdx, LUCK_CAP_PCT, mods, signalGrowth, type Draft, type FightEvent,
 } from '../engine/fight';
 import { extendEvolutions } from '../engine/evolutions';
 import { addComboSteps, patienceMs } from '../engine/passives';
@@ -28,7 +28,7 @@ const sinceLastSet = (d: Draft) => (d._setCtx ? d._setCtx.sinceLastMs : d.elapse
 
 const holds = (d: Draft, c: Condition): boolean => {
   switch (c.kind) {
-    case 'chance': return d._rng.next() * 100 < c.pct;
+    case 'chance': return d._rng.next() * 100 < c.pct * (1 + Math.min(LUCK_CAP_PCT, mods(d).luckPct ?? 0) / 100);
     case 'heartsAtMost': return d.hearts !== null && d.hearts <= c.n;
     case 'heartsFull': return d.hearts !== null && d.maxHearts !== null && d.hearts >= d.maxHearts;
     case 'comboAtLeast': return d.combo >= c.n;
@@ -84,6 +84,9 @@ const fireRule = (d: Draft, kr: KeyedRule, chain: readonly string[]) => {
   if (kr.rule.callout) emit(d, 'rule', undefined, kr.rule.callout);
   for (const e of kr.rule.effects) applyEffect(d, e, kr.rule.callout);
   d._chain = prev;
+  // A weapon's own rule fired: some weapons grow each time theirs does (data/weaponGrowth.ts)
+  const own = /^w\d+:(.+)#\d+$/.exec(kr.key);
+  if (own) signalGrowth(d, { on: 'own', weaponId: own[1] });
 };
 
 const checkFoeBelow = (d: Draft) => {
@@ -241,6 +244,7 @@ export const takeDouble = (d: Draft): boolean => {
   if (d.doubleNext <= 0) return false;
   d.doubleNext -= 1;
   emit(d, 'doubled', d.doubleNext, '×2');
+  signalGrowth(d, { on: 'doubled' });
   return true;
 };
 
@@ -310,6 +314,10 @@ export const applyEffect = (d: Draft, e: Effect, label?: string) => {
       // Stacks add up (×2 + ×2 = ×3), capped (data/rules.ts)
       d.nextSetMultiplier = Math.min(BASE_RULES.maxNextSetMultiplier, d.nextSetMultiplier + (e.times - 1));
       emit(d, 'charged', d.nextSetMultiplier);
+      break;
+    case 'emptyHeart':
+      // The new heart arrives empty: more room to heal into, nothing healed
+      if (d.maxHearts !== null) d.maxHearts += e.amount;
       break;
     case 'link': {
       const before = d.connections.length;

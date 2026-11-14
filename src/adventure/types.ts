@@ -11,6 +11,7 @@ import type { AttributeName, BoardConnection, CharacterName, Card, CardReward, W
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import type { IconName } from '@/components/Icon';
 import type { RuleSource } from './rules/types';
+import type { GrowthState } from './data/weaponGrowth';
 
 // ---------------------------------------------------------------------------
 // Mechanics (the "tutorial is the game" backbone)
@@ -552,7 +553,9 @@ export type RunEventType =
   /** Shading Surge: warning (amount = seconds until it starts), start, end, and a Set scored during it (amount = damage) */
   | 'surge_warn' | 'surge_start' | 'surge_end' | 'surge_hit'
   /** Practice only: out of hearts, so they refill (amount = hearts back) */
-  | 'breather';
+  | 'breather'
+  /** A weapon grew stronger for the rest of the fight (text = what it gained, amount = its stacks) */
+  | 'power_up';
 
 export interface RunEvent {
   id: number;
@@ -712,6 +715,8 @@ export interface SimplifyState {
   attribute: AttributeName;
   value: string | number;
   remainingMs: number;
+  /** A second trait made the same as well (a double Clarity) */
+  also?: { attribute: AttributeName; value: string | number };
 }
 
 /** What the trick weapons remember during a fight (engine/gear.ts). */
@@ -767,6 +772,10 @@ export interface RunState {
   timeBank: number | null;
   /** State of the trick weapons (engine/gear.ts) */
   gear: GearState;
+  /** How far each held weapon has grown this fight (data/weaponGrowth.ts) */
+  growth: GrowthState;
+  /** What weapon growth remembers between Sets */
+  growthMemo: { lastSetColor: string | null; lastHintAtMs: number; plantSet: boolean };
   elapsedMs: number;
   lastMatchAtMs: number;
   /** Cards scored or missed that the UI will REPLACE shortly; nothing else touches them meanwhile */

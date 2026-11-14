@@ -52,6 +52,8 @@ export interface SourceInputs {
   skillNodes: readonly string[];
   weapons: readonly Weapon[];
   activeEvolutions: readonly { id: string }[];
+  /** Standing modifiers from weapon growth this fight (data/weaponGrowth.ts) */
+  growth?: Modifiers;
 }
 
 /** Every live rule source with a stable key prefix. */
@@ -69,6 +71,7 @@ export const liveSources = (s: SourceInputs): { key: string; source: RuleSource 
     const r = getRecipe(e.id);
     if (r) out.push({ key: `evo:${e.id}`, source: r.source });
   }
+  if (s.growth && Object.keys(s.growth).length > 0) out.push({ key: 'growth', source: { modifiers: s.growth } });
   return out;
 };
 
