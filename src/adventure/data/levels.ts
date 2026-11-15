@@ -79,7 +79,7 @@ const RAW_LEVELS: LevelInput[] = [
     id: '1-3', biome: 'meadow', name: 'Counting Acorns', introduces: 'attr_number',
     // The first recipe arrives at ★: Blast Powder + Mending Charm = Phoenix Pyre (taught on 1-4)
     rules: { attributes: A3, boardSize: 12, moves: 8, hearts: 3 },
-    foes: [{ name: 'Nutkin', icon: 'delapouite/squirrel', hp: 58, taunt: 'One, two, three… mine!' }],
+    foes: [{ name: 'Nutkin', icon: 'delapouite/squirrel', hp: 64, taunt: 'One, two, three… mine!' }],
     challenge: { kind: 'streak', n: 6 }, coinMultiplier: 1, difficulty: 1,
     rewards: { star1: { coins: 15, evolution: 'phoenix-pyre' }, star2: { coins: 25, character: 'Sly Fox' }, star3: { coins: 50 } },
   },
@@ -125,7 +125,7 @@ const RAW_LEVELS: LevelInput[] = [
     // Puzzle: fuses tick in real time even without a clock. Build every Set around the bomb card.
     // Clarity Lens (★★) simplifies the board, so far more Sets include the bomb.
     rules: { attributes: A3, boardSize: 12, moves: 10, hearts: 4, hazards: { timeBombs: { every: 8, seconds: 16 } } },
-    foes: [{ name: 'Bumble Bomber', icon: 'lorc/bee', hp: 511, taunt: 'Bzz… tick… bzz… tick…' }],
+    foes: [{ name: 'Bumble Bomber', icon: 'lorc/bee', hp: 434, taunt: 'Bzz… tick… bzz… tick…' }],
     challenge: { kind: 'defuseTraps', n: 5 }, coinMultiplier: 1.4, difficulty: 2,
     rewards: {
       star1: { coins: 25, weapons: ['pinata'] },

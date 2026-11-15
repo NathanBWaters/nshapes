@@ -8,7 +8,7 @@ import type { PassiveDef, PassiveId } from '../types';
 export const PASSIVE_TUNING = {
   nine_lives: { 'nineLives.charges': 1 },
   scrappy: { 'scrappy.perHeart': 1 },
-  combo: { 'combo.windowMs': 5000, 'combo.max': 4, 'combo.perStep': 1 },
+  combo: { 'combo.windowMs': 4800, 'combo.max': 4, 'combo.perStep': 1 },
   hot_streak: { 'hotStreak.multiplier': 2 },
   grudge: { 'grudge.max': 3, 'grudge.damage': 3 },
   thick_hide: { 'thickHide.perWave': 1 },

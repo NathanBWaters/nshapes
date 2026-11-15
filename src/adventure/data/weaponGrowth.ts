@@ -218,7 +218,7 @@ export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
   snowball: [{ watch: { on: 'feat', name: 'fullSnowball' }, max: 2, stat: { max: 1 }, look: 'time the Snowball reaches its limit', gives: 'its limit rises by 1' }],
   // A sticker shower
   'collectors-album': [{ watch: { on: 'feat', name: 'albumDone' }, stat: { damage: 3 }, now: { do: 'empowerBoard', amount: 1 }, look: 'Album you complete', gives: 'every card on the board gains +1 and the next Album pays +3' }],
-  'wild-card': [{ watch: trickOn('wild'), every: 3, max: 1, mods: { wildMax: 1 }, look: 'wild cards you match', gives: 'a second wild card can be on the board at once' }],
+  'wild-card': [{ watch: trickOn('wild'), every: 5, max: 1, mods: { wildMax: 1 }, look: 'wild cards you match', gives: 'a second wild card can be on the board at once' }],
   // The seed sprouts
   'twin-seed': [
     { watch: trickOn('twin'), max: 8, proc: { on: trickOn('twin'), pct: 5, effect: { do: 'growBoard', count: 1 } }, look: 'twin you match', gives: '+5% chance that a matched twin leaves a new card on the board' },
@@ -242,7 +242,7 @@ export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
   // The pit spreads
   'tar-pit': [{ watch: trickOn('tar'), every: 6, max: 2, mods: { tarRows: 1 }, look: 'Sets in the tar', gives: 'the pit spreads to one more row' }],
   // See through one trick and you are forgiven the next
-  decoy: [{ watch: trickOn('decoy'), max: 5, stat: { chance: 3, damage: 2 }, now: { do: 'grace', amount: 1 }, look: 'decoy you catch', gives: 'gain a grace, and decoys turn up 3% more often and pay +2' }],
+  decoy: [{ watch: trickOn('decoy'), max: 5, stat: { chance: 3, damage: 3 }, now: { do: 'grace', amount: 1 }, look: 'decoy you catch', gives: 'gain a grace, and decoys turn up 3% more often and pay +3' }],
   'long-fuse': [{ watch: trickOn('fuse'), max: 4, mods: { fuseHotMs: 1000 }, look: 'short fuse you match', gives: 'the short-fuse window is 1s longer' }],
   // The cold spreads to the clock
   'ice-block': [{ watch: trickOn('ice'), max: 2, mods: { iceSetsLess: 1 }, now: { do: 'freeze', ms: 2000 }, look: 'thawed card you match', gives: 'the clock freezes for 2s and the next block thaws 1 Set sooner' }],

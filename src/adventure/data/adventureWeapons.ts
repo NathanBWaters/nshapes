@@ -619,7 +619,7 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     icon: 'delapouite/plastic-duck',
     effects: {},
     maxCount: 1,
-    stats: { chance: { label: 'Decoy chance', unit: '%', base: 16, perLevel: 2.5 }, damage: { label: 'Decoy damage', unit: 'dmg', base: 16, perLevel: 4.5 } },
+    stats: { chance: { label: 'Decoy chance', unit: '%', base: 18, perLevel: 2.5 }, damage: { label: 'Decoy damage', unit: 'dmg', base: 16, perLevel: 4.5 } },
     build: v => ({
       modifiers: { decoyChance: r(v.chance), decoyDamage: r(v.damage) },
       description: `${r(v.chance)}% chance that a new card is a decoy: a copy of a card on the board with one trait changed. Nothing marks it. Match a decoy and its original in the same Set for +${r(v.damage)}.`,
