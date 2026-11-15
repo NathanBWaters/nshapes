@@ -27,6 +27,8 @@ import {
 } from './progress';
 import { isFirstVisit, lessonsDueBefore, type LessonPlan } from './lessons';
 import { loadAdventureSave, loadBattleHistory, recordBattle, writeAdventureSave } from './save';
+import type { FightTape } from './engine/replay';
+import { trackFight } from '@/analytics/fightEvent';
 import { battleRecord, bestDpmOn, wasFought, type BattleRecord } from './history';
 import { computeStars } from './engine/run';
 import { randomSeed } from './engine/rng';
@@ -142,12 +144,14 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
 
   const remember = (record: BattleRecord) => setHistory(h => recordBattle(h, record));
 
-  const handleFinish = (level: LevelDef, run: RunState) => {
+  const handleFinish = (level: LevelDef, run: RunState, tape: FightTape) => {
     const stars = computeStars(run);
     const result = applyLevelResult(save, level, stars, run.coins, run);
     setSave(result.save);
     const bestDpm = bestDpmOn(history, level.id);
-    remember(battleRecord(level, run, { at: Date.now(), stars, coins: result.coinsBanked + result.starCoins + result.bountyCoins }));
+    const record = battleRecord(level, run, { at: Date.now(), stars, coins: result.coinsBanked + result.starCoins + result.bountyCoins });
+    remember(record);
+    trackFight(level, run, record, tape);
     setScreen({ kind: 'results', levelId: level.id, run, stars, result, bestDpm });
     if (result.unlocks.length > 0) {
       // Let the stars land first, then give each unlock its own moment
@@ -159,8 +163,11 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
   };
 
   /** A fight left partway through (retreat or restart) is still a battle, once a move was made. */
-  const handleLeft = (level: LevelDef, run: RunState) => {
-    if (wasFought(run)) remember(battleRecord(level, run, { at: Date.now(), left: true }));
+  const handleLeft = (level: LevelDef, run: RunState, tape: FightTape) => {
+    if (!wasFought(run)) return;
+    const record = battleRecord(level, run, { at: Date.now(), left: true });
+    remember(record);
+    trackFight(level, run, record, tape);
   };
 
   /** Next stop on the main path (an elite branch leads back to the map). */
@@ -191,9 +198,9 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
         save={save}
         seed={screen.seed}
         autoPlayer={autoPlayer}
-        onFinish={run => handleFinish(level, run)}
-        onQuit={run => { handleLeft(level, run); setScreen({ kind: 'map', highlight: level.id }); }}
-        onRestart={run => { handleLeft(level, run); startRun(level); }}
+        onFinish={(run, tape) => handleFinish(level, run, tape)}
+        onQuit={(run, tape) => { handleLeft(level, run, tape); setScreen({ kind: 'map', highlight: level.id }); }}
+        onRestart={(run, tape) => { handleLeft(level, run, tape); startRun(level); }}
         onCoachMarkSeen={id => setSave(s => markCoachMarkSeen(s, id))}
         effects={save.effectsOn && !reducedMotion}
         // A device that asks for reduced motion keeps effects off

@@ -8,6 +8,7 @@ import { KeywordProvider } from "@/context/KeywordContext";
 import KeywordTooltip from "@/components/KeywordTooltip";
 import { initAudio, preloadAllSounds } from "@/utils/sounds";
 import { LevelProgressStorage } from "@/utils/storage";
+import { startAnalytics } from "@/analytics/posthog";
 
 export default function RootLayout() {
   // Initialize audio system, preload sounds, and migrate old save data
@@ -16,6 +17,8 @@ export default function RootLayout() {
     preloadAllSounds();
     // Migrate old save format to new level-based system
     LevelProgressStorage.migrateFromOldSaveFormat();
+    // Anonymous gameplay analytics (src/analytics): sends anything queued from last time
+    startAnalytics();
   }, []);
 
   return (

@@ -611,7 +611,27 @@ export interface CreateRunOptions {
   features?: Set<FeatureFlag>;
 }
 
-export const createRun = (level: LevelDef, save: AdventureSave, opts: CreateRunOptions): RunState => {
+/**
+ * Foe effects (src/utils/enemies) roll with Math.random. Inside the engine
+ * that is a seeded stream kept in state (`foeRng`), so a fight is a pure
+ * function of its seed and actions and replays exactly (engine/replay.ts).
+ */
+const withFoeDice = (seed: number, fn: () => RunState): RunState => {
+  const dice = createRng(seed);
+  const real = Math.random;
+  Math.random = dice.next;
+  try {
+    const out = fn();
+    return dice.state === seed && out.foeRng === seed ? out : { ...out, foeRng: dice.state };
+  } finally {
+    Math.random = real;
+  }
+};
+
+export const createRun = (level: LevelDef, save: AdventureSave, opts: CreateRunOptions): RunState =>
+  withFoeDice((opts.seed ^ 0x2545f491) >>> 0, () => buildRun(level, save, opts));
+
+const buildRun = (level: LevelDef, save: AdventureSave, opts: CreateRunOptions): RunState => {
   const fighter = save.selectedFighter;
   const rng = createRng(opts.seed);
   const loadout = startingLoadout(level, save, opts.features, () => rng.next());
@@ -769,7 +789,10 @@ const startFoe = (d: Draft) => {
 
 // ─── Reducer ────────────────────────────────────────────────────────────────
 
-export const runReducer = (state: RunState, action: RunAction): RunState => {
+export const runReducer = (state: RunState, action: RunAction): RunState =>
+  action.type === 'CLEAR_EVENTS' ? reduceRun(state, action) : withFoeDice(state.foeRng ?? state.rng, () => reduceRun(state, action));
+
+const reduceRun = (state: RunState, action: RunAction): RunState => {
   if (action.type === 'CLEAR_EVENTS') {
     return { ...state, events: state.events.filter(e => e.id > action.upTo) };
   }

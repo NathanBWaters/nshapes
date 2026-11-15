@@ -70,6 +70,15 @@ NShapes combines the classic SET card matching game with roguelike progression m
 
 * No timer, no score targets—continuous endless gameplay.
 
+## Analytics
+
+> **Full documentation:** [docs/analytics.md](./docs/analytics.md)
+
+Every Adventure fight is sent to PostHog (`src/analytics/`) as one `fight_ended` event: a flat summary (level, fighter, outcome, stars, damage, dpm, sets, mistakes, weapons, app_version, env) plus the `recording` and starting `save` that **replay the fight exactly** (`src/adventure/engine/replay.ts`). Query with HogQL (filter `properties.env = 'prod'` for players); replay exported events with `FIGHTS=fights.json npm run fights:replay`.
+
+* **Keep the engine deterministic.** All randomness in a fight goes through `d._rng`; foe effects' `Math.random` is seeded by `withFoeDice` in `engine/run.ts`. `__tests__/adventureReplay.test.ts` replays a bot fight on every level and fails if anything leaks.
+* Anonymous install id only; no personal data.
+
 ## Weapon System
 
 > **Full documentation:** [specs/weapons-design.md](./specs/weapons-design.md)

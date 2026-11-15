@@ -8,7 +8,7 @@
  * every fresh event becomes a beat of a cascade that plays over the HUD and
  * the board, and the fight clock stands still while it plays.
  */
-import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Platform } from 'react-native';
 import Animated, { cancelAnimation, useSharedValue, useAnimatedStyle, withDelay, withRepeat, withSequence, withTiming, Easing } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,6 +28,7 @@ import { moodOf, playSounds, soundsFor } from '@/audio/fightAudio';
 import type { AdventureSave, EvolutionRecipe, LevelDef, PassiveId, RunEventType, RunState } from '../types';
 import type { WeaponBuilds } from '../data/weaponStats';
 import { createRun, runReducer, shopPrice, rerollCost, xpForLevel, type RunAction } from '../engine/run';
+import { FightRecorder, type FightTape } from '../engine/replay';
 import { challengeProgress } from '../engine/challenges';
 import { GearChips, gearModifiers, hasGearChips } from './GearChips';
 import { MECHANICS } from '../data/mechanics';
@@ -55,10 +56,10 @@ interface Props {
   save: AdventureSave;
   seed: number;
   autoPlayer?: boolean;
-  onFinish: (run: RunState) => void;
+  onFinish: (run: RunState, tape: FightTape) => void;
   /** The player retreated or restarted: the fight as it stood */
-  onQuit: (run: RunState) => void;
-  onRestart: (run: RunState) => void;
+  onQuit: (run: RunState, tape: FightTape) => void;
+  onRestart: (run: RunState, tape: FightTape) => void;
   onCoachMarkSeen: (mechanicId: string) => void;
   /** Play the fight's effects (and hold the clock while they play). Off: numbers only, nothing waits. */
   effects?: boolean;
@@ -91,10 +92,21 @@ for (const m of Object.values(MECHANICS)) {
 const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish, onQuit, onRestart, onCoachMarkSeen, effects = true, onToggleEffects }) => {
   const insets = useSafeAreaInsets();
   const appActive = useAppActive();
-  const [run, dispatchRaw] = useReducer(runReducer, undefined, () => createRun(level, save, { seed }));
+  // The save the fight started from and every action sent to it: enough to replay the fight (engine/replay.ts)
+  const [startSave] = useState(save);
+  const [run, setRun] = useState(() => createRun(level, startSave, { seed }));
   const runRef = useRef(run);
   runRef.current = run;
-  const dispatch = useCallback((a: RunAction) => dispatchRaw(a), []);
+  const recorder = useRef(new FightRecorder(seed));
+  // Reduce here, synchronously, so each recorded action is paired with exactly the state it was applied to
+  const dispatch = useCallback((a: RunAction) => {
+    const before = runRef.current;
+    recorder.current.record(a, before);
+    const next = runReducer(before, a);
+    runRef.current = next;
+    if (next !== before) setRun(next);
+  }, []);
+  const recordingOf = useCallback((): FightTape => ({ recording: recorder.current.toJSON(), save: startSave }), [startSave]);
   const [paused, setPaused] = useState(false);
   const [hudHeight, setHudHeight] = useState(150);
   const [hintTrigger, setHintTrigger] = useState(0);
@@ -347,7 +359,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   useEffect(() => {
     // The last cascade plays out first
     if (!ended || fx.busy) return;
-    const t = setTimeout(() => onFinish(runRef.current), effects ? 900 : 1300);
+    const t = setTimeout(() => onFinish(runRef.current, recordingOf()), effects ? 900 : 1300);
     return () => clearTimeout(t);
   }, [ended, fx.busy]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -398,7 +410,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   const evolutionsUsed = Number.isFinite(run.evolutionCap) ? `${run.evolutionsTriggered}/${run.evolutionCap}` : `${run.evolutionsTriggered} so far`;
   /** Armed recipes a Catalyst could still start: one that is running cannot be triggered again until it ends */
   const idleArmed = run.armedRecipes.filter(id => !run.activeEvolutions.some(a => a.id === id)).length;
-  const leavePractice = () => { music.stop(); onFinish(runRef.current); };
+  const leavePractice = () => { music.stop(); onFinish(runRef.current, recordingOf()); };
 
   const movesChip = run.movesLeft !== null && (
     <View style={[st.stat, run.movesLeft <= 2 && st.statWarn]}>
@@ -779,7 +791,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
                 onPress={onToggleEffects}
               />
             )}
-            <Btn label={practice ? 'Start over' : 'Restart'} variant="secondary" onPress={() => { setPaused(false); onRestart(runRef.current); }} />
+            <Btn label={practice ? 'Start over' : 'Restart'} variant="secondary" onPress={() => { setPaused(false); onRestart(runRef.current, recordingOf()); }} />
             {practice ? (
               <>
                 <Btn testID="pause-done" label="Done practising" variant="secondary" onPress={() => { setPaused(false); leavePractice(); }} />
@@ -787,7 +799,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
               </>
             ) : (
               <>
-                <Btn label="Retreat to map" variant="secondary" onPress={() => { setPaused(false); music.stop(); onQuit(runRef.current); }} />
+                <Btn label="Retreat to map" variant="secondary" onPress={() => { setPaused(false); music.stop(); onQuit(runRef.current, recordingOf()); }} />
                 <Text style={st.panelHint}>Retreating forfeits this attempt, including the coins you've collected in it.</Text>
               </>
             )}
