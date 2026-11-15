@@ -1,7 +1,8 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Platform } from 'react-native';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { useSoundSetting } from '@/hooks/useSoundSetting';
+import { analyticsOptedOut, playerCode, setAnalyticsEnabled } from '@/analytics/posthog';
 import Icon from './Icon';
 
 interface OptionsMenuProps {
@@ -12,6 +13,37 @@ interface OptionsMenuProps {
 const OptionsMenu: React.FC<OptionsMenuProps> = ({ visible, onClose }) => {
   // Re-read each time the modal opens: the in-game menu may have changed it
   const [soundEnabled, handleToggleSound] = useSoundSetting(visible);
+  const [analyticsOn, setAnalyticsOn] = useState(() => !analyticsOptedOut());
+  const [copiedCode, setCopiedCode] = useState(false);
+
+  useEffect(() => {
+    if (visible) {
+      setAnalyticsOn(!analyticsOptedOut());
+      setCopiedCode(false);
+    }
+  }, [visible]);
+
+  const handleToggleAnalytics = () => {
+    const next = !analyticsOn;
+    setAnalyticsEnabled(next);
+    setAnalyticsOn(next);
+  };
+
+  const code = playerCode();
+
+  const handleCopyCode = async () => {
+    try {
+      if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(code);
+      } else {
+        const Clipboard = await import('expo-clipboard');
+        if (Clipboard?.setStringAsync) await Clipboard.setStringAsync(code);
+      }
+      setCopiedCode(true);
+    } catch {
+      /* clipboard may be blocked in unsecure context */
+    }
+  };
 
   return (
     <Modal
@@ -48,6 +80,45 @@ const OptionsMenu: React.FC<OptionsMenuProps> = ({ visible, onClose }) => {
                 ]}>
                   {soundEnabled ? 'ON' : 'OFF'}
                 </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.settingRow}>
+              <View style={styles.settingLabel}>
+                <Icon name="delapouite/chart" size={24} color={COLORS.slateCharcoal} />
+                <Text style={styles.settingText}>Gameplay Analytics</Text>
+              </View>
+              <TouchableOpacity
+                testID="options-analytics-toggle"
+                accessibilityRole="button"
+                accessibilityState={{ checked: analyticsOn }}
+                style={[
+                  styles.toggleButton,
+                  analyticsOn ? styles.toggleButtonOn : styles.toggleButtonOff,
+                ]}
+                onPress={handleToggleAnalytics}
+              >
+                <Text style={[
+                  styles.toggleButtonText,
+                  analyticsOn ? styles.toggleTextOn : styles.toggleTextOff,
+                ]}>
+                  {analyticsOn ? 'ON' : 'OFF'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={[styles.settingRow, { borderBottomWidth: 0 }]}>
+              <View>
+                <Text style={styles.settingText}>Player ID</Text>
+                <Text style={styles.playerCodeText} testID="options-player-code">{code}</Text>
+              </View>
+              <TouchableOpacity
+                testID="options-copy-player-code"
+                accessibilityRole="button"
+                style={[styles.toggleButton, styles.toggleButtonOff]}
+                onPress={handleCopyCode}
+              >
+                <Text style={styles.toggleTextOff}>{copiedCode ? 'COPIED' : 'COPY'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -121,6 +192,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: COLORS.deepOnyx,
+  },
+  playerCodeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: 'monospace',
+    color: COLORS.slateCharcoal,
+    marginTop: 2,
   },
   toggleButton: {
     paddingHorizontal: 20,

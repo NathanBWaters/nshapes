@@ -24,6 +24,8 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
 import type { AdventureSave, UpgradeDef } from '../types';
 import { BOUNTIES } from '../data/bounties';
 import { summarize, type BattleRecord } from '../history';
+import { analyticsOptedOut, setAnalyticsEnabled } from '@/analytics/posthog';
+import type { FunRating, FunTag } from '@/analytics/fightEvent';
 import { FIGHTERS } from '../data/fighters';
 import { getPassive } from '../data/passives';
 import { MAX_TUNING_TIER, MAX_WEAPON_LEVEL, TUNING_MULTIPLIERS, formatStat, weaponStatLines } from '../data/weaponStats';
@@ -92,6 +94,7 @@ interface Props {
   /** Every battle fought, oldest first */
   history?: readonly BattleRecord[];
   onChange: (save: AdventureSave) => void;
+  onRateBattle?: (battle: BattleRecord, rating: FunRating | null, tags: FunTag[]) => void;
   onClose: () => void;
   /** Open straight on this section (its back button still leads to the menu) */
   initialTab?: CampTab;
@@ -106,11 +109,12 @@ const armoryWeapons = (save: AdventureSave): Weapon[] =>
 /** Workshop items that change the loadout itself, listed first. */
 const LOADOUT_UPGRADES = ['charm_belt', 'tarot_deck', 'evolution_lab'];
 
-const Camp: React.FC<Props> = ({ save, history = NO_BATTLES, onChange, onClose, initialTab }) => {
+const Camp: React.FC<Props> = ({ save, history = NO_BATTLES, onChange, onRateBattle, onClose, initialTab }) => {
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
   /** The open section; null is the menu */
   const [tab, setTab] = useState<CampTab | null>(initialTab ?? null);
+  const [analyticsOn, setAnalyticsOn] = useState(() => !analyticsOptedOut());
   const [treeFighter, setTreeFighter] = useState<CharacterName | null>(null);
   const [reactions, setReactions] = useState<Partial<Record<CharacterName, FighterReactionEvent>>>({});
   const [armoryTapCounts, setArmoryTapCounts] = useState<Record<string, number>>({});
@@ -305,6 +309,20 @@ const Camp: React.FC<Props> = ({ save, history = NO_BATTLES, onChange, onClose, 
                   style={{ flex: 1 }}
                 />
               )}
+              <Btn
+                testID="camp-toggle-analytics"
+                small
+                variant="secondary"
+                icon="delapouite/chart"
+                label={analyticsOn ? 'Analytics: on' : 'Analytics: off'}
+                onPress={() => {
+                  sfx('click');
+                  const next = !analyticsOn;
+                  setAnalyticsEnabled(next);
+                  setAnalyticsOn(next);
+                }}
+                style={{ flex: 1 }}
+              />
             </View>
             {!reducedMotion && (
               <Text style={st.blurb}>
@@ -314,7 +332,7 @@ const Camp: React.FC<Props> = ({ save, history = NO_BATTLES, onChange, onClose, 
           </>
         )}
 
-        {tab === 'history' && <BattleHistory history={history} />}
+        {tab === 'history' && <BattleHistory history={history} onRateBattle={onRateBattle} />}
 
         {tab === 'fighters' && treeFighter && (
           <SkillTree save={save} fighter={treeFighter} onChange={onChange} onBack={() => setTreeFighter(null)} />
@@ -676,7 +694,7 @@ const st = StyleSheet.create({
   menuTitle: { fontWeight: '900', fontSize: 17, color: INK, letterSpacing: 1, textTransform: 'uppercase' },
   menuSub: { fontSize: 12, color: INK, opacity: 0.8 },
   menuChevron: { fontSize: 26, fontWeight: '900', color: INK, opacity: 0.5 },
-  settings: { flexDirection: 'row', gap: 8 },
+  settings: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   dock: { borderTopWidth: 2, borderTopColor: INK, backgroundColor: '#3A2D21', paddingTop: 8 },
   dockBody: { paddingHorizontal: 12, maxWidth: 560, width: '100%', alignSelf: 'center' },
   dockClose: { position: 'absolute', top: -14, right: 12, zIndex: 2, width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: INK, backgroundColor: COLORS.canvasWhite, alignItems: 'center', justifyContent: 'center' },

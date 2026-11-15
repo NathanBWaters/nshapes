@@ -4,6 +4,7 @@
  * reading and writing the list lives in save.ts.
  */
 import type { CharacterName, Weapon } from '@/types';
+import type { FunRating, FunTag } from '@/analytics/fightEvent';
 import type { ArcanaId, FightLogEntry, LevelDef, PassiveId, RunState, RunStatus } from './types';
 import { getArmoryWeapon, resolveLegacyWeapon, understudyOf } from './data/armory';
 import { UNDERSTUDY_ID } from './data/adventureWeapons';
@@ -63,6 +64,11 @@ export interface BattleRecord {
   weapons: string[];
   /** The Power multiplier reached (data/weaponPower.ts); missing on battles from before Power */
   power?: number;
+  /** Stable id pairing this record with its single PostHog fight_ended event */
+  fightId?: string;
+  /** Player enjoyment feedback captured on Results or Camp History */
+  funRating?: FunRating;
+  funTags?: FunTag[];
   /** Compact fight log & build snapshot for FightReplay (retained for the newest REPLAY_LIMIT fights) */
   replay?: FightReplayData;
 }
@@ -134,7 +140,7 @@ export const buildReplayWeapons = (
 export const battleRecord = (
   level: LevelDef,
   run: RunState,
-  o: { at: number; stars?: number; coins?: number; left?: boolean }
+  o: { at: number; stars?: number; coins?: number; left?: boolean; fightId?: string }
 ): BattleRecord => ({
   at: o.at,
   levelId: level.id,
@@ -153,6 +159,7 @@ export const battleRecord = (
   evolutions: run.evolutionsTriggered,
   weapons: run.weapons.map(w => w.id),
   power: Math.round(powerMultiplier(run.power ?? 0) * 10) / 10,
+  ...(o.fightId ? { fightId: o.fightId } : {}),
   ...(run.log.length > 1 ? { replay: fightReplayOf(run) } : {}),
 });
 
@@ -183,6 +190,27 @@ export const wasFought = (run: Pick<RunState, 'matches' | 'mistakes'>): boolean 
 /** Newest last. Drops the oldest once the list is full, and caps stored replays at REPLAY_LIMIT. */
 export const withBattle = (history: readonly BattleRecord[], record: BattleRecord): BattleRecord[] =>
   trimReplays([...history, record].slice(-HISTORY_LIMIT), REPLAY_LIMIT);
+
+/** Updates fun rating & optional reason tags on a stored battle record. */
+export const withBattleFeedback = (
+  history: readonly BattleRecord[],
+  match: { fightId?: string; at: number; levelId: string },
+  feedback: { funRating: FunRating | null; funTags: FunTag[] }
+): BattleRecord[] => {
+  let changed = false;
+  const next = history.map(b => {
+    const matched = match.fightId && b.fightId ? b.fightId === match.fightId : b.at === match.at && b.levelId === match.levelId;
+    if (!matched) return b;
+    changed = true;
+    const { funRating: _r, funTags: _t, ...rest } = b;
+    return {
+      ...rest,
+      ...(feedback.funRating ? { funRating: feedback.funRating } : {}),
+      ...(feedback.funRating && feedback.funTags.length > 0 ? { funTags: feedback.funTags } : {}),
+    };
+  });
+  return changed ? next : [...history];
+};
 
 /** The best damage per minute on this level so far, or null if it has not been fought. */
 export const bestDpmOn = (history: readonly BattleRecord[], levelId: string): number | null => {
@@ -261,9 +289,26 @@ export const isBattleRecord = (v: unknown): v is BattleRecord =>
 /** Validate a stored record, stripping any corrupted `replay` snapshot without losing the summary entry. */
 export const sanitizeBattleRecord = (v: unknown): BattleRecord | null => {
   if (!isCoreRecord(v)) return null;
-  if (v.replay !== undefined && !isFightReplayData(v.replay)) {
-    const { replay: _drop, ...rest } = v as BattleRecord;
-    return rest;
+  const rec = v as BattleRecord;
+  let clean: BattleRecord = rec;
+  if (rec.replay !== undefined && !isFightReplayData(rec.replay)) {
+    const { replay: _drop, ...rest } = rec;
+    clean = rest;
   }
-  return v as BattleRecord;
+  const rawFun = (clean as unknown as Record<string, unknown>).funRating;
+  const rawTags = (clean as unknown as Record<string, unknown>).funTags;
+  const rawFightId = (clean as unknown as Record<string, unknown>).fightId;
+  if (rawFun !== undefined && rawFun !== 'up' && rawFun !== 'down') {
+    const { funRating: _dropFun, ...rest } = clean;
+    clean = rest;
+  }
+  if (rawTags !== undefined && (!Array.isArray(rawTags) || !rawTags.every(t => typeof t === 'string'))) {
+    const { funTags: _dropTags, ...rest } = clean;
+    clean = rest;
+  }
+  if (rawFightId !== undefined && typeof rawFightId !== 'string') {
+    const { fightId: _dropId, ...rest } = clean;
+    clean = rest;
+  }
+  return clean;
 };

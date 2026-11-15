@@ -7,7 +7,9 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, useWindowDimensions } from 'react-native';
 import Svg, { Line, Path, Rect, Text as SvgText } from 'react-native-svg';
 import Icon from '@/components/Icon';
+import RoundFunPrompt from '@/components/RoundFunPrompt';
 import { WeaponAvatar } from '@/components/weapons';
+import type { FunRating, FunTag } from '@/analytics/fightEvent';
 import { COLORS } from '@/utils/colors';
 import { sfx } from '@/audio';
 import { FIGHTERS } from '../data/fighters';
@@ -58,9 +60,10 @@ interface Props {
   history: readonly BattleRecord[];
   /** "Now", for the dates (injectable so they can be tested) */
   now?: number;
+  onRateBattle?: (battle: BattleRecord, rating: FunRating | null, tags: FunTag[]) => void;
 }
 
-const BattleHistory: React.FC<Props> = ({ history, now }) => {
+const BattleHistory: React.FC<Props> = ({ history, now, onRateBattle }) => {
   const { width } = useWindowDimensions();
   const [shown, setShown] = useState(PAGE);
   const [open, setOpen] = useState<string | null>(null);
@@ -228,6 +231,19 @@ const BattleHistory: React.FC<Props> = ({ history, now }) => {
                     ) : (
                       <StarRow stars={b.stars} size={14} />
                     )}
+                    {b.funRating && (
+                      <View
+                        testID="history-fun-badge"
+                        style={[st.funBadge, b.funRating === 'up' ? st.funBadgeUp : st.funBadgeDown]}
+                      >
+                        <Icon
+                          name={b.funRating === 'up' ? 'delapouite/thumb-up' : 'delapouite/thumb-down'}
+                          size={11}
+                          color={COLORS.canvasWhite}
+                          noShadow
+                        />
+                      </View>
+                    )}
                     {heldWeapons.length > 0 && (
                       <View style={st.weaponIcons}>
                         {heldWeapons.slice(0, 5).map(w => (
@@ -289,6 +305,17 @@ const BattleHistory: React.FC<Props> = ({ history, now }) => {
                 <Text style={st.sub}>
                   {b.fighter}{weapons.length > 0 ? ` with ${weapons.join(', ')}` : ', no weapons'}
                 </Text>
+
+                {onRateBattle && (
+                  <RoundFunPrompt
+                    compact
+                    title="Was this round fun?"
+                    rating={b.funRating ?? null}
+                    tags={b.funTags ?? []}
+                    onChange={(rating, tags) => onRateBattle(b, rating, tags)}
+                    testIDPrefix="history-fun"
+                  />
+                )}
 
                 {hasReplay ? (
                   <Btn
@@ -394,6 +421,9 @@ const st = StyleSheet.create({
   sub: { fontSize: 11, color: INK, opacity: 0.75 },
   badge: { alignSelf: 'flex-start', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 1 },
   badgeText: { fontSize: 9, fontWeight: '900', letterSpacing: 1 },
+  funBadge: { borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2 },
+  funBadgeUp: { backgroundColor: COLORS.logicTeal },
+  funBadgeDown: { backgroundColor: COLORS.impactOrange },
   score: { alignItems: 'flex-end' },
   dpm: { fontWeight: '900', fontSize: 22, color: INK, fontVariant: ['tabular-nums'] },
   dpmLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 0.5, color: INK, opacity: 0.65, textTransform: 'uppercase' },

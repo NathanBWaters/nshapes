@@ -1,0 +1,335 @@
+{
+  "projectId": 738615,
+  "generatedAt": "2026-11-15T19:28:02.017Z",
+  "eventSchema": {
+    "coreEvents": [
+      "app_opened",
+      "fight_ended"
+    ],
+    "rareRetrospectiveEvent": "fight_rated",
+    "oneEventPerGameRule": true
+  },
+  "dashboards": [
+    {
+      "id": "nshapes-executive-pulse",
+      "name": "NShapes · 1. Executive Pulse & Retention",
+      "description": "Daily active players, single-event fight volume, win/fun/abandon rates, session depth, D1/D7 retention cohorts, and player journey stages.",
+      "tags": [
+        "nshapes",
+        "game-analytics",
+        "executive"
+      ],
+      "tiles": [
+        {
+          "id": "exec-daily-pulse",
+          "name": "Daily Active Players, Fights & Fun Rate (30d)",
+          "category": "overview",
+          "description": "Top-line DAU, fight_ended count, decided win rate, abandon rate, and thumbs-up enjoyment rate.",
+          "hogql": "SELECT\n  toDate(timestamp) AS day,\n  uniqExact(distinct_id) AS dau,\n  count() AS fights,\n  round(countIf(properties.outcome IN ('won', 'survived')) / nullIf(countIf(properties.outcome IN ('won', 'survived', 'lost')), 0) * 100, 1) AS win_pct,\n  round(countIf(properties.outcome = 'left') / count() * 100, 1) AS abandon_pct,\n  round(countIf(properties.fun_rating = 'up') / nullIf(countIf(properties.fun_rating IN ('up', 'down')), 0) * 100, 1) AS fun_pct\nFROM events\nWHERE event = 'fight_ended' AND timestamp >= now() - INTERVAL 30 DAY\nGROUP BY day\nORDER BY day DESC",
+          "query": {
+            "kind": "DataTableNode",
+            "full": true,
+            "source": {
+              "kind": "HogQLQuery",
+              "query": "SELECT\n  toDate(timestamp) AS day,\n  uniqExact(distinct_id) AS dau,\n  count() AS fights,\n  round(countIf(properties.outcome IN ('won', 'survived')) / nullIf(countIf(properties.outcome IN ('won', 'survived', 'lost')), 0) * 100, 1) AS win_pct,\n  round(countIf(properties.outcome = 'left') / count() * 100, 1) AS abandon_pct,\n  round(countIf(properties.fun_rating = 'up') / nullIf(countIf(properties.fun_rating IN ('up', 'down')), 0) * 100, 1) AS fun_pct\nFROM events\nWHERE event = 'fight_ended' AND timestamp >= now() - INTERVAL 30 DAY\nGROUP BY day\nORDER BY day DESC"
+            }
+          }
+        },
+        {
+          "id": "exec-cohort-retention",
+          "name": "Install Cohort D1 / D3 / D7 / D14 Retention",
+          "category": "overview",
+          "description": "Classic day-offset retention grouped by each player’s first_seen_date person property.",
+          "hogql": "SELECT\n  toDate(person.properties.first_seen_date) AS cohort_date,\n  uniqExact(distinct_id) AS cohort_size,\n  round(uniqExactIf(distinct_id, toInt32OrZero(toString(properties.days_since_install)) = 1) / nullIf(uniqExact(distinct_id), 0) * 100, 1) AS d1_pct,\n  round(uniqExactIf(distinct_id, toInt32OrZero(toString(properties.days_since_install)) = 3) / nullIf(uniqExact(distinct_id), 0) * 100, 1) AS d3_pct,\n  round(uniqExactIf(distinct_id, toInt32OrZero(toString(properties.days_since_install)) = 7) / nullIf(uniqExact(distinct_id), 0) * 100, 1) AS d7_pct,\n  round(uniqExactIf(distinct_id, toInt32OrZero(toString(properties.days_since_install)) = 14) / nullIf(uniqExact(distinct_id), 0) * 100, 1) AS d14_pct\nFROM events\nWHERE event IN ('app_opened', 'fight_ended')\n  AND person.properties.first_seen_date IS NOT NULL\n  AND timestamp >= now() - INTERVAL 45 DAY\nGROUP BY cohort_date\nORDER BY cohort_date DESC",
+          "query": {
+            "kind": "DataTableNode",
+            "full": true,
+            "source": {
+              "kind": "HogQLQuery",
+              "query": "SELECT\n  toDate(person.properties.first_seen_date) AS cohort_date,\n  uniqExact(distinct_id) AS cohort_size,\n  round(uniqExactIf(distinct_id, toInt32OrZero(toString(properties.days_since_install)) = 1) / nullIf(uniqExact(distinct_id), 0) * 100, 1) AS d1_pct,\n  round(uniqExactIf(distinct_id, toInt32OrZero(toString(properties.days_since_install)) = 3) / nullIf(uniqExact(distinct_id), 0) * 100, 1) AS d3_pct,\n  round(uniqExactIf(distinct_id, toInt32OrZero(toString(properties.days_since_install)) = 7) / nullIf(uniqExact(distinct_id), 0) * 100, 1) AS d7_pct,\n  round(uniqExactIf(distinct_id, toInt32OrZero(toString(properties.days_since_install)) = 14) / nullIf(uniqExact(distinct_id), 0) * 100, 1) AS d14_pct\nFROM events\nWHERE event IN ('app_opened', 'fight_ended')\n  AND person.properties.first_seen_date IS NOT NULL\n  AND timestamp >= now() - INTERVAL 45 DAY\nGROUP BY cohort_date\nORDER BY cohort_date DESC"
+            }
+          }
+        },
+        {
+          "id": "exec-journey-stages",
+          "name": "Player Lifecycle Journey Breakdown",
+          "category": "overview",
+          "description": "Current distribution of players across NShapes progression stages (onboarding -> veteran / free_play_explorer).",
+          "hogql": "SELECT\n  coalesce(toString(person.properties.journey_stage), 'unknown') AS journey_stage,\n  uniqExact(distinct_id) AS players,\n  count() AS fights,\n  round(countIf(properties.fun_rating = 'up') / nullIf(countIf(properties.fun_rating IN ('up', 'down')), 0) * 100, 1) AS fun_pct\nFROM events\nWHERE event = 'fight_ended' AND timestamp >= now() - INTERVAL 30 DAY\nGROUP BY journey_stage\nORDER BY players DESC",
+          "query": {
+            "kind": "DataTableNode",
+            "full": true,
+            "source": {
+              "kind": "HogQLQuery",
+              "query": "SELECT\n  coalesce(toString(person.properties.journey_stage), 'unknown') AS journey_stage,\n  uniqExact(distinct_id) AS players,\n  count() AS fights,\n  round(countIf(properties.fun_rating = 'up') / nullIf(countIf(properties.fun_rating IN ('up', 'down')), 0) * 100, 1) AS fun_pct\nFROM events\nWHERE event = 'fight_ended' AND timestamp >= now() - INTERVAL 30 DAY\nGROUP BY journey_stage\nORDER BY players DESC"
+            }
+          }
+        },
+        {
+          "id": "exec-mode-mix",
+          "name": "Mode Split (Adventure vs Free Play vs Classic)",
+          "category": "overview",
+          "description": "Volume, session duration, and fun sentiment by game mode.",
+          "hogql": "SELECT\n  coalesce(toString(properties.mode), 'adventure') AS mode,\n  uniqExact(distinct_id) AS players,\n  count() AS fights,\n  round(avg(toFloat64OrZero(toString(properties.duration_ms))) / 1000, 1) AS avg_sec,\n  round(countIf(properties.fun_rating = 'up') / nullIf(countIf(properties.fun_rating IN ('up', 'down')), 0) * 100, 1) AS fun_pct\nFROM events\nWHERE event = 'fight_ended' AND timestamp >= now() - INTERVAL 30 DAY\nGROUP BY mode\nORDER BY fights DESC",
+          "query": {
+            "kind": "DataTableNode",
+            "full": true,
+            "source": {
+              "kind": "HogQLQuery",
+              "query": "SELECT\n  coalesce(toString(properties.mode), 'adventure') AS mode,\n  uniqExact(distinct_id) AS players,\n  count() AS fights,\n  round(avg(toFloat64OrZero(toString(properties.duration_ms))) / 1000, 1) AS avg_sec,\n  round(countIf(properties.fun_rating = 'up') / nullIf(countIf(properties.fun_rating IN ('up', 'down')), 0) * 100, 1) AS fun_pct\nFROM events\nWHERE event = 'fight_ended' AND timestamp >= now() - INTERVAL 30 DAY\nGROUP BY mode\nORDER BY fights DESC"
+            }
+          }
+        },
+        {
+          "id": "exec-session-depth",
+          "name": "Fights Per Session & Rage-Quit Rate",
+          "category": "overview",
+          "description": "Tracks session engagement depth and first-session vs returning-session stamina.",
+          "hogql": "SELECT\n  coalesce(toString(properties.platform), 'unknown') AS platform,\n  uniqExact(toString(properties.$session_id)) AS sessions,\n  round(count() / nullIf(uniqExact(toString(properties.$session_id)), 0), 2) AS avg_fights_per_session,\n  round(countIf(properties.outcome = 'left') / count() * 100, 1) AS abandon_pct,\n  round(median(toFloat64OrZero(toString(properties.median_find_ms))) / 1000, 2) AS median_find_sec\nFROM events\nWHERE event = 'fight_ended' AND timestamp >= now() - INTERVAL 30 DAY\nGROUP BY platform\nORDER BY sessions DESC",
+          "query": {
+            "kind": "DataTableNode",
+            "full": true,
+            "source": {
+              "kind": "HogQLQuery",
+              "query": "SELECT\n  coalesce(toString(properties.platform), 'unknown') AS platform,\n  uniqExact(toString(properties.$session_id)) AS sessions,\n  round(count() / nullIf(uniqExact(toString(properties.$session_id)), 0), 2) AS avg_fights_per_session,\n  round(countIf(properties.outcome = 'left') / count() * 100, 1) AS abandon_pct,\n  round(median(toFloat64OrZero(toString(properties.median_find_ms))) / 1000, 2) AS median_find_sec\nFROM events\nWHERE event = 'fight_ended' AND timestamp >= now() - INTERVAL 30 DAY\nGROUP BY platform\nORDER BY sessions DESC"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "nshapes-campaign-funnel",
+      "name": "NShapes · 2. Campaign Funnel & Churn Walls",
+      "description": "Level-by-level progression funnel, attempts per clear, difficulty spikes, unused-hint deaths, and composite churn-wall severity.",
+      "tags": [
+        "nshapes",
+        "game-analytics",
+        "funnel",
+        "levels"
+      ],
+      "tiles": [
+        {
+          "id": "funnel-level-progression",
+          "name": "Adventure Campaign Progression Funnel",
+          "category": "funnel",
+          "description": "Players reached vs cleared, win rate, attempts per clear, and enjoyment per campaign level.",
+          "hogql": "SELECT\n  toInt32OrZero(toString(properties.level_order)) AS level_order,\n  toString(properties.level_id) AS level_id,\n  any(toString(properties.level_name)) AS level_name,\n  uniqExact(distinct_id) AS players_reached,\n  uniqExactIf(distinct_id, properties.outcome IN ('won', 'survived')) AS players_cleared,\n  count() AS attempts,\n  round(countIf(properties.outcome IN ('won', 'survived')) / nullIf(countIf(properties.outcome IN ('won', 'survived', 'lost')), 0) * 100, 1) AS win_pct,\n  round(countIf(properties.outcome = 'left') / count() * 100, 1) AS abandon_pct,\n  round(countIf(properties.fun_rating = 'up') / nullIf(countIf(properties.fun_rating IN ('up', 'down')), 0) * 100, 1) AS fun_pct\nFROM events\nWHERE event = 'fight_ended'\n  AND coalesce(toString(properties.mode), 'adventure') = 'adventure'\n  AND toBool(properties.practice) = false\nGROUP BY level_order, level_id\nORDER BY level_order ASC, level_id ASC",
+          "query": {
+            "kind": "DataTableNode",
+            "full": true,
+            "source": {
+              "kind": "HogQLQuery",
+              "query": "SELECT\n  toInt32OrZero(toString(properties.level_order)) AS level_order,\n  toString(properties.level_id) AS level_id,\n  any(toString(properties.level_name)) AS level_name,\n  uniqExact(distinct_id) AS players_reached,\n  uniqExactIf(distinct_id, properties.outcome IN ('won', 'survived')) AS players_cleared,\n  count() AS attempts,\n  round(countIf(properties.outcome IN ('won', 'survived')) / nullIf(countIf(properties.outcome IN ('won', 'survived', 'lost')), 0) * 100, 1) AS win_pct,\n  round(countIf(properties.outcome = 'left') / count() * 100, 1) AS abandon_pct,\n  round(countIf(properties.fun_rating = 'up') / nullIf(countIf(properties.fun_rating IN ('up', 'down')), 0) * 100, 1) AS fun_pct\nFROM events\nWHERE event = 'fight_ended'\n  AND coalesce(toString(properties.mode), 'adventure') = 'adventure'\n  AND toBool(properties.practice) = false\nGROUP BY level_order, level_id\nORDER BY level_order ASC, level_id ASC"
+            }
+          }
+        },
+        {
+          "id": "funnel-churn-walls",
+          "name": "Top Churn Walls & Unused-Hint Deaths",
+          "category": "funnel",
+          "description": "Levels ranked by failure + abandon + unused hints rate to spot frustrating or unclear encounters.",
+          "hogql": "SELECT\n  toString(properties.level_id) AS level_id,\n  any(toString(properties.level_name)) AS level_name,\n  count() AS attempts,\n  countIf(properties.outcome = 'lost') AS losses,\n  countIf(properties.outcome = 'left') AS abandons,\n  round(countIf(properties.died_with_hints = true) / nullIf(countIf(properties.outcome = 'lost'), 0) * 100, 1) AS died_with_hints_pct,\n  round(avg(toFloat64OrZero(toString(properties.foe_hp_pct_left))) * 100, 1) AS avg_foe_hp_left_pct,\n  round(median(toFloat64OrZero(toString(properties.max_drought_ms))) / 1000, 1) AS median_drought_sec\nFROM events\nWHERE event = 'fight_ended'\n  AND coalesce(toString(properties.mode), 'adventure') = 'adventure'\nGROUP BY level_id\nHAVING attempts >= 5\nORDER BY abandons DESC, losses DESC",
+          "query": {
+            "kind": "DataTableNode",
+            "full": true,
+            "source": {
+              "kind": "HogQLQuery",
+              "query": "SELECT\n  toString(properties.level_id) AS level_id,\n  any(toString(properties.level_name)) AS level_name,\n  count() AS attempts,\n  countIf(properties.outcome = 'lost') AS losses,\n  countIf(properties.outcome = 'left') AS abandons,\n  round(countIf(properties.died_with_hints = true) / nullIf(countIf(properties.outcome = 'lost'), 0) * 100, 1) AS died_with_hints_pct,\n  round(avg(toFloat64OrZero(toString(properties.foe_hp_pct_left))) * 100, 1) AS avg_foe_hp_left_pct,\n  round(median(toFloat64OrZero(toString(properties.max_drought_ms))) / 1000, 1) AS median_drought_sec\nFROM events\nWHERE event = 'fight_ended'\n  AND coalesce(toString(properties.mode), 'adventure') = 'adventure'\nGROUP BY level_id\nHAVING attempts >= 5\nORDER BY abandons DESC, losses DESC"
+            }
+          }
+        },
+        {
+          "id": "funnel-attempt-curve",
+          "name": "Win Rate by Attempt Number (Learning Curve)",
+          "category": "funnel",
+          "description": "Distinguishes fair learnable challenges (win% rises by attempt 2-3) from flat RNG walls.",
+          "hogql": "SELECT\n  least(toInt32OrZero(toString(properties.attempt)), 5) AS attempt_bucket,\n  count() AS fights,\n  round(countIf(properties.outcome IN ('won', 'survived')) / nullIf(countIf(properties.outcome IN ('won', 'survived', 'lost')), 0) * 100, 1) AS win_pct,\n  round(countIf(properties.fun_rating = 'up') / nullIf(countIf(properties.fun_rating IN ('up', 'down')), 0) * 100, 1) AS fun_pct\nFROM events\nWHERE event = 'fight_ended'\n  AND coalesce(toString(properties.mode), 'adventure') = 'adventure'\nGROUP BY attempt_bucket\nORDER BY attempt_bucket ASC",
+          "query": {
+            "kind": "DataTableNode",
+            "full": true,
+            "source": {
+              "kind": "HogQLQuery",
+              "query": "SELECT\n  least(toInt32OrZero(toString(properties.attempt)), 5) AS attempt_bucket,\n  count() AS fights,\n  round(countIf(properties.outcome IN ('won', 'survived')) / nullIf(countIf(properties.outcome IN ('won', 'survived', 'lost')), 0) * 100, 1) AS win_pct,\n  round(countIf(properties.fun_rating = 'up') / nullIf(countIf(properties.fun_rating IN ('up', 'down')), 0) * 100, 1) AS fun_pct\nFROM events\nWHERE event = 'fight_ended'\n  AND coalesce(toString(properties.mode), 'adventure') = 'adventure'\nGROUP BY attempt_bucket\nORDER BY attempt_bucket ASC"
+            }
+          }
+        },
+        {
+          "id": "funnel-pacing-and-drought",
+          "name": "Find-Time Pacing & Board Drought by World",
+          "category": "funnel",
+          "description": "Measures cognitive load (time between Sets) across Adventure worlds.",
+          "hogql": "SELECT\n  toInt32OrZero(toString(properties.world)) AS world,\n  count() AS fights,\n  round(median(toFloat64OrZero(toString(properties.median_find_ms))) / 1000, 2) AS median_find_sec,\n  round(quantileExact(0.9)(toFloat64OrZero(toString(properties.max_drought_ms))) / 1000, 1) AS p90_drought_sec,\n  round(avg(toFloat64OrZero(toString(properties.mistakes))), 2) AS avg_mistakes\nFROM events\nWHERE event = 'fight_ended' AND properties.world IS NOT NULL\nGROUP BY world\nORDER BY world ASC",
+          "query": {
+            "kind": "DataTableNode",
+            "full": true,
+            "source": {
+              "kind": "HogQLQuery",
+              "query": "SELECT\n  toInt32OrZero(toString(properties.world)) AS world,\n  count() AS fights,\n  round(median(toFloat64OrZero(toString(properties.median_find_ms))) / 1000, 2) AS median_find_sec,\n  round(quantileExact(0.9)(toFloat64OrZero(toString(properties.max_drought_ms))) / 1000, 1) AS p90_drought_sec,\n  round(avg(toFloat64OrZero(toString(properties.mistakes))), 2) AS avg_mistakes\nFROM events\nWHERE event = 'fight_ended' AND properties.world IS NOT NULL\nGROUP BY world\nORDER BY world ASC"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "nshapes-meta-balance",
+      "name": "NShapes · 3. Weapon, Fighter & Evolution Balance",
+      "description": "Simpson’s-Paradox-adjusted win delta, offer-vs-pick rates, DPM, triggered damage share, Fighter parity, Evolution frequency, and Arcana meta.",
+      "tags": [
+        "nshapes",
+        "game-analytics",
+        "balance",
+        "meta"
+      ],
+      "tiles": [
+        {
+          "id": "balance-weapon-simpson",
+          "name": "Weapon Balance · Level-Adjusted Win Delta & Fun",
+          "category": "balance",
+          "description": "Controls for each level’s baseline win rate so late-game weapons aren’t penalized by harder worlds.",
+          "hogql": "WITH level_baselines AS (\n  SELECT\n    toString(properties.level_id) AS lvl,\n    countIf(properties.outcome IN ('won', 'survived')) / nullIf(countIf(properties.outcome IN ('won', 'survived', 'lost')), 0) AS lvl_win_rate\n  FROM events\n  WHERE event = 'fight_ended'\n  GROUP BY lvl\n)\nSELECT\n  trim(BOTH '\"' FROM weapon_id) AS weapon_id,\n  count() AS fights_held,\n  round(countIf(properties.outcome IN ('won', 'survived')) / nullIf(countIf(properties.outcome IN ('won', 'survived', 'lost')), 0) * 100, 1) AS raw_win_pct,\n  round(avg(if(properties.outcome IN ('won', 'survived'), 1.0, 0.0) - lb.lvl_win_rate) * 100, 1) AS adj_win_delta_pct,\n  round(avg(toFloat64OrZero(toString(properties.dpm))), 0) AS avg_dpm,\n  round(avg(toFloat64OrZero(toString(properties.triggered_damage_share))) * 100, 1) AS triggered_dmg_pct,\n  round(countIf(properties.fun_rating = 'up') / nullIf(countIf(properties.fun_rating IN ('up', 'down')), 0) * 100, 1) AS fun_pct\nFROM events\nARRAY JOIN JSONExtractArrayRaw(coalesce(toString(properties.weapons), '[]')) AS weapon_id\nLEFT JOIN level_baselines lb ON toString(properties.level_id) = lb.lvl\nWHERE event = 'fight_ended' AND properties.outcome IN ('won', 'survived', 'lost')\nGROUP BY weapon_id\nHAVING fights_held >= 5\nORDER BY adj_win_delta_pct DESC",
+          "query": {
+            "kind": "DataTableNode",
+            "full": true,
+            "source": {
+              "kind": "HogQLQuery",
+              "query": "WITH level_baselines AS (\n  SELECT\n    toString(properties.level_id) AS lvl,\n    countIf(properties.outcome IN ('won', 'survived')) / nullIf(countIf(properties.outcome IN ('won', 'survived', 'lost')), 0) AS lvl_win_rate\n  FROM events\n  WHERE event = 'fight_ended'\n  GROUP BY lvl\n)\nSELECT\n  trim(BOTH '\"' FROM weapon_id) AS weapon_id,\n  count() AS fights_held,\n  round(countIf(properties.outcome IN ('won', 'survived')) / nullIf(countIf(properties.outcome IN ('won', 'survived', 'lost')), 0) * 100, 1) AS raw_win_pct,\n  round(avg(if(properties.outcome IN ('won', 'survived'), 1.0, 0.0) - lb.lvl_win_rate) * 100, 1) AS adj_win_delta_pct,\n  round(avg(toFloat64OrZero(toString(properties.dpm))), 0) AS avg_dpm,\n  round(avg(toFloat64OrZero(toString(properties.triggered_damage_share))) * 100, 1) AS triggered_dmg_pct,\n  round(countIf(properties.fun_rating = 'up') / nullIf(countIf(properties.fun_rating IN ('up', 'down')), 0) * 100, 1) AS fun_pct\nFROM events\nARRAY JOIN JSONExtractArrayRaw(coalesce(toString(properties.weapons), '[]')) AS weapon_id\nLEFT JOIN level_baselines lb ON toString(properties.level_id) = lb.lvl\nWHERE event = 'fight_ended' AND properties.outcome IN ('won', 'survived', 'lost')\nGROUP BY weapon_id\nHAVING fights_held >= 5\nORDER BY adj_win_delta_pct DESC"
+            }
+          }
+        },
+        {
+          "id": "balance-offer-pick-rate",
+          "name": "Weapon Offer-vs-Pick & Shop Buy Rate",
+          "category": "balance",
+          "description": "Measures true player desire: how often offered weapons are picked on level-up or bought in shops.",
+          "hogql": "WITH offers AS (\n  SELECT trim(BOTH '\"' FROM w) AS weapon_id, count() AS offered\n  FROM events\n  ARRAY JOIN JSONExtractArrayRaw(coalesce(toString(properties.weapons_offered), '[]')) AS w\n  WHERE event = 'fight_ended'\n  GROUP BY weapon_id\n),\nchosen AS (\n  SELECT trim(BOTH '\"' FROM w) AS weapon_id, count() AS chosen_cnt\n  FROM events\n  ARRAY JOIN arrayConcat(\n    JSONExtractArrayRaw(coalesce(toString(properties.weapons_picked), '[]')),\n    JSONExtractArrayRaw(coalesce(toString(properties.weapons_bought), '[]'))\n  ) AS w\n  WHERE event = 'fight_ended'\n  GROUP BY weapon_id\n)\nSELECT\n  o.weapon_id AS weapon_id,\n  o.offered AS times_offered,\n  coalesce(c.chosen_cnt, 0) AS times_chosen,\n  round(coalesce(c.chosen_cnt, 0) / nullIf(o.offered, 0) * 100, 1) AS pick_rate_pct\nFROM offers o\nLEFT JOIN chosen c ON o.weapon_id = c.weapon_id\nWHERE o.offered >= 5\nORDER BY pick_rate_pct DESC",
+          "query": {
+            "kind": "DataTableNode",
+            "full": true,
+            "source": {
+              "kind": "HogQLQuery",
+              "query": "WITH offers AS (\n  SELECT trim(BOTH '\"' FROM w) AS weapon_id, count() AS offered\n  FROM events\n  ARRAY JOIN JSONExtractArrayRaw(coalesce(toString(properties.weapons_offered), '[]')) AS w\n  WHERE event = 'fight_ended'\n  GROUP BY weapon_id\n),\nchosen AS (\n  SELECT trim(BOTH '\"' FROM w) AS weapon_id, count() AS chosen_cnt\n  FROM events\n  ARRAY JOIN arrayConcat(\n    JSONExtractArrayRaw(coalesce(toString(properties.weapons_picked), '[]')),\n    JSONExtractArrayRaw(coalesce(toString(properties.weapons_bought), '[]'))\n  ) AS w\n  WHERE event = 'fight_ended'\n  GROUP BY weapon_id\n)\nSELECT\n  o.weapon_id AS weapon_id,\n  o.offered AS times_offered,\n  coalesce(c.chosen_cnt, 0) AS times_chosen,\n  round(coalesce(c.chosen_cnt, 0) / nullIf(o.offered, 0) * 100, 1) AS pick_rate_pct\nFROM offers o\nLEFT JOIN chosen c ON o.weapon_id = c.weapon_id\nWHERE o.offered >= 5\nORDER BY pick_rate_pct DESC"
+            }
+          }
+        },
+        {
+          "id": "balance-fighter-parity",
+          "name": "Fighter Parity (Pick Share, Win Delta & Fun)",
+          "category": "balance",
+          "description": "Compares win rate, DPM, mistakes, and enjoyment across playable fighters.",
+          "hogql": "SELECT\n  toString(properties.fighter) AS fighter,\n  count() AS fights,\n  round(countIf(properties.outcome IN ('won', 'survived')) / nullIf(countIf(properties.outcome IN ('won', 'survived', 'lost')), 0) * 100, 1) AS win_pct,\n  round(avg(toFloat64OrZero(toString(properties.dpm))), 0) AS avg_dpm,\n  round(avg(toFloat64OrZero(toString(properties.mistakes))), 2) AS avg_mistakes,\n  round(countIf(properties.fun_rating = 'up') / nullIf(countIf(properties.fun_rating IN ('up', 'down')), 0) * 100, 1) AS fun_pct\nFROM events\nWHERE event = 'fight_ended' AND properties.fighter IS NOT NULL\nGROUP BY fighter\nORDER BY fights DESC",
+          "query": {
+            "kind": "DataTableNode",
+            "full": true,
+            "source": {
+              "kind": "HogQLQuery",
+              "query": "SELECT\n  toString(properties.fighter) AS fighter,\n  count() AS fights,\n  round(countIf(properties.outcome IN ('won', 'survived')) / nullIf(countIf(properties.outcome IN ('won', 'survived', 'lost')), 0) * 100, 1) AS win_pct,\n  round(avg(toFloat64OrZero(toString(properties.dpm))), 0) AS avg_dpm,\n  round(avg(toFloat64OrZero(toString(properties.mistakes))), 2) AS avg_mistakes,\n  round(countIf(properties.fun_rating = 'up') / nullIf(countIf(properties.fun_rating IN ('up', 'down')), 0) * 100, 1) AS fun_pct\nFROM events\nWHERE event = 'fight_ended' AND properties.fighter IS NOT NULL\nGROUP BY fighter\nORDER BY fights DESC"
+            }
+          }
+        },
+        {
+          "id": "balance-evolutions",
+          "name": "Weapon Evolutions Forged & Impact",
+          "category": "balance",
+          "description": "How often each evolution recipe fires, its DPM, and how much fun players rate fights with it.",
+          "hogql": "SELECT\n  trim(BOTH '\"' FROM evo_id) AS evolution_id,\n  count() AS times_forged,\n  round(countIf(properties.outcome IN ('won', 'survived')) / nullIf(countIf(properties.outcome IN ('won', 'survived', 'lost')), 0) * 100, 1) AS win_pct,\n  round(avg(toFloat64OrZero(toString(properties.dpm))), 0) AS avg_dpm,\n  round(countIf(properties.fun_rating = 'up') / nullIf(countIf(properties.fun_rating IN ('up', 'down')), 0) * 100, 1) AS fun_pct\nFROM events\nARRAY JOIN JSONExtractArrayRaw(coalesce(toString(properties.evolutions_forged), '[]')) AS evo_id\nWHERE event = 'fight_ended'\nGROUP BY evolution_id\nORDER BY times_forged DESC",
+          "query": {
+            "kind": "DataTableNode",
+            "full": true,
+            "source": {
+              "kind": "HogQLQuery",
+              "query": "SELECT\n  trim(BOTH '\"' FROM evo_id) AS evolution_id,\n  count() AS times_forged,\n  round(countIf(properties.outcome IN ('won', 'survived')) / nullIf(countIf(properties.outcome IN ('won', 'survived', 'lost')), 0) * 100, 1) AS win_pct,\n  round(avg(toFloat64OrZero(toString(properties.dpm))), 0) AS avg_dpm,\n  round(countIf(properties.fun_rating = 'up') / nullIf(countIf(properties.fun_rating IN ('up', 'down')), 0) * 100, 1) AS fun_pct\nFROM events\nARRAY JOIN JSONExtractArrayRaw(coalesce(toString(properties.evolutions_forged), '[]')) AS evo_id\nWHERE event = 'fight_ended'\nGROUP BY evolution_id\nORDER BY times_forged DESC"
+            }
+          }
+        },
+        {
+          "id": "balance-arcana",
+          "name": "Arcana Adoption, Trade-Off Win Rate & Fun",
+          "category": "balance",
+          "description": "Evaluates whether tarot modifiers feel rewarding or too punishing.",
+          "hogql": "SELECT\n  trim(BOTH '\"' FROM arcana_id) AS arcana_id,\n  count() AS fights_active,\n  round(countIf(properties.outcome IN ('won', 'survived')) / nullIf(countIf(properties.outcome IN ('won', 'survived', 'lost')), 0) * 100, 1) AS win_pct,\n  round(countIf(properties.fun_rating = 'up') / nullIf(countIf(properties.fun_rating IN ('up', 'down')), 0) * 100, 1) AS fun_pct\nFROM events\nARRAY JOIN JSONExtractArrayRaw(coalesce(toString(properties.arcana), '[]')) AS arcana_id\nWHERE event = 'fight_ended'\nGROUP BY arcana_id\nORDER BY fights_active DESC",
+          "query": {
+            "kind": "DataTableNode",
+            "full": true,
+            "source": {
+              "kind": "HogQLQuery",
+              "query": "SELECT\n  trim(BOTH '\"' FROM arcana_id) AS arcana_id,\n  count() AS fights_active,\n  round(countIf(properties.outcome IN ('won', 'survived')) / nullIf(countIf(properties.outcome IN ('won', 'survived', 'lost')), 0) * 100, 1) AS win_pct,\n  round(countIf(properties.fun_rating = 'up') / nullIf(countIf(properties.fun_rating IN ('up', 'down')), 0) * 100, 1) AS fun_pct\nFROM events\nARRAY JOIN JSONExtractArrayRaw(coalesce(toString(properties.arcana), '[]')) AS arcana_id\nWHERE event = 'fight_ended'\nGROUP BY arcana_id\nORDER BY fights_active DESC"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "nshapes-player-enjoyment",
+      "name": "NShapes · 4. Player Enjoyment & Sentiment (👍 / 👎)",
+      "description": "What actually makes NShapes fun vs frustrating: outcome vs enjoyment gap, close-call thrill, board droughts, and 1-tap feedback reason tags.",
+      "tags": [
+        "nshapes",
+        "game-analytics",
+        "enjoyment",
+        "sentiment"
+      ],
+      "tiles": [
+        {
+          "id": "fun-sentiment-drivers",
+          "name": "Fun Drivers: Close Calls vs Droughts vs Outcomes",
+          "category": "enjoyment",
+          "description": "Healthy games keep close calls thrilling (>80% fun) while board droughts (>18s) hurt sentiment.",
+          "hogql": "SELECT\n  multiIf(\n    properties.outcome = 'left', 'Abandoned (Left)',\n    properties.outcome = 'lost', 'Defeat',\n    toBool(properties.close_call), 'Close Call Victory (<=1 heart)',\n    toFloat64OrZero(toString(properties.max_drought_ms)) > 18000, 'Slow Victory (>18s drought)',\n    'Clean Victory'\n  ) AS experience_bucket,\n  countIf(properties.fun_rating IN ('up', 'down')) AS rated_fights,\n  countIf(properties.fun_rating = 'up') AS thumbs_up,\n  round(countIf(properties.fun_rating = 'up') / nullIf(countIf(properties.fun_rating IN ('up', 'down')), 0) * 100, 1) AS fun_pct\nFROM events\nWHERE event = 'fight_ended' AND timestamp >= now() - INTERVAL 30 DAY\nGROUP BY experience_bucket\nORDER BY fun_pct DESC",
+          "query": {
+            "kind": "DataTableNode",
+            "full": true,
+            "source": {
+              "kind": "HogQLQuery",
+              "query": "SELECT\n  multiIf(\n    properties.outcome = 'left', 'Abandoned (Left)',\n    properties.outcome = 'lost', 'Defeat',\n    toBool(properties.close_call), 'Close Call Victory (<=1 heart)',\n    toFloat64OrZero(toString(properties.max_drought_ms)) > 18000, 'Slow Victory (>18s drought)',\n    'Clean Victory'\n  ) AS experience_bucket,\n  countIf(properties.fun_rating IN ('up', 'down')) AS rated_fights,\n  countIf(properties.fun_rating = 'up') AS thumbs_up,\n  round(countIf(properties.fun_rating = 'up') / nullIf(countIf(properties.fun_rating IN ('up', 'down')), 0) * 100, 1) AS fun_pct\nFROM events\nWHERE event = 'fight_ended' AND timestamp >= now() - INTERVAL 30 DAY\nGROUP BY experience_bucket\nORDER BY fun_pct DESC"
+            }
+          }
+        },
+        {
+          "id": "fun-reason-tags",
+          "name": "Player Feedback Reason Tags Leaderboard",
+          "category": "enjoyment",
+          "description": "Breakdown of 1-tap feedback chips selected alongside 👍 and 👎 votes.",
+          "hogql": "SELECT\n  trim(BOTH '\"' FROM tag) AS fun_tag,\n  any(toString(properties.fun_rating)) AS polarity,\n  count() AS count,\n  round(avg(toFloat64OrZero(toString(properties.dpm))), 0) AS avg_dpm,\n  round(avg(toFloat64OrZero(toString(properties.max_drought_ms))) / 1000, 1) AS avg_drought_sec\nFROM events\nARRAY JOIN JSONExtractArrayRaw(coalesce(toString(properties.fun_tags), '[]')) AS tag\nWHERE event IN ('fight_ended', 'fight_rated')\nGROUP BY fun_tag\nORDER BY count DESC",
+          "query": {
+            "kind": "DataTableNode",
+            "full": true,
+            "source": {
+              "kind": "HogQLQuery",
+              "query": "SELECT\n  trim(BOTH '\"' FROM tag) AS fun_tag,\n  any(toString(properties.fun_rating)) AS polarity,\n  count() AS count,\n  round(avg(toFloat64OrZero(toString(properties.dpm))), 0) AS avg_dpm,\n  round(avg(toFloat64OrZero(toString(properties.max_drought_ms))) / 1000, 1) AS avg_drought_sec\nFROM events\nARRAY JOIN JSONExtractArrayRaw(coalesce(toString(properties.fun_tags), '[]')) AS tag\nWHERE event IN ('fight_ended', 'fight_rated')\nGROUP BY fun_tag\nORDER BY count DESC"
+            }
+          }
+        },
+        {
+          "id": "fun-by-foe",
+          "name": "Enemy Design Scorecard (Fun Rate vs Win Rate)",
+          "category": "enjoyment",
+          "description": "Highlights enemies that players find unfairly annoying even if win rates look acceptable.",
+          "hogql": "SELECT\n  toString(properties.foe) AS foe,\n  count() AS fights,\n  round(countIf(properties.outcome IN ('won', 'survived')) / nullIf(countIf(properties.outcome IN ('won', 'survived', 'lost')), 0) * 100, 1) AS win_pct,\n  round(countIf(properties.fun_rating = 'up') / nullIf(countIf(properties.fun_rating IN ('up', 'down')), 0) * 100, 1) AS fun_pct,\n  round(avg(toFloat64OrZero(toString(properties.mistakes))), 2) AS avg_mistakes\nFROM events\nWHERE event = 'fight_ended' AND properties.foe IS NOT NULL\nGROUP BY foe\nHAVING fights >= 5\nORDER BY fun_pct ASC",
+          "query": {
+            "kind": "DataTableNode",
+            "full": true,
+            "source": {
+              "kind": "HogQLQuery",
+              "query": "SELECT\n  toString(properties.foe) AS foe,\n  count() AS fights,\n  round(countIf(properties.outcome IN ('won', 'survived')) / nullIf(countIf(properties.outcome IN ('won', 'survived', 'lost')), 0) * 100, 1) AS win_pct,\n  round(countIf(properties.fun_rating = 'up') / nullIf(countIf(properties.fun_rating IN ('up', 'down')), 0) * 100, 1) AS fun_pct,\n  round(avg(toFloat64OrZero(toString(properties.mistakes))), 2) AS avg_mistakes\nFROM events\nWHERE event = 'fight_ended' AND properties.foe IS NOT NULL\nGROUP BY foe\nHAVING fights >= 5\nORDER BY fun_pct ASC"
+            }
+          }
+        },
+        {
+          "id": "fun-replay-behavior",
+          "name": "Replay Curiosity & Post-Loss Learning",
+          "category": "enjoyment",
+          "description": "Tracks how often players inspect FightReplay after losses vs wins.",
+          "hogql": "SELECT\n  toString(properties.outcome) AS outcome,\n  count() AS fights,\n  countIf(properties.replay_opened = true) AS replay_opened,\n  round(countIf(properties.replay_opened = true) / count() * 100, 1) AS replay_open_pct,\n  round(countIf(properties.fun_rating = 'up') / nullIf(countIf(properties.fun_rating IN ('up', 'down')), 0) * 100, 1) AS fun_pct\nFROM events\nWHERE event = 'fight_ended'\nGROUP BY outcome\nORDER BY fights DESC",
+          "query": {
+            "kind": "DataTableNode",
+            "full": true,
+            "source": {
+              "kind": "HogQLQuery",
+              "query": "SELECT\n  toString(properties.outcome) AS outcome,\n  count() AS fights,\n  countIf(properties.replay_opened = true) AS replay_opened,\n  round(countIf(properties.replay_opened = true) / count() * 100, 1) AS replay_open_pct,\n  round(countIf(properties.fun_rating = 'up') / nullIf(countIf(properties.fun_rating IN ('up', 'down')), 0) * 100, 1) AS fun_pct\nFROM events\nWHERE event = 'fight_ended'\nGROUP BY outcome\nORDER BY fights DESC"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

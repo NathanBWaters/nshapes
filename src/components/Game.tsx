@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { View, StyleSheet, Platform, Dimensions } from 'react-native';
+import { trackClassicRound, trackFreePlayFight, type FunRating, type FunTag } from '@/analytics/fightEvent';
 import { Card, CardReward, Weapon, AttributeName, AdventureDifficulty, Character, GameMode, FreePlayDifficulty } from '@/types';
 import { COLORS } from '@/utils/colors';
 import { createDeck, isValidCombination, sameCardAttributes } from '@/utils/gameUtils';
@@ -218,6 +219,11 @@ const Game: React.FC<GameProps> = ({
   const [lastMatchTime, setLastMatchTime] = useState<number>(Date.now());
 
   const [gameOverReason, setGameOverReason] = useState<string | null>(null);
+  const [freePlayFunRating, setFreePlayFunRating] = useState<FunRating | null>(null);
+  const freePlaySessionRef = useRef<{ fightId: string; startedAt: number; difficulty: string } | null>(null);
+  const [classicFunRating, setClassicFunRating] = useState<FunRating | null>(null);
+  const [classicFunTags, setClassicFunTags] = useState<FunTag[]>([]);
+  const classicSessionRef = useRef<{ fightId: string; startedAt: number; reported: boolean } | null>(null);
 
   // Keyboard shortcut for hints (web only)
   useEffect(() => {
@@ -623,6 +629,13 @@ const Game: React.FC<GameProps> = ({
     const { board, deck } = dealBoardAndDeck(activeAttributes, playerTotalStats.fieldSize, 1);
 
     resetRoundStats(getRunRoundRequirement(1).targetScore, playerTotalStats.hints || 0, playerTotalStats.graces || 0);
+    setClassicFunRating(null);
+    setClassicFunTags([]);
+    classicSessionRef.current = {
+      fightId: `classic-${Date.now()}`,
+      startedAt: Date.now(),
+      reported: false,
+    };
 
     setState(createInitialGameState({
       player,
@@ -646,6 +659,12 @@ const Game: React.FC<GameProps> = ({
   // Start Free Play Mode (called from Difficulty Selection)
   const startFreePlay = (difficulty: FreePlayDifficulty) => {
     setGameMode('free_play');
+    setFreePlayFunRating(null);
+    freePlaySessionRef.current = {
+      fightId: `fp-${Date.now()}`,
+      startedAt: Date.now(),
+      difficulty,
+    };
 
     // Free Play - use selected difficulty
     const activeAttributes = [...ATTRIBUTE_SCALING.difficultyPresets[difficulty]];
@@ -756,7 +775,56 @@ const Game: React.FC<GameProps> = ({
     setGamePhase('tutorial');
   };
 
+  const emitClassicRunOnce = (outcome: 'won' | 'lost' | 'left') => {
+    const sess = classicSessionRef.current;
+    if (!sess || sess.reported) return;
+    sess.reported = true;
+    trackClassicRound({
+      fightId: sess.fightId,
+      outcome,
+      difficulty: adventureDifficulty,
+      round: state.round,
+      foe: state.activeEnemyInstance?.name,
+      fighter: state.player.character.name,
+      weapons: state.player.weapons.map(w => w.id),
+      sets: state.foundCombinations.length,
+      mistakes: roundStatsRef.current.invalidMatches,
+      score: state.score,
+      targetScore: state.targetScore,
+      durationMs: Math.max(0, Date.now() - sess.startedAt),
+      funRating: classicFunRating,
+      funTags: classicFunTags,
+    });
+  };
+
   const exitToMenu = () => {
+    if (gamePhase === 'free_play' && freePlaySessionRef.current) {
+      const sets = state.foundCombinations.length;
+      const mistakes = roundStatsRef.current.invalidMatches;
+      if (sets + mistakes > 0 || freePlayFunRating !== null) {
+        trackFreePlayFight({
+          fightId: freePlaySessionRef.current.fightId,
+          difficulty: freePlaySessionRef.current.difficulty,
+          fighter: state.player.character.name,
+          weapons: state.player.weapons.map(w => w.id),
+          sets,
+          mistakes,
+          score: state.score,
+          durationMs: Math.max(0, Date.now() - freePlaySessionRef.current.startedAt),
+          funRating: freePlayFunRating,
+        });
+      }
+      freePlaySessionRef.current = null;
+    } else if (
+      gamePhase === 'round' ||
+      gamePhase === 'round_summary' ||
+      gamePhase === 'level_up' ||
+      gamePhase === 'shop'
+    ) {
+      if (state.foundCombinations.length + roundStatsRef.current.invalidMatches > 0 || state.round > 1) {
+        emitClassicRunOnce('left');
+      }
+    }
     setIsMenuOpen(false);
     setGamePhase('main_menu');
   };
@@ -2014,6 +2082,9 @@ const Game: React.FC<GameProps> = ({
             enemyDefeated={enemyDefeated}
             stretchGoalReward={state.selectedEnemyReward}
             stretchGoalMoney={state.selectedEnemyMoney}
+            funRating={classicFunRating}
+            funTags={classicFunTags}
+            onRateFun={(r, t) => { setClassicFunRating(r); setClassicFunTags(t); }}
           />
         );
 
@@ -2134,6 +2205,8 @@ const Game: React.FC<GameProps> = ({
               onClearHint={() => setClearHintTrigger(t => t + 1)}
               matchCount={state.foundCombinations.length}
               onExit={exitToMenu}
+              funRating={freePlayFunRating}
+              onRateFun={setFreePlayFunRating}
             />
 
             {/* Game board area - fills remaining space */}
@@ -2152,7 +2225,11 @@ const Game: React.FC<GameProps> = ({
             playerStats={totalStats}
             roundScores={buildRoundScores(roundHistory)}
             difficulty={adventureDifficulty}
+            funRating={classicFunRating}
+            funTags={classicFunTags}
+            onRateFun={(r, t) => { setClassicFunRating(r); setClassicFunTags(t); }}
             onReturnToMenu={() => {
+              emitClassicRunOnce('won');
               setState(prev => ({ ...prev, isEndlessMode: false }));
               setGamePhase('main_menu');
             }}
@@ -2172,7 +2249,11 @@ const Game: React.FC<GameProps> = ({
             score={state.score}
             targetScore={state.targetScore}
             roundScores={buildRoundScores(roundHistory, { roundInLevel, score: state.score })}
+            funRating={classicFunRating}
+            funTags={classicFunTags}
+            onRateFun={(r, t) => { setClassicFunRating(r); setClassicFunTags(t); }}
             onPlayAgain={() => {
+              emitClassicRunOnce('lost');
               setGameOverReason(null);
               setState(prev => ({ ...prev, isEndlessMode: false }));
               setGamePhase('main_menu');

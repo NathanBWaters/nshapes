@@ -4,6 +4,8 @@ import { Character, PlayerStats } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { FighterAmbientMood, FighterReactionEvent } from '@/utils/fighterAnimations';
 import { FighterAvatar } from './fighters';
+import Icon from './Icon';
+import type { FunRating } from '@/analytics/fightEvent';
 
 interface FreePlayHeaderProps {
   character: Character;
@@ -16,6 +18,8 @@ interface FreePlayHeaderProps {
   onClearHint: () => void;
   matchCount: number;
   onExit: () => void;
+  funRating?: FunRating | null;
+  onRateFun?: (rating: FunRating | null) => void;
 }
 
 /** The minimal Free Play HUD: no round, timer or score target. */
@@ -30,6 +34,8 @@ const FreePlayHeader: React.FC<FreePlayHeaderProps> = ({
   onClearHint,
   matchCount,
   onExit,
+  funRating = null,
+  onRateFun,
 }) => (
                 <View style={styles.header}>
       <View style={styles.statsRow}>
@@ -88,6 +94,41 @@ const FreePlayHeader: React.FC<FreePlayHeaderProps> = ({
           <Text style={styles.matchLabel}>Matches</Text>
           <Text style={styles.statValue}>{matchCount}</Text>
         </View>
+
+        {matchCount > 0 && onRateFun && (
+          <View style={styles.funGroup}>
+            <TouchableOpacity
+              testID="freeplay-fun-up"
+              accessibilityRole="button"
+              accessibilityLabel="Rate Free Play round as fun"
+              accessibilityState={{ selected: funRating === 'up' }}
+              onPress={() => onRateFun(funRating === 'up' ? null : 'up')}
+              style={[styles.funBtn, funRating === 'up' && styles.funBtnUp]}
+            >
+              <Icon
+                name="delapouite/thumb-up"
+                size={14}
+                color={funRating === 'up' ? COLORS.canvasWhite : COLORS.slateCharcoal}
+                noShadow
+              />
+            </TouchableOpacity>
+            <TouchableOpacity
+              testID="freeplay-fun-down"
+              accessibilityRole="button"
+              accessibilityLabel="Rate Free Play round as not fun"
+              accessibilityState={{ selected: funRating === 'down' }}
+              onPress={() => onRateFun(funRating === 'down' ? null : 'down')}
+              style={[styles.funBtn, funRating === 'down' && styles.funBtnDown]}
+            >
+              <Icon
+                name="delapouite/thumb-down"
+                size={14}
+                color={funRating === 'down' ? COLORS.canvasWhite : COLORS.slateCharcoal}
+                noShadow
+              />
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     </View>
 );
@@ -196,6 +237,27 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontFamily: 'monospace',
     color: COLORS.slateCharcoal,
+  },
+  funGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  funBtn: {
+    width: 30,
+    height: 28,
+    borderRadius: RADIUS.button,
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+    backgroundColor: COLORS.paperBeige,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  funBtnUp: {
+    backgroundColor: COLORS.logicTeal,
+  },
+  funBtnDown: {
+    backgroundColor: COLORS.impactOrange,
   },
 });
 

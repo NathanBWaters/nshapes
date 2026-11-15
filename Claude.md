@@ -74,10 +74,11 @@ NShapes combines the classic SET card matching game with roguelike progression m
 
 > **Full documentation:** [docs/analytics.md](./docs/analytics.md)
 
-Every Adventure fight is sent to PostHog (`src/analytics/`) as one `fight_ended` event: a flat summary (level, fighter, outcome, stars, damage, dpm, sets, mistakes, weapons, app_version, env) plus the `recording` and starting `save` that **replay the fight exactly** (`src/adventure/engine/replay.ts`). Query with HogQL (filter `properties.env = 'prod'` for players); replay exported events with `FIGHTS=fights.json npm run fights:replay`.
+NShapes follows the **minimal wide-event** game telemetry standard (`src/analytics/`): normal gameplay sends only `app_opened` (on session start/launch) and **one wide `fight_ended` event per finished round/fight** across Adventure (`level_order`, foe/fighter/gear/shop choices `offered`/`picked`/`bought`/`rerolls`, tempo `median_find_ms`/`max_drought_ms`, close-call & `died_with_hints` flags, `recording` + `save` for exact replay via `FIGHTS=fights.json npm run fights:replay`), Free Play, and Classic modes. Player enjoyment (`👍`/`👎` `fun_rating` + feedback `fun_tags`) and `replay_opened` are **merged in place** into the staged `fight_ended` event before commit/flush (or fall back to `fight_rated` only when editing older already-flushed battles in Camp → History).
 
+* **User identity & journey:** Anonymous MMKV `installId` + shareable `playerCode` (`NSH-XXXXXXXX`), rolling 30-minute `$session_id` (`session_fight_index`), server-derived `$set`/`$set_once` properties and `journey_stage` (`new_player` → `onboarding` → `early_adventure` → `mid_adventure` → `late_adventure` → `veteran`, plus `free_play_explorer`), optional `identifyPlayer` account linking (`$identify`), and user opt-out toggles in both Camp Settings and Classic Options. No personal data is collected.
+* **Dashboards & Balance Engine:** `src/analytics/dashboardEngine.ts` computes D0–D30 cohort retention, campaign progression funnels + churn wall scores, Simpson's-Paradox-adjusted weapon/fighter/evolution/Arcana balance tables, and enjoyment vs friction segments. Inspect interactively at **`/dev/analytics`** or sync 4 HogQL dashboards (18 insights) to PostHog project `738615` via `npm run analytics:export` and `npm run analytics:posthog:sync`.
 * **Keep the engine deterministic.** All randomness in a fight goes through `d._rng`; foe effects' `Math.random` is seeded by `withFoeDice` in `engine/run.ts`. `__tests__/adventureReplay.test.ts` replays a bot fight on every level and fails if anything leaks.
-* Anonymous install id only; no personal data.
 
 ## Weapon System
 
@@ -340,6 +341,13 @@ This means Field Stone weapons can increase the starting board size beyond the m
 * Buy weapons, reroll shop
 * Test stat preview and inventory display
 * "Continue" refreshes the shop for more testing
+
+**`/dev/analytics`** - Interactive PostHog-compatible analytics, balance & enjoyment studio (`?source=local`, `?source=simulated`, `?source=import`):
+* Overview (D0–D30 cohort retention, 95% Wilson CI on fun score, journey stages, player inspector)
+* Funnel (Adventure campaign progression & composite churn wall scores)
+* Balance (Simpson's-Paradox-adjusted win Δ vs fun rate quadrant & offer-vs-pick rates across Weapons, Fighters, Evolutions, Arcana)
+* Enjoyment (win vs loss, close call, fast board vs drought, died-with-hints, and 👍/👎 tag rankings)
+* PostHog tab (18 copyable HogQL queries for the 4 synced PostHog dashboards)
 
 ## Versioning, Committing & Pushing (IMPORTANT)
 

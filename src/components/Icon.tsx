@@ -380,6 +380,10 @@ import TrickIceCube from '../../assets/icons/lorc/ice-cube.svg';
 import TrickMimicChest from '../../assets/icons/delapouite/mimic-chest.svg';
 import TrickTightrope from '../../assets/icons/delapouite/tightrope.svg';
 import TrickPotato from '../../assets/icons/delapouite/potato.svg';
+import ThumbUp from '../../assets/icons/delapouite/thumb-up.svg';
+import ThumbDown from '../../assets/icons/delapouite/thumb-down.svg';
+import AnalyticsChart from '../../assets/icons/delapouite/chart.svg';
+import PieChart from '../../assets/icons/delapouite/pie-chart.svg';
 
 // Icon registry: maps path (e.g., "delapouite/token") to the imported component
 // NOTE: When adding new icons, also add the import above and the path here.
@@ -758,6 +762,10 @@ const ICON_REGISTRY = {
   'delapouite/mimic-chest': TrickMimicChest,
   'delapouite/tightrope': TrickTightrope,
   'delapouite/potato': TrickPotato,
+  'delapouite/thumb-up': ThumbUp,
+  'delapouite/thumb-down': ThumbDown,
+  'delapouite/chart': AnalyticsChart,
+  'delapouite/pie-chart': PieChart,
 } as const satisfies Record<string, React.FC<SvgProps>>;
 
 // TypeScript union type of all valid icon names - use this for type-safe icon references

@@ -15,6 +15,8 @@ import { getBiome } from '../data/biomes';
 import { BOUNTIES } from '../data/bounties';
 import { Btn, CoinPill, INK, PopIn, starPopDelayMs, StarRow, TONE } from './ui';
 import { Silhouette, UnlockableAvatar, describeRewardUnlocks, describeUnlock } from './rewards';
+import type { FunRating, FunTag } from '@/analytics/fightEvent';
+import RoundFunPrompt from '@/components/RoundFunPrompt';
 import FightReplay from './FightReplay';
 import PowerExplainer from './PowerExplainer';
 
@@ -29,13 +31,34 @@ interface Props {
   unlocksRevealed: boolean;
   nextLevel: LevelDef | null;
   nextUnlocked: boolean;
+  funRating?: FunRating | null;
+  funTags?: FunTag[];
+  onRateFun?: (rating: FunRating | null, tags: FunTag[]) => void;
+  onReplayOpened?: () => void;
   onRetry: () => void;
   onNext: () => void;
   onMap: () => void;
   onCamp: () => void;
 }
 
-const LevelResults: React.FC<Props> = ({ level, run, stars, result, bestDpm = null, unlocksRevealed, nextLevel, nextUnlocked, onRetry, onNext, onMap, onCamp }) => {
+const LevelResults: React.FC<Props> = ({
+  level,
+  run,
+  stars,
+  result,
+  bestDpm = null,
+  unlocksRevealed,
+  nextLevel,
+  nextUnlocked,
+  funRating = null,
+  funTags = [],
+  onRateFun,
+  onReplayOpened,
+  onRetry,
+  onNext,
+  onMap,
+  onCamp,
+}) => {
   const insets = useSafeAreaInsets();
   const [replayOpen, setReplayOpen] = useState(false);
   const [powerInfoOpen, setPowerInfoOpen] = useState(false);
@@ -266,7 +289,19 @@ const LevelResults: React.FC<Props> = ({ level, run, stars, result, bestDpm = nu
           {tip && <Text style={st.tip}>{tip}</Text>}
 
           {run.log.length > 1 && (
-            <Btn testID="results-replay" label="What happened? See the fight" variant="secondary" icon="lorc/magnifying-glass" small onPress={() => setReplayOpen(true)} style={{ alignSelf: 'stretch' }} />
+            <Btn
+              testID="results-replay"
+              label="What happened? See the fight"
+              variant="secondary"
+              icon="lorc/magnifying-glass"
+              small
+              onPress={() => { onReplayOpened?.(); setReplayOpen(true); }}
+              style={{ alignSelf: 'stretch' }}
+            />
+          )}
+
+          {onRateFun && (
+            <RoundFunPrompt rating={funRating} tags={funTags} onChange={onRateFun} testIDPrefix="results-fun" />
           )}
 
           <View style={st.buttons}>

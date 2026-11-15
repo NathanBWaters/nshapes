@@ -3,7 +3,8 @@ import { storage } from '@/utils/storage';
 import type { AdventureSave } from './types';
 import { createNewSave, pathsSeenBeforeSecrets, reconcileUnlocks } from './progress';
 import { resolveLegacyWeapon } from './data/armory';
-import { HISTORY_LIMIT, sanitizeBattleRecord, trimReplays, withBattle, type BattleRecord } from './history';
+import { HISTORY_LIMIT, sanitizeBattleRecord, trimReplays, withBattle, withBattleFeedback, type BattleRecord } from './history';
+import type { FunRating, FunTag } from '@/analytics/fightEvent';
 
 const KEY = 'adventure_v2_save';
 /** Kept apart from the save: it grows with every fight, and the save is rewritten on every change */
@@ -106,13 +107,11 @@ export const loadBattleHistory = (): BattleRecord[] => {
   }
 };
 
-/** Add a battle to the stored history; returns the new list. */
-export const recordBattle = (history: readonly BattleRecord[], record: BattleRecord): BattleRecord[] => {
-  const next = withBattle(history, record);
+const writeHistoryList = (next: BattleRecord[]): BattleRecord[] => {
   try {
     storage.set(HISTORY_KEY, JSON.stringify(next));
   } catch {
-    // Tight storage quota (e.g. web localStorage): shed older full logs before dropping the battle
+    // Tight storage quota (e.g. web localStorage): shed older full logs before dropping entries
     for (const keep of [10, 0]) {
       try {
         storage.set(HISTORY_KEY, JSON.stringify(trimReplays(next, keep)));
@@ -124,3 +123,14 @@ export const recordBattle = (history: readonly BattleRecord[], record: BattleRec
   }
   return next;
 };
+
+/** Add a battle to the stored history; returns the new list. */
+export const recordBattle = (history: readonly BattleRecord[], record: BattleRecord): BattleRecord[] =>
+  writeHistoryList(withBattle(history, record));
+
+/** Persist updates to a battle's fun rating & tags inside the stored history list. */
+export const saveBattleFeedback = (
+  history: readonly BattleRecord[],
+  match: { fightId?: string; at: number; levelId: string },
+  feedback: { funRating: FunRating | null; funTags: FunTag[] }
+): BattleRecord[] => writeHistoryList(withBattleFeedback(history, match, feedback));

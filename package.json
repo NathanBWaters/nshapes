@@ -1,6 +1,6 @@
 {
   "name": "nshapes",
-  "version": "0.1.121",
+  "version": "0.1.122",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
@@ -24,6 +24,9 @@
     "balance:atlas": "BALANCE_ATLAS=1 jest __tests__/adventureAnalytics.test.ts",
     "balance:levels": "ADVENTURE_BALANCE_REPORT=1 jest __tests__/adventureBalance.test.ts",
     "balance:tune": "BALANCE_TUNE=1 jest __tests__/adventureBalanceTuner.test.ts",
+    "analytics:export": "npx tsx scripts/posthog-dashboards.ts export",
+    "analytics:posthog:sync": "npx tsx scripts/posthog-dashboards.ts sync",
+    "analytics:posthog:pull": "npx tsx scripts/posthog-dashboards.ts pull",
     "prebuild": "npm run typecheck"
   },
   "dependencies": {

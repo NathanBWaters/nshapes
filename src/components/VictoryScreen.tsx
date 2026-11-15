@@ -8,6 +8,8 @@ import RoundProgressChart, { RoundScore } from './RoundProgressChart';
 import { DifficultyChallengeCard } from './ui/ChallengeCard';
 import { FighterAvatar } from './fighters';
 import { WeaponAvatar } from './weapons';
+import RoundFunPrompt from './RoundFunPrompt';
+import type { FunRating, FunTag } from '@/analytics/fightEvent';
 
 interface VictoryScreenProps {
   player: Player;
@@ -18,6 +20,9 @@ interface VictoryScreenProps {
   difficulty: AdventureDifficulty;
   onReturnToMenu: () => void;
   onContinueEndless: () => void;
+  funRating?: FunRating | null;
+  funTags?: FunTag[];
+  onRateFun?: (rating: FunRating | null, tags: FunTag[]) => void;
 }
 
 const getRarityLabel = (rarity: WeaponRarity): string => {
@@ -59,6 +64,9 @@ const VictoryScreen: React.FC<VictoryScreenProps> = ({
   difficulty,
   onReturnToMenu,
   onContinueEndless,
+  funRating = null,
+  funTags = [],
+  onRateFun,
 }) => {
   const groupedWeapons = groupWeapons(player.weapons);
 
@@ -185,6 +193,18 @@ const VictoryScreen: React.FC<VictoryScreenProps> = ({
               height={160}
             />
           </View>
+
+          {onRateFun && (
+            <View style={{ marginBottom: 12 }}>
+              <RoundFunPrompt
+                compact
+                rating={funRating}
+                tags={funTags}
+                onChange={onRateFun}
+                testIDPrefix="victory-fun"
+              />
+            </View>
+          )}
         </ScrollView>
 
         <View style={styles.buttonSection}>

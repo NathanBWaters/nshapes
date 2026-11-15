@@ -22,6 +22,7 @@ npm run lint             # Run ESLint
 - `/dev/sound` — Adaptive music & weapon voice synthesizer studio
 - `/dev/fighters` — Fighter animations and wear-and-tear preview
 - `/dev/store` — Standalone weapon shop tester
+- `/dev/analytics` — PostHog-compatible analytics, balance & enjoyment studio (`?source=local`, `?source=simulated`, `?source=import`)
 
 ## Fast-Iteration Git Policy
 

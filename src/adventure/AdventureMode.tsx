@@ -26,9 +26,17 @@ import {
   type Unlock,
 } from './progress';
 import { isFirstVisit, lessonsDueBefore, type LessonPlan } from './lessons';
-import { loadAdventureSave, loadBattleHistory, recordBattle, writeAdventureSave } from './save';
+import { loadAdventureSave, loadBattleHistory, recordBattle, saveBattleFeedback, writeAdventureSave } from './save';
 import type { FightTape } from './engine/replay';
-import { trackFight } from '@/analytics/fightEvent';
+import {
+  commitAdventureFight,
+  markReplayOpened,
+  rateFight,
+  stageAdventureFight,
+  trackFight,
+  type FunRating,
+  type FunTag,
+} from '@/analytics/fightEvent';
 import { battleRecord, bestDpmOn, wasFought, type BattleRecord } from './history';
 import { computeStars } from './engine/run';
 import { randomSeed } from './engine/rng';
@@ -46,7 +54,18 @@ type Screen =
   | { kind: 'map'; highlight?: string | null }
   | { kind: 'run'; levelId: string; seed: number }
   /** `bestDpm`: the best damage per minute on this level before this battle (null: first time) */
-  | { kind: 'results'; levelId: string; run: RunState; stars: number; result: ResultApplication; bestDpm: number | null }
+  | {
+      kind: 'results';
+      levelId: string;
+      run: RunState;
+      stars: number;
+      result: ResultApplication;
+      bestDpm: number | null;
+      fightId: string;
+      recordAt: number;
+      funRating: FunRating | null;
+      funTags: FunTag[];
+    }
   | { kind: 'camp'; tab?: CampTab }
   | { kind: 'guide' };
 
@@ -113,6 +132,7 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
   }, []);
 
   useEffect(() => () => {
+    commitAdventureFight('unmount');
     music.stop();
     clearPendingTimers();
   }, [clearPendingTimers]);
@@ -149,10 +169,28 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
     const result = applyLevelResult(save, level, stars, run.coins, run);
     setSave(result.save);
     const bestDpm = bestDpmOn(history, level.id);
-    const record = battleRecord(level, run, { at: Date.now(), stars, coins: result.coinsBanked + result.starCoins + result.bountyCoins });
+    const at = Date.now();
+    const fightId = `${at}-${tape.recording.seed}`;
+    const record = battleRecord(level, run, {
+      at,
+      stars,
+      coins: result.coinsBanked + result.starCoins + result.bountyCoins,
+      fightId,
+    });
     remember(record);
-    trackFight(level, run, record, tape);
-    setScreen({ kind: 'results', levelId: level.id, run, stars, result, bestDpm });
+    stageAdventureFight(level, run, record, tape, { fightId, afterSave: result.save });
+    setScreen({
+      kind: 'results',
+      levelId: level.id,
+      run,
+      stars,
+      result,
+      bestDpm,
+      fightId,
+      recordAt: at,
+      funRating: null,
+      funTags: [],
+    });
     if (result.unlocks.length > 0) {
       // Let the stars land first, then give each unlock its own moment
       setUnlocksRevealed(false);
@@ -165,9 +203,29 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
   /** A fight left partway through (retreat or restart) is still a battle, once a move was made. */
   const handleLeft = (level: LevelDef, run: RunState, tape: FightTape) => {
     if (!wasFought(run)) return;
-    const record = battleRecord(level, run, { at: Date.now(), left: true });
+    const at = Date.now();
+    const fightId = `${at}-${tape.recording.seed}`;
+    const record = battleRecord(level, run, { at, left: true, fightId });
     remember(record);
-    trackFight(level, run, record, tape);
+    trackFight(level, run, record, tape, { fightId, afterSave: save });
+  };
+
+  const handleResultsRateFun = (rating: FunRating | null, tags: FunTag[]) => {
+    setScreen(prev => (prev.kind === 'results' ? { ...prev, funRating: rating, funTags: tags } : prev));
+    if (screen.kind !== 'results') return;
+    const { fightId, recordAt, levelId } = screen;
+    setHistory(h => saveBattleFeedback(h, { fightId, at: recordAt, levelId }, { funRating: rating, funTags: tags }));
+    rateFight(fightId, { funRating: rating, funTags: tags }, { source: 'results' });
+  };
+
+  const handleCampRateBattle = (battle: BattleRecord, rating: FunRating | null, tags: FunTag[]) => {
+    const match = { fightId: battle.fightId, at: battle.at, levelId: battle.levelId };
+    setHistory(h => saveBattleFeedback(h, match, { funRating: rating, funTags: tags }));
+    rateFight(
+      battle.fightId ?? `${battle.at}-${battle.levelId}`,
+      { funRating: rating, funTags: tags },
+      { source: 'history' }
+    );
   };
 
   /** Next stop on the main path (an elite branch leads back to the map). */
@@ -220,10 +278,15 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
         unlocksRevealed={unlocksRevealed}
         nextLevel={next}
         nextUnlocked={!!next && isLevelUnlocked(save, next)}
-        onRetry={() => startRun(level)}
-        onNext={() => next && setPreview(next)}
-        onMap={() => { clearPendingTimers(); setUnlocks([]); setScreen({ kind: 'map', highlight: next && isLevelUnlocked(save, next) ? next.id : level.id }); }}
+        funRating={screen.funRating}
+        funTags={screen.funTags}
+        onRateFun={handleResultsRateFun}
+        onReplayOpened={() => markReplayOpened(screen.fightId)}
+        onRetry={() => { commitAdventureFight('results_retry'); startRun(level); }}
+        onNext={() => { commitAdventureFight('results_next'); if (next) setPreview(next); }}
+        onMap={() => { commitAdventureFight('results_map'); clearPendingTimers(); setUnlocks([]); setScreen({ kind: 'map', highlight: next && isLevelUnlocked(save, next) ? next.id : level.id }); }}
         onCamp={() => {
+          commitAdventureFight('results_camp');
           clearPendingTimers();
           setUnlocks([]);
           // Land on the part of Camp this result just unlocked, or on Bounties if it claimed one
@@ -235,7 +298,7 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
       />
     );
   } else if (screen.kind === 'camp') {
-    body = <Camp save={save} history={history} initialTab={screen.tab} onChange={setSave} onClose={() => setScreen({ kind: 'map' })} />;
+    body = <Camp save={save} history={history} initialTab={screen.tab} onChange={setSave} onRateBattle={handleCampRateBattle} onClose={() => setScreen({ kind: 'map' })} />;
   } else if (screen.kind === 'guide') {
     body = <FieldGuide save={save} onClose={() => setScreen({ kind: 'map' })} />;
   }

@@ -90,23 +90,40 @@ const inflate = (v: unknown, s: Where): unknown => {
   return v;
 };
 
+/** Offer/pick/buy ledger captured alongside the fight recording for balance telemetry. */
+export interface FightChoices {
+  offered: string[];
+  picked: string[];
+  bought: string[];
+  rerolls: number;
+}
+
 /** A recording plus the save the fight started from: everything a replay needs besides the level. */
 export interface FightTape {
   recording: FightRecording;
   save: AdventureSave;
+  choices?: FightChoices;
 }
 
 /** Collects the actions of one fight as they are dispatched. */
 export class FightRecorder {
   readonly seed: number;
   private actions: RecordedAction[] = [];
+  private offeredIds: string[] = [];
+  private pickedIds: string[] = [];
+  private boughtIds: string[] = [];
+  private rerollCount = 0;
+  private shopSlateRecorded = false;
 
   constructor(seed: number) {
     this.seed = seed;
   }
 
   /** Call with the state the action is applied to (for the fight clock). */
-  record(action: RunAction, before: Pick<RunState, 'elapsedMs' | 'board' | 'deck'>) {
+  record(
+    action: RunAction,
+    before: Pick<RunState, 'elapsedMs' | 'board' | 'deck'> & Partial<Pick<RunState, 'pickOptions' | 'shopOptions'>>
+  ) {
     if (action.type === 'CLEAR_EVENTS') return;
     if (action.type === 'TICK') {
       const last = this.actions[this.actions.length - 1];
@@ -114,11 +131,46 @@ export class FightRecorder {
       else this.actions.push({ type: 'TICK', ms: action.ms, n: 1 });
       return;
     }
+
+    if (action.type === 'PICK') {
+      if (before.pickOptions?.length) {
+        for (const w of before.pickOptions) this.offeredIds.push(w.id);
+      }
+      if (action.weaponId) this.pickedIds.push(action.weaponId);
+    } else if (action.type === 'BUY') {
+      if (!this.shopSlateRecorded && before.shopOptions?.length) {
+        for (const w of before.shopOptions) this.offeredIds.push(w.id);
+        this.shopSlateRecorded = true;
+      }
+      const chosen = before.shopOptions?.[action.index];
+      if (chosen?.id) this.boughtIds.push(chosen.id);
+    } else if (action.type === 'REROLL') {
+      if (!this.shopSlateRecorded && before.shopOptions?.length) {
+        for (const w of before.shopOptions) this.offeredIds.push(w.id);
+      }
+      this.shopSlateRecorded = false;
+      this.rerollCount += 1;
+    } else if (action.type === 'NEXT_WAVE') {
+      if (!this.shopSlateRecorded && before.shopOptions?.length) {
+        for (const w of before.shopOptions) this.offeredIds.push(w.id);
+      }
+      this.shopSlateRecorded = false;
+    }
+
     this.actions.push({ at: before.elapsedMs, a: squeeze(action, before, placesOf(before)) as Record<string, unknown> });
   }
 
   get length() {
     return this.actions.length;
+  }
+
+  choicesJSON(): FightChoices {
+    return {
+      offered: [...this.offeredIds],
+      picked: [...this.pickedIds],
+      bought: [...this.boughtIds],
+      rerolls: this.rerollCount,
+    };
   }
 
   toJSON(): FightRecording {

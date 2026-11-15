@@ -19,6 +19,8 @@ import GameMenu from './GameMenu';
 import { ScreenTransition } from './ScreenTransition';
 import RoundProgressChart, { RoundScore } from './RoundProgressChart';
 import { FighterAvatar } from './fighters';
+import RoundFunPrompt from './RoundFunPrompt';
+import type { FunRating, FunTag } from '@/analytics/fightEvent';
 
 interface RoundSummaryProps {
   round: number;
@@ -41,6 +43,9 @@ interface RoundSummaryProps {
   stretchGoalReward?: Weapon | null;
   stretchGoalMoney?: number | null;
   weaponImpacts?: WeaponImpact[];
+  funRating?: FunRating | null;
+  funTags?: FunTag[];
+  onRateFun?: (rating: FunRating | null, tags: FunTag[]) => void;
 }
 
 interface AwardTile {
@@ -102,6 +107,9 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
   stretchGoalReward,
   stretchGoalMoney,
   weaponImpacts = [],
+  funRating = null,
+  funTags = [],
+  onRateFun,
 }) => {
   const insets = usePWASafeAreaInsets();
 
@@ -349,6 +357,18 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({
             height={140}
           />
         </View>
+
+        {onRateFun && (
+          <View style={{ marginTop: 12 }}>
+            <RoundFunPrompt
+              compact
+              rating={funRating}
+              tags={funTags}
+              onChange={onRateFun}
+              testIDPrefix="round-summary-fun"
+            />
+          </View>
+        )}
       </ScrollView>
 
       {/* Continue Button - Fixed at bottom, only rendered when ready to show */}

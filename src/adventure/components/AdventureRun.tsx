@@ -109,7 +109,11 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
     runRef.current = next;
     if (next !== before) setRun(next);
   }, []);
-  const recordingOf = useCallback((): FightTape => ({ recording: recorder.current.toJSON(), save: startSave }), [startSave]);
+  const recordingOf = useCallback((): FightTape => ({
+    recording: recorder.current.toJSON(),
+    save: startSave,
+    choices: recorder.current.choicesJSON(),
+  }), [startSave]);
   const [paused, setPaused] = useState(false);
   const [hudHeight, setHudHeight] = useState(150);
   const [hintTrigger, setHintTrigger] = useState(0);

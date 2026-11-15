@@ -14,6 +14,7 @@
 ## Project Guardrails
 
 - **Single weapon explainer (`WeaponExplainer.tsx`):** Every weapon description UI must reuse `src/adventure/components/WeaponExplainer.tsx`. Never build a second weapon description card. Register new Armory weapons in `src/adventure/data/weaponGuide.ts`, `src/adventure/data/weaponRoles.ts`, and `src/audio/voices.ts`.
+- **One wide event per game (`fight_ended`):** Normal gameplay sends only `app_opened` (on session launch) and **one wide `fight_ended` event per finished round/fight** (staged on finish so `👍`/`👎` enjoyment ratings, feedback tags, and replay opens merge in place before commit/flush). Never emit per-move, per-card, or per-modal PostHog events.
 - **Icons (`ICON_REGISTRY`):** Only use registered `IconName` keys defined in `src/components/Icon.tsx`. Verify with `npm run typecheck && npm run validate:icons`.
 - **Data-driven Adventure Mode:** Content, levels, weapons, skills, evolutions, and Arcana belong in `src/adventure/data/*.ts`, not hardcoded in the engine.
 - **Performance & Battery Guardrails:**

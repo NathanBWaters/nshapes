@@ -6,6 +6,8 @@ import { COLORS, RADIUS } from '@/utils/colors';
 import RoundProgressChart, { RoundScore } from './RoundProgressChart';
 import { EnemyAvatar } from './enemies';
 import { FighterAvatar } from './fighters';
+import RoundFunPrompt from './RoundFunPrompt';
+import type { FunRating, FunTag } from '@/analytics/fightEvent';
 
 interface GameOverScreenProps {
   character: Character;
@@ -19,6 +21,9 @@ interface GameOverScreenProps {
   targetScore: number;
   roundScores: RoundScore[];
   onPlayAgain: () => void;
+  funRating?: FunRating | null;
+  funTags?: FunTag[];
+  onRateFun?: (rating: FunRating | null, tags: FunTag[]) => void;
 }
 
 const GameOverScreen: React.FC<GameOverScreenProps> = ({
@@ -32,6 +37,9 @@ const GameOverScreen: React.FC<GameOverScreenProps> = ({
   targetScore,
   roundScores,
   onPlayAgain,
+  funRating = null,
+  funTags = [],
+  onRateFun,
 }) => (
     <View style={styles.container}>
       <View style={styles.eyebrow}>
@@ -114,6 +122,18 @@ const GameOverScreen: React.FC<GameOverScreenProps> = ({
             height={140}
           />
         </View>
+
+        {onRateFun && (
+          <View style={{ marginBottom: 12 }}>
+            <RoundFunPrompt
+              compact
+              rating={funRating}
+              tags={funTags}
+              onChange={onRateFun}
+              testIDPrefix="gameover-fun"
+            />
+          </View>
+        )}
 
         <View style={styles.buttonContainer}>
           <TouchableOpacity
