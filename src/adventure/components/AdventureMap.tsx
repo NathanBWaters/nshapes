@@ -7,7 +7,7 @@
  * trail draws itself out from the level it hangs off and its node pops in.
  * A branch can lead on to further branches.
  */
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, useWindowDimensions, Platform } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withDelay, withSequence, withTiming, Easing } from 'react-native-reanimated';
 import Svg, { Path, Circle } from 'react-native-svg';
@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
+import { useAppActive } from '@/hooks/useAppActive';
 import { COLORS } from '@/utils/colors';
 import { sfx } from '@/audio';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -134,12 +135,21 @@ interface Props {
   highlightLevelId?: string | null;
   /** The arrival of these secret paths has played: remember it, so it plays once */
   onPathsRevealed?: (ids: string[]) => void;
+  /** False when covered by modals/other tabs so background map animations pause */
+  active?: boolean;
 }
 
-const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpenGuide, onExit, highlightLevelId, onPathsRevealed }) => {
+const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpenGuide, onExit, highlightLevelId, onPathsRevealed, active = true }) => {
   const { width: winW } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const appActive = useAppActive();
   const reducedMotion = useReducedMotion();
+  const isLive = active && appActive && !reducedMotion;
+  const onSelectLevelRef = useRef(onSelectLevel);
+  onSelectLevelRef.current = onSelectLevel;
+  const handleSelectNode = useCallback((level: LevelDef) => {
+    onSelectLevelRef.current(level);
+  }, []);
   const width = Math.min(winW, 560);
   const openKey = openPaths(save).map(l => l.id).join(',');
   const { nodes, branches, banners, height } = useMemo(() => {
@@ -271,7 +281,8 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
               node={n}
               save={save}
               isFrontier={false}
-              onPress={() => onSelectLevel(n.level)}
+              isLive={isLive}
+              onSelectLevel={handleSelectNode}
               fighterName={fighter.name}
               arriveAtMs={arrivals.get(n.level.id)?.popMs}
               still={reducedMotion}
@@ -284,7 +295,8 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
               node={n}
               save={save}
               isFrontier={n.level.id === frontier.id}
-              onPress={() => onSelectLevel(n.level)}
+              isLive={isLive}
+              onSelectLevel={handleSelectNode}
               fighterName={fighter.name}
             />
           ))}
@@ -294,7 +306,7 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
       <View style={[s.dock, { paddingBottom: Math.max(insets.bottom, Platform.OS === 'web' ? 12 : 8) }]}>
         <DockButton testID="map-dock-guide" icon="lorc/open-book" label="Guide" onPress={onOpenGuide} />
         <TouchableOpacity testID="map-play-next" onPress={() => onSelectLevel(frontier)} style={s.playNext} activeOpacity={0.85}>
-          <FighterAvatar character={fighter.name} size={34} mood="anticipation" />
+          <FighterAvatar character={fighter.name} size={34} mood="anticipation" animate={isLive} />
           <View style={{ flex: 1 }}>
             <Text style={s.playNextLabel}>PLAY {frontier.id}</Text>
             <Text style={s.playNextSub} numberOfLines={1}>{frontier.name}</Text>
@@ -356,13 +368,14 @@ const MapNode: React.FC<{
   node: NodePos;
   save: AdventureSave;
   isFrontier: boolean;
-  onPress: () => void;
+  isLive: boolean;
+  onSelectLevel: (level: LevelDef) => void;
   fighterName: CharacterName;
   /** A secret path the map shows for the first time: when its node pops in */
   arriveAtMs?: number;
   /** Reduced motion: arrive without animation */
   still?: boolean;
-}> = ({ node, save, isFrontier, onPress, fighterName, arriveAtMs, still }) => {
+}> = memo(function MapNode({ node, save, isFrontier, isLive, onSelectLevel, fighterName, arriveAtMs, still }) {
   const { level, x, y } = node;
   const lock = getLockReason(save, level);
   const locked = lock !== null;
@@ -375,39 +388,42 @@ const MapNode: React.FC<{
   const isNew = !locked && !save.seenMechanics.includes(level.introduces);
   const mech = getMechanic(level.introduces);
 
+  const nodeButton = (
+    <TouchableOpacity
+      testID={`map-node-${level.id}`}
+      onPress={() => onSelectLevel(level)}
+      activeOpacity={0.85}
+      accessibilityLabel={`${practice ? 'Practice' : `Level ${level.id}`} ${level.name}${locked ? ' locked' : ''}`}
+      style={[
+        s.node,
+        { width: size, height: size, borderRadius: size / 2 },
+        locked ? s.nodeLocked : practice ? s.nodePractice : elite ? s.nodeElite : stars === 3 ? s.nodePerfect : stars > 0 ? s.nodeDone : s.nodeOpen,
+        isFrontier && s.nodeFrontier,
+      ]}
+    >
+      {locked ? (
+        <Icon name="lorc/padlock" size={size * 0.55} color="#A69F95" />
+      ) : (
+        <EnemyAvatar
+          enemy={foe}
+          size={Math.round(size * 0.76)}
+          mood={isFrontier ? 'menacing' : 'idle'}
+          lightweight={!isFrontier || !isLive}
+          animate={isFrontier && isLive}
+        />
+      )}
+      {elite && (
+        <View style={s.skull}><Icon name="lorc/daemon-skull" size={14} color={locked ? '#A69F95' : ELITE} /></View>
+      )}
+      {level.isBoss && !locked && (
+        <View style={s.crown}><Icon name="lorc/crown-coin" size={18} color="#E0A800" /></View>
+      )}
+    </TouchableOpacity>
+  );
+
   const content = (
     <>
-      <Bob active={isFrontier}>
-        <TouchableOpacity
-          testID={`map-node-${level.id}`}
-          onPress={onPress}
-          activeOpacity={0.85}
-          accessibilityLabel={`${practice ? 'Practice' : `Level ${level.id}`} ${level.name}${locked ? ' locked' : ''}`}
-          style={[
-            s.node,
-            { width: size, height: size, borderRadius: size / 2 },
-            locked ? s.nodeLocked : practice ? s.nodePractice : elite ? s.nodeElite : stars === 3 ? s.nodePerfect : stars > 0 ? s.nodeDone : s.nodeOpen,
-            isFrontier && s.nodeFrontier,
-          ]}
-        >
-          {locked ? (
-            <Icon name="lorc/padlock" size={size * 0.55} color="#A69F95" />
-          ) : (
-            <EnemyAvatar
-              enemy={foe}
-              size={Math.round(size * 0.76)}
-              mood={isFrontier ? 'menacing' : 'idle'}
-              lightweight
-            />
-          )}
-          {elite && (
-            <View style={s.skull}><Icon name="lorc/daemon-skull" size={14} color={locked ? '#A69F95' : ELITE} /></View>
-          )}
-          {level.isBoss && !locked && (
-            <View style={s.crown}><Icon name="lorc/crown-coin" size={18} color="#E0A800" /></View>
-          )}
-        </TouchableOpacity>
-      </Bob>
+      {isFrontier ? <Bob active={isLive}>{nodeButton}</Bob> : nodeButton}
       <View style={s.nodeMeta} pointerEvents="none">
         {/* Practice earns no stars */}
         {!locked && !practice && <StarRow stars={stars} size={15} />}
@@ -423,9 +439,9 @@ const MapNode: React.FC<{
       )}
       {isFrontier && (
         <View style={s.avatar} pointerEvents="none">
-          <Bob amount={3}>
+          <Bob amount={3} active={isLive}>
             <View style={s.avatarBubble}>
-              <FighterAvatar character={fighterName} size={30} mood="anticipation" />
+              <FighterAvatar character={fighterName} size={30} mood="anticipation" animate={isLive} />
             </View>
           </Bob>
         </View>
@@ -438,7 +454,7 @@ const MapNode: React.FC<{
       {arriveAtMs === undefined ? content : <Arrival delay={arriveAtMs} size={size} still={still}>{content}</Arrival>}
     </View>
   );
-};
+});
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#E8F6E3' },

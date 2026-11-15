@@ -7,6 +7,7 @@
  *
  * Everything is synthesized by the chip (src/audio/chip.ts) — no audio files.
  */
+import { getIsAppActive, subscribeAppActive } from '@/utils/appLifecycle';
 import { band, CUE_NAMES } from './band';
 import { chip, noteToFreq } from './chip';
 import type { FightMood } from './director';
@@ -18,10 +19,30 @@ import { WEAPON_VOICES } from './voices';
 
 export const audioSupported = (): boolean => chip.available;
 
+const setAudioSessionType = (type: 'playback' | 'ambient') => {
+  if (typeof navigator === 'undefined') return;
+  const nav = navigator as unknown as { audioSession?: { type: string } };
+  if (nav.audioSession && nav.audioSession.type !== type) {
+    try { nav.audioSession.type = type; } catch { /* unsupported */ }
+  }
+};
+
+const suspendIfSilent = () => {
+  if (!audioFlags.music && !audioFlags.sfx) {
+    band.halt();
+    chip.suspend();
+    setAudioSessionType('ambient');
+  }
+};
+
 export const setMusicEnabled = (on: boolean) => {
   audioFlags.music = on;
-  if (!on) band.halt();
-  else if (band.current) band.play(band.current);
+  if (!on) {
+    band.halt();
+    suspendIfSilent();
+  } else if (band.current) {
+    band.play(band.current);
+  }
 };
 let sfxSetting = true;
 let sfxOverride: boolean | null = null;
@@ -29,6 +50,7 @@ let sfxOverride: boolean | null = null;
 export const setSfxEnabled = (on: boolean) => {
   sfxSetting = on;
   audioFlags.sfx = sfxOverride ?? sfxSetting;
+  suspendIfSilent();
 };
 /**
  * A screen with its own sound switch (Adventure's map button) decides for as
@@ -37,6 +59,7 @@ export const setSfxEnabled = (on: boolean) => {
 export const setSfxOverride = (on: boolean | null) => {
   sfxOverride = on;
   audioFlags.sfx = sfxOverride ?? sfxSetting;
+  suspendIfSilent();
 };
 
 /**
@@ -46,17 +69,23 @@ export const setSfxOverride = (on: boolean | null) => {
  * inside that gesture.
  */
 export const unlockAudio = () => {
+  if (!getIsAppActive()) return;
+  if (!audioFlags.music && !audioFlags.sfx) return;
   if (!chip.ensure()) return;
   const ctx = chip.liveContext;
   if (!ctx) return;
   // Web Audio is "ambient" on iOS by default, so the ring/silent switch mutes
-  // it. Mark this as playback audio (Safari 16.4+). Players can still mute
-  // with the in-game toggles.
-  const nav = navigator as unknown as { audioSession?: { type: string } };
-  if (nav.audioSession && nav.audioSession.type !== 'playback') {
-    try { nav.audioSession.type = 'playback'; } catch { /* unsupported */ }
+  // it. Mark this as playback audio while actively playing (Safari 16.4+).
+  setAudioSessionType('playback');
+  if (ctx.state !== 'running') {
+    void Promise.resolve(ctx.resume())
+      .then(() => {
+        if (getIsAppActive() && ctx.state === 'running' && band.current && audioFlags.music) {
+          band.play(band.current);
+        }
+      })
+      .catch(() => undefined);
   }
-  if (ctx.state !== 'running') void ctx.resume().catch(() => undefined);
   try {
     // One silent sample — the classic iOS "unlock" nudge
     const b = ctx.createBuffer(1, 1, ctx.sampleRate);
@@ -68,20 +97,40 @@ export const unlockAudio = () => {
 };
 
 const installGestureUnlock = () => {
+  // Always monitor app foreground/background lifecycle so backgrounded apps never
+  // keep Web Audio DSP or Band sequencers running (even on iOS 'playback' audioSession).
+  subscribeAppActive((active) => {
+    if (!active) {
+      band.halt();
+      chip.suspend();
+      setAudioSessionType('ambient');
+      return;
+    }
+    if (!audioFlags.music && !audioFlags.sfx) return;
+    const ctx = chip.liveContext;
+    if (ctx && ctx.state !== 'closed') {
+      setAudioSessionType('playback');
+      void Promise.resolve(ctx.resume())
+        .then(() => {
+          if (getIsAppActive() && ctx.state === 'running' && audioFlags.music && band.current) {
+            band.play(band.current);
+          }
+        })
+        .catch(() => undefined);
+    }
+  });
+
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
   if (!chip.available) return;
   const events = ['touchend', 'pointerup', 'click', 'keydown'];
   const handler = () => {
+    if (!getIsAppActive()) return;
+    if (!audioFlags.music && !audioFlags.sfx) return;
     unlockAudio();
     if (chip.liveContext?.state === 'running' && band.current && audioFlags.music) band.play(band.current);
   };
   // Keep listening: iOS can interrupt the context again later (calls, Siri, app switch)
   events.forEach(e => document.addEventListener(e, handler, { capture: true, passive: true }));
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && chip.liveContext && chip.liveContext.state !== 'running') {
-      void chip.liveContext.resume().catch(() => undefined);
-    }
-  });
 };
 
 // ─── Music ─────────────────────────────────────────────────────────────────
@@ -117,6 +166,7 @@ let lastPlayed: Partial<Record<SfxName, number>> = {};
 
 export const sfx = (name: SfxName) => {
   if (!audioFlags.sfx) return;
+  if (nowOverride === null && !getIsAppActive()) return;
   if (!chip.ensure()) return;
   const now = nowOverride ?? chip.now;
   // de-dupe very rapid repeats (e.g. 3 coin events from one match)

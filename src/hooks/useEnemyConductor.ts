@@ -59,9 +59,12 @@ export function useEnemyConductor(options: UseEnemyConductorOptions): EnemyCondu
     [hp, maxHp, isBoss, inactivityRatio, isActiveCombat, naturallySleepy]
   );
 
-  return {
-    mood,
-    reaction,
-    triggerReaction: emitReaction,
-  };
+  return useMemo(
+    () => ({
+      mood,
+      reaction,
+      triggerReaction: emitReaction,
+    }),
+    [mood, reaction, emitReaction]
+  );
 }

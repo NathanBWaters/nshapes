@@ -9,6 +9,8 @@
  * poteto's approach. On platforms without Web Audio, everything is a no-op.
  */
 
+import { getIsAppActive } from '@/utils/appLifecycle';
+
 export type Duty = 0.125 | 0.25 | 0.5 | 0.75;
 export type Voice = 'pulse1' | 'pulse2' | 'wave' | 'noise';
 export type Bus = 'music' | 'sfx';
@@ -94,6 +96,9 @@ export class Chip {
 
   /** Create the context lazily (must happen after a user gesture on the web). */
   ensure(): boolean {
+    // Offline rendering swaps `ctx` temporarily via `useContext` — never block or resume hardware audio.
+    if (this.ctx && this.ctx !== this.live) return true;
+    if (!getIsAppActive()) return false;
     if (this.ctx) {
       // iOS reports 'interrupted' after calls/app switches, not just 'suspended'
       if (this.live && this.live.state !== 'running' && this.live.state !== 'closed') void this.live.resume().catch(() => undefined);
@@ -109,6 +114,14 @@ export class Chip {
     } catch {
       this.ctx = null;
       return false;
+    }
+  }
+
+  /** Suspend the hardware AudioContext so DSP nodes (convolvers/delays) consume zero CPU when idle or backgrounded. */
+  suspend(): void {
+    const state = this.live?.state as string | undefined;
+    if (this.live && state !== 'suspended' && state !== 'closed') {
+      void this.live.suspend().catch(() => undefined);
     }
   }
 

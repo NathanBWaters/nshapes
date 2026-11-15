@@ -147,7 +147,11 @@ const chooseSet = (s: RunState, sets: Card[][], bot: BotProfile, rng: Rng): Card
     (albumHeld ? prefer(set => albumPageOf(set, s.attributes, s.gear.album) !== null) : null) ??
     // A weapon that grows on a kind of Set (two corners, a 1-2-3, the same color twice) is worth hunting for
     prefer(set => setWouldGrow(s, set, s.attributes)) ??
-    (bot.huntsRainbows && s.features.has('rainbow') && rng.next() < 0.5 ? prefer(rainbow) : null) ??
+    (s.arcana.includes('monochrome_pact')
+      ? prefer(set => countDifferentAttributes(set, s.attributes) === 1)
+      : bot.huntsRainbows && s.features.has('rainbow') && rng.next() < 0.5
+        ? prefer(rainbow)
+        : null) ??
     prefer(set => !has(set, snared)) ??
     rng.pick(sets)
   );

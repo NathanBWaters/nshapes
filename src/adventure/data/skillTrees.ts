@@ -241,9 +241,9 @@ const TREES: Record<CharacterName, TreeSpec> = {
       '1-6': ['Echo Step', 'lorc/echo-ripples', 'Every echo adds a Combo step.', rule(T.weapon('echo'), [E.combo(1)]), 2, [6, 4]],
       '1-5': ['Overdrive', 'lorc/lightning-helix', '3 Sets within 4s: your next weapon trigger fires twice.', rule(T.within(3, 4000), [E.doubleNext], undefined, 'Overdrive!'), 3, [4, 4]],
       '1-9': ['Afterburn', 'lorc/bright-explosion', 'Every explosion has a 50% chance to add a Combo step.', rule(T.weapon('explosion'), [E.combo(1)], [C.chance(50)]), 3, [5, 5]],
-      '1-8': ['Flash Fire', 'lorc/fire-ring', 'At Combo 4+, every Set makes your next weapon trigger fire twice.', rule(T.set, [E.doubleNext], [C.combo(4)]), 4, [6, 6]],
+      '1-8': ['Flash Fire', 'lorc/fire-ring', 'At Combo 5+, every Set makes your next weapon trigger fire twice.', rule(T.set, [E.doubleNext], [C.combo(5)]), 4, [6, 6]],
       '1-7': ['Showstopper', 'lorc/flat-star', "Hot Streak's multiplier +1.", tune('hotStreak.multiplier', 1), 4, [4, 6]],
-      '1-10': ['Blaze of Glory', 'lorc/trophy', 'At Combo 4+, a Set has a 50% chance to make your next Set deal ×2.', rule(T.set, [E.times(2)], [C.combo(4), C.chance(50)], 'Glory!'), 5, [5, 7]],
+      '1-10': ['Blaze of Glory', 'lorc/trophy', 'At Combo 5+, a Set has a 25% chance to make your next Set deal ×2.', rule(T.set, [E.times(2)], [C.combo(5), C.chance(25)], 'Glory!'), 5, [5, 7]],
       'x-1': [
         'Hot Pursuit',
         'lorc/comet-spark',
@@ -274,7 +274,7 @@ const TREES: Record<CharacterName, TreeSpec> = {
   Badger: {
     roots: [[1, 0], [5, 0]],
     nodes: {
-      '0-2': ['Snarl', 'lorc/bestial-fangs', 'Every mistake also bites the foe for 5.', rule(T.mistake, [E.damage(5)]), 1, [1, 1]],
+      '0-2': ['Snarl', 'lorc/bestial-fangs', 'Every mistake also bites the foe for 8.', rule(T.mistake, [E.damage(8)]), 1, [1, 1]],
       '0-1': ['Bad Temper', 'lorc/fist', 'Each grudge releases +1 more damage.', tune('grudge.damage', 1), 2, [1, 2]],
       '0-7': ['Hard Lesson', 'lorc/light-bulb', 'Every mistake gives you a hint.', rule(T.mistake, [E.hint(1)]), 2, [2, 2]],
       '0-3': ['Seething', 'lorc/skull-crack', 'Hold 1 more grudge.', tune('grudge.max', 1), 2, [0, 3]],
@@ -296,10 +296,17 @@ const TREES: Record<CharacterName, TreeSpec> = {
       '1-3': ['Hunker Down', 'lorc/checked-shield', 'Losing a heart gives you a grace.', rule(T.hurt, [E.grace(1)]), 2, [5, 2]],
       '1-2': ['Scavenger', 'lorc/crown-coin', 'Every mistake drops 2 coins.', rule(T.mistake, [E.coins(2)]), 2, [4, 2]],
       '1-4': ['Thicker Hide', 'lorc/turtle-shell', '1 more mistake each wave costs no heart.', tune('thickHide.perWave', 1), 2, [6, 3]],
-      '1-5': ['Lucky Dig', 'lorc/cycle', 'Every grace you gain deals 6 damage.', rule(T.weapon('grace'), [E.damage(6)]), 3, [6, 4]],
+      '1-5': ['Lucky Dig', 'lorc/cycle', 'Every grace you gain deals 8 damage.', rule(T.weapon('grace'), [E.damage(8)]), 3, [6, 4]],
       '1-7': ['Armored Hide', 'lorc/turtle', '1 more mistake each wave costs no heart.', tune('thickHide.perWave', 1), 3, [5, 5]],
       '1-8': ['Grace Strike', 'lorc/angel-outfit', 'Every grace save fires a column laser.', rule(T.graceUsed, [E.laser(A.column)], undefined, 'Saved!'), 4, [5, 6]],
-      '1-9': ['Stubborn', 'lorc/diamond-hard', '2 more mistakes per fight cost no heart.', { modifiers: { freeMistakes: 2 } }, 4, [4, 7]],
+      '1-9': [
+        'Stubborn',
+        'lorc/diamond-hard',
+        '2 more mistakes per fight cost no heart, and Sets deal +1 per grace held.',
+        { modifiers: { freeMistakes: 2 }, rules: [on(T.set, [{ do: 'damage', amount: 1, per: 'grace' }])] },
+        4,
+        [4, 7],
+      ],
       '1-10': ['Jackpot', 'delapouite/coins-pile', 'Every mistake has a 1-in-3 chance to make a free Set for you.', rule(T.mistake, [E.autoSet], [C.chance(33)], 'Jackpot!'), 5, [5, 8]],
       'x-1': [
         'Grudge Match',
@@ -401,7 +408,7 @@ const TREES: Record<CharacterName, TreeSpec> = {
       '0-6': ['Tail Chase', 'lorc/cycle', '3 Sets within 5s: re-deal the board clean.', rule(T.within(3, 5000), [E.redeal], undefined, 'Zoom!'), 4, [6, 1]],
       '0-8': ['Puppy Power', 'lorc/flat-star', 'Every Zoomies re-deal turns 3 cards into power cards.', tune('zoomies.powerCards', 3), 4, [3, 2]],
       '0-10': ['Top Dog', 'lorc/trophy', 'Every time the board grows, your next Set deals ×2.', rule(T.weapon('growth'), [E.times(2)], undefined, 'Top Dog!'), 4, [2, 3]],
-      '1-8': ['Power Fetch', 'lorc/fist', 'Matching a power or gold card: 50% chance every card deals +1 more when matched.', rule(T.bonusCard, [E.empower(1)], [C.chance(50)], 'Power!'), 4, [4, 3]],
+      '1-8': ['Power Fetch', 'lorc/fist', 'Matching a power or gold card: 35% chance every card deals +1 more when matched.', rule(T.bonusCard, [E.empower(1)], [C.chance(35)], 'Power!'), 4, [4, 3]],
       'x-1': ['Good Boy', 'delapouite/sitting-dog', 'Matching a power or gold card grows the board by 1 card.', rule(T.bonusCard, [E.growBoard(1)]), 3, [3, 4]],
       'x-2': [
         'Herding',

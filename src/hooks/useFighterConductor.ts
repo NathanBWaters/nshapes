@@ -158,18 +158,33 @@ export function useFighterConductor({
     [health, remainingTime, score, targetScore, selectedCount, streak, isBoardIdle]
   );
 
-  return {
-    reaction,
-    mood,
-    streak,
-    setSelectedCount: handleSelectedCountChange,
-    setIsBoardIdle,
-    triggerReaction: fireReaction,
-    triggerMatch,
-    triggerMistake,
-    triggerPowerup,
-    triggerHint,
-    triggerHeal,
-    triggerEntrance,
-  };
+  return useMemo(
+    () => ({
+      reaction,
+      mood,
+      streak,
+      setSelectedCount: handleSelectedCountChange,
+      setIsBoardIdle,
+      triggerReaction: fireReaction,
+      triggerMatch,
+      triggerMistake,
+      triggerPowerup,
+      triggerHint,
+      triggerHeal,
+      triggerEntrance,
+    }),
+    [
+      reaction,
+      mood,
+      streak,
+      handleSelectedCountChange,
+      fireReaction,
+      triggerMatch,
+      triggerMistake,
+      triggerPowerup,
+      triggerHint,
+      triggerHeal,
+      triggerEntrance,
+    ]
+  );
 }

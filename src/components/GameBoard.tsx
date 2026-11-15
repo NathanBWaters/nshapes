@@ -1,13 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { memo, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { View, StyleSheet } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSequence,
   withTiming,
-  withRepeat,
-  interpolateColor,
-  Easing,
 } from 'react-native-reanimated';
 import { Card as CardType, PlayerStats, CardReward, AttributeName, Weapon, Shape, Color, BoardConnection } from '@/types';
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
@@ -38,6 +35,11 @@ import type { EnemyReactionEvent } from '@/utils/enemyAnimations';
 const REWARD_REVEAL_MS = 1500;
 
 const DEFAULT_ATTRIBUTES: AttributeName[] = ['shape', 'color', 'number', 'shading'];
+const EMPTY_SHAPES_SET = new Set<Shape>();
+const EMPTY_COLORS_SET = new Set<Color>();
+const EMPTY_COLOR_COUNTS = new Map<Color, number>();
+const EMPTY_WEAPONS_TRIGGERED = new Set<string>();
+const EMPTY_MATCH_TIMES: number[] = [];
 
 interface GameBoardProps {
   cards: CardType[];
@@ -121,28 +123,54 @@ const GameBoard: React.FC<GameBoardProps> = ({
   // Idle detection for the fighter's sleepy state
   const [isSleepyIdle, setIsSleepyIdle] = useState(false);
   const lastInteractionTimeRef = useRef(Date.now());
+  const pausedAtRef = useRef<number | null>(isPaused ? Date.now() : null);
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Trigger fighter sleepy state after 8s without interaction
   useEffect(() => {
-    const checkIdle = () => {
-      const timeSinceInteraction = Date.now() - lastInteractionTimeRef.current;
-      setIsSleepyIdle(timeSinceInteraction >= 8000);
+    if (isPaused) {
+      if (pausedAtRef.current === null) pausedAtRef.current = Date.now();
+    } else if (pausedAtRef.current !== null) {
+      lastInteractionTimeRef.current += Date.now() - pausedAtRef.current;
+      pausedAtRef.current = null;
+    }
+  }, [isPaused]);
+
+  const scheduleIdleTimer = useCallback(() => {
+    if (idleTimerRef.current) {
+      clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = null;
+    }
+    if (isPaused || isSleepyIdle) return;
+    const remaining = Math.max(0, 8000 - (Date.now() - lastInteractionTimeRef.current));
+    idleTimerRef.current = setTimeout(() => {
+      idleTimerRef.current = null;
+      setIsSleepyIdle(true);
+    }, remaining);
+  }, [isPaused, isSleepyIdle]);
+
+  // One-shot 8s idle timer (stopped when paused, already sleepy, or unmounted)
+  useEffect(() => {
+    scheduleIdleTimer();
+    return () => {
+      if (idleTimerRef.current) {
+        clearTimeout(idleTimerRef.current);
+        idleTimerRef.current = null;
+      }
     };
+  }, [scheduleIdleTimer]);
 
-    // Check immediately and then every second
-    checkIdle();
-    const interval = setInterval(checkIdle, 1000);
-
-    return () => clearInterval(interval);
-  }, []);
+  const markBoardInteraction = useCallback(() => {
+    lastInteractionTimeRef.current = Date.now();
+    setIsSleepyIdle(prev => (prev ? false : prev));
+    scheduleIdleTimer();
+  }, [scheduleIdleTimer]);
 
   // Reset idle timer on any card selection
   useEffect(() => {
     if (selectedCards.length > 0) {
-      lastInteractionTimeRef.current = Date.now();
-      setIsSleepyIdle(false);
+      markBoardInteraction();
     }
-  }, [selectedCards]);
+  }, [selectedCards, markBoardInteraction]);
 
   // Report sleepy board-idle state to parent (for fighter drowsy animation)
   useEffect(() => {
@@ -151,29 +179,6 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
   // Screen shake for explosions and failures
   const { shakeStyle, triggerShake, shake } = useScreenShake();
-
-  // Subtle background color animation - creates ambient life
-  const backgroundProgress = useSharedValue(0);
-
-  useEffect(() => {
-    // Very slow color shift cycle (45 seconds)
-    backgroundProgress.value = withRepeat(
-      withTiming(1, { duration: 45000, easing: Easing.inOut(Easing.sin) }),
-      -1, // infinite
-      true // reverse
-    );
-  }, [backgroundProgress]);
-
-  const animatedBoardStyle = useAnimatedStyle(() => {
-    // Subtle shift between paper beige variants
-    const backgroundColor = interpolateColor(
-      backgroundProgress.value,
-      [0, 0.5, 1],
-      [COLORS.paperBeige, '#F5EFE6', '#FAF6F0'] // Very subtle warm/cool variants
-    );
-
-    return { backgroundColor };
-  });
 
   const successFlashOpacity = useSharedValue(0);
   const failureFlashOpacity = useSharedValue(0);
@@ -377,6 +382,8 @@ const GameBoard: React.FC<GameBoardProps> = ({
     // Don't allow clicking on cards that are currently being revealed as rewards
     if (revealingRewards.some(r => r.cardId === card.id)) return;
 
+    markBoardInteraction();
+
     // If card is already selected, deselect it
     if (selectedCards.some(c => c.id === card.id)) {
       setSelectedCards(selectedCards.filter(c => c.id !== card.id));
@@ -473,6 +480,12 @@ const GameBoard: React.FC<GameBoardProps> = ({
     }
   };
 
+  const handleCardClickRef = useRef(handleCardClick);
+  handleCardClickRef.current = handleCardClick;
+  const stableHandleCardClick = useCallback((card: CardType) => {
+    handleCardClickRef.current(card);
+  }, []);
+
   // Auto-player - automatically finds and selects valid SETs (for testing/review)
   useAutoPlayer({
     isActive: autoPlayer && isPlayerTurn,
@@ -481,7 +494,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
     activeAttributes,
     matchedCardIds,
     graces: playerStats.graces ?? 0,
-    onSelectCard: handleCardClick,
+    onSelectCard: stableHandleCardClick,
   });
 
   // Get current round stats for defeat progress display
@@ -490,16 +503,16 @@ const GameBoard: React.FC<GameBoardProps> = ({
     currentStreak: 0,
     maxStreak: 0,
     invalidMatches: 0,
-    matchTimes: [],
+    matchTimes: EMPTY_MATCH_TIMES,
     timeRemaining: 0,
     cardsRemaining: cards.length,
     tripleCardsCleared: 0,
     faceDownCardsMatched: 0,
     bombsDefused: 0,
     countdownCardsMatched: 0,
-    shapesMatched: new Set<Shape>(),
-    colorsMatched: new Set<Color>(),
-    colorMatchCounts: new Map<Color, number>(),
+    shapesMatched: EMPTY_SHAPES_SET,
+    colorsMatched: EMPTY_COLORS_SET,
+    colorMatchCounts: EMPTY_COLOR_COUNTS,
     allDifferentMatches: 0,
     allSameColorMatches: 0,
     squiggleMatches: 0,
@@ -508,7 +521,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
     hintsRemaining: playerStats.hints ?? 0,
     gracesRemaining: playerStats.graces ?? 0,
     damageReceived: 0,
-    weaponEffectsTriggered: new Set<string>(),
+    weaponEffectsTriggered: EMPTY_WEAPONS_TRIGGERED,
     currentScore: 0,
     targetScore: 0,
     timeGainTriggersThisRound: 0,
@@ -583,7 +596,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
         </View>
       )}
 
-      <Animated.View nativeID="gameboard-grid" style={[styles.board, animatedBoardStyle]}>
+      <View nativeID="gameboard-grid" style={styles.board}>
         {rows.map((row, rowIndex) => {
           // Calculate how many empty slots we need to fill out the row
           const emptySlots = COLUMNS - row.length;
@@ -602,11 +615,14 @@ const GameBoard: React.FC<GameBoardProps> = ({
                   conn => conn.positionA === boardIndex || conn.positionB === boardIndex
                 );
 
-                const cardWithState = {
-                  ...card,
-                  selected: isSelected,
-                  isHint: isHint
-                };
+                const cardWithState =
+                  Boolean(card.selected) === isSelected && Boolean(card.isHint) === isHint
+                    ? card
+                    : {
+                        ...card,
+                        selected: isSelected,
+                        isHint: isHint,
+                      };
 
                 return (
                   <View
@@ -624,7 +640,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
                     ) : (
                       <Card
                         card={cardWithState}
-                        onClick={handleCardClick}
+                        onClick={stableHandleCardClick}
                         disabled={isMatched || !isPlayerTurn}
                         onBurnComplete={handleCardBurnComplete}
                         isPaused={isPaused}
@@ -641,7 +657,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
             </View>
           );
         })}
-      </Animated.View>
+      </View>
     </Animated.View>
   );
 };
@@ -706,4 +722,4 @@ const styles = StyleSheet.create({
   // Borders/outlines are EXCLUSIVELY reserved for selection state
 });
 
-export default GameBoard;
+export default memo(GameBoard);

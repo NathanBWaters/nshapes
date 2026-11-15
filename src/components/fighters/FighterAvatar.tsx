@@ -8,6 +8,7 @@ import {
   useCreatureMotion,
 } from '@/components/creatures/useCreatureMotion';
 import { Character } from '@/types';
+import { useAppActive } from '@/hooks/useAppActive';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { COLORS } from '@/utils/colors';
 import {
@@ -454,8 +455,9 @@ export const FighterAvatar: React.FC<FighterAvatarProps> = ({
   framed = false,
   testID,
 }) => {
+  const appActive = useAppActive();
   const reducedMotion = useReducedMotion();
-  const shouldAnimate = animate && !reducedMotion;
+  const shouldAnimate = animate && !reducedMotion && appActive;
 
   const characterName =
     typeof character === 'string'

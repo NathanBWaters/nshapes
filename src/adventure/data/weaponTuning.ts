@@ -59,9 +59,9 @@ export const ADVENTURE_TUNING: Record<string, AdventureTuning> = {
     perLevel: { ricochetChance: 5.5, ricochetChainChance: 5, ricochetDamage: 0.5 },
   },
   'echo-stone': {
-    effects: { echoChance: 10 },
+    effects: { echoChance: 15 },
     perLevel: { echoChance: 2.5 },
-    extra: { strike: dmg('Echo damage', 3, 1.5) },
+    extra: { strike: dmg('Echo damage', 3, 1.75) },
     rider: v => ({ rules: [strike({ on: 'weapon', kind: 'echo' }, v.strike)] }),
   },
   connector: { effects: { connectionChance: 25 }, perLevel: { connectionChance: 6 } },
@@ -94,8 +94,10 @@ export const ADVENTURE_TUNING: Record<string, AdventureTuning> = {
     rider: v => ({ modifiers: { conditionalDamage: [{ when: [{ kind: 'heartsFull' }], amount: v.vigor }] } }),
   },
   'soul-harvest': {
-    effects: { ricochetChance: 10, ricochetDamage: 0.5, bridgeChance: 15 },
-    perLevel: { ricochetChance: 3, ricochetDamage: 0.25, bridgeChance: 5 },
+    effects: { ricochetChance: 14, ricochetDamage: 0.5, bridgeChance: 22 },
+    perLevel: { ricochetChance: 3.5, ricochetDamage: 0.25, bridgeChance: 6 },
+    extra: { strike: dmg('Soul heal damage', 3, 1) },
+    rider: v => ({ rules: [strike({ on: 'healed' }, v.strike)] }),
   },
   'life-link': {
     effects: { maxHealth: 1, health: 1, explosionChance: 8, bridgeChance: 50 },
@@ -179,12 +181,12 @@ export const ADVENTURE_TUNING: Record<string, AdventureTuning> = {
 
   // ── Echoes & links ────────────────────────────────────────────────────────
   'chain-reaction': {
-    effects: { echoChance: 6, chainReactionChance: 30 },
+    effects: { echoChance: 7, chainReactionChance: 30 },
     perLevel: { echoChance: 2, chainReactionChance: 10 },
     extra: { strike: dmg('Echo damage', 2, 1) },
     rider: v => ({ rules: [strike({ on: 'weapon', kind: 'echo' }, v.strike)] }),
   },
-  'cascade-core': { effects: { echoChance: 6, burnDamage: 1, bridgeChance: 40 }, perLevel: { echoChance: 2, burnDamage: 0.5, bridgeChance: 10 } },
+  'cascade-core': { effects: { echoChance: 9, burnDamage: 1, bridgeChance: 45 }, perLevel: { echoChance: 2.5, burnDamage: 0.5, bridgeChance: 10 } },
   'neural-network': { effects: { connectionChance: 12, bonusConnectionChance: 30 }, perLevel: { connectionChance: 3, bonusConnectionChance: 10 } },
   'echo-chamber': { effects: { startingConnections: 1, echoTimeBonusPerLink: 0.5 }, perLevel: { startingConnections: 0.25, echoTimeBonusPerLink: 0.25 } },
 };

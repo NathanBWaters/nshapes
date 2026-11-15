@@ -71,21 +71,23 @@ interface GameMenuProps {
   /** Dev tools page (only given in dev mode) */
   devCallbacks?: DevModeCallbacks;
   copilot?: CopilotControl;
+  /** Controlled open state when parent needs to auto-open (e.g., background auto-pause) */
+  menuOpen?: boolean;
   // Callback when menu open state changes (for pausing game)
   onMenuOpenChange?: (isOpen: boolean) => void;
 }
 
 type MenuScreen = 'menu' | 'stats' | 'weapons' | 'options' | 'dev';
 
-const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], character, onExitGame, onEndRoundEarly, canEndRoundEarly = false, devCallbacks, copilot, onMenuOpenChange }) => {
+const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], character, onExitGame, onEndRoundEarly, canEndRoundEarly = false, devCallbacks, copilot, menuOpen, onMenuOpenChange }) => {
   const copilotMode = copilot !== undefined;
   const [internalModalOpen, setInternalModalOpen] = useState(false);
   const [currentScreen, setCurrentScreen] = useState<MenuScreen>('menu');
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [soundEnabled, handleToggleSound] = useSoundSetting();
 
-  // Use controlled mode when copilotMode is true, otherwise use internal state
-  const isModalOpen = copilot ? copilot.menuOpen : internalModalOpen;
+  // Use controlled mode when copilotMode is true or menuOpen prop is supplied
+  const isModalOpen = copilot ? copilot.menuOpen : (menuOpen ?? internalModalOpen);
 
   const openModal = () => {
     setCurrentScreen('menu');
@@ -679,6 +681,7 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
   const handleExitConfirm = () => {
     setShowExitConfirm(false);
     setInternalModalOpen(false);
+    onMenuOpenChange?.(false);
     if (onExitGame) {
       onExitGame();
     }

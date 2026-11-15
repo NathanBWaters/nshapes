@@ -103,6 +103,37 @@ export function stepSecondOrder(
 }
 
 /**
+ * In-place second-order spring-damper step for Reanimated UI-thread worklets.
+ * Mutates `state` fields directly via `sharedValue.modify(...)` to avoid per-frame object allocations.
+ */
+export function stepSecondOrderInPlace(
+  state: SecondOrderState,
+  target: number,
+  dtRaw: number,
+  f: number,
+  z: number,
+  r: number
+): void {
+  'worklet';
+  const dt = Math.min(Math.max(dtRaw, 0.0005), 0.05);
+  const safeF = Math.max(0.05, f);
+  const w = TAU * safeF;
+  const k1 = z / (Math.PI * safeF);
+  const k2 = 1 / (w * w);
+  const k3 = (r * z) / w;
+  const k2Stable = Math.max(k2, (dt * dt) / 2 + (dt * k1) / 2, dt * k1);
+
+  const xd = (target - state.xp) / dt;
+  const nextY = state.y + dt * state.yd;
+  const nextYd =
+    state.yd + (dt * (target + k3 * xd - nextY - k1 * state.yd)) / k2Stable;
+
+  state.y = nextY;
+  state.yd = nextYd;
+  state.xp = target;
+}
+
+/**
  * Evaluates an organic, asymmetric multi-harmonic breath wave in `[-1, 1]`.
  * - Phase skewing (`phase + skew * sin(phase)`) creates a fuller inhale and gentler exhale.
  * - Second harmonic adds subtle upper-chest/shoulder settle.

@@ -1,21 +1,25 @@
-import React, { useCallback } from 'react';
+import React, { memo, useCallback, useState } from 'react';
 import { View, Text, StyleSheet, Platform, TouchableOpacity } from 'react-native';
 import Svg, { Ellipse, Path, Polygon, Defs, Pattern, Rect } from 'react-native-svg';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming } from 'react-native-reanimated';
 import { Card as CardType, Background } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { BACKGROUND_COLORS } from '@/utils/gameConfig';
 import { useBurnTimer } from '@/hooks/useBurnTimer';
-import { DURATION } from '@/utils/animation';
 import Icon, { type IconName } from './Icon';
 
 /** The snare icon points down; turn it to face the card the snare points at. */
 const SNARE_ROTATION: Record<NonNullable<CardType['snare']>, string> = { down: '0deg', left: '90deg', up: '180deg', right: '-90deg' };
 
-const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
+const canHoverWeb = (): boolean => {
+  if (Platform.OS !== 'web' || typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return false;
+  }
+  try {
+    return window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+  } catch {
+    return false;
+  }
+};
 
 // SVG viewBox dimensions (1:2 width:height ratio)
 const SVG_WIDTH = 20;
@@ -44,11 +48,7 @@ const Card: React.FC<CardProps> = ({
   // Cards that cannot be selected (dud or face-down)
   const isUnselectable = isDud || isFaceDown || !!card.locked;
 
-  const scale = useSharedValue(1);
-  const translateY = useSharedValue(0);
-  const opacity = useSharedValue(1);
-  const shadowRadius = useSharedValue(0);
-  const hoverGlow = useSharedValue(0); // Web-only hover glow
+  const [isHovered, setIsHovered] = useState(false);
 
   const handleBurnComplete = useCallback(() => {
     onBurnComplete?.(card);
@@ -61,27 +61,15 @@ const Card: React.FC<CardProps> = ({
     onComplete: handleBurnComplete,
   });
 
-  // Web-only hover handlers
+  // Desktop fine-pointer hover glow (shadow only; borders/outlines are strictly for selection)
   const handleHoverIn = useCallback(() => {
-    if (Platform.OS !== 'web' || selected || disabled) return;
-    hoverGlow.value = withTiming(1, { duration: DURATION.fast });
-  }, [selected, disabled, hoverGlow]);
+    if (!canHoverWeb() || selected || disabled || isUnselectable) return;
+    setIsHovered(true);
+  }, [selected, disabled, isUnselectable]);
 
   const handleHoverOut = useCallback(() => {
-    if (Platform.OS !== 'web') return;
-    hoverGlow.value = withTiming(0, { duration: DURATION.fast });
-  }, [hoverGlow]);
-
-  // Animated style for the card
-  const animatedCardStyle = useAnimatedStyle(() => ({
-    transform: [
-      { scale: scale.value },
-      { translateY: translateY.value },
-    ],
-    shadowRadius: shadowRadius.value + hoverGlow.value * 4,
-    shadowOpacity: 0.1,
-    opacity: opacity.value,
-  }));
+    setIsHovered(prev => (prev ? false : prev));
+  }, []);
 
   // Multi-hit cards: health > 1 shows badge, health = 1 is regular (no badge), health = 0 means removed
   // Default health is 1 (undefined treated as 1). Badge shows remaining hits needed.
@@ -292,12 +280,12 @@ const Card: React.FC<CardProps> = ({
   const isClickDisabled = disabled || isUnselectable;
 
   return (
-    <AnimatedTouchableOpacity
+    <TouchableOpacity
       testID={`card-${shape}-${color}-${number}-${shading}${isDud ? '-dud' : ''}${isFaceDown ? '-facedown' : ''}${hasBomb ? '-bomb' : ''}${hasCountdown ? '-countdown' : ''}`}
       accessibilityLabel={`${number} ${color} ${shading} ${shape}${card.background ? ` on ${card.background}` : ''}${isDud ? ', dud' : ''}${isFaceDown ? ', face down' : ''}${card.hasEvolutionItem ? (card.evolutionReady ? ', evolution ready' : ', dormant catalyst') : ''}${card.snare ? `, snare pointing ${card.snare}` : ''}${card.bounty ? `, bounty ${card.bounty}` : ''}`}
       style={[
         getCardStyle(),
-        animatedCardStyle,
+        isHovered && !selected && !disabled && !isUnselectable && styles.hoveredCard,
         // Note: Fire state shown via icon, not border styling
         webCursorStyle,
       ]}
@@ -395,7 +383,7 @@ const Card: React.FC<CardProps> = ({
 
       {/* Fire overlay - progressive darkening (no border, borders are for selection only) */}
       {card.onFire && !isDud && !isFaceDown && (
-        <Animated.View
+        <View
           style={[
             styles.fireOverlay,
             {
@@ -405,7 +393,7 @@ const Card: React.FC<CardProps> = ({
           pointerEvents="none"
         />
       )}
-    </AnimatedTouchableOpacity>
+    </TouchableOpacity>
   );
 };
 
@@ -450,13 +438,15 @@ const getCardBackgroundColor = (background?: Background) => {
 };
 
 // Stripe pattern for "striped" shading
-const StripesPattern: React.FC<{ id: string; color: string }> = ({ id, color }) => (
-  <Defs>
-    <Pattern id={id} patternUnits="userSpaceOnUse" width="4" height="4">
-      <Rect x="0" y="0" width="4" height="2" fill={color} />
-    </Pattern>
-  </Defs>
-);
+const StripesPattern: React.FC<{ id: string; color: string }> = memo(function StripesPattern({ id, color }) {
+  return (
+    <Defs>
+      <Pattern id={id} patternUnits="userSpaceOnUse" width="4" height="4">
+        <Rect x="0" y="0" width="4" height="2" fill={color} />
+      </Pattern>
+    </Defs>
+  );
+});
 
 const getFill = (color: string, shading: string, patternId: string, background?: Background) => {
   if (shading === 'solid') return getShapeColor(color, background);
@@ -464,7 +454,7 @@ const getFill = (color: string, shading: string, patternId: string, background?:
   return 'transparent';
 };
 
-const Oval: React.FC<ShapeProps> = ({ color, shading, background }) => {
+const Oval: React.FC<ShapeProps> = memo(function Oval({ color, shading, background }) {
   const strokeColor = getShapeColor(color, background);
   const patternId = `stripes-oval-${color}-${background || 'white'}`;
   return (
@@ -486,9 +476,9 @@ const Oval: React.FC<ShapeProps> = ({ color, shading, background }) => {
       />
     </Svg>
   );
-};
+});
 
-const Diamond: React.FC<ShapeProps> = ({ color, shading, background }) => {
+const Diamond: React.FC<ShapeProps> = memo(function Diamond({ color, shading, background }) {
   const strokeColor = getShapeColor(color, background);
   const patternId = `stripes-diamond-${color}-${background || 'white'}`;
   // Diamond points: top, right, bottom, left
@@ -509,9 +499,9 @@ const Diamond: React.FC<ShapeProps> = ({ color, shading, background }) => {
       />
     </Svg>
   );
-};
+});
 
-const Squiggle: React.FC<ShapeProps> = ({ color, shading, background }) => {
+const Squiggle: React.FC<ShapeProps> = memo(function Squiggle({ color, shading, background }) {
   const strokeColor = getShapeColor(color, background);
   const patternId = `stripes-squiggle-${color}-${background || 'white'}`;
   // S-curve squiggle path (scaled for 20x40 viewBox)
@@ -543,7 +533,7 @@ const Squiggle: React.FC<ShapeProps> = ({ color, shading, background }) => {
       />
     </Svg>
   );
-};
+});
 
 const styles = StyleSheet.create({
   powerBadge: {
@@ -815,6 +805,31 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.canvasWhite,
   },
+  hoveredCard: {
+    shadowRadius: 8,
+    shadowOpacity: 0.18,
+  },
 });
 
-export default Card;
+const areCardsShallowEqual = (a: CardType, b: CardType): boolean => {
+  if (a === b) return true;
+  const keysA = Object.keys(a) as (keyof CardType)[];
+  const keysB = Object.keys(b) as (keyof CardType)[];
+  if (keysA.length !== keysB.length) return false;
+  for (const key of keysA) {
+    if (!Object.prototype.hasOwnProperty.call(b, key) || !Object.is(a[key], b[key])) {
+      return false;
+    }
+  }
+  return true;
+};
+
+const areCardPropsEqual = (prev: CardProps, next: CardProps): boolean =>
+  prev.disabled === next.disabled &&
+  prev.isPaused === next.isPaused &&
+  prev.isConnected === next.isConnected &&
+  prev.onClick === next.onClick &&
+  prev.onBurnComplete === next.onBurnComplete &&
+  areCardsShallowEqual(prev.card, next.card);
+
+export default memo(Card, areCardPropsEqual);

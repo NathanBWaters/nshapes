@@ -31,6 +31,7 @@ import {
   getFireSpreadMultiplier,
 } from '@/utils/connectionUtils';
 import { useGameTimer } from '@/hooks/useGameTimer';
+import { useAppActive } from '@/hooks/useAppActive';
 import { useParticles } from '@/hooks/useParticles';
 import { useRoundStats } from '@/hooks/useRoundStats';
 import { useFighterConductor } from '@/hooks/useFighterConductor';
@@ -211,6 +212,7 @@ const Game: React.FC<GameProps> = ({
 
   // Menu open state - used to pause game when menu is open
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const appActive = useAppActive();
 
   // Last match timestamp for auto-hint timing (triggers 15s after last match)
   const [lastMatchTime, setLastMatchTime] = useState<number>(Date.now());
@@ -419,9 +421,31 @@ const Game: React.FC<GameProps> = ({
     setGamePhase('round_summary');
   };
 
+  // Auto-pause active timed rounds if the app is backgrounded or screen locks
+  useEffect(() => {
+    if (
+      !appActive &&
+      gamePhase === 'round' &&
+      state.gameStarted &&
+      !state.gameEnded &&
+      !state.roundCompleted &&
+      !disableTimeout
+    ) {
+      setIsMenuOpen(true);
+    }
+  }, [
+    appActive,
+    gamePhase,
+    state.gameStarted,
+    state.gameEnded,
+    state.roundCompleted,
+    disableTimeout,
+  ]);
+
   // Timer - countdown when in round phase
   // Use gameMode as additional dependency to ensure timer restarts when a new game begins
-  const isTimerActive = gamePhase === 'round' &&
+  const isTimerActive = appActive &&
+    gamePhase === 'round' &&
     state.gameStarted &&
     !state.gameEnded &&
     state.remainingTime > 0 &&
@@ -732,7 +756,10 @@ const Game: React.FC<GameProps> = ({
     setGamePhase('tutorial');
   };
 
-  const exitToMenu = () => setGamePhase('main_menu');
+  const exitToMenu = () => {
+    setIsMenuOpen(false);
+    setGamePhase('main_menu');
+  };
 
   // Handle enemy selection - player has chosen which enemy to fight
   const handleEnemySelect = (enemyOption: EnemyOption) => {
@@ -1900,7 +1927,7 @@ const Game: React.FC<GameProps> = ({
     triggerHint: hintTrigger > 0 ? hintTrigger : undefined,
     triggerClearHint: clearHintTrigger > 0 ? clearHintTrigger : undefined,
     onCardBurn: handleCardBurn,
-    isPaused: isMenuOpen,
+    isPaused: isMenuOpen || !appActive,
     lastMatchTime,
     autoPlayer: autoPlayerEnabled,
     timeGainContext: {
@@ -2060,6 +2087,8 @@ const Game: React.FC<GameProps> = ({
                 canEndRoundEarly={state.score >= state.targetScore}
                 devCallbacks={devCallbacks}
                 onMenuOpenChange={setIsMenuOpen}
+                menuOpen={isMenuOpen}
+                isTimerPaused={!isTimerActive}
               />
             </View>
 

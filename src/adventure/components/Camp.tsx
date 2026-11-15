@@ -341,6 +341,7 @@ const Camp: React.FC<Props> = ({ save, history = NO_BATTLES, onChange, onClose, 
                         size={50}
                         mood={selected ? 'anticipation' : 'idle'}
                         reaction={reactions[f.name] ?? null}
+                        animate={selected || Boolean(reactions[f.name])}
                         framed
                         interactive
                       />

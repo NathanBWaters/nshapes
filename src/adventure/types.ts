@@ -623,6 +623,8 @@ export interface FightLogLine {
 export interface FightLogSetMath {
   /** Points on the three matched cards (base 1 each + bonus + charge) */
   cards: number;
+  /** Shading Surge multiplier applied to matched cards when active (e.g. ×5) */
+  surgeMultiplier?: number;
   /** Points on cards the Set's weapon procs destroyed (explosion, laser, ricochet…) by kind */
   collateral: Partial<Record<NonNullable<CardReward['effectType']>, number>>;
   /** Flat per-Set bonuses (gear, skill nodes, passives, conditional damage, active evolutions) */
@@ -632,6 +634,8 @@ export interface FightLogSetMath {
   rainbow: boolean;
   /** Purity chain and trap bonus damage, added after the multiplier */
   extra: number;
+  /** Global Power multiplier applied at damage dealing (when > ×1) */
+  powerMultiplier?: number;
   /** Damage the Set itself dealt */
   hit: number;
   /** How many traits were all different */

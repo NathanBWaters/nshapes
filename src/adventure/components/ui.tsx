@@ -1,8 +1,9 @@
 /** Small shared UI primitives for Adventure screens (Retro-Modern style guide). */
 import React, { useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ViewStyle, StyleProp } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, withDelay, Easing } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, withDelay, cancelAnimation, Easing } from 'react-native-reanimated';
 import Icon, { IconName } from '@/components/Icon';
+import { useAppActive } from '@/hooks/useAppActive';
 import { COLORS } from '@/utils/colors';
 
 export const INK = COLORS.slateCharcoal;
@@ -120,11 +121,23 @@ export const Eyebrow: React.FC<{ text: string; color?: string }> = ({ text, colo
 
 /** Gentle bob for "play me next" nodes. */
 export const Bob: React.FC<{ children: React.ReactNode; active?: boolean; amount?: number }> = ({ children, active = true, amount = 4 }) => {
+  const appActive = useAppActive();
   const y = useSharedValue(0);
+  const running = active && appActive;
   useEffect(() => {
-    if (active) y.value = withRepeat(withSequence(withTiming(-amount, { duration: 600, easing: Easing.inOut(Easing.sin) }), withTiming(0, { duration: 600, easing: Easing.inOut(Easing.sin) })), -1);
-    else y.value = 0;
-  }, [active, amount, y]);
+    if (running) {
+      y.value = withRepeat(
+        withSequence(
+          withTiming(-amount, { duration: 600, easing: Easing.inOut(Easing.sin) }),
+          withTiming(0, { duration: 600, easing: Easing.inOut(Easing.sin) })
+        ),
+        -1
+      );
+      return () => cancelAnimation(y);
+    }
+    cancelAnimation(y);
+    y.value = 0;
+  }, [running, amount, y]);
   const st = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
   return <Animated.View style={st}>{children}</Animated.View>;
 };

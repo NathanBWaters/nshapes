@@ -7,10 +7,12 @@ import { runReducer } from '@/adventure/engine/run';
 import { BOTS, simulateRun } from '@/adventure/engine/bot';
 import { barePlan, investedPlan } from '@/adventure/engine/botBuilds';
 import { LEVELS } from '@/adventure/data/levels';
+import { SURGE_RULES } from '@/adventure/data/rules';
+import { damageMultiplier } from '@/adventure/data/weaponPower';
 import { createNewSave } from '@/adventure/progress';
 import { describeLines, entrySummary, entryTitle, setMathRows } from '@/adventure/components/fightReplayText';
 import type { RunState } from '@/adventure/types';
-import { findSet, miss, playSet, relic, startFight, tick, withWeapons } from './testUtils/adventureFight';
+import { ALL_FEATURES, findSet, miss, playSet, relic, startFight, testLevel, tick, withWeapons } from './testUtils/adventureFight';
 
 const sum = (s: RunState) => s.log.reduce((a, e) => a + e.damage, 0);
 const freeSets = (s: RunState) => s.log.flatMap(e => e.lines).filter(l => l.text === 'Free Set').length;
@@ -80,5 +82,33 @@ describe('fight log', () => {
     s = runReducer(s, { type: 'USE_HINT' });
     expect(s.log[s.log.length - 1].kind).toBe('hint');
     expect(findSet(s)).toBeDefined();
+  });
+
+  it('tracks Shading Surge and Power multipliers in Set math and replay text', () => {
+    let surged = startFight({
+      level: testLevel({ foes: [{ name: 'Dummy', hp: 999 }], rules: { shadingSurge: true, timer: 300, boardSize: 15 } }),
+      features: ['hearts'],
+    });
+    surged = tick(surged, SURGE_RULES.calmMs);
+    expect(surged.surge?.active).toBe(true);
+    surged = playSet(surged);
+    const surgeEntry = surged.log[surged.log.length - 1];
+    expect(surgeEntry.set?.surgeMultiplier).toBe(SURGE_RULES.multiplier);
+    expect(surgeEntry.set?.hit).toBe(surgeEntry.setDamage);
+    expect(setMathRows(surgeEntry.set!)).toEqual(
+      expect.arrayContaining([{ label: 'Shading Surge', value: `×${SURGE_RULES.multiplier}` }])
+    );
+    expect(entrySummary(surgeEntry)).toContain(`Surge ×${SURGE_RULES.multiplier}`);
+    for (const l of describeLines(surgeEntry.lines)) expect(l.label).toBeTruthy();
+
+    let powered = { ...startFight({ features: ALL_FEATURES }), power: 100 };
+    const expectedMult = damageMultiplier(100);
+    expect(expectedMult).toBeGreaterThan(1);
+    powered = playSet(powered);
+    const powerEntry = powered.log[powered.log.length - 1];
+    expect(powerEntry.set?.powerMultiplier).toBe(expectedMult);
+    expect(setMathRows(powerEntry.set!)).toEqual(
+      expect.arrayContaining([{ label: 'Power', value: `×${Number.isInteger(expectedMult) ? expectedMult : expectedMult.toFixed(1)}` }])
+    );
   });
 });

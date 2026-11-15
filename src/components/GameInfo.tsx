@@ -137,6 +137,10 @@ interface GameInfoProps {
   copilot?: CopilotControl;
   // Callback when menu open state changes (for pausing game)
   onMenuOpenChange?: (isOpen: boolean) => void;
+  /** Controlled menu open state */
+  menuOpen?: boolean;
+  /** Pauses the timer urgency loop when countdown is paused or app is backgrounded */
+  isTimerPaused?: boolean;
 }
 
 interface ScoreTextProps {
@@ -174,6 +178,8 @@ const GameInfo: React.FC<GameInfoProps> = ({
   devCallbacks,
   copilot,
   onMenuOpenChange,
+  menuOpen,
+  isTimerPaused = false,
 }) => {
   const copilotMode = copilot !== undefined;
   const { width: screenWidth } = useWindowDimensions();
@@ -296,6 +302,7 @@ const GameInfo: React.FC<GameInfoProps> = ({
                 totalTime={totalTime}
                 size={isCompactHud ? 30 : 34}
                 strokeWidth={3}
+                isPaused={isTimerPaused}
               />,
               undefined
             )}
@@ -310,6 +317,7 @@ const GameInfo: React.FC<GameInfoProps> = ({
               devCallbacks={devCallbacks}
               copilot={copilot}
               onMenuOpenChange={onMenuOpenChange}
+              menuOpen={menuOpen}
             />
           </View>
         </View>

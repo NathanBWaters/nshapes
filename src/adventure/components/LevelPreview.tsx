@@ -224,6 +224,7 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                       size={42}
                       mood={selected ? 'anticipation' : 'idle'}
                       reaction={selected ? { type: 'entrance', id: 1 } : null}
+                      animate={selected}
                     />
                     <Text style={st.fighterName} numberOfLines={1}>{f.name}</Text>
                     <View style={st.passiveIcons}>

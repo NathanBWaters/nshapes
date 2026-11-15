@@ -95,6 +95,8 @@ export const applyWeaponToStats = (stats: PlayerStats, weapon: Weapon): PlayerSt
       (next as unknown as Record<string, number>)[k] = cur + v;
     }
   }
+  // Cap ricochet chain continuation below 100% so Chaos Shard + Understudy cannot deterministically wipe every card
+  if (next.ricochetChainChance > 80) next.ricochetChainChance = 80;
   return next;
 };
 

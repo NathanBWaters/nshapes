@@ -117,9 +117,21 @@ export const begin = (s: RunState, hooks: FightHooks): Draft => ({
   _logSet: null,
 });
 
-export const finish = (d: Draft): RunState => {
+export const finish = (d: Draft, prev?: RunState): RunState => {
   const { _rng, _queue, _chain, _firings, _mods, _rules, _arcana, _setCtx, _hooks, _clock, _lines, _logSet, ...rest } = d;
-  return { ...rest, rng: _rng.state };
+  const connections =
+    prev &&
+    d.connections.length === prev.connections.length &&
+    d.connections.every((c, i) => c === prev.connections[i])
+      ? prev.connections
+      : d.connections;
+  const events =
+    prev &&
+    d.events.length === prev.events.length &&
+    d.events.every((e, i) => e === prev.events[i])
+      ? prev.events
+      : d.events;
+  return { ...rest, connections, events, rng: _rng.state };
 };
 
 /**
@@ -600,9 +612,29 @@ export const armorCard = (d: Draft, extraHealth: number, bounty: number) => {
   emit(d, 'pinata', bounty, undefined, { slots: [i] });
 };
 
-/** Re-deal every card that isn't armored or on its way out; the foe's draw effects don't apply. */
+/** Re-deal every card that isn't armored, mid-trick or on its way out; the foe's draw effects don't apply. */
 export const redeal = (d: Draft) => {
-  const idx = d.board.map((c, i) => (d.replacing.includes(c.id) || (c.health ?? 1) > 1 ? -1 : i)).filter(i => i >= 0);
+  // Blowing the board clean lifts Fog Lantern's fog early into its promised power card instead of discarding it
+  d.board = d.board.map(c =>
+    c.isFaceDown && (c.fogBonus ?? 0) > 0
+      ? {
+          ...c,
+          isFaceDown: false,
+          bonusPoints: (c.bonusPoints ?? 0) + (c.fogBonus ?? 0),
+          fogFlipAt: undefined,
+          fogBonus: undefined,
+        }
+      : c
+  );
+  const keep = (c: Card) =>
+    (c.health ?? 1) > 1 ||
+    (c.rust ?? 0) > 0 ||
+    !!c.rusted ||
+    (c.frozen ?? 0) > 0 ||
+    !!c.thawed ||
+    c.chest !== undefined ||
+    !!c.doubler;
+  const idx = d.board.map((c, i) => (d.replacing.includes(c.id) || keep(c) ? -1 : i)).filter(i => i >= 0);
   if (idx.length === 0) return;
   const hadCatalyst = idx.some(i => d.board[i].hasEvolutionItem);
   idx.forEach(i => d.deck.push(toDeckCard(d.board[i])));

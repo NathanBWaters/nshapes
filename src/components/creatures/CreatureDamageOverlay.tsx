@@ -54,9 +54,11 @@ export const CreatureDamageOverlay: React.FC<CreatureDamageOverlayProps> = ({
     const dtMs = frameInfo.timeSincePreviousFrame;
     if (dtMs === null || dtMs <= 0) return;
     const dt = Math.min(dtMs / 1000, 0.05);
-    orbitPhase.value = advancePhase(orbitPhase.value, 0.58, dt);
+    if (healthState === 'knocked_out') {
+      orbitPhase.value = advancePhase(orbitPhase.value, 0.58, dt);
+    }
     sweatPhase.value = advancePhase(sweatPhase.value, 0.92, dt);
-  }, animate && healthState !== 'pristine');
+  }, animate && (healthState === 'battered' || healthState === 'critical' || healthState === 'knocked_out'));
 
   useEffect(() => {
     const nextSev = HEALTH_SEVERITY[healthState];

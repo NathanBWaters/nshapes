@@ -169,9 +169,11 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
 
   let body: React.ReactNode = null;
   if (screen.kind === 'map') {
+    const mapActive = !preview && !teaching && !reference && unlocks.length === 0;
     body = (
       <AdventureMap
         save={save}
+        active={mapActive}
         highlightLevelId={screen.highlight}
         onPathsRevealed={ids => setSave(s => markPathsRevealed(s, ids))}
         onSelectLevel={l => { sfx('click'); setPreview(l); }}

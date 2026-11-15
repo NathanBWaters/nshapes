@@ -64,7 +64,7 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     maxCount: 1,
     stats: {
       seconds: { label: 'Simplify seconds', unit: 's', base: 10, perLevel: 2 },
-      strike: { label: 'Clarity damage', unit: 'dmg', base: 5, perLevel: 2.5 },
+      strike: { label: 'Clarity damage', unit: 'dmg', base: 8, perLevel: 2.5 },
     },
     build: v => ({
       rules: clarity(r(v.seconds * 1000), r(v.strike)),
@@ -362,7 +362,7 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     icon: 'delapouite/post-stamp',
     effects: {},
     maxCount: 1,
-    stats: { damage: { label: 'Album damage', unit: 'dmg', base: 15, perLevel: 3 } },
+    stats: { damage: { label: 'Album damage', unit: 'dmg', base: 16, perLevel: 4.5 } },
     build: v => ({
       modifiers: { albumDamage: r(v.damage) },
       description: `Fill one page per trait: a Set where everything is the same except the number, one except the shape, one except the color (and the shading, when it is in play). With 4 or more traits, one other trait may differ too. The Set that fills the last page deals +${r(v.damage)}, then the album starts over.`,
@@ -425,7 +425,7 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     icon: 'lorc/shard-sword',
     effects: {},
     maxCount: 1,
-    stats: { damage: { label: 'Glass Sword damage', unit: 'dmg', base: 6, perLevel: 0.4 }, window: { label: 'Seconds between Sets', unit: 's', base: 6, perLevel: 0.25 } },
+    stats: { damage: { label: 'Glass Sword damage', unit: 'dmg', base: 5, perLevel: 0.75 }, window: { label: 'Seconds between Sets', unit: 's', base: 6, perLevel: 0.5 } },
     build: v => ({
       modifiers: { glassDamage: r(v.damage), glassWindowMs: r(v.window * 1000) },
       description: `Every Set deals +${r(v.damage)}. The sword shatters for the rest of the wave on your first mistake, or if ${num(v.window)}s pass without a Set.`,
@@ -488,11 +488,14 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     icon: 'delapouite/theater-curtains',
     effects: {},
     maxCount: 1,
-    stats: { damage: { label: 'Encore damage', unit: 'dmg', base: 10, perLevel: 3 } },
+    stats: {
+      damage: { label: 'Encore damage', unit: 'dmg', base: 10, perLevel: 3.5 },
+      catalyst: { label: 'Catalyst chance', unit: '%', base: 4, perLevel: 1 },
+    },
     build: v => ({
-      modifiers: { encoreDamage: r(v.damage) },
-      description: `When an evolution ends, it hits the foe for ${r(v.damage)} and its opening effect happens again.`,
-      shortDescription: `Evolutions end with +${r(v.damage)} and replay their opening`,
+      modifiers: { encoreDamage: r(v.damage), evolutionLikelihood: r(v.catalyst) },
+      description: `Catalysts are +${r(v.catalyst)}% more likely per refill. When an evolution ends, it hits the foe for ${r(v.damage)} and its opening effect happens again.`,
+      shortDescription: `Catalysts +${r(v.catalyst)}%; evolutions end with +${r(v.damage)} and replay their opening`,
     }),
   },
 
@@ -595,7 +598,7 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     icon: 'delapouite/sticky-boot',
     effects: {},
     maxCount: 1,
-    stats: { damage: { label: 'Tar Pit damage', unit: 'dmg', base: 5, perLevel: 1 } },
+    stats: { damage: { label: 'Tar Pit damage', unit: 'dmg', base: 4, perLevel: 1.25 } },
     build: v => ({
       modifiers: { tarDamage: r(v.damage) },
       description: `One row of the board is sticky each wave: its cards take two matches to clear. Every Set that uses a card in that row deals +${r(v.damage)}.`,
@@ -616,7 +619,7 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     icon: 'delapouite/plastic-duck',
     effects: {},
     maxCount: 1,
-    stats: { chance: { label: 'Decoy chance', unit: '%', base: 15, perLevel: 2 }, damage: { label: 'Decoy damage', unit: 'dmg', base: 15, perLevel: 4 } },
+    stats: { chance: { label: 'Decoy chance', unit: '%', base: 16, perLevel: 2.5 }, damage: { label: 'Decoy damage', unit: 'dmg', base: 16, perLevel: 4.5 } },
     build: v => ({
       modifiers: { decoyChance: r(v.chance), decoyDamage: r(v.damage) },
       description: `${r(v.chance)}% chance that a new card is a decoy: a copy of a card on the board with one trait changed. Nothing marks it. Match a decoy and its original in the same Set for +${r(v.damage)}.`,
@@ -679,7 +682,7 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     icon: 'delapouite/mimic-chest',
     effects: {},
     maxCount: 1,
-    stats: { start: { label: 'Chest starts at', unit: 'dmg', base: 10, perLevel: 2 }, growth: { label: 'Growth per Set', unit: 'dmg', base: 2, perLevel: 0.5 } },
+    stats: { start: { label: 'Chest starts at', unit: 'dmg', base: 8, perLevel: 2.5 }, growth: { label: 'Growth per Set', unit: 'dmg', base: 2, perLevel: 0.5 } },
     build: v => ({
       modifiers: { chestStart: r(v.start), chestGrowth: v.growth },
       description: `One card is a chest holding ${r(v.start)} damage. It grows by ${num(v.growth)} every Set you leave it, and pays out when you match it. A mistake drops it back to ${r(v.start)}, its floor.`,
@@ -721,7 +724,7 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     icon: 'delapouite/potato',
     effects: {},
     maxCount: 1,
-    stats: { damage: { label: 'Hot Potato damage', unit: 'dmg', base: 8, perLevel: 2 } },
+    stats: { damage: { label: 'Hot Potato damage', unit: 'dmg', base: 7, perLevel: 2.25 } },
     build: v => ({
       modifiers: { potatoDamage: r(v.damage) },
       description: `One card is hot and jumps to a neighbour every ${T.potatoMs / 1000}s. Matching it deals +${r(v.damage)}. While it is out, a mistake costs an extra heart.`,

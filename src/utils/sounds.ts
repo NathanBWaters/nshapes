@@ -5,6 +5,7 @@
  */
 
 import { Platform } from 'react-native';
+import { getIsAppActive } from './appLifecycle';
 import { SettingsStorage } from './storage';
 import { sfx, band, audioSupported, setSfxEnabled, type SfxName } from '@/audio';
 
@@ -55,11 +56,13 @@ export const playSelect = (selectedCount: number): void => {
 let Audio: typeof import('expo-av').Audio | null = null;
 type AVPlaybackSource = import('expo-av').AVPlaybackSource;
 
-// Try to load expo-av - will fail gracefully if native module not available
-try {
-  Audio = require('expo-av').Audio;
-} catch (e) {
-  console.warn('expo-av not available - sounds will be disabled');
+// Try to load expo-av only on native (Web synthesizes audio via src/audio)
+if (!useChip) {
+  try {
+    Audio = require('expo-av').Audio;
+  } catch (e) {
+    console.warn('expo-av not available - sounds will be disabled');
+  }
 }
 
 // Sound categories for type safety
@@ -196,7 +199,7 @@ const SOUND_DEFINITIONS: Record<SoundCategory, { sources: AVPlaybackSource[]; vo
  * Call this once at app startup.
  */
 export const initAudio = async (): Promise<void> => {
-  if (audioInitialized || !Audio) return;
+  if (audioInitialized || !Audio || useChip) return;
 
   try {
     await Audio.setAudioModeAsync({
@@ -264,7 +267,7 @@ export const preloadAllSounds = async (): Promise<void> => {
  * - Non-blocking - fires and forgets.
  */
 export const playSound = async (category: SoundCategory): Promise<void> => {
-  if (!audioEnabled) return;
+  if (!audioEnabled || !getIsAppActive()) return;
   if (useChip) {
     // In an Adventure fight the band plays these itself, in key and on the beat (src/audio/fightAudio.ts)
     if (band.inFight && BAND_OWNED.has(category)) return;

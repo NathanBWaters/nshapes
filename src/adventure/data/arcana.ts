@@ -9,12 +9,12 @@ import { BASE_RULES } from './rules';
 
 const percentMore = (scale: number) => Math.round((scale - 1) * 100);
 
-const monochromePact = { singleTraitBonusDamage: 3, rainbowMultiplier: 1 } satisfies ArcanaRules;
+const monochromePact = { singleTraitBonusDamage: 5, rainbowMultiplier: 1 } satisfies ArcanaRules;
 const prismaticFever = { rainbowMultiplier: 3, rainbowTimeBonus: 4, nonRainbowDamageDelta: -1 } satisfies ArcanaRules;
 const controlledBurn = { mistakeBurn: { cooldownMs: 12000, cards: 2 }, startingGraces: 0 } satisfies ArcanaRules;
-const glassPrism = { specialCardChanceScale: 3, maxHeartsLock: 1 } satisfies ArcanaRules;
+const glassPrism = { specialCardChanceScale: 4, maxHeartsLock: 2 } satisfies ArcanaRules;
 const overkillHarvest = { overkillCoinsPerDamage: 2, waveClearHeal: 1, foeHpScale: 1.15 } satisfies ArcanaRules;
-const scholarsGambit = { xpScale: 2, pickOptions: 4, maxHeartsDelta: -1 } satisfies ArcanaRules;
+const scholarsGambit = { xpScale: 2, pickOptions: 4, maxHeartsDelta: -1, foeHpScale: 1.12 } satisfies ArcanaRules;
 const catalystResonance = {
   catalystChanceScale: 2,
   evolutionBurstBonus: { damage: 8, time: 8 },
@@ -64,7 +64,7 @@ export const ARCANA: ArcanaDef[] = [
     numeral: 'IV',
     name: 'Glass Prism',
     icon: 'lorc/diamond-hard',
-    tagline: 'One fragile heart, flooded with treasure and power.',
+    tagline: 'Fragile crystal, flooded with treasure and power.',
     upside: `Power (+${BASE_RULES.powerCardBonus} dmg) and Gold (+${BASE_RULES.coinCardValue}¢) cards appear ${glassPrism.specialCardChanceScale}× as often.`,
     tradeoff: `Your maximum Hearts are locked to ${glassPrism.maxHeartsLock}.`,
   },
@@ -86,7 +86,7 @@ export const ARCANA: ArcanaDef[] = [
     icon: 'lorc/open-book',
     tagline: 'Level up twice as fast with wider weapon drafts.',
     upside: `${scholarsGambit.xpScale}× XP gained and ${scholarsGambit.pickOptions} weapon choices per level-up instead of ${BASE_RULES.pickOptions}.`,
-    tradeoff: `−${-scholarsGambit.maxHeartsDelta} max Heart (minimum 1).`,
+    tradeoff: `−${-scholarsGambit.maxHeartsDelta} max Heart (minimum 1) and +${percentMore(scholarsGambit.foeHpScale)}% foe HP.`,
   },
   {
     id: 'catalyst_resonance',

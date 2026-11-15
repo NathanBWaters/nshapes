@@ -28,6 +28,7 @@ import { allSets, countDifferentAttributes, hasAnySet, isRainbow, isSelectable }
 import { applyWeaponToStats, resolveWholeStats, startingLoadout } from '../loadout';
 import { getArmoryWeapon, understudyOf } from '../data/armory';
 import { UNDERSTUDY_ID } from '../data/adventureWeapons';
+import { damageMultiplier } from '../data/weaponPower';
 import { weaponBuilds } from '../weaponLevels';
 import { createFoe } from '../data/foes';
 import { arcanaRules } from '../data/arcana';
@@ -312,10 +313,11 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   advanceCombo(d);
   const m = mods(d);
   const a = arcana(d);
-  let points = rewards.reduce((sum, r) => sum + (r.points ?? 0), 0);
+  const rawPoints = rewards.reduce((sum, r) => sum + (r.points ?? 0), 0);
   // Shading Surge: the Set's base damage (its cards) is ×5; flat bonuses are added after, multipliers apply on top
   const surgeMult = surgeMultiplier(d);
-  points *= surgeMult;
+  let points = rawPoints * surgeMult;
+  const surgedPoints = points;
   if (a.nonRainbowDamageDelta !== undefined && !rainbow) points = Math.max(1, points + a.nonRainbowDamageDelta);
   if (a.singleTraitBonusDamage !== undefined && !graceUsed && diffCount === 1) points += a.singleTraitBonusDamage;
   const conditional = (m.conditionalDamage ?? []).reduce((sum, c) => sum + (conditionsHold(d, c.when) ? c.amount : 0), 0);
@@ -344,6 +346,7 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   const setMult = Math.min(BASE_RULES.maxNextSetMultiplier, d.nextSetMultiplier * hotStreak) * tricks.multiplier;
   d.nextSetMultiplier = 1;
   const dmg = flat * rainbowMult * (a.damageScale ?? 1) * enemyMult * setMult + (purity.damage + traps.bonus) * enemyMult;
+  const powerMult = damageMultiplier(d.power ?? 0);
   const hit = dealDamage(d, dmg);
   emit(d, surgeMult > 1 ? 'surge_hit' : rainbow ? 'rainbow' : 'hit', hit, undefined, { slots: gearSet.slots });
   if (surgeMult > 1 && d.surge) d.surge = { ...d.surge, sets: d.surge.sets + 1 };
@@ -359,11 +362,13 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
     }
     d._logSet = {
       cards: rewards.filter(r => matchedIds.has(r.cardId)).reduce((sum, r) => sum + (r.points ?? 0), 0),
+      ...(surgeMult !== 1 ? { surgeMultiplier: surgeMult } : {}),
       collateral,
-      flatBonus: flat - points,
+      flatBonus: flat - surgedPoints,
       multiplier: rainbowMult * (a.damageScale ?? 1) * enemyMult * setMult,
       rainbow,
       extra: (purity.damage + traps.bonus) * enemyMult,
+      ...(powerMult > 1 ? { powerMultiplier: powerMult } : {}),
       hit,
       diffTraits: diffCount,
       graceUsed,
@@ -829,7 +834,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       const indices = replaceCards(d, ids, ended);
       if (ended) {
         // keep the board stable behind the results screen
-        return finish(d);
+        return finish(d, state);
       }
       refillAfterLeaving(d, indices);
       // Prismatic Ray's growth: the cards that replace a laser's cards hold a Set among themselves
@@ -965,7 +970,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
   syncGear(d);
   resolve(d);
   recordLog(d, state, action);
-  return finish(d);
+  return finish(d, state);
 };
 
 /** Everything that runs on the fight clock (paused while frozen). */

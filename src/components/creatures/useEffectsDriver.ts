@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Easing,
   SharedValue,
@@ -63,13 +63,31 @@ export function useEffectsDriver({
   const presenceB = useSharedValue(targetB);
   const presenceC = useSharedValue(targetC);
 
+  const hasTarget = targetA > 0 || targetB > 0 || targetC > 0;
+  const [fadingOut, setFadingOut] = useState(false);
+  const prevHasTargetRef = useRef(hasTarget);
+
+  useEffect(() => {
+    const prev = prevHasTargetRef.current;
+    prevHasTargetRef.current = hasTarget;
+    if (!animate || hasTarget) {
+      setFadingOut(false);
+      return;
+    }
+    if (prev && !hasTarget) {
+      setFadingOut(true);
+      const timer = setTimeout(() => setFadingOut(false), fadeMs + 40);
+      return () => clearTimeout(timer);
+    }
+  }, [animate, hasTarget, fadeMs]);
+
   useFrameCallback((frameInfo) => {
     const dtMs = frameInfo.timeSincePreviousFrame;
     if (dtMs === null || dtMs <= 0) return;
     const dt = Math.min(dtMs / 1000, 0.05);
     ambientFreqHz.value = expApproach(ambientFreqHz.value, ambientHz, 8, dt);
     ambientPhase.value = advancePhase(ambientPhase.value, ambientFreqHz.value, dt);
-  }, animate);
+  }, animate && (hasTarget || fadingOut));
 
   useEffect(() => {
     if (!animate) {

@@ -90,7 +90,7 @@ const RAW_LEVELS: LevelInput[] = [
     // ★★★ asks for two evolutions: no Catalyst appears while Phoenix Pyre is running, so a third
     // would only reward playing slowly.
     rules: { attributes: A3, boardSize: 12, moves: 12, hearts: 4, evolutionLikelihood: 15 },
-    foes: [{ name: 'Cinder Toad', icon: 'lorc/frog', hp: 1070, taunt: 'Ribbit. I was born in a bonfire.' }],
+    foes: [{ name: 'Cinder Toad', icon: 'lorc/frog', hp: 1270, taunt: 'Ribbit. I was born in a bonfire.' }],
     challenge: { kind: 'evolutions', n: 2 }, coinMultiplier: 1.1, difficulty: 2,
     rewards: {
       star1: { coins: 15, weapons: ['flint-spark'] },
@@ -149,7 +149,7 @@ const RAW_LEVELS: LevelInput[] = [
     // Puzzle: the sloth smothers time weapons, so win FAST instead. Chrono Shard (★) starts you with more
     // clock; Flint Spark rare (★★) burns the sloth down quicker.
     rules: { attributes: A3, timer: 60, hearts: 3 },
-    foes: [{ enemy: 'Lazy Sloth', hp: 952, taunt: 'Take… your… time…' }],
+    foes: [{ enemy: 'Lazy Sloth', hp: 1320, taunt: 'Take… your… time…' }],
     challenge: { kind: 'timeLeft', n: 12 }, coinMultiplier: 1.5, difficulty: 2,
     rewards: { star1: { coins: 30, weapons: ['chrono-shard'] }, star2: { weapons: ['flint-spark'] }, star3: { coins: 70, evolution: 'wildfire-echo' } },
     recommended: ['Sly Fox'],
@@ -159,7 +159,7 @@ const RAW_LEVELS: LevelInput[] = [
     // Puzzle: never match the snared card; match the card its arrow points at for +4.
     // Growth Seed (★★) grows the board, so the pointed-at card fits a Set more often.
     rules: { attributes: A3, timer: 65, hearts: 4, hazards: { snares: { every: 5 } } },
-    foes: [{ name: 'Thicket Spider', icon: 'carl-olsen/spider-face', hp: 913, taunt: 'Step where I point. Or don\'t.' }],
+    foes: [{ name: 'Thicket Spider', icon: 'carl-olsen/spider-face', hp: 1020, taunt: 'Step where I point. Or don\'t.' }],
     challenge: { kind: 'defuseTraps', n: 6 }, coinMultiplier: 1.6, difficulty: 3,
     rewards: { star1: { coins: 35, weapons: ['magnet'] }, star2: { weapons: ['growth-seed'] }, star3: { coins: 80, evolution: 'big-bang' } },
   },
@@ -167,7 +167,7 @@ const RAW_LEVELS: LevelInput[] = [
     id: '2-3', biome: 'woods', name: 'A Little Help', introduces: 'hints',
     // Puzzle: the bandit kills auto-hints, so the bulb is yours to press. Seeker Lens (★★) refills it.
     rules: { attributes: A3, timer: 60, hearts: 3, startingHints: 3 },
-    foes: [{ enemy: 'Masked Bandit', hp: 1632, taunt: 'No free peeks in my woods.' }],
+    foes: [{ enemy: 'Masked Bandit', hp: 1980, taunt: 'No free peeks in my woods.' }],
     challenge: { kind: 'useHints', n: 3 }, coinMultiplier: 1.6, difficulty: 2,
     rewards: {
       star1: { coins: 35, weapons: ['chaos-shard'] },
@@ -198,7 +198,7 @@ const RAW_LEVELS: LevelInput[] = [
     id: '2-6', biome: 'woods', name: 'Lights Out', introduces: 'face_down',
     // Puzzle: make Sets to flip hidden cards, then use one. Oracle Eye (★★) points the way.
     rules: { attributes: A3, timer: 60, hearts: 3, startingHints: 1 },
-    foes: [{ enemy: 'Night Owl', hp: 1416, taunt: 'Whooo can see in the dark?' }],
+    foes: [{ enemy: 'Night Owl', hp: 1650, taunt: 'Whooo can see in the dark?' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 1.7, difficulty: 3,
     rewards: { star1: { coins: 40, weapons: ['odd-one-out'] }, star2: { weapons: ['oracle-eye'] }, star3: { coins: 90, weapons: ['time-drop'] } },
     recommended: ['Corgi'],
@@ -208,7 +208,7 @@ const RAW_LEVELS: LevelInput[] = [
     // Puzzle: near misses are free while graces last, so guess boldly. Badger (★★) makes the
     // first mistake each wave free on top.
     rules: { attributes: A3, timer: 65, hearts: 3, startingHints: 1, startingGraces: 2 },
-    foes: [{ name: 'Whisker Trickster', icon: 'lorc/mouse', hp: 1299, taunt: 'Close enough? Let\'s find out.' }],
+    foes: [{ name: 'Whisker Trickster', icon: 'lorc/mouse', hp: 1434, taunt: 'Close enough? Let\'s find out.' }],
     challenge: { kind: 'graceSaves', n: 2 }, coinMultiplier: 1.8, difficulty: 3,
     rewards: {
       star1: { coins: 45, weapons: ['second-chance'] },
@@ -221,7 +221,7 @@ const RAW_LEVELS: LevelInput[] = [
     id: '2-8', biome: 'woods', name: 'Prism Rush', introduces: 'purity_chain',
     // Puzzle: climb 1-diff → 2-diff → Rainbow on purpose. Emperor Penguin (★★) pays you to slow down and pick.
     rules: { attributes: A3, timer: 70, hearts: 3, startingHints: 1, startingGraces: 1 },
-    foes: [{ name: 'Magpie', icon: 'lorc/raven', hp: 1234, taunt: 'Shiny! Shiny! MINE!' }],
+    foes: [{ name: 'Magpie', icon: 'lorc/raven', hp: 1481, taunt: 'Shiny! Shiny! MINE!' }],
     challenge: { kind: 'purityChain', n: 3 }, coinMultiplier: 1.8, difficulty: 3,
     rewards: { star1: { coins: 45, weapons: ['greedy-chest'] }, star2: { character: 'Emperor Penguin' }, star3: { coins: 100, weapons: ['prismatic-ray'] } },
     recommended: ['Emperor Penguin'],

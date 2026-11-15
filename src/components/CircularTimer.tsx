@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import ReAnimated, { useSharedValue, useAnimatedProps, withTiming, Easing } from 'react-native-reanimated';
+import { useAppActive } from '@/hooks/useAppActive';
 import { COLORS } from '@/utils/colors';
 
 const AnimatedCircle = ReAnimated.createAnimatedComponent(Circle);
@@ -11,6 +12,7 @@ interface CircularTimerProps {
   totalTime: number; // Total time for the round in seconds
   size?: number; // Size of the timer circle
   strokeWidth?: number; // Width of the progress stroke
+  isPaused?: boolean; // Stop urgency animations while paused
 }
 
 const CircularTimer: React.FC<CircularTimerProps> = ({
@@ -18,7 +20,9 @@ const CircularTimer: React.FC<CircularTimerProps> = ({
   totalTime,
   size = 44,
   strokeWidth = 4,
+  isPaused = false,
 }) => {
+  const appActive = useAppActive();
   // Handle infinite time (totalTime <= 0 or very large)
   const isInfinite = totalTime <= 0 || totalTime > 9999;
 
@@ -61,7 +65,7 @@ const CircularTimer: React.FC<CircularTimerProps> = ({
 
   useEffect(() => {
     // Configure pulse based on urgency level
-    if (urgencyLevel === 'none') {
+    if (urgencyLevel === 'none' || isPaused || !appActive) {
       pulseAnim.setValue(1);
       shakeAnim.setValue(0);
       return;
@@ -119,7 +123,7 @@ const CircularTimer: React.FC<CircularTimerProps> = ({
     }
 
     return () => pulse.stop();
-  }, [urgencyLevel, currentTime, isInfinite]);
+  }, [urgencyLevel, currentTime, isInfinite, isPaused, appActive]);
 
   // Color based on time remaining
   const getProgressColor = () => {

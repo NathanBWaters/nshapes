@@ -16,21 +16,28 @@ import { BOUNTIES } from '@/adventure/data/bounties';
 import { computeStars } from '@/adventure/engine/run';
 import {
   HISTORY_LIMIT,
+  REPLAY_LIMIT,
   battleRecord,
   bestDpmOn,
   damagePerMinute,
+  fightReplayOf,
   formatDuration,
   formatWhen,
+  isBattleRecord,
+  sanitizeBattleRecord,
   summarize,
   wasFought,
   withBattle,
   type BattleRecord,
 } from '@/adventure/history';
+import { getArmoryWeapon } from '@/adventure/data/armory';
+import { isValidCombination } from '@/utils/gameUtils';
 import { COACH_KEYS, applyLevelResult, createNewSave, maxStars } from '@/adventure/progress';
 import { loadBattleHistory, recordBattle } from '@/adventure/save';
 import { storage } from '@/utils/storage';
 import type { AdventureSave, RunState } from '@/adventure/types';
-import { miss, playSet, startFight, testLevel, tick } from './testUtils/adventureFight';
+import type { AttributeName, Background, Card, Number as CardNumber, Color, Shading, Shape } from '@/types';
+import { miss, playSet, startFight, testLevel, tick, withWeapons } from './testUtils/adventureFight';
 
 jest.mock('react-native-svg', () => ({
   __esModule: true,
@@ -52,6 +59,7 @@ jest.mock('react-native-svg', () => ({
   RadialGradient: 'RadialGradient',
   Stop: 'Stop',
   ClipPath: 'ClipPath',
+  Pattern: 'Pattern',
 }));
 
 jest.mock('@/utils/storage', () => ({
@@ -191,6 +199,18 @@ describe('a battle record', () => {
     expect(battleRecord(PRACTICE_LEVELS[0], midFight, { at: 1 }).outcome).toBe('practice');
   });
 
+  it('attaches a FightReplayData snapshot when the fight has log entries beyond the opening', () => {
+    const fresh = startFight({ features: ['hearts'] });
+    expect(battleRecord(level, fresh, { at: 1 }).replay).toBeUndefined();
+
+    const played = playSet(withWeapons(fresh, getArmoryWeapon('blast-powder')!));
+    const rec = battleRecord(level, played, { at: 2, stars: 3 });
+    expect(rec.replay).toEqual(fightReplayOf(played));
+    expect(rec.replay?.weapons).toContain('blast-powder');
+    expect(rec.replay?.log.length).toBeGreaterThan(1);
+    expect(isBattleRecord(rec)).toBe(true);
+  });
+
   it('a fight left before any move is not a battle', () => {
     const fresh = startFight({ features: ['hearts'] });
     expect(wasFought(fresh)).toBe(false);
@@ -248,6 +268,47 @@ describe('the history', () => {
     expect(loadBattleHistory().map(b => b.at)).toEqual([1, 2]);
     getMock.mockImplementation(() => 'not json');
     expect(loadBattleHistory()).toEqual([]);
+  });
+
+  it('caps stored replay snapshots at REPLAY_LIMIT and strips corrupted replays without losing the battle', () => {
+    const sampleReplay = fightReplayOf(playSet(startFight({ features: ['hearts'] })));
+    let history: BattleRecord[] = [];
+    for (let i = 0; i < REPLAY_LIMIT + 5; i++) history = withBattle(history, record({ at: i + 1, replay: sampleReplay }));
+    expect(history).toHaveLength(REPLAY_LIMIT + 5);
+    expect(history.filter(b => b.replay)).toHaveLength(REPLAY_LIMIT);
+    expect(history[0].replay).toBeUndefined();
+    expect(history[history.length - 1].replay).toBeDefined();
+
+    const damaged = { ...record({ at: 99 }), replay: { broken: true } };
+    expect(isBattleRecord(damaged)).toBe(false);
+    const cleaned = sanitizeBattleRecord(damaged);
+    expect(cleaned).not.toBeNull();
+    expect(cleaned?.at).toBe(99);
+    expect(cleaned?.replay).toBeUndefined();
+
+    getMock.mockImplementation((key: string) => (key === HISTORY_KEY ? JSON.stringify([damaged]) : undefined));
+    const loaded = loadBattleHistory();
+    expect(loaded).toHaveLength(1);
+    expect(loaded[0].at).toBe(99);
+    expect(loaded[0].replay).toBeUndefined();
+  });
+
+  it('sheds older replay logs if storage quota throws so the battle record still saves', () => {
+    const sampleReplay = fightReplayOf(playSet(startFight({ features: ['hearts'] })));
+    const existing = Array.from({ length: 15 }, (_, i) => record({ at: i + 1, replay: sampleReplay }));
+    let calls = 0;
+    setMock.mockImplementation((_k: string, json: string) => {
+      calls++;
+      if (calls === 1) throw new Error('QuotaExceededError');
+      return json;
+    });
+    const saved = recordBattle(existing, record({ at: 999, replay: sampleReplay }));
+    expect(saved).toHaveLength(16);
+    expect(setMock).toHaveBeenCalledTimes(2);
+    const persisted = JSON.parse(setMock.mock.calls[1][1] as string) as BattleRecord[];
+    expect(persisted).toHaveLength(16);
+    expect(persisted.filter(b => b.replay)).toHaveLength(10);
+    expect(persisted[persisted.length - 1].at).toBe(999);
   });
 });
 
@@ -369,6 +430,41 @@ describe('Camp', () => {
     expect(view.queryByTestId('history-details')).toBeNull();
   });
 
+  it('charts battle history DPM, expands a fight from its chart bar, and opens full FightReplay with Set math & gear', () => {
+    const level = testLevel({ id: '1-2', name: 'Ouch!', foes: [{ name: 'Prickle', hp: 20 }] });
+    let run = startFight({ level, features: ['hearts', 'gear', 'power'] });
+    run = withWeapons(run, getArmoryWeapon('blast-powder')!);
+    run = tick(run, 12_000, 1000);
+    run = playSet(run);
+    const withReplay = battleRecord(level, run, { at: 200, stars: 3, coins: 10 });
+    const legacy = record({ at: 100, levelId: '1-1', levelName: 'First Light', dpm: 45, weapons: ['mending-charm'] });
+
+    const view = campOf(createNewSave(), [legacy, withReplay], { initialTab: 'history' });
+    expect(view.getByTestId('history-chart')).toBeTruthy();
+
+    // Tapping bar 0 (older / legacy fight) expands that fight and shows WeaponExplainer without FightReplay button
+    fireEvent.press(view.getByTestId('history-chart-bar-0'));
+    expect(view.getByTestId('history-details')).toBeTruthy();
+    expect(view.getByTestId('weapon-explainer-mending-charm')).toBeTruthy();
+    expect(view.queryByTestId('history-replay')).toBeNull();
+
+    // Tapping bar 1 (newer fight with saved log) expands its details, shows the DamageSplitBar, and launches FightReplay
+    fireEvent.press(view.getByTestId('history-chart-bar-1'));
+    expect(view.getByTestId('history-damage-split')).toBeTruthy();
+    fireEvent.press(view.getByTestId('history-replay'));
+
+    expect(view.getByTestId('history-details')).toBeTruthy();
+    expect(view.getByTestId('fight-replay')).toBeTruthy();
+    expect(view.getByTestId('replay-chart')).toBeTruthy();
+    expect(view.getByTestId('replay-gear')).toBeTruthy();
+    expect(view.getByTestId('weapon-explainer-blast-powder')).toBeTruthy();
+    expect(view.getByText('HOW THE SET HIT')).toBeTruthy();
+    expect(view.getByText('Every move')).toBeTruthy();
+
+    fireEvent.press(view.getByTestId('fight-replay-close'));
+    expect(view.queryByTestId('fight-replay')).toBeNull();
+  });
+
   it('shows a long history a page at a time', () => {
     const history = Array.from({ length: 75 }, (_, i) => record({ at: i + 1 }));
     const view = render(wrap(<BattleHistory history={history} now={2_000_000} />));
@@ -460,6 +556,60 @@ describe('playing', () => {
     fireEvent.press(view.getByText('Retreat to map'));
     expect(view.getByTestId('map-node-1-2')).toBeTruthy();
     expect(historyWrites()).toHaveLength(0);
+    act(() => { jest.runOnlyPendingTimers(); });
+    view.unmount();
+  });
+
+  it('after playing a Set and finishing, Camp → History opens the full FightReplay timeline from storage', () => {
+    const LABEL_RE = /^(\d+) (red|green|purple) (solid|striped|open) (diamond|oval|squiggle)(?: on (white|cream|sky))?/;
+    const view = render(wrap(<AdventureMode initialSave={ready()} onExit={noop} />));
+    fireEvent.press(view.getByTestId(`map-node-${dummy.id}`));
+    fireEvent.press(view.getByTestId('preview-play'));
+    act(() => { jest.advanceTimersByTime(1000); });
+
+    const slots = view.getAllByLabelText(LABEL_RE).map((pressable, idx) => {
+      const m = LABEL_RE.exec(String(pressable.props.accessibilityLabel))!;
+      const card: Card = {
+        id: `${idx}`,
+        number: Number(m[1]) as CardNumber,
+        color: m[2] as Color,
+        shading: m[3] as Shading,
+        shape: m[4] as Shape,
+        background: (m[5] as Background | undefined) ?? 'white',
+        selected: false,
+      };
+      return { pressable, card };
+    });
+    const attrs: AttributeName[] = ['shape', 'color', 'number'];
+    let triple: typeof slots | null = null;
+    for (let i = 0; i < slots.length - 2 && !triple; i++) {
+      for (let j = i + 1; j < slots.length - 1 && !triple; j++) {
+        for (let k = j + 1; k < slots.length && !triple; k++) {
+          if (isValidCombination([slots[i].card, slots[j].card, slots[k].card], attrs).isValid) {
+            triple = [slots[i], slots[j], slots[k]];
+          }
+        }
+      }
+    }
+    expect(triple).not.toBeNull();
+    for (const s of triple!) fireEvent.press(s.pressable);
+    act(() => { jest.advanceTimersByTime(1500); });
+
+    fireEvent.press(view.getByTestId('run-done'));
+    const writes = historyWrites();
+    expect(writes).toHaveLength(1);
+    expect(writes[0][0].replay?.log.length).toBeGreaterThan(1);
+
+    fireEvent.press(view.getByTestId('results-camp'));
+    fireEvent.press(view.getByTestId('camp-tab-history'));
+    fireEvent.press(view.getByTestId('history-battle'));
+    fireEvent.press(view.getByTestId('history-replay'));
+    expect(view.getByTestId('fight-replay')).toBeTruthy();
+    expect(view.getByTestId('replay-chart')).toBeTruthy();
+    expect(view.getByText('HOW THE SET HIT')).toBeTruthy();
+    fireEvent.press(view.getByTestId('fight-replay-close'));
+    expect(view.queryByTestId('fight-replay')).toBeNull();
+
     act(() => { jest.runOnlyPendingTimers(); });
     view.unmount();
   });

@@ -10,13 +10,14 @@
  */
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Platform } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withDelay, withRepeat, withSequence, withTiming, Easing } from 'react-native-reanimated';
+import Animated, { cancelAnimation, useSharedValue, useAnimatedStyle, withDelay, withRepeat, withSequence, withTiming, Easing } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GameBoard from '@/components/GameBoard';
 import Icon from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
 import { WeaponAvatar } from '@/components/weapons';
+import { useAppActive } from '@/hooks/useAppActive';
 import { useEnemyConductor } from '@/hooks/useEnemyConductor';
 import { useFighterConductor } from '@/hooks/useFighterConductor';
 import { COLORS } from '@/utils/colors';
@@ -89,6 +90,7 @@ for (const m of Object.values(MECHANICS)) {
 
 const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish, onQuit, onRestart, onCoachMarkSeen, effects = true, onToggleEffects }) => {
   const insets = useSafeAreaInsets();
+  const appActive = useAppActive();
   const [run, dispatchRaw] = useReducer(runReducer, undefined, () => createRun(level, save, { seed }));
   const runRef = useRef(run);
   runRef.current = run;
@@ -145,6 +147,13 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
 
   const halted = paused || Boolean(tip) || Boolean(inspect);
   const playing = run.status === 'playing' && !halted;
+
+  // Auto-pause active timed fights whenever the user leaves the app/tab
+  useEffect(() => {
+    if (!appActive && run.status === 'playing' && !practice) {
+      setPaused(true);
+    }
+  }, [appActive, run.status, practice]);
 
   // First fight with a new mechanic: walk through its tips before anything moves
   useEffect(() => {
@@ -227,7 +236,14 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   });
   const enemyMood = run.status === 'lost' ? 'victory' : enemyConductor.mood;
 
-  const { triggerEntrance } = conductor;
+  const {
+    triggerEntrance,
+    triggerMatch,
+    triggerMistake,
+    triggerHint,
+    setSelectedCount,
+    setIsBoardIdle,
+  } = conductor;
   const { triggerReaction: triggerEnemyReaction } = enemyConductor;
   useEffect(() => {
     triggerEntrance();
@@ -254,15 +270,15 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
       case 'pain': conductor.triggerReaction('pain'); break;
       case 'heal': conductor.triggerHeal(); break;
       case 'powerup': conductor.triggerPowerup(); break;
-      case 'entrance': conductor.triggerEntrance(); break;
+      case 'entrance': triggerEntrance(); break;
     }
     switch (row.enemy) {
-      case 'criticalHit': enemyConductor.triggerReaction('crit_pain'); break;
-      case 'hit': enemyConductor.triggerReaction('pain'); break;
-      case 'gloat': enemyConductor.triggerReaction('taunt'); break;
-      case 'attack': enemyConductor.triggerReaction('attack'); break;
-      case 'regen': enemyConductor.triggerReaction('regen'); break;
-      case 'entrance': enemyConductor.triggerReaction('entrance'); break;
+      case 'criticalHit': triggerEnemyReaction('crit_pain'); break;
+      case 'hit': triggerEnemyReaction('pain'); break;
+      case 'gloat': triggerEnemyReaction('taunt'); break;
+      case 'attack': triggerEnemyReaction('attack'); break;
+      case 'regen': triggerEnemyReaction('regen'); break;
+      case 'entrance': triggerEnemyReaction('entrance'); break;
     }
   };
 
@@ -275,8 +291,8 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
     onLand,
   });
 
-  // The fight clock stands still while a cascade plays or a cut-in waits for a tap
-  const ticking = playing && !fx.busy;
+  // The fight clock stands still while a cascade plays, a cut-in waits, or the app is backgrounded
+  const ticking = appActive && playing && !fx.busy;
   useEffect(() => {
     if (!ticking) return;
     const iv = setInterval(() => dispatch({ type: 'TICK', ms: TICK_MS }), TICK_MS);
@@ -344,26 +360,26 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
       Boolean(effects?.ricochetCards.length) ||
       cards.length > 3;
     const didHeal = rewards.some(r => (r.healing ?? 0) > 0) || Boolean(effects?.bonusHealing);
-    conductor.triggerMatch({ isGraceMatch: graceUsed, isMegaMatch, didHeal });
+    triggerMatch({ isGraceMatch: graceUsed, isMegaMatch, didHeal });
     dispatch({ type: 'MATCH', cards, rewards, effects, hinted: info?.hinted });
     const ids = cards.map(c => c.id);
     later(() => dispatch({ type: 'REPLACE', ids }), REPLACE_DELAY_MS);
-  }, [dispatch, conductor, later]);
+  }, [dispatch, triggerMatch, later]);
 
   const handleInvalid = useCallback((cards: Card[]) => {
-    conductor.triggerMistake();
-    enemyConductor.triggerReaction('taunt');
+    triggerMistake();
+    triggerEnemyReaction('taunt');
     dispatch({ type: 'INVALID', cards });
     const ids = cards.map(c => c.id);
     later(() => dispatch({ type: 'REPLACE', ids }), 520);
-  }, [dispatch, conductor, enemyConductor, later]);
+  }, [dispatch, triggerMistake, triggerEnemyReaction, later]);
 
   const handleBurn = useCallback((card: Card) => dispatch({ type: 'BURN', card }), [dispatch]);
   const handleUseHint = useCallback(() => {
-    conductor.triggerHint();
+    triggerHint();
     dispatch({ type: 'USE_HINT' });
     band.cue('hint');
-  }, [dispatch, conductor]);
+  }, [dispatch, triggerHint]);
 
   const foeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: foeShake.value }, { scale: foeScale.value }] }));
   const screenStyle = useAnimatedStyle(() => ({ transform: [{ translateX: screenShake.value }] }));
@@ -416,6 +432,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
               maxHp={run.foeMaxHp}
               mood={enemyMood}
               reaction={enemyConductor.reaction}
+              animate={appActive}
               interactive
             />
           </Animated.View>
@@ -455,6 +472,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
             mood={fighterMood}
             reaction={conductor.reaction}
             streak={conductor.streak}
+            animate={appActive}
             framed
             interactive
           />
@@ -616,13 +634,13 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
         )}
       </View>
 
-      {run.surge && <SurgeBar surge={run.surge} />}
+      {run.surge && <SurgeBar surge={run.surge} active={playing && appActive} />}
 
       {/* ── Board ───────────────────────────────────────── */}
       <View ref={anchors.ref('board')} collapsable={false} style={st.boardWrap}>
         {/* Evolution pulse: a glow behind the cards, never a card border */}
-        {run.activeEvolutions.length > 0 && <EvolutionGlow />}
-        {run.surge?.active && <SurgeGlow />}
+        {run.activeEvolutions.length > 0 && <EvolutionGlow active={playing && appActive} />}
+        {run.surge?.active && <SurgeGlow active={playing && appActive} />}
         {run.frozenMs > 0 && (
           <View style={st.frozen} pointerEvents="none">
             <Icon name="lorc/snowflake-1" size={18} color="#1D4ED8" />
@@ -647,8 +665,8 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
           enemy={run.foe}
           hideEnemyOverlay
           glowingCardIds={keenEyeIds}
-          onSelectedCountChange={conductor.setSelectedCount}
-          onBoardIdleChange={conductor.setIsBoardIdle}
+          onSelectedCountChange={setSelectedCount}
+          onBoardIdleChange={setIsBoardIdle}
           slotRef={slotRef}
           onSlotLayout={anchors.measure}
         />
@@ -865,11 +883,17 @@ const PassiveChip: React.FC<{ id: PassiveId; run: RunState }> = ({ id, run }) =>
 };
 
 /** Soft pulsing glow behind the board while an evolution runs. */
-const EvolutionGlow: React.FC = () => {
+const EvolutionGlow: React.FC<{ active: boolean }> = ({ active }) => {
   const o = useSharedValue(0.25);
   useEffect(() => {
+    if (!active) {
+      cancelAnimation(o);
+      o.value = 0.25;
+      return;
+    }
     o.value = withRepeat(withSequence(withTiming(0.6, { duration: 500 }), withTiming(0.25, { duration: 500 })), -1);
-  }, [o]);
+    return () => cancelAnimation(o);
+  }, [active, o]);
   const style = useAnimatedStyle(() => ({ opacity: o.value }));
   return <Animated.View testID="evolution-glow" pointerEvents="none" style={[st.glow, style]} />;
 };
@@ -878,16 +902,22 @@ const EvolutionGlow: React.FC = () => {
  * Shading Surge meter: fills toward the next surge while shading is off, then
  * drains through the ×5 window. Pulses in the last seconds before it starts.
  */
-const SurgeBar: React.FC<{ surge: NonNullable<RunState['surge']> }> = ({ surge }) => {
+const SurgeBar: React.FC<{ surge: NonNullable<RunState['surge']>; active: boolean }> = ({ surge, active }) => {
   const secs = Math.ceil(surge.msLeft / 1000);
   const fill = surge.active ? surge.msLeft / SURGE_RULES.surgeMs : 1 - surge.msLeft / SURGE_RULES.calmMs;
   const imminent = !surge.active && surge.msLeft <= SURGE_RULES.warnMs;
   const pulse = useSharedValue(1);
   useEffect(() => {
+    if (!active) {
+      cancelAnimation(pulse);
+      pulse.value = 1;
+      return;
+    }
     pulse.value = imminent || surge.active
       ? withRepeat(withSequence(withTiming(1.04, { duration: 260 }), withTiming(1, { duration: 260 })), -1)
       : withTiming(1, { duration: 120 });
-  }, [imminent, surge.active, pulse]);
+    return () => cancelAnimation(pulse);
+  }, [active, imminent, surge.active, pulse]);
   const style = useAnimatedStyle(() => ({ transform: [{ scale: pulse.value }] }));
   const label = surge.active
     ? `SHADING SURGE · SETS ×${SURGE_RULES.multiplier} · ${secs}s`
@@ -907,11 +937,17 @@ const SurgeBar: React.FC<{ surge: NonNullable<RunState['surge']> }> = ({ surge }
   );
 };
 
-const SurgeGlow: React.FC = () => {
+const SurgeGlow: React.FC<{ active: boolean }> = ({ active }) => {
   const o = useSharedValue(0.2);
   useEffect(() => {
+    if (!active) {
+      cancelAnimation(o);
+      o.value = 0.2;
+      return;
+    }
     o.value = withRepeat(withSequence(withTiming(0.5, { duration: 380 }), withTiming(0.2, { duration: 380 })), -1);
-  }, [o]);
+    return () => cancelAnimation(o);
+  }, [active, o]);
   const style = useAnimatedStyle(() => ({ opacity: o.value }));
   return <Animated.View testID="surge-glow" pointerEvents="none" style={[st.glow, { backgroundColor: TONE.surge }, style]} />;
 };

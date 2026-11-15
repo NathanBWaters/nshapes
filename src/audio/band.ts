@@ -15,6 +15,7 @@
  * With music switched off the sequencer stops, and cues still play (in the
  * world's home key). With sound effects off, cues are silent.
  */
+import { getIsAppActive } from '@/utils/appLifecycle';
 import { chip } from './chip';
 import { direct, restingMix, worldTone, type FightMood, type Mix } from './director';
 import { DRUMS, INSTRUMENTS, downlifter, drum, note, riser, subDrop, type DrumId, type InstrumentId } from './instruments';
@@ -153,6 +154,9 @@ class Band {
 
   private schedule() {
     if (!chip.ctx || !this.arr) return;
+    if (chip.liveContext && chip.ctx === chip.liveContext && (!getIsAppActive() || chip.liveContext.state !== 'running')) {
+      return;
+    }
     // If the tab was backgrounded, don't try to catch up a pile of notes
     if (this.nextTime < chip.now - 0.2) this.nextTime = chip.now + 0.05;
     while (this.nextTime < chip.now + 0.12) this.advance();

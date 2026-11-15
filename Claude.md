@@ -2,6 +2,8 @@
 
 A roguelike deckbuilding match-three puzzle game for iOS, Android, and Web, built with Expo/React Native.
 
+> **Git & Shipping Rule (CRITICAL):** Nothing is live in production and rapid iteration is expected. **Always** increment the patch version in `package.json`, commit, and `git push` immediately after verifying your changes—never leave completed work uncommitted or ask permission to push.
+
 ## Game Overview
 
 NShapes combines the classic SET card matching game with roguelike progression mechanics. The game offers two modes: **Adventure Mode** (a map-based campaign where every level teaches one new mechanic) and **Free Play** (a customizable practice mode).
@@ -48,7 +50,7 @@ NShapes combines the classic SET card matching game with roguelike progression m
 * **Coins** drop from matches, bank even on a loss (not on retreat), and are spent mid-run (shop between waves) or at **Camp** (Workshop upgrades and weapon upgrades).
 * **Weapon growth** (`data/weaponGrowth.ts`, `engine/growth.ts`): every weapon but Blast Powder, Field Stone and Growth Seed has something to look for in a fight (a Set at full hearts, two corner cards, an all-red mistake, its own payout). Each time, it gains a stack that raises one of its numbers, a standing modifier, or does something at once, until the fight ends. Damage weapons grow sideways and a little; support weapons are the ones that take off. Growth belongs to the weapon alone: evolutions do not change it. The belt shows each weapon's stacks; the explainer's Scaling line says what it grows on (in the Armory the explainer is docked at the bottom).
 * **Camp** (`components/Camp.tsx`) opens on a menu of sections: Fighters, Armory, Arcana, Workshop, **Bounties** and **History**, plus the sound and effects switches. The map's top bar holds only back, stars and coins; its dock is Guide · Play · Camp.
-* **Battle history** (`history.ts`, stored apart from the save): every battle is recorded with its **damage per minute** (damage over the fight clock), shown on the results screen against the best on that level and listed at Camp → History.
+* **Battle history** (`history.ts`, stored apart from the save): every battle is recorded with its **damage per minute** (damage over the fight clock), shown on the results screen against the best on that level and listed at Camp → History with a DPM timeline chart, damage split bar, and persisted `FightReplay` logs for recent fights.
 * Adventure-only weapons (`data/adventureWeapons.ts`, e.g. War Drum, Amplifier Coil, Piñata) join the Armory through `getArmoryWeapon`; Free Play doesn't use them.
 * **Weapons in Adventure:** every weapon does something visible alone at level 1, support weapons also hit the foe, and weapons that react to another effect bring a little of it themselves. Adventure's numbers for the shared weapons live in `src/adventure/data/weaponTuning.ts` (Free Play's stay in `gameDefinitions.ts`).
 * **Trick weapons** (`src/adventure/engine/gear.ts`): Magnet, Bounty Poster, Mirror Shard, Odd One Out, Collector's Album, Snowball, Glass Sword, Devil's Bargain, Tightrope, Wild Card, Understudy, Encore Mask, and the **board gambles** that make the board harder for a bigger payoff: Cursed Idol, Chain Gang, Thorn Bush, Rust, Tar Pit, Decoy, Long Fuse, Ice Block, Greedy Chest, Hot Potato, Twin Seed, Fog Lantern. Live state shows as HUD chips or small card icons (Decoy is unmarked on purpose). Each sits in 3 evolution recipes.
@@ -322,7 +324,9 @@ This means Field Stone weapons can increase the starting board size beyond the m
 * Test stat preview and inventory display
 * "Continue" refreshes the shop for more testing
 
-## Versioning (IMPORTANT)
+## Versioning, Committing & Pushing (IMPORTANT)
+
+Nothing in this repository is live in production. Agents must **always commit and push immediately** once checks pass—never leave finished work sitting uncommitted and never pause to ask whether to commit or push.
 
 When making commits, **ALWAYS increment the patch version** in `package.json`:
 

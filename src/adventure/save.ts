@@ -3,7 +3,7 @@ import { storage } from '@/utils/storage';
 import type { AdventureSave } from './types';
 import { createNewSave, pathsSeenBeforeSecrets, reconcileUnlocks } from './progress';
 import { resolveLegacyWeapon } from './data/armory';
-import { HISTORY_LIMIT, isBattleRecord, withBattle, type BattleRecord } from './history';
+import { HISTORY_LIMIT, sanitizeBattleRecord, trimReplays, withBattle, type BattleRecord } from './history';
 
 const KEY = 'adventure_v2_save';
 /** Kept apart from the save: it grows with every fight, and the save is rewritten on every change */
@@ -97,7 +97,9 @@ export const loadBattleHistory = (): BattleRecord[] => {
     const raw = storage.getString(HISTORY_KEY);
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter(isBattleRecord).slice(-HISTORY_LIMIT) : [];
+    return Array.isArray(parsed)
+      ? parsed.map(sanitizeBattleRecord).filter((b): b is BattleRecord => b !== null).slice(-HISTORY_LIMIT)
+      : [];
   } catch (e) {
     console.warn('Battle history could not be loaded; starting a new one.', e);
     return [];
@@ -110,7 +112,15 @@ export const recordBattle = (history: readonly BattleRecord[], record: BattleRec
   try {
     storage.set(HISTORY_KEY, JSON.stringify(next));
   } catch {
-    // storage unavailable: the history lives in memory only
+    // Tight storage quota (e.g. web localStorage): shed older full logs before dropping the battle
+    for (const keep of [10, 0]) {
+      try {
+        storage.set(HISTORY_KEY, JSON.stringify(trimReplays(next, keep)));
+        return next;
+      } catch {
+        // try keeping even fewer replays
+      }
+    }
   }
   return next;
 };

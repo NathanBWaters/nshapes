@@ -22,7 +22,7 @@ import {
   expApproach,
   sampleOrganicBreath,
   sampleOverlappingWave,
-  stepSecondOrder,
+  stepSecondOrderInPlace,
 } from '@/utils/proceduralMotion';
 import { CreatureJointPivots, GazeOffset } from './types';
 
@@ -385,54 +385,58 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
 
   const { easing, drift, poseSprings } = config;
 
-  // UI-thread continuous phase integrator + second-order posture solver
+  // UI-thread continuous phase integrator + second-order posture solver.
+  // Mutate the simulation state in place via `sim.modify` so each frame allocates zero objects.
   useFrameCallback((frameInfo) => {
     const dtMs = frameInfo.timeSincePreviousFrame;
     if (dtMs === null || dtMs <= 0) return;
     const dt = Math.min(dtMs / 1000, 0.05);
 
-    const cur = sim.value;
-    const tgt = targets.value;
+    const stepSim = <T extends SimState>(cur: T): T => {
+      'worklet';
+      const tgt = targets.value;
+      const breathHz = expApproach(cur.breathHz, tgt.rates.breathHz, easing.breathHz, dt);
+      const wagHz = expApproach(cur.wagHz, tgt.rates.wagHz, easing.wagHz, dt);
+      const swayHz = expApproach(cur.swayHz, tgt.rates.swayHz, easing.swayHz, dt);
 
-    const breathHz = expApproach(cur.breathHz, tgt.rates.breathHz, easing.breathHz, dt);
-    const wagHz = expApproach(cur.wagHz, tgt.rates.wagHz, easing.wagHz, dt);
-    const swayHz = expApproach(cur.swayHz, tgt.rates.swayHz, easing.swayHz, dt);
+      cur.breathHz = breathHz;
+      cur.wagHz = wagHz;
+      cur.swayHz = swayHz;
+      cur.breathAmpScale = expApproach(cur.breathAmpScale, tgt.rates.breathAmpScale, easing.breathAmp, dt);
+      cur.wagAmpScale = expApproach(cur.wagAmpScale, tgt.rates.wagAmpScale, easing.wagAmp, dt);
+      cur.swayAmpScale = expApproach(cur.swayAmpScale, tgt.rates.swayAmpScale, easing.swayAmp, dt);
+      cur.bounceBlend = expApproach(cur.bounceBlend, tgt.bounce, easing.bounce, dt);
+      cur.tremorBlend = expApproach(cur.tremorBlend, tgt.tremor, easing.tremor, dt);
+      cur.breathPhase = advancePhase(cur.breathPhase, breathHz, dt);
+      cur.wagPhase = advancePhase(cur.wagPhase, wagHz, dt);
+      cur.swayPhase = advancePhase(cur.swayPhase, swayHz, dt);
+      cur.driftPhase = advancePhase(cur.driftPhase, drift.base + drift.perBreathHz * breathHz, dt);
 
-    const next: SimState = {
-      ...cur,
-      breathHz,
-      wagHz,
-      swayHz,
-      breathAmpScale: expApproach(cur.breathAmpScale, tgt.rates.breathAmpScale, easing.breathAmp, dt),
-      wagAmpScale: expApproach(cur.wagAmpScale, tgt.rates.wagAmpScale, easing.wagAmp, dt),
-      swayAmpScale: expApproach(cur.swayAmpScale, tgt.rates.swayAmpScale, easing.swayAmp, dt),
-      bounceBlend: expApproach(cur.bounceBlend, tgt.bounce, easing.bounce, dt),
-      tremorBlend: expApproach(cur.tremorBlend, tgt.tremor, easing.tremor, dt),
-      breathPhase: advancePhase(cur.breathPhase, breathHz, dt),
-      wagPhase: advancePhase(cur.wagPhase, wagHz, dt),
-      swayPhase: advancePhase(cur.swayPhase, swayHz, dt),
-      driftPhase: advancePhase(cur.driftPhase, drift.base + drift.perBreathHz * breathHz, dt),
+      const p = tgt.pose;
+      const k = poseSprings;
+      stepSecondOrderInPlace(cur.leanX, p.leanX, dt, k.leanX[0], k.leanX[1], k.leanX[2]);
+      stepSecondOrderInPlace(cur.leanY, p.leanY, dt, k.leanY[0], k.leanY[1], k.leanY[2]);
+      stepSecondOrderInPlace(cur.bodyTilt, p.bodyTiltDeg, dt, k.bodyTilt[0], k.bodyTilt[1], k.bodyTilt[2]);
+      stepSecondOrderInPlace(cur.headTilt, p.headTiltDeg, dt, k.headTilt[0], k.headTilt[1], k.headTilt[2]);
+      stepSecondOrderInPlace(cur.headY, p.headY, dt, k.headY[0], k.headY[1], k.headY[2]);
+      stepSecondOrderInPlace(cur.leftEar, p.leftEarDeg, dt, k.leftEar[0], k.leftEar[1], k.leftEar[2]);
+      stepSecondOrderInPlace(cur.rightEar, p.rightEarDeg, dt, k.rightEar[0], k.rightEar[1], k.rightEar[2]);
+      stepSecondOrderInPlace(
+        cur.postureStretchY,
+        p.postureStretchY,
+        dt,
+        k.postureStretchY[0],
+        k.postureStretchY[1],
+        k.postureStretchY[2]
+      );
+      return cur;
     };
 
-    const p = tgt.pose;
-    const k = poseSprings;
-    next.leanX = stepSecondOrder(cur.leanX, p.leanX, dt, k.leanX[0], k.leanX[1], k.leanX[2]);
-    next.leanY = stepSecondOrder(cur.leanY, p.leanY, dt, k.leanY[0], k.leanY[1], k.leanY[2]);
-    next.bodyTilt = stepSecondOrder(cur.bodyTilt, p.bodyTiltDeg, dt, k.bodyTilt[0], k.bodyTilt[1], k.bodyTilt[2]);
-    next.headTilt = stepSecondOrder(cur.headTilt, p.headTiltDeg, dt, k.headTilt[0], k.headTilt[1], k.headTilt[2]);
-    next.headY = stepSecondOrder(cur.headY, p.headY, dt, k.headY[0], k.headY[1], k.headY[2]);
-    next.leftEar = stepSecondOrder(cur.leftEar, p.leftEarDeg, dt, k.leftEar[0], k.leftEar[1], k.leftEar[2]);
-    next.rightEar = stepSecondOrder(cur.rightEar, p.rightEarDeg, dt, k.rightEar[0], k.rightEar[1], k.rightEar[2]);
-    next.postureStretchY = stepSecondOrder(
-      cur.postureStretchY,
-      p.postureStretchY,
-      dt,
-      k.postureStretchY[0],
-      k.postureStretchY[1],
-      k.postureStretchY[2]
-    );
-
-    sim.value = next;
+    if (typeof sim.modify === 'function') {
+      sim.modify(stepSim);
+    } else {
+      sim.value = { ...stepSim(sim.value) };
+    }
   }, animate);
 
   const playReaction = useCallback(

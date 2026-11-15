@@ -8,6 +8,7 @@ import {
   useCreatureMotion,
 } from '@/components/creatures/useCreatureMotion';
 import type { EnemyInstance } from '@/types/enemy';
+import { useAppActive } from '@/hooks/useAppActive';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { COLORS } from '@/utils/colors';
 import {
@@ -43,6 +44,8 @@ interface EnemyAvatarProps {
    * JS blink/saccade timers and overlay layers.
    */
   lightweight?: boolean;
+  /** Whether continuous idle/mood animation should run (default true) */
+  animate?: boolean;
   /** Whether tapping the enemy pokes/provokes it (5x rapid pokes = rage_spin!) */
   interactive?: boolean;
   /** Optional callback when poked */
@@ -373,13 +376,15 @@ export const EnemyAvatar: React.FC<EnemyAvatarProps> = ({
   mood = 'idle',
   reaction = null,
   lightweight = false,
+  animate = true,
   interactive = false,
   onPoke,
   framed = false,
   testID,
 }) => {
+  const appActive = useAppActive();
   const reducedMotion = useReducedMotion();
-  const shouldAnimate = !reducedMotion;
+  const shouldAnimate = animate && !lightweight && !reducedMotion && appActive;
 
   const enemyName =
     typeof enemy === 'string'

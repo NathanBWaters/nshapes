@@ -3,7 +3,7 @@ import { ownerOfEvent } from '../data/weaponGuide';
 import type { FightLogEntry, FightLogLine, FightLogSetMath, RunEventType } from '../types';
 
 /** Events whose amount is damage dealt to the foe. */
-const DAMAGE: ReadonlySet<RunEventType> = new Set(['hit', 'rainbow', 'blast', 'laser', 'ricochet', 'pinata_break']);
+const DAMAGE: ReadonlySet<RunEventType> = new Set(['hit', 'rainbow', 'surge_hit', 'blast', 'laser', 'ricochet', 'pinata_break']);
 
 const plural = (n: number | undefined, one: string, many = `${one}s`) => `${n ?? 0} ${n === 1 ? one : many}`;
 
@@ -11,6 +11,10 @@ const plural = (n: number | undefined, one: string, many = `${one}s`) => `${n ??
 const LABEL: Partial<Record<RunEventType, (l: FightLogLine) => string | null>> = {
   hit: l => l.text ?? null,
   rainbow: l => (l.text ? `${l.text} (Rainbow)` : null),
+  surge_hit: l => (l.text ? `${l.text} (Shading Surge)` : null),
+  surge_start: l => `Shading Surge! ${l.text ? `${l.text} ` : ''}matched cards ×5`,
+  surge_end: () => 'Shading Surge ended',
+  surge_warn: () => null,
   blast: l => `Explosion · ${plural(Number(l.text), 'card')}`,
   laser: l => `Laser · ${plural(Number(l.text), 'card')}`,
   ricochet: l => `Ricochet · ${plural(Number(l.text), 'card')}`,
@@ -136,10 +140,12 @@ const fmt = (n: number) => (Number.isInteger(n) ? `${n}` : n.toFixed(1));
 /** The Set's own hit as a sum someone can check: cards + bonuses, × multipliers, + extras = hit. */
 export const setMathRows = (m: FightLogSetMath): MathRow[] => {
   const rows: MathRow[] = [{ label: 'Matched cards', value: fmt(m.cards) }];
+  if (m.surgeMultiplier && m.surgeMultiplier !== 1) rows.push({ label: 'Shading Surge', value: `×${fmt(m.surgeMultiplier)}` });
   for (const [kind, pts] of Object.entries(m.collateral)) if (pts) rows.push({ label: COLLATERAL_LABEL[kind] ?? kind, value: `+${fmt(pts)}` });
   if (m.flatBonus) rows.push({ label: 'Per-Set bonuses', value: `${m.flatBonus > 0 ? '+' : ''}${fmt(m.flatBonus)}` });
   if (m.multiplier !== 1) rows.push({ label: m.rainbow ? 'Multiplier (Rainbow ×2 and others)' : 'Multiplier', value: `×${fmt(m.multiplier)}` });
   if (m.extra) rows.push({ label: 'Purity & traps', value: `+${fmt(m.extra)}` });
+  if (m.powerMultiplier && m.powerMultiplier > 1) rows.push({ label: 'Power', value: `×${fmt(m.powerMultiplier)}` });
   rows.push({ label: 'Set hit', value: `${m.hit}`, total: true });
   return rows;
 };
@@ -164,16 +170,17 @@ export const entryTitle = (e: FightLogEntry, setNo: number): string => {
 };
 
 /** One short line for the move list. */
-export const entrySummary = (e: FightLogEntry): string => {
+export const entrySummary = (e: FightLogEntry, held: readonly string[] = []): string => {
   if (e.kind === 'set' && e.set) {
     const bits = [e.set.rainbow ? 'Rainbow' : `${e.set.diffTraits} trait${e.set.diffTraits === 1 ? '' : 's'} differ`];
+    if (e.set.surgeMultiplier && e.set.surgeMultiplier > 1) bits.push(`Surge ×${fmt(e.set.surgeMultiplier)}`);
     if (e.set.graceUsed) bits.push('grace');
-    const triggers = describeLines(e.lines).filter(l => l.damage).map(l => l.source ?? l.label);
+    const triggers = describeLines(e.lines, held).filter(l => l.damage).map(l => l.source ?? l.label);
     if (triggers.length) bits.push([...new Set(triggers)].slice(0, 2).join(', '));
     return bits.join(' · ');
   }
   if (e.kind === 'mistake') return e.heartsDelta < 0 ? `lost ${plural(-e.heartsDelta, 'heart')}` : 'no heart lost';
-  const lines = describeLines(e.lines);
+  const lines = describeLines(e.lines, held);
   return lines.slice(0, 2).map(l => l.source ?? l.label).join(', ');
 };
 
