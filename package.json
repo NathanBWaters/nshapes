@@ -1,6 +1,6 @@
 {
   "name": "nshapes",
-  "version": "0.1.122",
+  "version": "0.1.123",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
@@ -14,7 +14,8 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:perf": "jest --watchAll=false __tests__/eslintPerfPlugin.test.ts __tests__/performanceLifecycle.test.tsx",
-    "test:fast": "jest --watchAll=false --testPathIgnorePatterns=adventureBalance --testPathIgnorePatterns=adventureBuilds --testPathIgnorePatterns=adventurePower --testPathIgnorePatterns=Tuner --testPathIgnorePatterns=adventureAnalytics",
+    "test:fast": "jest --watchAll=false --testPathIgnorePatterns=adventureBalance --testPathIgnorePatterns=adventureBuilds --testPathIgnorePatterns=adventurePower --testPathIgnorePatterns=Tuner --testPathIgnorePatterns=adventureAnalytics --testPathIgnorePatterns=adventureFullGameE2E",
+    "test:e2e:adventure": "jest --watchAll=false __tests__/adventureFullGameE2E.test.tsx",
     "test:e2e:battery": "playwright test e2e/battery-budget.spec.ts --project=chromium --reporter=list",
     "verify:guardrails": "npm run typecheck && npm run lint && npm run validate:icons && npm run test:perf",
     "typecheck": "tsc --noEmit",
