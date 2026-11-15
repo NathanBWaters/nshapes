@@ -16,4 +16,10 @@
 - **Single weapon explainer (`WeaponExplainer.tsx`):** Every weapon description UI must reuse `src/adventure/components/WeaponExplainer.tsx`. Never build a second weapon description card. Register new Armory weapons in `src/adventure/data/weaponGuide.ts`, `src/adventure/data/weaponRoles.ts`, and `src/audio/voices.ts`.
 - **Icons (`ICON_REGISTRY`):** Only use registered `IconName` keys defined in `src/components/Icon.tsx`. Verify with `npm run typecheck && npm run validate:icons`.
 - **Data-driven Adventure Mode:** Content, levels, weapons, skills, evolutions, and Arcana belong in `src/adventure/data/*.ts`, not hardcoded in the engine.
+- **Performance & Battery Guardrails:**
+  - **React Compiler** is enabled for both Metro and Jest (`app.config.js` & `babel.config.js`).
+  - **Frame loops (`useGuardedFrameCallback`):** Never import Reanimated's `useFrameCallback` directly. Use `src/hooks/useGuardedFrameCallback.ts` with a leading `'worklet';` directive and zero object/array/closure allocations inside the callback.
+  - **Infinite Reanimated loops (`withRepeat(..., -1)`):** Only animate GPU-composited `transform`/`opacity`, gate on `useAppActive()`, and clean up with `cancelAnimation(...)`.
+  - **Single lifecycle & audio gateways:** Never subscribe to `AppState`, `visibilitychange`, or `new AudioContext` outside `src/utils/appLifecycle.ts` and `src/audio/chip.ts`. Pair recurring `setInterval` timers with `useAppActive()` and `registerInterval(...)` from `src/utils/perfWatchdog.ts`.
+  - **Verification gates:** Run `npm run verify:guardrails` and `npm run test:e2e:battery`.
 - **Reference docs:** See [Claude.md](./Claude.md), [README.md](./README.md), [style_guide.md](./style_guide.md), and [docs/adventure-design.md](./docs/adventure-design.md) for full system specifications.

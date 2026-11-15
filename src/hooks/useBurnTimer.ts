@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
+import { registerInterval } from '@/utils/perfWatchdog';
+import { useAppActive } from './useAppActive';
 
 const FIRE_BURN_DURATION = 250; // 0.25 seconds
 
@@ -20,6 +22,8 @@ export function useBurnTimer({
   isPaused,
   onComplete,
 }: UseBurnTimerOptions): number {
+  const appActive = useAppActive();
+  const effectivePaused = Boolean(isPaused) || !appActive;
   const [progress, setProgress] = useState(0);
 
   const accumulatedTimeRef = useRef(0);
@@ -46,7 +50,7 @@ export function useBurnTimer({
       return;
     }
 
-    if (isPaused) {
+    if (effectivePaused) {
       lastTickRef.current = null;
       return;
     }
@@ -70,9 +74,13 @@ export function useBurnTimer({
     };
 
     updateProgress();
+    const stopTrack = registerInterval('useBurnTimer');
     const interval = setInterval(updateProgress, 100);
-    return () => clearInterval(interval);
-  }, [isOnFire, fireStartTime, isPaused]);
+    return () => {
+      clearInterval(interval);
+      stopTrack();
+    };
+  }, [isOnFire, fireStartTime, effectivePaused]);
 
   return progress;
 }

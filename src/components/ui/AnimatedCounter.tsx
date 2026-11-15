@@ -5,6 +5,7 @@ import {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
+import { useAppActive } from '@/hooks/useAppActive';
 import { DURATION } from '@/utils/animation';
 
 interface AnimatedCounterProps {
@@ -24,26 +25,40 @@ export function AnimatedCounter({
   style,
   decimalPlaces = 0,
 }: AnimatedCounterProps) {
+  const appActive = useAppActive();
   const animatedValue = useSharedValue(0);
   const previousValue = useRef(0);
 
   useEffect(() => {
+    if (!appActive) {
+      animatedValue.value = value;
+      previousValue.current = value;
+      return;
+    }
     animatedValue.value = withTiming(value, {
       duration,
       easing: Easing.out(Easing.exp),
     });
     previousValue.current = value;
-  }, [value, duration, animatedValue]);
+  }, [appActive, value, duration, animatedValue]);
 
   // For simpler implementation, we'll use state-based updates
   const [displayValue, setDisplayValue] = React.useState(0);
 
   useEffect(() => {
+    if (!appActive) {
+      setDisplayValue(value);
+      previousValue.current = value;
+      return;
+    }
+    let rafId = 0;
+    let cancelled = false;
     const startValue = previousValue.current;
     const endValue = value;
     const startTime = Date.now();
 
     const animate = () => {
+      if (cancelled) return;
       const elapsed = Date.now() - startTime;
       const progress = Math.min(elapsed / duration, 1);
 
@@ -53,15 +68,19 @@ export function AnimatedCounter({
       setDisplayValue(currentValue);
 
       if (progress < 1) {
-        requestAnimationFrame(animate);
+        rafId = requestAnimationFrame(animate);
       } else {
         setDisplayValue(endValue);
         previousValue.current = endValue;
       }
     };
 
-    requestAnimationFrame(animate);
-  }, [value, duration]);
+    rafId = requestAnimationFrame(animate);
+    return () => {
+      cancelled = true;
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  }, [appActive, value, duration]);
 
   const formattedValue =
     decimalPlaces > 0

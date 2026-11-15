@@ -27,9 +27,14 @@ const append = (d: Draft, entry: FightLogEntry) => {
 
 const cardTags = (c: Card): string[] => {
   const tags: string[] = [];
-  const bonus = (c.bonusPoints ?? 0) + (c.charge ?? 0);
-  if (bonus > 0) tags.push(`+${bonus} dmg`);
+  if ((c.bonusPoints ?? 0) > 0) tags.push(`Power +${c.bonusPoints}`);
+  if ((c.charge ?? 0) > 0) tags.push(`Charged +${c.charge}`);
   if ((c.bonusMoney ?? 0) > 0) tags.push(`+${c.bonusMoney}¢`);
+  if (c.magnet) tags.push('Magnet');
+  if (c.chest !== undefined && c.chest > 0) tags.push(`Chest +${c.chest}`);
+  if (c.doubler) tags.push('Cursed ×2');
+  if (c.hot) tags.push('Hot Potato');
+  if (c.isWild) tags.push('Wild');
   if (c.hasEvolutionItem) tags.push('Catalyst');
   if (c.onFire) tags.push('On fire');
   if ((c.health ?? 1) > 1) tags.push(`Armored ${c.health}`);
@@ -39,14 +44,20 @@ const cardTags = (c: Card): string[] => {
   return tags;
 };
 
-export const logCard = (c: Card): FightLogCard => ({
-  shape: c.shape,
-  color: c.color,
-  number: c.number,
-  shading: c.shading,
-  ...(c.background ? { background: c.background } : {}),
-  tags: cardTags(c),
-});
+export const logCard = (c: Card): FightLogCard => {
+  const bonusPoints = (c.bonusPoints ?? 0) + (c.charge ?? 0);
+  const points = 1 + bonusPoints;
+  return {
+    shape: c.shape,
+    color: c.color,
+    number: c.number,
+    shading: c.shading,
+    ...(c.background ? { background: c.background } : {}),
+    points,
+    ...(bonusPoints > 0 ? { bonusPoints } : {}),
+    tags: cardTags(c),
+  };
+};
 
 /** Rule key (`node:<id>#i`, `w<slot>:<id>#i`, `evo:<id>#i`) → the name players know it by. */
 const sourceName = (d: RunState, key: string): string => {

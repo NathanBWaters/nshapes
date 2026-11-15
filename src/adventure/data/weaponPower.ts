@@ -182,6 +182,15 @@ export const PER_TRIAL = new Map<string, number>();
 
 export const powerPer = (weaponId: string): number => PER_TRIAL.get(weaponId) ?? PER_TRIAL.get('*') ?? PER[weaponId] ?? DEFAULT_PER;
 
+/** What a weapon watches to feed Power, as a lowercase noun phrase ("every explosion", "every card cleared", etc.). */
+export const powerWatchPhrase = (weaponId: string): string | null => {
+  if (powerWatches(weaponId).length === 0) return null;
+  if (FEED_OVERRIDES[weaponId]) return `every ${OVERRIDE_WORDS[weaponId] ?? 'Set you make'}`;
+  const def = (WEAPON_GROWTH[weaponId] ?? [])[0];
+  if (!def?.look) return 'using it';
+  return def.every && def.every > 1 ? `every ${def.every} ${def.look}` : `every ${def.look}`;
+};
+
 /** The explainer's Power sentence for a weapon, or null if it does not feed Power. */
 export const powerText = (weaponId: string): string | null => {
   if (powerWatches(weaponId).length === 0) return null;

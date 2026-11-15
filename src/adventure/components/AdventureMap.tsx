@@ -17,6 +17,7 @@ import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
 import { useAppActive } from '@/hooks/useAppActive';
 import { COLORS } from '@/utils/colors';
+import { recordComponentRender } from '@/utils/perfWatchdog';
 import { sfx } from '@/audio';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import type { CharacterName } from '@/types';
@@ -140,6 +141,7 @@ interface Props {
 }
 
 const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpenGuide, onExit, highlightLevelId, onPathsRevealed, active = true }) => {
+  recordComponentRender('AdventureMap');
   const { width: winW } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const appActive = useAppActive();

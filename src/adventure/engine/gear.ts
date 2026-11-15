@@ -34,7 +34,7 @@
  */
 import type { AttributeName, Card } from '@/types';
 import { ATTRIBUTE_VALUES } from '@/utils/gameUtils';
-import type { GearState } from '../types';
+import type { FightLogMathItem, GearState } from '../types';
 import type { TrickKind } from '../rules/types';
 import { TRICK_RULES } from '../data/rules';
 import { getAdjacentIndices } from '@/utils/weaponEffects';
@@ -144,16 +144,27 @@ const paid = (d: Draft, kind: TrickKind) => enqueue(d, 'trick', undefined, kind)
  * multiplier (a ×2 card, stepping off the Tightrope). Call before the Set
  * changes any state.
  */
-export const gearSetBonus = (d: Draft, set: GearSet): { flat: number; multiplier: number } => {
+export const gearSetBonus = (
+  d: Draft,
+  set: GearSet
+): { flat: number; multiplier: number; flatItems: FightLogMathItem[]; multItems: FightLogMathItem[] } => {
   const m = mods(d);
   const g = d.gear;
   let bonus = 0;
   let multiplier = 1;
-  const add = (amount: number, text: string, kind?: TrickKind) => {
+  const flatItems: FightLogMathItem[] = [];
+  const multItems: FightLogMathItem[] = [];
+  const add = (amount: number, text: string, kind?: TrickKind, note?: string, sourceRef?: string) => {
     if (amount === 0) return;
     bonus += amount;
     emit(d, 'rule', amount, text);
     if (kind && amount > 0) paid(d, kind);
+    flatItems.push({
+      label: text.replace(/!$/, ''),
+      amount,
+      ...(note ? { note } : {}),
+      ...(sourceRef ? { sourceRef } : {}),
+    });
   };
   const ids = new Set(set.matched.map(c => c.id));
 
@@ -162,55 +173,88 @@ export const gearSetBonus = (d: Draft, set: GearSet): { flat: number; multiplier
     multiplier *= times;
     emit(d, 'rule', times, `Curse broken ×${times}`);
     paid(d, 'curse');
+    multItems.push({
+      label: 'Cursed Idol',
+      amount: times,
+      note: 'broke a cursed card in this Set',
+      sourceRef: 'weapon:cursed-idol',
+    });
   }
   if (set.matched.some(c => c.isWild)) paid(d, 'wild');
-  if (on(m.chainDamage) && set.matched.some(c => c.shackle && ids.has(c.shackle))) add(m.chainDamage, 'Chain Gang!', 'chain');
-  if (on(m.thornDamage)) add(set.matched.filter(c => c.thornAt !== undefined).length * m.thornDamage, 'Thorns', 'thorn');
+  if (on(m.chainDamage) && set.matched.some(c => c.shackle && ids.has(c.shackle))) {
+    add(m.chainDamage, 'Chain Gang!', 'chain', 'matched linked chain cards', 'weapon:chain-gang');
+  }
+  if (on(m.thornDamage)) {
+    const hits = set.matched.filter(c => c.thornAt !== undefined).length;
+    add(hits * m.thornDamage, 'Thorns', 'thorn', hits === 1 ? 'cleared a thorned card' : `cleared ${hits} thorned cards`, 'weapon:thorn-bush');
+  }
   if (on(m.rustGold)) {
     // A rusty card can lose what it is worth, never more
     const lost = set.matched.reduce((sum, c) => sum + Math.min(c.rust ?? 0, 1 + (c.bonusPoints ?? 0) + (c.charge ?? 0)), 0);
-    add(-lost, 'Rust');
+    add(-lost, 'Rust', undefined, 'rusty cards lost damage', 'weapon:rust');
     if (set.matched.some(c => c.rusted)) paid(d, 'rust');
   }
-  if (on(m.tarDamage) && set.slots.some(i => tarRows(d).includes(Math.floor(i / GRID_COLS)))) add(m.tarDamage, 'Tar Pit', 'tar');
-  if (on(m.decoyDamage) && set.matched.some(c => c.decoyOf && ids.has(c.decoyOf))) add(m.decoyDamage, 'Decoy found!', 'decoy');
-  if (on(m.fuseDamage)) add(set.matched.filter(c => c.fuseHot).length * m.fuseDamage, 'Short fuse', 'fuse');
+  if (on(m.tarDamage) && set.slots.some(i => tarRows(d).includes(Math.floor(i / GRID_COLS)))) {
+    add(m.tarDamage, 'Tar Pit', 'tar', 'matched in the sticky tar row', 'weapon:tar-pit');
+  }
+  if (on(m.decoyDamage) && set.matched.some(c => c.decoyOf && ids.has(c.decoyOf))) {
+    add(m.decoyDamage, 'Decoy found!', 'decoy', 'matched a decoy with its pair', 'weapon:decoy');
+  }
+  if (on(m.fuseDamage)) {
+    const hits = set.matched.filter(c => c.fuseHot).length;
+    add(hits * m.fuseDamage, 'Short fuse', 'fuse', hits === 1 ? 'beat a hot fuse' : `beat ${hits} hot fuses`, 'weapon:long-fuse');
+  }
   if (set.matched.some(c => c.thawed)) paid(d, 'ice');
   const chest = set.matched.find(c => c.chest !== undefined);
-  if (chest) add(chest.chest ?? 0, 'Greedy Chest!', 'chest');
-  if (on(m.potatoDamage) && set.matched.some(c => c.hot)) add(m.potatoDamage, 'Hot Potato!', 'potato');
+  if (chest) {
+    const pts = chest.chest ?? 0;
+    add(pts, 'Greedy Chest!', 'chest', `chest saved +${pts} bonus damage`, 'weapon:greedy-chest');
+  }
+  if (on(m.potatoDamage) && set.matched.some(c => c.hot)) {
+    add(m.potatoDamage, 'Hot Potato!', 'potato', 'matched the hot potato card', 'weapon:hot-potato');
+  }
 
-  if (on(m.magnetDamage) && set.matched.some(c => c.magnet)) add(m.magnetDamage, 'Magnet!', 'magnet');
+  if (on(m.magnetDamage) && set.matched.some(c => c.magnet)) {
+    add(m.magnetDamage, 'Magnet!', 'magnet', 'matched the magnetized card', 'weapon:magnet');
+  }
   if (on(m.bountyDamage) && g.bounty) {
     const wanted = set.matched.filter(c => !c.isWild && valueOf(c, g.bounty!.attribute) === g.bounty!.value).length;
-    add(wanted * m.bountyDamage, 'Bounty!', 'bounty');
+    add(wanted * m.bountyDamage, 'Bounty!', 'bounty', `${wanted} wanted card${wanted === 1 ? '' : 's'}`, 'weapon:bounty-poster');
   }
   if (on(m.missingHeartDamage)) {
     // The heart the bargain took counts as missing
     const missing = d.hearts !== null && d.maxHearts !== null ? d.maxHearts - d.hearts : 0;
-    add((missing + 1) * m.missingHeartDamage, "Devil's Bargain");
+    add((missing + 1) * m.missingHeartDamage, "Devil's Bargain", undefined, `${missing + 1} missing heart${missing + 1 === 1 ? '' : 's'}`, 'weapon:devils-bargain');
   }
-  if (on(m.snowballStep) && g.snowball > 0) add(g.snowball * m.snowballStep, 'Snowball');
-  if (set.auto) return { flat: bonus, multiplier };
+  if (on(m.snowballStep) && g.snowball > 0) {
+    add(g.snowball * m.snowballStep, 'Snowball', undefined, `${g.snowball}-Set clean streak`, 'weapon:snowball');
+  }
+  if (set.auto) return { flat: bonus, multiplier, flatItems, multItems };
 
   if (on(m.mirrorDamage)) {
     // The mirror remembers your last Set, and further back once it has grown
     const remembered = [g.lastSetSlots, ...g.mirrorMemory.slice(0, Math.round(m.mirrorDepth ?? 0))].flat();
-    if (set.slots.some(i => remembered.includes(i))) add(m.mirrorDamage, 'Mirror!', 'mirror');
+    if (set.slots.some(i => remembered.includes(i))) {
+      add(m.mirrorDamage, 'Mirror!', 'mirror', 'reused a slot from a recent Set', 'weapon:mirror-shard');
+    }
     if (set.slots.filter(i => g.lastSetSlots.includes(i)).length >= 2) feat(d, 'doubleMirror');
   }
   if (on(m.oddOneOutDamage) && !set.graceUsed) {
     const n = d.attributes.length;
-    if (set.diffCount === 1 || (n >= 4 && set.diffCount === n - 1)) add(m.oddOneOutDamage, 'Odd one out!', 'odd');
+    if (set.diffCount === 1 || (n >= 4 && set.diffCount === n - 1)) {
+      add(m.oddOneOutDamage, 'Odd one out!', 'odd', set.diffCount === 1 ? 'only 1 trait differed' : 'only 1 trait matched', 'weapon:odd-one-out');
+    }
   }
-  if (on(m.glassDamage) && !g.glassBroken) add(m.glassDamage, 'Glass Sword');
+  if (on(m.glassDamage) && !g.glassBroken) {
+    add(m.glassDamage, 'Glass Sword', undefined, 'unbroken blade bonus', 'weapon:glass-sword');
+  }
   if (on(m.albumDamage)) {
     const page = set.graceUsed ? null : albumPageOf(set.matched, d.attributes, g.album);
     if (page) {
       g.album = [...g.album, page];
       if (albumTraits(d.attributes).every(a => g.album.includes(a))) {
         g.album = [];
-        add(m.albumDamage, 'Album complete!', 'album');
+        add(m.albumDamage, 'Album complete!', 'album', 'completed all trait pages', 'weapon:collectors-album');
         feat(d, 'albumDone');
       } else {
         emit(d, 'rule', undefined, `Album: ${page}`);
@@ -220,14 +264,18 @@ export const gearSetBonus = (d: Draft, set: GearSet): { flat: number; multiplier
   }
   if (on(m.tightropeDamage)) {
     // The first Set of a wave starts the rope; after that, stay next to your last Set
-    if (g.lastSetSlots.length === 0 || set.slots.some(i => touching(d, g.lastSetSlots).has(i))) add(m.tightropeDamage, 'Tightrope', 'tightrope');
-    else {
+    if (g.lastSetSlots.length === 0 || set.slots.some(i => touching(d, g.lastSetSlots).has(i))) {
+      add(m.tightropeDamage, 'Tightrope', 'tightrope', 'stayed on the rope', 'weapon:tightrope');
+    } else {
       const off = Math.min(1, TRICK_RULES.offRopeMultiplier + (m.offRopeBonus ?? 0));
       multiplier *= off;
-      if (off < 1) emit(d, 'rule', off, 'Off the rope');
+      if (off < 1) {
+        emit(d, 'rule', off, 'Off the rope');
+        multItems.push({ label: 'Off the rope', amount: off, note: 'missed Tightrope adjacency', sourceRef: 'weapon:tightrope' });
+      }
     }
   }
-  return { flat: bonus, multiplier };
+  return { flat: bonus, multiplier, flatItems, multItems };
 };
 
 /**

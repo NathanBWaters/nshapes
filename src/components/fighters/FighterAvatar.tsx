@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { memo, useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Easing, withDelay, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { CreatureDamageOverlay } from '@/components/creatures/CreatureDamageOverlay';
@@ -441,7 +441,7 @@ const FIGHTER_MOTION: CreatureMotionConfig<FighterAmbientMood, FighterReactionTy
   },
 };
 
-export const FighterAvatar: React.FC<FighterAvatarProps> = ({
+export const FighterAvatar: React.FC<FighterAvatarProps> = memo(function FighterAvatar({
   character,
   size = 56,
   health,
@@ -454,7 +454,7 @@ export const FighterAvatar: React.FC<FighterAvatarProps> = ({
   onPet,
   framed = false,
   testID,
-}) => {
+}) {
   const appActive = useAppActive();
   const reducedMotion = useReducedMotion();
   const shouldAnimate = animate && !reducedMotion && appActive;
@@ -570,7 +570,7 @@ export const FighterAvatar: React.FC<FighterAvatarProps> = ({
       )}
     </CreatureStage>
   );
-};
+});
 
 const styles = StyleSheet.create({
   streakBadge: {

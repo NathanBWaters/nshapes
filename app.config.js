@@ -47,6 +47,7 @@ export default {
     ],
     experiments: {
       typedRoutes: true,
+      reactCompiler: true,
       ...(IS_PROD && { baseUrl: "/nshapes" })
     }
   }

@@ -6,7 +6,7 @@
  */
 import { comboWindowFor } from '../data/passives';
 import type { Card } from '@/types';
-import type { PassiveId, PassiveState } from '../types';
+import type { FightLogMathItem, PassiveId, PassiveState } from '../types';
 import { BASE_RULES } from '../data/rules';
 import { emit, hasPassive, redeal, touchable, tuning, updateCards, type Draft } from './fight';
 import { allSets } from './sets';
@@ -84,25 +84,49 @@ export const consumeHotStreak = (d: Draft): number => {
  */
 export const patienceMs = (d: Draft): number => tuning(d, 'patience.msPerTrait') * d.attributes.length;
 
-export const passiveSetDamage = (d: Draft, sinceLastMs: number): number => {
+export const passiveSetDamageBreakdown = (d: Draft, sinceLastMs: number): { bonus: number; items: FightLogMathItem[] } => {
   let bonus = 0;
+  const items: FightLogMathItem[] = [];
   if (hasPassive(d, 'scrappy') && d.hearts !== null && d.maxHearts !== null) {
-    bonus += Math.max(0, d.maxHearts - d.hearts) * tuning(d, 'scrappy.perHeart');
+    const missing = Math.max(0, d.maxHearts - d.hearts);
+    const perHeart = tuning(d, 'scrappy.perHeart');
+    const add = missing * perHeart;
+    if (add !== 0) {
+      bonus += add;
+      items.push({ label: 'Scrappy', amount: add, note: `${missing} missing heart${missing === 1 ? '' : 's'}` });
+    }
   }
-  if (hasPassive(d, 'combo')) bonus += Math.min(comboSteps(d), tuning(d, 'combo.max')) * tuning(d, 'combo.perStep');
+  if (hasPassive(d, 'combo')) {
+    const steps = Math.min(comboSteps(d), tuning(d, 'combo.max'));
+    const perStep = tuning(d, 'combo.perStep');
+    const add = steps * perStep;
+    if (add !== 0) {
+      bonus += add;
+      items.push({ label: 'Combo', amount: add, note: `${steps}-Set speed streak` });
+    }
+  }
   if (hasPassive(d, 'grudge') && d.passive.grudge > 0) {
-    const release = d.passive.grudge * tuning(d, 'grudge.damage');
+    const count = d.passive.grudge;
+    const release = count * tuning(d, 'grudge.damage');
     emit(d, 'grudge_release', release);
     d.passive.grudge = 0;
     bonus += release;
+    if (release !== 0) {
+      items.push({ label: 'Grudge release', amount: release, note: `${count} stored mistake${count === 1 ? '' : 's'}` });
+    }
   }
   if (hasPassive(d, 'patience') && sinceLastMs >= patienceMs(d)) {
     const p = tuning(d, 'patience.damage');
     emit(d, 'patience', p);
     bonus += p;
+    if (p !== 0) {
+      items.push({ label: 'Patience', amount: p, note: 'slow careful Set bonus' });
+    }
   }
-  return bonus;
+  return { bonus, items };
 };
+
+export const passiveSetDamage = (d: Draft, sinceLastMs: number): number => passiveSetDamageBreakdown(d, sinceLastMs).bonus;
 
 const isPower = (c: Card) => (c.bonusPoints ?? 0) > 0;
 const isGold = (c: Card) => (c.bonusMoney ?? 0) > 0;

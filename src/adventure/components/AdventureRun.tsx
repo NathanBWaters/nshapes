@@ -21,6 +21,7 @@ import { useAppActive } from '@/hooks/useAppActive';
 import { useEnemyConductor } from '@/hooks/useEnemyConductor';
 import { useFighterConductor } from '@/hooks/useFighterConductor';
 import { COLORS } from '@/utils/colors';
+import { recordComponentRender, registerInterval } from '@/utils/perfWatchdog';
 import type { Card, CardReward, Weapon } from '@/types';
 import type { WeaponEffectResult } from '@/utils/weaponEffects';
 import { band, music, sfx } from '@/audio';
@@ -47,6 +48,7 @@ import { Btn, CoinPill, DARK, Eyebrow, Heart, INK, PopIn, TONE } from './ui';
 import { EvolutionBanner, EvolutionRing, MegaFlash } from './RunFx';
 import WeaponExplainer from './WeaponExplainer';
 import PowerMeter from './PowerMeter';
+import PowerExplainer from './PowerExplainer';
 
 const TICK_MS = 250;
 const REPLACE_DELAY_MS = 950;
@@ -90,6 +92,7 @@ for (const m of Object.values(MECHANICS)) {
 }
 
 const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish, onQuit, onRestart, onCoachMarkSeen, effects = true, onToggleEffects }) => {
+  recordComponentRender('AdventureRun');
   const insets = useSafeAreaInsets();
   const appActive = useAppActive();
   // The save the fight started from and every action sent to it: enough to replay the fight (engine/replay.ts)
@@ -115,6 +118,8 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   const [stage, setStage] = useState({ w: 0, h: 0 });
   /** A weapon on the belt the player tapped to read about (the fight waits) */
   const [inspect, setInspect] = useState<Weapon | null>(null);
+  /** The Power meter in the header was tapped to read about Power (the fight waits) */
+  const [powerInfo, setPowerInfo] = useState(false);
   /** The first evolution ever: its cut-in also points at the countdown ring */
   const [evolutionHint, setEvolutionHint] = useState(false);
   const anchors = useAnchors();
@@ -154,10 +159,10 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   }, [arrangement]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (run.status === 'won' || run.status === 'lost') return;
-    if (band.inFight) band.setMood(moodNow(run, paused || Boolean(tip) || Boolean(inspect)));
-  }, [run, paused, tip, inspect]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (band.inFight) band.setMood(moodNow(run, paused || Boolean(tip) || Boolean(inspect) || powerInfo));
+  }, [run, paused, tip, inspect, powerInfo]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const halted = paused || Boolean(tip) || Boolean(inspect);
+  const halted = paused || Boolean(tip) || Boolean(inspect) || powerInfo;
   const playing = run.status === 'playing' && !halted;
 
   // Auto-pause active timed fights whenever the user leaves the app/tab
@@ -307,8 +312,12 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   const ticking = appActive && playing && !fx.busy;
   useEffect(() => {
     if (!ticking) return;
+    const stopTrack = registerInterval('AdventureRun.clock');
     const iv = setInterval(() => dispatch({ type: 'TICK', ms: TICK_MS }), TICK_MS);
-    return () => clearInterval(iv);
+    return () => {
+      clearInterval(iv);
+      stopTrack();
+    };
   }, [ticking, dispatch]);
 
   // Fresh events → a script for the stage, and first-time coach marks
@@ -419,6 +428,10 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
     </View>
   );
   const keenEyeIds = useMemo(() => (run.passive.keenEyeCardId ? [run.passive.keenEyeCardId] : undefined), [run.passive.keenEyeCardId]);
+  const foeAvatarEnemy = useMemo(
+    () => ({ name: run.foeName, icon: run.foeIcon, tier: run.foe.tier }),
+    [run.foeName, run.foeIcon, run.foe.tier]
+  );
   return (
     <AnchorsProvider value={anchors}>
     <Animated.View
@@ -438,7 +451,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
           <Animated.View style={[st.foePortrait, level.isBoss && { backgroundColor: COLORS.actionYellow }, foeStyle]}>
             <EnemyAvatar
               testID="adventure-run-enemy"
-              enemy={{ name: run.foeName, icon: run.foeIcon, tier: run.foe.tier }}
+              enemy={foeAvatarEnemy}
               size={48}
               hp={run.foeHp}
               maxHp={run.foeMaxHp}
@@ -463,7 +476,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
             )}
             <View style={st.counters}>
               <Text testID="run-total-damage" style={st.counter} accessibilityLabel={`${run.totalDamage} total damage`}>⚔ {run.totalDamage}</Text>
-              {run.power > 0 && <PowerMeter points={run.power} />}
+              {run.power > 0 && <PowerMeter points={run.power} onPress={() => { sfx('click'); setPowerInfo(true); }} />}
               {run.combo > 1 && comboLive && (
                 <Anchor name="combo"><Text testID="run-combo" style={[st.counter, st.counterHot]}>COMBO ×{run.combo}</Text></Anchor>
               )}
@@ -818,6 +831,16 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
           <PopIn style={[st.panel, { padding: 12 }]}>
             {inspect && <WeaponExplainer weapon={run.weapons.find(w => w.id === inspect.id) ?? inspect} build={run.weaponBuilds[inspect.id]} growth={run.growth} defaultOpen />}
             <Btn testID="inspect-close" label="Back to the fight" onPress={() => setInspect(null)} />
+          </PopIn>
+        </View>
+      </Modal>
+
+      {/* Power meter, explained (the fight waits) */}
+      <Modal visible={powerInfo} transparent animationType="fade" onRequestClose={() => setPowerInfo(false)}>
+        <View style={st.overlay}>
+          <PopIn style={[st.panel, { padding: 12 }]}>
+            <PowerExplainer points={run.power} weapons={run.weapons} evolutionsTriggered={run.evolutionsTriggered} />
+            <Btn testID="power-info-close" label="Back to the fight" onPress={() => setPowerInfo(false)} />
           </PopIn>
         </View>
       </Modal>

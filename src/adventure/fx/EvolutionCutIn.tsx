@@ -8,9 +8,10 @@
  */
 import React, { useCallback, useEffect, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { cancelAnimation, Easing, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import Icon from '@/components/Icon';
 import { WeaponAvatar } from '@/components/weapons';
+import { useAppActive } from '@/hooks/useAppActive';
 import type { Weapon } from '@/types';
 import { COLORS } from '@/utils/colors';
 import type { EvolutionRecipe } from '../types';
@@ -33,10 +34,17 @@ const SPEED_LINES = [
 ] as const;
 
 const SpeedLine: React.FC<{ span: number; top: `${number}%`; width: number; ms: number; delay: number }> = ({ span, top, width, ms, delay }) => {
+  const appActive = useAppActive();
   const x = useSharedValue(0);
   useEffect(() => {
+    if (!appActive) {
+      cancelAnimation(x);
+      return;
+    }
+    x.value = 0;
     x.value = withDelay(delay, withRepeat(withTiming(1, { duration: ms, easing: Easing.linear }), -1));
-  }, [x, ms, delay]);
+    return () => cancelAnimation(x);
+  }, [appActive, x, ms, delay]);
   const style = useAnimatedStyle(() => ({ transform: [{ translateX: span - (span + width) * x.value }] }));
   return <Animated.View style={[st.speed, { top, width }, style]} />;
 };
@@ -95,6 +103,7 @@ interface Props {
 }
 
 export const EvolutionCutIn: React.FC<Props> = ({ recipes, weapons, seconds, size, onDone, autoDismissMs, hint }) => {
+  const appActive = useAppActive();
   const slash = useSharedValue(0);
   const open = useSharedValue(0);
   const flash = useSharedValue(0);
@@ -113,8 +122,18 @@ export const EvolutionCutIn: React.FC<Props> = ({ recipes, weapons, seconds, siz
     flash.value = withDelay(fxMs(90), withSequence(withTiming(0.75, { duration: fxMs(40) }), withTiming(0, { duration: fxMs(320), easing: Easing.out(Easing.quad) })));
     open.value = withDelay(fxMs(110), withTiming(1, { duration: fxMs(260), easing: Easing.out(Easing.back(1.5)) }));
     content.value = withDelay(fxMs(230), withTiming(1, { duration: fxMs(280), easing: Easing.out(Easing.cubic) }));
+  }, [slash, flash, open, content]);
+
+  useEffect(() => {
+    if (!appActive) {
+      cancelAnimation(prompt);
+      prompt.value = 0.7;
+      return;
+    }
+    prompt.value = 0;
     prompt.value = withDelay(fxMs(750), withRepeat(withSequence(withTiming(1, { duration: 500 }), withTiming(0.35, { duration: 500 })), -1, true));
-  }, [slash, flash, open, content, prompt]);
+    return () => cancelAnimation(prompt);
+  }, [appActive, prompt]);
 
   const close = useCallback(() => {
     if (closing.current || Date.now() - born.current < fxMs(GUARD_MS)) return;

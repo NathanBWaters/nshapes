@@ -1,31 +1,44 @@
 /**
- * Fight replay: the results screen's "what just happened" view, drawn from
- * the fight log (engine/fightLog.ts).
+ * Fight replay: the "what just happened" timeline & move-by-move receipt.
  *
- * - A timeline of damage per move (Set hit / triggered by the Set / burns and
- *   the clock), with mistakes, level-ups, buys and waves marked, and the foe's
- *   HP underneath on the same clock.
- * - Tap a bar (or a row in the move list) to inspect it: the cards, how the
- *   Set's hit was worked out, and everything it set off, by name and source.
- * - Top damage sources for the whole fight, and the raw log as JSON.
+ * - Plain-English summary + clickable Power banner + clickable series totals.
+ * - Move-column damage chart directly above the Move Inspector so players
+ *   immediately see every move's damage, move label, and timestamp.
+ * - Tapping any card, outcome chip, math row, or triggered effect opens an
+ *   inline plain-English explanation.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, View, Text, ScrollView, StyleSheet, TouchableOpacity, useWindowDimensions, Platform } from 'react-native';
-import Svg, { Rect, Path, Line, Text as SvgText } from 'react-native-svg';
+import Svg, { Rect, Path, Line, Circle, Text as SvgText } from 'react-native-svg';
 import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Card from '@/components/Card';
 import Icon, { type IconName } from '@/components/Icon';
 import { COLORS } from '@/utils/colors';
+import { sfx } from '@/audio';
 import type { Card as CardType } from '@/types';
 import type { FightLogCard, FightLogEntry, RunState } from '../types';
 import { Btn, INK, TONE } from './ui';
 import { ARCANA } from '../data/arcana';
 import { getArmoryWeapon } from '../data/armory';
+import { getPassive } from '../data/passives';
 import { weaponGuide } from '../data/weaponGuide';
+import { formatPower } from '../data/weaponPower';
 import { getRecipe, getSkillNode } from '../engine/sources';
 import { buildReplayWeapons, fightReplayOf, type FightReplayData } from '../history';
-import { describeLines, entrySummary, entryTitle, fightSummary, fmtClock, gearStats, gearStatText, setMathRows } from './fightReplayText';
+import {
+  describeLines,
+  entrySummary,
+  entryTitle,
+  explainLogCard,
+  fightSummary,
+  fmtClock,
+  gearStats,
+  gearStatText,
+  loggedCardPoints,
+  setMathRows,
+} from './fightReplayText';
+import PowerExplainer from './PowerExplainer';
 import WeaponExplainer from './WeaponExplainer';
 
 /** Categorical slots 1–3 of the validated chart palette, plus the reserved "critical" status color. */
@@ -41,19 +54,23 @@ const CRITICAL = '#d03b3b';
 const GRID = '#E6E0D7';
 const MUTED = 'rgba(56,56,56,0.62)';
 
-const PLOT_TOP = 12;
-const PLOT_H = 150;
-const MARK_H = 18;
-const AXIS_H = 16;
-const GAP_H = 14;
-const HP_H = 56;
+const PLOT_TOP = 18;
+const PLOT_H = 132;
+const AXIS_H = 30;
+const GAP_H = 12;
+const HP_H = 50;
 const HEARTS_H = 36;
+const TRACK_PAD_Y = 5;
 const Y_AXIS_W = 36;
 const PANEL_INSET = 27;
-const PAD_X = 10;
-const BAR_W = 6;
-const MIN_PX_PER_SEC = 7;
-const TICK_STEPS_S = [5, 10, 15, 30, 60, 120, 300];
+const PAD_X = 6;
+const MIN_SLOT_W = 48;
+
+const SERIES_HELP: Record<Series, string> = {
+  set: 'Damage dealt directly when you matched 3 cards—card points + flat bonuses × Set multipliers × Power.',
+  triggered: 'Bonus blasts, lasers, ricochets, and bursts triggered immediately after a Set.',
+  clock: 'Ongoing burn ticks, timed hazards, or clock events between moves.',
+};
 
 export const niceMax = (v: number) => {
   if (v <= 5) return 5;
@@ -127,11 +144,26 @@ export const DamageSplitBar: React.FC<{
   );
 };
 
+const shortMoveLabel = (e: FightLogEntry, setNo: number): string => {
+  switch (e.kind) {
+    case 'wave': return e.wave === 0 ? 'Start' : `W${e.wave + 1}`;
+    case 'set': return `S${setNo}`;
+    case 'mistake': return 'Miss';
+    case 'pick': return 'Pick';
+    case 'buy': return 'Shop';
+    case 'hint': return 'Hint';
+    case 'burn': return 'Burn';
+    case 'time': return 'Clock';
+  }
+};
+
 const MARK: Partial<Record<FightLogEntry['kind'], { glyph: string; color: string }>> = {
   mistake: { glyph: '✕', color: CRITICAL },
   pick: { glyph: '★', color: INK },
   buy: { glyph: '¢', color: INK },
   hint: { glyph: '?', color: MUTED },
+  burn: { glyph: '🔥', color: CRITICAL },
+  time: { glyph: '⏱', color: MUTED },
 };
 
 const toCard = (c: FightLogCard, i: number): CardType => ({
@@ -153,7 +185,10 @@ const explainRef = (
   weapons: ReturnType<typeof buildReplayWeapons>,
   weaponBuilds: FightReplayData['weaponBuilds']
 ): { name: string; text: string; kind: string; icon?: IconName } => {
-  const [type, id] = [ref.slice(0, ref.indexOf(':')), ref.slice(ref.indexOf(':') + 1)];
+  const colon = ref.indexOf(':');
+  if (colon < 0) return { name: '', text: '', kind: '' };
+  const type = ref.slice(0, colon);
+  const id = ref.slice(colon + 1);
   if (type === 'weapon') {
     const w = weapons.find(x => x.id === id) ?? getArmoryWeapon(id, weaponBuilds);
     return { name: w?.name ?? id, text: w?.description ?? '', kind: 'weapon', icon: w?.icon };
@@ -173,6 +208,8 @@ const explainRef = (
   return { name: '', text: '', kind: '' };
 };
 
+type ChipKind = 'damage' | 'set' | 'triggered' | 'power' | 'coins' | 'xp' | 'hearts' | 'foeHp';
+
 const FightReplay: React.FC<Props> = ({ run, replay, visible, onClose }) => {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -189,9 +226,20 @@ const FightReplay: React.FC<Props> = ({ run, replay, visible, onClose }) => {
   const biggest = useMemo(() => log.reduce((best, e, i) => (e.damage > (log[best]?.damage ?? -1) ? i : best), log.length - 1), [log]);
   const [selected, setSelected] = useState(biggest);
   const [openLine, setOpenLine] = useState<number | null>(null);
+  const [openCard, setOpenCard] = useState<number | null>(null);
+  const [openMath, setOpenMath] = useState<number | null>(null);
+  const [openChip, setOpenChip] = useState<ChipKind | null>(null);
+  const [openSeries, setOpenSeries] = useState<Series | null>(null);
+  const [powerBannerOpen, setPowerBannerOpen] = useState(false);
+
   useEffect(() => {
     setSelected(biggest);
     setOpenLine(null);
+    setOpenCard(null);
+    setOpenMath(null);
+    setOpenChip(null);
+    setOpenSeries(null);
+    setPowerBannerOpen(false);
     setCopied(false);
   }, [data, biggest]);
 
@@ -225,86 +273,74 @@ const FightReplay: React.FC<Props> = ({ run, replay, visible, onClose }) => {
     return [...by.values()].sort((a, b) => b.damage - a.damage).slice(0, 8);
   }, [log, heldIds, totals.set]);
 
-  // ─── Chart geometry ──────────────────────────────────────────────────────
+  // ─── Move-column Chart geometry ───────────────────────────────────────────
   const contentW = Math.min(width, 760) - 32;
-  const availPlotW = Math.max(120, contentW - PANEL_INSET - Y_AXIS_W);
-  const durationS = Math.max(10, (log[log.length - 1]?.t ?? 0) / 1000 + 2);
-  const fitPps = (availPlotW - 2 * PAD_X) / durationS;
-  const pps = Math.max(fitPps, MIN_PX_PER_SEC);
-  const x = (t: number) => PAD_X + (t / 1000) * pps;
-  const xs = useMemo(() => {
-    const out: number[] = [];
-    for (let i = 0; i < log.length; i++) {
-      const raw = PAD_X + (log[i].t / 1000) * pps;
-      out.push(i === 0 ? raw : Math.max(raw, out[i - 1] + 4));
-    }
-    return out;
-  }, [log, pps]);
-  const plotW = Math.max(availPlotW, 2 * PAD_X + durationS * pps, (xs[xs.length - 1] ?? 0) + PAD_X);
+  const availPlotW = Math.max(160, contentW - PANEL_INSET - Y_AXIS_W);
+  const slotW = log.length > 0 ? Math.max(MIN_SLOT_W, availPlotW / log.length) : MIN_SLOT_W;
+  const barW = Math.min(34, Math.max(16, slotW * 0.56));
+  const plotW = Math.max(availPlotW, 2 * PAD_X + log.length * slotW);
+  const xs = useMemo(() => log.map((_e, i) => PAD_X + (i + 0.5) * slotW), [log, slotW]);
 
   const isPractice = !!data?.sandbox;
-  const hasHp = !isPractice;
-  const hasHearts = data !== null && data.maxHearts !== null && log.some(e => e.hearts !== null);
-  const hpTop = PLOT_TOP + PLOT_H + MARK_H + AXIS_H + GAP_H;
+  const hasHp = !isPractice && log.some(e => e.foeMaxHp > 0);
+  // Hide flat hearts track when hearts never changed during the fight (keeps chart clean on no-damage runs & Dummy)
+  const hasHearts = data !== null && data.maxHearts !== null && data.maxHearts > 0 && log.some(e => e.heartsDelta !== 0);
+
+  const baselineY = PLOT_TOP + PLOT_H;
+  const hpTop = baselineY + AXIS_H + GAP_H;
   const heartsTop = hpTop + (hasHp ? HP_H + GAP_H : 0);
-  const totalH = (hasHearts ? heartsTop + HEARTS_H : hasHp ? hpTop + HP_H : PLOT_TOP + PLOT_H + MARK_H + AXIS_H) + 6;
+  const totalH = (hasHearts ? heartsTop + HEARTS_H : hasHp ? hpTop + HP_H : baselineY + AXIS_H) + 6;
 
   const yMax = niceMax(Math.max(1, ...log.map(e => e.damage)));
-  const yOf = (v: number) => PLOT_TOP + PLOT_H - (v / yMax) * PLOT_H;
+  const yOf = (v: number) => baselineY - (v / yMax) * PLOT_H;
+  const hpInnerH = HP_H - TRACK_PAD_Y * 2;
+  const hpY = (ratio: number) => hpTop + TRACK_PAD_Y + (1 - Math.max(0, Math.min(1, ratio))) * hpInnerH;
   const heartsMax = Math.max(1, ...log.map(e => e.hearts ?? 0), data?.maxHearts ?? 0);
-  const heartsY = (h: number) => heartsTop + (1 - Math.max(0, h) / heartsMax) * HEARTS_H;
-  const tickStep = TICK_STEPS_S.find(s => s * pps >= 48) ?? 600;
-  const ticks = Array.from({ length: Math.floor(durationS / tickStep) + 1 }, (_, i) => i * tickStep);
-  const hpY = (ratio: number) => hpTop + (1 - Math.max(0, Math.min(1, ratio))) * HP_H;
-  const hpPath = useMemo(() => {
-    if (!hasHp) return '';
-    let p = `M${x(0)},${hpY(1)}`;
-    for (const e of log) p += `H${x(e.t)}V${hpY(e.foeMaxHp > 0 ? e.foeHp / e.foeMaxHp : 0)}`;
-    return `${p}H${x(durationS * 1000)}`;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [log, pps, durationS, hasHp]);
-  const heartsPath = useMemo(() => {
-    if (!hasHearts) return '';
-    let p = `M${x(0)},${heartsY(log[0]?.hearts ?? 0)}`;
-    for (const e of log) p += `H${x(e.t)}V${heartsY(e.hearts ?? 0)}`;
-    return `${p}H${x(durationS * 1000)}`;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [log, pps, durationS, hasHearts, heartsMax, heartsTop]);
+  const heartsInnerH = HEARTS_H - TRACK_PAD_Y * 2;
+  const heartsY = (h: number) => heartsTop + TRACK_PAD_Y + (1 - Math.max(0, h) / heartsMax) * heartsInnerH;
 
-  // Shading Surge and Evolution active bands across the plot clock
-  const windows = useMemo(() => {
-    const bands: { kind: 'surge' | 'evo'; from: number; to: number }[] = [];
-    const endMs = Math.max((log[log.length - 1]?.t ?? 0) + 1000, durationS * 1000);
-    let surgeFrom: number | null = null;
-    let evoFrom: number | null = null;
-    let evoDepth = 0;
-    for (const e of log) {
-      for (const l of e.lines) {
-        if (l.type === 'surge_start' && surgeFrom === null) surgeFrom = e.t;
-        if (l.type === 'surge_end' && surgeFrom !== null) {
-          bands.push({ kind: 'surge', from: surgeFrom, to: e.t });
-          surgeFrom = null;
-        }
-        if (l.type === 'evolution_start') {
-          if (evoDepth === 0) evoFrom = e.t;
-          evoDepth++;
-        }
-        if (l.type === 'evolution_end' && evoDepth > 0) {
-          evoDepth--;
-          if (evoDepth === 0 && evoFrom !== null) {
-            bands.push({ kind: 'evo', from: evoFrom, to: e.t });
-            evoFrom = null;
-          }
-        }
-      }
+  const hpPath = useMemo(() => {
+    if (!hasHp || log.length === 0) return '';
+    let p = `M${xs[0]},${hpY(log[0].foeMaxHp > 0 ? log[0].foeHp / log[0].foeMaxHp : 1)}`;
+    for (let i = 1; i < log.length; i++) {
+      const ratio = log[i].foeMaxHp > 0 ? log[i].foeHp / log[i].foeMaxHp : 0;
+      p += `H${xs[i]}V${hpY(ratio)}`;
     }
-    if (surgeFrom !== null) bands.push({ kind: 'surge', from: surgeFrom, to: endMs });
-    if (evoDepth > 0 && evoFrom !== null) bands.push({ kind: 'evo', from: evoFrom, to: endMs });
-    return bands;
-  }, [log, durationS]);
+    return p;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [log, xs, hasHp, hpTop]);
+
+  const heartsPath = useMemo(() => {
+    if (!hasHearts || log.length === 0) return '';
+    let p = `M${xs[0]},${heartsY(log[0]?.hearts ?? 0)}`;
+    for (let i = 1; i < log.length; i++) {
+      p += `H${xs[i]}V${heartsY(log[i]?.hearts ?? 0)}`;
+    }
+    return p;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [log, xs, hasHearts, heartsMax, heartsTop]);
+
+  // Shading Surge and Evolution active columns
+  const columnBand = useMemo(() => {
+    let inSurge = false;
+    let evoDepth = 0;
+    return log.map(e => {
+      for (const l of e.lines) {
+        if (l.type === 'surge_start') inSurge = true;
+        if (l.type === 'surge_end') inSurge = false;
+        if (l.type === 'evolution_start') evoDepth++;
+        if (l.type === 'evolution_end' && evoDepth > 0) evoDepth--;
+      }
+      return { surge: inSurge || (e.set?.surgeMultiplier ?? 1) > 1, evo: evoDepth > 0 };
+    });
+  }, [log]);
 
   const select = (i: number, scroll = false) => {
+    sfx('click');
     setOpenLine(null);
+    setOpenCard(null);
+    setOpenMath(null);
+    setOpenChip(null);
     setSelected(i);
     if (scroll) scrollRef.current?.scrollTo({ y: Math.max(0, inspectorY.current - 8), animated: true });
   };
@@ -339,6 +375,11 @@ const FightReplay: React.FC<Props> = ({ run, replay, visible, onClose }) => {
       .map(ref => ({ ref, stat: stats[ref], ...explainRef(ref, heldWeapons, data.weaponBuilds) }))
       .filter(o => o.name);
   }, [stats, data, heldWeapons]);
+  const passivesList = useMemo(
+    () => (data?.passives ?? []).map(id => getPassive(id)),
+    [data?.passives]
+  );
+
   const summary = useMemo(() => {
     if (!data) return '';
     const best = [...gear.map(g => ({ name: g.weapon.name, damage: g.stat?.damage ?? 0 })), ...others.map(o => ({ name: o.name, damage: o.stat?.damage ?? 0 }))]
@@ -351,7 +392,7 @@ const FightReplay: React.FC<Props> = ({ run, replay, visible, onClose }) => {
     const payload = {
       level: data.levelId, fighter: data.fighter, status: data.status, endReason: data.endReason,
       weapons: heldWeapons.map(w => w.name), skillNodes: data.skillNodes, arcana: data.arcana ?? [],
-      totalDamage: data.totalDamage, log,
+      totalDamage: data.totalDamage, power: data.power ?? 0, log,
     };
     try {
       await Clipboard.setStringAsync(JSON.stringify(payload, null, 1));
@@ -363,22 +404,53 @@ const FightReplay: React.FC<Props> = ({ run, replay, visible, onClose }) => {
   };
 
   if (!data || !entry) return null;
-  const selX = xs[sel] ?? x(entry.t);
-  const lines = describeLines(entry.lines, heldIds);
+  const lines = describeLines(
+    entry.lines,
+    heldIds,
+    entry.kind === 'set' ? { excludeSetMathRules: true } : undefined
+  );
   const s = split(entry);
-  const belowParts: string[] = [];
-  if (hasHp) belowParts.push("the foe's HP");
-  if (hasHearts) belowParts.push('your hearts (red)');
-  const windowNotes: string[] = [];
-  if (windows.some(w => w.kind === 'surge')) windowNotes.push('Pink shading: Shading Surge (×5 cards)');
-  if (windows.some(w => w.kind === 'evo')) windowNotes.push('Gold shading: active Evolution');
+  const mathRows = entry.set ? setMathRows(entry.set, { lines: entry.lines, cards: entry.cards, held: heldIds }) : [];
+  const powerPoints = data.power ?? 0;
+  const hasAnyPower = powerPoints > 0;
+  const evoCount = others.filter(o => o.ref.startsWith('evo:')).length;
+
+  const chipHelp = (chip: ChipKind): React.ReactNode => {
+    switch (chip) {
+      case 'damage':
+        return <Text style={st.explainText}>Total damage dealt to {data.foeName} during this move (Set hit + any triggered blasts/effects).</Text>;
+      case 'set':
+        return <Text style={st.explainText}>Damage from this Set itself before extra triggered blasts—itemized step by step below in HOW THE SET HIT.</Text>;
+      case 'triggered':
+        return <Text style={st.explainText}>Extra damage from weapons, skills, or evolutions that fired right after you matched this Set.</Text>;
+      case 'coins':
+        return <Text style={st.explainText}>Coins banked on this move from matching cards, Gold cards (+¢), or weapon effects.</Text>;
+      case 'xp':
+        return <Text style={st.explainText}>Experience earned on this move toward your next in-fight level-up weapon pick.</Text>;
+      case 'hearts':
+        return <Text style={st.explainText}>{entry.heartsDelta > 0 ? `Healed ${entry.heartsDelta} heart${entry.heartsDelta === 1 ? '' : 's'} on this move.` : `Lost ${Math.abs(entry.heartsDelta)} heart${entry.heartsDelta === -1 ? '' : 's'} on this move.`}</Text>;
+      case 'foeHp':
+        return <Text style={st.explainText}>Remaining foe HP right after this move ({entry.foeHp} out of {entry.foeMaxHp}).</Text>;
+      case 'power':
+        return (
+          <PowerExplainer
+            points={entry.set?.powerPoints ?? (hasAnyPower ? powerPoints : undefined)}
+            multiplier={entry.set?.powerMultiplier}
+            weapons={heldWeapons}
+            evolutionsTriggered={evoCount}
+            subtitle={entry.set?.powerMultiplier ? `At this Set: ×${fmtMult(entry.set.powerMultiplier)} fight-wide damage multiplier` : undefined}
+            compact
+          />
+        );
+    }
+  };
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose} testID="fight-replay">
       <View style={[st.root, { paddingTop: insets.top + 8, paddingBottom: insets.bottom }]}>
         <View style={st.header}>
           <View style={{ flex: 1 }}>
-            <Text style={st.eyebrow}>FIGHT REPLAY · {data.levelId}</Text>
+            <Text style={st.eyebrow}>FIGHT REPLAY · {data.sandbox ? 'PRACTICE' : data.levelId}</Text>
             <Text style={st.title} numberOfLines={1}>What happened vs {data.foeName}</Text>
           </View>
           <TouchableOpacity testID="fight-replay-close" accessibilityRole="button" accessibilityLabel="Close replay" onPress={onClose} style={st.close}>
@@ -388,14 +460,547 @@ const FightReplay: React.FC<Props> = ({ run, replay, visible, onClose }) => {
 
         <ScrollView ref={scrollRef} contentContainerStyle={st.scroll}>
           <View style={[st.body, { width: contentW }]}>
-            {/* In plain words first */}
+            {/* 1. In plain words + clickable Power banner */}
             <View style={st.panel} testID="replay-summary">
               <Text style={st.panelTitle}>In short</Text>
               <Text style={st.summary}>{summary}</Text>
+              <DamageSplitBar totals={totals} totalDamage={data.totalDamage} />
+
+              <View style={st.tiles}>
+                {(Object.keys(SERIES) as Series[]).map(k => {
+                  const active = openSeries === k;
+                  return (
+                    <TouchableOpacity
+                      key={k}
+                      testID={`replay-total-${k}`}
+                      activeOpacity={0.78}
+                      accessibilityRole="button"
+                      onPress={() => { sfx('click'); setOpenSeries(active ? null : k); }}
+                      style={[st.tile, active && { backgroundColor: TONE.selected }]}
+                    >
+                      <View style={st.tileHead}>
+                        <View style={[st.swatch, { backgroundColor: SERIES[k].color }]} />
+                        <Text style={st.tileLabel} numberOfLines={1}>{SERIES[k].label}</Text>
+                      </View>
+                      <Text style={st.tileValue}>{totals[k]}</Text>
+                      <Text style={st.tileSub}>{data.totalDamage > 0 ? Math.round((totals[k] / data.totalDamage) * 100) : 0}% · tap ?</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {openSeries && (
+                <View style={st.explainBox}>
+                  <Text style={st.explainText}><Text style={st.bold}>{SERIES[openSeries].label}: </Text>{SERIES_HELP[openSeries]}</Text>
+                </View>
+              )}
+
+              {hasAnyPower && (
+                <>
+                  <TouchableOpacity
+                    testID="replay-power-banner"
+                    style={[st.powerBanner, powerBannerOpen && { backgroundColor: COLORS.actionYellow }]}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    onPress={() => { sfx('click'); setPowerBannerOpen(v => !v); }}
+                  >
+                    <Icon name="lorc/power-lightning" size={16} color={INK} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={st.powerBannerTitle}>
+                        Power reached {formatPower(powerPoints)}
+                      </Text>
+                      <Text style={st.powerBannerSub}>
+                        Multiplied every hit by {formatPower(powerPoints)} by the end · tap to see what Power is
+                      </Text>
+                    </View>
+                    <Text style={st.powerChevron}>{powerBannerOpen ? '▲' : '▼'}</Text>
+                  </TouchableOpacity>
+                  {powerBannerOpen && (
+                    <PowerExplainer
+                      points={powerPoints}
+                      weapons={heldWeapons}
+                      evolutionsTriggered={evoCount}
+                      subtitle={`Finished the fight at ${formatPower(powerPoints)} damage multiplier`}
+                      compact
+                    />
+                  )}
+                </>
+              )}
             </View>
 
-            {/* Your gear: what each thing is, and what it did */}
-            {(gear.length > 0 || others.length > 0) && (
+            {/* 2. Damage per move timeline directly above Move Inspector */}
+            <View style={st.panel}>
+              <View style={st.chartHead}>
+                <Text style={st.panelTitle}>Damage per move</Text>
+                <Text style={st.chartHint}>Tap any bar to inspect</Text>
+              </View>
+              <View style={st.chartLegend}>
+                {(Object.keys(SERIES) as Series[]).map(k => (
+                  <View key={k} style={st.splitItem}>
+                    <View style={[st.splitDot, { backgroundColor: SERIES[k].color }]} />
+                    <Text style={st.splitText}>{SERIES[k].label}</Text>
+                  </View>
+                ))}
+                {hasHp && (
+                  <View style={st.splitItem}>
+                    <View style={[st.lineDot, { backgroundColor: INK }]} />
+                    <Text style={st.splitText}>Foe HP</Text>
+                  </View>
+                )}
+                {hasHearts && (
+                  <View style={st.splitItem}>
+                    <View style={[st.lineDot, { backgroundColor: CRITICAL }]} />
+                    <Text style={st.splitText}>Hearts</Text>
+                  </View>
+                )}
+              </View>
+
+              <View style={{ flexDirection: 'row' }}>
+                <Svg width={Y_AXIS_W} height={totalH}>
+                  {[0, yMax / 2, yMax].map(v => (
+                    <SvgText key={v} x={Y_AXIS_W - 6} y={yOf(v) + 4} fontSize={10} fill={MUTED} textAnchor="end">{Number.isInteger(v) ? v : v.toFixed(1)}</SvgText>
+                  ))}
+                  {hasHp && (
+                    <>
+                      <SvgText x={Y_AXIS_W - 6} y={hpTop + 12} fontSize={9} fontWeight="700" fill={MUTED} textAnchor="end">Foe HP</SvgText>
+                      <SvgText x={Y_AXIS_W - 6} y={hpTop + HP_H - 3} fontSize={9} fill={MUTED} textAnchor="end">0</SvgText>
+                    </>
+                  )}
+                  {hasHearts && (
+                    <>
+                      <SvgText x={Y_AXIS_W - 6} y={heartsTop + 12} fontSize={9} fontWeight="700" fill={CRITICAL} textAnchor="end">{`${heartsMax}♥`}</SvgText>
+                      <SvgText x={Y_AXIS_W - 6} y={heartsTop + HEARTS_H - 3} fontSize={9} fill={MUTED} textAnchor="end">0</SvgText>
+                    </>
+                  )}
+                </Svg>
+
+                <ScrollView horizontal showsHorizontalScrollIndicator={plotW > availPlotW} style={{ flex: 1 }}>
+                  <Svg width={plotW} height={totalH} testID="replay-chart">
+                    {/* Active Surge / Evolution column tints */}
+                    {columnBand.map((b, i) => {
+                      if (!b.surge && !b.evo) return null;
+                      return (
+                        <Rect
+                          key={`band-${i}`}
+                          x={xs[i] - slotW / 2 + 2}
+                          y={PLOT_TOP}
+                          width={Math.max(4, slotW - 4)}
+                          height={PLOT_H}
+                          fill={b.surge ? TONE.surgePale : TONE.coinPale}
+                          opacity={0.75}
+                        />
+                      );
+                    })}
+
+                    {/* Selected move highlight */}
+                    <Rect
+                      x={xs[sel] - slotW / 2 + 2}
+                      y={2}
+                      width={Math.max(8, slotW - 4)}
+                      height={baselineY + AXIS_H - 2}
+                      rx={6}
+                      fill={TONE.selected}
+                      stroke={INK}
+                      strokeWidth={1.5}
+                    />
+
+                    {/* Grid lines */}
+                    {[0, yMax / 2, yMax].map(v => (
+                      <Line key={v} x1={0} x2={plotW} y1={yOf(v)} y2={yOf(v)} stroke={v === 0 ? INK : GRID} strokeWidth={v === 0 ? 1.5 : 1} />
+                    ))}
+                    {hasHp && <Line x1={0} x2={plotW} y1={hpTop + HP_H} y2={hpTop + HP_H} stroke={GRID} />}
+                    {hasHearts && <Line x1={0} x2={plotW} y1={heartsTop + HEARTS_H} y2={heartsTop + HEARTS_H} stroke={GRID} />}
+
+                    {/* Stacked move bars + total damage value above each non-zero bar */}
+                    {log.map((e, i) => {
+                      const cx = xs[i];
+                      const dim = i === sel ? 1 : 0.72;
+                      if (e.damage <= 0) {
+                        const m = MARK[e.kind] ?? (e.heartsDelta < 0 ? { glyph: '♥', color: CRITICAL } : { glyph: '·', color: MUTED });
+                        return (
+                          <SvgText
+                            key={`mk-${i}`}
+                            x={cx}
+                            y={baselineY - 8}
+                            fontSize={12}
+                            fontWeight="900"
+                            fill={m.color}
+                            textAnchor="middle"
+                            opacity={dim}
+                          >
+                            {m.glyph}
+                          </SvgText>
+                        );
+                      }
+                      const parts = split(e);
+                      const bx = cx - barW / 2;
+                      const order: Series[] = ['set', 'triggered', 'clock'];
+                      const shown = order.filter(k => parts[k] > 0);
+                      let base = 0;
+                      const topY = yOf(e.damage);
+                      return (
+                        <React.Fragment key={`col-${i}`}>
+                          {shown.map((k, j) => {
+                            const y0 = yOf(base);
+                            const y1 = yOf(base + parts[k]);
+                            base += parts[k];
+                            const gap = j > 0 ? 1.5 : 0;
+                            return (
+                              <Path
+                                key={`${i}${k}`}
+                                d={barPath(bx, y1, barW, Math.max(2, y0 - y1 - gap), j === shown.length - 1)}
+                                fill={SERIES[k].color}
+                                opacity={dim}
+                              />
+                            );
+                          })}
+                          <SvgText
+                            x={cx}
+                            y={Math.max(11, topY - 4)}
+                            fontSize={11}
+                            fontWeight="900"
+                            fill={INK}
+                            textAnchor="middle"
+                          >
+                            {e.damage}
+                          </SvgText>
+                        </React.Fragment>
+                      );
+                    })}
+
+                    {/* Move label + clock under each column */}
+                    {log.map((e, i) => (
+                      <React.Fragment key={`ax-${i}`}>
+                        <SvgText
+                          x={xs[i]}
+                          y={baselineY + 13}
+                          fontSize={10}
+                          fontWeight={i === sel ? '900' : '700'}
+                          fill={e.kind === 'mistake' ? CRITICAL : INK}
+                          textAnchor="middle"
+                        >
+                          {shortMoveLabel(e, setNos[i])}
+                        </SvgText>
+                        <SvgText x={xs[i]} y={baselineY + 25} fontSize={9} fill={MUTED} textAnchor="middle">
+                          {fmtClock(e.t)}
+                        </SvgText>
+                      </React.Fragment>
+                    ))}
+
+                    {/* Foe HP track */}
+                    {hasHp && (
+                      <>
+                        <Path d={hpPath} stroke={INK} strokeWidth={2} fill="none" />
+                        {log.map((e, i) => (
+                          <Circle
+                            key={`hp-${i}`}
+                            cx={xs[i]}
+                            cy={hpY(e.foeMaxHp > 0 ? e.foeHp / e.foeMaxHp : 0)}
+                            r={i === sel ? 3.5 : 2}
+                            fill={i === sel ? COLORS.actionYellow : INK}
+                            stroke={INK}
+                            strokeWidth={1}
+                          />
+                        ))}
+                      </>
+                    )}
+
+                    {/* Hearts track (only when hearts actually changed) */}
+                    {hasHearts && (
+                      <>
+                        <Path d={heartsPath} stroke={CRITICAL} strokeWidth={2} fill="none" />
+                        {log.map((e, i) => (
+                          <Circle
+                            key={`ht-${i}`}
+                            cx={xs[i]}
+                            cy={heartsY(e.hearts ?? 0)}
+                            r={i === sel ? 3.5 : 2}
+                            fill={CRITICAL}
+                          />
+                        ))}
+                      </>
+                    )}
+
+                    {/* Full-column hit targets */}
+                    {log.map((_e, i) => (
+                      <Rect
+                        key={`h${i}`}
+                        testID={`replay-bar-${i}`}
+                        x={xs[i] - slotW / 2}
+                        y={0}
+                        width={slotW}
+                        height={totalH}
+                        fill="transparent"
+                        onPress={() => select(i)}
+                      />
+                    ))}
+                  </Svg>
+                </ScrollView>
+              </View>
+            </View>
+
+            {/* 3. Interactive Move Inspector */}
+            <View style={st.panel} onLayout={ev => { inspectorY.current = ev.nativeEvent.layout.y; }} testID="replay-inspector">
+              <View style={st.inspectHead}>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Previous move" disabled={sel <= 0} onPress={() => select(sel - 1)} style={[st.step, sel <= 0 && { opacity: 0.3 }]}>
+                  <Text style={st.stepText}>◀</Text>
+                </TouchableOpacity>
+                <View style={{ flex: 1, alignItems: 'center' }}>
+                  <Text style={st.inspectTitle} testID="replay-entry-title">{entryTitle(entry, setNos[sel])}</Text>
+                  <Text style={st.panelSub}>
+                    {fmtClock(entry.t)} · wave {entry.wave + 1}
+                    {entry.set ? ` · ${(entry.set.sinceLastMs / 1000).toFixed(1)}s after the last Set` : ''}
+                  </Text>
+                </View>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Next move" disabled={sel >= log.length - 1} onPress={() => select(sel + 1)} style={[st.step, sel >= log.length - 1 && { opacity: 0.3 }]}>
+                  <Text style={st.stepText}>▶</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Clickable matched cards with per-card damage & tags */}
+              {entry.cards && (
+                <View style={{ gap: 6 }}>
+                  <View style={st.cards}>
+                    {entry.cards.map((c, i) => {
+                      const cardPts = loggedCardPoints(c);
+                      const isCardOpen = openCard === i;
+                      return (
+                        <TouchableOpacity
+                          key={i}
+                          testID={`replay-card-${i}`}
+                          activeOpacity={0.8}
+                          accessibilityRole="button"
+                          onPress={() => { sfx('click'); setOpenCard(isCardOpen ? null : i); }}
+                          style={[st.cardPick, isCardOpen && st.cardPickActive]}
+                        >
+                          <View style={st.cardSlot}><Card card={toCard(c, i)} onClick={() => {}} disabled isPaused /></View>
+                          {entry.kind === 'set' && (
+                            <Text style={[st.cardDmg, cardPts > 1 && st.cardDmgHot]}>{cardPts} dmg</Text>
+                          )}
+                          {c.tags.map(tag => (
+                            <View key={tag} style={st.cardTagPill}>
+                              <Text style={st.cardTag}>{tag}</Text>
+                            </View>
+                          ))}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  <Text style={st.tapHint}>
+                    {openCard !== null ? 'Tap card again to hide details' : 'Tap any card to see why it scored that damage'}
+                  </Text>
+                  {openCard !== null && entry.cards[openCard] && (() => {
+                    const info = explainLogCard(entry.cards[openCard]);
+                    return (
+                      <View style={st.explainBox} testID={`replay-card-detail-${openCard}`}>
+                        <Text style={st.explainTitle}>{info.title} · {info.points} dmg</Text>
+                        <Text style={st.explainText}>{info.summary}</Text>
+                        {info.notes.map((n, ni) => (
+                          <Text key={ni} style={st.explainBullet}>• {n}</Text>
+                        ))}
+                      </View>
+                    );
+                  })()}
+                </View>
+              )}
+
+              {/* Clickable outcome chips (replaces ambiguous "Set / triggered") */}
+              <View style={st.chips}>
+                <Chip
+                  label="Total damage"
+                  value={`${entry.damage}`}
+                  active={openChip === 'damage'}
+                  onPress={() => { sfx('click'); setOpenChip(openChip === 'damage' ? null : 'damage'); }}
+                />
+                {entry.kind === 'set' && (
+                  <Chip
+                    label="Set hit"
+                    value={`${s.set}`}
+                    active={openChip === 'set'}
+                    onPress={() => { sfx('click'); setOpenChip(openChip === 'set' ? null : 'set'); }}
+                  />
+                )}
+                {entry.kind === 'set' && s.triggered > 0 && (
+                  <Chip
+                    label="Extra triggers"
+                    value={`+${s.triggered}`}
+                    active={openChip === 'triggered'}
+                    onPress={() => { sfx('click'); setOpenChip(openChip === 'triggered' ? null : 'triggered'); }}
+                  />
+                )}
+                {(entry.set?.powerMultiplier ?? 1) > 1 && (
+                  <Chip
+                    testID="replay-inspector-power"
+                    label="Power · tap ?"
+                    value={`×${fmtMult(entry.set!.powerMultiplier!)}`}
+                    hot
+                    active={openChip === 'power'}
+                    onPress={() => { sfx('click'); setOpenChip(openChip === 'power' ? null : 'power'); }}
+                  />
+                )}
+                {entry.coins !== 0 && (
+                  <Chip
+                    label="Coins"
+                    value={`${entry.coins > 0 ? '+' : ''}${entry.coins}¢`}
+                    active={openChip === 'coins'}
+                    onPress={() => { sfx('click'); setOpenChip(openChip === 'coins' ? null : 'coins'); }}
+                  />
+                )}
+                {entry.xp > 0 && (
+                  <Chip
+                    label="XP"
+                    value={`+${Math.round(entry.xp * 10) / 10}`}
+                    active={openChip === 'xp'}
+                    onPress={() => { sfx('click'); setOpenChip(openChip === 'xp' ? null : 'xp'); }}
+                  />
+                )}
+                {entry.heartsDelta !== 0 && (
+                  <Chip
+                    label="Hearts"
+                    value={`${entry.heartsDelta > 0 ? '+' : ''}${entry.heartsDelta}`}
+                    bad={entry.heartsDelta < 0}
+                    active={openChip === 'hearts'}
+                    onPress={() => { sfx('click'); setOpenChip(openChip === 'hearts' ? null : 'hearts'); }}
+                  />
+                )}
+                {!isPractice && (
+                  <Chip
+                    label="Foe HP left"
+                    value={`${entry.foeHp}/${entry.foeMaxHp}`}
+                    active={openChip === 'foeHp'}
+                    onPress={() => { sfx('click'); setOpenChip(openChip === 'foeHp' ? null : 'foeHp'); }}
+                  />
+                )}
+              </View>
+
+              {openChip && <View style={st.chipDetail}>{chipHelp(openChip)}</View>}
+
+              {/* Itemized clickable Set math receipt */}
+              {entry.set && (
+                <View style={st.section}>
+                  <View style={st.sectionHead}>
+                    <Text style={st.sectionTitle}>HOW THE SET HIT</Text>
+                    <Text style={st.sectionHint}>tap any row for details</Text>
+                  </View>
+                  {mathRows.map((r, i) => {
+                    const interactive = !r.total && (!!r.explain || !!r.sourceRef || !!r.isPower);
+                    const isOpen = openMath === i;
+                    const about = r.sourceRef ? explainRef(r.sourceRef, heldWeapons, data.weaponBuilds) : null;
+                    return (
+                      <View key={i}>
+                        <TouchableOpacity
+                          testID={r.total ? undefined : `replay-math-${i}`}
+                          disabled={!interactive}
+                          activeOpacity={0.75}
+                          accessibilityRole={interactive ? 'button' : undefined}
+                          onPress={() => { sfx('click'); setOpenMath(isOpen ? null : i); }}
+                          style={[
+                            st.row,
+                            r.subtotal && st.subtotalRow,
+                            r.total && st.totalRow,
+                            isOpen && st.rowOpen,
+                          ]}
+                        >
+                          <View style={{ flex: 1 }}>
+                            <View style={st.rowTitleLine}>
+                              <Text style={[st.rowLabel, (r.total || r.subtotal) && st.bold]}>
+                                {r.label}
+                              </Text>
+                              {interactive && (
+                                <Text style={st.rowCaret}>{isOpen ? '▲' : '?'}</Text>
+                              )}
+                            </View>
+                            {r.sub && <Text style={st.rowSub}>{r.sub}</Text>}
+                          </View>
+                          <Text style={[st.rowValue, (r.total || r.subtotal) && st.bold]}>{r.value}</Text>
+                        </TouchableOpacity>
+                        {isOpen && (
+                          <View style={st.mathDetail} testID={`replay-math-detail-${i}`}>
+                            {r.isPower ? (
+                              <PowerExplainer
+                                points={r.powerPoints ?? (hasAnyPower ? powerPoints : undefined)}
+                                multiplier={r.powerMultiplier}
+                                weapons={heldWeapons}
+                                evolutionsTriggered={evoCount}
+                                subtitle={`Applied ×${fmtMult(r.powerMultiplier ?? 1)} to your Set subtotal (rounded to nearest whole hit)`}
+                                compact
+                              />
+                            ) : (
+                              <>
+                                {r.explain && <Text style={st.explainText}>{r.explain}</Text>}
+                                {about && about.text ? (
+                                  <View style={st.about}>
+                                    {about.icon && <Icon name={about.icon} size={18} color={INK} />}
+                                    <Text style={st.aboutText}><Text style={st.bold}>{about.name} ({about.kind}): </Text>{about.text}</Text>
+                                  </View>
+                                ) : null}
+                              </>
+                            )}
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+
+              {/* Post-Set / non-Set events without redundant rule amounts */}
+              <View style={st.section}>
+                <Text style={st.sectionTitle}>{entry.kind === 'set' ? 'OTHER EFFECTS ON THIS MOVE' : 'WHAT HAPPENED'}</Text>
+                {lines.length === 0 ? (
+                  <Text style={st.empty}>Nothing else triggered on this move.</Text>
+                ) : (
+                  lines.map((l, i) => {
+                    const about = l.sourceRef ? explainRef(l.sourceRef, heldWeapons, data.weaponBuilds) : null;
+                    const from = l.source ?? about?.name;
+                    const isOpen = openLine === i && !!about?.text;
+                    return (
+                      <TouchableOpacity
+                        key={i}
+                        testID={`replay-line-${i}`}
+                        disabled={!about?.text}
+                        onPress={() => { sfx('click'); setOpenLine(isOpen ? null : i); }}
+                        activeOpacity={0.8}
+                        accessibilityRole={about?.text ? 'button' : undefined}
+                        accessibilityState={about?.text ? { expanded: isOpen } : undefined}
+                        style={st.lineBlock}
+                      >
+                        <View style={st.row}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={st.rowLabel}>{l.label}{l.count > 1 ? ` ×${l.count}` : ''}</Text>
+                            {from && <Text style={st.source}>from {from}{about?.text ? (isOpen ? '  ▲' : '  ▼ what is that?') : ''}</Text>}
+                          </View>
+                          {l.damage !== undefined && <Text style={st.rowValue}>{l.damage} dmg</Text>}
+                        </View>
+                        {isOpen && about && (
+                          <View style={st.about} testID={`replay-line-about-${i}`}>
+                            {about.icon && <Icon name={about.icon} size={18} color={INK} />}
+                            <Text style={st.aboutText}><Text style={st.bold}>{about.name} ({about.kind}): </Text>{about.text}</Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })
+                )}
+              </View>
+            </View>
+
+            {/* 4. Top sources */}
+            <View style={st.panel} testID="replay-sources">
+              <Text style={st.panelTitle}>Where the damage came from</Text>
+              {sources.map(src => (
+                <View key={`${src.series}${src.name}`} style={st.srcRow}>
+                  <Text style={st.srcName} numberOfLines={1}>{src.name}</Text>
+                  <View style={st.srcTrack}>
+                    <View style={[st.srcBar, { width: `${Math.max(2, (src.damage / (sources[0]?.damage || 1)) * 100)}%`, backgroundColor: SERIES[src.series].color }]} />
+                  </View>
+                  <Text style={st.srcValue}>{src.damage}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* 5. Gear, passives & Arcana (reuses WeaponExplainer.tsx for all weapons) */}
+            {(gear.length > 0 || others.length > 0 || passivesList.length > 0) && (
               <View style={{ gap: 8 }} testID="replay-gear">
                 <Text style={st.gearTitle}>YOUR GEAR THIS FIGHT <Text style={st.gearHint}>· tap one for how it works</Text></Text>
                 {gear.map(g => (
@@ -425,228 +1030,20 @@ const FightReplay: React.FC<Props> = ({ run, replay, visible, onClose }) => {
                     </Text>
                   </View>
                 ))}
+                {passivesList.map(p => (
+                  <View key={p.id} style={st.otherCard} testID={`replay-gear-passive:${p.id}`}>
+                    <View style={st.otherHead}>
+                      <Icon name={p.icon} size={22} color={INK} />
+                      <Text style={st.otherName} numberOfLines={1}>{p.name}</Text>
+                      <Text style={st.otherKind}>{data.fighter} passive</Text>
+                    </View>
+                    <Text style={st.otherText}>{p.text}</Text>
+                  </View>
+                ))}
               </View>
             )}
 
-            {/* Totals double as the legend: each series' swatch, name and share */}
-            <View style={st.tiles}>
-              {(Object.keys(SERIES) as Series[]).map(k => (
-                <View key={k} style={st.tile} testID={`replay-total-${k}`}>
-                  <View style={st.tileHead}>
-                    <View style={[st.swatch, { backgroundColor: SERIES[k].color }]} />
-                    <Text style={st.tileLabel} numberOfLines={1}>{SERIES[k].label}</Text>
-                  </View>
-                  <Text style={st.tileValue}>{totals[k]}</Text>
-                  <Text style={st.tileSub}>{data.totalDamage > 0 ? Math.round((totals[k] / data.totalDamage) * 100) : 0}% of damage</Text>
-                </View>
-              ))}
-            </View>
-
-            <View style={st.panel}>
-              <Text style={st.panelTitle}>Damage per move</Text>
-              <Text style={st.panelSub}>
-                Each bar is one move: its Set hit, plus what the Set triggered (weapons, skills, evolutions) on top. Tap anywhere on the timeline to inspect that moment. ✕ mistake · ♥ heart lost · ★ level-up pick · ¢ shop buy · ? hint.
-                {belowParts.length > 0 ? ` Below: ${belowParts.join(' and ')}.` : ''}
-                {windowNotes.length > 0 ? ` ${windowNotes.join(' · ')}.` : ''}
-              </Text>
-              <View style={{ flexDirection: 'row' }}>
-                <Svg width={Y_AXIS_W} height={totalH}>
-                  {[0, yMax / 2, yMax].map(v => (
-                    <SvgText key={v} x={Y_AXIS_W - 6} y={yOf(v) + 4} fontSize={10} fill={MUTED} textAnchor="end">{Number.isInteger(v) ? v : v.toFixed(1)}</SvgText>
-                  ))}
-                  {hasHp && (
-                    <>
-                      <SvgText x={Y_AXIS_W - 6} y={hpTop + 8} fontSize={10} fill={MUTED} textAnchor="end">Foe</SvgText>
-                      <SvgText x={Y_AXIS_W - 6} y={hpTop + 20} fontSize={10} fill={MUTED} textAnchor="end">HP</SvgText>
-                      <SvgText x={Y_AXIS_W - 6} y={hpTop + HP_H} fontSize={10} fill={MUTED} textAnchor="end">0</SvgText>
-                    </>
-                  )}
-                  {hasHearts && <SvgText x={Y_AXIS_W - 6} y={heartsTop + 8} fontSize={10} fill={MUTED} textAnchor="end">{`${heartsMax}♥`}</SvgText>}
-                  {hasHearts && <SvgText x={Y_AXIS_W - 6} y={heartsTop + HEARTS_H} fontSize={10} fill={MUTED} textAnchor="end">0</SvgText>}
-                </Svg>
-                <ScrollView horizontal showsHorizontalScrollIndicator={plotW > availPlotW} style={{ flex: 1 }}>
-                  <Svg width={plotW} height={totalH} testID="replay-chart">
-                    {/* Active surge / evolution windows */}
-                    {windows.map((w, i) => {
-                      const wx = x(w.from);
-                      const ww = Math.max(2, x(w.to) - wx);
-                      return (
-                        <Rect
-                          key={`win-${i}`}
-                          x={wx}
-                          y={PLOT_TOP}
-                          width={ww}
-                          height={PLOT_H}
-                          fill={w.kind === 'surge' ? TONE.surgePale : TONE.coinPale}
-                          opacity={0.7}
-                        />
-                      );
-                    })}
-                    {/* Recessive grid */}
-                    {[0, yMax / 2, yMax].map(v => (
-                      <Line key={v} x1={0} x2={plotW} y1={yOf(v)} y2={yOf(v)} stroke={v === 0 ? INK : GRID} strokeWidth={1} />
-                    ))}
-                    {hasHp && <Line x1={0} x2={plotW} y1={hpTop + HP_H} y2={hpTop + HP_H} stroke={GRID} />}
-                    {hasHearts && <Line x1={0} x2={plotW} y1={heartsTop + HEARTS_H} y2={heartsTop + HEARTS_H} stroke={GRID} />}
-                    {ticks.map(t => (
-                      <SvgText key={t} x={x(t * 1000)} y={PLOT_TOP + PLOT_H + MARK_H + AXIS_H - 3} fontSize={10} fill={MUTED} textAnchor="middle">{fmtClock(t * 1000)}</SvgText>
-                    ))}
-                    {/* Waves */}
-                    {log.map((e, i) => e.kind === 'wave' && e.wave > 0 ? (
-                      <React.Fragment key={`w${i}`}>
-                        <Line x1={xs[i]} x2={xs[i]} y1={0} y2={totalH} stroke={MUTED} strokeDasharray="3,3" />
-                        <SvgText x={xs[i] + 3} y={10} fontSize={10} fontWeight="700" fill={MUTED}>{`Wave ${e.wave + 1}`}</SvgText>
-                      </React.Fragment>
-                    ) : null)}
-                    {/* Selection guide */}
-                    <Line x1={selX} x2={selX} y1={0} y2={totalH} stroke={INK} strokeWidth={1} opacity={0.5} />
-                    {/* Bars: Set hit at the base, what it triggered stacked on top, 2px surface gap between */}
-                    {log.map((e, i) => {
-                      if (e.damage <= 0) return null;
-                      const parts = split(e);
-                      const bx = xs[i] - BAR_W / 2;
-                      const dim = i === sel ? 1 : 0.6;
-                      const order: Series[] = ['set', 'triggered', 'clock'];
-                      const shown = order.filter(k => parts[k] > 0);
-                      let base = 0;
-                      return shown.map((k, j) => {
-                        const y0 = yOf(base);
-                        const y1 = yOf(base + parts[k]);
-                        base += parts[k];
-                        const gap = j > 0 ? 2 : 0;
-                        return (
-                          <Path key={`${i}${k}`} d={barPath(bx, y1, BAR_W, Math.max(1, y0 - y1 - gap), j === shown.length - 1)} fill={SERIES[k].color} opacity={dim} />
-                        );
-                      });
-                    })}
-                    {/* Event marks under the baseline */}
-                    {log.map((e, i) => {
-                      // A heart lost to anything but a mistake (bombs, foe attacks) gets its own mark
-                      const m = MARK[e.kind] ?? (e.heartsDelta < 0 ? { glyph: '♥', color: CRITICAL } : undefined);
-                      return m ? (
-                        <SvgText key={`m${i}`} x={xs[i]} y={PLOT_TOP + PLOT_H + 13} fontSize={11} fontWeight="900" fill={m.color} textAnchor="middle" opacity={i === sel ? 1 : 0.8}>{m.glyph}</SvgText>
-                      ) : null;
-                    })}
-                    {/* Foe HP, same clock */}
-                    {hasHp && <Path d={hpPath} stroke={INK} strokeWidth={2} fill="none" />}
-                    {hasHearts && <Path d={heartsPath} stroke={CRITICAL} strokeWidth={2} fill="none" />}
-                    {/* Hit targets: every entry gets a non-zero strip centered on its monotonic plot coordinate */}
-                    {log.map((_e, i) => {
-                      const left = i === 0 ? 0 : (xs[i - 1] + xs[i]) / 2;
-                      const right = i === log.length - 1 ? plotW : (xs[i] + xs[i + 1]) / 2;
-                      return <Rect key={`h${i}`} testID={`replay-bar-${i}`} x={left} y={0} width={Math.max(2, right - left)} height={totalH} fill="transparent" onPress={() => select(i)} />;
-                    })}
-                  </Svg>
-                </ScrollView>
-              </View>
-            </View>
-
-            {/* Inspector */}
-            <View style={st.panel} onLayout={ev => { inspectorY.current = ev.nativeEvent.layout.y; }} testID="replay-inspector">
-              <View style={st.inspectHead}>
-                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Previous move" disabled={sel <= 0} onPress={() => select(sel - 1)} style={[st.step, sel <= 0 && { opacity: 0.3 }]}>
-                  <Text style={st.stepText}>◀</Text>
-                </TouchableOpacity>
-                <View style={{ flex: 1, alignItems: 'center' }}>
-                  <Text style={st.inspectTitle} testID="replay-entry-title">{entryTitle(entry, setNos[sel])}</Text>
-                  <Text style={st.panelSub}>
-                    {fmtClock(entry.t)} · wave {entry.wave + 1}
-                    {entry.set ? ` · ${(entry.set.sinceLastMs / 1000).toFixed(1)}s after the last Set` : ''}
-                  </Text>
-                </View>
-                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Next move" disabled={sel >= log.length - 1} onPress={() => select(sel + 1)} style={[st.step, sel >= log.length - 1 && { opacity: 0.3 }]}>
-                  <Text style={st.stepText}>▶</Text>
-                </TouchableOpacity>
-              </View>
-
-              {entry.cards && (
-                <View style={st.cards}>
-                  {entry.cards.map((c, i) => (
-                    <View key={i} style={{ alignItems: 'center', gap: 2 }}>
-                      <View style={st.cardSlot}><Card card={toCard(c, i)} onClick={() => {}} disabled isPaused /></View>
-                      {c.tags.map(tag => <Text key={tag} style={st.cardTag}>{tag}</Text>)}
-                    </View>
-                  ))}
-                </View>
-              )}
-
-              <View style={st.chips}>
-                <Chip label="Damage" value={`${entry.damage}`} />
-                {entry.kind === 'set' && <Chip label="Set / triggered" value={`${s.set} / ${s.triggered}`} />}
-                {(entry.set?.powerMultiplier ?? 1) > 1 && <Chip label="Power" value={`×${fmtMult(entry.set!.powerMultiplier!)}`} />}
-                {entry.coins !== 0 && <Chip label="Coins" value={`${entry.coins > 0 ? '+' : ''}${entry.coins}`} />}
-                {entry.xp > 0 && <Chip label="XP" value={`+${Math.round(entry.xp * 10) / 10}`} />}
-                {entry.heartsDelta !== 0 && <Chip label="Hearts" value={`${entry.heartsDelta > 0 ? '+' : ''}${entry.heartsDelta}`} bad={entry.heartsDelta < 0} />}
-                {!isPractice && <Chip label="Foe HP after" value={`${entry.foeHp}/${entry.foeMaxHp}`} />}
-              </View>
-
-              {entry.set && (
-                <View style={st.section}>
-                  <Text style={st.sectionTitle}>HOW THE SET HIT</Text>
-                  {setMathRows(entry.set).map((r, i) => (
-                    <View key={i} style={[st.row, r.total && st.totalRow]}>
-                      <Text style={[st.rowLabel, r.total && st.bold]}>{r.label}</Text>
-                      <Text style={[st.rowValue, r.total && st.bold]}>{r.value}</Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-
-              <View style={st.section}>
-                <Text style={st.sectionTitle}>{entry.kind === 'set' ? 'WHAT IT SET OFF' : 'WHAT HAPPENED'}</Text>
-                {lines.length === 0 ? (
-                  <Text style={st.empty}>Nothing else happened.</Text>
-                ) : (
-                  lines.map((l, i) => {
-                    const about = l.sourceRef ? explainRef(l.sourceRef, heldWeapons, data.weaponBuilds) : null;
-                    const from = l.source ?? about?.name;
-                    const isOpen = openLine === i && !!about?.text;
-                    return (
-                      <TouchableOpacity
-                        key={i}
-                        testID={`replay-line-${i}`}
-                        disabled={!about?.text}
-                        onPress={() => setOpenLine(isOpen ? null : i)}
-                        activeOpacity={0.8}
-                        accessibilityRole={about?.text ? 'button' : undefined}
-                        accessibilityState={about?.text ? { expanded: isOpen } : undefined}
-                        style={st.lineBlock}
-                      >
-                        <View style={st.row}>
-                          <View style={{ flex: 1 }}>
-                            <Text style={st.rowLabel}>{l.label}{l.count > 1 ? ` ×${l.count}` : ''}</Text>
-                            {from && <Text style={st.source}>from {from}{about?.text ? (isOpen ? '  ▲' : '  ▼ what is that?') : ''}</Text>}
-                          </View>
-                          {l.damage !== undefined && <Text style={st.rowValue}>{l.damage} dmg</Text>}
-                        </View>
-                        {isOpen && about && (
-                          <View style={st.about} testID={`replay-line-about-${i}`}>
-                            {about.icon && <Icon name={about.icon} size={18} color={INK} />}
-                            <Text style={st.aboutText}><Text style={st.bold}>{about.name} ({about.kind}): </Text>{about.text}</Text>
-                          </View>
-                        )}
-                      </TouchableOpacity>
-                    );
-                  })
-                )}
-              </View>
-            </View>
-
-            {/* Top sources */}
-            <View style={st.panel}>
-              <Text style={st.panelTitle}>Where the damage came from</Text>
-              {sources.map(src => (
-                <View key={`${src.series}${src.name}`} style={st.srcRow}>
-                  <Text style={st.srcName} numberOfLines={1}>{src.name}</Text>
-                  <View style={st.srcTrack}>
-                    <View style={[st.srcBar, { width: `${Math.max(2, (src.damage / (sources[0]?.damage || 1)) * 100)}%`, backgroundColor: SERIES[src.series].color }]} />
-                  </View>
-                  <Text style={st.srcValue}>{src.damage}</Text>
-                </View>
-              ))}
-            </View>
-
-            {/* Move list (the table view of the chart) */}
+            {/* 6. Full move table */}
             <View style={st.panel}>
               <Text style={st.panelTitle}>Every move</Text>
               {log.map((e, i) => {
@@ -675,17 +1072,36 @@ const FightReplay: React.FC<Props> = ({ run, replay, visible, onClose }) => {
   );
 };
 
-const Chip: React.FC<{ label: string; value: string; bad?: boolean }> = ({ label, value, bad }) => (
-  <View style={st.chip}>
+const Chip: React.FC<{
+  label: string;
+  value: string;
+  bad?: boolean;
+  hot?: boolean;
+  active?: boolean;
+  testID?: string;
+  onPress?: () => void;
+}> = ({ label, value, bad, hot, active, testID, onPress }) => (
+  <TouchableOpacity
+    testID={testID}
+    disabled={!onPress}
+    onPress={onPress}
+    activeOpacity={0.75}
+    accessibilityRole={onPress ? 'button' : undefined}
+    style={[
+      st.chip,
+      hot && { backgroundColor: TONE.coinPale, borderWidth: 1, borderColor: INK },
+      active && { backgroundColor: COLORS.actionYellow, borderWidth: 1, borderColor: INK },
+    ]}
+  >
     <Text style={st.chipLabel}>{label}</Text>
     <Text style={[st.chipValue, bad && { color: CRITICAL }]}>{value}</Text>
-  </View>
+  </TouchableOpacity>
 );
 
 const mono = Platform.select({ ios: 'Menlo', android: 'monospace', default: undefined });
 
 const st = StyleSheet.create({
-  summary: { fontSize: 15, lineHeight: 22, color: INK },
+  summary: { fontSize: 14, lineHeight: 20, color: INK },
   gearTitle: { fontSize: 12, fontWeight: '900', letterSpacing: 2, color: INK },
   gearHint: { fontSize: 11, fontWeight: '600', letterSpacing: 0, opacity: 0.7 },
   otherCard: { backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 2, borderColor: INK, padding: 12, gap: 6 },
@@ -695,8 +1111,8 @@ const st = StyleSheet.create({
   otherText: { fontSize: 14, lineHeight: 20, color: INK },
   otherStat: { fontSize: 13, fontWeight: '700', color: INK, opacity: 0.8 },
   lineBlock: { gap: 4 },
-  about: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: COLORS.paperBeige, borderRadius: 8, padding: 8, marginBottom: 4 },
-  aboutText: { flex: 1, fontSize: 13, lineHeight: 19, color: INK },
+  about: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: COLORS.paperBeige, borderRadius: 8, padding: 8, marginTop: 4 },
+  aboutText: { flex: 1, fontSize: 12.5, lineHeight: 18, color: INK },
   root: { flex: 1, backgroundColor: COLORS.paperBeige },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 8, gap: 10 },
   eyebrow: { fontSize: 11, fontWeight: '900', letterSpacing: 1.5, color: MUTED },
@@ -705,33 +1121,79 @@ const st = StyleSheet.create({
   scroll: { alignItems: 'center', paddingBottom: 24 },
   body: { gap: 12 },
   tiles: { flexDirection: 'row', gap: 8 },
-  tile: { flex: 1, backgroundColor: COLORS.canvasWhite, borderRadius: 10, borderWidth: 1.5, borderColor: INK, padding: 8, gap: 2 },
+  tile: { flex: 1, backgroundColor: COLORS.paperBeige, borderRadius: 10, borderWidth: 1.5, borderColor: INK, padding: 8, gap: 2 },
   tileHead: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   swatch: { width: 10, height: 10, borderRadius: 3 },
   tileLabel: { flex: 1, fontSize: 10, fontWeight: '800', color: INK },
-  tileValue: { fontSize: 20, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
+  tileValue: { fontSize: 19, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
   tileSub: { fontSize: 10, color: MUTED },
+  powerBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: TONE.coinPale,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: INK,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  powerBannerTitle: { fontSize: 13, fontWeight: '900', color: INK },
+  powerBannerSub: { fontSize: 11, color: INK, opacity: 0.78 },
+  powerChevron: { fontSize: 11, fontWeight: '900', color: INK },
   panel: { backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 1.5, borderColor: INK, padding: 12, gap: 8 },
   panelTitle: { fontSize: 15, fontWeight: '900', color: INK },
   panelSub: { fontSize: 11, color: MUTED },
+  chartHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 },
+  chartHint: { fontSize: 11, fontWeight: '700', color: MUTED },
+  chartLegend: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  lineDot: { width: 10, height: 3, borderRadius: 1.5 },
   inspectHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   inspectTitle: { fontSize: 17, fontWeight: '900', color: INK, textAlign: 'center' },
   step: { width: 40, height: 40, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.paperBeige },
   stepText: { fontSize: 16, color: INK },
   cards: { flexDirection: 'row', justifyContent: 'center', gap: 10 },
+  cardPick: { alignItems: 'center', gap: 3, padding: 4, borderRadius: 8, borderWidth: 1.5, borderColor: 'transparent' },
+  cardPickActive: { borderColor: INK, backgroundColor: TONE.selected },
   cardSlot: { width: 56, height: 75 },
-  cardTag: { fontSize: 10, fontWeight: '800', color: INK },
+  cardDmg: { fontSize: 11, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
+  cardDmgHot: { color: TONE.upside },
+  cardTagPill: { backgroundColor: TONE.coinPale, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1, borderWidth: 1, borderColor: '#E0C770' },
+  cardTag: { fontSize: 9.5, fontWeight: '800', color: INK },
+  tapHint: { fontSize: 10.5, color: MUTED, textAlign: 'center' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  chip: { backgroundColor: COLORS.paperBeige, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
-  chipLabel: { fontSize: 9, fontWeight: '800', color: MUTED, letterSpacing: 0.5 },
+  chip: { backgroundColor: COLORS.paperBeige, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5 },
+  chipDetail: { backgroundColor: '#FFFDF7', borderRadius: 8, borderWidth: 1, borderColor: GRID, padding: 8 },
+  chipLabel: { fontSize: 9.5, fontWeight: '800', color: MUTED, letterSpacing: 0.4 },
   chipValue: { fontSize: 14, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
   section: { gap: 4 },
+  sectionHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 6 },
   sectionTitle: { fontSize: 10, fontWeight: '900', letterSpacing: 1.5, color: MUTED },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 3 },
-  totalRow: { borderTopWidth: 1, borderTopColor: GRID, paddingTop: 5 },
-  rowLabel: { flex: 1, fontSize: 13, color: INK },
+  sectionHint: { fontSize: 10, color: MUTED },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4, paddingHorizontal: 4, borderRadius: 6 },
+  rowOpen: { backgroundColor: TONE.selected },
+  rowTitleLine: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  rowCaret: {
+    fontSize: 9.5,
+    fontWeight: '900',
+    color: INK,
+    opacity: 0.6,
+    backgroundColor: COLORS.paperBeige,
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  rowSub: { fontSize: 11, color: MUTED, marginTop: 1 },
+  subtotalRow: { borderTopWidth: 1, borderTopColor: GRID, backgroundColor: '#FBF8F3', marginTop: 2, paddingTop: 5 },
+  totalRow: { borderTopWidth: 1.5, borderTopColor: INK, paddingTop: 6, marginTop: 2 },
+  rowLabel: { fontSize: 13, color: INK },
   rowValue: { fontSize: 13, color: INK, fontVariant: ['tabular-nums'], fontFamily: mono },
   bold: { fontWeight: '900' },
+  mathDetail: { paddingHorizontal: 6, paddingBottom: 6, gap: 4 },
+  explainBox: { backgroundColor: '#FFFDF7', borderRadius: 8, borderWidth: 1.5, borderColor: INK, padding: 9, gap: 4 },
+  explainTitle: { fontSize: 12, fontWeight: '900', color: INK },
+  explainText: { fontSize: 12, lineHeight: 17, color: INK },
+  explainBullet: { fontSize: 11.5, lineHeight: 16, color: INK, opacity: 0.88 },
   source: { fontSize: 11, color: MUTED },
   empty: { fontSize: 12, color: MUTED, fontStyle: 'italic' },
   srcRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },

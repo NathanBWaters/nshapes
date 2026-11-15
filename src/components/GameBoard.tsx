@@ -11,6 +11,7 @@ import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import Card from './Card';
 import RewardReveal from './RewardReveal';
 import { COLORS } from '@/utils/colors';
+import { recordComponentRender } from '@/utils/perfWatchdog';
 import type { WeaponEffectResult } from '@/utils/weaponEffects';
 import { isValidCombination } from '@/utils/gameUtils';
 import { findSet, resolveMatch } from '@/utils/matchResolution';
@@ -108,6 +109,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
   slotRef,
   onSlotLayout,
 }) => {
+  recordComponentRender('GameBoard');
   const [selectedCards, setSelectedCards] = useState<CardType[]>([]);
   const [matchedCardIds, setMatchedCardIds] = useState<string[]>([]);
   const [hintCards, setHintCards] = useState<string[]>([]);

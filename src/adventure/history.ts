@@ -4,7 +4,7 @@
  * reading and writing the list lives in save.ts.
  */
 import type { CharacterName, Weapon } from '@/types';
-import type { ArcanaId, FightLogEntry, LevelDef, RunState, RunStatus } from './types';
+import type { ArcanaId, FightLogEntry, LevelDef, PassiveId, RunState, RunStatus } from './types';
 import { getArmoryWeapon, resolveLegacyWeapon, understudyOf } from './data/armory';
 import { UNDERSTUDY_ID } from './data/adventureWeapons';
 import { growthStatBonus, type GrowthState } from './data/weaponGrowth';
@@ -28,6 +28,7 @@ export interface FightReplayData {
   weaponBuilds: WeaponBuilds;
   growth?: GrowthState;
   skillNodes: string[];
+  passives?: PassiveId[];
   arcana?: ArcanaId[];
   power?: number;
   log: FightLogEntry[];
@@ -102,6 +103,7 @@ export const fightReplayOf = (run: RunState): FightReplayData => ({
   weaponBuilds: run.weaponBuilds,
   ...(Object.keys(run.growth ?? {}).length > 0 ? { growth: run.growth } : {}),
   skillNodes: run.skillNodes,
+  ...(run.passives.length > 0 ? { passives: run.passives } : {}),
   ...(run.arcana.length > 0 ? { arcana: run.arcana } : {}),
   ...(run.power ? { power: run.power } : {}),
   log: run.log,

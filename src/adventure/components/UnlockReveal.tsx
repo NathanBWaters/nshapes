@@ -10,6 +10,7 @@ import Icon from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
 import { WeaponAvatar } from '@/components/weapons';
+import { useAppActive } from '@/hooks/useAppActive';
 import { COLORS } from '@/utils/colors';
 import { band, sfx } from '@/audio';
 import type { CharacterName } from '@/types';
@@ -37,11 +38,17 @@ const MUTED = DARK.muted;
 const adventureText = (t: string) => t.replace(/\+(\d+) points?/g, '+$1 damage');
 
 const Rays: React.FC<{ color: string }> = ({ color }) => {
+  const appActive = useAppActive();
   const rot = useSharedValue(0);
   useEffect(() => {
+    if (!appActive) {
+      cancelAnimation(rot);
+      return;
+    }
+    rot.value = 0;
     rot.value = withRepeat(withTiming(360, { duration: 26000, easing: Easing.linear }), -1);
     return () => cancelAnimation(rot);
-  }, [rot]);
+  }, [appActive, rot]);
   const style = useAnimatedStyle(() => ({ transform: [{ rotate: `${rot.value}deg` }] }));
   return (
     <Animated.View style={[st.rays, style]} pointerEvents="none">

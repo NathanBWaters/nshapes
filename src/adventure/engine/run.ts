@@ -21,7 +21,7 @@ import { getAdjacentIndices } from '@/utils/weaponEffects';
 import { getLinkedDestructionPositions, selectPositionsToConnect } from '@/utils/connectionUtils';
 import { DEFAULT_PLAYER_STATS, canObtainWeapon } from '@/utils/gameDefinitions';
 import { createInitialRoundStats } from '@/game/roundStats';
-import type { AdventureSave, AdventureWeapon, ArcanaId, FeatureFlag, LevelDef, RunEventType, RunState } from '../types';
+import type { AdventureSave, AdventureWeapon, ArcanaDef, ArcanaId, FeatureFlag, FightLogMathItem, LevelDef, RunEventType, RunState } from '../types';
 import type { Effect, WeaponTriggerKind } from '../rules/types';
 import { createRng } from './rng';
 import { allSets, countDifferentAttributes, hasAnySet, isRainbow, isSelectable } from './sets';
@@ -31,7 +31,7 @@ import { UNDERSTUDY_ID } from '../data/adventureWeapons';
 import { damageMultiplier } from '../data/weaponPower';
 import { weaponBuilds } from '../weaponLevels';
 import { createFoe } from '../data/foes';
-import { arcanaRules } from '../data/arcana';
+import { arcanaRules, getArcana } from '../data/arcana';
 import { BASE_RULES } from '../data/rules';
 import { challengeProgress } from './challenges';
 import {
@@ -41,16 +41,17 @@ import {
   MAX_BOARD, type Draft, type FightHooks, TIME_HEADROOM,
   CLOCK_SLOW_CAP_PCT,
 } from './fight';
-import { EVOLUTION_RULES } from './sources';
+import { EVOLUTION_RULES, getRecipe, getSkillNode, liveSources } from './sources';
 import { recordFightStart, recordLog } from './fightLog';
 import { afterSetGear, gearSetBonus, holdCards, initGear, onMistakeGear, onWaveStartGear, resolveTwins, syncGear, tickGear, type GearSet } from './gear';
 import { refreshArmedRecipes, resolveCatalyst, tickEvolutions } from './evolutions';
+import { growthModifiers, WEAPON_GROWTH } from '../data/weaponGrowth';
 import { isHintedSet, noteGrowth, seedGrowth } from './growth';
 import { placeOpeningTraps, resolveTrapsOnSet, springSnares, tickTimeBombs } from './hazards';
 import { initialSurge, surgeMultiplier, tickSurge } from './surge';
 import {
   advanceCombo, afterSetPassives, consumeHotStreak, decayCombo, initPassives, onMistakePassives, onWaveStartPassives,
-  passiveSetDamage, restingPassiveState, tickPassives,
+  passiveSetDamageBreakdown, restingPassiveState, tickPassives,
 } from './passives';
 import { applyEffect, checkIdle, conditionsHold, drain, resetFoeBelowRules, resetIdleRules, weaponFired } from '../rules/engine';
 
@@ -318,9 +319,103 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   const surgeMult = surgeMultiplier(d);
   let points = rawPoints * surgeMult;
   const surgedPoints = points;
-  if (a.nonRainbowDamageDelta !== undefined && !rainbow) points = Math.max(1, points + a.nonRainbowDamageDelta);
-  if (a.singleTraitBonusDamage !== undefined && !graceUsed && diffCount === 1) points += a.singleTraitBonusDamage;
-  const conditional = (m.conditionalDamage ?? []).reduce((sum, c) => sum + (conditionsHold(d, c.when) ? c.amount : 0), 0);
+  const flatItems: FightLogMathItem[] = [];
+  const describeSource = (key: string): { label: string; sourceRef?: string; defaultNote?: string } => {
+    if (key.startsWith('node:')) {
+      const id = key.slice(5);
+      return { label: getSkillNode(id)?.name ?? id, sourceRef: key, defaultNote: 'skill node' };
+    }
+    if (key.startsWith('evo:')) {
+      const id = key.slice(4);
+      return { label: getRecipe(id)?.name ?? id, sourceRef: key, defaultNote: 'active Evolution' };
+    }
+    const slot = /^w(\d+):(.*)$/.exec(key);
+    if (slot) {
+      const w = d.weapons[Number(slot[1])];
+      return { label: w?.name ?? slot[2], sourceRef: `weapon:${w?.id ?? slot[2]}`, defaultNote: 'weapon bonus' };
+    }
+    return { label: 'Weapon scaling', defaultNote: 'weapon growth' };
+  };
+  const findArcanaFor = (field: 'nonRainbowDamageDelta' | 'singleTraitBonusDamage' | 'damageScale'): ArcanaDef | undefined => {
+    for (const id of d.arcana) {
+      const def = getArcana(id);
+      if (def.rules[field] !== undefined) return def;
+    }
+    return undefined;
+  };
+  if (a.nonRainbowDamageDelta !== undefined && !rainbow) {
+    const before = points;
+    points = Math.max(1, points + a.nonRainbowDamageDelta);
+    const delta = points - before;
+    if (delta !== 0) {
+      const arc = findArcanaFor('nonRainbowDamageDelta');
+      flatItems.push({ label: arc?.name ?? 'Arcana', amount: delta, note: 'non-Rainbow penalty' });
+    }
+  }
+  if (a.singleTraitBonusDamage !== undefined && !graceUsed && diffCount === 1) {
+    points += a.singleTraitBonusDamage;
+    if (a.singleTraitBonusDamage !== 0) {
+      const arc = findArcanaFor('singleTraitBonusDamage');
+      flatItems.push({ label: arc?.name ?? 'Monochrome Pact', amount: a.singleTraitBonusDamage, note: 'only 1 trait differed' });
+    }
+  }
+  const sources = liveSources({
+    skillNodes: d.skillNodes,
+    weapons: d.weapons,
+    activeEvolutions: d.activeEvolutions,
+    growth: growthModifiers(d.growth ?? {}),
+  });
+  let conditional = 0;
+  for (const { key, source } of sources) {
+    for (const c of source.modifiers?.conditionalDamage ?? []) {
+      if (conditionsHold(d, c.when)) {
+        conditional += c.amount;
+        if (c.amount !== 0) {
+          const info = describeSource(key);
+          flatItems.push({
+            label: info.label,
+            amount: c.amount,
+            note: info.defaultNote,
+            ...(info.sourceRef ? { sourceRef: info.sourceRef } : {}),
+          });
+        }
+      }
+    }
+  }
+  if (d.bonusDamagePerMatch !== 0) {
+    flatItems.push({ label: 'Heavy Hitter', amount: d.bonusDamagePerMatch, note: 'Workshop upgrade' });
+  }
+  for (const { key, source } of sources) {
+    if (key === 'growth') continue;
+    const amt = source.modifiers?.setDamage ?? 0;
+    if (amt !== 0) {
+      const info = describeSource(key);
+      flatItems.push({
+        label: info.label,
+        amount: amt,
+        note: info.defaultNote,
+        ...(info.sourceRef ? { sourceRef: info.sourceRef } : {}),
+      });
+    }
+  }
+  const growthEntries: Array<{ wId: string; wName: string; stacks: number; mods: NonNullable<NonNullable<(typeof WEAPON_GROWTH)[string]>[number]['mods']> }> = [];
+  for (const [gKey, track] of Object.entries(d.growth ?? {})) {
+    if (!track.stacks) continue;
+    const [wId, index] = gKey.split('#');
+    const def = WEAPON_GROWTH[wId]?.[Number(index)];
+    if (!def?.mods) continue;
+    const wName = d.weapons.find(w => w.id === wId)?.name ?? getArmoryWeapon(wId)?.name ?? wId;
+    growthEntries.push({ wId, wName, stacks: track.stacks, mods: def.mods });
+    const sd = (def.mods.setDamage ?? 0) * track.stacks;
+    if (sd !== 0) {
+      flatItems.push({
+        label: wName,
+        amount: sd,
+        note: `${track.stacks} scaling stack${track.stacks === 1 ? '' : 's'}`,
+        sourceRef: `weapon:${wId}`,
+      });
+    }
+  }
   const gearSet: GearSet = {
     matched,
     slots: matched.map(mc => d.board.findIndex(bc => bc.id === mc.id)).filter(i => i >= 0),
@@ -329,22 +424,68 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
     auto: !!opts.auto,
   };
   const tricks = gearSetBonus(d, gearSet);
+  const passives = passiveSetDamageBreakdown(d, sinceLastMs);
   // Weapon growth: hints held are worth damage (Seeker Lens), and so is a Set made on a pointed-out card (Oracle Eye)
   const hinted = !opts.auto && isHintedSet(d, opts.hinted);
   const growthDamage = (m.hintHeldDamage ?? 0) * d.stats.hints + (hinted ? m.hintedSetDamage ?? 0 : 0);
+  for (const { key, source } of sources) {
+    if (key === 'growth') continue;
+    const hh = (source.modifiers?.hintHeldDamage ?? 0) * d.stats.hints;
+    const hs = hinted ? source.modifiers?.hintedSetDamage ?? 0 : 0;
+    if (hh !== 0 || hs !== 0) {
+      const info = describeSource(key);
+      if (hh !== 0) flatItems.push({ label: info.label, amount: hh, note: `${d.stats.hints} hint${d.stats.hints === 1 ? '' : 's'} held`, ...(info.sourceRef ? { sourceRef: info.sourceRef } : {}) });
+      if (hs !== 0) flatItems.push({ label: info.label, amount: hs, note: 'matched pointed-out card', ...(info.sourceRef ? { sourceRef: info.sourceRef } : {}) });
+    }
+  }
+  for (const g of growthEntries) {
+    const hh = (g.mods.hintHeldDamage ?? 0) * g.stacks * d.stats.hints;
+    if (hh !== 0) flatItems.push({ label: g.wName, amount: hh, note: `${d.stats.hints} hint${d.stats.hints === 1 ? '' : 's'} held`, sourceRef: `weapon:${g.wId}` });
+    const hs = hinted ? (g.mods.hintedSetDamage ?? 0) * g.stacks : 0;
+    if (hs !== 0) flatItems.push({ label: g.wName, amount: hs, note: 'matched pointed-out card', sourceRef: `weapon:${g.wId}` });
+  }
+  flatItems.push(...passives.items, ...tricks.flatItems);
+  for (const evo of d.activeEvolutions) {
+    flatItems.push({
+      label: getRecipe(evo.id)?.name ?? 'Active Evolution',
+      amount: EVOLUTION_RULES.setDamage,
+      note: 'active Evolution bonus',
+      sourceRef: `evo:${evo.id}`,
+    });
+  }
   // Rust can take damage off a Set, never below nothing
-  const flat = Math.max(
-    0,
-    points + d.bonusDamagePerMatch + (m.setDamage ?? 0) + conditional + passiveSetDamage(d, sinceLastMs) + tricks.flat + growthDamage +
-      d.activeEvolutions.length * EVOLUTION_RULES.setDamage
-  );
-  const rainbowMult =
-    (rainbow ? (a.rainbowMultiplier ?? BASE_RULES.rainbowMultiplier) + (m.rainbowMultiplierBonus ?? 0) : 1) *
-    (d.activeEvolutions.length > 0 ? EVOLUTION_RULES.setMultiplier : 1);
+  const unclampedFlat =
+    points + d.bonusDamagePerMatch + (m.setDamage ?? 0) + conditional + passives.bonus + tricks.flat + growthDamage +
+      d.activeEvolutions.length * EVOLUTION_RULES.setDamage;
+  const flat = Math.max(0, unclampedFlat);
+  if (unclampedFlat < 0) {
+    flatItems.push({ label: 'Minimum damage floor', amount: -unclampedFlat, note: 'Set damage cannot drop below 0' });
+  }
+  const rainbowBaseMult = rainbow ? (a.rainbowMultiplier ?? BASE_RULES.rainbowMultiplier) + (m.rainbowMultiplierBonus ?? 0) : 1;
+  const evoMult = d.activeEvolutions.length > 0 ? EVOLUTION_RULES.setMultiplier : 1;
+  const rainbowMult = rainbowBaseMult * evoMult;
   const enemyMult = (enemyResult.pointsMultiplier || 1) * (statMods.pointsMultiplier || 1);
   // "Next Set ×N" effects and Hot Streak together top out at the same cap (data/rules.ts)
-  const setMult = Math.min(BASE_RULES.maxNextSetMultiplier, d.nextSetMultiplier * hotStreak) * tricks.multiplier;
+  const preTricksSetMult = Math.min(BASE_RULES.maxNextSetMultiplier, d.nextSetMultiplier * hotStreak);
+  const setMult = preTricksSetMult * tricks.multiplier;
   d.nextSetMultiplier = 1;
+  const multItems: FightLogMathItem[] = [];
+  if (rainbowBaseMult !== 1) multItems.push({ label: 'Rainbow Strike', amount: rainbowBaseMult, note: 'every trait was different' });
+  if (evoMult !== 1) multItems.push({ label: 'Active Evolution', amount: evoMult, note: 'evolution Set multiplier' });
+  if ((a.damageScale ?? 1) !== 1) {
+    const arc = findArcanaFor('damageScale');
+    multItems.push({ label: arc?.name ?? 'Arcana', amount: a.damageScale!, note: 'Arcana Set multiplier' });
+  }
+  if (enemyMult !== 1) multItems.push({ label: d.foeName, amount: enemyMult, note: enemyMult < 1 ? 'foe resistance' : 'foe vulnerability' });
+  if (preTricksSetMult !== 1) multItems.push({ label: hotStreak > 1 ? 'Hot Streak' : 'Next-Set boost', amount: preTricksSetMult, note: hotStreak > 1 ? 'max Combo passive' : 'saved multiplier' });
+  multItems.push(...tricks.multItems);
+  const extraItems: FightLogMathItem[] = [];
+  if (purity.damage * enemyMult !== 0) {
+    extraItems.push({ label: 'Purity chain', amount: purity.damage * enemyMult, note: `${d.purityChain}-Set Purity streak` });
+  }
+  if (traps.bonus * enemyMult !== 0) {
+    extraItems.push({ label: 'Traps cleared', amount: traps.bonus * enemyMult, note: 'cleared hazard cards in this Set' });
+  }
   const dmg = flat * rainbowMult * (a.damageScale ?? 1) * enemyMult * setMult + (purity.damage + traps.bonus) * enemyMult;
   const powerMult = damageMultiplier(d.power ?? 0);
   const hit = dealDamage(d, dmg);
@@ -360,15 +501,34 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
       if (matchedIds.has(r.cardId) || !r.effectType) continue;
       collateral[r.effectType] = (collateral[r.effectType] ?? 0) + (r.points ?? 0);
     }
+    const matchedPts = rewards.filter(r => matchedIds.has(r.cardId)).reduce((sum, r) => sum + (r.points ?? 0), 0);
+    const baseCards = matched.length * MATCH_REWARDS.basePoints;
+    const cardBonus = Math.max(0, matchedPts - baseCards);
+    const powerBonus = matched.reduce((sum, c) => sum + (c.bonusPoints ?? 0), 0);
+    const chargeBonus = matched.reduce((sum, c) => sum + (c.charge ?? 0), 0);
+    const cardBonusParts: string[] = [];
+    if (powerBonus > 0) {
+      const cnt = matched.filter(c => (c.bonusPoints ?? 0) > 0).length;
+      cardBonusParts.push(`${cnt} Power card${cnt === 1 ? '' : 's'} (+${powerBonus})`);
+    }
+    if (chargeBonus > 0) cardBonusParts.push(`charged cards (+${chargeBonus})`);
+    if (cardBonus > powerBonus + chargeBonus) cardBonusParts.push(`extra card points (+${cardBonus - powerBonus - chargeBonus})`);
     d._logSet = {
-      cards: rewards.filter(r => matchedIds.has(r.cardId)).reduce((sum, r) => sum + (r.points ?? 0), 0),
+      cards: matchedPts,
+      cardCount: matched.length,
+      baseCards,
+      ...(cardBonus > 0 ? { cardBonus } : {}),
+      ...(cardBonusParts.length > 0 ? { cardBonusNote: cardBonusParts.join(', ') } : {}),
       ...(surgeMult !== 1 ? { surgeMultiplier: surgeMult } : {}),
       collateral,
       flatBonus: flat - surgedPoints,
+      ...(flatItems.length > 0 ? { flatItems } : {}),
       multiplier: rainbowMult * (a.damageScale ?? 1) * enemyMult * setMult,
+      ...(multItems.length > 0 ? { multItems } : {}),
       rainbow,
       extra: (purity.damage + traps.bonus) * enemyMult,
-      ...(powerMult > 1 ? { powerMultiplier: powerMult } : {}),
+      ...(extraItems.length > 0 ? { extraItems } : {}),
+      ...(powerMult > 1 ? { powerMultiplier: powerMult, powerPoints: d.power ?? 0 } : {}),
       hit,
       diffTraits: diffCount,
       graceUsed,

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { Card, AttributeName } from '@/types';
 import { findAllCombinations } from '@/utils/gameUtils';
+import { registerInterval } from '@/utils/perfWatchdog';
+import { useAppActive } from './useAppActive';
 
 interface UseAutoPlayerOptions {
   isActive: boolean;
@@ -30,6 +32,7 @@ export function useAutoPlayer({
   graces,
   onSelectCard,
 }: UseAutoPlayerOptions): void {
+  const appActive = useAppActive();
   // Use ref for callback to avoid stale closures
   const onSelectCardRef = useRef(onSelectCard);
   onSelectCardRef.current = onSelectCard;
@@ -100,16 +103,25 @@ export function useAutoPlayer({
 
   // Main effect - check for sets periodically
   useEffect(() => {
-    if (!isActive || isPaused) {
+    if (!isActive || isPaused || !appActive) {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+      isSelectingRef.current = false;
       return;
     }
 
+    const stopTrack = registerInterval('useAutoPlayer');
     const intervalId = setInterval(() => {
       if (!isSelectingRef.current) {
         findAndSelectSet();
       }
     }, CHECK_INTERVAL);
 
-    return () => clearInterval(intervalId);
-  }, [isActive, isPaused, findAndSelectSet]);
+    return () => {
+      clearInterval(intervalId);
+      stopTrack();
+    };
+  }, [isActive, isPaused, appActive, findAndSelectSet]);
 }

@@ -1,4 +1,6 @@
 import { useEffect, useRef } from 'react';
+import { registerInterval } from '@/utils/perfWatchdog';
+import { useAppActive } from './useAppActive';
 
 interface UseAutoHintOptions {
   autoHintChance: number;
@@ -26,14 +28,16 @@ export function useAutoHint({
   lastMatchTime,
   onTrigger,
 }: UseAutoHintOptions): void {
+  const appActive = useAppActive();
   const onTriggerRef = useRef(onTrigger);
   onTriggerRef.current = onTrigger;
 
   useEffect(() => {
-    if (autoHintChance <= 0 || isPaused) return;
+    if (autoHintChance <= 0 || isPaused || !appActive) return;
 
     const actualWaitTime = Math.max(MIN_WAIT_TIME, BASE_WAIT_TIME - autoHintInterval);
 
+    const stopTrack = registerInterval('useAutoHint');
     const intervalId = setInterval(() => {
       if (hasActiveHint) return;
 
@@ -45,6 +49,9 @@ export function useAutoHint({
       }
     }, CHECK_INTERVAL);
 
-    return () => clearInterval(intervalId);
-  }, [autoHintChance, autoHintInterval, isPaused, hasActiveHint, lastMatchTime]);
+    return () => {
+      clearInterval(intervalId);
+      stopTrack();
+    };
+  }, [autoHintChance, autoHintInterval, isPaused, appActive, hasActiveHint, lastMatchTime]);
 }

@@ -31,6 +31,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run TypeScript, icon, and ESLint guardrails
+        run: npm run typecheck && npm run validate:icons && npm run lint
+
+      - name: Run deterministic Jest & performance budget suites
+        run: npm run test:fast
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run browser CPU & background audio battery budgets
+        run: npm run test:e2e:battery
+
       - name: Build web app
         run: npx expo export --platform web
         env:

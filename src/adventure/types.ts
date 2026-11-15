@@ -604,8 +604,20 @@ export interface FightLogCard {
   number: Card['number'];
   shading: Card['shading'];
   background?: Card['background'];
+  /** Total damage points this card contributed (1 base + bonus) */
+  points?: number;
+  /** Extra bonus damage carried on this card (Power cards, Charge, etc.) */
+  bonusPoints?: number;
   /** Short notes on what was special about the card: "+2 dmg", "Catalyst", "On fire"… */
   tags: string[];
+}
+
+/** One itemized contributor (flat bonus, multiplier, or extra) in a Set's damage math. */
+export interface FightLogMathItem {
+  label: string;
+  amount: number;
+  note?: string;
+  sourceRef?: string;
 }
 
 /** One thing that happened during an entry (a RunEvent plus the rule source that caused it). */
@@ -623,19 +635,35 @@ export interface FightLogLine {
 export interface FightLogSetMath {
   /** Points on the three matched cards (base 1 each + bonus + charge) */
   cards: number;
+  /** Number of matched cards (normally 3) */
+  cardCount?: number;
+  /** Base damage across matched cards (1 per card = 3) */
+  baseCards?: number;
+  /** Extra damage stored on the matched cards (Power cards, Charge, etc.) */
+  cardBonus?: number;
+  /** Plain-English note describing why the cards carried extra damage */
+  cardBonusNote?: string;
   /** Shading Surge multiplier applied to matched cards when active (e.g. ×5) */
   surgeMultiplier?: number;
   /** Points on cards the Set's weapon procs destroyed (explosion, laser, ricochet…) by kind */
   collateral: Partial<Record<NonNullable<CardReward['effectType']>, number>>;
   /** Flat per-Set bonuses (gear, skill nodes, passives, conditional damage, active evolutions) */
   flatBonus: number;
+  /** Itemized breakdown of every non-zero contributor to `flatBonus` */
+  flatItems?: FightLogMathItem[];
   /** Everything the flat total was multiplied by (rainbow, Hot Streak / next-Set ×N, foe, arcana) */
   multiplier: number;
+  /** Itemized breakdown of multipliers composing `multiplier` */
+  multItems?: FightLogMathItem[];
   rainbow: boolean;
   /** Purity chain and trap bonus damage, added after the multiplier */
   extra: number;
+  /** Itemized breakdown of post-multiplier extras */
+  extraItems?: FightLogMathItem[];
   /** Global Power multiplier applied at damage dealing (when > ×1) */
   powerMultiplier?: number;
+  /** Accumulated Power points right after this Set */
+  powerPoints?: number;
   /** Damage the Set itself dealt */
   hit: number;
   /** How many traits were all different */

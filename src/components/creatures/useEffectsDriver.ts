@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Easing,
   SharedValue,
-  useFrameCallback,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
+import { useGuardedFrameCallback } from '@/hooks/useGuardedFrameCallback';
 import { advancePhase, expApproach } from '@/utils/proceduralMotion';
 
 interface EffectsDriverOptions {
@@ -81,13 +81,14 @@ export function useEffectsDriver({
     }
   }, [animate, hasTarget, fadeMs]);
 
-  useFrameCallback((frameInfo) => {
+  useGuardedFrameCallback((frameInfo) => {
+    'worklet';
     const dtMs = frameInfo.timeSincePreviousFrame;
     if (dtMs === null || dtMs <= 0) return;
     const dt = Math.min(dtMs / 1000, 0.05);
     ambientFreqHz.value = expApproach(ambientFreqHz.value, ambientHz, 8, dt);
     ambientPhase.value = advancePhase(ambientPhase.value, ambientFreqHz.value, dt);
-  }, animate && (hasTarget || fadingOut));
+  }, animate && (hasTarget || fadingOut), 'useEffectsDriver');
 
   useEffect(() => {
     if (!animate) {

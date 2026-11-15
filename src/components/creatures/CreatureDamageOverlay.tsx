@@ -3,11 +3,11 @@ import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import Animated, {
   Easing,
   useAnimatedStyle,
-  useFrameCallback,
   useSharedValue,
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
+import { useGuardedFrameCallback } from '@/hooks/useGuardedFrameCallback';
 import { Svg, Circle, Ellipse, G, Line, Path, Rect } from 'react-native-svg';
 import { COLORS } from '@/utils/colors';
 import { STROKE, StarBurst } from '@/components/illustration/primitives';
@@ -50,7 +50,8 @@ export const CreatureDamageOverlay: React.FC<CreatureDamageOverlayProps> = ({
   const koPresence = useSharedValue(healthState === 'knocked_out' ? 1 : 0);
   const prevSeverityRef = useRef<number>(HEALTH_SEVERITY[healthState]);
 
-  useFrameCallback((frameInfo) => {
+  useGuardedFrameCallback((frameInfo) => {
+    'worklet';
     const dtMs = frameInfo.timeSincePreviousFrame;
     if (dtMs === null || dtMs <= 0) return;
     const dt = Math.min(dtMs / 1000, 0.05);
@@ -58,7 +59,7 @@ export const CreatureDamageOverlay: React.FC<CreatureDamageOverlayProps> = ({
       orbitPhase.value = advancePhase(orbitPhase.value, 0.58, dt);
     }
     sweatPhase.value = advancePhase(sweatPhase.value, 0.92, dt);
-  }, animate && (healthState === 'battered' || healthState === 'critical' || healthState === 'knocked_out'));
+  }, animate && (healthState === 'battered' || healthState === 'critical' || healthState === 'knocked_out'), 'CreatureDamageOverlay');
 
   useEffect(() => {
     const nextSev = HEALTH_SEVERITY[healthState];

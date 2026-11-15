@@ -1,18 +1,31 @@
 import React from 'react';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { act, render, renderHook } from '@testing-library/react-native';
+import { act, fireEvent, render, renderHook } from '@testing-library/react-native';
+import AdventureMap from '@/adventure/components/AdventureMap';
 import AdventureRun from '@/adventure/components/AdventureRun';
 import { getLevel } from '@/adventure/data/levels';
+import { createRun, runReducer } from '@/adventure/engine/run';
 import { createMaxedSave, createNewSave } from '@/adventure/progress';
 import Card from '@/components/Card';
 import GameBoard from '@/components/GameBoard';
 import { EnemyAvatar } from '@/components/enemies/EnemyAvatar';
 import { FighterAvatar } from '@/components/fighters/FighterAvatar';
 import { useAppActive } from '@/hooks/useAppActive';
+import { useAutoHint } from '@/hooks/useAutoHint';
+import { useAutoPlayer } from '@/hooks/useAutoPlayer';
+import { useBurnTimer } from '@/hooks/useBurnTimer';
+import { useGameTimer } from '@/hooks/useGameTimer';
 import type { Card as CardType } from '@/types';
 import { __setAppActiveForTests, getIsAppActive } from '@/utils/appLifecycle';
 import { DEFAULT_PLAYER_STATS } from '@/utils/gameDefinitions';
+import {
+  MAX_CONCURRENT_FRAME_LOOPS,
+  getPerfSnapshot,
+  installPerfWatchdog,
+  registerFrameLoop,
+  resetPerfViolations,
+} from '@/utils/perfWatchdog';
 
 const mockUseFrameCallback = jest.fn();
 jest.mock('react-native-reanimated', () => {
@@ -40,6 +53,19 @@ jest.mock('@/hooks/useBurnTimer', () => {
     useBurnTimer: (...args: unknown[]) => {
       mockUseBurnTimer(...args);
       return actual.useBurnTimer(...args);
+    },
+  };
+});
+
+const mockUseScreenShake = jest.fn();
+jest.mock('@/hooks/useScreenShake', () => {
+  const actual = jest.requireActual('@/hooks/useScreenShake');
+  return {
+    __esModule: true,
+    ...actual,
+    useScreenShake: (...args: unknown[]) => {
+      mockUseScreenShake(...args);
+      return actual.useScreenShake(...args);
     },
   };
 });
@@ -162,12 +188,16 @@ const makeBoardCards = (): CardType[] => {
 beforeEach(() => {
   mockUseFrameCallback.mockClear();
   mockUseBurnTimer.mockClear();
+  mockUseScreenShake.mockClear();
+  resetPerfViolations();
 });
 
 afterEach(() => {
   __setAppActiveForTests(true);
   mockUseFrameCallback.mockClear();
   mockUseBurnTimer.mockClear();
+  mockUseScreenShake.mockClear();
+  resetPerfViolations();
   jest.useRealTimers();
   jest.restoreAllMocks();
 });
@@ -500,6 +530,207 @@ describe('Performance, Battery, and Background Lifecycle', () => {
 
       rerender(<Card card={{ ...card, selected: true }} onClick={onClick} />);
       expect(mockUseBurnTimer).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('Render isolation & reducer structural-sharing budgets', () => {
+    it('keeps GameBoard and all 12 Cards at 0 re-renders across 10 AdventureRun 250ms clock ticks', () => {
+      jest.useFakeTimers();
+      const maxed = createMaxedSave();
+      const save = {
+        ...createNewSave(),
+        seenMechanics: maxed.seenMechanics,
+        seenCoachMarks: maxed.seenCoachMarks,
+      };
+      const level = getLevel('2-3');
+
+      let commits = 0;
+      const onQuit = jest.fn();
+      const onFinish = jest.fn();
+      const onRestart = jest.fn();
+      const onCoachMarkSeen = jest.fn();
+
+      const { getByTestId } = render(
+        <SafeAreaProvider initialMetrics={SAFE_METRICS}>
+          <React.Profiler id="AdventureRun" onRender={() => { commits += 1; }}>
+            <AdventureRun
+              level={level}
+              save={save}
+              seed={42}
+              effects={false}
+              onFinish={onFinish}
+              onQuit={onQuit}
+              onRestart={onRestart}
+              onCoachMarkSeen={onCoachMarkSeen}
+            />
+          </React.Profiler>
+        </SafeAreaProvider>
+      );
+
+      const initialClock = getByTestId('run-clock').props.accessibilityLabel;
+      commits = 0;
+      mockUseScreenShake.mockClear();
+      mockUseBurnTimer.mockClear();
+
+      for (let i = 0; i < 10; i++) {
+        act(() => {
+          jest.advanceTimersByTime(250);
+        });
+      }
+
+      expect(commits).toBeGreaterThanOrEqual(8);
+      expect(getByTestId('run-clock').props.accessibilityLabel).not.toBe(initialClock);
+      expect(mockUseScreenShake).toHaveBeenCalledTimes(0);
+      expect(mockUseBurnTimer).toHaveBeenCalledTimes(0);
+    });
+
+    it('re-renders only the clicked Card (never all 12 Cards) when selecting a single card on GameBoard', () => {
+      const cards = makeBoardCards();
+      const { getAllByTestId } = render(
+        <GameBoard
+          cards={cards}
+          onMatch={jest.fn()}
+          onInvalidSelection={jest.fn()}
+          playerStats={DEFAULT_PLAYER_STATS}
+          isPlayerTurn={true}
+        />
+      );
+
+      mockUseBurnTimer.mockClear();
+      fireEvent.press(getAllByTestId('card-oval-red-1-solid')[0]);
+
+      expect(mockUseBurnTimer.mock.calls.length).toBeGreaterThanOrEqual(1);
+      expect(mockUseBurnTimer.mock.calls.length).toBeLessThanOrEqual(2);
+    });
+
+    it('preserves strict === reference identity on board, connections, events, stats, weapons, attributes, and foe across 20 TICKs', () => {
+      const initial = createRun(getLevel('2-3'), createNewSave(), { seed: 42 });
+      let cur = initial;
+      for (let i = 0; i < 20; i++) {
+        cur = runReducer(cur, { type: 'TICK', ms: 250 });
+      }
+
+      expect(cur.elapsedMs).toBe(initial.elapsedMs + 5000);
+      expect(cur.board).toBe(initial.board);
+      expect(cur.connections).toBe(initial.connections);
+      expect(cur.events).toBe(initial.events);
+      expect(cur.stats).toBe(initial.stats);
+      expect(cur.weapons).toBe(initial.weapons);
+      expect(cur.attributes).toBe(initial.attributes);
+      expect(cur.foe).toBe(initial.foe);
+    });
+  });
+
+  describe('perfWatchdog frame-loop & background zero-work budgets', () => {
+    it('caps 60-node AdventureMap concurrent frame loops at <= 6 when active and drops to 0 when inactive', () => {
+      const maxed = createMaxedSave();
+      const onSelectLevel = jest.fn();
+      const onOpenCamp = jest.fn();
+      const onOpenGuide = jest.fn();
+      const onExit = jest.fn();
+
+      const { rerender, unmount } = render(
+        <SafeAreaProvider initialMetrics={SAFE_METRICS}>
+          <AdventureMap
+            save={maxed}
+            onSelectLevel={onSelectLevel}
+            onOpenCamp={onOpenCamp}
+            onOpenGuide={onOpenGuide}
+            onExit={onExit}
+            active={true}
+          />
+        </SafeAreaProvider>
+      );
+
+      const snap = getPerfSnapshot();
+      expect(snap.activeFrameLoops).toBeGreaterThan(0);
+      expect(snap.activeFrameLoops).toBeLessThanOrEqual(6);
+      expect(snap.violations).toEqual([]);
+
+      rerender(
+        <SafeAreaProvider initialMetrics={SAFE_METRICS}>
+          <AdventureMap
+            save={maxed}
+            onSelectLevel={onSelectLevel}
+            onOpenCamp={onOpenCamp}
+            onOpenGuide={onOpenGuide}
+            onExit={onExit}
+            active={false}
+          />
+        </SafeAreaProvider>
+      );
+
+      expect(getPerfSnapshot().activeFrameLoops).toBe(0);
+
+      unmount();
+      expect(getPerfSnapshot().activeFrameLoops).toBe(0);
+    });
+
+    it('drops all Free Play timer intervals and frame loops to 0 with zero watchdog violations when backgrounded', () => {
+      jest.useFakeTimers();
+      const stopWatchdog = installPerfWatchdog();
+      const cards = makeBoardCards();
+      const onTick = jest.fn();
+      const onTrigger = jest.fn();
+      const onSelectCard = jest.fn();
+
+      const TimerHarness: React.FC = () => {
+        useGameTimer(true, onTick);
+        useBurnTimer({ isOnFire: true, fireStartTime: 1000, isPaused: false });
+        useAutoHint({
+          autoHintChance: 50,
+          autoHintInterval: 0,
+          isPaused: false,
+          hasActiveHint: false,
+          lastMatchTime: 1000,
+          onTrigger,
+        });
+        useAutoPlayer({
+          isActive: true,
+          isPaused: false,
+          cards,
+          activeAttributes: ['shape', 'color', 'number', 'shading'],
+          matchedCardIds: [],
+          graces: 0,
+          onSelectCard,
+        });
+        return <FighterAvatar character="Orange Tabby" />;
+      };
+
+      try {
+        render(<TimerHarness />);
+
+        const fgSnap = getPerfSnapshot();
+        expect(fgSnap.activeIntervals).toBeGreaterThanOrEqual(4);
+        expect(fgSnap.activeFrameLoops).toBeGreaterThan(0);
+
+        act(() => {
+          __setAppActiveForTests(false);
+        });
+        act(() => {
+          jest.advanceTimersByTime(15000);
+        });
+
+        const bgSnap = getPerfSnapshot();
+        expect(bgSnap.activeFrameLoops).toBe(0);
+        expect(bgSnap.activeIntervals).toBe(0);
+        expect(bgSnap.violations).toEqual([]);
+      } finally {
+        stopWatchdog();
+      }
+    });
+
+    it('flags excessive-frame-loops when concurrent frame loops exceed MAX_CONCURRENT_FRAME_LOOPS', () => {
+      const cleanups: (() => void)[] = [];
+      for (let i = 0; i < MAX_CONCURRENT_FRAME_LOOPS + 1; i++) {
+        cleanups.push(registerFrameLoop(`test-leak-${i}`));
+      }
+
+      expect(getPerfSnapshot().violations.some(v => v.kind === 'excessive-frame-loops')).toBe(true);
+
+      cleanups.forEach(fn => fn());
+      expect(getPerfSnapshot().activeFrameLoops).toBe(0);
+      resetPerfViolations();
     });
   });
 });

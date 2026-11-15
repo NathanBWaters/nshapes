@@ -13,7 +13,7 @@ import Camp from '@/adventure/components/Camp';
 import LevelResults from '@/adventure/components/LevelResults';
 import { MAIN_LEVELS, PRACTICE_LEVELS, getLevel } from '@/adventure/data/levels';
 import { BOUNTIES } from '@/adventure/data/bounties';
-import { computeStars } from '@/adventure/engine/run';
+import { baseCardReward, computeStars, runReducer } from '@/adventure/engine/run';
 import {
   HISTORY_LIMIT,
   REPLAY_LIMIT,
@@ -37,7 +37,7 @@ import { loadBattleHistory, recordBattle } from '@/adventure/save';
 import { storage } from '@/utils/storage';
 import type { AdventureSave, RunState } from '@/adventure/types';
 import type { AttributeName, Background, Card, Number as CardNumber, Color, Shading, Shape } from '@/types';
-import { miss, playSet, startFight, testLevel, tick, withWeapons } from './testUtils/adventureFight';
+import { ALL_FEATURES, findSet, miss, playSet, startFight, testLevel, tick, withWeapons } from './testUtils/adventureFight';
 
 jest.mock('react-native-svg', () => ({
   __esModule: true,
@@ -460,6 +460,81 @@ describe('Camp', () => {
     expect(view.getByTestId('weapon-explainer-blast-powder')).toBeTruthy();
     expect(view.getByText('HOW THE SET HIT')).toBeTruthy();
     expect(view.getByText('Every move')).toBeTruthy();
+
+    fireEvent.press(view.getByTestId('fight-replay-close'));
+    expect(view.queryByTestId('fight-replay')).toBeNull();
+  });
+
+  it('explains cards, itemized Set math, and Power across BattleHistory, FightReplay, and LevelResults', () => {
+    const level = testLevel({ id: '1-4D', name: 'The Back Field', foes: [{ name: 'Training Dummy', hp: 999 }], rules: { sandbox: true, hearts: 7 } });
+    let run = {
+      ...startFight({ level, save: { upgrades: { heavy_hitter: 1 } }, features: ALL_FEATURES }),
+      power: 10,
+    };
+    run = withWeapons(run, getArmoryWeapon('greedy-chest')!, getArmoryWeapon('magnet')!);
+    const triple = findSet(run)!;
+    run = {
+      ...run,
+      board: run.board.map(c =>
+        c.id === triple[0].id ? { ...c, bonusPoints: 2 } : c.id === triple[1].id ? { ...c, magnet: true } : c
+      ),
+    };
+    const matchCards = run.board.filter(c => triple.some(t => t.id === c.id));
+    run = runReducer(run, { type: 'MATCH', cards: matchCards, rewards: matchCards.map(baseCardReward) });
+    const rec = battleRecord(level, run, { at: 500, stars: 0, coins: 0 });
+
+    // 1. LevelResults: tapping results-power opens PowerExplainer inline
+    const resView = render(
+      wrap(
+        <LevelResults
+          level={level}
+          run={run}
+          stars={0}
+          result={applyLevelResult(createNewSave(), level, 0, 0)}
+          unlocksRevealed
+          nextLevel={null}
+          nextUnlocked={false}
+          onRetry={noop}
+          onNext={noop}
+          onMap={noop}
+          onCamp={noop}
+        />
+      )
+    );
+    expect(resView.queryByTestId('power-explainer')).toBeNull();
+    fireEvent.press(resView.getByTestId('results-power'));
+    expect(resView.getByTestId('power-explainer')).toBeTruthy();
+    expect(resView.getByText('WHAT IS POWER?')).toBeTruthy();
+
+    // 2. BattleHistory: tapping history-power toggles PowerExplainer, and FightReplay explains everything
+    const view = campOf(createNewSave(), [rec], { initialTab: 'history' });
+    fireEvent.press(view.getByTestId('history-battle'));
+    fireEvent.press(view.getByTestId('history-power'));
+    expect(view.getByTestId('power-explainer')).toBeTruthy();
+    fireEvent.press(view.getByTestId('history-power'));
+    expect(view.queryByTestId('power-explainer')).toBeNull();
+
+    fireEvent.press(view.getByTestId('history-replay'));
+    expect(view.getByTestId('fight-replay')).toBeTruthy();
+    expect(view.queryByText('Set / triggered')).toBeNull();
+    expect(view.getByText('3 matched cards (1 dmg each)')).toBeTruthy();
+    expect(view.getByText('Bonus on those cards')).toBeTruthy();
+    expect(view.getByText('Subtotal before multipliers')).toBeTruthy();
+
+    // Tap Power banner
+    fireEvent.press(view.getByTestId('replay-power-banner'));
+    expect(view.getByTestId('power-explainer')).toBeTruthy();
+    fireEvent.press(view.getByTestId('replay-power-banner'));
+
+    // Tap card 0 to explain why it scored 3 dmg
+    fireEvent.press(view.getByTestId('replay-card-0'));
+    expect(view.getByTestId('replay-card-detail-0')).toBeTruthy();
+
+    // Tap math row 0 & inspector Power chip
+    fireEvent.press(view.getByTestId('replay-math-0'));
+    expect(view.getByTestId('replay-math-detail-0')).toBeTruthy();
+    fireEvent.press(view.getByTestId('replay-inspector-power'));
+    expect(view.getByTestId('power-explainer')).toBeTruthy();
 
     fireEvent.press(view.getByTestId('fight-replay-close'));
     expect(view.queryByTestId('fight-replay')).toBeNull();

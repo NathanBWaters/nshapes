@@ -3,9 +3,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   SharedValue,
   useAnimatedStyle,
-  useFrameCallback,
   useSharedValue,
 } from 'react-native-reanimated';
+import { useGuardedFrameCallback } from '@/hooks/useGuardedFrameCallback';
 import {
   CreatureHealthState,
   MoodMotionTable,
@@ -387,7 +387,8 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
 
   // UI-thread continuous phase integrator + second-order posture solver.
   // Mutate the simulation state in place via `sim.modify` so each frame allocates zero objects.
-  useFrameCallback((frameInfo) => {
+  useGuardedFrameCallback((frameInfo) => {
+    'worklet';
     const dtMs = frameInfo.timeSincePreviousFrame;
     if (dtMs === null || dtMs <= 0) return;
     const dt = Math.min(dtMs / 1000, 0.05);
@@ -434,10 +435,10 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
 
     if (typeof sim.modify === 'function') {
       sim.modify(stepSim);
-    } else {
-      sim.value = { ...stepSim(sim.value) };
+    } else if (sim.value) {
+      stepSim(sim.value);
     }
-  }, animate);
+  }, animate, 'useCreatureMotion');
 
   const playReaction = useCallback(
     (type: Reaction) => {

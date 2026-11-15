@@ -21,6 +21,7 @@ import {
   type FightReplayData,
 } from '../history';
 import FightReplay, { DamageSplitBar, REPLAY_SERIES, barPath, niceMax, splitLogDamage } from './FightReplay';
+import PowerExplainer from './PowerExplainer';
 import WeaponExplainer from './WeaponExplainer';
 import { Btn, INK, StarRow, TONE } from './ui';
 
@@ -63,6 +64,7 @@ const BattleHistory: React.FC<Props> = ({ history, now }) => {
   const { width } = useWindowDimensions();
   const [shown, setShown] = useState(PAGE);
   const [open, setOpen] = useState<string | null>(null);
+  const [openPowerKey, setOpenPowerKey] = useState<string | null>(null);
   const [replay, setReplay] = useState<FightReplayData | null>(null);
   const clock = useMemo(() => now ?? Date.now(), [now]);
   const totals = useMemo(() => summarize(history), [history]);
@@ -89,7 +91,7 @@ const BattleHistory: React.FC<Props> = ({ history, now }) => {
     );
   }
 
-  const contentW = Math.max(220, Math.min(width, 760) - 56);
+  const contentW = Math.max(220, Math.min(width, 560) - 56);
   const plotW = Math.max(140, contentW - CHART_AXIS_W);
   const svgH = CHART_TOP + CHART_H + CHART_BOTTOM;
   const maxDpm = Math.max(1, ...chartItems.map(c => c.battle.dpm));
@@ -253,8 +255,27 @@ const BattleHistory: React.FC<Props> = ({ history, now }) => {
                   <Fact label="Fight clock" value={formatDuration(b.durationMs)} />
                   {b.coins > 0 && <Fact label="Coins" value={`+${b.coins}`} />}
                   {b.evolutions > 0 && <Fact label="Evolutions" value={`${b.evolutions}`} />}
-                  {(b.power ?? 1) > 1 && <Fact label="Power" value={`×${b.power}`} />}
+                  {(b.power ?? 1) > 1 && (
+                    <Fact
+                      testID="history-power"
+                      label={openPowerKey === key ? 'Power (hide)' : 'Power · tap ?'}
+                      value={`×${b.power}`}
+                      active={openPowerKey === key}
+                      onPress={() => { sfx('click'); setOpenPowerKey(prev => (prev === key ? null : key)); }}
+                    />
+                  )}
                 </View>
+
+                {openPowerKey === key && (b.power ?? 1) > 1 && (
+                  <PowerExplainer
+                    points={b.replay?.power}
+                    multiplier={b.power}
+                    weapons={heldWeapons}
+                    evolutionsTriggered={b.evolutions}
+                    subtitle={`Peak multiplier reached: ×${b.power}`}
+                    compact
+                  />
+                )}
 
                 {damageSplit && b.replay && b.replay.totalDamage > 0 && (
                   <DamageSplitBar
@@ -321,12 +342,28 @@ const Total: React.FC<{ label: string; value: number; hot?: boolean }> = ({ labe
   </View>
 );
 
-const Fact: React.FC<{ label: string; value: string }> = ({ label, value }) => (
-  <View style={st.fact}>
-    <Text style={st.factValue}>{value}</Text>
-    <Text style={st.factLabel}>{label}</Text>
-  </View>
-);
+const Fact: React.FC<{ label: string; value: string; testID?: string; active?: boolean; onPress?: () => void }> = ({ label, value, testID, active, onPress }) => {
+  if (onPress) {
+    return (
+      <TouchableOpacity
+        testID={testID}
+        style={[st.fact, st.factButton, active && { backgroundColor: COLORS.actionYellow }]}
+        onPress={onPress}
+        activeOpacity={0.75}
+        accessibilityRole="button"
+      >
+        <Text style={st.factValue}>{value}</Text>
+        <Text style={st.factLabel}>{label}</Text>
+      </TouchableOpacity>
+    );
+  }
+  return (
+    <View style={st.fact} testID={testID}>
+      <Text style={st.factValue}>{value}</Text>
+      <Text style={st.factLabel}>{label}</Text>
+    </View>
+  );
+};
 
 const st = StyleSheet.create({
   empty: { alignItems: 'center', gap: 6, backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 2.5, borderBottomWidth: 5, borderColor: INK, padding: 20, marginTop: 8 },
@@ -364,6 +401,7 @@ const st = StyleSheet.create({
   legacyGear: { gap: 6, marginTop: 2 },
   facts: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   fact: { backgroundColor: COLORS.paperBeige, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, alignItems: 'center', minWidth: 62 },
+  factButton: { borderWidth: 1.5, borderColor: INK },
   factValue: { fontWeight: '900', fontSize: 14, color: INK, fontVariant: ['tabular-nums'] },
   factLabel: { fontSize: 9, fontWeight: '700', color: INK, opacity: 0.7 },
 });

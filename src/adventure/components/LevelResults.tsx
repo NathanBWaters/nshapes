@@ -1,12 +1,12 @@
 /** End-of-level screen: stars pop in one by one, coins are paid out, unlocks wait for their reveal. */
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
 import { COLORS } from '@/utils/colors';
-import { band } from '@/audio';
+import { band, sfx } from '@/audio';
 import type { LevelDef, RunState } from '../types';
 import type { ResultApplication } from '../progress';
 import { damagePerMinute } from '../history';
@@ -16,6 +16,7 @@ import { BOUNTIES } from '../data/bounties';
 import { Btn, CoinPill, INK, PopIn, starPopDelayMs, StarRow, TONE } from './ui';
 import { Silhouette, UnlockableAvatar, describeRewardUnlocks, describeUnlock } from './rewards';
 import FightReplay from './FightReplay';
+import PowerExplainer from './PowerExplainer';
 
 interface Props {
   level: LevelDef;
@@ -37,6 +38,7 @@ interface Props {
 const LevelResults: React.FC<Props> = ({ level, run, stars, result, bestDpm = null, unlocksRevealed, nextLevel, nextUnlocked, onRetry, onNext, onMap, onCamp }) => {
   const insets = useSafeAreaInsets();
   const [replayOpen, setReplayOpen] = useState(false);
+  const [powerInfoOpen, setPowerInfoOpen] = useState(false);
   const biome = getBiome(level.biome);
   /** A practice fight has no result: the player simply left */
   const practice = !!level.rules.sandbox;
@@ -156,7 +158,15 @@ const LevelResults: React.FC<Props> = ({ level, run, stars, result, bestDpm = nu
             <Stat icon="lorc/checked-shield" label="Sets" value={`${run.matches}`} />
             <Stat icon="lorc/cross-mark" label="Mistakes" value={`${run.mistakes}`} />
             {run.power > 0 && (
-              <Stat testID="results-power" icon="lorc/power-lightning" label="Power reached" value={formatPower(run.power)} hot={powerMultiplier(run.power) >= 5} />
+              <Stat
+                testID="results-power"
+                icon="lorc/power-lightning"
+                label="Power reached"
+                value={formatPower(run.power)}
+                hot={powerMultiplier(run.power) >= 5}
+                note={powerInfoOpen ? 'HIDE INFO' : 'TAP TO EXPLAIN'}
+                onPress={() => { sfx('click'); setPowerInfoOpen(v => !v); }}
+              />
             )}
             {practice && run.matches > 0 && (
               <Stat testID="results-per-set" icon="lorc/target-dummy" label="Per Set" value={`${Math.round(run.totalDamage / run.matches)}`} />
@@ -165,6 +175,16 @@ const LevelResults: React.FC<Props> = ({ level, run, stars, result, bestDpm = nu
               <Stat testID="results-evolutions" icon="lorc/crystal-shine" label="Evolutions" value={`${run.evolutionsTriggered}`} />
             )}
           </View>
+
+          {powerInfoOpen && run.power > 0 && (
+            <PowerExplainer
+              points={run.power}
+              weapons={run.weapons}
+              evolutionsTriggered={run.evolutionsTriggered}
+              subtitle={`Finished the fight at ${formatPower(run.power)}`}
+              compact
+            />
+          )}
 
           {totalCoins > 0 && (
             <View style={st.bank}>
@@ -266,14 +286,28 @@ const LevelResults: React.FC<Props> = ({ level, run, stars, result, bestDpm = nu
   );
 };
 
-const Stat: React.FC<{ icon: React.ComponentProps<typeof Icon>['name']; label: string; value: string; testID?: string; hot?: boolean; note?: string }> = ({ icon, label, value, testID, hot, note }) => (
-  <View style={[st.stat, hot && { backgroundColor: COLORS.actionYellow }]} testID={testID}>
-    <Icon name={icon} size={18} color={INK} />
-    <Text style={st.statValue}>{value}</Text>
-    <Text style={st.statLabel}>{label}</Text>
-    {note && <Text style={st.statNote}>{note}</Text>}
-  </View>
-);
+const Stat: React.FC<{ icon: React.ComponentProps<typeof Icon>['name']; label: string; value: string; testID?: string; hot?: boolean; note?: string; onPress?: () => void }> = ({ icon, label, value, testID, hot, note, onPress }) => {
+  const inner = (
+    <>
+      <Icon name={icon} size={18} color={INK} />
+      <Text style={st.statValue}>{value}</Text>
+      <Text style={st.statLabel}>{label}</Text>
+      {note && <Text style={st.statNote}>{note}</Text>}
+    </>
+  );
+  if (onPress) {
+    return (
+      <TouchableOpacity style={[st.stat, hot && { backgroundColor: COLORS.actionYellow }]} testID={testID} onPress={onPress} activeOpacity={0.75} accessibilityRole="button">
+        {inner}
+      </TouchableOpacity>
+    );
+  }
+  return (
+    <View style={[st.stat, hot && { backgroundColor: COLORS.actionYellow }]} testID={testID}>
+      {inner}
+    </View>
+  );
+};
 
 const st = StyleSheet.create({
   root: { flex: 1 },

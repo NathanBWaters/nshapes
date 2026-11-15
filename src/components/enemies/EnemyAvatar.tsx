@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { memo, useMemo } from 'react';
 import { Easing, withDelay, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { IconName } from '@/components/Icon';
 import { CreatureDamageOverlay } from '@/components/creatures/CreatureDamageOverlay';
@@ -368,7 +368,7 @@ function enemyBlends(mood: EnemyAmbientMood, healthState: string) {
   };
 }
 
-export const EnemyAvatar: React.FC<EnemyAvatarProps> = ({
+export const EnemyAvatar: React.FC<EnemyAvatarProps> = memo(function EnemyAvatar({
   enemy,
   size = 56,
   hp,
@@ -381,7 +381,7 @@ export const EnemyAvatar: React.FC<EnemyAvatarProps> = ({
   onPoke,
   framed = false,
   testID,
-}) => {
+}) {
   const appActive = useAppActive();
   const reducedMotion = useReducedMotion();
   const shouldAnimate = animate && !lightweight && !reducedMotion && appActive;
@@ -488,4 +488,4 @@ export const EnemyAvatar: React.FC<EnemyAvatarProps> = ({
       )}
     </CreatureStage>
   );
-};
+});

@@ -16,6 +16,7 @@
  * world's home key). With sound effects off, cues are silent.
  */
 import { getIsAppActive } from '@/utils/appLifecycle';
+import { registerInterval } from '@/utils/perfWatchdog';
 import { chip } from './chip';
 import { direct, restingMix, worldTone, type FightMood, type Mix } from './director';
 import { DRUMS, INSTRUMENTS, downlifter, drum, note, riser, subDrop, type DrumId, type InstrumentId } from './instruments';
@@ -83,6 +84,7 @@ class Band {
   private nextTime = 0;
   private bpm = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
+  private stopIntervalTrack: (() => void) | null = null;
   private mix: Mix = restingMix('map');
   private mood: FightMood | null = null;
   private heat = new Map<string, number>();
@@ -118,6 +120,8 @@ class Band {
     this.nextTime = chip.now + 0.08;
     this.applied = { filterHz: -1, level: -1, echo: -1 };
     this.applyMixToChip(0.05);
+    this.stopIntervalTrack?.();
+    this.stopIntervalTrack = registerInterval('Band.scheduler');
     this.timer = setInterval(() => this.schedule(), 25);
   }
 
@@ -133,6 +137,8 @@ class Band {
   halt() {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    this.stopIntervalTrack?.();
+    this.stopIntervalTrack = null;
     this.arr = null;
     this.pending = null;
   }

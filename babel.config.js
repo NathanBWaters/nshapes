@@ -1,10 +1,33 @@
 module.exports = function (api) {
-  api.cache(true);
+  const presetHandlesCompiler = api.caller((caller) =>
+    Boolean(caller?.supportsReactCompiler)
+  );
   return {
     presets: [
-      ["babel-preset-expo", { jsxImportSource: "nativewind" }],
+      [
+        "babel-preset-expo",
+        {
+          jsxImportSource: "nativewind",
+          "react-compiler": { panicThreshold: "none" },
+        },
+      ],
       "nativewind/babel",
     ],
-    plugins: ["react-native-reanimated/plugin"],
+    plugins: [
+      ...(!presetHandlesCompiler
+        ? [
+            [
+              "babel-plugin-react-compiler",
+              {
+                target: "19",
+                panicThreshold: "none",
+                sources: (filename) =>
+                  Boolean(filename && !filename.includes("node_modules")),
+              },
+            ],
+          ]
+        : []),
+      "react-native-reanimated/plugin",
+    ],
   };
 };

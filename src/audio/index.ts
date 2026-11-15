@@ -8,6 +8,7 @@
  * Everything is synthesized by the chip (src/audio/chip.ts) — no audio files.
  */
 import { getIsAppActive, subscribeAppActive } from '@/utils/appLifecycle';
+import { registerAudioInspector } from '@/utils/perfWatchdog';
 import { band, CUE_NAMES } from './band';
 import { chip, noteToFreq } from './chip';
 import type { FightMood } from './director';
@@ -119,6 +120,11 @@ const installGestureUnlock = () => {
         .catch(() => undefined);
     }
   });
+
+  registerAudioInspector(() => ({
+    state: chip.liveContext?.state ?? 'uninitialized',
+    voiceCount: chip.voiceCount,
+  }));
 
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
   if (!chip.available) return;

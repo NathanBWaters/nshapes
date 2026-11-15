@@ -220,6 +220,14 @@ src/                        # Shared code (imported via @/ alias)
 
 **Import Alias:** Use `@/` to import from `src/` (configured in `tsconfig.json`).
 
+## Performance & Battery Guardrails (IMPORTANT)
+
+* **React Compiler:** Enabled across Metro (`app.config.js` `experiments.reactCompiler: true`) and Jest (`babel.config.js`). Heavy avatar rigs (`EnemyAvatar`, `FighterAvatar`) also keep explicit `React.memo` boundaries and stable prop references across 4 Hz fight clock ticks.
+* **Frame loops (`useGuardedFrameCallback`):** Never call Reanimated's `useFrameCallback` directly. Use `src/hooks/useGuardedFrameCallback.ts` (auto-gated on `useAppActive()` and tracked by `src/utils/perfWatchdog.ts`) with a leading `'worklet';` directive and zero object/array/closure allocations inside the callback.
+* **Infinite Reanimated loops (`withRepeat(..., -1)`):** Animate only GPU-composited `transform`/`opacity` styles, gate on `useAppActive()`, and cancel with `cancelAnimation(...)` in effect cleanup.
+* **Single lifecycle & audio gateways:** Subscribe to `AppState`/`visibilitychange`/`pagehide` only in `src/utils/appLifecycle.ts`, and instantiate `AudioContext` only in `src/audio/chip.ts`. Pair recurring `setInterval` timers with `useAppActive()` and `registerInterval(...)` from `src/utils/perfWatchdog.ts`.
+* **Static AST & runtime checks:** Enforced by custom ESLint plugin `scripts/eslint-plugin-nshapes-perf.js` (`eslint.config.js`), `__tests__/performanceLifecycle.test.tsx`, `e2e/battery-budget.spec.ts` (Playwright + CDP CPU/layout/audio budgets), and CI (`.github/workflows/deploy.yml`). Run `npm run verify:guardrails` and `npm run test:e2e:battery`.
+
 ## Icon System (IMPORTANT)
 
 The game uses SVG icons from `assets/icons/` with a **type-safe registry system**. Icons are organized by artist (e.g., `lorc/`, `delapouite/`, `caro-asercion/`).

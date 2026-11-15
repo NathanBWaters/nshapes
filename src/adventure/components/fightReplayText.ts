@@ -1,6 +1,6 @@
 /** Plain-language text for the fight replay (FightReplay.tsx): titles, damage math and "what got triggered" lines. */
 import { ownerOfEvent } from '../data/weaponGuide';
-import type { FightLogEntry, FightLogLine, FightLogSetMath, RunEventType } from '../types';
+import type { FightLogCard, FightLogEntry, FightLogLine, FightLogSetMath, RunEventType } from '../types';
 
 /** Events whose amount is damage dealt to the foe. */
 const DAMAGE: ReadonlySet<RunEventType> = new Set(['hit', 'rainbow', 'surge_hit', 'blast', 'laser', 'ricochet', 'pinata_break']);
@@ -43,7 +43,7 @@ const LABEL: Partial<Record<RunEventType, (l: FightLogLine) => string | null>> =
   grudge_release: l => `Grudge released (+${l.amount} to the Set)`,
   nine_lives: () => 'Nine Lives saved you',
   breather: () => 'Out of hearts: refilled (practice)',
-  power_up: l => `Grew: ${l.text ?? 'stronger'}`,
+  power_up: l => `Weapon scaled up: ${l.text ?? 'stronger'}`,
   thick_hide: () => 'Thick Hide took the mistake',
   patience: l => `Patience (+${l.amount} to the Set)`,
   freeze: l => `Frozen ${Math.round((l.amount ?? 0) / 100) / 10}s`,
@@ -95,11 +95,25 @@ export interface ReplayLine {
   count: number;
 }
 
+/** Log line types whose contribution is already itemized inside HOW THE SET HIT for Set entries. */
+const SET_MATH_LINE_TYPES: ReadonlySet<RunEventType> = new Set(['grudge_release', 'patience', 'hot_streak_hit']);
+
+/** A callout that carries a multiplier, not damage ("Curse broken ×2") */
+const isMultiplier = (l: FightLogLine) => l.type === 'rule' && (l.text?.includes('×') ?? false);
+
 /** What happened during an entry beyond the Set's own hit, with repeats folded together ("Burn ×4 · 8 dmg"). */
-export const describeLines = (lines: FightLogLine[], held: readonly string[] = []): ReplayLine[] => {
+export const describeLines = (
+  lines: FightLogLine[],
+  held: readonly string[] = [],
+  opts?: { excludeSetMathRules?: boolean }
+): ReplayLine[] => {
   const out: ReplayLine[] = [];
   const byKey = new Map<string, ReplayLine>();
   for (const l of lines) {
+    if (opts?.excludeSetMathRules) {
+      if (l.type === 'rule' && l.amount !== undefined) continue;
+      if (SET_MATH_LINE_TYPES.has(l.type)) continue;
+    }
     const fn = LABEL[l.type];
     const label = fn ? fn(l) : `${humanize(l.type)}${l.amount !== undefined ? ` ${l.amount}` : ''}`;
     if (!label) continue;
@@ -133,19 +147,260 @@ const COLLATERAL_LABEL: Record<string, string> = {
   explosion: 'Explosion cards', laser: 'Laser cards', ricochet: 'Ricochet cards', fire: 'Burned cards', connected: 'Linked cards', grace: 'Grace',
 };
 
-export interface MathRow { label: string; value: string; total?: boolean }
+export interface MathRow {
+  label: string;
+  value: string;
+  sub?: string;
+  explain?: string;
+  sourceRef?: string;
+  total?: boolean;
+  subtotal?: boolean;
+  isPower?: boolean;
+  powerPoints?: number;
+  powerMultiplier?: number;
+}
 
 const fmt = (n: number) => (Number.isInteger(n) ? `${n}` : n.toFixed(1));
+const signed = (n: number) => (n >= 0 ? `+${fmt(n)}` : `−${fmt(Math.abs(n))}`);
 
-/** The Set's own hit as a sum someone can check: cards + bonuses, × multipliers, + extras = hit. */
-export const setMathRows = (m: FightLogSetMath): MathRow[] => {
-  const rows: MathRow[] = [{ label: 'Matched cards', value: fmt(m.cards) }];
-  if (m.surgeMultiplier && m.surgeMultiplier !== 1) rows.push({ label: 'Shading Surge', value: `×${fmt(m.surgeMultiplier)}` });
-  for (const [kind, pts] of Object.entries(m.collateral)) if (pts) rows.push({ label: COLLATERAL_LABEL[kind] ?? kind, value: `+${fmt(pts)}` });
-  if (m.flatBonus) rows.push({ label: 'Per-Set bonuses', value: `${m.flatBonus > 0 ? '+' : ''}${fmt(m.flatBonus)}` });
-  if (m.multiplier !== 1) rows.push({ label: m.rainbow ? 'Multiplier (Rainbow ×2 and others)' : 'Multiplier', value: `×${fmt(m.multiplier)}` });
-  if (m.extra) rows.push({ label: 'Purity & traps', value: `+${fmt(m.extra)}` });
-  if (m.powerMultiplier && m.powerMultiplier > 1) rows.push({ label: 'Power', value: `×${fmt(m.powerMultiplier)}` });
+const LEGACY_TRICK_REF: Record<string, string> = {
+  'Greedy Chest': 'weapon:greedy-chest',
+  Magnet: 'weapon:magnet',
+  'Chain Gang': 'weapon:chain-gang',
+  Thorns: 'weapon:thorn-bush',
+  Rust: 'weapon:rust',
+  'Tar Pit': 'weapon:tar-pit',
+  'Decoy found': 'weapon:decoy',
+  'Short fuse': 'weapon:long-fuse',
+  'Hot Potato': 'weapon:hot-potato',
+  Bounty: 'weapon:bounty-poster',
+  "Devil's Bargain": 'weapon:devils-bargain',
+  Snowball: 'weapon:snowball',
+  Mirror: 'weapon:mirror-shard',
+  'Odd one out': 'weapon:odd-one-out',
+  'Glass Sword': 'weapon:glass-sword',
+  'Album complete': 'weapon:collectors-album',
+  Tightrope: 'weapon:tightrope',
+};
+
+/** Inferred bonus on a logged card (works for both v0.1.119 cards and legacy v0.1.118 cards with only tags). */
+export const loggedCardBonus = (c: FightLogCard): number => {
+  if (c.bonusPoints !== undefined) return c.bonusPoints;
+  let total = 0;
+  for (const tag of c.tags) {
+    const m = /^(?:Power|Charged)?\s*\+(\d+)(?:\s*dmg)?$/.exec(tag);
+    if (m) total += Number(m[1]);
+  }
+  return total;
+};
+
+/** Total damage points a single matched card was worth (1 base + card bonus). */
+export const loggedCardPoints = (c: FightLogCard): number => c.points ?? (1 + loggedCardBonus(c));
+
+/** Plain-English explanation shown when a player taps one of the 3 matched cards in the replay. */
+export const explainLogCard = (c: FightLogCard): { title: string; points: number; base: number; bonus: number; summary: string; notes: string[] } => {
+  const bonus = loggedCardBonus(c);
+  const points = loggedCardPoints(c);
+  const base = Math.max(0, points - bonus);
+  const shapeWord = c.number === 1 ? c.shape : `${c.shape}s`;
+  const title = `${c.number} ${c.color} ${c.shading} ${shapeWord}`;
+  const notes: string[] = [];
+  if (bonus > 0) {
+    const hasPower = c.tags.some(t => t.startsWith('Power '));
+    const hasCharged = c.tags.some(t => t.startsWith('Charged '));
+    if (hasPower) notes.push(`Power card (+${bonus}): landed boosted on the board, so this card counts for ${points} damage instead of 1.`);
+    else if (hasCharged) notes.push(`Charged card (+${bonus}): held extra charge damage, counting for ${points} total.`);
+    else notes.push(`Boosted card (+${bonus} dmg): special board boost made this card count for ${points} instead of 1.`);
+  } else {
+    notes.push('Standard card: counts for 1 base damage toward the Set.');
+  }
+  for (const tag of c.tags) {
+    if (tag.startsWith('Power ') || tag.startsWith('Charged ') || /^\+\d+\s*dmg$/.test(tag)) continue;
+    if (tag === 'Magnet') notes.push('Magnetized card: matching it triggered your Magnet bonus.');
+    else if (tag.startsWith('Chest +')) notes.push(`Greedy Chest (${tag}): matching this card cracked open the chest bonus.`);
+    else if (tag === 'Cursed ×2') notes.push('Cursed card: clearing it broke the curse and multiplied this Set.');
+    else if (tag === 'Hot Potato') notes.push('Hot Potato: matching it scored its bonus before passing or exploding.');
+    else if (tag === 'Wild') notes.push('Wild card: stood in for any trait needed to complete the Set.');
+    else if (tag === 'Catalyst') notes.push('Evolution Catalyst: matching it advanced an Evolution.');
+    else if (tag === 'On fire') notes.push('On fire: had been scorching the board before you matched it.');
+    else if (tag === 'Face-down') notes.push('Was hidden face-down before this Set.');
+    else if (tag === 'Fused') notes.push('Had an active fuse/countdown timer.');
+    else if (tag.startsWith('Armored ')) notes.push(`${tag}: armored card on the board.`);
+    else if (tag.endsWith('¢')) notes.push(`Gold card (${tag}): paid bonus coins when matched.`);
+    else if (tag === 'Dud') notes.push('Dud card: corrupted board card.');
+  }
+  const summary = bonus > 0
+    ? `Contributed ${points} dmg (${base} base + ${bonus} bonus on this card).`
+    : `Contributed ${points} base dmg to the Set.`;
+  return { title, points, base, bonus, summary, notes };
+};
+
+/** The Set's own hit as an itemized receipt: matched cards + card bonuses + itemized Set bonuses -> subtotal -> multipliers & Power = Set hit. */
+export const setMathRows = (
+  m: FightLogSetMath,
+  ctx?: { lines?: readonly FightLogLine[]; cards?: readonly FightLogCard[]; held?: readonly string[] }
+): MathRow[] => {
+  const rows: MathRow[] = [];
+  const cardCount = m.cardCount ?? ctx?.cards?.length ?? 3;
+  const baseCards = m.baseCards ?? Math.min(m.cards, cardCount);
+  const cardBonus = m.cardBonus ?? Math.max(0, m.cards - baseCards);
+  rows.push({
+    label: `${cardCount} matched cards (${fmt(cardCount > 0 ? baseCards / cardCount : 1)} dmg each)`,
+    value: fmt(baseCards),
+    explain: `You matched ${cardCount} cards (a Set is always ${cardCount} cards). Every card in a Set starts at 1 base damage.`,
+  });
+  if (cardBonus > 0) {
+    let note = m.cardBonusNote;
+    if (!note && ctx?.cards) {
+      const boosted = ctx.cards.map(loggedCardBonus).filter(n => n > 0);
+      if (boosted.length > 0) {
+        note = `${boosted.length} boosted card${boosted.length === 1 ? '' : 's'} (+${boosted.reduce((a, b) => a + b, 0)} printed on card${boosted.length === 1 ? '' : 's'})`;
+      }
+    }
+    rows.push({
+      label: 'Bonus on those cards',
+      value: `+${fmt(cardBonus)}`,
+      sub: note ?? 'Power cards or charge on matched cards',
+      explain: `Special cards like Power cards hold extra damage right on the card itself. Adding that +${fmt(cardBonus)} to the ${fmt(baseCards)} base card points gives ${fmt(m.cards)} from your 3 cards.`,
+    });
+  }
+  if (m.surgeMultiplier && m.surgeMultiplier !== 1) {
+    rows.push({
+      label: 'Shading Surge',
+      value: `×${fmt(m.surgeMultiplier)}`,
+      sub: 'multiplied the matched card points',
+      explain: 'Shading Surge multiplied your matched-card damage before adding per-Set bonuses.',
+    });
+  }
+  for (const [kind, pts] of Object.entries(m.collateral)) {
+    if (pts) {
+      rows.push({
+        label: COLLATERAL_LABEL[kind] ?? kind,
+        value: `+${fmt(pts)}`,
+        explain: 'Extra board cards destroyed along with your Set count toward the Set hit.',
+      });
+    }
+  }
+
+  // Flat per-Set bonuses (itemized for v0.1.119, or reconstructed from lines for legacy v0.1.118)
+  if (m.flatItems && m.flatItems.length > 0) {
+    let accounted = 0;
+    for (const item of m.flatItems) {
+      if (item.amount === 0) continue;
+      accounted += item.amount;
+      rows.push({
+        label: item.label,
+        value: signed(item.amount),
+        ...(item.note ? { sub: item.note } : {}),
+        ...(item.sourceRef ? { sourceRef: item.sourceRef } : {}),
+        explain: item.sourceRef
+          ? `${item.label} added ${signed(item.amount)} flat damage to this Set${item.note ? ` (${item.note})` : ''}. Tap below to inspect the source.`
+          : `${item.label} added ${signed(item.amount)} flat damage to this Set${item.note ? ` (${item.note})` : ''}.`,
+      });
+    }
+    const diff = Math.round((m.flatBonus - accounted) * 10) / 10;
+    if (Math.abs(diff) >= 0.1) {
+      rows.push({
+        label: 'Other per-Set bonuses',
+        value: signed(diff),
+        explain: 'Additional flat damage active for this Set.',
+      });
+    }
+  } else if (m.flatBonus !== 0) {
+    const recovered: MathRow[] = [];
+    let accounted = 0;
+    for (const l of ctx?.lines ?? []) {
+      if (l.type === 'rule' && l.amount !== undefined && !isMultiplier(l) && Number.isFinite(l.amount) && l.amount !== 0) {
+        const clean = (l.text ?? 'Rule bonus').replace(/!$/, '');
+        const owner = !l.sourceRef && ctx?.held ? ownerOfEvent(l.type, l.text, ctx.held) : null;
+        const sourceRef = l.sourceRef ?? LEGACY_TRICK_REF[clean] ?? (owner ? `weapon:${owner}` : undefined);
+        accounted += l.amount;
+        recovered.push({
+          label: clean,
+          value: signed(l.amount),
+          ...(sourceRef ? { sourceRef } : {}),
+          explain: `${clean} added ${signed(l.amount)} flat damage to this Set before multipliers.`,
+        });
+      } else if (l.type === 'grudge_release' && l.amount) {
+        accounted += l.amount;
+        recovered.push({ label: 'Grudge release', value: signed(l.amount), sub: 'stored mistakes released' });
+      } else if (l.type === 'patience' && l.amount) {
+        accounted += l.amount;
+        recovered.push({ label: 'Patience', value: signed(l.amount), sub: 'slow careful Set bonus' });
+      }
+    }
+    rows.push(...recovered);
+    const rem = Math.round((m.flatBonus - accounted) * 10) / 10;
+    if (Math.abs(rem) >= 0.1) {
+      rows.push({
+        label: recovered.length > 0 ? 'Other per-Set bonuses' : 'Per-Set bonuses',
+        value: signed(rem),
+        explain: 'Flat per-Set damage from your weapons, skill tree, passives, and Workshop upgrades added before multipliers.',
+      });
+    }
+  }
+
+  const collateralTotal = Object.values(m.collateral).reduce((s, n) => s + (n ?? 0), 0);
+  const preMult = Math.max(0, Math.round(((m.cards + collateralTotal) * (m.surgeMultiplier ?? 1) + m.flatBonus) * 10) / 10);
+  const hasScalingAfter = m.multiplier !== 1 || m.extra !== 0 || (m.powerMultiplier ?? 1) > 1;
+  if (hasScalingAfter && (cardBonus > 0 || m.flatBonus !== 0 || collateralTotal > 0)) {
+    rows.push({
+      label: 'Subtotal before multipliers',
+      value: fmt(preMult),
+      subtotal: true,
+      explain: `All your card points and flat bonuses added together before multipliers applied (= ${fmt(preMult)}).`,
+    });
+  }
+
+  if (m.multItems && m.multItems.length > 0) {
+    for (const item of m.multItems) {
+      rows.push({
+        label: item.label,
+        value: `×${fmt(item.amount)}`,
+        ...(item.note ? { sub: item.note } : {}),
+        ...(item.sourceRef ? { sourceRef: item.sourceRef } : {}),
+        explain: `${item.label} multiplied this Set by ×${fmt(item.amount)}${item.note ? ` (${item.note})` : ''}.`,
+      });
+    }
+  } else if (m.multiplier !== 1) {
+    rows.push({
+      label: m.rainbow ? 'Multiplier (Rainbow ×2 and others)' : 'Multiplier',
+      value: `×${fmt(m.multiplier)}`,
+      ...(m.rainbow ? { sub: 'all traits differed in this Set' } : {}),
+      explain: m.rainbow
+        ? 'A Rainbow Strike (all visible traits different) doubles Set damage alongside any other Set multipliers.'
+        : 'Multiplies your card points and flat per-Set bonuses together.',
+    });
+  }
+
+  if (m.extraItems && m.extraItems.length > 0) {
+    for (const item of m.extraItems) {
+      rows.push({
+        label: item.label,
+        value: signed(item.amount),
+        ...(item.note ? { sub: item.note } : {}),
+        ...(item.sourceRef ? { sourceRef: item.sourceRef } : {}),
+        explain: `${item.label} was added after Set multipliers and then scaled by Power.`,
+      });
+    }
+  } else if (m.extra) {
+    rows.push({
+      label: 'Purity & traps',
+      value: `+${fmt(m.extra)}`,
+      explain: 'Purity chain and trap-clearing bonus damage added after Set multipliers.',
+    });
+  }
+
+  if (m.powerMultiplier && m.powerMultiplier > 1) {
+    rows.push({
+      label: 'Power',
+      value: `×${fmt(m.powerMultiplier)}`,
+      sub: 'fight-wide multiplier · tap to explain',
+      isPower: true,
+      powerPoints: m.powerPoints,
+      powerMultiplier: m.powerMultiplier,
+    });
+  }
   rows.push({ label: 'Set hit', value: `${m.hit}`, total: true });
   return rows;
 };
@@ -175,7 +430,7 @@ export const entrySummary = (e: FightLogEntry, held: readonly string[] = []): st
     const bits = [e.set.rainbow ? 'Rainbow' : `${e.set.diffTraits} trait${e.set.diffTraits === 1 ? '' : 's'} differ`];
     if (e.set.surgeMultiplier && e.set.surgeMultiplier > 1) bits.push(`Surge ×${fmt(e.set.surgeMultiplier)}`);
     if (e.set.graceUsed) bits.push('grace');
-    const triggers = describeLines(e.lines, held).filter(l => l.damage).map(l => l.source ?? l.label);
+    const triggers = describeLines(e.lines, held, { excludeSetMathRules: true }).filter(l => l.damage).map(l => l.source ?? l.label);
     if (triggers.length) bits.push([...new Set(triggers)].slice(0, 2).join(', '));
     return bits.join(' · ');
   }
@@ -199,9 +454,6 @@ export const weaponOfLine = (l: FightLogLine, held: readonly string[]): string |
   if (l.sourceRef) return null;
   return ownerOfEvent(l.type, l.text, held);
 };
-
-/** A callout that carries a multiplier, not damage ("Curse broken ×2") */
-const isMultiplier = (l: FightLogLine) => l.type === 'rule' && (l.text?.includes('×') ?? false);
 
 /** What every weapon, evolution and skill node did over the whole fight, by ref ("weapon:<id>", "evo:<id>", "node:<id>"). */
 export const gearStats = (log: readonly FightLogEntry[], held: readonly string[]): Record<string, GearStat> => {
