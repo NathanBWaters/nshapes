@@ -13,6 +13,9 @@ import { damagePerMinute } from '../history';
 import { formatPower, powerMultiplier } from '../data/weaponPower';
 import { getBiome } from '../data/biomes';
 import { BOUNTIES } from '../data/bounties';
+import { mainIndexOf, getLevel } from '../data/levels';
+import { shouldShowDamageNumbers } from '../coach';
+import { explainStarBreakdown } from '../engine/challenges';
 import { Btn, CoinPill, INK, PopIn, starPopDelayMs, StarRow, TONE } from './ui';
 import { Silhouette, UnlockableAvatar, describeRewardUnlocks, describeUnlock } from './rewards';
 import type { FunRating, FunTag } from '@/analytics/fightEvent';
@@ -167,21 +170,41 @@ const LevelResults: React.FC<Props> = ({
           {!practice && <StarRow stars={stars} size={52} animateFrom={0} />}
           <Text style={st.sub}>{sub}</Text>
 
+          {!practice && (
+            <View style={st.breakdownBox} testID="results-star-breakdown">
+              {explainStarBreakdown(level, run, stars).map(row => (
+                <View key={row.star} style={[st.breakdownRow, row.earned ? st.breakdownRowEarned : st.breakdownRowMissed]} testID={`results-star-row-${row.star}`}>
+                  <Text style={[st.breakdownStars, row.earned ? st.breakdownStarsOn : st.breakdownStarsOff]}>
+                    {'★'.repeat(row.star)}
+                  </Text>
+                  <Text style={st.breakdownGoal} numberOfLines={2}>{row.goal}</Text>
+                  <View style={[st.breakdownBadge, row.earned ? st.breakdownBadgeOk : st.breakdownBadgeMiss]}>
+                    <Text style={[st.breakdownBadgeText, row.earned ? st.breakdownBadgeTextOk : st.breakdownBadgeTextMiss]}>
+                      {row.earned ? `✓ ${row.reason}` : `✗ ${row.reason}`}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {shouldShowDamageNumbers(level, result.save) && (
+            <View style={st.statsRow}>
+              <Stat testID="results-total-damage" icon="lorc/crossed-swords" label="Total damage" value={`${run.totalDamage}`} />
+              <Stat testID="results-biggest-hit" icon="lorc/bright-explosion" label="Biggest hit" value={`${run.biggestHit}`} hot={run.biggestHit >= 25} />
+              <Stat
+                testID="results-dpm"
+                icon="delapouite/speedometer"
+                label="Damage / min"
+                value={`${dpm}`}
+                hot={newBest}
+                note={newBest ? 'NEW BEST' : bestDpm !== null ? `best ${bestDpm}` : undefined}
+              />
+            </View>
+          )}
           <View style={st.statsRow}>
-            <Stat testID="results-total-damage" icon="lorc/crossed-swords" label="Total damage" value={`${run.totalDamage}`} />
-            <Stat testID="results-biggest-hit" icon="lorc/bright-explosion" label="Biggest hit" value={`${run.biggestHit}`} hot={run.biggestHit >= 25} />
-            <Stat
-              testID="results-dpm"
-              icon="delapouite/speedometer"
-              label="Damage / min"
-              value={`${dpm}`}
-              hot={newBest}
-              note={newBest ? 'NEW BEST' : bestDpm !== null ? `best ${bestDpm}` : undefined}
-            />
-          </View>
-          <View style={st.statsRow}>
-            <Stat icon="lorc/checked-shield" label="Sets" value={`${run.matches}`} />
-            <Stat icon="lorc/cross-mark" label="Mistakes" value={`${run.mistakes}`} />
+            <Stat testID="results-sets" icon="lorc/checked-shield" label="Matches" value={`${run.matches}`} />
+            <Stat testID="results-mistakes" icon="lorc/cross-mark" label="Mistakes" value={`${run.mistakes}`} />
             {run.power > 0 && (
               <Stat
                 testID="results-power"
@@ -290,7 +313,7 @@ const LevelResults: React.FC<Props> = ({
 
           {tip && <Text style={st.tip}>{tip}</Text>}
 
-          {run.log.length > 1 && (
+          {run.log.length > 1 && (practice || mainIndexOf(level) >= mainIndexOf(getLevel('1-4'))) && (
             <Btn
               testID="results-replay"
               label="What happened? See the fight"
@@ -302,7 +325,7 @@ const LevelResults: React.FC<Props> = ({
             />
           )}
 
-          {onRateFun && (
+          {onRateFun && (practice || mainIndexOf(level) >= mainIndexOf(getLevel('1-4'))) && (
             <RoundFunPrompt rating={funRating} tags={funTags} onChange={onRateFun} testIDPrefix="results-fun" />
           )}
 
@@ -353,6 +376,20 @@ const st = StyleSheet.create({
   levelId: { fontWeight: '900', letterSpacing: 1.5, fontSize: 12, color: INK, opacity: 0.7 },
   title: { fontWeight: '900', fontSize: 34, letterSpacing: 2 },
   sub: { textAlign: 'center', color: INK, fontSize: 14 },
+  breakdownBox: { alignSelf: 'stretch', gap: 6, backgroundColor: '#FAF7F0', borderRadius: 10, borderWidth: 1.5, borderColor: INK, padding: 10 },
+  breakdownRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4, paddingHorizontal: 6, borderRadius: 6 },
+  breakdownRowEarned: { backgroundColor: '#FFFFFF' },
+  breakdownRowMissed: { backgroundColor: '#F5F0E6', opacity: 0.92 },
+  breakdownStars: { width: 44, fontSize: 14, fontWeight: '900', letterSpacing: 1 },
+  breakdownStarsOn: { color: '#E0A800' },
+  breakdownStarsOff: { color: '#B8B0A4' },
+  breakdownGoal: { flex: 1, fontSize: 12, fontWeight: '800', color: INK },
+  breakdownBadge: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
+  breakdownBadgeOk: { backgroundColor: '#D4F4EE' },
+  breakdownBadgeMiss: { backgroundColor: '#FFE8E5' },
+  breakdownBadgeText: { fontSize: 11, fontWeight: '900' },
+  breakdownBadgeTextOk: { color: '#0F766E' },
+  breakdownBadgeTextMiss: { color: '#B91C1C' },
   statsRow: { flexDirection: 'row', gap: 8, alignSelf: 'stretch' },
   stat: { flex: 1, alignItems: 'center', backgroundColor: COLORS.paperBeige, borderRadius: 8, borderWidth: 1.5, borderColor: INK, paddingVertical: 8 },
   statValue: { fontWeight: '900', fontSize: 20, color: INK, fontVariant: ['tabular-nums'] },

@@ -35,13 +35,13 @@ import { GearChips, gearModifiers, hasGearChips } from './GearChips';
 import { MECHANICS } from '../data/mechanics';
 import { getBiome } from '../data/biomes';
 import { foeDisplay } from '../data/foes';
-import { getFighter } from '../data/fighters';
 import { comboWindowFor, getPassive, DEFAULT_COMBO_WINDOW_MS, PASSIVE_TUNING } from '../data/passives';
 import { getArcana } from '../data/arcana';
 import { EVOLUTION_RECIPES } from '../data/evolutions';
 import { SURGE_RULES } from '../data/rules';
 import { weaponLevelSuffix } from '../data/armory';
 import { COACH_KEYS } from '../progress';
+import { computeLiveGuidance, explainInvalidPick, shouldShowDamageNumbers, shouldShowPassiveHud } from '../coach';
 import { EVOLUTION_RULES } from '../engine/sources';
 import { Anchor, AnchorsProvider, EVENT_FX, EvolutionCutIn, FxStage, GearBelt, fxClock, scriptFor, useAnchors, useFightFx, type Beat } from '../fx';
 import { Btn, CoinPill, DARK, Eyebrow, Heart, INK, PopIn, TONE } from './ui';
@@ -126,6 +126,11 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   const [powerInfo, setPowerInfo] = useState(false);
   /** The first evolution ever: its cut-in also points at the countdown ring */
   const [evolutionHint, setEvolutionHint] = useState(false);
+  const [boardSelectedCount, setBoardSelectedCount] = useState(0);
+  const [boardIdle, setBoardIdle] = useState(false);
+  const [mistakeNote, setMistakeNote] = useState<string | null>(null);
+  const [coachDismissed, setCoachDismissed] = useState(false);
+  const [eventBannerNote, setEventBannerNote] = useState<string | null>(null);
   const anchors = useAnchors();
   const [tips, setTips] = useState<Tip[]>([]);
   const tip = tips[0] ?? null;
@@ -176,55 +181,13 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
     }
   }, [appActive, run.status, practice]);
 
-  // First fight with a new mechanic: walk through its tips before anything moves
+  // Zero blocking start-of-fight popups: guidance is shown live above the board while you play!
   useEffect(() => {
     const m = MECHANICS[level.introduces];
     const key = COACH_KEYS.fightStart(m.id);
-    if (!m.fightTips?.length || seenCoach.current.has(key)) return;
-    seenCoach.current.add(key);
-    onCoachMarkSeen(key);
-    const n = m.fightTips.length;
-    m.fightTips.forEach((t, i) => pushTip({ id: `${key}_${i}`, title: t.title, text: t.text, icon: m.icon, anchor: t.anchor, label: n > 1 ? `Tip ${i + 1} of ${n}` : 'Tip' }));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // First fight with a fighter: what its two passives do. First fight with a hazard: how it works.
-  useEffect(() => {
-    const once = (key: string, tip: Omit<Tip, 'id'>) => {
-      if (seenCoach.current.has(key)) return;
+    if (!seenCoach.current.has(key)) {
       seenCoach.current.add(key);
       onCoachMarkSeen(key);
-      pushTip({ id: key, ...tip });
-    };
-    // A fighter's own lesson (its trial) already explained the passives
-    const taught = save.seenMechanics.includes(getFighter(run.fighter).signature);
-    if (run.passives.length > 0 && !taught) {
-      const [a, b] = run.passives.map(getPassive);
-      once(COACH_KEYS.passives(run.fighter), {
-        title: `${run.fighter}: ${a.name} & ${b?.name ?? ''}`.replace(/ & $/, ''),
-        text: run.passives.map(id => `${getPassive(id).name}: ${getPassive(id).text}`).join('\n'),
-        icon: a.icon,
-        anchor: 'top',
-        label: 'Your passives',
-      });
-    }
-    const hazards = level.rules.hazards;
-    if (hazards?.timeBombs) {
-      once(COACH_KEYS.hazard('timeBombs'), {
-        title: 'Time Bombs',
-        text: `A card with a fuse counts down from ${hazards.timeBombs.seconds}s. Match it in a Set before it reaches 0, or you lose a heart.`,
-        icon: 'lorc/time-bomb',
-        anchor: 'bottom',
-        label: 'Hazard',
-      });
-    }
-    if (hazards?.snares) {
-      once(COACH_KEYS.hazard('snares'), {
-        title: 'Snares',
-        text: 'A card with an arrow in its corner is snared. Matching it costs a heart. Match the card the arrow points at instead to defuse it for +4 damage.',
-        icon: 'lorc/wolf-trap',
-        anchor: 'bottom',
-        label: 'Hazard',
-      });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -353,7 +316,9 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
         if (seenCoach.current.has(cm.id)) continue;
         seenCoach.current.add(cm.id);
         onCoachMarkSeen(cm.id);
-        pushTip(cm);
+        // Show reactive tips in the live non-blocking coach banner instead of freezing the board
+        setEventBannerNote(cm.text);
+        later(() => setEventBannerNote(prev => (prev === cm.text ? null : prev)), 4500);
       }
     }
     dispatch({ type: 'CLEAR_EVENTS', upTo: lastEventId.current - 20 });
@@ -378,6 +343,8 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
 
   const handleMatch = useCallback((cards: Card[], rewards: CardReward[], effects?: WeaponEffectResult, info?: { hinted: boolean }) => {
     setLastMatchTime(Date.now());
+    setMistakeNote(null);
+    setEventBannerNote(null);
     const graceUsed = rewards.some(r => r.effectType === 'grace');
     const isMegaMatch =
       Boolean(effects?.explosiveCards.length) ||
@@ -394,6 +361,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   const handleInvalid = useCallback((cards: Card[]) => {
     triggerMistake();
     triggerEnemyReaction('taunt');
+    setMistakeNote(explainInvalidPick(cards, runRef.current.attributes));
     dispatch({ type: 'INVALID', cards });
     const ids = cards.map(c => c.id);
     later(() => dispatch({ type: 'REPLACE', ids }), 520);
@@ -432,6 +400,38 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
     </View>
   );
   const keenEyeIds = useMemo(() => (run.passive.keenEyeCardId ? [run.passive.keenEyeCardId] : undefined), [run.passive.keenEyeCardId]);
+  const showDamageHud = shouldShowDamageNumbers(level, startSave);
+  const showPassivesHud = shouldShowPassiveHud(level, startSave);
+  const liveGuidance = useMemo(
+    () => computeLiveGuidance(run, { selectedCount: boardSelectedCount, mistakeNote, idleNudge: boardIdle, seenIntro: coachDismissed }),
+    [run, boardSelectedCount, mistakeNote, boardIdle, coachDismissed]
+  );
+  const activeGlowIds = useMemo(() => {
+    const merged = [...(keenEyeIds ?? []), ...(liveGuidance?.glowIds ?? [])];
+    return merged.length > 0 ? [...new Set(merged)] : undefined;
+  }, [keenEyeIds, liveGuidance]);
+  const activeDimIds = useMemo(
+    () => (liveGuidance && liveGuidance.dimIds.length > 0 ? liveGuidance.dimIds : undefined),
+    [liveGuidance]
+  );
+  const coachText = eventBannerNote ?? liveGuidance?.message ?? null;
+  const hasHudRow =
+    run.hearts !== null ||
+    run.movesLeft !== null ||
+    practice ||
+    secondsLeft !== null ||
+    (showPassivesHud && run.passives.length > 0) ||
+    run.features.has('graces') ||
+    run.features.has('coins') ||
+    run.features.has('hints');
+  const handleSelectedCount = useCallback((c: number) => {
+    setBoardSelectedCount(c);
+    setSelectedCount(c);
+  }, [setSelectedCount]);
+  const handleBoardIdle = useCallback((idle: boolean) => {
+    setBoardIdle(idle);
+    setIsBoardIdle(idle);
+  }, [setIsBoardIdle]);
   const foeAvatarEnemy = useMemo(
     () => ({ name: run.foeName, icon: run.foeIcon, tier: run.foe.tier }),
     [run.foeName, run.foeIcon, run.foe.tier]
@@ -478,16 +478,18 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
                 <View style={[st.idleFill, { width: `${Math.min(100, (ui.showInactivityBar.current / ui.showInactivityBar.max) * 100)}%` }]} />
               </View>
             )}
-            <View style={st.counters}>
-              <Text testID="run-total-damage" style={st.counter} accessibilityLabel={`${run.totalDamage} total damage`}>⚔ {run.totalDamage}</Text>
-              {run.power > 0 && <PowerMeter points={run.power} onPress={() => { sfx('click'); setPowerInfo(true); }} />}
-              {run.combo > 1 && comboLive && (
-                <Anchor name="combo"><Text testID="run-combo" style={[st.counter, st.counterHot]}>COMBO ×{run.combo}</Text></Anchor>
-              )}
-              {run.biggestHit > 0 && <Text testID="run-biggest-hit" style={st.counterDim}>best {run.biggestHit}</Text>}
-              {/* Practice: what a Set is worth with this build */}
-              {practice && run.matches > 0 && <Text testID="run-per-set" style={st.counterDim} accessibilityLabel={`${Math.round(run.totalDamage / run.matches)} damage per Set on average`}>avg {Math.round(run.totalDamage / run.matches)}</Text>}
-            </View>
+            {(showDamageHud || run.power > 0 || (run.combo > 1 && comboLive) || practice) && (
+              <View style={st.counters}>
+                {showDamageHud && <Text testID="run-total-damage" style={st.counter} accessibilityLabel={`${run.totalDamage} total damage`}>⚔ {run.totalDamage}</Text>}
+                {run.power > 0 && <PowerMeter points={run.power} onPress={() => { sfx('click'); setPowerInfo(true); }} />}
+                {run.combo > 1 && comboLive && (
+                  <Anchor name="combo"><Text testID="run-combo" style={[st.counter, st.counterHot]}>COMBO ×{run.combo}</Text></Anchor>
+                )}
+                {showDamageHud && run.biggestHit > 0 && <Text testID="run-biggest-hit" style={st.counterDim}>best {run.biggestHit}</Text>}
+                {/* Practice: what a Set is worth with this build */}
+                {practice && run.matches > 0 && <Text testID="run-per-set" style={st.counterDim} accessibilityLabel={`${Math.round(run.totalDamage / run.matches)} damage per Set on average`}>avg {Math.round(run.totalDamage / run.matches)}</Text>}
+              </View>
+            )}
           </View>
 
           {/* Player's living fighter */}
@@ -508,6 +510,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
           </Anchor>
         </View>
 
+        {hasHudRow && (
         <View style={st.hudRow}>
           <Anchor name="hearts"><Hearts hearts={run.hearts} max={run.maxHearts} /></Anchor>
           {/* On an untimed level the moves are the clock */}
@@ -533,7 +536,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
               </View>
             </Anchor>
           )}
-          {run.passives.map(id => <Anchor key={id} name={`passive:${id}`}><PassiveChip id={id} run={run} /></Anchor>)}
+          {showPassivesHud && run.passives.map(id => <Anchor key={id} name={`passive:${id}`}><PassiveChip id={id} run={run} /></Anchor>)}
           {run.features.has('graces') && (
             <Anchor name="graces">
               <View style={st.stat}>
@@ -558,6 +561,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
             </Anchor>
           )}
         </View>
+        )}
 
         {run.features.has('xp') && (
           <Anchor name="xp">
@@ -654,12 +658,34 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
               <Text style={st.doneText}>DONE</Text>
             </TouchableOpacity>
           </View>
-        ) : (
+        ) : level.id !== '1-1' ? (
           <View style={[st.challenge, challenge.met && { backgroundColor: '#D4F4EE' }, challenge.failed && { opacity: 0.55 }]}>
             <Text style={st.challengeStar}>★★★</Text>
             <Text style={[st.challengeText, challenge.failed && { textDecorationLine: 'line-through' }]} numberOfLines={1}>{challenge.text}</Text>
             {challenge.met && <Icon name="lorc/checked-shield" size={14} color={COLORS.logicTeal} />}
           </View>
+        ) : null}
+
+        {coachText && !ended && (
+          <TouchableOpacity
+            testID="run-coach-banner"
+            style={[st.coachBanner, mistakeNote ? st.coachBannerWarn : null]}
+            activeOpacity={level.id === '1-1' ? 1 : 0.8}
+            onPress={() => {
+              if (level.id !== '1-1') {
+                setCoachDismissed(true);
+                setEventBannerNote(null);
+              }
+            }}
+          >
+            <FighterAvatar
+              character={run.fighter}
+              size={28}
+              mood={mistakeNote ? 'anticipation' : 'curious'}
+              framed
+            />
+            <Text style={st.coachBannerText}>{coachText}</Text>
+          </TouchableOpacity>
         )}
       </View>
 
@@ -693,9 +719,11 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
           autoPlayer={autoPlayer}
           enemy={run.foe}
           hideEnemyOverlay
-          glowingCardIds={keenEyeIds}
-          onSelectedCountChange={setSelectedCount}
-          onBoardIdleChange={setIsBoardIdle}
+          glowingCardIds={activeGlowIds}
+          dimmedCardIds={activeDimIds}
+          dimmedOpacity={liveGuidance?.dimOpacity}
+          onSelectedCountChange={handleSelectedCount}
+          onBoardIdleChange={handleBoardIdle}
           slotRef={slotRef}
           onSlotLayout={anchors.measure}
         />
@@ -1150,6 +1178,9 @@ const st = StyleSheet.create({
   challenge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.paperBeige, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3 },
   challengeStar: { color: '#E0A800', fontSize: 11, fontWeight: '900' },
   challengeText: { flex: 1, fontSize: 12, fontWeight: '700', color: INK },
+  coachBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFFBEB', borderWidth: 1.5, borderColor: INK, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
+  coachBannerWarn: { backgroundColor: '#FFF1F0', borderColor: COLORS.impactOrange },
+  coachBannerText: { flex: 1, fontSize: 13, fontWeight: '800', color: INK, lineHeight: 18 },
   boardWrap: { flex: 1, padding: 6 },
   surgeBar: { marginHorizontal: 10, marginTop: 4, height: 22, borderRadius: 999, borderWidth: 2, borderColor: INK, backgroundColor: TONE.surgePale, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
   surgeBarSoon: { borderColor: TONE.surge },

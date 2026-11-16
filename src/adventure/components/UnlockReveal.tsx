@@ -230,8 +230,8 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                     {w.flavorText ? <Text style={st.note}>{adventureText(w.flavorText)}</Text> : null}
                     {u.kind === 'weapon' && u.firstWeapon && (
                       <View style={st.charmBox}>
-                        <Text style={st.rowTitle}>Your first charm</Text>
-                        {(MECHANICS.charm?.body ?? []).map((p, k) => <Text key={k} style={st.rowBody}>{p}</Text>)}
+                        <Text style={st.rowTitle}>Auto-equipped for you!</Text>
+                        <Text style={st.rowBody}>Your first weapon is already equipped as a charm and fires automatically as you make matches.</Text>
                       </View>
                     )}
                   </>

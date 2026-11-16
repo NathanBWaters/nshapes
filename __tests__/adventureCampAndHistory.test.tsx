@@ -313,17 +313,21 @@ describe('the history', () => {
 });
 
 describe('the results screen', () => {
-  const level = getLevel('1-2');
-  const show = (run: RunState, bestDpm: number | null) => {
+  const level = getLevel('1-7');
+  const show = (run: RunState, bestDpm: number | null, lvl = level) => {
     const stars = computeStars(run);
-    const result = applyLevelResult(createNewSave(), level, stars, 0, run);
+    const result = applyLevelResult(createNewSave(), lvl, stars, 0, run);
     return render(wrap(
-      <LevelResults level={level} run={run} stars={stars} result={result} bestDpm={bestDpm} unlocksRevealed nextLevel={null} nextUnlocked={false} onRetry={noop} onNext={noop} onMap={noop} onCamp={noop} />
+      <LevelResults level={lvl} run={run} stars={stars} result={result} bestDpm={bestDpm} unlocksRevealed nextLevel={null} nextUnlocked={false} onRetry={noop} onNext={noop} onMap={noop} onCamp={noop} />
     ));
   };
 
-  it('scores every battle in damage per minute', () => {
+  it('hides damage stats on early levels (1-1..1-6) and shows damage per minute from 1-7+', () => {
     const run = wonRun(30);
+    const early = show(run, null, getLevel('1-2'));
+    expect(early.queryByTestId('results-dpm')).toBeNull();
+    early.unmount();
+
     const view = show(run, null);
     expect(view.getByTestId('results-dpm')).toBeTruthy();
     expect(view.getByText('Damage / min')).toBeTruthy();

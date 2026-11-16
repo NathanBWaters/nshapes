@@ -72,8 +72,11 @@ interface GameBoardProps {
   onTimeGainTriggered?: () => void; // Called when time gain triggers (for tracking)
   connections?: BoardConnection[]; // Active connections between board positions
   hideEnemyOverlay?: boolean; // Adventure mode renders its own foe HUD
-  /** Cards the parent wants lit as hints (e.g. a free hint from a fighter passive) */
+  /** Cards the parent wants lit as hints (e.g. a free hint from a fighter passive or guided match) */
   glowingCardIds?: string[];
+  /** Non-highlighted cards dimmed gently during guided onboarding (still tappable) */
+  dimmedCardIds?: string[];
+  dimmedOpacity?: number;
   /** A ref callback for the slot at this board index, so the parent can find where each card is on screen */
   slotRef?: (index: number) => (node: View | null) => void;
   /** A slot changed size or position */
@@ -106,6 +109,8 @@ const GameBoard: React.FC<GameBoardProps> = ({
   connections = [],
   hideEnemyOverlay = false,
   glowingCardIds,
+  dimmedCardIds,
+  dimmedOpacity = 0.4,
   slotRef,
   onSlotLayout,
 }) => {
@@ -609,6 +614,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
                 const isSelected = selectedCards.some(c => c.id === card.id);
                 const isMatched = matchedCardIds.includes(card.id);
                 const isHint = hintCards.includes(card.id) || (glowingCardIds?.includes(card.id) ?? false);
+                const isDimmed = !isSelected && !isHint && (dimmedCardIds?.includes(card.id) ?? false);
                 const reward = rewardsByCardId.get(card.id);
 
                 // Calculate board index for connection checking
@@ -634,7 +640,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
                     onLayout={onSlotLayout}
                     nativeID={`card-slot-${rowIndex}-${colIndex}`}
                     testID={`card-slot-${rowIndex}-${colIndex}`}
-                    style={styles.cardWrapper}
+                    style={[styles.cardWrapper, isDimmed && { opacity: dimmedOpacity }]}
                   >
                     {/* Show reward instead of card when revealing */}
                     {reward ? (

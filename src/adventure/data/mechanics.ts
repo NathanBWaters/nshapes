@@ -120,11 +120,10 @@ export const MECHANICS: Record<string, MechanicDef> = {
     kind: 'feature',
     enables: 'hearts',
     title: 'Hearts',
-    tagline: 'Wrong Sets cost a heart. Take your time!',
+    tagline: 'Wrong matches cost a heart. Take your time!',
     body: [
-      'A wrong Set now costs you a heart. Run out and you lose the level — though Orange Tabby\'s Nine Lives saves you once!',
-      'Your new Blast Powder charm is already equipped and fires explosions automatically as you match!',
-      'Spot 2 all-red Sets for the third star.',
+      'A wrong pick costs 1 heart — and Blast Powder fires automatically as you match!',
+      'Make 2 all-red matches for the third star.',
     ],
     fightTips: [
       { title: 'Your hearts & Blast Powder', text: 'A wrong Set costs a heart, while your Blast Powder charm blasts extra cards on lucky matches!', anchor: 'top' },
@@ -135,24 +134,23 @@ export const MECHANICS: Record<string, MechanicDef> = {
       type: 'set',
       attributes: ['shape', 'color'],
       valid: false,
-      caption: 'Two reds and a green: colors are neither all same nor all different. −1 ♥',
+      caption: '2 red + 1 green → not a match (−1 ♥)',
       cards: [
         { shape: 'diamond', color: 'red', number: 1, shading: 'solid' },
         { shape: 'oval', color: 'red', number: 1, shading: 'solid' },
         { shape: 'squiggle', color: 'green', number: 1, shading: 'solid' },
       ],
     },
-    coachMark: { on: 'hurt', text: 'Ouch! That wasn\'t a Set. Check each trait one at a time.' },
+    coachMark: { on: 'hurt', text: 'Ouch! Check one trait at a time: all same or all different.' },
   },
   all_different: {
     id: 'all_different',
     kind: 'rule',
     title: 'All Different',
-    tagline: 'Three shapes, three colors — no two alike.',
+    tagline: '3 shapes, 3 colors — no two alike!',
     body: [
-      'All-same Sets are easy to spot, and all-different Sets are your next superpower.',
-      'Pick a diamond, an oval and a squiggle where one is red, one is green and one is purple.',
-      'Make 2 all-different Sets for the third star.',
+      'Pick a diamond, an oval, and a squiggle in red, green, and purple!',
+      'Make 2 all-different matches for the third star.',
     ],
     fightTips: [
       { title: 'Mix every trait', text: 'Pick 3 different shapes in 3 different colors! Make 2 all-different Sets for the third star.', anchor: 'bottom' },
@@ -162,7 +160,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
       type: 'set',
       attributes: ['shape', 'color'],
       valid: true,
-      caption: '3 different shapes + 3 different colors → Set!',
+      caption: '3 different shapes + 3 different colors → Match!',
       cards: [
         { shape: 'diamond', color: 'red', number: 1, shading: 'solid' },
         { shape: 'oval', color: 'green', number: 1, shading: 'solid' },
@@ -176,8 +174,8 @@ export const MECHANICS: Record<string, MechanicDef> = {
     title: 'New Trait: Number',
     tagline: 'Cards now show 1, 2 or 3 symbols.',
     body: [
-      'Count the symbols! Number joins shape and color, and the board grows to 12 cards.',
-      'Pro tip: scan one color at a time to make the bigger board feel small! Make 2 single-color Sets for the third star.',
+      'Count the symbols too: all 1s, all 2s, all 3s, or 1-2-3!',
+      'Tip: scan one color first. Make 2 single-color matches for the third star.',
     ],
     fightTips: [
       { title: 'Scan one color first', text: 'With 3 traits on the board, pick one color and look for a Set inside it! Make 2 single-color Sets for the third star.', anchor: 'bottom' },
@@ -187,7 +185,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
       type: 'set',
       attributes: ['shape', 'color', 'number'],
       valid: true,
-      caption: 'Shapes same, colors different, numbers 1-2-3 → Set!',
+      caption: 'Shapes same, colors different, numbers 1-2-3 ✓',
       cards: [
         { shape: 'oval', color: 'red', number: 1, shading: 'solid' },
         { shape: 'oval', color: 'green', number: 2, shading: 'solid' },
@@ -219,11 +217,10 @@ export const MECHANICS: Record<string, MechanicDef> = {
     id: 'skill_tree',
     kind: 'feature',
     title: 'Skill Trees',
-    tagline: 'Spend stars to grow your fighter.',
+    tagline: 'Spend stars at Camp to power up your fighter.',
     body: [
-      'Every fighter has two passives and a skill tree: a web of nodes that grows out from both passives.',
-      'Stars are the currency. At Camp, buy any node linked to one you own. Paths fork and meet again, and the tips change how you play. Refunds are free.',
-      'Spending stars never locks a world: star gates count every star you have earned.',
+      'Spend stars in your fighter\'s Skill Tree at Camp (refunds are always free!).',
+      'Land one hit of 7+ damage for the third star.',
     ],
     lessons: [
       {
@@ -245,9 +242,8 @@ export const MECHANICS: Record<string, MechanicDef> = {
     title: 'Power Cards',
     tagline: 'Cards marked +2 hit harder.',
     body: [
-      'Some cards now carry a +2 badge. Use one in a Set and that Set deals 2 extra damage.',
-      'Greedy Squirrel only refills 2 cards per Set, so the board shrinks. Grab power cards while they last.',
-      'Corgi loves these: its Fetch brings a fresh bonus card every time you match one.',
+      'Match a card with a +2 badge to deal +2 bonus damage!',
+      'Match 4 power or gold cards for the third star.',
     ],
     fightTips: [
       { title: 'Power cards', text: 'Look for cards with a +2 badge in the corner. A Set that uses one hits for 2 more.', anchor: 'bottom' },
@@ -258,7 +254,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
       type: 'set',
       attributes: ['shape', 'color', 'number'],
       valid: true,
-      caption: 'A Set with a power card: 3 + 2 = 5 damage',
+      caption: 'Match with a +2 card: 3 + 2 = 5 damage',
       cards: [
         { shape: 'squiggle', color: 'purple', number: 1, shading: 'solid', modifiers: { bonusPoints: 2 } },
         { shape: 'squiggle', color: 'purple', number: 2, shading: 'solid' },
@@ -270,10 +266,9 @@ export const MECHANICS: Record<string, MechanicDef> = {
     id: 'charm',
     kind: 'feature',
     title: 'Charms',
-    tagline: 'Equip up to 3 Armory weapons in every fight.',
+    tagline: 'Bring up to 3 Armory charms into every fight.',
     body: [
-      'Weapons you unlock go straight into your Armory! Equip up to 3 as charms before each fight.',
-      'Blast Powder, Flint Spark and Mending Charm trigger automatically as you make Sets.',
+      'Unlocked weapons go into your Armory and trigger automatically as you match!',
       'Set off 2 explosions for the third star.',
     ],
     fightTips: [
@@ -287,9 +282,9 @@ export const MECHANICS: Record<string, MechanicDef> = {
     kind: 'feature',
     enables: 'rainbow',
     title: 'Rainbow Strike',
-    tagline: 'All-different Sets hit twice as hard.',
+    tagline: 'All-different matches deal double damage!',
     body: [
-      'A Set where EVERY trait is different — 3 shapes, 3 colors and 1-2-3 — is a Rainbow Strike, and it does double damage!',
+      'Match 3 shapes, 3 colors, AND 1-2-3 for a Rainbow Strike (×2 damage)!',
       'Land 2 Rainbow Strikes for the third star.',
     ],
     fightTips: [
@@ -315,8 +310,8 @@ export const MECHANICS: Record<string, MechanicDef> = {
     title: 'Time Bombs',
     tagline: 'Match the fused card before it blows.',
     body: [
-      'Some new cards arrive with a lit fuse and a seconds counter. The fuse burns in real time, even without a clock.',
-      'Use the bomb card in a Set before it hits 0 and it is defused. Let it blow and you lose a heart.',
+      'Include the ticking bomb card in a match before it reaches 0 to defuse it!',
+      'Letting a bomb reach 0 costs 1 heart.',
     ],
     fightTips: [
       { title: 'Build around the bomb', text: 'Find a Set that INCLUDES the bomb card. Defuse 3 bombs for the third star.', anchor: 'bottom' },
@@ -341,9 +336,8 @@ export const MECHANICS: Record<string, MechanicDef> = {
     title: 'Coin Drops',
     tagline: 'Matched cards now drop coins.',
     body: [
-      'From now on every matched card drops coins on top of your star rewards. Golden cards drop extra!',
-      'Dropped coins are yours even when you lose. Spend them at Camp on permanent Workshop upgrades.',
-      'Tougher foes pay more. Replaying levels is a good way to save up.',
+      'Matched cards now drop coins — and gold +3 cards pay extra!',
+      'Spend your coins at Camp on permanent Workshop upgrades.',
     ],
     fightTips: [
       { title: 'Coin drops', text: 'Cards with a gold +3 badge drop extra coins when you match them. Your coin total is up here.', anchor: 'top' },
@@ -1001,9 +995,8 @@ export const MECHANICS: Record<string, MechanicDef> = {
     title: 'The Workshop',
     tagline: 'Spend coins on permanent upgrades at Camp.',
     body: [
-      'The Workshop at Camp is open! Spend coins on upgrades for mechanics you have met, and on your Armory weapons.',
-      'Watch for the Charm Belt (more charm slots), the Tarot Deck (more Arcana slots) and the Evolution Lab (more Catalysts).',
-      'Experiment freely: every Workshop upgrade can be refunded for 100% of its coins, anytime.',
+      'Upgrade your Armory weapons and unlock extra charm & Arcana slots at Camp.',
+      'Every Workshop upgrade refunds 100% of its coins anytime!',
     ],
     icon: 'lorc/gear-hammer',
     demo: {
@@ -1020,10 +1013,10 @@ export const MECHANICS: Record<string, MechanicDef> = {
     kind: 'feature',
     enables: 'purity',
     title: 'Escalating Purity',
-    tagline: 'Chain Sets with rising trait variety for escalating damage & gold.',
+    tagline: 'Climb from simple matches up to Rainbow Strikes!',
     body: [
-      'Start with a simple Set (1 trait different), then follow with 2 traits different, then a full Rainbow Strike!',
-      'Every step up the diversity ladder deals bonus damage and drops extra coins. Repeating or dropping diversity starts a fresh climb; mistakes break the chain.',
+      'Match 1-different trait, then 2-different, then a 3-different Rainbow Strike for bonus damage and coins!',
+      'Mistakes reset the chain.',
     ],
     fightTips: [
       { title: 'Climb the ladder', text: 'Match a simple 1-diff Set first, then a 2-diff Set, then a 3-diff Rainbow Strike for bonus damage and coins!', anchor: 'top' },
@@ -1037,18 +1030,17 @@ export const MECHANICS: Record<string, MechanicDef> = {
         { icon: 'lorc/rainbow-star', label: 'Rainbow (Max!)' },
       ],
     },
-    coachMark: { on: 'purity', text: 'Escalating Purity! Each Set with more all-different traits hits harder and drops bonus coins.' },
+    coachMark: { on: 'purity', text: 'Escalating Purity! Rising trait variety deals bonus damage and drops extra coins.' },
   },
   evolutions: {
     id: 'evolutions',
     kind: 'feature',
     enables: 'evolutions',
     title: 'Evolutions',
-    tagline: 'Two weapon families + a Catalyst card = 30 seconds of chaos.',
+    tagline: '2 weapon families + 1 Catalyst card = 30s superpower!',
     body: [
-      'A recipe fuses two weapon families. Equip a charm from each and the recipe is ARMED.',
-      'While a recipe is armed, a glowing Catalyst card can turn up on the board. Match it in any Set: the foe takes 10 at once and the evolution runs for 30 seconds, with new rules and every Set dealing ×1.5 and +2.',
-      'Up to 3 evolutions per fight, and no new Catalyst turns up for an evolution that is already running. Your first recipe, Phoenix Pyre, fuses Blast Powder and Mending Charm.',
+      'Equip charms from both weapon families in a recipe to ARM it.',
+      'Match the glowing Catalyst card in any Set to evolve for 30 seconds!',
     ],
     lessons: [
       {

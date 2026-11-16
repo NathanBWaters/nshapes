@@ -87,8 +87,6 @@ export const challengeProgress = (run: RunState): ChallengeProgress => {
   }
 };
 
-const lowerFirst = (t: string) => t.charAt(0).toLowerCase() + t.slice(1);
-
 /** The three star goals for a level, in plain words (preview + results). */
 export const starGoals = (level: LevelDef, foeName: string): [string, string, string] => {
   const rule = level.starRule;
@@ -96,14 +94,124 @@ export const starGoals = (level: LevelDef, foeName: string): [string, string, st
     const mistakes = (n: number) => plural(n, 'mistake');
     return [
       `Beat ${foeName}`,
-      `Beat ${foeName} with at most ${mistakes(rule.twoStarMax)}`,
-      rule.threeStarMax === 0 ? `Beat ${foeName} with no mistakes` : `Beat ${foeName} with at most ${mistakes(rule.threeStarMax)}`,
+      `At most ${mistakes(rule.twoStarMax)}`,
+      rule.threeStarMax === 0 ? 'Zero mistakes' : `At most ${mistakes(rule.threeStarMax)}`,
     ];
   }
   const target = level.foes.length > 1 ? `all ${level.foes.length} waves` : foeName;
   const survive = level.rules.timer
-    ? `Survive ${level.rules.timer} seconds`
-    : `Still be standing after ${level.rules.moves} moves`;
-  const defeat = level.rules.timer ? `Defeat ${target} before time runs out` : `Defeat ${target} within ${level.rules.moves} moves`;
-  return [survive, defeat, `Defeat ${target}, and ${lowerFirst(describeChallenge(level))}`];
+    ? `Survive ${level.rules.timer}s`
+    : `Finish all ${level.rules.moves} moves`;
+  return [survive, `Knock out ${target}`, `${describeChallenge(level)}`];
+};
+
+export interface StarCheckRow {
+  star: 1 | 2 | 3;
+  earned: boolean;
+  goal: string;
+  /** Plain-English reason why the player hit or missed this star */
+  reason: string;
+}
+
+/** Post-battle checklist explaining why each star (★, ★★, ★★★) was or was not earned. */
+export const explainStarBreakdown = (level: LevelDef, run: RunState, stars: number): [StarCheckRow, StarCheckRow, StarCheckRow] => {
+  const goals = starGoals(level, run.foeName);
+  const rule = level.starRule;
+  if (rule?.kind === 'accuracy') {
+    const m = run.mistakes;
+    const mText = `${m} mistake${m === 1 ? '' : 's'}`;
+    return [
+      {
+        star: 1,
+        earned: stars >= 1,
+        goal: goals[0],
+        reason: stars >= 1 ? `${run.matches} matches!` : 'Stopped early',
+      },
+      {
+        star: 2,
+        earned: stars >= 2,
+        goal: goals[1],
+        reason: stars >= 2 ? mText : `${mText} (max ${rule.twoStarMax})`,
+      },
+      {
+        star: 3,
+        earned: stars >= 3,
+        goal: goals[2],
+        reason: stars >= 3 ? (m === 0 ? 'Flawless!' : mText) : `${mText} (max ${rule.threeStarMax})`,
+      },
+    ];
+  }
+
+  const s = run.roundStats;
+  const c = level.challenge;
+  const prog = challengeProgress(run);
+  const count = challengeCount(run, c);
+  const hpLeft = Math.max(1, Math.ceil(run.foeHp));
+
+  const lostHearts = run.hearts !== null && run.hearts <= 0;
+  const star1Reason =
+    stars >= 1
+      ? 'Cleared!'
+      : lostHearts
+        ? 'Ran out of hearts'
+        : run.movesLeft !== null && run.movesLeft <= 0
+          ? 'Out of moves'
+          : 'Not cleared';
+  const star2Reason =
+    stars >= 2
+      ? 'Knocked out!'
+      : lostHearts
+        ? 'Ran out of hearts'
+        : `${hpLeft} HP left`;
+
+  let star3Reason = 'Complete!';
+  if (stars >= 3) {
+    if (count !== null && 'n' in c) star3Reason = `${count}/${c.n} done!`;
+    else if (c.kind === 'bigHit') star3Reason = `Best hit ${run.biggestHit}!`;
+    else if (c.kind === 'noMistakes') star3Reason = '0 mistakes!';
+    else if (c.kind === 'fullHearts') star3Reason = 'No hearts lost!';
+  } else if (prog.met && stars < 2) {
+    star3Reason = stars === 0 ? 'Goal met, but lost ♥' : 'Goal met — need ★★ KO too';
+  } else {
+    switch (c.kind) {
+      case 'noMistakes':
+        star3Reason = `${run.mistakes} mistake${run.mistakes === 1 ? '' : 's'} (need 0)`;
+        break;
+      case 'fullHearts':
+        star3Reason = 'Lost a heart';
+        break;
+      case 'movesLeft':
+        star3Reason = `${run.movesLeft ?? 0} left (need ${c.n}+)`;
+        break;
+      case 'timeLeft':
+        star3Reason = `${Math.max(0, Math.floor(run.timeLeft ?? 0))}s left (need ${c.n}s+)`;
+        break;
+      case 'noGrace':
+        star3Reason = `Used ${s.gracesUsed} grace${s.gracesUsed === 1 ? '' : 's'}`;
+        break;
+      case 'hintsLeft':
+        star3Reason = `${run.stats.hints} unused (need ${c.n}+)`;
+        break;
+      case 'bigHit':
+        star3Reason = `Best hit ${run.biggestHit} (need ${c.n}+)`;
+        break;
+      case 'streak':
+        star3Reason = `Best ${s.maxStreak}/${c.n} in a row`;
+        break;
+      case 'enemy':
+        star3Reason = 'Special goal not met';
+        break;
+      default: {
+        const n = 'n' in c ? c.n : 0;
+        star3Reason = `${count ?? 0}/${n} done`;
+        break;
+      }
+    }
+  }
+
+  return [
+    { star: 1, earned: stars >= 1, goal: goals[0], reason: star1Reason },
+    { star: 2, earned: stars >= 2, goal: goals[1], reason: star2Reason },
+    { star: 3, earned: stars >= 3, goal: `${goals[2]} (+ KO)`, reason: star3Reason },
+  ];
 };

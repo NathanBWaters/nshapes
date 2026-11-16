@@ -28,7 +28,7 @@ import { levelFoe } from '../data/foes';
 import { getMechanic } from '../data/mechanics';
 import { getFighter } from '../data/fighters';
 import { isFighterTrial } from '../data/rewards';
-import { freshPaths, hasUnspentStars, getFrontierLevel, getLockReason, maxStars, openPaths, totalStars, isBiomeOpen } from '../progress';
+import { freshPaths, hasUnspentStars, getFrontierLevel, getLockReason, isMechanicKnown, maxStars, openPaths, totalStars, isBiomeOpen } from '../progress';
 import { Bob, CoinPill, INK, StarRow, TONE } from './ui';
 
 const ELITE = '#5B2333';
@@ -162,7 +162,17 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
   const scrollRef = useRef<ScrollView>(null);
   const stars = totalStars(save);
   const fighter = getFighter(save.selectedFighter);
-  const campUnlocked = save.coinsUnlocked || save.armory.length > 0 || save.unlockedFighters.length > 1 || save.coins > 0 || save.lifetimeCoins > 0;
+  const campUnlocked = save.coinsUnlocked || save.armory.length > 0 || save.unlockedFighters.length > 1;
+  const skillTreeKnown = isMechanicKnown(save, 'skill_tree') || Object.keys(save.skillNodes).length > 0;
+  const showSkillNudge = skillTreeKnown && hasUnspentStars(save) && Object.keys(save.skillNodes).length === 0;
+  const guideMessage =
+    stars === 0
+      ? 'Tap Dozy Bunny (1-1) to begin! Earn up to ★★★ on each foe.'
+      : (save.stars['1-2'] ?? 0) === 0
+        ? 'Nice! Blast Powder is equipped — tap Prickle (1-2) next!'
+        : showSkillNudge
+          ? 'You earned ★! Tap Camp below to power up your fighter.'
+          : null;
 
   // Secret paths the map is showing for the first time, and when each one arrives
   const freshKey = freshPaths(save).map(l => l.id).join(',');
@@ -216,6 +226,18 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
         </View>
         {save.coinsUnlocked && <CoinPill coins={save.coins} />}
       </View>
+
+      {guideMessage && (
+        <TouchableOpacity
+          testID="map-guide-banner"
+          style={s.guideBanner}
+          activeOpacity={0.85}
+          onPress={() => (showSkillNudge ? onOpenCamp() : onSelectLevel(frontier))}
+        >
+          <FighterAvatar character={fighter.name} size={36} mood="curious" animate={isLive} framed />
+          <Text style={s.guideBannerText}>{guideMessage}</Text>
+        </TouchableOpacity>
+      )}
 
       <ScrollView ref={scrollRef} contentContainerStyle={{ alignItems: 'center' }} showsVerticalScrollIndicator={false}>
         <View style={{ width, height }}>
@@ -305,8 +327,8 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
         </View>
       </ScrollView>
 
-      <View style={[s.dock, { paddingBottom: Math.max(insets.bottom, Platform.OS === 'web' ? 12 : 8) }]}>
-        <DockButton testID="map-dock-guide" icon="lorc/open-book" label="Guide" onPress={onOpenGuide} />
+      <View style={[s.dock, { paddingBottom: Math.max(insets.bottom, Platform.OS === 'web' ? 12 : 8), justifyContent: stars === 0 && !campUnlocked ? 'center' : 'space-between' }]}>
+        {stars > 0 && <DockButton testID="map-dock-guide" icon="lorc/open-book" label="Guide" onPress={onOpenGuide} />}
         <TouchableOpacity testID="map-play-next" onPress={() => onSelectLevel(frontier)} style={s.playNext} activeOpacity={0.85}>
           <FighterAvatar character={fighter.name} size={34} mood="anticipation" animate={isLive} />
           <View style={{ flex: 1 }}>
@@ -314,7 +336,9 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
             <Text style={s.playNextSub} numberOfLines={1}>{frontier.name}</Text>
           </View>
         </TouchableOpacity>
-        <DockButton testID="map-dock-camp" icon="lorc/campfire" label="Camp" onPress={onOpenCamp} disabled={!campUnlocked} badge={campUnlocked && hasUnspentStars(save)} />
+        {(stars > 0 || campUnlocked) && (
+          <DockButton testID="map-dock-camp" icon="lorc/campfire" label="Camp" onPress={onOpenCamp} disabled={!campUnlocked} badge={campUnlocked && skillTreeKnown && hasUnspentStars(save)} />
+        )}
       </View>
     </View>
   );
@@ -477,6 +501,18 @@ const s = StyleSheet.create({
   iconBtn: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: INK, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.paperBeige },
   // The title gives way first on a narrow screen, so the stars and coins are never cut off
   title: { flex: 1, fontWeight: '900', letterSpacing: 2, color: INK, fontSize: 16 },
+  guideBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#FFFBEB',
+    borderBottomWidth: 2,
+    borderBottomColor: INK,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    zIndex: 9,
+  },
+  guideBannerText: { flex: 1, fontSize: 13, fontWeight: '800', color: INK, lineHeight: 18 },
   band: { position: 'absolute', left: 0, right: 0, overflow: 'hidden' },
   ground: { position: 'absolute', left: -40, right: -40, bottom: -60, height: 120, borderRadius: 200, opacity: 0.6 },
   decor: { position: 'absolute', opacity: 0.55 },

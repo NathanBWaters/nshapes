@@ -450,18 +450,30 @@ describe('Adventure Mode full-game E2E', () => {
     const world1 = MAIN_LEVELS.filter(l => l.biome === 'meadow');
     const first = world1[0];
 
-    // ── Onboarding and the bare first level ──────────────────────────────
-    const onboarding = completeLessons(screen, first.rules.attributes);
-    expect(onboarding.some(t => t.includes('Is this a Set?'))).toBe(true);
-    // Bare level: no passives, no hint button, no evolution chip
+    // ── Frictionless World Map launch & guided 1-1 live board ────────────
+    expect(screen.queryByTestId('lesson-modal')).toBeNull();
+    expect(screen.getByTestId('map-guide-banner')).toBeTruthy();
+    expect(screen.queryByTestId('map-dock-guide')).toBeNull();
+    expect(screen.queryByTestId('map-dock-camp')).toBeNull();
+
+    fireEvent.press(screen.getByTestId(`map-node-${first.id}`));
+    expect(screen.getByTestId('preview-coach')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('preview-play'));
+
+    // Zero pre-fight modals on 1-1: jumps straight onto the guided board
+    expect(screen.queryByTestId('lesson-modal')).toBeNull();
+    expect(screen.getByTestId('run-coach-banner')).toBeTruthy();
+    // Bare level: no passives, no hint button, no evolution chip, no cluttering damage counters
     expect(screen.queryAllByTestId(/^run-passive-/)).toHaveLength(0);
     expect(screen.queryByTestId('run-hint')).toBeNull();
     expect(screen.queryByTestId('run-evo-chip')).toBeNull();
     const fight1 = playFight(screen, first.rules.attributes);
-    expect(fight1.sawTotalDamage).toBe(true);
-    expect(screen.getByTestId('results-total-damage')).toBeTruthy();
-    expect(screen.getByTestId('results-biggest-hit')).toBeTruthy();
-    expect(screen.getByTestId('results-dpm')).toBeTruthy();
+    expect(fight1.sawTotalDamage).toBe(false);
+    expect(screen.getByTestId('results-star-breakdown')).toBeTruthy();
+    expect(screen.getByTestId('results-star-row-1')).toBeTruthy();
+    expect(screen.getByTestId('results-star-row-2')).toBeTruthy();
+    expect(screen.getByTestId('results-star-row-3')).toBeTruthy();
+    expect(screen.queryByTestId('results-total-damage')).toBeNull();
     stepThroughReveals(screen);
 
     let save = loadAdventureSave();
@@ -527,6 +539,12 @@ describe('Adventure Mode full-game E2E', () => {
         expect(reveals.some(t => t.includes('New evolution unlocked!'))).toBe(true);
       }
       expect(fight.sawPassiveChip).toBe(true);
+      if (level.id === '1-7') {
+        expect(fight.sawTotalDamage).toBe(true);
+        expect(screen.getByTestId('results-total-damage')).toBeTruthy();
+        expect(screen.getByTestId('results-biggest-hit')).toBeTruthy();
+        expect(screen.getByTestId('results-dpm')).toBeTruthy();
+      }
       sawBombs ||= fight.sawBomb;
       if (fight.sawEvolutionBanner || fight.sawEvolutionRing) expect(screen.getByTestId('results-evolutions')).toBeTruthy();
 

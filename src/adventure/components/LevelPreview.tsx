@@ -118,32 +118,41 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
           </View>
 
           <ScrollView contentContainerStyle={st.body} bounces={false}>
-            <TouchableOpacity onPress={() => onShowMechanic(level.introduces)} style={st.mech} activeOpacity={0.85}>
-              <Icon name={mech.icon} size={28} color={INK} />
-              <View style={{ flex: 1 }}>
-                <Eyebrow text={isNew ? 'New this level' : 'Featured'} />
-                <Text style={st.mechTitle}>{mech.title}</Text>
-                <Text style={st.mechTag}>{mech.tagline}</Text>
+            {level.id === '1-1' && best === 0 ? (
+              <View style={st.coachRow} testID="preview-coach">
+                <FighterAvatar character={fighter.name} size={40} mood="curious" framed />
+                <Text style={st.coachText}>Every foe has 3 ★ goals. Tap Fight! and I&apos;ll guide your first matches!</Text>
               </View>
-              <Icon name="lorc/open-book" size={18} color={INK} />
-            </TouchableOpacity>
+            ) : level.id !== '1-1' ? (
+              <TouchableOpacity onPress={() => onShowMechanic(level.introduces)} style={st.mech} activeOpacity={0.85}>
+                <Icon name={mech.icon} size={28} color={INK} />
+                <View style={{ flex: 1 }}>
+                  <Eyebrow text={isNew ? 'New this level' : 'Featured'} />
+                  <Text style={st.mechTitle}>{mech.title}</Text>
+                  <Text style={st.mechTag}>{mech.tagline}</Text>
+                </View>
+                <Icon name="lorc/open-book" size={18} color={INK} />
+              </TouchableOpacity>
+            ) : null}
 
             <View style={st.rules}>
               {practice ? (
                 <Rule icon="lorc/stopwatch" text="No clock" />
               ) : accuracy ? (
-                <Rule icon="lorc/archery-target" text={`Make ${Math.ceil(totalHp / 3)} Sets`} />
+                <Rule icon="lorc/archery-target" text={`${Math.ceil(totalHp / 3)} matches`} />
               ) : (
                 <Rule icon={timed ? 'lorc/stopwatch' : 'lorc/archery-target'} text={timed ? `${level.rules.timer}s` : `${level.rules.moves} moves`} />
               )}
               <View style={st.rule}><Heart size={16} /><Text style={st.ruleText}>{practice ? `${loadout.maxHearts ?? level.rules.hearts}, refilling` : level.rules.hearts === 0 ? "Can't lose" : level.rules.hearts}</Text></View>
-              <Rule icon="lorc/crossed-swords" text={practice ? '∞ HP' : `${totalHp} HP`} />
-              <View style={st.rule}>
-                <View style={{ flexDirection: 'row' }}>
-                  {level.rules.attributes.map(a => <Icon key={a} name={ATTR_ICONS[a]} size={14} color={INK} />)}
+              {!accuracy && <Rule icon="lorc/crossed-swords" text={practice ? '∞ HP' : `${totalHp} HP`} />}
+              {level.rules.attributes.length >= 3 && (
+                <View style={st.rule}>
+                  <View style={{ flexDirection: 'row' }}>
+                    {level.rules.attributes.map(a => <Icon key={a} name={ATTR_ICONS[a]} size={14} color={INK} />)}
+                  </View>
+                  <Text style={st.ruleText}>{level.rules.attributes.length} traits</Text>
                 </View>
-                <Text style={st.ruleText}>{level.rules.attributes.length} traits</Text>
-              </View>
+              )}
             </View>
 
             {level.foes.map((f, i) => {
@@ -208,52 +217,56 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
               })}
             </View>
 
-            <Text style={st.section}>FIGHTER</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4, paddingTop: 6 }}>
-              {FIGHTERS.filter(f => save.unlockedFighters.includes(f.name)).map(f => {
-                const selected = f.name === save.selectedFighter;
-                const rec = level.recommended?.includes(f.name);
-                const spent = fighterStarsSpent(save, f.name);
-                return (
-                  <TouchableOpacity
-                    key={f.name}
-                    testID={`preview-fighter-${f.name}`}
-                    onPress={() => onSelectFighter(f.name)}
-                    style={[st.fighter, selected && st.fighterSel]}
-                    activeOpacity={0.85}
-                    accessibilityState={{ selected }}
-                  >
-                    <FighterAvatar
-                      character={f.name}
-                      size={42}
-                      mood={selected ? 'anticipation' : 'idle'}
-                      reaction={selected ? { type: 'entrance', id: 1 } : null}
-                      animate={selected}
-                    />
-                    <Text style={st.fighterName} numberOfLines={1}>{f.name}</Text>
-                    <View style={st.passiveIcons}>
-                      {f.passives.map(id => <Icon key={id} name={getPassive(id).icon} size={13} color={INK} />)}
-                      {spent > 0 && <Text style={st.fighterLvl}>{spent}★</Text>}
-                    </View>
-                    {rec && <View style={st.rec}><Text style={st.recText}>STRONG</Text></View>}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-            {gearOn ? (
-              <View style={st.passiveBox} testID="preview-passives">
-                {fighter.passives.map(id => {
-                  const p = getPassive(id);
-                  return (
-                    <View key={id} style={st.passiveRow}>
-                      <Icon name={p.icon} size={16} color={INK} />
-                      <Text style={st.passiveText}><Text style={{ fontWeight: '900' }}>{p.name}: </Text>{p.text}</Text>
-                    </View>
-                  );
-                })}
-              </View>
-            ) : (
-              <Text style={st.note}>Fighter passives and weapons switch on after this first fight.</Text>
+            {gearOn && (
+              <>
+                {(save.unlockedFighters.length > 1 || save.seenMechanics.includes('skill_tree') || Object.keys(save.skillNodes).length > 0) && (
+                  <>
+                    <Text style={st.section}>FIGHTER</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4, paddingTop: 6 }}>
+                      {FIGHTERS.filter(f => save.unlockedFighters.includes(f.name)).map(f => {
+                        const selected = f.name === save.selectedFighter;
+                        const rec = level.recommended?.includes(f.name);
+                        const spent = fighterStarsSpent(save, f.name);
+                        return (
+                          <TouchableOpacity
+                            key={f.name}
+                            testID={`preview-fighter-${f.name}`}
+                            onPress={() => onSelectFighter(f.name)}
+                            style={[st.fighter, selected && st.fighterSel]}
+                            activeOpacity={0.85}
+                            accessibilityState={{ selected }}
+                          >
+                            <FighterAvatar
+                              character={f.name}
+                              size={42}
+                              mood={selected ? 'anticipation' : 'idle'}
+                              reaction={selected ? { type: 'entrance', id: 1 } : null}
+                              animate={selected}
+                            />
+                            <Text style={st.fighterName} numberOfLines={1}>{f.name}</Text>
+                            <View style={st.passiveIcons}>
+                              {f.passives.map(id => <Icon key={id} name={getPassive(id).icon} size={13} color={INK} />)}
+                              {spent > 0 && <Text style={st.fighterLvl}>{spent}★</Text>}
+                            </View>
+                            {rec && <View style={st.rec}><Text style={st.recText}>STRONG</Text></View>}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </>
+                )}
+                <View style={st.passiveBox} testID="preview-passives">
+                  {fighter.passives.map(id => {
+                    const p = getPassive(id);
+                    return (
+                      <View key={id} style={st.passiveRow}>
+                        <Icon name={p.icon} size={16} color={INK} />
+                        <Text style={st.passiveText}><Text style={{ fontWeight: '900' }}>{p.name}: </Text>{p.text}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              </>
             )}
 
             {gearOn && save.armory.length > 0 && (
@@ -313,21 +326,23 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                   <Text style={st.note}>Slots full. Tap an equipped charm to swap it out.</Text>
                 )}
 
-                {/* What each charm does, in full sentences. Tap one for what to look for and how to play it. */}
-                <View style={{ gap: 8 }} testID="preview-charm-guide">
-                  {focusCharm && !charms.includes(focusCharm) && (() => {
-                    const w = getArmoryWeapon(focusCharm, weaponBuilds(save));
-                    return w ? (
-                      <WeaponExplainer key={`look-${focusCharm}`} weapon={w} build={weaponBuilds(save)[focusCharm]} badge={charmsFull ? 'Slots full' : 'Not equipped'} defaultOpen />
-                    ) : null;
-                  })()}
-                  {charms.length > 0 && <Text style={st.sectionHint}>WHAT YOUR CHARMS DO · tap one for tips</Text>}
-                  {charms.map(id => {
-                    const w = getArmoryWeapon(id, weaponBuilds(save));
-                    return w ? <WeaponExplainer key={id} weapon={w} build={weaponBuilds(save)[id]} defaultOpen={id === focusCharm} /> : null;
-                  })}
-                  {charms.length === 0 && !focusCharm && <Text style={st.note}>Tap a charm above to equip it and see what it does.</Text>}
-                </View>
+                {/* Before 1-4 teaches swapping charms, keep charm details tucked unless tapped */}
+                {(focusCharm !== null || save.seenMechanics.includes('charm') || save.armory.length >= 3) && (
+                  <View style={{ gap: 8 }} testID="preview-charm-guide">
+                    {focusCharm && !charms.includes(focusCharm) && (() => {
+                      const w = getArmoryWeapon(focusCharm, weaponBuilds(save));
+                      return w ? (
+                        <WeaponExplainer key={`look-${focusCharm}`} weapon={w} build={weaponBuilds(save)[focusCharm]} badge={charmsFull ? 'Slots full' : 'Not equipped'} defaultOpen />
+                      ) : null;
+                    })()}
+                    {charms.length > 0 && <Text style={st.sectionHint}>WHAT YOUR CHARMS DO · tap one for tips</Text>}
+                    {charms.map(id => {
+                      const w = getArmoryWeapon(id, weaponBuilds(save));
+                      return w ? <WeaponExplainer key={id} weapon={w} build={weaponBuilds(save)[id]} defaultOpen={id === focusCharm} /> : null;
+                    })}
+                    {charms.length === 0 && !focusCharm && <Text style={st.note}>Tap a charm above to equip it and see what it does.</Text>}
+                  </View>
+                )}
               </>
             )}
 
@@ -476,6 +491,8 @@ const st = StyleSheet.create({
   bubble: { alignSelf: 'flex-start', backgroundColor: COLORS.canvasWhite, borderWidth: 2, borderColor: INK, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, marginLeft: 20 },
   bubbleText: { fontStyle: 'italic', color: INK, fontSize: 13 },
   body: { padding: 16, gap: 12 },
+  coachRow: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 10, borderWidth: 2, borderColor: INK, backgroundColor: '#FFFBEB' },
+  coachText: { flex: 1, fontSize: 14, fontWeight: '800', color: INK, lineHeight: 19 },
   mech: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 10, borderWidth: 2, borderColor: INK, backgroundColor: TONE.selected },
   mechTitle: { fontSize: 16, fontWeight: '900', color: INK, marginTop: 2 },
   mechTag: { fontSize: 13, color: INK },

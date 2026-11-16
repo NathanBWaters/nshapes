@@ -11,6 +11,7 @@ import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity } from 'rea
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import Card from '@/components/Card';
 import Icon, { IconName } from '@/components/Icon';
+import { FighterAvatar } from '@/components/fighters';
 import { COLORS } from '@/utils/colors';
 import { isValidCombination } from '@/utils/gameUtils';
 import { sfx } from '@/audio';
@@ -87,13 +88,16 @@ type LessonStep =
 
 const stepsForMechanic = (
   m: MechanicDef,
-  opts: { quiz?: boolean; prelude?: LessonPage[] } = {}
+  opts: { quiz?: boolean; prelude?: LessonPage[]; brief?: boolean } = {}
 ): LessonStep[] => {
   const steps: LessonStep[] = [];
   for (const p of opts.prelude ?? []) steps.push({ type: 'page', eyebrow: 'Adventure', title: p.title, body: p.body, demo: p.demo });
-  (m.lessons ?? []).forEach((p, i, all) => steps.push({ type: 'page', eyebrow: `Lesson ${i + 1} of ${all.length}`, title: p.title, body: p.body, demo: p.demo }));
-  steps.push({ type: 'page', eyebrow: KIND_LABEL[m.kind], title: m.title, tagline: m.tagline, body: m.body, demo: m.demo, icon: m.icon });
-  if (opts.quiz !== false) {
+  if (!opts.brief) {
+    (m.lessons ?? []).forEach((p, i, all) => steps.push({ type: 'page', eyebrow: `Lesson ${i + 1} of ${all.length}`, title: p.title, body: p.body, demo: p.demo }));
+  }
+  const summaryBody = opts.brief ? m.body.slice(0, 2) : m.body;
+  steps.push({ type: 'page', eyebrow: KIND_LABEL[m.kind], title: m.title, tagline: m.tagline, body: summaryBody, demo: m.demo, icon: m.icon });
+  if (opts.quiz !== false && !opts.brief) {
     const qs = m.quiz ?? [];
     qs.forEach((question, index) => steps.push({ type: 'quiz', question, index, total: qs.length }));
   }
@@ -164,15 +168,16 @@ const Lesson: React.FC<LessonProps> = ({ steps, onDone, cta = 'Got it', dismissi
                 <>
                   <Text style={st.eyebrow}>{step.eyebrow}</Text>
                   <View style={st.titleRow}>
-                    {step.icon && (
-                      <View style={st.titleIcon}>
-                        <Icon name={step.icon} size={30} color={INK} />
-                      </View>
-                    )}
+                    <FighterAvatar character="Orange Tabby" size={44} mood="curious" framed />
                     <View style={{ flex: 1 }}>
                       <Text style={st.title}>{step.title}</Text>
                       {step.tagline && <Text style={st.tagline}>{step.tagline}</Text>}
                     </View>
+                    {step.icon && (
+                      <View style={st.titleIcon}>
+                        <Icon name={step.icon} size={24} color={INK} />
+                      </View>
+                    )}
                   </View>
                   {step.demo && <View style={st.stage}><DemoView demo={step.demo} /></View>}
                   <View style={{ gap: 8 }}>
@@ -235,12 +240,13 @@ const MechanicIntro: React.FC<{
   onClose: () => void;
   cta?: string;
   quiz?: boolean;
+  brief?: boolean;
   prelude?: LessonPage[];
   dismissible?: boolean;
-}> = ({ mechanic, onClose, cta, quiz, prelude, dismissible }) => {
+}> = ({ mechanic, onClose, cta, quiz, brief, prelude, dismissible }) => {
   const steps = useMemo(
-    () => (mechanic ? stepsForMechanic(mechanic, { quiz, prelude }) : null),
-    [mechanic, quiz, prelude]
+    () => (mechanic ? stepsForMechanic(mechanic, { quiz, brief, prelude }) : null),
+    [mechanic, quiz, brief, prelude]
   );
   return <Lesson steps={steps} onDone={onClose} cta={cta} dismissible={dismissible} />;
 };

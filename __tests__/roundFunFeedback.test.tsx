@@ -157,12 +157,37 @@ describe('RoundFunPrompt & enjoyment feedback UI', () => {
     expect(onChange).toHaveBeenLastCalledWith(null, []);
   });
 
-  it('renders thumbs up/down & reason tags inside LevelResults and notifies parent handlers', () => {
+  it('renders thumbs up/down & reason tags inside LevelResults (from 1-4+) and notifies parent handlers', () => {
     const onRateFun = jest.fn();
     const onReplayOpened = jest.fn();
-    const level = getLevel('1-1');
     const run = sampleRun();
 
+    // Early onboarding (1-1..1-3) hides the fun prompt to avoid post-battle clutter
+    const early = render(
+      wrapSafe(
+        <LevelResults
+          level={getLevel('1-1')}
+          run={run}
+          stars={3}
+          result={applyLevelResult(createNewSave(), getLevel('1-1'), 3, 15, run)}
+          unlocksRevealed
+          nextLevel={getLevel('1-2')}
+          nextUnlocked
+          funRating="up"
+          funTags={['great_build']}
+          onRateFun={onRateFun}
+          onReplayOpened={onReplayOpened}
+          onRetry={jest.fn()}
+          onNext={jest.fn()}
+          onMap={jest.fn()}
+          onCamp={jest.fn()}
+        />
+      )
+    );
+    expect(early.queryByTestId('results-fun-saved')).toBeNull();
+    early.unmount();
+
+    const level = getLevel('1-4');
     const { getByTestId } = render(
       wrapSafe(
         <LevelResults
@@ -171,7 +196,7 @@ describe('RoundFunPrompt & enjoyment feedback UI', () => {
           stars={3}
           result={applyLevelResult(createNewSave(), level, 3, 15, run)}
           unlocksRevealed
-          nextLevel={getLevel('1-2')}
+          nextLevel={getLevel('1-5')}
           nextUnlocked
           funRating="up"
           funTags={['great_build']}

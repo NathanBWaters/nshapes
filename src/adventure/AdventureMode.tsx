@@ -11,12 +11,12 @@ import type { AdventureSave, FeatureDestination, LevelDef, MechanicDef, RunState
 import { MAIN_LEVELS, getLevel, mainIndexOf } from './data/levels';
 import { CAMPAIGN_FEATURES } from './data/features';
 import { MECHANICS } from './data/mechanics';
-import { STORY } from './data/story';
 import {
   applyLevelResult,
   equipArcana,
   equipCharm,
   isLevelUnlocked,
+  LESSON_KEYS,
   markCoachMarkSeen,
   markMechanicSeen,
   markPathsRevealed,
@@ -25,7 +25,7 @@ import {
   type ResultApplication,
   type Unlock,
 } from './progress';
-import { isFirstVisit, lessonsDueBefore, type LessonPlan } from './lessons';
+import { lessonsDueBefore, type LessonPlan } from './lessons';
 import { loadAdventureSave, loadBattleHistory, recordBattle, saveBattleFeedback, writeAdventureSave } from './save';
 import type { FightTape } from './engine/replay';
 import {
@@ -77,14 +77,6 @@ interface Teaching {
 
 const screenFor = (d: FeatureDestination): Screen => ({ kind: 'camp', tab: d.tab });
 
-/** First visit ever: story → lessons → "Is this a Set?" checks → straight into the first level. */
-const onboarding = (save: AdventureSave): Teaching | null => {
-  const first = MAIN_LEVELS[0];
-  if (!isFirstVisit(save)) return null;
-  const [lesson, ...rest] = lessonsDueBefore(first, save);
-  return { plans: [{ ...lesson, prelude: STORY.welcome }, ...rest], level: first };
-};
-
 interface Props {
   onExit: () => void;
   autoPlayer?: boolean;
@@ -98,7 +90,8 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
   const [screen, setScreen] = useState<Screen>({ kind: 'map' });
   const reducedMotion = useReducedMotion();
   const [preview, setPreview] = useState<LevelDef | null>(null);
-  const [teaching, setTeaching] = useState<Teaching | null>(() => onboarding(save));
+  // Start straight on the World Map — zero blocking windows on launch!
+  const [teaching, setTeaching] = useState<Teaching | null>(null);
   /** A mechanic opened just to read about it (no fight follows) */
   const [reference, setReference] = useState<MechanicDef | null>(null);
   const [unlocks, setUnlocks] = useState<Unlock[]>([]);
@@ -147,6 +140,11 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
   const handlePlay = (level: LevelDef) => {
     sfx('confirm');
     setPreview(null);
+    if (level.id === MAIN_LEVELS[0].id) {
+      setSave(s => markMechanicSeen(s, LESSON_KEYS.mechanic(level.introduces)));
+      startRun(level);
+      return;
+    }
     const plans = lessonsDueBefore(level, save);
     if (plans.length > 0) setTeaching({ plans, level });
     else startRun(level);
@@ -320,7 +318,8 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
         <MechanicIntro
           mechanic={teaching.plans[0].mechanic}
           prelude={teaching.plans[0].prelude}
-          cta={teaching.plans.length > 1 ? `Next: ${teaching.plans[1].mechanic.title}` : teaching.level.rules.sandbox ? 'Start practising' : 'Start the fight'}
+          brief
+          cta={teaching.plans.length > 1 ? `Next: ${teaching.plans[1].mechanic.title}` : teaching.level.rules.sandbox ? 'Start practising' : 'Let\'s play!'}
           onClose={() => finishLesson(teaching)}
         />
       ) : (
