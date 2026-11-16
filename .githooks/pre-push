@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ "${SKIP_PRE_PUSH:-0}" = "1" ]; then
+  echo "SKIP_PRE_PUSH=1 set; skipping pre-push verification gates."
+  exit 0
+fi
+
+ZERO_SHA="0000000000000000000000000000000000000000"
+has_non_delete_push=0
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ -z "${local_ref:-}" ] && continue
+  if [ "$local_sha" = "$ZERO_SHA" ]; then
+    continue
+  fi
+  has_non_delete_push=1
+
+  if [ "$remote_ref" = "refs/heads/main" ] && [ "$remote_sha" != "$ZERO_SHA" ] && [ "$local_sha" != "$remote_sha" ]; then
+    local_ver=$(git show "${local_sha}:package.json" 2>/dev/null | node -e "const fs=require('fs'); console.log(JSON.parse(fs.readFileSync(0,'utf8')).version || '')" || true)
+    remote_ver=$(git show "${remote_sha}:package.json" 2>/dev/null | node -e "const fs=require('fs'); console.log(JSON.parse(fs.readFileSync(0,'utf8')).version || '')" || true)
+    if [ -n "$local_ver" ] && [ "$local_ver" = "$remote_ver" ]; then
+      echo "ERROR: package.json version is still '$local_ver' on both local and remote main."
+      echo "Per AGENTS.md, increment the patch version in package.json (0.1.X -> 0.1.X+1) before pushing to main."
+      exit 1
+    fi
+  fi
+done
+
+if [ "$has_non_delete_push" = "0" ]; then
+  exit 0
+fi
+
+echo "Running pre-push verification gates (typecheck, lint, validate:icons, test:fast)..."
+npm run typecheck
+npm run lint
+npm run validate:icons
+npm run test:fast
+echo "✓ Pre-push verification passed"

@@ -38,6 +38,27 @@ module.exports = defineConfig([
     },
   },
   {
+    // Node CLI / hook scripts under scripts/
+    files: ['scripts/**/*.js'],
+    languageOptions: {
+      globals: {
+        __dirname: 'readonly',
+        __filename: 'readonly',
+        process: 'readonly',
+        Buffer: 'readonly',
+        console: 'readonly',
+        module: 'readonly',
+        require: 'readonly',
+        exports: 'readonly',
+        fetch: 'readonly',
+        AbortSignal: 'readonly',
+        URL: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+      },
+    },
+  },
+  {
     // Jest globals for tests and the Jest setup file
     files: ['__tests__/**/*.{ts,tsx,js}', 'jest.setup.js'],
     languageOptions: {

@@ -1,11 +1,12 @@
 # NShapes Workspace Rules
 
-## Git Workflow: Always Commit & Push Immediately (CRITICAL)
+## Git Workflow: Always Commit, Push & Verify CI (CRITICAL)
 
 - **Nothing in this repository is live in production.** The user iterates rapidly and expects completed changes to land on `origin/main` as soon as they are verified.
-- **Always commit and push immediately** once code, test, or doc edits pass verification (`npm run typecheck`, `npm run validate:icons`, and relevant `npx jest` suites).
+- **Always commit and push immediately** once local checks pass (`npm run verify:guardrails && npm run test:fast` — also enforced automatically on `git push` by `.githooks/pre-push`).
 - **Never** leave finished work uncommitted in the working tree, and **never** stop to ask the user whether to commit or push.
 - **Version bump on every commit:** Increment the patch version in `package.json` (`0.1.X` → `0.1.X+1`) and include `(v0.1.Y)` in the commit subject.
+- **Verify GitHub Actions before finishing:** After `git push`, wait via the `schedule` tool (never shell `sleep`) and check `npm run verify:ci` until the workflow run for `HEAD` completes with `success` across both `build` and `deploy` (enforced by `.agents/hooks.json`).
 - **Always report the shipped version** at the end of your response:
   ```
   ✓ Pushed version X.Y.Z

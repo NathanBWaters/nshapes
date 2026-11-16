@@ -1,0 +1,23 @@
+{
+  "github-ci-gate": {
+    "PostToolUse": [
+      {
+        "matcher": "edit_file|write_file|run_command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ../scripts/agy-ci-hook.js post-tool",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "node ../scripts/agy-ci-hook.js stop",
+        "timeout": 15
+      }
+    ]
+  }
+}

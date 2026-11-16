@@ -1,9 +1,10 @@
 {
   "name": "nshapes",
-  "version": "0.1.123",
+  "version": "0.1.124",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
+    "prepare": "git config core.hooksPath .githooks || true",
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
@@ -18,6 +19,7 @@
     "test:e2e:adventure": "jest --watchAll=false __tests__/adventureFullGameE2E.test.tsx",
     "test:e2e:battery": "playwright test e2e/battery-budget.spec.ts --project=chromium --reporter=list",
     "verify:guardrails": "npm run typecheck && npm run lint && npm run validate:icons && npm run test:perf",
+    "verify:ci": "node scripts/agy-ci-hook.js check",
     "typecheck": "tsc --noEmit",
     "validate:icons": "npx tsx scripts/validate-icons.ts",
     "fights:replay": "jest __tests__/fightReplayTool.test.ts",

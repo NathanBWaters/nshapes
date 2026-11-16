@@ -2,7 +2,7 @@
 
 A roguelike deckbuilding match-three puzzle game for iOS, Android, and Web, built with Expo/React Native.
 
-> **Git & Shipping Rule (CRITICAL):** Nothing is live in production and rapid iteration is expected. **Always** increment the patch version in `package.json`, commit, and `git push` immediately after verifying your changes—never leave completed work uncommitted or ask permission to push.
+> **Git & Shipping Rule (CRITICAL):** Nothing is live in production and rapid iteration is expected. **Always** increment the patch version in `package.json`, run `npm run verify:guardrails && npm run test:fast`, commit, `git push`, and confirm `npm run verify:ci` succeeds on GitHub Actions (enforced by `.githooks/pre-push` and `.agents/hooks.json`) before finishing—never leave completed work uncommitted or ask permission to push.
 
 ## Game Overview
 
@@ -349,9 +349,9 @@ This means Field Stone weapons can increase the starting board size beyond the m
 * Enjoyment (win vs loss, close call, fast board vs drought, died-with-hints, and 👍/👎 tag rankings)
 * PostHog tab (18 copyable HogQL queries for the 4 synced PostHog dashboards)
 
-## Versioning, Committing & Pushing (IMPORTANT)
+## Versioning, Committing, Pushing & CI Verification (IMPORTANT)
 
-Nothing in this repository is live in production. Agents must **always commit and push immediately** once checks pass—never leave finished work sitting uncommitted and never pause to ask whether to commit or push.
+Nothing in this repository is live in production. Agents must **always commit and push immediately** once local checks (`npm run verify:guardrails && npm run test:fast`) pass, and then confirm GitHub Actions finishes green (`npm run verify:ci` via `schedule` timers, enforced by `.githooks/pre-push` and `.agents/hooks.json`)—never leave finished work sitting uncommitted and never pause to ask whether to commit or push.
 
 When making commits, **ALWAYS increment the patch version** in `package.json`:
 
@@ -359,7 +359,7 @@ When making commits, **ALWAYS increment the patch version** in `package.json`:
 # Example: 0.1.0 → 0.1.1 → 0.1.2
 ```
 
-After committing and pushing, **ALWAYS report the new version number** in your output:
+After pushing and verifying CI passes on `origin/main`, **ALWAYS report the new version number** in your output:
 
 ```
 ✓ Pushed version X.Y.Z
