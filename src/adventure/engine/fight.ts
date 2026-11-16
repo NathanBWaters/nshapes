@@ -92,6 +92,7 @@ export const begin = (s: RunState, hooks: FightHooks): Draft => ({
   ruleState: { ...s.ruleState },
   activeEvolutions: s.activeEvolutions.map(e => ({ ...e })),
   hazardRefills: { ...s.hazardRefills },
+  colorSets: { ...s.colorSets },
   roundStats: {
     ...s.roundStats,
     matchTimes: [...s.roundStats.matchTimes],
@@ -563,6 +564,14 @@ export const destroyCards = (d: Draft, indices: number[], kind: DestroyKind): nu
     slots: [...gone, ...armored],
     cards: [...gone.map(i => d.board[i]), ...armored.map(() => null)],
   });
+  for (const i of gone) {
+    const c = d.board[i];
+    if (c?.health === 1) {
+      d.roundStats.tripleCardsCleared += 1;
+      enqueue(d, 'cardBroken');
+      if (c.bounty) emit(d, 'pinata_break', dealDamage(d, c.bounty * foeMultiplier(d)), undefined, { slots: [i] });
+    }
+  }
   linked.forEach(() => enqueue(d, 'linkDestroyed'));
   if (gone.length) recycle(d, gone);
   return gone.length;

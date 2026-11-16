@@ -214,7 +214,7 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
           <Text style={s.starGlyph}>★</Text>
           <Text style={s.starCount}>{stars}</Text>
         </View>
-        {(save.coinsUnlocked || save.coins > 0 || save.lifetimeCoins > 0) && <CoinPill coins={save.coins} />}
+        {save.coinsUnlocked && <CoinPill coins={save.coins} />}
       </View>
 
       <ScrollView ref={scrollRef} contentContainerStyle={{ alignItems: 'center' }} showsVerticalScrollIndicator={false}>

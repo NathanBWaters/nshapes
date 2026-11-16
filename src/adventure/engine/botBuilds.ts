@@ -232,19 +232,44 @@ export const gearUp = (save: AdventureSave, plan: BuildPlan, seed: number): Adve
     selectedFighter: fighter,
     skillNodes: { ...save.skillNodes, [fighter]: nodes },
     charms,
-    weaponTuning: plan.workshop ? maxedTuning(save, charms) : save.weaponTuning,
+    weaponTuning: plan.workshop && save.workshopUnlocked ? maxedTuning(save, charms) : save.weaponTuning,
   };
 };
 
-// ─── The two players balance is aimed at (docs/balance-philosophy.md) ───────
+// ─── The two players & 3-star funnel balance is aimed at (docs/balance-philosophy.md) ───
 
-/** Knockout (★★) rate by world, 1-5, for each player. */
+/** Knockout (★★+) rate by world, 1-5, for each player. */
 export const WIN_TARGETS = {
   /** No stars or coins spent, random charms, never chases a recipe */
-  bare: [0.5, 0.3, 0.1, 0, 0],
+  bare: [0.75, 0.3, 0.1, 0, 0],
   /** Everything available by then: every star, the Workshop maxed, charms tuned, a solid recipe build */
-  invested: [0.97, 0.9, 0.8, 0.7, 0.5],
+  invested: [0.98, 0.9, 0.8, 0.7, 0.5],
 } as const;
+
+/**
+ * Full 3-star funnel targets by world, 1-5 (mobile 3-star best practices):
+ * - ★1+ (`clear`): very easy in World 1 (~95–100%) so players never feel discouraged; steps down smoothly.
+ * - ★★+ (`ko`): easy in World 1 (~78% bare, ~98% invested), tightening in later worlds (`WIN_TARGETS`).
+ * - ★★★ (`star3`): "a bit of a challenge" in World 1 (~72% average invested, >=75% pro floor per level),
+ *   tightening to ~28% first-try mastery in World 5 so replays & buildcraft stay rewarding.
+ */
+export const STAR_TARGETS = {
+  bareClearFloor: [0.88, 0.55, 0.2, 0.03, 0],
+  investedClearFloor: [0.95, 0.9, 0.82, 0.7, 0.5],
+  investedStar3: [0.72, 0.58, 0.48, 0.38, 0.28],
+  investedStar3Floor: [0.5, 0.3, 0.2, 0.15, 0.1],
+  expertStar3Floor: [0.75, 0.45, 0.3, 0.2, 0.12],
+} as const;
+
+export interface StarTargets {
+  bareClearFloor: number;
+  investedClearFloor: number;
+  bareKo: number;
+  investedKo: number;
+  investedStar3: number;
+  investedStar3Floor: number;
+  expertStar3Floor: number;
+}
 
 const WORLD_OF: Record<LevelDef['biome'], number> = { meadow: 1, woods: 2, canyon: 3, peaks: 4, summit: 5 };
 export const worldOf = (level: LevelDef): number => WORLD_OF[level.biome];
@@ -253,20 +278,36 @@ export const worldOf = (level: LevelDef): number => WORLD_OF[level.biome];
 export const isTrial = (level: LevelDef) => level.introduces.startsWith('fighter_');
 
 /**
- * This level's targets. Bosses and elites are a step harder for the invested
- * player; fighter trials should feel good; the first meadow levels still teach.
+ * This level's knockout (★★+) targets. Bosses and elites are a step harder for the
+ * invested player; fighter trials feel good; the first meadow lessons ramp gently.
  */
 export const winTargets = (level: LevelDef): { bare: number; invested: number } => {
   const w = worldOf(level) - 1;
   const bare = WIN_TARGETS.bare[w];
   const invested = WIN_TARGETS.invested[w];
   if (level.starRule?.kind === 'accuracy') return { bare: 1, invested: 1 };
-  if (isTrial(level)) return { bare: Math.min(1, bare + 0.2), invested: Math.min(0.97, invested + 0.05) };
-  if (level.branchOf) return { bare: Math.max(0, bare - 0.1), invested: invested - 0.15 };
-  if (level.isBoss) return { bare: Math.max(0, bare - 0.1), invested: invested - 0.1 };
-  // The meadow's first lessons come before any progression exists, so both players play them alike
-  const tutorial: Record<string, number> = { '1-2': 0.85, '1-3': 0.85 };
+  if (isTrial(level)) return { bare: Math.min(1, bare + 0.15), invested: Math.min(0.98, invested + 0.05) };
+  if (level.branchOf) return { bare: Math.max(0, bare - 0.15), invested: invested - 0.15 };
+  if (level.isBoss) return { bare: Math.max(0, bare - 0.12), invested: invested - 0.08 };
+  // The meadow's opening lessons come before Skill Trees, Coins or Workshop exist, so bare stays high
+  const tutorial: Record<string, number> = { '1-2': 0.85, '1-3': 0.85, '1-4': 0.8, '1-5': 0.8 };
   return { bare: tutorial[level.id] ?? bare, invested };
+};
+
+/** Full 3-star funnel targets (`★1+` clear, `★★+` knockout, `★★★` mastery & pro `★★★` floor) for a level. */
+export const starTargets = (level: LevelDef): StarTargets => {
+  const w = worldOf(level) - 1;
+  const ko = winTargets(level);
+  const hardShift = level.branchOf && !isTrial(level) ? -0.1 : level.isBoss ? -0.08 : isTrial(level) ? 0.05 : 0;
+  return {
+    bareClearFloor: level.starRule?.kind === 'accuracy' ? 1 : Math.max(0, Math.min(1, STAR_TARGETS.bareClearFloor[w] + hardShift)),
+    investedClearFloor: level.starRule?.kind === 'accuracy' ? 1 : Math.max(ko.invested, Math.min(1, STAR_TARGETS.investedClearFloor[w] + hardShift)),
+    bareKo: ko.bare,
+    investedKo: ko.invested,
+    investedStar3: Math.max(0.15, Math.min(0.92, STAR_TARGETS.investedStar3[w] + hardShift)),
+    investedStar3Floor: Math.max(0.08, Math.min(0.8, STAR_TARGETS.investedStar3Floor[w] + hardShift)),
+    expertStar3Floor: Math.max(0.1, Math.min(0.9, STAR_TARGETS.expertStar3Floor[w] + hardShift)),
+  };
 };
 
 /** The bare player: no stars, no Workshop, random charms, never chases recipes. */

@@ -147,7 +147,13 @@ export type ChallengeDef =
   /** A single Set dealing at least n damage */
   | { kind: 'bigHit'; n: number }
   /** Sets made during Shading Surges */
-  | { kind: 'surgeSets'; n: number };
+  | { kind: 'surgeSets'; n: number }
+  /** Sets where all three cards are a specific color (e.g. all-red Sets) */
+  | { kind: 'colorSets'; color: Card['color']; n: number }
+  /** Sets where all three cards share the same color */
+  | { kind: 'sameColorSets'; n: number }
+  /** Sets where every active trait is all-different across the three cards */
+  | { kind: 'allDiffSets'; n: number };
 
 /** Board traps placed by the level itself (any foe). `every` = refilled cards per new trap. */
 export interface LevelHazards {
@@ -899,6 +905,7 @@ export interface RunState {
   hazardRefills: { timeBombs: number; snares: number };
 
   // Counters for challenges, results & bounties
+  colorSets: Record<Card['color'], number>;
   trapsDefused: number;
   trapsSprung: number;
   explosionsTriggered: number;

@@ -30,7 +30,10 @@ describe('HP tuner', () => {
       const { best } = tuneLevel(level, Number(process.env.RUNS ?? 60), !!process.env.WIDE);
       const t = winTargets(level);
       const pct = (x: number) => `${Math.round(x * 100)}%`;
-      lines.push(`${level.id.padEnd(6)} ×${best.scale.toFixed(2)}  bare ${pct(best.bare)} (${pct(t.bare)})  invested ${pct(best.invested)} (${pct(t.invested)})`);
+      lines.push(
+        `${level.id.padEnd(6)} ×${best.scale.toFixed(2)}  bare ★1+${pct(best.bareClear)} ★★+${pct(best.bare)} (${pct(t.bare)})  ` +
+          `inv ★1+${pct(best.investedClear)} ★★+${pct(best.invested)} (${pct(t.invested)}) ★★★${pct(best.investedStar3)}`
+      );
       if (best.scale !== 1) source = scaleLevelHp(source, level.id, best.scale);
     }
     fs.writeFileSync(FILE, source);

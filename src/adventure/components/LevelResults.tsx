@@ -67,7 +67,7 @@ const LevelResults: React.FC<Props> = ({
   const practice = !!level.rules.sandbox;
   const won = stars > 0 || practice;
   const accuracy = level.starRule?.kind === 'accuracy';
-  const title = practice ? 'PRACTICE OVER' : stars >= 3 ? 'PERFECT!' : stars === 2 ? 'VICTORY!' : stars === 1 ? (accuracy ? 'YOU WON!' : 'SURVIVED') : 'DEFEATED';
+  const title = practice ? 'PRACTICE OVER' : stars >= 3 ? 'PERFECT!' : stars === 2 ? 'VICTORY!' : stars === 1 ? (accuracy ? 'YOU WON!' : 'STAGE CLEAR!') : 'DEFEATED';
   const sub = practice
     ? 'Nothing banked, nothing lost. The dummy is ready whenever you are.'
     : accuracy
@@ -79,8 +79,8 @@ const LevelResults: React.FC<Props> = ({
       : stars === 2
         ? 'Foe knocked out! Come back for the ★★★ challenge.'
         : stars === 1
-          ? `You made it, but ${run.foeName} is still standing.`
-          : run.coins > 0
+          ? `Stage cleared! Next level unlocked — knock out ${run.foeName} for ★★.`
+          : run.coins > 0 && result.save.coinsUnlocked
             ? 'Out of hearts. You keep the coins you picked up.'
             : 'Out of hearts. Have another go.';
 
@@ -88,7 +88,7 @@ const LevelResults: React.FC<Props> = ({
     const ts: ReturnType<typeof setTimeout>[] = [];
     // Each star rings a step higher up the chord; then the coins count out like a payout
     for (let i = 1; i <= stars; i++) ts.push(setTimeout(() => band.cue('star', { amount: i }), starPopDelayMs(i - 1)));
-    if (run.coins > 0 && !level.rules.sandbox) ts.push(setTimeout(() => band.cue('coinRoll', { amount: Math.min(24, 4 + Math.round(run.coins / 5)) }), starPopDelayMs(stars) + 250));
+    if (result.save.coinsUnlocked && run.coins > 0 && !level.rules.sandbox) ts.push(setTimeout(() => band.cue('coinRoll', { amount: Math.min(24, 4 + Math.round(run.coins / 5)) }), starPopDelayMs(stars) + 250));
     return () => ts.forEach(clearTimeout);
   }, [stars]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -99,7 +99,9 @@ const LevelResults: React.FC<Props> = ({
       ? 'Tip: check one trait at a time: shape, then color, then number…'
       : 'Tip: spend stars in a skill tree at Camp, or try a fighter marked STRONG here.'
     : stars === 1 && !accuracy
-      ? 'Tip: Rainbow Strikes (every trait different) hit twice as hard.'
+      ? run.features.has('rainbow')
+        ? 'Tip: Rainbow Strikes (every trait different) hit twice as hard.'
+        : 'Tip: equip charms on the preview screen so every Set hits harder.'
       : null;
 
   const totalCoins = result.starCoins + result.coinsBanked + result.bountyCoins;
@@ -209,7 +211,7 @@ const LevelResults: React.FC<Props> = ({
             />
           )}
 
-          {totalCoins > 0 && (
+          {result.save.coinsUnlocked && totalCoins > 0 && (
             <View style={st.bank}>
               <View style={{ flex: 1, gap: 2 }}>
                 <Text style={st.bankLabel}>Coins earned</Text>

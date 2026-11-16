@@ -169,6 +169,16 @@ const resolve = (d: Draft) => {
       if (d.features.has('shop')) d.shopOptions = rollPickOptions(d, 3);
       return;
     }
+    const replacing = new Set(d.replacing);
+    let brokenOnWin = 0;
+    d.board = d.board.map(c => {
+      if (replacing.has(c.id) && !c.stay && c.health === 1) {
+        brokenOnWin += 1;
+        return { ...c, health: undefined };
+      }
+      return c;
+    });
+    if (brokenOnWin > 0) d.roundStats.tripleCardsCleared += brokenOnWin;
     d.status = 'won';
     d.endReason = 'defeated';
     d.challengeMet = challengeProgress(d).met;
@@ -558,8 +568,11 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
     s.colorsMatched.add(c.color);
     s.colorMatchCounts.set(c.color, (s.colorMatchCounts.get(c.color) ?? 0) + 1);
   }
-  if (isRainbow(matched, d.attributes)) s.allDifferentMatches += 1;
-  if (matched.every(c => c.color === matched[0].color)) s.allSameColorMatches += 1;
+  if (!graceUsed && isRainbow(matched, d.attributes)) s.allDifferentMatches += 1;
+  if (!graceUsed && matched.every(c => c.color === matched[0].color)) {
+    s.allSameColorMatches += 1;
+    d.colorSets[matched[0].color] += 1;
+  }
   if (matched.some(c => c.shape === 'squiggle')) s.squiggleMatches += 1;
   s.faceDownCardsMatched += matched.filter(c => c.wasOriginallyFaceDown || c.isFaceDown).length;
   s.bombsDefused += matched.filter(c => c.hasBomb).length;
@@ -899,6 +912,7 @@ const buildRun = (level: LevelDef, save: AdventureSave, opts: CreateRunOptions):
     rainbowRefill: false,
     timeBombIds: [],
     hazardRefills: { timeBombs: 0, snares: 0 },
+    colorSets: { red: 0, green: 0, purple: 0 },
     trapsDefused: 0,
     trapsSprung: 0,
     explosionsTriggered: 0,
@@ -1052,6 +1066,12 @@ const reduceRun = (state: RunState, action: RunAction): RunState => {
         }
       }
       const hadCatalyst = burned.some(i => d.board[i].hasEvolutionItem);
+      for (const i of burned) {
+        if (d.board[i].health === 1) {
+          d.roundStats.tripleCardsCleared += 1;
+          enqueue(d, 'cardBroken');
+        }
+      }
       enqueue(d, 'cardBurned');
       linked.forEach(() => enqueue(d, 'linkDestroyed'));
       recycle(d, burned);

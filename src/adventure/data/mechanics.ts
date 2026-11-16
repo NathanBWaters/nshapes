@@ -120,15 +120,15 @@ export const MECHANICS: Record<string, MechanicDef> = {
     kind: 'feature',
     enables: 'hearts',
     title: 'Hearts',
-    tagline: 'Wrong Sets cost a heart. Hearts are a resource too.',
+    tagline: 'Wrong Sets cost a heart. Take your time!',
     body: [
-      'A wrong Set now costs you a heart. Run out and you lose the level.',
-      'The three cards are still swapped out, so when you are stuck, a mistake shuffles in fresh cards. It just costs you.',
-      'Orange Tabby fights better hurt: Scrappy adds +1 damage to every Set for each heart you are missing.',
+      'A wrong Set now costs you a heart. Run out and you lose the level — though Orange Tabby\'s Nine Lives saves you once!',
+      'Your new Blast Powder charm is already equipped and fires explosions automatically as you match!',
+      'Spot 2 all-red Sets for the third star.',
     ],
     fightTips: [
-      { title: 'Your hearts', text: 'These are your hearts. A wrong Set costs one. Lose them all and the fight is over.', anchor: 'top' },
-      { title: 'One big hit', text: 'Third star: land ONE Set that deals 6. Tabby hits +1 harder per missing heart, so a heart or two down is a weapon.', anchor: 'top' },
+      { title: 'Your hearts & Blast Powder', text: 'A wrong Set costs a heart, while your Blast Powder charm blasts extra cards on lucky matches!', anchor: 'top' },
+      { title: 'All-red Sets', text: 'Make 2 Sets where all three cards are red for the third star.', anchor: 'bottom' },
     ],
     icon: 'lorc/shining-heart',
     demo: {
@@ -144,14 +144,43 @@ export const MECHANICS: Record<string, MechanicDef> = {
     },
     coachMark: { on: 'hurt', text: 'Ouch! That wasn\'t a Set. Check each trait one at a time.' },
   },
+  all_different: {
+    id: 'all_different',
+    kind: 'rule',
+    title: 'All Different',
+    tagline: 'Three shapes, three colors — no two alike.',
+    body: [
+      'All-same Sets are easy to spot, and all-different Sets are your next superpower.',
+      'Pick a diamond, an oval and a squiggle where one is red, one is green and one is purple.',
+      'Make 2 all-different Sets for the third star.',
+    ],
+    fightTips: [
+      { title: 'Mix every trait', text: 'Pick 3 different shapes in 3 different colors! Make 2 all-different Sets for the third star.', anchor: 'bottom' },
+    ],
+    icon: 'delapouite/sparkles',
+    demo: {
+      type: 'set',
+      attributes: ['shape', 'color'],
+      valid: true,
+      caption: '3 different shapes + 3 different colors → Set!',
+      cards: [
+        { shape: 'diamond', color: 'red', number: 1, shading: 'solid' },
+        { shape: 'oval', color: 'green', number: 1, shading: 'solid' },
+        { shape: 'squiggle', color: 'purple', number: 1, shading: 'solid' },
+      ],
+    },
+  },
   attr_number: {
     id: 'attr_number',
     kind: 'rule',
     title: 'New Trait: Number',
     tagline: 'Cards now show 1, 2 or 3 symbols.',
     body: [
-      'Count the symbols! Number joins shape and color.',
-      'All three traits must pass the rule: all same or all different.',
+      'Count the symbols! Number joins shape and color, and the board grows to 12 cards.',
+      'Pro tip: scan one color at a time to make the bigger board feel small! Make 2 single-color Sets for the third star.',
+    ],
+    fightTips: [
+      { title: 'Scan one color first', text: 'With 3 traits on the board, pick one color and look for a Set inside it! Make 2 single-color Sets for the third star.', anchor: 'bottom' },
     ],
     icon: 'lorc/cycle',
     demo: {
@@ -199,12 +228,12 @@ export const MECHANICS: Record<string, MechanicDef> = {
     lessons: [
       {
         title: 'Build a big hit',
-        body: ['Old Quillback has thick skin. The third star wants a single Set that deals 8 or more.', 'Try the Scrappy side of Tabby\'s tree or the Combo side of Sly Fox\'s, then come back swinging.'],
-        demo: { type: 'icons', items: [{ icon: 'lorc/cat', label: 'Scrappy' }, { icon: 'caro-asercion/fox', label: 'Combo' }, { icon: 'lorc/fist', label: '9+ in one Set' }] },
+        body: ['Old Quillback has thick skin. The third star wants a single Set that deals 7 or more.', 'Try the Scrappy side of Tabby\'s tree or the Combo side of Sly Fox\'s, then come back swinging.'],
+        demo: { type: 'icons', items: [{ icon: 'lorc/cat', label: 'Scrappy' }, { icon: 'caro-asercion/fox', label: 'Combo' }, { icon: 'lorc/fist', label: '7+ in one Set' }] },
       },
     ],
     fightTips: [
-      { title: 'Hit hard once', text: 'Land a single Set that deals 8 or more. Scrappy, Combo and your skill nodes all stack.', anchor: 'top' },
+      { title: 'Hit hard once', text: 'Land a single Set that deals 7 or more. Rainbow Strikes, Combo and your skill nodes all stack.', anchor: 'top' },
     ],
     icon: 'lorc/tree-branch',
     demo: { type: 'icons', items: [{ icon: 'lorc/flat-star', label: 'Earn stars' }, { icon: 'lorc/tree-branch', label: 'Buy nodes' }, { icon: 'lorc/fist', label: 'Hit harder' }] },
@@ -222,7 +251,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
     ],
     fightTips: [
       { title: 'Power cards', text: 'Look for cards with a +2 badge in the corner. A Set that uses one hits for 2 more.', anchor: 'bottom' },
-      { title: 'Bonus hunter', text: 'Match 5 power or gold cards for the third star.', anchor: 'top' },
+      { title: 'Bonus hunter', text: 'Match 4 power or gold cards for the third star.', anchor: 'top' },
     ],
     icon: 'lorc/fist',
     demo: {
@@ -243,8 +272,12 @@ export const MECHANICS: Record<string, MechanicDef> = {
     title: 'Charms',
     tagline: 'Equip up to 3 Armory weapons in every fight.',
     body: [
-      'Weapons you unlock go into your Armory. Equip up to 3 as charms: they are your whole loadout.',
-      'Pick charms on the screen before each fight. Mix different jobs: two weapon families together can arm an evolution.',
+      'Weapons you unlock go straight into your Armory! Equip up to 3 as charms before each fight.',
+      'Blast Powder, Flint Spark and Mending Charm trigger automatically as you make Sets.',
+      'Set off 2 explosions for the third star.',
+    ],
+    fightTips: [
+      { title: 'Charms fire for you', text: 'Your equipped charms trigger automatically when you match! Set off 2 explosions for the third star.', anchor: 'bottom' },
     ],
     icon: 'lorc/gems',
     demo: { type: 'icons', items: [{ icon: 'lorc/gems', label: 'Unlock' }, { icon: 'lorc/gear-hammer', label: 'Equip 3' }, { icon: 'lorc/crossed-swords', label: 'Fight' }] },
@@ -256,11 +289,11 @@ export const MECHANICS: Record<string, MechanicDef> = {
     title: 'Rainbow Strike',
     tagline: 'All-different Sets hit twice as hard.',
     body: [
-      'A Set where EVERY trait is different is a Rainbow Strike, and it does double damage.',
-      'This foe has more health than plain Sets can deal. Hunt for rainbows to knock it out!',
+      'A Set where EVERY trait is different — 3 shapes, 3 colors and 1-2-3 — is a Rainbow Strike, and it does double damage!',
+      'Land 2 Rainbow Strikes for the third star.',
     ],
     fightTips: [
-      { title: 'Hunt for rainbows', text: 'A Set where every trait is different hits twice as hard. Plain Sets alone will not finish this foe in time.', anchor: 'bottom' },
+      { title: 'Hunt for rainbows', text: 'A Set where every trait is different hits twice as hard! Land 2 Rainbow Strikes for the third star.', anchor: 'bottom' },
     ],
     icon: 'lorc/rainbow-star',
     demo: {
@@ -286,7 +319,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
       'Use the bomb card in a Set before it hits 0 and it is defused. Let it blow and you lose a heart.',
     ],
     fightTips: [
-      { title: 'Build around the bomb', text: 'Find a Set that INCLUDES the bomb card. Defuse 5 bombs for the third star.', anchor: 'bottom' },
+      { title: 'Build around the bomb', text: 'Find a Set that INCLUDES the bomb card. Defuse 3 bombs for the third star.', anchor: 'bottom' },
     ],
     icon: 'lorc/time-bomb',
     demo: {
@@ -353,7 +386,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
       'Matching the snared card itself still scores, but costs a heart. Match the card its arrow points at instead to defuse the snare for +4 damage.',
     ],
     fightTips: [
-      { title: 'Follow the arrow', text: 'An arrow in a card\'s corner? Leave that card alone and use the card it points at. Defuse 6 snares for the third star.', anchor: 'bottom' },
+      { title: 'Follow the arrow', text: 'An arrow in a card\'s corner? Leave that card alone and use the card it points at. Defuse 4 snares for the third star.', anchor: 'bottom' },
     ],
     icon: 'lorc/wolf-trap',
     demo: { type: 'icons', items: [{ icon: 'lorc/wolf-trap', label: 'Snared: −1 ♥' }, { icon: 'delapouite/plain-arrow', label: 'Points at…' }, { icon: 'lorc/flat-star', label: 'Defuse: +4' }] },
@@ -389,11 +422,11 @@ export const MECHANICS: Record<string, MechanicDef> = {
     tagline: 'Stuck? Tap the bulb to reveal a Set.',
     body: [
       'You now carry hints. Tap the light bulb to reveal a Set on the board.',
-      'Masked Bandit switches off auto-hints, so this time the bulb is all yours. Use it: the third star wants 3 hints spent.',
+      'Masked Bandit switches off auto-hints, so this time the bulb is all yours. Use it: the third star wants 2 hints spent.',
       'Seeker Lens and Crystal Orb keep you stocked.',
     ],
     fightTips: [
-      { title: 'Hints', text: 'Tap the yellow bulb to light up a Set. Spend 3 hints in this fight for the third star, so press it!', anchor: 'top' },
+      { title: 'Hints', text: 'Tap the yellow bulb to light up a Set. Spend 2 hints in this fight for the third star, so press it!', anchor: 'top' },
     ],
     icon: 'lorc/light-bulb',
     demo: { type: 'icons', items: [{ icon: 'lorc/light-bulb', label: 'Reveal a Set' }, { icon: 'lorc/floating-crystal', label: 'Hold more' }] },
@@ -404,8 +437,8 @@ export const MECHANICS: Record<string, MechanicDef> = {
     kind: 'threat',
     title: 'Duds',
     tagline: 'Junk cards that can\'t be matched.',
-    body: ['Junk Rat leaves duds on the board. Dud cards can\'t be used in Sets.', 'Blasts, fire and lasers clear them. Set off 4 explosions for the third star.'],
-    fightTips: [{ title: 'Blow up the junk', text: 'Equip Blast Powder: every explosion clears junk and counts toward the third star (4).', anchor: 'bottom' }],
+    body: ['Junk Rat leaves duds on the board. Dud cards can\'t be used in Sets.', 'Blasts, fire and lasers clear them. Set off 3 explosions for the third star.'],
+    fightTips: [{ title: 'Blow up the junk', text: 'Equip Blast Powder: every explosion clears junk and counts toward the third star (3).', anchor: 'bottom' }],
     icon: 'lorc/cross-mark',
     demo: {
       type: 'set', attributes: ['shape', 'color', 'number'], valid: false, caption: 'Dud cards can\'t be selected',
@@ -443,10 +476,10 @@ export const MECHANICS: Record<string, MechanicDef> = {
     body: [
       'If only ONE trait is wrong, that\'s a near miss. A grace counts it as a Set instead of costing a heart.',
       'Two or more wrong traits still hurt.',
-      'While you hold graces, a bold guess is cheap. The third star wants 2 grace saves.',
+      'While you hold graces, a bold guess is cheap. The third star wants 1 grace save.',
     ],
     fightTips: [
-      { title: 'Graces', text: 'The clover shows your graces. If only one trait is wrong, a grace turns the mistake into a Set. Save 2 for the third star.', anchor: 'top' },
+      { title: 'Graces', text: 'The clover shows your graces. If only one trait is wrong, a grace turns the mistake into a Set. Get saved once for the third star.', anchor: 'top' },
     ],
     icon: 'lorc/clover',
     demo: {
@@ -894,7 +927,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
       'Skill tree: stretch the window and turn Combo into lasers and blasts, or keep Hot Streak burning for ×4 hits.',
     ],
     fightTips: [
-      { title: 'Reach Combo 3', text: 'Make Sets less than 5 seconds apart. The wolf hates it. Hit Combo 3 for the third star.', anchor: 'top' },
+      { title: 'Reach Combo 2', text: 'Make 2 Sets less than 5 seconds apart. The wolf hates it. Hit Combo 2 for the third star.', anchor: 'top' },
     ],
     icon: 'caro-asercion/fox',
     demo: { type: 'icons', items: [{ icon: 'lorc/stopwatch', label: '< 5s apart' }, { icon: 'lorc/lightning-branches', label: 'Combo +1…+4' }, { icon: 'lorc/fireball', label: 'Hot Streak ×2' }] },
@@ -924,7 +957,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
       'Skill tree: make every patient Set a laser or a free Set, or turn Rainbows into Catalysts and 3×3 shatters.',
     ],
     fightTips: [
-      { title: 'Hunt Rainbows', text: 'The hawk speeds up the clock, and every Rainbow Strike freezes it. Land 5 Rainbows for the third star.', anchor: 'top' },
+      { title: 'Hunt Rainbows', text: 'The hawk speeds up the clock, and every Rainbow Strike freezes it. Land 4 Rainbows for the third star.', anchor: 'top' },
     ],
     icon: 'delapouite/penguin',
     demo: { type: 'icons', items: [{ icon: 'lorc/hourglass', label: 'Slow Set: +2' }, { icon: 'lorc/rainbow-star', label: 'Rainbow' }, { icon: 'lorc/snowflake-1', label: 'Freeze 4s' }] },
@@ -1052,7 +1085,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
     ],
     fightTips: [
       { title: 'Watch for the Catalyst', text: 'With Blast Powder and Mending Charm equipped, a glowing Catalyst card turns up. Match it in any Set to evolve!', anchor: 'bottom' },
-      { title: 'Evolve twice', text: 'Trigger 2 evolutions in this fight for the third star. A new Catalyst can turn up once the first evolution has ended.', anchor: 'top' },
+      { title: 'Trigger Phoenix Pyre', text: 'Trigger an evolution once in this fight for the third star. Match the glowing Catalyst card as soon as it appears!', anchor: 'top' },
     ],
     icon: 'lorc/crystal-shine',
     demo: {

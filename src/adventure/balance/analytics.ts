@@ -38,6 +38,7 @@ import {
   investedPlan,
   isTrial,
   levelsBefore,
+  starTargets,
   winTargets,
   worldOf,
   type BuildPlan,
@@ -1240,10 +1241,15 @@ export interface CampaignLevelRow {
   title: string;
   world: number;
   kind: string;
+  bareStar1Rate: number;
   bareWinRate: number;
+  bareStar3Rate: number;
   bareTarget: number;
+  investedStar1Rate: number;
   investedWinRate: number;
+  investedStar3Rate: number;
   investedTarget: number;
+  investedStar3Target: number;
   progressionGap: number;
   meanTimeLeftShare: number;
   meanHeartsLeftShare: number;
@@ -1256,10 +1262,13 @@ export interface CampaignSuspenseSuite {
   levels: CampaignLevelRow[];
   byWorld: {
     world: number;
+    bareStar1Mean: number;
     bareMean: number;
     bareTarget: number;
+    investedStar1Mean: number;
     investedMean: number;
     investedTarget: number;
+    investedStar3Mean: number;
     meanSuspense: number;
   }[];
 }
@@ -1283,19 +1292,25 @@ export const measureCampaignSuspense = (runs = 20): CampaignSuspenseSuite => {
   const evalPlan = (level: LevelDef, basePlan: BuildPlan) => {
     const plan: BuildPlan = { ...basePlan, keepCharms: !!PUZZLE_CHARMS[level.id] };
     const save = getSaveAt(level);
+    let star1 = 0;
     let wins = 0;
+    let star3 = 0;
     let timeShares = 0;
     let heartShares = 0;
     for (let i = 0; i < runs; i++) {
       const { state, stars } = simulateRun(level, save, BOTS.average, 4000 + i * 1009, plan);
+      if (stars >= 1) star1++;
       if (stars >= 2) wins++;
+      if (stars >= 3) star3++;
       const tShare = level.rules.timer && state.timeLeft !== null ? Math.max(0, state.timeLeft) / level.rules.timer : 0.35;
       const hShare = state.maxHearts && state.hearts !== null ? Math.max(0, state.hearts) / state.maxHearts : 1;
       timeShares += tShare;
       heartShares += hShare;
     }
     return {
+      star1Rate: star1 / runs,
       winRate: wins / runs,
+      star3Rate: star3 / runs,
       meanTimeLeftShare: timeShares / runs,
       meanHeartsLeftShare: heartShares / runs,
     };
@@ -1303,6 +1318,7 @@ export const measureCampaignSuspense = (runs = 20): CampaignSuspenseSuite => {
 
   const rows: CampaignLevelRow[] = LEVELS.map(l => {
     const targets = winTargets(l);
+    const st = starTargets(l);
     const bare = evalPlan(l, barePlan(l));
     const inv = evalPlan(l, investedPlan(l));
     // Outcome uncertainty 4*p*(1-p) + close-finish tension when winning with <35% clock or <60% hearts
@@ -1326,10 +1342,15 @@ export const measureCampaignSuspense = (runs = 20): CampaignSuspenseSuite => {
       title: l.name,
       world: worldOf(l),
       kind,
+      bareStar1Rate: bare.star1Rate,
       bareWinRate: bare.winRate,
+      bareStar3Rate: bare.star3Rate,
       bareTarget: targets.bare,
+      investedStar1Rate: inv.star1Rate,
       investedWinRate: inv.winRate,
+      investedStar3Rate: inv.star3Rate,
       investedTarget: targets.invested,
+      investedStar3Target: st.investedStar3,
       progressionGap: inv.winRate - bare.winRate,
       meanTimeLeftShare: inv.meanTimeLeftShare,
       meanHeartsLeftShare: inv.meanHeartsLeftShare,
@@ -1339,13 +1360,16 @@ export const measureCampaignSuspense = (runs = 20): CampaignSuspenseSuite => {
   });
 
   const byWorld = [1, 2, 3, 4, 5].map(w => {
-    const wRows = rows.filter(r => r.world === w && r.id !== '1-1' && r.id !== '1-2' && r.id !== '1-3');
+    const wRows = rows.filter(r => r.world === w && r.kind === 'main' && r.id !== '1-1');
     return {
       world: w,
+      bareStar1Mean: mean(wRows.map(r => r.bareStar1Rate)),
       bareMean: mean(wRows.map(r => r.bareWinRate)),
       bareTarget: mean(wRows.map(r => r.bareTarget)),
+      investedStar1Mean: mean(wRows.map(r => r.investedStar1Rate)),
       investedMean: mean(wRows.map(r => r.investedWinRate)),
       investedTarget: mean(wRows.map(r => r.investedTarget)),
+      investedStar3Mean: mean(wRows.map(r => r.investedStar3Rate)),
       meanSuspense: mean(wRows.map(r => r.suspenseScore)),
     };
   });

@@ -1,32 +1,28 @@
 /**
- * Adventure balance — headless bots play every level through the real reducer,
- * aimed at the two players in docs/balance-philosophy.md. Both are the same
- * average-skill bot (engine/bot.ts), so the gap between them is progression:
+ * Adventure 3-star balance — headless bots play every level through the real
+ * reducer across all three star tiers (`★1+` Clear, `★★+` Knockout, `★★★` Mastery)
+ * plus a World 1 Pro (`BOTS.expert`) `★★★` floor (docs/balance-philosophy.md):
  *
  *   BARE      no stars spent, no Workshop, random charms, never chases a recipe
- *   INVESTED  every star on offer spent with a plan, every Workshop upgrade on
- *             sale maxed, its charms fully tuned, a solid build (a recipe pair
- *             plus damage weapons), level-up picks and buys that chase recipes
+ *   INVESTED  every star on offer spent with a plan, Workshop maxed (once unlocked),
+ *             charms tuned, a solid recipe + damage build
+ *   PRO       BOTS.expert with the invested build (verifies World 1 ★★★ is a fun
+ *             mini-challenge, never a last-move RNG sweat)
  *
- * Each run gears up from the save a player has on reaching the level (3★ on
- * everything before it, through the real reward pipeline) and a random unlocked
- * fighter. "Winning" is a knockout (★★). Targets by world (engine/botBuilds.ts
- * WIN_TARGETS / winTargets):
+ * Targets by world (engine/botBuilds.ts WIN_TARGETS & STAR_TARGETS):
  *
- *   world      1     2     3     4     5
- *   bare      50%   30%   10%    0%    0%
- *   invested  97%   90%   80%   70%   50%
+ *   world            1     2     3     4     5
+ *   bare ★1+      >=88% >=55% >=20%  >=3%    0%
+ *   bare ★★+       75%   30%   10%    0%    0%
+ *   invested ★★+   98%   90%   80%   70%   50%
+ *   invested ★★★   72%   58%   48%   38%   28%
  *
- * Bosses and elites are a step harder for the invested player, fighter trials
- * a step kinder, and 1-2/1-3 come before any progression exists (both ~85%). The bot is seeded, so
- * the numbers are exact and the asserted sample is the one the report prints.
- *
- * Set ADVENTURE_BALANCE_REPORT=1 to print the full table.
+ * Set ADVENTURE_BALANCE_REPORT=1 to print the full 3-star funnel table.
  */
 import { LEVELS, MAIN_LEVELS } from '@/adventure/data/levels';
 import { applyLevelResult, createNewSave, createMaxedSave } from '@/adventure/progress';
 import { BOTS, simulateRun, starDistribution } from '@/adventure/engine/bot';
-import { barePlan, investedPlan, levelsBefore, winTargets, worldOf, WIN_TARGETS, type BuildPlan } from '@/adventure/engine/botBuilds';
+import { barePlan, investedPlan, levelsBefore, starTargets, winTargets, worldOf, WIN_TARGETS, STAR_TARGETS, type BuildPlan } from '@/adventure/engine/botBuilds';
 import { MECHANICS } from '@/adventure/data/mechanics';
 import type { AdventureSave, LevelDef } from '@/adventure/types';
 
@@ -85,10 +81,11 @@ describe('adventure data integrity', () => {
   });
 });
 
-describe('adventure balance: bare vs invested player (docs/balance-philosophy.md)', () => {
+describe('adventure 3-star balance: ★1+ clear, ★★+ knockout, ★★★ mastery (docs/balance-philosophy.md)', () => {
   const report: string[] = [];
-  /** knockout rates of main non-boss levels by world: [bare, invested] */
-  const byWorld = new Map<number, [number, number][]>();
+  /** [bareClear, bareKo, invClear, invKo, invStar3] of main non-boss levels by world */
+  const byWorld = new Map<number, [number, number, number, number, number][]>();
+  const world1ProStar3: number[] = [];
 
   afterAll(() => {
     if (process.env.ADVENTURE_BALANCE_REPORT) console.log(report.join('\n'));
@@ -96,42 +93,83 @@ describe('adventure balance: bare vs invested player (docs/balance-philosophy.md
 
   for (const level of LEVELS) {
     const kind = level.starRule?.kind === 'accuracy' ? 'tutorial' : level.branchOf ? 'elite' : level.isBoss ? 'boss' : 'level';
-    it(`${level.id} ${level.name} (${kind}) sits between the bare and the invested player`, () => {
+    it(`${level.id} ${level.name} (${kind}) hits its ★1 / ★★ / ★★★ funnel targets`, () => {
       const save = campaignSave(level);
       const bare = starDistribution(level, save, BOTS.average, RUNS, withPuzzle(level, barePlan(level)));
       const inv = starDistribution(level, save, BOTS.average, RUNS, withPuzzle(level, investedPlan(level)));
+      const clear = (d: number[]) => d[1] + d[2] + d[3];
       const ko = (d: number[]) => d[2] + d[3];
       const t = winTargets(level);
+      const st = starTargets(level);
+      const w = worldOf(level);
+      const pro = w === 1 ? starDistribution(level, save, BOTS.expert, RUNS, withPuzzle(level, investedPlan(level))) : null;
       const pct = (x: number) => `${Math.round(x * 100)}%`.padStart(4);
       report.push(
-        `${level.id.padEnd(5)} ${level.name.padEnd(18)} bare ★0 ${pct(bare.dist[0])} win ${pct(ko(bare.dist))} (${pct(t.bare)}) | ` +
-          `invested ★0 ${pct(inv.dist[0])} win ${pct(ko(inv.dist))} (${pct(t.invested)}) ★3 ${pct(inv.dist[3])} | coins ${Math.round(inv.avgCoins)}`
+        `${level.id.padEnd(5)} ${level.name.padEnd(18)} bare ★1+${pct(clear(bare.dist))} ★★+${pct(ko(bare.dist))} (${pct(t.bare)}) | ` +
+          `inv ★1+${pct(clear(inv.dist))} ★★+${pct(ko(inv.dist))} (${pct(t.invested)}) ★★★${pct(inv.dist[3])}` +
+          (pro ? ` | pro★★★${pct(pro.dist[3])}` : '') +
+          ` | coins ${Math.round(inv.avgCoins)}`
       );
       if (level.starRule?.kind === 'accuracy') {
-        // The first level can't be lost
+        // The first level can't be lost, and pros 3-star it cleanly
         expect(bare.dist[0]).toBe(0);
         expect(inv.dist[0]).toBe(0);
+        if (pro) expect(pro.dist[3]).toBeGreaterThanOrEqual(0.8);
         return;
       }
+      // 1★+ Clear floor: World 1 never discourages players with frequent 0★ losses
+      expect(clear(bare.dist)).toBeGreaterThanOrEqual(st.bareClearFloor - 0.1);
+      expect(clear(inv.dist)).toBeGreaterThanOrEqual(st.investedClearFloor - 0.1);
+      // 2★+ Knockout targets
       near(ko(bare.dist), t.bare, LEVEL_TOLERANCE);
       near(ko(inv.dist), t.invested, LEVEL_TOLERANCE);
-      // Progression always pays off
-      expect(ko(inv.dist)).toBeGreaterThan(ko(bare.dist));
-      if (kind === 'level') byWorld.set(worldOf(level), [...(byWorld.get(worldOf(level)) ?? []), [ko(bare.dist), ko(inv.dist)]]);
+      // 3★ Mastery floor: achievable challenge, never starved out
+      expect(inv.dist[3]).toBeGreaterThanOrEqual(st.investedStar3Floor - 0.12);
+      if (pro) {
+        expect(pro.dist[3]).toBeGreaterThanOrEqual(st.expertStar3Floor - 0.08);
+        if (!level.branchOf) world1ProStar3.push(pro.dist[3]);
+      }
+      // Progression pays off (gentle early lessons at >=95% KO allow ties at the ceiling)
+      if (ko(inv.dist) >= 0.96 && t.bare >= 0.8) expect(ko(inv.dist)).toBeGreaterThanOrEqual(ko(bare.dist));
+      else expect(ko(inv.dist)).toBeGreaterThan(ko(bare.dist));
+      if (kind === 'level') {
+        byWorld.set(w, [
+          ...(byWorld.get(w) ?? []),
+          [clear(bare.dist), ko(bare.dist), clear(inv.dist), ko(inv.dist), inv.dist[3]],
+        ]);
+      }
     });
   }
 
-  it('each world lands on its targets on average, and gets harder for both players', () => {
+  it('each world lands on its ★1 / ★★ / ★★★ funnel targets and gets harder cleanly', () => {
     const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
     const worlds = [1, 2, 3, 4, 5];
-    const bare = worlds.map(w => mean((byWorld.get(w) ?? []).map(x => x[0])));
-    const inv = worlds.map(w => mean((byWorld.get(w) ?? []).map(x => x[1])));
-    report.push(`mean wins by world: bare ${bare.map(x => `${Math.round(x * 100)}%`).join(' > ')} | invested ${inv.map(x => `${Math.round(x * 100)}%`).join(' > ')}`);
+    const bareClear = worlds.map(w => mean((byWorld.get(w) ?? []).map(x => x[0])));
+    const bare = worlds.map(w => mean((byWorld.get(w) ?? []).map(x => x[1])));
+    const invClear = worlds.map(w => mean((byWorld.get(w) ?? []).map(x => x[2])));
+    const inv = worlds.map(w => mean((byWorld.get(w) ?? []).map(x => x[3])));
+    const invStar3 = worlds.map(w => mean((byWorld.get(w) ?? []).map(x => x[4])));
+    const proW1 = mean(world1ProStar3);
+    report.push(
+      `world ★1+ clear: bare ${bareClear.map(x => `${Math.round(x * 100)}%`).join(' > ')} | inv ${invClear.map(x => `${Math.round(x * 100)}%`).join(' > ')}\n` +
+        `world ★★+ wins : bare ${bare.map(x => `${Math.round(x * 100)}%`).join(' > ')} | inv ${inv.map(x => `${Math.round(x * 100)}%`).join(' > ')}\n` +
+        `world ★★★ mast.: inv  ${invStar3.map(x => `${Math.round(x * 100)}%`).join(' > ')} | W1 pro ★★★ ${Math.round(proW1 * 100)}%`
+    );
+    // World 1 is super welcoming: >=94% bare ★1+, >=98% invested ★1+, >=80% pro ★★★ mean
+    expect(bareClear[0]).toBeGreaterThanOrEqual(0.94);
+    expect(invClear[0]).toBeGreaterThanOrEqual(0.98);
+    expect(proW1).toBeGreaterThanOrEqual(0.8);
+    expect(invStar3[0]).toBeGreaterThanOrEqual(0.6);
     worlds.forEach((w, i) => {
-      // World 1's first lessons ramp in, so its bare mean runs a little high
-      near(bare[i], WIN_TARGETS.bare[i] + (w === 1 ? 0.05 : 0), WORLD_TOLERANCE);
+      near(bare[i], WIN_TARGETS.bare[i] + (w === 1 ? 0.04 : 0), WORLD_TOLERANCE);
       near(inv[i], WIN_TARGETS.invested[i], WORLD_TOLERANCE);
+      expect(invClear[i]).toBeGreaterThanOrEqual(STAR_TARGETS.investedClearFloor[i] - 0.05);
+      // 3★ funnel: ★1+ >= ★★+ > ★★★ in every world
+      expect(invClear[i]).toBeGreaterThanOrEqual(inv[i]);
+      expect(inv[i]).toBeGreaterThan(invStar3[i]);
     });
+    // Late worlds require tighter mastery for ★★★ than World 1
+    expect(invStar3[0]).toBeGreaterThan(invStar3[4]);
     // Neither player finds a world easier than the last, and together they find each one harder
     for (let i = 1; i < worlds.length; i++) {
       expect(inv[i]).toBeLessThanOrEqual(inv[i - 1] + 0.02);

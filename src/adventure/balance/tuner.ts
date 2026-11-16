@@ -14,7 +14,7 @@
 import type { AdventureSave, LevelDef } from '../types';
 import { applyLevelResult, createNewSave } from '../progress';
 import { BOTS, starDistribution } from '../engine/bot';
-import { barePlan, investedPlan, levelsBefore, winTargets, type BuildPlan } from '../engine/botBuilds';
+import { barePlan, investedPlan, levelsBefore, starTargets, worldOf, type BuildPlan } from '../engine/botBuilds';
 
 /** Levels whose puzzle names its charms (kept in step with __tests__/adventureBalance.test.ts) */
 export const PUZZLE_CHARMS: Record<string, string[]> = { '3-2': ['blast-powder', 'flint-spark', 'prismatic-ray'] };
@@ -32,24 +32,61 @@ export const campaignSave = (level: LevelDef): AdventureSave => {
 };
 
 const withPuzzle = (level: LevelDef, plan: BuildPlan): BuildPlan => ({ ...plan, keepCharms: !!PUZZLE_CHARMS[level.id] });
+const clearRate = (dist: number[]) => dist[1] + dist[2] + dist[3];
 const knockout = (dist: number[]) => dist[2] + dist[3];
 
 export interface Rates {
   scale: number;
+  bareClear: number;
   bare: number;
+  investedClear: number;
   invested: number;
-  /** Distance from both targets (plus a penalty if progression doesn't pay) */
+  investedStar3: number;
+  expertStar3: number;
+  /** Multi-star distance across ★1+ clear floor, ★★+ knockout targets, and ★★★ mastery */
   loss: number;
 }
 
-/** Both players' knockout rates on this level with every foe's HP multiplied by `scale`. */
+/**
+ * Full 3-star evaluation (`★1+`, `★★+`, `★★★` + World 1 pro `★★★`) at foe HP × `scale`.
+ * Prevents both over-tuning HP (crushing ★★/★★★) and under-tuning HP (killing the foe before
+ * in-fight ★★★ objectives like bombs, explosions or Catalysts have time to trigger).
+ */
 export const ratesAt = (level: LevelDef, scale: number, runs: number): Rates => {
   const save = campaignSave(level);
   const scaled: LevelDef = { ...level, foes: level.foes.map(f => ({ ...f, hp: Math.max(1, Math.round(f.hp * scale)) })) };
-  const bare = knockout(starDistribution(scaled, save, BOTS.average, runs, withPuzzle(level, barePlan(level))).dist);
-  const invested = knockout(starDistribution(scaled, save, BOTS.average, runs, withPuzzle(level, investedPlan(level))).dist);
-  const t = winTargets(level);
-  return { scale, bare, invested, loss: Math.abs(bare - t.bare) + Math.abs(invested - t.invested) + (invested <= bare ? 1 : 0) };
+  const bareDist = starDistribution(scaled, save, BOTS.average, runs, withPuzzle(level, barePlan(level))).dist;
+  const invDist = starDistribution(scaled, save, BOTS.average, runs, withPuzzle(level, investedPlan(level))).dist;
+  const bareClear = clearRate(bareDist);
+  const bare = knockout(bareDist);
+  const investedClear = clearRate(invDist);
+  const invested = knockout(invDist);
+  const investedStar3 = invDist[3];
+  const expertRuns = worldOf(level) === 1 ? Math.max(20, Math.round(runs / 2)) : 0;
+  const expertStar3 =
+    expertRuns > 0
+      ? starDistribution(scaled, save, BOTS.expert, expertRuns, withPuzzle(level, investedPlan(level))).dist[3]
+      : investedStar3;
+  const t = starTargets(level);
+  const clearPenalty =
+    Math.max(0, t.bareClearFloor - bareClear) * 1.5 + Math.max(0, t.investedClearFloor - investedClear) * 1.5;
+  const koLoss = Math.abs(bare - t.bareKo) + Math.abs(invested - t.investedKo);
+  const star3Loss =
+    (investedStar3 < t.investedStar3Floor
+      ? (t.investedStar3Floor - investedStar3) * 1.5
+      : Math.abs(investedStar3 - t.investedStar3) * 0.3) +
+    (expertRuns > 0 ? Math.max(0, t.expertStar3Floor - expertStar3) * 2 : 0);
+  const progressionPenalty = invested < bare ? 1 : invested === bare && bare < 0.95 ? 0.5 : 0;
+  return {
+    scale,
+    bareClear,
+    bare,
+    investedClear,
+    invested,
+    investedStar3,
+    expertStar3,
+    loss: koLoss + clearPenalty + star3Loss + progressionPenalty,
+  };
 };
 
 /** A first geometric sweep, for when damage has moved a long way (a new scaling layer, a big rework) */

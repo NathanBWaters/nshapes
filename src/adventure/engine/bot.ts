@@ -90,7 +90,7 @@ const chasing = (s: RunState): Goal[] => {
  */
 const chooseSet = (s: RunState, sets: Card[][], bot: BotProfile, rng: Rng): Card[] => {
   const care = bot.huntsRainbows ? 0.6 : 0.3;
-  const focus = bot.huntsRainbows ? 0.85 : 0.6;
+  const focus = bot.name === 'expert' ? 0.96 : bot.huntsRainbows ? 0.85 : 0.6;
   const { defusers, snared, bombs } = trapCards(s);
   const has = (set: Card[], ids: Set<string>) => set.some(c => ids.has(c.id));
   const prefer = (pred: (set: Card[]) => boolean, chance = care) => {
@@ -109,6 +109,12 @@ const chooseSet = (s: RunState, sets: Card[][], bot: BotProfile, rng: Rng): Card
       case 'triple': return prefer(set => set.some(c => (c.health ?? 1) > 1), focus);
       case 'faceDown': return prefer(set => set.some(c => c.wasOriginallyFaceDown), focus);
       case 'bonusCards': return prefer(set => set.some(c => (c.bonusPoints ?? 0) > 0 || (c.bonusMoney ?? 0) > 0), focus);
+      case 'colorSets':
+        return s.level.challenge.kind === 'colorSets'
+          ? prefer(set => set.every(c => c.color === (s.level.challenge as { color: Card['color'] }).color), focus)
+          : null;
+      case 'sameColorSets': return prefer(set => set.every(c => c.color === set[0].color), focus);
+      case 'allDiffSets': return prefer(rainbow, focus);
       case 'rainbows':
       case 'bigHit': return s.features.has('rainbow') ? prefer(rainbow, focus) : null;
       case 'purityChain': {

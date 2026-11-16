@@ -445,7 +445,7 @@ describe('Adventure Mode full-game E2E', () => {
     jest.useRealTimers();
   });
 
-  it('drives a fresh player through all of World 1: unlocks, charms, the skill tree, the first evolution, Time Bombs, Workshop and Bounties', () => {
+  it('drives a fresh player through all of World 1: immediate Blast Powder, gentle 2-trait flow, skill tree, delayed Coins/Workshop, Time Bombs, Boss recipe & Bounties', () => {
     const screen = render(wrap(<AdventureMode onExit={() => {}} />));
     const world1 = MAIN_LEVELS.filter(l => l.biome === 'meadow');
     const first = world1[0];
@@ -498,7 +498,6 @@ describe('Adventure Mode full-game E2E', () => {
 
     // ── The rest of World 1 ──────────────────────────────────────────────
     const firstRecipeLevel = world1.find(l => starRewards(l).some(r => r.evolution))!;
-    let sawEvolution = false;
     let sawBombs = false;
     for (const level of world1.slice(1)) {
       fireEvent.press(screen.getByTestId(`map-node-${level.id}`));
@@ -528,7 +527,6 @@ describe('Adventure Mode full-game E2E', () => {
         expect(reveals.some(t => t.includes('New evolution unlocked!'))).toBe(true);
       }
       expect(fight.sawPassiveChip).toBe(true);
-      sawEvolution ||= fight.sawEvolutionBanner || fight.sawEvolutionRing;
       sawBombs ||= fight.sawBomb;
       if (fight.sawEvolutionBanner || fight.sawEvolutionRing) expect(screen.getByTestId('results-evolutions')).toBeTruthy();
 
@@ -549,9 +547,9 @@ describe('Adventure Mode full-game E2E', () => {
     }
 
     save = loadAdventureSave();
-    expect(sawEvolution).toBe(true);
-    expect(save.discoveredEvolutions.length).toBeGreaterThan(0);
+    expect(save.unlockedEvolutions).toContain('phoenix-pyre');
     expect(sawBombs).toBe(true);
+    expect(save.coinsUnlocked).toBe(true);
     expect(save.workshopUnlocked).toBe(true);
     expect(save.bountiesUnlocked).toBe(!!CAMPAIGN_FEATURES.bounties.clearLevel && (save.stars[CAMPAIGN_FEATURES.bounties.clearLevel] ?? 0) > 0);
     // Bounties live at Camp now, not on the map's dock; so does every battle fought so far
@@ -615,14 +613,12 @@ describe('Adventure Mode full-game E2E', () => {
       if (reward) expect(loadAdventureSave().unlockedFighters.length).toBeGreaterThan(before);
     }
 
-    // ── Recipe Guide shows the evolved recipe ────────────────────────────
+    // ── Guide opens cleanly on World 1 completion ────────────────────────
     fireEvent.press(screen.getByTestId('map-dock-guide'));
-    fireEvent.press(screen.getByTestId('guide-tab-recipes'));
-    expect(screen.getAllByText(/EVOLVED BEFORE/).length).toBeGreaterThan(0);
     fireEvent.press(screen.getByLabelText('Back to map'));
   });
 
-  it('plays World 2–5 landmarks: snares, waves and the shop, bigger loadouts, chained branches and the Summit finale, then reloads a completed campaign', () => {
+  it('plays World 2–5 landmarks: first Evolution on 2-2, snares, waves and the shop, bigger loadouts, chained branches and the Summit finale, then reloads a completed campaign', () => {
     // Everything before a level: 3★ on every earlier main level and the branches hanging off them
     const rootOf = (l: LevelDef): LevelDef => (l.branchOf ? rootOf(getLevel(l.branchOf)) : l);
     const saveBefore = (target: LevelDef, extra: Partial<AdventureSave> = {}): AdventureSave => {
@@ -633,6 +629,20 @@ describe('Adventure Mode full-game E2E', () => {
       const seen = LEVELS.filter(l => (s.stars[l.id] ?? 0) > 0).map(l => l.introduces);
       return { ...s, seenMechanics: [...new Set([...s.seenMechanics, ...seen])], ...extra };
     };
+
+    // ── First Evolution in World 2 (2-2 Phoenix Rising) ──────────────────
+    const evoLevel = MAIN_LEVELS.find(l => l.introduces === 'evolutions')!;
+    mockKvStore.clear();
+    let evoScreen = render(wrap(<AdventureMode initialSave={saveBefore(evoLevel, { charms: ['blast-powder', 'mending-charm', 'flint-spark'] })} onExit={() => {}} />));
+    fireEvent.press(evoScreen.getByTestId(`map-node-${evoLevel.id}`));
+    expect(evoScreen.getByText(/evolutions? armed/)).toBeTruthy();
+    const evoRun = playOpenPreview(evoScreen, evoLevel, { stayOnResults: true });
+    expect(evoRun.fight.sawEvolutionBanner || evoRun.fight.sawEvolutionRing).toBe(true);
+    backToMap(evoScreen);
+    fireEvent.press(evoScreen.getByTestId('map-dock-guide'));
+    fireEvent.press(evoScreen.getByTestId('guide-tab-recipes'));
+    expect(evoScreen.getAllByText(/EVOLVED BEFORE/).length).toBeGreaterThan(0);
+    evoScreen.unmount();
 
     // ── Snares on the board ──────────────────────────────────────────────
     const snareLevel = MAIN_LEVELS.find(l => l.rules.hazards?.snares)!;

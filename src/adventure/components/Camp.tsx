@@ -234,8 +234,8 @@ const Camp: React.FC<Props> = ({ save, history = NO_BATTLES, onChange, onRateBat
         <Icon name={section?.icon ?? 'lorc/campfire'} size={24} color={section ? INK : COLORS.impactOrange} />
         <Text style={st.title} numberOfLines={1}>{(section?.title ?? 'Camp').toUpperCase()}</Text>
         <View style={{ flex: 1 }} />
-        {/* Only what this page spends: stars on fighters, coins everywhere else */}
-        {tab === 'fighters' ? <StarPool save={save} testID="camp-stars" /> : <CoinPill coins={save.coins} />}
+        {/* Only what this page spends: stars on fighters (or before coins unlock), coins everywhere else */}
+        {tab === 'fighters' || !save.coinsUnlocked ? <StarPool save={save} testID="camp-stars" /> : <CoinPill coins={save.coins} />}
       </View>
 
       {totalRefundable > 0 && tab === 'workshop' && save.workshopUnlocked && (

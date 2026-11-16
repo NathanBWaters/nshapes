@@ -50,125 +50,154 @@ const normalizeRewards = (l: LevelInput): LevelDef['rewards'] => {
 };
 
 const RAW_LEVELS: LevelInput[] = [
-  // ════════════════════ 1 · SUNNY MEADOW — basics, first evolution, Time Bombs (no clock) ════════════════════
+  // ════════════════════ 1 · SUNNY MEADOW — gentle flow, early powers, bite-sized goals (no clock) ════════════════════
   {
     id: '1-1', biome: 'meadow', name: 'First Light', introduces: 'set_rule',
-    // The first level can't be lost: make 5 Sets. Stars are about accuracy.
+    // The first level can't be lost: make 5 Sets. Stars are about accuracy, and ★1 grants Blast Powder immediately!
     rules: { attributes: A2, boardSize: 9, hearts: 0, noGear: true },
     foes: [{ name: 'Dozy Bunny', icon: 'delapouite/rabbit', hp: 15, taunt: 'Zzz… huh? A challenger?' }],
-    challenge: { kind: 'noMistakes' }, starRule: { kind: 'accuracy', threeStarMax: 0, twoStarMax: 1 },
+    challenge: { kind: 'noMistakes' }, starRule: { kind: 'accuracy', threeStarMax: 0, twoStarMax: 2 },
     coinMultiplier: 1, difficulty: 1,
-    // Coin Drops, then the clearest offense weapon there is
     rewards: {
-      star1: { coins: 20, unlockFeature: 'coins' },
-      star2: { coins: 30, weapons: ['blast-powder'] },
+      star1: { coins: 20, weapons: ['blast-powder'] },
+      star2: { coins: 30 },
       star3: { coins: 50 },
     },
   },
   {
-    id: '1-2', biome: 'meadow', name: 'Ouch!', introduces: 'hearts',
-    // Puzzle: hearts are a resource. Tabby's Scrappy turns missing hearts into damage;
-    // Mending Charm (★★) heals you back up so the risky line is safe on a replay.
-    rules: { attributes: A2, boardSize: 9, moves: 8, hearts: 3 },
-    foes: [{ name: 'Prickle', icon: 'caro-asercion/hedgehog', hp: 46, taunt: 'Careful, I\'m pointy.' }],
-    challenge: { kind: 'bigHit', n: 6 }, coinMultiplier: 1, difficulty: 1,
-    rewards: { star1: { coins: 10 }, star2: { coins: 20, weapons: ['mending-charm'] }, star3: { coins: 30 } },
+    id: '1-2', biome: 'meadow', name: 'Red Clover', introduces: 'hearts',
+    // Gentle 2-trait flow with Blast Powder already firing! Spot 2 all-red Sets for ★★★.
+    rules: { attributes: A2, boardSize: 9, moves: 8, hearts: 5 },
+    foes: [{ name: 'Prickle', icon: 'caro-asercion/hedgehog', hp: 26, taunt: 'Careful, I\'m pointy.' }],
+    challenge: { kind: 'colorSets', color: 'red', n: 2 }, coinMultiplier: 1, difficulty: 1,
+    rewards: { star1: { coins: 10 }, star2: { coins: 20, weapons: ['flint-spark'] }, star3: { coins: 35 } },
     recommended: ['Orange Tabby'],
   },
   {
-    id: '1-3', biome: 'meadow', name: 'Counting Acorns', introduces: 'attr_number',
-    // The first recipe arrives at ★: Blast Powder + Mending Charm = Phoenix Pyre (taught on 1-4)
-    rules: { attributes: A3, boardSize: 12, moves: 8, hearts: 3 },
-    foes: [{ name: 'Nutkin', icon: 'delapouite/squirrel', hp: 64, taunt: 'One, two, three… mine!' }],
-    challenge: { kind: 'streak', n: 6 }, coinMultiplier: 1, difficulty: 1,
-    rewards: { star1: { coins: 15, evolution: 'phoenix-pyre' }, star2: { coins: 25, character: 'Sly Fox' }, star3: { coins: 50 } },
+    id: '1-3', biome: 'meadow', name: 'All Kinds', introduces: 'all_different',
+    // Practice spotting 3 different shapes + 3 different colors on the friendly 9-card board before Number arrives.
+    rules: { attributes: A2, boardSize: 9, moves: 8, hearts: 5 },
+    foes: [{ name: 'Clover Frog', icon: 'lorc/frog', hp: 30, taunt: 'Ribbit! Can you mix all three?' }],
+    challenge: { kind: 'allDiffSets', n: 2 }, coinMultiplier: 1, difficulty: 1,
+    rewards: { star1: { coins: 15 }, star2: { coins: 25, weapons: ['mending-charm'] }, star3: { coins: 40 } },
   },
   {
-    id: '1-4', biome: 'meadow', name: 'Phoenix Rising', introduces: 'evolutions',
-    // Puzzle: equip Blast Powder + Mending Charm, match the Catalyst, then take a hit on purpose:
-    // every heal or lost heart blasts a 3×2 block. Catalyst Prism (★★) brings Catalysts twice as often.
-    // ★★★ asks for two evolutions: no Catalyst appears while Phoenix Pyre is running, so a third
-    // would only reward playing slowly.
-    rules: { attributes: A3, boardSize: 12, moves: 12, hearts: 4, evolutionLikelihood: 15 },
-    foes: [{ name: 'Cinder Toad', icon: 'lorc/frog', hp: 1270, taunt: 'Ribbit. I was born in a bonfire.' }],
-    challenge: { kind: 'evolutions', n: 2 }, coinMultiplier: 1.1, difficulty: 2,
+    id: '1-4', biome: 'meadow', name: 'Boom Practice', introduces: 'charm',
+    // All 3 charm slots are now full (Blast Powder + Flint Spark + Mending Charm)! Enjoy watching them pop.
+    rules: { attributes: A2, boardSize: 9, moves: 9, hearts: 5 },
+    foes: [{ name: 'Sunny Gecko', icon: 'darkzaitzev/chameleon-glyph', hp: 62, taunt: 'Whoa — watch where you point that powder!' }],
+    challenge: { kind: 'explosions', n: 2 }, coinMultiplier: 1.1, difficulty: 1,
     rewards: {
-      star1: { coins: 15, weapons: ['flint-spark'] },
-      star2: { weapons: ['catalyst-prism'] },
-      star3: { coins: 40 },
+      star1: { coins: 15 },
+      star2: { weapons: ['rally-horn'] },
+      star3: { coins: 45 },
     },
   },
   {
-    id: '1-5', biome: 'meadow', name: 'Star Power', introduces: 'skill_tree',
-    // Puzzle: a tough old foe and a ★★★ for one huge hit. Spend your stars on the tree first
-    // (Scrappy, Combo). Rally Horn (★★) opens every wave with +6.
-    rules: { attributes: A3, boardSize: 12, moves: 9, hearts: 3 },
-    foes: [{ name: 'Old Quillback', icon: 'caro-asercion/porcupine', hp: 368, taunt: 'Seen a hundred like you. Hit harder.' }],
-    challenge: { kind: 'bigHit', n: 8 }, coinMultiplier: 1.2, difficulty: 2,
+    id: '1-5', biome: 'meadow', name: 'Counting Acorns', introduces: 'attr_number',
+    // First 3-trait (12-card) board! Scanning one color at a time makes 12 cards feel effortless.
+    rules: { attributes: A3, boardSize: 12, moves: 9, hearts: 5 },
+    foes: [{ name: 'Nutkin', icon: 'delapouite/squirrel', hp: 103, taunt: 'One, two, three… mine!' }],
+    challenge: { kind: 'sameColorSets', n: 2 }, coinMultiplier: 1.1, difficulty: 1,
+    rewards: { star1: { coins: 15 }, star2: { coins: 25, character: 'Sly Fox' }, star3: { coins: 50 } },
+  },
+  {
+    id: '1-6', biome: 'meadow', name: 'Rainbow Strike', introduces: 'rainbow',
+    // All-different Sets now hit twice as hard! Ask for 2 Rainbows (not 5) so ★★★ feels awesome.
+    rules: { attributes: A3, boardSize: 12, moves: 10, hearts: 4 },
+    foes: [{ name: 'Prism Moth', icon: 'lorc/evil-bat', hp: 180, taunt: 'Every color of the sky!' }],
+    challenge: { kind: 'rainbows', n: 2 }, coinMultiplier: 1.2, difficulty: 2,
+    rewards: { star1: { coins: 20 }, star2: { weapons: ['field-stone'] }, star3: { coins: 55 } },
+  },
+  {
+    id: '1-7', biome: 'meadow', name: 'Star Power', introduces: 'skill_tree',
+    // Spend earned stars in Camp on your fighter's skill tree and land a 7+ damage Set!
+    rules: { attributes: A3, boardSize: 12, moves: 10, hearts: 4 },
+    foes: [{ name: 'Old Quillback', icon: 'caro-asercion/porcupine', hp: 175, taunt: 'Seen a hundred like you. Hit harder.' }],
+    challenge: { kind: 'bigHit', n: 7 }, coinMultiplier: 1.2, difficulty: 2,
     rewards: {
-      star1: { coins: 20, unlockFeature: 'workshop' },
-      star2: { weapons: ['rally-horn'] },
-      star3: { coins: 50 },
+      star1: { coins: 20 },
+      star2: { weapons: ['pinata'] },
+      star3: { coins: 55 },
     },
     recommended: ['Orange Tabby', 'Sly Fox'],
   },
   {
-    id: '1-6', biome: 'meadow', name: 'Rainbow Strike', introduces: 'rainbow',
-    // Puzzle: plain Sets can't finish the moth in time. Field Stone (★★) widens the board: more rainbows.
-    rules: { attributes: A3, boardSize: 12, moves: 10, hearts: 3 },
-    foes: [{ name: 'Prism Moth', icon: 'lorc/evil-bat', hp: 560, taunt: 'Only a rainbow can hurt me.' }],
-    challenge: { kind: 'rainbows', n: 5 }, coinMultiplier: 1.3, difficulty: 2,
-    rewards: { star1: { coins: 25 }, star2: { weapons: ['field-stone'] }, star3: { coins: 60 } },
-  },
-  {
-    id: '1-7', biome: 'meadow', name: 'Fuse Meadow', introduces: 'time_bombs',
-    // Puzzle: fuses tick in real time even without a clock. Build every Set around the bomb card.
-    // Clarity Lens (★★) simplifies the board, so far more Sets include the bomb.
-    rules: { attributes: A3, boardSize: 12, moves: 10, hearts: 4, hazards: { timeBombs: { every: 8, seconds: 16 } } },
-    foes: [{ name: 'Bumble Bomber', icon: 'lorc/bee', hp: 434, taunt: 'Bzz… tick… bzz… tick…' }],
-    challenge: { kind: 'defuseTraps', n: 5 }, coinMultiplier: 1.4, difficulty: 2,
+    id: '1-8', biome: 'meadow', name: 'Shiny Loot', introduces: 'coins',
+    // Now that core Set flow is second nature, introduce Coin Drops and reveal the player's saved purse!
+    rules: { attributes: A3, boardSize: 12, moves: 10, hearts: 4 },
+    foes: [{ name: 'Golden Mole', icon: 'lorc/gold-scarab', hp: 150, taunt: 'Hands off my shiny stash!' }],
+    challenge: { kind: 'streak', n: 4 }, coinMultiplier: 1.3, difficulty: 2,
     rewards: {
-      star1: { coins: 25, weapons: ['pinata'] },
+      star1: { coins: 25, unlockFeature: 'coins' },
       star2: { weapons: ['clarity-lens'] },
       star3: { coins: 60 },
     },
   },
   {
-    id: '1-8', biome: 'meadow', name: 'Shell Shock', introduces: 'triple_card', isBoss: true,
-    // Puzzle: break the armored card while bombs tick. Prismatic Ray (★★) lasers chip armor from afar.
-    rules: { attributes: A3, boardSize: 12, moves: 12, hearts: 5, hazards: { timeBombs: { every: 12, seconds: 20 } } },
-    foes: [{ enemy: 'Iron Shell', hp: 888, taunt: 'Nothing gets through this shell.' }],
+    id: '1-9', biome: 'meadow', name: 'Fuse Meadow', introduces: 'time_bombs',
+    // Gentle 20s fuses and 3 defuses for ★★★; ★1 opens the Workshop so players can spend their coin stash!
+    rules: { attributes: A3, boardSize: 12, moves: 10, hearts: 4, hazards: { timeBombs: { every: 9, seconds: 20 } } },
+    foes: [{ name: 'Bumble Bomber', icon: 'lorc/bee', hp: 140, taunt: 'Bzz… tick… bzz… tick…' }],
+    challenge: { kind: 'defuseTraps', n: 3 }, coinMultiplier: 1.4, difficulty: 2,
+    rewards: {
+      star1: { coins: 25, unlockFeature: 'workshop' },
+      star2: { weapons: ['prismatic-ray'] },
+      star3: { coins: 65 },
+    },
+  },
+  {
+    id: '1-10', biome: 'meadow', name: 'Shell Shock', introduces: 'triple_card', isBoss: true,
+    // World 1 Boss: break the armored card while generous fuses tick. ★1 awards Phoenix Pyre & opens Bounties!
+    rules: { attributes: A3, boardSize: 15, moves: 12, hearts: 5, hazards: { timeBombs: { every: 14, seconds: 22 } } },
+    foes: [{ enemy: 'Iron Shell', hp: 255, taunt: 'Nothing gets through this shell.' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 1.6, difficulty: 3,
-    rewards: { star1: { coins: 40 }, star2: { weapons: ['prismatic-ray'] }, star3: { coins: 100, arcana: 'monochrome_pact' } },
+    rewards: {
+      star1: { coins: 40, evolution: 'phoenix-pyre' },
+      star2: { weapons: ['war-drum'] },
+      star3: { coins: 100, arcana: 'monochrome_pact' },
+    },
     recommended: ['Sly Fox'],
   },
 
-  // ════════════════════ 2 · WHISPERING WOODS — the clock, foe tricks, snares, hints, graces ════════════════════
+  // ════════════════════ 2 · WHISPERING WOODS — the clock, first evolution, snares, hints, graces ════════════════════
   {
     id: '2-1', biome: 'woods', name: 'Ticking Clock', introduces: 'timer',
     // Puzzle: the sloth smothers time weapons, so win FAST instead. Chrono Shard (★) starts you with more
-    // clock; Flint Spark rare (★★) burns the sloth down quicker.
-    rules: { attributes: A3, timer: 60, hearts: 3 },
-    foes: [{ enemy: 'Lazy Sloth', hp: 1320, taunt: 'Take… your… time…' }],
+    // clock; Flint Spark (★★) levels up your fire.
+    rules: { attributes: A3, timer: 60, hearts: 4 },
+    foes: [{ enemy: 'Lazy Sloth', hp: 713, taunt: 'Take… your… time…' }],
     challenge: { kind: 'timeLeft', n: 12 }, coinMultiplier: 1.5, difficulty: 2,
     rewards: { star1: { coins: 30, weapons: ['chrono-shard'] }, star2: { weapons: ['flint-spark'] }, star3: { coins: 70, evolution: 'wildfire-echo' } },
     recommended: ['Sly Fox'],
   },
   {
-    id: '2-2', biome: 'woods', name: 'Tangled Thicket', introduces: 'snares',
+    id: '2-2', biome: 'woods', name: 'Phoenix Rising', introduces: 'evolutions',
+    // Long timed round gives 30s evolutions room to shine! Equip Blast Powder + Mending Charm and trigger
+    // ONE Evolution for ★★★ (never penalizing fast play!).
+    rules: { attributes: A3, timer: 65, hearts: 4, evolutionLikelihood: 18 },
+    foes: [{ name: 'Cinder Toad', icon: 'lorc/frog', hp: 1380, taunt: 'Ribbit. I was born in a bonfire.' }],
+    challenge: { kind: 'evolutions', n: 1 }, coinMultiplier: 1.5, difficulty: 2,
+    rewards: {
+      star1: { coins: 30, weapons: ['life-vessel'] },
+      star2: { weapons: ['catalyst-prism'] },
+      star3: { coins: 75 },
+    },
+  },
+  {
+    id: '2-3', biome: 'woods', name: 'Tangled Thicket', introduces: 'snares',
     // Puzzle: never match the snared card; match the card its arrow points at for +4.
-    // Growth Seed (★★) grows the board, so the pointed-at card fits a Set more often.
     rules: { attributes: A3, timer: 65, hearts: 4, hazards: { snares: { every: 5 } } },
-    foes: [{ name: 'Thicket Spider', icon: 'carl-olsen/spider-face', hp: 1020, taunt: 'Step where I point. Or don\'t.' }],
-    challenge: { kind: 'defuseTraps', n: 6 }, coinMultiplier: 1.6, difficulty: 3,
+    foes: [{ name: 'Thicket Spider', icon: 'carl-olsen/spider-face', hp: 1322, taunt: 'Step where I point. Or don\'t.' }],
+    challenge: { kind: 'defuseTraps', n: 4 }, coinMultiplier: 1.6, difficulty: 3,
     rewards: { star1: { coins: 35, weapons: ['magnet'] }, star2: { weapons: ['growth-seed'] }, star3: { coins: 80, evolution: 'big-bang' } },
   },
   {
-    id: '2-3', biome: 'woods', name: 'A Little Help', introduces: 'hints',
+    id: '2-4', biome: 'woods', name: 'A Little Help', introduces: 'hints',
     // Puzzle: the bandit kills auto-hints, so the bulb is yours to press. Seeker Lens (★★) refills it.
     rules: { attributes: A3, timer: 60, hearts: 3, startingHints: 3 },
-    foes: [{ enemy: 'Masked Bandit', hp: 1980, taunt: 'No free peeks in my woods.' }],
-    challenge: { kind: 'useHints', n: 3 }, coinMultiplier: 1.6, difficulty: 2,
+    foes: [{ enemy: 'Masked Bandit', hp: 1321, taunt: 'No free peeks in my woods.' }],
+    challenge: { kind: 'useHints', n: 2 }, coinMultiplier: 1.6, difficulty: 2,
     rewards: {
       star1: { coins: 35, weapons: ['chaos-shard'] },
       star2: { weapons: ['seeker-lens'] },
@@ -176,40 +205,40 @@ const RAW_LEVELS: LevelInput[] = [
     },
   },
   {
-    id: '2-4', biome: 'woods', name: 'Power Up', introduces: 'power_cards',
+    id: '2-5', biome: 'woods', name: 'Power Up', introduces: 'power_cards',
     // Puzzle: the squirrel hoards refills and the board shrinks. Corgi (★★) fetches new power cards
     // and Zoomies re-deals a full board.
     rules: { attributes: A3, timer: 65, hearts: 3, startingHints: 1 },
     foes: [{ enemy: 'Greedy Squirrel', hp: 1696, taunt: 'Two cards for you. The rest? Mine.' }],
-    challenge: { kind: 'bonusCards', n: 5 }, coinMultiplier: 1.7, difficulty: 3,
+    challenge: { kind: 'bonusCards', n: 4 }, coinMultiplier: 1.7, difficulty: 3,
     rewards: { star1: { coins: 35, weapons: ['war-drum'] }, star2: { character: 'Corgi' }, star3: { coins: 80, weapons: ['chain-gang'] } },
     recommended: ['Corgi'],
   },
   {
-    id: '2-5', biome: 'woods', name: 'Junk Drawer', introduces: 'duds',
-    // Puzzle: duds clog the board; blasts clear them. Blast Powder rare (★★) clears them faster.
+    id: '2-6', biome: 'woods', name: 'Junk Drawer', introduces: 'duds',
+    // Puzzle: duds clog the board; blasts clear them. Blast Powder (★★) levels up to clear them faster.
     rules: { attributes: A3, timer: 60, hearts: 3, startingHints: 1 },
     foes: [{ enemy: 'Junk Rat', hp: 1229, taunt: 'One rat\'s junk is… still junk.' }],
-    challenge: { kind: 'explosions', n: 4 }, coinMultiplier: 1.7, difficulty: 3,
+    challenge: { kind: 'explosions', n: 3 }, coinMultiplier: 1.7, difficulty: 3,
     rewards: { star1: { coins: 40, weapons: ['snowball'] }, star2: { weapons: ['blast-powder'] }, star3: { coins: 90, weapons: ['connector'] } },
     recommended: ['Corgi'],
   },
   {
-    id: '2-6', biome: 'woods', name: 'Lights Out', introduces: 'face_down',
+    id: '2-7', biome: 'woods', name: 'Lights Out', introduces: 'face_down',
     // Puzzle: make Sets to flip hidden cards, then use one. Oracle Eye (★★) points the way.
     rules: { attributes: A3, timer: 60, hearts: 3, startingHints: 1 },
-    foes: [{ enemy: 'Night Owl', hp: 1650, taunt: 'Whooo can see in the dark?' }],
+    foes: [{ enemy: 'Night Owl', hp: 1063, taunt: 'Whooo can see in the dark?' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 1.7, difficulty: 3,
     rewards: { star1: { coins: 40, weapons: ['odd-one-out'] }, star2: { weapons: ['oracle-eye'] }, star3: { coins: 90, weapons: ['time-drop'] } },
     recommended: ['Corgi'],
   },
   {
-    id: '2-7', biome: 'woods', name: 'Near Miss', introduces: 'graces',
+    id: '2-8', biome: 'woods', name: 'Near Miss', introduces: 'graces',
     // Puzzle: near misses are free while graces last, so guess boldly. Badger (★★) makes the
     // first mistake each wave free on top.
     rules: { attributes: A3, timer: 65, hearts: 3, startingHints: 1, startingGraces: 2 },
-    foes: [{ name: 'Whisker Trickster', icon: 'lorc/mouse', hp: 1434, taunt: 'Close enough? Let\'s find out.' }],
-    challenge: { kind: 'graceSaves', n: 2 }, coinMultiplier: 1.8, difficulty: 3,
+    foes: [{ name: 'Whisker Trickster', icon: 'lorc/mouse', hp: 2079, taunt: 'Close enough? Let\'s find out.' }],
+    challenge: { kind: 'graceSaves', n: 1 }, coinMultiplier: 1.8, difficulty: 3,
     rewards: {
       star1: { coins: 45, weapons: ['second-chance'] },
       star2: { character: 'Badger' },
@@ -218,19 +247,19 @@ const RAW_LEVELS: LevelInput[] = [
     recommended: ['Badger'],
   },
   {
-    id: '2-8', biome: 'woods', name: 'Prism Rush', introduces: 'purity_chain',
-    // Puzzle: climb 1-diff → 2-diff → Rainbow on purpose. Emperor Penguin (★★) pays you to slow down and pick.
+    id: '2-9', biome: 'woods', name: 'Prism Rush', introduces: 'purity_chain',
+    // Puzzle: climb 1-diff → 2-diff on purpose. Emperor Penguin (★★) pays you to slow down and pick.
     rules: { attributes: A3, timer: 70, hearts: 3, startingHints: 1, startingGraces: 1 },
-    foes: [{ name: 'Magpie', icon: 'lorc/raven', hp: 1481, taunt: 'Shiny! Shiny! MINE!' }],
-    challenge: { kind: 'purityChain', n: 3 }, coinMultiplier: 1.8, difficulty: 3,
+    foes: [{ name: 'Magpie', icon: 'lorc/raven', hp: 1599, taunt: 'Shiny! Shiny! MINE!' }],
+    challenge: { kind: 'purityChain', n: 2 }, coinMultiplier: 1.8, difficulty: 3,
     rewards: { star1: { coins: 45, weapons: ['greedy-chest'] }, star2: { character: 'Emperor Penguin' }, star3: { coins: 100, weapons: ['prismatic-ray'] } },
     recommended: ['Emperor Penguin'],
   },
   {
-    id: '2-9', biome: 'woods', name: 'The Web', introduces: 'bombs', isBoss: true,
-    // Puzzle: one bomb, many snares. Defuse the bomb first; Clarity Lens rare (★★) makes Sets easy to find.
+    id: '2-10', biome: 'woods', name: 'The Web', introduces: 'bombs', isBoss: true,
+    // Puzzle: one bomb, many snares. Defuse the bomb first; Clarity Lens (★★) makes Sets easy to find.
     rules: { attributes: A3, timer: 75, hearts: 5, startingHints: 1, startingGraces: 1, hazards: { snares: { every: 6 } } },
-    foes: [{ enemy: 'Trap Weaver', hp: 4464, taunt: 'Step lightly. Everything here is wired.' }],
+    foes: [{ enemy: 'Trap Weaver', hp: 5357, taunt: 'Step lightly. Everything here is wired.' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 2.4, difficulty: 4,
     rewards: { star1: { coins: 70, weapons: ['tightrope'] }, star2: { weapons: ['clarity-lens'] }, star3: { coins: 160, arcana: 'controlled_burn' } },
     recommended: ['Emperor Penguin', 'Badger'],
@@ -511,39 +540,39 @@ export const BRANCH_STAR_REQUIREMENT = 2;
 const BRANCHES: LevelInput[] = [
   // World 1
   {
-    id: '1-3F', branchOf: '1-3', biome: 'meadow', name: 'Fox Den', introduces: 'fighter_fire',
+    id: '1-5F', branchOf: '1-5', biome: 'meadow', name: 'Fox Den', introduces: 'fighter_fire',
     // Fighter trial: chain Sets inside 5 s. The wolf punishes standing still. Echo Stone (★★) adds free Sets to the chain.
-    rules: { attributes: A3, boardSize: 12, moves: 12, hearts: 3 },
-    foes: [{ enemy: 'Stalking Wolf', hp: 264, taunt: 'Too slow, little fox.' }],
-    challenge: { kind: 'comboReach', n: 3 }, coinMultiplier: 1.4, difficulty: 2,
+    rules: { attributes: A3, boardSize: 12, moves: 12, hearts: 4 },
+    foes: [{ enemy: 'Stalking Wolf', hp: 165, taunt: 'Too slow, little fox.' }],
+    challenge: { kind: 'comboReach', n: 2 }, coinMultiplier: 1.4, difficulty: 2,
     rewards: { star1: { coins: 30 }, star2: { weapons: ['echo-stone'] }, star3: { coins: 70, weapons: ['amplifier-coil'] } },
     recommended: ['Sly Fox'],
   },
   // World 2
   {
-    id: '2-4C', branchOf: '2-4', biome: 'woods', name: 'Corgi\'s Yard', introduces: 'fighter_growth',
-    // Fighter trial: every bonus card Corgi fetches is another bonus card. Field Stone rare (★★) widens the yard.
+    id: '2-5C', branchOf: '2-5', biome: 'woods', name: 'Corgi\'s Yard', introduces: 'fighter_growth',
+    // Fighter trial: every bonus card Corgi fetches is another bonus card. Field Stone (★★) widens the yard.
     rules: { attributes: A3, timer: 70, hearts: 3, startingHints: 1 },
-    foes: [{ name: 'Lazy Tapir', icon: 'delapouite/tapir', hp: 742, taunt: 'Fetch? In this heat?' }],
+    foes: [{ name: 'Lazy Tapir', icon: 'delapouite/tapir', hp: 801, taunt: 'Fetch? In this heat?' }],
     challenge: { kind: 'bonusCards', n: 8 }, coinMultiplier: 2, difficulty: 3,
     rewards: { star1: { coins: 50, weapons: ['thorn-bush'] }, star2: { weapons: ['field-stone'] }, star3: { coins: 110, weapons: ['war-drum'] } },
     recommended: ['Corgi'],
   },
   {
-    id: '2-7B', branchOf: '2-7', biome: 'woods', name: 'Badger\'s Sett', introduces: 'fighter_grace',
-    // Fighter trial: miss on purpose, stack grudges, release one massive Set. Mending Charm rare (★★) keeps you standing.
+    id: '2-8B', branchOf: '2-8', biome: 'woods', name: 'Badger\'s Sett', introduces: 'fighter_grace',
+    // Fighter trial: miss on purpose, stack grudges, release one massive Set. Mending Charm (★★) keeps you standing.
     rules: { attributes: A3, timer: 70, hearts: 4, startingHints: 1, startingGraces: 1 },
-    foes: [{ name: 'Bully Boar', icon: 'caro-asercion/boar', hp: 1054, taunt: 'Go on. Take a swing. Miss.' }],
+    foes: [{ name: 'Bully Boar', icon: 'caro-asercion/boar', hp: 1164, taunt: 'Go on. Take a swing. Miss.' }],
     challenge: { kind: 'bigHit', n: 12 }, coinMultiplier: 2.1, difficulty: 3,
     rewards: { star1: { coins: 55, weapons: ['cursed-idol'] }, star2: { weapons: ['mending-charm'] }, star3: { coins: 120, weapons: ['fortune-token'] } },
     recommended: ['Badger'],
   },
   {
-    id: '2-8P', branchOf: '2-8', biome: 'woods', name: 'Ice Floe', introduces: 'fighter_foresight',
-    // Fighter trial: the hawk races the clock; every Rainbow freezes it. Time Drop rare (★★) buys more hunting time.
+    id: '2-9P', branchOf: '2-9', biome: 'woods', name: 'Ice Floe', introduces: 'fighter_foresight',
+    // Fighter trial: the hawk races the clock; every Rainbow freezes it. Time Drop (★★) buys more hunting time.
     rules: { attributes: A3, timer: 70, hearts: 3, startingHints: 1, startingGraces: 1 },
     foes: [{ enemy: 'Diving Hawk', hp: 1027, taunt: 'The clock is mine. Catch me.' }],
-    challenge: { kind: 'rainbows', n: 5 }, coinMultiplier: 2.2, difficulty: 3,
+    challenge: { kind: 'rainbows', n: 4 }, coinMultiplier: 2.2, difficulty: 3,
     rewards: { star1: { coins: 55 }, star2: { weapons: ['time-drop'] }, star3: { coins: 120, weapons: ['crystal-orb'] } },
     recommended: ['Emperor Penguin'],
   },

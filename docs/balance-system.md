@@ -12,8 +12,8 @@ reducer on fixed seeds, so every number is exact and repeatable.
 |---|---|---|---|
 | **The lab** (always on) | `npx jest __tests__/adventureBalanceLab.test.ts` | Is any weapon overpowered, underpowered, a passenger, or not worth a slot? | `src/adventure/balance/lab.ts`, `targets.ts`, `report.ts` |
 | **The report** | `npm run balance:report` | The same, plus every recipe, written to [balance-report.md](./balance-report.md) with a list of what moved since last time | `docs/balance-report.md`, `docs/balance-snapshot.json` |
-| **Level balance** | `npm run balance:levels` | Does each level hit its win rates for the bare and the invested player? | `__tests__/adventureBalance.test.ts` |
-| **The HP tuner** | `npm run balance:tune` (`ONLY=5-2,3-4` for some) | What foe HP puts each level closest to its targets? Rewrites `data/levels.ts`. | `src/adventure/balance/tuner.ts` |
+| **Level 3-star balance** | `npm run balance:levels` | Does every level hit its `★1+` clear floor, `★★+` knockout band, `★★★` mastery target, and World 1 pro `★★★` floor? | `__tests__/adventureBalance.test.ts`, `src/adventure/engine/botBuilds.ts` |
+| **The 3-star HP tuner** | `npm run balance:tune` (`ONLY=5-2,3-4` for some) | Searches foe HP against the multi-star loss (`★1+`, `★★+`, `★★★`, and World 1 pro `★★★` so HP neither walls `★★` nor starves in-fight `★★★` goals) and rewrites `data/levels.ts`. | `src/adventure/balance/tuner.ts` |
 | **The balance atlas** | `npm run balance:atlas` | How do all 1,953 weapon pairs, 204 recipes, 6 fighters, 8 Arcana, Pressure+Surge hazards, Snowball curves, Ridge Shapley weights, 8D `MAP-Elites` niches, and 56 campaign levels interact? | `src/adventure/balance/analytics.ts`, `docs/balance-analytics.json`, `docs/balance-atlas.html` |
 
 `__tests__/adventureBuilds.test.ts` adds the build-level checks: no fighter,

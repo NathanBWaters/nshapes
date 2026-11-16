@@ -693,7 +693,7 @@ export const applyLevelResult = (
  * `lifetimeCoins > 0`; bought upgrades show the Workshop was open.
  */
 const USED_BEFORE_FLAG: Record<UnlockableFeature, (save: AdventureSave) => boolean> = {
-  coins: s => s.lifetimeCoins > 0,
+  coins: s => s.workshopUnlocked || Object.keys(s.upgrades).length > 0 || Object.keys(s.weaponTuning ?? {}).length > 0,
   workshop: s => Object.keys(s.upgrades).length > 0 || Object.keys(s.weaponTuning ?? {}).length > 0,
   bounties: () => false,
 };

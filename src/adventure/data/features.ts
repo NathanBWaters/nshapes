@@ -38,7 +38,7 @@ export const CAMPAIGN_FEATURES: Record<UnlockableFeature, CampaignFeatureDef> = 
     tease: 'Your feats across every fight now earn extra loot!',
     badge: 'NEW SYSTEM UNLOCKED',
     accent: '#F59E0B',
-    clearLevel: '1-8',
+    clearLevel: '1-10',
     open: { label: 'View Bounty Board', destination: { screen: 'camp', tab: 'bounties' } },
   },
 };

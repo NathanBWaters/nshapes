@@ -5,31 +5,27 @@ a north star. These are rough targets, not hard rules. "Winning" can mean
 different things per level (knockout, ★★★…); read it as "knocks the foe out"
 unless a level says otherwise.
 
-## Two players to balance between
+## Balancing on All Three Stars (`★`, `★★`, `★★★`) & Mobile FTUE Pacing
 
-**The bare player** puts nothing into progression:
-- No skill-tree stars spent, no coins spent (no Workshop, no tuning).
-- Doesn't chase evolutions or build around anything.
+Following mobile 3-star best practices (*Angry Birds*, *Cut the Rope*, *Royal Match*, *Plants vs. Zombies*), campaign levels are balanced on **the entire 3-star funnel**, never on knockout win rate alone:
 
-They should win roughly:
+- **`★` (Stage Clear — Very Easy, Never Discouraging):** Clearing a stage unlocks the next node on the map and frames the outcome positively (`STAGE CLEAR!`). In World 1, even a bare player clears `>= 95%` of attempts (`100%` on `1-1`). Players are never walled or scolded for earning 1 star.
+- **`★★` (Knockout — Easy Early, Ramping Later):** Knocking out the foe within the move/time budget. Easy in World 1 (`~78%` bare, `~98%` invested) so beginners build confidence immediately, then diverging cleanly as progression layers kick in.
+- **`★★★` (Mastery — "A Bit of a Challenge", Never an RNG Sweat):** Completing the level's mini-goal alongside a knockout. In World 1, average invested players hit `★★★` `~72%` of the time and pro players (`BOTS.expert`) clear **`>= 75%` on every level** (`~85%+` mean) — never forcing last-move RNG luck. Across Worlds 2–5, organic first-try `★★★` tightens gradually toward `~28%` to reward mastery and replays.
 
-| World | 1 | 2 | 3 | 4 | 5 |
+| Metric / Tier | World 1 | World 2 | World 3 | World 4 | World 5 |
 |---|---|---|---|---|---|
-| Bare player wins | ~50% | ~30% | ~10% | ~0% | ~0% |
+| **Bare `★1+` (Stage Clear floor)** | ≥88% (~97% mean) | ≥55% | ≥20% | ≥3% | 0% |
+| **Bare `★★+` (Knockout target)** | ~75% (~85% on 1-2..1-5) | ~30% | ~10% | ~0% | ~0% |
+| **Invested `★★+` (Knockout target)** | ~98% | ~90% | ~80% | ~70% | ~50% |
+| **Invested `★★★` (Mastery target)** | ~72% (Pro ≥75%/lvl) | ~58% | ~48% | ~38% | ~28% |
 
-…unless they're just insanely good at the puzzle itself.
+### Progressive Onboarding (World 1 → World 2)
 
-**The invested player** is as maxed out as they could be at that point in the
-campaign and plays well:
-- Every star they could have earned is spent; coins are spent on the Workshop.
-- They run a *solid* build (not a hard counter to the foe, just a good one),
-  and probably use evolutions.
-
-They should win roughly:
-
-| World | 1 | 2 | 3 | 4 | 5 |
-|---|---|---|---|---|---|
-| Invested player wins | ~100% | ~90% | ~80% | ~70% | ~50% |
+New players get powers and flow **before** meta-economies:
+1. **Constrained 2-trait boards first (`1-1`..`1-4`):** Keep `shape` + `color` (9 cards) across 4 levels while granting `Blast Powder` right on `1-1` `★1`, `Flint Spark` on `1-2`, and `Mending Charm` on `1-3`. Ask for accessible visual mini-goals (*2 all-red Sets*, *2 all-different Sets*, *2 explosions*) so players feel powerful immediately.
+2. **Gradual puzzle expansion (`1-5`..`1-7`):** Introduce `Number` (`1-5`, *2 single-color Sets* scanning tip), `Rainbow Strike` (`1-6`, *2 Rainbows*), and `Skill Trees` (`1-7`).
+3. **Delayed currencies & meta-systems (`1-8`..`2-2`):** Hide coin UI clutter until `Coin Drops` unlock on `1-8`, open `The Workshop` on `1-9`, award `Phoenix Pyre` + `Bounties` on the `1-10` boss, and teach `Evolutions` (`n: 1`, never penalizing fast play) on `2-2` where `LONG_ROUNDS` gives 30-second evolutions room to shine.
 
 ## What this says
 

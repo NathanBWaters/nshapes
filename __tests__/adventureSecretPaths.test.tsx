@@ -184,9 +184,10 @@ describe('a practice fight', () => {
     expect(misses).toBeGreaterThanOrEqual(hearts);
     expect(eventsOf(s, 'breather')).toEqual([expect.objectContaining({ amount: hearts })]);
     expect(s.hearts).toBe(hearts);
-    // A real level is lost by the same mistakes
+    // A real level is lost once its hearts (plus Nine Lives) run out
     let real = createRun(PARENT, clearedThrough(PARENT.id), { seed: 7 });
-    for (let i = 0; i < misses && real.status === 'playing'; i++) real = miss(real);
+    const realLimit = (real.maxHearts ?? hearts) + 3;
+    for (let i = 0; i < realLimit && real.status === 'playing'; i++) real = miss(real);
     expect(real.status).toBe('lost');
   });
 

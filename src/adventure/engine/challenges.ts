@@ -28,6 +28,9 @@ export const describeChallenge = (level: LevelDef): string => {
     case 'shopBuys': return `Buy ${plural(c.n, 'weapon')} in the shop`;
     case 'bigHit': return `Deal ${c.n}+ damage in one Set`;
     case 'surgeSets': return c.n === 1 ? 'Make a Set during a Shading Surge' : `Make ${c.n} Sets during Shading Surges`;
+    case 'colorSets': return `Make ${plural(c.n, `all-${c.color} Set`)}`;
+    case 'sameColorSets': return `Make ${plural(c.n, 'single-color Set')}`;
+    case 'allDiffSets': return `Make ${plural(c.n, 'all-different Set')}`;
   }
 };
 
@@ -56,6 +59,9 @@ export const challengeCount = (run: RunState, c: ChallengeDef): number | null =>
     case 'shopBuys': return run.shopBuys;
     case 'bigHit': return run.biggestHit;
     case 'surgeSets': return run.surge?.sets ?? 0;
+    case 'colorSets': return run.colorSets[c.color];
+    case 'sameColorSets': return s.allSameColorMatches;
+    case 'allDiffSets': return s.allDifferentMatches;
     default: return null;
   }
 };

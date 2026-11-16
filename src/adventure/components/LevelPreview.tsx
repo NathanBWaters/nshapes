@@ -180,25 +180,29 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                       <Text style={[st.goalText, done && { opacity: 0.6 }]}>{g.text}</Text>
                       {done && <Text style={st.doneMark}>✓</Text>}
                     </View>
-                    <View style={st.goalRewards}>
-                      <View style={[st.coinChip, done && st.chipDone]}>
-                        <Icon name="lorc/crown-coin" size={14} color={done ? TONE.spent : TONE.coin} />
-                        <Text style={[st.coinChipText, done && { color: TONE.spent }]}>{g.reward.coins}</Text>
+                    {(save.coinsUnlocked || unlocks.length > 0) && (
+                      <View style={st.goalRewards}>
+                        {save.coinsUnlocked && (
+                          <View style={[st.coinChip, done && st.chipDone]}>
+                            <Icon name="lorc/crown-coin" size={14} color={done ? TONE.spent : TONE.coin} />
+                            <Text style={[st.coinChipText, done && { color: TONE.spent }]}>{g.reward.coins}</Text>
+                          </View>
+                        )}
+                        {unlocks.map((unlock, k) =>
+                          done ? (
+                            <View key={k} style={[st.unlockChip, st.chipDone]}>
+                              <UnlockableAvatar display={unlock} size={20} fighterMood="idle" iconSize={16} iconColor={TONE.spent} interactive />
+                              <Text style={[st.unlockText, { color: TONE.spent }]} numberOfLines={1}>{unlock.revealed}</Text>
+                            </View>
+                          ) : (
+                            <View key={k} style={st.unlockChip}>
+                              <Silhouette icon={unlock.icon} size={14} />
+                              <Text style={st.unlockText}>{unlock.secret}</Text>
+                            </View>
+                          )
+                        )}
                       </View>
-                      {unlocks.map((unlock, k) =>
-                        done ? (
-                          <View key={k} style={[st.unlockChip, st.chipDone]}>
-                            <UnlockableAvatar display={unlock} size={20} fighterMood="idle" iconSize={16} iconColor={TONE.spent} interactive />
-                            <Text style={[st.unlockText, { color: TONE.spent }]} numberOfLines={1}>{unlock.revealed}</Text>
-                          </View>
-                        ) : (
-                          <View key={k} style={st.unlockChip}>
-                            <Silhouette icon={unlock.icon} size={14} />
-                            <Text style={st.unlockText}>{unlock.secret}</Text>
-                          </View>
-                        )
-                      )}
-                    </View>
+                    )}
                   </View>
                 );
               })}
