@@ -1,7 +1,15 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const TUTORIAL_STORAGE_KEY = '@nshapes_tutorial';
+export const TUTORIAL_STORAGE_KEY = '@nshapes_tutorial';
+
+export const resetTutorialStorage = async (): Promise<void> => {
+  try {
+    await AsyncStorage.removeItem(TUTORIAL_STORAGE_KEY);
+  } catch {
+    // ignore storage errors
+  }
+};
 
 export type TutorialStep =
   | 'intro'
@@ -23,6 +31,7 @@ interface TutorialContextType {
   state: TutorialState;
   startTutorial: () => void;
   endTutorial: (completed: boolean) => void;
+  resetTutorial: () => void;
   nextStep: () => void;
   setStep: (step: TutorialStep) => void;
 }
@@ -109,6 +118,11 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
     });
   };
 
+  const resetTutorial = () => {
+    setState(defaultState);
+    void resetTutorialStorage();
+  };
+
   const setStep = (step: TutorialStep) => {
     setState(prev => ({ ...prev, currentStep: step }));
   };
@@ -124,6 +138,7 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
         state,
         startTutorial,
         endTutorial,
+        resetTutorial,
         nextStep,
         setStep,
       }}

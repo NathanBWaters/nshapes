@@ -387,3 +387,26 @@ export const LevelProgressStorage = {
     storage.set(migrationKey, true);
   },
 };
+
+/** Wipe all saved game runs, wins, high scores, character unlocks & level progress (preserves sound setting). */
+export const resetAllClassicStorage = (): void => {
+  const keysToClear = [
+    STORAGE_KEYS.CHARACTER_WINS,
+    STORAGE_KEYS.ENDLESS_HIGH_SCORES,
+    STORAGE_KEYS.ADVENTURE_HIGH_ROUNDS,
+    STORAGE_KEYS.UNLOCKED_CHARACTERS,
+    STORAGE_KEYS.SAVED_ADVENTURE_GAME,
+    STORAGE_KEYS.HIGHEST_UNLOCKED_LEVEL,
+    STORAGE_KEYS.LEVEL_COMPLETIONS,
+    'level_migration_v1_complete',
+  ];
+  const s = storage as { remove?: (k: string) => unknown; delete?: (k: string) => unknown };
+  for (const key of keysToClear) {
+    try {
+      if (typeof s.remove === 'function') s.remove(key);
+      else if (typeof s.delete === 'function') s.delete(key);
+    } catch {
+      // ignore storage errors
+    }
+  }
+};

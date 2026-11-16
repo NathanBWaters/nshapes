@@ -3,25 +3,42 @@ import { View, Text, TouchableOpacity, StyleSheet, Modal, Platform } from 'react
 import { COLORS, RADIUS } from '@/utils/colors';
 import { useSoundSetting } from '@/hooks/useSoundSetting';
 import { analyticsOptedOut, playerCode, setAnalyticsEnabled } from '@/analytics/posthog';
+import { resetAdventureSave } from '@/adventure/save';
+import { resetAllClassicStorage } from '@/utils/storage';
+import { resetTutorialStorage } from '@/context/TutorialContext';
 import Icon from './Icon';
 
 interface OptionsMenuProps {
   visible: boolean;
   onClose: () => void;
+  onResetGame?: () => void;
 }
 
-const OptionsMenu: React.FC<OptionsMenuProps> = ({ visible, onClose }) => {
+const OptionsMenu: React.FC<OptionsMenuProps> = ({ visible, onClose, onResetGame }) => {
   // Re-read each time the modal opens: the in-game menu may have changed it
   const [soundEnabled, handleToggleSound] = useSoundSetting(visible);
   const [analyticsOn, setAnalyticsOn] = useState(() => !analyticsOptedOut());
   const [copiedCode, setCopiedCode] = useState(false);
+  const [confirmingReset, setConfirmingReset] = useState(false);
+  const [resetDone, setResetDone] = useState(false);
 
   useEffect(() => {
     if (visible) {
       setAnalyticsOn(!analyticsOptedOut());
       setCopiedCode(false);
+      setConfirmingReset(false);
+      setResetDone(false);
     }
   }, [visible]);
+
+  const handleConfirmReset = () => {
+    resetAdventureSave();
+    resetAllClassicStorage();
+    void resetTutorialStorage();
+    setConfirmingReset(false);
+    setResetDone(true);
+    onResetGame?.();
+  };
 
   const handleToggleAnalytics = () => {
     const next = !analyticsOn;
@@ -107,7 +124,7 @@ const OptionsMenu: React.FC<OptionsMenuProps> = ({ visible, onClose }) => {
               </TouchableOpacity>
             </View>
 
-            <View style={[styles.settingRow, { borderBottomWidth: 0 }]}>
+            <View style={styles.settingRow}>
               <View>
                 <Text style={styles.settingText}>Player ID</Text>
                 <Text style={styles.playerCodeText} testID="options-player-code">{code}</Text>
@@ -120,6 +137,66 @@ const OptionsMenu: React.FC<OptionsMenuProps> = ({ visible, onClose }) => {
               >
                 <Text style={styles.toggleTextOff}>{copiedCode ? 'COPIED' : 'COPY'}</Text>
               </TouchableOpacity>
+            </View>
+
+            <View style={[styles.settingRow, { borderBottomWidth: 0, flexDirection: 'column', alignItems: 'stretch', gap: 10 }]}>
+              <View style={styles.resetHeaderRow}>
+                <View style={[styles.settingLabel, { flex: 1 }]}>
+                  <Icon name="lorc/recycle" size={24} color={COLORS.impactRed} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.settingText}>Reset Game</Text>
+                    <Text style={styles.resetSubtext}>Erase all stars, unlocks & saved progress</Text>
+                  </View>
+                </View>
+                {!confirmingReset && (
+                  <TouchableOpacity
+                    testID="options-reset-game"
+                    accessibilityRole="button"
+                    accessibilityLabel="Reset Game"
+                    style={[styles.toggleButton, resetDone ? styles.resetDoneBadge : styles.resetOutlineButton]}
+                    onPress={() => {
+                      setResetDone(false);
+                      setConfirmingReset(true);
+                    }}
+                  >
+                    <Text style={[styles.toggleButtonText, resetDone ? styles.toggleTextOn : styles.resetOutlineText]}>
+                      {resetDone ? 'RESET ✓' : 'RESET'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {confirmingReset && (
+                <View style={styles.confirmBox} testID="options-reset-confirm-box">
+                  <Text style={styles.confirmWarningText}>
+                    Start over from scratch? This permanently erases all Adventure stars, coins, weapons, fighters, battle history, and saved runs.
+                  </Text>
+                  <View style={styles.confirmButtonsRow}>
+                    <TouchableOpacity
+                      testID="options-reset-cancel"
+                      accessibilityRole="button"
+                      style={[styles.confirmActionBtn, styles.toggleButtonOff]}
+                      onPress={() => setConfirmingReset(false)}
+                    >
+                      <Text style={[styles.toggleButtonText, styles.toggleTextOff]}>CANCEL</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      testID="options-reset-confirm"
+                      accessibilityRole="button"
+                      style={[styles.confirmActionBtn, styles.dangerSolidButton]}
+                      onPress={handleConfirmReset}
+                    >
+                      <Text style={[styles.toggleButtonText, styles.toggleTextOn]}>START OVER</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
+              {resetDone && !confirmingReset && (
+                <Text style={styles.resetDoneText} testID="options-reset-done">
+                  All progress cleared — ready for a fresh start!
+                </Text>
+              )}
             </View>
           </View>
 
@@ -222,6 +299,60 @@ const styles = StyleSheet.create({
   },
   toggleTextOff: {
     color: COLORS.slateCharcoal,
+  },
+  resetHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  resetSubtext: {
+    fontSize: 12,
+    color: COLORS.slateCharcoal,
+    marginTop: 2,
+  },
+  resetOutlineButton: {
+    backgroundColor: '#FFF1F0',
+    borderWidth: 1.5,
+    borderColor: COLORS.impactRed,
+  },
+  resetOutlineText: {
+    color: COLORS.impactRed,
+  },
+  resetDoneBadge: {
+    backgroundColor: COLORS.logicTeal,
+  },
+  confirmBox: {
+    backgroundColor: '#FFF5F5',
+    borderRadius: RADIUS.button,
+    borderWidth: 1.5,
+    borderColor: COLORS.impactRed,
+    padding: 12,
+    gap: 10,
+  },
+  confirmWarningText: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
+    color: COLORS.deepOnyx,
+  },
+  confirmButtonsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  confirmActionBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: RADIUS.button,
+    alignItems: 'center',
+  },
+  dangerSolidButton: {
+    backgroundColor: COLORS.impactRed,
+  },
+  resetDoneText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.logicTeal,
   },
   doneButton: {
     backgroundColor: COLORS.actionYellow,

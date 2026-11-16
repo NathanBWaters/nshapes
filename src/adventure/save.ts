@@ -128,6 +128,32 @@ const writeHistoryList = (next: BattleRecord[]): BattleRecord[] => {
 export const recordBattle = (history: readonly BattleRecord[], record: BattleRecord): BattleRecord[] =>
   writeHistoryList(withBattle(history, record));
 
+const removeStoredKey = (key: string): boolean => {
+  try {
+    const s = storage as { remove?: (k: string) => unknown; delete?: (k: string) => unknown };
+    if (typeof s.remove === 'function') {
+      s.remove(key);
+      return true;
+    }
+    if (typeof s.delete === 'function') {
+      s.delete(key);
+      return true;
+    }
+  } catch {
+    // ignore storage errors
+  }
+  return false;
+};
+
+/** Wipe all Adventure Mode progress & battle history so the player starts completely fresh. */
+export const resetAdventureSave = (): AdventureSave => {
+  const fresh = createNewSave();
+  if (!removeStoredKey(KEY)) writeAdventureSave(fresh);
+  if (!removeStoredKey(HISTORY_KEY)) writeHistoryList([]);
+  removeStoredKey(BACKUP_KEY);
+  return fresh;
+};
+
 /** Persist updates to a battle's fun rating & tags inside the stored history list. */
 export const saveBattleFeedback = (
   history: readonly BattleRecord[],

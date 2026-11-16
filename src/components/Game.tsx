@@ -131,8 +131,9 @@ const Game: React.FC<GameProps> = ({
 
   // Track round scores for progress chart
   const [roundHistory, setRoundHistory] = useState<RoundHistoryEntry[]>([]);
+  const [resetRevision, setResetRevision] = useState(0);
 
-  const { startTutorial } = useTutorial();
+  const { startTutorial, resetTutorial } = useTutorial();
 
   const [state, setState] = useState<GameState>(() => {
     const activeAttributes = getActiveAttributesForRound(1);
@@ -2012,6 +2013,7 @@ const Game: React.FC<GameProps> = ({
         return (
           <>
             <MainMenu
+              key={`menu-${resetRevision}`}
               onSelectAdventure={() => setGamePhase('adventure')}
               onSelectFreeplay={() => setGamePhase('difficulty_select')}
               onSelectTutorial={handleTutorialStart}
@@ -2021,12 +2023,24 @@ const Game: React.FC<GameProps> = ({
             <OptionsMenu
               visible={showOptionsModal}
               onClose={() => setShowOptionsModal(false)}
+              onResetGame={() => {
+                resetTutorial();
+                setSelectedCharacter(null);
+                setRoundInLevel(1);
+                setUnlockedCharacter(null);
+                setRoundHistory([]);
+                setState(createInitialGameState({
+                  player: initializePlayer('player1', 'Player 1', 'Orange Tabby'),
+                  activeAttributes: getActiveAttributesForRound(1),
+                }));
+                setResetRevision(r => r + 1);
+              }}
             />
           </>
         );
 
       case 'adventure':
-        return <AdventureMode onExit={exitToMenu} autoPlayer={autoPlayerEnabled} />;
+        return <AdventureMode key={`adv-${resetRevision}`} onExit={exitToMenu} autoPlayer={autoPlayerEnabled} />;
 
       case 'difficulty_select':
         return (
