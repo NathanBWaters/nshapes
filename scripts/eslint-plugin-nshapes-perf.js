@@ -536,11 +536,254 @@ const singleLifecycleAndAudioGatewayRule = {
   },
 };
 
+const BANNER_COMPONENTS = new Set(['CompanionBubble', 'WeaponExplainer', 'PowerExplainer']);
+
+function getJsxTagName(openingElement) {
+  if (!openingElement || !openingElement.name) return null;
+  const n = openingElement.name;
+  if (n.type === 'JSXIdentifier') return n.name;
+  if (n.type === 'JSXMemberExpression' && n.property && n.property.type === 'JSXIdentifier') {
+    return n.property.name;
+  }
+  return null;
+}
+
+function hasJsxAttribute(openingElement, attrName) {
+  if (!openingElement || !Array.isArray(openingElement.attributes)) return false;
+  return openingElement.attributes.some(
+    a => a && a.type === 'JSXAttribute' && a.name && a.name.type === 'JSXIdentifier' && a.name.name === attrName
+  );
+}
+
+function extractStylePropValue(propName, valueNode) {
+  const v = unwrap(valueNode);
+  if (!v) return undefined;
+  if (v.type === 'Literal') {
+    if (propName === 'flexDirection' || propName === 'flexWrap') {
+      return typeof v.value === 'string' ? v.value : undefined;
+    }
+    if (typeof v.value === 'number') return v.value;
+    if (typeof v.value === 'string') return v.value.length > 0 ? v.value : 0;
+    return undefined;
+  }
+  if (v.type === 'TemplateLiteral' && (propName === 'width' || propName === 'maxWidth')) {
+    return 'dynamic';
+  }
+  if (propName === 'width' || propName === 'maxWidth') {
+    return 'dynamic';
+  }
+  if ((propName === 'flex' || propName === 'flexShrink') && v.type === 'Identifier') {
+    return 'dynamic';
+  }
+  return undefined;
+}
+
+function extractObjectStyle(objNode) {
+  const out = {};
+  if (!objNode || objNode.type !== 'ObjectExpression') return out;
+  for (const prop of objNode.properties) {
+    if (!prop || prop.type !== 'Property') continue;
+    const key = getPropertyKeyName(prop);
+    if (
+      key === 'flexDirection' ||
+      key === 'flexWrap' ||
+      key === 'flex' ||
+      key === 'flexShrink' ||
+      key === 'width' ||
+      key === 'maxWidth'
+    ) {
+      const val = extractStylePropValue(key, prop.value);
+      if (val !== undefined) out[key] = val;
+    }
+  }
+  return out;
+}
+
+function isShrinkableValue(val) {
+  if (val === undefined || val === null) return false;
+  if (typeof val === 'number') return val > 0;
+  if (typeof val === 'string') return val.length > 0;
+  return false;
+}
+
+function resolveStyleExpression(expr, styleSheets) {
+  const merged = {};
+  function mergeFrom(node) {
+    const e = unwrap(node);
+    if (!e) return;
+    if (e.type === 'ObjectExpression') {
+      Object.assign(merged, extractObjectStyle(e));
+    } else if (
+      e.type === 'MemberExpression' &&
+      !e.computed &&
+      e.object.type === 'Identifier' &&
+      e.property.type === 'Identifier'
+    ) {
+      const sheet = styleSheets.get(e.object.name);
+      if (sheet && sheet.has(e.property.name)) {
+        Object.assign(merged, sheet.get(e.property.name));
+      }
+    } else if (e.type === 'ArrayExpression') {
+      for (const item of e.elements) {
+        if (item) mergeFrom(item);
+      }
+    } else if (e.type === 'LogicalExpression') {
+      // Only let conditional branches add row layout risk, never count conditional shrink as guaranteed
+      const branch = resolveStyleExpression(e.right, styleSheets);
+      if (branch.flexDirection) merged.flexDirection = branch.flexDirection;
+      if (branch.flexWrap) merged.flexWrap = branch.flexWrap;
+    } else if (e.type === 'ConditionalExpression') {
+      const a = resolveStyleExpression(e.consequent, styleSheets);
+      const b = resolveStyleExpression(e.alternate, styleSheets);
+      if (a.flexDirection === 'row' || a.flexDirection === 'row-reverse') merged.flexDirection = a.flexDirection;
+      else if (b.flexDirection === 'row' || b.flexDirection === 'row-reverse') merged.flexDirection = b.flexDirection;
+      if (a.flexWrap === 'wrap' && b.flexWrap === 'wrap') merged.flexWrap = 'wrap';
+      for (const k of ['flex', 'flexShrink', 'width', 'maxWidth']) {
+        if (isShrinkableValue(a[k]) && isShrinkableValue(b[k])) merged[k] = a[k];
+      }
+    }
+  }
+  mergeFrom(expr);
+  return merged;
+}
+
+function getOpeningElementStyle(openingElement, styleSheets) {
+  if (!openingElement || !Array.isArray(openingElement.attributes)) return {};
+  const combined = {};
+  for (const attr of openingElement.attributes) {
+    if (
+      attr &&
+      attr.type === 'JSXAttribute' &&
+      attr.name &&
+      attr.name.type === 'JSXIdentifier' &&
+      attr.name.name === 'style' &&
+      attr.value &&
+      attr.value.type === 'JSXExpressionContainer'
+    ) {
+      Object.assign(combined, resolveStyleExpression(attr.value.expression, styleSheets));
+    }
+  }
+  return combined;
+}
+
+function collectDirectJsxElements(children, out) {
+  for (const ch of children || []) {
+    if (!ch) continue;
+    if (ch.type === 'JSXElement') {
+      out.push(ch);
+    } else if (ch.type === 'JSXExpressionContainer') {
+      collectExpressionJsxElements(ch.expression, out);
+    }
+  }
+}
+
+function collectExpressionJsxElements(expr, out) {
+  const e = unwrap(expr);
+  if (!e) return;
+  if (e.type === 'JSXElement') out.push(e);
+  else if (e.type === 'LogicalExpression') collectExpressionJsxElements(e.right, out);
+  else if (e.type === 'ConditionalExpression') {
+    collectExpressionJsxElements(e.consequent, out);
+    collectExpressionJsxElements(e.alternate, out);
+  }
+}
+
+const noRowTextOverflowRule = {
+  meta: {
+    type: 'problem',
+    docs: {
+      description:
+        'Prevent horizontal text clipping in React Native flexDirection: row containers where children default to flexShrink: 0.',
+    },
+    schema: [],
+    messages: {
+      rowClampedTextNeedsShrink:
+        "<Text numberOfLines> inside a non-wrapping flexDirection: 'row' container will overflow in React Native (flexShrink defaults to 0). Add flex: 1 or flexShrink: 1.",
+      rowBannerChildNeedsFlex:
+        "<{{name}}> inside a flexDirection: 'row' parent will expand to max-content width and clip off-screen unless given flex: 1 / flexShrink: 1 (or placed in a column container).",
+    },
+  },
+  create(context) {
+    const styleSheets = new Map();
+    const rowElements = [];
+
+    return {
+      CallExpression(node) {
+        const c = unwrap(node.callee);
+        if (
+          !c ||
+          c.type !== 'MemberExpression' ||
+          c.computed ||
+          c.object.type !== 'Identifier' ||
+          c.object.name !== 'StyleSheet' ||
+          c.property.type !== 'Identifier' ||
+          c.property.name !== 'create'
+        ) {
+          return;
+        }
+        const arg = node.arguments[0];
+        if (!arg || arg.type !== 'ObjectExpression') return;
+        const parent = node.parent;
+        if (!parent || parent.type !== 'VariableDeclarator' || parent.id.type !== 'Identifier') return;
+
+        const sheet = new Map();
+        for (const prop of arg.properties) {
+          if (!prop || prop.type !== 'Property' || prop.value.type !== 'ObjectExpression') continue;
+          const key = getPropertyKeyName(prop);
+          if (key) sheet.set(key, extractObjectStyle(prop.value));
+        }
+        styleSheets.set(parent.id.name, sheet);
+      },
+
+      JSXElement(node) {
+        rowElements.push(node);
+      },
+
+      'Program:exit'() {
+        for (const node of rowElements) {
+          const parentStyle = getOpeningElementStyle(node.openingElement, styleSheets);
+          const dir = parentStyle.flexDirection;
+          if ((dir !== 'row' && dir !== 'row-reverse') || parentStyle.flexWrap === 'wrap') continue;
+
+          const directChildren = [];
+          collectDirectJsxElements(node.children, directChildren);
+          for (const child of directChildren) {
+            const tagName = getJsxTagName(child.openingElement);
+            if (!tagName) continue;
+            const childStyle = getOpeningElementStyle(child.openingElement, styleSheets);
+
+            if (tagName === 'Text' && hasJsxAttribute(child.openingElement, 'numberOfLines')) {
+              const canShrink =
+                isShrinkableValue(childStyle.flex) ||
+                isShrinkableValue(childStyle.flexShrink) ||
+                isShrinkableValue(childStyle.width) ||
+                isShrinkableValue(childStyle.maxWidth);
+              if (!canShrink) {
+                context.report({ node: child, messageId: 'rowClampedTextNeedsShrink' });
+              }
+            } else if (BANNER_COMPONENTS.has(tagName)) {
+              const hasFlex = isShrinkableValue(childStyle.flex) || isShrinkableValue(childStyle.flexShrink);
+              if (!hasFlex) {
+                context.report({
+                  node: child,
+                  messageId: 'rowBannerChildNeedsFlex',
+                  data: { name: tagName },
+                });
+              }
+            }
+          }
+        }
+      },
+    };
+  },
+};
+
 module.exports = {
   rules: {
     'require-guarded-frame-callback': requireGuardedFrameCallbackRule,
     'no-frame-loop-allocations': noFrameLoopAllocationsRule,
     'require-safe-infinite-animation': requireSafeInfiniteAnimationRule,
     'single-lifecycle-and-audio-gateway': singleLifecycleAndAudioGatewayRule,
+    'no-row-text-overflow': noRowTextOverflowRule,
   },
 };

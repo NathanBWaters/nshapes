@@ -642,9 +642,9 @@ const Camp: React.FC<Props> = ({ save, history = NO_BATTLES, onChange, onRateBat
                     <Text style={st.arcanaNumeral}>{a.numeral}</Text>
                     <Icon name={unlocked ? a.icon : 'lorc/padlock'} size={26} color={INK} />
                   </View>
-                  <View style={{ flex: 1, gap: 4 }}>
+                  <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-                      <Text style={st.fighterName}>{unlocked ? a.name : `Arcana ${a.numeral}: ???`}</Text>
+                      <Text style={[st.fighterName, { flexShrink: 1 }]}>{unlocked ? a.name : `Arcana ${a.numeral}: ???`}</Text>
                       {equipped && <View style={st.usingTag}><Text style={st.usingText}>ACTIVE</Text></View>}
                     </View>
                     {unlocked ? (

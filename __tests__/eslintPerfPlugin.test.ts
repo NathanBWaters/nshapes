@@ -236,4 +236,99 @@ describe('eslint-plugin-nshapes-perf', () => {
       ],
     }
   );
+
+  ruleTester.run('no-row-text-overflow', plugin.rules['no-row-text-overflow'], {
+    valid: [
+      {
+        filename: 'src/components/ShrinkableRowText.tsx',
+        code: `
+          const st = StyleSheet.create({
+            row: { flexDirection: 'row', alignItems: 'center' },
+            ok: { flexShrink: 1, fontSize: 12 },
+            flexed: { flex: 1 },
+          });
+          export function Ok() {
+            return (
+              <View style={st.row}>
+                <Text numberOfLines={1} style={st.ok}>Long text truncates cleanly</Text>
+                <Text numberOfLines={1} style={st.flexed}>Also fine</Text>
+              </View>
+            );
+          }
+        `,
+      },
+      {
+        filename: 'src/components/WrappedRowOrColumn.tsx',
+        code: `
+          const st = StyleSheet.create({
+            wrapRow: { flexDirection: 'row', flexWrap: 'wrap' },
+            bannerCol: { width: '100%' },
+          });
+          export function Ok({ show }: { show: boolean }) {
+            return (
+              <>
+                <View style={st.wrapRow}>
+                  <Text numberOfLines={1}>Wrapped row is exempt</Text>
+                </View>
+                <View style={st.bannerCol}>
+                  <CompanionBubble text="Column container lets bubble stretch cleanly" />
+                </View>
+                <View style={{ flexDirection: 'row' }}>
+                  {show && <CompanionBubble style={{ flex: 1 }} text="Flexed in row is safe" />}
+                </View>
+              </>
+            );
+          }
+        `,
+      },
+    ],
+    invalid: [
+      {
+        filename: 'src/components/UnshrinkableRowText.tsx',
+        code: `
+          const st = StyleSheet.create({
+            row: { flexDirection: 'row' },
+            bad: { fontSize: 12 },
+          });
+          export function Bad() {
+            return (
+              <View style={st.row}>
+                <Text numberOfLines={1} style={st.bad}>Clips right off the edge!</Text>
+              </View>
+            );
+          }
+        `,
+        errors: [{ messageId: 'rowClampedTextNeedsShrink' }],
+      },
+      {
+        filename: 'src/components/ZeroShrinkRowText.tsx',
+        code: `
+          export function Bad() {
+            return (
+              <View style={{ flexDirection: 'row' }}>
+                <Text numberOfLines={1} style={{ flexShrink: 0 }}>Explicit zero shrink fails!</Text>
+              </View>
+            );
+          }
+        `,
+        errors: [{ messageId: 'rowClampedTextNeedsShrink' }],
+      },
+      {
+        filename: 'src/components/RowBannerClip.tsx',
+        code: `
+          const s = StyleSheet.create({
+            guideBanner: { flexDirection: 'row', alignItems: 'center' },
+          });
+          export function BadMap() {
+            return (
+              <View style={s.guideBanner}>
+                <CompanionBubble text="Meow! Expands to 680px in row!" />
+              </View>
+            );
+          }
+        `,
+        errors: [{ messageId: 'rowBannerChildNeedsFlex' }],
+      },
+    ],
+  });
 });

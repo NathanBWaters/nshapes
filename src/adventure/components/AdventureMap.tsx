@@ -326,7 +326,7 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
         {stars > 0 && <DockButton testID="map-dock-guide" icon="lorc/open-book" label="Guide" onPress={onOpenGuide} />}
         <TouchableOpacity testID="map-play-next" onPress={() => onSelectLevel(frontier)} style={s.playNext} activeOpacity={0.85}>
           <FighterAvatar character={fighter.name} size={34} mood="anticipation" animate={isLive} />
-          <View style={{ flex: 1 }}>
+          <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={s.playNextLabel}>PLAY {frontier.id}</Text>
             <Text style={s.playNextSub} numberOfLines={1}>{frontier.name}</Text>
           </View>
@@ -497,17 +497,14 @@ const s = StyleSheet.create({
   // The title gives way first on a narrow screen, so the stars and coins are never cut off
   title: { flex: 1, fontWeight: '900', letterSpacing: 2, color: INK, fontSize: 16 },
   guideBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+    width: '100%',
     backgroundColor: '#FFFBEB',
     borderBottomWidth: 2,
     borderBottomColor: INK,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 8,
     zIndex: 9,
   },
-  guideBannerText: { flex: 1, fontSize: 13, fontWeight: '800', color: INK, lineHeight: 18 },
   band: { position: 'absolute', left: 0, right: 0, overflow: 'hidden' },
   ground: { position: 'absolute', left: -40, right: -40, bottom: -60, height: 120, borderRadius: 200, opacity: 0.6 },
   decor: { position: 'absolute', opacity: 0.55 },
@@ -515,8 +512,8 @@ const s = StyleSheet.create({
   banner: { backgroundColor: COLORS.canvasWhite, borderWidth: 2, borderBottomWidth: 4, borderRadius: 8, paddingHorizontal: 18, paddingVertical: 8, alignItems: 'center', gap: 2 },
   bannerTitle: { fontWeight: '900', letterSpacing: 2, fontSize: 16 },
   bannerSub: { fontSize: 12, fontWeight: '600', opacity: 0.8 },
-  gate: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: INK, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4, marginTop: 4 },
-  gateText: { color: COLORS.canvasWhite, fontWeight: '800', fontSize: 11 },
+  gate: { flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '92%', backgroundColor: INK, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4, marginTop: 4 },
+  gateText: { flexShrink: 1, color: COLORS.canvasWhite, fontWeight: '800', fontSize: 11 },
   nodeWrap: { position: 'absolute', width: 120, alignItems: 'center' },
   node: { alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderBottomWidth: 6, borderColor: INK },
   nodeLocked: { backgroundColor: '#E9E4DC', borderColor: '#B8B0A4' },
@@ -545,7 +542,7 @@ const s = StyleSheet.create({
   badgeDot: { position: 'absolute', top: -2, right: 8, width: 12, height: 12, borderRadius: 6, backgroundColor: COLORS.impactRed, borderWidth: 2, borderColor: COLORS.canvasWhite },
   playNext: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.actionYellow, borderWidth: 2, borderBottomWidth: 5, borderColor: INK, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, maxWidth: 260 },
   playNextLabel: { fontWeight: '900', fontSize: 16, color: INK, letterSpacing: 1 },
-  playNextSub: { fontSize: 12, fontWeight: '600', color: INK },
+  playNextSub: { flexShrink: 1, fontSize: 12, fontWeight: '600', color: INK },
 });
 
 export default AdventureMap;

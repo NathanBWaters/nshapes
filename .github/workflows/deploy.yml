@@ -40,8 +40,8 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Run browser CPU & background audio battery budgets
-        run: npm run test:e2e:battery
+      - name: Run browser CPU, battery & mobile text-visibility budgets
+        run: npm run test:e2e:ci
 
       - name: Build web app
         run: npx expo export --platform web

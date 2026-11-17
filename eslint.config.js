@@ -35,6 +35,7 @@ module.exports = defineConfig([
       'nshapes-perf/no-frame-loop-allocations': 'error',
       'nshapes-perf/require-safe-infinite-animation': 'error',
       'nshapes-perf/single-lifecycle-and-audio-gateway': 'error',
+      'nshapes-perf/no-row-text-overflow': 'error',
     },
   },
   {

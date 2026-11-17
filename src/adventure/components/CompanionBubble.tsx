@@ -132,15 +132,24 @@ const CompanionBubble: React.FC<Props> = ({
 const st = StyleSheet.create({
   row: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    alignSelf: 'stretch',
+    width: '100%',
+    maxWidth: '100%',
+    flexShrink: 1,
+    minWidth: 0,
     gap: 8,
   },
   avatarWrap: {
     alignSelf: 'flex-start',
     marginTop: 2,
+    flexShrink: 0,
   },
   bubble: {
     flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    maxWidth: '100%',
     borderWidth: 2,
     borderBottomWidth: 3,
     borderRadius: 12,
@@ -161,11 +170,14 @@ const st = StyleSheet.create({
   },
   speakerRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
+    minWidth: 0,
     gap: 6,
   },
   speaker: {
+    flexShrink: 1,
     fontSize: 10,
     fontWeight: '900',
     letterSpacing: 1,
@@ -173,6 +185,8 @@ const st = StyleSheet.create({
     color: '#9A5B00',
   },
   badgePill: {
+    flexShrink: 1,
+    maxWidth: '100%',
     backgroundColor: COLORS.actionYellow,
     borderRadius: 999,
     borderWidth: 1,
@@ -188,11 +202,13 @@ const st = StyleSheet.create({
     textTransform: 'uppercase',
   },
   title: {
+    flexShrink: 1,
     fontSize: 14,
     fontWeight: '900',
     color: INK,
   },
   text: {
+    flexShrink: 1,
     fontSize: 12.5,
     fontWeight: '800',
     color: INK,
@@ -201,10 +217,13 @@ const st = StyleSheet.create({
   pillsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    minWidth: 0,
     gap: 5,
     marginTop: 3,
   },
   pill: {
+    flexShrink: 1,
+    maxWidth: '100%',
     borderRadius: 999,
     borderWidth: 1.5,
     paddingHorizontal: 7,
@@ -223,6 +242,7 @@ const st = StyleSheet.create({
     borderColor: '#D97706',
   },
   pillText: {
+    flexShrink: 1,
     fontSize: 11,
     fontWeight: '900',
   },
