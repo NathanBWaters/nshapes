@@ -36,7 +36,9 @@ import {
   weaponBuilds,
 } from '../progress';
 import { startingLoadout } from '../loadout';
-import { Btn, Eyebrow, Heart, INK, PopIn, Skulls, StarRow, TONE } from './ui';
+import { companionVoice } from '../coach';
+import CompanionBubble from './CompanionBubble';
+import { Btn, Heart, INK, PopIn, Skulls, StarRow, TONE } from './ui';
 import { Silhouette, UnlockableAvatar, describeRewardUnlocks } from './rewards';
 
 const ATTR_ICONS = { shape: 'lorc/diamond-hard', color: 'lorc/crystal-shine', number: 'lorc/cycle', shading: 'lorc/stone-block', background: 'lorc/field' } as const;
@@ -119,20 +121,23 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
 
           <ScrollView contentContainerStyle={st.body} bounces={false}>
             {level.id === '1-1' && best === 0 ? (
-              <View style={st.coachRow} testID="preview-coach">
-                <FighterAvatar character={fighter.name} size={40} mood="curious" framed />
-                <Text style={st.coachText}>Every foe has 3 ★ goals. Tap Fight! and I&apos;ll guide your first matches!</Text>
-              </View>
+              <CompanionBubble
+                testID="preview-coach"
+                character={fighter.name}
+                mood="victory"
+                badge="Magic Rule"
+                text={`${companionVoice(fighter.name).hello} Pick 3 cards where EVERY trait (Shape & Color) is all the same OR all different — never 2 twins + 1 oddball! Tap Fight! and I’ll show you!`}
+              />
             ) : level.id !== '1-1' ? (
-              <TouchableOpacity onPress={() => onShowMechanic(level.introduces)} style={st.mech} activeOpacity={0.85}>
-                <Icon name={mech.icon} size={28} color={INK} />
-                <View style={{ flex: 1 }}>
-                  <Eyebrow text={isNew ? 'New this level' : 'Featured'} />
-                  <Text style={st.mechTitle}>{mech.title}</Text>
-                  <Text style={st.mechTag}>{mech.tagline}</Text>
-                </View>
-                <Icon name="lorc/open-book" size={18} color={INK} />
-              </TouchableOpacity>
+              <CompanionBubble
+                testID="preview-mech-bubble"
+                character={fighter.name}
+                mood="curious"
+                badge={isNew ? 'New! Tap for tips 📖' : 'Tap for tips 📖'}
+                title={mech.title}
+                text={`${companionVoice(fighter.name).hello} ${mech.tagline}`}
+                onPress={() => onShowMechanic(level.introduces)}
+              />
             ) : null}
 
             <View style={st.rules}>

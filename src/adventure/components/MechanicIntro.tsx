@@ -15,8 +15,10 @@ import { FighterAvatar } from '@/components/fighters';
 import { COLORS } from '@/utils/colors';
 import { isValidCombination } from '@/utils/gameUtils';
 import { sfx } from '@/audio';
-import type { Card as CardType } from '@/types';
+import type { Card as CardType, CharacterName } from '@/types';
 import type { DemoCard, LessonPage, MechanicDef, MechanicDemo, QuizQuestion } from '../types';
+import { FIGHTERS } from '../data/fighters';
+import { companionVoice } from '../coach';
 import { DARK, INK } from './ui';
 
 const GOLD = COLORS.actionYellow;
@@ -106,6 +108,7 @@ const stepsForMechanic = (
 
 interface LessonProps {
   steps: LessonStep[] | null;
+  speaker?: CharacterName;
   onDone: () => void;
   /** Label of the final button */
   cta?: string;
@@ -113,7 +116,7 @@ interface LessonProps {
   dismissible?: boolean;
 }
 
-const Lesson: React.FC<LessonProps> = ({ steps, onDone, cta = 'Got it', dismissible }) => {
+const Lesson: React.FC<LessonProps> = ({ steps, speaker = 'Orange Tabby', onDone, cta = 'Got it', dismissible }) => {
   const [i, setI] = useState(0);
   const [answer, setAnswer] = useState<boolean | null>(null);
   const fade = useSharedValue(0);
@@ -166,12 +169,12 @@ const Lesson: React.FC<LessonProps> = ({ steps, onDone, cta = 'Got it', dismissi
             <Animated.View style={[{ gap: 14 }, anim]}>
               {step.type === 'page' ? (
                 <>
-                  <Text style={st.eyebrow}>{step.eyebrow}</Text>
+                  <Text style={st.eyebrow}>{speaker} · {step.eyebrow}</Text>
                   <View style={st.titleRow}>
-                    <FighterAvatar character="Orange Tabby" size={44} mood="curious" framed />
+                    <FighterAvatar character={speaker} size={48} mood="victory" framed />
                     <View style={{ flex: 1 }}>
                       <Text style={st.title}>{step.title}</Text>
-                      {step.tagline && <Text style={st.tagline}>{step.tagline}</Text>}
+                      {step.tagline && <Text style={st.tagline}>“{companionVoice(speaker).hello} {step.tagline}”</Text>}
                     </View>
                     {step.icon && (
                       <View style={st.titleIcon}>
@@ -180,14 +183,20 @@ const Lesson: React.FC<LessonProps> = ({ steps, onDone, cta = 'Got it', dismissi
                     )}
                   </View>
                   {step.demo && <View style={st.stage}><DemoView demo={step.demo} /></View>}
-                  <View style={{ gap: 8 }}>
+                  <View style={st.speechBox}>
                     {step.body.map((p, k) => <Text key={k} style={st.body}>{p}</Text>)}
                   </View>
                 </>
               ) : (
                 <>
-                  <Text style={st.eyebrow}>Check {step.index + 1} of {step.total}</Text>
-                  <Text style={st.title}>Is this a Set?</Text>
+                  <Text style={st.eyebrow}>{speaker} · Check {step.index + 1} of {step.total}</Text>
+                  <View style={st.titleRow}>
+                    <FighterAvatar character={speaker} size={44} mood={answer === null ? 'curious' : answer === correctAnswer ? 'victory' : 'anticipation'} framed />
+                    <View style={{ flex: 1 }}>
+                      <Text style={st.title}>Is this a Set?</Text>
+                      <Text style={st.tagline}>Check EVERY trait — no 2 twins + 1 oddball!</Text>
+                    </View>
+                  </View>
                   <View style={st.stage}><CardRow cards={step.question.cards} /></View>
                   {answer === null ? (
                     <View style={st.answers}>
@@ -201,7 +210,7 @@ const Lesson: React.FC<LessonProps> = ({ steps, onDone, cta = 'Got it', dismissi
                   ) : (
                     <View style={[st.feedback, { borderColor: answer === correctAnswer ? COLORS.logicTeal : COLORS.impactOrange }]}>
                       <Text style={[st.feedbackTitle, { color: answer === correctAnswer ? COLORS.logicTeal : COLORS.impactOrange }]}>
-                        {answer === correctAnswer ? 'Correct!' : 'Not quite.'} {correctAnswer ? 'It is a Set.' : 'It is not a Set.'}
+                        {answer === correctAnswer ? `${companionVoice(speaker).cheer} You nailed it!` : `Ooh, sneaky one!`} {correctAnswer ? 'Every trait passes!' : 'Magic Rule: 2 + 1 breaks it!'}
                       </Text>
                       <Text style={st.body}>{step.question.explain}</Text>
                     </View>
@@ -237,18 +246,21 @@ const Lesson: React.FC<LessonProps> = ({ steps, onDone, cta = 'Got it', dismissi
 /** Convenience wrapper: a lesson for one mechanic. */
 const MechanicIntro: React.FC<{
   mechanic: MechanicDef | null;
+  fighter?: CharacterName;
   onClose: () => void;
   cta?: string;
   quiz?: boolean;
   brief?: boolean;
   prelude?: LessonPage[];
   dismissible?: boolean;
-}> = ({ mechanic, onClose, cta, quiz, brief, prelude, dismissible }) => {
+}> = ({ mechanic, fighter, onClose, cta, quiz, brief, prelude, dismissible }) => {
   const steps = useMemo(
     () => (mechanic ? stepsForMechanic(mechanic, { quiz, brief, prelude }) : null),
     [mechanic, quiz, brief, prelude]
   );
-  return <Lesson steps={steps} onDone={onClose} cta={cta} dismissible={dismissible} />;
+  const featuredFighter = mechanic ? FIGHTERS.find(f => f.signature === mechanic.id)?.name : undefined;
+  const speaker = featuredFighter ?? fighter ?? 'Orange Tabby';
+  return <Lesson steps={steps} speaker={speaker} onDone={onClose} cta={cta} dismissible={dismissible} />;
 };
 
 const st = StyleSheet.create({
@@ -262,7 +274,8 @@ const st = StyleSheet.create({
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   titleIcon: { width: 54, height: 54, borderRadius: 12, backgroundColor: GOLD, alignItems: 'center', justifyContent: 'center' },
   title: { color: COLORS.canvasWhite, fontSize: 26, fontWeight: '900', lineHeight: 30 },
-  tagline: { color: MUTED, fontSize: 14, fontWeight: '600', marginTop: 2 },
+  tagline: { color: GOLD, fontSize: 14, fontWeight: '700', marginTop: 2 },
+  speechBox: { gap: 8, backgroundColor: 'rgba(255, 251, 235, 0.08)', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(253, 224, 71, 0.35)', padding: 12 },
   stage: { backgroundColor: STAGE, borderRadius: 12, paddingVertical: 16, paddingHorizontal: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
   body: { color: TEXT, fontSize: 16, lineHeight: 23 },
   cardsRow: { flexDirection: 'row', gap: 8, justifyContent: 'center' },

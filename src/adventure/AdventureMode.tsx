@@ -318,12 +318,13 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
         <MechanicIntro
           mechanic={teaching.plans[0].mechanic}
           prelude={teaching.plans[0].prelude}
+          fighter={save.selectedFighter}
           brief
           cta={teaching.plans.length > 1 ? `Next: ${teaching.plans[1].mechanic.title}` : teaching.level.rules.sandbox ? 'Start practising' : 'Let\'s play!'}
           onClose={() => finishLesson(teaching)}
         />
       ) : (
-        <MechanicIntro mechanic={reference} cta="Close" quiz={false} dismissible onClose={() => setReference(null)} />
+        <MechanicIntro mechanic={reference} fighter={save.selectedFighter} cta="Close" quiz={false} dismissible onClose={() => setReference(null)} />
       )}
       {unlocks.length > 0 && (
         <UnlockReveal

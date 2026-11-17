@@ -42,6 +42,7 @@ import { SURGE_RULES } from '../data/rules';
 import { weaponLevelSuffix } from '../data/armory';
 import { COACH_KEYS } from '../progress';
 import { computeLiveGuidance, explainInvalidPick, shouldShowDamageNumbers, shouldShowPassiveHud } from '../coach';
+import CompanionBubble from './CompanionBubble';
 import { EVOLUTION_RULES } from '../engine/sources';
 import { Anchor, AnchorsProvider, EVENT_FX, EvolutionCutIn, FxStage, GearBelt, fxClock, scriptFor, useAnchors, useFightFx, type Beat } from '../fx';
 import { Btn, CoinPill, DARK, Eyebrow, Heart, INK, PopIn, TONE } from './ui';
@@ -127,8 +128,10 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   /** The first evolution ever: its cut-in also points at the countdown ring */
   const [evolutionHint, setEvolutionHint] = useState(false);
   const [boardSelectedCount, setBoardSelectedCount] = useState(0);
+  const [boardSelectedCards, setBoardSelectedCards] = useState<Card[]>([]);
   const [boardIdle, setBoardIdle] = useState(false);
   const [mistakeNote, setMistakeNote] = useState<string | null>(null);
+  const [mistakeCards, setMistakeCards] = useState<Card[] | null>(null);
   const [coachDismissed, setCoachDismissed] = useState(false);
   const [eventBannerNote, setEventBannerNote] = useState<string | null>(null);
   const anchors = useAnchors();
@@ -344,6 +347,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   const handleMatch = useCallback((cards: Card[], rewards: CardReward[], effects?: WeaponEffectResult, info?: { hinted: boolean }) => {
     setLastMatchTime(Date.now());
     setMistakeNote(null);
+    setMistakeCards(null);
     setEventBannerNote(null);
     const graceUsed = rewards.some(r => r.effectType === 'grace');
     const isMegaMatch =
@@ -361,7 +365,8 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   const handleInvalid = useCallback((cards: Card[]) => {
     triggerMistake();
     triggerEnemyReaction('taunt');
-    setMistakeNote(explainInvalidPick(cards, runRef.current.attributes));
+    setMistakeNote(explainInvalidPick(cards, runRef.current.attributes, runRef.current.fighter));
+    setMistakeCards(cards);
     dispatch({ type: 'INVALID', cards });
     const ids = cards.map(c => c.id);
     later(() => dispatch({ type: 'REPLACE', ids }), 520);
@@ -403,8 +408,16 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   const showDamageHud = shouldShowDamageNumbers(level, startSave);
   const showPassivesHud = shouldShowPassiveHud(level, startSave);
   const liveGuidance = useMemo(
-    () => computeLiveGuidance(run, { selectedCount: boardSelectedCount, mistakeNote, idleNudge: boardIdle, seenIntro: coachDismissed }),
-    [run, boardSelectedCount, mistakeNote, boardIdle, coachDismissed]
+    () =>
+      computeLiveGuidance(run, {
+        selectedCount: boardSelectedCount,
+        selectedCards: boardSelectedCards,
+        mistakeNote,
+        mistakeCards,
+        idleNudge: boardIdle,
+        seenIntro: coachDismissed,
+      }),
+    [run, boardSelectedCount, boardSelectedCards, mistakeNote, mistakeCards, boardIdle, coachDismissed]
   );
   const activeGlowIds = useMemo(() => {
     const merged = [...(keenEyeIds ?? []), ...(liveGuidance?.glowIds ?? [])];
@@ -667,25 +680,25 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
         ) : null}
 
         {coachText && !ended && (
-          <TouchableOpacity
+          <CompanionBubble
             testID="run-coach-banner"
-            style={[st.coachBanner, mistakeNote ? st.coachBannerWarn : null]}
-            activeOpacity={level.id === '1-1' ? 1 : 0.8}
-            onPress={() => {
-              if (level.id !== '1-1') {
-                setCoachDismissed(true);
-                setEventBannerNote(null);
-              }
-            }}
-          >
-            <FighterAvatar
-              character={run.fighter}
-              size={28}
-              mood={mistakeNote ? 'anticipation' : 'curious'}
-              framed
-            />
-            <Text style={st.coachBannerText}>{coachText}</Text>
-          </TouchableOpacity>
+            character={run.fighter}
+            text={coachText}
+            mood={liveGuidance?.mood ?? 'curious'}
+            tone={mistakeNote && boardSelectedCount === 0 ? 'warn' : 'warm'}
+            pills={!eventBannerNote ? liveGuidance?.pills : undefined}
+            avatarSize={32}
+            onPress={
+              level.id === '1-1'
+                ? undefined
+                : () => {
+                    setCoachDismissed(true);
+                    setEventBannerNote(null);
+                    setMistakeNote(null);
+                    setMistakeCards(null);
+                  }
+            }
+          />
         )}
       </View>
 
@@ -723,6 +736,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
           dimmedCardIds={activeDimIds}
           dimmedOpacity={liveGuidance?.dimOpacity}
           onSelectedCountChange={handleSelectedCount}
+          onSelectedCardsChange={setBoardSelectedCards}
           onBoardIdleChange={handleBoardIdle}
           slotRef={slotRef}
           onSlotLayout={anchors.measure}

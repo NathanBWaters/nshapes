@@ -11,24 +11,24 @@ export const MECHANICS: Record<string, MechanicDef> = {
   set_rule: {
     id: 'set_rule',
     kind: 'rule',
-    title: 'The Set',
-    tagline: 'Pick 3 cards. Each trait: all same or all different.',
+    title: 'The Magic Rule of Set',
+    tagline: 'Check EVERY trait: all the same OR all different!',
     body: [
-      'Tap three cards to make a Set.',
-      'For every trait, the three cards must be ALL THE SAME or ALL DIFFERENT. For now the traits are shape and color.',
-      'Every Set hits the foe. Make 5 Sets to win!',
+      'Pick 3 cards and check EACH trait one by one (Shape, then Color).',
+      'For EVERY trait, all 3 cards must be ALL THE SAME or ALL DIFFERENT.',
+      'Magic Rule: If 2 match and 1 is odd (like 2 red + 1 green), it is NOT a Set!',
     ],
     fightTips: [
-      { title: 'Your foe', text: 'This is Dozy Bunny. The red bar is its health. Every Set you make knocks 3 off.', anchor: 'top' },
-      { title: 'Your move', text: 'Tap three cards that make a Set. Check shape first, then color. You can tap a card again to put it back.', anchor: 'bottom' },
-      { title: 'No pressure', text: 'You cannot lose this fight. A wrong guess just swaps those three cards for new ones. Fewer mistakes earn more stars.', anchor: 'top' },
+      { title: 'Your foe', text: 'This is Dozy Bunny! Every Set you make bonks 3 off its red health bar.', anchor: 'top' },
+      { title: 'Check every trait', text: 'Check Shape, then Color: each one must be ALL SAME or ALL DIFFERENT!', anchor: 'bottom' },
+      { title: 'Zero pressure', text: 'You cannot lose 1-1! Fewer mistakes earn more shiny ★.', anchor: 'top' },
     ],
     icon: 'lorc/crossed-swords',
     demo: {
       type: 'set',
       attributes: ['shape', 'color'],
       valid: true,
-      caption: 'Shapes all different, colors all the same → Set!',
+      caption: 'Color: all red ✓ · Shape: all 3 different ✓ → Set!',
       cards: [
         { shape: 'diamond', color: 'red', number: 1, shading: 'solid' },
         { shape: 'oval', color: 'red', number: 1, shading: 'solid' },
@@ -37,10 +37,10 @@ export const MECHANICS: Record<string, MechanicDef> = {
     },
     lessons: [
       {
-        title: 'Every card has traits',
-        body: ['Each card has a SHAPE (diamond, oval or squiggle) and a COLOR (red, green or purple).', 'You win fights by spotting three cards that go together.'],
+        title: 'Check each trait one by one',
+        body: ['Every card starts with two traits: a SHAPE (diamond, oval, squiggle) and a COLOR (red, green, purple).', 'Check Shape on its own, then check Color on its own!'],
         demo: {
-          type: 'set', attributes: ['shape', 'color'], valid: true, caption: 'Three shapes, three colors',
+          type: 'set', attributes: ['shape', 'color'], valid: true, caption: 'Shape: all 3 different ✓ · Color: all 3 different ✓',
           cards: [
           { shape: 'diamond', color: 'red', number: 1, shading: 'solid' },
           { shape: 'oval', color: 'green', number: 1, shading: 'solid' },
@@ -49,10 +49,10 @@ export const MECHANICS: Record<string, MechanicDef> = {
         },
       },
       {
-        title: 'All the same is good',
-        body: ['Check one trait at a time. Start with color.', 'Red, red, red. All three match, so color passes.'],
+        title: 'All twins ✓ or all different ✓',
+        body: ['Here all 3 are RED (all the same ✓) and the shapes are diamond, oval, squiggle (all different ✓).', 'Because EVERY trait passed, those 3 cards make a Set!'],
         demo: {
-          type: 'set', attributes: ['shape', 'color'], valid: true, caption: 'Color: all the same ✓',
+          type: 'set', attributes: ['shape', 'color'], valid: true, caption: 'Color: all red ✓ · Shape: all 3 different ✓',
           cards: [
           { shape: 'diamond', color: 'red', number: 1, shading: 'solid' },
           { shape: 'oval', color: 'red', number: 1, shading: 'solid' },
@@ -61,22 +61,10 @@ export const MECHANICS: Record<string, MechanicDef> = {
         },
       },
       {
-        title: 'All different is good too',
-        body: ['Now look at shape on the same three cards.', 'Diamond, oval, squiggle. No two match, so shape passes as well.', 'Both traits pass. That makes it a Set!'],
+        title: 'Magic Rule: 2 twins + 1 oddball = ✗',
+        body: ['If 2 cards match on a trait and the 3rd is different, it is NOT a Set!', 'Here 2 are red and 1 is green — even though shapes differ, Color fails!'],
         demo: {
-          type: 'set', attributes: ['shape', 'color'], valid: true, caption: 'Shape: all different ✓  Color: all the same ✓',
-          cards: [
-          { shape: 'diamond', color: 'red', number: 1, shading: 'solid' },
-          { shape: 'oval', color: 'red', number: 1, shading: 'solid' },
-          { shape: 'squiggle', color: 'red', number: 1, shading: 'solid' },
-        ],
-        },
-      },
-      {
-        title: 'Two alike and one odd is NOT a Set',
-        body: ['Here two cards are red and one is green.', 'Color is neither all the same nor all different, so this is not a Set. One bad trait spoils it.'],
-        demo: {
-          type: 'set', attributes: ['shape', 'color'], valid: false, caption: 'Color: red, red, green ✗',
+          type: 'set', attributes: ['shape', 'color'], valid: false, caption: 'Shape: all diff ✓ · Color: 2 red + 1 green ✗',
           cards: [
           { shape: 'diamond', color: 'red', number: 1, shading: 'solid' },
           { shape: 'oval', color: 'red', number: 1, shading: 'solid' },

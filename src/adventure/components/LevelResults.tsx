@@ -14,7 +14,8 @@ import { formatPower, powerMultiplier } from '../data/weaponPower';
 import { getBiome } from '../data/biomes';
 import { BOUNTIES } from '../data/bounties';
 import { mainIndexOf, getLevel } from '../data/levels';
-import { shouldShowDamageNumbers } from '../coach';
+import { shouldShowDamageNumbers, companionResultsLine } from '../coach';
+import CompanionBubble from './CompanionBubble';
 import { explainStarBreakdown } from '../engine/challenges';
 import { Btn, CoinPill, INK, PopIn, starPopDelayMs, StarRow, TONE } from './ui';
 import { Silhouette, UnlockableAvatar, describeRewardUnlocks, describeUnlock } from './rewards';
@@ -71,21 +72,6 @@ const LevelResults: React.FC<Props> = ({
   const won = stars > 0 || practice;
   const accuracy = level.starRule?.kind === 'accuracy';
   const title = practice ? 'PRACTICE OVER' : stars >= 3 ? 'PERFECT!' : stars === 2 ? 'VICTORY!' : stars === 1 ? (accuracy ? 'YOU WON!' : 'STAGE CLEAR!') : 'DEFEATED';
-  const sub = practice
-    ? 'Nothing banked, nothing lost. The dummy is ready whenever you are.'
-    : accuracy
-    ? stars >= 3
-      ? 'Not a single mistake.'
-      : `You beat ${run.foeName} with ${run.mistakes} mistake${run.mistakes === 1 ? '' : 's'}. Fewer mistakes earn more stars.`
-    : stars >= 3
-      ? 'Foe defeated and challenge complete.'
-      : stars === 2
-        ? 'Foe knocked out! Come back for the ★★★ challenge.'
-        : stars === 1
-          ? `Stage cleared! Next level unlocked — knock out ${run.foeName} for ★★.`
-          : run.coins > 0 && result.save.coinsUnlocked
-            ? 'Out of hearts. You keep the coins you picked up.'
-            : 'Out of hearts. Have another go.';
 
   useEffect(() => {
     const ts: ReturnType<typeof setTimeout>[] = [];
@@ -95,17 +81,18 @@ const LevelResults: React.FC<Props> = ({
     return () => ts.forEach(clearTimeout);
   }, [stars]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const tip = practice
+  const extraTip = practice
     ? null
     : !won
     ? run.mistakes > 3
-      ? 'Tip: check one trait at a time: shape, then color, then number…'
-      : 'Tip: spend stars in a skill tree at Camp, or try a fighter marked STRONG here.'
+      ? 'Check one trait at a time: Shape, then Color, then Number!'
+      : 'Try spending ★ in our Skill Tree at Camp!'
     : stars === 1 && !accuracy
       ? run.features.has('rainbow')
-        ? 'Tip: Rainbow Strikes (every trait different) hit twice as hard.'
-        : 'Tip: equip charms on the preview screen so every Set hits harder.'
+        ? 'Rainbow Strikes (every trait different) hit twice as hard!'
+        : 'Equip charms on the preview screen so every Set hits harder!'
       : null;
+  const companionText = [companionResultsLine(level, run, stars, result.save.coinsUnlocked), extraTip].filter(Boolean).join(' ');
 
   const totalCoins = result.starCoins + result.coinsBanked + result.bountyCoins;
   // The battle's score: damage per minute of fight clock, against the best on this level so far
@@ -168,7 +155,15 @@ const LevelResults: React.FC<Props> = ({
           </View>
           <Text style={[st.title, practice && { fontSize: 28 }, { color: won ? INK : COLORS.impactRed }]}>{title}</Text>
           {!practice && <StarRow stars={stars} size={52} animateFrom={0} />}
-          <Text style={st.sub}>{sub}</Text>
+          <CompanionBubble
+            testID="results-companion-bubble"
+            character={run.fighter}
+            mood={won ? 'victory' : 'anticipation'}
+            tone={stars >= 3 ? 'cheer' : !won ? 'warn' : 'warm'}
+            avatarSize={36}
+            text={companionText}
+            style={{ alignSelf: 'stretch' }}
+          />
 
           {!practice && (
             <View style={st.breakdownBox} testID="results-star-breakdown">
@@ -310,8 +305,6 @@ const LevelResults: React.FC<Props> = ({
               <Text style={st.biomeOpenText}>New region unlocked: {getBiome(result.newlyOpenedBiomes[0] as LevelDef['biome']).name}!</Text>
             </View>
           )}
-
-          {tip && <Text style={st.tip}>{tip}</Text>}
 
           {run.log.length > 1 && (practice || mainIndexOf(level) >= mainIndexOf(getLevel('1-4'))) && (
             <Btn

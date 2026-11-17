@@ -29,6 +29,8 @@ import { getMechanic } from '../data/mechanics';
 import { getFighter } from '../data/fighters';
 import { isFighterTrial } from '../data/rewards';
 import { freshPaths, hasUnspentStars, getFrontierLevel, getLockReason, isMechanicKnown, maxStars, openPaths, totalStars, isBiomeOpen } from '../progress';
+import { companionMapGreeting } from '../coach';
+import CompanionBubble from './CompanionBubble';
 import { Bob, CoinPill, INK, StarRow, TONE } from './ui';
 
 const ELITE = '#5B2333';
@@ -165,14 +167,7 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
   const campUnlocked = save.coinsUnlocked || save.armory.length > 0 || save.unlockedFighters.length > 1;
   const skillTreeKnown = isMechanicKnown(save, 'skill_tree') || Object.keys(save.skillNodes).length > 0;
   const showSkillNudge = skillTreeKnown && hasUnspentStars(save) && Object.keys(save.skillNodes).length === 0;
-  const guideMessage =
-    stars === 0
-      ? 'Tap Dozy Bunny (1-1) to begin! Earn up to ★★★ on each foe.'
-      : (save.stars['1-2'] ?? 0) === 0
-        ? 'Nice! Blast Powder is equipped — tap Prickle (1-2) next!'
-        : showSkillNudge
-          ? 'You earned ★! Tap Camp below to power up your fighter.'
-          : null;
+  const guideMessage = companionMapGreeting(save, frontier, stars, showSkillNudge);
 
   // Secret paths the map is showing for the first time, and when each one arrives
   const freshKey = freshPaths(save).map(l => l.id).join(',');
@@ -227,17 +222,17 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
         {save.coinsUnlocked && <CoinPill coins={save.coins} />}
       </View>
 
-      {guideMessage && (
-        <TouchableOpacity
+      <View style={s.guideBanner}>
+        <CompanionBubble
           testID="map-guide-banner"
-          style={s.guideBanner}
-          activeOpacity={0.85}
+          character={fighter.name}
+          text={guideMessage}
+          mood={stars === 0 ? 'victory' : 'curious'}
+          animate={isLive}
+          avatarSize={38}
           onPress={() => (showSkillNudge ? onOpenCamp() : onSelectLevel(frontier))}
-        >
-          <FighterAvatar character={fighter.name} size={36} mood="curious" animate={isLive} framed />
-          <Text style={s.guideBannerText}>{guideMessage}</Text>
-        </TouchableOpacity>
-      )}
+        />
+      </View>
 
       <ScrollView ref={scrollRef} contentContainerStyle={{ alignItems: 'center' }} showsVerticalScrollIndicator={false}>
         <View style={{ width, height }}>

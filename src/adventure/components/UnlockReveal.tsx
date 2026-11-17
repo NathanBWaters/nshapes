@@ -29,6 +29,8 @@ import { MECHANICS, getMechanic } from '../data/mechanics';
 import { DARK, INK } from './ui';
 import { describeUnlock } from './rewards';
 import { evolutionsMechanicId } from '../lessons';
+import { companionVoice } from '../coach';
+import CompanionBubble from './CompanionBubble';
 
 const GOLD = DARK.gold;
 const TEXT = DARK.text;
@@ -179,6 +181,21 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
             <Animated.View style={[{ alignSelf: 'stretch', gap: 12, alignItems: 'center' }, detailStyle]}>
               <Text style={st.name}>{display.name}</Text>
               {display.badge && <Text style={[st.rarity, { color: accent }]}>{display.badge}</Text>}
+
+              <CompanionBubble
+                character={fighter ? fighter.name : save.selectedFighter}
+                tone="dark"
+                mood="victory"
+                avatarSize={38}
+                text={
+                  fighter
+                    ? `${companionVoice(fighter.name).hello} I’m ${fighter.name} — ready to team up whenever you pick me!`
+                    : u.kind === 'weapon' && u.firstWeapon
+                      ? `${companionVoice(save.selectedFighter).cheer} Ooh, shiny! I tucked ${display.name} right into your charm belt so it fires automatically!`
+                      : `${companionVoice(save.selectedFighter).cheer} Ooh, look what we unlocked! Check out what ${display.name} can do:`
+                }
+                style={{ alignSelf: 'stretch' }}
+              />
 
               <View style={st.card}>
                 <Text style={st.cardTitle}>{path ? 'What is it?' : 'How it works'}</Text>

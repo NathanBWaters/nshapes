@@ -53,6 +53,7 @@ interface GameBoardProps {
   isPlayerTurn: boolean;
   activeAttributes?: AttributeName[];
   onSelectedCountChange?: (count: number) => void;
+  onSelectedCardsChange?: (cards: CardType[]) => void;
   onHintStateChange?: (hasHint: boolean) => void;
   onBoardIdleChange?: (isIdle: boolean) => void;
   onUseHint?: () => void;
@@ -93,6 +94,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
   isPlayerTurn,
   activeAttributes = DEFAULT_ATTRIBUTES,
   onSelectedCountChange,
+  onSelectedCardsChange,
   onHintStateChange,
   onBoardIdleChange,
   onUseHint,
@@ -261,15 +263,22 @@ const GameBoard: React.FC<GameBoardProps> = ({
   // When the board changes, clear matched state and hints, but preserve valid selections
   useEffect(() => {
     const cardIds = new Set(cards.map(c => c.id));
-    setSelectedCards(prev => prev.filter(c => cardIds.has(c.id)));
+    setSelectedCards(prev => {
+      const next = prev.filter(c => cardIds.has(c.id));
+      return next.length === prev.length ? prev : next;
+    });
     setMatchedCardIds([]); // Always clear - matched cards get replaced
     setHintCards([]);
   }, [cards]);
 
-  // Report selected count changes to parent
+  // Report selected count & selected cards changes to parent
   useEffect(() => {
     onSelectedCountChange?.(selectedCards.length);
   }, [selectedCards.length, onSelectedCountChange]);
+
+  useEffect(() => {
+    onSelectedCardsChange?.(selectedCards);
+  }, [selectedCards, onSelectedCardsChange]);
 
   // Report hint state changes to parent
   useEffect(() => {
