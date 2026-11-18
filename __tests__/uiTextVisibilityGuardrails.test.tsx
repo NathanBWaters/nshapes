@@ -84,8 +84,8 @@ describe('UI Text Visibility Style-Contract Guardrails', () => {
     const longMsg =
       "Meow! Tap Dozy Bunny (1-1) to begin! I'll teach you the Magic Rule of Set right on the board!";
     const pills = [
-      { attr: 'color' as const, status: 'pass' as const, label: 'Color: all red' },
-      { attr: 'shape' as const, status: 'fail' as const, label: 'Shape: 2 diamonds + 1 oval' },
+      { attr: 'color' as const, status: 'pass' as const, label: 'Color: all red', detail: 'Color: all red', brief: 'Color: all red' },
+      { attr: 'shape' as const, status: 'fail' as const, label: 'Shape: 2 diamonds + 1 oval', detail: 'Shape: 2 diamonds + 1 oval', brief: 'Shape: 2 diamonds + 1 oval' },
     ];
 
     for (const clickable of [false, true]) {

@@ -75,6 +75,40 @@ export const TRICK_RULES = {
 } as const;
 
 /**
+ * The deck (engine/dealer.ts). A level's deck is one of every card its traits
+ * can make, and a card that leaves the board goes back into it.
+ *
+ * Where it goes back matters. Queued in the order they left, the three cards of
+ * a Set came back together a few Sets later: from the 6th Set of a fight on,
+ * nine times in ten the three new cards were a ready-made Set. So a card goes
+ * back at a random place in the lower part of the deck instead.
+ *
+ * Two traits make only nine cards, which is a whole board: every card was always
+ * on the board, and the three just matched were the only ones left to deal. A
+ * level whose deck fits on its board plays with `copies` of each card (two of a
+ * kind can never be in one Set), and is dealt for variety: of the kinds that
+ * just left, at most `maxReturning` comes straight back, never to the slot it
+ * left, and only when the board would otherwise lose a kind of Set (same
+ * color, same shape, all different).
+ */
+export const DECK_RULES = {
+  /** A returning card lands below this share of the deck (0.5 = somewhere in the lower half) */
+  returnDepth: 0.5,
+  /** Cards of each kind in a deck that would otherwise fit on the board */
+  copies: 2,
+  /** Kinds that just left the board that may be dealt straight back */
+  maxReturning: 1,
+  /** What a kind of Set on the board is worth to the dealer, in Sets… */
+  kindOfSetWorth: 100,
+  /** …and what dealing a kind straight back costs (less than a kind of Set, more than any number of Sets) */
+  returningCost: 60,
+  /** Penalty per duplicate card-kind on the board so 2-trait boards stay visually varied */
+  duplicatePairCost: 12,
+  /** How far down the deck the dealer looks */
+  dealWindow: 12,
+} as const;
+
+/**
  * Stuck help. A new player can stare at a board for a minute without finding a
  * Set, and that minute is when they leave. So in the first two worlds the
  * companion points a Set out when the board has been quiet for a while: one

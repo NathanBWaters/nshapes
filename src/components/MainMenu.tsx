@@ -28,6 +28,7 @@ function MenuButton({
   icon,
   title,
   subtitle,
+  badge,
   accessibilityLabel,
 }: {
   onPress: () => void;
@@ -35,6 +36,7 @@ function MenuButton({
   icon: IconName;
   title: string;
   subtitle: string;
+  badge?: string;
   accessibilityLabel?: string;
 }) {
   const handlePress = () => {
@@ -93,7 +95,14 @@ function MenuButton({
         <Icon name={icon} size={32} color={v.iconColor} />
       </View>
       <View style={styles.buttonTextContainer}>
-        <Text style={[styles.menuButtonText, { color: v.textColor }]}>{title}</Text>
+        <View style={styles.buttonTitleRow}>
+          <Text style={[styles.menuButtonText, { color: v.textColor }]}>{title}</Text>
+          {badge && (
+            <View style={styles.menuBadge}>
+              <Text style={styles.menuBadgeText}>{badge}</Text>
+            </View>
+          )}
+        </View>
         <Text style={[styles.menuButtonSubtext, { color: v.textColor, opacity: variant === 'tutorial' ? 0.9 : 0.7 }]}>
           {subtitle}
         </Text>
@@ -119,12 +128,12 @@ const MainMenu: React.FC<MainMenuProps> = ({
       const save = loadAdventureSave();
       const stars = totalStars(save);
       if (stars === 0 && Object.keys(save.plays).length === 0) {
-        return { title: 'Play', subtitle: 'A star fell. The critters went wild.' };
+        return { title: 'Play', subtitle: 'A star fell. The critters went wild.', isFresh: true };
       }
       const next = getFrontierLevel(save);
-      return { title: 'Continue', subtitle: `${next.id} · ${levelFoe(next).name} is waiting   ★ ${stars}` };
+      return { title: 'Continue', subtitle: `${next.id} · ${levelFoe(next).name} is waiting   ★ ${stars}`, isFresh: false };
     } catch {
-      return { title: 'Adventure', subtitle: 'Map, foes, stars & unlocks' };
+      return { title: 'Adventure', subtitle: 'Map, foes, stars & unlocks', isFresh: false };
     }
   }, []);
 
@@ -168,6 +177,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
             icon="lorc/crossed-swords"
             title={adventure.title}
             subtitle={adventure.subtitle}
+            badge={adventure.isFresh ? 'START HERE' : undefined}
             accessibilityLabel={`Adventure: ${adventure.title}`}
           />
           <MenuButton
@@ -317,6 +327,14 @@ const styles = StyleSheet.create({
   },
   buttonTextContainer: {
     flex: 1,
+    minWidth: 0,
+  },
+  buttonTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 4,
   },
   menuButtonText: {
     fontSize: 20,
@@ -324,7 +342,18 @@ const styles = StyleSheet.create({
     color: COLORS.slateCharcoal,
     textTransform: 'uppercase',
     letterSpacing: 1,
-    marginBottom: 4,
+  },
+  menuBadge: {
+    backgroundColor: COLORS.deepOnyx,
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  menuBadgeText: {
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 1,
+    color: COLORS.actionYellow,
   },
   menuButtonSubtext: {
     fontSize: 12,

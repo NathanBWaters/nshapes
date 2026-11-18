@@ -21,7 +21,7 @@ import { COLORS } from '@/utils/colors';
 import type { CharacterName, Weapon } from '@/types';
 import { band, sfx } from '@/audio';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
-import type { AdventureSave, UpgradeDef } from '../types';
+import type { AdventureSave, LevelDef, UpgradeDef } from '../types';
 import { BOUNTIES } from '../data/bounties';
 import { summarize, type BattleRecord } from '../history';
 import { analyticsOptedOut, setAnalyticsEnabled } from '@/analytics/posthog';
@@ -42,6 +42,7 @@ import {
   canBuyUpgrade,
   canTune,
   charmSlots,
+  charmSynergyWithEquipped,
   equippedArcanaOf,
   equippedCharms,
   getUnlockedUpgrades,
@@ -66,6 +67,8 @@ import SkillTree, { StarPool } from './SkillTree';
 import BattleHistory from './BattleHistory';
 import WeaponExplainer from './WeaponExplainer';
 import BountyBoard from './BountyBoard';
+import CompanionBubble from './CompanionBubble';
+import { companionVoice } from '../coach';
 import { Btn, CoinPill, INK, PopIn, TONE } from './ui';
 
 export type CampTab = 'fighters' | 'armory' | 'arcana' | 'workshop' | 'bounties' | 'history';
@@ -98,6 +101,9 @@ interface Props {
   onClose: () => void;
   /** Open straight on this section (its back button still leads to the menu) */
   initialTab?: CampTab;
+  /** Level to jump back into from Camp when arriving from a preview/result */
+  returnLevel?: LevelDef | null;
+  onReturnToLevel?: (level: LevelDef) => void;
 }
 
 const NO_BATTLES: readonly BattleRecord[] = [];
@@ -109,7 +115,7 @@ const armoryWeapons = (save: AdventureSave): Weapon[] =>
 /** Workshop items that change the loadout itself, listed first. */
 const LOADOUT_UPGRADES = ['charm_belt', 'tarot_deck', 'evolution_lab'];
 
-const Camp: React.FC<Props> = ({ save, history = NO_BATTLES, onChange, onRateBattle, onClose, initialTab }) => {
+const Camp: React.FC<Props> = ({ save, history = NO_BATTLES, onChange, onRateBattle, onClose, initialTab, returnLevel, onReturnToLevel }) => {
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
   /** The open section; null is the menu */
@@ -198,12 +204,18 @@ const Camp: React.FC<Props> = ({ save, history = NO_BATTLES, onChange, onRateBat
       case 'fighters':
         return { sub: `${save.selectedFighter} · ${availableStars(save, save.selectedFighter)}★ to spend on skills`, badge: hasUnspentStars(save) };
       case 'armory':
-        return { sub: save.armory.length === 0 ? 'No weapons yet. Some stars unlock one.' : `${charms.length}/${slots} charms equipped · ${save.armory.length} weapons` };
+        return {
+          sub: save.armory.length === 0 ? 'No weapons yet. Some stars unlock one.' : `${charms.length}/${slots} charms equipped · ${save.armory.length} weapons`,
+          badge: charms.length < Math.min(slots, save.armory.length),
+        };
       case 'arcana':
         return { sub: save.unlockedArcana.length === 0 ? 'None found yet' : `${arcana.length}/${arcanaSlots(save)} equipped · ${save.unlockedArcana.length} found` };
       case 'workshop':
         return save.workshopUnlocked
-          ? { sub: totalRefundable > 0 ? `Upgrades and weapon tuning · ${totalRefundable}¢ invested` : 'Upgrades and weapon tuning' }
+          ? {
+              sub: totalRefundable > 0 ? `Upgrades and weapon tuning · ${totalRefundable}¢ invested` : 'Upgrades and weapon tuning',
+              badge: totalRefundable === 0 && save.coins >= 60,
+            }
           : { sub: `${unlockHint({ kind: 'feature', id: 'workshop' }, save) ?? 'Keep playing'} to open`, locked: true };
       case 'bounties':
         return save.bountiesUnlocked
@@ -431,6 +443,14 @@ const Camp: React.FC<Props> = ({ save, history = NO_BATTLES, onChange, onRateBat
             </View>
           ) : (
             <>
+              {totalRefundable === 0 && save.coins >= 60 && (
+                <CompanionBubble
+                  testID="camp-workshop-welcome"
+                  character={save.selectedFighter}
+                  mood="victory"
+                  text={`${companionVoice(save.selectedFighter).cheer} Spend coins on upgrades or weapon tuning — every coin refunds 100% anytime!`}
+                />
+              )}
               <Text style={st.blurb}>
                 Upgrade your loadout, any mechanic you have met, and tune your Armory weapons. Refundable at 100% value anytime.
               </Text>
@@ -601,6 +621,9 @@ const Camp: React.FC<Props> = ({ save, history = NO_BATTLES, onChange, onRateBat
                     <WeaponAvatar weapon={w} size={36} triggerKey={armoryTapCounts[w.id]} />
                     <Text style={st.armoryName} numberOfLines={1}>{w.name}{weaponLevelSuffix(wLevel)}</Text>
                     <Text style={[st.armoryRarity, { color: TONE.spent }]}>{equipped ? `slot ${slot + 1}` : `level ${wLevel}`}</Text>
+                    {!equipped && charmSynergyWithEquipped(save, w.id) && (
+                      <Text style={{ fontSize: 10, fontWeight: '900', color: TONE.combo }}>✦ FUSES</Text>
+                    )}
                     <Text style={st.armoryDesc} numberOfLines={3}>{shown?.shortDescription}</Text>
                   </TouchableOpacity>
                 );
@@ -678,6 +701,17 @@ const Camp: React.FC<Props> = ({ save, history = NO_BATTLES, onChange, onRateBat
           </View>
         ) : null;
       })()}
+
+      {returnLevel && onReturnToLevel && !(tab === 'armory' && armoryFocus) && (
+        <View testID="camp-return-bar" style={[st.returnBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+          <Btn
+            testID="camp-return-fight"
+            icon="lorc/crossed-swords"
+            label={`Ready: ${returnLevel.id} ${returnLevel.name}`}
+            onPress={() => onReturnToLevel(returnLevel)}
+          />
+        </View>
+      )}
     </View>
   );
 };
@@ -757,6 +791,7 @@ const st = StyleSheet.create({
   arcanaNumeral: { fontSize: 11, fontWeight: '900', letterSpacing: 1.5, color: INK },
   arcanaUpside: { fontSize: 12, fontWeight: '800', color: TONE.upside },
   arcanaTradeoff: { fontSize: 12, fontWeight: '700', color: TONE.tradeoff },
+  returnBar: { padding: 12, backgroundColor: COLORS.paperBeige, borderTopWidth: 2, borderTopColor: INK },
 });
 
 export default Camp;

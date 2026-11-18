@@ -15,7 +15,7 @@
 import type { Card, CardReward, Weapon } from '@/types';
 import type { EnemyEvent } from '@/types/enemy';
 import type { WeaponEffectResult } from '@/utils/weaponEffects';
-import { ATTRIBUTE_VALUES, createDeck } from '@/utils/gameUtils';
+import { ATTRIBUTE_VALUES } from '@/utils/gameUtils';
 import { MATCH_REWARDS, getBoardSizeForAttributes } from '@/utils/gameConfig';
 import { getAdjacentIndices } from '@/utils/weaponEffects';
 import { getLinkedDestructionPositions, selectPositionsToConnect } from '@/utils/connectionUtils';
@@ -25,6 +25,7 @@ import type { AdventureSave, AdventureWeapon, ArcanaDef, ArcanaId, FeatureFlag, 
 import type { Effect, WeaponTriggerKind } from '../rules/types';
 import { createRng } from './rng';
 import { allSets, countDifferentAttributes, hasAnySet, isRainbow, isSelectable } from './sets';
+import { boardVariety, buildDeck, deckCopies, kindsOfSet } from './dealer';
 import { applyWeaponToStats, resolveWholeStats, startingLoadout } from '../loadout';
 import { getArmoryWeapon, understudyOf } from '../data/armory';
 import { UNDERSTUDY_ID } from '../data/adventureWeapons';
@@ -37,7 +38,7 @@ import { challengeProgress } from './challenges';
 import {
   addCoins, addConnection, addRandomConnections, addTime, addXp, announceDraw, arcana, begin, chanceStatsOf, dealDamage, drawCard,
   emit, enqueue, finish, foeMultiplier, heal, hurt, igniteCards, keepCatalystMatchable, mods, newLinkSlots, placeCatalyst,
-  pruneConnections, recycle, refill, refreshSources, rollBridges, syncTraps, toDeckCard, tuning, updateCards,
+  pruneConnections, recycle, refill, refreshSources, returnToDeck, rollBridges, syncTraps, toDeckCard, tuning, updateCards,
   MAX_BOARD, type Draft, type FightHooks, TIME_HEADROOM,
   CLOCK_SLOW_CAP_PCT,
 } from './fight';
@@ -696,9 +697,9 @@ const replaceCards = (d: Draft, ids: Set<string>, ended: boolean): number[] => {
     if ((c.health ?? 1) > 1) return { ...c, health: (c.health ?? 1) - 1, selected: false };
     if (c.health === 1) broken.push(i);
     indices.push(i);
-    d.deck.push(toDeckCard(c));
     return c;
   });
+  returnToDeck(d, indices.map(i => d.board[i]));
   for (const i of broken) {
     const c = d.board[i];
     d.roundStats.tripleCardsCleared += 1;
@@ -833,7 +834,7 @@ const buildRun = (level: LevelDef, save: AdventureSave, opts: CreateRunOptions):
     features,
     rng: rng.state,
     attributes,
-    deck: rng.shuffle(createDeck(attributes)).map(toDeckCard),
+    deck: rng.shuffle(buildDeck(level)).map(toDeckCard),
     board: [],
     connections: [],
     stats,
@@ -926,13 +927,15 @@ const buildRun = (level: LevelDef, save: AdventureSave, opts: CreateRunOptions):
   refreshSources(d);
   initPassives(d);
   // Deal a board that contains at least one Set
+  const varied = deckCopies(level) > 1;
   for (let attempt = 0; attempt < 30; attempt++) {
     d.deck.push(...d.board.map(toDeckCard));
     d.deck = d._rng.shuffle(d.deck);
     const dealt: Card[] = [];
     for (let i = 0; i < boardSize; i++) dealt.push(drawCard(d));
     d.board = dealt;
-    if (hasAnySet(d.board, attributes)) break;
+    // A deck with copies opens on every kind of Set its traits allow (the first level shows one of each)
+    if (varied ? boardVariety(d.board, attributes).kinds >= kindsOfSet(attributes) : hasAnySet(d.board, attributes)) break;
   }
   d.events = []; // don't coach-mark the deal itself
   d._lines = [];

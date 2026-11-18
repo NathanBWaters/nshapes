@@ -267,6 +267,82 @@ export const unequipCharm = (save: AdventureSave, weaponId: string): AdventureSa
 export const toggleCharm = (save: AdventureSave, weaponId: string): AdventureSave =>
   equippedCharms(save).includes(weaponId) ? unequipCharm(save, weaponId) : equipCharm(save, weaponId);
 
+/** Replace one equipped charm (`replaceId`) with another owned Armory weapon (`withId`). */
+export const swapCharm = (save: AdventureSave, replaceId: string, withId: string): AdventureSave => {
+  const charms = equippedCharms(save);
+  if (!save.armory.includes(withId) || charms.includes(withId)) return save;
+  const idx = charms.indexOf(replaceId);
+  if (idx < 0) return save;
+  const next = [...charms];
+  next[idx] = withId;
+  return { ...save, charms: next };
+};
+
+/**
+ * Equip a pair of owned Armory weapons that arms `recipeId`, preserving as many
+ * already-equipped charms as the belt slots allow.
+ */
+export const armRecipePair = (save: AdventureSave, recipeId: string): AdventureSave => {
+  if (save.unlockedEvolutions.length === 0) return save;
+  const recipe = EVOLUTION_RECIPES.find(r => r.id === recipeId);
+  const slots = charmSlots(save);
+  if (!recipe || slots < 2) return save;
+  const charms = equippedCharms(save);
+  const w0 =
+    charms.find(id => inFamily(id, recipe.families[0])) ??
+    save.armory.find(id => inFamily(id, recipe.families[0]));
+  const w1 =
+    charms.find(id => id !== w0 && inFamily(id, recipe.families[1])) ??
+    save.armory.find(id => id !== w0 && inFamily(id, recipe.families[1]));
+  if (!w0 || !w1) return save;
+  const toAdd = [w0, w1].filter(id => !charms.includes(id));
+  if (toAdd.length === 0) return save;
+  const keepCount = Math.max(0, slots - toAdd.length);
+  const preserved: string[] = [];
+  for (const id of charms) {
+    if (id === w0 || id === w1) preserved.push(id);
+  }
+  for (const id of charms) {
+    if (preserved.length >= keepCount) break;
+    if (id !== w0 && id !== w1) preserved.push(id);
+  }
+  return { ...save, charms: [...preserved, ...toAdd].slice(0, slots) };
+};
+
+/** Every Evolution recipe the player currently owns both weapons for in the Armory (known recipes first). */
+export const armableRecipesFromArmory = (
+  save: AdventureSave
+): { recipe: EvolutionRecipe; known: boolean; pair: [string, string] }[] => {
+  if (save.unlockedEvolutions.length === 0) return [];
+  const knownIds = new Set([...save.unlockedEvolutions, ...save.discoveredEvolutions]);
+  const out: { recipe: EvolutionRecipe; known: boolean; pair: [string, string] }[] = [];
+  for (const recipe of EVOLUTION_RECIPES) {
+    const w0 = save.armory.find(id => inFamily(id, recipe.families[0]));
+    const w1 = save.armory.find(id => id !== w0 && inFamily(id, recipe.families[1]));
+    if (w0 && w1) out.push({ recipe, known: knownIds.has(recipe.id), pair: [w0, w1] });
+  }
+  return out.sort((a, b) => Number(b.known) - Number(a.known));
+};
+
+/** Whether an unequipped Armory weapon fuses with at least one currently equipped charm. */
+export const charmSynergyWithEquipped = (
+  save: AdventureSave,
+  candidateWeaponId: string
+): { known: boolean; recipe: EvolutionRecipe } | null => {
+  if (save.unlockedEvolutions.length === 0 || !save.armory.includes(candidateWeaponId)) return null;
+  const charms = equippedCharms(save);
+  if (charms.includes(candidateWeaponId)) return null;
+  const matches = EVOLUTION_RECIPES.filter(
+    r =>
+      (inFamily(candidateWeaponId, r.families[0]) && charms.some(c => inFamily(c, r.families[1]))) ||
+      (inFamily(candidateWeaponId, r.families[1]) && charms.some(c => inFamily(c, r.families[0])))
+  );
+  if (matches.length === 0) return null;
+  const knownIds = new Set([...save.unlockedEvolutions, ...save.discoveredEvolutions]);
+  const best = matches.find(r => knownIds.has(r.id)) ?? matches[0];
+  return { known: knownIds.has(best.id), recipe: best };
+};
+
 /**
  * Equip an unlocked Arcana. When every slot is taken, the one equipped
  * longest ago makes room (with one slot this is a plain swap).
@@ -866,6 +942,10 @@ export const COACH_KEYS = {
   hazard: (kind: 'timeBombs' | 'snares') => `hazard_${kind}`,
   /** The first time an evolution starts */
   evolution: 'evolution_first',
+  /** The first time a weapon gains a scaling stack mid-fight */
+  weaponGrowth: 'weapon_growth_first',
+  /** The first time the Power meter climbs on a level with damage numbers */
+  powerMeter: 'power_meter_first',
 } as const;
 
 export const markMechanicSeen = (save: AdventureSave, key: string): AdventureSave =>
@@ -892,6 +972,8 @@ export const createMaxedSave = (): AdventureSave => {
       COACH_KEYS.hazard('timeBombs'),
       COACH_KEYS.hazard('snares'),
       COACH_KEYS.evolution,
+      COACH_KEYS.weaponGrowth,
+      COACH_KEYS.powerMeter,
     ],
     coins: 50000,
     upgrades: Object.fromEntries(UPGRADES.map(u => [u.id, u.costs.length])),

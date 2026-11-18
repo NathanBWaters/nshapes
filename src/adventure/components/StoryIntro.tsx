@@ -10,12 +10,13 @@ import { StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'r
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
 import Svg, { Polygon } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Card from '@/components/Card';
 import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { COLORS } from '@/utils/colors';
 import { sfx } from '@/audio';
-import type { CharacterName } from '@/types';
+import type { Card as CardType, CharacterName } from '@/types';
 import { STORY, STORY_CRITTER_LEVELS, type StoryBeat } from '../data/story';
 import { getLevel } from '../data/levels';
 import { levelFoe } from '../data/foes';
@@ -128,7 +129,7 @@ const Sky: React.FC<SceneSize> = ({ width, height }) => (
   </>
 );
 
-/** The Summit: a far peak with a snow cap. */
+/** The Summit: a far peak with a snow cap and warm valley hills below. */
 const Mountain: React.FC<SceneSize> = ({ width, height: h }) => {
   const peak = { x: width * 0.5, y: h * 0.36 };
   const base = h;
@@ -138,6 +139,8 @@ const Mountain: React.FC<SceneSize> = ({ width, height: h }) => {
       <Polygon points={`${width * 0.6},${base} ${width * 0.8},${h * 0.58} ${width},${base}`} fill="#1D2547" />
       <Polygon points={`${width * 0.14},${base} ${peak.x},${peak.y} ${width * 0.86},${base}`} fill={DUSK} />
       <Polygon points={`${peak.x - width * 0.09},${peak.y + h * 0.16} ${peak.x},${peak.y} ${peak.x + width * 0.09},${peak.y + h * 0.16} ${peak.x + width * 0.03},${peak.y + h * 0.12} ${peak.x - width * 0.02},${peak.y + h * 0.17}`} fill="#E8ECFF" />
+      <Polygon points={`0,${base} ${width * 0.25},${h * 0.82} ${width * 0.58},${base}`} fill="#1B3038" />
+      <Polygon points={`${width * 0.42},${base} ${width * 0.78},${h * 0.84} ${width},${base}`} fill="#1E353A" />
     </Svg>
   );
 };
@@ -158,13 +161,26 @@ const Starfall: React.FC<SceneSize> = ({ width, height: h }) => {
   }, []);
   const from = { x: width * 0.92, y: -30 };
   const to = { x: width * 0.5, y: h * 0.36 };
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const streakLen = Math.hypot(dx, dy);
+  const streakAngle = Math.atan2(dy, dx);
   const starStyle = useAnimatedStyle(() => ({
     opacity: fall.value >= 1 ? 0 : 1,
     transform: [
-      { translateX: from.x + (to.x - from.x) * fall.value - 26 },
-      { translateY: from.y + (to.y - from.y) * fall.value - 26 },
+      { translateX: from.x + dx * fall.value - 26 },
+      { translateY: from.y + dy * fall.value - 26 },
       { rotate: `${fall.value * 200}deg` },
       { scale: 0.7 + 0.5 * fall.value },
+    ],
+  }));
+  const streakStyle = useAnimatedStyle(() => ({
+    opacity: fall.value <= 0 || fall.value >= 1 ? 0 : (1 - fall.value) * 0.65,
+    transform: [
+      { translateX: from.x + dx * fall.value },
+      { translateY: from.y + dy * fall.value },
+      { rotate: `${streakAngle}rad` },
+      { scaleX: Math.max(0.01, fall.value) },
     ],
   }));
   const flashStyle = useAnimatedStyle(() => ({
@@ -175,8 +191,9 @@ const Starfall: React.FC<SceneSize> = ({ width, height: h }) => {
     <>
       <Sky width={width} height={h} />
       <Mountain width={width} height={h} />
+      <Animated.View pointerEvents="none" style={[st.streak, { width: streakLen * 0.55, left: -streakLen * 0.55 }, streakStyle]} />
       <Animated.View pointerEvents="none" style={[st.flash, { left: to.x - 60, top: to.y - 60 }, flashStyle]} />
-      {SHARDS.map(([dx, dy], k) => <Shard key={k} burst={burst} at={to} dx={dx * width} dy={dy * h} big={k % 3 === 0} />)}
+      {SHARDS.map(([sdx, sdy], k) => <Shard key={k} burst={burst} at={to} dx={sdx * width} dy={sdy * h} big={k % 3 === 0} />)}
       <Animated.View pointerEvents="none" style={[st.abs, starStyle]}>
         <Text style={st.bigStar}>★</Text>
       </Animated.View>
@@ -207,17 +224,17 @@ const Shard: React.FC<{ burst: ReturnType<typeof useSharedValue<number>>; at: { 
   );
 };
 
-/** Beat 2: three critters, each with a shard over its head. */
+/** Beat 2: three critters, each guarding three fallen shards. */
 const Critters: React.FC<SceneSize> = ({ width, height }) => {
   const size = Math.min(116, Math.floor((width - 48) / 3), Math.floor(height * 0.42));
   return (
     <>
       <Sky width={width} height={height} />
-      <View style={[st.ground, { backgroundColor: '#1D2547' }]} />
+      <View style={[st.ground, { backgroundColor: '#1B3038' }]} />
       <View style={st.critterRow}>
         {STORY_CRITTER_LEVELS.map((id, k) => (
           <Rise key={id} delay={k * 140}>
-            <Text style={st.critterShard}>★</Text>
+            <Text style={st.critterShard}>★★★</Text>
             <EnemyAvatar enemy={levelFoe(getLevel(id))} size={k === 1 ? size : Math.round(size * 0.86)} mood={k === 1 ? 'menacing' : 'idle'} reaction={{ type: 'entrance', id: k + 1 }} />
           </Rise>
         ))}
@@ -226,18 +243,43 @@ const Critters: React.FC<SceneSize> = ({ width, height }) => {
   );
 };
 
-/** Beat 3: your fighter, front and centre. */
-const Hero: React.FC<SceneSize & { fighter: CharacterName }> = ({ width, height, fighter }) => (
-  <>
-    <Sky width={width} height={height} />
-    <View style={[st.ground, { backgroundColor: '#1D2547' }]} />
-    <View style={st.heroWrap}>
-      <Rise delay={0}>
-        <FighterAvatar character={fighter} size={Math.round(Math.min(190, width * 0.46, height * 0.62))} mood="anticipation" reaction={{ type: 'entrance', id: 1 }} />
-      </Rise>
-    </View>
-  </>
-);
+const HERO_PREVIEW_CARDS: CardType[] = [
+  { id: 'story-c1', shape: 'diamond', color: 'red', number: 1, shading: 'solid', selected: false },
+  { id: 'story-c2', shape: 'oval', color: 'red', number: 1, shading: 'solid', selected: false },
+  { id: 'story-c3', shape: 'squiggle', color: 'red', number: 1, shading: 'solid', selected: false },
+];
+
+/** Beat 3: your fighter, ready beside a quick visual hint of a Set. */
+const Hero: React.FC<SceneSize & { fighter: CharacterName }> = ({ width, height, fighter }) => {
+  const fighterSize = Math.round(Math.min(144, width * 0.38, height * 0.48));
+  const cardW = height < 260 ? 40 : 46;
+  const cardH = Math.round(cardW * 1.34);
+  return (
+    <>
+      <Sky width={width} height={height} />
+      <View style={[st.ground, { backgroundColor: '#1B3038' }]} />
+      <View style={st.heroWrap}>
+        <Rise delay={0}>
+          <FighterAvatar character={fighter} size={fighterSize} mood="anticipation" reaction={{ type: 'entrance', id: 1 }} />
+        </Rise>
+        <Rise delay={180}>
+          <View pointerEvents="none" style={st.miniSetCol}>
+            <View style={st.miniCardsRow}>
+              {HERO_PREVIEW_CARDS.map(card => (
+                <View key={card.id} style={{ width: cardW, height: cardH }}>
+                  <Card card={card} onClick={() => {}} disabled isPaused />
+                </View>
+              ))}
+            </View>
+            <View style={st.miniSetBadge}>
+              <Text style={st.miniSetBadgeText}>✓ SET → ★</Text>
+            </View>
+          </View>
+        </Rise>
+      </View>
+    </>
+  );
+};
 
 /** Its children pop up into place once. */
 const Rise: React.FC<{ delay: number; children: React.ReactNode }> = ({ delay, children }) => {
@@ -265,16 +307,21 @@ const st = StyleSheet.create({
   scene: { overflow: 'hidden' },
   abs: { position: 'absolute', left: 0, top: 0 },
   skyStar: { position: 'absolute', backgroundColor: '#E8ECFF', opacity: 0.8 },
+  streak: { position: 'absolute', top: 0, height: 4, borderRadius: 2, backgroundColor: '#FFF6C2', transformOrigin: 'right center' },
   flash: { position: 'absolute', width: 120, height: 120, borderRadius: 60, backgroundColor: '#FFF6C2' },
   bigStar: { fontSize: 52, lineHeight: 56, color: GOLD, textShadowColor: '#FFF6C2', textShadowRadius: 12 },
   ground: { position: 'absolute', left: -40, right: -40, bottom: -70, height: 150, borderRadius: 300 },
   critterRow: { position: 'absolute', left: 0, right: 0, bottom: 26, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: 8 },
-  critterShard: { fontSize: 22, lineHeight: 26, color: GOLD, textShadowColor: '#FFF6C2', textShadowRadius: 8 },
-  heroWrap: { position: 'absolute', left: 0, right: 0, bottom: 30, alignItems: 'center' },
-  words: { alignSelf: 'stretch', alignItems: 'center', gap: 8, paddingHorizontal: 24, minHeight: 124 },
-  speaker: { color: GOLD, fontWeight: '900', letterSpacing: 2, fontSize: 11, textTransform: 'uppercase' },
-  title: { color: COLORS.canvasWhite, fontWeight: '900', fontSize: 26, lineHeight: 31, textAlign: 'center' },
-  text: { color: '#D5DAF2', fontSize: 16, lineHeight: 23, textAlign: 'center', maxWidth: 380 },
+  critterShard: { fontSize: 15, lineHeight: 20, letterSpacing: 1, color: GOLD, textShadowColor: '#FFF6C2', textShadowRadius: 8 },
+  heroWrap: { position: 'absolute', left: 0, right: 0, bottom: 14, alignItems: 'center', gap: 8 },
+  miniSetCol: { alignItems: 'center', gap: 5 },
+  miniCardsRow: { flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center' },
+  miniSetBadge: { backgroundColor: COLORS.logicTeal, borderRadius: 999, borderWidth: 1.5, borderColor: '#FFF6C2', paddingHorizontal: 10, paddingVertical: 2 },
+  miniSetBadgeText: { color: COLORS.canvasWhite, fontSize: 11, fontWeight: '900', letterSpacing: 0.8 },
+  words: { alignSelf: 'stretch', alignItems: 'center', gap: 8, paddingHorizontal: 24, minHeight: 112 },
+  speaker: { flexShrink: 1, color: GOLD, fontWeight: '900', letterSpacing: 2, fontSize: 11, textTransform: 'uppercase' },
+  title: { flexShrink: 1, color: COLORS.canvasWhite, fontWeight: '900', fontSize: 24, lineHeight: 29, textAlign: 'center' },
+  text: { flexShrink: 1, color: '#D5DAF2', fontSize: 15, lineHeight: 21, textAlign: 'center', maxWidth: 380 },
   footer: { alignSelf: 'stretch', paddingHorizontal: 20, alignItems: 'center' },
   cta: { alignSelf: 'stretch', maxWidth: 440, width: '100%', backgroundColor: GOLD, borderRadius: 10, borderWidth: 2, borderBottomWidth: 5, borderColor: INK, paddingVertical: 14, alignItems: 'center' },
   ctaText: { color: INK, fontWeight: '900', fontSize: 17, letterSpacing: 1.5, textTransform: 'uppercase' },

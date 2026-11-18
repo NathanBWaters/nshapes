@@ -5,7 +5,7 @@
  * cards themselves (Magnet's mark, twins, the wild card, fog) need no chip.
  */
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Icon from '@/components/Icon';
 import { COLORS } from '@/utils/colors';
 import type { AttributeName } from '@/types';
@@ -34,43 +34,63 @@ export const gearModifiers = (run: RunState): Modifiers =>
 export const hasGearChips = (m: Modifiers): boolean =>
   (m.bountyDamage ?? 0) > 0 || (m.snowballStep ?? 0) > 0 || (m.albumDamage ?? 0) > 0 || (m.glassDamage ?? 0) > 0;
 
-export const GearChips: React.FC<{ run: RunState; mods: Modifiers }> = ({ run, mods: m }) => {
+export const GearChips: React.FC<{ run: RunState; mods: Modifiers; onInspectWeapon?: (weaponId: string) => void }> = ({ run, mods: m, onInspectWeapon }) => {
   const g = run.gear;
   const glassLeft = Math.max(0, Math.ceil(((m.glassWindowMs ?? 0) - (run.elapsedMs - g.glassSinceMs)) / 1000));
   const pages = albumTraits(run.attributes);
+  const wrap = (weaponId: string, testID: string, style: object, children: React.ReactNode) =>
+    onInspectWeapon ? (
+      <TouchableOpacity testID={testID} onPress={() => onInspectWeapon(weaponId)} activeOpacity={0.75} style={style}>
+        {children}
+      </TouchableOpacity>
+    ) : (
+      <View testID={testID} style={style}>{children}</View>
+    );
   return (
     <>
-      {(m.bountyDamage ?? 0) > 0 && g.bounty && (
-        <View testID="run-bounty-chip" style={[st.chip, st.wanted]}>
+      {(m.bountyDamage ?? 0) > 0 && g.bounty && wrap(
+        'bounty-poster',
+        'run-bounty-chip',
+        [st.chip, st.wanted],
+        <>
           <Icon name="delapouite/wanted-reward" size={12} color={INK} />
           <Text style={st.text}>WANTED</Text>
           {g.bounty.attribute === 'color' && <View style={[st.dot, { backgroundColor: CARD_COLORS[String(g.bounty.value)] ?? INK }]} />}
           <Text style={st.text}>{wantedLabel(g.bounty.attribute, g.bounty.value)} · {g.bounty.left} left</Text>
-        </View>
+        </>
       )}
-      {(m.snowballStep ?? 0) > 0 && (
-        <View testID="run-snowball-chip" style={[st.chip, g.snowball > 0 && st.cold]}>
+      {(m.snowballStep ?? 0) > 0 && wrap(
+        'snowball',
+        'run-snowball-chip',
+        [st.chip, g.snowball > 0 && st.cold],
+        <>
           <Icon name="lorc/snowman" size={12} color={INK} />
           <Text style={st.text}>+{g.snowball * (m.snowballStep ?? 0)} / {Math.round(m.snowballMax ?? 0)}</Text>
-        </View>
+        </>
       )}
-      {(m.albumDamage ?? 0) > 0 && (
-        <View testID="run-album-chip" style={st.chip}>
+      {(m.albumDamage ?? 0) > 0 && wrap(
+        'collectors-album',
+        'run-album-chip',
+        st.chip,
+        <>
           <Icon name="delapouite/post-stamp" size={12} color={INK} />
           {pages.map(a => (
             <View key={a} style={[st.page, g.album.includes(a) && st.pageDone]}>
               <Text style={[st.pageText, g.album.includes(a) && st.pageTextDone]}>{a}</Text>
             </View>
           ))}
-        </View>
+        </>
       )}
-      {(m.glassDamage ?? 0) > 0 && (
-        <View testID="run-glass-chip" style={[st.chip, g.glassBroken ? st.broken : glassLeft <= 2 ? st.danger : st.glass]}>
+      {(m.glassDamage ?? 0) > 0 && wrap(
+        'glass-sword',
+        'run-glass-chip',
+        [st.chip, g.glassBroken ? st.broken : glassLeft <= 2 ? st.danger : st.glass],
+        <>
           <Icon name="lorc/shard-sword" size={12} color={g.glassBroken ? '#9CA3AF' : INK} />
           <Text style={[st.text, g.glassBroken && st.brokenText]}>
             {g.glassBroken ? 'Shattered' : `+${Math.round(m.glassDamage ?? 0)} · ${glassLeft}s`}
           </Text>
-        </View>
+        </>
       )}
     </>
   );

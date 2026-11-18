@@ -8,14 +8,14 @@ import { FighterAvatar } from '@/components/fighters';
 import { COLORS } from '@/utils/colors';
 import { band, sfx } from '@/audio';
 import type { LevelDef, RunState } from '../types';
-import type { ResultApplication } from '../progress';
+import { isLevelUnlocked, type ResultApplication } from '../progress';
 import { damagePerMinute } from '../history';
 import { formatPower, powerMultiplier } from '../data/weaponPower';
 import { getBiome } from '../data/biomes';
 import { levelFoe } from '../data/foes';
 import { getMechanic } from '../data/mechanics';
 import { BOUNTIES } from '../data/bounties';
-import { mainIndexOf, getLevel } from '../data/levels';
+import { MAIN_LEVELS, mainIndexOf, getLevel } from '../data/levels';
 import { shouldShowDamageNumbers, companionResultsLine } from '../coach';
 import CompanionBubble from './CompanionBubble';
 import { explainStarBreakdown } from '../engine/challenges';
@@ -74,6 +74,11 @@ const LevelResults: React.FC<Props> = ({
   const won = stars > 0 || practice;
   const accuracy = level.starRule?.kind === 'accuracy';
   const title = practice ? 'PRACTICE OVER' : stars >= 3 ? 'PERFECT!' : stars === 2 ? 'VICTORY!' : stars === 1 ? (accuracy ? 'YOU WON!' : 'STAGE CLEAR!') : 'DEFEATED';
+  const newlyReachableBiome =
+    result.newlyOpenedBiomes.find(b => {
+      const first = MAIN_LEVELS.find(l => l.biome === b);
+      return first ? isLevelUnlocked(result.save, first) : false;
+    }) ?? (won && nextLevel && nextUnlocked && nextLevel.biome !== level.biome ? nextLevel.biome : undefined);
 
   useEffect(() => {
     const ts: ReturnType<typeof setTimeout>[] = [];
@@ -311,10 +316,22 @@ const LevelResults: React.FC<Props> = ({
             </View>
           ))}
 
-          {result.newlyOpenedBiomes.length > 0 && (
+          {won && level.isBoss && !practice && (
+            <View testID="results-boss-clear" style={st.bossClear}>
+              <Icon name="lorc/crown" size={20} color={INK} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={st.bossClearTitle}>{biome.name.toUpperCase()} GUARDIAN DEFEATED!</Text>
+                <Text style={st.bossClearSub}>
+                  {nextLevel && nextUnlocked ? `The road to ${getBiome(nextLevel.biome).name} is open!` : 'Region complete!'}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {newlyReachableBiome && (
             <View style={st.biomeOpen}>
               <Icon name="lorc/padlock" size={18} color={COLORS.canvasWhite} />
-              <Text style={st.biomeOpenText}>New region unlocked: {getBiome(result.newlyOpenedBiomes[0] as LevelDef['biome']).name}!</Text>
+              <Text style={st.biomeOpenText}>New region unlocked: {getBiome(newlyReachableBiome as LevelDef['biome']).name}!</Text>
             </View>
           )}
 
@@ -433,6 +450,9 @@ const st = StyleSheet.create({
   bountyHookFrac: { fontSize: 12, fontWeight: '900', color: TONE.upside, fontVariant: ['tabular-nums'] },
   biomeOpen: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: INK, borderRadius: 8, padding: 10 },
   biomeOpenText: { flex: 1, flexShrink: 1, color: COLORS.canvasWhite, fontWeight: '800' },
+  bossClear: { flexDirection: 'row', alignItems: 'center', gap: 10, alignSelf: 'stretch', backgroundColor: COLORS.actionYellow, borderRadius: 10, borderWidth: 2, borderColor: INK, padding: 10 },
+  bossClearTitle: { fontWeight: '900', fontSize: 13, letterSpacing: 1, color: INK, flexShrink: 1 },
+  bossClearSub: { fontSize: 12, fontWeight: '700', color: INK, flexShrink: 1 },
   pathFound: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.deepOnyx, borderRadius: 8, padding: 10 },
   pathFoundTitle: { color: COLORS.actionYellow, fontWeight: '900', letterSpacing: 2, fontSize: 11 },
   pathFoundText: { color: COLORS.canvasWhite, fontWeight: '700', fontSize: 13 },

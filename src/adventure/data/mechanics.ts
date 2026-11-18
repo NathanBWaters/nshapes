@@ -109,9 +109,9 @@ export const MECHANICS: Record<string, MechanicDef> = {
     enables: 'hearts',
     title: 'Hearts',
     tagline: 'A wrong pick costs a heart now. Run out and the fight is over.',
-    coach: 'Careful now: a wrong pick costs a heart.',
+    coach: '2 alike + 1 odd is never a Set. Now it costs a heart!',
     body: [
-      'A wrong pick costs 1 heart. Lose them all and the fight is lost.',
+      'Wrong picks cost 1 heart, and you have 8 moves to knock out the foe (surviving = ★, knockout = ★★).',
       'Your new Blast Powder fires by itself as you match. Make 2 all-red Sets for the third star.',
     ],
     fightTips: [

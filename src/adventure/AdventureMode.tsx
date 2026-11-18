@@ -13,6 +13,7 @@ import { CAMPAIGN_FEATURES } from './data/features';
 import { MECHANICS } from './data/mechanics';
 import {
   applyLevelResult,
+  armRecipePair,
   equipArcana,
   equipCharm,
   isLevelUnlocked,
@@ -20,6 +21,7 @@ import {
   markCoachMarkSeen,
   markMechanicSeen,
   markPathsRevealed,
+  swapCharm,
   toggleArcana,
   toggleCharm,
   type ResultApplication,
@@ -69,7 +71,7 @@ type Screen =
       funRating: FunRating | null;
       funTags: FunTag[];
     }
-  | { kind: 'camp'; tab?: CampTab }
+  | { kind: 'camp'; tab?: CampTab; returnLevelId?: string }
   | { kind: 'guide' };
 
 /** Lessons still to play before a fight starts; the first one is on screen. */
@@ -78,7 +80,7 @@ interface Teaching {
   level: LevelDef;
 }
 
-const screenFor = (d: FeatureDestination): Screen => ({ kind: 'camp', tab: d.tab });
+const screenFor = (d: FeatureDestination, returnLevelId?: string): Screen => ({ kind: 'camp', tab: d.tab, returnLevelId });
 
 interface Props {
   onExit: () => void;
@@ -312,12 +314,29 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave, coldO
           const tab: CampTab | undefined =
             screen.result.unlocks.flatMap(u => (u.kind === 'feature' ? [CAMPAIGN_FEATURES[u.feature].open?.destination.tab] : []))[0] ??
             (screen.result.completedBounties.length > 0 ? 'bounties' : undefined);
-          setScreen({ kind: 'camp', tab });
+          const returnLevelId = next && isLevelUnlocked(save, next) ? next.id : level.id;
+          setScreen({ kind: 'camp', tab, returnLevelId });
         }}
       />
     );
   } else if (screen.kind === 'camp') {
-    body = <Camp save={save} history={history} initialTab={screen.tab} onChange={setSave} onRateBattle={handleCampRateBattle} onClose={() => setScreen({ kind: 'map' })} />;
+    const returnLevel = screen.returnLevelId ? getLevel(screen.returnLevelId) : null;
+    body = (
+      <Camp
+        save={save}
+        history={history}
+        initialTab={screen.tab}
+        returnLevel={returnLevel}
+        onReturnToLevel={lvl => {
+          sfx('confirm');
+          setScreen({ kind: 'map', highlight: lvl.id });
+          setPreview(lvl);
+        }}
+        onChange={setSave}
+        onRateBattle={handleCampRateBattle}
+        onClose={() => setScreen({ kind: 'map' })}
+      />
+    );
   } else if (screen.kind === 'guide') {
     body = <FieldGuide save={save} onClose={() => setScreen({ kind: 'map' })} />;
   }
@@ -332,14 +351,16 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave, coldO
         onPlay={handlePlay}
         onSelectFighter={f => { sfx('click'); setSave(s => ({ ...s, selectedFighter: f })); }}
         onSelectCharm={id => { sfx('click'); setSave(s => toggleCharm(s, id)); }}
+        onArmRecipe={recipeId => { sfx('confirm'); setSave(s => armRecipePair(s, recipeId)); }}
         onSelectArcana={id => { sfx('click'); setSave(s => toggleArcana(s, id)); }}
         onShowMechanic={id => setReference(MECHANICS[id])}
         onOpenCamp={tab => {
           // The lesson was read and is being acted on: it counts as seen, and the fight waits on the map
           sfx('confirm');
+          const returnLevelId = preview?.id;
           if (preview) setSave(s => markMechanicSeen(s, LESSON_KEYS.mechanic(preview.introduces)));
           setPreview(null);
-          setScreen({ kind: 'camp', tab });
+          setScreen({ kind: 'camp', tab, returnLevelId });
         }}
       />
       {teaching ? (
@@ -360,10 +381,19 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave, coldO
           save={save}
           onUseFighter={name => setSave(s => ({ ...s, selectedFighter: name }))}
           onEquipCharm={id => setSave(s => equipCharm(s, id))}
+          onSwapCharm={(replaceId, withId) => { sfx('confirm'); setSave(s => swapCharm(s, replaceId, withId)); }}
           onEquipArcana={id => setSave(s => equipArcana(s, id))}
           onOpenFeature={feature => {
             const open = CAMPAIGN_FEATURES[feature].open;
-            if (open) setScreen(screenFor(open.destination));
+            if (open) {
+              let returnLevelId: string | undefined;
+              if (screen.kind === 'results') {
+                const lvl = getLevel(screen.levelId);
+                const nxt = MAIN_LEVELS[mainIndexOf(lvl) + 1] ?? null;
+                returnLevelId = nxt && isLevelUnlocked(save, nxt) ? nxt.id : screen.levelId;
+              }
+              setScreen(screenFor(open.destination, returnLevelId));
+            }
           }}
           onShowPath={id => { clearPendingTimers(); setScreen({ kind: 'map', highlight: id }); }}
           onDone={() => {

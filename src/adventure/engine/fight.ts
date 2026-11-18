@@ -9,15 +9,16 @@
  */
 import { damageMultiplier } from '../data/weaponPower';
 import type { AttributeName, BoardConnection, BridgeTriggerType, Card, PlayerStats, Weapon } from '@/types';
-import { ATTRIBUTE_VALUES, createDeck } from '@/utils/gameUtils';
+import { ATTRIBUTE_VALUES } from '@/utils/gameUtils';
 import { getLinkedDestructionPositions, arePositionsConnected } from '@/utils/connectionUtils';
 import type { ArcanaRules, EventPlace, FightLogLine, FightLogSetMath, PassiveId, RunEvent, RunEventType, RunState } from '../types';
 import type { Area, Modifiers, TrickKind, WeaponTriggerKind } from '../rules/types';
 import { arcanaRules } from '../data/arcana';
-import { BASE_RULES, TRICK_RULES } from '../data/rules';
+import { BASE_RULES, DECK_RULES, TRICK_RULES } from '../data/rules';
 import { PASSIVE_TUNING } from '../data/passives';
 import { createRng, type Rng } from './rng';
 import { hasAnySet, isSelectable } from './sets';
+import { buildDeck, deckCopies, variedDeal } from './dealer';
 import { growthModifiers } from '../data/weaponGrowth';
 import { evolutionCapFor, evolutionLikelihoodFor, liveRules, modifiersOf, type KeyedRule } from './sources';
 
@@ -293,11 +294,58 @@ export interface DrawOptions {
   skipFoeDrawEffects?: boolean;
 }
 
-/** Draw one card from the deck top (recycling is handled by the caller). */
-export const drawCard = (d: Draft, opts?: DrawOptions): Card => {
+/**
+ * Cards that leave the board go back into the deck at a random place in its
+ * lower part, and never among the cards about to take their places. (Queued in
+ * the order they left, a Set came back as the same three cards a few Sets
+ * later: see DECK_RULES.)
+ */
+export const returnToDeck = (d: Draft, cards: readonly Card[]) => {
+  for (const c of cards) {
+    const from = Math.min(d.deck.length, Math.max(cards.length, Math.ceil(d.deck.length * DECK_RULES.returnDepth)));
+    d.deck.splice(from + Math.floor(d._rng.next() * (d.deck.length - from + 1)), 0, toDeckCard(c));
+  }
+};
+
+/** Take cards out of the deck by position (the top is 0); a deck that runs short is topped up first. */
+const takeFromDeck = (d: Draft, positions: readonly number[] = [0]): Card[] => {
+  const uniquePositions = [...new Set(positions)];
+  const needed = Math.max(positions.length, uniquePositions.length, ...uniquePositions.map(p => p + 1));
   // The deck holds the level's own traits (a Shading Surge adds shading to cards as they land)
-  if (d.deck.length === 0) d.deck = d._rng.shuffle(createDeck(d.level.rules.attributes)).map(toDeckCard);
-  const base = d.deck.shift()!;
+  if (d.deck.length < needed) {
+    const inPlay = new Set([...d.board.map(c => c.id), ...d.deck.map(c => c.id)]);
+    const fresh = d._rng
+      .shuffle(buildDeck(d.level))
+      .map(toDeckCard)
+      .filter(c => !inPlay.has(c.id));
+    d.deck = [...d.deck, ...fresh];
+    if (d.deck.length < needed) {
+      const extra = d._rng.shuffle(buildDeck(d.level)).map((c, idx) => toDeckCard({ ...c, id: `${c.id}-x${d.eventSeq}-${idx}` }));
+      d.deck = [...d.deck, ...extra];
+    }
+  }
+  const pickedIndices: number[] = [];
+  const pickedSet = new Set<number>();
+  for (const p of positions) {
+    let idx = p;
+    if (idx < 0 || idx >= d.deck.length || pickedSet.has(idx)) {
+      idx = d.deck.findIndex((_, i) => !pickedSet.has(i));
+    }
+    if (idx >= 0) {
+      pickedIndices.push(idx);
+      pickedSet.add(idx);
+    }
+  }
+  const taken = pickedIndices.map(i => d.deck[i]);
+  d.deck = d.deck.filter((_, i) => !pickedSet.has(i));
+  return taken;
+};
+
+/** Draw one card from the deck top (recycling is handled by the caller). */
+export const drawCard = (d: Draft, opts?: DrawOptions): Card => dress(d, takeFromDeck(d)[0], opts);
+
+/** A deck card as it lands on the board: what the level, the fight and the foe do to it on the way. */
+const dress = (d: Draft, base: Card, opts?: DrawOptions): Card => {
   let card = freshCard(base);
   if (d.surge) card.shading = d.surge.active ? d._rng.pick(ATTRIBUTE_VALUES.shading) : ATTRIBUTE_VALUES.shading[0];
   if (d.simplified) {
@@ -335,7 +383,9 @@ export interface RefillOptions extends DrawOptions {
 export const refill = (d: Draft, indices: number[], opts?: RefillOptions) => {
   if (indices.length === 0) return;
   for (let attempt = 0; attempt < 12; attempt++) {
-    const drawn = indices.map(() => drawCard(d, opts));
+    // A deck with copies is dealt for variety (engine/dealer.ts); any other, and any second try, from the top
+    const picks = attempt === 0 && deckCopies(d.level) > 1 ? variedDeal(d.board, indices, d.deck, d.attributes) : null;
+    const drawn = picks ? takeFromDeck(d, picks).map(base => dress(d, base, opts)) : indices.map(() => drawCard(d, opts));
     const candidate = [...d.board];
     indices.forEach((idx, i) => (candidate[idx] = drawn[i]));
     if (hasAnySet(candidate, d.attributes) || attempt === 11) {
@@ -343,7 +393,7 @@ export const refill = (d: Draft, indices: number[], opts?: RefillOptions) => {
       if (!opts?.skipFoeDrawEffects) indices.forEach((idx, i) => announceDraw(d, drawn[i], idx));
       break;
     }
-    d.deck.push(...drawn.map(toDeckCard));
+    returnToDeck(d, drawn);
   }
   if (opts?.quiet) return;
   countHazardRefills(d, indices);
@@ -352,7 +402,7 @@ export const refill = (d: Draft, indices: number[], opts?: RefillOptions) => {
 
 /** Put cards back in the deck and refill their slots. */
 export const recycle = (d: Draft, indices: number[], opts?: RefillOptions) => {
-  indices.forEach(i => d.deck.push(toDeckCard(d.board[i])));
+  returnToDeck(d, indices.map(i => d.board[i]));
   refill(d, indices, opts);
 };
 

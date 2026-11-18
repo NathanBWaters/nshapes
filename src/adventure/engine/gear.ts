@@ -482,7 +482,12 @@ export const syncGear = (d: Draft) => {
   if (d.board.some(c => c.twinOf)) {
     const byId = new Map(d.board.map(c => [c.id, c]));
     const partner = new Map<string, string>();
-    for (const c of d.board) if (c.twinOf && byId.has(c.twinOf)) { partner.set(c.id, c.twinOf); partner.set(c.twinOf, c.id); }
+    // (two cards dealt at once can pick the same card to copy: the first keeps it, the other is an ordinary card)
+    for (const c of d.board) {
+      if (!c.twinOf || !byId.has(c.twinOf) || partner.has(c.id) || partner.has(c.twinOf)) continue;
+      partner.set(c.id, c.twinOf);
+      partner.set(c.twinOf, c.id);
+    }
     const stale = d.board.map((c, i) => (c.twinOf !== partner.get(c.id) ? i : -1)).filter(i => i >= 0);
     updateCards(d, stale, c => {
       const { twinOf: _old, ...rest } = c;

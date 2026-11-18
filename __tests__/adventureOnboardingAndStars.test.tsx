@@ -4,7 +4,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AdventureMode from '@/adventure/AdventureMode';
 import LevelResults from '@/adventure/components/LevelResults';
 import { MAIN_LEVELS, PRACTICE_LEVELS, getLevel } from '@/adventure/data/levels';
-import { applyLevelResult, createNewSave, createSaveBefore } from '@/adventure/progress';
+import { applyLevelResult, armableRecipesFromArmory, createMaxedSave, createNewSave, createSaveBefore, equipCharm } from '@/adventure/progress';
 import { baseCardReward, createRun, runReducer, computeStars } from '@/adventure/engine/run';
 import { explainStarBreakdown } from '@/adventure/engine/challenges';
 import {
@@ -14,6 +14,7 @@ import {
   companionResultsLine,
   companionVoice,
   computeLiveGuidance,
+  describeSingleCardTraits,
   describeValidSetWhy,
   fightRemarks,
   evaluateTripleTraits,
@@ -25,9 +26,13 @@ import {
 import { ASSIST_RULES } from '@/adventure/data/rules';
 import { MECHANICS } from '@/adventure/data/mechanics';
 import { STORY } from '@/adventure/data/story';
+import { FIGHTERS } from '@/adventure/data/fighters';
 import { lessonsDueBefore, taughtOnPreview } from '@/adventure/lessons';
 import LevelPreview from '@/adventure/components/LevelPreview';
 import AdventureMap from '@/adventure/components/AdventureMap';
+import UnlockReveal from '@/adventure/components/UnlockReveal';
+import Camp from '@/adventure/components/Camp';
+import AdventureRun from '@/adventure/components/AdventureRun';
 import MainMenu from '@/components/MainMenu';
 import { writeAdventureSave } from '@/adventure/save';
 import { starRewards, unlockablesOf } from '@/adventure/data/rewards';
@@ -150,21 +155,21 @@ describe('Adventure first minutes: show, then say', () => {
 
   it('explains a Set and a wrong pick in the cards’ own words, trait by trait', () => {
     const sameColor = [makeCard('a', 'diamond', 'red'), makeCard('b', 'oval', 'red'), makeCard('c', 'squiggle', 'red')];
-    expect(describeValidSetWhy(sameColor, ['shape', 'color'])).toBe('All red.');
+    expect(describeValidSetWhy(sameColor, ['shape', 'color'])).toBe('All red, all different shapes.');
     expect(evaluateTripleTraits(sameColor, ['shape', 'color'])).toEqual([
-      { attr: 'color', status: 'pass', label: 'Color: all red' },
-      { attr: 'shape', status: 'pass', label: 'Shape: all different' },
+      { attr: 'color', status: 'pass', label: 'Color: all red', detail: 'all red', brief: 'all red' },
+      { attr: 'shape', status: 'pass', label: 'Shape: all different', detail: 'all different', brief: 'all different' },
     ]);
 
     const allDiff = [makeCard('a', 'diamond', 'red'), makeCard('b', 'oval', 'green'), makeCard('c', 'squiggle', 'purple')];
-    expect(describeValidSetWhy(allDiff, ['shape', 'color'])).toBe('Nothing in common!');
+    expect(describeValidSetWhy(allDiff, ['shape', 'color'])).toBe('All different colors and shapes.');
 
     // One trait wrong: named with the cards that were picked, and the trait that passed is shown too
     const badColor = [makeCard('a', 'diamond', 'red'), makeCard('b', 'oval', 'red'), makeCard('c', 'squiggle', 'green')];
     expect(explainInvalidPick(badColor, ['shape', 'color'], 'Orange Tabby')).toBe('Almost! Color was 2 red + 1 green.');
     expect(evaluateTripleTraits(badColor, ['shape', 'color'])).toEqual([
-      { attr: 'color', status: 'fail', label: 'Color: 2 red + 1 green' },
-      { attr: 'shape', status: 'pass', label: 'Shape: all different' },
+      { attr: 'color', status: 'fail', label: 'Color: 2 red + 1 green', detail: '2 red + 1 green', brief: '2 + 1' },
+      { attr: 'shape', status: 'pass', label: 'Shape: all different', detail: 'all different', brief: 'all different' },
     ]);
 
     const badNumber = [makeCard('a', 'oval', 'purple', 2), makeCard('b', 'oval', 'purple', 2), makeCard('c', 'oval', 'purple', 3)];
@@ -198,9 +203,10 @@ describe('Adventure first minutes: show, then say', () => {
     expect(onBoard!.neededSummary).toBe('a red squiggle');
     expect(onBoard!.existsOnBoard).toBe(true);
     expect(onBoard!.cardId).toBe('3');
+    expect(onBoard!.identicalPair).toBe(false);
     expect(onBoard!.pills).toEqual([
-      { attr: 'color', status: 'hint', label: 'Color: same → red' },
-      { attr: 'shape', status: 'hint', label: 'Shape: different → squiggle' },
+      { attr: 'color', status: 'hint', label: 'Color: same → red', detail: 'red (same)', brief: 'red' },
+      { attr: 'shape', status: 'hint', label: 'Shape: different → squiggle', detail: 'squiggle (different)', brief: 'squiggle' },
     ]);
 
     const threeTrait = predictThirdCard([c1, c2], ['shape', 'color', 'number'], [c1, c2, wrongThird]);
@@ -215,14 +221,14 @@ describe('Adventure first minutes: show, then say', () => {
     let run = createRun(level, createNewSave(), { seed: 42 });
     const lit = (g: ReturnType<typeof computeLiveGuidance>) => run.board.filter(c => g!.glowIds.includes(c.id));
 
-    // Step 1: three cards of one colour are lit, the rest dimmed, and the words name the colour
+    // Step 1: three cards of one colour are lit, the rest dimmed, and the words name BOTH traits
     const step1 = computeLiveGuidance(run)!;
     expect(step1.kind).toBe('lesson');
     expect(step1.glowIds).toHaveLength(3);
     expect(step1.dimIds).toHaveLength(6);
     const color = lit(step1)[0].color;
     expect(lit(step1).every(c => c.color === color)).toBe(true);
-    expect(step1.message).toBe(`Meow! Tap the 3 ${color} cards!`);
+    expect(step1.message).toBe(`Meow! Tap these 3: all ${color}, 3 shapes!`);
     // (as they tap, the line counts down)
     expect(computeLiveGuidance(run, { selectedCount: 2 })!.message).toBe('One more!');
 
@@ -239,12 +245,12 @@ describe('Adventure first minutes: show, then say', () => {
     expect(step2.glowIds).toHaveLength(3);
     const shape = lit(step2)[0].shape;
     expect(lit(step2).every(c => c.shape === shape)).toBe(true);
-    expect(step2.message).toBe(`Now the 3 ${shape}s.`);
+    expect(step2.message).toMatch(/^Now these 3: all (diamonds|ovals|squiggles), 3 colors!$/);
     run = score(run, lit(step2));
 
     // Step 3: three cards with nothing in common
     const step3 = computeLiveGuidance(run)!;
-    expect(step3.message).toBe('Now 3 with nothing in common!');
+    expect(step3.message).toBe('And these 3: 3 colors & 3 shapes!');
     expect(new Set(lit(step3).map(c => c.color)).size).toBe(3);
     expect(new Set(lit(step3).map(c => c.shape)).size).toBe(3);
     run = score(run, lit(step3));
@@ -253,7 +259,7 @@ describe('Adventure first minutes: show, then say', () => {
     const turn = computeLiveGuidance(run)!;
     expect(turn.glowIds).toHaveLength(0);
     expect(turn.dimIds).toHaveLength(0);
-    expect(turn.message).toBe('Your turn! All the same, or all different.');
+    expect(turn.message).toBe('Your turn! Each trait: all same, or all different.');
 
     // Two cards held: the companion names the card that finishes the Set
     const triple = allSets(run.board, run.attributes)[0];
@@ -288,16 +294,21 @@ describe('Adventure first minutes: show, then say', () => {
     expect(assistCardsFor(getLevel('1-5'), 60_000)).toBe(3);
     expect(assistCardsFor(getLevel('2-1'), 600_000)).toBe(2);
 
-    // 1-5, three traits on twelve cards: the level's opening line first, then help as the seconds pass
+    // 1-5, three traits on twelve cards: lights an example Set for Number with trait pills, then help as the seconds pass
     const level = getLevel('1-5');
     const save = createSaveBefore('1-5');
     let run = createRun(level, save, { seed: 9 });
-    expect(computeLiveGuidance(run)!.kind).toBe('opening');
-    expect(computeLiveGuidance(run)!.message).toBe(MECHANICS[level.introduces].coach);
+    const open15 = computeLiveGuidance(run)!;
+    expect(open15.kind).toBe('lesson');
+    expect(open15.message).toBe(MECHANICS[level.introduces].coach);
+    expect(open15.pills).toHaveLength(3);
 
     const [t1, t2, t3] = ASSIST_RULES.threeTraits;
+    const [twoT1] = ASSIST_RULES.twoTraits;
+    const quietBefore13 = wait(createRun(getLevel('1-3'), createSaveBefore('1-3'), { seed: 9 }), twoT1 - 1);
+    expect(computeLiveGuidance(quietBefore13, { seenIntro: true })).toBeNull();
     run = wait(run, t1 - 1);
-    expect(computeLiveGuidance(run, { seenIntro: true })).toBeNull();
+    expect(computeLiveGuidance(run, { seenIntro: true })!.kind).toBe('lesson');
     run = wait(run, 1);
     const one = computeLiveGuidance(run, { seenIntro: true })!;
     expect(one.kind).toBe('rescue');
@@ -326,8 +337,12 @@ describe('Adventure first minutes: show, then say', () => {
   it('points at a Set that helps the level’s ★★★ challenge when the board has one', () => {
     // 1-2 asks for all-red Sets
     const level = getLevel('1-2');
-    let run = createRun(level, createSaveBefore('1-2'), { seed: 5 });
-    run = wait(run, ASSIST_RULES.twoTraits[2]);
+    const save = createSaveBefore('1-2');
+    const base = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+      .map(seed => createRun(level, save, { seed }))
+      .find(r => allSets(r.board, r.attributes).some(s => s.every(c => c.color === 'red')))!;
+    expect(base).toBeTruthy();
+    const run = wait(base, ASSIST_RULES.twoTraits[2]);
     const help = computeLiveGuidance(run, { seenIntro: true })!;
     const cards = run.board.filter(c => help.glowIds.includes(c.id));
     expect(cards).toHaveLength(3);
@@ -501,7 +516,7 @@ describe('Adventure first minutes: the screens', () => {
     letTheFoeFinish();
     expect(screen.queryByTestId('run-foe-taunt')).toBeNull();
     expect(screen.getByTestId('run-coach-banner')).toBeTruthy();
-    expect(screen.getByText(/^Meow! Tap the 3 (red|green|purple) cards!$/)).toBeTruthy();
+    expect(screen.getByText(/^Meow! Tap these 3: all (red|green|purple), 3 shapes!$/)).toBeTruthy();
   });
 
   it('Skip jumps from the story to the first fight', () => {
@@ -659,5 +674,189 @@ describe('Adventure first minutes: the screens', () => {
     // Early on, the numbers that have not been introduced stay away
     expect(screen.queryByTestId('results-sets')).toBeNull();
     expect(screen.queryByTestId('results-power')).toBeNull();
+  });
+
+  it('describes a single held card trait-by-trait and protects incompatible pairs from stuck rescue', () => {
+    const c = makeCard('s1', 'oval', 'purple', 2);
+    expect(describeSingleCardTraits(c, ['shape', 'color', 'number'])).toEqual([
+      { attr: 'color', status: 'info', label: 'Color: purple', detail: 'purple', brief: 'purple' },
+      { attr: 'shape', status: 'info', label: 'Shape: oval', detail: 'oval', brief: 'oval' },
+      { attr: 'number', status: 'info', label: 'Number: 2', detail: '2', brief: '2' },
+    ]);
+
+    const level = getLevel('1-3');
+    const save = createSaveBefore('1-3');
+    const board: Card[] = [
+      makeCard('x1', 'oval', 'red'),
+      makeCard('x2', 'oval', 'green'),
+      makeCard('d1', 'diamond', 'red'),
+      makeCard('d2', 'diamond', 'green'),
+      makeCard('d3', 'diamond', 'purple'),
+      makeCard('q1', 'squiggle', 'red'),
+    ];
+    const run = wait({ ...createRun(level, save, { seed: 4 }), board }, ASSIST_RULES.twoTraits[2]);
+    const guidance = computeLiveGuidance(run, { selectedCount: 2, selectedCards: [board[0], board[1]], seenIntro: true })!;
+    expect(guidance.kind).toBe('pair');
+    expect(guidance.message).toMatch(/Swap one!/);
+    expect(guidance.glowIds).toEqual([]);
+  });
+
+  it('allows immediate taunt dismissal on card tap and opens HudInspector from passive and challenge chips', () => {
+    const save = createSaveBefore('1-7');
+    const screen = render(wrap(
+      <AdventureRun
+        level={getLevel('1-7')}
+        save={save}
+        seed={12}
+        onFinish={() => {}}
+        onQuit={() => {}}
+        onRestart={() => {}}
+        onCoachMarkSeen={() => {}}
+      />
+    ));
+    expect(screen.getByTestId('run-foe-taunt')).toBeTruthy();
+
+    fireEvent.press(screen.getAllByTestId(/^card-(diamond|oval|squiggle)-/)[0]);
+    expect(screen.queryByTestId('run-foe-taunt')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('run-passive-nine_lives'));
+    expect(screen.getByTestId('hud-inspector-modal')).toBeTruthy();
+    expect(screen.getByText('Nine Lives')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('hud-inspector-close'));
+    expect(screen.queryByTestId('hud-inspector-modal')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('run-challenge'));
+    expect(screen.getByTestId('hud-inspector-modal')).toBeTruthy();
+    expect(screen.getByText('Star Goals')).toBeTruthy();
+  });
+
+  it('offers one-tap belt swap on UnlockReveal when charm slots are full', () => {
+    let save = createSaveBefore('1-4');
+    // Ensure belt is full and pick a real unowned Armory weapon to unlock
+    save = applyLevelResult(save, getLevel('1-3'), 3, 0).save;
+    const fullSave = save.charms.length >= 2 ? save : equipCharm(save, save.armory[1]);
+    const extraId = createMaxedSave().armory.find(id => !fullSave.armory.includes(id) && !fullSave.charms.includes(id))!;
+    const onSwapCharm = jest.fn();
+
+    const screen = render(wrap(
+      <UnlockReveal
+        unlocks={[{ kind: 'weapon', id: extraId, star: 3, firstWeapon: false }]}
+        save={fullSave}
+        onUseFighter={() => {}}
+        onEquipCharm={() => {}}
+        onSwapCharm={onSwapCharm}
+        onDone={() => {}}
+      />
+    ));
+    fireEvent.press(screen.getByTestId('unlock-reveal'));
+    expect(screen.getByTestId('unlock-swap-box')).toBeTruthy();
+    fireEvent.press(screen.getByTestId(`unlock-swap-${fullSave.charms[0]}`));
+    expect(onSwapCharm).toHaveBeenCalledWith(fullSave.charms[0], extraId);
+  });
+
+  it('renders evolution one-tap arm button and fighter trial nudge on LevelPreview, and Camp return bar', () => {
+    const maxed = createMaxedSave();
+    const armable = armableRecipesFromArmory(maxed);
+    expect(armable.length).toBeGreaterThan(0);
+    const noArmedSave = { ...maxed, charms: [] };
+    const onArmRecipe = jest.fn();
+    const noop = () => {};
+
+    const evoPreview = render(wrap(
+      <LevelPreview
+        level={getLevel('2-2')}
+        save={noArmedSave}
+        onClose={noop}
+        onPlay={noop}
+        onSelectFighter={noop}
+        onSelectCharm={noop}
+        onArmRecipe={onArmRecipe}
+        onShowMechanic={noop}
+      />
+    ));
+    expect(evoPreview.getByText('No evolution armed')).toBeTruthy();
+    fireEvent.press(evoPreview.getByTestId('preview-arm-recipe'));
+    expect(onArmRecipe).toHaveBeenCalledWith(armable[0].recipe.id);
+    evoPreview.unmount();
+
+    const trialLevel = getLevel('1-5F');
+    const trialFighter = FIGHTERS.find(f => f.signature === trialLevel.introduces)!;
+    const otherFighter = trialFighter.name === 'Orange Tabby' ? 'Sly Fox' : 'Orange Tabby';
+    const onSelectFighter = jest.fn();
+    const trialPreview = render(wrap(
+      <LevelPreview
+        level={trialLevel}
+        save={{ ...maxed, selectedFighter: otherFighter }}
+        onClose={noop}
+        onPlay={noop}
+        onSelectFighter={onSelectFighter}
+        onSelectCharm={noop}
+        onShowMechanic={noop}
+      />
+    ));
+    expect(trialPreview.getByTestId('preview-trial-fighter-nudge')).toBeTruthy();
+    fireEvent.press(trialPreview.getByTestId('preview-switch-trial-fighter'));
+    expect(onSelectFighter).toHaveBeenCalledWith(trialFighter.name);
+    trialPreview.unmount();
+
+    const onReturnToLevel = jest.fn();
+    const camp = render(wrap(
+      <Camp
+        save={maxed}
+        returnLevel={getLevel('1-7')}
+        onReturnToLevel={onReturnToLevel}
+        onChange={noop}
+        onClose={noop}
+      />
+    ));
+    fireEvent.press(camp.getByTestId('camp-return-fight'));
+    expect(onReturnToLevel).toHaveBeenCalledWith(getLevel('1-7'));
+  });
+
+  it('hides premature biome unlock banner on 1-4 and shows boss-clear celebration on 1-10 win', () => {
+    const save14 = createSaveBefore('1-4');
+    const lvl14 = getLevel('1-4');
+    const run14 = { ...createRun(lvl14, save14, { seed: 3 }), status: 'won' as const, endReason: 'defeated' as const, challengeMet: true, foeHp: 0 };
+    const res14 = applyLevelResult(save14, lvl14, 3, 0, run14);
+    expect(res14.newlyOpenedBiomes).toContain('woods');
+    const early = render(wrap(
+      <LevelResults
+        level={lvl14}
+        run={run14}
+        stars={3}
+        result={res14}
+        unlocksRevealed
+        nextLevel={getLevel('1-5')}
+        nextUnlocked
+        onRetry={() => {}}
+        onNext={() => {}}
+        onMap={() => {}}
+        onCamp={() => {}}
+      />
+    ));
+    expect(early.queryByText(/New region unlocked/)).toBeNull();
+    early.unmount();
+
+    const save110 = createSaveBefore('1-10');
+    const lvl110 = getLevel('1-10');
+    const run110 = { ...createRun(lvl110, save110, { seed: 4 }), status: 'won' as const, endReason: 'defeated' as const, challengeMet: true, foeHp: 0 };
+    const res110 = applyLevelResult(save110, lvl110, 3, 0, run110);
+    const boss = render(wrap(
+      <LevelResults
+        level={lvl110}
+        run={run110}
+        stars={3}
+        result={res110}
+        unlocksRevealed
+        nextLevel={getLevel('2-1')}
+        nextUnlocked
+        onRetry={() => {}}
+        onNext={() => {}}
+        onMap={() => {}}
+        onCamp={() => {}}
+      />
+    ));
+    expect(boss.getByTestId('results-boss-clear')).toBeTruthy();
+    expect(boss.getByText(/New region unlocked/)).toBeTruthy();
   });
 });

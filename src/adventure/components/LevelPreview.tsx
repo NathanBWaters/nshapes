@@ -27,6 +27,8 @@ import { isFighterTrial, starRewards } from '../data/rewards';
 import { starGoals } from '../engine/challenges';
 import {
   arcanaSlots,
+  armableRecipesFromArmory,
+  charmSynergyWithEquipped,
   fighterStarsSpent,
   charmSlots,
   equippedArcanaOf,
@@ -57,9 +59,11 @@ interface Props {
   onShowMechanic: (id: string) => void;
   /** Leave for Camp (a lesson that is used there, like skill trees, offers it) */
   onOpenCamp?: (tab: NonNullable<MechanicDef['camp']>['tab']) => void;
+  /** Equip the top armable recipe pair from Armory in one tap */
+  onArmRecipe?: (recipeId: string) => void;
 }
 
-const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectFighter, onSelectCharm, onSelectArcana, onShowMechanic, onOpenCamp }) => {
+const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectFighter, onSelectCharm, onSelectArcana, onShowMechanic, onOpenCamp, onArmRecipe }) => {
   const [charmTapCounts, setCharmTapCounts] = useState<Record<string, number>>({});
   /** The charm tapped last: explained below the row even when it could not be equipped */
   const [focusCharm, setFocusCharm] = useState<string | null>(null);
@@ -87,6 +91,7 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
   const charmsFull = charms.length >= slots;
   /** A practice fight: nothing to win or lose, so no goals, rewards or difficulty */
   const practice = !!level.rules.sandbox;
+  const trialFighter = isFighterTrial(level) ? FIGHTERS.find(f => f.signature === level.introduces) : undefined;
   // Swapping charms is its own lesson (the level that introduces 'charm'); before it, or with nothing to swap, the picker stays away
   const charmsTaught = level.introduces === 'charm' || save.seenMechanics.includes('charm') || save.armory.length > slots || practice;
 
@@ -140,6 +145,16 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
               <LessonCard mech={mech} isNew={isNew} onMore={() => onShowMechanic(level.introduces)} onOpenCamp={onOpenCamp} />
             )}
 
+            {trialFighter && save.unlockedFighters.includes(trialFighter.name) && save.selectedFighter !== trialFighter.name && (
+              <View testID="preview-trial-fighter-nudge" style={st.trialNudge}>
+                <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                  <Text style={st.evoName}>Built for {trialFighter.name}</Text>
+                  <Text style={st.evoHintSub}>This trial showcases {trialFighter.name}’s two passives.</Text>
+                </View>
+                <Btn small testID="preview-switch-trial-fighter" label={`Switch to ${trialFighter.name}`} onPress={() => onSelectFighter(trialFighter.name)} />
+              </View>
+            )}
+
             <View style={st.rules}>
               {practice ? (
                 <Rule icon="lorc/stopwatch" text="No clock" />
@@ -178,6 +193,11 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                 <Text style={st.abilityText}>
                   Nothing here earns stars or coins, and nothing is lost. Everything you have learned so far is switched on. Stay as long as you like.
                 </Text>
+                {!save.seenMechanics.includes('attr_number') && (save.stars['1-5'] ?? 0) === 0 && (
+                  <Text style={st.abilityText}>
+                    Heads up: the dummy’s board deals 1, 2 & 3 shapes at once — a sneak peek at the next trait!
+                  </Text>
+                )}
               </View>
             )}
 
@@ -194,29 +214,32 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                       <Text style={[st.goalText, done && { opacity: 0.6 }]}>{g.text}</Text>
                       {done && <Text style={st.doneMark}>✓</Text>}
                     </View>
-                    {(save.coinsUnlocked || unlocks.length > 0) && (
-                      <View style={st.goalRewards}>
-                        {save.coinsUnlocked && (
-                          <View style={[st.coinChip, done && st.chipDone]}>
-                            <Icon name="lorc/crown-coin" size={14} color={done ? TONE.spent : TONE.coin} />
-                            <Text style={[st.coinChipText, done && { color: TONE.spent }]}>{g.reward.coins}</Text>
+                    <View style={st.goalRewards}>
+                      {!save.coinsUnlocked ? (
+                        <View style={[st.coinChip, done && st.chipDone]} testID={`preview-shard-${g.star}`}>
+                          <Icon name="lorc/flat-star" size={14} color={done ? TONE.spent : TONE.coin} />
+                          <Text style={[st.coinChipText, done && { color: TONE.spent }]}>{done ? 'Shard won' : 'Star Shard'}</Text>
+                        </View>
+                      ) : (
+                        <View style={[st.coinChip, done && st.chipDone]}>
+                          <Icon name="lorc/crown-coin" size={14} color={done ? TONE.spent : TONE.coin} />
+                          <Text style={[st.coinChipText, done && { color: TONE.spent }]}>{g.reward.coins}</Text>
+                        </View>
+                      )}
+                      {unlocks.map((unlock, k) =>
+                        done ? (
+                          <View key={k} style={[st.unlockChip, st.chipDone]}>
+                            <UnlockableAvatar display={unlock} size={20} fighterMood="idle" iconSize={16} iconColor={TONE.spent} interactive />
+                            <Text style={[st.unlockText, { color: TONE.spent }]} numberOfLines={1}>{unlock.revealed}</Text>
                           </View>
-                        )}
-                        {unlocks.map((unlock, k) =>
-                          done ? (
-                            <View key={k} style={[st.unlockChip, st.chipDone]}>
-                              <UnlockableAvatar display={unlock} size={20} fighterMood="idle" iconSize={16} iconColor={TONE.spent} interactive />
-                              <Text style={[st.unlockText, { color: TONE.spent }]} numberOfLines={1}>{unlock.revealed}</Text>
-                            </View>
-                          ) : (
-                            <View key={k} style={st.unlockChip}>
-                              <Silhouette icon={unlock.icon} size={14} />
-                              <Text style={st.unlockText}>{unlock.secret}</Text>
-                            </View>
-                          )
-                        )}
-                      </View>
-                    )}
+                        ) : (
+                          <View key={k} style={st.unlockChip}>
+                            <Silhouette icon={unlock.icon} size={14} />
+                            <Text style={st.unlockText}>{unlock.secret}</Text>
+                          </View>
+                        )
+                      )}
+                    </View>
                   </View>
                 );
               })}
@@ -260,17 +283,24 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                     </ScrollView>
                   </>
                 )}
-                {shouldShowPassiveHud(level, save) && <View style={st.passiveBox} testID="preview-passives">
-                  {fighter.passives.map(id => {
-                    const p = getPassive(id);
-                    return (
-                      <View key={id} style={st.passiveRow}>
-                        <Icon name={p.icon} size={16} color={INK} />
-                        <Text style={st.passiveText}><Text style={{ fontWeight: '900' }}>{p.name}: </Text>{p.text}</Text>
-                      </View>
-                    );
-                  })}
-                </View>}
+                {shouldShowPassiveHud(level, save) && (
+                  <>
+                    <Text style={st.section}>
+                      PASSIVES <Text style={st.sectionHint}>always on for {fighter.name}</Text>
+                    </Text>
+                    <View style={st.passiveBox} testID="preview-passives">
+                      {fighter.passives.map(id => {
+                        const p = getPassive(id);
+                        return (
+                          <View key={id} style={st.passiveRow}>
+                            <Icon name={p.icon} size={16} color={INK} />
+                            <Text style={st.passiveText}><Text style={{ fontWeight: '900' }}>{p.name}: </Text>{p.text}</Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </>
+                )}
               </>
             )}
 
@@ -321,6 +351,7 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                     const selected = charms.includes(id);
                     const blocked = !selected && charmsFull;
                     const wLevel = weaponLevel(save, id);
+                    const synergy = !selected ? charmSynergyWithEquipped(save, id) : null;
                     return (
                       <TouchableOpacity
                         key={id}
@@ -339,6 +370,11 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                         <View style={[st.kindDot, { backgroundColor: WEAPON_KINDS[weaponGuide(id).kind].color }]}>
                           <Text style={st.kindDotText}>{WEAPON_KINDS[weaponGuide(id).kind].label.toUpperCase()}</Text>
                         </View>
+                        {synergy && (
+                          <View style={st.fusesTag} testID={`preview-fuses-${id}`}>
+                            <Text style={st.fusesText}>✦ FUSES</Text>
+                          </View>
+                        )}
                       </TouchableOpacity>
                     );
                   })}
@@ -388,11 +424,31 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                     </View>
                   );
                 })}
-                {armed.length > 0 && (
+                {armed.length > 0 ? (
                   <Text style={st.evoHintSub} testID="preview-evo-likelihood">
                     Catalyst chance {Math.round(loadout.evolutionLikelihood)}% per refill · {Number.isFinite(loadout.evolutionCap) ? `up to ${loadout.evolutionCap} evolutions this fight` : 'as many evolutions as you like'}. Match the Catalyst to evolve for 30 s.
                   </Text>
-                )}
+                ) : (() => {
+                  const armable = armableRecipesFromArmory(save);
+                  if (armable.length === 0 || !onArmRecipe) return null;
+                  const top = armable[0];
+                  const w0 = getArmoryWeapon(top.pair[0]);
+                  const w1 = getArmoryWeapon(top.pair[1]);
+                  return (
+                    <View style={{ gap: 6 }}>
+                      <Text style={st.evoHintSub}>
+                        Equip {w0?.name ?? top.pair[0]} + {w1?.name ?? top.pair[1]} to arm {top.known ? top.recipe.name : '??? Evolution'}.
+                      </Text>
+                      <Btn
+                        small
+                        testID="preview-arm-recipe"
+                        icon="lorc/fireball"
+                        label={`Arm ${top.known ? top.recipe.name : '??? Evolution'}`}
+                        onPress={() => onArmRecipe(top.recipe.id)}
+                      />
+                    </View>
+                  );
+                })()}
               </View>
             )}
 
@@ -581,6 +637,9 @@ const st = StyleSheet.create({
   charmSel: { backgroundColor: COLORS.actionYellow, borderBottomWidth: 4 },
   kindDot: { borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1, marginTop: 2 },
   kindDotText: { fontSize: 8, fontWeight: '900', letterSpacing: 0.4, color: COLORS.canvasWhite },
+  fusesTag: { backgroundColor: TONE.combo, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1, borderWidth: 1, borderColor: INK },
+  fusesText: { fontSize: 8, fontWeight: '900', color: COLORS.canvasWhite, letterSpacing: 0.5 },
+  trialNudge: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, padding: 10, borderRadius: 10, borderWidth: 2, borderColor: INK, backgroundColor: COLORS.actionYellow },
   evoBox: { gap: 6, backgroundColor: TONE.comboPale, borderRadius: 8, borderWidth: 1.5, borderColor: TONE.combo, padding: 8 },
   evoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   evoName: { fontSize: 12, fontWeight: '900', color: INK },

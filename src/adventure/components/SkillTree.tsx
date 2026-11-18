@@ -30,6 +30,8 @@ import {
   totalStarsEarned,
   type NodeStatus,
 } from '../progress';
+import { companionVoice } from '../coach';
+import CompanionBubble from './CompanionBubble';
 import { Btn, INK, TONE } from './ui';
 
 const STAR = '#E0A800';
@@ -129,6 +131,16 @@ const SkillTree: React.FC<Props> = ({ save, fighter, onChange, onBack }) => {
       <View style={st.passives}>
         {def.passives.map(id => <PassiveCard key={id} passive={getPassive(id)} />)}
       </View>
+      {spentHere === 0 && availableStars(save, fighter) > 0 && (
+        <View style={{ paddingHorizontal: 14, paddingTop: 8 }}>
+          <CompanionBubble
+            testID="skill-tree-welcome"
+            character={fighter}
+            mood="victory"
+            text={`${companionVoice(fighter).cheer} Tap any glowing node next to a yellow passive to power me up! Respecs are always free.`}
+          />
+        </View>
+      )}
       <Text style={st.blurb}>
         Grow out from either passive (the big yellow nodes): any node linked to one you own can be bought. Tap a node to read it. Refunds are free.
       </Text>

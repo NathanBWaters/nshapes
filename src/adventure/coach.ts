@@ -4,11 +4,18 @@
  * How it teaches (the order matters):
  *  1. Show, then say. The board lights up the cards; the words are one short
  *     line. A new player reads the board, not paragraphs.
- *  2. One idea at a time. The first level walks through "all the same colour",
- *     "all the same shape", "nothing in common", and only then hands over.
- *  3. Never leave a player stuck. When the board has been quiet for a while the
+ *  2. The rule is checked one trait at a time, every time. A Set is three cards
+ *     where EACH trait is all the same or all different, so nothing here ever
+ *     says "three red cards are a Set": a Set that is lit, made or missed is
+ *     shown with a check per trait ("Color: all red ✓  Shape: all different ✓").
+ *     Three of one color is only a Set because the shapes pass too, and a player
+ *     who learns the shortcut is lost the moment a third trait arrives.
+ *  3. One idea at a time. The first level shows the three ways two traits can
+ *     pass (same color, same shape, nothing alike), then hands over with the
+ *     rule. The level that adds a trait shows one Set checked on all three.
+ *  4. Never leave a player stuck. When the board has been quiet for a while the
  *     companion points a Set out, one card at a time (data/rules.ts ASSIST_RULES).
- *  4. A mistake is explained with the cards that were picked ("2 red + 1 green"),
+ *  5. A mistake is explained with the cards that were picked ("2 red + 1 green"),
  *     never scolded.
  *
  * Every line here is short on purpose: it has to fit a speech bubble next to
@@ -23,11 +30,17 @@ import { levelFoe } from './data/foes';
 import { MECHANICS } from './data/mechanics';
 import { ASSIST_RULES } from './data/rules';
 
+/** One trait's check across the cards in question (the fight shows them in a strip above the board: TraitChecks.tsx). */
 export interface TraitCheckPill {
   attr: AttributeName;
+  /** The whole check in words: "Color: all red" */
   label: string;
-  /** `pass` = the trait is all the same or all different ✓, `fail` = two alike and one odd ✗, `hint` = what the third card needs → */
-  status: 'pass' | 'fail' | 'hint';
+  /** The same for a cell that already shows the trait's name: "all red", "2 red + 1 green", "red (same)" */
+  detail: string;
+  /** As short as it gets, for a narrow cell: "all red", "2 + 1", "red" */
+  brief: string;
+  /** `pass` = all same/different ✓, `fail` = two alike + one odd ✗, `hint` = 3rd card needs →, `info` = 1 card selected • */
+  status: 'pass' | 'fail' | 'hint' | 'info';
 }
 
 /** What the companion is doing right now (the HUD tints the bubble by it) */
@@ -40,6 +53,7 @@ export interface GuidedBoardHint {
   message: string;
   mood: 'curious' | 'victory' | 'anticipation' | 'streak';
   kind: GuidanceKind;
+  /** The trait checks of the cards this is about (shown in the strip above the board while the rule is new) */
   pills?: TraitCheckPill[];
 }
 
@@ -178,15 +192,32 @@ export const evaluateTripleTraits = (
     if (unique.size === 1) {
       const v = vals[0];
       const desc = attr === 'shape' ? `all ${SHAPE_PLURAL[v as Shape]}` : attr === 'number' ? `all ${v}s` : `all ${v}`;
-      return { attr, status: 'pass', label: `${title}: ${desc}` };
+      return { attr, status: 'pass', label: `${title}: ${desc}`, detail: desc, brief: desc };
     }
     if (unique.size === 3) {
-      return { attr, status: 'pass', label: `${title}: ${attr === 'number' ? '1 · 2 · 3' : 'all different'}` };
+      const desc = attr === 'number' ? '1 · 2 · 3' : 'all different';
+      return { attr, status: 'pass', label: `${title}: ${desc}`, detail: desc, brief: desc };
     }
     const { pair, odd } = twoAndOne(cards, attr);
-    return { attr, status: 'fail', label: `${title}: ${pair} + ${odd}` };
+    return { attr, status: 'fail', label: `${title}: ${pair} + ${odd}`, detail: `${pair} + ${odd}`, brief: '2 + 1' };
   });
 };
+
+/** One card held: its active traits in reading order so the player learns what to scan. */
+export const describeSingleCardTraits = (
+  card: Card,
+  attributes: readonly AttributeName[]
+): TraitCheckPill[] =>
+  inReadingOrder(attributes).map(attr => {
+    const val = String(attrValueOf(card, attr));
+    return {
+      attr,
+      status: 'info',
+      label: `${ATTR_TITLE[attr]}: ${val}`,
+      detail: val,
+      brief: val,
+    };
+  });
 
 const thirdValue = <T extends string | number>(a: T, b: T, domain: readonly T[]): T =>
   a === b ? a : (domain.find(x => x !== a && x !== b) ?? a);
@@ -199,12 +230,13 @@ export const predictThirdCard = (
   pair: readonly Card[],
   attributes: readonly AttributeName[],
   boardCards?: readonly Card[]
-): { pills: TraitCheckPill[]; neededSummary: string; existsOnBoard: boolean; cardId: string | null } | null => {
+): { pills: TraitCheckPill[]; neededSummary: string; existsOnBoard: boolean; cardId: string | null; identicalPair: boolean } | null => {
   if (pair.length !== 2) return null;
   const [a, b] = pair;
   const needed: Partial<Record<AttributeName, string | number>> = {};
   const pills: TraitCheckPill[] = [];
   const ordered = inReadingOrder(attributes);
+  const identicalPair = ordered.every(attr => attrValueOf(a, attr) === attrValueOf(b, attr));
 
   for (const attr of ordered) {
     const va = attrValueOf(a, attr);
@@ -217,7 +249,8 @@ export const predictThirdCard = (
     else if (attr === 'background') target = thirdValue(va as Background, vb as Background, ALL_BACKGROUNDS);
 
     needed[attr] = target;
-    pills.push({ attr, status: 'hint', label: `${ATTR_TITLE[attr]}: ${va === vb ? 'same' : 'different'} → ${target}` });
+    const how = va === vb ? 'same' : 'different';
+    pills.push({ attr, status: 'hint', label: `${ATTR_TITLE[attr]}: ${how} → ${target}`, detail: `${target} (${how})`, brief: `${target}` });
   }
 
   // "a red squiggle", "2 green ovals"
@@ -234,20 +267,39 @@ export const predictThirdCard = (
 
   const others = (boardCards ?? []).filter(c => c.id !== a.id && c.id !== b.id);
   const found = others.find(c => ordered.every(attr => attrValueOf(c, attr) === needed[attr]));
-  return { pills, neededSummary, existsOnBoard: boardCards === undefined ? true : !!found, cardId: found?.id ?? null };
+  return { pills, neededSummary, existsOnBoard: boardCards === undefined ? true : !!found, cardId: found?.id ?? null, identicalPair };
 };
 
-/** One short line on why three cards are a Set: "All red.", "All ovals.", "Nothing in common!" */
+/** The rule, as the companion says it when there are no cards to show it with */
+const RULE_LINE = 'Each trait: all the same or all different.';
+
+/**
+ * Why three cards are a Set, in the rule's own two phrases and with every
+ * trait accounted for: "All red, all different shapes." / "All different
+ * colors and shapes, 1-2-3." (Naming only what the cards share, "All red.",
+ * teaches a shortcut that stops working at three traits.)
+ */
 export const describeValidSetWhy = (cards: readonly Card[], attributes: readonly AttributeName[]): string => {
-  if (cards.length < 3) return 'Each trait is all the same or all different.';
-  const diff = countDifferentAttributes([...cards], [...attributes]);
-  if (diff === attributes.length) return 'Nothing in common!';
+  if (cards.length !== 3) return RULE_LINE;
   const same: string[] = [];
-  if (attributes.includes('color') && cards.every(c => c.color === cards[0].color)) same.push(cards[0].color);
-  if (attributes.includes('shape') && cards.every(c => c.shape === cards[0].shape)) same.push(SHAPE_PLURAL[cards[0].shape]);
-  if (attributes.includes('number') && cards.every(c => c.number === cards[0].number)) same.push(`${cards[0].number}s`);
-  if (attributes.includes('shading') && cards.every(c => c.shading === cards[0].shading)) same.push(cards[0].shading);
-  return same.length > 0 ? `All ${same.join(', all ')}.` : 'Each trait is all the same or all different.';
+  const different: string[] = [];
+  let counted = '';
+  for (const attr of inReadingOrder(attributes)) {
+    const vals = cards.map(c => attrValueOf(c, attr));
+    const distinct = new Set(vals).size;
+    if (distinct === 2) return RULE_LINE;
+    if (distinct === 3) {
+      if (attr === 'number') counted = '1-2-3';
+      else different.push(attr === 'color' ? 'colors' : attr === 'shape' ? 'shapes' : attr === 'shading' ? 'shadings' : 'backgrounds');
+    } else if (attr === 'shape') same.push(`all ${SHAPE_PLURAL[vals[0] as Shape]}`);
+    else if (attr === 'number') same.push(`all ${vals[0]}s`);
+    else if (attr === 'background') same.push('one background');
+    else same.push(`all ${vals[0]}`);
+  }
+  const parts = [...same, ...(different.length > 0 ? [`all different ${different.join(' and ')}`] : []), ...(counted ? [counted] : [])];
+  // (what the cards share comes first, unless nothing is shared)
+  const line = parts.join(', ');
+  return line ? `${line[0].toUpperCase()}${line.slice(1)}.` : RULE_LINE;
 };
 
 /**
@@ -260,7 +312,7 @@ export const explainInvalidPick = (
   attributes: readonly AttributeName[],
   _fighter?: CharacterName
 ): string => {
-  const rule = 'Each trait: all the same or all different.';
+  const rule = RULE_LINE;
   if (cards.length !== 3) return rule;
   const bad = (isValidCombination([...cards], [...attributes]).invalidAttributes as AttributeName[]) ?? [];
   if (bad.length === 0) return rule;
@@ -317,8 +369,77 @@ const BASE_SET_DAMAGE = 3;
 
 const RESCUE_LINES = ['Stuck? Start with this one.', 'These two go together…', 'Here is one. Tap all three!'];
 
-/** What the companion says as each of the first level's Sets lands */
-const FIRST_LEVEL_PRAISE = ['That is a Set!', 'Same shape works too!', 'All different works too!', 'You found one yourself!', 'Yes!'];
+/** The rule, handed over once the first level has shown it three ways (the strip above the board names the traits) */
+const YOUR_TURN_LINE = 'Your turn! Each trait: all same, or all different.';
+
+/**
+ * The ways two traits can pass, in the order the first level shows them: one
+ * color (three shapes), one shape (three colors), nothing alike.
+ */
+type SetLook = 'color' | 'shape' | 'different' | 'other';
+const WALK_THROUGH: readonly SetLook[] = ['color', 'shape', 'different'];
+
+const lookOf = (set: readonly Card[], attributes: readonly AttributeName[]): SetLook => {
+  if (set.length !== 3) return 'other';
+  if (countDifferentAttributes([...set], [...attributes]) === attributes.length) return 'different';
+  const oneColor = set.every(c => c.color === set[0].color);
+  const oneShape = set.every(c => c.shape === set[0].shape);
+  return oneColor && !oneShape ? 'color' : oneShape && !oneColor ? 'shape' : 'other';
+};
+
+/** What the companion says as each of the first level's Sets lands: the first is a Set, the next two are other ways to make one. */
+const firstLevelPraise = (matches: number, look: SetLook): string => {
+  if (matches <= 1) return 'That is a Set!';
+  if (matches <= 3) {
+    return look === 'shape' ? 'Same shape works too!' : look === 'different' ? 'Nothing alike works too!' : look === 'color' ? 'Same color works too!' : 'A Set again!';
+  }
+  return matches === 4 ? 'You found one yourself!' : 'Yes!';
+};
+
+/** Compact 2-trait summary for the 1-1 walk-through speech bubble (<= 60 chars). */
+const shortWhy = (cards: readonly Card[], attributes: readonly AttributeName[]): string => {
+  const look = lookOf(cards, attributes);
+  if (look === 'color') return `all ${cards[0].color}, 3 shapes`;
+  if (look === 'shape') return `all ${SHAPE_PLURAL[cards[0].shape]}, 3 colors`;
+  if (look === 'different') return '3 colors & 3 shapes';
+  const why = describeValidSetWhy(cards, attributes).replace(/\.$/, '');
+  return `${why[0].toLowerCase()}${why.slice(1)}`;
+};
+
+/**
+ * The trait checks of the Set just made, when every one passes (a near miss
+ * that a grace saved is not shown as a Set); otherwise nothing to show.
+ */
+export const checksOfSet = (cards: readonly Card[] | null | undefined, attributes: readonly AttributeName[]): TraitCheckPill[] | undefined => {
+  if (!cards || cards.length !== 3) return undefined;
+  const pills = evaluateTripleTraits(cards, attributes);
+  return pills.length > 0 && pills.every(p => p.status === 'pass') ? pills : undefined;
+};
+
+/**
+ * While the rule is still new (the first level through the one after Number
+ * arrives), the fight keeps it in sight: a strip above the board with a cell
+ * per trait, which checks every Set that is lit, made or missed.
+ */
+export const showsTraitChecks = (level: LevelDef): boolean =>
+  !level.rules.sandbox && level.biome === 'meadow' && mainIndexOf(level) >= 0 && mainIndexOf(level) <= 5;
+
+/** The trait a main level plays on that the level before it did not (Number at 1-5), if any. */
+export const traitAddedBy = (level: LevelDef): AttributeName | null => {
+  const idx = MAIN_LEVELS.findIndex(l => l.id === level.id);
+  if (idx <= 0) return null;
+  const before = MAIN_LEVELS[idx - 1].rules.attributes;
+  return level.rules.attributes.find(a => !before.includes(a)) ?? null;
+};
+
+/**
+ * The Set that shows a new trait best: one where the new trait is all
+ * different (1-2-3) and as little else changes as the board allows.
+ */
+const exampleOfTrait = (sets: Card[][], trait: AttributeName, attributes: readonly AttributeName[]): Card[] => {
+  const cost = (s: Card[]) => (new Set(s.map(c => attrValueOf(c, trait))).size === 3 ? 0 : 10) + countDifferentAttributes(s, [...attributes]);
+  return sets.reduce((best, s) => (cost(s) < cost(best) ? s : best), sets[0]);
+};
 
 // ─── Live guidance ──────────────────────────────────────────────────────────
 
@@ -326,9 +447,11 @@ const FIRST_LEVEL_PRAISE = ['That is a Set!', 'Same shape works too!', 'All diff
  * What the companion says and lights up right now, or null when there is
  * nothing to add. Pure: it reads the fight and what the player is holding.
  *
- * The first level is a walk-through. After it: an opening line, an
- * explanation after a mistake, "find: a red oval" while two cards are held
- * (early levels), and stuck help when the board has been quiet too long.
+ * The first level is a walk-through. After it: an opening line (a whole Set,
+ * lit, on the level that adds a trait), an explanation after a mistake,
+ * "find: a red oval" while two cards are held (early levels), and stuck help
+ * when the board has been quiet too long. Whatever three cards it is about,
+ * `pills` checks them one trait at a time.
  */
 export const computeLiveGuidance = (
   run: RunState,
@@ -354,11 +477,23 @@ export const computeLiveGuidance = (
   const assist = noAssist ? 0 : assistCardsFor(run.level, quietMs);
   const mistakePills = mistakeCards && mistakeCards.length === 3 ? evaluateTripleTraits(mistakeCards, run.attributes) : undefined;
   const others = (glow: string[]) => run.board.filter(c => !glow.includes(c.id)).map(c => c.id);
+  /** While the rule is still new, two held cards are answered with the card that finishes them */
+  const ruleIsNew = showsTraitChecks(run.level);
 
   /** Light the first `n` cards of a Set (the ones already held count as lit) */
   const rescue = (n: number): GuidedBoardHint | null => {
     const target = helpfulSet(run, sets, selectedCards);
     if (!target) return null;
+    if (selectedCards.length > 0 && !sets.some(s => selectedCards.every(h => s.some(c => c.id === h.id)))) {
+      return {
+        glowIds: [target[0].id],
+        dimIds: [],
+        dimOpacity: 1,
+        message: 'No Set with that card. Swap to this!',
+        mood: 'curious',
+        kind: 'rescue',
+      };
+    }
     const held = new Set(selectedCards.map(c => c.id));
     const ordered = [...target.filter(c => held.has(c.id)), ...target.filter(c => !held.has(c.id))];
     const lit = ordered.slice(0, Math.max(n, Math.min(3, held.size + 1)));
@@ -374,8 +509,50 @@ export const computeLiveGuidance = (
     };
   };
 
+  /** Two cards held: the card that finishes the Set, worked out one trait at a time */
+  const pairHelp = (lightAfterAWhile: boolean): GuidedBoardHint | null => {
+    const pred = selectedCards.length === 2 ? predictThirdCard(selectedCards, run.attributes, available) : null;
+    if (!pred) return null;
+    const missing = !pred.existsOnBoard;
+    let message: string;
+    if (missing) {
+      message = pred.identicalPair
+        ? 'Identical pair! Swap one card.'
+        : `No ${pred.neededSummary.replace(/^an? /, '')} out there. Swap one!`;
+    } else if (run.level.introduces === 'rainbow' && pred.pills.every(p => p.label.includes('different'))) {
+      const rainbowMsg = `Rainbow! Find ${pred.neededSummary}!`;
+      message = rainbowMsg.length <= 60 ? rainbowMsg : `Find ${pred.neededSummary}!`;
+    } else {
+      message = `Find ${pred.neededSummary}!`;
+    }
+    return {
+      // A pair that works: after a moment, the card that finishes it lights up
+      glowIds: !missing && lightAfterAWhile && assist > 0 && pred.cardId ? [pred.cardId] : [],
+      dimIds: [],
+      dimOpacity: 1,
+      message,
+      mood: 'curious',
+      kind: 'pair',
+      pills: pred.pills,
+    };
+  };
+
   // ── 1-1: the walk-through ────────────────────────────────────────────────
   if (first) {
+    // The Set just made is still leaving the board: praise it with its checks, and point at nothing until the next cards are dealt
+    if (run.replacing.length > 0 && run.matches > 0) {
+      const leaving = run.board.filter(c => run.replacing.includes(c.id));
+      return {
+        glowIds: [],
+        dimIds: [],
+        dimOpacity: 1,
+        message: firstLevelPraise(run.matches, lookOf(leaving, run.attributes)),
+        mood: 'victory',
+        kind: 'cheer',
+        pills: checksOfSet(leaving, run.attributes),
+      };
+    }
+
     if (sets.length === 0) return null;
 
     // A wrong pick: say why with the cards they picked, and light a Set to try
@@ -392,60 +569,40 @@ export const computeLiveGuidance = (
       };
     }
 
-    // The Set just made is still leaving the board: praise it, and point at nothing until the next cards are dealt
-    if (run.replacing.length > 0 && run.matches > 0) {
-      return { glowIds: [], dimIds: [], dimOpacity: 1, message: FIRST_LEVEL_PRAISE[Math.min(run.matches, FIRST_LEVEL_PRAISE.length) - 1], mood: 'victory', kind: 'cheer' };
-    }
-
-    // The words name what the three cards share; the board shows the rest
-    const guided = (target: Card[], message: string, dimOpacity: number, mood: GuidedBoardHint['mood']): GuidedBoardHint => {
+    // Three Sets are shown, one way of passing at a time. The words name BOTH traits, and the strip above the
+    // board says the same thing trait by trait: three red cards are a Set because the shapes pass too.
+    if (run.matches < WALK_THROUGH.length) {
+      const step = run.matches;
+      // (the dealer keeps every kind of Set on the board; if this one is missing all the same, the next kind is shown)
+      const wanted = [WALK_THROUGH[step], ...WALK_THROUGH].find(look => sets.some(s => lookOf(s, run.attributes) === look));
+      const target = sets.find(s => lookOf(s, run.attributes) === wanted) ?? sets[0];
+      const why = shortWhy(target, run.attributes);
+      const ask = step === 0 ? `${voice.hello} Tap these 3: ${why}!` : step === 1 ? `Now these 3: ${why}!` : `And these 3: ${why}!`;
       const glowIds = target.map(c => c.id);
-      return { glowIds, dimIds: others(glowIds), dimOpacity, message, mood, kind: 'lesson' };
-    };
-
-    // Step 1: three cards of one colour
-    if (run.matches === 0) {
-      const target = sets.find(s => s.every(c => c.color === s[0].color)) ?? sets[0];
-      const sameColor = target.every(c => c.color === target[0].color);
-      const ask = sameColor ? `Tap the 3 ${target[0].color} cards!` : 'Tap the 3 glowing cards!';
-      return guided(target, selectedCount === 0 ? `${voice.hello} ${ask}` : selectedCount === 1 ? 'Two more!' : 'One more!', 0.38, 'victory');
+      return {
+        glowIds,
+        dimIds: others(glowIds),
+        dimOpacity: [0.38, 0.45, 0.52][step],
+        message: selectedCount === 0 ? ask : selectedCount === 1 ? 'Two more!' : 'One more!',
+        mood: step === 0 ? 'victory' : 'streak',
+        kind: 'lesson',
+        pills: evaluateTripleTraits(target, run.attributes),
+      };
     }
 
-    // Step 2: three cards of one shape
-    if (run.matches === 1) {
-      const target = sets.find(s => s.every(c => c.shape === s[0].shape) && !s.every(c => c.color === s[0].color)) ?? sets[0];
-      const sameShape = target.every(c => c.shape === target[0].shape);
-      const ask = sameShape ? `Now the 3 ${SHAPE_PLURAL[target[0].shape]}.` : 'Now these three.';
-      return guided(target, selectedCount === 0 ? ask : selectedCount === 1 ? 'Two more!' : 'One more!', 0.45, 'streak');
-    }
-
-    // Step 3: three cards with nothing in common
-    if (run.matches === 2) {
-      const target = sets.find(s => countDifferentAttributes(s, run.attributes) === run.attributes.length) ?? sets[0];
-      return guided(target, selectedCount === 0 ? 'Now 3 with nothing in common!' : selectedCount === 1 ? 'Two more!' : 'One more!', 0.52, 'streak');
-    }
-
-    // Steps 4 and 5: their turn, with a net under them
-    if (selectedCards.length === 2) {
-      const pred = predictThirdCard(selectedCards, run.attributes, available);
-      if (pred && !pred.existsOnBoard) {
-        return { glowIds: [], dimIds: [], dimOpacity: 1, message: `No ${pred.neededSummary.replace(/^an? /, '')} out there. Swap one!`, mood: 'curious', kind: 'pair' };
-      }
-      if (pred) {
-        // A pair that works: after a moment, the card that finishes it lights up
-        const lit = assist > 0 && pred.cardId ? [pred.cardId] : [];
-        return { glowIds: lit, dimIds: [], dimOpacity: 1, message: `Find ${pred.neededSummary}!`, mood: 'curious', kind: 'pair' };
-      }
-    }
+    // Their turn, with a net under them
+    const pair = pairHelp(true);
+    if (pair) return pair;
     if (assist > 0) return rescue(assist);
-    const left = Math.max(1, Math.ceil(run.foeHp / 3));
+    const left = Math.max(1, Math.ceil(run.foeHp / BASE_SET_DAMAGE));
+    const handover = run.matches === WALK_THROUGH.length;
     return {
       glowIds: [],
       dimIds: [],
       dimOpacity: 1,
-      message: run.matches === 3 ? 'Your turn! All the same, or all different.' : left === 1 ? `${voice.cheer} One more Set wins it!` : `${voice.cheer} ${left} more to go!`,
-      mood: run.matches === 3 ? 'curious' : 'victory',
-      kind: run.matches === 3 ? 'lesson' : 'cheer',
+      message: handover ? YOUR_TURN_LINE : left === 1 ? `${voice.cheer} One more Set wins it!` : `${voice.cheer} ${left} more to go!`,
+      mood: handover ? 'curious' : 'victory',
+      kind: handover ? 'lesson' : 'cheer',
     };
   }
 
@@ -454,25 +611,16 @@ export const computeLiveGuidance = (
     return { glowIds: [], dimIds: [], dimOpacity: 1, message: mistakeNote, mood: 'anticipation', kind: 'mistake', pills: mistakePills };
   }
 
+  // ── Two cards held: name the third (and light it if assist > 0); beats rescue so we never steer into a miss ──
+  if (selectedCards.length === 2 && (ruleIsNew || assist > 0)) {
+    const pair = pairHelp(assist > 0);
+    if (pair) return pair;
+  }
+
   // ── Stuck help: the board has been quiet too long ────────────────────────
   if (assist > 0) {
     const help = rescue(assist);
     if (help) return help;
-  }
-
-  // ── Two cards held (while the rule is still new): name the third ─────────
-  if (selectedCards.length === 2 && run.level.biome === 'meadow' && idx <= 5) {
-    const pred = predictThirdCard(selectedCards, run.attributes, available);
-    if (pred) {
-      return {
-        glowIds: [],
-        dimIds: [],
-        dimOpacity: 1,
-        message: pred.existsOnBoard ? `Find ${pred.neededSummary}!` : `No ${pred.neededSummary.replace(/^an? /, '')} out there. Swap one!`,
-        mood: 'curious',
-        kind: 'pair',
-      };
-    }
   }
 
   // ── The end is in sight: say so (it is the moment to choose a Set with care) ──
@@ -485,10 +633,17 @@ export const computeLiveGuidance = (
     }
   }
 
-  // ── The opening line of a level that teaches something ───────────────────
-  if (run.matches === 0 && !seenIntro) {
+  // ── The opening of a level that teaches something ────────────────────────
+  if (run.matches === 0) {
     const mech = MECHANICS[run.level.introduces];
-    if (mech) {
+    const line = mech ? mech.coach ?? `${mech.title}: ${mech.tagline}` : null;
+    // A new trait: one Set is lit whole and checked on every trait, so the rule is seen to carry over to it
+    const added = traitAddedBy(run.level);
+    if (line && added && sets.length > 0 && !noAssist) {
+      const target = exampleOfTrait(sets, added, run.attributes);
+      return { glowIds: target.map(c => c.id), dimIds: [], dimOpacity: 1, message: line, mood: 'curious', kind: 'lesson', pills: evaluateTripleTraits(target, run.attributes) };
+    }
+    if (line && !seenIntro) {
       const target = helpfulSet(run, sets, []);
       // Where the level's ★★★ asks for a kind of Set, the first card of one is lit as a head start
       const wantsKind = ['colorSets', 'sameColorSets', 'allDiffSets', 'rainbows'].includes(run.level.challenge.kind);
@@ -496,7 +651,7 @@ export const computeLiveGuidance = (
         glowIds: wantsKind && target && run.level.biome === 'meadow' ? [target[0].id] : [],
         dimIds: [],
         dimOpacity: 1,
-        message: mech.coach ?? `${mech.title}: ${mech.tagline}`,
+        message: line,
         mood: 'curious',
         kind: 'opening',
       };

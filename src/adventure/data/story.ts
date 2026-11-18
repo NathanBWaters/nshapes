@@ -35,17 +35,17 @@ export const STORY: Record<'welcome', StoryBeat[]> = {
     {
       scene: 'starfall',
       title: 'A star fell on the Summit.',
-      body: 'It shattered, and its shards rained down on the valley below.',
+      body: 'It shattered, and golden star shards rained across the valley.',
     },
     {
       scene: 'critters',
       title: 'The critters found them first.',
-      body: 'One shard each… and every one of them has gone a little wild.',
+      body: 'Three shards each… and every one of them has gone a little wild.',
     },
     {
       scene: 'hero',
       title: 'Let’s win them back!',
-      body: 'Match 3 cards to make a Set. Every Set knocks a shard loose.',
+      body: 'Match 3 cards: each trait all the same, or all different.',
       spoken: true,
     },
   ],

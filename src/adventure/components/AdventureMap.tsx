@@ -24,11 +24,12 @@ import type { CharacterName } from '@/types';
 import type { AdventureSave, BiomeDef, LevelDef } from '../types';
 import { MAIN_LEVELS, branchesOf } from '../data/levels';
 import { BIOMES } from '../data/biomes';
+import { BOUNTIES } from '../data/bounties';
 import { levelFoe } from '../data/foes';
 import { getMechanic } from '../data/mechanics';
 import { getFighter } from '../data/fighters';
 import { isFighterTrial, starRewards, unlockablesOf } from '../data/rewards';
-import { freshPaths, hasUnspentStars, getFrontierLevel, getLockReason, isMechanicKnown, maxStars, openPaths, totalStars, isBiomeOpen } from '../progress';
+import { freshPaths, hasUnspentStars, getFrontierLevel, getLockReason, isMechanicKnown, maxStars, openPaths, refundableCoins, totalStars, isBiomeOpen } from '../progress';
 import { companionMapGreeting } from '../coach';
 import CompanionBubble from './CompanionBubble';
 import { Bob, CoinPill, INK, StarRow, TONE } from './ui';
@@ -337,7 +338,20 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
           </View>
         </TouchableOpacity>
         {(stars > 0 || campUnlocked) && (
-          <DockButton testID="map-dock-camp" icon="lorc/campfire" label="Camp" onPress={onOpenCamp} disabled={!campUnlocked} badge={campUnlocked && skillTreeKnown && hasUnspentStars(save)} />
+          <DockButton
+            testID="map-dock-camp"
+            icon="lorc/campfire"
+            label="Camp"
+            onPress={onOpenCamp}
+            disabled={!campUnlocked}
+            badge={
+              campUnlocked && (
+                (skillTreeKnown && hasUnspentStars(save)) ||
+                (save.workshopUnlocked && refundableCoins(save) === 0 && save.coins >= 60) ||
+                (save.bountiesUnlocked && BOUNTIES.some(b => !save.completedBounties.includes(b.id) && b.progress(save) / b.target >= 0.75))
+              )
+            }
+          />
         )}
       </View>
     </View>

@@ -42,8 +42,9 @@ import { EVOLUTION_RECIPES } from '../data/evolutions';
 import { SURGE_RULES } from '../data/rules';
 import { weaponLevelSuffix } from '../data/armory';
 import { COACH_KEYS } from '../progress';
-import { computeLiveGuidance, explainInvalidPick, fightRemarks, shouldShowDamageNumbers, shouldShowPassiveHud } from '../coach';
+import { checksOfSet, computeLiveGuidance, describeSingleCardTraits, explainInvalidPick, fightRemarks, shouldShowDamageNumbers, shouldShowPassiveHud, showsTraitChecks, traitAddedBy } from '../coach';
 import StageBubble from './StageBubble';
+import TraitChecks, { TRAIT_CHECKS_HEIGHT } from './TraitChecks';
 import { EVOLUTION_RULES } from '../engine/sources';
 import { Anchor, AnchorsProvider, EVENT_FX, EvolutionCutIn, FxStage, GearBelt, fxClock, scriptFor, useAnchors, useFightFx, type Beat } from '../fx';
 import { Banner } from '../fx/visuals';
@@ -52,6 +53,7 @@ import { EvolutionBanner, EvolutionRing, MegaFlash } from './RunFx';
 import WeaponExplainer from './WeaponExplainer';
 import PowerMeter from './PowerMeter';
 import PowerExplainer from './PowerExplainer';
+import HudInspector, { type HudInspectTarget } from './HudInspector';
 
 const TICK_MS = 250;
 /** A Set's cards are thrown at the foe, then the next ones are dealt: long enough to see the throw, short enough to keep moving */
@@ -60,15 +62,22 @@ const REPLACE_DELAY_MS = 560;
 /** How long the foe's taunt is up as a fight (or a wave) opens, before your fighter speaks */
 const FOE_TAUNT_MS = 2400;
 
+/** How long the checks of the Set just made stay up (they also go as soon as the next card is picked) */
+const LAST_SET_MS = 3200;
+
 /**
  * The battle stage (fighter on the left, foe on the right) takes whatever
  * height the board does not need: tall on a nine-card board, where the fight
  * can be the star of the screen, compact once the board fills up (`min`, or
  * `minWide` on a window at least `wideFrom` wide). From `roomy` up, the words
- * get a row of their own (`speechPx`) above the two of them. `chromePx` is
- * roughly what the rest of the HUD takes.
+ * get a row of their own (`speechPx`: two lines) above the two of them.
+ * `chromePx` is roughly what the rest of the HUD takes.
+ *
+ * Its height is fixed for the fight: what is said never changes it, so the
+ * board never moves. (A line too long for its room spills over the stage's
+ * edge by a few pixels rather than pushing anything.)
  */
-const STAGE = { min: 66, minWide: 104, wideFrom: 700, max: 184, chromePx: 132, roomy: 132, speechPx: 56 } as const;
+const STAGE = { min: 66, minWide: 104, wideFrom: 700, max: 184, chromePx: 132, roomy: 136, speechPx: 60 } as const;
 
 interface Props {
   level: LevelDef;
@@ -143,12 +152,16 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   const [inspect, setInspect] = useState<Weapon | null>(null);
   /** The Power meter in the header was tapped to read about Power (the fight waits) */
   const [powerInfo, setPowerInfo] = useState(false);
+  /** Another HUD chip/bar/goal was tapped to inspect (the fight waits) */
+  const [hudInspect, setHudInspect] = useState<HudInspectTarget | null>(null);
   /** The first evolution ever: its cut-in also points at the countdown ring */
   const [evolutionHint, setEvolutionHint] = useState(false);
   const [boardSelectedCount, setBoardSelectedCount] = useState(0);
   const [boardSelectedCards, setBoardSelectedCards] = useState<Card[]>([]);
   const [mistakeNote, setMistakeNote] = useState<string | null>(null);
   const [mistakeCards, setMistakeCards] = useState<Card[] | null>(null);
+  // The Set just made: the companion shows why it was one, trait by trait, until the next pick (coach.ts)
+  const [lastSet, setLastSet] = useState<Card[] | null>(null);
   const [coachDismissed, setCoachDismissed] = useState(false);
   const [eventBannerNote, setEventBannerNote] = useState<string | null>(null);
   const anchors = useAnchors();
@@ -176,6 +189,13 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
     const t = setTimeout(() => setTaunting(false), FOE_TAUNT_MS);
     return () => clearTimeout(t);
   }, [run.wave, taunt]);
+
+  // If the player starts picking right away, cede the stage to live guidance at once
+  useEffect(() => {
+    if (taunting && (boardSelectedCount > 0 || run.matches > 0)) {
+      setTaunting(false);
+    }
+  }, [taunting, boardSelectedCount, run.matches]);
 
   // The bell: a banner across the board as the fight opens (taps pass through it)
   const [opening, setOpening] = useState(true);
@@ -215,10 +235,10 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   }, [arrangement]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (run.status === 'won' || run.status === 'lost') return;
-    if (band.inFight) band.setMood(moodNow(run, paused || Boolean(tip) || Boolean(inspect) || powerInfo));
-  }, [run, paused, tip, inspect, powerInfo]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (band.inFight) band.setMood(moodNow(run, paused || Boolean(tip) || Boolean(inspect) || powerInfo || Boolean(hudInspect)));
+  }, [run, paused, tip, inspect, powerInfo, hudInspect]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const halted = paused || Boolean(tip) || Boolean(inspect) || powerInfo;
+  const halted = paused || Boolean(tip) || Boolean(inspect) || powerInfo || Boolean(hudInspect);
   const playing = run.status === 'playing' && !halted;
 
   // Auto-pause active timed fights whenever the user leaves the app/tab
@@ -235,6 +255,11 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
     if (!seenCoach.current.has(key)) {
       seenCoach.current.add(key);
       onCoachMarkSeen(key);
+    }
+    if (practice) {
+      const msg = 'Practice yard! Test any gear — tap DONE when ready.';
+      setEventBannerNote(msg);
+      later(() => setEventBannerNote(prev => (prev === msg ? null : prev)), 4500);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -366,6 +391,13 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
           });
         }
       }
+      if (e.type === 'power_up' && !seenCoach.current.has(COACH_KEYS.weaponGrowth)) {
+        seenCoach.current.add(COACH_KEYS.weaponGrowth);
+        onCoachMarkSeen(COACH_KEYS.weaponGrowth);
+        const msg = 'Charm grew stronger for this fight! Tap your belt to see how.';
+        setEventBannerNote(msg);
+        later(() => setEventBannerNote(prev => (prev === msg ? null : prev)), 4500);
+      }
       for (const cm of COACH_BY_EVENT.get(e.type) ?? []) {
         // A fighter's own tip is for that fighter (everyone chains Combos; only Sly Fox is paid for them)
         if (cm.fighter && cm.fighter !== run.fighter) continue;
@@ -413,6 +445,10 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
     dispatch({ type: 'MATCH', cards, rewards, effects, hinted: info?.hinted });
     const ids = cards.map(c => c.id);
     later(() => dispatch({ type: 'REPLACE', ids }), REPLACE_DELAY_MS);
+    // (the three picked cards come first; anything a weapon took with them follows)
+    const picked = cards.slice(0, 3);
+    setLastSet(picked);
+    later(() => setLastSet(cur => (cur === picked ? null : cur)), LAST_SET_MS);
   }, [dispatch, triggerMatch, later]);
 
   const handleInvalid = useCallback((cards: Card[]) => {
@@ -420,6 +456,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
     triggerEnemyReaction('taunt');
     setMistakeNote(explainInvalidPick(cards, runRef.current.attributes, runRef.current.fighter));
     setMistakeCards(cards);
+    setLastSet(null);
     dispatch({ type: 'INVALID', cards });
     const ids = cards.map(c => c.id);
     later(() => dispatch({ type: 'REPLACE', ids }), 520);
@@ -460,6 +497,17 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   const keenEyeIds = useMemo(() => (run.passive.keenEyeCardId ? [run.passive.keenEyeCardId] : undefined), [run.passive.keenEyeCardId]);
   const showDamageHud = shouldShowDamageNumbers(level, startSave);
   const showPassivesHud = shouldShowPassiveHud(level, startSave);
+
+  // Explain the POWER meter once the first time the player builds Charge in battle
+  useEffect(() => {
+    if (!showDamageHud || run.power < 1) return;
+    if (seenCoach.current.has(COACH_KEYS.powerMeter)) return;
+    seenCoach.current.add(COACH_KEYS.powerMeter);
+    onCoachMarkSeen(COACH_KEYS.powerMeter);
+    const msg = 'POWER × boosts all damage! Tap POWER above to see how.';
+    setEventBannerNote(msg);
+    later(() => setEventBannerNote(prev => (prev === msg ? null : prev)), 4500);
+  }, [showDamageHud, run.power]); // eslint-disable-line react-hooks/exhaustive-deps
   const liveGuidance = useMemo(
     () =>
       computeLiveGuidance(run, {
@@ -480,6 +528,10 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
     () => (liveGuidance && liveGuidance.dimIds.length > 0 ? liveGuidance.dimIds : undefined),
     [liveGuidance]
   );
+  // Dev only: the cards being pointed at, so browser scripts can follow a lesson
+  useEffect(() => {
+    if (__DEV__ && Platform.OS === 'web') (window as unknown as { __nshapesLit?: string[] }).__nshapesLit = activeGlowIds ?? [];
+  }, [activeGlowIds]);
   // A passing remark from your fighter (coach.ts fightRemarks): each is said once, and only into silence
   const [remark, setRemark] = useState<string | null>(null);
   const saidRemarks = useRef(new Set<string>());
@@ -497,15 +549,25 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   const explaining = liveGuidance?.kind === 'mistake';
   const coachText = (explaining ? liveGuidance?.message : eventBannerNote ?? liveGuidance?.message ?? remark) ?? null;
   const coachKind = explaining ? 'mistake' : eventBannerNote ? 'event' : liveGuidance ? liveGuidance.kind : 'cheer';
-  const coachPills = explaining || !eventBannerNote ? liveGuidance?.pills : undefined;
+  // While the rule is new, a strip above the board checks one trait at a time: the cards the companion is talking
+  // about, else the Set just made (until the next card is picked)
+  const traitChecks = showsTraitChecks(level);
+  const checks =
+    liveGuidance?.pills ??
+    (boardSelectedCount === 1 && boardSelectedCards[0]
+      ? describeSingleCardTraits(boardSelectedCards[0], run.attributes)
+      : boardSelectedCount === 0
+        ? checksOfSet(lastSet, run.attributes)
+        : undefined);
   // The stage is as tall as the board can spare (see STAGE)
   const boardRows = Math.max(1, Math.ceil(run.board.length / 3));
   // (cards a little squatter than a playing card still read well, and leave the fight room to breathe on a short phone)
   const idealCardH = stage.w > 0 ? (Math.min(stage.w, 560) - 36) / 3 / 0.82 : 140;
   // (a wide window has width to burn and little height: there the two of them get a little more than the minimum)
   const stageMin = stage.w >= STAGE.wideFrom ? STAGE.minWide : STAGE.min;
+  const chromePx = STAGE.chromePx + (traitChecks ? TRAIT_CHECKS_HEIGHT + 6 : 0);
   const stageH = stage.h > 0
-    ? Math.round(Math.max(stageMin, Math.min(STAGE.max, stage.h - insets.top - STAGE.chromePx - boardRows * (idealCardH + 6))))
+    ? Math.round(Math.max(stageMin, Math.min(STAGE.max, stage.h - insets.top - chromePx - boardRows * (idealCardH + 6))))
     : 92;
   // Tall enough to give the companion's words their own row above the two fighters
   const roomyStage = stageH >= STAGE.roomy;
@@ -523,7 +585,6 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
       testID="run-coach-banner"
       text={coachText}
       kind={coachKind}
-      pills={coachPills}
       tail={roomyStage ? 'down' : 'left'}
       onPress={
         // A lesson stays up; anything else can be tapped away
@@ -533,6 +594,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
               setEventBannerNote(null);
               setMistakeNote(null);
               setMistakeCards(null);
+              setLastSet(null);
               setRemark(null);
             }
           : undefined
@@ -573,7 +635,14 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
           <TouchableOpacity onPress={() => setPaused(true)} style={st.pauseBtn} accessibilityLabel="Pause">
             <Text style={st.pauseText}>II</Text>
           </TouchableOpacity>
-          <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+          <TouchableOpacity
+            testID="run-foe-inspect"
+            onPress={() => { sfx('click'); setHudInspect({ kind: 'foe' }); }}
+            style={{ flex: 1, minWidth: 0, gap: 2 }}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityLabel={`Inspect foe: ${run.foeName}`}
+          >
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
               <Text style={st.foeName} numberOfLines={1}>{run.foeName}</Text>
               {level.isBoss && <Text style={st.bossTag}>BOSS</Text>}
@@ -585,12 +654,14 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
                 <View style={[st.idleFill, { width: `${Math.min(100, (ui.showInactivityBar.current / ui.showInactivityBar.max) * 100)}%` }]} />
               </View>
             )}
-          </View>
+          </TouchableOpacity>
         </View>
 
         {/* The battle stage: your fighter on the left, the foe on the right, and what your fighter says */}
-        <View testID="run-stage" style={[st.stage, { minHeight: stageH, backgroundColor: biome.colors.sky }]}>
-          <View pointerEvents="none" style={[st.stageGround, { backgroundColor: biome.colors.ground }]} />
+        <View testID="run-stage" style={[st.stage, { height: stageH, backgroundColor: biome.colors.sky }]}>
+          <View pointerEvents="none" style={st.stageClip}>
+            <View style={[st.stageGround, { backgroundColor: biome.colors.ground }]} />
+          </View>
           {/* A tall stage has room for the words above the two of them (the room is kept, so the board never moves) */}
           {roomyStage && <View style={st.stageSpeech}>{coachBubble}</View>}
           <View style={st.stageFloor}>
@@ -678,7 +749,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
               </View>
             </Anchor>
           )}
-          {showPassivesHud && run.passives.map(id => <Anchor key={id} name={`passive:${id}`}><PassiveChip id={id} run={run} /></Anchor>)}
+          {showPassivesHud && run.passives.map(id => <Anchor key={id} name={`passive:${id}`}><PassiveChip id={id} run={run} onPress={() => { sfx('click'); setHudInspect({ kind: 'passive', id }); }} /></Anchor>)}
           {run.features.has('graces') && (
             <Anchor name="graces">
               <View style={st.stat}>
@@ -720,41 +791,83 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
         {(run.arcana.length > 0 || purityLive || evolutionsOn || run.simplified || run.doubleNext > 0 || run.nextSetMultiplier > 1 || hasGearChips(gearMods)) && (
           <View style={st.synergyRow}>
             {run.arcana.map(id => (
-              <View key={id} testID="run-arcana-chip" style={st.arcanaChip}>
+              <TouchableOpacity
+                key={id}
+                testID="run-arcana-chip"
+                style={st.arcanaChip}
+                onPress={() => { sfx('click'); setHudInspect({ kind: 'arcana', id }); }}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityLabel={`Inspect ${getArcana(id).name}`}
+              >
                 <Icon name={getArcana(id).icon} size={12} color={TONE.arcana} />
                 <Text style={st.arcanaChipText}>{getArcana(id).numeral}</Text>
-              </View>
+              </TouchableOpacity>
             ))}
-            <GearChips run={run} mods={gearMods} />
+            <GearChips
+              run={run}
+              mods={gearMods}
+              onInspectWeapon={id => {
+                const w = run.weapons.find(x => x.id === id);
+                if (w) { sfx('click'); setInspect(w); }
+              }}
+            />
             {purityLive && (
-              <View testID="run-purity-chip" style={[st.purityChip, run.purityChain >= 2 && st.purityChipHot]}>
+              <TouchableOpacity
+                testID="run-purity-chip"
+                style={[st.purityChip, run.purityChain >= 2 && st.purityChipHot]}
+                onPress={() => { sfx('click'); setHudInspect({ kind: 'buff', which: 'purity' }); }}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+              >
                 <Icon name="lorc/lightning-branches" size={12} color={run.purityChain >= 2 ? TONE.upside : INK} />
                 <Text style={st.purityChipText}>
                   {run.purityChain >= 2 ? `Purity ×${run.purityChain}` : `Purity 1`} · &gt;{run.lastDiffCount} diff next
                 </Text>
-              </View>
+              </TouchableOpacity>
             )}
             {run.doubleNext > 0 && (
-              <View testID="run-double-chip" style={[st.purityChip, st.purityChipHot]}>
+              <TouchableOpacity
+                testID="run-double-chip"
+                style={[st.purityChip, st.purityChipHot]}
+                onPress={() => { sfx('click'); setHudInspect({ kind: 'buff', which: 'double' }); }}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+              >
                 <Text style={st.purityChipText}>NEXT TRIGGER ×2{run.doubleNext > 1 ? ` (${run.doubleNext})` : ''}</Text>
-              </View>
+              </TouchableOpacity>
             )}
             {run.nextSetMultiplier > 1 && (
-              <View testID="run-charged-chip" style={[st.purityChip, { backgroundColor: '#FFE8CC', borderColor: COLORS.impactOrange }]}>
+              <TouchableOpacity
+                testID="run-charged-chip"
+                style={[st.purityChip, { backgroundColor: '#FFE8CC', borderColor: COLORS.impactOrange }]}
+                onPress={() => { sfx('click'); setHudInspect({ kind: 'buff', which: 'charged' }); }}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+              >
                 <Text style={st.purityChipText}>NEXT SET ×{run.nextSetMultiplier}</Text>
-              </View>
+              </TouchableOpacity>
             )}
             {run.simplified && (
-              <View testID="run-simplified-chip" style={[st.purityChip, st.purityChipHot]}>
+              <TouchableOpacity
+                testID="run-simplified-chip"
+                style={[st.purityChip, st.purityChipHot]}
+                onPress={() => { sfx('click'); setHudInspect({ kind: 'buff', which: 'simplified' }); }}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+              >
                 <Icon name="lorc/third-eye" size={12} color={TONE.upside} />
                 <Text style={st.purityChipText}>
                   All {run.simplified.attribute} {String(run.simplified.value)}{run.simplified.also ? ` and ${run.simplified.also.attribute} ${String(run.simplified.also.value)}` : ''} · {Math.ceil(run.simplified.remainingMs / 1000)}s
                 </Text>
-              </View>
+              </TouchableOpacity>
             )}
             {evolutionsOn && (
-              <View
+              <TouchableOpacity
                 testID="run-evo-chip"
+                onPress={() => { sfx('click'); setHudInspect({ kind: 'evolutions' }); }}
+                activeOpacity={0.75}
+                accessibilityRole="button"
                 accessibilityLabel={
                   idleArmed === 0
                     ? `Evolving, ${evolutionsUsed} used. No Catalyst until an evolution ends`
@@ -772,18 +885,25 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
                         ? `Evolving · ${evolutionsUsed}`
                         : `${idleArmed} armed · ${Math.round(run.evolutionLikelihood)}% · ${evolutionsUsed}`}
                 </Text>
-              </View>
+              </TouchableOpacity>
             )}
             {run.activeEvolutions.map(a => {
               const recipe = recipeFor(a.id);
               return (
                 <Anchor key={a.id} name={`evo:${a.id}`}>
-                  <EvolutionRing
-                    icon={recipe?.icon ?? 'lorc/crystal-shine'}
-                    name={recipe?.name ?? a.id}
-                    remainingMs={a.remainingMs}
-                    durationMs={a.durationMs}
-                  />
+                  <TouchableOpacity
+                    onPress={() => { sfx('click'); setHudInspect({ kind: 'evolutions' }); }}
+                    activeOpacity={0.75}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Inspect ${recipe?.name ?? a.id} evolution`}
+                  >
+                    <EvolutionRing
+                      icon={recipe?.icon ?? 'lorc/crystal-shine'}
+                      name={recipe?.name ?? a.id}
+                      remainingMs={a.remainingMs}
+                      durationMs={a.durationMs}
+                    />
+                  </TouchableOpacity>
                 </Anchor>
               );
             })}
@@ -800,8 +920,11 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
             </TouchableOpacity>
           </View>
         ) : level.id !== '1-1' ? (
-          <ChallengeStrip text={challenge.text} met={challenge.met} failed={challenge.failed} />
+          <ChallengeStrip text={challenge.text} met={challenge.met} failed={challenge.failed} onPress={() => { sfx('click'); setHudInspect({ kind: 'challenge' }); }} />
         ) : null}
+
+        {/* The rule, one cell per trait, while it is new (always the same height: the board never moves) */}
+        {traitChecks && <TraitChecks attributes={run.attributes} checks={ended ? null : checks} added={traitAddedBy(level)} />}
 
       </View>
 
@@ -999,6 +1122,16 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
           </PopIn>
         </View>
       </Modal>
+
+      {/* HUD inspector: foe / passive / ★★★ goal / Arcana / evolution / buff (the fight waits) */}
+      <HudInspector
+        target={hudInspect}
+        run={run}
+        shownHp={shownHp}
+        challenge={challenge}
+        knownEvolutions={new Set([...startSave.unlockedEvolutions, ...startSave.discoveredEvolutions, ...run.forgedRecipes])}
+        onClose={() => setHudInspect(null)}
+      />
     </Animated.View>
     </AnchorsProvider>
   );
@@ -1033,7 +1166,7 @@ const HpBar: React.FC<{ hp: number; max: number; endless?: boolean }> = ({ hp, m
  * and turns teal with a tick when it is met, so progress toward the third
  * star is felt as it happens and not only read on the results screen.
  */
-const ChallengeStrip: React.FC<{ text: string; met: boolean; failed: boolean }> = ({ text, met, failed }) => {
+const ChallengeStrip: React.FC<{ text: string; met: boolean; failed: boolean; onPress?: () => void }> = ({ text, met, failed, onPress }) => {
   const pop = useSharedValue(1);
   const first = useRef(true);
   useEffect(() => {
@@ -1048,11 +1181,20 @@ const ChallengeStrip: React.FC<{ text: string; met: boolean; failed: boolean }> 
   }, [text, met, failed, pop]);
   const style = useAnimatedStyle(() => ({ transform: [{ scale: pop.value }] }));
   return (
-    <Animated.View testID="run-challenge" style={[st.challenge, met && st.challengeMet, failed && { opacity: 0.55 }, style]} accessibilityLabel={`Three star goal: ${text}${met ? ', done' : ''}`}>
-      <Text style={st.challengeStar}>★★★</Text>
-      <Text style={[st.challengeText, failed && { textDecorationLine: 'line-through' }]} numberOfLines={1}>{text}</Text>
-      {met && <Icon name="lorc/checked-shield" size={14} color={COLORS.logicTeal} />}
-    </Animated.View>
+    <TouchableOpacity
+      testID="run-challenge"
+      onPress={onPress}
+      disabled={!onPress}
+      activeOpacity={0.75}
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={`Three star goal: ${text}${met ? ', done' : ''}`}
+    >
+      <Animated.View style={[st.challenge, met && st.challengeMet, failed && { opacity: 0.55 }, style]}>
+        <Text style={st.challengeStar}>★★★</Text>
+        <Text style={[st.challengeText, failed && { textDecorationLine: 'line-through' }]} numberOfLines={1}>{text}</Text>
+        {met && <Icon name="lorc/checked-shield" size={14} color={COLORS.logicTeal} />}
+      </Animated.View>
+    </TouchableOpacity>
   );
 };
 
@@ -1063,7 +1205,7 @@ const comboWindowMs = (run: RunState): number =>
   comboWindowFor(run.passives.includes('combo') ? tune('combo', 'combo.windowMs') : DEFAULT_COMBO_WINDOW_MS, run.attributes.length);
 
 /** One passive's live state. Lit when it is about to matter. */
-const PassiveChip: React.FC<{ id: PassiveId; run: RunState }> = ({ id, run }) => {
+const PassiveChip: React.FC<{ id: PassiveId; run: RunState; onPress?: () => void }> = ({ id, run, onPress }) => {
   const def = getPassive(id);
   const p = run.passive;
   const sinceSet = run.elapsedMs - run.lastMatchAtMs;
@@ -1093,10 +1235,18 @@ const PassiveChip: React.FC<{ id: PassiveId; run: RunState }> = ({ id, run }) =>
     case 'keen_eye': label = p.keenEyeCardId ? 'look!' : 'eye'; lit = !!p.keenEyeCardId; break;
   }
   return (
-    <View testID={`run-passive-${id}`} style={[st.stat, lit && { backgroundColor: '#FFF1C7' }, !lit && { opacity: 0.6 }]} accessibilityLabel={`${def.name}: ${label}`}>
+    <TouchableOpacity
+      testID={`run-passive-${id}`}
+      onPress={onPress}
+      disabled={!onPress}
+      activeOpacity={0.75}
+      accessibilityRole={onPress ? 'button' : undefined}
+      style={[st.stat, lit && { backgroundColor: '#FFF1C7' }, !lit && { opacity: 0.6 }]}
+      accessibilityLabel={`${def.name}: ${label}`}
+    >
       <Icon name={def.icon} size={15} color={INK} />
       <Text style={st.statText}>{label}</Text>
-    </View>
+    </TouchableOpacity>
   );
 };
 
@@ -1281,10 +1431,12 @@ const st = StyleSheet.create({
   hudTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   bossTag: { fontWeight: '900', fontSize: 10, letterSpacing: 1.5, color: INK, backgroundColor: COLORS.actionYellow, borderWidth: 1.5, borderColor: INK, borderRadius: 4, paddingHorizontal: 5, overflow: 'hidden' },
   // The battle stage: a strip of the world the fight happens in
-  stage: { borderRadius: 14, borderWidth: 2, borderColor: INK, paddingHorizontal: 8, paddingTop: 6, paddingBottom: 4, overflow: 'hidden' },
+  stage: { borderRadius: 14, borderWidth: 2, borderColor: INK, paddingHorizontal: 8, paddingTop: 6, paddingBottom: 4 },
+  // (the ground is clipped to the stage's corners; the words are not, so a long line can spill instead of pushing)
+  stageClip: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, borderRadius: 12, overflow: 'hidden' },
   stageGround: { position: 'absolute', left: -30, right: -30, bottom: -46, height: 74, borderRadius: 200, opacity: 0.75 },
   // The words sit at the bottom of their row, just above the fighter's head
-  stageSpeech: { minHeight: STAGE.speechPx, justifyContent: 'flex-end', paddingBottom: 8 },
+  stageSpeech: { height: STAGE.speechPx, justifyContent: 'flex-end', paddingBottom: 8, zIndex: 2 },
   stageFloor: { flex: 1, flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
   stageSide: { alignItems: 'center', gap: 2 },
   stageMiddle: { flex: 1, minWidth: 0, alignSelf: 'center', alignItems: 'center', gap: 4, paddingVertical: 2 },

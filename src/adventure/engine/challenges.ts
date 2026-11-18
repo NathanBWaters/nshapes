@@ -170,6 +170,7 @@ export const explainStarBreakdown = (level: LevelDef, run: RunState, stars: numb
     else if (c.kind === 'bigHit') star3Reason = `Best hit ${run.biggestHit}!`;
     else if (c.kind === 'noMistakes') star3Reason = '0 mistakes!';
     else if (c.kind === 'fullHearts') star3Reason = 'No hearts lost!';
+    else if (c.kind === 'enemy') star3Reason = 'Boss goal met!';
   } else if (prog.met && stars < 2) {
     star3Reason = stars === 0 ? 'Goal met, but lost ♥' : 'Goal met — need ★★ KO too';
   } else {
@@ -199,7 +200,7 @@ export const explainStarBreakdown = (level: LevelDef, run: RunState, stars: numb
         star3Reason = `Best ${s.maxStreak}/${c.n} in a row`;
         break;
       case 'enemy':
-        star3Reason = 'Special goal not met';
+        star3Reason = 'Boss goal missed';
         break;
       default: {
         const n = 'n' in c ? c.n : 0;

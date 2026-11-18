@@ -69,6 +69,7 @@ interface Props {
   save: AdventureSave;
   onUseFighter: (name: CharacterName) => void;
   onEquipCharm: (id: string) => void;
+  onSwapCharm?: (replaceId: string, withId: string) => void;
   onEquipArcana?: (id: ArcanaId) => void;
   /** Go to the screen a newly unlocked feature lives on (offered on the last reveal only) */
   onOpenFeature?: (feature: UnlockableFeature) => void;
@@ -77,7 +78,7 @@ interface Props {
   onDone: () => void;
 }
 
-const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCharm, onEquipArcana, onOpenFeature, onShowPath, onDone }) => {
+const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCharm, onSwapCharm, onEquipArcana, onOpenFeature, onShowPath, onDone }) => {
   // (read from the context, so the reveal also stands alone where there is no safe-area provider)
   const insets = useContext(SafeAreaInsetsContext) ?? NO_INSETS;
   const [i, setI] = useState(0);
@@ -265,6 +266,34 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                         <Text style={st.rowBody}>Nothing to press: it fires by itself as you make Sets.</Text>
                       </View>
                     )}
+                    {charmsFull && !charmEquipped && onSwapCharm && (
+                      <View style={st.charmBox} testID="unlock-swap-box">
+                        <Text style={st.rowTitle}>Swap onto your belt now:</Text>
+                        <View style={st.swapRow}>
+                          {equippedCharms(save).map(equippedId => {
+                            const equippedWeapon = getArmoryWeapon(equippedId, weaponBuilds(save));
+                            if (!equippedWeapon) return null;
+                            return (
+                              <TouchableOpacity
+                                key={equippedId}
+                                testID={`unlock-swap-${equippedId}`}
+                                onPress={() => {
+                                  band.audition(w.id);
+                                  onSwapCharm(equippedId, w.id);
+                                }}
+                                style={st.swapBtn}
+                                activeOpacity={0.8}
+                                accessibilityRole="button"
+                                accessibilityLabel={`Swap ${equippedWeapon.name} out for ${w.name}`}
+                              >
+                                <WeaponAvatar weapon={equippedWeapon} size={24} />
+                                <Text style={st.swapBtnText}>Swap {equippedWeapon.name}</Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    )}
                   </>
                 )}
                 {evo && (
@@ -283,6 +312,11 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                 {feature && getMechanic(feature.mechanic).body.map((p, k) => (
                   <Text key={k} style={st.rowBody}>{p}</Text>
                 ))}
+                {feature?.id === 'coins' && (
+                  <Text style={[st.rowBody, { color: '#FCD34D', fontWeight: '800' }]}>
+                    Your purse already holds {save.coins.toLocaleString()}¢ from your Star Shards!
+                  </Text>
+                )}
                 {arcana && (
                   <>
                     <Text style={st.rowBody}>{arcana.tagline}</Text>
@@ -433,11 +467,14 @@ const st = StyleSheet.create({
   cardTitle: { color: GOLD, fontWeight: '800', letterSpacing: 2, fontSize: 11, textTransform: 'uppercase' },
   row: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   rowIcon: { width: 40, height: 40, borderRadius: 8, backgroundColor: COLORS.paperBeige, alignItems: 'center', justifyContent: 'center' },
-  rowTitle: { color: COLORS.canvasWhite, fontWeight: '900', fontSize: 16 },
+  rowTitle: { color: COLORS.canvasWhite, fontWeight: '900', fontSize: 16, flexShrink: 1 },
   rowTag: { color: MUTED, fontSize: 10, fontWeight: '800', letterSpacing: 1 },
-  rowBody: { color: TEXT, fontSize: 15, lineHeight: 21 },
-  note: { color: MUTED, fontSize: 13, fontStyle: 'italic' },
+  rowBody: { color: TEXT, fontSize: 15, lineHeight: 21, flexShrink: 1 },
+  note: { color: MUTED, fontSize: 13, fontStyle: 'italic', flexShrink: 1 },
   charmBox: { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.12)', paddingTop: 10, gap: 6 },
+  swapRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  swapBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1.5, borderColor: DARK.goldEdge(0.5), borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, maxWidth: '100%' },
+  swapBtnText: { color: COLORS.canvasWhite, fontWeight: '800', fontSize: 13, flexShrink: 1 },
   cta: { alignSelf: 'stretch', backgroundColor: GOLD, borderRadius: 8, paddingVertical: 15, alignItems: 'center' },
   ctaText: { color: INK, fontWeight: '900', fontSize: 16, letterSpacing: 1.5, textTransform: 'uppercase' },
   secondary: { paddingVertical: 8 },
