@@ -462,6 +462,9 @@ describe('Adventure Mode full-game E2E', () => {
 
     // Zero pre-fight modals on 1-1: jumps straight onto the guided board
     expect(screen.queryByTestId('lesson-modal')).toBeNull();
+    // (the foe taunts first; then the fighter says what to do)
+    expect(screen.getByTestId('run-foe-taunt')).toBeTruthy();
+    advanceMs(2500);
     expect(screen.getByTestId('run-coach-banner')).toBeTruthy();
     // Bare level: no passives, no hint button, no evolution chip, no cluttering damage counters
     expect(screen.queryAllByTestId(/^run-passive-/)).toHaveLength(0);

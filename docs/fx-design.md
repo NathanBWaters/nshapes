@@ -25,7 +25,10 @@ Three ideas hold it together.
 
 | It happens | You see |
 |---|---|
-| A Set | A ring on each of its three cards, an orb from each flying to the foe, the foe flinching, and the damage number where they land. The HP bar drops as the orbs land, with a pale trail of what was just taken. |
+| A fight opens | A FIGHT! banner across the board (BOSS FIGHT! on a boss), and the foe says its taunt from the battle stage. |
+| A Set | Its three cards pop and are thrown at the foe, with an orb trailing each; they land as a comic burst on the foe with the damage number on top (a word in front of it, "RAINBOW", rides above it as a small tag). The foe flinches, and the HP bar drops with a pale trail of what was just taken. The next cards are dealt in. |
+| A knockout | A K.O.! banner across the board and a burst on the foe. |
+| The ★★★ goal moves | Its strip under the HUD jumps; it turns teal with a tick (and rings) when it is met. |
 | A blast | A spiky burst on every card it destroys. The old card shatters and the next card is underneath. |
 | A laser | A beam along the row or column (or from whoever fired to each card), and the cards under it vaporised. |
 | A ricochet, a link | A bolt jumping from card to card. |
@@ -116,7 +119,23 @@ The path of one event:
   (`ambient: true`: a fuse warning, a foe healing, Keen Eye) play at most
   once a second and never hold it either.
 - **Borders stay for selection.** Effects are drawn on a layer over the board;
-  they never change a card's border.
+  they never change a card's border. A pointed-out card is a warm fill and a
+  hop (`src/components/CardMotion.tsx`), never an outline.
+- **A Set's own cards are thrown.** `AdventureRun` hands the stage the cards of
+  the Set's lead hit (`e.cards`), and a ghost of each flies to the foe
+  (`visuals.tsx` `Ghost`, `'throw'`; `useFightFx.ts` `ghostBreakOf`). The board
+  keeps the scored card under the flying copy for a moment (`CardLeaving`), so
+  the slot never blinks, and shows no per-card reward text in Adventure
+  (`GameBoard` `quietRewards`).
+- **A row can ask for a banner** (`banner: true`, used by `foe_defeated`): its
+  words slam in across the middle of the board instead of popping where it
+  landed.
+- **The battle stage** (`AdventureRun.tsx` `STAGE`): the fighter and their
+  hearts on the left, the foe on the right, as tall as the board can spare.
+  Tall enough (`STAGE.roomy`), the words get their own row above the two of
+  them, and that row keeps its room so the board never moves when the words
+  change. Labels that land on the foe fan out to its left, level with the top
+  of the stage.
 
 ### Timing
 

@@ -9,22 +9,30 @@ Everything is **data-driven**. To change the campaign, edit `src/adventure/data/
 ## The loop
 
 ```
-Map ─tap foe─▶ Preview (foe, skulls, NEW mechanic, hazards, ★ goals + rewards,
-     ▲                  fighter pick, charm slots, Arcana slots)
-     │                 │
-     │          new mechanic? ─▶ Lesson cards / "Is this a Set?" checks
+First time only:  Story (3 beats) ─▶ Fight 1-1   (no map, no preview, no lesson card)
+
+Map ─tap foe─▶ Preview (foe, skulls, the lesson: NEW mechanic with its picture,
+     ▲                  hazards, ★ goals + rewards, fighter pick, charm slots, Arcana slots)
      │                 ▼
      │               Fight (one foe, or waves + intermission shop)
      │                 ▼
-     │               Results (stars pop, coins bank, unlocks revealed, damage / min)
-     │                 │
+     │               Results (stars pop, coins bank, unlocks revealed, damage / min;
+     │                 │      Next · Retry · Map · Camp pinned under the screen)
      └── Camp menu: Fighters (skill trees) · Armory · Arcana · Workshop ◀┘
          · Bounties · History · sound and effects switches
          Field Guide (mechanics, fighters, recipes)
 ```
 
+**The story** (`data/story.ts`, `components/StoryIntro.tsx`): a star fell on the
+Summit and shattered; every critter that pocketed a shard has gone a bit wild;
+each Set knocks a shard loose. The stars a level pays are those shards ("2 of
+3 star shards won back"), which is why foes drop stars, why stars power your
+fighter and why the last world is Starfall Summit. It plays once
+(`lessons.ts` `isFirstVisit`) and leads straight into 1-1.
+
 ### Map and preview
 - **Map** (`AdventureMap.tsx`): a winding path of foe nodes through the five worlds. Tap a node to open the preview.
+  - **The road ahead is visible.** Each region has scenery (`Scenery`: hills, its `decor` down both sides, its `skyIcon`) and its banner shows that region's star progress. The foes further down the road are shown dimmed with a small padlock (a region that is still star-gated keeps plain padlocks), and a small chest tags every level where an unearned star still hides an unlock (`map-loot-<id>`).
   - **Top bar:** only the way back, the title, the stars earned and the coins. The title gives way first on a narrow screen, so nothing is cut off. Sound, equipped Arcana and Bounties are at Camp.
   - **Dock:** Guide · Play next · Camp.
   - **Side paths are secrets.** A side path (elite, fighter trial or practice) is not drawn at all until it opens: no locked node, no trail, no gap where it will go. The result that opens one ends with a "You found a secret path!" reveal (`Unlock` kind `path`) whose button leads to the map, and the first time the map shows it the trail draws itself out, dash by dash, from the level it hangs off, and the node pops in under a "SECRET PATH!" tag. The save remembers which arrivals have played (`revealedPaths`), so each plays once. Some paths lead on to further paths.
@@ -53,13 +61,17 @@ Map ─tap foe─▶ Preview (foe, skulls, NEW mechanic, hazards, ★ goals + re
 - `reconcileUnlocks` (`progress.ts`) re-grants anything an old save's stars now unlock after a level-table change. It never pays coins twice.
 
 ### How the game teaches
-The player always has to accept a teaching step. Nothing auto-dismisses.
-- **Lesson cards** (`MechanicIntro.tsx`): a paged card before the first fight with a new mechanic. The pages come from the mechanic's `lessons`, then its summary, then its `quiz`.
-- **"Is this a Set?" checks**: yes/no questions with an explanation after each answer. Validity is computed from the cards, never hand-written.
-- **First-run onboarding**: the first time the player enters Adventure, the game plays the story page (`data/story.ts`, placeholder text), the Set lessons and the checks, then drops straight into 1-1.
-- **Fight tips** (`fightTips` on a mechanic): shown one by one when the first fight with that mechanic starts. The fight is paused and the part of the screen the tip is about stays lit.
-- **First-time event tips** (`coachMark`): the fight pauses the first time something happens (first mistake, first Rainbow, first Catalyst…). There are also one-off tips for a fighter's first fight (its two passives), the first fight with each hazard, and the first evolution (`COACH_KEYS` in `progress.ts`).
-- **"First evolution is near" page** (`lessons.ts`, `LESSON_KEYS.comboDiscovery`): built from the save, not fixed in data.
+Show, then say (`coach.ts`). The board lights the cards; the words are one short line.
+- **The battle stage speaks.** What your fighter says is a speech bubble on the stage beside them (`StageBubble.tsx`), never a banner that pushes the board around. Every line is short (about 60 characters): it has to fit beside the fighter on a small phone. The foe speaks too: its `taunt` is up for a moment as the fight (and each wave) opens.
+- **1-1 is a walk-through** (`computeLiveGuidance`): three cards of one colour are lit and the rest dimmed ("Tap the 3 red cards!"), then three of one shape, then three with nothing in common, then "Your turn! All the same, or all different." Each Set is praised as it lands. It cannot be lost.
+- **A wrong pick is explained with the cards that were picked** (`explainInvalidPick`: "Almost! Color was 2 red + 1 green.") and per-trait ✓/✗ pills (`evaluateTripleTraits`). In 1-1 a Set to try is lit as well. This beats any first-time tip about the same moment.
+- **Two cards held** (1-1, and World 1 up to 1-6): the companion names the card that would finish the Set ("Find a red oval!"), or says it is not on the board.
+- **Stuck help** (`data/rules.ts` `ASSIST_RULES`): in Worlds 1–2, when no Set has been made for a while, the companion lights a Set one card at a time, preferring one that moves the level's ★★★ challenge. It is free, it is not a hint, it is off from World 3, and a foe that disables auto-hints disables it. `fight_ended.helped_sets` counts the Sets made on a pointed-out card.
+- **The preview is the lesson.** A level that teaches something new shows it on its preview sheet as a NEW card with the mechanic's picture (`preview-lesson`), and Fight starts the fight; the mechanic's `coach` line opens the fight as a reminder. Only the evolutions lesson still gets its own card (`MechanicIntro.tsx`, `lessons.ts` `taughtOnPreview`). Tapping the NEW card opens the mechanic's full page.
+- **Things appear when they are taught** (`shouldShowDamageNumbers`, `shouldShowPassiveHud`, `LevelPreview`): weapons simply "come along" until 1-4 teaches charms; passives from 1-5; damage totals, Power and battle stats from 1-7; coins from 1-8.
+- **Passing remarks** (`fightRemarks`): once per fight each, and only into silence, the fighter says how it is going: the foe at half health, the foe wobbling, the last heart, the ★★★ goal done, a run of quick Sets. In World 1 they also call the last move and the Set that will finish the foe.
+- **First-time event tips** (`coachMark`): the first time something happens (first Rainbow, first Catalyst…) the fighter says a line about it. A fighter's own tip is only said while playing that fighter. There are also one-off tips for the first evolution (`COACH_KEYS` in `progress.ts`).
+- **"Is this a Set?" checks** (`quiz` on a mechanic): yes/no questions with an explanation, on the full lesson page (Field Guide). Validity is computed from the cards, never hand-written.
 
 ## Worlds and routes
 

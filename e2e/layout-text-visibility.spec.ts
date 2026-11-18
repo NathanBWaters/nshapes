@@ -23,6 +23,7 @@ async function assertAllTextVisible(page: Page, contextLabel: string): Promise<v
       '[data-testid="preview-coach"]',
       '[data-testid="preview-lesson"]',
       '[data-testid="run-coach-banner"]',
+      '[data-testid="run-foe-taunt"]',
       '[data-testid="results-companion-bubble"]',
       '[data-testid="results-star-breakdown"]',
       '[data-testid="results-actions"]',
@@ -151,6 +152,9 @@ test.describe('Mobile Text Visibility & Zero-Clipping Guardrails', () => {
         await assertAllTextVisible(page, `Story beat ${beat} (${vp.width}x${vp.height})`);
         await page.getByTestId('story-next').click();
       }
+      // The foe has the first word (its taunt), then the fighter says what to do
+      await expect(page.getByTestId('run-foe-taunt')).toBeVisible({ timeout: 10000 });
+      await assertAllTextVisible(page, `1-1 Foe Taunt (${vp.width}x${vp.height})`);
       await expect(page.getByTestId('run-coach-banner')).toBeVisible({ timeout: 10000 });
       await expect(page.getByTestId('run-stage')).toBeVisible();
       await page.waitForTimeout(400);

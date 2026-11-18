@@ -473,6 +473,10 @@ describe('Adventure first minutes: the screens', () => {
   });
 
   const wrap = (node: React.ReactElement) => <SafeAreaProvider initialMetrics={INSETS}>{node}</SafeAreaProvider>;
+  /** The foe has the first word (its taunt); a moment later the fighter takes the stage. */
+  const letTheFoeFinish = () => act(() => {
+    jest.advanceTimersByTime(2500);
+  });
 
   it('a brand-new player sees the story, then is in the first fight: no map, no preview, no lesson card', () => {
     const screen = render(wrap(<AdventureMode onExit={() => {}} />));
@@ -490,6 +494,12 @@ describe('Adventure first minutes: the screens', () => {
     expect(screen.queryByTestId('lesson-modal')).toBeNull();
     expect(screen.queryByTestId('preview-play')).toBeNull();
     expect(screen.getByTestId('run-stage')).toBeTruthy();
+    // The foe speaks first, in its own words; then the fighter says what to do
+    expect(screen.getByTestId('run-foe-taunt')).toBeTruthy();
+    expect(screen.getByText(`“${getLevel('1-1').foes[0].taunt}”`)).toBeTruthy();
+    expect(screen.queryByTestId('run-coach-banner')).toBeNull();
+    letTheFoeFinish();
+    expect(screen.queryByTestId('run-foe-taunt')).toBeNull();
     expect(screen.getByTestId('run-coach-banner')).toBeTruthy();
     expect(screen.getByText(/^Meow! Tap the 3 (red|green|purple) cards!$/)).toBeTruthy();
   });
@@ -497,6 +507,8 @@ describe('Adventure first minutes: the screens', () => {
   it('Skip jumps from the story to the first fight', () => {
     const screen = render(wrap(<AdventureMode onExit={() => {}} />));
     fireEvent.press(screen.getByTestId('story-skip'));
+    expect(screen.getByTestId('run-stage')).toBeTruthy();
+    letTheFoeFinish();
     expect(screen.getByTestId('run-coach-banner')).toBeTruthy();
   });
 
@@ -513,6 +525,7 @@ describe('Adventure first minutes: the screens', () => {
     expect(screen.getByTestId('preview-coach')).toBeTruthy();
     fireEvent.press(screen.getByTestId('preview-play'));
     expect(screen.queryByTestId('lesson-modal')).toBeNull();
+    letTheFoeFinish();
     expect(screen.getByTestId('run-coach-banner')).toBeTruthy();
   });
 
@@ -531,7 +544,8 @@ describe('Adventure first minutes: the screens', () => {
     fireEvent.press(screen.getByTestId('preview-play'));
     expect(screen.queryByTestId('lesson-modal')).toBeNull();
     expect(screen.getByTestId('run-stage')).toBeTruthy();
-    // ...and the fight opens with the level's one-line reminder
+    // ...and after the foe's taunt, the fight opens with the level's one-line reminder
+    letTheFoeFinish();
     expect(screen.getByText(MECHANICS[level.introduces].coach!)).toBeTruthy();
   });
 

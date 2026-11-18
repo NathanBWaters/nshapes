@@ -62,6 +62,9 @@ const REPLACE_DELAY_MS = 560;
  * height the board does not need: tall on a nine-card board, where the fight
  * can be the star of the screen, compact once the board fills up.
  */
+/** How long the foe's taunt is up as a fight (or a wave) opens, before your fighter speaks */
+const FOE_TAUNT_MS = 2400;
+
 const STAGE = { min: 66, minWide: 104, wideFrom: 700, max: 184, chromePx: 132, roomy: 132, speechPx: 56 } as const;
 
 interface Props {
@@ -158,12 +161,32 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
 
   useEffect(() => () => timeouts.current.forEach(clearTimeout), []);
 
+  // The foe speaks first: its taunt, as the fight (and each wave) opens. Then your fighter has the stage.
+  const taunt = level.rules.sandbox ? undefined : level.foes[run.wave]?.taunt;
+  const [taunting, setTaunting] = useState(!!taunt);
+  useEffect(() => {
+    if (!taunt) {
+      setTaunting(false);
+      return;
+    }
+    setTaunting(true);
+    const t = setTimeout(() => setTaunting(false), FOE_TAUNT_MS);
+    return () => clearTimeout(t);
+  }, [run.wave, taunt]);
+
   // The bell: a banner across the board as the fight opens (taps pass through it)
   const [opening, setOpening] = useState(true);
   useEffect(() => {
+    // (rung a moment in, once the band has taken the stage)
+    const bell = setTimeout(() => {
+      if (!level.rules.sandbox) band.cue('wave');
+    }, 260);
     const t = setTimeout(() => setOpening(false), 1500);
-    return () => clearTimeout(t);
-  }, []);
+    return () => {
+      clearTimeout(bell);
+      clearTimeout(t);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Dev only: expose the live run so browser scripts can play end-to-end
   useEffect(() => {
@@ -488,7 +511,11 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   // Side by side on a compact stage, the two of them leave the middle for the words
   const foeSize = Math.round(Math.min(roomyStage ? 132 : Math.min(120, stageW * 0.2), floorH - (level.isBoss ? 4 : 12)));
   const fighterSize = Math.round(Math.max(36, Math.min(roomyStage ? 104 : Math.min(96, stageW * 0.15), floorH - 34)));
-  const coachBubble = coachText && !ended ? (
+  // While the foe is taunting it has the floor (a wrong pick is still explained at once)
+  const foeTalking = taunting && !!taunt && !explaining && !ended;
+  const coachBubble = foeTalking ? (
+    <StageBubble testID="run-foe-taunt" text={`“${taunt}”`} kind="foe" tail={roomyStage ? 'down-right' : 'right'} />
+  ) : coachText && !ended ? (
     <StageBubble
       testID="run-coach-banner"
       text={coachText}
