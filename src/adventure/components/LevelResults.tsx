@@ -338,14 +338,14 @@ const LevelResults: React.FC<Props> = ({
       </ScrollView>
 
       {/* What next: always in reach, never below the fold */}
-      <View style={st.footer} testID="results-actions">
+      <View style={[st.footer, { paddingBottom: Math.max(insets.bottom, 12) }]} testID="results-actions">
         {canGoOn && nextLevel && nextFoe ? (
           <TouchableOpacity testID="results-next" onPress={onNext} activeOpacity={0.85} style={st.nextBtn} accessibilityRole="button" accessibilityLabel={`Next: ${nextLevel.id} ${nextLevel.name}, against ${nextFoe.name}`}>
             <View style={st.nextFoe}>
               <EnemyAvatar enemy={nextFoe} size={40} mood="menacing" lightweight />
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={st.nextLabel} numberOfLines={1}>NEXT: {nextLevel.name}</Text>
+              <Text style={st.nextLabel} numberOfLines={2}>NEXT: {nextLevel.name}</Text>
               <Text style={st.nextSub} numberOfLines={1}>
                 {nextIsNew ? `New: ${getMechanic(nextLevel.introduces).title}` : `vs ${nextFoe.name}`}
               </Text>

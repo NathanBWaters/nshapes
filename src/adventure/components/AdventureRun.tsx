@@ -57,14 +57,17 @@ const TICK_MS = 250;
 /** A Set's cards are thrown at the foe, then the next ones are dealt: long enough to see the throw, short enough to keep moving */
 const REPLACE_DELAY_MS = 560;
 
-/**
- * The battle stage (fighter on the left, foe on the right) takes whatever
- * height the board does not need: tall on a nine-card board, where the fight
- * can be the star of the screen, compact once the board fills up.
- */
 /** How long the foe's taunt is up as a fight (or a wave) opens, before your fighter speaks */
 const FOE_TAUNT_MS = 2400;
 
+/**
+ * The battle stage (fighter on the left, foe on the right) takes whatever
+ * height the board does not need: tall on a nine-card board, where the fight
+ * can be the star of the screen, compact once the board fills up (`min`, or
+ * `minWide` on a window at least `wideFrom` wide). From `roomy` up, the words
+ * get a row of their own (`speechPx`) above the two of them. `chromePx` is
+ * roughly what the rest of the HUD takes.
+ */
 const STAGE = { min: 66, minWide: 104, wideFrom: 700, max: 184, chromePx: 132, roomy: 132, speechPx: 56 } as const;
 
 interface Props {
@@ -840,7 +843,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
           onBoardIdleChange={handleBoardIdle}
           slotRef={slotRef}
           onSlotLayout={anchors.measure}
-          quietRewards={effects}
+          quietRewards
         />
       </View>
 

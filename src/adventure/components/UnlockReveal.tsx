@@ -3,8 +3,9 @@
  * a silhouette on a field of light, a tap to reveal, then a card explaining
  * exactly how the new thing works and a button to start using it.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity } from 'react-native';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, Easing, cancelAnimation } from 'react-native-reanimated';
 import Icon from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
@@ -31,6 +32,8 @@ import { describeUnlock } from './rewards';
 import { evolutionsMechanicId } from '../lessons';
 import { companionVoice } from '../coach';
 import CompanionBubble from './CompanionBubble';
+
+const NO_INSETS = { top: 0, bottom: 0, left: 0, right: 0 };
 
 const GOLD = DARK.gold;
 const TEXT = DARK.text;
@@ -75,6 +78,8 @@ interface Props {
 }
 
 const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCharm, onEquipArcana, onOpenFeature, onShowPath, onDone }) => {
+  // (read from the context, so the reveal also stands alone where there is no safe-area provider)
+  const insets = useContext(SafeAreaInsetsContext) ?? NO_INSETS;
   const [i, setI] = useState(0);
   const [revealed, setRevealed] = useState(false);
   const flash = useSharedValue(0);
@@ -147,7 +152,7 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
   const sourceLabel = path ? 'Secret' : u.star === 0 ? 'Bounty reward' : `${'★'.repeat(u.star)} reward`;
   return (
     <Modal visible transparent animationType="fade">
-      <View testID="unlock-modal" style={st.overlay}>
+      <View testID="unlock-modal" style={[st.overlay, { paddingTop: insets.top }]}>
         <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: '#FFFFFF' }, flashStyle]} pointerEvents="none" />
         <ScrollView contentContainerStyle={st.scroll} bounces={false}>
           <Text style={st.eyebrow}>{sourceLabel}{unlocks.length > 1 ? `  ·  ${i + 1} of ${unlocks.length}` : ''}</Text>
@@ -293,7 +298,7 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
         </ScrollView>
 
         {/* What to do with it: always in reach, whatever the screen size */}
-        <View style={st.footer}>
+        <View style={[st.footer, { paddingBottom: Math.max(insets.bottom, 18) }]}>
           {!revealed ? (
             <TouchableOpacity testID="unlock-reveal" onPress={reveal} style={st.cta} activeOpacity={0.85}>
               <Text style={st.ctaText}>Reveal</Text>
