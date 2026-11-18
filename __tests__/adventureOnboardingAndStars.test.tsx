@@ -26,6 +26,10 @@ import { MECHANICS } from '@/adventure/data/mechanics';
 import { STORY } from '@/adventure/data/story';
 import { lessonsDueBefore, taughtOnPreview } from '@/adventure/lessons';
 import LevelPreview from '@/adventure/components/LevelPreview';
+import AdventureMap from '@/adventure/components/AdventureMap';
+import MainMenu from '@/components/MainMenu';
+import { writeAdventureSave } from '@/adventure/save';
+import { starRewards, unlockablesOf } from '@/adventure/data/rewards';
 import type { RunState } from '@/adventure/types';
 import { allSets } from '@/adventure/engine/sets';
 import type { Card } from '@/types';
@@ -42,6 +46,8 @@ jest.mock('@/utils/storage', () => ({
       mockKvStore.delete(key);
     },
   },
+  // The main menu asks whether a classic-mode game is waiting to be resumed: none here
+  SavedGameStorage: { hasSavedGame: () => false, load: () => null },
 }));
 
 jest.mock('@/audio', () => {
@@ -327,6 +333,28 @@ describe('Adventure first minutes: show, then say', () => {
     expect(cards.every(c => c.color === 'red')).toBe(true);
   });
 
+  it('says so when the end is in sight, and makes a near miss a reason to try again', () => {
+    const level = getLevel('1-2');
+    const save = createSaveBefore('1-2');
+    let run = createRun(level, save, { seed: 5 });
+    run = score(run, allSets(run.board, run.attributes)[0]);
+
+    // One plain Set from a knockout
+    expect(computeLiveGuidance({ ...run, foeHp: 3 }, { seenIntro: true })!.message).toBe('Purr-fect! One more Set does it!');
+    // The last move, with the foe still standing
+    const last = computeLiveGuidance({ ...run, foeHp: 12, movesLeft: 1 }, { seenIntro: true })!;
+    expect(last.message).toBe('Last move. Make it count!');
+    // Mid-fight, with moves in hand: nothing to add
+    expect(computeLiveGuidance({ ...run, foeHp: 12, movesLeft: 5 }, { seenIntro: true })).toBeNull();
+
+    // The foe survived on a sliver of health: the results line says how close it was
+    const survived = { ...run, status: 'won' as const, endReason: 'survived' as const, foeHp: 4, movesLeft: 0 };
+    expect(companionResultsLine(level, survived, computeStars(survived), false)).toBe(`So close! ${run.foeName} had just 4 HP left.`);
+    // Nowhere near: the fighter's usual line
+    const far = { ...survived, foeHp: run.foeMaxHp - 3 };
+    expect(companionResultsLine(level, far, computeStars(far), false)).toBe(companionVoice('Orange Tabby').win1);
+  });
+
   it('gives every fighter a voice of their own and explains ★, ★★ and ★★★', () => {
     expect(companionVoice('Orange Tabby').hello).toBe('Meow!');
     expect(companionVoice('Corgi').hello).toBe('Woof!');
@@ -501,6 +529,50 @@ describe('Adventure first minutes: the screens', () => {
     // 1-5 brings a second fighter: passives appear
     const later = render(wrap(<LevelPreview {...props} level={getLevel('1-5')} save={createSaveBefore('1-5')} />));
     expect(later.getByTestId('preview-passives')).toBeTruthy();
+  });
+
+  it('the fight shows its ★★★ goal as a strip that tracks progress', () => {
+    const screen = render(wrap(<AdventureMode initialSave={createSaveBefore('1-2')} onExit={() => {}} />));
+    fireEvent.press(screen.getByTestId('map-node-1-2'));
+    fireEvent.press(screen.getByTestId('preview-play'));
+    expect(screen.getByTestId('run-challenge').props.accessibilityLabel).toMatch(/^Three star goal: Make 2 all-red Sets/);
+    // (1-1 scores accuracy instead: no goal strip there)
+    screen.unmount();
+    mockKvStore.clear();
+    const first = render(wrap(<AdventureMode onExit={() => {}} />));
+    fireEvent.press(first.getByTestId('story-skip'));
+    expect(first.queryByTestId('run-challenge')).toBeNull();
+  });
+
+  it('the map shows the road ahead: this world’s progress, the foes coming up, and where rewards still hide', () => {
+    const save = createSaveBefore('1-3');
+    const noop = () => {};
+    const screen = render(wrap(<AdventureMap save={save} onSelectLevel={noop} onOpenCamp={noop} onOpenGuide={noop} onExit={noop} />));
+    const meadow = MAIN_LEVELS.filter(l => l.biome === 'meadow');
+    expect(screen.getByTestId('map-world-progress-meadow').props.accessibilityLabel).toBe(`6 of ${meadow.length * 3} stars in Sunny Meadow`);
+    // A level whose stars still hide an unlock is tagged; one with nothing left to find is not
+    for (const level of meadow) {
+      const hides = starRewards(level).some((reward, i) => i >= (save.stars[level.id] ?? 0) && unlockablesOf(reward).length > 0);
+      expect(!!screen.queryByTestId(`map-loot-${level.id}`)).toBe(hides);
+    }
+    expect(screen.queryByTestId('map-loot-1-1')).toBeNull();
+    // The next levels down the road can still be opened to see what is waiting there
+    expect(screen.getByTestId('map-node-1-4').props.accessibilityLabel).toContain('locked');
+  });
+
+  it('the main menu invites a new player to Play and takes a returning one back to their next foe', () => {
+    const noop = () => {};
+    const props = { onSelectAdventure: noop, onSelectFreeplay: noop, onSelectTutorial: noop, onSelectOptions: noop };
+    const fresh = render(wrap(<MainMenu {...props} />));
+    expect(fresh.getByTestId('menu-adventure').props.accessibilityLabel).toBe('Adventure: Play');
+    expect(fresh.getByText('A star fell. The critters went wild.')).toBeTruthy();
+    fresh.unmount();
+
+    const save = createSaveBefore('1-5');
+    writeAdventureSave(save);
+    const back = render(wrap(<MainMenu {...props} />));
+    expect(back.getByTestId('menu-adventure').props.accessibilityLabel).toBe('Adventure: Continue');
+    expect(back.getByText(/^1-5 · Nutkin is waiting\s+★ 12$/)).toBeTruthy();
   });
 
   it('the results screen keeps what to do next in reach, with the next foe on the button', () => {

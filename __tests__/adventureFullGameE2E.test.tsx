@@ -543,8 +543,9 @@ describe('Adventure Mode full-game E2E', () => {
         expect(reveals.some(t => t.includes('You found a secret path!'))).toBe(true);
         expect(screen.getByTestId('results-secret-path')).toBeTruthy();
       }
+      // World 1 teaches on the preview sheet: no lesson card stands before any of its fights
+      expect(lessons).toHaveLength(0);
       if (level.id === firstRecipeLevel.id) {
-        expect(lessons.some(t => t.includes('First Evolution'))).toBe(true);
         expect(reveals.some(t => t.includes('New evolution unlocked!'))).toBe(true);
       }
       expect(fight.sawPassiveChip).toBe(true);

@@ -3,12 +3,12 @@
  * lesson pages that are written from their save rather than fixed in data.
  */
 import type { AdventureSave, EvolutionRecipe, LessonPage, LevelDef, MechanicDef } from './types';
-import { LEVELS, MAIN_LEVELS, mainIndexOf } from './data/levels';
-import { levelFoe } from './data/foes';
+import { MAIN_LEVELS } from './data/levels';
 import { MECHANICS } from './data/mechanics';
 import { EVOLUTION_RECIPES } from './data/evolutions';
-import { starRewards } from './data/rewards';
 import { LESSON_KEYS } from './progress';
+
+const recipeOf = (id: string): EvolutionRecipe | undefined => EVOLUTION_RECIPES.find(r => r.id === id);
 
 /** The mechanic that explains evolutions: the one that switches them on, else the older id. */
 export const evolutionsMechanicId = (): string | undefined =>
@@ -22,83 +22,6 @@ export interface LessonPlan {
   /** LESSON_KEYS to record once the player has accepted the lesson */
   marks: string[];
 }
-
-// ─── First Weapon Combo ─────────────────────────────────────────────────────
-
-interface ComboStage {
-  level: LevelDef;
-  star: number;
-  recipeId: string;
-}
-
-const COMBO_STAGES: ComboStage[] = LEVELS.flatMap(level =>
-  starRewards(level).flatMap((reward, i) => (reward.evolution ? [{ level, star: i + 1, recipeId: reward.evolution }] : []))
-);
-
-/**
- * The stages where a player can win their first Combo: everything up to the
- * first main-path level that grants one. Nobody gets past that level without
- * its lesson, so later Combo levels never need the discovery page.
- */
-const FIRST_COMBO_STAGES: ComboStage[] = (() => {
-  const onMainPath = COMBO_STAGES.filter(s => !s.level.branchOf).map(s => mainIndexOf(s.level));
-  const last = Math.min(...onMainPath);
-  return COMBO_STAGES.filter(s => mainIndexOf(s.level) <= last);
-})();
-
-const recipeOf = (id: string): EvolutionRecipe | undefined => EVOLUTION_RECIPES.find(r => r.id === id);
-
-const comboDiscoveryPage = (stage: ComboStage): LessonPage => {
-  const { level } = stage;
-  const recipe = recipeOf(stage.recipeId);
-  const name = recipe?.name ?? 'an evolution';
-  const stars = '★'.repeat(stage.star);
-  const unlocks = `unlocks your very first EVOLUTION: ${name}${recipe ? ` (${recipe.familyText})` : ''}`;
-  const knockout = stage.star >= 2 ? `Knocking out ${levelFoe(level).name} (${stars})` : `Earning ${stars} against ${levelFoe(level).name}`;
-  const catalysts = 'Equip both weapon families as charms and match the glowing Catalyst card to evolve for 30s';
-  const comboIcon = recipe?.icon ?? 'lorc/fireball';
-  if (level.branchOf) {
-    return {
-      title: 'Elite Reward: First Evolution',
-      body: [
-        `${knockout} ${unlocks}.`,
-        `${catalysts}!`,
-      ],
-      demo: {
-        type: 'icons',
-        items: [
-          { icon: 'lorc/daemon-skull', label: `${level.id} Elite` },
-          { icon: comboIcon, label: 'Unlock evolution' },
-          { icon: 'lorc/crystal-shine', label: 'Match the Catalyst' },
-        ],
-      },
-    };
-  }
-  return {
-    title: 'Milestone Reward: First Evolution',
-    body: [
-      `${knockout} ${unlocks}!`,
-      `${catalysts}.`,
-    ],
-    demo: {
-      type: 'icons',
-      items: [
-        { icon: 'lorc/crossed-swords', label: `Beat ${level.id} (${stars})` },
-        { icon: comboIcon, label: 'Unlock evolution' },
-        { icon: 'lorc/crystal-shine', label: 'Match the Catalyst' },
-      ],
-    },
-  };
-};
-
-/**
- * Shown once, on whichever first-evolution stage the player reaches first while
- * they still own no recipe.
- */
-export const buildComboDiscoveryPages = (levelId: string, save: AdventureSave): LessonPage[] => {
-  if (save.seenMechanics.includes(LESSON_KEYS.comboDiscovery) || save.unlockedEvolutions.length > 0) return [];
-  return FIRST_COMBO_STAGES.filter(s => s.level.id === levelId).map(comboDiscoveryPage);
-};
 
 /** The evolutions lesson, rewritten around the recipe the player unlocked first. */
 export const buildAdaptiveEvolutionMechanic = (save: AdventureSave): MechanicDef => {
@@ -128,9 +51,13 @@ export const buildAdaptiveEvolutionMechanic = (save: AdventureSave): MechanicDef
 // ─── Lessons due before a fight ─────────────────────────────────────────────
 
 /**
- * In playing order: the level's own mechanic the first time (with the Combo
- * discovery page in front of it when that applies), then the Weapon Combos
- * lesson once the player owns a recipe and gear is on.
+ * In playing order: the level's own mechanic the first time, then the
+ * evolutions lesson once the player owns a recipe and gear is on.
+ *
+ * (The level that pays the first recipe used to open with a page announcing
+ * it. A wall of text about a reward, before a boss, about something that
+ * does nothing in that fight: it is gone. The reward is teased on the preview
+ * as a secret, and explained by its own reveal when it is won.)
  */
 export const lessonsDueBefore = (level: LevelDef, save: AdventureSave): LessonPlan[] => {
   // Level 1-1 teaches directly on the live board with glowing cards & Orange Tabby — zero pre-fight modals!
@@ -139,12 +66,10 @@ export const lessonsDueBefore = (level: LevelDef, save: AdventureSave): LessonPl
   const evoId = evolutionsMechanicId();
   const plans: LessonPlan[] = [];
   if (!seen(LESSON_KEYS.mechanic(level.introduces))) {
-    const discovery = buildComboDiscoveryPages(level.id, save);
     plans.push({
       // The level that teaches evolutions teaches them around the recipe the player owns
       mechanic: level.introduces === evoId ? buildAdaptiveEvolutionMechanic(save) : MECHANICS[level.introduces],
-      prelude: discovery.length > 0 ? discovery : undefined,
-      marks: [LESSON_KEYS.mechanic(level.introduces), ...(discovery.length > 0 ? [LESSON_KEYS.comboDiscovery] : [])],
+      marks: [LESSON_KEYS.mechanic(level.introduces)],
     });
   }
   if (

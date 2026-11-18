@@ -339,7 +339,7 @@ describe('Unlock reveals', () => {
 });
 
 describe('First-evolution lesson', () => {
-  it('the level that grants the first recipe opens with a discovery page, and the next fight teaches evolutions', () => {
+  it('the level that grants the first recipe starts straight from its preview, and the next fight teaches evolutions', () => {
     const first = MAIN_LEVELS.find(l => starRewards(l).some(r => r.evolution))!;
     const before = MAIN_LEVELS.slice(0, mainIndexOf(first));
     const save: AdventureSave = {
@@ -351,8 +351,10 @@ describe('First-evolution lesson', () => {
     };
     const view = render(wrap(<AdventureMode initialSave={save} onExit={() => {}} />));
     fireEvent.press(view.getByTestId(`map-node-${first.id}`));
+    // The recipe is teased on the sheet as a secret reward; no page of text stands between the player and the boss
     fireEvent.press(view.getByTestId('preview-play'));
-    expect(view.getByText('Milestone Reward: First Evolution')).toBeTruthy();
+    expect(view.queryByTestId('lesson-modal')).toBeNull();
+    expect(view.getByTestId('run-stage')).toBeTruthy();
     view.unmount();
 
     const next = MAIN_LEVELS[mainIndexOf(first) + 1];

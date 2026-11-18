@@ -312,6 +312,9 @@ const helpfulSet = (run: RunState, sets: Card[][], held: readonly Card[]): Card[
   return (run.challengeMet ? undefined : pool.find(wanted)) ?? pool[0];
 };
 
+/** What a plain Set deals: three cards, a point each */
+const BASE_SET_DAMAGE = 3;
+
 const RESCUE_LINES = ['Stuck? Start with this one.', 'These two go together…', 'Here is one. Tap all three!'];
 
 /** What the companion says as each of the first level's Sets lands */
@@ -472,6 +475,16 @@ export const computeLiveGuidance = (
     }
   }
 
+  // ── The end is in sight: say so (it is the moment to choose a Set with care) ──
+  if (run.level.biome === 'meadow' && run.foeHp > 0 && run.matches > 0 && selectedCount === 0) {
+    if (run.foeHp <= BASE_SET_DAMAGE) {
+      return { glowIds: [], dimIds: [], dimOpacity: 1, message: `${voice.cheer} One more Set does it!`, mood: 'victory', kind: 'cheer' };
+    }
+    if (run.movesLeft === 1) {
+      return { glowIds: [], dimIds: [], dimOpacity: 1, message: 'Last move. Make it count!', mood: 'anticipation', kind: 'cheer' };
+    }
+  }
+
   // ── The opening line of a level that teaches something ───────────────────
   if (run.matches === 0 && !seenIntro) {
     const mech = MECHANICS[run.level.introduces];
@@ -522,6 +535,10 @@ export const companionResultsLine = (
   if (level.rules.sandbox) return `${voice.cheer} The dummy is always here when we want to try a build.`;
   if (stars >= 3) return voice.win3;
   if (stars === 2) return voice.win2;
+  // The foe is still standing: if it was close, say how close (a near miss is the best reason to try again)
+  const hpLeft = Math.max(1, Math.ceil(run.foeHp));
+  const close = run.foeHp > 0 && run.foeMaxHp > 0 && run.foeHp / run.foeMaxHp <= 0.25;
+  if (close) return `So close! ${run.foeName} had just ${hpLeft} HP left.`;
   if (stars === 1) return voice.win1;
   if (run.coins > 0 && coinsUnlocked) return `${voice.loss} (We keep the coins we scooped up.)`;
   return voice.loss;

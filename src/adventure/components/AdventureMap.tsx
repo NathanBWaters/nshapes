@@ -21,13 +21,13 @@ import { recordComponentRender } from '@/utils/perfWatchdog';
 import { sfx } from '@/audio';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import type { CharacterName } from '@/types';
-import type { AdventureSave, LevelDef } from '../types';
+import type { AdventureSave, BiomeDef, LevelDef } from '../types';
 import { MAIN_LEVELS, branchesOf } from '../data/levels';
 import { BIOMES } from '../data/biomes';
 import { levelFoe } from '../data/foes';
 import { getMechanic } from '../data/mechanics';
 import { getFighter } from '../data/fighters';
-import { isFighterTrial } from '../data/rewards';
+import { isFighterTrial, starRewards, unlockablesOf } from '../data/rewards';
 import { freshPaths, hasUnspentStars, getFrontierLevel, getLockReason, isMechanicKnown, maxStars, openPaths, totalStars, isBiomeOpen } from '../progress';
 import { companionMapGreeting } from '../coach';
 import CompanionBubble from './CompanionBubble';
@@ -239,19 +239,24 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
           {banners.map(b => {
             const biome = BIOMES[b.biomeIndex];
             const open = isBiomeOpen(save, biome.id);
+            const here = MAIN_LEVELS.filter(l => l.biome === biome.id);
+            const earned = here.reduce((sum, l) => sum + (save.stars[l.id] ?? 0), 0);
             return (
               <View key={biome.id} style={[s.band, { top: b.y, height: b.height, backgroundColor: biome.colors.sky }]}>
-                <View style={[s.ground, { backgroundColor: biome.colors.ground }]} />
-                {biome.decor.map((d, i) => (
-                  <View key={i} style={[s.decor, { top: 40 + ((i * 197) % Math.max(60, b.height - 80)), left: i % 2 === 0 ? 8 + i * 6 : undefined, right: i % 2 === 1 ? 10 + i * 4 : undefined }]}>
-                    <Icon name={d} size={30 + (i % 2) * 10} color={biome.colors.ground} />
-                  </View>
-                ))}
+                <Scenery biome={biome} width={width} height={b.height} />
                 <View style={s.bannerWrap}>
                   <View style={[s.banner, { borderColor: biome.colors.ink }]}>
                     <Text style={[s.bannerTitle, { color: biome.colors.ink }]}>{biome.name.toUpperCase()}</Text>
                     <Text style={[s.bannerSub, { color: biome.colors.ink }]}>{biome.subtitle}</Text>
-                    {!open && (
+                    {open ? (
+                      // How much of this region's star is back in one piece
+                      <View style={s.worldProgress} testID={`map-world-progress-${biome.id}`} accessibilityLabel={`${earned} of ${here.length * 3} stars in ${biome.name}`}>
+                        <View style={s.worldTrack}>
+                          <View style={[s.worldFill, { width: `${(earned / (here.length * 3)) * 100}%` }]} />
+                        </View>
+                        <Text style={[s.worldCount, { color: biome.colors.ink }]}>★ {earned}/{here.length * 3}</Text>
+                      </View>
+                    ) : (
                       <View style={s.gate}>
                         <Icon name="lorc/padlock" size={14} color={COLORS.canvasWhite} />
                         <Text style={s.gateText}>{biome.starGate} ★ to enter · you have {stars}</Text>
@@ -339,6 +344,39 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
   );
 };
 
+/** Where the scenery of a region sits, as fractions of its band: [x, y, size, edge]. The path runs down the middle, so everything hugs the sides. */
+const SCENERY_SPOTS: [number, number, number][] = [
+  [0.04, 0.2, 34], [0.86, 0.27, 30], [0.1, 0.4, 26], [0.9, 0.48, 38], [0.03, 0.6, 30], [0.84, 0.68, 26], [0.12, 0.8, 36], [0.88, 0.88, 30],
+];
+const HILLS: [number, number, number][] = [[-0.25, 0.3, 0.7], [0.6, 0.55, 0.75], [-0.2, 0.82, 0.8]];
+
+/**
+ * The land a region's path runs through: soft hills, its plants or rocks down
+ * both sides, and something in its sky. All of it stands still (the map is a
+ * screen people leave open), so it costs nothing after the first paint.
+ */
+const Scenery: React.FC<{ biome: BiomeDef; width: number; height: number }> = memo(function Scenery({ biome, width, height }) {
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      {HILLS.map(([x, y, w], i) => {
+        // A circle stretched sideways: a low, round hill
+        const d = w * width * 0.42;
+        return <View key={i} style={[s.hill, { left: x * width + (w * width - d) / 2, top: y * height, width: d, height: d, borderRadius: d / 2, backgroundColor: biome.colors.ground }]} />;
+      })}
+      {biome.skyIcon && (
+        <View style={s.skyIcon}>
+          <Icon name={biome.skyIcon.icon} size={44} color={biome.skyIcon.color} />
+        </View>
+      )}
+      {SCENERY_SPOTS.map(([x, y, size], i) => (
+        <View key={i} style={[s.decor, { left: x * width, top: y * height }]}>
+          <Icon name={biome.decor[i % biome.decor.length]} size={size} color={biome.colors.ink} />
+        </View>
+      ))}
+    </View>
+  );
+});
+
 const DockButton: React.FC<{ testID?: string; icon: React.ComponentProps<typeof Icon>['name']; label: string; onPress: () => void; disabled?: boolean; badge?: boolean }> = ({ testID, icon, label, onPress, disabled, badge }) => (
   <TouchableOpacity testID={testID} onPress={onPress} disabled={disabled} accessibilityState={{ disabled: !!disabled }} style={[s.dockBtn, disabled && { opacity: 0.35 }]} accessibilityLabel={label}>
     <Icon name={disabled ? 'lorc/padlock' : icon} size={26} color={INK} />
@@ -408,6 +446,10 @@ const MapNode: React.FC<{
   const size = level.isBoss ? 78 : side ? 54 : 62;
   const isNew = !locked && !save.seenMechanics.includes(level.introduces);
   const mech = getMechanic(level.introduces);
+  // The next foes down the road can be seen coming (dimmed); a region that is still gated keeps its padlocks
+  const comingUp = lock?.kind === 'previous';
+  // A star here that has not been won still hides something to unlock
+  const hidesLoot = !practice && starRewards(level).some((reward, i) => i >= stars && unlockablesOf(reward).length > 0);
 
   const nodeButton = (
     <TouchableOpacity
@@ -422,7 +464,11 @@ const MapNode: React.FC<{
         isFrontier && s.nodeFrontier,
       ]}
     >
-      {locked ? (
+      {locked && comingUp ? (
+        <View style={s.comingUp}>
+          <EnemyAvatar enemy={foe} size={Math.round(size * 0.76)} mood="idle" lightweight animate={false} />
+        </View>
+      ) : locked ? (
         <Icon name="lorc/padlock" size={size * 0.55} color="#A69F95" />
       ) : (
         <EnemyAvatar
@@ -436,8 +482,16 @@ const MapNode: React.FC<{
       {elite && (
         <View style={s.skull}><Icon name="lorc/daemon-skull" size={14} color={locked ? '#A69F95' : ELITE} /></View>
       )}
-      {level.isBoss && !locked && (
-        <View style={s.crown}><Icon name="lorc/crown-coin" size={18} color="#E0A800" /></View>
+      {level.isBoss && (!locked || comingUp) && (
+        <View style={s.crown}><Icon name="lorc/crown-coin" size={18} color={locked ? '#A69F95' : '#E0A800'} /></View>
+      )}
+      {locked && comingUp && (
+        <View style={s.lockBadge}><Icon name="lorc/padlock" size={11} color="#8E877D" /></View>
+      )}
+      {hidesLoot && (
+        <View style={[s.lootTag, locked && { opacity: 0.6 }]} testID={`map-loot-${level.id}`} accessibilityLabel="A reward is still hidden here">
+          <Icon name="lorc/locked-chest" size={13} color={INK} />
+        </View>
       )}
     </TouchableOpacity>
   );
@@ -506,8 +560,16 @@ const s = StyleSheet.create({
     zIndex: 9,
   },
   band: { position: 'absolute', left: 0, right: 0, overflow: 'hidden' },
-  ground: { position: 'absolute', left: -40, right: -40, bottom: -60, height: 120, borderRadius: 200, opacity: 0.6 },
-  decor: { position: 'absolute', opacity: 0.55 },
+  hill: { position: 'absolute', opacity: 0.4, transform: [{ scaleX: 2.4 }] },
+  skyIcon: { position: 'absolute', top: 18, right: 14, opacity: 0.9 },
+  decor: { position: 'absolute', opacity: 0.28 },
+  worldProgress: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
+  worldTrack: { width: 96, height: 8, borderRadius: 4, borderWidth: 1.5, borderColor: INK, backgroundColor: COLORS.paperBeige, overflow: 'hidden' },
+  worldFill: { height: '100%', backgroundColor: '#F5B800' },
+  worldCount: { fontSize: 11, fontWeight: '900', fontVariant: ['tabular-nums'] },
+  comingUp: { opacity: 0.38 },
+  lockBadge: { position: 'absolute', bottom: -4, right: -4, backgroundColor: COLORS.canvasWhite, borderRadius: 10, borderWidth: 1.5, borderColor: '#B8B0A4', padding: 2 },
+  lootTag: { position: 'absolute', bottom: -6, left: -8, backgroundColor: COLORS.actionYellow, borderRadius: 9, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 3, paddingVertical: 2 },
   bannerWrap: { alignItems: 'center', paddingTop: 22 },
   banner: { backgroundColor: COLORS.canvasWhite, borderWidth: 2, borderBottomWidth: 4, borderRadius: 8, paddingHorizontal: 18, paddingVertical: 8, alignItems: 'center', gap: 2 },
   bannerTitle: { fontWeight: '900', letterSpacing: 2, fontSize: 16 },

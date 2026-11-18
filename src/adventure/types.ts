@@ -112,6 +112,8 @@ export interface BiomeDef {
   /** Music variation key for the chip sequencer */
   music: string;
   decor: IconName[];
+  /** Something in the sky over the region's banner on the map (a sun, a cloud, a falling star) */
+  skyIcon?: { icon: IconName; color: string };
 }
 
 /** Foe on the map: either a registered enemy (with real effects) or a cosmetic sparring foe. */

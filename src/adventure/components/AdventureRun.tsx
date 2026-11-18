@@ -46,6 +46,7 @@ import { computeLiveGuidance, explainInvalidPick, shouldShowDamageNumbers, shoul
 import StageBubble from './StageBubble';
 import { EVOLUTION_RULES } from '../engine/sources';
 import { Anchor, AnchorsProvider, EVENT_FX, EvolutionCutIn, FxStage, GearBelt, fxClock, scriptFor, useAnchors, useFightFx, type Beat } from '../fx';
+import { Banner } from '../fx/visuals';
 import { Btn, CoinPill, DARK, Eyebrow, Heart, INK, PopIn, TONE } from './ui';
 import { EvolutionBanner, EvolutionRing, MegaFlash } from './RunFx';
 import WeaponExplainer from './WeaponExplainer';
@@ -61,7 +62,7 @@ const REPLACE_DELAY_MS = 560;
  * height the board does not need: tall on a nine-card board, where the fight
  * can be the star of the screen, compact once the board fills up.
  */
-const STAGE = { min: 66, max: 184, chromePx: 132, roomy: 132, speechPx: 56 } as const;
+const STAGE = { min: 66, minWide: 104, wideFrom: 700, max: 184, chromePx: 132, roomy: 132, speechPx: 56 } as const;
 
 interface Props {
   level: LevelDef;
@@ -156,6 +157,13 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   const practice = !!level.rules.sandbox;
 
   useEffect(() => () => timeouts.current.forEach(clearTimeout), []);
+
+  // The bell: a banner across the board as the fight opens (taps pass through it)
+  const [opening, setOpening] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setOpening(false), 1500);
+    return () => clearTimeout(t);
+  }, []);
 
   // Dev only: expose the live run so browser scripts can play end-to-end
   useEffect(() => {
@@ -451,16 +459,18 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   const boardRows = Math.max(1, Math.ceil(run.board.length / 3));
   // (cards a little squatter than a playing card still read well, and leave the fight room to breathe on a short phone)
   const idealCardH = stage.w > 0 ? (Math.min(stage.w, 560) - 36) / 3 / 0.82 : 140;
+  // (a wide window has width to burn and little height: there the two of them get a little more than the minimum)
+  const stageMin = stage.w >= STAGE.wideFrom ? STAGE.minWide : STAGE.min;
   const stageH = stage.h > 0
-    ? Math.round(Math.max(STAGE.min, Math.min(STAGE.max, stage.h - insets.top - STAGE.chromePx - boardRows * (idealCardH + 6))))
+    ? Math.round(Math.max(stageMin, Math.min(STAGE.max, stage.h - insets.top - STAGE.chromePx - boardRows * (idealCardH + 6))))
     : 92;
   // Tall enough to give the companion's words their own row above the two fighters
   const roomyStage = stageH >= STAGE.roomy;
   const floorH = roomyStage ? stageH - STAGE.speechPx : stageH;
   const stageW = stage.w > 0 ? stage.w : 375;
   // Side by side on a compact stage, the two of them leave the middle for the words
-  const foeSize = Math.round(Math.min(roomyStage ? 132 : stageW * 0.2, floorH - (level.isBoss ? 4 : 12)));
-  const fighterSize = Math.round(Math.max(36, Math.min(roomyStage ? 104 : stageW * 0.15, floorH - 34)));
+  const foeSize = Math.round(Math.min(roomyStage ? 132 : Math.min(120, stageW * 0.2), floorH - (level.isBoss ? 4 : 12)));
+  const fighterSize = Math.round(Math.max(36, Math.min(roomyStage ? 104 : Math.min(96, stageW * 0.15), floorH - 34)));
   const coachBubble = coachText && !ended ? (
     <StageBubble
       testID="run-coach-banner"
@@ -563,7 +573,12 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
                   {showDamageHud && <Text testID="run-total-damage" style={st.counter} accessibilityLabel={`${run.totalDamage} total damage`}>⚔ {run.totalDamage}</Text>}
                   {showDamageHud && run.power > 0 && <PowerMeter points={run.power} onPress={() => { sfx('click'); setPowerInfo(true); }} />}
                   {run.combo > 1 && comboLive && (
-                    <Anchor name="combo"><Text testID="run-combo" style={[st.counter, st.counterHot]}>COMBO ×{run.combo}</Text></Anchor>
+                    // (the cascade calls out "COMBO ×N" as it lands; this is the running count)
+                    <Anchor name="combo">
+                      <View testID="run-combo" style={st.comboPill} accessibilityLabel={`Combo ×${run.combo}`}>
+                        <Text style={st.comboText}>×{run.combo}</Text>
+                      </View>
+                    </Anchor>
                   )}
                   {showDamageHud && run.biggestHit > 0 && <Text testID="run-biggest-hit" style={st.counterDim}>best {run.biggestHit}</Text>}
                   {/* Practice: what a Set is worth with this build */}
@@ -737,11 +752,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
             </TouchableOpacity>
           </View>
         ) : level.id !== '1-1' ? (
-          <View style={[st.challenge, challenge.met && { backgroundColor: '#D4F4EE' }, challenge.failed && { opacity: 0.55 }]}>
-            <Text style={st.challengeStar}>★★★</Text>
-            <Text style={[st.challengeText, challenge.failed && { textDecorationLine: 'line-through' }]} numberOfLines={1}>{challenge.text}</Text>
-            {challenge.met && <Icon name="lorc/checked-shield" size={14} color={COLORS.logicTeal} />}
-          </View>
+          <ChallengeStrip text={challenge.text} met={challenge.met} failed={challenge.failed} />
         ) : null}
 
       </View>
@@ -790,6 +801,11 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
 
       {/* Everything that is playing right now */}
       <FxStage fx={fx} anchors={anchors} size={stage} />
+      {opening && effects && !practice && anchors.rect('board') && (
+        <View style={st.openingLayer} pointerEvents="none" testID="run-opening">
+          <Banner rect={anchors.rect('board')!} text={level.isBoss ? 'BOSS FIGHT!' : 'FIGHT!'} color={level.isBoss ? '#9F1239' : COLORS.deepOnyx} delay={120} />
+        </View>
+      )}
       {fx.cutIn && (
         <EvolutionCutIn
           key={fx.cutIn.key}
@@ -961,6 +977,34 @@ const HpBar: React.FC<{ hp: number; max: number; endless?: boolean }> = ({ hp, m
       <Animated.View style={[st.hpFill, { backgroundColor: pct > 0.5 ? COLORS.impactRed : pct > 0.25 ? COLORS.impactOrange : '#E53935' }, fillStyle]} />
       <Text style={[st.hpText, endless && st.hpEndless]}>{endless ? '∞' : `${hp} / ${max}`}</Text>
     </View>
+  );
+};
+
+/**
+ * The ★★★ goal, under the fight. It jumps each time it moves forward ("1/2"),
+ * and turns teal with a tick when it is met, so progress toward the third
+ * star is felt as it happens and not only read on the results screen.
+ */
+const ChallengeStrip: React.FC<{ text: string; met: boolean; failed: boolean }> = ({ text, met, failed }) => {
+  const pop = useSharedValue(1);
+  const first = useRef(true);
+  useEffect(() => {
+    // (not on the way in: only when the words change during the fight)
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    if (failed) return;
+    pop.value = withSequence(withTiming(met ? 1.12 : 1.06, { duration: 90, easing: Easing.out(Easing.quad) }), withTiming(1, { duration: 160, easing: Easing.inOut(Easing.quad) }));
+    if (met) band.cue('star', { amount: 3 });
+  }, [text, met, failed, pop]);
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: pop.value }] }));
+  return (
+    <Animated.View testID="run-challenge" style={[st.challenge, met && st.challengeMet, failed && { opacity: 0.55 }, style]} accessibilityLabel={`Three star goal: ${text}${met ? ', done' : ''}`}>
+      <Text style={st.challengeStar}>★★★</Text>
+      <Text style={[st.challengeText, failed && { textDecorationLine: 'line-through' }]} numberOfLines={1}>{text}</Text>
+      {met && <Icon name="lorc/checked-shield" size={14} color={COLORS.logicTeal} />}
+    </Animated.View>
   );
 };
 
@@ -1214,9 +1258,12 @@ const st = StyleSheet.create({
   counters: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, paddingLeft: 8 },
   counter: { fontSize: 11, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
   counterHot: { color: COLORS.impactOrange },
+  comboPill: { backgroundColor: COLORS.impactOrange, borderRadius: 999, borderWidth: 2, borderColor: INK, paddingHorizontal: 8, paddingVertical: 1 },
+  comboText: { fontSize: 13, fontWeight: '900', color: COLORS.canvasWhite, fontVariant: ['tabular-nums'] },
   counterDim: { fontSize: 10, fontWeight: '700', color: TONE.spent, fontVariant: ['tabular-nums'] },
   glow: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, borderRadius: 18, backgroundColor: '#FDE68A' },
   bannerWrap: { position: 'absolute', left: 0, right: 0, zIndex: 250 },
+  openingLayer: { ...StyleSheet.absoluteFillObject, zIndex: 245 },
   hudRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   stat: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, borderWidth: 2, borderColor: INK, backgroundColor: COLORS.canvasWhite },
   statWarn: { backgroundColor: '#FFE1DE', borderColor: COLORS.impactRed },
@@ -1238,6 +1285,7 @@ const st = StyleSheet.create({
   frozen: { position: 'absolute', top: 10, alignSelf: 'center', zIndex: 60, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#DBEAFE', borderWidth: 2, borderColor: '#1D4ED8', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 4 },
   frozenText: { fontWeight: '900', color: '#1D4ED8', letterSpacing: 1 },
   challenge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.paperBeige, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3 },
+  challengeMet: { backgroundColor: '#D4F4EE' },
   challengeStar: { color: '#E0A800', fontSize: 11, fontWeight: '900' },
   challengeText: { flex: 1, fontSize: 12, fontWeight: '700', color: INK },
   boardWrap: { flex: 1, padding: 6 },

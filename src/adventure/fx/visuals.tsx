@@ -341,7 +341,9 @@ export const Stamp: React.FC<{ at: Point; text: string; color: string; tier?: Hi
   const hold = 520 + tier * 200;
   const total = hold + 400;
   const p = useProgress(total, delay);
-  const size = sticker ? STICKER_SIZE + tier * 3 : lead ? LEAD_STAMP_SIZE[tier] : STAMP_SIZE[tier];
+  const wanted = sticker ? STICKER_SIZE + tier * 3 : lead ? LEAD_STAMP_SIZE[tier] : STAMP_SIZE[tier];
+  // A long word ("MEGA RAINBOW −254") is drawn smaller rather than run off the screen
+  const size = sticker ? wanted : Math.max(14, Math.min(wanted, Math.floor((maxX - 16) / (text.length * 0.62))));
   // keep the whole word on screen (a rough width is enough)
   const width = Math.min(maxX - 8, text.length * size * 0.62 + (sticker ? 16 : 0));
   // `fromLeft`: the word starts at the point instead of being centred on it (a long word next to a small target)
@@ -379,7 +381,8 @@ export const Stamp: React.FC<{ at: Point; text: string; color: string; tier?: Hi
  */
 export const Banner: React.FC<{ rect: Rect; text: string; color: string; delay?: number }> = ({ rect, text, color, delay = 0 }) => {
   const p = useProgress(1150, delay);
-  const size = Math.max(34, Math.min(64, rect.w * 0.17));
+  // As big as fits: a short shout ("K.O.!") fills the board, a longer one ("BOSS FIGHT!") is sized to stay on it
+  const size = Math.max(26, Math.min(64, rect.w * 0.17, (rect.w - 40) / (text.length * 0.62 + 1)));
   const style = useAnimatedStyle(() => {
     const t = p.value;
     return {

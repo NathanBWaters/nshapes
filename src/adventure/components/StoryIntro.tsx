@@ -24,7 +24,8 @@ import { INK } from './ui';
 const NIGHT = '#141B33';
 const DUSK = '#27305A';
 const GOLD = COLORS.actionYellow;
-const SCENE_H = 280;
+/** The scene is as tall as the screen can spare (a short phone still has room for the words) */
+const sceneHeightFor = (windowHeight: number): number => Math.round(Math.max(220, Math.min(380, windowHeight * 0.42)));
 
 /** Where the fixed stars sit, as fractions of the scene (hand-placed so none hides behind the mountain) */
 const SKY: [number, number, number][] = [
@@ -42,8 +43,9 @@ interface Props {
 
 const StoryIntro: React.FC<Props> = ({ fighter, onDone }) => {
   const insets = useSafeAreaInsets();
-  const { width: winW } = useWindowDimensions();
+  const { width: winW, height: winH } = useWindowDimensions();
   const width = Math.min(winW, 480);
+  const sceneH = sceneHeightFor(winH);
   const beats = STORY.welcome;
   const [i, setI] = useState(0);
   const beat = beats[i];
@@ -74,8 +76,8 @@ const StoryIntro: React.FC<Props> = ({ fighter, onDone }) => {
 
       {/* Tap anywhere on the scene or the words to move on */}
       <TouchableOpacity activeOpacity={1} onPress={next} style={st.body} accessibilityRole="button" accessibilityLabel={`${beat.title} ${beat.body} Tap to continue`}>
-        <View style={[st.scene, { width, height: SCENE_H }]}>
-          <Scene key={i} beat={beat} width={width} fighter={fighter} />
+        <View style={[st.scene, { width, height: sceneH }]}>
+          <Scene key={i} beat={beat} width={width} height={sceneH} fighter={fighter} />
         </View>
         <Words key={`w${i}`} beat={beat} fighter={fighter} />
       </TouchableOpacity>
@@ -108,38 +110,40 @@ const Words: React.FC<{ beat: StoryBeat; fighter: CharacterName }> = ({ beat, fi
   );
 };
 
-const Scene: React.FC<{ beat: StoryBeat; width: number; fighter: CharacterName }> = ({ beat, width, fighter }) => {
+interface SceneSize { width: number; height: number }
+
+const Scene: React.FC<SceneSize & { beat: StoryBeat; fighter: CharacterName }> = ({ beat, width, height, fighter }) => {
   switch (beat.scene) {
-    case 'starfall': return <Starfall width={width} />;
-    case 'critters': return <Critters width={width} />;
-    case 'hero': return <Hero width={width} fighter={fighter} />;
+    case 'starfall': return <Starfall width={width} height={height} />;
+    case 'critters': return <Critters width={width} height={height} />;
+    case 'hero': return <Hero width={width} height={height} fighter={fighter} />;
   }
 };
 
-const Sky: React.FC<{ width: number }> = ({ width }) => (
+const Sky: React.FC<SceneSize> = ({ width, height }) => (
   <>
     {SKY.map(([x, y, s], k) => (
-      <View key={k} style={[st.skyStar, { left: x * width, top: y * SCENE_H, width: s, height: s, borderRadius: s / 2 }]} />
+      <View key={k} style={[st.skyStar, { left: x * width, top: y * height, width: s, height: s, borderRadius: s / 2 }]} />
     ))}
   </>
 );
 
 /** The Summit: a far peak with a snow cap. */
-const Mountain: React.FC<{ width: number }> = ({ width }) => {
-  const peak = { x: width * 0.5, y: SCENE_H * 0.36 };
-  const base = SCENE_H;
+const Mountain: React.FC<SceneSize> = ({ width, height: h }) => {
+  const peak = { x: width * 0.5, y: h * 0.36 };
+  const base = h;
   return (
-    <Svg width={width} height={SCENE_H} style={StyleSheet.absoluteFill} pointerEvents="none">
-      <Polygon points={`${width * 0.02},${base} ${width * 0.3},${SCENE_H * 0.62} ${width * 0.46},${base}`} fill="#1D2547" />
-      <Polygon points={`${width * 0.6},${base} ${width * 0.8},${SCENE_H * 0.58} ${width},${base}`} fill="#1D2547" />
+    <Svg width={width} height={h} style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Polygon points={`${width * 0.02},${base} ${width * 0.3},${h * 0.62} ${width * 0.46},${base}`} fill="#1D2547" />
+      <Polygon points={`${width * 0.6},${base} ${width * 0.8},${h * 0.58} ${width},${base}`} fill="#1D2547" />
       <Polygon points={`${width * 0.14},${base} ${peak.x},${peak.y} ${width * 0.86},${base}`} fill={DUSK} />
-      <Polygon points={`${peak.x - width * 0.09},${peak.y + SCENE_H * 0.16} ${peak.x},${peak.y} ${peak.x + width * 0.09},${peak.y + SCENE_H * 0.16} ${peak.x + width * 0.03},${peak.y + SCENE_H * 0.12} ${peak.x - width * 0.02},${peak.y + SCENE_H * 0.17}`} fill="#E8ECFF" />
+      <Polygon points={`${peak.x - width * 0.09},${peak.y + h * 0.16} ${peak.x},${peak.y} ${peak.x + width * 0.09},${peak.y + h * 0.16} ${peak.x + width * 0.03},${peak.y + h * 0.12} ${peak.x - width * 0.02},${peak.y + h * 0.17}`} fill="#E8ECFF" />
     </Svg>
   );
 };
 
 /** Beat 1: the star streaks down to the peak, flashes, and breaks into shards. */
-const Starfall: React.FC<{ width: number }> = ({ width }) => {
+const Starfall: React.FC<SceneSize> = ({ width, height: h }) => {
   const reduced = useReducedMotion();
   const fall = useSharedValue(reduced ? 1 : 0);
   const burst = useSharedValue(reduced ? 1 : 0);
@@ -153,7 +157,7 @@ const Starfall: React.FC<{ width: number }> = ({ width }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const from = { x: width * 0.92, y: -30 };
-  const to = { x: width * 0.5, y: SCENE_H * 0.36 };
+  const to = { x: width * 0.5, y: h * 0.36 };
   const starStyle = useAnimatedStyle(() => ({
     opacity: fall.value >= 1 ? 0 : 1,
     transform: [
@@ -169,10 +173,10 @@ const Starfall: React.FC<{ width: number }> = ({ width }) => {
   }));
   return (
     <>
-      <Sky width={width} />
-      <Mountain width={width} />
+      <Sky width={width} height={h} />
+      <Mountain width={width} height={h} />
       <Animated.View pointerEvents="none" style={[st.flash, { left: to.x - 60, top: to.y - 60 }, flashStyle]} />
-      {SHARDS.map(([dx, dy], k) => <Shard key={k} burst={burst} at={to} dx={dx * width} dy={dy * SCENE_H} big={k % 3 === 0} />)}
+      {SHARDS.map(([dx, dy], k) => <Shard key={k} burst={burst} at={to} dx={dx * width} dy={dy * h} big={k % 3 === 0} />)}
       <Animated.View pointerEvents="none" style={[st.abs, starStyle]}>
         <Text style={st.bigStar}>★</Text>
       </Animated.View>
@@ -204,11 +208,11 @@ const Shard: React.FC<{ burst: ReturnType<typeof useSharedValue<number>>; at: { 
 };
 
 /** Beat 2: three critters, each with a shard over its head. */
-const Critters: React.FC<{ width: number }> = ({ width }) => {
-  const size = Math.min(104, Math.floor((width - 48) / 3));
+const Critters: React.FC<SceneSize> = ({ width, height }) => {
+  const size = Math.min(116, Math.floor((width - 48) / 3), Math.floor(height * 0.42));
   return (
     <>
-      <Sky width={width} />
+      <Sky width={width} height={height} />
       <View style={[st.ground, { backgroundColor: '#1D2547' }]} />
       <View style={st.critterRow}>
         {STORY_CRITTER_LEVELS.map((id, k) => (
@@ -223,13 +227,13 @@ const Critters: React.FC<{ width: number }> = ({ width }) => {
 };
 
 /** Beat 3: your fighter, front and centre. */
-const Hero: React.FC<{ width: number; fighter: CharacterName }> = ({ width, fighter }) => (
+const Hero: React.FC<SceneSize & { fighter: CharacterName }> = ({ width, height, fighter }) => (
   <>
-    <Sky width={width} />
+    <Sky width={width} height={height} />
     <View style={[st.ground, { backgroundColor: '#1D2547' }]} />
     <View style={st.heroWrap}>
       <Rise delay={0}>
-        <FighterAvatar character={fighter} size={Math.min(170, width * 0.44)} mood="anticipation" reaction={{ type: 'entrance', id: 1 }} />
+        <FighterAvatar character={fighter} size={Math.round(Math.min(190, width * 0.46, height * 0.62))} mood="anticipation" reaction={{ type: 'entrance', id: 1 }} />
       </Rise>
     </View>
   </>

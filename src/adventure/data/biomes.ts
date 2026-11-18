@@ -4,11 +4,12 @@ export const BIOMES: BiomeDef[] = [
   {
     id: 'meadow',
     name: 'Sunny Meadow',
-    subtitle: 'Learn the ropes',
+    subtitle: 'Where the first shards fell',
     starGate: 0,
     colors: { sky: '#E8F6E3', ground: '#B9E2A6', path: '#FFFFFF', accent: '#16AA98', ink: '#2F5D3A' },
     music: 'meadow',
-    decor: ['lorc/flowers', 'lorc/clover', 'lorc/flowers'],
+    decor: ['lorc/flowers', 'lorc/clover', 'delapouite/sunflower'],
+    skyIcon: { icon: 'lorc/sun', color: '#F5B800' },
   },
   {
     id: 'woods',
@@ -17,7 +18,8 @@ export const BIOMES: BiomeDef[] = [
     starGate: 12,
     colors: { sky: '#DCEBDD', ground: '#7FB38A', path: '#F4EFEA', accent: '#2E7D4F', ink: '#1E3B27' },
     music: 'woods',
-    decor: ['lorc/cobweb', 'delapouite/bamboo', 'lorc/feather'],
+    decor: ['lorc/pine-tree', 'delapouite/bamboo', 'lorc/cobweb'],
+    skyIcon: { icon: 'lorc/fluffy-cloud', color: '#FFFFFF' },
   },
   {
     id: 'canyon',
@@ -27,6 +29,7 @@ export const BIOMES: BiomeDef[] = [
     colors: { sky: '#FBE6D2', ground: '#E9A86F', path: '#FFF4E8', accent: '#FF7A2F', ink: '#5C2E12' },
     music: 'canyon',
     decor: ['lorc/campfire', 'delapouite/stone-pile', 'lorc/fireball'],
+    skyIcon: { icon: 'lorc/sun', color: '#FF7A2F' },
   },
   {
     id: 'peaks',
@@ -35,7 +38,8 @@ export const BIOMES: BiomeDef[] = [
     starGate: 56,
     colors: { sky: '#E3EEF8', ground: '#A8C8E6', path: '#FFFFFF', accent: '#3B82F6', ink: '#1D3557' },
     music: 'peaks',
-    decor: ['lorc/snowflake-1', 'lorc/crystal-shine', 'lorc/snowflake-1'],
+    decor: ['lorc/snowflake-1', 'lorc/pine-tree', 'lorc/crystal-shine'],
+    skyIcon: { icon: 'lorc/fluffy-cloud', color: '#FFFFFF' },
   },
   {
     id: 'summit',
@@ -45,6 +49,7 @@ export const BIOMES: BiomeDef[] = [
     colors: { sky: '#E7E0F7', ground: '#A99BD6', path: '#FFF9E8', accent: '#F5B82E', ink: '#2A1D57' },
     music: 'boss',
     decor: ['lorc/mountaintop', 'delapouite/falling-star', 'lorc/comet-spark'],
+    skyIcon: { icon: 'delapouite/falling-star', color: '#F5B82E' },
   },
 ];
 

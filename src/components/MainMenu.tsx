@@ -7,6 +7,9 @@ import Icon, { IconName } from './Icon';
 import { FighterAvatar } from './fighters';
 import { CHARACTERS } from '@/utils/gameDefinitions';
 import { SavedGameStorage } from '@/utils/storage';
+import { loadAdventureSave } from '@/adventure/save';
+import { getFrontierLevel, totalStars } from '@/adventure/progress';
+import { levelFoe } from '@/adventure/data/foes';
 import { version } from '../../package.json';
 
 const DISCORD_URL = 'https://discord.gg/JFkUmp54Sp';
@@ -25,12 +28,14 @@ function MenuButton({
   icon,
   title,
   subtitle,
+  accessibilityLabel,
 }: {
   onPress: () => void;
   variant: 'resume' | 'adventure' | 'freeplay' | 'tutorial' | 'options';
   icon: IconName;
   title: string;
   subtitle: string;
+  accessibilityLabel?: string;
 }) {
   const handlePress = () => {
     triggerHaptic('light');
@@ -76,7 +81,7 @@ function MenuButton({
   return (
     <Pressable
       onPress={handlePress}
-      accessibilityLabel={title}
+      accessibilityLabel={accessibilityLabel ?? title}
       testID={`menu-${variant}`}
       style={[
         styles.menuButton,
@@ -107,6 +112,21 @@ const MainMenu: React.FC<MainMenuProps> = ({
   const hasSavedGame = SavedGameStorage.hasSavedGame();
   const savedGame = hasSavedGame ? SavedGameStorage.load() : null;
   const [mascotIndex, setMascotIndex] = React.useState(0);
+
+  // The Adventure button says where you are: a first invitation, or the foe that is waiting for you
+  const adventure = React.useMemo(() => {
+    try {
+      const save = loadAdventureSave();
+      const stars = totalStars(save);
+      if (stars === 0 && Object.keys(save.plays).length === 0) {
+        return { title: 'Play', subtitle: 'A star fell. The critters went wild.' };
+      }
+      const next = getFrontierLevel(save);
+      return { title: 'Continue', subtitle: `${next.id} · ${levelFoe(next).name} is waiting   ★ ${stars}` };
+    } catch {
+      return { title: 'Adventure', subtitle: 'Map, foes, stars & unlocks' };
+    }
+  }, []);
 
   const mascotCharacter = savedGame?.characterName
     ? CHARACTERS.find(c => c.name === savedGame.characterName) ?? CHARACTERS[0]
@@ -146,8 +166,9 @@ const MainMenu: React.FC<MainMenuProps> = ({
             onPress={onSelectAdventure}
             variant="adventure"
             icon="lorc/crossed-swords"
-            title="Adventure"
-            subtitle="Map, foes, stars & unlocks"
+            title={adventure.title}
+            subtitle={adventure.subtitle}
+            accessibilityLabel={`Adventure: ${adventure.title}`}
           />
           <MenuButton
             onPress={onSelectFreeplay}
