@@ -128,6 +128,9 @@ export const fightEventProps = (
     (record.outcome === 'won' && run.hearts !== null && run.hearts <= 1) ||
     (record.outcome === 'lost' && foeHpPctLeft <= 0.15);
   const diedWithHints = record.outcome === 'lost' && (run.stats.hints ?? 0) > 0;
+  // Sets made on a card that was being pointed out: a guided step, the companion's stuck help, a hint or an auto-hint.
+  // With `max_drought_ms` it says how much a player leans on help, and where.
+  const helpedSets = tape.recording.actions.filter(x => 'a' in x && x.a.type === 'MATCH' && x.a.hinted === true).length;
 
   const totalStarsBefore = Object.values(tape.save.stars ?? {}).reduce((a, b) => a + b, 0);
   const levelsClearedBefore = Object.values(tape.save.stars ?? {}).filter(s => s > 0).length;
@@ -173,6 +176,7 @@ export const fightEventProps = (
     foe_hp_pct_left: foeHpPctLeft,
     close_call: closeCall,
     died_with_hints: diedWithHints,
+    helped_sets: helpedSets,
     hints_used: run.roundStats?.hintsUsed ?? 0,
     graces_used: run.roundStats?.gracesUsed ?? 0,
     coins: record.coins,

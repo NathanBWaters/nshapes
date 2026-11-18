@@ -67,7 +67,7 @@ Alongside existing summary fields (`level_id`, `fighter`, `foe`, `outcome`, `sta
 
 * **Identity & Flow:** `fight_id`, `mode` (`'adventure' | 'free_play' | 'classic'`), `level_order`, `$session_id`, `session_fight_index`, `player_code`, `journey_stage`
 * **Build Agency & Offer-vs-Pick:** `weapons_offered`, `weapons_picked`, `weapons_bought`, `shop_rerolls` (captured in `FightRecorder.choicesJSON()`)
-* **Pacing & Friction:** `biggest_hit_share`, `triggered_damage`, `triggered_damage_share`, `median_find_ms`, `max_drought_ms`, `foe_hp_left`, `foe_hp_pct_left`, `close_call`, `hints_used`, `graces_used`, `died_with_hints`
+* **Pacing & Friction:** `biggest_hit_share`, `triggered_damage`, `triggered_damage_share`, `median_find_ms`, `max_drought_ms`, `foe_hp_left`, `foe_hp_pct_left`, `close_call`, `hints_used`, `graces_used`, `died_with_hints`, `helped_sets` (Sets made on a pointed-out card: a guided step, the companion's stuck help, a hint or an auto-hint)
 * **Enjoyment & Engagement:** `fun_rating` (`'up' | 'down' | null`), `fun_score` (`1 | 0 | null`), `fun_tags` (`string[]`), `replay_opened` (`boolean`)
 
 ### Replaying Exported Fights

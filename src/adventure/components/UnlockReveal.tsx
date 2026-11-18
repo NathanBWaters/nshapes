@@ -86,6 +86,17 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
     setRevealed(false);
   }, [unlocks]);
 
+  // A weapon the player already owns growing a level is good news, not a mystery: it is shown at once.
+  // (After a boss a dozen of these can arrive together; a tap to unwrap each one made the win drag.)
+  const current = unlocks[i];
+  const isLevelUp = current?.kind === 'weapon' && current.level !== undefined;
+  useEffect(() => {
+    if (isLevelUp) {
+      setRevealed(true);
+      detail.value = 1;
+    }
+  }, [i, isLevelUp, detail]);
+
   const flashStyle = useAnimatedStyle(() => ({ opacity: flash.value }));
   const heroStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   const detailStyle = useAnimatedStyle(() => ({ opacity: detail.value, transform: [{ translateY: (1 - detail.value) * 12 }] }));

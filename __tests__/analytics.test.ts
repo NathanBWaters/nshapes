@@ -18,9 +18,9 @@ import { __enableAnalyticsForTests, capture, flush, installId, setAnalyticsEnabl
 import { fightEventProps } from '@/analytics/fightEvent';
 import { battleRecord } from '@/adventure/history';
 import { getLevel } from '@/adventure/data/levels';
-import { createMaxedSave } from '@/adventure/progress';
+import { createMaxedSave, createSaveBefore } from '@/adventure/progress';
 import { FightRecorder, replayFight } from '@/adventure/engine/replay';
-import { createRun, runReducer } from '@/adventure/engine/run';
+import { baseCardReward, createRun, runReducer } from '@/adventure/engine/run';
 
 const queue = () => JSON.parse(storage.getString('analytics_queue') ?? '[]');
 const fetchMock = jest.fn();
@@ -103,5 +103,29 @@ describe('fight_ended event', () => {
     expect(props).toMatchObject({ level_id: '2-6', world: 2, outcome: 'left', seed: 3, recording_format: 1 });
     expect(replayFight(level, props.save, JSON.parse(JSON.stringify(props.recording))).elapsedMs).toBe(s.elapsedMs);
     expect(JSON.stringify(props).length).toBeLessThan(900_000);
+  });
+
+  it('counts the Sets made on a pointed-out card (a guided step, stuck help, a hint)', () => {
+    const level = getLevel('1-2');
+    const save = createSaveBefore('1-2');
+    const rec = new FightRecorder(4);
+    let s = createRun(level, save, { seed: 4 });
+    // (1-2 plays on the nine cards of two traits: any three of one colour are a Set)
+    const play = (hinted: boolean) => {
+      const cards = s.board.filter(c => c.color === 'red').slice(0, 3);
+      const match = { type: 'MATCH' as const, cards, rewards: cards.map(baseCardReward), hinted };
+      rec.record(match, s);
+      s = runReducer(s, match);
+      const replace = { type: 'REPLACE' as const, ids: cards.map(c => c.id) };
+      rec.record(replace, s);
+      s = runReducer(s, replace);
+    };
+    play(false);
+    play(true);
+    play(true);
+    const tape = { recording: rec.toJSON(), save };
+    const props = fightEventProps(level, s, battleRecord(level, s, { at: 0, left: true }), tape);
+    expect(props.sets).toBe(3);
+    expect(props.helped_sets).toBe(2);
   });
 });

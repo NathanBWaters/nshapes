@@ -506,6 +506,31 @@ export const computeLiveGuidance = (
   return null;
 };
 
+// ─── Passing remarks ────────────────────────────────────────────────────────
+
+/**
+ * Things your fighter remarks on as a fight goes by: the foe at half health,
+ * the foe wobbling, the ★★★ goal done, a run of quick Sets, the last heart.
+ * Each is said once per fight (per wave for the foe's health), only when
+ * nothing more useful is being said, and is gone in a moment. They keep the
+ * stage alive and tell the player how the fight is going without a number.
+ *
+ * Returns every remark that is true right now, most important first; the
+ * fight screen says the first one it has not said yet.
+ */
+export const fightRemarks = (run: RunState, challengeMet: boolean): { key: string; text: string }[] => {
+  if (run.status !== 'playing' || run.level.rules.sandbox || run.level.id === MAIN_LEVELS[0].id) return [];
+  const voice = companionVoice(run.fighter);
+  const out: { key: string; text: string }[] = [];
+  if (run.hearts === 1 && (run.maxHearts ?? 0) > 1) out.push({ key: 'last-heart', text: 'One heart left. Careful!' });
+  if (challengeMet && run.level.challenge.kind !== 'enemy') out.push({ key: 'goal', text: `${voice.cheer} Three-star goal: done!` });
+  const share = run.foeMaxHp > 0 ? run.foeHp / run.foeMaxHp : 1;
+  if (run.foeHp > BASE_SET_DAMAGE && share <= 0.25) out.push({ key: `wobble-${run.wave}`, text: `${run.foeName} is wobbling!` });
+  else if (run.foeHp > 0 && share <= 0.5) out.push({ key: `half-${run.wave}`, text: 'Halfway there!' });
+  if (run.combo >= 3) out.push({ key: 'roll', text: 'On a roll!' });
+  return out;
+};
+
 // ─── Map, preview & results lines ───────────────────────────────────────────
 
 export const companionMapGreeting = (

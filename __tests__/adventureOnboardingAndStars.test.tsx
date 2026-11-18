@@ -15,6 +15,7 @@ import {
   companionVoice,
   computeLiveGuidance,
   describeValidSetWhy,
+  fightRemarks,
   evaluateTripleTraits,
   explainInvalidPick,
   predictThirdCard,
@@ -353,6 +354,28 @@ describe('Adventure first minutes: show, then say', () => {
     // Nowhere near: the fighter's usual line
     const far = { ...survived, foeHp: run.foeMaxHp - 3 };
     expect(companionResultsLine(level, far, computeStars(far), false)).toBe(companionVoice('Orange Tabby').win1);
+  });
+
+  it('the fighter remarks on how the fight is going, most important first', () => {
+    const level = getLevel('1-2');
+    const run = createRun(level, createSaveBefore('1-2'), { seed: 5 });
+    const keys = (r: RunState, met = false) => fightRemarks(r, met).map(x => x.key);
+    expect(keys(run)).toEqual([]);
+    expect(fightRemarks({ ...run, foeHp: run.foeMaxHp / 2 }, false)).toEqual([{ key: 'half-0', text: 'Halfway there!' }]);
+    expect(fightRemarks({ ...run, foeHp: 5 }, false)).toEqual([{ key: 'wobble-0', text: `${run.foeName} is wobbling!` }]);
+    // (one plain Set from the end, the "one more Set" line takes over instead)
+    expect(keys({ ...run, foeHp: 3 })).toEqual(['half-0']);
+    expect(keys({ ...run, combo: 3 })).toEqual(['roll']);
+    // The last heart outranks everything; the goal being met comes next
+    expect(keys({ ...run, hearts: 1, foeHp: 5, combo: 4 }, true)).toEqual(['last-heart', 'goal', 'wobble-0', 'roll']);
+    // A second wave gets its own "halfway"
+    expect(keys({ ...run, wave: 1, foeHp: 10 })).toEqual(['half-1']);
+    // The walk-through level and practice have their own voice: no remarks there
+    const first = createRun(getLevel('1-1'), createNewSave(), { seed: 1 });
+    expect(keys({ ...first, foeHp: 6, combo: 3 })).toEqual([]);
+    const dummy = createRun(PRACTICE_LEVELS[0], createSaveBefore('1-5'), { seed: 1 });
+    expect(keys({ ...dummy, combo: 5 })).toEqual([]);
+    for (const r of fightRemarks({ ...run, hearts: 1, foeHp: 5, combo: 4 }, true)) expect(r.text.length).toBeLessThanOrEqual(64);
   });
 
   it('gives every fighter a voice of their own and explains ★, ★★ and ★★★', () => {

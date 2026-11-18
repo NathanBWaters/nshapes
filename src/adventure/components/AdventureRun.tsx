@@ -42,7 +42,7 @@ import { EVOLUTION_RECIPES } from '../data/evolutions';
 import { SURGE_RULES } from '../data/rules';
 import { weaponLevelSuffix } from '../data/armory';
 import { COACH_KEYS } from '../progress';
-import { computeLiveGuidance, explainInvalidPick, shouldShowDamageNumbers, shouldShowPassiveHud } from '../coach';
+import { computeLiveGuidance, explainInvalidPick, fightRemarks, shouldShowDamageNumbers, shouldShowPassiveHud } from '../coach';
 import StageBubble from './StageBubble';
 import { EVOLUTION_RULES } from '../engine/sources';
 import { Anchor, AnchorsProvider, EVENT_FX, EvolutionCutIn, FxStage, GearBelt, fxClock, scriptFor, useAnchors, useFightFx, type Beat } from '../fx';
@@ -454,7 +454,24 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
     () => (liveGuidance && liveGuidance.dimIds.length > 0 ? liveGuidance.dimIds : undefined),
     [liveGuidance]
   );
-  const coachText = eventBannerNote ?? liveGuidance?.message ?? null;
+  // A passing remark from your fighter (coach.ts fightRemarks): each is said once, and only into silence
+  const [remark, setRemark] = useState<string | null>(null);
+  const saidRemarks = useRef(new Set<string>());
+  const remarks = fightRemarks(run, challenge.met);
+  const nextRemark = remarks.find(r => !saidRemarks.current.has(r.key));
+  useEffect(() => {
+    if (!nextRemark) return;
+    saidRemarks.current.add(nextRemark.key);
+    const { text } = nextRemark;
+    setRemark(text);
+    later(() => setRemark(r => (r === text ? null : r)), 2600);
+  }, [nextRemark?.key]); // eslint-disable-line react-hooks/exhaustive-deps
+  // What went wrong with a pick is said at once (it beats a first-time tip about the same moment);
+  // then tips, then guidance, then remarks
+  const explaining = liveGuidance?.kind === 'mistake';
+  const coachText = (explaining ? liveGuidance?.message : eventBannerNote ?? liveGuidance?.message ?? remark) ?? null;
+  const coachKind = explaining ? 'mistake' : eventBannerNote ? 'event' : liveGuidance ? liveGuidance.kind : 'cheer';
+  const coachPills = explaining || !eventBannerNote ? liveGuidance?.pills : undefined;
   // The stage is as tall as the board can spare (see STAGE)
   const boardRows = Math.max(1, Math.ceil(run.board.length / 3));
   // (cards a little squatter than a playing card still read well, and leave the fight room to breathe on a short phone)
@@ -475,17 +492,18 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
     <StageBubble
       testID="run-coach-banner"
       text={coachText}
-      kind={eventBannerNote ? 'event' : liveGuidance?.kind}
-      pills={!eventBannerNote ? liveGuidance?.pills : undefined}
+      kind={coachKind}
+      pills={coachPills}
       tail={roomyStage ? 'down' : 'left'}
       onPress={
         // A lesson stays up; anything else can be tapped away
-        eventBannerNote || (liveGuidance && liveGuidance.kind !== 'lesson' && liveGuidance.kind !== 'rescue')
+        coachKind !== 'lesson' && coachKind !== 'rescue'
           ? () => {
               setCoachDismissed(true);
               setEventBannerNote(null);
               setMistakeNote(null);
               setMistakeCards(null);
+              setRemark(null);
             }
           : undefined
       }

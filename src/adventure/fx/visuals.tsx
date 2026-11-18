@@ -337,15 +337,19 @@ const STICKER_SIZE = 13;
  * and fades. `sticker` gives it a white tag so it reads over the cards.
  * A sour one shakes its head instead of popping.
  */
-export const Stamp: React.FC<{ at: Point; text: string; color: string; tier?: HitTier; delay?: number; sticker?: boolean; sour?: boolean; fromLeft?: boolean; lead?: boolean; maxX: number }> = ({ at, text, color, tier = 0, delay = 0, sticker, sour, fromLeft, lead, maxX }) => {
+export const Stamp: React.FC<{ at: Point; text: string; color: string; tier?: HitTier; delay?: number; sticker?: boolean; sour?: boolean; fromLeft?: boolean; lead?: boolean; maxX: number; testID?: string }> = ({ at, text, color, tier = 0, delay = 0, sticker, sour, fromLeft, lead, maxX, testID }) => {
   const hold = 520 + tier * 200;
   const total = hold + 400;
   const p = useProgress(total, delay);
   const wanted = sticker ? STICKER_SIZE + tier * 3 : lead ? LEAD_STAMP_SIZE[tier] : STAMP_SIZE[tier];
-  // A long word ("MEGA RAINBOW −254") is drawn smaller rather than run off the screen
-  const size = sticker ? wanted : Math.max(14, Math.min(wanted, Math.floor((maxX - 16) / (text.length * 0.62))));
+  // Heavy capitals run wide: about this share of the font size per letter
+  const em = sticker ? 0.62 : 0.74;
+  // A bare number ("−3") is as big as its tier says. A long word ("MEGA RAINBOW −254") is drawn smaller:
+  // it must stay on the screen, and the Set's own callout should not cover more than about two thirds of it.
+  const room = lead ? maxX * 0.66 : maxX - 16;
+  const size = sticker ? wanted : Math.max(14, Math.min(wanted, Math.floor(room / (text.length * em))));
   // keep the whole word on screen (a rough width is enough)
-  const width = Math.min(maxX - 8, text.length * size * 0.62 + (sticker ? 16 : 0));
+  const width = Math.min(maxX - 8, text.length * size * em + (sticker ? 16 : 0));
   // `fromLeft`: the word starts at the point instead of being centred on it (a long word next to a small target)
   const left = Math.max(4, Math.min(maxX - width - 4, fromLeft ? at.x : at.x - width / 2));
   const h = hold / total;
@@ -361,7 +365,7 @@ export const Stamp: React.FC<{ at: Point; text: string; color: string; tier?: Hi
     };
   });
   return (
-    <Animated.View style={[st.abs, { left, top: at.y - size * 0.7, width, alignItems: 'center' }, style]} testID={`floater-tier-${tier}`}>
+    <Animated.View style={[st.abs, { left, top: at.y - size * 0.7, width, alignItems: 'center' }, style]} testID={testID ?? `floater-tier-${tier}`}>
       <View style={sticker ? st.sticker : undefined}>
         <Text
           numberOfLines={1}

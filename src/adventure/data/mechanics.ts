@@ -130,7 +130,6 @@ export const MECHANICS: Record<string, MechanicDef> = {
         { shape: 'squiggle', color: 'green', number: 1, shading: 'solid' },
       ],
     },
-    coachMark: { on: 'hurt', text: 'Ouch! One trait at a time: all the same, or all different.' },
   },
   all_different: {
     id: 'all_different',

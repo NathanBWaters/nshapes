@@ -37,9 +37,22 @@ const burstSize = (r: Rect): number => Math.min(r.w * 1.3, Math.max(r.h * 1.8, 4
 const labelPoint = (to: AnchorName, r: Rect, lane: number, lead: boolean): Point => {
   if (to !== 'foe') return { x: r.x + r.w / 2, y: r.y + r.h + 13 + (lane % 3) * 18 };
   // (a long word is kept on screen by the stamp itself)
-  if (lead) return { x: r.x + r.w * 0.5, y: r.y + r.h * 0.36 };
+  if (lead) return { x: r.x + r.w * 0.5, y: r.y + r.h * 0.4 };
+  // (they start level with the top of the foe, where the stage meets the HP bar, and step down:
+  // the middle of the stage is where the fighter's words are)
   const n = Math.max(0, lane - 1);
-  return { x: r.x - 44 - (n % 2) * 92, y: r.y + 12 + (Math.floor(n / 2) % 3) * 20 };
+  return { x: r.x - 44 - (n % 2) * 92, y: r.y + 2 + (Math.floor(n / 2) % 3) * 20 };
+};
+
+/**
+ * The Set's own callout is a number, sometimes with a word in front of it
+ * ("RAINBOW −9", "MEGA SURGE −260"). The number lands on the foe, big; the
+ * word rides on top of it as a tag, so a long callout never sprawls across
+ * the stage.
+ */
+const leadParts = (label: string): { word: string | null; number: string } => {
+  const m = /^(.+?)\s+(−\S+)$/.exec(label);
+  return m ? { word: m[1], number: m[2] } : { word: null, number: label };
 };
 
 const BeatView: React.FC<{ beat: Beat; anchors: Anchors; size: Size }> = React.memo(({ beat, anchors, size }) => {
@@ -206,8 +219,15 @@ const BeatView: React.FC<{ beat: Beat; anchors: Anchors; size: Size }> = React.m
           <Banner rect={board} text={label} color={color} delay={labelDelay} />
           {places[0] && <Sparkles rect={places[0]} color="#FFDE00" delay={labelDelay + 80} />}
         </>
+      ) : label && beat.lead && end && targetRect ? (
+        <>
+          <Stamp at={labelAt} text={leadParts(label).number} color={labelColor} tier={beat.tier} delay={labelDelay} sour={beat.sour} lead maxX={size.w} />
+          {leadParts(label).word && (
+            <Stamp at={{ x: labelAt.x, y: targetRect.y + 4 }} text={leadParts(label).word!} color={labelColor} tier={beat.tier} delay={labelDelay} sticker maxX={size.w} testID="fx-lead-word" />
+          )}
+        </>
       ) : label ? (
-        <Stamp at={labelAt} text={label} color={labelColor} tier={beat.tier} delay={labelDelay} sticker={sticker} sour={beat.sour} fromLeft={besideFighter} lead={beat.lead && !!end} maxX={size.w} />
+        <Stamp at={labelAt} text={label} color={labelColor} tier={beat.tier} delay={labelDelay} sticker={sticker} sour={beat.sour} fromLeft={besideFighter} maxX={size.w} />
       ) : null}
     </>
   );
