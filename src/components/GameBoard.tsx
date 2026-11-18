@@ -9,6 +9,7 @@ import Animated, {
 import { Card as CardType, PlayerStats, CardReward, AttributeName, Weapon, Shape, Color, BoardConnection } from '@/types';
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import Card from './Card';
+import CardMotion, { CardLeaving } from './CardMotion';
 import RewardReveal from './RewardReveal';
 import { COLORS } from '@/utils/colors';
 import { recordComponentRender } from '@/utils/perfWatchdog';
@@ -82,6 +83,11 @@ interface GameBoardProps {
   slotRef?: (index: number) => (node: View | null) => void;
   /** A slot changed size or position */
   onSlotLayout?: () => void;
+  /**
+   * The parent shows what a Set paid in its own way (Adventure's effects stage), so a matched
+   * slot simply stays empty until its next card is dealt instead of listing the card's rewards.
+   */
+  quietRewards?: boolean;
 }
 
 const GameBoard: React.FC<GameBoardProps> = ({
@@ -115,6 +121,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
   dimmedOpacity = 0.4,
   slotRef,
   onSlotLayout,
+  quietRewards = false,
 }) => {
   recordComponentRender('GameBoard');
   const [selectedCards, setSelectedCards] = useState<CardType[]>([]);
@@ -653,16 +660,27 @@ const GameBoard: React.FC<GameBoardProps> = ({
                   >
                     {/* Show reward instead of card when revealing */}
                     {reward ? (
-                      <RewardReveal reward={reward} />
+                      quietRewards ? (
+                        // The stage throws a copy of this card at the foe; the card itself steps out from under it
+                        <View testID="card-slot-emptied" style={styles.emptiedSlot}>
+                          <CardLeaving>
+                            <Card card={cardWithState} onClick={stableHandleCardClick} disabled isPaused />
+                          </CardLeaving>
+                        </View>
+                      ) : (
+                        <RewardReveal reward={reward} />
+                      )
                     ) : (
-                      <Card
-                        card={cardWithState}
-                        onClick={stableHandleCardClick}
-                        disabled={isMatched || !isPlayerTurn}
-                        onBurnComplete={handleCardBurnComplete}
-                        isPaused={isPaused}
-                        isConnected={isConnected}
-                      />
+                      <CardMotion selected={isSelected} pointedOut={isHint} column={colIndex}>
+                        <Card
+                          card={cardWithState}
+                          onClick={stableHandleCardClick}
+                          disabled={isMatched || !isPlayerTurn}
+                          onBurnComplete={handleCardBurnComplete}
+                          isPaused={isPaused}
+                          isConnected={isConnected}
+                        />
+                      </CardMotion>
                     )}
                   </View>
                 );
@@ -701,6 +719,12 @@ const styles = StyleSheet.create({
     aspectRatio: 0.75,
     maxHeight: '100%',
     position: 'relative',
+  },
+  // Where a matched card was, until the next one is dealt (quietRewards)
+  emptiedSlot: {
+    flex: 1,
+    borderRadius: 12,
+    backgroundColor: 'rgba(56, 56, 56, 0.05)',
   },
   flashOverlay: {
     position: 'absolute',

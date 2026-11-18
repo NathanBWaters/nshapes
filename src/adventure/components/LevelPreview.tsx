@@ -11,7 +11,7 @@ import { FighterAvatar } from '@/components/fighters';
 import { WeaponAvatar } from '@/components/weapons';
 import { COLORS } from '@/utils/colors';
 import type { CharacterName } from '@/types';
-import type { AdventureSave, ArcanaId, LevelDef, LevelHazards } from '../types';
+import type { AdventureSave, ArcanaId, LevelDef, LevelHazards, MechanicDef } from '../types';
 import { getBiome } from '../data/biomes';
 import { foeDisplay, levelFoe } from '../data/foes';
 import { getMechanic } from '../data/mechanics';
@@ -36,8 +36,9 @@ import {
   weaponBuilds,
 } from '../progress';
 import { startingLoadout } from '../loadout';
-import { companionVoice } from '../coach';
+import { companionVoice, shouldShowPassiveHud } from '../coach';
 import CompanionBubble from './CompanionBubble';
+import { DemoView } from './MechanicIntro';
 import { Btn, Heart, INK, PopIn, Skulls, StarRow, TONE } from './ui';
 import { Silhouette, UnlockableAvatar, describeRewardUnlocks } from './rewards';
 
@@ -84,6 +85,8 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
   const charmsFull = charms.length >= slots;
   /** A practice fight: nothing to win or lose, so no goals, rewards or difficulty */
   const practice = !!level.rules.sandbox;
+  // Swapping charms is its own lesson (the level that introduces 'charm'); before it, or with nothing to swap, the picker stays away
+  const charmsTaught = level.introduces === 'charm' || save.seenMechanics.includes('charm') || save.armory.length > slots || practice;
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
@@ -120,25 +123,20 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
           </View>
 
           <ScrollView contentContainerStyle={st.body} bounces={false}>
-            {level.id === '1-1' && best === 0 ? (
-              <CompanionBubble
-                testID="preview-coach"
-                character={fighter.name}
-                mood="victory"
-                badge="Magic Rule"
-                text={`${companionVoice(fighter.name).hello} Pick 3 cards where EVERY trait (Shape & Color) is all the same OR all different — never 2 twins + 1 oddball! Tap Fight! and I’ll show you!`}
-              />
-            ) : level.id !== '1-1' ? (
-              <CompanionBubble
-                testID="preview-mech-bubble"
-                character={fighter.name}
-                mood="curious"
-                badge={isNew ? 'New! Tap for tips 📖' : 'Tap for tips 📖'}
-                title={mech.title}
-                text={`${companionVoice(fighter.name).hello} ${mech.tagline}`}
-                onPress={() => onShowMechanic(level.introduces)}
-              />
-            ) : null}
+            {level.id === '1-1' ? (
+              best === 0 ? (
+                <CompanionBubble
+                  testID="preview-coach"
+                  character={fighter.name}
+                  mood="victory"
+                  text={`${companionVoice(fighter.name).hello} ${foe.name} has a star shard. I’ll show you how to win it back!`}
+                />
+              ) : null
+            ) : practice ? null : (
+              // The lesson: the one new thing this level brings, with its picture. Tap for the full page.
+              // (A practice level says what it is in its own box, below.)
+              <LessonCard mech={mech} isNew={isNew} onMore={() => onShowMechanic(level.introduces)} />
+            )}
 
             <View style={st.rules}>
               {practice ? (
@@ -260,7 +258,7 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                     </ScrollView>
                   </>
                 )}
-                <View style={st.passiveBox} testID="preview-passives">
+                {shouldShowPassiveHud(level, save) && <View style={st.passiveBox} testID="preview-passives">
                   {fighter.passives.map(id => {
                     const p = getPassive(id);
                     return (
@@ -270,11 +268,27 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                       </View>
                     );
                   })}
-                </View>
+                </View>}
               </>
             )}
 
-            {gearOn && save.armory.length > 0 && (
+            {/* Until charms are taught, the weapons simply come along: nothing to manage yet */}
+            {gearOn && save.armory.length > 0 && !charmsTaught && (
+              <View style={st.bringing} testID="preview-bringing">
+                <Text style={st.bringingLabel}>WITH YOU</Text>
+                {charms.map(id => {
+                  const w = getArmoryWeapon(id, weaponBuilds(save));
+                  return w ? (
+                    <View key={id} style={st.bringingItem}>
+                      <WeaponAvatar weapon={w} size={22} />
+                      <Text style={st.bringingName} numberOfLines={1}>{w.name}</Text>
+                    </View>
+                  ) : null;
+                })}
+              </View>
+            )}
+
+            {gearOn && save.armory.length > 0 && charmsTaught && (
               <>
                 <Text style={st.section}>
                   CHARMS <Text style={st.sectionHint}>{charms.length}/{slots} equipped · tap to equip or remove</Text>
@@ -445,6 +459,25 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
   );
 };
 
+/**
+ * The one thing this level teaches. New: a card with its picture (this IS the
+ * lesson; the fight starts straight from the sheet). Seen before: one line.
+ */
+const LessonCard: React.FC<{ mech: MechanicDef; isNew: boolean; onMore: () => void }> = ({ mech, isNew, onMore }) => (
+  <TouchableOpacity testID="preview-lesson" onPress={onMore} activeOpacity={0.9} style={[st.lesson, isNew && st.lessonNew]} accessibilityRole="button" accessibilityLabel={`${mech.title}: ${mech.tagline} Tap to read more`}>
+    <View style={st.lessonHead}>
+      <View style={[st.lessonIcon, isNew && { backgroundColor: COLORS.actionYellow }]}><Icon name={mech.icon} size={20} color={INK} /></View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        {isNew && <Text style={st.lessonEyebrow}>NEW</Text>}
+        <Text style={st.lessonTitle}>{mech.title}</Text>
+      </View>
+      <Text style={st.lessonMore}>More ›</Text>
+    </View>
+    <Text style={st.lessonText}>{mech.tagline}</Text>
+    {isNew && mech.demo && <DemoView demo={mech.demo} light compact />}
+  </TouchableOpacity>
+);
+
 /** Traps the level itself places on the board. */
 const Hazards: React.FC<{ hazards: LevelHazards }> = ({ hazards }) => (
   <View style={{ gap: 6 }} testID="preview-hazards">
@@ -501,6 +534,18 @@ const st = StyleSheet.create({
   mech: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 10, borderWidth: 2, borderColor: INK, backgroundColor: TONE.selected },
   mechTitle: { fontSize: 16, fontWeight: '900', color: INK, marginTop: 2 },
   mechTag: { fontSize: 13, color: INK },
+  lesson: { gap: 8, padding: 10, borderRadius: 12, borderWidth: 2, borderColor: TONE.spentEdge, backgroundColor: COLORS.paperBeige },
+  lessonNew: { borderColor: INK, borderBottomWidth: 4, backgroundColor: '#FFFBEB' },
+  lessonHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  lessonIcon: { width: 36, height: 36, borderRadius: 9, borderWidth: 2, borderColor: INK, backgroundColor: COLORS.canvasWhite, alignItems: 'center', justifyContent: 'center' },
+  lessonEyebrow: { fontSize: 10, fontWeight: '900', letterSpacing: 2, color: '#9A5B00' },
+  lessonTitle: { flexShrink: 1, fontSize: 17, fontWeight: '900', color: INK },
+  lessonMore: { fontSize: 12, fontWeight: '800', color: INK, opacity: 0.6 },
+  lessonText: { flexShrink: 1, fontSize: 14, lineHeight: 19, fontWeight: '700', color: INK },
+  bringing: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
+  bringingLabel: { fontWeight: '900', letterSpacing: 2, fontSize: 11, color: INK, opacity: 0.7 },
+  bringingItem: { flexDirection: 'row', alignItems: 'center', gap: 4, minWidth: 0, maxWidth: '100%', backgroundColor: COLORS.paperBeige, borderRadius: 999, borderWidth: 1.5, borderColor: INK, paddingLeft: 4, paddingRight: 9, paddingVertical: 2 },
+  bringingName: { flexShrink: 1, fontSize: 12, fontWeight: '800', color: INK },
   rules: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   rule: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: COLORS.paperBeige, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6, borderWidth: 1.5, borderColor: INK },
   ruleText: { fontWeight: '800', fontSize: 13, color: INK },

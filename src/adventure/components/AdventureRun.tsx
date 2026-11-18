@@ -22,7 +22,7 @@ import { useEnemyConductor } from '@/hooks/useEnemyConductor';
 import { useFighterConductor } from '@/hooks/useFighterConductor';
 import { COLORS } from '@/utils/colors';
 import { recordComponentRender, registerInterval } from '@/utils/perfWatchdog';
-import type { Card, CardReward, Weapon } from '@/types';
+import type { Card, CardReward, CharacterName, Weapon } from '@/types';
 import type { WeaponEffectResult } from '@/utils/weaponEffects';
 import { band, music, sfx } from '@/audio';
 import { moodOf, playSounds, soundsFor } from '@/audio/fightAudio';
@@ -34,6 +34,7 @@ import { challengeProgress } from '../engine/challenges';
 import { GearChips, gearModifiers, hasGearChips } from './GearChips';
 import { MECHANICS } from '../data/mechanics';
 import { getBiome } from '../data/biomes';
+import { FIGHTERS } from '../data/fighters';
 import { foeDisplay } from '../data/foes';
 import { comboWindowFor, getPassive, DEFAULT_COMBO_WINDOW_MS, PASSIVE_TUNING } from '../data/passives';
 import { getArcana } from '../data/arcana';
@@ -42,7 +43,7 @@ import { SURGE_RULES } from '../data/rules';
 import { weaponLevelSuffix } from '../data/armory';
 import { COACH_KEYS } from '../progress';
 import { computeLiveGuidance, explainInvalidPick, shouldShowDamageNumbers, shouldShowPassiveHud } from '../coach';
-import CompanionBubble from './CompanionBubble';
+import StageBubble from './StageBubble';
 import { EVOLUTION_RULES } from '../engine/sources';
 import { Anchor, AnchorsProvider, EVENT_FX, EvolutionCutIn, FxStage, GearBelt, fxClock, scriptFor, useAnchors, useFightFx, type Beat } from '../fx';
 import { Btn, CoinPill, DARK, Eyebrow, Heart, INK, PopIn, TONE } from './ui';
@@ -52,7 +53,15 @@ import PowerMeter from './PowerMeter';
 import PowerExplainer from './PowerExplainer';
 
 const TICK_MS = 250;
-const REPLACE_DELAY_MS = 950;
+/** A Set's cards are thrown at the foe, then the next ones are dealt: long enough to see the throw, short enough to keep moving */
+const REPLACE_DELAY_MS = 560;
+
+/**
+ * The battle stage (fighter on the left, foe on the right) takes whatever
+ * height the board does not need: tall on a nine-card board, where the fight
+ * can be the star of the screen, compact once the board fills up.
+ */
+const STAGE = { min: 66, max: 184, chromePx: 132, roomy: 132, speechPx: 56 } as const;
 
 interface Props {
   level: LevelDef;
@@ -82,13 +91,15 @@ interface Tip {
   anchor?: 'top' | 'bottom';
   /** e.g. "Tip 2 of 3" */
   label?: string;
+  /** The tip is about this fighter's own passives: shown only while playing them */
+  fighter?: CharacterName;
 }
 
 /** First-time tips for each run event (several mechanics may wait on the same event). */
 const COACH_BY_EVENT = new Map<RunEventType, Tip[]>();
 for (const m of Object.values(MECHANICS)) {
   if (!m.coachMark) continue;
-  const tip: Tip = { id: COACH_KEYS.event(m.id), title: m.title, text: m.coachMark.text, icon: m.icon };
+  const tip: Tip = { id: COACH_KEYS.event(m.id), title: m.title, text: m.coachMark.text, icon: m.icon, fighter: FIGHTERS.find(f => f.signature === m.id)?.name };
   COACH_BY_EVENT.set(m.coachMark.on, [...(COACH_BY_EVENT.get(m.coachMark.on) ?? []), tip]);
 }
 
@@ -129,7 +140,6 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   const [evolutionHint, setEvolutionHint] = useState(false);
   const [boardSelectedCount, setBoardSelectedCount] = useState(0);
   const [boardSelectedCards, setBoardSelectedCards] = useState<Card[]>([]);
-  const [boardIdle, setBoardIdle] = useState(false);
   const [mistakeNote, setMistakeNote] = useState<string | null>(null);
   const [mistakeCards, setMistakeCards] = useState<Card[] | null>(null);
   const [coachDismissed, setCoachDismissed] = useState(false);
@@ -296,7 +306,14 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
     const fresh = run.events.filter(e => e.id > lastEventId.current);
     if (fresh.length === 0) return;
     lastEventId.current = fresh[fresh.length - 1].id;
-    fx.play(scriptFor(fresh, { weapons: run.weapons, gridMs: band.gridMs, reduced: !effects }));
+    // The cards of the Set itself are still in their slots: hand them to the stage so it can throw them at the foe
+    const thrownIds = new Set(run.replacing);
+    const staged = fresh.map(e =>
+      (e.type === 'hit' && !e.text || e.type === 'rainbow' || e.type === 'surge_hit') && e.slots && !e.cards
+        ? { ...e, cards: e.slots.map(i => (run.board[i] && thrownIds.has(run.board[i].id) && (run.board[i].health ?? 1) <= 1 && !run.board[i].stay ? run.board[i] : null)) }
+        : e
+    );
+    fx.play(scriptFor(staged, { weapons: run.weapons, gridMs: band.gridMs, reduced: !effects }));
     for (const e of fresh) {
       if (e.type === 'evolution_start' && !seenCoach.current.has(COACH_KEYS.evolution)) {
         seenCoach.current.add(COACH_KEYS.evolution);
@@ -316,6 +333,8 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
         }
       }
       for (const cm of COACH_BY_EVENT.get(e.type) ?? []) {
+        // A fighter's own tip is for that fighter (everyone chains Combos; only Sly Fox is paid for them)
+        if (cm.fighter && cm.fighter !== run.fighter) continue;
         if (seenCoach.current.has(cm.id)) continue;
         seenCoach.current.add(cm.id);
         onCoachMarkSeen(cm.id);
@@ -414,10 +433,10 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
         selectedCards: boardSelectedCards,
         mistakeNote,
         mistakeCards,
-        idleNudge: boardIdle,
         seenIntro: coachDismissed,
+        noAssist: ui.disableAutoHint === true,
       }),
-    [run, boardSelectedCount, boardSelectedCards, mistakeNote, mistakeCards, boardIdle, coachDismissed]
+    [run, boardSelectedCount, boardSelectedCards, mistakeNote, mistakeCards, coachDismissed, ui.disableAutoHint]
   );
   const activeGlowIds = useMemo(() => {
     const merged = [...(keenEyeIds ?? []), ...(liveGuidance?.glowIds ?? [])];
@@ -428,8 +447,41 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
     [liveGuidance]
   );
   const coachText = eventBannerNote ?? liveGuidance?.message ?? null;
+  // The stage is as tall as the board can spare (see STAGE)
+  const boardRows = Math.max(1, Math.ceil(run.board.length / 3));
+  // (cards a little squatter than a playing card still read well, and leave the fight room to breathe on a short phone)
+  const idealCardH = stage.w > 0 ? (Math.min(stage.w, 560) - 36) / 3 / 0.82 : 140;
+  const stageH = stage.h > 0
+    ? Math.round(Math.max(STAGE.min, Math.min(STAGE.max, stage.h - insets.top - STAGE.chromePx - boardRows * (idealCardH + 6))))
+    : 92;
+  // Tall enough to give the companion's words their own row above the two fighters
+  const roomyStage = stageH >= STAGE.roomy;
+  const floorH = roomyStage ? stageH - STAGE.speechPx : stageH;
+  const stageW = stage.w > 0 ? stage.w : 375;
+  // Side by side on a compact stage, the two of them leave the middle for the words
+  const foeSize = Math.round(Math.min(roomyStage ? 132 : stageW * 0.2, floorH - (level.isBoss ? 4 : 12)));
+  const fighterSize = Math.round(Math.max(36, Math.min(roomyStage ? 104 : stageW * 0.15, floorH - 34)));
+  const coachBubble = coachText && !ended ? (
+    <StageBubble
+      testID="run-coach-banner"
+      text={coachText}
+      kind={eventBannerNote ? 'event' : liveGuidance?.kind}
+      pills={!eventBannerNote ? liveGuidance?.pills : undefined}
+      tail={roomyStage ? 'down' : 'left'}
+      onPress={
+        // A lesson stays up; anything else can be tapped away
+        eventBannerNote || (liveGuidance && liveGuidance.kind !== 'lesson' && liveGuidance.kind !== 'rescue')
+          ? () => {
+              setCoachDismissed(true);
+              setEventBannerNote(null);
+              setMistakeNote(null);
+              setMistakeCards(null);
+            }
+          : undefined
+      }
+    />
+  ) : null;
   const hasHudRow =
-    run.hearts !== null ||
     run.movesLeft !== null ||
     practice ||
     secondsLeft !== null ||
@@ -442,7 +494,6 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
     setSelectedCount(c);
   }, [setSelectedCount]);
   const handleBoardIdle = useCallback((idle: boolean) => {
-    setBoardIdle(idle);
     setIsBoardIdle(idle);
   }, [setIsBoardIdle]);
   const foeAvatarEnemy = useMemo(
@@ -459,30 +510,15 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
       <View ref={anchors.rootRef} collapsable={false} pointerEvents="none" style={StyleSheet.absoluteFill} />
       {/* ── HUD ─────────────────────────────────────────── */}
       <View style={st.hud} onLayout={e => setHudHeight(e.nativeEvent.layout.height)}>
+        {/* Who you are fighting, and how much of it is left */}
         <View style={st.hudTop}>
           <TouchableOpacity onPress={() => setPaused(true)} style={st.pauseBtn} accessibilityLabel="Pause">
             <Text style={st.pauseText}>II</Text>
           </TouchableOpacity>
-
-          <Anchor name="foe">
-          <Animated.View style={[st.foePortrait, level.isBoss && { backgroundColor: COLORS.actionYellow }, foeStyle]}>
-            <EnemyAvatar
-              testID="adventure-run-enemy"
-              enemy={foeAvatarEnemy}
-              size={48}
-              hp={run.foeHp}
-              maxHp={run.foeMaxHp}
-              mood={enemyMood}
-              reaction={enemyConductor.reaction}
-              animate={appActive}
-              interactive
-            />
-          </Animated.View>
-          </Anchor>
-
-          <View style={{ flex: 1, gap: 3 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
               <Text style={st.foeName} numberOfLines={1}>{run.foeName}</Text>
+              {level.isBoss && <Text style={st.bossTag}>BOSS</Text>}
               {level.foes.length > 1 && <Text style={st.wave}>WAVE {run.wave + 1}/{level.foes.length}</Text>}
             </View>
             <HpBar hp={shownHp} max={run.foeMaxHp} endless={practice} />
@@ -491,41 +527,71 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
                 <View style={[st.idleFill, { width: `${Math.min(100, (ui.showInactivityBar.current / ui.showInactivityBar.max) * 100)}%` }]} />
               </View>
             )}
-            {(showDamageHud || run.power > 0 || (run.combo > 1 && comboLive) || practice) && (
-              <View style={st.counters}>
-                {showDamageHud && <Text testID="run-total-damage" style={st.counter} accessibilityLabel={`${run.totalDamage} total damage`}>⚔ {run.totalDamage}</Text>}
-                {run.power > 0 && <PowerMeter points={run.power} onPress={() => { sfx('click'); setPowerInfo(true); }} />}
-                {run.combo > 1 && comboLive && (
-                  <Anchor name="combo"><Text testID="run-combo" style={[st.counter, st.counterHot]}>COMBO ×{run.combo}</Text></Anchor>
-                )}
-                {showDamageHud && run.biggestHit > 0 && <Text testID="run-biggest-hit" style={st.counterDim}>best {run.biggestHit}</Text>}
-                {/* Practice: what a Set is worth with this build */}
-                {practice && run.matches > 0 && <Text testID="run-per-set" style={st.counterDim} accessibilityLabel={`${Math.round(run.totalDamage / run.matches)} damage per Set on average`}>avg {Math.round(run.totalDamage / run.matches)}</Text>}
-              </View>
-            )}
           </View>
-
-          {/* Player's living fighter */}
-          <Anchor name="fighter">
-          <FighterAvatar
-            testID="adventure-run-fighter"
-            character={run.fighter}
-            size={46}
-            health={fighterHealth}
-            maxHealth={fighterMaxHealth}
-            mood={fighterMood}
-            reaction={conductor.reaction}
-            streak={conductor.streak}
-            animate={appActive}
-            framed
-            interactive
-          />
-          </Anchor>
         </View>
 
-        {hasHudRow && (
+        {/* The battle stage: your fighter on the left, the foe on the right, and what your fighter says */}
+        <View testID="run-stage" style={[st.stage, { minHeight: stageH, backgroundColor: biome.colors.sky }]}>
+          <View pointerEvents="none" style={[st.stageGround, { backgroundColor: biome.colors.ground }]} />
+          {/* A tall stage has room for the words above the two of them (the room is kept, so the board never moves) */}
+          {roomyStage && <View style={st.stageSpeech}>{coachBubble}</View>}
+          <View style={st.stageFloor}>
+            <View style={st.stageSide}>
+              <Anchor name="fighter">
+                <FighterAvatar
+                  testID="adventure-run-fighter"
+                  character={run.fighter}
+                  size={fighterSize}
+                  health={fighterHealth}
+                  maxHealth={fighterMaxHealth}
+                  mood={fighterMood}
+                  reaction={conductor.reaction}
+                  streak={conductor.streak}
+                  animate={appActive}
+                  interactive
+                />
+              </Anchor>
+              {run.hearts !== null && run.maxHearts !== null && (
+                <Anchor name="hearts"><Hearts hearts={run.hearts} max={run.maxHearts} /></Anchor>
+              )}
+            </View>
+
+            <View style={st.stageMiddle}>
+              {!roomyStage && coachBubble}
+              {(showDamageHud || (run.combo > 1 && comboLive) || practice) && (
+                <View style={st.counters}>
+                  {showDamageHud && <Text testID="run-total-damage" style={st.counter} accessibilityLabel={`${run.totalDamage} total damage`}>⚔ {run.totalDamage}</Text>}
+                  {showDamageHud && run.power > 0 && <PowerMeter points={run.power} onPress={() => { sfx('click'); setPowerInfo(true); }} />}
+                  {run.combo > 1 && comboLive && (
+                    <Anchor name="combo"><Text testID="run-combo" style={[st.counter, st.counterHot]}>COMBO ×{run.combo}</Text></Anchor>
+                  )}
+                  {showDamageHud && run.biggestHit > 0 && <Text testID="run-biggest-hit" style={st.counterDim}>best {run.biggestHit}</Text>}
+                  {/* Practice: what a Set is worth with this build */}
+                  {practice && run.matches > 0 && <Text testID="run-per-set" style={st.counterDim} accessibilityLabel={`${Math.round(run.totalDamage / run.matches)} damage per Set on average`}>avg {Math.round(run.totalDamage / run.matches)}</Text>}
+                </View>
+              )}
+            </View>
+
+            <Anchor name="foe">
+              <Animated.View style={foeStyle}>
+                <EnemyAvatar
+                  testID="adventure-run-enemy"
+                  enemy={foeAvatarEnemy}
+                  size={foeSize}
+                  hp={run.foeHp}
+                  maxHp={run.foeMaxHp}
+                  mood={enemyMood}
+                  reaction={enemyConductor.reaction}
+                  animate={appActive}
+                  interactive
+                />
+              </Animated.View>
+            </Anchor>
+          </View>
+        </View>
+
+        {(hasHudRow || run.weapons.length > 0) && (
         <View style={st.hudRow}>
-          <Anchor name="hearts"><Hearts hearts={run.hearts} max={run.maxHearts} /></Anchor>
           {/* On an untimed level the moves are the clock */}
           {run.movesLeft !== null && (secondsLeft === null ? <Anchor name="clock">{movesChip}</Anchor> : movesChip)}
           {practice && (
@@ -558,6 +624,8 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
               </View>
             </Anchor>
           )}
+          {/* The weapons in play: each jumps when it fires; tap one to read it */}
+          <GearBelt weapons={run.weapons} growth={run.growth} width={stage.w} onInspect={setInspect} />
           <View style={{ flex: 1 }} />
           {run.features.has('coins') && <Anchor name="coins"><CoinPill coins={run.coins} /></Anchor>}
           {run.features.has('hints') && (
@@ -584,9 +652,6 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
             </View>
           </Anchor>
         )}
-
-        {/* The weapons in play: each jumps when it fires; tap one to read it */}
-        <GearBelt weapons={run.weapons} growth={run.growth} width={stage.w} onInspect={setInspect} />
 
         {/* Live Arcana, Escalating Purity, board effects & Evolution status strip */}
         {(run.arcana.length > 0 || purityLive || evolutionsOn || run.simplified || run.doubleNext > 0 || run.nextSetMultiplier > 1 || hasGearChips(gearMods)) && (
@@ -679,27 +744,6 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
           </View>
         ) : null}
 
-        {coachText && !ended && (
-          <CompanionBubble
-            testID="run-coach-banner"
-            character={run.fighter}
-            text={coachText}
-            mood={liveGuidance?.mood ?? 'curious'}
-            tone={mistakeNote && boardSelectedCount === 0 ? 'warn' : 'warm'}
-            pills={!eventBannerNote ? liveGuidance?.pills : undefined}
-            avatarSize={32}
-            onPress={
-              level.id === '1-1'
-                ? undefined
-                : () => {
-                    setCoachDismissed(true);
-                    setEventBannerNote(null);
-                    setMistakeNote(null);
-                    setMistakeCards(null);
-                  }
-            }
-          />
-        )}
       </View>
 
       {run.surge && <SurgeBar surge={run.surge} active={playing && appActive} />}
@@ -740,6 +784,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
           onBoardIdleChange={handleBoardIdle}
           slotRef={slotRef}
           onSlotLayout={anchors.measure}
+          quietRewards={effects}
         />
       </View>
 
@@ -1033,27 +1078,20 @@ const SurgeGlow: React.FC<{ active: boolean }> = ({ active }) => {
   return <Animated.View testID="surge-glow" pointerEvents="none" style={[st.glow, { backgroundColor: TONE.surge }, style]} />;
 };
 
-const Hearts: React.FC<{ hearts: number | null; max: number | null }> = ({ hearts, max }) => {
-  if (hearts === null || max === null) {
+/** Your hearts, under your fighter on the stage. */
+const Hearts: React.FC<{ hearts: number; max: number }> = ({ hearts, max }) => {
+  if (max > 5) {
     return (
-      <View style={st.stat}>
-        <Heart />
-        <Text style={st.statText}>∞</Text>
-      </View>
-    );
-  }
-  if (max > 6) {
-    return (
-      <View style={st.stat}>
-        <Heart />
-        <Text style={st.statText}>{hearts}/{max}</Text>
+      <View style={st.heartsPill} accessibilityLabel={`${hearts} of ${max} hearts`}>
+        <Heart size={13} />
+        <Text style={st.heartsText}>{hearts}/{max}</Text>
       </View>
     );
   }
   return (
-    <View style={[st.stat, { gap: 1 }]} accessibilityLabel={`${hearts} of ${max} hearts`}>
+    <View style={st.heartsPill} accessibilityLabel={`${hearts} of ${max} hearts`}>
       {Array.from({ length: max }).map((_, i) => (
-        <Heart key={i} size={17} filled={i < hearts} />
+        <Heart key={i} size={13} filled={i < hearts} />
       ))}
     </View>
   );
@@ -1148,10 +1186,20 @@ const Intermission: React.FC<{ run: RunState; dispatch: (a: RunAction) => void; 
 const st = StyleSheet.create({
   root: { flex: 1 },
   hud: { backgroundColor: COLORS.canvasWhite, borderBottomWidth: 2, borderBottomColor: INK, paddingHorizontal: 10, paddingTop: 8, paddingBottom: 6, gap: 6 },
-  hudTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  hudTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  bossTag: { fontWeight: '900', fontSize: 10, letterSpacing: 1.5, color: INK, backgroundColor: COLORS.actionYellow, borderWidth: 1.5, borderColor: INK, borderRadius: 4, paddingHorizontal: 5, overflow: 'hidden' },
+  // The battle stage: a strip of the world the fight happens in
+  stage: { borderRadius: 14, borderWidth: 2, borderColor: INK, paddingHorizontal: 8, paddingTop: 6, paddingBottom: 4, overflow: 'hidden' },
+  stageGround: { position: 'absolute', left: -30, right: -30, bottom: -46, height: 74, borderRadius: 200, opacity: 0.75 },
+  // The words sit at the bottom of their row, just above the fighter's head
+  stageSpeech: { minHeight: STAGE.speechPx, justifyContent: 'flex-end', paddingBottom: 8 },
+  stageFloor: { flex: 1, flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
+  stageSide: { alignItems: 'center', gap: 2 },
+  stageMiddle: { flex: 1, minWidth: 0, alignSelf: 'center', alignItems: 'center', gap: 4, paddingVertical: 2 },
   pauseBtn: { width: 34, height: 34, borderRadius: 6, borderWidth: 2, borderColor: INK, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.paperBeige },
   pauseText: { fontWeight: '900', color: INK, letterSpacing: -1 },
-  foePortrait: { width: 56, height: 56, borderRadius: 28, borderWidth: 3, borderBottomWidth: 5, borderColor: INK, backgroundColor: COLORS.canvasWhite, alignItems: 'center', justifyContent: 'center' },
+  heartsPill: { flexDirection: 'row', alignItems: 'center', gap: 1, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 999, borderWidth: 2, borderColor: INK, backgroundColor: COLORS.canvasWhite },
+  heartsText: { fontWeight: '900', color: INK, fontSize: 11, fontVariant: ['tabular-nums'] },
   foeName: { fontWeight: '900', fontSize: 15, color: INK, flexShrink: 1 },
   wave: { fontWeight: '900', fontSize: 11, color: INK, letterSpacing: 1 },
   hpTrack: { height: 20, borderRadius: 4, borderWidth: 2, borderColor: INK, backgroundColor: '#F1E9E0', overflow: 'hidden', justifyContent: 'center' },
@@ -1163,7 +1211,7 @@ const st = StyleSheet.create({
   doneText: { fontWeight: '900', fontSize: 12, letterSpacing: 1, color: INK },
   idleTrack: { height: 5, borderRadius: 3, backgroundColor: '#EEE', overflow: 'hidden' },
   idleFill: { height: '100%', backgroundColor: COLORS.impactOrange },
-  counters: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  counters: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, paddingLeft: 8 },
   counter: { fontSize: 11, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
   counterHot: { color: COLORS.impactOrange },
   counterDim: { fontSize: 10, fontWeight: '700', color: TONE.spent, fontVariant: ['tabular-nums'] },

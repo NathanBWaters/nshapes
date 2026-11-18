@@ -450,15 +450,15 @@ describe('Adventure Mode full-game E2E', () => {
     const world1 = MAIN_LEVELS.filter(l => l.biome === 'meadow');
     const first = world1[0];
 
-    // ── Frictionless World Map launch & guided 1-1 live board ────────────
+    // ── Cold open: the story, then straight onto the guided 1-1 board ─────
+    // (no map of padlocks, no preview sheet and no lesson card before the first card is tapped)
+    expect(screen.getByTestId('story-intro')).toBeTruthy();
     expect(screen.queryByTestId('lesson-modal')).toBeNull();
-    expect(screen.getByTestId('map-guide-banner')).toBeTruthy();
-    expect(screen.queryByTestId('map-dock-guide')).toBeNull();
-    expect(screen.queryByTestId('map-dock-camp')).toBeNull();
-
-    fireEvent.press(screen.getByTestId(`map-node-${first.id}`));
-    expect(screen.getByTestId('preview-coach')).toBeTruthy();
-    fireEvent.press(screen.getByTestId('preview-play'));
+    expect(screen.queryByTestId('map-guide-banner')).toBeNull();
+    fireEvent.press(screen.getByTestId('story-next'));
+    fireEvent.press(screen.getByTestId('story-next'));
+    fireEvent.press(screen.getByTestId('story-next'));
+    expect(screen.queryByTestId('preview-play')).toBeNull();
 
     // Zero pre-fight modals on 1-1: jumps straight onto the guided board
     expect(screen.queryByTestId('lesson-modal')).toBeNull();
@@ -514,10 +514,19 @@ describe('Adventure Mode full-game E2E', () => {
     for (const level of world1.slice(1)) {
       fireEvent.press(screen.getByTestId(`map-node-${level.id}`));
       save = loadAdventureSave();
-      // Preview: the fighter's passives and the charm slots, filled with what was won so far
+      // Preview: the fighter's passives (a skill node is owned, so they are shown) and what was won so far.
+      // Until the level that teaches charms, the weapons simply come along; from then on, the slots.
       expect(screen.getByTestId('preview-passives')).toBeTruthy();
-      expect(screen.getByTestId('preview-charm-slots')).toBeTruthy();
-      expect(screen.getByTestId(`preview-slot-${charmSlots(save) - 1}`)).toBeTruthy();
+      const charmsTaught = level.introduces === 'charm' || save.seenMechanics.includes('charm') || save.armory.length > charmSlots(save);
+      if (charmsTaught) {
+        expect(screen.getByTestId('preview-charm-slots')).toBeTruthy();
+        expect(screen.getByTestId(`preview-slot-${charmSlots(save) - 1}`)).toBeTruthy();
+      } else {
+        expect(screen.getByTestId('preview-bringing')).toBeTruthy();
+        expect(screen.queryByTestId('preview-charm-slots')).toBeNull();
+      }
+      // A level's new mechanic is taught on the sheet itself
+      expect(screen.getByTestId('preview-lesson')).toBeTruthy();
       if (level.rules.hazards) expect(screen.getByTestId('preview-hazards')).toBeTruthy();
       const armed = save.unlockedEvolutions.length > 0 && EVOLUTION_RECIPES.some(
         r => save.unlockedEvolutions.includes(r.id) && r.families.every(f => equippedCharms(save).some(id => f.some(p => id === p || id.startsWith(`${p}-`))))

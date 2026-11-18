@@ -12,9 +12,10 @@ import { createMaxedSave, createNewSave, createSaveBefore } from '@/adventure/pr
  * - ?save=fresh  — brand new save
  * - ?save=before:1-4 — ★★★ on every main level before 1-4, so 1-4 is next (any main level id works)
  * - ?autoplay=true — the board plays itself (for watching flows end to end)
+ * - ?intro=false — a fresh save opens on the map instead of the story and the first fight
  */
 export default function DevAdventure() {
-  const params = useLocalSearchParams<{ save?: string; autoplay?: string }>();
+  const params = useLocalSearchParams<{ save?: string; autoplay?: string; intro?: string }>();
   const initialSave =
     params.save === 'maxed' ? createMaxedSave()
     : params.save === 'fresh' ? createNewSave()
@@ -25,6 +26,7 @@ export default function DevAdventure() {
       <AdventureMode
         initialSave={initialSave}
         autoPlayer={params.autoplay === 'true'}
+        coldOpen={params.intro !== 'false'}
         onExit={() => router.replace('/')}
       />
     </View>

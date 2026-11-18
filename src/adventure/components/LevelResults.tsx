@@ -12,6 +12,8 @@ import type { ResultApplication } from '../progress';
 import { damagePerMinute } from '../history';
 import { formatPower, powerMultiplier } from '../data/weaponPower';
 import { getBiome } from '../data/biomes';
+import { levelFoe } from '../data/foes';
+import { getMechanic } from '../data/mechanics';
 import { BOUNTIES } from '../data/bounties';
 import { mainIndexOf, getLevel } from '../data/levels';
 import { shouldShowDamageNumbers, companionResultsLine } from '../coach';
@@ -117,6 +119,10 @@ const LevelResults: React.FC<Props> = ({
         .sort((a, b) => b.progress(result.save) / b.target - a.progress(result.save) / a.target)
         .slice(0, 2)
     : [];
+  const showNumbers = shouldShowDamageNumbers(level, result.save);
+  const canGoOn = won && !!nextLevel && nextUnlocked;
+  const nextFoe = canGoOn && nextLevel ? levelFoe(nextLevel) : null;
+  const nextIsNew = !!nextLevel && !result.save.seenMechanics.includes(nextLevel.introduces);
   const hasHearts = run.hearts !== null && run.maxHearts !== null && run.maxHearts > 0;
   const resultFighterHealth = won
     ? (hasHearts ? Math.max(1, run.hearts!) : 3)
@@ -124,7 +130,7 @@ const LevelResults: React.FC<Props> = ({
   const resultFighterMaxHealth = hasHearts ? run.maxHearts! : 3;
 
   return (
-    <View style={[st.root, { backgroundColor: biome.colors.sky, paddingTop: insets.top + 12, paddingBottom: insets.bottom + 12 }]}>
+    <View style={[st.root, { backgroundColor: biome.colors.sky, paddingTop: insets.top + 8 }]}>
       <ScrollView contentContainerStyle={st.scroll}>
         <PopIn style={st.card}>
           <Text style={st.levelId}>{practice ? 'PRACTICE' : level.id} · {level.name}</Text>
@@ -155,6 +161,12 @@ const LevelResults: React.FC<Props> = ({
           </View>
           <Text style={[st.title, practice && { fontSize: 28 }, { color: won ? INK : COLORS.impactRed }]}>{title}</Text>
           {!practice && <StarRow stars={stars} size={52} animateFrom={0} />}
+          {/* The stars are the shards of the fallen star this foe was holding (data/story.ts) */}
+          {!practice && (
+            <Text style={st.shards} testID="results-shards">
+              {stars >= 3 ? 'All 3 star shards won back!' : stars > 0 ? `${stars} of 3 star shards won back` : 'No shards this time'}
+            </Text>
+          )}
           <CompanionBubble
             testID="results-companion-bubble"
             character={run.fighter}
@@ -183,7 +195,7 @@ const LevelResults: React.FC<Props> = ({
             </View>
           )}
 
-          {shouldShowDamageNumbers(level, result.save) && (
+          {showNumbers && (
             <View style={st.statsRow}>
               <Stat testID="results-total-damage" icon="lorc/crossed-swords" label="Total damage" value={`${run.totalDamage}`} />
               <Stat testID="results-biggest-hit" icon="lorc/bright-explosion" label="Biggest hit" value={`${run.biggestHit}`} hot={run.biggestHit >= 25} />
@@ -197,10 +209,10 @@ const LevelResults: React.FC<Props> = ({
               />
             </View>
           )}
-          <View style={st.statsRow}>
-            <Stat testID="results-sets" icon="lorc/checked-shield" label="Matches" value={`${run.matches}`} />
-            <Stat testID="results-mistakes" icon="lorc/cross-mark" label="Mistakes" value={`${run.mistakes}`} />
-            {run.power > 0 && (
+          {(showNumbers || practice || run.evolutionsTriggered > 0 || run.armedRecipes.length > 0) && <View style={st.statsRow}>
+            {(showNumbers || practice) && <Stat testID="results-sets" icon="lorc/checked-shield" label="Matches" value={`${run.matches}`} />}
+            {(showNumbers || practice) && <Stat testID="results-mistakes" icon="lorc/cross-mark" label="Mistakes" value={`${run.mistakes}`} />}
+            {run.power > 0 && (showNumbers || practice) && (
               <Stat
                 testID="results-power"
                 icon="lorc/power-lightning"
@@ -217,9 +229,9 @@ const LevelResults: React.FC<Props> = ({
             {(run.evolutionsTriggered > 0 || run.armedRecipes.length > 0) && (
               <Stat testID="results-evolutions" icon="lorc/crystal-shine" label="Evolutions" value={`${run.evolutionsTriggered}`} />
             )}
-          </View>
+          </View>}
 
-          {powerInfoOpen && run.power > 0 && (
+          {powerInfoOpen && run.power > 0 && (showNumbers || practice) && (
             <PowerExplainer
               points={run.power}
               weapons={run.weapons}
@@ -322,18 +334,35 @@ const LevelResults: React.FC<Props> = ({
             <RoundFunPrompt rating={funRating} tags={funTags} onChange={onRateFun} testIDPrefix="results-fun" />
           )}
 
-          <View style={st.buttons}>
-            {won && nextLevel && nextUnlocked ? (
-              <Btn testID="results-next" label={`Next: ${nextLevel.id}`} icon="lorc/crossed-swords" onPress={onNext} />
-            ) : null}
-            <Btn testID="results-retry" label={practice ? 'Practice again' : stars >= 3 ? 'Play again' : won ? 'Retry for more ★' : 'Try again'} variant={won && nextLevel && nextUnlocked ? 'secondary' : 'primary'} onPress={onRetry} />
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <Btn testID="results-map" label="Map" variant="secondary" icon="lorc/field" onPress={onMap} style={{ flex: 1 }} />
-              <Btn testID="results-camp" label="Camp" variant="secondary" icon="lorc/campfire" onPress={onCamp} style={{ flex: 1 }} />
-            </View>
-          </View>
         </PopIn>
       </ScrollView>
+
+      {/* What next: always in reach, never below the fold */}
+      <View style={st.footer} testID="results-actions">
+        {canGoOn && nextLevel && nextFoe ? (
+          <TouchableOpacity testID="results-next" onPress={onNext} activeOpacity={0.85} style={st.nextBtn} accessibilityRole="button" accessibilityLabel={`Next: ${nextLevel.id} ${nextLevel.name}, against ${nextFoe.name}`}>
+            <View style={st.nextFoe}>
+              <EnemyAvatar enemy={nextFoe} size={40} mood="menacing" lightweight />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={st.nextLabel} numberOfLines={1}>NEXT: {nextLevel.name}</Text>
+              <Text style={st.nextSub} numberOfLines={1}>
+                {nextIsNew ? `New: ${getMechanic(nextLevel.introduces).title}` : `vs ${nextFoe.name}`}
+              </Text>
+            </View>
+            <Icon name="lorc/crossed-swords" size={20} color={INK} />
+          </TouchableOpacity>
+        ) : (
+          <Btn testID="results-retry" label={practice ? 'Practice again' : won ? 'Play again' : 'Try again'} onPress={onRetry} />
+        )}
+        <View style={st.footerRow}>
+          {canGoOn && (
+            <Btn testID="results-retry" small label={stars >= 3 ? 'Replay' : 'Retry'} variant="secondary" onPress={onRetry} style={{ flex: 1 }} />
+          )}
+          <Btn testID="results-map" small label="Map" variant="secondary" icon="lorc/field" onPress={onMap} style={{ flex: 1 }} />
+          <Btn testID="results-camp" small label="Camp" variant="secondary" icon="lorc/campfire" onPress={onCamp} style={{ flex: 1 }} />
+        </View>
+      </View>
       {replayOpen && <FightReplay run={run} visible onClose={() => setReplayOpen(false)} />}
     </View>
   );
@@ -364,7 +393,7 @@ const Stat: React.FC<{ icon: React.ComponentProps<typeof Icon>['name']; label: s
 
 const st = StyleSheet.create({
   root: { flex: 1 },
-  scroll: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', padding: 16 },
+  scroll: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', padding: 14 },
   card: { width: '100%', maxWidth: 440, backgroundColor: COLORS.canvasWhite, borderRadius: 16, borderWidth: 3, borderBottomWidth: 8, borderColor: INK, padding: 20, alignItems: 'center', gap: 12 },
   levelId: { fontWeight: '900', letterSpacing: 1.5, fontSize: 12, color: INK, opacity: 0.7 },
   title: { fontWeight: '900', fontSize: 34, letterSpacing: 2 },
@@ -408,7 +437,13 @@ const st = StyleSheet.create({
   pathFoundTitle: { color: COLORS.actionYellow, fontWeight: '900', letterSpacing: 2, fontSize: 11 },
   pathFoundText: { color: COLORS.canvasWhite, fontWeight: '700', fontSize: 13 },
   tip: { fontSize: 13, color: INK, fontStyle: 'italic', textAlign: 'center', opacity: 0.85 },
-  buttons: { alignSelf: 'stretch', gap: 8, marginTop: 4 },
+  shards: { fontSize: 13, fontWeight: '800', color: INK, opacity: 0.75, marginTop: -4 },
+  footer: { backgroundColor: COLORS.canvasWhite, borderTopWidth: 2, borderTopColor: INK, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 12, gap: 8, alignItems: 'center' },
+  footerRow: { flexDirection: 'row', gap: 8, alignSelf: 'stretch', maxWidth: 440, width: '100%' },
+  nextBtn: { alignSelf: 'stretch', maxWidth: 440, width: '100%', flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.actionYellow, borderWidth: 2, borderBottomWidth: 5, borderColor: INK, borderRadius: 12, paddingVertical: 7, paddingHorizontal: 10 },
+  nextFoe: { width: 46, height: 46, borderRadius: 23, borderWidth: 2, borderColor: INK, backgroundColor: COLORS.canvasWhite, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  nextLabel: { flexShrink: 1, fontWeight: '900', fontSize: 16, letterSpacing: 0.5, color: INK, textTransform: 'uppercase' },
+  nextSub: { flexShrink: 1, fontSize: 12, fontWeight: '700', color: INK },
 });
 
 export default LevelResults;

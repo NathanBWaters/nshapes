@@ -205,13 +205,15 @@ describe('Camp', () => {
 
 describe('Level preview loadout', () => {
   it('shows charm slots, the fighter passives, armed evolutions and Arcana slots', () => {
-    const level = MAIN_LEVELS.find(l => !l.rules.noGear)!;
+    // A level from after charms (1-4) and passives (1-5) have been introduced: the sheet shows both
+    const level = MAIN_LEVELS.find(l => l.id === '1-5')!;
     const recipe = EVOLUTION_RECIPES[0];
     const armory = recipe.families.map(f => f[0]);
     let save: AdventureSave = {
       ...createNewSave(),
       coinsUnlocked: true,
       stars: { [MAIN_LEVELS[0].id]: 3 },
+      seenMechanics: ['charm'],
       armory,
       unlockedEvolutions: [recipe.id],
       unlockedArcana: [ARCANA[0].id],

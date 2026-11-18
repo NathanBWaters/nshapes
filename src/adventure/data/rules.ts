@@ -73,3 +73,24 @@ export const TRICK_RULES = {
   potatoMinMs: 4000,
   potatoHearts: 1,
 } as const;
+
+/**
+ * Stuck help. A new player can stare at a board for a minute without finding a
+ * Set, and that minute is when they leave. So in the first two worlds the
+ * companion points a Set out when the board has been quiet for a while: one
+ * card, then a second, then (in the first world) the whole Set.
+ *
+ * Seconds without a Set before each card lights up. It costs nothing and is not
+ * a hint (the bulb, auto-hints and Keen Eye are separate and arrive later). It
+ * fades out by World 3, where the player has hints and a build of their own.
+ */
+export const ASSIST_RULES = {
+  /** The very first level: quick, because nothing is at stake and the player is still learning what a Set is */
+  firstLevel: [5, 9, 13],
+  /** World 1 on two traits (nine cards) */
+  twoTraits: [8, 14, 20],
+  /** World 1 on three traits */
+  threeTraits: [12, 20, 28],
+  /** World 2: a nudge, never the whole Set */
+  secondWorld: [20, 34],
+} as const;

@@ -46,37 +46,42 @@ const toCard = (c: DemoCard, i: number): CardType => ({
   fireStartTime: c.modifiers?.onFire ? Date.now() + 10_000_000 : undefined,
 });
 
-const CardRow: React.FC<{ cards: DemoCard[] }> = ({ cards }) => (
+const CardRow: React.FC<{ cards: DemoCard[]; compact?: boolean }> = ({ cards, compact }) => (
   <View style={st.cardsRow}>
     {cards.map((c, i) => (
-      <View key={i} style={st.cardSlot}>
+      <View key={i} style={[st.cardSlot, compact && st.cardSlotCompact]}>
         <Card card={toCard(c, i)} onClick={() => {}} disabled isPaused />
       </View>
     ))}
   </View>
 );
 
-const DemoView: React.FC<{ demo: MechanicDemo }> = ({ demo }) => {
+/**
+ * A mechanic's picture: three example cards with a verdict, or a row of icons.
+ * `light` draws it for a pale background (the level preview); the default is
+ * for the dark lesson card.
+ */
+export const DemoView: React.FC<{ demo: MechanicDemo; light?: boolean; compact?: boolean }> = ({ demo, light, compact }) => {
   if (demo.type === 'icons') {
     return (
       <View style={st.iconsRow}>
         {demo.items.map((it, i) => (
-          <View key={i} style={st.iconItem}>
-            <View style={st.iconCircle}>
-              <Icon name={it.icon} size={30} color={it.color ?? INK} />
+          <View key={i} style={[st.iconItem, compact && { width: 76 }]}>
+            <View style={[st.iconCircle, compact && st.iconCircleCompact, light && st.iconCircleLight]}>
+              <Icon name={it.icon} size={compact ? 24 : 30} color={it.color ?? INK} />
             </View>
-            <Text style={st.iconLabel}>{it.label}</Text>
+            <Text style={[st.iconLabel, light && { color: INK }]}>{it.label}</Text>
           </View>
         ))}
       </View>
     );
   }
   return (
-    <View style={{ alignItems: 'center', gap: 10 }}>
-      <CardRow cards={demo.cards} />
-      <View style={[st.verdict, { borderColor: demo.valid ? COLORS.logicTeal : COLORS.impactRed }]}>
+    <View style={{ alignItems: 'center', gap: compact ? 8 : 10 }}>
+      <CardRow cards={demo.cards} compact={compact} />
+      <View style={[st.verdict, light && st.verdictLight, { borderColor: demo.valid ? COLORS.logicTeal : COLORS.impactRed }]}>
         <Text style={[st.verdictMark, { color: demo.valid ? COLORS.logicTeal : COLORS.impactRed }]}>{demo.valid ? '✓' : '✗'}</Text>
-        <Text style={st.verdictText}>{demo.caption}</Text>
+        <Text style={[st.verdictText, light && { color: INK }]}>{demo.caption}</Text>
       </View>
     </View>
   );
@@ -194,7 +199,7 @@ const Lesson: React.FC<LessonProps> = ({ steps, speaker = 'Orange Tabby', onDone
                     <FighterAvatar character={speaker} size={44} mood={answer === null ? 'curious' : answer === correctAnswer ? 'victory' : 'anticipation'} framed />
                     <View style={{ flex: 1 }}>
                       <Text style={st.title}>Is this a Set?</Text>
-                      <Text style={st.tagline}>Check EVERY trait — no 2 twins + 1 oddball!</Text>
+                      <Text style={st.tagline}>Each trait: all the same, or all different?</Text>
                     </View>
                   </View>
                   <View style={st.stage}><CardRow cards={step.question.cards} /></View>
@@ -210,7 +215,7 @@ const Lesson: React.FC<LessonProps> = ({ steps, speaker = 'Orange Tabby', onDone
                   ) : (
                     <View style={[st.feedback, { borderColor: answer === correctAnswer ? COLORS.logicTeal : COLORS.impactOrange }]}>
                       <Text style={[st.feedbackTitle, { color: answer === correctAnswer ? COLORS.logicTeal : COLORS.impactOrange }]}>
-                        {answer === correctAnswer ? `${companionVoice(speaker).cheer} You nailed it!` : `Ooh, sneaky one!`} {correctAnswer ? 'Every trait passes!' : 'Magic Rule: 2 + 1 breaks it!'}
+                        {answer === correctAnswer ? `${companionVoice(speaker).cheer} You got it.` : 'A sneaky one!'} {correctAnswer ? 'Every trait passes.' : 'Two alike and one odd breaks it.'}
                       </Text>
                       <Text style={st.body}>{step.question.explain}</Text>
                     </View>
@@ -280,12 +285,16 @@ const st = StyleSheet.create({
   body: { color: TEXT, fontSize: 16, lineHeight: 23 },
   cardsRow: { flexDirection: 'row', gap: 8, justifyContent: 'center' },
   cardSlot: { width: 80, height: 107 },
+  cardSlotCompact: { width: 62, height: 83 },
   verdict: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1.5, backgroundColor: 'rgba(0,0,0,0.25)', maxWidth: 380 },
+  verdictLight: { backgroundColor: COLORS.canvasWhite },
   verdictMark: { fontSize: 16, fontWeight: '900' },
   verdictText: { fontSize: 13, fontWeight: '700', color: TEXT, flexShrink: 1 },
   iconsRow: { flexDirection: 'row', justifyContent: 'center', gap: 8, flexWrap: 'wrap' },
   iconItem: { alignItems: 'center', gap: 6, width: 84 },
   iconCircle: { width: 58, height: 58, borderRadius: 29, backgroundColor: COLORS.paperBeige, alignItems: 'center', justifyContent: 'center' },
+  iconCircleCompact: { width: 48, height: 48, borderRadius: 24 },
+  iconCircleLight: { backgroundColor: COLORS.canvasWhite, borderWidth: 2, borderColor: INK },
   iconLabel: { fontSize: 12, fontWeight: '800', color: TEXT, textAlign: 'center' },
   answers: { flexDirection: 'row', gap: 10 },
   answer: { flex: 1, paddingVertical: 16, borderRadius: 10, borderWidth: 2, alignItems: 'center', backgroundColor: STAGE },

@@ -1,27 +1,55 @@
 /**
- * Story beats. PLACEHOLDER TEXT — swap these for the real story later.
- * Each entry is a lesson page, so it gets the same card treatment as a
- * mechanic lesson (title, a few short paragraphs, optional demo).
+ * The story, in as few words as it can be told.
+ *
+ * A star fell on the Summit and shattered. Every critter that pocketed a shard
+ * has gone a bit wild. Each Set you make knocks a shard loose; the stars you
+ * earn on a level ARE those shards. That is why foes drop stars, why stars
+ * power your fighter, and why the last world is called Starfall Summit.
+ *
+ * `welcome` plays once, the first time Adventure is opened, and leads straight
+ * into the first fight (components/StoryIntro.tsx). Keep every line short: it
+ * is read on a phone, by someone who came to play.
  */
-import type { LessonPage } from '../types';
 
-export const STORY: Record<'welcome', LessonPage[]> = {
+/** What is on stage while a beat's words are up */
+export type StoryScene =
+  /** A star falls on the mountain and shatters */
+  | 'starfall'
+  /** Critters, each holding a shard */
+  | 'critters'
+  /** Your fighter, ready to go */
+  | 'hero';
+
+export interface StoryBeat {
+  scene: StoryScene;
+  /** Big words (a handful) */
+  title: string;
+  /** One or two short sentences */
+  body: string;
+  /** The hero beat: said by your fighter */
+  spoken?: boolean;
+}
+
+export const STORY: Record<'welcome', StoryBeat[]> = {
   welcome: [
     {
-      title: 'The meadow needs you',
-      body: [
-        'Something has stirred up the creatures of the meadow, and they are picking fights with everyone.',
-        'You fight back with your wits. Spot a Set of three cards and you land a hit.',
-        'Every star you win grows your fighter\'s skill tree. Recruit new fighters, collect weapons, and climb all the way to Starfall Summit.',
-      ],
-      demo: {
-        type: 'icons',
-        items: [
-          { icon: 'lorc/crossed-swords', label: 'Beat foes' },
-          { icon: 'lorc/crown-coin', label: 'Earn coins' },
-          { icon: 'lorc/tree-branch', label: 'Grow your fighter' },
-        ],
-      },
+      scene: 'starfall',
+      title: 'A star fell on the Summit.',
+      body: 'It shattered, and its shards rained down on the valley below.',
+    },
+    {
+      scene: 'critters',
+      title: 'The critters found them first.',
+      body: 'One shard each… and every one of them has gone a little wild.',
+    },
+    {
+      scene: 'hero',
+      title: 'Let’s win them back!',
+      body: 'Match 3 cards to make a Set. Every Set knocks a shard loose.',
+      spoken: true,
     },
   ],
 };
+
+/** The level ids whose foes stand in the 'critters' scene */
+export const STORY_CRITTER_LEVELS = ['1-2', '1-1', '1-3'] as const;

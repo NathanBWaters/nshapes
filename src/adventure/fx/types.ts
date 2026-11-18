@@ -66,6 +66,8 @@ export interface FxRow {
   /** Text that pops where it lands */
   label?: (e: RunEvent) => string | null;
   labelColor?: string;
+  /** A moment of the fight itself (a knockout): its words are a banner across the middle of the board */
+  banner?: boolean;
   /** The event's amount is damage dealt to the foe right then: it comes off the HP bar as the beat lands */
   damage?: boolean;
   /**

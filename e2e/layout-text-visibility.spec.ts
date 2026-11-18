@@ -18,12 +18,14 @@ async function assertAllTextVisible(page: Page, contextLabel: string): Promise<v
     }
 
     const criticalSelector = [
+      '[data-testid="story-intro"]',
       '[data-testid="map-guide-banner"]',
       '[data-testid="preview-coach"]',
-      '[data-testid="preview-mech-bubble"]',
+      '[data-testid="preview-lesson"]',
       '[data-testid="run-coach-banner"]',
       '[data-testid="results-companion-bubble"]',
       '[data-testid="results-star-breakdown"]',
+      '[data-testid="results-actions"]',
       '[data-testid="lesson-modal"]',
       '[data-testid="unlock-modal"]',
     ].join(', ');
@@ -133,13 +135,29 @@ test.describe('Mobile Text Visibility & Zero-Clipping Guardrails', () => {
   test.describe.configure({ mode: 'serial' });
 
   test('First-minute Adventure onboarding screens fit 100% of text on 375px and 320px viewports', async ({ page }) => {
-    // Audit both 375px and 320px onboarding screens cleanly in <15s
+    test.setTimeout(60_000);
     for (const vp of [
       { width: 375, height: 667 },
       { width: 320, height: 568 },
     ]) {
       await page.setViewportSize(vp);
+
+      // A brand-new player: the story (three beats), then straight onto the guided 1-1 board
       await page.goto('/dev/adventure?save=fresh');
+      await expect(page.getByTestId('story-intro')).toBeVisible({ timeout: 20000 });
+      for (let beat = 1; beat <= 3; beat++) {
+        // (the words of a beat rise in a moment after its scene starts)
+        await page.waitForTimeout(beat === 1 ? 1500 : 700);
+        await assertAllTextVisible(page, `Story beat ${beat} (${vp.width}x${vp.height})`);
+        await page.getByTestId('story-next').click();
+      }
+      await expect(page.getByTestId('run-coach-banner')).toBeVisible({ timeout: 10000 });
+      await expect(page.getByTestId('run-stage')).toBeVisible();
+      await page.waitForTimeout(400);
+      await assertAllTextVisible(page, `1-1 Guided Board (${vp.width}x${vp.height})`);
+
+      // The same save from the map: its greeting, and the 1-1 preview sheet
+      await page.goto('/dev/adventure?save=fresh&intro=false');
       await expect(page.getByTestId('map-guide-banner')).toBeVisible({ timeout: 20000 });
       await expect(page.getByTestId('map-play-next')).toBeVisible();
       await page.waitForTimeout(350);
@@ -151,12 +169,6 @@ test.describe('Mobile Text Visibility & Zero-Clipping Guardrails', () => {
       await expect(page.getByTestId('preview-play')).toBeVisible();
       await page.waitForTimeout(350);
       await assertAllTextVisible(page, `1-1 Preview (${vp.width}x${vp.height})`);
-
-      await page.getByTestId('preview-play').click();
-      await expect(page.getByTestId('run-coach-banner')).toBeVisible({ timeout: 10000 });
-      await expect(page.getByTestId('coach-trait-pills')).toBeVisible({ timeout: 10000 });
-      await page.waitForTimeout(350);
-      await assertAllTextVisible(page, `1-1 Guided Board (${vp.width}x${vp.height})`);
     }
   });
 
@@ -164,10 +176,9 @@ test.describe('Mobile Text Visibility & Zero-Clipping Guardrails', () => {
     test.setTimeout(60_000);
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/dev/adventure?save=fresh&autoplay=true');
-    await expect(page.getByTestId('map-play-next')).toBeVisible({ timeout: 20000 });
-    await page.getByTestId('map-play-next').click();
-    await expect(page.getByTestId('preview-play')).toBeVisible({ timeout: 10000 });
-    await page.getByTestId('preview-play').click();
+    // Skip the story: the first fight starts at once and plays itself
+    await expect(page.getByTestId('story-skip')).toBeVisible({ timeout: 20000 });
+    await page.getByTestId('story-skip').click();
 
     await expect(page.getByTestId('unlock-reveal')).toBeVisible({ timeout: 45000 });
     await page.waitForTimeout(350);
@@ -177,10 +188,14 @@ test.describe('Mobile Text Visibility & Zero-Clipping Guardrails', () => {
     await expect(page.getByTestId('unlock-primary')).toBeVisible({ timeout: 10000 });
     await page.waitForTimeout(400);
     await assertAllTextVisible(page, 'UnlockReveal Revealed Card (375x667)');
+    // ...and so is the button that moves on from a reward
+    await expect(page.getByTestId('unlock-primary')).toBeInViewport();
 
     await page.getByTestId('unlock-primary').click();
     await expect(page.getByTestId('results-companion-bubble')).toBeVisible({ timeout: 10000 });
     await expect(page.getByTestId('results-star-breakdown')).toBeVisible();
+    // What to do next is pinned under the results: on screen without scrolling
+    await expect(page.getByTestId('results-next')).toBeInViewport();
     await page.waitForTimeout(400);
     await assertAllTextVisible(page, '1-1 LevelResults & Star Breakdown (375x667)');
   });
@@ -205,18 +220,26 @@ test.describe('Mobile Text Visibility & Zero-Clipping Guardrails', () => {
     await page.waitForTimeout(200);
     await assertAllTextVisible(page, 'Options Reset Confirmation (375x667)');
 
-    // 1-2 Preview CompanionBubble + brief MechanicIntro
+    // 1-2 Preview: the level's lesson card (the new mechanic and its picture), and the full page behind it
     await page.goto('/dev/adventure?save=before:1-2');
     await expect(page.getByTestId('map-play-next')).toBeVisible({ timeout: 20000 });
     await page.getByTestId('map-play-next').click();
-    await expect(page.getByTestId('preview-mech-bubble')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId('preview-lesson')).toBeVisible({ timeout: 10000 });
     await page.waitForTimeout(350);
     await assertAllTextVisible(page, '1-2 Preview (375x667)');
 
-    await page.getByTestId('preview-play').click();
+    await page.getByTestId('preview-lesson').click();
     await expect(page.getByTestId('lesson-modal')).toBeVisible({ timeout: 10000 });
     await page.waitForTimeout(350);
     await assertAllTextVisible(page, '1-2 MechanicIntro (375x667)');
+    await page.getByTestId('mechanic-intro-ok').click();
+
+    // Fight! starts the fight straight from the sheet: the 1-2 board with its battle stage
+    await page.getByTestId('preview-play').click();
+    await expect(page.getByTestId('run-stage')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId('run-coach-banner')).toBeVisible();
+    await page.waitForTimeout(400);
+    await assertAllTextVisible(page, '1-2 Fight (375x667)');
 
     // Maxed Map, Field Guide & Camp screens
     await page.goto('/dev/adventure?save=maxed');

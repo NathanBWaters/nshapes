@@ -50,6 +50,8 @@ export interface MechanicDef {
   demo?: MechanicDemo;
   /** Turning this feature on when the mechanic is introduced */
   enables?: FeatureFlag;
+  /** One short line the companion says as the first fight with this mechanic opens (under about 60 characters) */
+  coach?: string;
   /** In-run tip shown the first time it happens (keyed by run event). The player must accept it. */
   coachMark?: { on: RunEventType; text: string };
   /** Tips shown one by one when the first fight with this mechanic starts. Each must be accepted. */

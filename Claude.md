@@ -36,7 +36,9 @@ NShapes combines the classic SET card matching game with roguelike progression m
 
 * A tappable map of 5 star-gated worlds (8 / 9 / 10 / 11 / 5 main levels) with **secret side paths** (`branchOf`, which can chain): a side path is not on the map at all until it opens (★★ on its parent, or its own `opensAt`), then it is revealed after the result and draws itself onto the map once. Side paths are elites, **fighter trials** that teach a newly recruited fighter, or practice. Each node opens a preview: foe, difficulty, star goals, rewards, fighter, charm and Arcana loadout, armed evolutions and hazards.
 * **The Back Field (1-4D):** the surprise behind 1-4. Any clear of 1-4 opens a Training Dummy with endless health, no clock and no move limit (`rules.sandbox`): hearts refill, everything learned so far is on, nothing is banked, and the player leaves with Done. It lives in `PRACTICE_LEVELS`, outside the campaign's `LEVELS`.
-* **One new mechanic per level**, and the level that introduces a mechanic rewards *using* it: its ★★★ challenge asks for it (e.g. "use 3 hints") and its ★★ reward makes that easier. Teaching uses lesson cards, "Is this a Set?" checks and in-fight tips that pause until accepted. 1-1 is bare: 2 traits, no gear, can't be lost.
+* **One new mechanic per level**, and the level that introduces a mechanic rewards *using* it: its ★★★ challenge asks for it (e.g. "use 3 hints") and its ★★ reward makes that easier. 1-1 is bare: 2 traits, no gear, can't be lost.
+* **Teaching: show, then say** (`src/adventure/coach.ts`). The board lights the cards; the fighter says one short line (about 60 characters) from the battle stage. 1-1 is a walk-through: 3 of one colour, 3 of one shape, 3 with nothing in common, then "your turn". A wrong pick is explained with the cards that were picked ("Almost! Color was 2 red + 1 green.") and per-trait ✓/✗ pills. Each mechanic's opening line is its `coach` field in `data/mechanics.ts`.
+* **Stuck help** (`data/rules.ts` `ASSIST_RULES`, `coach.ts` `assistStepsFor`): in Worlds 1–2, when no Set has been made for a while, the companion lights a Set one card at a time (1-1: 5/9/13 s; World 1: 8/14/20 s on two traits, 12/20/28 s on three; World 2: two cards at 20/34 s). It prefers a Set that moves the level's ★★★ challenge, costs nothing, is off from World 3, and a foe that disables auto-hints disables it.
 * **Shading Surge (Worlds 3–5):** boards play on 3 traits with every card solid; every 45s of clock, shading switches on for 15s and every Set's base damage is ×5 (3 → 15; "next Set ×2" etc. stack on top). Background is not used in Adventure. Numbers in `SURGE_RULES` (`src/adventure/data/rules.ts`).
 * **Stars:** ★ survive · ★★ knock out every foe · ★★★ knock out + challenge (1-1 scores accuracy). Stars are also the skill-tree currency (spent stars never re-lock worlds).
 * **Rewards:** every star pays coins; some also unlock a weapon, fighter, Arcana, evolution recipe or campaign system, hidden as a silhouette until earned.
@@ -125,6 +127,8 @@ Everything that happens in an Adventure fight is SHOWN: one move plays as a casc
 
 * **Every run event has a look** (`src/adventure/fx/catalog.ts` `EVENT_FX`, a full Record): when you add a `RunEventType`, give it a row (and its sound row in `EVENT_CUE`). `__tests__/fightFx.test.tsx` fails an empty row.
 * **Events say where they happened:** if an event touches cards, pass `{ slots, cards }` to `emit` (`engine/fight.ts`) so the effect plays on those cards.
+* **A Set's own cards are thrown at the foe** (`fx/visuals.tsx` `Ghost` `'throw'`): `AdventureRun` hands the stage the cards of the Set's lead hit, the board keeps the scored card under the flying copy for a moment (`CardLeaving`), and the hit lands as a burst with the big number. The board shows no per-card reward text in Adventure (`GameBoard` `quietRewards`).
+* **The fighter's words live on the battle stage** (`components/StageBubble.tsx`), which keeps their room, so the board never moves when the words change. Cards are dealt in, lift when picked and hop while pointed out (`src/components/CardMotion.tsx`); never use a border for any of that.
 * **The same effect looks the same whoever caused it.** Do not draw a second laser; add to the catalog row or the shared pieces in `fx/visuals.tsx`.
 * **Never animate fight feedback inside `AdventureRun.tsx`.** HUD parts are `<Anchor name="…">`; the stage aims at them and makes them jump.
 * **A row is `damage` only if its amount was dealt right then.** Bonuses inside the Set's hit carry no damage of their own (or the HP bar drops twice).
@@ -292,11 +296,11 @@ npm run validate:icons   # Verifies all registered icons have SVG files
 
 **Adventure Mode:**
 
+0. **First time only: the cold open.** Main Menu → Adventure → a three-beat **story** (`components/StoryIntro.tsx`, text in `data/story.ts`: a star fell on the Summit, its shards made the critters wild, the stars you earn are those shards) → straight into the 1-1 fight. No map, no preview and no lesson card before the first card is tapped.
 1. Main Menu → Adventure → **Map** (frontier node bobs; your fighter stands beside it).
-2. Tap a foe → **Preview** (foe + taunt, skulls, NEW mechanic, rules, ★/★★/★★★ goals + rewards, fighter pick).
-3. If the level teaches something new → **Intro card** (demo cards/icons).
-4. **Fight**: HUD with foe HP bar, hearts, moves or clock, coins, hint, XP, the weapon belt, live ★★★ challenge. Every move plays as a cascade of effects while the clock waits; an evolution opens with a tap-to-continue cut-in. Waves → intermission (shop once taught).
-5. **Results**: stars pop in, the battle's damage per minute is scored, coins bank, first-time star rewards unlock weapons/fighters/regions, and a secret side path the result opened is revealed last → Next / Retry / Map / Camp.
+2. Tap a foe → **Preview** (foe + taunt, skulls, rules, ★/★★/★★★ goals + rewards, fighter pick). **The preview is the lesson:** a level that teaches something new shows it there as a NEW card with its picture (`preview-lesson`), and Fight starts the fight. Only a lesson with extra pages (the first evolution) or about evolutions still gets its own card first (`lessons.ts` `taughtOnPreview`). Gear management appears when it is taught: weapons simply "come along" until 1-4 teaches charms, passives appear from 1-5.
+3. **Fight**: the **battle stage** (your fighter and their hearts on the left, the foe on the right, what your fighter says in a speech bubble; it is as tall as the board can spare), the foe's HP bar, moves or clock, coins, hint, XP, the weapon belt, live ★★★ challenge. A Set's cards are thrown at the foe and land as a burst with the damage number; every move plays as a cascade of effects while the clock waits; a knockout gets a banner; an evolution opens with a tap-to-continue cut-in. Waves → intermission (shop once taught).
+4. **Results**: stars pop in ("N of 3 star shards won back"), coins bank, first-time star rewards unlock weapons/fighters/regions, and a secret side path the result opened is revealed last. What to do next is pinned under the screen: a Next button with the next foe on it, then Retry / Map / Camp.
 
 **Free Play Mode:**
 
@@ -328,7 +332,7 @@ This means Field Stone weapons can increase the starting board size beyond the m
 * Add graces
 * Add the rarest weapon of a category
 
-**`/dev/adventure`** - Adventure map (`?save=maxed` everything unlocked + 50k coins, `?save=fresh`, `?save=before:1-4` ★★★ on everything before that level, `?autoplay=true`)
+**`/dev/adventure`** - Adventure map (`?save=maxed` everything unlocked + 50k coins, `?save=fresh` (opens on the story and the first fight; add `&intro=false` to open on the map), `?save=before:1-4` ★★★ on everything before that level, `?autoplay=true`)
 
 **`/dev/fx`** - Effects studio: a button for every fight event, a sample cascade and the evolution cut-in, on a stand-in fight screen; real time or 4×/10× slower; effects on/off
 

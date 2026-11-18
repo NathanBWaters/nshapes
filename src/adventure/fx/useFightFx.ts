@@ -9,10 +9,10 @@ import type { Anchors } from './anchors';
 import { fxMs } from './clock';
 import { scriptDamage } from './script';
 import type { Beat, Script, Segment } from './types';
-import type { GhostBreak } from './visuals';
+import { GHOST_BREAK_MS, type GhostBreak } from './visuals';
 
-/** How long a ghost card takes to break */
-const GHOST_MS = 260;
+/** A ghost stays mounted this much longer than it takes to break */
+const GHOST_SLACK_MS = 20;
 /** An ambient effect of one kind plays at most this often */
 const AMBIENT_GAP_MS = 900;
 /** How long the small banner stays up when effects are off */
@@ -26,6 +26,8 @@ export interface LiveGhost {
   broken: boolean;
   how: GhostBreak;
   color: string;
+  /** Position among the ghosts of its beat */
+  order: number;
 }
 
 export interface FightFxOptions {
@@ -52,6 +54,10 @@ export interface FightFx {
   /** Effects off: recipe ids of the evolution banner on screen */
   banner: { recipes: string[]; key: number } | null;
 }
+
+/** How the cards a beat removes leave: the Set's own are thrown at the foe, a beam vaporises, the rest shatter. */
+export const ghostBreakOf = (beat: Pick<Beat, 'lead' | 'row'>): GhostBreak =>
+  beat.lead ? 'throw' : beat.row.board === 'beam' ? 'vaporise' : 'shatter';
 
 export const useFightFx = (options: FightFxOptions): FightFx => {
   const opts = useRef(options);
@@ -122,7 +128,7 @@ export const useFightFx = (options: FightFxOptions): FightFx => {
         if (beat.source && !beat.quiet) opts.current.anchors.bump(beat.source.anchor);
         if (beat.ghosts.some(Boolean)) {
           setGhosts(g => g.map(x => (x.beat === beat.key ? { ...x, broken: true } : x)));
-          later(() => setGhosts(g => g.filter(x => x.beat !== beat.key)), GHOST_MS);
+          later(() => setGhosts(g => g.filter(x => x.beat !== beat.key)), GHOST_BREAK_MS[ghostBreakOf(beat)] + GHOST_SLACK_MS);
         }
       }, beat.at);
       later(() => land(beat), beat.land);
@@ -140,7 +146,7 @@ export const useFightFx = (options: FightFxOptions): FightFx => {
     for (const b of all) {
       if (b.quiet) continue;
       b.ghosts.forEach((card, i) => {
-        if (card) covers.push({ key: `${b.key}:${b.slots[i]}`, beat: b.key, slot: b.slots[i], card, broken: false, how: b.row.board === 'beam' ? 'vaporise' : 'shatter', color: b.row.color });
+        if (card) covers.push({ key: `${b.key}:${b.slots[i]}`, beat: b.key, slot: b.slots[i], card, broken: false, how: ghostBreakOf(b), color: b.row.color, order: i });
       });
     }
     if (covers.length) setGhosts(g => [...g, ...covers]);

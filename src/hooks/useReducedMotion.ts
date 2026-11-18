@@ -6,8 +6,18 @@ import { AccessibilityInfo, Platform } from 'react-native';
  * On native: uses AccessibilityInfo.isReduceMotionEnabled
  * On web: uses prefers-reduced-motion media query
  */
+/** What the browser says right now, so the very first render already knows (false anywhere it cannot be asked). */
+const readNow = (): boolean => {
+  if (Platform.OS !== 'web' || typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+  try {
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  } catch {
+    return false;
+  }
+};
+
 export function useReducedMotion(): boolean {
-  const [reducedMotion, setReducedMotion] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(readNow);
 
   useEffect(() => {
     if (Platform.OS === 'web') {

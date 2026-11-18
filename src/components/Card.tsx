@@ -618,8 +618,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.6,
     elevation: 8,
   },
+  // Pointed out: a warm fill (never a border: those are for selection)
   hint: {
-    backgroundColor: '#FFFDE7',
+    backgroundColor: '#FFF3B0',
   },
   // Note: Fire state is shown via small icon in bottom left, not border
   // Borders/outlines are EXCLUSIVELY for selection state

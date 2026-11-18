@@ -25,7 +25,7 @@ import {
   type ResultApplication,
   type Unlock,
 } from './progress';
-import { lessonsDueBefore, type LessonPlan } from './lessons';
+import { isFirstVisit, lessonsDueBefore, taughtOnPreview, type LessonPlan } from './lessons';
 import { loadAdventureSave, loadBattleHistory, recordBattle, saveBattleFeedback, writeAdventureSave } from './save';
 import type { FightTape } from './engine/replay';
 import {
@@ -48,9 +48,12 @@ import LevelResults from './components/LevelResults';
 import UnlockReveal from './components/UnlockReveal';
 import Camp, { type CampTab } from './components/Camp';
 import FieldGuide from './components/FieldGuide';
+import StoryIntro from './components/StoryIntro';
 import { starsLandedMs } from './components/ui';
 
 type Screen =
+  /** The cold open: the story, then straight into the first fight */
+  | { kind: 'story' }
   | { kind: 'map'; highlight?: string | null }
   | { kind: 'run'; levelId: string; seed: number }
   /** `bestDpm`: the best damage per minute on this level before this battle (null: first time) */
@@ -82,12 +85,17 @@ interface Props {
   autoPlayer?: boolean;
   /** Dev: start with a specific save */
   initialSave?: AdventureSave;
+  /**
+   * A brand-new player opens on the story and goes straight into the first
+   * fight, not on a map of padlocks (default). False: always open on the map.
+   */
+  coldOpen?: boolean;
 }
 
-const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => {
+const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave, coldOpen = true }) => {
   const [save, setSaveState] = useState<AdventureSave>(() => initialSave ?? loadAdventureSave());
   const [history, setHistory] = useState<BattleRecord[]>(loadBattleHistory);
-  const [screen, setScreen] = useState<Screen>({ kind: 'map' });
+  const [screen, setScreen] = useState<Screen>(() => (coldOpen && isFirstVisit(save) ? { kind: 'story' } : { kind: 'map' }));
   const reducedMotion = useReducedMotion();
   const [preview, setPreview] = useState<LevelDef | null>(null);
   // Start straight on the World Map — zero blocking windows on launch!
@@ -116,7 +124,7 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
 
   // Map / camp music
   useEffect(() => {
-    if (screen.kind === 'map' || screen.kind === 'camp' || screen.kind === 'guide') music.play('map');
+    if (screen.kind === 'map' || screen.kind === 'camp' || screen.kind === 'guide' || screen.kind === 'story') music.play('map');
   }, [screen.kind]);
 
   const clearPendingTimers = useCallback(() => {
@@ -145,9 +153,20 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
       startRun(level);
       return;
     }
-    const plans = lessonsDueBefore(level, save);
+    // What the preview sheet already taught is simply recorded; anything bigger gets its own lesson first
+    const due = lessonsDueBefore(level, save);
+    const taught = due.filter(p => taughtOnPreview(p, level));
+    const plans = due.filter(p => !taughtOnPreview(p, level));
+    if (taught.length > 0) setSave(s => taught.flatMap(p => p.marks).reduce(markMechanicSeen, s));
     if (plans.length > 0) setTeaching({ plans, level });
     else startRun(level);
+  };
+
+  /** The story is over (or skipped): the first fight starts at once, with no map and no preview in between. */
+  const startFirstFight = () => {
+    const first = MAIN_LEVELS[0];
+    setSave(s => markMechanicSeen(s, LESSON_KEYS.mechanic(first.introduces)));
+    startRun(first);
   };
 
   /** The lesson on screen was accepted: record it, then show the next one or start the fight. */
@@ -231,7 +250,9 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave }) => 
     level.branchOf ? null : MAIN_LEVELS[mainIndexOf(level) + 1] ?? null;
 
   let body: React.ReactNode = null;
-  if (screen.kind === 'map') {
+  if (screen.kind === 'story') {
+    body = <StoryIntro fighter={save.selectedFighter} onDone={startFirstFight} />;
+  } else if (screen.kind === 'map') {
     const mapActive = !preview && !teaching && !reference && unlocks.length === 0;
     body = (
       <AdventureMap

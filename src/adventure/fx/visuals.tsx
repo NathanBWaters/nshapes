@@ -327,6 +327,8 @@ export const Sweep: React.FC<{ rect: Rect; kind: SweepKind; delay?: number; ms?:
 // ─── Words ──────────────────────────────────────────────────────────────────
 
 const STAMP_SIZE: Record<HitTier, number> = { 0: 19, 1: 27, 2: 35, 3: 44 };
+/** The Set's own number, on the foe: the one the player is waiting for */
+const LEAD_STAMP_SIZE: Record<HitTier, number> = { 0: 30, 1: 36, 2: 42, 3: 50 };
 /** A tag on a card is smaller: it should not hide the card */
 const STICKER_SIZE = 13;
 
@@ -335,11 +337,11 @@ const STICKER_SIZE = 13;
  * and fades. `sticker` gives it a white tag so it reads over the cards.
  * A sour one shakes its head instead of popping.
  */
-export const Stamp: React.FC<{ at: Point; text: string; color: string; tier?: HitTier; delay?: number; sticker?: boolean; sour?: boolean; fromLeft?: boolean; maxX: number }> = ({ at, text, color, tier = 0, delay = 0, sticker, sour, fromLeft, maxX }) => {
+export const Stamp: React.FC<{ at: Point; text: string; color: string; tier?: HitTier; delay?: number; sticker?: boolean; sour?: boolean; fromLeft?: boolean; lead?: boolean; maxX: number }> = ({ at, text, color, tier = 0, delay = 0, sticker, sour, fromLeft, lead, maxX }) => {
   const hold = 520 + tier * 200;
   const total = hold + 400;
   const p = useProgress(total, delay);
-  const size = sticker ? STICKER_SIZE + tier * 3 : STAMP_SIZE[tier];
+  const size = sticker ? STICKER_SIZE + tier * 3 : lead ? LEAD_STAMP_SIZE[tier] : STAMP_SIZE[tier];
   // keep the whole word on screen (a rough width is enough)
   const width = Math.min(maxX - 8, text.length * size * 0.62 + (sticker ? 16 : 0));
   // `fromLeft`: the word starts at the point instead of being centred on it (a long word next to a small target)
@@ -352,7 +354,7 @@ export const Stamp: React.FC<{ at: Point; text: string; color: string; tier?: Hi
       transform: [
         { translateX: sour ? seg(t, [0, 0.06, 0.12, 0.18, 0.24], [0, -6, 6, -4, 0]) : 0 },
         { translateY: -seg(t, [0, 0.12, 1], [0, 4, 16 + tier * 6]) },
-        { scale: sour ? 1 : seg(t, [0, 0.1, 0.2, 1], [0.5, 1.22, 1, 1]) },
+        { scale: sour ? 1 : seg(t, [0, 0.1, 0.2, 1], [0.5, lead ? 1.45 : 1.22, 1, 1]) },
       ],
     };
   });
@@ -361,10 +363,42 @@ export const Stamp: React.FC<{ at: Point; text: string; color: string; tier?: Hi
       <View style={sticker ? st.sticker : undefined}>
         <Text
           numberOfLines={1}
-          style={[st.stamp, { color, fontSize: size, lineHeight: size * 1.15 }, !sticker && st.stampGlow, tier >= 2 && st.stampHeavy]}
+          // The Set's own number lands on top of its burst: white with an ink edge reads over anything
+          style={[st.stamp, { color: lead ? WHITE : color, fontSize: size, lineHeight: size * 1.15 }, !sticker && (lead ? st.stampLead : st.stampGlow), tier >= 2 && st.stampHeavy]}
         >
           {text}
         </Text>
+      </View>
+    </Animated.View>
+  );
+};
+
+/**
+ * A moment of the fight itself (a knockout): a tilted plate that slams in across
+ * the middle of the board, holds, and lifts away.
+ */
+export const Banner: React.FC<{ rect: Rect; text: string; color: string; delay?: number }> = ({ rect, text, color, delay = 0 }) => {
+  const p = useProgress(1150, delay);
+  const size = Math.max(34, Math.min(64, rect.w * 0.17));
+  const style = useAnimatedStyle(() => {
+    const t = p.value;
+    return {
+      opacity: t <= 0 ? 0 : seg(t, [0, 0.06, 0.8, 1], [0, 1, 1, 0]),
+      transform: [
+        { translateY: -seg(t, [0.8, 1], [0, 26]) },
+        { scale: seg(t, [0, 0.1, 0.17, 0.24, 1], [2.4, 0.92, 1.06, 1, 1]) },
+        { rotate: '-5deg' },
+      ],
+    };
+  });
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[st.abs, { left: rect.x, top: rect.y + rect.h * 0.34 - size, width: rect.w, alignItems: 'center' }, style]}
+      testID="fx-banner"
+    >
+      <View style={[st.bannerPlate, { backgroundColor: color, paddingHorizontal: size * 0.5, borderRadius: size * 0.28 }]}>
+        <Text numberOfLines={1} style={[st.bannerText, { fontSize: size, lineHeight: size * 1.16 }]}>{text}</Text>
       </View>
     </Animated.View>
   );
@@ -388,7 +422,11 @@ export const Tag: React.FC<{ at: Point; text: string; maxX: number }> = ({ at, t
 
 // ─── A card that is no longer there ─────────────────────────────────────────
 
-export type GhostBreak = 'shatter' | 'vaporise';
+/** How a card leaves: 'throw' is the Set's own cards, flung at whatever the Set hits */
+export type GhostBreak = 'shatter' | 'vaporise' | 'throw';
+
+/** How long each way of leaving takes (the stage keeps the ghost mounted this long) */
+export const GHOST_BREAK_MS: Record<GhostBreak, number> = { shatter: 240, vaporise: 240, throw: 300 };
 
 const noop = () => {};
 
@@ -397,18 +435,37 @@ const noop = () => {};
  * in the next card at once; the ghost sits on top until its beat arrives and
  * then breaks, so the player sees the old card get hit and the new one appear.
  */
-export const Ghost: React.FC<{ rect: Rect; card: CardType; broken: boolean; how: GhostBreak; color: string }> = ({ rect, card, broken, how, color }) => {
+export const Ghost: React.FC<{ rect: Rect; card: CardType; broken: boolean; how: GhostBreak; color: string; to?: Point | null; order?: number }> = ({ rect, card, broken, how, color, to, order = 0 }) => {
   const p = useSharedValue(0);
+  const thrown = how === 'throw';
   useEffect(() => {
-    if (broken) p.value = withTiming(1, { duration: fxMs(240), easing: EASE.in });
-  }, [broken, p]);
+    if (broken) p.value = withTiming(1, { duration: fxMs(GHOST_BREAK_MS[how]), easing: thrown ? EASE.linear : EASE.in });
+  }, [broken, how, thrown, p]);
+  // A thrown card pops, then flies to its target shrinking and spinning; without a target it just pops away
+  const dx = to ? to.x - (rect.x + rect.w / 2) : 0;
+  const dy = to ? to.y - (rect.y + rect.h / 2) : -rect.h * 0.4;
+  const spin = order % 2 ? -1 : 1;
   const style = useAnimatedStyle(() => {
     const t = p.value;
+    if (thrown) {
+      // ease-in on the way out, so it leaves slowly and arrives fast
+      const f = seg(t, [0, 0.24, 1], [0, 0, 1]);
+      const fly = f * f;
+      return {
+        opacity: seg(t, [0, 0.86, 1], [1, 1, 0]),
+        transform: [
+          { translateX: dx * fly },
+          { translateY: dy * fly - seg(t, [0, 0.24, 0.6, 1], [0, 6, 14, 0]) },
+          { scale: seg(t, [0, 0.14, 0.24, 1], [1, 1.16, 1.1, 0.16]) },
+          { rotate: `${spin * 24 * fly}deg` },
+        ],
+      };
+    }
     return how === 'vaporise'
       ? { opacity: seg(t, [0, 0.5, 1], [1, 1, 0]), transform: [{ scaleX: seg(t, [0, 0.3, 1], [1, 1.08, 1.2]) }, { scaleY: seg(t, [0, 0.3, 1], [1, 0.9, 0.04]) }] }
       : { opacity: seg(t, [0, 0.45, 1], [1, 1, 0]), transform: [{ scale: seg(t, [0, 0.3, 1], [1, 1.14, 0.35]) }, { rotate: `${t * 16}deg` }] };
   });
-  const tint = useAnimatedStyle(() => ({ opacity: seg(p.value, [0, 0.25, 1], [0, 0.85, 0.6]) }));
+  const tint = useAnimatedStyle(() => ({ opacity: thrown ? seg(p.value, [0, 0.14, 0.4, 1], [0, 0.9, 0.25, 0.5]) : seg(p.value, [0, 0.25, 1], [0, 0.85, 0.6]) }));
   return (
     // Swallows taps: the card under it is not the one the player is looking at
     <Animated.View style={[st.abs, { left: rect.x, top: rect.y, width: rect.w, height: rect.h }, style]} testID="fx-ghost">
@@ -424,8 +481,11 @@ const st = StyleSheet.create({
   core: { position: 'absolute', left: '18%', top: '16%', backgroundColor: WHITE, opacity: 0.9 },
   stamp: { fontWeight: '900', textAlign: 'center' },
   stampGlow: { textShadowColor: WHITE, textShadowRadius: 4, textShadowOffset: { width: 0, height: 0 } },
+  stampLead: { textShadowColor: INK, textShadowRadius: 3, textShadowOffset: { width: 1, height: 2 } },
   stampHeavy: { letterSpacing: 1 },
   sticker: { backgroundColor: WHITE, borderRadius: 8, borderWidth: 2, borderColor: INK, paddingHorizontal: 7, paddingVertical: 1 },
+  bannerPlate: { borderWidth: 4, borderBottomWidth: 8, borderColor: INK, paddingVertical: 2 },
+  bannerText: { fontWeight: '900', letterSpacing: 2, color: WHITE, textShadowColor: INK, textShadowRadius: 0, textShadowOffset: { width: 2, height: 3 } },
   tag: { backgroundColor: COLORS.deepOnyx, borderRadius: 6, paddingVertical: 2, alignItems: 'center' },
   tagText: { color: WHITE, fontSize: 10, fontWeight: '800', letterSpacing: 0.3 },
 });

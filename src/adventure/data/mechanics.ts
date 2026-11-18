@@ -11,24 +11,24 @@ export const MECHANICS: Record<string, MechanicDef> = {
   set_rule: {
     id: 'set_rule',
     kind: 'rule',
-    title: 'The Magic Rule of Set',
-    tagline: 'Check EVERY trait: all the same OR all different!',
+    title: 'What is a Set?',
+    tagline: 'Three cards where each trait is all the same, or all different.',
     body: [
-      'Pick 3 cards and check EACH trait one by one (Shape, then Color).',
-      'For EVERY trait, all 3 cards must be ALL THE SAME or ALL DIFFERENT.',
-      'Magic Rule: If 2 match and 1 is odd (like 2 red + 1 green), it is NOT a Set!',
+      'Pick 3 cards and check one trait at a time: shape, then color.',
+      'For each trait, the 3 cards must be all the same or all different.',
+      'Two alike and one odd (2 red + 1 green) is never a Set.',
     ],
     fightTips: [
-      { title: 'Your foe', text: 'This is Dozy Bunny! Every Set you make bonks 3 off its red health bar.', anchor: 'top' },
-      { title: 'Check every trait', text: 'Check Shape, then Color: each one must be ALL SAME or ALL DIFFERENT!', anchor: 'bottom' },
-      { title: 'Zero pressure', text: 'You cannot lose 1-1! Fewer mistakes earn more shiny ★.', anchor: 'top' },
+      { title: 'Your foe', text: 'This is Dozy Bunny. Every Set you make knocks 3 off its health bar.', anchor: 'top' },
+      { title: 'One trait at a time', text: 'Check shape, then color: each one all the same, or all different.', anchor: 'bottom' },
+      { title: 'No pressure', text: 'You cannot lose this one. Fewer mistakes earn more stars.', anchor: 'top' },
     ],
     icon: 'lorc/crossed-swords',
     demo: {
       type: 'set',
       attributes: ['shape', 'color'],
       valid: true,
-      caption: 'Color: all red ✓ · Shape: all 3 different ✓ → Set!',
+      caption: 'All red, and three different shapes: a Set!',
       cards: [
         { shape: 'diamond', color: 'red', number: 1, shading: 'solid' },
         { shape: 'oval', color: 'red', number: 1, shading: 'solid' },
@@ -37,10 +37,10 @@ export const MECHANICS: Record<string, MechanicDef> = {
     },
     lessons: [
       {
-        title: 'Check each trait one by one',
-        body: ['Every card starts with two traits: a SHAPE (diamond, oval, squiggle) and a COLOR (red, green, purple).', 'Check Shape on its own, then check Color on its own!'],
+        title: 'One trait at a time',
+        body: ['Every card has two traits to start with: a shape (diamond, oval, squiggle) and a color (red, green, purple).', 'Check shape by itself, then color by itself.'],
         demo: {
-          type: 'set', attributes: ['shape', 'color'], valid: true, caption: 'Shape: all 3 different ✓ · Color: all 3 different ✓',
+          type: 'set', attributes: ['shape', 'color'], valid: true, caption: 'Three shapes, three colors: nothing in common',
           cards: [
           { shape: 'diamond', color: 'red', number: 1, shading: 'solid' },
           { shape: 'oval', color: 'green', number: 1, shading: 'solid' },
@@ -49,10 +49,10 @@ export const MECHANICS: Record<string, MechanicDef> = {
         },
       },
       {
-        title: 'All twins ✓ or all different ✓',
-        body: ['Here all 3 are RED (all the same ✓) and the shapes are diamond, oval, squiggle (all different ✓).', 'Because EVERY trait passed, those 3 cards make a Set!'],
+        title: 'All the same, or all different',
+        body: ['Here all 3 are red (all the same) and the shapes are a diamond, an oval and a squiggle (all different).', 'Every trait passes, so these 3 cards are a Set.'],
         demo: {
-          type: 'set', attributes: ['shape', 'color'], valid: true, caption: 'Color: all red ✓ · Shape: all 3 different ✓',
+          type: 'set', attributes: ['shape', 'color'], valid: true, caption: 'All red, and three different shapes',
           cards: [
           { shape: 'diamond', color: 'red', number: 1, shading: 'solid' },
           { shape: 'oval', color: 'red', number: 1, shading: 'solid' },
@@ -61,10 +61,10 @@ export const MECHANICS: Record<string, MechanicDef> = {
         },
       },
       {
-        title: 'Magic Rule: 2 twins + 1 oddball = ✗',
-        body: ['If 2 cards match on a trait and the 3rd is different, it is NOT a Set!', 'Here 2 are red and 1 is green — even though shapes differ, Color fails!'],
+        title: 'Never two alike and one odd',
+        body: ['If 2 cards match on a trait and the 3rd does not, it is not a Set.', 'Here 2 are red and 1 is green. The shapes are fine, but color breaks it.'],
         demo: {
-          type: 'set', attributes: ['shape', 'color'], valid: false, caption: 'Shape: all diff ✓ · Color: 2 red + 1 green ✗',
+          type: 'set', attributes: ['shape', 'color'], valid: false, caption: '2 red + 1 green: color breaks it',
           cards: [
           { shape: 'diamond', color: 'red', number: 1, shading: 'solid' },
           { shape: 'oval', color: 'red', number: 1, shading: 'solid' },
@@ -108,13 +108,14 @@ export const MECHANICS: Record<string, MechanicDef> = {
     kind: 'feature',
     enables: 'hearts',
     title: 'Hearts',
-    tagline: 'Wrong matches cost a heart. Take your time!',
+    tagline: 'A wrong pick costs a heart now. Run out and the fight is over.',
+    coach: 'Careful now: a wrong pick costs a heart.',
     body: [
-      'A wrong pick costs 1 heart — and Blast Powder fires automatically as you match!',
-      'Make 2 all-red matches for the third star.',
+      'A wrong pick costs 1 heart. Lose them all and the fight is lost.',
+      'Your new Blast Powder fires by itself as you match. Make 2 all-red Sets for the third star.',
     ],
     fightTips: [
-      { title: 'Your hearts & Blast Powder', text: 'A wrong Set costs a heart, while your Blast Powder charm blasts extra cards on lucky matches!', anchor: 'top' },
+      { title: 'Your hearts and Blast Powder', text: 'A wrong Set costs a heart. Your Blast Powder charm blasts extra cards on lucky matches.', anchor: 'top' },
       { title: 'All-red Sets', text: 'Make 2 Sets where all three cards are red for the third star.', anchor: 'bottom' },
     ],
     icon: 'lorc/shining-heart',
@@ -122,33 +123,34 @@ export const MECHANICS: Record<string, MechanicDef> = {
       type: 'set',
       attributes: ['shape', 'color'],
       valid: false,
-      caption: '2 red + 1 green → not a match (−1 ♥)',
+      caption: '2 red + 1 green: not a Set (−1 ♥)',
       cards: [
         { shape: 'diamond', color: 'red', number: 1, shading: 'solid' },
         { shape: 'oval', color: 'red', number: 1, shading: 'solid' },
         { shape: 'squiggle', color: 'green', number: 1, shading: 'solid' },
       ],
     },
-    coachMark: { on: 'hurt', text: 'Ouch! Check one trait at a time: all same or all different.' },
+    coachMark: { on: 'hurt', text: 'Ouch! One trait at a time: all the same, or all different.' },
   },
   all_different: {
     id: 'all_different',
     kind: 'rule',
     title: 'All Different',
-    tagline: '3 shapes, 3 colors — no two alike!',
+    tagline: 'Three shapes in three colors: nothing in common is a Set too.',
+    coach: 'Hunt for Sets with nothing in common!',
     body: [
-      'Pick a diamond, an oval, and a squiggle in red, green, and purple!',
-      'Make 2 all-different matches for the third star.',
+      'A diamond, an oval and a squiggle, one red, one green, one purple: no two alike, so it is a Set.',
+      'Make 2 all-different Sets for the third star.',
     ],
     fightTips: [
-      { title: 'Mix every trait', text: 'Pick 3 different shapes in 3 different colors! Make 2 all-different Sets for the third star.', anchor: 'bottom' },
+      { title: 'Mix every trait', text: 'Pick 3 different shapes in 3 different colors. Make 2 all-different Sets for the third star.', anchor: 'bottom' },
     ],
     icon: 'delapouite/sparkles',
     demo: {
       type: 'set',
       attributes: ['shape', 'color'],
       valid: true,
-      caption: '3 different shapes + 3 different colors → Match!',
+      caption: 'Three shapes, three colors: a Set!',
       cards: [
         { shape: 'diamond', color: 'red', number: 1, shading: 'solid' },
         { shape: 'oval', color: 'green', number: 1, shading: 'solid' },
@@ -160,10 +162,11 @@ export const MECHANICS: Record<string, MechanicDef> = {
     id: 'attr_number',
     kind: 'rule',
     title: 'New Trait: Number',
-    tagline: 'Cards now show 1, 2 or 3 symbols.',
+    tagline: 'Cards now carry 1, 2 or 3 shapes. Count them: all the same, or 1-2-3.',
+    coach: 'New trait: count them. 1-2-3, or all the same.',
     body: [
-      'Count the symbols too: all 1s, all 2s, all 3s, or 1-2-3!',
-      'Tip: scan one color first. Make 2 single-color matches for the third star.',
+      'Count the shapes too: all 1s, all 2s, all 3s, or 1-2-3.',
+      'Tip: scan one color first. Make 2 single-color Sets for the third star.',
     ],
     fightTips: [
       { title: 'Scan one color first', text: 'With 3 traits on the board, pick one color and look for a Set inside it! Make 2 single-color Sets for the third star.', anchor: 'bottom' },
@@ -173,7 +176,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
       type: 'set',
       attributes: ['shape', 'color', 'number'],
       valid: true,
-      caption: 'Shapes same, colors different, numbers 1-2-3 ✓',
+      caption: 'All ovals, three colors, 1-2-3: a Set!',
       cards: [
         { shape: 'oval', color: 'red', number: 1, shading: 'solid' },
         { shape: 'oval', color: 'green', number: 2, shading: 'solid' },
@@ -206,9 +209,10 @@ export const MECHANICS: Record<string, MechanicDef> = {
     kind: 'feature',
     title: 'Skill Trees',
     tagline: 'Spend stars at Camp to power up your fighter.',
+    coach: 'Tough hide! Land one big hit: 7 or more.',
     body: [
-      'Spend stars in your fighter\'s Skill Tree at Camp (refunds are always free!).',
-      'Land one hit of 7+ damage for the third star.',
+      'Spend stars in your fighter\'s Skill Tree at Camp. Refunds are always free.',
+      'Land one hit of 7 or more for the third star.',
     ],
     lessons: [
       {
@@ -229,6 +233,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
     enables: 'power',
     title: 'Power Cards',
     tagline: 'Cards marked +2 hit harder.',
+    coach: 'Cards marked +2 hit harder. Grab them!',
     body: [
       'Match a card with a +2 badge to deal +2 bonus damage!',
       'Match 4 power or gold cards for the third star.',
@@ -254,13 +259,14 @@ export const MECHANICS: Record<string, MechanicDef> = {
     id: 'charm',
     kind: 'feature',
     title: 'Charms',
-    tagline: 'Bring up to 3 Armory charms into every fight.',
+    tagline: 'Your weapons ride along as charms and fire by themselves. Bring any 3.',
+    coach: 'Your charms fire on their own. Watch for the boom!',
     body: [
-      'Unlocked weapons go into your Armory and trigger automatically as you match!',
+      'Every weapon you win goes into your Armory. Bring up to 3 as charms: they fire by themselves as you match.',
       'Set off 2 explosions for the third star.',
     ],
     fightTips: [
-      { title: 'Charms fire for you', text: 'Your equipped charms trigger automatically when you match! Set off 2 explosions for the third star.', anchor: 'bottom' },
+      { title: 'Charms fire for you', text: 'Your charms fire by themselves when you match. Set off 2 explosions for the third star.', anchor: 'bottom' },
     ],
     icon: 'lorc/gems',
     demo: { type: 'icons', items: [{ icon: 'lorc/gems', label: 'Unlock' }, { icon: 'lorc/gear-hammer', label: 'Equip 3' }, { icon: 'lorc/crossed-swords', label: 'Fight' }] },
@@ -270,36 +276,38 @@ export const MECHANICS: Record<string, MechanicDef> = {
     kind: 'feature',
     enables: 'rainbow',
     title: 'Rainbow Strike',
-    tagline: 'All-different matches deal double damage!',
+    tagline: 'A Set with nothing in common hits twice as hard.',
+    coach: 'Nothing in common = a Rainbow. Double damage!',
     body: [
-      'Match 3 shapes, 3 colors, AND 1-2-3 for a Rainbow Strike (×2 damage)!',
+      'Three shapes, three colors and 1-2-3: a Rainbow Strike, for double damage.',
       'Land 2 Rainbow Strikes for the third star.',
     ],
     fightTips: [
-      { title: 'Hunt for rainbows', text: 'A Set where every trait is different hits twice as hard! Land 2 Rainbow Strikes for the third star.', anchor: 'bottom' },
+      { title: 'Hunt for Rainbows', text: 'A Set where every trait is different hits twice as hard. Land 2 Rainbow Strikes for the third star.', anchor: 'bottom' },
     ],
     icon: 'lorc/rainbow-star',
     demo: {
       type: 'set',
       attributes: ['shape', 'color', 'number'],
       valid: true,
-      caption: 'Everything different → Rainbow Strike ×2',
+      caption: 'Nothing in common: Rainbow Strike ×2',
       cards: [
         { shape: 'diamond', color: 'red', number: 1, shading: 'solid' },
         { shape: 'oval', color: 'green', number: 2, shading: 'solid' },
         { shape: 'squiggle', color: 'purple', number: 3, shading: 'solid' },
       ],
     },
-    coachMark: { on: 'rainbow', text: 'RAINBOW STRIKE! Double damage!' },
+    coachMark: { on: 'rainbow', text: 'Rainbow Strike! Double damage!' },
   },
   time_bombs: {
     id: 'time_bombs',
     kind: 'rule',
     title: 'Time Bombs',
     tagline: 'Match the fused card before it blows.',
+    coach: 'See the fuse? Use that card in a Set, fast!',
     body: [
-      'Include the ticking bomb card in a match before it reaches 0 to defuse it!',
-      'Letting a bomb reach 0 costs 1 heart.',
+      'Use the ticking card in a Set before its fuse reaches 0 to defuse it.',
+      'A bomb that goes off costs 1 heart.',
     ],
     fightTips: [
       { title: 'Build around the bomb', text: 'Find a Set that INCLUDES the bomb card. Defuse 3 bombs for the third star.', anchor: 'bottom' },
@@ -322,10 +330,11 @@ export const MECHANICS: Record<string, MechanicDef> = {
     kind: 'feature',
     enables: 'coins',
     title: 'Coin Drops',
-    tagline: 'Matched cards now drop coins.',
+    tagline: 'Sets drop coins now. Gold cards pay extra.',
+    coach: 'Sets drop coins now. Gold cards pay extra!',
     body: [
-      'Matched cards now drop coins — and gold +3 cards pay extra!',
-      'Spend your coins at Camp on permanent Workshop upgrades.',
+      'Matched cards drop coins now, and gold +3 cards pay extra.',
+      'Spend coins at Camp on Workshop upgrades that last.',
     ],
     fightTips: [
       { title: 'Coin drops', text: 'Cards with a gold +3 badge drop extra coins when you match them. Your coin total is up here.', anchor: 'top' },
@@ -348,6 +357,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
     kind: 'rule',
     title: 'The Clock',
     tagline: 'Survive until the clock runs out.',
+    coach: 'No move limit. Beat the clock instead!',
     body: [
       'This level has a clock and no move limit.',
       'Survive until time runs out for ★. Knock out the foe before then for ★★.',
@@ -363,6 +373,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
     kind: 'rule',
     title: 'Snares',
     tagline: 'Leave the snared card. Match the one it points at.',
+    coach: 'Leave the snared card. Match where its arrow points.',
     body: [
       'A snared card shows an arrow in its corner, pointing at a neighbour.',
       'Matching the snared card itself still scores, but costs a heart. Match the card its arrow points at instead to defuse the snare for +4 damage.',
@@ -378,6 +389,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
     kind: 'threat',
     title: 'Armored Card',
     tagline: 'One card takes 3 matches to break.',
+    coach: 'The armored card takes 3 Sets to crack.',
     body: [
       'Iron Shell hides behind an armored card. It stays on the board until you\'ve used it in three Sets.',
       'Lasers and blasts chip off a plate too. Break the armor for the third star.',
@@ -402,6 +414,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
     enables: 'hints',
     title: 'Hints',
     tagline: 'Stuck? Tap the bulb to reveal a Set.',
+    coach: 'Stuck? Tap the bulb. It lights up a Set.',
     body: [
       'You now carry hints. Tap the light bulb to reveal a Set on the board.',
       'Masked Bandit switches off auto-hints, so this time the bulb is all yours. Use it: the third star wants 2 hints spent.',
@@ -455,6 +468,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
     enables: 'graces',
     title: 'Graces',
     tagline: 'Off by one trait? A grace saves you.',
+    coach: 'A near miss costs a grace, not a heart. Be bold!',
     body: [
       'If only ONE trait is wrong, that\'s a near miss. A grace counts it as a Set instead of costing a heart.',
       'Two or more wrong traits still hurt.',

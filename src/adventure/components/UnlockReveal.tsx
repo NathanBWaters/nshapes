@@ -144,7 +144,7 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
 
           <View style={st.heroWrap}>
             <Rays color={accent} />
-            <Animated.View style={[st.hero, { borderColor: accent, backgroundColor: revealed ? COLORS.canvasWhite : '#151413' }, heroStyle]}>
+            <Animated.View style={[st.hero, { borderColor: accent, backgroundColor: revealed ? COLORS.canvasWhite : '#151413' }, heroStyle]} onTouchEnd={revealed ? undefined : reveal}>
               {revealed && fighter ? (
                 <FighterAvatar
                   testID="unlock-revealed-fighter"
@@ -173,9 +173,6 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
           {!revealed ? (
             <>
               <Text style={st.tease}>{display.tease}</Text>
-              <TouchableOpacity testID="unlock-reveal" onPress={reveal} style={st.cta} activeOpacity={0.85}>
-                <Text style={st.ctaText}>Reveal</Text>
-              </TouchableOpacity>
             </>
           ) : (
             <Animated.View style={[{ alignSelf: 'stretch', gap: 12, alignItems: 'center' }, detailStyle]}>
@@ -189,10 +186,10 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                 avatarSize={38}
                 text={
                   fighter
-                    ? `${companionVoice(fighter.name).hello} I’m ${fighter.name} — ready to team up whenever you pick me!`
+                    ? `${companionVoice(fighter.name).hello} I’m ${fighter.name}. Pick me whenever you like!`
                     : u.kind === 'weapon' && u.firstWeapon
-                      ? `${companionVoice(save.selectedFighter).cheer} Ooh, shiny! I tucked ${display.name} right into your charm belt so it fires automatically!`
-                      : `${companionVoice(save.selectedFighter).cheer} Ooh, look what we unlocked! Check out what ${display.name} can do:`
+                      ? `${companionVoice(save.selectedFighter).cheer} Our first weapon! I clipped it on. It fires by itself.`
+                      : `${companionVoice(save.selectedFighter).cheer} Look what we won!`
                 }
                 style={{ alignSelf: 'stretch' }}
               />
@@ -244,11 +241,12 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                       </Text>
                     )}
                     <Text style={st.rowBody}>{adventureText(w.description)}</Text>
-                    {w.flavorText ? <Text style={st.note}>{adventureText(w.flavorText)}</Text> : null}
+                    {/* The very first weapon: one plain sentence is enough */}
+                    {w.flavorText && !(u.kind === 'weapon' && u.firstWeapon) ? <Text style={st.note}>{adventureText(w.flavorText)}</Text> : null}
                     {u.kind === 'weapon' && u.firstWeapon && (
                       <View style={st.charmBox}>
-                        <Text style={st.rowTitle}>Auto-equipped for you!</Text>
-                        <Text style={st.rowBody}>Your first weapon is already equipped as a charm and fires automatically as you make matches.</Text>
+                        <Text style={st.rowTitle}>Already on your belt</Text>
+                        <Text style={st.rowBody}>Nothing to press: it fires by itself as you make Sets.</Text>
                       </View>
                     )}
                   </>
@@ -279,121 +277,135 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                 )}
               </View>
 
-              {fighter && (
-                <>
-                  <TouchableOpacity testID="unlock-primary" onPress={() => { sfx('confirm'); onUseFighter(fighter.name); advance(); }} style={st.cta} activeOpacity={0.85}>
-                    <Text style={st.ctaText}>Fight as {fighter.name}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={advance} style={st.secondary}>
-                    <Text style={st.secondaryText}>Keep {save.selectedFighter} for now</Text>
-                  </TouchableOpacity>
-                </>
-              )}
-              {w && (
-                charmEquipped || charmsFull ? (
-                  <>
-                    {!charmEquipped && <Text style={st.note}>Your charm slots are full. Swap charms on the level preview or at Camp.</Text>}
-                    <TouchableOpacity testID="unlock-primary" onPress={() => { sfx('confirm'); advance(); }} style={st.cta} activeOpacity={0.85}>
-                      <Text style={st.ctaText}>{charmEquipped ? 'Equipped ✓  Continue' : 'Continue'}</Text>
-                    </TouchableOpacity>
-                  </>
-                ) : (
-                  <>
-                    <TouchableOpacity testID="unlock-primary" onPress={() => { sfx('confirm'); onEquipCharm(w.id); advance(); }} style={st.cta} activeOpacity={0.85}>
-                      <Text style={st.ctaText}>Equip as charm</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={advance} style={st.secondary}>
-                      <Text style={st.secondaryText}>Leave it in the Armory</Text>
-                    </TouchableOpacity>
-                  </>
-                )
-              )}
-              {evo && (
-                <TouchableOpacity testID="unlock-primary" onPress={() => { sfx('confirm'); advance(); }} style={st.cta} activeOpacity={0.85}>
-                  <Text style={st.ctaText}>{last ? 'Awesome!' : 'Continue'}</Text>
-                </TouchableOpacity>
-              )}
-              {feature && (
-                openFeature ? (
-                  <>
-                    <TouchableOpacity
-                      testID="unlock-primary"
-                      onPress={() => {
-                        sfx('confirm');
-                        onDone();
-                        onOpenFeature?.(feature.id);
-                      }}
-                      style={st.cta}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={st.ctaText}>{openFeature.label}</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={advance} style={st.secondary}>
-                      <Text style={st.secondaryText}>Stay on results</Text>
-                    </TouchableOpacity>
-                  </>
-                ) : (
-                  <TouchableOpacity testID="unlock-primary" onPress={() => { sfx('confirm'); advance(); }} style={st.cta} activeOpacity={0.85}>
-                    <Text style={st.ctaText}>{last ? 'Awesome!' : 'Continue'}</Text>
-                  </TouchableOpacity>
-                )
-              )}
-              {path && (
-                last && onShowPath ? (
-                  <>
-                    <TouchableOpacity
-                      testID="unlock-primary"
-                      onPress={() => { sfx('confirm'); onDone(); onShowPath(path.id); }}
-                      style={st.cta}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={st.ctaText}>Show me on the map</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity testID="unlock-later" onPress={advance} style={st.secondary}>
-                      <Text style={st.secondaryText}>Later</Text>
-                    </TouchableOpacity>
-                  </>
-                ) : (
-                  <TouchableOpacity testID="unlock-primary" onPress={() => { sfx('confirm'); advance(); }} style={st.cta} activeOpacity={0.85}>
-                    <Text style={st.ctaText}>Continue</Text>
-                  </TouchableOpacity>
-                )
-              )}
-              {arcana && (
-                arcanaEquipped ? (
-                  <TouchableOpacity testID="unlock-primary" onPress={() => { sfx('confirm'); advance(); }} style={st.cta} activeOpacity={0.85}>
-                    <Text style={st.ctaText}>Equipped ✓  Continue</Text>
-                  </TouchableOpacity>
-                ) : (
-                  <>
-                    <TouchableOpacity
-                      testID="unlock-primary"
-                      onPress={() => { sfx('confirm'); onEquipArcana?.(arcana.id); advance(); }}
-                      style={st.cta}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={st.ctaText}>Equip {arcana.name}</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={advance} style={st.secondary}>
-                      <Text style={st.secondaryText}>Keep current rules for now</Text>
-                    </TouchableOpacity>
-                  </>
-                )
-              )}
             </Animated.View>
           )}
         </ScrollView>
+
+        {/* What to do with it: always in reach, whatever the screen size */}
+        <View style={st.footer}>
+          {!revealed ? (
+            <TouchableOpacity testID="unlock-reveal" onPress={reveal} style={st.cta} activeOpacity={0.85}>
+              <Text style={st.ctaText}>Reveal</Text>
+            </TouchableOpacity>
+          ) : (
+            <>
+        {fighter && (
+          <>
+            <TouchableOpacity testID="unlock-primary" onPress={() => { sfx('confirm'); onUseFighter(fighter.name); advance(); }} style={st.cta} activeOpacity={0.85}>
+              <Text style={st.ctaText}>Fight as {fighter.name}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={advance} style={st.secondary}>
+              <Text style={st.secondaryText}>Keep {save.selectedFighter} for now</Text>
+            </TouchableOpacity>
+          </>
+        )}
+        {w && (
+          charmEquipped || charmsFull ? (
+            <>
+              {!charmEquipped && <Text style={st.note}>Your charm slots are full. Swap charms on the level preview or at Camp.</Text>}
+              <TouchableOpacity testID="unlock-primary" onPress={() => { sfx('confirm'); advance(); }} style={st.cta} activeOpacity={0.85}>
+                <Text style={st.ctaText}>{charmEquipped ? 'Equipped ✓  Continue' : 'Continue'}</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <TouchableOpacity testID="unlock-primary" onPress={() => { sfx('confirm'); onEquipCharm(w.id); advance(); }} style={st.cta} activeOpacity={0.85}>
+                <Text style={st.ctaText}>Equip as charm</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={advance} style={st.secondary}>
+                <Text style={st.secondaryText}>Leave it in the Armory</Text>
+              </TouchableOpacity>
+            </>
+          )
+        )}
+        {evo && (
+          <TouchableOpacity testID="unlock-primary" onPress={() => { sfx('confirm'); advance(); }} style={st.cta} activeOpacity={0.85}>
+            <Text style={st.ctaText}>{last ? 'Awesome!' : 'Continue'}</Text>
+          </TouchableOpacity>
+        )}
+        {feature && (
+          openFeature ? (
+            <>
+              <TouchableOpacity
+                testID="unlock-primary"
+                onPress={() => {
+                  sfx('confirm');
+                  onDone();
+                  onOpenFeature?.(feature.id);
+                }}
+                style={st.cta}
+                activeOpacity={0.85}
+              >
+                <Text style={st.ctaText}>{openFeature.label}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={advance} style={st.secondary}>
+                <Text style={st.secondaryText}>Stay on results</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <TouchableOpacity testID="unlock-primary" onPress={() => { sfx('confirm'); advance(); }} style={st.cta} activeOpacity={0.85}>
+              <Text style={st.ctaText}>{last ? 'Awesome!' : 'Continue'}</Text>
+            </TouchableOpacity>
+          )
+        )}
+        {path && (
+          last && onShowPath ? (
+            <>
+              <TouchableOpacity
+                testID="unlock-primary"
+                onPress={() => { sfx('confirm'); onDone(); onShowPath(path.id); }}
+                style={st.cta}
+                activeOpacity={0.85}
+              >
+                <Text style={st.ctaText}>Show me on the map</Text>
+              </TouchableOpacity>
+              <TouchableOpacity testID="unlock-later" onPress={advance} style={st.secondary}>
+                <Text style={st.secondaryText}>Later</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <TouchableOpacity testID="unlock-primary" onPress={() => { sfx('confirm'); advance(); }} style={st.cta} activeOpacity={0.85}>
+              <Text style={st.ctaText}>Continue</Text>
+            </TouchableOpacity>
+          )
+        )}
+        {arcana && (
+          arcanaEquipped ? (
+            <TouchableOpacity testID="unlock-primary" onPress={() => { sfx('confirm'); advance(); }} style={st.cta} activeOpacity={0.85}>
+              <Text style={st.ctaText}>Equipped ✓  Continue</Text>
+            </TouchableOpacity>
+          ) : (
+            <>
+              <TouchableOpacity
+                testID="unlock-primary"
+                onPress={() => { sfx('confirm'); onEquipArcana?.(arcana.id); advance(); }}
+                style={st.cta}
+                activeOpacity={0.85}
+              >
+                <Text style={st.ctaText}>Equip {arcana.name}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={advance} style={st.secondary}>
+                <Text style={st.secondaryText}>Keep current rules for now</Text>
+              </TouchableOpacity>
+            </>
+          )
+        )}
+            </>
+          )}
+        </View>
       </View>
     </Modal>
   );
 };
 
 const st = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(8,8,8,0.94)' },
-  scroll: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', padding: 20, gap: 12, maxWidth: 460, width: '100%', alignSelf: 'center' },
+  // Opaque: whatever is behind it (the results screen) would only be noise
+  overlay: { flex: 1, backgroundColor: '#0B0B0C' },
+  scroll: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', padding: 20, paddingBottom: 12, gap: 12, maxWidth: 460, width: '100%', alignSelf: 'center' },
+  footer: { alignSelf: 'center', width: '100%', maxWidth: 460, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 18, gap: 4, alignItems: 'center', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)' },
   eyebrow: { color: GOLD, fontWeight: '800', letterSpacing: 2.5, fontSize: 12, textTransform: 'uppercase' },
   headline: { color: COLORS.canvasWhite, fontWeight: '900', fontSize: 28, textAlign: 'center' },
-  heroWrap: { width: 240, height: 240, alignItems: 'center', justifyContent: 'center', marginVertical: 4 },
+  heroWrap: { width: 210, height: 200, alignItems: 'center', justifyContent: 'center', marginVertical: 2 },
   rays: { position: 'absolute', width: 240, height: 240, alignItems: 'center', justifyContent: 'center' },
   ray: { position: 'absolute', width: 5, height: 240, opacity: 0.16, borderRadius: 3 },
   hero: { width: 150, height: 150, borderRadius: 75, borderWidth: 4, alignItems: 'center', justifyContent: 'center' },

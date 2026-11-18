@@ -114,7 +114,7 @@ export const EVENT_FX: Record<RunEventType, FxRow | null> = {
   trap_sprung: { color: C.sour, board: 'burst', from: 'hearts', fighter: 'pain', enemy: 'gloat', labelColor: C.sour, label: () => 'SPRUNG!' },
 
   // ── The fight itself ─────────────────────────────────────────────────────
-  foe_defeated: { color: C.blast, from: 'foe', board: 'burst', bump: ['foe'], fighter: 'ecstatic', label: () => 'K.O.!' },
+  foe_defeated: { color: C.blast, from: 'foe', board: 'burst', bump: ['foe'], fighter: 'ecstatic', banner: true, label: () => 'K.O.!' },
   wave: { color: C.ink, sweep: 'gold', fighter: 'entrance', enemy: 'entrance', label: e => `WAVE ${n(e)}` },
   time_up: { color: C.time, bump: ['clock'], label: () => "TIME'S UP" },
   moves_out: { color: C.ink, bump: ['clock'], label: () => 'OUT OF MOVES' },

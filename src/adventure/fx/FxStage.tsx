@@ -11,7 +11,7 @@ import type { Anchors } from './anchors';
 import { FX_COLOR } from './catalog';
 import type { AnchorName, Beat, Point, Rect } from './types';
 import type { FightFx } from './useFightFx';
-import { Beam, centerOf, Comet, Flames, Flash, Ghost, Puff, Ring, Sparkles, Stamp, Starburst, Sweep, Tag, Ticks, unitOf } from './visuals';
+import { Banner, Beam, centerOf, Comet, Flames, Flash, Ghost, Puff, Ring, Sparkles, Stamp, Starburst, Sweep, Tag, Ticks, unitOf } from './visuals';
 
 /** Most orbs one beat sends, however many cards it touched */
 const MAX_ORBS = 3;
@@ -30,15 +30,16 @@ const burstSize = (r: Rect): number => Math.min(r.w * 1.3, Math.max(r.h * 1.8, 4
 
 /**
  * Where the words pop for something that landed on this part of the HUD.
- * On the foe, the Set's own number sits on the portrait and the rest fan out
- * to its right in two columns; elsewhere they stack under the chip.
+ * The foe stands at the right of the battle stage: the Set's own number sits
+ * on it, and the rest fan out to its left in two columns. Elsewhere they
+ * stack under the chip.
  */
 const labelPoint = (to: AnchorName, r: Rect, lane: number, lead: boolean): Point => {
   if (to !== 'foe') return { x: r.x + r.w / 2, y: r.y + r.h + 13 + (lane % 3) * 18 };
-  // (the stage starts the Set's number here and lets it run to the right, so "RAINBOW −14" stays on screen)
-  if (lead) return { x: r.x + r.w * 0.3, y: r.y + r.h * 0.42 };
+  // (a long word is kept on screen by the stamp itself)
+  if (lead) return { x: r.x + r.w * 0.5, y: r.y + r.h * 0.36 };
   const n = Math.max(0, lane - 1);
-  return { x: r.x + r.w + 46 + (n % 2) * 92, y: r.y + 13 + (Math.floor(n / 2) % 3) * 20 };
+  return { x: r.x - 44 - (n % 2) * 92, y: r.y + 12 + (Math.floor(n / 2) % 3) * 20 };
 };
 
 const BeatView: React.FC<{ beat: Beat; anchors: Anchors; size: Size }> = React.memo(({ beat, anchors, size }) => {
@@ -82,7 +83,8 @@ const BeatView: React.FC<{ beat: Beat; anchors: Anchors; size: Size }> = React.m
       : launch.length
         ? launch.slice(0, MAX_ORBS).map(centerOf)
         : [centerOf(sourceRect ?? fromRect ?? fighter ?? middle)];
-  const orbSize = Math.max(12, Math.min(20, unit * 0.2)) + beat.tier * 4;
+  // The Set's own hit is the one to feel: its orbs are bigger than anything it sets off
+  const orbSize = Math.max(12, Math.min(20, unit * 0.2)) * (beat.lead ? 1.5 : 1) + beat.tier * 4;
 
   // Where the words go. Only the Set's own number is bare; everything else is a tag, so it reads over whatever is under it.
   const label = beat.label;
@@ -91,13 +93,15 @@ const BeatView: React.FC<{ beat: Beat; anchors: Anchors; size: Size }> = React.m
   if (end && targetRect && row.to && !inbound) labelAt = labelPoint(row.to, targetRect, beat.lane, beat.lead);
   else if (places.length) labelAt = { x: places[0].x + places[0].w / 2, y: places[0].y + places[0].h * 0.34 + (beat.lane % 3) * 20 };
   else if (row.sweep && board) labelAt = { x: board.x + board.w / 2, y: board.y + board.h * 0.3 + (beat.lane % 3) * 30 };
-  else if (row.aura && fighter) labelAt = { x: fighter.x - 8, y: fighter.y + fighter.h + 14 + (beat.lane % 3) * 18 };
+  // (the fighter stands at the left of the battle stage: their words start beside them)
+  else if (row.aura && fighter) labelAt = { x: fighter.x + fighter.w + 6, y: fighter.y + 14 + (beat.lane % 3) * 18 };
   else {
     const chip = row.bump?.map(a => anchors.rect(a)).find(Boolean) ?? sourceRect ?? fromRect;
     // nowhere of its own: the top of the board
     labelAt = chip ? labelPoint('board', chip, beat.lane, false) : board ? { x: board.x + board.w / 2, y: board.y + 18 + (beat.lane % 3) * 22 } : { x: middle.x + 20, y: middle.y };
   }
   const labelDelay = end ? flight : inbound ? flight + 60 : 70;
+  const besideFighter = !(end && targetRect && row.to && !inbound) && !places.length && !(row.sweep && board) && !!row.aura && !!fighter;
 
   // Lines: a laser along a row or column, or from whoever fired to each card; a bolt from card to card
   const lines: { from: Point; to: Point; delay: number }[] = [];
@@ -184,8 +188,12 @@ const BeatView: React.FC<{ beat: Beat; anchors: Anchors; size: Size }> = React.m
       ))}
       {end && !inbound && (
         <>
-          <Ring at={end} size={36 + beat.tier * 14} color={color} delay={flight} />
-          {beat.damage > 0 && <Ticks at={end} size={54 + beat.tier * 16} color={color} delay={flight} />}
+          {/* The Set's own hit lands as a comic burst on whatever it hits */}
+          {beat.lead && beat.damage > 0 && targetRect && (
+            <Starburst at={end} size={Math.min(targetRect.w * 1.25, 150) + beat.tier * 14} color={color} delay={flight} ms={380} />
+          )}
+          <Ring at={end} size={36 + beat.tier * 14 + (beat.lead ? 22 : 0)} color={color} delay={flight} width={beat.lead ? 4 : 3} />
+          {beat.damage > 0 && <Ticks at={end} size={54 + beat.tier * 16 + (beat.lead ? 30 : 0)} color={color} delay={flight} />}
         </>
       )}
 
@@ -193,9 +201,14 @@ const BeatView: React.FC<{ beat: Beat; anchors: Anchors; size: Size }> = React.m
         // Three rows, by step, so the names of weapons that fire one after another do not land on each other
         <Tag at={{ x: sourceRect.x + sourceRect.w / 2, y: sourceRect.y + sourceRect.h + 3 + (beat.step % 3) * 16 }} text={beat.source.name} maxX={size.w} />
       )}
-      {label && (
-        <Stamp at={labelAt} text={label} color={labelColor} tier={beat.tier} delay={labelDelay} sticker={sticker} sour={beat.sour} fromLeft={beat.lead && !!end} maxX={size.w} />
-      )}
+      {label && row.banner && board ? (
+        <>
+          <Banner rect={board} text={label} color={color} delay={labelDelay} />
+          {places[0] && <Sparkles rect={places[0]} color="#FFDE00" delay={labelDelay + 80} />}
+        </>
+      ) : label ? (
+        <Stamp at={labelAt} text={label} color={labelColor} tier={beat.tier} delay={labelDelay} sticker={sticker} sour={beat.sour} fromLeft={besideFighter} lead={beat.lead && !!end} maxX={size.w} />
+      ) : null}
     </>
   );
 });
@@ -206,7 +219,9 @@ export const FxStage: React.FC<{ fx: FightFx; anchors: Anchors; size: Size }> = 
   <View style={st.stage} pointerEvents="box-none" testID="fx-stage">
     {fx.ghosts.map(g => {
       const rect = anchors.rect(`slot:${g.slot}`);
-      return rect ? <Ghost key={g.key} rect={rect} card={g.card} broken={g.broken} how={g.how} color={g.color} /> : null;
+      // A thrown card flies at the foe
+      const foe = g.how === 'throw' ? anchors.rect('foe') : null;
+      return rect ? <Ghost key={g.key} rect={rect} card={g.card} broken={g.broken} how={g.how} color={g.color} to={foe ? centerOf(foe) : null} order={g.order} /> : null;
     })}
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
       {fx.beats.map(b => <BeatView key={b.key} beat={b} anchors={anchors} size={size} />)}
