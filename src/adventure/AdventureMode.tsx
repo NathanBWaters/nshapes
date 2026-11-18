@@ -334,6 +334,13 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave, coldO
         onSelectCharm={id => { sfx('click'); setSave(s => toggleCharm(s, id)); }}
         onSelectArcana={id => { sfx('click'); setSave(s => toggleArcana(s, id)); }}
         onShowMechanic={id => setReference(MECHANICS[id])}
+        onOpenCamp={tab => {
+          // The lesson was read and is being acted on: it counts as seen, and the fight waits on the map
+          sfx('confirm');
+          if (preview) setSave(s => markMechanicSeen(s, LESSON_KEYS.mechanic(preview.introduces)));
+          setPreview(null);
+          setScreen({ kind: 'camp', tab });
+        }}
       />
       {teaching ? (
         <MechanicIntro

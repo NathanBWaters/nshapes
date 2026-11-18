@@ -209,6 +209,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
     title: 'Skill Trees',
     tagline: 'Spend stars at Camp to power up your fighter.',
     coach: 'Tough hide! Land one big hit: 7 or more.',
+    camp: { tab: 'fighters', label: 'Spend your stars at Camp' },
     body: [
       'Spend stars in your fighter\'s Skill Tree at Camp. Refunds are always free.',
       'Land one hit of 7 or more for the third star.',

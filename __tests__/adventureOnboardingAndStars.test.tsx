@@ -549,6 +549,22 @@ describe('Adventure first minutes: the screens', () => {
     expect(screen.getByText(MECHANICS[level.introduces].coach!)).toBeTruthy();
   });
 
+  it('a lesson that is used at Camp offers to go there before the fight (skill trees on 1-7)', () => {
+    const screen = render(wrap(<AdventureMode initialSave={createSaveBefore('1-7')} onExit={() => {}} />));
+    fireEvent.press(screen.getByTestId('map-node-1-7'));
+    expect(screen.getByTestId('preview-lesson')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('preview-lesson-camp'));
+    // Straight to the fighters and their trees, with the stars earned so far ready to spend
+    expect(screen.queryByTestId('preview-play')).toBeNull();
+    expect(screen.getByTestId('camp-open-tree-Orange Tabby')).toBeTruthy();
+    // Other lessons have nothing to do at Camp
+    screen.unmount();
+    mockKvStore.clear();
+    const other = render(wrap(<AdventureMode initialSave={createSaveBefore('1-2')} onExit={() => {}} />));
+    fireEvent.press(other.getByTestId('map-node-1-2'));
+    expect(other.queryByTestId('preview-lesson-camp')).toBeNull();
+  });
+
   it('keeps gear management off the preview until the game has taught it', () => {
     const noop = () => {};
     const props = { onClose: noop, onPlay: noop, onSelectFighter: noop, onSelectCharm: noop, onShowMechanic: noop };

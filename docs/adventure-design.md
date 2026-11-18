@@ -563,7 +563,7 @@ src/adventure/
   rules/types.ts        the shared rule vocabulary (triggers, conditions, effects, modifiers)
   rules/engine.ts       the interpreter: drain(), conditions, effects, doubling, loop safety
   data/levels.ts        ← THE campaign table (main path + side branches)
-  data/mechanics.ts     lessons, quizzes, fight tips, coach marks
+  data/mechanics.ts     lessons, quizzes, the fighter's opening line (`coach`), first-time tips (`coachMark`), a Camp link (`camp`)
   data/fighters.ts      six fighters, two passives each
   data/passives.ts      passive tuning keys + player text
   data/skillTrees.ts    120 skill nodes
@@ -582,13 +582,16 @@ src/adventure/
   data/rewards.ts       what a reward unlocks, and "Earn ★★ on 1-7…" unlock hints
   data/biomes.ts        worlds, star gates, palettes, music arrangement
   data/foes.ts          FoeDef → enemy instance or sparring foe
-  data/rules.ts         base fight constants (Rainbow ×2, power/gold chances…)
-  data/story.ts         story pages (placeholder text)
+  data/rules.ts         base fight constants (Rainbow ×2, power/gold chances…), stuck-help timings (ASSIST_RULES)
+  data/story.ts         the story: three beats, played once before the first fight
+  coach.ts              what the fighter says and lights up in a fight (walk-through, mistakes, stuck help, remarks), map and results lines
+  components/StoryIntro.tsx   the cold open
+  components/StageBubble.tsx  the speech bubble on the battle stage (fighter and foe)
   loadout.ts            what the fighter brings into a level (slots, features, stats)
   progress.ts           pure rules: unlocks, rewards, star pool, purchases, refunds, migration
   weaponLevels.ts       a weapon's level (copies found) and Workshop tuning purchases
   save.ts               MMKV persistence (key adventure_v2_save, version 1)
-  lessons.ts            lessons still to play, save-dependent lesson pages
+  lessons.ts            lessons still to play, which of them the preview sheet already taught (`taughtOnPreview`)
   engine/run.ts         pure reducer for one fight (seeded RNG), createRun, computeStars
   engine/fight.ts       draft state + primitives (damage, hearts, area destruction, Catalyst & trap placement)
   engine/sources.ts     live rule sources, modifier combining, EVOLUTION_RULES

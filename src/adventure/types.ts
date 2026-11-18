@@ -52,6 +52,11 @@ export interface MechanicDef {
   enables?: FeatureFlag;
   /** One short line the companion says as the first fight with this mechanic opens (under about 60 characters) */
   coach?: string;
+  /**
+   * The mechanic is used at Camp (skill trees): the level's lesson card offers
+   * to go there, so the new thing can be used before the fight that asks for it.
+   */
+  camp?: { tab: 'fighters' | 'armory' | 'arcana' | 'workshop' | 'bounties'; label: string };
   /** In-run tip shown the first time it happens (keyed by run event). The player must accept it. */
   coachMark?: { on: RunEventType; text: string };
   /** Tips shown one by one when the first fight with this mechanic starts. Each must be accepted. */

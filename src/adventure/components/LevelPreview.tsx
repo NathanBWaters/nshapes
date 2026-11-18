@@ -55,9 +55,11 @@ interface Props {
   /** Equip the Arcana (swapping out the oldest when full), take it off if worn */
   onSelectArcana?: (id: ArcanaId) => void;
   onShowMechanic: (id: string) => void;
+  /** Leave for Camp (a lesson that is used there, like skill trees, offers it) */
+  onOpenCamp?: (tab: NonNullable<MechanicDef['camp']>['tab']) => void;
 }
 
-const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectFighter, onSelectCharm, onSelectArcana, onShowMechanic }) => {
+const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectFighter, onSelectCharm, onSelectArcana, onShowMechanic, onOpenCamp }) => {
   const [charmTapCounts, setCharmTapCounts] = useState<Record<string, number>>({});
   /** The charm tapped last: explained below the row even when it could not be equipped */
   const [focusCharm, setFocusCharm] = useState<string | null>(null);
@@ -135,7 +137,7 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
             ) : practice ? null : (
               // The lesson: the one new thing this level brings, with its picture. Tap for the full page.
               // (A practice level says what it is in its own box, below.)
-              <LessonCard mech={mech} isNew={isNew} onMore={() => onShowMechanic(level.introduces)} />
+              <LessonCard mech={mech} isNew={isNew} onMore={() => onShowMechanic(level.introduces)} onOpenCamp={onOpenCamp} />
             )}
 
             <View style={st.rules}>
@@ -463,7 +465,7 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
  * The one thing this level teaches. New: a card with its picture (this IS the
  * lesson; the fight starts straight from the sheet). Seen before: one line.
  */
-const LessonCard: React.FC<{ mech: MechanicDef; isNew: boolean; onMore: () => void }> = ({ mech, isNew, onMore }) => (
+const LessonCard: React.FC<{ mech: MechanicDef; isNew: boolean; onMore: () => void; onOpenCamp?: Props['onOpenCamp'] }> = ({ mech, isNew, onMore, onOpenCamp }) => (
   <TouchableOpacity testID="preview-lesson" onPress={onMore} activeOpacity={0.9} style={[st.lesson, isNew && st.lessonNew]} accessibilityRole="button" accessibilityLabel={`${mech.title}: ${mech.tagline} Tap to read more`}>
     <View style={st.lessonHead}>
       <View style={[st.lessonIcon, isNew && { backgroundColor: COLORS.actionYellow }]}><Icon name={mech.icon} size={20} color={INK} /></View>
@@ -475,6 +477,10 @@ const LessonCard: React.FC<{ mech: MechanicDef; isNew: boolean; onMore: () => vo
     </View>
     <Text style={st.lessonText}>{mech.tagline}</Text>
     {isNew && mech.demo && <DemoView demo={mech.demo} light compact />}
+    {/* Something that is used at Camp can be used right now, before the fight that asks for it */}
+    {mech.camp && onOpenCamp && (
+      <Btn testID="preview-lesson-camp" small variant="secondary" icon="lorc/campfire" label={mech.camp.label} onPress={() => onOpenCamp(mech.camp!.tab)} />
+    )}
   </TouchableOpacity>
 );
 
