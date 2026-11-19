@@ -492,12 +492,15 @@ describe('the fight the band hears', () => {
     expect(alertsOf({ ...s, board: s.board.map((c, i) => (i === 0 ? { ...c, thornAt: s.elapsedMs + 60000 } : c)) }).thornSoon).toBe(false);
   });
 
-  it('registers slow-mo defeat and Angry Birds star stamp cues and runs slowMoDefeat safely without Web Audio', () => {
+  it('registers slow-mo defeat, Angry Birds star stamp, and damage story crescendo cues safely without Web Audio', () => {
     expect(CUE_NAMES).toContain('slowMoDefeat');
     expect(CUE_NAMES).toContain('starSwoosh');
     expect(CUE_NAMES).toContain('star');
     expect(CUE_NAMES).toContain('rankSeal');
+    expect(CUE_NAMES).toContain('storyClimax');
     expect(() => band.slowMoDefeat({ boss: true, perfectParry: true })).not.toThrow();
+    expect(() => band.storyBeat({ weaponId: 'war-drum', step: 0, totalSteps: 5 })).not.toThrow();
+    expect(() => band.storyBeat({ step: 4, totalSteps: 5 })).not.toThrow();
     expect(() => band.finale(true)).not.toThrow();
   });
 });

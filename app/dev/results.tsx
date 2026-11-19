@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import AdventureMode from '@/adventure/AdventureMode';
 import { createMaxedSave, createNewSave, createSaveBefore } from '@/adventure/progress';
+import { BOUNTIES } from '@/adventure/data/bounties';
 import { getLevel } from '@/adventure/data/levels';
 import { simulateRun, BOTS } from '@/adventure/engine/bot';
 import type { AdventureSave, RunState } from '@/adventure/types';
@@ -26,10 +27,16 @@ const CASES: Record<string, { level: string; stars: number; save: string }> = {
   two: { level: '1-1', stars: 2, save: 'maxed' },
   first: { level: '2-5', stars: 3, save: 'before' },
   fighter: { level: '1-5', stars: 3, save: 'before' },
+  geared: { level: '2-4', stars: 3, save: 'geared' },
 };
 
-const saveFor = (kind: string, levelId: string): AdventureSave =>
-  kind === 'maxed' ? createMaxedSave() : kind === 'fresh' ? createNewSave() : createSaveBefore(levelId);
+const saveFor = (kind: string, levelId: string): AdventureSave => {
+  if (kind === 'geared') {
+    const s = createMaxedSave();
+    return { ...s, completedBounties: BOUNTIES.map(b => b.id) };
+  }
+  return kind === 'maxed' ? createMaxedSave() : kind === 'fresh' ? createNewSave() : createSaveBefore(levelId);
+};
 
 /** A won fight on `levelId`, played by the expert bot; patched to land on exactly `stars`. */
 const wonRun = (levelId: string, save: AdventureSave, stars: number, seed: number): RunState => {

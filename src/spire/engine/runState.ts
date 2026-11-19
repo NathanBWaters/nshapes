@@ -15,6 +15,7 @@ import { skillTreeOf } from '@/adventure/data/skillTrees';
 import { getUpgrade } from '@/adventure/data/upgrades';
 import { MAX_WEAPON_LEVEL } from '@/adventure/data/weaponStats';
 import { damagePerMinute } from '@/adventure/history';
+import { mergeSpireDamageLedger } from '@/adventure/engine/damageStory';
 import { createRng, type Rng } from '@/adventure/engine/rng';
 import { ascensionModifiers } from '../data/ascensions';
 import { generateSpireEncounter, SPIRE_WEAPON_POOL, STARTER_KITS } from '../data/encounters';
@@ -353,6 +354,12 @@ export const completeSpireBattle = (run: SpireRun, fight: RunState): SpireRun =>
   const won = fight.status === 'won' && fight.endReason === 'defeated';
   const dpm = damagePerMinute(fight);
   const mergedRecipes = [...new Set([...run.stats.forgedRecipeIds, ...fight.forgedRecipes])];
+  const { sourceDamage, floorLedger } = mergeSpireDamageLedger(
+    run.stats.sourceDamage,
+    run.stats.floorLedger,
+    run.floor,
+    fight
+  );
 
   const nextStats = {
     ...run.stats,
@@ -368,6 +375,8 @@ export const completeSpireBattle = (run: SpireRun, fight: RunState): SpireRun =>
     perfectParries: run.stats.perfectParries + fight.perfectParriesLanded,
     evolutionsForged: run.stats.evolutionsForged + fight.evolutionsTriggered,
     forgedRecipeIds: mergedRecipes,
+    sourceDamage,
+    floorLedger,
   };
 
   if (!won) {

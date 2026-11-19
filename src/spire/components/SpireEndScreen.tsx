@@ -3,12 +3,15 @@
  *
  * Reuses `FighterAvatar`, `WeaponAvatar`, `FightReplay`, and shared `ui.tsx`.
  */
-import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import Icon from '@/components/Icon';
 import { FighterAvatar } from '@/components/fighters';
 import { COLORS } from '@/utils/colors';
+import { buildDamageStory, buildSpireRunDamageStory } from '@/adventure/engine/damageStory';
+import BattleDamageStory from '@/adventure/components/BattleDamageStory';
 import FightReplay from '@/adventure/components/FightReplay';
 import { WeaponChip } from '@/adventure/components/SharedCards';
 import { Btn, DARK, Eyebrow, INK, PopIn, TONE } from '@/adventure/components/ui';
@@ -34,9 +37,21 @@ const SpireEndScreen: React.FC<Props> = ({
   onExitToMenu,
 }) => {
   const insets = useSafeAreaInsets();
+  const reduced = useReducedMotion();
   const [replayOpen, setReplayOpen] = useState(false);
+  const [storyScope, setStoryScope] = useState<'climb' | 'final'>('climb');
   const held = spireHeldWeapons(run);
-  const builds = buildSpireWeaponBuilds(run);
+  const builds = useMemo(() => buildSpireWeaponBuilds(run), [run]);
+  const climbStory = useMemo(
+    () => buildSpireRunDamageStory(run.stats.sourceDamage, run.stats.floorLedger),
+    [run.stats.sourceDamage, run.stats.floorLedger]
+  );
+  const finalFightStory = useMemo(() => (lastFight ? buildDamageStory(lastFight.run) : null), [lastFight]);
+  const activeStory =
+    storyScope === 'final' && finalFightStory && finalFightStory.totalDamage > 0
+      ? finalFightStory
+      : climbStory ?? finalFightStory;
+  const canToggleScope = !!(climbStory && finalFightStory && finalFightStory.totalDamage > 0 && (run.stats.floorLedger?.length ?? 0) > 1);
 
   return (
     <View style={[st.root, { paddingTop: insets.top }]} testID={victory ? 'spire-victory' : 'spire-defeat'}>
@@ -65,6 +80,40 @@ const SpireEndScreen: React.FC<Props> = ({
             mood={victory ? 'victory' : 'defeat'}
           />
         </PopIn>
+
+        {/* Brotato-Style Cumulative Damage Story (Full Climb + optional Final Fight toggle) */}
+        {activeStory && activeStory.totalDamage > 0 && (
+          <BattleDamageStory
+            story={activeStory}
+            title={activeStory === climbStory ? 'FULL CLIMB DAMAGE' : 'FINAL FIGHT DAMAGE'}
+            weaponBuilds={activeStory === finalFightStory && lastFight ? lastFight.builds : builds}
+            startDelayMs={280}
+            reduced={reduced}
+            testID="spire-end-damage-story"
+            headerRight={
+              canToggleScope ? (
+                <View style={st.scopeToggle}>
+                  <TouchableOpacity
+                    testID="spire-story-scope-climb"
+                    onPress={() => { sfx('click'); setStoryScope('climb'); }}
+                    style={[st.scopeBtn, storyScope === 'climb' && st.scopeBtnActive]}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[st.scopeBtnText, storyScope === 'climb' && st.scopeBtnTextActive]}>Climb</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    testID="spire-story-scope-final"
+                    onPress={() => { sfx('click'); setStoryScope('final'); }}
+                    style={[st.scopeBtn, storyScope === 'final' && st.scopeBtnActive]}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[st.scopeBtnText, storyScope === 'final' && st.scopeBtnTextActive]}>Last</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : undefined
+            }
+          />
+        )}
 
         {/* Run Stats Grid */}
         <View style={st.statsCard}>
@@ -154,6 +203,31 @@ const st = StyleSheet.create({
   metricVal: { fontSize: 15, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
   metricLabel: { fontSize: 10, fontWeight: '800', color: TONE.spent },
   gearWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  scopeToggle: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.paperBeige,
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: INK,
+    padding: 1.5,
+    gap: 2,
+  },
+  scopeBtn: {
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  scopeBtnActive: {
+    backgroundColor: INK,
+  },
+  scopeBtnText: {
+    fontSize: 9.5,
+    fontWeight: '900',
+    color: INK,
+  },
+  scopeBtnTextActive: {
+    color: COLORS.actionYellow,
+  },
   actions: { gap: 8 },
 });
 

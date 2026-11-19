@@ -17,6 +17,7 @@ import type {
   RunState,
 } from '@/adventure/types';
 import type { WeaponBuilds } from '@/adventure/data/weaponStats';
+import type { SpireFloorDamageSnapshot, SpireSourceDamageEntry } from '@/adventure/engine/damageStory';
 
 export type SpireNodeKind = 'skirmish' | 'elite' | 'shop' | 'campfire' | 'event' | 'treasure' | 'boss';
 
@@ -186,6 +187,10 @@ export interface SpireRunStats {
   forgedRecipeIds: string[];
   coinsSpent: number;
   eventsResolved: number;
+  /** Cumulative damage dealt by each weapon/passive/skill/Set across the entire climb (Brotato-style) */
+  sourceDamage?: Record<string, SpireSourceDamageEntry>;
+  /** Floor-by-floor cumulative damage snapshots for the full-climb over-time graph */
+  floorLedger?: SpireFloorDamageSnapshot[];
 }
 
 export interface SpireRun {

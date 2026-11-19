@@ -3,7 +3,7 @@
  * then the coins count out; unlocks wait for their reveal.
  * The choreography lives in ResultsMotion.tsx (review: docs/motion/reviews/results-payout.md).
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -25,10 +25,12 @@ import { shouldShowDamageNumbers, companionResultsLine } from '../coach';
 import CompanionBubble from './CompanionBubble';
 import { explainStarBreakdown } from '../engine/challenges';
 import { Btn, INK, starLandMs, starPopDelayMs, StarRow, TONE } from './ui';
-import { coinRollAmount, coinRollTicks, coinStartMs, CountingCoinPill, FadeAt, FIGHTER_CHEER_LAG_MS, missesShownMs, ResultsCard, ResultStars, revealPayoutMs, rowTurnMs, sealLandMs, TICK_LAG_MS, TickAt, TurnOver, VictorySeal, VictorySunburst } from './ResultsMotion';
+import { COIN_TICK_MS, coinRollAmount, coinRollTicks, coinStartMs, CountingCoinPill, FadeAt, FIGHTER_CHEER_LAG_MS, missesShownMs, ResultsCard, ResultStars, revealPayoutMs, rowTurnMs, sealLandMs, TICK_LAG_MS, TickAt, TurnOver, VictorySeal, VictorySunburst } from './ResultsMotion';
 import { Silhouette, UnlockableAvatar, describeRewardUnlocks, describeUnlock } from './rewards';
 import type { FunRating, FunTag } from '@/analytics/fightEvent';
 import RoundFunPrompt from '@/components/RoundFunPrompt';
+import { buildDamageStory } from '../engine/damageStory';
+import BattleDamageStory from './BattleDamageStory';
 import FightReplay from './FightReplay';
 import PowerExplainer from './PowerExplainer';
 
@@ -192,6 +194,16 @@ const LevelResults: React.FC<Props> = ({
         .slice(0, 2)
     : [];
   const showNumbers = shouldShowDamageNumbers(level, result.save);
+  const damageStory = useMemo(() => buildDamageStory(run), [run]);
+  const showDamageStory =
+    damageStory.totalDamage > 0 &&
+    (showNumbers || practice || run.weapons.length > 0 || damageStory.sources.length >= 2);
+  // Start the 3-second battle damage story crescendo cleanly after stars & coins settle
+  const storyStartDelayMs = revealedAtStart.current
+    ? showBank && !practice
+      ? coinStartMs(stars) + rollTicks * COIN_TICK_MS + 260
+      : (stars > 0 ? starLandMs(stars - 1) : 0) + 380
+    : revealPayoutMs(handoffRows) + (showBank && !practice ? rollTicks * COIN_TICK_MS + 260 : 320);
   const canGoOn = won && !!nextLevel && nextUnlocked;
   const nextFoe = canGoOn && nextLevel ? levelFoe(nextLevel) : null;
   const nextIsNew = !!nextLevel && !result.save.seenMechanics.includes(nextLevel.introduces);
@@ -427,6 +439,16 @@ const LevelResults: React.FC<Props> = ({
               evolutionsTriggered={run.evolutionsTriggered}
               subtitle={`Finished the fight at ${formatPower(run.power)}`}
               compact
+            />
+          )}
+
+          {showDamageStory && (
+            <BattleDamageStory
+              story={damageStory}
+              weaponBuilds={run.weaponBuilds}
+              startDelayMs={storyStartDelayMs}
+              active={unlocksRevealed}
+              reduced={reduced}
             />
           )}
 

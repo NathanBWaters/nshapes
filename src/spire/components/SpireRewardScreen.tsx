@@ -5,19 +5,22 @@
  * `FightReplay.tsx`, and shared `WeaponOfferRow` / `SkillNodeRow` / `ArcanaCard`
  * so drafts look and behave identically to Adventure Mode!
  */
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import Icon from '@/components/Icon';
 import { COLORS } from '@/utils/colors';
 import type { ArcanaId } from '@/adventure/types';
 import { getArmoryWeapon } from '@/adventure/data/armory';
 import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
+import { buildDamageStory, buildSpireRunDamageStory } from '@/adventure/engine/damageStory';
+import BattleDamageStory from '@/adventure/components/BattleDamageStory';
 import WeaponExplainer from '@/adventure/components/WeaponExplainer';
 import FightReplay from '@/adventure/components/FightReplay';
 import { ArcanaCard, SkillNodeRow, WeaponOfferRow } from '@/adventure/components/SharedCards';
 import { Btn, CoinPill, Eyebrow, INK, PopIn, TONE } from '@/adventure/components/ui';
 import { band, sfx } from '@/audio';
-import { newEvolutionsArmedBy } from '../engine/bridge';
+import { buildSpireWeaponBuilds, newEvolutionsArmedBy } from '../engine/bridge';
 import { REWARD_REROLL_COST, SKIP_WEAPON_COINS } from '../engine/runState';
 import type { SpireLastFightSnapshot, SpireRewardBundle, SpireRun } from '../types';
 
@@ -48,8 +51,18 @@ const SpireRewardScreen: React.FC<Props> = ({
   onSkipSkill,
   onContinue,
 }) => {
+  const reduced = useReducedMotion();
   const [inspectIdx, setInspectIdx] = useState<number>(0);
   const [replayOpen, setReplayOpen] = useState(false);
+
+  const damageStory = useMemo(
+    () =>
+      lastFight
+        ? buildDamageStory(lastFight.run)
+        : buildSpireRunDamageStory(run.stats.sourceDamage, run.stats.floorLedger),
+    [lastFight, run.stats.sourceDamage, run.stats.floorLedger]
+  );
+  const storyBuilds = useMemo(() => lastFight?.builds ?? buildSpireWeaponBuilds(run), [lastFight, run]);
 
   const inspectedOffer = reward.weaponOptions[inspectIdx] ?? reward.weaponOptions[0] ?? null;
   const inspectedWeapon = inspectedOffer
@@ -93,6 +106,17 @@ const SpireRewardScreen: React.FC<Props> = ({
             />
           )}
         </PopIn>
+
+        {damageStory && damageStory.totalDamage > 0 && (
+          <BattleDamageStory
+            story={damageStory}
+            title={lastFight ? `FLOOR ${run.floor} DAMAGE BREAKDOWN` : 'CLIMB DAMAGE REPORT'}
+            weaponBuilds={storyBuilds}
+            startDelayMs={260}
+            reduced={reduced}
+            testID="spire-reward-damage-story"
+          />
+        )}
 
         {/* 1. Weapon Draft */}
         {!reward.weaponClaimed && reward.weaponOptions.length > 0 && (

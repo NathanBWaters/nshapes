@@ -124,4 +124,22 @@ export default {
     trigger: async (page, h) => h.tap((await h.present('unlock-later')) ? 'unlock-later' : 'unlock-primary'),
     frames: 150,
   },
+  'results-story': {
+    id: 'results-story',
+    about: 'The 3-second Brotato cumulative weapon & passive damage story crescendo on a geared 2-4 win (/dev/results?case=geared)',
+    path: resultsPath('geared'),
+    ready: (page, h) => h.until('battle-damage-story'),
+    prepare: async (page, h) => {
+      // Wait for stars, coins, and the initial auto-play crescendo to settle completely
+      await h.advance(6400);
+      await h.reveal('battle-damage-story');
+      await h.advance(300);
+    },
+    trigger: async (page, h) => {
+      if (await h.present('battle-damage-story-replay-btn')) {
+        await h.tap('battle-damage-story-replay-btn');
+      }
+    },
+    frames: 195,
+  },
 };

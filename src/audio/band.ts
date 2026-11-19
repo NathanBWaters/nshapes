@@ -63,7 +63,7 @@ export type CueName =
   | 'doubled' | 'armed' | 'charged' | 'warDrum' | 'clarity' | 'clarityEnd' | 'pinata' | 'pinataBreak' | 'link'
   | 'purity' | 'rainbow' | 'catalyst' | 'trapSet' | 'trapDefused' | 'trapSprung' | 'burn' | 'overkill'
   | 'streakLost' | 'sour' | 'reelStop' | 'register' | 'reelSpin' | 'star' | 'starSwoosh' | 'rankSeal' | 'coinRoll' | 'weaponGet' | 'tap' | 'back'
-  | 'parryWarn' | 'parry' | 'perfectParry' | 'foeStrike' | 'multStep' | 'multSlam' | 'killCamRiser' | 'killCamShatter' | 'slowMoDefeat';
+  | 'parryWarn' | 'parry' | 'perfectParry' | 'foeStrike' | 'multStep' | 'multSlam' | 'killCamRiser' | 'killCamShatter' | 'slowMoDefeat' | 'storyClimax';
 
 export interface CueOpts {
   /** How big the thing is (damage, coins, a count): scales the cue */
@@ -573,7 +573,7 @@ class Band {
 
   /** Play a named cue on the next 32nd note, in key. */
   cue(name: CueName, o: CueOpts = {}) {
-    const immediate = name === 'tap' || name === 'back' || name === 'slowMoDefeat' || name === 'star' || name === 'starSwoosh' || name === 'rankSeal';
+    const immediate = name === 'tap' || name === 'back' || name === 'slowMoDefeat' || name === 'star' || name === 'starSwoosh' || name === 'rankSeal' || name === 'storyClimax';
     const c = this.cueCtx(o.slot ?? 0, immediate, o.afterMs);
     if (!c) return;
     // The same cue twice inside a 32nd is one sound, not two
@@ -638,6 +638,39 @@ class Band {
   /** Audition an evolution's fanfare (Recipe Guide, unlock screen). */
   auditionEvolution(recipeId: string) {
     this.evolve(recipeId);
+  }
+
+  /**
+   * One beat of the 3-second Battle Damage Story crescendo: plays the peaking weapon's
+   * real instrument voice (or a rising harmonic chime for passives/Sets), climbing up
+   * the scale and gaining energy as the cumulative damage graph races toward its climax.
+   */
+  storyBeat(opts: { weaponId?: string; step: number; totalSteps: number }) {
+    const c = this.cueCtx(0, true);
+    if (!c) return;
+    const total = Math.max(1, opts.totalSteps);
+    const ratio = Math.max(0, Math.min(1, opts.step / Math.max(1, total - 1)));
+    const deg = ladderDegree(c.mode, Math.min(10, opts.step));
+    const vol = 0.58 + ratio * 0.34;
+    const pan = opts.step % 2 === 0 ? -0.35 : 0.35;
+    logCue(opts.weaponId ? `story:${opts.weaponId}` : 'story:beat', c.t, this.now);
+
+    if (opts.weaponId) {
+      const v = weaponVoice(opts.weaponId);
+      const oct = Math.min(6, v.octave + (v.octave <= 3 ? 1 : 0));
+      const motif = stingOf(v).slice(0, 2);
+      motif.forEach((s, i) => {
+        const freq = degreeToFreq(c.mode, c.key, c.root + s + Math.floor(opts.step / 2), oct);
+        note(v.inst, freq, c.t + i * c.g * 0.9, c.g * 2.8, { vol: vol * 0.95, pan: v.pan, bus: SFX });
+      });
+      if (v.drum) drum(v.drum, c.t, 0.45 + ratio * 0.35, SFX, v.pan);
+      // Delicate ascending celesta shimmer linking each weapon voice into one musical crescendo
+      note('celesta', degreeToFreq(c.mode, c.key, deg, 6), c.t + c.g * 0.5, 0.28, { vol: 0.35 + ratio * 0.22, pan, bus: SFX });
+    } else {
+      note('marimba', degreeToFreq(c.mode, c.key, deg, 5), c.t, 0.22, { vol: vol * 0.85, pan, bus: SFX });
+      note('celesta', degreeToFreq(c.mode, c.key, deg + 4, 6), c.t + c.g * 0.6, 0.3, { vol: 0.42 + ratio * 0.25, pan: -pan, bus: SFX });
+      drum(ratio > 0.65 ? 'woodblock' : 'shaker', c.t, 0.4 + ratio * 0.25, SFX, pan);
+    }
   }
 
   /**
@@ -1164,6 +1197,16 @@ const CUES: Record<CueName, (c: CueCtx) => void> = {
     note('bell', bellF, c.t, 0.68, { vol: 0.92, bus: SFX, slideTo: bellF * sag });
     note('horn', hornF, c.t + 0.01, 0.75, { vol: 0.88, bus: SFX, slideTo: hornF * sag });
     note('glass', glassF, c.t + 0.02, 0.82, { vol: 0.65, bus: SFX, slideTo: glassF * 0.89 });
+  },
+  // Resolution chord when the 3-second Battle Damage Story crescendo crowns the MVP item
+  storyClimax: c => {
+    D(c, 'taiko', 0, 0.72);
+    D(c, 'tamb', 0.02, 0.55);
+    N(c, 'bell', 7, 6, 0, 0.95, 0.88);
+    for (const d of [0, 2, 4, 7]) N(c, 'strings', d, 4, 0, 0.9, 0.68);
+    [0, 2, 4, 7].forEach((d, i) =>
+      note('glock', fq(c, d, 6), c.t + i * 0.032, 0.42, { vol: 0.58, bus: SFX, pan: i % 2 ? 0.45 : -0.45 })
+    );
   },
 
   // Menus
