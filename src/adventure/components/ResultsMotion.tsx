@@ -11,7 +11,7 @@
  * piece renders finished and the coin total is shown at once.
  */
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, StyleProp, ViewStyle } from 'react-native';
+import { View, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, withDelay, withSpring, runOnJS, ReduceMotion } from 'react-native-reanimated';
 import { EASE, exitMs, MS, SCALE, SPRING, SQUASH, STAGGER, staggerDelay } from '@/utils/motion';
 import { CoinPill, INK, STAR_FALL_MS, starLandMs, starPopDelayMs, TONE } from './ui';
@@ -89,22 +89,27 @@ const BigStar: React.FC<{ filled: boolean; size: number; delay: number; big: boo
   const sy = useSharedValue(1);
   const o = useSharedValue(animate ? 0 : 1);
   const ring = useSharedValue(animate ? 0 : 1);
+  // The empty grey slot is only for a star not (yet) won: it goes on the frame its gold star covers it,
+  // or the squash (wider and shorter) shows its tip and legs around the gold one
+  const pip = useSharedValue(filled && !animate ? 0 : 1);
   useEffect(() => {
     if (!animate) return;
     const land = delay + STAR_FALL_MS;
+    pip.value = withDelay(land, withTiming(0, { duration: 16 }));
     o.value = withDelay(delay, withTiming(1, { duration: MS.feedback, easing: EASE.ui }));
     s.value = withDelay(delay, withTiming(1, { duration: STAR_FALL_MS, easing: EASE.impact }));
     // The hit: squashed wide and short on the landing frame, held 2 frames, then back on a lively spring
     sx.value = withDelay(land, withSequence(withTiming(SQUASH.squash.x, { duration: 16, easing: EASE.ui }), withDelay(SQUASH_HOLD_MS, withSpring(1, SPRING.lively))));
     sy.value = withDelay(land, withSequence(withTiming(SQUASH.squash.y, { duration: 16, easing: EASE.ui }), withDelay(SQUASH_HOLD_MS, withSpring(1, SPRING.lively))));
     ring.value = withDelay(land, withTiming(1, { duration: MS.move, easing: EASE.enter }));
-  }, [animate, delay, s, sx, sy, o, ring]);
+  }, [animate, delay, s, sx, sy, o, ring, pip]);
 
   const k = 1 / SCALE.slam;
   const starStyle = useAnimatedStyle(() => ({
     opacity: o.value,
     transform: [{ scaleX: s.value * sx.value * k }, { scaleY: s.value * sy.value * k }],
   }));
+  const pipStyle = useAnimatedStyle(() => ({ opacity: pip.value }));
   const reach = big ? 1.9 : 1.6;
   const ringStyle = useAnimatedStyle(() => ({
     opacity: ring.value <= 0 || ring.value >= 1 ? 0 : 0.9 * (1 - ring.value),
@@ -120,7 +125,7 @@ const BigStar: React.FC<{ filled: boolean; size: number; delay: number; big: boo
   const ringD = size * 0.95;
   return (
     <View style={{ width: w, height: h }}>
-      <Text style={[glyph, StyleSheet.absoluteFillObject, { color: TONE.emptyPip }]}>★</Text>
+      <Animated.Text style={[glyph, StyleSheet.absoluteFillObject, { color: TONE.emptyPip }, pipStyle]}>★</Animated.Text>
       {animate && (
         <Animated.View
           pointerEvents="none"

@@ -96,3 +96,14 @@ Three variants for the star (hero moment):
 - Sound timing is reasoned, not heard: the capture is silent and the band snaps cues to its next 32nd (up to ~60 ms late, never early).
 - First-time results (an unlock reveal opens at `starsLandedMs`): the coins count 450 ms after the last reveal closes. Not captured in this lane (the reveal is the unlock-reveal surface).
 - The fighter avatar still changes opacity on f47 of the reduced capture (its own reaction code: the creatures surface).
+
+## Follow-up: the grey star's tip (lane A, after the unlock surfaces)
+
+Seen on `results-quick` (`/dev/results?case=perfect`, the same frames as `results-payout` from the mount), `--dpr 2`, star 3 cropped.
+
+- **Before** (`motion-out/results-quick/tip-before`): star 3 lands on f36 and is squashed 1.2×0.8 f36-f41; the empty grey slot glyph under it is not squashed, so its tip shows above the gold star and its two legs below it for 6 frames (f36-f41), read as a grey shadow doubling the star.
+- **Change**: the empty slot (`pip`) fades to 0 in one frame on its gold star's landing frame (`withDelay(land, withTiming(0, 16 ms))`), and is not drawn at all under a star that is already filled at rest (reduced motion, or no animation). Nothing else moves.
+- **After** (`motion-out/results-quick/tip-after`): f36-f45 the gold star is alone, squash and ring as before. Compare: `motion-out/results-quick/tip-after/compare-tip-before-vs-tip-after.png`. Stars not won keep their grey slot.
+
+File: `src/adventure/components/ResultsMotion.tsx` (`BigStar`).
+
