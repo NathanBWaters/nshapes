@@ -4,7 +4,7 @@ A **surface** is one moment the player sees that can be captured as one shot and
 **Status:** `todo` (not started) · `shot` (captured, not yet scored) · `wip` (being changed) · `done` (re-scored and accepted) · `skip` (fine as is, or not worth the time).
 **Scores** are the seven rubric scores from `.agents/skills/motion-loop/references/critique.md`, in the order Response / Readability / Motion / Staging / Rhythm / Identity / Sync, each 1-10, written like `7/6/5/6/7/6/8`.
 **Shot** names how to capture it: `fx:<event>` is a button in `/dev/fx` (`fx-event-<event>`), `fx-cascade` and `fx-evolution` are the studio's sample runs, `—` means no capture recipe yet.
-The loop that works through this file is described in `.agents/skills/motion-loop/SKILL.md`; entry ids point into `docs/motion/inventory/` (`F:` fight-fx.md, `A:` adventure-screens.md, `S:` shared-components.md).
+The loop that works through this file is described in `.agents/skills/motion-loop/SKILL.md`; entry ids point into `docs/motion/inventory/` (`F:` fight-fx.md, `A:` adventure-screens.md, `S:` shared-components.md, `N:` spire-and-parry.md).
 This file is edited by whoever runs the loop: keep rows short; details, frame strips and decisions go to `docs/motion/reviews/<surface>.md`.
 
 ## Fight (every Set)
@@ -49,6 +49,16 @@ This file is edited by whoever runs the loop: keep rows short; details, frame st
 | fight-opening | "FIGHT!" banner, bell, both creatures enter, taunt | often | P2 | deal-in, entrances, taunt and banner all start at mount; bell at 260 ms vs slam ~120-235 ms; foe pops in on frame 1 | — | todo | — | F:41, S:fighter-react-entrance, S:enemy-react-entrance |
 | evolution-cut-in | Blade slashes, band opens, recipe slides in, tap | sometimes | P2 | content moves as one block; close is unscaled and timer-paired; prompt pulse reverse flag; reduced banner exits slower than enters | fx-evolution | todo | — | F:42, F:59, F:60, F:61, F:62, F:63, F:64, F:65, F:66 |
 | fight-overlays | Pause, explainer, inspector, level-up pick, shop fade in | sometimes | P3 | fade-only; no exit (only the Modal fade); fade and pop stacked | — | todo | — | F:43, F:44, A:hud-inspector-enter |
+
+## Fight (parry, ignition, kill-cam: added in v0.1.137)
+
+| Surface | What the player sees | Seen | Pri | Top problems | Shot | Status | Scores before → after | Entries |
+|---|---|---|---|---|---|---|---|---|
+| parry-bar-telegraph | Pill under the HUD fills red, snaps gold and throbs, "PARRY NOW!", teal when staggered | constant | P1 | fill animates width in 4 Hz steps; phase colours snap; throb ignores reduced motion and Effects off; scales its own text | — | todo | — | N:parry-bar-mount, N:parry-bar-fill, N:parry-bar-phase-swap, N:parry-bar-pulse, N:parry-bar-stall-badge, N:parry-bar-press, N:parry-warn-beat |
+| ignition-equation | Equation chips pop over the top card row, total slams, flames at high heat | constant | P1 | chips pop with no motion and re-flow; chip sounds late by i×grid (double offset); total slams after the foe already shows it; covers the board ~1.8 s; not in /dev/fx | — | todo | — | N:ignition-panel-enter, N:ignition-chip-reveal, N:ignition-total-slam, N:ignition-flame-tongues, N:ignition-panel-exit |
+| killcam-finisher | Screen dims, "FINISHING BLOW!" tag, white flash, star shards from the foe | often | P1 | white full-screen flash (banned; stacks with MegaFlash); second K.O. banner fights F:24; dims the Set's own hit; banner blinks out unreadable; plays on every wave's KO | — | todo | — | N:killcam-dim, N:killcam-banner, N:killcam-flash, N:killcam-star-shards |
+| parry-landed | After the throw: rings round the fighter, spark to the foe, flinch, "PARRY!" / gold sweep "PERFECT PARRY!" | often | P2 | foe shake survives Effects off; sound ~240 ms before the orb lands; Ignition announces the parry before it launches; perfect beat piles everything on one frame | — | todo | — | N:parry-counter-beat, N:parry-perfect-beat |
+| foe-strike | Unparried attack: dark orb to the hearts, foe lunges and shakes, fighter winces | often | P2 | attacker gets the "was hit" shake on its lunge frame; shake survives Effects off; sound leads the orb | — | todo | — | N:parry-foe-strike-beat |
 
 ## Creatures (fighter, foe, weapon avatars)
 
@@ -120,6 +130,21 @@ This file is edited by whoever runs the loop: keep rows short; details, frame st
 | button-press | Pressed button dims | constant | P2 | fade-only; release (250 ms) slower than press; 3D buttons never press down | — | todo | — | A:ui-btn-press, S:touchable-opacity-press |
 | companion-bubble | Companion's bubble text changes | often | P3 | text swaps with no transition | — | todo | — | A:companion-text-swap |
 
+## Starfall Spire (added in v0.1.137)
+
+| Surface | What the player sees | Seen | Pri | Top problems | Shot | Status | Scores before → after | Entries |
+|---|---|---|---|---|---|---|---|---|
+| spire-screen-cuts | Menu → setup → map → room / briefing → fight → reward → map: every screen cuts | constant | P2 | no transition anywhere; no climb between floors; act change is a cut; 900 ms still then a cut after fights | — | todo | — | N:menu-spire-enter-cut, N:spire-setup-to-map-cut, N:spire-map-node-press, N:spire-preview-to-fight-cut, N:spire-fight-to-reward-cut, N:spire-room-exit-cut, N:spire-map-act-change |
+| spire-map-climb | Reachable nodes bob; map opens scrolled to the next row | constant | P2 | bob ignores reduced motion (Adventure map gates it); all nodes in phase; scroll jumps instead of climbing | — | todo | — | N:spire-map-node-bob, N:spire-map-autoscroll |
+| spire-reward-draft | "FLOOR CLEARED!" card pops; pick a weapon, skill, arcana | constant | P2 | claiming has no moment: the section vanishes and the list jumps; reroll swaps instantly; payoff pop at 180 ms; coins not counted | — | todo | — | N:spire-reward-banner-popin, N:spire-reward-draft-claim |
+| spire-room-panels | Briefing, shop, campfire, event, treasure cards pop in; outcomes swap | constant | P3 | one 180 ms PopIn on the top card only, rest static; outcomes cut the options; treasure has no reveal; foe entrance and card pop start together | — | todo | — | N:spire-preview-card-popin, N:spire-preview-foe-entrance, N:spire-shop-header-popin, N:spire-campfire-popin, N:spire-campfire-submode-swap, N:spire-campfire-fighter-idle, N:spire-event-popin, N:spire-treasure-popin |
+| spire-purchases | Buy, heal, rest: coins and hearts change in the header | often | P3 | numbers swap instantly; bought row vanishes; forge list jumps open | — | todo | — | N:spire-shop-purchase, N:spire-header-stat-swap |
+| spire-run-end | "SPIRE CONQUERED!" / "CLIMB ENDED" card with the fighter cheering or slumped | once per run | P2 | the run's payoff is a 180 ms PopIn; nothing staged, no count-up | — | todo | — | N:spire-end-hero-popin, N:spire-end-fighter-acting |
+| spire-build-modal | Build inspector fades in; replay sheet slides up | sometimes | P3 | close is an instant unmount (no exit); fade and pop stacked | — | todo | — | N:spire-build-modal-open, N:spire-build-modal-close, N:spire-replay-modal |
+| spire-setup | Fighter pick, ascension stepper, resume card | once per run | P3 | selection is a colour swap and the avatar pops between frozen and animated; values swap | — | todo | — | N:spire-setup-mount, N:spire-setup-fighter-select, N:spire-setup-steppers |
+| spire-presses | Menu Spire button and Spire buttons dim on press | often | P3 | menu button has no press state at all; elsewhere dim only, slow release | — | todo | — | N:menu-spire-button-press, N:spire-btn-press |
+| parry-preview-card | Static parry card in briefings and the inspector | sometimes | P4 | fine as is | — | todo | — | N:parry-preview-card |
+
 ## Legacy / Free Play (low priority)
 
 | Surface | What the player sees | Seen | Pri | Top problems | Shot | Status | Scores before → after | Entries |
@@ -158,6 +183,11 @@ This file is edited by whoever runs the loop: keep rows short; details, frame st
 - **Real motion bugs found in passing:** AnimatedCounter never rolls (S:counter-roll); CircularTimer pulse and shake restart every second (S:timer-urgency-pulse, S:timer-critical-shake); KeywordTooltip slide-out never visible (S:keyword-sheet-slide); K.O. banner unmounted 110 ms before its exit ends (F:24); enemy tremor and cornered jitter loop-seam tick (S:creature-tremor, S:enemy-fx-cornered-jitter); KO stars' fade-out never seen (S:damage-ko-presence-fade); cut-in prompt pulse reverse flag gives uneven holds (F:65).
 - **`lightweight` EnemyAvatar is fully static**, though its doc comment promises a gentle breath; map nodes, previews and the inspector show frozen foes. (S §1 "Reduced motion / app inactive / lightweight")
 - **Duplicated effects for one event:** a blast draws the stage burst plus GameBoard's own shake and particles at a hard-coded point (F:8 vs F:54-55); two full-screen white flashes exist (F:30, F:61); the foe gets anchor bump + flinch + avatar reaction stacked (F:26, F:28, F:68).
+
+- **The v0.1.137 fight pieces bypass the effects system** (N §3): the Kill-Cam and Multiplier Ignition read `run.lastSetIgnition` instead of being catalog events, so they skip `fxMs` slow motion, the quiet path and `/dev/fx`; the Kill-Cam adds a second K.O. banner and a white full-screen flash on every knockout (two flashes on a lethal MEGA hit).
+- **Ignition chip sounds drift late** (N:ignition-chip-reveal): each chip waits `i × 85` ms in a timer and is also given `slot: i`, which the band adds as a further `i × grid`: about 310 ms late by the fifth chip.
+- **New reduced-motion gaps** (N §1): the parry bar's throb ignores both the OS setting and the Effects switch; `parry`, `perfect_parry` and `foe_strike` still shake the foe with Effects off; the Spire map's bob is always on.
+- **None of the v0.1.137 code uses the motion tokens** (`src/utils/motion.ts` landed one commit later): every number is a literal.
 
 ## Not animations but found on the way
 
