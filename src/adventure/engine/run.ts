@@ -21,13 +21,14 @@ import { getAdjacentIndices } from '@/utils/weaponEffects';
 import { getLinkedDestructionPositions, selectPositionsToConnect } from '@/utils/connectionUtils';
 import { DEFAULT_PLAYER_STATS, canObtainWeapon } from '@/utils/gameDefinitions';
 import { createInitialRoundStats } from '@/game/roundStats';
-import type { AdventureSave, AdventureWeapon, ArcanaDef, ArcanaId, FeatureFlag, FightLogMathItem, LevelDef, RunEventType, RunState } from '../types';
+import type { AdventureSave, AdventureWeapon, ArcanaDef, ArcanaId, BeltBadge, FeatureFlag, FightLogMathItem, LevelDef, RunEventType, RunState, SetFollowUpItem } from '../types';
 import type { Effect, WeaponTriggerKind } from '../rules/types';
 import { createRng } from './rng';
 import { allSets, countDifferentAttributes, hasAnySet, isRainbow, isSelectable } from './sets';
 import { boardVariety, buildDeck, deckCopies, kindsOfSet } from './dealer';
 import { applyWeaponToStats, resolveWholeStats, startingLoadout, type LoadoutOptions } from '../loadout';
 import { getArmoryWeapon, understudyOf } from '../data/armory';
+import { ownerOfEvent } from '../data/weaponGuide';
 import { UNDERSTUDY_ID } from '../data/adventureWeapons';
 import { damageMultiplier } from '../data/weaponPower';
 import { weaponBuilds } from '../weaponLevels';
@@ -1012,6 +1013,124 @@ const startFoe = (d: Draft) => {
   if (d.board.some(c => c.isFaceDown)) emit(d, 'face_down');
 };
 
+const fmtBadgeNum = (n: number): string => {
+  const r = Math.round(n * 10) / 10;
+  return Number.isInteger(r) ? String(r) : r.toFixed(1);
+};
+
+/** Resolve a rule source key (`w0:rally-horn#0`, `evo:...`, `node:...`) to a readable name + ref. */
+const resolveLineSource = (d: Draft, key?: string): { label?: string; sourceRef?: string; weaponId?: string } => {
+  if (!key) return {};
+  const base = key.split('#')[0];
+  if (base.startsWith('node:')) return { label: getSkillNode(base.slice(5))?.name ?? base, sourceRef: base };
+  if (base.startsWith('evo:')) return { label: getRecipe(base.slice(4))?.name ?? base, sourceRef: base };
+  const slot = /^w(\d+):(.*)$/.exec(base);
+  if (slot) {
+    const w = d.weapons[Number(slot[1])];
+    const id = w?.id ?? slot[2];
+    return { label: w?.name ?? id, sourceRef: `weapon:${id}`, weaponId: id };
+  }
+  return {};
+};
+
+/**
+ * Enrich `d.lastSetIgnition` after `drain(d)` with any follow-up turn damage
+ * lines (Rally Horn, Free Set, Piñata, Blast rules, etc.) and per-weapon
+ * Balatro trigger badges so the docked Scoreboard and GearBelt reconcile 100%
+ * with the exact damage dealt on this move.
+ */
+const finalizeTurnIgnition = (d: Draft, beforeDamage: number) => {
+  if (!d.lastSetIgnition) return;
+  const turnDamage = Math.max(0, Math.round(d.totalDamage - beforeDamage));
+  const held = d.weapons.map(w => w.id);
+  const math = d.lastSetIgnition.math;
+
+  const followUps: SetFollowUpItem[] = [];
+  const dmgByWeapon = new Map<string, number>();
+  const multByWeapon = new Map<string, number>();
+  const fxByWeapon = new Map<string, string>();
+
+  // 1. Direct Set contributors already itemized in `math`
+  for (const item of math.flatItems ?? []) {
+    if (item.amount !== 0 && item.sourceRef?.startsWith('weapon:')) {
+      const id = item.sourceRef.slice(7);
+      dmgByWeapon.set(id, (dmgByWeapon.get(id) ?? 0) + item.amount);
+    }
+  }
+  for (const item of math.multItems ?? []) {
+    if (Math.abs(item.amount - 1) >= 0.01 && item.sourceRef?.startsWith('weapon:')) {
+      const id = item.sourceRef.slice(7);
+      multByWeapon.set(id, (multByWeapon.get(id) ?? 1) * item.amount);
+    }
+  }
+  const collTypes: [keyof typeof math.collateral, RunEventType][] = [
+    ['explosion', 'blast'],
+    ['laser', 'laser'],
+    ['ricochet', 'ricochet'],
+    ['connected', 'link'],
+  ];
+  for (const [k, evType] of collTypes) {
+    const amt = math.collateral[k] ?? 0;
+    if (amt <= 0) continue;
+    const owner = ownerOfEvent(evType, undefined, held);
+    if (owner) dmgByWeapon.set(owner, (dmgByWeapon.get(owner) ?? 0) + amt);
+  }
+
+  // 2. Post-Set rule/weapon lines emitted during the same `MATCH` turn
+  const FOLLOW_UP_DMG = new Set<RunEventType>(['hit', 'blast', 'laser', 'ricochet', 'hot_streak_hit', 'grudge_release', 'pinata_break']);
+  let skippedPrimarySetHit = false;
+  for (const line of d._lines) {
+    const isPrimary = !skippedPrimarySetHit && (line.type === 'hit' && !line.text || line.type === 'rainbow' || line.type === 'surge_hit');
+    if (isPrimary) {
+      skippedPrimarySetHit = true;
+      continue;
+    }
+    const src = resolveLineSource(d, line.source);
+    const owner = src.weaponId ?? ownerOfEvent(line.type, line.text, held) ?? undefined;
+    const amt = line.amount ?? 0;
+
+    if (FOLLOW_UP_DMG.has(line.type) && amt > 0) {
+      const label = src.label ?? line.text ?? (line.type === 'pinata_break' ? 'Piñata' : line.type === 'hot_streak_hit' ? 'Hot Streak' : 'Bonus hit');
+      followUps.push({ label, amount: Math.round(amt * 10) / 10, ...(src.sourceRef ? { sourceRef: src.sourceRef } : owner ? { sourceRef: `weapon:${owner}` } : {}) });
+      if (owner) dmgByWeapon.set(owner, (dmgByWeapon.get(owner) ?? 0) + amt);
+      continue;
+    }
+
+    if (!owner || fxByWeapon.has(owner)) continue;
+    if (line.type === 'fire' && amt > 0) fxByWeapon.set(owner, `🔥${Math.round(amt)}`);
+    else if (line.type === 'heal' && amt > 0) fxByWeapon.set(owner, `+${Math.round(amt)}♥`);
+    else if (line.type === 'coins' && amt > 0) fxByWeapon.set(owner, `+${Math.round(amt)}¢`);
+    else if (line.type === 'time_gain' && amt > 0) fxByWeapon.set(owner, `+${fmtBadgeNum(amt)}s`);
+    else if (line.type === 'power_up' && amt > 0) fxByWeapon.set(owner, `⚡+${Math.round(amt)}`);
+    else if (line.type === 'pinata') fxByWeapon.set(owner, 'ARMOR');
+    else if (line.type === 'link') fxByWeapon.set(owner, 'LINK');
+    else if (line.type === 'echo') fxByWeapon.set(owner, 'ECHO');
+    else if (line.type === 'grow') fxByWeapon.set(owner, '+1 CARD');
+  }
+
+  const beltBadges: Record<string, BeltBadge> = {};
+  for (const id of held) {
+    const mult = multByWeapon.get(id);
+    const dmg = dmgByWeapon.get(id);
+    const fx = fxByWeapon.get(id);
+    if (mult && Math.abs(mult - 1) >= 0.01) {
+      beltBadges[id] = { text: `×${fmtBadgeNum(mult)}`, kind: 'mult' };
+    } else if (dmg && dmg !== 0) {
+      beltBadges[id] = { text: `${dmg > 0 ? '+' : ''}${fmtBadgeNum(dmg)}`, kind: followUps.some(f => f.sourceRef === `weapon:${id}`) ? 'fx' : 'flat' };
+    } else if (fx) {
+      beltBadges[id] = { text: fx, kind: 'fx' };
+    }
+  }
+
+  d.lastSetIgnition = {
+    ...d.lastSetIgnition,
+    turnDamage,
+    ...(followUps.length > 0 ? { followUps } : {}),
+    ...(Object.keys(beltBadges).length > 0 ? { beltBadges } : {}),
+    lethal: d.lastSetIgnition.lethal || d.foeHp <= 0,
+  };
+};
+
 // ─── Reducer ────────────────────────────────────────────────────────────────
 
 export const runReducer = (state: RunState, action: RunAction): RunState =>
@@ -1032,9 +1151,7 @@ const reduceRun = (state: RunState, action: RunAction): RunState => {
       const before = d.totalDamage;
       applyMatch(d, action.cards, action.rewards, action.effects, { hinted: action.hinted });
       drain(d);
-      if (d.lastSetIgnition && d.foeHp <= 0 && !d.lastSetIgnition.lethal) {
-        d.lastSetIgnition = { ...d.lastSetIgnition, lethal: true };
-      }
+      finalizeTurnIgnition(d, before);
       d.biggestHit = Math.max(d.biggestHit, d.totalDamage - before);
       break;
     }

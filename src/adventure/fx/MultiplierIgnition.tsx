@@ -1,28 +1,43 @@
 /**
- * Live "Multiplier Ignition" — Balatro-style real-time math equation strip.
+ * Live Balatro-Style Score Equation Bar (`MultiplierIgnition`).
  *
- * Reads the exact `FightLogSetMath` recorded by the engine (`RunState.lastSetIgnition`)
- * and animates each multiplier slamming in left-to-right on the musical beat,
- * escalating from warm glow → orange-gold flames → electric Starfall plasma fire.
+ * Docked permanently in the HUD (never covering the card board, zero reflow):
+ *   [ NEXT / LIVE / LAST ]  [ BASE  14.3 ]  ×  [ MULT  2× ]  (+11)  =  [  40  ]  ?
+ *   Cards 9 · +2.3 Blast · +3 Heavy Hitter · ×2 Rainbow · +11 Rally Horn
  *
- * Strictly `pointerEvents="none"` floating overlay (never shifts the board, never
- * blocks taps, never overflows 320px/375px viewports).
+ * - Before the first Set: displays your live primed NEXT SET equation so anyone
+ *   joining a Twitch stream understands the build's engine immediately.
+ * - When a Set lands: steps through every itemized Base contributor, Multiplier,
+ *   Power boost, and Turn Follow-up using `src/utils/motion.ts` tokens (`MS`,
+ *   `EASE`, `SPRING`, `STAGGER`, `cascadeDelay`, `SCALE`) with zero layout shift.
+ * - After settling: stays cleanly readable as the persistent Last Set receipt
+ *   until the next Set. Tapping anywhere opens the full itemized breakdown in
+ *   `HudInspector` while pausing the clock.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, {
   cancelAnimation,
-  Easing,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
   withSequence,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { band } from '@/audio';
 import { useAppActive } from '@/hooks/useAppActive';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { COLORS } from '@/utils/colors';
-import type { SetIgnition } from '../types';
+import { cascadeDelay, EASE, MS, SCALE, SPRING, STAGGER } from '@/utils/motion';
+import { arcanaRules, getArcana } from '../data/arcana';
+import { PARRY_RULES } from '../data/parry';
+import { SURGE_RULES } from '../data/rules';
+import { growthModifiers } from '../data/weaponGrowth';
+import { damageMultiplier } from '../data/weaponPower';
+import { EVOLUTION_RULES, getRecipe, liveSources } from '../engine/sources';
+import { PASSIVE_TUNING } from '../data/passives';
+import type { RunState, SetIgnition } from '../types';
 import { INK } from '../components/ui';
 
 export type HeatTier = 0 | 1 | 2 | 3;
@@ -40,8 +55,40 @@ export interface IgnitionPlan {
   steps: IgnitionStep[];
   total: number;
   heatTier: HeatTier;
-  /** True when the equation has interesting multipliers or big damage worth igniting */
   show: boolean;
+}
+
+export interface TallyStep {
+  key: string;
+  /** Short readable source name ("Cards", "Heavy Hitter", "Rainbow", "Rally Horn") */
+  label: string;
+  /** Formatted delta ("9", "+3", "×2", "+11") */
+  value: string;
+  kind: 'base' | 'mult' | 'bonus';
+  /** Running equation numbers right after this step fires */
+  baseAfter: number;
+  multAfter: number;
+  bonusAfter: number;
+  note?: string;
+}
+
+export interface BalatroBreakdown {
+  steps: TallyStep[];
+  finalBase: number;
+  finalMult: number;
+  finalBonus: number;
+  finalTotal: number;
+  heatTier: HeatTier;
+  /** Compact single-line summary pieces shown in Row 2 at rest */
+  receiptLine: string;
+}
+
+export interface PrimedEquation {
+  base: number;
+  mult: number;
+  total: number;
+  items: { label: string; value: string; kind: 'base' | 'mult'; note?: string }[];
+  summaryLine: string;
 }
 
 const fmt = (n: number): string => {
@@ -52,9 +99,23 @@ const fmt = (n: number): string => {
 export const heatTierFor = (total: number): HeatTier =>
   total >= 200 ? 3 : total >= 60 ? 2 : total >= 20 ? 1 : 0;
 
+/** Compact label helper so receipts read cleanly at 320px/375px phone widths. */
+const shortLabel = (label: string): string => {
+  const lower = label.toLowerCase();
+  if (lower.includes('rainbow')) return 'Rainbow';
+  if (lower.includes('perfect parry')) return 'Perfect Parry';
+  if (lower.includes('counter parry')) return 'Parry';
+  if (lower.includes('stagger')) return 'Stagger';
+  if (lower.includes('active evolution')) return 'Evolved';
+  if (lower.includes('hot streak')) return 'Hot Streak';
+  if (lower.includes('next-set')) return 'Charged';
+  if (lower.includes('purity')) return 'Purity';
+  if (lower.includes('traps')) return 'Traps';
+  return label;
+};
+
 /**
- * Pure builder: turns an engine `SetIgnition` snapshot into ordered equation steps.
- * Every number matches `applyMatch` exactly.
+ * Legacy-compatible flat step plan builder (preserved for existing unit tests & callers).
  */
 export const buildIgnitionPlan = (ignition: SetIgnition): IgnitionPlan => {
   const m = ignition.math;
@@ -74,23 +135,9 @@ export const buildIgnitionPlan = (ignition: SetIgnition): IgnitionPlan => {
   ];
 
   if (surge > 1) {
-    steps.push({
-      key: 'surge',
-      label: 'SURGE',
-      value: `×${fmt(surge)}`,
-      color: '#FFFFFF',
-      bg: '#DB2777',
-      kind: 'mult',
-    });
+    steps.push({ key: 'surge', label: 'SURGE', value: `×${fmt(surge)}`, color: '#FFFFFF', bg: '#DB2777', kind: 'mult' });
     if (m.flatBonus > 0) {
-      steps.push({
-        key: 'flat',
-        label: 'GEAR',
-        value: `+${fmt(m.flatBonus)}`,
-        color: INK,
-        bg: '#FEF3C7',
-        kind: 'extra',
-      });
+      steps.push({ key: 'flat', label: 'GEAR', value: `+${fmt(m.flatBonus)}`, color: INK, bg: '#FEF3C7', kind: 'extra' });
     }
   }
 
@@ -99,75 +146,305 @@ export const buildIgnitionPlan = (ignition: SetIgnition): IgnitionPlan => {
     if (Math.abs(item.amount - 1) < 0.01) continue;
     const lower = item.label.toLowerCase();
     let short = item.label.toUpperCase();
-    let bg = '#F97316';
+    let bg = '#EA580C';
     let color = '#FFFFFF';
-    if (lower.includes('rainbow')) {
-      short = 'RAINBOW';
-      bg = '#9333EA';
-    } else if (lower.includes('perfect parry')) {
-      short = 'PERFECT PARRY';
-      bg = COLORS.actionYellow;
-      color = INK;
-    } else if (lower.includes('parry')) {
-      short = 'PARRY';
-      bg = '#0F766E';
-    } else if (lower.includes('stagger')) {
-      short = 'STAGGER';
-      bg = '#0D9488';
-    } else if (lower.includes('evolution')) {
-      short = 'EVOLVED';
-      bg = '#7C3AED';
-    } else if (lower.includes('hot streak')) {
-      short = 'STREAK';
-      bg = '#EA580C';
-    } else if (lower.length > 12) {
-      short = item.label.slice(0, 10).toUpperCase();
-    }
-    steps.push({
-      key: `m-${i}`,
-      label: short,
-      value: `×${fmt(item.amount)}`,
-      color,
-      bg,
-      kind: 'mult',
-    });
+    if (lower.includes('rainbow')) { short = 'RAINBOW'; bg = '#D97706'; }
+    else if (lower.includes('perfect parry')) { short = 'PERFECT PARRY'; bg = COLORS.actionYellow; color = INK; }
+    else if (lower.includes('parry')) { short = 'PARRY'; bg = '#0F766E'; }
+    else if (lower.includes('stagger')) { short = 'STAGGER'; bg = '#0D9488'; }
+    else if (lower.includes('evolution')) { short = 'EVOLVED'; bg = '#C2410C'; }
+    else if (lower.includes('hot streak')) { short = 'STREAK'; bg = '#EA580C'; }
+    else if (lower.length > 12) short = item.label.slice(0, 10).toUpperCase();
+    steps.push({ key: `m-${i}`, label: short, value: `×${fmt(item.amount)}`, color, bg, kind: 'mult' });
   }
 
   if (m.extra > 0) {
-    steps.push({
-      key: 'extra',
-      label: 'BONUS',
-      value: `+${fmt(m.extra)}`,
-      color: '#FFFFFF',
-      bg: '#0D9488',
-      kind: 'extra',
-    });
+    steps.push({ key: 'extra', label: 'BONUS', value: `+${fmt(m.extra)}`, color: '#FFFFFF', bg: '#0D9488', kind: 'extra' });
   }
 
   if (m.powerMultiplier && m.powerMultiplier > 1.04) {
-    steps.push({
-      key: 'power',
-      label: 'POWER',
-      value: `×${fmt(m.powerMultiplier)}`,
-      color: '#FFFFFF',
-      bg: '#DC2626',
-      kind: 'mult',
-    });
+    steps.push({ key: 'power', label: 'POWER', value: `×${fmt(m.powerMultiplier)}`, color: '#FFFFFF', bg: '#DC2626', kind: 'mult' });
   }
 
-  const total = Math.round(m.hit);
+  const total = Math.round(ignition.turnDamage ?? m.hit);
   const heatTier = heatTierFor(total);
   const show = steps.length >= 2 || total >= 10;
   return { steps: steps.slice(0, 6), total, heatTier, show };
 };
 
+/**
+ * Pure Balatro tally builder: turns an engine `SetIgnition` into exact running
+ * `BASE × MULT (+ BONUS) = TOTAL` steps so every single point is accounted for.
+ */
+export const buildBalatroBreakdown = (ignition: SetIgnition): BalatroBreakdown => {
+  const m = ignition.math;
+  const surge = m.surgeMultiplier && m.surgeMultiplier > 1 ? m.surgeMultiplier : 1;
+  const power = m.powerMultiplier && m.powerMultiplier > 1.01 ? m.powerMultiplier : 1;
+
+  const steps: TallyStep[] = [];
+  let base = m.cards * surge;
+  let mult = 1;
+  let bonus = 0;
+
+  // 1. Opening Set Cards (including Power/Charged card points & Surge ×5)
+  const cardLabel = surge > 1
+    ? `Cards ${fmt(m.cards)} ×${fmt(surge)} Surge`
+    : (m.cardBonus ?? 0) > 0
+      ? `Cards ${m.baseCards ?? 3} (+${fmt(m.cardBonus!)})`
+      : `${m.cardCount ?? 3} Cards`;
+  steps.push({
+    key: 'cards',
+    label: cardLabel,
+    value: fmt(base),
+    kind: 'base',
+    baseAfter: base,
+    multAfter: mult,
+    bonusAfter: bonus,
+    note: m.cardBonusNote ?? `${m.cardCount ?? 3} matched cards`,
+  });
+
+  // 2. Collateral cards destroyed with the Set (Blast / Laser / Ricochet / Link)
+  const collLabels: [keyof typeof m.collateral, string][] = [
+    ['explosion', 'Blast'],
+    ['laser', 'Laser'],
+    ['ricochet', 'Ricochet'],
+    ['connected', 'Link'],
+  ];
+  for (const [key, label] of collLabels) {
+    const raw = m.collateral[key] ?? 0;
+    if (raw <= 0) continue;
+    const add = raw * surge;
+    base += add;
+    steps.push({
+      key: `col-${key}`,
+      label,
+      value: `+${fmt(add)}`,
+      kind: 'base',
+      baseAfter: base,
+      multAfter: mult,
+      bonusAfter: bonus,
+      note: 'collateral cards',
+    });
+  }
+
+  // 3. Every itemized flat contributor (Heavy Hitter, Weapons, Passives, Active Evolution, Growth)
+  for (let i = 0; i < (m.flatItems?.length ?? 0); i++) {
+    const item = m.flatItems![i];
+    if (item.amount === 0) continue;
+    base = Math.max(0, base + item.amount);
+    steps.push({
+      key: `flat-${i}`,
+      label: shortLabel(item.label),
+      value: `${item.amount > 0 ? '+' : ''}${fmt(item.amount)}`,
+      kind: 'base',
+      baseAfter: base,
+      multAfter: mult,
+      bonusAfter: bonus,
+      note: item.note,
+    });
+  }
+
+  // 4. Every itemized multiplier (Rainbow, Evolved, Parry, Stagger, Hot Streak, Arcana, etc.)
+  for (let i = 0; i < (m.multItems?.length ?? 0); i++) {
+    const item = m.multItems![i];
+    if (Math.abs(item.amount - 1) < 0.01) continue;
+    mult *= item.amount;
+    steps.push({
+      key: `mult-${i}`,
+      label: shortLabel(item.label),
+      value: `×${fmt(item.amount)}`,
+      kind: 'mult',
+      baseAfter: base,
+      multAfter: mult,
+      bonusAfter: bonus,
+      note: item.note,
+    });
+  }
+
+  // 5. Fight Power multiplier (applies to the Set hit & extras)
+  if (power > 1.01) {
+    mult *= power;
+    steps.push({
+      key: 'power',
+      label: 'Power',
+      value: `×${fmt(power)}`,
+      kind: 'mult',
+      baseAfter: base,
+      multAfter: mult,
+      bonusAfter: bonus,
+      note: `${Math.round(m.powerPoints ?? 0)} scaling charge`,
+    });
+  }
+
+  // 6. Post-mult extra Set damage (Purity chain, Traps defused — scaled by Power just like dealDamage)
+  for (let i = 0; i < (m.extraItems?.length ?? 0); i++) {
+    const item = m.extraItems![i];
+    if (item.amount === 0) continue;
+    const scaled = Math.round(item.amount * power * 10) / 10;
+    bonus += scaled;
+    steps.push({
+      key: `extra-${i}`,
+      label: shortLabel(item.label),
+      value: `+${fmt(scaled)}`,
+      kind: 'bonus',
+      baseAfter: base,
+      multAfter: mult,
+      bonusAfter: bonus,
+      note: item.note,
+    });
+  }
+
+  // 7. Follow-up damage lines fired during the same turn (Rally Horn, Free Set, Piñata, Blast rules, etc.)
+  for (let i = 0; i < (ignition.followUps?.length ?? 0); i++) {
+    const f = ignition.followUps![i];
+    if (f.amount <= 0) continue;
+    bonus += f.amount;
+    steps.push({
+      key: `fu-${i}`,
+      label: shortLabel(f.label),
+      value: `+${fmt(f.amount)}`,
+      kind: 'bonus',
+      baseAfter: base,
+      multAfter: mult,
+      bonusAfter: bonus,
+      note: 'triggered follow-up',
+    });
+  }
+
+  const finalTotal = Math.round(ignition.turnDamage ?? m.hit);
+  const receiptLine = steps
+    .map(s => (s.key === 'cards' ? s.label : `${s.value} ${s.label}`))
+    .join(' · ');
+
+  return {
+    steps,
+    finalBase: Math.round(base * 10) / 10,
+    finalMult: Math.round(mult * 100) / 100,
+    finalBonus: Math.round(bonus * 10) / 10,
+    finalTotal,
+    heatTier: heatTierFor(finalTotal),
+    receiptLine,
+  };
+};
+
+/**
+ * Pure primed Next-Set preview: tells players & Twitch viewers what a plain
+ * 3-card Set is primed to hit for RIGHT NOW before they tap anything.
+ */
+export const computePrimedEquation = (run: RunState): PrimedEquation => {
+  const surge = run.surge?.active ? SURGE_RULES.multiplier : 1;
+  const items: PrimedEquation['items'] = [];
+  let base = 3 * surge;
+  items.push({
+    label: surge > 1 ? `3 cards ×${surge} Surge` : '3 cards',
+    value: fmt(base),
+    kind: 'base',
+    note: surge > 1 ? 'Shading Surge active!' : 'Base 1 damage per card',
+  });
+
+  if (run.bonusDamagePerMatch !== 0) {
+    base += run.bonusDamagePerMatch;
+    items.push({ label: 'Heavy Hitter', value: `+${fmt(run.bonusDamagePerMatch)}`, kind: 'base', note: 'Workshop upgrade' });
+  }
+
+  const sources = liveSources({
+    skillNodes: run.skillNodes,
+    weapons: run.weapons,
+    activeEvolutions: run.activeEvolutions,
+    growth: growthModifiers(run.growth ?? {}),
+  });
+  let gearFlat = 0;
+  let hintFlat = 0;
+  for (const { source } of sources) {
+    gearFlat += source.modifiers?.setDamage ?? 0;
+    hintFlat += (source.modifiers?.hintHeldDamage ?? 0) * run.stats.hints;
+  }
+  if (gearFlat !== 0) {
+    base += gearFlat;
+    items.push({ label: 'Gear', value: `${gearFlat > 0 ? '+' : ''}${fmt(gearFlat)}`, kind: 'base', note: 'Standing charm & skill bonuses' });
+  }
+  if (hintFlat > 0) {
+    base += hintFlat;
+    items.push({ label: 'Hints held', value: `+${fmt(hintFlat)}`, kind: 'base', note: `${run.stats.hints} hints held` });
+  }
+
+  // Missing-heart Scrappy passive (Orange Tabby)
+  if (run.passives.includes('scrappy') && run.hearts !== null && run.maxHearts !== null) {
+    const missing = Math.max(0, run.maxHearts - run.hearts);
+    const perHeart = PASSIVE_TUNING.scrappy['scrappy.perHeart'] +
+      sources.reduce((s, x) => s + (x.source.modifiers?.passiveTuning?.['scrappy.perHeart'] ?? 0), 0);
+    const scrappyDmg = missing * perHeart;
+    if (scrappyDmg > 0) {
+      base += scrappyDmg;
+      items.push({ label: 'Scrappy', value: `+${fmt(scrappyDmg)}`, kind: 'base', note: `${missing} missing ♥` });
+    }
+  }
+
+  // Snowball & Glass Sword standing bonuses
+  const snowStep = sources.reduce((s, x) => s + (x.source.modifiers?.snowballStep ?? 0), 0);
+  if (snowStep > 0 && run.gear.snowball > 0) {
+    const snowDmg = run.gear.snowball * snowStep;
+    base += snowDmg;
+    items.push({ label: 'Snowball', value: `+${fmt(snowDmg)}`, kind: 'base', note: `${run.gear.snowball} Sets rolled` });
+  }
+  const glassDmg = sources.reduce((s, x) => s + (x.source.modifiers?.glassDamage ?? 0), 0);
+  if (glassDmg > 0 && !run.gear.glassBroken) {
+    base += glassDmg;
+    items.push({ label: 'Glass Sword', value: `+${fmt(glassDmg)}`, kind: 'base', note: 'Unbroken window active' });
+  }
+
+  // Active Evolution flat bonus
+  if (run.activeEvolutions.length > 0) {
+    const evoFlat = run.activeEvolutions.length * EVOLUTION_RULES.setDamage;
+    base += evoFlat;
+    const names = run.activeEvolutions.map(e => getRecipe(e.id)?.name ?? 'Evolution').join(', ');
+    items.push({ label: names, value: `+${fmt(evoFlat)}`, kind: 'base', note: 'Active Evolution bonus' });
+  }
+  base = Math.max(0, Math.round(base * 10) / 10);
+
+  let mult = 1;
+  if (run.activeEvolutions.length > 0) {
+    mult *= EVOLUTION_RULES.setMultiplier;
+    items.push({ label: 'Evolved', value: `×${fmt(EVOLUTION_RULES.setMultiplier)}`, kind: 'mult', note: 'Active Evolution multiplier' });
+  }
+  const a = arcanaRules(run.arcana);
+  if ((a.damageScale ?? 1) !== 1) {
+    const arc = run.arcana.map(getArcana).find(x => x.rules.damageScale !== undefined);
+    mult *= a.damageScale!;
+    items.push({ label: arc?.name ?? 'Arcana', value: `×${fmt(a.damageScale!)}`, kind: 'mult', note: 'Arcana Set multiplier' });
+  }
+  if (run.nextSetMultiplier > 1) {
+    mult *= run.nextSetMultiplier;
+    items.push({ label: 'Next Set', value: `×${fmt(run.nextSetMultiplier)}`, kind: 'mult', note: 'Charged for next Set' });
+  }
+  if (run.passive.hotStreak) {
+    const hotMult = PASSIVE_TUNING.hot_streak['hotStreak.multiplier'] +
+      sources.reduce((s, x) => s + (x.source.modifiers?.passiveTuning?.['hotStreak.multiplier'] ?? 0), 0);
+    mult *= hotMult;
+    items.push({ label: 'Hot Streak', value: `×${fmt(hotMult)}`, kind: 'mult', note: 'Sly Fox streak ready' });
+  }
+  if (run.parry?.phase === 'staggered') {
+    mult *= PARRY_RULES.staggerDamageMult;
+    items.push({ label: 'Staggered', value: `×${fmt(PARRY_RULES.staggerDamageMult)}`, kind: 'mult', note: 'Foe staggered by Parry' });
+  }
+  const power = damageMultiplier(run.power ?? 0);
+  if (power > 1.01) {
+    mult *= power;
+    items.push({ label: 'Power', value: `×${fmt(power)}`, kind: 'mult', note: `${Math.round(run.power)} scaling charge` });
+  }
+
+  mult = Math.round(mult * 100) / 100;
+  const total = Math.round(base * mult);
+  const summaryLine = items.map((it, idx) => (idx === 0 ? it.label : `${it.value} ${it.label}`)).join(' · ');
+  return { base, mult, total, items, summaryLine };
+};
+
 interface Props {
   ignition: SetIgnition | null;
+  run?: RunState;
   enabled: boolean;
+  onPress?: () => void;
 }
-
-const STEP_MS = 85;
-const LINGER_MS = 1450;
 
 const FlameTongue: React.FC<{ color: string; offset: number; delay: number; active: boolean }> = ({
   color,
@@ -185,8 +462,8 @@ const FlameTongue: React.FC<{ color: string; offset: number; delay: number; acti
     const t = setTimeout(() => {
       bob.value = withRepeat(
         withSequence(
-          withTiming(1, { duration: 190, easing: Easing.out(Easing.quad) }),
-          withTiming(0, { duration: 210, easing: Easing.in(Easing.quad) })
+          withTiming(1, { duration: MS.quick, easing: EASE.drift }),
+          withTiming(0, { duration: MS.quick + 20, easing: EASE.drift })
         ),
         -1
       );
@@ -200,8 +477,8 @@ const FlameTongue: React.FC<{ color: string; offset: number; delay: number; acti
   const anim = useAnimatedStyle(() => ({
     opacity: 0.72 + bob.value * 0.28,
     transform: [
-      { translateY: -bob.value * 5 },
-      { scaleY: 0.85 + bob.value * 0.45 },
+      { translateY: -bob.value * 4 },
+      { scaleY: 0.85 + bob.value * 0.4 },
       { rotate: `${offset > 0 ? 8 : -8}deg` },
     ],
   }));
@@ -214,229 +491,406 @@ const FlameTongue: React.FC<{ color: string; offset: number; delay: number; acti
   );
 };
 
-const MultiplierIgnition: React.FC<Props> = ({ ignition, enabled }) => {
+const MultiplierIgnition: React.FC<Props> = ({ ignition, run, enabled, onPress }) => {
   const appActive = useAppActive();
-  const [visibleId, setVisibleId] = useState<number | null>(null);
-  const [revealed, setRevealed] = useState(0);
-  const [slammed, setSlammed] = useState(false);
+  const sysReduced = useReducedMotion();
+  const animate = enabled && !sysReduced;
+
+  const breakdown = useMemo(() => (ignition ? buildBalatroBreakdown(ignition) : null), [ignition]);
+  const primed = useMemo(() => (run ? computePrimedEquation(run) : null), [run]);
+
+  const [stepIdx, setStepIdx] = useState<number>(-1);
+  const [phase, setPhase] = useState<'primed' | 'tally' | 'settled'>('primed');
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  const plan = useMemo(() => (ignition ? buildIgnitionPlan(ignition) : null), [ignition]);
-
-  const totalScale = useSharedValue(0.8);
-  const panelOpacity = useSharedValue(0);
+  const baseScale = useSharedValue(1);
+  const multScale = useSharedValue(1);
+  const bonusScale = useSharedValue(1);
+  const totalScale = useSharedValue(1);
+  const tickerY = useSharedValue(0);
+  const tickerOp = useSharedValue(1);
 
   useEffect(() => {
     timers.current.forEach(clearTimeout);
     timers.current = [];
-    if (!enabled || !ignition || !plan || !plan.show) {
-      setVisibleId(null);
+
+    if (!ignition || !breakdown) {
+      setPhase('primed');
+      setStepIdx(-1);
+      baseScale.value = 1;
+      multScale.value = 1;
+      bonusScale.value = 1;
+      totalScale.value = 1;
+      tickerY.value = 0;
+      tickerOp.value = 1;
       return;
     }
 
-    setVisibleId(ignition.id);
-    setRevealed(1);
-    setSlammed(false);
-    panelOpacity.value = withTiming(1, { duration: 90 });
-    totalScale.value = 0.75;
+    const lastIdx = breakdown.steps.length - 1;
 
-    const count = plan.steps.length;
-    for (let i = 1; i < count; i++) {
+    // Reduced motion / effects off: show the exact finished Balatro receipt instantly, zero bounce/flames
+    if (!animate) {
+      setStepIdx(lastIdx);
+      setPhase('settled');
+      baseScale.value = 1;
+      multScale.value = 1;
+      bonusScale.value = 1;
+      totalScale.value = 1;
+      tickerY.value = 0;
+      tickerOp.value = 1;
+      return;
+    }
+
+    const popValue = (sv: { value: number }) => {
+      sv.value = withSequence(
+        withTiming(SCALE.pop, { duration: Math.round(MS.feedback * 0.55), easing: EASE.pop }),
+        withTiming(1, { duration: Math.round(MS.feedback * 0.8), easing: EASE.ui })
+      );
+    };
+
+    const flashTicker = () => {
+      tickerY.value = 5;
+      tickerOp.value = 0.6;
+      tickerY.value = withTiming(0, { duration: Math.round(MS.feedback * 0.75), easing: EASE.enter });
+      tickerOp.value = withTiming(1, { duration: Math.round(MS.feedback * 0.75), easing: EASE.enter });
+    };
+
+    // f0: immediately open tally on Step 0 (Cards base)
+    setPhase('tally');
+    setStepIdx(0);
+    popValue(baseScale);
+    flashTicker();
+
+    // Step through every subsequent contributor on accelerating cascadeDelay (hits peak right around f16–f22)
+    for (let i = 1; i < breakdown.steps.length; i++) {
       const idx = i;
+      const step = breakdown.steps[idx];
+      const delayMs = cascadeDelay(idx, STAGGER.item);
       timers.current.push(
         setTimeout(() => {
-          setRevealed(idx + 1);
-          band.cue('multStep', { slot: idx, amount: plan.heatTier });
-        }, idx * STEP_MS)
+          setStepIdx(idx);
+          flashTicker();
+          if (step.kind === 'base') popValue(baseScale);
+          else if (step.kind === 'mult') popValue(multScale);
+          else popValue(bonusScale);
+          // slot: 0 guarantees zero double-offset delay; amount climbs the musical pitch cleanly
+          band.cue('multStep', { slot: 0, amount: idx });
+        }, delayMs)
       );
     }
 
-    const slamAt = count * STEP_MS + 40;
+    // Payoff Slam: lands cleanly after the last step (right as the thrown Set hits the foe!)
+    const slamAt = breakdown.steps.length > 1 ? cascadeDelay(breakdown.steps.length - 1, STAGGER.item) + 55 : 70;
     timers.current.push(
       setTimeout(() => {
-        setSlammed(true);
+        setPhase('settled');
+        totalScale.value = 0.86;
         totalScale.value = withSequence(
-          withTiming(1.24, { duration: 100, easing: Easing.out(Easing.cubic) }),
-          withTiming(1, { duration: 130, easing: Easing.inOut(Easing.quad) })
+          withTiming(SCALE.reward, { duration: Math.round(MS.feedback * 0.7), easing: EASE.pop }),
+          withSpring(1, SPRING.lively)
         );
-        band.cue('multSlam', { amount: plan.heatTier });
+        band.cue('multSlam', { slot: 0, amount: breakdown.heatTier });
       }, slamAt)
-    );
-
-    timers.current.push(
-      setTimeout(() => {
-        panelOpacity.value = withTiming(0, { duration: 220 });
-      }, slamAt + LINGER_MS - 220)
-    );
-
-    timers.current.push(
-      setTimeout(() => {
-        setVisibleId(cur => (cur === ignition.id ? null : cur));
-      }, slamAt + LINGER_MS)
     );
 
     return () => {
       timers.current.forEach(clearTimeout);
       timers.current = [];
     };
-  }, [ignition, enabled, plan, panelOpacity, totalScale]);
+  }, [ignition, breakdown, animate, baseScale, multScale, bonusScale, totalScale, tickerY, tickerOp]);
 
-  const panelAnim = useAnimatedStyle(() => ({ opacity: panelOpacity.value }));
+  const baseAnim = useAnimatedStyle(() => ({ transform: [{ scale: baseScale.value }] }));
+  const multAnim = useAnimatedStyle(() => ({ transform: [{ scale: multScale.value }] }));
+  const bonusAnim = useAnimatedStyle(() => ({ transform: [{ scale: bonusScale.value }] }));
   const totalAnim = useAnimatedStyle(() => ({ transform: [{ scale: totalScale.value }] }));
+  const tickerAnim = useAnimatedStyle(() => ({ opacity: tickerOp.value, transform: [{ translateY: tickerY.value }] }));
 
-  if (!enabled || !ignition || !plan || !plan.show || visibleId !== ignition.id) return null;
+  // If neither an ignition nor a live run is present, nothing to render
+  if (!breakdown && !primed) return null;
 
-  const isBlazing = slammed && plan.heatTier >= 2;
-  const isNuclear = slammed && plan.heatTier >= 3;
+  const showingSet = Boolean(breakdown && phase !== 'primed');
+  const activeStep = showingSet && breakdown ? breakdown.steps[Math.max(0, Math.min(stepIdx, breakdown.steps.length - 1))] : null;
+
+  const shownBase = showingSet && breakdown
+    ? (phase === 'tally' && activeStep ? activeStep.baseAfter : breakdown.finalBase)
+    : primed!.base;
+  const shownMult = showingSet && breakdown
+    ? (phase === 'tally' && activeStep ? activeStep.multAfter : breakdown.finalMult)
+    : primed!.mult;
+  const shownBonus = showingSet && breakdown
+    ? (phase === 'tally' && activeStep ? activeStep.bonusAfter : breakdown.finalBonus)
+    : 0;
+  const shownTotal = showingSet && breakdown
+    ? (phase === 'tally' ? Math.round(shownBase * shownMult + shownBonus) : breakdown.finalTotal)
+    : primed!.total;
+  const heatTier: HeatTier = showingSet && breakdown ? breakdown.heatTier : 0;
+
+  const isBlazing = animate && phase === 'settled' && heatTier >= 2;
+  const isNuclear = animate && phase === 'settled' && heatTier >= 3;
   const flamesActive = isBlazing && appActive;
 
-  return (
-    <Animated.View
-      testID="multiplier-ignition"
-      pointerEvents="none"
-      style={[st.anchor, panelAnim]}
+  const tagText = !showingSet ? 'NEXT' : phase === 'tally' ? 'LIVE' : 'LAST';
+  const row2Text = showingSet && breakdown
+    ? (phase === 'tally' && activeStep
+        ? `${activeStep.key === 'cards' ? activeStep.label : `${activeStep.value} ${activeStep.label}`}${activeStep.note ? ` · ${activeStep.note}` : ''}`
+        : breakdown.receiptLine)
+    : `Next Set: ${primed!.summaryLine}`;
+
+  const hasFinalBonus = showingSet && !!breakdown && breakdown.finalBonus > 0;
+  const row2Color = showingSet && phase === 'tally' && activeStep
+    ? (activeStep.kind === 'base' ? '#BAE6FD' : activeStep.kind === 'mult' ? '#FECACA' : '#FDE047')
+    : '#F5F0E8';
+
+  const inner = (
+    <View
+      style={[
+        st.bar,
+        showingSet && heatTier === 1 && st.barHot,
+        showingSet && heatTier === 2 && st.barBlazing,
+        showingSet && heatTier === 3 && st.barNuclear,
+      ]}
     >
-      <View
-        style={[
-          st.strip,
-          plan.heatTier === 1 && st.stripHot,
-          plan.heatTier === 2 && st.stripBlazing,
-          plan.heatTier === 3 && st.stripNuclear,
-        ]}
-      >
-        <View style={st.chips}>
-          {plan.steps.slice(0, revealed).map(step => (
-            <View key={step.key} style={[st.chip, { backgroundColor: step.bg }]}>
-              <Text style={[st.chipLabel, { color: step.color }]} numberOfLines={1}>
-                {step.label}
-              </Text>
-              <Text style={[st.chipVal, { color: step.color }]} numberOfLines={1}>
-                {step.value}
-              </Text>
-            </View>
-          ))}
+      {/* Row 1: Balanced 3-zone fixed-geometry Balatro Equation — ZERO horizontal reflow */}
+      <View style={st.eqRow}>
+        <View style={[st.tagPill, phase === 'tally' && st.tagPillLive]}>
+          <Text style={[st.tagText, phase === 'tally' && st.tagTextLive]}>{tagText}</Text>
         </View>
 
-        {slammed && (
+        <View style={st.eqMath}>
+          <Animated.View style={[st.basePill, baseAnim]} testID="score-base-pill">
+            <Text style={st.pillCap}>BASE</Text>
+            <Text style={st.pillVal} numberOfLines={1}>{fmt(shownBase)}</Text>
+          </Animated.View>
+
+          <Text style={st.op}>×</Text>
+
+          <Animated.View style={[st.multPill, shownMult > 1.01 && st.multPillHot, multAnim]} testID="score-mult-pill">
+            <Text style={st.pillCap}>MULT</Text>
+            <Text style={st.pillVal} numberOfLines={1}>{fmt(shownMult)}×</Text>
+          </Animated.View>
+
+          {hasFinalBonus && (
+            <>
+              <Text style={[st.op, shownBonus <= 0 && { opacity: 0.3 }]}>+</Text>
+              <Animated.View
+                style={[st.bonusPill, shownBonus <= 0 && { opacity: 0.3 }, bonusAnim]}
+                testID="score-bonus-pill"
+              >
+                <Text style={st.pillVal} numberOfLines={1}>{fmt(shownBonus)}</Text>
+              </Animated.View>
+            </>
+          )}
+
+          <Text style={st.op}>=</Text>
+
           <Animated.View style={[st.totalWrap, totalAnim]}>
             {isBlazing && (
               <>
-                <FlameTongue color={isNuclear ? '#38BDF8' : '#FB923C'} offset={-26} delay={0} active={flamesActive} />
-                <FlameTongue color={isNuclear ? '#A855F7' : '#FACC15'} offset={0} delay={70} active={flamesActive} />
-                <FlameTongue color={isNuclear ? '#22D3EE' : '#F97316'} offset={24} delay={130} active={flamesActive} />
+                <FlameTongue color={isNuclear ? '#38BDF8' : '#FB923C'} offset={-24} delay={0} active={flamesActive} />
+                <FlameTongue color={isNuclear ? '#FDE047' : '#FACC15'} offset={0} delay={70} active={flamesActive} />
+                <FlameTongue color={isNuclear ? '#22D3EE' : '#F97316'} offset={22} delay={130} active={flamesActive} />
               </>
             )}
             <View
               style={[
                 st.totalBadge,
-                plan.heatTier === 1 && st.totalHot,
-                plan.heatTier === 2 && st.totalBlazing,
-                plan.heatTier === 3 && st.totalNuclear,
+                showingSet && heatTier === 1 && st.totalHot,
+                showingSet && heatTier === 2 && st.totalBlazing,
+                showingSet && heatTier === 3 && st.totalNuclear,
               ]}
             >
               <Text
                 testID="multiplier-ignition-total"
-                style={[st.totalText, plan.heatTier >= 2 && { color: '#FFFFFF' }]}
+                style={[st.totalText, showingSet && heatTier >= 2 && { color: '#FFFFFF' }]}
+                numberOfLines={1}
               >
-                {fmt(plan.total)}
+                {fmt(shownTotal)}
               </Text>
             </View>
           </Animated.View>
+        </View>
+
+        {onPress ? (
+          <View style={st.infoDot}>
+            <Text style={st.infoText}>?</Text>
+          </View>
+        ) : (
+          <View style={{ width: 16 }} />
         )}
       </View>
-    </Animated.View>
+
+      {/* Row 2: Fixed-height itemized source ticker → persistent receipt */}
+      <Animated.View style={[st.receiptRow, tickerAnim]}>
+        <Text testID="score-receipt-line" style={[st.receiptText, { color: row2Color }]} numberOfLines={1}>
+          {row2Text}
+        </Text>
+      </Animated.View>
+    </View>
+  );
+
+  if (onPress) {
+    return (
+      <TouchableOpacity
+        testID="multiplier-ignition"
+        onPress={onPress}
+        activeOpacity={0.85}
+        accessibilityRole="button"
+        accessibilityLabel={`Score equation: Base ${fmt(shownBase)} times Mult ${fmt(shownMult)} equals ${fmt(shownTotal)} damage. Tap for full breakdown.`}
+        style={st.wrap}
+      >
+        {inner}
+      </TouchableOpacity>
+    );
+  }
+
+  return (
+    <View testID="multiplier-ignition" style={st.wrap}>
+      {inner}
+    </View>
   );
 };
 
 const st = StyleSheet.create({
-  anchor: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    right: 8,
-    zIndex: 245,
-    alignItems: 'center',
+  wrap: {
+    width: '100%',
   },
-  strip: {
-    maxWidth: '100%',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    backgroundColor: 'rgba(28, 27, 25, 0.92)',
-    borderRadius: 12,
+  bar: {
+    backgroundColor: '#241E19',
+    borderRadius: 10,
     borderWidth: 2,
     borderColor: INK,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    gap: 2,
   },
-  stripHot: {
-    borderColor: '#F59E0B',
+  barHot: {
+    borderColor: '#D97706',
   },
-  stripBlazing: {
+  barBlazing: {
     borderColor: '#F97316',
-    backgroundColor: 'rgba(42, 20, 12, 0.95)',
+    backgroundColor: '#2E1A12',
   },
-  stripNuclear: {
+  barNuclear: {
     borderColor: '#38BDF8',
-    backgroundColor: 'rgba(18, 22, 48, 0.96)',
+    backgroundColor: '#162436',
   },
-  chips: {
+  eqRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 4,
+    minHeight: 24,
+  },
+  eqMath: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    flexShrink: 1,
   },
-  chip: {
+  tagPill: {
+    width: 34,
+    alignItems: 'center',
+    backgroundColor: '#3A2F26',
+    borderRadius: 4,
+    paddingHorizontal: 3,
+    paddingVertical: 2,
+  },
+  tagPillLive: {
+    backgroundColor: COLORS.actionYellow,
+  },
+  tagText: {
+    fontSize: 8.5,
+    fontWeight: '900',
+    letterSpacing: 0.6,
+    color: '#D6CFC4',
+  },
+  tagTextLive: {
+    color: INK,
+  },
+  basePill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    backgroundColor: '#0E7490',
     borderRadius: 6,
     borderWidth: 1.5,
-    borderColor: INK,
+    borderColor: '#164E63',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    minWidth: 52,
+    justifyContent: 'center',
   },
-  chipLabel: {
-    flexShrink: 1,
-    fontSize: 9,
+  multPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#9A3412',
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: '#7C2D12',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    minWidth: 48,
+    justifyContent: 'center',
+  },
+  multPillHot: {
+    backgroundColor: '#DC2626',
+    borderColor: '#991B1B',
+  },
+  bonusPill: {
+    backgroundColor: '#B45309',
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: '#78350F',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    justifyContent: 'center',
+  },
+  pillCap: {
+    fontSize: 7.5,
     fontWeight: '900',
+    color: 'rgba(255,255,255,0.78)',
     letterSpacing: 0.4,
-    opacity: 0.9,
   },
-  chipVal: {
+  pillVal: {
     flexShrink: 1,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '900',
+    color: '#FFFFFF',
     fontVariant: ['tabular-nums'],
+  },
+  op: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#E7E0D6',
   },
   totalWrap: {
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 2,
   },
   flame: {
     position: 'absolute',
-    top: -8,
-    width: 11,
-    height: 14,
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
+    top: -7,
+    width: 9,
+    height: 11,
+    borderTopLeftRadius: 6,
+    borderTopRightRadius: 6,
     borderBottomLeftRadius: 3,
     borderBottomRightRadius: 3,
-    marginLeft: -5.5,
+    marginLeft: -4.5,
   },
   totalBadge: {
     backgroundColor: COLORS.actionYellow,
-    borderRadius: 8,
-    borderWidth: 2,
+    borderRadius: 7,
+    borderWidth: 1.5,
     borderColor: INK,
-    paddingHorizontal: 9,
-    paddingVertical: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 1,
+    minWidth: 34,
+    alignItems: 'center',
   },
   totalHot: {
     backgroundColor: '#F59E0B',
@@ -446,15 +900,42 @@ const st = StyleSheet.create({
     borderColor: '#FDE047',
   },
   totalNuclear: {
-    backgroundColor: '#7C3AED',
-    borderColor: '#38BDF8',
+    backgroundColor: '#0284C7',
+    borderColor: '#7DD3FC',
   },
   totalText: {
-    fontSize: 15,
+    flexShrink: 1,
+    fontSize: 13.5,
     fontWeight: '900',
     color: INK,
     fontVariant: ['tabular-nums'],
-    letterSpacing: 0.4,
+    letterSpacing: 0.2,
+  },
+  infoDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#3A2F26',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  infoText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#E7E0D6',
+  },
+  receiptRow: {
+    height: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  receiptText: {
+    flexShrink: 1,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.15,
+    textAlign: 'center',
   },
 });
 

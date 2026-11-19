@@ -55,7 +55,7 @@ const leadParts = (label: string): { word: string | null; number: string } => {
   return m ? { word: m[1], number: m[2] } : { word: null, number: label };
 };
 
-const BeatView: React.FC<{ beat: Beat; anchors: Anchors; size: Size }> = React.memo(({ beat, anchors, size }) => {
+const BeatView: React.FC<{ beat: Beat; anchors: Anchors; size: Size; hideWeaponNameTags?: boolean }> = React.memo(({ beat, anchors, size, hideWeaponNameTags }) => {
   const { row } = beat;
   const rectsOf = (slots: number[]) => slots.map(i => anchors.rect(`slot:${i}`)).filter((r): r is Rect => !!r);
   const middle: Rect = { x: size.w / 2 - 20, y: Math.min(120, size.h * 0.2), w: 40, h: 40 };
@@ -216,8 +216,8 @@ const BeatView: React.FC<{ beat: Beat; anchors: Anchors; size: Size }> = React.m
         </>
       )}
 
-      {beat.source && beat.named && sourceRect && (
-        // Three rows, by step, so the names of weapons that fire one after another do not land on each other
+      {beat.source && beat.named && sourceRect && !(hideWeaponNameTags && beat.source.anchor.startsWith('weapon:')) && (
+        // Three rows, by step, so the names of sources that fire one after another do not land on each other
         <Tag at={{ x: sourceRect.x + sourceRect.w / 2, y: sourceRect.y + sourceRect.h + 3 + (beat.step % 3) * 16 }} text={beat.source.name} maxX={size.w} />
       )}
       {lands && !beat.landed ? null : label && row.banner && board ? (
@@ -241,7 +241,7 @@ const BeatView: React.FC<{ beat: Beat; anchors: Anchors; size: Size }> = React.m
 BeatView.displayName = 'BeatView';
 
 /** Everything that is playing right now, drawn over the fight. Taps pass through, except on ghost cards. */
-export const FxStage: React.FC<{ fx: FightFx; anchors: Anchors; size: Size }> = ({ fx, anchors, size }) => (
+export const FxStage: React.FC<{ fx: FightFx; anchors: Anchors; size: Size; hideWeaponNameTags?: boolean }> = ({ fx, anchors, size, hideWeaponNameTags }) => (
   <View style={st.stage} pointerEvents="box-none" testID="fx-stage">
     {fx.ghosts.map(g => {
       const rect = anchors.rect(`slot:${g.slot}`);
@@ -250,7 +250,7 @@ export const FxStage: React.FC<{ fx: FightFx; anchors: Anchors; size: Size }> = 
       return rect ? <Ghost key={g.key} rect={rect} card={g.card} broken={g.broken} how={g.how} ms={g.ms} color={g.color} to={foe ? centerOf(foe) : null} order={g.order} /> : null;
     })}
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {fx.beats.map(b => <BeatView key={b.key} beat={b} anchors={anchors} size={size} />)}
+      {fx.beats.map(b => <BeatView key={b.key} beat={b} anchors={anchors} size={size} hideWeaponNameTags={hideWeaponNameTags} />)}
     </View>
   </View>
 );

@@ -11,7 +11,7 @@ import { PARRY_RULES, parryCounterMeta, resolveParrySpec } from '@/adventure/dat
 import { boardHasCounterSet, setMatchesCounter } from '@/adventure/engine/parry';
 import { createRun, runReducer } from '@/adventure/engine/run';
 import { createMaxedSave } from '@/adventure/progress';
-import { buildIgnitionPlan, heatTierFor } from '@/adventure/fx/MultiplierIgnition';
+import { buildBalatroBreakdown, buildIgnitionPlan, computePrimedEquation, heatTierFor } from '@/adventure/fx/MultiplierIgnition';
 import ParryPreviewCard from '@/adventure/components/ParryPreviewCard';
 import LevelPreview from '@/adventure/components/LevelPreview';
 import type { LevelDef, ParryRequirement, ParrySpec } from '@/adventure/types';
@@ -328,5 +328,64 @@ describe('Live Multiplier Ignition & Pre-Battle Parry UI', () => {
       />
     );
     expect(getByText(/COUNTER: ANY SET/)).toBeTruthy();
+  });
+
+  it('buildBalatroBreakdown itemizes Cards, flat bonuses, multipliers, Power, and follow-ups with exact running math', () => {
+    const bd = buildBalatroBreakdown({
+      id: 7,
+      math: {
+        cards: 9,
+        baseCards: 3,
+        cardBonus: 6,
+        cardBonusNote: '3 Power cards (+6)',
+        collateral: { explosion: 3 },
+        flatBonus: 5,
+        flatItems: [
+          { label: 'Heavy Hitter', amount: 3, note: 'Workshop upgrade' },
+          { label: 'Scrappy', amount: 2, note: '2 missing hearts' },
+        ],
+        multiplier: 2,
+        multItems: [{ label: 'Rainbow Strike', amount: 2, note: 'every trait was different' }],
+        rainbow: true,
+        extra: 0,
+        powerMultiplier: 1.5,
+        powerPoints: 5,
+        hit: 51,
+        diffTraits: 3,
+        graceUsed: false,
+        sinceLastMs: 1200,
+        combo: 2,
+      },
+      followUps: [{ label: 'Rally Horn', amount: 11, sourceRef: 'weapon:rally-horn' }],
+      turnDamage: 62,
+      lethal: false,
+      isBossOrElite: false,
+      foeName: 'Masked Bandit',
+    });
+
+    expect(bd.finalBase).toBe(17); // 9 cards + 3 blast + 3 Heavy Hitter + 2 Scrappy
+    expect(bd.finalMult).toBe(3); // 2 Rainbow × 1.5 Power
+    expect(bd.finalBonus).toBe(11); // +11 Rally Horn
+    expect(bd.finalTotal).toBe(62);
+    expect(bd.heatTier).toBe(2);
+    expect(bd.receiptLine).toContain('Cards 3 (+6)');
+    expect(bd.receiptLine).toContain('+3 Heavy Hitter');
+    expect(bd.receiptLine).toContain('×2 Rainbow');
+    expect(bd.receiptLine).toContain('+11 Rally Horn');
+  });
+
+  it('computePrimedEquation and finalizeTurnIgnition expose live primed math, follow-ups, and GearBelt badges', () => {
+    const save = createMaxedSave();
+    const run = createRun(getLevel('2-4'), save, { seed: 42 });
+    const primed = computePrimedEquation(run);
+    expect(primed.base).toBeGreaterThanOrEqual(6); // 3 base cards + 3 Heavy Hitter
+    expect(primed.mult).toBeGreaterThanOrEqual(1);
+    expect(primed.summaryLine).toContain('Heavy Hitter');
+
+    const set = findSet(run)!;
+    expect(set).toBeDefined();
+    const after = runReducer(run, { type: 'MATCH', cards: set, rewards: plainRewards(set) });
+    expect(after.lastSetIgnition?.turnDamage).toBe(after.totalDamage);
+    expect(after.lastSetIgnition?.beltBadges).toBeDefined();
   });
 });

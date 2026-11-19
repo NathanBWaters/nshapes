@@ -100,6 +100,8 @@ class Band {
   private timer: ReturnType<typeof setInterval> | null = null;
   private stopIntervalTrack: (() => void) | null = null;
   private mix: Mix = restingMix('map');
+  /** Smoothly eased per-layer energy envelopes (fast attack on match, slow multi-bar release when streak ends or idle) */
+  private env = { intensity: 0.5, lead: 1, arp: 0, counter: 0, drums: 2 };
   private mood: FightMood | null = null;
   private heat = new Map<string, number>();
   private turn = 0;
@@ -131,6 +133,7 @@ class Band {
     this.setArrangement(known);
     this.pending = null;
     this.bpm = ARRANGEMENTS[known].bpm;
+    this.snapEnv(this.mix);
     this.nextTime = chip.now + 0.08;
     this.applied = { filterHz: -1, level: -1, echo: -1 };
     this.applyMixToChip(0.05);
@@ -155,6 +158,23 @@ class Band {
     this.stopIntervalTrack = null;
     this.arr = null;
     this.pending = null;
+  }
+
+  private snapEnv(m: Mix) {
+    this.env = {
+      intensity: m.intensity,
+      lead: m.lead ? m.leadGain : 0,
+      arp: m.arp ? 1 : 0,
+      counter: m.counter ? 1 : 0,
+      drums: m.drums,
+    };
+  }
+
+  /** Asymmetric per-step envelope easing: crisp swell up (~0.4s), gentle multi-bar fade down (~4s). */
+  private easeEnv(cur: number, target: number, up = 0.22, down = 0.032): number {
+    const k = target >= cur ? up : down;
+    const next = cur + (target - cur) * k;
+    return Math.abs(target - next) < 0.004 ? target : next;
   }
 
   private setArrangement(name: string) {
@@ -188,9 +208,21 @@ class Band {
       this.setArrangement(this.pending);
       this.pending = null;
     }
-    // Tempo eases toward its target, so a streak speeds the band up instead of jolting it
+    // Asymmetric tempo easing: builds momentum crisply on streaks, relaxes imperceptibly over ~3 bars when cooling down
     const target = this.arr.bpm * this.mix.tempo;
-    this.bpm = this.bpm ? this.bpm + (target - this.bpm) * 0.12 : target;
+    if (!this.bpm) this.bpm = target;
+    else this.bpm += (target - this.bpm) * (target >= this.bpm ? 0.1 : 0.025);
+
+    // Smooth per-layer envelopes so idle/streak-end fades out gradually instead of snapping layers off
+    const targetLead = this.mix.lead ? this.mix.leadGain : 0;
+    this.env.intensity = this.easeEnv(this.env.intensity, this.mix.intensity);
+    this.env.lead = this.easeEnv(this.env.lead, targetLead, 0.25, 0.035);
+    this.env.arp = this.easeEnv(this.env.arp, this.mix.arp ? 1 : 0, 0.22, 0.03);
+    this.env.counter = this.easeEnv(this.env.counter, this.mix.counter ? 1 : 0, 0.2, 0.028);
+    // Pause/freeze cuts drums promptly; cooling down from a streak or idle eases them back gradually
+    const drumDown = this.mix.drums === 0 ? 0.35 : 0.03;
+    this.env.drums = this.easeEnv(this.env.drums, this.mix.drums, 0.22, drumDown);
+
     this.playStep(this.arr, this.step, this.nextTime);
     this.nextTime += this.stepDur();
     this.step += 1;
@@ -219,7 +251,10 @@ class Band {
     const prev = this.mood;
     this.mood = mood;
     this.mix = direct(mood, id => themeOf(id));
-    this.applyMixToChip(0.35);
+    if (!prev) this.snapEnv(this.mix);
+    // Cooling down (idle/streak drop) glides gently over 1.8s; waking up or pausing responds promptly
+    const cooling = !mood.paused && this.applied.filterHz > 0 && (this.mix.filterHz < this.applied.filterHz || this.mix.level < this.applied.level);
+    this.applyMixToChip(cooling ? 1.8 : 0.35);
     if (!prev) return;
     for (const id of mood.evolutions) if (!prev.evolutions.includes(id)) this.evolve(id);
     for (const id of prev.evolutions) if (!mood.evolutions.includes(id)) this.devolve();
@@ -295,34 +330,38 @@ class Band {
     const idx = (bar % 8) * 16 + s16;
     const tok = section[idx];
     const lead = tok && tok !== '-' && tok !== '.' ? parseNote(tok) : null;
-    if (lead && mix.lead) {
+    const leadEnv = this.env.lead;
+    const colourEnv = Math.max(0, Math.min(1, (this.env.intensity - 0.38) / 0.22));
+    if (lead && leadEnv > 0.04) {
       let len = 1;
       while (section[idx + len] === '-' && s16 + len < 16) len++;
       const dur = sd * len * 0.95;
       const semis = a.leadOctave / 12;
       const freq = f(lead.degree, lead.octave + semis);
-      if (mix.lounge) note('vibes', freq, t, dur, { vol: 0.9 });
+      if (mix.lounge) note('vibes', freq, t, dur, { vol: 0.9 * leadEnv });
       else {
-        chip.tone({ voice: 'pulse1', freq, at: t, dur, vol: a.leadVol, duty: a.leadDuty, vibrato: len > 2 ? a.leadVibrato : 0 });
-        if (mix.intensity >= 0.5) note(WORLD_COLOUR[this.arrName] ?? 'glock', freq * (this.arrName === 'boss' ? 0.5 : 2), t, dur, { vol: 0.45, soft: true });
-        if (mix.counter) note('flute', f(lead.degree - 2, lead.octave + semis), t, dur, { vol: 0.5, pan: -0.3, soft: true });
+        chip.tone({ voice: 'pulse1', freq, at: t, dur, vol: a.leadVol * leadEnv, duty: a.leadDuty, vibrato: len > 2 ? a.leadVibrato : 0 });
+        if (colourEnv > 0.05) note(WORLD_COLOUR[this.arrName] ?? 'glock', freq * (this.arrName === 'boss' ? 0.5 : 2), t, dur, { vol: 0.45 * colourEnv * leadEnv, soft: true });
+        if (this.env.counter > 0.05) note('flute', f(lead.degree - 2, lead.octave + semis), t, dur, { vol: 0.5 * this.env.counter * leadEnv, pan: -0.3, soft: true });
       }
     }
 
     // Bass
     const b = mix.lounge ? 'R..5..8.R..5.3..'[s16] : a.bass[s16];
+    const subEnv = Math.max(0, Math.min(1, (this.env.intensity - 0.48) / 0.2));
     if (b && b !== '-' && b !== '.' && !mix.frozen) {
       let len = 1;
       while (!mix.lounge && a.bass[s16 + len] === '-') len++;
       const freq = f(root + (BASS_STEP[b] ?? 0), a.bassOctave);
       chip.tone({ voice: 'wave', freq, at: t, dur: sd * len * 0.9, vol: 0.55, decay: 0.5 });
-      if (mix.intensity >= 0.6 && b === 'R') note('sub', freq / (freq > 90 ? 2 : 1), t, sd * 1.5, { vol: 0.5, soft: true });
+      if (subEnv > 0.05 && b === 'R') note('sub', freq / (freq > 90 ? 2 : 1), t, sd * 1.5, { vol: 0.5 * subEnv, soft: true });
     }
 
     // Arpeggio
-    if ((a.arp || mix.arp) && s16 % 2 === 0 && !mix.frozen) {
+    const arpGain = a.arp ? Math.max(0.45, this.env.arp) : this.env.arp;
+    if (arpGain > 0.05 && s16 % 2 === 0 && !mix.frozen) {
       const tones = [0, 2, 4, 7];
-      chip.tone({ voice: 'pulse2', freq: f(root + tones[(s16 / 2) % 4], 4), at: t, dur: sd * 0.8, vol: 0.18, duty: a.arpDuty, decay: 0.8, soft: true });
+      chip.tone({ voice: 'pulse2', freq: f(root + tones[(s16 / 2) % 4], 4), at: t, dur: sd * 0.8, vol: 0.18 * arpGain, duty: a.arpDuty, decay: 0.8, soft: true });
     }
 
     // Pad: the chord, held
@@ -376,22 +415,25 @@ class Band {
   }
 
   private playDrums(a: Arrangement, s16: number, bar: number, t: number, groove: string | null) {
-    const level = this.mix.drums;
-    if (level === 0) return;
+    const lvl = this.env.drums;
+    if (lvl <= 0.08) return;
     const d = groove ? groove[s16] : this.mix.lounge ? LOUNGE_DRUMS[s16] : a.drums[s16];
-    const light = level === 1;
-    if (d === 'k') drum('kick', t, light ? 0.7 : 1);
+    // Smooth blends across drum tiers: 0→1 basic groove, 1→2 full hats/snare, 2→3 driving claps & off-beat hats
+    const base = Math.min(1, lvl);
+    const full = Math.max(0, Math.min(1, lvl - 1));
+    const drive = Math.max(0, Math.min(1, lvl - 2));
+    if (d === 'k') drum('kick', t, base * (0.7 + 0.3 * full));
     if (d === 's') {
-      drum('snare', t, light ? 0.5 : 0.9);
-      if (level === 3) drum('clap', t, 0.5);
+      drum('snare', t, base * (0.5 + 0.4 * full));
+      if (drive > 0.06) drum('clap', t, 0.5 * drive);
     }
-    if (d === 'c') drum('clap', t, 0.8);
-    if (d === 'h' && (!light || this.mix.lounge)) drum(this.mix.lounge ? 'ride' : 'hat', t, 0.9);
-    if (d === 'o' && !light) drum('openHat', t, 0.9);
-    if (level === 3 && s16 % 2 === 1 && d !== 'h') drum('hat', t, 0.45, 'music', 0.3, true);
+    if (d === 'c') drum('clap', t, 0.8 * base);
+    if (d === 'h' && (full > 0.06 || this.mix.lounge)) drum(this.mix.lounge ? 'ride' : 'hat', t, 0.9 * (this.mix.lounge ? base : full));
+    if (d === 'o' && full > 0.06) drum('openHat', t, 0.9 * full);
+    if (drive > 0.06 && s16 % 2 === 1 && d !== 'h') drum('hat', t, 0.45 * drive, 'music', 0.3, true);
     // A tom fill hands every fourth bar over to the next one
-    if (level >= 2 && !groove && bar % 4 === 3 && s16 >= 12) drum('tom', t, 0.5 + (s16 - 12) * 0.1, 'music', (s16 - 13.5) * 0.3);
-    if (level >= 2 && bar % 8 === 0 && s16 === 0 && bar > 0) drum('crash', t, 0.45);
+    if (full > 0.25 && !groove && bar % 4 === 3 && s16 >= 12) drum('tom', t, (0.5 + (s16 - 12) * 0.1) * full, 'music', (s16 - 13.5) * 0.3);
+    if (full > 0.25 && bar % 8 === 0 && s16 === 0 && bar > 0) drum('crash', t, 0.45 * full);
   }
 
   /** Bar line: pick which weapons take this bar, and let old excitement fade. */
@@ -616,6 +658,7 @@ class Band {
     for (const part of plan) {
       this.setArrangement(part.arrangement);
       if (!this.mood) this.mix = restingMix(part.arrangement);
+      this.snapEnv(this.mix);
       this.bpm = ARRANGEMENTS[part.arrangement].bpm * this.mix.tempo;
       for (let i = 0; i < part.bars * 16; i++) this.advance();
     }
@@ -951,10 +994,10 @@ const CUES: Record<CueName, (c: CueCtx) => void> = {
     for (const d of [0, 2, 4]) N(c, 'choir', d, 4, 0, c.g * 8, 0.8);
   },
 
-  // The streak ends: two notes stepping down, like a slot reel that just missed
+  // The streak ends: a gentle, warm two-note exhale so cooling down never feels jarring
   streakLost: c => {
-    note('vibes', fq(c, isMinor(c.mode) ? 3 : 2, 4), c.t, 0.25, { vol: 0.7, bus: SFX });
-    note('vibes', fq(c, 0, 4), c.t + c.g * 3, 0.5, { vol: 0.7, bus: SFX });
+    note('vibes', fq(c, isMinor(c.mode) ? 3 : 2, 4), c.t, 0.32, { vol: 0.42, bus: SFX });
+    note('vibes', fq(c, 0, 4), c.t + c.g * 3, 0.65, { vol: 0.36, bus: SFX });
   },
 
   // Your own gear went wrong: a plucked note with its sour neighbour, falling
@@ -992,10 +1035,11 @@ const CUES: Record<CueName, (c: CueCtx) => void> = {
 
   // Live Multiplier Ignition & Lethal Kill-Cam
   multStep: c => {
-    const step = Math.min(12, Math.max(0, c.slot));
-    const hot = c.amount >= 2;
-    N(c, hot ? 'bell' : 'celesta', step, hot ? 6 : 5, 0, 0.22, 0.85);
-    D(c, hot ? 'tick' : 'woodblock', 0, 0.45);
+    // Pitch climbs by `amount` (or legacy `slot`), while callers pass `slot: 0` on visual frames to avoid double-offsetting timing
+    const step = Math.min(12, Math.max(0, Math.round(c.amount || c.slot)));
+    const hot = step >= 4;
+    N(c, hot ? 'bell' : 'celesta', step, hot ? 6 : 5, 0, 0.22, 0.72);
+    D(c, hot ? 'tick' : 'woodblock', 0, 0.38);
   },
   multSlam: c => {
     const tier = Math.max(0, Math.min(3, Math.round(c.amount)));

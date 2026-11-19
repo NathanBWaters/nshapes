@@ -176,10 +176,29 @@ export interface ParryState {
   perfectParries: number;
 }
 
-/** Snapshot of the latest scored Set for Live Multiplier Ignition & Lethal Kill-Cam FX. */
+/** A follow-up damage source triggered by the Set during the same turn (e.g. Rally Horn +11, Free Set +18). */
+export interface SetFollowUpItem {
+  label: string;
+  amount: number;
+  sourceRef?: string;
+}
+
+/** Per-weapon Balatro-style trigger value badge shown on the GearBelt when a weapon contributes. */
+export interface BeltBadge {
+  text: string;
+  kind: 'flat' | 'mult' | 'fx';
+}
+
+/** Snapshot of the latest scored Set for the Live Balatro Scoreboard, GearBelt badges & Kill-Cam FX. */
 export interface SetIgnition {
   id: number;
   math: FightLogSetMath;
+  /** Follow-up weapon/rule damage lines triggered during this same Set turn */
+  followUps?: SetFollowUpItem[];
+  /** Per-weapon value badges keyed by weapon id (e.g. "+3", "×2", "+11", "🔥4") */
+  beltBadges?: Record<string, BeltBadge>;
+  /** Total damage dealt across the entire Set turn (Set hit + follow-ups) */
+  turnDamage?: number;
   parryKind?: 'parry' | 'perfect';
   staggered?: boolean;
   lethal: boolean;

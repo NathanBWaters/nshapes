@@ -19,6 +19,7 @@ import { starGoals, type ChallengeProgress } from '../engine/challenges';
 import { EVOLUTION_RULES } from '../engine/sources';
 import ParryPreviewCard from './ParryPreviewCard';
 import { FoeAbilityCard, HazardNotices } from './SharedCards';
+import { buildBalatroBreakdown, computePrimedEquation } from '../fx/MultiplierIgnition';
 import { Btn, Eyebrow, INK, PopIn, TONE } from './ui';
 
 export type HudInspectTarget =
@@ -27,6 +28,7 @@ export type HudInspectTarget =
   | { kind: 'challenge' }
   | { kind: 'arcana'; id: ArcanaId }
   | { kind: 'evolutions' }
+  | { kind: 'score' }
   | { kind: 'buff'; which: 'purity' | 'double' | 'charged' | 'simplified' };
 
 interface Props {
@@ -205,6 +207,68 @@ const HudInspector: React.FC<Props> = ({ target, run, shownHp, challenge, knownE
         );
       }
 
+      case 'score': {
+        const last = run.lastSetIgnition ? buildBalatroBreakdown(run.lastSetIgnition) : null;
+        const primed = computePrimedEquation(run);
+        const fmtN = (n: number) => {
+          const r = Math.round(n * 10) / 10;
+          return Number.isInteger(r) ? r.toLocaleString() : r.toFixed(1);
+        };
+        return (
+          <>
+            <View style={st.headerRow}>
+              <View style={[st.iconBadge, { backgroundColor: COLORS.actionYellow }]}>
+                <Icon name="lorc/power-lightning" size={24} color={INK} />
+              </View>
+              <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                <Eyebrow text="Damage Math" color={COLORS.actionYellow} />
+                <Text style={st.title}>Score Breakdown</Text>
+                <Text style={st.meta}>Base × Multiplier (+ Bonus hits) = Damage</Text>
+              </View>
+            </View>
+
+            {last && (
+              <View style={{ gap: 6 }}>
+                <Text style={st.section}>LAST SET RECEIPT ({fmtN(last.finalBase)} × {fmtN(last.finalMult)}×{last.finalBonus > 0 ? ` + ${fmtN(last.finalBonus)}` : ''} = {fmtN(last.finalTotal)} DMG)</Text>
+                {last.steps.map(step => (
+                  <View key={step.key} style={st.scoreRow}>
+                    <View
+                      style={[
+                        st.scoreChip,
+                        step.kind === 'base' ? st.scoreChipBase : step.kind === 'mult' ? st.scoreChipMult : st.scoreChipBonus,
+                      ]}
+                    >
+                      <Text style={st.scoreChipText}>{step.value}</Text>
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={st.scoreLabel}>{step.label}</Text>
+                      {step.note && <Text style={st.meta}>{step.note}</Text>}
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            <View style={{ gap: 6 }}>
+              <Text style={st.section}>NEXT SET PRIMED ({fmtN(primed.base)} × {fmtN(primed.mult)}× = {fmtN(primed.total)} DMG)</Text>
+              {primed.items.map((item, i) => (
+                <View key={i} style={st.scoreRow}>
+                  <View style={[st.scoreChip, item.kind === 'base' ? st.scoreChipBase : st.scoreChipMult]}>
+                    <Text style={st.scoreChipText}>{item.value}</Text>
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={st.scoreLabel}>{item.label}</Text>
+                    {item.note && <Text style={st.meta}>{item.note}</Text>}
+                  </View>
+                </View>
+              ))}
+            </View>
+
+            <Text style={st.note}>Rainbow Sets (all traits different) multiply damage ×2 and grow your Power faster!</Text>
+          </>
+        );
+      }
+
       case 'buff': {
         if (target.which === 'purity') {
           return (
@@ -282,6 +346,13 @@ const st = StyleSheet.create({
   goalMet: { backgroundColor: '#D4F4EE', borderColor: COLORS.logicTeal },
   goalMissed: { backgroundColor: '#FFF1F0', borderColor: COLORS.impactRed },
   goalStars: { width: 34, fontSize: 12, fontWeight: '900', color: '#E0A800' },
+  scoreRow: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.paperBeige, borderRadius: 8, borderWidth: 1.5, borderColor: TONE.spentEdge, paddingHorizontal: 8, paddingVertical: 6 },
+  scoreChip: { minWidth: 46, borderRadius: 6, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 6, paddingVertical: 2, alignItems: 'center' },
+  scoreChipBase: { backgroundColor: '#0E7490' },
+  scoreChipMult: { backgroundColor: '#DC2626' },
+  scoreChipBonus: { backgroundColor: '#D97706' },
+  scoreChipText: { fontSize: 11, fontWeight: '900', color: '#FFFFFF', fontVariant: ['tabular-nums'] },
+  scoreLabel: { fontSize: 13, fontWeight: '900', color: INK },
 });
 
 export default HudInspector;

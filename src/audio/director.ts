@@ -78,6 +78,8 @@ export interface Mix {
   /** 0 none · 1 light · 2 full · 3 driving (extra hats and claps) */
   drums: 0 | 1 | 2 | 3;
   lead: boolean;
+  /** Smooth 0..1 gain for the lead melody so idle fade-outs ease softly instead of cutting abruptly */
+  leadGain: number;
   arp: boolean;
   pad: boolean;
   /** The tune harmonised a third below */
@@ -127,9 +129,10 @@ export const DIRECTOR = {
   racingSeconds: 8,
   /** Foe HP share under which the drum roll starts */
   finisherHp: 0.2,
-  /** Idle: the band starts to thin, and the tune drops out */
+  /** Idle: the band gradually softens from `idleStartMs` through `idleThinMs` until the lead rests at `idleQuietMs` */
+  idleStartMs: 6000,
   idleThinMs: 10000,
-  idleQuietMs: 18000,
+  idleQuietMs: 22000,
   /** An evolution's layer flickers for its last seconds */
   evolutionFadeMs: 5000,
   /** Tempo: each Set of a streak adds this, up to `comboTempoCap` */
@@ -149,6 +152,7 @@ export const restingMix = (arrangement: string): Mix => ({
   intensity: 0.5,
   drums: 2,
   lead: true,
+  leadGain: 1,
   arp: false,
   pad: false,
   counter: false,
@@ -202,19 +206,30 @@ export const direct = (m: FightMood, themeOf: Brighten = () => ({ lift: 2, brigh
   if (between) tempo = 0.84;
   if (m.frozen && playing) tempo = 0.6;
 
-  // Intensity: the foe falling, the fight going on, the streak, the evolution
-  const idle = playing && m.evolutions.length === 0 ? (m.idleMs >= DIRECTOR.idleQuietMs ? 2 : m.idleMs >= DIRECTOR.idleThinMs ? 1 : 0) : 0;
+  // Intensity: the foe falling, the fight going on, the streak, the evolution.
+  // Idle fades smoothly from `idleStartMs` to `idleQuietMs` instead of dropping in harsh steps.
+  const idleActive = playing && m.evolutions.length === 0;
+  const idleFade = idleActive
+    ? clamp01((m.idleMs - DIRECTOR.idleStartMs) / Math.max(1, DIRECTOR.idleQuietMs - DIRECTOR.idleStartMs))
+    : 0;
+  const idleLeadFade = idleActive
+    ? clamp01((m.idleMs - DIRECTOR.idleThinMs) / Math.max(1, DIRECTOR.idleQuietMs - DIRECTOR.idleThinMs))
+    : 0;
+  const idleQuiet = idleActive && m.idleMs >= DIRECTOR.idleQuietMs;
   const waveShare = m.waves > 1 ? m.wave / (m.waves - 1) : 0;
   let intensity = 0.22 + 0.33 * (1 - clamp01(m.foeHp)) + 0.1 * clamp01(waveShare) + 0.2 * clamp01((m.combo - 1) / 4)
-    + (m.evolutions.length > 0 ? 0.3 : 0) + (m.boss ? 0.1 : 0) + (m.hotStreak ? 0.05 : 0) - idle * 0.2;
+    + (m.evolutions.length > 0 ? 0.3 : 0) + (m.boss ? 0.1 : 0) + (m.hotStreak ? 0.05 : 0) - idleFade * 0.38;
   intensity = clamp01(intensity);
   if (between) intensity = 0.3;
 
   const finisher = playing && m.foeHp > 0 && m.foeHp <= DIRECTOR.finisherHp;
   const evolving = m.evolutions.length > 0;
 
-  const filterHz = m.paused ? 700 : between ? 2600 : m.frozen ? 1800 : lastHeart ? 3400 : 18000;
-  const level = m.paused ? 0.55 : between ? 0.8 : 1;
+  // Gradually warm the low-pass filter and ease level down as idle deepens (zero abrupt drop-off)
+  const idleFilterHz = Math.round(18000 - idleFade * 11500);
+  const filterHz = m.paused ? 700 : between ? 2600 : m.frozen ? 1800 : lastHeart ? 3400 : idleFilterHz;
+  const level = m.paused ? 0.55 : between ? 0.8 : Math.round((1 - idleFade * 0.15) * 100) / 100;
+  const leadGain = m.frozen ? 0 : Math.round((1 - idleLeadFade) * 100) / 100;
 
   return {
     arrangement: m.arrangement,
@@ -223,9 +238,10 @@ export const direct = (m: FightMood, themeOf: Brighten = () => ({ lift: 2, brigh
     tempo,
     intensity,
     drums: m.frozen || m.paused ? 0 : between ? 1 : evolving || intensity >= 0.8 ? 3 : intensity >= 0.42 ? 2 : 1,
-    lead: idle < 2 && !m.frozen,
+    lead: !idleQuiet && !m.frozen,
+    leadGain,
     arp: !between && (evolving || intensity >= 0.55),
-    pad: m.frozen || between || intensity >= 0.35 || lastHeart,
+    pad: m.frozen || between || intensity >= 0.35 || lastHeart || idleFade > 0.25,
     counter: !between && intensity >= 0.7,
     filterHz,
     level,
@@ -234,7 +250,7 @@ export const direct = (m: FightMood, themeOf: Brighten = () => ({ lift: 2, brigh
     finisher,
     lounge: between,
     frozen: m.frozen && playing,
-    spotlights: m.weapons.length === 0 ? 0 : between || idle === 2 ? 1 : intensity >= 0.7 ? 3 : 2,
+    spotlights: m.weapons.length === 0 ? 0 : between || idleQuiet ? 1 : intensity >= 0.7 ? 3 : 2,
     evolutions: m.evolutions,
     evolutionFading: evolving && m.evolutionEndsMs <= DIRECTOR.evolutionFadeMs,
     weapons: m.weapons,

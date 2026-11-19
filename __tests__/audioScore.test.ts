@@ -301,12 +301,23 @@ describe('the director', () => {
     expect(direct(mood({ combo: 50, timeLeft: 3, hotStreak: true, evolutions: ['x'] })).tempo).toBeLessThanOrEqual(DIRECTOR.maxTempo);
   });
 
-  it('the band thins out when the player has not made a Set, then the tune drops out', () => {
+  it('the band thins out gradually when the player has not made a Set, softening lead & highs before resting', () => {
     const active = direct(mood({ foeHp: 0.6, weapons: ['magnet', 'rust'] }));
+    const early = direct(mood({ foeHp: 0.6, idleMs: DIRECTOR.idleStartMs + 2000, weapons: ['magnet', 'rust'] }));
     const thin = direct(mood({ foeHp: 0.6, idleMs: DIRECTOR.idleThinMs, weapons: ['magnet', 'rust'] }));
+    const midFade = direct(mood({ foeHp: 0.6, idleMs: (DIRECTOR.idleThinMs + DIRECTOR.idleQuietMs) / 2, weapons: ['magnet', 'rust'] }));
     const quiet = direct(mood({ foeHp: 0.6, idleMs: DIRECTOR.idleQuietMs, weapons: ['magnet', 'rust'] }));
-    expect(thin.intensity).toBeLessThan(active.intensity);
-    expect(quiet.intensity).toBeLessThan(thin.intensity);
+    // Continuous smooth monotonic descent rather than sharp cliffs
+    expect(early.intensity).toBeLessThan(active.intensity);
+    expect(thin.intensity).toBeLessThan(early.intensity);
+    expect(midFade.intensity).toBeLessThan(thin.intensity);
+    expect(quiet.intensity).toBeLessThan(midFade.intensity);
+    expect(midFade.leadGain).toBeGreaterThan(0);
+    expect(midFade.leadGain).toBeLessThan(thin.leadGain);
+    expect(quiet.leadGain).toBe(0);
+    expect(midFade.filterHz).toBeLessThan(active.filterHz);
+    expect(quiet.filterHz).toBeLessThan(midFade.filterHz);
+    expect(quiet.level).toBeLessThan(active.level);
     expect([active.lead, thin.lead, quiet.lead]).toEqual([true, true, false]);
     expect(quiet.spotlights).toBe(1);
   });

@@ -614,7 +614,7 @@ const AdventureRun: React.FC<Props> = ({
   const idealCardH = stage.w > 0 ? (Math.min(stage.w, 560) - 36) / 3 / 0.82 : 140;
   // (a wide window has width to burn and little height: there the two of them get a little more than the minimum)
   const stageMin = stage.w >= STAGE.wideFrom ? STAGE.minWide : STAGE.min;
-  const chromePx = STAGE.chromePx + (traitChecks ? TRAIT_CHECKS_HEIGHT + 6 : 0) + (run.parry ? 28 : 0);
+  const chromePx = STAGE.chromePx + (traitChecks ? TRAIT_CHECKS_HEIGHT + 6 : 0) + (showDamageHud ? 52 : 0) + (run.parry ? 28 : 0);
   const stageH = stage.h > 0
     ? Math.round(Math.max(stageMin, Math.min(STAGE.max, stage.h - insets.top - chromePx - boardRows * (idealCardH + 6))))
     : 92;
@@ -807,8 +807,8 @@ const AdventureRun: React.FC<Props> = ({
               </View>
             </Anchor>
           )}
-          {/* The weapons in play: each jumps when it fires; tap one to read it */}
-          <GearBelt weapons={run.weapons} growth={run.growth} width={stage.w} onInspect={setInspect} />
+          {/* The weapons in play: each jumps & pops its live value badge when it contributes; tap one to read it */}
+          <GearBelt weapons={run.weapons} growth={run.growth} ignition={run.lastSetIgnition} reduced={!effects} width={stage.w} onInspect={setInspect} />
           <View style={{ flex: 1 }} />
           {run.features.has('coins') && <Anchor name="coins"><CoinPill coins={run.coins} /></Anchor>}
           {run.features.has('hints') && (
@@ -982,6 +982,16 @@ const AdventureRun: React.FC<Props> = ({
         {/* The rule, one cell per trait, while it is new (always the same height: the board never moves) */}
         {traitChecks && <TraitChecks attributes={run.attributes} checks={ended ? null : checks} added={traitAddedBy(level)} />}
 
+        {/* Docked Balatro-style Score Equation Bar (never covers cards; shows live primed math + real-time tally + receipt) */}
+        {showDamageHud && (
+          <MultiplierIgnition
+            ignition={run.lastSetIgnition}
+            run={run}
+            enabled={effects}
+            onPress={() => { sfx('click'); setHudInspect({ kind: 'score' }); }}
+          />
+        )}
+
       </View>
 
       {run.parry && (
@@ -1000,7 +1010,6 @@ const AdventureRun: React.FC<Props> = ({
         {/* Evolution pulse: a glow behind the cards, never a card border */}
         {run.activeEvolutions.length > 0 && <EvolutionGlow active={playing && appActive} />}
         {run.surge?.active && <SurgeGlow active={playing && appActive} />}
-        <MultiplierIgnition ignition={run.lastSetIgnition} enabled={effects && showDamageHud} />
         {run.frozenMs > 0 && (
           <View style={st.frozen} pointerEvents="none">
             <Icon name="lorc/snowflake-1" size={18} color="#1D4ED8" />
@@ -1037,7 +1046,7 @@ const AdventureRun: React.FC<Props> = ({
       </View>
 
       {/* Everything that is playing right now */}
-      <FxStage fx={fx} anchors={anchors} size={stage} />
+      <FxStage fx={fx} anchors={anchors} size={stage} hideWeaponNameTags />
       <KillCamOverlay ignition={run.lastSetIgnition} anchors={anchors} stageSize={stage} enabled={effects && !practice} />
       {opening && effects && !practice && anchors.rect('board') && (
         <View style={st.openingLayer} pointerEvents="none" testID="run-opening">
