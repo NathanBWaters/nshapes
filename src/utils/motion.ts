@@ -20,8 +20,13 @@ export const MS = {
   quick: 180,
   /** A card, a row, a part of a panel arriving or moving */
   move: 280,
-  /** A sheet, a modal, a whole screen */
+  /** A sheet, a modal */
   panel: 360,
+  /**
+   * One screen giving way to another (map → fight, map → Camp…): seen hundreds of
+   * times, so shorter than a sheet. The old screen leaves in exitMs(screen).
+   */
+  screen: 220,
   /** The moment the player came for: a star, a reward, a knockout */
   hero: 700,
 } as const;

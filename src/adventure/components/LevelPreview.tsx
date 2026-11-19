@@ -3,10 +3,12 @@
  * mechanic, star goals with their coin rewards, secret unlocks shown as
  * silhouettes, and the fighter + charm you'll bring.
  */
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, BackHandler } from 'react-native';
 import Animated, { ReduceMotion, runOnJS, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { SCREEN_INSTANT } from '@/components/ScreenTransition';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { EASE, MS, exitMs } from '@/utils/motion';
 import Icon, { IconName } from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
@@ -69,10 +71,11 @@ interface Props {
   onArmRecipe?: (recipeId: string) => void;
   /**
    * How the sheet goes when `level` turns null: 'slide' (put away with ✕, the
-   * backdrop or the back button: it goes down the way it came) or 'cut' (it
-   * leaves with the screen under it, e.g. Fight! or a trip to Camp).
+   * backdrop or the back button: it goes down the way it came), 'screen' (it
+   * leaves with the screen under it, Fight! or a trip to Camp: it fades out in
+   * the time the screen takes to leave) or 'cut'.
    */
-  exit?: 'slide' | 'cut';
+  exit?: 'slide' | 'screen' | 'cut';
 }
 
 /**
@@ -86,6 +89,7 @@ interface Props {
 const SHEET_RISE = 96;
 /** Fades still play when the device asks for reduced motion (Reanimated would otherwise cut them): only the travel goes */
 const KEEP = { reduceMotion: ReduceMotion.Never } as const;
+const NO_INSETS = { top: 0, bottom: 0, left: 0, right: 0 };
 
 const LevelPreview: React.FC<Props> = props => {
   const { level, onClose, exit = 'slide' } = props;
@@ -130,7 +134,19 @@ const LevelPreview: React.FC<Props> = props => {
     }
     if (!wasOpen.current) return;
     wasOpen.current = false;
-    if (exit === 'cut') {
+    const onGone = (finished?: boolean) => {
+      'worklet';
+      if (finished) runOnJS(finishExit)();
+    };
+    if (exit === 'screen' && !SCREEN_INSTANT) {
+      // Goes with the screen under it: no travel of its own, gone when the screen is
+      const out = exitMs(reduced ? MS.feedback : MS.screen);
+      setClosing(true);
+      dim.value = withTiming(0, { duration: out, easing: EASE.exitSoft, ...KEEP });
+      fade.value = withTiming(0, { duration: out, easing: EASE.exitSoft, ...KEEP }, onGone);
+      return;
+    }
+    if (exit !== 'slide') {
       dim.value = 0;
       rise.value = SHEET_RISE;
       fade.value = 0;
@@ -145,10 +161,6 @@ const LevelPreview: React.FC<Props> = props => {
     dim.value = withTiming(0, { duration: out, easing: EASE.ui, ...KEEP });
     rise.value = reduced ? rise.value : withTiming(SHEET_RISE, { duration: out, easing: EASE.exitSoft });
     // Gone only once it has faded all the way (an interrupted exit does not finish, so it does not unmount)
-    const onGone = (finished?: boolean) => {
-      'worklet';
-      if (finished) runOnJS(finishExit)();
-    };
     fade.value = reduced
       ? withTiming(0, { duration: out, easing: EASE.ui, ...KEEP }, onGone)
       : withDelay(out - vanish, withTiming(0, { duration: vanish, easing: EASE.exitSoft }, onGone));
@@ -162,13 +174,30 @@ const LevelPreview: React.FC<Props> = props => {
     return () => sub.remove();
   }, [level, onClose]);
 
+  // The context, not the hook: a sheet rendered without a provider (a test) simply has no insets
+  const insets = useContext(SafeAreaInsetsContext) ?? NO_INSETS;
+  /**
+   * The dim covers the whole phone, as the Modal's did: AdventureMode sits inside
+   * the app's SafeAreaView, so the backdrop reaches past its box by the insets
+   * (no ancestor clips: AdventureMode, Game and app/index.tsx have no overflow
+   * hidden). The sheet itself stays inside the safe area. On web the insets are 0.
+   */
+  const backdropBox = { top: -insets.top, bottom: -insets.bottom, left: -insets.left, right: -insets.right };
   const backdropStyle = useAnimatedStyle(() => ({ opacity: dim.value }));
   const sheetStyle = useAnimatedStyle(() => ({ opacity: fade.value, transform: [{ translateY: rise.value }] }));
 
   if (!shown) return null;
   return (
-    <View style={[StyleSheet.absoluteFill, st.layer]} pointerEvents={closing ? 'none' : 'box-none'} testID="preview-sheet-root">
-      <Animated.View style={[StyleSheet.absoluteFill, st.backdrop, backdropStyle]} pointerEvents="none" />
+    <View
+      style={[StyleSheet.absoluteFill, st.layer]}
+      pointerEvents={closing ? 'none' : 'box-none'}
+      testID="preview-sheet-root"
+      // What the Modal gave for free: screen readers stay in the sheet, not on the map behind it
+      role="dialog"
+      aria-modal
+      accessibilityViewIsModal
+    >
+      <Animated.View style={[st.backdrop, backdropBox, backdropStyle]} pointerEvents="none" />
       {/* box-none hands touches to its children, so the closing sheet must say none here too */}
       <View style={st.overlay} pointerEvents={closing ? 'none' : 'box-none'}>
         <TouchableOpacity style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
@@ -633,7 +662,7 @@ const Rule: React.FC<{ icon: IconName; text: string }> = ({ icon, text }) => (
 const st = StyleSheet.create({
   /** Above everything the screen under it stacks (the map's top bar has its own zIndex) */
   layer: { zIndex: 100, elevation: 100 },
-  backdrop: { backgroundColor: 'rgba(18,18,18,0.55)' },
+  backdrop: { position: 'absolute', backgroundColor: 'rgba(18,18,18,0.55)' },
   overlay: { flex: 1, justifyContent: 'flex-end', alignItems: 'center' },
   sheet: { width: '100%', maxWidth: 520, maxHeight: '94%', backgroundColor: COLORS.canvasWhite, borderTopLeftRadius: 18, borderTopRightRadius: 18, borderWidth: 3, borderColor: INK, overflow: 'hidden' },
   header: { padding: 16, gap: 10, borderBottomWidth: 2, borderBottomColor: INK },

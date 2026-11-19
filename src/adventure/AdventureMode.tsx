@@ -5,6 +5,9 @@
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, StyleSheet } from 'react-native';
+import Animated from 'react-native-reanimated';
+import { useScreenTransition, type ScreenDirection } from '@/components/ScreenTransition';
+import { COLORS } from '@/utils/colors';
 import { music, setMusicEnabled, setSfxOverride, sfx } from '@/audio';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import type { AdventureSave, FeatureDestination, LevelDef, MechanicDef, RunState } from './types';
@@ -80,6 +83,12 @@ interface Teaching {
   level: LevelDef;
 }
 
+/**
+ * How deep each screen sits: a change to a screen as deep or deeper comes in
+ * from the right ("deeper"), a change to a shallower one from the left ("back").
+ */
+const DEPTH: Record<Screen['kind'], number> = { story: 1, map: 1, camp: 2, guide: 2, run: 2, results: 2 };
+
 const screenFor = (d: FeatureDestination, returnLevelId?: string): Screen => ({ kind: 'camp', tab: d.tab, returnLevelId });
 
 interface Props {
@@ -97,11 +106,23 @@ interface Props {
 const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave, coldOpen = true }) => {
   const [save, setSaveState] = useState<AdventureSave>(() => initialSave ?? loadAdventureSave());
   const [history, setHistory] = useState<BattleRecord[]>(loadBattleHistory);
-  const [screen, setScreen] = useState<Screen>(() => (coldOpen && isFirstVisit(save) ? { kind: 'story' } : { kind: 'map' }));
+  const [screen, setScreenNow] = useState<Screen>(() => (coldOpen && isFirstVisit(save) ? { kind: 'story' } : { kind: 'map' }));
+  // Every change of screen goes through the one shared transition (src/components/ScreenTransition.tsx)
+  const transition = useScreenTransition();
+  const screenRef = useRef(screen);
+  screenRef.current = screen;
+  /** Change screen: the old one leaves, then `next` (and whatever `also` sets with it) arrives */
+  const setScreen = useCallback((next: Screen, also?: () => void) => {
+    const direction: ScreenDirection = DEPTH[next.kind] >= DEPTH[screenRef.current.kind] ? 1 : -1;
+    transition.go(() => {
+      setScreenNow(next);
+      also?.();
+    }, direction);
+  }, [transition]);
   const reducedMotion = useReducedMotion();
   const [preview, setPreview] = useState<LevelDef | null>(null);
-  /** Put away by hand, the sheet slides down; leaving with its screen (Fight!, Camp), it goes with it */
-  const [previewExit, setPreviewExit] = useState<'slide' | 'cut'>('slide');
+  /** Put away by hand, the sheet slides down; leaving with its screen (Fight!, Camp), it fades with it */
+  const [previewExit, setPreviewExit] = useState<'slide' | 'screen' | 'cut'>('slide');
   // Start straight on the World Map — zero blocking windows on launch!
   const [teaching, setTeaching] = useState<Teaching | null>(null);
   /** A mechanic opened just to read about it (no fight follows) */
@@ -142,20 +163,22 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave, coldO
     clearPendingTimers();
   }, [clearPendingTimers]);
 
-  const startRun = useCallback((level: LevelDef) => {
+  const startRun = useCallback((level: LevelDef, also?: () => void) => {
     clearPendingTimers();
     setUnlocks([]);
     setUnlocksRevealed(true);
-    setScreen({ kind: 'run', levelId: level.id, seed: randomSeed() });
-  }, [clearPendingTimers]);
+    setScreen({ kind: 'run', levelId: level.id, seed: randomSeed() }, also);
+  }, [clearPendingTimers, setScreen]);
 
   const handlePlay = (level: LevelDef) => {
     sfx('confirm');
+    // The sheet is part of the screen that leaves: it fades out with the map, as one
+    // picture, and is taken away at the swap (never a frame of bare map before the fight)
+    const leave = () => setPreview(null);
     setPreviewExit('cut');
-    setPreview(null);
     if (level.id === MAIN_LEVELS[0].id) {
       setSave(s => markMechanicSeen(s, LESSON_KEYS.mechanic(level.introduces)));
-      startRun(level);
+      startRun(level, leave);
       return;
     }
     // What the preview sheet already taught is simply recorded; anything bigger gets its own lesson first
@@ -163,8 +186,12 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave, coldO
     const taught = due.filter(p => taughtOnPreview(p, level));
     const plans = due.filter(p => !taughtOnPreview(p, level));
     if (taught.length > 0) setSave(s => taught.flatMap(p => p.marks).reduce(markMechanicSeen, s));
-    if (plans.length > 0) setTeaching({ plans, level });
-    else startRun(level);
+    if (plans.length > 0) {
+      // A lesson card comes first, over the map: the sheet fades under it
+      setPreviewExit('screen');
+      setPreview(null);
+      setTeaching({ plans, level });
+    } else startRun(level, leave);
   };
 
   /** The story is over (or skipped): the first fight starts at once, with no map and no preview in between. */
@@ -212,14 +239,16 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave, coldO
       recordAt: at,
       funRating: null,
       funTags: [],
+    }, () => {
+      // Timed from the moment the results screen is there
+      if (result.unlocks.length > 0) {
+        // Let the stars land first, then give each unlock its own moment
+        setUnlocksRevealed(false);
+        timers.current.push(setTimeout(() => setUnlocks(result.unlocks), starsLandedMs(stars)));
+      } else {
+        setUnlocksRevealed(true);
+      }
     });
-    if (result.unlocks.length > 0) {
-      // Let the stars land first, then give each unlock its own moment
-      setUnlocksRevealed(false);
-      timers.current.push(setTimeout(() => setUnlocks(result.unlocks), starsLandedMs(stars)));
-    } else {
-      setUnlocksRevealed(true);
-    }
   };
 
   /** A fight left partway through (retreat or restart) is still a battle, once a move was made. */
@@ -233,7 +262,7 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave, coldO
   };
 
   const handleResultsRateFun = (rating: FunRating | null, tags: FunTag[]) => {
-    setScreen(prev => (prev.kind === 'results' ? { ...prev, funRating: rating, funTags: tags } : prev));
+    setScreenNow(prev => (prev.kind === 'results' ? { ...prev, funRating: rating, funTags: tags } : prev));
     if (screen.kind !== 'results') return;
     const { fightId, recordAt, levelId } = screen;
     setHistory(h => saveBattleFeedback(h, { fightId, at: recordAt, levelId }, { funRating: rating, funTags: tags }));
@@ -268,7 +297,7 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave, coldO
         onSelectLevel={l => { sfx('click'); setPreview(l); }}
         onOpenCamp={() => { sfx('confirm'); setScreen({ kind: 'camp' }); }}
         onOpenGuide={() => { sfx('confirm'); setScreen({ kind: 'guide' }); }}
-        onExit={() => { music.stop(); onExit(); }}
+        onExit={() => transition.go(() => { music.stop(); onExit(); }, -1)}
       />
     );
   } else if (screen.kind === 'run') {
@@ -332,8 +361,7 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave, coldO
         returnLevel={returnLevel}
         onReturnToLevel={lvl => {
           sfx('confirm');
-          setScreen({ kind: 'map', highlight: lvl.id });
-          setPreview(lvl);
+          setScreen({ kind: 'map', highlight: lvl.id }, () => setPreview(lvl));
         }}
         onChange={setSave}
         onRateBattle={handleCampRateBattle}
@@ -346,28 +374,30 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave, coldO
 
   return (
     <View style={st.root}>
-      {body}
-      <LevelPreview
-        level={preview}
-        save={save}
-        exit={previewExit}
-        onClose={() => { setPreviewExit('slide'); setPreview(null); }}
-        onPlay={handlePlay}
-        onSelectFighter={f => { sfx('click'); setSave(s => ({ ...s, selectedFighter: f })); }}
-        onSelectCharm={id => { sfx('click'); setSave(s => toggleCharm(s, id)); }}
-        onArmRecipe={recipeId => { sfx('confirm'); setSave(s => armRecipePair(s, recipeId)); }}
-        onSelectArcana={id => { sfx('click'); setSave(s => toggleArcana(s, id)); }}
-        onShowMechanic={id => setReference(MECHANICS[id])}
-        onOpenCamp={tab => {
-          // The lesson was read and is being acted on: it counts as seen, and the fight waits on the map
-          sfx('confirm');
-          const returnLevelId = preview?.id;
-          if (preview) setSave(s => markMechanicSeen(s, LESSON_KEYS.mechanic(preview.introduces)));
-          setPreviewExit('cut');
-          setPreview(null);
-          setScreen({ kind: 'camp', tab, returnLevelId });
-        }}
-      />
+      <Animated.View style={[st.screen, transition.style]} pointerEvents={transition.leaving ? 'none' : 'auto'}>
+        {body}
+        {/* Inside the screen layer: the sheet leaves with its screen, and its layer's one opacity keeps them one picture */}
+        <LevelPreview
+          level={preview}
+          save={save}
+          exit={previewExit}
+          onClose={() => { setPreviewExit('slide'); setPreview(null); }}
+          onPlay={handlePlay}
+          onSelectFighter={f => { sfx('click'); setSave(s => ({ ...s, selectedFighter: f })); }}
+          onSelectCharm={id => { sfx('click'); setSave(s => toggleCharm(s, id)); }}
+          onArmRecipe={recipeId => { sfx('confirm'); setSave(s => armRecipePair(s, recipeId)); }}
+          onSelectArcana={id => { sfx('click'); setSave(s => toggleArcana(s, id)); }}
+          onShowMechanic={id => setReference(MECHANICS[id])}
+          onOpenCamp={tab => {
+            // The lesson was read and is being acted on: it counts as seen, and the fight waits on the map
+            sfx('confirm');
+            const returnLevelId = preview?.id;
+            if (preview) setSave(s => markMechanicSeen(s, LESSON_KEYS.mechanic(preview.introduces)));
+            setPreviewExit('cut');
+            setScreen({ kind: 'camp', tab, returnLevelId }, () => setPreview(null));
+          }}
+        />
+      </Animated.View>
       {teaching ? (
         <MechanicIntro
           mechanic={teaching.plans[0].mechanic}
@@ -411,6 +441,10 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave, coldO
   );
 };
 
-const st = StyleSheet.create({ root: { flex: 1 } });
+const st = StyleSheet.create({
+  // Paper shows for the frame or two between one screen leaving and the next arriving
+  root: { flex: 1, backgroundColor: COLORS.paperBeige },
+  screen: { flex: 1 },
+});
 
 export default AdventureMode;
