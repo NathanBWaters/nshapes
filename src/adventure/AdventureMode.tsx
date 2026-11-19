@@ -101,9 +101,11 @@ interface Props {
    * fight, not on a map of padlocks (default). False: always open on the map.
    */
   coldOpen?: boolean;
+  /** Dev (/dev/results): open on the results of this fight, as if it had just been won. Not recorded or sent. */
+  devResult?: { levelId: string; run: RunState; stars: number };
 }
 
-const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave, coldOpen = true }) => {
+const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave, coldOpen = true, devResult }) => {
   const [save, setSaveState] = useState<AdventureSave>(() => initialSave ?? loadAdventureSave());
   const [history, setHistory] = useState<BattleRecord[]>(loadBattleHistory);
   const [screen, setScreenNow] = useState<Screen>(() => (coldOpen && isFirstVisit(save) ? { kind: 'story' } : { kind: 'map' }));
@@ -228,6 +230,11 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave, coldO
     });
     remember(record);
     stageAdventureFight(level, run, record, tape, { fightId, afterSave: result.save });
+    showResults(level, run, stars, result, bestDpm, fightId, at);
+  };
+
+  /** The results screen, then (once the stars have landed) one reveal per unlock */
+  const showResults = (level: LevelDef, run: RunState, stars: number, result: ResultApplication, bestDpm: number | null, fightId: string, at: number) => {
     setScreen({
       kind: 'results',
       levelId: level.id,
@@ -250,6 +257,15 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave, coldO
       }
     });
   };
+
+  // Dev: the results of a canned fight, through the same path as a real one (the save is not written)
+  useEffect(() => {
+    if (!devResult) return;
+    const level = getLevel(devResult.levelId);
+    const result = applyLevelResult(save, level, devResult.stars, devResult.run.coins, devResult.run);
+    setSaveState(result.save);
+    showResults(level, devResult.run, devResult.stars, result, null, `dev-${devResult.levelId}-${devResult.stars}`, Date.now());
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** A fight left partway through (retreat or restart) is still a battle, once a move was made. */
   const handleLeft = (level: LevelDef, run: RunState, tape: FightTape) => {

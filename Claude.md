@@ -347,6 +347,8 @@ This means Field Stone weapons can increase the starting board size beyond the m
 
 **`/dev/adventure`** - Adventure map (`?save=maxed` everything unlocked + 50k coins, `?save=fresh` (opens on the story and the first fight; add `&intro=false` to open on the map), `?save=before:1-4` ★★★ on everything before that level, `?autoplay=true`)
 
+**`/dev/results`** - The real results flow (AdventureMode → LevelResults → UnlockReveal) on a fight the bot has just won, in seconds: `?case=perfect` (1-1 ★★★, coins), `two` (★★), `first` (first ★★★ on 2-5: level-up, fighter, weapon, secret path), `fighter` (1-5: fighter, path), or `?level=2-8&stars=2&save=before|maxed|fresh&seed=N`. Shots `results-quick`, `results-two`, `unlock-open`, `unlock-reveal`, `unlock-advance`, `unlock-return`
+
 **`/dev/fx`** - Effects studio: a button for every fight event, a sample cascade and the evolution cut-in, on a stand-in fight screen; real time or 4×/10× slower; effects on/off
 
 **`/dev/sound`** - Sound studio: start the band, change the fight state and hear the music follow; audition every weapon voice, evolution theme and cue; "Check levels" renders a fight offline and reports peak/RMS
