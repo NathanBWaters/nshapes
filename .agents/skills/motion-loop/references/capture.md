@@ -66,11 +66,11 @@ What this means for you:
 
 - **Frame numbers are real.** `f12` is 192 ms after the trigger, always.
 - **Edges of scaling things can differ by a few pixels** from run to run (the browser re-rasters when it likes). `--twice` allows for that and also compares the measured positions, which do not depend on it.
-- **`NOT repeatable` is a finding**, not a tool error: something reads the audio clock, a real timer or unseeded randomness, or the screen is reached a different way each time. Note it in the review. Compare such a surface by its report numbers rather than pixel for pixel.
+- **`NOT fully repeatable` names who differed.** If the list is only idle creatures (`adventure-run-fighter…`) or particles, the effect itself is repeatable: carry on, and compare by the report's numbers rather than pixel for pixel. If the effect's own parts are listed, that is a finding: something in it reads a real clock, the audio clock or unseeded randomness. Note it in the review.
 
 ## Shots
 
-A shot says how to reach a moment and what starts it. They are in `scripts/motion/shots.mjs`; the header of that file is the reference. The shape:
+A shot says how to reach a moment and what starts it. Shots live in `scripts/motion/shots/`, one file per part of the game (`fx`, `fight`, `board`, `creatures`, `results`, `screens`), so two people adding shots do not collide. `scripts/motion/shot-kit.mjs` has the building blocks (`studio`, `intoFight`, `openPreview`, `thirdCard`, `findCards`); the header of `scripts/motion/shots.mjs` is the reference for the format. The shape:
 
 ```js
 'preview-open': {
@@ -104,6 +104,7 @@ Rules for shots:
 - **Frame 0 is right after the trigger.** If the moment starts by itself (a screen arriving), make the trigger an empty function and let `prepare` stop one step before it.
 - **Leave the screen at rest before the trigger** (`h.advance(400)`), or the entrance you did not mean to capture pollutes the frames.
 - **Every fight event has a shot already:** `fx:<event>` plays it in the effects studio (`/dev/fx`). Use a real-fight shot (`fight-set`, `fight-miss`, `fight-open`, `fight-win`) to see it in context, with the board, the HUD and the creatures reacting.
+- **Clip to the subject.** Idle creatures change a few thousand pixels every frame. On a whole-screen shot that noise hides small moves from the timeline (a card lifting is a few hundred pixels) and fills the report with breathing. `clip: 'game-board'` (see `board-set`, `fight-pick`) measures only what is inside the box.
 - **Endless loops** (an idle creature, a bobbing node): give the shot `frames` and `loop: { frames: N }` with the loop's length in frames; the report then checks the seam.
 - **Add the shot in the same change as the animation.** A surface with no shot cannot be reviewed by the next agent.
 

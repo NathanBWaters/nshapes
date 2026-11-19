@@ -36,20 +36,24 @@ SKILL      Read [LANE]/.agents/skills/motion-loop/SKILL.md and follow it exactly
 SURFACE    [surface id] — [what the player sees, one line]. Seen: [constant | often | once].
            Ledger row and inventory entries: docs/motion/ledger.md, entries [ids] in
            docs/motion/inventory/[file].md (file and line of every animation involved).
-           Shot: [shot name, or "none yet: write one"].
+           Shot: [shot name, or "none yet: write one in scripts/motion/shots/[area].mjs"].
            Known problems from the audit: [the 2-3 from the ledger. These are leads, not
            conclusions: the baseline capture decides.]
 
-OWNS       You may edit: [files or folders]. If the fix needs a file outside this list,
-           stop and say so in your report instead of editing it.
+OWNS       You may edit: [files or folders], scripts/motion/shots/[area].mjs,
+           docs/motion/reviews/[surface].md.
+           Do NOT edit: [files other lanes are in right now], docs/motion/ledger.md (the
+           director records the ledger: parallel lanes would collide in it; your scores
+           go in the review file and your report). If the fix needs a file outside this
+           list, stop and say so in your report instead of editing it.
 
 DIRECTION  [Optional. What the director wants, in numbers and frames, if it has a view.
            Otherwise: "Yours to decide from the baseline."]
 
 DONE WHEN  Every rubric score is 8 or more, or you have done 4 rounds. Reduced-motion capture
-           taken. `npm run verify:guardrails && npm run test:fast` pass. Review written to
-           docs/motion/reviews/[surface].md and the ledger row updated. One commit on this
-           lane's branch (no push, no version bump: the director lands it).
+           taken. `npm run verify:guardrails && npm run test:fast -- --maxWorkers=4` pass
+           (several lanes share the machine). Review written to docs/motion/reviews/[surface].md.
+           One commit on this lane's branch (no push, no version bump: the director lands it).
 
 REPORT     Reply with:
            1. Scores per round, as R/Rd/M/St/Rh/Id/Sy (before, r1, r2…).
@@ -57,7 +61,8 @@ REPORT     Reply with:
            3. The final numbers (tokens, durations, curves) and the files changed.
            4. The capture folders: before, each round, reduced; and the compare sheet's path.
            5. What is still under 8 and why. What you could not verify. Anything you found
-              that belongs to another surface.
+              that belongs to another surface or another lane's files.
+           6. Anything in the skill or the tools that was wrong, unclear or missing.
            Be exact and honest: the director will open the sheets.
 ```
 
@@ -67,6 +72,8 @@ Notes on briefing:
 - **Name the files a lane owns.** It is the only thing that keeps parallel lanes apart.
 - **Cluster by file, not by theme.** Surfaces that live in the same component go to one lane, one after the other.
 - **Follow up in the same agent.** A rejection goes back to the agent that did the work, as notes in frames.
+- **Give the director's taste as constraints, not as a design.** "The hit is the hero and these reactions are its support; nothing here may get slower" leaves the lane the decisions and still keeps four lanes pulling the same way.
+- **One writer per shared file.** The ledger is the director's. Shots go in the lane's own area file. If two surfaces meet in one file (the HUD's bump of the foe and the foe's own squash), one lane owns the file and the other reports what it needs.
 
 ## Audit: making or refreshing the inventory
 

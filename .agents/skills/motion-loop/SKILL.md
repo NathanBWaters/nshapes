@@ -24,7 +24,7 @@ Two ideas carry everything else:
 NO MOTION CHANGE IS DONE UNTIL YOU HAVE READ ITS FRAMES, BEFORE AND AFTER.
 ```
 
-Reading the code is not reading the frames. "The numbers look right" is not reading the frames. If a moment has no shot, write the shot (ten lines in `scripts/motion/shots.mjs`). If it truly cannot be captured (native only), say so in plain words in your report and say what you did instead. Never report a motion change as better without the before and after sheets.
+Reading the code is not reading the frames. "The numbers look right" is not reading the frames. If a moment has no shot, write the shot (ten lines in `scripts/motion/shots/<area>.mjs`). If it truly cannot be captured (native only), say so in plain words in your report and say what you did instead. Never report a motion change as better without the before and after sheets.
 
 ## The loop
 
@@ -32,7 +32,7 @@ One **surface** at a time: one moment the player sees (a Set landing, a sheet op
 
 | # | Step | Do | Read |
 |---|------|----|------|
-| 0 | **Shot** | Find the surface's shot (`npm run motion:shots`) or add one. Dev server must be up. | [capture.md](references/capture.md) |
+| 0 | **Shot** | Find the surface's shot (`npm run motion:shots`) or add one in `scripts/motion/shots/`. Dev server must be up. | [capture.md](references/capture.md) |
 | 1 | **Baseline** | `npm run motion:capture -- <shot> --label before --twice`. Read `report.md`, then `contact.png`, then `strip.png`. | |
 | 2 | **Critique** | As a harsh motion director, not the author: score the seven lines of the rubric, list the 3 worst defects, each with a frame number, the evidence and the exact change. | [critique.md](references/critique.md) |
 | 3 | **Brief** | Before any code: the goal in one sentence, the key poses on a frame table, one hero, what waits, tokens for every curve and spring, what is banned, what reduced motion shows. For a hero moment write 3 different variants and pick one, saying why. | [brief.md](references/brief.md), [numbers.md](references/numbers.md) |
