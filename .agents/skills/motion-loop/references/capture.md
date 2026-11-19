@@ -73,6 +73,7 @@ What this means for you:
 
 - **Frame numbers are real.** `f12` is 192 ms after the trigger, always.
 - **Edges of scaling things can differ by a few pixels** from run to run (the browser re-rasters when it likes). `--twice` allows for that and also compares the measured positions, which do not depend on it.
+- **Studio shots repeat exactly; real-fight shots repeat to within about a frame.** A real fight has more going on than the clock controls (the screen is built over several real frames, and where one of those lands can move a start by a frame). So make frame-exact claims ("the burst and the number start on the same frame") on a studio shot (`fx:<event>`, `/dev/fighters`, `/dev/results`), and use the real-fight shot to see the piece in context.
 - **`NOT fully repeatable` names who differed.** If the list is only idle creatures (`adventure-run-fighter…`) or particles, the effect itself is repeatable: carry on, and compare by the report's numbers rather than pixel for pixel. If the effect's own parts are listed, that is a finding: something in it reads a real clock, the audio clock or unseeded randomness. Note it in the review.
 
 ## Shots
