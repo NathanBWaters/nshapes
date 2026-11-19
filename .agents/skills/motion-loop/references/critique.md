@@ -51,6 +51,7 @@ Go down this list on every strip. Each line is a defect seen in real reviews.
 - The same effect looking different in two places.
 - A sound scheduled when the effect starts while the picture lands 200 ms later.
 - Reduced motion that still shakes, flashes or flies.
+- Reduced motion that shows nothing: the animation jumps straight to its end, and the number or word it carried is gone before anyone could read it.
 - Anything from the banned list.
 
 ## Notes: frames, not feelings

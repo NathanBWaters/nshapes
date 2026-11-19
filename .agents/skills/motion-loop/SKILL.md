@@ -84,5 +84,7 @@ npm run motion:flipbook -- motion-out/fx-hit/before motion-out/fx-hit/r1   # a p
 - **A second look for the same effect.** In fights, the same effect looks the same whoever caused it: change the catalog row or the shared piece, never fork one.
 - **Slower when it should be clearer.** Feeling unclear is rarely fixed by more milliseconds. Fix order, hierarchy and the pause before the payoff.
 - **Forgetting sound.** A cue lands on its picture's frame or one frame after, never before.
+- **Piling on.** The first unguided attempt at the results screen added a ring, eight sparkles, a twist, a second bounce and a gold flash to each star, pushed the overshoot to 38% and made the numbers arrive two seconds later. Each addition felt like polish. Together they were five things saying "a star". Take away before you add.
+- **Side effects.** A motion change that also moves when a sound plays or when a button works is two changes. Put the second one in the brief, or do not make it.
 
 Where these practices come from: [sources.md](references/sources.md).
