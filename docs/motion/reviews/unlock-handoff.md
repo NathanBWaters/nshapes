@@ -36,13 +36,13 @@ REFERENCE The reveal's own turn: the next card is turned over the way the last c
           unlocked row on the results is turned over like the medallion was.
 HERO      advance: the medallion turning to the next silhouette. return: the unlocked row turning over.
 POSES     advance (from the tap):
-          f2   words start to leave (exitMs(MS.quick) = 119 ms, EASE.leave, opacity only)
+          f2   words start to leave (exitMs(MS.quick) = 119 ms, EASE.exitSoft, opacity only)
           f2   the reward turns edge-on (MS.feedback, EASE.impact) — no windup, the player is moving on
           f8   edge-on: the next unlock is swapped in, its headline fades in at once
           f9   the silhouette comes round on SPRING.lively
           f17  tease and Reveal button rise in (MS.feedback after the swap, not the opening's 340 ms)
           return (from the tap on the last reveal's button):
-          f1   words and medallion fade together (119 ms, EASE.leave); the medallion shrinks toward 0.6 and sinks 48 px
+          f1   words and medallion fade together (119 ms, EASE.exitSoft); the medallion shrinks toward 0.6 and sinks 48 px
           f8   the dark lifts (the rest of exitMs(MS.panel) = 238 ms), the reveal stops taking taps on f0
           f16  onDone: the results are in charge
           f17  unlocked row k turns over (edge-on on EASE.impact over MS.feedback, face swapped on the edge,
@@ -65,11 +65,11 @@ Variants considered for the return (it is the hand-off of a hero moment):
 
 **advance r1**: words out f2-f7, edge-on f8, the next silhouette and its headline come round f9-f15, Reveal button f17-f21; ready f22. HARD-STOP hint on the fox at f7 is the turn stopping at the edge (the edge is the stop, as in the reveal). Note: reduced not built yet.
 
-**advance r2** (EASE.leave, reduced): same picture; reduced fades the face out and in (f0-f18).
+**advance r2** (EASE.exitSoft, reduced): same picture; reduced fades the face out and in (f0-f18).
 
 **return r1**: words out from f5 (EASE.exit barely moves for half of a 119 ms exit), the medallion still opaque over "PERFECT!" f13-f15 as the dark lifts; the visible row turns f24-f31; coins wait for all 6 rows (+840 ms): DEAD f50-f62. Notes: (1) a short exit curve; (2) fade the medallion faster than the dark; (3) pay out after the rows in sight, not all.
 
-**return r2** (new token `EASE.leave` = ease-in-cubic; payout after two rows): words start f4; coins from f43, 12 frames after the visible row lands. The medallion still hangs over the results f9-f12 (its fade followed the sink, which eases in late).
+**return r2** (new token `EASE.exitSoft` = ease-in-cubic; payout after two rows): words start f4; coins from f43, 12 frames after the visible row lands. The medallion still hangs over the results f9-f12 (its fade followed the sink, which eases in late).
 
 **return r3** (medallion fades with the words): f1-f8 the whole reveal recedes as one, f8-f16 the dark lifts, row turns f19-f31. Reduced capture: the medallion does not fade at all (its fade was tied to the sink, which reduced motion does not move) and pops out on f12; the words ghost over the results f6-f7.
 
@@ -77,9 +77,9 @@ Variants considered for the return (it is the hand-off of a hero moment):
 
 ## Final numbers
 
-- `EASE.leave` / `CURVE.leave` = cubic-bezier(0.32, 0, 0.67, 0): new token, for exits under ~250 ms.
-- Advance: words `LEAVE_MS` = `exitMs(MS.quick)` = 119 ms on EASE.leave; turn to edge `MS.feedback` on EASE.impact; next face back on SPRING.lively after 16 ms; headline in at once, tease and Reveal button `MS.feedback` after the swap. Later reveals in a row: words at LAND + 60 ms, `STAGGER.card` apart (first: +100, `STAGGER.item`).
-- Return: `REVEAL_EXIT_MS` = `exitMs(MS.panel)` = 238 ms (words + medallion 119 ms, then the dark 119 ms), medallion scale →0.6 and +48 px on EASE.leave; the reveal takes no taps from the first frame of its exit.
+- `EASE.exitSoft` / `CURVE.leave` = cubic-bezier(0.32, 0, 0.67, 0): new token, for exits under ~250 ms.
+- Advance: words `LEAVE_MS` = `exitMs(MS.quick)` = 119 ms on EASE.exitSoft; turn to edge `MS.feedback` on EASE.impact; next face back on SPRING.lively after 16 ms; headline in at once, tease and Reveal button `MS.feedback` after the swap. Later reveals in a row: words at LAND + 60 ms, `STAGGER.card` apart (first: +100, `STAGGER.item`).
+- Return: `REVEAL_EXIT_MS` = `exitMs(MS.panel)` = 238 ms (words + medallion 119 ms, then the dark 119 ms), medallion scale →0.6 and +48 px on EASE.exitSoft; the reveal takes no taps from the first frame of its exit.
 - Rows: `TurnOver` (ResultsMotion.tsx): edge-on `MS.feedback` on EASE.impact, 16 ms on the edge, back on SPRING.lively; `rowTurnMs(k, n)` = `staggerDelay(k, n, STAGGER.item)`.
 - Payout after a reveal: `revealPayoutMs(rows)` = turn of the second row in sight + 2 × 120 + 120 ms (450 ms with no rows); the fighter's cheer uses the same time when no coins count.
 - Layout: the UNLOCKED rows and the secret-path box moved from under the stats to right under the coin box.

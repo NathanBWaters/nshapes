@@ -278,19 +278,19 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
       revealing.current = true;
       setExiting(true);
       closing.value = 1;
-      leave.value = withTiming(0, { duration: LEAVE_MS, easing: EASE.leave, reduceMotion: KEEP });
+      leave.value = withTiming(0, { duration: LEAVE_MS, easing: EASE.exitSoft, reduceMotion: KEEP });
       if (!reduced) {
-        press.value = withTiming(0.6, { duration: REVEAL_EXIT_MS, easing: EASE.leave });
-        sink.value = withTiming(1, { duration: REVEAL_EXIT_MS, easing: EASE.leave });
+        press.value = withTiming(0.6, { duration: REVEAL_EXIT_MS, easing: EASE.exitSoft });
+        sink.value = withTiming(1, { duration: REVEAL_EXIT_MS, easing: EASE.exitSoft });
       }
-      backdrop.value = withDelay(LEAVE_MS, withTiming(0, { duration: REVEAL_EXIT_MS - LEAVE_MS, easing: EASE.leave, reduceMotion: KEEP }, f => { if (f) runOnJS(onDone)(); }), KEEP);
+      backdrop.value = withDelay(LEAVE_MS, withTiming(0, { duration: REVEAL_EXIT_MS - LEAVE_MS, easing: EASE.exitSoft, reduceMotion: KEEP }, f => { if (f) runOnJS(onDone)(); }), KEEP);
       return;
     }
     if (revealing.current) return;
     revealing.current = true;
     const next = i + 1;
     // The words leave (quick, flat) while the reward turns back edge-on; the next one is swapped in on the edge
-    leave.value = withTiming(0, { duration: LEAVE_MS, easing: EASE.leave, reduceMotion: KEEP });
+    leave.value = withTiming(0, { duration: LEAVE_MS, easing: EASE.exitSoft, reduceMotion: KEEP });
     if (reduced) {
       face.value = withTiming(0, { duration: LEAVE_MS, easing: EASE.ui, reduceMotion: KEEP }, finished => { if (finished) runOnJS(goNext)(next); });
       return;

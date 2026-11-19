@@ -38,7 +38,9 @@ Options of `motion:capture`:
 | `--preroll N` | Frames taken before the trigger (default 8). They measure the ambient motion. |
 | `--no-seed` | Leave `Math.random` alone (it is seeded by default so particles repeat). |
 
-`motion:sheet` crops with `--roi`: `auto` (where pixels changed), `full`, a **test id** (`--roi results-stars`: the box that part of the screen covered during the capture, the easy way to get the crop you meant), or `x,y,w,h` in image pixels.
+Do not edit files, `git stash` or switch branches while a capture is running: the dev server hot-reloads the page under it and the frames are spoiled.
+
+`motion:sheet` crops with `--roi`: `auto` (where pixels changed), `full`, a **test id** (`--roi results-stars`: the box that part of the screen covered during the capture, the easy way to get the crop you meant), or `x,y,w,h` in image pixels (at `--dpr 2` that is twice the screen's numbers).
 | `--headed` | Show the browser window. |
 
 ## What a capture gives you
@@ -110,6 +112,7 @@ Rules for shots:
 
 - **Never use Playwright's own waits** (`waitFor`, `waitForTimeout`, `expect(...).toBeVisible`) inside a shot. Time stands still, so a screen that needs a timer would never arrive. Use `h.until`.
 - **A missing test id is a one-line fix:** add `testID="..."` to the component. Test ids are part of making a surface reviewable.
+- **A capture is not at the screen's first frame unless you ask.** After `prepare`, the screen is left to settle (`settleMs`, 320 ms) and the pre-roll is taken (8 frames) before frame 0. For a shot of a screen arriving, set `settleMs: 0, preroll: 1` and an empty trigger, and let `prepare` stop one step before the arrival.
 - **Frame 0 is right after the trigger.** If the moment starts by itself (a screen arriving), make the trigger an empty function and let `prepare` stop one step before it.
 - **Leave the screen at rest before the trigger** (`h.advance(400)`), or the entrance you did not mean to capture pollutes the frames.
 - **Every fight event has a shot already:** `fx:<event>` plays it in the effects studio (`/dev/fx`). Use a real-fight shot (`fight-set`, `fight-miss`, `fight-open`, `fight-win`) to see it in context, with the board, the HUD and the creatures reacting.
@@ -147,4 +150,4 @@ Useful places to start a shot (all from Claude.md "Dev Testing" and the inventor
 
 ## Sound
 
-The capture is silent (the browser is muted), so sound is checked by timing, not by ear. In a dev build the band writes every cue it schedules to `window.__nshapesCueLog` as `{ name, t }`, where `t` is the moment the cue will be heard on the page's own clock (`performance.now()` plus the delay until its audio time). The capture reads that log and the report gets a **Sound cues** section: each cue with the frame it lands on. Compare that frame with the frame its picture lands on (the mover lines above it). A surface whose sounds do not go through the band shows no cues: add the same one-line log where it schedules them. In a fight, `useFightFx` hands each stretch of beats to the band through `onSegment`; each beat has `at` (when it starts) and `land` (when it reaches its target). A cue belongs on `land`, or one frame after, never on `at` when the picture needs 15 frames to arrive.
+The capture is silent (the browser is muted), so sound is checked by timing, not by ear. In a dev build the band writes every cue it schedules to `window.__nshapesCueLog` as `{ name, t }`, where `t` is the moment the cue will be heard on the page's own clock (`performance.now()` plus the delay until its audio time). The capture reads that log and the report gets a **Sound cues** section: each cue with the frame it lands on. Compare that frame with the frame its picture lands on (the mover lines above it). A surface whose sounds do not go through `band.cue` shows no cues (`sfx('unlock')` and `band.audition` on the results and reveal screens are two): add the same one-line log where they are scheduled before you claim a Sync score there. In a fight, `useFightFx` hands each stretch of beats to the band through `onSegment`; each beat has `at` (when it starts) and `land` (when it reaches its target). A cue belongs on `land`, or one frame after, never on `at` when the picture needs 15 frames to arrive.

@@ -10,7 +10,17 @@
  * What each token is for, and the tables they come from, are in
  * `.agents/skills/motion-loop/references/numbers.md`.
  */
-import { Easing } from 'react-native-reanimated';
+import { Easing, ReduceMotion } from 'react-native-reanimated';
+
+/**
+ * For the animations that must still play when the device asks for less
+ * motion: the fade or the hold that carries the meaning. Reanimated otherwise
+ * jumps every timing, spring, delay and sequence straight to its end, so a
+ * number that fades in, holds and fades out is never shown at all.
+ * Spread it into a timing's config and pass `STAYS.reduceMotion` as the last
+ * argument of `withDelay` / `withSequence`. Leave travel and springs unmarked.
+ */
+export const STAYS = { reduceMotion: ReduceMotion.Never } as const;
 
 /** How long things take, by what they are (ms). A phone screen is small: these are the short end of the usual ranges. */
 export const MS = {
@@ -53,7 +63,6 @@ export const CURVE = {
   pop: [0.34, 1.56, 0.64, 1],
   drift: [0.37, 0, 0.63, 1],
   impact: [0.3, 0, 0.75, 0.3],
-  leave: [0.32, 0, 0.67, 0],
 } as const;
 
 const bezier = (c: readonly [number, number, number, number]) => Easing.bezier(c[0], c[1], c[2], c[3]);
@@ -74,12 +83,11 @@ export const EASE = {
   move: bezier(CURVE.move),
   /** Leaving: slow start, gone fast (ease-in-expo) */
   exit: bezier(CURVE.exit),
-  /** A short exit (under ~250 ms) that must show at once: ease-in-cubic. Expo spends half of a short exit not moving. */
-  leave: bezier(CURVE.leave),
   /**
    * Leaving, but seen to go at once (ease-in-cubic): for exits the player
-   * asked for with a tap (a sheet put away, a screen left), where ease-in-expo
-   * would sit still for the first four frames and read as a late answer.
+   * asked for with a tap (a sheet put away, a screen left) and for any exit
+   * under about 250 ms, where ease-in-expo would sit still for the first four
+   * frames and read as a late answer.
    */
   exitSoft: bezier(CURVE.exitSoft),
   /** A pop that visibly overshoots (ease-out-back). Position and scale only, never opacity. */

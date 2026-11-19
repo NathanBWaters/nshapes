@@ -29,7 +29,9 @@ One frame is 16 ms. Say durations in frames when you review (`f12`), in tokens w
 | `EASE.enterSoft` | 0.22, 1, 0.36, 1 (ease-out-quint) | hero and panel arrivals |
 | `EASE.ui` | 0.33, 1, 0.68, 1 (ease-out-cubic) | small interface parts |
 | `EASE.move` | 0.76, 0, 0.24, 1 (ease-in-out-quart) | from one place on screen to another |
-| `EASE.exit` | 0.7, 0, 0.84, 0 (ease-in-expo) | leaving |
+| `EASE.exit` | 0.7, 0, 0.84, 0 (ease-in-expo) | leaving on its own (an effect that is done, a banner timing out) |
+| `EASE.exitSoft` | 0.32, 0, 0.67, 0 (ease-in-cubic) | leaving because the player asked (a sheet put away, a screen left), and any exit under about 250 ms: expo sits still for the first four frames, which reads as a late answer |
+| `EASE.impact` | 0.3, 0, 0.75, 0.3 | falling or thrown INTO a hit: lands at full speed, the hit is the stop |
 | `EASE.pop` | 0.34, 1.56, 0.64, 1 (ease-out-back) | a pop with visible overshoot: position and scale only |
 | `EASE.drift` | 0.37, 0, 0.63, 1 (ease-in-out-sine) | breathing, floating |
 | `EASE.linear` | | rotation, progress bars, loop phase. **Never a move.** |
@@ -97,7 +99,7 @@ Read every spring by one number, the **damping ratio**: `damping / (2 × √(sti
 - Supporting moves start **100–200 ms after** the hero and travel **50–70% as far**.
 - Ambient life (breathing, drift) stays under 5% of the hero's travel and under ±2% scale, on a slow sine, with a different period for each thing so they never line up. Ambient motion never fills an empty beat.
 - With three or more things on screen, at most a third of them move at once.
-- **Causes and effects share a frame.** The flinch starts on the frame the hit lands, not shortly after. In Reanimated that means: mount (or trigger) everything that belongs to the moment in the same React commit, from the same state update, and start their animations there. A JS `setTimeout` for one part and a `withDelay` for another will drift a frame or two apart, and the strip will show it. If the moment waits for something (a flight, the band's next note), let that one wait release all of it.
+- **Causes and effects share a frame.** The flinch starts on the frame the hit lands, not shortly after. In Reanimated that means: mount (or trigger) everything that belongs to the moment in the same React commit, from the same state update, and start their animations there. A JS `setTimeout` for one part and a `withDelay` for another will drift a frame or two apart, and the strip will show it. The same goes for swapping what is drawn when an animation ends: a timer set to the animation's length fires a frame early (the animation starts on the next frame), so the swap shows. Swap from the animation's own finish callback. If the moment waits for something (a flight, the band's next note), let that one wait release all of it.
 - **A breath before the payoff.** Hold 0.3–0.75 s between the decisive act and what it pays (a knockout, a reveal), then 100–200 ms of stillness before anything new starts.
 - **One direction means "next"** across the game. Up means done or gained; growing means arriving; shrinking means dismissed. Do not ping-pong directions on consecutive transitions.
 
@@ -150,9 +152,10 @@ Disney's animators wrote these down as feelings. A model follows them only as fr
 - **Reanimated does the removing for you, and it removes too much.** With the OS setting on, every `withTiming`, `withSpring`, `withDelay` and `withSequence` jumps straight to its end unless it is marked to stay:
 
   ```ts
-  import { ReduceMotion, withDelay, withTiming } from 'react-native-reanimated';
+  import { withDelay, withTiming } from 'react-native-reanimated';
+  import { MS, STAYS } from '@/utils/motion';
   // The fade that carries the meaning still plays; the travel around it does not
-  opacity.value = withDelay(120, withTiming(1, { duration: MS.feedback, reduceMotion: ReduceMotion.Never }), ReduceMotion.Never);
+  opacity.value = withDelay(120, withTiming(1, { duration: MS.feedback, ...STAYS }), STAYS.reduceMotion);
   ```
 
   So "keep opacity and colour" does nothing by itself: a number that fades in, holds and fades out is simply never shown, and a wash that should stay for a second lasts one frame. Mark the fades and the holds that carry meaning with `ReduceMotion.Never` (the delay too), leave the moves unmarked, and look at the `--reduced` capture: it should show the meaning arriving without the travel.
