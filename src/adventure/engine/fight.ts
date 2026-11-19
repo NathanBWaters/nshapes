@@ -94,6 +94,7 @@ export const begin = (s: RunState, hooks: FightHooks): Draft => ({
   activeEvolutions: s.activeEvolutions.map(e => ({ ...e })),
   hazardRefills: { ...s.hazardRefills },
   colorSets: { ...s.colorSets },
+  parry: s.parry ? { ...s.parry } : null,
   roundStats: {
     ...s.roundStats,
     matchTimes: [...s.roundStats.matchTimes],

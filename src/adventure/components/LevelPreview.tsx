@@ -23,7 +23,9 @@ import { WEAPON_KINDS, weaponGuide } from '../data/weaponGuide';
 import WeaponExplainer from './WeaponExplainer';
 import { EVOLUTION_RECIPES } from '../data/evolutions';
 import { getLevel } from '../data/levels';
+import { resolveParrySpec } from '../data/parry';
 import { isFighterTrial, starRewards } from '../data/rewards';
+import ParryPreviewCard from './ParryPreviewCard';
 import { starGoals } from '../engine/challenges';
 import {
   arcanaSlots,
@@ -184,6 +186,11 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                 </View>
               ) : null;
             })}
+
+            {(() => {
+              const parrySpec = resolveParrySpec(level, level.foes[level.foes.length - 1]);
+              return parrySpec ? <ParryPreviewCard spec={parrySpec} testID="preview-parry" /> : null;
+            })()}
 
             {level.rules.hazards && <Hazards hazards={level.rules.hazards} />}
 

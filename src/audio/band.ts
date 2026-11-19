@@ -51,7 +51,8 @@ export type CueName =
   | 'freeze' | 'redeal' | 'scoop' | 'twinkle' | 'fetch' | 'phew' | 'ding' | 'blast' | 'laser' | 'ricochet'
   | 'doubled' | 'armed' | 'charged' | 'warDrum' | 'clarity' | 'clarityEnd' | 'pinata' | 'pinataBreak' | 'link'
   | 'purity' | 'rainbow' | 'catalyst' | 'trapSet' | 'trapDefused' | 'trapSprung' | 'burn' | 'overkill'
-  | 'streakLost' | 'sour' | 'reelStop' | 'register' | 'reelSpin' | 'star' | 'coinRoll' | 'weaponGet' | 'tap' | 'back';
+  | 'streakLost' | 'sour' | 'reelStop' | 'register' | 'reelSpin' | 'star' | 'coinRoll' | 'weaponGet' | 'tap' | 'back'
+  | 'parryWarn' | 'parry' | 'perfectParry' | 'foeStrike' | 'multStep' | 'multSlam' | 'killCamRiser' | 'killCamShatter';
 
 export interface CueOpts {
   /** How big the thing is (damage, coins, a count): scales the cue */
@@ -916,6 +917,65 @@ const CUES: Record<CueName, (c: CueCtx) => void> = {
     X(c, 'pizz', 2, 4, -1, 0, 0.18, 0.9);
     N(c, 'pizz', 0, 4, c.g * 2, 0.22, 0.9);
     D(c, 'rim', 0, 0.5);
+  },
+
+  // Set-Parrying
+  parryWarn: c => {
+    D(c, 'rim', 0, 0.75);
+    N(c, 'steel', 7, 5, 0, 0.16, 0.75);
+    N(c, 'bell', 7, 6, c.g, 0.22, 0.6);
+  },
+  parry: c => {
+    D(c, 'anvil', 0, 0.9);
+    N(c, 'steel', 4, 5, 0, 0.22, 0.95);
+    N(c, 'bell', 7, 5, c.g, 0.45, 0.95);
+  },
+  perfectParry: c => {
+    D(c, 'anvil', 0, 1);
+    D(c, 'crash', 0, 0.75);
+    N(c, 'bell', 7, 6, 0, 0.8, 1);
+    N(c, 'bell', 11, 6, c.g, 0.7, 0.9);
+    for (const d of [0, 4, 7]) N(c, 'brass', d, 4, c.g * 2, 0.45, 0.85);
+    chip.duck(0.45, c.t, 0.35);
+  },
+  foeStrike: c => {
+    D(c, 'timpani', 0, 1);
+    D(c, 'thud', c.g, 0.95);
+    X(c, 'brass', 0, 2, 1, 0, 0.32, 1);
+    N(c, 'brass', 0, 2, 0, 0.32, 0.9);
+  },
+
+  // Live Multiplier Ignition & Lethal Kill-Cam
+  multStep: c => {
+    const step = Math.min(12, Math.max(0, c.slot));
+    const hot = c.amount >= 2;
+    N(c, hot ? 'bell' : 'celesta', step, hot ? 6 : 5, 0, 0.22, 0.85);
+    D(c, hot ? 'tick' : 'woodblock', 0, 0.45);
+  },
+  multSlam: c => {
+    const tier = Math.max(0, Math.min(3, Math.round(c.amount)));
+    D(c, tier >= 2 ? 'timpani' : 'kick', 0, 0.85 + tier * 0.05);
+    if (tier >= 2) {
+      subDrop(c.t, 0.85, SFX);
+      for (const d of [0, 4, 7]) N(c, 'brass', d, 4, 0, 0.38, 0.8);
+    }
+    if (tier >= 3) {
+      D(c, 'crash', 0, 0.7);
+      runUp(c, 'bell', [4, 7, 9, 11], 6, 0.5, 0.45, 0.85);
+    } else {
+      N(c, 'bell', 7, 5, 0, 0.35, 0.85);
+    }
+  },
+  killCamRiser: c => {
+    for (let i = 0; i < 6; i++) D(c, 'timpani', i * 0.048, 0.45 + i * 0.09);
+    riser(c.t, 0.32, 0.5, SFX);
+    chip.duck(0.55, c.t, 0.38);
+  },
+  killCamShatter: c => {
+    D(c, 'crash', 0, 1);
+    D(c, 'anvil', 0, 0.8);
+    subDrop(c.t, 1, SFX);
+    runUp(c, 'glock', [0, 2, 4, 7, 9, 11, 14], 6, 0.5, 0.45, 0.9);
   },
 
   // Menus

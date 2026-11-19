@@ -27,13 +27,17 @@ export const charmSlotsOf = (save: AdventureSave): number =>
 export const arcanaSlotsOf = (save: AdventureSave): number =>
   Math.min(MAX_ARCANA_SLOTS, BASE_ARCANA_SLOTS + (save.upgrades.tarot_deck ?? 0));
 
-/** Equipped charms that come into a fight: owned, unique, within the slots. */
-export const fightCharms = (save: AdventureSave): string[] =>
-  [...new Set(save.charms ?? [])].filter(id => save.armory.includes(id)).slice(0, charmSlotsOf(save));
+/** Equipped charms that come into a fight: owned, unique, within the slots (or uncapped in Spire). */
+export const fightCharms = (save: AdventureSave, uncapped = false): string[] => {
+  const unique = [...new Set(save.charms ?? [])].filter(id => save.armory.includes(id));
+  return uncapped ? unique : unique.slice(0, charmSlotsOf(save));
+};
 
-/** Equipped Arcana that come into a fight: unlocked, unique, within the slots. */
-export const fightArcana = (save: AdventureSave): ArcanaId[] =>
-  [...new Set(save.equippedArcana ?? [])].filter(id => save.unlockedArcana.includes(id)).slice(0, arcanaSlotsOf(save));
+/** Equipped Arcana that come into a fight: unlocked, unique, within the slots (or uncapped in Spire). */
+export const fightArcana = (save: AdventureSave, uncapped = false): ArcanaId[] => {
+  const unique = [...new Set(save.equippedArcana ?? [])].filter(id => save.unlockedArcana.includes(id));
+  return uncapped ? unique : unique.slice(0, arcanaSlotsOf(save));
+};
 
 export const fighterPassives = (fighter: string): [PassiveId, PassiveId] => getFighter(fighter).passives;
 
@@ -125,6 +129,15 @@ export interface Loadout {
   evolutionLabTier: number;
 }
 
+export interface LoadoutOptions {
+  /** Allow holding more than MAX_CHARM_SLOTS weapons (e.g. Starfall Spire runs) */
+  uncappedCharms?: boolean;
+  /** Allow holding more than MAX_ARCANA_SLOTS Arcana (e.g. Starfall Spire runs) */
+  uncappedArcana?: boolean;
+  /** Override derived Adventure weapon builds (e.g. Spire per-run weapon levels) */
+  weaponBuilds?: ReturnType<typeof weaponBuilds>;
+}
+
 /**
  * Everything the selected fighter walks into a level with: which systems are
  * on, passives and skill nodes, equipped charms (at their upgrade tiers),
@@ -135,16 +148,18 @@ export const startingLoadout = (
   save: AdventureSave,
   features: Set<FeatureFlag> = getFeaturesForLevel(level, save),
   /** The fight's RNG, for rounding tuned whole-number stats by chance (resolveWholeStats) */
-  rand?: () => number
+  rand?: () => number,
+  opts?: LoadoutOptions
 ): Loadout => {
   const fighter = save.selectedFighter;
   const gear = features.has('gear');
   const passives = gear ? [...fighterPassives(fighter)] : [];
   const skillNodes = gear ? fightSkillNodes(save, fighter) : [];
-  const arcana = gear ? fightArcana(save) : [];
+  const arcana = gear ? fightArcana(save, opts?.uncappedArcana) : [];
   const rules = arcanaRules(arcana);
+  const builds = opts?.weaponBuilds ?? weaponBuilds(save);
   const weapons: Weapon[] = gear
-    ? charmWeapons(fightCharms(save), weaponBuilds(save))
+    ? charmWeapons(fightCharms(save, opts?.uncappedCharms), builds)
     : [];
   const modifiers = modifiersOf({ skillNodes, weapons, activeEvolutions: [] });
 

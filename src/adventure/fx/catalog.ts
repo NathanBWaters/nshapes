@@ -154,4 +154,10 @@ export const EVENT_FX: Record<RunEventType, FxRow | null> = {
   // The Catalyst card erupts; then the cut-in takes the screen (fx/EvolutionCutIn.tsx)
   evolution_start: { color: C.evo, board: 'burst', sweep: 'rainbow', fighter: 'ecstatic', enemy: 'criticalHit' },
   evolution_end: { color: C.evo, sweep: 'dark', label: e => `${e.text ?? 'Evolution'} ends` },
+
+  // ── Set-Parrying ──────────────────────────────────────────────────────────
+  parry_warn: { color: C.buff, from: 'foe', bump: ['foe'], ambient: true, label: () => 'PARRY NOW!' },
+  parry: { color: C.shield, aura: true, orb: 'spark', from: 'fighter', to: 'foe', bump: ['fighter', 'foe'], shake: true, fighter: 'ecstatic', enemy: 'hit', label: e => `PARRY! ×${fmt(n(e) || 1.25)}` },
+  perfect_parry: { color: C.coin, sweep: 'gold', aura: true, orb: 'spark', from: 'fighter', to: 'foe', bump: ['fighter', 'foe'], shake: true, fighter: 'ecstatic', enemy: 'criticalHit', label: () => 'PERFECT PARRY! STAGGER ×2' },
+  foe_strike: { color: C.sour, orb: 'dark', from: 'foe', to: 'hearts', bump: ['foe', 'hearts'], shake: true, fighter: 'pain', enemy: 'attack', labelColor: C.sour, label: e => `${(e.text ?? 'STRIKE').toUpperCase()}!` },
 };

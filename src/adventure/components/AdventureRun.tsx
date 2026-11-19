@@ -26,9 +26,10 @@ import type { Card, CardReward, CharacterName, Weapon } from '@/types';
 import type { WeaponEffectResult } from '@/utils/weaponEffects';
 import { band, music, sfx } from '@/audio';
 import { moodOf, playSounds, soundsFor } from '@/audio/fightAudio';
-import type { AdventureSave, EvolutionRecipe, LevelDef, PassiveId, RunEventType, RunState } from '../types';
+import type { AdventureSave, EvolutionRecipe, FeatureFlag, LevelDef, PassiveId, RunEventType, RunState } from '../types';
 import type { WeaponBuilds } from '../data/weaponStats';
-import { createRun, runReducer, shopPrice, rerollCost, xpForLevel, type RunAction } from '../engine/run';
+import { createRun, runReducer, shopPrice, rerollCost, xpForLevel, type RunAction, type RunOverrides } from '../engine/run';
+import { boardHasCounterSet } from '../engine/parry';
 import { FightRecorder, type FightTape } from '../engine/replay';
 import { challengeProgress } from '../engine/challenges';
 import { GearChips, gearModifiers, hasGearChips } from './GearChips';
@@ -46,7 +47,7 @@ import { checksOfSet, computeLiveGuidance, describeSingleCardTraits, explainInva
 import StageBubble from './StageBubble';
 import TraitChecks, { TRAIT_CHECKS_HEIGHT } from './TraitChecks';
 import { EVOLUTION_RULES } from '../engine/sources';
-import { Anchor, AnchorsProvider, EVENT_FX, EvolutionCutIn, FxStage, GearBelt, fxClock, scriptFor, useAnchors, useFightFx, type Beat } from '../fx';
+import { Anchor, AnchorsProvider, EVENT_FX, EvolutionCutIn, FxStage, GearBelt, KillCamOverlay, MultiplierIgnition, fxClock, scriptFor, useAnchors, useFightFx, type Beat } from '../fx';
 import { Banner } from '../fx/visuals';
 import { Btn, CoinPill, DARK, Eyebrow, Heart, INK, PopIn, TONE } from './ui';
 import { EvolutionBanner, EvolutionRing, MegaFlash } from './RunFx';
@@ -54,6 +55,7 @@ import WeaponExplainer from './WeaponExplainer';
 import PowerMeter from './PowerMeter';
 import PowerExplainer from './PowerExplainer';
 import HudInspector, { type HudInspectTarget } from './HudInspector';
+import ParryIntentBar from './ParryIntentBar';
 
 const TICK_MS = 250;
 /** A Set's cards are thrown at the foe, then the next ones are dealt: long enough to see the throw, short enough to keep moving */
@@ -79,6 +81,16 @@ const LAST_SET_MS = 3200;
  */
 const STAGE = { min: 66, minWide: 104, wideFrom: 700, max: 184, chromePx: 132, roomy: 136, speechPx: 60 } as const;
 
+export interface SpireFightContext {
+  floorLabel: string;
+  nodeLabel: string;
+  hideChallenge?: boolean;
+  /** Disable mid-fight Restart in Spire (roguelike stakes) */
+  noRestart?: boolean;
+  quitLabel?: string;
+  quitHint?: string;
+}
+
 interface Props {
   level: LevelDef;
   save: AdventureSave;
@@ -92,6 +104,12 @@ interface Props {
   /** Play the fight's effects (and hold the clock while they play). Off: numbers only, nothing waits. */
   effects?: boolean;
   onToggleEffects?: () => void;
+  /** Optional overrides (e.g. persistent HP / uncapped loadout for Starfall Spire) */
+  runOverrides?: RunOverrides;
+  /** Optional explicit feature set (e.g. Starfall Spire enables all core features) */
+  featuresOverride?: Set<FeatureFlag>;
+  /** Optional Starfall Spire HUD & pause adaptations */
+  spireContext?: SpireFightContext;
 }
 
 /** The recipe an evolution event is about (the engine names it by id or by name). */
@@ -119,13 +137,33 @@ for (const m of Object.values(MECHANICS)) {
   COACH_BY_EVENT.set(m.coachMark.on, [...(COACH_BY_EVENT.get(m.coachMark.on) ?? []), tip]);
 }
 
-const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish, onQuit, onRestart, onCoachMarkSeen, effects = true, onToggleEffects }) => {
+const AdventureRun: React.FC<Props> = ({
+  level,
+  save,
+  seed,
+  autoPlayer,
+  onFinish,
+  onQuit,
+  onRestart,
+  onCoachMarkSeen,
+  effects = true,
+  onToggleEffects,
+  runOverrides,
+  featuresOverride,
+  spireContext,
+}) => {
   recordComponentRender('AdventureRun');
   const insets = useSafeAreaInsets();
   const appActive = useAppActive();
   // The save the fight started from and every action sent to it: enough to replay the fight (engine/replay.ts)
   const [startSave] = useState(save);
-  const [run, setRun] = useState(() => createRun(level, startSave, { seed }));
+  const [run, setRun] = useState(() =>
+    createRun(level, startSave, {
+      seed,
+      ...(featuresOverride ? { features: featuresOverride } : {}),
+      ...(runOverrides ? { overrides: runOverrides } : {}),
+    })
+  );
   const runRef = useRef(run);
   runRef.current = run;
   const recorder = useRef(new FightRecorder(seed));
@@ -251,10 +289,12 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   // Zero blocking start-of-fight popups: guidance is shown live above the board while you play!
   useEffect(() => {
     const m = MECHANICS[level.introduces];
-    const key = COACH_KEYS.fightStart(m.id);
-    if (!seenCoach.current.has(key)) {
-      seenCoach.current.add(key);
-      onCoachMarkSeen(key);
+    if (m) {
+      const key = COACH_KEYS.fightStart(m.id);
+      if (!seenCoach.current.has(key)) {
+        seenCoach.current.add(key);
+        onCoachMarkSeen(key);
+      }
     }
     if (practice) {
       const msg = 'Practice yard! Test any gear — tap DONE when ready.';
@@ -495,8 +535,12 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
     </View>
   );
   const keenEyeIds = useMemo(() => (run.passive.keenEyeCardId ? [run.passive.keenEyeCardId] : undefined), [run.passive.keenEyeCardId]);
-  const showDamageHud = shouldShowDamageNumbers(level, startSave);
-  const showPassivesHud = shouldShowPassiveHud(level, startSave);
+  const showDamageHud = spireContext ? true : shouldShowDamageNumbers(level, startSave);
+  const showPassivesHud = spireContext ? true : shouldShowPassiveHud(level, startSave);
+  const parryCounterAvailable = useMemo(() => {
+    if (!run.parry || run.parry.phase !== 'windup' || run.parry.spec.counter.kind === 'any') return true;
+    return boardHasCounterSet(run.board, run.attributes, run.parry.spec.counter);
+  }, [run.parry, run.board, run.attributes]);
 
   // Explain the POWER meter once the first time the player builds Charge in battle
   useEffect(() => {
@@ -565,7 +609,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
   const idealCardH = stage.w > 0 ? (Math.min(stage.w, 560) - 36) / 3 / 0.82 : 140;
   // (a wide window has width to burn and little height: there the two of them get a little more than the minimum)
   const stageMin = stage.w >= STAGE.wideFrom ? STAGE.minWide : STAGE.min;
-  const chromePx = STAGE.chromePx + (traitChecks ? TRAIT_CHECKS_HEIGHT + 6 : 0);
+  const chromePx = STAGE.chromePx + (traitChecks ? TRAIT_CHECKS_HEIGHT + 6 : 0) + (run.parry ? 28 : 0);
   const stageH = stage.h > 0
     ? Math.round(Math.max(stageMin, Math.min(STAGE.max, stage.h - insets.top - chromePx - boardRows * (idealCardH + 6))))
     : 92;
@@ -919,6 +963,13 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
               <Text style={st.doneText}>DONE</Text>
             </TouchableOpacity>
           </View>
+        ) : spireContext?.hideChallenge ? (
+          <View style={st.challenge} testID="run-spire-bar">
+            <Icon name="lorc/mountaintop" size={14} color={TONE.arcana} />
+            <Text style={st.challengeText} numberOfLines={1}>
+              {spireContext.floorLabel} · {spireContext.nodeLabel}
+            </Text>
+          </View>
         ) : level.id !== '1-1' ? (
           <ChallengeStrip text={challenge.text} met={challenge.met} failed={challenge.failed} onPress={() => { sfx('click'); setHudInspect({ kind: 'challenge' }); }} />
         ) : null}
@@ -928,6 +979,15 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
 
       </View>
 
+      {run.parry && (
+        <ParryIntentBar
+          parry={run.parry}
+          active={playing && appActive}
+          counterAvailable={parryCounterAvailable}
+          onPress={() => { sfx('click'); setHudInspect({ kind: 'foe' }); }}
+        />
+      )}
+
       {run.surge && <SurgeBar surge={run.surge} active={playing && appActive} />}
 
       {/* ── Board ───────────────────────────────────────── */}
@@ -935,6 +995,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
         {/* Evolution pulse: a glow behind the cards, never a card border */}
         {run.activeEvolutions.length > 0 && <EvolutionGlow active={playing && appActive} />}
         {run.surge?.active && <SurgeGlow active={playing && appActive} />}
+        <MultiplierIgnition ignition={run.lastSetIgnition} enabled={effects && showDamageHud} />
         {run.frozenMs > 0 && (
           <View style={st.frozen} pointerEvents="none">
             <Icon name="lorc/snowflake-1" size={18} color="#1D4ED8" />
@@ -972,6 +1033,7 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
 
       {/* Everything that is playing right now */}
       <FxStage fx={fx} anchors={anchors} size={stage} />
+      <KillCamOverlay ignition={run.lastSetIgnition} anchors={anchors} stageSize={stage} enabled={effects && !practice} />
       {opening && effects && !practice && anchors.rect('board') && (
         <View style={st.openingLayer} pointerEvents="none" testID="run-opening">
           <Banner rect={anchors.rect('board')!} text={level.isBoss ? 'BOSS FIGHT!' : 'FIGHT!'} color={level.isBoss ? '#9F1239' : COLORS.deepOnyx} delay={120} />
@@ -1058,7 +1120,9 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
         <View style={st.overlay}>
           <PopIn style={st.panel}>
             <Text style={st.panelTitle}>PAUSED</Text>
-            <Text style={st.panelSub}>{practice ? 'Practice' : level.id} · {level.name}</Text>
+            <Text style={st.panelSub}>
+              {spireContext ? `${spireContext.floorLabel} · ${run.foeName}` : `${practice ? 'Practice' : level.id} · ${level.name}`}
+            </Text>
             {run.weapons.length > 0 && (
               <View style={st.gearRow}>
                 {run.weapons.map((w, i) => {
@@ -1082,7 +1146,9 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
                 onPress={onToggleEffects}
               />
             )}
-            <Btn label={practice ? 'Start over' : 'Restart'} variant="secondary" onPress={() => { setPaused(false); onRestart(runRef.current, recordingOf()); }} />
+            {!spireContext?.noRestart && (
+              <Btn label={practice ? 'Start over' : 'Restart'} variant="secondary" onPress={() => { setPaused(false); onRestart(runRef.current, recordingOf()); }} />
+            )}
             {practice ? (
               <>
                 <Btn testID="pause-done" label="Done practising" variant="secondary" onPress={() => { setPaused(false); leavePractice(); }} />
@@ -1090,8 +1156,10 @@ const AdventureRun: React.FC<Props> = ({ level, save, seed, autoPlayer, onFinish
               </>
             ) : (
               <>
-                <Btn label="Retreat to map" variant="secondary" onPress={() => { setPaused(false); music.stop(); onQuit(runRef.current, recordingOf()); }} />
-                <Text style={st.panelHint}>Retreating forfeits this attempt, including the coins you've collected in it.</Text>
+                <Btn label={spireContext?.quitLabel ?? 'Retreat to map'} variant="secondary" onPress={() => { setPaused(false); music.stop(); onQuit(runRef.current, recordingOf()); }} />
+                <Text style={st.panelHint}>
+                  {spireContext?.quitHint ?? "Retreating forfeits this attempt, including the coins you've collected in it."}
+                </Text>
               </>
             )}
             {onToggleEffects && (

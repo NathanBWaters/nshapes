@@ -4,6 +4,7 @@ import { COLORS, RADIUS } from '@/utils/colors';
 import { useSoundSetting } from '@/hooks/useSoundSetting';
 import { analyticsOptedOut, playerCode, setAnalyticsEnabled } from '@/analytics/posthog';
 import { resetAdventureSave } from '@/adventure/save';
+import { resetSpireStorage } from '@/spire/save';
 import { resetAllClassicStorage } from '@/utils/storage';
 import { resetTutorialStorage } from '@/context/TutorialContext';
 import Icon from './Icon';
@@ -33,6 +34,7 @@ const OptionsMenu: React.FC<OptionsMenuProps> = ({ visible, onClose, onResetGame
 
   const handleConfirmReset = () => {
     resetAdventureSave();
+    resetSpireStorage();
     resetAllClassicStorage();
     void resetTutorialStorage();
     setConfirmingReset(false);

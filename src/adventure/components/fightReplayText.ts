@@ -81,6 +81,10 @@ const LABEL: Partial<Record<RunEventType, (l: FightLogLine) => string | null>> =
   card_removed: () => 'A card was removed',
   time_stolen: () => 'Foe stole time',
   inactivity: () => 'Foe punished standing still',
+  parry_warn: () => null,
+  parry: l => `Parried ${l.text ?? 'strike'}!`,
+  perfect_parry: l => `Perfect Parry on ${l.text ?? 'strike'}! (Stagger ×2)`,
+  foe_strike: l => `Unparried ${l.text ?? 'strike'} landed`,
 };
 
 const humanize = (t: string) => t.charAt(0).toUpperCase() + t.slice(1).replace(/_/g, ' ');

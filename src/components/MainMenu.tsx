@@ -10,12 +10,14 @@ import { SavedGameStorage } from '@/utils/storage';
 import { loadAdventureSave } from '@/adventure/save';
 import { getFrontierLevel, totalStars } from '@/adventure/progress';
 import { levelFoe } from '@/adventure/data/foes';
+import { loadSpireMeta, loadSpireRun } from '@/spire/save';
 import { version } from '../../package.json';
 
 const DISCORD_URL = 'https://discord.gg/JFkUmp54Sp';
 
 interface MainMenuProps {
   onSelectAdventure: () => void;
+  onSelectSpire?: () => void;
   onSelectFreeplay: () => void;
   onSelectTutorial: () => void;
   onSelectOptions: () => void;
@@ -32,7 +34,7 @@ function MenuButton({
   accessibilityLabel,
 }: {
   onPress: () => void;
-  variant: 'resume' | 'adventure' | 'freeplay' | 'tutorial' | 'options';
+  variant: 'resume' | 'adventure' | 'spire' | 'freeplay' | 'tutorial' | 'options';
   icon: IconName;
   title: string;
   subtitle: string;
@@ -57,6 +59,12 @@ function MenuButton({
       iconBg: COLORS.paperBeige,
       iconColor: COLORS.slateCharcoal,
       textColor: COLORS.slateCharcoal,
+    },
+    spire: {
+      button: styles.spireButton,
+      iconBg: '#2E234A',
+      iconColor: COLORS.actionYellow,
+      textColor: COLORS.canvasWhite,
     },
     freeplay: {
       button: styles.freeplayButton,
@@ -113,6 +121,7 @@ function MenuButton({
 
 const MainMenu: React.FC<MainMenuProps> = ({
   onSelectAdventure,
+  onSelectSpire,
   onSelectFreeplay,
   onSelectTutorial,
   onSelectOptions,
@@ -135,6 +144,35 @@ const MainMenu: React.FC<MainMenuProps> = ({
     } catch {
       return { title: 'Adventure', subtitle: 'Map, foes, stars & unlocks', isFresh: false };
     }
+  }, []);
+
+  const spire = React.useMemo(() => {
+    try {
+      const active = loadSpireRun();
+      if (active && active.phase !== 'defeat' && active.phase !== 'victory') {
+        const actLabel = active.endless ? `Endless A${active.act}` : `Act ${active.act}`;
+        return {
+          title: 'Starfall Spire',
+          subtitle: `Resume ${actLabel} · Floor ${active.floor} · ♥ ${active.hearts}/${active.maxHearts}`,
+          badge: 'LIVE RUN',
+        };
+      }
+      const meta = loadSpireMeta();
+      if (meta.totalRuns > 0) {
+        return {
+          title: 'Starfall Spire',
+          subtitle: `Roguelike Climb · Best Fl ${meta.bestFloor} · ${meta.victories} Win${meta.victories === 1 ? '' : 's'}`,
+          badge: meta.highestAscensionUnlocked > 0 ? `A${meta.highestAscensionUnlocked}` : 'ROGUELIKE',
+        };
+      }
+    } catch {
+      // ignore storage errors
+    }
+    return {
+      title: 'Starfall Spire',
+      subtitle: '3-Act Roguelike Climb · Shops, Events & Endless',
+      badge: 'ROGUELIKE',
+    };
   }, []);
 
   const mascotCharacter = savedGame?.characterName
@@ -180,6 +218,17 @@ const MainMenu: React.FC<MainMenuProps> = ({
             badge={adventure.isFresh ? 'START HERE' : undefined}
             accessibilityLabel={`Adventure: ${adventure.title}`}
           />
+          {onSelectSpire && (
+            <MenuButton
+              onPress={onSelectSpire}
+              variant="spire"
+              icon="lorc/mountaintop"
+              title={spire.title}
+              subtitle={spire.subtitle}
+              badge={spire.badge}
+              accessibilityLabel={`Starfall Spire: ${spire.subtitle}`}
+            />
+          )}
           <MenuButton
             onPress={onSelectFreeplay}
             variant="freeplay"
@@ -261,23 +310,23 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     justifyContent: 'space-between',
-    paddingVertical: 40,
-    paddingHorizontal: 24,
+    paddingVertical: 22,
+    paddingHorizontal: 20,
   },
   titleSection: {
     alignItems: 'center',
-    paddingTop: 40,
+    paddingTop: 14,
   },
   title: {
-    fontSize: 56,
+    fontSize: 48,
     fontWeight: '700',
     color: COLORS.slateCharcoal,
     letterSpacing: 4,
     textTransform: 'uppercase',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '400',
     color: COLORS.slateCharcoal,
     opacity: 0.7,
@@ -285,8 +334,8 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   menuSection: {
-    gap: 16,
-    paddingHorizontal: 20,
+    gap: 12,
+    paddingHorizontal: 8,
   },
   menuButton: {
     flexDirection: 'row',
@@ -295,14 +344,18 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.module,
     borderWidth: 2,
     borderColor: COLORS.slateCharcoal,
-    padding: 20,
-    gap: 16,
+    padding: 15,
+    gap: 14,
   },
   resumeButton: {
     backgroundColor: COLORS.logicTeal,
   },
   adventureButton: {
     backgroundColor: COLORS.actionYellow,
+  },
+  spireButton: {
+    backgroundColor: '#4C1D95',
+    borderColor: COLORS.slateCharcoal,
   },
   freeplayButton: {
     backgroundColor: COLORS.canvasWhite,

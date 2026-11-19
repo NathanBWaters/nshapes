@@ -26,15 +26,18 @@ import type { Effect, WeaponTriggerKind } from '../rules/types';
 import { createRng } from './rng';
 import { allSets, countDifferentAttributes, hasAnySet, isRainbow, isSelectable } from './sets';
 import { boardVariety, buildDeck, deckCopies, kindsOfSet } from './dealer';
-import { applyWeaponToStats, resolveWholeStats, startingLoadout } from '../loadout';
+import { applyWeaponToStats, resolveWholeStats, startingLoadout, type LoadoutOptions } from '../loadout';
 import { getArmoryWeapon, understudyOf } from '../data/armory';
 import { UNDERSTUDY_ID } from '../data/adventureWeapons';
 import { damageMultiplier } from '../data/weaponPower';
 import { weaponBuilds } from '../weaponLevels';
+import type { WeaponBuilds } from '../data/weaponStats';
 import { createFoe } from '../data/foes';
 import { arcanaRules, getArcana } from '../data/arcana';
 import { BASE_RULES } from '../data/rules';
+import { PARRY_RULES } from '../data/parry';
 import { challengeProgress } from './challenges';
+import { initParryState, resolveParryOnSet, tickParry } from './parry';
 import {
   addCoins, addConnection, addRandomConnections, addTime, addXp, announceDraw, arcana, begin, chanceStatsOf, dealDamage, drawCard,
   emit, enqueue, finish, foeMultiplier, heal, hurt, igniteCards, keepCatalystMatchable, mods, newLinkSlots, placeCatalyst,
@@ -321,6 +324,7 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   const purity = advancePurity(d, diffCount, graceUsed);
 
   // Damage
+  const parryRes = resolveParryOnSet(d, matched, graceUsed, !!opts.auto);
   const hotStreak = consumeHotStreak(d);
   advanceCombo(d);
   const m = mods(d);
@@ -489,6 +493,22 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   }
   if (enemyMult !== 1) multItems.push({ label: d.foeName, amount: enemyMult, note: enemyMult < 1 ? 'foe resistance' : 'foe vulnerability' });
   if (preTricksSetMult !== 1) multItems.push({ label: hotStreak > 1 ? 'Hot Streak' : 'Next-Set boost', amount: preTricksSetMult, note: hotStreak > 1 ? 'max Combo passive' : 'saved multiplier' });
+  const staggerMult = parryRes.wasStaggered ? PARRY_RULES.staggerDamageMult : 1;
+  const parryMult = parryRes.multiplier;
+  if (parryMult !== 1) {
+    multItems.push({
+      label: parryRes.kind === 'perfect' ? 'Perfect Parry' : 'Counter Parry',
+      amount: parryMult,
+      note: parryRes.kind === 'perfect' ? 'golden window parry' : 'countered telegraphed strike',
+    });
+  }
+  if (staggerMult !== 1) {
+    multItems.push({
+      label: 'Staggered!',
+      amount: staggerMult,
+      note: 'foe staggered by Parry',
+    });
+  }
   multItems.push(...tricks.multItems);
   const extraItems: FightLogMathItem[] = [];
   if (purity.damage * enemyMult !== 0) {
@@ -497,7 +517,8 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   if (traps.bonus * enemyMult !== 0) {
     extraItems.push({ label: 'Traps cleared', amount: traps.bonus * enemyMult, note: 'cleared hazard cards in this Set' });
   }
-  const dmg = flat * rainbowMult * (a.damageScale ?? 1) * enemyMult * setMult + (purity.damage + traps.bonus) * enemyMult;
+  const totalMult = rainbowMult * (a.damageScale ?? 1) * enemyMult * setMult * parryMult * staggerMult;
+  const dmg = flat * totalMult + (purity.damage + traps.bonus) * enemyMult;
   const powerMult = damageMultiplier(d.power ?? 0);
   const hit = dealDamage(d, dmg);
   emit(d, surgeMult > 1 ? 'surge_hit' : rainbow ? 'rainbow' : 'hit', hit, undefined, { slots: gearSet.slots });
@@ -534,7 +555,7 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
       collateral,
       flatBonus: flat - surgedPoints,
       ...(flatItems.length > 0 ? { flatItems } : {}),
-      multiplier: rainbowMult * (a.damageScale ?? 1) * enemyMult * setMult,
+      multiplier: totalMult,
       ...(multItems.length > 0 ? { multItems } : {}),
       rainbow,
       extra: (purity.damage + traps.bonus) * enemyMult,
@@ -545,6 +566,15 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
       graceUsed,
       sinceLastMs,
       combo: d.combo,
+    };
+    d.lastSetIgnition = {
+      id: d.eventSeq,
+      math: d._logSet,
+      ...(parryRes.kind === 'parry' || parryRes.kind === 'perfect' ? { parryKind: parryRes.kind } : {}),
+      ...(parryRes.wasStaggered ? { staggered: true } : {}),
+      lethal: d.foeHp <= 0,
+      isBossOrElite: !!(d.level.isBoss || d.level.branchOf),
+      foeName: d.foeName,
     };
   }
   if (hotStreak > 1) emit(d, 'hot_streak_hit', hotStreak);
@@ -779,10 +809,17 @@ const HOOKS: FightHooks = { autoSet };
 
 // ─── Setup ──────────────────────────────────────────────────────────────────
 
+export interface RunOverrides extends LoadoutOptions {
+  /** Override starting hearts (e.g. carry HP across floors in Starfall Spire) */
+  startingHearts?: number;
+}
+
 export interface CreateRunOptions {
   seed: number;
   /** Replace the level's accumulated features (dev tools & tests) */
   features?: Set<FeatureFlag>;
+  /** Optional overrides used by Starfall Spire runs without affecting Adventure Mode */
+  overrides?: RunOverrides;
 }
 
 /**
@@ -808,10 +845,17 @@ export const createRun = (level: LevelDef, save: AdventureSave, opts: CreateRunO
 const buildRun = (level: LevelDef, save: AdventureSave, opts: CreateRunOptions): RunState => {
   const fighter = save.selectedFighter;
   const rng = createRng(opts.seed);
-  const loadout = startingLoadout(level, save, opts.features, () => rng.next());
+  const ov = opts.overrides;
+  const loadout = startingLoadout(level, save, opts.features, () => rng.next(), ov);
   const features = loadout.features;
   const gear = features.has('gear');
   const { stats, weapons, maxHearts, timer, bonusDamagePerMatch, coinBonusPercent } = loadout;
+  const resolvedHearts =
+    features.has('hearts') && maxHearts !== null
+      ? ov?.startingHearts !== undefined
+        ? Math.max(1, Math.min(maxHearts, ov.startingHearts))
+        : maxHearts
+      : null;
   const arcanaIds = gear ? loadout.arcana : [];
   const attributes = level.rules.attributes;
   const baseSize = level.rules.boardSize ?? getBoardSizeForAttributes(attributes.length);
@@ -840,7 +884,7 @@ const buildRun = (level: LevelDef, save: AdventureSave, opts: CreateRunOptions):
     stats,
     baseChances: chanceStatsOf(stats),
     weapons: gear ? weapons : [],
-    hearts: features.has('hearts') ? maxHearts : null,
+    hearts: resolvedHearts,
     maxHearts: features.has('hearts') ? maxHearts : null,
     wave: 0,
     foe: first.foe,
@@ -880,7 +924,7 @@ const buildRun = (level: LevelDef, save: AdventureSave, opts: CreateRunOptions):
     shopOptions: [],
     rerolls: 0,
     armory: save.armory,
-    weaponBuilds: weaponBuilds(save),
+    weaponBuilds: ov?.weaponBuilds ?? weaponBuilds(save),
     passives: gear ? loadout.passives : [],
     passive: restingPassiveState(),
     skillNodes: gear ? loadout.skillNodes : [],
@@ -920,6 +964,10 @@ const buildRun = (level: LevelDef, save: AdventureSave, opts: CreateRunOptions):
     bonusCardsMatched: 0,
     levelUpsTaken: 0,
     shopBuys: 0,
+    parry: initParryState(level, level.foes[0]),
+    parriesLanded: 0,
+    perfectParriesLanded: 0,
+    lastSetIgnition: null,
   };
 
   const d = begin(state, HOOKS);
@@ -984,6 +1032,9 @@ const reduceRun = (state: RunState, action: RunAction): RunState => {
       const before = d.totalDamage;
       applyMatch(d, action.cards, action.rewards, action.effects, { hinted: action.hinted });
       drain(d);
+      if (d.lastSetIgnition && d.foeHp <= 0 && !d.lastSetIgnition.lethal) {
+        d.lastSetIgnition = { ...d.lastSetIgnition, lethal: true };
+      }
       d.biggestHit = Math.max(d.biggestHit, d.totalDamage - before);
       break;
     }
@@ -1158,6 +1209,7 @@ const reduceRun = (state: RunState, action: RunAction): RunState => {
       // Links are for the wave, unless the Link Stone has grown (then they stay where they are)
       if (!(mods(d).keepLinks ?? 0)) d.connections = [];
       d.setsThisWave = 0;
+      d.parry = initParryState(d.level, def);
       d.status = 'playing';
       onWaveStartPassives(d);
       onWaveStartGear(d);
@@ -1193,6 +1245,10 @@ const tickClock = (d: Draft, ms: number) => {
     if (!d.simplified) emit(d, 'simplify_end');
   }
   tickTimeBombs(d, ms);
+  tickParry(d, ms * speed);
+
+  // A Staggered foe is rattled and cannot tick its own hostile abilities or regen
+  if (d.parry?.phase === 'staggered') return;
 
   const tick = d.foe.onTick(ms * speed, d.board);
   emitEnemyEvents(d, tick.events);

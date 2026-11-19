@@ -79,6 +79,7 @@ import FreePlayHeader from './FreePlayHeader';
 import CharacterUnlockScreen from './CharacterUnlockScreen';
 import MainMenu from './MainMenu';
 import AdventureMode from '@/adventure/AdventureMode';
+import SpireMode from '@/spire/components/SpireMode';
 import DifficultySelection from './DifficultySelection';
 import LevelUpModal from './LevelUpModal';
 import OptionsMenu from './OptionsMenu';
@@ -110,6 +111,7 @@ const Game: React.FC<GameProps> = ({
   const [gamePhase, setGamePhase] = useState<
     'main_menu' |
     'adventure' |         // Map-based adventure (src/adventure)
+    'spire' |             // Starfall Spire roguelike climb (src/spire)
     'difficulty_select' |
     'tutorial' |
     'round' |
@@ -2015,6 +2017,7 @@ const Game: React.FC<GameProps> = ({
             <MainMenu
               key={`menu-${resetRevision}`}
               onSelectAdventure={() => setGamePhase('adventure')}
+              onSelectSpire={() => setGamePhase('spire')}
               onSelectFreeplay={() => setGamePhase('difficulty_select')}
               onSelectTutorial={handleTutorialStart}
               onSelectOptions={() => setShowOptionsModal(true)}
@@ -2041,6 +2044,9 @@ const Game: React.FC<GameProps> = ({
 
       case 'adventure':
         return <AdventureMode key={`adv-${resetRevision}`} onExit={exitToMenu} autoPlayer={autoPlayerEnabled} />;
+
+      case 'spire':
+        return <SpireMode key={`spire-${resetRevision}`} onExit={exitToMenu} autoPlayer={autoPlayerEnabled} />;
 
       case 'difficulty_select':
         return (

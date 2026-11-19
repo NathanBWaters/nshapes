@@ -12,7 +12,8 @@ import { getBoardSizeForAttributes } from '@/utils/gameConfig';
 import { resolveMatch } from '@/utils/matchResolution';
 import type { AdventureSave, ChallengeDef, LevelDef, RunState } from '../types';
 import { createRng, type Rng } from './rng';
-import { computeStars, createRun, runReducer, shopPrice } from './run';
+import { computeStars, createRun, runReducer, shopPrice, type RunOverrides } from './run';
+import { setMatchesCounter } from './parry';
 import { allSets, countDifferentAttributes, isRainbow, isSelectable } from './sets';
 import { albumPageOf } from './gear';
 import type { Modifiers } from '../rules/types';
@@ -139,6 +140,10 @@ const chooseSet = (s: RunState, sets: Card[][], bot: BotProfile, rng: Rng): Card
   );
   const lastSlots = new Set(mirrorHeld ? s.gear.lastSetSlots.map(i => s.board[i]?.id) : []);
   let picked: Card[] | null = null;
+  // When a foe is winding up a telegraphed strike with a specific Counter-Set, a real player hunts the counter!
+  if (s.parry && s.parry.phase === 'windup' && s.parry.spec.counter.kind !== 'any') {
+    picked = prefer(set => setMatchesCounter(set, s.attributes, s.parry!.spec.counter), focus);
+  }
   for (const goal of chasing(s)) picked ??= goalPick(goal);
   return (
     picked ??
@@ -182,6 +187,10 @@ const nearMiss = (cards: Card[], attrs: AttributeName[], rng: Rng): Card[] | nul
 export interface SimOptions {
   /** Pass on every level-up pick and shop offer, so the fight measures only what was brought in */
   skipPicks?: boolean;
+  /** Optional CreateRun overrides (used by Starfall Spire balance simulations) */
+  overrides?: RunOverrides;
+  /** Override accumulated features (used by Starfall Spire balance simulations) */
+  features?: RunState['features'];
 }
 
 export const simulateRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: number, plan?: BuildPlan, opts: SimOptions = {}) => {
@@ -252,7 +261,7 @@ const shop = (s: RunState, rng: Rng, chase: boolean): RunState => {
 
 const playRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: number, chase: boolean, opts: SimOptions = {}) => {
   const rng = createRng(seed ^ 0x9e3779b9);
-  let s = createRun(level, save, { seed });
+  let s = createRun(level, save, { seed, ...(opts.features ? { features: opts.features } : {}), ...(opts.overrides ? { overrides: opts.overrides } : {}) });
   let guard = 0;
   while ((s.status === 'playing' || s.status === 'pick' || s.status === 'intermission') && guard++ < 2000) {
     if (s.status === 'pick') {

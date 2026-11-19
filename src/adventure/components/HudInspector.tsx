@@ -17,6 +17,7 @@ import { foeDisplay } from '../data/foes';
 import { getPassive } from '../data/passives';
 import { starGoals, type ChallengeProgress } from '../engine/challenges';
 import { EVOLUTION_RULES } from '../engine/sources';
+import ParryPreviewCard from './ParryPreviewCard';
 import { Btn, Eyebrow, INK, PopIn, TONE } from './ui';
 
 export type HudInspectTarget =
@@ -67,6 +68,7 @@ const HudInspector: React.FC<Props> = ({ target, run, shownHp, challenge, knownE
             ) : (
               <Text style={st.body}>Standard foe — match Sets of 3 cards to deal damage and knock out {run.foeName}.</Text>
             )}
+            {run.parry && <ParryPreviewCard spec={run.parry.spec} compact testID="inspector-parry-card" />}
             {hazards?.timeBombs && (
               <View style={st.cardHazard}>
                 <Icon name="lorc/time-bomb" size={16} color={INK} />

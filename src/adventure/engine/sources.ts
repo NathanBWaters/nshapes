@@ -118,4 +118,4 @@ export const evolutionLikelihoodFor = (labTier: number, mods: Modifiers, catalys
 
 /** Evolutions a fight allows (a practice fight has no limit). */
 export const evolutionCapFor = (level: LevelDef, mods: Modifiers): number =>
-  level.rules.sandbox ? Infinity : EVOLUTION_RULES.perFight + (mods.extraEvolutionsPerFight ?? 0);
+  level.rules.sandbox ? Infinity : EVOLUTION_RULES.perFight + (level.rules.extraEvolutionCap ?? 0) + (mods.extraEvolutionsPerFight ?? 0);

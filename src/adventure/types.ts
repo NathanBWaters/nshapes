@@ -121,6 +121,72 @@ export interface BiomeDef {
   skyIcon?: { icon: IconName; color: string };
 }
 
+/** What kind of Set counters a foe's telegraphed attack. */
+export type ParryRequirement =
+  /** Default timing-based parry: any valid Set during wind-up parries; final window = Perfect Parry */
+  | { kind: 'any' }
+  /** All three cards share this color (e.g. All Red) */
+  | { kind: 'color'; color: Card['color'] }
+  /** All three cards share this shape (e.g. All Ovals) */
+  | { kind: 'shape'; shape: Card['shape'] }
+  /** Every active trait is all-different across the three cards (Rainbow) */
+  | { kind: 'all_different' }
+  /** Exactly `count` active traits are identical across all three cards (e.g. 2 traits the same) */
+  | { kind: 'exact_same'; count: 2 }
+  /** Exactly `count` active traits are all-different across the three cards (e.g. 2 traits different) */
+  | { kind: 'exact_diff'; count: 2 }
+  /** All three cards have the same number (e.g. three 1s, 2s, or 3s) */
+  | { kind: 'same_number' }
+  /** All three cards have different numbers (1, 2, 3) */
+  | { kind: 'diff_number' };
+
+/** What happens if a foe's telegraphed attack finishes unparried. */
+export type ParryPenalty = 'heart' | 'glancing' | 'time';
+
+/** Specification for a foe's telegraphed attack & Set-Parry counter. */
+export interface ParrySpec {
+  attackName: string;
+  icon: IconName;
+  counter: ParryRequirement;
+  /** Calm time (ms) between attacks */
+  cooldownMs: number;
+  /** Telegraph wind-up duration (ms) during which the player can Parry */
+  windupMs: number;
+  /** Final golden window (ms) of the wind-up that scores a PERFECT PARRY + Stagger */
+  perfectWindowMs: number;
+  /** Consequence if the wind-up completes unparried */
+  penalty: ParryPenalty;
+}
+
+/** Live Set-Parry state for the current wave's foe. */
+export interface ParryState {
+  spec: ParrySpec;
+  phase: 'calm' | 'windup' | 'staggered';
+  /** Time left in the current phase (ms) */
+  msLeft: number;
+  /** Total duration of the current phase (ms) */
+  durationMs: number;
+  /** True once the golden Perfect Parry warning has emitted for this wind-up */
+  warned: boolean;
+  /** Fairness stalls granted this wind-up when no counter-Set existed on the board */
+  stallsUsed: number;
+  /** Total parries landed this wave */
+  parries: number;
+  /** Total Perfect Parries landed this wave */
+  perfectParries: number;
+}
+
+/** Snapshot of the latest scored Set for Live Multiplier Ignition & Lethal Kill-Cam FX. */
+export interface SetIgnition {
+  id: number;
+  math: FightLogSetMath;
+  parryKind?: 'parry' | 'perfect';
+  staggered?: boolean;
+  lethal: boolean;
+  isBossOrElite: boolean;
+  foeName: string;
+}
+
 /** Foe on the map: either a registered enemy (with real effects) or a cosmetic sparring foe. */
 export interface FoeDef {
   /** Name of a registered enemy in enemyFactory (gives real mechanics) */
@@ -130,6 +196,8 @@ export interface FoeDef {
   icon?: IconName;
   hp: number;
   taunt?: string;
+  /** Optional explicit telegraphed attack & Set-Parry counter (auto-resolved if omitted) */
+  parry?: ParrySpec | null;
 }
 
 export type ChallengeDef =
@@ -294,6 +362,8 @@ export interface LevelRules {
   hazards?: LevelHazards;
   /** Percentage points added to the Catalyst chance on every refill (e.g. the level that teaches evolutions) */
   evolutionLikelihood?: number;
+  /** Extra Evolutions allowed per fight beyond the base cap (used by Spire boons) */
+  extraEvolutionCap?: number;
   /**
    * Shading Surge (Worlds 3-5): the board plays on `attributes` with every card
    * solid, then for a short window shading turns on and every Set hits much
@@ -570,7 +640,9 @@ export type RunEventType =
   /** Practice only: out of hearts, so they refill (amount = hearts back) */
   | 'breather'
   /** A weapon grew stronger for the rest of the fight (text = what it gained, amount = its stacks) */
-  | 'power_up';
+  | 'power_up'
+  /** Set-Parry: foe entering golden Perfect Parry window, Counter Parry, Perfect Parry (Stagger ×2), or unparried strike */
+  | 'parry_warn' | 'parry' | 'perfect_parry' | 'foe_strike';
 
 export interface RunEvent {
   id: number;
@@ -921,4 +993,14 @@ export interface RunState {
   bonusCardsMatched: number;
   levelUpsTaken: number;
   shopBuys: number;
+
+  // Set-Parrying & Live Multiplier Ignition / Kill-Cam
+  /** Live telegraphed attack & Set-Parry state (null on early onboarding / sandbox) */
+  parry: ParryState | null;
+  /** Total parries landed across the whole fight */
+  parriesLanded: number;
+  /** Total Perfect Parries landed across the whole fight */
+  perfectParriesLanded: number;
+  /** Snapshot of the latest player Set for Live Multiplier Ignition & Kill-Cam visuals */
+  lastSetIgnition: SetIgnition | null;
 }

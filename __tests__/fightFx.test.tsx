@@ -188,7 +188,7 @@ describe('the script: one move as a cascade', () => {
     for (const type of TYPES.filter(t => EVENT_FX[t]?.ambient)) {
       expect({ type, hold: scriptHoldMs(scriptFor([ev(type, { amount: 1, slots: [0] })], { weapons: WEAPONS })) }).toEqual({ type, hold: 0 });
     }
-    expect(TYPES.filter(t => EVENT_FX[t]?.ambient).sort()).toEqual(['countdown', 'keen_eye', 'regen']);
+    expect(TYPES.filter(t => EVENT_FX[t]?.ambient).sort()).toEqual(['countdown', 'keen_eye', 'parry_warn', 'regen']);
   });
 
   it('only the player\'s own moves hold the clock: what the clock causes plays while it runs', () => {
