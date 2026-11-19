@@ -457,6 +457,7 @@ describe('Fighter Animation System', () => {
     });
 
     it('keeps silhouette before reveal and showcases living FighterAvatar upon reveal in UnlockReveal', () => {
+      jest.useFakeTimers();
       const save = createNewSave();
       const { getByTestId, queryByTestId } = render(
         <UnlockReveal
@@ -469,7 +470,9 @@ describe('Fighter Animation System', () => {
       );
 
       expect(queryByTestId('unlock-revealed-fighter')).toBeNull();
+      // The reward turns into view (UnlockReveal: about 0.8 s from the tap to the buttons)
       fireEvent.press(getByTestId('unlock-reveal'));
+      act(() => { jest.advanceTimersByTime(1000); });
       const revealed = getByTestId('unlock-revealed-fighter');
       expect(revealed).toBeTruthy();
       expect(revealed.props.accessibilityLabel).toContain('Sly Fox');

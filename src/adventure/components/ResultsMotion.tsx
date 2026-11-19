@@ -27,6 +27,8 @@ export const COIN_BREATH_MS = 320;
 export const coinStartMs = (stars: number): number => (stars > 0 ? starLandMs(stars - 1) : 0) + COIN_BREATH_MS;
 /** When the goal rows that did not earn a star show their ✗: after the last hit */
 export const missesShownMs = (stars: number): number => (stars > 0 ? starLandMs(stars - 1) + 160 : 160);
+/** After the last unlock reveal closes: the payout (or, with no coins, the fighter's cheer) starts this long after */
+export const REVEAL_PAYOUT_MS = 450;
 /** The fighter's cheer starts this long after the last star hits (after the ring has gone out) */
 export const FIGHTER_CHEER_LAG_MS = 200;
 /** A ✓ lands just behind its star: the star is the hero, the tick is its echo */

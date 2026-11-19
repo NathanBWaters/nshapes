@@ -409,6 +409,7 @@ describe('the screens around it', () => {
   });
 
   it('opening a secret path is revealed, and the reveal leads to the map', () => {
+    jest.useFakeTimers();
     const shown = jest.fn();
     const done = jest.fn();
     const view = render(
@@ -424,7 +425,9 @@ describe('the screens around it', () => {
     expect(view.getByText('You found a secret path!')).toBeTruthy();
     // Nothing names it before the reveal
     expect(view.queryByText(DUMMY.name)).toBeNull();
+    // The reward turns into view (UnlockReveal: about 0.8 s from the tap to the buttons)
     fireEvent.press(view.getByTestId('unlock-reveal'));
+    act(() => { jest.advanceTimersByTime(1000); });
     expect(view.getByText(DUMMY.name)).toBeTruthy();
     expect(view.getByText(MECHANICS[DUMMY.introduces].body[0])).toBeTruthy();
     fireEvent.press(view.getByTestId('unlock-primary'));

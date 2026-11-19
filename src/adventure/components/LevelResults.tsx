@@ -25,7 +25,7 @@ import { shouldShowDamageNumbers, companionResultsLine } from '../coach';
 import CompanionBubble from './CompanionBubble';
 import { explainStarBreakdown } from '../engine/challenges';
 import { Btn, INK, starLandMs, StarRow, TONE } from './ui';
-import { coinRollAmount, coinRollTicks, coinStartMs, CountingCoinPill, FadeAt, FIGHTER_CHEER_LAG_MS, missesShownMs, ResultsCard, ResultStars, TICK_LAG_MS, TickAt } from './ResultsMotion';
+import { coinRollAmount, coinRollTicks, coinStartMs, CountingCoinPill, FadeAt, FIGHTER_CHEER_LAG_MS, missesShownMs, REVEAL_PAYOUT_MS, ResultsCard, ResultStars, TICK_LAG_MS, TickAt } from './ResultsMotion';
 import { Silhouette, UnlockableAvatar, describeRewardUnlocks, describeUnlock } from './rewards';
 import type { FunRating, FunTag } from '@/analytics/fightEvent';
 import RoundFunPrompt from '@/components/RoundFunPrompt';
@@ -107,12 +107,14 @@ const LevelResults: React.FC<Props> = ({
 
   // The fighter cheers last, when the payout is done (on the coin bell, or after the stars when no
   // coins count): the leap answers the stars and coins, it never competes with them
+  // (When an unlock reveal is coming, not before it closes: the reveal would cover the leap mid-air.)
   const [cheer, setCheer] = useState(reduced || stars === 0);
+  const firstRevealed = React.useRef(unlocksRevealed);
   useEffect(() => {
-    if (cheer || coinsCount) return;
-    const t = setTimeout(() => setCheer(true), starLandMs(stars - 1) + FIGHTER_CHEER_LAG_MS);
+    if (cheer || coinsCount || !unlocksRevealed) return;
+    const t = setTimeout(() => setCheer(true), firstRevealed.current ? starLandMs(stars - 1) + FIGHTER_CHEER_LAG_MS : REVEAL_PAYOUT_MS);
     return () => clearTimeout(t);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [unlocksRevealed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const rollTicks = coinRollTicks(rollAmount);
   // The payout starts once the player can see it: after the stars, or, when an unlock
@@ -124,7 +126,7 @@ const LevelResults: React.FC<Props> = ({
     const t = setTimeout(() => {
       band.cue('coinRoll', { amount: rollAmount });
       setPaying(true);
-    }, revealedAtStart.current ? coinStartMs(stars) : 450);
+    }, revealedAtStart.current ? coinStartMs(stars) : REVEAL_PAYOUT_MS);
     return () => clearTimeout(t);
   }, [unlocksRevealed]); // eslint-disable-line react-hooks/exhaustive-deps
 

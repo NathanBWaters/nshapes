@@ -4,7 +4,7 @@
  * first-evolution lesson, rendered with the real components.
  */
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render, fireEvent, act } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Camp from '@/adventure/components/Camp';
 import FieldGuide from '@/adventure/components/FieldGuide';
@@ -285,6 +285,7 @@ describe('Field Guide', () => {
 
 describe('Unlock reveals', () => {
   it('reveals the Workshop (and opens it) and a first evolution with how it works', () => {
+    jest.useFakeTimers();
     let opened = false;
     const view = render(
       <UnlockReveal
@@ -297,7 +298,9 @@ describe('Unlock reveals', () => {
       />
     );
     expect(view.getByText('The Workshop unlocked!')).toBeTruthy();
+    // The reward turns into view (UnlockReveal: about 0.8 s from the tap to the buttons)
     fireEvent.press(view.getByTestId('unlock-reveal'));
+    act(() => { jest.advanceTimersByTime(1000); });
     fireEvent.press(view.getByTestId('unlock-primary'));
     expect(opened).toBe(true);
 
@@ -312,19 +315,24 @@ describe('Unlock reveals', () => {
       />
     );
     expect(view.getByText('New evolution unlocked!')).toBeTruthy();
+    // The reward turns into view (UnlockReveal: about 0.8 s from the tap to the buttons)
     fireEvent.press(view.getByTestId('unlock-reveal'));
+    act(() => { jest.advanceTimersByTime(1000); });
     expect(view.getByText(recipe.name)).toBeTruthy();
     expect(view.getByText(`Armed by: ${recipe.familyText}`)).toBeTruthy();
   });
 
   it('a new fighter names its passives and points at its trial; once the trial is played the reveal explains them', () => {
+    jest.useFakeTimers();
     const fox = getFighter('Sly Fox');
     const trial = LEVELS.find(l => l.branchOf && l.introduces === fox.signature);
     const reveal = (save: AdventureSave) => {
       const view = render(
         <UnlockReveal unlocks={[{ kind: 'fighter', name: fox.name, star: 3 }]} save={save} onUseFighter={() => {}} onEquipCharm={() => {}} onDone={() => {}} />
       );
+      // The reward turns into view (UnlockReveal: about 0.8 s from the tap to the buttons)
       fireEvent.press(view.getByTestId('unlock-reveal'));
+      act(() => { jest.advanceTimersByTime(1000); });
       return view;
     };
     if (trial) {

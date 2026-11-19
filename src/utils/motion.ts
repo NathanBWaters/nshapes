@@ -165,6 +165,8 @@ export const SCALE = {
   reward: 1.18,
   /** How big a slammed reward (a results star) starts before it falls into its slot */
   slam: 1.5,
+  /** Anticipation before a hero turns or launches: it gathers itself to this, then goes */
+  windup: 0.9,
 } as const;
 
 /** Squash and stretch keep the volume: scaleX × scaleY stays near 1. */

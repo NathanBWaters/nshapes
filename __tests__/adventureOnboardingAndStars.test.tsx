@@ -731,6 +731,7 @@ describe('Adventure first minutes: the screens', () => {
   });
 
   it('offers one-tap belt swap on UnlockReveal when charm slots are full', () => {
+    jest.useFakeTimers();
     let save = createSaveBefore('1-4');
     // Ensure belt is full and pick a real unowned Armory weapon to unlock
     save = applyLevelResult(save, getLevel('1-3'), 3, 0).save;
@@ -748,7 +749,9 @@ describe('Adventure first minutes: the screens', () => {
         onDone={() => {}}
       />
     ));
+    // The reward turns into view (UnlockReveal: about 0.8 s from the tap to the buttons)
     fireEvent.press(screen.getByTestId('unlock-reveal'));
+    act(() => { jest.advanceTimersByTime(1000); });
     expect(screen.getByTestId('unlock-swap-box')).toBeTruthy();
     fireEvent.press(screen.getByTestId(`unlock-swap-${fullSave.charms[0]}`));
     expect(onSwapCharm).toHaveBeenCalledWith(fullSave.charms[0], extraId);

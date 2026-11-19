@@ -2,11 +2,20 @@
  * Unlock reveal — every new fighter or weapon gets its own full-screen moment:
  * a silhouette on a field of light, a tap to reveal, then a card explaining
  * exactly how the new thing works and a button to start using it.
+ *
+ * Motion (review: docs/motion/reviews/unlock-reveal.md): the dark screen comes up,
+ * then the medallion. The tap winds the medallion in (SCALE.windup), it turns edge-on
+ * like a card and comes round showing the reward (the swap happens on the edge, never
+ * in sight), lands with one accent ring and its sound; then the name, the companion and
+ * the card rise in after it, and only then does the new fighter act. No flash.
+ * Reduced motion: the faces cross-fade, nothing turns, rays stand still.
  */
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
-import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, Easing, cancelAnimation } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, withDelay, withSpring, Easing, cancelAnimation, runOnJS, ReduceMotion } from 'react-native-reanimated';
+import { EASE, MS, SCALE, SPRING, STAGGER } from '@/utils/motion';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import Icon from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
@@ -42,18 +51,52 @@ const MUTED = DARK.muted;
 /** Weapon text was written for score-based modes. In Adventure a point is a point of damage. */
 const adventureText = (t: string) => t.replace(/\+(\d+) points?/g, '+$1 damage');
 
-const Rays: React.FC<{ color: string }> = ({ color }) => {
+/** The tap winds the medallion in for this long, then it turns */
+const WINDUP_MS = MS.feedback;
+/** Each half of the turn (to edge-on, and back round) */
+const TURN_MS = MS.feedback;
+/** Held edge-on for 2 frames: the face is swapped here, out of sight */
+const EDGE_HOLD_MS = 32;
+/** About when the face is swapped: by the turn itself, on the frame it is edge-on (inside the hold) */
+const SWAP_MS = WINDUP_MS + TURN_MS + 16;
+/** The reward has come round to full width (the spring takes ~7 frames from edge-on): its ring and its sound land here */
+const LAND_MS = WINDUP_MS + TURN_MS + EDGE_HOLD_MS + 144;
+/** The words follow the medallion: name, companion, card, then the buttons */
+const detailAt = (k: number) => LAND_MS + 100 + k * STAGGER.item;
+/** The revealed creature starts acting once its name is up */
+const ACT_MS = detailAt(3) + MS.move;
+
+/** Opening: the dark screen, then the headline, then the medallion */
+const OPEN_TEXT_MS = MS.quick - 40;
+const OPEN_HERO_MS = OPEN_TEXT_MS + 80;
+
+/** Rises into place `delay` ms after it mounts (remount it with a key to play again). Reduced motion: fades. */
+/** Fades still play under reduced motion (Reanimated would otherwise jump them to the end): they carry the meaning */
+const KEEP = ReduceMotion.Never;
+
+const Rise: React.FC<{ delay: number; reduced: boolean; style?: object; children: React.ReactNode }> = ({ delay, reduced, style, children }) => {
+  const o = useSharedValue(0);
+  const y = useSharedValue(reduced ? 0 : 14);
+  useEffect(() => {
+    o.value = withDelay(reduced ? Math.round(delay / 3) : delay, withTiming(1, { duration: MS.quick, easing: EASE.ui, reduceMotion: KEEP }), KEEP);
+    if (!reduced) y.value = withDelay(delay, withTiming(0, { duration: MS.move, easing: EASE.enter }));
+  }, [delay, reduced, o, y]);
+  const a = useAnimatedStyle(() => ({ opacity: o.value, transform: [{ translateY: y.value }] }));
+  return <Animated.View style={[a, style]}>{children}</Animated.View>;
+};
+
+const Rays: React.FC<{ color: string; still: boolean }> = ({ color, still }) => {
   const appActive = useAppActive();
   const rot = useSharedValue(0);
   useEffect(() => {
-    if (!appActive) {
+    if (!appActive || still) {
       cancelAnimation(rot);
       return;
     }
     rot.value = 0;
     rot.value = withRepeat(withTiming(360, { duration: 26000, easing: Easing.linear }), -1);
     return () => cancelAnimation(rot);
-  }, [appActive, rot]);
+  }, [appActive, still, rot]);
   const style = useAnimatedStyle(() => ({ transform: [{ rotate: `${rot.value}deg` }] }));
   return (
     <Animated.View style={[st.rays, style]} pointerEvents="none">
@@ -81,16 +124,33 @@ interface Props {
 const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCharm, onSwapCharm, onEquipArcana, onOpenFeature, onShowPath, onDone }) => {
   // (read from the context, so the reveal also stands alone where there is no safe-area provider)
   const insets = useContext(SafeAreaInsetsContext) ?? NO_INSETS;
+  const reduced = useReducedMotion();
   const [i, setI] = useState(0);
   const [revealed, setRevealed] = useState(false);
-  const flash = useSharedValue(0);
-  const scale = useSharedValue(1);
-  const detail = useSharedValue(0);
+  /** The revealed creature acts only once its name is up (its leap must not compete with the turn) */
+  const [acting, setActing] = useState(false);
+  const backdrop = useSharedValue(0);
+  const opened = useSharedValue(0);
+  const press = useSharedValue(1);
+  const turn = useSharedValue(1);
+  /** Reduced motion: the medallion's face cross-fades instead of turning */
+  const face = useSharedValue(1);
+  const ring = useSharedValue(0);
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const revealing = useRef(false);
+  const later = (ms: number, fn: () => void) => { timers.current.push(setTimeout(fn, ms)); };
+  useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
   useEffect(() => {
     setI(0);
     setRevealed(false);
-  }, [unlocks]);
+    setActing(false);
+    // The dark screen first, then what is on it: no words over the results' words
+    backdrop.value = 0;
+    backdrop.value = withTiming(1, { duration: MS.quick, easing: EASE.ui, reduceMotion: KEEP });
+    opened.value = reduced ? 1 : 0;
+    if (!reduced) opened.value = withDelay(OPEN_HERO_MS, withSpring(1, SPRING.lively));
+  }, [unlocks]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // A weapon the player already owns growing a level is good news, not a mystery: it is shown at once.
   // (After a boss a dozen of these can arrive together; a tap to unwrap each one made the win drag.)
@@ -99,13 +159,21 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
   useEffect(() => {
     if (isLevelUp) {
       setRevealed(true);
-      detail.value = 1;
+      setActing(true);
     }
-  }, [i, isLevelUp, detail]);
+  }, [i, isLevelUp]);
 
-  const flashStyle = useAnimatedStyle(() => ({ opacity: flash.value }));
-  const heroStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
-  const detailStyle = useAnimatedStyle(() => ({ opacity: detail.value, transform: [{ translateY: (1 - detail.value) * 12 }] }));
+  const backdropStyle = useAnimatedStyle(() => ({ opacity: backdrop.value }));
+  // The medallion arrives from 0.7 on a lively spring; its fade is flat and quick (opacity never bounces)
+  const openStyle = useAnimatedStyle(() => ({
+    opacity: Math.min(1, opened.value * 2.5),
+    transform: [{ scale: 0.7 + 0.3 * opened.value }],
+  }));
+  const heroStyle = useAnimatedStyle(() => ({ opacity: face.value, transform: [{ scale: press.value }, { scaleX: turn.value }] }));
+  const ringStyle = useAnimatedStyle(() => ({
+    opacity: ring.value <= 0 || ring.value >= 1 ? 0 : 0.85 * (1 - ring.value),
+    transform: [{ scale: 0.95 + ring.value * 0.75 }],
+  }));
 
   const u = unlocks[i];
   if (!u) return null;
@@ -129,20 +197,51 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
   const evoMechanic = evo && evoId ? MECHANICS[evoId] : null;
 
   const reveal = () => {
-    // A weapon is introduced by its own voice, a recipe by its fanfare
-    if (u.kind === 'weapon') band.audition(u.id);
-    else if (u.kind === 'evolution') band.auditionEvolution(u.id);
-    else sfx('unlock');
-    setRevealed(true);
-    flash.value = withSequence(withTiming(0.9, { duration: 70 }), withTiming(0, { duration: 380, easing: Easing.out(Easing.quad) }));
-    scale.value = withSequence(withTiming(1.12, { duration: 140, easing: Easing.out(Easing.cubic) }), withTiming(1, { duration: 160, easing: Easing.inOut(Easing.quad) }));
-    detail.value = 0;
-    detail.value = withTiming(1, { duration: 260, easing: Easing.out(Easing.cubic) });
+    if (revealing.current || revealed) return;
+    revealing.current = true;
+    // A weapon is introduced by its own voice, a recipe by its fanfare: on the frame the reward lands
+    const sound = () => {
+      if (u.kind === 'weapon') band.audition(u.id);
+      else if (u.kind === 'evolution') band.auditionEvolution(u.id);
+      else sfx('unlock');
+    };
+    const done = () => { revealing.current = false; };
+    if (reduced) {
+      // The faces cross-fade through the dark: no wind-up, no turn, no ring
+      face.value = withSequence(
+        KEEP,
+        withTiming(0, { duration: MS.feedback, easing: EASE.ui, reduceMotion: KEEP }, finished => { if (finished) runOnJS(setRevealed)(true); }),
+        withTiming(1, { duration: MS.quick, easing: EASE.ui, reduceMotion: KEEP })
+      );
+      later(MS.feedback + 16, sound);
+      later(MS.feedback + MS.quick, () => { setActing(true); done(); });
+      return;
+    }
+    // Wind in, turn edge-on (EASE.impact: it speeds into the edge), hold, swap the face, come round on a spring
+    press.value = withSequence(
+      withTiming(SCALE.windup, { duration: WINDUP_MS, easing: EASE.ui }),
+      withDelay(TURN_MS + EDGE_HOLD_MS, withSpring(1, SPRING.lively))
+    );
+    turn.value = withDelay(
+      WINDUP_MS,
+      withSequence(
+        // Swapped by the turn itself once it is edge-on, so the old face is never seen to change
+        withTiming(0, { duration: TURN_MS, easing: EASE.impact }, finished => { if (finished) runOnJS(setRevealed)(true); }),
+        withDelay(EDGE_HOLD_MS, withSpring(1, SPRING.lively))
+      )
+    );
+    ring.value = 0;
+    ring.value = withDelay(LAND_MS, withTiming(1, { duration: MS.move, easing: EASE.enter }));
+    // Backstop for the swap, still inside the edge-on hold (where there are no frames, as in tests)
+    later(WINDUP_MS + TURN_MS + EDGE_HOLD_MS, () => setRevealed(true));
+    later(LAND_MS, sound);
+    later(ACT_MS, () => { setActing(true); done(); });
   };
 
   const advance = () => {
     if (i + 1 < unlocks.length) {
       setRevealed(false);
+      setActing(false);
       setI(i + 1);
     } else onDone();
   };
@@ -152,15 +251,18 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
   const arcanaEquipped = u.kind === 'arcana' && equippedArcanaOf(save).includes(u.id);
   const sourceLabel = path ? 'Secret' : u.star === 0 ? 'Bounty reward' : `${'★'.repeat(u.star)} reward`;
   return (
-    <Modal visible transparent animationType="fade">
+    <Modal visible transparent animationType="none">
       <View testID="unlock-modal" style={[st.overlay, { paddingTop: insets.top }]}>
-        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: '#FFFFFF' }, flashStyle]} pointerEvents="none" />
+        <Animated.View style={[StyleSheet.absoluteFill, st.backdrop, backdropStyle]} pointerEvents="none" />
         <ScrollView contentContainerStyle={st.scroll} bounces={false}>
-          <Text style={st.eyebrow}>{sourceLabel}{unlocks.length > 1 ? `  ·  ${i + 1} of ${unlocks.length}` : ''}</Text>
-          <Text style={st.headline}>{display.headline}</Text>
+          <Rise delay={OPEN_TEXT_MS} reduced={reduced} style={st.heads}>
+            <Text style={st.eyebrow}>{sourceLabel}{unlocks.length > 1 ? `  ·  ${i + 1} of ${unlocks.length}` : ''}</Text>
+            <Text style={st.headline}>{display.headline}</Text>
+          </Rise>
 
-          <View style={st.heroWrap}>
-            <Rays color={accent} />
+          <Animated.View style={[st.heroWrap, openStyle]}>
+            <Rays color={accent} still={reduced} />
+            <Animated.View pointerEvents="none" style={[st.revealRing, { borderColor: accent }, ringStyle]} />
             <Animated.View style={[st.hero, { borderColor: accent, backgroundColor: revealed ? COLORS.canvasWhite : '#151413' }, heroStyle]} onTouchEnd={revealed ? undefined : reveal}>
               {revealed && fighter ? (
                 <FighterAvatar
@@ -168,7 +270,7 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                   character={fighter.name}
                   size={116}
                   mood="victory"
-                  reaction={{ type: 'ecstatic', id: i + 1 }}
+                  reaction={acting ? { type: 'ecstatic', id: i + 1 } : null}
                   interactive
                 />
               ) : revealed && w ? (
@@ -179,23 +281,26 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                   interactive
                 />
               ) : revealed && path ? (
-                <EnemyAvatar testID="unlock-revealed-path" enemy={levelFoe(path)} size={108} mood="idle" reaction={{ type: 'entrance', id: i + 1 }} interactive />
+                <EnemyAvatar testID="unlock-revealed-path" enemy={levelFoe(path)} size={108} mood="idle" reaction={acting ? { type: 'entrance', id: i + 1 } : null} interactive />
               ) : (
                 <Icon name={icon} size={92} color={revealed ? INK : '#050505'} />
               )}
               {!revealed && <Text style={st.heroQ}>?</Text>}
             </Animated.View>
-          </View>
+          </Animated.View>
 
           {!revealed ? (
-            <>
+            <Rise key={`tease-${i}`} delay={OPEN_HERO_MS + MS.feedback} reduced={reduced}>
               <Text style={st.tease}>{display.tease}</Text>
-            </>
+            </Rise>
           ) : (
-            <Animated.View style={[{ alignSelf: 'stretch', gap: 12, alignItems: 'center' }, detailStyle]}>
-              <Text style={st.name}>{display.name}</Text>
-              {display.badge && <Text style={[st.rarity, { color: accent }]}>{display.badge}</Text>}
+            <View key={`detail-${i}`} style={{ alignSelf: 'stretch', gap: 12, alignItems: 'center' }}>
+              <Rise delay={isLevelUp ? 0 : detailAt(0) - SWAP_MS} reduced={reduced} style={{ alignItems: 'center', gap: 4 }}>
+                <Text style={st.name}>{display.name}</Text>
+                {display.badge && <Text style={[st.rarity, { color: accent }]}>{display.badge}</Text>}
+              </Rise>
 
+              <Rise delay={isLevelUp ? STAGGER.item : detailAt(1) - SWAP_MS} reduced={reduced} style={{ alignSelf: 'stretch' }}>
               <CompanionBubble
                 character={fighter ? fighter.name : save.selectedFighter}
                 tone="dark"
@@ -210,7 +315,9 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                 }
                 style={{ alignSelf: 'stretch' }}
               />
+              </Rise>
 
+              <Rise delay={isLevelUp ? 2 * STAGGER.item : detailAt(2) - SWAP_MS} reduced={reduced} style={{ alignSelf: 'stretch' }}>
               <View style={st.card}>
                 <Text style={st.cardTitle}>{path ? 'What is it?' : 'How it works'}</Text>
                 {path && (
@@ -326,19 +433,21 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                   </>
                 )}
               </View>
-
-            </Animated.View>
+              </Rise>
+            </View>
           )}
         </ScrollView>
 
         {/* What to do with it: always in reach, whatever the screen size */}
         <View style={[st.footer, { paddingBottom: Math.max(insets.bottom, 18) }]}>
           {!revealed ? (
+            <Rise key={`reveal-${i}`} delay={OPEN_HERO_MS + MS.feedback} reduced={reduced} style={st.footerInner}>
             <TouchableOpacity testID="unlock-reveal" onPress={reveal} style={st.cta} activeOpacity={0.85}>
               <Text style={st.ctaText}>Reveal</Text>
             </TouchableOpacity>
+            </Rise>
           ) : (
-            <>
+            <Rise key={`act-${i}`} delay={isLevelUp ? 2 * STAGGER.item : detailAt(2) - SWAP_MS} reduced={reduced} style={st.footerInner}>
         {fighter && (
           <>
             <TouchableOpacity testID="unlock-primary" onPress={() => { sfx('confirm'); onUseFighter(fighter.name); advance(); }} style={st.cta} activeOpacity={0.85}>
@@ -440,7 +549,7 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
             </>
           )
         )}
-            </>
+            </Rise>
           )}
         </View>
       </View>
@@ -450,9 +559,14 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
 
 const st = StyleSheet.create({
   // Opaque: whatever is behind it (the results screen) would only be noise
-  overlay: { flex: 1, backgroundColor: '#0B0B0C' },
-  scroll: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', padding: 20, paddingBottom: 12, gap: 12, maxWidth: 460, width: '100%', alignSelf: 'center' },
-  footer: { alignSelf: 'center', width: '100%', maxWidth: 460, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 18, gap: 4, alignItems: 'center', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)' },
+  overlay: { flex: 1 },
+  backdrop: { backgroundColor: '#0B0B0C' },
+  // Top-aligned, so the headline and the medallion stay put when the details arrive under them
+  scroll: { flexGrow: 1, alignItems: 'center', justifyContent: 'flex-start', padding: 20, paddingTop: 36, paddingBottom: 12, gap: 12, maxWidth: 460, width: '100%', alignSelf: 'center' },
+  footer: { alignSelf: 'center', width: '100%', maxWidth: 460, minHeight: 74, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 18, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)' },
+  footerInner: { alignSelf: 'stretch', gap: 4, alignItems: 'center' },
+  heads: { alignItems: 'center', gap: 12 },
+  revealRing: { position: 'absolute', width: 150, height: 150, borderRadius: 75, borderWidth: 4 },
   eyebrow: { color: GOLD, fontWeight: '800', letterSpacing: 2.5, fontSize: 12, textTransform: 'uppercase' },
   headline: { color: COLORS.canvasWhite, fontWeight: '900', fontSize: 28, textAlign: 'center' },
   heroWrap: { width: 210, height: 200, alignItems: 'center', justifyContent: 'center', marginVertical: 2 },
