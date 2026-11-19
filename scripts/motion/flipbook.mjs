@@ -12,6 +12,7 @@
  *   node scripts/motion/flipbook.mjs --pair "A Set lands|motion-out/fight-set/before|motion-out/fight-set/r2" \
  *        --pair "The preview opens|motion-out/preview-open/before|motion-out/preview-open/r1" --out night.html
  *        [--width 240] [--every 1] [--quality 0.6] [--title "Motion review"]
+ *   A pair can show part of a long capture and carry a note: --pair "Title|dirA|dirB|from|to|What changed"
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -81,7 +82,11 @@ const PLAYER = `
     const speed = el.querySelector('.speed');
     const count = Math.max(...data.clips.map(c => c.urls.length));
     range.max = String(count - 1);
-    let i = 0, playing = true, rate = 1, last = 0, acc = 0, hold = 0;
+    // Films start paused for people who asked their device for less motion, and wait while off screen
+    const calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let i = 0, playing = !calm, rate = 1, last = 0, acc = 0, hold = 0, seen = true;
+    if (window.IntersectionObserver) new IntersectionObserver(entries => { seen = entries[0].isIntersecting; }, { rootMargin: '120px' }).observe(el);
+    if (calm) play.textContent = 'Play';
     const show = () => {
       data.clips.forEach((c, k) => { imgs[k].src = c.urls[Math.min(i, c.urls.length - 1)]; });
       const frame = data.clips[0].indices[Math.min(i, data.clips[0].indices.length - 1)];
@@ -89,8 +94,8 @@ const PLAYER = `
       range.value = String(i);
     };
     const tick = now => {
-      if (playing) {
-        acc += (now - last) * rate;
+      if (playing && seen) {
+        acc += Math.min(100, now - last) * rate;
         const per = data.step * data.every;
         while (acc >= per) {
           acc -= per;
@@ -143,8 +148,8 @@ export async function buildFlipbook(pairs, options = {}) {
   const sections = [];
   for (const pair of pairs) {
     const captures = pair.dirs.map(d => readJson(path.join(d, 'capture.json')));
-    const to = (options.to ?? Math.max(...captures.map(activeRange))) + 12;
-    const from = options.from ?? -Math.min(4, ...captures.map(c => c.preroll));
+    const to = pair.to ?? (options.to ?? Math.max(...captures.map(activeRange))) + 12;
+    const from = pair.from ?? options.from ?? -Math.min(4, ...captures.map(c => c.preroll));
     const clips = [];
     for (const dir of pair.dirs) clips.push(await loadClip(page, dir, { from, to, every, width, quality }));
     const data = { step: clips[0].step, every, clips: clips.map(c => ({ urls: c.urls, indices: c.indices })) };
@@ -167,10 +172,16 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const raw = process.argv.slice(2);
   const pairs = [];
+  // --pair "Title|dirA|dirB" or, to show part of a long capture and say something about it,
+  // --pair "Title|dirA|dirB|from|to|A note under the title"
   raw.forEach((a, i) => {
     if (a !== '--pair' || !raw[i + 1]) return;
-    const [title, ...dirs] = raw[i + 1].split('|');
-    pairs.push({ title, dirs: dirs.map(d => path.resolve(d)) });
+    const [title, dirA, dirB, from, to, note] = raw[i + 1].split('|');
+    const pair = { title, dirs: [dirA, dirB].filter(Boolean).map(d => path.resolve(d)) };
+    if (from !== undefined && from !== '') pair.from = Number(from);
+    if (to !== undefined && to !== '') pair.to = Number(to);
+    if (note) pair.note = note;
+    pairs.push(pair);
   });
   if (!pairs.length) {
     if (!args._.length) throw new Error('usage: node scripts/motion/flipbook.mjs <captureDir> [<captureDir>] [--out file.html]  |  --pair "Title|dirA|dirB" …');
