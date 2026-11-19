@@ -21,6 +21,7 @@ import { useAutoPlayer } from '@/hooks/useAutoPlayer';
 import { useScreenShake } from '@/hooks/useScreenShake';
 import { useParticles } from '@/hooks/useParticles';
 import { DURATION } from '@/utils/animation';
+import { STAGGER } from '@/utils/motion';
 import { triggerHaptic, selectionHaptic } from '@/utils/haptics';
 import { playSelect, playSound } from '@/utils/sounds';
 import {
@@ -254,6 +255,21 @@ const GameBoard: React.FC<GameBoardProps> = ({
   for (let i = 0; i < cards.length; i += COLUMNS) {
     rows.push(cards.slice(i, i + COLUMNS));
   }
+
+  // Cards that arrive together are dealt as one sweep from the top left: each diagonal (row + column)
+  // of the new cards starts STAGGER.card after the one before, the whole sweep within
+  // CARD_MOTION.dealSweepMs (a full board at the start of a fight) (cards already on the board: no delay)
+  const seenCardIdsRef = useRef<Set<string> | null>(null);
+  const dealDelays = useMemo(() => {
+    const seen = seenCardIdsRef.current;
+    const fresh = cards.map((c, i) => ({ id: c.id, diagonal: Math.floor(i / COLUMNS) + (i % COLUMNS) })).filter(c => !seen || !seen.has(c.id));
+    const diagonals = [...new Set(fresh.map(c => c.diagonal))].sort((a, b) => a - b);
+    const gap = diagonals.length > 1 ? Math.min(STAGGER.card, CARD_MOTION.dealSweepMs / (diagonals.length - 1)) : 0;
+    return new Map(fresh.map(c => [c.id, Math.round(diagonals.indexOf(c.diagonal) * gap)]));
+  }, [cards]);
+  useEffect(() => {
+    seenCardIdsRef.current = new Set(cards.map(c => c.id));
+  }, [cards]);
 
   // When the board changes, clear matched state and hints, but preserve valid selections
   useEffect(() => {
@@ -655,7 +671,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
                         <RewardReveal reward={reward} />
                       )
                     ) : (
-                      <CardMotion selected={isSelected} pointedOut={isHint} column={colIndex}>
+                      <CardMotion selected={isSelected} pointedOut={isHint} dealDelayMs={dealDelays.get(card.id) ?? 0}>
                         <Card
                           card={cardWithState}
                           onClick={stableHandleCardClick}

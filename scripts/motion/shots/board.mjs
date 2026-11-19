@@ -3,6 +3,8 @@ import { intoFight, mapPath, slotOf, thirdCard } from '../shot-kit.mjs';
 
 export default {
   'board-set': thirdCard('board-set', 'The same Set as fight-set, board only: the cards leaving and the new ones arriving', true, { clip: 'game-board' }),
+  // 1-2: no weapon removes extra cards, so only the Set's three slots empty and refill
+  'board-deal': thirdCard('board-deal', 'A Set on a quiet board (1-2), board only: the three slots empty and the next cards are dealt in', true, { clip: 'game-board', frames: 72 }, '1-2'),
   'board-miss': thirdCard('board-miss', 'The same mistake as fight-miss, board only', false, { clip: 'game-board' }),
   'fight-pick': {
     id: 'fight-pick',
