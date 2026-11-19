@@ -387,6 +387,8 @@ async function captureOnce(shot, opts, outDir) {
   const ambient = opts.preroll > 1 ? Math.max(0, ...activity.slice(1)) : 0;
   const quiet = ambient * 1.5 + 2;
 
+  // The page's own (virtual) time at the trigger: sound cues are logged against it
+  const triggerAt = (await inPage(() => performance.now())) ?? 0;
   await shot.trigger(page, helpers);
   await flush();
 
@@ -430,6 +432,10 @@ async function captureOnce(shot, opts, outDir) {
     seam = { frame: shot.loop.frames, ratio: d.changed / (a.width * a.height) };
   }
 
+  // Sound cannot be heard here, so it is timed: in dev builds the band logs when each cue will sound
+  const cueLog = (await inPage(() => (Array.isArray(window.__nshapesCueLog) ? window.__nshapesCueLog.map(c => ({ name: String(c.name), t: Number(c.t) })) : null))) ?? null;
+  const cues = cueLog ? cueLog.filter(c => Number.isFinite(c.t) && c.t >= triggerAt - step).map(c => ({ name: c.name, frame: Math.round(((c.t - triggerAt) / step) * 10) / 10 })) : null;
+
   await browser.close();
   const capture = {
     shot: { id: shot.id, about: shot.about ?? '', path: shot.path },
@@ -452,6 +458,7 @@ async function captureOnce(shot, opts, outDir) {
     boxes,
     roi: roi ? padBox(roi, 10, { width: bounds.width * opts.dpr, height: bounds.height * opts.dpr }) : null,
     cssAnimations,
+    cues,
     seam,
     problems,
     tracks: moved,

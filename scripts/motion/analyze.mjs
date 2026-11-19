@@ -382,6 +382,15 @@ export function analyze(dir) {
   });
   if (hints.length > 20) lines.push(`- …and ${hints.length - 20} more (see analysis.json).`);
   lines.push('');
+  if (capture.cues) {
+    lines.push('## Sound cues (when each will be heard; a cue belongs on its picture\'s frame or one frame after, never before)');
+    lines.push('');
+    if (!capture.cues.length) lines.push('_None after the trigger._');
+    const byName = new Map();
+    for (const c of capture.cues) byName.set(c.name, [...(byName.get(c.name) ?? []), c.frame]);
+    for (const [name, frames] of byName) lines.push(`- \`${name}\`: ${frames.slice(0, 14).map(fr => `f${fr}`).join(' ')}${frames.length > 14 ? ' …' : ''}`);
+    lines.push('');
+  }
   const report = lines.join('\n');
   fs.writeFileSync(path.join(dir, 'report.md'), report + '\n');
   fs.writeFileSync(path.join(dir, 'analysis.json'), JSON.stringify({ timeline, groups: groups.map(g => ({ label: g.label, shape: g.shape, starts: g.members.map(m => m.from) })), movers, hints }, null, 1));
