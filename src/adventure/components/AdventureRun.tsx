@@ -965,7 +965,7 @@ const AdventureRun: React.FC<Props> = ({
           </View>
         ) : spireContext?.hideChallenge ? (
           <View style={st.challenge} testID="run-spire-bar">
-            <Icon name="lorc/mountaintop" size={14} color={TONE.arcana} />
+            <Icon name="lorc/mountaintop" size={14} color={TONE.upside} />
             <Text style={st.challengeText} numberOfLines={1}>
               {spireContext.floorLabel} · {spireContext.nodeLabel}
             </Text>

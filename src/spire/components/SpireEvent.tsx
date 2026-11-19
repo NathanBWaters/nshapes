@@ -52,7 +52,7 @@ const SpireEvent: React.FC<Props> = ({
               <Icon name={def.icon} size={28} color={COLORS.canvasWhite} />
             </View>
             <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-              <Eyebrow text="MYSTERY ENCOUNTER" color="#E9D5FF" />
+              <Eyebrow text="MYSTERY ENCOUNTER" color={COLORS.actionYellow} />
               <Text style={st.title}>{def.title}</Text>
             </View>
           </View>
@@ -191,16 +191,16 @@ const SpireEvent: React.FC<Props> = ({
 };
 
 const st = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#1E182B' },
+  root: { flex: 1, backgroundColor: '#2B2118' },
   body: { padding: 14, gap: 12, maxWidth: 500, width: '100%', alignSelf: 'center', paddingBottom: 32 },
-  storyCard: { backgroundColor: DARK.panel, borderRadius: 14, borderWidth: 2.5, borderColor: '#A855F7', padding: 14, gap: 10 },
+  storyCard: { backgroundColor: DARK.panel, borderRadius: 14, borderWidth: 2.5, borderColor: COLORS.actionYellow, padding: 14, gap: 10 },
   storyHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   iconBadge: { width: 48, height: 48, borderRadius: 10, borderWidth: 2, borderColor: COLORS.canvasWhite, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 19, fontWeight: '900', color: DARK.text },
   storyText: { fontSize: 14, lineHeight: 20, color: DARK.text, opacity: 0.92 },
   optList: { gap: 10 },
   optCard: { backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 2.5, borderBottomWidth: 5, borderColor: INK, padding: 12, gap: 4 },
-  optBold: { borderColor: '#7C3AED', backgroundColor: '#FAF5FF' },
+  optBold: { borderColor: '#D97706', backgroundColor: '#FFFBEB' },
   optSafe: { borderColor: TONE.upside, backgroundColor: '#F0FDFA' },
   optHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 },
   optLabel: { fontSize: 15, fontWeight: '900', color: INK },

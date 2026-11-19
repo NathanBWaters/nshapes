@@ -224,11 +224,11 @@ const SpireRewardScreen: React.FC<Props> = ({
                     style={st.arcanaCard}
                     activeOpacity={0.85}
                   >
-                    <View style={[st.iconBox, { backgroundColor: TONE.arcanaPale, borderColor: TONE.arcana }]}>
-                      <Icon name={a.icon} size={22} color={TONE.arcana} />
+                    <View style={[st.iconBox, { backgroundColor: COLORS.paperBeige, borderColor: INK }]}>
+                      <Icon name={a.icon} size={22} color={INK} />
                     </View>
                     <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-                      <Text style={[st.itemName, { color: TONE.arcana }]}>{a.numeral} · {a.name}</Text>
+                      <Text style={st.itemName}>{a.numeral} · {a.name}</Text>
                       <Text style={[st.itemDesc, { color: TONE.upside, fontWeight: '700' }]}>▲ {a.upside}</Text>
                       <Text style={[st.itemDesc, { color: TONE.tradeoff }]}>▼ {a.tradeoff}</Text>
                     </View>
@@ -268,7 +268,7 @@ const SpireRewardScreen: React.FC<Props> = ({
 };
 
 const st = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#1E1B2E' },
+  root: { flex: 1, backgroundColor: '#2B2118' },
   body: { padding: 14, gap: 12, maxWidth: 520, width: '100%', alignSelf: 'center', paddingBottom: 32 },
   bannerCard: { backgroundColor: COLORS.canvasWhite, borderRadius: 14, borderWidth: 3, borderBottomWidth: 6, borderColor: INK, padding: 14, gap: 8 },
   title: { fontSize: 22, fontWeight: '900', color: INK },
@@ -288,10 +288,10 @@ const st = StyleSheet.create({
   nameRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 5 },
   itemName: { flexShrink: 1, fontSize: 14, fontWeight: '900', color: INK },
   itemDesc: { fontSize: 12, color: INK, opacity: 0.85, lineHeight: 16 },
-  evoBadge: { backgroundColor: TONE.arcana, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 },
+  evoBadge: { backgroundColor: TONE.evoReady, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 },
   evoBadgeText: { fontSize: 9, fontWeight: '900', color: COLORS.canvasWhite, letterSpacing: 0.4 },
   skillCard: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 10, borderWidth: 2, borderBottomWidth: 4, borderColor: TONE.upside, backgroundColor: '#F0FDFA', padding: 10 },
-  arcanaCard: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 10, borderWidth: 2, borderBottomWidth: 4, borderColor: TONE.arcana, backgroundColor: TONE.arcanaPale, padding: 10 },
+  arcanaCard: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 10, borderWidth: 2, borderBottomWidth: 4, borderColor: INK, backgroundColor: COLORS.paperBeige, padding: 10 },
 });
 
 export default SpireRewardScreen;

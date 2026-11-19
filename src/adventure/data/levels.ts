@@ -725,7 +725,11 @@ export const getLevel = (id: string): LevelDef => {
 /** The main-path level a branch (or a branch of a branch) ultimately hangs off; a main level is its own root. */
 export const branchRoot = (level: LevelDef): LevelDef => {
   let at = level;
-  for (let guard = 0; at.branchOf && guard < 16; guard++) at = getLevel(at.branchOf);
+  for (let guard = 0; at.branchOf && guard < 16; guard++) {
+    const parent = EVERY_LEVEL.find(x => x.id === at.branchOf);
+    if (!parent) break;
+    at = parent;
+  }
   return at;
 };
 

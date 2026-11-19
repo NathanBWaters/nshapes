@@ -1,6 +1,6 @@
 {
   "name": "nshapes",
-  "version": "0.1.140",
+  "version": "0.1.141",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
@@ -19,8 +19,8 @@
     "test:e2e:adventure": "jest --watchAll=false __tests__/adventureFullGameE2E.test.tsx",
     "test:e2e:battery": "playwright test e2e/battery-budget.spec.ts --project=chromium --reporter=list",
     "test:e2e:layout": "playwright test e2e/layout-text-visibility.spec.ts --project=chromium --reporter=list",
-    "test:e2e:spire": "playwright test e2e/spire-and-parry.spec.ts --project=chromium --reporter=list",
-    "test:e2e:ci": "playwright test e2e/battery-budget.spec.ts e2e/layout-text-visibility.spec.ts e2e/spire-and-parry.spec.ts --project=chromium --reporter=list",
+    "test:e2e:spire": "playwright test e2e/spire-and-parry.spec.ts e2e/menu-resume-integration.spec.ts --project=chromium --reporter=list",
+    "test:e2e:ci": "playwright test e2e/battery-budget.spec.ts e2e/layout-text-visibility.spec.ts e2e/spire-and-parry.spec.ts e2e/menu-resume-integration.spec.ts --project=chromium --reporter=list",
     "verify:guardrails": "npm run typecheck && npm run lint && npm run validate:icons && npm run test:perf",
     "verify:ci": "node scripts/agy-ci-hook.js check",
     "typecheck": "tsc --noEmit",

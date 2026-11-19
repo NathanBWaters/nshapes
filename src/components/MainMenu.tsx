@@ -62,8 +62,8 @@ function MenuButton({
     },
     spire: {
       button: styles.spireButton,
-      iconBg: '#2E234A',
-      iconColor: COLORS.actionYellow,
+      iconBg: COLORS.paperBeige,
+      iconColor: COLORS.slateCharcoal,
       textColor: COLORS.canvasWhite,
     },
     freeplay: {
@@ -354,7 +354,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.actionYellow,
   },
   spireButton: {
-    backgroundColor: '#4C1D95',
+    backgroundColor: COLORS.logicTeal,
     borderColor: COLORS.slateCharcoal,
   },
   freeplayButton: {

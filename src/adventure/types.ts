@@ -395,6 +395,8 @@ export interface LevelDef {
   difficulty: 1 | 2 | 3 | 4 | 5;
   rewards: { star1: RewardDef; star2: RewardDef; star3: RewardDef };
   isBoss?: boolean;
+  /** Elite encounter flag (used by Spire Elites without creating a fake Adventure `branchOf` id) */
+  isElite?: boolean;
   /**
    * Secret side path: hangs off this level on the map, stays hidden until
    * `opensAt` stars are earned there, and never blocks the main path.

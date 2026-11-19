@@ -97,7 +97,7 @@ export const spireEncounterToLevel = (run: SpireRun, encounter: SpireEncounter):
     star3: { coins: encounter.coinReward },
   },
   isBoss: encounter.kind === 'boss',
-  ...(encounter.kind === 'elite' ? { branchOf: 'spire-elite' } : {}),
+  ...(encounter.kind === 'elite' ? { isElite: true } : {}),
 });
 
 /** Build a virtual `AdventureSave` reflecting the Spire run's exact fighter, gear, skills, Arcana, and upgrades. */

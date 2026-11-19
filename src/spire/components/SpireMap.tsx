@@ -28,7 +28,7 @@ const NODE_STYLE: Record<SpireNodeKind, { label: string; icon: IconName; bg: str
   elite: { label: 'Elite', icon: 'lorc/daemon-skull', bg: '#FEE2E2', fg: '#991B1B', border: '#991B1B' },
   shop: { label: 'Shop', icon: 'lorc/crown-coin', bg: '#FEF9C3', fg: '#854D0E', border: '#A16207' },
   campfire: { label: 'Campfire', icon: 'lorc/campfire', bg: '#FFEDD5', fg: '#9A3412', border: '#C2410C' },
-  event: { label: 'Mystery', icon: 'lorc/uncertainty', bg: '#F3E8FF', fg: '#6B21A8', border: '#7C3AED' },
+  event: { label: 'Mystery', icon: 'lorc/uncertainty', bg: '#EFF6FF', fg: '#1D4ED8', border: '#2563EB' },
   treasure: { label: 'Vault', icon: 'skoll/open-treasure-chest', bg: '#CCFBF1', fg: '#115E59', border: '#0F766E' },
   boss: { label: 'ACT BOSS', icon: 'lorc/crown', bg: COLORS.actionYellow, fg: INK, border: INK },
 };
@@ -79,7 +79,7 @@ const SpireMap: React.FC<Props> = ({ run, onSelectNode }) => {
     <View style={[st.root, { backgroundColor: biome.colors.sky }]} testID="spire-map">
       <View style={st.actBanner}>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Eyebrow text={run.endless ? `ENDLESS ACT ${map.act}` : `ACT ${map.act} OF 3`} color={run.endless ? '#E9D5FF' : COLORS.actionYellow} />
+          <Eyebrow text={run.endless ? `ENDLESS ACT ${map.act}` : `ACT ${map.act} OF 3`} color={run.endless ? COLORS.impactOrange : COLORS.actionYellow} />
           <Text style={st.actTitle} numberOfLines={1}>{map.title}</Text>
           <Text style={st.actSub} numberOfLines={2}>{map.subtitle}</Text>
         </View>

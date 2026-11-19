@@ -18,7 +18,7 @@ import { getPassive } from '@/adventure/data/passives';
 import { getArmoryWeapon } from '@/adventure/data/armory';
 import { randomSeed } from '@/adventure/engine/rng';
 import { sfx } from '@/audio';
-import { Btn, DARK, Eyebrow, Heart, INK, PopIn, TONE } from '@/adventure/components/ui';
+import { Btn, Eyebrow, Heart, INK, PopIn, TONE } from '@/adventure/components/ui';
 import { ASCENSION_DESCRIPTIONS, MAX_ASCENSION } from '../data/ascensions';
 import { STARTER_KITS } from '../data/encounters';
 import type { SpireMeta, SpireRun } from '../types';
@@ -61,7 +61,7 @@ const SpireSetup: React.FC<Props> = ({ activeRun, meta, onStartNew, onResume, on
           <Text style={st.headerSub} numberOfLines={1}>3-Act Roguelike · Endless & Ascensions</Text>
         </View>
         <View style={st.trophyPill}>
-          <Icon name="lorc/trophy" size={14} color={COLORS.actionYellow} />
+          <Icon name="lorc/trophy" size={14} color={TONE.coin} />
           <Text style={st.trophyText}>{meta.victories}</Text>
         </View>
       </View>
@@ -224,28 +224,28 @@ const StatBox: React.FC<{ label: string; value: string }> = ({ label, value }) =
 );
 
 const st = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#1E1B2E' },
-  topBar: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: DARK.panel, borderBottomWidth: 2, borderBottomColor: '#3B3456' },
-  backBtn: { width: 34, height: 34, borderRadius: 8, borderWidth: 2, borderColor: INK, backgroundColor: COLORS.paperBeige, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: 20, fontWeight: '900', color: COLORS.actionYellow, letterSpacing: 1.2 },
-  headerSub: { fontSize: 11, fontWeight: '700', color: DARK.muted },
-  trophyPill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#2D2645', borderWidth: 1.5, borderColor: COLORS.actionYellow, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 },
-  trophyText: { fontSize: 12, fontWeight: '900', color: COLORS.actionYellow, fontVariant: ['tabular-nums'] },
+  root: { flex: 1, backgroundColor: '#2B2118' },
+  topBar: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: COLORS.canvasWhite, borderBottomWidth: 2, borderBottomColor: INK },
+  backBtn: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: INK, backgroundColor: COLORS.paperBeige, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 18, fontWeight: '900', color: INK, letterSpacing: 1.8 },
+  headerSub: { fontSize: 11, fontWeight: '700', color: TONE.spent },
+  trophyPill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: TONE.coinPale, borderWidth: 2, borderColor: INK, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 },
+  trophyText: { fontSize: 12, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
   body: { padding: 14, gap: 12, maxWidth: 540, width: '100%', alignSelf: 'center' },
   resumeCard: { backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 3, borderBottomWidth: 6, borderColor: INK, padding: 12, gap: 10 },
   resumeHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   resumeTitle: { fontSize: 15, fontWeight: '900', color: INK, marginTop: 2 },
   resumeSub: { fontSize: 12, fontWeight: '700', color: TONE.spent },
   resumeBtns: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  section: { fontSize: 11, fontWeight: '900', letterSpacing: 1.4, color: '#C4B5FD', marginTop: 2 },
+  section: { fontSize: 11, fontWeight: '900', letterSpacing: 1.8, color: COLORS.actionYellow, marginTop: 2 },
   fighterGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  fighterCard: { width: '31%', flexGrow: 1, minWidth: 92, alignItems: 'center', gap: 4, backgroundColor: '#2B2640', borderRadius: 10, borderWidth: 2, borderColor: '#4C4370', paddingVertical: 8, paddingHorizontal: 3 },
+  fighterCard: { width: '31%', flexGrow: 1, minWidth: 92, alignItems: 'center', gap: 4, backgroundColor: '#3A2D21', borderRadius: 10, borderWidth: 2, borderColor: '#6B5A49', paddingVertical: 8, paddingHorizontal: 3 },
   fighterCardSel: { backgroundColor: COLORS.canvasWhite, borderColor: COLORS.actionYellow, borderWidth: 3 },
-  fighterName: { fontSize: 10.5, fontWeight: '900', color: '#E2DCF5', textAlign: 'center' },
+  fighterName: { fontSize: 10.5, fontWeight: '900', color: TONE.onDusk, textAlign: 'center' },
   fighterNameSel: { color: INK },
-  winBadge: { fontSize: 10, fontWeight: '900', color: '#F5B800' },
+  winBadge: { fontSize: 10, fontWeight: '900', color: COLORS.actionYellow },
   winBadgeSel: { color: '#92400E' },
-  footer: { paddingHorizontal: 14, paddingTop: 10, backgroundColor: DARK.panel, borderTopWidth: 2, borderTopColor: '#3B3456' },
+  footer: { paddingHorizontal: 14, paddingTop: 10, backgroundColor: '#3A2D21', borderTopWidth: 2, borderTopColor: INK },
   kitCard: { backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 2.5, borderBottomWidth: 5, borderColor: INK, padding: 12, gap: 8 },
   kitTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   kitTitle: { fontSize: 17, fontWeight: '900', color: INK },
@@ -257,22 +257,22 @@ const st = StyleSheet.create({
   passiveText: { flex: 1, fontSize: 12, lineHeight: 16, color: INK },
   subSection: { fontSize: 10, fontWeight: '900', letterSpacing: 1.1, color: TONE.spent, marginTop: 2 },
   starterRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  starterChip: { flex: 1, minWidth: 132, flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: '#F5F3FF', borderRadius: 8, borderWidth: 1.5, borderColor: TONE.arcana, padding: 7 },
+  starterChip: { flex: 1, minWidth: 132, flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: COLORS.paperBeige, borderRadius: 8, borderWidth: 1.5, borderColor: INK, padding: 7 },
   starterName: { fontSize: 12, fontWeight: '900', color: INK },
   starterDesc: { fontSize: 10, color: INK, opacity: 0.8, lineHeight: 13 },
-  ascCard: { backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 2.5, borderColor: INK, padding: 12, gap: 8 },
+  ascCard: { backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 2.5, borderBottomWidth: 5, borderColor: INK, padding: 12, gap: 8 },
   ascRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   stepBtn: { width: 38, height: 38, borderRadius: 8, borderWidth: 2, borderBottomWidth: 4, borderColor: INK, backgroundColor: COLORS.actionYellow, alignItems: 'center', justifyContent: 'center' },
   stepText: { fontSize: 22, fontWeight: '900', color: INK, lineHeight: 24 },
-  ascTitle: { fontSize: 16, fontWeight: '900', color: TONE.arcana, letterSpacing: 1 },
+  ascTitle: { fontSize: 16, fontWeight: '900', color: INK, letterSpacing: 1 },
   ascUnlockHint: { fontSize: 10, fontWeight: '700', color: TONE.spent, textAlign: 'center' },
-  ascDesc: { fontSize: 12, fontWeight: '700', color: INK, textAlign: 'center', backgroundColor: TONE.arcanaPale, borderRadius: 6, padding: 7 },
+  ascDesc: { fontSize: 12, fontWeight: '700', color: INK, textAlign: 'center', backgroundColor: TONE.coinPale, borderRadius: 6, borderWidth: 1.5, borderColor: '#E5D5A3', padding: 7 },
   statsStrip: { flexDirection: 'row', gap: 6 },
-  statBox: { flex: 1, backgroundColor: '#2B2640', borderRadius: 8, borderWidth: 1.5, borderColor: '#4C4370', paddingVertical: 8, alignItems: 'center' },
+  statBox: { flex: 1, backgroundColor: '#3A2D21', borderRadius: 8, borderWidth: 1.5, borderColor: '#6B5A49', paddingVertical: 8, alignItems: 'center' },
   statVal: { fontSize: 15, fontWeight: '900', color: COLORS.actionYellow, fontVariant: ['tabular-nums'] },
-  statLabel: { fontSize: 9, fontWeight: '800', color: '#C4B5FD', letterSpacing: 0.8 },
+  statLabel: { fontSize: 9, fontWeight: '800', color: TONE.onDusk, letterSpacing: 0.8 },
   seedRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4 },
-  seedText: { fontSize: 11, fontWeight: '700', color: '#A59EC4', fontVariant: ['tabular-nums'] },
+  seedText: { fontSize: 11, fontWeight: '700', color: TONE.onDusk, opacity: 0.85, fontVariant: ['tabular-nums'] },
   rerollSeedBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: COLORS.paperBeige, borderRadius: 6, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 8, paddingVertical: 4 },
   rerollSeedText: { fontSize: 11, fontWeight: '800', color: INK },
 });

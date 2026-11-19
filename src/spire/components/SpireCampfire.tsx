@@ -169,7 +169,7 @@ const SpireCampfire: React.FC<Props> = ({ run, campfire, onRest, onForge, onMedi
 };
 
 const st = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#231815' },
+  root: { flex: 1, backgroundColor: '#2B2118' },
   body: { padding: 14, gap: 12, maxWidth: 500, width: '100%', alignSelf: 'center', paddingBottom: 32 },
   heroCard: { backgroundColor: DARK.panel, borderRadius: 14, borderWidth: 2.5, borderColor: '#F97316', padding: 14 },
   heroRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },

@@ -100,7 +100,7 @@ const st = StyleSheet.create({
   backBtn: {
     width: 30,
     height: 30,
-    borderRadius: 6,
+    borderRadius: 15,
     borderWidth: 2,
     borderColor: INK,
     backgroundColor: COLORS.paperBeige,
@@ -120,7 +120,7 @@ const st = StyleSheet.create({
     letterSpacing: 0.4,
   },
   ascPill: {
-    backgroundColor: TONE.arcana,
+    backgroundColor: COLORS.deepOnyx,
     borderRadius: 4,
     paddingHorizontal: 4,
     paddingVertical: 1,
@@ -128,7 +128,7 @@ const st = StyleSheet.create({
   ascText: {
     fontSize: 9,
     fontWeight: '900',
-    color: COLORS.canvasWhite,
+    color: COLORS.actionYellow,
   },
   heartsRow: {
     flexDirection: 'row',
@@ -145,7 +145,7 @@ const st = StyleSheet.create({
     flexShrink: 1,
     fontSize: 11,
     fontWeight: '900',
-    color: TONE.arcana,
+    color: TONE.evoReady,
   },
   right: {
     flexDirection: 'row',

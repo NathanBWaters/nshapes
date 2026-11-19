@@ -122,7 +122,7 @@ export const SPIRE_EVENTS: readonly SpireEventDef[] = [
     id: 'wandering_alchemist',
     title: 'The Wandering Alchemist',
     icon: 'lorc/fizzing-flask',
-    accent: '#7C3AED',
+    accent: '#0F766E',
     story:
       'A hooded frog uncorks three bubbling vials on a folding crate. “First sip’s on the house, climber. Choose your chaos!”',
     options: [
@@ -258,7 +258,7 @@ export const SPIRE_EVENTS: readonly SpireEventDef[] = [
     id: 'shady_peddler',
     title: 'The Mystery Crate',
     icon: 'lorc/locked-chest',
-    accent: '#6D28D9',
+    accent: '#B45309',
     story:
       'A raccoon waves you into an alcove beside a vibrating wooden crate stamped with three gold stars.',
     options: [

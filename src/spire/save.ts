@@ -52,7 +52,16 @@ export const loadSpireRun = (): SpireRun | null => {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<SpireRun>;
     if (parsed?.version !== 1 || !parsed.map || !parsed.fighter) return null;
-    return parsed as SpireRun;
+    const run = parsed as SpireRun;
+    // Defensive guard: if a saved phase references missing room state, land cleanly on the Act map
+    const needsFallbackToMap =
+      ((run.phase === 'preview' || run.phase === 'fight') && !run.activeEncounter) ||
+      (run.phase === 'reward' && !run.reward) ||
+      (run.phase === 'shop' && !run.shop) ||
+      (run.phase === 'campfire' && !run.campfire) ||
+      (run.phase === 'event' && !run.event) ||
+      (run.phase === 'treasure' && !run.treasure);
+    return needsFallbackToMap ? { ...run, phase: 'map' } : run;
   } catch {
     return null;
   }

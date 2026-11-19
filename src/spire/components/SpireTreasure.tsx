@@ -74,12 +74,12 @@ const SpireTreasure: React.FC<Props> = ({ run, treasure, onClaim, onLeave }) => 
               <TouchableOpacity
                 testID="spire-treasure-arcana"
                 onPress={() => { band.cue('catalyst'); onClaim('arcana'); }}
-                style={[st.choice, { borderColor: TONE.arcana, backgroundColor: TONE.arcanaPale }]}
+                style={st.choice}
                 activeOpacity={0.85}
               >
-                <Icon name={arc.icon} size={26} color={TONE.arcana} />
+                <Icon name={arc.icon} size={26} color={INK} />
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={[st.choiceTitle, { color: TONE.arcana }]}>Arcana {arc.numeral} · {arc.name}</Text>
+                  <Text style={st.choiceTitle}>Arcana {arc.numeral} · {arc.name}</Text>
                   <Text style={[st.choiceSub, { color: TONE.upside }]}>▲ {arc.upside}</Text>
                   <Text style={[st.choiceSub, { color: TONE.tradeoff }]}>▼ {arc.tradeoff}</Text>
                 </View>
@@ -106,7 +106,7 @@ const SpireTreasure: React.FC<Props> = ({ run, treasure, onClaim, onLeave }) => 
 };
 
 const st = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#1E1B2E' },
+  root: { flex: 1, backgroundColor: '#2B2118' },
   body: { padding: 14, gap: 12, maxWidth: 500, width: '100%', alignSelf: 'center', paddingBottom: 32 },
   hero: { backgroundColor: COLORS.canvasWhite, borderRadius: 14, borderWidth: 3, borderBottomWidth: 6, borderColor: INK, padding: 16, alignItems: 'center', gap: 6 },
   title: { fontSize: 22, fontWeight: '900', color: INK, textAlign: 'center' },

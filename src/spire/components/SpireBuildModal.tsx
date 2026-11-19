@@ -109,7 +109,7 @@ const SpireBuildModal: React.FC<Props> = ({ visible, run, onClose }) => {
               <View style={st.cardGroup}>
                 {armedRecipes.map(r => (
                   <View key={r.id} style={st.evoCard}>
-                    <Icon name={r.icon} size={16} color={TONE.arcana} />
+                    <Icon name={r.icon} size={16} color={TONE.evoReady} />
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Text style={st.evoName}>{r.name} · {r.familyText}</Text>
                       <Text style={st.rowText}>{r.activeText}</Text>
@@ -148,10 +148,10 @@ const SpireBuildModal: React.FC<Props> = ({ visible, run, onClose }) => {
                   {run.arcana.map(id => {
                     const a = getArcana(id);
                     return (
-                      <View key={id} style={st.evoCard}>
-                        <Icon name={a.icon} size={16} color={TONE.arcana} />
+                      <View key={id} style={st.rowCard}>
+                        <Icon name={a.icon} size={16} color={INK} />
                         <View style={{ flex: 1, minWidth: 0 }}>
-                          <Text style={st.evoName}>{a.numeral} · {a.name}</Text>
+                          <Text style={st.arcanaName}>{a.numeral} · {a.name}</Text>
                           <Text style={[st.rowText, { color: TONE.upside }]}>▲ {a.upside}</Text>
                           <Text style={[st.rowText, { color: TONE.tradeoff }]}>▼ {a.tradeoff}</Text>
                         </View>
@@ -198,8 +198,9 @@ const st = StyleSheet.create({
   section: { fontSize: 10, fontWeight: '900', letterSpacing: 1.3, color: TONE.spent, marginTop: 4 },
   cardGroup: { gap: 6 },
   rowCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: COLORS.paperBeige, borderRadius: 8, borderWidth: 1.5, borderColor: '#D6CFC4', padding: 8 },
-  evoCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: TONE.arcanaPale, borderRadius: 8, borderWidth: 1.5, borderColor: TONE.arcana, padding: 8 },
-  evoName: { fontSize: 12, fontWeight: '900', color: TONE.arcana },
+  evoCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: TONE.coinPale, borderRadius: 8, borderWidth: 1.5, borderColor: TONE.evoReady, padding: 8 },
+  evoName: { fontSize: 12, fontWeight: '900', color: INK },
+  arcanaName: { fontSize: 12, fontWeight: '900', color: INK },
   rowText: { flex: 1, fontSize: 12, lineHeight: 17, color: INK },
   bold: { fontWeight: '900' },
   muted: { fontSize: 12, color: TONE.spent },

@@ -63,7 +63,7 @@ const SpireEncounterPreview: React.FC<Props> = ({ run, encounter, onFight, onIns
                     <Text style={st.metaChipText}>{run.hearts}/{run.maxHearts}</Text>
                   </View>
                   <View style={st.metaChip}>
-                    <Icon name="lorc/gems" size={13} color={TONE.arcana} />
+                    <Icon name="lorc/gems" size={13} color={TONE.evoReady} />
                     <Text style={st.metaChipText}>{armed} evo{armed === 1 ? '' : 's'} armed</Text>
                   </View>
                 </View>
@@ -129,9 +129,9 @@ const SpireEncounterPreview: React.FC<Props> = ({ run, encounter, onFight, onIns
                   <Text style={st.lootPillText}>{isBoss ? 'Lv 2 Weapon Draft' : 'Weapon Draft'}</Text>
                 </View>
                 {(isElite || isBoss) && (
-                  <View style={[st.lootPill, { backgroundColor: TONE.arcanaPale, borderColor: TONE.arcana }]}>
-                    <Icon name="lorc/crystal-wand" size={13} color={TONE.arcana} />
-                    <Text style={[st.lootPillText, { color: TONE.arcana }]}>Arcana + Skill Node</Text>
+                  <View style={[st.lootPill, { backgroundColor: TONE.coinPale, borderColor: INK }]}>
+                    <Icon name="lorc/crystal-wand" size={13} color={TONE.upside} />
+                    <Text style={[st.lootPillText, { color: INK }]}>Arcana + Skill Node</Text>
                   </View>
                 )}
               </View>

@@ -359,7 +359,7 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
 };
 
 const st = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#1E1B2E' },
+  root: { flex: 1, backgroundColor: '#2B2118' },
 });
 
 export default SpireMode;

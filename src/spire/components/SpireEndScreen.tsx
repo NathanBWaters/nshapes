@@ -120,7 +120,7 @@ const SpireEndScreen: React.FC<Props> = ({
           />
           <Btn
             testID="spire-end-menu"
-            variant="ghost"
+            variant="secondary"
             label="Return to Main Menu"
             onPress={() => { sfx('click'); onExitToMenu(); }}
           />
@@ -146,7 +146,7 @@ const Metric: React.FC<{ label: string; value: string }> = ({ label, value }) =>
 );
 
 const st = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#1E1B2E' },
+  root: { flex: 1, backgroundColor: '#2B2118' },
   body: { padding: 14, gap: 12, maxWidth: 500, width: '100%', alignSelf: 'center' },
   hero: { borderRadius: 16, borderWidth: 3, borderBottomWidth: 6, padding: 18, alignItems: 'center', gap: 8 },
   heroWin: { backgroundColor: DARK.panel, borderColor: COLORS.actionYellow },

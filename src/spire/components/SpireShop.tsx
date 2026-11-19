@@ -234,11 +234,11 @@ const SpireShop: React.FC<Props> = ({
                 const a = getArcana(offer.arcanaId);
                 const afford = !offer.sold && run.coins >= offer.price;
                 return (
-                  <View key={offer.arcanaId} style={[st.row, { borderColor: TONE.arcana, backgroundColor: TONE.arcanaPale }, offer.sold && { opacity: 0.45 }]}>
+                  <View key={offer.arcanaId} style={[st.row, { borderColor: INK, backgroundColor: COLORS.paperBeige }, offer.sold && { opacity: 0.45 }]}>
                     <View style={st.rowLeft}>
-                      <View style={[st.iconBox, { borderColor: TONE.arcana }]}><Icon name={a.icon} size={22} color={TONE.arcana} /></View>
+                      <View style={st.iconBox}><Icon name={a.icon} size={22} color={INK} /></View>
                       <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
-                        <Text style={[st.itemName, { color: TONE.arcana }]}>{a.numeral} · {a.name}</Text>
+                        <Text style={st.itemName}>{a.numeral} · {a.name}</Text>
                         <Text style={[st.itemDesc, { color: TONE.upside, fontWeight: '700' }]}>▲ {a.upside}</Text>
                         <Text style={[st.itemDesc, { color: TONE.tradeoff }]}>▼ {a.tradeoff}</Text>
                       </View>
@@ -265,7 +265,7 @@ const SpireShop: React.FC<Props> = ({
 };
 
 const st = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#1E1B2E' },
+  root: { flex: 1, backgroundColor: '#2B2118' },
   body: { padding: 14, gap: 12, maxWidth: 520, width: '100%', alignSelf: 'center', paddingBottom: 32 },
   headerCard: { backgroundColor: COLORS.canvasWhite, borderRadius: 14, borderWidth: 3, borderBottomWidth: 6, borderColor: INK, padding: 14 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -285,7 +285,7 @@ const st = StyleSheet.create({
   itemDesc: { fontSize: 11, color: INK, opacity: 0.85, lineHeight: 15 },
   saleTag: { backgroundColor: '#DC2626', borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 },
   saleText: { fontSize: 8, fontWeight: '900', color: '#FFFFFF' },
-  evoTag: { backgroundColor: TONE.arcana, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 },
+  evoTag: { backgroundColor: TONE.evoReady, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 },
   evoText: { fontSize: 8, fontWeight: '900', color: '#FFFFFF' },
   buyBtn: { backgroundColor: COLORS.actionYellow, borderRadius: 8, borderWidth: 2, borderBottomWidth: 4, borderColor: INK, paddingHorizontal: 10, paddingVertical: 7, minWidth: 58, alignItems: 'center' },
   buyBtnDisabled: { backgroundColor: '#E5E0D8', opacity: 0.55 },

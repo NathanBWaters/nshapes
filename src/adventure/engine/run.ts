@@ -573,7 +573,7 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
       ...(parryRes.kind === 'parry' || parryRes.kind === 'perfect' ? { parryKind: parryRes.kind } : {}),
       ...(parryRes.wasStaggered ? { staggered: true } : {}),
       lethal: d.foeHp <= 0,
-      isBossOrElite: !!(d.level.isBoss || d.level.branchOf),
+      isBossOrElite: !!(d.level.isBoss || d.level.isElite || d.level.branchOf),
       foeName: d.foeName,
     };
   }
