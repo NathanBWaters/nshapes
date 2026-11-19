@@ -30,6 +30,18 @@ const tuned = (w: Weapon): Weapon => {
 };
 const TUNED: Weapon[] = WEAPONS.filter(w => !FREE_PLAY_ONLY_WEAPONS.includes(w.id)).map(tuned);
 
+/** Single source of truth for every valid Armory weapon id across Adventure Mode and Starfall Spire. */
+export const ALL_ARMORY_WEAPON_IDS: readonly string[] = (() => {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const w of [...TUNED, ...ADVENTURE_WEAPONS]) {
+    if (seen.has(w.id)) continue;
+    seen.add(w.id);
+    out.push(w.id);
+  }
+  return out;
+})();
+
 /** The authored weapon at level 1 (an adventure version wins over a Free Play one with the same id). */
 export const armoryBaseWeapon = (id: string): Weapon | undefined => findAdventureWeapon(id) ?? TUNED.find(w => w.id === id);
 

@@ -1,15 +1,16 @@
 /**
  * Starfall Spire — Campfire Node (Rest / Forge Weapon / Meditate for a real Fighter Skill Tree Node).
+ *
+ * Reuses `WeaponExplainer.tsx` and shared `WeaponOfferRow` / `SkillNodeRow`.
  */
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Icon from '@/components/Icon';
 import { FighterAvatar } from '@/components/fighters';
-import { WeaponAvatar } from '@/components/weapons';
 import { COLORS } from '@/utils/colors';
-import { getSkillNode } from '@/adventure/data/skillTrees';
 import { MAX_WEAPON_LEVEL } from '@/adventure/data/weaponStats';
 import WeaponExplainer from '@/adventure/components/WeaponExplainer';
+import { SkillNodeRow, WeaponOfferRow } from '@/adventure/components/SharedCards';
 import { Btn, DARK, Eyebrow, INK, PopIn, TONE } from '@/adventure/components/ui';
 import { band, sfx } from '@/audio';
 import { buildSpireWeaponBuilds, spireHeldWeapons } from '../engine/bridge';
@@ -111,23 +112,23 @@ const SpireCampfire: React.FC<Props> = ({ run, campfire, onRest, onForge, onMedi
             <View style={{ gap: 8 }}>
               {forgeable.map(w => {
                 const lv = builds[w.id]?.level ?? 1;
-                const sel = focusedWeapon?.id === w.id;
                 return (
-                  <View key={w.id} style={[st.pickRow, sel && st.pickRowSel]}>
-                    <TouchableOpacity onPress={() => setFocusedForgeId(w.id)} style={st.pickLeft}>
-                      <WeaponAvatar weapon={w} size={30} />
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text style={st.pickName} numberOfLines={1}>{w.name}</Text>
-                        <Text style={st.pickMeta}>Level {lv} → Level {lv + 1}</Text>
-                      </View>
-                    </TouchableOpacity>
-                    <Btn
-                      testID={`spire-campfire-forge-${w.id}`}
-                      small
-                      label="Forge"
-                      onPress={() => { band.cue('levelUp'); onForge(w.id); }}
-                    />
-                  </View>
+                  <WeaponOfferRow
+                    key={w.id}
+                    weapon={w}
+                    level={lv}
+                    subtitle={`Level ${lv} → Level ${lv + 1}`}
+                    focused={focusedWeapon?.id === w.id}
+                    onPress={() => setFocusedForgeId(w.id)}
+                    right={
+                      <Btn
+                        testID={`spire-campfire-forge-${w.id}`}
+                        small
+                        label="Forge"
+                        onPress={() => { band.cue('levelUp'); onForge(w.id); }}
+                      />
+                    }
+                  />
                 );
               })}
             </View>
@@ -138,27 +139,14 @@ const SpireCampfire: React.FC<Props> = ({ run, campfire, onRest, onForge, onMedi
           <View style={st.subCard}>
             <Text style={st.secTitle}>CHOOSE A {run.fighter.toUpperCase()} SKILL NODE</Text>
             <View style={{ gap: 8 }}>
-              {campfire.skillOptions.map((id, i) => {
-                const node = getSkillNode(id);
-                if (!node) return null;
-                return (
-                  <TouchableOpacity
-                    key={id}
-                    testID={`spire-campfire-skill-${i}`}
-                    onPress={() => { band.cue('levelUp'); onMeditate(id); }}
-                    style={st.skillRow}
-                    activeOpacity={0.85}
-                  >
-                    <View style={[st.optIcon, { backgroundColor: '#CCFBF1', width: 42, height: 42 }]}>
-                      <Icon name={node.icon} size={22} color={TONE.upside} />
-                    </View>
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={st.pickName}>{node.name}</Text>
-                      <Text style={st.optDesc}>{node.text}</Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
+              {campfire.skillOptions.map((id, i) => (
+                <SkillNodeRow
+                  key={id}
+                  testID={`spire-campfire-skill-${i}`}
+                  nodeId={id}
+                  onPress={() => { band.cue('levelUp'); onMeditate(id); }}
+                />
+              ))}
             </View>
             <Btn small variant="secondary" label="Back" onPress={() => setSubMode('main')} />
           </View>
@@ -185,12 +173,6 @@ const st = StyleSheet.create({
   outcomeText: { fontSize: 14, color: INK, textAlign: 'center', lineHeight: 20 },
   subCard: { backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 2.5, borderBottomWidth: 5, borderColor: INK, padding: 12, gap: 10 },
   secTitle: { fontSize: 11, fontWeight: '900', letterSpacing: 1.2, color: TONE.spent },
-  pickRow: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.paperBeige, borderRadius: 10, borderWidth: 2, borderColor: '#D6CFC4', padding: 8 },
-  pickRowSel: { borderColor: INK, backgroundColor: TONE.selected },
-  pickLeft: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  pickName: { flexShrink: 1, fontSize: 14, fontWeight: '900', color: INK },
-  pickMeta: { fontSize: 11, fontWeight: '800', color: '#B45309' },
-  skillRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#F0FDFA', borderRadius: 10, borderWidth: 2, borderBottomWidth: 4, borderColor: TONE.upside, padding: 10 },
 });
 
 export default SpireCampfire;

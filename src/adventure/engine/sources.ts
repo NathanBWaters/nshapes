@@ -44,6 +44,26 @@ export const armedRecipesFor = (weapons: Weapon[], known: readonly string[]): st
     ? []
     : EVOLUTION_RECIPES.filter(r => r.families.every(fam => weapons.some(w => inFamily(w.id, fam)))).map(r => r.id);
 
+/**
+ * Evolution recipes that adding `candidateWeaponId` to `heldWeaponIds` would
+ * newly arm (ignoring recipes already armed by `heldWeaponIds`).
+ * Shared by Adventure Mode (`charmSynergyWithEquipped`) and Starfall Spire.
+ */
+export const newRecipesArmedBy = (
+  heldWeaponIds: readonly string[],
+  candidateWeaponId: string
+): EvolutionRecipe[] => {
+  if (heldWeaponIds.includes(candidateWeaponId)) return [];
+  return EVOLUTION_RECIPES.filter(r => {
+    const alreadyArmed = r.families.every(fam => heldWeaponIds.some(id => inFamily(id, fam)));
+    if (alreadyArmed) return false;
+    return (
+      (inFamily(candidateWeaponId, r.families[0]) && heldWeaponIds.some(id => inFamily(id, r.families[1]))) ||
+      (inFamily(candidateWeaponId, r.families[1]) && heldWeaponIds.some(id => inFamily(id, r.families[0])))
+    );
+  });
+};
+
 export interface KeyedRule {
   /** Stable for the whole fight: `node:<id>#i`, `w<slot>:<weaponId>#i`, `evo:<id>#i` */
   key: string;

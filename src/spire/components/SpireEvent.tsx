@@ -1,14 +1,15 @@
 /**
  * Starfall Spire — Mystery Narrative Event Screen.
+ *
+ * Reuses shared `WeaponOfferRow` and `SkillNodeRow` for inline rewards.
  */
 import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Icon from '@/components/Icon';
-import { WeaponAvatar } from '@/components/weapons';
 import { COLORS } from '@/utils/colors';
 import { getArmoryWeapon } from '@/adventure/data/armory';
-import { getSkillNode } from '@/adventure/data/skillTrees';
 import { MAX_WEAPON_LEVEL } from '@/adventure/data/weaponStats';
+import { SkillNodeRow, WeaponOfferRow } from '@/adventure/components/SharedCards';
 import { Btn, DARK, Eyebrow, INK, PopIn, TONE } from '@/adventure/components/ui';
 import { band, sfx } from '@/audio';
 import { getSpireEvent } from '../data/events';
@@ -112,18 +113,14 @@ const SpireEvent: React.FC<Props> = ({
                   const w = getArmoryWeapon(o.weaponId, { [o.weaponId]: { level: o.level, tuning: {} } });
                   if (!w) return null;
                   return (
-                    <TouchableOpacity
+                    <WeaponOfferRow
                       key={o.weaponId}
                       testID={`spire-event-weapon-${i}`}
+                      weapon={w}
+                      level={o.level}
+                      focused
                       onPress={() => { band.cue('weaponGet'); onPickWeapon(i); }}
-                      style={st.subPick}
-                    >
-                      <WeaponAvatar weapon={w} size={28} />
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text style={st.optLabel}>{w.name} Lv {o.level}</Text>
-                        <Text style={st.optDetail} numberOfLines={2}>{w.shortDescription}</Text>
-                      </View>
-                    </TouchableOpacity>
+                    />
                   );
                 })}
               </View>
@@ -132,46 +129,34 @@ const SpireEvent: React.FC<Props> = ({
             {/* Inline Skill Node Pick */}
             {eventState.pendingSkillOptions && eventState.pendingSkillOptions.length > 0 && (
               <View style={{ gap: 8 }}>
-                {eventState.pendingSkillOptions.map((id, i) => {
-                  const n = getSkillNode(id);
-                  if (!n) return null;
-                  return (
-                    <TouchableOpacity
-                      key={id}
-                      testID={`spire-event-skill-${i}`}
-                      onPress={() => { band.cue('levelUp'); onPickSkill(id); }}
-                      style={st.subPick}
-                    >
-                      <Icon name={n.icon} size={22} color={TONE.upside} />
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text style={st.optLabel}>{n.name}</Text>
-                        <Text style={st.optDetail}>{n.text}</Text>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
+                {eventState.pendingSkillOptions.map((id, i) => (
+                  <SkillNodeRow
+                    key={id}
+                    testID={`spire-event-skill-${i}`}
+                    nodeId={id}
+                    onPress={() => { band.cue('levelUp'); onPickSkill(id); }}
+                  />
+                ))}
               </View>
             )}
 
             {/* Inline Overclock +2 Forge */}
             {eventState.pendingForge && (
               <View style={{ gap: 8 }}>
-                {forgeable.map(w => (
-                  <TouchableOpacity
-                    key={w.id}
-                    testID={`spire-event-forge-${w.id}`}
-                    onPress={() => { band.cue('levelUp'); onPickForge(w.id); }}
-                    style={st.subPick}
-                  >
-                    <WeaponAvatar weapon={w} size={26} />
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={st.optLabel}>{w.name}</Text>
-                      <Text style={st.optDetail}>
-                        Level {run.weaponLevels[w.id] ?? 1} → {Math.min(MAX_WEAPON_LEVEL, (run.weaponLevels[w.id] ?? 1) + 2)}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
+                {forgeable.map(w => {
+                  const lv = run.weaponLevels[w.id] ?? 1;
+                  return (
+                    <WeaponOfferRow
+                      key={w.id}
+                      testID={`spire-event-forge-${w.id}`}
+                      weapon={w}
+                      level={lv}
+                      subtitle={`Level ${lv} → ${Math.min(MAX_WEAPON_LEVEL, lv + 2)}`}
+                      focused
+                      onPress={() => { band.cue('levelUp'); onPickForge(w.id); }}
+                    />
+                  );
+                })}
               </View>
             )}
 
@@ -209,7 +194,6 @@ const st = StyleSheet.create({
   outcomeCard: { backgroundColor: COLORS.canvasWhite, borderRadius: 14, borderWidth: 3, borderBottomWidth: 6, borderColor: INK, padding: 14, gap: 10 },
   outcomeTitle: { fontSize: 19, fontWeight: '900', color: INK, textAlign: 'center' },
   outcomeText: { fontSize: 13, lineHeight: 19, color: INK, textAlign: 'center' },
-  subPick: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.paperBeige, borderRadius: 10, borderWidth: 2, borderColor: INK, padding: 10 },
 });
 
 export default SpireEvent;

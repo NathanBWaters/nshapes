@@ -50,9 +50,39 @@ export const loadSpireRun = (): SpireRun | null => {
   try {
     const raw = storage.getString(RUN_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<SpireRun>;
+    const parsed = JSON.parse(raw) as Partial<SpireRun> & {
+      bonusDamagePerMatch?: number;
+      bonusClockSeconds?: number;
+      evolutionLabTier?: number;
+    };
     if (parsed?.version !== 1 || !parsed.map || !parsed.fighter) return null;
-    const run = parsed as SpireRun;
+
+    // Migrate older saved runs that stored flat upgrade counters instead of shared `upgrades`
+    const upgrades: Record<string, number> = { ...(parsed.upgrades ?? {}) };
+    if (!parsed.upgrades) {
+      if (parsed.bonusDamagePerMatch) upgrades.heavy_hitter = parsed.bonusDamagePerMatch;
+      if (parsed.bonusClockSeconds) upgrades.hourglass = Math.round(parsed.bonusClockSeconds / 8);
+      upgrades.evolution_lab = parsed.evolutionLabTier ?? 1;
+    }
+
+    // Migrate older saved shop upgrade offers (`kind` → `upgradeId`)
+    const shop = parsed.shop
+      ? {
+          ...parsed.shop,
+          upgrades: parsed.shop.upgrades.map(u => {
+            const legacy = u as unknown as { upgradeId?: string; kind?: string; price: number; sold?: boolean };
+            return {
+              upgradeId: (legacy.upgradeId ?? legacy.kind ?? 'heavy_hitter') as SpireRun['shop'] extends null
+                ? never
+                : NonNullable<SpireRun['shop']>['upgrades'][number]['upgradeId'],
+              price: legacy.price,
+              sold: legacy.sold,
+            };
+          }),
+        }
+      : null;
+
+    const run: SpireRun = { ...(parsed as SpireRun), upgrades, shop };
     // Defensive guard: if a saved phase references missing room state, land cleanly on the Act map
     const needsFallbackToMap =
       ((run.phase === 'preview' || run.phase === 'fight') && !run.activeEncounter) ||

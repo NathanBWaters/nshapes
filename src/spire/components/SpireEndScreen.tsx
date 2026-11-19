@@ -8,10 +8,9 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '@/components/Icon';
 import { FighterAvatar } from '@/components/fighters';
-import { WeaponAvatar } from '@/components/weapons';
 import { COLORS } from '@/utils/colors';
-import { weaponLevelSuffix } from '@/adventure/data/armory';
 import FightReplay from '@/adventure/components/FightReplay';
+import { WeaponChip } from '@/adventure/components/SharedCards';
 import { Btn, DARK, Eyebrow, INK, PopIn, TONE } from '@/adventure/components/ui';
 import { sfx } from '@/audio';
 import { buildSpireWeaponBuilds, spireHeldWeapons } from '../engine/bridge';
@@ -82,12 +81,7 @@ const SpireEndScreen: React.FC<Props> = ({
           <Text style={st.sec}>FINAL ARSENAL ({held.length} WEAPONS · {run.skillNodes.length} SKILLS · {run.arcana.length} ARCANA)</Text>
           <View style={st.gearWrap}>
             {held.map((w, i) => (
-              <View key={`${w.id}-${i}`} style={st.gearChip}>
-                <WeaponAvatar weapon={w} size={20} />
-                <Text style={st.gearText} numberOfLines={1}>
-                  {w.name}{weaponLevelSuffix(builds[w.id]?.level ?? 1)}
-                </Text>
-              </View>
+              <WeaponChip key={`${w.id}-${i}`} weapon={w} level={builds[w.id]?.level ?? 1} />
             ))}
           </View>
 
@@ -160,8 +154,6 @@ const st = StyleSheet.create({
   metricVal: { fontSize: 15, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
   metricLabel: { fontSize: 10, fontWeight: '800', color: TONE.spent },
   gearWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  gearChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: COLORS.paperBeige, borderRadius: 6, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 7, paddingVertical: 3, maxWidth: '100%' },
-  gearText: { flexShrink: 1, fontSize: 11, fontWeight: '800', color: INK },
   actions: { gap: 8 },
 });
 

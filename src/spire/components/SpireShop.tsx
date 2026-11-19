@@ -1,19 +1,25 @@
 /**
  * Starfall Spire — Full Merchant Shop.
  *
- * Brings back rich roguelike shopping (Weapons w/ Sale tags & Evolution synergy
- * badges, Arcana wildcards, Workshop-style Run Upgrades, Heart Restorative,
- * Weapon Level Forging, and Stock Rerolls) while reusing `WeaponExplainer.tsx`!
+ * Reuses Adventure's `UPGRADES`, `WeaponExplainer.tsx`, and shared
+ * `WeaponOfferRow` / `UpgradeOfferRow` / `WeaponChip` / `ArcanaCard` so
+ * shopping shares every data spec and UI primitive with Adventure Mode.
  */
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Icon from '@/components/Icon';
-import { WeaponAvatar } from '@/components/weapons';
 import { COLORS } from '@/utils/colors';
-import { getArmoryWeapon, weaponLevelSuffix } from '@/adventure/data/armory';
-import { getArcana } from '@/adventure/data/arcana';
+import { getArmoryWeapon } from '@/adventure/data/armory';
+import { getUpgrade } from '@/adventure/data/upgrades';
 import { MAX_WEAPON_LEVEL } from '@/adventure/data/weaponStats';
 import WeaponExplainer from '@/adventure/components/WeaponExplainer';
+import {
+  ArcanaCard,
+  UpgradeOfferRow,
+  WeaponChip,
+  WeaponOfferRow,
+  type OfferBadge,
+} from '@/adventure/components/SharedCards';
 import { Btn, CoinPill, Eyebrow, Heart, INK, PopIn, TONE } from '@/adventure/components/ui';
 import { band, sfx } from '@/audio';
 import { buildSpireWeaponBuilds, newEvolutionsArmedBy, spireHeldWeapons } from '../engine/bridge';
@@ -54,6 +60,17 @@ const SpireShop: React.FC<Props> = ({
   const builds = buildSpireWeaponBuilds(run);
   const forgeable = held.filter(w => (run.weaponLevels[w.id] ?? 1) < MAX_WEAPON_LEVEL);
 
+  const priceBtn = (opts: { testID: string; disabled: boolean; label: string; onPress: () => void }) => (
+    <TouchableOpacity
+      testID={opts.testID}
+      disabled={opts.disabled}
+      onPress={opts.onPress}
+      style={[st.buyBtn, opts.disabled && st.buyBtnDisabled]}
+    >
+      <Text style={st.buyBtnText}>{opts.label}</Text>
+    </TouchableOpacity>
+  );
+
   return (
     <View style={st.root} testID="spire-shop">
       <ScrollView contentContainerStyle={st.body}>
@@ -89,39 +106,29 @@ const SpireShop: React.FC<Props> = ({
               if (!w) return null;
               const afford = !offer.sold && run.coins >= offer.price;
               const evos = offer.sold ? [] : newEvolutionsArmedBy(run, offer.weaponId);
-              const focused = inspectWeaponId === offer.weaponId;
+              const badges: OfferBadge[] = [];
+              if (offer.onSale && !offer.sold) badges.push({ text: 'SALE', bg: '#DC2626' });
+              if (evos.length > 0) badges.push({ text: '⚡ EVO', bg: TONE.evoReady });
               return (
-                <View key={`${offer.weaponId}-${i}`} style={[st.row, focused && st.rowFocused, offer.sold && { opacity: 0.45 }]}>
-                  <TouchableOpacity onPress={() => { sfx('click'); setInspectWeaponId(offer.weaponId); }} style={st.rowLeft}>
-                    <View style={st.iconBox}><WeaponAvatar weapon={w} size={30} /></View>
-                    <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-                      <View style={st.tagRow}>
-                        <Text style={st.itemName} numberOfLines={1}>
-                          {w.name}{weaponLevelSuffix(offer.level)}
-                        </Text>
-                        {offer.onSale && !offer.sold && (
-                          <View style={st.saleTag}><Text style={st.saleText}>SALE</Text></View>
-                        )}
-                        {evos.length > 0 && (
-                          <View style={st.evoTag}><Text style={st.evoText}>⚡ EVO</Text></View>
-                        )}
-                      </View>
-                      <Text style={st.itemDesc} numberOfLines={2}>{w.shortDescription}</Text>
-                    </View>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    testID={`spire-shop-weapon-${i}`}
-                    disabled={!afford}
-                    onPress={() => {
+                <WeaponOfferRow
+                  key={`${offer.weaponId}-${i}`}
+                  weapon={w}
+                  level={offer.level}
+                  badges={badges}
+                  focused={inspectWeaponId === offer.weaponId}
+                  dimmed={offer.sold}
+                  onPress={() => { sfx('click'); setInspectWeaponId(offer.weaponId); }}
+                  right={priceBtn({
+                    testID: `spire-shop-weapon-${i}`,
+                    disabled: !afford,
+                    label: offer.sold ? 'SOLD' : `${offer.price}¢`,
+                    onPress: () => {
                       band.cue('register');
                       band.fire(w.id, 4);
                       onBuyWeapon(i);
-                    }}
-                    style={[st.buyBtn, !afford && st.buyBtnDisabled]}
-                  >
-                    <Text style={st.buyBtnText}>{offer.sold ? 'SOLD' : `${offer.price}¢`}</Text>
-                  </TouchableOpacity>
-                </View>
+                    },
+                  })}
+                />
               );
             })}
           </View>
@@ -136,31 +143,28 @@ const SpireShop: React.FC<Props> = ({
           <Text style={st.secTitle}>RUN UPGRADES & SERVICES</Text>
           <View style={{ gap: 8 }}>
             {shop.upgrades.map((u, i) => {
+              const def = getUpgrade(u.upgradeId);
               const afford = !u.sold && run.coins >= u.price;
               return (
-                <View key={u.kind} style={[st.row, u.sold && { opacity: 0.45 }]}>
-                  <View style={st.rowLeft}>
-                    <View style={st.iconBox}><Icon name={u.icon} size={22} color={INK} /></View>
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={st.itemName}>{u.name}</Text>
-                      <Text style={st.itemDesc}>{u.description}</Text>
-                    </View>
-                  </View>
-                  <TouchableOpacity
-                    testID={`spire-shop-upgrade-${i}`}
-                    disabled={!afford}
-                    onPress={() => { band.cue('register'); onBuyUpgrade(i); }}
-                    style={[st.buyBtn, !afford && st.buyBtnDisabled]}
-                  >
-                    <Text style={st.buyBtnText}>{u.sold ? 'SOLD' : `${u.price}¢`}</Text>
-                  </TouchableOpacity>
-                </View>
+                <UpgradeOfferRow
+                  key={u.upgradeId}
+                  icon={def.icon}
+                  name={def.name}
+                  description={def.description(1)}
+                  dimmed={u.sold}
+                  right={priceBtn({
+                    testID: `spire-shop-upgrade-${i}`,
+                    disabled: !afford,
+                    label: u.sold ? 'SOLD' : `${u.price}¢`,
+                    onPress: () => { band.cue('register'); onBuyUpgrade(i); },
+                  })}
+                />
               );
             })}
 
             {/* Restorative Heal */}
-            <View style={[st.row, (shop.healed || run.hearts >= run.maxHearts) && { opacity: 0.5 }]}>
-              <View style={st.rowLeft}>
+            <View style={[st.serviceRow, (shop.healed || run.hearts >= run.maxHearts) && { opacity: 0.5 }]}>
+              <View style={st.serviceLeft}>
                 <View style={[st.iconBox, { backgroundColor: '#FEF2F2' }]}><Heart size={20} /></View>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={st.itemName}>Trail Tonic (+{shop.healAmount} ♥)</Text>
@@ -169,56 +173,49 @@ const SpireShop: React.FC<Props> = ({
                   </Text>
                 </View>
               </View>
-              <TouchableOpacity
-                testID="spire-shop-heal"
-                disabled={shop.healed || run.hearts >= run.maxHearts || run.coins < shop.healCost}
-                onPress={() => { band.cue('heal'); onBuyHeal(); }}
-                style={[st.buyBtn, (shop.healed || run.hearts >= run.maxHearts || run.coins < shop.healCost) && st.buyBtnDisabled]}
-              >
-                <Text style={st.buyBtnText}>{shop.healed ? 'USED' : `${shop.healCost}¢`}</Text>
-              </TouchableOpacity>
+              {priceBtn({
+                testID: 'spire-shop-heal',
+                disabled: shop.healed || run.hearts >= run.maxHearts || run.coins < shop.healCost,
+                label: shop.healed ? 'USED' : `${shop.healCost}¢`,
+                onPress: () => { band.cue('heal'); onBuyHeal(); },
+              })}
             </View>
 
             {/* Weapon Forge Service */}
-            <View style={[st.row, (shop.forged || forgeable.length === 0) && { opacity: 0.5 }]}>
-              <View style={st.rowLeft}>
-                <View style={[st.iconBox, { backgroundColor: '#FFFBEB' }]}><Icon name="lorc/anvil" size={22} color="#B45309" /></View>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={st.itemName}>Forge Weapon (+1 Level)</Text>
-                  <Text style={st.itemDesc}>Permanently empower any held weapon for this run.</Text>
-                </View>
-              </View>
-              <TouchableOpacity
-                testID="spire-shop-forge-toggle"
-                disabled={shop.forged || forgeable.length === 0 || run.coins < shop.forgeCost}
-                onPress={() => { sfx('click'); setPickingForge(p => !p); }}
-                style={[st.buyBtn, (shop.forged || forgeable.length === 0 || run.coins < shop.forgeCost) && st.buyBtnDisabled]}
-              >
-                <Text style={st.buyBtnText}>{shop.forged ? 'DONE' : `${shop.forgeCost}¢`}</Text>
-              </TouchableOpacity>
-            </View>
+            <UpgradeOfferRow
+              icon="lorc/anvil"
+              name="Forge Weapon (+1 Level)"
+              description="Permanently empower any held weapon for this run."
+              dimmed={shop.forged || forgeable.length === 0}
+              right={priceBtn({
+                testID: 'spire-shop-forge-toggle',
+                disabled: shop.forged || forgeable.length === 0 || run.coins < shop.forgeCost,
+                label: shop.forged ? 'DONE' : `${shop.forgeCost}¢`,
+                onPress: () => { sfx('click'); setPickingForge(p => !p); },
+              })}
+            />
 
             {pickingForge && !shop.forged && (
               <View style={st.forgePicker}>
                 <Text style={st.secTitle}>PICK WEAPON TO UPGRADE (+1 LV)</Text>
                 <View style={st.forgeGrid}>
-                  {forgeable.map(w => (
-                    <TouchableOpacity
-                      key={w.id}
-                      testID={`spire-shop-forge-${w.id}`}
-                      onPress={() => {
-                        band.cue('levelUp');
-                        onForgeWeapon(w.id);
-                        setPickingForge(false);
-                      }}
-                      style={st.forgeChip}
-                    >
-                      <WeaponAvatar weapon={w} size={22} />
-                      <Text style={st.forgeChipText} numberOfLines={1}>
-                        {w.name} Lv {builds[w.id]?.level ?? 1} → {(builds[w.id]?.level ?? 1) + 1}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                  {forgeable.map(w => {
+                    const lv = builds[w.id]?.level ?? 1;
+                    return (
+                      <WeaponChip
+                        key={w.id}
+                        testID={`spire-shop-forge-${w.id}`}
+                        weapon={w}
+                        label={`${w.name} Lv ${lv} → ${lv + 1}`}
+                        active
+                        onPress={() => {
+                          band.cue('levelUp');
+                          onForgeWeapon(w.id);
+                          setPickingForge(false);
+                        }}
+                      />
+                    );
+                  })}
                 </View>
               </View>
             )}
@@ -231,27 +228,19 @@ const SpireShop: React.FC<Props> = ({
             <Text style={st.secTitle}>TAROT ARCANA</Text>
             <View style={{ gap: 8 }}>
               {shop.arcana.map((offer, i) => {
-                const a = getArcana(offer.arcanaId);
                 const afford = !offer.sold && run.coins >= offer.price;
                 return (
-                  <View key={offer.arcanaId} style={[st.row, { borderColor: INK, backgroundColor: COLORS.paperBeige }, offer.sold && { opacity: 0.45 }]}>
-                    <View style={st.rowLeft}>
-                      <View style={st.iconBox}><Icon name={a.icon} size={22} color={INK} /></View>
-                      <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
-                        <Text style={st.itemName}>{a.numeral} · {a.name}</Text>
-                        <Text style={[st.itemDesc, { color: TONE.upside, fontWeight: '700' }]}>▲ {a.upside}</Text>
-                        <Text style={[st.itemDesc, { color: TONE.tradeoff }]}>▼ {a.tradeoff}</Text>
-                      </View>
-                    </View>
-                    <TouchableOpacity
-                      testID={`spire-shop-arcana-${i}`}
-                      disabled={!afford}
-                      onPress={() => { band.cue('catalyst'); onBuyArcana(i); }}
-                      style={[st.buyBtn, !afford && st.buyBtnDisabled]}
-                    >
-                      <Text style={st.buyBtnText}>{offer.sold ? 'SOLD' : `${offer.price}¢`}</Text>
-                    </TouchableOpacity>
-                  </View>
+                  <ArcanaCard
+                    key={offer.arcanaId}
+                    arcanaId={offer.arcanaId}
+                    dimmed={offer.sold}
+                    right={priceBtn({
+                      testID: `spire-shop-arcana-${i}`,
+                      disabled: !afford,
+                      label: offer.sold ? 'SOLD' : `${offer.price}¢`,
+                      onPress: () => { band.cue('catalyst'); onBuyArcana(i); },
+                    })}
+                  />
                 );
               })}
             </View>
@@ -276,24 +265,16 @@ const st = StyleSheet.create({
   secTitle: { fontSize: 11, fontWeight: '900', letterSpacing: 1.2, color: TONE.spent },
   rerollBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: COLORS.paperBeige, borderRadius: 6, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 8, paddingVertical: 4 },
   rerollText: { fontSize: 11, fontWeight: '800', color: INK },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.paperBeige, borderRadius: 10, borderWidth: 2, borderColor: '#D6CFC4', padding: 8 },
-  rowFocused: { borderColor: INK, backgroundColor: TONE.selected },
-  rowLeft: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  iconBox: { width: 40, height: 40, borderRadius: 8, borderWidth: 1.5, borderColor: INK, backgroundColor: COLORS.canvasWhite, alignItems: 'center', justifyContent: 'center' },
-  tagRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 },
-  itemName: { flexShrink: 1, fontSize: 13, fontWeight: '900', color: INK },
-  itemDesc: { fontSize: 11, color: INK, opacity: 0.85, lineHeight: 15 },
-  saleTag: { backgroundColor: '#DC2626', borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 },
-  saleText: { fontSize: 8, fontWeight: '900', color: '#FFFFFF' },
-  evoTag: { backgroundColor: TONE.evoReady, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 },
-  evoText: { fontSize: 8, fontWeight: '900', color: '#FFFFFF' },
+  serviceRow: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.paperBeige, borderRadius: 10, borderWidth: 2, borderColor: '#D6CFC4', padding: 8 },
+  serviceLeft: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  iconBox: { width: 42, height: 42, borderRadius: 8, borderWidth: 1.5, borderColor: INK, backgroundColor: COLORS.canvasWhite, alignItems: 'center', justifyContent: 'center' },
+  itemName: { flexShrink: 1, fontSize: 13.5, fontWeight: '900', color: INK },
+  itemDesc: { fontSize: 12, color: INK, opacity: 0.85, lineHeight: 16 },
   buyBtn: { backgroundColor: COLORS.actionYellow, borderRadius: 8, borderWidth: 2, borderBottomWidth: 4, borderColor: INK, paddingHorizontal: 10, paddingVertical: 7, minWidth: 58, alignItems: 'center' },
   buyBtnDisabled: { backgroundColor: '#E5E0D8', opacity: 0.55 },
   buyBtnText: { fontSize: 12, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
   forgePicker: { backgroundColor: '#FFFBEB', borderRadius: 10, borderWidth: 2, borderColor: '#D97706', padding: 10, gap: 8 },
   forgeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  forgeChip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: COLORS.canvasWhite, borderRadius: 8, borderWidth: 2, borderColor: INK, paddingHorizontal: 8, paddingVertical: 6, maxWidth: '100%' },
-  forgeChipText: { flexShrink: 1, fontSize: 11, fontWeight: '900', color: INK },
 });
 
 export default SpireShop;

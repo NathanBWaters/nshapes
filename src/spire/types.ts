@@ -64,7 +64,14 @@ export interface SpireActMap {
   bossIcon: IconName;
 }
 
-export type SpireShopUpgradeKind = 'heavy_hitter' | 'tough_hide' | 'hourglass' | 'sharp_eyes' | 'second_wind' | 'evolution_lab';
+export type SpireShopUpgradeKind =
+  | 'heavy_hitter'
+  | 'tough_hide'
+  | 'lucky_purse'
+  | 'hourglass'
+  | 'sharp_eyes'
+  | 'second_wind'
+  | 'evolution_lab';
 
 export interface SpireShopWeaponOffer {
   weaponId: string;
@@ -80,11 +87,9 @@ export interface SpireShopArcanaOffer {
   sold?: boolean;
 }
 
+/** References a canonical Adventure `UPGRADES` entry by id (zero duplicate name/icon/copy). */
 export interface SpireShopUpgradeOffer {
-  kind: SpireShopUpgradeKind;
-  name: string;
-  description: string;
-  icon: IconName;
+  upgradeId: SpireShopUpgradeKind;
   price: number;
   sold?: boolean;
 }
@@ -196,15 +201,14 @@ export interface SpireRun {
   floor: number;
   phase: SpirePhase;
 
-  // Persistent survival & economy
+  // Persistent survival, economy & shared Adventure UPGRADES tiers
   hearts: number;
   maxHearts: number;
   coins: number;
   startingHints: number;
   startingGraces: number;
-  bonusClockSeconds: number;
-  bonusDamagePerMatch: number;
-  evolutionLabTier: number;
+  /** Shared Adventure Workshop upgrade tiers (heavy_hitter, hourglass, sharp_eyes, second_wind, lucky_purse, evolution_lab, tough_hide). */
+  upgrades: Record<string, number>;
   extraEvolutionCap: number;
   extraEvolutionLikelihood: number;
 

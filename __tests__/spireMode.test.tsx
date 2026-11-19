@@ -5,6 +5,8 @@ import React from 'react';
 import { render } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { FIGHTERS } from '@/adventure/data/fighters';
+import { ALL_ARMORY_WEAPON_IDS } from '@/adventure/data/armory';
+import { getUpgrade } from '@/adventure/data/upgrades';
 import { loadAdventureSave, writeAdventureSave } from '@/adventure/save';
 import { createNewSave } from '@/adventure/progress';
 import { generateActMap, reachableNodeIds } from '@/spire/engine/mapGen';
@@ -21,10 +23,11 @@ import {
   enterEndlessSpire,
   leaveShop,
   selectSpireNode,
+  shopBuyUpgrade,
   shopBuyWeapon,
   shopReroll,
 } from '@/spire/engine/runState';
-import { SPIRE_FIGHT_FEATURES, spireEncounterToLevel, spireRunOverrides, spireRunToVirtualSave } from '@/spire/engine/bridge';
+import { SPIRE_FIGHT_FEATURES, spireEncounterLoadout, spireEncounterToLevel, spireRunOverrides, spireRunToVirtualSave } from '@/spire/engine/bridge';
 import { createInitialSpireMeta, loadSpireRun, resetSpireStorage, syncSpireDiscoveriesToAdventure, writeSpireRun } from '@/spire/save';
 import { createRun } from '@/adventure/engine/run';
 import SpireSetup from '@/spire/components/SpireSetup';
@@ -170,6 +173,66 @@ describe('Starfall Spire — Map DAG, Events & Shared Engine Bridge', () => {
     expect(loadAdventureSave().discoveredEvolutions).toContain('phoenix-pyre');
     resetSpireStorage();
     expect(loadSpireRun()).toBeNull();
+  });
+
+  it('reuses Adventure ALL_ARMORY_WEAPON_IDS, canonical UPGRADES, and startingLoadout without duplicate specs', () => {
+    // Shared Armory weapon pool is the exact canonical reference
+    expect(SPIRE_WEAPON_POOL).toBe(ALL_ARMORY_WEAPON_IDS);
+
+    // Shop upgrades reference canonical Adventure UPGRADES and flow directly into startingLoadout
+    let run = createSpireRun('Orange Tabby', 0, 31337);
+    run = { ...run, coins: 400 };
+    const shopNode = run.map.nodes.find(n => n.kind === 'shop')!;
+    run = selectSpireNode(
+      { ...run, map: { ...run.map, nodes: run.map.nodes.map(n => (n.id === shopNode.id ? { ...n, row: 0 } : n)) } },
+      shopNode.id
+    );
+    expect(run.shop?.upgrades.length).toBeGreaterThan(0);
+    for (const offer of run.shop!.upgrades) {
+      expect(getUpgrade(offer.upgradeId).name).toBeTruthy();
+    }
+    const boughtId = run.shop!.upgrades[0].upgradeId;
+    const beforeTier = run.upgrades[boughtId] ?? 0;
+    run = shopBuyUpgrade(run, 0);
+    expect(run.upgrades[boughtId]).toBe(beforeTier + 1);
+
+    // Shared startingLoadout reflects Spire's hourglass & heavy_hitter upgrades cleanly
+    const withUpgrades = { ...run, upgrades: { ...run.upgrades, heavy_hitter: 2, hourglass: 1 } };
+    const firstFight = withUpgrades.map.nodes.find(n => n.encounter)!.encounter!;
+    const loadout = spireEncounterLoadout(withUpgrades, firstFight);
+    expect(loadout.bonusDamagePerMatch).toBe(2);
+    expect(loadout.timer).toBe(firstFight.timer + 8);
+  });
+
+  it('migrates legacy saved Spire runs with flat upgrade counters and legacy shop offer kind safely', () => {
+    resetSpireStorage();
+    const fresh = createSpireRun('Pelican', 0, 8888);
+    const legacy = {
+      ...fresh,
+      upgrades: undefined,
+      bonusDamagePerMatch: 2,
+      bonusClockSeconds: 16,
+      evolutionLabTier: 2,
+      shop: {
+        weapons: [],
+        arcana: [],
+        upgrades: [{ kind: 'heavy_hitter', price: 70, sold: false }],
+        healCost: 45,
+        healAmount: 2,
+        healed: false,
+        forgeCost: 65,
+        forged: false,
+        rerollCost: 25,
+        rerolls: 0,
+      },
+    };
+    writeSpireRun(legacy as unknown as typeof fresh);
+    const loaded = loadSpireRun();
+    expect(loaded?.upgrades.heavy_hitter).toBe(2);
+    expect(loaded?.upgrades.hourglass).toBe(2);
+    expect(loaded?.upgrades.evolution_lab).toBe(2);
+    expect(loaded?.shop?.upgrades[0].upgradeId).toBe('heavy_hitter');
+    resetSpireStorage();
   });
 });
 

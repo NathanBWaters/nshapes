@@ -12,6 +12,7 @@ import type { ArcanaId, RunState } from '@/adventure/types';
 import { ARCANA } from '@/adventure/data/arcana';
 import { getArmoryWeapon } from '@/adventure/data/armory';
 import { skillTreeOf } from '@/adventure/data/skillTrees';
+import { getUpgrade } from '@/adventure/data/upgrades';
 import { MAX_WEAPON_LEVEL } from '@/adventure/data/weaponStats';
 import { damagePerMinute } from '@/adventure/history';
 import { createRng, type Rng } from '@/adventure/engine/rng';
@@ -27,7 +28,6 @@ import type {
   SpireRun,
   SpireShopState,
   SpireShopUpgradeKind,
-  SpireShopUpgradeOffer,
   SpireTreasureState,
 } from '../types';
 
@@ -126,20 +126,21 @@ export const upgradeSpireWeapon = (run: SpireRun, weaponId: string, delta = 1): 
   };
 };
 
-const SHOP_UPGRADE_CATALOG: readonly {
-  kind: SpireShopUpgradeKind;
-  name: string;
-  description: string;
-  icon: SpireShopUpgradeOffer['icon'];
-  basePrice: number;
-}[] = [
-  { kind: 'heavy_hitter', name: 'Heavy Hitter', description: '+1 flat damage on every Set.', icon: 'lorc/fist', basePrice: 70 },
-  { kind: 'tough_hide', name: 'Vital Vessel', description: '+1 Max Heart & heal +1 ♥ now.', icon: 'lorc/shining-heart', basePrice: 75 },
-  { kind: 'hourglass', name: 'Hourglass', description: '+10s on every future fight clock.', icon: 'lorc/hourglass', basePrice: 60 },
-  { kind: 'sharp_eyes', name: 'Sharp Eyes', description: '+1 Starting Hint every fight.', icon: 'lorc/light-bulb', basePrice: 55 },
-  { kind: 'second_wind', name: 'Second Wind', description: '+1 Starting Grace every fight.', icon: 'lorc/clover', basePrice: 60 },
-  { kind: 'evolution_lab', name: 'Evolution Lab', description: '+5% Catalyst chance on every refill.', icon: 'lorc/fizzing-flask', basePrice: 80 },
+/** Canonical Adventure `UPGRADES` offered in the Spire Merchant's Tent (slot-cap upgrades omitted since Spire is uncapped). */
+const SPIRE_SHOP_UPGRADE_IDS: readonly SpireShopUpgradeKind[] = [
+  'heavy_hitter',
+  'tough_hide',
+  'lucky_purse',
+  'hourglass',
+  'sharp_eyes',
+  'second_wind',
+  'evolution_lab',
 ];
+
+const bumpUpgrade = (run: SpireRun, id: SpireShopUpgradeKind, delta = 1): SpireRun => ({
+  ...run,
+  upgrades: { ...(run.upgrades ?? {}), [id]: (run.upgrades?.[id] ?? 0) + delta },
+});
 
 const buildShopState = (run: SpireRun, rng: Rng, rerolls = 0): SpireShopState => {
   const asc = ascensionModifiers(run.ascension);
@@ -167,14 +168,15 @@ const buildShopState = (run: SpireRun, rng: Rng, rerolls = 0): SpireShopState =>
     sold: false,
   }));
 
-  const upgrades = rng.shuffle([...SHOP_UPGRADE_CATALOG]).slice(0, 2).map(u => ({
-    kind: u.kind,
-    name: u.name,
-    description: u.description,
-    icon: u.icon,
-    price: Math.round(u.basePrice * priceScale),
-    sold: false,
-  }));
+  const upgrades = rng.shuffle([...SPIRE_SHOP_UPGRADE_IDS]).slice(0, 2).map(upgradeId => {
+    const def = getUpgrade(upgradeId);
+    const basePrice = Math.round(48 + (def.costs[0] ?? 200) * 0.065);
+    return {
+      upgradeId,
+      price: Math.round(basePrice * priceScale),
+      sold: false,
+    };
+  });
 
   return {
     weapons,
@@ -216,9 +218,7 @@ export const createSpireRun = (fighter: CharacterName, ascension: number, seed: 
     coins,
     startingHints: kit.startingHints,
     startingGraces: kit.startingGraces,
-    bonusClockSeconds: 0,
-    bonusDamagePerMatch: 0,
-    evolutionLabTier: 1, // Spire starts with Evolution Lab active so Catalysts flow early!
+    upgrades: { evolution_lab: 1 }, // Spire starts with Evolution Lab active so Catalysts flow early!
     extraEvolutionCap: 0,
     extraEvolutionLikelihood: 4,
     weapons: [kit.starterWeapon, kit.bonusWeapon],
@@ -559,34 +559,22 @@ export const shopBuyUpgrade = (run: SpireRun, index: number): SpireRun => {
   if (run.phase !== 'shop' || !run.shop) return run;
   const offer = run.shop.upgrades[index];
   if (!offer || offer.sold || run.coins < offer.price) return run;
-  let next: SpireRun = {
-    ...run,
-    coins: run.coins - offer.price,
-    stats: { ...run.stats, coinsSpent: run.stats.coinsSpent + offer.price },
-    shop: {
-      ...run.shop,
-      upgrades: run.shop.upgrades.map((u, i) => (i === index ? { ...u, sold: true } : u)),
+  let next: SpireRun = bumpUpgrade(
+    {
+      ...run,
+      coins: run.coins - offer.price,
+      stats: { ...run.stats, coinsSpent: run.stats.coinsSpent + offer.price },
+      shop: {
+        ...run.shop,
+        upgrades: run.shop.upgrades.map((u, i) => (i === index ? { ...u, sold: true } : u)),
+      },
     },
-  };
-  switch (offer.kind) {
-    case 'heavy_hitter':
-      next = { ...next, bonusDamagePerMatch: next.bonusDamagePerMatch + 1 };
-      break;
-    case 'tough_hide':
-      next = { ...next, maxHearts: next.maxHearts + 1, hearts: Math.min(next.maxHearts + 1, next.hearts + 1) };
-      break;
-    case 'hourglass':
-      next = { ...next, bonusClockSeconds: next.bonusClockSeconds + 10 };
-      break;
-    case 'sharp_eyes':
-      next = { ...next, startingHints: next.startingHints + 1 };
-      break;
-    case 'second_wind':
-      next = { ...next, startingGraces: next.startingGraces + 1 };
-      break;
-    case 'evolution_lab':
-      next = { ...next, evolutionLabTier: next.evolutionLabTier + 1, extraEvolutionLikelihood: next.extraEvolutionLikelihood + 1 };
-      break;
+    offer.upgradeId,
+    1
+  );
+  // Tough Hide also updates Spire's persistent maxHearts & heals +1 ♥ immediately
+  if (offer.upgradeId === 'tough_hide') {
+    next = { ...next, maxHearts: next.maxHearts + 1, hearts: Math.min(next.maxHearts + 1, next.hearts + 1) };
   }
   return next;
 };
@@ -782,7 +770,7 @@ export const chooseEventOption = (run: SpireRun, optionId: string): SpireRun => 
         break;
       }
       case 'cursed_anvil:salvage':
-        next = { ...next, bonusDamagePerMatch: next.bonusDamagePerMatch + 1 };
+        next = bumpUpgrade(next, 'heavy_hitter', 1);
         outcomeText = 'Reinforced your strike: +1 flat damage on every Set!';
         break;
 
@@ -846,7 +834,7 @@ export const chooseEventOption = (run: SpireRun, optionId: string): SpireRun => 
         outcomeText = 'You pocket a crisp +40¢ and tip your hat.';
         break;
       case 'gamblers_dice:leave':
-        next = { ...next, bonusClockSeconds: next.bonusClockSeconds + 8 };
+        next = bumpUpgrade(next, 'hourglass', 1);
         outcomeText = 'Time saved! +8s added to every future fight clock.';
         break;
 
@@ -882,8 +870,8 @@ export const chooseEventOption = (run: SpireRun, optionId: string): SpireRun => 
         outcomeText = 'Fusion mastery! +10% Catalyst chance and +1 Evolution per fight!';
         break;
       case 'ancient_library:clarity':
-        next = { ...next, startingHints: next.startingHints + 2, bonusClockSeconds: next.bonusClockSeconds + 10 };
-        outcomeText = 'Sharp mind! +2 Starting Hints and +10s on every future clock.';
+        next = bumpUpgrade(bumpUpgrade(next, 'sharp_eyes', 2), 'hourglass', 1);
+        outcomeText = 'Sharp mind! +2 Starting Hints and +8s on every future clock.';
         break;
 
       case 'bounty_camp:arsenal':
@@ -905,7 +893,7 @@ export const chooseEventOption = (run: SpireRun, optionId: string): SpireRun => 
         outcomeText = `Patched up (+2 ♥) and gifted +1 Starting Grace!`;
         break;
       case 'bounty_camp:spar':
-        next = { ...next, bonusDamagePerMatch: next.bonusDamagePerMatch + 2 };
+        next = bumpUpgrade(next, 'heavy_hitter', 2);
         outcomeText = 'Sharpened form! +2 flat damage on every Set.';
         break;
 
@@ -936,13 +924,12 @@ export const chooseEventOption = (run: SpireRun, optionId: string): SpireRun => 
         outcomeText = picked.length
           ? `Prism lightning surges (−1 ♥) — upgraded ${names}!`
           : 'Your belt is already maxed — gained +2 flat Set damage instead!';
-        if (!picked.length) next = { ...next, bonusDamagePerMatch: next.bonusDamagePerMatch + 2 };
+        if (!picked.length) next = bumpUpgrade(next, 'heavy_hitter', 2);
         break;
       }
       case 'prism_obelisk:prism_shard':
         next = {
-          ...next,
-          bonusDamagePerMatch: next.bonusDamagePerMatch + 2,
+          ...bumpUpgrade(next, 'heavy_hitter', 2),
           extraEvolutionLikelihood: next.extraEvolutionLikelihood + 6,
         };
         outcomeText = 'Prism resonance! +2 flat Set damage & +6% Catalyst chance.';

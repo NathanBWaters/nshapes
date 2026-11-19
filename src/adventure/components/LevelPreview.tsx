@@ -14,13 +14,13 @@ import { FighterAvatar } from '@/components/fighters';
 import { WeaponAvatar } from '@/components/weapons';
 import { COLORS } from '@/utils/colors';
 import type { CharacterName } from '@/types';
-import type { AdventureSave, ArcanaId, LevelDef, LevelHazards, MechanicDef } from '../types';
+import type { AdventureSave, ArcanaId, LevelDef, MechanicDef } from '../types';
 import { getBiome } from '../data/biomes';
 import { foeDisplay, levelFoe } from '../data/foes';
 import { getMechanic } from '../data/mechanics';
 import { FIGHTERS, getFighter } from '../data/fighters';
 import { getPassive } from '../data/passives';
-import { ARCANA, getArcana } from '../data/arcana';
+import { ARCANA } from '../data/arcana';
 import { getArmoryWeapon, weaponLevelSuffix } from '../data/armory';
 import { WEAPON_KINDS, weaponGuide } from '../data/weaponGuide';
 import WeaponExplainer from './WeaponExplainer';
@@ -29,6 +29,7 @@ import { getLevel } from '../data/levels';
 import { resolveParrySpec } from '../data/parry';
 import { isFighterTrial, starRewards } from '../data/rewards';
 import ParryPreviewCard from './ParryPreviewCard';
+import { ArcanaCard, ArmedEvolutionRow, FighterPassivesList, FoeAbilityCard, HazardNotices } from './SharedCards';
 import { starGoals } from '../engine/challenges';
 import {
   arcanaSlots,
@@ -287,22 +288,16 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({ l
               )}
             </View>
 
-            {level.foes.map((f, i) => {
-              const d = foeDisplay(f);
-              return d.ability ? (
-                <View key={i} style={st.ability}>
-                  <EnemyAvatar enemy={d} size={26} mood="menacing" lightweight />
-                  <Text style={st.abilityText}><Text style={{ fontWeight: '900' }}>{d.name}: </Text>{d.ability}</Text>
-                </View>
-              ) : null;
-            })}
+            {level.foes.map((f, i) => (
+              <FoeAbilityCard key={i} foe={foeDisplay(f)} />
+            ))}
 
             {(() => {
               const parrySpec = resolveParrySpec(level, level.foes[level.foes.length - 1]);
               return parrySpec ? <ParryPreviewCard spec={parrySpec} testID="preview-parry" /> : null;
             })()}
 
-            {level.rules.hazards && <Hazards hazards={level.rules.hazards} />}
+            {level.rules.hazards && <HazardNotices hazards={level.rules.hazards} />}
 
             {practice && (
               <View style={st.practiceBox} testID="preview-practice">
@@ -405,17 +400,7 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({ l
                     <Text style={st.section}>
                       PASSIVES <Text style={st.sectionHint}>always on for {fighter.name}</Text>
                     </Text>
-                    <View style={st.passiveBox} testID="preview-passives">
-                      {fighter.passives.map(id => {
-                        const p = getPassive(id);
-                        return (
-                          <View key={id} style={st.passiveRow}>
-                            <Icon name={p.icon} size={16} color={INK} />
-                            <Text style={st.passiveText}><Text style={{ fontWeight: '900' }}>{p.name}: </Text>{p.text}</Text>
-                          </View>
-                        );
-                      })}
-                    </View>
+                    <FighterPassivesList fighter={fighter.name} testID="preview-passives" />
                   </>
                 )}
               </>
@@ -531,15 +516,7 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({ l
                 </View>
                 {armed.map(r => {
                   const known = save.unlockedEvolutions.includes(r.id) || save.discoveredEvolutions.includes(r.id);
-                  return (
-                    <View key={r.id} style={st.evoRow} testID={`preview-recipe-${r.id}`}>
-                      <Icon name={r.icon} size={16} color={TONE.evoReady} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={st.evoName}>{known ? r.name : '??? Evolution'} · ARMED</Text>
-                        <Text style={st.evoHintSub}>{known ? r.activeText : `${r.familyText}: forge it to find out what it does.`}</Text>
-                      </View>
-                    </View>
-                  );
+                  return <ArmedEvolutionRow key={r.id} recipe={r} known={known} testID={`preview-recipe-${r.id}`} />;
                 })}
                 {armed.length > 0 ? (
                   <Text style={st.evoHintSub} testID="preview-evo-likelihood">
@@ -597,16 +574,7 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({ l
                 {arcana.length === 0 ? (
                   <Text style={st.note}>Standard rules. Tap an Arcana to bring it along.</Text>
                 ) : (
-                  arcana.map(id => {
-                    const active = getArcana(id);
-                    return (
-                      <View key={id} style={st.arcanaSummary}>
-                        <Text style={st.evoName}>{active.numeral} · {active.name}</Text>
-                        <Text style={st.arcanaUp}>▲ {active.upside}</Text>
-                        <Text style={st.arcanaDown}>▼ {active.tradeoff}</Text>
-                      </View>
-                    );
-                  })
+                  arcana.map(id => <ArcanaCard key={id} arcanaId={id} />)
                 )}
               </>
             )}
@@ -653,30 +621,6 @@ const LessonCard: React.FC<{ mech: MechanicDef; isNew: boolean; onMore: () => vo
       <Btn testID="preview-lesson-camp" small variant="secondary" icon="lorc/campfire" label={mech.camp.label} onPress={() => onOpenCamp(mech.camp!.tab)} />
     )}
   </TouchableOpacity>
-);
-
-/** Traps the level itself places on the board. */
-const Hazards: React.FC<{ hazards: LevelHazards }> = ({ hazards }) => (
-  <View style={{ gap: 6 }} testID="preview-hazards">
-    {hazards.timeBombs && (
-      <View style={st.hazard}>
-        <Icon name="lorc/time-bomb" size={20} color={INK} />
-        <Text style={st.abilityText}>
-          <Text style={{ fontWeight: '900' }}>Time Bombs: </Text>
-          match a bomb card within {hazards.timeBombs.seconds}s or lose a heart.
-        </Text>
-      </View>
-    )}
-    {hazards.snares && (
-      <View style={st.hazard}>
-        <Icon name="lorc/wolf-trap" size={20} color={INK} />
-        <Text style={st.abilityText}>
-          <Text style={{ fontWeight: '900' }}>Snares: </Text>
-          matching a snared card costs a heart. Match the card its arrow points at to defuse it for +4 damage.
-        </Text>
-      </View>
-    )}
-  </View>
 );
 
 const Rule: React.FC<{ icon: IconName; text: string }> = ({ icon, text }) => (

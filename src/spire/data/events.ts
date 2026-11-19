@@ -220,7 +220,7 @@ export const SPIRE_EVENTS: readonly SpireEventDef[] = [
       {
         id: 'clarity',
         label: 'Memorize Pattern Tables',
-        detail: '+2 Starting Hints & +10s on every future clock.',
+        detail: '+2 Starting Hints & +8s on every future clock.',
         tone: 'neutral',
       },
     ],

@@ -13,7 +13,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Platform }
 import Animated, { cancelAnimation, useSharedValue, useAnimatedStyle, withDelay, withRepeat, withSequence, withTiming, Easing } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GameBoard from '@/components/GameBoard';
-import Icon from '@/components/Icon';
+import Icon, { type IconName } from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
 import { WeaponAvatar } from '@/components/weapons';
@@ -56,6 +56,7 @@ import PowerMeter from './PowerMeter';
 import PowerExplainer from './PowerExplainer';
 import HudInspector, { type HudInspectTarget } from './HudInspector';
 import ParryIntentBar from './ParryIntentBar';
+import { WeaponOfferRow } from './SharedCards';
 
 const TICK_MS = 250;
 /** A Set's cards are thrown at the foe, then the next ones are dealt: long enough to see the throw, short enough to keep moving */
@@ -81,12 +82,16 @@ const LAST_SET_MS = 3200;
  */
 const STAGE = { min: 66, minWide: 104, wideFrom: 700, max: 184, chromePx: 132, roomy: 136, speechPx: 60 } as const;
 
-export interface SpireFightContext {
-  floorLabel: string;
-  nodeLabel: string;
-  hideChallenge?: boolean;
-  /** Disable mid-fight Restart in Spire (roguelike stakes) */
-  noRestart?: boolean;
+/** Mode-agnostic HUD & pause chrome overrides so any higher-level mode can wrap AdventureRun. */
+export interface FightChromeOptions {
+  /** Replaces the 3-star challenge strip with a custom status banner (e.g. Act/Floor label) */
+  statusBanner?: { icon: IconName; text: string; testID?: string };
+  /** Subtitle line shown in the Pause modal */
+  pauseSubtitle?: string;
+  /** Always show damage, Power & passive chips regardless of campaign progression */
+  alwaysShowHudStats?: boolean;
+  /** Disable mid-fight Restart button (e.g. roguelike stakes) */
+  allowRestart?: boolean;
   quitLabel?: string;
   quitHint?: string;
 }
@@ -104,12 +109,12 @@ interface Props {
   /** Play the fight's effects (and hold the clock while they play). Off: numbers only, nothing waits. */
   effects?: boolean;
   onToggleEffects?: () => void;
-  /** Optional overrides (e.g. persistent HP / uncapped loadout for Starfall Spire) */
+  /** Optional engine overrides (persistent HP, uncapped loadout, custom weapon builds) */
   runOverrides?: RunOverrides;
-  /** Optional explicit feature set (e.g. Starfall Spire enables all core features) */
+  /** Optional explicit feature set (defaults to campaign progression for `level`) */
   featuresOverride?: Set<FeatureFlag>;
-  /** Optional Starfall Spire HUD & pause adaptations */
-  spireContext?: SpireFightContext;
+  /** Optional mode-agnostic HUD & pause chrome overrides */
+  chrome?: FightChromeOptions;
 }
 
 /** The recipe an evolution event is about (the engine names it by id or by name). */
@@ -150,7 +155,7 @@ const AdventureRun: React.FC<Props> = ({
   onToggleEffects,
   runOverrides,
   featuresOverride,
-  spireContext,
+  chrome,
 }) => {
   recordComponentRender('AdventureRun');
   const insets = useSafeAreaInsets();
@@ -535,8 +540,8 @@ const AdventureRun: React.FC<Props> = ({
     </View>
   );
   const keenEyeIds = useMemo(() => (run.passive.keenEyeCardId ? [run.passive.keenEyeCardId] : undefined), [run.passive.keenEyeCardId]);
-  const showDamageHud = spireContext ? true : shouldShowDamageNumbers(level, startSave);
-  const showPassivesHud = spireContext ? true : shouldShowPassiveHud(level, startSave);
+  const showDamageHud = chrome?.alwaysShowHudStats ? true : shouldShowDamageNumbers(level, startSave);
+  const showPassivesHud = chrome?.alwaysShowHudStats ? true : shouldShowPassiveHud(level, startSave);
   const parryCounterAvailable = useMemo(() => {
     if (!run.parry || run.parry.phase !== 'windup' || run.parry.spec.counter.kind === 'any') return true;
     return boardHasCounterSet(run.board, run.attributes, run.parry.spec.counter);
@@ -963,11 +968,11 @@ const AdventureRun: React.FC<Props> = ({
               <Text style={st.doneText}>DONE</Text>
             </TouchableOpacity>
           </View>
-        ) : spireContext?.hideChallenge ? (
-          <View style={st.challenge} testID="run-spire-bar">
-            <Icon name="lorc/mountaintop" size={14} color={TONE.upside} />
+        ) : chrome?.statusBanner ? (
+          <View style={st.challenge} testID={chrome.statusBanner.testID}>
+            <Icon name={chrome.statusBanner.icon} size={14} color={TONE.upside} />
             <Text style={st.challengeText} numberOfLines={1}>
-              {spireContext.floorLabel} · {spireContext.nodeLabel}
+              {chrome.statusBanner.text}
             </Text>
           </View>
         ) : level.id !== '1-1' ? (
@@ -1121,7 +1126,7 @@ const AdventureRun: React.FC<Props> = ({
           <PopIn style={st.panel}>
             <Text style={st.panelTitle}>PAUSED</Text>
             <Text style={st.panelSub}>
-              {spireContext ? `${spireContext.floorLabel} · ${run.foeName}` : `${practice ? 'Practice' : level.id} · ${level.name}`}
+              {chrome?.pauseSubtitle ?? `${practice ? 'Practice' : level.id} · ${level.name}`}
             </Text>
             {run.weapons.length > 0 && (
               <View style={st.gearRow}>
@@ -1146,7 +1151,7 @@ const AdventureRun: React.FC<Props> = ({
                 onPress={onToggleEffects}
               />
             )}
-            {!spireContext?.noRestart && (
+            {chrome?.allowRestart !== false && (
               <Btn label={practice ? 'Start over' : 'Restart'} variant="secondary" onPress={() => { setPaused(false); onRestart(runRef.current, recordingOf()); }} />
             )}
             {practice ? (
@@ -1156,9 +1161,9 @@ const AdventureRun: React.FC<Props> = ({
               </>
             ) : (
               <>
-                <Btn label={spireContext?.quitLabel ?? 'Retreat to map'} variant="secondary" onPress={() => { setPaused(false); music.stop(); onQuit(runRef.current, recordingOf()); }} />
+                <Btn label={chrome?.quitLabel ?? 'Retreat to map'} variant="secondary" onPress={() => { setPaused(false); music.stop(); onQuit(runRef.current, recordingOf()); }} />
                 <Text style={st.panelHint}>
-                  {spireContext?.quitHint ?? "Retreating forfeits this attempt, including the coins you've collected in it."}
+                  {chrome?.quitHint ?? "Retreating forfeits this attempt, including the coins you've collected in it."}
                 </Text>
               </>
             )}
@@ -1416,13 +1421,13 @@ const WeaponPick: React.FC<{ title: string; subtitle: string; options: Weapon[];
         {options.map((w, i) => {
           const level = weaponBuilds?.[w.id]?.level ?? 1;
           return (
-            <TouchableOpacity key={`${w.id}-${i}`} testID={`pick-${i}`} onPress={() => onPick(w)} style={st.pickCard} activeOpacity={0.85}>
-              <View style={[st.pickIcon, { backgroundColor: COLORS.paperBeige }]}><WeaponAvatar weapon={w} size={34} /></View>
-              <View style={{ flex: 1 }}>
-                <Text style={st.pickName}>{w.name} <Text style={[st.pickRarity, { color: TONE.spent }]}>LV {level}</Text></Text>
-                <Text style={st.pickDesc}>{w.shortDescription}</Text>
-              </View>
-            </TouchableOpacity>
+            <WeaponOfferRow
+              key={`${w.id}-${i}`}
+              testID={`pick-${i}`}
+              weapon={w}
+              level={level}
+              onPress={() => onPick(w)}
+            />
           );
         })}
         <Btn label="Skip" variant="ghost" small onPress={onSkip} />
@@ -1451,9 +1456,14 @@ const Intermission: React.FC<{ run: RunState; dispatch: (a: RunAction) => void; 
                   const price = shopPrice(w);
                   const afford = run.coins >= price;
                   return (
-                    <TouchableOpacity
+                    <WeaponOfferRow
                       key={`${w.id}-${i}`}
                       testID={`shop-buy-${i}`}
+                      weapon={w}
+                      level={run.weaponBuilds[w.id]?.level ?? 1}
+                      dimmed={!afford}
+                      triggerKey={tapTriggers[i]}
+                      right={<CoinPill coins={price} />}
                       onPress={() => {
                         setTapTriggers(prev => ({ ...prev, [i]: (prev[i] ?? 0) + 1 }));
                         if (afford) {
@@ -1463,16 +1473,7 @@ const Intermission: React.FC<{ run: RunState; dispatch: (a: RunAction) => void; 
                           dispatch({ type: 'BUY', index: i });
                         }
                       }}
-                      style={[st.pickCard, { opacity: afford ? 1 : 0.5 }]}
-                      activeOpacity={0.85}
-                    >
-                      <View style={st.pickIcon}><WeaponAvatar weapon={w} size={34} triggerKey={tapTriggers[i]} /></View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={st.pickName}>{w.name}{weaponLevelSuffix(run.weaponBuilds[w.id]?.level ?? 1)}</Text>
-                        <Text style={st.pickDesc}>{w.shortDescription}</Text>
-                      </View>
-                      <CoinPill coins={price} />
-                    </TouchableOpacity>
+                    />
                   );
                 })}
                 {run.shopOptions.length === 0 && <Text style={st.panelSub}>Sold out!</Text>}

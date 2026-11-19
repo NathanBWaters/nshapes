@@ -2,7 +2,9 @@
  * Starfall Spire — Pre-Battle Encounter Briefing.
  *
  * Reuses `ParryPreviewCard` (showing the foe's Counter-Set UP FRONT before the
- * fight begins!), `EnemyAvatar`, `Skulls`, `Heart`, and shared `ui.tsx`.
+ * fight begins!), `FoeAbilityCard`, `HazardNotices`, `ShadingSurgeNotice`,
+ * `spireEncounterLoadout` (via Adventure's `startingLoadout`), `EnemyAvatar`,
+ * `Skulls`, `Heart`, and shared `ui.tsx`.
  */
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -12,8 +14,9 @@ import { COLORS } from '@/utils/colors';
 import { getBiome } from '@/adventure/data/biomes';
 import { foeDisplay } from '@/adventure/data/foes';
 import ParryPreviewCard from '@/adventure/components/ParryPreviewCard';
+import { FoeAbilityCard, HazardNotices, ShadingSurgeNotice } from '@/adventure/components/SharedCards';
 import { Btn, CoinPill, Eyebrow, Heart, INK, PopIn, Skulls, TONE } from '@/adventure/components/ui';
-import { spireArmedRecipes } from '../engine/bridge';
+import { spireEncounterLoadout } from '../engine/bridge';
 import type { SpireEncounter, SpireRun } from '../types';
 
 interface Props {
@@ -27,8 +30,9 @@ const SpireEncounterPreview: React.FC<Props> = ({ run, encounter, onFight, onIns
   const biome = getBiome(encounter.biome);
   const foeDef = encounter.foes[0];
   const foe = foeDisplay(foeDef);
-  const armed = spireArmedRecipes(run).length;
-  const totalClock = Math.max(45, encounter.timer + run.bonusClockSeconds);
+  const loadout = spireEncounterLoadout(run, encounter);
+  const armed = loadout.armedRecipes.length;
+  const totalClock = loadout.timer ?? encounter.timer;
   const isBoss = encounter.kind === 'boss';
   const isElite = encounter.kind === 'elite';
 
@@ -77,47 +81,14 @@ const SpireEncounterPreview: React.FC<Props> = ({ run, encounter, onFight, onIns
           </View>
 
           <View style={st.content}>
-            {foe.ability && (
-              <View style={st.abilityBox}>
-                <Icon name="lorc/crossed-swords" size={16} color={INK} />
-                <Text style={st.abilityText}>
-                  <Text style={{ fontWeight: '900' }}>{foe.name}: </Text>
-                  {foe.ability}
-                </Text>
-              </View>
-            )}
+            <FoeAbilityCard foe={foe} showAvatar={false} />
 
             {/* Shared Set-Parry Pre-Battle Briefing */}
             <ParryPreviewCard spec={encounter.parry} testID="spire-preview-parry" />
 
-            {encounter.shadingSurge && (
-              <View style={st.surgeBox}>
-                <Icon name="lorc/stone-block" size={16} color={TONE.surge} />
-                <Text style={st.abilityText}>
-                  <Text style={{ fontWeight: '900', color: TONE.surge }}>Shading Surge Active: </Text>
-                  Every 45s, shading turns on for 15s and every Set’s base damage is ×5!
-                </Text>
-              </View>
-            )}
+            {encounter.shadingSurge && <ShadingSurgeNotice />}
 
-            {encounter.hazards?.timeBombs && (
-              <View style={st.hazardBox}>
-                <Icon name="lorc/time-bomb" size={15} color="#991B1B" />
-                <Text style={st.abilityText}>
-                  <Text style={{ fontWeight: '900' }}>Time Bombs: </Text>
-                  Defuse fused cards within {encounter.hazards.timeBombs.seconds}s.
-                </Text>
-              </View>
-            )}
-            {encounter.hazards?.snares && (
-              <View style={st.hazardBox}>
-                <Icon name="lorc/wolf-trap" size={15} color="#991B1B" />
-                <Text style={st.abilityText}>
-                  <Text style={{ fontWeight: '900' }}>Snares: </Text>
-                  Match the card the arrow points at (+4 dmg); avoid matching the snared card itself.
-                </Text>
-              </View>
-            )}
+            {encounter.hazards && <HazardNotices hazards={encounter.hazards} testID="spire-preview-hazards" />}
 
             {/* Loot Preview */}
             <View style={st.lootRow}>
@@ -166,10 +137,6 @@ const st = StyleSheet.create({
   tauntBox: { backgroundColor: COLORS.canvasWhite, borderRadius: 8, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 10, paddingVertical: 6 },
   tauntText: { fontSize: 12, fontStyle: 'italic', fontWeight: '700', color: INK },
   content: { padding: 12, gap: 10 },
-  abilityBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: COLORS.paperBeige, borderRadius: 8, borderWidth: 1.5, borderColor: '#D6CFC4', padding: 9 },
-  surgeBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: TONE.surgePale, borderRadius: 8, borderWidth: 1.5, borderColor: TONE.surge, padding: 9 },
-  hazardBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: '#FEF2F2', borderRadius: 8, borderWidth: 1.5, borderColor: '#FCA5A5', padding: 8 },
-  abilityText: { flex: 1, fontSize: 12, lineHeight: 17, color: INK },
   lootRow: { backgroundColor: COLORS.paperBeige, borderRadius: 10, borderWidth: 1.5, borderColor: '#D6CFC4', padding: 10, gap: 6 },
   lootLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1.2, color: TONE.spent },
   lootPills: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },

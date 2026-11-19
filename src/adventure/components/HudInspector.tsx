@@ -18,6 +18,7 @@ import { getPassive } from '../data/passives';
 import { starGoals, type ChallengeProgress } from '../engine/challenges';
 import { EVOLUTION_RULES } from '../engine/sources';
 import ParryPreviewCard from './ParryPreviewCard';
+import { FoeAbilityCard, HazardNotices } from './SharedCards';
 import { Btn, Eyebrow, INK, PopIn, TONE } from './ui';
 
 export type HudInspectTarget =
@@ -61,26 +62,12 @@ const HudInspector: React.FC<Props> = ({ target, run, shownHp, challenge, knownE
               </View>
             </View>
             {foeInfo.ability ? (
-              <View style={st.cardWarn}>
-                <Icon name="lorc/crossed-swords" size={16} color={INK} />
-                <Text style={st.cardText}><Text style={st.bold}>Ability: </Text>{foeInfo.ability}</Text>
-              </View>
+              <FoeAbilityCard foe={foeInfo} showAvatar={false} />
             ) : (
               <Text style={st.body}>Standard foe — match Sets of 3 cards to deal damage and knock out {run.foeName}.</Text>
             )}
             {run.parry && <ParryPreviewCard spec={run.parry.spec} compact testID="inspector-parry-card" />}
-            {hazards?.timeBombs && (
-              <View style={st.cardHazard}>
-                <Icon name="lorc/time-bomb" size={16} color={INK} />
-                <Text style={st.cardText}><Text style={st.bold}>Time Bombs: </Text>Match any fused card within {hazards.timeBombs.seconds}s to defuse it before it costs a heart.</Text>
-              </View>
-            )}
-            {hazards?.snares && (
-              <View style={st.cardHazard}>
-                <Icon name="lorc/wolf-trap" size={16} color={INK} />
-                <Text style={st.cardText}><Text style={st.bold}>Snares: </Text>Leave the snared card alone; match the card its arrow points at for +4 damage.</Text>
-              </View>
-            )}
+            {hazards && <HazardNotices hazards={hazards} testID="inspector-hazards" />}
           </>
         );
       }

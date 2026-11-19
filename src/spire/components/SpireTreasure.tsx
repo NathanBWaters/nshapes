@@ -1,16 +1,15 @@
 /**
  * Starfall Spire — Golden Treasure Vault Node.
  *
- * Reuses `WeaponExplainer.tsx` for inspecting the Vault's weapon prize.
+ * Reuses `WeaponExplainer.tsx` and shared `WeaponOfferRow` / `ArcanaCard`.
  */
 import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Icon from '@/components/Icon';
-import { WeaponAvatar } from '@/components/weapons';
 import { COLORS } from '@/utils/colors';
 import { getArmoryWeapon } from '@/adventure/data/armory';
-import { getArcana } from '@/adventure/data/arcana';
 import WeaponExplainer from '@/adventure/components/WeaponExplainer';
+import { ArcanaCard, WeaponOfferRow } from '@/adventure/components/SharedCards';
 import { Btn, CoinPill, Eyebrow, INK, PopIn, TONE } from '@/adventure/components/ui';
 import { band, sfx } from '@/audio';
 import type { SpireRun, SpireTreasureState } from '../types';
@@ -26,7 +25,6 @@ const SpireTreasure: React.FC<Props> = ({ run, treasure, onClaim, onLeave }) => 
   const w = getArmoryWeapon(treasure.weaponOffer.weaponId, {
     [treasure.weaponOffer.weaponId]: { level: treasure.weaponOffer.level, tuning: {} },
   });
-  const arc = treasure.arcanaOffer ? getArcana(treasure.arcanaOffer) : null;
   const extraCoins = 60 + run.act * 20;
 
   return (
@@ -54,36 +52,24 @@ const SpireTreasure: React.FC<Props> = ({ run, treasure, onClaim, onLeave }) => 
 
             {w && (
               <>
-                <TouchableOpacity
+                <WeaponOfferRow
                   testID="spire-treasure-weapon"
+                  weapon={w}
+                  level={treasure.weaponOffer.level}
+                  focused
                   onPress={() => { band.cue('weaponGet'); onClaim('weapon'); }}
-                  style={st.choice}
-                  activeOpacity={0.85}
-                >
-                  <WeaponAvatar weapon={w} size={32} />
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={st.choiceTitle}>{w.name} (Lv {treasure.weaponOffer.level})</Text>
-                    <Text style={st.choiceSub}>{w.shortDescription}</Text>
-                  </View>
-                </TouchableOpacity>
+                />
                 <WeaponExplainer weapon={w} build={{ level: treasure.weaponOffer.level, tuning: {} }} />
               </>
             )}
 
-            {arc && (
-              <TouchableOpacity
+            {treasure.arcanaOffer && (
+              <ArcanaCard
                 testID="spire-treasure-arcana"
+                arcanaId={treasure.arcanaOffer}
+                prefix="Arcana"
                 onPress={() => { band.cue('catalyst'); onClaim('arcana'); }}
-                style={st.choice}
-                activeOpacity={0.85}
-              >
-                <Icon name={arc.icon} size={26} color={INK} />
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={st.choiceTitle}>Arcana {arc.numeral} · {arc.name}</Text>
-                  <Text style={[st.choiceSub, { color: TONE.upside }]}>▲ {arc.upside}</Text>
-                  <Text style={[st.choiceSub, { color: TONE.tradeoff }]}>▼ {arc.tradeoff}</Text>
-                </View>
-              </TouchableOpacity>
+              />
             )}
 
             <TouchableOpacity

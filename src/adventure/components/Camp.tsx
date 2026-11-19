@@ -27,7 +27,6 @@ import { summarize, type BattleRecord } from '../history';
 import { analyticsOptedOut, setAnalyticsEnabled } from '@/analytics/posthog';
 import type { FunRating, FunTag } from '@/analytics/fightEvent';
 import { FIGHTERS } from '../data/fighters';
-import { getPassive } from '../data/passives';
 import { MAX_TUNING_TIER, MAX_WEAPON_LEVEL, TUNING_MULTIPLIERS, formatStat, weaponStatLines } from '../data/weaponStats';
 import { ARCANA } from '../data/arcana';
 import { charmWeapons, getArmoryWeapon, weaponLevelSuffix } from '../data/armory';
@@ -68,6 +67,7 @@ import BattleHistory from './BattleHistory';
 import WeaponExplainer from './WeaponExplainer';
 import BountyBoard from './BountyBoard';
 import CompanionBubble from './CompanionBubble';
+import { ArcanaCard, FighterPassivesList } from './SharedCards';
 import { companionVoice } from '../coach';
 import { Btn, CoinPill, INK, PopIn, TONE } from './ui';
 
@@ -400,20 +400,7 @@ const Camp: React.FC<Props> = ({ save, history = NO_BATTLES, onChange, onRateBat
                   </View>
                   {unlocked && (
                     <>
-                      <View style={st.passives}>
-                        {f.passives.map(id => {
-                          const p = getPassive(id);
-                          return (
-                            <View key={id} style={st.passive} testID={`camp-passive-${id}`}>
-                              <Icon name={p.icon} size={18} color={INK} />
-                              <View style={{ flex: 1 }}>
-                                <Text style={st.passiveName}>{p.name}</Text>
-                                <Text style={st.passiveText}>{p.text}</Text>
-                              </View>
-                            </View>
-                          );
-                        })}
-                      </View>
+                      <FighterPassivesList fighter={f.name} itemTestIdPrefix="camp-passive" />
                       <TouchableOpacity
                         testID={`camp-open-tree-${f.name}`}
                         onPress={() => { sfx('confirm'); fireFighterReaction(f.name, 'powerup'); setTreeFighter(f.name); }}
@@ -645,42 +632,20 @@ const Camp: React.FC<Props> = ({ save, history = NO_BATTLES, onChange, onRateBat
               const unlocked = save.unlockedArcana.includes(a.id);
               const equipped = arcana.includes(a.id);
               return (
-                <TouchableOpacity
+                <ArcanaCard
                   key={a.id}
+                  arcanaId={a.id}
+                  tarot
+                  showTagline
+                  selected={equipped}
+                  badgeText={equipped ? 'ACTIVE' : undefined}
+                  lockedText={!unlocked ? `Unlock: ${unlockHint({ kind: 'arcana', id: a.id }, save)}` : undefined}
                   testID={`camp-arcana-${a.id}`}
-                  disabled={!unlocked}
                   onPress={() => {
                     sfx('confirm');
                     onChange(toggleArcana(save, a.id));
                   }}
-                  activeOpacity={0.85}
-                  accessibilityState={{ selected: equipped, disabled: !unlocked }}
-                  style={[
-                    st.arcanaCard,
-                    !unlocked && { opacity: 0.6, backgroundColor: '#EFEAE2' },
-                    equipped && { borderColor: COLORS.actionYellow, backgroundColor: TONE.selected },
-                  ]}
-                >
-                  <View style={[st.arcanaTarot, equipped && { backgroundColor: COLORS.actionYellow }]}>
-                    <Text style={st.arcanaNumeral}>{a.numeral}</Text>
-                    <Icon name={unlocked ? a.icon : 'lorc/padlock'} size={26} color={INK} />
-                  </View>
-                  <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-                      <Text style={[st.fighterName, { flexShrink: 1 }]}>{unlocked ? a.name : `Arcana ${a.numeral}: ???`}</Text>
-                      {equipped && <View style={st.usingTag}><Text style={st.usingText}>ACTIVE</Text></View>}
-                    </View>
-                    {unlocked ? (
-                      <>
-                        <Text style={st.fighterBlurb}>{a.tagline}</Text>
-                        <Text style={st.arcanaUpside}>▲ {a.upside}</Text>
-                        <Text style={st.arcanaTradeoff}>▼ {a.tradeoff}</Text>
-                      </>
-                    ) : (
-                      <Text style={st.fighterBlurb}>Unlock: {unlockHint({ kind: 'arcana', id: a.id }, save)}</Text>
-                    )}
-                  </View>
-                </TouchableOpacity>
+                />
               );
             })}
           </>

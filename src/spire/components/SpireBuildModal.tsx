@@ -1,22 +1,24 @@
 /**
  * Starfall Spire Build Inspector Modal.
  *
- * Reuses `WeaponExplainer.tsx` (single weapon explainer guardrail!), `FighterAvatar`,
- * `WeaponAvatar`, `ARCANA`, `EVOLUTION_RECIPES`, and `SKILL_NODES`.
+ * Reuses `WeaponExplainer.tsx` (single weapon explainer guardrail!) plus shared
+ * domain cards (`FighterPassivesList`, `WeaponChip`, `ArmedEvolutionRow`,
+ * `SkillNodeRow`, `ArcanaCard`) and Adventure's `UPGRADES` table.
  */
 import React, { useState } from 'react';
 import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import Icon from '@/components/Icon';
 import { FighterAvatar } from '@/components/fighters';
-import { WeaponAvatar } from '@/components/weapons';
 import { COLORS } from '@/utils/colors';
-import { getFighter } from '@/adventure/data/fighters';
-import { getPassive } from '@/adventure/data/passives';
-import { getArcana } from '@/adventure/data/arcana';
 import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
-import { getSkillNode } from '@/adventure/data/skillTrees';
-import { weaponLevelSuffix } from '@/adventure/data/armory';
+import { getUpgrade } from '@/adventure/data/upgrades';
 import WeaponExplainer from '@/adventure/components/WeaponExplainer';
+import {
+  ArcanaCard,
+  ArmedEvolutionRow,
+  FighterPassivesList,
+  SkillNodeRow,
+  WeaponChip,
+} from '@/adventure/components/SharedCards';
 import { Btn, Eyebrow, INK, PopIn, TONE } from '@/adventure/components/ui';
 import { ASCENSION_DESCRIPTIONS } from '../data/ascensions';
 import { buildSpireWeaponBuilds, spireArmedRecipes, spireHeldWeapons } from '../engine/bridge';
@@ -32,12 +34,15 @@ const SpireBuildModal: React.FC<Props> = ({ visible, run, onClose }) => {
   const [selectedWeaponId, setSelectedWeaponId] = useState<string | null>(null);
   if (!visible) return null;
 
-  const fighter = getFighter(run.fighter);
   const builds = buildSpireWeaponBuilds(run);
   const weapons = spireHeldWeapons(run);
   const armedIds = spireArmedRecipes(run);
   const armedRecipes = EVOLUTION_RECIPES.filter(r => armedIds.includes(r.id));
   const focusedWeapon = weapons.find(w => w.id === selectedWeaponId) ?? weapons[0] ?? null;
+
+  const heavyTier = run.upgrades?.heavy_hitter ?? 0;
+  const bonusDmg = heavyTier > 0 ? (getUpgrade('heavy_hitter').bonusDamage?.(heavyTier) ?? heavyTier) : 0;
+  const bonusClock = (run.upgrades?.hourglass ?? 0) * 8;
 
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
@@ -50,7 +55,7 @@ const SpireBuildModal: React.FC<Props> = ({ visible, run, onClose }) => {
               <Eyebrow text={`Spire Build · Seed ${run.seed}`} />
               <Text style={st.title} numberOfLines={1}>{run.fighter}</Text>
               <Text style={st.sub}>
-                ♥ {run.hearts}/{run.maxHearts} · {run.coins}¢ · +{run.bonusDamagePerMatch} dmg · +{run.bonusClockSeconds}s clock
+                ♥ {run.hearts}/{run.maxHearts} · {run.coins}¢ · +{bonusDmg} dmg · +{bonusClock}s clock
               </Text>
             </View>
             <TouchableOpacity onPress={onClose} style={st.closeBtn} accessibilityLabel="Close">
@@ -61,41 +66,21 @@ const SpireBuildModal: React.FC<Props> = ({ visible, run, onClose }) => {
           <ScrollView contentContainerStyle={st.body}>
             {/* Passives */}
             <Text style={st.section}>PASSIVES</Text>
-            <View style={st.cardGroup}>
-              {fighter.passives.map(pid => {
-                const p = getPassive(pid);
-                return (
-                  <View key={pid} style={st.rowCard}>
-                    <Icon name={p.icon} size={16} color={INK} />
-                    <Text style={st.rowText}>
-                      <Text style={st.bold}>{p.name}: </Text>{p.text}
-                    </Text>
-                  </View>
-                );
-              })}
-            </View>
+            <FighterPassivesList fighter={run.fighter} />
 
             {/* Held Weapons (tap to inspect with WeaponExplainer) */}
             <Text style={st.section}>WEAPONS ({weapons.length} · UNCAPPED)</Text>
             <View style={st.weaponGrid}>
-              {weapons.map((w, i) => {
-                const lv = builds[w.id]?.level ?? 1;
-                const active = focusedWeapon?.id === w.id;
-                return (
-                  <TouchableOpacity
-                    key={`${w.id}-${i}`}
-                    testID={`spire-build-weapon-${w.id}`}
-                    onPress={() => setSelectedWeaponId(w.id)}
-                    style={[st.weaponChip, active && st.weaponChipActive]}
-                    activeOpacity={0.8}
-                  >
-                    <WeaponAvatar weapon={w} size={22} />
-                    <Text style={st.weaponChipText} numberOfLines={1}>
-                      {w.name}{weaponLevelSuffix(lv)}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+              {weapons.map((w, i) => (
+                <WeaponChip
+                  key={`${w.id}-${i}`}
+                  testID={`spire-build-weapon-${w.id}`}
+                  weapon={w}
+                  level={builds[w.id]?.level ?? 1}
+                  active={focusedWeapon?.id === w.id}
+                  onPress={() => setSelectedWeaponId(w.id)}
+                />
+              ))}
             </View>
             {focusedWeapon && (
               <WeaponExplainer weapon={focusedWeapon} build={builds[focusedWeapon.id]} defaultOpen />
@@ -108,13 +93,7 @@ const SpireBuildModal: React.FC<Props> = ({ visible, run, onClose }) => {
             ) : (
               <View style={st.cardGroup}>
                 {armedRecipes.map(r => (
-                  <View key={r.id} style={st.evoCard}>
-                    <Icon name={r.icon} size={16} color={TONE.evoReady} />
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={st.evoName}>{r.name} · {r.familyText}</Text>
-                      <Text style={st.rowText}>{r.activeText}</Text>
-                    </View>
-                  </View>
+                  <ArmedEvolutionRow key={r.id} recipe={r} showFamily />
                 ))}
               </View>
             )}
@@ -124,18 +103,9 @@ const SpireBuildModal: React.FC<Props> = ({ visible, run, onClose }) => {
               <>
                 <Text style={st.section}>MASTERED SKILL NODES ({run.skillNodes.length})</Text>
                 <View style={st.cardGroup}>
-                  {run.skillNodes.map(id => {
-                    const node = getSkillNode(id);
-                    if (!node) return null;
-                    return (
-                      <View key={id} style={st.rowCard}>
-                        <Icon name={node.icon} size={16} color={TONE.upside} />
-                        <Text style={st.rowText}>
-                          <Text style={st.bold}>{node.name}: </Text>{node.text}
-                        </Text>
-                      </View>
-                    );
-                  })}
+                  {run.skillNodes.map(id => (
+                    <SkillNodeRow key={id} nodeId={id} />
+                  ))}
                 </View>
               </>
             )}
@@ -145,19 +115,9 @@ const SpireBuildModal: React.FC<Props> = ({ visible, run, onClose }) => {
               <>
                 <Text style={st.section}>ARCANA WILDCARDS ({run.arcana.length})</Text>
                 <View style={st.cardGroup}>
-                  {run.arcana.map(id => {
-                    const a = getArcana(id);
-                    return (
-                      <View key={id} style={st.rowCard}>
-                        <Icon name={a.icon} size={16} color={INK} />
-                        <View style={{ flex: 1, minWidth: 0 }}>
-                          <Text style={st.arcanaName}>{a.numeral} · {a.name}</Text>
-                          <Text style={[st.rowText, { color: TONE.upside }]}>▲ {a.upside}</Text>
-                          <Text style={[st.rowText, { color: TONE.tradeoff }]}>▼ {a.tradeoff}</Text>
-                        </View>
-                      </View>
-                    );
-                  })}
+                  {run.arcana.map(id => (
+                    <ArcanaCard key={id} arcanaId={id} />
+                  ))}
                 </View>
               </>
             )}
@@ -197,17 +157,8 @@ const st = StyleSheet.create({
   body: { padding: 12, gap: 10 },
   section: { fontSize: 10, fontWeight: '900', letterSpacing: 1.3, color: TONE.spent, marginTop: 4 },
   cardGroup: { gap: 6 },
-  rowCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: COLORS.paperBeige, borderRadius: 8, borderWidth: 1.5, borderColor: '#D6CFC4', padding: 8 },
-  evoCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: TONE.coinPale, borderRadius: 8, borderWidth: 1.5, borderColor: TONE.evoReady, padding: 8 },
-  evoName: { fontSize: 12, fontWeight: '900', color: INK },
-  arcanaName: { fontSize: 12, fontWeight: '900', color: INK },
-  rowText: { flex: 1, fontSize: 12, lineHeight: 17, color: INK },
-  bold: { fontWeight: '900' },
   muted: { fontSize: 12, color: TONE.spent },
   weaponGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  weaponChip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: COLORS.paperBeige, borderWidth: 2, borderColor: '#C9C2B8', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, maxWidth: '100%' },
-  weaponChipActive: { backgroundColor: TONE.selected, borderColor: INK },
-  weaponChipText: { flexShrink: 1, fontSize: 12, fontWeight: '800', color: INK },
   ascLine: { fontSize: 11, color: INK, opacity: 0.85, lineHeight: 16 },
   footer: { padding: 12, borderTopWidth: 2, borderTopColor: INK, backgroundColor: COLORS.paperBeige },
 });

@@ -224,11 +224,15 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
         onToggleEffects={reducedMotion ? undefined : handleToggleEffects}
         runOverrides={overrides}
         featuresOverride={new Set(SPIRE_FIGHT_FEATURES)}
-        spireContext={{
-          floorLabel,
-          nodeLabel,
-          hideChallenge: true,
-          noRestart: true,
+        chrome={{
+          statusBanner: {
+            icon: 'lorc/mountaintop',
+            text: `${floorLabel} · ${nodeLabel}`,
+            testID: 'run-spire-bar',
+          },
+          pauseSubtitle: `${floorLabel} · ${enc.name}`,
+          alwaysShowHudStats: true,
+          allowRestart: false,
           quitLabel: 'Retreat to Briefing',
           quitHint: 'Returns to the pre-battle briefing for this floor.',
         }}

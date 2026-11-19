@@ -30,6 +30,7 @@ import { BOUNTIES } from './data/bounties';
 import { EVOLUTION_RECIPES } from './data/evolutions';
 import { CAMPAIGN_FEATURES, FEATURES } from './data/features';
 import { starRewards, unlockablesOf } from './data/rewards';
+import { inFamily, newRecipesArmedBy } from './engine/sources';
 import { tuningSpent, weaponLevel } from './weaponLevels';
 
 /**
@@ -330,13 +331,7 @@ export const charmSynergyWithEquipped = (
   candidateWeaponId: string
 ): { known: boolean; recipe: EvolutionRecipe } | null => {
   if (save.unlockedEvolutions.length === 0 || !save.armory.includes(candidateWeaponId)) return null;
-  const charms = equippedCharms(save);
-  if (charms.includes(candidateWeaponId)) return null;
-  const matches = EVOLUTION_RECIPES.filter(
-    r =>
-      (inFamily(candidateWeaponId, r.families[0]) && charms.some(c => inFamily(c, r.families[1]))) ||
-      (inFamily(candidateWeaponId, r.families[1]) && charms.some(c => inFamily(c, r.families[0])))
-  );
+  const matches = newRecipesArmedBy(equippedCharms(save), candidateWeaponId);
   if (matches.length === 0) return null;
   const knownIds = new Set([...save.unlockedEvolutions, ...save.discoveredEvolutions]);
   const best = matches.find(r => knownIds.has(r.id)) ?? matches[0];
@@ -359,10 +354,6 @@ export const unequipArcana = (save: AdventureSave, arcanaId: ArcanaId): Adventur
 
 export const toggleArcana = (save: AdventureSave, arcanaId: ArcanaId): AdventureSave =>
   equippedArcanaOf(save).includes(arcanaId) ? unequipArcana(save, arcanaId) : equipArcana(save, arcanaId);
-
-/** A weapon belongs to a recipe family when its id is the family id or a tier of it (`oracle-eye-rare`). */
-const inFamily = (weaponId: string, family: readonly string[]): boolean =>
-  family.some(p => weaponId === p || weaponId.startsWith(`${p}-`));
 
 /** Unlocked recipes whose two families are both among these weapons. */
 export const recipesArmedBy = (weaponIds: readonly string[], unlockedEvolutions: readonly string[]): EvolutionRecipe[] =>

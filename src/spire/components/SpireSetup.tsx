@@ -13,11 +13,11 @@ import { FighterAvatar } from '@/components/fighters';
 import { WeaponAvatar } from '@/components/weapons';
 import { COLORS } from '@/utils/colors';
 import type { CharacterName } from '@/types';
-import { FIGHTERS, getFighter } from '@/adventure/data/fighters';
-import { getPassive } from '@/adventure/data/passives';
+import { FIGHTERS } from '@/adventure/data/fighters';
 import { getArmoryWeapon } from '@/adventure/data/armory';
 import { randomSeed } from '@/adventure/engine/rng';
 import { sfx } from '@/audio';
+import { FighterPassivesList } from '@/adventure/components/SharedCards';
 import { Btn, Eyebrow, Heart, INK, PopIn, TONE } from '@/adventure/components/ui';
 import { ASCENSION_DESCRIPTIONS, MAX_ASCENSION } from '../data/ascensions';
 import { STARTER_KITS } from '../data/encounters';
@@ -38,7 +38,6 @@ const SpireSetup: React.FC<Props> = ({ activeRun, meta, onStartNew, onResume, on
   const [ascension, setAscension] = useState<number>(Math.min(meta.highestAscensionUnlocked, MAX_ASCENSION));
   const [seed, setSeed] = useState<number>(() => randomSeed());
 
-  const fDef = getFighter(fighter);
   const kit = STARTER_KITS[fighter];
   const w1 = getArmoryWeapon(kit.starterWeapon);
   const w2 = getArmoryWeapon(kit.bonusWeapon);
@@ -125,19 +124,7 @@ const SpireSetup: React.FC<Props> = ({ activeRun, meta, onStartNew, onResume, on
           </View>
           <Text style={st.kitBlurb}>{kit.tagline}</Text>
 
-          <View style={st.passivesBox}>
-            {fDef.passives.map(pid => {
-              const p = getPassive(pid);
-              return (
-                <View key={pid} style={st.passiveLine}>
-                  <Icon name={p.icon} size={14} color={INK} />
-                  <Text style={st.passiveText}>
-                    <Text style={{ fontWeight: '900' }}>{p.name}: </Text>{p.text}
-                  </Text>
-                </View>
-              );
-            })}
-          </View>
+          <FighterPassivesList fighter={fighter} compact />
 
           <Text style={st.subSection}>STARTER WEAPONS</Text>
           <View style={st.starterRow}>
@@ -252,9 +239,6 @@ const st = StyleSheet.create({
   kitStats: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   kitStatText: { fontSize: 13, fontWeight: '900', color: INK, marginRight: 4 },
   kitBlurb: { fontSize: 12, lineHeight: 17, color: INK, opacity: 0.85 },
-  passivesBox: { backgroundColor: COLORS.paperBeige, borderRadius: 8, borderWidth: 1.5, borderColor: '#D6CFC4', padding: 8, gap: 5 },
-  passiveLine: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
-  passiveText: { flex: 1, fontSize: 12, lineHeight: 16, color: INK },
   subSection: { fontSize: 10, fontWeight: '900', letterSpacing: 1.1, color: TONE.spent, marginTop: 2 },
   starterRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   starterChip: { flex: 1, minWidth: 132, flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: COLORS.paperBeige, borderRadius: 8, borderWidth: 1.5, borderColor: INK, padding: 7 },
