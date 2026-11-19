@@ -62,6 +62,7 @@ Read every spring by one number, the **damping ratio**: `damping / (2 × √(sti
 
 - **Position and scale may bounce. Opacity and colour never do**: an overshooting fade is a flicker. Fades use `withTiming`.
 - **If everything overshoots, nothing feels precise.** Give each class of thing its own spring and keep to it.
+- **A spring comes to rest late.** `SPRING.lively` is still for about twice as long as a 190 ms curve takes. On one hero that tail is the charm. On things that queue behind each other (a board of cards being dealt, a list) it doubles the wait: use a timed curve there (`EASE.pop` gives the overshoot without the tail). The report's `in 24f` is the time to rest: read it.
 - **Time neighbours off the duration you asked for**, not off the moment the spring finally stops. A spring's tail is longer than it looks.
 - A value that changes target several times: let the spring carry on to the new target. Do not restart it from rest.
 
@@ -146,6 +147,15 @@ Disney's animators wrote these down as feelings. A model follows them only as fr
 ## Reduced motion and safety
 
 - Reduced motion **removes movement and springs, keeps opacity and colour**, halves durations, plays no loop by itself. The meaning must still arrive: nothing important is said by motion alone.
+- **Reanimated does the removing for you, and it removes too much.** With the OS setting on, every `withTiming`, `withSpring`, `withDelay` and `withSequence` jumps straight to its end unless it is marked to stay:
+
+  ```ts
+  import { ReduceMotion, withDelay, withTiming } from 'react-native-reanimated';
+  // The fade that carries the meaning still plays; the travel around it does not
+  opacity.value = withDelay(120, withTiming(1, { duration: MS.feedback, reduceMotion: ReduceMotion.Never }), ReduceMotion.Never);
+  ```
+
+  So "keep opacity and colour" does nothing by itself: a number that fades in, holds and fades out is simply never shown, and a wash that should stay for a second lasts one frame. Mark the fades and the holds that carry meaning with `ReduceMotion.Never` (the delay too), leave the moves unmarked, and look at the `--reduced` capture: it should show the meaning arriving without the travel.
 - No flash more than 3 times a second. No white full-screen flash.
 - Shakes, spins and big zooms are what make people ill: they are the first to go.
 

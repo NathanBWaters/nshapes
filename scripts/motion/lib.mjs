@@ -140,7 +140,10 @@ export function writeJson(file, value) {
 export function gitSha() {
   try {
     const { execSync } = require('node:child_process');
-    return execSync('git rev-parse --short HEAD', { cwd: REPO_ROOT, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+    const sha = execSync('git rev-parse --short HEAD', { cwd: REPO_ROOT, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+    // A plus sign says the code under test is not what that commit holds
+    const dirty = execSync('git status --porcelain --untracked-files=no', { cwd: REPO_ROOT, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+    return dirty ? `${sha}+` : sha;
   } catch {
     return 'unknown';
   }

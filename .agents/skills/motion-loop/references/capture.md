@@ -32,7 +32,7 @@ Options of `motion:capture`:
 | `--label <name>` | Folder name of this capture: `before`, `r1`, `r2`, `reduced`. Default `run`. |
 | `--twice` | Capture a second time and compare. Says `repeatable` or `NOT repeatable` in the report. Use it on the baseline. |
 | `--reduced` | Capture with `prefers-reduced-motion: reduce`. (The in-game Effects switch is a separate thing: a shot can flip it, e.g. `fx-hit-effects-off`, `foe-hit-quiet`.) Beware what it shows: with this setting Reanimated jumps every animation straight to its last frame, so anything that ends invisible (a number that fades out, a label that leaves) is never seen at all. A reduced capture with one changed frame is usually that bug, not a pass. Give what must be read its own short fade with `reduceMotion: ReduceMotion.Never`, or a plain timed hold. |
-| `--frames N` | Exactly N frames. Default: until the picture has been still for 18 frames, or `--max` (240). |
+| `--frames N` | Exactly N frames. Default: until the picture has been still for 18 frames, or `--max` (240). Give it when something happens after a pause (new cards dealt half a second after the old ones leave): the capture would stop in the pause. |
 | `--step 8` | Half frames, for a very fast move. `--step 32` to cover a long sequence cheaply. |
 | `--dpr 2` | Sharper frames for looking closely at small things. Four times the pixels. |
 | `--preroll N` | Frames taken before the trigger (default 8). They measure the ambient motion. |
@@ -111,6 +111,7 @@ Rules for shots:
 - **Every fight event has a shot already:** `fx:<event>` plays it in the effects studio (`/dev/fx`). Use a real-fight shot (`fight-set`, `fight-miss`, `fight-open`, `fight-win`) to see it in context, with the board, the HUD and the creatures reacting.
 - **Clip to the subject.** Idle creatures change a few thousand pixels every frame. On a whole-screen shot that noise hides small moves from the timeline (a card lifting is a few hundred pixels) and fills the report with breathing. `clip: 'game-board'` (see `board-set`, `fight-pick`) measures only what is inside the box.
 - **A shot that starts in the middle of something** (the frame a foe goes down, with the last hit still playing) has no quiet moment before it, so the capture cannot learn what "still" looks like and the report says nothing changed. Give the shot `ambient: 0` (or the number of pixels per frame that should count as still), or better, start it on a quiet frame.
+- **A capture label ending in `+` was taken with uncommitted changes** (`@1a79299+`): the sheet shows the commit it was built on, not the code under test. Label your captures (`before`, `r1`) so the folder name says what they are.
 - **Compare like with like.** A compare sheet lines two captures up by frame number, so both must be the same shot. If you change the shot (a different starting point), capture the baseline again with the new shot (`git stash`, capture, `git stash pop`).
 - **Endless loops** (an idle creature, a bobbing node): give the shot `frames` and `loop: { frames: N }` with the loop's length in frames; the report then checks the seam.
 - **Add the shot in the same change as the animation.** A surface with no shot cannot be reviewed by the next agent.
