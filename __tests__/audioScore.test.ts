@@ -4,7 +4,7 @@
  * mix) and the bridge from fight events to cues. docs/sound-design.md.
  */
 import { EVENT_CUE, HIT_SIZES, JACKPOT_CHAIN, MAX_CHAIN, alertsOf, hitSize, moodOf, soundsFor, type FightSound } from '@/audio/fightAudio';
-import { CUE_NAMES } from '@/audio/band';
+import { band, CUE_NAMES } from '@/audio/band';
 import { DIRECTOR, NO_ALERTS, direct, restingMix, worldTone, type FightMood } from '@/audio/director';
 import { INSTRUMENTS } from '@/audio/instruments';
 import { ARRANGEMENTS, THEME, THEME_B } from '@/audio/songs';
@@ -490,5 +490,14 @@ describe('the fight the band hears', () => {
     expect(alerts.thornSoon).toBe(true);
     expect(alerts.potatoSoon).toBe(false);
     expect(alertsOf({ ...s, board: s.board.map((c, i) => (i === 0 ? { ...c, thornAt: s.elapsedMs + 60000 } : c)) }).thornSoon).toBe(false);
+  });
+
+  it('registers slow-mo defeat and Angry Birds star stamp cues and runs slowMoDefeat safely without Web Audio', () => {
+    expect(CUE_NAMES).toContain('slowMoDefeat');
+    expect(CUE_NAMES).toContain('starSwoosh');
+    expect(CUE_NAMES).toContain('star');
+    expect(CUE_NAMES).toContain('rankSeal');
+    expect(() => band.slowMoDefeat({ boss: true, perfectParry: true })).not.toThrow();
+    expect(() => band.finale(true)).not.toThrow();
   });
 });

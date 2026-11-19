@@ -51,9 +51,9 @@ export const DARK = {
  * `starLandMs` the frame it hits its slot (its sound and its goal's ✓ belong there),
  * `starsLandedMs` when the last one has settled and had a breath.
  */
-export const STAR_FIRST_MS = 200;
-export const STAR_GAP_MS = 300;
-export const STAR_FALL_MS = MS.quick;
+export const STAR_FIRST_MS = 180;
+export const STAR_GAP_MS = 340;
+export const STAR_FALL_MS = MS.screen;
 export const starPopDelayMs = (index: number): number => STAR_FIRST_MS + index * STAR_GAP_MS;
 export const starLandMs = (index: number): number => starPopDelayMs(index) + STAR_FALL_MS;
 export const starsLandedMs = (stars: number): number => (stars > 0 ? starLandMs(stars - 1) + 450 : 600);

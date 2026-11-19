@@ -4,8 +4,9 @@
  * another and overlap, each ✓ follows its star, the coins wait for a breath
  * after the last star, and the unlock reveal never covers a star still moving.
  */
-import { coinRollAmount, coinRollTicks, coinStartMs, COIN_TICK_MS, FIGHTER_CHEER_LAG_MS, missesShownMs, TICK_LAG_MS } from '@/adventure/components/ResultsMotion';
+import { coinRollAmount, coinRollTicks, coinStartMs, COIN_TICK_MS, FIGHTER_CHEER_LAG_MS, missesShownMs, sealLandMs, TICK_LAG_MS } from '@/adventure/components/ResultsMotion';
 import { STAR_FALL_MS, starLandMs, starPopDelayMs, starsLandedMs } from '@/adventure/components/ui';
+import { FX_TIMING, SLOWMO_HOLD_MS, SLOWMO_IMPACT_DELAY_MS, SLOWMO_RELEASE_MS, SLOWMO_SETTLE_PAD_MS, SLOWMO_TOTAL_MS } from '@/adventure/fx';
 import { SCALE } from '@/utils/motion';
 
 describe('results payout timeline', () => {
@@ -47,5 +48,20 @@ describe('results payout timeline', () => {
   it('a slammed star starts big but not so big it reads as broken', () => {
     expect(SCALE.slam).toBeGreaterThan(1.2);
     expect(SCALE.slam).toBeLessThanOrEqual(1.6);
+  });
+
+  it('the performance rank seal stamps after the final star and before the coins roll', () => {
+    for (let stars = 1; stars <= 3; stars++) {
+      expect(sealLandMs(stars)).toBeGreaterThan(starLandMs(stars - 1));
+      expect(sealLandMs(stars)).toBeLessThan(coinStartMs(stars));
+    }
+  });
+
+  it('the Expedition 33 slow-mo knockout waits for thrown cards to land and settles before results handoff', () => {
+    expect(SLOWMO_IMPACT_DELAY_MS).toBeGreaterThanOrEqual(FX_TIMING.flightMs);
+    expect(SLOWMO_HOLD_MS).toBeGreaterThanOrEqual(600);
+    expect(SLOWMO_RELEASE_MS).toBeGreaterThanOrEqual(180);
+    expect(SLOWMO_SETTLE_PAD_MS).toBeGreaterThan(0);
+    expect(SLOWMO_TOTAL_MS).toBe(SLOWMO_IMPACT_DELAY_MS + SLOWMO_HOLD_MS + SLOWMO_RELEASE_MS + SLOWMO_SETTLE_PAD_MS);
   });
 });

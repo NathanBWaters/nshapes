@@ -107,3 +107,31 @@ Seen on `results-quick` (`/dev/results?case=perfect`, the same frames as `result
 
 File: `src/adventure/components/ResultsMotion.tsx` (`BigStar`).
 
+---
+
+## v0.1.147 Upgrade: Angry Birds Giant Stamping Stars & Ceremonial Victory Card
+
+### Goal & Reference
+Elevate the Victory Card from a flat white receipt with small `52 px` Unicode `★` glyphs into a bold, celebratory **Angry Birds–inspired** trophy payoff: huge arched beveled SVG gold stars sweeping across the screen on angled arcs and stamping physically into carved sockets (jolting the entire card downward on every impact), layered swoosh + stamp thwack + ascending triad + 3★ orchestral fanfare audio, a ceremonial dark-onyx Victory Crest header with golden sunburst, K.O. foe trophy framing, and a wax-stamped Performance Rank Seal (`FLAWLESS`, `BOSS SLAYER`, `NEW RECORD`, `3★ MASTER`).
+
+### Three Variants Considered
+1. **Incremental tweak on white card (`64 px` text stars):** Rejected — still reads like a plain receipt with no sweeping travel or physical stamp weight.
+2. **Dark-Onyx Ceremonial Victory Crest + Giant Arched SVG Stars with Across-Screen Arc & Whole-Card Stamp Recoil + Rank Seal (Chosen):** Gives huge unmistakable silhouette, razor-sharp vector stars at `2×` slam scale, physical card recoil (`+4/+6.5/+9.5 px`), exact landing frame for swoosh → thwack+chime → goal ✓, and fits cleanly above the fold on 390×844.
+3. **Separate full-screen star modal before results:** Rejected — adds an extra screen transition and delays goals/coins on replays.
+
+### Rounds & Scores (Response / Readability / Motion / Staging / Rhythm / Identity / Sync)
+- **Baseline (`results-quick/before` against new goal):** `7 / 7 / 6 / 6 / 7 / 5 / 7`
+  - Tiny `52 px` flat text `★` glyphs shrank in place with no flight arc, no card recoil, peeking empty-star tip during squash, thin `star` SFX (no swoosh/thud/sparkle), and second stats row sliced at the fold.
+- **Round 1 (`results-quick/r1` + `fight-win/r1`):** `8 / 8 / 8 / 8 / 8 / 9 / 8`
+  - Built `TrophyStarSvg`, giant arched `ResultStars` (`62`/`74`/`62 px`), `VictorySunburst`, `VictorySeal`, multi-star `ResultsCard` thump recoil, dark-onyx Victory Crest header, and `starSwoosh` + multi-layered `star` + `rankSeal` cues.
+  - Caught in frames: Star 3 (`fromX: +120`) started partially outside the right edge of 390 px viewport; `Matches / Mistakes` stat row remained half-clipped behind footer.
+- **Round 2 (`results-quick/r2`, `results-two/r2`, `fight-ko/r2`, `reduced`):** `9 / 9 / 9 / 9 / 9 / 10 / 9`
+  - Tightened horizontal launch (`fromX: -82 / -10 / +84`) so 100% of all 3 giant stars stay vividly inside 390 px during flight; enlarged arched stars to `65 / 78 / 65 px`; brightened 3★ sunburst climax (`0.34 → 0.28`); trimmed ~36 px vertical rhythm so both stat rows sit 100% cleanly above the pinned footer.
+- **Round 3 (`results-quick/r3 --twice`, `fight-ko/r3/strip-star1.png`, `strip-star3.png`):** `9 / 9 / 9 / 9 / 9 / 10 / 9`
+  - Zero hints on `results-quick/r3`. Empty trophy socket hides cleanly on the exact stamp frame (resolved prior open issue). Exact sound sync: `starSwoosh` (`f112.2 / f133.4 / f154.7`) → `star` (`f125.9 / f147.2 / f168.4`) → `rankSeal` (`f177.2`) → `coinRoll` (`f187.2`). Reduced motion renders the finished Victory Card + all giant SVG stars + rank seal + coin total immediately at rest.
+
+### Final Numbers (v0.1.147)
+- `STAR_FIRST_MS` `180`, `STAR_FALL_MS` `MS.screen` (`220`), `STAR_GAP_MS` `340` → stars stamp at `400 / 740 / 1080 ms`
+- `ResultsCard` stamp recoil: `+4 / +6.5 / +9.5 px` (`24 ms` down, `24 ms` hold, `SPRING.snappy` back)
+- Giant arched SVG stars: `65 px` (`-10°`), `78 px` (`0°`, lifted `8 px`), `65 px` (`+10°`), arcing from `(-82, -78)`, `(-10, -98)`, `(+84, -92)` with `-22 px` parabolic lift and `1.85–2.05×` slam scale
+- `sealLandMs(stars)`: `starLandMs(stars - 1) + 140 ms`, `COIN_BREATH_MS`: `300 ms`

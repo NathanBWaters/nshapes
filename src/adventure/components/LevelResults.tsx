@@ -24,8 +24,8 @@ import { MAIN_LEVELS, mainIndexOf, getLevel } from '../data/levels';
 import { shouldShowDamageNumbers, companionResultsLine } from '../coach';
 import CompanionBubble from './CompanionBubble';
 import { explainStarBreakdown } from '../engine/challenges';
-import { Btn, INK, starLandMs, StarRow, TONE } from './ui';
-import { coinRollAmount, coinRollTicks, coinStartMs, CountingCoinPill, FadeAt, FIGHTER_CHEER_LAG_MS, missesShownMs, ResultsCard, ResultStars, revealPayoutMs, rowTurnMs, TICK_LAG_MS, TickAt, TurnOver } from './ResultsMotion';
+import { Btn, INK, starLandMs, starPopDelayMs, StarRow, TONE } from './ui';
+import { coinRollAmount, coinRollTicks, coinStartMs, CountingCoinPill, FadeAt, FIGHTER_CHEER_LAG_MS, missesShownMs, ResultsCard, ResultStars, revealPayoutMs, rowTurnMs, sealLandMs, TICK_LAG_MS, TickAt, TurnOver, VictorySeal, VictorySunburst } from './ResultsMotion';
 import { Silhouette, UnlockableAvatar, describeRewardUnlocks, describeUnlock } from './rewards';
 import type { FunRating, FunTag } from '@/analytics/fightEvent';
 import RoundFunPrompt from '@/components/RoundFunPrompt';
@@ -86,17 +86,43 @@ const LevelResults: React.FC<Props> = ({
       return first ? isLevelUnlocked(result.save, first) : false;
     }) ?? (won && nextLevel && nextUnlocked && nextLevel.biome !== level.biome ? nextLevel.biome : undefined);
 
+  // The battle's score: damage per minute of fight clock, against the best on this level so far
+  const dpm = damagePerMinute(run);
+  const newBest = bestDpm !== null && dpm > bestDpm;
+  /** Earned victory performance seal stamped onto the hero crest after the stars lock in */
+  const rankSeal: { label: string; accent: 'gold' | 'teal' | 'coral' } | null =
+    practice || !won
+      ? null
+      : level.isBoss
+        ? { label: 'BOSS SLAYER', accent: 'gold' }
+        : newBest
+          ? { label: 'NEW RECORD', accent: 'coral' }
+          : run.mistakes === 0 && stars >= 3
+            ? { label: 'FLAWLESS', accent: 'teal' }
+            : stars >= 3
+              ? { label: '3★ MASTER', accent: 'gold' }
+              : stars === 2
+                ? { label: 'GREAT WIN', accent: 'teal' }
+                : { label: 'CLEARED', accent: 'gold' };
+
   const reduced = useReducedMotion();
   const revealedFirst = React.useRef(unlocksRevealed);
   useEffect(() => {
-    // Each star rings a step higher up the chord, on the frame it hits its slot.
-    // Reduced motion shows every star at once: one chord for all of them, at once.
+    // Angry Birds–style star sequence: brisk rising swoosh as each giant star launches across
+    // the screen, then heavy stamp thwack + ascending triad chime on the exact landing frame.
+    // Reduced motion shows every star at once: one unified chord, no swoosh.
     if (reduced) {
       if (stars > 0) band.cue('star', { amount: stars });
       return;
     }
     const ts: ReturnType<typeof setTimeout>[] = [];
-    for (let i = 1; i <= stars; i++) ts.push(setTimeout(() => band.cue('star', { amount: i }), starLandMs(i - 1)));
+    for (let i = 1; i <= stars; i++) {
+      ts.push(setTimeout(() => band.cue('starSwoosh', { amount: i }), starPopDelayMs(i - 1)));
+      ts.push(setTimeout(() => band.cue('star', { amount: i }), starLandMs(i - 1)));
+    }
+    if (rankSeal) {
+      ts.push(setTimeout(() => band.cue('rankSeal'), sealLandMs(stars)));
+    }
     return () => ts.forEach(clearTimeout);
   }, [stars]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -144,9 +170,6 @@ const LevelResults: React.FC<Props> = ({
       : null;
   const companionText = [companionResultsLine(level, run, stars, result.save.coinsUnlocked), extraTip].filter(Boolean).join(' ');
 
-  // The battle's score: damage per minute of fight clock, against the best on this level so far
-  const dpm = damagePerMinute(run);
-  const newBest = bestDpm !== null && dpm > bestDpm;
   // A weapon the player already owned came back as a free level: name the level it reached
   const levelOf = (star: number, name: string) => {
     const u = result.unlocks.find(x => x.kind === 'weapon' && x.star === star && x.level !== undefined && describeUnlock(x).name === name);
@@ -179,52 +202,96 @@ const LevelResults: React.FC<Props> = ({
   const resultFighterMaxHealth = hasHearts ? run.maxHearts! : 3;
 
   return (
-    <View style={[st.root, { backgroundColor: biome.colors.sky, paddingTop: insets.top + 8 }]}>
+    <View style={[st.root, { backgroundColor: biome.colors.sky, paddingTop: insets.top + 6 }]}>
       <ScrollView contentContainerStyle={st.scroll}>
-        <ResultsCard reduced={reduced} style={st.card}>
-          <Text style={st.levelId}>{practice ? 'PRACTICE' : level.id} · {level.name}</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
-            <FighterAvatar
-              testID="results-fighter-avatar"
-              character={run.fighter}
-              size={80}
-              health={resultFighterHealth}
-              maxHealth={resultFighterMaxHealth}
-              mood={won ? 'victory' : 'defeat'}
-              reaction={won && cheer ? { type: stars >= 3 ? 'ecstatic' : 'joy', id: 1 } : null}
-              framed
-              interactive
-            />
-            <Text style={{ fontWeight: '900', fontSize: 13, color: INK, opacity: 0.55 }}>VS</Text>
-            <EnemyAvatar
-              testID="results-enemy-avatar"
-              enemy={{ name: run.foeName, icon: run.foeIcon, tier: run.foe.tier }}
-              size={64}
-              hp={run.foeHp}
-              maxHp={run.foeMaxHp}
-              mood={practice ? 'idle' : won ? 'cornered' : 'victory'}
-              reaction={!won ? { type: 'taunt', id: 1 } : null}
-              framed
-              interactive
-            />
+        <ResultsCard reduced={reduced} stampStars={won && !practice ? stars : 0} style={st.card}>
+          {/* Ceremonial Dark-Onyx Victory Stage Header */}
+          <View style={st.heroBand}>
+            <View style={[st.heroBgClip, !won && st.heroBgDefeat]} pointerEvents="none">
+              {won && !practice && <VictorySunburst stars={stars} reduced={reduced} />}
+              <View style={[st.heroAccentBar, !won && st.heroAccentDefeat]} />
+            </View>
+
+            {/* Top meta bar: level ribbon + stamped Victory Rank Seal */}
+            <View style={st.heroTopRow}>
+              <View style={st.levelPill}>
+                <Text style={st.levelId} numberOfLines={1}>
+                  {practice ? 'PRACTICE' : level.id} · {level.name}
+                </Text>
+              </View>
+              {rankSeal && (
+                <VictorySeal
+                  label={rankSeal.label}
+                  accent={rankSeal.accent}
+                  at={sealLandMs(stars)}
+                  reduced={reduced}
+                />
+              )}
+            </View>
+
+            {/* Champion Fighter vs Vanquished Foe */}
+            <View style={st.matchupRow}>
+              <View style={[st.championRing, won && !practice && st.championRingGold]}>
+                <FighterAvatar
+                  testID="results-fighter-avatar"
+                  character={run.fighter}
+                  size={60}
+                  health={resultFighterHealth}
+                  maxHealth={resultFighterMaxHealth}
+                  mood={won ? 'victory' : 'defeat'}
+                  reaction={won && cheer ? { type: stars >= 3 ? 'ecstatic' : 'joy', id: 1 } : null}
+                  framed
+                  interactive
+                />
+              </View>
+              <Text style={st.vsBadge}>VS</Text>
+              <View style={st.foeWrap}>
+                <View style={won && !practice ? st.foeBeaten : undefined}>
+                  <EnemyAvatar
+                    testID="results-enemy-avatar"
+                    enemy={{ name: run.foeName, icon: run.foeIcon, tier: run.foe.tier }}
+                    size={48}
+                    hp={run.foeHp}
+                    maxHp={run.foeMaxHp}
+                    mood={practice ? 'idle' : won ? 'cornered' : 'victory'}
+                    reaction={!won ? { type: 'taunt', id: 1 } : null}
+                    framed
+                    interactive
+                  />
+                </View>
+                {won && !practice && (
+                  <View style={st.koTag}>
+                    <Text style={st.koTagText}>K.O.</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+
+            {/* Monumental Gold Victory Title */}
+            <Text style={[st.title, practice && { fontSize: 25 }, !won && st.titleDefeat]}>{title}</Text>
+
+            {/* Giant Arched Angry Birds–style SVG Trophy Stars */}
+            {!practice && <ResultStars stars={stars} size={65} reduced={reduced} darkSocket />}
+
+            {/* The stars are the shards of the fallen star this foe was holding (data/story.ts) */}
+            {!practice && (
+              // The caption of the stars: it would spoil them if it came first
+              <FadeAt at={missesShownMs(stars)} reduced={reduced}>
+                <Text style={st.shards} testID="results-shards">
+                  {stars >= 3 ? 'All 3 star shards won back!' : stars > 0 ? `${stars} of 3 star shards won back` : 'No shards this time'}
+                </Text>
+              </FadeAt>
+            )}
           </View>
-          <Text style={[st.title, practice && { fontSize: 28 }, { color: won ? INK : COLORS.impactRed }]}>{title}</Text>
-          {!practice && <ResultStars stars={stars} size={52} reduced={reduced} />}
-          {/* The stars are the shards of the fallen star this foe was holding (data/story.ts) */}
-          {!practice && (
-            // The caption of the stars: it would spoil them if it came first
-            <FadeAt at={missesShownMs(stars)} reduced={reduced}>
-              <Text style={st.shards} testID="results-shards">
-                {stars >= 3 ? 'All 3 star shards won back!' : stars > 0 ? `${stars} of 3 star shards won back` : 'No shards this time'}
-              </Text>
-            </FadeAt>
-          )}
+
+          {/* Clean Tactile Paper Body */}
+          <View style={st.body}>
           <CompanionBubble
             testID="results-companion-bubble"
             character={run.fighter}
             mood={won ? 'victory' : 'anticipation'}
             tone={stars >= 3 ? 'cheer' : !won ? 'warn' : 'warm'}
-            avatarSize={36}
+            avatarSize={34}
             text={companionText}
             style={{ alignSelf: 'stretch' }}
           />
@@ -428,6 +495,7 @@ const LevelResults: React.FC<Props> = ({
             <RoundFunPrompt rating={funRating} tags={funTags} onChange={onRateFun} testIDPrefix="results-fun" />
           )}
 
+          </View>
         </ResultsCard>
       </ScrollView>
 
@@ -487,32 +555,159 @@ const Stat: React.FC<{ icon: React.ComponentProps<typeof Icon>['name']; label: s
 
 const st = StyleSheet.create({
   root: { flex: 1 },
-  scroll: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', padding: 14 },
-  card: { width: '100%', maxWidth: 440, backgroundColor: COLORS.canvasWhite, borderRadius: 16, borderWidth: 3, borderBottomWidth: 8, borderColor: INK, padding: 20, alignItems: 'center', gap: 12 },
-  levelId: { fontWeight: '900', letterSpacing: 1.5, fontSize: 12, color: INK, opacity: 0.7 },
-  title: { fontWeight: '900', fontSize: 34, letterSpacing: 2 },
+  scroll: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 6 },
+  card: {
+    width: '100%',
+    maxWidth: 440,
+    backgroundColor: COLORS.canvasWhite,
+    borderRadius: 18,
+    borderWidth: 3,
+    borderBottomWidth: 7,
+    borderColor: INK,
+    alignItems: 'stretch',
+    overflow: 'visible',
+  },
+  heroBand: {
+    position: 'relative',
+    paddingTop: 9,
+    paddingBottom: 9,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    gap: 4,
+    overflow: 'visible',
+  },
+  heroBgClip: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#1C1917',
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
+    overflow: 'hidden',
+  },
+  heroBgDefeat: {
+    backgroundColor: '#25191A',
+  },
+  heroAccentBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 4,
+    backgroundColor: '#F5B800',
+  },
+  heroAccentDefeat: {
+    backgroundColor: COLORS.impactRed,
+  },
+  heroTopRow: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    minWidth: 0,
+  },
+  levelPill: {
+    flexShrink: 1,
+    minWidth: 0,
+    backgroundColor: 'rgba(255, 253, 245, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 184, 0, 0.45)',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+  },
+  levelId: { fontWeight: '900', letterSpacing: 1.2, fontSize: 11, color: '#F5EFE6', flexShrink: 1 },
+  matchupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    marginTop: 2,
+  },
+  championRing: {
+    borderRadius: 16,
+    padding: 2,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 253, 245, 0.25)',
+  },
+  championRingGold: {
+    borderColor: '#F5B800',
+    backgroundColor: 'rgba(255, 222, 0, 0.12)',
+  },
+  vsBadge: {
+    fontWeight: '900',
+    fontSize: 12,
+    letterSpacing: 1.5,
+    color: '#D6CFC5',
+    opacity: 0.8,
+  },
+  foeWrap: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  foeBeaten: {
+    opacity: 0.72,
+    transform: [{ rotate: '6deg' }],
+  },
+  koTag: {
+    position: 'absolute',
+    bottom: -5,
+    right: -6,
+    backgroundColor: COLORS.impactRed,
+    borderWidth: 1.5,
+    borderColor: INK,
+    borderRadius: 5,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    transform: [{ rotate: '-6deg' }],
+  },
+  koTagText: {
+    color: COLORS.canvasWhite,
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+  title: {
+    fontWeight: '900',
+    fontSize: 28,
+    letterSpacing: 2.2,
+    color: COLORS.actionYellow,
+    textShadowColor: '#0B0908',
+    textShadowRadius: 3,
+    textAlign: 'center',
+    marginTop: 0,
+  },
+  titleDefeat: {
+    color: '#FF7B73',
+  },
+  body: {
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    alignItems: 'center',
+    gap: 7,
+  },
   sub: { textAlign: 'center', color: INK, fontSize: 14 },
-  breakdownBox: { alignSelf: 'stretch', gap: 6, backgroundColor: '#FAF7F0', borderRadius: 10, borderWidth: 1.5, borderColor: INK, padding: 10 },
-  breakdownRow: { flexDirection: 'row', alignItems: 'center', minWidth: 0, gap: 8, paddingVertical: 4, paddingHorizontal: 6, borderRadius: 6 },
+  breakdownBox: { alignSelf: 'stretch', gap: 4, backgroundColor: '#FAF7F0', borderRadius: 10, borderWidth: 1.5, borderColor: INK, padding: 7 },
+  breakdownRow: { flexDirection: 'row', alignItems: 'center', minWidth: 0, gap: 6, paddingVertical: 2.5, paddingHorizontal: 6, borderRadius: 6 },
   breakdownRowEarned: { backgroundColor: '#FFFFFF' },
   breakdownRowMissed: { backgroundColor: '#F5F0E6', opacity: 0.92 },
-  breakdownStars: { width: 44, fontSize: 14, fontWeight: '900', letterSpacing: 1 },
+  breakdownStars: { width: 42, fontSize: 13, fontWeight: '900', letterSpacing: 1 },
   breakdownStarsOn: { color: '#E0A800' },
   breakdownStarsOff: { color: '#B8B0A4' },
   breakdownGoal: { flex: 1, fontSize: 12, fontWeight: '800', color: INK },
   breakdownBadgeWrap: { flexShrink: 1, maxWidth: '52%' },
-  breakdownBadge: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
+  breakdownBadge: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
   breakdownBadgeOk: { backgroundColor: '#D4F4EE' },
   breakdownBadgeMiss: { backgroundColor: '#FFE8E5' },
   breakdownBadgeText: { fontSize: 11, fontWeight: '900' },
   breakdownBadgeTextOk: { color: '#0F766E' },
   breakdownBadgeTextMiss: { color: '#B91C1C' },
-  statsRow: { flexDirection: 'row', gap: 8, alignSelf: 'stretch' },
-  stat: { flex: 1, alignItems: 'center', backgroundColor: COLORS.paperBeige, borderRadius: 8, borderWidth: 1.5, borderColor: INK, paddingVertical: 8 },
-  statValue: { fontWeight: '900', fontSize: 20, color: INK, fontVariant: ['tabular-nums'] },
-  statLabel: { fontSize: 11, fontWeight: '700', color: INK, opacity: 0.7 },
+  statsRow: { flexDirection: 'row', gap: 6, alignSelf: 'stretch' },
+  stat: { flex: 1, alignItems: 'center', backgroundColor: COLORS.paperBeige, borderRadius: 8, borderWidth: 1.5, borderColor: INK, paddingVertical: 5 },
+  statValue: { fontWeight: '900', fontSize: 17, color: INK, fontVariant: ['tabular-nums'] },
+  statLabel: { fontSize: 10.5, fontWeight: '700', color: INK, opacity: 0.72 },
   statNote: { fontSize: 9, fontWeight: '900', letterSpacing: 0.5, color: INK, opacity: 0.75 },
-  bank: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: TONE.coinPale, borderRadius: 8, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 12, paddingVertical: 8 },
+  bank: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: TONE.coinPale, borderRadius: 8, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 10, paddingVertical: 6 },
   bankLabel: { fontWeight: '900', color: INK },
   bankLine: { fontSize: 12, color: INK, opacity: 0.8, fontVariant: ['tabular-nums'] },
   section: { fontWeight: '900', letterSpacing: 2, fontSize: 12, color: INK },
@@ -535,7 +730,7 @@ const st = StyleSheet.create({
   pathFoundTitle: { color: COLORS.actionYellow, fontWeight: '900', letterSpacing: 2, fontSize: 11 },
   pathFoundText: { color: COLORS.canvasWhite, fontWeight: '700', fontSize: 13 },
   tip: { fontSize: 13, color: INK, fontStyle: 'italic', textAlign: 'center', opacity: 0.85 },
-  shards: { fontSize: 13, fontWeight: '800', color: INK, opacity: 0.75, marginTop: -4 },
+  shards: { fontSize: 12, fontWeight: '800', color: '#E9DFD2', opacity: 0.9, marginTop: -2 },
   footer: { backgroundColor: COLORS.canvasWhite, borderTopWidth: 2, borderTopColor: INK, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 12, gap: 8, alignItems: 'center' },
   footerRow: { flexDirection: 'row', gap: 8, alignSelf: 'stretch', maxWidth: 440, width: '100%' },
   nextBtn: { alignSelf: 'stretch', maxWidth: 440, width: '100%', flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.actionYellow, borderWidth: 2, borderBottomWidth: 5, borderColor: INK, borderRadius: 12, paddingVertical: 7, paddingHorizontal: 10 },

@@ -62,8 +62,8 @@ export type CueName =
   | 'freeze' | 'redeal' | 'scoop' | 'twinkle' | 'fetch' | 'phew' | 'ding' | 'blast' | 'laser' | 'ricochet'
   | 'doubled' | 'armed' | 'charged' | 'warDrum' | 'clarity' | 'clarityEnd' | 'pinata' | 'pinataBreak' | 'link'
   | 'purity' | 'rainbow' | 'catalyst' | 'trapSet' | 'trapDefused' | 'trapSprung' | 'burn' | 'overkill'
-  | 'streakLost' | 'sour' | 'reelStop' | 'register' | 'reelSpin' | 'star' | 'coinRoll' | 'weaponGet' | 'tap' | 'back'
-  | 'parryWarn' | 'parry' | 'perfectParry' | 'foeStrike' | 'multStep' | 'multSlam' | 'killCamRiser' | 'killCamShatter';
+  | 'streakLost' | 'sour' | 'reelStop' | 'register' | 'reelSpin' | 'star' | 'starSwoosh' | 'rankSeal' | 'coinRoll' | 'weaponGet' | 'tap' | 'back'
+  | 'parryWarn' | 'parry' | 'perfectParry' | 'foeStrike' | 'multStep' | 'multSlam' | 'killCamRiser' | 'killCamShatter' | 'slowMoDefeat';
 
 export interface CueOpts {
   /** How big the thing is (damage, coins, a count): scales the cue */
@@ -108,6 +108,9 @@ class Band {
   private spot: string[] = [];
   private clockOverride: number | null = null;
   private lastCueAt: Partial<Record<string, number>> = {};
+  /** Expedition 33 slow-mo time-dilation factor (1 = normal, <1 = tempo + pitch dragging down into hit-stop) */
+  private slowMo = 1;
+  private slowMoTimer: ReturnType<typeof setTimeout> | null = null;
 
   /** True while a fight is feeding the band its mood: the fight's own sounds belong to the band. */
   get inFight(): boolean {
@@ -123,6 +126,7 @@ class Band {
   play(name: string) {
     const known = ARRANGEMENTS[name] ? name : 'map';
     this.current = known;
+    this.clearSlowMo();
     if (!this.mood) this.mix = restingMix(known);
     if (!audioFlags.music) return;
     if (!chip.ensure()) return;
@@ -152,12 +156,19 @@ class Band {
 
   /** Silence playback but remember the song (music toggled off, autoplay blocked). */
   halt() {
+    this.clearSlowMo();
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
     this.stopIntervalTrack?.();
     this.stopIntervalTrack = null;
     this.arr = null;
     this.pending = null;
+  }
+
+  private clearSlowMo() {
+    if (this.slowMoTimer) clearTimeout(this.slowMoTimer);
+    this.slowMoTimer = null;
+    this.slowMo = 1;
   }
 
   private snapEnv(m: Mix) {
@@ -208,10 +219,12 @@ class Band {
       this.setArrangement(this.pending);
       this.pending = null;
     }
-    // Asymmetric tempo easing: builds momentum crisply on streaks, relaxes imperceptibly over ~3 bars when cooling down
-    const target = this.arr.bpm * this.mix.tempo;
+    // Asymmetric tempo easing: builds momentum crisply on streaks, relaxes imperceptibly over ~3 bars when cooling down;
+    // during an Expedition 33 slow-mo knockout, drags tempo sharply down like a tape-stop time dilation.
+    const slow = this.slowMo < 0.99;
+    const target = this.arr.bpm * this.mix.tempo * this.slowMo;
     if (!this.bpm) this.bpm = target;
-    else this.bpm += (target - this.bpm) * (target >= this.bpm ? 0.1 : 0.025);
+    else this.bpm += (target - this.bpm) * (slow ? 0.28 : target >= this.bpm ? 0.1 : 0.025);
 
     // Smooth per-layer envelopes so idle/streak-end fades out gradually instead of snapping layers off
     const targetLead = this.mix.lead ? this.mix.leadGain : 0;
@@ -241,9 +254,11 @@ class Band {
 
   /** Stop following the fight (results, quitting): the band goes back to a resting mix. */
   leaveFight() {
+    this.clearSlowMo();
     this.mood = null;
     this.heat.clear();
     this.mix = restingMix(this.current ?? 'map');
+    this.applied = { filterHz: -1, level: -1, echo: -1 };
     this.applyMixToChip(0.6);
   }
 
@@ -319,7 +334,9 @@ class Band {
     const s16 = step % 16;
     const { mode, key } = this.tone();
     const root = chordRoot(mode, bar);
-    const f = (degree: number, octave: number) => degreeToFreq(mode, key, degree, octave);
+    // During slow-mo knockout, pitch-bend the music bed downward (~3.5 semitones) as time dilates
+    const pitchScale = this.slowMo < 0.99 ? 0.72 + 0.28 * this.slowMo : 1;
+    const f = (degree: number, octave: number) => degreeToFreq(mode, key, degree, octave) * pitchScale;
     const evo = mix.evolutions.length > 0 ? themeOf(mix.evolutions[0]) : null;
     const flicker = mix.evolutionFading && s16 % 8 >= 4;
 
@@ -556,11 +573,12 @@ class Band {
 
   /** Play a named cue on the next 32nd note, in key. */
   cue(name: CueName, o: CueOpts = {}) {
-    const c = this.cueCtx(o.slot ?? 0, name === 'tap' || name === 'back', o.afterMs);
+    const immediate = name === 'tap' || name === 'back' || name === 'slowMoDefeat' || name === 'star' || name === 'starSwoosh' || name === 'rankSeal';
+    const c = this.cueCtx(o.slot ?? 0, immediate, o.afterMs);
     if (!c) return;
     // The same cue twice inside a 32nd is one sound, not two
     const last = this.lastCueAt[name];
-    if (last !== undefined && Math.abs(c.t - last) < 0.02 && name !== 'reelStop') return;
+    if (last !== undefined && Math.abs(c.t - last) < 0.02 && name !== 'reelStop' && name !== 'starSwoosh') return;
     this.lastCueAt[name] = c.t;
     logCue(name, c.t, this.now);
     c.amount = o.amount ?? 0;
@@ -622,12 +640,36 @@ class Band {
     this.evolve(recipeId);
   }
 
+  /**
+   * Expedition 33 slow-mo knockout: time drags down on the live soundtrack (tempo slows,
+   * pitch sags, low-pass closes into cavernous stillness) while a deep sub-drop and
+   * pitch-bending metallic resonance hold the impact breath before `finale(true)` blooms.
+   */
+  slowMoDefeat(opts: { boss?: boolean; perfectParry?: boolean } = {}) {
+    this.clearSlowMo();
+    this.slowMo = 0.36;
+    chip.setMusicFilter(320, 0.34);
+    chip.setMusicLevel(0.32, 0.3);
+    this.applied = { filterHz: 320, level: 0.32, echo: this.applied.echo };
+    const emphasis = opts.perfectParry ? 2 : opts.boss ? 1 : 0;
+    this.cue('slowMoDefeat', { amount: emphasis });
+    this.slowMoTimer = setTimeout(() => {
+      this.slowMoTimer = null;
+      // Halt the slowed combat bed at the trough of time-freeze so only the hall resonance lingers
+      this.halt();
+    }, 420);
+  }
+
   /** The fight is over: the band stops on a cadence (won) or falls apart (lost). */
   finale(won: boolean) {
     const c = this.cueCtx();
     this.halt();
     this.mood = null;
     this.heat.clear();
+    // Re-open the music filter cleanly after slow-mo muffling so the results screen arrives crisp
+    chip.setMusicFilter(18000, 0.16);
+    chip.setMusicLevel(1, 0.22);
+    this.applied = { filterHz: -1, level: -1, echo: -1 };
     if (!c) return;
     const f = (degree: number, octave: number) => degreeToFreq(won ? c.mode : 'aeolian', c.key, degree, octave);
     const beat = c.g * 8;
@@ -815,14 +857,52 @@ const CUES: Record<CueName, (c: CueCtx) => void> = {
     for (let i = 0; i < 12; i++) D(c, i % 2 ? 'woodblock' : 'woodblockLo', i * 0.05, 0.35 + i * 0.03);
     [0, 2, 4].forEach((d, i) => N(c, 'marimba', d, 4, 0.6 + i * 0.12, 0.25, 1));
   },
+  // Angry Birds–inspired flying star swoosh: brisk rising air sweep + subtle glint before the stamp
+  starSwoosh: c => {
+    const step = Math.max(1, Math.min(3, Math.round(c.amount) || 1));
+    const baseHz = 440 + (step - 1) * 140;
+    chip.noise({ at: c.t, dur: 0.19, vol: 0.34 + step * 0.05, filter: baseHz, sweepTo: baseHz * 6.5, attack: 0.09, bus: SFX, space: 'room' });
+    const startDeg = [0, 2, 4][step - 1];
+    note('whistle', fq(c, startDeg, 5), c.t, 0.16, { vol: 0.28, bus: SFX, slideTo: fq(c, startDeg + 4, 5) });
+  },
+  // Angry Birds–inspired giant star stamp: heavy physical thwack + ascending triad chime + sparkle trail + 3★ climax fanfare
   star: c => {
-    const top = Math.max(1, Math.min(3, c.amount));
-    N(c, 'bell', [0, 2, 4][top - 1], 6, 0, 0.9, 1);
-    N(c, 'brass', [0, 2, 4][top - 1], 4, 0, 0.3, 0.8);
-    if (top === 3) {
-      for (const d of [0, 2, 4, 7]) N(c, 'strings', d, 4, 0, 1.2, 1);
-      D(c, 'crash', 0, 0.6);
+    const top = Math.max(1, Math.min(3, Math.round(c.amount) || 1));
+    // Layer 1: tactile rubber/wood stamp thud that grows heavier with each star
+    D(c, 'taiko', 0, 0.75 + (top - 1) * 0.12);
+    D(c, 'thud', 0, 0.65 + (top - 1) * 0.16);
+    D(c, 'woodblock', 0, 0.68);
+    // Layer 2: ascending major triad chime (Do → Mi → Sol + High Do)
+    const deg = [0, 2, 4][top - 1];
+    N(c, 'bell', deg, 6, 0, 1.0, 1.0);
+    N(c, 'glock', deg, 6, 0.014, 0.55, 0.85);
+    N(c, 'brass', deg, 4, 0, 0.36, 0.88);
+    // Layer 3: celebratory shimmer (and on 3★, booming subDrop + full orchestral resolution + harp glissando!)
+    if (top === 1) {
+      runUp(c, 'celesta', [0, 4], 6, 0.7, 0.35, 0.55);
+    } else if (top === 2) {
+      runUp(c, 'celesta', [2, 4, 7], 6, 0.65, 0.4, 0.65);
+      D(c, 'tamb', 0.02, 0.5);
+    } else {
+      subDrop(c.t, 0.9, SFX);
+      D(c, 'crash', 0, 0.78);
+      D(c, 'timpani', 0.01, 0.9);
+      N(c, 'bell', 7, 6, 0.02, 1.35, 1.05);
+      for (const d of [0, 2, 4, 7]) {
+        N(c, 'brass', d, 4, 0, 0.85, 0.82);
+        N(c, 'strings', d, 4, 0.02, 1.45, 1.05);
+        N(c, 'choir', d, 4, 0.05, 1.35, 0.72);
+      }
+      [0, 2, 4, 7, 9, 11].forEach((d, i) =>
+        note('harp', fq(c, d, 5), c.t + 0.03 + i * 0.038, 0.7, { vol: 0.75, bus: SFX, pan: i % 2 ? 0.55 : -0.55 })
+      );
     }
+  },
+  // Performance seal wax-stamp impact on the Victory Card
+  rankSeal: c => {
+    D(c, 'woodblockLo', 0, 0.85);
+    D(c, 'thud', 0, 0.7);
+    N(c, 'bell', 7, 5, 0.01, 0.65, 0.75);
   },
 
   // The foe
@@ -1065,6 +1145,25 @@ const CUES: Record<CueName, (c: CueCtx) => void> = {
     D(c, 'anvil', 0, 0.8);
     subDrop(c.t, 1, SFX);
     runUp(c, 'glock', [0, 2, 4, 7, 9, 11, 14], 6, 0.5, 0.45, 0.9);
+  },
+  // Expedition 33 slow-mo finishing blow: deep sub-bass drop + downward pitch-sagging harmonic resonance + slow-mo vacuum whoosh
+  slowMoDefeat: c => {
+    const emphasis = Math.max(0, Math.min(2, Math.round(c.amount)));
+    // Chest-thumping time-stop bass drop
+    chip.play({ osc: 'sine', a: 0.002, d: 0.95, s: 0, r: 0.08, vol: 0.95 }, { freq: 122, slideTo: 26, at: c.t, dur: 0.85, vol: 1.0, bus: SFX });
+    D(c, 'taiko', 0, 1.0);
+    D(c, 'timpani', 0.015, 0.9);
+    if (emphasis >= 1) D(c, 'anvil', 0, emphasis >= 2 ? 0.95 : 0.72);
+    // Air-vacuum slow-motion whoosh sweeping from bright edge into hushed hall stillness
+    chip.noise({ at: c.t, dur: 0.72, vol: 0.52, filter: 5600, sweepTo: 180, bus: SFX, space: 'hall' });
+    // Pitch-dragging metallic bell + horn + glass chord (sags -3 semitones as time freezes!)
+    const sag = 0.84;
+    const bellF = fq(c, 7, 5);
+    const hornF = fq(c, 0, 3);
+    const glassF = fq(c, 4, 6);
+    note('bell', bellF, c.t, 0.68, { vol: 0.92, bus: SFX, slideTo: bellF * sag });
+    note('horn', hornF, c.t + 0.01, 0.75, { vol: 0.88, bus: SFX, slideTo: hornF * sag });
+    note('glass', glassF, c.t + 0.02, 0.82, { vol: 0.65, bus: SFX, slideTo: glassF * 0.89 });
   },
 
   // Menus

@@ -18,9 +18,11 @@ import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
 import { WeaponAvatar } from '@/components/weapons';
 import { useAppActive } from '@/hooks/useAppActive';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useEnemyConductor } from '@/hooks/useEnemyConductor';
 import { useFighterConductor } from '@/hooks/useFighterConductor';
 import { COLORS } from '@/utils/colors';
+import { EASE, MS } from '@/utils/motion';
 import { recordComponentRender, registerInterval } from '@/utils/perfWatchdog';
 import type { Card, CardReward, CharacterName, Weapon } from '@/types';
 import type { WeaponEffectResult } from '@/utils/weaponEffects';
@@ -47,7 +49,7 @@ import { checksOfSet, computeLiveGuidance, describeSingleCardTraits, explainInva
 import StageBubble from './StageBubble';
 import TraitChecks, { TRAIT_CHECKS_HEIGHT } from './TraitChecks';
 import { EVOLUTION_RULES } from '../engine/sources';
-import { Anchor, AnchorsProvider, EVENT_FX, EvolutionCutIn, FxStage, GearBelt, KillCamOverlay, MultiplierIgnition, fxClock, scriptFor, useAnchors, useFightFx, type Beat } from '../fx';
+import { Anchor, AnchorsProvider, EVENT_FX, EvolutionCutIn, FxStage, GearBelt, KillCamOverlay, MultiplierIgnition, SLOWMO_HOLD_MS, SLOWMO_IMPACT_DELAY_MS, SLOWMO_REDUCED_TOTAL_MS, SLOWMO_RELEASE_MS, SLOWMO_SETTLE_PAD_MS, fxClock, scriptFor, useAnchors, useFightFx, type Beat } from '../fx';
 import { Banner } from '../fx/visuals';
 import { Btn, CoinPill, DARK, Eyebrow, Heart, INK, PopIn, TONE } from './ui';
 import { EvolutionBanner, EvolutionRing, MegaFlash } from './RunFx';
@@ -160,6 +162,7 @@ const AdventureRun: React.FC<Props> = ({
   recordComponentRender('AdventureRun');
   const insets = useSafeAreaInsets();
   const appActive = useAppActive();
+  const reducedMotion = useReducedMotion();
   // The save the fight started from and every action sent to it: enough to replay the fight (engine/replay.ts)
   const [startSave] = useState(save);
   const [run, setRun] = useState(() =>
@@ -355,17 +358,19 @@ const AdventureRun: React.FC<Props> = ({
   const foeShake = useSharedValue(0);
   const foeScale = useSharedValue(1);
   const screenShake = useSharedValue(0);
+  const victoryZoom = useSharedValue(1);
+  const victoryPanY = useSharedValue(0);
   const onLand = (beat: Beat) => {
     const { row, tier } = beat;
-    if (row.shake) {
+    if (row.shake && effects && !reducedMotion) {
       foeShake.value = withSequence(withTiming(-8, { duration: 40 }), withTiming(8, { duration: 60 }), withTiming(-4, { duration: 50 }), withTiming(0, { duration: 50 }));
       foeScale.value = withSequence(withTiming(0.9, { duration: 60 }), withTiming(1, { duration: 120, easing: Easing.out(Easing.quad) }));
     }
-    if (tier >= 2) {
+    if (tier >= 2 && effects && !reducedMotion) {
       const amp = tier === 3 ? 10 : 6;
       screenShake.value = withSequence(withTiming(-amp, { duration: 40 }), withTiming(amp, { duration: 60 }), withTiming(-amp / 2, { duration: 50 }), withTiming(amp / 2, { duration: 50 }), withTiming(0, { duration: 50 }));
     }
-    if (tier === 3) setMegaFlash(f => f + 1);
+    if (tier === 3 && effects && !reducedMotion && runRef.current.status === 'playing') setMegaFlash(f => f + 1);
     switch (row.fighter) {
       case 'ecstatic': conductor.triggerReaction('ecstatic'); break;
       case 'pain': conductor.triggerReaction('pain'); break;
@@ -463,14 +468,49 @@ const AdventureRun: React.FC<Props> = ({
   }, [anchors, run.board.length, run.weapons.length, run.activeEvolutions.length, run.status, stage.w, stage.h, hudHeight]);
   const slotRef = useCallback((index: number) => anchors.ref(`slot:${index}`), [anchors]);
 
-  // End of run → hand off to results after the finishing blow lands
+  // End of run → Expedition 33 slow-mo defeat cinema, then seamless handoff straight into Results
+  const endedAtRef = useRef<number | null>(null);
+  const slowMoCinema = effects && !reducedMotion && !practice;
+  const victoryImpactDelay = run.lastSetIgnition?.lethal ? SLOWMO_IMPACT_DELAY_MS : 0;
   useEffect(() => {
-    if (ended) band.finale(run.status === 'won');
+    if (!ended) return;
+    endedAtRef.current = Date.now();
+    const won = run.status === 'won';
+    if (won && slowMoCinema) {
+      // Subtle dramatic camera push-in during the slow-mo breath, releasing cleanly into Results
+      victoryZoom.value = withDelay(
+        victoryImpactDelay,
+        withSequence(
+          withTiming(1.045, { duration: MS.hero * 0.72, easing: EASE.enterSoft }),
+          withDelay(SLOWMO_HOLD_MS - MS.hero * 0.72, withTiming(1, { duration: SLOWMO_RELEASE_MS, easing: EASE.exitSoft }))
+        )
+      );
+      victoryPanY.value = withDelay(
+        victoryImpactDelay,
+        withSequence(
+          withTiming(10, { duration: MS.hero * 0.72, easing: EASE.enterSoft }),
+          withDelay(SLOWMO_HOLD_MS - MS.hero * 0.72, withTiming(0, { duration: SLOWMO_RELEASE_MS, easing: EASE.exitSoft }))
+        )
+      );
+      // Wait for KillCamOverlay's slowMoDefeat resonance trough to release, then bloom into the victory finale
+      const releaseAt = victoryImpactDelay + SLOWMO_HOLD_MS;
+      const t = setTimeout(() => band.finale(true), releaseAt);
+      return () => clearTimeout(t);
+    }
+    band.finale(won);
   }, [ended]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    // The last cascade plays out first
+    // The last cascade plays out first; hand off right as the slow-mo release completes (zero dead air)
     if (!ended || fx.busy) return;
-    const t = setTimeout(() => onFinish(runRef.current, recordingOf()), effects ? 900 : 1300);
+    const won = runRef.current.status === 'won';
+    const targetMs = won
+      ? slowMoCinema
+        ? victoryImpactDelay + SLOWMO_HOLD_MS + SLOWMO_RELEASE_MS + SLOWMO_SETTLE_PAD_MS
+        : SLOWMO_REDUCED_TOTAL_MS
+      : 680;
+    const elapsed = endedAtRef.current ? Date.now() - endedAtRef.current : 0;
+    const wait = Math.max(80, targetMs - elapsed);
+    const t = setTimeout(() => onFinish(runRef.current, recordingOf()), wait);
     return () => clearTimeout(t);
   }, [ended, fx.busy]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -515,7 +555,13 @@ const AdventureRun: React.FC<Props> = ({
   }, [dispatch, triggerHint]);
 
   const foeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: foeShake.value }, { scale: foeScale.value }] }));
-  const screenStyle = useAnimatedStyle(() => ({ transform: [{ translateX: screenShake.value }] }));
+  const screenStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: screenShake.value },
+      { translateY: victoryPanY.value },
+      { scale: victoryZoom.value },
+    ],
+  }));
   // Damage still in the air has not come off the bar yet (nor has that of events the stage is about to be handed)
   const incoming = effects ? run.events.reduce((sum, e) => (e.id > lastEventId.current && EVENT_FX[e.type]?.damage ? sum + (e.amount ?? 0) : sum), 0) : 0;
   const shownHp = Math.min(run.foeMaxHp, Math.round(run.foeHp + fx.pendingDamage + incoming));
@@ -1046,8 +1092,17 @@ const AdventureRun: React.FC<Props> = ({
       </View>
 
       {/* Everything that is playing right now */}
-      <FxStage fx={fx} anchors={anchors} size={stage} hideWeaponNameTags />
-      <KillCamOverlay ignition={run.lastSetIgnition} anchors={anchors} stageSize={stage} enabled={effects && !practice} />
+      <FxStage fx={fx} anchors={anchors} size={stage} hideWeaponNameTags suppressKoBanner={run.status === 'won' && !practice} />
+      <KillCamOverlay
+        ignition={run.lastSetIgnition}
+        victory={run.status === 'won' && !practice}
+        flawless={run.mistakes === 0}
+        impactDelayMs={victoryImpactDelay}
+        anchors={anchors}
+        stageSize={stage}
+        enabled={effects && !practice}
+        reduced={reducedMotion}
+      />
       {opening && effects && !practice && anchors.rect('board') && (
         <View style={st.openingLayer} pointerEvents="none" testID="run-opening">
           <Banner rect={anchors.rect('board')!} text={level.isBoss ? 'BOSS FIGHT!' : 'FIGHT!'} color={level.isBoss ? '#9F1239' : COLORS.deepOnyx} delay={120} />

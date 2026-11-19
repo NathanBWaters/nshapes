@@ -42,9 +42,45 @@ const gearedSet = () => {
   };
 };
 
+const lethalFinisher = () => {
+  let third = null;
+  return {
+    id: 'fight-ko',
+    about: 'Lethal Set tap on 1-1: cards fly in, Clair-Obscur slow-mo defeat engages, releases seamlessly into Victory Card & giant stamping stars',
+    path: mapPath('maxed'),
+    ready: (page, h) => h.until('map-play-next'),
+    prepare: async (page, h) => {
+      await intoFight(page, h, '1-1');
+      // Play Sets until the next Set will defeat Dozy Bunny (15 HP, 6 dmg per Set with Heavy Hitter → 2 prior Sets leave 3 HP)
+      for (let round = 0; round < 6; round++) {
+        const hp = await page.evaluate(() => window.__nshapesRun?.foeHp ?? 0);
+        if (hp <= 6) break;
+        const cards = await findCards(page, true);
+        if (!cards) throw new Error('No Set available while chipping 1-1 foe');
+        await h.tap(slotOf(cards[0]));
+        await h.advance(160);
+        await h.tap(slotOf(cards[1]));
+        await h.advance(160);
+        await h.tap(slotOf(cards[2]));
+        await h.advance(900);
+      }
+      const lethalCards = await findCards(page, true);
+      if (!lethalCards) throw new Error('No lethal Set found on 1-1');
+      await h.tap(slotOf(lethalCards[0]));
+      await h.advance(200);
+      await h.tap(slotOf(lethalCards[1]));
+      await h.advance(200);
+      third = slotOf(lethalCards[2]);
+    },
+    trigger: (page, h) => h.tap(third),
+    frames: 240,
+  };
+};
+
 export default {
   'fight-set': thirdCard('fight-set', 'A real Set in a real fight (1-5): the third tap, the throw, the hit, the bar, the new cards', true),
   'fight-ignition': gearedSet(),
+  'fight-ko': lethalFinisher(),
   'fight-miss': thirdCard('fight-miss', 'A wrong third card in a real fight (1-5): what a mistake looks like', false),
   'fight-open': {
     id: 'fight-open',
