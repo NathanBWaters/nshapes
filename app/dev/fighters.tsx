@@ -79,6 +79,8 @@ export default function DevFightersPage() {
   const [enemyPage, setEnemyPage] = useState(0);
   const [weaponRarity, setWeaponRarity] = useState<WeaponRarity | 'default'>('default');
   const [autoCycle, setAutoCycle] = useState(false);
+  // The in-game Effects switch: reactions change faces but bodies stay still
+  const [effectsOff, setEffectsOff] = useState(false);
 
   const reactionIdRef = useRef(0);
   const stepRef = useRef(0);
@@ -183,6 +185,15 @@ export default function DevFightersPage() {
                   {autoCycle ? '■ Stop Flow' : '▶ Auto-Flow'}
                 </Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                testID="studio-effects-off"
+                style={[styles.autoBtn, effectsOff && styles.autoBtnActive]}
+                onPress={() => setEffectsOff((v) => !v)}
+              >
+                <Text style={[styles.autoBtnText, effectsOff && styles.chipTextActive]}>
+                  {effectsOff ? 'Effects off' : 'Effects on'}
+                </Text>
+              </TouchableOpacity>
               <Text style={styles.statePill}>{healthState.toUpperCase()}</Text>
             </>
           )}
@@ -199,6 +210,7 @@ export default function DevFightersPage() {
         ).map((t) => (
           <TouchableOpacity
             key={t.id}
+            testID={`studio-tab-${t.id}`}
             style={[styles.tabBtn, tab === t.id && styles.tabBtnActive]}
             onPress={() => {
               setAutoCycle(false);
@@ -216,8 +228,8 @@ export default function DevFightersPage() {
         {tab === 'fighters' && (
           <>
             <View style={styles.grid}>
-              {CHARACTERS.map((char) => (
-                <View key={char.name} style={styles.fighterCard}>
+              {CHARACTERS.map((char, idx) => (
+                <View key={char.name} testID={`studio-fighter-card-${idx}`} style={styles.fighterCard}>
                   <FighterAvatar
                     character={char}
                     size={96}
@@ -241,6 +253,7 @@ export default function DevFightersPage() {
                 {HP_PRESETS.map((preset, idx) => (
                   <TouchableOpacity
                     key={preset.label}
+                    testID={`studio-hp-${idx}`}
                     style={[styles.chip, hpPresetIndex === idx && styles.chipActive]}
                     onPress={() => setHpPresetIndex(idx)}
                   >
@@ -258,6 +271,7 @@ export default function DevFightersPage() {
                 {FIGHTER_REACTIONS.map((r) => (
                   <TouchableOpacity
                     key={r.type}
+                    testID={`studio-fighter-react-${r.type}`}
                     style={styles.reactionBtn}
                     onPress={() => triggerFighter(r.type)}
                   >
@@ -273,6 +287,7 @@ export default function DevFightersPage() {
                 {FIGHTER_MOODS.map((m) => (
                   <TouchableOpacity
                     key={m}
+                    testID={`studio-mood-${m}`}
                     style={[styles.chip, fighterMood === m && styles.chipActive]}
                     onPress={() => setFighterMood(m)}
                   >
@@ -308,8 +323,8 @@ export default function DevFightersPage() {
             </View>
 
             <View style={styles.grid}>
-              {visibleEnemies.map((enemyName) => (
-                <View key={enemyName} style={styles.fighterCard}>
+              {visibleEnemies.map((enemyName, idx) => (
+                <View key={enemyName} testID={`studio-enemy-card-${idx}`} style={styles.fighterCard}>
                   <EnemyAvatar
                     enemy={enemyName}
                     size={82}
@@ -317,6 +332,7 @@ export default function DevFightersPage() {
                     maxHp={hp.maxHealth}
                     mood={enemyMood}
                     reaction={enemyReaction}
+                    quiet={effectsOff}
                     framed
                     interactive
                   />
@@ -332,6 +348,7 @@ export default function DevFightersPage() {
                 {HP_PRESETS.map((preset, idx) => (
                   <TouchableOpacity
                     key={preset.label}
+                    testID={`studio-hp-${idx}`}
                     style={[styles.chip, hpPresetIndex === idx && styles.chipActive]}
                     onPress={() => setHpPresetIndex(idx)}
                   >
@@ -349,6 +366,7 @@ export default function DevFightersPage() {
                 {ENEMY_REACTIONS.map((r) => (
                   <TouchableOpacity
                     key={r.type}
+                    testID={`studio-enemy-react-${r.type}`}
                     style={styles.reactionBtn}
                     onPress={() => triggerEnemy(r.type)}
                   >
@@ -364,6 +382,7 @@ export default function DevFightersPage() {
                 {ENEMY_MOODS.map((m) => (
                   <TouchableOpacity
                     key={m}
+                    testID={`studio-mood-${m}`}
                     style={[styles.chip, enemyMood === m && styles.chipActive]}
                     onPress={() => setEnemyMood(m)}
                   >

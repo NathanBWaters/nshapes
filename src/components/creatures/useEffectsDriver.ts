@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Easing,
+  EasingFunction,
   SharedValue,
   useSharedValue,
   withTiming,
@@ -25,6 +26,15 @@ interface EffectsDriverOptions {
   burstMs: number;
   /** Burst progress shown when not animating */
   staticBurstProgress: number;
+  /** Show the burst still (at `staticBurstProgress`) even while idle life animates: the Effects switch is off */
+  stillBurst?: boolean;
+  /** How burst progress runs in time (default ease-out cubic; linear when the overlay shapes it itself) */
+  burstEasing?: EasingFunction;
+  /**
+   * The same reaction again while its burst is still showing: carry on from this
+   * progress (the burst at full size) instead of growing again from nothing.
+   */
+  rehitFrom?: number;
   /** Extra identity that replays the burst when it changes */
   restartKey?: unknown;
 }
@@ -52,8 +62,12 @@ export function useEffectsDriver({
   reactionId,
   burstMs,
   staticBurstProgress,
+  stillBurst = false,
+  burstEasing,
+  rehitFrom,
   restartKey,
 }: EffectsDriverOptions): EffectsDriver {
+  const lastBurstRef = useRef<string | null>(null);
   const burstProgress = useSharedValue(0);
   const ambientPhase = useSharedValue(0);
   const ambientFreqHz = useSharedValue(initialAmbientHz);
@@ -104,20 +118,24 @@ export function useEffectsDriver({
   }, [animate, targetA, targetB, targetC, fadeMs, presenceA, presenceB, presenceC]);
 
   useEffect(() => {
+    const previous = lastBurstRef.current;
+    lastBurstRef.current = activeReaction;
     if (!activeReaction) {
       burstProgress.value = 0;
       return;
     }
-    if (!animate) {
+    if (!animate || stillBurst) {
       burstProgress.value = staticBurstProgress;
       return;
     }
-    burstProgress.value = 0;
+    const now = burstProgress.value;
+    const rehit = rehitFrom !== undefined && previous === activeReaction && now > rehitFrom && now < 1;
+    burstProgress.value = rehit ? rehitFrom : 0;
     burstProgress.value = withTiming(1, {
-      duration: burstMs,
-      easing: Easing.out(Easing.cubic),
+      duration: rehit ? Math.round(burstMs * (1 - rehitFrom)) : burstMs,
+      easing: burstEasing ?? Easing.out(Easing.cubic),
     });
-  }, [activeReaction, reactionId, animate, burstProgress, burstMs, staticBurstProgress, restartKey]);
+  }, [activeReaction, reactionId, animate, stillBurst, burstProgress, burstMs, burstEasing, rehitFrom, staticBurstProgress, restartKey]);
 
   return { burstProgress, ambientPhase, presences: [presenceA, presenceB, presenceC] };
 }

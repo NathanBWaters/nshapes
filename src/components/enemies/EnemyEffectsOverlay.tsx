@@ -5,6 +5,7 @@ import { Svg, Circle, G, Line, Path, Text as SvgText } from 'react-native-svg';
 import { useEffectsDriver } from '@/components/creatures/useEffectsDriver';
 import { STROKE, StarBurst } from '@/components/illustration/primitives';
 import { COLORS } from '@/utils/colors';
+import { EASE, HIT } from '@/utils/motion';
 import {
   EnemyAmbientMood,
   EnemyPersonalityProfile,
@@ -17,7 +18,12 @@ interface EnemyEffectsOverlayProps {
   mood: EnemyAmbientMood;
   personality: EnemyPersonalityProfile;
   animate?: boolean;
+  /** Bursts show still (the Effects switch is off); ambient life still runs */
+  stillBurst?: boolean;
 }
+
+/** Impact stars of a hit: one frame on progress (they run linearly over `HIT.starsMs`) */
+const STAR_FRAME = 16 / HIT.starsMs;
 
 function AngerVein({ cx, cy, scale = 1 }: { cx: number; cy: number; scale?: number }) {
   return (
@@ -44,8 +50,11 @@ export const EnemyEffectsOverlay: React.FC<EnemyEffectsOverlayProps> = ({
   mood,
   personality,
   animate = true,
+  stillBurst = false,
 }) => {
   const showAmbient = !activeReaction;
+  // A hit's stars are on at full size on the impact frame and leave on their own short clock
+  const impact = activeReaction === 'pain' || activeReaction === 'crit_pain';
   const {
     burstProgress,
     ambientPhase,
@@ -62,12 +71,27 @@ export const EnemyEffectsOverlay: React.FC<EnemyEffectsOverlayProps> = ({
     fadeMs: 220,
     activeReaction,
     reactionId,
-    burstMs: 680,
-    staticBurstProgress: 0.5,
+    burstMs: impact ? HIT.starsMs : 680,
+    burstEasing: impact ? EASE.linear : undefined,
+    staticBurstProgress: impact ? 0.3 : 0.5,
+    stillBurst,
+    // A chained hit keeps its stars up (back to full) instead of growing them again from nothing
+    rehitFrom: impact ? STAR_FRAME : undefined,
   });
 
   const burstStyle = useAnimatedStyle(() => {
     const p = burstProgress.value;
+    if (impact) {
+      // f1 full size and opacity, settle by f4, drift up on an ease-out, fade over the last 8 frames
+      const rise = 1 - (1 - p) * (1 - p);
+      return {
+        opacity: interpolate(p, [0, STAR_FRAME * 0.5, 0.6, 1], [0, 1, 1, 0], 'clamp'),
+        transform: [
+          { translateY: -8 * rise },
+          { scale: interpolate(p, [0, STAR_FRAME, STAR_FRAME * 4, 1], [0.7, 1.12, 1, 0.96], 'clamp') },
+        ],
+      };
+    }
     const popScale = interpolate(p, [0, 0.24, 0.65, 1], [0.4, 1.14, 1.03, 0.96]);
     return {
       opacity: interpolate(p, [0, 0.14, 0.72, 1], [0, 1, 0.9, 0]),

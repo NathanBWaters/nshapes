@@ -163,5 +163,29 @@ export const SQUASH = {
   stretch: { x: 0.85, y: 1.15 },
 } as const;
 
+/**
+ * A creature taking a hit: the impact pose is there on the next frame, held
+ * for a few frames (the hit-stop), then recovered on a spring. A hit that
+ * lands while the last one is still being felt is a CHAIN: it goes deeper
+ * from wherever the body is, holds less, and never restarts from rest.
+ */
+export const HIT = {
+  /** From rest to the impact pose: one frame */
+  snapMs: 16,
+  /** The hit-stop: the impact pose held still (3 frames) */
+  holdMs: 48,
+  /** A critical hit holds a frame longer */
+  critHoldMs: 64,
+  /** A chained hit holds less, so a fast chain does not stall (2 frames) */
+  chainHoldMs: 32,
+  /** A hit this soon after the last one is part of the same chain */
+  chainWindowMs: 420,
+  /** How much deeper each step of a chain goes, and how many steps count */
+  chainGain: 0.15,
+  chainMax: 2,
+  /** Impact stars: on at full size on the impact frame, drift up, gone in about 20 frames */
+  starsMs: 320,
+} as const;
+
 /** How long a line of text must stay still to be read: half a second to find it, 0.3 s a word. */
 export const textHoldMs = (words: number): number => 500 + 300 * Math.max(1, words);

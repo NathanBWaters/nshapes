@@ -24,6 +24,7 @@ import {
   sampleOverlappingWave,
   stepSecondOrderInPlace,
 } from '@/utils/proceduralMotion';
+import { HIT } from '@/utils/motion';
 import { CreatureJointPivots, GazeOffset } from './types';
 
 /**
@@ -50,6 +51,12 @@ export interface ReactionChannels {
 export type PartStyle = StyleProp<ViewStyle>;
 const asPart = (style: ReturnType<typeof useAnimatedStyle>): PartStyle => style as PartStyle;
 
+/** What a reaction knows about what came just before it */
+export interface ReactionContext {
+  /** Same reactions in a row before this one, each within `HIT.chainWindowMs` of the last (capped at `HIT.chainMax`) */
+  chain: number;
+}
+
 /** (frequency, damping, response) of one second-order posture channel. */
 type Spring = readonly [f: number, z: number, r: number];
 
@@ -68,8 +75,12 @@ export interface CreatureMotionConfig<Mood extends string, Reaction extends stri
   moodMotion: MoodMotionTable<Mood>;
   /** How long each one-shot reaction holds its expression */
   reactionHoldMs: Record<Reaction, number>;
-  /** Starts the choreography of a one-shot reaction on the impulse channels */
-  playReaction: (type: Reaction, channels: ReactionChannels, size: number) => void;
+  /**
+   * Starts the choreography of a one-shot reaction on the impulse channels.
+   * `context.chain` counts how many of the same reaction landed just before this one
+   * (within `HIT.chainWindowMs`): 0 for a fresh reaction, 1+ while a chain is running.
+   */
+  playReaction: (type: Reaction, channels: ReactionChannels, size: number, context: ReactionContext) => void;
   /** Reaction played by a single tap, and by a rapid streak of taps */
   tapReaction: Reaction;
   tapStreakReaction: Reaction;
@@ -160,6 +171,11 @@ interface CreatureMotionInput<Mood extends string, Reaction extends string> {
   reaction: { type: Reaction; id: number } | null;
   /** Run continuous motion (false = settle straight into the resting pose) */
   animate: boolean;
+  /**
+   * Reactions change the face but do not move the body (the in-game Effects switch is off).
+   * Idle life still runs when `animate` is on.
+   */
+  stillReactions?: boolean;
   /** Blink, glance around and fidget while idle */
   lively: boolean;
   interactive: boolean;
@@ -232,6 +248,7 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
 ): CreatureMotion<Reaction> {
   const { name, size, mood, healthState, personality, pivots, reaction, animate, lively, interactive, onTap } =
     input;
+  const stillReactions = input.stillReactions ?? false;
 
   const [activeReaction, setActiveReaction] = useState<Reaction | null>(reaction?.type ?? null);
   const [reactionKey, setReactionKey] = useState<number>(reaction ? 1 : 0);
@@ -241,6 +258,7 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
   const reactionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tapTimestampsRef = useRef<number[]>([]);
   const playCountRef = useRef(0);
+  const lastPlayRef = useRef<{ type: Reaction | null; at: number; chain: number }>({ type: null, at: 0, chain: 0 });
 
   const gaze = useMemo<GazeOffset>(
     () => config.resolveGaze({ mood, healthState, activeReaction, idleGaze }),
@@ -453,11 +471,17 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
         setActiveReaction(null);
       }, config.reactionHoldMs[type] ?? 850);
 
-      if (animate) {
-        config.playReaction(type, channels, size);
+      // A chain: the same reaction again while the last one is still being felt
+      const now = Date.now();
+      const last = lastPlayRef.current;
+      const chain = last.type === type && now - last.at < HIT.chainWindowMs ? Math.min(HIT.chainMax, last.chain + 1) : 0;
+      lastPlayRef.current = { type, at: now, chain };
+
+      if (animate && !stillReactions) {
+        config.playReaction(type, channels, size, { chain });
       }
     },
-    [config, animate, size, channels]
+    [config, animate, stillReactions, size, channels]
   );
 
   const lastExternalIdRef = useRef<number | null>(null);

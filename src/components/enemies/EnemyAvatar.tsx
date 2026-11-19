@@ -11,6 +11,7 @@ import type { EnemyInstance } from '@/types/enemy';
 import { useAppActive } from '@/hooks/useAppActive';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { COLORS } from '@/utils/colors';
+import { EASE, HIT, SPRING, SpringSpec } from '@/utils/motion';
 import {
   ENEMY_MOOD_MOTION,
   ENEMY_REACTION_HOLD_MS,
@@ -46,6 +47,11 @@ interface EnemyAvatarProps {
   lightweight?: boolean;
   /** Whether continuous idle/mood animation should run (default true) */
   animate?: boolean;
+  /**
+   * Reactions change the face and show their marks, but the body does not move
+   * (the in-game Effects switch is off). Idle life still runs.
+   */
+  quiet?: boolean;
   /** Whether tapping the enemy pokes/provokes it (5x rapid pokes = rage_spin!) */
   interactive?: boolean;
   /** Optional callback when poked */
@@ -57,7 +63,7 @@ interface EnemyAvatarProps {
 }
 
 /** How enemies move: menacing stances, heavy recoils, taunts and lunges. */
-const ENEMY_MOTION: CreatureMotionConfig<EnemyAmbientMood, EnemyReactionType> = {
+export const ENEMY_MOTION: CreatureMotionConfig<EnemyAmbientMood, EnemyReactionType> = {
   moodMotion: ENEMY_MOOD_MOTION,
   reactionHoldMs: ENEMY_REACTION_HOLD_MS,
   tapReaction: 'poke',
@@ -153,78 +159,34 @@ const ENEMY_MOTION: CreatureMotionConfig<EnemyAmbientMood, EnemyReactionType> = 
     pawTapGain: 2,
   },
 
-  playReaction: (type, ch, size) => {
+  playReaction: (type, ch, size, context) => {
   const jumpPx = Math.max(6, size * 0.16);
   const recoilPx = Math.max(5, size * 0.14);
 
   switch (type) {
-    case 'pain': {
-      // Player matched a Set! Enemy takes impact: horizontal knockback + squash + head snap!
-      ch.bodyTx.value = withSequence(
-        withTiming(recoilPx, { duration: 48, easing: Easing.out(Easing.quad) }),
-        withTiming(-recoilPx * 0.82, { duration: 60 }),
-        withTiming(recoilPx * 0.55, { duration: 58 }),
-        withTiming(-recoilPx * 0.28, { duration: 52 }),
-        withSpring(0, { damping: 10, stiffness: 240 })
-      );
-      ch.reactionScaleY.value = withSequence(
-        withTiming(0.81, { duration: 65, easing: Easing.out(Easing.quad) }),
-        withTiming(1.09, { duration: 110 }),
-        withSpring(1, { damping: 9, stiffness: 210 })
-      );
-      ch.bodyTy.value = withSequence(
-        withTiming(size * 0.045, { duration: 65 }),
-        withSpring(0, { damping: 10, stiffness: 200 })
-      );
-      ch.bodyRotate.value = withSequence(
-        withTiming(11, { duration: 65 }),
-        withTiming(-6, { duration: 85 }),
-        withSpring(0, { damping: 10, stiffness: 195 })
-      );
-      ch.headRotate.value = withDelay(
-        25,
-        withSequence(
-          withTiming(14, { duration: 75 }),
-          withTiming(-8, { duration: 85 }),
-          withSpring(0, { damping: 9, stiffness: 190 })
-        )
-      );
-      ch.leftEarExtra.value = withSequence(
-        withTiming(18, { duration: 85 }),
-        withSpring(0, { damping: 8, stiffness: 175 })
-      );
-      ch.rightEarExtra.value = withSequence(
-        withTiming(-18, { duration: 85 }),
-        withSpring(0, { damping: 8, stiffness: 175 })
-      );
-      break;
-    }
-
+    case 'pain':
     case 'crit_pain': {
-      // Rainbow / Mega-match! Heavy stagger spin + dramatic compression & rebound!
-      ch.bodyTx.value = withSequence(
-        withTiming(recoilPx * 1.35, { duration: 55 }),
-        withTiming(-recoilPx * 1.1, { duration: 68 }),
-        withTiming(recoilPx * 0.75, { duration: 62 }),
-        withSpring(0, { damping: 9, stiffness: 220 })
+      // A Set lands: the impact pose is there on the next frame (knocked back away from the
+      // fighter, squashed, tipped back), held for the hit-stop, then recovered on springs.
+      // A chained hit goes deeper from wherever the body is; it never restarts from rest.
+      const crit = type === 'crit_pain';
+      const gain = 1 + HIT.chainGain * context.chain;
+      const hold = context.chain > 0 ? HIT.chainHoldMs : crit ? HIT.critHoldMs : HIT.holdMs;
+      const snap = { duration: HIT.snapMs, easing: EASE.enter };
+      const strike = (to: number, rest: number, spring: SpringSpec) =>
+        withSequence(withTiming(to, snap), withDelay(hold, withSpring(rest, spring)));
+
+      ch.reactionScaleY.value = strike(Math.max(0.72, 1 - (crit ? 0.26 : 0.18) * gain), 1, crit ? SPRING.playful : SPRING.lively);
+      ch.bodyTx.value = strike(recoilPx * Math.min(1.7, (crit ? 1.4 : 1) * gain), 0, SPRING.settle);
+      ch.bodyTy.value = strike(size * (crit ? 0.045 : 0.03), 0, SPRING.settle);
+      ch.bodyRotate.value = strike(Math.min(22, (crit ? 16 : 9) * gain), 0, SPRING.lively);
+      // The head and ears are thrown a frame later and come back loose (follow-through)
+      ch.headRotate.value = withDelay(
+        HIT.snapMs,
+        strike(Math.min(22, (crit ? 16 : 11) * gain), 0, SPRING.lively)
       );
-      ch.reactionScaleY.value = withSequence(
-        withTiming(0.74, { duration: 70, easing: Easing.out(Easing.quad) }),
-        withTiming(1.18, { duration: 125, easing: Easing.out(Easing.cubic) }),
-        withTiming(0.92, { duration: 90 }),
-        withSpring(1, { damping: 8, stiffness: 210 })
-      );
-      ch.bodyRotate.value = withSequence(
-        withTiming(22, { duration: 90, easing: Easing.out(Easing.quad) }),
-        withTiming(-16, { duration: 105 }),
-        withTiming(9, { duration: 85 }),
-        withSpring(0, { damping: 9, stiffness: 190 })
-      );
-      ch.bodyTy.value = withSequence(
-        withTiming(-jumpPx * 0.55, { duration: 110, easing: Easing.out(Easing.quad) }),
-        withTiming(size * 0.05, { duration: 95 }),
-        withSpring(0, { damping: 9, stiffness: 200 })
-      );
+      ch.leftEarExtra.value = strike(crit ? 24 : 18, 0, SPRING.loose);
+      ch.rightEarExtra.value = strike(crit ? -24 : -18, 0, SPRING.loose);
       break;
     }
 
@@ -377,6 +339,7 @@ export const EnemyAvatar: React.FC<EnemyAvatarProps> = memo(function EnemyAvatar
   reaction = null,
   lightweight = false,
   animate = true,
+  quiet = false,
   interactive = false,
   onPoke,
   framed = false,
@@ -414,6 +377,7 @@ export const EnemyAvatar: React.FC<EnemyAvatarProps> = memo(function EnemyAvatar
     pivots,
     reaction,
     animate: shouldAnimate,
+    stillReactions: quiet,
     lively: !lightweight,
     interactive,
     onTap: onPoke as ((reaction: EnemyReactionType) => void) | undefined,
@@ -484,6 +448,7 @@ export const EnemyAvatar: React.FC<EnemyAvatarProps> = memo(function EnemyAvatar
           mood={effectiveMood}
           personality={personality}
           animate={shouldAnimate}
+          stillBurst={quiet}
         />
       )}
     </CreatureStage>
