@@ -125,7 +125,7 @@ This file is edited by whoever runs the loop: keep rows short; details, frame st
 
 | Surface | What the player sees | Seen | Pri | Top problems | Shot | Status | Scores before → after | Entries |
 |---|---|---|---|---|---|---|---|---|
-| screen-change | Menu → map → fight → results → camp swap | often | P1 | every screen change is a hard cut (incl. fight → results); no exits; ScreenTransition only on 4 legacy screens | — | todo | — | A:screen-swap, S:phase-cut, S:route-stack-transition, S:screen-transition-enter |
+| screen-change | Menu → map → fight → results → camp swap | often | P1 | every screen change is a hard cut (incl. fight → results); no exits; ScreenTransition only on 4 legacy screens | screen-map-camp, screen-camp-map, screen-map-fight, screen-double, screen-menu-map | done v0.1.141 (menu ↔ Adventure still cuts: Game.tsx) | 8/5/2/5/4/4/6 → 8/8/7/8/8/7/8 | A:screen-swap, S:phase-cut, S:route-stack-transition, S:screen-transition-enter |
 | modal-enter-exit | Panels pop in over a fade; options modal | often | P2 | no modal ever plays an exit (unmounted); PopIn ignores reduced motion; fade-only | — | todo | — | A:ui-popin, S:modal-fade |
 | button-press | Pressed button dims | constant | P2 | fade-only; release (250 ms) slower than press; 3D buttons never press down | — | todo | — | A:ui-btn-press, S:touchable-opacity-press |
 | companion-bubble | Companion's bubble text changes | often | P3 | text swaps with no transition | — | todo | — | A:companion-text-swap |

@@ -32,12 +32,14 @@ const EPOCH = Date.UTC(2026, 0, 15, 20, 0, 0);
 
 /**
  * Runs in the page. Seeded random numbers: the same board, particles, blinks
- * and fidgets on every capture. Each caller gets its own stream, keyed by the
- * NAMES of the calling function and of its caller: one consumer drawing an
- * extra number (a component that happened to render once more) cannot shift
- * the numbers every other consumer gets, and, because names do not move when
- * lines are added above them, a "before" and an "after" capture of a real
- * fight still deal the same board.
+ * and fidgets on every capture. Each place that calls Math.random gets its own
+ * stream, so one consumer drawing an extra number (a component that happened
+ * to render once more) cannot shift the numbers every other consumer gets.
+ *
+ * A place is named by the last three functions on the stack: each one's name
+ * and the COLUMN of the call, never the line. Lines move whenever code is
+ * added above them; names and columns do not. So a "before" and an "after"
+ * capture of a real fight still deal the same board.
  */
 function seedRandom(seed) {
   const streams = new Map();
@@ -52,14 +54,16 @@ function seedRandom(seed) {
     for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
     return h >>> 0;
   };
-  const nameOf = line => {
-    const m = /^\s*at (?:async )?(?:new )?([^\s(]+) \(/.exec(line || '');
-    return m ? m[1] : 'anon';
+  const placeOf = line => {
+    const text = line || '';
+    const name = /^\s*at (?:async )?(?:new )?([^\s(]+) \(/.exec(text);
+    const column = /:(\d+)\)?\s*$/.exec(text);
+    return `${name ? name[1] : 'anon'}:${column ? column[1] : 0}`;
   };
   Math.random = () => {
-    // Line 0 is "Error", line 1 this function, line 2 the caller, line 3 the caller's caller
-    const lines = (new Error().stack || '').split('\n', 4);
-    const site = `${nameOf(lines[2])}<${nameOf(lines[3])}`;
+    // Line 0 is "Error", line 1 this function, lines 2-4 the caller and what called it
+    const lines = (new Error().stack || '').split('\n', 5);
+    const site = `${placeOf(lines[2])}<${placeOf(lines[3])}<${placeOf(lines[4])}`;
     let stream = streams.get(site);
     if (!stream) streams.set(site, (stream = make(hash(site))));
     return stream();

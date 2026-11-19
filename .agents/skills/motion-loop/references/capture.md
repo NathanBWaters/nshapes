@@ -67,7 +67,7 @@ Images cost context. Read `report.md`, then one contact sheet and one strip. Mak
 
 The page never sees a real clock. Before the app boots, `Date`, timers, `performance.now` and `requestAnimationFrame` are replaced by a virtual clock that only moves when the capture moves it: 16 ms at a time while a shot waits for a screen, then one step per frame. The audio clock follows it (the fight's pictures wait for the band's next note, so the note must fall on the same frame every time). Random numbers are seeded, one stream per place in the code that asks. CSS animations are held and moved by hand. So frame 12 is the same picture on a fast or a slow machine, and a before/after pair shows the change you made and nothing else.
 
-Random numbers are keyed by the names of the functions that ask for them, so adding lines to a file does not reshuffle a real fight: the "before" and the "after" of a real-fight shot deal the same board. Renaming a function that draws random numbers does reshuffle it; if the two captures show different boards, compare by the report's numbers.
+Random numbers are keyed by where they are asked for (the names of the calling functions and the column of the call, not the line), so adding lines to a file does not reshuffle a real fight: the "before" and the "after" of a real-fight shot deal the same board. Renaming or re-indenting a function that draws random numbers does reshuffle it; if the two captures show different boards, compare by the report's numbers.
 
 What this means for you:
 
