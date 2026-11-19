@@ -131,6 +131,13 @@ src/audio/
   (`src/adventure/fx`, docs/fx-design.md) take a step exactly when the chain
   does (`takesChainSlot`) and choose how many 32nd notes a step lasts
   (`playSounds(sounds, stride)`): a short chain plays slower so it can be read.
+  Each sound is heard when its picture lands, never before: the stage marks
+  every event with `heardAfterMs` (a flight is a whole number of 32nd notes,
+  so it stays on the beat), `band.stretch` counts the whole chain from the
+  band's next note and returns how long that is, and the stage starts its
+  picture that much later, less one frame. In dev builds every fight cue is
+  logged to `window.__nshapesCueLog` (when it will be heard), which the motion
+  capture prints next to the frames.
 - **Run events carry `source`** (the rule key of the weapon, skill node or
   evolution that caused them), which is how the band knows whose sting to play.
 

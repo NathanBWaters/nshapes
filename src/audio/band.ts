@@ -44,6 +44,17 @@ const LOUNGE_DRUMS = 'k...h..hs...h..h';
 const RIFF_VOL = 1.2;
 const RIFF_HEAT = 0.8;
 
+/** Dev builds only: when each fight sound will be heard, on the page's own clock. The motion capture times sound against the picture with it. */
+interface CueLogEntry { name: string; t: number }
+const CUE_LOG_MAX = 500;
+const logCue = (name: string, at: number, now: number): void => {
+  if (typeof __DEV__ === 'undefined' || !__DEV__ || typeof window === 'undefined' || typeof performance === 'undefined') return;
+  const w = window as unknown as { __nshapesCueLog?: CueLogEntry[] };
+  const log = (w.__nshapesCueLog ??= []);
+  log.push({ name, t: performance.now() + (at - now) * 1000 });
+  if (log.length > CUE_LOG_MAX) log.splice(0, log.length - CUE_LOG_MAX);
+};
+
 export type CueName =
   | 'heal' | 'hurt' | 'mistake' | 'graceSave' | 'coins' | 'levelUp' | 'foeDefeated' | 'wave' | 'foeRegen'
   | 'foeMove' | 'foeDud' | 'foeHide' | 'foeFuse' | 'foeShuffle' | 'foeSteal' | 'foeGrowl'
@@ -59,6 +70,8 @@ export interface CueOpts {
   amount?: number;
   /** Position in a chain of effects: later slots play later and higher */
   slot?: number;
+  /** Heard this much later than its slot (ms): when its picture lands */
+  afterMs?: number;
 }
 
 interface CueCtx {
@@ -231,10 +244,11 @@ class Band {
   }
 
   /** A weapon fired: play its sting and bring its riff forward for the next bars. */
-  fire(weaponId: string, slot = 0) {
+  fire(weaponId: string, slot = 0, afterMs = 0) {
     this.heat.set(weaponId, Math.min(1, (this.heat.get(weaponId) ?? 0) + 0.5));
-    const c = this.cueCtx(slot);
+    const c = this.cueCtx(slot, false, afterMs);
     if (!c) return;
+    logCue(`sting:${weaponId}`, c.t, this.now);
     const v = weaponVoice(weaponId);
     this.playSting(v, c, 1);
   }
@@ -401,7 +415,7 @@ class Band {
   // ─── Cues ─────────────────────────────────────────────────────────────────
 
   /** When and in what harmony the next cue lands; null when effects are off or there is no audio. */
-  private cueCtx(slot = 0, immediate = false): CueCtx | null {
+  private cueCtx(slot = 0, immediate = false, afterMs = 0): CueCtx | null {
     if (!audioFlags.sfx) return null;
     if (!chip.ensure()) return null;
     const { mode, key } = this.tone();
@@ -409,10 +423,39 @@ class Band {
     const sd = running && this.bpm ? this.stepDur() : 60 / 120 / 4;
     const g = sd / 2;
     const earliest = this.now + 0.012;
-    const t0 = running && !immediate ? nextGridTime(earliest, this.nextTime, g) : earliest;
-    const t = t0 + slot * g;
+    // Inside a stretch of beats (`stretch`), every cue counts from the note its pictures land on
+    const t0 = !immediate && this.stretchT0 !== null ? this.stretchT0 : running && !immediate ? nextGridTime(earliest, this.nextTime, g) : earliest;
+    const t = t0 + slot * g + Math.max(0, afterMs) / 1000;
     const stepAt = running ? this.step + Math.floor((t - this.nextTime) / sd + 1e-6) : 0;
     return { t, g, mode, key, root: running ? chordRoot(mode, Math.floor(stepAt / 16)) : 0, amount: 0, slot };
+  }
+
+  private stretchT0: number | null = null;
+
+  /**
+   * A stretch of a fight's cascade. Every cue played inside `fn` counts its slot
+   * from one note, the band's next 32nd, so the whole chain keeps its spacing.
+   * Returns how long until that note (ms): the stage starts its picture that much
+   * later, so each sound lands on the frame its picture does. Null when there is
+   * no sound to wait for.
+   */
+  stretch(fn: () => void): number | null {
+    if (!audioFlags.sfx || !chip.ensure()) {
+      fn();
+      return null;
+    }
+    const running = this.timer !== null || this.clockOverride !== null;
+    const g = (running && this.bpm ? this.stepDur() : 60 / 120 / 4) / 2;
+    const now = this.now;
+    const earliest = now + 0.012;
+    const t0 = running ? nextGridTime(earliest, this.nextTime, g) : earliest;
+    this.stretchT0 = t0;
+    try {
+      fn();
+    } finally {
+      this.stretchT0 = null;
+    }
+    return (t0 - now) * 1000;
   }
 
   /** A card was tapped: the first, second and third card are the root, third and fifth of the chord. */
@@ -435,9 +478,10 @@ class Band {
    * for every Set in the combo, and the hit's size picks its weight:
    * 0 a tap, 1 a thump, 2 a slam with a sub drop, 3 the whole orchestra.
    */
-  payout(o: { combo: number; tier: number; rainbow?: boolean }) {
-    const c = this.cueCtx();
+  payout(o: { combo: number; tier: number; rainbow?: boolean; afterMs?: number }) {
+    const c = this.cueCtx(0, false, o.afterMs);
     if (!c) return;
+    logCue('payout', c.t, this.now);
     const f = (degree: number, octave: number) => degreeToFreq(c.mode, c.key, degree, octave);
     const N = (inst: InstrumentId, degree: number, octave: number, dt: number, dur: number, vol = 1, pan?: number) =>
       note(inst, f(degree, octave), c.t + dt, dur, { vol, pan, bus: SFX });
@@ -470,12 +514,13 @@ class Band {
 
   /** Play a named cue on the next 32nd note, in key. */
   cue(name: CueName, o: CueOpts = {}) {
-    const c = this.cueCtx(o.slot ?? 0, name === 'tap' || name === 'back');
+    const c = this.cueCtx(o.slot ?? 0, name === 'tap' || name === 'back', o.afterMs);
     if (!c) return;
     // The same cue twice inside a 32nd is one sound, not two
     const last = this.lastCueAt[name];
     if (last !== undefined && Math.abs(c.t - last) < 0.02 && name !== 'reelStop') return;
     this.lastCueAt[name] = c.t;
+    logCue(name, c.t, this.now);
     c.amount = o.amount ?? 0;
     this.run(CUES[name], c);
   }

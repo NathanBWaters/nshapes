@@ -13,7 +13,12 @@ Three ideas hold it together.
 2. **Picture and sound step together.** A step of the cascade is a step of the
    band's chain (`src/audio/fightAudio.ts`), so every effect lands with its
    sound. A short chain plays slower so each step can be read; a long one
-   speeds up.
+   speeds up. A sound is heard on the frame its picture lands or one frame
+   after, never before: the Set's payout when its cards reach the foe, a coin's
+   cue when the coin reaches the counter, a blast's when it goes off on the
+   card (`Beat.cue`, carried to the band as the event's `heardAfterMs`). The
+   stage waits for the band's next note (`band.stretch`, at most one 32nd),
+   so the two meet.
 3. **The clock waits for your moves.** While the cascade of something you did
    plays (a Set, a miss, a burn, the refill after it), or an evolution's cut-in
    waits for a tap, nothing runs on the fight clock: not the timer, not the
@@ -123,7 +128,13 @@ The path of one event:
   hop (`src/components/CardMotion.tsx`), never an outline.
 - **A Set's own cards are thrown.** `AdventureRun` hands the stage the cards of
   the Set's lead hit (`e.cards`), and a ghost of each flies to the foe
-  (`visuals.tsx` `Ghost`, `'throw'`; `useFightFx.ts` `ghostBreakOf`). The board
+  (`visuals.tsx` `Ghost`, `'throw'`; `useFightFx.ts` `ghostBreakOf`): picked up
+  from the picked card's own size, drawn back 8 px, then thrown on a bow
+  (6% of the way, at most 20 px, the three fanned 10 px apart), speeding up
+  into the hit. The cards are the projectile: a thrown Set sends no orbs and
+  rings no board rings. They arrive one frame before the beat lands; on the
+  landing's own commit (`Beat.landed`) the burst, the number, the HP bar and
+  the foe's flinch all start together. The board
   keeps the scored card under the flying copy for a moment (`CardLeaving`), so
   the slot never blinks, and shows no per-card reward text in Adventure
   (`GameBoard` `quietRewards`).
@@ -142,7 +153,9 @@ The path of one event:
 | | |
 |---|---|
 | A step of the chain | 3, 2 or 1 thirty-second notes of the band (about 190, 125 or 60 ms): slower for a chain of 4 or fewer, faster for 10 or more |
-| An orb's flight | 240 ms |
+| A flight (the thrown cards, an orb) | about 240 ms, rounded to whole 32nd notes of the band (`flightFor`: 250 ms at 120 bpm), plus the wait for the band's next note |
+| The Set's number | slams in from ×1.6 in 120 ms (`MS.feedback`, `EASE.enter`), holds still, lifts 12 px and fades in 119 ms (`exitMs(MS.quick)`, `EASE.exit`); reduced motion: no slam, no lift, same hold |
+| The burst | ×0.7 on the frame of the hit, ×1.15 two frames later, settled by the sixth (`EASE.ui`) |
 | A plain Set holds the clock for | about 0.4 s |
 | The longest hold | about 2.2 s, however long the chain (after 14 steps the rest is text only) |
 | A cut-in | until tapped |

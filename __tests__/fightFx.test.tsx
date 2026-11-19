@@ -3,7 +3,8 @@
  *
  *  - every kind of fight event has a row in the catalog that shows something
  *    (the type checker already refuses a missing row; this refuses an empty one),
- *  - sound and picture step through a cascade together,
+ *  - sound and picture step through a cascade together, and each sound is
+ *    heard on the frame its picture lands, never before,
  *  - a cascade never holds the clock for long, and things that repeat on the
  *    clock never hold it at all,
  *  - the engine says WHERE things happened, so they can be drawn there,
@@ -16,7 +17,7 @@ import { PASSIVES } from '@/adventure/data/passives';
 import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
 import { runReducer } from '@/adventure/engine/run';
 import { EVENT_FX, EvolutionCutIn, FxStage, FX_TIMING, scriptFor, scriptHoldMs, strideFor, useAnchors, useFightFx } from '@/adventure/fx';
-import { catalogAnchors, scriptDamage, sourceOfEvent } from '@/adventure/fx/script';
+import { catalogAnchors, flightFor, scriptDamage, sourceOfEvent } from '@/adventure/fx/script';
 import type { Beat, Segment } from '@/adventure/fx/types';
 import type { RunEvent, RunEventType } from '@/adventure/types';
 import type { Card } from '@/types';
@@ -102,6 +103,30 @@ describe('the script: one move as a cascade', () => {
     expect(seg.total).toBe(Math.max(...seg.beats.map(b => b.land)) + FX_TIMING.settleMs);
   });
 
+  it('each sound is heard when its picture lands: the Set at the foe, a coin at the counter, a blast where it goes off', () => {
+    const seg = firstBeats([ev('hit', { amount: 7, slots: [0, 4, 8] }), ev('blast', { amount: 4, text: '2', slots: [3, 7] }), ev('coins', { amount: 5 })]);
+    const [hit, blast, coins] = seg.beats;
+    const flight = flightFor(FX_TIMING.gridMs);
+    // the Set's cards (and a coin) fly: heard as they arrive; a blast goes off on the board as its step starts
+    expect(hit.cue).toBe(hit.land);
+    expect(hit.land - hit.at).toBe(flight);
+    expect(coins.flies && coins.cue === coins.land).toBe(true);
+    expect(blast.cue).toBe(blast.at);
+    // …and the band reads that from the events it is handed
+    const sounds = soundsFor(seg.events, { weapons: WEAPONS.map(w => w.id), combo: 1 });
+    expect(sounds.find(s => s.kind === 'payout')?.after).toBe(flight);
+    expect(sounds.find(s => s.kind === 'cue' && s.name === 'coins')?.after).toBe(flight);
+    expect(sounds.find(s => s.kind === 'cue' && s.name === 'blast')?.after).toBeUndefined();
+  });
+
+  it('a flight is a whole number of the band\'s 32nd notes, so what lands with it stays on the beat', () => {
+    for (const grid of [40, 53.6, 62.5, 75, 120]) {
+      const steps = flightFor(grid) / grid;
+      expect({ grid, whole: Math.abs(steps - Math.round(steps)) < 1e-9 && steps >= 1 }).toEqual({ grid, whole: true });
+      expect(Math.abs(flightFor(grid) - FX_TIMING.flightMs)).toBeLessThanOrEqual(grid / 2);
+    }
+  });
+
   it('a short chain plays slower than a long one', () => {
     expect(strideFor(2)).toBeGreaterThan(strideFor(7));
     expect(strideFor(7)).toBeGreaterThan(strideFor(12));
@@ -129,7 +154,7 @@ describe('the script: one move as a cascade', () => {
       const events = [ev('hit', { amount: 5, slots: [0, 1, 2] }), ev(type, { amount: 2, text: 'x' }), ev('coins', { amount: 1 })];
       const seg = firstBeats(events);
       const step = seg.stride * FX_TIMING.gridMs;
-      const coins = seg.beats.find(b => b.event.type === 'coins' && b.event !== events[1])!;
+      const coins = seg.beats.find(b => b.event.type === 'coins' && b.event.id !== events[1].id)!;
       const cue = soundsFor(events, { weapons: held, combo: 1 }).filter(s => s.kind === 'cue' && s.name === 'coins').pop();
       // the coins after it land on the same step in both
       if (cue && cue.kind === 'cue' && type !== 'evolution_start') expect({ type, at: coins.at / step }).toEqual({ type, at: cue.slot });
@@ -318,8 +343,10 @@ describe('the stage', () => {
     act(() => fx.play(script));
     expect(fx.busy).toBe(true);
     expect(fx.pendingDamage).toBe(15);
+    // nothing has landed yet: no number, the whole hit still on the bar
+    expect(view.queryAllByTestId('floater-tier-1')).toHaveLength(0);
     act(() => {
-      jest.advanceTimersByTime(FX_TIMING.flightMs + 5);
+      jest.advanceTimersByTime(flightFor(FX_TIMING.gridMs) + 5);
     });
     // the Set has landed (its number is up), the blast has not
     expect(fx.pendingDamage).toBe(3);
@@ -333,6 +360,33 @@ describe('the stage', () => {
       jest.advanceTimersByTime(3000);
     });
     expect(fx.beats).toHaveLength(0);
+  });
+
+  it('waits for the band: when its note is late, every landing is as late, and the cards still leave at once', () => {
+    let fx!: ReturnType<typeof useFightFx>;
+    const Late: React.FC = () => {
+      const anchors = useAnchors();
+      fx = useFightFx({ anchors, onSegment: () => 40 });
+      return <FxStage fx={fx} anchors={anchors} size={{ w: 375, h: 700 }} />;
+    };
+    const card = { id: 'c1' } as unknown as Card;
+    render(<Late />);
+    act(() => fx.play(scriptFor([ev('hit', { amount: 12, slots: [0, 1, 2], cards: [card, null, null] })], { weapons: WEAPONS })));
+    const flight = flightFor(FX_TIMING.gridMs);
+    act(() => {
+      jest.advanceTimersByTime(1);
+    });
+    // the thrown card is already on its way, and flies for the whole (longer) flight, less the frame its start waits for
+    expect(fx.ghosts[0]).toMatchObject({ broken: true, how: 'throw', ms: flight + 40 - 16 });
+    act(() => {
+      jest.advanceTimersByTime(flight + 5);
+    });
+    expect(fx.pendingDamage).toBe(12);
+    act(() => {
+      jest.advanceTimersByTime(40);
+    });
+    expect(fx.pendingDamage).toBe(0);
+    expect(fx.beats[0].landed).toBe(true);
   });
 
   it('with effects off nothing waits and the numbers still show', () => {

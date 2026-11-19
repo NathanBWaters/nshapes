@@ -101,6 +101,10 @@ export interface Beat {
   at: number;
   /** When it reaches its target: the number pops, the HUD reacts, the damage comes off the HP bar */
   land: number;
+  /** When its sound is heard: the frame a flying thing arrives, or a board effect appears */
+  cue: number;
+  /** It has reached its target (the stage draws the impact on this commit, with the HP bar and the HUD) */
+  landed?: boolean;
   /** How long it stays mounted */
   life: number;
   /** Cards it plays on */

@@ -7,11 +7,13 @@
  */
 import React, { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withTiming, type SharedValue } from 'react-native-reanimated';
+import Animated, { Easing, ReduceMotion, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withTiming, type EasingFunction, type EasingFunctionFactory, type SharedValue } from 'react-native-reanimated';
 import Svg, { Polygon } from 'react-native-svg';
 import Card from '@/components/Card';
+import { CARD_MOTION } from '@/components/CardMotion';
 import type { Card as CardType } from '@/types';
 import { COLORS } from '@/utils/colors';
+import { EASE as MOTION, MS, exitMs } from '@/utils/motion';
 import { fxMs } from './clock';
 import type { HitTier, Point, Rect, SweepKind } from './types';
 
@@ -30,9 +32,15 @@ export const centerOf = (r: Rect): Point => ({ x: r.x + r.w / 2, y: r.y + r.h / 
 /** The size to draw things on a card from: its smaller side, so a short wide card (a desktop board) gets small effects */
 export const unitOf = (r: Rect): number => Math.min(r.w, r.h);
 
+/**
+ * Where a piece with no delay starts: just past 0, so it is on screen on the frame it mounts (the frame of the
+ * hit that mounts it), not one frame later.
+ */
+const ON_MOUNT = 1e-4;
+
 /** 0 → 1 over `ms`, starting `delay` ms after mount. Runs once. */
-const useProgress = (ms: number, delay = 0, easing: (t: number) => number = EASE.linear): SharedValue<number> => {
-  const p = useSharedValue(0);
+const useProgress = (ms: number, delay = 0, easing: EasingFunction | EasingFunctionFactory = EASE.linear): SharedValue<number> => {
+  const p = useSharedValue(delay > 0 ? 0 : ON_MOUNT);
   useEffect(() => {
     p.value = withDelay(fxMs(delay), withTiming(1, { duration: fxMs(ms), easing }));
     // once, on mount: a piece never restarts
@@ -136,14 +144,17 @@ const starPoints = (spikes: number, outer: number, inner: number, c: number): st
   return pts.join(' ');
 };
 
-/** A spiky comic explosion: pops out past its size, settles, then swells and fades. */
+/**
+ * A spiky comic explosion: there at most of its size on the frame of the hit, past it two frames later,
+ * settled by the sixth, then it swells a little as it fades. (Progress is eased, so the keys are in eased time.)
+ */
 export const Starburst: React.FC<{ at: Point; delay?: number; size: number; color: string; ms?: number }> = ({ at, delay = 0, size, color, ms = 440 }) => {
-  const p = useProgress(ms, delay);
+  const p = useProgress(ms, delay, MOTION.ui);
   const style = useAnimatedStyle(() => {
     const t = p.value;
     return {
-      opacity: t <= 0 ? 0 : seg(t, [0, 0.6, 1], [1, 1, 0]),
-      transform: [{ scale: seg(t, [0, 0.28, 0.45, 1], [0.15, 1.18, 1, 1.3]) }, { rotate: `${seg(t, [0, 1], [-14, 10])}deg` }],
+      opacity: t <= 0 ? 0 : seg(t, [0, 0.75, 1], [1, 1, 0]),
+      transform: [{ scale: seg(t, [0, 0.3, 0.5, 1], [0.7, 1.15, 1, 1.25]) }, { rotate: `${seg(t, [0, 1], [-14, 10])}deg` }],
     };
   });
   const c = size / 2;
@@ -332,15 +343,39 @@ const LEAD_STAMP_SIZE: Record<HitTier, number> = { 0: 30, 1: 36, 2: 42, 3: 50 };
 /** A tag on a card is smaller: it should not hide the card */
 const STICKER_SIZE = 13;
 
+/** How much bigger than its size a word lands before it settles (the Set's own number lands biggest) */
+const STAMP_LAND = { lead: 1.6, other: 1.3 } as const;
+
 /**
- * A number or a word that pops where something landed, holds, then drifts up
- * and fades. `sticker` gives it a white tag so it reads over the cards.
- * A sour one shakes its head instead of popping.
+ * A number or a word that slams in where something landed (big, settling in
+ * `MS.feedback`), holds still while it is read, then lifts away and fades on
+ * the way out. `sticker` gives it a white tag so it reads over the cards.
+ * A sour one shakes its head instead of slamming.
  */
 export const Stamp: React.FC<{ at: Point; text: string; color: string; tier?: HitTier; delay?: number; sticker?: boolean; sour?: boolean; fromLeft?: boolean; lead?: boolean; maxX: number; testID?: string }> = ({ at, text, color, tier = 0, delay = 0, sticker, sour, fromLeft, lead, maxX, testID }) => {
   const hold = 520 + tier * 200;
-  const total = hold + 400;
-  const p = useProgress(total, delay);
+  // (leaving is not the news: out in two thirds of a small part's change, about as quick as it slammed in)
+  const out = exitMs(MS.quick);
+  const total = hold + out;
+  // With reduced motion the words do not slam, lift or shake, but they still hold and fade on time
+  // (Reanimated would otherwise jump every timing to its end, and the number would be gone on its first frame)
+  const still = useReducedMotion();
+  const timed = { reduceMotion: ReduceMotion.Never };
+  // (the head shake of a sour one runs on plain time)
+  const p = useSharedValue(delay > 0 ? 0 : ON_MOUNT);
+  // (with no delay it is already a third of the way in on the frame it mounts: fully opaque, still big)
+  const land = useSharedValue(delay > 0 ? 0 : 1 / 3);
+  const leave = useSharedValue(0);
+  useEffect(() => {
+    p.value = withDelay(fxMs(delay), withTiming(1, { duration: fxMs(total), easing: EASE.linear, ...timed }), ReduceMotion.Never);
+    land.value = withDelay(fxMs(delay), withTiming(1, { duration: fxMs(MS.feedback), easing: MOTION.enter, ...timed }), ReduceMotion.Never);
+    leave.value = withDelay(fxMs(delay + hold), withTiming(1, { duration: fxMs(out), easing: MOTION.exit, ...timed }), ReduceMotion.Never);
+    // once, on mount: a piece never restarts
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const big = still ? 1 : lead ? STAMP_LAND.lead : STAMP_LAND.other;
+  const rise = still ? 0 : 12 + tier * 6;
+  const shake = !!sour && !still;
   const wanted = sticker ? STICKER_SIZE + tier * 3 : lead ? LEAD_STAMP_SIZE[tier] : STAMP_SIZE[tier];
   // Heavy capitals run wide: about this share of the font size per letter
   const em = sticker ? 0.62 : 0.74;
@@ -352,15 +387,16 @@ export const Stamp: React.FC<{ at: Point; text: string; color: string; tier?: Hi
   const width = Math.min(maxX - 8, text.length * size * em + (sticker ? 16 : 0));
   // `fromLeft`: the word starts at the point instead of being centred on it (a long word next to a small target)
   const left = Math.max(4, Math.min(maxX - width - 4, fromLeft ? at.x : at.x - width / 2));
-  const h = hold / total;
   const style = useAnimatedStyle(() => {
     const t = p.value;
+    const l = land.value;
     return {
-      opacity: t <= 0 ? 0 : seg(t, [0, h, 1], [1, 1, 0]),
+      // in over the first two frames of the slam (never a pop), out as it lifts
+      opacity: t <= 0 ? 0 : Math.min(1, l * 3) * (1 - leave.value),
       transform: [
-        { translateX: sour ? seg(t, [0, 0.06, 0.12, 0.18, 0.24], [0, -6, 6, -4, 0]) : 0 },
-        { translateY: -seg(t, [0, 0.12, 1], [0, 4, 16 + tier * 6]) },
-        { scale: sour ? 1 : seg(t, [0, 0.1, 0.2, 1], [0.5, lead ? 1.45 : 1.22, 1, 1]) },
+        { translateX: shake ? seg(t, [0, 0.06, 0.12, 0.18, 0.24], [0, -6, 6, -4, 0]) : 0 },
+        { translateY: -rise * leave.value },
+        { scale: sour ? 1 : big + (1 - big) * l },
       ],
     };
   });
@@ -432,6 +468,23 @@ export const Tag: React.FC<{ at: Point; text: string; maxX: number }> = ({ at, t
 /** How a card leaves: 'throw' is the Set's own cards, flung at whatever the Set hits */
 export type GhostBreak = 'shatter' | 'vaporise' | 'throw';
 
+/** The throw of the Set's own cards, as shares of its flight and pixels */
+const THROW = {
+  /** Share of the flight spent being picked up before it leaves */
+  pickUp: 0.2,
+  /** How big it is when picked up, and when it reaches the target */
+  lift: 1.1,
+  arrive: 0.3,
+  /** How far it draws back, away from the target, as it is picked up (px) */
+  drawBack: 8,
+  /** Its speed as it leaves, as a share of an even pace (0 = a plain ease-in, 1 = linear) */
+  launch: 0.35,
+  /** The bow at the middle of the flight: this share of the distance, at most `bowMax` px; the cards fan `fan` px apart */
+  bowShare: 0.06,
+  bowMax: 20,
+  fan: 10,
+} as const;
+
 /** How long each way of leaving takes (the stage keeps the ghost mounted this long) */
 export const GHOST_BREAK_MS: Record<GhostBreak, number> = { shatter: 240, vaporise: 240, throw: 300 };
 
@@ -442,28 +495,39 @@ const noop = () => {};
  * in the next card at once; the ghost sits on top until its beat arrives and
  * then breaks, so the player sees the old card get hit and the new one appear.
  */
-export const Ghost: React.FC<{ rect: Rect; card: CardType; broken: boolean; how: GhostBreak; color: string; to?: Point | null; order?: number }> = ({ rect, card, broken, how, color, to, order = 0 }) => {
+export const Ghost: React.FC<{ rect: Rect; card: CardType; broken: boolean; how: GhostBreak; color: string; to?: Point | null; order?: number; ms?: number }> = ({ rect, card, broken, how, color, to, order = 0, ms }) => {
   const p = useSharedValue(0);
   const thrown = how === 'throw';
+  const duration = ms ?? GHOST_BREAK_MS[how];
   useEffect(() => {
-    if (broken) p.value = withTiming(1, { duration: fxMs(GHOST_BREAK_MS[how]), easing: thrown ? EASE.linear : EASE.in });
-  }, [broken, how, thrown, p]);
-  // A thrown card pops, then flies to its target shrinking and spinning; without a target it just pops away
+    if (broken) p.value = withTiming(1, { duration: fxMs(duration), easing: thrown ? EASE.linear : EASE.in });
+  }, [broken, duration, thrown, p]);
+  // A thrown card is picked up (it grows and draws back a little), then flies at its target on a bow,
+  // speeding up into the hit, shrinking and turning as it goes; without a target it just pops away
   const dx = to ? to.x - (rect.x + rect.w / 2) : 0;
   const dy = to ? to.y - (rect.y + rect.h / 2) : -rect.h * 0.4;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len;
+  const uy = dy / len;
+  // the bow bends to the left of the way it flies; the three cards fan apart on it and meet on the target
+  const bend = Math.max(4, Math.min(THROW.bowMax, len * THROW.bowShare) + (order - 1) * THROW.fan);
   const spin = order % 2 ? -1 : 1;
   const style = useAnimatedStyle(() => {
     const t = p.value;
     if (thrown) {
-      // ease-in on the way out, so it leaves slowly and arrives fast
-      const f = seg(t, [0, 0.24, 1], [0, 0, 1]);
-      const fly = f * f;
+      const u = seg(t, [0, THROW.pickUp, 1], [0, 0, 1]);
+      // ease-in, but already moving when it leaves the hand: it speeds up into the hit
+      const fly = u * (THROW.launch + (1 - THROW.launch) * u);
+      const back = THROW.drawBack * seg(t, [0, THROW.pickUp, THROW.pickUp * 2], [0, 1, 0]);
+      const bow = Math.sin(Math.PI * u) * bend;
       return {
-        opacity: seg(t, [0, 0.86, 1], [1, 1, 0]),
+        // whole all the way: it waits on the target until the stage takes it away, on the frame the burst appears
+        opacity: 1,
         transform: [
-          { translateX: dx * fly },
-          { translateY: dy * fly - seg(t, [0, 0.24, 0.6, 1], [0, 6, 14, 0]) },
-          { scale: seg(t, [0, 0.14, 0.24, 1], [1, 1.16, 1.1, 0.16]) },
+          { translateX: dx * fly - ux * back + uy * bow },
+          { translateY: dy * fly - uy * back - ux * bow },
+          // (it starts as big as the picked card it replaces on the board, so the hand-off has no step)
+          { scale: t < THROW.pickUp ? CARD_MOTION.pickedScale + (THROW.lift - CARD_MOTION.pickedScale) * (t / THROW.pickUp) : THROW.lift + (THROW.arrive - THROW.lift) * fly },
           { rotate: `${spin * 24 * fly}deg` },
         ],
       };
@@ -472,11 +536,13 @@ export const Ghost: React.FC<{ rect: Rect; card: CardType; broken: boolean; how:
       ? { opacity: seg(t, [0, 0.5, 1], [1, 1, 0]), transform: [{ scaleX: seg(t, [0, 0.3, 1], [1, 1.08, 1.2]) }, { scaleY: seg(t, [0, 0.3, 1], [1, 0.9, 0.04]) }] }
       : { opacity: seg(t, [0, 0.45, 1], [1, 1, 0]), transform: [{ scale: seg(t, [0, 0.3, 1], [1, 1.14, 0.35]) }, { rotate: `${t * 16}deg` }] };
   });
-  const tint = useAnimatedStyle(() => ({ opacity: thrown ? seg(p.value, [0, 0.14, 0.4, 1], [0, 0.9, 0.25, 0.5]) : seg(p.value, [0, 0.25, 1], [0, 0.85, 0.6]) }));
+  // A thrown card flies as itself (no wash); a broken one washes out as it goes
+  const tint = useAnimatedStyle(() => ({ opacity: thrown ? 0 : seg(p.value, [0, 0.25, 1], [0, 0.85, 0.6]) }));
   return (
     // Swallows taps: the card under it is not the one the player is looking at
     <Animated.View style={[st.abs, { left: rect.x, top: rect.y, width: rect.w, height: rect.h }, style]} testID="fx-ghost">
-      <Card card={{ ...card, selected: false, isHint: false, onFire: false }} onClick={noop} disabled />
+      {/* (a thrown card is drawn whole, not dimmed like a card you cannot tap: it is the Set itself, in flight) */}
+      <Card card={{ ...card, selected: false, isHint: false, onFire: false }} onClick={noop} disabled={!thrown} />
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: 12, backgroundColor: how === 'vaporise' ? color : WHITE }, tint]} />
     </Animated.View>
   );

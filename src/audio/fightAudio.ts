@@ -119,10 +119,18 @@ export const JACKPOT_CHAIN = 5;
 /** Most sounds one move may make (the rest of a huge chain is felt, not heard) */
 export const MAX_CHAIN = 12;
 
+/**
+ * A fight event as the stage plays it: `heardAfterMs` says how long after its
+ * step its picture lands (the Set's cards reaching the foe, a coin reaching
+ * the counter), so its sound is heard then and not before (src/adventure/fx/script.ts).
+ */
+export type TimedEvent = RunEvent & { heardAfterMs?: number };
+
+/** `after`: ms after its step that it is heard, so it lands on its picture */
 export type FightSound =
-  | { kind: 'payout'; combo: number; tier: number; rainbow: boolean }
-  | { kind: 'cue'; name: CueName; amount: number; slot: number }
-  | { kind: 'sting'; weapon: string; slot: number };
+  | { kind: 'payout'; combo: number; tier: number; rainbow: boolean; after?: number }
+  | { kind: 'cue'; name: CueName; amount: number; slot: number; after?: number }
+  | { kind: 'sting'; weapon: string; slot: number; after?: number };
 
 /** The Set's own hit: it is the payout, never a link of the chain */
 export const isSetHit = (e: RunEvent): boolean => (e.type === 'hit' && !e.text) || e.type === 'surge_hit';
@@ -142,15 +150,22 @@ export const takesChainSlot = (e: RunEvent, held: readonly string[], setHit: boo
   return (e.type === 'hit' ? 'ding' : EVENT_CUE[e.type]) !== null || weaponOfEvent(e, held) !== null;
 };
 
+/** How long the Set's cards (and every orb) take to reach their target, at 120 bpm (src/adventure/fx/script.ts) */
+export const IMPACT_MS = 240;
+
+/** A sound is heard one frame after its picture lands, never before: light comes first, as in life */
+export const SOUND_AFTER_PICTURE_MS = 16;
+
 /** The chain's first step when a Set leads it: the payout rings first */
 export const CHAIN_LEAD = 2;
 
-export const soundsFor = (events: readonly RunEvent[], ctx: { weapons: readonly string[]; combo: number }): FightSound[] => {
+export const soundsFor = (events: readonly TimedEvent[], ctx: { weapons: readonly string[]; combo: number }): FightSound[] => {
   const out: FightSound[] = [];
   const damage = events.reduce((sum, e) => sum + (DAMAGE.has(e.type) ? e.amount ?? 0 : 0), 0);
   const setHit = events.some(isSetHit);
   const rainbow = events.some(e => e.type === 'rainbow');
-  if (setHit) out.push({ kind: 'payout', combo: Math.max(1, ctx.combo), tier: hitSize(damage), rainbow });
+  const leadAfter = events.find(isSetHit)?.heardAfterMs;
+  if (setHit) out.push({ kind: 'payout', combo: Math.max(1, ctx.combo), tier: hitSize(damage), rainbow, ...(leadAfter ? { after: leadAfter } : {}) });
 
   let slot = setHit ? CHAIN_LEAD : 0;
   let chain = 0;
@@ -160,7 +175,7 @@ export const soundsFor = (events: readonly RunEvent[], ctx: { weapons: readonly 
     if (isSetHit(e) || (e.type === 'rainbow' && setHit)) continue;
     // Bad news from your own gear (a shattered sword, a thorn that bit) never sounds like a win
     if (isSour(e)) {
-      out.push({ kind: 'cue', name: 'sour', amount: 0, slot });
+      out.push({ kind: 'cue', name: 'sour', amount: 0, slot, ...(e.heardAfterMs ? { after: e.heardAfterMs } : {}) });
       slot += 1;
       continue;
     }
@@ -168,10 +183,11 @@ export const soundsFor = (events: readonly RunEvent[], ctx: { weapons: readonly 
     const cue = e.type === 'hit' ? 'ding' : EVENT_CUE[e.type];
     // A weapon speaks for itself: its sting replaces the plain "ding" of a rule or a bonus hit
     const plain = cue === 'ding' && weapon !== null;
-    if (cue && !plain) out.push({ kind: 'cue', name: cue, amount: e.amount ?? 0, slot });
+    const after = e.heardAfterMs ? { after: e.heardAfterMs } : {};
+    if (cue && !plain) out.push({ kind: 'cue', name: cue, amount: e.amount ?? 0, slot, ...after });
     if (weapon && !stung.has(weapon)) {
       stung.add(weapon);
-      out.push({ kind: 'sting', weapon, slot: cue && !plain ? slot + 1 : slot });
+      out.push({ kind: 'sting', weapon, slot: cue && !plain ? slot + 1 : slot, ...after });
     }
     if (cue || weapon) {
       slot += 1;
@@ -187,12 +203,17 @@ export const soundsFor = (events: readonly RunEvent[], ctx: { weapons: readonly 
  * screen pick it (a short chain plays slower, so each step can be read) and
  * pass it here, so every sound lands with its picture.
  */
-export const playSounds = (sounds: readonly FightSound[], stride = 1): void => {
-  for (const s of sounds) {
-    if (s.kind === 'payout') band.payout(s);
-    else if (s.kind === 'cue') band.cue(s.name, { amount: s.amount, slot: s.slot * stride });
-    else band.fire(s.weapon, s.slot * stride);
-  }
+export const playSounds = (sounds: readonly FightSound[], stride = 1): number | null => {
+  // The steps count from the band's next note; each sound is heard `after` its step, when its picture lands
+  const untilFirst = band.stretch(() => {
+    for (const s of sounds) {
+      if (s.kind === 'payout') band.payout({ ...s, afterMs: s.after });
+      else if (s.kind === 'cue') band.cue(s.name, { amount: s.amount, slot: s.slot * stride, afterMs: s.after });
+      else band.fire(s.weapon, s.slot * stride, s.after);
+    }
+  });
+  // How much later than planned the stage should play, so that every picture lands one frame before its sound
+  return untilFirst === null ? null : Math.max(0, untilFirst - SOUND_AFTER_PICTURE_MS);
 };
 
 // ─── Mood ───────────────────────────────────────────────────────────────────

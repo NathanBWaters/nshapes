@@ -17,6 +17,10 @@ const GHOST_SLACK_MS = 20;
 const AMBIENT_GAP_MS = 900;
 /** How long the small banner stays up when effects are off */
 const BANNER_MS = 2700;
+/** One frame of the screen */
+const FRAME_MS = 16;
+/** The longest the stage waits for the band's next note (one 32nd note at the slowest tempo) */
+const MAX_SLIP_MS = 200;
 
 export interface LiveGhost {
   key: string;
@@ -28,14 +32,20 @@ export interface LiveGhost {
   color: string;
   /** Position among the ghosts of its beat */
   order: number;
+  /** How long it takes to break (a thrown card: its whole flight, so it arrives as its beat lands) */
+  ms: number;
 }
 
 export interface FightFxOptions {
   anchors: Anchors;
   /** Effects are off: evolutions show a small banner instead of the cut-in */
   reduced?: boolean;
-  /** A stretch of beats starts now (the band plays its sounds) */
-  onSegment?: (segment: Extract<Segment, { kind: 'beats' }>) => void;
+  /**
+   * A stretch of beats starts now (the band plays its sounds). It may return how
+   * much later than planned its sounds will be heard (ms, the wait for the band's
+   * next note): every landing waits as long, so the picture lands on the sound.
+   */
+  onSegment?: (segment: Extract<Segment, { kind: 'beats' }>) => number | null | void;
   /** A beat reached its target: the HUD reacts */
   onLand?: (beat: Beat) => void;
 }
@@ -107,6 +117,8 @@ export const useFightFx = (options: FightFxOptions): FightFx => {
   const land = useCallback((beat: Beat) => {
     const { anchors, onLand } = opts.current;
     if (beat.damage > 0) setPending(p => Math.max(0, p - beat.damage));
+    // The impact is drawn on this commit, together with the HP bar and the HUD's reaction: one event, one frame
+    setBeats(l => l.map(b => (b.key === beat.key ? { ...b, landed: true } : b)));
     if (!beat.quiet) {
       if (beat.flies && beat.row.to) anchors.bump(beat.row.to);
       beat.row.bump?.forEach(anchors.bump);
@@ -114,9 +126,18 @@ export const useFightFx = (options: FightFxOptions): FightFx => {
     onLand?.(beat);
   }, []);
 
-  const playBeats = useCallback((segment: Extract<Segment, { kind: 'beats' }>) => {
-    opts.current.onSegment?.(segment);
-    for (const beat of segment.beats) {
+  /** Plays a stretch of beats; returns how much later than planned they land (ms) */
+  const playBeats = useCallback((segment: Extract<Segment, { kind: 'beats' }>): number => {
+    const late = Number(opts.current.onSegment?.(segment));
+    const slip = Number.isFinite(late) ? Math.max(0, Math.min(MAX_SLIP_MS, late)) : 0;
+    for (const planned of segment.beats) {
+      // The Set's own cards still leave at once (they answer the tap); they just fly a little longer.
+      // Everything else, the text-only beats of effects-off included, simply waits for its sound.
+      const beat: Beat = slip === 0
+        ? planned
+        : planned.lead && !planned.quiet
+          ? { ...planned, land: planned.land + slip, cue: planned.cue + slip, life: planned.life + slip }
+          : { ...planned, at: planned.at + slip, land: planned.land + slip, cue: planned.cue + slip };
       if (beat.row.ambient) {
         // The same warning again within a second: once is enough
         const now = Date.now();
@@ -127,13 +148,18 @@ export const useFightFx = (options: FightFxOptions): FightFx => {
         setBeats(l => [...l, beat]);
         if (beat.source && !beat.quiet) opts.current.anchors.bump(beat.source.anchor);
         if (beat.ghosts.some(Boolean)) {
-          setGhosts(g => g.map(x => (x.beat === beat.key ? { ...x, broken: true } : x)));
-          later(() => setGhosts(g => g.filter(x => x.beat !== beat.key)), GHOST_BREAK_MS[ghostBreakOf(beat)] + GHOST_SLACK_MS);
+          const how = ghostBreakOf(beat);
+          // A thrown card flies for exactly as long as its beat takes to land
+          // (one frame less: its flight starts on the commit after this one, the impact is drawn on the landing's own commit)
+          const ms = how === 'throw' ? Math.max(1, beat.land - beat.at - FRAME_MS) : GHOST_BREAK_MS[how];
+          setGhosts(g => g.map(x => (x.beat === beat.key ? { ...x, broken: true, ms } : x)));
+          later(() => setGhosts(g => g.filter(x => x.beat !== beat.key)), ms + GHOST_SLACK_MS);
         }
       }, beat.at);
       later(() => land(beat), beat.land);
-      later(() => setBeats(l => l.filter(b => b !== beat)), beat.at + beat.life);
+      later(() => setBeats(l => l.filter(b => b.key !== beat.key)), beat.at + beat.life);
     }
+    return slip;
   }, [later, land]);
 
   const play = useCallback((script: Script) => {
@@ -146,7 +172,8 @@ export const useFightFx = (options: FightFxOptions): FightFx => {
     for (const b of all) {
       if (b.quiet) continue;
       b.ghosts.forEach((card, i) => {
-        if (card) covers.push({ key: `${b.key}:${b.slots[i]}`, beat: b.key, slot: b.slots[i], card, broken: false, how: ghostBreakOf(b), color: b.row.color, order: i });
+        const how = ghostBreakOf(b);
+        if (card) covers.push({ key: `${b.key}:${b.slots[i]}`, beat: b.key, slot: b.slots[i], card, broken: false, how, color: b.row.color, order: i, ms: GHOST_BREAK_MS[how] });
       });
     }
     if (covers.length) setGhosts(g => [...g, ...covers]);
@@ -177,8 +204,8 @@ export const useFightFx = (options: FightFxOptions): FightFx => {
         if (cutQueue.current.length === 1) showNextCutIn();
         return;
       }
-      playBeats(segment);
-      if (segment.total > 0) later(next, segment.total);
+      const slip = playBeats(segment);
+      if (segment.total > 0) later(next, segment.total + slip);
       else next();
     };
     run(0);

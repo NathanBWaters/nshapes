@@ -10,7 +10,7 @@
  * An evolution splits the script: what led to it plays, then the cut-in holds
  * the screen until the player taps, then the rest plays.
  */
-import { CHAIN_LEAD, isSetHit, isSour, takesChainSlot } from '@/audio/fightAudio';
+import { CHAIN_LEAD, IMPACT_MS, isSetHit, isSour, takesChainSlot, type TimedEvent } from '@/audio/fightAudio';
 import type { RunEvent } from '../types';
 import { ownerOfEvent } from '../data/weaponGuide';
 import { EVOLUTION_RECIPES } from '../data/evolutions';
@@ -26,8 +26,8 @@ export const hitTier = (amount: number): HitTier =>
 export const FX_TIMING = {
   /** One 32nd note at 120 bpm: the step when the band is not playing */
   gridMs: 62.5,
-  /** An orb's flight from the cards to the HUD */
-  flightMs: 240,
+  /** An orb's (or a thrown card's) flight from the cards to its target, at 120 bpm (`flightFor` fits it to the band's grid) */
+  flightMs: IMPACT_MS,
   /** A board effect with nothing to fly: how long until it "hits" */
   strikeMs: 110,
   /** After the last beat lands, before the clock runs again */
@@ -37,6 +37,9 @@ export const FX_TIMING = {
   /** Steps drawn in full; the rest of a huge chain is text only */
   maxSteps: 14,
 } as const;
+
+/** A flight lasts a whole number of the band's 32nd notes, so a sound that lands with it is still on the beat */
+export const flightFor = (gridMs: number): number => Math.max(1, Math.round(FX_TIMING.flightMs / gridMs)) * gridMs;
 
 /** 32nd notes per step of the chain */
 export const strideFor = (steps: number): number => (steps <= 4 ? 3 : steps <= 9 ? 2 : 1);
@@ -93,6 +96,7 @@ const beatsOf = (events: RunEvent[], ctx: ScriptContext): Segment => {
   // (a band that is not there, or a nonsense tempo, falls back to 120 bpm)
   const grid = typeof ctx.gridMs === 'number' && ctx.gridMs >= 30 && ctx.gridMs <= 200 ? ctx.gridMs : FX_TIMING.gridMs;
   const step = stride * grid;
+  const flight = flightFor(grid);
   const lead = events.find(isLead);
   const setSlots = lead?.slots ?? [];
   const lanes = new Map<string, number>();
@@ -101,6 +105,7 @@ const beatsOf = (events: RunEvent[], ctx: ScriptContext): Segment => {
   const dealt = new Set(events.filter(e => e.type === 'hit' && e.text).map(e => `${e.source ?? ''}|${e.text}`));
   const echoesHit = (e: RunEvent) => e.type === 'rule' && dealt.has(`${e.source ?? ''}|${e.text}`);
   const beats: Beat[] = [];
+  const timedEvents: TimedEvent[] = [];
   let slot = setHit ? CHAIN_LEAD : 0;
   let taken = 0;
 
@@ -113,7 +118,10 @@ const beatsOf = (events: RunEvent[], ctx: ScriptContext): Segment => {
       taken += 1;
     }
     const row = EVENT_FX[e.type];
-    if (!row) continue;
+    if (!row) {
+      timedEvents.push(e);
+      continue;
+    }
 
     const sour = isSour(e);
     const flies = !!row.orb && !sour && isContribution(e) && !echoesHit(e);
@@ -125,17 +133,25 @@ const beatsOf = (events: RunEvent[], ctx: ScriptContext): Segment => {
     const laneKey = flies && row.to ? row.to : slots.length ? `slot:${slots[0]}` : row.from ?? 'board';
     const lane = lanes.get(laneKey) ?? 0;
     if (label) lanes.set(laneKey, lane + 1);
-    const land = ctx.reduced ? 0 : at + (flies ? FX_TIMING.flightMs : FX_TIMING.strikeMs);
+    const land = ctx.reduced ? 0 : at + (flies ? flight : FX_TIMING.strikeMs);
+    // Its sound is heard on its picture: when what it throws arrives (the Set's cards at the foe, a coin at the
+    // counter), unless it happens on the board itself (a blast on a card): then as that starts, on its step.
+    const onBoard = !!row.board && (slots.length > 0 || (!!row.from && row.from !== 'set')) && row.to !== 'board';
+    const cue = ctx.reduced ? 0 : flies && (e === lead || !onBoard) ? land : at;
     const source = sourceOfEvent(e, ctx);
     const named = !!source && !namedSources.has(source.ref);
+    // The band reads when to sound it from the event itself (src/audio/fightAudio.ts `soundsFor`)
+    const timed: TimedEvent = cue > at ? { ...e, heardAfterMs: cue - at } : e;
+    timedEvents.push(timed);
     if (source) namedSources.add(source.ref);
 
     beats.push({
       key: `e${e.id}`,
-      event: e,
+      event: timed,
       row,
       at,
       land,
+      cue,
       life: land - at + FX_TIMING.lingerMs + tier * 250,
       slots,
       ghosts: e.cards ?? [],
@@ -158,7 +174,7 @@ const beatsOf = (events: RunEvent[], ctx: ScriptContext): Segment => {
   // an evolution running out) and ambient beats play while it runs.
   const holding = beats.filter(b => !b.row.ambient && !b.event.clock);
   const total = ctx.reduced || holding.length === 0 ? 0 : Math.max(...holding.map(b => b.land)) + FX_TIMING.settleMs;
-  return { kind: 'beats', events, beats, total, stride };
+  return { kind: 'beats', events: timedEvents, beats, total, stride };
 };
 
 export const scriptFor = (events: readonly RunEvent[], ctx: ScriptContext): Script => {

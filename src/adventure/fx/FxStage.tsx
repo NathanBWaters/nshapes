@@ -15,7 +15,7 @@ import { Banner, Beam, centerOf, Comet, Flames, Flash, Ghost, Puff, Ring, Sparkl
 
 /** Most orbs one beat sends, however many cards it touched */
 const MAX_ORBS = 3;
-/** Each orb leaves this long after the one before */
+/** Each orb leaves this long after the one before (and they all arrive together) */
 const ORB_GAP_MS = 45;
 const RAINBOW = ['#F0483E', '#F5B800', '#16AA98', '#3B82F6', '#9333EA'];
 
@@ -65,7 +65,8 @@ const BeatView: React.FC<{ beat: Beat; anchors: Anchors; size: Size }> = React.m
   if (beat.quiet) {
     const foe = anchors.rect('foe');
     const at = foe ? labelPoint('foe', foe, beat.lane, beat.lead) : { x: middle.x + 20, y: middle.y + beat.lane * 20 };
-    return beat.label ? <Stamp at={at} text={beat.label} color={labelColor} tier={beat.tier} sticker={!beat.lead} fromLeft={beat.lead && !!foe} maxX={size.w} /> : null;
+    // (the Set's own number looks as it does with effects on: white with an ink edge, on the foe; it just does not fly)
+    return beat.label ? <Stamp at={at} text={beat.label} color={labelColor} tier={beat.tier} sticker={!beat.lead} lead={beat.lead && !!foe} sour={beat.sour} maxX={size.w} /> : null;
   }
 
   const cards = rectsOf(beat.slots);
@@ -84,6 +85,8 @@ const BeatView: React.FC<{ beat: Beat; anchors: Anchors; size: Size }> = React.m
   // Where the board effect plays: on its cards, or on the place the row starts from (the foe healing, the foe going down)
   const places = cards.length ? cards : row.board && fromRect ? [fromRect] : [];
   const boardDelay = inbound ? flight : 0;
+  /** The Set's own cards are thrown at the foe: they are the projectile, so nothing else flies or rings with them */
+  const thrown = beat.lead && beat.ghosts.some(Boolean);
 
   // What flies, from where, to where
   const targetRect = !beat.flies ? null : inbound ? cards[0] ?? board : row.to ? anchors.rect(row.to) : null;
@@ -113,7 +116,9 @@ const BeatView: React.FC<{ beat: Beat; anchors: Anchors; size: Size }> = React.m
     // nowhere of its own: the top of the board
     labelAt = chip ? labelPoint('board', chip, beat.lane, false) : board ? { x: board.x + board.w / 2, y: board.y + 18 + (beat.lane % 3) * 22 } : { x: middle.x + 20, y: middle.y };
   }
-  const labelDelay = end ? flight : inbound ? flight + 60 : 70;
+  // What lands on a HUD target is drawn when its beat lands (`landed`), on the same commit as the HP bar and the HUD
+  const lands = !!end && !inbound;
+  const labelDelay = lands ? 0 : inbound ? flight + 60 : 70;
   const besideFighter = !(end && targetRect && row.to && !inbound) && !places.length && !(row.sweep && board) && !!row.aura && !!fighter;
 
   // Lines: a laser along a row or column, or from whoever fired to each card; a bolt from card to card
@@ -165,7 +170,7 @@ const BeatView: React.FC<{ beat: Beat; anchors: Anchors; size: Size }> = React.m
           case 'puff':
             return <Puff key={key} rect={r} color={color} delay={delay} />;
           case 'ring':
-            return (
+            return thrown ? null : (
               <React.Fragment key={key}>
                 <Ring at={centerOf(r)} size={unitOf(r) * 1.25} color={color} delay={delay} width={4} />
                 <Ring at={centerOf(r)} size={unitOf(r) * 1.7} color={color} delay={delay + 90} />
@@ -187,26 +192,27 @@ const BeatView: React.FC<{ beat: Beat; anchors: Anchors; size: Size }> = React.m
         </>
       )}
 
-      {end && starts.map((from, i) => (
+      {end && !thrown && starts.map((from, i) => (
         <Comet
           key={`${beat.key}-o${i}`}
           from={from}
           to={end}
           delay={i * ORB_GAP_MS}
-          ms={flight}
+          // (a later orb flies faster: they all arrive together, on the beat's landing)
+          ms={Math.max(ORB_GAP_MS, flight - i * ORB_GAP_MS)}
           size={orbSize}
           color={row.orb === 'rainbow' ? RAINBOW[(i * 2) % RAINBOW.length] : color}
           bend={(i % 2 ? 1 : -1) * (12 + i * 7)}
         />
       ))}
-      {end && !inbound && (
+      {lands && beat.landed && (
         <>
           {/* The Set's own hit lands as a comic burst on whatever it hits */}
           {beat.lead && beat.damage > 0 && targetRect && (
-            <Starburst at={end} size={Math.min(targetRect.w * 1.25, 150) + beat.tier * 14} color={color} delay={flight} ms={380} />
+            <Starburst at={end} size={Math.min(targetRect.w * 1.25, 150) + beat.tier * 14} color={color} ms={380} />
           )}
-          <Ring at={end} size={36 + beat.tier * 14 + (beat.lead ? 22 : 0)} color={color} delay={flight} width={beat.lead ? 4 : 3} />
-          {beat.damage > 0 && <Ticks at={end} size={54 + beat.tier * 16 + (beat.lead ? 30 : 0)} color={color} delay={flight} />}
+          <Ring at={end} size={36 + beat.tier * 14 + (beat.lead ? 22 : 0)} color={color} width={beat.lead ? 4 : 3} />
+          {beat.damage > 0 && <Ticks at={end} size={54 + beat.tier * 16 + (beat.lead ? 30 : 0)} color={color} />}
         </>
       )}
 
@@ -214,7 +220,7 @@ const BeatView: React.FC<{ beat: Beat; anchors: Anchors; size: Size }> = React.m
         // Three rows, by step, so the names of weapons that fire one after another do not land on each other
         <Tag at={{ x: sourceRect.x + sourceRect.w / 2, y: sourceRect.y + sourceRect.h + 3 + (beat.step % 3) * 16 }} text={beat.source.name} maxX={size.w} />
       )}
-      {label && row.banner && board ? (
+      {lands && !beat.landed ? null : label && row.banner && board ? (
         <>
           <Banner rect={board} text={label} color={color} delay={labelDelay} />
           {places[0] && <Sparkles rect={places[0]} color="#FFDE00" delay={labelDelay + 80} />}
@@ -241,7 +247,7 @@ export const FxStage: React.FC<{ fx: FightFx; anchors: Anchors; size: Size }> = 
       const rect = anchors.rect(`slot:${g.slot}`);
       // A thrown card flies at the foe
       const foe = g.how === 'throw' ? anchors.rect('foe') : null;
-      return rect ? <Ghost key={g.key} rect={rect} card={g.card} broken={g.broken} how={g.how} color={g.color} to={foe ? centerOf(foe) : null} order={g.order} /> : null;
+      return rect ? <Ghost key={g.key} rect={rect} card={g.card} broken={g.broken} how={g.how} ms={g.ms} color={g.color} to={foe ? centerOf(foe) : null} order={g.order} /> : null;
     })}
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
       {fx.beats.map(b => <BeatView key={b.key} beat={b} anchors={anchors} size={size} />)}
