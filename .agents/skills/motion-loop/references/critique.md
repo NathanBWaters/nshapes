@@ -28,6 +28,8 @@ Write all seven every round, like `7/6/5/6/7/6/8`. An 8 means this:
 
 Scores under 8 need a note. A score of 8 or more on round 1 needs a second look at the strip: you probably graded the idea.
 
+A supporting move (a creature flinching under the hit's burst, a chip jumping when a coin lands) is scored as support: does it start on the hero's frame, is it smaller and shorter than the hero, and is it right in the frames where it can be seen? Being half covered by the hero is correct staging, not a defect. Score it in its studio shot for its own motion and in the real shot for how it sits with the hero.
+
 ## What to hunt for
 
 Go down this list on every strip. Each line is a defect seen in real reviews.

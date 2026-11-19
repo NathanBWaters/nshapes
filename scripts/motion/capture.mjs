@@ -31,11 +31,13 @@ import { describeShots, resolveShot } from './shots.mjs';
 const EPOCH = Date.UTC(2026, 0, 15, 20, 0, 0);
 
 /**
- * Runs in the page. Seeded random numbers: the same particles, blinks and
- * fidgets on every capture. Each place in the code that calls Math.random gets
- * its own stream (keyed by the caller's line), so one consumer drawing an extra
- * number (a component that happened to render once more) cannot shift the
- * numbers every other consumer gets.
+ * Runs in the page. Seeded random numbers: the same board, particles, blinks
+ * and fidgets on every capture. Each caller gets its own stream, keyed by the
+ * NAMES of the calling function and of its caller: one consumer drawing an
+ * extra number (a component that happened to render once more) cannot shift
+ * the numbers every other consumer gets, and, because names do not move when
+ * lines are added above them, a "before" and an "after" capture of a real
+ * fight still deal the same board.
  */
 function seedRandom(seed) {
   const streams = new Map();
@@ -50,12 +52,14 @@ function seedRandom(seed) {
     for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
     return h >>> 0;
   };
+  const nameOf = line => {
+    const m = /^\s*at (?:async )?(?:new )?([^\s(]+) \(/.exec(line || '');
+    return m ? m[1] : 'anon';
+  };
   Math.random = () => {
-    const stack = new Error().stack || '';
-    const first = stack.indexOf('\n');
-    const second = stack.indexOf('\n', first + 1);
-    const third = stack.indexOf('\n', second + 1);
-    const site = second < 0 ? 'unknown' : stack.slice(second + 1, third < 0 ? undefined : third);
+    // Line 0 is "Error", line 1 this function, line 2 the caller, line 3 the caller's caller
+    const lines = (new Error().stack || '').split('\n', 4);
+    const site = `${nameOf(lines[2])}<${nameOf(lines[3])}`;
     let stream = streams.get(site);
     if (!stream) streams.set(site, (stream = make(hash(site))));
     return stream();
@@ -218,15 +222,17 @@ const toSelector = target => (/[[\].#>:= ]/.test(target) ? target : `[data-testi
 
 async function resolveClip(page, clip, viewport) {
   if (!clip) return null;
+  const what = typeof clip === 'string' ? toSelector(clip) : 'the shot\'s clip';
   let box = clip;
   if (typeof clip === 'function') box = await clip(page);
   if (typeof box === 'string') box = await page.locator(toSelector(box)).first().boundingBox();
-  if (!box) return null;
+  if (!box) throw new Error(`The shot is clipped to ${what}, which is not on the page. Capturing the whole screen instead would measure the wrong thing.`);
   const x = Math.max(0, Math.floor(box.x));
   const y = Math.max(0, Math.floor(box.y));
   const x1 = Math.min(viewport.width, Math.ceil(box.x + box.width));
   const y1 = Math.min(viewport.height, Math.ceil(box.y + box.height));
-  if (x1 - x < 8 || y1 - y < 8) return null;
+  if (x1 - x < 8 || y1 - y < 8)
+    throw new Error(`The shot is clipped to ${what}, which is off screen (at ${Math.round(box.x)},${Math.round(box.y)}, ${Math.round(box.width)}×${Math.round(box.height)}). Scroll it into view in the shot's prepare step: h.reveal(target).`);
   return { x, y, width: x1 - x, height: y1 - y };
 }
 
@@ -314,8 +320,16 @@ async function captureOnce(shot, opts, outDir) {
     until,
     /** Advance virtual time by hand (ms) */
     advance,
-    /** Click a test id or selector */
+    /** Click a test id or selector. (If it is off screen the click scrolls to it first: reveal it in `prepare` so the page does not move mid-capture.) */
     tap: target => page.locator(toSelector(target)).first().click(),
+    /** Scroll a test id or selector to the middle of its scroller, without tapping it */
+    reveal: async target => {
+      await inPage(sel => {
+        const el = document.querySelector(sel);
+        if (el) el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
+      }, toSelector(target));
+      await flush();
+    },
     /** Wait for it, then click it */
     go: async target => {
       await until(target);
@@ -468,7 +482,7 @@ async function captureOnce(shot, opts, outDir) {
 
   await browser.close();
   const capture = {
-    shot: { id: shot.id, about: shot.about ?? '', path: shot.path },
+    shot: { id: shot.id, about: shot.about ?? '', path: shot.path, mute: shot.mute ?? [] },
     label: opts.label,
     url,
     sha: gitSha(),

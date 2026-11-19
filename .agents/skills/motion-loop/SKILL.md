@@ -40,7 +40,7 @@ One **surface** at a time: one moment the player sees (a Set landing, a sheet op
 | 5 | **Capture again** | `npm run motion:capture -- <shot> --label r1`, then `npm run motion:sheet -- --compare motion-out/<shot>/before motion-out/<shot>/r1`. Check the brief's numbers against `report.md`. | |
 | 6 | **Score again** | Same rubric, same harshness. Fix the 3 worst. Back to 5 (`r2`, `r3`). Stop when every score is 8 or more, or after 4 rounds: then say what is still under 8 and why. If what holds a score down lives in a file that is not yours to change, stop there and report the exact change it needs: that is a finished loop for your part. | |
 | 7 | **Other paths** | `--reduced` capture (movement gone, meaning kept). Neighbours that share the code still look right. `npm run verify:guardrails && npm run test:fast`. | |
-| 8 | **Log** | `docs/motion/reviews/<surface>.md`: rounds, scores, notes, final numbers. Update the surface's row in `docs/motion/ledger.md`. Then commit and push by the repo's rules. | |
+| 8 | **Log** | `docs/motion/reviews/<surface>.md`: rounds, scores, notes, final numbers. Update the surface's row in `docs/motion/ledger.md` (when you are one lane of a sweep, the director does that: report your scores instead). Then commit and push by the repo's rules. | |
 
 Change one thing per round when you can. A round that changes five numbers teaches you nothing about any of them. A round somebody else asks for (a reviewer's note, a seam with a neighbouring surface) does not count against the four.
 

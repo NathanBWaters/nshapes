@@ -342,7 +342,9 @@ export function analyze(dir) {
     .map(t => analyzeTrack(t, step))
     .filter(Boolean)
     .sort((a, b) => b.salience - a.salience);
-  const hints = hintsFor(movers, timeline, capture);
+  // A shot can say which findings are meant (a held pose is not a dead stretch)
+  const mute = new Set(capture.shot.mute ?? []);
+  const hints = hintsFor(movers, timeline, capture).filter(h => !mute.has(h.code));
 
   const lines = [];
   const total = capture.frames;
@@ -376,6 +378,7 @@ export function analyze(dir) {
   lines.push('## Hints (machine-detected; confirm each one on the strip before acting)');
   lines.push('');
   if (!hints.length) lines.push('_None._');
+  if (mute.size) lines.push(`_Not reported for this shot (meant): ${[...mute].join(', ')}._`);
   hints.slice(0, 20).forEach(h => {
     const frames = [...new Set(h.frames)].sort((a, b) => a - b);
     const when = frames.length > 1 ? `f${frames[0]}–f${frames[frames.length - 1]} (×${h.frames.length})` : `f${frames[0]}`;

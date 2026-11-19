@@ -67,6 +67,8 @@ Images cost context. Read `report.md`, then one contact sheet and one strip. Mak
 
 The page never sees a real clock. Before the app boots, `Date`, timers, `performance.now` and `requestAnimationFrame` are replaced by a virtual clock that only moves when the capture moves it: 16 ms at a time while a shot waits for a screen, then one step per frame. The audio clock follows it (the fight's pictures wait for the band's next note, so the note must fall on the same frame every time). Random numbers are seeded, one stream per place in the code that asks. CSS animations are held and moved by hand. So frame 12 is the same picture on a fast or a slow machine, and a before/after pair shows the change you made and nothing else.
 
+Random numbers are keyed by the names of the functions that ask for them, so adding lines to a file does not reshuffle a real fight: the "before" and the "after" of a real-fight shot deal the same board. Renaming a function that draws random numbers does reshuffle it; if the two captures show different boards, compare by the report's numbers.
+
 What this means for you:
 
 - **Frame numbers are real.** `f12` is 192 ms after the trigger, always.
@@ -98,6 +100,7 @@ Helpers (`h`):
 | `h.until(target)` | Wait for a test id, a CSS selector or an async function to be true, moving time only as needed |
 | `h.tap(target)` | Click a test id or selector |
 | `h.go(target)` | `until` then `tap` |
+| `h.reveal(target)` | Scroll a button into view during `prepare`. A tap on something off screen scrolls the page first, and then the thing you are filming moves between the trigger and frame 0. |
 | `h.advance(ms)` | Move time by hand (let an entrance finish before the trigger) |
 | `h.present(target)` | Is it on screen right now? |
 | `h.evaluate(fn)` | Run code in the page: `window.__nshapesRun` is the live fight (board, attributes, status) |
@@ -113,6 +116,7 @@ Rules for shots:
 - **A shot that starts in the middle of something** (the frame a foe goes down, with the last hit still playing) has no quiet moment before it, so the capture cannot learn what "still" looks like and the report says nothing changed. Give the shot `ambient: 0` (or the number of pixels per frame that should count as still), or better, start it on a quiet frame.
 - **A capture label ending in `+` was taken with uncommitted changes** (`@1a79299+`): the sheet shows the commit it was built on, not the code under test. Label your captures (`before`, `r1`) so the folder name says what they are.
 - **Compare like with like.** A compare sheet lines two captures up by frame number, so both must be the same shot. If you change the shot (a different starting point), capture the baseline again with the new shot (`git stash`, capture, `git stash pop`).
+- **Say what is meant.** A crouch held for ten frames is not a dead stretch, and a creature whose every part starts on the hit is not "everything at once". `mute: ['DEAD-STRETCH', 'ALL-AT-ONCE']` on the shot keeps those hints out of its report (the report says they were left out).
 - **Endless loops** (an idle creature, a bobbing node): give the shot `frames` and `loop: { frames: N }` with the loop's length in frames; the report then checks the seam.
 - **Add the shot in the same change as the animation.** A surface with no shot cannot be reviewed by the next agent.
 

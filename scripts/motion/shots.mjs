@@ -12,6 +12,7 @@
  *   actions   optional: [{ at: frame, do: page => … }] things to do part-way (dismiss a cut-in)
  *   track     optional: extra selectors to measure (elements moved by inline transform / opacity are found automatically)
  *   loop      optional: { frames: N } for an endless loop of N frames: frame N is compared with frame 0
+ *   mute      optional: hint codes that are meant in this shot, e.g. ['DEAD-STRETCH'] for a pose that is held on purpose
  *   ambient   optional: how many pixels may change per frame and still count as "nothing happening"
  *             (default: measured on the frames before the trigger; set 0 when the shot starts mid-action)
  *
@@ -22,6 +23,7 @@
  *   h.until(target)   advance time 16 ms at a time until the test id / selector / async fn is there
  *   h.tap(target)     click a test id or selector
  *   h.go(target)      until + tap
+ *   h.reveal(target)  scroll it into view (in `prepare`), so the trigger's tap does not scroll the page mid-capture
  *   h.advance(ms)     move time by hand
  *   h.evaluate(fn)    run something in the page (e.g. read window.__nshapesRun)
  *

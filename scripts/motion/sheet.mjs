@@ -9,7 +9,7 @@
  *   node scripts/motion/sheet.mjs <captureDir>                       # contact.png + strip.png
  *   node scripts/motion/sheet.mjs <captureDir> --from 10 --to 25     # a strip of exactly these frames
  *        [--every 1] [--cols 8] [--roi auto|full|<test id>|x,y,w,h] [--out file.png]
- *        (--roi results-stars crops to the box that test id covered; x,y,w,h are image pixels)
+ *        (--roi results-stars crops to the box that test id covered, plus --pad N pixels (16); x,y,w,h are image pixels)
  *   node scripts/motion/sheet.mjs --compare <beforeDir> <afterDir> [--from A --to B --every N]
  *
  * Every thumbnail is labelled with its frame number and time, so a note can
@@ -23,6 +23,8 @@ import { frameLabel, frameName, num, parseArgs, readJson, unionBox } from './lib
 
 const SHEET_WIDTH = 1500;
 const GAP = 3;
+/** Room kept around a test id's box when cropping to it (`--pad N`) */
+const PAD = { value: 16 };
 
 function activeRange(capture) {
   const live = capture.activity.slice(capture.preroll);
@@ -56,7 +58,8 @@ function parseRoi(value, capture) {
   // A test id: the box that part of the screen covered during the capture
   const region = capture.regions?.[value];
   if (!region) throw new Error(`--roi "${value}" is not auto, full, x,y,w,h or a test id seen in this capture. Seen: ${Object.keys(capture.regions ?? {}).slice(0, 40).join(', ')}`);
-  const pad = 8;
+  // A creature's ears and a burst's rays stick out of the box their test id is on
+  const pad = PAD.value;
   const d = capture.dpr;
   const x = Math.max(0, (region[0] - pad) * d);
   const y = Math.max(0, (region[1] - pad) * d);
@@ -177,6 +180,7 @@ async function main() {
     roi: typeof args.roi === 'string' ? args.roi : undefined,
     out: typeof args.out === 'string' ? path.resolve(args.out) : undefined,
   };
+  if (args.pad !== undefined) PAD.value = num(args.pad, 16);
   if (args.compare) {
     const [a, b] = [args.compare === true ? args._[0] : args.compare, args.compare === true ? args._[1] : args._[0]];
     if (!a || !b) throw new Error('usage: node scripts/motion/sheet.mjs --compare <beforeDir> <afterDir>');
