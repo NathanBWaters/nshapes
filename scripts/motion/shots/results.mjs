@@ -15,6 +15,8 @@ export default {
       await h.until(() => page.evaluate(() => !!window.__nshapesRun && window.__nshapesRun.status !== 'playing'), { chunk: 48, timeout: 240000 });
     },
     trigger: async () => {},
+    // Starts mid-action (the last hit is still playing), so "still" cannot be measured before the trigger
+    ambient: 0,
     frames: 420,
   },
   'results-payout': {
@@ -31,6 +33,7 @@ export default {
       await h.until('results-actions');
     },
     trigger: async () => {},
+    ambient: 0,
     frames: 180,
   },
 };

@@ -314,7 +314,7 @@ export function analyze(dir) {
   // activity[k] belongs to frame (k - preroll): how much changed since the frame before it
   const pre = capture.preroll;
   const live = activity.slice(pre);
-  const ambient = pre > 1 ? Math.max(0, ...activity.slice(1, pre)) : 0;
+  const ambient = capture.ambient ?? (pre > 1 ? Math.max(0, ...activity.slice(1, pre)) : 0);
   const quiet = ambient * 1.5 + 2;
   let firstChange = null;
   let lastChange = null;

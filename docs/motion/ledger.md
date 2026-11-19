@@ -78,7 +78,7 @@ This file is edited by whoever runs the loop: keep rows short; details, frame st
 
 | Surface | What the player sees | Seen | Pri | Top problems | Shot | Status | Scores before → after | Entries |
 |---|---|---|---|---|---|---|---|---|
-| results-payout | Result card pops, stars pop with chords, coins bank | often | P1 | whole card lands as one block in 180 ms; coin-roll sound with no count-up; 260 ms star pops on parallel timers | — | todo | — | A:results-card-popin, A:results-star-pop, A:ui-star-pop, A:results-coins, A:results-avatars, A:results-footer |
+| results-payout | Result card pops, stars pop with chords, coins bank | often | P1 | whole card lands as one block in 180 ms; coin-roll sound with no count-up; 260 ms star pops on parallel timers | fight-win, results-payout | done v0.1.139 | 7/6/6/5/5/6/4 → 8/8/8/8/8/8/8 | A:results-card-popin, A:results-star-pop, A:ui-star-pop, A:results-coins, A:results-avatars, A:results-footer |
 | unlock-reveal | Black screen, rays, tap: flash, medallion, details | sometimes | P2 | white flash and rays ignore reduced motion; 300 ms bump with a hard content swap; ~440 ms dead gap before it opens | — | todo | — | A:results-unlock-delay, A:unlock-modal-fade, A:unlock-rays, A:unlock-flash, A:unlock-hero-pop, A:unlock-detail-rise, A:unlock-avatar-acting |
 | unlock-handoff | Next unlock in a row; results swap silhouettes | sometimes | P2 | cut to next silhouette; no exit; silhouettes swap instantly on return | — | todo | — | A:unlock-advance, A:results-unlocked-reveal-swap |
 | results-details | Power breakdown expander, NEW BEST, 👍/👎 vote | often | P3 | expander pops in; NEW BEST has no emphasis; vote and saved badge snap | — | todo | — | A:results-power-toggle, S:fun-prompt-vote |

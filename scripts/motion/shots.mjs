@@ -12,6 +12,8 @@
  *   actions   optional: [{ at: frame, do: page => … }] things to do part-way (dismiss a cut-in)
  *   track     optional: extra selectors to measure (elements moved by inline transform / opacity are found automatically)
  *   loop      optional: { frames: N } for an endless loop of N frames: frame N is compared with frame 0
+ *   ambient   optional: how many pixels may change per frame and still count as "nothing happening"
+ *             (default: measured on the frames before the trigger; set 0 when the shot starts mid-action)
  *
  * The page's clock is virtual and stands still unless the capture moves it, so
  * never wait with Playwright's own waits (`waitFor`, `waitForTimeout`): a

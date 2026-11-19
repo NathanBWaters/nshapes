@@ -33,7 +33,7 @@ One **surface** at a time: one moment the player sees (a Set landing, a sheet op
 | # | Step | Do | Read |
 |---|------|----|------|
 | 0 | **Shot** | Find the surface's shot (`npm run motion:shots`) or add one in `scripts/motion/shots/`. Dev server must be up. | [capture.md](references/capture.md) |
-| 1 | **Baseline** | `npm run motion:capture -- <shot> --label before --twice`. Read `report.md`, then `contact.png`, then `strip.png`. | |
+| 1 | **Baseline** | `npm run motion:capture -- <shot> --label before --twice`. Read `report.md`, then `contact.png`, then `strip.png`. (`--twice` captures a second time to check the shot repeats: once per surface is enough, and on a shot that takes minutes, keep it for the final round.) | |
 | 2 | **Critique** | As a harsh motion director, not the author: score the seven lines of the rubric, list the 3 worst defects, each with a frame number, the evidence and the exact change. | [critique.md](references/critique.md) |
 | 3 | **Brief** | Before any code: the goal in one sentence, the key poses on a frame table, one hero, what waits, tokens for every curve and spring, what is banned, what reduced motion shows. For a hero moment write 3 different variants and pick one, saying why. | [brief.md](references/brief.md), [numbers.md](references/numbers.md) |
 | 4 | **Build** | Smallest change that meets the brief. Numbers come from `src/utils/motion.ts`. Transform and opacity only. Follow the project's fight-effect, card and battery rules (Claude.md). | |

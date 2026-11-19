@@ -8,7 +8,8 @@
  *
  *   node scripts/motion/sheet.mjs <captureDir>                       # contact.png + strip.png
  *   node scripts/motion/sheet.mjs <captureDir> --from 10 --to 25     # a strip of exactly these frames
- *        [--every 1] [--cols 8] [--roi auto|full|x,y,w,h] [--out file.png]
+ *        [--every 1] [--cols 8] [--roi auto|full|<test id>|x,y,w,h] [--out file.png]
+ *        (--roi results-stars crops to the box that test id covered; x,y,w,h are image pixels)
  *   node scripts/motion/sheet.mjs --compare <beforeDir> <afterDir> [--from A --to B --every N]
  *
  * Every thumbnail is labelled with its frame number and time, so a note can
@@ -25,7 +26,7 @@ const GAP = 3;
 
 function activeRange(capture) {
   const live = capture.activity.slice(capture.preroll);
-  const ambient = capture.preroll > 1 ? Math.max(0, ...capture.activity.slice(1, capture.preroll)) : 0;
+  const ambient = capture.ambient ?? (capture.preroll > 1 ? Math.max(0, ...capture.activity.slice(1, capture.preroll)) : 0);
   const quiet = ambient * 1.5 + 2;
   let first = null;
   let last = null;
@@ -50,8 +51,16 @@ function parseRoi(value, capture) {
     if (!r || r.width * r.height > full.width * full.height * 0.7) return { x: 0, y: 0, ...full };
     return r;
   }
-  const [x, y, width, height] = String(value).split(',').map(Number);
-  return { x, y, width, height };
+  const parts = String(value).split(',').map(Number);
+  if (parts.length === 4 && parts.every(Number.isFinite)) return { x: parts[0], y: parts[1], width: parts[2], height: parts[3] };
+  // A test id: the box that part of the screen covered during the capture
+  const region = capture.regions?.[value];
+  if (!region) throw new Error(`--roi "${value}" is not auto, full, x,y,w,h or a test id seen in this capture. Seen: ${Object.keys(capture.regions ?? {}).slice(0, 40).join(', ')}`);
+  const pad = 8;
+  const d = capture.dpr;
+  const x = Math.max(0, (region[0] - pad) * d);
+  const y = Math.max(0, (region[1] - pad) * d);
+  return { x, y, width: Math.min(full.width - x, (region[2] + pad * 2) * d), height: Math.min(full.height - y, (region[3] + pad * 2) * d) };
 }
 
 /** rows: [{ tag?, cells: [{ file, label }] }] */

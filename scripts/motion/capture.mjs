@@ -192,7 +192,16 @@ function installProbes() {
     }
     return false;
   };
-  window.__motion = { measure, sync, flush, present };
+  /** Where every named part of the screen is, so a sheet can be cropped to one by name (`--roi results-stars`) */
+  const regions = () => {
+    const out = [];
+    for (const el of document.querySelectorAll('[data-testid]')) {
+      const r = el.getBoundingClientRect();
+      if (r.width >= 1 && r.height >= 1) out.push([el.getAttribute('data-testid'), Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)]);
+    }
+    return out;
+  };
+  window.__motion = { measure, sync, flush, present, regions };
 }
 
 /** "map-play-next" is a test id; anything that looks like CSS is used as it is. */
@@ -332,6 +341,14 @@ async function captureOnce(shot, opts, outDir) {
 
   const bounds = clip ?? { x: 0, y: 0, width: viewport.width, height: viewport.height };
   const tracks = new Map();
+  const regions = new Map();
+  const noteRegions = async () => {
+    for (const [name, x, y, width, height] of (await inPage(() => window.__motion.regions())) ?? []) {
+      const box = { x: x - bounds.x, y: y - bounds.y, width, height };
+      if (box.x + box.width < 0 || box.y + box.height < 0 || box.x > bounds.width || box.y > bounds.height) continue;
+      regions.set(name, unionBox(regions.get(name) ?? null, box));
+    }
+  };
   const activity = [];
   const boxes = [];
   const hashes = [];
@@ -384,7 +401,8 @@ async function captureOnce(shot, opts, outDir) {
     if (i > -opts.preroll) await advance(step);
     await grab(i);
   }
-  const ambient = opts.preroll > 1 ? Math.max(0, ...activity.slice(1)) : 0;
+  // A shot that starts in the middle of something (the last hit of a fight) says what "still" means itself
+  const ambient = typeof shot.ambient === 'number' ? shot.ambient : opts.preroll > 1 ? Math.max(0, ...activity.slice(1)) : 0;
   const quiet = ambient * 1.5 + 2;
 
   // The page's own (virtual) time at the trigger: sound cues are logged against it
@@ -407,6 +425,7 @@ async function captureOnce(shot, opts, outDir) {
     }
     if (i > 0) await advance(step);
     const changed = await grab(i);
+    if (i % 8 === 0) await noteRegions();
     count = i + 1;
     calm = changed <= quiet ? calm + 1 : 0;
     if (!fixed && !actions.length && i >= minFrames && calm >= quietFrames) {
@@ -414,6 +433,8 @@ async function captureOnce(shot, opts, outDir) {
       break;
     }
   }
+
+  await noteRegions();
 
   // An element that was there and is not on the last frames has left
   for (const t of tracks.values()) if (t.last < count - 1) t.gone = t.last + 1;
@@ -449,6 +470,7 @@ async function captureOnce(shot, opts, outDir) {
     clip,
     size: bounds,
     preroll: opts.preroll,
+    ambient,
     frames: count,
     reduced: !!opts.reduced,
     seed: opts.seed,
@@ -458,6 +480,7 @@ async function captureOnce(shot, opts, outDir) {
     boxes,
     roi: roi ? padBox(roi, 10, { width: bounds.width * opts.dpr, height: bounds.height * opts.dpr }) : null,
     cssAnimations,
+    regions: Object.fromEntries([...regions.entries()].map(([name, b]) => [name, [b.x, b.y, b.width, b.height]])),
     cues,
     seam,
     problems,

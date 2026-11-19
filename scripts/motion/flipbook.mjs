@@ -21,7 +21,7 @@ import { frameName, num, parseArgs, readJson } from './lib.mjs';
 
 function activeRange(capture) {
   const live = capture.activity.slice(capture.preroll);
-  const ambient = capture.preroll > 1 ? Math.max(0, ...capture.activity.slice(1, capture.preroll)) : 0;
+  const ambient = capture.ambient ?? (capture.preroll > 1 ? Math.max(0, ...capture.activity.slice(1, capture.preroll)) : 0);
   const quiet = ambient * 1.5 + 2;
   let last = 0;
   live.forEach((v, i) => {

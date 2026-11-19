@@ -37,6 +37,8 @@ Options of `motion:capture`:
 | `--dpr 2` | Sharper frames for looking closely at small things. Four times the pixels. |
 | `--preroll N` | Frames taken before the trigger (default 8). They measure the ambient motion. |
 | `--no-seed` | Leave `Math.random` alone (it is seeded by default so particles repeat). |
+
+`motion:sheet` crops with `--roi`: `auto` (where pixels changed), `full`, a **test id** (`--roi results-stars`: the box that part of the screen covered during the capture, the easy way to get the crop you meant), or `x,y,w,h` in image pixels.
 | `--headed` | Show the browser window. |
 
 ## What a capture gives you
@@ -108,6 +110,8 @@ Rules for shots:
 - **Leave the screen at rest before the trigger** (`h.advance(400)`), or the entrance you did not mean to capture pollutes the frames.
 - **Every fight event has a shot already:** `fx:<event>` plays it in the effects studio (`/dev/fx`). Use a real-fight shot (`fight-set`, `fight-miss`, `fight-open`, `fight-win`) to see it in context, with the board, the HUD and the creatures reacting.
 - **Clip to the subject.** Idle creatures change a few thousand pixels every frame. On a whole-screen shot that noise hides small moves from the timeline (a card lifting is a few hundred pixels) and fills the report with breathing. `clip: 'game-board'` (see `board-set`, `fight-pick`) measures only what is inside the box.
+- **A shot that starts in the middle of something** (the frame a foe goes down, with the last hit still playing) has no quiet moment before it, so the capture cannot learn what "still" looks like and the report says nothing changed. Give the shot `ambient: 0` (or the number of pixels per frame that should count as still), or better, start it on a quiet frame.
+- **Compare like with like.** A compare sheet lines two captures up by frame number, so both must be the same shot. If you change the shot (a different starting point), capture the baseline again with the new shot (`git stash`, capture, `git stash pop`).
 - **Endless loops** (an idle creature, a bobbing node): give the shot `frames` and `loop: { frames: N }` with the loop's length in frames; the report then checks the seam.
 - **Add the shot in the same change as the animation.** A surface with no shot cannot be reviewed by the next agent.
 

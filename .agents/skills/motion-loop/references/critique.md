@@ -33,6 +33,7 @@ Scores under 8 need a note. A score of 8 or more on round 1 needs a second look 
 Go down this list on every strip. Each line is a defect seen in real reviews.
 
 - A tap with nothing on f0–f6.
+- Something animating where nobody can see it: below the fold, under a pinned footer, behind a modal. (The coins of the results screen counted for months under the footer.)
 - Anything moving at constant speed (the report says `linear`; on the strip the gaps between positions are equal).
 - A move that is at full speed on its last frame and then stops dead (unless it hit something).
 - Something that is there on one frame and gone the next, or the other way round.
@@ -101,6 +102,9 @@ Three notes a round, ordered by how much the player gains. Fix them, capture, sc
 - Scale-pulse as the answer to every event.
 - Screen shake on small events.
 - A second version of an effect that already exists.
+- Content hidden but keeping its space while it waits its turn (holes in a card).
+- A caption that announces the reward before the reward lands.
+- A number that shows 0 while it waits to count.
 - **Project rules:** a card border or outline for anything but selection; fight feedback animated inside `AdventureRun.tsx`; a raw frequency instead of a cue; layout properties (width, height, top, left, margin) animated.
 
 After each review, add the defaults you caught that are not here yet. The list grows and the defaults shrink.
