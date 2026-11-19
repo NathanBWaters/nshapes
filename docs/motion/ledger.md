@@ -12,7 +12,7 @@ This file is edited by whoever runs the loop: keep rows short; details, frame st
 | Surface | What the player sees | Seen | Pri | Top problems | Shot | Status | Scores before → after | Entries |
 |---|---|---|---|---|---|---|---|---|
 | set-throw-lands | Set's cards fly at the foe; burst, number, rings | constant | P1 | sound leads picture 100-230 ms; card lands 60 ms after the burst; number pops at full opacity, linear drift | fx:hit (no throw in studio) | todo | — | F:1, F:2, F:3, F:4, F:5, F:6, F:7, F:15 |
-| set-tap-confirm | Cards lift on tap; board flashes white on a Set | constant | P1 | 200 ms dead time after third tap; white flash fights the throw start; press dim 250 ms release | — | todo | — | F:47, F:48, F:51, F:56, F:57 |
+| set-tap-confirm | Cards lift on tap; board flashes white on a Set | constant | P1 | 200 ms dead time after third tap; white flash fights the throw start; press dim 250 ms release | fight-pick, board-set | done v0.1.140 | 6/6/6/5/5/5/7 → 9/8/7/8/8/8/8 | F:47, F:48, F:51, F:56, F:57 |
 | card-leave-and-deal | Scored slot empties, new cards grow in | constant | P1 | empty slot dead time ~300-750 ms; stagger by column only; deal hidden under ghosts | — | todo | — | F:46, F:50 |
 | wrong-pick | Board flashes red and shakes; fighter winces, foe gloats | often | P1 | no feedback on the three wrong cards; 21 ms linear shake legs; shake ignores Effects off | — | todo | — | F:52, F:53, S:screen-shake-preset, S:fighter-react-pain, S:enemy-react-taunt |
 | big-hit-impact | Screen shakes and flashes white on a 25+ / 50+ hit | often | P1 | shake and flash still play with effects off (photosensitivity); third shake implementation; piles on mega number | — | todo | — | F:29, F:30 |
@@ -64,7 +64,7 @@ This file is edited by whoever runs the loop: keep rows short; details, frame st
 
 | Surface | What the player sees | Seen | Pri | Top problems | Shot | Status | Scores before → after | Entries |
 |---|---|---|---|---|---|---|---|---|
-| foe-takes-hit | Foe recoils, squashes, impact stars | constant | P1 | anchor bump 1.28 and squash 0.9 on the same frame; flinch still plays with effects off; restarts every beat, no hit-stop | — | todo | — | F:28, F:68, S:enemy-react-pain, S:enemy-react-crit-pain, S:enemy-fx-burst |
+| foe-takes-hit | Foe recoils, squashes, impact stars | constant | P1 | anchor bump 1.28 and squash 0.9 on the same frame; flinch still plays with effects off; restarts every beat, no hit-stop | foe-hit, foe-chain, foe-crit, foe-hit-quiet, fight-set | done v0.1.140 (HUD bump still stacks: see review) | 8/7/5/5/5/7/5 → 9/8/8/7/8/8/7 | F:28, F:68, S:enemy-react-pain, S:enemy-react-crit-pain, S:enemy-fx-burst |
 | fighter-reacts-to-set | Fighter leaps; full spin once on a streak | constant | P1 | 368° spin on every Set at streak ≥3 competes with the throw; burst symbols share one transform, re-grow while fading | — | todo | — | F:67, S:fighter-react-joy, S:fighter-react-ecstatic-spin, S:fighter-fx-burst |
 | creature-face | Eyes blink, pupils dart, face swaps per reaction | constant | P2 | face pops in and out at hold end, mid-spring; timer-driven swaps; lids never travel | — | todo | — | S:creature-blink, S:creature-gaze-saccade, S:creature-expression-swap |
 | creature-wear-and-tremor | Low-HP shiver, bandages, sweat, KO stars, red frame | often | P2 | enemy tremor loop seam (1.3 px tick); bandages and KO stars vanish with no exit; frame colour snaps | — | todo | — | S:creature-tremor, S:enemy-fx-cornered-jitter, S:damage-bandage-pop, S:damage-sweat-drip, S:damage-ko-stars-orbit, S:damage-ko-presence-fade, S:creature-frame-state-swap |
@@ -96,7 +96,7 @@ This file is edited by whoever runs the loop: keep rows short; details, frame st
 
 | Surface | What the player sees | Seen | Pri | Top problems | Shot | Status | Scores before → after | Entries |
 |---|---|---|---|---|---|---|---|---|
-| preview-sheet | Tap a node; sheet slides up; ✕ closes it | often | P1 | slide + scale stacked; backdrop slides with the sheet; no exit (vanishes); node gives no press | — | todo | — | A:map-node-tap, A:preview-sheet-enter, A:preview-sheet-exit, A:preview-foe-entrance |
+| preview-sheet | Tap a node; sheet slides up; ✕ closes it | often | P1 | slide + scale stacked; backdrop slides with the sheet; no exit (vanishes); node gives no press | preview-open, preview-close, preview-reopen, preview-flick | done v0.1.140 | 6/6/3/4/5/4/4 → 8/8/8/8/8/7/8 | A:map-node-tap, A:preview-sheet-enter, A:preview-sheet-exit, A:preview-foe-entrance |
 | preview-loadout | Pick a fighter, equip charms, explainer appears | often | P3 | no travel from tile to slot; selection frame snaps; explainer swaps at once | — | todo | — | A:preview-fighter-select, A:preview-charm-equip |
 | preview-lesson-card | Static NEW card with demo cards | sometimes | P3 | the NEW lesson never draws the eye | — | todo | — | A:preview-lesson-card |
 | lesson-card | Lesson modal fades in; steps rise; quiz; guide tabs | sometimes | P3 | no exit; Back moves like Continue, no crossfade; quiz verdict has no motion | — | todo | — | A:lesson-modal-fade, A:lesson-step-rise, A:lesson-quiz-feedback, A:lesson-dots, A:guide-tabs |
