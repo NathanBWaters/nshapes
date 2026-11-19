@@ -77,9 +77,26 @@ function installProbes() {
   // The audio clock follows the virtual clock too. The fight's pictures wait for the band's next
   // note; on the real audio clock that note would fall on a different frame in every capture.
   // (The browser is muted, so what this does to the sound itself does not matter.)
+  // Waking the audio up is a real promise: left alone, the band would start a few frames
+  // earlier or later in every capture. Here it is awake at once.
   try {
     const audio = window.BaseAudioContext && window.BaseAudioContext.prototype;
-    if (audio) Object.defineProperty(audio, 'currentTime', { configurable: true, get: () => performance.now() / 1000 });
+    if (audio) {
+      Object.defineProperty(audio, 'currentTime', { configurable: true, get: () => performance.now() / 1000 });
+      Object.defineProperty(audio, 'state', { configurable: true, get: () => 'running' });
+    }
+    const context = window.AudioContext && window.AudioContext.prototype;
+    if (context) {
+      const wake = context.resume;
+      context.resume = function resume() {
+        try {
+          wake.call(this).catch(() => {});
+        } catch {
+          /* muted anyway */
+        }
+        return Promise.resolve();
+      };
+    }
   } catch {
     /* no Web Audio here */
   }
