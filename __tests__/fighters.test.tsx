@@ -336,7 +336,7 @@ describe('Fighter Animation System', () => {
       );
     }
 
-    it('escalates matches into ecstatic on 3x streak and resets on mistake', () => {
+    it('cheers every Set the same way (a streak raises it, never a spin) and resets on mistake', () => {
       let latest!: ReturnType<typeof useFighterConductor>;
       const { getByTestId } = render(
         <ConductorHarness health={3} onReady={(api) => { latest = api; }} />
@@ -357,7 +357,7 @@ describe('Fighter Animation System', () => {
       act(() => {
         latest.triggerMatch();
       });
-      expect(getByTestId('reaction').props.children).toBe('ecstatic');
+      expect(getByTestId('reaction').props.children).toBe('joy');
       expect(getByTestId('streak').props.children).toBe('3');
       expect(getByTestId('mood').props.children).toBe('streak');
 

@@ -1,7 +1,9 @@
 /**
  * A creature taking a hit (docs/motion/reviews/foe-takes-hit.md): the impact
  * pose holds for a hit-stop of 2-4 frames, a chain of hits goes deeper instead
- * of restarting, and the in-game Effects switch keeps the body still.
+ * of restarting, and the in-game Effects switch keeps the body still. The
+ * fighter cheers a Set (docs/motion/reviews/fighter-reacts-to-set.md) with a hop
+ * released when the Set lands, raised by a streak, never a spin.
  */
 import React from 'react';
 import { act, render, renderHook } from '@testing-library/react-native';
@@ -9,7 +11,9 @@ import { EnemyAvatar, ENEMY_MOTION } from '@/components/enemies/EnemyAvatar';
 import { getEnemyPersonality, getEnemyRigPivots } from '@/components/enemies/enemyRegistry';
 import { useCreatureMotion } from '@/components/creatures/useCreatureMotion';
 import type { EnemyReactionType } from '@/utils/enemyAnimations';
-import { HIT } from '@/utils/motion';
+import { FighterAvatar } from '@/components/fighters/FighterAvatar';
+import { FX_TIMING } from '@/adventure/fx/script';
+import { CHEER, HIT, cheerIntensity } from '@/utils/motion';
 
 const FRAME = 16;
 
@@ -99,5 +103,28 @@ describe('creature reactions', () => {
       <EnemyAvatar enemy={name} size={64} quiet reaction={{ type: 'pain', id: 1 }} testID="foe" />
     );
     expect(getByTestId('foe')).toBeTruthy();
+  });
+});
+
+describe('the fighter cheering a Set', () => {
+  it('releases the hop on the frame the thrown Set reaches the foe', () => {
+    // If the fight's flight time changes, the cheer must change with it (or be triggered on landing)
+    expect(CHEER.releaseMs).toBe(FX_TIMING.flightMs);
+  });
+
+  it('a streak raises the same cheer, from the 2nd Set up to a cap', () => {
+    expect(cheerIntensity(0)).toBe(0);
+    expect(cheerIntensity(1)).toBe(0);
+    expect(cheerIntensity(3)).toBeGreaterThan(cheerIntensity(2));
+    expect(cheerIntensity(CHEER.streakFull)).toBe(1);
+    expect(cheerIntensity(40)).toBe(1);
+    expect(CHEER.liftMax / CHEER.liftMin).toBeLessThan(1.6);
+  });
+
+  it('a quiet fighter still shows its cheer', () => {
+    const { getByTestId } = render(
+      <FighterAvatar character="Orange Tabby" size={64} quiet streak={4} reaction={{ type: 'joy', id: 1 }} testID="fighter" />
+    );
+    expect(getByTestId('fighter')).toBeTruthy();
   });
 });

@@ -87,9 +87,10 @@ export function useFighterConductor({
       setStreak(nextStreak);
       setIsBoardIdle(false);
 
-      if (opts.isMegaMatch || nextStreak >= 3) {
-        fireReaction('ecstatic');
-      } else if (opts.didHeal) {
+      // Every Set gets the same cheer (a hop released when the Set lands); a streak only
+      // makes it higher (the avatar reads `streak`), and what a big Set sets off celebrates
+      // on its own when it lands. The full spin is kept for the 5-pets easter egg.
+      if (opts.didHeal) {
         fireReaction('heal');
       } else if (opts.isGraceMatch) {
         // Near-miss saved by Grace!

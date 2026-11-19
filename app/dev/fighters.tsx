@@ -81,6 +81,8 @@ export default function DevFightersPage() {
   const [autoCycle, setAutoCycle] = useState(false);
   // The in-game Effects switch: reactions change faces but bodies stay still
   const [effectsOff, setEffectsOff] = useState(false);
+  // Sets in a row: a streak makes the fighter's cheer for a Set bigger
+  const [streak, setStreak] = useState(0);
 
   const reactionIdRef = useRef(0);
   const stepRef = useRef(0);
@@ -237,7 +239,8 @@ export default function DevFightersPage() {
                     maxHealth={hp.maxHealth}
                     mood={fighterMood}
                     reaction={fighterReaction}
-                    streak={fighterMood === 'streak' ? 4 : 0}
+                    streak={streak || (fighterMood === 'streak' ? 4 : 0)}
+                    quiet={effectsOff}
                     framed
                     interactive
                   />
@@ -267,6 +270,20 @@ export default function DevFightersPage() {
 
             <View style={styles.panel}>
               <Text style={styles.panelTitle}>2. ONE-SHOT REACTIONS</Text>
+              <View style={styles.chipRow}>
+                {[0, 1, 3, 5].map((n) => (
+                  <TouchableOpacity
+                    key={n}
+                    testID={`studio-streak-${n}`}
+                    style={[styles.chip, streak === n && styles.chipActive]}
+                    onPress={() => setStreak(n)}
+                  >
+                    <Text style={[styles.chipText, streak === n && styles.chipTextActive]}>
+                      {n === 0 ? 'No streak' : `Streak ${n}`}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
               <View style={styles.chipRow}>
                 {FIGHTER_REACTIONS.map((r) => (
                   <TouchableOpacity

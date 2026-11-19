@@ -11,6 +11,7 @@ import { Character } from '@/types';
 import { useAppActive } from '@/hooks/useAppActive';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { COLORS } from '@/utils/colors';
+import { CHEER, EASE, SPRING, cheerIntensity } from '@/utils/motion';
 import {
   FIGHTER_MOOD_MOTION,
   FIGHTER_REACTION_HOLD_MS,
@@ -41,6 +42,11 @@ interface FighterAvatarProps {
   streak?: number;
   /** Whether continuous idle/reaction animations run (default true) */
   animate?: boolean;
+  /**
+   * Reactions change the face and show their marks, but the body does not move
+   * (the in-game Effects switch is off). Idle life still runs.
+   */
+  quiet?: boolean;
   /** Whether tapping the fighter pets them (blush + heart, 5x = zoomie spin!) */
   interactive?: boolean;
   /** Optional callback when the player pets the fighter */
@@ -178,68 +184,75 @@ const FIGHTER_MOTION: CreatureMotionConfig<FighterAmbientMood, FighterReactionTy
   },
 
   // Disney Anticipation -> Arc -> Follow-Through -> Settle choreography
-  playReaction: (type, ch, size) => {
+  playReaction: (type, ch, size, context) => {
   const jumpPx = Math.max(6, size * 0.22);
   const recoilPx = Math.max(4, size * 0.14);
 
   switch (type) {
-    case 'joy': {
-      // 1. Anticipation crouch (ears tuck) -> 2. Curved arc leap (stretch + flare) -> 3. Cushioned land -> 4. Spring settle
+    case 'joy':
+    case 'ecstatic': {
+      // A Set: crouch at once (the answer to the tap), hold the crouch while the cards fly,
+      // and hop on the frame they land. 'ecstatic' (a reaction to something that has
+      // already landed, or a hero moment) is the same hop at full height, released at once.
+      // A streak raises the hop; it is never a different, louder move.
+      const now = type === 'ecstatic';
+      const i = now ? 1 : context.intensity;
+      const wind = { duration: now ? 32 : CHEER.windMs, easing: EASE.enter };
+      const hold = now ? 0 : CHEER.releaseMs - CHEER.windMs;
+      const rise = { duration: CHEER.riseMs, easing: EASE.enter };
+      const lift = jumpPx * (CHEER.liftMin + (CHEER.liftMax - CHEER.liftMin) * i);
+      // The body is in the air for riseMs + fallMs; the landing squash is timed to touch-down
+      const stretchMs = 90;
+      const apexMs = CHEER.riseMs - stretchMs + 60;
+      const toLanding = CHEER.riseMs + CHEER.fallMs - stretchMs - apexMs;
+
       ch.reactionScaleY.value = withSequence(
-        withTiming(0.83, { duration: 75, easing: Easing.out(Easing.quad) }),
-        withTiming(1.17, { duration: 155, easing: Easing.out(Easing.cubic) }),
-        withTiming(0.92, { duration: 115, easing: Easing.in(Easing.quad) }),
-        withSpring(1, { damping: 9, stiffness: 220 })
+        withTiming(0.88, wind),
+        withDelay(hold, withTiming(1.1 + 0.05 * i, { duration: stretchMs, easing: EASE.enter })),
+        withTiming(1, { duration: apexMs, easing: EASE.drift }),
+        withDelay(toLanding, withTiming(0.9, { duration: CHEER.landHoldMs, easing: EASE.enter })),
+        withDelay(CHEER.landHoldMs, withSpring(1, SPRING.lively))
       );
       ch.bodyTy.value = withSequence(
-        withTiming(size * 0.04, { duration: 75, easing: Easing.out(Easing.quad) }),
-        withTiming(-jumpPx, { duration: 175, easing: Easing.out(Easing.cubic) }),
-        withSpring(0, { damping: 8, stiffness: 195 })
-      );
-      ch.bodyTx.value = withSequence(
-        withTiming(size * 0.022, { duration: 160, easing: Easing.inOut(Easing.sin) }),
-        withTiming(-size * 0.015, { duration: 140, easing: Easing.inOut(Easing.sin) }),
-        withSpring(0, { damping: 10, stiffness: 200 })
+        withTiming(size * 0.045, wind),
+        withDelay(hold, withTiming(-lift, rise)),
+        // Falls on ease-in: it accelerates into the landing
+        withTiming(0, { duration: CHEER.fallMs, easing: Easing.in(Easing.quad) })
       );
       ch.bodyRotate.value = withSequence(
-        withTiming(3.5, { duration: 70 }),
-        withTiming(-9.5, { duration: 135 }),
-        withTiming(8.5, { duration: 150 }),
-        withSpring(0, { damping: 9, stiffness: 200 })
+        withTiming(2, wind),
+        withDelay(hold, withTiming(-(4 + 4 * i), rise)),
+        withSpring(0, SPRING.lively)
       );
+      // The head, ears and tail follow the body a frame or two late (one overshoot, not a wobble: this plays on every Set)
       ch.headTy.value = withDelay(
-        40,
-        withSequence(
-          withTiming(-size * 0.035, { duration: 150 }),
-          withSpring(0, { damping: 8, stiffness: 190 })
-        )
+        (now ? 32 : CHEER.releaseMs) + 32,
+        withSequence(withTiming(-size * 0.03, { duration: 120, easing: EASE.enter }), withSpring(0, SPRING.lively))
       );
       ch.leftEarExtra.value = withSequence(
-        withTiming(7, { duration: 65 }),
-        withTiming(-20, { duration: 150 }),
-        withSpring(0, { damping: 7, stiffness: 175 })
+        withTiming(6, wind),
+        withDelay(hold, withTiming(-(14 + 6 * i), rise)),
+        withSpring(0, SPRING.playful)
       );
       ch.rightEarExtra.value = withSequence(
-        withTiming(-7, { duration: 65 }),
-        withTiming(20, { duration: 150 }),
-        withSpring(0, { damping: 7, stiffness: 175 })
+        withTiming(-6, wind),
+        withDelay(hold, withTiming(14 + 6 * i, rise)),
+        withSpring(0, SPRING.playful)
       );
       ch.pawBounce.value = withSequence(
-        withTiming(size * 0.02, { duration: 70 }),
-        withTiming(-size * 0.09, { duration: 170 }),
-        withSpring(0, { damping: 8, stiffness: 185 })
+        withTiming(size * 0.02, wind),
+        withDelay(hold, withTiming(-size * 0.07, rise)),
+        withSpring(0, SPRING.lively)
       );
-      ch.tailExtra.value = withSequence(
-        withTiming(18, { duration: 120 }),
-        withTiming(-16, { duration: 130 }),
-        withSpring(0, { damping: 7, stiffness: 180 })
+      ch.tailExtra.value = withDelay(
+        (now ? 32 : CHEER.releaseMs) + 32,
+        withSequence(withTiming(16, { duration: 120, easing: EASE.enter }), withSpring(0, SPRING.playful))
       );
       break;
     }
 
-    case 'ecstatic':
     case 'dizzy_joy': {
-      // Deep coil with counter-rotation wind-up (-15deg) -> soaring 360 spin -> cushioned landing bounce!
+      // The 5-pets easter egg (rare and asked for): deep coil, counter-wind, a full spin, land
       ch.reactionScaleY.value = withSequence(
         withTiming(0.79, { duration: 85, easing: Easing.out(Easing.quad) }),
         withTiming(1.21, { duration: 170, easing: Easing.out(Easing.cubic) }),
@@ -450,6 +463,7 @@ export const FighterAvatar: React.FC<FighterAvatarProps> = memo(function Fighter
   reaction = null,
   streak = 0,
   animate = true,
+  quiet = false,
   interactive = false,
   onPet,
   framed = false,
@@ -481,6 +495,9 @@ export const FighterAvatar: React.FC<FighterAvatarProps> = memo(function Fighter
     pivots,
     reaction,
     animate: shouldAnimate,
+    stillReactions: quiet,
+    // A streak makes the cheer for a Set bigger (the same hop, higher)
+    reactionIntensity: cheerIntensity(streak),
     lively: true,
     interactive,
     onTap: onPet as ((reaction: FighterReactionType) => void) | undefined,
@@ -560,6 +577,8 @@ export const FighterAvatar: React.FC<FighterAvatarProps> = memo(function Fighter
         mood={mood}
         personality={personality}
         animate={shouldAnimate}
+        stillBurst={quiet}
+        intensity={cheerIntensity(streak)}
       />
 
       {/* Streak mini-pill when framed in HUD and on a 3+ match streak */}

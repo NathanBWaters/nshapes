@@ -5,6 +5,7 @@ import { Svg, Circle, G, Line, Path, Polygon, Text as SvgText } from 'react-nati
 import { useEffectsDriver } from '@/components/creatures/useEffectsDriver';
 import { STROKE, Sparkle4 } from '@/components/illustration/primitives';
 import { COLORS } from '@/utils/colors';
+import { CHEER, EASE } from '@/utils/motion';
 import {
   FIGHTER_REACTION_HOLD_MS,
   FighterAmbientMood,
@@ -18,6 +19,10 @@ interface FighterEffectsOverlayProps {
   mood: FighterAmbientMood;
   personality: FighterPersonalityProfile;
   animate?: boolean;
+  /** Bursts show still (the Effects switch is off); ambient life still runs */
+  stillBurst?: boolean;
+  /** 0..1 how big the moment is (a streak): a big one adds the centre mark to a Set's cheer */
+  intensity?: number;
 }
 
 function HeartShape({
@@ -57,8 +62,15 @@ export const FighterEffectsOverlay: React.FC<FighterEffectsOverlayProps> = ({
   mood,
   personality,
   animate = true,
+  stillBurst = false,
+  intensity = 0,
 }) => {
   const showAmbient = !activeReaction;
+  // A Set's cheer: its marks appear with the hop (released when the cards land), on a linear clock
+  const cheer = activeReaction === 'joy' || activeReaction === 'ecstatic';
+  const holdMs = activeReaction ? FIGHTER_REACTION_HOLD_MS[activeReaction] ?? 850 : 850;
+  const releaseAt = activeReaction === 'joy' ? CHEER.releaseMs / holdMs : 0;
+  const frame = 16 / holdMs;
   const {
     burstProgress,
     ambientPhase,
@@ -75,14 +87,28 @@ export const FighterEffectsOverlay: React.FC<FighterEffectsOverlayProps> = ({
     fadeMs: 240,
     activeReaction,
     reactionId,
-    burstMs: activeReaction ? FIGHTER_REACTION_HOLD_MS[activeReaction] ?? 850 : 850,
-    staticBurstProgress: 0.55,
+    burstMs: holdMs,
+    burstEasing: cheer ? EASE.linear : undefined,
+    staticBurstProgress: cheer ? Math.min(0.9, releaseAt + 0.2) : 0.55,
+    stillBurst,
     restartKey: personality,
   });
 
   // Curved arc + overshoot pop-and-settle for one-shot reaction particles
   const burstStyle = useAnimatedStyle(() => {
     const p = burstProgress.value;
+    if (cheer) {
+      // Nothing until the hop; full size 2 frames later, settle, rise and fade (no second pop)
+      const on = releaseAt + 2 * frame;
+      const t = Math.max(0, (p - releaseAt) / Math.max(0.0001, 1 - releaseAt));
+      return {
+        opacity: interpolate(p, [releaseAt, on, 0.72, 1], [0, 1, 1, 0], 'clamp'),
+        transform: [
+          { translateY: 2 - 9 * (1 - (1 - t) * (1 - t)) },
+          { scale: interpolate(p, [releaseAt, on, on + 4 * frame], [0.8, 1.1, 1], 'clamp') },
+        ],
+      };
+    }
     const opacity = interpolate(p, [0, 0.12, 0.78, 1], [0, 1, 1, 0]);
     const scale = interpolate(p, [0, 0.24, 0.52, 1], [0.52, 1.12, 1.03, 1.14]);
     const translateY = interpolate(p, [0, 0.35, 1], [5, -3.5, -7.5]);
@@ -263,7 +289,7 @@ export const FighterEffectsOverlay: React.FC<FighterEffectsOverlayProps> = ({
         >
           <Svg width="100%" height="100%" viewBox="0 0 100 100">
             {(activeReaction === 'joy' || activeReaction === 'ecstatic') &&
-              renderSignatureJoyMotif(activeReaction === 'ecstatic')}
+              renderSignatureJoyMotif(activeReaction === 'ecstatic' || intensity >= 0.5)}
 
             {activeReaction === 'pain' && (
               <G>

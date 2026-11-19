@@ -194,5 +194,35 @@ export const HIT = {
   starsMs: 320,
 } as const;
 
+/**
+ * The fighter cheering a Set it made: a small crouch answers the tap at once,
+ * holds while the cards fly (the throw is the hero), and the hop is released on
+ * the frame the Set lands. A streak makes the same hop higher, never a different
+ * move. Used on every Set: small and short, smaller than the throw.
+ */
+export const CHEER = {
+  /** Into the crouch: the answer to the tap */
+  windMs: 60,
+  /**
+   * When the hop is released, from the Set: the time a thrown Set takes to reach the foe.
+   * Keep it equal to the fight's flight time (`FX_TIMING.flightMs`, src/adventure/fx/script.ts).
+   */
+  releaseMs: 240,
+  /** Up to the top of the hop (ease-out), and back down (ease-in, into the landing) */
+  riseMs: 150,
+  fallMs: 130,
+  /** The landing squash is held this long before it springs back (2 frames) */
+  landHoldMs: 32,
+  /** Hop height as a share of the creature's jump: a single Set, and a long streak */
+  liftMin: 0.75,
+  liftMax: 1.1,
+  /** Streak at which the cheer is at its biggest (it grows from the 2nd Set) */
+  streakFull: 5,
+} as const;
+
+/** How strongly to cheer a streak of `streak` Sets: 0 for one Set, 1 from `CHEER.streakFull` on. */
+export const cheerIntensity = (streak: number): number =>
+  Math.max(0, Math.min(1, (streak - 1) / (CHEER.streakFull - 1)));
+
 /** How long a line of text must stay still to be read: half a second to find it, 0.3 s a word. */
 export const textHoldMs = (words: number): number => 500 + 300 * Math.max(1, words);

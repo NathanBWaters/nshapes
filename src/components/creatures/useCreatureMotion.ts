@@ -55,6 +55,8 @@ const asPart = (style: ReturnType<typeof useAnimatedStyle>): PartStyle => style 
 export interface ReactionContext {
   /** Same reactions in a row before this one, each within `HIT.chainWindowMs` of the last (capped at `HIT.chainMax`) */
   chain: number;
+  /** 0..1: how big the moment is (a fighter's streak); 0 when the creature has no say */
+  intensity: number;
 }
 
 /** (frequency, damping, response) of one second-order posture channel. */
@@ -176,6 +178,8 @@ interface CreatureMotionInput<Mood extends string, Reaction extends string> {
    * Idle life still runs when `animate` is on.
    */
   stillReactions?: boolean;
+  /** 0..1 handed to reactions as `context.intensity` (e.g. a fighter's streak) */
+  reactionIntensity?: number;
   /** Blink, glance around and fidget while idle */
   lively: boolean;
   interactive: boolean;
@@ -249,6 +253,7 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
   const { name, size, mood, healthState, personality, pivots, reaction, animate, lively, interactive, onTap } =
     input;
   const stillReactions = input.stillReactions ?? false;
+  const reactionIntensity = input.reactionIntensity ?? 0;
 
   const [activeReaction, setActiveReaction] = useState<Reaction | null>(reaction?.type ?? null);
   const [reactionKey, setReactionKey] = useState<number>(reaction ? 1 : 0);
@@ -478,10 +483,10 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
       lastPlayRef.current = { type, at: now, chain };
 
       if (animate && !stillReactions) {
-        config.playReaction(type, channels, size, { chain });
+        config.playReaction(type, channels, size, { chain, intensity: reactionIntensity });
       }
     },
-    [config, animate, stillReactions, size, channels]
+    [config, animate, stillReactions, reactionIntensity, size, channels]
   );
 
   const lastExternalIdRef = useRef<number | null>(null);
