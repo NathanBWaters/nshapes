@@ -9,7 +9,8 @@
  */
 import React, { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, useWindowDimensions, Platform } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withDelay, withSequence, withTiming, Easing } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withDelay, withSequence, withSpring, withTiming, Easing } from 'react-native-reanimated';
+import { EASE, MS, SCALE, SPRING } from '@/utils/motion';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '@/components/Icon';
@@ -323,6 +324,7 @@ const AdventureMap: React.FC<Props> = ({ save, onSelectLevel, onOpenCamp, onOpen
               isLive={isLive}
               onSelectLevel={handleSelectNode}
               fighterName={fighter.name}
+              still={reducedMotion}
             />
           ))}
         </View>
@@ -465,10 +467,23 @@ const MapNode: React.FC<{
   // A star here that has not been won still hides something to unlock
   const hidesLoot = !practice && starRewards(level).some((reward, i) => i >= stars && unlockablesOf(reward).length > 0);
 
+  // The press: the node sinks to SCALE.press at once and springs back, even on a tap too quick to hold it down
+  const press = useSharedValue(1);
+  const pressStyle = useAnimatedStyle(() => ({ transform: [{ scale: press.value }] }));
+  const pressIn = () => {
+    if (!still) press.value = withTiming(SCALE.press, { duration: MS.feedback / 2, easing: EASE.ui });
+  };
+  const pressOut = () => {
+    if (!still) press.value = withSequence(withTiming(SCALE.press, { duration: MS.feedback / 2, easing: EASE.ui }), withSpring(1, SPRING.snappy));
+  };
+
   const nodeButton = (
+    <Animated.View style={pressStyle}>
     <TouchableOpacity
       testID={`map-node-${level.id}`}
       onPress={() => onSelectLevel(level)}
+      onPressIn={pressIn}
+      onPressOut={pressOut}
       activeOpacity={0.85}
       accessibilityLabel={`${practice ? 'Practice' : `Level ${level.id}`} ${level.name}${locked ? ' locked' : ''}`}
       style={[
@@ -508,6 +523,7 @@ const MapNode: React.FC<{
         </View>
       )}
     </TouchableOpacity>
+    </Animated.View>
   );
 
   const content = (

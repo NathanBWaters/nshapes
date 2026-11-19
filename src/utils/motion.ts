@@ -44,6 +44,7 @@ export const CURVE = {
   ui: [0.33, 1, 0.68, 1],
   move: [0.76, 0, 0.24, 1],
   exit: [0.7, 0, 0.84, 0],
+  exitSoft: [0.32, 0, 0.67, 0],
   pop: [0.34, 1.56, 0.64, 1],
   drift: [0.37, 0, 0.63, 1],
   impact: [0.3, 0, 0.75, 0.3],
@@ -67,6 +68,12 @@ export const EASE = {
   move: bezier(CURVE.move),
   /** Leaving: slow start, gone fast (ease-in-expo) */
   exit: bezier(CURVE.exit),
+  /**
+   * Leaving, but seen to go at once (ease-in-cubic): for exits the player
+   * asked for with a tap (a sheet put away, a screen left), where ease-in-expo
+   * would sit still for the first four frames and read as a late answer.
+   */
+  exitSoft: bezier(CURVE.exitSoft),
   /** A pop that visibly overshoots (ease-out-back). Position and scale only, never opacity. */
   pop: bezier(CURVE.pop),
   /** Ambient drift, breathing (ease-in-out-sine) */

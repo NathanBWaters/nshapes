@@ -100,6 +100,8 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave, coldO
   const [screen, setScreen] = useState<Screen>(() => (coldOpen && isFirstVisit(save) ? { kind: 'story' } : { kind: 'map' }));
   const reducedMotion = useReducedMotion();
   const [preview, setPreview] = useState<LevelDef | null>(null);
+  /** Put away by hand, the sheet slides down; leaving with its screen (Fight!, Camp), it goes with it */
+  const [previewExit, setPreviewExit] = useState<'slide' | 'cut'>('slide');
   // Start straight on the World Map — zero blocking windows on launch!
   const [teaching, setTeaching] = useState<Teaching | null>(null);
   /** A mechanic opened just to read about it (no fight follows) */
@@ -149,6 +151,7 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave, coldO
 
   const handlePlay = (level: LevelDef) => {
     sfx('confirm');
+    setPreviewExit('cut');
     setPreview(null);
     if (level.id === MAIN_LEVELS[0].id) {
       setSave(s => markMechanicSeen(s, LESSON_KEYS.mechanic(level.introduces)));
@@ -347,7 +350,8 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave, coldO
       <LevelPreview
         level={preview}
         save={save}
-        onClose={() => setPreview(null)}
+        exit={previewExit}
+        onClose={() => { setPreviewExit('slide'); setPreview(null); }}
         onPlay={handlePlay}
         onSelectFighter={f => { sfx('click'); setSave(s => ({ ...s, selectedFighter: f })); }}
         onSelectCharm={id => { sfx('click'); setSave(s => toggleCharm(s, id)); }}
@@ -359,6 +363,7 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave, coldO
           sfx('confirm');
           const returnLevelId = preview?.id;
           if (preview) setSave(s => markMechanicSeen(s, LESSON_KEYS.mechanic(preview.introduces)));
+          setPreviewExit('cut');
           setPreview(null);
           setScreen({ kind: 'camp', tab, returnLevelId });
         }}

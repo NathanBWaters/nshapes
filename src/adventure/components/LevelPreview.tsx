@@ -3,8 +3,11 @@
  * mechanic, star goals with their coin rewards, secret unlocks shown as
  * silhouettes, and the fighter + charm you'll bring.
  */
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, BackHandler } from 'react-native';
+import Animated, { ReduceMotion, runOnJS, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { EASE, MS, exitMs } from '@/utils/motion';
 import Icon, { IconName } from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
@@ -43,7 +46,7 @@ import { startingLoadout } from '../loadout';
 import { companionVoice, shouldShowPassiveHud } from '../coach';
 import CompanionBubble from './CompanionBubble';
 import { DemoView } from './MechanicIntro';
-import { Btn, Heart, INK, PopIn, Skulls, StarRow, TONE } from './ui';
+import { Btn, Heart, INK, Skulls, StarRow, TONE } from './ui';
 import { Silhouette, UnlockableAvatar, describeRewardUnlocks } from './rewards';
 
 const ATTR_ICONS = { shape: 'lorc/diamond-hard', color: 'lorc/crystal-shine', number: 'lorc/cycle', shading: 'lorc/stone-block', background: 'lorc/field' } as const;
@@ -63,13 +66,123 @@ interface Props {
   onOpenCamp?: (tab: NonNullable<MechanicDef['camp']>['tab']) => void;
   /** Equip the top armable recipe pair from Armory in one tap */
   onArmRecipe?: (recipeId: string) => void;
+  /**
+   * How the sheet goes when `level` turns null: 'slide' (put away with ✕, the
+   * backdrop or the back button: it goes down the way it came) or 'cut' (it
+   * leaves with the screen under it, e.g. Fight! or a trip to Camp).
+   */
+  exit?: 'slide' | 'cut';
 }
 
-const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectFighter, onSelectCharm, onSelectArcana, onShowMechanic, onOpenCamp, onArmRecipe }) => {
+/**
+ * The sheet's motion (docs/motion/reviews/preview-sheet.md). The backdrop
+ * dims in place; the sheet rises a short way on its own; the foe drops into
+ * its portrait once the sheet is nearly there; put away, it goes back down the
+ * same way in two thirds of the time. Interrupted either way, every value
+ * carries on from where it is to the new end, so a quick double tap always
+ * ends fully open or fully closed.
+ */
+const SHEET_RISE = 96;
+/** Fades still play when the device asks for reduced motion (Reanimated would otherwise cut them): only the travel goes */
+const KEEP = { reduceMotion: ReduceMotion.Never } as const;
+
+const LevelPreview: React.FC<Props> = props => {
+  const { level, onClose, exit = 'slide' } = props;
+  const reduced = useReducedMotion();
+  /** The level on screen: it outlives `level` while the sheet goes down */
+  const [shown, setShown] = useState<LevelDef | null>(level);
+  const [closing, setClosing] = useState(false);
+  /** Bumped on every opening: the foe's drop-in waits for the sheet */
+  const [foeCue, setFoeCue] = useState(0);
+  const dim = useSharedValue(level ? 1 : 0);
+  const rise = useSharedValue(level ? 0 : SHEET_RISE);
+  const fade = useSharedValue(level ? 1 : 0);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wasOpen = useRef(!!level);
+  const shownRef = useRef(shown);
+  shownRef.current = shown;
+  const finishExit = useCallback(() => {
+    if (wasOpen.current) return;
+    setShown(null);
+    setClosing(false);
+  }, []);
+
+  useEffect(() => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+    if (level) {
+      // Reopened before the exit finished: the sheet is still there, so the foe stays put
+      const midExit = !wasOpen.current && shownRef.current !== null;
+      setShown(level);
+      setClosing(false);
+      if (!wasOpen.current) {
+        // Opening (or reopening mid-exit): from wherever the values are now
+        const enter = reduced ? MS.feedback : MS.panel;
+        dim.value = withTiming(1, { duration: reduced ? MS.feedback : MS.quick, easing: EASE.ui, ...KEEP });
+        rise.value = reduced ? 0 : withTiming(0, { duration: enter, easing: EASE.enterSoft });
+        // Opaque within 4 frames: a longer fade shows the map's words through the sheet
+        fade.value = withTiming(1, { duration: reduced ? MS.feedback : MS.feedback / 2, easing: EASE.ui, ...KEEP });
+        if (!midExit) timer.current = setTimeout(() => setFoeCue(c => c + 1), reduced ? 0 : MS.feedback);
+      }
+      wasOpen.current = true;
+      return;
+    }
+    if (!wasOpen.current) return;
+    wasOpen.current = false;
+    if (exit === 'cut') {
+      dim.value = 0;
+      rise.value = SHEET_RISE;
+      fade.value = 0;
+      setShown(null);
+      return;
+    }
+    const out = exitMs(reduced ? MS.feedback : MS.panel);
+    setClosing(true);
+    // The backdrop answers the tap at once (ease-out); the sheet accelerates away, opaque,
+    // and only fades in its last 4 frames, as it came (a long fade shows the map through it)
+    const vanish = MS.feedback / 2;
+    dim.value = withTiming(0, { duration: out, easing: EASE.ui, ...KEEP });
+    rise.value = reduced ? rise.value : withTiming(SHEET_RISE, { duration: out, easing: EASE.exitSoft });
+    // Gone only once it has faded all the way (an interrupted exit does not finish, so it does not unmount)
+    const onGone = (finished?: boolean) => {
+      'worklet';
+      if (finished) runOnJS(finishExit)();
+    };
+    fade.value = reduced
+      ? withTiming(0, { duration: out, easing: EASE.ui, ...KEEP }, onGone)
+      : withDelay(out - vanish, withTiming(0, { duration: vanish, easing: EASE.exitSoft }, onGone));
+  }, [level, exit, reduced, dim, rise, fade, finishExit]);
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+
+  // Android's back button puts the sheet away, as the modal it replaces did
+  useEffect(() => {
+    if (!level) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => { onClose(); return true; });
+    return () => sub.remove();
+  }, [level, onClose]);
+
+  const backdropStyle = useAnimatedStyle(() => ({ opacity: dim.value }));
+  const sheetStyle = useAnimatedStyle(() => ({ opacity: fade.value, transform: [{ translateY: rise.value }] }));
+
+  if (!shown) return null;
+  return (
+    <View style={[StyleSheet.absoluteFill, st.layer]} pointerEvents={closing ? 'none' : 'box-none'} testID="preview-sheet-root">
+      <Animated.View style={[StyleSheet.absoluteFill, st.backdrop, backdropStyle]} pointerEvents="none" />
+      {/* box-none hands touches to its children, so the closing sheet must say none here too */}
+      <View style={st.overlay} pointerEvents={closing ? 'none' : 'box-none'}>
+        <TouchableOpacity style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
+        <Animated.View style={[st.sheet, sheetStyle]}>
+          <SheetContent {...props} level={shown} foeCue={foeCue} />
+        </Animated.View>
+      </View>
+    </View>
+  );
+};
+
+const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({ level, save, onClose, onPlay, onSelectFighter, onSelectCharm, onSelectArcana, onShowMechanic, onOpenCamp, onArmRecipe, foeCue }) => {
   const [charmTapCounts, setCharmTapCounts] = useState<Record<string, number>>({});
   /** The charm tapped last: explained below the row even when it could not be equipped */
   const [focusCharm, setFocusCharm] = useState<string | null>(null);
-  if (!level) return null;
   const biome = getBiome(level.biome);
   const foe = levelFoe(level);
   const mech = getMechanic(level.introduces);
@@ -98,16 +211,13 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
   const charmsTaught = level.introduces === 'charm' || save.seenMechanics.includes('charm') || save.armory.length > slots || practice;
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <View style={st.overlay}>
-        <TouchableOpacity style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
-        <PopIn style={st.sheet}>
+    <>
           <View style={[st.header, { backgroundColor: biome.colors.sky }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Text style={[st.levelId, { color: biome.colors.ink }]}>
                 {biome.name.toUpperCase()}{practice ? ' · PRACTICE' : ` · ${level.id}${level.isBoss ? ' · BOSS' : ''}${level.branchOf ? (isFighterTrial(level) ? ' · TRIAL' : ' · ELITE') : ''}`}
               </Text>
-              <TouchableOpacity onPress={onClose} style={st.close}><Text style={st.closeText}>✕</Text></TouchableOpacity>
+              <TouchableOpacity testID="preview-close" onPress={onClose} style={st.close}><Text style={st.closeText}>✕</Text></TouchableOpacity>
             </View>
             <View style={st.foeRow}>
               <View style={[st.foePortrait, level.isBoss && st.foeBoss, level.branchOf && !practice && st.foeElite, practice && st.foePractice]}>
@@ -116,7 +226,7 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
                   enemy={foe}
                   size={level.isBoss ? 78 : 68}
                   mood={level.isBoss ? 'enraged' : practice ? 'idle' : 'menacing'}
-                  reaction={{ type: 'entrance', id: 1 }}
+                  reaction={foeCue > 0 ? { type: 'entrance', id: foeCue } : null}
                   interactive
                 />
               </View>
@@ -518,9 +628,7 @@ const LevelPreview: React.FC<Props> = ({ level, save, onClose, onPlay, onSelectF
               <Btn testID="preview-play" label={practice ? 'Practice' : best > 0 ? 'Play again' : 'Fight!'} icon={practice ? 'lorc/target-dummy' : 'lorc/crossed-swords'} onPress={() => onPlay(level)} />
             )}
           </View>
-        </PopIn>
-      </View>
-    </Modal>
+    </>
   );
 };
 
@@ -579,7 +687,10 @@ const Rule: React.FC<{ icon: IconName; text: string }> = ({ icon, text }) => (
 );
 
 const st = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(18,18,18,0.55)', justifyContent: 'flex-end', alignItems: 'center' },
+  /** Above everything the screen under it stacks (the map's top bar has its own zIndex) */
+  layer: { zIndex: 100, elevation: 100 },
+  backdrop: { backgroundColor: 'rgba(18,18,18,0.55)' },
+  overlay: { flex: 1, justifyContent: 'flex-end', alignItems: 'center' },
   sheet: { width: '100%', maxWidth: 520, maxHeight: '94%', backgroundColor: COLORS.canvasWhite, borderTopLeftRadius: 18, borderTopRightRadius: 18, borderWidth: 3, borderColor: INK, overflow: 'hidden' },
   header: { padding: 16, gap: 10, borderBottomWidth: 2, borderBottomColor: INK },
   levelId: { flex: 1, flexShrink: 1, marginRight: 8, fontWeight: '900', letterSpacing: 1.5, fontSize: 12 },
