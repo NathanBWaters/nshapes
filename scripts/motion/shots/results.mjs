@@ -7,7 +7,26 @@ import { mapPath, openPreview } from '../shot-kit.mjs';
  */
 const resultsPath = (c, extra = '') => `/dev/results?case=${c}${extra}`;
 
-/** Tap through reveals until `done(h)` is true: reveal what is hidden, then the primary button. */
+/** Which reveal of how many is on screen ("2 of 7"), from the reveal's eyebrow */
+const revealCount = page =>
+  page.evaluate(() => {
+    const m = /(\d+)\s+of\s+(\d+)/i.exec(document.querySelector('[data-testid="unlock-modal"]')?.innerText ?? '');
+    return m ? [Number(m[1]), Number(m[2])] : [1, 1];
+  });
+
+/** Tap through every reveal up to the last one, and reveal that one: whatever the result unlocked */
+const toLastReveal = async (page, h) => {
+  for (let guard = 0; guard < 24; guard++) {
+    await h.until(async () => (await h.present('unlock-reveal')) || (await h.present('unlock-primary')));
+    await h.advance(900);
+    const [at, of] = await revealCount(page);
+    if (await h.present('unlock-reveal')) await h.tap('unlock-reveal');
+    else if (at >= of) return;
+    else await h.tap('unlock-primary');
+  }
+};
+
+/** Tap through the given buttons in order (each waits for the last step to settle). */
 const tapThrough = async (h, steps) => {
   for (const id of steps) {
     await h.until(id);
@@ -94,16 +113,15 @@ export default {
   },
   'unlock-return': {
     id: 'unlock-return',
-    about: 'The last reveal closes and the results show what was won (2-5: level-up, Corgi, Chain Gang, secret path; "Later")',
+    about: 'The last reveal closes and the results show what was won (first ★★★ on 2-5: seven unlocks with its bounties; the last is the secret path, "Later")',
     path: resultsPath('first'),
     ready: (page, h) => h.until('results-actions'),
     prepare: async (page, h) => {
-      // war-drum level-up (shown at once) → Corgi → Chain Gang → the secret path
-      await tapThrough(h, ['unlock-primary', 'unlock-reveal', 'unlock-primary', 'unlock-reveal', 'unlock-primary', 'unlock-reveal']);
-      await h.until('unlock-later');
+      await toLastReveal(page, h);
       await h.advance(1200);
     },
-    trigger: (page, h) => h.tap('unlock-later'),
+    // The last reveal's way back to the results: "Later" on a path, the primary button on anything else
+    trigger: async (page, h) => h.tap((await h.present('unlock-later')) ? 'unlock-later' : 'unlock-primary'),
     frames: 150,
   },
 };

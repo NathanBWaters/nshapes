@@ -12,8 +12,8 @@
  */
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, StyleProp, ViewStyle } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, withDelay, withSpring } from 'react-native-reanimated';
-import { EASE, MS, SCALE, SPRING, SQUASH } from '@/utils/motion';
+import Animated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, withDelay, withSpring, runOnJS, ReduceMotion } from 'react-native-reanimated';
+import { EASE, exitMs, MS, SCALE, SPRING, SQUASH, STAGGER, staggerDelay } from '@/utils/motion';
 import { CoinPill, INK, STAR_FALL_MS, starLandMs, starPopDelayMs, TONE } from './ui';
 
 /** The band's coinRoll cue rings this many ticks, 45 ms apart, then a bell (src/audio/band.ts). */
@@ -27,8 +27,22 @@ export const COIN_BREATH_MS = 320;
 export const coinStartMs = (stars: number): number => (stars > 0 ? starLandMs(stars - 1) : 0) + COIN_BREATH_MS;
 /** When the goal rows that did not earn a star show their ✗: after the last hit */
 export const missesShownMs = (stars: number): number => (stars > 0 ? starLandMs(stars - 1) + 160 : 160);
-/** After the last unlock reveal closes: the payout (or, with no coins, the fighter's cheer) starts this long after */
-export const REVEAL_PAYOUT_MS = 450;
+/** The unlock reveal's way out (UnlockReveal.tsx): the dark screen goes in this long, then the results take over */
+export const REVEAL_EXIT_MS = exitMs(MS.panel);
+/** One unlocked row turning over on the results, edge-on and back (the reveal's own turn, smaller) */
+const ROW_TURN_MS = MS.feedback;
+/** When unlocked row `k` of `n` turns over, after the reveal has gone */
+export const rowTurnMs = (k: number, n: number): number => staggerDelay(k, n, STAGGER.item);
+/**
+ * After the last unlock reveal closes: the payout (or, with no coins, the fighter's cheer) starts once the
+ * unlocked rows in sight have turned over, with a breath; 450 ms when there are no rows.
+ */
+export const revealPayoutMs = (rows: number): number => {
+  if (rows <= 0) return 450;
+  // Waits for the rows a phone shows under the payout (two), not for the ones below the fold
+  const seen = Math.min(rows, 2);
+  return rowTurnMs(seen - 1, rows) + 2 * ROW_TURN_MS + 120;
+};
 /** The fighter's cheer starts this long after the last star hits (after the ring has gone out) */
 export const FIGHTER_CHEER_LAG_MS = 200;
 /** A ✓ lands just behind its star: the star is the hero, the tick is its echo */
@@ -186,6 +200,32 @@ export const CountingCoinPill: React.FC<{ total: number; running: boolean; ticks
       <CoinPill coins={shown} style={{ minWidth: 44 + 10 * total.toLocaleString().length, justifyContent: 'center' }} />
     </Animated.View>
   );
+};
+
+/**
+ * A row of the results that hides a reward until its unlock reveal has played. When `shown` turns true it
+ * turns over the way the reveal's medallion did (edge-on on EASE.impact, the face swapped there, back on
+ * SPRING.lively): the reward the player just saw arrives in its row as the same thing, not as a swap.
+ * Reduced motion: it fades through to the new face. `face(shown)` draws each side.
+ */
+export const TurnOver: React.FC<{ shown: boolean; delay: number; reduced: boolean; style?: StyleProp<ViewStyle>; testID?: string; face: (shown: boolean) => React.ReactNode }> = ({ shown, delay, reduced, style, testID, face }) => {
+  const [side, setSide] = useState(shown);
+  const turn = useSharedValue(1);
+  const o = useSharedValue(1);
+  useEffect(() => {
+    if (shown === side) return;
+    const keep = ReduceMotion.Never;
+    if (reduced) {
+      o.value = withDelay(delay, withSequence(keep, withTiming(0, { duration: MS.feedback, easing: EASE.ui, reduceMotion: keep }, f => { if (f) runOnJS(setSide)(shown); }), withTiming(1, { duration: MS.quick, easing: EASE.ui, reduceMotion: keep })), keep);
+      return;
+    }
+    turn.value = withDelay(delay, withSequence(
+      withTiming(0, { duration: ROW_TURN_MS, easing: EASE.impact }, f => { if (f) runOnJS(setSide)(shown); }),
+      withDelay(16, withSpring(1, SPRING.lively))
+    ));
+  }, [shown]); // eslint-disable-line react-hooks/exhaustive-deps
+  const a = useAnimatedStyle(() => ({ opacity: o.value, transform: [{ scaleX: turn.value }] }));
+  return <Animated.View testID={testID} style={[style, a]}>{face(side)}</Animated.View>;
 };
 
 const st = StyleSheet.create({

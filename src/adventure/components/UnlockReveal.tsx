@@ -14,7 +14,7 @@ import React, { useContext, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, withDelay, withSpring, Easing, cancelAnimation, runOnJS, ReduceMotion } from 'react-native-reanimated';
-import { EASE, MS, SCALE, SPRING, STAGGER } from '@/utils/motion';
+import { EASE, exitMs, MS, SCALE, SPRING, STAGGER } from '@/utils/motion';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import Icon from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
@@ -41,6 +41,7 @@ import { describeUnlock } from './rewards';
 import { evolutionsMechanicId } from '../lessons';
 import { companionVoice } from '../coach';
 import CompanionBubble from './CompanionBubble';
+import { REVEAL_EXIT_MS } from './ResultsMotion';
 
 const NO_INSETS = { top: 0, bottom: 0, left: 0, right: 0 };
 
@@ -61,10 +62,15 @@ const EDGE_HOLD_MS = 32;
 const SWAP_MS = WINDUP_MS + TURN_MS + 16;
 /** The reward has come round to full width (the spring takes ~7 frames from edge-on): its ring and its sound land here */
 const LAND_MS = WINDUP_MS + TURN_MS + EDGE_HOLD_MS + 144;
-/** The words follow the medallion: name, companion, card, then the buttons */
-const detailAt = (k: number) => LAND_MS + 100 + k * STAGGER.item;
+/**
+ * The words follow the medallion: name, companion, then the card with the buttons.
+ * After the first unlock of a row the player knows the rhythm: the words come tighter.
+ */
+const detailAt = (k: number, quick = false) => LAND_MS + (quick ? 60 : 100) + k * (quick ? STAGGER.card : STAGGER.item);
 /** The revealed creature starts acting once its name is up */
 const ACT_MS = detailAt(3) + MS.move;
+/** Next unlock: the words leave while the medallion turns back edge-on */
+const LEAVE_MS = exitMs(MS.quick);
 
 /** Opening: the dark screen, then the headline, then the medallion */
 const OPEN_TEXT_MS = MS.quick - 40;
@@ -135,6 +141,13 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
   const turn = useSharedValue(1);
   /** Reduced motion: the medallion's face cross-fades instead of turning */
   const face = useSharedValue(1);
+  /** The words on screen (headline, details, buttons) leaving for the next unlock */
+  const leave = useSharedValue(1);
+  /** Closing: the medallion sinks (0→1) as the dark lifts */
+  const sink = useSharedValue(0);
+  /** 1 while closing: the medallion then fades with the words (with or without reduced motion) */
+  const closing = useSharedValue(0);
+  const [exiting, setExiting] = useState(false);
   const ring = useSharedValue(0);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const revealing = useRef(false);
@@ -145,6 +158,11 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
     setI(0);
     setRevealed(false);
     setActing(false);
+    setExiting(false);
+    sink.value = 0;
+    closing.value = 0;
+    press.value = 1;
+    revealing.current = false;
     // The dark screen first, then what is on it: no words over the results' words
     backdrop.value = 0;
     backdrop.value = withTiming(1, { duration: MS.quick, easing: EASE.ui, reduceMotion: KEEP });
@@ -166,9 +184,10 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
   const backdropStyle = useAnimatedStyle(() => ({ opacity: backdrop.value }));
   // The medallion arrives from 0.7 on a lively spring; its fade is flat and quick (opacity never bounces)
   const openStyle = useAnimatedStyle(() => ({
-    opacity: Math.min(1, opened.value * 2.5),
-    transform: [{ scale: 0.7 + 0.3 * opened.value }],
+    opacity: Math.min(1, opened.value * 2.5) * (closing.value > 0 ? leave.value : 1),
+    transform: [{ translateY: sink.value * 48 }, { scale: 0.7 + 0.3 * opened.value }],
   }));
+  const leaveStyle = useAnimatedStyle(() => ({ opacity: leave.value }));
   const heroStyle = useAnimatedStyle(() => ({ opacity: face.value, transform: [{ scale: press.value }, { scaleX: turn.value }] }));
   const ringStyle = useAnimatedStyle(() => ({
     opacity: ring.value <= 0 || ring.value >= 1 ? 0 : 0.85 * (1 - ring.value),
@@ -238,12 +257,45 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
     later(ACT_MS, () => { setActing(true); done(); });
   };
 
+  const goNext = (next: number) => {
+    // Whatever the last reveal still had scheduled (its creature's act) belongs to it, not to the next one
+    timers.current.forEach(clearTimeout);
+    timers.current = [];
+    setRevealed(false);
+    setActing(false);
+    setI(next);
+    leave.value = 1;
+    // The next silhouette comes round from edge-on, the way the last reward went
+    if (!reduced) turn.value = withDelay(EDGE_HOLD_MS / 2, withSpring(1, SPRING.lively));
+    face.value = withTiming(1, { duration: MS.quick, easing: EASE.ui, reduceMotion: KEEP });
+    revealing.current = false;
+  };
   const advance = () => {
-    if (i + 1 < unlocks.length) {
-      setRevealed(false);
-      setActing(false);
-      setI(i + 1);
-    } else onDone();
+    if (i + 1 >= unlocks.length) {
+      // The way out: the words go first, the medallion sinks back into the results as the dark lifts,
+      // then the results take over (their rows turn over into what was just won)
+      if (revealing.current) return;
+      revealing.current = true;
+      setExiting(true);
+      closing.value = 1;
+      leave.value = withTiming(0, { duration: LEAVE_MS, easing: EASE.leave, reduceMotion: KEEP });
+      if (!reduced) {
+        press.value = withTiming(0.6, { duration: REVEAL_EXIT_MS, easing: EASE.leave });
+        sink.value = withTiming(1, { duration: REVEAL_EXIT_MS, easing: EASE.leave });
+      }
+      backdrop.value = withDelay(LEAVE_MS, withTiming(0, { duration: REVEAL_EXIT_MS - LEAVE_MS, easing: EASE.leave, reduceMotion: KEEP }, f => { if (f) runOnJS(onDone)(); }), KEEP);
+      return;
+    }
+    if (revealing.current) return;
+    revealing.current = true;
+    const next = i + 1;
+    // The words leave (quick, flat) while the reward turns back edge-on; the next one is swapped in on the edge
+    leave.value = withTiming(0, { duration: LEAVE_MS, easing: EASE.leave, reduceMotion: KEEP });
+    if (reduced) {
+      face.value = withTiming(0, { duration: LEAVE_MS, easing: EASE.ui, reduceMotion: KEEP }, finished => { if (finished) runOnJS(goNext)(next); });
+      return;
+    }
+    turn.value = withTiming(0, { duration: TURN_MS, easing: EASE.impact }, finished => { if (finished) runOnJS(goNext)(next); });
   };
 
   const charmEquipped = u.kind === 'weapon' && equippedCharms(save).includes(u.id);
@@ -252,13 +304,16 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
   const sourceLabel = path ? 'Secret' : u.star === 0 ? 'Bounty reward' : `${'★'.repeat(u.star)} reward`;
   return (
     <Modal visible transparent animationType="none">
-      <View testID="unlock-modal" style={[st.overlay, { paddingTop: insets.top }]}>
+      {/* Closing, it no longer takes taps: the results' buttons are usable from the first frame of the way out */}
+      <View testID="unlock-modal" pointerEvents={exiting ? 'none' : 'auto'} style={[st.overlay, { paddingTop: insets.top }]}>
         <Animated.View style={[StyleSheet.absoluteFill, st.backdrop, backdropStyle]} pointerEvents="none" />
         <ScrollView contentContainerStyle={st.scroll} bounces={false}>
-          <Rise delay={OPEN_TEXT_MS} reduced={reduced} style={st.heads}>
+          <Animated.View style={leaveStyle}>
+          <Rise key={`heads-${i}`} delay={i === 0 ? OPEN_TEXT_MS : 0} reduced={reduced} style={st.heads}>
             <Text style={st.eyebrow}>{sourceLabel}{unlocks.length > 1 ? `  ·  ${i + 1} of ${unlocks.length}` : ''}</Text>
             <Text style={st.headline}>{display.headline}</Text>
           </Rise>
+          </Animated.View>
 
           <Animated.View style={[st.heroWrap, openStyle]}>
             <Rays color={accent} still={reduced} />
@@ -290,17 +345,17 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
           </Animated.View>
 
           {!revealed ? (
-            <Rise key={`tease-${i}`} delay={OPEN_HERO_MS + MS.feedback} reduced={reduced}>
+            <Rise key={`tease-${i}`} delay={i === 0 ? OPEN_HERO_MS + MS.feedback : MS.feedback} reduced={reduced}>
               <Text style={st.tease}>{display.tease}</Text>
             </Rise>
           ) : (
-            <View key={`detail-${i}`} style={{ alignSelf: 'stretch', gap: 12, alignItems: 'center' }}>
-              <Rise delay={isLevelUp ? 0 : detailAt(0) - SWAP_MS} reduced={reduced} style={{ alignItems: 'center', gap: 4 }}>
+            <Animated.View key={`detail-${i}`} style={[{ alignSelf: 'stretch', gap: 12, alignItems: 'center' }, leaveStyle]}>
+              <Rise delay={isLevelUp ? 0 : detailAt(0, i > 0) - SWAP_MS} reduced={reduced} style={{ alignItems: 'center', gap: 4 }}>
                 <Text style={st.name}>{display.name}</Text>
                 {display.badge && <Text style={[st.rarity, { color: accent }]}>{display.badge}</Text>}
               </Rise>
 
-              <Rise delay={isLevelUp ? STAGGER.item : detailAt(1) - SWAP_MS} reduced={reduced} style={{ alignSelf: 'stretch' }}>
+              <Rise delay={isLevelUp ? STAGGER.item : detailAt(1, i > 0) - SWAP_MS} reduced={reduced} style={{ alignSelf: 'stretch' }}>
               <CompanionBubble
                 character={fighter ? fighter.name : save.selectedFighter}
                 tone="dark"
@@ -317,7 +372,7 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
               />
               </Rise>
 
-              <Rise delay={isLevelUp ? 2 * STAGGER.item : detailAt(2) - SWAP_MS} reduced={reduced} style={{ alignSelf: 'stretch' }}>
+              <Rise delay={isLevelUp ? 2 * STAGGER.item : detailAt(2, i > 0) - SWAP_MS} reduced={reduced} style={{ alignSelf: 'stretch' }}>
               <View style={st.card}>
                 <Text style={st.cardTitle}>{path ? 'What is it?' : 'How it works'}</Text>
                 {path && (
@@ -434,20 +489,21 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                 )}
               </View>
               </Rise>
-            </View>
+            </Animated.View>
           )}
         </ScrollView>
 
         {/* What to do with it: always in reach, whatever the screen size */}
         <View style={[st.footer, { paddingBottom: Math.max(insets.bottom, 18) }]}>
           {!revealed ? (
-            <Rise key={`reveal-${i}`} delay={OPEN_HERO_MS + MS.feedback} reduced={reduced} style={st.footerInner}>
+            <Rise key={`reveal-${i}`} delay={i === 0 ? OPEN_HERO_MS + MS.feedback : MS.feedback} reduced={reduced} style={st.footerInner}>
             <TouchableOpacity testID="unlock-reveal" onPress={reveal} style={st.cta} activeOpacity={0.85}>
               <Text style={st.ctaText}>Reveal</Text>
             </TouchableOpacity>
             </Rise>
           ) : (
-            <Rise key={`act-${i}`} delay={isLevelUp ? 2 * STAGGER.item : detailAt(2) - SWAP_MS} reduced={reduced} style={st.footerInner}>
+            <Animated.View style={[st.footerInner, leaveStyle]}>
+            <Rise key={`act-${i}`} delay={isLevelUp ? 2 * STAGGER.item : detailAt(2, i > 0) - SWAP_MS} reduced={reduced} style={st.footerInner}>
         {fighter && (
           <>
             <TouchableOpacity testID="unlock-primary" onPress={() => { sfx('confirm'); onUseFighter(fighter.name); advance(); }} style={st.cta} activeOpacity={0.85}>
@@ -550,6 +606,7 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
           )
         )}
             </Rise>
+            </Animated.View>
           )}
         </View>
       </View>

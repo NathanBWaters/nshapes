@@ -25,7 +25,7 @@ import { shouldShowDamageNumbers, companionResultsLine } from '../coach';
 import CompanionBubble from './CompanionBubble';
 import { explainStarBreakdown } from '../engine/challenges';
 import { Btn, INK, starLandMs, StarRow, TONE } from './ui';
-import { coinRollAmount, coinRollTicks, coinStartMs, CountingCoinPill, FadeAt, FIGHTER_CHEER_LAG_MS, missesShownMs, REVEAL_PAYOUT_MS, ResultsCard, ResultStars, TICK_LAG_MS, TickAt } from './ResultsMotion';
+import { coinRollAmount, coinRollTicks, coinStartMs, CountingCoinPill, FadeAt, FIGHTER_CHEER_LAG_MS, missesShownMs, ResultsCard, ResultStars, revealPayoutMs, rowTurnMs, TICK_LAG_MS, TickAt, TurnOver } from './ResultsMotion';
 import { Silhouette, UnlockableAvatar, describeRewardUnlocks, describeUnlock } from './rewards';
 import type { FunRating, FunTag } from '@/analytics/fightEvent';
 import RoundFunPrompt from '@/components/RoundFunPrompt';
@@ -87,6 +87,7 @@ const LevelResults: React.FC<Props> = ({
     }) ?? (won && nextLevel && nextUnlocked && nextLevel.biome !== level.biome ? nextLevel.biome : undefined);
 
   const reduced = useReducedMotion();
+  const revealedFirst = React.useRef(unlocksRevealed);
   useEffect(() => {
     // Each star rings a step higher up the chord, on the frame it hits its slot.
     // Reduced motion shows every star at once: one chord for all of them, at once.
@@ -112,7 +113,7 @@ const LevelResults: React.FC<Props> = ({
   const firstRevealed = React.useRef(unlocksRevealed);
   useEffect(() => {
     if (cheer || coinsCount || !unlocksRevealed) return;
-    const t = setTimeout(() => setCheer(true), firstRevealed.current ? starLandMs(stars - 1) + FIGHTER_CHEER_LAG_MS : REVEAL_PAYOUT_MS);
+    const t = setTimeout(() => setCheer(true), firstRevealed.current ? starLandMs(stars - 1) + FIGHTER_CHEER_LAG_MS : revealPayoutMs(handoffRows));
     return () => clearTimeout(t);
   }, [unlocksRevealed]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -126,7 +127,7 @@ const LevelResults: React.FC<Props> = ({
     const t = setTimeout(() => {
       band.cue('coinRoll', { amount: rollAmount });
       setPaying(true);
-    }, revealedAtStart.current ? coinStartMs(stars) : REVEAL_PAYOUT_MS);
+    }, revealedAtStart.current ? coinStartMs(stars) : revealPayoutMs(handoffRows));
     return () => clearTimeout(t);
   }, [unlocksRevealed]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -159,6 +160,8 @@ const LevelResults: React.FC<Props> = ({
   );
   // Secret paths this result opened: named only once their reveal has played
   const newPaths = result.unlocks.filter(u => u.kind === 'path').map(describeUnlock);
+  /** Rows that turn over when the reveals close (only when there were reveals to close) */
+  const handoffRows = unlocksRevealed && revealedFirst.current ? 0 : starUnlocks.length + newPaths.length;
   const activeBountyHooks = result.save.bountiesUnlocked && !practice
     ? BOUNTIES
         .filter(b => !result.save.completedBounties.includes(b.id) && b.progress(result.save) > 0)
@@ -266,6 +269,54 @@ const LevelResults: React.FC<Props> = ({
             </View>
           )}
 
+          {/* What was won, right under the payout so it is on screen: each row turns over once its reveal has played */}
+          {starUnlocks.length > 0 && (
+            <View style={{ gap: 6, alignSelf: 'stretch' }}>
+              <Text style={st.section}>UNLOCKED</Text>
+              {starUnlocks.map(({ star, unlock }, k) => (
+                <TurnOver
+                  key={k}
+                  shown={unlocksRevealed}
+                  delay={rowTurnMs(k, handoffRows)}
+                  reduced={reduced}
+                  style={st.reward}
+                  testID={`results-unlocked-${k}`}
+                  face={shown => (
+                    <>
+                      <StarRow stars={star} max={star} size={14} />
+                      {shown ? (
+                        <UnlockableAvatar display={unlock} size={24} fighterMood="victory" iconSize={22} iconColor={COLORS.actionYellow} interactive />
+                      ) : (
+                        <Silhouette icon={unlock.icon} size={16} />
+                      )}
+                      <Text style={st.rewardText}>{shown ? unlock.revealed : unlock.secret}</Text>
+                    </>
+                  )}
+                />
+              ))}
+            </View>
+          )}
+
+          {newPaths.map((path, k) => (
+            <TurnOver
+              key={k}
+              shown={unlocksRevealed}
+              delay={rowTurnMs(starUnlocks.length + k, handoffRows)}
+              reduced={reduced}
+              style={st.pathFound}
+              testID="results-secret-path"
+              face={shown => (
+                <>
+                  <Icon name="lorc/treasure-map" size={20} color={COLORS.actionYellow} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={st.pathFoundTitle}>SECRET PATH FOUND</Text>
+                    <Text style={st.pathFoundText}>{shown ? `${path.revealed}. It is on the map now.` : 'Something new is on the map…'}</Text>
+                  </View>
+                </>
+              )}
+            />
+          ))}
+
           {showNumbers && (
             <View style={st.statsRow}>
               <Stat testID="results-total-damage" icon="lorc/crossed-swords" label="Total damage" value={`${run.totalDamage}`} />
@@ -341,33 +392,6 @@ const LevelResults: React.FC<Props> = ({
               })}
             </View>
           )}
-
-          {starUnlocks.length > 0 && (
-            <View style={{ gap: 6, alignSelf: 'stretch' }}>
-              <Text style={st.section}>UNLOCKED</Text>
-              {starUnlocks.map(({ star, unlock }, k) => (
-                <View key={k} style={st.reward}>
-                  <StarRow stars={star} max={star} size={14} />
-                  {unlocksRevealed ? (
-                    <UnlockableAvatar display={unlock} size={24} fighterMood="victory" iconSize={22} iconColor={COLORS.actionYellow} interactive />
-                  ) : (
-                    <Silhouette icon={unlock.icon} size={16} />
-                  )}
-                  <Text style={st.rewardText}>{unlocksRevealed ? unlock.revealed : unlock.secret}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {newPaths.map((path, k) => (
-            <View key={k} style={st.pathFound} testID="results-secret-path">
-              <Icon name="lorc/treasure-map" size={20} color={COLORS.actionYellow} />
-              <View style={{ flex: 1 }}>
-                <Text style={st.pathFoundTitle}>SECRET PATH FOUND</Text>
-                <Text style={st.pathFoundText}>{unlocksRevealed ? `${path.revealed}. It is on the map now.` : 'Something new is on the map…'}</Text>
-              </View>
-            </View>
-          ))}
 
           {won && level.isBoss && !practice && (
             <View testID="results-boss-clear" style={st.bossClear}>

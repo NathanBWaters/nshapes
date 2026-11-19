@@ -53,6 +53,7 @@ export const CURVE = {
   pop: [0.34, 1.56, 0.64, 1],
   drift: [0.37, 0, 0.63, 1],
   impact: [0.3, 0, 0.75, 0.3],
+  leave: [0.32, 0, 0.67, 0],
 } as const;
 
 const bezier = (c: readonly [number, number, number, number]) => Easing.bezier(c[0], c[1], c[2], c[3]);
@@ -73,6 +74,8 @@ export const EASE = {
   move: bezier(CURVE.move),
   /** Leaving: slow start, gone fast (ease-in-expo) */
   exit: bezier(CURVE.exit),
+  /** A short exit (under ~250 ms) that must show at once: ease-in-cubic. Expo spends half of a short exit not moving. */
+  leave: bezier(CURVE.leave),
   /**
    * Leaving, but seen to go at once (ease-in-cubic): for exits the player
    * asked for with a tap (a sheet put away, a screen left), where ease-in-expo
