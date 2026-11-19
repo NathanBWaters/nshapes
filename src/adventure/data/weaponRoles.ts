@@ -17,7 +17,7 @@ export const WEAPON_ROLES: { id: WeaponRole; label: string; blurb: string }[] = 
 ];
 
 const BY_ROLE: Record<WeaponRole, string[]> = {
-  damage: ['blast-powder', 'flint-spark', 'prismatic-ray', 'chaos-shard', 'war-drum', 'rally-horn', 'pinata', 'amplifier-coil'],
+  damage: ['blast-powder', 'rainbow-charm', 'flint-spark', 'prismatic-ray', 'chaos-shard', 'war-drum', 'rally-horn', 'pinata', 'amplifier-coil'],
   tricks: ['magnet', 'bounty-poster', 'mirror-shard', 'odd-one-out', 'collectors-album', 'snowball', 'glass-sword', 'devils-bargain', 'tightrope', 'understudy'],
   gambles: ['cursed-idol', 'chain-gang', 'thorn-bush', 'rust', 'tar-pit', 'decoy', 'long-fuse', 'ice-block', 'greedy-chest', 'hot-potato', 'twin-seed', 'fog-lantern'],
   board: ['field-stone', 'growth-seed', 'clarity-lens', 'wild-card'],

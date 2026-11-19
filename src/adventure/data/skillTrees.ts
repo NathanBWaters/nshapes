@@ -351,7 +351,7 @@ const TREES: Record<CharacterName, TreeSpec> = {
       '1-2': ['Prism Eye', 'lorc/light-bulb', 'Rainbow Strikes give you a hint.', rule(T.rainbow, [E.hint(1)]), 1, [5, 3]],
       '1-5': ['Hailstorm', 'lorc/laser-warning', 'Rainbow Strikes fire a row laser.', rule(T.rainbow, [E.laser(A.row)], undefined, 'Hail!'), 3, [6, 2]],
       '1-3': ['Cold Snap', 'lorc/stopwatch', 'Rainbow Strikes add +3s to the clock.', rule(T.rainbow, [E.time(3)]), 1, [5, 5]],
-      '1-4': ['Rainbow Hunter', 'lorc/rainbow-star', 'Rainbow Strikes deal ×0.5 more (×2 becomes ×2.5).', { modifiers: { rainbowMultiplierBonus: 0.5 } }, 3, [6, 6]],
+      '1-4': ['Rainbow Hunter', 'lorc/rainbow-star', 'All-different Sets deal +0.5× more damage.', { modifiers: { rainbowMultiplierBonus: 0.5 } }, 3, [6, 6]],
       '0-8': [
         'Perfect Strike',
         'lorc/rainbow-star',

@@ -47,6 +47,7 @@ const LINK = { icon: 'lorc/linked-rings', color: '#383838', text: 'Rings in the 
 export const WEAPON_GUIDE: Record<string, WeaponGuide> = {
   // ── Damage ────────────────────────────────────────────────────────────────
   'blast-powder': { kind: 'luck', tip: 'Blasts hit the cards NEXT to your Set, so Sets in the middle of the board blast more cards than Sets on the edge.', events: ['blast'] },
+  'rainbow-charm': { kind: 'hunt', tip: 'Look for three cards with nothing in common: every trait all different. Each Rainbow Set multiplies your hit.', events: ['rainbow'] },
   'flint-spark': { kind: 'luck', tip: 'Fire spreads on its own. Do not chase burning cards: they are already paying you.', look: FIRE, events: ['fire'], calls: ['Burn'] },
   'prismatic-ray': { kind: 'luck', tip: 'A laser clears a whole row or column, so a bigger board means a bigger laser.', events: ['laser'] },
   'chaos-shard': { kind: 'luck', tip: 'Each bounce can bounce again. Nothing to aim: just keep making Sets.', events: ['ricochet'] },

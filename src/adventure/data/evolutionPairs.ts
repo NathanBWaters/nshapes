@@ -22,7 +22,7 @@ import type { Area, Condition, Effect, Modifiers, Rule, Scale, TrickKind, Trigge
 
 /** Armory weapons by short key */
 const W = {
-  blast: 'blast-powder', mend: 'mending-charm', flint: 'flint-spark', catprism: 'catalyst-prism', horn: 'rally-horn',
+  blast: 'blast-powder', mend: 'mending-charm', flint: 'flint-spark', rainbow: 'rainbow-charm', catprism: 'catalyst-prism', horn: 'rally-horn',
   field: 'field-stone', pinata: 'pinata', clarity: 'clarity-lens', ray: 'prismatic-ray', chrono: 'chrono-shard',
   growth: 'growth-seed', chaos: 'chaos-shard', seeker: 'seeker-lens', drum: 'war-drum', connector: 'connector',
   oracle: 'oracle-eye', tdrop: 'time-drop', second: 'second-chance', amp: 'amplifier-coil', favor: 'fortunes-favor',
@@ -36,7 +36,7 @@ const W = {
 type K = keyof typeof W;
 
 const NAME: Record<K, string> = {
-  blast: 'Blast Powder', mend: 'Mending Charm', flint: 'Flint Spark', catprism: 'Catalyst Prism', horn: 'Rally Horn',
+  blast: 'Blast Powder', mend: 'Mending Charm', flint: 'Flint Spark', rainbow: 'Rainbow Charm', catprism: 'Catalyst Prism', horn: 'Rally Horn',
   field: 'Field Stone', pinata: 'Piñata', clarity: 'Clarity Lens', ray: 'Prismatic Ray', chrono: 'Chrono Shard',
   growth: 'Growth Seed', chaos: 'Chaos Shard', seeker: 'Seeker Lens', drum: 'War Drum', connector: 'Link Stone',
   oracle: 'Oracle Eye', tdrop: 'Time Drop', second: 'Second Chance', amp: 'Amplifier Coil', favor: "Fortune's Favor",
@@ -452,7 +452,7 @@ const ROWS: Row[] = [
     'Gives a grace, and another for 3 Sets within 12s. Every grace save fires a row laser and deals 4.',
     'Sing it in time and the heavens keep the beat.',
     [on(T.start, [E.grace(1)]), on(T.within(3, 12000), [E.grace(1)]), on(T.graceUsed, [E.laser(A.row), E.damage(4)])]],
-  ['prismatic-grace', 'Prismatic Grace', 'lorc/rainbow-star', ['gconduit', 'catprism'],
+  ['prismatic-grace', 'Prismatic Grace', 'lorc/rainbow-star', ['gconduit', 'rainbow'],
     'Gives a grace. Every Rainbow Strike gives a grace and deals 4. Every grace save stretches evolutions 3s.',
     'Every colour forgives.',
     [on(T.start, [E.grace(1)]), on(T.rainbow, [E.grace(1), E.damage(4)]), on(T.graceUsed, [E.extend(3000)])]],
@@ -838,7 +838,7 @@ const ROWS: Row[] = [
     'Every Album page you fill gives 4 XP and deals 6. A full Album hits +10 harder.',
     'Every page a memory. Every memory a bruise.',
     [on(T.trick('album'), [E.xp(4), E.damage(6)])], { albumDamage: 10 }],
-  ['jokers-rainbow', "Joker's Rainbow", 'delapouite/jester-hat', ['wild', 'catprism'],
+  ['jokers-rainbow', "Joker's Rainbow", 'delapouite/jester-hat', ['wild', 'rainbow'],
     'Wild cards are 15% more likely. A Set with a wild card deals 6 and has a 30% chance to bring a Catalyst.',
     'Any colour you like, as long as it is all of them.',
     [on(T.trick('wild'), [E.damage(6)]), on(T.trick('wild'), [E.catalyst], [C.chance(30)])], { wildChance: 15 }],
@@ -1002,6 +1002,23 @@ const ROWS: Row[] = [
     'Fuses are 20% more likely and golden rust cards hit +8 harder. A short-fuse match blasts a 2×2 block.',
     'Still good. Probably.',
     [on(T.trick('fuse'), [E.explode(A.block(2, 2))], undefined, 'Boom!')], { fuseChance: 20, rustGold: 8 }],
+  // ── Rainbow Charm pairs ──────────────────────────────────────────────────
+  ['prism-burst', 'Prism Burst', 'delapouite/prism', ['rainbow', 'blast'],
+    'Opens with a 2×2 blast. Every Rainbow Set blasts 3 random cards and adds +0.5× Rainbow damage.',
+    'Every color shatters outward at once.',
+    [on(T.start, [E.explode(A.block(2, 2))], undefined, 'Prism Burst!'), on(T.rainbow, [E.explode(A.random(3))])], { rainbowMultiplierBonus: 0.5 }],
+  ['spectrum-mend', 'Spectrum Mend', 'lorc/shining-heart', ['rainbow', 'mend'],
+    'Every Rainbow Set heals 1 heart and deals 6. Every Set at full hearts deals +4 more.',
+    'Whole heart, full spectrum.',
+    [on(T.rainbow, [E.heal(1), E.damage(6)], undefined, 'Spectrum!')], { conditionalDamage: [{ when: [C.heartsFull], amount: 4 }] }],
+  ['chromatic-fanfare', 'Chromatic Fanfare', 'lorc/hunting-horn', ['rainbow', 'horn'],
+    'Opens with 8 damage. Every Rainbow Set makes your next Set deal ×2.',
+    'One bright chord, then the avalanche.',
+    [on(T.start, [E.damage(8)], undefined, 'Fanfare!'), on(T.rainbow, [E.times(2)], undefined, 'Encore!')]],
+  ['rainbow-nova', 'Rainbow Nova', 'lorc/comet-spark', ['rainbow', 'catprism'],
+    'Every Rainbow Set deals 8 damage and extends the evolution by 3s. +0.5× Rainbow damage.',
+    'Refracted light that refuses to fade.',
+    [on(T.rainbow, [E.damage(8), E.extend(3000)], undefined, 'Nova!')], { rainbowMultiplierBonus: 0.5 }],
 ];
 
 export const PAIR_RECIPES: EvolutionRecipe[] = ROWS.map(recipe);

@@ -368,11 +368,11 @@ export const setMathRows = (
     }
   } else if (m.multiplier !== 1) {
     rows.push({
-      label: m.rainbow ? 'Multiplier (Rainbow ×2 and others)' : 'Multiplier',
+      label: m.rainbow ? 'Multiplier (Rainbow bonus and others)' : 'Multiplier',
       value: `×${fmt(m.multiplier)}`,
       ...(m.rainbow ? { sub: 'all traits differed in this Set' } : {}),
       explain: m.rainbow
-        ? 'A Rainbow Strike (all visible traits different) doubles Set damage alongside any other Set multipliers.'
+        ? 'Your Rainbow gear multiplied Set damage alongside any other Set multipliers.'
         : 'Multiplies your card points and flat per-Set bonuses together.',
     });
   }

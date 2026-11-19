@@ -99,6 +99,10 @@ const chooseSet = (s: RunState, sets: Card[][], bot: BotProfile, rng: Rng): Card
     return hits.length && rng.next() < chance ? rng.pick(hits) : null;
   };
   const rainbow = (set: Card[]) => isRainbow(set, s.attributes);
+  const hasRainbowPayoff =
+    s.weapons.some(w => !!((w as { modifiers?: Modifiers }).modifiers?.rainbowMultiplierBonus) || w.id === 'catalyst-prism') ||
+    s.arcana.includes('prismatic_fever') ||
+    s.fighter === 'Emperor Penguin';
   const goalPick = (goal: Goal): Card[] | null => {
     switch (goal) {
       case 'evolutions': return prefer(set => set.some(c => c.hasEvolutionItem), focus);
@@ -115,9 +119,9 @@ const chooseSet = (s: RunState, sets: Card[][], bot: BotProfile, rng: Rng): Card
           ? prefer(set => set.every(c => c.color === (s.level.challenge as { color: Card['color'] }).color), focus)
           : null;
       case 'sameColorSets': return prefer(set => set.every(c => c.color === set[0].color), focus);
-      case 'allDiffSets': return prefer(rainbow, focus);
-      case 'rainbows':
-      case 'bigHit': return s.features.has('rainbow') ? prefer(rainbow, focus) : null;
+      case 'allDiffSets':
+      case 'rainbows': return prefer(rainbow, focus);
+      case 'bigHit': return hasRainbowPayoff ? prefer(rainbow, focus) : null;
       case 'purityChain': {
         if (!s.features.has('purity') || rng.next() >= focus) return null;
         // Climb on purpose: the least diverse Set that still beats the last step
@@ -160,7 +164,7 @@ const chooseSet = (s: RunState, sets: Card[][], bot: BotProfile, rng: Rng): Card
     prefer(set => setWouldGrow(s, set, s.attributes)) ??
     (s.arcana.includes('monochrome_pact')
       ? prefer(set => countDifferentAttributes(set, s.attributes) === 1)
-      : bot.huntsRainbows && s.features.has('rainbow') && rng.next() < 0.5
+      : bot.huntsRainbows && hasRainbowPayoff && rng.next() < 0.5
         ? prefer(rainbow)
         : null) ??
     prefer(set => !has(set, snared)) ??

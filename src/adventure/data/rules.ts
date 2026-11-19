@@ -1,6 +1,6 @@
 /** Standard fight rules that Arcana, card text and the engine all refer to. */
 export const BASE_RULES = {
-  rainbowMultiplier: 2,
+  rainbowMultiplier: 1,
   coinCardChance: 0.1,
   coinCardValue: 3,
   powerCardChance: 0.12,

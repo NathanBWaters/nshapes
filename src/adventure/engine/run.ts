@@ -319,7 +319,9 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   emitEnemyEvents(d, enemyResult.events);
 
   const diffCount = !graceUsed ? countDifferentAttributes(matched, d.attributes) : 0;
-  const rainbow = d.features.has('rainbow') && !graceUsed && isRainbow(matched, d.attributes);
+  // An all-different Set is always detected for gear/passives/challenges; base multiplier is 1× (clean base game)
+  // unless a weapon (e.g. Rainbow Charm), skill node, evolution, or Arcana adds a Rainbow multiplier.
+  const rainbow = !graceUsed && isRainbow(matched, d.attributes);
   const sinceLastMs = d.elapsedMs - d.lastMatchAtMs;
   d._setCtx = { diffCount, rainbow, sinceLastMs, firstOfWave: d.setsThisWave === 0, matchNo: d.matches + 1 };
   const purity = advancePurity(d, diffCount, graceUsed);
@@ -477,7 +479,10 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   if (unclampedFlat < 0) {
     flatItems.push({ label: 'Minimum damage floor', amount: -unclampedFlat, note: 'Set damage cannot drop below 0' });
   }
-  const rainbowBaseMult = rainbow ? (a.rainbowMultiplier ?? BASE_RULES.rainbowMultiplier) + (m.rainbowMultiplierBonus ?? 0) : 1;
+  const weaponRainbowMult = rainbow ? Math.max(0.1, 1 + (m.rainbowMultiplierBonus ?? 0)) : 1;
+  const arcanaRainbowMult = rainbow ? (a.rainbowMultiplier ?? BASE_RULES.rainbowMultiplier) : 1;
+  const rainbowBaseMult = weaponRainbowMult * arcanaRainbowMult;
+  const rainbowBoosted = rainbow && rainbowBaseMult > 1;
   const evoMult = d.activeEvolutions.length > 0 ? EVOLUTION_RULES.setMultiplier : 1;
   const rainbowMult = rainbowBaseMult * evoMult;
   const enemyMult = (enemyResult.pointsMultiplier || 1) * (statMods.pointsMultiplier || 1);
@@ -486,7 +491,46 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   const setMult = preTricksSetMult * tricks.multiplier;
   d.nextSetMultiplier = 1;
   const multItems: FightLogMathItem[] = [];
-  if (rainbowBaseMult !== 1) multItems.push({ label: 'Rainbow Strike', amount: rainbowBaseMult, note: 'every trait was different' });
+  if (rainbow) {
+    let runningRainbow = 1;
+    for (const { key, source } of sources) {
+      if (key === 'growth') continue;
+      const bonus = source.modifiers?.rainbowMultiplierBonus ?? 0;
+      if (bonus === 0) continue;
+      const next = Math.max(0.1, runningRainbow + bonus);
+      const factor = next / runningRainbow;
+      const info = describeSource(key);
+      multItems.push({
+        label: info.label,
+        amount: Math.round(factor * 1000) / 1000,
+        note: runningRainbow === 1 ? 'all traits different' : `+${bonus}× on Rainbow Sets`,
+        ...(info.sourceRef ? { sourceRef: info.sourceRef } : {}),
+      });
+      runningRainbow = next;
+    }
+    for (const g of growthEntries) {
+      const bonus = (g.mods.rainbowMultiplierBonus ?? 0) * g.stacks;
+      if (bonus === 0) continue;
+      const next = Math.max(0.1, runningRainbow + bonus);
+      const factor = next / runningRainbow;
+      multItems.push({
+        label: g.wName,
+        amount: Math.round(factor * 1000) / 1000,
+        note: `${g.stacks} scaling stack${g.stacks === 1 ? '' : 's'}`,
+        sourceRef: `weapon:${g.wId}`,
+      });
+      runningRainbow = next;
+    }
+    if (arcanaRainbowMult !== 1) {
+      const matchingArcana = d.arcana.map(getArcana).filter(def => def.rules.rainbowMultiplier !== undefined);
+      const arcLabel = matchingArcana.length === 1 ? matchingArcana[0].name : 'Arcana';
+      multItems.push({
+        label: arcLabel,
+        amount: arcanaRainbowMult,
+        note: arcanaRainbowMult < 1 ? 'all-different Set penalty' : 'all traits different',
+      });
+    }
+  }
   if (evoMult !== 1) multItems.push({ label: 'Active Evolution', amount: evoMult, note: 'evolution Set multiplier' });
   if ((a.damageScale ?? 1) !== 1) {
     const arc = findArcanaFor('damageScale');
@@ -522,7 +566,7 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   const dmg = flat * totalMult + (purity.damage + traps.bonus) * enemyMult;
   const powerMult = damageMultiplier(d.power ?? 0);
   const hit = dealDamage(d, dmg);
-  emit(d, surgeMult > 1 ? 'surge_hit' : rainbow ? 'rainbow' : 'hit', hit, undefined, { slots: gearSet.slots });
+  emit(d, surgeMult > 1 ? 'surge_hit' : rainbowBoosted ? 'rainbow' : 'hit', hit, undefined, { slots: gearSet.slots });
   if (surgeMult > 1 && d.surge) d.surge = { ...d.surge, sets: d.surge.sets + 1 };
   if (!opts.auto) emitBoardWeapons(d, rewards, fx);
   if (opts.auto) {
@@ -558,7 +602,7 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
       ...(flatItems.length > 0 ? { flatItems } : {}),
       multiplier: totalMult,
       ...(multItems.length > 0 ? { multItems } : {}),
-      rainbow,
+      rainbow: rainbowBoosted,
       extra: (purity.damage + traps.bonus) * enemyMult,
       ...(extraItems.length > 0 ? { extraItems } : {}),
       ...(powerMult > 1 ? { powerMultiplier: powerMult, powerPoints: d.power ?? 0 } : {}),

@@ -42,6 +42,7 @@ type Row = [inst: InstrumentId, octave: number, riff: string, why: string, extra
 const ROWS: Record<string, Row> = {
   // ── Damage: the brass and the big drums ───────────────────────────────────
   'blast-powder': ['brass', 2, '0.......0..4....', 'Low brass and a kettledrum: every boom lands on the beat.', { beat: 'x.......x..x....', drum: 'timpani' }],
+  'rainbow-charm': ['celesta', 5, '0.2.4.7.9.7.4.2.', 'A shimmering celesta arpeggio climbing the full spectrum.'],
   'flint-spark': ['banjo', 4, '..4.7...4.7.9...', 'A flicking banjo over a crackling fire.', { beat: '..x...x...x...x.', drum: 'crackle' }],
   'prismatic-ray': ['saw', 4, '0247....0247....', 'A beam of light sweeping up the chord.'],
   'chaos-shard': ['steel', 5, '7.0.9.2.7.4.0.9.', 'Steel-drum pings that leap about like a ricochet.'],

@@ -136,13 +136,13 @@ export const MECHANICS: Record<string, MechanicDef> = {
     kind: 'rule',
     title: 'All Different',
     tagline: 'Three shapes in three colors: nothing in common is a Set too.',
-    coach: 'Hunt for Sets with nothing in common!',
+    coach: 'All traits different? Rainbow Charm doubles every hit!',
     body: [
       'A diamond, an oval and a squiggle, one red, one green, one purple: no two alike, so it is a Set.',
-      'Make 2 all-different Sets for the third star.',
+      'Your new Rainbow Charm doubles every all-different Set! Make 2 all-different Sets for the third star.',
     ],
     fightTips: [
-      { title: 'Mix every trait', text: 'Pick 3 different shapes in 3 different colors. Make 2 all-different Sets for the third star.', anchor: 'bottom' },
+      { title: 'Mix every trait', text: 'Pick 3 different shapes in 3 different colors — Rainbow Charm doubles each hit! Make 2 all-different Sets for the third star.', anchor: 'bottom' },
     ],
     icon: 'delapouite/sparkles',
     demo: {
@@ -222,7 +222,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
       },
     ],
     fightTips: [
-      { title: 'Hit hard once', text: 'Land a single Set that deals 7 or more. Rainbow Strikes, Combo and your skill nodes all stack.', anchor: 'top' },
+      { title: 'Hit hard once', text: 'Land a single Set that deals 7 or more. Rainbow Charm, Combo and your skill nodes all stack.', anchor: 'top' },
     ],
     icon: 'lorc/tree-branch',
     demo: { type: 'icons', items: [{ icon: 'lorc/flat-star', label: 'Earn stars' }, { icon: 'lorc/tree-branch', label: 'Buy nodes' }, { icon: 'lorc/fist', label: 'Hit harder' }] },
@@ -273,31 +273,30 @@ export const MECHANICS: Record<string, MechanicDef> = {
   },
   rainbow: {
     id: 'rainbow',
-    kind: 'feature',
-    enables: 'rainbow',
-    title: 'Rainbow Strike',
-    tagline: 'A Set with nothing in common hits twice as hard.',
-    coach: 'Nothing in common = a Rainbow. Double damage!',
+    kind: 'rule',
+    title: 'Rainbow Sets',
+    tagline: 'Three shapes, three colors, and 1-2-3: nothing in common across all three traits.',
+    coach: 'Nothing in common across all 3 traits = a Rainbow!',
     body: [
-      'Three shapes, three colors and 1-2-3: a Rainbow Strike, for double damage.',
-      'Land 2 Rainbow Strikes for the third star.',
+      'Three shapes, three colors, and 1-2-3 make a 3-trait Rainbow Set.',
+      'Bring Rainbow Charm (or Rainbow gear) to multiply every Rainbow Set! Land 2 Rainbow Sets for the third star.',
     ],
     fightTips: [
-      { title: 'Hunt for Rainbows', text: 'A Set where every trait is different hits twice as hard. Land 2 Rainbow Strikes for the third star.', anchor: 'bottom' },
+      { title: 'Hunt for 3-trait Rainbows', text: 'Match 3 shapes, 3 colors, and 1-2-3. Equip Rainbow Charm to double every Rainbow Set! Land 2 Rainbow Sets for the third star.', anchor: 'bottom' },
     ],
     icon: 'lorc/rainbow-star',
     demo: {
       type: 'set',
       attributes: ['shape', 'color', 'number'],
       valid: true,
-      caption: 'Nothing in common: Rainbow Strike ×2',
+      caption: 'Nothing in common: 3-trait Rainbow Set!',
       cards: [
         { shape: 'diamond', color: 'red', number: 1, shading: 'solid' },
         { shape: 'oval', color: 'green', number: 2, shading: 'solid' },
         { shape: 'squiggle', color: 'purple', number: 3, shading: 'solid' },
       ],
     },
-    coachMark: { on: 'rainbow', text: 'Rainbow Strike! Double damage!' },
+    coachMark: { on: 'rainbow', text: 'Rainbow Set! Every trait different!' },
   },
   time_bombs: {
     id: 'time_bombs',

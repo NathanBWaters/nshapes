@@ -48,6 +48,34 @@ const revenge = (pct: number, amount: number): Rule[] => [
 ];
 
 export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
+  // ── Rainbow Charm (intro hunt): all-different Sets deal ×2 damage ────────
+  {
+    id: 'rainbow-charm',
+    name: 'Rainbow Charm',
+    rarity: 'common',
+    level: 1,
+    price: 8,
+    description: '',
+    shortDescription: '',
+    flavorText: 'Three of nothing alike: every trait different, every hit doubled.',
+    icon: 'lorc/rainbow-star',
+    specialEffect: 'bridge',
+    effects: {},
+    maxCount: 1,
+    stats: {
+      mult: { label: 'Rainbow multiplier', unit: '×', base: 2, perLevel: 0.25 },
+    },
+    build: v => {
+      const m = Math.round(v.mult * 100) / 100;
+      const bonus = Math.max(0, Math.round((m - 1) * 100) / 100);
+      return {
+        modifiers: { rainbowMultiplierBonus: bonus },
+        description: `Sets where every trait is different (Rainbow Sets) deal ×${m} damage.`,
+        shortDescription: `All-different Sets deal ×${m} damage`,
+      };
+    },
+  },
+
   // ── Clarity Lens (utility): a steady beat of easier boards ────────────────
   {
     id: 'clarity-lens',

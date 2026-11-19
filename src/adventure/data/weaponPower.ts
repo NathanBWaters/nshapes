@@ -156,6 +156,7 @@ export const PER: Readonly<Record<string, number>> = {
   'oracle-eye': 0.081,
   'pinata': 0.822,
   'prismatic-ray': 0.394,
+  'rainbow-charm': 0.65,
   'rally-horn': 0.897,
   'revenge-linker': 0.454,
   'rust': 0.253,

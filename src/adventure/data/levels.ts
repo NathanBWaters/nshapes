@@ -67,15 +67,16 @@ const RAW_LEVELS: LevelInput[] = [
   {
     id: '1-2', biome: 'meadow', name: 'Red Clover', introduces: 'hearts',
     // Gentle 2-trait flow with Blast Powder already firing! Spot 2 all-red Sets for ★★★.
+    // ★★ unlocks Rainbow Charm — the intro hunt weapon that doubles all-different Sets right before 1-3!
     rules: { attributes: A2, boardSize: 9, moves: 8, hearts: 5 },
     foes: [{ name: 'Prickle', icon: 'caro-asercion/hedgehog', hp: 26, taunt: 'Careful, I\'m pointy.' }],
     challenge: { kind: 'colorSets', color: 'red', n: 2 }, coinMultiplier: 1, difficulty: 1,
-    rewards: { star1: { coins: 10 }, star2: { coins: 20, weapons: ['flint-spark'] }, star3: { coins: 35 } },
+    rewards: { star1: { coins: 10 }, star2: { coins: 20, weapons: ['rainbow-charm'] }, star3: { coins: 35 } },
     recommended: ['Orange Tabby'],
   },
   {
     id: '1-3', biome: 'meadow', name: 'All Kinds', introduces: 'all_different',
-    // Practice spotting 3 different shapes + 3 different colors on the friendly 9-card board before Number arrives.
+    // Practice spotting 3 different shapes + 3 different colors on the friendly 9-card board — Rainbow Charm doubles each one!
     rules: { attributes: A2, boardSize: 9, moves: 8, hearts: 5 },
     foes: [{ name: 'Clover Frog', icon: 'lorc/frog', hp: 30, taunt: 'Ribbit! Can you mix all three?' }],
     challenge: { kind: 'allDiffSets', n: 2 }, coinMultiplier: 1, difficulty: 1,
@@ -83,7 +84,7 @@ const RAW_LEVELS: LevelInput[] = [
   },
   {
     id: '1-4', biome: 'meadow', name: 'Boom Practice', introduces: 'charm',
-    // All 3 charm slots are now full (Blast Powder + Flint Spark + Mending Charm)! Enjoy watching them pop.
+    // All 3 charm slots are now full (Blast Powder + Rainbow Charm + Mending Charm)! Enjoy watching them pop.
     rules: { attributes: A2, boardSize: 9, moves: 9, hearts: 5 },
     foes: [{ name: 'Sunny Gecko', icon: 'darkzaitzev/chameleon-glyph', hp: 62, taunt: 'Whoa — watch where you point that powder!' }],
     challenge: { kind: 'explosions', n: 2 }, coinMultiplier: 1.1, difficulty: 1,
@@ -102,12 +103,12 @@ const RAW_LEVELS: LevelInput[] = [
     rewards: { star1: { coins: 15 }, star2: { coins: 25, character: 'Sly Fox' }, star3: { coins: 50 } },
   },
   {
-    id: '1-6', biome: 'meadow', name: 'Rainbow Strike', introduces: 'rainbow',
-    // All-different Sets now hit twice as hard! Ask for 2 Rainbows (not 5) so ★★★ feels awesome.
+    id: '1-6', biome: 'meadow', name: 'Rainbow Hunt', introduces: 'rainbow',
+    // First 3-trait all-different hunt! Equip Rainbow Charm to double every Rainbow Set; ★★★ levels Rainbow Charm up.
     rules: { attributes: A3, boardSize: 12, moves: 10, hearts: 4 },
     foes: [{ name: 'Prism Moth', icon: 'lorc/evil-bat', hp: 180, taunt: 'Every color of the sky!' }],
     challenge: { kind: 'rainbows', n: 2 }, coinMultiplier: 1.2, difficulty: 2,
-    rewards: { star1: { coins: 20 }, star2: { weapons: ['field-stone'] }, star3: { coins: 55 } },
+    rewards: { star1: { coins: 20 }, star2: { weapons: ['field-stone'] }, star3: { coins: 55, weapons: ['rainbow-charm'] } },
   },
   {
     id: '1-7', biome: 'meadow', name: 'Star Power', introduces: 'skill_tree',
@@ -137,8 +138,8 @@ const RAW_LEVELS: LevelInput[] = [
   {
     id: '1-9', biome: 'meadow', name: 'Fuse Meadow', introduces: 'time_bombs',
     // Gentle 20s fuses and 3 defuses for ★★★; ★1 opens the Workshop so players can spend their coin stash!
-    rules: { attributes: A3, boardSize: 12, moves: 10, hearts: 4, hazards: { timeBombs: { every: 9, seconds: 20 } } },
-    foes: [{ name: 'Bumble Bomber', icon: 'lorc/bee', hp: 140, taunt: 'Bzz… tick… bzz… tick…' }],
+    rules: { attributes: A3, boardSize: 12, moves: 10, hearts: 4, hazards: { timeBombs: { every: 7, seconds: 20 } } },
+    foes: [{ name: 'Bumble Bomber', icon: 'lorc/bee', hp: 165, taunt: 'Bzz… tick… bzz… tick…' }],
     challenge: { kind: 'defuseTraps', n: 3 }, coinMultiplier: 1.4, difficulty: 2,
     rewards: {
       star1: { coins: 25, unlockFeature: 'workshop' },
@@ -164,7 +165,7 @@ const RAW_LEVELS: LevelInput[] = [
   {
     id: '2-1', biome: 'woods', name: 'Ticking Clock', introduces: 'timer',
     // Puzzle: the sloth smothers time weapons, so win FAST instead. Chrono Shard (★) starts you with more
-    // clock; Flint Spark (★★) levels up your fire.
+    // clock; Flint Spark (★★) introduces fire ignition right as Whispering Woods begins.
     rules: { attributes: A3, timer: 60, hearts: 4 },
     foes: [{ enemy: 'Lazy Sloth', hp: 713, taunt: 'Take… your… time…' }],
     challenge: { kind: 'timeLeft', n: 12 }, coinMultiplier: 1.5, difficulty: 2,
@@ -181,7 +182,7 @@ const RAW_LEVELS: LevelInput[] = [
     rewards: {
       star1: { coins: 30, weapons: ['life-vessel'] },
       star2: { weapons: ['catalyst-prism'] },
-      star3: { coins: 75 },
+      star3: { coins: 75, weapons: ['flint-spark'] },
     },
   },
   {
@@ -209,7 +210,7 @@ const RAW_LEVELS: LevelInput[] = [
     // Puzzle: the squirrel hoards refills and the board shrinks. Corgi (★★) fetches new power cards
     // and Zoomies re-deals a full board.
     rules: { attributes: A3, timer: 65, hearts: 3, startingHints: 1 },
-    foes: [{ enemy: 'Greedy Squirrel', hp: 1696, taunt: 'Two cards for you. The rest? Mine.' }],
+    foes: [{ enemy: 'Greedy Squirrel', hp: 1280, taunt: 'Two cards for you. The rest? Mine.' }],
     challenge: { kind: 'bonusCards', n: 4 }, coinMultiplier: 1.7, difficulty: 3,
     rewards: { star1: { coins: 35, weapons: ['war-drum'] }, star2: { character: 'Corgi' }, star3: { coins: 80, weapons: ['chain-gang'] } },
     recommended: ['Corgi'],
@@ -379,7 +380,7 @@ const RAW_LEVELS: LevelInput[] = [
     // Puzzle: every multiplier stacks with the surge's ×5. Charge a "next Set ×N" (or wait out a
     // Hot Streak) just before shading switches on, then land one huge Set.
     rules: { attributes: A3, shadingSurge: true, boardSize: 15, timer: 90, hearts: 4, startingHints: 3, startingGraces: 2 },
-    foes: [{ name: 'Snow Hare', icon: 'delapouite/rabbit', hp: 17730, taunt: 'Here comes the wave. Can you surf it?' }],
+    foes: [{ name: 'Snow Hare', icon: 'delapouite/rabbit', hp: 25500, taunt: 'Here comes the wave. Can you surf it?' }],
     challenge: { kind: 'bigHit', n: 40 }, coinMultiplier: 3.2, difficulty: 4,
     rewards: { star1: { coins: 120, weapons: ['understudy'] }, star2: { weapons: ['fortune-token'] }, star3: { coins: 260, weapons: ['encore-mask'] } },
     recommended: ['Pelican'],
@@ -573,7 +574,7 @@ const BRANCHES: LevelInput[] = [
     rules: { attributes: A3, timer: 70, hearts: 3, startingHints: 1, startingGraces: 1 },
     foes: [{ enemy: 'Diving Hawk', hp: 1027, taunt: 'The clock is mine. Catch me.' }],
     challenge: { kind: 'rainbows', n: 4 }, coinMultiplier: 2.2, difficulty: 3,
-    rewards: { star1: { coins: 55 }, star2: { weapons: ['time-drop'] }, star3: { coins: 120, weapons: ['crystal-orb'] } },
+    rewards: { star1: { coins: 55, weapons: ['rainbow-charm'] }, star2: { weapons: ['time-drop'] }, star3: { coins: 120, weapons: ['crystal-orb'] } },
     recommended: ['Emperor Penguin'],
   },
   // World 3

@@ -198,18 +198,18 @@ describe('a practice fight', () => {
   });
 
   it('switches on everything the player has learned, wherever that was taught', () => {
-    const rainbow = MAIN_LEVELS.find(l => MECHANICS[l.introduces].enables === 'rainbow')!;
+    const power = MAIN_LEVELS.find(l => MECHANICS[l.introduces].enables === 'power')!;
     const hints = MAIN_LEVELS.find(l => MECHANICS[l.introduces].enables === 'hints')!;
     const early = clearedThrough(PARENT.id);
     expect(getFeaturesForLevel(DUMMY, early).has('hearts')).toBe(true);
-    expect(getFeaturesForLevel(DUMMY, early).has('rainbow')).toBe(false);
+    expect(getFeaturesForLevel(DUMMY, early).has('power')).toBe(false);
     expect(getFeaturesForLevel(DUMMY, early).has('hints')).toBe(false);
     // Clearing the level that teaches it is enough
-    expect(getFeaturesForLevel(DUMMY, clearedThrough(rainbow.id)).has('rainbow')).toBe(true);
+    expect(getFeaturesForLevel(DUMMY, clearedThrough(power.id)).has('power')).toBe(true);
     // So is having sat through its lesson
     expect(getFeaturesForLevel(DUMMY, { ...early, seenMechanics: [hints.introduces] }).has('hints')).toBe(true);
     // A campaign level still only has what was taught up to it
-    expect(getFeaturesForLevel(PARENT, clearedThrough(rainbow.id)).has('rainbow')).toBe(false);
+    expect(getFeaturesForLevel(PARENT, clearedThrough(power.id)).has('power')).toBe(false);
   });
 
   it('keeps its log bounded however long it runs', () => {

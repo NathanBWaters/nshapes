@@ -102,7 +102,7 @@ export const heatTierFor = (total: number): HeatTier =>
 /** Compact label helper so receipts read cleanly at 320px/375px phone widths. */
 const shortLabel = (label: string): string => {
   const lower = label.toLowerCase();
-  if (lower.includes('rainbow')) return 'Rainbow';
+  if (lower === 'rainbow strike') return 'Rainbow';
   if (lower.includes('perfect parry')) return 'Perfect Parry';
   if (lower.includes('counter parry')) return 'Parry';
   if (lower.includes('stagger')) return 'Stagger';

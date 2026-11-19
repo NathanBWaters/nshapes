@@ -246,7 +246,7 @@ export const resolveDamageSourceMeta = (
     const u = getUpgrade('heavy_hitter');
     return { id: 'upgrade:heavy_hitter', name: u.name, kind: 'passive', icon: u.icon };
   }
-  if (low.includes('rainbow')) return { id: 'bonus:rainbow', name: 'Rainbow Strike', kind: 'bonus', icon: 'lorc/rainbow-star' };
+  if (low === 'rainbow' || low === 'rainbow strike') return { id: 'bonus:rainbow', name: 'Rainbow Strike', kind: 'bonus', icon: 'lorc/rainbow-star' };
   if (low.includes('parry') || low.includes('stagger')) return { id: 'bonus:parry', name: 'Set-Parry Counter', kind: 'bonus', icon: 'lorc/sword-clash' };
   if (low.includes('surge')) return { id: 'bonus:surge', name: 'Shading Surge', kind: 'bonus', icon: 'lorc/power-lightning' };
   if (low.includes('power')) return { id: 'power:scale', name: 'Power Scaling', kind: 'power', icon: 'lorc/power-lightning' };

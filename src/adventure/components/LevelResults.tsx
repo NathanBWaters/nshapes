@@ -166,9 +166,9 @@ const LevelResults: React.FC<Props> = ({
       ? 'Check one trait at a time: Shape, then Color, then Number!'
       : 'Try spending ★ in our Skill Tree at Camp!'
     : stars === 1 && !accuracy
-      ? run.features.has('rainbow')
-        ? 'Rainbow Strikes (every trait different) hit twice as hard!'
-        : 'Equip charms on the preview screen so every Set hits harder!'
+      ? run.weapons.some(w => w.id === 'rainbow-charm')
+        ? 'Hunt all-different Sets so Rainbow Charm doubles your hits!'
+        : 'Equip Rainbow Charm or offensive charms on the preview screen so every Set hits harder!'
       : null;
   const companionText = [companionResultsLine(level, run, stars, result.save.coinsUnlocked), extraTip].filter(Boolean).join(' ');
 

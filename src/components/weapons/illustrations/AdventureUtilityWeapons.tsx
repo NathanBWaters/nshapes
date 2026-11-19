@@ -5,6 +5,53 @@ import { COLORS } from '@/utils/colors';
 import { WeaponRelic } from '../types';
 
 export const ADVENTURE_UTILITY_WEAPON_RELICS: Record<string, WeaponRelic> = {
+  'Rainbow Charm': {
+    tapStyle: 'arcane',
+    art: (trim) => (
+    <Svg width="100%" height="100%" viewBox="0 0 100 100">
+      {/* Soft prismatic halo behind the pendant */}
+      <Circle cx={50} cy={56} r={35} fill="#F5B800" opacity={0.16} />
+      {/* Charm bail ring at top */}
+      <Circle cx={50} cy={17} r={7.5} fill="none" stroke={STROKE} strokeWidth={5.2} />
+      <Circle cx={50} cy={17} r={7.5} fill="none" stroke={trim.metal} strokeWidth={2.6} />
+      {/* Faceted prismatic crystal body (5 rainbow wedges meeting at center) */}
+      <Polygon points="50,24 79,48 50,55" fill="#F0483E" stroke={STROKE} strokeWidth={2.4} strokeLinejoin="round" />
+      <Polygon points="50,24 50,55 21,48" fill="#F5B800" stroke={STROKE} strokeWidth={2.4} strokeLinejoin="round" />
+      <Polygon points="21,48 50,55 34,86" fill="#16AA98" stroke={STROKE} strokeWidth={2.4} strokeLinejoin="round" />
+      <Polygon points="79,48 66,86 50,55" fill="#3B82F6" stroke={STROKE} strokeWidth={2.4} strokeLinejoin="round" />
+      <Polygon points="34,86 50,55 66,86" fill="#9333EA" stroke={STROKE} strokeWidth={2.4} strokeLinejoin="round" />
+      {/* Bold outer ink bezel */}
+      <Polygon
+        points="50,24 79,48 66,86 34,86 21,48"
+        fill="none"
+        stroke={STROKE}
+        strokeWidth={3.4}
+        strokeLinejoin="round"
+      />
+      {/* Metallic collar clasp */}
+      <Rect x={42} y={21} width={16} height={7.5} rx={3} fill={trim.metal} stroke={STROKE} strokeWidth={2.6} />
+      <Line x1={45} y1={24} x2={55} y2={24} stroke={trim.metalHighlight} strokeWidth={2} strokeLinecap="round" />
+      {/* Center bright prismatic star core */}
+      <Polygon
+        points="50,43 53,51 61,54 53,57 50,65 47,57 39,54 47,51"
+        fill="#FFFFFF"
+        stroke={STROKE}
+        strokeWidth={2.2}
+        strokeLinejoin="round"
+      />
+      {/* Corner starlight sparkles */}
+      <Polygon
+        points="82,21 84,26 89,28 84,30 82,35 80,30 75,28 80,26"
+        fill={COLORS.actionYellow}
+        stroke={STROKE}
+        strokeWidth={2}
+        strokeLinejoin="round"
+      />
+      <Circle cx={18} cy={29} r={3} fill="#38BDF8" stroke={STROKE} strokeWidth={1.8} />
+    </Svg>
+    ),
+  },
+
   'Clarity Lens': {
     tapStyle: 'arcane',
     art: (trim) => (

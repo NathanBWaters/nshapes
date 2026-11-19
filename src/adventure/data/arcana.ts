@@ -9,7 +9,7 @@ import { BASE_RULES } from './rules';
 
 const percentMore = (scale: number) => Math.round((scale - 1) * 100);
 
-const monochromePact = { singleTraitBonusDamage: 5, rainbowMultiplier: 1 } satisfies ArcanaRules;
+const monochromePact = { singleTraitBonusDamage: 5, rainbowMultiplier: 0.5 } satisfies ArcanaRules;
 const prismaticFever = { rainbowMultiplier: 3, rainbowTimeBonus: 4, nonRainbowDamageDelta: -1 } satisfies ArcanaRules;
 const controlledBurn = { mistakeBurn: { cooldownMs: 12000, cards: 2 }, startingGraces: 0 } satisfies ArcanaRules;
 const glassPrism = { specialCardChanceScale: 4, maxHeartsLock: 2 } satisfies ArcanaRules;
@@ -36,7 +36,7 @@ export const ARCANA: ArcanaDef[] = [
     icon: 'lorc/stone-block',
     tagline: 'Simple Sets hit like boulders; Rainbows lose their shine.',
     upside: `Sets with only 1 different trait deal +${monochromePact.singleTraitBonusDamage} bonus damage.`,
-    tradeoff: `Rainbow Strikes deal ${monochromePact.rainbowMultiplier}× damage instead of ${BASE_RULES.rainbowMultiplier}×.`,
+    tradeoff: `All-different Sets deal ${monochromePact.rainbowMultiplier}× damage instead of ${BASE_RULES.rainbowMultiplier}×.`,
   },
   {
     id: 'prismatic_fever',
@@ -44,8 +44,8 @@ export const ARCANA: ArcanaDef[] = [
     numeral: 'II',
     name: 'Prismatic Fever',
     icon: 'lorc/rainbow-star',
-    tagline: 'All-in on Rainbow Strikes.',
-    upside: `Rainbow Strikes deal ${prismaticFever.rainbowMultiplier}× damage and restore +${prismaticFever.rainbowTimeBonus}s on timed fights.`,
+    tagline: 'All-in on Rainbow Sets.',
+    upside: `All-different Sets deal ${prismaticFever.rainbowMultiplier}× damage and restore +${prismaticFever.rainbowTimeBonus}s on timed fights.`,
     tradeoff: `Non-Rainbow Sets deal −${-prismaticFever.nonRainbowDamageDelta} base damage (min 1).`,
   },
   {

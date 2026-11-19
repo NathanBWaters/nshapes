@@ -264,7 +264,7 @@ const HudInspector: React.FC<Props> = ({ target, run, shownHp, challenge, knownE
               ))}
             </View>
 
-            <Text style={st.note}>Rainbow Sets (all traits different) multiply damage ×2 and grow your Power faster!</Text>
+            <Text style={st.note}>Equip weapons like Rainbow Charm, Catalyst Prism, or Arcana to multiply Sets and grow Power faster!</Text>
           </>
         );
       }

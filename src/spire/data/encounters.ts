@@ -79,13 +79,13 @@ export const STARTER_KITS: Record<CharacterName, FighterStarterKit> = {
   },
   'Emperor Penguin': {
     fighter: 'Emperor Penguin',
-    starterWeapon: 'catalyst-prism',
-    bonusWeapon: 'clarity-lens',
+    starterWeapon: 'rainbow-charm',
+    bonusWeapon: 'catalyst-prism',
     maxHearts: 5,
     startingCoins: 70,
     startingHints: 2,
     startingGraces: 1,
-    tagline: 'Rainbow precision, Deep Freeze locks, and rapid Catalyst surges.',
+    tagline: 'Starts armed for Rainbow Nova — ×2 Rainbow hits, Deep Freeze locks, and rapid Catalysts.',
   },
   Pelican: {
     fighter: 'Pelican',

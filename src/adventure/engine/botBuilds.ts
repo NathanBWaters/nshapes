@@ -152,7 +152,7 @@ export const chooseCharms = (save: AdventureSave, rng: Rng, recipeChance = RECIP
 };
 
 /** Weapons that hit hard on their own: a solid build leans on these. */
-export const DAMAGE_WEAPONS = ['blast-powder', 'flint-spark', 'prismatic-ray', 'chaos-shard', 'war-drum'];
+export const DAMAGE_WEAPONS = ['blast-powder', 'rainbow-charm', 'flint-spark', 'prismatic-ray', 'chaos-shard', 'war-drum'];
 
 /**
  * A solid build, not a counter: both halves of a random recipe, then the damage

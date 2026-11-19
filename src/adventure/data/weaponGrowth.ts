@@ -104,6 +104,9 @@ export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
 
   // ── Damage: these already hit hard, so they grow sideways ─────────────────
   // Blast Powder: nothing. It is already the strongest thing in the Armory.
+  'rainbow-charm': [
+    { watch: { on: 'set', test: 'rainbow' }, every: 2, max: 6, stat: { mult: 0.25 }, look: 'Rainbow Sets', gives: '+0.25× Rainbow multiplier' },
+  ],
   'flint-spark': [
     { watch: { on: 'cardBurned' }, every: 4, max: 5, proc: { on: weaponOn('fire'), pct: 6, effect: { do: 'ignite', count: 1 } }, look: 'cards burned up', gives: '+6% chance that a new fire catches one more card' },
   ],
