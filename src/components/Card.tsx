@@ -133,7 +133,8 @@ const Card: React.FC<CardProps> = ({
       cardStyles.push(styles.selected);
     }
 
-    if (isHint) {
+    // A pointed-out card that has been picked has been found: its warm fill gives way to the selection border
+    if (isHint && !selected) {
       cardStyles.push(styles.hint);
     }
 
@@ -291,7 +292,8 @@ const Card: React.FC<CardProps> = ({
       ]}
       onPress={() => !isClickDisabled && onClick(card)}
       disabled={isClickDisabled}
-      activeOpacity={isUnselectable ? 1 : 0.9}
+      // No press dim: the lift in CardMotion answers the tap (a 250 ms fade-back on release only blurred it)
+      activeOpacity={1}
       hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
       // @ts-ignore - onHoverIn/Out are web-only props
       onHoverIn={handleHoverIn}

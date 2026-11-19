@@ -146,7 +146,7 @@ describe('Match Rewards Display', () => {
     fireEvent.press(getByTestId('card-card-2'));
     fireEvent.press(getByTestId('card-card-3'));
 
-    // Advance past the 200ms selection delay
+    // Advance past the selection delay (CARD_MOTION.confirmMs)
     act(() => {
       jest.advanceTimersByTime(250);
     });
@@ -190,7 +190,7 @@ describe('Match Rewards Display', () => {
     fireEvent.press(getByTestId('card-card-2'));
     fireEvent.press(getByTestId('card-card-3'));
 
-    // Advance past the 200ms selection delay
+    // Advance past the selection delay (CARD_MOTION.confirmMs)
     act(() => {
       jest.advanceTimersByTime(250);
     });
@@ -221,7 +221,7 @@ describe('Match Rewards Display', () => {
     fireEvent.press(getByTestId('card-card-2'));
     fireEvent.press(getByTestId('card-card-3'));
 
-    // Advance past the 200ms selection delay
+    // Advance past the selection delay (CARD_MOTION.confirmMs)
     act(() => {
       jest.advanceTimersByTime(250);
     });
@@ -229,9 +229,9 @@ describe('Match Rewards Display', () => {
     // Verify rewards are showing
     expect(getByTestId('reward-reveal-card-1')).toBeTruthy();
 
-    // Advance to just before 1.5s clear time
+    // Advance to just before 1.5s clear time (the Set is checked CARD_MOTION.confirmMs after the third tap)
     act(() => {
-      jest.advanceTimersByTime(1400);
+      jest.advanceTimersByTime(1200);
     });
 
     // Rewards should still be visible
@@ -239,7 +239,7 @@ describe('Match Rewards Display', () => {
 
     // Advance past 1.5s
     act(() => {
-      jest.advanceTimersByTime(200);
+      jest.advanceTimersByTime(300);
     });
 
     // Rewards should be cleared
@@ -266,7 +266,7 @@ describe('Match Rewards Display', () => {
     fireEvent.press(getByTestId('card-card-2'));
     fireEvent.press(getByTestId('card-card-3'));
 
-    // Advance past the 200ms selection delay
+    // Advance past the selection delay (CARD_MOTION.confirmMs)
     act(() => {
       jest.advanceTimersByTime(250);
     });
@@ -348,7 +348,7 @@ describe('Grace Match Rewards Display', () => {
     fireEvent.press(getByTestId('card-card-2'));
     fireEvent.press(getByTestId('card-card-3'));
 
-    // Advance past the 200ms selection delay
+    // Advance past the selection delay (CARD_MOTION.confirmMs)
     act(() => {
       jest.advanceTimersByTime(250);
     });

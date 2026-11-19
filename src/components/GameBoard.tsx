@@ -9,7 +9,7 @@ import Animated, {
 import { Card as CardType, PlayerStats, CardReward, AttributeName, Weapon, Shape, Color, BoardConnection } from '@/types';
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import Card from './Card';
-import CardMotion, { CardLeaving } from './CardMotion';
+import CardMotion, { CARD_MOTION, CardLeaving } from './CardMotion';
 import RewardReveal from './RewardReveal';
 import { COLORS } from '@/utils/colors';
 import { recordComponentRender } from '@/utils/perfWatchdog';
@@ -196,23 +196,11 @@ const GameBoard: React.FC<GameBoardProps> = ({
   // Screen shake for explosions and failures
   const { shakeStyle, triggerShake, shake } = useScreenShake();
 
-  const successFlashOpacity = useSharedValue(0);
   const failureFlashOpacity = useSharedValue(0);
-
-  const successFlashStyle = useAnimatedStyle(() => ({
-    opacity: successFlashOpacity.value,
-  }));
 
   const failureFlashStyle = useAnimatedStyle(() => ({
     opacity: failureFlashOpacity.value,
   }));
-
-  const triggerSuccessFlash = useCallback(() => {
-    successFlashOpacity.value = withSequence(
-      withTiming(0.15, { duration: 50 }),
-      withTiming(0, { duration: DURATION.fast })
-    );
-  }, [successFlashOpacity]);
 
   // Trigger failure flash and shake
   const triggerFailureFlash = useCallback(() => {
@@ -438,7 +426,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
         if (validation.isValid || graceUsed) {
           onMatchStart?.();
-          triggerSuccessFlash();
+          // No board flash: the Set's cards themselves are the answer (thrown in Adventure, revealed elsewhere)
           triggerHaptic(graceUsed ? 'warning' : 'success');
           playSound(graceUsed ? 'graceUsed' : 'matchValid');
 
@@ -499,7 +487,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
             setSelectedCards(prev => prev.filter(c => !newSelectedCards.some(mc => mc.id === c.id)));
           }, 500);
         }
-      }, 200);
+      }, CARD_MOTION.confirmMs);
     }
   };
 
@@ -556,10 +544,6 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
   return (
     <Animated.View testID="game-board" nativeID="gameboard-container" style={[styles.container, shakeStyle]}>
-      <Animated.View
-        style={[styles.flashOverlay, styles.successFlash, successFlashStyle]}
-        pointerEvents="none"
-      />
       <Animated.View
         style={[styles.flashOverlay, styles.failureFlash, failureFlashStyle]}
         pointerEvents="none"
@@ -733,9 +717,6 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 100,
-  },
-  successFlash: {
-    backgroundColor: '#FFFFFF',
   },
   failureFlash: {
     backgroundColor: '#EF4444',

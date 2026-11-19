@@ -11,6 +11,7 @@ import { StyleSheet } from 'react-native';
 import Animated, { cancelAnimation, Easing, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { useAppActive } from '@/hooks/useAppActive';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { EASE, MS, SPRING } from '@/utils/motion';
 
 export const CARD_MOTION = {
   /** A freshly dealt card grows in over this long */
@@ -19,6 +20,15 @@ export const CARD_MOTION = {
   dealStaggerMs: 45,
   /** How far a picked card lifts */
   pickedScale: 1.045,
+  /** A picked card pops up to this first (on the tap's own frame), then settles to `pickedScale` */
+  pickedPopScale: 1.1,
+  /** How long the pick pop takes to reach its peak: 5 frames */
+  pickedPopMs: 80,
+  /**
+   * The third card of a Set is checked when its pop peaks: the player sees all
+   * three cards up together for a beat, then the Set goes. Was 200 ms of nothing.
+   */
+  confirmMs: 80,
   /** A scored card stays in its slot this long, until the stage's flying copy covers it */
   leaveAfterMs: 110,
   /** A pointed-out card hops, rests this long, and hops again */
@@ -55,8 +65,8 @@ const CardMotion: React.FC<Props> = ({ selected, pointedOut, column, children })
     if (reduced) return;
     if (!mounted.current) return;
     lift.value = selected
-      ? withSequence(withTiming(1.1, { duration: 70, easing: Easing.out(Easing.quad) }), withSpring(CARD_MOTION.pickedScale, { damping: 11, stiffness: 300, mass: 0.6 }))
-      : withTiming(1, { duration: 110, easing: Easing.out(Easing.quad) });
+      ? withSequence(withTiming(CARD_MOTION.pickedPopScale, { duration: CARD_MOTION.pickedPopMs, easing: EASE.ui }), withSpring(CARD_MOTION.pickedScale, SPRING.lively))
+      : withTiming(1, { duration: MS.feedback, easing: EASE.ui });
   }, [selected, reduced, lift]);
 
   // Pointed out: it hops, rests, and hops again for as long as it is, so the eye keeps finding it.
