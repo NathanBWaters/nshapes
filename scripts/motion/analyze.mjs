@@ -267,7 +267,7 @@ function hintsFor(movers, timeline, capture) {
     for (const [name, q] of [['position', m.pos], ['scale', m.scale]]) {
       if (!q || q.kind !== 'transition') continue;
       if (q.curve === 'linear') add('LINEAR', q.from, m.label, `${name} changes at constant speed for ${q.frames} frames. Use a spring or an ease; linear is for rotation, progress bars and loop phase only.`);
-      else if ((q.curve === 'ease-out' || q.curve === 'ease-in-out') && q.endRatio > RULES.hardStopRatio && q.frames >= 5)
+      else if ((q.curve === 'ease-out' || q.curve === 'ease-in-out') && q.endRatio > RULES.hardStopRatio && q.frames >= 5 && q.to < capture.frames - 1)
         add('HARD-STOP', q.to, m.label, `${name} is still at ${Math.round(q.endRatio * 100)}% of its top speed on its last frame, then stops dead. Let it settle (a spring, or a longer ease-out).`);
       if (q.curve === 'instant' && (name === 'position' ? Math.abs(q.end - q.start) >= 24 : Math.abs(q.end - q.start) >= 0.2) && changedAt(q.to, m))
         add('JUMP', q.from, m.label, `${name} jumps in ${q.frames} frame(s). A teleport, unless it is meant as a cut.`);

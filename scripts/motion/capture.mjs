@@ -350,7 +350,11 @@ async function captureOnce(shot, opts, outDir) {
         for (const row of got.rows) {
           const t = tracks.get(row[0]);
           if (!t) continue;
-          t.s.push([index, row[1] - bounds.x, row[2] - bounds.y, row[3], row[4], row[5], row[6]]);
+          const x = row[1] - bounds.x;
+          const y = row[2] - bounds.y;
+          // Outside the clip: not part of this shot
+          if (x + row[3] / 2 < 0 || y + row[4] / 2 < 0 || x - row[3] / 2 > bounds.width || y - row[4] / 2 > bounds.height) continue;
+          t.s.push([index, x, y, row[3], row[4], row[5], row[6]]);
           t.last = index;
         }
       }
@@ -412,6 +416,7 @@ async function captureOnce(shot, opts, outDir) {
   // An element that was there and is not on the last frames has left
   for (const t of tracks.values()) if (t.last < count - 1) t.gone = t.last + 1;
   const moved = [...tracks.values()].filter(t => {
+    if (!t.s.length) return false;
     if (t.first > 0 || t.gone != null) return true;
     const a = t.s[0];
     return t.s.some(r => Math.abs(r[1] - a[1]) > 0.6 || Math.abs(r[2] - a[2]) > 0.6 || Math.abs(r[3] - a[3]) > 0.6 || Math.abs(r[4] - a[4]) > 0.6 || Math.abs(r[5] - a[5]) > 0.01 || Math.abs(r[6] - a[6]) > 0.3);
