@@ -96,7 +96,7 @@ Read every spring by one number, the **damping ratio**: `damping / (2 × √(sti
 - Supporting moves start **100–200 ms after** the hero and travel **50–70% as far**.
 - Ambient life (breathing, drift) stays under 5% of the hero's travel and under ±2% scale, on a slow sine, with a different period for each thing so they never line up. Ambient motion never fills an empty beat.
 - With three or more things on screen, at most a third of them move at once.
-- **Causes and effects share a frame.** The flinch starts on the frame the hit lands, not shortly after.
+- **Causes and effects share a frame.** The flinch starts on the frame the hit lands, not shortly after. In Reanimated that means: mount (or trigger) everything that belongs to the moment in the same React commit, from the same state update, and start their animations there. A JS `setTimeout` for one part and a `withDelay` for another will drift a frame or two apart, and the strip will show it. If the moment waits for something (a flight, the band's next note), let that one wait release all of it.
 - **A breath before the payoff.** Hold 0.3–0.75 s between the decisive act and what it pays (a knockout, a reveal), then 100–200 ms of stillness before anything new starts.
 - **One direction means "next"** across the game. Up means done or gained; growing means arriving; shrinking means dismissed. Do not ping-pong directions on consecutive transitions.
 

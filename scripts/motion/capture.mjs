@@ -66,6 +66,15 @@ function seedRandom(seed) {
 function installProbes() {
   // This script is registered before the virtual clock, so these are still the browser's own
   const nativeRaf = window.requestAnimationFrame.bind(window);
+  // The audio clock follows the virtual clock too. The fight's pictures wait for the band's next
+  // note; on the real audio clock that note would fall on a different frame in every capture.
+  // (The browser is muted, so what this does to the sound itself does not matter.)
+  try {
+    const audio = window.BaseAudioContext && window.BaseAudioContext.prototype;
+    if (audio) Object.defineProperty(audio, 'currentTime', { configurable: true, get: () => performance.now() / 1000 });
+  } catch {
+    /* no Web Audio here */
+  }
   const state = { ids: new WeakMap(), next: 1, fresh: [], anims: new WeakMap() };
   const describe = el => {
     const own = el.getAttribute && el.getAttribute('data-testid');
@@ -560,10 +569,12 @@ async function main() {
     first.capture.determinism =
       off === 0 && strays.size === 0
         ? `repeatable: a second capture matched (largest difference ${worst} px${where ? ` on ${where}` : ''}; measured positions within ${Math.round(drift * 10) / 10} px).`
-        : `NOT fully repeatable: a second capture differs on ${off} of ${n} frames (worst ${worst} px on ${where}). ` +
-          (strays.size
-            ? `${strays.size} element group(s) moved differently: ${who.join('; ')}. If these are only idle creatures or particles, the effect itself is repeatable: compare it by its numbers. If the effect's own parts are listed, something in it reads a real clock or unseeded randomness.`
-            : 'Measured positions matched, so the difference is in drawing only (an image or font arriving late, or rastering).');
+        : off === 0
+          ? `repeatable to the eye: a second capture gave the same pictures (largest difference ${worst} px${where ? ` on ${where}` : ''}). ${strays.size} element group(s) sat a few pixels apart: ${who.join('; ')}.`
+          : `NOT fully repeatable: a second capture differs on ${off} of ${n} frames (worst ${worst} px on ${where}). ` +
+            (strays.size
+              ? `${strays.size} element group(s) moved differently: ${who.join('; ')}. If these are only idle creatures or particles, the effect itself is repeatable: compare it by its numbers. If the effect's own parts are listed, something in it reads a real clock or unseeded randomness.`
+              : 'Measured positions matched, so the difference is in drawing only (an image or font arriving late, or rastering).');
     writeJson(path.join(outDir, 'capture.json'), first.capture);
     fs.rmSync(outDir + '.again', { recursive: true, force: true });
   }

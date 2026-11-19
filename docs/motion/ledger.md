@@ -11,7 +11,7 @@ This file is edited by whoever runs the loop: keep rows short; details, frame st
 
 | Surface | What the player sees | Seen | Pri | Top problems | Shot | Status | Scores before → after | Entries |
 |---|---|---|---|---|---|---|---|---|
-| set-throw-lands | Set's cards fly at the foe; burst, number, rings | constant | P1 | sound leads picture 100-230 ms; card lands 60 ms after the burst; number pops at full opacity, linear drift | fx:hit (no throw in studio) | todo | — | F:1, F:2, F:3, F:4, F:5, F:6, F:7, F:15 |
+| set-throw-lands | Set's cards fly at the foe; burst, number, rings | constant | P1 | sound leads picture 100-230 ms; card lands 60 ms after the burst; number pops at full opacity, linear drift | fight-set, fx:hit, fx:rainbow, fx-cascade, fx-hit-effects-off | done v0.1.141 | 6/6/5/4/5/6/2 → 7/8/8/8/8/8/8 | F:1, F:2, F:3, F:4, F:5, F:6, F:7, F:15 |
 | set-tap-confirm | Cards lift on tap; board flashes white on a Set | constant | P1 | 200 ms dead time after third tap; white flash fights the throw start; press dim 250 ms release | fight-pick, board-set | done v0.1.140 | 6/6/6/5/5/5/7 → 9/8/7/8/8/8/8 | F:47, F:48, F:51, F:56, F:57 |
 | card-leave-and-deal | Scored slot empties, new cards grow in | constant | P1 | empty slot dead time ~300-750 ms; stagger by column only; deal hidden under ghosts | — | todo | — | F:46, F:50 |
 | wrong-pick | Board flashes red and shakes; fighter winces, foe gloats | often | P1 | no feedback on the three wrong cards; 21 ms linear shake legs; shake ignores Effects off | — | todo | — | F:52, F:53, S:screen-shake-preset, S:fighter-react-pain, S:enemy-react-taunt |

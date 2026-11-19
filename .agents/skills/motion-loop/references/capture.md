@@ -31,7 +31,7 @@ Options of `motion:capture`:
 |--------|--------------|
 | `--label <name>` | Folder name of this capture: `before`, `r1`, `r2`, `reduced`. Default `run`. |
 | `--twice` | Capture a second time and compare. Says `repeatable` or `NOT repeatable` in the report. Use it on the baseline. |
-| `--reduced` | Capture with `prefers-reduced-motion: reduce`. (The in-game Effects switch is a separate thing: a shot can flip it.) |
+| `--reduced` | Capture with `prefers-reduced-motion: reduce`. (The in-game Effects switch is a separate thing: a shot can flip it, e.g. `fx-hit-effects-off`, `foe-hit-quiet`.) Beware what it shows: with this setting Reanimated jumps every animation straight to its last frame, so anything that ends invisible (a number that fades out, a label that leaves) is never seen at all. A reduced capture with one changed frame is usually that bug, not a pass. Give what must be read its own short fade with `reduceMotion: ReduceMotion.Never`, or a plain timed hold. |
 | `--frames N` | Exactly N frames. Default: until the picture has been still for 18 frames, or `--max` (240). |
 | `--step 8` | Half frames, for a very fast move. `--step 32` to cover a long sequence cheaply. |
 | `--dpr 2` | Sharper frames for looking closely at small things. Four times the pixels. |
@@ -65,7 +65,7 @@ Images cost context. Read `report.md`, then one contact sheet and one strip. Mak
 
 ## How it stays exact
 
-The page never sees a real clock. Before the app boots, `Date`, timers, `performance.now` and `requestAnimationFrame` are replaced by a virtual clock that only moves when the capture moves it: 16 ms at a time while a shot waits for a screen, then one step per frame. Random numbers are seeded. CSS animations are held and moved by hand. So frame 12 is the same picture on a fast or a slow machine, and a before/after pair shows the change you made and nothing else.
+The page never sees a real clock. Before the app boots, `Date`, timers, `performance.now` and `requestAnimationFrame` are replaced by a virtual clock that only moves when the capture moves it: 16 ms at a time while a shot waits for a screen, then one step per frame. The audio clock follows it (the fight's pictures wait for the band's next note, so the note must fall on the same frame every time). Random numbers are seeded, one stream per place in the code that asks. CSS animations are held and moved by hand. So frame 12 is the same picture on a fast or a slow machine, and a before/after pair shows the change you made and nothing else.
 
 What this means for you:
 

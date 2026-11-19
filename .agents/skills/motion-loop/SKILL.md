@@ -42,7 +42,7 @@ One **surface** at a time: one moment the player sees (a Set landing, a sheet op
 | 7 | **Other paths** | `--reduced` capture (movement gone, meaning kept). Neighbours that share the code still look right. `npm run verify:guardrails && npm run test:fast`. | |
 | 8 | **Log** | `docs/motion/reviews/<surface>.md`: rounds, scores, notes, final numbers. Update the surface's row in `docs/motion/ledger.md`. Then commit and push by the repo's rules. | |
 
-Change one thing per round when you can. A round that changes five numbers teaches you nothing about any of them.
+Change one thing per round when you can. A round that changes five numbers teaches you nothing about any of them. A round somebody else asks for (a reviewer's note, a seam with a neighbouring surface) does not count against the four.
 
 ## Quick reference
 

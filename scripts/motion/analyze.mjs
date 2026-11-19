@@ -143,7 +143,8 @@ function analyzeTrack(track, step) {
         bow = Math.max(bow, Math.abs(px * dy - py * dx) / chord);
       }
       const d = describeSeries(along, frames.slice(a, b + 1), { eps: 0.3, minChange: RULES.minTravel });
-      if (d) pos = { ...d, travel: round(chord), path: round(pathLen), dx: round(dx), dy: round(dy), bow: round(bow), arc: bow > chord * 0.08 };
+      // A bow of a few pixels is already an arc to the eye (the house rule asks for 10–20 px)
+      if (d) pos = { ...d, travel: round(chord), path: round(pathLen), dx: round(dx), dy: round(dy), bow: round(bow), arc: bow >= Math.max(5, chord * 0.02) };
     } else {
       // Moves a lot but ends near where it began: a shake or a hop
       const dist = live.map((_, i) => Math.hypot(xs[i] - xs[a], ys[i] - ys[a]));
