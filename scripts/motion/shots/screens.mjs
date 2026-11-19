@@ -139,12 +139,37 @@ export default {
   },
   'story-open': {
     id: 'story-open',
-    about: 'A new player opens Adventure: the first beat of the story',
+    about: 'A new player opens Adventure: wild critters swoop in, cage your friends, and scatter Golden Keys',
     path: '/dev/adventure?save=fresh',
     ready: async () => {},
     trigger: async () => {},
     preroll: 1,
     settleMs: 0,
-    frames: 200,
+    frames: 110,
+  },
+  'map-key-open': {
+    id: 'map-key-open',
+    about: 'Tapping a gleaming Golden Rescue Key on the Adventure Map road between 1-5 and 1-6 opens the Friend Rescue picker',
+    path: '/dev/adventure?save=before:1-6&keys=ready&intro=false',
+    ready: (page, h) => h.until('map-key-key-1'),
+    prepare: async (page, h) => {
+      await h.reveal('map-key-key-1');
+      await h.advance(500);
+    },
+    trigger: (page, h) => h.tap('map-key-key-1'),
+    frames: 45,
+  },
+  'friend-rescue': {
+    id: 'friend-rescue',
+    about: 'Freeing a chosen caged friend (Corgi): Golden Key glides into the padlock, cranks 90°, forged bars burst apart, friend leaps free',
+    path: '/dev/adventure?save=before:1-6&keys=ready&rescue=key-1&intro=false',
+    ready: (page, h) => h.until('rescue-confirm-btn'),
+    prepare: async (page, h) => {
+      await h.advance(450);
+      await h.tap('rescue-option-Corgi');
+      await h.advance(200);
+    },
+    trigger: (page, h) => h.tap('rescue-confirm-btn'),
+    frames: 100,
   },
 };

@@ -100,7 +100,7 @@ const RAW_LEVELS: LevelInput[] = [
     rules: { attributes: A3, boardSize: 12, moves: 9, hearts: 5 },
     foes: [{ name: 'Nutkin', icon: 'delapouite/squirrel', hp: 103, taunt: 'One, two, three… mine!' }],
     challenge: { kind: 'sameColorSets', n: 2 }, coinMultiplier: 1.1, difficulty: 1,
-    rewards: { star1: { coins: 15 }, star2: { coins: 25, character: 'Sly Fox' }, star3: { coins: 50 } },
+    rewards: { star1: { coins: 15 }, star2: { coins: 25 }, star3: { coins: 50 } },
   },
   {
     id: '1-6', biome: 'meadow', name: 'Rainbow Hunt', introduces: 'rainbow',
@@ -212,7 +212,7 @@ const RAW_LEVELS: LevelInput[] = [
     rules: { attributes: A3, timer: 65, hearts: 3, startingHints: 1 },
     foes: [{ enemy: 'Greedy Squirrel', hp: 1280, taunt: 'Two cards for you. The rest? Mine.' }],
     challenge: { kind: 'bonusCards', n: 4 }, coinMultiplier: 1.7, difficulty: 3,
-    rewards: { star1: { coins: 35, weapons: ['war-drum'] }, star2: { character: 'Corgi' }, star3: { coins: 80, weapons: ['chain-gang'] } },
+    rewards: { star1: { coins: 35, weapons: ['war-drum'] }, star2: {}, star3: { coins: 80, weapons: ['chain-gang'] } },
     recommended: ['Corgi'],
   },
   {
@@ -242,18 +242,18 @@ const RAW_LEVELS: LevelInput[] = [
     challenge: { kind: 'graceSaves', n: 1 }, coinMultiplier: 1.8, difficulty: 3,
     rewards: {
       star1: { coins: 45, weapons: ['second-chance'] },
-      star2: { character: 'Badger' },
+      star2: {},
       star3: { coins: 100, evolution: 'judgement-beam' },
     },
     recommended: ['Badger'],
   },
   {
     id: '2-9', biome: 'woods', name: 'Prism Rush', introduces: 'purity_chain',
-    // Puzzle: climb 1-diff → 2-diff on purpose. Emperor Penguin (★★) pays you to slow down and pick.
+    // Puzzle: climb 1-diff → 2-diff on purpose. Emperor Penguin pays you to slow down and pick.
     rules: { attributes: A3, timer: 70, hearts: 3, startingHints: 1, startingGraces: 1 },
     foes: [{ name: 'Magpie', icon: 'lorc/raven', hp: 1599, taunt: 'Shiny! Shiny! MINE!' }],
     challenge: { kind: 'purityChain', n: 2 }, coinMultiplier: 1.8, difficulty: 3,
-    rewards: { star1: { coins: 45, weapons: ['greedy-chest'] }, star2: { character: 'Emperor Penguin' }, star3: { coins: 100, weapons: ['prismatic-ray'] } },
+    rewards: { star1: { coins: 45, weapons: ['greedy-chest'] }, star2: {}, star3: { coins: 100, weapons: ['prismatic-ray'] } },
     recommended: ['Emperor Penguin'],
   },
   {
@@ -317,7 +317,7 @@ const RAW_LEVELS: LevelInput[] = [
     challenge: { kind: 'levelUps', n: 2 }, coinMultiplier: 2.5, difficulty: 3,
     rewards: {
       star1: { coins: 80, weapons: ['scholars-tome'] },
-      star2: { character: 'Pelican' },
+      star2: {},
       star3: { coins: 180, arcana: 'scholars_gambit' },
     },
     recommended: ['Pelican'],

@@ -92,6 +92,7 @@ This file is edited by whoever runs the loop: keep rows short; details, frame st
 | map-return | Map appears, scrolls to the frontier, progress shown | often | P2 | no enter motion; region bar and star count do not fill after a win; scroll on a 120 ms timer | — | todo | — | A:map-mount, A:map-autoscroll, A:map-progress-static |
 | secret-path-reveal | Trail draws out, node pops, ring, "SECRET PATH!" | sometimes | P2 | tag never hides in reduced motion; chime on a parallel setTimeout; fade-only exit | — | todo | — | A:map-trail-dash, A:map-arrival-pop, A:map-arrival-ring, A:map-secret-tag |
 | map-ambient | Frontier node and fighter bob; foes idle | constant | P3 | node and fighter bob in lockstep; lightweight foes frozen | — | todo | — | A:ui-bob, A:map-frontier-bob, A:map-fighter-bob, A:map-avatars |
+| friend-rescue | Golden Rescue Keys sit on the map road; walking onto or tapping one opens the pick-any-friend modal, turns the key, shatters iron cage bars, and springs the friend free | sometimes | P1 | fixed r1→r4: dynamic `GOLDEN KEY`→`FRIEND FREED` eyebrow, `UNLOCKING CAGE…` slot removing empty black void, restrained leap avoiding top-pill clip, `keyY=22` zero text overlap, `KEY_EXTRA_ROW=98` balanced road air, clean `--reduced` | friend-rescue, map-key-open | done v0.1.150 | 8/8/8/7/7/9/9 → 9/9/9/9/9/10/9 | A:map-key-node, A:friend-rescue-modal |
 
 ## Level preview and lessons
 
@@ -118,7 +119,7 @@ This file is edited by whoever runs the loop: keep rows short; details, frame st
 
 | Surface | What the player sees | Seen | Pri | Top problems | Shot | Status | Scores before → after | Entries |
 |---|---|---|---|---|---|---|---|---|
-| story-starfall | Star streaks onto the peak, flash, shards, words rise | once | P2 | words absent for 950 ms; chime on a parallel 870 ms timer; shards share one curve, gravity on ease-out | — | todo | — | A:story-starfall-fall, A:story-starfall-flash, A:story-starfall-shards, A:story-words-rise |
+| story-abduction | Wild critters swoop in, slam forged iron cages onto your 3 friends in a tight ripple, and scatter Golden Keys across the valley; Beat 2 shows map keys, Beat 3 shows hero + Set | once | P2 | replaced old Starfall void: friends on stage from f0, per-friend mood flip synced to cage slams (`f28/f30/f32`, `foeDud` f31), keys settle on `SPRING.snappy` (`keyFound` f40.5), words enter cleanly after slams, zero flash, clean `--reduced` | story-open | done v0.1.150 | 6/6/5/6/5/5/6 → 9/9/9/9/9/10/9 | A:story-abduction, A:story-keys-road, A:story-words-rise |
 | main-menu | Menu buttons, mascot, Discord button | often | P2 | big menu buttons give no press feedback; mascot swaps mid-spin; no mascot entrance | — | todo | — | S:menu-button-press, S:discord-button-press, S:mascot-swap |
 | story-beats | Next beat: critters rise, hero rises, dots | once | P3 | hard cut between beats; dot jumps; rise and avatar entrance doubled | — | todo | — | A:story-beat-swap, A:story-dots, A:story-rise, A:story-avatars |
 

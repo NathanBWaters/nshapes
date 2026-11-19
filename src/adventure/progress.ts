@@ -20,6 +20,7 @@ import { LEVELS, MAIN_LEVELS, SIDE_PATHS, branchStars, isPathHidden, mainIndexOf
 import { BIOMES, getBiome } from './data/biomes';
 import { MECHANICS } from './data/mechanics';
 import { FIGHTERS, STARTING_FIGHTERS } from './data/fighters';
+import { MAP_KEYS, getMapKey, isMapKeyClaimed, isMapKeyReached } from './data/mapKeys';
 import { UPGRADES, getUpgrade, LEGACY_WEAPON_LEVEL_COSTS } from './data/upgrades';
 import { ARCANA } from './data/arcana';
 import { getArmoryWeapon, resolveLegacyWeapon } from './data/armory';
@@ -82,6 +83,7 @@ export const createNewSave = (): AdventureSave => ({
   musicOn: true,
   effectsOn: true,
   revealedPaths: [],
+  claimedMapKeys: {},
 });
 
 // ─── Stars & unlocks ────────────────────────────────────────────────────────
@@ -766,6 +768,24 @@ const USED_BEFORE_FLAG: Record<UnlockableFeature, (save: AdventureSave) => boole
 };
 
 /**
+ * Redeem a reached Golden Rescue Key along the map to free ANY caged friend
+ * of the player's choosing (Angry Birds 2 Extra Bird Key mechanic).
+ */
+export const claimMapKey = (save: AdventureSave, keyId: string, fighter: CharacterName): AdventureSave => {
+  const key = getMapKey(keyId);
+  if (!key) return save;
+  if (!isMapKeyReached(save, key)) return save;
+  if (isMapKeyClaimed(save, key)) return save;
+  if (save.unlockedFighters.includes(fighter)) return save;
+  if (!FIGHTERS.some(f => f.name === fighter)) return save;
+  return {
+    ...save,
+    unlockedFighters: [...save.unlockedFighters, fighter],
+    claimedMapKeys: { ...(save.claimedMapKeys ?? {}), [keyId]: fighter },
+  };
+};
+
+/**
  * Bring an older save in line with the current level table: anything a level's
  * already-earned stars now unlock (a fighter, weapon, Arcana, Combo recipe or
  * campaign feature that moved there in an update) is granted. Coins are never paid twice.
@@ -786,10 +806,35 @@ export const reconcileUnlocks = (save: AdventureSave): AdventureSave => {
     const b = BOUNTIES.find(x => x.id === id);
     if (b) regrant(b.reward);
   }
+  // Legacy save backfill: non-starting fighters already unlocked before Golden Keys
+  // were introduced count against the earliest unclaimed map keys so players keep
+  // every friend they earned and still have one key per remaining locked friend.
+  const claimedMapKeys: Record<string, CharacterName> = { ...(next.claimedMapKeys ?? {}) };
+  const recordedFighters = new Set<CharacterName>(Object.values(claimedMapKeys));
+  const unrecordedUnlocked = next.unlockedFighters.filter(
+    f => !STARTING_FIGHTERS.includes(f) && !recordedFighters.has(f)
+  );
+  if (unrecordedUnlocked.length > 0) {
+    for (const fighter of unrecordedUnlocked) {
+      const slot =
+        MAP_KEYS.find(k => !claimedMapKeys[k.id] && isMapKeyReached(next, k)) ??
+        MAP_KEYS.find(k => !claimedMapKeys[k.id]);
+      if (slot) claimedMapKeys[slot.id] = fighter;
+    }
+  }
+  // Ensure every fighter recorded on a claimed key is also in unlockedFighters
+  const unlockedFighters = [...next.unlockedFighters];
+  for (const fighter of Object.values(claimedMapKeys)) {
+    if (!unlockedFighters.includes(fighter) && FIGHTERS.some(f => f.name === fighter)) {
+      unlockedFighters.push(fighter);
+    }
+  }
   // Recipes and weapons that no longer exist (renamed in an update) are dropped
   const known = new Set(EVOLUTION_RECIPES.map(r => r.id));
   next = {
     ...next,
+    unlockedFighters,
+    claimedMapKeys,
     armory: next.armory.filter(id => !!getArmoryWeapon(id)),
     unlockedEvolutions: next.unlockedEvolutions.filter(id => known.has(id)),
     discoveredEvolutions: next.discoveredEvolutions.filter(id => known.has(id)),
@@ -978,16 +1023,23 @@ export const createMaxedSave = (): AdventureSave => {
     for (const r of starRewards(l)) save = grant(save, r).save;
   }
   for (const b of BOUNTIES) save = grant(save, { ...b.reward, coins: 0 }).save;
+  for (const k of MAP_KEYS) save = claimMapKey(save, k.id, k.defaultFighter);
   return save;
 };
 
 /**
  * Dev helper: ★★★ on every main level before this one, with their lessons
  * seen, so this level is the next to play (side paths are left to be found).
+ * Pass `{ leaveKeysReady: true }` to leave reached Golden Rescue Keys unclaimed.
  */
-export const createSaveBefore = (levelId: string): AdventureSave => {
+export const createSaveBefore = (levelId: string, opts?: { leaveKeysReady?: boolean }): AdventureSave => {
   const earlier = MAIN_LEVELS.slice(0, Math.max(0, MAIN_LEVELS.findIndex(l => l.id === levelId)));
   let save = createNewSave();
   for (const l of earlier) save = applyLevelResult(save, l, 3, 0).save;
+  if (!opts?.leaveKeysReady) {
+    for (const k of MAP_KEYS) {
+      if (isMapKeyReached(save, k)) save = claimMapKey(save, k.id, k.defaultFighter);
+    }
+  }
   return { ...save, seenMechanics: [...new Set([...save.seenMechanics, ...earlier.map(l => LESSON_KEYS.mechanic(l.introduces))])] };
 };

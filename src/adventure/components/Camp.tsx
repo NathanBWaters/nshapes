@@ -27,11 +27,13 @@ import { summarize, type BattleRecord } from '../history';
 import { analyticsOptedOut, setAnalyticsEnabled } from '@/analytics/posthog';
 import type { FunRating, FunTag } from '@/analytics/fightEvent';
 import { FIGHTERS } from '../data/fighters';
+import { readyMapKeys } from '../data/mapKeys';
 import { MAX_TUNING_TIER, MAX_WEAPON_LEVEL, TUNING_MULTIPLIERS, formatStat, weaponStatLines } from '../data/weaponStats';
 import { ARCANA } from '../data/arcana';
 import { charmWeapons, getArmoryWeapon, weaponLevelSuffix } from '../data/armory';
 import { WEAPON_ROLES, weaponRole } from '../data/weaponRoles';
 import { unlockHint } from '../data/rewards';
+import { GoldenKeyArt } from './RescueArt';
 import {
   arcanaSlots,
   availableStars,
@@ -353,6 +355,20 @@ const Camp: React.FC<Props> = ({ save, history = NO_BATTLES, onChange, onRateBat
         {tab === 'fighters' && !treeFighter && (
           <>
             <Text style={st.blurb}>Every fighter plays by two passives. Spend stars in their skill trees to bend those rules. Every fighter can spend every star you have earned, so grow them all at once. Refunds are free.</Text>
+            {readyMapKeys(save).length > 0 && (
+              <TouchableOpacity
+                testID="camp-key-ready-banner"
+                onPress={onClose}
+                activeOpacity={0.85}
+                style={st.keyReadyBanner}
+              >
+                <GoldenKeyArt size={26} />
+                <View style={{ flex: 1 }}>
+                  <Text style={st.keyReadyTitle}>Golden Key Ready on the Map!</Text>
+                  <Text style={st.keyReadySub}>Head back to the map and tap the Golden Key to free any caged friend.</Text>
+                </View>
+              </TouchableOpacity>
+            )}
             {FIGHTERS.map(f => {
               const unlocked = save.unlockedFighters.includes(f.name);
               const selected = save.selectedFighter === f.name;
@@ -379,9 +395,9 @@ const Camp: React.FC<Props> = ({ save, history = NO_BATTLES, onChange, onRateBat
                       <View style={st.portrait}><Icon name="lorc/padlock" size={30} color={INK} /></View>
                     )}
                     <View style={{ flex: 1 }}>
-                      <Text style={st.fighterName}>{unlocked ? f.name : '???'}</Text>
+                      <Text style={st.fighterName}>{unlocked ? f.name : 'Caged Friend'}</Text>
                       <Text style={st.fighterBlurb}>
-                        {unlocked ? f.blurb : `A fighter you have not met yet. ${unlockHint({ kind: 'fighter', id: f.name }, save) ?? 'Keep winning stars.'}`}
+                        {unlocked ? f.blurb : `${unlockHint({ kind: 'fighter', id: f.name }, save) ?? 'Find a Golden Key on the map to free this friend.'}`}
                       </Text>
                     </View>
                     {unlocked && !selected && (
@@ -757,6 +773,9 @@ const st = StyleSheet.create({
   arcanaUpside: { fontSize: 12, fontWeight: '800', color: TONE.upside },
   arcanaTradeoff: { fontSize: 12, fontWeight: '700', color: TONE.tradeoff },
   returnBar: { padding: 12, backgroundColor: COLORS.paperBeige, borderTopWidth: 2, borderTopColor: INK },
+  keyReadyBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: TONE.coinPale, borderRadius: 12, borderWidth: 2.5, borderBottomWidth: 5, borderColor: INK, padding: 12 },
+  keyReadyTitle: { fontWeight: '900', fontSize: 14, color: INK },
+  keyReadySub: { fontSize: 12, fontWeight: '600', color: INK, opacity: 0.85 },
 });
 
 export default Camp;

@@ -17,6 +17,7 @@ import { render, fireEvent, act } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AdventureMode from '@/adventure/AdventureMode';
 import { LEVELS, MAIN_LEVELS, PRACTICE_LEVELS, SIDE_PATHS, getLevel, isPathHidden } from '@/adventure/data/levels';
+import { MAP_KEYS } from '@/adventure/data/mapKeys';
 import { FIGHTERS, getFighter } from '@/adventure/data/fighters';
 import { EVOLUTION_RECIPES, SIGNATURE_RECIPES } from '@/adventure/data/evolutions';
 import { ARCANA } from '@/adventure/data/arcana';
@@ -28,6 +29,7 @@ import {
   applyLevelResult,
   availableStars,
   charmSlots,
+  claimMapKey,
   createNewSave,
   equippedCharms,
   maxStars,
@@ -379,14 +381,19 @@ function stepThroughReveals(screen: Screen, opts: { stayOnResults?: boolean } = 
   advanceMs(2600);
   const texts: string[] = [];
   let guard = 0;
-  while (screen.queryByTestId('unlock-reveal') && guard++ < 15) {
-    fireEvent.press(screen.getByTestId('unlock-reveal'));
+  while ((screen.queryByTestId('unlock-reveal') || screen.queryByTestId('unlock-primary') || screen.queryByTestId('unlock-later')) && guard++ < 20) {
+    if (screen.queryByTestId('unlock-reveal')) {
+      fireEvent.press(screen.getByTestId('unlock-reveal'));
+      advanceMs(1100);
+    }
     const modal = screen.queryByTestId('unlock-modal');
     texts.push(modal ? collectTreeText(modal) : '');
     if (opts.stayOnResults && screen.queryByText('Stay on results')) fireEvent.press(screen.getByText('Stay on results'));
     // A secret path's reveal offers the map; these walk-throughs go on from the results screen
     else if (screen.queryByTestId('unlock-later')) fireEvent.press(screen.getByTestId('unlock-later'));
-    else fireEvent.press(screen.getByTestId('unlock-primary'));
+    else if (screen.queryByTestId('unlock-primary')) fireEvent.press(screen.getByTestId('unlock-primary'));
+    else break;
+    advanceMs(600);
   }
   return texts;
 }
@@ -575,6 +582,18 @@ describe('Adventure Mode full-game E2E', () => {
       } else {
         backToMap(screen);
       }
+
+      // Angry Birds 2 walk-over: clearing 1-5 walks onto Golden Rescue Key key-1!
+      if (level.id === '1-5') {
+        advanceMs(650);
+        expect(screen.getByTestId('friend-rescue-modal')).toBeTruthy();
+        fireEvent.press(screen.getByTestId('rescue-option-Sly Fox'));
+        fireEvent.press(screen.getByTestId('rescue-confirm-btn'));
+        advanceMs(800);
+        fireEvent.press(screen.getByTestId('rescue-keep-fighter'));
+        expect(loadAdventureSave().unlockedFighters).toContain('Sly Fox');
+        expect(loadAdventureSave().claimedMapKeys['key-1']).toBe('Sly Fox');
+      }
     }
 
     save = loadAdventureSave();
@@ -716,6 +735,7 @@ describe('Adventure Mode full-game E2E', () => {
     expect(finale.biome).toBe('summit');
     let full = createNewSave();
     for (const l of LEVELS) if (l.id !== finale.id) full = applyLevelResult(full, l, 3, 50).save;
+    for (const k of MAP_KEYS) full = claimMapKey(full, k.id, k.defaultFighter);
     full = {
       ...full,
       seenMechanics: LEVELS.map(l => l.introduces),

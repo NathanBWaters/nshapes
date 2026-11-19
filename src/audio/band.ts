@@ -63,7 +63,8 @@ export type CueName =
   | 'doubled' | 'armed' | 'charged' | 'warDrum' | 'clarity' | 'clarityEnd' | 'pinata' | 'pinataBreak' | 'link'
   | 'purity' | 'rainbow' | 'catalyst' | 'trapSet' | 'trapDefused' | 'trapSprung' | 'burn' | 'overkill'
   | 'streakLost' | 'sour' | 'reelStop' | 'register' | 'reelSpin' | 'star' | 'starSwoosh' | 'rankSeal' | 'coinRoll' | 'weaponGet' | 'tap' | 'back'
-  | 'parryWarn' | 'parry' | 'perfectParry' | 'foeStrike' | 'multStep' | 'multSlam' | 'killCamRiser' | 'killCamShatter' | 'slowMoDefeat' | 'storyClimax';
+  | 'parryWarn' | 'parry' | 'perfectParry' | 'foeStrike' | 'multStep' | 'multSlam' | 'killCamRiser' | 'killCamShatter' | 'slowMoDefeat' | 'storyClimax'
+  | 'keyFound' | 'friendRescued';
 
 export interface CueOpts {
   /** How big the thing is (damage, coins, a count): scales the cue */
@@ -573,7 +574,7 @@ class Band {
 
   /** Play a named cue on the next 32nd note, in key. */
   cue(name: CueName, o: CueOpts = {}) {
-    const immediate = name === 'tap' || name === 'back' || name === 'slowMoDefeat' || name === 'star' || name === 'starSwoosh' || name === 'rankSeal' || name === 'storyClimax';
+    const immediate = name === 'tap' || name === 'back' || name === 'slowMoDefeat' || name === 'star' || name === 'starSwoosh' || name === 'rankSeal' || name === 'storyClimax' || name === 'keyFound' || name === 'friendRescued';
     const c = this.cueCtx(o.slot ?? 0, immediate, o.afterMs);
     if (!c) return;
     // The same cue twice inside a 32nd is one sound, not two
@@ -1207,6 +1208,31 @@ const CUES: Record<CueName, (c: CueCtx) => void> = {
     [0, 2, 4, 7].forEach((d, i) =>
       note('glock', fq(c, d, 6), c.t + i * 0.032, 0.42, { vol: 0.58, bus: SFX, pan: i % 2 ? 0.45 : -0.45 })
     );
+  },
+
+  // Golden Rescue Key pickup / keyhole turn shimmer
+  keyFound: c => {
+    D(c, 'tick', 0, 0.7);
+    D(c, 'anvil', 0.015, 0.48);
+    [0, 4, 7, 11].forEach((d, i) =>
+      note('celesta', fq(c, d, 6), c.t + i * 0.042, 0.36, { vol: 0.78, bus: SFX, pan: i % 2 ? 0.35 : -0.35 })
+    );
+    N(c, 'bell', 7, 6, 0.09, 0.62, 0.85);
+  },
+
+  // Cage bars snap open and a caged friend leaps free!
+  friendRescued: c => {
+    D(c, 'anvil', 0, 0.88);
+    D(c, 'taiko', 0.015, 0.85);
+    D(c, 'crash', 0.04, 0.65);
+    [0, 2, 4, 7].forEach((d, i) => {
+      note('brass', fq(c, d, 4), c.t + 0.03 + i * 0.068, i === 3 ? 0.85 : 0.2, { vol: 0.86, bus: SFX });
+      note('bell', fq(c, d, 6), c.t + 0.03 + i * 0.068, 0.55, { vol: 0.75, bus: SFX, pan: i % 2 ? 0.45 : -0.45 });
+    });
+    [0, 2, 4, 7, 9, 11].forEach((d, i) =>
+      note('harp', fq(c, d, 5), c.t + 0.12 + i * 0.04, 0.68, { vol: 0.68, bus: SFX, pan: i % 2 ? -0.5 : 0.5 })
+    );
+    for (const d of [0, 2, 4, 7]) N(c, 'strings', d, 4, 0.24, 1.05, 0.74);
   },
 
   // Menus

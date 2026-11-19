@@ -1,23 +1,23 @@
 /**
  * The story, in as few words as it can be told.
  *
- * A star fell on the Summit and shattered. Every critter that pocketed a shard
- * has gone a bit wild. Each Set you make knocks a shard loose; the stars you
- * earn on a level ARE those shards. That is why foes drop stars, why stars
- * power your fighter, and why the last world is called Starfall Summit.
+ * Wild critters raided the valley, locked your animal friends in cages, and
+ * dropped Golden Cage Keys along the road between levels. Walk over any Golden
+ * Key on the map to choose which caged friend to free first!
  *
  * `welcome` plays once, the first time Adventure is opened, and leads straight
  * into the first fight (components/StoryIntro.tsx). Keep every line short: it
  * is read on a phone, by someone who came to play.
  */
+import type { CharacterName } from '@/types';
 
 /** What is on stage while a beat's words are up */
 export type StoryScene =
-  /** A star falls on the mountain and shatters */
-  | 'starfall'
-  /** Critters, each holding a shard */
-  | 'critters'
-  /** Your fighter, ready to go */
+  /** Wild critters swoop in, cage your friends, and scatter Golden Keys */
+  | 'abduction'
+  /** Winding valley road with Golden Keys between levels to free anyone you choose */
+  | 'keys'
+  /** Your fighter, ready to go rescue the crew */
   | 'hero';
 
 export interface StoryBeat {
@@ -33,23 +33,29 @@ export interface StoryBeat {
 export const STORY: Record<'welcome', StoryBeat[]> = {
   welcome: [
     {
-      scene: 'starfall',
-      title: 'A star fell on the Summit.',
-      body: 'It shattered, and golden star shards rained across the valley.',
+      scene: 'abduction',
+      title: 'Wild critters stole your friends!',
+      body: 'They locked your crew in iron cages and dropped Golden Keys across the valley.',
     },
     {
-      scene: 'critters',
-      title: 'The critters found them first.',
-      body: 'Three shards each… and every one of them has gone a little wild.',
+      scene: 'keys',
+      title: 'Walk over keys to free anyone!',
+      body: 'Every Golden Key on the road lets you choose which caged friend to save first.',
     },
     {
       scene: 'hero',
-      title: 'Let’s win them back!',
+      title: 'Hang tight—I’m coming!',
       body: 'Match 3 cards: each trait all the same, or all different.',
       spoken: true,
     },
   ],
 };
 
-/** The level ids whose foes stand in the 'critters' scene */
-export const STORY_CRITTER_LEVELS = ['1-2', '1-1', '1-3'] as const;
+/** The mischievous foes swooping in during the abduction cold-open */
+export const STORY_RAIDER_LEVELS = ['2-4', '1-10'] as const;
+
+/** Alias kept for any caller referencing the story's enemy levels */
+export const STORY_CRITTER_LEVELS = STORY_RAIDER_LEVELS;
+
+/** Friends shown getting caged in Beat 1 */
+export const STORY_CAPTIVE_FRIENDS: readonly CharacterName[] = ['Sly Fox', 'Corgi', 'Badger'] as const;

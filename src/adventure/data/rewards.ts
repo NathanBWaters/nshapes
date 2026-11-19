@@ -10,6 +10,7 @@ import { worldNumber } from './biomes';
 import { BOUNTIES } from './bounties';
 import { FEATURES } from './features';
 import { MECHANICS } from './mechanics';
+import { MAP_KEYS, isMapKeyClaimed, isMapKeyReached, nextMapKeyFor } from './mapKeys';
 
 /** A side branch that teaches a fighter (rather than an Elite foe). */
 export const isFighterTrial = (level: LevelDef): boolean => !!level.branchOf && MECHANICS[level.introduces]?.kind === 'fighter';
@@ -76,7 +77,21 @@ const describeSource = (s: UnlockSource, save?: Pick<AdventureSave, 'stars'>): s
  * How to get it, in a few words, or null when nothing in the game grants it.
  * With the player's save, a source on a side path they have not found is not named.
  */
-export const unlockHint = (u: Unlockable, save?: Pick<AdventureSave, 'stars'>): string | null => {
+export const unlockHint = (
+  u: Unlockable,
+  save?: Pick<AdventureSave, 'stars'> & Partial<Pick<AdventureSave, 'claimedMapKeys' | 'unlockedFighters'>>
+): string | null => {
   const source = unlockSource(u);
-  return source ? describeSource(source, save) : null;
+  if (source) return describeSource(source, save);
+  if (u.kind === 'fighter') {
+    if (save && MAP_KEYS.some(k => isMapKeyReached(save, k) && !isMapKeyClaimed(save, k))) {
+      return 'A Golden Key is waiting on the map! Tap it to free this friend.';
+    }
+    const nextKey = nextMapKeyFor(save);
+    if (nextKey) {
+      return `Find a Golden Key on the map (after ${nextKey.afterLevel}) to free any caged friend.`;
+    }
+    return 'Find a Golden Key on the map to free this friend.';
+  }
+  return null;
 };

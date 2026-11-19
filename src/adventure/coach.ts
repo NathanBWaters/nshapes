@@ -26,6 +26,7 @@ import { isValidCombination } from '@/utils/gameUtils';
 import type { AdventureSave, LevelDef, RunState } from './types';
 import { allSets, countDifferentAttributes, isSelectable } from './engine/sets';
 import { mainIndexOf, getLevel, MAIN_LEVELS } from './data/levels';
+import { readyMapKeys } from './data/mapKeys';
 import { levelFoe } from './data/foes';
 import { MECHANICS } from './data/mechanics';
 import { ASSIST_RULES } from './data/rules';
@@ -696,7 +697,11 @@ export const companionMapGreeting = (
 ): string => {
   const voice = companionVoice(save.selectedFighter);
   const foe = levelFoe(frontier);
-  if (stars === 0) return `${voice.hello} ${foe.name} found a star shard. Let’s win it back!`;
+  const readyKeys = readyMapKeys(save);
+  if (readyKeys.length > 0) {
+    return `${voice.hello} A Golden Key is waiting on the road! Tap it to free a friend!`;
+  }
+  if (stars === 0) return `${voice.hello} ${foe.name} is blocking the road. Let’s go save our friends!`;
   if (showSkillNudge) return `${voice.hello} We have shards to spend. Camp is open!`;
   if (frontier.isBoss) return `${foe.name} is next. The big one. Ready, ${voice.petName}?`;
   if (!save.seenMechanics.includes(frontier.introduces)) {

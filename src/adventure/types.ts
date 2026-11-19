@@ -608,6 +608,8 @@ export interface AdventureSave {
   effectsOn: boolean;
   /** Secret side paths whose arrival has played on the map (ids) */
   revealedPaths: string[];
+  /** Golden Rescue Keys already redeemed along the map: mapKeyId -> rescued friend name */
+  claimedMapKeys: Record<string, CharacterName>;
 }
 
 // ---------------------------------------------------------------------------

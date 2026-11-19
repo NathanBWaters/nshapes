@@ -16,8 +16,8 @@ import type { AdventureSave, RunState } from '@/adventure/types';
  * URL params:
  * - ?case=perfect — 1-1 replayed for ★★★ on a maxed save: stars, coins, no unlocks (default)
  * - ?case=two     — the same with ★★ (the ★★★ challenge missed)
- * - ?case=first   — a first ★★★ on 2-5: a weapon level-up, a fighter (Corgi), a weapon and a secret path, one reveal each
- * - ?case=fighter — a first ★★★ on 1-5: a fighter (Sly Fox), then a secret path
+ * - ?case=first   — a first ★★★ on 2-5: weapons and a secret path, one reveal each
+ * - ?case=fighter — a first ★★★ on 2-1: multiple weapon & recipe unlocks in sequence
  * - ?level=2-8&stars=2&save=before|maxed|fresh&seed=3 — any level and star count (save `before` = first time on that level)
  *
  * Like /dev/adventure, the save is only written once you do something (equip, pick a fighter).
@@ -26,7 +26,7 @@ const CASES: Record<string, { level: string; stars: number; save: string }> = {
   perfect: { level: '1-1', stars: 3, save: 'maxed' },
   two: { level: '1-1', stars: 2, save: 'maxed' },
   first: { level: '2-5', stars: 3, save: 'before' },
-  fighter: { level: '1-5', stars: 3, save: 'before' },
+  fighter: { level: '2-1', stars: 3, save: 'before' },
   geared: { level: '2-4', stars: 3, save: 'geared' },
 };
 

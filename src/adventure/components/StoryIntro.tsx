@@ -1,41 +1,58 @@
 /**
- * The cold open: three short beats that say why you are here, then straight
- * into the first fight. Plays once, the first time Adventure is opened.
+ * The cold open: three short beats showing wild critters caging your animal
+ * friends, Golden Keys scattered along the road so you can free whoever you
+ * pick first, and your fighter ready to dive straight into the first battle.
  *
  * Tap anywhere to move on; Skip jumps to the fight. Every animation runs once
- * (nothing loops), and reduced motion shows each scene already settled.
+ * (nothing loops), uses `src/utils/motion.ts` tokens on GPU transform/opacity
+ * only, and reduced motion shows every scene already settled cleanly on f0.
  */
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
-import Svg, { Polygon } from 'react-native-svg';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
+import Svg, { Circle, Path, Polygon } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Card from '@/components/Card';
 import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { COLORS } from '@/utils/colors';
-import { sfx } from '@/audio';
+import { EASE, MS, SPRING, STAYS } from '@/utils/motion';
+import { band, sfx } from '@/audio';
 import type { Card as CardType, CharacterName } from '@/types';
-import { STORY, STORY_CRITTER_LEVELS, type StoryBeat } from '../data/story';
+import { STORY, STORY_CAPTIVE_FRIENDS, STORY_RAIDER_LEVELS, type StoryBeat } from '../data/story';
 import { getLevel } from '../data/levels';
 import { levelFoe } from '../data/foes';
+import { CageBarsSvg, CagePadlockSvg, GoldenKeyArt } from './RescueArt';
 import { INK } from './ui';
 
 const NIGHT = '#141B33';
 const DUSK = '#27305A';
 const GOLD = COLORS.actionYellow;
 /** The scene is as tall as the screen can spare (a short phone still has room for the words) */
-const sceneHeightFor = (windowHeight: number): number => Math.round(Math.max(220, Math.min(380, windowHeight * 0.42)));
+const sceneHeightFor = (windowHeight: number): number => Math.round(Math.max(230, Math.min(380, windowHeight * 0.43)));
 
-/** Where the fixed stars sit, as fractions of the scene (hand-placed so none hides behind the mountain) */
+/** Fixed stars in the valley night sky */
 const SKY: [number, number, number][] = [
-  [0.08, 0.12, 3], [0.2, 0.3, 2], [0.31, 0.08, 2], [0.44, 0.2, 3], [0.58, 0.07, 2], [0.7, 0.26, 2],
-  [0.83, 0.1, 3], [0.93, 0.32, 2], [0.14, 0.5, 2], [0.88, 0.52, 2], [0.5, 0.42, 2], [0.26, 0.6, 2],
+  [0.08, 0.1, 3], [0.22, 0.24, 2], [0.34, 0.08, 2], [0.5, 0.14, 3], [0.64, 0.07, 2], [0.76, 0.22, 2],
+  [0.88, 0.1, 3], [0.93, 0.3, 2], [0.14, 0.42, 2], [0.87, 0.44, 2],
 ];
 
-/** Where each shard flies once the star breaks: [dx, dy] in scene widths/heights */
-const SHARDS: [number, number][] = [[-0.34, 0.1], [-0.2, -0.16], [-0.06, -0.26], [0.1, -0.22], [0.24, -0.1], [0.36, 0.12], [0.02, 0.2]];
+/** Abduction choreography timings (ms) — derived from `src/utils/motion.ts` tokens */
+const RAIDER_START_MS = 80;                  // f5: raiders swoop in
+const CAGE_FIRST_MS = 240;                   // f15: first cage starts dropping
+const CAGE_GAP_MS = 32;                      // tight 2-frame ripple across the 3 cages
+const CAGE_DROP_MS = MS.quick;               // 180 ms impact fall
+const CAGE_ALL_LANDED_MS = CAGE_FIRST_MS + CAGE_GAP_MS * 2 + CAGE_DROP_MS; // 484 ms (~f30)
+const KEY_SCATTER_FIRST_MS = CAGE_ALL_LANDED_MS + 32;  // 516 ms: keys pop out right after all 3 cages slam
+const ABDUCTION_WORDS_MS = CAGE_ALL_LANDED_MS + 96;    // 580 ms: title rises cleanly once cages settle
 
 interface Props {
   fighter: CharacterName;
@@ -92,16 +109,22 @@ const StoryIntro: React.FC<Props> = ({ fighter, onDone }) => {
   );
 };
 
-/** The words of a beat rise in a moment after its scene starts. */
+/** The words of a beat rise in smoothly right on the hero moment (or appear settled under reduced motion). */
 const Words: React.FC<{ beat: StoryBeat; fighter: CharacterName }> = ({ beat, fighter }) => {
   const reduced = useReducedMotion();
   const p = useSharedValue(reduced ? 1 : 0);
   useEffect(() => {
-    if (!reduced) p.value = withDelay(beat.scene === 'starfall' ? 950 : 250, withTiming(1, { duration: 320, easing: Easing.out(Easing.cubic) }));
-    // once per beat (the component is keyed by beat)
+    if (!reduced) {
+      const delay = beat.scene === 'abduction' ? ABDUCTION_WORDS_MS : MS.quick;
+      p.value = withDelay(delay, withTiming(1, { duration: MS.move, easing: EASE.enterSoft }));
+    }
+    // once per beat (keyed by beat)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const style = useAnimatedStyle(() => ({ opacity: p.value, transform: [{ translateY: (1 - p.value) * 10 }] }));
+  const style = useAnimatedStyle(() => ({
+    opacity: p.value,
+    transform: [{ translateY: (1 - p.value) * 10 }],
+  }));
   return (
     <Animated.View style={[st.words, style]}>
       {beat.spoken && <Text style={st.speaker}>{fighter}</Text>}
@@ -115,8 +138,8 @@ interface SceneSize { width: number; height: number }
 
 const Scene: React.FC<SceneSize & { beat: StoryBeat; fighter: CharacterName }> = ({ beat, width, height, fighter }) => {
   switch (beat.scene) {
-    case 'starfall': return <Starfall width={width} height={height} />;
-    case 'critters': return <Critters width={width} height={height} />;
+    case 'abduction': return <Abduction width={width} height={height} />;
+    case 'keys': return <KeysRoad width={width} height={height} />;
     case 'hero': return <Hero width={width} height={height} fighter={fighter} />;
   }
 };
@@ -129,119 +152,325 @@ const Sky: React.FC<SceneSize> = ({ width, height }) => (
   </>
 );
 
-/** The Summit: a far peak with a snow cap and warm valley hills below. */
-const Mountain: React.FC<SceneSize> = ({ width, height: h }) => {
-  const peak = { x: width * 0.5, y: h * 0.36 };
+/** Distant valley silhouettes behind the meadow stage. */
+const ValleyBackdrop: React.FC<SceneSize> = ({ width, height: h }) => {
   const base = h;
   return (
     <Svg width={width} height={h} style={StyleSheet.absoluteFill} pointerEvents="none">
-      <Polygon points={`${width * 0.02},${base} ${width * 0.3},${h * 0.62} ${width * 0.46},${base}`} fill="#1D2547" />
-      <Polygon points={`${width * 0.6},${base} ${width * 0.8},${h * 0.58} ${width},${base}`} fill="#1D2547" />
-      <Polygon points={`${width * 0.14},${base} ${peak.x},${peak.y} ${width * 0.86},${base}`} fill={DUSK} />
-      <Polygon points={`${peak.x - width * 0.09},${peak.y + h * 0.16} ${peak.x},${peak.y} ${peak.x + width * 0.09},${peak.y + h * 0.16} ${peak.x + width * 0.03},${peak.y + h * 0.12} ${peak.x - width * 0.02},${peak.y + h * 0.17}`} fill="#E8ECFF" />
-      <Polygon points={`0,${base} ${width * 0.25},${h * 0.82} ${width * 0.58},${base}`} fill="#1B3038" />
-      <Polygon points={`${width * 0.42},${base} ${width * 0.78},${h * 0.84} ${width},${base}`} fill="#1E353A" />
+      <Polygon points={`0,${base} ${width * 0.24},${h * 0.44} ${width * 0.5},${base}`} fill="#1D2547" />
+      <Polygon points={`${width * 0.48},${base} ${width * 0.78},${h * 0.38} ${width},${base}`} fill="#1D2547" />
+      <Polygon points={`${width * 0.28},${base} ${width * 0.52},${h * 0.48} ${width * 0.78},${base}`} fill={DUSK} />
+      <Polygon points={`0,${base} ${width * 0.32},${h * 0.72} ${width * 0.68},${base}`} fill="#1B3038" />
+      <Polygon points={`${width * 0.35},${base} ${width * 0.75},${h * 0.74} ${width},${base}`} fill="#1E353A" />
     </Svg>
   );
 };
 
-/** Beat 1: the star streaks down to the peak, flashes, and breaks into shards. */
-const Starfall: React.FC<SceneSize> = ({ width, height: h }) => {
+// ---------------------------------------------------------------------------
+// Beat 1: Evil critters swoop in, drop iron cages over your friends, & scatter keys
+// ---------------------------------------------------------------------------
+
+const Abduction: React.FC<SceneSize> = ({ width, height: h }) => {
   const reduced = useReducedMotion();
-  const fall = useSharedValue(reduced ? 1 : 0);
-  const burst = useSharedValue(reduced ? 1 : 0);
+  const [cagedCount, setCagedCount] = useState(reduced ? STORY_CAPTIVE_FRIENDS.length : 0);
+
+  const friendSize = Math.round(Math.min(72, (width - 68) / 3.4, h * 0.27));
+  const cageSize = Math.round(friendSize * 1.24);
+  const raiderSize = Math.round(Math.min(72, width * 0.18, h * 0.26));
+
   useEffect(() => {
     if (reduced) return;
-    fall.value = withDelay(250, withTiming(1, { duration: 620, easing: Easing.in(Easing.quad) }));
-    burst.value = withDelay(870, withTiming(1, { duration: 700, easing: Easing.out(Easing.cubic) }));
-    const t = setTimeout(() => sfx('unlock'), 870);
-    return () => clearTimeout(t);
-    // once
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const from = { x: width * 0.92, y: -30 };
-  const to = { x: width * 0.5, y: h * 0.36 };
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  const streakLen = Math.hypot(dx, dy);
-  const streakAngle = Math.atan2(dy, dx);
-  const starStyle = useAnimatedStyle(() => ({
-    opacity: fall.value >= 1 ? 0 : 1,
-    transform: [
-      { translateX: from.x + dx * fall.value - 26 },
-      { translateY: from.y + dy * fall.value - 26 },
-      { rotate: `${fall.value * 200}deg` },
-      { scale: 0.7 + 0.5 * fall.value },
-    ],
-  }));
-  const streakStyle = useAnimatedStyle(() => ({
-    opacity: fall.value <= 0 || fall.value >= 1 ? 0 : (1 - fall.value) * 0.65,
-    transform: [
-      { translateX: from.x + dx * fall.value },
-      { translateY: from.y + dy * fall.value },
-      { rotate: `${streakAngle}rad` },
-      { scaleX: Math.max(0.01, fall.value) },
-    ],
-  }));
-  const flashStyle = useAnimatedStyle(() => ({
-    opacity: burst.value <= 0 ? 0 : Math.max(0, 0.85 - burst.value * 1.6),
-    transform: [{ scale: 0.4 + burst.value * 2.4 }],
-  }));
+    const timers: ReturnType<typeof setTimeout>[] = STORY_CAPTIVE_FRIENDS.map((_, idx) =>
+      setTimeout(() => {
+        setCagedCount(c => Math.max(c, idx + 1));
+        if (idx === 1) band.cue('foeDud');
+      }, CAGE_FIRST_MS + idx * CAGE_GAP_MS + CAGE_DROP_MS)
+    );
+    timers.push(setTimeout(() => band.cue('keyFound'), KEY_SCATTER_FIRST_MS + 120));
+    return () => timers.forEach(clearTimeout);
+  }, [reduced]);
+
   return (
     <>
       <Sky width={width} height={h} />
-      <Mountain width={width} height={h} />
-      <Animated.View pointerEvents="none" style={[st.streak, { width: streakLen * 0.55, left: -streakLen * 0.55 }, streakStyle]} />
-      <Animated.View pointerEvents="none" style={[st.flash, { left: to.x - 60, top: to.y - 60 }, flashStyle]} />
-      {SHARDS.map(([sdx, sdy], k) => <Shard key={k} burst={burst} at={to} dx={sdx * width} dy={sdy * h} big={k % 3 === 0} />)}
-      <Animated.View pointerEvents="none" style={[st.abs, starStyle]}>
-        <Text style={st.bigStar}>★</Text>
-      </Animated.View>
-    </>
-  );
-};
+      <ValleyBackdrop width={width} height={h} />
+      <View style={[st.ground, { backgroundColor: '#213B40' }]} />
 
-/** One piece of the broken star: flung out from the peak, then it settles a little lower. */
-const Shard: React.FC<{ burst: ReturnType<typeof useSharedValue<number>>; at: { x: number; y: number }; dx: number; dy: number; big: boolean }> = ({ burst, at, dx, dy, big }) => {
-  const size = big ? 26 : 18;
-  const style = useAnimatedStyle(() => {
-    const t = burst.value;
-    return {
-      opacity: t <= 0 ? 0 : 1,
-      transform: [
-        { translateX: at.x + dx * t - size / 2 },
-        // out and up first, then gravity
-        { translateY: at.y + dy * t + 46 * t * t - size / 2 },
-        { rotate: `${t * 140 * (dx < 0 ? -1 : 1)}deg` },
-        { scale: 0.5 + 0.5 * Math.min(1, t * 2) },
-      ],
-    };
-  });
-  return (
-    <Animated.View pointerEvents="none" style={[st.abs, style]}>
-      <Text style={{ fontSize: size, lineHeight: size * 1.1, color: GOLD }}>★</Text>
-    </Animated.View>
-  );
-};
+      {/* Mischievous enemy critters swooping down from upper corners */}
+      <View style={st.raiderRow} pointerEvents="none">
+        {STORY_RAIDER_LEVELS.map((levelId, idx) => (
+          <RaiderSwoop
+            key={levelId}
+            fromX={idx === 0 ? -96 : 96}
+            fromY={-74}
+            delay={RAIDER_START_MS + idx * 56}
+            reduced={reduced}
+          >
+            <EnemyAvatar
+              enemy={levelFoe(getLevel(levelId))}
+              size={raiderSize}
+              mood="menacing"
+              animate={false}
+              lightweight
+            />
+          </RaiderSwoop>
+        ))}
+      </View>
 
-/** Beat 2: three critters, each guarding three fallen shards. */
-const Critters: React.FC<SceneSize> = ({ width, height }) => {
-  const size = Math.min(116, Math.floor((width - 48) / 3), Math.floor(height * 0.42));
-  return (
-    <>
-      <Sky width={width} height={height} />
-      <View style={[st.ground, { backgroundColor: '#1B3038' }]} />
-      <View style={st.critterRow}>
-        {STORY_CRITTER_LEVELS.map((id, k) => (
-          <Rise key={id} delay={k * 140}>
-            <Text style={st.critterShard}>★★★</Text>
-            <EnemyAvatar enemy={levelFoe(getLevel(id))} size={k === 1 ? size : Math.round(size * 0.86)} mood={k === 1 ? 'menacing' : 'idle'} reaction={{ type: 'entrance', id: k + 1 }} />
-          </Rise>
+      {/* Three friends standing in the valley — iron cages slam down right over them */}
+      <View style={st.captiveRow} pointerEvents="none">
+        {STORY_CAPTIVE_FRIENDS.map((name, idx) => (
+          <View key={name} style={[st.captiveSlot, { width: cageSize, height: cageSize }]}>
+            <FighterAvatar
+              character={name}
+              size={friendSize}
+              mood={cagedCount > idx ? 'urgent' : 'victory'}
+              animate={false}
+            />
+            <DroppingCage
+              size={cageSize}
+              delay={CAGE_FIRST_MS + idx * CAGE_GAP_MS}
+              reduced={reduced}
+            />
+          </View>
+        ))}
+      </View>
+
+      {/* Three gleaming Golden Keys scattered across the valley foreground */}
+      <View style={st.droppedKeysRow} pointerEvents="none">
+        {([-1, 0, 1] as const).map((slot, idx) => (
+          <ScatteredKey
+            key={slot}
+            fromX={-slot * 34}
+            fromY={-56}
+            tilt={slot * 16}
+            delay={KEY_SCATTER_FIRST_MS + idx * 64}
+            reduced={reduced}
+          />
         ))}
       </View>
     </>
   );
 };
+
+/** Raider enemy swooping into its hovering perch from an upper corner. */
+const RaiderSwoop: React.FC<{
+  fromX: number;
+  fromY: number;
+  delay: number;
+  reduced: boolean;
+  children: React.ReactNode;
+}> = ({ fromX, fromY, delay, reduced, children }) => {
+  const x = useSharedValue(reduced ? 0 : fromX);
+  const y = useSharedValue(reduced ? 0 : fromY);
+  const o = useSharedValue(reduced ? 1 : 0);
+
+  useEffect(() => {
+    if (reduced) return;
+    o.value = withDelay(delay, withTiming(1, { duration: MS.feedback, easing: EASE.ui }));
+    x.value = withDelay(delay, withTiming(0, { duration: MS.move, easing: EASE.enter }));
+    y.value = withDelay(delay, withTiming(0, { duration: MS.move, easing: EASE.enter }));
+    // once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const style = useAnimatedStyle(() => ({
+    opacity: o.value,
+    transform: [{ translateX: x.value }, { translateY: y.value }],
+  }));
+
+  return <Animated.View style={style}>{children}</Animated.View>;
+};
+
+/** Iron cage + brass padlock slamming down over a friend with a 2-frame impact squash. */
+const DroppingCage: React.FC<{ size: number; delay: number; reduced: boolean }> = ({ size, delay, reduced }) => {
+  const y = useSharedValue(reduced ? 0 : -118);
+  const o = useSharedValue(reduced ? 1 : 0);
+  const sx = useSharedValue(1);
+  const sy = useSharedValue(1);
+
+  useEffect(() => {
+    if (reduced) return;
+    o.value = withDelay(delay, withTiming(1, { duration: 48, easing: EASE.ui }));
+    y.value = withDelay(delay, withTiming(0, { duration: CAGE_DROP_MS, easing: EASE.impact }));
+    sx.value = withDelay(
+      delay + CAGE_DROP_MS,
+      withSequence(
+        withTiming(1.09, { duration: 40, easing: EASE.ui }),
+        withSpring(1, SPRING.snappy)
+      )
+    );
+    sy.value = withDelay(
+      delay + CAGE_DROP_MS,
+      withSequence(
+        withTiming(0.91, { duration: 40, easing: EASE.ui }),
+        withSpring(1, SPRING.snappy)
+      )
+    );
+    // once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const style = useAnimatedStyle(() => ({
+    opacity: o.value,
+    transform: [{ translateY: y.value }, { scaleX: sx.value }, { scaleY: sy.value }],
+  }));
+
+  return (
+    <Animated.View style={[StyleSheet.absoluteFill, st.cageDropWrap, style]}>
+      <CageBarsSvg width={size} height={size} side="full" />
+      <View style={st.cageMiniLock}>
+        <CagePadlockSvg size={Math.round(size * 0.26)} />
+      </View>
+    </Animated.View>
+  );
+};
+
+/** Golden Key tumbling from the raiders onto the valley road. */
+const ScatteredKey: React.FC<{
+  fromX: number;
+  fromY: number;
+  tilt: number;
+  delay: number;
+  reduced: boolean;
+}> = ({ fromX, fromY, tilt, delay, reduced }) => {
+  const x = useSharedValue(reduced ? 0 : fromX);
+  const y = useSharedValue(reduced ? 0 : fromY);
+  const s = useSharedValue(reduced ? 1 : 0.45);
+  const rot = useSharedValue(reduced ? tilt : tilt - 48);
+  const o = useSharedValue(reduced ? 1 : 0);
+
+  useEffect(() => {
+    if (reduced) return;
+    o.value = withDelay(delay, withTiming(1, { duration: MS.feedback, easing: EASE.ui }));
+    x.value = withDelay(delay, withTiming(0, { duration: MS.move, easing: EASE.enterSoft }));
+    y.value = withDelay(
+      delay,
+      withSequence(
+        withTiming(fromY - 14, { duration: 80, easing: EASE.enter }),
+        withSpring(0, SPRING.snappy)
+      )
+    );
+    s.value = withDelay(delay, withSpring(1, SPRING.snappy));
+    rot.value = withDelay(delay, withTiming(tilt, { duration: MS.move, easing: EASE.enterSoft }));
+    // once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const style = useAnimatedStyle(() => ({
+    opacity: o.value,
+    transform: [{ translateX: x.value }, { translateY: y.value }, { rotate: `${rot.value}deg` }, { scale: s.value }],
+  }));
+
+  return (
+    <Animated.View style={[st.keyBadge, style]}>
+      <GoldenKeyArt size={30} />
+    </Animated.View>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Beat 2: Winding map road with a Golden Key between two nodes → opens ANY friend!
+// ---------------------------------------------------------------------------
+
+const KeysRoad: React.FC<SceneSize> = ({ width, height: h }) => {
+  const reduced = useReducedMotion();
+  const keyScale = useSharedValue(reduced ? 1 : 0.72);
+  const keyO = useSharedValue(reduced ? 1 : 0);
+  const barsSplit = useSharedValue(reduced ? 1 : 0);
+  const friendPop = useSharedValue(reduced ? 1 : 0.88);
+
+  useEffect(() => {
+    if (reduced) return;
+    keyO.value = withDelay(80, withTiming(1, { duration: MS.quick, easing: EASE.ui }));
+    keyScale.value = withDelay(80, withSpring(1, SPRING.playful));
+    barsSplit.value = withDelay(340, withTiming(1, { duration: MS.move, easing: EASE.enterSoft }));
+    friendPop.value = withDelay(360, withSpring(1, SPRING.playful));
+    const t = setTimeout(() => band.cue('keyFound'), 340);
+    return () => clearTimeout(t);
+    // once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const keyStyle = useAnimatedStyle(() => ({
+    opacity: keyO.value,
+    transform: [{ scale: keyScale.value }],
+  }));
+  const leftBarStyle = useAnimatedStyle(() => ({
+    opacity: 1 - barsSplit.value * 0.85,
+    transform: [{ translateX: -barsSplit.value * 26 }, { rotate: `${-barsSplit.value * 14}deg` }],
+  }));
+  const rightBarStyle = useAnimatedStyle(() => ({
+    opacity: 1 - barsSplit.value * 0.85,
+    transform: [{ translateX: barsSplit.value * 26 }, { rotate: `${barsSplit.value * 14}deg` }],
+  }));
+  const friendStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: friendPop.value }],
+  }));
+
+  const roadY = Math.round(h * 0.68);
+  const leftX = Math.round(width * 0.19);
+  const midX = Math.round(width * 0.5);
+  const rightX = Math.round(width * 0.81);
+
+  return (
+    <>
+      <Sky width={width} height={h} />
+      <View style={[st.ground, { backgroundColor: '#1E3A3F' }]} />
+
+      {/* Winding road between two level stones with the Golden Key right in between */}
+      <Svg width={width} height={h} style={StyleSheet.absoluteFill} pointerEvents="none">
+        <Path
+          d={`M ${leftX - 24} ${roadY + 12} Q ${midX} ${roadY - 22} ${rightX + 24} ${roadY + 12}`}
+          stroke="#FFFFFF"
+          strokeWidth={14}
+          fill="none"
+          strokeLinecap="round"
+          opacity={0.9}
+        />
+        <Path
+          d={`M ${leftX - 24} ${roadY + 12} Q ${midX} ${roadY - 22} ${midX} ${roadY - 5}`}
+          stroke={GOLD}
+          strokeWidth={6}
+          fill="none"
+          strokeLinecap="round"
+        />
+        <Circle cx={leftX} cy={roadY + 5} r={16} fill={GOLD} stroke={INK} strokeWidth={3} />
+        <Circle cx={rightX} cy={roadY + 5} r={16} fill="#FFFFFF" stroke={INK} strokeWidth={3} />
+      </Svg>
+
+      {/* Freed friend preview glowing above the road key */}
+      <View style={[st.keysPreviewStage, { top: Math.max(12, Math.round(h * 0.1)) }]} pointerEvents="none">
+        <View style={st.keysMedallion}>
+          <Animated.View style={friendStyle}>
+            <FighterAvatar character="Corgi" size={76} mood="victory" animate={false} />
+          </Animated.View>
+          <Animated.View style={[StyleSheet.absoluteFill, st.centerAbs, leftBarStyle]}>
+            <CageBarsSvg width={94} height={94} side="left" />
+          </Animated.View>
+          <Animated.View style={[StyleSheet.absoluteFill, st.centerAbs, rightBarStyle]}>
+            <CageBarsSvg width={94} height={94} side="right" />
+          </Animated.View>
+        </View>
+        <View style={st.miniSetBadge}>
+          <Text style={st.miniSetBadgeText}>YOUR CHOICE · FREE ANY FRIEND!</Text>
+        </View>
+      </View>
+
+      {/* Gleaming Golden Key sitting directly on the map path */}
+      <Animated.View
+        pointerEvents="none"
+        style={[st.roadKeyMedallion, { left: midX - 26, top: roadY - 31 }, keyStyle]}
+      >
+        <GoldenKeyArt size={34} />
+      </Animated.View>
+    </>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Beat 3: Your starting fighter + Golden Key + crisp 3-card Set hint
+// ---------------------------------------------------------------------------
 
 const HERO_PREVIEW_CARDS: CardType[] = [
   { id: 'story-c1', shape: 'diamond', color: 'red', number: 1, shading: 'solid', selected: false },
@@ -249,9 +478,8 @@ const HERO_PREVIEW_CARDS: CardType[] = [
   { id: 'story-c3', shape: 'squiggle', color: 'red', number: 1, shading: 'solid', selected: false },
 ];
 
-/** Beat 3: your fighter, ready beside a quick visual hint of a Set. */
 const Hero: React.FC<SceneSize & { fighter: CharacterName }> = ({ width, height, fighter }) => {
-  const fighterSize = Math.round(Math.min(144, width * 0.38, height * 0.48));
+  const fighterSize = Math.round(Math.min(136, width * 0.36, height * 0.45));
   const cardW = height < 260 ? 40 : 46;
   const cardH = Math.round(cardW * 1.34);
   return (
@@ -260,9 +488,14 @@ const Hero: React.FC<SceneSize & { fighter: CharacterName }> = ({ width, height,
       <View style={[st.ground, { backgroundColor: '#1B3038' }]} />
       <View style={st.heroWrap}>
         <Rise delay={0}>
-          <FighterAvatar character={fighter} size={fighterSize} mood="anticipation" reaction={{ type: 'entrance', id: 1 }} />
+          <View style={st.heroRow}>
+            <FighterAvatar character={fighter} size={fighterSize} mood="anticipation" reaction={{ type: 'entrance', id: 1 }} />
+            <View style={st.heroKeyMedallion}>
+              <GoldenKeyArt size={34} />
+            </View>
+          </View>
         </Rise>
-        <Rise delay={180}>
+        <Rise delay={MS.quick}>
           <View pointerEvents="none" style={st.miniSetCol}>
             <View style={st.miniCardsRow}>
               {HERO_PREVIEW_CARDS.map(card => (
@@ -272,7 +505,7 @@ const Hero: React.FC<SceneSize & { fighter: CharacterName }> = ({ width, height,
               ))}
             </View>
             <View style={st.miniSetBadge}>
-              <Text style={st.miniSetBadgeText}>✓ SET → ★</Text>
+              <Text style={st.miniSetBadgeText}>✓ SET → FREE FRIENDS!</Text>
             </View>
           </View>
         </Rise>
@@ -281,16 +514,24 @@ const Hero: React.FC<SceneSize & { fighter: CharacterName }> = ({ width, height,
   );
 };
 
-/** Its children pop up into place once. */
+/** Its children rise smoothly into place once (reduced motion: immediate calm fade). */
 const Rise: React.FC<{ delay: number; children: React.ReactNode }> = ({ delay, children }) => {
   const reduced = useReducedMotion();
-  const p = useSharedValue(reduced ? 1 : 0);
+  const o = useSharedValue(reduced ? 1 : 0);
+  const y = useSharedValue(reduced ? 0 : 18);
+  const s = useSharedValue(reduced ? 1 : 0.9);
   useEffect(() => {
-    if (!reduced) p.value = withDelay(delay, withSequence(withTiming(1.08, { duration: 220, easing: Easing.out(Easing.cubic) }), withTiming(1, { duration: 140 })));
+    if (reduced) return;
+    o.value = withDelay(delay, withTiming(1, { duration: MS.quick, easing: EASE.ui, ...STAYS }), STAYS.reduceMotion);
+    y.value = withDelay(delay, withTiming(0, { duration: MS.move, easing: EASE.enterSoft }));
+    s.value = withDelay(delay, withSpring(1, SPRING.lively));
     // once
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const style = useAnimatedStyle(() => ({ opacity: Math.min(1, p.value * 2), transform: [{ translateY: (1 - Math.min(1, p.value)) * 24 }, { scale: 0.7 + 0.3 * p.value }] }));
+  const style = useAnimatedStyle(() => ({
+    opacity: o.value,
+    transform: [{ translateY: y.value }, { scale: s.value }],
+  }));
   return <Animated.View style={[{ alignItems: 'center' }, style]}>{children}</Animated.View>;
 };
 
@@ -303,17 +544,67 @@ const st = StyleSheet.create({
   dotDone: { backgroundColor: 'rgba(255,222,0,0.55)' },
   skip: { position: 'absolute', right: 12, paddingHorizontal: 10, paddingVertical: 6 },
   skipText: { color: '#B9C0E0', fontWeight: '800', fontSize: 14 },
-  body: { flex: 1, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center', gap: 18 },
+  body: { flex: 1, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center', gap: 16 },
   scene: { overflow: 'hidden' },
-  abs: { position: 'absolute', left: 0, top: 0 },
   skyStar: { position: 'absolute', backgroundColor: '#E8ECFF', opacity: 0.8 },
-  streak: { position: 'absolute', top: 0, height: 4, borderRadius: 2, backgroundColor: '#FFF6C2', transformOrigin: 'right center' },
-  flash: { position: 'absolute', width: 120, height: 120, borderRadius: 60, backgroundColor: '#FFF6C2' },
-  bigStar: { fontSize: 52, lineHeight: 56, color: GOLD, textShadowColor: '#FFF6C2', textShadowRadius: 12 },
   ground: { position: 'absolute', left: -40, right: -40, bottom: -70, height: 150, borderRadius: 300 },
-  critterRow: { position: 'absolute', left: 0, right: 0, bottom: 26, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: 8 },
-  critterShard: { fontSize: 15, lineHeight: 20, letterSpacing: 1, color: GOLD, textShadowColor: '#FFF6C2', textShadowRadius: 8 },
+  // Beat 1: Abduction
+  raiderRow: { position: 'absolute', left: 0, right: 0, top: 14, flexDirection: 'row', justifyContent: 'space-around', paddingHorizontal: 32 },
+  captiveRow: { position: 'absolute', left: 0, right: 0, bottom: 54, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: 14 },
+  captiveSlot: { alignItems: 'center', justifyContent: 'center' },
+  cageDropWrap: { alignItems: 'center', justifyContent: 'center' },
+  cageMiniLock: { position: 'absolute', bottom: -2 },
+  droppedKeysRow: { position: 'absolute', left: 0, right: 0, bottom: 8, flexDirection: 'row', justifyContent: 'center', gap: 34 },
+  keyBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: GOLD,
+    borderWidth: 2,
+    borderBottomWidth: 4,
+    borderColor: INK,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Beat 2: Keys road
+  keysPreviewStage: { position: 'absolute', left: 0, right: 0, alignItems: 'center', gap: 6 },
+  keysMedallion: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: '#2B3354',
+    borderWidth: 3,
+    borderColor: GOLD,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  centerAbs: { alignItems: 'center', justifyContent: 'center' },
+  roadKeyMedallion: {
+    position: 'absolute',
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: GOLD,
+    borderWidth: 2.5,
+    borderBottomWidth: 5,
+    borderColor: INK,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Beat 3: Hero
   heroWrap: { position: 'absolute', left: 0, right: 0, bottom: 14, alignItems: 'center', gap: 8 },
+  heroRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  heroKeyMedallion: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: GOLD,
+    borderWidth: 2.5,
+    borderBottomWidth: 5,
+    borderColor: INK,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   miniSetCol: { alignItems: 'center', gap: 5 },
   miniCardsRow: { flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center' },
   miniSetBadge: { backgroundColor: COLORS.logicTeal, borderRadius: 999, borderWidth: 1.5, borderColor: '#FFF6C2', paddingHorizontal: 10, paddingVertical: 2 },

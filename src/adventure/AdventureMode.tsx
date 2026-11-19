@@ -12,11 +12,13 @@ import { music, setMusicEnabled, setSfxOverride, sfx } from '@/audio';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import type { AdventureSave, FeatureDestination, LevelDef, MechanicDef, RunState } from './types';
 import { MAIN_LEVELS, getLevel, mainIndexOf } from './data/levels';
+import { getMapKey, isMapKeyClaimed, isMapKeyReached, lockedFighters, mapKeyAfter } from './data/mapKeys';
 import { CAMPAIGN_FEATURES } from './data/features';
 import { MECHANICS } from './data/mechanics';
 import {
   applyLevelResult,
   armRecipePair,
+  claimMapKey,
   equipArcana,
   equipCharm,
   isLevelUnlocked,
@@ -53,6 +55,7 @@ import LevelResults from './components/LevelResults';
 import UnlockReveal from './components/UnlockReveal';
 import Camp, { type CampTab } from './components/Camp';
 import FieldGuide from './components/FieldGuide';
+import FriendRescueModal from './components/FriendRescueModal';
 import StoryIntro from './components/StoryIntro';
 import { starsLandedMs } from './components/ui';
 
@@ -103,9 +106,11 @@ interface Props {
   coldOpen?: boolean;
   /** Dev (/dev/results): open on the results of this fight, as if it had just been won. Not recorded or sent. */
   devResult?: { levelId: string; run: RunState; stars: number };
+  /** Dev (/dev/adventure?rescue=key-1): open the Friend Rescue modal directly for a map key */
+  devRescueKeyId?: string;
 }
 
-const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave, coldOpen = true, devResult }) => {
+const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave, coldOpen = true, devResult, devRescueKeyId }) => {
   const [save, setSaveState] = useState<AdventureSave>(() => initialSave ?? loadAdventureSave());
   const [history, setHistory] = useState<BattleRecord[]>(loadBattleHistory);
   const [screen, setScreenNow] = useState<Screen>(() => (coldOpen && isFirstVisit(save) ? { kind: 'story' } : { kind: 'map' }));
@@ -131,6 +136,9 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave, coldO
   const [reference, setReference] = useState<MechanicDef | null>(null);
   const [unlocks, setUnlocks] = useState<Unlock[]>([]);
   const [unlocksRevealed, setUnlocksRevealed] = useState(true);
+  const [walkingKeyId, setWalkingKeyId] = useState<string | null>(null);
+  const [activeRescueKeyId, setActiveRescueKeyId] = useState<string | null>(() => devRescueKeyId ?? null);
+  const deferredKeyIds = useRef<Set<string>>(new Set());
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const setSave = useCallback((next: AdventureSave | ((s: AdventureSave) => AdventureSave)) => {
@@ -299,20 +307,33 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave, coldO
   const nextLevelAfter = (level: LevelDef): LevelDef | null =>
     level.branchOf ? null : MAIN_LEVELS[mainIndexOf(level) + 1] ?? null;
 
+  /** Unclaimed, reached Golden Rescue Key sitting right after `levelId` (Angry Birds 2 walk-over). */
+  const readyKeyAfter = (levelId: string) => {
+    const key = mapKeyAfter(levelId);
+    if (!key) return null;
+    if (!isMapKeyReached(save, key) || isMapKeyClaimed(save, key)) return null;
+    if (lockedFighters(save).length === 0) return null;
+    if (deferredKeyIds.current.has(key.id)) return null;
+    return key;
+  };
+
   let body: React.ReactNode = null;
   if (screen.kind === 'story') {
     body = <StoryIntro fighter={save.selectedFighter} onDone={startFirstFight} />;
   } else if (screen.kind === 'map') {
-    const mapActive = !preview && !teaching && !reference && unlocks.length === 0;
+    const mapActive = !preview && !teaching && !reference && unlocks.length === 0 && !activeRescueKeyId;
     body = (
       <AdventureMap
         save={save}
         active={mapActive}
         highlightLevelId={screen.highlight}
+        walkingKeyId={walkingKeyId}
+        onOpenMapKey={keyId => { setWalkingKeyId(null); setActiveRescueKeyId(keyId); }}
+        onWalkKeyArrived={keyId => { setWalkingKeyId(null); setActiveRescueKeyId(keyId); }}
         onPathsRevealed={ids => setSave(s => markPathsRevealed(s, ids))}
-        onSelectLevel={l => { sfx('click'); setPreview(l); }}
-        onOpenCamp={() => { sfx('confirm'); setScreen({ kind: 'camp' }); }}
-        onOpenGuide={() => { sfx('confirm'); setScreen({ kind: 'guide' }); }}
+        onSelectLevel={l => { setWalkingKeyId(null); sfx('click'); setPreview(l); }}
+        onOpenCamp={() => { setWalkingKeyId(null); sfx('confirm'); setScreen({ kind: 'camp' }); }}
+        onOpenGuide={() => { setWalkingKeyId(null); sfx('confirm'); setScreen({ kind: 'guide' }); }}
         onExit={() => transition.go(() => { music.stop(); onExit(); }, -1)}
       />
     );
@@ -352,8 +373,27 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave, coldO
         onRateFun={handleResultsRateFun}
         onReplayOpened={() => markReplayOpened(screen.fightId)}
         onRetry={() => { commitAdventureFight('results_retry'); startRun(level); }}
-        onNext={() => { commitAdventureFight('results_next'); if (next) setPreview(next); }}
-        onMap={() => { commitAdventureFight('results_map'); clearPendingTimers(); setUnlocks([]); setScreen({ kind: 'map', highlight: next && isLevelUnlocked(save, next) ? next.id : level.id }); }}
+        onNext={() => {
+          commitAdventureFight('results_next');
+          const key = readyKeyAfter(level.id);
+          if (key) {
+            clearPendingTimers();
+            setUnlocks([]);
+            setScreen({ kind: 'map', highlight: level.id }, () => setWalkingKeyId(key.id));
+          } else if (next) {
+            setPreview(next);
+          }
+        }}
+        onMap={() => {
+          commitAdventureFight('results_map');
+          clearPendingTimers();
+          setUnlocks([]);
+          const key = readyKeyAfter(level.id);
+          setScreen(
+            { kind: 'map', highlight: key ? level.id : next && isLevelUnlocked(save, next) ? next.id : level.id },
+            () => { if (key) setWalkingKeyId(key.id); }
+          );
+        }}
         onCamp={() => {
           commitAdventureFight('results_camp');
           clearPendingTimers();
@@ -453,6 +493,19 @@ const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave, coldO
           }}
         />
       )}
+      <FriendRescueModal
+        keyDef={activeRescueKeyId ? getMapKey(activeRescueKeyId) ?? null : null}
+        save={save}
+        onRescue={(keyId, fighterName) => {
+          deferredKeyIds.current.delete(keyId);
+          setSave(s => claimMapKey(s, keyId, fighterName));
+        }}
+        onUseFighter={fighterName => setSave(s => ({ ...s, selectedFighter: fighterName }))}
+        onClose={deferred => {
+          if (deferred && activeRescueKeyId) deferredKeyIds.current.add(activeRescueKeyId);
+          setActiveRescueKeyId(null);
+        }}
+      />
     </View>
   );
 };

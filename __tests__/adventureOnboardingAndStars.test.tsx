@@ -463,13 +463,13 @@ describe('Adventure first minutes: show, then say', () => {
   });
 
   it('tells the story in three short beats and greets the map in one line', () => {
-    expect(STORY.welcome.map(b => b.scene)).toEqual(['starfall', 'critters', 'hero']);
+    expect(STORY.welcome.map(b => b.scene)).toEqual(['abduction', 'keys', 'hero']);
     for (const beat of STORY.welcome) {
       expect(beat.title.length).toBeLessThanOrEqual(34);
       expect(beat.body.length).toBeLessThanOrEqual(80);
     }
     const fresh = createNewSave();
-    expect(companionMapGreeting(fresh, MAIN_LEVELS[0], 0, false)).toBe('Meow! Dozy Bunny found a star shard. Let’s win it back!');
+    expect(companionMapGreeting(fresh, MAIN_LEVELS[0], 0, false)).toBe('Meow! Dozy Bunny is blocking the road. Let’s go save our friends!');
     const after = createSaveBefore('1-2');
     expect(companionMapGreeting(after, getLevel('1-2'), 3, false)).toBe('Prickle is next, with something new: Hearts.');
   });
