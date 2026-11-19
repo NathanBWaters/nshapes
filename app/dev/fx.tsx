@@ -126,7 +126,7 @@ export default function FxStudio() {
   return (
     <AnchorsProvider value={anchors}>
       <View style={st.page}>
-        <View style={st.fight} onLayout={e => setStage({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
+        <View testID="fx-stage" style={st.fight} onLayout={e => setStage({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
           <View ref={anchors.rootRef} collapsable={false} pointerEvents="none" style={StyleSheet.absoluteFill} />
           <View style={st.hud}>
             <View style={st.row}>

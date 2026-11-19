@@ -14,6 +14,7 @@ module.exports = defineConfig([
       'test-results/*',
       'public/*',
       'specs/*',
+      'motion-out/*',
     ],
   },
   {
@@ -56,6 +57,27 @@ module.exports = defineConfig([
         URL: 'readonly',
         setTimeout: 'readonly',
         clearTimeout: 'readonly',
+      },
+    },
+  },
+  {
+    // The motion tools (scripts/motion) are Node ES modules; the functions they hand to
+    // Playwright run in the page, so they see the browser's globals too
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      sourceType: 'module',
+      globals: {
+        process: 'readonly',
+        Buffer: 'readonly',
+        console: 'readonly',
+        URL: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        window: 'readonly',
+        document: 'readonly',
+        getComputedStyle: 'readonly',
+        MessageChannel: 'readonly',
+        performance: 'readonly',
       },
     },
   },

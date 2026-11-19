@@ -136,6 +136,18 @@ Everything that happens in an Adventure fight is SHOWN: one move plays as a casc
 * **The clock waits for the player's own moves** (`fx.busy`). Events the clock itself causes are emitted with `clock: true` (every `TICK`) and play while it runs; rows that repeat (`ambient`) never hold it either.
 * Players can turn effects off (Pause → Effects); the code path is the same script with `reduced: true`.
 
+## Motion (IMPORTANT)
+
+> **Full documentation:** the `motion-loop` skill, [.agents/skills/motion-loop/SKILL.md](./.agents/skills/motion-loop/SKILL.md) (linked into `.claude/skills/`, so `/motion-loop` works). Doing many surfaces with sub-agents: `motion-sweep`.
+
+A model cannot watch an animation, so every motion change goes round one loop: capture the real animation frame by frame, read the frames and the measurements, write notes in frames, decide in numbers, change the code, capture again.
+
+* **No motion change is done until its frames have been read, before and after.** `npm run motion:capture -- <shot> --label before` (`scripts/motion/`) drives the web build on a virtual clock, one 16 ms frame at a time, and writes `motion-out/<shot>/<label>/`: `report.md` (who moved, on what curve, from which frame, plus hints such as LINEAR, POP-IN, DEAD-STRETCH), `contact.png` and `strip.png`. `npm run motion:sheet -- --compare <before> <after>` puts two captures one above the other.
+* **Numbers come from `src/utils/motion.ts`** (`MS`, `EASE`, `SPRING`, `STAGGER`, `SCALE`, `SQUASH`): a literal duration or curve at a call site is a decision nobody made. What each is for: the skill's `references/numbers.md`.
+* **Every surface has a shot** (`scripts/motion/shots.mjs`, `npm run motion:shots`). `fx:<event>` plays any fight event in the effects studio; `fight-set`, `fight-miss`, `fight-open`, `fight-win` are real fights. Add a shot in the same change as a new animation: it is how the next agent sees it.
+* **The ledger** ([docs/motion/ledger.md](./docs/motion/ledger.md)) lists every surface of the game with its priority, problems, shot, status and scores; reviews are in `docs/motion/reviews/`, the audit of every animation in `docs/motion/inventory/`.
+* **House rules:** enter with ease-out, leave with ease-in in two thirds of the time, linear only for rotation, progress and loop phase; one hero move per beat; position and scale may bounce, opacity never; an effect starts on the frame that causes it; a sound lands on its picture's frame or one after, never before; reduced motion drops the movement and keeps the meaning.
+
 ## Card Visual Rules (IMPORTANT)
 
 **Borders/outlines are EXCLUSIVELY for selection.** Never use card borders or outlines to indicate any other state (fire, connections, etc.).
@@ -380,6 +392,7 @@ When working on specific systems, load the relevant design doc for detailed spec
 
 * **[Adventure Mode](./docs/adventure-design.md)** - Map, levels, stars, economy, fighters, audio synth, balance bots
 * **[Balance System](./docs/balance-system.md)** - The lab, the generated report, level balance and the HP tuner; **[Balance Philosophy](./docs/balance-philosophy.md)** - what we are aiming at
+* **[Motion loop](./.agents/skills/motion-loop/SKILL.md)** - How every animation is captured, judged and improved; the ledger of surfaces is [docs/motion/ledger.md](./docs/motion/ledger.md)
 * **[Fight effects](./docs/fx-design.md)** - The cascade, the clock hold, the weapon belt, the evolution cut-in, how to add an effect
 * **[Sound](./docs/sound-design.md)** - The adaptive score: what the music tells you, weapon voices, evolution themes, the casino layer
 * **[Weapon System](./specs/weapons-design.md)** - Complete weapon roster, rarities, effects, synergies, and balance notes

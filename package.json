@@ -1,6 +1,6 @@
 {
   "name": "nshapes",
-  "version": "0.1.137",
+  "version": "0.1.138",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
@@ -34,6 +34,10 @@
     "analytics:export": "npx tsx scripts/posthog-dashboards.ts export",
     "analytics:posthog:sync": "npx tsx scripts/posthog-dashboards.ts sync",
     "analytics:posthog:pull": "npx tsx scripts/posthog-dashboards.ts pull",
+    "motion:shots": "node scripts/motion/capture.mjs --list",
+    "motion:capture": "node scripts/motion/capture.mjs",
+    "motion:sheet": "node scripts/motion/sheet.mjs",
+    "motion:analyze": "node scripts/motion/analyze.mjs",
     "prebuild": "npm run typecheck"
   },
   "dependencies": {

@@ -15,6 +15,9 @@ web-build/
 
 e2e-screenshots/
 
+# Frames, sheets and reports of the motion loop (scripts/motion)
+motion-out/
+
 # Ralph generated files
 .circuit_breaker_history
 .circuit_breaker_state
@@ -54,7 +57,8 @@ android/
 
 playwright-report/
 test-results/
-.claude/
+.claude/*
+!.claude/skills/
 .playwright-mcp/
 
 # misc
