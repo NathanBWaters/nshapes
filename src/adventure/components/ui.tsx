@@ -5,6 +5,7 @@ import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, w
 import Icon, { IconName } from '@/components/Icon';
 import { useAppActive } from '@/hooks/useAppActive';
 import { COLORS } from '@/utils/colors';
+import { MS } from '@/utils/motion';
 
 export const INK = COLORS.slateCharcoal;
 
@@ -44,9 +45,18 @@ export const DARK = {
   goldEdge: (alpha: number) => `rgba(255,222,0,${alpha})`,
 } as const;
 
-/** Results screen: earned stars pop one after another, then the unlock reveals start. */
-export const starPopDelayMs = (index: number): number => 350 + index * 450;
-export const starsLandedMs = (stars: number): number => 600 + stars * 450;
+/**
+ * Results screen: earned stars fall into their slots one after another (ResultsMotion.tsx),
+ * then the unlock reveals start. `starPopDelayMs` is when star `index` starts to fall,
+ * `starLandMs` the frame it hits its slot (its sound and its goal's ✓ belong there),
+ * `starsLandedMs` when the last one has settled and had a breath.
+ */
+export const STAR_FIRST_MS = 200;
+export const STAR_GAP_MS = 300;
+export const STAR_FALL_MS = MS.quick;
+export const starPopDelayMs = (index: number): number => STAR_FIRST_MS + index * STAR_GAP_MS;
+export const starLandMs = (index: number): number => starPopDelayMs(index) + STAR_FALL_MS;
+export const starsLandedMs = (stars: number): number => (stars > 0 ? starLandMs(stars - 1) + 450 : 600);
 
 export const Btn: React.FC<{
   label: string;

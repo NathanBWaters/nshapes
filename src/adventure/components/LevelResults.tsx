@@ -1,7 +1,12 @@
-/** End-of-level screen: stars pop in one by one, coins are paid out, unlocks wait for their reveal. */
+/**
+ * End-of-level screen: the card arrives whole, the stars fall in one by one and tick their goals,
+ * then the coins count out; unlocks wait for their reveal.
+ * The choreography lives in ResultsMotion.tsx (review: docs/motion/reviews/results-payout.md).
+ */
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import Icon from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
@@ -19,7 +24,8 @@ import { MAIN_LEVELS, mainIndexOf, getLevel } from '../data/levels';
 import { shouldShowDamageNumbers, companionResultsLine } from '../coach';
 import CompanionBubble from './CompanionBubble';
 import { explainStarBreakdown } from '../engine/challenges';
-import { Btn, CoinPill, INK, PopIn, starPopDelayMs, StarRow, TONE } from './ui';
+import { Btn, INK, starLandMs, StarRow, TONE } from './ui';
+import { coinRollAmount, coinRollTicks, coinStartMs, CountingCoinPill, FadeAt, FIGHTER_CHEER_LAG_MS, missesShownMs, ResultsCard, ResultStars, TICK_LAG_MS, TickAt } from './ResultsMotion';
 import { Silhouette, UnlockableAvatar, describeRewardUnlocks, describeUnlock } from './rewards';
 import type { FunRating, FunTag } from '@/analytics/fightEvent';
 import RoundFunPrompt from '@/components/RoundFunPrompt';
@@ -80,13 +86,47 @@ const LevelResults: React.FC<Props> = ({
       return first ? isLevelUnlocked(result.save, first) : false;
     }) ?? (won && nextLevel && nextUnlocked && nextLevel.biome !== level.biome ? nextLevel.biome : undefined);
 
+  const reduced = useReducedMotion();
   useEffect(() => {
+    // Each star rings a step higher up the chord, on the frame it hits its slot.
+    // Reduced motion shows every star at once: one chord for all of them, at once.
+    if (reduced) {
+      if (stars > 0) band.cue('star', { amount: stars });
+      return;
+    }
     const ts: ReturnType<typeof setTimeout>[] = [];
-    // Each star rings a step higher up the chord; then the coins count out like a payout
-    for (let i = 1; i <= stars; i++) ts.push(setTimeout(() => band.cue('star', { amount: i }), starPopDelayMs(i - 1)));
-    if (result.save.coinsUnlocked && run.coins > 0 && !level.rules.sandbox) ts.push(setTimeout(() => band.cue('coinRoll', { amount: Math.min(24, 4 + Math.round(run.coins / 5)) }), starPopDelayMs(stars) + 250));
+    for (let i = 1; i <= stars; i++) ts.push(setTimeout(() => band.cue('star', { amount: i }), starLandMs(i - 1)));
     return () => ts.forEach(clearTimeout);
   }, [stars]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const totalCoins = result.starCoins + result.coinsBanked + result.bountyCoins;
+  const showBank = result.save.coinsUnlocked && totalCoins > 0;
+  const coinsCount = showBank && !practice && !reduced;
+  // A bigger payout rolls longer (5 ticks for a handful of coins, 16 at most: 0.7 s)
+  const rollAmount = coinRollAmount(totalCoins);
+
+  // The fighter cheers last, when the payout is done (on the coin bell, or after the stars when no
+  // coins count): the leap answers the stars and coins, it never competes with them
+  const [cheer, setCheer] = useState(reduced || stars === 0);
+  useEffect(() => {
+    if (cheer || coinsCount) return;
+    const t = setTimeout(() => setCheer(true), starLandMs(stars - 1) + FIGHTER_CHEER_LAG_MS);
+    return () => clearTimeout(t);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const rollTicks = coinRollTicks(rollAmount);
+  // The payout starts once the player can see it: after the stars, or, when an unlock
+  // reveal covers the screen, just after the last reveal is closed
+  const [paying, setPaying] = useState(false);
+  const revealedAtStart = React.useRef(unlocksRevealed);
+  useEffect(() => {
+    if (!showBank || !unlocksRevealed || practice || reduced) return;
+    const t = setTimeout(() => {
+      band.cue('coinRoll', { amount: rollAmount });
+      setPaying(true);
+    }, revealedAtStart.current ? coinStartMs(stars) : 450);
+    return () => clearTimeout(t);
+  }, [unlocksRevealed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const extraTip = practice
     ? null
@@ -101,7 +141,6 @@ const LevelResults: React.FC<Props> = ({
       : null;
   const companionText = [companionResultsLine(level, run, stars, result.save.coinsUnlocked), extraTip].filter(Boolean).join(' ');
 
-  const totalCoins = result.starCoins + result.coinsBanked + result.bountyCoins;
   // The battle's score: damage per minute of fight clock, against the best on this level so far
   const dpm = damagePerMinute(run);
   const newBest = bestDpm !== null && dpm > bestDpm;
@@ -137,7 +176,7 @@ const LevelResults: React.FC<Props> = ({
   return (
     <View style={[st.root, { backgroundColor: biome.colors.sky, paddingTop: insets.top + 8 }]}>
       <ScrollView contentContainerStyle={st.scroll}>
-        <PopIn style={st.card}>
+        <ResultsCard reduced={reduced} style={st.card}>
           <Text style={st.levelId}>{practice ? 'PRACTICE' : level.id} · {level.name}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
             <FighterAvatar
@@ -147,7 +186,7 @@ const LevelResults: React.FC<Props> = ({
               health={resultFighterHealth}
               maxHealth={resultFighterMaxHealth}
               mood={won ? 'victory' : 'defeat'}
-              reaction={won ? { type: stars >= 3 ? 'ecstatic' : 'joy', id: 1 } : null}
+              reaction={won && cheer ? { type: stars >= 3 ? 'ecstatic' : 'joy', id: 1 } : null}
               framed
               interactive
             />
@@ -165,12 +204,15 @@ const LevelResults: React.FC<Props> = ({
             />
           </View>
           <Text style={[st.title, practice && { fontSize: 28 }, { color: won ? INK : COLORS.impactRed }]}>{title}</Text>
-          {!practice && <StarRow stars={stars} size={52} animateFrom={0} />}
+          {!practice && <ResultStars stars={stars} size={52} reduced={reduced} />}
           {/* The stars are the shards of the fallen star this foe was holding (data/story.ts) */}
           {!practice && (
-            <Text style={st.shards} testID="results-shards">
-              {stars >= 3 ? 'All 3 star shards won back!' : stars > 0 ? `${stars} of 3 star shards won back` : 'No shards this time'}
-            </Text>
+            // The caption of the stars: it would spoil them if it came first
+            <FadeAt at={missesShownMs(stars)} reduced={reduced}>
+              <Text style={st.shards} testID="results-shards">
+                {stars >= 3 ? 'All 3 star shards won back!' : stars > 0 ? `${stars} of 3 star shards won back` : 'No shards this time'}
+              </Text>
+            </FadeAt>
           )}
           <CompanionBubble
             testID="results-companion-bubble"
@@ -184,19 +226,41 @@ const LevelResults: React.FC<Props> = ({
 
           {!practice && (
             <View style={st.breakdownBox} testID="results-star-breakdown">
-              {explainStarBreakdown(level, run, stars).map(row => (
-                <View key={row.star} style={[st.breakdownRow, row.earned ? st.breakdownRowEarned : st.breakdownRowMissed]} testID={`results-star-row-${row.star}`}>
-                  <Text style={[st.breakdownStars, row.earned ? st.breakdownStarsOn : st.breakdownStarsOff]}>
-                    {'★'.repeat(row.star)}
-                  </Text>
-                  <Text style={st.breakdownGoal} numberOfLines={2}>{row.goal}</Text>
-                  <View style={[st.breakdownBadge, row.earned ? st.breakdownBadgeOk : st.breakdownBadgeMiss]}>
-                    <Text style={[st.breakdownBadgeText, row.earned ? st.breakdownBadgeTextOk : st.breakdownBadgeTextMiss]}>
-                      {row.earned ? `✓ ${row.reason}` : `✗ ${row.reason}`}
+              {/* The goals are there from the start; each ✓ lands just behind its star, the misses once the stars are done */}
+              {explainStarBreakdown(level, run, stars).map(row => {
+                const lands = row.earned && row.star <= stars ? starLandMs(row.star - 1) + TICK_LAG_MS : missesShownMs(stars);
+                return (
+                  <View key={row.star} style={[st.breakdownRow, row.earned ? st.breakdownRowEarned : st.breakdownRowMissed]} testID={`results-star-row-${row.star}`}>
+                    <Text style={[st.breakdownStars, row.earned ? st.breakdownStarsOn : st.breakdownStarsOff]}>
+                      {'★'.repeat(row.star)}
                     </Text>
+                    <Text style={st.breakdownGoal} numberOfLines={2}>{row.goal}</Text>
+                    <TickAt at={lands} reduced={reduced} style={st.breakdownBadgeWrap}>
+                      <View style={[st.breakdownBadge, row.earned ? st.breakdownBadgeOk : st.breakdownBadgeMiss]}>
+                        <Text style={[st.breakdownBadgeText, row.earned ? st.breakdownBadgeTextOk : st.breakdownBadgeTextMiss]}>
+                          {row.earned ? `✓ ${row.reason}` : `✗ ${row.reason}`}
+                        </Text>
+                      </View>
+                    </TickAt>
                   </View>
-                </View>
-              ))}
+                );
+              })}
+            </View>
+          )}
+
+          {/* The payout sits right under the goals, where it is on screen without scrolling */}
+          {showBank && (
+            <View style={st.bank} testID="results-bank">
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={st.bankLabel}>Coins earned</Text>
+                {result.granted.map(g => (
+                  <Text key={g.star} style={st.bankLine}>{'★'.repeat(g.star)} reward  +{g.reward.coins}</Text>
+                ))}
+                {result.coinsBanked > 0 && <Text style={st.bankLine}>Coin drops  +{result.coinsBanked}</Text>}
+                {result.bountyCoins > 0 && <Text style={st.bankLine}>Bounties  +{result.bountyCoins}</Text>}
+              </View>
+              {/* Counts up tick for tick with the coinRoll cue, and bumps on its closing bell */}
+              <CountingCoinPill total={totalCoins} running={paying} ticks={rollTicks} reduced={reduced || practice} onBell={() => setCheer(true)} />
             </View>
           )}
 
@@ -246,19 +310,6 @@ const LevelResults: React.FC<Props> = ({
             />
           )}
 
-          {result.save.coinsUnlocked && totalCoins > 0 && (
-            <View style={st.bank}>
-              <View style={{ flex: 1, gap: 2 }}>
-                <Text style={st.bankLabel}>Coins earned</Text>
-                {result.granted.map(g => (
-                  <Text key={g.star} style={st.bankLine}>{'★'.repeat(g.star)} reward  +{g.reward.coins}</Text>
-                ))}
-                {result.coinsBanked > 0 && <Text style={st.bankLine}>Coin drops  +{result.coinsBanked}</Text>}
-                {result.bountyCoins > 0 && <Text style={st.bankLine}>Bounties  +{result.bountyCoins}</Text>}
-              </View>
-              <CoinPill coins={totalCoins} />
-            </View>
-          )}
 
           {result.completedBounties.length > 0 && (
             <View style={st.bountyDoneBox}>
@@ -351,7 +402,7 @@ const LevelResults: React.FC<Props> = ({
             <RoundFunPrompt rating={funRating} tags={funTags} onChange={onRateFun} testIDPrefix="results-fun" />
           )}
 
-        </PopIn>
+        </ResultsCard>
       </ScrollView>
 
       {/* What next: always in reach, never below the fold */}
@@ -423,7 +474,8 @@ const st = StyleSheet.create({
   breakdownStarsOn: { color: '#E0A800' },
   breakdownStarsOff: { color: '#B8B0A4' },
   breakdownGoal: { flex: 1, fontSize: 12, fontWeight: '800', color: INK },
-  breakdownBadge: { flexShrink: 1, maxWidth: '52%', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
+  breakdownBadgeWrap: { flexShrink: 1, maxWidth: '52%' },
+  breakdownBadge: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
   breakdownBadgeOk: { backgroundColor: '#D4F4EE' },
   breakdownBadgeMiss: { backgroundColor: '#FFE8E5' },
   breakdownBadgeText: { fontSize: 11, fontWeight: '900' },

@@ -46,6 +46,7 @@ export const CURVE = {
   exit: [0.7, 0, 0.84, 0],
   pop: [0.34, 1.56, 0.64, 1],
   drift: [0.37, 0, 0.63, 1],
+  impact: [0.3, 0, 0.75, 0.3],
 } as const;
 
 const bezier = (c: readonly [number, number, number, number]) => Easing.bezier(c[0], c[1], c[2], c[3]);
@@ -70,6 +71,8 @@ export const EASE = {
   pop: bezier(CURVE.pop),
   /** Ambient drift, breathing (ease-in-out-sine) */
   drift: bezier(CURVE.drift),
+  /** Falling or thrown INTO a hit: gathers speed and lands at full speed (the hit is the stop). Never an entrance that just arrives. */
+  impact: bezier(CURVE.impact),
   /** Rotation, progress bars, loop phase. Never a move. */
   linear: Easing.linear,
 } as const;
@@ -148,6 +151,8 @@ export const SCALE = {
   pop: 1.08,
   /** A reward landing */
   reward: 1.18,
+  /** How big a slammed reward (a results star) starts before it falls into its slot */
+  slam: 1.5,
 } as const;
 
 /** Squash and stretch keep the volume: scaleX × scaleY stays near 1. */
