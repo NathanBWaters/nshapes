@@ -38,6 +38,7 @@
     "motion:capture": "node scripts/motion/capture.mjs",
     "motion:sheet": "node scripts/motion/sheet.mjs",
     "motion:analyze": "node scripts/motion/analyze.mjs",
+    "motion:flipbook": "node scripts/motion/flipbook.mjs",
     "prebuild": "npm run typecheck"
   },
   "dependencies": {

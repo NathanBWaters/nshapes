@@ -20,7 +20,10 @@ npm run motion:capture -- <shot> --label before       # capture → motion-out/<
 npm run motion:sheet -- <dir> --from 10 --to 25       # a strip of exactly these frames
 npm run motion:sheet -- --compare <dirA> <dirB>       # the same frames of two captures, A above B
 npm run motion:analyze -- <dir>                       # re-run the numbers on an existing capture
+npm run motion:flipbook -- <dirA> <dirB> --out x.html # for a person: the two captures as films, side by side
 ```
+
+The sheets are for you, who cannot watch. The flipbook is for the person who can: one self-contained HTML page where each capture plays (pause, slow motion, scrub), two captures of a shot side by side. Make one when you hand work to a human: `--pair "Title|before|after"` can be repeated to put several surfaces on one page.
 
 Options of `motion:capture`:
 

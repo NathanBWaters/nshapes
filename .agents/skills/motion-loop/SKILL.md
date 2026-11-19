@@ -53,6 +53,7 @@ npm run motion:capture -- fx:hit --label r1 --twice    # --twice: capture again 
 npm run motion:capture -- fx:hit --label reduced --reduced
 npm run motion:sheet -- motion-out/fx-hit/r1 --from 10 --to 25              # a strip of exactly these frames
 npm run motion:sheet -- --compare motion-out/fx-hit/before motion-out/fx-hit/r1
+npm run motion:flipbook -- motion-out/fx-hit/before motion-out/fx-hit/r1   # a page a person can watch
 ```
 
 - Dev server: `http://localhost:8099` by default (`.claude/launch.json` → `nshapes-web`, or `npx expo start --web --port 8099`). Another port: `--base http://localhost:PORT` or `MOTION_BASE_URL`.

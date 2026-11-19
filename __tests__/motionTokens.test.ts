@@ -122,7 +122,7 @@ describe('motion skills', () => {
 
   it('the commands the skill tells agents to run exist', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-    for (const script of ['motion:shots', 'motion:capture', 'motion:sheet', 'motion:analyze']) expect(pkg.scripts[script]).toBeTruthy();
-    for (const tool of ['capture.mjs', 'sheet.mjs', 'analyze.mjs', 'shots.mjs', 'lib.mjs']) expect(fs.existsSync(path.join(ROOT, 'scripts', 'motion', tool))).toBe(true);
+    for (const script of ['motion:shots', 'motion:capture', 'motion:sheet', 'motion:analyze', 'motion:flipbook']) expect(pkg.scripts[script]).toBeTruthy();
+    for (const tool of ['capture.mjs', 'sheet.mjs', 'analyze.mjs', 'flipbook.mjs', 'shots.mjs', 'shot-kit.mjs', 'lib.mjs']) expect(fs.existsSync(path.join(ROOT, 'scripts', 'motion', tool))).toBe(true);
   });
 });
