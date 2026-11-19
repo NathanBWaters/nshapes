@@ -11,7 +11,8 @@ import { StyleSheet } from 'react-native';
 import Animated, { cancelAnimation, Easing, ReduceMotion, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { useAppActive } from '@/hooks/useAppActive';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
-import { EASE, MS, SPRING } from '@/utils/motion';
+import { EASE, exitMs, MS, SPRING } from '@/utils/motion';
+import { RADIUS } from '@/utils/colors';
 
 export const CARD_MOTION = {
   /** A freshly dealt card grows from this size... */
@@ -37,6 +38,19 @@ export const CARD_MOTION = {
   leaveAfterMs: 110,
   /** A pointed-out card hops, rests this long, and hops again */
   hopRestMs: 1500,
+  /** A wrong pick: each of the three cards shakes sideways, swings that shrink (px, then ms per swing) */
+  missShakePx: [-12, 9, -5, 0],
+  missShakeMs: [48, 64, 64, 80],
+  /** ...is washed red (never a border: borders are for selection) */
+  missWashOpacity: 0.3,
+  missWashColor: '#EF4444',
+  /** ...and steps out before the board replaces it (Adventure replaces a wrong pick 520 ms after it) */
+  missLeaveAtMs: 300,
+  missLeaveScale: 0.88,
+  /** If nothing replaced it (a tutorial board keeps its cards), it comes back after this long */
+  missReturnAtMs: 700,
+  /** GameBoard keeps a card marked as missed this long (past its return) */
+  missHoldMs: 900,
 } as const;
 
 interface Props {
@@ -45,16 +59,23 @@ interface Props {
   pointedOut: boolean;
   /** When this card starts to be dealt, after it arrives (ms): GameBoard sweeps the cards dealt together from the top left */
   dealDelayMs: number;
+  /** This card was one of three that are not a Set: it shakes, washes red and steps out */
+  missed?: boolean;
+  /** Adventure's Effects switch: off keeps the colour and the fades, drops the shake and the scale */
+  effects?: boolean;
   children: React.ReactNode;
 }
 
-const CardMotion: React.FC<Props> = ({ selected, pointedOut, dealDelayMs, children }) => {
+const CardMotion: React.FC<Props> = ({ selected, pointedOut, dealDelayMs, missed = false, effects = true, children }) => {
   const reduced = useReducedMotion();
   const appActive = useAppActive();
   const dealShown = useSharedValue(0);
   const dealScale = useSharedValue(reduced ? 1 : CARD_MOTION.dealFromScale);
   const lift = useSharedValue(1);
   const hop = useSharedValue(0);
+  const missX = useSharedValue(0);
+  const missWash = useSharedValue(0);
+  const missLeave = useSharedValue(0);
   const mounted = useRef(false);
 
   // Dealt in once, when the card arrives in the slot
@@ -102,16 +123,60 @@ const CardMotion: React.FC<Props> = ({ selected, pointedOut, dealDelayMs, childr
     return () => cancelAnimation(hop);
   }, [hopping, hop]);
 
+  // A wrong pick, shown on the three cards themselves: the wash and the step out are colour and
+  // opacity (kept with reduced motion or Effects off); the shake and the shrink are movement (dropped).
+  const moves = effects && !reduced;
+  useEffect(() => {
+    if (!missed) return;
+    // (colour and opacity are kept under reduced motion: Reanimated would skip them, delays included, unless told)
+    const keep = { reduceMotion: ReduceMotion.Never } as const;
+    missWash.value = withSequence(
+      withTiming(CARD_MOTION.missWashOpacity, { duration: MS.feedback, easing: EASE.ui, ...keep }),
+      withDelay(CARD_MOTION.missReturnAtMs - MS.feedback, withTiming(0, { duration: MS.feedback, easing: EASE.ui, ...keep }), ReduceMotion.Never)
+    );
+    const leaveMs = exitMs(MS.move);
+    missLeave.value = withSequence(
+      withDelay(CARD_MOTION.missLeaveAtMs, withTiming(1, { duration: leaveMs, easing: EASE.exit, ...keep }), ReduceMotion.Never),
+      withDelay(CARD_MOTION.missReturnAtMs - CARD_MOTION.missLeaveAtMs - leaveMs, withTiming(0, { duration: MS.feedback, easing: EASE.ui, ...keep }), ReduceMotion.Never)
+    );
+    if (moves) {
+      const last = CARD_MOTION.missShakePx.length - 1;
+      missX.value = withSequence(
+        ...CARD_MOTION.missShakePx.map((px, i) =>
+          withTiming(px, { duration: CARD_MOTION.missShakeMs[i], easing: i === 0 || i === last ? EASE.ui : EASE.drift })
+        )
+      );
+    }
+    return () => {
+      cancelAnimation(missX);
+      cancelAnimation(missWash);
+      cancelAnimation(missLeave);
+      missX.value = 0;
+      missWash.value = 0;
+      missLeave.value = 0;
+    };
+  }, [missed, moves, missX, missWash, missLeave]);
+
   useEffect(() => {
     mounted.current = true;
   }, []);
 
   const style = useAnimatedStyle(() => ({
-    opacity: dealShown.value,
-    transform: [{ translateY: -7 * hop.value }, { scale: dealScale.value * lift.value }],
+    opacity: dealShown.value * (1 - missLeave.value),
+    transform: [
+      { translateX: missX.value },
+      { translateY: -7 * hop.value },
+      { scale: dealScale.value * lift.value * (moves ? 1 - (1 - CARD_MOTION.missLeaveScale) * missLeave.value : 1) },
+    ],
   }));
+  const washStyle = useAnimatedStyle(() => ({ opacity: missWash.value }));
 
-  return <Animated.View style={[st.fill, style]}>{children}</Animated.View>;
+  return (
+    <Animated.View style={[st.fill, style]}>
+      {children}
+      {missed && <Animated.View pointerEvents="none" style={[st.wash, washStyle]} />}
+    </Animated.View>
+  );
 };
 
 /**
@@ -132,6 +197,7 @@ export const CardLeaving: React.FC<{ children: React.ReactNode }> = ({ children 
 
 const st = StyleSheet.create({
   fill: { flex: 1 },
+  wash: { ...StyleSheet.absoluteFillObject, borderRadius: RADIUS.module, backgroundColor: CARD_MOTION.missWashColor },
 });
 
 export default CardMotion;

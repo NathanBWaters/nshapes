@@ -1,11 +1,6 @@
 import React, { memo, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { View, StyleSheet } from 'react-native';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSequence,
-  withTiming,
-} from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 import { Card as CardType, PlayerStats, CardReward, AttributeName, Weapon, Shape, Color, BoardConnection } from '@/types';
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import Card from './Card';
@@ -20,7 +15,6 @@ import { useAutoHint } from '@/hooks/useAutoHint';
 import { useAutoPlayer } from '@/hooks/useAutoPlayer';
 import { useScreenShake } from '@/hooks/useScreenShake';
 import { useParticles } from '@/hooks/useParticles';
-import { DURATION } from '@/utils/animation';
 import { STAGGER } from '@/utils/motion';
 import { triggerHaptic, selectionHaptic } from '@/utils/haptics';
 import { playSelect, playSound } from '@/utils/sounds';
@@ -89,6 +83,8 @@ interface GameBoardProps {
    * slot simply stays empty until its next card is dealt instead of listing the card's rewards.
    */
   quietRewards?: boolean;
+  /** Adventure's Effects switch: off, a wrong pick washes and fades its cards without shaking them */
+  effects?: boolean;
 }
 
 const GameBoard: React.FC<GameBoardProps> = ({
@@ -123,6 +119,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
   slotRef,
   onSlotLayout,
   quietRewards = false,
+  effects = true,
 }) => {
   recordComponentRender('GameBoard');
   const [selectedCards, setSelectedCards] = useState<CardType[]>([]);
@@ -194,23 +191,15 @@ const GameBoard: React.FC<GameBoardProps> = ({
     onBoardIdleChange?.(isSleepyIdle);
   }, [isSleepyIdle, onBoardIdleChange]);
 
-  // Screen shake for explosions and failures
-  const { shakeStyle, triggerShake, shake } = useScreenShake();
+  // Screen shake for explosions (a wrong pick is shown on its three cards instead: CardMotion `missed`)
+  const { shakeStyle, triggerShake } = useScreenShake();
 
-  const failureFlashOpacity = useSharedValue(0);
-
-  const failureFlashStyle = useAnimatedStyle(() => ({
-    opacity: failureFlashOpacity.value,
-  }));
-
-  // Trigger failure flash and shake
-  const triggerFailureFlash = useCallback(() => {
-    failureFlashOpacity.value = withSequence(
-      withTiming(0.2, { duration: 50 }),
-      withTiming(0, { duration: DURATION.normal })
-    );
-    shake('medium');
-  }, [failureFlashOpacity, shake]);
+  // The three cards of the last wrong pick, while they show it
+  const [missedCardIds, setMissedCardIds] = useState<string[]>([]);
+  const markMissed = useCallback((ids: string[]) => {
+    setMissedCardIds(ids);
+    setTimeout(() => setMissedCardIds(prev => (prev === ids ? [] : prev)), CARD_MOTION.missHoldMs);
+  }, []);
 
   // Particle effects for explosions
   const { spawnParticles, Particles } = useParticles();
@@ -491,7 +480,8 @@ const GameBoard: React.FC<GameBoardProps> = ({
             setRevealingRewards(prev => prev.filter(r => r.matchId !== matchId));
           }, REWARD_REVEAL_MS);
         } else {
-          triggerFailureFlash();
+          // Shown on the three cards that were wrong, not on the whole board
+          markMissed(newSelectedCards.map(c => c.id));
           triggerHaptic('error');
           playSound('matchInvalid');
 
@@ -560,10 +550,6 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
   return (
     <Animated.View testID="game-board" nativeID="gameboard-container" style={[styles.container, shakeStyle]}>
-      <Animated.View
-        style={[styles.flashOverlay, styles.failureFlash, failureFlashStyle]}
-        pointerEvents="none"
-      />
       <Particles />
 
       {/* Enemy UI Overlay - Shows enemy info and status effects */}
@@ -671,7 +657,13 @@ const GameBoard: React.FC<GameBoardProps> = ({
                         <RewardReveal reward={reward} />
                       )
                     ) : (
-                      <CardMotion selected={isSelected} pointedOut={isHint} dealDelayMs={dealDelays.get(card.id) ?? 0}>
+                      <CardMotion
+                        selected={isSelected}
+                        pointedOut={isHint}
+                        dealDelayMs={dealDelays.get(card.id) ?? 0}
+                        missed={missedCardIds.includes(card.id)}
+                        effects={effects}
+                      >
                         <Card
                           card={cardWithState}
                           onClick={stableHandleCardClick}
@@ -725,17 +717,6 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 12,
     backgroundColor: 'rgba(56, 56, 56, 0.05)',
-  },
-  flashOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 100,
-  },
-  failureFlash: {
-    backgroundColor: '#EF4444',
   },
   enemyOverlay: {
     position: 'absolute',
