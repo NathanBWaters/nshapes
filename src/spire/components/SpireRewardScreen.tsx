@@ -9,6 +9,8 @@ import React, { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import Icon from '@/components/Icon';
+import RoundFunPrompt from '@/components/RoundFunPrompt';
+import type { FunRating, FunTag } from '@/analytics/fightEvent';
 import { COLORS } from '@/utils/colors';
 import type { ArcanaId } from '@/adventure/types';
 import { getArmoryWeapon } from '@/adventure/data/armory';
@@ -28,6 +30,10 @@ interface Props {
   run: SpireRun;
   reward: SpireRewardBundle;
   lastFight: SpireLastFightSnapshot | null;
+  funRating?: FunRating | null;
+  funTags?: readonly FunTag[];
+  onRateFun?: (rating: FunRating | null, tags: FunTag[]) => void;
+  onReplayOpened?: () => void;
   onClaimWeapon: (index: number) => void;
   onRerollWeapons: () => void;
   onSkipWeapon: () => void;
@@ -42,6 +48,10 @@ const SpireRewardScreen: React.FC<Props> = ({
   run,
   reward,
   lastFight,
+  funRating = null,
+  funTags = [],
+  onRateFun,
+  onReplayOpened,
   onClaimWeapon,
   onRerollWeapons,
   onSkipWeapon,
@@ -102,7 +112,7 @@ const SpireRewardScreen: React.FC<Props> = ({
               variant="secondary"
               label="What happened? See the fight"
               icon="delapouite/scroll-quill"
-              onPress={() => { sfx('click'); setReplayOpen(true); }}
+              onPress={() => { sfx('click'); onReplayOpened?.(); setReplayOpen(true); }}
             />
           )}
         </PopIn>
@@ -233,6 +243,17 @@ const SpireRewardScreen: React.FC<Props> = ({
             </View>
             <Btn small variant="ghost" label="Decline Arcana" onPress={onSkipArcana} />
           </View>
+        )}
+
+        {onRateFun && (
+          <RoundFunPrompt
+            rating={funRating}
+            tags={funTags}
+            onChange={onRateFun}
+            compact
+            title="Was that battle fun?"
+            testIDPrefix="spire-reward-fun"
+          />
         )}
 
         <Btn

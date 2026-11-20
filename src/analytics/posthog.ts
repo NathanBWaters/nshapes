@@ -66,6 +66,7 @@ export interface PlayerAnalyticsProfile {
   totalAbandons: number;
   totalPlayMs: number;
   adventureFights: number;
+  spireFights: number;
   freePlayFights: number;
   classicFights: number;
   funUpCount: number;
@@ -85,7 +86,7 @@ export interface PlayerAnalyticsProfile {
 }
 
 export interface FightProfileUpdate {
-  mode: 'adventure' | 'free_play' | 'classic';
+  mode: 'adventure' | 'spire' | 'free_play' | 'classic';
   outcome: 'won' | 'survived' | 'lost' | 'practice' | 'left';
   durationMs: number;
   fighter?: string;
@@ -276,6 +277,7 @@ const emptyProfile = (nowIso: string): PlayerAnalyticsProfile => ({
   totalAbandons: 0,
   totalPlayMs: 0,
   adventureFights: 0,
+  spireFights: 0,
   freePlayFights: 0,
   classicFights: 0,
   funUpCount: 0,
@@ -367,6 +369,7 @@ const applyProfileDelta = (
   if (!next.initialMode) next.initialMode = delta.mode;
 
   if (delta.mode === 'adventure') next.adventureFights += 1;
+  else if (delta.mode === 'spire') next.spireFights += 1;
   else if (delta.mode === 'free_play') next.freePlayFights += 1;
   else next.classicFights += 1;
 
@@ -430,6 +433,7 @@ const buildPersonProps = (profile: PlayerAnalyticsProfile) => {
       fun_rate: rated > 0 ? Math.round((profile.funUpCount / rated) * 1000) / 1000 : null,
       fun_ratings_count: rated,
       adventure_fights: profile.adventureFights,
+      spire_fights: profile.spireFights,
       free_play_fights: profile.freePlayFights,
       classic_fights: profile.classicFights,
       highest_world_unlocked: profile.highestWorldUnlocked,

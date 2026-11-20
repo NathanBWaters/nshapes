@@ -15,8 +15,20 @@ import type { CharacterName } from '@/types';
 import { music, setMusicEnabled, setSfxOverride } from '@/audio';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { loadAdventureSave, writeAdventureSave } from '@/adventure/save';
+import { battleRecord, wasFought } from '@/adventure/history';
+import type { FightTape } from '@/adventure/engine/replay';
 import AdventureRun from '@/adventure/components/AdventureRun';
 import type { RunState } from '@/adventure/types';
+import {
+  commitSpireFight,
+  markReplayOpened,
+  rateFight,
+  stageSpireFight,
+  trackFight,
+  type FunRating,
+  type FunTag,
+  type SpireFightMeta,
+} from '@/analytics/fightEvent';
 import {
   buildSpireWeaponBuilds,
   SPIRE_FIGHT_FEATURES,
@@ -97,6 +109,11 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
   const [inSetup, setInSetup] = useState<boolean>(() => !initialRun);
   const [buildOpen, setBuildOpen] = useState(false);
   const [lastFight, setLastFight] = useState<SpireLastFightSnapshot | null>(null);
+  const [lastFightFeedback, setLastFightFeedback] = useState<{
+    fightId: string;
+    funRating: FunRating | null;
+    funTags: FunTag[];
+  } | null>(null);
 
   const run = savedRun;
 
@@ -110,6 +127,7 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
     setSfxOverride(prefs.musicOn);
   }, [prefs.musicOn]);
   useEffect(() => () => {
+    commitSpireFight('spire_unmount');
     setSfxOverride(null);
     music.stop();
   }, []);
@@ -131,8 +149,10 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
   }, []);
 
   const handleStartNew = useCallback((fighter: CharacterName, ascension: number, seed: number) => {
+    commitSpireFight('spire_new_run');
     const fresh = createSpireRun(fighter, ascension, seed);
     setLastFight(null);
+    setLastFightFeedback(null);
     updateRun(fresh);
     setInSetup(false);
   }, [updateRun]);
@@ -142,12 +162,39 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
   }, [savedRun]);
 
   const handleAbandonActive = useCallback(() => {
+    commitSpireFight('spire_abandon');
     updateRun(null);
     setLastFight(null);
+    setLastFightFeedback(null);
   }, [updateRun]);
 
-  const handleBattleFinish = useCallback((fightRun: RunState) => {
-    if (!run) return;
+  const spireFightMeta = (spireRun: SpireRun, fightRun: RunState): SpireFightMeta => ({
+    runId: spireRun.id,
+    act: spireRun.act,
+    floor: spireRun.floor,
+    ascension: spireRun.ascension,
+    endless: spireRun.endless,
+    nodeKind: spireRun.activeEncounter?.kind ?? 'skirmish',
+    weaponLevels: { ...spireRun.weaponLevels },
+    parries: fightRun.parriesLanded,
+    perfectParries: fightRun.perfectParriesLanded,
+  });
+
+  const handleBattleFinish = useCallback((fightRun: RunState, tape: FightTape) => {
+    if (!run || !run.activeEncounter) return;
+    const level = spireEncounterToLevel(run, run.activeEncounter);
+    const won = fightRun.status === 'won' && fightRun.endReason === 'defeated';
+    const at = Date.now();
+    const fightId = `${at}-${tape.recording.seed}`;
+    const record = {
+      ...battleRecord(level, fightRun, { at, fightId }),
+      outcome: (won ? 'won' : 'lost') as 'won' | 'lost',
+    };
+    stageSpireFight(level, fightRun, record, tape, {
+      fightId,
+      spire: spireFightMeta(run, fightRun),
+    });
+    setLastFightFeedback({ fightId, funRating: null, funTags: [] });
     setLastFight({
       run: fightRun,
       weapons: spireHeldWeapons(run),
@@ -166,11 +213,26 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
     }
   }, [run, updateRun]);
 
+  const handleRateFun = useCallback((rating: FunRating | null, tags: FunTag[]) => {
+    setLastFightFeedback(prev => {
+      if (!prev) return prev;
+      rateFight(prev.fightId, { funRating: rating, funTags: tags }, { source: 'spire' });
+      return { ...prev, funRating: rating, funTags: tags };
+    });
+  }, []);
+
+  const handleReplayOpened = useCallback(() => {
+    if (lastFightFeedback) markReplayOpened(lastFightFeedback.fightId);
+  }, [lastFightFeedback]);
+
   const handleFinishRewards = useCallback(() => {
     if (!run) return;
     const next = finishSpireRewards(run);
     if (next.phase === 'victory') {
       setMeta(recordSpireRunEnd(next, true));
+    } else {
+      commitSpireFight('spire_reward_continue');
+      setLastFightFeedback(null);
     }
     updateRun(next);
   }, [run, updateRun]);
@@ -212,9 +274,18 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
         save={virtualSave}
         seed={(run.seed ^ (run.floor * 7919) ^ (run.act * 104729)) >>> 0}
         autoPlayer={autoPlayer}
-        onFinish={fightRun => handleBattleFinish(fightRun)}
-        onQuit={() => {
-          // Saving mid-fight safely returns to the Spire encounter preview / menu without losing run progress
+        onFinish={(fightRun, tape) => handleBattleFinish(fightRun, tape)}
+        onQuit={(fightRun, tape) => {
+          // Record retreats once a move was made, then return safely to the pre-battle briefing
+          if (wasFought(fightRun)) {
+            const at = Date.now();
+            const fightId = `${at}-${tape.recording.seed}`;
+            const record = battleRecord(activeLevel, fightRun, { at, left: true, fightId });
+            trackFight(activeLevel, fightRun, record, tape, {
+              fightId,
+              spire: spireFightMeta(run, fightRun),
+            });
+          }
           music.stop();
           updateRun({ ...run, phase: 'preview' });
         }}
@@ -246,17 +317,29 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
         run={run}
         victory={run.phase === 'victory'}
         lastFight={lastFight}
+        funRating={lastFightFeedback?.funRating ?? null}
+        funTags={lastFightFeedback?.funTags}
+        onRateFun={lastFightFeedback ? handleRateFun : undefined}
+        onReplayOpened={handleReplayOpened}
         onEnterEndless={
           run.phase === 'victory'
-            ? () => updateRun(enterEndlessSpire(run))
+            ? () => {
+                commitSpireFight('spire_enter_endless');
+                setLastFightFeedback(null);
+                updateRun(enterEndlessSpire(run));
+              }
             : undefined
         }
         onNewRun={() => {
+          commitSpireFight('spire_end_new_run');
+          setLastFightFeedback(null);
           writeSpireRun(null);
           setSavedRun(null);
           setInSetup(true);
         }}
         onExitToMenu={() => {
+          commitSpireFight('spire_end_exit');
+          setLastFightFeedback(null);
           if (run.phase === 'victory' || run.phase === 'defeat') {
             writeSpireRun(null);
             setSavedRun(null);
@@ -274,6 +357,8 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
         run={run}
         onOpenBuild={() => setBuildOpen(true)}
         onExitToMenu={() => {
+          commitSpireFight('spire_header_exit');
+          setLastFightFeedback(null);
           writeSpireRun(run);
           setInSetup(true);
         }}
@@ -300,6 +385,10 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
           run={run}
           reward={run.reward}
           lastFight={lastFight}
+          funRating={lastFightFeedback?.funRating ?? null}
+          funTags={lastFightFeedback?.funTags}
+          onRateFun={lastFightFeedback ? handleRateFun : undefined}
+          onReplayOpened={handleReplayOpened}
           onClaimWeapon={idx => updateRun(claimRewardWeapon(run, idx))}
           onRerollWeapons={() => updateRun(rerollRewardWeapons(run))}
           onSkipWeapon={() => updateRun(skipRewardWeapon(run))}

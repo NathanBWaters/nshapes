@@ -8,6 +8,8 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import Icon from '@/components/Icon';
+import RoundFunPrompt from '@/components/RoundFunPrompt';
+import type { FunRating, FunTag } from '@/analytics/fightEvent';
 import { FighterAvatar } from '@/components/fighters';
 import { COLORS } from '@/utils/colors';
 import { buildDamageStory, buildSpireRunDamageStory } from '@/adventure/engine/damageStory';
@@ -23,6 +25,10 @@ interface Props {
   run: SpireRun;
   victory: boolean;
   lastFight: SpireLastFightSnapshot | null;
+  funRating?: FunRating | null;
+  funTags?: readonly FunTag[];
+  onRateFun?: (rating: FunRating | null, tags: FunTag[]) => void;
+  onReplayOpened?: () => void;
   onEnterEndless?: () => void;
   onNewRun: () => void;
   onExitToMenu: () => void;
@@ -32,6 +38,10 @@ const SpireEndScreen: React.FC<Props> = ({
   run,
   victory,
   lastFight,
+  funRating = null,
+  funTags = [],
+  onRateFun,
+  onReplayOpened,
   onEnterEndless,
   onNewRun,
   onExitToMenu,
@@ -141,10 +151,21 @@ const SpireEndScreen: React.FC<Props> = ({
               variant="secondary"
               label="See Final Fight Replay"
               icon="delapouite/scroll-quill"
-              onPress={() => { sfx('click'); setReplayOpen(true); }}
+              onPress={() => { sfx('click'); onReplayOpened?.(); setReplayOpen(true); }}
             />
           )}
         </View>
+
+        {onRateFun && (
+          <RoundFunPrompt
+            rating={funRating}
+            tags={funTags}
+            onChange={onRateFun}
+            compact
+            title={victory ? 'Was that climb fun?' : 'Was that fight fun?'}
+            testIDPrefix="spire-end-fun"
+          />
+        )}
 
         <View style={st.actions}>
           {victory && onEnterEndless && (

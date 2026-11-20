@@ -82,12 +82,25 @@ export const levelOrderOf = (level: LevelDef): number => {
   return root >= 0 ? root + 1 : 0;
 };
 
+export interface SpireFightMeta {
+  runId: string;
+  act: number;
+  floor: number;
+  ascension: number;
+  endless: boolean;
+  nodeKind: 'skirmish' | 'elite' | 'boss';
+  weaponLevels: Readonly<Record<string, number>>;
+  parries: number;
+  perfectParries: number;
+}
+
 export interface FightEventExtras {
   fightId?: string;
   funRating?: FunRating | null;
   funTags?: FunTag[];
   replayOpened?: boolean;
   afterSave?: AdventureSave;
+  spire?: SpireFightMeta;
 }
 
 const highestWorldFromSave = (save: AdventureSave, wonWorld: number | null): number => {
@@ -137,16 +150,30 @@ export const fightEventProps = (
   const accuracy =
     record.sets + record.mistakes > 0 ? round3(record.sets / (record.sets + record.mistakes)) : null;
 
+  const spire = extras.spire;
   return {
     fight_id: fightId,
-    mode: 'adventure',
+    mode: spire ? 'spire' : 'adventure',
     level_id: level.id,
     level_name: level.name,
-    level_order: levelOrderOf(level),
-    world,
+    level_order: spire ? spire.floor : levelOrderOf(level),
+    world: spire ? spire.act : world,
     side_path: !!level.branchOf,
     boss: !!level.isBoss,
     practice: !!level.rules.sandbox,
+    ...(spire
+      ? {
+          spire_run_id: spire.runId,
+          spire_act: spire.act,
+          spire_floor: spire.floor,
+          spire_ascension: spire.ascension,
+          spire_endless: spire.endless,
+          spire_node_kind: spire.nodeKind,
+          spire_weapon_levels: spire.weaponLevels,
+          parries: spire.parries,
+          perfect_parries: spire.perfectParries,
+        }
+      : {}),
     foe: record.foe,
     fighter: record.fighter,
     outcome: record.outcome,
@@ -211,6 +238,16 @@ const buildAdventureProfileDelta = (
   tape: FightTape,
   extras: FightEventExtras
 ): FightProfileUpdate => {
+  if (extras.spire) {
+    return {
+      mode: 'spire',
+      outcome: record.outcome,
+      durationMs: record.durationMs,
+      fighter: record.fighter,
+      weapons: record.weapons,
+      funRating: extras.funRating ?? record.funRating ?? null,
+    };
+  }
   const saveAfter = extras.afterSave ?? tape.save;
   const world = Number(level.id.split('-')[0]) || 1;
   return {
@@ -251,8 +288,21 @@ export const stageAdventureFight = (
   return fightId;
 };
 
+/** Stages a Starfall Spire `fight_ended` event while the reward/end screen is visible so 👍/👎 feedback merges in place. */
+export const stageSpireFight = (
+  level: LevelDef,
+  run: RunState,
+  record: BattleRecord,
+  tape: FightTape,
+  extras: FightEventExtras & { spire: SpireFightMeta }
+): string => stageAdventureFight(level, run, record, tape, extras);
+
 /** Flushes a staged Adventure `fight_ended` event when leaving results or backgrounding. */
 export const commitAdventureFight = (reason: string = 'navigation'): boolean =>
+  commitStagedEvent(reason, true);
+
+/** Flushes a staged Starfall Spire `fight_ended` event when leaving rewards/end screen or backgrounding. */
+export const commitSpireFight = (reason: string = 'spire_navigation'): boolean =>
   commitStagedEvent(reason, true);
 
 /**
@@ -263,7 +313,7 @@ export const commitAdventureFight = (reason: string = 'navigation'): boolean =>
 export const rateFight = (
   fightId: string,
   feedback: { funRating: FunRating | null; funTags: FunTag[] },
-  extra: { replayOpened?: boolean; source?: 'results' | 'history' | 'free_play' | 'classic' } = {}
+  extra: { replayOpened?: boolean; source?: 'results' | 'history' | 'free_play' | 'classic' | 'spire' } = {}
 ): { updatedStaged: boolean } => {
   const updatedStaged = updateFightFeedbackInAnalytics(fightId, feedback, {
     replayOpened: extra.replayOpened,

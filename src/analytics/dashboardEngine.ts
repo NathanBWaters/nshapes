@@ -24,7 +24,7 @@ import {
 } from './fightEvent';
 import type { JourneyStage, LocalAnalyticsEvent } from './posthog';
 
-export type FightMode = 'adventure' | 'free_play' | 'classic';
+export type FightMode = 'adventure' | 'spire' | 'free_play' | 'classic';
 
 export interface NormalizedFightRow {
   fightId: string;
@@ -154,6 +154,7 @@ export interface PlayerJourneySummary {
 export interface AnalyticsDashboardReport {
   totalFights: number;
   adventureFights: number;
+  spireFights: number;
   freePlayFights: number;
   classicFights: number;
   uniquePlayers: number;
@@ -264,7 +265,8 @@ const normalizeOutcome = (v: unknown): BattleOutcome => {
 };
 
 const normalizeMode = (v: unknown, levelId: string): FightMode => {
-  if (v === 'free_play' || v === 'classic' || v === 'adventure') return v;
+  if (v === 'free_play' || v === 'classic' || v === 'adventure' || v === 'spire') return v;
+  if (levelId.startsWith('spire-')) return 'spire';
   if (levelId.startsWith('freeplay')) return 'free_play';
   if (levelId.startsWith('classic')) return 'classic';
   return 'adventure';
@@ -457,6 +459,7 @@ export const analyzeFights = (rawRows: readonly NormalizedFightRow[]): Analytics
   const rows = [...rawRows].sort((a, b) => a.timestampMs - b.timestampMs);
   const totalFights = rows.length;
   const adventureRows = rows.filter(r => r.mode === 'adventure');
+  const spireRows = rows.filter(r => r.mode === 'spire');
   const freePlayRows = rows.filter(r => r.mode === 'free_play');
   const classicRows = rows.filter(r => r.mode === 'classic');
 
@@ -828,7 +831,7 @@ export const analyzeFights = (rawRows: readonly NormalizedFightRow[]): Analytics
     .filter(t => t.count > 0)
     .sort((a, b) => b.count - a.count);
 
-  const modeBreakdown = (['adventure', 'free_play', 'classic'] as FightMode[]).map(mode => {
+  const modeBreakdown = (['adventure', 'spire', 'free_play', 'classic'] as FightMode[]).map(mode => {
     const subset = rows.filter(r => r.mode === mode);
     return {
       mode,
@@ -849,6 +852,7 @@ export const analyzeFights = (rawRows: readonly NormalizedFightRow[]): Analytics
   return {
     totalFights,
     adventureFights: adventureRows.length,
+    spireFights: spireRows.length,
     freePlayFights: freePlayRows.length,
     classicFights: classicRows.length,
     uniquePlayers: uniquePlayersSet.size,

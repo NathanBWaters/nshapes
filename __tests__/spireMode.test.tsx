@@ -2,7 +2,7 @@
  * Starfall Spire — unit, map integrity, event coverage, UI reuse, and persistence tests.
  */
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { FIGHTERS } from '@/adventure/data/fighters';
 import { ALL_ARMORY_WEAPON_IDS } from '@/adventure/data/armory';
@@ -48,6 +48,8 @@ import SpireEncounterPreview from '@/spire/components/SpireEncounterPreview';
 import SpireShop from '@/spire/components/SpireShop';
 import SpireCampfire from '@/spire/components/SpireCampfire';
 import SpireBuildModal from '@/spire/components/SpireBuildModal';
+import SpireRewardScreen from '@/spire/components/SpireRewardScreen';
+import SpireEndScreen from '@/spire/components/SpireEndScreen';
 
 jest.mock('@/components/Icon', () => {
   const { Text: RNText } = require('react-native');
@@ -385,5 +387,67 @@ describe('Starfall Spire — Shared UI Components Render Cleanly', () => {
       0
     );
     expect(rewardRun.weapons).toContain('war-drum');
+
+    // Shared RoundFunPrompt renders on SpireRewardScreen & SpireEndScreen and reports 👍/👎 clicks
+    const onRateReward = jest.fn();
+    const rewardPromptView = render(
+      <SafeAreaProvider initialMetrics={safeMetrics}>
+        <SpireRewardScreen
+          run={run}
+          reward={{
+            nodeKind: 'skirmish',
+            foeName: 'Lazy Sloth',
+            coinsEarned: 50,
+            parryBonusCoins: 0,
+            dpm: 400,
+            biggestHit: 35,
+            parries: 0,
+            perfectParries: 0,
+            weaponOptions: [{ weaponId: 'war-drum', level: 1 }],
+            weaponClaimed: false,
+            weaponRerolled: false,
+            arcanaOptions: [],
+            arcanaClaimed: true,
+            skillOptions: [],
+            skillClaimed: true,
+            isActBoss: false,
+          }}
+          lastFight={null}
+          funRating={null}
+          funTags={[]}
+          onRateFun={onRateReward}
+          onClaimWeapon={() => {}}
+          onRerollWeapons={() => {}}
+          onSkipWeapon={() => {}}
+          onClaimArcana={() => {}}
+          onSkipArcana={() => {}}
+          onClaimSkill={() => {}}
+          onSkipSkill={() => {}}
+          onContinue={() => {}}
+        />
+      </SafeAreaProvider>
+    );
+    expect(rewardPromptView.getByTestId('spire-reward-fun-prompt')).toBeTruthy();
+    fireEvent.press(rewardPromptView.getByTestId('spire-reward-fun-up'));
+    expect(onRateReward).toHaveBeenCalledWith('up', []);
+
+    const onRateEnd = jest.fn();
+    const endPromptView = render(
+      <SafeAreaProvider initialMetrics={safeMetrics}>
+        <SpireEndScreen
+          run={{ ...run, phase: 'defeat', defeatedBy: 'Lazy Sloth' }}
+          victory={false}
+          lastFight={null}
+          funRating={null}
+          funTags={[]}
+          onRateFun={onRateEnd}
+          onNewRun={() => {}}
+          onExitToMenu={() => {}}
+        />
+      </SafeAreaProvider>
+    );
+    expect(endPromptView.getByTestId('spire-end-fun-prompt')).toBeTruthy();
+    fireEvent.press(endPromptView.getByTestId('spire-end-fun-down'));
+    expect(onRateEnd).toHaveBeenCalledWith('down', []);
   });
 });

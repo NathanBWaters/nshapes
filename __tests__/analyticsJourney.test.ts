@@ -19,10 +19,13 @@ import {
   FIGHT_EVENT,
   FIGHT_RATED_EVENT,
   commitAdventureFight,
+  commitSpireFight,
   markReplayOpened,
   rateFight,
   stageAdventureFight,
+  stageSpireFight,
 } from '@/analytics/fightEvent';
+import { analyzeFights, normalizePostHogLikeEvent } from '@/analytics/dashboardEngine';
 import {
   SESSION_TIMEOUT_MS,
   __enableAnalyticsForTests,
@@ -224,5 +227,63 @@ describe('analytics user journey, sessions & 1-event-per-game staging', () => {
       bought: ['war-drum'],
       rerolls: 1,
     });
+  });
+
+  it('stages a single wide Starfall Spire fight_ended event, merges thumbs up/down + replay in place, and parses cleanly in dashboardEngine', async () => {
+    const { level, run } = makeWonRun();
+    const spireLevel = { ...level, id: 'spire-1-3-enc-a1-r2-c0', name: 'Lazy Sloth', isElite: true };
+    const record = battleRecord(spireLevel, run, { at: 1_700_000_300_000 });
+    const fightId = stageSpireFight(spireLevel, run, record, makeTape(), {
+      spire: {
+        runId: 'spire-4242-0',
+        act: 1,
+        floor: 3,
+        ascension: 2,
+        endless: false,
+        nodeKind: 'elite',
+        weaponLevels: { 'growth-seed': 2, 'chaos-shard': 3 },
+        parries: 2,
+        perfectParries: 1,
+      },
+    });
+
+    // Rating and opening replay merge in place without emitting extra PostHog events
+    expect(sentBatches()).toHaveLength(0);
+    const rated = rateFight(fightId, { funRating: 'up', funTags: ['great_build', 'satisfying_combos'] }, { source: 'spire' });
+    expect(rated.updatedStaged).toBe(true);
+    expect(markReplayOpened(fightId)).toBe(true);
+    expect(sentBatches()).toHaveLength(0);
+
+    expect(commitSpireFight('spire_reward_continue')).toBe(true);
+    await flush();
+
+    const events = sentBatches();
+    expect(events).toHaveLength(1);
+    const ev = events[0];
+    expect(ev.event).toBe(FIGHT_EVENT);
+    expect(ev.properties.mode).toBe('spire');
+    expect(ev.properties.spire_run_id).toBe('spire-4242-0');
+    expect(ev.properties.spire_act).toBe(1);
+    expect(ev.properties.spire_floor).toBe(3);
+    expect(ev.properties.spire_ascension).toBe(2);
+    expect(ev.properties.spire_node_kind).toBe('elite');
+    expect(ev.properties.spire_weapon_levels).toEqual({ 'growth-seed': 2, 'chaos-shard': 3 });
+    expect(ev.properties.parries).toBe(2);
+    expect(ev.properties.perfect_parries).toBe(1);
+    expect(ev.properties.fun_rating).toBe('up');
+    expect(ev.properties.fun_score).toBe(1);
+    expect(ev.properties.fun_tags).toEqual(['great_build', 'satisfying_combos']);
+    expect(ev.properties.replay_opened).toBe(true);
+    expect((ev.properties.$set as Record<string, unknown>).spire_fights).toBe(1);
+    expect((ev.properties.$set as Record<string, unknown>).adventure_fights).toBe(0);
+
+    // Analytics dashboard normalizer & aggregator recognize mode === 'spire'
+    const normalized = normalizePostHogLikeEvent(ev as unknown as Record<string, unknown>);
+    expect(normalized?.mode).toBe('spire');
+    expect(normalized?.funRating).toBe('up');
+    const report = analyzeFights(normalized ? [normalized] : []);
+    expect(report.spireFights).toBe(1);
+    expect(report.enjoyment.modeBreakdown.find(m => m.mode === 'spire')?.fights).toBe(1);
+    expect(report.enjoyment.modeBreakdown.find(m => m.mode === 'spire')?.funRate).toBe(1);
   });
 });
