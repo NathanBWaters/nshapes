@@ -46,6 +46,10 @@ export const resolveCatalyst = (d: Draft, matched: Card[]) => {
   const idx = d.board.findIndex(c => ids.has(c.id) && c.hasEvolutionItem);
   if (idx === -1) return;
   updateCards(d, [idx], c => ({ ...c, hasEvolutionItem: false, evolutionReady: false }));
+  // If this Set already knocked out the final foe (outside endless practice), skip triggering
+  // a dead-on-arrival Evolution (no phantom burst, no post-mortem rules, no unnecessary cut-in).
+  const finalFoeAlreadyDefeated = !d.level.rules.sandbox && d.foeHp <= 0 && d.wave >= d.level.foes.length - 1;
+  if (finalFoeAlreadyDefeated) return;
   if (d.evolutionsTriggered >= d.evolutionCap) return;
   const id = recipeToStart(d);
   if (!id) return;

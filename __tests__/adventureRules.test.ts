@@ -392,6 +392,56 @@ describe('evolutions', () => {
     expect(s.board.filter(c => c.hasEvolutionItem)).toHaveLength(1);
     expect(s.evolutionsTriggered).toBe(0);
   });
+
+  it('a Catalyst matched on a Set that already defeated the final foe does not fire a post-mortem Evolution', () => {
+    let s = catalystOn(
+      startFight({
+        save: armedSave,
+        level: testLevel({ foes: [{ name: 'Frail Imp', icon: 'lorc/imp', hp: 3 }] }),
+        features: ['hearts', 'gear', 'evolutions'],
+      })
+    );
+    s = playSet(s, catalystSet(s));
+    expect(s.status).toBe('won');
+    expect(s.foeHp).toBe(0);
+    expect(s.evolutionsTriggered).toBe(0);
+    expect(s.activeEvolutions).toEqual([]);
+    expect(eventsOf(s, 'evolution_start')).toEqual([]);
+  });
+
+  it('a Catalyst matched on a lethal Wave 1 Set still fires an Evolution when another wave follows', () => {
+    let s = catalystOn(
+      startFight({
+        save: armedSave,
+        level: testLevel({
+          foes: [
+            { name: 'Wave 1 Imp', icon: 'lorc/imp', hp: 3 },
+            { name: 'Wave 2 Boss', icon: 'lorc/imp', hp: 100 },
+          ],
+        }),
+        features: ['hearts', 'gear', 'evolutions'],
+      })
+    );
+    s = playSet(s, catalystSet(s));
+    expect(s.status).toBe('intermission');
+    expect(s.evolutionsTriggered).toBe(1);
+    expect(s.activeEvolutions).toHaveLength(1);
+    expect(eventsOf(s, 'evolution_start')).toHaveLength(1);
+  });
+
+  it('a Catalyst whose 10-dmg opening burst finishes the final foe still deals its lethal burst and wins', () => {
+    let s = catalystOn(
+      startFight({
+        save: armedSave,
+        level: testLevel({ foes: [{ name: 'Wounded Imp', icon: 'lorc/imp', hp: 10 }] }),
+        features: ['hearts', 'gear', 'evolutions'],
+      })
+    );
+    s = playSet(s, catalystSet(s));
+    expect(s.status).toBe('won');
+    expect(s.foeHp).toBe(0);
+    expect(s.evolutionsTriggered).toBe(1);
+  });
 });
 
 describe('traps', () => {

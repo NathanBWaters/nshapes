@@ -51,6 +51,8 @@ export interface ScriptContext {
   gridMs?: number;
   /** Effects are off: text only, all at once, and nothing holds the clock */
   reduced?: boolean;
+  /** Fight already ended (won/lost): never pause the victory/defeat transition for an Evolution cut-in */
+  skipCutIn?: boolean;
 }
 
 /** The recipe an evolution event is about (the engine names it by id or by name). */
@@ -186,7 +188,7 @@ export const scriptFor = (events: readonly RunEvent[], ctx: ScriptContext): Scri
   };
   for (const e of events) {
     chunk.push(e);
-    if (e.type !== 'evolution_start') continue;
+    if (e.type !== 'evolution_start' || ctx.skipCutIn) continue;
     const id = recipeIdOfEvent(e);
     const prev = segments[segments.length - 1];
     // Two evolutions at once share one cut-in

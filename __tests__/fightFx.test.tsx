@@ -242,6 +242,23 @@ describe('the script: one move as a cascade', () => {
     expect(script.segments.filter(s => s.kind === 'cutIn')).toEqual([{ kind: 'cutIn', recipes: [a.id, b.id] }]);
   });
 
+  it('skipCutIn omits the blocking Evolution cut-in when the fight already ended while keeping lethal beats intact', () => {
+    const recipe = EVOLUTION_RECIPES[0];
+    const script = scriptFor(
+      [
+        ev('hit', { amount: 5, slots: [0, 1, 2] }),
+        ev('evolution_start', { text: recipe.name, slots: [1] }),
+        ev('hit', { amount: 10, text: recipe.name }),
+        ev('foe_defeated'),
+      ],
+      { weapons: WEAPONS, skipCutIn: true }
+    );
+    expect(script.segments.map(s => s.kind)).toEqual(['beats']);
+    const beatTypes = (script.segments[0] as Extract<Segment, { kind: 'beats' }>).beats.map(b => b.event.type);
+    expect(beatTypes).toContain('hit');
+    expect(beatTypes).toContain('foe_defeated');
+  });
+
   it('with effects off everything is text, at once, and nothing holds the clock', () => {
     const script = scriptFor([ev('hit', { amount: 5, slots: [0, 1, 2] }), ev('blast', { amount: 2, text: '1', slots: [3] })], { weapons: WEAPONS, reduced: true });
     expect(scriptHoldMs(script)).toBe(0);

@@ -422,9 +422,10 @@ const AdventureRun: React.FC<Props> = ({
         ? { ...e, cards: e.slots.map(i => (run.board[i] && thrownIds.has(run.board[i].id) && (run.board[i].health ?? 1) <= 1 && !run.board[i].stay ? run.board[i] : null)) }
         : e
     );
-    fx.play(scriptFor(staged, { weapons: run.weapons, gridMs: band.gridMs, reduced: !effects }));
+    const fightEnded = run.status === 'won' || run.status === 'lost';
+    fx.play(scriptFor(staged, { weapons: run.weapons, gridMs: band.gridMs, reduced: !effects, skipCutIn: fightEnded }));
     for (const e of fresh) {
-      if (e.type === 'evolution_start' && !seenCoach.current.has(COACH_KEYS.evolution)) {
+      if (!fightEnded && e.type === 'evolution_start' && !seenCoach.current.has(COACH_KEYS.evolution)) {
         seenCoach.current.add(COACH_KEYS.evolution);
         onCoachMarkSeen(COACH_KEYS.evolution);
         const recipe = recipeFor(e.text);
@@ -499,6 +500,13 @@ const AdventureRun: React.FC<Props> = ({
     }
     band.finale(won);
   }, [ended]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    // If a fight ends while an Evolution cut-in is open or queued, dismiss it so victory/defeat flows smoothly
+    if (ended && fx.cutIn) {
+      setEvolutionHint(false);
+      fx.dismissCutIn();
+    }
+  }, [ended, fx.cutIn, fx.dismissCutIn]);
   useEffect(() => {
     // The last cascade plays out first; hand off right as the slow-mo release completes (zero dead air)
     if (!ended || fx.busy) return;
@@ -1108,7 +1116,7 @@ const AdventureRun: React.FC<Props> = ({
           <Banner rect={anchors.rect('board')!} text={level.isBoss ? 'BOSS FIGHT!' : 'FIGHT!'} color={level.isBoss ? '#9F1239' : COLORS.deepOnyx} delay={120} />
         </View>
       )}
-      {fx.cutIn && (
+      {!ended && fx.cutIn && (
         <EvolutionCutIn
           key={fx.cutIn.key}
           recipes={fx.cutIn.recipes.map(recipeFor).filter((r): r is EvolutionRecipe => !!r)}
@@ -1121,7 +1129,7 @@ const AdventureRun: React.FC<Props> = ({
         />
       )}
       {/* Effects off: evolutions get a small banner that does not stop the fight */}
-      {fx.banner && (() => {
+      {!ended && fx.banner && (() => {
         const recipe = recipeFor(fx.banner.recipes[0]);
         return (
           <View style={[st.bannerWrap, { top: insets.top + hudHeight / 2 }]} pointerEvents="none">
