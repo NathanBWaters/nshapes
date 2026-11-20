@@ -17,7 +17,7 @@ import { buildDamageStory, buildSpireRunDamageStory } from '@/adventure/engine/d
 import BattleDamageStory from '@/adventure/components/BattleDamageStory';
 import WeaponExplainer from '@/adventure/components/WeaponExplainer';
 import FightReplay from '@/adventure/components/FightReplay';
-import { ArcanaCard, SkillNodeRow, WeaponOfferRow } from '@/adventure/components/SharedCards';
+import { ArcanaCard, SkillNodeRow, WeaponOfferRow, type OfferBadge } from '@/adventure/components/SharedCards';
 import { Btn, CoinPill, Eyebrow, INK, PopIn, TONE } from '@/adventure/components/ui';
 import { band, sfx } from '@/audio';
 import { buildSpireWeaponBuilds, newEvolutionsArmedBy } from '../engine/bridge';
@@ -114,6 +114,7 @@ const SpireRewardScreen: React.FC<Props> = ({
             weaponBuilds={storyBuilds}
             startDelayMs={260}
             reduced={reduced}
+            hidePowerNote
             testID="spire-reward-damage-story"
           />
         )}
@@ -138,28 +139,37 @@ const SpireRewardScreen: React.FC<Props> = ({
 
             <View style={st.choiceList}>
               {reward.weaponOptions.map((opt, i) => {
+                const heldLv = run.weaponLevels[opt.weaponId];
+                const isUpgrade = heldLv !== undefined;
                 const w = getArmoryWeapon(opt.weaponId, { [opt.weaponId]: { level: opt.level, tuning: {} } });
                 if (!w) return null;
-                const newEvos = newEvolutionsArmedBy(run, opt.weaponId);
+                const newEvos = isUpgrade ? [] : newEvolutionsArmedBy(run, opt.weaponId);
                 const firstEvo = newEvos[0] ? EVOLUTION_RECIPES.find(r => r.id === newEvos[0]) : null;
-                const badges = newEvos.length > 0
-                  ? [{ text: `⚡ ARMS ${newEvos.length > 1 ? `${newEvos.length} EVOS` : firstEvo?.name ?? 'EVO'}`, bg: TONE.evoReady }]
-                  : undefined;
+                const badges: OfferBadge[] = [];
+                if (isUpgrade) {
+                  badges.push({ text: `⬆ LV ${heldLv} → ${opt.level}`, bg: '#D97706' });
+                }
+                if (newEvos.length > 0) {
+                  badges.push({
+                    text: `⚡ ARMS ${newEvos.length > 1 ? `${newEvos.length} EVOS` : firstEvo?.name ?? 'EVO'}`,
+                    bg: TONE.evoReady,
+                  });
+                }
                 return (
                   <WeaponOfferRow
                     key={`${opt.weaponId}-${i}`}
                     weapon={w}
                     level={opt.level}
-                    badges={badges}
+                    badges={badges.length > 0 ? badges : undefined}
                     focused={inspectIdx === i}
                     onPress={() => { sfx('click'); setInspectIdx(i); }}
                     right={
                       <Btn
                         testID={`spire-draft-pick-${i}`}
                         small
-                        label="Draft"
+                        label={isUpgrade ? 'Upgrade' : 'Draft'}
                         onPress={() => {
-                          band.cue('weaponGet');
+                          band.cue(isUpgrade ? 'levelUp' : 'weaponGet');
                           band.fire(w.id, 4);
                           onClaimWeapon(i);
                         }}
@@ -175,6 +185,7 @@ const SpireRewardScreen: React.FC<Props> = ({
               <WeaponExplainer
                 weapon={inspectedWeapon}
                 build={{ level: inspectedOffer.level, tuning: {} }}
+                hidePowerNote
               />
             )}
 

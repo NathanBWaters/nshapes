@@ -83,7 +83,7 @@ const SpireBuildModal: React.FC<Props> = ({ visible, run, onClose }) => {
               ))}
             </View>
             {focusedWeapon && (
-              <WeaponExplainer weapon={focusedWeapon} build={builds[focusedWeapon.id]} defaultOpen />
+              <WeaponExplainer weapon={focusedWeapon} build={builds[focusedWeapon.id]} defaultOpen hidePowerNote />
             )}
 
             {/* Armed Evolutions */}

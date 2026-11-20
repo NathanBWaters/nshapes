@@ -102,12 +102,15 @@ const SpireShop: React.FC<Props> = ({
 
           <View style={{ gap: 8 }}>
             {shop.weapons.map((offer, i) => {
+              const heldLv = run.weaponLevels[offer.weaponId];
+              const isUpgrade = !offer.sold && heldLv !== undefined;
               const w = getArmoryWeapon(offer.weaponId, { [offer.weaponId]: { level: offer.level, tuning: {} } });
               if (!w) return null;
               const afford = !offer.sold && run.coins >= offer.price;
-              const evos = offer.sold ? [] : newEvolutionsArmedBy(run, offer.weaponId);
+              const evos = offer.sold || isUpgrade ? [] : newEvolutionsArmedBy(run, offer.weaponId);
               const badges: OfferBadge[] = [];
               if (offer.onSale && !offer.sold) badges.push({ text: 'SALE', bg: '#DC2626' });
+              if (isUpgrade) badges.push({ text: `⬆ LV ${heldLv} → ${offer.level}`, bg: '#D97706' });
               if (evos.length > 0) badges.push({ text: '⚡ EVO', bg: TONE.evoReady });
               return (
                 <WeaponOfferRow
@@ -123,7 +126,7 @@ const SpireShop: React.FC<Props> = ({
                     disabled: !afford,
                     label: offer.sold ? 'SOLD' : `${offer.price}¢`,
                     onPress: () => {
-                      band.cue('register');
+                      band.cue(isUpgrade ? 'levelUp' : 'register');
                       band.fire(w.id, 4);
                       onBuyWeapon(i);
                     },
@@ -134,7 +137,7 @@ const SpireShop: React.FC<Props> = ({
           </View>
 
           {inspectedWeapon && inspectedOffer && !inspectedOffer.sold && (
-            <WeaponExplainer weapon={inspectedWeapon} build={{ level: inspectedOffer.level, tuning: {} }} />
+            <WeaponExplainer weapon={inspectedWeapon} build={{ level: inspectedOffer.level, tuning: {} }} hidePowerNote />
           )}
         </View>
 

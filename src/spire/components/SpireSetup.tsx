@@ -39,8 +39,8 @@ const SpireSetup: React.FC<Props> = ({ activeRun, meta, onStartNew, onResume, on
   const [seed, setSeed] = useState<number>(() => randomSeed());
 
   const kit = STARTER_KITS[fighter];
-  const w1 = getArmoryWeapon(kit.starterWeapon);
-  const w2 = getArmoryWeapon(kit.bonusWeapon);
+  const w1 = getArmoryWeapon(kit.starterWeapon, { [kit.starterWeapon]: { level: 2, tuning: {} } });
+  const w2 = getArmoryWeapon(kit.bonusWeapon, { [kit.bonusWeapon]: { level: 2, tuning: {} } });
 
   const maxSelectableAsc = Math.max(1, meta.highestAscensionUnlocked);
 
@@ -126,7 +126,7 @@ const SpireSetup: React.FC<Props> = ({ activeRun, meta, onStartNew, onResume, on
 
           <FighterPassivesList fighter={fighter} compact />
 
-          <Text style={st.subSection}>STARTER WEAPONS</Text>
+          <Text style={st.subSection}>STARTER WEAPONS (LV 2)</Text>
           <View style={st.starterRow}>
             {[w1, w2].map(w =>
               w ? (

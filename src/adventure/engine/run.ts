@@ -483,7 +483,13 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   const arcanaRainbowMult = rainbow ? (a.rainbowMultiplier ?? BASE_RULES.rainbowMultiplier) : 1;
   const rainbowBaseMult = weaponRainbowMult * arcanaRainbowMult;
   const rainbowBoosted = rainbow && rainbowBaseMult > 1;
-  const evoMult = d.activeEvolutions.length > 0 ? EVOLUTION_RULES.setMultiplier : 1;
+  const evoCount = d.activeEvolutions.length;
+  const evoMult =
+    evoCount > 0
+      ? d.stackEvolutionMultipliers
+        ? Math.pow(EVOLUTION_RULES.setMultiplier, evoCount)
+        : EVOLUTION_RULES.setMultiplier
+      : 1;
   const rainbowMult = rainbowBaseMult * evoMult;
   const enemyMult = (enemyResult.pointsMultiplier || 1) * (statMods.pointsMultiplier || 1);
   // "Next Set ×N" effects and Hot Streak together top out at the same cap (data/rules.ts)
@@ -531,12 +537,24 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
       });
     }
   }
-  if (evoMult !== 1) multItems.push({ label: 'Active Evolution', amount: evoMult, note: 'evolution Set multiplier' });
+  if (evoMult !== 1) {
+    const perEvo = d.stackEvolutionMultipliers
+      ? EVOLUTION_RULES.setMultiplier
+      : Math.pow(evoMult, 1 / evoCount);
+    for (const evo of d.activeEvolutions) {
+      multItems.push({
+        label: getRecipe(evo.id)?.name ?? 'Active Evolution',
+        amount: Math.round(perEvo * 1000) / 1000,
+        note: 'active Evolution multiplier',
+        sourceRef: `evo:${evo.id}`,
+      });
+    }
+  }
   if ((a.damageScale ?? 1) !== 1) {
     const arc = findArcanaFor('damageScale');
     multItems.push({ label: arc?.name ?? 'Arcana', amount: a.damageScale!, note: 'Arcana Set multiplier' });
   }
-  if (enemyMult !== 1) multItems.push({ label: d.foeName, amount: enemyMult, note: enemyMult < 1 ? 'foe resistance' : 'foe vulnerability' });
+  if (enemyMult !== 1) multItems.push({ label: enemyMult > 1 ? `${d.foeName} Weakness` : d.foeName, amount: enemyMult, note: enemyMult < 1 ? 'foe resistance' : 'foe vulnerability' });
   if (preTricksSetMult !== 1) multItems.push({ label: hotStreak > 1 ? 'Hot Streak' : 'Next-Set boost', amount: preTricksSetMult, note: hotStreak > 1 ? 'max Combo passive' : 'saved multiplier' });
   const staggerMult = parryRes.wasStaggered ? PARRY_RULES.staggerDamageMult : 1;
   const parryMult = parryRes.multiplier;
@@ -857,6 +875,10 @@ const HOOKS: FightHooks = { autoSet };
 export interface RunOverrides extends LoadoutOptions {
   /** Override starting hearts (e.g. carry HP across floors in Starfall Spire) */
   startingHearts?: number;
+  /** Scale Power accumulation (default 1; 0 disables generic global Power scaling in Spire) */
+  powerScaling?: number;
+  /** Stack concurrent active Evolution Set multipliers multiplicatively (used by Spire) */
+  stackEvolutionMultipliers?: boolean;
 }
 
 export interface CreateRunOptions {
@@ -948,6 +970,8 @@ const buildRun = (level: LevelDef, save: AdventureSave, opts: CreateRunOptions):
     gear: initGear(),
     growth: {},
     power: 0,
+    ...(ov?.powerScaling !== undefined ? { powerScaling: ov.powerScaling } : {}),
+    ...(ov?.stackEvolutionMultipliers ? { stackEvolutionMultipliers: true } : {}),
     growthMemo: { lastSetColor: null, lastHintAtMs: -1, plantSet: false },
     elapsedMs: 0,
     lastMatchAtMs: 0,

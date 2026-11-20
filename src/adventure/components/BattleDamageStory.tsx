@@ -204,6 +204,8 @@ interface Props {
   reduced?: boolean;
   /** Suppress audio cues when silent (e.g. unit tests) */
   muted?: boolean;
+  /** Hide Adventure-only global Power accumulation notes in WeaponExplainer (used by Spire) */
+  hidePowerNote?: boolean;
   /** Optional compact top toggle slot (e.g. "Full Climb" vs "Final Fight" on SpireEndScreen) */
   headerRight?: React.ReactNode;
   testID?: string;
@@ -217,6 +219,7 @@ const BattleDamageStory: React.FC<Props> = ({
   active = true,
   reduced = false,
   muted = false,
+  hidePowerNote = false,
   headerRight,
   testID = 'battle-damage-story',
 }) => {
@@ -771,6 +774,7 @@ const BattleDamageStory: React.FC<Props> = ({
             <WeaponExplainer
               weapon={selectedWeapon}
               build={selectedBuild}
+              hidePowerNote={hidePowerNote}
               badge={selectedSource === story.sources[0] ? 'MVP' : `${Math.round(selectedSource.share * 100)}% DMG`}
               result={{
                 text: `${Math.round(selectedSource.totalDamage).toLocaleString()} cumulative dmg (${Math.round(selectedSource.share * 100)}%) · ${selectedSource.hits} ${selectedSource.hits === 1 ? 'hit' : 'hits'} · biggest spike +${Math.round(selectedSource.biggestHit)}.`,

@@ -134,8 +134,12 @@ test.describe('Set-Parrying, Multiplier Ignition, Kill-Cam & Starfall Spire E2E'
 
     // Switch fighter & verify starter kit updates cleanly
     await page.getByTestId('spire-fighter-Badger').click();
-    await expect(page.getByTestId('spire-starter-kit')).toContainText('Judgement Beam');
+    await expect(page.getByTestId('spire-starter-kit')).toContainText('Bloodline');
     await assertAllTextVisible(page, 'Spire Setup Badger (375x667)');
+
+    await page.getByTestId('spire-fighter-Corgi').click();
+    await expect(page.getByTestId('spire-starter-kit')).toContainText('Shard Garden');
+    await assertAllTextVisible(page, 'Spire Setup Corgi (375x667)');
 
     expect(pageErrors).toEqual([]);
   });

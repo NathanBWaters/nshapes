@@ -12,11 +12,12 @@
  */
 import type { IconName } from '@/components/Icon';
 import { getArmoryWeapon } from '../data/armory';
+import { EVOLUTION_RECIPES } from '../data/evolutions';
 import { PASSIVES } from '../data/passives';
 import { getUpgrade } from '../data/upgrades';
 import { ownerOfEvent } from '../data/weaponGuide';
 import { getRecipe, getSkillNode } from './sources';
-import type { FightLogEntry, FightLogLine, PassiveId, RunEventType, RunState } from '../types';
+import type { EvolutionRecipe, FightLogEntry, FightLogLine, PassiveId, RunEventType, RunState } from '../types';
 
 export type DamageSourceKind = 'weapon' | 'passive' | 'skill' | 'evolution' | 'set' | 'power' | 'bonus';
 
@@ -127,6 +128,11 @@ for (const [id, def] of Object.entries(PASSIVES) as [PassiveId, (typeof PASSIVES
   PASSIVE_BY_NAME[def.name.toLowerCase()] = id;
 }
 
+const EVOLUTION_BY_NAME: Record<string, EvolutionRecipe> = {};
+for (const rec of EVOLUTION_RECIPES) {
+  EVOLUTION_BY_NAME[rec.name.toLowerCase()] = rec;
+}
+
 const fmtClockShort = (ms: number): string => {
   const s = Math.max(0, Math.round(ms / 1000));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
@@ -234,6 +240,10 @@ export const resolveDamageSourceMeta = (
     const pid = PASSIVE_BY_NAME[low];
     const p = PASSIVES[pid];
     return { id: `passive:${pid}`, name: p.name, kind: 'passive', icon: p.icon };
+  }
+  if (EVOLUTION_BY_NAME[low]) {
+    const rec = EVOLUTION_BY_NAME[low];
+    return { id: `evo:${rec.id}`, name: rec.name, kind: 'evolution', icon: rec.icon };
   }
   if (low.includes('hot streak')) return { id: 'passive:hot_streak', name: PASSIVES.hot_streak.name, kind: 'passive', icon: PASSIVES.hot_streak.icon };
   if (low.includes('scrappy')) return { id: 'passive:scrappy', name: PASSIVES.scrappy.name, kind: 'passive', icon: PASSIVES.scrappy.icon };

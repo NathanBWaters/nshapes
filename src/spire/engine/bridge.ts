@@ -127,12 +127,14 @@ export const spireRunToVirtualSave = (
   };
 };
 
-/** Overrides passed to `createRun` / `AdventureRun` so Spire keeps persistent HP and uncapped builds. */
+/** Overrides passed to `createRun` / `AdventureRun` so Spire keeps persistent HP, uncapped builds, and pure item-driven scaling (no generic Power snowball). */
 export const spireRunOverrides = (run: SpireRun): RunOverrides => ({
   startingHearts: run.hearts,
   uncappedCharms: true,
   uncappedArcana: true,
   weaponBuilds: buildSpireWeaponBuilds(run),
+  powerScaling: 0,
+  stackEvolutionMultipliers: true,
 });
 
 /**

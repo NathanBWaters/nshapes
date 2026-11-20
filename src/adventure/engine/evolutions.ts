@@ -27,8 +27,9 @@ export const startEvolution = (d: Draft, id: string, slot?: number) => {
   const durationMs = Math.max(1000, EVOLUTION_RULES.durationMs + (mods(d).evolutionDurationMs ?? 0));
   d.activeEvolutions = [...d.activeEvolutions.filter(e => e.id !== id), { id, remainingMs: durationMs, durationMs }];
   d.evolutionsTriggered += 1;
-  // An evolution surges Power, outside the weapons' shared meter
-  d.power = (d.power ?? 0) + EVOLUTION_RULES.power;
+  // An evolution surges Power, outside the weapons' shared meter (unless global Power scaling is disabled)
+  const powerScale = d.powerScaling ?? 1;
+  if (powerScale > 0) d.power = (d.power ?? 0) + EVOLUTION_RULES.power * powerScale;
   if (!d.forgedRecipes.includes(id)) d.forgedRecipes = [...d.forgedRecipes, id];
   refreshSources(d);
   emit(d, 'evolution_start', durationMs, recipe.name, slot === undefined ? undefined : { slots: [slot] });

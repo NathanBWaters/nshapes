@@ -128,8 +128,9 @@ export const noteGrowth = (d: Draft, ev: GrowthEvent) => {
     if (w.id === UNDERSTUDY_ID || seen.has(w.id)) return;
     seen.add(w.id);
     // Power: every watch that happens adds the weapon's share, at any stack count (it never stops)
-    const hits = powerWatches(w.id).filter(watch => counts(d, { watch } as GrowthDef, w.id, ev) === true).length;
-    if (hits > 0) d.power = (d.power ?? 0) + hits * share * powerPer(w.id) * powerLevelFactor(d.weaponBuilds[w.id]?.level ?? 1);
+    const powerScale = d.powerScaling ?? 1;
+    const hits = powerScale > 0 ? powerWatches(w.id).filter(watch => counts(d, { watch } as GrowthDef, w.id, ev) === true).length : 0;
+    if (hits > 0) d.power = (d.power ?? 0) + hits * share * powerPer(w.id) * powerLevelFactor(d.weaponBuilds[w.id]?.level ?? 1) * powerScale;
     (WEAPON_GROWTH[w.id] ?? []).forEach((def, index) => {
       const ok = counts(d, def, w.id, ev);
       if (ok === null) return;

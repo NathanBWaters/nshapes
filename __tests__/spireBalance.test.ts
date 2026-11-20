@@ -24,6 +24,18 @@ describe('Starfall Spire — full climb balance', () => {
     let expA1 = 0, expA2 = 0, expA3 = 0;
     const byFighter: Record<string, { n: number; avgWin: number; expWin: number; avgFloors: number }> = {};
 
+    let totalBuildDmg = 0;
+    let totalSetDmg = 0;
+    let totalPowerDmg = 0;
+    let totalAllDmg = 0;
+    let sumWeapons = 0;
+    let sumAvgLv = 0;
+    let sumSkills = 0;
+    let sumArcana = 0;
+    let sumEvos = 0;
+    let sumSetsPerFight = 0;
+    let fightsCount = 0;
+
     for (let i = 0; i < RUNS; i++) {
       const fighter = fighters[i % fighters.length];
       const seed = 5000 + i * 7919;
@@ -37,6 +49,22 @@ describe('Starfall Spire — full climb balance', () => {
       if (exp.wonAct2) expA2 += 1;
       if (exp.wonAct3) expA3 += 1;
 
+      for (const s of Object.values(avg.run.stats.sourceDamage ?? {})) {
+        totalAllDmg += s.damage;
+        if (s.kind === 'set') totalSetDmg += s.damage;
+        else if (s.kind === 'power') totalPowerDmg += s.damage;
+        else totalBuildDmg += s.damage;
+      }
+      const lvs = Object.values(avg.run.weaponLevels);
+      sumWeapons += avg.run.weapons.length;
+      sumAvgLv += lvs.length > 0 ? lvs.reduce((a, b) => a + b, 0) / lvs.length : 1;
+      sumSkills += avg.run.skillNodes.length;
+      sumArcana += avg.run.arcana.length;
+      sumEvos += avg.run.stats.evolutionsForged;
+      const fights = Math.max(1, avg.run.stats.floorLedger?.length ?? 0);
+      sumSetsPerFight += avg.run.stats.totalSets / fights;
+      fightsCount += 1;
+
       const row = (byFighter[fighter] ??= { n: 0, avgWin: 0, expWin: 0, avgFloors: 0 });
       row.n += 1;
       if (avg.wonAct3) row.avgWin += 1;
@@ -45,17 +73,36 @@ describe('Starfall Spire — full climb balance', () => {
     }
 
     const r = (n: number) => n / RUNS;
+    const buildShare = totalAllDmg > 0 ? totalBuildDmg / totalAllDmg : 0;
+    const powerShare = totalAllDmg > 0 ? totalPowerDmg / totalAllDmg : 0;
+    const setShare = totalAllDmg > 0 ? totalSetDmg / totalAllDmg : 0;
     if (process.env.SPIRE_BALANCE_REPORT) {
       const fighterLines = Object.entries(byFighter)
         .map(([f, v]) => `    ${f.padEnd(16)} avgWin=${Math.round((v.avgWin / v.n) * 100)}% | expWin=${Math.round((v.expWin / v.n) * 100)}% | avgFloors=${(v.avgFloors / v.n).toFixed(1)}`)
+        .join('\n');
+      const sampleRun = simulateSpireClimb({ fighter: 'Corgi', ascension: 0, seed: 5000, bot: BOTS.average });
+      const topSources = Object.values(sampleRun.run.stats.sourceDamage ?? {})
+        .sort((a, b) => b.damage - a.damage)
+        .slice(0, 8)
+        .map(s => {
+          const pct = sampleRun.run.stats.totalDamage > 0 ? Math.round((s.damage / sampleRun.run.stats.totalDamage) * 100) : 0;
+          return `    ${s.name.padEnd(22)} [${s.kind.toUpperCase().padEnd(9)}] ${Math.round(s.damage).toString().padStart(6)} dmg (${pct}%)`;
+        })
         .join('\n');
       console.log(
         `SPIRE A0 (${RUNS} runs across all 6 fighters):\n` +
           `  Average: Act1=${Math.round(r(avgA1) * 100)}% | Act2=${Math.round(r(avgA2) * 100)}% | Victory=${Math.round(r(avgA3) * 100)}%\n` +
           `  Expert : Act1=${Math.round(r(expA1) * 100)}% | Act2=${Math.round(r(expA2) * 100)}% | Victory=${Math.round(r(expA3) * 100)}%\n` +
-          `  Per fighter:\n${fighterLines}`
+          `  Damage Share: Build/Items=${Math.round(buildShare * 100)}% | Bare Sets=${Math.round(setShare * 100)}% | Power=${Math.round(powerShare * 100)}%\n` +
+          `  Avg Build (avg bot): ${(sumWeapons / fightsCount).toFixed(1)} weapons (avg Lv ${(sumAvgLv / fightsCount).toFixed(2)}), ${(sumSkills / fightsCount).toFixed(1)} skills, ${(sumArcana / fightsCount).toFixed(1)} arcana, ${(sumEvos / fightsCount).toFixed(1)} evos/run, ${(sumSetsPerFight / fightsCount).toFixed(1)} sets/fight\n` +
+          `  Per fighter:\n${fighterLines}\n` +
+          `  Sample Corgi Run Top Damage Sources (${sampleRun.wonAct3 ? 'VICTORY' : `Act ${sampleRun.finalAct} Fl ${sampleRun.finalFloor}`}):\n${topSources}`
       );
     }
+
+    // Pure item-driven Spire: generic global Power must be 0%, and real build items/synergies carry the vast majority of damage!
+    expect(powerShare).toBe(0);
+    expect(buildShare).toBeGreaterThanOrEqual(0.65);
 
     // Act 1 should feel welcoming & fun
     expect(r(avgA1)).toBeGreaterThanOrEqual(0.55);

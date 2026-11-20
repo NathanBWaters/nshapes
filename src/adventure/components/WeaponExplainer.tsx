@@ -39,12 +39,14 @@ interface Props {
   growth?: GrowthState;
   /** Start with "more" open */
   defaultOpen?: boolean;
+  /** Hide the Adventure-only global Power accumulation note (used in item-driven modes like Starfall Spire) */
+  hidePowerNote?: boolean;
   testID?: string;
 }
 
 const roleLabel = (id: string) => WEAPON_ROLES.find(r => r.id === weaponRole(id))?.label ?? '';
 
-const WeaponExplainer: React.FC<Props> = ({ weapon, build = BASE_BUILD, badge, result, growth, defaultOpen = false, testID }) => {
+const WeaponExplainer: React.FC<Props> = ({ weapon, build = BASE_BUILD, badge, result, growth, defaultOpen = false, hidePowerNote = false, testID }) => {
   const [open, setOpen] = useState(defaultOpen);
   const [taps, setTaps] = useState(0);
   const guide = weaponGuide(weapon.id);
@@ -114,7 +116,7 @@ const WeaponExplainer: React.FC<Props> = ({ weapon, build = BASE_BUILD, badge, r
                         const stacks = growth?.[growthKey(weapon.id, i)]?.stacks ?? 0;
                         return `${growthText(def)}${stacks > 0 ? ` Now: ${stacks}${def.max ? `/${def.max}` : ''}.` : ''}`;
                       }).join(' '),
-                  powerText(weapon.id),
+                  hidePowerNote ? '' : powerText(weapon.id),
                 ].filter(Boolean).join(' ')}
               </Text>
             </View>

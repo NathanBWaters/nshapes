@@ -20,7 +20,7 @@ import LevelResults from '@/adventure/components/LevelResults';
 import SpireRewardScreen from '@/spire/components/SpireRewardScreen';
 import SpireEndScreen from '@/spire/components/SpireEndScreen';
 import { completeSpireBattle, createSpireRun, selectSpireNode } from '@/spire/engine/runState';
-import { buildSpireWeaponBuilds, spireEncounterToLevel, spireHeldWeapons } from '@/spire/engine/bridge';
+import { buildSpireWeaponBuilds, SPIRE_FIGHT_FEATURES, spireEncounterToLevel, spireHeldWeapons, spireRunOverrides, spireRunToVirtualSave } from '@/spire/engine/bridge';
 import type { SpireLastFightSnapshot } from '@/spire/types';
 
 jest.mock('react-native-svg', () => ({
@@ -205,6 +205,31 @@ describe('damageStory attribution & timeline engine', () => {
     expect(lostSpire.phase).toBe('defeat');
     expect(lostSpire.stats.sourceDamage).toBeDefined();
     expect(lostSpire.stats.floorLedger).toHaveLength(1);
+  });
+
+  it('attributes Spire fights with zero Power Scaling and credits active Evolutions by their canonical name & kind', () => {
+    let spire = createSpireRun('Corgi', 0, 2027);
+    const firstNode = spire.map.nodes.find(n => n.row === 0 && n.encounter)!;
+    spire = selectSpireNode(spire, firstNode.id);
+    const sim = simulateRun(
+      spireEncounterToLevel(spire, spire.activeEncounter!),
+      spireRunToVirtualSave(spire),
+      BOTS.expert,
+      42,
+      undefined,
+      {
+        skipPicks: true,
+        features: new Set(SPIRE_FIGHT_FEATURES),
+        overrides: spireRunOverrides(spire),
+      }
+    );
+    const story = buildDamageStory(sim.state);
+    expect(story.sources.find(s => s.kind === 'power')).toBeUndefined();
+    expect(story.sources.find(s => s.name === 'Active Evolution')).toBeUndefined();
+    if (sim.state.forgedRecipes.length > 0) {
+      const evos = story.sources.filter(s => s.kind === 'evolution');
+      expect(evos.length).toBeGreaterThan(0);
+    }
   });
 });
 

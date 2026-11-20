@@ -39,6 +39,7 @@ import {
   resolveEventPendingSkill,
   resolveEventPendingWeapon,
   selectSpireNode,
+  shopBuyArcana,
   shopBuyHeal,
   shopBuyUpgrade,
   shopBuyWeapon,
@@ -132,16 +133,34 @@ export const simulateSpireClimb = (o: {
 
     if (run.phase === 'reward' && run.reward) {
       if (!run.reward.weaponClaimed && run.reward.weaponOptions.length > 0) {
-        // Prefer weapons that arm a NEW Evolution!
-        const synIdx = run.reward.weaponOptions.findIndex(opt => newEvolutionsArmedBy(run, opt.weaponId).length > 0);
-        run = claimRewardWeapon(run, synIdx >= 0 ? synIdx : 0);
+        // Smart drafting: arm early Evolutions, then push core weapons tall (Lv 3→5) once holding 5+!
+        const opts = run.reward.weaponOptions;
+        const upIdx = opts.findIndex(opt => run.weaponLevels[opt.weaponId] !== undefined);
+        const synIdx = opts.findIndex(opt => run.weaponLevels[opt.weaponId] === undefined && newEvolutionsArmedBy(run, opt.weaponId).length > 0);
+        const pickIdx =
+          run.weapons.length >= 5 && upIdx >= 0
+            ? upIdx
+            : synIdx >= 0
+              ? synIdx
+              : upIdx >= 0
+                ? upIdx
+                : 0;
+        run = claimRewardWeapon(run, pickIdx);
       }
       if (run.reward && !run.reward.skillClaimed && run.reward.skillOptions.length > 0) {
         run = claimRewardSkillNode(run, run.reward.skillOptions[0]);
       }
       if (run.reward && !run.reward.arcanaClaimed && run.reward.arcanaOptions.length > 0) {
-        // Pick helpful non-glass Arcana (skip glass_prism when low on hearts)
-        const safe = run.reward.arcanaOptions.find(a => a !== 'glass_prism' && a !== 'scholars_gambit');
+        // Pick synergistic non-conflicting Arcana (up to 3 total so kiss-curses stay intentional!)
+        const isRainbowBuild = run.fighter === 'Emperor Penguin' || run.weapons.includes('rainbow-charm') || run.arcana.includes('prismatic_fever');
+        const safe = run.arcana.length < 3
+          ? run.reward.arcanaOptions.find(a =>
+              a !== 'glass_prism' &&
+              a !== 'scholars_gambit' &&
+              !(a === 'monochrome_pact' && isRainbowBuild) &&
+              !(a === 'prismatic_fever' && run.arcana.includes('monochrome_pact'))
+            )
+          : undefined;
         run = safe ? claimRewardArcana(run, safe) : skipRewardArcana(run);
       }
       run = finishSpireRewards(run);
@@ -152,11 +171,29 @@ export const simulateSpireClimb = (o: {
       if (run.hearts <= Math.ceil(run.maxHearts * 0.6) && run.coins >= run.shop.healCost && !run.shop.healed) {
         run = shopBuyHeal(run);
       }
-      // Buy synergy or sale weapon if affordable
+      // Buy upgrade or Evolution-arming synergy weapon (avoid bloating past 6 with random off-synergy sales)
       for (let i = 0; i < (run.shop?.weapons.length ?? 0); i++) {
         const w = run.shop!.weapons[i];
-        if (!w.sold && run.coins >= w.price && (w.onSale || newEvolutionsArmedBy(run, w.weaponId).length > 0)) {
+        const isUpgrade = run.weaponLevels[w.weaponId] !== undefined;
+        const armsEvo = !isUpgrade && newEvolutionsArmedBy(run, w.weaponId).length > 0;
+        if (!w.sold && run.coins >= w.price && (isUpgrade || armsEvo || (w.onSale && run.weapons.length < 6))) {
           run = shopBuyWeapon(run, i);
+        }
+      }
+      // Buy a helpful synergistic Arcana if holding fewer than 3
+      const isRainbowBuild = run.fighter === 'Emperor Penguin' || run.weapons.includes('rainbow-charm') || run.arcana.includes('prismatic_fever');
+      for (let i = 0; i < (run.shop?.arcana.length ?? 0); i++) {
+        const a = run.shop!.arcana[i];
+        if (
+          run.arcana.length < 3 &&
+          !a.sold &&
+          run.coins >= a.price &&
+          a.arcanaId !== 'glass_prism' &&
+          a.arcanaId !== 'scholars_gambit' &&
+          !(a.arcanaId === 'monochrome_pact' && isRainbowBuild) &&
+          !(a.arcanaId === 'prismatic_fever' && run.arcana.includes('monochrome_pact'))
+        ) {
+          run = shopBuyArcana(run, i);
         }
       }
       // Buy useful upgrade if affordable

@@ -404,8 +404,24 @@ export const computePrimedEquation = (run: RunState): PrimedEquation => {
 
   let mult = 1;
   if (run.activeEvolutions.length > 0) {
-    mult *= EVOLUTION_RULES.setMultiplier;
-    items.push({ label: 'Evolved', value: `×${fmt(EVOLUTION_RULES.setMultiplier)}`, kind: 'mult', note: 'Active Evolution multiplier' });
+    if (run.stackEvolutionMultipliers) {
+      for (const evo of run.activeEvolutions) {
+        mult *= EVOLUTION_RULES.setMultiplier;
+        items.push({
+          label: getRecipe(evo.id)?.name ?? 'Evolved',
+          value: `×${fmt(EVOLUTION_RULES.setMultiplier)}`,
+          kind: 'mult',
+          note: 'Active Evolution multiplier',
+        });
+      }
+    } else {
+      mult *= EVOLUTION_RULES.setMultiplier;
+      const evoLabel =
+        run.activeEvolutions.length === 1
+          ? (getRecipe(run.activeEvolutions[0].id)?.name ?? 'Evolved')
+          : 'Evolved';
+      items.push({ label: evoLabel, value: `×${fmt(EVOLUTION_RULES.setMultiplier)}`, kind: 'mult', note: 'Active Evolution multiplier' });
+    }
   }
   const a = arcanaRules(run.arcana);
   if ((a.damageScale ?? 1) !== 1) {

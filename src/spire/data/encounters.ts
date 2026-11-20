@@ -49,33 +49,33 @@ export const STARTER_KITS: Record<CharacterName, FighterStarterKit> = {
   },
   'Sly Fox': {
     fighter: 'Sly Fox',
-    starterWeapon: 'rally-horn',
-    bonusWeapon: 'flint-spark',
+    starterWeapon: 'snowball',
+    bonusWeapon: 'war-drum',
     maxHearts: 5,
     startingCoins: 70,
     startingHints: 2,
     startingGraces: 1,
-    tagline: 'Blistering combo speed with opening fire & rhythm bursts.',
+    tagline: 'Starts armed for Avalanche — blistering combos that ramp Snowball & War Drum bursts.',
   },
   Corgi: {
     fighter: 'Corgi',
-    starterWeapon: 'field-stone',
-    bonusWeapon: 'growth-seed',
+    starterWeapon: 'growth-seed',
+    bonusWeapon: 'chaos-shard',
     maxHearts: 6,
     startingCoins: 75,
     startingHints: 2,
     startingGraces: 1,
-    tagline: 'Wide boards, Fetch power cards, and clean Zoomies sweeps.',
+    tagline: 'Starts armed for Shard Garden — expands the board with Fetch Power cards and ricochet storms.',
   },
   Badger: {
     fighter: 'Badger',
-    starterWeapon: 'second-chance',
-    bonusWeapon: 'prismatic-ray',
+    starterWeapon: 'prismatic-ray',
+    bonusWeapon: 'life-vessel',
     maxHearts: 6,
     startingCoins: 65,
     startingHints: 2,
-    startingGraces: 2,
-    tagline: 'Starts armed for Judgement Beam — turns graces & grudges into lasers.',
+    startingGraces: 1,
+    tagline: 'Starts armed for Bloodline — massive Heart pool, Grudge retaliation, and cross-board lasers.',
   },
   'Emperor Penguin': {
     fighter: 'Emperor Penguin',
@@ -90,12 +90,12 @@ export const STARTER_KITS: Record<CharacterName, FighterStarterKit> = {
   Pelican: {
     fighter: 'Pelican',
     starterWeapon: 'echo-stone',
-    bonusWeapon: 'cascade-core',
+    bonusWeapon: 'flint-spark',
     maxHearts: 6,
     startingCoins: 75,
     startingHints: 3,
     startingGraces: 1,
-    tagline: 'Starts armed for Wildfire Echo — free Big Scoops and blazing echo chains.',
+    tagline: 'Starts armed for Wildfire Echo — free Big Scoops, blazing fire spreads, and echo chains.',
   },
 };
 
@@ -161,25 +161,27 @@ const ACT_LEVEL_POOLS: Record<1 | 2 | 3, Record<'skirmish' | 'elite' | 'boss', r
 
 /**
  * Calibrated base HP curve per Act and row (row 0..5 = floors, row 6 = Boss).
- * Accounts for NShapes' real Power ×N snowball (1–2 weapons in Act 1 → 4–6+
- * weapons + Evolutions + Skill Nodes + Shading Surge in Act 3 → Endless!).
+ * Tuned for pure item-driven scaling (`powerScaling: 0`): damage climbs from
+ * upgraded weapons (Lv 2→5), board procs, stacking Evolutions (×1.5 per active
+ * Evolution), Fighter Skill Tree nodes, Arcana wildcards, Set-Parries, and
+ * Shading Surge (×5 in Act 3).
  */
 const BASE_ACT_HP: Record<number, { start: number; end: number; eliteMult: number; boss: number; timer: number }> = {
-  1: { start: 320, end: 1200, eliteMult: 1.32, boss: 2050, timer: 104 },
-  2: { start: 2250, end: 7400, eliteMult: 1.38, boss: 12200, timer: 116 },
-  3: { start: 13000, end: 35000, eliteMult: 1.42, boss: 60000, timer: 126 },
+  1: { start: 115, end: 320, eliteMult: 1.28, boss: 560, timer: 102 },
+  2: { start: 510, end: 1250, eliteMult: 1.32, boss: 2050, timer: 114 },
+  3: { start: 1650, end: 3500, eliteMult: 1.36, boss: 5600, timer: 126 },
 };
 
 const actCurve = (act: number) => {
   if (act <= 3) return BASE_ACT_HP[act] ?? BASE_ACT_HP[3];
   const endlessStep = act - 3;
-  const scale = Math.pow(3.4, endlessStep);
+  const scale = Math.pow(1.65, endlessStep);
   return {
-    start: Math.round(BASE_ACT_HP[3].end * 0.95 * scale),
-    end: Math.round(BASE_ACT_HP[3].boss * 1.25 * scale),
-    eliteMult: 1.48,
-    boss: Math.round(BASE_ACT_HP[3].boss * 2.0 * scale),
-    timer: Math.max(85, 118 - endlessStep * 6),
+    start: Math.round(BASE_ACT_HP[3].end * 0.9 * scale),
+    end: Math.round(BASE_ACT_HP[3].boss * 1.12 * scale),
+    eliteMult: 1.4,
+    boss: Math.round(BASE_ACT_HP[3].boss * 1.48 * scale),
+    timer: Math.max(85, 118 - endlessStep * 5),
   };
 };
 

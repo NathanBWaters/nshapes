@@ -924,6 +924,10 @@ export interface RunState {
   growth: GrowthState;
   /** Power points this fight (data/weaponPower.ts): every held weapon's Scaling feeds them, and they multiply all damage */
   power: number;
+  /** Multiplier on Power accumulation (default 1; 0 disables global Power scaling in item-driven modes like Starfall Spire) */
+  powerScaling?: number;
+  /** When true, concurrent active Evolutions stack their ×1.5 Set multiplier multiplicatively (used by Starfall Spire) */
+  stackEvolutionMultipliers?: boolean;
   /** What weapon growth remembers between Sets */
   growthMemo: { lastSetColor: string | null; lastHintAtMs: number; plantSet: boolean };
   elapsedMs: number;

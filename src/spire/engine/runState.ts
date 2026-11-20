@@ -13,6 +13,7 @@ import { ARCANA } from '@/adventure/data/arcana';
 import { getArmoryWeapon } from '@/adventure/data/armory';
 import { skillTreeOf } from '@/adventure/data/skillTrees';
 import { getUpgrade } from '@/adventure/data/upgrades';
+import { weaponRole } from '@/adventure/data/weaponRoles';
 import { MAX_WEAPON_LEVEL } from '@/adventure/data/weaponStats';
 import { damagePerMinute } from '@/adventure/history';
 import { mergeSpireDamageLedger } from '@/adventure/engine/damageStory';
@@ -41,33 +42,88 @@ const withRng = <T>(run: SpireRun, fn: (rng: Rng) => { run: SpireRun; out?: T })
   return { ...res.run, rngState: rng.state };
 };
 
-/** Pick `count` unheld weapons, biasing slot 0 toward a weapon that arms a NEW Evolution! */
+/** Pure mid-fight XP items are excluded from Spire offers (progression lives on the Spire map). */
+const SPIRE_EXCLUDED_WEAPONS: ReadonlySet<string> = new Set(['scholars-tome']);
+const SPIRE_EXCLUDED_ARCANA: ReadonlySet<ArcanaId> = new Set(['scholars_gambit']);
+const ENGINE_ROLES: ReadonlySet<string> = new Set(['damage', 'tricks', 'gambles', 'chains']);
+
+/**
+ * Roll `count` weapon offers for drafts & shops:
+ *  - Slot 0 strongly prefers a new unheld weapon that arms a NEW Evolution.
+ *  - Middle slots guarantee high-impact engine/payoff weapons (damage/tricks/gambles/chains).
+ *  - For 3+ slot drafts/shops, the final slot frequently offers a +1 Level UPGRADE
+ *    for one of your currently held weapons so builds deepen (Lv 2→5) instead of bloating!
+ */
 export const rollSynergyWeapons = (
   run: Pick<SpireRun, 'weapons' | 'weaponLevels' | 'act'>,
   rng: Rng,
   count: number,
-  minLevel = 1
+  minLevel = 1,
+  opts?: { allowUpgrade?: boolean }
 ): { weaponId: string; level: number }[] => {
-  const unheld = SPIRE_WEAPON_POOL.filter(id => !run.weapons.includes(id));
-  if (unheld.length === 0) return [];
+  const unheld = SPIRE_WEAPON_POOL.filter(id => !run.weapons.includes(id) && !SPIRE_EXCLUDED_WEAPONS.has(id));
+  const upgradeable = run.weapons.filter(id => (run.weaponLevels[id] ?? 1) < MAX_WEAPON_LEVEL);
+  const allowUpgrade = (opts?.allowUpgrade ?? true) && count >= 3 && upgradeable.length > 0;
+  // Tall-vs-wide balance: early drafts offer 1 upgrade slot so you can deepen starters;
+  // once holding 6+ weapons, offer up to 2 upgrade slots alongside 1 Evolution-arming new weapon!
+  let upgradeSlots = 0;
+  if (allowUpgrade) {
+    if (run.weapons.length >= 6 && upgradeable.length >= 2) {
+      upgradeSlots = 2;
+    } else if (rng.next() < (run.weapons.length >= 4 ? 0.9 : 0.65)) {
+      upgradeSlots = 1;
+    }
+  }
+  const newCount = Math.min(unheld.length, count - upgradeSlots);
+
   const synergy = unheld.filter(id => newEvolutionsArmedBy(run, id).length > 0);
   const chosen: string[] = [];
 
-  if (synergy.length > 0 && rng.next() < 0.72) {
-    chosen.push(rng.pick(synergy));
-  }
-  const remaining = rng.shuffle(unheld.filter(id => !chosen.includes(id)));
-  for (const id of remaining) {
-    if (chosen.length >= count) break;
-    chosen.push(id);
+  // Slot 0: Evolution-arming synergy weapon (preferring engine roles!)
+  if (newCount > 0 && synergy.length > 0 && rng.next() < 0.82) {
+    const synEngine = synergy.filter(id => ENGINE_ROLES.has(weaponRole(id)));
+    const synPool = synEngine.length > 0 && rng.next() < 0.75 ? synEngine : synergy;
+    chosen.push(rng.pick(synPool));
   }
 
-  return chosen.map(weaponId => {
-    // Higher acts occasionally offer pre-levelled weapons so late pickups stay exciting!
-    const bonusLv = run.act >= 3 && rng.next() < 0.45 ? 1 : run.act >= 2 && rng.next() < 0.25 ? 1 : 0;
-    const level = Math.min(MAX_WEAPON_LEVEL, Math.max(minLevel, 1 + bonusLv));
+  // Remaining new weapon slots: bias toward build-defining engine weapons while keeping support in the mix
+  const availEngine = rng.shuffle(unheld.filter(id => !chosen.includes(id) && ENGINE_ROLES.has(weaponRole(id))));
+  const availSupport = rng.shuffle(unheld.filter(id => !chosen.includes(id) && !ENGINE_ROLES.has(weaponRole(id))));
+  let eIdx = 0;
+  let sIdx = 0;
+  while (chosen.length < newCount) {
+    const needEngine = chosen.length === 1 || rng.next() < 0.72;
+    if (needEngine && eIdx < availEngine.length) {
+      chosen.push(availEngine[eIdx++]);
+    } else if (sIdx < availSupport.length) {
+      chosen.push(availSupport[sIdx++]);
+    } else if (eIdx < availEngine.length) {
+      chosen.push(availEngine[eIdx++]);
+    } else {
+      break;
+    }
+  }
+
+  const actFloor = run.act >= 3 ? 3 : run.act === 2 ? 2 : 1;
+  const offers = chosen.map(weaponId => {
+    const bonusLv = run.act === 1 && rng.next() < 0.3 ? 1 : run.act >= 2 && rng.next() < 0.35 ? 1 : 0;
+    const level = Math.min(MAX_WEAPON_LEVEL, Math.max(minLevel, actFloor + bonusLv));
     return { weaponId, level };
   });
+
+  // Trailing slots: +1 Level upgrades for existing held weapons (anti-bloat power spikes!)
+  if (upgradeSlots > 0 && offers.length < count) {
+    const engineHeld = rng.shuffle(upgradeable.filter(id => ENGINE_ROLES.has(weaponRole(id))));
+    const otherHeld = rng.shuffle(upgradeable.filter(id => !ENGINE_ROLES.has(weaponRole(id))));
+    const orderedUp = [...engineHeld, ...otherHeld];
+    for (const upId of orderedUp) {
+      if (offers.length >= count) break;
+      const nextLv = Math.min(MAX_WEAPON_LEVEL, (run.weaponLevels[upId] ?? 1) + 1);
+      offers.push({ weaponId: upId, level: nextLv });
+    }
+  }
+
+  return offers;
 };
 
 /** Pick `count` Fighter Skill Tree nodes not yet owned (prioritizing nodes linked to already-owned nodes / roots!). */
@@ -86,25 +142,26 @@ export const rollSkillNodeOptions = (
   return rng.shuffle(pool).slice(0, count).map(n => n.id);
 };
 
-/** Pick `count` Arcana wildcards not yet equipped. */
+/** Pick `count` Arcana wildcards not yet equipped (excluding XP-only Arcana unused in Spire). */
 export const rollArcanaOptions = (
   run: Pick<SpireRun, 'arcana'>,
   rng: Rng,
   count: number
 ): ArcanaId[] => {
-  const unheld = ARCANA.map(a => a.id).filter(id => !run.arcana.includes(id));
+  const unheld = ARCANA.map(a => a.id).filter(id => !run.arcana.includes(id) && !SPIRE_EXCLUDED_ARCANA.has(id));
   return rng.shuffle(unheld).slice(0, count);
 };
 
-/** Add a weapon (or level it up if already held). */
+/** Add a weapon (or level it up by at least +1, or to `level` if higher, when already held). */
 export const grantSpireWeapon = (run: SpireRun, weaponId: string, level = 1): SpireRun => {
   const existing = run.weaponLevels[weaponId];
   if (existing !== undefined) {
+    const nextLv = Math.min(MAX_WEAPON_LEVEL, Math.max(existing + 1, level));
     return {
       ...run,
       weaponLevels: {
         ...run.weaponLevels,
-        [weaponId]: Math.min(MAX_WEAPON_LEVEL, existing + Math.max(1, level)),
+        [weaponId]: nextLv,
       },
     };
   }
@@ -151,7 +208,10 @@ const buildShopState = (run: SpireRun, rng: Rng, rerolls = 0): SpireShopState =>
 
   const weapons = offers.map((o, i) => {
     const w = getArmoryWeapon(o.weaponId);
-    const base = Math.max(40, Math.round(((w?.price ?? 25) * 2.2 + (o.level - 1) * 28) * priceScale));
+    const isUpgrade = run.weaponLevels[o.weaponId] !== undefined;
+    const base = isUpgrade
+      ? Math.round(52 * priceScale)
+      : Math.max(40, Math.round(((w?.price ?? 25) * 2.1 + (o.level - 1) * 22) * priceScale));
     const onSale = i === saleIdx;
     return {
       weaponId: o.weaponId,
@@ -165,7 +225,7 @@ const buildShopState = (run: SpireRun, rng: Rng, rerolls = 0): SpireShopState =>
   const arcanaIds = rollArcanaOptions(run, rng, 2);
   const arcana = arcanaIds.map(arcanaId => ({
     arcanaId,
-    price: Math.round(95 * priceScale),
+    price: Math.round(75 * priceScale),
     sold: false,
   }));
 
@@ -186,7 +246,7 @@ const buildShopState = (run: SpireRun, rng: Rng, rerolls = 0): SpireShopState =>
     healCost: Math.round(45 * priceScale),
     healAmount: Math.max(2, Math.ceil(run.maxHearts * 0.4)),
     healed: false,
-    forgeCost: Math.round(65 * priceScale),
+    forgeCost: Math.round(55 * priceScale),
     forged: false,
     rerollCost: Math.round((25 + rerolls * 15) * asc.shopPriceScale),
     rerolls,
@@ -221,9 +281,9 @@ export const createSpireRun = (fighter: CharacterName, ascension: number, seed: 
     startingGraces: kit.startingGraces,
     upgrades: { evolution_lab: 1 }, // Spire starts with Evolution Lab active so Catalysts flow early!
     extraEvolutionCap: 0,
-    extraEvolutionLikelihood: 4,
+    extraEvolutionLikelihood: 6,
     weapons: [kit.starterWeapon, kit.bonusWeapon],
-    weaponLevels: { [kit.starterWeapon]: 1, [kit.bonusWeapon]: 1 },
+    weaponLevels: { [kit.starterWeapon]: 2, [kit.bonusWeapon]: 2 },
     arcana: [],
     skillNodes: [],
     map,
@@ -395,9 +455,19 @@ export const completeSpireBattle = (run: SpireRun, fight: RunState): SpireRun =>
   const coinsEarned = enc.coinReward + Math.round(fight.coins * 0.65) + parryBonusCoins;
 
   return withRng(run, rng => {
-    const weaponOptions = rollSynergyWeapons(run, rng, 3, enc.kind === 'boss' ? 2 : 1);
-    const arcanaOptions = enc.kind === 'elite' || enc.kind === 'boss' ? rollArcanaOptions(run, rng, 3) : [];
-    const skillOptions = enc.kind === 'elite' || enc.kind === 'boss' ? rollSkillNodeOptions(run, rng, 3) : [];
+    const minWeaponLv =
+      enc.kind === 'boss'
+        ? Math.min(4, run.act + 1)
+        : enc.kind === 'elite'
+          ? Math.min(3, run.act + 1)
+          : 1;
+    const weaponOptions = rollSynergyWeapons(run, rng, 3, minWeaponLv);
+    // Offer early Skill Nodes on every odd Skirmish win (starting Floor 1!) plus every Elite & Boss,
+    // and offer an early Act 1 Arcana wildcard on the 2nd Skirmish win plus every Elite & Boss!
+    const earlySkill = enc.kind === 'skirmish' && nextStats.skirmishesWon % 2 === 1;
+    const earlyArcana = enc.kind === 'skirmish' && nextStats.skirmishesWon === 2;
+    const arcanaOptions = enc.kind === 'elite' || enc.kind === 'boss' || earlyArcana ? rollArcanaOptions(run, rng, 3) : [];
+    const skillOptions = enc.kind === 'elite' || enc.kind === 'boss' || earlySkill ? rollSkillNodeOptions(run, rng, 3) : [];
 
     const reward: SpireRewardBundle = {
       nodeKind: enc.kind,

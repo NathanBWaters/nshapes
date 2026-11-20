@@ -19,17 +19,29 @@ import {
   chooseEventOption,
   claimRewardWeapon,
   claimTreasure,
+  completeSpireBattle,
   createSpireRun,
   enterEndlessSpire,
   leaveShop,
+  rollArcanaOptions,
+  rollSynergyWeapons,
   selectSpireNode,
   shopBuyUpgrade,
   shopBuyWeapon,
   shopReroll,
 } from '@/spire/engine/runState';
-import { SPIRE_FIGHT_FEATURES, spireEncounterLoadout, spireEncounterToLevel, spireRunOverrides, spireRunToVirtualSave } from '@/spire/engine/bridge';
+import {
+  SPIRE_FIGHT_FEATURES,
+  spireArmedRecipes,
+  spireEncounterLoadout,
+  spireEncounterToLevel,
+  spireRunOverrides,
+  spireRunToVirtualSave,
+} from '@/spire/engine/bridge';
 import { createInitialSpireMeta, loadSpireRun, resetSpireStorage, syncSpireDiscoveriesToAdventure, writeSpireRun } from '@/spire/save';
+import { createRng } from '@/adventure/engine/rng';
 import { createRun } from '@/adventure/engine/run';
+import { simulateRun, BOTS } from '@/adventure/engine/bot';
 import SpireSetup from '@/spire/components/SpireSetup';
 import SpireMap from '@/spire/components/SpireMap';
 import SpireEncounterPreview from '@/spire/components/SpireEncounterPreview';
@@ -82,13 +94,52 @@ describe('Starfall Spire — Map DAG, Events & Shared Engine Bridge', () => {
     }
   });
 
-  it('every fighter has a valid starter kit whose weapons exist in the shared pool', () => {
+  it('every fighter has a valid Level 2 starter kit that arms a Floor 1 Evolution in the shared pool', () => {
     for (const f of FIGHTERS) {
       const kit = STARTER_KITS[f.name];
       expect(kit).toBeDefined();
       expect(SPIRE_WEAPON_POOL).toContain(kit.starterWeapon);
       expect(SPIRE_WEAPON_POOL).toContain(kit.bonusWeapon);
+      const run = createSpireRun(f.name, 0, 1001);
+      expect(run.weaponLevels[kit.starterWeapon]).toBe(2);
+      expect(run.weaponLevels[kit.bonusWeapon]).toBe(2);
+      expect(spireArmedRecipes(run).length).toBeGreaterThanOrEqual(1);
     }
+  });
+
+  it('runs item-driven Spire fights with zero generic Power scaling, stacking Evolution multipliers, and anti-bloat drafts', () => {
+    let run = createSpireRun('Corgi', 0, 4242);
+    const firstId = reachableNodeIds(run.map, null)[0];
+    run = selectSpireNode(run, firstId);
+    const enc = run.activeEncounter!;
+    const overrides = spireRunOverrides(run);
+    expect(overrides.powerScaling).toBe(0);
+    expect(overrides.stackEvolutionMultipliers).toBe(true);
+
+    const sim = simulateRun(spireEncounterToLevel(run, enc), spireRunToVirtualSave(run), BOTS.expert, 777, undefined, {
+      skipPicks: true,
+      features: new Set(SPIRE_FIGHT_FEATURES),
+      overrides,
+    });
+    expect(sim.state.power).toBe(0);
+    expect(sim.state.totalDamage).toBeGreaterThan(0);
+
+    // First Skirmish win grants an early Fighter Skill Node draft
+    const afterWin = completeSpireBattle(run, { ...sim.state, status: 'won', endReason: 'defeated', foeHp: 0 });
+    expect(afterWin.phase).toBe('reward');
+    expect(afterWin.reward?.skillOptions.length).toBeGreaterThan(0);
+
+    // Drafts & Arcana exclude dead XP-only items and include upgrade offers for held weapons
+    const rng = createRng(12345);
+    let sawUpgrade = false;
+    for (let i = 0; i < 20; i++) {
+      const offers = rollSynergyWeapons(run, rng, 3);
+      expect(offers.some(o => o.weaponId === 'scholars-tome')).toBe(false);
+      if (offers.some(o => run.weaponLevels[o.weaponId] !== undefined)) sawUpgrade = true;
+    }
+    expect(sawUpgrade).toBe(true);
+    const arcanaPool = rollArcanaOptions({ arcana: [] }, createRng(99), 20);
+    expect(arcanaPool).not.toContain('scholars_gambit');
   });
 
   it('bridges Spire encounters seamlessly into Adventure createRun with persistent HP and uncapped weapons', () => {
@@ -145,8 +196,9 @@ describe('Starfall Spire — Map DAG, Events & Shared Engine Bridge', () => {
 
     // Campfire rest, forge, meditate
     const campBase = { ...run, phase: 'campfire' as const, campfire: { healAmount: 3, skillOptions: ['badger-0-1'], resolved: false } };
+    const beforeLv = campBase.weaponLevels[run.weapons[0]] ?? 1;
     expect(campfireRest(campBase).hearts).toBe(6);
-    expect(campfireForge(campBase, run.weapons[0]).weaponLevels[run.weapons[0]]).toBe(2);
+    expect(campfireForge(campBase, run.weapons[0]).weaponLevels[run.weapons[0]]).toBe(beforeLv + 1);
     expect(campfireMeditate(campBase, 'badger-0-1').skillNodes).toContain('badger-0-1');
 
     // Treasure
