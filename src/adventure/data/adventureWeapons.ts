@@ -495,7 +495,7 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     icon: 'lorc/lantern-flame',
     effects: {},
     maxCount: 1,
-    stats: { chance: { label: 'Fog chance', unit: '%', base: 10, perLevel: 1 }, bonus: { label: 'Damage when the fog lifts', unit: 'dmg', base: 8, perLevel: 1.5 } },
+    stats: { chance: { label: 'Fog chance', unit: '%', base: 10, perLevel: 1 }, bonus: { label: 'Damage when the fog lifts', unit: 'dmg', base: 8, perLevel: 2 } },
     build: v => ({
       modifiers: { fogChance: d1(v.chance), fogBonus: r(v.bonus) },
       description: `${num(v.chance)}% chance that a new card arrives face-down. After ${FOG_MS / 1000}s it flips up as a power card worth +${r(v.bonus)}.`,

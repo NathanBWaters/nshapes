@@ -7,7 +7,7 @@ import { WEAPON_GROWTH, NO_GROWTH, growthKey, growthStacks, growthText } from '@
 import { armoryBaseWeapon, getArmoryWeapon } from '@/adventure/data/armory';
 import { MAX_TUNING_TIER, MAX_WEAPON_LEVEL, weaponStatDefs, weaponValues } from '@/adventure/data/weaponStats';
 import { weaponGuide } from '@/adventure/data/weaponGuide';
-import { EFFECT_CAPS } from '@/game/effectCaps';
+import { EFFECT_CAPS, STAT_TO_CAP_TYPE } from '@/game/effectCaps';
 import { PAIR_RECIPES } from '@/adventure/data/evolutionPairs';
 import { createMaxedSave } from '@/adventure/progress';
 import { startingLoadout } from '@/adventure/loadout';
@@ -325,7 +325,7 @@ describe('growth and evolutions', () => {
 });
 
 describe('Wave 2 weapons overhaul invariants & reworks', () => {
-  it('zero Workshop clamp waste on bridgeChance (≤ 95%), echo (≤ 45%), and ricochet (≤ 75%) at L5+T4 + growth', () => {
+  it('zero Workshop clamp waste across ALL 64 weapons (bridgeChance ≤ 95%, all capped stats L5+T4+maxGrowth ≤ EFFECT_CAPS, zero dead rounded tiers)', () => {
     for (const id of ARMORY) {
       const base = armoryBaseWeapon(id)!;
       const defs = weaponStatDefs(base);
@@ -337,22 +337,39 @@ describe('Wave 2 weapons overhaul invariants & reworks', () => {
       }
       if (vals.chainReactionChance !== undefined) expect(vals.chainReactionChance).toBeLessThanOrEqual(100);
       if (vals.bonusConnectionChance !== undefined) expect(vals.bonusConnectionChance).toBeLessThanOrEqual(100);
+
+      // Every capped PlayerStats field at L5+T4 + full finite growth must stay at or below its EFFECT_CAPS ceiling!
+      for (const [statKey, maxVal] of Object.entries(vals)) {
+        const capType = STAT_TO_CAP_TYPE[statKey];
+        if (!capType) continue;
+        const cap = EFFECT_CAPS[capType].defaultCap;
+        const growthAdd = (WEAPON_GROWTH[id] ?? []).reduce(
+          (sum, g) => sum + (g.stat?.[statKey] ?? 0) * (g.max ?? 0),
+          0
+        );
+        expect({ id, statKey, total: Math.round((maxVal + growthAdd) * 100) / 100, ok: maxVal + growthAdd <= cap }).toEqual({
+          id,
+          statKey,
+          total: Math.round((maxVal + growthAdd) * 100) / 100,
+          ok: true,
+        });
+      }
+
+      // Every tunable AdventureWeapon stat must produce strictly different built rules/modifiers across tiers T0..T4 at every level L1..L5!
+      const adv = base as AdventureWeapon;
+      if (adv.stats && adv.build) {
+        for (const [statKey, def] of Object.entries(adv.stats)) {
+          if (def.tunable === false) continue;
+          for (let lvl = 1; lvl <= MAX_WEAPON_LEVEL; lvl++) {
+            const snapshots = [0, 1, 2, 3, 4].map(tier => {
+              const built = getArmoryWeapon(id, { [id]: { level: lvl, tuning: { [statKey]: tier } } }) as AdventureWeapon;
+              return JSON.stringify({ rules: built.rules, modifiers: built.modifiers });
+            });
+            expect({ id, statKey, lvl, distinctTiers: new Set(snapshots).size }).toEqual({ id, statKey, lvl, distinctTiers: 5 });
+          }
+        }
+      }
     }
-
-    // Echo Stone L5+T4 + full growth fits inside EFFECT_CAPS.echo (45%)
-    const echoMax = weaponValues(armoryBaseWeapon('echo-stone')!, { level: 5, tuning: { echoChance: 4 } }).echoChance;
-    const echoGrowth = (WEAPON_GROWTH['echo-stone'][0].stat!.echoChance ?? 0) * WEAPON_GROWTH['echo-stone'][0].max!;
-    expect(echoMax + echoGrowth).toBeLessThanOrEqual(EFFECT_CAPS.echo.defaultCap);
-
-    // Chaos Shard L5+T4 + Track 1 growth fits inside EFFECT_CAPS.ricochet (75%)
-    const chaosMax = weaponValues(armoryBaseWeapon('chaos-shard')!, { level: 5, tuning: { ricochetChance: 4 } }).ricochetChance;
-    const chaosGrowth = (WEAPON_GROWTH['chaos-shard'][0].stat!.ricochetChance ?? 0) * WEAPON_GROWTH['chaos-shard'][0].max!;
-    expect(chaosMax + chaosGrowth).toBeLessThanOrEqual(EFFECT_CAPS.ricochet.defaultCap);
-
-    // Seeker Lens L5+T4 + growth fits inside EFFECT_CAPS.hint (70%)
-    const seekerMax = weaponValues(armoryBaseWeapon('seeker-lens')!, { level: 5, tuning: { hintGainChance: 4 } }).hintGainChance;
-    const seekerGrowth = (WEAPON_GROWTH['seeker-lens'][0].stat!.hintGainChance ?? 0) * WEAPON_GROWTH['seeker-lens'][0].max!;
-    expect(seekerMax + seekerGrowth).toBeLessThanOrEqual(EFFECT_CAPS.hint.defaultCap);
   });
 
   it('Crystal Orb L1 Workshop tuning scales starting hints via resolveWholeStats instead of Math.floor(1.5) === 1', () => {

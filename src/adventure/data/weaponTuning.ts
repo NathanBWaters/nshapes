@@ -159,8 +159,8 @@ export const ADVENTURE_TUNING: Record<string, AdventureTuning> = {
     rider: v => ({ rules: [strike({ on: 'hintUsed' }, v.strike)], modifiers: { hintedSetDamage: v.insight } }),
   },
   'oracle-eye': {
-    effects: { autoHintChance: 30, autoHintInterval: 3000 },
-    perLevel: { autoHintChance: 6 },
+    effects: { autoHintChance: 24, autoHintInterval: 3000 },
+    perLevel: { autoHintChance: 4 },
     extra: {
       insight: dmg('Hinted Set bonus', 4, 1.5),
       clarity: dmg('Clean-play Set bonus', 2, 0.5),
@@ -173,8 +173,8 @@ export const ADVENTURE_TUNING: Record<string, AdventureTuning> = {
     }),
   },
   'mystic-sight': {
-    effects: { enhancedHintChance: 33, autoHintChance: 16, autoHintInterval: 2000 },
-    perLevel: { enhancedHintChance: 4, autoHintChance: 3 },
+    effects: { enhancedHintChance: 30, autoHintChance: 16, autoHintInterval: 2000 },
+    perLevel: { enhancedHintChance: 3, autoHintChance: 3 },
     extra: { third: dmg('Third Eye damage', 4, 1.5) },
     rider: v => ({ rules: [strike({ on: 'everyNthSet', n: MYSTIC_EVERY }, v.third, 'Third Eye!')] }),
   },

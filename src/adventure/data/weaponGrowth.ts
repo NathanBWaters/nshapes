@@ -195,10 +195,10 @@ export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
   // Using hints makes room for more of them (and a hoard is what Seeker Lens pays for)
   'crystal-orb': [{ watch: { on: 'hintUsed' }, every: 3, max: 3, stat: { maxHints: 1 }, now: { do: 'hint', amount: 1 }, look: 'hints you use', gives: '+1 hint slot, and a hint to put in it' }],
   'oracle-eye': [
-    { watch: { on: 'set' }, every: 2, max: 10, stat: { autoHintChance: 2 }, look: 'Sets you make', gives: '+2% chance to point out a card' },
+    { watch: { on: 'set' }, every: 2, max: 5, stat: { autoHintChance: 2 }, look: 'Sets you make', gives: '+2% chance to point out a card' },
     { watch: { on: 'set', test: 'hinted' }, max: 10, mods: { hintedSetDamage: 1.5 }, look: 'Set made on a pointed-out card', gives: 'Sets made on a pointed-out card hit +1.5 harder' },
   ],
-  'mystic-sight': [{ watch: { on: 'own' }, max: 5, stat: { enhancedHintChance: 5 }, look: 'Third Eye', gives: '+5% chance an auto-hint points out 2 cards' }],
+  'mystic-sight': [{ watch: { on: 'own' }, max: 3, stat: { enhancedHintChance: 2 }, look: 'Third Eye', gives: '+2% chance an auto-hint points out 2 cards' }],
   // Hints gild the board and build coin momentum
   'fortunes-blessing': [
     {
