@@ -30,6 +30,8 @@ Run `npm run balance:power` — every item in a category is anchored to the weak
 ```bash
 npm run balance:power -- --format compact --top 10 --bottom 5          # Fast overview (weapons, evolutions, fighters)
 npm run balance:power -- --category all --format compact --top 8       # Include Arcana
+npm run balance:power -- --lens gauntletHuman --format compact --top 10 --bottom 5  # Real-enemy calibrated-human gauntlet
+npm run balance:power -- --lens gauntletSpire --format compact --top 10 --bottom 5  # Starfall Summit (Act 2/3 A0 & A18)
 npm run balance:power -- --category weapons --lens inBuild --top 15    # Sub-lens query
 npm run balance:power -- --category weapons --role gambles             # Filter weapons by role
 npm run balance:power -- --category evolutions --lens buildAround --top 20
@@ -43,12 +45,12 @@ npm run balance:power -- --write                                       # Regener
 
 | Category | Lenses (`--lens`) | Notes |
 |---|---|---|
-| `weapons` | `composite` (default, `W8`), `inBuild`, `solo`, `pressure`, `shapley` | `--role`: `damage`, `tricks`, `gambles`, `board`, `survival`, `insight`, `tempo`, `chains` |
-| `evolutions` | `composite` (default, `E7` pure upgrade), `buildAround` (`E8`), `ruleLift`, `pairOutput` | `E7` removes carrier-weapon confounding; `E8` adds 25% armed-pair output |
-| `fighters` | `composite` (default, `F7`), `fullBuild`, `pressure160`, `dummy160`, `withWeapons90` | Always call out fighter sim caveats (see Methodology) |
+| `weapons` | `composite` (default, `W8`), `inBuild`, `solo`, `pressure`, `shapley`, `gauntlet`, `gauntletHuman`, `gauntletSpire` | `--role`: `damage`, `tricks`, `gambles`, `board`, `survival`, `insight`, `tempo`, `chains` |
+| `evolutions` | `composite` (default, `E7` pure upgrade), `buildAround` (`E8`), `ruleLift`, `pairOutput`, `gauntlet`, `gauntletHuman`, `gauntletSpire` | `E7` removes carrier-weapon confounding; `E8` adds 25% armed-pair output |
+| `fighters` | `composite` (default, `F7`), `fullBuild`, `pressure160`, `dummy160`, `withWeapons90`, `gauntlet`, `gauntletHuman`, `gauntletSpire` | Always compare dummy composite vs real-enemy `gauntletHuman` (captures Lognormal speed & survival!) |
 | `arcana` | `composite` (default), `effectiveAvg`, `effectiveExpert`, `shapley` | Included via `--category arcana` or `--category all` |
 
-Other flags: `--mode <adventure|spire>` (default `adventure`), `--top <N>`, `--bottom <N>`, `--format <md|compact|json>` (default `md`), `--write` (writes `docs/power-rankings.md` for weapons/evolutions/fighters — add `--category all` to include Arcana — plus full `docs/power-rankings.json`).
+Other flags: `--mode <adventure|spire>` (default `adventure`), `--top <N>`, `--bottom <N>`, `--gauntlet <path>` / `--no-gauntlet` (auto-loads `docs/balance-gauntlet.json` by default), `--format <md|compact|json>` (default `md`), `--write` (writes `docs/power-rankings.md` for weapons/evolutions/fighters — add `--category all` to include Arcana — plus full `docs/power-rankings.json`).
 
 If output flags `STALE_DATA` because `docs/balance-analytics.json` lags the current Balance Era after a mechanical patch, refresh simulation artifacts (`npm run balance:report` and/or `npm run balance:atlas`) before reporting sim rankings.
 
@@ -56,14 +58,24 @@ If output flags `STALE_DATA` because `docs/balance-analytics.json` lags the curr
 
 ## 2. Analyzing & blending live PostHog telemetry
 
-Check whether `POSTHOG_PERSONAL_API_KEY` (`phx_...`, never the public `phc_` write key) is set in the environment:
+All CLI scripts auto-load `POSTHOG_PERSONAL_API_KEY` (`phx_...`, never the public `phc_` write key) from `.env.local` via `scripts/lib/loadEnv.ts` (shell env vars take precedence; never log or commit keys or raw player IDs):
 
 ```bash
-# Live blend directly from PostHog (scope: query:read; falls back cleanly to sim-only if unset)
-POSTHOG_PERSONAL_API_KEY=phx_... npm run balance:power -- --live
+# Live blend directly from PostHog (auto-loads .env.local; falls back cleanly to sim-only if unset)
+npm run balance:power -- --live
+
+# Solo-tester / low-sample mode (priorK=12, minBlendFights=3, low-N lift guard ±0.50 for n<10, player-count-free tiers/alerts)
+npm run balance:power -- --live --era all --solo-tester --top 10 --bottom 5
+npm run balance:power -- --live --mode spire --era all --solo-tester --format compact --top 10 --bottom 5
+
+# Calibrate realistic Lognormal + cognitive-load human bot from clean prod PostHog runs -> docs/calibrated-bot.json
+npm run balance:calibrate-bot -- --live --write
+
+# Run 6-tier real-enemy gauntlet (64 weapons, 6 fighters, 208 evolutions; Uniform vs calibrated_human) -> docs/balance-gauntlet.json
+npm run balance:gauntlet -- --write
 
 # Pull lightweight paginated balance events (excludes heavy recording/save blobs; default -> docs/posthog-live-sample.json)
-POSTHOG_PERSONAL_API_KEY=phx_... npm run analytics:posthog:pull-balance -- --mode adventure --max-rows 10000
+npm run analytics:posthog:pull-balance -- --mode adventure --era all --max-rows 10000
 
 # Blend from a local export (JSON array, { results|events|rows }, HogQL { columns, results } matrix, or NDJSON)
 npm run balance:power -- --posthog docs/posthog-live-sample.json
@@ -72,25 +84,26 @@ npm run balance:power -- --posthog docs/posthog-live-sample.json
 npm run balance:power -- --simulated-posthog --format compact --top 8 --bottom 5
 ```
 
-Modifiers: `--era <current|E<n>|all>` (default `current`), `--include-dev` (default `env = 'prod'` only), `--mode <adventure|spire>`. For `pull-balance`: `--min-version <X.Y.Z>`, `--all-eras`, `--include-dev`, `--out <path>`. (Use `npm run analytics:posthog:pull` only when raw `recording`/`save` replay payloads are needed, capped at 1,000 rows.)
+Modifiers: `--era <current|E<n>|all>` (default `current`), `--solo-tester` (keeps `env = 'prod'` default; if combined with `--include-dev`, drops Playwright E2E bot rows into `droppedByE2eBot`), `--include-dev` (default `env = 'prod'` only), `--mode <adventure|spire>`. When `--era current` yields `kept = 0`, `balance:power` emits a stderr hint suggesting `--era E7 --solo-tester` or `--era all --solo-tester`. For `pull-balance`: `--era <current|all|E<n>>`, `--min-version <X.Y.Z>`, `--all-eras`, `--include-dev`, `--out <path>`.
 
-- **When `POSTHOG_PERSONAL_API_KEY` is absent:** `--live` emits a stderr notice and falls back to simulation-only rankings. Tell the user plainly that results are simulation-only and how to supply `POSTHOG_PERSONAL_API_KEY` or `--posthog <file>`.
-- **Always report the `PostHogAuditLedger`:** `kept / totalRaw`, drops by version/env/mode/practice/bug/short/coached, `deduped`, and `ratedFolds`.
+- **When `POSTHOG_PERSONAL_API_KEY` is absent:** `--live` emits a stderr notice and falls back to simulation-only rankings. Tell the user plainly that results are simulation-only and how to supply `POSTHOG_PERSONAL_API_KEY` (e.g. in `.env.local`) or `--posthog <file>`.
+- **Always report the `PostHogAuditLedger`:** `kept / totalRaw`, drops by version/env/e2e-bot/mode/practice/bug/short/coached, `deduped`, and `ratedFolds`.
 
 ### Credibility tiers & divergence alerts
 
-| Credibility tier | Threshold (`classifyCredibility`) | EB live weight (`k = 30`) |
-|---|---|---|
-| `sim_only` | `effectiveN = 0` | `w_live = 0` (100% sim prior) |
-| `exploratory` | `effectiveN < 15` or `uniquePlayers < 5` | `w_live < 0.33` (diagnostic only) |
-| `emerging` | `15 <= effectiveN < 50` and `uniquePlayers >= 5` | `0.33 <= w_live < 0.62` (blended + 95% CI) |
-| `credible` | `effectiveN >= 50` and `uniquePlayers >= 10` | `w_live >= 0.62` (live-dominant + Ridge) |
+| Credibility tier | Multi-player threshold | `--solo-tester` threshold | EB live weight |
+|---|---|---|---|
+| `sim_only` | `effectiveN = 0` | `fights = 0` | `w_live = 0` (100% sim prior) |
+| `exploratory` | `effectiveN < 15` or `uniquePlayers < 5` | `1 <= fights < 3` | Multi: `< 0.33`; Solo: `w_live = 0` (`minBlendFights = 3`) |
+| `emerging` | `15 <= effectiveN < 50` and `uniquePlayers >= 5` | `3 <= fights < 10` | Multi (`k=30`): `0.33..0.62`; Solo (`k=12`, `±0.50` clamp): `0.20..0.43` |
+| `credible` | `effectiveN >= 50` and `uniquePlayers >= 10` | `fights >= 10` | Multi (`k=30`): `>= 0.62`; Solo (`k=12`, `±0.80` clamp): `>= 0.45` |
 
-| Alert | Trigger (`DIVERGENCE_THRESHOLDS`) | Meaning |
+| Alert | Trigger (`DIVERGENCE_THRESHOLDS` / solo-tester) | Meaning |
 |---|---|---|
-| `BOT_BLIND_SLEEPER` | `effectiveN >= 15`, live exceeds sim by `>= +0.22` log (~`+25%`) vs peers | Players outperform headless bots (e.g. hurt-reactive or human-combo items) |
-| `BOT_FAVORED_TRAP` | `effectiveN >= 15`, live trails sim by `<= -0.22` log (~`-20%`) vs peers | Bots thrive, players struggle (e.g. cognitive-load board gambles hurting find-time) |
-| `FUN_POWER_GAP` | `funCount >= 10` and (`>= p75` power & `funRate <= 50%`) or (`<= p25` power & `funRate >= 85%`) | Frustrating meta pick vs beloved crowd pleaser |
+| `BOT_BLIND_SLEEPER` | `effectiveN >= 15` (`>= 5` solo), live exceeds sim by `>= +0.22` log (~`+25%`) vs peers | Players outperform headless bots (e.g. hurt-reactive or human-combo items) |
+| `BOT_FAVORED_TRAP` | `effectiveN >= 15` (`>= 5` solo), live trails sim by `<= -0.22` log (~`-20%`) vs peers | Bots thrive, players struggle (e.g. cognitive-load board gambles hurting find-time) |
+| `FUN_POWER_GAP` | `funCount >= 10` (`>= 3` solo) and (`>= p75` power & `funRate <= 50%`) or (`<= p25` power & `funRate >= 85%`) | Frustrating meta pick vs beloved crowd pleaser |
+| `HUMAN_DROUGHT_GAP` | Gauntlet peer shift between Lognormal `calibrated_human` and Uniform `BOTS.average` (`>= 0.12` weapons, `>= 0.10` fighters, `>= 0.35` evos) | Item gains or loses real power under human Set droughts & cognitive load |
 | `STALE_DATA` | All PostHog fights excluded by era floor (`kept = 0`), or atlas version lags current era | Collect current-era telemetry or re-run `npm run balance:atlas` |
 
 ---
@@ -181,7 +194,8 @@ Enforced by `__tests__/posthogRules.test.ts` on every dashboard tile:
 | Area | Files |
 |---|---|
 | Power rankings engine & CLI | `src/adventure/balance/powerRank.ts`, `scripts/balance-power-rank.ts`, `docs/power-rankings.md` |
+| Human bot calibrator & enemy gauntlet | `src/adventure/balance/botCalibrator.ts`, `scripts/balance-calibrate-bot.ts`, `docs/calibrated-bot.json`, `src/adventure/balance/gauntlet.ts`, `scripts/balance-gauntlet.ts`, `docs/balance-gauntlet.json` |
 | Balance Eras & fingerprints | `src/analytics/balanceEras.ts`, `src/analytics/balanceEras.json`, `src/analytics/balanceFingerprints.ts`, `scripts/balance-eras.ts` |
-| PostHog rules, dashboards & fetcher | `src/analytics/posthogRules.ts`, `src/analytics/posthogDashboards.ts`, `scripts/posthog-dashboards.ts`, `scripts/lib/posthogFetch.ts` |
+| PostHog rules, dashboards & fetcher | `src/analytics/posthogRules.ts`, `src/analytics/posthogDashboards.ts`, `scripts/posthog-dashboards.ts`, `scripts/lib/posthogFetch.ts`, `scripts/lib/loadEnv.ts` |
 | Dev studio & analytics engine | `src/analytics/dashboardEngine.ts`, `app/dev/analytics.tsx` |
-| Deep-dive specs & tests | `docs/posthog-analysis-rules.md`, `docs/balance-system.md`, `docs/analytics.md`, `__tests__/powerRank.test.ts`, `__tests__/posthogRules.test.ts`, `__tests__/balanceEraManifest.test.ts` |
+| Deep-dive specs & tests | `docs/posthog-analysis-rules.md`, `docs/balance-system.md`, `docs/analytics.md`, `__tests__/powerRank.test.ts`, `__tests__/botCalibrator.test.ts`, `__tests__/gauntlet.test.ts`, `__tests__/posthogRules.test.ts`, `__tests__/balanceEraManifest.test.ts` |

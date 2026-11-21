@@ -12,12 +12,16 @@ import * as fs from 'fs';
 import * as path from 'path';
 import {
   CURRENT_BALANCE_ERA_ID,
+  getEraById,
   getMinValidVersion,
   type FightModeFilter,
 } from '../src/analytics/balanceEras';
 import { POSTHOG_PROJECT_ID } from '../src/analytics/config';
 import { POSTHOG_DASHBOARDS, buildPostHogExportBundle } from '../src/analytics/posthogDashboards';
+import { loadLocalEnv } from './lib/loadEnv';
 import { fetchBalanceEventsFromPostHog } from './lib/posthogFetch';
+
+loadLocalEnv();
 
 const API_BASE = process.env.POSTHOG_API_HOST || 'https://us.posthog.com';
 const DOCS_DIR = path.resolve(__dirname, '../docs');
@@ -198,12 +202,16 @@ const runPullBalance = async (flags: Record<string, string | boolean>) => {
   const mode = (rawMode === 'adventure' || rawMode === 'spire' || rawMode === 'free_play' || rawMode === 'classic'
     ? rawMode
     : 'all') as FightModeFilter | 'all';
+  const eraArg = typeof flags.era === 'string' ? flags.era.trim() : undefined;
   const minVersion =
     typeof flags['min-version'] === 'string'
       ? flags['min-version']
-      : flags['all-eras']
+      : flags['all-eras'] || eraArg === 'all'
         ? '0.1.119'
-        : getMinValidVersion('all', undefined, mode === 'all' ? undefined : mode);
+        : eraArg && eraArg !== 'current'
+          ? (getEraById(eraArg)?.minVersion ??
+            getMinValidVersion('all', undefined, mode === 'all' ? undefined : mode))
+          : getMinValidVersion('all', undefined, mode === 'all' ? undefined : mode);
   const includeDev = Boolean(flags['include-dev']);
   const maxRows =
     typeof flags['max-rows'] === 'string' && Number.isFinite(Number(flags['max-rows']))

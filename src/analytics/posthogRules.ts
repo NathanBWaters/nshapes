@@ -66,6 +66,13 @@ export interface PostHogFilterOptions {
   maxPlayerWeightShare?: number;
   /** Enforce granular per-item `getMinValidVersion` on top of the global floor (default `true`). */
   usePerItemMinVersion?: boolean;
+  /**
+   * Low-sample solo playtester mode: uses uniform fight weights (`w = 1`, `effectiveN = fights`),
+   * player-count-free credibility tiers (`exploratory` 1–2, `emerging` 3–9, `credible` >=10),
+   * tighter low-N `liveLogLift` clamp (`±0.50` for `fights < 10`), and filters automated Playwright
+   * E2E bot signatures when combined with `includeDev: true`. Keeps `env = 'prod'` by default.
+   */
+  soloTester?: boolean;
   /** Custom era table (primarily for unit tests). */
   eras?: readonly BalanceEra[];
 }
@@ -79,6 +86,7 @@ export interface PostHogAuditLedger {
   droppedByEnv: number;
   droppedByMode: number;
   droppedByPractice: number;
+  droppedByE2eBot: number;
   droppedByBug: number;
   droppedByShort: number;
   droppedByCoached: number;
@@ -111,7 +119,10 @@ export interface ValidatedFightRecord {
   sets: number;
   mistakes: number;
   helpedSets: number;
+  hintsUsed: number;
+  gracesUsed: number;
   medianFindMs: number | null;
+  maxDroughtMs: number;
   evolutionsCount: number;
   weapons: string[];
   weaponsOffered: string[];
@@ -148,6 +159,7 @@ export interface LiveItemSignal {
 export interface PostHogBalanceSignals {
   audit: PostHogAuditLedger;
   mode: FightModeFilter | 'all';
+  soloTester?: boolean;
   weapons: Record<string, LiveItemSignal>;
   evolutions: Record<string, LiveItemSignal>;
   fighters: Record<string, LiveItemSignal>;
@@ -156,6 +168,20 @@ export interface PostHogBalanceSignals {
   decidedFights: number;
   evolutionCohortFights: number;
 }
+
+/**
+ * Detects automated Playwright E2E bot fights recorded under `env = 'dev'`
+ * (machine-regular <=1.4s median find, <=2.0s max drought, zero mistakes).
+ */
+export const isLikelyE2eBotFight = (
+  r: Pick<ValidatedFightRecord, 'env' | 'medianFindMs' | 'maxDroughtMs' | 'mistakes'>
+): boolean =>
+  r.env === 'dev' &&
+  r.medianFindMs !== null &&
+  r.medianFindMs > 0 &&
+  r.medianFindMs <= 1400 &&
+  r.maxDroughtMs <= 2000 &&
+  r.mistakes === 0;
 
 const MAIN_LEVEL_META = new Map(
   MAIN_LEVELS.map((l, idx) => [
@@ -291,6 +317,7 @@ export const filterFightEvents = (
   const eras = options.eras ?? BALANCE_ERAS;
   const modeFilter = options.mode ?? 'adventure';
   const includeDev = options.includeDev ?? false;
+  const soloTester = options.soloTester ?? false;
   const excludePractice = options.excludePractice ?? true;
   const excludeBugTagged = options.excludeBugTagged ?? true;
   const minSets = options.minSets ?? 3;
@@ -308,6 +335,7 @@ export const filterFightEvents = (
     droppedByEnv: 0,
     droppedByMode: 0,
     droppedByPractice: 0,
+    droppedByE2eBot: 0,
     droppedByBug: 0,
     droppedByShort: 0,
     droppedByCoached: 0,
@@ -432,7 +460,10 @@ export const filterFightEvents = (
       sets: asNum(p.sets, 0),
       mistakes: asNum(p.mistakes, 0),
       helpedSets: asNum(p.helped_sets ?? p.helpedSets, 0),
+      hintsUsed: asNum(p.hints_used ?? p.hintsUsed, 0),
+      gracesUsed: asNum(p.graces_used ?? p.gracesUsed, 0),
       medianFindMs: asOptNum(p.median_find_ms ?? p.medianFindMs),
+      maxDroughtMs: asNum(p.max_drought_ms ?? p.maxDroughtMs, 0),
       evolutionsCount,
       weapons: normalizeWeaponIds(asStringArray(p.weapons)),
       weaponsOffered: normalizeWeaponBag(asStringArray(p.weapons_offered ?? p.weaponsOffered)),
@@ -482,6 +513,10 @@ export const filterFightEvents = (
     }
     if (excludePractice && r.practice) {
       audit.droppedByPractice += 1;
+      continue;
+    }
+    if (soloTester && includeDev && isLikelyE2eBotFight(r)) {
+      audit.droppedByE2eBot += 1;
       continue;
     }
     if (!isVersionAtLeast(r.appVersion, activeMinVersion)) {
@@ -755,8 +790,17 @@ const fitBuildRidge = (
 
 // ─── Credibility & Concentration-Weighted Aggregation ──────────────────────
 
-export const classifyCredibility = (effectiveN: number, uniquePlayers: number): CredibilityTier => {
+export const classifyCredibility = (
+  effectiveN: number,
+  uniquePlayers: number,
+  soloTester = false
+): CredibilityTier => {
   if (effectiveN <= 0) return 'sim_only';
+  if (soloTester) {
+    if (effectiveN >= 10) return 'credible';
+    if (effectiveN >= 3) return 'emerging';
+    return 'exploratory';
+  }
   if (effectiveN >= 50 && uniquePlayers >= 10) return 'credible';
   if (effectiveN >= 15 && uniquePlayers >= 5) return 'emerging';
   return 'exploratory';
@@ -873,6 +917,7 @@ export const analyzePostHogForBalance = (
     options.usePerItemMinVersion ??
     ((options.eraId === undefined || options.eraId === 'current') && !options.minVersionOverride);
   const maxPlayerWeightShare = options.maxPlayerWeightShare ?? 0.25;
+  const soloTester = options.soloTester ?? false;
 
   const { fights, audit } = filterFightEvents(rawEvents, options);
 
@@ -1005,10 +1050,13 @@ export const analyzePostHogForBalance = (
     const result: Record<string, LiveItemSignal> = {};
     for (const [id, itemFights] of grouped.entries()) {
       const validSince = validSinceByItem.get(id) ?? audit.activeMinVersion;
-      const { weights, effectiveN, uniquePlayers } = computePlayerCappedWeights(
-        itemFights,
-        maxPlayerWeightShare
-      );
+      const { weights, effectiveN, uniquePlayers } = soloTester
+        ? {
+            weights: itemFights.map(() => 1),
+            effectiveN: itemFights.length,
+            uniquePlayers: new Set(itemFights.map(r => r.distinctId)).size,
+          }
+        : computePlayerCappedWeights(itemFights, maxPlayerWeightShare);
 
       let wDecided = 0;
       let wWins = 0;
@@ -1063,17 +1111,18 @@ export const analyzePostHogForBalance = (
       const bestWinDelta = ridgeWinDelta ?? adjustedWinDelta;
       const bestDpmDelta = ridgeLogDpmDelta ?? logDpmDelta;
 
+      const liftBound = soloTester && itemFights.length < 10 ? 0.5 : 0.8;
       let liveLogLift = 0;
       if (bestWinDelta !== null && bestDpmDelta !== null) {
         liveLogLift = clamp(
           0.6 * (WIN_TO_LOG_LIFT_SCALE * bestWinDelta) + 0.4 * clamp(bestDpmDelta, -0.75, 0.75),
-          -0.8,
-          0.8
+          -liftBound,
+          liftBound
         );
       } else if (bestWinDelta !== null) {
-        liveLogLift = clamp(WIN_TO_LOG_LIFT_SCALE * bestWinDelta, -0.8, 0.8);
+        liveLogLift = clamp(WIN_TO_LOG_LIFT_SCALE * bestWinDelta, -liftBound, liftBound);
       } else if (bestDpmDelta !== null) {
-        liveLogLift = clamp(0.65 * clamp(bestDpmDelta, -0.75, 0.75), -0.8, 0.8);
+        liveLogLift = clamp(0.65 * clamp(bestDpmDelta, -0.75, 0.75), -liftBound, liftBound);
       }
 
       // Compute standard error on natural-log scale for 95% CI reporting
@@ -1122,7 +1171,7 @@ export const analyzePostHogForBalance = (
         pickRate,
         funRate,
         funCount,
-        credibility: classifyCredibility(effectiveN, uniquePlayers),
+        credibility: classifyCredibility(effectiveN, uniquePlayers, soloTester),
       };
     }
 
@@ -1132,6 +1181,7 @@ export const analyzePostHogForBalance = (
   return {
     audit,
     mode: modeFilter,
+    ...(soloTester ? { soloTester: true } : {}),
     weapons: buildCategorySignals('weapons', fights, mainStrata, ridgeMainWin, ridgeMainDpm, r => r.weapons),
     evolutions: buildCategorySignals(
       'evolutions',
@@ -1224,7 +1274,7 @@ export const buildHogqlBalanceHygieneWhere = (opts: HogqlBalanceHygieneOptions =
     clauses.push(`NOT has(JSONExtractArrayRaw(coalesce(toString(properties.fun_tags), '[]')), '"bug_in_game"')`);
   }
   if (minSets > 0) {
-    clauses.push(`toInt32OrZero(toString(properties.sets)) >= ${Math.floor(minSets)}`);
+    clauses.push(`toIntOrZero(toString(properties.sets)) >= ${Math.floor(minSets)}`);
   }
   if (minDurationMs > 0) {
     clauses.push(`toFloat64OrZero(toString(properties.duration_ms)) >= ${Math.floor(minDurationMs)}`);

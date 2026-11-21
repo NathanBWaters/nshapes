@@ -1,6 +1,6 @@
 {
   "name": "nshapes",
-  "version": "0.1.167",
+  "version": "0.1.168",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
@@ -33,6 +33,8 @@
     "balance:spire": "SPIRE_BALANCE_REPORT=1 jest __tests__/spireBalance.test.ts",
     "balance:tune": "BALANCE_TUNE=1 jest __tests__/adventureBalanceTuner.test.ts",
     "balance:power": "npx tsx scripts/balance-power-rank.ts",
+    "balance:calibrate-bot": "npx tsx scripts/balance-calibrate-bot.ts",
+    "balance:gauntlet": "npx tsx scripts/balance-gauntlet.ts",
     "balance:era:check": "npx tsx scripts/balance-eras.ts check",
     "balance:era:record": "npx tsx scripts/balance-eras.ts record",
     "balance:era:status": "npx tsx scripts/balance-eras.ts status",

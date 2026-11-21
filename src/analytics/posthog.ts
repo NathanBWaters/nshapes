@@ -241,10 +241,15 @@ export const playerCode = (): string => {
   return code;
 };
 
+/** True when running inside an automated WebDriver / Playwright browser (suppresses E2E dev pollution). */
+const isAutomatedBrowser = (): boolean =>
+  typeof navigator !== 'undefined' &&
+  (navigator as { webdriver?: boolean }).webdriver === true;
+
 /** True when the player opted out via Settings/Camp (independent of Jest test suppression). */
 export const analyticsOptedOut = (): boolean => readKey(KEYS.optOut) === '1';
 
-export const analyticsEnabled = (): boolean => !isTest && !analyticsOptedOut();
+export const analyticsEnabled = (): boolean => !isTest && !isAutomatedBrowser() && !analyticsOptedOut();
 
 export const setAnalyticsEnabled = (on: boolean) => {
   if (on) {

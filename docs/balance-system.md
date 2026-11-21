@@ -6,7 +6,7 @@ How Adventure Mode is measured and tuned. The feel we are aiming at is in
 Everything is simulated: headless bots play real fights through the real
 reducer on fixed seeds, so every number is exact and repeatable.
 
-## The six tools
+## The eight tools
 
 | Tool | Command | What it answers | Where it lives |
 |---|---|---|---|
@@ -15,7 +15,9 @@ reducer on fixed seeds, so every number is exact and repeatable.
 | **Level 3-star balance** | `npm run balance:levels` | Does every level hit its `★1+` clear floor, `★★+` knockout band, `★★★` mastery target, and World 1 pro `★★★` floor? | `__tests__/adventureBalance.test.ts`, `src/adventure/engine/botBuilds.ts` |
 | **The 3-star HP tuner** | `npm run balance:tune` (`ONLY=5-2,3-4` for some) | Searches foe HP against the multi-star loss (`★1+`, `★★+`, `★★★`, and World 1 pro `★★★` so HP neither walls `★★` nor starves in-fight `★★★` goals) and rewrites `data/levels.ts`. | `src/adventure/balance/tuner.ts` |
 | **The balance atlas** | `npm run balance:atlas` | How do all 2,016 weapon pairs, 208 recipes, 6 fighters, 8 Arcana, Pressure+Surge hazards, Snowball curves, Ridge Shapley weights, 8D `MAP-Elites` niches, and 59 campaign levels interact? | `src/adventure/balance/analytics.ts`, `docs/balance-analytics.json`, `docs/balance-atlas.html` |
-| **Power rankings (`1.00×+`) & Balance Eras** | `npm run balance:power` / `npm run balance:era:record` | Ranks every weapon, evolution, fighter, and Arcana as a `1.00×+` multiplier over the weakest in its category, blending simulation priors with era-valid PostHog telemetry (Empirical Bayes shrinkage + divergence alerts), written to [power-rankings.md](./power-rankings.md). | `src/adventure/balance/powerRank.ts`, `scripts/balance-power-rank.ts`, `src/analytics/balanceEras.json`, `scripts/balance-eras.ts` |
+| **Human bot calibrator** | `npm run balance:calibrate-bot -- --live --write` | Fits a realistic human `BotProfile` (`calibrated_human`) from era-independent clean `prod` PostHog runs (`baseReactionSec + secondsPerAttribute × traits`, Lognormal drought `findTimeSigma`, total slip/near-miss/hint/parry rates, and Empirical-Bayes cognitive load per weapon & role), written to [calibrated-bot.json](./calibrated-bot.json). | `src/adventure/balance/botCalibrator.ts`, `scripts/balance-calibrate-bot.ts`, `docs/calibrated-bot.json` |
+| **6-tier enemy gauntlet** | `npm run balance:gauntlet -- --write` | Counterfactual `with ÷ without` clear scores (`S_e`) for all 64 weapons, 6 fighters (scaled trees → `160★`), and 208 evolutions across 6 real escalating enemy tiers (`1-10`, `2-5`/`2-6`, Spire A2 Boss `Charging Boar A0`, `4-6`/`4-10`, Spire A3 Boss `A0`/`A18`, `5-5 Hydra`) under BOTH Uniform `BOTS.average` and Lognormal `calibrated_human`, written to [balance-gauntlet.json](./balance-gauntlet.json). | `src/adventure/balance/gauntlet.ts`, `scripts/balance-gauntlet.ts`, `docs/balance-gauntlet.json` |
+| **Power rankings (`1.00×+`) & Balance Eras** | `npm run balance:power` / `npm run balance:era:record` | Ranks every weapon, evolution, fighter, and Arcana as a `1.00×+` multiplier over the weakest in its category, blending simulation priors with era-valid PostHog telemetry (`--live`, `--solo-tester`) and exposing real-enemy gauntlet lenses (`--lens gauntlet\|gauntletHuman\|gauntletSpire`), written to [power-rankings.md](./power-rankings.md). | `src/adventure/balance/powerRank.ts`, `scripts/balance-power-rank.ts`, `src/analytics/balanceEras.json`, `scripts/balance-eras.ts` |
 
 `__tests__/adventureBuilds.test.ts` adds the build-level checks: no fighter,
 recipe pairing or random endgame build runs away from the field, and every
@@ -27,8 +29,9 @@ evolution adds damage over its two weapons.
 2. `npm run balance:report` and read the Movers table: did anything move that you did not mean to move?
 3. `npm run balance:levels`. If levels drifted, `npm run balance:tune`, then run it again.
 4. `npm run balance:era:record -- --summary "What changed"` (verified automatically by `npm run validate:balance-eras` in guardrails and CI so stale pre-change PostHog telemetry is excluded automatically from live rankings and dashboards).
-5. `npm run balance:power -- --write` to refresh [power-rankings.md](./power-rankings.md) and [power-rankings.json](./power-rankings.json) (add `--live` with `POSTHOG_PERSONAL_API_KEY` or `--posthog <export.json>` to blend live player data).
-6. Commit the report, snapshot, era manifest, and power rankings with the change, so the next person's Movers table and PostHog validity window start from yours.
+5. `npm run balance:gauntlet -- --write` (optional when enemy/weapon balance shifted significantly — refreshes the 6-tier live-enemy gauntlet in ~75s using [calibrated-bot.json](./calibrated-bot.json)).
+6. `npm run balance:power -- --write` to refresh [power-rankings.md](./power-rankings.md) and [power-rankings.json](./power-rankings.json) (add `--live` — auto-loads `.env.local` — and `--solo-tester` when evaluating small single-tester playtest samples, or `--lens gauntletHuman` to inspect real-enemy human rankings).
+7. Commit the report, snapshot, era manifest, gauntlet (if refreshed), and power rankings with the change, so the next person's Movers table and PostHog validity window start from yours.
 
 ## What the lab measures
 
@@ -105,7 +108,7 @@ Live player telemetry from PostHog (pick rate, Simpson-adjusted win/DPM deltas, 
 
 ## Limits worth knowing
 
-- **The foe in the lab never hits back.** Weapons that wake up on a lost heart (Life Link, Revenge Linker) and survival weapons read low there. Level balance, where foes do hit, is their real test.
-- **Bots are not players.** They hunt marks, pages and chained pairs a set share of the time (`engine/bot.ts` `chooseSet`). A weapon that needs cleverness the bot lacks will read low; say so in the weapon's comment rather than buffing it blind.
+- **The foe in the lab never hits back.** Weapons that wake up on a lost heart (Life Link, Revenge Linker) and survival/tempo weapons read low on dummy benches. Use `npm run balance:gauntlet` and `npm run balance:power -- --lens gauntletHuman` (or `--lens gauntletSpire`) to measure real finite-HP enemy clear scores across all 6 tiers (including Starfall Summit A0 & A18).
+- **Uniform bots don't experience human droughts.** Default `BOTS` (`novice`/`average`/`expert`) use Uniform `[0.6, 1.4]` think multipliers (`max 1.4×`). Real players follow Lognormal search times (`σ ≈ 0.75`, p95 `~3.4×` median) plus weapon cognitive load; `npm run balance:calibrate-bot -- --live --write` fits `calibrated_human` from clean `prod` PostHog runs, and `balance:power` flags large Uniform-vs-Human shifts as `HUMAN_DROUGHT_GAP`.
 - **Samples are small in the always-on run** (8 seeds, 4 builds). A number right at a band's edge can flip; the full report (14 seeds, 6 builds) is the one to trust.
-- **Damage is the yardstick.** Coins, XP and hints only count through the damage they lead to in that fight.
+- **Damage is the yardstick on dummy benches.** Coins, XP and hints only count through the damage they lead to in that fight; the 6-tier enemy gauntlet smooths win rate, HP dealt, time left, and hearts left into `S_e = 0.50·min(1.5, dmg/hp) + 0.30·win + 0.20·(timeShare + heartsShare)/2`.

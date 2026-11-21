@@ -1,19 +1,40 @@
 /**
- * Lightweight PostHog HogQL balance-event fetcher for Node CLI tools.
+ * Lightweight PostHog HogQL balance & calibration event fetcher for Node CLI tools.
  *
- * Projects ONLY the analytical columns needed for balance & enjoyment scoring —
- * deliberately excluding multi-hundred-KB `recording` and `save` replay blobs so
- * queries stay fast, cheap, and paginate cleanly past PostHog's 1,000-row cap.
+ * Uses keyset pagination on `(timestamp, uuid)` (never `OFFSET`, which PostHog
+ * rejects on personal API keys) and HogQL-safe cast functions (`toIntOrZero` /
+ * `toIntOrNull`, never `toInt32OrZero` / `toInt32OrNull`).
+ *
+ * - `fetchBalanceEventsFromPostHog`: projects ONLY analytical & behavioral columns
+ *   (excluding multi-hundred-KB `recording`/`save` blobs) for fast pagination.
+ * - `fetchHumanCalibrationEventsFromPostHog`: pulls `prod` fight rows + compact
+ *   `recording` blobs for exact per-Set find-time & drought calibration.
  */
 import { POSTHOG_PROJECT_ID } from '../../src/analytics/config';
 import { getMinValidVersion, type FightModeFilter } from '../../src/analytics/balanceEras';
 import { buildHogqlVersionClause } from '../../src/analytics/posthogRules';
+import { loadLocalEnv } from './loadEnv';
+
+export { loadLocalEnv } from './loadEnv';
 
 export interface FetchBalanceEventsOptions {
-  apiKey: string;
+  apiKey?: string;
   minVersion?: string;
   includeDev?: boolean;
   mode?: FightModeFilter | 'all';
+  maxRows?: number;
+  apiHost?: string;
+  projectId?: number;
+  pageSize?: number;
+  /** Include raw `recording` payload alongside balance columns (default `false`). */
+  includeRecording?: boolean;
+}
+
+export interface FetchCalibrationEventsOptions {
+  apiKey?: string;
+  includeDev?: boolean;
+  mode?: FightModeFilter | 'all';
+  minVersion?: string;
   maxRows?: number;
   apiHost?: string;
   projectId?: number;
@@ -22,13 +43,13 @@ export interface FetchBalanceEventsOptions {
 
 const DEFAULT_API_HOST = 'https://us.posthog.com';
 const DEFAULT_MAX_ROWS = 10_000;
-const DEFAULT_PAGE_SIZE = 1000;
+const DEFAULT_PAGE_SIZE = 500;
 
 const BALANCE_SELECT_COLUMNS = `
-  uuid,
+  toString(uuid) AS uuid,
   event,
   distinct_id,
-  timestamp,
+  toString(timestamp) AS timestamp,
   toString(properties.fight_id) AS fight_id,
   toString(properties.app_version) AS app_version,
   toString(properties.balance_era) AS balance_era,
@@ -40,33 +61,42 @@ const BALANCE_SELECT_COLUMNS = `
   coalesce(toString(properties.mode), 'adventure') AS mode,
   toString(properties.level_id) AS level_id,
   toString(properties.level_name) AS level_name,
-  toInt32OrZero(toString(properties.level_order)) AS level_order,
-  toInt32OrZero(toString(properties.world)) AS world,
+  toIntOrZero(toString(properties.level_order)) AS level_order,
+  toIntOrZero(toString(properties.world)) AS world,
   lower(coalesce(toString(properties.boss), 'false')) IN ('true', '1') AS boss,
   lower(coalesce(toString(properties.practice), 'false')) IN ('true', '1') AS practice,
-  toInt32OrNull(toString(properties.spire_act)) AS spire_act,
-  toInt32OrNull(toString(properties.spire_floor)) AS spire_floor,
-  toInt32OrNull(toString(properties.spire_ascension)) AS spire_ascension,
+  toString(properties.difficulty) AS difficulty,
+  toIntOrNull(toString(properties.spire_act)) AS spire_act,
+  toIntOrNull(toString(properties.spire_floor)) AS spire_floor,
+  toIntOrNull(toString(properties.spire_ascension)) AS spire_ascension,
   toString(properties.spire_node_kind) AS spire_node_kind,
+  toIntOrNull(toString(properties.parries)) AS parries,
+  toIntOrNull(toString(properties.perfect_parries)) AS perfect_parries,
   toString(properties.fighter) AS fighter,
   toString(properties.foe) AS foe,
   toString(properties.outcome) AS outcome,
-  toInt32OrZero(toString(properties.stars)) AS stars,
+  toString(properties.end_reason) AS end_reason,
+  toIntOrZero(toString(properties.stars)) AS stars,
   toFloat64OrZero(toString(properties.duration_ms)) AS duration_ms,
   toFloat64OrZero(toString(properties.damage)) AS damage,
   toFloat64OrZero(toString(properties.dpm)) AS dpm,
-  toInt32OrZero(toString(properties.sets)) AS sets,
-  toInt32OrZero(toString(properties.mistakes)) AS mistakes,
-  toInt32OrZero(toString(properties.helped_sets)) AS helped_sets,
-  toInt32OrZero(toString(properties.hints_used)) AS hints_used,
-  toInt32OrZero(toString(properties.graces_used)) AS graces_used,
+  toIntOrZero(toString(properties.sets)) AS sets,
+  toIntOrZero(toString(properties.mistakes)) AS mistakes,
+  toIntOrZero(toString(properties.helped_sets)) AS helped_sets,
+  toIntOrZero(toString(properties.hints_used)) AS hints_used,
+  toIntOrZero(toString(properties.graces_used)) AS graces_used,
+  toIntOrNull(toString(properties.hearts_left)) AS hearts_left,
+  toIntOrNull(toString(properties.max_hearts)) AS max_hearts,
+  toFloat64OrNull(toString(properties.foe_hp_left)) AS foe_hp_left,
+  toFloat64OrNull(toString(properties.foe_max_hp)) AS foe_max_hp,
+  toFloat64OrNull(toString(properties.foe_hp_pct_left)) AS foe_hp_pct_left,
   toFloat64OrZero(toString(properties.triggered_damage_share)) AS triggered_damage_share,
   toFloat64OrZero(toString(properties.biggest_hit_share)) AS biggest_hit_share,
   toFloat64OrNull(toString(properties.median_find_ms)) AS median_find_ms,
   toFloat64OrZero(toString(properties.max_drought_ms)) AS max_drought_ms,
   lower(coalesce(toString(properties.close_call), 'false')) IN ('true', '1') AS close_call,
   lower(coalesce(toString(properties.died_with_hints), 'false')) IN ('true', '1') AS died_with_hints,
-  toInt32OrZero(toString(properties.evolutions)) AS evolutions,
+  toIntOrZero(toString(properties.evolutions)) AS evolutions,
   coalesce(toString(properties.weapons), '[]') AS weapons,
   coalesce(toString(properties.weapons_offered), '[]') AS weapons_offered,
   coalesce(toString(properties.weapons_picked), '[]') AS weapons_picked,
@@ -87,6 +117,10 @@ const ARRAY_COLUMNS = new Set([
   'fun_tags',
 ]);
 
+const NULLABLE_STRING_COLUMNS = new Set(['fun_rating', 'end_reason', 'difficulty', 'spire_node_kind']);
+
+const escapeSqlLiteral = (s: string): string => s.replace(/\\/g, '\\\\').replace(/'/g, "''");
+
 const parseRowToEvent = (columns: string[], row: unknown[]): Record<string, unknown> => {
   const flat: Record<string, unknown> = {};
   for (let i = 0; i < columns.length; i++) {
@@ -98,8 +132,17 @@ const parseRowToEvent = (columns: string[], row: unknown[]): Record<string, unkn
       } catch {
         val = [];
       }
-    }
-    if (col === 'fun_rating' && (val === '' || val === 'null')) {
+    } else if (col === 'recording') {
+      if (typeof val === 'string' && val.trim().startsWith('{')) {
+        try {
+          val = JSON.parse(val);
+        } catch {
+          val = null;
+        }
+      } else if (val === '' || val === 'null') {
+        val = null;
+      }
+    } else if (NULLABLE_STRING_COLUMNS.has(col) && (val === '' || val === 'null')) {
       val = null;
     }
     flat[col] = val;
@@ -149,18 +192,80 @@ async function runHogql(
   };
 }
 
-/**
- * Fetches lightweight `fight_ended` + retrospective `fight_rated` events from PostHog
- * using server-side numeric semver and environment filtering, paginating up to `maxRows`.
- */
-export async function fetchBalanceEventsFromPostHog(
-  opts: FetchBalanceEventsOptions
-): Promise<Record<string, unknown>[]> {
-  const apiKey = opts.apiKey.trim();
-  if (!apiKey) {
-    throw new Error('fetchBalanceEventsFromPostHog requires a non-empty PostHog Personal API Key.');
+async function fetchPaginatedHogqlEvents(params: {
+  apiKey: string;
+  apiHost: string;
+  projectId: number;
+  selectColumns: string;
+  whereParts: string[];
+  maxRows: number;
+  pageSize: number;
+}): Promise<Record<string, unknown>[]> {
+  const { apiKey, apiHost, projectId, selectColumns, whereParts, maxRows, pageSize } = params;
+  const collected: Record<string, unknown>[] = [];
+  let cursorTs: string | null = null;
+  let cursorUuid: string | null = null;
+
+  while (collected.length < maxRows) {
+    const limit = Math.min(pageSize, maxRows - collected.length);
+    const pageWhere = [...whereParts];
+    if (cursorTs && cursorUuid) {
+      const safeTs = escapeSqlLiteral(cursorTs);
+      const safeUuid = escapeSqlLiteral(cursorUuid);
+      pageWhere.push(
+        `(timestamp < parseDateTime64BestEffort('${safeTs}', 6) OR (timestamp = parseDateTime64BestEffort('${safeTs}', 6) AND toString(uuid) < '${safeUuid}'))`
+      );
+    }
+
+    const sql = `
+SELECT
+  ${selectColumns}
+FROM events
+WHERE ${pageWhere.join('\n  AND ')}
+ORDER BY timestamp DESC, uuid DESC
+LIMIT ${limit}`;
+
+    const { columns, results } = await runHogql(apiHost, projectId, apiKey, sql);
+    if (results.length === 0) break;
+
+    const tsIdx = columns.indexOf('timestamp');
+    const uuidIdx = columns.indexOf('uuid');
+    for (const row of results) {
+      collected.push(parseRowToEvent(columns, row));
+    }
+
+    const lastRow = results[results.length - 1];
+    const nextTs = tsIdx >= 0 && lastRow[tsIdx] != null ? String(lastRow[tsIdx]) : null;
+    const nextUuid = uuidIdx >= 0 && lastRow[uuidIdx] != null ? String(lastRow[uuidIdx]) : null;
+    if (results.length < limit || !nextTs || !nextUuid) break;
+    if (nextTs === cursorTs && nextUuid === cursorUuid) break;
+    cursorTs = nextTs;
+    cursorUuid = nextUuid;
   }
 
+  return collected;
+}
+
+const resolveApiKey = (explicitKey?: string): string => {
+  loadLocalEnv();
+  const key = explicitKey?.trim() || process.env.POSTHOG_PERSONAL_API_KEY?.trim() || '';
+  if (!key) {
+    throw new Error(
+      'Missing POSTHOG_PERSONAL_API_KEY. Save a Personal API Key (phx_..., scope: query:read) in .env.local or pass via environment.'
+    );
+  }
+  return key;
+};
+
+/**
+ * Fetches lightweight `fight_ended` + retrospective `fight_rated` events from PostHog
+ * using server-side numeric semver, environment filtering, and keyset pagination on
+ * `(timestamp, uuid)`.
+ */
+export async function fetchBalanceEventsFromPostHog(
+  opts: FetchBalanceEventsOptions = {}
+): Promise<Record<string, unknown>[]> {
+  const apiKey = resolveApiKey(opts.apiKey);
   const apiHost = opts.apiHost || process.env.POSTHOG_API_HOST || DEFAULT_API_HOST;
   const projectId = opts.projectId ?? POSTHOG_PROJECT_ID;
   const maxRows = Math.max(1, opts.maxRows ?? DEFAULT_MAX_ROWS);
@@ -177,33 +282,60 @@ export async function fetchBalanceEventsFromPostHog(
     whereParts.push(`coalesce(toString(properties.env), '') = 'prod'`);
   }
   if (mode !== 'all') {
-    whereParts.push(`(event = 'fight_rated' OR coalesce(toString(properties.mode), 'adventure') = '${mode}')`);
+    whereParts.push(
+      `(event = 'fight_rated' OR coalesce(toString(properties.mode), 'adventure') = '${mode}')`
+    );
   }
 
-  const baseWhere = whereParts.join('\n  AND ');
-  const collected: Record<string, unknown>[] = [];
-  let offset = 0;
+  const selectColumns = opts.includeRecording
+    ? `${BALANCE_SELECT_COLUMNS},\n  toString(properties.recording) AS recording`
+    : BALANCE_SELECT_COLUMNS;
 
-  while (collected.length < maxRows) {
-    const limit = Math.min(pageSize, maxRows - collected.length);
-    const sql = `
-SELECT
-  ${BALANCE_SELECT_COLUMNS}
-FROM events
-WHERE ${baseWhere}
-ORDER BY timestamp DESC, uuid DESC
-LIMIT ${limit}
-OFFSET ${offset}`;
+  return fetchPaginatedHogqlEvents({
+    apiKey,
+    apiHost,
+    projectId,
+    selectColumns,
+    whereParts,
+    maxRows,
+    pageSize,
+  });
+}
 
-    const { columns, results } = await runHogql(apiHost, projectId, apiKey, sql);
-    if (results.length === 0) break;
+/**
+ * Fetches real human `fight_ended` rows (default: `env = 'prod'`, all balance eras)
+ * together with `properties.recording` for exact per-Set find-time & drought calibration.
+ */
+export async function fetchHumanCalibrationEventsFromPostHog(
+  opts: FetchCalibrationEventsOptions = {}
+): Promise<Record<string, unknown>[]> {
+  const apiKey = resolveApiKey(opts.apiKey);
+  const apiHost = opts.apiHost || process.env.POSTHOG_API_HOST || DEFAULT_API_HOST;
+  const projectId = opts.projectId ?? POSTHOG_PROJECT_ID;
+  const maxRows = Math.max(1, opts.maxRows ?? 500);
+  const pageSize = Math.max(1, Math.min(opts.pageSize ?? 200, maxRows));
+  const mode = opts.mode ?? 'all';
 
-    for (const row of results) {
-      collected.push(parseRowToEvent(columns, row));
-    }
-    if (results.length < limit) break;
-    offset += results.length;
+  const whereParts: string[] = [`event = 'fight_ended'`];
+  if (!opts.includeDev) {
+    whereParts.push(`coalesce(toString(properties.env), '') = 'prod'`);
+  }
+  if (opts.minVersion) {
+    whereParts.push(buildHogqlVersionClause(opts.minVersion));
+  }
+  if (mode !== 'all') {
+    whereParts.push(`coalesce(toString(properties.mode), 'adventure') = '${mode}'`);
   }
 
-  return collected;
+  const selectColumns = `${BALANCE_SELECT_COLUMNS},\n  toString(properties.recording) AS recording`;
+
+  return fetchPaginatedHogqlEvents({
+    apiKey,
+    apiHost,
+    projectId,
+    selectColumns,
+    whereParts,
+    maxRows,
+    pageSize,
+  });
 }

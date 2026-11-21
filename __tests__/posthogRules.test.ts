@@ -1,9 +1,13 @@
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { BALANCE_ERAS, getMinValidVersion, nextPatchVersion, type BalanceEra } from '@/analytics/balanceEras';
 import {
   analyzeFights,
   generateSimulatedCohort,
   parseAnalyticsImportJson,
 } from '@/analytics/dashboardEngine';
+import { __enableAnalyticsForTests, analyticsEnabled } from '@/analytics/posthog';
 import { POSTHOG_DASHBOARDS } from '@/analytics/posthogDashboards';
 import {
   analyzePostHogForBalance,
@@ -11,7 +15,9 @@ import {
   buildHogqlVersionClause,
   classifyCredibility,
   filterFightEvents,
+  isLikelyE2eBotFight,
 } from '@/analytics/posthogRules';
+import { loadLocalEnv } from '../scripts/lib/loadEnv';
 
 const CURRENT_ADV_MIN = getMinValidVersion('all', undefined, 'adventure');
 const NEXT_PATCH_VER = nextPatchVersion(CURRENT_ADV_MIN);
@@ -119,6 +125,7 @@ describe('posthogRules filtering, hygiene & audit ledger', () => {
     expect(audit.droppedByEnv).toBe(1);
     expect(audit.droppedByMode).toBe(1);
     expect(audit.droppedByPractice).toBe(1);
+    expect(audit.droppedByE2eBot).toBe(0);
     expect(audit.droppedByBug).toBe(1);
     expect(audit.droppedByShort).toBe(2);
     expect(audit.droppedByCoached).toBe(2);
@@ -264,10 +271,13 @@ describe('posthogRules filtering, hygiene & audit ledger', () => {
     expect(whereSql).toContain('helped_sets');
     expect(whereSql).toContain("IN ('won', 'survived', 'lost')");
 
-    // Verify every HogQL tile avoids ClickHouse pitfalls: no toBool(), no unguarded log(0), LEFT JOIN before ARRAY JOIN, no cyclic ARRAY JOIN alias
+    // Verify every HogQL tile avoids ClickHouse/HogQL pitfalls: no toBool(), no toInt32OrZero/Null, no OFFSET, no unguarded log(0), LEFT JOIN before ARRAY JOIN, no cyclic ARRAY JOIN alias
     for (const dash of POSTHOG_DASHBOARDS) {
       for (const tile of dash.tiles) {
         expect(tile.hogql).not.toContain('toBool(');
+        expect(tile.hogql).not.toContain('toInt32OrZero(');
+        expect(tile.hogql).not.toContain('toInt32OrNull(');
+        expect(tile.hogql).not.toMatch(/\bOFFSET\b/i);
         expect(tile.hogql).not.toMatch(/avgIf\(log\(toFloat64/);
         const arrayJoinIdx = tile.hogql.lastIndexOf('ARRAY JOIN');
         const leftJoinIdx = tile.hogql.lastIndexOf('LEFT JOIN');
@@ -275,6 +285,21 @@ describe('posthogRules filtering, hygiene & audit ledger', () => {
           expect(leftJoinIdx).toBeLessThan(arrayJoinIdx);
         }
         expect(tile.hogql).not.toMatch(/trim\(BOTH '"' FROM (\w+)\) AS \1\b/);
+      }
+    }
+
+    // Also guard source files against unsupported HogQL casts & OFFSET pagination
+    const rootDir = path.resolve(__dirname, '..');
+    for (const rel of [
+      'src/analytics/posthogDashboards.ts',
+      'src/analytics/posthogRules.ts',
+      'scripts/lib/posthogFetch.ts',
+    ]) {
+      const src = fs.readFileSync(path.join(rootDir, rel), 'utf8');
+      expect(src).not.toContain('toInt32OrZero(');
+      expect(src).not.toContain('toInt32OrNull(');
+      if (rel === 'scripts/lib/posthogFetch.ts') {
+        expect(src).not.toMatch(/^\s*OFFSET\s+/m);
       }
     }
   });
@@ -450,5 +475,139 @@ describe('dashboardEngine parser & filter upgrades', () => {
     });
     expect(liveSignals.audit.kept).toBeGreaterThan(50);
     expect(Object.keys(liveSignals.weapons).length).toBeGreaterThan(0);
+  });
+});
+
+describe('soloTester mode, E2E bot suppression & loadLocalEnv', () => {
+  it('enforces uniform weights, player-count-free credibility tiers, low-N lift clamp, and E2E bot filtering', () => {
+    // Credibility tiers in soloTester mode
+    expect(classifyCredibility(0, 0, true)).toBe('sim_only');
+    expect(classifyCredibility(1, 1, true)).toBe('exploratory');
+    expect(classifyCredibility(2, 1, true)).toBe('exploratory');
+    expect(classifyCredibility(3, 1, true)).toBe('emerging');
+    expect(classifyCredibility(9, 1, true)).toBe('emerging');
+    expect(classifyCredibility(10, 1, true)).toBe('credible');
+
+    // E2E bot detector
+    expect(isLikelyE2eBotFight({ env: 'dev', medianFindMs: 1250, maxDroughtMs: 1250, mistakes: 0 })).toBe(true);
+    expect(isLikelyE2eBotFight({ env: 'dev', medianFindMs: 3500, maxDroughtMs: 12000, mistakes: 0 })).toBe(false);
+    expect(isLikelyE2eBotFight({ env: 'prod', medianFindMs: 1250, maxDroughtMs: 1250, mistakes: 0 })).toBe(false);
+
+    // 1. soloTester keeps env='prod' by default (dev rows dropped by env)
+    const mixedEnv = [
+      makeEvent({ fight_id: 'prod-1', env: 'prod', median_find_ms: 3500, max_drought_ms: 11000 }),
+      makeEvent({ fight_id: 'dev-bot', env: 'dev', median_find_ms: 1250, max_drought_ms: 1250, mistakes: 0 }),
+      makeEvent({ fight_id: 'dev-human', env: 'dev', median_find_ms: 3600, max_drought_ms: 12500, mistakes: 1 }),
+    ];
+    const prodOnly = filterFightEvents(mixedEnv, { mode: 'adventure', soloTester: true });
+    expect(prodOnly.audit.kept).toBe(1);
+    expect(prodOnly.audit.droppedByEnv).toBe(2);
+    expect(prodOnly.audit.droppedByE2eBot).toBe(0);
+
+    // 2. soloTester + includeDev drops ONLY Playwright E2E bot, keeps human dev + prod
+    const withDev = filterFightEvents(mixedEnv, { mode: 'adventure', soloTester: true, includeDev: true });
+    expect(withDev.audit.kept).toBe(2);
+    expect(withDev.audit.droppedByE2eBot).toBe(1);
+    expect(withDev.fights.map(f => f.fightId).sort()).toEqual(['dev-human', 'prod-1']);
+
+    // 3. Uniform weights (effectiveN === fights across 2 browser profiles) & low-N ±0.50 lift clamp
+    const soloEvents: Record<string, unknown>[] = [];
+    // Baseline 20 losses on 2-3 with filler weapon on browser A
+    for (let i = 0; i < 20; i++) {
+      soloEvents.push(
+        makeEvent(
+          { fight_id: `base-${i}`, weapons: ['field-stone'], outcome: 'lost', dpm: 80 },
+          { distinct_id: 'nathan-desktop' }
+        )
+      );
+    }
+    // 4 extreme wins with low-N weapon (3 on desktop, 1 on mobile) -> effectiveN=4, emerging, lift clamped to <= 0.50
+    for (let i = 0; i < 4; i++) {
+      soloEvents.push(
+        makeEvent(
+          { fight_id: `low-${i}`, weapons: ['clarity-lens'], outcome: 'won', dpm: 600 },
+          { distinct_id: i < 3 ? 'nathan-desktop' : 'nathan-mobile' }
+        )
+      );
+    }
+    // 12 extreme wins with high-N weapon (10 on desktop, 2 on mobile) -> effectiveN=12, credible, lift > 0.50 (up to 0.80)
+    for (let i = 0; i < 12; i++) {
+      soloEvents.push(
+        makeEvent(
+          { fight_id: `high-${i}`, weapons: ['blast-powder'], outcome: 'won', dpm: 600 },
+          { distinct_id: i < 10 ? 'nathan-desktop' : 'nathan-mobile' }
+        )
+      );
+    }
+    const soloSig = analyzePostHogForBalance(soloEvents, { mode: 'adventure', soloTester: true });
+    expect(soloSig.soloTester).toBe(true);
+    expect(soloSig.weapons['clarity-lens'].effectiveN).toBe(4);
+    expect(soloSig.weapons['clarity-lens'].credibility).toBe('emerging');
+    expect(soloSig.weapons['clarity-lens'].liveLogLift).toBeLessThanOrEqual(0.5);
+    expect(soloSig.weapons['blast-powder'].effectiveN).toBe(12);
+    expect(soloSig.weapons['blast-powder'].credibility).toBe('credible');
+    expect(soloSig.weapons['blast-powder'].liveLogLift).toBeGreaterThan(0.5);
+    expect(soloSig.weapons['blast-powder'].liveLogLift).toBeLessThanOrEqual(0.8);
+  });
+
+  it('loads .env.local before .env without overriding existing process.env vars', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nshapes-env-test-'));
+    const keys = ['NSHAPES_TEST_A', 'NSHAPES_TEST_B', 'NSHAPES_TEST_C', 'NSHAPES_TEST_D'];
+    const saved: Record<string, string | undefined> = {};
+    for (const k of keys) {
+      saved[k] = process.env[k];
+      delete process.env[k];
+    }
+    try {
+      process.env.NSHAPES_TEST_A = 'from-shell';
+      fs.writeFileSync(
+        path.join(tmpDir, '.env.local'),
+        [
+          '# comment line',
+          'NSHAPES_TEST_A=from-local',
+          'export NSHAPES_TEST_B="quoted value" # trailing comment',
+          "NSHAPES_TEST_C='single-quoted'",
+        ].join('\n'),
+        'utf8'
+      );
+      fs.writeFileSync(
+        path.join(tmpDir, '.env'),
+        ['NSHAPES_TEST_B=from-env', 'NSHAPES_TEST_D=fallback-val # inline note'].join('\n'),
+        'utf8'
+      );
+
+      loadLocalEnv(tmpDir);
+      expect(process.env.NSHAPES_TEST_A).toBe('from-shell');
+      expect(process.env.NSHAPES_TEST_B).toBe('quoted value');
+      expect(process.env.NSHAPES_TEST_C).toBe('single-quoted');
+      expect(process.env.NSHAPES_TEST_D).toBe('fallback-val');
+    } finally {
+      for (const k of keys) {
+        if (saved[k] === undefined) delete process.env[k];
+        else process.env[k] = saved[k];
+      }
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('suppresses PostHog capture when navigator.webdriver is true (Playwright E2E guard)', () => {
+    const prevNav = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+    try {
+      __enableAnalyticsForTests();
+      Object.defineProperty(globalThis, 'navigator', {
+        value: { webdriver: true },
+        configurable: true,
+      });
+      expect(analyticsEnabled()).toBe(false);
+
+      Object.defineProperty(globalThis, 'navigator', {
+        value: { webdriver: false },
+        configurable: true,
+      });
+      expect(analyticsEnabled()).toBe(true);
+    } finally {
+      if (prevNav) Object.defineProperty(globalThis, 'navigator', prevNav);
+      else delete (globalThis as { navigator?: unknown }).navigator;
+    }
   });
 });

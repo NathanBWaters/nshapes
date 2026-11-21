@@ -11,6 +11,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { FullBalanceAtlasData } from '../src/adventure/balance/analytics';
+import type { GauntletReport } from '../src/adventure/balance/gauntlet';
 import {
   CATEGORY_LENSES,
   compareItems,
@@ -34,12 +35,14 @@ import {
   type FightModeFilter,
 } from '../src/analytics/balanceEras';
 import { analyzePostHogForBalance, type PostHogBalanceSignals } from '../src/analytics/posthogRules';
+import { loadLocalEnv } from './lib/loadEnv';
 import { fetchBalanceEventsFromPostHog } from './lib/posthogFetch';
 
 const ROOT_DIR = path.resolve(__dirname, '..');
 const DOCS_DIR = path.join(ROOT_DIR, 'docs');
 const SNAPSHOT_PATH = path.join(DOCS_DIR, 'balance-snapshot.json');
 const ANALYTICS_PATH = path.join(DOCS_DIR, 'balance-analytics.json');
+const DEFAULT_GAUNTLET_PATH = path.join(DOCS_DIR, 'balance-gauntlet.json');
 const OUT_MD_PATH = path.join(DOCS_DIR, 'power-rankings.md');
 const OUT_JSON_PATH = path.join(DOCS_DIR, 'power-rankings.json');
 
@@ -55,7 +58,10 @@ interface CliArgs {
   item?: string;
   compare?: [string, string];
   posthogPath?: string;
+  gauntletPath?: string;
+  noGauntlet: boolean;
   live: boolean;
+  soloTester: boolean;
   simulatedPosthog: boolean;
   includeDev: boolean;
   era: string;
@@ -73,9 +79,9 @@ Usage:
 Options:
   --category <list>      weapons | evolutions | fighters | arcana | all (comma-separated allowed; default: weapons,evolutions,fighters)
   --lens <name>          Sub-lens for the selected category:
-                           weapons:    composite (default), inBuild, solo, pressure, shapley
-                           evolutions: composite (E7 default), buildAround (E8), ruleLift, pairOutput
-                           fighters:   composite (default), fullBuild, pressure160, dummy160, withWeapons90
+                           weapons:    composite (default), inBuild, solo, pressure, shapley, gauntlet, gauntletHuman, gauntletSpire
+                           evolutions: composite (E7 default), buildAround (E8), ruleLift, pairOutput, gauntlet, gauntletHuman, gauntletSpire
+                           fighters:   composite (default), fullBuild, pressure160, dummy160, withWeapons90, gauntlet, gauntletHuman, gauntletSpire
                            arcana:     composite (default), effectiveAvg, effectiveExpert, shapley
   --mode <mode>          adventure (default) | spire
   --top <N>              Show only the top N items per category
@@ -84,23 +90,24 @@ Options:
   --item <id|name>       Detailed breakdown for one weapon, evolution, fighter, or Arcana
   --compare <a,b>        Head-to-head multiplier comparison between two items in the same category
   --posthog <path>       Blend live telemetry from a PostHog JSON / NDJSON / HogQL export file
-  --live                 Fetch era-valid PostHog events via POSTHOG_PERSONAL_API_KEY (falls back to sim-only if unset)
+  --live                 Fetch era-valid PostHog events via POSTHOG_PERSONAL_API_KEY (auto-loads .env.local; falls back cleanly to sim-only if unset)
+  --solo-tester          Low-sample solo-tester blending (priorK=12, minBlendFights=3, low-N lift clamp, player-count-free credibility & alerts)
   --simulated-posthog    Blend a deterministic simulated PostHog cohort to preview Empirical Bayes blending
-  --include-dev          Include env='dev' PostHog events (default: prod only)
-  --era <id|all>         Balance era scope: current (default: ${CURRENT_BALANCE_ERA.id} >= v${CURRENT_BALANCE_ERA.minVersion}), an era id (e.g. E5), or all
+  --include-dev          Include env='dev' PostHog events (default: prod only; E2E bot rows filtered in --solo-tester)
+  --era <id|all>         Balance era scope: current (default: ${CURRENT_BALANCE_ERA.id} >= v${CURRENT_BALANCE_ERA.minVersion}), an era id (e.g. E7), or all
+  --gauntlet <path>      Custom gauntlet JSON path (default: auto-loads docs/balance-gauntlet.json if present)
+  --no-gauntlet          Skip loading docs/balance-gauntlet.json
   --format <fmt>         md (default) | json | compact
   --write                Write docs/power-rankings.md and docs/power-rankings.json
   -h, --help             Show this help message
 
 Examples:
   npm run balance:power -- --format compact --top 10 --bottom 5
-  npm run balance:power -- --category weapons --lens inBuild --top 15
-  npm run balance:power -- --category evolutions --lens buildAround --top 20
-  npm run balance:power -- --category fighters --format md
+  npm run balance:power -- --lens gauntletHuman --format compact --top 10 --bottom 5
+  npm run balance:power -- --category weapons --lens gauntletSpire --top 15
+  npm run balance:power -- --live --era all --solo-tester --top 10 --bottom 5
   npm run balance:power -- --compare blast-powder,chrono-shard
   npm run balance:power -- --item standing-ovation
-  npm run balance:power -- --simulated-posthog --format compact --top 8
-  POSTHOG_PERSONAL_API_KEY=phx_... npm run balance:power -- --live --write
 `.trim();
 
 const parsePositiveInt = (val: string | undefined, flag: string): number => {
@@ -145,7 +152,9 @@ const parseArgs = (argv: readonly string[]): CliArgs => {
     categories: ['weapons', 'evolutions', 'fighters'],
     includeArcana: false,
     mode: 'adventure',
+    noGauntlet: false,
     live: false,
+    soloTester: false,
     simulatedPosthog: false,
     includeDev: false,
     era: 'current',
@@ -212,8 +221,17 @@ const parseArgs = (argv: readonly string[]): CliArgs => {
       case '--posthog':
         args.posthogPath = next();
         break;
+      case '--gauntlet':
+        args.gauntletPath = next();
+        break;
+      case '--no-gauntlet':
+        args.noGauntlet = true;
+        break;
       case '--live':
         args.live = true;
+        break;
+      case '--solo-tester':
+        args.soloTester = true;
         break;
       case '--simulated-posthog':
         args.simulatedPosthog = true;
@@ -543,14 +561,38 @@ async function loadPostHogSignals(
 
   if (!rawEvents) return null;
 
-  return analyzePostHogForBalance(rawEvents, {
+  const signals = analyzePostHogForBalance(rawEvents, {
     mode: args.mode,
     includeDev: args.includeDev,
     eraId: args.era,
+    soloTester: args.soloTester,
   });
+
+  if (signals.audit.kept === 0 && args.era === 'current') {
+    console.error(
+      `[balance:power] 0 fights kept under current era ${CURRENT_BALANCE_ERA.id} (>= v${CURRENT_BALANCE_ERA.minVersion}). ` +
+        `Tip: re-run with \`--era E7 --solo-tester\` (most recent human session) or \`--era all --solo-tester\` for all-era directional blending.`
+    );
+  }
+
+  return signals;
 }
 
+const loadOptionalGauntlet = (args: CliArgs): GauntletReport | null => {
+  if (args.noGauntlet) return null;
+  const target = args.gauntletPath ? path.resolve(args.gauntletPath) : DEFAULT_GAUNTLET_PATH;
+  if (!fs.existsSync(target)) {
+    if (args.gauntletPath) {
+      throw new Error(`Gauntlet file not found: ${target}`);
+    }
+    return null;
+  }
+  return JSON.parse(fs.readFileSync(target, 'utf8')) as GauntletReport;
+};
+
 async function main() {
+  loadLocalEnv(ROOT_DIR);
+
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
     console.log(HELP_TEXT);
@@ -559,12 +601,21 @@ async function main() {
 
   const snapshot: Snapshot = JSON.parse(fs.readFileSync(SNAPSHOT_PATH, 'utf8'));
   const analytics: FullBalanceAtlasData = JSON.parse(fs.readFileSync(ANALYTICS_PATH, 'utf8'));
+  const gauntlet = loadOptionalGauntlet(args);
   const posthog = await loadPostHogSignals(args, analytics);
 
   const lenses: Partial<Record<PowerCategory, string>> = {};
   if (args.lens) {
+    const low = args.lens.toLowerCase();
+    const isGauntletAlias =
+      low === 'gauntlet' ||
+      low === 'gauntlethuman' ||
+      low === 'gauntlet-human' ||
+      low === 'gauntletspire' ||
+      low === 'gauntlet-spire' ||
+      low === 'human';
     for (const c of args.categories) {
-      if (CATEGORY_LENSES[c].includes(args.lens) || args.categories.length === 1) {
+      if (CATEGORY_LENSES[c].includes(args.lens) || (isGauntletAlias && c !== 'arcana') || args.categories.length === 1) {
         lenses[c] = args.lens;
       }
     }
@@ -574,8 +625,10 @@ async function main() {
     snapshot,
     analytics,
     posthog,
+    gauntlet,
     lenses,
     mode: args.mode,
+    soloTester: args.soloTester,
   });
 
   if (args.write) {

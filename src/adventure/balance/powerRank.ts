@@ -35,6 +35,7 @@ import type {
 } from '../../analytics/posthogRules';
 import { roleLabel, WEAPON_ROLES, type WeaponRole } from '../data/weaponRoles';
 import type { FullBalanceAtlasData, WeaponExtendedRow } from './analytics';
+import type { GauntletMover, GauntletReport } from './gauntlet';
 import type { Snapshot } from './report';
 
 export type { CredibilityTier, LiveItemSignal, PostHogAuditLedger, PostHogBalanceSignals };
@@ -42,6 +43,8 @@ export type { CredibilityTier, LiveItemSignal, PostHogAuditLedger, PostHogBalanc
 // ─── Public Constants & Formula Weights ──────────────────────────────────────
 
 export const EMPIRICAL_BAYES_PRIOR_K = 30;
+export const SOLO_TESTER_PRIOR_K = 12;
+export const SOLO_TESTER_MIN_BLEND_FIGHTS = 3;
 export const ADDED_MULT_MIN_FLOOR = 1.05;
 
 export const WEAPON_COMPOSITE_WEIGHTS = {
@@ -85,20 +88,60 @@ export const DIVERGENCE_THRESHOLDS = {
   highFunRate: 0.85,
 } as const;
 
+export const SOLO_TESTER_DIVERGENCE_THRESHOLDS = {
+  minEffectiveN: 5,
+  logResidualGap: 0.22,
+  minFunCount: 3,
+  lowFunRate: 0.50,
+  highFunRate: 0.85,
+} as const;
+
+export const HUMAN_DROUGHT_GAP_THRESHOLDS = {
+  /** Peer-normalized log shift between Lognormal calibrated_human and Uniform BOTS.average */
+  weaponLogGap: 0.12,
+  /** Evolutions span 208 recipes with fewer seeds per boss, so require a stronger shift (~±40%) */
+  evolutionLogGap: 0.35,
+  /** Fighters have tighter spreads (~±10%) across 36 seeds */
+  fighterLogGap: 0.10,
+} as const;
+
 // ─── Categories, Lenses & Shared Live-Telemetry Contract ─────────────────────
 
 export type PowerCategory = 'weapons' | 'evolutions' | 'fighters' | 'arcana';
 
-export type WeaponLens = 'composite' | 'inBuild' | 'solo' | 'pressure' | 'shapley';
-export type EvolutionLens = 'composite' | 'buildAround' | 'ruleLift' | 'pairOutput';
-export type FighterLens = 'composite' | 'fullBuild' | 'pressure160' | 'dummy160' | 'withWeapons90';
+export type WeaponLens =
+  | 'composite'
+  | 'inBuild'
+  | 'solo'
+  | 'pressure'
+  | 'shapley'
+  | 'gauntlet'
+  | 'gauntletHuman'
+  | 'gauntletSpire';
+export type EvolutionLens =
+  | 'composite'
+  | 'buildAround'
+  | 'ruleLift'
+  | 'pairOutput'
+  | 'gauntlet'
+  | 'gauntletHuman'
+  | 'gauntletSpire';
+export type FighterLens =
+  | 'composite'
+  | 'fullBuild'
+  | 'pressure160'
+  | 'dummy160'
+  | 'withWeapons90'
+  | 'gauntlet'
+  | 'gauntletHuman'
+  | 'gauntletSpire';
 export type ArcanaLens = 'composite' | 'effectiveAvg' | 'effectiveExpert' | 'shapley';
 export type AnyLens = WeaponLens | EvolutionLens | FighterLens | ArcanaLens;
 
 export const CATEGORY_LENSES: Record<PowerCategory, readonly string[]> = {
-  weapons: ['composite', 'inBuild', 'solo', 'pressure', 'shapley'],
-  evolutions: ['composite', 'buildAround', 'ruleLift', 'pairOutput'],
-  fighters: ['composite', 'fullBuild', 'pressure160', 'dummy160', 'withWeapons90'],
+  weapons: ['composite', 'inBuild', 'solo', 'pressure', 'shapley', 'gauntlet', 'gauntletHuman', 'gauntletSpire'],
+  evolutions: ['composite', 'buildAround', 'ruleLift', 'pairOutput', 'gauntlet', 'gauntletHuman', 'gauntletSpire'],
+  fighters: ['composite', 'fullBuild', 'pressure160', 'dummy160', 'withWeapons90', 'gauntlet', 'gauntletHuman', 'gauntletSpire'],
   arcana: ['composite', 'effectiveAvg', 'effectiveExpert', 'shapley'],
 };
 
@@ -121,6 +164,7 @@ export interface PostHogSignalsInput {
   /** Backwards-compatible alias for `audit` */
   ledger?: PostHogAuditLedger;
   mode?: FightModeFilter | 'all';
+  soloTester?: boolean;
   ridgeUsed?: boolean;
   decidedFights?: number;
   evolutionCohortFights?: number;
@@ -133,7 +177,12 @@ export interface PostHogSignalsInput {
   >;
 }
 
-export type DivergenceKind = 'BOT_BLIND_SLEEPER' | 'BOT_FAVORED_TRAP' | 'FUN_POWER_GAP' | 'STALE_DATA';
+export type DivergenceKind =
+  | 'BOT_BLIND_SLEEPER'
+  | 'BOT_FAVORED_TRAP'
+  | 'FUN_POWER_GAP'
+  | 'HUMAN_DROUGHT_GAP'
+  | 'STALE_DATA';
 
 export interface DivergenceAlert {
   kind: DivergenceKind;
@@ -298,10 +347,14 @@ export interface PowerRankInput {
   snapshot: Snapshot;
   analytics: FullBalanceAtlasData;
   posthog?: PostHogSignalsInput | null;
+  /** Optional 6-tier multi-difficulty enemy gauntlet report (`docs/balance-gauntlet.json`). */
+  gauntlet?: GauntletReport | null;
   lenses?: Partial<Record<PowerCategory, string>>;
   mode?: FightModeFilter;
   eraContext?: EraContext;
-  /** Prior strength `k` for Empirical Bayes live weight `n_eff / (n_eff + k)`. Default 30. */
+  /** Solo-tester / low-sample mode (`priorK = 12`, `minBlendFights = 3`, player-count-free alerts/tiers). */
+  soloTester?: boolean;
+  /** Prior strength `k` for Empirical Bayes live weight `n_eff / (n_eff + k)`. Default 30 (12 in soloTester mode). */
   priorK?: number;
 }
 
@@ -312,11 +365,17 @@ export interface PowerRankReport {
   appVersion: string | null;
   mode: string;
   hasLiveData: boolean;
+  hasGauntletData: boolean;
+  soloTester: boolean;
   currentEraId: string | null;
   currentEraMinVersion: string | null;
   medianChassisLift: number;
   priorK: number;
   auditLedger: PostHogAuditLedger | null;
+  gauntletMovers: {
+    topHumanRisers: GauntletMover[];
+    topHumanFallers: GauntletMover[];
+  } | null;
   alerts: DivergenceAlert[];
   categories: Record<PowerCategory, CategoryRanking>;
 }
@@ -380,6 +439,15 @@ const normalizeLens = (category: PowerCategory, requested?: string): string => {
   const valid = CATEGORY_LENSES[category];
   if (!requested) return valid[0];
   if (valid.includes(requested)) return requested;
+  const low = requested.trim().toLowerCase();
+  // Gauntlet lens aliases (weapons, evolutions, fighters)
+  if (category !== 'arcana') {
+    if (low === 'gauntlet' || low === 'gauntletavg' || low === 'gauntlet-avg') return 'gauntlet';
+    if (low === 'gauntlethuman' || low === 'gauntlet-human' || low === 'human') return 'gauntletHuman';
+    if (low === 'gauntletspire' || low === 'gauntlet-spire' || low === 'gauntletspirea20' || low === 'spire') {
+      return 'gauntletSpire';
+    }
+  }
   // Helpful aliases
   if (category === 'weapons' && (requested === 'soloLate' || requested === 'late')) return 'solo';
   if (category === 'weapons' && requested === 'in-build') return 'inBuild';
@@ -401,6 +469,8 @@ interface RawCategoryItem {
   category: PowerCategory;
   /** Raw positive index per lens for this category */
   lensRaw: Record<string, number>;
+  /** Present when real gauntlet measurements exist for this item */
+  hasGauntlet?: boolean;
   meta: EntryMeta;
 }
 
@@ -411,6 +481,7 @@ const buildCategoryRanking = (
   signals: Map<string, LiveItemSignalLike>,
   priorK: number,
   mode: string,
+  soloTester: boolean,
   eraContext?: EraContext
 ): CategoryRanking => {
   // 1. Precompute 1.00x-anchored simulation multipliers for every sub-lens
@@ -419,6 +490,19 @@ const buildCategoryRanking = (
   for (const l of lensNames) {
     lensMin[l] = Math.min(...items.map(it => clampPos(it.lensRaw[l] ?? it.lensRaw.composite)));
   }
+
+  // Peer geometric means for Bot-vs-Human Gauntlet Delta detection
+  const gauntletItems = items.filter(it => it.hasGauntlet);
+  const gmGauntletAvg =
+    gauntletItems.length > 0 ? geoMean(gauntletItems.map(it => clampPos(it.lensRaw.gauntlet ?? 1))) : null;
+  const gmGauntletHuman =
+    gauntletItems.length > 0 ? geoMean(gauntletItems.map(it => clampPos(it.lensRaw.gauntletHuman ?? 1))) : null;
+  const droughtGapThreshold =
+    category === 'fighters'
+      ? HUMAN_DROUGHT_GAP_THRESHOLDS.fighterLogGap
+      : category === 'weapons'
+        ? HUMAN_DROUGHT_GAP_THRESHOLDS.weaponLogGap
+        : HUMAN_DROUGHT_GAP_THRESHOLDS.evolutionLogGap;
 
   // 2. Active lens pure simulation index & peer geometric mean (for divergence detection)
   const rawSims = items.map(it => clampPos(it.lensRaw[lens] ?? it.lensRaw.composite));
@@ -431,10 +515,14 @@ const buildCategoryRanking = (
   for (const it of items) {
     const sig = signals.get(it.id);
     if (sig && sig.fights > 0 && Number.isFinite(sig.liveLogLift)) {
-      rawLives.push(Math.exp(sig.liveLogLift));
+      const clampedLift = soloTester && sig.fights < 10 ? Math.max(-0.5, Math.min(0.5, sig.liveLogLift)) : sig.liveLogLift;
+      rawLives.push(Math.exp(clampedLift));
     }
   }
   const minRawLive = rawLives.length > 0 ? Math.min(...rawLives) : null;
+
+  const divThresholds = soloTester ? SOLO_TESTER_DIVERGENCE_THRESHOLDS : DIVERGENCE_THRESHOLDS;
+  const minBlendFights = soloTester ? SOLO_TESTER_MIN_BLEND_FIGHTS : 1;
 
   // 4. Apply Empirical Bayes shrinkage in log-space
   const preliminary = items.map((it, idx) => {
@@ -442,8 +530,10 @@ const buildCategoryRanking = (
     const sig = signals.get(it.id);
     const fights = sig?.fights ?? 0;
     const effectiveN = sig?.effectiveN ?? 0;
-    const liveWeight = effectiveN > 0 ? effectiveN / (effectiveN + priorK) : 0;
-    const liveLogLift = sig && Number.isFinite(sig.liveLogLift) ? sig.liveLogLift : 0;
+    const eligibleToBlend = fights >= minBlendFights && effectiveN > 0;
+    const liveWeight = eligibleToBlend ? effectiveN / (effectiveN + priorK) : 0;
+    const rawLift = sig && Number.isFinite(sig.liveLogLift) ? sig.liveLogLift : 0;
+    const liveLogLift = soloTester && fights < 10 ? Math.max(-0.5, Math.min(0.5, rawLift)) : rawLift;
     const rawBlended = clampPos(rawSim * Math.exp(liveWeight * liveLogLift));
 
     const validSince =
@@ -493,7 +583,7 @@ const buildCategoryRanking = (
 
     let ciLow: number | null = null;
     let ciHigh: number | null = null;
-    if (p.effectiveN > 0) {
+    if (p.liveWeight > 0 && p.effectiveN > 0) {
       const se =
         p.sig &&
         p.sig.liveLogLiftSE !== null &&
@@ -509,9 +599,9 @@ const buildCategoryRanking = (
     // Divergence alerts
     const alerts: DivergenceAlert[] = [];
     const simLogRel = Math.log(p.rawSim / gmSim);
-    if (p.sig && p.effectiveN >= DIVERGENCE_THRESHOLDS.minEffectiveN && Number.isFinite(p.sig.liveLogLift)) {
-      const residualGap = p.sig.liveLogLift - simLogRel;
-      if (residualGap >= DIVERGENCE_THRESHOLDS.logResidualGap) {
+    if (p.sig && p.effectiveN >= divThresholds.minEffectiveN && Number.isFinite(p.sig.liveLogLift)) {
+      const residualGap = p.liveLogLift - simLogRel;
+      if (residualGap >= divThresholds.logResidualGap) {
         const pctAhead = Math.round((Math.exp(residualGap) - 1) * 100);
         alerts.push({
           kind: 'BOT_BLIND_SLEEPER',
@@ -521,7 +611,7 @@ const buildCategoryRanking = (
           severity: 'warn',
           detail: `Live players outperform simulation by +${pctAhead}% vs peers (n=${p.fights}, n_eff=${p.effectiveN.toFixed(1)}, sim=${simMult.toFixed(2)}×, live=${liveMult?.toFixed(2) ?? '—'}×)`,
         });
-      } else if (residualGap <= -DIVERGENCE_THRESHOLDS.logResidualGap) {
+      } else if (residualGap <= -divThresholds.logResidualGap) {
         const pctBehind = Math.round((1 - Math.exp(residualGap)) * 100);
         alerts.push({
           kind: 'BOT_FAVORED_TRAP',
@@ -536,11 +626,11 @@ const buildCategoryRanking = (
 
     if (
       p.sig &&
-      p.sig.funCount >= DIVERGENCE_THRESHOLDS.minFunCount &&
+      p.sig.funCount >= divThresholds.minFunCount &&
       p.sig.funRate !== null &&
       Number.isFinite(p.sig.funRate)
     ) {
-      if (powerMult >= p75Mult && p.sig.funRate <= DIVERGENCE_THRESHOLDS.lowFunRate) {
+      if (powerMult >= p75Mult && p.sig.funRate <= divThresholds.lowFunRate) {
         alerts.push({
           kind: 'FUN_POWER_GAP',
           category,
@@ -549,7 +639,7 @@ const buildCategoryRanking = (
           severity: 'info',
           detail: `High power (${powerMult.toFixed(2)}×) but low fun rating (${Math.round(p.sig.funRate * 100)}% 👍 across ${p.sig.funCount} ratings)`,
         });
-      } else if (powerMult <= p25Mult && p.sig.funRate >= DIVERGENCE_THRESHOLDS.highFunRate) {
+      } else if (powerMult <= p25Mult && p.sig.funRate >= divThresholds.highFunRate) {
         alerts.push({
           kind: 'FUN_POWER_GAP',
           category,
@@ -557,6 +647,34 @@ const buildCategoryRanking = (
           itemName: p.it.name,
           severity: 'info',
           detail: `Crowd pleaser (${Math.round(p.sig.funRate * 100)}% 👍 across ${p.sig.funCount} ratings) despite low power (${powerMult.toFixed(2)}×)`,
+        });
+      }
+    }
+
+    // Bot-vs-Human Gauntlet Delta (HUMAN_DROUGHT_GAP)
+    if (p.it.hasGauntlet && gmGauntletAvg && gmGauntletHuman) {
+      const gAvg = clampPos(p.it.lensRaw.gauntlet ?? 1);
+      const gHum = clampPos(p.it.lensRaw.gauntletHuman ?? 1);
+      const humanShiftLog = Math.log(gHum / gmGauntletHuman) - Math.log(gAvg / gmGauntletAvg);
+      if (humanShiftLog >= droughtGapThreshold) {
+        const pct = Math.round((Math.exp(humanShiftLog) - 1) * 100);
+        alerts.push({
+          kind: 'HUMAN_DROUGHT_GAP',
+          category,
+          itemId: p.it.id,
+          itemName: p.it.name,
+          severity: 'info',
+          detail: `Rises +${pct}% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=${p.subLenses.gauntlet?.toFixed(2) ?? '—'}× → human=${p.subLenses.gauntletHuman?.toFixed(2) ?? '—'}×)`,
+        });
+      } else if (humanShiftLog <= -droughtGapThreshold) {
+        const pct = Math.round((1 - Math.exp(humanShiftLog)) * 100);
+        alerts.push({
+          kind: 'HUMAN_DROUGHT_GAP',
+          category,
+          itemId: p.it.id,
+          itemName: p.it.name,
+          severity: 'info',
+          detail: `Drops -${pct}% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=${p.subLenses.gauntlet?.toFixed(2) ?? '—'}× → human=${p.subLenses.gauntletHuman?.toFixed(2) ?? '—'}×)`,
         });
       }
     }
@@ -625,9 +743,14 @@ const buildCategoryRanking = (
 
 // ─── Category Builders ───────────────────────────────────────────────────────
 
-const buildWeaponItems = (snapshot: Snapshot, analytics: FullBalanceAtlasData): RawCategoryItem[] => {
+const buildWeaponItems = (
+  snapshot: Snapshot,
+  analytics: FullBalanceAtlasData,
+  gauntlet?: GauntletReport | null
+): RawCategoryItem[] => {
   const weapons: readonly WeaponExtendedRow[] = analytics.weaponsSuite.weapons;
   const shapById = new Map(analytics.coveringSuite.weaponShapley.map(s => [s.id, s.shapleyMult]));
+  const gauntletById = new Map((gauntlet?.weapons ?? []).map(w => [w.id, w]));
 
   const pre = weapons.map(w => {
     const snapEarly = snapshot[`weapon:${w.id}:early`];
@@ -676,16 +799,22 @@ const buildWeaponItems = (snapshot: Snapshot, analytics: FullBalanceAtlasData): 
       Math.pow(effCamp, WEAPON_COMPOSITE_WEIGHTS.campaign) *
       Math.pow(p.shapVal, WEAPON_COMPOSITE_WEIGHTS.shapley);
 
+    const gRow = gauntletById.get(p.w.id);
+
     return {
       id: p.w.id,
       name: p.w.name,
       category: 'weapons',
+      hasGauntlet: !!gRow,
       lensRaw: {
         composite,
         inBuild: p.inBuildBlend,
         solo: p.soloLate3Tier,
         pressure: p.pressVal,
         shapley: p.shapVal,
+        gauntlet: gRow ? clampPos(gRow.avgBotLift) : composite,
+        gauntletHuman: gRow ? clampPos(gRow.humanBotLift) : composite,
+        gauntletSpire: gRow ? clampPos(gRow.spireLift) : composite,
       },
       meta: {
         kind: 'weapons',
@@ -742,9 +871,11 @@ const computeWeaponRoleRollups = (entries: readonly PowerRankEntry[]): RoleRollu
 
 const buildEvolutionItems = (
   snapshot: Snapshot,
-  analytics: FullBalanceAtlasData
+  analytics: FullBalanceAtlasData,
+  gauntlet?: GauntletReport | null
 ): { items: RawCategoryItem[]; medianChassisLift: number } => {
   const recipes = analytics.pairSuite.recipes;
+  const gauntletById = new Map((gauntlet?.evolutions ?? []).map(e => [e.id, e]));
   const pairByKey = new Map<string, number>();
   const pairsByRecipe = new Map<string, number[]>();
 
@@ -815,37 +946,48 @@ const buildEvolutionItems = (
 
   const minBuildAround = Math.min(...prelim.map(p => p.buildAround));
 
-  const items: RawCategoryItem[] = prelim.map(p => ({
-    id: p.r.id,
-    name: p.r.name || p.r.id,
-    category: 'evolutions',
-    lensRaw: {
-      composite: p.composite,
-      buildAround: p.buildAround,
-      ruleLift: p.ruleBlend,
-      pairOutput: p.meanPairLift,
-    },
-    meta: {
-      kind: 'evolutions',
-      pair: p.r.pair,
-      isSignature: p.armingPairCount > 1,
-      armingPairCount: p.armingPairCount,
-      hasEncoreFix: p.hasEncore,
-      rawTotalLift: roundN(p.rawTotalLift, 3),
-      cleanTotalLift: roundN(p.cleanTotal, 3),
-      ruleLift: roundN(p.ruleBlend, 3),
-      meanPairLift: roundN(p.meanPairLift, 3),
-      startsPerFight: roundN(p.r.starts, 2),
-      ruleFiringsPerFight: roundN(p.r.ruleFirings, 1),
-      buildAroundMult: roundN(p.buildAround / minBuildAround, 4),
-    },
-  }));
+  const items: RawCategoryItem[] = prelim.map(p => {
+    const gRow = gauntletById.get(p.r.id);
+    return {
+      id: p.r.id,
+      name: p.r.name || p.r.id,
+      category: 'evolutions',
+      hasGauntlet: !!gRow,
+      lensRaw: {
+        composite: p.composite,
+        buildAround: p.buildAround,
+        ruleLift: p.ruleBlend,
+        pairOutput: p.meanPairLift,
+        gauntlet: gRow ? clampPos(gRow.avgBotLift) : p.composite,
+        gauntletHuman: gRow ? clampPos(gRow.humanBotLift) : p.composite,
+        gauntletSpire: gRow ? clampPos(gRow.spireLift) : p.composite,
+      },
+      meta: {
+        kind: 'evolutions',
+        pair: p.r.pair,
+        isSignature: p.armingPairCount > 1,
+        armingPairCount: p.armingPairCount,
+        hasEncoreFix: p.hasEncore,
+        rawTotalLift: roundN(p.rawTotalLift, 3),
+        cleanTotalLift: roundN(p.cleanTotal, 3),
+        ruleLift: roundN(p.ruleBlend, 3),
+        meanPairLift: roundN(p.meanPairLift, 3),
+        startsPerFight: roundN(p.r.starts, 2),
+        ruleFiringsPerFight: roundN(p.r.ruleFirings, 1),
+        buildAroundMult: roundN(p.buildAround / minBuildAround, 4),
+      },
+    };
+  });
 
   return { items, medianChassisLift: roundN(medianChassisLift, 4) };
 };
 
-const buildFighterItems = (analytics: FullBalanceAtlasData): RawCategoryItem[] => {
+const buildFighterItems = (
+  analytics: FullBalanceAtlasData,
+  gauntlet?: GauntletReport | null
+): RawCategoryItem[] => {
   const shapByFighter = new Map(analytics.coveringSuite.fighterShapley.map(s => [s.id, s.shapleyMult]));
+  const gauntletByFighter = new Map((gauntlet?.fighters ?? []).map(f => [f.id, f]));
   const cellsByFighter = new Map<CharacterName, typeof analytics.fighterSuite.cells>();
   for (const cell of analytics.fighterSuite.cells) {
     const list = cellsByFighter.get(cell.fighter) ?? [];
@@ -890,16 +1032,22 @@ const buildFighterItems = (analytics: FullBalanceAtlasData): RawCategoryItem[] =
         effectiveLift: roundN(x.effectiveLift, 2),
       }));
 
+    const gRow = gauntletByFighter.get(c.fighter);
+
     return {
       id: c.fighter,
       name: c.fighter,
       category: 'fighters',
+      hasGauntlet: !!gRow,
       lensRaw: {
         composite,
         fullBuild: shap,
         pressure160: p160,
         dummy160: d160,
         withWeapons90,
+        gauntlet: gRow ? clampPos(gRow.avgBotScore) : composite,
+        gauntletHuman: gRow ? clampPos(gRow.humanBotScore) : composite,
+        gauntletSpire: gRow ? clampPos(gRow.spireScore) : composite,
       },
       meta: {
         kind: 'fighters',
@@ -963,10 +1111,16 @@ const buildArcanaItems = (analytics: FullBalanceAtlasData): RawCategoryItem[] =>
 // ─── Main Public Entry Point ─────────────────────────────────────────────────
 
 export const computePowerRankings = (input: PowerRankInput): PowerRankReport => {
-  const priorK = input.priorK ?? EMPIRICAL_BAYES_PRIOR_K;
+  const soloTester = input.soloTester ?? input.posthog?.soloTester ?? false;
+  const priorK = input.priorK ?? (soloTester ? SOLO_TESTER_PRIOR_K : EMPIRICAL_BAYES_PRIOR_K);
   const rawMode = input.mode ?? input.posthog?.mode;
   const mode: FightModeFilter = rawMode && rawMode !== 'all' ? rawMode : 'adventure';
   const ledger = input.posthog?.audit ?? input.posthog?.ledger ?? null;
+  const gauntlet = input.gauntlet ?? null;
+  const hasGauntletData = !!(
+    gauntlet &&
+    (gauntlet.weapons.length > 0 || gauntlet.evolutions.length > 0 || gauntlet.fighters.length > 0)
+  );
   const eraContext: EraContext = input.eraContext ?? {
     currentEraId: CURRENT_BALANCE_ERA.id,
     currentEraMinVersion: CURRENT_BALANCE_ERA.minVersion,
@@ -974,9 +1128,9 @@ export const computePowerRankings = (input: PowerRankInput): PowerRankReport => 
     getMinValidVersion: (cat, itemId, m) => getMinValidVersion(cat, itemId, (m as FightModeFilter | undefined) ?? mode),
   };
 
-  const weaponItems = buildWeaponItems(input.snapshot, input.analytics);
-  const { items: evoItems, medianChassisLift } = buildEvolutionItems(input.snapshot, input.analytics);
-  const fighterItems = buildFighterItems(input.analytics);
+  const weaponItems = buildWeaponItems(input.snapshot, input.analytics, gauntlet);
+  const { items: evoItems, medianChassisLift } = buildEvolutionItems(input.snapshot, input.analytics, gauntlet);
+  const fighterItems = buildFighterItems(input.analytics, gauntlet);
   const arcanaItems = buildArcanaItems(input.analytics);
 
   const wLens = normalizeLens('weapons', input.lenses?.weapons);
@@ -991,6 +1145,7 @@ export const computePowerRankings = (input: PowerRankInput): PowerRankReport => 
     extractSignalsMap(input.posthog, 'weapons'),
     priorK,
     mode,
+    soloTester,
     eraContext
   );
   weapons.roleRollups = computeWeaponRoleRollups(weapons.entries);
@@ -1002,6 +1157,7 @@ export const computePowerRankings = (input: PowerRankInput): PowerRankReport => 
     extractSignalsMap(input.posthog, 'evolutions'),
     priorK,
     mode,
+    soloTester,
     eraContext
   );
   const fighters = buildCategoryRanking(
@@ -1011,6 +1167,7 @@ export const computePowerRankings = (input: PowerRankInput): PowerRankReport => 
     extractSignalsMap(input.posthog, 'fighters'),
     priorK,
     mode,
+    soloTester,
     eraContext
   );
   const arcana = buildCategoryRanking(
@@ -1020,6 +1177,7 @@ export const computePowerRankings = (input: PowerRankInput): PowerRankReport => 
     extractSignalsMap(input.posthog, 'arcana'),
     priorK,
     mode,
+    soloTester,
     eraContext
   );
 
@@ -1067,11 +1225,14 @@ export const computePowerRankings = (input: PowerRankInput): PowerRankReport => 
     appVersion: eraContext.appVersion ?? null,
     mode,
     hasLiveData,
+    hasGauntletData,
+    soloTester,
     currentEraId: ledger?.currentEraId ?? eraContext.currentEraId ?? null,
     currentEraMinVersion: ledger?.activeMinVersion ?? eraContext.currentEraMinVersion ?? null,
     medianChassisLift,
     priorK,
     auditLedger: ledger,
+    gauntletMovers: hasGauntletData && gauntlet?.movers ? gauntlet.movers : null,
     alerts,
     categories,
   };
@@ -1185,22 +1346,31 @@ export const renderPowerRankMarkdown = (
   const includeMethodology = opts.includeMethodology ?? true;
 
   out.push('# NShapes Power Rankings (`1.00×` Weakest-Anchored)', '');
+  if (report.soloTester) {
+    out.push(
+      `> **[SOLO-TESTER]** Low-sample single-tester blending active (\`priorK = ${report.priorK}\`, \`minBlendFights = ${SOLO_TESTER_MIN_BLEND_FIGHTS}\`, uniform fight weights, low-N lift guard \`±0.50\` for \`n < 10\`, player-count-free credibility & alerts at \`fights >= ${SOLO_TESTER_DIVERGENCE_THRESHOLDS.minEffectiveN}\` / \`funCount >= ${SOLO_TESTER_DIVERGENCE_THRESHOLDS.minFunCount}\`).`,
+      ''
+    );
+  }
   out.push(
     `Generated by \`npm run balance:power\` (see [balance-system.md](./balance-system.md) & [analytics.md](./analytics.md)). Every item in a category is expressed as a multiplier over the **weakest item in that category (\`1.00×\`)**.`,
     ''
   );
   out.push(
-    `- **App / Sim Data:** ${report.appVersion ? `v${report.appVersion}` : `sim v${report.simAnalyticsVersion}`} (atlas generated \`${report.simAnalyticsGeneratedAt}\`) | **Mode:** \`${report.mode}\``
+    `- **App / Sim Data:** ${report.appVersion ? `v${report.appVersion}` : `sim v${report.simAnalyticsVersion}`} (atlas generated \`${report.simAnalyticsGeneratedAt}\`) | **Mode:** \`${report.mode}\`${report.hasGauntletData ? ' | **Enemy Gauntlet:** loaded (`gauntlet`, `gauntletHuman`, `gauntletSpire` lenses)' : ''}`
   );
   out.push(
     `- **Balance Era:** \`${report.currentEraId ?? 'unknown'}\` (PostHog valid-from \`>= v${report.currentEraMinVersion ?? 'n/a'}\`) | **Telemetry Mode:** ${
-      report.hasLiveData ? '**Blended (Simulation Prior + PostHog Empirical Bayes)**' : '**Simulation-Only** *(no era-valid PostHog telemetry loaded; pass `--live` or `--posthog <file>` to blend)*'
+      report.hasLiveData
+        ? `**Blended (Simulation Prior + PostHog Empirical Bayes${report.soloTester ? ', Solo-Tester' : ''})**`
+        : '**Simulation-Only** *(no era-valid PostHog telemetry loaded; pass `--live` or `--posthog <file>` to blend)*'
     }`
   );
   if (report.auditLedger) {
     const l = report.auditLedger;
+    const e2eNote = l.droppedByE2eBot ? `, ${l.droppedByE2eBot} e2e-bot` : '';
     out.push(
-      `- **PostHog Filter Audit:** ${l.kept} kept / ${l.totalRaw} raw (dropped: ${l.droppedByVersion} stale-era, ${l.droppedByEnv} dev-env, ${l.droppedByMode} other-mode, ${l.droppedByPractice} practice, ${l.droppedByBug} bug-tagged, ${l.droppedByShort} short, ${l.droppedByCoached} coached; ${l.deduped} deduped, ${l.ratedFolds} \`fight_rated\` folds)`
+      `- **PostHog Filter Audit:** ${l.kept} kept / ${l.totalRaw} raw (dropped: ${l.droppedByVersion} stale-era, ${l.droppedByEnv} dev-env${e2eNote}, ${l.droppedByMode} other-mode, ${l.droppedByPractice} practice, ${l.droppedByBug} bug-tagged, ${l.droppedByShort} short, ${l.droppedByCoached} coached; ${l.deduped} deduped, ${l.ratedFolds} \`fight_rated\` folds)`
     );
   }
   out.push('');
@@ -1226,7 +1396,9 @@ export const renderPowerRankMarkdown = (
 
   // Divergence & Freshness Alerts (scoped to requested categories + global alerts)
   const catSet = new Set<string>(cats);
-  const itemAlerts = report.alerts.filter(a => a.kind !== 'STALE_DATA' && (a.category === 'global' || catSet.has(a.category)));
+  const itemAlerts = report.alerts.filter(
+    a => a.kind !== 'STALE_DATA' && a.kind !== 'HUMAN_DROUGHT_GAP' && (a.category === 'global' || catSet.has(a.category))
+  );
   const staleAlerts = report.alerts.filter(a => a.kind === 'STALE_DATA');
   if (itemAlerts.length || staleAlerts.length) {
     out.push('## Diagnostics & Divergence Alerts', '');
@@ -1235,6 +1407,65 @@ export const renderPowerRankMarkdown = (
       out.push(`- ${tag}: ${a.detail}`);
     }
     out.push('');
+  }
+
+  // Bot-vs-Human Gauntlet Delta Highlights (when docs/balance-gauntlet.json is loaded)
+  if (report.hasGauntletData) {
+    const droughtAlerts = report.alerts.filter(
+      a => a.kind === 'HUMAN_DROUGHT_GAP' && catSet.has(a.category)
+    );
+    const gauntletCats = cats.filter((c): c is 'weapons' | 'evolutions' | 'fighters' => c !== 'arcana');
+    const highlightRows: {
+      cat: PowerCategory;
+      name: string;
+      id: string;
+      avg: number;
+      hum: number;
+      ratio: number;
+    }[] = [];
+    for (const c of gauntletCats) {
+      const entries = report.categories[c].entries;
+      const gmAvg = geoMean(entries.map(e => clampPos(e.subLenses.gauntlet ?? 1)));
+      const gmHum = geoMean(entries.map(e => clampPos(e.subLenses.gauntletHuman ?? 1)));
+      const scored = entries.map(e => {
+        const avg = e.subLenses.gauntlet ?? 1;
+        const hum = e.subLenses.gauntletHuman ?? 1;
+        return {
+          cat: c,
+          name: e.name,
+          id: e.id,
+          avg,
+          hum,
+          ratio: (hum / gmHum) / Math.max(1e-4, avg / gmAvg),
+        };
+      });
+      const riseMin = c === 'evolutions' ? 1.3 : c === 'fighters' ? 1.07 : 1.08;
+      const fallMax = c === 'evolutions' ? 0.72 : c === 'fighters' ? 0.93 : 0.92;
+      const risers = [...scored].filter(x => x.ratio >= riseMin).sort((a, b) => b.ratio - a.ratio).slice(0, 3);
+      const fallers = [...scored].filter(x => x.ratio <= fallMax).sort((a, b) => a.ratio - b.ratio).slice(0, 3);
+      highlightRows.push(...risers, ...fallers);
+    }
+    if (highlightRows.length > 0) {
+      out.push(
+        `## Bot-vs-Human Gauntlet Delta Highlights (\`HUMAN_DROUGHT_GAP\`: ${droughtAlerts.length} flagged)`,
+        '',
+        'Items whose relative standing shifts most between Uniform `BOTS.average` and PostHog-calibrated Lognormal + cognitive-load `calibrated_human` across the 6-tier real-enemy gauntlet:',
+        ''
+      );
+      row(['Direction', 'Category', 'Item', 'Gauntlet Avg (`1.00×`)', 'Gauntlet Human (`1.00×`)', 'Human/Avg Peer Shift']);
+      row(['---', '---', '---', '---', '---', '---']);
+      for (const h of highlightRows) {
+        row([
+          h.ratio >= 1 ? '↑ Human Riser' : '↓ Bot-Favored',
+          h.cat,
+          `**${h.name}** (\`${h.id}\`)`,
+          fx(h.avg),
+          `**${fx(h.hum)}**`,
+          `${h.ratio >= 1 ? '+' : ''}${Math.round((h.ratio - 1) * 100)}% (${h.ratio.toFixed(2)}×)`,
+        ]);
+      }
+      out.push('');
+    }
   }
 
   // ── WEAPONS ───────────────────────────────────────────────────────────────
@@ -1261,9 +1492,10 @@ export const renderPowerRankMarkdown = (
       out.push('');
     }
 
+    const gauntletHeaders = report.hasGauntletData ? ['Gauntlet (Hum)'] : [];
     const liveHeaders = report.hasLiveData ? ['Sim', 'Live', '95% CI', 'Fights (Tier)', 'Fun 👍', 'Flags'] : [];
-    row(['#', 'Weapon', 'Role', 'Power', 'Added', 'In-Build', 'Solo 3T', 'Pressure', 'Shapley', ...liveHeaders]);
-    row(['---', '---', '---', '---', '---', '---', '---', '---', '---', ...liveHeaders.map(() => '---')]);
+    row(['#', 'Weapon', 'Role', 'Power', 'Added', 'In-Build', 'Solo 3T', 'Pressure', 'Shapley', ...gauntletHeaders, ...liveHeaders]);
+    row(['---', '---', '---', '---', '---', '---', '---', '---', '---', ...gauntletHeaders.map(() => '---'), ...liveHeaders.map(() => '---')]);
     for (const e of shown) {
       const m = e.meta as WeaponEntryMeta;
       row([
@@ -1276,6 +1508,7 @@ export const renderPowerRankMarkdown = (
         m.partner ? 'partner' : `${fx(e.subLenses.solo)} (${m.soloLate3Tier.toFixed(2)})`,
         m.partner ? 'partner' : `${fx(e.subLenses.pressure)} (${m.pressureAvg.toFixed(2)})`,
         `${fx(e.subLenses.shapley)} (${m.shapleyMult.toFixed(2)})`,
+        ...(report.hasGauntletData ? [fx(e.subLenses.gauntletHuman)] : []),
         ...(report.hasLiveData ? renderLiveColumns(e) : []),
       ]);
     }
@@ -1291,10 +1524,11 @@ export const renderPowerRankMarkdown = (
       ''
     );
 
+    const gauntletHeaders = report.hasGauntletData ? ['Gauntlet (Hum)'] : [];
     const liveHeaders = report.hasLiveData ? ['Sim', 'Live', '95% CI', 'Fights (Tier)', 'Fun 👍', 'Flags'] : [];
     const renderEvoTable = (rows: readonly PowerRankEntry[]) => {
-      row(['#', 'Evolution', 'Pair', 'Power', 'Added', 'Build-Around (E8)', 'Clean Lift', 'Rule Lift', 'Pair Lift', 'Starts', ...liveHeaders]);
-      row(['---', '---', '---', '---', '---', '---', '---', '---', '---', '---', ...liveHeaders.map(() => '---')]);
+      row(['#', 'Evolution', 'Pair', 'Power', 'Added', 'Build-Around (E8)', 'Clean Lift', 'Rule Lift', 'Pair Lift', 'Starts', ...gauntletHeaders, ...liveHeaders]);
+      row(['---', '---', '---', '---', '---', '---', '---', '---', '---', '---', ...gauntletHeaders.map(() => '---'), ...liveHeaders.map(() => '---')]);
       for (const e of rows) {
         const m = e.meta as EvolutionEntryMeta;
         const badge = `${m.isSignature ? ' ★' : ''}${m.hasEncoreFix ? ' †' : ''}`;
@@ -1309,6 +1543,7 @@ export const renderPowerRankMarkdown = (
           `×${m.ruleLift.toFixed(2)}`,
           `×${m.meanPairLift.toFixed(2)}`,
           m.startsPerFight.toFixed(1),
+          ...(report.hasGauntletData ? [fx(e.subLenses.gauntletHuman)] : []),
           ...(report.hasLiveData ? renderLiveColumns(e) : []),
         ]);
       }
@@ -1355,9 +1590,10 @@ export const renderPowerRankMarkdown = (
       ''
     );
 
+    const gauntletHeaders = report.hasGauntletData ? ['Gauntlet (Hum)', 'Gauntlet (Avg)'] : [];
     const liveHeaders = report.hasLiveData ? ['Sim', 'Live', '95% CI', 'Fights (Tier)', 'Fun 👍', 'Flags'] : [];
-    row(['#', 'Fighter', 'Power', 'Added', 'Full-Build Shapley', '90★ + Weapon', '160★ Pressure', '160★ Dummy', 'Surv (160★)', 'Top Weapon Synergies', ...liveHeaders]);
-    row(['---', '---', '---', '---', '---', '---', '---', '---', '---', '---', ...liveHeaders.map(() => '---')]);
+    row(['#', 'Fighter', 'Power', 'Added', 'Full-Build Shapley', '90★ + Weapon', '160★ Pressure', '160★ Dummy', 'Surv (160★)', 'Top Weapon Synergies', ...gauntletHeaders, ...liveHeaders]);
+    row(['---', '---', '---', '---', '---', '---', '---', '---', '---', '---', ...gauntletHeaders.map(() => '---'), ...liveHeaders.map(() => '---')]);
     for (const e of shown) {
       const m = e.meta as FighterEntryMeta;
       const syns = m.topWeaponSynergies.map(s => `\`${s.weaponId}\` (${s.affinity.toFixed(2)}×)`).join(', ');
@@ -1372,6 +1608,7 @@ export const renderPowerRankMarkdown = (
         `${fx(e.subLenses.dummy160)} (×${m.dummy160Stars.toFixed(2)})`,
         fpct(m.pressureSurvival160),
         syns || '—',
+        ...(report.hasGauntletData ? [fx(e.subLenses.gauntletHuman), fx(e.subLenses.gauntlet)] : []),
         ...(report.hasLiveData ? renderLiveColumns(e) : []),
       ]);
     }
@@ -1419,7 +1656,8 @@ export const renderPowerRankMarkdown = (
       '1. **Why Positive-Anchored Geometric Composites (`P_i / P_min`):** Every component is a strictly positive damage multiplier ratio (`> 0`). A weighted geometric mean preserves multiplicative symmetry, guarantees zero division-by-zero or negative singularities, and resists Monte Carlo noise in the weakest item.',
       '2. **Primary (`Power`) vs Secondary (`Added`):** `Power = P_i / P_min` answers *"how many times more total combat output does a fight/build get with X vs the weakest item?"*. `Added = ln(P_i) / ln(P_min)` (shown whenever `P_min >= 1.05`) has identical rank order and answers *"how many times more bonus power above bare baseline does X add?"*.',
       `3. **PostHog Empirical Bayes Blending:** Live fight events are filtered by \`src/analytics/balanceEras.json\` + \`src/analytics/posthogRules.ts\` (numeric semver \`>= minValidVersion\`, \`env='prod'\`, mode isolation, no practice/bug/short/coached runs, \`fight_id\` dedup, player-weight cap, leave-one-out Simpson's-paradox level stratification, L2 Ridge co-occurrence debiasing). Live log-lift residuals shrink toward the simulation prior with \`w_live = effectiveN / (effectiveN + ${report.priorK})\`: \`P_blend = P_sim × exp(w_live × liveLogLift)\`, then re-anchored to \`1.00×\`.`,
-      '4. **Re-running on demand:** `npm run balance:power` (sim-only), `npm run balance:power -- --live` (pulls PostHog if `POSTHOG_PERSONAL_API_KEY` is set), `npm run balance:power -- --compare blast-powder,chrono-shard`, `npm run balance:power -- --category evolutions --lens buildAround --top 15`.',
+      `4. **Multi-Difficulty Enemy Gauntlet Lenses:** When \`docs/balance-gauntlet.json\` is loaded (\`npm run balance:gauntlet -- --write\`), Weapons, Evolutions, and Fighters expose \`--lens gauntlet\` (Uniform \`BOTS.average\`), \`--lens gauntletHuman\` (PostHog-calibrated Lognormal + cognitive-load \`calibrated_human\`), and \`--lens gauntletSpire\` (Starfall Summit Act 2/3 A0 & A18 bosses), flagging significant Bot-vs-Human shifts as \`HUMAN_DROUGHT_GAP\`.`,
+      '5. **Re-running on demand:** `npm run balance:power` (sim-only), `npm run balance:power -- --live --solo-tester --era all` (auto-reads `.env.local` for solo-tester PostHog blending), `npm run balance:power -- --lens gauntletHuman --top 15`, `npm run balance:power -- --compare blast-powder,chrono-shard`.',
       ''
     );
   }
@@ -1435,8 +1673,9 @@ export const renderPowerRankCompact = (
   const topN = opts.top ?? 10;
   const botN = opts.bottom ?? 5;
   const lines: string[] = [];
+  const soloBanner = report.soloTester ? '[SOLO-TESTER] ' : '';
   lines.push(
-    `NShapes Power Rankings (era=${report.currentEraId ?? 'n/a'}, minVer=${report.currentEraMinVersion ?? 'n/a'}, live=${report.hasLiveData ? 'blended' : 'sim-only'})`
+    `${soloBanner}NShapes Power Rankings (era=${report.currentEraId ?? 'n/a'}, minVer=${report.currentEraMinVersion ?? 'n/a'}, live=${report.hasLiveData ? 'blended' : 'sim-only'}, k=${report.priorK}${report.hasGauntletData ? ', gauntlet=on' : ''})`
   );
   for (const c of cats) {
     const cr = report.categories[c];

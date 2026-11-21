@@ -161,10 +161,10 @@ ORDER BY day DESC`
 SELECT
   toDate(person.properties.first_seen_date) AS cohort_date,
   uniqExact(distinct_id) AS cohort_size,
-  round(uniqExactIf(distinct_id, toInt32OrZero(toString(properties.days_since_install)) = 1) / nullIf(uniqExact(distinct_id), 0) * 100, 1) AS d1_pct,
-  round(uniqExactIf(distinct_id, toInt32OrZero(toString(properties.days_since_install)) = 3) / nullIf(uniqExact(distinct_id), 0) * 100, 1) AS d3_pct,
-  round(uniqExactIf(distinct_id, toInt32OrZero(toString(properties.days_since_install)) = 7) / nullIf(uniqExact(distinct_id), 0) * 100, 1) AS d7_pct,
-  round(uniqExactIf(distinct_id, toInt32OrZero(toString(properties.days_since_install)) = 14) / nullIf(uniqExact(distinct_id), 0) * 100, 1) AS d14_pct
+  round(uniqExactIf(distinct_id, toIntOrZero(toString(properties.days_since_install)) = 1) / nullIf(uniqExact(distinct_id), 0) * 100, 1) AS d1_pct,
+  round(uniqExactIf(distinct_id, toIntOrZero(toString(properties.days_since_install)) = 3) / nullIf(uniqExact(distinct_id), 0) * 100, 1) AS d3_pct,
+  round(uniqExactIf(distinct_id, toIntOrZero(toString(properties.days_since_install)) = 7) / nullIf(uniqExact(distinct_id), 0) * 100, 1) AS d7_pct,
+  round(uniqExactIf(distinct_id, toIntOrZero(toString(properties.days_since_install)) = 14) / nullIf(uniqExact(distinct_id), 0) * 100, 1) AS d14_pct
 FROM events
 WHERE event IN ('app_opened', 'fight_ended')
   AND ${PROD_ONLY}
@@ -244,7 +244,7 @@ ORDER BY sessions DESC`
         `Prod players reached vs cleared, win rate, abandon rate, and enjoyment per campaign level since ${CURRENT_BALANCE_ERA_ID} (v${ADVENTURE_MIN_VERSION}+).`,
         `
 SELECT
-  toInt32OrZero(toString(properties.level_order)) AS level_order,
+  toIntOrZero(toString(properties.level_order)) AS level_order,
   toString(properties.level_id) AS level_id,
   any(toString(properties.level_name)) AS level_name,
   uniqExact(distinct_id) AS players_reached,
@@ -286,7 +286,7 @@ ORDER BY abandons DESC, losses DESC`
         'Distinguishes fair learnable challenges (win% rises by attempt 2-3) from flat RNG walls in the active balance era.',
         `
 SELECT
-  least(toInt32OrZero(toString(properties.attempt)), 5) AS attempt_bucket,
+  least(toIntOrZero(toString(properties.attempt)), 5) AS attempt_bucket,
   count() AS fights,
   round(countIf(properties.outcome IN ('won', 'survived')) / nullIf(countIf(properties.outcome IN ('won', 'survived', 'lost')), 0) * 100, 1) AS win_pct,
   round(countIf(properties.fun_rating = 'up') / nullIf(countIf(properties.fun_rating IN ('up', 'down')), 0) * 100, 1) AS fun_pct
@@ -302,7 +302,7 @@ ORDER BY attempt_bucket ASC`
         'Measures cognitive load (time between Sets) across Adventure worlds in the current balance era.',
         `
 SELECT
-  toInt32OrZero(toString(properties.world)) AS world,
+  toIntOrZero(toString(properties.world)) AS world,
   count() AS fights,
   round(median(toFloat64OrZero(toString(properties.median_find_ms))) / 1000, 2) AS median_find_sec,
   round(quantileExact(0.9)(toFloat64OrZero(toString(properties.max_drought_ms))) / 1000, 1) AS p90_drought_sec,
@@ -431,7 +431,7 @@ WITH evo_level_baselines AS (
     avgIf(${SAFE_LOG_DPM}, toFloat64OrZero(toString(properties.dpm)) > 0) AS lvl_log_dpm
   FROM events
   WHERE ${ADV_EVO_BALANCE_WHERE}
-    AND toInt32OrZero(toString(properties.evolutions)) > 0
+    AND toIntOrZero(toString(properties.evolutions)) > 0
   GROUP BY lvl
 )
 SELECT
@@ -447,7 +447,7 @@ FROM events
 LEFT JOIN evo_level_baselines lb ON toString(properties.level_id) = lb.lvl
 ARRAY JOIN JSONExtractArrayRaw(coalesce(toString(properties.evolutions_forged), '[]')) AS raw_evo_id
 WHERE ${ADV_EVO_BALANCE_WHERE}
-  AND toInt32OrZero(toString(properties.evolutions)) > 0
+  AND toIntOrZero(toString(properties.evolutions)) > 0
 GROUP BY evolution_id
 ORDER BY adj_win_delta_pct DESC`
       ),

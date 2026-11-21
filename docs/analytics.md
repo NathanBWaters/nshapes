@@ -43,7 +43,7 @@ Free Play and Classic rounds commit one `fight_ended` event with `mode: 'free_pl
 * **Derived `journey_stage`**:
   * `new_player` (`0` fights) → `onboarding` (`1+` fights, no Adventure clear yet) → `early_adventure` (`1+` Adventure clear) → `mid_adventure` (level `>= 7` or world `2+`) → `late_adventure` (level `>= 15` or world `3+`) → `veteran` (`12+` levels cleared or world `4+`), plus `free_play_explorer` (`2+` Free Play fights with `0` Adventure fights).
 * **Cross-device linking (`identifyPlayer(externalId, traits?)`)**: Ready-to-use `$identify` hook for future accounts/cloud saves that merges the pre-login anonymous `installId` into `externalId` via PostHog `$anon_distinct_id`.
-* **Privacy / Opt-out**: Exposed both in **Adventure Camp → Settings → Gameplay Analytics** (`camp-toggle-analytics`) and **Classic Options → Gameplay Analytics** (`options-analytics-toggle`). Opting out stops captures immediately and clears pending staged/queued events.
+* **Privacy / Opt-out & Automated Browser Guard**: Exposed both in **Adventure Camp → Settings → Gameplay Analytics** (`camp-toggle-analytics`) and **Classic Options → Gameplay Analytics** (`options-analytics-toggle`). Opting out stops captures immediately and clears pending staged/queued events. Additionally, `src/analytics/posthog.ts` automatically suppresses capture when `navigator.webdriver === true` so Playwright E2E runs never pollute PostHog `dev` telemetry.
 
 ---
 
@@ -85,12 +85,12 @@ See `src/adventure/engine/replay.ts` for exact deterministic replay rules (keep 
 > **Canonical PostHog Analysis & Version-Invalidation Spec:** See [docs/posthog-analysis-rules.md](./posthog-analysis-rules.md).
 
 ### Version-Era Tracking (`src/analytics/balanceEras.json` + `src/analytics/posthogRules.ts`)
-Because balance updates invalidate older telemetry, every event stamps `app_version` and `balance_era` (`CURRENT_BALANCE_ERA_ID`), and `src/analytics/balanceEras.json` tracks all historical Balance Eras (`E0`–`E8`, current floor **`v0.1.164+`**) with hybrid engine-file + per-item canonical mechanical fingerprints.
+Because balance updates invalidate older telemetry, every event stamps `app_version` and `balance_era` (`CURRENT_BALANCE_ERA_ID`), and `src/analytics/balanceEras.json` tracks all historical Balance Eras (`E0`–`E9`, current floor **`v0.1.166+`**) with hybrid engine-file + per-item canonical mechanical fingerprints.
 
 * `npm run balance:era:status` — inspect current era, active version floors, and working-tree drift.
 * `npm run balance:era:record -- --summary "<change>" [--bump | --version X.Y.Z]` — record a new Balance Era (auto-detects global, mode, category, or exact changed item IDs).
 * `npm run validate:balance-eras` — fast guardrail (in `verify:guardrails`, `.githooks/pre-push`, and CI) ensuring mechanical balance changes never ship without updating the era manifest.
-* `npm run balance:power` — reusable power-ranking CLI combining simulation balance data with version-filtered, Simpson-adjusted, Ridge-debiased PostHog telemetry (`--live`, `--posthog <file>`, or `--simulated-posthog`).
+* `npm run balance:power` — reusable power-ranking CLI combining simulation balance data with version-filtered, Simpson-adjusted, Ridge-debiased PostHog telemetry (`--live`, `--solo-tester`, `--posthog <file>`, or `--simulated-posthog`). Auto-loads `POSTHOG_PERSONAL_API_KEY` (`phx_...`) from `.env.local` via `scripts/lib/loadEnv.ts`.
 
 ### Pure Analytical Engine (`src/analytics/dashboardEngine.ts`)
 Computes:
@@ -110,18 +110,18 @@ Open `/dev/analytics` (or `/dev/analytics?source=simulated`) in Expo Web / dev b
 3. `NShapes · 3. Weapon, Fighter & Evolution Balance`
 4. `NShapes · 4. Player Enjoyment & Sentiment (👍 / 👎)`
 
-Commands:
+Commands (all PostHog CLI commands auto-load `POSTHOG_PERSONAL_API_KEY` from `.env.local` / `.env` and use keyset pagination on `(timestamp, uuid)` + HogQL-safe `toIntOrZero` casts):
 
 ```bash
 # Regenerate docs/posthog-dashboards.json (with active Balance Era version floors)
 npm run analytics:export
 
-# Upsert all 4 dashboards & 18 HogQL tiles in PostHog project 738615
-POSTHOG_PERSONAL_API_KEY=phx_... npm run analytics:posthog:sync
+# Upsert all 4 dashboards & 18 HogQL tiles in PostHog project 738615 (requires dashboard:write + insight:write)
+npm run analytics:posthog:sync
 
-# Pull lightweight paginated balance events (excludes heavy replay/save blobs)
-POSTHOG_PERSONAL_API_KEY=phx_... npm run analytics:posthog:pull-balance
+# Pull lightweight paginated balance events (excludes heavy replay/save blobs; supports --era current|all|<id>)
+npm run analytics:posthog:pull-balance -- --era all
 
 # Pull raw fight_ended events (including full replay payloads, up to 1,000 rows)
-POSTHOG_PERSONAL_API_KEY=phx_... npm run analytics:posthog:pull
+npm run analytics:posthog:pull
 ```

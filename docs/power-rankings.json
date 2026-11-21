@@ -1,21 +1,597 @@
 {
-  "generatedAt": "2026-11-21T17:32:10.428Z",
+  "generatedAt": "2026-11-21T20:40:18.605Z",
   "simAnalyticsVersion": "0.1.163",
   "simAnalyticsGeneratedAt": "2026-11-21T16:56:41.677Z",
-  "appVersion": "0.1.164",
+  "appVersion": "0.1.166",
   "mode": "adventure",
   "hasLiveData": false,
-  "currentEraId": "E8",
-  "currentEraMinVersion": "0.1.164",
+  "hasGauntletData": true,
+  "soloTester": false,
+  "currentEraId": "E9",
+  "currentEraMinVersion": "0.1.166",
   "medianChassisLift": 1.191,
   "priorK": 30,
   "auditLedger": null,
+  "gauntletMovers": {
+    "topHumanRisers": [
+      {
+        "category": "evolutions",
+        "id": "purity-lens",
+        "name": "Purity Lens",
+        "avgMult": 1.1626,
+        "humanMult": 2.1137,
+        "humanVsAvgRatio": 1.7761,
+        "logShift": 0.5744,
+        "avgRank": 203,
+        "humanRank": 26,
+        "rankDelta": 177
+      },
+      {
+        "category": "evolutions",
+        "id": "stockpile",
+        "name": "Stockpile",
+        "avgMult": 1.4095,
+        "humanMult": 2.3402,
+        "humanVsAvgRatio": 1.622,
+        "logShift": 0.4836,
+        "avgRank": 139,
+        "humanRank": 10,
+        "rankDelta": 129
+      },
+      {
+        "category": "evolutions",
+        "id": "overclocked-mind",
+        "name": "Overclocked Mind",
+        "avgMult": 1.2307,
+        "humanMult": 1.9853,
+        "humanVsAvgRatio": 1.5759,
+        "logShift": 0.4548,
+        "avgRank": 191,
+        "humanRank": 38,
+        "rankDelta": 153
+      },
+      {
+        "category": "evolutions",
+        "id": "avalanche",
+        "name": "Avalanche",
+        "avgMult": 1.2319,
+        "humanMult": 1.9518,
+        "humanVsAvgRatio": 1.5478,
+        "logShift": 0.4368,
+        "avgRank": 190,
+        "humanRank": 43,
+        "rankDelta": 147
+      },
+      {
+        "category": "evolutions",
+        "id": "forge",
+        "name": "Forge",
+        "avgMult": 1.0854,
+        "humanMult": 1.7085,
+        "humanVsAvgRatio": 1.5377,
+        "logShift": 0.4303,
+        "avgRank": 207,
+        "humanRank": 97,
+        "rankDelta": 110
+      },
+      {
+        "category": "evolutions",
+        "id": "old-powder",
+        "name": "Old Powder",
+        "avgMult": 1.9217,
+        "humanMult": 2.9347,
+        "humanVsAvgRatio": 1.4919,
+        "logShift": 0.4,
+        "avgRank": 39,
+        "humanRank": 1,
+        "rankDelta": 38
+      },
+      {
+        "category": "evolutions",
+        "id": "chaos-theory",
+        "name": "Chaos Theory",
+        "avgMult": 1.3025,
+        "humanMult": 1.9644,
+        "humanVsAvgRatio": 1.4734,
+        "logShift": 0.3875,
+        "avgRank": 174,
+        "humanRank": 40,
+        "rankDelta": 134
+      },
+      {
+        "category": "evolutions",
+        "id": "trance",
+        "name": "Trance",
+        "avgMult": 1.2523,
+        "humanMult": 1.8871,
+        "humanVsAvgRatio": 1.4721,
+        "logShift": 0.3867,
+        "avgRank": 186,
+        "humanRank": 54,
+        "rankDelta": 132
+      },
+      {
+        "category": "evolutions",
+        "id": "trading-cards",
+        "name": "Trading Cards",
+        "avgMult": 1.2419,
+        "humanMult": 1.8684,
+        "humanVsAvgRatio": 1.4697,
+        "logShift": 0.3851,
+        "avgRank": 187,
+        "humanRank": 61,
+        "rankDelta": 126
+      },
+      {
+        "category": "evolutions",
+        "id": "high-wire",
+        "name": "High Wire",
+        "avgMult": 1.3033,
+        "humanMult": 1.9542,
+        "humanVsAvgRatio": 1.4648,
+        "logShift": 0.3817,
+        "avgRank": 173,
+        "humanRank": 41,
+        "rankDelta": 132
+      },
+      {
+        "category": "evolutions",
+        "id": "bloodline",
+        "name": "Bloodline",
+        "avgMult": 1.5255,
+        "humanMult": 2.2061,
+        "humanVsAvgRatio": 1.4128,
+        "logShift": 0.3455,
+        "avgRank": 106,
+        "humanRank": 18,
+        "rankDelta": 88
+      },
+      {
+        "category": "evolutions",
+        "id": "slow-burn",
+        "name": "Slow Burn",
+        "avgMult": 1.23,
+        "humanMult": 1.7658,
+        "humanVsAvgRatio": 1.4025,
+        "logShift": 0.3382,
+        "avgRank": 192,
+        "humanRank": 82,
+        "rankDelta": 110
+      },
+      {
+        "category": "evolutions",
+        "id": "sanctuary",
+        "name": "Sanctuary",
+        "avgMult": 1.3522,
+        "humanMult": 1.9389,
+        "humanVsAvgRatio": 1.4008,
+        "logShift": 0.337,
+        "avgRank": 156,
+        "humanRank": 44,
+        "rankDelta": 112
+      },
+      {
+        "category": "evolutions",
+        "id": "glacier-clock",
+        "name": "Glacier Clock",
+        "avgMult": 1.3419,
+        "humanMult": 1.9169,
+        "humanVsAvgRatio": 1.3955,
+        "logShift": 0.3333,
+        "avgRank": 163,
+        "humanRank": 46,
+        "rankDelta": 117
+      },
+      {
+        "category": "evolutions",
+        "id": "fuse-line",
+        "name": "Fuse Line",
+        "avgMult": 1.4793,
+        "humanMult": 2.1042,
+        "humanVsAvgRatio": 1.3896,
+        "logShift": 0.329,
+        "avgRank": 123,
+        "humanRank": 28,
+        "rankDelta": 95
+      }
+    ],
+    "topHumanFallers": [
+      {
+        "category": "evolutions",
+        "id": "grudge-match",
+        "name": "Grudge Match",
+        "avgMult": 1.7886,
+        "humanMult": 1,
+        "humanVsAvgRatio": 0.5462,
+        "logShift": -0.6048,
+        "avgRank": 54,
+        "humanRank": 208,
+        "rankDelta": -154
+      },
+      {
+        "category": "evolutions",
+        "id": "countdown",
+        "name": "Countdown",
+        "avgMult": 1.8914,
+        "humanMult": 1.0795,
+        "humanVsAvgRatio": 0.5576,
+        "logShift": -0.5842,
+        "avgRank": 42,
+        "humanRank": 205,
+        "rankDelta": -163
+      },
+      {
+        "category": "evolutions",
+        "id": "overgrowth",
+        "name": "Overgrowth",
+        "avgMult": 2.5642,
+        "humanMult": 1.608,
+        "humanVsAvgRatio": 0.6126,
+        "logShift": -0.49,
+        "avgRank": 11,
+        "humanRank": 115,
+        "rankDelta": -104
+      },
+      {
+        "category": "evolutions",
+        "id": "lucky-break",
+        "name": "Lucky Break",
+        "avgMult": 2.554,
+        "humanMult": 1.6595,
+        "humanVsAvgRatio": 0.6348,
+        "logShift": -0.4545,
+        "avgRank": 12,
+        "humanRank": 105,
+        "rankDelta": -93
+      },
+      {
+        "category": "evolutions",
+        "id": "pathfinder",
+        "name": "Pathfinder",
+        "avgMult": 2.7436,
+        "humanMult": 1.8166,
+        "humanVsAvgRatio": 0.6468,
+        "logShift": -0.4357,
+        "avgRank": 8,
+        "humanRank": 70,
+        "rankDelta": -62
+      },
+      {
+        "category": "evolutions",
+        "id": "karma",
+        "name": "Karma",
+        "avgMult": 2.0516,
+        "humanMult": 1.4104,
+        "humanVsAvgRatio": 0.6716,
+        "logShift": -0.3981,
+        "avgRank": 28,
+        "humanRank": 159,
+        "rankDelta": -131
+      },
+      {
+        "category": "evolutions",
+        "id": "spot-the-difference",
+        "name": "Spot the Difference",
+        "avgMult": 1.8047,
+        "humanMult": 1.2425,
+        "humanVsAvgRatio": 0.6726,
+        "logShift": -0.3966,
+        "avgRank": 52,
+        "humanRank": 182,
+        "rankDelta": -130
+      },
+      {
+        "category": "evolutions",
+        "id": "spark-plug",
+        "name": "Spark Plug",
+        "avgMult": 3.6625,
+        "humanMult": 2.539,
+        "humanVsAvgRatio": 0.6772,
+        "logShift": -0.3897,
+        "avgRank": 1,
+        "humanRank": 5,
+        "rankDelta": -4
+      },
+      {
+        "category": "evolutions",
+        "id": "phoenix-pyre",
+        "name": "Phoenix Pyre",
+        "avgMult": 1.6588,
+        "humanMult": 1.1673,
+        "humanVsAvgRatio": 0.6875,
+        "logShift": -0.3748,
+        "avgRank": 76,
+        "humanRank": 197,
+        "rankDelta": -121
+      },
+      {
+        "category": "evolutions",
+        "id": "spite",
+        "name": "Spite",
+        "avgMult": 2.1335,
+        "humanMult": 1.5037,
+        "humanVsAvgRatio": 0.6885,
+        "logShift": -0.3732,
+        "avgRank": 24,
+        "humanRank": 140,
+        "rankDelta": -116
+      },
+      {
+        "category": "evolutions",
+        "id": "clear-signal",
+        "name": "Clear Signal",
+        "avgMult": 2.8206,
+        "humanMult": 2.0097,
+        "humanVsAvgRatio": 0.6961,
+        "logShift": -0.3623,
+        "avgRank": 6,
+        "humanRank": 35,
+        "rankDelta": -29
+      },
+      {
+        "category": "evolutions",
+        "id": "lullaby",
+        "name": "Lullaby",
+        "avgMult": 2.4119,
+        "humanMult": 1.7379,
+        "humanVsAvgRatio": 0.7039,
+        "logShift": -0.3511,
+        "avgRank": 17,
+        "humanRank": 88,
+        "rankDelta": -71
+      },
+      {
+        "category": "evolutions",
+        "id": "ball-and-chain",
+        "name": "Ball and Chain",
+        "avgMult": 1.6095,
+        "humanMult": 1.1951,
+        "humanVsAvgRatio": 0.7254,
+        "logShift": -0.3211,
+        "avgRank": 86,
+        "humanRank": 191,
+        "rankDelta": -105
+      },
+      {
+        "category": "evolutions",
+        "id": "static",
+        "name": "Static",
+        "avgMult": 3.0925,
+        "humanMult": 2.3008,
+        "humanVsAvgRatio": 0.7268,
+        "logShift": -0.3191,
+        "avgRank": 3,
+        "humanRank": 11,
+        "rankDelta": -8
+      },
+      {
+        "category": "evolutions",
+        "id": "hive-mind",
+        "name": "Hive Mind",
+        "avgMult": 1.5543,
+        "humanMult": 1.1638,
+        "humanVsAvgRatio": 0.7315,
+        "logShift": -0.3127,
+        "avgRank": 99,
+        "humanRank": 198,
+        "rankDelta": -99
+      }
+    ]
+  },
   "alerts": [
     {
       "kind": "STALE_DATA",
       "category": "global",
       "severity": "info",
-      "detail": "balance-analytics.json is stamped v0.1.163 (generated 2026-11-21T16:56:41.677Z) while current era E8 starts at v0.1.164. If regenerated immediately before the patch bump this is cosmetic; otherwise re-run `npm run balance:atlas`."
+      "detail": "balance-analytics.json is stamped v0.1.163 (generated 2026-11-21T16:56:41.677Z) while current era E9 starts at v0.1.166. If regenerated immediately before the patch bump this is cosmetic; otherwise re-run `npm run balance:atlas`."
+    },
+    {
+      "kind": "HUMAN_DROUGHT_GAP",
+      "category": "weapons",
+      "itemId": "flint-spark",
+      "itemName": "Flint Spark",
+      "severity": "info",
+      "detail": "Rises +18% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.05× → human=1.24×)"
+    },
+    {
+      "kind": "HUMAN_DROUGHT_GAP",
+      "category": "weapons",
+      "itemId": "echo-stone",
+      "itemName": "Echo Stone",
+      "severity": "info",
+      "detail": "Rises +13% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.18× → human=1.34×)"
+    },
+    {
+      "kind": "HUMAN_DROUGHT_GAP",
+      "category": "weapons",
+      "itemId": "tar-pit",
+      "itemName": "Tar Pit",
+      "severity": "info",
+      "detail": "Rises +14% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.01× → human=1.16×)"
+    },
+    {
+      "kind": "HUMAN_DROUGHT_GAP",
+      "category": "evolutions",
+      "itemId": "spite",
+      "itemName": "Spite",
+      "severity": "info",
+      "detail": "Drops -31% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=2.13× → human=1.50×)"
+    },
+    {
+      "kind": "HUMAN_DROUGHT_GAP",
+      "category": "evolutions",
+      "itemId": "pathfinder",
+      "itemName": "Pathfinder",
+      "severity": "info",
+      "detail": "Drops -35% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=2.74× → human=1.82×)"
+    },
+    {
+      "kind": "HUMAN_DROUGHT_GAP",
+      "category": "evolutions",
+      "itemId": "old-powder",
+      "itemName": "Old Powder",
+      "severity": "info",
+      "detail": "Rises +49% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.92× → human=2.93×)"
+    },
+    {
+      "kind": "HUMAN_DROUGHT_GAP",
+      "category": "evolutions",
+      "itemId": "clear-signal",
+      "itemName": "Clear Signal",
+      "severity": "info",
+      "detail": "Drops -30% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=2.82× → human=2.01×)"
+    },
+    {
+      "kind": "HUMAN_DROUGHT_GAP",
+      "category": "evolutions",
+      "itemId": "stockpile",
+      "itemName": "Stockpile",
+      "severity": "info",
+      "detail": "Rises +62% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.41× → human=2.34×)"
+    },
+    {
+      "kind": "HUMAN_DROUGHT_GAP",
+      "category": "evolutions",
+      "itemId": "forge",
+      "itemName": "Forge",
+      "severity": "info",
+      "detail": "Rises +54% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.09× → human=1.71×)"
+    },
+    {
+      "kind": "HUMAN_DROUGHT_GAP",
+      "category": "evolutions",
+      "itemId": "overgrowth",
+      "itemName": "Overgrowth",
+      "severity": "info",
+      "detail": "Drops -39% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=2.56× → human=1.61×)"
+    },
+    {
+      "kind": "HUMAN_DROUGHT_GAP",
+      "category": "evolutions",
+      "itemId": "chaos-theory",
+      "itemName": "Chaos Theory",
+      "severity": "info",
+      "detail": "Rises +47% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.30× → human=1.96×)"
+    },
+    {
+      "kind": "HUMAN_DROUGHT_GAP",
+      "category": "evolutions",
+      "itemId": "spark-plug",
+      "itemName": "Spark Plug",
+      "severity": "info",
+      "detail": "Drops -32% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=3.66× → human=2.54×)"
+    },
+    {
+      "kind": "HUMAN_DROUGHT_GAP",
+      "category": "evolutions",
+      "itemId": "lucky-break",
+      "itemName": "Lucky Break",
+      "severity": "info",
+      "detail": "Drops -37% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=2.55× → human=1.66×)"
+    },
+    {
+      "kind": "HUMAN_DROUGHT_GAP",
+      "category": "evolutions",
+      "itemId": "countdown",
+      "itemName": "Countdown",
+      "severity": "info",
+      "detail": "Drops -44% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.89× → human=1.08×)"
+    },
+    {
+      "kind": "HUMAN_DROUGHT_GAP",
+      "category": "evolutions",
+      "itemId": "lullaby",
+      "itemName": "Lullaby",
+      "severity": "info",
+      "detail": "Drops -30% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=2.41× → human=1.74×)"
+    },
+    {
+      "kind": "HUMAN_DROUGHT_GAP",
+      "category": "evolutions",
+      "itemId": "trading-cards",
+      "itemName": "Trading Cards",
+      "severity": "info",
+      "detail": "Rises +47% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.24× → human=1.87×)"
+    },
+    {
+      "kind": "HUMAN_DROUGHT_GAP",
+      "category": "evolutions",
+      "itemId": "grudge-match",
+      "itemName": "Grudge Match",
+      "severity": "info",
+      "detail": "Drops -45% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.79× → human=1.00×)"
+    },
+    {
+      "kind": "HUMAN_DROUGHT_GAP",
+      "category": "evolutions",
+      "itemId": "purity-lens",
+      "itemName": "Purity Lens",
+      "severity": "info",
+      "detail": "Rises +78% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.16× → human=2.11×)"
+    },
+    {
+      "kind": "HUMAN_DROUGHT_GAP",
+      "category": "evolutions",
+      "itemId": "karma",
+      "itemName": "Karma",
+      "severity": "info",
+      "detail": "Drops -33% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=2.05× → human=1.41×)"
+    },
+    {
+      "kind": "HUMAN_DROUGHT_GAP",
+      "category": "evolutions",
+      "itemId": "phoenix-pyre",
+      "itemName": "Phoenix Pyre",
+      "severity": "info",
+      "detail": "Drops -31% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.66× → human=1.17×)"
+    },
+    {
+      "kind": "HUMAN_DROUGHT_GAP",
+      "category": "evolutions",
+      "itemId": "overclocked-mind",
+      "itemName": "Overclocked Mind",
+      "severity": "info",
+      "detail": "Rises +58% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.23× → human=1.99×)"
+    },
+    {
+      "kind": "HUMAN_DROUGHT_GAP",
+      "category": "evolutions",
+      "itemId": "spot-the-difference",
+      "itemName": "Spot the Difference",
+      "severity": "info",
+      "detail": "Drops -33% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.80× → human=1.24×)"
+    },
+    {
+      "kind": "HUMAN_DROUGHT_GAP",
+      "category": "evolutions",
+      "itemId": "high-wire",
+      "itemName": "High Wire",
+      "severity": "info",
+      "detail": "Rises +46% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.30× → human=1.95×)"
+    },
+    {
+      "kind": "HUMAN_DROUGHT_GAP",
+      "category": "evolutions",
+      "itemId": "trance",
+      "itemName": "Trance",
+      "severity": "info",
+      "detail": "Rises +47% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.25× → human=1.89×)"
+    },
+    {
+      "kind": "HUMAN_DROUGHT_GAP",
+      "category": "evolutions",
+      "itemId": "avalanche",
+      "itemName": "Avalanche",
+      "severity": "info",
+      "detail": "Rises +55% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.23× → human=1.95×)"
+    },
+    {
+      "kind": "HUMAN_DROUGHT_GAP",
+      "category": "fighters",
+      "itemId": "Pelican",
+      "itemName": "Pelican",
+      "severity": "info",
+      "detail": "Drops -11% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.00× → human=1.00×)"
     }
   ],
   "categories": {
@@ -57,10 +633,13 @@
             "inBuild": 1.6169,
             "solo": 4.2426,
             "pressure": 2.3632,
-            "shapley": 1.3197
+            "shapley": 1.3197,
+            "gauntlet": 1.3319,
+            "gauntletHuman": 1.2538,
+            "gauntletSpire": 1.1359
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -110,10 +689,13 @@
             "inBuild": 1.382,
             "solo": 2.9791,
             "pressure": 2.9419,
-            "shapley": 1.8883
+            "shapley": 1.8883,
+            "gauntlet": 1.0626,
+            "gauntletHuman": 1.0699,
+            "gauntletSpire": 1.0316
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -163,10 +745,13 @@
             "inBuild": 1.8307,
             "solo": 2.1358,
             "pressure": 1.4954,
-            "shapley": 1.7616
+            "shapley": 1.7616,
+            "gauntlet": 1.1085,
+            "gauntletHuman": 1.1323,
+            "gauntletSpire": 1.1296
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -216,10 +801,13 @@
             "inBuild": 1.762,
             "solo": 2.5712,
             "pressure": 1.3515,
-            "shapley": 1.3051
+            "shapley": 1.3051,
+            "gauntlet": 1.4378,
+            "gauntletHuman": 1.4779,
+            "gauntletSpire": 1.298
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -269,10 +857,13 @@
             "inBuild": 1.4758,
             "solo": 2.4384,
             "pressure": 2.1821,
-            "shapley": 1.7331
+            "shapley": 1.7331,
+            "gauntlet": 1.4123,
+            "gauntletHuman": 1.2954,
+            "gauntletSpire": 1.1941
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -322,10 +913,13 @@
             "inBuild": 1.9572,
             "solo": 1.7704,
             "pressure": 1.3941,
-            "shapley": 1.1775
+            "shapley": 1.1775,
+            "gauntlet": 1.2973,
+            "gauntletHuman": 1.3051,
+            "gauntletSpire": 1.3509
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -375,10 +969,13 @@
             "inBuild": 1.2434,
             "solo": 3.6627,
             "pressure": 2.2001,
-            "shapley": 1.6557
+            "shapley": 1.6557,
+            "gauntlet": 1.1192,
+            "gauntletHuman": 1.0178,
+            "gauntletSpire": 1.0822
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -428,10 +1025,13 @@
             "inBuild": 1.2067,
             "solo": 3.1473,
             "pressure": 2.355,
-            "shapley": 1.7418
+            "shapley": 1.7418,
+            "gauntlet": 1.1273,
+            "gauntletHuman": 1.1923,
+            "gauntletSpire": 1.1998
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -481,10 +1081,13 @@
             "inBuild": 1.2329,
             "solo": 3.3818,
             "pressure": 2.3777,
-            "shapley": 1.325
+            "shapley": 1.325,
+            "gauntlet": 1.1198,
+            "gauntletHuman": 1.1853,
+            "gauntletSpire": 1.1905
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -534,10 +1137,13 @@
             "inBuild": 1.3797,
             "solo": 3.0902,
             "pressure": 1.6838,
-            "shapley": 1.4455
+            "shapley": 1.4455,
+            "gauntlet": 1.0468,
+            "gauntletHuman": 1.238,
+            "gauntletSpire": 1
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -546,7 +1152,16 @@
           "pickRate": null,
           "funRate": null,
           "funCount": 0,
-          "alerts": [],
+          "alerts": [
+            {
+              "kind": "HUMAN_DROUGHT_GAP",
+              "category": "weapons",
+              "itemId": "flint-spark",
+              "itemName": "Flint Spark",
+              "severity": "info",
+              "detail": "Rises +18% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.05× → human=1.24×)"
+            }
+          ],
           "meta": {
             "kind": "weapons",
             "role": "damage",
@@ -587,10 +1202,13 @@
             "inBuild": 1.3052,
             "solo": 3.1406,
             "pressure": 1.834,
-            "shapley": 1.7572
+            "shapley": 1.7572,
+            "gauntlet": 1.6233,
+            "gauntletHuman": 1.7772,
+            "gauntletSpire": 1.3642
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -640,10 +1258,13 @@
             "inBuild": 1.512,
             "solo": 2.7655,
             "pressure": 1.397,
-            "shapley": 1.354
+            "shapley": 1.354,
+            "gauntlet": 1.2767,
+            "gauntletHuman": 1.1712,
+            "gauntletSpire": 1.1158
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -693,10 +1314,13 @@
             "inBuild": 1.2092,
             "solo": 2.9521,
             "pressure": 2.1278,
-            "shapley": 1.4531
+            "shapley": 1.4531,
+            "gauntlet": 1.1286,
+            "gauntletHuman": 1.1702,
+            "gauntletSpire": 1.1449
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -746,10 +1370,13 @@
             "inBuild": 1.1921,
             "solo": 2.5906,
             "pressure": 3.2701,
-            "shapley": 1
+            "shapley": 1,
+            "gauntlet": 1.1075,
+            "gauntletHuman": 1.1862,
+            "gauntletSpire": 1.1979
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -799,10 +1426,13 @@
             "inBuild": 1.143,
             "solo": 3.2939,
             "pressure": 2.1013,
-            "shapley": 1.4806
+            "shapley": 1.4806,
+            "gauntlet": 1.1042,
+            "gauntletHuman": 1.2375,
+            "gauntletSpire": 1.1575
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -852,10 +1482,13 @@
             "inBuild": 1.1459,
             "solo": 3.2558,
             "pressure": 2.3544,
-            "shapley": 1.2501
+            "shapley": 1.2501,
+            "gauntlet": 1.2049,
+            "gauntletHuman": 1.1832,
+            "gauntletSpire": 1.1199
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -905,10 +1538,13 @@
             "inBuild": 1.2894,
             "solo": 2.866,
             "pressure": 1.7062,
-            "shapley": 1.1523
+            "shapley": 1.1523,
+            "gauntlet": 1.2233,
+            "gauntletHuman": 1.1085,
+            "gauntletSpire": 1.1352
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -958,10 +1594,13 @@
             "inBuild": 1.6925,
             "solo": 1.6725,
             "pressure": 1.2244,
-            "shapley": 1.149
+            "shapley": 1.149,
+            "gauntlet": 1.574,
+            "gauntletHuman": 1.5731,
+            "gauntletSpire": 1.1966
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -1011,10 +1650,13 @@
             "inBuild": 1.1976,
             "solo": 2.9244,
             "pressure": 1.5598,
-            "shapley": 1.4046
+            "shapley": 1.4046,
+            "gauntlet": 1.0543,
+            "gauntletHuman": 1.1889,
+            "gauntletSpire": 1.2031
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -1064,10 +1706,13 @@
             "inBuild": 1.1527,
             "solo": 2.9807,
             "pressure": 1.9353,
-            "shapley": 1.5922
+            "shapley": 1.5922,
+            "gauntlet": 1.0664,
+            "gauntletHuman": 1.0631,
+            "gauntletSpire": 1.032
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -1117,10 +1762,13 @@
             "inBuild": 1.0462,
             "solo": 2.1649,
             "pressure": 3.9574,
-            "shapley": 1.3627
+            "shapley": 1.3627,
+            "gauntlet": 1.1604,
+            "gauntletHuman": 1.1533,
+            "gauntletSpire": 1.1152
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -1170,10 +1818,13 @@
             "inBuild": 1.1162,
             "solo": 3.2067,
             "pressure": 2.1553,
-            "shapley": 1.1292
+            "shapley": 1.1292,
+            "gauntlet": 1.1231,
+            "gauntletHuman": 1.0639,
+            "gauntletSpire": 1.094
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -1223,10 +1874,13 @@
             "inBuild": 1.164,
             "solo": 2.6279,
             "pressure": 1.8889,
-            "shapley": 1.6444
+            "shapley": 1.6444,
+            "gauntlet": 1.1876,
+            "gauntletHuman": 1.1172,
+            "gauntletSpire": 1.0602
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -1276,10 +1930,13 @@
             "inBuild": 1.145,
             "solo": 2.6686,
             "pressure": 1.7728,
-            "shapley": 1.4852
+            "shapley": 1.4852,
+            "gauntlet": 1.0663,
+            "gauntletHuman": 1.1228,
+            "gauntletSpire": 1.1693
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -1329,10 +1986,13 @@
             "inBuild": 1.1518,
             "solo": 2.1151,
             "pressure": 2.3317,
-            "shapley": 1.3481
+            "shapley": 1.3481,
+            "gauntlet": 1.0648,
+            "gauntletHuman": 1.1403,
+            "gauntletSpire": 1.0681
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -1382,10 +2042,13 @@
             "inBuild": 1.4209,
             "solo": 1.7056,
             "pressure": 1.5822,
-            "shapley": 1.5707
+            "shapley": 1.5707,
+            "gauntlet": 1.3885,
+            "gauntletHuman": 1.4299,
+            "gauntletSpire": 1.2212
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -1435,10 +2098,13 @@
             "inBuild": 1.1788,
             "solo": 2.8575,
             "pressure": 2.0189,
-            "shapley": 1.3302
+            "shapley": 1.3302,
+            "gauntlet": 1.1543,
+            "gauntletHuman": 1.0329,
+            "gauntletSpire": 1.0631
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -1488,10 +2154,13 @@
             "inBuild": 1.182,
             "solo": 2.6418,
             "pressure": 1.7712,
-            "shapley": 1.4894
+            "shapley": 1.4894,
+            "gauntlet": 1.1203,
+            "gauntletHuman": 1.2332,
+            "gauntletSpire": 1.1652
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -1541,10 +2210,13 @@
             "inBuild": 1.3028,
             "solo": 2.5553,
             "pressure": 1.5945,
-            "shapley": 1.043
+            "shapley": 1.043,
+            "gauntlet": 1.175,
+            "gauntletHuman": 1.0701,
+            "gauntletSpire": 1.1989
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -1594,10 +2266,13 @@
             "inBuild": 1.241,
             "solo": 1.9664,
             "pressure": 1.6267,
-            "shapley": 1.6588
+            "shapley": 1.6588,
+            "gauntlet": 1.1787,
+            "gauntletHuman": 1.3373,
+            "gauntletSpire": 1.0819
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -1606,7 +2281,16 @@
           "pickRate": null,
           "funRate": null,
           "funCount": 0,
-          "alerts": [],
+          "alerts": [
+            {
+              "kind": "HUMAN_DROUGHT_GAP",
+              "category": "weapons",
+              "itemId": "echo-stone",
+              "itemName": "Echo Stone",
+              "severity": "info",
+              "detail": "Rises +13% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.18× → human=1.34×)"
+            }
+          ],
           "meta": {
             "kind": "weapons",
             "role": "chains",
@@ -1647,10 +2331,13 @@
             "inBuild": 1.3379,
             "solo": 2.0311,
             "pressure": 1.3269,
-            "shapley": 1.5578
+            "shapley": 1.5578,
+            "gauntlet": 1.1866,
+            "gauntletHuman": 1.1489,
+            "gauntletSpire": 1.0839
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -1700,10 +2387,13 @@
             "inBuild": 1.1687,
             "solo": 2.7216,
             "pressure": 1.6242,
-            "shapley": 1.0919
+            "shapley": 1.0919,
+            "gauntlet": 1.0811,
+            "gauntletHuman": 1.1326,
+            "gauntletSpire": 1.0345
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -1753,10 +2443,13 @@
             "inBuild": 1.1708,
             "solo": 2.6547,
             "pressure": 1.4541,
-            "shapley": 1.3748
+            "shapley": 1.3748,
+            "gauntlet": 1.4693,
+            "gauntletHuman": 1.3166,
+            "gauntletSpire": 1.068
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -1806,10 +2499,13 @@
             "inBuild": 1.0543,
             "solo": 3.0274,
             "pressure": 2.0215,
-            "shapley": 1.0864
+            "shapley": 1.0864,
+            "gauntlet": 1.013,
+            "gauntletHuman": 1.1591,
+            "gauntletSpire": 1.0782
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -1818,7 +2514,16 @@
           "pickRate": null,
           "funRate": null,
           "funCount": 0,
-          "alerts": [],
+          "alerts": [
+            {
+              "kind": "HUMAN_DROUGHT_GAP",
+              "category": "weapons",
+              "itemId": "tar-pit",
+              "itemName": "Tar Pit",
+              "severity": "info",
+              "detail": "Rises +14% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.01× → human=1.16×)"
+            }
+          ],
           "meta": {
             "kind": "weapons",
             "role": "gambles",
@@ -1859,10 +2564,13 @@
             "inBuild": 1.2938,
             "solo": 1.6809,
             "pressure": 1.3963,
-            "shapley": 1.6518
+            "shapley": 1.6518,
+            "gauntlet": 1.0896,
+            "gauntletHuman": 1.0369,
+            "gauntletSpire": 1.1177
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -1912,10 +2620,13 @@
             "inBuild": 1.217,
             "solo": 2.1275,
             "pressure": 1.456,
-            "shapley": 1.3621
+            "shapley": 1.3621,
+            "gauntlet": 1.0524,
+            "gauntletHuman": 1.0862,
+            "gauntletSpire": 1.0433
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -1965,10 +2676,13 @@
             "inBuild": 1.157,
             "solo": 2.1539,
             "pressure": 1.6144,
-            "shapley": 1.4432
+            "shapley": 1.4432,
+            "gauntlet": 1.0606,
+            "gauntletHuman": 1.1351,
+            "gauntletSpire": 1.165
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -2018,10 +2732,13 @@
             "inBuild": 1.0997,
             "solo": 2.3648,
             "pressure": 1.71,
-            "shapley": 1.2201
+            "shapley": 1.2201,
+            "gauntlet": 1.1031,
+            "gauntletHuman": 1.1181,
+            "gauntletSpire": 1.1412
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -2071,10 +2788,13 @@
             "inBuild": 1.2464,
             "solo": 2.0875,
             "pressure": 1.3279,
-            "shapley": 1.4626
+            "shapley": 1.4626,
+            "gauntlet": 1.49,
+            "gauntletHuman": 1.4282,
+            "gauntletSpire": 1.1094
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -2124,10 +2844,13 @@
             "inBuild": 1.1785,
             "solo": 2.2379,
             "pressure": 1.6021,
-            "shapley": 1.2915
+            "shapley": 1.2915,
+            "gauntlet": 1.1009,
+            "gauntletHuman": 1.0316,
+            "gauntletSpire": 1.1038
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -2177,10 +2900,13 @@
             "inBuild": 1.1573,
             "solo": 2.2619,
             "pressure": 1.639,
-            "shapley": 1.2189
+            "shapley": 1.2189,
+            "gauntlet": 1.0511,
+            "gauntletHuman": 1.0595,
+            "gauntletSpire": 1.1484
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -2230,10 +2956,13 @@
             "inBuild": 1.1226,
             "solo": 3.1089,
             "pressure": 1.2771,
-            "shapley": 1.2354
+            "shapley": 1.2354,
+            "gauntlet": 1.0543,
+            "gauntletHuman": 1.0894,
+            "gauntletSpire": 1.1716
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -2283,10 +3012,13 @@
             "inBuild": 1.1816,
             "solo": 2.1662,
             "pressure": 1.4979,
-            "shapley": 1.2041
+            "shapley": 1.2041,
+            "gauntlet": 1.1435,
+            "gauntletHuman": 1.1757,
+            "gauntletSpire": 1.2006
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -2336,10 +3068,13 @@
             "inBuild": 1.0624,
             "solo": 2.322,
             "pressure": 1.7504,
-            "shapley": 1.4035
+            "shapley": 1.4035,
+            "gauntlet": 1.0477,
+            "gauntletHuman": 1.0795,
+            "gauntletSpire": 1.0946
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -2389,10 +3124,13 @@
             "inBuild": 1,
             "solo": 2.8939,
             "pressure": 2.0445,
-            "shapley": 1.1404
+            "shapley": 1.1404,
+            "gauntlet": 1.1844,
+            "gauntletHuman": 1.1438,
+            "gauntletSpire": 1.0905
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -2442,10 +3180,13 @@
             "inBuild": 1.0063,
             "solo": 2.3298,
             "pressure": 2.2509,
-            "shapley": 1.0891
+            "shapley": 1.0891,
+            "gauntlet": 1.1128,
+            "gauntletHuman": 1.0413,
+            "gauntletSpire": 1.0877
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -2495,10 +3236,13 @@
             "inBuild": 1.2424,
             "solo": 1.7073,
             "pressure": 1.3528,
-            "shapley": 1.475
+            "shapley": 1.475,
+            "gauntlet": 1.2077,
+            "gauntletHuman": 1.1933,
+            "gauntletSpire": 1.2032
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -2548,10 +3292,13 @@
             "inBuild": 1.2459,
             "solo": 1.5849,
             "pressure": 1.3143,
-            "shapley": 1.6163
+            "shapley": 1.6163,
+            "gauntlet": 1.1988,
+            "gauntletHuman": 1.0891,
+            "gauntletSpire": 1.1511
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -2601,10 +3348,13 @@
             "inBuild": 1.266,
             "solo": 1.6674,
             "pressure": 1.3692,
-            "shapley": 1.3546
+            "shapley": 1.3546,
+            "gauntlet": 1.0847,
+            "gauntletHuman": 1.0286,
+            "gauntletSpire": 1.0874
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -2654,10 +3404,13 @@
             "inBuild": 1.0813,
             "solo": 2.2851,
             "pressure": 1.5093,
-            "shapley": 1.4471
+            "shapley": 1.4471,
+            "gauntlet": 1.038,
+            "gauntletHuman": 1.0636,
+            "gauntletSpire": 1.1002
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -2707,10 +3460,13 @@
             "inBuild": 1.0607,
             "solo": 2.5476,
             "pressure": 1.4481,
-            "shapley": 1.2539
+            "shapley": 1.2539,
+            "gauntlet": 1.1907,
+            "gauntletHuman": 1.1241,
+            "gauntletSpire": 1.0496
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -2760,10 +3516,13 @@
             "inBuild": 1.0734,
             "solo": 1,
             "pressure": 1,
-            "shapley": 1.4224
+            "shapley": 1.4224,
+            "gauntlet": 1.2494,
+            "gauntletHuman": 1.2118,
+            "gauntletSpire": 1.1004
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -2813,10 +3572,13 @@
             "inBuild": 1.0221,
             "solo": 2.3269,
             "pressure": 1.5664,
-            "shapley": 1.3394
+            "shapley": 1.3394,
+            "gauntlet": 1.1288,
+            "gauntletHuman": 1.2561,
+            "gauntletSpire": 1.0906
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -2866,10 +3628,13 @@
             "inBuild": 1.0893,
             "solo": 3.0419,
             "pressure": 1.0148,
-            "shapley": 1.358
+            "shapley": 1.358,
+            "gauntlet": 1.1585,
+            "gauntletHuman": 1.0566,
+            "gauntletSpire": 1.027
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -2919,10 +3684,13 @@
             "inBuild": 1.0352,
             "solo": 2.1019,
             "pressure": 1.5715,
-            "shapley": 1.2599
+            "shapley": 1.2599,
+            "gauntlet": 1,
+            "gauntletHuman": 1,
+            "gauntletSpire": 1.0555
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -2972,10 +3740,13 @@
             "inBuild": 1.2317,
             "solo": 1.2093,
             "pressure": 1.1811,
-            "shapley": 2.1165
+            "shapley": 2.1165,
+            "gauntlet": 1.1345,
+            "gauntletHuman": 1.1796,
+            "gauntletSpire": 1.2502
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -3025,10 +3796,13 @@
             "inBuild": 1.0958,
             "solo": 1.9628,
             "pressure": 1.5121,
-            "shapley": 1.1637
+            "shapley": 1.1637,
+            "gauntlet": 1.082,
+            "gauntletHuman": 1.0381,
+            "gauntletSpire": 1.1577
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -3078,10 +3852,13 @@
             "inBuild": 1.1348,
             "solo": 1.8604,
             "pressure": 1.2357,
-            "shapley": 1.1816
+            "shapley": 1.1816,
+            "gauntlet": 1.096,
+            "gauntletHuman": 1.1725,
+            "gauntletSpire": 1.1107
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -3131,10 +3908,13 @@
             "inBuild": 1.0694,
             "solo": 1,
             "pressure": 1,
-            "shapley": 1.1891
+            "shapley": 1.1891,
+            "gauntlet": 1.2822,
+            "gauntletHuman": 1.2209,
+            "gauntletSpire": 1.2041
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -3184,10 +3964,13 @@
             "inBuild": 1.1563,
             "solo": 1.5594,
             "pressure": 1.4572,
-            "shapley": 1.2288
+            "shapley": 1.2288,
+            "gauntlet": 1.2625,
+            "gauntletHuman": 1.1673,
+            "gauntletSpire": 1.0678
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -3237,10 +4020,13 @@
             "inBuild": 1.066,
             "solo": 2.0174,
             "pressure": 1.4481,
-            "shapley": 1.0374
+            "shapley": 1.0374,
+            "gauntlet": 1.1094,
+            "gauntletHuman": 1.1767,
+            "gauntletSpire": 1.0445
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -3290,10 +4076,13 @@
             "inBuild": 1.1238,
             "solo": 1.5314,
             "pressure": 1.3559,
-            "shapley": 1.4134
+            "shapley": 1.4134,
+            "gauntlet": 1.1756,
+            "gauntletHuman": 1.1886,
+            "gauntletSpire": 1.1252
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -3343,10 +4132,13 @@
             "inBuild": 1.1037,
             "solo": 1.7132,
             "pressure": 1.0675,
-            "shapley": 1.5339
+            "shapley": 1.5339,
+            "gauntlet": 1.1605,
+            "gauntletHuman": 1.1018,
+            "gauntletSpire": 1.0799
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -3396,10 +4188,13 @@
             "inBuild": 1.0388,
             "solo": 1.8019,
             "pressure": 1.2635,
-            "shapley": 1.3251
+            "shapley": 1.3251,
+            "gauntlet": 1.2625,
+            "gauntletHuman": 1.1936,
+            "gauntletSpire": 1.136
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -3566,10 +4361,13 @@
             "composite": 1.8992,
             "buildAround": 1.9186,
             "ruleLift": 1.758,
-            "pairOutput": 2.6724
+            "pairOutput": 2.6724,
+            "gauntlet": 2.2451,
+            "gauntletHuman": 1.7528,
+            "gauntletSpire": 2.1126
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -3616,10 +4414,13 @@
             "composite": 1.8782,
             "buildAround": 1.7839,
             "ruleLift": 1.768,
-            "pairOutput": 2.0619
+            "pairOutput": 2.0619,
+            "gauntlet": 1.3458,
+            "gauntletHuman": 1.3497,
+            "gauntletSpire": 1.3188
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -3666,10 +4467,13 @@
             "composite": 1.83,
             "buildAround": 2.0059,
             "ruleLift": 1.6802,
-            "pairOutput": 3.5722
+            "pairOutput": 3.5722,
+            "gauntlet": 2.7018,
+            "gauntletHuman": 2.1266,
+            "gauntletSpire": 2.4877
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -3716,10 +4520,13 @@
             "composite": 1.8027,
             "buildAround": 1.7216,
             "ruleLift": 1.6933,
-            "pairOutput": 2.0236
+            "pairOutput": 2.0236,
+            "gauntlet": 2.1335,
+            "gauntletHuman": 1.5037,
+            "gauntletSpire": 1.6929
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -3728,7 +4535,16 @@
           "pickRate": null,
           "funRate": null,
           "funCount": 0,
-          "alerts": [],
+          "alerts": [
+            {
+              "kind": "HUMAN_DROUGHT_GAP",
+              "category": "evolutions",
+              "itemId": "spite",
+              "itemName": "Spite",
+              "severity": "info",
+              "detail": "Drops -31% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=2.13× → human=1.50×)"
+            }
+          ],
           "meta": {
             "kind": "evolutions",
             "pair": [
@@ -3766,10 +4582,13 @@
             "composite": 1.7966,
             "buildAround": 2.0346,
             "ruleLift": 1.7373,
-            "pairOutput": 3.9769
+            "pairOutput": 3.9769,
+            "gauntlet": 2.4597,
+            "gauntletHuman": 2.2206,
+            "gauntletSpire": 2.4307
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -3816,10 +4635,13 @@
             "composite": 1.7951,
             "buildAround": 2.0448,
             "ruleLift": 1.6856,
-            "pairOutput": 4.0781
+            "pairOutput": 4.0781,
+            "gauntlet": 1.5676,
+            "gauntletHuman": 1.4433,
+            "gauntletSpire": 1.7451
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -3866,10 +4688,13 @@
             "composite": 1.7767,
             "buildAround": 1.944,
             "ruleLift": 1.6406,
-            "pairOutput": 3.4416
+            "pairOutput": 3.4416,
+            "gauntlet": 1.4793,
+            "gauntletHuman": 2.1042,
+            "gauntletSpire": 1.8315
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -3916,10 +4741,13 @@
             "composite": 1.7748,
             "buildAround": 1.9687,
             "ruleLift": 1.6839,
-            "pairOutput": 3.6228
+            "pairOutput": 3.6228,
+            "gauntlet": 2.7436,
+            "gauntletHuman": 1.8166,
+            "gauntletSpire": 2.2249
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -3928,7 +4756,16 @@
           "pickRate": null,
           "funRate": null,
           "funCount": 0,
-          "alerts": [],
+          "alerts": [
+            {
+              "kind": "HUMAN_DROUGHT_GAP",
+              "category": "evolutions",
+              "itemId": "pathfinder",
+              "itemName": "Pathfinder",
+              "severity": "info",
+              "detail": "Drops -35% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=2.74× → human=1.82×)"
+            }
+          ],
           "meta": {
             "kind": "evolutions",
             "pair": [
@@ -3966,10 +4803,13 @@
             "composite": 1.767,
             "buildAround": 1.8087,
             "ruleLift": 1.5509,
-            "pairOutput": 2.6336
+            "pairOutput": 2.6336,
+            "gauntlet": 1.9217,
+            "gauntletHuman": 2.9347,
+            "gauntletSpire": 2.4843
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -3978,7 +4818,16 @@
           "pickRate": null,
           "funRate": null,
           "funCount": 0,
-          "alerts": [],
+          "alerts": [
+            {
+              "kind": "HUMAN_DROUGHT_GAP",
+              "category": "evolutions",
+              "itemId": "old-powder",
+              "itemName": "Old Powder",
+              "severity": "info",
+              "detail": "Rises +49% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.92× → human=2.93×)"
+            }
+          ],
           "meta": {
             "kind": "evolutions",
             "pair": [
@@ -4016,10 +4865,13 @@
             "composite": 1.7599,
             "buildAround": 1.8868,
             "ruleLift": 1.5264,
-            "pairOutput": 3.1601
+            "pairOutput": 3.1601,
+            "gauntlet": 1.9004,
+            "gauntletHuman": 1.8519,
+            "gauntletSpire": 2.0264
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -4066,10 +4918,13 @@
             "composite": 1.7538,
             "buildAround": 1.8972,
             "ruleLift": 1.641,
-            "pairOutput": 3.2419
+            "pairOutput": 3.2419,
+            "gauntlet": 2.0273,
+            "gauntletHuman": 1.6998,
+            "gauntletSpire": 2.0117
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -4116,10 +4971,13 @@
             "composite": 1.7491,
             "buildAround": 1.7882,
             "ruleLift": 1.5952,
-            "pairOutput": 2.5855
+            "pairOutput": 2.5855,
+            "gauntlet": 1.6261,
+            "gauntletHuman": 2.2334,
+            "gauntletSpire": 1.9819
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -4166,10 +5024,13 @@
             "composite": 1.7399,
             "buildAround": 1.9688,
             "ruleLift": 1.6272,
-            "pairOutput": 3.8507
+            "pairOutput": 3.8507,
+            "gauntlet": 1.9447,
+            "gauntletHuman": 2.1647,
+            "gauntletSpire": 1.8917
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -4216,10 +5077,13 @@
             "composite": 1.7254,
             "buildAround": 1.6462,
             "ruleLift": 1.5331,
-            "pairOutput": 1.9391
+            "pairOutput": 1.9391,
+            "gauntlet": 1.23,
+            "gauntletHuman": 1.7658,
+            "gauntletSpire": 1.4337
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -4266,10 +5130,13 @@
             "composite": 1.7149,
             "buildAround": 1.82,
             "ruleLift": 1.6061,
-            "pairOutput": 2.9366
+            "pairOutput": 2.9366,
+            "gauntlet": 2.403,
+            "gauntletHuman": 2.1267,
+            "gauntletSpire": 2.6686
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -4316,10 +5183,13 @@
             "composite": 1.7115,
             "buildAround": 1.3851,
             "ruleLift": 1.4496,
-            "pairOutput": 1
+            "pairOutput": 1,
+            "gauntlet": 1.269,
+            "gauntletHuman": 1.6382,
+            "gauntletSpire": 1.4315
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -4366,10 +5236,13 @@
             "composite": 1.7011,
             "buildAround": 1.927,
             "ruleLift": 1.6077,
-            "pairOutput": 3.777
+            "pairOutput": 3.777,
+            "gauntlet": 2.0385,
+            "gauntletHuman": 1.7196,
+            "gauntletSpire": 1.6524
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -4416,10 +5289,13 @@
             "composite": 1.701,
             "buildAround": 2.0245,
             "ruleLift": 1.5534,
-            "pairOutput": 4.6174
+            "pairOutput": 4.6174,
+            "gauntlet": 2.8206,
+            "gauntletHuman": 2.0097,
+            "gauntletSpire": 1.9189
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -4428,7 +5304,16 @@
           "pickRate": null,
           "funRate": null,
           "funCount": 0,
-          "alerts": [],
+          "alerts": [
+            {
+              "kind": "HUMAN_DROUGHT_GAP",
+              "category": "evolutions",
+              "itemId": "clear-signal",
+              "itemName": "Clear Signal",
+              "severity": "info",
+              "detail": "Drops -30% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=2.82× → human=2.01×)"
+            }
+          ],
           "meta": {
             "kind": "evolutions",
             "pair": [
@@ -4466,10 +5351,13 @@
             "composite": 1.6896,
             "buildAround": 1.8778,
             "ruleLift": 1.456,
-            "pairOutput": 3.5059
+            "pairOutput": 3.5059,
+            "gauntlet": 1.9221,
+            "gauntletHuman": 1.6119,
+            "gauntletSpire": 1.9011
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -4516,10 +5404,13 @@
             "composite": 1.681,
             "buildAround": 1.7432,
             "ruleLift": 1.63,
-            "pairOutput": 2.6154
+            "pairOutput": 2.6154,
+            "gauntlet": 1.4095,
+            "gauntletHuman": 2.3402,
+            "gauntletSpire": 2.1421
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -4528,7 +5419,16 @@
           "pickRate": null,
           "funRate": null,
           "funCount": 0,
-          "alerts": [],
+          "alerts": [
+            {
+              "kind": "HUMAN_DROUGHT_GAP",
+              "category": "evolutions",
+              "itemId": "stockpile",
+              "itemName": "Stockpile",
+              "severity": "info",
+              "detail": "Rises +62% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.41× → human=2.34×)"
+            }
+          ],
           "meta": {
             "kind": "evolutions",
             "pair": [
@@ -4566,10 +5466,13 @@
             "composite": 1.6777,
             "buildAround": 1.7455,
             "ruleLift": 1.5778,
-            "pairOutput": 2.6523
+            "pairOutput": 2.6523,
+            "gauntlet": 1.7276,
+            "gauntletHuman": 2.3001,
+            "gauntletSpire": 1.9156
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -4616,10 +5519,13 @@
             "composite": 1.6716,
             "buildAround": 1.8407,
             "ruleLift": 1.5005,
-            "pairOutput": 3.3301
+            "pairOutput": 3.3301,
+            "gauntlet": 1.6409,
+            "gauntletHuman": 1.6772,
+            "gauntletSpire": 1.6513
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -4666,10 +5572,13 @@
             "composite": 1.6707,
             "buildAround": 1.6908,
             "ruleLift": 1.607,
-            "pairOutput": 2.3595
+            "pairOutput": 2.3595,
+            "gauntlet": 1.5255,
+            "gauntletHuman": 2.2061,
+            "gauntletSpire": 1.8252
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -4716,10 +5625,13 @@
             "composite": 1.6553,
             "buildAround": 1.7959,
             "ruleLift": 1.594,
-            "pairOutput": 3.0874
+            "pairOutput": 3.0874,
+            "gauntlet": 1.9666,
+            "gauntletHuman": 1.8965,
+            "gauntletSpire": 1.9863
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -4766,10 +5678,13 @@
             "composite": 1.6538,
             "buildAround": 1.6656,
             "ruleLift": 1.5328,
-            "pairOutput": 2.2986
+            "pairOutput": 2.2986,
+            "gauntlet": 1.6516,
+            "gauntletHuman": 2.1404,
+            "gauntletSpire": 1.8027
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -4816,10 +5731,13 @@
             "composite": 1.6498,
             "buildAround": 1.748,
             "ruleLift": 1.5732,
-            "pairOutput": 2.8016
+            "pairOutput": 2.8016,
+            "gauntlet": 3.3448,
+            "gauntletHuman": 2.8981,
+            "gauntletSpire": 3.4167
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -4866,10 +5784,13 @@
             "composite": 1.647,
             "buildAround": 1.8653,
             "ruleLift": 1.607,
-            "pairOutput": 3.6439
+            "pairOutput": 3.6439,
+            "gauntlet": 1.7317,
+            "gauntletHuman": 2.0664,
+            "gauntletSpire": 1.8763
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -4916,10 +5837,13 @@
             "composite": 1.6409,
             "buildAround": 1.8317,
             "ruleLift": 1.5596,
-            "pairOutput": 3.4347
+            "pairOutput": 3.4347,
+            "gauntlet": 3.0562,
+            "gauntletHuman": 2.4706,
+            "gauntletSpire": 3.3717
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -4966,10 +5890,13 @@
             "composite": 1.6396,
             "buildAround": 1.6691,
             "ruleLift": 1.5089,
-            "pairOutput": 2.3806
+            "pairOutput": 2.3806,
+            "gauntlet": 3.0925,
+            "gauntletHuman": 2.3008,
+            "gauntletSpire": 2.8331
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -5016,10 +5943,13 @@
             "composite": 1.6272,
             "buildAround": 1.7605,
             "ruleLift": 1.504,
-            "pairOutput": 3.0133
+            "pairOutput": 3.0133,
+            "gauntlet": 1.0854,
+            "gauntletHuman": 1.7085,
+            "gauntletSpire": 1.4177
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -5028,7 +5958,16 @@
           "pickRate": null,
           "funRate": null,
           "funCount": 0,
-          "alerts": [],
+          "alerts": [
+            {
+              "kind": "HUMAN_DROUGHT_GAP",
+              "category": "evolutions",
+              "itemId": "forge",
+              "itemName": "Forge",
+              "severity": "info",
+              "detail": "Rises +54% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.09× → human=1.71×)"
+            }
+          ],
           "meta": {
             "kind": "evolutions",
             "pair": [
@@ -5066,10 +6005,13 @@
             "composite": 1.6261,
             "buildAround": 1.6618,
             "ruleLift": 1.5132,
-            "pairOutput": 2.3954
+            "pairOutput": 2.3954,
+            "gauntlet": 2.9132,
+            "gauntletHuman": 2.2903,
+            "gauntletSpire": 2.428
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -5116,10 +6058,13 @@
             "composite": 1.6161,
             "buildAround": 1.7059,
             "ruleLift": 1.506,
-            "pairOutput": 2.7092
+            "pairOutput": 2.7092,
+            "gauntlet": 1.6186,
+            "gauntletHuman": 1.5894,
+            "gauntletSpire": 1.6858
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -5166,10 +6111,13 @@
             "composite": 1.6107,
             "buildAround": 1.567,
             "ruleLift": 1.412,
-            "pairOutput": 1.9592
+            "pairOutput": 1.9592,
+            "gauntlet": 2.3256,
+            "gauntletHuman": 2.1092,
+            "gauntletSpire": 2.4236
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -5216,10 +6164,13 @@
             "composite": 1.6101,
             "buildAround": 1.8367,
             "ruleLift": 1.3888,
-            "pairOutput": 3.7073
+            "pairOutput": 3.7073,
+            "gauntlet": 1.5655,
+            "gauntletHuman": 1.5368,
+            "gauntletSpire": 1.485
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -5266,10 +6217,13 @@
             "composite": 1.6023,
             "buildAround": 1.6776,
             "ruleLift": 1.4712,
-            "pairOutput": 2.6036
+            "pairOutput": 2.6036,
+            "gauntlet": 1.7955,
+            "gauntletHuman": 2.2658,
+            "gauntletSpire": 1.9895
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -5316,10 +6270,13 @@
             "composite": 1.6004,
             "buildAround": 1.6899,
             "ruleLift": 1.5568,
-            "pairOutput": 2.6758
+            "pairOutput": 2.6758,
+            "gauntlet": 2.0919,
+            "gauntletHuman": 1.8979,
+            "gauntletSpire": 2.2251
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -5366,10 +6323,13 @@
             "composite": 1.5977,
             "buildAround": 1.754,
             "ruleLift": 1.5272,
-            "pairOutput": 3.1267
+            "pairOutput": 3.1267,
+            "gauntlet": 2.5642,
+            "gauntletHuman": 1.608,
+            "gauntletSpire": 2.2173
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -5378,7 +6338,16 @@
           "pickRate": null,
           "funRate": null,
           "funCount": 0,
-          "alerts": [],
+          "alerts": [
+            {
+              "kind": "HUMAN_DROUGHT_GAP",
+              "category": "evolutions",
+              "itemId": "overgrowth",
+              "itemName": "Overgrowth",
+              "severity": "info",
+              "detail": "Drops -39% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=2.56× → human=1.61×)"
+            }
+          ],
           "meta": {
             "kind": "evolutions",
             "pair": [
@@ -5416,10 +6385,13 @@
             "composite": 1.569,
             "buildAround": 1.6468,
             "ruleLift": 1.419,
-            "pairOutput": 2.5781
+            "pairOutput": 2.5781,
+            "gauntlet": 1.3025,
+            "gauntletHuman": 1.9644,
+            "gauntletSpire": 1.7078
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -5428,7 +6400,16 @@
           "pickRate": null,
           "funRate": null,
           "funCount": 0,
-          "alerts": [],
+          "alerts": [
+            {
+              "kind": "HUMAN_DROUGHT_GAP",
+              "category": "evolutions",
+              "itemId": "chaos-theory",
+              "itemName": "Chaos Theory",
+              "severity": "info",
+              "detail": "Rises +47% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.30× → human=1.96×)"
+            }
+          ],
           "meta": {
             "kind": "evolutions",
             "pair": [
@@ -5466,10 +6447,13 @@
             "composite": 1.5652,
             "buildAround": 1.6124,
             "ruleLift": 1.484,
-            "pairOutput": 2.3764
+            "pairOutput": 2.3764,
+            "gauntlet": 1.4751,
+            "gauntletHuman": 1.4687,
+            "gauntletSpire": 1.5078
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -5516,10 +6500,13 @@
             "composite": 1.5616,
             "buildAround": 1.6906,
             "ruleLift": 1.3934,
-            "pairOutput": 2.9077
+            "pairOutput": 2.9077,
+            "gauntlet": 1.3845,
+            "gauntletHuman": 1.1908,
+            "gauntletSpire": 1.3208
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -5566,10 +6553,13 @@
             "composite": 1.5594,
             "buildAround": 1.6363,
             "ruleLift": 1.3863,
-            "pairOutput": 2.5634
+            "pairOutput": 2.5634,
+            "gauntlet": 1.8908,
+            "gauntletHuman": 1.7957,
+            "gauntletSpire": 1.8451
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -5616,10 +6606,13 @@
             "composite": 1.5534,
             "buildAround": 1.6817,
             "ruleLift": 1.47,
-            "pairOutput": 2.8772
+            "pairOutput": 2.8772,
+            "gauntlet": 1.6164,
+            "gauntletHuman": 1.9878,
+            "gauntletSpire": 1.8031
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -5666,10 +6659,13 @@
             "composite": 1.5303,
             "buildAround": 1.5872,
             "ruleLift": 1.4314,
-            "pairOutput": 2.3905
+            "pairOutput": 2.3905,
+            "gauntlet": 1.6178,
+            "gauntletHuman": 1.6262,
+            "gauntletSpire": 1.6176
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -5716,10 +6712,13 @@
             "composite": 1.521,
             "buildAround": 1.5737,
             "ruleLift": 1.4506,
-            "pairOutput": 2.3487
+            "pairOutput": 2.3487,
+            "gauntlet": 2.4733,
+            "gauntletHuman": 1.8968,
+            "gauntletSpire": 2.4
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -5766,10 +6765,13 @@
             "composite": 1.5112,
             "buildAround": 1.6286,
             "ruleLift": 1.3786,
-            "pairOutput": 2.7579
+            "pairOutput": 2.7579,
+            "gauntlet": 2.1215,
+            "gauntletHuman": 2.0263,
+            "gauntletSpire": 2.5617
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -5816,10 +6818,13 @@
             "composite": 1.5073,
             "buildAround": 1.5988,
             "ruleLift": 1.48,
-            "pairOutput": 2.5643
+            "pairOutput": 2.5643,
+            "gauntlet": 1.788,
+            "gauntletHuman": 1.6963,
+            "gauntletSpire": 1.9818
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -5866,10 +6871,13 @@
             "composite": 1.5061,
             "buildAround": 1.5956,
             "ruleLift": 1.4201,
-            "pairOutput": 2.5595
+            "pairOutput": 2.5595,
+            "gauntlet": 2.0994,
+            "gauntletHuman": 1.913,
+            "gauntletSpire": 2.0923
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -5916,10 +6924,13 @@
             "composite": 1.5017,
             "buildAround": 1.6065,
             "ruleLift": 1.3525,
-            "pairOutput": 2.6642
+            "pairOutput": 2.6642,
+            "gauntlet": 1.5681,
+            "gauntletHuman": 1.4562,
+            "gauntletSpire": 1.589
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -5966,10 +6977,13 @@
             "composite": 1.5007,
             "buildAround": 1.4938,
             "ruleLift": 1.351,
-            "pairOutput": 1.9956
+            "pairOutput": 1.9956,
+            "gauntlet": 2.7518,
+            "gauntletHuman": 2.8305,
+            "gauntletSpire": 2.6438
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -6016,10 +7030,13 @@
             "composite": 1.4945,
             "buildAround": 1.7947,
             "ruleLift": 1.4221,
-            "pairOutput": 4.1886
+            "pairOutput": 4.1886,
+            "gauntlet": 1.8372,
+            "gauntletHuman": 2.5183,
+            "gauntletSpire": 2.1317
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -6066,10 +7083,13 @@
             "composite": 1.4784,
             "buildAround": 1.8262,
             "ruleLift": 1.3823,
-            "pairOutput": 4.6459
+            "pairOutput": 4.6459,
+            "gauntlet": 3.6625,
+            "gauntletHuman": 2.539,
+            "gauntletSpire": 2.336
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -6078,7 +7098,16 @@
           "pickRate": null,
           "funRate": null,
           "funCount": 0,
-          "alerts": [],
+          "alerts": [
+            {
+              "kind": "HUMAN_DROUGHT_GAP",
+              "category": "evolutions",
+              "itemId": "spark-plug",
+              "itemName": "Spark Plug",
+              "severity": "info",
+              "detail": "Drops -32% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=3.66× → human=2.54×)"
+            }
+          ],
           "meta": {
             "kind": "evolutions",
             "pair": [
@@ -6116,10 +7145,13 @@
             "composite": 1.4782,
             "buildAround": 1.5604,
             "ruleLift": 1.3802,
-            "pairOutput": 2.4779
+            "pairOutput": 2.4779,
+            "gauntlet": 2.554,
+            "gauntletHuman": 1.6595,
+            "gauntletSpire": 1.9987
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -6128,7 +7160,16 @@
           "pickRate": null,
           "funRate": null,
           "funCount": 0,
-          "alerts": [],
+          "alerts": [
+            {
+              "kind": "HUMAN_DROUGHT_GAP",
+              "category": "evolutions",
+              "itemId": "lucky-break",
+              "itemName": "Lucky Break",
+              "severity": "info",
+              "detail": "Drops -37% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=2.55× → human=1.66×)"
+            }
+          ],
           "meta": {
             "kind": "evolutions",
             "pair": [
@@ -6166,10 +7207,13 @@
             "composite": 1.4666,
             "buildAround": 1.4235,
             "ruleLift": 1.3737,
-            "pairOutput": 1.7569
+            "pairOutput": 1.7569,
+            "gauntlet": 1.4045,
+            "gauntletHuman": 1.7555,
+            "gauntletSpire": 1.5724
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -6216,10 +7260,13 @@
             "composite": 1.4611,
             "buildAround": 1.7065,
             "ruleLift": 1.3833,
-            "pairOutput": 3.666
+            "pairOutput": 3.666,
+            "gauntlet": 1.3701,
+            "gauntletHuman": 1.5111,
+            "gauntletSpire": 1.5016
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -6266,10 +7313,13 @@
             "composite": 1.4604,
             "buildAround": 1.4641,
             "ruleLift": 1.3328,
-            "pairOutput": 1.9961
+            "pairOutput": 1.9961,
+            "gauntlet": 1.5426,
+            "gauntletHuman": 2.1473,
+            "gauntletSpire": 1.8486
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -6316,10 +7366,13 @@
             "composite": 1.4569,
             "buildAround": 1.5395,
             "ruleLift": 1.3822,
-            "pairOutput": 2.4489
+            "pairOutput": 2.4489,
+            "gauntlet": 1.8183,
+            "gauntletHuman": 1.8685,
+            "gauntletSpire": 2.0225
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -6366,10 +7419,13 @@
             "composite": 1.4437,
             "buildAround": 1.4783,
             "ruleLift": 1.404,
-            "pairOutput": 2.1351
+            "pairOutput": 2.1351,
+            "gauntlet": 1.8135,
+            "gauntletHuman": 2.2741,
+            "gauntletSpire": 2.2257
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -6416,10 +7472,13 @@
             "composite": 1.4426,
             "buildAround": 1.6969,
             "ruleLift": 1.3446,
-            "pairOutput": 3.7289
+            "pairOutput": 3.7289,
+            "gauntlet": 2.3479,
+            "gauntletHuman": 2.4143,
+            "gauntletSpire": 2.5278
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -6466,10 +7525,13 @@
             "composite": 1.438,
             "buildAround": 1.4631,
             "ruleLift": 1.3132,
-            "pairOutput": 2.085
+            "pairOutput": 2.085,
+            "gauntlet": 1.2743,
+            "gauntletHuman": 1.2188,
+            "gauntletSpire": 1.2537
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -6516,10 +7578,13 @@
             "composite": 1.4316,
             "buildAround": 1.5431,
             "ruleLift": 1.307,
-            "pairOutput": 2.6144
+            "pairOutput": 2.6144,
+            "gauntlet": 1.5078,
+            "gauntletHuman": 1.9218,
+            "gauntletSpire": 1.78
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -6566,10 +7631,13 @@
             "composite": 1.4199,
             "buildAround": 1.46,
             "ruleLift": 1.3285,
-            "pairOutput": 2.1424
+            "pairOutput": 2.1424,
+            "gauntlet": 2.5168,
+            "gauntletHuman": 2.5392,
+            "gauntletSpire": 2.469
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -6616,10 +7684,13 @@
             "composite": 1.4198,
             "buildAround": 1.5627,
             "ruleLift": 1.3463,
-            "pairOutput": 2.8094
+            "pairOutput": 2.8094,
+            "gauntlet": 1.5265,
+            "gauntletHuman": 1.3076,
+            "gauntletSpire": 1.4357
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -6666,10 +7737,13 @@
             "composite": 1.4161,
             "buildAround": 1.531,
             "ruleLift": 1.327,
-            "pairOutput": 2.611
+            "pairOutput": 2.611,
+            "gauntlet": 1.8914,
+            "gauntletHuman": 1.0795,
+            "gauntletSpire": 1.4082
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -6678,7 +7752,16 @@
           "pickRate": null,
           "funRate": null,
           "funCount": 0,
-          "alerts": [],
+          "alerts": [
+            {
+              "kind": "HUMAN_DROUGHT_GAP",
+              "category": "evolutions",
+              "itemId": "countdown",
+              "itemName": "Countdown",
+              "severity": "info",
+              "detail": "Drops -44% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.89× → human=1.08×)"
+            }
+          ],
           "meta": {
             "kind": "evolutions",
             "pair": [
@@ -6716,10 +7799,13 @@
             "composite": 1.4155,
             "buildAround": 1.5509,
             "ruleLift": 1.3561,
-            "pairOutput": 2.7471
+            "pairOutput": 2.7471,
+            "gauntlet": 2.4119,
+            "gauntletHuman": 1.7379,
+            "gauntletSpire": 1.89
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -6728,7 +7814,16 @@
           "pickRate": null,
           "funRate": null,
           "funCount": 0,
-          "alerts": [],
+          "alerts": [
+            {
+              "kind": "HUMAN_DROUGHT_GAP",
+              "category": "evolutions",
+              "itemId": "lullaby",
+              "itemName": "Lullaby",
+              "severity": "info",
+              "detail": "Drops -30% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=2.41× → human=1.74×)"
+            }
+          ],
           "meta": {
             "kind": "evolutions",
             "pair": [
@@ -6766,10 +7861,13 @@
             "composite": 1.4152,
             "buildAround": 1.341,
             "ruleLift": 1.3065,
-            "pairOutput": 1.5422
+            "pairOutput": 1.5422,
+            "gauntlet": 1.5114,
+            "gauntletHuman": 1.8533,
+            "gauntletSpire": 1.6538
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -6816,10 +7914,13 @@
             "composite": 1.4135,
             "buildAround": 1.4785,
             "ruleLift": 1.297,
-            "pairOutput": 2.2878
+            "pairOutput": 2.2878,
+            "gauntlet": 1.5543,
+            "gauntletHuman": 1.1638,
+            "gauntletSpire": 1.2399
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -6866,10 +7967,13 @@
             "composite": 1.405,
             "buildAround": 1.468,
             "ruleLift": 1.277,
-            "pairOutput": 2.2662
+            "pairOutput": 2.2662,
+            "gauntlet": 1.4901,
+            "gauntletHuman": 1.7652,
+            "gauntletSpire": 1.682
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -6916,10 +8020,13 @@
             "composite": 1.4036,
             "buildAround": 1.349,
             "ruleLift": 1.2602,
-            "pairOutput": 1.6223
+            "pairOutput": 1.6223,
+            "gauntlet": 1.877,
+            "gauntletHuman": 1.6339,
+            "gauntletSpire": 1.9515
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -6966,10 +8073,13 @@
             "composite": 1.4015,
             "buildAround": 1.4254,
             "ruleLift": 1.2963,
-            "pairOutput": 2.0265
+            "pairOutput": 2.0265,
+            "gauntlet": 1.3533,
+            "gauntletHuman": 1.5041,
+            "gauntletSpire": 1.5031
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -7016,10 +8126,13 @@
             "composite": 1.3957,
             "buildAround": 1.4961,
             "ruleLift": 1.3904,
-            "pairOutput": 2.4736
+            "pairOutput": 2.4736,
+            "gauntlet": 2.4837,
+            "gauntletHuman": 1.8703,
+            "gauntletSpire": 2.3175
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -7066,10 +8179,13 @@
             "composite": 1.3801,
             "buildAround": 1.2762,
             "ruleLift": 1.2793,
-            "pairOutput": 1.363
+            "pairOutput": 1.363,
+            "gauntlet": 1.3499,
+            "gauntletHuman": 1.1585,
+            "gauntletSpire": 1.16
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -7116,10 +8232,13 @@
             "composite": 1.3764,
             "buildAround": 1.4437,
             "ruleLift": 1.2241,
-            "pairOutput": 2.2593
+            "pairOutput": 2.2593,
+            "gauntlet": 1.7506,
+            "gauntletHuman": 2.4625,
+            "gauntletSpire": 2.0443
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -7166,10 +8285,13 @@
             "composite": 1.3735,
             "buildAround": 1.4072,
             "ruleLift": 1.2561,
-            "pairOutput": 2.0472
+            "pairOutput": 2.0472,
+            "gauntlet": 1.4497,
+            "gauntletHuman": 1.8527,
+            "gauntletSpire": 1.6091
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -7216,10 +8338,13 @@
             "composite": 1.3718,
             "buildAround": 1.5152,
             "ruleLift": 1.2611,
-            "pairOutput": 2.7603
+            "pairOutput": 2.7603,
+            "gauntlet": 1.7788,
+            "gauntletHuman": 2.0264,
+            "gauntletSpire": 2.0912
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -7266,10 +8391,13 @@
             "composite": 1.3708,
             "buildAround": 1.426,
             "ruleLift": 1.2307,
-            "pairOutput": 2.1753
+            "pairOutput": 2.1753,
+            "gauntlet": 1.8455,
+            "gauntletHuman": 1.7712,
+            "gauntletSpire": 2.0296
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -7316,10 +8444,13 @@
             "composite": 1.3707,
             "buildAround": 1.4722,
             "ruleLift": 1.296,
-            "pairOutput": 2.4597
+            "pairOutput": 2.4597,
+            "gauntlet": 1.8551,
+            "gauntletHuman": 2.0637,
+            "gauntletSpire": 2.207
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -7366,10 +8497,13 @@
             "composite": 1.3651,
             "buildAround": 1.4311,
             "ruleLift": 1.2606,
-            "pairOutput": 2.2283
+            "pairOutput": 2.2283,
+            "gauntlet": 1.3475,
+            "gauntletHuman": 1.8839,
+            "gauntletSpire": 1.5873
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -7416,10 +8550,13 @@
             "composite": 1.3646,
             "buildAround": 1.4576,
             "ruleLift": 1.2895,
-            "pairOutput": 2.3959
+            "pairOutput": 2.3959,
+            "gauntlet": 1.3022,
+            "gauntletHuman": 1.5113,
+            "gauntletSpire": 1.5077
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -7466,10 +8603,13 @@
             "composite": 1.3614,
             "buildAround": 1.4311,
             "ruleLift": 1.2858,
-            "pairOutput": 2.2417
+            "pairOutput": 2.2417,
+            "gauntlet": 1.7196,
+            "gauntletHuman": 1.405,
+            "gauntletSpire": 1.7964
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -7516,10 +8656,13 @@
             "composite": 1.3609,
             "buildAround": 1.4005,
             "ruleLift": 1.2495,
-            "pairOutput": 2.064
+            "pairOutput": 2.064,
+            "gauntlet": 1.166,
+            "gauntletHuman": 1.1985,
+            "gauntletSpire": 1.2362
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -7566,10 +8709,13 @@
             "composite": 1.3569,
             "buildAround": 1.4969,
             "ruleLift": 1.1895,
-            "pairOutput": 2.7289
+            "pairOutput": 2.7289,
+            "gauntlet": 1.3373,
+            "gauntletHuman": 1.223,
+            "gauntletSpire": 1.2087
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -7616,10 +8762,13 @@
             "composite": 1.3556,
             "buildAround": 1.3694,
             "ruleLift": 1.1974,
-            "pairOutput": 1.9155
+            "pairOutput": 1.9155,
+            "gauntlet": 1.5333,
+            "gauntletHuman": 1.4275,
+            "gauntletSpire": 1.4751
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -7666,10 +8815,13 @@
             "composite": 1.3536,
             "buildAround": 1.4014,
             "ruleLift": 1.2202,
-            "pairOutput": 2.1061
+            "pairOutput": 2.1061,
+            "gauntlet": 1.7555,
+            "gauntletHuman": 1.636,
+            "gauntletSpire": 1.8639
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -7716,10 +8868,13 @@
             "composite": 1.3493,
             "buildAround": 1.3494,
             "ruleLift": 1.2211,
-            "pairOutput": 1.8274
+            "pairOutput": 1.8274,
+            "gauntlet": 1.7885,
+            "gauntletHuman": 1.9959,
+            "gauntletSpire": 2.0995
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -7766,10 +8921,13 @@
             "composite": 1.3435,
             "buildAround": 1.3979,
             "ruleLift": 1.3302,
-            "pairOutput": 2.1149
+            "pairOutput": 2.1149,
+            "gauntlet": 1.2419,
+            "gauntletHuman": 1.8684,
+            "gauntletSpire": 1.6362
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -7778,7 +8936,16 @@
           "pickRate": null,
           "funRate": null,
           "funCount": 0,
-          "alerts": [],
+          "alerts": [
+            {
+              "kind": "HUMAN_DROUGHT_GAP",
+              "category": "evolutions",
+              "itemId": "trading-cards",
+              "itemName": "Trading Cards",
+              "severity": "info",
+              "detail": "Rises +47% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.24× → human=1.87×)"
+            }
+          ],
           "meta": {
             "kind": "evolutions",
             "pair": [
@@ -7816,10 +8983,13 @@
             "composite": 1.3412,
             "buildAround": 1.3923,
             "ruleLift": 1.2305,
-            "pairOutput": 2.1061
+            "pairOutput": 2.1061,
+            "gauntlet": 1.4412,
+            "gauntletHuman": 1.7659,
+            "gauntletSpire": 1.948
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -7866,10 +9036,13 @@
             "composite": 1.3322,
             "buildAround": 1.3404,
             "ruleLift": 1.2517,
-            "pairOutput": 1.8423
+            "pairOutput": 1.8423,
+            "gauntlet": 1.5943,
+            "gauntletHuman": 2.19,
+            "gauntletSpire": 2.0384
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -7916,10 +9089,13 @@
             "composite": 1.3267,
             "buildAround": 1.5641,
             "ruleLift": 1.1743,
-            "pairOutput": 3.4764
+            "pairOutput": 3.4764,
+            "gauntlet": 1.4928,
+            "gauntletHuman": 1.9655,
+            "gauntletSpire": 1.9026
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -7966,10 +9142,13 @@
             "composite": 1.3149,
             "buildAround": 1.3888,
             "ruleLift": 1.2462,
-            "pairOutput": 2.2064
+            "pairOutput": 2.2064,
+            "gauntlet": 1.5254,
+            "gauntletHuman": 1.785,
+            "gauntletSpire": 1.902
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -8016,10 +9195,13 @@
             "composite": 1.3115,
             "buildAround": 1.4089,
             "ruleLift": 1.2442,
-            "pairOutput": 2.3548
+            "pairOutput": 2.3548,
+            "gauntlet": 1.7344,
+            "gauntletHuman": 2.1289,
+            "gauntletSpire": 2.1322
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -8066,10 +9248,13 @@
             "composite": 1.3023,
             "buildAround": 1.3584,
             "ruleLift": 1.2065,
-            "pairOutput": 2.0825
+            "pairOutput": 2.0825,
+            "gauntlet": 1.5757,
+            "gauntletHuman": 1.907,
+            "gauntletSpire": 1.8188
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -8116,10 +9301,13 @@
             "composite": 1.2977,
             "buildAround": 1.4198,
             "ruleLift": 1.2256,
-            "pairOutput": 2.5079
+            "pairOutput": 2.5079,
+            "gauntlet": 1.6257,
+            "gauntletHuman": 1.5577,
+            "gauntletSpire": 1.6801
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -8166,10 +9354,13 @@
             "composite": 1.2956,
             "buildAround": 1.4151,
             "ruleLift": 1.2207,
-            "pairOutput": 2.4872
+            "pairOutput": 2.4872,
+            "gauntlet": 1.3248,
+            "gauntletHuman": 1.2766,
+            "gauntletSpire": 1.2563
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -8216,10 +9407,13 @@
             "composite": 1.2938,
             "buildAround": 1.3653,
             "ruleLift": 1.2458,
-            "pairOutput": 2.1596
+            "pairOutput": 2.1596,
+            "gauntlet": 1.4455,
+            "gauntletHuman": 1.8208,
+            "gauntletSpire": 1.6693
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -8266,10 +9460,13 @@
             "composite": 1.2896,
             "buildAround": 1.3062,
             "ruleLift": 1.0932,
-            "pairOutput": 1.8487
+            "pairOutput": 1.8487,
+            "gauntlet": 1.5938,
+            "gauntletHuman": 1.8241,
+            "gauntletSpire": 1.8569
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -8316,10 +9513,13 @@
             "composite": 1.2888,
             "buildAround": 1.3472,
             "ruleLift": 1.2424,
-            "pairOutput": 2.0712
+            "pairOutput": 2.0712,
+            "gauntlet": 1.6121,
+            "gauntletHuman": 1.7454,
+            "gauntletSpire": 1.7813
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -8366,10 +9566,13 @@
             "composite": 1.2888,
             "buildAround": 1.3855,
             "ruleLift": 1.2373,
-            "pairOutput": 2.3183
+            "pairOutput": 2.3183,
+            "gauntlet": 1.3522,
+            "gauntletHuman": 1.9389,
+            "gauntletSpire": 1.4303
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -8416,10 +9619,13 @@
             "composite": 1.2875,
             "buildAround": 1.4332,
             "ruleLift": 1.1808,
-            "pairOutput": 2.6734
+            "pairOutput": 2.6734,
+            "gauntlet": 1.9694,
+            "gauntletHuman": 1.5447,
+            "gauntletSpire": 1.7889
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -8466,10 +9672,13 @@
             "composite": 1.2872,
             "buildAround": 1.37,
             "ruleLift": 1.2628,
-            "pairOutput": 2.22
+            "pairOutput": 2.22,
+            "gauntlet": 1.5828,
+            "gauntletHuman": 1.7182,
+            "gauntletSpire": 1.7064
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -8516,10 +9725,13 @@
             "composite": 1.287,
             "buildAround": 1.409,
             "ruleLift": 1.2239,
-            "pairOutput": 2.4921
+            "pairOutput": 2.4921,
+            "gauntlet": 1.6717,
+            "gauntletHuman": 1.8697,
+            "gauntletSpire": 1.8512
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -8566,10 +9778,13 @@
             "composite": 1.2828,
             "buildAround": 1.2221,
             "ruleLift": 1.24,
-            "pairOutput": 1.422
+            "pairOutput": 1.422,
+            "gauntlet": 1.3573,
+            "gauntletHuman": 1.3925,
+            "gauntletSpire": 1.3995
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -8616,10 +9831,13 @@
             "composite": 1.2821,
             "buildAround": 1.3265,
             "ruleLift": 1.1849,
-            "pairOutput": 1.9853
+            "pairOutput": 1.9853,
+            "gauntlet": 1.7886,
+            "gauntletHuman": 1,
+            "gauntletSpire": 1.2871
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -8628,7 +9846,16 @@
           "pickRate": null,
           "funRate": null,
           "funCount": 0,
-          "alerts": [],
+          "alerts": [
+            {
+              "kind": "HUMAN_DROUGHT_GAP",
+              "category": "evolutions",
+              "itemId": "grudge-match",
+              "itemName": "Grudge Match",
+              "severity": "info",
+              "detail": "Drops -45% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.79× → human=1.00×)"
+            }
+          ],
           "meta": {
             "kind": "evolutions",
             "pair": [
@@ -8666,10 +9893,13 @@
             "composite": 1.2793,
             "buildAround": 1.2671,
             "ruleLift": 1.1959,
-            "pairOutput": 1.6621
+            "pairOutput": 1.6621,
+            "gauntlet": 1.5056,
+            "gauntletHuman": 1.3004,
+            "gauntletSpire": 1.4396
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -8716,10 +9946,13 @@
             "composite": 1.2759,
             "buildAround": 1.3697,
             "ruleLift": 1.184,
-            "pairOutput": 2.2893
+            "pairOutput": 2.2893,
+            "gauntlet": 1.4034,
+            "gauntletHuman": 1.4485,
+            "gauntletSpire": 1.5786
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -8766,10 +9999,13 @@
             "composite": 1.2642,
             "buildAround": 1.3576,
             "ruleLift": 1.2014,
-            "pairOutput": 2.2662
+            "pairOutput": 2.2662,
+            "gauntlet": 1.3152,
+            "gauntletHuman": 1.0526,
+            "gauntletSpire": 1.104
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -8816,10 +10052,13 @@
             "composite": 1.26,
             "buildAround": 1.3668,
             "ruleLift": 1.2328,
-            "pairOutput": 2.3454
+            "pairOutput": 2.3454,
+            "gauntlet": 2.0047,
+            "gauntletHuman": 2.0729,
+            "gauntletSpire": 2.2733
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -8866,10 +10105,13 @@
             "composite": 1.2591,
             "buildAround": 1.2638,
             "ruleLift": 1.1577,
-            "pairOutput": 1.7279
+            "pairOutput": 1.7279,
+            "gauntlet": 1.5954,
+            "gauntletHuman": 1.8393,
+            "gauntletSpire": 1.9062
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -8916,10 +10158,13 @@
             "composite": 1.255,
             "buildAround": 1.3881,
             "ruleLift": 1.2195,
-            "pairOutput": 2.5267
+            "pairOutput": 2.5267,
+            "gauntlet": 1.5639,
+            "gauntletHuman": 1.452,
+            "gauntletSpire": 1.4126
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -8966,10 +10211,13 @@
             "composite": 1.2548,
             "buildAround": 1.4404,
             "ruleLift": 1.2051,
-            "pairOutput": 2.9335
+            "pairOutput": 2.9335,
+            "gauntlet": 1.5147,
+            "gauntletHuman": 1.7208,
+            "gauntletSpire": 1.689
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -9016,10 +10264,13 @@
             "composite": 1.2544,
             "buildAround": 1.3715,
             "ruleLift": 1.3053,
-            "pairOutput": 2.3964
+            "pairOutput": 2.3964,
+            "gauntlet": 1.7452,
+            "gauntletHuman": 1.628,
+            "gauntletSpire": 1.597
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -9066,10 +10317,13 @@
             "composite": 1.2528,
             "buildAround": 1.2954,
             "ruleLift": 1.2156,
-            "pairOutput": 1.9267
+            "pairOutput": 1.9267,
+            "gauntlet": 1.4544,
+            "gauntletHuman": 1.763,
+            "gauntletSpire": 1.708
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -9116,10 +10370,13 @@
             "composite": 1.2502,
             "buildAround": 1.2592,
             "ruleLift": 1.1724,
-            "pairOutput": 1.736
+            "pairOutput": 1.736,
+            "gauntlet": 2.6704,
+            "gauntletHuman": 2.0334,
+            "gauntletSpire": 2.7284
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -9166,10 +10423,13 @@
             "composite": 1.2486,
             "buildAround": 1.3597,
             "ruleLift": 1.1619,
-            "pairOutput": 2.3713
+            "pairOutput": 2.3713,
+            "gauntlet": 1.9959,
+            "gauntletHuman": 1.7678,
+            "gauntletSpire": 2.1623
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -9216,10 +10476,13 @@
             "composite": 1.2478,
             "buildAround": 1.3315,
             "ruleLift": 1.126,
-            "pairOutput": 2.1911
+            "pairOutput": 2.1911,
+            "gauntlet": 1.5216,
+            "gauntletHuman": 1.7014,
+            "gauntletSpire": 1.7349
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -9266,10 +10529,13 @@
             "composite": 1.2475,
             "buildAround": 1.4923,
             "ruleLift": 1.2162,
-            "pairOutput": 3.4352
+            "pairOutput": 3.4352,
+            "gauntlet": 1,
+            "gauntletHuman": 1.0898,
+            "gauntletSpire": 1
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -9316,10 +10582,13 @@
             "composite": 1.2458,
             "buildAround": 1.2433,
             "ruleLift": 1.0559,
-            "pairOutput": 1.6829
+            "pairOutput": 1.6829,
+            "gauntlet": 1.1626,
+            "gauntletHuman": 2.1137,
+            "gauntletSpire": 1.4684
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -9328,7 +10597,16 @@
           "pickRate": null,
           "funRate": null,
           "funCount": 0,
-          "alerts": [],
+          "alerts": [
+            {
+              "kind": "HUMAN_DROUGHT_GAP",
+              "category": "evolutions",
+              "itemId": "purity-lens",
+              "itemName": "Purity Lens",
+              "severity": "info",
+              "detail": "Rises +78% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.16× → human=2.11×)"
+            }
+          ],
           "meta": {
             "kind": "evolutions",
             "pair": [
@@ -9366,10 +10644,13 @@
             "composite": 1.244,
             "buildAround": 1.4622,
             "ruleLift": 1.1538,
-            "pairOutput": 3.208
+            "pairOutput": 3.208,
+            "gauntlet": 1.3528,
+            "gauntletHuman": 1.4047,
+            "gauntletSpire": 1.2768
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -9416,10 +10697,13 @@
             "composite": 1.2416,
             "buildAround": 1.2273,
             "ruleLift": 1.1973,
-            "pairOutput": 1.5958
+            "pairOutput": 1.5958,
+            "gauntlet": 1.4488,
+            "gauntletHuman": 1.3505,
+            "gauntletSpire": 1.4289
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -9466,10 +10750,13 @@
             "composite": 1.2405,
             "buildAround": 1.2481,
             "ruleLift": 1.1602,
-            "pairOutput": 1.7161
+            "pairOutput": 1.7161,
+            "gauntlet": 2.0516,
+            "gauntletHuman": 1.4104,
+            "gauntletSpire": 1.7791
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -9478,7 +10765,16 @@
           "pickRate": null,
           "funRate": null,
           "funCount": 0,
-          "alerts": [],
+          "alerts": [
+            {
+              "kind": "HUMAN_DROUGHT_GAP",
+              "category": "evolutions",
+              "itemId": "karma",
+              "itemName": "Karma",
+              "severity": "info",
+              "detail": "Drops -33% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=2.05× → human=1.41×)"
+            }
+          ],
           "meta": {
             "kind": "evolutions",
             "pair": [
@@ -9516,10 +10812,13 @@
             "composite": 1.2385,
             "buildAround": 1.2842,
             "ruleLift": 1.1689,
-            "pairOutput": 1.9307
+            "pairOutput": 1.9307,
+            "gauntlet": 1.3441,
+            "gauntletHuman": 1.4893,
+            "gauntletSpire": 1.5205
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -9566,10 +10865,13 @@
             "composite": 1.2341,
             "buildAround": 1.5747,
             "ruleLift": 1.1671,
-            "pairOutput": 4.4116
+            "pairOutput": 4.4116,
+            "gauntlet": 1.6769,
+            "gauntletHuman": 1.6323,
+            "gauntletSpire": 1.6855
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -9616,10 +10918,13 @@
             "composite": 1.2323,
             "buildAround": 1.4578,
             "ruleLift": 1.1772,
-            "pairOutput": 3.2515
+            "pairOutput": 3.2515,
+            "gauntlet": 1.3628,
+            "gauntletHuman": 1.8112,
+            "gauntletSpire": 1.6053
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -9666,10 +10971,13 @@
             "composite": 1.23,
             "buildAround": 1.277,
             "ruleLift": 1.0744,
-            "pairOutput": 1.9411
+            "pairOutput": 1.9411,
+            "gauntlet": 1.9671,
+            "gauntletHuman": 1.9084,
+            "gauntletSpire": 2.294
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -9716,10 +11024,13 @@
             "composite": 1.2294,
             "buildAround": 1.3265,
             "ruleLift": 1.192,
-            "pairOutput": 2.2417
+            "pairOutput": 2.2417,
+            "gauntlet": 1.4112,
+            "gauntletHuman": 1.3498,
+            "gauntletSpire": 1.4523
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -9766,10 +11077,13 @@
             "composite": 1.2196,
             "buildAround": 1.2873,
             "ruleLift": 1.1789,
-            "pairOutput": 2.0373
+            "pairOutput": 2.0373,
+            "gauntlet": 1.4945,
+            "gauntletHuman": 1.1746,
+            "gauntletSpire": 1.2081
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -9816,10 +11130,13 @@
             "composite": 1.2195,
             "buildAround": 1.34,
             "ruleLift": 1.1325,
-            "pairOutput": 2.4013
+            "pairOutput": 2.4013,
+            "gauntlet": 1.3144,
+            "gauntletHuman": 1.1255,
+            "gauntletSpire": 1.1805
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -9866,10 +11183,13 @@
             "composite": 1.2106,
             "buildAround": 1.2898,
             "ruleLift": 1.1908,
-            "pairOutput": 2.0958
+            "pairOutput": 2.0958,
+            "gauntlet": 1.5192,
+            "gauntletHuman": 1.8439,
+            "gauntletSpire": 1.7375
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -9916,10 +11236,13 @@
             "composite": 1.2072,
             "buildAround": 1.3683,
             "ruleLift": 1.1359,
-            "pairOutput": 2.6881
+            "pairOutput": 2.6881,
+            "gauntlet": 1.4559,
+            "gauntletHuman": 1.5813,
+            "gauntletSpire": 1.465
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -9966,10 +11289,13 @@
             "composite": 1.2021,
             "buildAround": 1.1598,
             "ruleLift": 1.149,
-            "pairOutput": 1.4032
+            "pairOutput": 1.4032,
+            "gauntlet": 1.5675,
+            "gauntletHuman": 1.7699,
+            "gauntletSpire": 1.7174
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -10016,10 +11342,13 @@
             "composite": 1.2013,
             "buildAround": 1.1665,
             "ruleLift": 1.1592,
-            "pairOutput": 1.4376
+            "pairOutput": 1.4376,
+            "gauntlet": 1.5487,
+            "gauntletHuman": 1.6071,
+            "gauntletSpire": 1.754
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -10066,10 +11395,13 @@
             "composite": 1.2012,
             "buildAround": 1.3536,
             "ruleLift": 1.1259,
-            "pairOutput": 2.6142
+            "pairOutput": 2.6142,
+            "gauntlet": 1.2633,
+            "gauntletHuman": 1.4151,
+            "gauntletSpire": 1.2079
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -10116,10 +11448,13 @@
             "composite": 1.2008,
             "buildAround": 1.3688,
             "ruleLift": 1.0516,
-            "pairOutput": 2.7534
+            "pairOutput": 2.7534,
+            "gauntlet": 1.4805,
+            "gauntletHuman": 1.4878,
+            "gauntletSpire": 1.571
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -10166,10 +11501,13 @@
             "composite": 1.2008,
             "buildAround": 1.3607,
             "ruleLift": 1.105,
-            "pairOutput": 2.6768
+            "pairOutput": 2.6768,
+            "gauntlet": 1.3524,
+            "gauntletHuman": 1.23,
+            "gauntletSpire": 1.2443
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -10216,10 +11554,13 @@
             "composite": 1.1988,
             "buildAround": 1.423,
             "ruleLift": 1.1901,
-            "pairOutput": 3.1955
+            "pairOutput": 3.1955,
+            "gauntlet": 2.1755,
+            "gauntletHuman": 1.8864,
+            "gauntletSpire": 2.1976
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -10266,10 +11607,13 @@
             "composite": 1.197,
             "buildAround": 1.3549,
             "ruleLift": 1.2124,
-            "pairOutput": 2.633
+            "pairOutput": 2.633,
+            "gauntlet": 1.6095,
+            "gauntletHuman": 1.1951,
+            "gauntletSpire": 1.3318
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -10316,10 +11660,13 @@
             "composite": 1.193,
             "buildAround": 1.2184,
             "ruleLift": 1.1382,
-            "pairOutput": 1.7485
+            "pairOutput": 1.7485,
+            "gauntlet": 1.35,
+            "gauntletHuman": 1.557,
+            "gauntletSpire": 1.5584
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -10366,10 +11713,13 @@
             "composite": 1.1929,
             "buildAround": 1.1963,
             "ruleLift": 1.1171,
-            "pairOutput": 1.6282
+            "pairOutput": 1.6282,
+            "gauntlet": 1.1694,
+            "gauntletHuman": 1.2362,
+            "gauntletSpire": 1.176
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -10416,10 +11766,13 @@
             "composite": 1.1892,
             "buildAround": 1.3621,
             "ruleLift": 1.1203,
-            "pairOutput": 2.7613
+            "pairOutput": 2.7613,
+            "gauntlet": 1.4375,
+            "gauntletHuman": 1.721,
+            "gauntletSpire": 1.7072
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -10466,10 +11819,13 @@
             "composite": 1.1886,
             "buildAround": 1.2318,
             "ruleLift": 1.0843,
-            "pairOutput": 1.8548
+            "pairOutput": 1.8548,
+            "gauntlet": 1.2982,
+            "gauntletHuman": 1.5333,
+            "gauntletSpire": 1.5151
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -10516,10 +11872,13 @@
             "composite": 1.1875,
             "buildAround": 1.2867,
             "ruleLift": 1.093,
-            "pairOutput": 2.2132
+            "pairOutput": 2.2132,
+            "gauntlet": 1.3229,
+            "gauntletHuman": 1.2635,
+            "gauntletSpire": 1.3688
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -10566,10 +11925,13 @@
             "composite": 1.1864,
             "buildAround": 1.3987,
             "ruleLift": 1.1335,
-            "pairOutput": 3.0876
+            "pairOutput": 3.0876,
+            "gauntlet": 1.6588,
+            "gauntletHuman": 1.1673,
+            "gauntletSpire": 1.2058
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -10578,7 +11940,16 @@
           "pickRate": null,
           "funRate": null,
           "funCount": 0,
-          "alerts": [],
+          "alerts": [
+            {
+              "kind": "HUMAN_DROUGHT_GAP",
+              "category": "evolutions",
+              "itemId": "phoenix-pyre",
+              "itemName": "Phoenix Pyre",
+              "severity": "info",
+              "detail": "Drops -31% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.66× → human=1.17×)"
+            }
+          ],
           "meta": {
             "kind": "evolutions",
             "pair": [
@@ -10616,10 +11987,13 @@
             "composite": 1.1844,
             "buildAround": 1.2867,
             "ruleLift": 1.1111,
-            "pairOutput": 2.2267
+            "pairOutput": 2.2267,
+            "gauntlet": 1.8703,
+            "gauntletHuman": 1.7704,
+            "gauntletSpire": 1.9466
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -10666,10 +12040,13 @@
             "composite": 1.1744,
             "buildAround": 1.1579,
             "ruleLift": 1.1049,
-            "pairOutput": 1.4971
+            "pairOutput": 1.4971,
+            "gauntlet": 1.4795,
+            "gauntletHuman": 1.583,
+            "gauntletSpire": 1.6429
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -10716,10 +12093,13 @@
             "composite": 1.1737,
             "buildAround": 1.3154,
             "ruleLift": 1.1985,
-            "pairOutput": 2.4798
+            "pairOutput": 2.4798,
+            "gauntlet": 1.5696,
+            "gauntletHuman": 1.5068,
+            "gauntletSpire": 1.5971
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -10766,10 +12146,13 @@
             "composite": 1.1726,
             "buildAround": 1.2882,
             "ruleLift": 1.1226,
-            "pairOutput": 2.3001
+            "pairOutput": 2.3001,
+            "gauntlet": 1.3418,
+            "gauntletHuman": 1.7124,
+            "gauntletSpire": 1.5046
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -10816,10 +12199,13 @@
             "composite": 1.171,
             "buildAround": 1.3164,
             "ruleLift": 1.1334,
-            "pairOutput": 2.5167
+            "pairOutput": 2.5167,
+            "gauntlet": 1.714,
+            "gauntletHuman": 1.4811,
+            "gauntletSpire": 1.7539
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -10866,10 +12252,13 @@
             "composite": 1.1709,
             "buildAround": 1.2349,
             "ruleLift": 1.0431,
-            "pairOutput": 1.9641
+            "pairOutput": 1.9641,
+            "gauntlet": 1.2307,
+            "gauntletHuman": 1.9853,
+            "gauntletSpire": 1.7433
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -10878,7 +12267,16 @@
           "pickRate": null,
           "funRate": null,
           "funCount": 0,
-          "alerts": [],
+          "alerts": [
+            {
+              "kind": "HUMAN_DROUGHT_GAP",
+              "category": "evolutions",
+              "itemId": "overclocked-mind",
+              "itemName": "Overclocked Mind",
+              "severity": "info",
+              "detail": "Rises +58% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.23× → human=1.99×)"
+            }
+          ],
           "meta": {
             "kind": "evolutions",
             "pair": [
@@ -10916,10 +12314,13 @@
             "composite": 1.1695,
             "buildAround": 1.4814,
             "ruleLift": 1.0541,
-            "pairOutput": 4.0781
+            "pairOutput": 4.0781,
+            "gauntlet": 1.5173,
+            "gauntletHuman": 1.219,
+            "gauntletSpire": 1.2884
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -10966,10 +12367,13 @@
             "composite": 1.1669,
             "buildAround": 1.3158,
             "ruleLift": 1.1153,
-            "pairOutput": 2.5416
+            "pairOutput": 2.5416,
+            "gauntlet": 1.7859,
+            "gauntletHuman": 1.6814,
+            "gauntletSpire": 1.8044
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -11016,10 +12420,13 @@
             "composite": 1.1667,
             "buildAround": 1.2716,
             "ruleLift": 1.1157,
-            "pairOutput": 2.2181
+            "pairOutput": 2.2181,
+            "gauntlet": 1.3118,
+            "gauntletHuman": 1.8107,
+            "gauntletSpire": 1.6689
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -11066,10 +12473,13 @@
             "composite": 1.166,
             "buildAround": 1.2807,
             "ruleLift": 1.0855,
-            "pairOutput": 2.2917
+            "pairOutput": 2.2917,
+            "gauntlet": 1.746,
+            "gauntletHuman": 1.4113,
+            "gauntletSpire": 1.6012
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -11116,10 +12526,13 @@
             "composite": 1.1654,
             "buildAround": 1.2528,
             "ruleLift": 1.1303,
-            "pairOutput": 2.0939
+            "pairOutput": 2.0939,
+            "gauntlet": 1.2219,
+            "gauntletHuman": 1.5473,
+            "gauntletSpire": 1.4233
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -11166,10 +12579,13 @@
             "composite": 1.1627,
             "buildAround": 1.2146,
             "ruleLift": 1.1281,
-            "pairOutput": 1.8626
+            "pairOutput": 1.8626,
+            "gauntlet": 1.3486,
+            "gauntletHuman": 1.5934,
+            "gauntletSpire": 1.5607
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -11216,10 +12632,13 @@
             "composite": 1.1618,
             "buildAround": 1.3027,
             "ruleLift": 1.1057,
-            "pairOutput": 2.4754
+            "pairOutput": 2.4754,
+            "gauntlet": 1.4915,
+            "gauntletHuman": 1.6416,
+            "gauntletSpire": 1.5758
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -11266,10 +12685,13 @@
             "composite": 1.1569,
             "buildAround": 1.3341,
             "ruleLift": 1.1324,
-            "pairOutput": 2.7502
+            "pairOutput": 2.7502,
+            "gauntlet": 1.9168,
+            "gauntletHuman": 1.4409,
+            "gauntletSpire": 1.6343
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -11316,10 +12738,13 @@
             "composite": 1.1556,
             "buildAround": 1.1095,
             "ruleLift": 1.092,
-            "pairOutput": 1.3242
+            "pairOutput": 1.3242,
+            "gauntlet": 1.3544,
+            "gauntletHuman": 1.3464,
+            "gauntletSpire": 1.3779
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -11366,10 +12791,13 @@
             "composite": 1.1538,
             "buildAround": 1.3606,
             "ruleLift": 1.0922,
-            "pairOutput": 3.0088
+            "pairOutput": 3.0088,
+            "gauntlet": 1.9261,
+            "gauntletHuman": 1.9527,
+            "gauntletSpire": 1.7965
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -11416,10 +12844,13 @@
             "composite": 1.1525,
             "buildAround": 1.1973,
             "ruleLift": 1.115,
-            "pairOutput": 1.8064
+            "pairOutput": 1.8064,
+            "gauntlet": 1.2961,
+            "gauntletHuman": 1.5734,
+            "gauntletSpire": 1.5566
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -11466,10 +12897,13 @@
             "composite": 1.1502,
             "buildAround": 1.2439,
             "ruleLift": 1.1129,
-            "pairOutput": 2.1173
+            "pairOutput": 2.1173,
+            "gauntlet": 1.735,
+            "gauntletHuman": 1.7349,
+            "gauntletSpire": 1.911
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -11516,10 +12950,13 @@
             "composite": 1.1486,
             "buildAround": 1.1904,
             "ruleLift": 1.0938,
-            "pairOutput": 1.786
+            "pairOutput": 1.786,
+            "gauntlet": 1.7252,
+            "gauntletHuman": 1.8791,
+            "gauntletSpire": 2.0856
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -11566,10 +13003,13 @@
             "composite": 1.1448,
             "buildAround": 1.1898,
             "ruleLift": 1.0253,
-            "pairOutput": 1.8104
+            "pairOutput": 1.8104,
+            "gauntlet": 1.4874,
+            "gauntletHuman": 1.5589,
+            "gauntletSpire": 1.5969
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -11616,10 +13056,13 @@
             "composite": 1.144,
             "buildAround": 1.2589,
             "ruleLift": 1.0729,
-            "pairOutput": 2.2638
+            "pairOutput": 2.2638,
+            "gauntlet": 1.4571,
+            "gauntletHuman": 1.8159,
+            "gauntletSpire": 1.5924
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -11666,10 +13109,13 @@
             "composite": 1.144,
             "buildAround": 1.2282,
             "ruleLift": 1.0527,
-            "pairOutput": 2.0548
+            "pairOutput": 2.0548,
+            "gauntlet": 1.4243,
+            "gauntletHuman": 1.2502,
+            "gauntletSpire": 1.3786
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -11716,10 +13162,13 @@
             "composite": 1.1429,
             "buildAround": 1.1738,
             "ruleLift": 1.0255,
-            "pairOutput": 1.7225
+            "pairOutput": 1.7225,
+            "gauntlet": 1.7237,
+            "gauntletHuman": 1.7166,
+            "gauntletSpire": 1.7812
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -11766,10 +13215,13 @@
             "composite": 1.1407,
             "buildAround": 1.3106,
             "ruleLift": 1.0705,
-            "pairOutput": 2.6822
+            "pairOutput": 2.6822,
+            "gauntlet": 1.4433,
+            "gauntletHuman": 1.1873,
+            "gauntletSpire": 1.1892
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -11816,10 +13268,13 @@
             "composite": 1.1397,
             "buildAround": 1.2163,
             "ruleLift": 1.0511,
-            "pairOutput": 1.998
+            "pairOutput": 1.998,
+            "gauntlet": 1.8047,
+            "gauntletHuman": 1.2425,
+            "gauntletSpire": 1.6176
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -11828,7 +13283,16 @@
           "pickRate": null,
           "funRate": null,
           "funCount": 0,
-          "alerts": [],
+          "alerts": [
+            {
+              "kind": "HUMAN_DROUGHT_GAP",
+              "category": "evolutions",
+              "itemId": "spot-the-difference",
+              "itemName": "Spot the Difference",
+              "severity": "info",
+              "detail": "Drops -33% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.80× → human=1.24×)"
+            }
+          ],
           "meta": {
             "kind": "evolutions",
             "pair": [
@@ -11866,10 +13330,13 @@
             "composite": 1.1386,
             "buildAround": 1.1905,
             "ruleLift": 1.0822,
-            "pairOutput": 1.8345
+            "pairOutput": 1.8345,
+            "gauntlet": 1.2542,
+            "gauntletHuman": 1.2117,
+            "gauntletSpire": 1.207
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -11916,10 +13383,13 @@
             "composite": 1.1363,
             "buildAround": 1.2885,
             "ruleLift": 1.0969,
-            "pairOutput": 2.5283
+            "pairOutput": 2.5283,
+            "gauntlet": 1.3033,
+            "gauntletHuman": 1.9542,
+            "gauntletSpire": 1.6497
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -11928,7 +13398,16 @@
           "pickRate": null,
           "funRate": null,
           "funCount": 0,
-          "alerts": [],
+          "alerts": [
+            {
+              "kind": "HUMAN_DROUGHT_GAP",
+              "category": "evolutions",
+              "itemId": "high-wire",
+              "itemName": "High Wire",
+              "severity": "info",
+              "detail": "Rises +46% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.30× → human=1.95×)"
+            }
+          ],
           "meta": {
             "kind": "evolutions",
             "pair": [
@@ -11966,10 +13445,13 @@
             "composite": 1.1322,
             "buildAround": 1.183,
             "ruleLift": 1.1196,
-            "pairOutput": 1.8126
+            "pairOutput": 1.8126,
+            "gauntlet": 1.4325,
+            "gauntletHuman": 1.9077,
+            "gauntletSpire": 1.6902
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -12016,10 +13498,13 @@
             "composite": 1.1322,
             "buildAround": 1.1211,
             "ruleLift": 1.0502,
-            "pairOutput": 1.4704
+            "pairOutput": 1.4704,
+            "gauntlet": 1.8245,
+            "gauntletHuman": 1.422,
+            "gauntletSpire": 1.7457
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -12066,10 +13551,13 @@
             "composite": 1.1301,
             "buildAround": 1.2106,
             "ruleLift": 1.0647,
-            "pairOutput": 2.0079
+            "pairOutput": 2.0079,
+            "gauntlet": 1.1602,
+            "gauntletHuman": 1.235,
+            "gauntletSpire": 1.1456
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -12116,10 +13604,13 @@
             "composite": 1.1268,
             "buildAround": 1.0989,
             "ruleLift": 1.0685,
-            "pairOutput": 1.3743
+            "pairOutput": 1.3743,
+            "gauntlet": 1.0931,
+            "gauntletHuman": 1.276,
+            "gauntletSpire": 1.132
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -12166,10 +13657,13 @@
             "composite": 1.1258,
             "buildAround": 1.308,
             "ruleLift": 1.0602,
-            "pairOutput": 2.7672
+            "pairOutput": 2.7672,
+            "gauntlet": 1.4202,
+            "gauntletHuman": 1.7007,
+            "gauntletSpire": 1.59
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -12216,10 +13710,13 @@
             "composite": 1.1251,
             "buildAround": 1.2604,
             "ruleLift": 1.068,
-            "pairOutput": 2.3892
+            "pairOutput": 2.3892,
+            "gauntlet": 1.1821,
+            "gauntletHuman": 1.5093,
+            "gauntletSpire": 1.27
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -12266,10 +13763,13 @@
             "composite": 1.123,
             "buildAround": 1.179,
             "ruleLift": 1.0755,
-            "pairOutput": 1.8376
+            "pairOutput": 1.8376,
+            "gauntlet": 1.5261,
+            "gauntletHuman": 1.1854,
+            "gauntletSpire": 1.3024
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -12316,10 +13816,13 @@
             "composite": 1.1219,
             "buildAround": 1.233,
             "ruleLift": 1.0806,
-            "pairOutput": 2.2033
+            "pairOutput": 2.2033,
+            "gauntlet": 1.3245,
+            "gauntletHuman": 1.5823,
+            "gauntletSpire": 1.4981
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -12366,10 +13869,13 @@
             "composite": 1.1195,
             "buildAround": 1.2754,
             "ruleLift": 1.0862,
-            "pairOutput": 2.5376
+            "pairOutput": 2.5376,
+            "gauntlet": 2.1832,
+            "gauntletHuman": 1.6471,
+            "gauntletSpire": 2.0436
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -12416,10 +13922,13 @@
             "composite": 1.1164,
             "buildAround": 1.3156,
             "ruleLift": 1.0817,
-            "pairOutput": 2.897
+            "pairOutput": 2.897,
+            "gauntlet": 1.7105,
+            "gauntletHuman": 1.5559,
+            "gauntletSpire": 1.7741
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -12466,10 +13975,13 @@
             "composite": 1.1123,
             "buildAround": 1.17,
             "ruleLift": 1.0841,
-            "pairOutput": 1.8314
+            "pairOutput": 1.8314,
+            "gauntlet": 1.5244,
+            "gauntletHuman": 1.3159,
+            "gauntletSpire": 1.5415
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -12516,10 +14028,13 @@
             "composite": 1.1114,
             "buildAround": 1.2554,
             "ruleLift": 1.0638,
-            "pairOutput": 2.4376
+            "pairOutput": 2.4376,
+            "gauntlet": 1.2175,
+            "gauntletHuman": 1.4277,
+            "gauntletSpire": 1.4081
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -12566,10 +14081,13 @@
             "composite": 1.1088,
             "buildAround": 1.1618,
             "ruleLift": 1.0911,
-            "pairOutput": 1.7957
+            "pairOutput": 1.7957,
+            "gauntlet": 1.3419,
+            "gauntletHuman": 1.9169,
+            "gauntletSpire": 1.5754
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -12616,10 +14134,13 @@
             "composite": 1.1047,
             "buildAround": 1.1897,
             "ruleLift": 1.0478,
-            "pairOutput": 2.0032
+            "pairOutput": 2.0032,
+            "gauntlet": 1.3845,
+            "gauntletHuman": 1.7102,
+            "gauntletSpire": 1.5769
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -12666,10 +14187,13 @@
             "composite": 1.1032,
             "buildAround": 1.1788,
             "ruleLift": 1.0354,
-            "pairOutput": 1.9407
+            "pairOutput": 1.9407,
+            "gauntlet": 1.2523,
+            "gauntletHuman": 1.8871,
+            "gauntletSpire": 1.4968
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -12678,7 +14202,16 @@
           "pickRate": null,
           "funRate": null,
           "funCount": 0,
-          "alerts": [],
+          "alerts": [
+            {
+              "kind": "HUMAN_DROUGHT_GAP",
+              "category": "evolutions",
+              "itemId": "trance",
+              "itemName": "Trance",
+              "severity": "info",
+              "detail": "Rises +47% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.25× → human=1.89×)"
+            }
+          ],
           "meta": {
             "kind": "evolutions",
             "pair": [
@@ -12716,10 +14249,13 @@
             "composite": 1.1029,
             "buildAround": 1.2757,
             "ruleLift": 1.0431,
-            "pairOutput": 2.6627
+            "pairOutput": 2.6627,
+            "gauntlet": 1.2319,
+            "gauntletHuman": 1.9518,
+            "gauntletSpire": 1.586
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -12728,7 +14264,16 @@
           "pickRate": null,
           "funRate": null,
           "funCount": 0,
-          "alerts": [],
+          "alerts": [
+            {
+              "kind": "HUMAN_DROUGHT_GAP",
+              "category": "evolutions",
+              "itemId": "avalanche",
+              "itemName": "Avalanche",
+              "severity": "info",
+              "detail": "Rises +55% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.23× → human=1.95×)"
+            }
+          ],
           "meta": {
             "kind": "evolutions",
             "pair": [
@@ -12766,10 +14311,13 @@
             "composite": 1.1015,
             "buildAround": 1.3037,
             "ruleLift": 1.0562,
-            "pairOutput": 2.9111
+            "pairOutput": 2.9111,
+            "gauntlet": 1.2253,
+            "gauntletHuman": 1.3086,
+            "gauntletSpire": 1.2929
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -12816,10 +14364,13 @@
             "composite": 1.0975,
             "buildAround": 1.2972,
             "ruleLift": 1.0755,
-            "pairOutput": 2.8792
+            "pairOutput": 2.8792,
+            "gauntlet": 1.6547,
+            "gauntletHuman": 1.2541,
+            "gauntletSpire": 1.5655
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -12866,10 +14417,13 @@
             "composite": 1.0965,
             "buildAround": 1.2285,
             "ruleLift": 1.0544,
-            "pairOutput": 2.3267
+            "pairOutput": 2.3267,
+            "gauntlet": 1.1769,
+            "gauntletHuman": 1.1894,
+            "gauntletSpire": 1.1749
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -12916,10 +14470,13 @@
             "composite": 1.0888,
             "buildAround": 1.2188,
             "ruleLift": 1.0405,
-            "pairOutput": 2.3033
+            "pairOutput": 2.3033,
+            "gauntlet": 1.4706,
+            "gauntletHuman": 1.475,
+            "gauntletSpire": 1.4555
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -12966,10 +14523,13 @@
             "composite": 1.0859,
             "buildAround": 1.0892,
             "ruleLift": 1.0212,
-            "pairOutput": 1.4829
+            "pairOutput": 1.4829,
+            "gauntlet": 1.274,
+            "gauntletHuman": 1.1274,
+            "gauntletSpire": 1.1704
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -13016,10 +14576,13 @@
             "composite": 1.0849,
             "buildAround": 1.2671,
             "ruleLift": 1.0612,
-            "pairOutput": 2.7142
+            "pairOutput": 2.7142,
+            "gauntlet": 1.3868,
+            "gauntletHuman": 1.8308,
+            "gauntletSpire": 1.7143
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -13066,10 +14629,13 @@
             "composite": 1.083,
             "buildAround": 1.0744,
             "ruleLift": 1.0155,
-            "pairOutput": 1.4157
+            "pairOutput": 1.4157,
+            "gauntlet": 1.1312,
+            "gauntletHuman": 1.3874,
+            "gauntletSpire": 1.1284
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -13116,10 +14682,13 @@
             "composite": 1.0798,
             "buildAround": 1.1149,
             "ruleLift": 1.0197,
-            "pairOutput": 1.6548
+            "pairOutput": 1.6548,
+            "gauntlet": 1.2872,
+            "gauntletHuman": 1.5116,
+            "gauntletSpire": 1.4237
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -13166,10 +14735,13 @@
             "composite": 1.0793,
             "buildAround": 1.0092,
             "ruleLift": 1.0232,
-            "pairOutput": 1.1126
+            "pairOutput": 1.1126,
+            "gauntlet": 1.301,
+            "gauntletHuman": 1.6872,
+            "gauntletSpire": 1.5488
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -13216,10 +14788,13 @@
             "composite": 1.078,
             "buildAround": 1.1496,
             "ruleLift": 1.0397,
-            "pairOutput": 1.8767
+            "pairOutput": 1.8767,
+            "gauntlet": 1.4084,
+            "gauntletHuman": 1.1551,
+            "gauntletSpire": 1.2348
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -13266,10 +14841,13 @@
             "composite": 1.0707,
             "buildAround": 1.2091,
             "ruleLift": 1.018,
-            "pairOutput": 2.347
+            "pairOutput": 2.347,
+            "gauntlet": 1.2409,
+            "gauntletHuman": 1.247,
+            "gauntletSpire": 1.2871
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -13316,10 +14894,13 @@
             "composite": 1.0694,
             "buildAround": 1.2381,
             "ruleLift": 1.0414,
-            "pairOutput": 2.5845
+            "pairOutput": 2.5845,
+            "gauntlet": 1.5433,
+            "gauntletHuman": 1.5156,
+            "gauntletSpire": 1.6117
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -13366,10 +14947,13 @@
             "composite": 1.0651,
             "buildAround": 1.2258,
             "ruleLift": 1.0306,
-            "pairOutput": 2.5142
+            "pairOutput": 2.5142,
+            "gauntlet": 1.2417,
+            "gauntletHuman": 1.2573,
+            "gauntletSpire": 1.176
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -13416,10 +15000,13 @@
             "composite": 1.0635,
             "buildAround": 1.1782,
             "ruleLift": 1.0438,
-            "pairOutput": 2.1532
+            "pairOutput": 2.1532,
+            "gauntlet": 1.6949,
+            "gauntletHuman": 1.8003,
+            "gauntletSpire": 1.9701
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -13466,10 +15053,13 @@
             "composite": 1.0589,
             "buildAround": 1.1488,
             "ruleLift": 1.0539,
-            "pairOutput": 1.9689
+            "pairOutput": 1.9689,
+            "gauntlet": 1.4041,
+            "gauntletHuman": 1.5287,
+            "gauntletSpire": 1.4633
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -13516,10 +15106,13 @@
             "composite": 1.0583,
             "buildAround": 1.112,
             "ruleLift": 1.0324,
-            "pairOutput": 1.7345
+            "pairOutput": 1.7345,
+            "gauntlet": 1.3129,
+            "gauntletHuman": 1.1265,
+            "gauntletSpire": 1.1668
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -13566,10 +15159,13 @@
             "composite": 1.0576,
             "buildAround": 1.1408,
             "ruleLift": 1.0066,
-            "pairOutput": 1.9298
+            "pairOutput": 1.9298,
+            "gauntlet": 1.364,
+            "gauntletHuman": 1.0311,
+            "gauntletSpire": 1.1601
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -13616,10 +15212,13 @@
             "composite": 1.0556,
             "buildAround": 1.1154,
             "ruleLift": 1.0104,
-            "pairOutput": 1.7726
+            "pairOutput": 1.7726,
+            "gauntlet": 1.7263,
+            "gauntletHuman": 1.354,
+            "gauntletSpire": 1.8392
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -13666,10 +15265,13 @@
             "composite": 1.0544,
             "buildAround": 1.1713,
             "ruleLift": 1.0196,
-            "pairOutput": 2.1611
+            "pairOutput": 2.1611,
+            "gauntlet": 1.206,
+            "gauntletHuman": 1.2569,
+            "gauntletSpire": 1.1925
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -13716,10 +15318,13 @@
             "composite": 1.0513,
             "buildAround": 1.0999,
             "ruleLift": 1.0789,
-            "pairOutput": 1.686
+            "pairOutput": 1.686,
+            "gauntlet": 1.3909,
+            "gauntletHuman": 1.304,
+            "gauntletSpire": 1.3295
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -13766,10 +15371,13 @@
             "composite": 1.0431,
             "buildAround": 1.2291,
             "ruleLift": 1.0271,
-            "pairOutput": 2.7017
+            "pairOutput": 2.7017,
+            "gauntlet": 1.2029,
+            "gauntletHuman": 1.4201,
+            "gauntletSpire": 1.2812
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -13816,10 +15424,13 @@
             "composite": 1.0327,
             "buildAround": 1,
             "ruleLift": 1,
-            "pairOutput": 1.2219
+            "pairOutput": 1.2219,
+            "gauntlet": 1.2057,
+            "gauntletHuman": 1.47,
+            "gauntletSpire": 1.4355
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -13866,10 +15477,13 @@
             "composite": 1.0325,
             "buildAround": 1.1962,
             "ruleLift": 1.0095,
-            "pairOutput": 2.5005
+            "pairOutput": 2.5005,
+            "gauntlet": 1.5866,
+            "gauntletHuman": 1.4301,
+            "gauntletSpire": 1.7094
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -13916,10 +15530,13 @@
             "composite": 1,
             "buildAround": 1.0303,
             "ruleLift": 1.0342,
-            "pairOutput": 1.5074
+            "pairOutput": 1.5074,
+            "gauntlet": 1.2926,
+            "gauntletHuman": 1.5275,
+            "gauntletSpire": 1.4546
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -13987,10 +15604,13 @@
             "fullBuild": 1.1298,
             "pressure160": 1.8475,
             "dummy160": 4.6452,
-            "withWeapons90": 1.5836
+            "withWeapons90": 1.5836,
+            "gauntlet": 1.0419,
+            "gauntletHuman": 1.2703,
+            "gauntletSpire": 1.0181
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -14067,10 +15687,13 @@
             "fullBuild": 1.1156,
             "pressure160": 1.6017,
             "dummy160": 2.5972,
-            "withWeapons90": 1.7155
+            "withWeapons90": 1.7155,
+            "gauntlet": 1.0354,
+            "gauntletHuman": 1.1216,
+            "gauntletSpire": 1.0495
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -14147,10 +15770,13 @@
             "fullBuild": 1.2215,
             "pressure160": 1.6065,
             "dummy160": 4.083,
-            "withWeapons90": 1
+            "withWeapons90": 1,
+            "gauntlet": 1,
+            "gauntletHuman": 1,
+            "gauntletSpire": 1
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -14159,7 +15785,16 @@
           "pickRate": null,
           "funRate": null,
           "funCount": 0,
-          "alerts": [],
+          "alerts": [
+            {
+              "kind": "HUMAN_DROUGHT_GAP",
+              "category": "fighters",
+              "itemId": "Pelican",
+              "itemName": "Pelican",
+              "severity": "info",
+              "detail": "Drops -11% vs peers under calibrated human Lognormal droughts & cognitive load (gauntlet=1.00× → human=1.00×)"
+            }
+          ],
           "meta": {
             "kind": "fighters",
             "passives": [
@@ -14227,10 +15862,13 @@
             "fullBuild": 1.0878,
             "pressure160": 1,
             "dummy160": 2.5491,
-            "withWeapons90": 1.2131
+            "withWeapons90": 1.2131,
+            "gauntlet": 1.3225,
+            "gauntletHuman": 1.4865,
+            "gauntletSpire": 1.0967
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -14307,10 +15945,13 @@
             "fullBuild": 1.0514,
             "pressure160": 1.8765,
             "dummy160": 1,
-            "withWeapons90": 1.4975
+            "withWeapons90": 1.4975,
+            "gauntlet": 1.3209,
+            "gauntletHuman": 1.6433,
+            "gauntletSpire": 1.1
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -14387,10 +16028,13 @@
             "fullBuild": 1,
             "pressure160": 1.0973,
             "dummy160": 1.1408,
-            "withWeapons90": 1.1248
+            "withWeapons90": 1.1248,
+            "gauntlet": 1.1804,
+            "gauntletHuman": 1.31,
+            "gauntletSpire": 1.0708
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -14489,7 +16133,7 @@
             "shapley": 1.7196
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -14534,7 +16178,7 @@
             "shapley": 1.1512
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -14579,7 +16223,7 @@
             "shapley": 1.214
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -14624,7 +16268,7 @@
             "shapley": 1.0842
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -14669,7 +16313,7 @@
             "shapley": 1.3281
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -14714,7 +16358,7 @@
             "shapley": 1
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -14759,7 +16403,7 @@
             "shapley": 1.4007
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,
@@ -14804,7 +16448,7 @@
             "shapley": 1.1175
           },
           "credibility": "sim_only",
-          "validSince": "0.1.164",
+          "validSince": "0.1.166",
           "fights": 0,
           "effectiveN": 0,
           "uniquePlayers": 0,

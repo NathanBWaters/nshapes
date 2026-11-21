@@ -18,6 +18,7 @@ import { allSets, countDifferentAttributes, isRainbow, isSelectable } from './se
 import { albumPageOf } from './gear';
 import type { Modifiers } from '../rules/types';
 import { growthModifiers } from '../data/weaponGrowth';
+import { weaponRole, type WeaponRole } from '../data/weaponRoles';
 import { challengeCount } from './challenges';
 import { snareTarget } from './fight';
 import { armedRecipesFor, getRecipe, modifiersOf } from './sources';
@@ -37,7 +38,52 @@ export interface BotProfile {
   nearMissRate: number;
   /** Chance to guess boldly on a slow search while a grace would cover a near miss */
   boldness: number;
+  /**
+   * Optional lognormal search-time volatility `sigma`. When `> 0`, replaces the
+   * uniform `[0.6, 1.4]` pace draw with deterministic Box-Muller lognormal
+   * `clamp(exp(z * sigma), 0.30, maxPaceMultiplier ?? 5.0)` to capture human droughts.
+   * When omitted or `<= 0`, behavior is bit-for-bit identical to the uniform bot.
+   */
+  findTimeSigma?: number;
+  /** Upper multiplier cap on lognormal pace draws (default `5.0`). */
+  maxPaceMultiplier?: number;
+  /**
+   * Optional fixed motor/tap floor in seconds. When set, base median think time is
+   * `baseReactionSec + secondsPerAttribute * traits` instead of `secondsPerAttribute * traits`.
+   */
+  baseReactionSec?: number;
+  /** Per-weapon multiplicative think-time cognitive load factor (per-item clamped `[0.75, 1.35]`). */
+  cognitiveLoadByWeapon?: Readonly<Record<string, number>>;
+  /** Fallback per-role multiplicative think-time cognitive load factor (per-item clamped `[0.75, 1.35]`). */
+  cognitiveLoadByRole?: Readonly<Partial<Record<WeaponRole, number>>>;
+  /**
+   * Optional override for the chance to pause briefly during a Set-Parry wind-up to catch
+   * the golden Perfect Parry window (overrides the hardcoded `0.4` expert-only chance).
+   */
+  perfectParryWaitChance?: number;
 }
+
+/** Deterministic Box-Muller standard normal N(0, 1) using the seeded RNG. */
+const sampleStandardNormal = (rng: Rng): number => {
+  const u1 = Math.max(1e-12, rng.next());
+  const u2 = rng.next();
+  return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+};
+
+/** Compound multiplicative cognitive-load think-time factor across the equipped belt (clamped `[0.70, 1.50]`). */
+const beltCognitiveLoadFactor = (weapons: readonly Weapon[], bot: BotProfile): number => {
+  const byWeapon = bot.cognitiveLoadByWeapon;
+  const byRole = bot.cognitiveLoadByRole;
+  if (!byWeapon && !byRole) return 1;
+  let factor = 1;
+  for (const w of weapons) {
+    const raw = byWeapon?.[w.id] ?? byRole?.[weaponRole(w.id)];
+    if (raw !== undefined && Number.isFinite(raw) && raw > 0) {
+      factor *= Math.min(1.35, Math.max(0.75, raw));
+    }
+  }
+  return Math.min(1.5, Math.max(0.7, factor));
+};
 
 export const BOTS: Record<'novice' | 'average' | 'expert', BotProfile> = {
   novice: { name: 'novice', secondsPerAttribute: 3.2, mistakeRate: 0.18, huntsRainbows: false, hintEagerness: 0.75, nearMissRate: 0.6, boldness: 0.4 },
@@ -204,7 +250,16 @@ const chooseSet = (s: RunState, sets: Card[][], bot: BotProfile, rng: Rng, m: Mo
   const chestThreshold = (m.chestStart ?? 8) + 3 * (m.chestGrowth ?? 2);
   const surgeMult = s.surge?.active ? 1.5 : 1;
   // Decoy is unmarked on purpose: human visual spotting scales modestly by skill tier (no X-ray cheating)
-  const decoySight = bot.name === 'expert' ? 0.3 : bot.name === 'average' ? 0.15 : 0.05;
+  const decoySight =
+    bot.name === 'expert'
+      ? 0.3
+      : bot.name === 'average'
+        ? 0.15
+        : bot.name === 'novice'
+          ? 0.05
+          : bot.huntsRainbows
+            ? 0.2
+            : 0.05;
   const nAttrs = s.attributes.length;
 
   let bestScore = -Infinity;
@@ -573,12 +628,23 @@ const playRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: nu
     // Fewer cards to scan is a faster search: a board eaten down to half size takes ~70% as long
     const fullBoard = s.level.rules.boardSize ?? getBoardSizeForAttributes(s.attributes.length);
     const crowd = Math.sqrt(Math.min(1, Math.max(0.25, s.board.filter(isSelectable).length / fullBoard)));
-    const pace = 0.6 + rng.next() * 0.8;
+    const sigma = bot.findTimeSigma && bot.findTimeSigma > 0 ? bot.findTimeSigma : 0;
+    const pace =
+      sigma > 0
+        ? Math.min(bot.maxPaceMultiplier ?? 5.0, Math.max(0.3, Math.exp(sampleStandardNormal(rng) * sigma)))
+        : 0.6 + rng.next() * 0.8;
     // A simplified board unifies 1 trait (or 2 on double Clarity Lens)
     const traits = Math.max(1, s.attributes.length - (s.simplified ? (s.simplified.also ? 2 : 1) : 0));
     // A wild card makes a Set with any two cards, cutting scan time substantially
     const wild = s.board.some(c => c.isWild && isSelectable(c)) ? 0.65 : 1;
-    let think = bot.secondsPerAttribute * traits * pace * glow * crowd * wild;
+    const baseThink =
+      bot.baseReactionSec !== undefined && Number.isFinite(bot.baseReactionSec)
+        ? Math.max(0, bot.baseReactionSec) + bot.secondsPerAttribute * traits
+        : bot.secondsPerAttribute * traits;
+    let think = baseThink * pace * glow * crowd * wild;
+    if (bot.cognitiveLoadByWeapon || bot.cognitiveLoadByRole) {
+      think *= beltCognitiveLoadFactor(s.weapons, bot);
+    }
     // A slow search (or a "use hints" goal) is when a real player presses the bulb
     const slow = pace > 1;
     const goals = chasing(s);
@@ -634,6 +700,12 @@ const playRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: nu
     // Set-Parry deadline awareness: rush or hint to parry before an unparried strike hits;
     // experts occasionally pause 1-2s to catch the golden Perfect Parry window!
     const focus = bot.name === 'expert' ? 0.96 : bot.huntsRainbows ? 0.85 : 0.6;
+    const parryWaitChance =
+      bot.perfectParryWaitChance !== undefined
+        ? bot.perfectParryWaitChance
+        : bot.name === 'expert'
+          ? 0.4
+          : 0;
     if (s.parry && s.parry.phase === 'windup') {
       const parryLeft = s.parry.msLeft / 1000 - 1;
       if (think > parryLeft && rng.next() < focus) {
@@ -647,13 +719,13 @@ const playRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: nu
           rushed = true;
         }
       } else if (
-        bot.name === 'expert' &&
+        parryWaitChance > 0 &&
         s.parry.msLeft > 3500 &&
         s.parry.msLeft <= 5500 &&
         think < (s.parry.msLeft - 3000) / 1000 &&
         s.combo === 0 &&
         !((runMods.glassDamage ?? 0) > 0 && !s.gear.glassBroken) &&
-        rng.next() < 0.4
+        rng.next() < parryWaitChance
       ) {
         think = Math.max(think, (s.parry.msLeft - 2500) / 1000);
       }

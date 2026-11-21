@@ -8,6 +8,8 @@ import {
   findItemInReport,
   renderPowerRankCompact,
   renderPowerRankMarkdown,
+  SOLO_TESTER_MIN_BLEND_FIGHTS,
+  SOLO_TESTER_PRIOR_K,
   type EvolutionEntryMeta,
   type LiveItemSignalLike,
   type PostHogSignalsInput,
@@ -15,6 +17,7 @@ import {
   type WeaponEntryMeta,
 } from '@/adventure/balance/powerRank';
 import type { FullBalanceAtlasData } from '@/adventure/balance/analytics';
+import type { GauntletReport } from '@/adventure/balance/gauntlet';
 import type { Snapshot } from '@/adventure/balance/report';
 import { BALANCE_ERA_MANIFEST } from '@/analytics/balanceEras';
 import { analyzePostHogForBalance } from '@/analytics/posthogRules';
@@ -216,6 +219,7 @@ describe('powerRank engine (1.00x weakest-anchored power rankings)', () => {
         kept: 0,
         droppedByVersion: 100,
         droppedByEnv: 0,
+        droppedByE2eBot: 0,
         droppedByMode: 0,
         droppedByPractice: 0,
         droppedByBug: 0,
@@ -349,5 +353,89 @@ describe('powerRank engine (1.00x weakest-anchored power rankings)', () => {
       1.0,
       4
     );
+  });
+
+  it('supports --solo-tester mode (priorK=12, minBlendFights=3, low-N lift clamp, lower alert thresholds, and [SOLO-TESTER] banner)', () => {
+    const posthog: PostHogSignalsInput = {
+      soloTester: true,
+      weapons: [
+        // 2 fights (< minBlendFights=3): live diagnostics shown, but liveWeight === 0 so 2-fight flukes do not warp ranks
+        makeSignal('weapons', 'fortunes-favor', {
+          fights: 2,
+          effectiveN: 2,
+          uniquePlayers: 1,
+          liveLogLift: 0.9,
+          credibility: 'exploratory',
+        }),
+        // 6 fights (< 10): priorK=12 => w = 6/18 = 1/3, liveLogLift clamped to ±0.50, triggers BOT_BLIND_SLEEPER at n>=5
+        makeSignal('weapons', 'echo-stone', {
+          fights: 6,
+          effectiveN: 6,
+          uniquePlayers: 1,
+          liveLogLift: 0.95, // should be clamped to 0.50
+          funRate: 0.95,
+          funCount: 3, // triggers FUN_POWER_GAP in soloTester (minFunCount=3) if in bottom quartile
+          credibility: 'emerging',
+        }),
+      ],
+    };
+
+    const simOnly = computePowerRankings({ snapshot: SNAPSHOT, analytics: ANALYTICS });
+    const solo = computePowerRankings({ snapshot: SNAPSHOT, analytics: ANALYTICS, posthog, soloTester: true });
+
+    expect(solo.soloTester).toBe(true);
+    expect(solo.priorK).toBe(SOLO_TESTER_PRIOR_K);
+    expect(SOLO_TESTER_MIN_BLEND_FIGHTS).toBe(3);
+
+    const ff = solo.categories.weapons.entries.find(e => e.id === 'fortunes-favor')!;
+    const ffSim = simOnly.categories.weapons.entries.find(e => e.id === 'fortunes-favor')!;
+    expect(ff.fights).toBe(2);
+    expect(ff.liveWeight).toBe(0);
+    expect(ff.rawBlendedIndex).toBeCloseTo(ffSim.rawSimIndex, 4);
+
+    const es = solo.categories.weapons.entries.find(e => e.id === 'echo-stone')!;
+    const esSim = simOnly.categories.weapons.entries.find(e => e.id === 'echo-stone')!;
+    expect(es.liveWeight).toBeCloseTo(6 / (6 + 12), 4);
+    // Clamped to +0.50 instead of +0.95
+    expect(es.rawBlendedIndex).toBeCloseTo(esSim.rawSimIndex * Math.exp((6 / 18) * 0.5), 3);
+    expect(es.alerts.some(a => a.kind === 'BOT_BLIND_SLEEPER')).toBe(true);
+
+    const md = renderPowerRankMarkdown(solo);
+    const compact = renderPowerRankCompact(solo);
+    expect(md).toContain('[SOLO-TESTER]');
+    expect(compact).toContain('[SOLO-TESTER]');
+  });
+
+  it('loads docs/balance-gauntlet.json and exposes gauntlet, gauntletHuman, and gauntletSpire 1.00x lenses plus HUMAN_DROUGHT_GAP highlights', () => {
+    const gauntletPath = path.join(DOCS, 'balance-gauntlet.json');
+    expect(fs.existsSync(gauntletPath)).toBe(true);
+    const gauntlet: GauntletReport = JSON.parse(fs.readFileSync(gauntletPath, 'utf8'));
+
+    for (const lens of ['gauntlet', 'gauntletHuman', 'gauntletSpire'] as const) {
+      const report = computePowerRankings({
+        snapshot: SNAPSHOT,
+        analytics: ANALYTICS,
+        gauntlet,
+        lenses: { weapons: lens, evolutions: lens, fighters: lens },
+      });
+      expect(report.hasGauntletData).toBe(true);
+      for (const cat of ['weapons', 'evolutions', 'fighters'] as const) {
+        const cr = report.categories[cat];
+        expect(cr.lens).toBe(lens);
+        expect(cr.entries[cr.entries.length - 1].powerMult).toBeCloseTo(1.0, 4);
+        expect(cr.entries[0].powerMult).toBeGreaterThan(1.0);
+      }
+    }
+
+    const humanReport = computePowerRankings({
+      snapshot: SNAPSHOT,
+      analytics: ANALYTICS,
+      gauntlet,
+      lenses: { weapons: 'gauntletHuman', fighters: 'gauntletHuman' },
+    });
+    expect(humanReport.alerts.some(a => a.kind === 'HUMAN_DROUGHT_GAP')).toBe(true);
+    const md = renderPowerRankMarkdown(humanReport, { top: 5, bottom: 3 });
+    expect(md).toContain('Bot-vs-Human Gauntlet Delta Highlights');
+    expect(md).toContain('Gauntlet (Hum)');
   });
 });
