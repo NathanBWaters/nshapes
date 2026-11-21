@@ -12,6 +12,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Platform } from 'react-native';
 import Animated, { cancelAnimation, useSharedValue, useAnimatedStyle, withDelay, withRepeat, withSequence, withTiming, Easing } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CardBoardProvider, type CardBoardOverlay } from '@/components/Card';
 import GameBoard from '@/components/GameBoard';
 import Icon, { type IconName } from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
@@ -25,12 +26,13 @@ import { COLORS } from '@/utils/colors';
 import { EASE, MS } from '@/utils/motion';
 import { recordComponentRender, registerInterval } from '@/utils/perfWatchdog';
 import type { Card, CardReward, CharacterName, Weapon } from '@/types';
-import type { WeaponEffectResult } from '@/utils/weaponEffects';
+import { getAdjacentIndices, type WeaponEffectResult } from '@/utils/weaponEffects';
 import { band, music, sfx } from '@/audio';
 import { moodOf, playSounds, soundsFor } from '@/audio/fightAudio';
 import type { AdventureSave, EvolutionRecipe, FeatureFlag, LevelDef, PassiveId, RunEventType, RunState } from '../types';
 import type { WeaponBuilds } from '../data/weaponStats';
-import { createRun, runReducer, shopPrice, rerollCost, xpForLevel, type RunAction, type RunOverrides } from '../engine/run';
+import { activeEnemyCounters, createRun, runReducer, shopPrice, rerollCost, xpForLevel, type RunAction, type RunOverrides } from '../engine/run';
+import { nextCatalystRecipe } from '../engine/fight';
 import { boardHasCounterSet } from '../engine/parry';
 import { FightRecorder, type FightTape } from '../engine/replay';
 import { challengeProgress } from '../engine/challenges';
@@ -48,8 +50,9 @@ import { COACH_KEYS } from '../progress';
 import { checksOfSet, computeLiveGuidance, describeSingleCardTraits, explainInvalidPick, fightRemarks, shouldShowDamageNumbers, shouldShowPassiveHud, showsTraitChecks, traitAddedBy } from '../coach';
 import StageBubble from './StageBubble';
 import TraitChecks, { TRAIT_CHECKS_HEIGHT } from './TraitChecks';
-import { EVOLUTION_RULES } from '../engine/sources';
+import { EVOLUTION_RULES, getRecipe } from '../engine/sources';
 import { Anchor, AnchorsProvider, EVENT_FX, EvolutionCutIn, FxStage, GearBelt, KillCamOverlay, MultiplierIgnition, SLOWMO_HOLD_MS, SLOWMO_IMPACT_DELAY_MS, SLOWMO_REDUCED_TOTAL_MS, SLOWMO_RELEASE_MS, SLOWMO_SETTLE_PAD_MS, fxClock, scriptFor, useAnchors, useFightFx, type Beat } from '../fx';
+import { counterForWeapon } from '../fx/GearBelt';
 import { Banner } from '../fx/visuals';
 import { Btn, CoinPill, DARK, Eyebrow, Heart, INK, PopIn, TONE } from './ui';
 import { EvolutionBanner, EvolutionRing, MegaFlash } from './RunFx';
@@ -585,6 +588,71 @@ const AdventureRun: React.FC<Props> = ({
   const evolutionsUsed = Number.isFinite(run.evolutionCap) ? `${run.evolutionsTriggered}/${run.evolutionCap}` : `${run.evolutionsTriggered} so far`;
   /** Armed recipes a Catalyst could still start: one that is running cannot be triggered again until it ends */
   const idleArmed = run.armedRecipes.filter(id => !run.activeEvolutions.some(a => a.id === id)).length;
+  const enemyCounters = useMemo(
+    () => activeEnemyCounters({ foe: run.foe, stats: run.stats, baseChances: run.baseChances }),
+    [run.foe, run.stats, run.baseChances]
+  );
+  const nextEvoId = useMemo(() => {
+    const fallback = nextCatalystRecipe({
+      armedRecipes: run.armedRecipes,
+      activeEvolutions: run.activeEvolutions,
+      forgedRecipes: run.forgedRecipes,
+    });
+    return catalystOnBoard ? (run.catalystRecipeId ?? fallback) : fallback;
+  }, [catalystOnBoard, run.catalystRecipeId, run.armedRecipes, run.activeEvolutions, run.forgedRecipes]);
+  const nextEvoRecipe = nextEvoId ? getRecipe(nextEvoId) : undefined;
+  const catalystTargetName = catalystOnBoard ? (nextEvoRecipe?.name ?? null) : null;
+
+  const mirrorActive = (gearMods.mirrorDamage ?? 0) > 0;
+  const mirrorDepth = Math.round(gearMods.mirrorDepth ?? 0);
+  const tightropeActive = (gearMods.tightropeDamage ?? 0) > 0;
+  const mirrorCardIds = useMemo(() => {
+    if (!mirrorActive || run.gear.lastSetSlots.length === 0) return undefined;
+    const slots = [run.gear.lastSetSlots, ...run.gear.mirrorMemory.slice(0, mirrorDepth)].flat();
+    const ids = new Set<string>();
+    for (const idx of slots) {
+      const id = run.board[idx]?.id;
+      if (id) ids.add(id);
+    }
+    return ids.size > 0 ? ids : undefined;
+  }, [mirrorActive, mirrorDepth, run.board, run.gear.lastSetSlots, run.gear.mirrorMemory]);
+  const tightropeCardIds = useMemo(() => {
+    if (!tightropeActive || run.gear.lastSetSlots.length === 0) return undefined;
+    const ids = new Set<string>();
+    for (const idx of run.gear.lastSetSlots) {
+      const selfId = run.board[idx]?.id;
+      if (selfId) ids.add(selfId);
+      for (const adj of getAdjacentIndices(idx, run.board.length)) {
+        const adjId = run.board[adj]?.id;
+        if (adjId) ids.add(adjId);
+      }
+    }
+    return ids.size > 0 ? ids : undefined;
+  }, [tightropeActive, run.board, run.gear.lastSetSlots]);
+  const hasHotPotatoCard = useMemo(() => run.board.some(c => !!c.hot), [run.board]);
+  const potatoAtMs = hasHotPotatoCard && run.gear.potatoAtMs > 0 ? run.gear.potatoAtMs : undefined;
+  const hasTimedGambleCard = useMemo(
+    () =>
+      run.board.some(
+        c =>
+          c.thornAt !== undefined ||
+          c.fuseAt !== undefined ||
+          c.cursedUntil !== undefined ||
+          c.fogFlipAt !== undefined ||
+          (!!c.hot && run.gear.potatoAtMs > 0)
+      ),
+    [run.board, run.gear.potatoAtMs]
+  );
+  const gambleClockMs = hasTimedGambleCard ? Math.floor(run.elapsedMs / 1000) * 1000 : null;
+  const cardBoardOverlay = useMemo<CardBoardOverlay>(
+    () => ({
+      mirrorCardIds,
+      tightropeCardIds,
+      catalystRecipeName: catalystTargetName,
+      potatoAtMs,
+    }),
+    [mirrorCardIds, tightropeCardIds, catalystTargetName, potatoAtMs]
+  );
   const leavePractice = () => { music.stop(); onFinish(runRef.current, recordingOf()); };
 
   const movesChip = run.movesLeft !== null && (
@@ -862,7 +930,7 @@ const AdventureRun: React.FC<Props> = ({
             </Anchor>
           )}
           {/* The weapons in play: each jumps & pops its live value badge when it contributes; tap one to read it */}
-          <GearBelt weapons={run.weapons} growth={run.growth} ignition={run.lastSetIgnition} reduced={!effects} width={stage.w} onInspect={setInspect} />
+          <GearBelt weapons={run.weapons} growth={run.growth} ignition={run.lastSetIgnition} counters={enemyCounters} reduced={!effects} width={stage.w} onInspect={setInspect} />
           <View style={{ flex: 1 }} />
           {run.features.has('coins') && <Anchor name="coins"><CoinPill coins={run.coins} /></Anchor>}
           {run.features.has('hints') && (
@@ -890,8 +958,8 @@ const AdventureRun: React.FC<Props> = ({
           </Anchor>
         )}
 
-        {/* Live Arcana, Escalating Purity, board effects & Evolution status strip */}
-        {(run.arcana.length > 0 || purityLive || evolutionsOn || run.simplified || run.doubleNext > 0 || run.nextSetMultiplier > 1 || hasGearChips(gearMods)) && (
+        {/* Live Arcana, Role Set Bonuses, Escalating Purity, board effects & Evolution status strip */}
+        {(run.arcana.length > 0 || purityLive || evolutionsOn || run.simplified || run.doubleNext > 0 || run.nextSetMultiplier > 1 || hasGearChips(gearMods, run.weapons)) && (
           <View style={st.synergyRow}>
             {run.arcana.map(id => (
               <TouchableOpacity
@@ -972,9 +1040,11 @@ const AdventureRun: React.FC<Props> = ({
                 activeOpacity={0.75}
                 accessibilityRole="button"
                 accessibilityLabel={
-                  idleArmed === 0
-                    ? `Evolving, ${evolutionsUsed} used. No Catalyst until an evolution ends`
-                    : `${idleArmed} evolutions armed, ${evolutionsUsed} used, ${Math.round(run.evolutionLikelihood)} percent catalyst chance`
+                  catalystOnBoard && catalystTargetName
+                    ? `Catalyst on board for ${catalystTargetName}. Match it to evolve.`
+                    : idleArmed === 0
+                      ? `Evolving, ${evolutionsUsed} used. No Catalyst until an evolution ends`
+                      : `${idleArmed} evolutions armed${nextEvoRecipe ? `, next ${nextEvoRecipe.name}` : ''}, ${evolutionsUsed} used, ${Math.round(run.evolutionLikelihood)} percent catalyst chance`
                 }
                 style={[st.evoChip, catalystOnBoard && st.evoChipReady, evolutionsLeft <= 0 && { opacity: 0.55 }]}
               >
@@ -983,10 +1053,12 @@ const AdventureRun: React.FC<Props> = ({
                   {evolutionsLeft <= 0
                     ? `Evolutions ${evolutionsUsed}`
                     : catalystOnBoard
-                      ? 'CATALYST! Match it to evolve'
+                      ? (catalystTargetName ? `CATALYST: ${catalystTargetName}` : 'CATALYST! Match it to evolve')
                       : idleArmed === 0
                         ? `Evolving · ${evolutionsUsed}`
-                        : `${idleArmed} armed · ${Math.round(run.evolutionLikelihood)}% · ${evolutionsUsed}`}
+                        : nextEvoRecipe
+                          ? `Next: ${nextEvoRecipe.name} · ${Math.round(run.evolutionLikelihood)}% · ${evolutionsUsed}`
+                          : `${idleArmed} armed · ${Math.round(run.evolutionLikelihood)}% · ${evolutionsUsed}`}
                 </Text>
               </TouchableOpacity>
             )}
@@ -1070,33 +1142,35 @@ const AdventureRun: React.FC<Props> = ({
             <Text style={st.frozenText}>FROZEN {Math.ceil(run.frozenMs / 1000)}s</Text>
           </View>
         )}
-        <GameBoard
-          cards={run.board}
-          connections={run.connections}
-          onMatch={handleMatch}
-          onInvalidSelection={handleInvalid}
-          playerStats={run.stats}
-          weapons={run.weapons}
-          isPlayerTurn={run.status === 'playing' && !halted && !fx.cutIn}
-          activeAttributes={run.attributes}
-          onUseHint={handleUseHint}
-          triggerHint={hintTrigger}
-          onCardBurn={handleBurn}
-          isPaused={!ticking}
-          lastMatchTime={lastMatchTime}
-          autoPlayer={autoPlayer}
-          enemy={run.foe}
-          hideEnemyOverlay
-          glowingCardIds={activeGlowIds}
-          dimmedCardIds={activeDimIds}
-          dimmedOpacity={liveGuidance?.dimOpacity}
-          onSelectedCountChange={handleSelectedCount}
-          onSelectedCardsChange={setBoardSelectedCards}
-          onBoardIdleChange={handleBoardIdle}
-          slotRef={slotRef}
-          onSlotLayout={anchors.measure}
-          quietRewards
-        />
+        <CardBoardProvider overlay={cardBoardOverlay} clockMs={gambleClockMs}>
+          <GameBoard
+            cards={run.board}
+            connections={run.connections}
+            onMatch={handleMatch}
+            onInvalidSelection={handleInvalid}
+            playerStats={run.stats}
+            weapons={run.weapons}
+            isPlayerTurn={run.status === 'playing' && !halted && !fx.cutIn}
+            activeAttributes={run.attributes}
+            onUseHint={handleUseHint}
+            triggerHint={hintTrigger}
+            onCardBurn={handleBurn}
+            isPaused={!ticking}
+            lastMatchTime={lastMatchTime}
+            autoPlayer={autoPlayer}
+            enemy={run.foe}
+            hideEnemyOverlay
+            glowingCardIds={activeGlowIds}
+            dimmedCardIds={activeDimIds}
+            dimmedOpacity={liveGuidance?.dimOpacity}
+            onSelectedCountChange={handleSelectedCount}
+            onSelectedCardsChange={setBoardSelectedCards}
+            onBoardIdleChange={handleBoardIdle}
+            slotRef={slotRef}
+            onSlotLayout={anchors.measure}
+            quietRewards
+          />
+        </CardBoardProvider>
       </View>
 
       {/* Everything that is playing right now */}
@@ -1252,7 +1326,19 @@ const AdventureRun: React.FC<Props> = ({
       <Modal visible={!!inspect} transparent animationType="fade" onRequestClose={() => setInspect(null)}>
         <View style={st.overlay}>
           <PopIn style={[st.panel, { padding: 12 }]}>
-            {inspect && <WeaponExplainer weapon={run.weapons.find(w => w.id === inspect.id) ?? inspect} build={run.weaponBuilds[inspect.id]} growth={run.growth} defaultOpen />}
+            {inspect && (() => {
+              const liveWeapon = run.weapons.find(w => w.id === inspect.id) ?? inspect;
+              return (
+                <WeaponExplainer
+                  weapon={liveWeapon}
+                  build={run.weaponBuilds[inspect.id]}
+                  growth={run.growth}
+                  heldWeapons={run.weapons}
+                  counter={counterForWeapon(liveWeapon, enemyCounters)}
+                  defaultOpen
+                />
+              );
+            })()}
             <Btn testID="inspect-close" label="Back to the fight" onPress={() => setInspect(null)} />
           </PopIn>
         </View>

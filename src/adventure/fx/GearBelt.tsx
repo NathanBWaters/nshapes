@@ -19,6 +19,7 @@ import type { Weapon } from '@/types';
 import { COLORS } from '@/utils/colors';
 import { EASE, exitMs, MS, SCALE } from '@/utils/motion';
 import { growthStacks, type GrowthState } from '../data/weaponGrowth';
+import type { ActiveWeaponCounter } from '../engine/fight';
 import type { BeltBadge, SetIgnition } from '../types';
 import { Anchor, useBump } from './anchors';
 
@@ -33,15 +34,42 @@ const BADGE_BG: Record<BeltBadge['kind'], string> = {
   fx: '#D97706',
 };
 
+const SPECIAL_EFFECT_COUNTER: Partial<Record<NonNullable<Weapon['specialEffect']>, ActiveWeaponCounter['type']>> = {
+  fire: 'fire',
+  explosive: 'explosion',
+  laser: 'laser',
+  hintGain: 'hint',
+  graceGain: 'grace',
+  timeGain: 'time',
+  healing: 'healing',
+};
+
+/** Returns the active enemy counter dampening this weapon, if any. */
+export const counterForWeapon = (
+  weapon: Weapon,
+  counters?: readonly ActiveWeaponCounter[]
+): ActiveWeaponCounter | undefined => {
+  if (!counters || counters.length === 0) return undefined;
+  const byStat = counters.find(c => {
+    const val = weapon.effects?.[c.stat];
+    return typeof val === 'number' && val > 0;
+  });
+  if (byStat) return byStat;
+  const specialType = weapon.specialEffect ? SPECIAL_EFFECT_COUNTER[weapon.specialEffect] : undefined;
+  if (!specialType) return undefined;
+  return counters.find(c => c.type === specialType);
+};
+
 const BeltItem: React.FC<{
   weapon: Weapon;
   size: number;
   stacks: number;
+  counter?: ActiveWeaponCounter;
   badge?: BeltBadge;
   ignitionId?: number;
   reduced?: boolean;
   onPress: () => void;
-}> = ({ weapon, size, stacks, badge, ignitionId, reduced = false, onPress }) => {
+}> = ({ weapon, size, stacks, counter, badge, ignitionId, reduced = false, onPress }) => {
   const [fired, setFired] = useState(0);
   const [shownBadge, setShownBadge] = useState<BeltBadge | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -92,17 +120,27 @@ const BeltItem: React.FC<{
     transform: [{ translateY: badgeY.value }, { scale: badgeScale.value }],
   }));
 
+  const a11yParts = [weapon.name];
+  if (stacks > 0) a11yParts.push(`grown ${Math.round(stacks)} times`);
+  if (counter) a11yParts.push(`countered by foe −${counter.reduction}% (${counter.label})`);
+
   return (
     <Anchor name={`weapon:${weapon.id}`}>
       <TouchableOpacity
         onPress={onPress}
         activeOpacity={0.7}
-        style={[st.item, { width: size + 6, height: size + 6 }]}
+        style={[st.item, counter && st.itemCountered, { width: size + 6, height: size + 6 }]}
         accessibilityRole="button"
-        accessibilityLabel={stacks > 0 ? `${weapon.name}, grown ${Math.round(stacks)} times: what it does` : `${weapon.name}: what it does`}
+        accessibilityLabel={`${a11yParts.join(', ')}: what it does`}
         testID={`belt-${weapon.id}`}
       >
         <WeaponAvatar weapon={weapon} size={size} triggerKey={fired} />
+        {/* Enemy counter debuff indicator when the active foe weakens this weapon's category */}
+        {counter && (
+          <View style={st.counterBadge} testID={`belt-counter-${weapon.id}`} pointerEvents="none">
+            <Text style={st.counterBadgeText} numberOfLines={1}>−{counter.reduction}%</Text>
+          </View>
+        )}
         {/* How far it has grown this fight */}
         {stacks > 0 && (
           <View style={st.stacks} testID={`belt-stacks-${weapon.id}`} pointerEvents="none">
@@ -128,10 +166,11 @@ export const GearBelt: React.FC<{
   weapons: readonly Weapon[];
   growth?: GrowthState;
   ignition?: SetIgnition | null;
+  counters?: readonly ActiveWeaponCounter[];
   reduced?: boolean;
   width: number;
   onInspect: (w: Weapon) => void;
-}> = ({ weapons, growth, ignition, reduced, width, onInspect }) => {
+}> = ({ weapons, growth, ignition, counters, reduced, width, onInspect }) => {
   if (weapons.length === 0) return null;
   const room = (width - 20 - GAP * (weapons.length - 1)) / weapons.length - 6;
   const size = Math.max(MIN_ICON, Math.min(MAX_ICON, Math.floor(room)));
@@ -143,6 +182,7 @@ export const GearBelt: React.FC<{
           weapon={w}
           size={size}
           stacks={growth ? growthStacks(growth, w.id) : 0}
+          counter={counterForWeapon(w, counters)}
           badge={ignition?.beltBadges?.[w.id]}
           ignitionId={ignition?.id}
           reduced={reduced}
@@ -158,6 +198,27 @@ const st = StyleSheet.create({
   stacks: { position: 'absolute', top: -6, right: -6, minWidth: 16, paddingHorizontal: 2, borderRadius: 8, backgroundColor: COLORS.actionYellow, borderWidth: 1.5, borderColor: COLORS.slateCharcoal, alignItems: 'center', zIndex: 5 },
   stacksText: { fontSize: 9, fontWeight: '900', color: COLORS.slateCharcoal },
   item: { alignItems: 'center', justifyContent: 'center', borderRadius: 7, borderWidth: 1.5, borderColor: COLORS.slateCharcoal, backgroundColor: COLORS.paperBeige, overflow: 'visible' },
+  itemCountered: { borderColor: '#DC2626', backgroundColor: '#FEE2E2' },
+  counterBadge: {
+    position: 'absolute',
+    top: -6,
+    left: -6,
+    paddingHorizontal: 2.5,
+    paddingVertical: 0.5,
+    borderRadius: 6,
+    backgroundColor: '#B91C1C',
+    borderWidth: 1,
+    borderColor: COLORS.slateCharcoal,
+    alignItems: 'center',
+    zIndex: 7,
+  },
+  counterBadgeText: {
+    fontSize: 7.5,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    fontVariant: ['tabular-nums'],
+    lineHeight: 9,
+  },
   triggerBadge: {
     position: 'absolute',
     bottom: -6,

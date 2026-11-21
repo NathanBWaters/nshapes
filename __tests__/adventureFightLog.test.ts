@@ -96,11 +96,30 @@ describe('fight log', () => {
     const surgeEntry = surged.log[surged.log.length - 1];
     expect(surgeEntry.set?.surgeMultiplier).toBe(SURGE_RULES.multiplier);
     expect(surgeEntry.set?.hit).toBe(surgeEntry.setDamage);
-    expect(setMathRows(surgeEntry.set!)).toEqual(
-      expect.arrayContaining([expect.objectContaining({ label: 'Shading Surge', value: `×${SURGE_RULES.multiplier}` })])
-    );
+    const surgeRows = setMathRows(surgeEntry.set!);
+    const surgeMatches = surgeRows.filter(r => r.label === 'Shading Surge');
+    expect(surgeMatches).toHaveLength(1);
+    expect(surgeMatches[0].value).toBe(`×${SURGE_RULES.multiplier}`);
     expect(entrySummary(surgeEntry)).toContain(`Surge ×${SURGE_RULES.multiplier}`);
     for (const l of describeLines(surgeEntry.lines)) expect(l.label).toBeTruthy();
+
+    // Unified add-first math: flat bonuses sum with cards BEFORE Shading Surge ×5 (never duplicated!)
+    let surgedFlat = startFight({
+      level: testLevel({ foes: [{ name: 'Dummy', hp: 999 }], rules: { shadingSurge: true, timer: 300, boardSize: 15 } }),
+      save: { upgrades: { heavy_hitter: 2 } },
+      features: ['hearts'],
+    });
+    surgedFlat = tick(surgedFlat, SURGE_RULES.calmMs);
+    surgedFlat = playSet(surgedFlat);
+    const flatSurgeEntry = surgedFlat.log[surgedFlat.log.length - 1];
+    const flatSurgeRows = setMathRows(flatSurgeEntry.set!);
+    expect(flatSurgeRows.filter(r => r.label === 'Shading Surge')).toHaveLength(1);
+    const subtotalRow = flatSurgeRows.find(r => r.subtotal);
+    const surgeRowIdx = flatSurgeRows.findIndex(r => r.label === 'Shading Surge');
+    const subtotalIdx = flatSurgeRows.findIndex(r => r.subtotal);
+    expect(subtotalRow?.value).toBe('5'); // 3 base cards + 2 Heavy Hitter BEFORE ×5 Surge
+    expect(surgeRowIdx).toBeGreaterThan(subtotalIdx);
+    expect(flatSurgeEntry.set?.hit).toBe(25); // 5 × 5 = 25
 
     let powered = { ...startFight({ features: ALL_FEATURES }), power: 100 };
     const expectedMult = damageMultiplier(100);

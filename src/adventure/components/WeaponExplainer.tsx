@@ -23,8 +23,9 @@ import { armoryBaseWeapon, weaponLevelSuffix } from '../data/armory';
 import { WEAPON_KINDS, weaponGuide } from '../data/weaponGuide';
 import { NO_GROWTH, WEAPON_GROWTH, growthKey, growthText, type GrowthState } from '../data/weaponGrowth';
 import { powerText } from '../data/weaponPower';
-import { WEAPON_ROLES, weaponRole } from '../data/weaponRoles';
+import { hasWeaponRole, ROLE_SET_BONUSES, roleLabel as getRoleLabel, WEAPON_ROLES, weaponRole } from '../data/weaponRoles';
 import { BASE_BUILD, formatStat, weaponStatLines, type WeaponBuild } from '../data/weaponStats';
+import type { ActiveWeaponCounter } from '../engine/fight';
 import { INK } from './ui';
 
 interface Props {
@@ -37,6 +38,10 @@ interface Props {
   result?: { text: string; share?: number };
   /** In a fight: how far the weapon has grown so far */
   growth?: GrowthState;
+  /** Optional held weapons (ids or objects) so reached 2/4/6 Role Set Bonus tiers highlight live */
+  heldWeapons?: readonly (string | { id: string })[];
+  /** Optional active enemy counter dampening this weapon right now */
+  counter?: ActiveWeaponCounter;
   /** Start with "more" open */
   defaultOpen?: boolean;
   /** Hide the Adventure-only global Power accumulation note (used in item-driven modes like Starfall Spire) */
@@ -46,7 +51,18 @@ interface Props {
 
 const roleLabel = (id: string) => WEAPON_ROLES.find(r => r.id === weaponRole(id))?.label ?? '';
 
-const WeaponExplainer: React.FC<Props> = ({ weapon, build = BASE_BUILD, badge, result, growth, defaultOpen = false, hidePowerNote = false, testID }) => {
+const WeaponExplainer: React.FC<Props> = ({
+  weapon,
+  build = BASE_BUILD,
+  badge,
+  result,
+  growth,
+  heldWeapons,
+  counter,
+  defaultOpen = false,
+  hidePowerNote = false,
+  testID,
+}) => {
   const [open, setOpen] = useState(defaultOpen);
   const [taps, setTaps] = useState(0);
   const guide = weaponGuide(weapon.id);
@@ -55,6 +71,16 @@ const WeaponExplainer: React.FC<Props> = ({ weapon, build = BASE_BUILD, badge, r
   const stats = base ? weaponStatLines(base, build) : [];
   const voice = weaponVoice(weapon.id);
   const grows = WEAPON_GROWTH[weapon.id] ?? [];
+  const hasRoleBonus = hasWeaponRole(weapon.id);
+  const role = weaponRole(weapon.id);
+  const roleTiers = hasRoleBonus ? ROLE_SET_BONUSES[role] : [];
+  const heldRoleCount =
+    hasRoleBonus && heldWeapons
+      ? heldWeapons.filter(w => {
+          const id = typeof w === 'string' ? w : w.id;
+          return hasWeaponRole(id) && weaponRole(id) === role;
+        }).length
+      : null;
 
   return (
     <View style={st.card} testID={testID ?? `weapon-explainer-${weapon.id}`}>
@@ -81,6 +107,14 @@ const WeaponExplainer: React.FC<Props> = ({ weapon, build = BASE_BUILD, badge, r
           <Text style={st.caret}>{open ? '▲' : '▼'}</Text>
         </View>
         <Text style={st.what} testID={`weapon-explainer-what-${weapon.id}`}>{weapon.description}</Text>
+        {counter && (
+          <View style={st.counterAlert} testID={`weapon-explainer-counter-${weapon.id}`}>
+            <Icon name="lorc/broken-shield" size={14} color="#B91C1C" />
+            <Text style={st.counterAlertText}>
+              Foe counter (−{counter.reduction}%): {counter.label} reduced from {counter.baseChance}% to {counter.effectiveChance}%.
+            </Text>
+          </View>
+        )}
         {result && (
           <View style={st.result} testID={`weapon-explainer-result-${weapon.id}`}>
             <Text style={st.resultLabel}>THIS FIGHT</Text>
@@ -95,6 +129,37 @@ const WeaponExplainer: React.FC<Props> = ({ weapon, build = BASE_BUILD, badge, r
       {open && (
         <View style={st.more} testID={`weapon-explainer-more-${weapon.id}`}>
           <Row icon="lorc/crystal-shine" title={kind.label} color={kind.color}>{kind.blurb}</Row>
+          {hasRoleBonus && (
+            <View style={st.row} testID={`weapon-explainer-role-bonus-${weapon.id}`}>
+              <View style={[st.mark, { borderColor: '#B45309' }]}>
+                <Icon name="delapouite/star-formation" size={16} color="#B45309" />
+              </View>
+              <View style={st.roleBonusBody}>
+                <Text style={st.rowText}>
+                  <Text style={st.rowTitle}>
+                    Role Set ({getRoleLabel(role)}){heldRoleCount !== null ? ` · ${heldRoleCount} held` : ''}:{' '}
+                  </Text>
+                  Passive set bonuses at 2, 4, and 6 held weapons.
+                </Text>
+                <View style={st.tierRow}>
+                  {roleTiers.map(t => {
+                    const reached = heldRoleCount !== null && heldRoleCount >= t.tier;
+                    return (
+                      <View
+                        key={t.tier}
+                        testID={`weapon-explainer-role-tier-${weapon.id}-${t.tier}`}
+                        style={[st.tierPill, reached && st.tierPillActive]}
+                      >
+                        <Text style={[st.tierText, reached && st.tierTextActive]}>
+                          {t.tier}×: {t.summary}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            </View>
+          )}
           {guide.look && (
             <View style={st.row}>
               <View style={[st.mark, { borderColor: guide.look.color ?? INK }]}>
@@ -169,6 +234,8 @@ const st = StyleSheet.create({
   role: { fontSize: 11, fontWeight: '600', color: INK, opacity: 0.65 },
   caret: { fontSize: 12, color: INK, opacity: 0.6, paddingHorizontal: 4 },
   what: { fontSize: 15, lineHeight: 21, color: INK, marginTop: 8 },
+  counterAlert: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: '#FEE2E2', borderRadius: 8, borderWidth: 1.5, borderColor: '#DC2626', paddingHorizontal: 8, paddingVertical: 6 },
+  counterAlertText: { flex: 1, flexShrink: 1, fontSize: 12, lineHeight: 17, fontWeight: '800', color: '#991B1B' },
   result: { marginTop: 8, backgroundColor: COLORS.paperBeige, borderRadius: 8, padding: 8, gap: 3 },
   resultLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1.5, color: INK, opacity: 0.6 },
   resultText: { fontSize: 14, fontWeight: '700', color: INK },
@@ -177,8 +244,14 @@ const st = StyleSheet.create({
   more: { gap: 10, borderTopWidth: 1, borderTopColor: '#E6E0D7', paddingTop: 10 },
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   mark: { width: 28, height: 28, borderRadius: 8, borderWidth: 2, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.canvasWhite },
-  rowText: { flex: 1, fontSize: 14, lineHeight: 20, color: INK },
+  rowText: { flex: 1, flexShrink: 1, fontSize: 14, lineHeight: 20, color: INK },
   rowTitle: { fontWeight: '900' },
+  roleBonusBody: { flex: 1, minWidth: 0, gap: 6 },
+  tierRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
+  tierPill: { maxWidth: '100%', borderRadius: 6, borderWidth: 1.5, borderColor: '#D6CFC4', backgroundColor: COLORS.paperBeige, paddingHorizontal: 7, paddingVertical: 3 },
+  tierPillActive: { backgroundColor: '#FEF3C7', borderColor: INK },
+  tierText: { flexShrink: 1, fontSize: 12, fontWeight: '700', color: INK },
+  tierTextActive: { fontWeight: '900', color: '#78350F' },
   numbers: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   number: { backgroundColor: COLORS.paperBeige, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, minWidth: 92 },
   numberValue: { fontSize: 16, fontWeight: '900', color: INK },

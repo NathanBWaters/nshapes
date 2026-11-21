@@ -89,6 +89,14 @@ describe('the catalog: what every event looks like', () => {
       }
     }
   });
+
+  it('labels folded Set-break pinata_break cleanly as PIÑATA! instead of −0, and keeps standalone damage labels', () => {
+    expect(EVENT_FX.pinata_break?.label?.(ev('pinata_break'))).toBe('PIÑATA!');
+    expect(EVENT_FX.pinata_break?.label?.(ev('pinata_break', { amount: 0 }))).toBe('PIÑATA!');
+    expect(EVENT_FX.pinata_break?.label?.(ev('pinata_break', { amount: 12 }))).toBe('PIÑATA −12');
+    const [foldedBeat] = beatsOf([ev('pinata_break', { slots: [0] })]);
+    expect(foldedBeat.label).toBe('PIÑATA!');
+  });
 });
 
 describe('the script: one move as a cascade', () => {

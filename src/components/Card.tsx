@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useState } from 'react';
+import React, { createContext, memo, useCallback, useContext, useState } from 'react';
 import { View, Text, StyleSheet, Platform, TouchableOpacity } from 'react-native';
 import Svg, { Ellipse, Path, Polygon, Defs, Pattern, Rect } from 'react-native-svg';
 import { Card as CardType, Background } from '@/types';
@@ -6,6 +6,94 @@ import { COLORS, RADIUS } from '@/utils/colors';
 import { BACKGROUND_COLORS } from '@/utils/gameConfig';
 import { useBurnTimer } from '@/hooks/useBurnTimer';
 import Icon, { type IconName } from './Icon';
+
+/** Board-level static visual overlays (Mirror Shard, Tightrope, Catalyst target, Hot Potato timestamp). */
+export interface CardBoardOverlay {
+  mirrorCardIds?: ReadonlySet<string>;
+  tightropeCardIds?: ReadonlySet<string>;
+  catalystRecipeName?: string | null;
+  potatoAtMs?: number;
+}
+
+const DEFAULT_CARD_BOARD_OVERLAY: CardBoardOverlay = {};
+const CardBoardContext = createContext<CardBoardOverlay>(DEFAULT_CARD_BOARD_OVERLAY);
+/** Whole-second fight clock (ms), ONLY subscribed to by timed Gamble countdown badges so plain Cards never re-render on ticks. */
+const CardBoardClockContext = createContext<number | null>(null);
+
+export const CardBoardProvider: React.FC<{
+  overlay: CardBoardOverlay;
+  clockMs: number | null;
+  children: React.ReactNode;
+}> = ({ overlay, clockMs, children }) => (
+  <CardBoardContext.Provider value={overlay}>
+    <CardBoardClockContext.Provider value={clockMs}>{children}</CardBoardClockContext.Provider>
+  </CardBoardContext.Provider>
+);
+
+const computeCountdownSec = (targetMs: number | undefined, elapsedMs: number | null): number | null => {
+  if (targetMs === undefined || elapsedMs === null || !Number.isFinite(targetMs)) return null;
+  return Math.max(0, Math.ceil((targetMs - elapsedMs) / 1000));
+};
+
+interface GambleTimerBadgeProps {
+  kind: 'thorn' | 'fuse' | 'curse' | 'potato';
+  icon: IconName;
+  targetMs: number;
+  elapsedMsOverride?: number;
+  hot?: boolean;
+  urgentAtSec?: number;
+  normalColor: string;
+  normalBg: string;
+  normalBorder: string;
+}
+
+const GambleTimerBadge: React.FC<GambleTimerBadgeProps> = memo(function GambleTimerBadge({
+  kind,
+  icon,
+  targetMs,
+  elapsedMsOverride,
+  hot = false,
+  urgentAtSec,
+  normalColor,
+  normalBg,
+  normalBorder,
+}) {
+  const ctxClock = useContext(CardBoardClockContext);
+  const nowMs = elapsedMsOverride !== undefined ? elapsedMsOverride : ctxClock;
+  const secs = computeCountdownSec(targetMs, nowMs);
+  const urgent = hot || (secs !== null && urgentAtSec !== undefined && secs <= urgentAtSec);
+  const color = urgent ? '#B91C1C' : normalColor;
+  const bg = urgent ? '#FEE2E2' : normalBg;
+  const border = urgent ? '#DC2626' : normalBorder;
+  const label = secs !== null ? (hot ? `${secs}s!` : `${secs}s`) : undefined;
+
+  return (
+    <View
+      testID={`card-timer-${kind}`}
+      style={[styles.stateIndicator, styles.timerPill, { backgroundColor: bg, borderColor: border }]}
+    >
+      <Icon name={icon} size={10} color={color} noShadow />
+      {label !== undefined && (
+        <Text style={[styles.stateIndicatorLabel, styles.timerPillLabel, { color }]}>{label}</Text>
+      )}
+    </View>
+  );
+});
+
+const FogTimerBadge: React.FC<{ targetMs: number; elapsedMsOverride?: number }> = memo(function FogTimerBadge({
+  targetMs,
+  elapsedMsOverride,
+}) {
+  const ctxClock = useContext(CardBoardClockContext);
+  const nowMs = elapsedMsOverride !== undefined ? elapsedMsOverride : ctxClock;
+  const secs = computeCountdownSec(targetMs, nowMs);
+  if (secs === null) return null;
+  return (
+    <View testID="card-timer-fog" style={styles.fogTimerBadge} pointerEvents="none">
+      <Text style={styles.fogTimerText}>{secs}s</Text>
+    </View>
+  );
+});
 
 /** The snare icon points down; turn it to face the card the snare points at. */
 const SNARE_ROTATION: Record<NonNullable<CardType['snare']>, string> = { down: '0deg', left: '90deg', up: '180deg', right: '-90deg' };
@@ -33,6 +121,16 @@ interface CardProps {
   onBurnComplete?: (card: CardType) => void;
   isPaused?: boolean;
   isConnected?: boolean; // Whether this card is part of a connection (connector weapons)
+  /** Optional direct fight clock (ms) override for timed Gamble countdowns */
+  elapsedMs?: number;
+  /** Optional direct Hot Potato next jump timestamp (ms) override */
+  potatoAtMs?: number;
+  /** Optional direct Mirror Shard slot highlight override */
+  mirrorSlot?: boolean;
+  /** Optional direct Tightrope valid slot highlight override */
+  tightropeSlot?: boolean;
+  /** Optional direct Catalyst target Evolution name override */
+  catalystLabel?: string | null;
 }
 
 const Card: React.FC<CardProps> = ({
@@ -42,11 +140,21 @@ const Card: React.FC<CardProps> = ({
   onBurnComplete,
   isPaused = false,
   isConnected = false,
+  elapsedMs,
+  potatoAtMs,
+  mirrorSlot,
+  tightropeSlot,
+  catalystLabel,
 }) => {
   const { shape, color, number, shading, selected, isHint, isDud, isFaceDown, hasCountdown, countdownTimer, hasBomb, bombTimer } = card;
+  const boardOverlay = useContext(CardBoardContext);
 
   // Cards that cannot be selected (dud or face-down)
   const isUnselectable = isDud || isFaceDown || !!card.locked;
+  const isMirrorSlot = (mirrorSlot ?? boardOverlay.mirrorCardIds?.has(card.id) ?? false) && !isDud && !isFaceDown;
+  const isTightropeSlot = (tightropeSlot ?? boardOverlay.tightropeCardIds?.has(card.id) ?? false) && !isDud && !isFaceDown;
+  const resolvedCatalystLabel = catalystLabel !== undefined ? catalystLabel : (boardOverlay.catalystRecipeName ?? null);
+  const resolvedPotatoAtMs = potatoAtMs !== undefined ? potatoAtMs : boardOverlay.potatoAtMs;
 
   const [isHovered, setIsHovered] = useState(false);
 
@@ -190,23 +298,26 @@ const Card: React.FC<CardProps> = ({
     }
 
     // Board tricks (adventure/engine/gear.ts). Decoys are unmarked on purpose.
-    if (card.cursedUntil !== undefined && visible) indicators.push({ icon: 'lorc/cursed-star', color: '#7E22CE' });
+    // Timed Gambles render dedicated countdown badges (subscribing to 1Hz clock context only when mounted).
     if (card.doubler && visible) indicators.push({ icon: 'lorc/cursed-star', color: '#B45309', label: '×2' });
     if (card.shackle && visible) indicators.push({ icon: 'lorc/crossed-chains', color: '#475569' });
-    if (card.thornAt !== undefined && visible) indicators.push({ icon: 'lorc/thorny-vine', color: '#15803D' });
     if ((card.rust ?? 0) > 0 && visible) indicators.push({ icon: 'delapouite/rusty-sword', color: '#B45309', label: `-${card.rust}` });
     if (card.tar && visible) indicators.push({ icon: 'delapouite/sticky-boot', color: '#1F2937', label: card.tar === 1 ? '2' : '1' });
-    if (card.fuseAt !== undefined && visible) indicators.push({ icon: 'delapouite/time-dynamite', color: card.fuseHot ? '#DC2626' : '#6B7280' });
     if ((card.frozen ?? 0) > 0 && visible) indicators.push({ icon: 'lorc/ice-cube', color: '#0284C7', label: `${card.frozen}` });
     if (card.chest !== undefined && visible) indicators.push({ icon: 'delapouite/mimic-chest', color: '#B45309', label: `${Math.round(card.chest)}` });
-    if (card.hot && visible) indicators.push({ icon: 'delapouite/potato', color: '#EA580C' });
+    const hasHotTimer = Boolean(card.hot && visible && resolvedPotatoAtMs !== undefined && resolvedPotatoAtMs > 0);
+    if (card.hot && visible && !hasHotTimer) indicators.push({ icon: 'delapouite/potato', color: '#EA580C' });
 
     // Piñata bounty: bonus damage when this armored card finally breaks
     if (card.bounty && visible) {
       indicators.push({ icon: 'delapouite/pinata', color: '#DB2777', label: `${card.bounty}` });
     }
 
-    if (indicators.length === 0) return null;
+    const hasCurseTimer = card.cursedUntil !== undefined && visible;
+    const hasThornTimer = card.thornAt !== undefined && visible;
+    const hasFuseTimer = card.fuseAt !== undefined && visible;
+
+    if (indicators.length === 0 && !hasCurseTimer && !hasThornTimer && !hasFuseTimer && !hasHotTimer) return null;
 
     return (
       <View style={styles.stateIndicatorContainer}>
@@ -218,6 +329,53 @@ const Card: React.FC<CardProps> = ({
             {indicator.label && <Text style={[styles.stateIndicatorLabel, { color: indicator.color }]}>{indicator.label}</Text>}
           </View>
         ))}
+        {hasCurseTimer && (
+          <GambleTimerBadge
+            kind="curse"
+            icon="lorc/cursed-star"
+            targetMs={card.cursedUntil!}
+            elapsedMsOverride={elapsedMs}
+            normalColor="#6B21A8"
+            normalBg="#F3E8FF"
+            normalBorder="#7E22CE"
+          />
+        )}
+        {hasThornTimer && (
+          <GambleTimerBadge
+            kind="thorn"
+            icon="lorc/thorny-vine"
+            targetMs={card.thornAt!}
+            elapsedMsOverride={elapsedMs}
+            urgentAtSec={5}
+            normalColor="#14532D"
+            normalBg="#DCFCE7"
+            normalBorder="#15803D"
+          />
+        )}
+        {hasFuseTimer && (
+          <GambleTimerBadge
+            kind="fuse"
+            icon="delapouite/time-dynamite"
+            targetMs={card.fuseAt!}
+            elapsedMsOverride={elapsedMs}
+            hot={!!card.fuseHot}
+            normalColor="#374151"
+            normalBg="#F3F4F6"
+            normalBorder="#4B5563"
+          />
+        )}
+        {hasHotTimer && (
+          <GambleTimerBadge
+            kind="potato"
+            icon="delapouite/potato"
+            targetMs={resolvedPotatoAtMs!}
+            elapsedMsOverride={elapsedMs}
+            urgentAtSec={2}
+            normalColor="#9A3412"
+            normalBg="#FFEDD5"
+            normalBorder="#EA580C"
+          />
+        )}
       </View>
     );
   };
@@ -228,7 +386,10 @@ const Card: React.FC<CardProps> = ({
       <View style={styles.faceDownPattern}>
         {card.fogFlipAt !== undefined ? (
           // Fog Lantern: this one flips up by itself, stronger
-          <Icon name="lorc/lantern-flame" size={22} color="#FDE68A" noShadow />
+          <View style={styles.fogContent}>
+            <Icon name="lorc/lantern-flame" size={20} color="#FDE68A" noShadow />
+            <FogTimerBadge targetMs={card.fogFlipAt} elapsedMsOverride={elapsedMs} />
+          </View>
         ) : (
           <Text style={styles.faceDownSymbol}>?</Text>
         )}
@@ -283,7 +444,7 @@ const Card: React.FC<CardProps> = ({
   return (
     <TouchableOpacity
       testID={`card-${shape}-${color}-${number}-${shading}${isDud ? '-dud' : ''}${isFaceDown ? '-facedown' : ''}${hasBomb ? '-bomb' : ''}${hasCountdown ? '-countdown' : ''}`}
-      accessibilityLabel={`${number} ${color} ${shading} ${shape}${card.background ? ` on ${card.background}` : ''}${isDud ? ', dud' : ''}${isFaceDown ? ', face down' : ''}${card.hasEvolutionItem ? (card.evolutionReady ? ', evolution ready' : ', dormant catalyst') : ''}${card.snare ? `, snare pointing ${card.snare}` : ''}${card.bounty ? `, bounty ${card.bounty}` : ''}`}
+      accessibilityLabel={`${number} ${color} ${shading} ${shape}${card.background ? ` on ${card.background}` : ''}${isDud ? ', dud' : ''}${isFaceDown ? ', face down' : ''}${card.hasEvolutionItem ? (card.evolutionReady ? (resolvedCatalystLabel ? `, catalyst for ${resolvedCatalystLabel}` : ', evolution ready') : ', dormant catalyst') : ''}${isMirrorSlot ? ', mirror slot' : ''}${isTightropeSlot ? ', on tightrope' : ''}${card.snare ? `, snare pointing ${card.snare}` : ''}${card.bounty ? `, bounty ${card.bounty}` : ''}`}
       style={[
         getCardStyle(),
         isHovered && !selected && !disabled && !isUnselectable && styles.hoveredCard,
@@ -299,6 +460,30 @@ const Card: React.FC<CardProps> = ({
       onHoverIn={handleHoverIn}
       onHoverOut={handleHoverOut}
     >
+      {/* Mirror Shard & Tightrope slot accents: inset inside outer border so selection border stays unmistakable */}
+      {isMirrorSlot && <View testID="card-mirror-frame" pointerEvents="none" style={styles.mirrorInnerFrame} />}
+      {isTightropeSlot && (
+        <View
+          testID="card-tightrope-frame"
+          pointerEvents="none"
+          style={[styles.tightropeInnerFrame, isMirrorSlot && styles.tightropeInnerFrameNested]}
+        />
+      )}
+      {(isMirrorSlot || isTightropeSlot) && (
+        <View style={styles.slotMarkRow} pointerEvents="none">
+          {isMirrorSlot && (
+            <View testID="card-slot-mirror" style={styles.mirrorSlotBadge}>
+              <Icon name="lorc/mirror-mirror" size={9} color="#0369A1" noShadow />
+            </View>
+          )}
+          {isTightropeSlot && (
+            <View testID="card-slot-tightrope" style={styles.tightropeSlotBadge}>
+              <Icon name="delapouite/tightrope" size={9} color="#B45309" noShadow />
+            </View>
+          )}
+        </View>
+      )}
+
       {/* Health badge for multi-hit cards */}
       {getHealthBadge()}
 
@@ -338,6 +523,7 @@ const Card: React.FC<CardProps> = ({
               styles.badge,
               styles.badgeTopRight,
               card.evolutionReady ? styles.catalystBadgeReady : styles.catalystBadgeDormant,
+              resolvedCatalystLabel ? (card.bonusMoney ? styles.catalystBadgeWithCoin : styles.catalystBadgeNamed) : null,
             ]}
             pointerEvents="none"
           >
@@ -347,7 +533,16 @@ const Card: React.FC<CardProps> = ({
               color={card.evolutionReady ? COLORS.deepOnyx : '#5B21B6'}
               noShadow
             />
-            {card.evolutionReady && <Text style={styles.catalystBadgeText}>EVO</Text>}
+            {card.evolutionReady && (
+              <Text
+                testID="card-catalyst-name"
+                style={styles.catalystBadgeText}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {resolvedCatalystLabel || 'EVO'}
+              </Text>
+            )}
           </View>
         </>
       )}
@@ -585,11 +780,107 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.actionYellow,
     borderColor: COLORS.deepOnyx,
   },
+  catalystBadgeNamed: {
+    maxWidth: '88%',
+    paddingHorizontal: 4,
+  },
+  catalystBadgeWithCoin: {
+    maxWidth: '64%',
+    paddingHorizontal: 4,
+  },
   catalystBadgeText: {
+    flexShrink: 1,
     fontSize: 8,
     fontWeight: '900',
     color: COLORS.deepOnyx,
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
+  },
+  mirrorInnerFrame: {
+    position: 'absolute',
+    top: 1,
+    left: 1,
+    right: 1,
+    bottom: 1,
+    borderRadius: RADIUS.module - 3,
+    borderWidth: 2,
+    borderColor: 'rgba(14, 165, 233, 0.72)',
+    backgroundColor: 'rgba(224, 242, 254, 0.14)',
+  },
+  tightropeInnerFrame: {
+    position: 'absolute',
+    top: 1,
+    left: 1,
+    right: 1,
+    bottom: 1,
+    borderRadius: RADIUS.module - 3,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(217, 119, 6, 0.82)',
+  },
+  tightropeInnerFrameNested: {
+    top: 3,
+    left: 3,
+    right: 3,
+    bottom: 3,
+    borderRadius: RADIUS.module - 5,
+  },
+  slotMarkRow: {
+    position: 'absolute',
+    top: 2,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    gap: 2,
+    zIndex: 9,
+  },
+  mirrorSlotBadge: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#E0F2FE',
+    borderWidth: 1,
+    borderColor: '#0284C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tightropeSlotBadge: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#D97706',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timerPill: {
+    height: 16,
+    borderRadius: 8,
+    paddingHorizontal: 3,
+    gap: 2,
+  },
+  timerPillLabel: {
+    fontSize: 9,
+    fontVariant: ['tabular-nums'],
+    paddingRight: 0,
+  },
+  fogContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+  },
+  fogTimerBadge: {
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 8,
+    backgroundColor: 'rgba(18, 18, 18, 0.78)',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  fogTimerText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#FDE68A',
+    fontVariant: ['tabular-nums'],
   },
   card: {
     position: 'relative',
@@ -645,7 +936,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 3,
     left: 3,
+    maxWidth: '78%',
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 2,
     zIndex: 10,
   },
@@ -831,6 +1124,11 @@ const areCardPropsEqual = (prev: CardProps, next: CardProps): boolean =>
   prev.disabled === next.disabled &&
   prev.isPaused === next.isPaused &&
   prev.isConnected === next.isConnected &&
+  prev.elapsedMs === next.elapsedMs &&
+  prev.potatoAtMs === next.potatoAtMs &&
+  prev.mirrorSlot === next.mirrorSlot &&
+  prev.tightropeSlot === next.tightropeSlot &&
+  prev.catalystLabel === next.catalystLabel &&
   prev.onClick === next.onClick &&
   prev.onBurnComplete === next.onBurnComplete &&
   areCardsShallowEqual(prev.card, next.card);

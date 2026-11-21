@@ -109,6 +109,7 @@ const shortLabel = (label: string): string => {
   if (lower.includes('active evolution')) return 'Evolved';
   if (lower.includes('hot streak')) return 'Hot Streak';
   if (lower.includes('next-set')) return 'Charged';
+  if (lower.includes('surge')) return 'Surge';
   if (lower.includes('purity')) return 'Purity';
   if (lower.includes('traps')) return 'Traps';
   return label;
@@ -122,20 +123,24 @@ export const buildIgnitionPlan = (ignition: SetIgnition): IgnitionPlan => {
   const collateral = Object.values(m.collateral).reduce((s, n) => s + (n ?? 0), 0);
   const preSurgeBase = m.cards + collateral;
   const surge = m.surgeMultiplier && m.surgeMultiplier > 1 ? m.surgeMultiplier : 1;
+  // Wave 1 unified Shading Surge ×5 directly inside multItems (add-first, multiply-second);
+  // only emit the legacy pre-flat SURGE/GEAR split for older logs that omit Surge from multItems.
+  const surgeInMult = (m.multItems ?? []).some(it => it.label.toLowerCase().includes('surge'));
+  const legacyPreSurge = !surgeInMult && surge > 1 ? surge : 1;
   const baseWithFlat = Math.max(0, Math.round((preSurgeBase + m.flatBonus) * 10) / 10);
   const steps: IgnitionStep[] = [
     {
       key: 'base',
       label: m.flatBonus > 0 ? 'BASE' : 'SET',
-      value: fmt(surge > 1 ? preSurgeBase : baseWithFlat),
+      value: fmt(legacyPreSurge > 1 ? preSurgeBase : baseWithFlat),
       color: INK,
       bg: COLORS.canvasWhite,
       kind: 'base',
     },
   ];
 
-  if (surge > 1) {
-    steps.push({ key: 'surge', label: 'SURGE', value: `×${fmt(surge)}`, color: '#FFFFFF', bg: '#DB2777', kind: 'mult' });
+  if (legacyPreSurge > 1) {
+    steps.push({ key: 'surge', label: 'SURGE', value: `×${fmt(legacyPreSurge)}`, color: '#FFFFFF', bg: '#DB2777', kind: 'mult' });
     if (m.flatBonus > 0) {
       steps.push({ key: 'flat', label: 'GEAR', value: `+${fmt(m.flatBonus)}`, color: INK, bg: '#FEF3C7', kind: 'extra' });
     }
@@ -148,7 +153,8 @@ export const buildIgnitionPlan = (ignition: SetIgnition): IgnitionPlan => {
     let short = item.label.toUpperCase();
     let bg = '#EA580C';
     let color = '#FFFFFF';
-    if (lower.includes('rainbow')) { short = 'RAINBOW'; bg = '#D97706'; }
+    if (lower.includes('surge')) { short = 'SURGE'; bg = '#DB2777'; }
+    else if (lower.includes('rainbow')) { short = 'RAINBOW'; bg = '#D97706'; }
     else if (lower.includes('perfect parry')) { short = 'PERFECT PARRY'; bg = COLORS.actionYellow; color = INK; }
     else if (lower.includes('parry')) { short = 'PARRY'; bg = '#0F766E'; }
     else if (lower.includes('stagger')) { short = 'STAGGER'; bg = '#0D9488'; }
@@ -179,16 +185,20 @@ export const buildIgnitionPlan = (ignition: SetIgnition): IgnitionPlan => {
 export const buildBalatroBreakdown = (ignition: SetIgnition): BalatroBreakdown => {
   const m = ignition.math;
   const surge = m.surgeMultiplier && m.surgeMultiplier > 1 ? m.surgeMultiplier : 1;
+  // Unified logs put Shading Surge ×5 directly in multItems (applied after all additions);
+  // legacy saved logs applied surgeMultiplier only to cards + collateral before flatBonus.
+  const surgeInMult = (m.multItems ?? []).some(it => it.label.toLowerCase().includes('surge'));
+  const legacyPreSurge = !surgeInMult && surge > 1 ? surge : 1;
   const power = m.powerMultiplier && m.powerMultiplier > 1.01 ? m.powerMultiplier : 1;
 
   const steps: TallyStep[] = [];
-  let base = m.cards * surge;
+  let base = m.cards * legacyPreSurge;
   let mult = 1;
   let bonus = 0;
 
-  // 1. Opening Set Cards (including Power/Charged card points & Surge ×5)
-  const cardLabel = surge > 1
-    ? `Cards ${fmt(m.cards)} ×${fmt(surge)} Surge`
+  // 1. Opening Set Cards (including Power/Charged card points, or legacy pre-flat Surge)
+  const cardLabel = legacyPreSurge > 1
+    ? `Cards ${fmt(m.cards)} ×${fmt(legacyPreSurge)} Surge`
     : (m.cardBonus ?? 0) > 0
       ? `Cards ${m.baseCards ?? 3} (+${fmt(m.cardBonus!)})`
       : `${m.cardCount ?? 3} Cards`;
@@ -213,7 +223,7 @@ export const buildBalatroBreakdown = (ignition: SetIgnition): BalatroBreakdown =
   for (const [key, label] of collLabels) {
     const raw = m.collateral[key] ?? 0;
     if (raw <= 0) continue;
-    const add = raw * surge;
+    const add = raw * legacyPreSurge;
     base += add;
     steps.push({
       key: `col-${key}`,
@@ -227,20 +237,34 @@ export const buildBalatroBreakdown = (ignition: SetIgnition): BalatroBreakdown =
     });
   }
 
-  // 3. Every itemized flat contributor (Heavy Hitter, Weapons, Passives, Active Evolution, Growth)
-  for (let i = 0; i < (m.flatItems?.length ?? 0); i++) {
-    const item = m.flatItems![i];
-    if (item.amount === 0) continue;
-    base = Math.max(0, base + item.amount);
+  // 3. Every itemized flat contributor (Piñata, Purity, Traps, Heavy Hitter, Weapons, Role Sets, Passives, Active Evolution, Growth)
+  if (m.flatItems && m.flatItems.length > 0) {
+    for (let i = 0; i < m.flatItems.length; i++) {
+      const item = m.flatItems[i];
+      if (item.amount === 0) continue;
+      base = Math.max(0, base + item.amount);
+      steps.push({
+        key: `flat-${i}`,
+        label: shortLabel(item.label),
+        value: `${item.amount > 0 ? '+' : ''}${fmt(item.amount)}`,
+        kind: 'base',
+        baseAfter: base,
+        multAfter: mult,
+        bonusAfter: bonus,
+        note: item.note,
+      });
+    }
+  } else if (m.flatBonus !== 0) {
+    base = Math.max(0, base + m.flatBonus);
     steps.push({
-      key: `flat-${i}`,
-      label: shortLabel(item.label),
-      value: `${item.amount > 0 ? '+' : ''}${fmt(item.amount)}`,
+      key: 'flat-0',
+      label: 'Gear',
+      value: `${m.flatBonus > 0 ? '+' : ''}${fmt(m.flatBonus)}`,
       kind: 'base',
       baseAfter: base,
       multAfter: mult,
       bonusAfter: bonus,
-      note: item.note,
+      note: 'per-Set bonuses',
     });
   }
 
@@ -334,12 +358,12 @@ export const buildBalatroBreakdown = (ignition: SetIgnition): BalatroBreakdown =
 export const computePrimedEquation = (run: RunState): PrimedEquation => {
   const surge = run.surge?.active ? SURGE_RULES.multiplier : 1;
   const items: PrimedEquation['items'] = [];
-  let base = 3 * surge;
+  let base = 3;
   items.push({
-    label: surge > 1 ? `3 cards ×${surge} Surge` : '3 cards',
+    label: '3 cards',
     value: fmt(base),
     kind: 'base',
-    note: surge > 1 ? 'Shading Surge active!' : 'Base 1 damage per card',
+    note: 'Base 1 damage per card',
   });
 
   if (run.bonusDamagePerMatch !== 0) {
@@ -403,6 +427,15 @@ export const computePrimedEquation = (run: RunState): PrimedEquation => {
   base = Math.max(0, Math.round(base * 10) / 10);
 
   let mult = 1;
+  if (surge > 1) {
+    mult *= surge;
+    items.push({
+      label: 'Shading Surge',
+      value: `×${fmt(surge)}`,
+      kind: 'mult',
+      note: '4-trait Shading Surge multiplier',
+    });
+  }
   if (run.activeEvolutions.length > 0) {
     if (run.stackEvolutionMultipliers) {
       for (const evo of run.activeEvolutions) {
