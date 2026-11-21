@@ -6,11 +6,15 @@
 import React from 'react';
 import { render } from '@testing-library/react-native';
 import type { Card } from '@/types';
+import { getArmoryWeapon } from '@/adventure/data/armory';
 import { getLevel } from '@/adventure/data/levels';
 import { PARRY_RULES, parryCounterMeta, resolveParrySpec } from '@/adventure/data/parry';
+import { SURGE_RULES } from '@/adventure/data/rules';
 import { boardHasCounterSet, setMatchesCounter } from '@/adventure/engine/parry';
-import { createRun, runReducer } from '@/adventure/engine/run';
-import { createMaxedSave } from '@/adventure/progress';
+import { activeEnemyCounters, createRun, runReducer } from '@/adventure/engine/run';
+import { createMaxedSave, createNewSave } from '@/adventure/progress';
+import { AnchorsProvider, useAnchors } from '@/adventure/fx/anchors';
+import { counterForWeapon, GearBelt } from '@/adventure/fx/GearBelt';
 import { buildBalatroBreakdown, buildIgnitionPlan, computePrimedEquation, heatTierFor } from '@/adventure/fx/MultiplierIgnition';
 import ParryPreviewCard from '@/adventure/components/ParryPreviewCard';
 import LevelPreview from '@/adventure/components/LevelPreview';
@@ -387,5 +391,130 @@ describe('Live Multiplier Ignition & Pre-Battle Parry UI', () => {
     const after = runReducer(run, { type: 'MATCH', cards: set, rewards: plainRewards(set) });
     expect(after.lastSetIgnition?.turnDamage).toBe(after.totalDamage);
     expect(after.lastSetIgnition?.beltBadges).toBeDefined();
+  });
+
+  it('never duplicates Shading Surge ×5 in unified Wave 1 add-then-multiply math (plan, breakdown, and primed equation)', () => {
+    const unifiedIgnition = {
+      id: 99,
+      math: {
+        cards: 3,
+        cardCount: 3,
+        baseCards: 3,
+        surgeMultiplier: 5,
+        collateral: {},
+        flatBonus: 13,
+        flatItems: [
+          { label: 'Piñata', amount: 6, note: 'piñata broken in this Set', sourceRef: 'weapon:pinata' },
+          { label: 'Purity chain', amount: 3, note: '3-Set Purity streak' },
+          { label: 'Traps cleared', amount: 4, note: 'cleared hazard cards in this Set' },
+        ],
+        multiplier: 10,
+        multItems: [
+          { label: 'Shading Surge', amount: 5, note: '4-trait Shading Surge multiplier' },
+          { label: 'Rainbow Strike', amount: 2, note: 'all traits different' },
+        ],
+        rainbow: true,
+        extra: 0,
+        hit: 160,
+        diffTraits: 4,
+        graceUsed: false,
+        sinceLastMs: 1800,
+        combo: 2,
+      },
+      turnDamage: 160,
+      lethal: false,
+      isBossOrElite: false,
+      foeName: 'Shadow Beast',
+    };
+
+    const plan = buildIgnitionPlan(unifiedIgnition);
+    const surgeSteps = plan.steps.filter(st => st.label === 'SURGE' || st.value === '×5');
+    expect(surgeSteps).toHaveLength(1);
+    expect(plan.steps[0].value).toBe('16'); // 3 cards + 6 Piñata + 3 Purity + 4 Traps added FIRST
+    expect(plan.total).toBe(160);
+
+    const bd = buildBalatroBreakdown(unifiedIgnition);
+    expect(bd.finalBase).toBe(16); // SUM(all additions incl. Piñata, Purity, Traps) — NOT pre-multiplied by 5!
+    expect(bd.finalMult).toBe(10); // 5 Surge × 2 Rainbow — NEVER ×25!
+    expect(bd.finalTotal).toBe(160);
+    expect(bd.receiptLine.match(/×5/g)).toHaveLength(1);
+    expect(bd.receiptLine).toContain('+6 Piñata');
+    expect(bd.receiptLine).toContain('+3 Purity');
+    expect(bd.receiptLine).toContain('+4 Traps');
+    expect(bd.receiptLine).toContain('×5 Surge');
+    expect(bd.receiptLine).toContain('×2 Rainbow');
+
+    // Primed equation during active Shading Surge also puts Surge ×5 in mult AFTER additions
+    const surgeLevel: LevelDef = {
+      id: 'surge-primed-test',
+      biome: 'canyon',
+      name: 'Surge Test',
+      introduces: 'shading_surge',
+      rules: { attributes: ['shape', 'color', 'number'], boardSize: 12, timer: 120, hearts: 5, shadingSurge: true },
+      foes: [{ name: 'Dummy', icon: 'lorc/uncertainty', hp: 500 }],
+      challenge: { kind: 'noMistakes' },
+      coinMultiplier: 1,
+      difficulty: 3,
+      rewards: { star1: { coins: 10 }, star2: { coins: 20 }, star3: { coins: 30 } },
+    };
+    const save = { ...createNewSave(), charms: [], upgrades: { heavy_hitter: 2 } };
+    let run = createRun(surgeLevel, save, { seed: 12, features: new Set(['hearts', 'gear']) });
+    run = tick(run, SURGE_RULES.calmMs, 500);
+    expect(run.surge?.active).toBe(true);
+    const primed = computePrimedEquation(run);
+    expect(primed.base).toBe(5); // 3 cards + 2 Heavy Hitter
+    expect(primed.mult).toBe(SURGE_RULES.multiplier); // ×5 Surge
+    expect(primed.total).toBe(25);
+    expect(primed.items.filter(it => it.label === 'Shading Surge')).toHaveLength(1);
+  });
+
+  it('surfaces active enemy weapon counters cleanly on affected GearBelt charms only', () => {
+    const flint = getArmoryWeapon('flint-spark')!;
+    const blast = getArmoryWeapon('blast-powder')!;
+    const ray = getArmoryWeapon('prismatic-ray')!;
+    const magnet = getArmoryWeapon('magnet')!;
+
+    // Wet Crab counters fire (-15%)
+    const crabLevel: LevelDef = {
+      id: 'crab-test',
+      biome: 'canyon',
+      name: 'Wet Crab Test',
+      introduces: 'timer',
+      rules: { attributes: A3, boardSize: 12, timer: 90, hearts: 5 },
+      foes: [{ enemy: 'Wet Crab', hp: 200 }],
+      challenge: { kind: 'noMistakes' },
+      coinMultiplier: 1,
+      difficulty: 2,
+      rewards: { star1: { coins: 10 }, star2: { coins: 20 }, star3: { coins: 30 } },
+    };
+    const save = { ...createNewSave(), armory: [flint.id, blast.id, ray.id, magnet.id], charms: [flint.id, blast.id, magnet.id] };
+    const run = createRun(crabLevel, save, { seed: 5, features: new Set(['hearts', 'gear']) });
+    const counters = activeEnemyCounters(run);
+    expect(counters.some(c => c.type === 'fire')).toBe(true);
+    expect(counterForWeapon(flint, counters)?.type).toBe('fire');
+    expect(counterForWeapon(blast, counters)).toBeUndefined();
+    expect(counterForWeapon(magnet, counters)).toBeUndefined();
+
+    const BeltHarness: React.FC = () => {
+      const anchors = useAnchors();
+      return (
+        <AnchorsProvider value={anchors}>
+          <GearBelt weapons={[flint, blast, magnet]} counters={counters} width={360} onInspect={() => {}} />
+        </AnchorsProvider>
+      );
+    };
+    const view = render(<BeltHarness />);
+    expect(view.getByTestId('belt-counter-flint-spark')).toBeTruthy();
+    expect(view.getByText(`−${counters.find(c => c.type === 'fire')!.reduction}%`)).toBeTruthy();
+    expect(view.queryByTestId('belt-counter-blast-powder')).toBeNull();
+    expect(view.queryByTestId('belt-counter-magnet')).toBeNull();
+
+    // Polar Guardian counters laser (-40%)
+    const polarLevel: LevelDef = { ...crabLevel, id: 'polar-test', foes: [{ enemy: 'Polar Guardian', hp: 200 }] };
+    const polarRun = createRun(polarLevel, { ...save, charms: [ray.id, magnet.id] }, { seed: 6, features: new Set(['hearts', 'gear']) });
+    const polarCounters = activeEnemyCounters(polarRun);
+    expect(counterForWeapon(ray, polarCounters)?.type).toBe('laser');
+    expect(counterForWeapon(ray, polarCounters)?.reduction).toBe(40);
+    expect(counterForWeapon(magnet, polarCounters)).toBeUndefined();
   });
 });

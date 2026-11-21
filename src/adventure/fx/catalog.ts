@@ -70,7 +70,7 @@ export const EVENT_FX: Record<RunEventType, FxRow | null> = {
   link_burst: { color: C.link, board: 'zap', orb: 'damage', to: 'foe', enemy: 'hit', label: () => 'LINKED!' },
   echo: { color: C.echo, board: 'ring', orb: 'damage', to: 'foe', enemy: 'hit', label: () => 'ECHO!' },
   fire: { color: C.fire, board: 'flame', label: () => 'BURNING' },
-  pinata_break: { color: C.pinata, board: 'burst', orb: 'damage', to: 'foe', damage: true, shake: true, fighter: 'ecstatic', enemy: 'criticalHit', label: e => `PIÑATA −${fmt(n(e))}` },
+  pinata_break: { color: C.pinata, board: 'burst', orb: 'damage', to: 'foe', damage: true, shake: true, fighter: 'ecstatic', enemy: 'criticalHit', label: destroyLabel('PIÑATA') },
   overkill: { color: C.coin, orb: 'coin', from: 'foe', to: 'coins', labelColor: C.coinText, label: e => `OVERKILL +${fmt(n(e))}` },
 
   // ── What a Set pays into the HUD ─────────────────────────────────────────

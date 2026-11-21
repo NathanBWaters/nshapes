@@ -12,7 +12,7 @@ const LABEL: Partial<Record<RunEventType, (l: FightLogLine) => string | null>> =
   hit: l => l.text ?? null,
   rainbow: l => (l.text ? `${l.text} (Rainbow)` : null),
   surge_hit: l => (l.text ? `${l.text} (Shading Surge)` : null),
-  surge_start: l => `Shading Surge! ${l.text ? `${l.text} ` : ''}matched cards ×5`,
+  surge_start: l => `Shading Surge! ${l.text ? `${l.text} ` : ''}Sets ×5`,
   surge_end: () => 'Shading Surge ended',
   surge_warn: () => null,
   blast: l => `Explosion · ${plural(Number(l.text), 'card')}`,
@@ -268,10 +268,14 @@ export const setMathRows = (
       explain: `Special cards like Power cards hold extra damage right on the card itself. Adding that +${fmt(cardBonus)} to the ${fmt(baseCards)} base card points gives ${fmt(m.cards)} from your 3 cards.`,
     });
   }
-  if (m.surgeMultiplier && m.surgeMultiplier !== 1) {
+  // Unified logs put Shading Surge ×5 directly inside multItems (after additions);
+  // legacy logs omitted Surge from multItems and multiplied cards + collateral before flatBonus.
+  const surgeInMult = (m.multItems ?? []).some(it => it.label.toLowerCase().includes('surge'));
+  const legacyPreSurge = !surgeInMult && m.surgeMultiplier && m.surgeMultiplier !== 1 ? m.surgeMultiplier : 1;
+  if (legacyPreSurge !== 1) {
     rows.push({
       label: 'Shading Surge',
-      value: `×${fmt(m.surgeMultiplier)}`,
+      value: `×${fmt(legacyPreSurge)}`,
       sub: 'multiplied the matched card points',
       explain: 'Shading Surge multiplied your matched-card damage before adding per-Set bonuses.',
     });
@@ -345,7 +349,7 @@ export const setMathRows = (
   }
 
   const collateralTotal = Object.values(m.collateral).reduce((s, n) => s + (n ?? 0), 0);
-  const preMult = Math.max(0, Math.round(((m.cards + collateralTotal) * (m.surgeMultiplier ?? 1) + m.flatBonus) * 10) / 10);
+  const preMult = Math.max(0, Math.round(((m.cards + collateralTotal) * legacyPreSurge + m.flatBonus) * 10) / 10);
   const hasScalingAfter = m.multiplier !== 1 || m.extra !== 0 || (m.powerMultiplier ?? 1) > 1;
   if (hasScalingAfter && (cardBonus > 0 || m.flatBonus !== 0 || collateralTotal > 0)) {
     rows.push({
