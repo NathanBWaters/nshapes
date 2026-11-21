@@ -139,6 +139,7 @@ const RoundFunPrompt: React.FC<Props> = ({
                 onPress={() => handleTag(tag.id)}
                 style={[
                   st.tagChip,
+                  compact && st.tagChipCompact,
                   selected && (rating === 'up' ? st.tagChipUp : st.tagChipDown),
                 ]}
               >
@@ -155,6 +156,8 @@ const RoundFunPrompt: React.FC<Props> = ({
 const st = StyleSheet.create({
   box: {
     alignSelf: 'stretch',
+    maxWidth: '100%',
+    minWidth: 0,
     backgroundColor: COLORS.paperBeige,
     borderRadius: 12,
     borderWidth: 2,
@@ -177,6 +180,7 @@ const st = StyleSheet.create({
     fontWeight: '900',
     color: INK,
     letterSpacing: 0.3,
+    flexShrink: 1,
   },
   questionCompact: {
     fontSize: 12,
@@ -237,9 +241,12 @@ const st = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
+    maxWidth: '100%',
+    minWidth: 0,
   },
   tagChip: {
     minHeight: 34,
+    maxWidth: '100%',
     justifyContent: 'center',
     backgroundColor: COLORS.canvasWhite,
     borderRadius: 8,
@@ -247,6 +254,10 @@ const st = StyleSheet.create({
     borderColor: INK,
     paddingHorizontal: 10,
     paddingVertical: 5,
+  },
+  tagChipCompact: {
+    paddingHorizontal: 9,
+    paddingVertical: 4,
   },
   tagChipUp: {
     backgroundColor: '#D6F5EF',
@@ -260,6 +271,7 @@ const st = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     color: INK,
+    flexShrink: 1,
   },
   tagTextActive: {
     color: COLORS.deepOnyx,

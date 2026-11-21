@@ -57,7 +57,7 @@ Free Play and Classic rounds commit one `fight_ended` event with `mode: 'free_pl
   * **Classic RoundSummary / VictoryScreen / GameOverScreen**
 * Contextual 1-tap feedback tags:
   * **After `👍`:** `great_build` ("Great build"), `close_call` ("Close call"), `satisfying_combos` ("Juicy combos"), `fair_challenge` ("Fair challenge")
-  * **After `👎`:** `too_hard` ("Too punishing"), `unfair_rng` ("Bad board RNG"), `too_slow` ("Too slow"), `confusing` ("Confusing")
+  * **After `👎`:** `too_hard` ("Too punishing"), `too_easy` ("Too easy"), `unfair_rng` ("Bad board RNG"), `too_slow` ("Too slow"), `confusing` ("Confusing"), `bug_in_game` ("Bug in game")
 
 ---
 

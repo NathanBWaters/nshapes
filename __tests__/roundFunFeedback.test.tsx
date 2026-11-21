@@ -88,10 +88,20 @@ import BattleHistory from '@/adventure/components/BattleHistory';
 import Camp from '@/adventure/components/Camp';
 import { getArmoryWeapon } from '@/adventure/data/armory';
 import { getLevel } from '@/adventure/data/levels';
+import { FightRecorder } from '@/adventure/engine/replay';
 import { battleRecord, type BattleRecord } from '@/adventure/history';
 import { applyLevelResult, createNewSave } from '@/adventure/progress';
 import type { RunState } from '@/adventure/types';
-import { __enableAnalyticsForTests, __resetAnalyticsForTests, analyticsOptedOut } from '@/analytics/posthog';
+import {
+  FIGHT_EVENT,
+  NEGATIVE_FUN_TAGS,
+  commitAdventureFight,
+  rateFight,
+  stageAdventureFight,
+  type FunRating,
+  type FunTag,
+} from '@/analytics/fightEvent';
+import { __enableAnalyticsForTests, __resetAnalyticsForTests, analyticsOptedOut, flush } from '@/analytics/posthog';
 import { playSet, startFight, testLevel, tick, withWeapons } from './testUtils/adventureFight';
 
 const SAFE_METRICS = {
@@ -155,6 +165,74 @@ describe('RoundFunPrompt & enjoyment feedback UI', () => {
     );
     fireEvent.press(getByTestId('round-fun-down'));
     expect(onChange).toHaveBeenLastCalledWith(null, []);
+  });
+
+  it('renders "Too easy" and "Bug in game" after thumbs down, merges them into fight_ended fun_tags, and clears them on thumbs up', async () => {
+    const level = getLevel('1-4');
+    const run = sampleRun();
+    const record = battleRecord(level, run, { at: 1_700_000_500_000 });
+    const tape = { recording: new FightRecorder(9001).toJSON(), save: createNewSave() };
+    const fightId = stageAdventureFight(level, run, record, tape);
+
+    let currentRating: FunRating | null = null;
+    let currentTags: FunTag[] = [];
+    const onChange = jest.fn((nextRating: FunRating | null, nextTags: FunTag[]) => {
+      currentRating = nextRating;
+      currentTags = nextTags;
+      rateFight(fightId, { funRating: nextRating, funTags: nextTags }, { source: 'results' });
+    });
+
+    const { getByTestId, getByText, queryByTestId, rerender } = render(
+      <RoundFunPrompt rating={currentRating} tags={currentTags} onChange={onChange} testIDPrefix="round-fun" />
+    );
+
+    // Clicking "Not fun" (thumbs down) reveals all 6 negative tags including "Too easy" & "Bug in game"
+    fireEvent.press(getByTestId('round-fun-down'));
+    expect(onChange).toHaveBeenLastCalledWith('down', []);
+
+    rerender(
+      <RoundFunPrompt rating={currentRating} tags={currentTags} onChange={onChange} testIDPrefix="round-fun" />
+    );
+    expect(NEGATIVE_FUN_TAGS).toHaveLength(6);
+    expect(getByTestId('round-fun-tag-too_easy')).toBeTruthy();
+    expect(getByText('Too easy')).toBeTruthy();
+    expect(getByTestId('round-fun-tag-bug_in_game')).toBeTruthy();
+    expect(getByText('Bug in game')).toBeTruthy();
+
+    // Selecting "Too easy" then "Bug in game" merges both into staged fight_ended fun_tags
+    fireEvent.press(getByTestId('round-fun-tag-too_easy'));
+    expect(onChange).toHaveBeenLastCalledWith('down', ['too_easy']);
+    rerender(
+      <RoundFunPrompt rating={currentRating} tags={currentTags} onChange={onChange} testIDPrefix="round-fun" />
+    );
+
+    fireEvent.press(getByTestId('round-fun-tag-bug_in_game'));
+    expect(onChange).toHaveBeenLastCalledWith('down', ['too_easy', 'bug_in_game']);
+    rerender(
+      <RoundFunPrompt rating={currentRating} tags={currentTags} onChange={onChange} testIDPrefix="round-fun" />
+    );
+
+    expect(commitAdventureFight('results_done')).toBe(true);
+    await flush();
+
+    const sent = (fetchMock.mock.calls as unknown[][]).flatMap(call => {
+      const body = (call[1] as { body?: string } | undefined)?.body;
+      return body ? (JSON.parse(body).batch as { event: string; properties: Record<string, unknown> }[]) : [];
+    });
+    expect(sent).toHaveLength(1);
+    expect(sent[0].event).toBe(FIGHT_EVENT);
+    expect(sent[0].properties.fun_rating).toBe('down');
+    expect(sent[0].properties.fun_score).toBe(0);
+    expect(sent[0].properties.fun_tags).toEqual(['too_easy', 'bug_in_game']);
+
+    // Switching to thumbs up clears negative tags cleanly and hides negative chips
+    fireEvent.press(getByTestId('round-fun-up'));
+    expect(onChange).toHaveBeenLastCalledWith('up', []);
+    rerender(
+      <RoundFunPrompt rating={currentRating} tags={currentTags} onChange={onChange} testIDPrefix="round-fun" />
+    );
+    expect(queryByTestId('round-fun-tag-too_easy')).toBeNull();
+    expect(queryByTestId('round-fun-tag-bug_in_game')).toBeNull();
   });
 
   it('renders thumbs up/down & reason tags inside LevelResults (from 1-4+) and notifies parent handlers', () => {

@@ -35,8 +35,10 @@ export type FunTag =
   | 'fair_challenge'
   | 'unfair_rng'
   | 'too_hard'
+  | 'too_easy'
   | 'too_slow'
-  | 'confusing';
+  | 'confusing'
+  | 'bug_in_game';
 
 export const POSITIVE_FUN_TAGS: readonly { id: FunTag; label: string }[] = [
   { id: 'great_build', label: 'Great build' },
@@ -47,9 +49,11 @@ export const POSITIVE_FUN_TAGS: readonly { id: FunTag; label: string }[] = [
 
 export const NEGATIVE_FUN_TAGS: readonly { id: FunTag; label: string }[] = [
   { id: 'too_hard', label: 'Too punishing' },
+  { id: 'too_easy', label: 'Too easy' },
   { id: 'unfair_rng', label: 'Bad board RNG' },
   { id: 'too_slow', label: 'Too slow' },
   { id: 'confusing', label: 'Confusing' },
+  { id: 'bug_in_game', label: 'Bug in game' },
 ];
 
 export const FUN_TAG_LABELS: Record<FunTag, string> = {
@@ -58,9 +62,11 @@ export const FUN_TAG_LABELS: Record<FunTag, string> = {
   satisfying_combos: 'Juicy combos',
   fair_challenge: 'Fair challenge',
   too_hard: 'Too punishing',
+  too_easy: 'Too easy',
   unfair_rng: 'Bad board RNG',
   too_slow: 'Too slow',
   confusing: 'Confusing',
+  bug_in_game: 'Bug in game',
 };
 
 const round3 = (n: number): number => Math.round(n * 1000) / 1000;

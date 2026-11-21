@@ -14,6 +14,8 @@ import { activeRoleBonuses } from '@/adventure/data/weaponRoles';
 import { createRun } from '@/adventure/engine/run';
 import { createMaxedSave, createNewSave } from '@/adventure/progress';
 import Card, { CardBoardProvider } from '@/components/Card';
+import RoundFunPrompt from '@/components/RoundFunPrompt';
+import { NEGATIVE_FUN_TAGS } from '@/analytics/fightEvent';
 import type { Card as CardType } from '@/types';
 
 const mockKvStore = new Map<string, string>();
@@ -409,5 +411,41 @@ describe('UI Text Visibility Style-Contract Guardrails', () => {
     }
 
     view.unmount();
+  });
+
+  it('wraps all 6 negative feedback tag chips cleanly in RoundFunPrompt (default & compact, 375px safe)', () => {
+    for (const compact of [false, true]) {
+      const view = render(
+        <RoundFunPrompt
+          rating="down"
+          tags={['too_easy', 'bug_in_game']}
+          onChange={() => {}}
+          compact={compact}
+          testIDPrefix="guard-fun"
+        />
+      );
+
+      const boxStyle = StyleSheet.flatten(view.getByTestId('guard-fun-prompt').props.style);
+      expect(boxStyle.alignSelf).toBe('stretch');
+      expect(boxStyle.maxWidth).toBe('100%');
+      expect(boxStyle.minWidth).toBe(0);
+
+      const wrapStyle = StyleSheet.flatten(view.getByTestId('guard-fun-tags').props.style);
+      expect(wrapStyle.flexDirection).toBe('row');
+      expect(wrapStyle.flexWrap).toBe('wrap');
+      expect(wrapStyle.maxWidth).toBe('100%');
+
+      expect(NEGATIVE_FUN_TAGS).toHaveLength(6);
+      for (const tag of NEGATIVE_FUN_TAGS) {
+        const chip = view.getByTestId(`guard-fun-tag-${tag.id}`);
+        const chipStyle = StyleSheet.flatten(chip.props.style);
+        expect(chipStyle.maxWidth).toBe('100%');
+        expect(view.getByText(tag.label)).toBeTruthy();
+        const labelStyle = StyleSheet.flatten(view.getByText(tag.label).props.style);
+        expect(labelStyle.flexShrink).toBeGreaterThan(0);
+      }
+
+      view.unmount();
+    }
   });
 });

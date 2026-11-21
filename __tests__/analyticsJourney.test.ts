@@ -140,7 +140,7 @@ describe('analytics user journey, sessions & 1-event-per-game staging', () => {
     expect(r1.updatedStaged).toBe(true);
     expect(markReplayOpened(fightId)).toBe(true);
 
-    const r2 = rateFight(fightId, { funRating: 'down', funTags: ['unfair_rng'] }, { source: 'results' });
+    const r2 = rateFight(fightId, { funRating: 'down', funTags: ['unfair_rng', 'too_easy', 'bug_in_game'] }, { source: 'results' });
     expect(r2.updatedStaged).toBe(true);
     expect(sentBatches()).toHaveLength(0);
 
@@ -154,7 +154,12 @@ describe('analytics user journey, sessions & 1-event-per-game staging', () => {
     expect(ev.properties.fight_id).toBe(fightId);
     expect(ev.properties.fun_rating).toBe('down');
     expect(ev.properties.fun_score).toBe(0);
-    expect(ev.properties.fun_tags).toEqual(['unfair_rng']);
+    expect(ev.properties.fun_tags).toEqual(['unfair_rng', 'too_easy', 'bug_in_game']);
+    const normalized = normalizePostHogLikeEvent(ev as unknown as Record<string, unknown>);
+    expect(normalized?.funTags).toEqual(['unfair_rng', 'too_easy', 'bug_in_game']);
+    const report = analyzeFights(normalized ? [normalized] : []);
+    expect(report.enjoyment.tags.find(t => t.tag === 'too_easy')).toMatchObject({ label: 'Too easy', polarity: 'down', count: 1 });
+    expect(report.enjoyment.tags.find(t => t.tag === 'bug_in_game')).toMatchObject({ label: 'Bug in game', polarity: 'down', count: 1 });
     expect(ev.properties.replay_opened).toBe(true);
     expect(ev.properties.commit_reason).toBe('next_level');
     expect(ev.properties.weapons_offered).toEqual(['clarity-lens', 'war-drum']);
