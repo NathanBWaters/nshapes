@@ -10,6 +10,7 @@ import { SavedGameStorage } from '@/utils/storage';
 import { loadAdventureSave } from '@/adventure/save';
 import { getFrontierLevel, totalStars } from '@/adventure/progress';
 import { levelFoe } from '@/adventure/data/foes';
+import { STORY_TAGLINE } from '@/adventure/data/story';
 import { loadSpireMeta, loadSpireRun } from '@/spire/save';
 import { version } from '../../package.json';
 
@@ -137,12 +138,12 @@ const MainMenu: React.FC<MainMenuProps> = ({
       const save = loadAdventureSave();
       const stars = totalStars(save);
       if (stars === 0 && Object.keys(save.plays).length === 0) {
-        return { title: 'Play', subtitle: 'A star fell. The critters went wild.', isFresh: true };
+        return { title: 'Play', subtitle: STORY_TAGLINE, isFresh: true };
       }
       const next = getFrontierLevel(save);
       return { title: 'Continue', subtitle: `${next.id} · ${levelFoe(next).name} is waiting   ★ ${stars}`, isFresh: false };
     } catch {
-      return { title: 'Adventure', subtitle: 'Map, foes, stars & unlocks', isFresh: false };
+      return { title: 'Adventure', subtitle: 'Free your caged friends · Map, foes & stars', isFresh: false };
     }
   }, []);
 
@@ -170,7 +171,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
     }
     return {
       title: 'Starfall Spire',
-      subtitle: '3-Act Roguelike Climb · Shops, Events & Endless',
+      subtitle: 'Climb where the star fell · 3-Act Roguelike & Endless',
       badge: 'ROGUELIKE',
     };
   }, []);

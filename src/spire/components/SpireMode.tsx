@@ -41,6 +41,7 @@ import {
   campfireForge,
   campfireMeditate,
   campfireRest,
+  cancelSpirePreview,
   chooseEventOption,
   claimRewardArcana,
   claimRewardSkillNode,
@@ -54,17 +55,23 @@ import {
   leaveEvent,
   leaveShop,
   leaveTreasure,
+  reorderSpireWeapon,
   rerollRewardWeapons,
+  resolveEventPendingArcana,
   resolveEventPendingForge,
   resolveEventPendingSkill,
   resolveEventPendingWeapon,
+  retreatSpireBattle,
   selectSpireNode,
   shopBuyArcana,
   shopBuyHeal,
   shopBuyUpgrade,
   shopBuyWeapon,
   shopForgeWeapon,
+  shopPurgeArcana,
   shopReroll,
+  shopSellWeapon,
+  shopToggleLock,
   skipRewardArcana,
   skipRewardSkillNode,
   skipRewardWeapon,
@@ -267,16 +274,23 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
     const enc = run.activeEncounter;
     const floorLabel = run.endless ? `Endless Act ${run.act} · Fl ${run.floor}` : `Act ${run.act} · Floor ${run.floor}`;
     const nodeLabel = enc.kind === 'boss' ? 'Act Boss' : enc.kind === 'elite' ? 'Elite' : 'Skirmish';
+    const fightSeed = (
+      run.seed ^
+      (run.floor * 7919) ^
+      (run.act * 104729) ^
+      ((run.retreats ?? 0) * 2654435761)
+    ) >>> 0;
+    const isLastHeart = run.hearts <= 1;
     return (
       <AdventureRun
-        key={`spire-fight-${run.act}-${run.floor}-${enc.id}`}
+        key={`spire-fight-${run.act}-${run.floor}-${enc.id}-${run.retreats ?? 0}`}
         level={activeLevel}
         save={virtualSave}
-        seed={(run.seed ^ (run.floor * 7919) ^ (run.act * 104729)) >>> 0}
+        seed={fightSeed}
         autoPlayer={autoPlayer}
         onFinish={(fightRun, tape) => handleBattleFinish(fightRun, tape)}
         onQuit={(fightRun, tape) => {
-          // Record retreats once a move was made, then return safely to the pre-battle briefing
+          // Record retreats once a move was made, then charge 1 ♥ (or forfeit on 1 ♥) so combat cannot be save-scummed
           if (wasFought(fightRun)) {
             const at = Date.now();
             const fightId = `${at}-${tape.recording.seed}`;
@@ -287,7 +301,14 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
             });
           }
           music.stop();
-          updateRun({ ...run, phase: 'preview' });
+          const next = retreatSpireBattle(run, fightRun.foeName);
+          if (next.phase === 'defeat') {
+            setMeta(recordSpireRunEnd(next, false));
+            writeSpireRun(null);
+            setSavedRun(next);
+          } else {
+            updateRun(next);
+          }
         }}
         onRestart={() => {}}
         onCoachMarkSeen={() => {}}
@@ -304,8 +325,10 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
           pauseSubtitle: `${floorLabel} · ${enc.name}`,
           alwaysShowHudStats: true,
           allowRestart: false,
-          quitLabel: 'Retreat to Briefing',
-          quitHint: 'Returns to the pre-battle briefing for this floor.',
+          quitLabel: isLastHeart ? 'Forfeit Run' : 'Retreat (−1 ♥)',
+          quitHint: isLastHeart
+            ? 'You are at 1 ♥ — retreating ends this Spire run.'
+            : 'Costs 1 ♥ and reshuffles the board before returning to briefing.',
         }}
       />
     );
@@ -368,6 +391,7 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
         <SpireMap
           run={run}
           onSelectNode={nodeId => updateRun(selectSpireNode(run, nodeId))}
+          onReorderWeapon={(from, to) => updateRun(reorderSpireWeapon(run, from, to))}
         />
       )}
 
@@ -377,6 +401,7 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
           encounter={run.activeEncounter}
           onFight={() => updateRun(startSpireEncounter(run))}
           onInspectBuild={() => setBuildOpen(true)}
+          onBack={run.prevNodeId !== undefined ? () => updateRun(cancelSpirePreview(run)) : undefined}
         />
       )}
 
@@ -410,6 +435,10 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
           onBuyHeal={() => updateRun(shopBuyHeal(run))}
           onForgeWeapon={wId => updateRun(shopForgeWeapon(run, wId))}
           onReroll={() => updateRun(shopReroll(run))}
+          onToggleLock={(kind, idx) => updateRun(shopToggleLock(run, kind, idx))}
+          onSellWeapon={wId => updateRun(shopSellWeapon(run, wId))}
+          onPurgeArcana={id => updateRun(shopPurgeArcana(run, id))}
+          onReorderWeapon={(from, to) => updateRun(reorderSpireWeapon(run, from, to))}
           onLeave={() => updateRun(leaveShop(run))}
         />
       )}
@@ -421,6 +450,7 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
           onRest={() => updateRun(campfireRest(run))}
           onForge={wId => updateRun(campfireForge(run, wId))}
           onMeditate={nodeId => updateRun(campfireMeditate(run, nodeId))}
+          onReorderWeapon={(from, to) => updateRun(reorderSpireWeapon(run, from, to))}
           onLeave={() => updateRun(leaveCampfire(run))}
         />
       )}
@@ -433,6 +463,7 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
           onPickWeapon={idx => updateRun(resolveEventPendingWeapon(run, idx))}
           onPickSkill={id => updateRun(resolveEventPendingSkill(run, id))}
           onPickForge={wId => updateRun(resolveEventPendingForge(run, wId))}
+          onResolveArcana={accept => updateRun(resolveEventPendingArcana(run, accept))}
           onLeave={() => updateRun(leaveEvent(run))}
         />
       )}
@@ -446,7 +477,12 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
         />
       )}
 
-      <SpireBuildModal visible={buildOpen} run={run} onClose={() => setBuildOpen(false)} />
+      <SpireBuildModal
+        visible={buildOpen}
+        run={run}
+        onReorderWeapon={(from, to) => updateRun(reorderSpireWeapon(run, from, to))}
+        onClose={() => setBuildOpen(false)}
+      />
     </View>
   );
 };

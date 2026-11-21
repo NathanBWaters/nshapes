@@ -1,9 +1,10 @@
 /**
  * The story, in as few words as it can be told.
  *
- * Wild critters raided the valley, locked your animal friends in cages, and
- * dropped Golden Cage Keys along the road between levels. Walk over any Golden
- * Key on the map to choose which caged friend to free first!
+ * A star fell over the summit and drove the wild critters mad — they raided
+ * the valley, locked your animal friends in cages, and dropped Golden Cage Keys
+ * along the road between levels. Walk over any Golden Key on the map to choose
+ * which caged friend to free first, or climb where the star fell in Starfall Spire!
  *
  * `welcome` plays once, the first time Adventure is opened, and leads straight
  * into the first fight (components/StoryIntro.tsx). Keep every line short: it
@@ -11,9 +12,12 @@
  */
 import type { CharacterName } from '@/types';
 
+/** Shared one-line hook used on MainMenu so the title screen matches the opening story cleanly. */
+export const STORY_TAGLINE = 'A star fell. The critters went wild.';
+
 /** What is on stage while a beat's words are up */
 export type StoryScene =
-  /** Wild critters swoop in, cage your friends, and scatter Golden Keys */
+  /** A fallen star drives wild critters to raid, cage your friends, and scatter Golden Keys */
   | 'abduction'
   /** Winding valley road with Golden Keys between levels to free anyone you choose */
   | 'keys'
@@ -34,8 +38,8 @@ export const STORY: Record<'welcome', StoryBeat[]> = {
   welcome: [
     {
       scene: 'abduction',
-      title: 'Wild critters stole your friends!',
-      body: 'They locked your crew in iron cages and dropped Golden Keys across the valley.',
+      title: 'A star fell—critters went wild!',
+      body: 'They caged your friends and scattered Golden Keys across the valley.',
     },
     {
       scene: 'keys',

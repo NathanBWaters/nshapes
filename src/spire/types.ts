@@ -3,7 +3,7 @@
  *
  * Designed as a clean, self-contained roguelike climb module (`src/spire/`) that
  * reuses Adventure Mode's combat engine (`runReducer`, `AdventureRun`), weapons
- * (`getArmoryWeapon`, `WeaponExplainer`), 204 Evolutions, Fighter Skill Trees,
+ * (`getArmoryWeapon`, `WeaponExplainer`), 208 Evolutions, Fighter Skill Trees,
  * Arcana, Set-Parrying, Live Multiplier Ignition, Kill-Cam, and adaptive audio.
  */
 import type { CharacterName, Weapon } from '@/types';
@@ -80,12 +80,14 @@ export interface SpireShopWeaponOffer {
   price: number;
   onSale?: boolean;
   sold?: boolean;
+  locked?: boolean;
 }
 
 export interface SpireShopArcanaOffer {
   arcanaId: ArcanaId;
   price: number;
   sold?: boolean;
+  locked?: boolean;
 }
 
 /** References a canonical Adventure `UPGRADES` entry by id (zero duplicate name/icon/copy). */
@@ -93,6 +95,14 @@ export interface SpireShopUpgradeOffer {
   upgradeId: SpireShopUpgradeKind;
   price: number;
   sold?: boolean;
+  locked?: boolean;
+}
+
+/** Up to 2 shop wares locked by the player to carry into the next Merchant visit. */
+export interface SpireLockedShopItems {
+  weapons: SpireShopWeaponOffer[];
+  arcana: SpireShopArcanaOffer[];
+  upgrades: SpireShopUpgradeOffer[];
 }
 
 export interface SpireShopState {
@@ -151,11 +161,14 @@ export interface SpireEventState {
   resolved: boolean;
   outcomeTitle?: string;
   outcomeText?: string;
+  /** Previewed Arcana before choosing (e.g. Wandering Alchemist never deals a blind curse!) */
+  offeredArcana?: ArcanaId;
   /** Some bold events trigger a surprise Elite fight! */
   ambushEncounter?: SpireEncounter;
-  /** Some events open a mini skill/weapon pick inline */
+  /** Some events open a mini skill/weapon/arcana pick inline */
   pendingWeaponOptions?: { weaponId: string; level: number }[];
   pendingSkillOptions?: string[];
+  pendingArcanaOffer?: ArcanaId;
   pendingForge?: boolean;
 }
 
@@ -226,8 +239,14 @@ export interface SpireRun {
   // Map & current node
   map: SpireActMap;
   currentNodeId: string | null;
+  /** Node id before stepping into a pre-fight preview (allows backing out to map before combat begins) */
+  prevNodeId?: string | null;
   activeEncounter: SpireEncounter | null;
   seenEvents: string[];
+  /** Number of paid mid-fight retreats (mixed into fight seed so retreating never replays the same board) */
+  retreats?: number;
+  /** Up to 2 locked shop items carried forward into the next Merchant visit */
+  lockedShop?: SpireLockedShopItems;
 
   // Active sub-screen states
   reward: SpireRewardBundle | null;

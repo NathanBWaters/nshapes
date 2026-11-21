@@ -15,6 +15,7 @@ import { Btn, DARK, Eyebrow, INK, PopIn, TONE } from '@/adventure/components/ui'
 import { band, sfx } from '@/audio';
 import { buildSpireWeaponBuilds, spireHeldWeapons } from '../engine/bridge';
 import type { SpireCampfireState, SpireRun } from '../types';
+import SpireBeltBar from './SpireBeltBar';
 
 interface Props {
   run: SpireRun;
@@ -22,10 +23,11 @@ interface Props {
   onRest: () => void;
   onForge: (weaponId: string) => void;
   onMeditate: (nodeId: string) => void;
+  onReorderWeapon?: (fromIndex: number, toIndex: number) => void;
   onLeave: () => void;
 }
 
-const SpireCampfire: React.FC<Props> = ({ run, campfire, onRest, onForge, onMeditate, onLeave }) => {
+const SpireCampfire: React.FC<Props> = ({ run, campfire, onRest, onForge, onMeditate, onReorderWeapon, onLeave }) => {
   const [subMode, setSubMode] = useState<'main' | 'forge' | 'meditate'>('main');
   const [focusedForgeId, setFocusedForgeId] = useState<string | null>(null);
 
@@ -150,6 +152,17 @@ const SpireCampfire: React.FC<Props> = ({ run, campfire, onRest, onForge, onMedi
             </View>
             <Btn small variant="secondary" label="Back" onPress={() => setSubMode('main')} />
           </View>
+        )}
+
+        {/* Quick belt inspection & reordering while resting by the campfire */}
+        {subMode === 'main' && (
+          <SpireBeltBar
+            run={run}
+            onReorder={onReorderWeapon}
+            title="INSPECT & REORDER BELT"
+            compact
+            testIDPrefix="spire-campfire-belt"
+          />
         )}
       </ScrollView>
     </View>

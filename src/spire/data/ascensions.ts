@@ -32,7 +32,7 @@ export interface AscensionModifiers {
 export const ASCENSION_DESCRIPTIONS: readonly string[] = [
   'Standard Climb — balanced 3-Act gauntlet.',
   'More Elites stalk every Act (+1 Elite per map).',
-  'All foes gain +12% HP.',
+  'All foes gain +14% HP.',
   'Start with −1 Max Heart.',
   'Fight clocks are 8% shorter.',
   'Specific Set-Parry counters appear earlier in the climb.',
@@ -41,16 +41,16 @@ export const ASCENSION_DESCRIPTIONS: readonly string[] = [
   'All foes gain +16% HP and telegraphed attacks wind up 8% faster.',
   'Foe telegraphed attacks wind up another 8% faster.',
   'Start with 25 fewer coins.',
-  'All foes gain another +12% HP.',
+  'All foes gain another +14% HP.',
   'Fight clocks shorten by another 6%.',
-  'Bosses gain another +15% HP.',
+  'Bosses gain another +16% HP.',
   'Merchant prices rise another 10%.',
   'Foe telegraphed attacks wind up another 8% faster.',
-  'All foes gain another +14% HP.',
+  'All foes gain another +15% HP.',
   'Start with another −1 Max Heart (min 3).',
-  'Elites and Bosses gain another +15% HP.',
+  'Elites and Bosses gain another +16% HP.',
   'Fight clocks shorten by another 6%.',
-  'STARFALL APEX — final Boss gauntlet (+20% Boss HP & faster parries).',
+  'STARFALL APEX — final Boss gauntlet (+22% Boss HP & faster parries).',
 ];
 
 export const ascensionModifiers = (level: number): AscensionModifiers => {

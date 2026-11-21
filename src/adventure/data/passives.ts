@@ -10,7 +10,7 @@ export const PASSIVE_TUNING = {
   scrappy: { 'scrappy.perHeart': 1 },
   combo: { 'combo.windowMs': 4800, 'combo.max': 4, 'combo.perStep': 1 },
   hot_streak: { 'hotStreak.multiplier': 2 },
-  grudge: { 'grudge.max': 3, 'grudge.damage': 3 },
+  grudge: { 'grudge.max': 4, 'grudge.damage': 3 },
   thick_hide: { 'thickHide.perWave': 1 },
   patience: { 'patience.msPerTrait': 2500, 'patience.damage': 2 },
   deep_freeze: { 'deepFreeze.ms': 4000 },

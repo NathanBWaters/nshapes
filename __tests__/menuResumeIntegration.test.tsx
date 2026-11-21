@@ -196,10 +196,12 @@ describe('Main Menu ↔ Game Mode Resume Integration', () => {
     expect(app.getByTestId('run-parry-bar')).toBeTruthy();
     expect(app.getByTestId('run-spire-bar')).toBeTruthy();
 
-    // Pause mid-fight → Retreat to Briefing → Main Menu → Resume → re-enter Floor 3 Elite battle!
+    // Pause mid-fight → Retreat (−1 ♥) → Main Menu → Resume → re-enter Floor 3 Elite battle!
     fireEvent.press(app.getByLabelText('Pause'));
-    fireEvent.press(app.getByText('Retreat to Briefing'));
+    fireEvent.press(app.getByText('Retreat (−1 ♥)'));
     expect(app.getByTestId('spire-encounter-preview')).toBeTruthy();
+    expect(loadSpireRun()?.hearts).toBe(4);
+    expect(loadSpireRun()?.retreats).toBe(1);
 
     fireEvent.press(app.getByTestId('spire-back-menu'));
     fireEvent.press(app.getByTestId('spire-setup-back'));

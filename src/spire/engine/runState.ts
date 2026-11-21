@@ -26,15 +26,21 @@ import { newEvolutionsArmedBy } from './bridge';
 import type {
   SpireCampfireState,
   SpireEncounter,
+  SpireLockedShopItems,
   SpireRewardBundle,
   SpireRun,
+  SpireShopArcanaOffer,
   SpireShopState,
   SpireShopUpgradeKind,
+  SpireShopUpgradeOffer,
+  SpireShopWeaponOffer,
   SpireTreasureState,
 } from '../types';
 
 export const SKIP_WEAPON_COINS = 25;
 export const REWARD_REROLL_COST = 20;
+export const MAX_SHOP_LOCKS = 2;
+export const ARCANA_PURGE_COST = 40;
 
 const withRng = <T>(run: SpireRun, fn: (rng: Rng) => { run: SpireRun; out?: T }): SpireRun => {
   const rng = createRng(run.rngState);
@@ -43,8 +49,8 @@ const withRng = <T>(run: SpireRun, fn: (rng: Rng) => { run: SpireRun; out?: T })
 };
 
 /** Pure mid-fight XP items are excluded from Spire offers (progression lives on the Spire map). */
-const SPIRE_EXCLUDED_WEAPONS: ReadonlySet<string> = new Set(['scholars-tome']);
-const SPIRE_EXCLUDED_ARCANA: ReadonlySet<ArcanaId> = new Set(['scholars_gambit']);
+export const SPIRE_EXCLUDED_WEAPONS: ReadonlySet<string> = new Set(['scholars-tome', 'wisdom-chain']);
+export const SPIRE_EXCLUDED_ARCANA: ReadonlySet<ArcanaId> = new Set(['scholars_gambit']);
 const ENGINE_ROLES: ReadonlySet<string> = new Set(['damage', 'tricks', 'gambles', 'chains']);
 
 /**
@@ -59,10 +65,16 @@ export const rollSynergyWeapons = (
   rng: Rng,
   count: number,
   minLevel = 1,
-  opts?: { allowUpgrade?: boolean }
+  opts?: { allowUpgrade?: boolean; excludeIds?: ReadonlySet<string> }
 ): { weaponId: string; level: number }[] => {
-  const unheld = SPIRE_WEAPON_POOL.filter(id => !run.weapons.includes(id) && !SPIRE_EXCLUDED_WEAPONS.has(id));
-  const upgradeable = run.weapons.filter(id => (run.weaponLevels[id] ?? 1) < MAX_WEAPON_LEVEL);
+  if (count <= 0) return [];
+  const excluded = opts?.excludeIds;
+  const unheld = SPIRE_WEAPON_POOL.filter(
+    id => !run.weapons.includes(id) && !SPIRE_EXCLUDED_WEAPONS.has(id) && !excluded?.has(id)
+  );
+  const upgradeable = run.weapons.filter(
+    id => (run.weaponLevels[id] ?? 1) < MAX_WEAPON_LEVEL && !excluded?.has(id)
+  );
   const allowUpgrade = (opts?.allowUpgrade ?? true) && count >= 3 && upgradeable.length > 0;
   // Tall-vs-wide balance: early drafts offer 1 upgrade slot so you can deepen starters;
   // once holding 6+ weapons, offer up to 2 upgrade slots alongside 1 Evolution-arming new weapon!
@@ -184,6 +196,45 @@ export const upgradeSpireWeapon = (run: SpireRun, weaponId: string, delta = 1): 
   };
 };
 
+/** Reorder a weapon on the Spire belt (critical for positioning Understudy next to its target!). */
+export const reorderSpireWeapon = (run: SpireRun, fromIndex: number, toIndex: number): SpireRun => {
+  if (
+    fromIndex < 0 ||
+    fromIndex >= run.weapons.length ||
+    toIndex < 0 ||
+    toIndex >= run.weapons.length ||
+    fromIndex === toIndex
+  ) {
+    return run;
+  }
+  const weapons = [...run.weapons];
+  const [moved] = weapons.splice(fromIndex, 1);
+  weapons.splice(toIndex, 0, moved);
+  return { ...run, weapons };
+};
+
+/** 50% of base Spire shop value refunded when selling a held weapon. */
+export const spireWeaponSellValue = (weaponId: string, level = 1): number => {
+  const w = getArmoryWeapon(weaponId);
+  const lv = Math.max(1, Math.min(MAX_WEAPON_LEVEL, level));
+  const shopBase = Math.max(40, Math.round((w?.price ?? 25) * 2.1 + (lv - 1) * 22));
+  return Math.max(15, Math.round(shopBase * 0.5));
+};
+
+/** Count currently locked unsold wares across all shelves of a Spire Shop. */
+export const countShopLocks = (shop: SpireShopState): number =>
+  shop.weapons.filter(w => w.locked && !w.sold).length +
+  shop.arcana.filter(a => a.locked && !a.sold).length +
+  shop.upgrades.filter(u => u.locked && !u.sold).length;
+
+const extractLockedShop = (shop: SpireShopState): SpireLockedShopItems | undefined => {
+  const weapons = shop.weapons.filter(w => w.locked && !w.sold).map(w => ({ ...w, locked: true }));
+  const arcana = shop.arcana.filter(a => a.locked && !a.sold).map(a => ({ ...a, locked: true }));
+  const upgrades = shop.upgrades.filter(u => u.locked && !u.sold).map(u => ({ ...u, locked: true }));
+  if (weapons.length + arcana.length + upgrades.length === 0) return undefined;
+  return { weapons, arcana, upgrades };
+};
+
 /** Canonical Adventure `UPGRADES` offered in the Spire Merchant's Tent (slot-cap upgrades omitted since Spire is uncapped). */
 const SPIRE_SHOP_UPGRADE_IDS: readonly SpireShopUpgradeKind[] = [
   'heavy_hitter',
@@ -200,13 +251,49 @@ const bumpUpgrade = (run: SpireRun, id: SpireShopUpgradeKind, delta = 1): SpireR
   upgrades: { ...(run.upgrades ?? {}), [id]: (run.upgrades?.[id] ?? 0) + delta },
 });
 
-const buildShopState = (run: SpireRun, rng: Rng, rerolls = 0): SpireShopState => {
+const buildShopState = (
+  run: SpireRun,
+  rng: Rng,
+  rerolls = 0,
+  carryLocked?: SpireLockedShopItems
+): SpireShopState => {
   const asc = ascensionModifiers(run.ascension);
   const priceScale = asc.shopPriceScale * (1 + (run.act - 1) * 0.12);
-  const offers = rollSynergyWeapons(run, rng, 4);
-  const saleIdx = offers.length > 0 ? Math.floor(rng.next() * offers.length) : -1;
 
-  const weapons = offers.map((o, i) => {
+  // Carry forward locked unsold offers (capped at MAX_SHOP_LOCKS total)
+  let lockBudget = MAX_SHOP_LOCKS;
+  const keptWeapons: SpireShopWeaponOffer[] = [];
+  for (const lw of carryLocked?.weapons ?? []) {
+    if (lockBudget <= 0 || lw.sold || SPIRE_EXCLUDED_WEAPONS.has(lw.weaponId)) continue;
+    const heldLv = run.weaponLevels[lw.weaponId];
+    if (heldLv !== undefined && heldLv >= MAX_WEAPON_LEVEL) continue;
+    const level = heldLv !== undefined ? Math.min(MAX_WEAPON_LEVEL, Math.max(lw.level, heldLv + 1)) : lw.level;
+    keptWeapons.push({ ...lw, level, sold: false, locked: true });
+    lockBudget -= 1;
+  }
+
+  const keptArcana: SpireShopArcanaOffer[] = [];
+  for (const la of carryLocked?.arcana ?? []) {
+    if (lockBudget <= 0 || la.sold || run.arcana.includes(la.arcanaId) || SPIRE_EXCLUDED_ARCANA.has(la.arcanaId)) continue;
+    keptArcana.push({ ...la, sold: false, locked: true });
+    lockBudget -= 1;
+  }
+
+  const keptUpgrades: SpireShopUpgradeOffer[] = [];
+  for (const lu of carryLocked?.upgrades ?? []) {
+    if (lockBudget <= 0 || lu.sold) continue;
+    keptUpgrades.push({ ...lu, sold: false, locked: true });
+    lockBudget -= 1;
+  }
+
+  const keptWeaponIds = new Set(keptWeapons.map(w => w.weaponId));
+  const freshOffers = rollSynergyWeapons(run, rng, Math.max(0, 4 - keptWeapons.length), 1, {
+    allowUpgrade: true,
+    excludeIds: keptWeaponIds,
+  });
+  const saleIdx = freshOffers.length > 0 ? Math.floor(rng.next() * freshOffers.length) : -1;
+
+  const freshWeapons: SpireShopWeaponOffer[] = freshOffers.map((o, i) => {
     const w = getArmoryWeapon(o.weaponId);
     const isUpgrade = run.weaponLevels[o.weaponId] !== undefined;
     const base = isUpgrade
@@ -219,25 +306,38 @@ const buildShopState = (run: SpireRun, rng: Rng, rerolls = 0): SpireShopState =>
       price: onSale ? Math.max(25, Math.round(base * 0.55)) : base,
       onSale,
       sold: false,
+      locked: false,
     };
   });
+  const weapons = [...keptWeapons, ...freshWeapons];
 
-  const arcanaIds = rollArcanaOptions(run, rng, 2);
-  const arcana = arcanaIds.map(arcanaId => ({
-    arcanaId,
-    price: Math.round(75 * priceScale),
-    sold: false,
-  }));
-
-  const upgrades = rng.shuffle([...SPIRE_SHOP_UPGRADE_IDS]).slice(0, 2).map(upgradeId => {
-    const def = getUpgrade(upgradeId);
-    const basePrice = Math.round(48 + (def.costs[0] ?? 200) * 0.065);
-    return {
-      upgradeId,
-      price: Math.round(basePrice * priceScale),
+  const keptArcanaIds = new Set(keptArcana.map(a => a.arcanaId));
+  const freshArcanaIds = rollArcanaOptions({ arcana: [...run.arcana, ...keptArcanaIds] }, rng, Math.max(0, 2 - keptArcana.length));
+  const arcana: SpireShopArcanaOffer[] = [
+    ...keptArcana,
+    ...freshArcanaIds.map(arcanaId => ({
+      arcanaId,
+      price: Math.round(75 * priceScale),
       sold: false,
-    };
-  });
+      locked: false,
+    })),
+  ];
+
+  const keptUpgradeIds = new Set(keptUpgrades.map(u => u.upgradeId));
+  const freshUpgrades: SpireShopUpgradeOffer[] = rng
+    .shuffle(SPIRE_SHOP_UPGRADE_IDS.filter(id => !keptUpgradeIds.has(id)))
+    .slice(0, Math.max(0, 2 - keptUpgrades.length))
+    .map(upgradeId => {
+      const def = getUpgrade(upgradeId);
+      const basePrice = Math.round(48 + (def.costs[0] ?? 200) * 0.065);
+      return {
+        upgradeId,
+        price: Math.round(basePrice * priceScale),
+        sold: false,
+        locked: false,
+      };
+    });
+  const upgrades = [...keptUpgrades, ...freshUpgrades];
 
   return {
     weapons,
@@ -342,6 +442,7 @@ export const selectSpireNode = (run: SpireRun, nodeId: string): SpireRun => {
   if (node.kind === 'skirmish' || node.kind === 'elite' || node.kind === 'boss') {
     return {
       ...base,
+      prevNodeId: run.currentNodeId,
       phase: 'preview',
       activeEncounter: node.encounter ?? null,
     };
@@ -349,7 +450,7 @@ export const selectSpireNode = (run: SpireRun, nodeId: string): SpireRun => {
 
   if (node.kind === 'shop') {
     return withRng(base, rng => ({
-      run: { ...base, phase: 'shop', shop: buildShopState(base, rng, 0) },
+      run: { ...base, lockedShop: undefined, phase: 'shop', shop: buildShopState(base, rng, 0, base.lockedShop) },
     }));
   }
 
@@ -381,6 +482,19 @@ export const selectSpireNode = (run: SpireRun, nodeId: string): SpireRun => {
   // Mystery Event
   const eventId = node.eventId ?? 'starfall_shrine';
   const seenEvents = base.seenEvents.includes(eventId) ? base.seenEvents : [...base.seenEvents, eventId];
+  if (eventId === 'wandering_alchemist') {
+    return withRng(base, rng => {
+      const offeredArcana = rollArcanaOptions(base, rng, 1)[0];
+      return {
+        run: {
+          ...base,
+          seenEvents,
+          phase: 'event',
+          event: { eventId, resolved: false, ...(offeredArcana ? { offeredArcana } : {}) },
+        },
+      };
+    });
+  }
   return {
     ...base,
     seenEvents,
@@ -391,13 +505,55 @@ export const selectSpireNode = (run: SpireRun, nodeId: string): SpireRun => {
 
 export const startSpireEncounter = (run: SpireRun): SpireRun => {
   if (run.phase !== 'preview' || !run.activeEncounter) return run;
-  return { ...run, phase: 'fight' };
+  return { ...run, prevNodeId: undefined, phase: 'fight' };
 };
 
 export const cancelSpirePreview = (run: SpireRun): SpireRun => {
-  // Note: once a node is entered in Slay the Spire you're committed, OR allow peeking back cleanly if you haven't fought yet!
   if (run.phase !== 'preview') return run;
-  return { ...run, phase: 'fight' };
+  if (run.prevNodeId !== undefined) {
+    const currentId = run.currentNodeId;
+    return {
+      ...run,
+      phase: 'map',
+      activeEncounter: null,
+      currentNodeId: run.prevNodeId,
+      prevNodeId: undefined,
+      floor: Math.max(0, run.floor - 1),
+      map: currentId
+        ? {
+            ...run.map,
+            nodes: run.map.nodes.map(n => (n.id === currentId ? { ...n, visited: false } : n)),
+          }
+        : run.map,
+    };
+  }
+  return { ...run, phase: 'map', activeEncounter: null };
+};
+
+/**
+ * Abandoning a live Spire battle is NEVER a free same-seed reset:
+ *  - If at 1 ♥, retreating forfeits the run cleanly (`phase: 'defeat'`).
+ *  - Otherwise it costs 1 ♥ and increments `retreats` (reshuffling the board seed)
+ *    before returning to the pre-battle briefing.
+ */
+export const retreatSpireBattle = (run: SpireRun, foeName?: string): SpireRun => {
+  if (run.phase !== 'fight') return run;
+  if (run.hearts <= 1) {
+    return {
+      ...run,
+      hearts: 0,
+      phase: 'defeat',
+      prevNodeId: undefined,
+      defeatedBy: foeName ?? run.activeEncounter?.name ?? 'Retreated',
+    };
+  }
+  return {
+    ...run,
+    hearts: run.hearts - 1,
+    retreats: (run.retreats ?? 0) + 1,
+    prevNodeId: undefined,
+    phase: 'preview',
+  };
 };
 
 // ─── Battle Completion ──────────────────────────────────────────────────────
@@ -612,7 +768,7 @@ export const shopBuyWeapon = (run: SpireRun, index: number): SpireRun => {
     stats: { ...run.stats, coinsSpent: run.stats.coinsSpent + offer.price },
     shop: {
       ...run.shop,
-      weapons: run.shop.weapons.map((w, i) => (i === index ? { ...w, sold: true } : w)),
+      weapons: run.shop.weapons.map((w, i) => (i === index ? { ...w, sold: true, locked: false } : w)),
     },
   };
 };
@@ -629,7 +785,7 @@ export const shopBuyArcana = (run: SpireRun, index: number): SpireRun => {
     stats: { ...run.stats, coinsSpent: run.stats.coinsSpent + offer.price },
     shop: {
       ...run.shop,
-      arcana: run.shop.arcana.map((a, i) => (i === index ? { ...a, sold: true } : a)),
+      arcana: run.shop.arcana.map((a, i) => (i === index ? { ...a, sold: true, locked: false } : a)),
     },
   };
 };
@@ -645,7 +801,7 @@ export const shopBuyUpgrade = (run: SpireRun, index: number): SpireRun => {
       stats: { ...run.stats, coinsSpent: run.stats.coinsSpent + offer.price },
       shop: {
         ...run.shop,
-        upgrades: run.shop.upgrades.map((u, i) => (i === index ? { ...u, sold: true } : u)),
+        upgrades: run.shop.upgrades.map((u, i) => (i === index ? { ...u, sold: true, locked: false } : u)),
       },
     },
     offer.upgradeId,
@@ -656,6 +812,80 @@ export const shopBuyUpgrade = (run: SpireRun, index: number): SpireRun => {
     next = { ...next, maxHearts: next.maxHearts + 1, hearts: Math.min(next.maxHearts + 1, next.hearts + 1) };
   }
   return next;
+};
+
+/** Toggle a Brotato-style lock on an unsold shop item (up to MAX_SHOP_LOCKS=2 total across shelves). */
+export const shopToggleLock = (
+  run: SpireRun,
+  kind: 'weapon' | 'arcana' | 'upgrade',
+  index: number
+): SpireRun => {
+  if (run.phase !== 'shop' || !run.shop) return run;
+  const shop = run.shop;
+  const lockedCount = countShopLocks(shop);
+
+  if (kind === 'weapon') {
+    const item = shop.weapons[index];
+    if (!item || item.sold) return run;
+    if (!item.locked && lockedCount >= MAX_SHOP_LOCKS) return run;
+    return {
+      ...run,
+      shop: {
+        ...shop,
+        weapons: shop.weapons.map((w, i) => (i === index ? { ...w, locked: !w.locked } : w)),
+      },
+    };
+  }
+  if (kind === 'arcana') {
+    const item = shop.arcana[index];
+    if (!item || item.sold) return run;
+    if (!item.locked && lockedCount >= MAX_SHOP_LOCKS) return run;
+    return {
+      ...run,
+      shop: {
+        ...shop,
+        arcana: shop.arcana.map((a, i) => (i === index ? { ...a, locked: !a.locked } : a)),
+      },
+    };
+  }
+  const item = shop.upgrades[index];
+  if (!item || item.sold) return run;
+  if (!item.locked && lockedCount >= MAX_SHOP_LOCKS) return run;
+  return {
+    ...run,
+    shop: {
+      ...shop,
+      upgrades: shop.upgrades.map((u, i) => (i === index ? { ...u, locked: !u.locked } : u)),
+    },
+  };
+};
+
+/** Sell a held weapon in the Spire Shop for 50% of shop value (must keep at least 1 weapon). */
+export const shopSellWeapon = (run: SpireRun, weaponId: string): SpireRun => {
+  if (run.phase !== 'shop' || !run.shop) return run;
+  if (run.weapons.length <= 1 || !run.weapons.includes(weaponId)) return run;
+  const lv = run.weaponLevels[weaponId] ?? 1;
+  const refund = spireWeaponSellValue(weaponId, lv);
+  const nextLevels = { ...run.weaponLevels };
+  delete nextLevels[weaponId];
+  return {
+    ...run,
+    coins: run.coins + refund,
+    weapons: run.weapons.filter(id => id !== weaponId),
+    weaponLevels: nextLevels,
+  };
+};
+
+/** Purge an unwanted Arcana in the Spire Shop for ARCANA_PURGE_COST (40¢). */
+export const shopPurgeArcana = (run: SpireRun, arcanaId: ArcanaId): SpireRun => {
+  if (run.phase !== 'shop' || !run.shop) return run;
+  if (!run.arcana.includes(arcanaId) || run.coins < ARCANA_PURGE_COST) return run;
+  return {
+    ...run,
+    coins: run.coins - ARCANA_PURGE_COST,
+    stats: { ...run.stats, coinsSpent: run.stats.coinsSpent + ARCANA_PURGE_COST },
+    arcana: run.arcana.filter(id => id !== arcanaId),
+  };
 };
 
 export const shopBuyHeal = (run: SpireRun): SpireRun => {
@@ -688,8 +918,9 @@ export const shopReroll = (run: SpireRun): SpireRun => {
   if (run.coins < run.shop.rerollCost) return run;
   const cost = run.shop.rerollCost;
   const nextRerolls = run.shop.rerolls + 1;
+  const locked = extractLockedShop(run.shop);
   return withRng(run, rng => {
-    const fresh = buildShopState(run, rng, nextRerolls);
+    const fresh = buildShopState(run, rng, nextRerolls, locked);
     return {
       run: {
         ...run,
@@ -703,7 +934,8 @@ export const shopReroll = (run: SpireRun): SpireRun => {
 
 export const leaveShop = (run: SpireRun): SpireRun => {
   if (run.phase !== 'shop') return run;
-  return { ...run, shop: null, phase: 'map' };
+  const lockedShop = run.shop ? extractLockedShop(run.shop) : undefined;
+  return { ...run, shop: null, lockedShop, phase: 'map' };
 };
 
 // ─── Campfire (Rest / Forge / Meditate) ─────────────────────────────────────
@@ -812,6 +1044,7 @@ export const chooseEventOption = (run: SpireRun, optionId: string): SpireRun => 
     let ambushEncounter: SpireEncounter | undefined;
     let pendingWeaponOptions: { weaponId: string; level: number }[] | undefined;
     let pendingSkillOptions: string[] | undefined;
+    let pendingArcanaOffer: ArcanaId | undefined;
     let pendingForge = false;
 
     const key = `${ev.id}:${optionId}`;
@@ -868,12 +1101,16 @@ export const chooseEventOption = (run: SpireRun, optionId: string): SpireRun => 
         break;
 
       case 'wandering_alchemist:arcana': {
-        const pool = rollArcanaOptions(next, rng, 1);
-        if (pool.length > 0) {
-          const id = pool[0];
-          next = { ...next, arcana: [...next.arcana, id] };
-          const def = ARCANA.find(a => a.id === id);
-          outcomeText = `Wild magic swirls! You gained Arcana: ${def?.name ?? id}.`;
+        const preRolled =
+          run.event?.offeredArcana && !next.arcana.includes(run.event.offeredArcana) && !SPIRE_EXCLUDED_ARCANA.has(run.event.offeredArcana)
+            ? run.event.offeredArcana
+            : undefined;
+        const offerId = preRolled ?? rollArcanaOptions(next, rng, 1)[0];
+        if (offerId) {
+          pendingArcanaOffer = offerId;
+          const def = ARCANA.find(a => a.id === offerId);
+          outcomeTitle = def ? `Arcana Offer · ${def.name}` : 'Arcana Offer';
+          outcomeText = 'Inspect the Tarot vial carefully — Accept its kiss-curse power or Decline safely.';
         } else {
           next = { ...next, coins: next.coins + 75 };
           outcomeText = 'You already hold every Arcana — the alchemist hands you +75¢ instead!';
@@ -1030,11 +1267,41 @@ export const chooseEventOption = (run: SpireRun, optionId: string): SpireRun => 
           ...(ambushEncounter ? { ambushEncounter } : {}),
           ...(pendingWeaponOptions?.length ? { pendingWeaponOptions } : {}),
           ...(pendingSkillOptions?.length ? { pendingSkillOptions } : {}),
+          ...(pendingArcanaOffer ? { pendingArcanaOffer } : {}),
           ...(pendingForge ? { pendingForge: true } : {}),
         },
       },
     };
   });
+};
+
+export const resolveEventPendingArcana = (run: SpireRun, accept: boolean): SpireRun => {
+  if (run.phase !== 'event' || !run.event?.pendingArcanaOffer) return run;
+  const offerId = run.event.pendingArcanaOffer;
+  const def = ARCANA.find(a => a.id === offerId);
+  const name = def?.name ?? offerId;
+  if (!accept) {
+    return {
+      ...run,
+      event: {
+        ...run.event,
+        pendingArcanaOffer: undefined,
+        outcomeTitle: 'Declined',
+        outcomeText: `You corked the vial and politely declined ${name}.`,
+      },
+    };
+  }
+  const arcana = run.arcana.includes(offerId) ? run.arcana : [...run.arcana, offerId];
+  return {
+    ...run,
+    arcana,
+    event: {
+      ...run.event,
+      pendingArcanaOffer: undefined,
+      outcomeTitle: `Bound ${name}!`,
+      outcomeText: `Wild magic swirls — ${name} is now active for the rest of your Spire climb!`,
+    },
+  };
 };
 
 export const resolveEventPendingWeapon = (run: SpireRun, index: number): SpireRun => {

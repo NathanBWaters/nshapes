@@ -27,10 +27,11 @@ import type { SpireRun } from '../types';
 interface Props {
   visible: boolean;
   run: SpireRun;
+  onReorderWeapon?: (fromIndex: number, toIndex: number) => void;
   onClose: () => void;
 }
 
-const SpireBuildModal: React.FC<Props> = ({ visible, run, onClose }) => {
+const SpireBuildModal: React.FC<Props> = ({ visible, run, onReorderWeapon, onClose }) => {
   const [selectedWeaponId, setSelectedWeaponId] = useState<string | null>(null);
   if (!visible) return null;
 
@@ -39,6 +40,7 @@ const SpireBuildModal: React.FC<Props> = ({ visible, run, onClose }) => {
   const armedIds = spireArmedRecipes(run);
   const armedRecipes = EVOLUTION_RECIPES.filter(r => armedIds.includes(r.id));
   const focusedWeapon = weapons.find(w => w.id === selectedWeaponId) ?? weapons[0] ?? null;
+  const focusedIdx = focusedWeapon ? run.weapons.indexOf(focusedWeapon.id) : -1;
 
   const heavyTier = run.upgrades?.heavy_hitter ?? 0;
   const bonusDmg = heavyTier > 0 ? (getUpgrade('heavy_hitter').bonusDamage?.(heavyTier) ?? heavyTier) : 0;
@@ -82,6 +84,31 @@ const SpireBuildModal: React.FC<Props> = ({ visible, run, onClose }) => {
                 />
               ))}
             </View>
+            {onReorderWeapon && focusedWeapon && focusedIdx >= 0 && weapons.length > 1 && (
+              <View style={st.reorderRow}>
+                <Text style={st.reorderLabel}>
+                  Slot {focusedIdx + 1}/{weapons.length} · {focusedWeapon.name}
+                </Text>
+                <View style={st.reorderBtns}>
+                  <TouchableOpacity
+                    testID="spire-build-move-left"
+                    disabled={focusedIdx === 0}
+                    onPress={() => onReorderWeapon(focusedIdx, focusedIdx - 1)}
+                    style={[st.moveBtn, focusedIdx === 0 && { opacity: 0.35 }]}
+                  >
+                    <Text style={st.moveBtnText}>◀ Left</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    testID="spire-build-move-right"
+                    disabled={focusedIdx === weapons.length - 1}
+                    onPress={() => onReorderWeapon(focusedIdx, focusedIdx + 1)}
+                    style={[st.moveBtn, focusedIdx === weapons.length - 1 && { opacity: 0.35 }]}
+                  >
+                    <Text style={st.moveBtnText}>Right ▶</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
             {focusedWeapon && (
               <WeaponExplainer weapon={focusedWeapon} build={builds[focusedWeapon.id]} defaultOpen hidePowerNote />
             )}
@@ -159,6 +186,11 @@ const st = StyleSheet.create({
   cardGroup: { gap: 6 },
   muted: { fontSize: 12, color: TONE.spent },
   weaponGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  reorderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, backgroundColor: COLORS.paperBeige, borderRadius: 8, borderWidth: 1.5, borderColor: '#D6CFC4', paddingHorizontal: 8, paddingVertical: 6 },
+  reorderLabel: { flex: 1, fontSize: 11, fontWeight: '800', color: INK },
+  reorderBtns: { flexDirection: 'row', gap: 6 },
+  moveBtn: { backgroundColor: COLORS.canvasWhite, borderRadius: 6, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 8, paddingVertical: 4 },
+  moveBtnText: { fontSize: 10.5, fontWeight: '900', color: INK },
   ascLine: { fontSize: 11, color: INK, opacity: 0.85, lineHeight: 16 },
   footer: { padding: 12, borderTopWidth: 2, borderTopColor: INK, backgroundColor: COLORS.paperBeige },
 });

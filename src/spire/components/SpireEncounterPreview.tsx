@@ -24,9 +24,10 @@ interface Props {
   encounter: SpireEncounter;
   onFight: () => void;
   onInspectBuild: () => void;
+  onBack?: () => void;
 }
 
-const SpireEncounterPreview: React.FC<Props> = ({ run, encounter, onFight, onInspectBuild }) => {
+const SpireEncounterPreview: React.FC<Props> = ({ run, encounter, onFight, onInspectBuild, onBack }) => {
   const biome = getBiome(encounter.biome);
   const foeDef = encounter.foes[0];
   const foe = foeDisplay(foeDef);
@@ -111,6 +112,9 @@ const SpireEncounterPreview: React.FC<Props> = ({ run, encounter, onFight, onIns
             <View style={st.actions}>
               <Btn testID="spire-enter-fight" label="FIGHT!" icon="lorc/crossed-swords" onPress={onFight} />
               <Btn small variant="secondary" label="Inspect My Build" icon="lorc/gems" onPress={onInspectBuild} />
+              {onBack && (
+                <Btn testID="spire-preview-back" small variant="ghost" label="Back to Map" onPress={onBack} />
+              )}
             </View>
           </View>
         </PopIn>

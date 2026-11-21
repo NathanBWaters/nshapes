@@ -6,21 +6,26 @@
  * badges, bobbing reachable choices, and Act Boss preview.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Svg, Line } from 'react-native-svg';
 import Icon, { type IconName } from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
 import { COLORS } from '@/utils/colors';
 import { getBiome } from '@/adventure/data/biomes';
 import { foeDisplay } from '@/adventure/data/foes';
-import { Bob, Eyebrow, INK, TONE } from '@/adventure/components/ui';
+import ParryPreviewCard from '@/adventure/components/ParryPreviewCard';
+import { FoeAbilityCard, HazardNotices, ShadingSurgeNotice } from '@/adventure/components/SharedCards';
+import { Bob, Btn, Eyebrow, INK, PopIn, Skulls, TONE } from '@/adventure/components/ui';
 import { sfx } from '@/audio';
+import { spireEncounterLoadout } from '../engine/bridge';
 import { reachableNodeIds } from '../engine/mapGen';
 import type { SpireNode, SpireNodeKind, SpireRun } from '../types';
+import SpireBeltBar from './SpireBeltBar';
 
 interface Props {
   run: SpireRun;
   onSelectNode: (nodeId: string) => void;
+  onReorderWeapon?: (fromIndex: number, toIndex: number) => void;
 }
 
 const NODE_STYLE: Record<SpireNodeKind, { label: string; icon: IconName; bg: string; fg: string; border: string }> = {
@@ -37,10 +42,11 @@ const ROW_H = 82;
 const TOP_PAD = 36;
 const BOSS_ROW_EXTRA = 22;
 
-const SpireMap: React.FC<Props> = ({ run, onSelectNode }) => {
+const SpireMap: React.FC<Props> = ({ run, onSelectNode, onReorderWeapon }) => {
   const scrollRef = useRef<ScrollView>(null);
   const [canvasW, setCanvasW] = useState(340);
   const [viewH, setViewH] = useState(0);
+  const [bossModalOpen, setBossModalOpen] = useState(false);
   const { map } = run;
   const biome = getBiome(map.biome);
   const reachable = useMemo(() => new Set(reachableNodeIds(map, run.currentNodeId)), [map, run.currentNodeId]);
@@ -73,7 +79,13 @@ const SpireMap: React.FC<Props> = ({ run, onSelectNode }) => {
 
   const nodeById = useMemo(() => new Map(map.nodes.map(n => [n.id, n])), [map.nodes]);
   const bossNode = map.nodes.find(n => n.kind === 'boss');
-  const bossFoe = bossNode?.encounter ? foeDisplay(bossNode.encounter.foes[0]) : null;
+  const bossEncounter = bossNode?.encounter ?? null;
+  const bossFoeDef = bossEncounter?.foes[0] ?? null;
+  const bossFoe = bossFoeDef ? foeDisplay(bossFoeDef) : null;
+  const bossLoadout = useMemo(
+    () => (bossModalOpen && bossEncounter ? spireEncounterLoadout(run, bossEncounter) : null),
+    [bossModalOpen, bossEncounter, run]
+  );
 
   return (
     <View style={[st.root, { backgroundColor: biome.colors.sky }]} testID="spire-map">
@@ -83,11 +95,25 @@ const SpireMap: React.FC<Props> = ({ run, onSelectNode }) => {
           <Text style={st.actTitle} numberOfLines={1}>{map.title}</Text>
           <Text style={st.actSub} numberOfLines={2}>{map.subtitle}</Text>
         </View>
-        {bossFoe && (
-          <View style={st.bossPreview}>
+        {bossFoe && bossEncounter && (
+          <TouchableOpacity
+            testID="spire-map-boss-preview"
+            onPress={() => {
+              sfx('click');
+              setBossModalOpen(true);
+            }}
+            activeOpacity={0.82}
+            accessibilityRole="button"
+            accessibilityLabel={`Inspect Act ${map.act} Boss: ${bossFoe.name}`}
+            style={st.bossPreview}
+          >
             <EnemyAvatar enemy={bossFoe} size={40} mood="enraged" lightweight animate={false} />
             <Text style={st.bossPreviewText} numberOfLines={1}>{bossFoe.name}</Text>
-          </View>
+            <View style={st.bossInspectPill}>
+              <Icon name="lorc/magnifying-glass" size={9} color={INK} />
+              <Text style={st.bossInspectText}>BOSS</Text>
+            </View>
+          </TouchableOpacity>
         )}
       </View>
 
@@ -137,20 +163,30 @@ const SpireMap: React.FC<Props> = ({ run, onSelectNode }) => {
           </Svg>
 
           {/* Interactive Nodes */}
-          {map.nodes.map(node => (
-            <MapNodeButton
-              key={node.id}
-              node={node}
-              x={centerX(node.col, node.kind === 'boss')}
-              y={centerY(node.row)}
-              isCurrent={node.id === run.currentNodeId}
-              isReachable={reachable.has(node.id)}
-              onPress={() => {
-                sfx('confirm');
-                onSelectNode(node.id);
-              }}
-            />
-          ))}
+          {map.nodes.map(node => {
+            const isReachable = reachable.has(node.id);
+            const canInspectBoss = node.kind === 'boss' && !isReachable && Boolean(bossEncounter);
+            return (
+              <MapNodeButton
+                key={node.id}
+                node={node}
+                x={centerX(node.col, node.kind === 'boss')}
+                y={centerY(node.row)}
+                isCurrent={node.id === run.currentNodeId}
+                isReachable={isReachable}
+                canInspectBoss={canInspectBoss}
+                onPress={() => {
+                  if (isReachable) {
+                    sfx('confirm');
+                    onSelectNode(node.id);
+                  } else if (canInspectBoss) {
+                    sfx('click');
+                    setBossModalOpen(true);
+                  }
+                }}
+              />
+            );
+          })}
         </View>
 
         {/* Legend */}
@@ -162,7 +198,74 @@ const SpireMap: React.FC<Props> = ({ run, onSelectNode }) => {
             </View>
           ))}
         </View>
+
+        {onReorderWeapon && (
+          <View style={st.beltWrap}>
+            <SpireBeltBar
+              run={run}
+              onReorder={onReorderWeapon}
+              title="BELT ORDER"
+              compact
+              testIDPrefix="spire-map-belt"
+            />
+          </View>
+        )}
       </ScrollView>
+
+      {/* Floor-1 Act Boss Full Preview Modal (Monster Train Ring-1 Seraph rule!) */}
+      {bossModalOpen && bossEncounter && bossFoe && bossFoeDef && (
+        <Modal visible transparent animationType="fade" onRequestClose={() => setBossModalOpen(false)}>
+          <View style={st.modalOverlay} testID="spire-map-boss-modal">
+            <TouchableOpacity
+              style={StyleSheet.absoluteFill}
+              onPress={() => setBossModalOpen(false)}
+              accessibilityLabel="Close Act Boss preview"
+            />
+            <PopIn style={st.bossSheet}>
+              <View style={st.bossSheetHeader}>
+                <View style={st.bossHeaderTop}>
+                  <Eyebrow text={`ACT ${map.act} BOSS · PLAN AHEAD`} color={COLORS.actionYellow} />
+                  <Skulls n={bossEncounter.difficulty} />
+                </View>
+                <View style={st.bossHeaderRow}>
+                  <View style={st.bossPortrait}>
+                    <EnemyAvatar enemy={bossFoe} size={64} mood="enraged" lightweight animate={false} />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+                    <Text style={st.bossSheetTitle}>{bossFoe.name}</Text>
+                    <Text style={st.bossHpLine}>
+                      {bossFoeDef.hp.toLocaleString()} HP · {bossLoadout?.timer ?? bossEncounter.timer}s clock
+                    </Text>
+                    {bossFoeDef.taunt && (
+                      <Text style={st.bossTaunt} numberOfLines={2}>“{bossFoeDef.taunt}”</Text>
+                    )}
+                  </View>
+                </View>
+              </View>
+
+              <ScrollView contentContainerStyle={st.bossSheetBody}>
+                <FoeAbilityCard foe={bossFoe} showAvatar={false} />
+                <ParryPreviewCard spec={bossEncounter.parry} testID="spire-map-boss-parry" />
+                {bossEncounter.shadingSurge && <ShadingSurgeNotice />}
+                {bossEncounter.hazards && (
+                  <HazardNotices hazards={bossEncounter.hazards} testID="spire-map-boss-hazards" />
+                )}
+              </ScrollView>
+
+              <View style={st.bossSheetFooter}>
+                <Btn
+                  testID="spire-map-boss-close"
+                  label="Back to Map"
+                  onPress={() => {
+                    sfx('click');
+                    setBossModalOpen(false);
+                  }}
+                />
+              </View>
+            </PopIn>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 };
@@ -173,8 +276,9 @@ const MapNodeButton: React.FC<{
   y: number;
   isCurrent: boolean;
   isReachable: boolean;
+  canInspectBoss?: boolean;
   onPress: () => void;
-}> = ({ node, x, y, isCurrent, isReachable, onPress }) => {
+}> = ({ node, x, y, isCurrent, isReachable, canInspectBoss = false, onPress }) => {
   const cfg = NODE_STYLE[node.kind];
   const isBoss = node.kind === 'boss';
   const w = isBoss ? 132 : 84;
@@ -184,11 +288,11 @@ const MapNodeButton: React.FC<{
   const inner = (
     <TouchableOpacity
       testID={`spire-node-${node.id}`}
-      disabled={!isReachable}
+      disabled={!isReachable && !canInspectBoss}
       onPress={onPress}
       activeOpacity={0.82}
       accessibilityRole="button"
-      accessibilityLabel={`${cfg.label}${foeName ? `: ${foeName}` : ''}${isReachable ? ', available' : ''}`}
+      accessibilityLabel={`${cfg.label}${foeName ? `: ${foeName}` : ''}${isReachable ? ', available' : canInspectBoss ? ', tap to inspect' : ''}`}
       style={[
         st.node,
         {
@@ -198,7 +302,7 @@ const MapNodeButton: React.FC<{
           borderColor: isReachable ? INK : isCurrent ? TONE.upside : cfg.border,
           borderWidth: isReachable ? 3 : 2,
           borderBottomWidth: isReachable ? 5 : 3,
-          opacity: isReachable || isCurrent ? 1 : node.visited ? 0.65 : 0.72,
+          opacity: isReachable || isCurrent || canInspectBoss ? 1 : node.visited ? 0.65 : 0.72,
         },
       ]}
     >
@@ -229,8 +333,10 @@ const st = StyleSheet.create({
   actBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.canvasWhite, borderBottomWidth: 2, borderBottomColor: INK, paddingHorizontal: 12, paddingVertical: 8 },
   actTitle: { fontSize: 16, fontWeight: '900', color: INK, marginTop: 2 },
   actSub: { fontSize: 11, color: TONE.spent, lineHeight: 15 },
-  bossPreview: { alignItems: 'center', backgroundColor: '#FFFBEB', borderRadius: 10, borderWidth: 2, borderColor: INK, paddingHorizontal: 8, paddingVertical: 4, maxWidth: 96 },
+  bossPreview: { alignItems: 'center', backgroundColor: '#FFFBEB', borderRadius: 10, borderWidth: 2, borderBottomWidth: 4, borderColor: INK, paddingHorizontal: 8, paddingVertical: 4, maxWidth: 104 },
   bossPreviewText: { fontSize: 9, fontWeight: '900', color: INK, marginTop: 2 },
+  bossInspectPill: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2, backgroundColor: COLORS.actionYellow, borderRadius: 4, borderWidth: 1, borderColor: INK, paddingHorizontal: 4, paddingVertical: 1 },
+  bossInspectText: { fontSize: 7.5, fontWeight: '900', color: INK, letterSpacing: 0.4 },
   scrollContent: { paddingHorizontal: 10, paddingTop: 10, paddingBottom: 28, alignItems: 'center', width: '100%' },
   prompt: { fontSize: 12, fontWeight: '900', color: INK, backgroundColor: 'rgba(255,255,255,0.85)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 999, borderWidth: 1.5, borderColor: INK, overflow: 'hidden' },
   canvas: { width: '100%', maxWidth: 480, position: 'relative', marginTop: 6 },
@@ -243,6 +349,18 @@ const st = StyleSheet.create({
   legend: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 8, backgroundColor: 'rgba(255,255,255,0.88)', borderRadius: 10, borderWidth: 1.5, borderColor: INK, padding: 8, maxWidth: 460 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   legendText: { fontSize: 10, fontWeight: '800', color: INK },
+  beltWrap: { width: '100%', maxWidth: 460, marginTop: 10 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(18,18,18,0.65)', justifyContent: 'center', alignItems: 'center', padding: 14 },
+  bossSheet: { width: '100%', maxWidth: 460, maxHeight: '88%', backgroundColor: COLORS.canvasWhite, borderRadius: 14, borderWidth: 3, borderBottomWidth: 6, borderColor: INK, overflow: 'hidden' },
+  bossSheetHeader: { backgroundColor: '#FEF3C7', borderBottomWidth: 2, borderBottomColor: INK, padding: 12, gap: 8 },
+  bossHeaderTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  bossHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  bossPortrait: { width: 74, height: 74, borderRadius: 12, borderWidth: 2.5, borderColor: '#B45309', backgroundColor: '#FFFBEB', alignItems: 'center', justifyContent: 'center' },
+  bossSheetTitle: { fontSize: 19, fontWeight: '900', color: INK },
+  bossHpLine: { fontSize: 12.5, fontWeight: '800', color: '#991B1B', fontVariant: ['tabular-nums'] },
+  bossTaunt: { fontSize: 11.5, fontStyle: 'italic', fontWeight: '700', color: INK, opacity: 0.85 },
+  bossSheetBody: { padding: 12, gap: 10 },
+  bossSheetFooter: { padding: 12, borderTopWidth: 2, borderTopColor: INK, backgroundColor: COLORS.paperBeige },
 });
 
 export default SpireMap;
