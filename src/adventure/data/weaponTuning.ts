@@ -34,7 +34,6 @@ export interface AdventureTuning {
   rider?: (v: V) => RuleSource;
 }
 
-const r = Math.round;
 const strike = (trigger: Trigger, amount: number, callout?: string): Rule => ({
   trigger,
   effects: [{ do: 'damage', amount }],
@@ -42,25 +41,31 @@ const strike = (trigger: Trigger, amount: number, callout?: string): Rule => ({
 });
 const dmg = (label: string, base: number, perLevel: number): WeaponStatDef => ({ label, unit: 'dmg', base, perLevel });
 
-/** Oracle Eye: a Set this long after the last one is a "patient" Set */
-export const ORACLE_PATIENCE_MS = 8000;
+/** Oracle Eye: auto-hint idle wait in seconds (BASE_WAIT_TIME 8s − autoHintInterval 3s = 5s) */
+export const ORACLE_WAIT_S = 5;
 /** Seeker Lens: Set damage per hint you are holding */
 export const SEEKER_DAMAGE_PER_HINT = 1;
 /** Mystic Sight: every Nth Set */
 export const MYSTIC_EVERY = 3;
+/** Life Link: every Nth Set at full hearts unleashes a Life Pulse */
+export const LIFE_LINK_PULSE_EVERY = 4;
+/** Wisdom Chain: every Nth Set grants bonus XP */
+export const WISDOM_XP_EVERY = 5;
+/** Wisdom Chain: standing % coin bonus */
+export const WISDOM_COIN_PCT = 15;
 
 export const ADVENTURE_TUNING: Record<string, AdventureTuning> = {
   // ── Damage ────────────────────────────────────────────────────────────────
   'blast-powder': { effects: { explosionChance: 18, explosionDamage: 0.5 }, perLevel: { explosionChance: 4, explosionDamage: 0.25 } },
-  'flint-spark': { effects: { fireSpreadChance: 18, burnDamage: 0.5 }, perLevel: { fireSpreadChance: 4, burnDamage: 0.25 } },
+  'flint-spark': { effects: { fireSpreadChance: 20, burnDamage: 0.75 }, perLevel: { fireSpreadChance: 4, burnDamage: 0.35 } },
   'prismatic-ray': { effects: { laserChance: 10, laserDamage: 0.5 }, perLevel: { laserChance: 2.5, laserDamage: 0.75 } },
   'chaos-shard': {
-    effects: { ricochetChance: 18, ricochetChainChance: 20, ricochetDamage: 0.5 },
-    perLevel: { ricochetChance: 5.5, ricochetChainChance: 5, ricochetDamage: 0.5 },
+    effects: { ricochetChance: 18, ricochetChainChance: 22, ricochetDamage: 0.5 },
+    perLevel: { ricochetChance: 4.5, ricochetChainChance: 5.5, ricochetDamage: 0.5 },
   },
   'echo-stone': {
-    effects: { echoChance: 15 },
-    perLevel: { echoChance: 2.5 },
+    effects: { echoChance: 14 },
+    perLevel: { echoChance: 2 },
     extra: { strike: dmg('Echo damage', 3, 1.75) },
     rider: v => ({ rules: [strike({ on: 'weapon', kind: 'echo' }, v.strike)] }),
   },
@@ -76,8 +81,8 @@ export const ADVENTURE_TUNING: Record<string, AdventureTuning> = {
   'field-stone': {
     effects: { fieldSize: 2 },
     perLevel: { fieldSize: 1 },
-    extra: { charge: dmg('Opening power per card', 1, 0.5) },
-    rider: v => ({ rules: [{ trigger: { on: 'waveStart' }, effects: [{ do: 'empowerBoard', amount: Math.max(1, r(v.charge)) }] }] }),
+    extra: { charge: { label: 'Opening power per card', unit: 'dmg', base: 1, perLevel: 0.5, tunable: false } },
+    rider: v => ({ rules: [{ trigger: { on: 'waveStart' }, effects: [{ do: 'empowerBoard', amount: Math.round(v.charge * 2) / 2 }] }] }),
   },
 
   // ── Hearts ────────────────────────────────────────────────────────────────
@@ -94,14 +99,26 @@ export const ADVENTURE_TUNING: Record<string, AdventureTuning> = {
     rider: v => ({ modifiers: { conditionalDamage: [{ when: [{ kind: 'heartsFull' }], amount: v.vigor }] } }),
   },
   'soul-harvest': {
-    effects: { ricochetChance: 14, ricochetDamage: 0.5, bridgeChance: 22 },
+    effects: { ricochetChance: 16, ricochetDamage: 0.5, bridgeChance: 24 },
     perLevel: { ricochetChance: 3.5, ricochetDamage: 0.25, bridgeChance: 6 },
-    extra: { strike: dmg('Soul heal damage', 3, 1) },
-    rider: v => ({ rules: [strike({ on: 'healed' }, v.strike)] }),
+    extra: { strike: dmg('Soul heal damage', 4, 1.5) },
+    rider: v => ({ rules: [strike({ on: 'healed' }, v.strike, 'Soul Harvest!')] }),
   },
   'life-link': {
-    effects: { maxHealth: 1, health: 1, explosionChance: 8, bridgeChance: 50 },
-    perLevel: { explosionChance: 2, bridgeChance: 10 },
+    effects: { maxHealth: 1, health: 1, explosionChance: 10, bridgeChance: 35 },
+    perLevel: { maxHealth: 0.5, health: 0.5, explosionChance: 2.5, bridgeChance: 6 },
+    extra: { strike: dmg('Full-heart pulse damage', 4, 1.5) },
+    rider: v => ({
+      rules: [
+        { trigger: { on: 'waveStart' }, effects: [{ do: 'shield', count: 1 }], callout: 'Life Ward!' },
+        {
+          trigger: { on: 'everyNthSet', n: LIFE_LINK_PULSE_EVERY },
+          when: [{ kind: 'heartsFull' }],
+          effects: [{ do: 'damage', amount: v.strike }, { do: 'explode', area: { shape: 'random', count: 2 } }],
+          callout: 'Life Pulse!',
+        },
+      ],
+    }),
   },
 
   // ── Graces ────────────────────────────────────────────────────────────────
@@ -120,39 +137,57 @@ export const ADVENTURE_TUNING: Record<string, AdventureTuning> = {
     perLevel: { explosionChance: 2, bridgeChance: 8 },
   },
   'grace-conduit': {
-    effects: { graces: 1, laserDamage: 0.5, bridgeChance: 40 },
-    perLevel: { graces: 0.5, laserDamage: 0.5, bridgeChance: 10 },
+    effects: { graces: 1, laserDamage: 0.5, bridgeChance: 38 },
+    perLevel: { graces: 0.5, laserDamage: 0.5, bridgeChance: 6 },
   },
 
   // ── Hints ─────────────────────────────────────────────────────────────────
   'seeker-lens': {
     effects: { hintGainChance: 15 },
-    perLevel: { hintGainChance: 5 },
+    perLevel: { hintGainChance: 4.5 },
     extra: { strike: dmg('Damage per hint found', 3, 0.75) },
     // Hoard them: every hint you are holding is worth damage on every Set
     rider: v => ({ rules: [strike({ on: 'weapon', kind: 'hint' }, v.strike)], modifiers: { hintHeldDamage: SEEKER_DAMAGE_PER_HINT } }),
   },
   'crystal-orb': {
-    extra: { strike: dmg('Damage per hint used', 3, 1.5) },
-    rider: v => ({ rules: [strike({ on: 'hintUsed' }, v.strike)], modifiers: { startingHints: Math.floor(v.maxHints) } }),
+    effects: { maxHints: 1, hints: 1 },
+    perLevel: { maxHints: 1, hints: 1 },
+    extra: {
+      strike: dmg('Damage per hint used', 3, 1.5),
+      insight: dmg('Hinted Set bonus', 3, 1),
+    },
+    rider: v => ({ rules: [strike({ on: 'hintUsed' }, v.strike)], modifiers: { hintedSetDamage: v.insight } }),
   },
   'oracle-eye': {
-    effects: { autoHintChance: 25 },
+    effects: { autoHintChance: 30, autoHintInterval: 3000 },
     perLevel: { autoHintChance: 6 },
-    extra: { patience: dmg('Patient Set damage', 2, 0.75) },
-    rider: v => ({ modifiers: { conditionalDamage: [{ when: [{ kind: 'timeSinceLastSetAtLeast', ms: ORACLE_PATIENCE_MS }], amount: v.patience }] } }),
+    extra: {
+      insight: dmg('Hinted Set bonus', 4, 1.5),
+      clarity: dmg('Clean-play Set bonus', 2, 0.5),
+    },
+    rider: v => ({
+      modifiers: {
+        hintedSetDamage: v.insight,
+        conditionalDamage: [{ when: [{ kind: 'noMistakesThisFight' }], amount: v.clarity }],
+      },
+    }),
   },
   'mystic-sight': {
-    effects: { enhancedHintChance: 33, autoHintChance: 12 },
+    effects: { enhancedHintChance: 33, autoHintChance: 16, autoHintInterval: 2000 },
     perLevel: { enhancedHintChance: 4, autoHintChance: 3 },
-    extra: { third: dmg('Third Eye damage', 3, 1.5) },
+    extra: { third: dmg('Third Eye damage', 4, 1.5) },
     rider: v => ({ rules: [strike({ on: 'everyNthSet', n: MYSTIC_EVERY }, v.third, 'Third Eye!')] }),
   },
   'fortunes-blessing': {
-    effects: { coinGainChance: 15, bridgeChance: 30 },
-    perLevel: { coinGainChance: 4, bridgeChance: 8 },
-    extra: { strike: dmg('Damage per bonus coin', 2, 0.25) },
-    rider: v => ({ rules: [strike({ on: 'weapon', kind: 'coin' }, v.strike)] }),
+    effects: { coinGainChance: 18, bridgeChance: 30 },
+    perLevel: { coinGainChance: 4, bridgeChance: 7 },
+    extra: { strike: dmg('Gold & bonus-card strike', 5, 1.5) },
+    rider: v => ({
+      rules: [
+        { trigger: { on: 'waveStart' }, effects: [{ do: 'convert', to: 'gold', count: 1 }], callout: 'Gilded!' },
+        { trigger: { on: 'bonusCardMatched' }, effects: [{ do: 'damage', amount: v.strike }], callout: 'Gilded!' },
+      ],
+    }),
   },
 
   // ── Coins & XP ────────────────────────────────────────────────────────────
@@ -165,10 +200,16 @@ export const ADVENTURE_TUNING: Record<string, AdventureTuning> = {
     rider: v => ({ rules: [strike({ on: 'weapon', kind: 'xp' }, v.strike)] }),
   },
   'wisdom-chain': {
-    effects: { xpGainChance: 15, bridgeChance: 30 },
-    perLevel: { xpGainChance: 4, bridgeChance: 8 },
-    extra: { strike: dmg('Damage per bonus XP', 2, 0.25) },
-    rider: v => ({ rules: [strike({ on: 'weapon', kind: 'xp' }, v.strike)] }),
+    effects: { xpGainChance: 18, bridgeChance: 30 },
+    perLevel: { xpGainChance: 4, bridgeChance: 7 },
+    extra: { strike: dmg('Dividend strike per coin', 3, 1) },
+    rider: v => ({
+      modifiers: { coinPercent: WISDOM_COIN_PCT },
+      rules: [
+        { trigger: { on: 'everyNthSet', n: WISDOM_XP_EVERY }, effects: [{ do: 'xp', amount: 2 }], callout: 'Insight!' },
+        strike({ on: 'weapon', kind: 'coin' }, v.strike, 'Dividend!'),
+      ],
+    }),
   },
 
   // ── Time ──────────────────────────────────────────────────────────────────
@@ -181,12 +222,12 @@ export const ADVENTURE_TUNING: Record<string, AdventureTuning> = {
 
   // ── Echoes & links ────────────────────────────────────────────────────────
   'chain-reaction': {
-    effects: { echoChance: 7, chainReactionChance: 30 },
-    perLevel: { echoChance: 2, chainReactionChance: 10 },
+    effects: { echoChance: 8, chainReactionChance: 25 },
+    perLevel: { echoChance: 2, chainReactionChance: 9 },
     extra: { strike: dmg('Echo damage', 2, 1) },
     rider: v => ({ rules: [strike({ on: 'weapon', kind: 'echo' }, v.strike)] }),
   },
-  'cascade-core': { effects: { echoChance: 9, burnDamage: 1, bridgeChance: 45 }, perLevel: { echoChance: 2.5, burnDamage: 0.5, bridgeChance: 10 } },
-  'neural-network': { effects: { connectionChance: 12, bonusConnectionChance: 30 }, perLevel: { connectionChance: 3, bonusConnectionChance: 10 } },
+  'cascade-core': { effects: { echoChance: 9, burnDamage: 1, bridgeChance: 38 }, perLevel: { echoChance: 2.5, burnDamage: 0.5, bridgeChance: 6 } },
+  'neural-network': { effects: { connectionChance: 14, bonusConnectionChance: 25 }, perLevel: { connectionChance: 3, bonusConnectionChance: 9 } },
   'echo-chamber': { effects: { startingConnections: 1, echoTimeBonusPerLink: 0.5 }, perLevel: { startingConnections: 0.25, echoTimeBonusPerLink: 0.25 } },
 };

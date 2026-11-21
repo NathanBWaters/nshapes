@@ -167,13 +167,26 @@ describe('loadout', () => {
     const drum = (level: number, tuning: Record<string, number> = {}) => {
       const w = getArmoryWeapon('war-drum', { 'war-drum': { level, tuning } }) as AdventureWeapon;
       const r = w.rules![0];
-      const e = r.effects[0];
-      return [r.trigger.on === 'setsWithin' ? r.trigger.withinMs : NaN, e.do === 'empowerBoard' ? e.amount : NaN];
+      const empower = r.effects[0];
+      const hit = r.effects[1];
+      return [
+        r.trigger.on === 'setsWithin' ? r.trigger.withinMs : NaN,
+        empower.do === 'empowerBoard' ? empower.amount : NaN,
+        hit?.do === 'damage' ? hit.amount : NaN,
+      ];
     };
-    expect([1, 2, 3, 4, 5].map(l => drum(l))).toEqual([[15000, 1], [16500, 1], [18000, 2], [19500, 2], [21000, 2]]);
-    // ×1.5 on the window and on power, at level 5
-    expect(drum(5, { window: 4, power: 4 })).toEqual([31500, 3]);
-    expect(getArmoryWeapon('war-drum', { 'war-drum': { level: 3, tuning: {} } })!.shortDescription).toBe('3 Sets in 18s: board +2 damage');
+    // Window stays tight (14-16s); power scales cleanly without dead levels; slam scales cleanly too
+    expect([1, 2, 3, 4, 5].map(l => drum(l))).toEqual([
+      [14000, 1, 5],
+      [14500, 1.5, 7],
+      [15000, 2, 9],
+      [15500, 2.5, 11],
+      [16000, 3, 13],
+    ]);
+    // ×1.5 on tunable slam at level 5 (window & power stay tight and untunable, zero rounding traps)
+    expect(drum(5, { slam: 4 })).toEqual([16000, 3, 19.5]);
+    expect(getArmoryWeapon('war-drum', { 'war-drum': { level: 3, tuning: {} } })!.shortDescription)
+      .toBe('3 Sets in 15s: +9 dmg & board +2');
   });
 
   it('every adventure weapon has numbers that grow with level and wording built from them', () => {

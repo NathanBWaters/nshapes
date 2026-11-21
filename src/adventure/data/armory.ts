@@ -53,12 +53,15 @@ export const getArmoryWeapon = (id: string, builds?: WeaponBuilds, grown?: Reado
 
 /**
  * The Understudy standing in for `leftId`: the Understudy item with that
- * weapon's numbers, rules and wording at the Understudy's own level, untuned.
- * It keeps its own id, so it never arms the copied weapon's evolutions.
+ * weapon's numbers, rules and wording at the higher of the Understudy's level
+ * and the copied charm's level, untuned. It keeps its own id, so it never arms
+ * the copied weapon's evolutions.
  */
 export const understudyOf = (understudy: Weapon, leftId: string | undefined, builds?: WeaponBuilds): Weapon => {
   if (!leftId || leftId === UNDERSTUDY_ID) return understudy;
-  const level = builds?.[UNDERSTUDY_ID]?.level ?? 1;
+  const understudyLevel = builds?.[UNDERSTUDY_ID]?.level ?? 1;
+  const leftLevel = builds?.[leftId]?.level ?? 1;
+  const level = Math.max(understudyLevel, leftLevel);
   const copy = getArmoryWeapon(leftId, { [leftId]: { level, tuning: {} } }) as AdventureWeapon | undefined;
   if (!copy) return understudy;
   return {
@@ -69,7 +72,7 @@ export const understudyOf = (understudy: Weapon, leftId: string | undefined, bui
     rules: copy.rules,
     modifiers: copy.modifiers,
     description: `Copying ${copy.name} at level ${level}: ${copy.description}`,
-    shortDescription: `${copy.name} again: ${copy.shortDescription}`,
+    shortDescription: `${copy.name} again (Lv ${level}): ${copy.shortDescription}`,
   } as Weapon;
 };
 

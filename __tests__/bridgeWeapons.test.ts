@@ -39,10 +39,10 @@ describe('Bridge Weapons', () => {
       });
     });
 
-    it('bridge weapon prices should be in legendary range (30-50 coins)', () => {
+    it('bridge weapon prices should be in balanced range (10-14 coins)', () => {
       bridgeWeapons.forEach(weapon => {
-        expect(weapon.price).toBeGreaterThanOrEqual(30);
-        expect(weapon.price).toBeLessThanOrEqual(50);
+        expect(weapon.price).toBeGreaterThanOrEqual(10);
+        expect(weapon.price).toBeLessThanOrEqual(14);
       });
     });
   });

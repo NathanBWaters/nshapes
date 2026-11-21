@@ -103,12 +103,22 @@ export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
   ],
 
   // ── Damage: these already hit hard, so they grow sideways ─────────────────
-  // Blast Powder: nothing. It is already the strongest thing in the Armory.
+  'blast-powder': [
+    { watch: weaponOn('explosion'), every: 3, max: 4, stat: { explosionDamage: 0.25 }, look: 'explosions', gives: 'blasted cards deal +0.25 more damage' },
+  ],
   'rainbow-charm': [
     { watch: { on: 'set', test: 'rainbow' }, every: 2, max: 6, stat: { mult: 0.25 }, look: 'Rainbow Sets', gives: '+0.25× Rainbow multiplier' },
   ],
   'flint-spark': [
-    { watch: { on: 'cardBurned' }, every: 4, max: 5, proc: { on: weaponOn('fire'), pct: 6, effect: { do: 'ignite', count: 1 } }, look: 'cards burned up', gives: '+6% chance that a new fire catches one more card' },
+    {
+      watch: { on: 'cardBurned' },
+      every: 3,
+      max: 5,
+      stat: { burnDamage: 0.25 },
+      proc: { on: weaponOn('fire'), pct: 12, effect: { do: 'ignite', count: 1 } },
+      look: 'cards burned up',
+      gives: 'burns deal +0.25 more and +12% chance a new fire catches an extra card',
+    },
   ],
   'prismatic-ray': [
     { watch: weaponOn('laser'), max: 12, mods: { laserSetChance: 3 }, look: 'laser', gives: '+3% chance the cards that replace a laser hold a Set among themselves' },
@@ -118,7 +128,7 @@ export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
     { watch: { on: 'set', test: 'oneTwoThree' }, max: 30, mods: { ricochetHealChance: 1 }, look: 'Set with a 1, a 2 and a 3 in it', gives: '+1% chance a ricochet heals a heart' },
   ],
   'echo-stone': [
-    { watch: { on: 'set', test: 'sameColorAgain' }, max: 10, stat: { echoChance: 3, strike: 1 }, look: 'one-color Set right after a Set of that same color', gives: '+3% echo chance and echoes hit +1 harder' },
+    { watch: { on: 'set', test: 'sameColorAgain' }, max: 4, stat: { echoChance: 3, strike: 1 }, look: 'one-color Set right after a Set of that same color', gives: '+3% echo chance and echoes hit +1 harder' },
   ],
   // The reaction jumps the gap
   'chain-reaction': [
@@ -142,11 +152,14 @@ export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
   'echo-chamber': [
     { watch: { on: 'linkDestroyed' }, every: 4, max: 6, proc: { on: { on: 'linkDestroyed' }, pct: 3, effect: { do: 'trigger', kind: 'echo' } }, look: 'cards destroyed through a link', gives: '+3% chance that a linked card echoes as it goes (a Set is matched for you)' },
   ],
-  'revenge-linker': [{ watch: { on: 'hurt' }, max: 6, stat: { strike: 2, chance: 5 }, look: 'heart you lose', gives: 'Revenge hits +2 harder and links 5% more often' }],
+  'revenge-linker': [
+    { watch: { on: 'linkDestroyed' }, every: 3, max: 4, stat: { strike: 1.5, chance: 3 }, look: 'cards destroyed through a link', gives: 'Tripwire and Revenge hit +1.5 harder and link 3% more often' },
+    { watch: { on: 'hurt' }, max: 2, stat: { strike: 3, chance: 6 }, look: 'heart you lose', gives: 'Revenge strikes +3 harder and links 6% more often' },
+  ],
 
   // ── Board ─────────────────────────────────────────────────────────────────
   // Field Stone and Growth Seed: nothing. They are the board's own snowball.
-  'war-drum': [{ watch: { on: 'own' }, chance: 25, max: 3, stat: { power: 1 }, look: 'time the Drum sounds', gives: 'the Drum gives every card +1 more' }],
+  'war-drum': [{ watch: { on: 'own' }, every: 3, max: 3, stat: { power: 1 }, look: 'times the Drum sounds', gives: 'the Drum gives every card +1 more' }],
   'clarity-lens': [
     { watch: { on: 'own' }, max: 10, mods: { doubleClarityChance: 5 }, look: 'Clarity', gives: '+5% chance a Clarity simplifies two traits at once' },
   ],
@@ -156,11 +169,11 @@ export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
     { watch: { on: 'doubled' }, max: 6, stat: { chance: 2, shock: 1 }, look: 'trigger it doubles', gives: '+2% amplify chance and the shock hits +1 harder' },
   ],
   'catalyst-prism': [
-    { watch: { on: 'catalyst' }, max: 6, mods: { evolutionDurationMs: 4000 }, look: 'Catalyst you match', gives: 'evolutions last 4s longer, starting with this one' },
+    { watch: { on: 'catalyst' }, max: 3, mods: { evolutionDurationMs: 6000 }, look: 'Catalyst you match', gives: 'evolutions last 6s longer, starting with this one' },
   ],
-  // The crowd wants more
+  // The crowd wants more (caps cleanly within Adventure's 3-evolution limit)
   'encore-mask': [
-    { watch: { on: 'evolutionEnd' }, max: 3, proc: { on: { on: 'evolutionEnd' }, pct: 25, effect: { do: 'spawnCatalyst' } }, look: 'evolution that ends', gives: '+25% chance that an ending evolution leaves a new Catalyst on the board' },
+    { watch: { on: 'evolutionEnd' }, max: 2, proc: { on: { on: 'evolutionEnd' }, pct: 40, effect: { do: 'spawnCatalyst' } }, look: 'evolution that ends', gives: '+40% chance that an ending evolution leaves a new Catalyst on the board' },
   ],
 
   // ── Graces ────────────────────────────────────────────────────────────────
@@ -182,12 +195,21 @@ export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
   // Using hints makes room for more of them (and a hoard is what Seeker Lens pays for)
   'crystal-orb': [{ watch: { on: 'hintUsed' }, every: 3, max: 3, stat: { maxHints: 1 }, now: { do: 'hint', amount: 1 }, look: 'hints you use', gives: '+1 hint slot, and a hint to put in it' }],
   'oracle-eye': [
-    { watch: { on: 'set' }, max: 40, stat: { autoHintChance: 1 }, look: 'Set you make', gives: '+1% chance to point out a card' },
-    { watch: { on: 'set' }, chance: 15, max: 12, mods: { hintedSetDamage: 1 }, look: 'Set you make', gives: 'Sets made on a pointed-out card hit +1 harder' },
+    { watch: { on: 'set' }, every: 2, max: 10, stat: { autoHintChance: 2 }, look: 'Sets you make', gives: '+2% chance to point out a card' },
+    { watch: { on: 'set', test: 'hinted' }, max: 10, mods: { hintedSetDamage: 1.5 }, look: 'Set made on a pointed-out card', gives: 'Sets made on a pointed-out card hit +1.5 harder' },
   ],
-  'mystic-sight': [{ watch: { on: 'own' }, max: 10, stat: { enhancedHintChance: 5 }, look: 'Third Eye', gives: '+5% chance an auto-hint points out 2 cards' }],
-  // Hints bring coins and coins bring hints
-  'fortunes-blessing': [{ watch: weaponOn('hint'), max: 8, stat: { coinGainChance: 2 }, look: 'hint you gain', gives: '+2% bonus coin chance' }],
+  'mystic-sight': [{ watch: { on: 'own' }, max: 5, stat: { enhancedHintChance: 5 }, look: 'Third Eye', gives: '+5% chance an auto-hint points out 2 cards' }],
+  // Hints gild the board and build coin momentum
+  'fortunes-blessing': [
+    {
+      watch: weaponOn('hint'),
+      max: 6,
+      stat: { coinGainChance: 2 },
+      proc: { on: weaponOn('hint'), pct: 10, effect: { do: 'convert', to: 'gold', count: 1 } },
+      look: 'hint you gain',
+      gives: '+2% bonus coin chance and +10% chance a gained hint gilds a card',
+    },
+  ],
 
   // ── Coins & XP ────────────────────────────────────────────────────────────
   // The golden touch: money turns the board into power
@@ -196,14 +218,14 @@ export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
   ],
   // Study pays: XP brings more XP, so level-ups come faster as the fight goes on
   'scholars-tome': [{ watch: weaponOn('xp'), every: 3, max: 6, stat: { xpGainChance: 1 }, now: { do: 'xp', amount: 2 }, look: 'bonus XP gains', gives: '+2 XP at once and +1% XP chance' }],
-  // Coins teach
-  'wisdom-chain': [{ watch: weaponOn('coin'), max: 8, stat: { xpGainChance: 2 }, look: 'bonus coin', gives: '+2% bonus XP chance' }],
+  // Coins teach and dividends compound
+  'wisdom-chain': [{ watch: weaponOn('coin'), max: 8, stat: { xpGainChance: 2, strike: 0.5 }, look: 'bonus coin', gives: '+2% bonus XP chance and Dividend hits +0.5 harder' }],
 
   // ── Time ──────────────────────────────────────────────────────────────────
   'chrono-shard': [
     { watch: { on: 'set', test: 'corners' }, max: 5, mods: { clockSlowPct: 5 }, look: 'Set that uses two of the board\'s four corner cards', gives: 'the clock runs 5% slower' },
   ],
-  'time-drop': [{ watch: { on: 'set', test: 'rainbow' }, chance: 50, max: 4, stat: { timeGainAmount: 0.5 }, look: 'Rainbow', gives: 'time gains add 0.5s more' }],
+  'time-drop': [{ watch: { on: 'set', test: 'rainbow' }, max: 4, stat: { timeGainAmount: 0.5 }, look: 'Rainbow', gives: 'time gains add 0.5s more' }],
 
   // ── Tricks: each one changes its own game ─────────────────────────────────
   magnet: [{ watch: trickOn('magnet'), chance: 25, max: 3, mods: { magnetMarks: 1 }, look: 'Set through a marked card', gives: 'one more card is marked' }],
@@ -216,7 +238,7 @@ export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
     { watch: trickOn('odd'), max: 10, proc: { on: { on: 'set' }, pct: 4, effect: { do: 'doubleNext' } }, look: 'Odd One Out', gives: '+4% chance that a Set makes your next weapon trigger fire twice' },
   ],
   // He looks after his investment
-  'devils-bargain': [{ watch: { on: 'feat', name: 'lastHeart' }, max: 4, stat: { damage: 0.5 }, now: { do: 'shield', count: 1 }, look: 'time you fall to your last heart', gives: '+0.5 per missing heart, and your next mistake costs nothing' }],
+  'devils-bargain': [{ watch: { on: 'feat', name: 'lastHeart' }, max: 4, stat: { damage: 0.75 }, now: { do: 'shield', count: 1 }, look: 'time you fall to your last heart', gives: '+0.75 per missing heart, and your next mistake costs nothing' }],
   // Roll it all the way up and it gets bigger
   snowball: [{ watch: { on: 'feat', name: 'fullSnowball' }, max: 2, stat: { max: 1 }, look: 'time the Snowball reaches its limit', gives: 'its limit rises by 1' }],
   // A sticker shower
@@ -251,18 +273,17 @@ export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
   'ice-block': [{ watch: trickOn('ice'), max: 2, mods: { iceSetsLess: 1 }, now: { do: 'freeze', ms: 2000 }, look: 'thawed card you match', gives: 'the clock freezes for 2s and the next block thaws 1 Set sooner' }],
   // Greed pays
   'greedy-chest': [{ watch: trickOn('chest'), max: 3, stat: { start: 1 }, look: 'chest you open', gives: 'its floor rises by 1, so new chests hold more and a mistake never drops it lower' }],
-  // A net under the rope
-  tightrope: [{ watch: trickOn('tightrope'), every: 4, max: 5, mods: { offRopeBonus: 0.1 }, look: 'Sets on the rope', gives: 'stepping off the rope costs 10% less' }],
+  // Tighter footing on the rope
+  tightrope: [{ watch: trickOn('tightrope'), every: 4, max: 4, stat: { damage: 1 }, mods: { offRopeBonus: 0.05 }, look: 'Sets on the rope', gives: 'Rope Sets pay +1 more and stepping off costs 5% less' }],
   // Hotter and jumpier
   'hot-potato': [{ watch: trickOn('potato'), max: 4, stat: { damage: 0.5 }, mods: { potatoFasterMs: 1500 }, look: 'Hot Potato you match', gives: 'the next is worth +0.5 and jumps 1.5s sooner' }],
 };
 
 /** Weapons that are left without growth on purpose, and why (the explainer says so). */
 export const NO_GROWTH: Record<string, string> = {
-  'blast-powder': 'Already the hardest hitter in the Armory: its own numbers stay as they are.',
   'field-stone': 'A bigger board from the first second: its own numbers stay as they are.',
   'growth-seed': 'Its own effect is the growth: every card it adds makes the whole board hit harder.',
-  understudy: 'It grows with the weapon it copies.',
+  understudy: 'Copies your left charm at the higher of both levels, and shares its standing board modifiers.',
 };
 
 // ─── Stacks ─────────────────────────────────────────────────────────────────

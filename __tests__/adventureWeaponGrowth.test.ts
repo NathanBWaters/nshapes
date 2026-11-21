@@ -5,9 +5,12 @@
 import type { Card } from '@/types';
 import { WEAPON_GROWTH, NO_GROWTH, growthKey, growthStacks, growthText } from '@/adventure/data/weaponGrowth';
 import { armoryBaseWeapon, getArmoryWeapon } from '@/adventure/data/armory';
-import { weaponStatDefs } from '@/adventure/data/weaponStats';
+import { MAX_TUNING_TIER, MAX_WEAPON_LEVEL, weaponStatDefs, weaponValues } from '@/adventure/data/weaponStats';
+import { weaponGuide } from '@/adventure/data/weaponGuide';
+import { EFFECT_CAPS } from '@/game/effectCaps';
 import { PAIR_RECIPES } from '@/adventure/data/evolutionPairs';
 import { createMaxedSave } from '@/adventure/progress';
+import { startingLoadout } from '@/adventure/loadout';
 import { runReducer } from '@/adventure/engine/run';
 import { cornerSlots } from '@/adventure/engine/growth';
 import type { AdventureWeapon, RunState } from '@/adventure/types';
@@ -59,8 +62,10 @@ describe('the growth table', () => {
     }
   });
 
-  it('the weapons that already snowball are left alone', () => {
-    for (const id of ['blast-powder', 'field-stone', 'growth-seed']) expect(WEAPON_GROWTH[id]).toBeUndefined();
+  it('the board-size weapons that already snowball are left alone, while Blast Powder has modest growth', () => {
+    for (const id of ['field-stone', 'growth-seed']) expect(WEAPON_GROWTH[id]).toBeUndefined();
+    expect(WEAPON_GROWTH['blast-powder']).toHaveLength(1);
+    expect(WEAPON_GROWTH['blast-powder'][0]).toMatchObject({ every: 3, max: 4, stat: { explosionDamage: 0.25 } });
   });
 });
 
@@ -307,12 +312,117 @@ describe('growth and evolutions', () => {
     expect(stacksOf(s, 'chrono-shard')).toBe(5);
   });
 
-  it('Catalyst Prism: each Catalyst matched makes evolutions 4 seconds longer, starting with that one', () => {
+  it('Catalyst Prism: each Catalyst matched makes evolutions 6 seconds longer (max 3 stacks), starting with that one', () => {
     const pair = PAIR_RECIPES.find(r => r.families.some(f => f[0] === 'catalyst-prism'))!;
     const ids = [pair.families[0][0], pair.families[1][0]];
     let s = held(ids, { save: { unlockedEvolutions: ['phoenix-pyre'] } });
     const board = s.board.map((c, i) => (i === 0 ? { ...c, hasEvolutionItem: true, evolutionReady: true } : c));
     s = matchAt({ ...s, board }, [0, 1, 2], SAME_NUMBER);
-    expect(s.activeEvolutions[0].durationMs).toBe(34000);
+    expect(s.activeEvolutions[0].durationMs).toBe(36000);
+    expect(WEAPON_GROWTH['catalyst-prism'][0].max).toBe(3);
+    expect(WEAPON_GROWTH['encore-mask'][0].max).toBe(2);
+  });
+});
+
+describe('Wave 2 weapons overhaul invariants & reworks', () => {
+  it('zero Workshop clamp waste on bridgeChance (≤ 95%), echo (≤ 45%), and ricochet (≤ 75%) at L5+T4 + growth', () => {
+    for (const id of ARMORY) {
+      const base = armoryBaseWeapon(id)!;
+      const defs = weaponStatDefs(base);
+      const maxTuning = Object.fromEntries(Object.keys(defs).map(k => [k, MAX_TUNING_TIER]));
+      const vals = weaponValues(base, { level: MAX_WEAPON_LEVEL, tuning: maxTuning });
+      if (vals.bridgeChance !== undefined) {
+        expect({ id, bridgeChance: vals.bridgeChance }).toEqual({ id, bridgeChance: expect.any(Number) });
+        expect(vals.bridgeChance).toBeLessThanOrEqual(95);
+      }
+      if (vals.chainReactionChance !== undefined) expect(vals.chainReactionChance).toBeLessThanOrEqual(100);
+      if (vals.bonusConnectionChance !== undefined) expect(vals.bonusConnectionChance).toBeLessThanOrEqual(100);
+    }
+
+    // Echo Stone L5+T4 + full growth fits inside EFFECT_CAPS.echo (45%)
+    const echoMax = weaponValues(armoryBaseWeapon('echo-stone')!, { level: 5, tuning: { echoChance: 4 } }).echoChance;
+    const echoGrowth = (WEAPON_GROWTH['echo-stone'][0].stat!.echoChance ?? 0) * WEAPON_GROWTH['echo-stone'][0].max!;
+    expect(echoMax + echoGrowth).toBeLessThanOrEqual(EFFECT_CAPS.echo.defaultCap);
+
+    // Chaos Shard L5+T4 + Track 1 growth fits inside EFFECT_CAPS.ricochet (75%)
+    const chaosMax = weaponValues(armoryBaseWeapon('chaos-shard')!, { level: 5, tuning: { ricochetChance: 4 } }).ricochetChance;
+    const chaosGrowth = (WEAPON_GROWTH['chaos-shard'][0].stat!.ricochetChance ?? 0) * WEAPON_GROWTH['chaos-shard'][0].max!;
+    expect(chaosMax + chaosGrowth).toBeLessThanOrEqual(EFFECT_CAPS.ricochet.defaultCap);
+
+    // Seeker Lens L5+T4 + growth fits inside EFFECT_CAPS.hint (70%)
+    const seekerMax = weaponValues(armoryBaseWeapon('seeker-lens')!, { level: 5, tuning: { hintGainChance: 4 } }).hintGainChance;
+    const seekerGrowth = (WEAPON_GROWTH['seeker-lens'][0].stat!.hintGainChance ?? 0) * WEAPON_GROWTH['seeker-lens'][0].max!;
+    expect(seekerMax + seekerGrowth).toBeLessThanOrEqual(EFFECT_CAPS.hint.defaultCap);
+  });
+
+  it('Crystal Orb L1 Workshop tuning scales starting hints via resolveWholeStats instead of Math.floor(1.5) === 1', () => {
+    const base = armoryBaseWeapon('crystal-orb')!;
+    const lv1T4 = getArmoryWeapon('crystal-orb', { 'crystal-orb': { level: 1, tuning: { maxHints: 4 } } })!;
+    expect(lv1T4.effects.maxHints).toBe(1.5);
+    expect(lv1T4.effects.hints).toBe(1.5);
+    // With rand() < 0.5, resolveWholeStats grants +2 starting hints (instead of wasting all 4 L1 tiers!)
+    const save = { ...createMaxedSave(), charms: ['crystal-orb'], skillNodes: {}, equippedArcana: [], upgrades: {}, weaponTuning: { 'crystal-orb': { maxHints: 4 } } };
+    const lv1Build = { 'crystal-orb': { level: 1, tuning: { maxHints: 4 } } };
+    const highRoll = startingLoadout(testLevel({ rules: { startingHints: 0 } }), save, new Set(['hearts', 'gear', 'hints']), () => 0.1, { weaponBuilds: lv1Build });
+    const lowRoll = startingLoadout(testLevel({ rules: { startingHints: 0 } }), save, new Set(['hearts', 'gear', 'hints']), () => 0.9, { weaponBuilds: lv1Build });
+    expect(highRoll.stats.hints).toBe(2);
+    expect(lowRoll.stats.hints).toBe(1);
+    expect(base.effects.maxHints).toBe(1);
+  });
+
+  it('Life Link grants a wave mistake shield, scales maxHealth, and fires Life Pulse on every 4th Set at full hearts', () => {
+    const lv1 = getArmoryWeapon('life-link', { 'life-link': { level: 1, tuning: {} } })!;
+    const lv5 = getArmoryWeapon('life-link', { 'life-link': { level: 5, tuning: {} } })!;
+    expect(lv5.effects.maxHealth).toBeGreaterThan(lv1.effects.maxHealth!);
+    let s = held(['life-link'], { level: testLevel({ foes: [{ name: 'Dummy', hp: 9999 }] }) });
+    // Wave opener mistake shield granted on fight start
+    expect(s.freeMistakesLeft).toBeGreaterThanOrEqual(1);
+    for (let i = 0; i < 4; i++) s = matchAt(s, [0, 1, 2], SAME_NUMBER);
+    expect(eventsOf(s, 'rule').some(e => e.text === 'Life Pulse!')).toBe(true);
+  });
+
+  it('Revenge Linker fires active Tripwire on every 4th Set even on clean play, and caps hurt growth at 2', () => {
+    let s = held(['revenge-linker'], { level: testLevel({ foes: [{ name: 'Dummy', hp: 9999 }] }) });
+    for (let i = 0; i < 4; i++) s = matchAt(s, [0, 1, 2], SAME_NUMBER);
+    expect(eventsOf(s, 'rule').some(e => e.text === 'Tripwire!')).toBe(true);
+    expect(s.connections.length).toBeGreaterThanOrEqual(1);
+    expect(WEAPON_GROWTH['revenge-linker'].find(d => d.watch.on === 'hurt')?.max).toBe(2);
+  });
+
+  it('Oracle Eye rewards hinted Sets and mistake-free play without an 8s wait-to-win rider', () => {
+    const level = testLevel({ foes: [{ name: 'Dummy', hp: 9999 }] });
+    const plain = matchAt(startFight({ level }), [0, 1, 2], SAME_NUMBER);
+    let s = held(['oracle-eye'], { level });
+    // Clean Set immediately deals +2 bonus (no 8s stall needed!)
+    const clean = matchAt(s, [0, 1, 2], SAME_NUMBER);
+    expect(clean.totalDamage - plain.totalDamage).toBeGreaterThanOrEqual(2);
+    // Hinted clean Set deals both clean (+2) and insight (+4) bonuses!
+    const hinted = matchAt(s, [0, 1, 2], SAME_NUMBER, true);
+    expect(hinted.totalDamage - plain.totalDamage).toBeGreaterThanOrEqual(6);
+    expect(getArmoryWeapon('oracle-eye')!.effects.autoHintInterval).toBe(3000);
+  });
+
+  it("Fortune's Blessing gilds a wave card and strikes on bonus cards; Wisdom Chain boosts coins and grants 5th-Set XP", () => {
+    let fb = held(['fortunes-blessing'], { level: testLevel({ foes: [{ name: 'Dummy', hp: 9999 }] }) });
+    expect(fb.board.some(c => (c.bonusMoney ?? 0) > 0)).toBe(true);
+
+    let wc = held(['wisdom-chain'], { level: testLevel({ foes: [{ name: 'Dummy', hp: 9999 }] }) });
+    expect(wc.coinBonusPercent).toBeGreaterThanOrEqual(15);
+    for (let i = 0; i < 5; i++) wc = matchAt(wc, [0, 1, 2], SAME_NUMBER);
+    expect(eventsOf(wc, 'rule').some(e => e.text === 'Insight!')).toBe(true);
+  });
+
+  it('Piñata guarantees 1 piñata at wave start, Greedy Chest starts at +3 and grows +3/Set, and Soul Harvest / Seeker Lens copy is accurate', () => {
+    const s = held(['pinata']);
+    expect(s.board.some(c => (c.bounty ?? 0) > 0 && (c.health ?? 1) > 1)).toBe(true);
+
+    const chest = getArmoryWeapon('greedy-chest') as AdventureWeapon;
+    expect(chest.modifiers!.chestStart).toBe(3);
+    expect(chest.modifiers!.chestGrowth).toBe(3);
+
+    expect(getArmoryWeapon('soul-harvest')!.description).toMatch(/every heal.*hits the foe/i);
+    expect(weaponGuide('seeker-lens').tip).toMatch(/hoard/i);
+    expect(weaponGuide('rainbow-charm').tip).toMatch(/Clarity Lens/i);
+    expect(weaponGuide('rally-horn').tip).toMatch(/multipl/i);
   });
 });

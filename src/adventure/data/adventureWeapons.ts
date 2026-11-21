@@ -17,7 +17,9 @@ const FOG_MS = TRICK_RULES.fogMs;
 const BOUNTY_CARDS = TRICK_RULES.bountyCards;
 
 const r = Math.round;
-const num = (n: number) => String(Math.round(n * 10) / 10);
+const d1 = (n: number) => Math.round(n * 10) / 10;
+const half = (n: number) => Math.round(n * 2) / 2;
+const num = (n: number) => String(d1(n));
 
 /** Clarity Lens fires on every Nth Set */
 const CLARITY_EVERY = 5;
@@ -25,17 +27,22 @@ const CLARITY_EVERY = 5;
 const DRUM_SETS = 3;
 /** Rally Horn sounds again on every Nth Set */
 const RALLY_EVERY = 4;
+/** Revenge Linker wires a Tripwire on every Nth Set */
+const REVENGE_EVERY = 4;
+/** Encore Mask adds this many seconds to every evolution */
+const ENCORE_EXTRA_MS = 5000;
 
 const clarity = (ms: number, amount: number): Rule[] => [
   { trigger: { on: 'everyNthSet', n: CLARITY_EVERY }, effects: [{ do: 'simplify', ms }, { do: 'damage', amount }], callout: 'Clarity!' },
 ];
-const warDrum = (withinMs: number, amount: number): Rule[] => [
-  { trigger: { on: 'setsWithin', count: DRUM_SETS, withinMs }, effects: [{ do: 'empowerBoard', amount }], callout: 'War Drum!' },
+const warDrum = (withinMs: number, power: number, slam: number): Rule[] => [
+  { trigger: { on: 'setsWithin', count: DRUM_SETS, withinMs }, effects: [{ do: 'empowerBoard', amount: power }, { do: 'damage', amount: slam }], callout: 'War Drum!' },
 ];
 const amplifier = (pct: number, amount: number): Rule[] => [
   { trigger: { on: 'set' }, when: [{ kind: 'chance', pct }], effects: [{ do: 'damage', amount }, { do: 'doubleNext' }], callout: 'Amplified!' },
 ];
 const pinata = (pct: number, bounty: number): Rule[] => [
+  { trigger: { on: 'waveStart' }, effects: [{ do: 'armorCard', extraHealth: 1, bounty }], callout: 'Piñata!' },
   { trigger: { on: 'set' }, when: [{ kind: 'chance', pct }], effects: [{ do: 'armorCard', extraHealth: 1, bounty }], callout: 'Piñata!' },
 ];
 const rallyHorn = (amount: number): Rule[] => [
@@ -43,7 +50,9 @@ const rallyHorn = (amount: number): Rule[] => [
   { trigger: { on: 'everyNthSet', n: RALLY_EVERY }, effects: [{ do: 'damage', amount }], callout: 'Rally!' },
 ];
 const revenge = (pct: number, amount: number): Rule[] => [
-  { trigger: { on: 'hurt' }, effects: [{ do: 'damage', amount }], callout: 'Revenge!' },
+  { trigger: { on: 'everyNthSet', n: REVENGE_EVERY }, effects: [{ do: 'link', count: 1 }, { do: 'damage', amount }], callout: 'Tripwire!' },
+  { trigger: { on: 'trapDefused' }, effects: [{ do: 'link', count: 1 }, { do: 'damage', amount }], callout: 'Counter!' },
+  { trigger: { on: 'hurt' }, effects: [{ do: 'damage', amount: d1(amount * 2) }], callout: 'Revenge!' },
   ...[0, 1, 2].map(() => ({ trigger: { on: 'hurt' }, when: [{ kind: 'chance', pct }], effects: [{ do: 'link', count: 1 }] }) as Rule),
 ];
 
@@ -116,14 +125,19 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     effects: {},
     maxCount: 1,
     stats: {
-      window: { label: `Seconds for ${DRUM_SETS} Sets`, unit: 's', base: 15, perLevel: 1.5 },
-      power: { label: 'Power per card', unit: 'dmg', base: 1, perLevel: 0.25 },
+      window: { label: `Seconds for ${DRUM_SETS} Sets`, unit: 's', base: 14, perLevel: 0.5, tunable: false },
+      power: { label: 'Power per card', unit: 'dmg', base: 1, perLevel: 0.5, tunable: false },
+      slam: { label: 'Drumbeat hit', unit: 'dmg', base: 5, perLevel: 2 },
     },
-    build: v => ({
-      rules: warDrum(r(v.window * 1000), Math.max(1, r(v.power))),
-      description: `${DRUM_SETS} Sets within ${r(v.window)}s: every card on the board deals +${r(v.power)} more when matched.`,
-      shortDescription: `${DRUM_SETS} Sets in ${r(v.window)}s: board +${r(v.power)} damage`,
-    }),
+    build: v => {
+      const power = half(v.power);
+      const slam = d1(v.slam);
+      return {
+        rules: warDrum(r(v.window * 1000), power, slam),
+        description: `${DRUM_SETS} Sets within ${num(v.window)}s: hit the foe for ${num(slam)} and every card on the board deals +${num(power)} more when matched.`,
+        shortDescription: `${DRUM_SETS} Sets in ${num(v.window)}s: +${num(slam)} dmg & board +${num(power)}`,
+      };
+    },
   },
 
   // ── Amplifier Coil (combo): sometimes the next weapon fires twice ─────────
@@ -145,9 +159,9 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
       shock: { label: 'Shock damage', unit: 'dmg', base: 2, perLevel: 0.5 },
     },
     build: v => ({
-      rules: amplifier(r(v.chance), r(v.shock)),
-      description: `Each Set: ${r(v.chance)}% chance to shock the foe for ${r(v.shock)} and make the next weapon trigger (blast, heal, laser, fire...) happen twice.`,
-      shortDescription: `${r(v.chance)}%: +${r(v.shock)} and next trigger ×2`,
+      rules: amplifier(d1(v.chance), d1(v.shock)),
+      description: `Each Set: ${num(v.chance)}% chance to shock the foe for ${num(v.shock)} and make the next weapon trigger (blast, heal, laser, fire...) happen twice.`,
+      shortDescription: `${num(v.chance)}%: +${num(v.shock)} and next trigger ×2`,
     }),
   },
 
@@ -166,13 +180,13 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     effects: {},
     maxCount: 1,
     stats: {
-      chance: { label: 'Piñata chance', unit: '%', base: 20, perLevel: 6 },
+      chance: { label: 'Piñata chance', unit: '%', base: 26, perLevel: 6 },
       bounty: { label: 'Piñata damage', unit: 'dmg', base: 8, perLevel: 3 },
     },
     build: v => ({
-      rules: pinata(r(v.chance), r(v.bounty)),
-      description: `Each Set has a ${r(v.chance)}% chance to give a random card +1 hit. Breaking that card deals +${r(v.bounty)} damage.`,
-      shortDescription: `Sets may hang a +${r(v.bounty)} piñata`,
+      rules: pinata(d1(v.chance), r(v.bounty)),
+      description: `Each wave starts with 1 piñata card (+1 hit), and each Set has a ${num(v.chance)}% chance to hang another. Breaking a piñata deals +${r(v.bounty)} damage.`,
+      shortDescription: `Wave opener + ${num(v.chance)}% per Set to hang a +${r(v.bounty)} piñata`,
     }),
   },
 
@@ -191,14 +205,14 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     maxCount: 1,
     stats: {
       likelihood: { label: 'Catalyst chance', unit: '%', base: 6, perLevel: 3 },
-      rainbow: { label: 'Extra after a Rainbow', unit: '%', base: 25, perLevel: 3 },
-      strike: { label: 'Rainbow Strike damage', unit: 'dmg', base: 4, perLevel: 2 },
+      rainbow: { label: 'Extra after a Rainbow', unit: '%', base: 25, perLevel: 4 },
+      strike: { label: 'Rainbow Strike damage', unit: 'dmg', base: 5, perLevel: 2 },
     },
     build: v => ({
-      rules: [{ trigger: { on: 'rainbow' }, effects: [{ do: 'damage', amount: r(v.strike) }], callout: 'Prism!' }],
-      modifiers: { evolutionLikelihood: r(v.likelihood), rainbowEvolutionLikelihood: r(v.rainbow) },
-      description: `Rainbow Strikes hit for ${r(v.strike)} more. +${r(v.likelihood)}% Catalyst chance on every refill, and +${r(v.rainbow)}% more on refills after a Rainbow Strike.`,
-      shortDescription: `Rainbows +${r(v.strike)}, +${r(v.likelihood)}% Catalysts`,
+      rules: [{ trigger: { on: 'rainbow' }, effects: [{ do: 'damage', amount: d1(v.strike) }], callout: 'Prism!' }],
+      modifiers: { evolutionLikelihood: d1(v.likelihood), rainbowEvolutionLikelihood: d1(v.rainbow) },
+      description: `Rainbow Strikes hit for +${num(v.strike)} more (multiplied by your Set multipliers). +${num(v.likelihood)}% Catalyst chance on every refill, and +${num(v.rainbow)}% more on refills after a Rainbow Strike.`,
+      shortDescription: `Rainbows +${num(v.strike)}, +${num(v.likelihood)}% Catalysts`,
     }),
   },
 
@@ -218,13 +232,13 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     maxCount: 1,
     stats: { damage: { label: 'Rally damage', unit: 'dmg', base: 5, perLevel: 2.5 } },
     build: v => ({
-      rules: rallyHorn(r(v.damage)),
-      description: `The first Set of each wave, and every ${RALLY_EVERY}th Set of the fight, deals +${r(v.damage)} damage.`,
-      shortDescription: `Wave openers and every ${RALLY_EVERY}th Set +${r(v.damage)}`,
+      rules: rallyHorn(d1(v.damage)),
+      description: `The first Set of each wave, and every ${RALLY_EVERY}th Set of the fight, hits for +${num(v.damage)} damage — multiplied by that Set's Rainbow, Surge, Parry and Evolution multipliers.`,
+      shortDescription: `Wave openers & every ${RALLY_EVERY}th Set: +${num(v.damage)} (multiplied!)`,
     }),
   },
 
-  // ── Revenge Linker (Adventure version): getting hurt wires up the board ───
+  // ── Revenge Linker (Adventure version): Tripwires, trap counters & payback ─
   {
     id: 'revenge-linker',
     name: 'Revenge Linker',
@@ -239,13 +253,13 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     effects: {},
     maxCount: 1,
     stats: {
-      strike: { label: 'Revenge damage', unit: 'dmg', base: 4, perLevel: 2 },
-      chance: { label: 'Link chance per roll', unit: '%', base: 30, perLevel: 7 },
+      strike: { label: 'Tripwire & Revenge damage', unit: 'dmg', base: 4, perLevel: 2 },
+      chance: { label: 'Link chance per roll', unit: '%', base: 28, perLevel: 5 },
     },
     build: v => ({
-      rules: revenge(r(v.chance), r(v.strike)),
-      description: `Losing a heart hits the foe for ${r(v.strike)}, with 3 rolls at ${r(v.chance)}% each to link a pair of cards. Linked cards are destroyed together.`,
-      shortDescription: `Lost hearts: ${r(v.strike)} dmg, 3× ${r(v.chance)}% link`,
+      rules: revenge(d1(v.chance), d1(v.strike)),
+      description: `Every ${REVENGE_EVERY}th Set — and every trap you defuse — links 2 cards and hits for +${num(v.strike)}. Losing a heart hits for +${num(v.strike * 2)} with 3 rolls at ${num(v.chance)}% each to link pairs.`,
+      shortDescription: `Every ${REVENGE_EVERY}th Set/defuse: link +${num(v.strike)}; hurt: +${num(v.strike * 2)} & 3× ${num(v.chance)}% link`,
     }),
   },
 
@@ -266,9 +280,9 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     maxCount: 1,
     stats: { damage: { label: 'Magnet damage', unit: 'dmg', base: 5, perLevel: 1.5 } },
     build: v => ({
-      modifiers: { magnetDamage: r(v.damage) },
-      description: `One card on the board is always marked. A Set that includes it deals +${r(v.damage)}, then the mark moves.`,
-      shortDescription: `Sets with the marked card +${r(v.damage)}`,
+      modifiers: { magnetDamage: d1(v.damage) },
+      description: `One card on the board is always marked. A Set that includes it deals +${num(v.damage)}, then the mark moves.`,
+      shortDescription: `Sets with the marked card +${num(v.damage)}`,
     }),
   },
 
@@ -308,9 +322,9 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     maxCount: 1,
     stats: { damage: { label: 'Mirror damage', unit: 'dmg', base: 4, perLevel: 1 } },
     build: v => ({
-      modifiers: { mirrorDamage: r(v.damage) },
-      description: `A Set that uses a spot from your last Set deals +${r(v.damage)}.`,
-      shortDescription: `Reuse a spot from your last Set: +${r(v.damage)}`,
+      modifiers: { mirrorDamage: d1(v.damage) },
+      description: `A Set that uses a spot from your last Set deals +${num(v.damage)}.`,
+      shortDescription: `Reuse a spot from your last Set: +${num(v.damage)}`,
     }),
   },
 
@@ -329,9 +343,9 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     maxCount: 1,
     stats: { damage: { label: 'Odd-one-out damage', unit: 'dmg', base: 4, perLevel: 1 } },
     build: v => ({
-      modifiers: { oddOneOutDamage: r(v.damage) },
-      description: `Sets with exactly 1 trait different deal +${r(v.damage)}. With 4 or more traits, so do Sets with exactly 1 trait the same.`,
-      shortDescription: `Exactly 1 trait different (or the same): +${r(v.damage)}`,
+      modifiers: { oddOneOutDamage: d1(v.damage) },
+      description: `Sets with exactly 1 trait different deal +${num(v.damage)}. With 4 or more traits, so do Sets with exactly 1 trait the same.`,
+      shortDescription: `Exactly 1 trait different (or the same): +${num(v.damage)}`,
     }),
   },
 
@@ -348,11 +362,11 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     icon: 'delapouite/devil-mask',
     effects: {},
     maxCount: 1,
-    stats: { damage: { label: 'Damage per missing heart', unit: 'dmg', base: 1, perLevel: 0.5 } },
+    stats: { damage: { label: 'Damage per missing heart', unit: 'dmg', base: 1.5, perLevel: 0.5 } },
     build: v => ({
-      modifiers: { maxHearts: -1, missingHeartDamage: v.damage },
-      description: `Start every fight with 1 heart fewer. Every Set deals +${num(v.damage)} for that heart and for every other heart you are missing.`,
-      shortDescription: `-1 heart; +${num(v.damage)} per missing heart`,
+      modifiers: { maxHearts: -1, missingHeartDamage: d1(v.damage) },
+      description: `Start every fight with 1 heart fewer. Every Set deals +${num(v.damage)} for that missing heart and for every other heart you are missing.`,
+      shortDescription: `-1 max heart; +${num(v.damage)} per missing heart`,
     }),
   },
 
@@ -369,12 +383,19 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     icon: 'lorc/snowman',
     effects: {},
     maxCount: 1,
-    stats: { max: { label: 'Most stacks', unit: 'count', base: 3, perLevel: 1 } },
-    build: v => ({
-      modifiers: { snowballStep: 1, snowballMax: r(v.max) },
-      description: `Every Set you make adds +1 damage to all your later Sets this wave, up to +${r(v.max)}. A mistake halves it.`,
-      shortDescription: `Each Set: later Sets +1 (max +${r(v.max)}); mistakes halve it`,
-    }),
+    stats: {
+      step: { label: 'Damage per stack', unit: 'dmg', base: 1, perLevel: 0.25 },
+      max: { label: 'Most stacks', unit: 'count', base: 4, perLevel: 1, tunable: false },
+    },
+    build: v => {
+      const step = d1(v.step);
+      const max = r(v.max);
+      return {
+        modifiers: { snowballStep: step, snowballMax: max },
+        description: `Every clean Set adds +${num(step)} damage to all later Sets this wave, up to ${max} stacks (+${num(step * max)}). A mistake halves your stacks.`,
+        shortDescription: `+${num(step)}/Set this wave (max ${max} stacks); mistakes halve it`,
+      };
+    },
   },
 
   // ── Collector's Album: one page per trait, then a big hit
@@ -393,8 +414,8 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     stats: { damage: { label: 'Album damage', unit: 'dmg', base: 16, perLevel: 4.5 } },
     build: v => ({
       modifiers: { albumDamage: r(v.damage) },
-      description: `Fill one page per trait: a Set where everything is the same except the number, one except the shape, one except the color (and the shading, when it is in play). With 4 or more traits, one other trait may differ too. The Set that fills the last page deals +${r(v.damage)}, then the album starts over.`,
-      shortDescription: `One "all the same but X" Set per trait: +${r(v.damage)}`,
+      description: `Fill one page per trait ("all the same except X", up to 2 differing traits on 4-trait boards or 3 on 5-trait boards). Each page deals +3, and filling the last page deals +${r(v.damage)} and resets the album.`,
+      shortDescription: `Stamp each trait page (+3 each); finish the album for +${r(v.damage)}`,
     }),
   },
 
@@ -413,9 +434,9 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     maxCount: 1,
     stats: { chance: { label: 'Wild card chance', unit: '%', base: 10, perLevel: 2 } },
     build: v => ({
-      modifiers: { wildChance: r(v.chance) },
-      description: `${r(v.chance)}% chance that a new card is a wild card: it makes a Set with any two other cards. One on the board at a time.`,
-      shortDescription: `${r(v.chance)}% of new cards are wild`,
+      modifiers: { wildChance: d1(v.chance) },
+      description: `${num(v.chance)}% chance that a new card is a wild card: it makes a Set with any two other cards. One on the board at a time.`,
+      shortDescription: `${num(v.chance)}% of new cards are wild`,
     }),
   },
 
@@ -434,13 +455,13 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     maxCount: 1,
     stats: { chance: { label: 'Twin chance', unit: '%', base: 15, perLevel: 2 }, damage: { label: 'Twin damage', unit: 'dmg', base: 5, perLevel: 1.5 } },
     build: v => ({
-      modifiers: { twinChance: r(v.chance), twinDamage: r(v.damage) },
-      description: `${r(v.chance)}% chance that a new card is an exact twin of a card on the board. Twins can never share a Set, but matching one destroys the other for ${r(v.damage)}.`,
-      shortDescription: `${r(v.chance)}% twins; match one, the other hits for ${r(v.damage)}`,
+      modifiers: { twinChance: d1(v.chance), twinDamage: d1(v.damage) },
+      description: `${num(v.chance)}% chance that a new card is an exact twin of a card on the board. Twins can never share a Set, but matching one destroys the other for ${num(v.damage)}.`,
+      shortDescription: `${num(v.chance)}% twins; match one, the other hits for ${num(v.damage)}`,
     }),
   },
 
-  // ── Glass Sword: fast and flawless, or nothing
+  // ── Glass Sword: fast and flawless, or reforge on a Rainbow / 3 clean Sets
   {
     id: 'glass-sword',
     name: 'Glass Sword',
@@ -455,9 +476,9 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     maxCount: 1,
     stats: { damage: { label: 'Glass Sword damage', unit: 'dmg', base: 5, perLevel: 0.75 }, window: { label: 'Seconds between Sets', unit: 's', base: 6, perLevel: 0.5 } },
     build: v => ({
-      modifiers: { glassDamage: r(v.damage), glassWindowMs: r(v.window * 1000) },
-      description: `Every Set deals +${r(v.damage)}. The sword shatters for the rest of the wave on your first mistake, or if ${num(v.window)}s pass without a Set.`,
-      shortDescription: `Sets +${r(v.damage)} until a mistake or ${num(v.window)}s without a Set`,
+      modifiers: { glassDamage: d1(v.damage), glassWindowMs: r(v.window * 1000) },
+      description: `Every Set deals +${num(v.damage)}. Shatters on a mistake or after ${num(v.window)}s without a Set (+1.5s per trait beyond 3). A Rainbow Set or 3 clean Sets in a row reforges it.`,
+      shortDescription: `Sets +${num(v.damage)}; shatters on mistake/${num(v.window)}s, reforges on Rainbow or 3 clean Sets`,
     }),
   },
 
@@ -474,11 +495,11 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     icon: 'lorc/lantern-flame',
     effects: {},
     maxCount: 1,
-    stats: { chance: { label: 'Fog chance', unit: '%', base: 10, perLevel: 1 }, bonus: { label: 'Damage when the fog lifts', unit: 'dmg', base: 7, perLevel: 1 } },
+    stats: { chance: { label: 'Fog chance', unit: '%', base: 10, perLevel: 1 }, bonus: { label: 'Damage when the fog lifts', unit: 'dmg', base: 8, perLevel: 1.5 } },
     build: v => ({
-      modifiers: { fogChance: r(v.chance), fogBonus: r(v.bonus) },
-      description: `${r(v.chance)}% chance that a new card arrives face-down. After ${FOG_MS / 1000}s it flips up as a power card worth +${r(v.bonus)}.`,
-      shortDescription: `${r(v.chance)}% face-down cards flip up at +${r(v.bonus)}`,
+      modifiers: { fogChance: d1(v.chance), fogBonus: r(v.bonus) },
+      description: `${num(v.chance)}% chance that a new card arrives face-down. After ${FOG_MS / 1000}s it flips up as a power card worth +${r(v.bonus)}.`,
+      shortDescription: `${num(v.chance)}% face-down cards flip up at +${r(v.bonus)}`,
     }),
   },
 
@@ -495,15 +516,15 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     icon: 'lorc/two-shadows',
     effects: {},
     maxCount: 1,
-    stats: { level: { label: 'Level it copies at', unit: 'count', base: 1, perLevel: 1, tunable: false } },
+    stats: { level: { label: 'Minimum copy level', unit: 'count', base: 1, perLevel: 1, tunable: false } },
     build: v => ({
       modifiers: {},
-      description: `Copies the charm to its left, at level ${r(v.level)} and untuned. Does nothing in the first slot.`,
-      shortDescription: `Copies the charm to its left (level ${r(v.level)})`,
+      description: `Copies the charm to its left at that charm's level (at least level ${r(v.level)}), untuned. Does nothing in the first slot.`,
+      shortDescription: `Copies left charm at its level (min Lv ${r(v.level)})`,
     }),
   },
 
-  // ── Encore Mask: evolutions go out the way they came in
+  // ── Encore Mask: longer, harder evolutions + Curtain Call ×2 finale
   {
     id: 'encore-mask',
     name: 'Encore Mask',
@@ -517,13 +538,20 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     effects: {},
     maxCount: 1,
     stats: {
-      damage: { label: 'Encore damage', unit: 'dmg', base: 10, perLevel: 3.5 },
-      catalyst: { label: 'Catalyst chance', unit: '%', base: 4, perLevel: 1 },
+      damage: { label: 'Encore blast', unit: 'dmg', base: 14, perLevel: 4 },
+      bonus: { label: 'Set bonus while evolved', unit: 'dmg', base: 3, perLevel: 1 },
+      catalyst: { label: 'Catalyst chance', unit: '%', base: 8, perLevel: 2 },
     },
     build: v => ({
-      modifiers: { encoreDamage: r(v.damage), evolutionLikelihood: r(v.catalyst) },
-      description: `Catalysts are +${r(v.catalyst)}% more likely per refill. When an evolution ends, it hits the foe for ${r(v.damage)} and its opening effect happens again.`,
-      shortDescription: `Catalysts +${r(v.catalyst)}%; evolutions end with +${r(v.damage)} and replay their opening`,
+      rules: [{ trigger: { on: 'evolutionEnd' }, effects: [{ do: 'nextSetMultiplier', times: 2 }], callout: 'Curtain Call!' }],
+      modifiers: {
+        encoreDamage: r(v.damage),
+        evolutionDurationMs: ENCORE_EXTRA_MS,
+        evolutionLikelihood: d1(v.catalyst),
+        conditionalDamage: [{ when: [{ kind: 'evolutionActive' }], amount: d1(v.bonus) }],
+      },
+      description: `+${num(v.catalyst)}% Catalyst chance per refill. Evolutions last +${ENCORE_EXTRA_MS / 1000}s and add +${num(v.bonus)} to every Set while active. When an evolution ends, it blasts for ${r(v.damage)}, replays its opening (if any), and makes your next Set ×2.`,
+      shortDescription: `Evos +${ENCORE_EXTRA_MS / 1000}s & +${num(v.bonus)}/Set; end with ${r(v.damage)} dmg & next Set ×2`,
     }),
   },
 
@@ -542,11 +570,11 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     icon: 'lorc/totem-head',
     effects: {},
     maxCount: 1,
-    stats: { chance: { label: 'Curse chance', unit: '%', base: 5, perLevel: 1 } },
+    stats: { chance: { label: 'Curse chance', unit: '%', base: 10, perLevel: 2 } },
     build: v => ({
-      modifiers: { curseChance: r(v.chance) },
-      description: `${r(v.chance)}% chance that a new card arrives cursed: it can't be matched for ${T.curseMs / 1000}s. Then it is a coin flip: the card becomes a ×${T.curseMultiplier} card (a Set that includes it deals ×${T.curseMultiplier}), or the curse moves to the card next to it.`,
-      shortDescription: `${r(v.chance)}% cursed cards: wait ${T.curseMs / 1000}s for ×${T.curseMultiplier}, or the curse spreads`,
+      modifiers: { curseChance: d1(v.chance) },
+      description: `${num(v.chance)}% chance that a new card arrives cursed: locked for ${T.curseMs / 1000}s. When the timer ends, it either becomes a ×${T.curseMultiplier} card (a Set with it deals ×${T.curseMultiplier}) or spreads to a neighbour.`,
+      shortDescription: `${num(v.chance)}% cursed cards: wait ${T.curseMs / 1000}s for ×${T.curseMultiplier}, or the curse spreads`,
     }),
   },
 
@@ -565,9 +593,9 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     maxCount: 1,
     stats: { damage: { label: 'Chain damage', unit: 'dmg', base: 8, perLevel: 1.5 } },
     build: v => ({
-      modifiers: { chainDamage: r(v.damage) },
-      description: `Two cards on the board are chained together. Match both in the same Set for +${r(v.damage)}. A chained card matched alone stays on the board.`,
-      shortDescription: `Match both chained cards together: +${r(v.damage)}`,
+      modifiers: { chainDamage: d1(v.damage) },
+      description: `Two cards on the board are chained together. Match both in the same Set for +${num(v.damage)}. A chained card matched alone stays on the board.`,
+      shortDescription: `Match both chained cards together: +${num(v.damage)}`,
     }),
   },
 
@@ -584,11 +612,11 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     icon: 'lorc/thorny-vine',
     effects: {},
     maxCount: 1,
-    stats: { chance: { label: 'Thorn chance', unit: '%', base: 10, perLevel: 0.5 }, damage: { label: 'Thorn damage', unit: 'dmg', base: 8, perLevel: 1.5 } },
+    stats: { chance: { label: 'Thorn chance', unit: '%', base: 10, perLevel: 1.5 }, damage: { label: 'Thorn damage', unit: 'dmg', base: 8, perLevel: 1.5 } },
     build: v => ({
-      modifiers: { thornChance: r(v.chance), thornDamage: r(v.damage) },
-      description: `${r(v.chance)}% chance that a new card has thorns. Match it within ${T.thornMs / 1000}s (+${T.thornMsPerExtraTrait / 1000}s per trait beyond 3) for +${r(v.damage)}; leave it and it costs a heart. One at a time.`,
-      shortDescription: `${r(v.chance)}% thorn cards: +${r(v.damage)} in time, a heart if not`,
+      modifiers: { thornChance: d1(v.chance), thornDamage: d1(v.damage) },
+      description: `${num(v.chance)}% chance that a new card has thorns. Match it within ${T.thornMs / 1000}s (+${T.thornMsPerExtraTrait / 1000}s per trait beyond 3) for +${num(v.damage)}; leave it and it costs a heart. One at a time.`,
+      shortDescription: `${num(v.chance)}% thorn cards: +${num(v.damage)} in time, a heart if not`,
     }),
   },
 
@@ -605,7 +633,7 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     icon: 'delapouite/rusty-sword',
     effects: {},
     maxCount: 1,
-    stats: { gold: { label: 'Golden card damage', unit: 'dmg', base: 15, perLevel: 0.5 } },
+    stats: { gold: { label: 'Golden card damage', unit: 'dmg', base: 15, perLevel: 2.5 } },
     build: v => ({
       modifiers: { rustGold: r(v.gold) },
       description: `Every card loses 1 damage for each Set it sits through (never below 0). The card that has sat longest, once it has sat through ${T.rustSets} Sets, turns golden: +${r(v.gold)} damage and +${T.rustCoins} coins when matched.`,
@@ -628,9 +656,9 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     maxCount: 1,
     stats: { damage: { label: 'Tar Pit damage', unit: 'dmg', base: 4, perLevel: 1.25 } },
     build: v => ({
-      modifiers: { tarDamage: r(v.damage) },
-      description: `One row of the board is sticky each wave: its cards take two matches to clear. Every Set that uses a card in that row deals +${r(v.damage)}.`,
-      shortDescription: `A sticky row: two matches per card, +${r(v.damage)} per Set there`,
+      modifiers: { tarDamage: d1(v.damage) },
+      description: `One row of the board is sticky each wave: its cards take two matches to clear. Every Set that uses a card in that row deals +${num(v.damage)}.`,
+      shortDescription: `A sticky row: two matches per card, +${num(v.damage)} per Set there`,
     }),
   },
 
@@ -647,11 +675,11 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     icon: 'delapouite/plastic-duck',
     effects: {},
     maxCount: 1,
-    stats: { chance: { label: 'Decoy chance', unit: '%', base: 18, perLevel: 2.5 }, damage: { label: 'Decoy damage', unit: 'dmg', base: 16, perLevel: 4.5 } },
+    stats: { chance: { label: 'Decoy chance', unit: '%', base: 24, perLevel: 3 }, damage: { label: 'Decoy damage', unit: 'dmg', base: 18, perLevel: 5 } },
     build: v => ({
-      modifiers: { decoyChance: r(v.chance), decoyDamage: r(v.damage) },
-      description: `${r(v.chance)}% chance that a new card is a decoy: a copy of a card on the board with one trait changed. Nothing marks it. Match a decoy and its original in the same Set for +${r(v.damage)}.`,
-      shortDescription: `${r(v.chance)}% unmarked near-copies; match one with its original: +${r(v.damage)}`,
+      modifiers: { decoyChance: d1(v.chance), decoyDamage: r(v.damage) },
+      description: `${num(v.chance)}% chance that a new card is a decoy: a copy of a card on the board with one trait changed. Nothing marks it. Match a decoy and its original in the same Set for +${r(v.damage)}.`,
+      shortDescription: `${num(v.chance)}% unmarked near-copies; catch the pair: +${r(v.damage)}`,
     }),
   },
 
@@ -670,9 +698,9 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     maxCount: 1,
     stats: { chance: { label: 'Fuse chance', unit: '%', base: 20, perLevel: 2 }, damage: { label: 'Short-fuse damage', unit: 'dmg', base: 6, perLevel: 1.5 } },
     build: v => ({
-      modifiers: { fuseChance: r(v.chance), fuseDamage: r(v.damage) },
-      description: `${r(v.chance)}% chance that a new card carries a ${T.fuseMs / 1000}s fuse. Matched in its last ${T.fuseHotMs / 1000}s it deals +${r(v.damage)}. If it burns out it becomes a dud.`,
-      shortDescription: `${r(v.chance)}% fused cards: +${r(v.damage)} in the last ${T.fuseHotMs / 1000}s, a dud after`,
+      modifiers: { fuseChance: d1(v.chance), fuseDamage: d1(v.damage) },
+      description: `${num(v.chance)}% chance that a new card carries a ${T.fuseMs / 1000}s fuse. Matched in its last ${T.fuseHotMs / 1000}s it deals +${num(v.damage)}. If it burns out it becomes a dud.`,
+      shortDescription: `${num(v.chance)}% fused cards: +${num(v.damage)} in the last ${T.fuseHotMs / 1000}s, a dud after`,
     }),
   },
 
@@ -710,11 +738,14 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     icon: 'delapouite/mimic-chest',
     effects: {},
     maxCount: 1,
-    stats: { start: { label: 'Chest starts at', unit: 'dmg', base: 8, perLevel: 2.5 }, growth: { label: 'Growth per Set', unit: 'dmg', base: 2, perLevel: 0.5 } },
+    stats: {
+      start: { label: 'Chest floor', unit: 'dmg', base: 3, perLevel: 1, tunable: false },
+      growth: { label: 'Growth per Set', unit: 'dmg', base: 3, perLevel: 0.75 },
+    },
     build: v => ({
-      modifiers: { chestStart: r(v.start), chestGrowth: v.growth },
-      description: `One card is a chest holding ${r(v.start)} damage. It grows by ${num(v.growth)} every Set you leave it, and pays out when you match it. A mistake drops it back to ${r(v.start)}, its floor.`,
-      shortDescription: `A chest card: ${r(v.start)} damage, +${num(v.growth)} per Set you wait; a mistake drops it back to ${r(v.start)}`,
+      modifiers: { chestStart: r(v.start), chestGrowth: d1(v.growth) },
+      description: `One card is a chest starting at ${r(v.start)} damage. It grows by +${num(v.growth)} every Set you leave it, and pays out when you match it. A mistake drops it back to ${r(v.start)}, its floor.`,
+      shortDescription: `Chest card: starts at +${r(v.start)}, grows +${num(v.growth)}/Set; mistakes reset it`,
     }),
   },
 
@@ -731,11 +762,11 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     icon: 'delapouite/tightrope',
     effects: {},
     maxCount: 1,
-    stats: { damage: { label: 'Tightrope damage', unit: 'dmg', base: 4, perLevel: 0.5 } },
+    stats: { damage: { label: 'Tightrope damage', unit: 'dmg', base: 5, perLevel: 1 } },
     build: v => ({
-      modifiers: { tightropeDamage: r(v.damage) },
-      description: `A Set that uses a spot from your last Set, or one next to it, deals +${r(v.damage)}. Any other Set deals half damage.`,
-      shortDescription: `Sets touching your last Set +${r(v.damage)}; others deal half`,
+      modifiers: { tightropeDamage: d1(v.damage) },
+      description: `A Set that uses a spot from your last Set, or one next to it, deals +${num(v.damage)}. Stepping off the rope deals half damage.`,
+      shortDescription: `Sets touching your last Set +${num(v.damage)}; off-rope deals half`,
     }),
   },
 
@@ -752,11 +783,11 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     icon: 'delapouite/potato',
     effects: {},
     maxCount: 1,
-    stats: { damage: { label: 'Hot Potato damage', unit: 'dmg', base: 7, perLevel: 2.25 } },
+    stats: { damage: { label: 'Hot Potato damage', unit: 'dmg', base: 8, perLevel: 2.5 } },
     build: v => ({
-      modifiers: { potatoDamage: r(v.damage) },
-      description: `One card is hot and jumps to a neighbour every ${T.potatoMs / 1000}s. Matching it deals +${r(v.damage)}. While it is out, a mistake costs an extra heart.`,
-      shortDescription: `A hot card: +${r(v.damage)} when matched; mistakes cost an extra heart`,
+      modifiers: { potatoDamage: d1(v.damage) },
+      description: `One card is hot and jumps to a neighbour every ${T.potatoMs / 1000}s. Matching it deals +${num(v.damage)}. Mistakes cost an extra heart while it is in play.`,
+      shortDescription: `Hot card: +${num(v.damage)} when matched; mistakes cost double`,
     }),
   },
 ];

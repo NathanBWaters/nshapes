@@ -209,11 +209,21 @@ describe('Fog Lantern', () => {
 });
 
 describe('Understudy', () => {
-  it('copies the charm to its left at its own level, and does nothing in the first slot', () => {
+  it('copies the charm to its left at the higher of both levels, and does nothing in the first slot', () => {
     const [blast, copy] = charmWeapons(['blast-powder', 'understudy'], { understudy: { level: 2, tuning: {} } });
     expect(copy.id).toBe('understudy');
     expect(copy.effects.explosionChance).toBe(getArmoryWeapon('blast-powder', { 'blast-powder': { level: 2, tuning: {} } })!.effects.explosionChance);
     expect(copy.shortDescription).toContain(blast.name);
+
+    // Even a Lv 1 Understudy copies a higher-level left charm at the neighbor's level!
+    const [, highCopy] = charmWeapons(['blast-powder', 'understudy'], {
+      'blast-powder': { level: 4, tuning: { explosionChance: 4 } },
+      understudy: { level: 1, tuning: {} },
+    });
+    expect(highCopy.effects.explosionChance).toBe(
+      getArmoryWeapon('blast-powder', { 'blast-powder': { level: 4, tuning: {} } })!.effects.explosionChance
+    );
+
     const [alone] = charmWeapons(['understudy', 'blast-powder']);
     expect(alone.effects).toEqual({});
   });
@@ -222,9 +232,14 @@ describe('Understudy', () => {
     const save = { ...createMaxedSave(), charms: ['magnet', 'understudy'], skillNodes: {}, equippedArcana: [], upgrades: {} };
     const s = startFight({ save });
     expect(s.weapons.map(w => w.id)).toEqual(['magnet', 'understudy']);
-    const m = (s.weapons[1] as AdventureWeapon).modifiers!;
-    // The copy is the Magnet at the Understudy's level (1), whatever level the Magnet itself is
-    expect(m.magnetDamage).toBe((getArmoryWeapon('magnet', { magnet: { level: 1, tuning: {} } }) as AdventureWeapon).modifiers!.magnetDamage);
+    const orig = (s.weapons[0] as AdventureWeapon).modifiers!;
+    const copy = (s.weapons[1] as AdventureWeapon).modifiers!;
+    // Understudy copies Magnet at max(understudyLevel, magnetLevel), untuned
+    const expectedLevel = Math.max(s.weaponBuilds.understudy?.level ?? 1, s.weaponBuilds.magnet?.level ?? 1);
+    expect(copy.magnetDamage).toBe(
+      (getArmoryWeapon('magnet', { magnet: { level: expectedLevel, tuning: {} } }) as AdventureWeapon).modifiers!.magnetDamage
+    );
+    expect(orig.magnetDamage).toBeGreaterThan(0);
   });
 });
 
@@ -232,16 +247,21 @@ describe('Encore Mask', () => {
   // Exact hits: Power (which an evolution surges) is switched off here
   beforeEach(() => setPowerEnabled(false));
   afterEach(() => setPowerEnabled(true));
-  it('an evolution ends with a hit', () => {
+  it('extends evolutions by 5s, boosts Sets while evolved, and ends with a blast + Curtain Call ×2', () => {
     const save = { ...createMaxedSave(), charms: ['blast-powder', 'mending-charm', 'encore-mask'], skillNodes: {}, equippedArcana: [], upgrades: {} };
     let s = startFight({ save, features: ['hearts', 'gear', 'evolutions'] });
     const set = findSet(s)!;
     s = { ...s, board: s.board.map(c => (c.id === set[0].id ? { ...c, hasEvolutionItem: true, evolutionReady: true } : c)) };
     s = playSet(s, findSet(s, cards => cards.some(c => c.hasEvolutionItem)));
     expect(s.activeEvolutions).toHaveLength(1);
-    s = tick(s, 31000, 1000);
+    // Base 30s + Encore Mask +5s = 35s
+    expect(s.activeEvolutions[0].durationMs).toBe(35000);
+    s = tick(s, 36000, 1000);
     expect(s.activeEvolutions).toHaveLength(0);
-    expect(s.log.flatMap(e => e.lines)).toContainEqual({ type: 'hit', amount: 10, text: 'Encore!' });
+    const encoreDmg = (s.weapons.find(w => w.id === 'encore-mask') as AdventureWeapon).modifiers!.encoreDamage!;
+    expect(s.log.flatMap(e => e.lines)).toContainEqual({ type: 'hit', amount: encoreDmg, text: 'Encore!' });
+    // Curtain Call arms next Set ×2 even for evolutions without evolutionStart rules
+    expect(s.nextSetMultiplier).toBe(2);
   });
 });
 

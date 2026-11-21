@@ -87,11 +87,11 @@ describe('Weapon Definitions', () => {
       });
     });
 
-    it('legendary weapons should cost 15-50 coins', () => {
+    it('legendary weapons should cost 10-14 coins (balanced Adventure shop prices: 20-28¢)', () => {
       const legendaries = WEAPONS.filter(w => w.rarity === 'legendary');
       legendaries.forEach(weapon => {
-        expect(weapon.price).toBeGreaterThanOrEqual(15);
-        expect(weapon.price).toBeLessThanOrEqual(50);
+        expect(weapon.price).toBeGreaterThanOrEqual(10);
+        expect(weapon.price).toBeLessThanOrEqual(14);
       });
     });
 
