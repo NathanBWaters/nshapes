@@ -31,7 +31,7 @@ import { band, music, sfx } from '@/audio';
 import { moodOf, playSounds, soundsFor } from '@/audio/fightAudio';
 import type { AdventureSave, EvolutionRecipe, FeatureFlag, LevelDef, PassiveId, RunEventType, RunState } from '../types';
 import type { WeaponBuilds } from '../data/weaponStats';
-import { activeEnemyCounters, createRun, runReducer, shopPrice, rerollCost, xpForLevel, type RunAction, type RunOverrides } from '../engine/run';
+import { activeEnemyCounters, computeStars, createRun, runReducer, shopPrice, rerollCost, xpForLevel, type RunAction, type RunOverrides } from '../engine/run';
 import { nextCatalystRecipe } from '../engine/fight';
 import { boardHasCounterSet } from '../engine/parry';
 import { FightRecorder, type FightTape } from '../engine/replay';
@@ -111,6 +111,12 @@ export interface FightChromeOptions {
   alwaysShowHudStats?: boolean;
   /** Disable mid-fight Restart button (e.g. roguelike stakes) */
   allowRestart?: boolean;
+  /** True when timing out counts as a defeat rather than a 1★ survival (e.g. Starfall Summit) */
+  requireKnockoutToWin?: boolean;
+  /** True for starless modes so KillCam uses knockout/untouched copy instead of 1–3★ tiers */
+  starlessVictory?: boolean;
+  /** True when the current fight is an Elite encounter (Starfall Summit) */
+  isEliteEncounter?: boolean;
   quitLabel?: string;
   quitHint?: string;
 }
@@ -491,10 +497,12 @@ const AdventureRun: React.FC<Props> = ({
   const endedAtRef = useRef<number | null>(null);
   const slowMoCinema = effects && !reducedMotion && !practice;
   const victoryImpactDelay = run.lastSetIgnition?.lethal ? SLOWMO_IMPACT_DELAY_MS : 0;
+  const isVictoryRun = (s: RunState) => s.status === 'won' && (!chrome?.requireKnockoutToWin || s.endReason === 'defeated');
+  const fightVictory = isVictoryRun(run);
   useEffect(() => {
     if (!ended) return;
     endedAtRef.current = Date.now();
-    const won = run.status === 'won';
+    const won = isVictoryRun(run);
     if (won && slowMoCinema) {
       // Subtle dramatic camera push-in during the slow-mo breath, releasing cleanly into Results
       victoryZoom.value = withDelay(
@@ -528,7 +536,7 @@ const AdventureRun: React.FC<Props> = ({
   useEffect(() => {
     // The last cascade plays out first; hand off right as the slow-mo release completes (zero dead air)
     if (!ended || fx.busy) return;
-    const won = runRef.current.status === 'won';
+    const won = isVictoryRun(runRef.current);
     const targetMs = won
       ? slowMoCinema
         ? victoryImpactDelay + SLOWMO_HOLD_MS + SLOWMO_RELEASE_MS + SLOWMO_SETTLE_PAD_MS
@@ -1501,11 +1509,18 @@ const AdventureRun: React.FC<Props> = ({
       </View>
 
       {/* Everything that is playing right now */}
-      <FxStage fx={fx} anchors={anchors} size={stage} hideWeaponNameTags suppressKoBanner={run.status === 'won' && !practice} />
+      <FxStage fx={fx} anchors={anchors} size={stage} hideWeaponNameTags suppressKoBanner={fightVictory && !practice} />
       <KillCamOverlay
         ignition={run.lastSetIgnition}
-        victory={run.status === 'won' && !practice}
-        flawless={run.mistakes === 0}
+        victory={fightVictory && !practice}
+        stars={chrome?.starlessVictory ? null : computeStars(run)}
+        endReason={run.endReason}
+        damageReceived={run.roundStats.damageReceived}
+        mistakes={run.mistakes}
+        hasHearts={hasHearts}
+        heartsLeft={run.hearts}
+        isBoss={Boolean(level.isBoss)}
+        isElite={Boolean(chrome?.isEliteEncounter)}
         impactDelayMs={victoryImpactDelay}
         anchors={anchors}
         stageSize={stage}

@@ -326,6 +326,9 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
           pauseSubtitle: `${floorLabel} · ${enc.name}`,
           alwaysShowHudStats: true,
           allowRestart: false,
+          requireKnockoutToWin: true,
+          starlessVictory: true,
+          isEliteEncounter: enc.kind === 'elite',
           quitLabel: isLastHeart ? 'Forfeit Run' : 'Retreat (−1 ♥)',
           quitHint: isLastHeart
             ? 'You are at 1 ♥ — retreating ends this climb.'

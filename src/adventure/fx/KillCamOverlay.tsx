@@ -35,7 +35,8 @@ import { COLORS } from '@/utils/colors';
 import { EASE, MS, exitMs } from '@/utils/motion';
 import type { Anchors } from './anchors';
 import { fxMs } from './clock';
-import type { SetIgnition } from '../types';
+import type { RunState, SetIgnition } from '../types';
+import { resolveVictoryCallout } from '../victoryCallout';
 
 /** Let the lethal Set's cards reach the foe before time slows (matches FX_TIMING.flightMs + audio-grid slip ≈ 290 ms) */
 export const SLOWMO_IMPACT_DELAY_MS = 290;
@@ -52,9 +53,25 @@ export const SLOWMO_REDUCED_TOTAL_MS = 620;
 
 interface Props {
   ignition: SetIgnition | null;
-  /** True once the fight's final enemy is defeated (won) */
+  /** True once the fight ends in a victory */
   victory?: boolean;
-  /** True when the player won with zero mistakes */
+  /** Earned stars (1–3) in Adventure Mode, or null in starless modes like Starfall Summit */
+  stars?: number | null;
+  /** How the fight ended ('defeated' knockout vs 'survived' timer/moves out) */
+  endReason?: RunState['endReason'];
+  /** Total health lost during this fight (0 = untouched) */
+  damageReceived?: number;
+  /** Invalid selections made during this fight */
+  mistakes?: number;
+  /** Whether this fight tracks player hearts */
+  hasHearts?: boolean;
+  /** Hearts remaining at fight end */
+  heartsLeft?: number | null;
+  /** True when the defeated foe is a boss */
+  isBoss?: boolean;
+  /** True when the defeated foe is a Summit elite */
+  isElite?: boolean;
+  /** Legacy shorthand: true when no health/mistakes were lost (used only if damageReceived is omitted) */
   flawless?: boolean;
   /** Override impact wait (0 for instant / burn kills; defaults to SLOWMO_IMPACT_DELAY_MS) */
   impactDelayMs?: number;
@@ -158,6 +175,14 @@ const WEB_NOIR_STYLE: ViewStyle | undefined =
 const KillCamOverlay: React.FC<Props> = ({
   ignition,
   victory = false,
+  stars = null,
+  endReason = 'defeated',
+  damageReceived,
+  mistakes,
+  hasHearts = false,
+  heartsLeft = null,
+  isBoss = false,
+  isElite = false,
   flawless = false,
   impactDelayMs = SLOWMO_IMPACT_DELAY_MS,
   anchors,
@@ -166,8 +191,9 @@ const KillCamOverlay: React.FC<Props> = ({
   reduced = false,
 }) => {
   const [activeKey, setActiveKey] = useState<string | null>(null);
-  const [headline, setHeadline] = useState('VICTORY!');
-  const [eyebrow, setEyebrow] = useState('FOE VANQUISHED');
+  const [headline, setHeadline] = useState('NICE JOB!');
+  const [eyebrow, setEyebrow] = useState('STAGE CLEAR');
+  const [showSlash, setShowSlash] = useState(true);
   const [origin, setOrigin] = useState({ x: 260, y: 120 });
   const firedKey = useRef<string | null>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -191,17 +217,24 @@ const KillCamOverlay: React.FC<Props> = ({
     timers.current = [];
 
     const waitMs = ignition?.lethal ? fxMs(impactDelayMs) : 0;
-
-    const text =
-      ignition?.parryKind === 'perfect'
-        ? 'PERFECT PARRY K.O.!'
-        : ignition?.isBossOrElite
-          ? 'BOSS VANQUISHED'
-          : flawless
-            ? 'FLAWLESS VICTORY'
-            : 'VICTORY!';
     const dmg = ignition ? Math.round(ignition.turnDamage ?? ignition.math.hit) : 0;
-    const sub = dmg > 0 ? `FINAL BLOW · ${dmg} DMG` : 'FOE VANQUISHED';
+    const resolvedDamageReceived = damageReceived ?? (flawless ? 0 : 1);
+    const resolvedMistakes = mistakes ?? (flawless ? 0 : 1);
+    const callout = resolveVictoryCallout({
+      stars,
+      endReason,
+      damageReceived: resolvedDamageReceived,
+      mistakes: resolvedMistakes,
+      hasHearts,
+      heartsLeft,
+      isBoss: isBoss || Boolean(ignition?.isBossOrElite && !isElite),
+      isElite,
+      isPerfectParryKo: ignition?.parryKind === 'perfect' && endReason === 'defeated',
+      finalBlowDmg: dmg,
+    });
+    const text = callout.headline;
+    const sub = callout.eyebrow;
+    const knockedOut = endReason !== 'survived';
 
     const start = () => {
       const foeRect = anchors.rect('foe');
@@ -210,6 +243,7 @@ const KillCamOverlay: React.FC<Props> = ({
       setOrigin({ x: ox, y: oy });
       setHeadline(text);
       setEyebrow(sub);
+      setShowSlash(knockedOut);
       setActiveKey(triggerKey);
 
       if (isQuiet) {
@@ -338,8 +372,8 @@ const KillCamOverlay: React.FC<Props> = ({
         </>
       )}
 
-      {/* Chiaroscuro luminous golden slash across the defeated foe */}
-      {!isQuiet && (
+      {/* Chiaroscuro luminous golden slash across the defeated foe (knockouts only) */}
+      {!isQuiet && showSlash && (
         <Animated.View
           style={[
             st.slashWrap,
@@ -374,8 +408,15 @@ const KillCamOverlay: React.FC<Props> = ({
       <View style={st.bannerCenter}>
         <Animated.View style={[st.goldRule, ruleStyle]} />
         <Animated.View style={[st.banner, bannerStyle]}>
-          <Text style={st.eyebrowText}>{eyebrow}</Text>
-          <Text style={st.bannerText} numberOfLines={1} adjustsFontSizeToFit>
+          <Text testID="kill-cam-eyebrow" style={st.eyebrowText} numberOfLines={1}>
+            {eyebrow}
+          </Text>
+          <Text
+            testID="kill-cam-headline"
+            style={[st.bannerText, headline.length > 15 && st.bannerTextCompact]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+          >
             {headline}
           </Text>
         </Animated.View>
@@ -477,6 +518,10 @@ const st = StyleSheet.create({
     letterSpacing: 2,
     textTransform: 'uppercase',
     textAlign: 'center',
+  },
+  bannerTextCompact: {
+    fontSize: 21,
+    letterSpacing: 1.4,
   },
   shardWrap: {
     position: 'absolute',

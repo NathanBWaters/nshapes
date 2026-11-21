@@ -33,6 +33,7 @@ import { buildDamageStory } from '../engine/damageStory';
 import BattleDamageStory from './BattleDamageStory';
 import FightReplay from './FightReplay';
 import PowerExplainer from './PowerExplainer';
+import { resolveVictoryCallout } from '../victoryCallout';
 
 interface Props {
   level: LevelDef;
@@ -81,7 +82,8 @@ const LevelResults: React.FC<Props> = ({
   const practice = !!level.rules.sandbox;
   const won = stars > 0 || practice;
   const accuracy = level.starRule?.kind === 'accuracy';
-  const title = practice ? 'PRACTICE OVER' : stars >= 3 ? 'PERFECT!' : stars === 2 ? 'VICTORY!' : stars === 1 ? (accuracy ? 'YOU WON!' : 'STAGE CLEAR!') : 'DEFEATED';
+  const knockedOut = run.endReason === 'defeated';
+  const hasHearts = run.hearts !== null && run.maxHearts !== null && run.maxHearts > 0;
   const newlyReachableBiome =
     result.newlyOpenedBiomes.find(b => {
       const first = MAIN_LEVELS.find(l => l.biome === b);
@@ -91,21 +93,22 @@ const LevelResults: React.FC<Props> = ({
   // The battle's score: damage per minute of fight clock, against the best on this level so far
   const dpm = damagePerMinute(run);
   const newBest = bestDpm !== null && dpm > bestDpm;
+  const callout = resolveVictoryCallout({
+    stars: practice ? null : stars,
+    endReason: run.endReason,
+    damageReceived: run.roundStats.damageReceived,
+    mistakes: run.mistakes,
+    hasHearts,
+    heartsLeft: run.hearts,
+    isBoss: Boolean(level.isBoss),
+    isPerfectParryKo: run.lastSetIgnition?.parryKind === 'perfect' && knockedOut,
+    finalBlowDmg: run.lastSetIgnition ? Math.round(run.lastSetIgnition.turnDamage ?? run.lastSetIgnition.math.hit) : 0,
+    practice,
+    newBest,
+  });
+  const title = callout.headline;
   /** Earned victory performance seal stamped onto the hero crest after the stars lock in */
-  const rankSeal: { label: string; accent: 'gold' | 'teal' | 'coral' } | null =
-    practice || !won
-      ? null
-      : level.isBoss
-        ? { label: 'BOSS SLAYER', accent: 'gold' }
-        : newBest
-          ? { label: 'NEW RECORD', accent: 'coral' }
-          : run.mistakes === 0 && stars >= 3
-            ? { label: 'FLAWLESS', accent: 'teal' }
-            : stars >= 3
-              ? { label: '3★ MASTER', accent: 'gold' }
-              : stars === 2
-                ? { label: 'GREAT WIN', accent: 'teal' }
-                : { label: 'CLEARED', accent: 'gold' };
+  const rankSeal = callout.rankSeal;
 
   const reduced = useReducedMotion();
   const revealedFirst = React.useRef(unlocksRevealed);
@@ -207,7 +210,6 @@ const LevelResults: React.FC<Props> = ({
   const canGoOn = won && !!nextLevel && nextUnlocked;
   const nextFoe = canGoOn && nextLevel ? levelFoe(nextLevel) : null;
   const nextIsNew = !!nextLevel && !result.save.seenMechanics.includes(nextLevel.introduces);
-  const hasHearts = run.hearts !== null && run.maxHearts !== null && run.maxHearts > 0;
   const resultFighterHealth = won
     ? (hasHearts ? Math.max(1, run.hearts!) : 3)
     : 0;
@@ -258,21 +260,21 @@ const LevelResults: React.FC<Props> = ({
               </View>
               <Text style={st.vsBadge}>VS</Text>
               <View style={st.foeWrap}>
-                <View style={won && !practice ? st.foeBeaten : undefined}>
+                <View style={won && knockedOut && !practice ? st.foeBeaten : undefined}>
                   <EnemyAvatar
                     testID="results-enemy-avatar"
                     enemy={{ name: run.foeName, icon: run.foeIcon, tier: run.foe.tier }}
                     size={48}
                     hp={run.foeHp}
                     maxHp={run.foeMaxHp}
-                    mood={practice ? 'idle' : won ? 'cornered' : 'victory'}
+                    mood={practice ? 'idle' : won && knockedOut ? 'cornered' : won ? 'idle' : 'victory'}
                     reaction={!won ? { type: 'taunt', id: 1 } : null}
                     framed
                     interactive
                   />
                 </View>
-                {won && !practice && (
-                  <View style={st.koTag}>
+                {won && knockedOut && !practice && (
+                  <View testID="results-ko-tag" style={st.koTag}>
                     <Text style={st.koTagText}>K.O.</Text>
                   </View>
                 )}
@@ -280,7 +282,18 @@ const LevelResults: React.FC<Props> = ({
             </View>
 
             {/* Monumental Gold Victory Title */}
-            <Text style={[st.title, practice && { fontSize: 25 }, !won && st.titleDefeat]}>{title}</Text>
+            <Text
+              testID="results-title"
+              style={[
+                st.title,
+                (practice || title.length > 13) && st.titleCompact,
+                !won && st.titleDefeat,
+              ]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+            >
+              {title}
+            </Text>
 
             {/* Giant Arched Angry Birds–style SVG Trophy Stars */}
             {!practice && <ResultStars stars={stars} size={65} reduced={reduced} darkSocket />}
@@ -698,6 +711,10 @@ const st = StyleSheet.create({
     textShadowRadius: 3,
     textAlign: 'center',
     marginTop: 0,
+  },
+  titleCompact: {
+    fontSize: 22,
+    letterSpacing: 1.5,
   },
   titleDefeat: {
     color: '#FF7B73',
