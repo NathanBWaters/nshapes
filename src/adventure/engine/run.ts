@@ -539,7 +539,13 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   }
   const weaponRainbowMult = rainbow ? Math.max(0.1, 1 + (m.rainbowMultiplierBonus ?? 0)) : 1;
   const arcanaRainbowMult = rainbow ? (a.rainbowMultiplier ?? BASE_RULES.rainbowMultiplier) : 1;
-  const rainbowBaseMult = weaponRainbowMult * arcanaRainbowMult;
+  // Combine positive Arcana Rainbow bonuses (Prismatic Fever) additively with Rainbow Charm / Rainbow Hunter
+  // so they stack cleanly instead of compounding exponentially, while penalties (Monochrome ×0.5) still halve.
+  const rainbowBaseMult = !rainbow
+    ? 1
+    : arcanaRainbowMult > 1
+      ? weaponRainbowMult + (arcanaRainbowMult - 1)
+      : weaponRainbowMult * arcanaRainbowMult;
   const rainbowBoosted = rainbow && rainbowBaseMult > 1;
   const evoCount = d.activeEvolutions.length;
   const evoMult =
@@ -595,10 +601,11 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
     if (arcanaRainbowMult !== 1) {
       const matchingArcana = d.arcana.map(getArcana).filter(def => def.rules.rainbowMultiplier !== undefined);
       const arcLabel = matchingArcana.length === 1 ? matchingArcana[0].name : 'Arcana';
+      const arcFactor = arcanaRainbowMult > 1 ? rainbowBaseMult / weaponRainbowMult : arcanaRainbowMult;
       multItems.push({
         label: arcLabel,
-        amount: arcanaRainbowMult,
-        note: arcanaRainbowMult < 1 ? 'all-different Set penalty' : 'all traits different',
+        amount: Math.round(arcFactor * 1000) / 1000,
+        note: arcanaRainbowMult < 1 ? 'all-different Set penalty' : weaponRainbowMult > 1 ? `+${arcanaRainbowMult - 1}× on Rainbow Sets` : 'all traits different',
       });
     }
   }
@@ -990,8 +997,7 @@ const autoSet = (d: Draft, source?: 'scoop') => {
     for (let k = 0; k < linkedCards.length; k++) {
       for (const bw of rollBridges(d, 'onDestruction')) {
         if (bw.bridgeEffect?.effect === 'heal') {
-          heal(d, bw.bridgeEffect.amount ?? 1);
-          enqueue(d, 'weapon', 'heal');
+          if (heal(d, bw.bridgeEffect.amount ?? 1)) enqueue(d, 'weapon', 'heal');
         }
       }
     }
@@ -1461,8 +1467,7 @@ const reduceRun = (state: RunState, action: RunAction): RunState => {
       for (let k = 0; k < burned.length; k++) {
         for (const bw of rollBridges(d, 'onDestruction')) {
           if (bw.bridgeEffect?.effect === 'heal') {
-            heal(d, bw.bridgeEffect.amount ?? 1);
-            enqueue(d, 'weapon', 'heal');
+            if (heal(d, bw.bridgeEffect.amount ?? 1)) enqueue(d, 'weapon', 'heal');
           }
         }
       }
@@ -1498,10 +1503,10 @@ const reduceRun = (state: RunState, action: RunAction): RunState => {
         }
         d.burnMults = nextMults;
       }
-      enqueue(d, 'cardBurned');
-      linked.forEach(() => enqueue(d, 'linkDestroyed'));
       recycle(d, burned);
       if (hadCatalyst) placeCatalyst(d, burned);
+      enqueue(d, 'cardBurned');
+      linked.forEach(() => enqueue(d, 'linkDestroyed'));
       drain(d);
       break;
     }

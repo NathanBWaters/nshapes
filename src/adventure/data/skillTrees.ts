@@ -182,9 +182,9 @@ const TREES: Record<CharacterName, TreeSpec> = {
       '1-2': ['Lick Wounds', 'lorc/heart-inside', 'Every 4th Set heals 1 heart.', rule(T.nth(4), [E.heal(1)]), 2, [1, 7]],
       '0-7': ['Extra Life', 'lorc/heart-bottle', 'Nine Lives gains 1 more charge per fight.', tune('nineLives.charges', 1), 3, [2, 8]],
       '0-5': ['Catnip', 'lorc/clover', 'Every explosion has a 25% chance to heal 1 heart.', rule(T.weapon('explosion'), [E.heal(1)], [C.chance(25)]), 2, [0, 4]],
-      '0-9': ['Sunbeam', 'lorc/laser-warning', 'Every heal fires a row laser.', rule(T.healed, [E.laser(A.row)], undefined, 'Sunbeam!'), 4, [0, 3]],
+      '0-9': ['Sunbeam', 'lorc/laser-warning', 'Every heal has a 50% chance to fire a row laser.', rule(T.healed, [E.laser(A.row)], [C.chance(50)], 'Sunbeam!'), 4, [0, 3]],
       '1-5': ['Rebound', 'lorc/bright-explosion', 'Every heal explodes 2 random cards.', rule(T.healed, [E.explode(A.random(2))]), 3, [2, 2]],
-      '1-6': ['Second Helping', 'lorc/crossed-swords', 'After every heal, your next Set deals ×2.', rule(T.healed, [E.times(2)]), 3, [2, 1]],
+      '1-6': ['Second Helping', 'lorc/crossed-swords', 'Every heal has a 50% chance to make your next Set deal ×2.', rule(T.healed, [E.times(2)], [C.chance(50)]), 3, [2, 1]],
       '1-3': ['Hot-Blooded', 'lorc/campfire', 'Every mistake sets 2 cards on fire.', rule(T.mistake, [E.ignite(2)]), 2, [3, 5]],
       'x-1': [
         'Ninth Life Scrap',

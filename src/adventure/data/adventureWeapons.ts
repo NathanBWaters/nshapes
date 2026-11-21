@@ -72,7 +72,7 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     effects: {},
     maxCount: 1,
     stats: {
-      mult: { label: 'Rainbow multiplier', unit: '×', base: 2, perLevel: 0.25 },
+      mult: { label: 'Rainbow multiplier', unit: '×', base: 2, perLevel: 0.25, tunable: false },
     },
     build: v => {
       const m = Math.round(v.mult * 100) / 100;
@@ -253,8 +253,8 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     effects: {},
     maxCount: 1,
     stats: {
-      strike: { label: 'Tripwire & Revenge damage', unit: 'dmg', base: 4, perLevel: 2 },
-      chance: { label: 'Link chance per roll', unit: '%', base: 28, perLevel: 5 },
+      strike: { label: 'Tripwire & Revenge damage', unit: 'dmg', base: 2, perLevel: 1 },
+      chance: { label: 'Link chance per roll', unit: '%', base: 22, perLevel: 4 },
     },
     build: v => ({
       rules: revenge(d1(v.chance), d1(v.strike)),
@@ -384,7 +384,7 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     effects: {},
     maxCount: 1,
     stats: {
-      step: { label: 'Damage per stack', unit: 'dmg', base: 1, perLevel: 0.25 },
+      step: { label: 'Damage per stack', unit: 'dmg', base: 0.8, perLevel: 0.1 },
       max: { label: 'Most stacks', unit: 'count', base: 4, perLevel: 1, tunable: false },
     },
     build: v => {
@@ -633,7 +633,7 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     icon: 'delapouite/rusty-sword',
     effects: {},
     maxCount: 1,
-    stats: { gold: { label: 'Golden card damage', unit: 'dmg', base: 15, perLevel: 2.5 } },
+    stats: { gold: { label: 'Golden card damage', unit: 'dmg', base: 14, perLevel: 2 } },
     build: v => ({
       modifiers: { rustGold: r(v.gold) },
       description: `Every card loses 1 damage for each Set it sits through (never below 0). The card that has sat longest, once it has sat through ${T.rustSets} Sets, turns golden: +${r(v.gold)} damage and +${T.rustCoins} coins when matched.`,
@@ -675,7 +675,7 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     icon: 'delapouite/plastic-duck',
     effects: {},
     maxCount: 1,
-    stats: { chance: { label: 'Decoy chance', unit: '%', base: 24, perLevel: 3 }, damage: { label: 'Decoy damage', unit: 'dmg', base: 18, perLevel: 5 } },
+    stats: { chance: { label: 'Decoy chance', unit: '%', base: 20, perLevel: 3 }, damage: { label: 'Decoy damage', unit: 'dmg', base: 14, perLevel: 5 } },
     build: v => ({
       modifiers: { decoyChance: d1(v.chance), decoyDamage: r(v.damage) },
       description: `${num(v.chance)}% chance that a new card is a decoy: a copy of a card on the board with one trait changed. Nothing marks it. Match a decoy and its original in the same Set for +${r(v.damage)}.`,
@@ -762,7 +762,7 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     icon: 'delapouite/tightrope',
     effects: {},
     maxCount: 1,
-    stats: { damage: { label: 'Tightrope damage', unit: 'dmg', base: 5, perLevel: 1 } },
+    stats: { damage: { label: 'Tightrope damage', unit: 'dmg', base: 3, perLevel: 1 } },
     build: v => ({
       modifiers: { tightropeDamage: d1(v.damage) },
       description: `A Set that uses a spot from your last Set, or one next to it, deals +${num(v.damage)}. Stepping off the rope deals half damage.`,

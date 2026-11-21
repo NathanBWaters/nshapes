@@ -384,7 +384,7 @@ describe('Adventure first minutes: show, then say', () => {
     // The last heart outranks everything; the goal being met comes next
     expect(keys({ ...run, hearts: 1, foeHp: 5, combo: 4 }, true)).toEqual(['last-heart', 'goal', 'wobble-0', 'roll']);
     // A second wave gets its own "halfway"
-    expect(keys({ ...run, wave: 1, foeHp: 10 })).toEqual(['half-1']);
+    expect(keys({ ...run, wave: 1, foeHp: run.foeMaxHp / 2 })).toEqual(['half-1']);
     // The walk-through level and practice have their own voice: no remarks there
     const first = createRun(getLevel('1-1'), createNewSave(), { seed: 1 });
     expect(keys({ ...first, foeHp: 6, combo: 3 })).toEqual([]);

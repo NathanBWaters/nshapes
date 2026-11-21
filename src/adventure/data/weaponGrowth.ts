@@ -107,7 +107,7 @@ export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
     { watch: weaponOn('explosion'), every: 3, max: 4, stat: { explosionDamage: 0.25 }, look: 'explosions', gives: 'blasted cards deal +0.25 more damage' },
   ],
   'rainbow-charm': [
-    { watch: { on: 'set', test: 'rainbow' }, every: 2, max: 6, stat: { mult: 0.25 }, look: 'Rainbow Sets', gives: '+0.25× Rainbow multiplier' },
+    { watch: { on: 'set', test: 'rainbow' }, every: 2, max: 5, stat: { mult: 0.25 }, look: 'Rainbow Sets', gives: '+0.25× Rainbow multiplier' },
   ],
   'flint-spark': [
     {
@@ -115,9 +115,9 @@ export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
       every: 3,
       max: 5,
       stat: { burnDamage: 0.25 },
-      proc: { on: weaponOn('fire'), pct: 12, effect: { do: 'ignite', count: 1 } },
+      proc: { on: weaponOn('fire'), pct: 8, effect: { do: 'ignite', count: 1 } },
       look: 'cards burned up',
-      gives: 'burns deal +0.25 more and +12% chance a new fire catches an extra card',
+      gives: 'burns deal +0.25 more and +8% chance a new fire catches an extra card',
     },
   ],
   'prismatic-ray': [
@@ -153,13 +153,13 @@ export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
     { watch: { on: 'linkDestroyed' }, every: 4, max: 6, proc: { on: { on: 'linkDestroyed' }, pct: 3, effect: { do: 'trigger', kind: 'echo' } }, look: 'cards destroyed through a link', gives: '+3% chance that a linked card echoes as it goes (a Set is matched for you)' },
   ],
   'revenge-linker': [
-    { watch: { on: 'linkDestroyed' }, every: 3, max: 4, stat: { strike: 1.5, chance: 3 }, look: 'cards destroyed through a link', gives: 'Tripwire and Revenge hit +1.5 harder and link 3% more often' },
-    { watch: { on: 'hurt' }, max: 2, stat: { strike: 3, chance: 6 }, look: 'heart you lose', gives: 'Revenge strikes +3 harder and links 6% more often' },
+    { watch: { on: 'linkDestroyed' }, every: 4, max: 4, stat: { strike: 0.5, chance: 2 }, look: 'cards destroyed through a link', gives: 'Tripwire and Revenge hit +0.5 harder and link 2% more often' },
+    { watch: { on: 'hurt' }, max: 2, stat: { strike: 1.5, chance: 4 }, look: 'heart you lose', gives: 'Revenge strikes +1.5 harder and links 4% more often' },
   ],
 
   // ── Board ─────────────────────────────────────────────────────────────────
   // Field Stone and Growth Seed: nothing. They are the board's own snowball.
-  'war-drum': [{ watch: { on: 'own' }, every: 3, max: 3, stat: { power: 1 }, look: 'times the Drum sounds', gives: 'the Drum gives every card +1 more' }],
+  'war-drum': [{ watch: { on: 'own' }, every: 4, max: 2, stat: { power: 1 }, look: 'times the Drum sounds', gives: 'the Drum gives every card +1 more' }],
   'clarity-lens': [
     { watch: { on: 'own' }, max: 10, mods: { doubleClarityChance: 5 }, look: 'Clarity', gives: '+5% chance a Clarity simplifies two traits at once' },
   ],

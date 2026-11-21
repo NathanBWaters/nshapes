@@ -73,6 +73,8 @@ export interface Draft extends RunState {
   /** Keys of the rules whose effects are running right now (events queued now inherit them) */
   _chain: readonly string[];
   _firings: number;
+  /** Number of overheal-triggered `healed` events already queued in this action */
+  _overheals: number;
   _mods: Modifiers | null;
   _rules: KeyedRule[] | null;
   _arcana: ArcanaRules | null;
@@ -117,6 +119,7 @@ export const begin = (s: RunState, hooks: FightHooks): Draft => ({
   _queue: [],
   _chain: [],
   _firings: 0,
+  _overheals: 0,
   _mods: null,
   _rules: null,
   _arcana: null,
@@ -129,7 +132,7 @@ export const begin = (s: RunState, hooks: FightHooks): Draft => ({
 });
 
 export const finish = (d: Draft, prev?: RunState): RunState => {
-  const { _rng, _queue, _chain, _firings, _mods, _rules, _arcana, _setCtx, _setMultiplier, _hooks, _clock, _lines, _logSet, ...rest } = d;
+  const { _rng, _queue, _chain, _firings, _overheals, _mods, _rules, _arcana, _setCtx, _setMultiplier, _hooks, _clock, _lines, _logSet, ...rest } = d;
   const connections =
     prev &&
     d.connections.length === prev.connections.length &&
@@ -518,13 +521,26 @@ export const addXp = (d: Draft, amount: number) => {
   }
 };
 
-export const heal = (d: Draft, amount: number) => {
-  if (d.hearts === null || d.maxHearts === null || amount <= 0) return;
+/** Cap overheal-sourced `healed` events per action so full-HP heal→destroy loops (Soul Harvest + Sunbeam/Rebound/Catnip) can't snowball unboundedly. */
+export const MAX_OVERHEAL_TRIGGERS_PER_ACTION = 1;
+
+export const heal = (d: Draft, amount: number): boolean => {
+  if (d.hearts === null || d.maxHearts === null || amount <= 0) return false;
   const before = d.hearts;
   d.hearts = Math.min(d.maxHearts, d.hearts + amount);
-  if (d.hearts > before) emit(d, 'heal', d.hearts - before);
+  const restored = d.hearts - before;
+  if (restored > 0) {
+    emit(d, 'heal', restored);
+    enqueue(d, 'healed');
+    return true;
+  }
   // Overheal counts as healed too so Phoenix Pyre, Bonfire, Bloodline, Stitches, Life Lessons, Soul Beam work at full HP
-  enqueue(d, 'healed');
+  if (d._overheals < MAX_OVERHEAL_TRIGGERS_PER_ACTION) {
+    d._overheals += 1;
+    enqueue(d, 'healed');
+    return true;
+  }
+  return false;
 };
 
 export const rollBridges = (d: Draft, trigger: BridgeTriggerType): Weapon[] =>
@@ -669,25 +685,26 @@ export const destroyCards = (d: Draft, indices: number[], kind: DestroyKind): nu
     slots: [...gone, ...armored],
     cards: [...gone.map(i => d.board[i]), ...armored.map(() => null)],
   });
+  let brokenCount = 0;
   for (const i of gone) {
     const c = d.board[i];
     if (c?.health === 1) {
       d.roundStats.tripleCardsCleared += 1;
-      enqueue(d, 'cardBroken');
+      brokenCount += 1;
       if (c.bounty) emit(d, 'pinata_break', dealDamage(d, c.bounty * d._setMultiplier * foeMultiplier(d)), undefined, { slots: [i] });
     }
   }
+  if (gone.length) recycle(d, gone);
+  for (let k = 0; k < brokenCount; k++) enqueue(d, 'cardBroken');
   // Soul Harvest (onDestruction): roll once per destroyed card (including linked partners)
   for (let k = 0; k < gone.length; k++) {
     for (const bw of rollBridges(d, 'onDestruction')) {
       if (bw.bridgeEffect?.effect === 'heal') {
-        heal(d, bw.bridgeEffect.amount ?? 1);
-        enqueue(d, 'weapon', 'heal');
+        if (heal(d, bw.bridgeEffect.amount ?? 1)) enqueue(d, 'weapon', 'heal');
       }
     }
   }
   linked.forEach(() => enqueue(d, 'linkDestroyed'));
-  if (gone.length) recycle(d, gone);
   return gone.length;
 };
 

@@ -57,7 +57,7 @@ export const WISDOM_COIN_PCT = 15;
 export const ADVENTURE_TUNING: Record<string, AdventureTuning> = {
   // ── Damage ────────────────────────────────────────────────────────────────
   'blast-powder': { effects: { explosionChance: 18, explosionDamage: 0.5 }, perLevel: { explosionChance: 4, explosionDamage: 0.25 } },
-  'flint-spark': { effects: { fireSpreadChance: 20, burnDamage: 0.75 }, perLevel: { fireSpreadChance: 4, burnDamage: 0.35 } },
+  'flint-spark': { effects: { fireSpreadChance: 16, burnDamage: 0.5 }, perLevel: { fireSpreadChance: 3.5, burnDamage: 0.25 } },
   'prismatic-ray': { effects: { laserChance: 10, laserDamage: 0.5 }, perLevel: { laserChance: 2.5, laserDamage: 0.75 } },
   'chaos-shard': {
     effects: { ricochetChance: 18, ricochetChainChance: 22, ricochetDamage: 0.5 },
@@ -101,13 +101,13 @@ export const ADVENTURE_TUNING: Record<string, AdventureTuning> = {
   'soul-harvest': {
     effects: { ricochetChance: 16, ricochetDamage: 0.5, bridgeChance: 24 },
     perLevel: { ricochetChance: 3.5, ricochetDamage: 0.25, bridgeChance: 6 },
-    extra: { strike: dmg('Soul heal damage', 4, 1.5) },
+    extra: { strike: dmg('Soul heal damage', 2, 0.75) },
     rider: v => ({ rules: [strike({ on: 'healed' }, v.strike, 'Soul Harvest!')] }),
   },
   'life-link': {
-    effects: { maxHealth: 1, health: 1, explosionChance: 10, bridgeChance: 35 },
+    effects: { maxHealth: 1, health: 1, explosionChance: 12, bridgeChance: 35 },
     perLevel: { maxHealth: 0.5, health: 0.5, explosionChance: 2.5, bridgeChance: 6 },
-    extra: { strike: dmg('Full-heart pulse damage', 4, 1.5) },
+    extra: { strike: dmg('Full-heart pulse damage', 5, 2) },
     rider: v => ({
       rules: [
         { trigger: { on: 'waveStart' }, effects: [{ do: 'shield', count: 1 }], callout: 'Life Ward!' },
