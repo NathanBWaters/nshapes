@@ -11,7 +11,6 @@
  *   solo         a weapon alone vs no weapon, per stage and skill tier
  *   inBuild      a weapon in random real builds vs those builds without it
  *   recipe       an evolution vs its two weapons with evolutions off AND vs a blank evolution shell (`ruleLift`)
- *   roleSets     2 / 4 / 6 Brotato Role Set Bonus counterfactual lift across all 8 weapon roles
  *   pair         two weapons together vs what they add separately (synergy)
  */
 import type { AttributeName } from '@/types';
@@ -25,7 +24,6 @@ import { createRng } from '../engine/rng';
 import { ALL_ARMORY_WEAPON_IDS, getArmoryWeapon } from '../data/armory';
 import { getRecipe } from '../engine/sources';
 import type { RunOverrides } from '../engine/run';
-import { WEAPON_ROLES, weaponRole, type WeaponRole } from '../data/weaponRoles';
 import { MAX_TUNING_TIER, MAX_WEAPON_LEVEL, weaponStatLines } from '../data/weaponStats';
 import { weaponLevelsInWorld } from '../weaponLevels';
 import { PARTNER_WEAPONS, type Tier } from './targets';
@@ -333,47 +331,6 @@ export const recipeLifts = (bench: Bench, tier: Tier, runs: number, only?: reado
         deadRules,
       };
     });
-
-export interface RoleSetBonusRow {
-  role: WeaponRole;
-  tier: 2 | 4 | 6;
-  charms: string[];
-  ratio: number;
-  survivalDelta: number;
-}
-
-/**
- * Counterfactual Role Set Bonus measurement across all 8 weapon roles at 2-, 4-, and 6-piece
- * breakpoints (skipping 6-piece for roles with fewer than 6 weapons: `board` (4) and `tempo` (5)).
- */
-export const measureRoleSetBonuses = (bench: Bench = benches().late, runs = 6): RoleSetBonusRow[] => {
-  const rows: RoleSetBonusRow[] = [];
-  for (const { id: role } of WEAPON_ROLES) {
-    const allInRole = ALL_ARMORY_WEAPON_IDS.filter(id => weaponRole(id) === role);
-    const nonPartner = allInRole.filter(id => !PARTNER_WEAPONS.includes(id));
-    const tiers: (2 | 4 | 6)[] = [2, 4, ...(allInRole.length >= 6 ? ([6] as const) : [])];
-    for (const tier of tiers) {
-      const pool = nonPartner.length >= tier ? nonPartner : allInRole;
-      let charms = fixUnderstudyOrder(pool.slice(0, tier));
-      // For `tempo` (+3s/+6s Evolution duration), arm an evolution so duration actually triggers!
-      if (role === 'tempo' && charms.length <= 4) {
-        if (!armableRecipes({ ...bench.save, armory: charms }).length) {
-          charms = [...charms, 'blast-powder', 'mending-charm'].slice(0, 6);
-        }
-      }
-      const on = play(bench, charms, 'average', runs);
-      const off = play(bench, charms, 'average', runs, {}, { disableRoleBonuses: true });
-      rows.push({
-        role,
-        tier,
-        charms,
-        ratio: mean(on.damage) / Math.max(1, mean(off.damage)),
-        survivalDelta: on.survival - off.survival,
-      });
-    }
-  }
-  return rows;
-};
 
 /**
  * Synergy of two weapons: what they add together ÷ what they add apart

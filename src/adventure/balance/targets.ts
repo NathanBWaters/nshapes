@@ -70,12 +70,6 @@ export const BALANCE_TARGETS = {
   recipeLift: [1.04, 2.6] as Band,
   /** An evolution's bespoke rules vs a blank evolution shell (isolates real recipe value from the universal +10/+2/×1.5 chassis) */
   recipeRuleLift: [1.04, 1.85] as Band,
-  /** Brotato-style 2 / 4 / 6 Role Set Bonus counterfactual lift (with vs without Role Set Bonuses) */
-  roleSetBonus: {
-    2: [1.0, 1.35] as Band,
-    4: [1.04, 1.65] as Band,
-    6: [1.08, 2.1] as Band,
-  },
   /** The middle recipe: evolutions as a whole are a power trip */
   recipeLiftMedian: 1.2,
   /** A held recipe starts at least this often per fight */

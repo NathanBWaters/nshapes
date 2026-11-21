@@ -938,8 +938,6 @@ export interface RunState {
   stackEvolutionMultipliers?: boolean;
   /** Lab-only override: omit each active Evolution's bespoke rules/modifiers while keeping the universal chassis */
   blankEvolutionRules?: boolean;
-  /** Lab-only override: disable Brotato-style 2/4/6 Role Set Bonuses to measure their counterfactual lift */
-  disableRoleBonuses?: boolean;
   /** Opt-in lab telemetry: total firings per rule key (undefined in normal gameplay for zero overhead) */
   ruleFirings?: Record<string, number>;
   /** Opt-in lab telemetry: firings where every effect resolved to a no-op / 0-damage result */

@@ -17,7 +17,6 @@ import { EVOLUTION_RECIPES } from '../data/evolutions';
 import { PASSIVES } from '../data/passives';
 import { UPGRADES, getUpgrade } from '../data/upgrades';
 import { ownerOfEvent } from '../data/weaponGuide';
-import { roleLabel, type WeaponRole } from '../data/weaponRoles';
 import { getRecipe, getSkillNode } from './sources';
 import type { ArcanaDef, EvolutionRecipe, FightLogEntry, FightLogLine, PassiveId, RunEventType, RunState, UpgradeDef } from '../types';
 
@@ -216,18 +215,7 @@ export const resolveDamageSourceMeta = (
     };
   }
 
-  // 4b. Explicit Role Set Bonus ref
-  if (rawRef?.startsWith('role:')) {
-    const rid = rawRef.slice(5) as WeaponRole;
-    return {
-      id: `role:${rid}`,
-      name: `${roleLabel(rid)} Set Bonus`,
-      kind: 'bonus',
-      icon: 'delapouite/star-formation',
-    };
-  }
-
-  // 4c. Explicit Arcana ref
+  // 4b. Explicit Arcana ref
   if (rawRef?.startsWith('arcana:')) {
     const aid = rawRef.slice(7);
     const arc = ARCANA_BY_ID[aid];

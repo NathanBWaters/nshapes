@@ -24,7 +24,6 @@ import { getArmoryWeapon } from '../data/armory';
 import { getPassive, PASSIVES } from '../data/passives';
 import { weaponGuide } from '../data/weaponGuide';
 import { formatPower } from '../data/weaponPower';
-import { ROLE_SET_BONUSES, roleLabel, type WeaponRole } from '../data/weaponRoles';
 import { getRecipe, getSkillNode } from '../engine/sources';
 import { buildReplayWeapons, fightReplayOf, type FightReplayData } from '../history';
 import {
@@ -207,16 +206,6 @@ const explainRef = (
     const a = ARCANA.find(x => x.id === id);
     return { name: a ? `${a.numeral} · ${a.name}` : id, text: a ? `${a.upside} Tradeoff: ${a.tradeoff}` : '', kind: 'arcana', icon: a?.icon };
   }
-  if (type === 'role') {
-    const r = id as WeaponRole;
-    const tiers = ROLE_SET_BONUSES[r];
-    return {
-      name: `${roleLabel(r)} Set Bonus`,
-      text: tiers ? `Role Set Bonus (${tiers.map(t => `${t.tier}×: ${t.summary}`).join(' · ')}).` : '',
-      kind: 'role bonus',
-      icon: 'delapouite/star-formation',
-    };
-  }
   if (type === 'passive') {
     const p = PASSIVES[id as PassiveId];
     return { name: p?.name ?? id, text: p?.text ?? '', kind: 'passive', icon: p?.icon };
@@ -369,7 +358,7 @@ const FightReplay: React.FC<Props> = ({ run, replay, visible, onClose }) => {
       .sort((a, b) => (b.stat?.damage ?? 0) - (a.stat?.damage ?? 0) || (b.stat?.fired ?? 0) - (a.stat?.fired ?? 0)),
     [heldIds, heldWeapons, stats]
   );
-  /** Evolutions, skill nodes, Role Set Bonuses, and equipped Arcana */
+  /** Evolutions, skill nodes, and equipped Arcana */
   const others = useMemo(() => {
     if (!data) return [];
     const seen = new Set<string>();
@@ -1036,7 +1025,7 @@ const FightReplay: React.FC<Props> = ({ run, replay, visible, onClose }) => {
                   const resultText =
                     o.kind === 'arcana' && (!o.stat || o.stat.fired === 0)
                       ? 'Active all fight.'
-                      : gearStatText(o.stat, data.totalDamage, o.ref.startsWith('role:') ? 'always' : 'other');
+                      : gearStatText(o.stat, data.totalDamage, 'other');
                   return (
                     <DamageSourceExplainer
                       key={o.ref}
@@ -1045,7 +1034,6 @@ const FightReplay: React.FC<Props> = ({ run, replay, visible, onClose }) => {
                       name={o.name}
                       icon={o.icon}
                       description={o.text}
-                      heldWeapons={heldWeapons}
                       result={{
                         text: resultText,
                         share:

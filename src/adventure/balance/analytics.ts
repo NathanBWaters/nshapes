@@ -24,7 +24,7 @@ import { FIGHTERS } from '../data/fighters';
 import { ARCANA, arcanaRules } from '../data/arcana';
 import { EVOLUTION_RECIPES } from '../data/evolutions';
 import { TREE_BUDGET } from '../data/skillTrees';
-import { WEAPON_ROLES, activeRoleBonuses, weaponRole, type WeaponRole } from '../data/weaponRoles';
+import { WEAPON_ROLES, weaponRole, type WeaponRole } from '../data/weaponRoles';
 import { ALL_ARMORY_WEAPON_IDS, getArmoryWeapon } from '../data/armory';
 import { PARRY_RULES } from '../data/parry';
 import { SPIRE_CLASH_PAIRS } from '@/spire/engine/bridge';
@@ -1272,9 +1272,8 @@ export const measureCoveringArrayShapley = (passesPerSlot = 15, runsPerBuild = 3
     fullCurves.push(effBuckets);
     fullEnds.push(effEndMultiple);
 
-    // Design row: [1 (intercept), 64 weapon indicators, 5 fighter contrasts (vs index 0), 8 arcana indicators, 16 Role Set indicators (role2, role4)]
-    const roleOffset = 1 + armory.length + (FIGHTERS.length - 1) + ARCANA.length;
-    const row = Array(roleOffset + WEAPON_ROLES.length * 2).fill(0);
+    // Design row: [1 (intercept), 64 weapon indicators, 5 fighter contrasts (vs index 0), 8 arcana indicators]
+    const row = Array(1 + armory.length + (FIGHTERS.length - 1) + ARCANA.length).fill(0);
     row[0] = 1;
     for (const cId of charms) {
       const wi = armory.indexOf(cId);
@@ -1290,13 +1289,6 @@ export const measureCoveringArrayShapley = (passesPerSlot = 15, runsPerBuild = 3
       if (ai >= 0) {
         row[1 + armory.length + (FIGHTERS.length - 1) + ai] = 1;
         aAppear[ai]++;
-      }
-    }
-    for (const rb of activeRoleBonuses(charms)) {
-      const ri = WEAPON_ROLES.findIndex(r => r.id === rb.role);
-      if (ri >= 0) {
-        if (rb.tier >= 2) row[roleOffset + ri * 2] = 1;
-        if (rb.tier >= 4) row[roleOffset + ri * 2 + 1] = 1;
       }
     }
     X.push(row);

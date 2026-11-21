@@ -6,8 +6,6 @@ import { baseCardReward, runReducer } from '@/adventure/engine/run';
 import { allSets, countDifferentAttributes, hasAnySet, isRainbow } from '@/adventure/engine/sets';
 import { MAX_CHAIN_OCCURRENCES, MAX_FIRINGS_PER_ACTION } from '@/adventure/rules/engine';
 import { arcanaRules, combineArcana } from '@/adventure/data/arcana';
-import { getArmoryWeapon } from '@/adventure/data/armory';
-import { ROLE_SET_BONUSES, activeRoleBonuses, roleBonusProgress } from '@/adventure/data/weaponRoles';
 import { challengeProgress, describeChallenge } from '@/adventure/engine/challenges';
 import { snareTarget } from '@/adventure/engine/fight';
 import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
@@ -924,80 +922,6 @@ describe('core engine bug fixes', () => {
     const after = miss(s);
     // AutoSet matched 3 cards + broke linked partner(s) -> linkDestroyed fired (+7 each)
     expect(hpBefore - after.foeHp).toBeGreaterThanOrEqual(3 + 7);
-  });
-});
-
-describe('Role Set Bonuses (2/4/6 Brotato-style synergies)', () => {
-  beforeEach(() => setPowerEnabled(false));
-  afterEach(() => setPowerEnabled(true));
-
-  it('defines 2/4/6 tiers for all 8 weapon roles and ignores synthetic test relics', () => {
-    expect(Object.keys(ROLE_SET_BONUSES)).toHaveLength(8);
-    expect(activeRoleBonuses([relic([]), relic([], undefined, 'r2')])).toEqual([]);
-  });
-
-  it('activates damage (2) and board (2) Role Set Bonuses live in a fight', () => {
-    const blast = getArmoryWeapon('blast-powder')!;
-    const ray = getArmoryWeapon('prismatic-ray')!;
-    const fieldStone = getArmoryWeapon('field-stone')!;
-    const growthSeed = getArmoryWeapon('growth-seed')!;
-
-    const bonuses = activeRoleBonuses([blast, ray, fieldStone, growthSeed]);
-    expect(bonuses.map(b => `${b.role}:${b.tier}`)).toEqual(expect.arrayContaining(['damage:2', 'board:2']));
-
-    const progress = roleBonusProgress([blast, ray, fieldStone, growthSeed]);
-    expect(progress.find(p => p.role === 'damage')).toMatchObject({ count: 2, activeTier: 2, nextTier: 4 });
-
-    // Fight with 2 damage + 2 board weapons: board:2 adds +1 startingBoardCards on top of field-stone's fieldSize, damage:2 adds +1 setDamage
-    const singleBoard = startFight({
-      save: {
-        selectedFighter: 'Pelican',
-        upgrades: { charm_belt: 4 },
-        armory: ['blast-powder', 'prismatic-ray', 'field-stone'],
-        charms: ['blast-powder', 'prismatic-ray', 'field-stone'],
-      },
-      level: testLevel({ foes: [{ name: 'Dummy', hp: 500 }] }),
-      features: ['hearts', 'gear'],
-    });
-    const s = startFight({
-      save: {
-        selectedFighter: 'Pelican',
-        upgrades: { charm_belt: 4 },
-        armory: ['blast-powder', 'prismatic-ray', 'field-stone', 'growth-seed'],
-        charms: ['blast-powder', 'prismatic-ray', 'field-stone', 'growth-seed'],
-      },
-      level: testLevel({ foes: [{ name: 'Dummy', hp: 500 }] }),
-      features: ['hearts', 'gear'],
-    });
-    expect(s.board.length).toBe(singleBoard.board.length + 1);
-    const { next, dmg } = damageOf(s);
-    // 3 base + 1 from Damage Set (2)
-    expect(dmg).toBeGreaterThanOrEqual(4);
-    expect(next.log[next.log.length - 1].set?.flatItems).toContainEqual(
-      expect.objectContaining({ label: 'Damage Set', amount: 1, sourceRef: 'role:damage' })
-    );
-  });
-
-  it('chains:4 adds starting links and +5% bonusEchoChance', () => {
-    const s = startFight({
-      save: {
-        selectedFighter: 'Pelican',
-        upgrades: { charm_belt: 4 },
-        armory: ['echo-stone', 'chain-reaction', 'connector', 'web-weaver'],
-        charms: ['echo-stone', 'chain-reaction', 'connector', 'web-weaver'],
-      },
-      level: testLevel({ foes: [{ name: 'Dummy', hp: 500 }] }),
-      features: ['hearts', 'gear'],
-    });
-    // chains:4 adds startingLinks: 2 (plus connector/web-weaver links)
-    expect(s.connections.length).toBeGreaterThanOrEqual(2);
-    // chains:4 adds +5% bonusEchoChance on top of echo-stone
-    const baseEchoOnly = startFight({
-      save: { selectedFighter: 'Pelican', armory: ['echo-stone'], charms: ['echo-stone'] },
-      level: testLevel({ foes: [{ name: 'Dummy', hp: 500 }] }),
-      features: ['hearts', 'gear'],
-    });
-    expect(s.stats.echoChance).toBeGreaterThanOrEqual(baseEchoOnly.stats.echoChance + 5);
   });
 });
 

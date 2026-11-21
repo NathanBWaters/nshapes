@@ -139,7 +139,7 @@ describe('Power targets on a 3-minute endgame fight (vs no gear)', () => {
     expect(Math.max(...pairs)).toBeLessThanOrEqual(T.pair * 4);
   });
 
-  it('a full build (six charms with Role Set Bonuses, full tree, Workshop, coherent Arcana) reaches about ×300', () => {
+  it('a full build (six charms, full tree, Workshop, coherent Arcana) reaches about ×300', () => {
     const maxed = createMaxedSave();
     // Coherent, non-contradictory 3-Arcana loadout (never pairs monochrome_pact + prismatic_fever)
     const coherentArcana: ArcanaId[] = ['prismatic_fever', 'catalyst_resonance', 'tempo_surge'];

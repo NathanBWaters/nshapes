@@ -13,7 +13,6 @@ import type { FightLogCard, FightLogEntry, FightLogKind, FightLogLine, RunState 
 import type { RunAction } from './run';
 import { xpForLevel, type Draft } from './fight';
 import { getRecipe, getSkillNode } from './sources';
-import { roleLabel, type WeaponRole } from '../data/weaponRoles';
 
 /** Clock entries and burns closer together than this become one entry. */
 const MERGE_MS = 1000;
@@ -60,12 +59,11 @@ export const logCard = (c: Card): FightLogCard => {
   };
 };
 
-/** Rule key (`node:<id>#i`, `w<slot>:<id>#i`, `evo:<id>#i`, `role:<role>`) → the name players know it by. */
+/** Rule key (`node:<id>#i`, `w<slot>:<id>#i`, `evo:<id>#i`) → the name players know it by. */
 const sourceName = (d: RunState, key: string): string => {
   const base = key.split('#')[0];
   if (base.startsWith('node:')) return getSkillNode(base.slice(5))?.name ?? base;
   if (base.startsWith('evo:')) return getRecipe(base.slice(4))?.name ?? base;
-  if (base.startsWith('role:')) return `${roleLabel(base.slice(5) as WeaponRole)} Set`;
   const slot = /^w(\d+):(.*)$/.exec(base);
   if (slot) return d.weapons[Number(slot[1])]?.name ?? slot[2];
   return base;

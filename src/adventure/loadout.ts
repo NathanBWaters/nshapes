@@ -138,8 +138,6 @@ export interface LoadoutOptions {
   weaponBuilds?: ReturnType<typeof weaponBuilds>;
   /** Lab-only override: strip fighter passives without disabling Parry/Surge/Power/Rainbow/Purity */
   disablePassives?: boolean;
-  /** Lab-only override: disable Brotato-style 2/4/6 Role Set Bonuses */
-  disableRoleBonuses?: boolean;
 }
 
 /**
@@ -169,7 +167,6 @@ export const startingLoadout = (
     skillNodes,
     weapons,
     activeEvolutions: [],
-    disableRoleBonuses: opts?.disableRoleBonuses,
   });
 
   // Time gains are exactly the seconds the weapons say (Free Play adds them to a 10s base)

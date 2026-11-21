@@ -13,7 +13,7 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import { benches, lift, measureRoleSetBonuses, play, synergy } from '@/adventure/balance/lab';
+import { benches, lift, play, synergy } from '@/adventure/balance/lab';
 import { judge, measure, movers, renderMarkdown, snapshotOf, type BalanceReport, type Snapshot } from '@/adventure/balance/report';
 import { BALANCE_TARGETS as T } from '@/adventure/balance/targets';
 import { ALL_ARMORY_WEAPON_IDS } from '@/adventure/data/armory';
@@ -60,20 +60,6 @@ describe('the lab measures counterfactuals', () => {
     const s = synergy(b.late, 'echo-stone', 'chain-reaction', 'average', 8);
     expect(Number.isFinite(s)).toBe(true);
     expect(s).toBeGreaterThan(0);
-  });
-
-  it('Brotato Role Set Bonuses (2 / 4 / 6) stay inside healthy counterfactual bands', () => {
-    const rows = measureRoleSetBonuses(b.late, 10);
-    expect(rows.length).toBeGreaterThanOrEqual(20);
-    for (const r of rows) {
-      const [lo, hi] = T.roleSetBonus[r.tier];
-      expect({ role: r.role, tier: r.tier, ratio: r.ratio, ok: r.ratio >= lo - 0.02 && r.ratio <= hi }).toEqual({
-        role: r.role,
-        tier: r.tier,
-        ratio: r.ratio,
-        ok: true,
-      });
-    }
   });
 });
 

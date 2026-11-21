@@ -100,7 +100,6 @@ export const cleanseBoard = (d: Draft) => {
     if (bombIds.has(c.id)) defused(d, 'bomb', undefined, i);
   });
   d.timeBombIds = [];
-  const gambleScale = 1 + (mods(d).gambleBonusPct ?? 0) / 100;
   updateCards(d, idx, c => {
     const hadFog = c.isFaceDown && (c.fogBonus ?? 0) > 0;
     const { fogFlipAt: _at, fogBonus, ...rest } = c;
@@ -108,7 +107,7 @@ export const cleanseBoard = (d: Draft) => {
       ...rest,
       snare: undefined,
       isFaceDown: false,
-      ...(hadFog ? { bonusPoints: (c.bonusPoints ?? 0) + Math.round((fogBonus ?? 0) * gambleScale) } : {}),
+      ...(hadFog ? { bonusPoints: (c.bonusPoints ?? 0) + Math.round(fogBonus ?? 0) } : {}),
       ...(bombIds.has(c.id) ? { hasCountdown: false, countdownTimer: undefined } : {}),
     };
   });

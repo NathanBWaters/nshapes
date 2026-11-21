@@ -2,7 +2,7 @@
  * Multi-factor combo analytics, fighter/Arcana synergy & uniqueness guardrails.
  *
  * Fast mode (default `npm test`): verifies analytics primitives (Ridge solver,
- * skewness, Pressure bench, Role Set Bonus / Gamble clash checks, Fighter
+ * skewness, Pressure bench, Gamble clash checks, Fighter
  * pressure equity, and Arcana EV + survival bounds).
  *
  * Full Atlas mode (`BALANCE_ATLAS=1` / `npm run balance:atlas`): sweeps all 64

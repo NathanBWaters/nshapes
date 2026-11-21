@@ -23,7 +23,7 @@ import { armoryBaseWeapon, weaponLevelSuffix } from '../data/armory';
 import { WEAPON_KINDS, weaponGuide } from '../data/weaponGuide';
 import { NO_GROWTH, WEAPON_GROWTH, growthKey, growthText, type GrowthState } from '../data/weaponGrowth';
 import { powerText } from '../data/weaponPower';
-import { hasWeaponRole, ROLE_SET_BONUSES, roleLabel as getRoleLabel, WEAPON_ROLES, weaponRole } from '../data/weaponRoles';
+import { WEAPON_ROLES, weaponRole } from '../data/weaponRoles';
 import { BASE_BUILD, formatStat, weaponStatLines, type WeaponBuild } from '../data/weaponStats';
 import type { ActiveWeaponCounter } from '../engine/fight';
 import { INK } from './ui';
@@ -38,8 +38,6 @@ interface Props {
   result?: { text: string; share?: number };
   /** In a fight: how far the weapon has grown so far */
   growth?: GrowthState;
-  /** Optional held weapons (ids or objects) so reached 2/4/6 Role Set Bonus tiers highlight live */
-  heldWeapons?: readonly (string | { id: string })[];
   /** Optional active enemy counter dampening this weapon right now */
   counter?: ActiveWeaponCounter;
   /** Start with "more" open */
@@ -57,7 +55,6 @@ const WeaponExplainer: React.FC<Props> = ({
   badge,
   result,
   growth,
-  heldWeapons,
   counter,
   defaultOpen = false,
   hidePowerNote = false,
@@ -71,16 +68,6 @@ const WeaponExplainer: React.FC<Props> = ({
   const stats = base ? weaponStatLines(base, build) : [];
   const voice = weaponVoice(weapon.id);
   const grows = WEAPON_GROWTH[weapon.id] ?? [];
-  const hasRoleBonus = hasWeaponRole(weapon.id);
-  const role = weaponRole(weapon.id);
-  const roleTiers = hasRoleBonus ? ROLE_SET_BONUSES[role] : [];
-  const heldRoleCount =
-    hasRoleBonus && heldWeapons
-      ? heldWeapons.filter(w => {
-          const id = typeof w === 'string' ? w : w.id;
-          return hasWeaponRole(id) && weaponRole(id) === role;
-        }).length
-      : null;
 
   return (
     <View style={st.card} testID={testID ?? `weapon-explainer-${weapon.id}`}>
@@ -129,37 +116,6 @@ const WeaponExplainer: React.FC<Props> = ({
       {open && (
         <View style={st.more} testID={`weapon-explainer-more-${weapon.id}`}>
           <Row icon="lorc/crystal-shine" title={kind.label} color={kind.color}>{kind.blurb}</Row>
-          {hasRoleBonus && (
-            <View style={st.row} testID={`weapon-explainer-role-bonus-${weapon.id}`}>
-              <View style={[st.mark, { borderColor: '#B45309' }]}>
-                <Icon name="delapouite/star-formation" size={16} color="#B45309" />
-              </View>
-              <View style={st.roleBonusBody}>
-                <Text style={st.rowText}>
-                  <Text style={st.rowTitle}>
-                    Role Set ({getRoleLabel(role)}){heldRoleCount !== null ? ` · ${heldRoleCount} held` : ''}:{' '}
-                  </Text>
-                  Passive set bonuses at 2, 4, and 6 held weapons.
-                </Text>
-                <View style={st.tierRow}>
-                  {roleTiers.map(t => {
-                    const reached = heldRoleCount !== null && heldRoleCount >= t.tier;
-                    return (
-                      <View
-                        key={t.tier}
-                        testID={`weapon-explainer-role-tier-${weapon.id}-${t.tier}`}
-                        style={[st.tierPill, reached && st.tierPillActive]}
-                      >
-                        <Text style={[st.tierText, reached && st.tierTextActive]}>
-                          {t.tier}×: {t.summary}
-                        </Text>
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
-            </View>
-          )}
           {guide.look && (
             <View style={st.row}>
               <View style={[st.mark, { borderColor: guide.look.color ?? INK }]}>
@@ -246,12 +202,6 @@ const st = StyleSheet.create({
   mark: { width: 28, height: 28, borderRadius: 8, borderWidth: 2, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.canvasWhite },
   rowText: { flex: 1, flexShrink: 1, fontSize: 14, lineHeight: 20, color: INK },
   rowTitle: { fontWeight: '900' },
-  roleBonusBody: { flex: 1, minWidth: 0, gap: 6 },
-  tierRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
-  tierPill: { maxWidth: '100%', borderRadius: 6, borderWidth: 1.5, borderColor: '#D6CFC4', backgroundColor: COLORS.paperBeige, paddingHorizontal: 7, paddingVertical: 3 },
-  tierPillActive: { backgroundColor: '#FEF3C7', borderColor: INK },
-  tierText: { flexShrink: 1, fontSize: 12, fontWeight: '700', color: INK },
-  tierTextActive: { fontWeight: '900', color: '#78350F' },
   numbers: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   number: { backgroundColor: COLORS.paperBeige, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, minWidth: 92 },
   numberValue: { fontSize: 16, fontWeight: '900', color: INK },

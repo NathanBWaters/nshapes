@@ -71,10 +71,6 @@ export const initGear = (): GearState => ({
 
 const on = (n: number | undefined): n is number => (n ?? 0) > 0;
 const valueOf = (c: Card, a: AttributeName) => (a === 'background' ? c.background ?? 'white' : c[a]);
-const scaleGamble = (d: Draft, n: number): number => {
-  const pct = mods(d).gambleBonusPct ?? 0;
-  return pct > 0 ? Math.round(n * (1 + pct / 100) * 10) / 10 : n;
-};
 const freshThornAt = (d: Draft): number =>
   d.elapsedMs + TRICK_RULES.thornMs + TRICK_RULES.thornMsPerExtraTrait * Math.max(0, d.attributes.length - 3);
 
@@ -223,11 +219,11 @@ export const gearSetBonus = (
   }
   if (set.matched.some(c => c.isWild)) paid(d, 'wild');
   if (on(m.chainDamage) && set.matched.some(c => c.shackle && ids.has(c.shackle))) {
-    add(scaleGamble(d, m.chainDamage), 'Chain Gang!', 'chain', 'matched linked chain cards', 'weapon:chain-gang');
+    add(m.chainDamage, 'Chain Gang!', 'chain', 'matched linked chain cards', 'weapon:chain-gang');
   }
   if (on(m.thornDamage)) {
     const hits = set.matched.filter(c => c.thornAt !== undefined).length;
-    add(scaleGamble(d, hits * m.thornDamage), 'Thorns', 'thorn', hits === 1 ? 'cleared a thorned card' : `cleared ${hits} thorned cards`, 'weapon:thorn-bush');
+    add(hits * m.thornDamage, 'Thorns', 'thorn', hits === 1 ? 'cleared a thorned card' : `cleared ${hits} thorned cards`, 'weapon:thorn-bush');
   }
   if (on(m.rustGold)) {
     // A rusty card can lose what it is worth, never more
@@ -236,7 +232,7 @@ export const gearSetBonus = (
     const gilded = set.matched.filter(c => c.rusted);
     if (gilded.length > 0) {
       // Honor current rustGold (including active evolutions like Ancient Relic / Old Powder and growth) on ALREADY-gilded cards
-      const targetGold = Math.round(scaleGamble(d, m.rustGold));
+      const targetGold = Math.round(m.rustGold);
       const extraGold = gilded.reduce((sum, c) => {
         const stamped = d.gear.rustGoldStamped?.[c.id];
         const baseline = stamped !== undefined ? stamped : (c.bonusPoints ?? 0);
@@ -249,23 +245,23 @@ export const gearSetBonus = (
     }
   }
   if (on(m.tarDamage) && set.slots.some(i => tarRows(d).includes(Math.floor(i / GRID_COLS)))) {
-    add(scaleGamble(d, m.tarDamage), 'Tar Pit', 'tar', 'matched in the sticky tar row', 'weapon:tar-pit');
+    add(m.tarDamage, 'Tar Pit', 'tar', 'matched in the sticky tar row', 'weapon:tar-pit');
   }
   if (on(m.decoyDamage) && set.matched.some(c => c.decoyOf && ids.has(c.decoyOf))) {
-    add(scaleGamble(d, m.decoyDamage), 'Decoy found!', 'decoy', 'matched a decoy with its pair', 'weapon:decoy');
+    add(m.decoyDamage, 'Decoy found!', 'decoy', 'matched a decoy with its pair', 'weapon:decoy');
   }
   if (on(m.fuseDamage)) {
     const hits = set.matched.filter(c => c.fuseHot).length;
-    add(scaleGamble(d, hits * m.fuseDamage), 'Short fuse', 'fuse', hits === 1 ? 'beat a hot fuse' : `beat ${hits} hot fuses`, 'weapon:long-fuse');
+    add(hits * m.fuseDamage, 'Short fuse', 'fuse', hits === 1 ? 'beat a hot fuse' : `beat ${hits} hot fuses`, 'weapon:long-fuse');
   }
   if (set.matched.some(c => c.thawed)) paid(d, 'ice');
   const chest = set.matched.find(c => c.chest !== undefined);
   if (chest) {
-    const pts = scaleGamble(d, chest.chest ?? 0);
+    const pts = chest.chest ?? 0;
     add(pts, 'Greedy Chest!', 'chest', `chest saved +${pts} bonus damage`, 'weapon:greedy-chest');
   }
   if (on(m.potatoDamage) && set.matched.some(c => c.hot)) {
-    add(scaleGamble(d, m.potatoDamage), 'Hot Potato!', 'potato', 'matched the hot potato card', 'weapon:hot-potato');
+    add(m.potatoDamage, 'Hot Potato!', 'potato', 'matched the hot potato card', 'weapon:hot-potato');
   }
 
   if (on(m.magnetDamage) && set.matched.some(c => c.magnet)) {
@@ -358,7 +354,7 @@ export const resolveTwins = (d: Draft, matched: Card[]) => {
   for (const id of twins) {
     const idx = d.board.findIndex(c => c.id === id);
     if (idx < 0 || !touchable(d, idx)) continue;
-    const rawTwin = scaleGamble(d, mods(d).twinDamage ?? 0);
+    const rawTwin = mods(d).twinDamage ?? 0;
     emit(d, 'hit', dealDamage(d, rawTwin * d._setMultiplier * foeMultiplier(d)), 'Twin', { slots: [idx], cards: [d.board[idx]] });
     paid(d, 'twin');
     recycle(d, [idx]);
@@ -395,7 +391,7 @@ export const afterSetGear = (d: Draft, set: GearSet) => {
     // One card a Set turns golden: the first that has sat long enough
     const ripe = rusting.find(i => (d.board[i].rust ?? 0) >= rustSets(d));
     if (ripe !== undefined) {
-      const gold = Math.round(scaleGamble(d, m.rustGold ?? 0));
+      const gold = Math.round(m.rustGold ?? 0);
       const ripeId = d.board[ripe].id;
       g.rustGoldStamped = { ...(g.rustGoldStamped ?? {}), [ripeId]: gold };
       updateCards(d, [ripe], c => {
@@ -411,7 +407,7 @@ export const afterSetGear = (d: Draft, set: GearSet) => {
     const frozen = (c.frozen ?? 0) - 1;
     if (frozen > 0) return { ...c, frozen };
     const { frozen: _f, locked: _l, ...rest } = c;
-    return { ...rest, thawed: true, bonusPoints: (c.bonusPoints ?? 0) + Math.round(scaleGamble(d, m.frozenDamage ?? 0)) };
+    return { ...rest, thawed: true, bonusPoints: (c.bonusPoints ?? 0) + Math.round(m.frozenDamage ?? 0) };
   });
   g.mirrorMemory = [g.lastSetSlots, ...g.mirrorMemory].filter(slots => slots.length > 0).slice(0, 3);
   g.lastSetSlots = set.slots;
@@ -470,7 +466,7 @@ export const tickGear = (d: Draft) => {
   if (due.length) {
     updateCards(d, due, c => {
       const { fogFlipAt: _at, fogBonus, ...rest } = c;
-      return rest.isFaceDown ? { ...rest, isFaceDown: false, bonusPoints: (rest.bonusPoints ?? 0) + Math.round(scaleGamble(d, fogBonus ?? 0)) } : rest;
+      return rest.isFaceDown ? { ...rest, isFaceDown: false, bonusPoints: (rest.bonusPoints ?? 0) + Math.round(fogBonus ?? 0) } : rest;
     });
     emit(d, 'rule', due.length, 'The fog lifts', { slots: due });
     paid(d, 'fog');
@@ -694,7 +690,7 @@ export const advanceTricks = (d: Draft, ms: number) => {
         if (slot >= 0) liftedFog.push(slot);
         const { fogFlipAt: _at, fogBonus, ...rest } = c;
         return rest.isFaceDown
-          ? { ...rest, isFaceDown: false, bonusPoints: (rest.bonusPoints ?? 0) + Math.round(scaleGamble(d, fogBonus ?? 0)) }
+          ? { ...rest, isFaceDown: false, bonusPoints: (rest.bonusPoints ?? 0) + Math.round(fogBonus ?? 0) }
           : rest;
       }
       return { ...c, fogFlipAt: nextAt };
@@ -743,7 +739,7 @@ export const advanceTricks = (d: Draft, ms: number) => {
       const frozen = (c.frozen ?? 0) - steps;
       if (frozen > 0) return { ...c, frozen };
       const { frozen: _f, locked: _l, ...rest } = c;
-      return { ...rest, thawed: true, bonusPoints: (c.bonusPoints ?? 0) + Math.round(scaleGamble(d, m.frozenDamage ?? 0)) };
+      return { ...rest, thawed: true, bonusPoints: (c.bonusPoints ?? 0) + Math.round(m.frozenDamage ?? 0) };
     });
   }
 
@@ -754,7 +750,7 @@ export const advanceTricks = (d: Draft, ms: number) => {
       .map((c, i) => (!c.rusted && isSelectable(c) && touchable(d, i) && (c.rust ?? 0) > 0 ? i : -1))
       .filter(i => i >= 0);
     if (rustIdx.length) {
-      const gold = Math.round(scaleGamble(d, m.rustGold));
+      const gold = Math.round(m.rustGold);
       updateCards(d, rustIdx, c => {
         const nextRust = (c.rust ?? 0) + steps;
         if (nextRust >= target) {

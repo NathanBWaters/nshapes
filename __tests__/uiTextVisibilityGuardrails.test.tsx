@@ -10,13 +10,12 @@ import Camp from '@/adventure/components/Camp';
 import DamageSourceExplainer from '@/adventure/components/DamageSourceExplainer';
 import EvolutionPickOverlay from '@/adventure/components/EvolutionPickOverlay';
 import FieldGuide from '@/adventure/components/FieldGuide';
-import { compactRoleBonusLabel, GearChips, gearModifiers, hasGearChips } from '@/adventure/components/GearChips';
+import { GearChips, gearModifiers, hasGearChips } from '@/adventure/components/GearChips';
 import SkillTree from '@/adventure/components/SkillTree';
 import WeaponExplainer from '@/adventure/components/WeaponExplainer';
 import { getArmoryWeapon } from '@/adventure/data/armory';
 import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
 import { getLevel } from '@/adventure/data/levels';
-import { activeRoleBonuses } from '@/adventure/data/weaponRoles';
 import { createRun } from '@/adventure/engine/run';
 import { createMaxedSave, createNewSave } from '@/adventure/progress';
 import Card, { CardBoardProvider } from '@/components/Card';
@@ -304,38 +303,29 @@ describe('UI Text Visibility Style-Contract Guardrails', () => {
     plain.unmount();
   });
 
-  it('displays compact Brotato 2/4/6 Role Set Bonus pills in GearChips and full thresholds + counter alert in WeaponExplainer', () => {
+  it('displays live Trick chips in GearChips without Role Set pills and shows counter alert in WeaponExplainer', () => {
     const save = {
       ...createNewSave(),
-      armory: ['thorn-bush', 'long-fuse', 'blast-powder', 'flint-spark'],
-      charms: ['thorn-bush', 'long-fuse', 'blast-powder', 'flint-spark'],
+      armory: ['bounty-poster', 'snowball', 'blast-powder', 'flint-spark'],
+      charms: ['bounty-poster', 'snowball', 'blast-powder', 'flint-spark'],
       upgrades: { charm_belt: 1 },
     };
     const run = createRun(getLevel('2-3'), save, { seed: 7, features: new Set(['hearts', 'gear']) });
     const mods = gearModifiers(run);
-    expect(hasGearChips(mods, run.weapons)).toBe(true);
-
-    const bonuses = activeRoleBonuses(run.weapons);
-    expect(bonuses.map(compactRoleBonusLabel)).toEqual(
-      expect.arrayContaining(['2× Gambles +15%', '2× Damage +1'])
-    );
+    expect(hasGearChips(mods)).toBe(true);
 
     const chips = render(<GearChips run={run} mods={mods} />);
-    const gamblesChip = chips.getByTestId('run-role-bonus-gambles');
-    const damageChip = chips.getByTestId('run-role-bonus-damage');
-    expect(gamblesChip).toBeTruthy();
-    expect(damageChip).toBeTruthy();
-    expect(chips.getByText('2× Gambles +15%')).toBeTruthy();
-    expect(chips.getByText('2× Damage +1')).toBeTruthy();
-    expect(StyleSheet.flatten(gamblesChip.props.style).maxWidth).toBe('100%');
+    const bountyChip = chips.getByTestId('run-bounty-chip');
+    expect(bountyChip).toBeTruthy();
+    expect(chips.queryByTestId('run-role-bonus-damage')).toBeNull();
+    expect(StyleSheet.flatten(bountyChip.props.style).maxWidth).toBe('100%');
     chips.unmount();
 
-    // Canonical single WeaponExplainer shows 2×/4×/6× Role Set Bonus tiers & active counter alert
+    // Canonical single WeaponExplainer shows active counter alert without Role Set tiers
     const flint = getArmoryWeapon('flint-spark')!;
     const explainer = render(
       <WeaponExplainer
         weapon={flint}
-        heldWeapons={run.weapons}
         counter={{
           type: 'fire',
           label: 'Fire Spread',
@@ -347,15 +337,12 @@ describe('UI Text Visibility Style-Contract Guardrails', () => {
         defaultOpen
       />
     );
-    expect(explainer.getByTestId('weapon-explainer-role-bonus-flint-spark')).toBeTruthy();
-    expect(explainer.getByTestId('weapon-explainer-role-tier-flint-spark-2')).toBeTruthy();
-    expect(explainer.getByTestId('weapon-explainer-role-tier-flint-spark-4')).toBeTruthy();
-    expect(explainer.getByTestId('weapon-explainer-role-tier-flint-spark-6')).toBeTruthy();
+    expect(explainer.queryByTestId('weapon-explainer-role-bonus-flint-spark')).toBeNull();
     expect(explainer.getByTestId('weapon-explainer-counter-flint-spark')).toHaveTextContent(/−15%.*18%.*6%/);
     explainer.unmount();
   });
 
-  it('wires Role Set Bonus chips, enemy counter badges, and Evolution preview (multi-choice & single) inside AdventureRun', () => {
+  it('wires enemy counter badges and Evolution preview (multi-choice & single) inside AdventureRun without Role Set chips', () => {
     const maxed = createMaxedSave();
     // 3 weapons arming 3 recipes -> multi-choice preview ("Pick 1 of 3")
     const multiSave = {
@@ -381,7 +368,7 @@ describe('UI Text Visibility Style-Contract Guardrails', () => {
         />
       </SafeAreaProvider>
     );
-    expect(view.getByTestId('run-role-bonus-damage')).toBeTruthy();
+    expect(view.queryByTestId('run-role-bonus-damage')).toBeNull();
     expect(view.getByTestId('belt-counter-flint-spark')).toBeTruthy();
     expect(view.queryByTestId('belt-counter-blast-powder')).toBeNull();
     expect(view.getByTestId('run-evo-chip')).toHaveTextContent(/Pick 1 of 3|CATALYST: Pick 1 of 3/);
@@ -463,30 +450,24 @@ describe('UI Text Visibility Style-Contract Guardrails', () => {
     view.unmount();
   });
 
-  it('enforces shrinkable row wrapping & tier-pill layout contracts on DamageSourceExplainer', () => {
+  it('enforces shrinkable row wrapping layout contracts on DamageSourceExplainer', () => {
     const view = render(
       <DamageSourceExplainer
-        sourceId="role:chains"
+        sourceId="evo:phoenix-pyre"
         accentColor="#16AA98"
         badge="MVP"
-        heldWeapons={['echo-stone', 'connector']}
         result={{ text: '240 cumulative dmg (48%) · 6 hits · biggest spike +72.', share: 0.48 }}
         defaultOpen
       />
     );
 
-    const card = view.getByTestId('damage-source-explainer-role:chains');
+    const card = view.getByTestId('damage-source-explainer-evo:phoenix-pyre');
     const cardStyle = StyleSheet.flatten(card.props.style);
     expect(cardStyle.width).toBe('100%');
     expect(cardStyle.maxWidth).toBe('100%');
 
-    const whatNode = view.getByTestId('damage-source-what-role:chains');
+    const whatNode = view.getByTestId('damage-source-what-evo:phoenix-pyre');
     expect(StyleSheet.flatten(whatNode.props.style).flexShrink).toBeGreaterThan(0);
-
-    for (const tier of [2, 4, 6]) {
-      const pill = view.getByTestId(`damage-source-role-tier-chains-${tier}`);
-      expect(StyleSheet.flatten(pill.props.style).maxWidth).toBe('100%');
-    }
 
     // Check every row Text node with numberOfLines carries flexShrink: 1 so it never clips
     const nodes = collectNodes(view.toJSON());

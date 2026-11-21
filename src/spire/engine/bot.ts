@@ -3,7 +3,7 @@
  *
  * Plays complete multi-Act roguelike climbs (Act 1 → Act 3 Boss → optional
  * Endless Act 4+) through the REAL `runReducer` and `BOTS` from Adventure Mode
- * with full Wave 1 agency: Belt Reordering (for Understudy), Role Set Bonus &
+ * with full Wave 1 agency: Belt Reordering (for Understudy), Evolution &
  * Evolution drafting, Gamble clash avoidance, Shop Lock / Sell / Purge / Reroll,
  * Reward Reroll, and risk-calibrated Glass Prism evaluation!
  */
@@ -12,7 +12,7 @@ import type { ArcanaId } from '@/adventure/types';
 import { simulateRun, type BotProfile } from '@/adventure/engine/bot';
 import { createRng } from '@/adventure/engine/rng';
 import { MAX_WEAPON_LEVEL } from '@/adventure/data/weaponStats';
-import { activeRoleBonuses, weaponRole, type WeaponRole } from '@/adventure/data/weaponRoles';
+import { weaponRole, type WeaponRole } from '@/adventure/data/weaponRoles';
 import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
 import { inFamily } from '@/adventure/engine/sources';
 import { getSpireEvent } from '../data/events';
@@ -120,7 +120,6 @@ const countArmedEvolutions = (weaponIds: readonly string[]): number => {
 const scoreBelt = (weaponIds: readonly string[], weaponLevels: Record<string, number>): number => {
   const armed = countArmedEvolutions(weaponIds);
   let score = Math.min(armed, 7) * 2.5 + Math.max(0, armed - 7) * 0.5;
-  score += activeRoleBonuses(weaponIds).reduce((s, b) => s + b.tier, 0) * 2.0;
 
   for (let i = 0; i < weaponIds.length; i++) {
     const id = weaponIds[i];
@@ -140,7 +139,7 @@ interface WeaponDecision {
 
 /**
  * Evaluate a weapon offer (direct add, +1 Lv upgrade, or 6/6 in-place swap)
- * accounting for Evolutions, Role Set Bonuses, weapon levels, and Gamble clashes.
+ * accounting for Evolutions, weapon levels, and Gamble clashes.
  */
 const evaluateWeaponOffer = (run: SpireRun, weaponId: string, offerLevel = 1): WeaponDecision => {
   const existingLv = run.weaponLevels[weaponId];
@@ -166,9 +165,6 @@ const evaluateWeaponOffer = (run: SpireRun, weaponId: string, offerLevel = 1): W
     const newEvos = newEvolutionsArmedBy(run, weaponId).length;
     score += Math.min(newEvos, 3) * 3.0;
 
-    const beforeTiers = activeRoleBonuses(run.weapons).reduce((s, b) => s + b.tier, 0);
-    const afterTiers = activeRoleBonuses([...run.weapons, weaponId]).reduce((s, b) => s + b.tier, 0);
-    if (afterTiers > beforeTiers) score += (afterTiers - beforeTiers) * 2.2;
     if (ENGINE_ROLES.has(weaponRole(weaponId))) score += 1.2;
     score += (Math.min(MAX_WEAPON_LEVEL, Math.max(1, offerLevel)) - 1) * 1.1;
     score += run.weapons.length < 4 ? 1.2 : 0.4;
@@ -230,10 +226,8 @@ const findSellableWeapon = (run: SpireRun): string | null => {
     if (lv > 2) continue;
     const other = run.weapons.filter(x => x !== id);
     const hasClash = clashesWithBelt(other, id).length > 0;
-    const beforeTiers = activeRoleBonuses(run.weapons).reduce((s, b) => s + b.tier, 0);
-    const afterTiers = activeRoleBonuses(other).reduce((s, b) => s + b.tier, 0);
-    const breaksRole = afterTiers < beforeTiers;
-    const score = (hasClash ? -5 : 0) + (breaksRole ? 4 : 0) + lv * 2 + (ENGINE_ROLES.has(weaponRole(id)) ? 1 : 0);
+    const evosLost = Math.max(0, countArmedEvolutions(run.weapons) - countArmedEvolutions(other));
+    const score = (hasClash ? -5 : 0) + evosLost * 3 + lv * 2 + (ENGINE_ROLES.has(weaponRole(id)) ? 1 : 0);
     if (score < worstScore) {
       worstScore = score;
       worstId = id;

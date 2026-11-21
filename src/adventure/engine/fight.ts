@@ -211,7 +211,6 @@ const sourceInputs = (d: RunState) => ({
   activeEvolutions: d.activeEvolutions,
   growth: growthModifiers(d.growth ?? {}),
   blankEvolutionRules: d.blankEvolutionRules,
-  disableRoleBonuses: d.disableRoleBonuses,
 });
 
 export const mods = (d: Draft): Modifiers => (d._mods ??= modifiersOf(sourceInputs(d)));
@@ -280,7 +279,7 @@ export const refreshSources = (d: Draft) => {
   const luck = 1 + Math.min(LUCK_CAP_PCT, m.luckPct ?? 0) / 100;
   const uncountered: PlayerStats = { ...d.stats };
   for (const [kind, key] of Object.entries(CHANCE_STATS) as [WeaponTriggerKind, keyof PlayerStats][]) {
-    const base = (d.baseChances[key] ?? 0) + (kind === 'echo' ? (m.bonusEchoChance ?? 0) : 0);
+    const base = d.baseChances[key] ?? 0;
     (uncountered as unknown as Record<string, number>)[key] = Math.round(base * (scale[kind] ?? 1) * luck);
   }
   // Wire enemy weapon counters (Wet Crab, Kraken's Grasp, Goblin Saboteur, Polar Guardian, etc.)

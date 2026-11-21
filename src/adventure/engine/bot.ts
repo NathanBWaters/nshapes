@@ -87,7 +87,7 @@ const chasing = (s: RunState): Goal[] => {
 
 const cardAttrValue = (c: Card, a: AttributeName) => (a === 'background' ? c.background ?? 'white' : c[a]);
 
-/** Standing modifiers currently live on `s` (weapons, skill nodes, active evolutions, Role Set Bonuses & growth). */
+/** Standing modifiers currently live on `s` (weapons, skill nodes, active evolutions & growth). */
 const currentModifiers = (s: RunState): Modifiers =>
   modifiersOf({
     skillNodes: s.skillNodes,
@@ -95,7 +95,6 @@ const currentModifiers = (s: RunState): Modifiers =>
     activeEvolutions: s.activeEvolutions,
     growth: growthModifiers(s.growth ?? {}),
     blankEvolutionRules: s.blankEvolutionRules,
-    disableRoleBonuses: s.disableRoleBonuses,
   });
 
 /**

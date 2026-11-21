@@ -5,7 +5,7 @@
  * non-weapon entry in `BattleDamageStory` (Adventure `LevelResults` and
  * Starfall Summit `SpireRewardScreen` / `SpireEndScreen`) and `FightReplay`:
  * Evolutions, Set-Parry Counters, Shading Surge, Rainbow Strike, Purity Chain,
- * Trap Defusal, Role Set Bonuses, Skill Tree Nodes, Fighter Passives, Arcana,
+ * Trap Defusal, Skill Tree Nodes, Fighter Passives, Arcana,
  * Workshop Upgrades, Matched Sets, Power Cards, Power Scaling, and Board FX.
  *
  * GUARDRAIL: Weapons MUST NEVER use this component — every weapon description
@@ -21,15 +21,6 @@ import { PARRY_RULES } from '../data/parry';
 import { PASSIVES } from '../data/passives';
 import { SURGE_RULES } from '../data/rules';
 import { UPGRADES } from '../data/upgrades';
-import {
-  hasWeaponRole,
-  ROLE_SET_BONUSES,
-  roleLabel as getRoleLabel,
-  WEAPON_ROLES,
-  weaponRole,
-  type RoleBonusTierDef,
-  type WeaponRole,
-} from '../data/weaponRoles';
 import type { DamageSourceKind } from '../engine/damageStory';
 import { EVOLUTION_RULES, getRecipe, getSkillNode } from '../engine/sources';
 import type { PassiveId } from '../types';
@@ -50,15 +41,10 @@ export interface ResolvedDamageSourceCopy {
   subtitle: string;
   what: string;
   details: DamageSourceDetailRow[];
-  roleBonus?: {
-    role: WeaponRole;
-    label: string;
-    tiers: readonly RoleBonusTierDef[];
-  };
 }
 
 export interface DamageSourceExplainerProps {
-  /** Canonical non-weapon source id (`evo:<id>`, `node:<id>`, `passive:<id>`, `arcana:<id>`, `upgrade:<id>`, `role:<role>`, `bonus:*`, `set:*`, `power:*`, `fx:*`) */
+  /** Canonical non-weapon source id (`evo:<id>`, `node:<id>`, `passive:<id>`, `arcana:<id>`, `upgrade:<id>`, `bonus:*`, `set:*`, `power:*`, `fx:*`) */
   sourceId: string;
   /** Display name fallback (or override when canonical data is absent) */
   name?: string;
@@ -78,8 +64,6 @@ export interface DamageSourceExplainerProps {
   result?: { text: string; share?: number };
   /** Uppercase label above the result strip ("THIS FIGHT" or "THIS CLIMB") */
   scopeLabel?: string;
-  /** Optional held weapons (ids or objects) so Role Set Bonus 2×/4×/6× tiers highlight live */
-  heldWeapons?: readonly (string | { id: string })[];
   /** Start with the collapsible "more" drawer open */
   defaultOpen?: boolean;
   testID?: string;
@@ -91,7 +75,6 @@ const CATEGORY_COLORS = {
   surge: '#BE185D',
   skill: '#1D4ED8',
   passive: '#0F766E',
-  role: '#92400E',
   arcana: TONE.arcana,
   upgrade: '#0369A1',
   sets: INK,
@@ -294,36 +277,7 @@ export const resolveDamageSourceCopy = (opts: {
     };
   }
 
-  // 6. Role Set Bonus (`role:<role>`)
-  if (prefix === 'role') {
-    const roleId = rawId as WeaponRole;
-    const roleInfo = WEAPON_ROLES.find(r => r.id === roleId);
-    const tiers = ROLE_SET_BONUSES[roleId];
-    const rLabel = roleInfo?.label ?? (tiers ? getRoleLabel(roleId) : name ?? rawId);
-    const details: DamageSourceDetailRow[] = [];
-    if (roleInfo?.blurb) {
-      details.push({
-        icon: 'lorc/light-bulb',
-        title: `${roleInfo.label} role`,
-        color: CATEGORY_COLORS.role,
-        text: roleInfo.blurb,
-      });
-    }
-    return {
-      title: name ?? `${rLabel} Set Bonus`,
-      icon: icon ?? 'delapouite/star-formation',
-      categoryLabel: 'ROLE BONUS',
-      categoryColor: CATEGORY_COLORS.role,
-      subtitle: subtitle ?? '2 / 4 / 6 Held Bonus',
-      what: tiers
-        ? `Holding 2, 4, or 6 ${rLabel} weapons unlocks passive Role Set bonuses across the fight (${tiers.map(t => `${t.tier}×: ${t.summary}`).join(' · ')}).`
-        : (description ?? 'Passive bonus unlocked by holding 2, 4, or 6 weapons of the same role.'),
-      details,
-      ...(tiers ? { roleBonus: { role: roleId, label: rLabel, tiers } } : {}),
-    };
-  }
-
-  // 7. Combat Mechanics & Special Sources
+  // 6. Combat Mechanics & Special Sources
   if (sourceId === 'bonus:parry') {
     const perfectWin = (PARRY_RULES.perfectWindowMs / 1000).toFixed(1).replace(/\.0$/, '');
     const perfectStagger = Math.round(PARRY_RULES.perfectStaggerMs / 1000);
@@ -692,25 +646,16 @@ const DamageSourceExplainer: React.FC<DamageSourceExplainerProps> = ({
   description,
   result,
   scopeLabel = 'THIS FIGHT',
-  heldWeapons,
   defaultOpen = false,
   testID,
 }) => {
   const [open, setOpen] = useState(defaultOpen);
   const info = resolveDamageSourceCopy({ sourceId, name, kind, icon, subtitle, description });
-  const hasMore = info.details.length > 0 || Boolean(info.roleBonus);
+  const hasMore = info.details.length > 0;
 
   const medallionBorder = accentColor ?? info.categoryColor;
   const medallionBg = isHex6(medallionBorder) ? `${medallionBorder}1F` : COLORS.paperBeige;
   const barColor = accentColor ?? '#eb6834';
-
-  const heldRoleCount =
-    info.roleBonus && heldWeapons
-      ? heldWeapons.filter(w => {
-          const id = typeof w === 'string' ? w : w.id;
-          return hasWeaponRole(id) && weaponRole(id) === info.roleBonus!.role;
-        }).length
-      : null;
 
   return (
     <View style={st.card} testID={testID ?? `damage-source-explainer-${sourceId}`}>
@@ -783,37 +728,6 @@ const DamageSourceExplainer: React.FC<DamageSourceExplainerProps> = ({
 
       {open && hasMore && (
         <View style={st.more} testID={`damage-source-more-${sourceId}`}>
-          {info.roleBonus && (
-            <View style={st.row} testID={`damage-source-role-bonus-${info.roleBonus.role}`}>
-              <View style={[st.mark, { borderColor: CATEGORY_COLORS.evolution }]}>
-                <Icon name="delapouite/star-formation" size={16} color={CATEGORY_COLORS.evolution} />
-              </View>
-              <View style={st.roleBonusBody}>
-                <Text style={st.rowText}>
-                  <Text style={st.rowTitle}>
-                    Role Set ({info.roleBonus.label}){heldRoleCount !== null ? ` · ${heldRoleCount} held` : ''}:{' '}
-                  </Text>
-                  Passive set bonuses at 2, 4, and 6 held weapons.
-                </Text>
-                <View style={st.tierRow}>
-                  {info.roleBonus.tiers.map(t => {
-                    const reached = heldRoleCount !== null && heldRoleCount >= t.tier;
-                    return (
-                      <View
-                        key={t.tier}
-                        testID={`damage-source-role-tier-${info.roleBonus!.role}-${t.tier}`}
-                        style={[st.tierPill, reached && st.tierPillActive]}
-                      >
-                        <Text style={[st.tierText, reached && st.tierTextActive]}>
-                          {t.tier}×: {t.summary}
-                        </Text>
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
-            </View>
-          )}
           {info.details.map((row, idx) => (
             <DetailRow key={`${row.title}-${idx}`} icon={row.icon} title={row.title} color={row.color}>
               {row.text}
@@ -1000,39 +914,6 @@ const st = StyleSheet.create({
   },
   rowTitle: {
     fontWeight: '900',
-  },
-  roleBonusBody: {
-    flex: 1,
-    minWidth: 0,
-    gap: 6,
-  },
-  tierRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 5,
-  },
-  tierPill: {
-    maxWidth: '100%',
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: '#D6CFC4',
-    backgroundColor: COLORS.paperBeige,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-  },
-  tierPillActive: {
-    backgroundColor: '#FEF3C7',
-    borderColor: INK,
-  },
-  tierText: {
-    flexShrink: 1,
-    fontSize: 12,
-    fontWeight: '700',
-    color: INK,
-  },
-  tierTextActive: {
-    fontWeight: '900',
-    color: '#78350F',
   },
 });
 

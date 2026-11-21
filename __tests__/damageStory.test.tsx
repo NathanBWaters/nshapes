@@ -375,12 +375,8 @@ describe('BattleDamageStory shared UI across Adventure Mode and Starfall Spire',
       name: 'Trap Defusal',
     });
 
-    // Workshop upgrade & Role Set Bonus
+    // Workshop upgrade
     expect(resolveDamageSourceMeta({ label: 'Heavy Hitter' }).id).toBe('upgrade:heavy_hitter');
-    expect(resolveDamageSourceMeta({ sourceRef: 'role:damage' })).toMatchObject({
-      id: 'role:damage',
-      name: 'Damage Set Bonus',
-    });
 
     // Full climb story uses Starfall Summit wording (never stale "Spire" copy)
     const { run: fight } = runGearedFight();
@@ -415,7 +411,6 @@ describe('BattleDamageStory shared UI across Adventure Mode and Starfall Spire',
       makeSource({ id: 'bonus:traps', name: 'Trap Defusal', kind: 'bonus', icon: 'lorc/checked-shield', color: '#4ADE80', totalDamage: 120 }),
       makeSource({ id: 'passive:scrappy', name: PASSIVES.scrappy.name, kind: 'passive', icon: PASSIVES.scrappy.icon, color: '#F5B800', totalDamage: 110 }),
       makeSource({ id: 'node:tabby-0-1', name: purrPunch.name, kind: 'skill', icon: purrPunch.icon, color: '#16AA98', totalDamage: 100 }),
-      makeSource({ id: 'role:damage', name: 'Damage Set Bonus', kind: 'bonus', icon: 'delapouite/star-formation', color: '#F0483E', totalDamage: 90 }),
       makeSource({ id: 'arcana:monochrome_pact', name: monochrome.name, kind: 'bonus', icon: monochrome.icon, color: '#38BDF8', totalDamage: 80 }),
       makeSource({ id: 'upgrade:heavy_hitter', name: 'Heavy Hitter', kind: 'passive', icon: 'lorc/fist', color: '#FB923C', totalDamage: 60 }),
       makeSource({ id: 'set:cards', name: 'Matched Sets', kind: 'set', icon: 'lorc/crossed-swords', color: '#C084FC', totalDamage: 30 }),
@@ -488,17 +483,8 @@ describe('BattleDamageStory shared UI across Adventure Mode and Starfall Spire',
     expect(view.getByTestId('damage-source-explainer-node:tabby-0-1')).toHaveTextContent('Orange Tabby · Skill Tree', { exact: false });
     expect(view.getByTestId('damage-source-what-node:tabby-0-1')).toHaveTextContent(purrPunch.text, { exact: false });
 
-    // 10. Role Set Bonus (with expandable 2×/4×/6× tier pills)
+    // 10. Arcana (with expandable Boon/Curse rows)
     fireEvent.press(view.getByTestId('battle-damage-story-row-9'));
-    expect(view.getByTestId('damage-source-explainer-role:damage')).toHaveTextContent('ROLE BONUS', { exact: false });
-    expect(view.getByTestId('damage-source-explainer-role:damage')).toHaveTextContent('2 / 4 / 6 Held Bonus', { exact: false });
-    fireEvent.press(view.getByTestId('damage-source-toggle-role:damage'));
-    expect(view.getByTestId('damage-source-role-tier-damage-2')).toBeTruthy();
-    expect(view.getByTestId('damage-source-role-tier-damage-4')).toBeTruthy();
-    expect(view.getByTestId('damage-source-role-tier-damage-6')).toBeTruthy();
-
-    // 11. Arcana (with expandable Boon/Curse rows)
-    fireEvent.press(view.getByTestId('battle-damage-story-row-10'));
     expect(view.getByTestId('damage-source-explainer-arcana:monochrome_pact')).toHaveTextContent('ARCANA', { exact: false });
     expect(view.getByTestId('damage-source-what-arcana:monochrome_pact')).toHaveTextContent(monochrome.upside, { exact: false });
     expect(view.getByTestId('damage-source-what-arcana:monochrome_pact')).toHaveTextContent(monochrome.tradeoff, { exact: false });
@@ -506,22 +492,22 @@ describe('BattleDamageStory shared UI across Adventure Mode and Starfall Spire',
     expect(view.getByTestId('damage-source-more-arcana:monochrome_pact')).toHaveTextContent(/Boon \(Upside\)/);
     expect(view.getByTestId('damage-source-more-arcana:monochrome_pact')).toHaveTextContent(/Curse \(Tradeoff\)/);
 
-    // 12. Workshop Upgrade
-    fireEvent.press(view.getByTestId('battle-damage-story-row-11'));
+    // 11. Workshop Upgrade
+    fireEvent.press(view.getByTestId('battle-damage-story-row-10'));
     expect(view.getByTestId('damage-source-explainer-upgrade:heavy_hitter')).toHaveTextContent('UPGRADE', { exact: false });
     expect(view.getByTestId('damage-source-what-upgrade:heavy_hitter')).toHaveTextContent(/\+1 damage on every Set/);
 
-    // 13. Matched Sets, Power Cards, Power Scaling, Burn FX
-    fireEvent.press(view.getByTestId('battle-damage-story-row-12'));
+    // 12. Matched Sets, Power Cards, Power Scaling, Burn FX
+    fireEvent.press(view.getByTestId('battle-damage-story-row-11'));
     expect(view.getByTestId('damage-source-what-set:cards')).toHaveTextContent(/Base damage from every valid 3-card Set/);
 
-    fireEvent.press(view.getByTestId('battle-damage-story-row-13'));
+    fireEvent.press(view.getByTestId('battle-damage-story-row-12'));
     expect(view.getByTestId('damage-source-what-set:card_bonus')).toHaveTextContent(/Power cards, War Drum charges/);
 
-    fireEvent.press(view.getByTestId('battle-damage-story-row-14'));
+    fireEvent.press(view.getByTestId('battle-damage-story-row-13'));
     expect(view.getByTestId('damage-source-what-power:scale')).toHaveTextContent(/in-fight Power meter/);
 
-    fireEvent.press(view.getByTestId('battle-damage-story-row-15'));
+    fireEvent.press(view.getByTestId('battle-damage-story-row-14'));
     expect(view.getByTestId('damage-source-what-fx:burn')).toHaveTextContent(/Burning cards scorch the foe/);
 
     view.unmount();
@@ -568,7 +554,6 @@ describe('BattleDamageStory shared UI across Adventure Mode and Starfall Spire',
           lines: [
             { type: 'hit', amount: 15, text: 'Phoenix Pyre', source: 'Phoenix Pyre', sourceRef: 'evo:phoenix-pyre' },
             { type: 'hit', amount: 8, text: 'Purr Punch', source: 'Purr Punch', sourceRef: 'node:tabby-0-1' },
-            { type: 'rule', amount: 7, text: 'Damage Set', source: 'Damage Set', sourceRef: 'role:damage' },
           ],
         },
       ],
@@ -583,19 +568,17 @@ describe('BattleDamageStory shared UI across Adventure Mode and Starfall Spire',
     // Non-weapons use DamageSourceExplainer with preserved replay-gear-* testIDs
     expect(view.getByTestId('replay-gear-evo:phoenix-pyre')).toBeTruthy();
     expect(view.getByTestId('replay-gear-node:tabby-0-1')).toBeTruthy();
-    expect(view.getByTestId('replay-gear-role:damage')).toBeTruthy();
     expect(view.getByTestId('replay-gear-arcana:monochrome_pact')).toBeTruthy();
     expect(view.getByTestId('replay-gear-passive:nine_lives')).toBeTruthy();
     expect(view.getByTestId('replay-gear-passive:scrappy')).toBeTruthy();
 
-    // Rich canonical copy & expandable tiers work inside FightReplay too
+    // Rich canonical copy & expandable details work inside FightReplay too
     expect(view.getByTestId('damage-source-what-evo:phoenix-pyre')).toHaveTextContent(/Lasts 30s/);
     expect(view.getByTestId('damage-source-what-arcana:monochrome_pact')).toHaveTextContent(/Tradeoff:/);
     expect(view.getByTestId('damage-source-what-passive:scrappy')).toHaveTextContent(PASSIVES.scrappy.text, { exact: false });
 
-    fireEvent.press(view.getByTestId('damage-source-toggle-role:damage'));
-    expect(view.getByTestId('damage-source-role-bonus-damage')).toHaveTextContent('2 held', { exact: false });
-    expect(view.getByTestId('damage-source-role-tier-damage-2')).toBeTruthy();
+    fireEvent.press(view.getByTestId('damage-source-toggle-arcana:monochrome_pact'));
+    expect(view.getByTestId('damage-source-more-arcana:monochrome_pact')).toHaveTextContent(/Boon \(Upside\)/);
 
     view.unmount();
   });

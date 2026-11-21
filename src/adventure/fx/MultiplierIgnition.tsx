@@ -237,7 +237,7 @@ export const buildBalatroBreakdown = (ignition: SetIgnition): BalatroBreakdown =
     });
   }
 
-  // 3. Every itemized flat contributor (Piñata, Purity, Traps, Heavy Hitter, Weapons, Role Sets, Passives, Active Evolution, Growth)
+  // 3. Every itemized flat contributor (Piñata, Purity, Traps, Heavy Hitter, Weapons, Passives, Active Evolution, Growth)
   if (m.flatItems && m.flatItems.length > 0) {
     for (let i = 0; i < m.flatItems.length; i++) {
       const item = m.flatItems[i];

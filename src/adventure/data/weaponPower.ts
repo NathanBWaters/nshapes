@@ -25,7 +25,7 @@ import { WEAPON_GROWTH } from './weaponGrowth';
  * How Power points turn into the damage multiplier: one-for-one up to the
  * knee (3 points = ×4), then bending gently via log tail so a single weapon
  * reaches ×10, a recipe pair reaches ×50, and a full 6-charm build with
- * unified multipliers, Role Set Bonuses, fighter tree, and Arcana lands
+ * unified multipliers, fighter tree, and Arcana lands
  * cleanly near ×300 instead of overflowing into the thousands.
  */
 export const POWER_KNEE = 3;

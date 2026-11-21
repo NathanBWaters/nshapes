@@ -14,7 +14,7 @@ import { EVOLUTION_RECIPES } from '../data/evolutions';
 import { arcanaSlotsOf, charmSlotsOf } from '../loadout';
 import { applyLevelResult, createNewSave, getUnlockedUpgrades } from '../progress';
 import { ALL_ARMORY_WEAPON_IDS, getArmoryWeapon } from '../data/armory';
-import { weaponRole, type WeaponRole } from '../data/weaponRoles';
+import { weaponRole } from '../data/weaponRoles';
 import { MAX_TUNING_TIER, weaponStatLines } from '../data/weaponStats';
 import { createRng, type Rng } from './rng';
 
@@ -168,11 +168,9 @@ export const chooseCharms = (save: AdventureSave, rng: Rng, recipeChance = RECIP
 /** Weapons that hit hard on their own: derived directly from the Damage shelf. */
 export const DAMAGE_WEAPONS: readonly string[] = ALL_ARMORY_WEAPON_IDS.filter(id => weaponRole(id) === 'damage');
 
-const ENGINE_ROLE_PRIORITY: ReadonlySet<WeaponRole> = new Set(['damage', 'tricks', 'gambles', 'chains']);
-
 /**
- * A solid build, not a counter: both halves of a random recipe, then Role Set Bonus
- * completions (2-set / 4-set breakpoints) and damage weapons it owns, then anything.
+ * A solid build, not a counter: both halves of a random recipe, then damage
+ * weapons it owns, then anything else it owns.
  */
 export const solidCharms = (save: AdventureSave, rng: Rng): string[] => {
   const slots = charmSlotsOf(save);
@@ -182,39 +180,12 @@ export const solidCharms = (save: AdventureSave, rng: Rng): string[] => {
     const r = rng.pick(recipes);
     charms.push(rng.pick(r.options[0]), rng.pick(r.options[1]));
   }
-  // Bias remaining slots (70%) toward completing 2-piece or 4-piece Role Set Bonuses
   const nonPartners = save.armory.filter(id => !PARTNER_IDS.has(id));
   while (charms.length < slots) {
     const remaining = nonPartners.filter(id => !charms.includes(id));
     if (remaining.length === 0) break;
-    let picked: string | null = null;
-    if (charms.length > 0 && rng.next() < 0.7) {
-      const counts = new Map<WeaponRole, number>();
-      for (const id of charms) counts.set(weaponRole(id), (counts.get(weaponRole(id)) ?? 0) + 1);
-      // Prefer roles closest to reaching a 2-piece or 4-piece breakpoint (especially engine roles)
-      const roleOrder = [...counts.entries()]
-        .filter(([, c]) => c === 1 || c === 3 || c === 2)
-        .sort((a, b) => {
-          const aClose = a[1] === 1 || a[1] === 3 ? 1 : 0;
-          const bClose = b[1] === 1 || b[1] === 3 ? 1 : 0;
-          if (aClose !== bClose) return bClose - aClose;
-          const aEng = ENGINE_ROLE_PRIORITY.has(a[0]) ? 1 : 0;
-          const bEng = ENGINE_ROLE_PRIORITY.has(b[0]) ? 1 : 0;
-          return bEng - aEng || b[1] - a[1];
-        });
-      for (const [role] of roleOrder) {
-        const match = remaining.filter(id => weaponRole(id) === role);
-        if (match.length > 0) {
-          picked = rng.pick(match);
-          break;
-        }
-      }
-    }
-    if (!picked) {
-      const dmg = remaining.filter(id => DAMAGE_WEAPONS.includes(id));
-      picked = dmg.length > 0 ? rng.pick(dmg) : rng.pick(remaining);
-    }
-    charms.push(picked);
+    const dmg = remaining.filter(id => DAMAGE_WEAPONS.includes(id));
+    charms.push(dmg.length > 0 ? rng.pick(dmg) : rng.pick(remaining));
   }
   for (const id of rng.shuffle(save.armory)) if (charms.length < slots && !charms.includes(id)) charms.push(id);
   return fixUnderstudyOrder(charms);
@@ -414,7 +385,7 @@ export const barePlan = (level: LevelDef): BuildPlan => ({
   arcana: 'none',
 });
 
-/** The invested player: every star on offer spent with a plan, the Workshop maxed, synergistic Arcana, and a solid recipe + Role Set build. */
+/** The invested player: every star on offer spent with a plan, the Workshop maxed, synergistic Arcana, and a solid recipe build. */
 export const investedPlan = (level: LevelDef): BuildPlan => ({
   stars: starsOnReaching(level, 1),
   fighter: isTrial(level) ? level.recommended![0] : 'any',

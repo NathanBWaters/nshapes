@@ -299,16 +299,6 @@ export interface Modifiers {
   tightropeDamage?: number;
   /** Hot Potato: damage for matching the hot card (mistakes cost an extra heart while it is out) */
   potatoDamage?: number;
-
-  // ── Role Set Bonuses (data/weaponRoles.ts) ──
-  /** % bonus added to all Board Gamble weapon payouts (e.g. 15 / 35 / 60) */
-  gambleBonusPct?: number;
-  /** Extra starting cards dealt to the board (overflow empowers the board at MAX_BOARD) */
-  startingBoardCards?: number;
-  /** Extra board links placed at wave start */
-  startingLinks?: number;
-  /** Flat % echo chance added before scaling */
-  bonusEchoChance?: number;
 }
 
 /** Anything that can bring rules into a fight. */

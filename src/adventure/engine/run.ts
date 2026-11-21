@@ -35,7 +35,6 @@ import { weaponBuilds } from '../weaponLevels';
 import { createFoe } from '../data/foes';
 import { arcanaRules, getArcana } from '../data/arcana';
 import { BASE_RULES, TRICK_RULES } from '../data/rules';
-import { roleLabel, type WeaponRole } from '../data/weaponRoles';
 import { PARRY_RULES } from '../data/parry';
 import { challengeProgress } from './challenges';
 import { initParryState, resolveParryOnSet, tickParry } from './parry';
@@ -46,7 +45,7 @@ import {
   MAX_BOARD, type Draft, type FightHooks, TIME_HEADROOM,
   CLOCK_SLOW_CAP_PCT,
 } from './fight';
-import { activeRoleBonuses, combineModifiers, EVOLUTION_RULES, getRecipe, getSkillNode, liveSources } from './sources';
+import { EVOLUTION_RULES, getRecipe, getSkillNode, liveSources } from './sources';
 import { recordFightStart, recordLog } from './fightLog';
 import { afterSetGear, gearSetBonus, holdCards, initGear, onMistakeGear, onWaveStartGear, resolveTwins, syncGear, tickGear, type GearSet } from './gear';
 import { refreshArmedRecipes, resolveCatalyst, startEvolution, tickEvolutions } from './evolutions';
@@ -138,12 +137,10 @@ const rollPickOptions = (d: Draft, count = 3): Weapon[] => {
 };
 
 const acquireWeapon = (d: Draft, picked: Weapon) => {
-  const prevRoleMods = combineModifiers(activeRoleBonuses(d.weapons).map(r => r.modifiers));
   // An Understudy picked up mid-fight copies the weapon picked up before it
   const built = picked.id === UNDERSTUDY_ID ? understudyOf(picked, d.weapons[d.weapons.length - 1]?.id, d.weaponBuilds) : picked;
   const weapon: Weapon = { ...built, effects: resolveWholeStats(built.effects, () => d._rng.next()) };
   d.weapons = [...d.weapons, weapon];
-  const nextRoleMods = combineModifiers(activeRoleBonuses(d.weapons).map(r => r.modifiers));
   d.stats = applyWeaponToStats(d.stats, weapon);
   const base = { ...d.baseChances };
   for (const k of Object.keys(base)) {
@@ -153,22 +150,10 @@ const acquireWeapon = (d: Draft, picked: Weapon) => {
   d.baseChances = base;
   const m = (weapon as AdventureWeapon).modifiers;
   const heartsLocked = arcana(d).maxHeartsLock !== undefined;
-  const roleHeartsDelta = (nextRoleMods.maxHearts ?? 0) - (prevRoleMods.maxHearts ?? 0);
-  const extraHearts = (weapon.effects.maxHealth ?? 0) + (m?.maxHearts ?? 0) + roleHeartsDelta;
+  const extraHearts = (weapon.effects.maxHealth ?? 0) + (m?.maxHearts ?? 0);
   if (extraHearts && d.hearts !== null && d.maxHearts !== null && !heartsLocked) {
     d.maxHearts = Math.max(1, d.maxHearts + extraHearts);
-    d.hearts = Math.min(d.maxHearts, d.hearts + Math.max(0, (weapon.effects.health ?? 0) + (m?.maxHearts ?? 0) + roleHeartsDelta));
-  }
-  const roleHintsDelta = (nextRoleMods.startingHints ?? 0) - (prevRoleMods.startingHints ?? 0);
-  if (roleHintsDelta > 0) addHints(d, roleHintsDelta);
-  const roleBoardDelta = (nextRoleMods.startingBoardCards ?? 0) - (prevRoleMods.startingBoardCards ?? 0);
-  if (roleBoardDelta > 0) growBoard(d, roleBoardDelta);
-  const roleLinksDelta = (nextRoleMods.startingLinks ?? 0) - (prevRoleMods.startingLinks ?? 0);
-  if (roleLinksDelta > 0) {
-    const beforeLinks = d.connections.length;
-    if (addRandomConnections(d, roleLinksDelta) > 0) {
-      emit(d, 'link', roleLinksDelta, undefined, { slots: newLinkSlots(d, beforeLinks) });
-    }
+    d.hearts = Math.min(d.maxHearts, d.hearts + Math.max(0, (weapon.effects.health ?? 0) + (m?.maxHearts ?? 0)));
   }
   if (m?.coinPercent) d.coinBonusPercent += m.coinPercent;
   refreshArmedRecipes(d);
@@ -382,10 +367,6 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
       const id = key.slice(4);
       return { label: getRecipe(id)?.name ?? id, sourceRef: key, defaultNote: 'active Evolution' };
     }
-    if (key.startsWith('role:')) {
-      const role = key.slice(5) as WeaponRole;
-      return { label: `${roleLabel(role)} Set`, sourceRef: key, defaultNote: 'Role Set Bonus' };
-    }
     const slot = /^w(\d+):(.*)$/.exec(key);
     if (slot) {
       const w = d.weapons[Number(slot[1])];
@@ -454,7 +435,6 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
     activeEvolutions: d.activeEvolutions,
     growth: growthModifiers(d.growth ?? {}),
     blankEvolutionRules: d.blankEvolutionRules,
-    disableRoleBonuses: d.disableRoleBonuses,
   });
   let conditional = 0;
   for (const { key, source } of sources) {
@@ -516,7 +496,7 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   };
   const tricks = gearSetBonus(d, gearSet);
   const passives = passiveSetDamageBreakdown(d, sinceLastMs);
-  // Weapon growth & Insight Role Set: hints held are worth damage (Seeker Lens), and so is a Set made on a pointed-out card (Oracle Eye)
+  // Weapon growth & riders: hints held are worth damage (Seeker Lens), and so is a Set made on a pointed-out card (Oracle Eye)
   const growthDamage = (m.hintHeldDamage ?? 0) * d.stats.hints + (hinted ? m.hintedSetDamage ?? 0 : 0);
   for (const { key, source } of sources) {
     if (key === 'growth') continue;
@@ -1093,8 +1073,7 @@ const buildRun = (level: LevelDef, save: AdventureSave, opts: CreateRunOptions):
   const arcanaIds = gear ? loadout.arcana : [];
   const attributes = level.rules.attributes;
   const baseSize = level.rules.boardSize ?? getBoardSizeForAttributes(attributes.length);
-  const roleBoardCards = gear ? Math.round(loadout.modifiers.startingBoardCards ?? 0) : 0;
-  const desiredBoardSize = Math.max(baseSize, gear ? baseSize + (stats.fieldSize - DEFAULT_PLAYER_STATS.fieldSize) + roleBoardCards : baseSize);
+  const desiredBoardSize = Math.max(baseSize, gear ? baseSize + (stats.fieldSize - DEFAULT_PLAYER_STATS.fieldSize) : baseSize);
   const boardSize = Math.min(MAX_BOARD, desiredBoardSize);
   const boardOverflow = Math.max(0, desiredBoardSize - MAX_BOARD);
   const first = createFoe(level.foes[0]);
@@ -1143,7 +1122,6 @@ const buildRun = (level: LevelDef, save: AdventureSave, opts: CreateRunOptions):
     ...(ov?.powerScaling !== undefined ? { powerScaling: ov.powerScaling } : {}),
     ...(ov?.stackEvolutionMultipliers ? { stackEvolutionMultipliers: true } : {}),
     ...(ov?.blankEvolutionRules ? { blankEvolutionRules: true } : {}),
-    ...(ov?.disableRoleBonuses ? { disableRoleBonuses: true } : {}),
     ...(opts.trackRuleFirings ? { ruleFirings: {}, ruleZeroOps: {} } : {}),
     growthMemo: { lastSetColor: null, lastHintAtMs: -1, plantSet: false },
     elapsedMs: 0,
@@ -1239,8 +1217,7 @@ const buildRun = (level: LevelDef, save: AdventureSave, opts: CreateRunOptions):
   if (boardOverflow > 0) empowerBoard(d, boardOverflow);
   startFoe(d);
   placeOpeningTraps(d);
-  const startLinks = d.stats.startingConnections + Math.round(mods(d).startingLinks ?? 0);
-  if (startLinks > 0) addRandomConnections(d, startLinks);
+  if (d.stats.startingConnections > 0) addRandomConnections(d, d.stats.startingConnections);
   seedGrowth(d);
   enqueue(d, 'fightStart');
   enqueue(d, 'waveStart');
@@ -1274,10 +1251,6 @@ const resolveLineSource = (d: Draft, key?: string): { label?: string; sourceRef?
   const base = key.split('#')[0];
   if (base.startsWith('node:')) return { label: getSkillNode(base.slice(5))?.name ?? base, sourceRef: base };
   if (base.startsWith('evo:')) return { label: getRecipe(base.slice(4))?.name ?? base, sourceRef: base };
-  if (base.startsWith('role:')) {
-    const role = base.slice(5) as WeaponRole;
-    return { label: `${roleLabel(role)} Set`, sourceRef: base };
-  }
   const slot = /^w(\d+):(.*)$/.exec(base);
   if (slot) {
     const w = d.weapons[Number(slot[1])];
@@ -1650,8 +1623,7 @@ const reduceRun = (state: RunState, action: RunAction): RunState => {
       resetFoeBelowRules(d);
       emit(d, 'wave', d.wave + 1);
       startFoe(d);
-      const waveLinks = d.stats.startingConnections + Math.round(mods(d).startingLinks ?? 0);
-      if (waveLinks > 0) addRandomConnections(d, waveLinks);
+      if (d.stats.startingConnections > 0) addRandomConnections(d, d.stats.startingConnections);
       enqueue(d, 'waveStart');
       drain(d);
       break;

@@ -9,9 +9,6 @@ import type { Modifiers, Rule, RuleSource, WeaponTriggerKind } from '../rules/ty
 import { getSkillNode } from '../data/skillTrees';
 import { EVOLUTION_RECIPES } from '../data/evolutions';
 import { weaponRuleSource } from '../data/armory';
-import { activeRoleBonuses, roleBonusProgress, ROLE_SET_BONUSES, type ActiveRoleBonus, type RoleBonusProgress } from '../data/weaponRoles';
-
-export { activeRoleBonuses, roleBonusProgress, ROLE_SET_BONUSES, type ActiveRoleBonus, type RoleBonusProgress };
 
 export const EVOLUTION_RULES = {
   /** % chance per refill batch while a recipe is armed */
@@ -81,8 +78,6 @@ export interface SourceInputs {
   growth?: Modifiers;
   /** Lab-only override: omit each active Evolution's bespoke rules/modifiers (keeps universal shell) */
   blankEvolutionRules?: boolean;
-  /** Lab-only override: omit Brotato-style 2/4/6 Role Set Bonuses */
-  disableRoleBonuses?: boolean;
 }
 
 /** Every live rule source with a stable key prefix. */
@@ -100,11 +95,6 @@ export const liveSources = (s: SourceInputs): { key: string; source: RuleSource 
     for (const e of s.activeEvolutions) {
       const r = getRecipe(e.id);
       if (r) out.push({ key: `evo:${e.id}`, source: r.source });
-    }
-  }
-  if (!s.disableRoleBonuses) {
-    for (const rb of activeRoleBonuses(s.weapons)) {
-      out.push({ key: `role:${rb.role}`, source: { modifiers: rb.modifiers } });
     }
   }
   if (s.growth && Object.keys(s.growth).length > 0) out.push({ key: 'growth', source: { modifiers: s.growth } });

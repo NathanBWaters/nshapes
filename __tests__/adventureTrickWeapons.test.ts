@@ -542,7 +542,7 @@ describe('trick & gamble engine bug fixes', () => {
 
   it('Rust pays rustGold delta on already-gilded cards when rustGold increases later without double-counting', () => {
     let s = startFight({ features: ['hearts', 'gear'], level: testLevel({ foes: [{ name: 'Dummy', hp: 500 }] }) });
-    // Mark one card from a valid set as already gilded with stamped value 10, then hold rustGold: 10 + gambleBonusPct: 50 -> 15 (+5 delta)
+    // Mark one card from a valid set as already gilded with stamped value 10, then hold rustGold: 15 -> +5 delta
     const set = findSet(s)!;
     const gildedId = set[0].id;
     s = withWeapons(
@@ -551,7 +551,7 @@ describe('trick & gamble engine bug fixes', () => {
         gear: { ...s.gear, rustGoldStamped: { [gildedId]: 10 } },
         board: s.board.map(c => (c.id === gildedId ? { ...c, rusted: true, bonusPoints: 10 } : c)),
       },
-      { ...relic([]), modifiers: { rustGold: 10, gambleBonusPct: 50 } } as AdventureWeapon
+      { ...relic([]), modifiers: { rustGold: 15 } } as AdventureWeapon
     );
     const after = playSet(s, set);
     // Delta = 15 - 10 = +5 paid in flatItems

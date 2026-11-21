@@ -37,7 +37,6 @@ import { boardHasCounterSet } from '../engine/parry';
 import { FightRecorder, type FightTape } from '../engine/replay';
 import { challengeProgress } from '../engine/challenges';
 import { GearChips, gearModifiers, hasTrickGearChips } from './GearChips';
-import { activeRoleBonuses } from '../data/weaponRoles';
 import { growthStacks } from '../data/weaponGrowth';
 import { MECHANICS } from '../data/mechanics';
 import { getBiome } from '../data/biomes';
@@ -865,10 +864,9 @@ const AdventureRun: React.FC<Props> = ({
     practice ||
     secondsLeft !== null ||
     hasRichResources;
-  const roleBonuses = activeRoleBonuses(run.weapons);
   const hasBeltDock =
     run.weapons.length > 0 || run.arcana.length > 0 || run.activeEvolutions.length > 0;
-  // In sparse early fights (e.g. 1-2..1-4: moves + 1-3 weapons, no passives/coins/hints), merge moves + belt + Role Bonus into ONE row
+  // In sparse early fights (e.g. 1-2..1-4: moves + 1-3 weapons, no passives/coins/hints), merge moves + belt into ONE row
   const useSingleSparseRow = !hasRichResources && (hasResourceRow || run.weapons.length > 0);
   // Flow synergy chips right beside a small weapon belt (<= 3 weapons, no Arcana/active Evos, e.g. Summit Act 1!) to kill empty right-side voids
   const inlineSynergyOnBelt =
@@ -878,39 +876,17 @@ const AdventureRun: React.FC<Props> = ({
     run.weapons.length <= 3 &&
     run.arcana.length === 0 &&
     run.activeEvolutions.length === 0;
-  // Dock Role Set Bonus pill(s) on the open right side of the belt row whenever horizontal space permits (even alongside Arcana or active EvoRing!)
-  const existingRightDockW = run.arcana.length * 42 + run.activeEvolutions.length * 58;
-  const spareBeltW = Math.max(
-    0,
-    hudPanelW -
-      24 -
-      run.weapons.length * 32 -
-      existingRightDockW -
-      (useSingleSparseRow && (run.movesLeft !== null || practice || secondsLeft !== null) ? 84 : 0)
-  );
-  const dockedRolesCount =
-    !inlineSynergyOnBelt &&
-    run.weapons.length > 0 &&
-    run.weapons.length <= 5 &&
-    roleBonuses.length > 0 &&
-    (!useSingleSparseRow || (!hasTrickGearChips(gearMods) && !purityLive && !evolutionsOn && !run.simplified && run.doubleNext <= 0 && run.nextSetMultiplier <= 1))
-      ? Math.min(roleBonuses.length, Math.max(0, Math.floor(spareBeltW / 100)))
-      : 0;
-  const dockRolesOnBelt = dockedRolesCount > 0;
-  const remainingRoleBonuses = roleBonuses.length > dockedRolesCount;
   const hasAnySynergyItems =
     purityLive ||
     evolutionsOn ||
     Boolean(run.simplified) ||
     run.doubleNext > 0 ||
     run.nextSetMultiplier > 1 ||
-    hasTrickGearChips(gearMods) ||
-    remainingRoleBonuses;
+    hasTrickGearChips(gearMods);
   const hasSynergyChips = !inlineSynergyOnBelt && hasAnySynergyItems;
   const beltReservedRightPx =
     run.arcana.length * 42 +
     run.activeEvolutions.length * 54 +
-    dockedRolesCount * 100 +
     (useSingleSparseRow && (run.movesLeft !== null || practice || secondsLeft !== null) ? 84 : 0);
   const dualThreat = Boolean(run.parry && run.surge) && !isWide;
   const boardMaxWidth = isWide ? Math.min(760, Math.max(480, Math.round((stage.h - 20) * 0.94))) : undefined;
@@ -926,12 +902,11 @@ const AdventureRun: React.FC<Props> = ({
     [run.foeName, run.foeIcon, run.foe.tier]
   );
 
-  const renderSynergyItems = (skipRolesCount: number) => (
+  const renderSynergyItems = () => (
     <>
       <GearChips
         run={run}
         mods={gearMods}
-        skipRoles={skipRolesCount}
         onInspectWeapon={id => {
           const w = run.weapons.find(x => x.id === id);
           if (w) { sfx('click'); setInspect(w); }
@@ -1226,20 +1201,6 @@ const AdventureRun: React.FC<Props> = ({
               reservedRightPx={beltReservedRightPx}
               onInspect={setInspect}
             />
-            {dockRolesOnBelt && (
-              <View style={st.rightDock}>
-                <GearChips
-                  run={run}
-                  mods={gearMods}
-                  rolesOnly
-                  maxRoles={dockedRolesCount}
-                  onInspectWeapon={id => {
-                    const w = run.weapons.find(x => x.id === id);
-                    if (w) { sfx('click'); setInspect(w); }
-                  }}
-                />
-              </View>
-            )}
           </View>
         ) : (
           <>
@@ -1309,21 +1270,9 @@ const AdventureRun: React.FC<Props> = ({
                   onInspect={setInspect}
                 />
                 {inlineSynergyOnBelt && hasAnySynergyItems ? (
-                  <View style={st.inlineSynergyDock}>{renderSynergyItems(0)}</View>
-                ) : (run.arcana.length > 0 || run.activeEvolutions.length > 0 || dockRolesOnBelt) ? (
+                  <View style={st.inlineSynergyDock}>{renderSynergyItems()}</View>
+                ) : (run.arcana.length > 0 || run.activeEvolutions.length > 0) ? (
                   <View style={st.rightDock}>
-                    {dockRolesOnBelt && (
-                      <GearChips
-                        run={run}
-                        mods={gearMods}
-                        rolesOnly
-                        maxRoles={dockedRolesCount}
-                        onInspectWeapon={id => {
-                          const w = run.weapons.find(x => x.id === id);
-                          if (w) { sfx('click'); setInspect(w); }
-                        }}
-                      />
-                    )}
                     {run.arcana.map(id => (
                       <TouchableOpacity
                         key={id}
@@ -1366,9 +1315,9 @@ const AdventureRun: React.FC<Props> = ({
           </>
         )}
 
-        {/* Live Role Set Bonuses, Trick trackers, Escalating Purity, board effects & armed Evolution chip */}
+        {/* Live Trick trackers, Escalating Purity, board effects & armed Evolution chip */}
         {hasSynergyChips && (
-          <View style={st.synergyRow}>{renderSynergyItems(dockedRolesCount)}</View>
+          <View style={st.synergyRow}>{renderSynergyItems()}</View>
         )}
 
         {practice ? (
@@ -1686,7 +1635,6 @@ const AdventureRun: React.FC<Props> = ({
                   weapon={liveWeapon}
                   build={run.weaponBuilds[inspect.id]}
                   growth={run.growth}
-                  heldWeapons={run.weapons}
                   counter={counterForWeapon(liveWeapon, enemyCounters)}
                   defaultOpen
                 />
