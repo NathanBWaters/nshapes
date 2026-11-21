@@ -1,7 +1,7 @@
 /**
  * Shared Brotato-style Cumulative Damage Breakdown & 3-Second Animated Battle Story.
  *
- * Used by BOTH Adventure Mode (`LevelResults`) and Starfall Spire (`SpireRewardScreen`
+ * Used by BOTH Adventure Mode (`LevelResults`) and Starfall Summit (`SpireRewardScreen`
  * for per-battle breakdown + `SpireEndScreen` for full-climb cumulative breakdown).
  *
  * Features:
@@ -43,6 +43,7 @@ import type {
   DamageSourceSummary,
   DamageStory,
 } from '../engine/damageStory';
+import DamageSourceExplainer from './DamageSourceExplainer';
 import { INK, TONE } from './ui';
 import WeaponExplainer from './WeaponExplainer';
 
@@ -767,11 +768,12 @@ const BattleDamageStory: React.FC<Props> = ({
         )}
       </View>
 
-      {/* Interactive Inline Inspector (reuses canonical WeaponExplainer for weapons!) */}
+      {/* Interactive Inline Inspector (reuses canonical WeaponExplainer for weapons, DamageSourceExplainer for all non-weapon sources!) */}
       {selectedSource && (
         <View style={st.inspector} testID={`${testID}-inspector`}>
           {selectedWeapon ? (
             <WeaponExplainer
+              key={selectedWeapon.id}
               weapon={selectedWeapon}
               build={selectedBuild}
               hidePowerNote={hidePowerNote}
@@ -782,21 +784,24 @@ const BattleDamageStory: React.FC<Props> = ({
               }}
             />
           ) : (
-            <View style={st.passiveCard}>
-              <View style={st.passiveHead}>
-                <Icon name={selectedSource.icon} size={18} color={selectedSource.color} />
-                <Text style={st.passiveTitle} numberOfLines={1}>
-                  {selectedSource.name}
-                </Text>
-                <Text style={st.passiveBadge}>{KIND_TAG[selectedSource.kind]}</Text>
-              </View>
-              <Text style={st.passiveBody}>
-                Contributed {Math.round(selectedSource.totalDamage).toLocaleString()} damage (
-                {Math.max(1, Math.round(selectedSource.share * 100))}% of total) across {selectedSource.hits}{' '}
-                {selectedSource.hits === 1 ? 'trigger' : 'triggers'}, with a biggest spike of +
-                {Math.round(selectedSource.biggestHit)}.
-              </Text>
-            </View>
+            <DamageSourceExplainer
+              key={selectedSource.id}
+              sourceId={selectedSource.id}
+              name={selectedSource.name}
+              kind={selectedSource.kind}
+              icon={selectedSource.icon}
+              accentColor={selectedSource.color}
+              scopeLabel={story.xAxisMode === 'floors' ? 'THIS CLIMB' : 'THIS FIGHT'}
+              badge={
+                selectedSource === story.sources[0]
+                  ? 'MVP'
+                  : `${Math.max(1, Math.round(selectedSource.share * 100))}% DMG`
+              }
+              result={{
+                text: `${Math.round(selectedSource.totalDamage).toLocaleString()} cumulative dmg (${Math.max(1, Math.round(selectedSource.share * 100))}%) · ${selectedSource.hits} ${selectedSource.hits === 1 ? 'hit' : 'hits'} · biggest spike +${Math.round(selectedSource.biggestHit)}.`,
+                share: selectedSource.share,
+              }}
+            />
           )}
         </View>
       )}
@@ -1100,44 +1105,6 @@ const st = StyleSheet.create({
   },
   inspector: {
     marginTop: 2,
-  },
-  passiveCard: {
-    backgroundColor: COLORS.canvasWhite,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: INK,
-    padding: 10,
-    gap: 4,
-  },
-  passiveHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    minWidth: 0,
-  },
-  passiveTitle: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: INK,
-    flex: 1,
-    flexShrink: 1,
-  },
-  passiveBadge: {
-    fontSize: 9.5,
-    fontWeight: '900',
-    color: TONE.spent,
-    backgroundColor: COLORS.paperBeige,
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    flexShrink: 0,
-  },
-  passiveBody: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: INK,
-    opacity: 0.85,
-    lineHeight: 17,
   },
 });
 

@@ -8,17 +8,18 @@
  *   1. Ranked cumulative damage leaderboard (`sources`, MVP at index 0)
  *   2. Cumulative over-time curves (`points` + `source.cumulative[]`) for SVG graphing
  *   3. 4–7 musical & particle crescendo peaks (`crescendoBeats`) across the 3-second story
- *   4. Multi-floor cumulative Spire climb summaries (`buildSpireRunDamageStory`)
+ *   4. Multi-floor cumulative Summit climb summaries (`buildSpireRunDamageStory`)
  */
 import type { IconName } from '@/components/Icon';
+import { ARCANA } from '../data/arcana';
 import { getArmoryWeapon } from '../data/armory';
 import { EVOLUTION_RECIPES } from '../data/evolutions';
 import { PASSIVES } from '../data/passives';
-import { getUpgrade } from '../data/upgrades';
+import { UPGRADES, getUpgrade } from '../data/upgrades';
 import { ownerOfEvent } from '../data/weaponGuide';
 import { roleLabel, type WeaponRole } from '../data/weaponRoles';
 import { getRecipe, getSkillNode } from './sources';
-import type { EvolutionRecipe, FightLogEntry, FightLogLine, PassiveId, RunEventType, RunState } from '../types';
+import type { ArcanaDef, EvolutionRecipe, FightLogEntry, FightLogLine, PassiveId, RunEventType, RunState, UpgradeDef } from '../types';
 
 export type DamageSourceKind = 'weapon' | 'passive' | 'skill' | 'evolution' | 'set' | 'power' | 'bonus';
 
@@ -73,7 +74,7 @@ export interface DamageStory {
   crescendoBeats: CrescendoBeat[];
 }
 
-/** Persistent per-source ledger stored on `SpireRunStats` across all floors of a Spire climb. */
+/** Persistent per-source ledger stored on `SpireRunStats` across all floors of a Starfall Summit climb. */
 export interface SpireSourceDamageEntry {
   id: string;
   name: string;
@@ -132,6 +133,21 @@ for (const [id, def] of Object.entries(PASSIVES) as [PassiveId, (typeof PASSIVES
 const EVOLUTION_BY_NAME: Record<string, EvolutionRecipe> = {};
 for (const rec of EVOLUTION_RECIPES) {
   EVOLUTION_BY_NAME[rec.name.toLowerCase()] = rec;
+}
+
+const ARCANA_BY_ID: Record<string, ArcanaDef> = {};
+const ARCANA_BY_NAME: Record<string, ArcanaDef> = {};
+for (const arc of ARCANA) {
+  ARCANA_BY_ID[arc.id] = arc;
+  ARCANA_BY_NAME[arc.name.toLowerCase()] = arc;
+  ARCANA_BY_NAME[`${arc.numeral} · ${arc.name}`.toLowerCase()] = arc;
+}
+
+const UPGRADE_BY_ID: Record<string, UpgradeDef> = {};
+const UPGRADE_BY_NAME: Record<string, UpgradeDef> = {};
+for (const u of UPGRADES) {
+  UPGRADE_BY_ID[u.id] = u;
+  UPGRADE_BY_NAME[u.name.toLowerCase()] = u;
 }
 
 const fmtClockShort = (ms: number): string => {
@@ -207,7 +223,31 @@ export const resolveDamageSourceMeta = (
       id: `role:${rid}`,
       name: `${roleLabel(rid)} Set Bonus`,
       kind: 'bonus',
-      icon: 'lorc/spark-spirit',
+      icon: 'delapouite/star-formation',
+    };
+  }
+
+  // 4c. Explicit Arcana ref
+  if (rawRef?.startsWith('arcana:')) {
+    const aid = rawRef.slice(7);
+    const arc = ARCANA_BY_ID[aid];
+    return {
+      id: `arcana:${aid}`,
+      name: arc?.name ?? opts.label ?? aid,
+      kind: 'bonus',
+      icon: (arc?.icon as IconName | undefined) ?? 'caro-asercion/tarot-10-wheel-of-fortune',
+    };
+  }
+
+  // 4d. Explicit Workshop / Run Upgrade ref
+  if (rawRef?.startsWith('upgrade:')) {
+    const uid = rawRef.slice(8);
+    const u = UPGRADE_BY_ID[uid];
+    return {
+      id: `upgrade:${uid}`,
+      name: u?.name ?? opts.label ?? uid,
+      kind: 'passive',
+      icon: (u?.icon as IconName | undefined) ?? 'lorc/gear-hammer',
     };
   }
 
@@ -257,6 +297,17 @@ export const resolveDamageSourceMeta = (
     const rec = EVOLUTION_BY_NAME[low];
     return { id: `evo:${rec.id}`, name: rec.name, kind: 'evolution', icon: rec.icon };
   }
+  if (ARCANA_BY_NAME[low]) {
+    const arc = ARCANA_BY_NAME[low];
+    return { id: `arcana:${arc.id}`, name: arc.name, kind: 'bonus', icon: arc.icon };
+  }
+  if (UPGRADE_BY_NAME[low]) {
+    const u = UPGRADE_BY_NAME[low];
+    return { id: `upgrade:${u.id}`, name: u.name, kind: 'passive', icon: u.icon };
+  }
+  if (low === 'arcana') {
+    return { id: 'bonus:arcana', name: 'Arcana', kind: 'bonus', icon: 'caro-asercion/tarot-10-wheel-of-fortune' };
+  }
   if (low.includes('hot streak')) return { id: 'passive:hot_streak', name: PASSIVES.hot_streak.name, kind: 'passive', icon: PASSIVES.hot_streak.icon };
   if (low.includes('scrappy')) return { id: 'passive:scrappy', name: PASSIVES.scrappy.name, kind: 'passive', icon: PASSIVES.scrappy.icon };
   if (low.includes('grudge')) return { id: 'passive:grudge', name: PASSIVES.grudge.name, kind: 'passive', icon: PASSIVES.grudge.icon };
@@ -264,6 +315,7 @@ export const resolveDamageSourceMeta = (
   if (low.includes('combo')) return { id: 'passive:combo', name: PASSIVES.combo.name, kind: 'passive', icon: PASSIVES.combo.icon };
   if (low.includes('big scoop') || low.includes('free set')) return { id: 'passive:big_scoop', name: PASSIVES.big_scoop.name, kind: 'passive', icon: PASSIVES.big_scoop.icon };
   if (low.includes('purity')) return { id: 'bonus:purity', name: 'Purity Chain', kind: 'bonus', icon: 'lorc/crystal-shine' };
+  if (low.includes('trap')) return { id: 'bonus:traps', name: 'Trap Defusal', kind: 'bonus', icon: 'lorc/checked-shield' };
   if (low.includes('heavy hitter')) {
     const u = getUpgrade('heavy_hitter');
     return { id: 'upgrade:heavy_hitter', name: u.name, kind: 'passive', icon: u.icon };
@@ -661,7 +713,7 @@ export const buildDamageStory = (run: RunState): DamageStory => {
 };
 
 /**
- * Merge one finished Spire battle's damage breakdown into the cumulative run-wide ledger
+ * Merge one finished Starfall Summit battle's damage breakdown into the cumulative run-wide ledger
  * stored on `SpireRunStats` (so `SpireEndScreen` shows your entire roguelike climb!).
  */
 export const mergeSpireDamageLedger = (
@@ -704,7 +756,7 @@ export const mergeSpireDamageLedger = (
   return { sourceDamage: nextSources, floorLedger: nextFloors };
 };
 
-/** Build a cumulative full-climb Brotato Damage Story across every floor of a Starfall Spire run! */
+/** Build a cumulative full-climb Brotato Damage Story across every floor of a Starfall Summit run! */
 export const buildSpireRunDamageStory = (
   sourceDamage: Record<string, SpireSourceDamageEntry> | undefined,
   floorLedger: readonly SpireFloorDamageSnapshot[] | undefined
@@ -765,7 +817,7 @@ export const buildSpireRunDamageStory = (
   const pct = mvp && finalTotal > 0 ? Math.max(1, Math.round(mvp.share * 100)) : 0;
   const headline = mvp
     ? `${mvp.name} carried the climb with ${Math.round(mvp.totalDamage).toLocaleString()} dmg (${pct}%) across ${floors.length} ${floors.length === 1 ? 'battle' : 'battles'}`
-    : `Dealt ${Math.round(finalTotal).toLocaleString()} total damage across the Spire`;
+    : `Dealt ${Math.round(finalTotal).toLocaleString()} total damage across the Summit`;
 
   return {
     totalDamage: finalTotal,
