@@ -10,11 +10,20 @@
  * - Deterministic 60-player cohort generator for sandboxed inspection
  */
 import { ARCANA } from '@/adventure/data/arcana';
-import { armoryBaseWeapon } from '@/adventure/data/armory';
+import { armoryBaseWeapon, resolveLegacyWeapon } from '@/adventure/data/armory';
 import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
 import { FIGHTERS } from '@/adventure/data/fighters';
 import { MAIN_LEVELS } from '@/adventure/data/levels';
 import type { BattleOutcome, BattleRecord } from '@/adventure/history';
+import {
+  CURRENT_BALANCE_ERA,
+  CURRENT_BALANCE_ERA_ID,
+  getEraById,
+  getEraForVersion,
+  getMinValidVersion,
+  isVersionAtLeast,
+  semverToNumeric,
+} from './balanceEras';
 import {
   FUN_TAG_LABELS,
   NEGATIVE_FUN_TAGS,
@@ -26,6 +35,32 @@ import type { JourneyStage, LocalAnalyticsEvent } from './posthog';
 
 export type FightMode = 'adventure' | 'spire' | 'free_play' | 'classic';
 
+export interface AnalyzeFightsOptions {
+  /** Filter rows by Balance Era (`'all'` default for backwards compat, `'current'` for active era, or era id `'E8'`). */
+  eraScope?: 'all' | 'current' | string;
+  /** Restrict report to one game mode (`'all'` default). */
+  modeFilter?: FightMode | 'all';
+  /** Apply strict production hygiene rules (exclude dev/practice/bug_in_game/short/tutorial-coached). */
+  hygiene?: 'off' | 'prod_clean';
+  /** Allow `env !== 'prod'` when `hygiene === 'prod_clean'`. */
+  includeDev?: boolean;
+}
+
+export interface DashboardFilterAudit {
+  inputCount: number;
+  keptCount: number;
+  droppedByVersion: number;
+  droppedByEnv: number;
+  droppedByMode: number;
+  droppedByPractice: number;
+  droppedByBug: number;
+  droppedByShort: number;
+  droppedByCoached: number;
+  activeMinVersion: string | null;
+  eraScope: string;
+  hygiene: 'off' | 'prod_clean';
+}
+
 export interface NormalizedFightRow {
   fightId: string;
   distinctId: string;
@@ -33,11 +68,19 @@ export interface NormalizedFightRow {
   sessionId: string;
   timestampMs: number;
   dayKey: string;
+  appVersion?: string | null;
+  balanceEra?: string | null;
+  env?: string;
+  practice?: boolean;
   mode: FightMode;
   levelId: string;
   levelName: string;
   levelOrder: number;
   world: number;
+  spireAct?: number | null;
+  spireFloor?: number | null;
+  spireAscension?: number | null;
+  spireNodeKind?: string | null;
   fighter: string;
   foe: string;
   outcome: BattleOutcome;
@@ -47,6 +90,10 @@ export interface NormalizedFightRow {
   dpm: number;
   sets: number;
   mistakes: number;
+  helpedSets?: number;
+  hintsUsed?: number;
+  gracesUsed?: number;
+  biggestHitShare?: number;
   triggeredDamageShare: number;
   medianFindMs: number | null;
   maxDroughtMs: number;
@@ -189,6 +236,7 @@ export interface AnalyticsDashboardReport {
     tags: TagCountRow[];
   };
   players: PlayerJourneySummary[];
+  filterAudit: DashboardFilterAudit;
 }
 
 const VALID_TAGS = new Set<string>([
@@ -272,6 +320,29 @@ const normalizeMode = (v: unknown, levelId: string): FightMode => {
   return 'adventure';
 };
 
+const normalizeWeaponIds = (ids: readonly string[]): string[] => {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const rawId of ids) {
+    const resolved = resolveLegacyWeapon(rawId);
+    if (!resolved) continue;
+    if (!seen.has(resolved.id)) {
+      seen.add(resolved.id);
+      out.push(resolved.id);
+    }
+  }
+  return out;
+};
+
+const normalizeWeaponBag = (ids: readonly string[]): string[] => {
+  const out: string[] = [];
+  for (const rawId of ids) {
+    const resolved = resolveLegacyWeapon(rawId);
+    if (resolved) out.push(resolved.id);
+  }
+  return out;
+};
+
 export const normalizeBattleRecord = (
   b: BattleRecord,
   identity: { distinctId?: string; playerCode?: string } = {}
@@ -286,6 +357,10 @@ export const normalizeBattleRecord = (
     sessionId: `local-${toDayKey(ts)}`,
     timestampMs: ts,
     dayKey: toDayKey(ts),
+    appVersion: null,
+    balanceEra: null,
+    env: 'local',
+    practice: b.outcome === 'practice' || Boolean(b.replay?.sandbox),
     mode: 'adventure',
     levelId: b.levelId,
     levelName: b.levelName || meta?.name || b.levelId,
@@ -300,12 +375,16 @@ export const normalizeBattleRecord = (
     dpm: b.dpm,
     sets: b.sets,
     mistakes: b.mistakes,
+    helpedSets: 0,
+    hintsUsed: 0,
+    gracesUsed: 0,
+    biggestHitShare: b.damage > 0 ? Math.round((b.biggestHit / b.damage) * 1000) / 1000 : 0,
     triggeredDamageShare: 0,
     medianFindMs: null,
     maxDroughtMs: b.durationMs,
     closeCall: false,
     diedWithHints: false,
-    weapons: b.weapons ?? [],
+    weapons: normalizeWeaponIds(b.weapons ?? []),
     weaponsOffered: [],
     weaponsPicked: [],
     weaponsBought: [],
@@ -328,18 +407,43 @@ export const normalizePostHogLikeEvent = (raw: Record<string, unknown>): Normali
 
   const tsRaw = typeof raw.timestamp === 'string' ? Date.parse(raw.timestamp) : num(raw.timestamp, Date.now());
   const timestampMs = Number.isFinite(tsRaw) ? tsRaw : Date.now();
-  const levelId = typeof p.level_id === 'string' ? p.level_id : typeof p.levelId === 'string' ? p.levelId : 'unknown';
+  const levelId =
+    typeof p.level_id === 'string'
+      ? p.level_id
+      : typeof p.levelId === 'string'
+        ? p.levelId
+        : typeof p.level === 'string'
+          ? p.level
+          : 'unknown';
   const meta = LEVEL_ORDER_MAP.get(levelId);
   const mode = normalizeMode(p.mode, levelId);
+  const outcome = normalizeOutcome(p.outcome);
   const funRaw = p.fun_rating ?? p.funRating;
   const funRating: FunRating | null = funRaw === 'up' || funRaw === 'down' ? funRaw : null;
+
+  const rawVersion =
+    typeof p.app_version === 'string'
+      ? p.app_version
+      : typeof p.$app_version === 'string'
+        ? p.$app_version
+        : typeof p.appVersion === 'string'
+          ? p.appVersion
+          : null;
+  const appVersion =
+    rawVersion && semverToNumeric(rawVersion) !== null ? rawVersion.replace(/^v/, '').trim() : null;
+  const balanceEra =
+    typeof p.balance_era === 'string' && p.balance_era.trim() !== ''
+      ? p.balance_era.trim()
+      : getEraForVersion(appVersion)?.id ?? null;
 
   const fightId =
     typeof p.fight_id === 'string'
       ? p.fight_id
-      : typeof raw.uuid === 'string'
-        ? raw.uuid
-        : `${timestampMs}-${levelId}`;
+      : typeof p.fightId === 'string'
+        ? p.fightId
+        : typeof raw.uuid === 'string'
+          ? raw.uuid
+          : `${timestampMs}-${levelId}`;
 
   return {
     fightId,
@@ -355,30 +459,47 @@ export const normalizePostHogLikeEvent = (raw: Record<string, unknown>): Normali
     sessionId: typeof p.$session_id === 'string' ? p.$session_id : `sess-${toDayKey(timestampMs)}`,
     timestampMs,
     dayKey: toDayKey(timestampMs),
+    appVersion,
+    balanceEra,
+    env: typeof p.env === 'string' && p.env.trim() !== '' ? p.env.trim().toLowerCase() : undefined,
+    practice: Boolean(p.practice) || outcome === 'practice',
     mode,
     levelId,
     levelName: typeof p.level_name === 'string' ? p.level_name : meta?.name ?? levelId,
     levelOrder: num(p.level_order, meta?.order ?? 0),
     world: num(p.world, meta?.world ?? (Number(levelId.split('-')[0]) || 1)),
+    spireAct: optNum(p.spire_act ?? p.spireAct),
+    spireFloor: optNum(p.spire_floor ?? p.spireFloor),
+    spireAscension: optNum(p.spire_ascension ?? p.spireAscension),
+    spireNodeKind:
+      typeof p.spire_node_kind === 'string'
+        ? p.spire_node_kind
+        : typeof p.spireNodeKind === 'string'
+          ? p.spireNodeKind
+          : null,
     fighter: typeof p.fighter === 'string' ? p.fighter : 'Unknown',
     foe: typeof p.foe === 'string' ? p.foe : 'Unknown',
-    outcome: normalizeOutcome(p.outcome),
+    outcome,
     stars: num(p.stars, 0),
     durationMs: num(p.duration_ms ?? p.durationMs, 0),
     damage: num(p.damage, 0),
     dpm: num(p.dpm, 0),
     sets: num(p.sets, 0),
     mistakes: num(p.mistakes, 0),
+    helpedSets: num(p.helped_sets ?? p.helpedSets, 0),
+    hintsUsed: num(p.hints_used ?? p.hintsUsed, 0),
+    gracesUsed: num(p.graces_used ?? p.gracesUsed, 0),
+    biggestHitShare: num(p.biggest_hit_share ?? p.biggestHitShare, 0),
     triggeredDamageShare: num(p.triggered_damage_share, 0),
     medianFindMs: optNum(p.median_find_ms),
     maxDroughtMs: num(p.max_drought_ms, num(p.duration_ms, 0)),
     closeCall: Boolean(p.close_call),
     diedWithHints: Boolean(p.died_with_hints),
-    weapons: asStringArray(p.weapons),
-    weaponsOffered: asStringArray(p.weapons_offered),
-    weaponsPicked: asStringArray(p.weapons_picked),
-    weaponsBought: asStringArray(p.weapons_bought),
-    evolutions: asStringArray(p.evolutions_forged),
+    weapons: normalizeWeaponIds(asStringArray(p.weapons)),
+    weaponsOffered: normalizeWeaponBag(asStringArray(p.weapons_offered)),
+    weaponsPicked: normalizeWeaponBag(asStringArray(p.weapons_picked)),
+    weaponsBought: normalizeWeaponBag(asStringArray(p.weapons_bought)),
+    evolutions: asStringArray(p.evolutions_forged ?? p.evolutionsForged),
     arcana: asStringArray(p.arcana),
     funRating,
     funTags: asStringArray(p.fun_tags).filter((t): t is FunTag => VALID_TAGS.has(t)),
@@ -386,37 +507,132 @@ export const normalizePostHogLikeEvent = (raw: Record<string, unknown>): Normali
   };
 };
 
-/** Parses raw JSON text (array, `{ results }`, `{ events }`, or single batch `{ batch }`) into normalized rows. */
-export const parseAnalyticsImportJson = (rawText: string): { rows: NormalizedFightRow[]; error?: string } => {
-  try {
-    const parsed = JSON.parse(rawText) as unknown;
-    let list: unknown[] = [];
-    if (Array.isArray(parsed)) list = parsed;
-    else if (parsed && typeof parsed === 'object') {
-      const obj = parsed as Record<string, unknown>;
-      if (Array.isArray(obj.results)) list = obj.results;
-      else if (Array.isArray(obj.events)) list = obj.events;
-      else if (Array.isArray(obj.batch)) list = obj.batch;
-      else if (Array.isArray(obj.fights)) list = obj.fights;
-    }
-    if (list.length === 0) return { rows: [], error: 'No fight_ended events found in JSON.' };
-
-    const rows: NormalizedFightRow[] = [];
-    for (const item of list) {
-      if (!item || typeof item !== 'object') continue;
-      const obj = item as Record<string, unknown>;
-      if (typeof obj.levelId === 'string' && typeof obj.at === 'number') {
-        rows.push(normalizeBattleRecord(obj as unknown as BattleRecord));
+const zipHogqlTabular = (columns: string[], rows: unknown[][]): Record<string, unknown>[] =>
+  rows.map(r => {
+    const obj: Record<string, unknown> = {};
+    columns.forEach((col, i) => {
+      const val = r[i];
+      if (col === 'properties' && typeof val === 'string') {
+        try {
+          obj[col] = JSON.parse(val);
+        } catch {
+          obj[col] = {};
+        }
       } else {
-        const n = normalizePostHogLikeEvent(obj);
-        if (n) rows.push(n);
+        obj[col] = val;
+      }
+    });
+    return obj;
+  });
+
+/**
+ * Parses raw text from JSON arrays, NDJSON (newline-delimited JSON), PostHog
+ * `{ results }`/`{ events }`/`{ batch }` envelopes, or HogQL `{ columns, results: [[...]] }`
+ * tables into deduplicated normalized rows (folding retrospective `fight_rated` events).
+ */
+export const parseAnalyticsImportJson = (rawText: string): { rows: NormalizedFightRow[]; error?: string } => {
+  const trimmed = rawText.trim();
+  if (!trimmed) return { rows: [], error: 'Empty input.' };
+
+  let list: unknown[] = [];
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (Array.isArray(parsed)) {
+      list = parsed;
+    } else if (parsed && typeof parsed === 'object') {
+      const obj = parsed as Record<string, unknown>;
+      if (
+        Array.isArray(obj.columns) &&
+        obj.columns.every((c): c is string => typeof c === 'string') &&
+        Array.isArray(obj.results) &&
+        obj.results.every(r => Array.isArray(r))
+      ) {
+        list = zipHogqlTabular(obj.columns, obj.results as unknown[][]);
+      } else if (Array.isArray(obj.results)) {
+        list = obj.results;
+      } else if (Array.isArray(obj.events)) {
+        list = obj.events;
+      } else if (Array.isArray(obj.batch)) {
+        list = obj.batch;
+      } else if (Array.isArray(obj.fights)) {
+        list = obj.fights;
+      } else if (typeof obj.event === 'string' || typeof obj.fight_id === 'string') {
+        list = [obj];
       }
     }
-    if (rows.length === 0) return { rows: [], error: 'JSON parsed, but contained 0 fight_ended records.' };
-    return { rows };
-  } catch (err) {
-    return { rows: [], error: err instanceof Error ? err.message : 'Invalid JSON' };
+  } catch (jsonErr) {
+    // Fallback: parse as NDJSON (one JSON object per non-empty line)
+    const lines = trimmed
+      .split(/\r?\n/)
+      .map(l => l.trim())
+      .filter(Boolean);
+    if (lines.length === 0) {
+      return { rows: [], error: jsonErr instanceof Error ? jsonErr.message : 'Invalid JSON' };
+    }
+    const ndItems: unknown[] = [];
+    for (const line of lines) {
+      try {
+        ndItems.push(JSON.parse(line));
+      } catch {
+        return { rows: [], error: jsonErr instanceof Error ? jsonErr.message : 'Invalid JSON / NDJSON' };
+      }
+    }
+    list = ndItems;
   }
+
+  if (list.length === 0) return { rows: [], error: 'No fight_ended events found in JSON.' };
+
+  const byFightId = new Map<string, NormalizedFightRow>();
+  const lateRatings = new Map<string, { funRating: FunRating; funTags: FunTag[] }>();
+
+  for (const item of list) {
+    if (!item || typeof item !== 'object') continue;
+    const obj = item as Record<string, unknown>;
+
+    if (obj.event === 'fight_rated') {
+      const props =
+        obj.properties && typeof obj.properties === 'object' && !Array.isArray(obj.properties)
+          ? (obj.properties as Record<string, unknown>)
+          : obj;
+      const fid = typeof props.fight_id === 'string' ? props.fight_id : null;
+      const rating = props.fun_rating === 'up' || props.fun_rating === 'down' ? props.fun_rating : null;
+      if (fid && rating) {
+        const tags = asStringArray(props.fun_tags).filter((t): t is FunTag => VALID_TAGS.has(t));
+        lateRatings.set(fid, { funRating: rating, funTags: tags });
+      }
+      continue;
+    }
+
+    const normalized =
+      typeof obj.levelId === 'string' && typeof obj.at === 'number'
+        ? normalizeBattleRecord(obj as unknown as BattleRecord)
+        : normalizePostHogLikeEvent(obj);
+    if (!normalized) continue;
+
+    const prev = byFightId.get(normalized.fightId);
+    if (prev) {
+      const newer = normalized.timestampMs >= prev.timestampMs ? normalized : prev;
+      const older = newer === normalized ? prev : normalized;
+      byFightId.set(normalized.fightId, {
+        ...newer,
+        funRating: newer.funRating ?? older.funRating,
+        funTags: newer.funTags.length > 0 ? newer.funTags : older.funTags,
+      });
+    } else {
+      byFightId.set(normalized.fightId, normalized);
+    }
+  }
+
+  for (const [fid, late] of lateRatings.entries()) {
+    const existing = byFightId.get(fid);
+    if (!existing) continue;
+    existing.funRating = late.funRating;
+    if (late.funTags.length > 0) existing.funTags = late.funTags;
+  }
+
+  const rows = Array.from(byFightId.values()).sort((a, b) => a.timestampMs - b.timestampMs);
+  if (rows.length === 0) return { rows: [], error: 'JSON parsed, but contained 0 fight_ended records.' };
+  return { rows };
 };
 
 /** Combines local analytics events + fallback BattleRecords cleanly without double-counting matching fightIds. */
@@ -455,8 +671,87 @@ const stageOfPlayer = (maxOrder: number, cleared: number, advFights: number, fpF
   return advFights + fpFights > 0 ? 'onboarding' : 'new_player';
 };
 
-export const analyzeFights = (rawRows: readonly NormalizedFightRow[]): AnalyticsDashboardReport => {
-  const rows = [...rawRows].sort((a, b) => a.timestampMs - b.timestampMs);
+const applyDashboardFilters = (
+  rawRows: readonly NormalizedFightRow[],
+  options: AnalyzeFightsOptions
+): { rows: NormalizedFightRow[]; filterAudit: DashboardFilterAudit } => {
+  const eraScope = options.eraScope ?? 'all';
+  const modeFilter = options.modeFilter ?? 'all';
+  const hygiene = options.hygiene ?? 'off';
+  const includeDev = options.includeDev ?? false;
+
+  let activeMinVersion: string | null = null;
+  if (eraScope === 'current') {
+    activeMinVersion = getMinValidVersion('all', undefined, modeFilter === 'all' ? undefined : modeFilter);
+  } else if (eraScope !== 'all') {
+    const era = getEraById(eraScope);
+    if (era) activeMinVersion = era.minVersion;
+    else if (semverToNumeric(eraScope) !== null) activeMinVersion = eraScope;
+  }
+
+  const filterAudit: DashboardFilterAudit = {
+    inputCount: rawRows.length,
+    keptCount: 0,
+    droppedByVersion: 0,
+    droppedByEnv: 0,
+    droppedByMode: 0,
+    droppedByPractice: 0,
+    droppedByBug: 0,
+    droppedByShort: 0,
+    droppedByCoached: 0,
+    activeMinVersion,
+    eraScope,
+    hygiene,
+  };
+
+  const kept: NormalizedFightRow[] = [];
+  for (const r of rawRows) {
+    if (modeFilter !== 'all' && r.mode !== modeFilter) {
+      filterAudit.droppedByMode += 1;
+      continue;
+    }
+    if (activeMinVersion !== null && !isVersionAtLeast(r.appVersion, activeMinVersion)) {
+      filterAudit.droppedByVersion += 1;
+      continue;
+    }
+    if (hygiene === 'prod_clean') {
+      if (!includeDev && r.env !== 'prod') {
+        filterAudit.droppedByEnv += 1;
+        continue;
+      }
+      if (r.practice || r.outcome === 'practice') {
+        filterAudit.droppedByPractice += 1;
+        continue;
+      }
+      if (r.funTags.includes('bug_in_game')) {
+        filterAudit.droppedByBug += 1;
+        continue;
+      }
+      if (r.sets < 3 || r.durationMs < 10_000) {
+        filterAudit.droppedByShort += 1;
+        continue;
+      }
+      if (r.mode === 'adventure') {
+        const helped = r.helpedSets ?? 0;
+        if (r.levelId === '1-1' || (r.sets > 0 && helped / r.sets > 0.5)) {
+          filterAudit.droppedByCoached += 1;
+          continue;
+        }
+      }
+    }
+    kept.push(r);
+  }
+
+  kept.sort((a, b) => a.timestampMs - b.timestampMs);
+  filterAudit.keptCount = kept.length;
+  return { rows: kept, filterAudit };
+};
+
+export const analyzeFights = (
+  rawRows: readonly NormalizedFightRow[],
+  options: AnalyzeFightsOptions = {}
+): AnalyticsDashboardReport => {
+  const { rows, filterAudit } = applyDashboardFilters(rawRows, options);
   const totalFights = rows.length;
   const adventureRows = rows.filter(r => r.mode === 'adventure');
   const spireRows = rows.filter(r => r.mode === 'spire');
@@ -594,12 +889,26 @@ export const analyzeFights = (rawRows: readonly NormalizedFightRow[]): Analytics
     playerMaxOrder.set(did, maxOrd);
   }
 
-  const levelBaselineWinRate = new Map<string, number>();
-  for (const [lid, lRows] of levelMap.entries()) {
-    const dec = lRows.filter(r => isDecidedOutcome(r.outcome));
-    if (dec.length > 0) {
-      levelBaselineWinRate.set(lid, dec.filter(r => isWinOutcome(r.outcome)).length / dec.length);
+  // Mode-aware stratum baselines prevent cross-mode Simpson's leakage (Adventure vs Spire vs Classic)
+  const stratumKeyOf = (r: NormalizedFightRow): string => {
+    if (r.mode === 'spire') {
+      return `spire:${r.spireAct ?? r.world}:${r.spireNodeKind ?? 'std'}`;
     }
+    return `${r.mode}:${r.levelId}`;
+  };
+
+  const stratumBaselineWinRate = new Map<string, number>();
+  const stratumBuckets = new Map<string, { wins: number; decided: number }>();
+  for (const r of rows) {
+    if (r.practice || r.outcome === 'practice' || !isDecidedOutcome(r.outcome)) continue;
+    const key = stratumKeyOf(r);
+    const b = stratumBuckets.get(key) ?? { wins: 0, decided: 0 };
+    b.decided += 1;
+    if (isWinOutcome(r.outcome)) b.wins += 1;
+    stratumBuckets.set(key, b);
+  }
+  for (const [k, b] of stratumBuckets.entries()) {
+    if (b.decided > 0) stratumBaselineWinRate.set(k, b.wins / b.decided);
   }
 
   const orderedLevels = Array.from(levelMap.entries()).sort((a, b) => {
@@ -714,6 +1023,9 @@ export const analyzeFights = (rawRows: readonly NormalizedFightRow[]): Analytics
     };
 
     for (const r of rows) {
+      // Exclude sandbox practice and endless free_play (no win/loss) from competitive balance metrics
+      if (r.practice || r.outcome === 'practice' || r.mode === 'free_play') continue;
+
       if (category === 'weapon') {
         for (const id of r.weaponsOffered) ensure(id).offered += 1;
         for (const id of r.weaponsPicked) ensure(id).picked += 1;
@@ -721,7 +1033,7 @@ export const analyzeFights = (rawRows: readonly NormalizedFightRow[]): Analytics
       }
 
       const uniqueIds = new Set(extractIds(r));
-      const baseWin = levelBaselineWinRate.get(r.levelId);
+      const baseWin = stratumBaselineWinRate.get(stratumKeyOf(r));
       const decided = isDecidedOutcome(r.outcome) && baseWin !== undefined;
       const won = isWinOutcome(r.outcome);
 
@@ -883,6 +1195,7 @@ export const analyzeFights = (rawRows: readonly NormalizedFightRow[]): Analytics
       tags,
     },
     players,
+    filterAudit,
   };
 };
 
@@ -949,6 +1262,10 @@ export const generateSimulatedCohort = (
           sessionId,
           timestampMs: ts,
           dayKey: toDayKey(ts),
+          appVersion: CURRENT_BALANCE_ERA.minVersion,
+          balanceEra: CURRENT_BALANCE_ERA_ID,
+          env: 'prod',
+          practice: false,
           mode: 'free_play',
           levelId: 'freeplay-medium',
           levelName: 'Free Play (medium)',
@@ -1045,6 +1362,10 @@ export const generateSimulatedCohort = (
           sessionId,
           timestampMs: ts,
           dayKey: toDayKey(ts),
+          appVersion: CURRENT_BALANCE_ERA.minVersion,
+          balanceEra: CURRENT_BALANCE_ERA_ID,
+          env: 'prod',
+          practice: false,
           mode: 'adventure',
           levelId: level.id,
           levelName: level.name,

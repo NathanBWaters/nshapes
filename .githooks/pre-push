@@ -31,9 +31,10 @@ if [ "$has_non_delete_push" = "0" ]; then
   exit 0
 fi
 
-echo "Running pre-push verification gates (typecheck, lint, validate:icons, test:fast)..."
+echo "Running pre-push verification gates (typecheck, lint, validate:icons, validate:balance-eras, test:fast)..."
 npm run typecheck
 npm run lint
 npm run validate:icons
+npm run validate:balance-eras
 npm run test:fast
 echo "✓ Pre-push verification passed"

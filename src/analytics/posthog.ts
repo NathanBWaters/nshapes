@@ -18,6 +18,7 @@ import { Platform } from 'react-native';
 import { storage } from '@/utils/storage';
 import { subscribeAppActive } from '@/utils/appLifecycle';
 import { version as APP_VERSION } from '../../package.json';
+import { CURRENT_BALANCE_ERA_ID } from './balanceEras';
 import {
   POSTHOG_HOST,
   POSTHOG_PROJECT_ID,
@@ -561,6 +562,7 @@ const common = () => ({
   $lib: 'nshapes',
   $app_version: APP_VERSION,
   app_version: APP_VERSION,
+  balance_era: CURRENT_BALANCE_ERA_ID,
   $os: Platform.OS,
   platform: Platform.OS,
   env: __DEV__ ? 'dev' : 'prod',

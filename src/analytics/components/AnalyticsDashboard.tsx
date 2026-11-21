@@ -15,11 +15,16 @@ import { COLORS, RADIUS } from '@/utils/colors';
 import { sfx } from '@/audio';
 import { loadBattleHistory } from '@/adventure/save';
 import {
+  CURRENT_BALANCE_ERA,
+  CURRENT_BALANCE_ERA_ID,
+} from '../balanceEras';
+import {
   analyzeFights,
   generateSimulatedCohort,
   mergeLocalAnalyticsSources,
   parseAnalyticsImportJson,
   type AnalyticsDashboardReport,
+  type FightMode,
   type NormalizedFightRow,
 } from '../dashboardEngine';
 import { POSTHOG_HOST, POSTHOG_PROJECT_ID } from '../config';
@@ -130,7 +135,7 @@ function OverviewTab({
         <KpiCard
           label="TOTAL FIGHTS"
           value={`${report.totalFights}`}
-          hint={`${report.adventureFights} Adv · ${report.freePlayFights} Free · ${report.classicFights} Classic`}
+          hint={`${report.adventureFights} Adv · ${report.spireFights} Summit · ${report.freePlayFights} Free · ${report.classicFights} Classic`}
         />
         <KpiCard
           label="PLAYERS / SESSIONS"
@@ -551,6 +556,9 @@ export default function AnalyticsDashboard({
   const { width } = useWindowDimensions();
   const [source, setSource] = useState<DashboardSource>(initialSource);
   const [tab, setTab] = useState<DashboardTab>('overview');
+  const [eraScope, setEraScope] = useState<'all' | 'current'>('all');
+  const [modeFilter, setModeFilter] = useState<FightMode | 'all'>('all');
+  const [hygiene, setHygiene] = useState<'off' | 'prod_clean'>('off');
   const [importText, setImportText] = useState('');
   const [importError, setImportError] = useState<string | null>(null);
   const [importedRows, setImportedRows] = useState<NormalizedFightRow[]>([]);
@@ -576,8 +584,24 @@ export default function AnalyticsDashboard({
     });
   }, [source, importedRows, inspector.localEvents, inspector.distinctId, inspector.playerCode]);
 
-  const report = useMemo(() => analyzeFights(rows), [rows]);
+  const report = useMemo(
+    () => analyzeFights(rows, { eraScope, modeFilter, hygiene }),
+    [rows, eraScope, modeFilter, hygiene]
+  );
   const chartWidth = Math.max(260, Math.min(760, width - 56));
+  const audit = report.filterAudit;
+  const droppedTotal = audit.inputCount - audit.keptCount;
+  const auditDropSummary = useMemo(() => {
+    const parts: string[] = [];
+    if (audit.droppedByVersion > 0) parts.push(`${audit.droppedByVersion} stale ver`);
+    if (audit.droppedByEnv > 0) parts.push(`${audit.droppedByEnv} dev/non-prod`);
+    if (audit.droppedByMode > 0) parts.push(`${audit.droppedByMode} other mode`);
+    if (audit.droppedByPractice > 0) parts.push(`${audit.droppedByPractice} practice`);
+    if (audit.droppedByBug > 0) parts.push(`${audit.droppedByBug} bug-tagged`);
+    if (audit.droppedByShort > 0) parts.push(`${audit.droppedByShort} short`);
+    if (audit.droppedByCoached > 0) parts.push(`${audit.droppedByCoached} tutorial/coached`);
+    return parts.join(' · ');
+  }, [audit]);
 
   const handleApplyImport = () => {
     sfx('click');
@@ -639,7 +663,8 @@ export default function AnalyticsDashboard({
                   <Text style={styles.pageTitle}>NShapes Game Analytics</Text>
                 </View>
                 <Text style={styles.pageSub}>
-                  PostHog #{POSTHOG_PROJECT_ID} · Stage: {inspector.journeyStage} · Player{' '}
+                  PostHog #{POSTHOG_PROJECT_ID} · Era {CURRENT_BALANCE_ERA_ID} (v
+                  {CURRENT_BALANCE_ERA.minVersion}+) · Stage: {inspector.journeyStage} ·{' '}
                   {inspector.playerCode}
                 </Text>
               </View>
@@ -710,6 +735,84 @@ export default function AnalyticsDashboard({
               );
             })}
           </View>
+
+          <View style={styles.filterBar}>
+            <TouchableOpacity
+              testID="analytics-era-all"
+              style={[styles.subPill, eraScope === 'all' && styles.subPillActive]}
+              onPress={() => {
+                sfx('click');
+                setEraScope('all');
+              }}
+            >
+              <Text style={[styles.subPillText, eraScope === 'all' && styles.subPillTextActive]}>
+                All Eras
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              testID="analytics-era-current"
+              style={[styles.subPill, eraScope === 'current' && styles.subPillActive]}
+              onPress={() => {
+                sfx('click');
+                setEraScope('current');
+              }}
+            >
+              <Text
+                style={[styles.subPillText, eraScope === 'current' && styles.subPillTextActive]}
+              >
+                {CURRENT_BALANCE_ERA_ID} (v{CURRENT_BALANCE_ERA.minVersion}+)
+              </Text>
+            </TouchableOpacity>
+            {(
+              [
+                { id: 'all', label: 'All Modes' },
+                { id: 'adventure', label: 'Adventure' },
+                { id: 'spire', label: 'Summit' },
+                { id: 'classic', label: 'Classic' },
+              ] as { id: FightMode | 'all'; label: string }[]
+            ).map(m => {
+              const active = modeFilter === m.id;
+              return (
+                <TouchableOpacity
+                  key={m.id}
+                  testID={`analytics-mode-${m.id}`}
+                  style={[styles.subPill, active && styles.subPillActive]}
+                  onPress={() => {
+                    sfx('click');
+                    setModeFilter(m.id);
+                  }}
+                >
+                  <Text style={[styles.subPillText, active && styles.subPillTextActive]}>
+                    {m.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+            <TouchableOpacity
+              testID="analytics-hygiene-toggle"
+              style={[styles.subPill, hygiene === 'prod_clean' && styles.subPillActive]}
+              onPress={() => {
+                sfx('click');
+                setHygiene(prev => (prev === 'off' ? 'prod_clean' : 'off'));
+              }}
+            >
+              <Text
+                style={[styles.subPillText, hygiene === 'prod_clean' && styles.subPillTextActive]}
+              >
+                {hygiene === 'prod_clean' ? 'Prod Clean: ON' : 'Prod Clean: OFF'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {droppedTotal > 0 && (
+            <View style={styles.auditBanner} testID="analytics-audit-summary">
+              <Text style={styles.auditText}>
+                Filtered {audit.keptCount}/{audit.inputCount} fights
+                {audit.activeMinVersion ? ` (v${audit.activeMinVersion}+)` : ''}
+                {auditDropSummary ? ` · Excluded: ${auditDropSummary}` : ''}
+              </Text>
+            </View>
+          )}
 
           {source === 'import' && (
             <View style={styles.card}>
@@ -910,6 +1013,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
+  },
+  filterBar: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  auditBanner: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: RADIUS.button,
+    backgroundColor: '#FFF5E0',
+    borderWidth: 1,
+    borderColor: '#D69A32',
+  },
+  auditText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#7A4E00',
   },
   sourceBtn: {
     paddingHorizontal: 12,

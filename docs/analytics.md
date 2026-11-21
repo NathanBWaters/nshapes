@@ -80,35 +80,48 @@ See `src/adventure/engine/replay.ts` for exact deterministic replay rules (keep 
 
 ---
 
-## 5. Balance & Enjoyment Engine + PostHog Dashboards
+## 5. Balance Eras, Analysis Rules & PostHog Dashboards
+
+> **Canonical PostHog Analysis & Version-Invalidation Spec:** See [docs/posthog-analysis-rules.md](./posthog-analysis-rules.md).
+
+### Version-Era Tracking (`src/analytics/balanceEras.json` + `src/analytics/posthogRules.ts`)
+Because balance updates invalidate older telemetry, every event stamps `app_version` and `balance_era` (`CURRENT_BALANCE_ERA_ID`), and `src/analytics/balanceEras.json` tracks all historical Balance Eras (`E0`–`E8`, current floor **`v0.1.164+`**) with hybrid engine-file + per-item canonical mechanical fingerprints.
+
+* `npm run balance:era:status` — inspect current era, active version floors, and working-tree drift.
+* `npm run balance:era:record -- --summary "<change>" [--bump | --version X.Y.Z]` — record a new Balance Era (auto-detects global, mode, category, or exact changed item IDs).
+* `npm run validate:balance-eras` — fast guardrail (in `verify:guardrails`, `.githooks/pre-push`, and CI) ensuring mechanical balance changes never ship without updating the era manifest.
+* `npm run balance:power` — reusable power-ranking CLI combining simulation balance data with version-filtered, Simpson-adjusted, Ridge-debiased PostHog telemetry (`--live`, `--posthog <file>`, or `--simulated-posthog`).
 
 ### Pure Analytical Engine (`src/analytics/dashboardEngine.ts`)
 Computes:
 1. **Cohort Retention:** D0, D1, D3, D7, D14, D30 retention and Wilson 95% confidence intervals (`wilsonCI`) on player enjoyment.
 2. **Campaign Funnel & Churn Walls:** Player reach %, clear %, attempts per clear, abandon rate, `died_with_hints` %, and composite `churnWallScore`.
-3. **Simpson's-Paradox-Adjusted Balance:** Avoids late-game selection bias by comparing each weapon, fighter, evolution, and Arcana's win rate against the **expected win rate at the exact levels/modes where it was played** (`adjustedWinDelta`), paired with offer-vs-pick rate and player fun rate.
+3. **Mode-Isolated Simpson's-Paradox-Adjusted Balance:** Avoids late-game selection bias and cross-mode leakage by comparing each weapon, fighter, evolution, and Arcana's win rate against the **expected win rate at the exact mode & level/act stratum where it was played** (`adjustedWinDelta`), paired with offer-vs-pick rate, player fun rate, legacy weapon ID normalization, and Balance Era + `Prod Clean` hygiene audit counters.
 4. **Enjoyment Drivers:** Win-vs-loss fun gap, close-call vs stomp fun rate, fast-board (`<6s` median) vs drought (`>=12s`) fun rate, and feedback tag distributions.
 
 ### Interactive Dev Studio (`/dev/analytics`)
-Open `/dev/analytics` (or `/dev/analytics?source=simulated`) in Expo Web / dev builds to inspect live local telemetry, a deterministic 60-player cohort (`generateSimulatedCohort`), or pasted PostHog JSON/NDJSON/HogQL exports across **Overview**, **Funnel**, **Balance**, **Enjoyment**, and **PostHog** tabs.
+Open `/dev/analytics` (or `/dev/analytics?source=simulated`) in Expo Web / dev builds to inspect live local telemetry, a deterministic 60-player cohort (`generateSimulatedCohort`), or pasted PostHog JSON / NDJSON / HogQL `{ columns, results }` exports across **Overview**, **Funnel**, **Balance**, **Enjoyment**, and **PostHog** tabs, with interactive **Balance Era (`E8 v0.1.164+`)**, **Mode**, and **Prod Clean** hygiene filters.
 
 ### Syncing Official Dashboards to PostHog (`project/738615`)
 
-4 dashboards (18 HogQL insights) are defined in `src/analytics/posthogDashboards.ts`:
-1. `NShapes — 01 Retention & Player Journey`
-2. `NShapes — 02 Campaign Funnel & Churn Walls`
-3. `NShapes — 03 Weapons, Fighters & Evolutions Balance`
-4. `NShapes — 04 Fun Rating & Friction Diagnostics`
+4 dashboards (18 HogQL insights) are defined in `src/analytics/posthogDashboards.ts`, with numeric-semver Balance Era floors, `env = 'prod'` hygiene, Simpson-adjusted fighter/evolution/Arcana queries, and within-Catalyst-cohort evolution baselines auto-injected from `balanceEras.ts` + `posthogRules.ts`:
+1. `NShapes · 1. Executive Pulse & Retention`
+2. `NShapes · 2. Campaign Funnel & Churn Walls`
+3. `NShapes · 3. Weapon, Fighter & Evolution Balance`
+4. `NShapes · 4. Player Enjoyment & Sentiment (👍 / 👎)`
 
 Commands:
 
 ```bash
-# Regenerate docs/posthog-dashboards.json
+# Regenerate docs/posthog-dashboards.json (with active Balance Era version floors)
 npm run analytics:export
 
 # Upsert all 4 dashboards & 18 HogQL tiles in PostHog project 738615
 POSTHOG_PERSONAL_API_KEY=phx_... npm run analytics:posthog:sync
 
-# Pull live PostHog dashboards/insights for verification
+# Pull lightweight paginated balance events (excludes heavy replay/save blobs)
+POSTHOG_PERSONAL_API_KEY=phx_... npm run analytics:posthog:pull-balance
+
+# Pull raw fight_ended events (including full replay payloads, up to 1,000 rows)
 POSTHOG_PERSONAL_API_KEY=phx_... npm run analytics:posthog:pull
 ```

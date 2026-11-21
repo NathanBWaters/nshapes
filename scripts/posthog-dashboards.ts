@@ -1,20 +1,50 @@
 /**
  * PostHog Dashboard & Data CLI:
- * - `export`: writes `docs/posthog-dashboards.json`
- * - `sync`: creates or updates all 4 NShapes dashboards + HogQL insights via PostHog REST API
- * - `pull`: fetches recent `fight_ended` events from PostHog HogQL API to `docs/posthog-live-sample.json`
+ * - `export`: writes `docs/posthog-dashboards.json` (with active Balance Era version floors)
+ * - `sync`: creates or updates all 4 NShapes dashboards + 18 HogQL insights via PostHog REST API
+ * - `pull`: fetches recent raw `fight_ended` events to `docs/posthog-live-sample.json`
+ * - `pull-balance`: lightweight paginated HogQL fetch projecting ONLY balance/analytics columns
+ *   (excluding heavy `recording`/`save` blobs) with server-side numeric semver & env filtering.
  *
  * Sync & pull require `POSTHOG_PERSONAL_API_KEY` (personal API key, never the public write key).
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import { POSTHOG_DASHBOARDS, buildPostHogExportBundle } from '../src/analytics/posthogDashboards';
+import {
+  CURRENT_BALANCE_ERA_ID,
+  getMinValidVersion,
+  type FightModeFilter,
+} from '../src/analytics/balanceEras';
 import { POSTHOG_PROJECT_ID } from '../src/analytics/config';
+import { POSTHOG_DASHBOARDS, buildPostHogExportBundle } from '../src/analytics/posthogDashboards';
+import { fetchBalanceEventsFromPostHog } from './lib/posthogFetch';
 
 const API_BASE = process.env.POSTHOG_API_HOST || 'https://us.posthog.com';
 const DOCS_DIR = path.resolve(__dirname, '../docs');
 const EXPORT_PATH = path.join(DOCS_DIR, 'posthog-dashboards.json');
 const PULL_PATH = path.join(DOCS_DIR, 'posthog-live-sample.json');
+
+const parseFlags = (argv: string[]): Record<string, string | boolean> => {
+  const flags: Record<string, string | boolean> = {};
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (!arg.startsWith('--')) continue;
+    const key = arg.slice(2);
+    const eqIdx = key.indexOf('=');
+    if (eqIdx >= 0) {
+      flags[key.slice(0, eqIdx)] = key.slice(eqIdx + 1);
+      continue;
+    }
+    const next = argv[i + 1];
+    if (next && !next.startsWith('--')) {
+      flags[key] = next;
+      i += 1;
+    } else {
+      flags[key] = true;
+    }
+  }
+  return flags;
+};
 
 const requirePersonalKey = (): string => {
   const key = process.env.POSTHOG_PERSONAL_API_KEY?.trim();
@@ -52,7 +82,9 @@ const runExport = () => {
   const bundle = buildPostHogExportBundle();
   fs.writeFileSync(EXPORT_PATH, `${JSON.stringify(bundle, null, 2)}\n`, 'utf8');
   const tileCount = bundle.dashboards.reduce((s, d) => s + d.tiles.length, 0);
-  console.log(`Exported ${bundle.dashboards.length} PostHog dashboards (${tileCount} HogQL insights) -> ${EXPORT_PATH}`);
+  console.log(
+    `Exported ${bundle.dashboards.length} PostHog dashboards (${tileCount} HogQL insights, era ${CURRENT_BALANCE_ERA_ID} v${bundle.balanceEra.adventureMinVersion}+) -> ${EXPORT_PATH}`
+  );
 };
 
 const runSync = async () => {
@@ -160,7 +192,61 @@ LIMIT 1000`,
   console.log(`Pulled ${events.length} fight_ended events -> ${PULL_PATH}`);
 };
 
-const cmd = process.argv[2] ?? 'export';
+const runPullBalance = async (flags: Record<string, string | boolean>) => {
+  const key = requirePersonalKey();
+  const rawMode = typeof flags.mode === 'string' ? flags.mode : 'all';
+  const mode = (rawMode === 'adventure' || rawMode === 'spire' || rawMode === 'free_play' || rawMode === 'classic'
+    ? rawMode
+    : 'all') as FightModeFilter | 'all';
+  const minVersion =
+    typeof flags['min-version'] === 'string'
+      ? flags['min-version']
+      : flags['all-eras']
+        ? '0.1.119'
+        : getMinValidVersion('all', undefined, mode === 'all' ? undefined : mode);
+  const includeDev = Boolean(flags['include-dev']);
+  const maxRows =
+    typeof flags['max-rows'] === 'string' && Number.isFinite(Number(flags['max-rows']))
+      ? Math.max(1, Number(flags['max-rows']))
+      : 10_000;
+  const outPath = typeof flags.out === 'string' ? path.resolve(flags.out) : PULL_PATH;
+
+  const events = await fetchBalanceEventsFromPostHog({
+    apiKey: key,
+    apiHost: API_BASE,
+    projectId: POSTHOG_PROJECT_ID,
+    minVersion,
+    includeDev,
+    mode,
+    maxRows,
+  });
+
+  fs.mkdirSync(path.dirname(outPath), { recursive: true });
+  fs.writeFileSync(
+    outPath,
+    `${JSON.stringify(
+      {
+        projectId: POSTHOG_PROJECT_ID,
+        pulledAt: new Date().toISOString(),
+        eraId: CURRENT_BALANCE_ERA_ID,
+        minVersion,
+        mode,
+        includeDev,
+        eventCount: events.length,
+        events,
+      },
+      null,
+      2
+    )}\n`,
+    'utf8'
+  );
+  console.log(
+    `Pulled ${events.length} lightweight balance events (v${minVersion}+, mode=${mode}, includeDev=${includeDev}) -> ${outPath}`
+  );
+};
+
+const [cmd = 'export', ...rest] = process.argv.slice(2);
+const flags = parseFlags(rest);
 if (cmd === 'export') {
   runExport();
 } else if (cmd === 'sync') {
@@ -173,7 +259,12 @@ if (cmd === 'export') {
     console.error(err);
     process.exit(1);
   });
+} else if (cmd === 'pull-balance') {
+  runPullBalance(flags).catch(err => {
+    console.error(err);
+    process.exit(1);
+  });
 } else {
-  console.error(`Unknown subcommand "${cmd}". Use: export | sync | pull`);
+  console.error(`Unknown subcommand "${cmd}". Use: export | sync | pull | pull-balance`);
   process.exit(1);
 }

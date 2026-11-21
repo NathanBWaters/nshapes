@@ -6,7 +6,7 @@ How Adventure Mode is measured and tuned. The feel we are aiming at is in
 Everything is simulated: headless bots play real fights through the real
 reducer on fixed seeds, so every number is exact and repeatable.
 
-## The five tools
+## The six tools
 
 | Tool | Command | What it answers | Where it lives |
 |---|---|---|---|
@@ -15,17 +15,20 @@ reducer on fixed seeds, so every number is exact and repeatable.
 | **Level 3-star balance** | `npm run balance:levels` | Does every level hit its `★1+` clear floor, `★★+` knockout band, `★★★` mastery target, and World 1 pro `★★★` floor? | `__tests__/adventureBalance.test.ts`, `src/adventure/engine/botBuilds.ts` |
 | **The 3-star HP tuner** | `npm run balance:tune` (`ONLY=5-2,3-4` for some) | Searches foe HP against the multi-star loss (`★1+`, `★★+`, `★★★`, and World 1 pro `★★★` so HP neither walls `★★` nor starves in-fight `★★★` goals) and rewrites `data/levels.ts`. | `src/adventure/balance/tuner.ts` |
 | **The balance atlas** | `npm run balance:atlas` | How do all 2,016 weapon pairs, 208 recipes, 6 fighters, 8 Arcana, Pressure+Surge hazards, Snowball curves, Ridge Shapley weights, 8D `MAP-Elites` niches, and 59 campaign levels interact? | `src/adventure/balance/analytics.ts`, `docs/balance-analytics.json`, `docs/balance-atlas.html` |
+| **Power rankings (`1.00×+`) & Balance Eras** | `npm run balance:power` / `npm run balance:era:record` | Ranks every weapon, evolution, fighter, and Arcana as a `1.00×+` multiplier over the weakest in its category, blending simulation priors with era-valid PostHog telemetry (Empirical Bayes shrinkage + divergence alerts), written to [power-rankings.md](./power-rankings.md). | `src/adventure/balance/powerRank.ts`, `scripts/balance-power-rank.ts`, `src/analytics/balanceEras.json`, `scripts/balance-eras.ts` |
 
 `__tests__/adventureBuilds.test.ts` adds the build-level checks: no fighter,
 recipe pairing or random endgame build runs away from the field, and every
 evolution adds damage over its two weapons.
 
-**The workflow after changing a weapon, recipe, skill node or rule:**
+**The workflow after changing a weapon, recipe, fighter, Arcana, skill node, or combat rule:**
 
 1. `npx jest __tests__/adventureBalanceLab.test.ts` (about two minutes). Fix what it flags.
 2. `npm run balance:report` and read the Movers table: did anything move that you did not mean to move?
 3. `npm run balance:levels`. If levels drifted, `npm run balance:tune`, then run it again.
-4. Commit the report and the snapshot with the change, so the next person's Movers table starts from yours.
+4. `npm run balance:era:record -- --summary "What changed"` (verified automatically by `npm run validate:balance-eras` in guardrails and CI so stale pre-change PostHog telemetry is excluded automatically from live rankings and dashboards).
+5. `npm run balance:power -- --write` to refresh [power-rankings.md](./power-rankings.md) and [power-rankings.json](./power-rankings.json) (add `--live` with `POSTHOG_PERSONAL_API_KEY` or `--posthog <export.json>` to blend live player data).
+6. Commit the report, snapshot, era manifest, and power rankings with the change, so the next person's Movers table and PostHog validity window start from yours.
 
 ## What the lab measures
 
@@ -98,8 +101,7 @@ are judged in a build, never alone (`PARTNER_WEAPONS`).
 | Tune by search toward stated targets | Simulation-based autobalancing toward a designer's target graph ([paper](https://arxiv.org/abs/2006.04419)) | The HP tuner searches foe HP toward each level's bare/invested targets |
 | Fun first | Mark Rosewater: make the fun part the correct way to win | The trick weapons pay for doing the interesting thing; the lab only checks they pay enough and not too much |
 
-We have no real players' data yet, so there is no pick rate. When there is,
-the place for it is a column beside Passenger.
+Live player telemetry from PostHog (pick rate, Simpson-adjusted win/DPM deltas, and `👍`/`👎` fun ratings) is gated by `src/analytics/balanceEras.json` and `src/analytics/posthogRules.ts` so pre-balance-patch runs are excluded automatically, then shrunk toward the simulation prior inside `npm run balance:power` ([power-rankings.md](./power-rankings.md)). See [analytics.md](./analytics.md) for the PostHog analysis rules and `npm run balance:era:record` workflow.
 
 ## Limits worth knowing
 
