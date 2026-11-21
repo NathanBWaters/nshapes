@@ -60,9 +60,9 @@ test.describe('Main Menu ↔ Mode Resume Integration (Spire & Adventure)', () =>
     await expect(page.getByTestId('run-parry-bar')).toBeVisible({ timeout: 10000 });
     await page.waitForTimeout(800);
 
-    // Pause mid-battle → Retreat to Briefing → Main Menu → Resume → Start Floor 3 Elite battle again
+    // Pause mid-battle → Retreat (−1 ♥) → Main Menu → Resume → Start Floor 3 Elite battle again
     await page.getByLabel('Pause').click();
-    await page.getByText('Retreat to Briefing').click();
+    await page.getByText('Retreat (−1 ♥)').click();
     await expect(page.getByTestId('spire-encounter-preview')).toBeVisible({ timeout: 10000 });
 
     await page.getByTestId('spire-back-menu').click();

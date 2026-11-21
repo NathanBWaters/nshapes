@@ -37,9 +37,10 @@ import {
 } from '@/adventure/progress';
 import { loadAdventureSave, loadBattleHistory } from '@/adventure/save';
 import { createRng } from '@/adventure/engine/rng';
+import { gearUp } from '@/adventure/engine/botBuilds';
 import { countDifferentAttributes } from '@/adventure/engine/sets';
 import { isValidCombination } from '@/utils/gameUtils';
-import type { AdventureSave, LevelDef } from '@/adventure/types';
+import type { AdventureSave, ArcanaId, LevelDef } from '@/adventure/types';
 import type { AttributeName, Background, Card, Color, Number as CardNumber, Shading, Shape } from '@/types';
 
 const mockKvStore = new Map<string, string>();
@@ -736,24 +737,38 @@ describe('Adventure Mode full-game E2E', () => {
     let full = createNewSave();
     for (const l of LEVELS) if (l.id !== finale.id) full = applyLevelResult(full, l, 3, 50).save;
     for (const k of MAP_KEYS) full = claimMapKey(full, k.id, k.defaultFighter);
-    full = {
-      ...full,
-      seenMechanics: LEVELS.map(l => l.introduces),
-      discoveredEvolutions: EVOLUTION_RECIPES.map(r => r.id),
-      bountyStats: {
-        totalSets: 100000,
-        rainbowSets: 10000,
-        purityChains: 10000,
-        threeStepPurities: 10000,
-        flawlessTimedWins: 1000,
-        evolutionsForged: 1000,
-        maxOverkill: 1000,
-        destructiveFights: 1000,
-        trapsDefused: 1000,
-        biggestHit: 1000,
-        fighterWins: Object.fromEntries(FIGHTERS.map(f => [f.name, 100])),
+    // Equip an invested endgame build (maxed Workshop, full Skill Tree, solid charms & Arcana) for the 5-5 Hydra boss
+    const finaleArcana: ArcanaId[] = ['glass_prism', 'tempo_surge', 'prismatic_fever'];
+    full = gearUp(
+      {
+        ...full,
+        seenMechanics: LEVELS.map(l => l.introduces),
+        discoveredEvolutions: EVOLUTION_RECIPES.map(r => r.id),
+        bountyStats: {
+          totalSets: 100000,
+          rainbowSets: 10000,
+          purityChains: 10000,
+          threeStepPurities: 10000,
+          flawlessTimedWins: 1000,
+          evolutionsForged: 1000,
+          maxOverkill: 1000,
+          destructiveFights: 1000,
+          trapsDefused: 1000,
+          biggestHit: 1000,
+          fighterWins: Object.fromEntries(FIGHTERS.map(f => [f.name, 100])),
+        },
       },
-    };
+      {
+        stars: totalStarsEarned(full),
+        fighter: 'Sly Fox',
+        treeStyle: 'plan',
+        charms: 'solid',
+        workshop: true,
+        arcana: 'none',
+      },
+      1
+    );
+    full = { ...full, equippedArcana: finaleArcana, activeArcana: finaleArcana[0] };
     screen = render(wrap(<AdventureMode initialSave={full} onExit={() => {}} />));
     fireEvent.press(screen.getByTestId(`map-node-${finale.id}`));
     fireEvent.press(screen.getByTestId('preview-play'));
@@ -781,7 +796,10 @@ describe('Adventure Mode full-game E2E', () => {
     fireEvent.press(reloaded.getByLabelText('Back to map'));
     fireEvent.press(reloaded.getByTestId('map-dock-camp'));
     fireEvent.press(reloaded.getByTestId('camp-tab-arcana'));
-    for (const a of ARCANA) expect(reloaded.getByText(a.name)).toBeTruthy();
+    for (const a of ARCANA) {
+      expect(reloaded.getByTestId(`camp-arcana-${a.id}`)).toBeTruthy();
+      expect(reloaded.getByText(`${a.numeral} · ${a.name}`)).toBeTruthy();
+    }
   });
 
   it('migrates a v1 save on load: fighter levels refunded, the single charm and Arcana moved into slots', () => {

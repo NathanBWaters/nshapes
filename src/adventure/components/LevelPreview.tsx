@@ -192,10 +192,13 @@ const LevelPreview: React.FC<Props> = props => {
       style={[StyleSheet.absoluteFill, st.layer]}
       pointerEvents={closing ? 'none' : 'box-none'}
       testID="preview-sheet-root"
-      // What the Modal gave for free: screen readers stay in the sheet, not on the map behind it
-      role="dialog"
-      aria-modal
-      accessibilityViewIsModal
+      // What the Modal gave for free: screen readers stay in the sheet, not on the map behind it.
+      // Once closing begins, release modal focus immediately so the map behind is accessible again.
+      role={closing ? undefined : 'dialog'}
+      aria-modal={!closing}
+      accessibilityViewIsModal={!closing}
+      accessibilityElementsHidden={closing}
+      importantForAccessibility={closing ? 'no-hide-descendants' : 'auto'}
     >
       <Animated.View style={[st.backdrop, backdropBox, backdropStyle]} pointerEvents="none" />
       {/* box-none hands touches to its children, so the closing sheet must say none here too */}
