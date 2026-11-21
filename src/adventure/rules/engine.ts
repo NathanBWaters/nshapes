@@ -13,17 +13,93 @@ import { isSelectable } from '../engine/sets';
 import { BASE_RULES } from '../data/rules';
 import {
   addCoins, addGraces, addHints, addRandomConnections, addTime, addXp, areaIndices, armorCard, canSpawnCatalyst, catalystOnBoard,
-  dealDamage, destroyCards, emit, empowerBoard, enqueue, foeMultiplier, growBoard, heal, igniteCards, liveRulesOf,
-  newLinkSlots, placeCatalyst, recordRuleFiring, recordRuleZeroOp, redeal, simplify, touchable as touchableIdx, LUCK_CAP_PCT, mods, signalGrowth, type Draft, type FightEvent,
+  dealDamage, destroyCards, emit, empowerBoard, enqueue, foeMultiplier, foldSetRuleDamage, growBoard, heal, igniteCards, liveRulesOf,
+  newLinkSlots, placeCatalyst, recordRuleFiring, recordRuleZeroOp, redeal, simplify, touchable as touchableIdx, LUCK_CAP_PCT, mods, signalGrowth,
+  type Draft, type FightEvent, type FoldedRuleItem,
 } from '../engine/fight';
 import { addMagnet, advanceTricks, feedChest, repairGlass, stampAlbum } from '../engine/gear';
 import { extendEvolutions } from '../engine/evolutions';
 import { addComboSteps, patienceMs } from '../engine/passives';
-import { getRecipe, type KeyedRule } from '../engine/sources';
+import { getRecipe, getSkillNode, type KeyedRule } from '../engine/sources';
 
 export const MAX_FIRINGS_PER_ACTION = 32;
 /** Max times a single rule key may fire within one synchronous chain (allows 1 bounce for Pinball / Entropy Engine / Powder Keg). */
 export const MAX_CHAIN_OCCURRENCES = 2;
+
+/**
+ * Triggers that belong directly to the player's matched Set (as opposed to chained
+ * weapon/heal/foeBelow/burn/idle follow-ups). Their `{ do: 'damage' }` and `{ do: 'cashIn' }`
+ * effects fold straight into the Set's `BASE` bucket before multiplication.
+ */
+const DIRECT_SET_TRIGGERS = new Set<Trigger['on']>([
+  'set',
+  'firstSetOfWave',
+  'everyNthSet',
+  'setsWithin',
+  'rainbow',
+  'bonusCardMatched',
+  'graceUsed',
+  'trapDefused',
+  'trick',
+]);
+
+const ordinal = (n: number): string => {
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1: return `${n}st`;
+    case 2: return `${n}nd`;
+    case 3: return `${n}rd`;
+    default: return `${n}th`;
+  }
+};
+
+const describeRuleSource = (
+  d: Draft,
+  key: string,
+  trigger: Trigger,
+  callout?: string
+): FoldedRuleItem => {
+  const base = key.split('#')[0];
+  let label = callout?.replace(/!$/, '') ?? 'Bonus';
+  let sourceRef: string | undefined;
+  if (base.startsWith('node:')) {
+    const id = base.slice(5);
+    label = getSkillNode(id)?.name ?? label;
+    sourceRef = base;
+  } else if (base.startsWith('evo:')) {
+    const id = base.slice(4);
+    label = getRecipe(id)?.name ?? label;
+    sourceRef = base;
+  } else {
+    const slot = /^w(\d+):(.*)$/.exec(base);
+    if (slot) {
+      const w = d.weapons[Number(slot[1])];
+      label = w?.name ?? slot[2];
+      sourceRef = `weapon:${w?.id ?? slot[2]}`;
+    }
+  }
+  const cleanCallout = callout?.replace(/!$/, '');
+  const note =
+    trigger.on === 'firstSetOfWave'
+      ? 'wave opener'
+      : trigger.on === 'everyNthSet'
+        ? `every ${ordinal(trigger.n)} Set`
+        : trigger.on === 'setsWithin'
+          ? `${trigger.count} fast Sets`
+          : trigger.on === 'rainbow'
+            ? 'Rainbow Set bonus'
+            : trigger.on === 'bonusCardMatched'
+              ? 'bonus card matched'
+              : trigger.on === 'trapDefused'
+                ? 'trap defused'
+                : trigger.on === 'graceUsed'
+                  ? 'Grace Set bonus'
+                  : trigger.on === 'trick'
+                    ? cleanCallout || 'trick payout'
+                    : cleanCallout || 'Set trigger';
+  return { label, note, ...(sourceRef ? { sourceRef } : {}) };
+};
 
 // ─── Conditions ─────────────────────────────────────────────────────────────
 
@@ -88,10 +164,33 @@ const fireRule = (d: Draft, kr: KeyedRule, chain: readonly string[]) => {
   recordRuleFiring(d, kr.key);
   const prev = d._chain;
   d._chain = [...chain, kr.key];
-  if (kr.rule.callout) emit(d, 'rule', undefined, kr.rule.callout);
+  let calloutEventId: number | null = null;
+  let calloutLineIdx = -1;
+  if (kr.rule.callout) {
+    emit(d, 'rule', undefined, kr.rule.callout);
+    calloutEventId = d.eventSeq;
+    calloutLineIdx = d._lines.length - 1;
+  }
+  const canFold = Boolean(
+    d._setFold &&
+    !d._setFold.inAutoSet &&
+    d._setCtx === d._setFold.setCtx &&
+    DIRECT_SET_TRIGGERS.has(kr.rule.trigger.on)
+  );
+  const foldMeta = canFold ? describeRuleSource(d, kr.key, kr.rule.trigger, kr.rule.callout) : undefined;
+  let foldedBaseSum = 0;
   let didWork = false;
   for (const e of kr.rule.effects) {
-    if (applyEffect(d, e, kr.rule.callout)) didWork = true;
+    const res = runEffect(d, e, kr.rule.callout, foldMeta);
+    if (res.didWork) didWork = true;
+    foldedBaseSum += res.foldedBase;
+  }
+  if (foldedBaseSum > 0 && calloutEventId !== null) {
+    const rounded = Math.round(foldedBaseSum * 10) / 10;
+    const ev = d.events.find(e => e.id === calloutEventId);
+    if (ev) ev.amount = rounded;
+    const line = d._lines[calloutLineIdx];
+    if (line) line.amount = rounded;
   }
   if (kr.rule.effects.length > 0 && !didWork) {
     recordRuleZeroOp(d, kr.key);
@@ -285,8 +384,12 @@ export const weaponFired = (d: Draft, kind: WeaponTriggerKind, replay?: Effect) 
   }
 };
 
-/** Returns true when the effect actually performed non-zero work (used by lab dead-rule telemetry). */
-export const applyEffect = (d: Draft, e: Effect, label?: string): boolean => {
+const runEffect = (
+  d: Draft,
+  e: Effect,
+  label?: string,
+  foldMeta?: FoldedRuleItem
+): { didWork: boolean; foldedBase: number } => {
   const kind = e.do === 'trigger' ? e.kind : WEAPON_KIND[e.do];
   if (kind) {
     const times = takeDouble(d) ? 2 : 1;
@@ -298,80 +401,93 @@ export const applyEffect = (d: Draft, e: Effect, label?: string): boolean => {
       enqueue(d, 'weapon', kind);
       ran = true;
     }
-    return ran;
+    return { didWork: ran, foldedBase: 0 };
   }
   switch (e.do) {
     case 'damage': {
       const times = e.per ? scaleCount(d, e.per) : 1;
-      if (times <= 0 || e.amount <= 0) return false;
-      const dealt = dealDamage(d, e.amount * times * d._setMultiplier * foeMultiplier(d));
+      if (times <= 0 || e.amount <= 0) return { didWork: false, foldedBase: 0 };
+      const rawBase = e.amount * times;
+      if (foldMeta && d._setFold && !d._setFold.inAutoSet) {
+        foldSetRuleDamage(d, rawBase, foldMeta);
+        return { didWork: true, foldedBase: rawBase };
+      }
+      const dealt = dealDamage(d, rawBase * d._setMultiplier * foeMultiplier(d));
       if (dealt > 0) emit(d, 'hit', dealt, label ?? 'Bonus');
-      return dealt > 0;
+      return { didWork: dealt > 0, foldedBase: 0 };
     }
     case 'cashIn': {
       const held = e.resource === 'hints' ? d.stats.hints : d.stats.graces;
-      if (held <= 0) return false;
+      if (held <= 0) return { didWork: false, foldedBase: 0 };
       d.stats = { ...d.stats, [e.resource]: 0 };
-      const dealt = dealDamage(d, held * e.damageEach * d._setMultiplier * foeMultiplier(d));
+      const rawBase = held * e.damageEach;
+      if (foldMeta && d._setFold && !d._setFold.inAutoSet) {
+        foldSetRuleDamage(d, rawBase, foldMeta);
+        return { didWork: true, foldedBase: rawBase };
+      }
+      const dealt = dealDamage(d, rawBase * d._setMultiplier * foeMultiplier(d));
       emit(d, 'hit', dealt, label ?? 'Cash in');
-      return dealt > 0;
+      return { didWork: dealt > 0, foldedBase: 0 };
     }
-    case 'convert': convertCards(d, e.to, e.count); return true;
+    case 'convert': convertCards(d, e.to, e.count); return { didWork: true, foldedBase: 0 };
     case 'shield':
       d.freeMistakesLeft += e.count;
       emit(d, 'free_mistake', d.freeMistakesLeft);
-      return true;
-    case 'cleanse': cleanseBoard(d); return true;
-    case 'empowerBoard': empowerBoard(d, e.amount); return true;
-    case 'armorCard': armorCard(d, e.extraHealth, e.bounty); return true;
-    case 'simplify': simplify(d, e.ms); return true;
+      return { didWork: true, foldedBase: 0 };
+    case 'cleanse': cleanseBoard(d); return { didWork: true, foldedBase: 0 };
+    case 'empowerBoard': empowerBoard(d, e.amount); return { didWork: true, foldedBase: 0 };
+    case 'armorCard': armorCard(d, e.extraHealth, e.bounty); return { didWork: true, foldedBase: 0 };
+    case 'simplify': simplify(d, e.ms); return { didWork: true, foldedBase: 0 };
     case 'doubleNext':
       d.doubleNext += 1;
       emit(d, 'double_ready', d.doubleNext);
-      return true;
+      return { didWork: true, foldedBase: 0 };
     case 'freeze':
       d.frozenMs = Math.max(d.frozenMs, e.ms);
       emit(d, 'freeze', e.ms);
-      return true;
-    case 'redeal': redeal(d); return true;
-    case 'autoSet': d._hooks.autoSet(d); return true;
-    case 'comboStep': addComboSteps(d, e.amount); return true;
+      return { didWork: true, foldedBase: 0 };
+    case 'redeal': redeal(d); return { didWork: true, foldedBase: 0 };
+    case 'autoSet': d._hooks.autoSet(d); return { didWork: true, foldedBase: 0 };
+    case 'comboStep': addComboSteps(d, e.amount); return { didWork: true, foldedBase: 0 };
     case 'spawnCatalyst':
-      if (!canSpawnCatalyst(d)) return false;
+      if (!canSpawnCatalyst(d)) return { didWork: false, foldedBase: 0 };
       placeCatalyst(d, []);
-      return true;
+      return { didWork: true, foldedBase: 0 };
     case 'spawnCatalystForce':
       if (d.features.has('evolutions') && d.armedRecipes.length > 0 && !catalystOnBoard(d) && d.evolutionsTriggered < d.evolutionCap) {
         placeCatalyst(d, []);
-        return true;
+        return { didWork: true, foldedBase: 0 };
       }
-      return false;
-    case 'extendEvolutions': extendEvolutions(d, e.ms); return d.activeEvolutions.length > 0;
+      return { didWork: false, foldedBase: 0 };
+    case 'extendEvolutions': extendEvolutions(d, e.ms); return { didWork: d.activeEvolutions.length > 0, foldedBase: 0 };
     case 'nextSetMultiplier':
       // Stacks add up (×2 + ×2 = ×3), capped (data/rules.ts)
       d.nextSetMultiplier = Math.min(BASE_RULES.maxNextSetMultiplier, d.nextSetMultiplier + (e.times - 1));
       emit(d, 'charged', d.nextSetMultiplier);
-      return true;
+      return { didWork: true, foldedBase: 0 };
     case 'emptyHeart':
       // The new heart arrives empty: more room to heal into, nothing healed
       if (d.maxHearts !== null) {
         d.maxHearts += e.amount;
-        return true;
+        return { didWork: true, foldedBase: 0 };
       }
-      return false;
+      return { didWork: false, foldedBase: 0 };
     case 'link': {
       const before = d.connections.length;
       if (addRandomConnections(d, e.count) > 0) {
         emit(d, 'link', e.count, undefined, { slots: newLinkSlots(d, before) });
-        return true;
+        return { didWork: true, foldedBase: 0 };
       }
-      return false;
+      return { didWork: false, foldedBase: 0 };
     }
-    case 'repairGlass': repairGlass(d, label); return true;
-    case 'feedChest': feedChest(d, e.amount, label); return true;
-    case 'advanceTricks': advanceTricks(d, e.ms); return true;
-    case 'stampAlbum': stampAlbum(d); return true;
-    case 'addMagnet': addMagnet(d, e.count); return true;
-    default: return false;
+    case 'repairGlass': repairGlass(d, label); return { didWork: true, foldedBase: 0 };
+    case 'feedChest': feedChest(d, e.amount, label); return { didWork: true, foldedBase: 0 };
+    case 'advanceTricks': advanceTricks(d, e.ms); return { didWork: true, foldedBase: 0 };
+    case 'stampAlbum': stampAlbum(d); return { didWork: true, foldedBase: 0 };
+    case 'addMagnet': addMagnet(d, e.count); return { didWork: true, foldedBase: 0 };
+    default: return { didWork: false, foldedBase: 0 };
   }
 };
+
+/** Returns true when the effect actually performed non-zero work (used by lab dead-rule telemetry). */
+export const applyEffect = (d: Draft, e: Effect, label?: string): boolean => runEffect(d, e, label).didWork;

@@ -1,4 +1,4 @@
-import { BALANCE_ERAS, type BalanceEra } from '@/analytics/balanceEras';
+import { BALANCE_ERAS, getMinValidVersion, nextPatchVersion, type BalanceEra } from '@/analytics/balanceEras';
 import {
   analyzeFights,
   generateSimulatedCohort,
@@ -13,6 +13,9 @@ import {
   filterFightEvents,
 } from '@/analytics/posthogRules';
 
+const CURRENT_ADV_MIN = getMinValidVersion('all', undefined, 'adventure');
+const NEXT_PATCH_VER = nextPatchVersion(CURRENT_ADV_MIN);
+
 const makeEvent = (overrides: Record<string, unknown> = {}, topOverrides: Record<string, unknown> = {}) => ({
   event: 'fight_ended',
   distinct_id: 'player-1',
@@ -20,7 +23,7 @@ const makeEvent = (overrides: Record<string, unknown> = {}, topOverrides: Record
   ...topOverrides,
   properties: {
     fight_id: `fight-${Math.random().toString(36).slice(2)}`,
-    app_version: '0.1.164',
+    app_version: CURRENT_ADV_MIN,
     env: 'prod',
     mode: 'adventure',
     level_id: '2-3',
@@ -119,15 +122,15 @@ describe('posthogRules filtering, hygiene & audit ledger', () => {
     expect(audit.droppedByBug).toBe(1);
     expect(audit.droppedByShort).toBe(2);
     expect(audit.droppedByCoached).toBe(2);
-    expect(audit.activeMinVersion).toBe('0.1.164');
+    expect(audit.activeMinVersion).toBe(CURRENT_ADV_MIN);
   });
 
   it('applies per-item minValidVersion so only updated items discard pre-patch data', () => {
     const customEras: BalanceEra[] = [
       ...BALANCE_ERAS,
       {
-        id: 'E9',
-        minVersion: '0.1.165',
+        id: `E${BALANCE_ERAS.length}`,
+        minVersion: NEXT_PATCH_VER,
         date: '2026-11-22',
         commit: 'abc1234',
         summary: 'Tweak chrono-shard only',
@@ -138,24 +141,24 @@ describe('posthogRules filtering, hygiene & audit ledger', () => {
 
     const events: Record<string, unknown>[] = [];
     for (let i = 0; i < 6; i++) {
-      // Old 0.1.164 fights: valid for blast-powder, INVALID for chrono-shard
+      // Pre-patch fights: valid for blast-powder, INVALID for chrono-shard
       events.push(
         makeEvent(
           {
-            fight_id: `v164-${i}`,
-            app_version: '0.1.164',
+            fight_id: `vpre-${i}`,
+            app_version: CURRENT_ADV_MIN,
             weapons: ['blast-powder', 'chrono-shard'],
             outcome: 'lost',
           },
           { distinct_id: `p-${i}` }
         )
       );
-      // New 0.1.165 fights: valid for BOTH
+      // Post-patch fights: valid for BOTH
       events.push(
         makeEvent(
           {
-            fight_id: `v165-${i}`,
-            app_version: '0.1.165',
+            fight_id: `vpost-${i}`,
+            app_version: NEXT_PATCH_VER,
             weapons: ['blast-powder', 'chrono-shard'],
             outcome: 'won',
           },
@@ -171,9 +174,9 @@ describe('posthogRules filtering, hygiene & audit ledger', () => {
       usePerItemMinVersion: true,
     });
 
-    expect(signals.weapons['blast-powder'].validSince).toBe('0.1.164');
+    expect(signals.weapons['blast-powder'].validSince).toBe(CURRENT_ADV_MIN);
     expect(signals.weapons['blast-powder'].fights).toBe(12);
-    expect(signals.weapons['chrono-shard'].validSince).toBe('0.1.165');
+    expect(signals.weapons['chrono-shard'].validSince).toBe(NEXT_PATCH_VER);
     expect(signals.weapons['chrono-shard'].fights).toBe(6);
     expect(signals.weapons['chrono-shard'].winRate).toBe(1);
   });
@@ -328,12 +331,12 @@ describe('posthogRules filtering, hygiene & audit ledger', () => {
     expect(e5Sig.audit.kept).toBe(10);
     expect(e5Sig.weapons['blast-powder']?.fights).toBe(10);
 
-    // Granular item patch E9 at 0.1.165: stale 0.1.164 chrono-shard fights must NOT contaminate Ridge
+    // Granular item patch at NEXT_PATCH_VER: stale pre-patch chrono-shard fights must NOT contaminate Ridge
     const customEras: BalanceEra[] = [
       ...BALANCE_ERAS,
       {
-        id: 'E9',
-        minVersion: '0.1.165',
+        id: `E${BALANCE_ERAS.length}`,
+        minVersion: NEXT_PATCH_VER,
         date: '2026-11-22',
         commit: 'testridge',
         summary: 'Huge buff to chrono-shard',
@@ -342,14 +345,14 @@ describe('posthogRules filtering, hygiene & audit ledger', () => {
       },
     ];
     const mixed: Record<string, unknown>[] = [];
-    // 60 stale 0.1.164 fights where chrono-shard loses 100%, blast-powder wins 50%
+    // 60 stale pre-patch fights where chrono-shard loses 100%, blast-powder wins 50%
     for (let i = 0; i < 60; i++) {
       const hasChrono = i < 30;
       mixed.push(
         makeEvent(
           {
             fight_id: `pre-${i}`,
-            app_version: '0.1.164',
+            app_version: CURRENT_ADV_MIN,
             weapons: hasChrono ? ['chrono-shard', 'blast-powder'] : ['blast-powder', 'flint-spark'],
             outcome: hasChrono ? 'lost' : 'won',
             dpm: hasChrono ? 60 : 180,
@@ -358,14 +361,14 @@ describe('posthogRules filtering, hygiene & audit ledger', () => {
         )
       );
     }
-    // 40 post-buff 0.1.165 fights where chrono-shard wins 100%
+    // 40 post-buff fights where chrono-shard wins 100%
     for (let i = 0; i < 40; i++) {
       const hasChrono = i < 20;
       mixed.push(
         makeEvent(
           {
             fight_id: `post-${i}`,
-            app_version: '0.1.165',
+            app_version: NEXT_PATCH_VER,
             weapons: hasChrono ? ['chrono-shard', 'blast-powder'] : ['blast-powder', 'flint-spark'],
             outcome: hasChrono ? 'won' : 'lost',
             dpm: hasChrono ? 240 : 100,
@@ -428,14 +431,14 @@ describe('dashboardEngine parser & filter upgrades', () => {
 
   it('produces valid current-era prod rows in generateSimulatedCohort and audits filters accurately', () => {
     const simRows = generateSimulatedCohort(20261115, 30);
-    expect(simRows.every(r => r.appVersion === '0.1.164' && r.env === 'prod')).toBe(true);
+    expect(simRows.every(r => r.appVersion === CURRENT_ADV_MIN && r.env === 'prod')).toBe(true);
 
     const reportClean = analyzeFights(simRows, {
       eraScope: 'current',
       modeFilter: 'adventure',
       hygiene: 'prod_clean',
     });
-    expect(reportClean.filterAudit.activeMinVersion).toBe('0.1.164');
+    expect(reportClean.filterAudit.activeMinVersion).toBe(CURRENT_ADV_MIN);
     expect(reportClean.filterAudit.droppedByVersion).toBe(0);
     expect(reportClean.filterAudit.droppedByCoached).toBeGreaterThan(0); // level 1-1 excluded
     expect(reportClean.totalFights).toBe(reportClean.filterAudit.keptCount);

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "currentEraId": "E8",
-  "currentAppVersion": "0.1.164",
+  "currentEraId": "E9",
+  "currentAppVersion": "0.1.166",
   "eras": [
     {
       "id": "E0",
@@ -198,13 +198,35 @@
           "tempo_surge"
         ]
       }
+    },
+    {
+      "id": "E9",
+      "minVersion": "0.1.166",
+      "date": "2026-11-21",
+      "commit": "d3a12e6",
+      "summary": "Fold synchronous Set-triggered damage rules (Rally Horn, Catalyst Prism, War Drum, Clarity Lens, etc.) into BASE before multipliers",
+      "scope": "global",
+      "invalidated": {
+        "global": true,
+        "modes": [
+          "adventure",
+          "spire"
+        ],
+        "categories": [
+          "weapons",
+          "evolutions",
+          "fighters",
+          "arcana",
+          "levels"
+        ]
+      }
     }
   ],
   "fingerprints": {
     "engineFiles": {
       "virtual:globalConstants": "07dcc9da02840bc0",
-      "src/adventure/engine/run.ts": "fecf837b1a741896",
-      "src/adventure/engine/fight.ts": "21441c4397b73193",
+      "src/adventure/engine/run.ts": "b50a4cc4b544fda9",
+      "src/adventure/engine/fight.ts": "debc839983058840",
       "src/adventure/engine/gear.ts": "f3f4ed814e83d33c",
       "src/adventure/engine/evolutions.ts": "a722282d82a10187",
       "src/adventure/engine/growth.ts": "d2fadd34a7d9254f",
@@ -215,7 +237,7 @@
       "src/adventure/engine/sources.ts": "17a20585d6e83715",
       "src/adventure/engine/dealer.ts": "6d9cc81e10190b79",
       "src/adventure/engine/surge.ts": "6b07e3bceead3b98",
-      "src/adventure/rules/engine.ts": "3491438124068a27",
+      "src/adventure/rules/engine.ts": "bb490432d28a1b19",
       "src/adventure/loadout.ts": "ce60b457753b54f7",
       "src/adventure/weaponLevels.ts": "e1d31f25004ae73a",
       "src/adventure/data/rules.ts": "7ad03548fde313b4",

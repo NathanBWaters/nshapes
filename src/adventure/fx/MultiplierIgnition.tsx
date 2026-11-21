@@ -2,8 +2,8 @@
  * Live Balatro-Style Score Equation Bar (`MultiplierIgnition`).
  *
  * Docked permanently in the HUD (never covering the card board, zero reflow):
- *   [ NEXT / LIVE / LAST ]  [ BASE  14.3 ]  ×  [ MULT  2× ]  (+11)  =  [  40  ]  ?
- *   Cards 9 · +2.3 Blast · +3 Heavy Hitter · ×2 Rainbow · +11 Rally Horn
+ *   [ NEXT / LIVE / LAST ]  [ BASE  19.3 ]  ×  [ MULT  2× ]  =  [  39  ]  ?
+ *   Cards 9 · +2.3 Blast · +3 Heavy Hitter · +5 Rally Horn · ×2 Rainbow
  *
  * - Before the first Set: displays your live primed NEXT SET equation so anyone
  *   joining a Twitch stream understands the build's engine immediately.
@@ -35,8 +35,9 @@ import { PARRY_RULES } from '../data/parry';
 import { SURGE_RULES } from '../data/rules';
 import { growthModifiers } from '../data/weaponGrowth';
 import { damageMultiplier } from '../data/weaponPower';
-import { EVOLUTION_RULES, getRecipe, liveSources } from '../engine/sources';
+import { EVOLUTION_RULES, getRecipe, getSkillNode, liveRules, liveSources } from '../engine/sources';
 import { PASSIVE_TUNING } from '../data/passives';
+import type { Condition, Scale, Trigger } from '../rules/types';
 import type { RunState, SetIgnition } from '../types';
 import { INK } from '../components/ui';
 
@@ -351,6 +352,69 @@ export const buildBalatroBreakdown = (ignition: SetIgnition): BalatroBreakdown =
   };
 };
 
+const ordinal = (n: number): string => {
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1: return `${n}st`;
+    case 2: return `${n}nd`;
+    case 3: return `${n}rd`;
+    default: return `${n}th`;
+  }
+};
+
+const scaleCountForState = (run: RunState, per: Scale): number => {
+  switch (per) {
+    case 'boardCard': return run.board.length;
+    case 'missingHeart': return run.hearts !== null && run.maxHearts !== null ? Math.max(0, run.maxHearts - run.hearts) : 0;
+    case 'heart': return run.hearts ?? 0;
+    case 'hint': return run.stats.hints;
+    case 'grace': return run.stats.graces;
+    case 'link': return run.connections.length;
+    case 'combo': return run.combo;
+    case 'bonusCard': return run.board.filter(c => (c.bonusPoints ?? 0) > 0 || (c.bonusMoney ?? 0) > 0).length;
+    case 'burning': return run.board.filter(c => c.onFire).length;
+    case 'evolution': return run.activeEvolutions.length;
+  }
+};
+
+const primedConditionsHold = (run: RunState, when: Condition[] | undefined): boolean => {
+  if (!when?.length) return true;
+  return when.every(c => {
+    switch (c.kind) {
+      case 'heartsAtMost': return run.hearts !== null && run.hearts <= c.n;
+      case 'heartsFull': return run.hearts !== null && run.maxHearts !== null && run.hearts >= run.maxHearts;
+      case 'comboAtLeast': return run.combo >= c.n;
+      case 'noMistakesThisFight': return run.mistakes === 0;
+      case 'evolutionActive': return run.activeEvolutions.length > 0;
+      case 'boardAtLeast': return run.board.length >= c.n;
+      case 'foeHpBelow': return run.foeMaxHp > 0 && run.foeHp > 0 && run.foeHp / run.foeMaxHp < c.fraction;
+      // Chance, Rainbow, Hinted, diffCount, and timing depend on the exact Set played — don't promise them in NEXT
+      default: return false;
+    }
+  });
+};
+
+const primedTriggerNote = (run: RunState, key: string, t: Trigger): string | null => {
+  if (t.on === 'firstSetOfWave') return run.setsThisWave === 0 ? 'Wave opener primed' : null;
+  if (t.on === 'everyNthSet') return t.n > 0 && (run.matches + 1) % t.n === 0 ? `Set #${run.matches + 1} (every ${ordinal(t.n)} Set) primed` : null;
+  if (t.on === 'setsWithin') {
+    const times = (run.ruleState[key]?.times ?? []).filter(x => run.elapsedMs - x <= t.withinMs);
+    return times.length >= t.count - 1 ? `${t.count} fast Sets primed` : null;
+  }
+  if (t.on === 'set') return 'Triggers on next Set';
+  return null;
+};
+
+const primedRuleLabel = (run: RunState, key: string, callout?: string): string => {
+  const base = key.split('#')[0];
+  if (base.startsWith('node:')) return getSkillNode(base.slice(5))?.name ?? callout?.replace(/!$/, '') ?? 'Skill';
+  if (base.startsWith('evo:')) return getRecipe(base.slice(4))?.name ?? callout?.replace(/!$/, '') ?? 'Evolution';
+  const slot = /^w(\d+):(.*)$/.exec(base);
+  if (slot) return run.weapons[Number(slot[1])]?.name ?? slot[2];
+  return callout?.replace(/!$/, '') ?? 'Bonus';
+};
+
 /**
  * Pure primed Next-Set preview: tells players & Twitch viewers what a plain
  * 3-card Set is primed to hit for RIGHT NOW before they tap anything.
@@ -371,12 +435,14 @@ export const computePrimedEquation = (run: RunState): PrimedEquation => {
     items.push({ label: 'Heavy Hitter', value: `+${fmt(run.bonusDamagePerMatch)}`, kind: 'base', note: 'Workshop upgrade' });
   }
 
-  const sources = liveSources({
+  const sourceInput = {
     skillNodes: run.skillNodes,
     weapons: run.weapons,
     activeEvolutions: run.activeEvolutions,
     growth: growthModifiers(run.growth ?? {}),
-  });
+    blankEvolutionRules: run.blankEvolutionRules,
+  };
+  const sources = liveSources(sourceInput);
   let gearFlat = 0;
   let hintFlat = 0;
   for (const { source } of sources) {
@@ -423,6 +489,31 @@ export const computePrimedEquation = (run: RunState): PrimedEquation => {
     base += evoFlat;
     const names = run.activeEvolutions.map(e => getRecipe(e.id)?.name ?? 'Evolution').join(', ');
     items.push({ label: names, value: `+${fmt(evoFlat)}`, kind: 'base', note: 'Active Evolution bonus' });
+  }
+
+  // Primed deterministic Set-triggered flat damage rules (Rally Horn, Clarity Lens, Revenge Linker, War Drum, etc.)
+  for (const kr of liveRules(sourceInput)) {
+    const note = primedTriggerNote(run, kr.key, kr.rule.trigger);
+    if (!note || !primedConditionsHold(run, kr.rule.when)) continue;
+    let ruleFlat = 0;
+    for (const e of kr.rule.effects) {
+      if (e.do === 'damage' && e.amount > 0) {
+        const times = e.per ? scaleCountForState(run, e.per) : 1;
+        if (times > 0) ruleFlat += e.amount * times;
+      } else if (e.do === 'cashIn') {
+        const held = e.resource === 'hints' ? run.stats.hints : run.stats.graces;
+        if (held > 0) ruleFlat += held * e.damageEach;
+      }
+    }
+    if (ruleFlat > 0) {
+      base += ruleFlat;
+      items.push({
+        label: primedRuleLabel(run, kr.key, kr.rule.callout),
+        value: `+${fmt(ruleFlat)}`,
+        kind: 'base',
+        note,
+      });
+    }
   }
   base = Math.max(0, Math.round(base * 10) / 10);
 

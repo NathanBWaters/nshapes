@@ -464,11 +464,16 @@ const attributeEntry = (
   const triggered = Math.max(0, e.damage - e.setDamage);
   if (triggered > 0.05) {
     const trigPart: Record<string, number> = {};
+    const hasSetMath = e.kind === 'set' && Boolean(e.set);
     for (const l of e.lines) {
       const amt = l.amount ?? 0;
       if (amt <= 0 || !Number.isFinite(amt)) continue;
       // Skip the Set's own lead hit line (already accounted for in e.setDamage)
       if ((l.type === 'hit' && !l.text) || l.type === 'rainbow' || l.type === 'surge_hit') continue;
+      // On Set entries with itemized Set math, Set-math callout lines (`rule` + passive/trap tags) are already in `e.setDamage`
+      if (hasSetMath && (l.type === 'rule' || l.type === 'hot_streak_hit' || l.type === 'grudge_release' || l.type === 'patience' || l.type === 'trap_defused')) {
+        continue;
+      }
       const isDmg = DAMAGE_LINE_TYPES.has(l.type) || (l.type === 'rule' && !isMultRuleLine(l)) || l.type === 'fire';
       if (!isDmg) continue;
       const meta = resolveDamageSourceMeta({ sourceRef: l.sourceRef, label: l.source ?? l.text, line: l, held });

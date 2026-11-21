@@ -67,6 +67,43 @@ export interface FightHooks {
   autoSet(d: Draft, source?: 'scoop'): void;
 }
 
+/**
+ * Active primary-Set damage fold during a synchronous `MATCH` turn.
+ * Synchronous Set-triggered flat damage rules (Rally Horn, Catalyst Prism, War Drum,
+ * Clarity Lens, Revenge Linker, Amplifier Coil, Coin Charm, Mystic Crystal, Life Link,
+ * Set/Rainbow/Nth/Trick evolutions & skill nodes) fold their pre-multiplier base damage
+ * straight into `BASE` (`_logSet.flatItems`) so `SUM(additions) × PRODUCT(multipliers) = TOTAL`
+ * holds exactly in both combat math and HUD.
+ */
+export interface SetDamageFold {
+  /** Exact `SetContext` object of the primary player Set (isolates nested `autoSet`s) */
+  setCtx: SetContext;
+  /** Current pre-multiplier flat base total (cards + collateral + flatItems) */
+  baseFlat: number;
+  /** Full Set multiplier (including enemy multiplier) */
+  totalMult: number;
+  /** Locked fight Power multiplier for this Set strike */
+  powerMult: number;
+  /** Total unified damage applied to foeHp / totalDamage so far for this Set */
+  dealtSoFar: number;
+  /** Foe HP right before the primary Set hit (for exact overkill calculation) */
+  hpBeforeSet: number;
+  /** Overkill already credited on this Set strike */
+  overkillCredited: number;
+  /** True while inside a nested `autoSet` so Free Sets remain separate follow-up hits */
+  inAutoSet: boolean;
+  /** Event sequence ID of the primary Set hit/rainbow/surge_hit event */
+  primaryEventId: number;
+  /** Index in `d._lines` of the primary Set hit/rainbow/surge_hit line */
+  primaryLineIdx: number;
+}
+
+export interface FoldedRuleItem {
+  label: string;
+  note?: string;
+  sourceRef?: string;
+}
+
 export interface Draft extends RunState {
   _rng: Rng;
   _queue: { ev: FightEvent; chain: readonly string[]; setCtx: SetContext | null }[];
@@ -81,6 +118,8 @@ export interface Draft extends RunState {
   _setCtx: SetContext | null;
   /** Non-foe multiplier of the triggering Set during its synchronous drain() (1 outside a Set) */
   _setMultiplier: number;
+  /** Primary Set fold accumulator during a synchronous MATCH drain() (null outside a Set) */
+  _setFold: SetDamageFold | null;
   _hooks: FightHooks;
   /** This action is the fight clock ticking: what it emits is marked `clock` (see RunEvent) */
   _clock: boolean;
@@ -146,6 +185,7 @@ export const begin = (s: RunState, hooks: FightHooks): Draft => ({
   _arcana: null,
   _setCtx: null,
   _setMultiplier: 1,
+  _setFold: null,
   _hooks: hooks,
   _clock: false,
   _lines: [],
@@ -153,7 +193,7 @@ export const begin = (s: RunState, hooks: FightHooks): Draft => ({
 });
 
 export const finish = (d: Draft, prev?: RunState): RunState => {
-  const { _rng, _queue, _chain, _firings, _overheals, _mods, _rules, _arcana, _setCtx, _setMultiplier, _hooks, _clock, _lines, _logSet, _ruleFiringsCloned, _ruleZeroOpsCloned, ...rest } = d;
+  const { _rng, _queue, _chain, _firings, _overheals, _mods, _rules, _arcana, _setCtx, _setMultiplier, _setFold, _hooks, _clock, _lines, _logSet, _ruleFiringsCloned, _ruleZeroOpsCloned, ...rest } = d;
   const connections =
     prev &&
     d.connections.length === prev.connections.length &&
@@ -520,6 +560,67 @@ export const dealDamage = (d: Draft, amount: number): number => {
   d.foeHp = Math.max(0, d.foeHp - dmg);
   d.totalDamage += dmg;
   return dmg;
+};
+
+/**
+ * Fold a synchronous Set-triggered flat damage bonus (`rawBase` BEFORE multipliers)
+ * directly into the active primary Set's `BASE` bucket, applying only the exact
+ * incremental damage delta so `Math.round(newBaseFlat * totalMult * powerMult)` is exact.
+ */
+export const foldSetRuleDamage = (d: Draft, rawBase: number, item: FoldedRuleItem): number => {
+  const fold = d._setFold;
+  if (!fold || rawBase <= 0) return 0;
+  const nextBaseFlat = fold.baseFlat + rawBase;
+  const nextTotal = Math.max(0, Math.round(nextBaseFlat * fold.totalMult * fold.powerMult));
+  const delta = Math.max(0, nextTotal - fold.dealtSoFar);
+
+  fold.baseFlat = nextBaseFlat;
+  fold.dealtSoFar = nextTotal;
+
+  if (delta > 0) {
+    if (d.level.rules.sandbox) {
+      d.totalDamage += delta;
+    } else {
+      d.foeHp = Math.max(0, d.foeHp - delta);
+      d.totalDamage += delta;
+      if (fold.hpBeforeSet > 0 && nextTotal > fold.hpBeforeSet) {
+        const totalOverkill = nextTotal - fold.hpBeforeSet;
+        const extraOverkill = totalOverkill - fold.overkillCredited;
+        if (extraOverkill > 0) {
+          fold.overkillCredited = totalOverkill;
+          d.overkillDamage = Math.max(d.overkillDamage, totalOverkill);
+          const coinsPerDamage = arcana(d).overkillCoinsPerDamage;
+          if (coinsPerDamage !== undefined) {
+            addCoins(d, extraOverkill * coinsPerDamage);
+            emit(d, 'overkill', extraOverkill);
+          }
+        }
+      }
+    }
+  }
+
+  // Update the primary Set hit event & fight-log line so FX & log reflect the unified Set strike
+  const primaryEv = d.events.find(e => e.id === fold.primaryEventId);
+  if (primaryEv) primaryEv.amount = nextTotal;
+  const primaryLine = d._lines[fold.primaryLineIdx];
+  if (primaryLine) primaryLine.amount = nextTotal;
+
+  // Itemize into `_logSet` so MultiplierIgnition, HudInspector, FightReplay, DamageStory, and GearBelt show it in BASE
+  if (d._logSet) {
+    const flatItems = d._logSet.flatItems ? [...d._logSet.flatItems] : [];
+    const rounded = Math.round(rawBase * 10) / 10;
+    flatItems.push({
+      label: item.label,
+      amount: rounded,
+      ...(item.note ? { note: item.note } : {}),
+      ...(item.sourceRef ? { sourceRef: item.sourceRef } : {}),
+    });
+    d._logSet.flatItems = flatItems;
+    d._logSet.flatBonus = Math.round((d._logSet.flatBonus + rawBase) * 10) / 10;
+    d._logSet.hit = nextTotal;
+  }
+
+  return delta;
 };
 
 export const addCoins = (d: Draft, base: number) => {

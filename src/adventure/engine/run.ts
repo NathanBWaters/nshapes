@@ -325,16 +325,11 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   const matchedIds = new Set(matched.map(c => c.id));
   const prevCtx = d._setCtx;
   const prevSetMult = d._setMultiplier;
+  const prevInAutoSet = d._setFold?.inAutoSet ?? false;
+  if (opts.auto && d._setFold) d._setFold.inAutoSet = true;
   const graceUsed = rewards.some(r => r.effectType === 'grace');
   if (!opts.auto) d.hintUsedThisSet = false;
   d.replacing = [...new Set([...d.replacing, ...cards.map(c => c.id)])];
-
-  const traps = resolveTrapsOnSet(d, matched);
-
-  // Enemy reaction first (time theft, extra removals, flips)
-  const enemyResult = d.foe.onValidMatch(matched, d.board);
-  const statMods = d.foe.getStatModifiers();
-  emitEnemyEvents(d, enemyResult.events);
 
   const simplifiedAttrs = d.simplified
     ? [d.simplified.attribute, ...(d.simplified.also ? [d.simplified.also.attribute] : [])]
@@ -346,6 +341,14 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   const sinceLastMs = d.elapsedMs - d.lastMatchAtMs;
   const hinted = !opts.auto && isHintedSet(d, opts.hinted);
   d._setCtx = { diffCount, rainbow, sinceLastMs, firstOfWave: d.setsThisWave === 0, matchNo: d.matches + 1, hinted };
+
+  const traps = resolveTrapsOnSet(d, matched);
+
+  // Enemy reaction first (time theft, extra removals, flips)
+  const enemyResult = d.foe.onValidMatch(matched, d.board);
+  const statMods = d.foe.getStatModifiers();
+  emitEnemyEvents(d, enemyResult.events);
+
   const purity = advancePurity(d, diffCount, graceUsed);
 
   // Unified Balatro-style damage pipeline: SUM(all additions) × PRODUCT(all multipliers)
@@ -644,8 +647,11 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   d._setMultiplier = enemyMult !== 0 ? totalMult / enemyMult : totalMult;
   const dmg = flat * totalMult;
   const powerMult = damageMultiplier(d.power ?? 0);
+  const hpBeforeSet = d.foeHp;
   const hit = dealDamage(d, dmg);
   emit(d, surgeMult > 1 ? 'surge_hit' : rainbowBoosted ? 'rainbow' : 'hit', hit, undefined, { slots: gearSet.slots });
+  const primaryEventId = d.eventSeq;
+  const primaryLineIdx = d._lines.length - 1;
   if (surgeMult > 1 && d.surge) d.surge = { ...d.surge, sets: d.surge.sets + 1 };
   if (!opts.auto) emitBoardWeapons(d, rewards, fx);
   if (opts.auto) {
@@ -697,6 +703,18 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
       lethal: d.foeHp <= 0,
       isBossOrElite: !!(d.level.isBoss || d.level.isElite || d.level.branchOf),
       foeName: d.foeName,
+    };
+    d._setFold = {
+      setCtx: d._setCtx,
+      baseFlat: flat,
+      totalMult,
+      powerMult,
+      dealtSoFar: hit,
+      hpBeforeSet,
+      overkillCredited: hpBeforeSet > 0 && hit > hpBeforeSet ? hit - hpBeforeSet : 0,
+      inAutoSet: false,
+      primaryEventId,
+      primaryLineIdx,
     };
   }
   if (hotStreak > 1) emit(d, 'hot_streak_hit', hotStreak);
@@ -856,7 +874,10 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
 
   afterSetPassives(d, matched, rainbow, !!opts.auto);
   d._setCtx = prevCtx;
-  if (opts.auto) d._setMultiplier = prevSetMult;
+  if (opts.auto) {
+    d._setMultiplier = prevSetMult;
+    if (d._setFold) d._setFold.inAutoSet = prevInAutoSet;
+  }
 };
 
 /**
@@ -1304,7 +1325,8 @@ const finalizeTurnIgnition = (d: Draft, beforeDamage: number) => {
   }
 
   // 2. Post-Set rule/weapon lines emitted during the same `MATCH` turn
-  const FOLLOW_UP_DMG = new Set<RunEventType>(['hit', 'blast', 'laser', 'ricochet', 'hot_streak_hit', 'grudge_release', 'pinata_break']);
+  // (`hot_streak_hit` and `grudge_release` are already inside `math.multItems` / `math.flatItems`)
+  const FOLLOW_UP_DMG = new Set<RunEventType>(['hit', 'blast', 'laser', 'ricochet', 'pinata_break']);
   let skippedPrimarySetHit = false;
   for (const line of d._lines) {
     const isPrimary = !skippedPrimarySetHit && (line.type === 'hit' && !line.text || line.type === 'rainbow' || line.type === 'surge_hit');
@@ -1317,7 +1339,7 @@ const finalizeTurnIgnition = (d: Draft, beforeDamage: number) => {
     const amt = line.amount ?? 0;
 
     if (FOLLOW_UP_DMG.has(line.type) && amt > 0) {
-      const label = src.label ?? line.text ?? (line.type === 'pinata_break' ? 'Piñata' : line.type === 'hot_streak_hit' ? 'Hot Streak' : 'Bonus hit');
+      const label = src.label ?? line.text ?? (line.type === 'pinata_break' ? 'Piñata' : 'Bonus hit');
       followUps.push({ label, amount: Math.round(amt * 10) / 10, ...(src.sourceRef ? { sourceRef: src.sourceRef } : owner ? { sourceRef: `weapon:${owner}` } : {}) });
       if (owner) dmgByWeapon.set(owner, (dmgByWeapon.get(owner) ?? 0) + amt);
       continue;
@@ -1379,6 +1401,7 @@ const reduceRun = (state: RunState, action: RunAction): RunState => {
       applyMatch(d, action.cards, action.rewards, action.effects, { hinted: action.hinted });
       drain(d);
       d._setMultiplier = 1;
+      d._setFold = null;
       finalizeTurnIgnition(d, before);
       d.biggestHit = Math.max(d.biggestHit, d.totalDamage - before);
       break;

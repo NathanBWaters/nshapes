@@ -44,7 +44,10 @@ describe('balanceEras manifest & semver helpers', () => {
 
   it('resolves historical eras and hierarchical global/mode/category/item validity floors', () => {
     expect(BALANCE_ERAS.length).toBeGreaterThanOrEqual(9);
-    expect(CURRENT_BALANCE_ERA_ID).toBe('E8');
+    const currentEra = BALANCE_ERAS[BALANCE_ERAS.length - 1];
+    const currentMin = currentEra.minVersion;
+    const nextMin = nextPatchVersion(currentMin);
+    expect(CURRENT_BALANCE_ERA_ID).toBe(currentEra.id);
 
     expect(getEraForVersion('0.1.118')).toBeNull();
     expect(getEraForVersion('0.1.119')?.id).toBe('E0');
@@ -52,13 +55,20 @@ describe('balanceEras manifest & semver helpers', () => {
     expect(getEraForVersion('0.1.158')?.id).toBe('E6');
     expect(getEraForVersion('0.1.160')?.id).toBe('E7');
     expect(getEraForVersion('0.1.164')?.id).toBe('E8');
-    expect(getEraForVersion('0.1.199')?.id).toBe('E8');
+    expect(getEraForVersion(currentMin)?.id).toBe(currentEra.id);
+    expect(getEraForVersion('0.1.999')?.id).toBe(currentEra.id);
 
-    // Current E8 is a global hard reset at 0.1.164
-    expect(getMinValidVersion('all', undefined, 'adventure')).toBe('0.1.164');
-    expect(getMinValidVersion('all', undefined, 'spire')).toBe('0.1.164');
-    expect(getMinValidVersion('weapons', 'blast-powder', 'adventure')).toBe('0.1.164');
-    expect(getMinValidVersion('evolutions', 'stockpile', 'adventure')).toBe('0.1.164');
+    // Current era global floor (or active mode/category floor) matches manifest minVersion
+    const expectedAdvFloor = getMinValidVersion('all', undefined, 'adventure', BALANCE_ERAS);
+    expect(expectedAdvFloor).toBe(getMinValidVersion('all', undefined, 'adventure'));
+    expect(isVersionAtLeast(currentMin, expectedAdvFloor)).toBe(true);
+    expect(getMinValidVersion('weapons', 'blast-powder', 'adventure')).toBe(expectedAdvFloor);
+    expect(getMinValidVersion('evolutions', 'stockpile', 'adventure')).toBe(expectedAdvFloor);
+
+    // Historical E8 was a global hard reset at 0.1.164
+    const erasThroughE8 = BALANCE_ERAS.slice(0, 9); // E0..E8
+    expect(getMinValidVersion('all', undefined, 'adventure', erasThroughE8)).toBe('0.1.164');
+    expect(getMinValidVersion('all', undefined, 'spire', erasThroughE8)).toBe('0.1.164');
 
     // Mode-scoped era (E6 Spire) does not cross-invalidate Adventure when evaluated up to E6
     const erasThroughE6 = BALANCE_ERAS.slice(0, 7); // E0..E6
@@ -71,12 +81,12 @@ describe('balanceEras manifest & semver helpers', () => {
     expect(getMinValidVersion('weapons', 'blast-powder', 'adventure', erasThroughE7)).toBe('0.1.154');
     expect(getMinValidVersion('fighters', 'Corgi', 'adventure', erasThroughE7)).toBe('0.1.154');
 
-    // Granular per-item era: buffing only chrono-shard in 0.1.165 keeps blast-powder valid from 0.1.164
+    // Granular per-item era: buffing only chrono-shard in next patch keeps blast-powder valid from current floor
     const withGranularPatch: BalanceEra[] = [
       ...BALANCE_ERAS,
       {
-        id: 'E9',
-        minVersion: '0.1.165',
+        id: `E${BALANCE_ERAS.length}`,
+        minVersion: nextMin,
         date: '2026-11-22',
         commit: 'testsha',
         summary: 'Buff chrono-shard only',
@@ -84,9 +94,9 @@ describe('balanceEras manifest & semver helpers', () => {
         invalidated: { weapons: ['chrono-shard'] },
       },
     ];
-    expect(getMinValidVersion('weapons', 'chrono-shard', 'adventure', withGranularPatch)).toBe('0.1.165');
-    expect(getMinValidVersion('weapons', 'blast-powder', 'adventure', withGranularPatch)).toBe('0.1.164');
-    expect(getMinValidVersion('fighters', 'Corgi', 'adventure', withGranularPatch)).toBe('0.1.164');
+    expect(getMinValidVersion('weapons', 'chrono-shard', 'adventure', withGranularPatch)).toBe(nextMin);
+    expect(getMinValidVersion('weapons', 'blast-powder', 'adventure', withGranularPatch)).toBe(expectedAdvFloor);
+    expect(getMinValidVersion('fighters', 'Corgi', 'adventure', withGranularPatch)).toBe(expectedAdvFloor);
   });
 
   it('infers global, mode, category, and item invalidation scopes accurately from fingerprint diffs', () => {

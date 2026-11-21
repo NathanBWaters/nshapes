@@ -44,15 +44,25 @@ describe('fight log', () => {
     expect(entrySummary(e)).toBe('lost 1 heart');
   });
 
-  it('names the weapon behind triggered damage', () => {
+  it('folds direct Set-triggered damage into Set math and names the weapon behind chained triggered damage', () => {
     let s = withWeapons(startFight(), relic([{ trigger: { on: 'set' }, effects: [{ do: 'damage', amount: 5 }], callout: 'Zap!' }]));
     s = playSet(s);
     const e = s.log[s.log.length - 1];
-    expect(e.damage - e.setDamage).toBe(5);
-    const lines = describeLines(e.lines);
+    expect(e.damage).toBe(e.setDamage);
+    expect(e.set?.flatItems).toContainEqual(
+      expect.objectContaining({ label: 'Test Relic', amount: 5, sourceRef: 'weapon:test-relic' })
+    );
+    expect(describeLines(e.lines, ['test-relic'], { excludeSetMathRules: true }).filter(l => l.label === 'Zap!')).toEqual([]);
+    expect(entryTitle(e, 1)).toBe('Set #1');
+
+    // Chained / non-Set triggered damage (e.g. on mistake) still appears as a named triggered line
+    let m = withWeapons(startFight(), relic([{ trigger: { on: 'mistake' }, effects: [{ do: 'damage', amount: 5 }], callout: 'Zap!' }]));
+    m = miss(m);
+    const me = m.log[m.log.length - 1];
+    expect(me.damage - me.setDamage).toBe(5);
+    const lines = describeLines(me.lines);
     // The callout and its damage fold into one line
     expect(lines.filter(l => l.label === 'Zap!')).toEqual([{ label: 'Zap!', source: 'Test Relic', sourceRef: 'weapon:test-relic', count: 1, damage: 5 }]);
-    expect(entryTitle(e, 1)).toBe('Set #1');
   });
 
   it('folds the clock into one entry per second, and only when something happened', () => {

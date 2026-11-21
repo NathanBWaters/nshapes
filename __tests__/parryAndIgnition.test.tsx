@@ -10,8 +10,11 @@ import { getArmoryWeapon } from '@/adventure/data/armory';
 import { getLevel } from '@/adventure/data/levels';
 import { PARRY_RULES, parryCounterMeta, resolveParrySpec } from '@/adventure/data/parry';
 import { SURGE_RULES } from '@/adventure/data/rules';
+import { setPowerEnabled } from '@/adventure/data/weaponPower';
+import { buildDamageStory } from '@/adventure/engine/damageStory';
 import { boardHasCounterSet, setMatchesCounter } from '@/adventure/engine/parry';
 import { activeEnemyCounters, createRun, runReducer } from '@/adventure/engine/run';
+import { isRainbow } from '@/adventure/engine/sets';
 import { createMaxedSave, createNewSave } from '@/adventure/progress';
 import { AnchorsProvider, useAnchors } from '@/adventure/fx/anchors';
 import { counterForWeapon, GearBelt } from '@/adventure/fx/GearBelt';
@@ -19,7 +22,7 @@ import { buildBalatroBreakdown, buildIgnitionPlan, computePrimedEquation, heatTi
 import ParryPreviewCard from '@/adventure/components/ParryPreviewCard';
 import LevelPreview from '@/adventure/components/LevelPreview';
 import type { LevelDef, ParryRequirement, ParrySpec } from '@/adventure/types';
-import { eventsOf, findSet, plainRewards, tick } from './testUtils/adventureFight';
+import { eventsOf, findSet, plainRewards, playSet, relic, startFight, testLevel, tick, withWeapons } from './testUtils/adventureFight';
 
 jest.mock('@/components/Icon', () => {
   const { Text: RNText } = require('react-native');
@@ -516,5 +519,133 @@ describe('Live Multiplier Ignition & Pre-Battle Parry UI', () => {
     expect(counterForWeapon(ray, polarCounters)?.type).toBe('laser');
     expect(counterForWeapon(ray, polarCounters)?.reduction).toBe(40);
     expect(counterForWeapon(magnet, polarCounters)).toBeUndefined();
+  });
+
+  it('folds Rally Horn, Catalyst Prism, Clarity Lens, and War Drum directly into BASE before multipliers and previews primed Rally Horn in NEXT', () => {
+    setPowerEnabled(false);
+    try {
+      const dummyLevel = testLevel({ foes: [{ name: 'Dummy', hp: 500 }], rules: { timer: 120, boardSize: 12 } });
+      let run = startFight({
+        level: dummyLevel,
+        save: {
+          selectedFighter: 'Pelican',
+          armory: ['rally-horn', 'rainbow-charm', 'catalyst-prism'],
+          charms: ['rally-horn', 'rainbow-charm', 'catalyst-prism'],
+        },
+        features: ['hearts', 'gear'],
+      });
+
+      // Wave opener: NEXT primed preview includes Rally Horn (+5) right in BASE
+      const primedOpen = computePrimedEquation(run);
+      expect(primedOpen.base).toBe(8); // 3 cards + 5 Rally Horn
+      expect(primedOpen.items).toContainEqual(
+        expect.objectContaining({ label: 'Rally Horn', value: '+5', kind: 'base' })
+      );
+
+      // Force a Rainbow Set on Set #1 so BOTH Rally Horn (+5) and Catalyst Prism (+5) fold into BASE before Rainbow ×2!
+      const rainbowSet = findSet(run, cards => isRainbow(cards, run.attributes));
+      expect(rainbowSet).toBeDefined();
+      run = playSet(run, rainbowSet!);
+      const bd1 = buildBalatroBreakdown(run.lastSetIgnition!);
+      expect(bd1.finalBase).toBe(13); // 3 cards + 5 Rally Horn + 5 Catalyst Prism
+      expect(bd1.finalMult).toBe(2); // ×2 Rainbow Charm
+      expect(bd1.finalBonus).toBe(0); // ZERO post-multiplier bonus pill!
+      expect(bd1.finalTotal).toBe(26); // (3 + 5 + 5) × 2
+      expect(run.totalDamage).toBe(26);
+      expect(run.lastSetIgnition?.followUps).toBeUndefined();
+      expect(run.lastSetIgnition?.beltBadges?.['rally-horn']).toEqual({ text: '+5', kind: 'flat' });
+      expect(run.lastSetIgnition?.beltBadges?.['catalyst-prism']).toEqual({ text: '+5', kind: 'flat' });
+      expect(bd1.receiptLine).toContain('+5 Rally Horn');
+      expect(bd1.receiptLine).toContain('+5 Catalyst Prism');
+      expect(bd1.receiptLine).toContain('×2 Rainbow');
+
+      // DamageStory credits Rally Horn & Catalyst Prism cleanly with exact total sum
+      const story = buildDamageStory(run);
+      expect(story.totalDamage).toBe(26);
+      expect(story.sources.some(s => s.weaponId === 'rally-horn' && s.totalDamage > 0)).toBe(true);
+      expect(story.sources.some(s => s.weaponId === 'catalyst-prism' && s.totalDamage > 0)).toBe(true);
+
+      // Set #2 & #3: Rally Horn is NOT primed in NEXT
+      expect(computePrimedEquation(run).items.some(i => i.label === 'Rally Horn')).toBe(false);
+      run = playSet(run);
+      run = playSet(run);
+
+      // Set #4: Rally Horn (grown from +5 to +6 after Set #1!) IS primed again in NEXT
+      const primed4 = computePrimedEquation(run);
+      expect(primed4.base).toBe(9); // 3 cards + 6 grown Rally Horn
+      expect(primed4.items).toContainEqual(
+        expect.objectContaining({ label: 'Rally Horn', value: '+6', kind: 'base' })
+      );
+
+      // War Drum (3 fast Sets) on Set #3 and Clarity Lens (every 5th Set) on Set #5 both preview & fold cleanly into BASE
+      let rhythmRun = startFight({
+        level: dummyLevel,
+        save: {
+          selectedFighter: 'Pelican',
+          armory: ['clarity-lens', 'war-drum'],
+          charms: ['clarity-lens', 'war-drum'],
+        },
+        features: ['hearts', 'gear'],
+      });
+      rhythmRun = playSet(rhythmRun);
+      rhythmRun = playSet(rhythmRun);
+      // Before Set #3 (within window), War Drum (3 fast Sets) is primed in NEXT
+      const primed3 = computePrimedEquation(rhythmRun);
+      expect(primed3.items.some(i => i.label === 'War Drum')).toBe(true);
+      rhythmRun = playSet(rhythmRun);
+      const bd3 = buildBalatroBreakdown(rhythmRun.lastSetIgnition!);
+      expect(bd3.finalBonus).toBe(0);
+      expect(bd3.receiptLine).toContain('War Drum');
+      expect(bd3.finalTotal).toBe(Math.round(bd3.finalBase * bd3.finalMult));
+
+      // Advance to Set #5: Clarity Lens (every 5th Set) is primed in NEXT and folds into BASE
+      rhythmRun = playSet(rhythmRun);
+      const primed5 = computePrimedEquation(rhythmRun);
+      expect(primed5.items.some(i => i.label === 'Clarity Lens')).toBe(true);
+      rhythmRun = playSet(rhythmRun);
+      const bd5 = buildBalatroBreakdown(rhythmRun.lastSetIgnition!);
+      expect(bd5.finalBonus).toBe(0);
+      expect(bd5.receiptLine).toContain('Clarity Lens');
+      expect(bd5.finalTotal).toBe(Math.round(bd5.finalBase * bd5.finalMult));
+    } finally {
+      setPowerEnabled(true);
+    }
+  });
+
+  it('keeps nested autoSet (Free Set) separate from primary BASE and never double-counts Hot Streak or Grudge in followUps', () => {
+    setPowerEnabled(false);
+    try {
+      // Nested autoSet triggered on Set #1 must stay in followUps, NOT leak into primary BASE
+      const dummyLevel = testLevel({ foes: [{ name: 'Dummy', hp: 500 }], rules: { timer: 120, boardSize: 12 } });
+      let s = withWeapons(
+        startFight({ level: dummyLevel, save: { selectedFighter: 'Pelican' }, features: ['hearts', 'gear'] }),
+        relic([
+          { trigger: { on: 'firstSetOfWave' }, effects: [{ do: 'autoSet' }, { do: 'damage', amount: 5 }], callout: 'Rally!' },
+          { trigger: { on: 'everyNthSet', n: 2 }, effects: [{ do: 'damage', amount: 7 }], callout: 'Second!' },
+        ])
+      );
+      s = playSet(s);
+      const bd = buildBalatroBreakdown(s.lastSetIgnition!);
+      // Primary Set #1 gets 3 cards + 5 Rally! = 8 BASE; the Free Set (match #2: 3 cards + 7 Second!) stays in followUps!
+      expect(bd.finalBase).toBe(8);
+      expect(bd.finalBonus).toBe(10); // 3 Free Set + 7 Second!
+      expect(bd.finalTotal).toBe(18);
+      expect(s.totalDamage).toBe(18);
+
+      // Sly Fox Hot Streak ×2 must NEVER create a bogus "+2" orange bonus pill
+      let fox = startFight({
+        level: dummyLevel,
+        save: { selectedFighter: 'Sly Fox' },
+        features: ['hearts', 'gear'],
+      });
+      fox = { ...fox, passive: { ...fox.passive, hotStreak: true } };
+      fox = playSet(fox);
+      const foxBd = buildBalatroBreakdown(fox.lastSetIgnition!);
+      expect(foxBd.finalBonus).toBe(0);
+      expect(fox.lastSetIgnition?.followUps).toBeUndefined();
+      expect(foxBd.finalTotal).toBe(Math.round(foxBd.finalBase * foxBd.finalMult));
+    } finally {
+      setPowerEnabled(true);
+    }
   });
 });
