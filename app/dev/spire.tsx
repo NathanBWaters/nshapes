@@ -4,7 +4,8 @@ import { useLocalSearchParams, router } from 'expo-router';
 import type { CharacterName } from '@/types';
 import { FIGHTERS } from '@/adventure/data/fighters';
 import SpireMode from '@/spire/components/SpireMode';
-import { createSpireRun, selectSpireNode } from '@/spire/engine/runState';
+import { SPIRE_WEAPON_POOL } from '@/spire/data/encounters';
+import { createSpireRun, MAX_SUMMIT_WEAPONS, selectSpireNode } from '@/spire/engine/runState';
 import type { SpireNodeKind, SpireRun } from '@/spire/types';
 
 /**
@@ -13,6 +14,7 @@ import type { SpireNodeKind, SpireRun } from '@/spire/types';
  * URL params:
  * - ?start=true       — jump straight onto the Act 1 map with a fresh run
  * - ?room=shop|campfire|event|treasure — jump directly into a specific room
+ * - ?fullBelt=true    — populate all 6 weapon slots to test 6/6 swap UX
  * - ?fighter=Sly+Fox  — fighter name (default Orange Tabby)
  * - ?ascension=0..20  — ascension tier (default 0)
  * - ?seed=12345       — deterministic seed
@@ -22,6 +24,7 @@ export default function DevSpire() {
   const params = useLocalSearchParams<{
     start?: string;
     room?: string;
+    fullBelt?: string;
     fighter?: string;
     ascension?: string;
     seed?: string;
@@ -35,6 +38,16 @@ export default function DevSpire() {
   let initialRun: SpireRun | undefined;
   if (params.start === 'true' || params.room) {
     let run = createSpireRun(fighter, ascension, seed);
+    if (params.fullBelt === 'true') {
+      const extra = SPIRE_WEAPON_POOL.filter(id => !run.weapons.includes(id)).slice(
+        0,
+        Math.max(0, MAX_SUMMIT_WEAPONS - run.weapons.length)
+      );
+      const weapons = [...run.weapons, ...extra].slice(0, MAX_SUMMIT_WEAPONS);
+      const weaponLevels: Record<string, number> = {};
+      for (const id of weapons) weaponLevels[id] = run.weaponLevels[id] ?? 2;
+      run = { ...run, weapons, weaponLevels };
+    }
     const roomKind = params.room as SpireNodeKind | undefined;
     if (roomKind && ['shop', 'campfire', 'event', 'treasure'].includes(roomKind)) {
       const target = run.map.nodes.find(n => n.kind === roomKind);

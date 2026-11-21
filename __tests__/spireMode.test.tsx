@@ -22,6 +22,7 @@ import {
 import {
   ARCANA_PURGE_COST,
   MAX_SHOP_LOCKS,
+  MAX_SUMMIT_WEAPONS,
   SPIRE_EXCLUDED_ARCANA,
   SPIRE_EXCLUDED_WEAPONS,
   SPIRE_SHOP_UPGRADE_IDS,
@@ -38,13 +39,16 @@ import {
   completeSpireBattle,
   createSpireRun,
   enterEndlessSpire,
+  grantSpireWeapon,
   isSpireUpgradeMaxed,
   leaveShop,
   maxSpireUpgradeTier,
   reorderSpireWeapon,
+  replaceSpireWeapon,
   resolveEventPendingArcana,
   resolveEventPendingForge,
   resolveEventPendingSkill,
+  resolveEventPendingWeapon,
   retreatSpireBattle,
   rollArcanaOptions,
   rollSkillNodeOptions,
@@ -57,6 +61,7 @@ import {
   shopReroll,
   shopSellWeapon,
   shopToggleLock,
+  skipEventPendingWeapon,
   spireWeaponSellValue,
   startSpireEncounter,
 } from '@/spire/engine/runState';
@@ -85,6 +90,7 @@ import { simulateRun, BOTS } from '@/adventure/engine/bot';
 import MainMenu from '@/components/MainMenu';
 import SpireSetup from '@/spire/components/SpireSetup';
 import SpireHeader from '@/spire/components/SpireHeader';
+import SpireBeltBar from '@/spire/components/SpireBeltBar';
 import SpireMap from '@/spire/components/SpireMap';
 import SpireEncounterPreview from '@/spire/components/SpireEncounterPreview';
 import SpireShop from '@/spire/components/SpireShop';
@@ -411,9 +417,10 @@ describe('Starfall Summit — Map DAG, Events & Shared Engine Bridge', () => {
     expect(clashesWithBelt(['blast-powder'], 'mending-charm')).toHaveLength(0);
   });
 
-  it('bridges Spire encounters seamlessly into Adventure createRun with persistent HP and uncapped weapons', () => {
+  it('bridges Spire encounters seamlessly into Adventure createRun with persistent HP and all 6 Summit weapons', () => {
     let run = createSpireRun('Orange Tabby', 0, 777);
-    run = { ...run, hearts: 3, weapons: SPIRE_WEAPON_POOL.slice(0, 8) };
+    const six = SPIRE_WEAPON_POOL.slice(0, MAX_SUMMIT_WEAPONS);
+    run = { ...run, hearts: 3, weapons: six, weaponLevels: Object.fromEntries(six.map(id => [id, 2])) };
     const firstId = reachableNodeIds(run.map, null)[0];
     run = selectSpireNode(run, firstId);
     expect(run.phase).toBe('preview');
@@ -424,7 +431,7 @@ describe('Starfall Summit — Map DAG, Events & Shared Engine Bridge', () => {
       overrides: spireRunOverrides(run),
     });
     expect(fight.hearts).toBe(3);
-    expect(fight.weapons.length).toBe(8);
+    expect(fight.weapons.length).toBe(MAX_SUMMIT_WEAPONS);
     expect(fight.parry?.spec.attackName).toBe(enc.parry.attackName);
   });
 
@@ -1597,5 +1604,415 @@ describe('Starfall Summit — Shared UI Components Render Cleanly & Zero-"Spire"
       </SafeAreaProvider>
     );
     expect(assertNoSpireText('SpireEndScreen (defeat)', loseView.toJSON())).toContain('the Summit');
+  });
+});
+
+describe('Starfall Summit — Strict 6-Weapon Cap (MAX_SUMMIT_WEAPONS = 6) & Inline Swap Flow', () => {
+  const makeFullBeltRun = (levels = 2) => {
+    const base = createSpireRun('Orange Tabby', 0, 6060);
+    const six = ['blast-powder', 'mending-charm', 'flint-spark', 'understudy', 'war-drum', 'snowball'];
+    return {
+      ...base,
+      coins: 300,
+      weapons: six,
+      weaponLevels: Object.fromEntries(six.map(id => [id, levels])),
+    };
+  };
+
+  it('enforces MAX_SUMMIT_WEAPONS = 6 in grantSpireWeapon and preserves slot order & clean weaponLevels in replaceSpireWeapon', () => {
+    expect(MAX_SUMMIT_WEAPONS).toBe(6);
+    const full = makeFullBeltRun(2);
+    expect(full.weapons).toHaveLength(6);
+
+    // Adding a 7th unheld weapon via grantSpireWeapon is strictly blocked (returns unchanged!)
+    const blocked = grantSpireWeapon(full, 'echo-stone', 3);
+    expect(blocked).toBe(full);
+    expect(blocked.weapons).toHaveLength(6);
+    expect(blocked.weapons).not.toContain('echo-stone');
+    expect(blocked.weaponLevels['echo-stone']).toBeUndefined();
+
+    // Upgrading an already-held weapon via grantSpireWeapon succeeds even at 6/6!
+    const upgraded = grantSpireWeapon(full, 'blast-powder', 3);
+    expect(upgraded.weapons).toHaveLength(6);
+    expect(upgraded.weaponLevels['blast-powder']).toBe(3);
+
+    // replaceSpireWeapon replaces in place (preserving slot index 2 right before Understudy at slot 3!)
+    const swapped = replaceSpireWeapon(full, 'flint-spark', 'echo-stone', 4);
+    expect(swapped.weapons).toHaveLength(6);
+    expect(swapped.weapons[2]).toBe('echo-stone');
+    expect(swapped.weapons[3]).toBe('understudy');
+    expect(swapped.weaponLevels['flint-spark']).toBeUndefined();
+    expect(swapped.weaponLevels['echo-stone']).toBe(4);
+    expect(Object.keys(swapped.weaponLevels)).toHaveLength(6);
+
+    // Clamps incoming level to 1..5 and guards invalid dropId or already-held newWeaponId
+    const clampedHigh = replaceSpireWeapon(full, 'snowball', 'echo-stone', 99);
+    expect(clampedHigh.weaponLevels['echo-stone']).toBe(5);
+    const clampedLow = replaceSpireWeapon(full, 'snowball', 'echo-stone', 0);
+    expect(clampedLow.weaponLevels['echo-stone']).toBe(1);
+    expect(replaceSpireWeapon(full, 'not-held', 'echo-stone', 2)).toBe(full);
+    expect(replaceSpireWeapon(full, 'snowball', 'blast-powder', 2)).toBe(full);
+    expect(replaceSpireWeapon(full, 'snowball', 'snowball', 2)).toBe(full);
+  });
+
+  it('enforces <= 6 weapons across Draft, Shop, Treasure Vault, and Mystery Event swaps (and upgrades without swapping)', () => {
+    const full = makeFullBeltRun(2);
+
+    // 1. Reward Draft: new weapon at 6/6 requires replaceWeaponId; held weapon upgrades directly
+    const rewardState = {
+      ...full,
+      phase: 'reward' as const,
+      reward: {
+        nodeKind: 'skirmish' as const,
+        foeName: 'Lazy Sloth',
+        coinsEarned: 50,
+        parryBonusCoins: 0,
+        dpm: 500,
+        biggestHit: 50,
+        parries: 0,
+        perfectParries: 0,
+        weaponOptions: [
+          { weaponId: 'blast-powder', level: 3 },
+          { weaponId: 'echo-stone', level: 3 },
+        ],
+        weaponClaimed: false,
+        weaponRerolled: false,
+        arcanaOptions: [],
+        arcanaClaimed: true,
+        skillOptions: [],
+        skillClaimed: true,
+        isActBoss: false,
+      },
+    };
+    // Missing or invalid replaceWeaponId is a safe no-op
+    expect(claimRewardWeapon(rewardState, 1)).toBe(rewardState);
+    expect(claimRewardWeapon(rewardState, 1, 'not-held')).toBe(rewardState);
+    // Valid swap replaces in place & marks claimed
+    const draftSwapped = claimRewardWeapon(rewardState, 1, 'snowball');
+    expect(draftSwapped.weapons).toHaveLength(6);
+    expect(draftSwapped.weapons[5]).toBe('echo-stone');
+    expect(draftSwapped.weaponLevels['snowball']).toBeUndefined();
+    expect(draftSwapped.weaponLevels['echo-stone']).toBe(3);
+    expect(draftSwapped.reward?.weaponClaimed).toBe(true);
+    // Upgrade option requires NO replaceWeaponId
+    const draftUp = claimRewardWeapon(rewardState, 0);
+    expect(draftUp.weapons).toHaveLength(6);
+    expect(draftUp.weaponLevels['blast-powder']).toBe(3);
+    expect(draftUp.reward?.weaponClaimed).toBe(true);
+
+    // 2. Merchant Shop: new weapon at 6/6 requires replaceWeaponId, resets any other unsold offer for dropped weapon
+    const shopState = {
+      ...full,
+      phase: 'shop' as const,
+      shop: {
+        weapons: [
+          { weaponId: 'echo-stone', level: 3, price: 70, sold: false, locked: false },
+          { weaponId: 'snowball', level: 3, price: 52, sold: false, locked: true },
+        ],
+        arcana: [],
+        upgrades: [],
+        healCost: 45,
+        healAmount: 2,
+        healed: false,
+        forgeCost: 55,
+        forged: false,
+        rerollCost: 25,
+        rerolls: 0,
+      },
+    };
+    expect(shopBuyWeapon(shopState, 0)).toBe(shopState);
+    const shopSwapped = shopBuyWeapon(shopState, 0, 'snowball');
+    expect(shopSwapped.weapons).toHaveLength(6);
+    expect(shopSwapped.weapons[5]).toBe('echo-stone');
+    expect(shopSwapped.coins).toBe(full.coins - 70);
+    expect(shopSwapped.shop?.weapons[0].sold).toBe(true);
+    // Unsold upgrade offer for dropped snowball resets to standalone Lv 1 (prevents cheap rebuy exploit)
+    expect(shopSwapped.shop?.weapons[1].level).toBe(1);
+    expect(shopSwapped.shop?.weapons[1].locked).toBe(false);
+    // Buying an upgrade in shop works directly at 6/6 without replaceWeaponId
+    const shopUp = shopBuyWeapon(shopState, 1);
+    expect(shopUp.weapons).toHaveLength(6);
+    expect(shopUp.weaponLevels['snowball']).toBe(3);
+
+    // 3. Treasure Vault: new weapon requires replaceWeaponId; upgrade works directly
+    const treasNew = {
+      ...full,
+      phase: 'treasure' as const,
+      treasure: {
+        coins: 80,
+        weaponOffer: { weaponId: 'echo-stone', level: 3 },
+        arcanaOffer: null,
+        claimed: false,
+      },
+    };
+    expect(claimTreasure(treasNew, 'weapon')).toBe(treasNew);
+    const treasSwapped = claimTreasure(treasNew, 'weapon', 'war-drum');
+    expect(treasSwapped.weapons).toHaveLength(6);
+    expect(treasSwapped.weapons[4]).toBe('echo-stone');
+    expect(treasSwapped.coins).toBe(full.coins + 80);
+    expect(treasSwapped.treasure?.claimed).toBe(true);
+
+    // 4. Mystery Events: pendingWeaponOptions swap + blind auto-grant events at 6/6 never exceed 6
+    const evPending = {
+      ...full,
+      phase: 'event' as const,
+      event: {
+        eventId: 'starfall_shrine',
+        resolved: true,
+        pendingWeaponOptions: [{ weaponId: 'echo-stone', level: 2 }],
+      },
+    };
+    expect(resolveEventPendingWeapon(evPending, 0)).toBe(evPending);
+    const evSwapped = resolveEventPendingWeapon(evPending, 0, 'war-drum');
+    expect(evSwapped.weapons).toHaveLength(6);
+    expect(evSwapped.weapons[4]).toBe('echo-stone');
+    expect(evSwapped.event?.pendingWeaponOptions).toBeUndefined();
+
+    const evSkipped = skipEventPendingWeapon(evPending);
+    expect(evSkipped.weapons).toEqual(full.weapons);
+    expect(evSkipped.coins).toBe(full.coins + 25);
+    expect(evSkipped.event?.pendingWeaponOptions).toBeUndefined();
+
+    // Gambler's Dice high_stakes at 6/6 (upgradeable & all-maxed) NEVER exceeds 6 and always pays real value on win
+    let sawUpgradedWin = false;
+    let sawMaxedJackpot = false;
+    for (let s = 1; s <= 30; s++) {
+      const rUp = chooseEventOption(
+        { ...full, rngState: s * 1337, phase: 'event', event: { eventId: 'gamblers_dice', resolved: false } },
+        'high_stakes'
+      );
+      expect(rUp.weapons).toHaveLength(6);
+      if (rUp.event?.outcomeTitle === 'JACKPOT!') {
+        const sumLv = Object.values(rUp.weaponLevels).reduce((a, b) => a + b, 0);
+        expect(sumLv).toBe(13); // 6*2 + 1 upgrade!
+        expect(rUp.coins).toBe(full.coins - 45 + 135);
+        sawUpgradedWin = true;
+      }
+
+      const maxed = makeFullBeltRun(5);
+      const rMax = chooseEventOption(
+        { ...maxed, rngState: s * 1337, phase: 'event', event: { eventId: 'gamblers_dice', resolved: false } },
+        'high_stakes'
+      );
+      expect(rMax.weapons).toHaveLength(6);
+      if (rMax.event?.outcomeTitle === 'JACKPOT!') {
+        expect(rMax.coins).toBe(maxed.coins - 45 + 235);
+        sawMaxedJackpot = true;
+      }
+    }
+    expect(sawUpgradedWin).toBe(true);
+    expect(sawMaxedJackpot).toBe(true);
+
+    // Shady Peddler buy_crate at 6/6 NEVER exceeds 6 and opens pendingWeaponOptions (upgrade + Lv 3 swap candidate)
+    const crateAtFull = chooseEventOption(
+      { ...full, phase: 'event', event: { eventId: 'shady_peddler', resolved: false } },
+      'buy_crate'
+    );
+    expect(crateAtFull.weapons).toHaveLength(6);
+    expect(crateAtFull.event?.pendingWeaponOptions?.length).toBeGreaterThanOrEqual(2);
+    expect(crateAtFull.event!.pendingWeaponOptions!.some(o => full.weapons.includes(o.weaponId) && o.level >= 3)).toBe(true);
+    expect(crateAtFull.event!.pendingWeaponOptions!.some(o => !full.weapons.includes(o.weaponId) && o.level >= 3)).toBe(true);
+  });
+
+  it('rollSynergyWeapons prioritizes upgrades at 6/6 and fills cleanly with swap candidates when all 6 are maxed', () => {
+    const full = makeFullBeltRun(2);
+    const rng = createRng(4242);
+
+    // 3-slot draft at 6/6 with upgradeable weapons: 2 held upgrades + 1 new swap candidate
+    for (let i = 0; i < 20; i++) {
+      const draft3 = rollSynergyWeapons(full, rng, 3, 1);
+      expect(draft3).toHaveLength(3);
+      const upgrades = draft3.filter(o => full.weaponLevels[o.weaponId] !== undefined);
+      const news = draft3.filter(o => full.weaponLevels[o.weaponId] === undefined);
+      expect(upgrades).toHaveLength(2);
+      expect(news).toHaveLength(1);
+    }
+
+    // 4-slot shop at 6/6 with upgradeable weapons: 2–3 held upgrades + 1–2 new swap candidates
+    for (let i = 0; i < 20; i++) {
+      const shop4 = rollSynergyWeapons(full, rng, 4, 1);
+      expect(shop4).toHaveLength(4);
+      const upgrades = shop4.filter(o => full.weaponLevels[o.weaponId] !== undefined);
+      const news = shop4.filter(o => full.weaponLevels[o.weaponId] === undefined);
+      expect(upgrades.length).toBeGreaterThanOrEqual(2);
+      expect(upgrades.length).toBeLessThanOrEqual(3);
+      expect(news.length).toBeGreaterThanOrEqual(1);
+    }
+
+    // All 6 held weapons maxed (Lv 5): fills cleanly with 3 fresh unheld swap candidates
+    const maxed = makeFullBeltRun(5);
+    const maxedOffers = rollSynergyWeapons(maxed, rng, 3, 2);
+    expect(maxedOffers).toHaveLength(3);
+    expect(maxedOffers.every(o => maxed.weaponLevels[o.weaponId] === undefined)).toBe(true);
+  });
+
+  it('renders 6/6 badges and interactive inline Swap pickers on SpireRewardScreen, SpireShop, SpireTreasure & SpireEvent with zero "Spire" text', () => {
+    const full = makeFullBeltRun(2);
+    const collectStrings = (node: unknown, out: string[] = []): string[] => {
+      if (node == null) return out;
+      if (typeof node === 'string' || typeof node === 'number') {
+        const s = String(node).trim();
+        if (s) out.push(s);
+        return out;
+      }
+      if (Array.isArray(node)) {
+        for (const c of node) collectStrings(c, out);
+        return out;
+      }
+      if (typeof node === 'object') {
+        const obj = node as { props?: Record<string, unknown>; children?: unknown[] };
+        if (typeof obj.props?.accessibilityLabel === 'string') out.push(obj.props.accessibilityLabel);
+        if (obj.children) collectStrings(obj.children, out);
+      }
+      return out;
+    };
+    const assertZeroSpire = (tree: unknown) => {
+      const all = collectStrings(tree);
+      expect(all.filter(s => /spire/i.test(s))).toEqual([]);
+      return all.join('\n');
+    };
+
+    // Header, BeltBar & BuildModal show 6/6 and FULL indicator (zero "UNCAPPED" or "Spire")
+    const header = render(<SpireHeader run={full} onOpenBuild={() => {}} />);
+    expect(assertZeroSpire(header.toJSON())).toContain('6/6');
+
+    const belt = render(<SpireBeltBar run={full} onReorder={() => {}} />);
+    expect(belt.getByTestId('spire-belt-full-badge')).toBeTruthy();
+    expect(assertZeroSpire(belt.toJSON())).toContain('6/6');
+
+    const modal = render(<SpireBuildModal visible run={full} onClose={() => {}} />);
+    expect(modal.getByTestId('spire-build-full-badge')).toBeTruthy();
+    const modalCopy = assertZeroSpire(modal.toJSON());
+    expect(modalCopy).toContain('6/6');
+    expect(modalCopy).not.toMatch(/uncapped/i);
+
+    // 1. SpireRewardScreen inline Swap flow
+    const onClaimReward = jest.fn();
+    const rewardView = render(
+      <SpireRewardScreen
+        run={full}
+        reward={{
+          nodeKind: 'skirmish',
+          foeName: 'Lazy Sloth',
+          coinsEarned: 50,
+          parryBonusCoins: 0,
+          dpm: 500,
+          biggestHit: 40,
+          parries: 0,
+          perfectParries: 0,
+          weaponOptions: [
+            { weaponId: 'blast-powder', level: 3 },
+            { weaponId: 'echo-stone', level: 3 },
+          ],
+          weaponClaimed: false,
+          weaponRerolled: false,
+          arcanaOptions: [],
+          arcanaClaimed: true,
+          skillOptions: [],
+          skillClaimed: true,
+          isActBoss: false,
+        }}
+        lastFight={null}
+        onClaimWeapon={onClaimReward}
+        onRerollWeapons={() => {}}
+        onSkipWeapon={() => {}}
+        onClaimArcana={() => {}}
+        onSkipArcana={() => {}}
+        onClaimSkill={() => {}}
+        onSkipSkill={() => {}}
+        onContinue={() => {}}
+      />
+    );
+    // Option 0 is Upgrade → claims directly
+    fireEvent.press(rewardView.getByTestId('spire-draft-pick-0'));
+    expect(onClaimReward).toHaveBeenCalledWith(0);
+    // Option 1 is New at 6/6 → opens Swap picker instead of calling onClaimReward yet
+    fireEvent.press(rewardView.getByTestId('spire-draft-pick-1'));
+    expect(onClaimReward).toHaveBeenCalledTimes(1);
+    expect(rewardView.getByTestId('spire-draft-swap-panel')).toBeTruthy();
+    expect(assertZeroSpire(rewardView.toJSON())).toContain('Belt Full (6/6)');
+    fireEvent.press(rewardView.getByTestId('spire-draft-swap-drop-snowball'));
+    expect(onClaimReward).toHaveBeenCalledWith(1, 'snowball');
+
+    // 2. SpireShop inline Swap flow
+    const onBuyShop = jest.fn();
+    const shopView = render(
+      <SpireShop
+        run={full}
+        shop={{
+          weapons: [{ weaponId: 'echo-stone', level: 3, price: 65, sold: false }],
+          arcana: [],
+          upgrades: [],
+          healCost: 45,
+          healAmount: 2,
+          healed: false,
+          forgeCost: 55,
+          forged: false,
+          rerollCost: 25,
+          rerolls: 0,
+        }}
+        onBuyWeapon={onBuyShop}
+        onBuyArcana={() => {}}
+        onBuyUpgrade={() => {}}
+        onBuyHeal={() => {}}
+        onForgeWeapon={() => {}}
+        onReroll={() => {}}
+        onLeave={() => {}}
+      />
+    );
+    expect(assertZeroSpire(shopView.toJSON())).toContain('Swap 65¢');
+    fireEvent.press(shopView.getByTestId('spire-shop-weapon-0'));
+    expect(onBuyShop).not.toHaveBeenCalled();
+    expect(shopView.getByTestId('spire-shop-swap-panel')).toBeTruthy();
+    assertZeroSpire(shopView.toJSON());
+    fireEvent.press(shopView.getByTestId('spire-shop-swap-drop-war-drum'));
+    expect(onBuyShop).toHaveBeenCalledWith(0, 'war-drum');
+
+    // 3. SpireTreasure inline Swap flow
+    const onClaimTreas = jest.fn();
+    const treasView = render(
+      <SpireTreasure
+        run={full}
+        treasure={{ coins: 80, weaponOffer: { weaponId: 'echo-stone', level: 3 }, arcanaOffer: null, claimed: false }}
+        onClaim={onClaimTreas}
+        onLeave={() => {}}
+      />
+    );
+    fireEvent.press(treasView.getByTestId('spire-treasure-weapon-btn'));
+    expect(onClaimTreas).not.toHaveBeenCalled();
+    expect(treasView.getByTestId('spire-treasure-swap-panel')).toBeTruthy();
+    assertZeroSpire(treasView.toJSON());
+    fireEvent.press(treasView.getByTestId('spire-treasure-swap-drop-snowball'));
+    expect(onClaimTreas).toHaveBeenCalledWith('weapon', 'snowball');
+
+    // 4. SpireEvent inline Swap flow
+    const onPickEvWeapon = jest.fn();
+    const onSkipEvWeapon = jest.fn();
+    const evView = render(
+      <SpireEvent
+        run={full}
+        eventState={{
+          eventId: 'shady_peddler',
+          resolved: true,
+          pendingWeaponOptions: [{ weaponId: 'echo-stone', level: 3 }],
+          outcomeTitle: 'Crate',
+          outcomeText: 'Swap or skip!',
+        }}
+        onChoose={() => {}}
+        onPickWeapon={onPickEvWeapon}
+        onSkipWeapon={onSkipEvWeapon}
+        onPickSkill={() => {}}
+        onPickForge={() => {}}
+        onLeave={() => {}}
+      />
+    );
+    fireEvent.press(evView.getByTestId('spire-event-weapon-0'));
+    expect(onPickEvWeapon).not.toHaveBeenCalled();
+    expect(evView.getByTestId('spire-event-swap-panel')).toBeTruthy();
+    assertZeroSpire(evView.toJSON());
+    fireEvent.press(evView.getByTestId('spire-event-swap-drop-flint-spark'));
+    expect(onPickEvWeapon).toHaveBeenCalledWith(0, 'flint-spark');
+    fireEvent.press(evView.getByTestId('spire-event-weapon-skip'));
+    expect(onSkipEvWeapon).toHaveBeenCalledTimes(1);
   });
 });

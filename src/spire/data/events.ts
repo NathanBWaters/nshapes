@@ -157,7 +157,7 @@ export const SPIRE_EVENTS: readonly SpireEventDef[] = [
       {
         id: 'high_stakes',
         label: 'Roll High Stakes (45¢)',
-        detail: '65% chance: win +135¢ & a free Weapon! 35% chance: lose 45¢.',
+        detail: '65% chance: win +135¢ & a free Weapon (or upgrade at 6/6)! 35% chance: lose 45¢.',
         minCoins: 45,
         tone: 'bold',
       },
@@ -265,7 +265,7 @@ export const SPIRE_EVENTS: readonly SpireEventDef[] = [
       {
         id: 'buy_crate',
         label: 'Crack Open the Crate (55¢)',
-        detail: 'Receive a guaranteed Level 3 Synergy Weapon!',
+        detail: 'Receive a Level 3 Synergy Weapon (or upgrade/swap at 6/6)!',
         minCoins: 55,
         tone: 'bold',
       },

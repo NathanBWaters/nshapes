@@ -72,6 +72,7 @@ import {
   shopReroll,
   shopSellWeapon,
   shopToggleLock,
+  skipEventPendingWeapon,
   skipRewardArcana,
   skipRewardSkillNode,
   skipRewardWeapon,
@@ -414,7 +415,7 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
           funTags={lastFightFeedback?.funTags}
           onRateFun={lastFightFeedback ? handleRateFun : undefined}
           onReplayOpened={handleReplayOpened}
-          onClaimWeapon={idx => updateRun(claimRewardWeapon(run, idx))}
+          onClaimWeapon={(idx, replaceId) => updateRun(claimRewardWeapon(run, idx, replaceId))}
           onRerollWeapons={() => updateRun(rerollRewardWeapons(run))}
           onSkipWeapon={() => updateRun(skipRewardWeapon(run))}
           onClaimArcana={id => updateRun(claimRewardArcana(run, id))}
@@ -429,7 +430,7 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
         <SpireShop
           run={run}
           shop={run.shop}
-          onBuyWeapon={idx => updateRun(shopBuyWeapon(run, idx))}
+          onBuyWeapon={(idx, replaceId) => updateRun(shopBuyWeapon(run, idx, replaceId))}
           onBuyArcana={idx => updateRun(shopBuyArcana(run, idx))}
           onBuyUpgrade={idx => updateRun(shopBuyUpgrade(run, idx))}
           onBuyHeal={() => updateRun(shopBuyHeal(run))}
@@ -460,7 +461,8 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
           run={run}
           eventState={run.event}
           onChoose={optId => updateRun(chooseEventOption(run, optId))}
-          onPickWeapon={idx => updateRun(resolveEventPendingWeapon(run, idx))}
+          onPickWeapon={(idx, replaceId) => updateRun(resolveEventPendingWeapon(run, idx, replaceId))}
+          onSkipWeapon={() => updateRun(skipEventPendingWeapon(run))}
           onPickSkill={id => updateRun(resolveEventPendingSkill(run, id))}
           onPickForge={wId => updateRun(resolveEventPendingForge(run, wId))}
           onResolveArcana={accept => updateRun(resolveEventPendingArcana(run, accept))}
@@ -472,7 +474,7 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
         <SpireTreasure
           run={run}
           treasure={run.treasure}
-          onClaim={choice => updateRun(claimTreasure(run, choice))}
+          onClaim={(choice, replaceId) => updateRun(claimTreasure(run, choice, replaceId))}
           onLeave={() => updateRun(leaveTreasure(run))}
         />
       )}

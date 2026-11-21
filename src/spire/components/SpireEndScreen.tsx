@@ -19,6 +19,7 @@ import { WeaponChip } from '@/adventure/components/SharedCards';
 import { Btn, DARK, Eyebrow, INK, PopIn, TONE } from '@/adventure/components/ui';
 import { sfx } from '@/audio';
 import { buildSpireWeaponBuilds, spireHeldWeapons } from '../engine/bridge';
+import { MAX_SUMMIT_WEAPONS } from '../engine/runState';
 import type { SpireLastFightSnapshot, SpireRun } from '../types';
 
 interface Props {
@@ -138,7 +139,7 @@ const SpireEndScreen: React.FC<Props> = ({
             <Metric label="Evolutions" value={String(run.stats.evolutionsForged)} />
           </View>
 
-          <Text style={st.sec}>FINAL ARSENAL ({held.length} WEAPONS · {run.skillNodes.length} SKILLS · {run.arcana.length} ARCANA)</Text>
+          <Text style={st.sec}>FINAL ARSENAL ({held.length}/{MAX_SUMMIT_WEAPONS} WEAPONS · {run.skillNodes.length} SKILLS · {run.arcana.length} ARCANA)</Text>
           <View style={st.gearWrap}>
             {held.map((w, i) => (
               <WeaponChip key={`${w.id}-${i}`} weapon={w} level={builds[w.id]?.level ?? 1} />

@@ -30,14 +30,21 @@ import {
   newEvolutionRecipesArmedBy,
   spireHeldWeapons,
 } from '../engine/bridge';
-import { ARCANA_PURGE_COST, countShopLocks, MAX_SHOP_LOCKS, maxSpireUpgradeTier } from '../engine/runState';
+import {
+  ARCANA_PURGE_COST,
+  countShopLocks,
+  MAX_SHOP_LOCKS,
+  MAX_SUMMIT_WEAPONS,
+  maxSpireUpgradeTier,
+} from '../engine/runState';
 import type { SpireRun, SpireShopState } from '../types';
 import SpireBeltBar from './SpireBeltBar';
+import SpireSwapPicker from './SpireSwapPicker';
 
 interface Props {
   run: SpireRun;
   shop: SpireShopState;
-  onBuyWeapon: (index: number) => void;
+  onBuyWeapon: (index: number, replaceWeaponId?: string) => void;
   onBuyArcana: (index: number) => void;
   onBuyUpgrade: (index: number) => void;
   onBuyHeal: () => void;
@@ -67,6 +74,8 @@ const SpireShop: React.FC<Props> = ({
 }) => {
   const [inspectWeaponId, setInspectWeaponId] = useState<string | null>(shop.weapons[0]?.weaponId ?? null);
   const [pickingForge, setPickingForge] = useState(false);
+  const [swapIdx, setSwapIdx] = useState<number | null>(null);
+  const beltFull = run.weapons.length >= MAX_SUMMIT_WEAPONS;
 
   const inspectedOffer = shop.weapons.find(o => o.weaponId === inspectWeaponId);
   const inspectedWeapon = inspectedOffer
@@ -141,11 +150,20 @@ const SpireShop: React.FC<Props> = ({
         {/* Weapons Shelf */}
         <View style={st.card}>
           <View style={st.secHead}>
-            <Text style={st.secTitle}>ARMORY WARES</Text>
+            <View style={st.secTitleRow}>
+              <Text style={st.secTitle}>ARMORY WARES</Text>
+              {beltFull && (
+                <View style={st.fullPill} testID="spire-shop-belt-full">
+                  <Text style={st.fullPillText}>
+                    {`BELT ${run.weapons.length}/${MAX_SUMMIT_WEAPONS}`}
+                  </Text>
+                </View>
+              )}
+            </View>
             <TouchableOpacity
               testID="spire-shop-reroll"
               disabled={run.coins < shop.rerollCost}
-              onPress={() => { band.cue('reelSpin'); onReroll(); }}
+              onPress={() => { band.cue('reelSpin'); setSwapIdx(null); onReroll(); }}
               style={[st.rerollBtn, run.coins < shop.rerollCost && { opacity: 0.4 }]}
             >
               <Icon name="lorc/cycle" size={13} color={INK} />
@@ -157,6 +175,7 @@ const SpireShop: React.FC<Props> = ({
             {shop.weapons.map((offer, i) => {
               const heldLv = run.weaponLevels[offer.weaponId];
               const isUpgrade = !offer.sold && heldLv !== undefined;
+              const needsSwap = !offer.sold && beltFull && !isUpgrade;
               const w = getArmoryWeapon(offer.weaponId, { [offer.weaponId]: { level: offer.level, tuning: {} } });
               if (!w) return null;
               const afford = !offer.sold && run.coins >= offer.price;
@@ -173,6 +192,13 @@ const SpireShop: React.FC<Props> = ({
                 });
               }
               if (clashes.length > 0) badges.push({ text: '⚠ CLASH', bg: '#B91C1C' });
+              const btnLabel = offer.sold
+                ? 'SOLD'
+                : needsSwap
+                  ? `Swap ${offer.price}¢`
+                  : isUpgrade
+                    ? `⬆ ${offer.price}¢`
+                    : `${offer.price}¢`;
               return (
                 <View key={`${offer.weaponId}-${i}`} style={{ gap: 5 }}>
                   <WeaponOfferRow
@@ -193,16 +219,42 @@ const SpireShop: React.FC<Props> = ({
                         {priceBtn({
                           testID: `spire-shop-weapon-${i}`,
                           disabled: !afford,
-                          label: offer.sold ? 'SOLD' : `${offer.price}¢`,
+                          label: btnLabel,
                           onPress: () => {
+                            if (needsSwap) {
+                              sfx('click');
+                              setInspectWeaponId(offer.weaponId);
+                              setSwapIdx(prev => (prev === i ? null : i));
+                              return;
+                            }
                             band.cue(isUpgrade ? 'levelUp' : 'register');
                             band.fire(w.id, 4);
+                            setSwapIdx(null);
                             onBuyWeapon(i);
                           },
                         })}
                       </View>
                     }
                   />
+                  {swapIdx === i && needsSwap && afford && (
+                    <SpireSwapPicker
+                      run={run}
+                      incomingWeaponId={offer.weaponId}
+                      incomingLevel={offer.level}
+                      price={offer.price}
+                      testIDPrefix="spire-shop-swap"
+                      onConfirmSwap={dropId => {
+                        band.cue('register');
+                        band.fire(w.id, 4);
+                        setSwapIdx(null);
+                        onBuyWeapon(i, dropId);
+                      }}
+                      onCancel={() => {
+                        sfx('click');
+                        setSwapIdx(null);
+                      }}
+                    />
+                  )}
                   {evos.length > 0 && (
                     <View style={st.evoCallouts} testID={`spire-shop-evo-${i}`}>
                       {evos.slice(0, 2).map(r => (
@@ -378,7 +430,14 @@ const SpireShop: React.FC<Props> = ({
           <SpireBeltBar
             run={run}
             onReorder={onReorderWeapon}
-            onSell={onSellWeapon}
+            onSell={
+              onSellWeapon
+                ? wId => {
+                    setSwapIdx(null);
+                    onSellWeapon(wId);
+                  }
+                : undefined
+            }
             title={onSellWeapon ? 'MY BELT · REORDER OR SELL (50%)' : 'MY BELT · REORDER'}
             testIDPrefix="spire-shop-belt"
           />
@@ -429,8 +488,11 @@ const st = StyleSheet.create({
   title: { fontSize: 21, fontWeight: '900', color: INK, marginTop: 2 },
   sub: { fontSize: 12, color: TONE.spent },
   card: { backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 2.5, borderBottomWidth: 5, borderColor: INK, padding: 12, gap: 10 },
-  secHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  secTitle: { fontSize: 11, fontWeight: '900', letterSpacing: 1.2, color: TONE.spent },
+  secHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 },
+  secTitleRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, flexShrink: 1, minWidth: 0 },
+  secTitle: { flexShrink: 1, fontSize: 11, fontWeight: '900', letterSpacing: 1.2, color: TONE.spent },
+  fullPill: { backgroundColor: '#FEF3C7', borderRadius: 4, borderWidth: 1, borderColor: '#D97706', paddingHorizontal: 5, paddingVertical: 1 },
+  fullPillText: { fontSize: 9, fontWeight: '900', letterSpacing: 0.5, color: '#92400E' },
   rerollBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: COLORS.paperBeige, borderRadius: 6, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 8, paddingVertical: 4 },
   rerollText: { fontSize: 11, fontWeight: '800', color: INK },
   serviceRow: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.paperBeige, borderRadius: 10, borderWidth: 2, borderColor: '#D6CFC4', padding: 8 },

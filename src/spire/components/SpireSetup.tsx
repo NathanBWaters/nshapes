@@ -21,6 +21,7 @@ import { FighterPassivesList } from '@/adventure/components/SharedCards';
 import { Btn, Eyebrow, Heart, INK, PopIn, TONE } from '@/adventure/components/ui';
 import { ASCENSION_DESCRIPTIONS, MAX_ASCENSION } from '../data/ascensions';
 import { STARTER_KITS } from '../data/encounters';
+import { MAX_SUMMIT_WEAPONS } from '../engine/runState';
 import type { SpireMeta, SpireRun } from '../types';
 
 interface Props {
@@ -77,7 +78,7 @@ const SpireSetup: React.FC<Props> = ({ activeRun, meta, onStartNew, onResume, on
                   {activeRun.fighter} · {activeRun.endless ? `Endless Act ${activeRun.act}` : `Act ${activeRun.act}`} · Floor {activeRun.floor}
                 </Text>
                 <Text style={st.resumeSub}>
-                  ♥ {activeRun.hearts}/{activeRun.maxHearts} · {activeRun.coins}¢ · {activeRun.weapons.length} weapons · A{activeRun.ascension}
+                  ♥ {activeRun.hearts}/{activeRun.maxHearts} · {activeRun.coins}¢ · {activeRun.weapons.length}/{MAX_SUMMIT_WEAPONS} weapons · A{activeRun.ascension}
                 </Text>
               </View>
             </View>

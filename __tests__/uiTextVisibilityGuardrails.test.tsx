@@ -15,6 +15,8 @@ import { createRun } from '@/adventure/engine/run';
 import { createMaxedSave, createNewSave } from '@/adventure/progress';
 import Card, { CardBoardProvider } from '@/components/Card';
 import RoundFunPrompt from '@/components/RoundFunPrompt';
+import SpireSwapPicker from '@/spire/components/SpireSwapPicker';
+import { createSpireRun } from '@/spire/engine/runState';
 import { NEGATIVE_FUN_TAGS } from '@/analytics/fightEvent';
 import type { Card as CardType } from '@/types';
 
@@ -447,5 +449,42 @@ describe('UI Text Visibility Style-Contract Guardrails', () => {
 
       view.unmount();
     }
+  });
+
+  it('enforces 375px-safe width & shrinkable text contracts on SpireSwapPicker at 6/6', () => {
+    const base = createSpireRun('Orange Tabby', 0, 6060);
+    const six = ['blast-powder', 'mending-charm', 'flint-spark', 'understudy', 'war-drum', 'snowball'];
+    const fullRun = {
+      ...base,
+      weapons: six,
+      weaponLevels: Object.fromEntries(six.map(id => [id, 3])),
+    };
+
+    const view = render(
+      <SpireSwapPicker
+        run={fullRun}
+        incomingWeaponId="echo-stone"
+        incomingLevel={3}
+        price={65}
+        onConfirmSwap={() => {}}
+        onCancel={() => {}}
+        testIDPrefix="guard-swap"
+      />
+    );
+
+    const panelStyle = StyleSheet.flatten(view.getByTestId('guard-swap-panel').props.style);
+    expect(panelStyle.width).toBe('100%');
+    expect(panelStyle.maxWidth).toBe('100%');
+
+    const titleNode = view.getByText('Belt Full (6/6) — Swap out which weapon?');
+    const titleStyle = StyleSheet.flatten(titleNode.props.style);
+    expect(titleStyle.flexShrink).toBeGreaterThan(0);
+    expect(titleStyle.minWidth).toBe(0);
+
+    for (const id of six) {
+      expect(view.getByTestId(`guard-swap-drop-${id}`)).toBeTruthy();
+    }
+
+    view.unmount();
   });
 });

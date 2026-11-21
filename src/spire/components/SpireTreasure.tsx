@@ -3,33 +3,66 @@
  *
  * Reuses `WeaponExplainer.tsx` and shared `WeaponOfferRow` / `ArcanaCard`.
  */
-import React from 'react';
+import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Icon from '@/components/Icon';
 import { COLORS } from '@/utils/colors';
 import { getArmoryWeapon } from '@/adventure/data/armory';
 import WeaponExplainer from '@/adventure/components/WeaponExplainer';
-import { ArcanaCard, WeaponOfferRow } from '@/adventure/components/SharedCards';
+import { ArcanaCard, WeaponOfferRow, type OfferBadge } from '@/adventure/components/SharedCards';
 import { Btn, CoinPill, Eyebrow, INK, PopIn, TONE } from '@/adventure/components/ui';
 import { band, sfx } from '@/audio';
+import { clashesWithBelt, newEvolutionRecipesArmedBy } from '../engine/bridge';
+import { MAX_SUMMIT_WEAPONS } from '../engine/runState';
 import type { SpireRun, SpireTreasureState } from '../types';
+import SpireSwapPicker from './SpireSwapPicker';
 
 interface Props {
   run: SpireRun;
   treasure: SpireTreasureState;
-  onClaim: (choice: 'weapon' | 'arcana' | 'coins') => void;
+  onClaim: (choice: 'weapon' | 'arcana' | 'coins', replaceWeaponId?: string) => void;
   onLeave: () => void;
 }
 
 const SpireTreasure: React.FC<Props> = ({ run, treasure, onClaim, onLeave }) => {
+  const [swapping, setSwapping] = useState(false);
   const w = getArmoryWeapon(treasure.weaponOffer.weaponId, {
     [treasure.weaponOffer.weaponId]: { level: treasure.weaponOffer.level, tuning: {} },
   });
+  const heldLv = run.weaponLevels[treasure.weaponOffer.weaponId];
+  const isUpgrade = heldLv !== undefined;
+  const beltFull = run.weapons.length >= MAX_SUMMIT_WEAPONS;
+  const needsSwap = beltFull && !isUpgrade;
+  const newEvos = isUpgrade ? [] : newEvolutionRecipesArmedBy(run, treasure.weaponOffer.weaponId);
+  const clashes = isUpgrade ? [] : clashesWithBelt(run.weapons, treasure.weaponOffer.weaponId);
+  const badges: OfferBadge[] = [];
+  if (isUpgrade) {
+    badges.push({ text: `⬆ LV ${heldLv} → ${treasure.weaponOffer.level}`, bg: '#D97706' });
+  }
+  if (newEvos.length > 0) {
+    badges.push({
+      text: newEvos.length > 1 ? `⚡ ${newEvos[0].name} +${newEvos.length - 1}` : `⚡ ${newEvos[0].name}`,
+      bg: TONE.evoReady,
+    });
+  }
+  if (clashes.length > 0) {
+    badges.push({ text: '⚠ CLASH', bg: '#B91C1C' });
+  }
   const availArcana =
     treasure.arcanaOffer && !run.arcana.includes(treasure.arcanaOffer)
       ? treasure.arcanaOffer
       : null;
   const extraCoins = 60 + run.act * 20;
+
+  const handleWeaponAction = () => {
+    if (needsSwap) {
+      sfx('click');
+      setSwapping(prev => !prev);
+      return;
+    }
+    band.cue(isUpgrade ? 'levelUp' : 'weaponGet');
+    onClaim('weapon');
+  };
 
   return (
     <View style={st.root} testID="spire-treasure">
@@ -60,10 +93,36 @@ const SpireTreasure: React.FC<Props> = ({ run, treasure, onClaim, onLeave }) => 
                   testID="spire-treasure-weapon"
                   weapon={w}
                   level={treasure.weaponOffer.level}
+                  badges={badges.length > 0 ? badges : undefined}
                   focused
-                  onPress={() => { band.cue('weaponGet'); onClaim('weapon'); }}
+                  onPress={handleWeaponAction}
+                  right={
+                    <Btn
+                      testID="spire-treasure-weapon-btn"
+                      small
+                      label={isUpgrade ? 'Upgrade' : needsSwap ? 'Swap' : 'Claim'}
+                      onPress={handleWeaponAction}
+                    />
+                  }
                 />
-                <WeaponExplainer weapon={w} build={{ level: treasure.weaponOffer.level, tuning: {} }} />
+                {swapping && needsSwap && (
+                  <SpireSwapPicker
+                    run={run}
+                    incomingWeaponId={treasure.weaponOffer.weaponId}
+                    incomingLevel={treasure.weaponOffer.level}
+                    testIDPrefix="spire-treasure-swap"
+                    onConfirmSwap={dropId => {
+                      band.cue('weaponGet');
+                      setSwapping(false);
+                      onClaim('weapon', dropId);
+                    }}
+                    onCancel={() => {
+                      sfx('click');
+                      setSwapping(false);
+                    }}
+                  />
+                )}
+                <WeaponExplainer weapon={w} build={{ level: treasure.weaponOffer.level, tuning: {} }} hidePowerNote />
               </>
             )}
 

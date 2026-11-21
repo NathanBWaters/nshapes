@@ -22,6 +22,7 @@ import {
 import { Btn, Eyebrow, INK, PopIn, TONE } from '@/adventure/components/ui';
 import { ASCENSION_DESCRIPTIONS } from '../data/ascensions';
 import { buildSpireWeaponBuilds, spireArmedRecipes, spireHeldWeapons } from '../engine/bridge';
+import { MAX_SUMMIT_WEAPONS } from '../engine/runState';
 import type { SpireRun } from '../types';
 
 interface Props {
@@ -71,7 +72,16 @@ const SpireBuildModal: React.FC<Props> = ({ visible, run, onReorderWeapon, onClo
             <FighterPassivesList fighter={run.fighter} />
 
             {/* Held Weapons (tap to inspect with WeaponExplainer) */}
-            <Text style={st.section}>WEAPONS ({weapons.length} · UNCAPPED)</Text>
+            <View style={st.sectionRow}>
+              <Text style={st.section}>
+                {`WEAPONS (${weapons.length}/${MAX_SUMMIT_WEAPONS})`}
+              </Text>
+              {weapons.length >= MAX_SUMMIT_WEAPONS && (
+                <View style={st.fullPill} testID="spire-build-full-badge">
+                  <Text style={st.fullPillText}>FULL</Text>
+                </View>
+              )}
+            </View>
             <View style={st.weaponGrid}>
               {weapons.map((w, i) => (
                 <WeaponChip
@@ -183,6 +193,9 @@ const st = StyleSheet.create({
   closeText: { fontWeight: '900', color: INK, fontSize: 14 },
   body: { padding: 12, gap: 10 },
   section: { fontSize: 10, fontWeight: '900', letterSpacing: 1.3, color: TONE.spent, marginTop: 4 },
+  sectionRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
+  fullPill: { backgroundColor: '#FEF3C7', borderRadius: 4, borderWidth: 1, borderColor: '#D97706', paddingHorizontal: 5, paddingVertical: 1 },
+  fullPillText: { fontSize: 9, fontWeight: '900', letterSpacing: 0.6, color: '#92400E' },
   cardGroup: { gap: 6 },
   muted: { fontSize: 12, color: TONE.spent },
   weaponGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },

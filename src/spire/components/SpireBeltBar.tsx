@@ -13,7 +13,7 @@ import { WeaponChip } from '@/adventure/components/SharedCards';
 import { INK, TONE } from '@/adventure/components/ui';
 import { band, sfx } from '@/audio';
 import { buildSpireWeaponBuilds, spireHeldWeapons } from '../engine/bridge';
-import { spireWeaponSellValue } from '../engine/runState';
+import { MAX_SUMMIT_WEAPONS, spireWeaponSellValue } from '../engine/runState';
 import type { SpireRun } from '../types';
 
 interface Props {
@@ -43,13 +43,21 @@ const SpireBeltBar: React.FC<Props> = ({
   const understudyTarget = understudyIdx > 0 ? held[understudyIdx - 1] : null;
   const inspected = held.find(w => w.id === inspectId) ?? null;
   const canSellAny = Boolean(onSell) && held.length > 1;
+  const isFull = held.length >= MAX_SUMMIT_WEAPONS;
 
   return (
     <View style={[st.card, compact && st.cardCompact]} testID={testIDPrefix}>
       <View style={st.headRow}>
-        <Text style={st.secTitle}>
-          {title} ({held.length})
-        </Text>
+        <View style={st.titleRow}>
+          <Text style={st.secTitle}>
+            {`${title} (${held.length}/${MAX_SUMMIT_WEAPONS})`}
+          </Text>
+          {isFull && (
+            <View style={st.fullPill} testID={`${testIDPrefix}-full-badge`}>
+              <Text style={st.fullPillText}>FULL</Text>
+            </View>
+          )}
+        </View>
         {onReorder && held.length > 1 && (
           <Text style={st.orderHint}>Order matters for Understudy</Text>
         )}
@@ -171,11 +179,34 @@ const st = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 6,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    flexShrink: 1,
+    minWidth: 0,
+  },
   secTitle: {
+    flexShrink: 1,
     fontSize: 11,
     fontWeight: '900',
     letterSpacing: 1.2,
     color: TONE.spent,
+  },
+  fullPill: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#D97706',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  fullPillText: {
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.6,
+    color: '#92400E',
   },
   orderHint: {
     fontSize: 10,

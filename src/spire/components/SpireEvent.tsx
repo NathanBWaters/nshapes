@@ -3,25 +3,28 @@
  *
  * Reuses shared `WeaponOfferRow` and `SkillNodeRow` for inline rewards.
  */
-import React from 'react';
+import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Icon from '@/components/Icon';
 import { COLORS } from '@/utils/colors';
 import { getArcana } from '@/adventure/data/arcana';
 import { getArmoryWeapon } from '@/adventure/data/armory';
 import { MAX_WEAPON_LEVEL } from '@/adventure/data/weaponStats';
-import { ArcanaCard, SkillNodeRow, WeaponOfferRow } from '@/adventure/components/SharedCards';
+import { ArcanaCard, SkillNodeRow, WeaponOfferRow, type OfferBadge } from '@/adventure/components/SharedCards';
 import { Btn, DARK, Eyebrow, INK, PopIn, TONE } from '@/adventure/components/ui';
 import { band, sfx } from '@/audio';
 import { getSpireEvent } from '../data/events';
-import { spireHeldWeapons } from '../engine/bridge';
+import { clashesWithBelt, newEvolutionRecipesArmedBy, spireHeldWeapons } from '../engine/bridge';
+import { MAX_SUMMIT_WEAPONS, SKIP_WEAPON_COINS } from '../engine/runState';
 import type { SpireEventState, SpireRun } from '../types';
+import SpireSwapPicker from './SpireSwapPicker';
 
 interface Props {
   run: SpireRun;
   eventState: SpireEventState;
   onChoose: (optionId: string) => void;
-  onPickWeapon: (index: number) => void;
+  onPickWeapon: (index: number, replaceWeaponId?: string) => void;
+  onSkipWeapon?: () => void;
   onPickSkill: (nodeId: string) => void;
   onPickForge: (weaponId: string) => void;
   onResolveArcana?: (accept: boolean) => void;
@@ -33,13 +36,16 @@ const SpireEvent: React.FC<Props> = ({
   eventState,
   onChoose,
   onPickWeapon,
+  onSkipWeapon,
   onPickSkill,
   onPickForge,
   onResolveArcana,
   onLeave,
 }) => {
+  const [swapIdx, setSwapIdx] = useState<number | null>(null);
   const def = getSpireEvent(eventState.eventId);
   const held = spireHeldWeapons(run);
+  const beltFull = run.weapons.length >= MAX_SUMMIT_WEAPONS;
   const forgeable = held.filter(w => (run.weaponLevels[w.id] ?? 1) < MAX_WEAPON_LEVEL);
   const availSkills = (eventState.pendingSkillOptions ?? []).filter(id => !run.skillNodes.includes(id));
   const pendingArcana =
@@ -134,17 +140,81 @@ const SpireEvent: React.FC<Props> = ({
                 {eventState.pendingWeaponOptions.map((o, i) => {
                   const w = getArmoryWeapon(o.weaponId, { [o.weaponId]: { level: o.level, tuning: {} } });
                   if (!w) return null;
+                  const heldLv = run.weaponLevels[o.weaponId];
+                  const isUpgrade = heldLv !== undefined;
+                  const needsSwap = beltFull && !isUpgrade;
+                  const newEvos = isUpgrade ? [] : newEvolutionRecipesArmedBy(run, o.weaponId);
+                  const clashes = isUpgrade ? [] : clashesWithBelt(run.weapons, o.weaponId);
+                  const badges: OfferBadge[] = [];
+                  if (isUpgrade) badges.push({ text: `⬆ LV ${heldLv} → ${o.level}`, bg: '#D97706' });
+                  if (newEvos.length > 0) {
+                    badges.push({
+                      text: newEvos.length > 1 ? `⚡ ${newEvos[0].name} +${newEvos.length - 1}` : `⚡ ${newEvos[0].name}`,
+                      bg: TONE.evoReady,
+                    });
+                  }
+                  if (clashes.length > 0) badges.push({ text: '⚠ CLASH', bg: '#B91C1C' });
+                  const handlePick = () => {
+                    if (needsSwap) {
+                      sfx('click');
+                      setSwapIdx(prev => (prev === i ? null : i));
+                      return;
+                    }
+                    band.cue(isUpgrade ? 'levelUp' : 'weaponGet');
+                    setSwapIdx(null);
+                    onPickWeapon(i);
+                  };
                   return (
-                    <WeaponOfferRow
-                      key={o.weaponId}
-                      testID={`spire-event-weapon-${i}`}
-                      weapon={w}
-                      level={o.level}
-                      focused
-                      onPress={() => { band.cue('weaponGet'); onPickWeapon(i); }}
-                    />
+                    <View key={`${o.weaponId}-${i}`} style={{ gap: 5 }}>
+                      <WeaponOfferRow
+                        testID={`spire-event-weapon-${i}`}
+                        weapon={w}
+                        level={o.level}
+                        badges={badges.length > 0 ? badges : undefined}
+                        focused
+                        onPress={handlePick}
+                        right={
+                          <Btn
+                            testID={`spire-event-weapon-btn-${i}`}
+                            small
+                            label={isUpgrade ? 'Upgrade' : needsSwap ? 'Swap' : 'Claim'}
+                            onPress={handlePick}
+                          />
+                        }
+                      />
+                      {swapIdx === i && needsSwap && (
+                        <SpireSwapPicker
+                          run={run}
+                          incomingWeaponId={o.weaponId}
+                          incomingLevel={o.level}
+                          testIDPrefix="spire-event-swap"
+                          onConfirmSwap={dropId => {
+                            band.cue('weaponGet');
+                            setSwapIdx(null);
+                            onPickWeapon(i, dropId);
+                          }}
+                          onCancel={() => {
+                            sfx('click');
+                            setSwapIdx(null);
+                          }}
+                        />
+                      )}
+                    </View>
                   );
                 })}
+                {beltFull && onSkipWeapon && (
+                  <Btn
+                    testID="spire-event-weapon-skip"
+                    small
+                    variant="ghost"
+                    label={`Keep current belt (+${SKIP_WEAPON_COINS}¢)`}
+                    onPress={() => {
+                      sfx('click');
+                      setSwapIdx(null);
+                      onSkipWeapon();
+                    }}
+                  />
+                )}
               </View>
             )}
 

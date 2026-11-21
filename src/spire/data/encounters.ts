@@ -182,26 +182,27 @@ export const canonicalLevelEnemyName = (levelId: string): string => {
 
 /**
  * Calibrated base HP curve per Act and row (row 0..5 = floors, row 6 = Boss).
- * Tuned for pure item-driven scaling (`powerScaling: 0`): damage climbs from
- * upgraded weapons (Lv 2→5), board procs, stacking Evolutions (×1.5 per active
+ * Tuned for pure item-driven scaling (`powerScaling: 0`) under the 6-weapon belt
+ * cap (`MAX_SUMMIT_WEAPONS = 6`): damage climbs from upgraded weapons (Lv 2→5),
+ * curated 6-slot synergies, board procs, stacking Evolutions (×1.5 per active
  * Evolution), Fighter Skill Tree nodes, Arcana wildcards, Set-Parries, and
  * Shading Surge (×5 in Act 3).
  */
 const BASE_ACT_HP: Record<number, { start: number; end: number; eliteMult: number; boss: number; timer: number; skirmishTimer: number }> = {
-  1: { start: 108, end: 320, eliteMult: 1.48, boss: 720, timer: 100, skirmishTimer: 72 },
-  2: { start: 720, end: 1780, eliteMult: 1.44, boss: 3350, timer: 110, skirmishTimer: 94 },
-  3: { start: 4400, end: 9500, eliteMult: 1.5, boss: 18500, timer: 112, skirmishTimer: 106 },
+  1: { start: 108, end: 295, eliteMult: 1.42, boss: 660, timer: 100, skirmishTimer: 72 },
+  2: { start: 540, end: 1220, eliteMult: 1.32, boss: 2200, timer: 110, skirmishTimer: 94 },
+  3: { start: 2100, end: 4400, eliteMult: 1.28, boss: 8100, timer: 112, skirmishTimer: 106 },
 };
 
 const actCurve = (act: number) => {
   if (act <= 3) return BASE_ACT_HP[act] ?? BASE_ACT_HP[3];
   const endlessStep = act - 3;
-  const scale = Math.pow(1.65, endlessStep);
+  const scale = Math.pow(2.05, endlessStep);
   return {
-    start: Math.round(BASE_ACT_HP[3].end * 0.9 * scale),
-    end: Math.round(BASE_ACT_HP[3].boss * 1.12 * scale),
-    eliteMult: 1.4,
-    boss: Math.round(BASE_ACT_HP[3].boss * 1.48 * scale),
+    start: Math.round(BASE_ACT_HP[3].end * 0.95 * scale),
+    end: Math.round(BASE_ACT_HP[3].boss * 1.2 * scale),
+    eliteMult: 1.42,
+    boss: Math.round(BASE_ACT_HP[3].boss * 1.65 * scale),
     timer: Math.max(85, 118 - endlessStep * 5),
     skirmishTimer: Math.max(80, 112 - endlessStep * 5),
   };

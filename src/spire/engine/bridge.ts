@@ -218,7 +218,12 @@ export const spireRunToVirtualSave = (
   };
 };
 
-/** Overrides passed to `createRun` / `AdventureRun` so Starfall Summit keeps persistent HP, uncapped builds, and pure item-driven scaling (no generic Power snowball). */
+/**
+ * Overrides passed to `createRun` / `AdventureRun` so Starfall Summit keeps
+ * persistent HP, lets all 6 Summit weapons enter combat regardless of Adventure's
+ * `charm_belt` meta-upgrade (Summit enforces `MAX_SUMMIT_WEAPONS = 6` in `runState.ts`),
+ * and uses pure item-driven scaling (no generic Power snowball).
+ */
 export const spireRunOverrides = (run: SpireRun): RunOverrides => ({
   startingHearts: run.hearts,
   uncappedCharms: true,

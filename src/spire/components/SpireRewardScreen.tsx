@@ -32,8 +32,9 @@ import {
   clashesWithBelt,
   newEvolutionRecipesArmedBy,
 } from '../engine/bridge';
-import { REWARD_REROLL_COST, SKIP_WEAPON_COINS } from '../engine/runState';
+import { MAX_SUMMIT_WEAPONS, REWARD_REROLL_COST, SKIP_WEAPON_COINS } from '../engine/runState';
 import type { SpireLastFightSnapshot, SpireRewardBundle, SpireRun } from '../types';
+import SpireSwapPicker from './SpireSwapPicker';
 
 interface Props {
   run: SpireRun;
@@ -43,7 +44,7 @@ interface Props {
   funTags?: readonly FunTag[];
   onRateFun?: (rating: FunRating | null, tags: FunTag[]) => void;
   onReplayOpened?: () => void;
-  onClaimWeapon: (index: number) => void;
+  onClaimWeapon: (index: number, replaceWeaponId?: string) => void;
   onRerollWeapons: () => void;
   onSkipWeapon: () => void;
   onClaimArcana: (id: ArcanaId) => void;
@@ -72,7 +73,9 @@ const SpireRewardScreen: React.FC<Props> = ({
 }) => {
   const reduced = useReducedMotion();
   const [inspectIdx, setInspectIdx] = useState<number>(0);
+  const [swapIdx, setSwapIdx] = useState<number | null>(null);
   const [replayOpen, setReplayOpen] = useState(false);
+  const beltFull = run.weapons.length >= MAX_SUMMIT_WEAPONS;
 
   const damageStory = useMemo(
     () =>
@@ -147,12 +150,21 @@ const SpireRewardScreen: React.FC<Props> = ({
         {!reward.weaponClaimed && reward.weaponOptions.length > 0 && (
           <View style={st.sectionCard} testID="spire-weapon-draft">
             <View style={st.sectionHead}>
-              <Text style={st.sectionTitle}>DRAFT A WEAPON (PICK 1 OF {reward.weaponOptions.length})</Text>
+              <View style={st.sectionTitleRow}>
+                <Text style={st.sectionTitle}>DRAFT A WEAPON (PICK 1 OF {reward.weaponOptions.length})</Text>
+                {beltFull && (
+                  <View style={st.fullPill} testID="spire-draft-belt-full">
+                    <Text style={st.fullPillText}>
+                      {`BELT ${run.weapons.length}/${MAX_SUMMIT_WEAPONS}`}
+                    </Text>
+                  </View>
+                )}
+              </View>
               {!reward.weaponRerolled && (
                 <TouchableOpacity
                   testID="spire-draft-reroll"
                   disabled={run.coins < REWARD_REROLL_COST}
-                  onPress={() => { band.cue('reelSpin'); onRerollWeapons(); }}
+                  onPress={() => { band.cue('reelSpin'); setSwapIdx(null); onRerollWeapons(); }}
                   style={[st.miniBtn, run.coins < REWARD_REROLL_COST && { opacity: 0.4 }]}
                 >
                   <Icon name="lorc/cycle" size={12} color={INK} />
@@ -165,6 +177,7 @@ const SpireRewardScreen: React.FC<Props> = ({
               {reward.weaponOptions.map((opt, i) => {
                 const heldLv = run.weaponLevels[opt.weaponId];
                 const isUpgrade = heldLv !== undefined;
+                const needsSwap = beltFull && !isUpgrade;
                 const w = getArmoryWeapon(opt.weaponId, { [opt.weaponId]: { level: opt.level, tuning: {} } });
                 if (!w) return null;
                 const newEvos = isUpgrade ? [] : newEvolutionRecipesArmedBy(run, opt.weaponId);
@@ -197,15 +210,40 @@ const SpireRewardScreen: React.FC<Props> = ({
                         <Btn
                           testID={`spire-draft-pick-${i}`}
                           small
-                          label={isUpgrade ? 'Upgrade' : 'Draft'}
+                          label={isUpgrade ? 'Upgrade' : needsSwap ? 'Swap' : 'Draft'}
                           onPress={() => {
+                            if (needsSwap) {
+                              sfx('click');
+                              setInspectIdx(i);
+                              setSwapIdx(prev => (prev === i ? null : i));
+                              return;
+                            }
                             band.cue(isUpgrade ? 'levelUp' : 'weaponGet');
                             band.fire(w.id, 4);
+                            setSwapIdx(null);
                             onClaimWeapon(i);
                           }}
                         />
                       }
                     />
+                    {swapIdx === i && needsSwap && (
+                      <SpireSwapPicker
+                        run={run}
+                        incomingWeaponId={opt.weaponId}
+                        incomingLevel={opt.level}
+                        testIDPrefix="spire-draft-swap"
+                        onConfirmSwap={dropId => {
+                          band.cue('weaponGet');
+                          band.fire(w.id, 4);
+                          setSwapIdx(null);
+                          onClaimWeapon(i, dropId);
+                        }}
+                        onCancel={() => {
+                          sfx('click');
+                          setSwapIdx(null);
+                        }}
+                      />
+                    )}
                     {newEvos.length > 0 && (
                       <View style={st.evoCallouts} testID={`spire-draft-evo-${i}`}>
                         {newEvos.slice(0, 2).map(r => (
@@ -241,7 +279,7 @@ const SpireRewardScreen: React.FC<Props> = ({
               small
               variant="ghost"
               label={`Skip weapon draft (+${SKIP_WEAPON_COINS}¢)`}
-              onPress={() => { sfx('click'); onSkipWeapon(); }}
+              onPress={() => { sfx('click'); setSwapIdx(null); onSkipWeapon(); }}
             />
           </View>
         )}
@@ -330,7 +368,10 @@ const st = StyleSheet.create({
   statText: { fontSize: 11, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
   sectionCard: { backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 2.5, borderBottomWidth: 5, borderColor: INK, padding: 12, gap: 10 },
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 },
-  sectionTitle: { fontSize: 11, fontWeight: '900', letterSpacing: 1.2, color: TONE.spent },
+  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, flexShrink: 1, minWidth: 0 },
+  sectionTitle: { flexShrink: 1, fontSize: 11, fontWeight: '900', letterSpacing: 1.2, color: TONE.spent },
+  fullPill: { backgroundColor: '#FEF3C7', borderRadius: 4, borderWidth: 1, borderColor: '#D97706', paddingHorizontal: 5, paddingVertical: 1 },
+  fullPillText: { fontSize: 9, fontWeight: '900', letterSpacing: 0.5, color: '#92400E' },
   miniBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: COLORS.paperBeige, borderRadius: 6, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 8, paddingVertical: 3 },
   miniBtnText: { fontSize: 11, fontWeight: '800', color: INK },
   choiceList: { gap: 8 },

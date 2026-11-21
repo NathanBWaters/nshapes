@@ -9,6 +9,7 @@ import { FighterAvatar } from '@/components/fighters';
 import { COLORS } from '@/utils/colors';
 import { CoinPill, Heart, INK, TONE } from '@/adventure/components/ui';
 import { spireArmedRecipes } from '../engine/bridge';
+import { MAX_SUMMIT_WEAPONS } from '../engine/runState';
 import type { SpireRun } from '../types';
 
 interface Props {
@@ -71,7 +72,9 @@ const SpireHeader: React.FC<Props> = ({ run, onOpenBuild, onExitToMenu }) => {
           accessibilityRole="button"
         >
           <Icon name="lorc/gems" size={14} color={INK} />
-          <Text style={st.buildText}>{run.weapons.length}</Text>
+          <Text style={st.buildText}>
+            {`${run.weapons.length}/${MAX_SUMMIT_WEAPONS}`}
+          </Text>
         </TouchableOpacity>
       </View>
     </View>

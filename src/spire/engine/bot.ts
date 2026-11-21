@@ -13,6 +13,8 @@ import { simulateRun, type BotProfile } from '@/adventure/engine/bot';
 import { createRng } from '@/adventure/engine/rng';
 import { MAX_WEAPON_LEVEL } from '@/adventure/data/weaponStats';
 import { activeRoleBonuses, weaponRole, type WeaponRole } from '@/adventure/data/weaponRoles';
+import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
+import { inFamily } from '@/adventure/engine/sources';
 import { getSpireEvent } from '../data/events';
 import { reachableNodeIds } from './mapGen';
 import {
@@ -44,6 +46,7 @@ import {
   leaveShop,
   leaveTreasure,
   MAX_SHOP_LOCKS,
+  MAX_SUMMIT_WEAPONS,
   reorderSpireWeapon,
   rerollRewardWeapons,
   resolveEventPendingArcana,
@@ -61,7 +64,9 @@ import {
   shopReroll,
   shopSellWeapon,
   shopToggleLock,
+  skipEventPendingWeapon,
   skipRewardArcana,
+  skipRewardWeapon,
   startSpireEncounter,
 } from './runState';
 import type { SpireRun } from '../types';
@@ -102,30 +107,101 @@ const optimizeBeltOrder = (run: SpireRun): SpireRun => {
   return reorderSpireWeapon(run, idx, desired);
 };
 
-/** Score a candidate weapon offer for drafting/shopping using Evolutions, Role Set breakpoints, upgrades & clash avoidance. */
-const scoreWeaponOffer = (run: SpireRun, weaponId: string): number => {
-  const isUpgrade = run.weaponLevels[weaponId] !== undefined;
-  let score = 0;
-  if (isUpgrade) {
-    const lv = run.weaponLevels[weaponId] ?? 1;
-    if (lv >= MAX_WEAPON_LEVEL) return -5;
-    score += run.weapons.length >= 5 ? 3.5 : 2;
-    if (ENGINE_ROLES.has(weaponRole(weaponId))) score += 1;
-    return score;
+/** Count armed Evolution recipes for a weapon id list. */
+const countArmedEvolutions = (weaponIds: readonly string[]): number => {
+  let count = 0;
+  for (const r of EVOLUTION_RECIPES) {
+    if (r.families.every(fam => weaponIds.some(id => inFamily(id, fam)))) count += 1;
   }
-  const newEvos = newEvolutionsArmedBy(run, weaponId).length;
-  score += newEvos * 3;
+  return count;
+};
 
-  // Check if adding this weapon unlocks a 2 / 4 / 6 Role Set Bonus tier!
-  const beforeTiers = activeRoleBonuses(run.weapons).reduce((s, b) => s + b.tier, 0);
-  const afterTiers = activeRoleBonuses([...run.weapons, weaponId]).reduce((s, b) => s + b.tier, 0);
-  if (afterTiers > beforeTiers) score += 2;
-  if (ENGINE_ROLES.has(weaponRole(weaponId))) score += 1;
+/** Holistic belt strength estimate (used to evaluate 6/6 weapon swaps cleanly). */
+const scoreBelt = (weaponIds: readonly string[], weaponLevels: Record<string, number>): number => {
+  const armed = countArmedEvolutions(weaponIds);
+  let score = Math.min(armed, 7) * 2.5 + Math.max(0, armed - 7) * 0.5;
+  score += activeRoleBonuses(weaponIds).reduce((s, b) => s + b.tier, 0) * 2.0;
 
-  // Penalize registered Gamble/Board anti-synergies
-  const clashes = clashesWithBelt(run.weapons, weaponId).length;
-  score -= clashes * 4;
+  for (let i = 0; i < weaponIds.length; i++) {
+    const id = weaponIds[i];
+    const lv = weaponLevels[id] ?? 1;
+    score += lv * (ENGINE_ROLES.has(weaponRole(id)) ? 1.85 : 1.15);
+    // Count each clashing pair once
+    const rest = weaponIds.slice(i + 1);
+    score -= clashesWithBelt(rest, id).length * 4.5;
+  }
   return score;
+};
+
+interface WeaponDecision {
+  score: number;
+  replaceWeaponId?: string;
+}
+
+/**
+ * Evaluate a weapon offer (direct add, +1 Lv upgrade, or 6/6 in-place swap)
+ * accounting for Evolutions, Role Set Bonuses, weapon levels, and Gamble clashes.
+ */
+const evaluateWeaponOffer = (run: SpireRun, weaponId: string, offerLevel = 1): WeaponDecision => {
+  const existingLv = run.weaponLevels[weaponId];
+  if (existingLv !== undefined) {
+    if (existingLv >= MAX_WEAPON_LEVEL) return { score: -10 };
+    const targetLv = Math.min(MAX_WEAPON_LEVEL, Math.max(existingLv + 1, offerLevel));
+    const lvGain = targetLv - existingLv;
+    const basePerLv =
+      run.weapons.length >= MAX_SUMMIT_WEAPONS
+        ? 4.4
+        : run.weapons.length >= 4
+          ? 3.6
+          : 2.6;
+    let score = basePerLv * lvGain;
+    if (ENGINE_ROLES.has(weaponRole(weaponId))) score += 1.4;
+    if (targetLv >= 4) score += 0.8;
+    return { score };
+  }
+
+  // Room left on the 6-weapon belt: evaluate direct addition
+  if (run.weapons.length < MAX_SUMMIT_WEAPONS) {
+    let score = 0;
+    const newEvos = newEvolutionsArmedBy(run, weaponId).length;
+    score += Math.min(newEvos, 3) * 3.0;
+
+    const beforeTiers = activeRoleBonuses(run.weapons).reduce((s, b) => s + b.tier, 0);
+    const afterTiers = activeRoleBonuses([...run.weapons, weaponId]).reduce((s, b) => s + b.tier, 0);
+    if (afterTiers > beforeTiers) score += (afterTiers - beforeTiers) * 2.2;
+    if (ENGINE_ROLES.has(weaponRole(weaponId))) score += 1.2;
+    score += (Math.min(MAX_WEAPON_LEVEL, Math.max(1, offerLevel)) - 1) * 1.1;
+    score += run.weapons.length < 4 ? 1.2 : 0.4;
+
+    const clashes = clashesWithBelt(run.weapons, weaponId).length;
+    score -= clashes * 4.5;
+    return { score };
+  }
+
+  // Belt is FULL (6/6): find the best held weapon to swap out if the net delta is meaningfully positive
+  const baseVal = scoreBelt(run.weapons, run.weaponLevels);
+  const incomingLv = Math.min(MAX_WEAPON_LEVEL, Math.max(1, offerLevel));
+  let bestDropId: string | undefined;
+  let bestDelta = -Infinity;
+
+  for (let i = 0; i < run.weapons.length; i++) {
+    const dropId = run.weapons[i];
+    const nextWeapons = [...run.weapons];
+    nextWeapons[i] = weaponId;
+    const nextLevels = { ...run.weaponLevels };
+    delete nextLevels[dropId];
+    nextLevels[weaponId] = incomingLv;
+    const delta = scoreBelt(nextWeapons, nextLevels) - baseVal;
+    if (delta > bestDelta) {
+      bestDelta = delta;
+      bestDropId = dropId;
+    }
+  }
+
+  return {
+    score: bestDelta >= 1.5 ? bestDelta : bestDelta - 1.5,
+    replaceWeaponId: bestDropId,
+  };
 };
 
 /** True when taking `arcanaId` fits the run's build cleanly (Glass Prism allowed when healthy or expert!). */
@@ -137,9 +213,9 @@ const isGoodArcana = (run: SpireRun, arcanaId: ArcanaId, bot: BotProfile): boole
   if (arcanaId === 'monochrome_pact' && (isRainbowBuild || run.arcana.includes('prismatic_fever'))) return false;
   if (arcanaId === 'prismatic_fever' && run.arcana.includes('monochrome_pact')) return false;
   if (arcanaId === 'glass_prism') {
-    // Risk-calibrated Glass Prism: strong when max hearts are already lean (<= 5),
-    // instead of sacrificing an 8+ heart tank pool into Act 2–3 hazard fights.
-    return run.maxHearts <= 5 && (bot.name === 'expert' || run.hearts >= 3);
+    // Risk-calibrated Glass Prism: strong when max hearts are already lean (<= 4, e.g. high Ascension),
+    // instead of sacrificing an 8+ heart Act 3 survival pool into Snare/Time-Bomb fights.
+    return run.maxHearts <= 4 && (bot.name === 'expert' || run.hearts >= 3);
   }
   return true;
 };
@@ -252,23 +328,33 @@ export const simulateSpireClimb = (o: {
 
     if (run.phase === 'reward' && run.reward) {
       if (!run.reward.weaponClaimed && run.reward.weaponOptions.length > 0) {
-        const bestScoreOf = (r: SpireRun) =>
-          Math.max(...r.reward!.weaponOptions.map(opt => scoreWeaponOffer(r, opt.weaponId)));
+        const bestDecisionOf = (r: SpireRun) => {
+          let bestIdx = 0;
+          let best: WeaponDecision = { score: -Infinity };
+          r.reward!.weaponOptions.forEach((opt, i) => {
+            const dec = evaluateWeaponOffer(r, opt.weaponId, opt.level);
+            if (dec.score > best.score) {
+              best = dec;
+              bestIdx = i;
+            }
+          });
+          return { idx: bestIdx, decision: best };
+        };
         // Reroll weak reward offers when flush with coins
-        if (!run.reward.weaponRerolled && bestScoreOf(run) <= 1 && run.coins >= REWARD_REROLL_COST + 50) {
+        if (!run.reward.weaponRerolled && bestDecisionOf(run).decision.score <= 1.2 && run.coins >= REWARD_REROLL_COST + 50) {
           run = rerollRewardWeapons(run);
         }
-        const opts = run.reward!.weaponOptions;
-        let pickIdx = 0;
-        let pickScore = -Infinity;
-        opts.forEach((opt, i) => {
-          const sc = scoreWeaponOffer(run, opt.weaponId);
-          if (sc > pickScore) {
-            pickScore = sc;
-            pickIdx = i;
-          }
-        });
-        run = optimizeBeltOrder(claimRewardWeapon(run, pickIdx));
+        const { idx: pickIdx, decision } = bestDecisionOf(run);
+        const picked = run.reward!.weaponOptions[pickIdx];
+        const isNewAtCap =
+          picked && run.weaponLevels[picked.weaponId] === undefined && run.weapons.length >= MAX_SUMMIT_WEAPONS;
+        if (isNewAtCap && (decision.score < 1.5 || !decision.replaceWeaponId)) {
+          run = skipRewardWeapon(run);
+        } else {
+          run = optimizeBeltOrder(
+            claimRewardWeapon(run, pickIdx, isNewAtCap ? decision.replaceWeaponId : undefined)
+          );
+        }
       }
       if (run.reward && !run.reward.skillClaimed && run.reward.skillOptions.length > 0) {
         run = claimRewardSkillNode(run, run.reward.skillOptions[0]);
@@ -314,23 +400,42 @@ export const simulateSpireClimb = (o: {
           }
         }
 
-        // Score & buy top shop weapons (selling a weak/clashing Lv1-2 weapon if needed to afford a high-score Evolution piece!)
-        const order = (run.shop?.weapons ?? [])
-          .map((w, i) => ({ w, i, score: scoreWeaponOffer(run, w.weaponId) }))
+        // Score & buy top shop weapons (upgrades prioritized at 4–6 weapons; swaps cleanly at 6/6!)
+        const indices = (run.shop?.weapons ?? []).map((_, i) => i);
+        const scoredOrder = indices
+          .map(i => {
+            const w = run.shop!.weapons[i];
+            const dec = w.sold ? { score: -Infinity } : evaluateWeaponOffer(run, w.weaponId, w.level);
+            return { i, score: dec.score };
+          })
           .sort((a, b) => b.score - a.score);
-        for (const item of order) {
+
+        for (const item of scoredOrder) {
           const cur = run.shop?.weapons[item.i];
           if (!cur || cur.sold) continue;
-          const worthBuying = item.score >= 1.5 || (cur.onSale && item.score >= 0.5 && run.weapons.length < 8);
+          // Re-evaluate against current belt state (earlier purchases in this pass may have filled 6/6!)
+          const dec = evaluateWeaponOffer(run, cur.weaponId, cur.level);
+          const isUpgrade = run.weaponLevels[cur.weaponId] !== undefined;
+          const isNewAtCap = !isUpgrade && run.weapons.length >= MAX_SUMMIT_WEAPONS;
+          const worthBuying = isNewAtCap
+            ? dec.score >= 2.2 && Boolean(dec.replaceWeaponId)
+            : dec.score >= 1.5 || (cur.onSale && dec.score >= 0.5 && run.weapons.length < MAX_SUMMIT_WEAPONS);
           if (!worthBuying) continue;
-          if (run.coins < cur.price && item.score >= 3) {
+          if (run.coins < cur.price && dec.score >= 3.5 && !isNewAtCap) {
             const sellId = findSellableWeapon(run);
-            if (sellId) run = shopSellWeapon(run, sellId);
+            if (sellId && sellId !== cur.weaponId) run = shopSellWeapon(run, sellId);
           }
+          // Recompute swap target if selling freed a slot
+          const nowNewAtCap =
+            run.weaponLevels[cur.weaponId] === undefined && run.weapons.length >= MAX_SUMMIT_WEAPONS;
+          const finalDec = nowNewAtCap ? evaluateWeaponOffer(run, cur.weaponId, cur.level) : dec;
+          if (nowNewAtCap && (finalDec.score < 2.2 || !finalDec.replaceWeaponId)) continue;
           if (run.coins >= cur.price) {
-            run = optimizeBeltOrder(shopBuyWeapon(run, item.i));
+            run = optimizeBeltOrder(
+              shopBuyWeapon(run, item.i, nowNewAtCap ? finalDec.replaceWeaponId : undefined)
+            );
             bought = true;
-          } else if (item.score >= 3 && !cur.locked && run.shop && countShopLocks(run.shop) < MAX_SHOP_LOCKS) {
+          } else if (finalDec.score >= 3 && !cur.locked && run.shop && countShopLocks(run.shop) < MAX_SHOP_LOCKS) {
             // Lock unaffordable high-synergy weapon for the next Merchant visit!
             run = shopToggleLock(run, 'weapon', item.i);
           }
@@ -375,10 +480,23 @@ export const simulateSpireClimb = (o: {
 
     if (run.phase === 'treasure' && run.treasure) {
       if (!run.treasure.claimed) {
-        const wScore = scoreWeaponOffer(run, run.treasure.weaponOffer.weaponId);
+        const offer = run.treasure.weaponOffer;
+        const dec = evaluateWeaponOffer(run, offer.weaponId, offer.level);
+        const isNewAtCap =
+          run.weaponLevels[offer.weaponId] === undefined && run.weapons.length >= MAX_SUMMIT_WEAPONS;
+        const canTakeWeapon = !isNewAtCap || (dec.score >= 1.5 && Boolean(dec.replaceWeaponId));
         const arcGood = run.treasure.arcanaOffer ? isGoodArcana(run, run.treasure.arcanaOffer, bot) : false;
-        const choice = wScore >= 2 ? 'weapon' : arcGood ? 'arcana' : wScore >= 0 ? 'weapon' : 'coins';
-        run = optimizeBeltOrder(claimTreasure(run, choice));
+        const choice =
+          canTakeWeapon && dec.score >= 2.2
+            ? 'weapon'
+            : arcGood
+              ? 'arcana'
+              : canTakeWeapon && dec.score >= 0.5
+                ? 'weapon'
+                : 'coins';
+        run = optimizeBeltOrder(
+          claimTreasure(run, choice, choice === 'weapon' && isNewAtCap ? dec.replaceWeaponId : undefined)
+        );
       }
       run = leaveTreasure(run);
       continue;
@@ -401,15 +519,24 @@ export const simulateSpireClimb = (o: {
       if (run.event?.pendingWeaponOptions?.length) {
         const opts = run.event.pendingWeaponOptions;
         let pickIdx = 0;
-        let bestSc = -Infinity;
+        let bestDec: WeaponDecision = { score: -Infinity };
         opts.forEach((opt, i) => {
-          const sc = scoreWeaponOffer(run, opt.weaponId);
-          if (sc > bestSc) {
-            bestSc = sc;
+          const dec = evaluateWeaponOffer(run, opt.weaponId, opt.level);
+          if (dec.score > bestDec.score) {
+            bestDec = dec;
             pickIdx = i;
           }
         });
-        run = optimizeBeltOrder(resolveEventPendingWeapon(run, pickIdx));
+        const picked = opts[pickIdx];
+        const isNewAtCap =
+          picked && run.weaponLevels[picked.weaponId] === undefined && run.weapons.length >= MAX_SUMMIT_WEAPONS;
+        if (isNewAtCap && (bestDec.score < 1.5 || !bestDec.replaceWeaponId)) {
+          run = skipEventPendingWeapon(run);
+        } else {
+          run = optimizeBeltOrder(
+            resolveEventPendingWeapon(run, pickIdx, isNewAtCap ? bestDec.replaceWeaponId : undefined)
+          );
+        }
       }
       if (run.event?.pendingSkillOptions?.length) {
         run = resolveEventPendingSkill(run, run.event.pendingSkillOptions[0]);

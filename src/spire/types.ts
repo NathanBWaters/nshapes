@@ -232,7 +232,7 @@ export interface SpireRun {
   extraEvolutionCap: number;
   extraEvolutionLikelihood: number;
 
-  // Persistent build (uncapped snowballing!)
+  // Persistent build (strictly capped at MAX_SUMMIT_WEAPONS = 6!)
   weapons: string[];
   weaponLevels: Record<string, number>;
   arcana: ArcanaId[];

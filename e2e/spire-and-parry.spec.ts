@@ -290,6 +290,24 @@ test.describe('Set-Parrying, Multiplier Ignition, Kill-Cam & Starfall Summit E2E
     await page.getByTestId('spire-treasure-coins').click();
     await expect(page.getByTestId('spire-treasure-leave')).toBeVisible({ timeout: 5000 });
 
+    // 5. Full 6/6 Belt in Merchant Shop: Swap button opens inline Swap Picker cleanly at 375px
+    await page.goto('/dev/spire?room=shop&fullBelt=true&seed=4242');
+    await expect(page.getByTestId('spire-shop')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId('spire-open-build')).toContainText('6/6');
+    await expect(page.getByTestId('spire-shop-belt-full')).toContainText('BELT 6/6');
+    await page.waitForTimeout(250);
+    await assertAllTextVisible(page, 'Summit Shop Full 6/6 Belt (375x667)');
+    // Click the trailing new swap candidate in the 4-slot shop to open the inline Swap Picker
+    const swapCandidate = page.locator('[data-testid^="spire-shop-weapon-"]', { hasText: /^Swap / }).first();
+    await expect(swapCandidate).toBeVisible({ timeout: 5000 });
+    await swapCandidate.click();
+    await expect(page.getByTestId('spire-shop-swap-panel')).toBeVisible({ timeout: 5000 });
+    await page.waitForTimeout(250);
+    await assertAllTextVisible(page, 'Summit Shop 6/6 Inline Swap Picker (375x667)');
+    await page.locator('[data-testid^="spire-shop-swap-drop-"]').first().click();
+    await expect(page.getByTestId('spire-shop-swap-panel')).toBeHidden({ timeout: 5000 });
+    await expect(page.getByTestId('spire-open-build')).toContainText('6/6');
+
     expect(pageErrors).toEqual([]);
   });
 });

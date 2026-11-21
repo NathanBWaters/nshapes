@@ -18,6 +18,7 @@ import { generateSpireEncounter, SPIRE_WEAPON_POOL } from '@/spire/data/encounte
 import { SPIRE_FIGHT_FEATURES, spireEncounterToLevel, spireRunOverrides, spireRunToVirtualSave } from '@/spire/engine/bridge';
 import {
   createSpireRun,
+  MAX_SUMMIT_WEAPONS,
   SPIRE_EXCLUDED_WEAPONS,
   spireWeaponSellValue,
   standaloneWeaponShopPrice,
@@ -150,11 +151,13 @@ describe('Starfall Summit — full climb balance', () => {
       const fighter = fighters[i % fighters.length];
       const seed = 5000 + i * 7919;
       const avg = simulateSpireClimb({ fighter, ascension: 0, seed, bot: BOTS.average });
+      expect(avg.run.weapons.length).toBeLessThanOrEqual(MAX_SUMMIT_WEAPONS);
       if (avg.wonAct1) avgA1 += 1;
       if (avg.wonAct2) avgA2 += 1;
       if (avg.wonAct3) avgA3 += 1;
 
       const exp = simulateSpireClimb({ fighter, ascension: 0, seed, bot: BOTS.expert });
+      expect(exp.run.weapons.length).toBeLessThanOrEqual(MAX_SUMMIT_WEAPONS);
       if (exp.wonAct1) expA1 += 1;
       if (exp.wonAct2) expA2 += 1;
       if (exp.wonAct3) expA3 += 1;
@@ -246,6 +249,7 @@ describe('Starfall Summit — full climb balance', () => {
         const fighter = FIGHTERS[i % FIGHTERS.length].name;
         const seed = 9100 + i * 3571;
         const res = simulateSpireClimb({ fighter, ascension: asc, seed, bot });
+        expect(res.run.weapons.length).toBeLessThanOrEqual(MAX_SUMMIT_WEAPONS);
         if (res.wonAct3) wins += 1;
         floors += res.finalFloor;
       }
@@ -264,6 +268,7 @@ describe('Starfall Summit — full climb balance', () => {
       const fighter = FIGHTERS[i % FIGHTERS.length].name;
       const seed = 9100 + i * 3571;
       const re = simulateSpireClimb({ fighter, ascension: 0, seed, bot: BOTS.expert, playEndless: true, maxAct: 4 });
+      expect(re.run.weapons.length).toBeLessThanOrEqual(MAX_SUMMIT_WEAPONS);
       if (re.wonAct4) endlessA4Wins += 1;
       endlessMaxFloor = Math.max(endlessMaxFloor, re.finalFloor);
     }

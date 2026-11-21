@@ -37,6 +37,7 @@ import type {
   SpireTreasureState,
 } from '../types';
 
+export const MAX_SUMMIT_WEAPONS = 6;
 export const SKIP_WEAPON_COINS = 25;
 export const REWARD_REROLL_COST = 20;
 export const MAX_SHOP_LOCKS = 2;
@@ -60,11 +61,13 @@ const recordSeenEnemy = (seenEnemies: readonly string[] | undefined, name?: stri
 };
 
 /**
- * Roll `count` weapon offers for drafts & shops:
- *  - Slot 0 strongly prefers a new unheld weapon that arms a NEW Evolution.
- *  - Middle slots guarantee high-impact engine/payoff weapons (damage/tricks/gambles/chains).
- *  - For 3+ slot drafts/shops, the final slot frequently offers a +1 Level UPGRADE
- *    for one of your currently held weapons so builds deepen (Lv 2→5) instead of bloating!
+ * Roll `count` weapon offers for drafts, shops, vaults & events under the 6-weapon belt cap:
+ *  - Below 6 weapons: new weapons lead (preferring Evolution-arming & engine roles) while
+ *    offering a +1 Level upgrade slot often enough (especially at 3–5 weapons) to create
+ *    genuine tall-vs-wide tension!
+ *  - At 6/6 (belt full): prioritize held-weapon +1 Level upgrades (2 in 3-slot drafts,
+ *    2–3 in 4-slot shops, 75% in 1-slot vaults) alongside 1–2 high-synergy swap/pivot
+ *    candidates. If all 6 held weapons are already Lv 5, fill cleanly with fresh swap candidates.
  */
 export const rollSynergyWeapons = (
   run: Pick<SpireRun, 'weapons' | 'weaponLevels' | 'act'>,
@@ -81,15 +84,27 @@ export const rollSynergyWeapons = (
   const upgradeable = run.weapons.filter(
     id => (run.weaponLevels[id] ?? 1) < MAX_WEAPON_LEVEL && !excluded?.has(id)
   );
-  const allowUpgrade = (opts?.allowUpgrade ?? true) && count >= 3 && upgradeable.length > 0;
-  // Tall-vs-wide balance: early drafts offer 1 upgrade slot so you can deepen starters;
-  // once holding 6+ weapons, offer up to 2 upgrade slots alongside 1 Evolution-arming new weapon!
+  const beltFull = run.weapons.length >= MAX_SUMMIT_WEAPONS;
+  const canOfferUpgrade = (opts?.allowUpgrade ?? true) && upgradeable.length > 0;
+
   let upgradeSlots = 0;
-  if (allowUpgrade) {
-    if (run.weapons.length >= 6 && upgradeable.length >= 2) {
-      upgradeSlots = 2;
-    } else if (rng.next() < (run.weapons.length >= 4 ? 0.9 : 0.65)) {
-      upgradeSlots = 1;
+  if (canOfferUpgrade) {
+    if (beltFull) {
+      if (count === 1) {
+        upgradeSlots = rng.next() < 0.75 ? 1 : 0;
+      } else if (count === 2) {
+        upgradeSlots = 1;
+      } else if (count === 3) {
+        upgradeSlots = Math.min(2, upgradeable.length);
+      } else {
+        const desired = upgradeable.length >= 3 && rng.next() < 0.5 ? 3 : 2;
+        upgradeSlots = Math.min(upgradeable.length, count - 1, desired);
+      }
+    } else if (count >= 3) {
+      const upgradeChance = run.weapons.length >= 5 ? 0.9 : run.weapons.length >= 3 ? 0.7 : 0.45;
+      if (rng.next() < upgradeChance) {
+        upgradeSlots = 1;
+      }
     }
   }
   const newCount = Math.min(unheld.length, count - upgradeSlots);
@@ -97,7 +112,7 @@ export const rollSynergyWeapons = (
   const synergy = unheld.filter(id => newEvolutionsArmedBy(run, id).length > 0);
   const chosen: string[] = [];
 
-  // Slot 0: Evolution-arming synergy weapon (preferring engine roles!)
+  // Prefer an Evolution-arming synergy weapon (biasing toward engine roles)
   if (newCount > 0 && synergy.length > 0 && rng.next() < 0.82) {
     const synEngine = synergy.filter(id => ENGINE_ROLES.has(weaponRole(id)));
     const synPool = synEngine.length > 0 && rng.next() < 0.75 ? synEngine : synergy;
@@ -123,25 +138,28 @@ export const rollSynergyWeapons = (
   }
 
   const actFloor = run.act >= 3 ? 3 : run.act === 2 ? 2 : 1;
-  const offers = chosen.map(weaponId => {
+  const newOffers = chosen.map(weaponId => {
     const bonusLv = run.act === 1 && rng.next() < 0.3 ? 1 : run.act >= 2 && rng.next() < 0.35 ? 1 : 0;
     const level = Math.min(MAX_WEAPON_LEVEL, Math.max(minLevel, actFloor + bonusLv));
     return { weaponId, level };
   });
 
-  // Trailing slots: +1 Level upgrades for existing held weapons (anti-bloat power spikes!)
-  if (upgradeSlots > 0 && offers.length < count) {
+  // +1 Level upgrades for existing held weapons (deepen Lv 2→5 power spikes!)
+  const upgradeOffers: { weaponId: string; level: number }[] = [];
+  const upgradeTarget = Math.min(upgradeable.length, count - newOffers.length);
+  if (upgradeSlots > 0 && upgradeTarget > 0) {
     const engineHeld = rng.shuffle(upgradeable.filter(id => ENGINE_ROLES.has(weaponRole(id))));
     const otherHeld = rng.shuffle(upgradeable.filter(id => !ENGINE_ROLES.has(weaponRole(id))));
     const orderedUp = [...engineHeld, ...otherHeld];
     for (const upId of orderedUp) {
-      if (offers.length >= count) break;
-      const nextLv = Math.min(MAX_WEAPON_LEVEL, (run.weaponLevels[upId] ?? 1) + 1);
-      offers.push({ weaponId: upId, level: nextLv });
+      if (upgradeOffers.length >= upgradeTarget) break;
+      const nextLv = Math.min(MAX_WEAPON_LEVEL, Math.max((run.weaponLevels[upId] ?? 1) + 1, minLevel));
+      upgradeOffers.push({ weaponId: upId, level: nextLv });
     }
   }
 
-  return offers;
+  // At 6/6 lead with upgrades followed by swap candidates; below 6 lead with new weapons
+  return beltFull ? [...upgradeOffers, ...newOffers] : [...newOffers, ...upgradeOffers];
 };
 
 /** Pick `count` Fighter Skill Tree nodes not yet owned (prioritizing nodes linked to already-owned nodes / roots!). */
@@ -183,7 +201,11 @@ export const rollArcanaOptions = (
   return rng.shuffle(unheld).slice(0, count);
 };
 
-/** Add a weapon (or level it up by at least +1, or to `level` if higher, when already held). */
+/**
+ * Add a weapon (capped strictly at `MAX_SUMMIT_WEAPONS = 6`), or level it up by
+ * at least +1 (or to `level` if higher) when already held.
+ * If NOT held and the belt is already at 6/6, returns `run` unchanged.
+ */
 export const grantSpireWeapon = (run: SpireRun, weaponId: string, level = 1): SpireRun => {
   const existing = run.weaponLevels[weaponId];
   if (existing !== undefined) {
@@ -196,11 +218,60 @@ export const grantSpireWeapon = (run: SpireRun, weaponId: string, level = 1): Sp
       },
     };
   }
+  if (run.weapons.length >= MAX_SUMMIT_WEAPONS) return run;
   return {
     ...run,
     weapons: [...run.weapons, weaponId],
     weaponLevels: { ...run.weaponLevels, [weaponId]: Math.min(MAX_WEAPON_LEVEL, Math.max(1, level)) },
   };
+};
+
+/**
+ * Replace a held weapon in place (preserving its exact belt slot index for Understudy!)
+ * with a new unheld weapon at `clamp(level, 1, MAX_WEAPON_LEVEL)`.
+ * Guards against invalid `dropWeaponId` or an already-held `newWeaponId`.
+ */
+export const replaceSpireWeapon = (
+  run: SpireRun,
+  dropWeaponId: string,
+  newWeaponId: string,
+  level = 1
+): SpireRun => {
+  const dropIdx = run.weapons.indexOf(dropWeaponId);
+  if (dropIdx < 0) return run;
+  if (dropWeaponId === newWeaponId) return run;
+  if (run.weaponLevels[newWeaponId] !== undefined || run.weapons.includes(newWeaponId)) return run;
+  const clampedLv = Math.min(MAX_WEAPON_LEVEL, Math.max(1, level));
+  const weapons = [...run.weapons];
+  weapons[dropIdx] = newWeaponId;
+  const weaponLevels = { ...run.weaponLevels };
+  delete weaponLevels[dropWeaponId];
+  weaponLevels[newWeaponId] = clampedLv;
+  return { ...run, weapons, weaponLevels };
+};
+
+/**
+ * Shared acquisition helper enforcing the 6-weapon belt cap:
+ * - Held weapon → upgrades immediately (no swap needed).
+ * - New weapon with room (`< 6`) → adds directly.
+ * - New weapon at full belt (`>= 6`) → requires a valid held `replaceWeaponId`; returns `null` otherwise.
+ */
+const acquireSpireWeapon = (
+  run: SpireRun,
+  weaponId: string,
+  level: number,
+  replaceWeaponId?: string
+): SpireRun | null => {
+  if (run.weaponLevels[weaponId] !== undefined) {
+    return grantSpireWeapon(run, weaponId, level);
+  }
+  if (run.weapons.length < MAX_SUMMIT_WEAPONS) {
+    return grantSpireWeapon(run, weaponId, level);
+  }
+  if (!replaceWeaponId || !run.weapons.includes(replaceWeaponId)) {
+    return null;
+  }
+  return replaceSpireWeapon(run, replaceWeaponId, weaponId, level);
 };
 
 export const upgradeSpireWeapon = (run: SpireRun, weaponId: string, delta = 1): SpireRun => {
@@ -254,7 +325,7 @@ const extractLockedShop = (shop: SpireShopState): SpireLockedShopItems | undefin
   return { weapons, arcana, upgrades };
 };
 
-/** Canonical Adventure `UPGRADES` offered in the Summit Merchant's Tent (slot-cap upgrades omitted since Summit is uncapped). */
+/** Canonical Adventure `UPGRADES` offered in the Summit Merchant's Tent (slot-cap upgrades omitted since Summit uses a fixed 6-weapon belt). */
 export const SPIRE_SHOP_UPGRADE_IDS: readonly SpireShopUpgradeKind[] = [
   'heavy_hitter',
   'tough_hide',
@@ -757,11 +828,12 @@ export const completeSpireBattle = (run: SpireRun, fight: RunState): SpireRun =>
 
 // ─── Post-Battle Rewards ────────────────────────────────────────────────────
 
-export const claimRewardWeapon = (run: SpireRun, index: number): SpireRun => {
+export const claimRewardWeapon = (run: SpireRun, index: number, replaceWeaponId?: string): SpireRun => {
   if (run.phase !== 'reward' || !run.reward || run.reward.weaponClaimed) return run;
   const pick = run.reward.weaponOptions[index];
   if (!pick) return run;
-  const next = grantSpireWeapon(run, pick.weaponId, pick.level);
+  const next = acquireSpireWeapon(run, pick.weaponId, pick.level, replaceWeaponId);
+  if (!next) return run;
   return { ...next, reward: { ...run.reward, weaponClaimed: true } };
 };
 
@@ -855,18 +927,35 @@ export const enterEndlessSpire = (run: SpireRun): SpireRun => {
 
 // ─── Merchant Shop ──────────────────────────────────────────────────────────
 
-export const shopBuyWeapon = (run: SpireRun, index: number): SpireRun => {
+export const shopBuyWeapon = (run: SpireRun, index: number, replaceWeaponId?: string): SpireRun => {
   if (run.phase !== 'shop' || !run.shop) return run;
   const offer = run.shop.weapons[index];
   if (!offer || offer.sold || run.coins < offer.price) return run;
-  const next = grantSpireWeapon(run, offer.weaponId, offer.level);
+  const next = acquireSpireWeapon(run, offer.weaponId, offer.level, replaceWeaponId);
+  if (!next) return run;
+  const swappedOut =
+    run.weaponLevels[offer.weaponId] === undefined && run.weapons.length >= MAX_SUMMIT_WEAPONS
+      ? replaceWeaponId
+      : undefined;
+  const priceScale = swappedOut ? shopPriceScaleOf(run) : 1;
   return {
     ...next,
     coins: run.coins - offer.price,
     stats: { ...run.stats, coinsSpent: run.stats.coinsSpent + offer.price },
     shop: {
       ...run.shop,
-      weapons: run.shop.weapons.map((w, i) => (i === index ? { ...w, sold: true, locked: false } : w)),
+      weapons: run.shop.weapons.map((w, i) => {
+        if (i === index) return { ...w, sold: true, locked: false };
+        if (swappedOut && !w.sold && w.weaponId === swappedOut) {
+          return {
+            ...w,
+            level: 1,
+            locked: false,
+            price: standaloneWeaponShopPrice(w.weaponId, 1, priceScale, w.onSale),
+          };
+        }
+        return w;
+      }),
     },
   };
 };
@@ -1111,16 +1200,32 @@ export const leaveCampfire = (run: SpireRun): SpireRun => {
 
 // ─── Treasure Vault ─────────────────────────────────────────────────────────
 
-export const claimTreasure = (run: SpireRun, choice: 'weapon' | 'arcana' | 'coins'): SpireRun => {
+export const claimTreasure = (
+  run: SpireRun,
+  choice: 'weapon' | 'arcana' | 'coins',
+  replaceWeaponId?: string
+): SpireRun => {
   if (run.phase !== 'treasure' || !run.treasure || run.treasure.claimed) return run;
   const t = run.treasure;
   let next: SpireRun = { ...run, coins: run.coins + t.coins };
   let outcomeText = `Claimed ${t.coins}¢`;
 
   if (choice === 'weapon') {
-    next = grantSpireWeapon(next, t.weaponOffer.weaponId, t.weaponOffer.level);
+    const acquired = acquireSpireWeapon(next, t.weaponOffer.weaponId, t.weaponOffer.level, replaceWeaponId);
+    if (!acquired) return run;
+    const isUpgrade = run.weaponLevels[t.weaponOffer.weaponId] !== undefined;
+    const swappedOut = !isUpgrade && run.weapons.length >= MAX_SUMMIT_WEAPONS ? replaceWeaponId : undefined;
+    next = acquired;
     const wName = getArmoryWeapon(t.weaponOffer.weaponId)?.name ?? t.weaponOffer.weaponId;
-    outcomeText = `Claimed ${t.coins}¢ + ${wName} (Lv ${t.weaponOffer.level})!`;
+    const finalLv = next.weaponLevels[t.weaponOffer.weaponId] ?? t.weaponOffer.level;
+    if (swappedOut) {
+      const dropName = getArmoryWeapon(swappedOut)?.name ?? swappedOut;
+      outcomeText = `Claimed ${t.coins}¢ & swapped ${dropName} for ${wName} (Lv ${finalLv})!`;
+    } else if (isUpgrade) {
+      outcomeText = `Claimed ${t.coins}¢ & upgraded ${wName} to Lv ${finalLv}!`;
+    } else {
+      outcomeText = `Claimed ${t.coins}¢ + ${wName} (Lv ${finalLv})!`;
+    }
   } else if (choice === 'arcana' && t.arcanaOffer && !next.arcana.includes(t.arcanaOffer)) {
     const arcana = [...next.arcana, t.arcanaOffer];
     const name = ARCANA.find(a => a.id === t.arcanaOffer)?.name ?? t.arcanaOffer;
@@ -1258,12 +1363,25 @@ export const chooseEventOption = (run: SpireRun, optionId: string): SpireRun => 
       case 'gamblers_dice:high_stakes': {
         next = { ...next, coins: next.coins - 45, stats: { ...next.stats, coinsSpent: next.stats.coinsSpent + 45 } };
         if (rng.next() < 0.65) {
-          const prize = rollSynergyWeapons(next, rng, 1, 2)[0];
           next = { ...next, coins: next.coins + 135 };
-          if (prize) next = grantSpireWeapon(next, prize.weaponId, prize.level);
-          const wName = prize ? getArmoryWeapon(prize.weaponId)?.name ?? prize.weaponId : 'bonus loot';
           outcomeTitle = 'JACKPOT!';
-          outcomeText = `Double sixes! Won +135¢ and ${wName} (Lv ${prize?.level ?? 2})!`;
+          if (next.weapons.length >= MAX_SUMMIT_WEAPONS) {
+            const upgradeable = next.weapons.filter(id => (next.weaponLevels[id] ?? 1) < MAX_WEAPON_LEVEL);
+            if (upgradeable.length > 0) {
+              const wId = rng.pick(upgradeable);
+              next = upgradeSpireWeapon(next, wId, 1);
+              const wName = getArmoryWeapon(wId)?.name ?? wId;
+              outcomeText = `Double sixes! Won +135¢ and upgraded ${wName} to Lv ${next.weaponLevels[wId]}!`;
+            } else {
+              next = { ...next, coins: next.coins + 100 };
+              outcomeText = 'Double sixes! Belt maxed (6/6) — won +235¢ jackpot gold!';
+            }
+          } else {
+            const prize = rollSynergyWeapons(next, rng, 1, 2, { allowUpgrade: false })[0];
+            if (prize) next = grantSpireWeapon(next, prize.weaponId, prize.level);
+            const wName = prize ? getArmoryWeapon(prize.weaponId)?.name ?? prize.weaponId : 'bonus loot';
+            outcomeText = `Double sixes! Won +135¢ and ${wName} (Lv ${prize?.level ?? 2})!`;
+          }
         } else {
           outcomeTitle = 'Snake Eyes…';
           outcomeText = 'The fox grins and sweeps your 45¢ off the felt.';
@@ -1358,14 +1476,39 @@ export const chooseEventOption = (run: SpireRun, optionId: string): SpireRun => 
 
       case 'shady_peddler:buy_crate': {
         next = { ...next, coins: next.coins - 55, stats: { ...next.stats, coinsSpent: next.stats.coinsSpent + 55 } };
-        const prize = rollSynergyWeapons(next, rng, 1, 3)[0];
-        if (prize) {
-          next = grantSpireWeapon(next, prize.weaponId, 3);
-          const wName = getArmoryWeapon(prize.weaponId)?.name ?? prize.weaponId;
-          outcomeText = `Inside the crate: a pristine Level 3 ${wName}!`;
+        if (next.weapons.length >= MAX_SUMMIT_WEAPONS) {
+          const upgradeable = next.weapons.filter(id => (next.weaponLevels[id] ?? 1) < MAX_WEAPON_LEVEL);
+          const newPrize = rollSynergyWeapons(next, rng, 1, 3, { allowUpgrade: false })[0];
+          const options: { weaponId: string; level: number }[] = [];
+          if (upgradeable.length > 0) {
+            const engineUp = upgradeable.filter(id => ENGINE_ROLES.has(weaponRole(id)));
+            const pickUp = rng.pick(engineUp.length > 0 ? engineUp : upgradeable);
+            const targetLv = Math.min(MAX_WEAPON_LEVEL, Math.max((next.weaponLevels[pickUp] ?? 1) + 1, 3));
+            options.push({ weaponId: pickUp, level: targetLv });
+          }
+          if (newPrize) {
+            options.push({ weaponId: newPrize.weaponId, level: Math.max(3, newPrize.level) });
+          }
+          if (options.length > 0) {
+            pendingWeaponOptions = options;
+            outcomeText =
+              upgradeable.length > 0
+                ? 'Belt full (6/6)! Boost a held weapon to Lv 3+ or swap in a Level 3 Synergy Weapon!'
+                : 'Belt maxed (6/6)! Inside the crate: a pristine Level 3 Synergy Weapon to swap in (or skip for +25¢)!';
+          } else {
+            next = { ...next, coins: next.coins + 110 };
+            outcomeText = 'A stash of rare gold coins (+110¢)!';
+          }
         } else {
-          next = { ...next, coins: next.coins + 110 };
-          outcomeText = 'A stash of rare gold coins (+110¢)!';
+          const prize = rollSynergyWeapons(next, rng, 1, 3, { allowUpgrade: false })[0];
+          if (prize) {
+            next = grantSpireWeapon(next, prize.weaponId, 3);
+            const wName = getArmoryWeapon(prize.weaponId)?.name ?? prize.weaponId;
+            outcomeText = `Inside the crate: a pristine Level 3 ${wName}!`;
+          } else {
+            next = { ...next, coins: next.coins + 110 };
+            outcomeText = 'A stash of rare gold coins (+110¢)!';
+          }
         }
         break;
       }
@@ -1508,18 +1651,44 @@ export const resolveEventPendingArcana = (run: SpireRun, accept: boolean): Spire
   };
 };
 
-export const resolveEventPendingWeapon = (run: SpireRun, index: number): SpireRun => {
+export const resolveEventPendingWeapon = (
+  run: SpireRun,
+  index: number,
+  replaceWeaponId?: string
+): SpireRun => {
   if (run.phase !== 'event' || !run.event?.pendingWeaponOptions) return run;
   const pick = run.event.pendingWeaponOptions[index];
   if (!pick) return run;
-  const next = grantSpireWeapon(run, pick.weaponId, pick.level);
+  const next = acquireSpireWeapon(run, pick.weaponId, pick.level, replaceWeaponId);
+  if (!next) return run;
+  const isUpgrade = run.weaponLevels[pick.weaponId] !== undefined;
+  const swappedOut = !isUpgrade && run.weapons.length >= MAX_SUMMIT_WEAPONS ? replaceWeaponId : undefined;
   const wName = getArmoryWeapon(pick.weaponId)?.name ?? pick.weaponId;
+  const finalLv = next.weaponLevels[pick.weaponId] ?? pick.level;
+  const outcomeText = swappedOut
+    ? `Swapped ${getArmoryWeapon(swappedOut)?.name ?? swappedOut} for ${wName} (Lv ${finalLv})!`
+    : isUpgrade
+      ? `Upgraded ${wName} to Lv ${finalLv}!`
+      : `Claimed ${wName} (Lv ${finalLv})!`;
   return {
     ...next,
     event: {
       ...run.event,
       pendingWeaponOptions: undefined,
-      outcomeText: `Claimed ${wName} (Lv ${pick.level})!`,
+      outcomeText,
+    },
+  };
+};
+
+export const skipEventPendingWeapon = (run: SpireRun): SpireRun => {
+  if (run.phase !== 'event' || !run.event?.pendingWeaponOptions?.length) return run;
+  return {
+    ...run,
+    coins: run.coins + SKIP_WEAPON_COINS,
+    event: {
+      ...run.event,
+      pendingWeaponOptions: undefined,
+      outcomeText: `Kept your current belt and pocketed +${SKIP_WEAPON_COINS}¢ instead!`,
     },
   };
 };
