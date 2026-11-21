@@ -23,9 +23,9 @@ const catalystResonance = {
   foeHpScale: 1.08,
 } satisfies ArcanaRules;
 const tempoSurge = {
-  damageScale: 1.32,
+  damageScale: 1.28,
   setTimeBonus: 1,
-  timerSpeedScale: 1.2,
+  timerSpeedScale: 1.35,
   untimedMoves: { delta: -1, min: 4 },
 } satisfies ArcanaRules;
 

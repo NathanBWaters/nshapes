@@ -131,6 +131,16 @@ export const SPIRE_CLASH_PAIRS: readonly { a: string; b: string; reason: string 
     b: 'ice-block',
     reason: 'Frozen cards sit untouched while Rust decays them to 0 before thawing.',
   },
+  {
+    a: 'twin-seed',
+    b: 'thorn-bush',
+    reason: 'Duplicate twin cards crowd board slots while Thorn Bush demands fast thorn clears.',
+  },
+  {
+    a: 'ice-block',
+    b: 'greedy-chest',
+    reason: 'Frozen slots and maturing Greedy Chests both tie up playable board space at once.',
+  },
 ];
 
 /** Returns any severe Gamble/Board clash warnings if `candidateWeaponId` is added to `heldWeaponIds`. */

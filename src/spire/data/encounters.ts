@@ -61,20 +61,20 @@ export const STARTER_KITS: Record<CharacterName, FighterStarterKit> = {
     fighter: 'Corgi',
     starterWeapon: 'growth-seed',
     bonusWeapon: 'chaos-shard',
-    maxHearts: 6,
-    startingCoins: 75,
+    maxHearts: 7,
+    startingCoins: 90,
     startingHints: 2,
-    startingGraces: 1,
+    startingGraces: 2,
     tagline: 'Starts armed for Shard Garden — expands the board with Fetch Power cards and ricochet storms.',
   },
   Badger: {
     fighter: 'Badger',
     starterWeapon: 'prismatic-ray',
     bonusWeapon: 'life-vessel',
-    maxHearts: 6,
-    startingCoins: 65,
+    maxHearts: 7,
+    startingCoins: 85,
     startingHints: 2,
-    startingGraces: 1,
+    startingGraces: 2,
     tagline: 'Starts armed for Bloodline — massive Heart pool, Grudge retaliation, and cross-board lasers.',
   },
   'Emperor Penguin': {
@@ -189,9 +189,9 @@ export const canonicalLevelEnemyName = (levelId: string): string => {
  * Shading Surge (×5 in Act 3).
  */
 const BASE_ACT_HP: Record<number, { start: number; end: number; eliteMult: number; boss: number; timer: number; skirmishTimer: number }> = {
-  1: { start: 108, end: 295, eliteMult: 1.42, boss: 660, timer: 100, skirmishTimer: 72 },
-  2: { start: 540, end: 1220, eliteMult: 1.32, boss: 2200, timer: 110, skirmishTimer: 94 },
-  3: { start: 2100, end: 4400, eliteMult: 1.28, boss: 8100, timer: 112, skirmishTimer: 106 },
+  1: { start: 105, end: 280, eliteMult: 1.4, boss: 630, timer: 100, skirmishTimer: 72 },
+  2: { start: 515, end: 1150, eliteMult: 1.3, boss: 2080, timer: 110, skirmishTimer: 94 },
+  3: { start: 1960, end: 4120, eliteMult: 1.26, boss: 7600, timer: 112, skirmishTimer: 106 },
 };
 
 const actCurve = (act: number) => {
