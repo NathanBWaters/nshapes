@@ -10,8 +10,9 @@
 import type { AttributeName, Weapon } from '@/types';
 import type { AdventureSave, EvolutionRecipe, FeatureFlag, LevelDef } from '@/adventure/types';
 import type { WeaponBuilds } from '@/adventure/data/weaponStats';
-import { createNewSave } from '@/adventure/progress';
+import { COACH_KEYS, createNewSave } from '@/adventure/progress';
 import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
+import { MECHANICS } from '@/adventure/data/mechanics';
 import { ARCANA } from '@/adventure/data/arcana';
 import { ALL_ARMORY_WEAPON_IDS, charmWeapons, getArmoryWeapon } from '@/adventure/data/armory';
 import { armedRecipesFor, newRecipesArmedBy } from '@/adventure/engine/sources';
@@ -213,8 +214,13 @@ export const spireRunToVirtualSave = (
     musicOn: prefs.musicOn,
     effectsOn: prefs.effectsOn,
     // Mark all intro/coach tips seen so Summit fights stay brisk and never interrupt with campaign tutorial tips
-    seenMechanics: ['set_rule', 'hearts', 'timer', 'rainbow', 'evolutions', 'skill_tree', 'coins', 'hints', 'graces', 'shading_surge'],
-    seenCoachMarks: ['evo', 'power_meter', 'weapon_growth'],
+    seenMechanics: Object.keys(MECHANICS),
+    seenCoachMarks: [
+      ...Object.keys(MECHANICS).map(COACH_KEYS.event),
+      COACH_KEYS.evolution,
+      COACH_KEYS.powerMeter,
+      COACH_KEYS.weaponGrowth,
+    ],
   };
 };
 

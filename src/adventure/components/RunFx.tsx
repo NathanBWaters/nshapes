@@ -48,22 +48,53 @@ export const EvolutionBanner: React.FC<{ name: string; icon: IconName; text: str
 };
 
 /** One active evolution: its icon inside a ring that empties as the time runs out. */
-export const EvolutionRing: React.FC<{ icon: IconName; name: string; remainingMs: number; durationMs: number }> = ({ icon, name, remainingMs, durationMs }) => {
-  const size = 34;
-  const r = 14;
+export const EvolutionRing: React.FC<{ icon: IconName; name: string; remainingMs: number; durationMs: number; compact?: boolean }> = ({
+  icon,
+  name,
+  remainingMs,
+  durationMs,
+  compact = false,
+}) => {
+  const size = compact ? 26 : 34;
+  const strokeW = compact ? 3 : 4;
+  const r = compact ? 10.5 : 14;
   const c = 2 * Math.PI * r;
   const frac = durationMs > 0 ? Math.max(0, Math.min(1, remainingMs / durationMs)) : 0;
   const secs = Math.ceil(remainingMs / 1000);
+  if (compact) {
+    return (
+      <View style={st.ringPill} accessibilityLabel={`${name} evolution, ${secs} seconds left`} testID="evolution-ring">
+        <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+          <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
+            <Circle cx={size / 2} cy={size / 2} r={r} stroke="#E9D5FF" strokeWidth={strokeW} fill={COLORS.canvasWhite} />
+            <Circle
+              cx={size / 2}
+              cy={size / 2}
+              r={r}
+              stroke={secs <= 5 ? COLORS.impactRed : TONE.evoReady}
+              strokeWidth={strokeW}
+              fill="none"
+              strokeDasharray={`${c * frac} ${c}`}
+              strokeLinecap="round"
+              transform={`rotate(-90 ${size / 2} ${size / 2})`}
+            />
+          </Svg>
+          <Icon name={icon} size={12} color={INK} />
+        </View>
+        <Text style={st.ringPillSecs}>{secs}s</Text>
+      </View>
+    );
+  }
   return (
     <View style={st.ring} accessibilityLabel={`${name} evolution, ${secs} seconds left`} testID="evolution-ring">
       <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
-        <Circle cx={size / 2} cy={size / 2} r={r} stroke="#E9D5FF" strokeWidth={4} fill={COLORS.canvasWhite} />
+        <Circle cx={size / 2} cy={size / 2} r={r} stroke="#E9D5FF" strokeWidth={strokeW} fill={COLORS.canvasWhite} />
         <Circle
           cx={size / 2}
           cy={size / 2}
           r={r}
           stroke={secs <= 5 ? COLORS.impactRed : TONE.evoReady}
-          strokeWidth={4}
+          strokeWidth={strokeW}
           fill="none"
           strokeDasharray={`${c * frac} ${c}`}
           strokeLinecap="round"
@@ -99,4 +130,6 @@ const st = StyleSheet.create({
   bannerText: { color: DARK.text, fontSize: 12 },
   ring: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
   ringSecs: { position: 'absolute', bottom: -6, fontSize: 9, fontWeight: '900', color: INK, backgroundColor: COLORS.canvasWhite, borderRadius: 4, paddingHorizontal: 2, overflow: 'hidden' },
+  ringPill: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#FEF3C7', borderRadius: 999, borderWidth: 1.5, borderColor: TONE.evoReady, paddingLeft: 1, paddingRight: 5, paddingVertical: 0.5 },
+  ringPillSecs: { fontSize: 9.5, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
 });

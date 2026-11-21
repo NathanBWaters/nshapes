@@ -116,10 +116,10 @@ export const Heart: React.FC<{ size?: number; filled?: boolean }> = ({ size = 16
   <Text style={{ fontSize: size, lineHeight: size * 1.15, color: filled ? COLORS.impactRed : '#C9C2B8' }}>{filled ? '♥' : '♡'}</Text>
 );
 
-export const CoinPill: React.FC<{ coins: number; style?: ViewStyle; dark?: boolean }> = ({ coins, style, dark }) => (
-  <View style={[styles.pill, dark && { backgroundColor: COLORS.deepOnyx, borderColor: COLORS.deepOnyx }, style]}>
-    <Icon name="lorc/crown-coin" size={16} color="#E0A800" />
-    <Text style={[styles.pillText, dark && { color: COLORS.canvasWhite }]}>{coins.toLocaleString()}</Text>
+export const CoinPill: React.FC<{ coins: number; style?: ViewStyle; dark?: boolean; compact?: boolean }> = ({ coins, style, dark, compact }) => (
+  <View style={[styles.pill, compact && styles.pillCompact, dark && { backgroundColor: COLORS.deepOnyx, borderColor: COLORS.deepOnyx }, style]}>
+    <Icon name="lorc/crown-coin" size={compact ? 13 : 16} color="#E0A800" />
+    <Text style={[styles.pillText, compact && styles.pillTextCompact, dark && { color: COLORS.canvasWhite }]}>{coins.toLocaleString()}</Text>
   </View>
 );
 
@@ -199,7 +199,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
+  pillCompact: {
+    gap: 3,
+    borderWidth: 1.5,
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+  },
   pillText: { fontWeight: '800', color: INK, fontSize: 14, fontVariant: ['tabular-nums'] },
+  pillTextCompact: { fontSize: 11, fontWeight: '900' },
   eyebrow: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 3, borderWidth: 1.5, borderColor: INK },
   eyebrowText: { fontWeight: '800', fontSize: 11, letterSpacing: 1.5, color: INK, textTransform: 'uppercase' },
 });

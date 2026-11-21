@@ -37,10 +37,12 @@ interface Props {
    * other side ('right', 'down-right').
    */
   tail?: 'left' | 'down' | 'right' | 'down-right';
+  /** Compact inline style for short battle stages so tips fit cleanly without spilling out */
+  compact?: boolean;
   testID?: string;
 }
 
-const StageBubble: React.FC<Props> = ({ text, kind = 'lesson', onPress, tail = 'left', testID }) => {
+const StageBubble: React.FC<Props> = ({ text, kind = 'lesson', onPress, tail = 'left', compact = false, testID }) => {
   const [bg, edge] = TONE[kind];
   const foeSide = tail === 'right' || tail === 'down-right';
   // A new line pops in, so the eye goes to it
@@ -52,19 +54,30 @@ const StageBubble: React.FC<Props> = ({ text, kind = 'lesson', onPress, tail = '
 
   const body = (
     <>
-      <View style={[st.tail, TAIL_STYLE[tail], { backgroundColor: bg, borderColor: edge }]} />
-      <Text style={st.text}>{text}</Text>
+      {!compact && <View style={[st.tail, TAIL_STYLE[tail], { backgroundColor: bg, borderColor: edge }]} />}
+      <Text style={[st.text, compact && st.textCompact]}>{text}</Text>
     </>
   );
 
   return (
     <Animated.View style={[st.wrap, popStyle]}>
       {onPress ? (
-        <TouchableOpacity testID={testID} onPress={onPress} activeOpacity={0.85} style={[st.bubble, foeSide && st.bubbleRight, { backgroundColor: bg, borderColor: edge }]} accessibilityRole="button" accessibilityLabel={`${text} Tap to dismiss`}>
+        <TouchableOpacity
+          testID={testID}
+          onPress={onPress}
+          activeOpacity={0.85}
+          style={[st.bubble, compact && st.bubbleCompact, foeSide && st.bubbleRight, { backgroundColor: bg, borderColor: edge }]}
+          accessibilityRole="button"
+          accessibilityLabel={`${text} Tap to dismiss`}
+        >
           {body}
         </TouchableOpacity>
       ) : (
-        <View testID={testID} style={[st.bubble, foeSide && st.bubbleRight, { backgroundColor: bg, borderColor: edge }]} accessibilityLabel={text}>
+        <View
+          testID={testID}
+          style={[st.bubble, compact && st.bubbleCompact, foeSide && st.bubbleRight, { backgroundColor: bg, borderColor: edge }]}
+          accessibilityLabel={text}
+        >
           {body}
         </View>
       )}
@@ -83,8 +96,16 @@ const st = StyleSheet.create({
     borderBottomWidth: 3,
     borderRadius: 12,
     paddingHorizontal: 9,
-    paddingVertical: 6,
+    paddingVertical: 5,
     gap: 4,
+  },
+  bubbleCompact: {
+    alignSelf: 'center',
+    borderWidth: 1.5,
+    borderBottomWidth: 2,
+    borderRadius: 9,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
   },
   bubbleRight: { alignSelf: 'flex-end' },
   tail: { position: 'absolute', width: 10, height: 10, transform: [{ rotate: '45deg' }] },
@@ -92,7 +113,8 @@ const st = StyleSheet.create({
   tailDown: { left: 22, bottom: -7, borderRightWidth: 2, borderBottomWidth: 3 },
   tailRight: { right: -6, top: 12, borderRightWidth: 2, borderTopWidth: 2 },
   tailDownRight: { right: 26, bottom: -7, borderRightWidth: 2, borderBottomWidth: 3 },
-  text: { flexShrink: 1, fontSize: 13, lineHeight: 17, fontWeight: '800', color: INK },
+  text: { flexShrink: 1, fontSize: 12.5, lineHeight: 16, fontWeight: '800', color: INK },
+  textCompact: { fontSize: 10, lineHeight: 12.5, fontWeight: '800', textAlign: 'center' },
 });
 
 const TAIL_STYLE = {

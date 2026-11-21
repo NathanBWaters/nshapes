@@ -320,7 +320,7 @@ const Card: React.FC<CardProps> = ({
     if (indicators.length === 0 && !hasCurseTimer && !hasThornTimer && !hasFuseTimer && !hasHotTimer) return null;
 
     return (
-      <View style={styles.stateIndicatorContainer}>
+      <>
         {indicators.map((indicator, index) => (
           <View key={index} style={styles.stateIndicator}>
             <View style={indicator.rotate ? { transform: [{ rotate: indicator.rotate }] } : undefined}>
@@ -376,7 +376,7 @@ const Card: React.FC<CardProps> = ({
             normalBorder="#EA580C"
           />
         )}
-      </View>
+      </>
     );
   };
 
@@ -547,9 +547,6 @@ const Card: React.FC<CardProps> = ({
         </>
       )}
 
-      {/* State indicator icons (fire, connection) in bottom left */}
-      {renderStateIndicators()}
-
       {/* Card content - depends on state */}
       {isDud ? (
         renderDudContent()
@@ -569,9 +566,12 @@ const Card: React.FC<CardProps> = ({
         </View>
       )}
 
-      {/* Timer overlays for countdown and bomb cards */}
-      {renderCountdownOverlay()}
-      {renderBombOverlay()}
+      {/* Unified bottom-left badge tray: enemy timers + state/gamble indicators side-by-side (zero overlap) */}
+      <View style={styles.stateIndicatorContainer} pointerEvents="none">
+        {renderCountdownOverlay()}
+        {renderBombOverlay()}
+        {renderStateIndicators()}
+      </View>
 
       {/* Cursed or frozen: visible but out of play (a wash over the card, never a border) */}
       {card.locked && !isDud && !isFaceDown && (
@@ -930,17 +930,17 @@ const styles = StyleSheet.create({
   frozenOverlay: { backgroundColor: 'rgba(125, 211, 252, 0.5)' },
   wildContent: { alignItems: 'center', justifyContent: 'center', gap: 2 },
   wildText: { fontSize: 10, fontWeight: '900', letterSpacing: 1, color: '#7C3AED' },
-  // State indicator icons (fire, connection, snare, bounty) in bottom left corner
-  // Size is ~1/5 of the shapes on the card
+  // State indicator icons & timers in one non-overlapping bottom-left flex row
   stateIndicatorContainer: {
     position: 'absolute',
-    bottom: 3,
-    left: 3,
-    maxWidth: '78%',
+    bottom: 2,
+    left: 2,
+    maxWidth: '80%',
     flexDirection: 'row',
+    alignItems: 'center',
     flexWrap: 'wrap',
     gap: 2,
-    zIndex: 10,
+    zIndex: 12,
   },
   stateIndicator: {
     minWidth: 14,
@@ -1017,16 +1017,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.6,
     shadowRadius: 8,
   },
-  // Timer overlay (shared by countdown and bomb)
+  // Timer overlay (shared by countdown and bomb — sits inside bottom-left badge tray)
   timerOverlay: {
-    position: 'absolute',
-    bottom: 2,
-    left: 2,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
     paddingHorizontal: 4,
-    paddingVertical: 2,
+    paddingVertical: 1.5,
     borderRadius: RADIUS.button,
     borderWidth: 1,
     borderColor: COLORS.slateCharcoal,

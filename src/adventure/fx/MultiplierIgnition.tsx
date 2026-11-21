@@ -492,6 +492,8 @@ interface Props {
   ignition: SetIgnition | null;
   run?: RunState;
   enabled: boolean;
+  /** Desktop landscape sidebar: allow 2 full lines of itemized receipt */
+  wide?: boolean;
   onPress?: () => void;
 }
 
@@ -526,8 +528,8 @@ const FlameTongue: React.FC<{ color: string; offset: number; delay: number; acti
   const anim = useAnimatedStyle(() => ({
     opacity: 0.72 + bob.value * 0.28,
     transform: [
-      { translateY: -bob.value * 4 },
-      { scaleY: 0.85 + bob.value * 0.4 },
+      { translateY: -bob.value * 2.5 },
+      { scaleY: 0.85 + bob.value * 0.3 },
       { rotate: `${offset > 0 ? 8 : -8}deg` },
     ],
   }));
@@ -540,7 +542,24 @@ const FlameTongue: React.FC<{ color: string; offset: number; delay: number; acti
   );
 };
 
-const MultiplierIgnition: React.FC<Props> = ({ ignition, run, enabled, onPress }) => {
+const fitReceiptParts = (parts: readonly string[], maxChars: number): string => {
+  if (parts.length === 0) return '';
+  let out = parts[0];
+  let shown = 1;
+  for (let i = 1; i < parts.length; i++) {
+    const remaining = parts.length - i;
+    const moreReserve = remaining > 1 ? ` · +${remaining} more`.length : 0;
+    const candidate = `${out} · ${parts[i]}`;
+    if (candidate.length + moreReserve > maxChars) {
+      return `${out} · +${remaining} more`;
+    }
+    out = candidate;
+    shown++;
+  }
+  return shown < parts.length ? `${out} · +${parts.length - shown} more` : out;
+};
+
+const MultiplierIgnition: React.FC<Props> = ({ ignition, run, enabled, wide = false, onPress }) => {
   const appActive = useAppActive();
   const sysReduced = useReducedMotion();
   const animate = enabled && !sysReduced;
@@ -653,6 +672,18 @@ const MultiplierIgnition: React.FC<Props> = ({ ignition, run, enabled, onPress }
   const bonusAnim = useAnimatedStyle(() => ({ transform: [{ scale: bonusScale.value }] }));
   const totalAnim = useAnimatedStyle(() => ({ transform: [{ scale: totalScale.value }] }));
   const tickerAnim = useAnimatedStyle(() => ({ opacity: tickerOp.value, transform: [{ translateY: tickerY.value }] }));
+  const compactReceipt = useMemo(() => {
+    if (!breakdown) return '';
+    if (wide) return breakdown.receiptLine;
+    const parts = breakdown.steps.map(s => (s.key === 'cards' ? s.label : `${s.value} ${s.label}`));
+    return fitReceiptParts(parts, 56);
+  }, [breakdown, wide]);
+  const compactPrimed = useMemo(() => {
+    if (!primed) return '';
+    if (wide) return `Next Set: ${primed.summaryLine}`;
+    const parts = primed.items.map((it, idx) => (idx === 0 ? it.label : `${it.value} ${it.label}`));
+    return `Next: ${fitReceiptParts(parts, 50)}`;
+  }, [primed, wide]);
 
   // If neither an ignition nor a live run is present, nothing to render
   if (!breakdown && !primed) return null;
@@ -682,8 +713,8 @@ const MultiplierIgnition: React.FC<Props> = ({ ignition, run, enabled, onPress }
   const row2Text = showingSet && breakdown
     ? (phase === 'tally' && activeStep
         ? `${activeStep.key === 'cards' ? activeStep.label : `${activeStep.value} ${activeStep.label}`}${activeStep.note ? ` · ${activeStep.note}` : ''}`
-        : breakdown.receiptLine)
-    : `Next Set: ${primed!.summaryLine}`;
+        : compactReceipt)
+    : compactPrimed;
 
   const hasFinalBonus = showingSet && !!breakdown && breakdown.finalBonus > 0;
   const row2Color = showingSet && phase === 'tally' && activeStep
@@ -769,8 +800,13 @@ const MultiplierIgnition: React.FC<Props> = ({ ignition, run, enabled, onPress }
       </View>
 
       {/* Row 2: Fixed-height itemized source ticker → persistent receipt */}
-      <Animated.View style={[st.receiptRow, tickerAnim]}>
-        <Text testID="score-receipt-line" style={[st.receiptText, { color: row2Color }]} numberOfLines={1}>
+      <Animated.View style={[st.receiptRow, wide && st.receiptRowWide, tickerAnim]}>
+        <Text
+          testID="score-receipt-line"
+          style={[st.receiptText, { color: row2Color }]}
+          numberOfLines={wide ? 2 : 1}
+          ellipsizeMode="tail"
+        >
           {row2Text}
         </Text>
       </Animated.View>
@@ -805,12 +841,13 @@ const st = StyleSheet.create({
   },
   bar: {
     backgroundColor: '#241E19',
-    borderRadius: 10,
-    borderWidth: 2,
+    borderRadius: 8,
+    borderWidth: 1.5,
     borderColor: INK,
-    paddingHorizontal: 7,
-    paddingVertical: 4,
-    gap: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 2.5,
+    gap: 1.5,
+    overflow: 'hidden',
   },
   barHot: {
     borderColor: '#D97706',
@@ -828,7 +865,8 @@ const st = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 4,
-    minHeight: 24,
+    minHeight: 22,
+    paddingTop: 2.5,
   },
   eqMath: {
     flex: 1,
@@ -836,23 +874,23 @@ const st = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
+    gap: 3.5,
   },
   tagPill: {
-    width: 34,
+    width: 32,
     alignItems: 'center',
     backgroundColor: '#3A2F26',
     borderRadius: 4,
     paddingHorizontal: 3,
-    paddingVertical: 2,
+    paddingVertical: 1.5,
   },
   tagPillLive: {
     backgroundColor: COLORS.actionYellow,
   },
   tagText: {
-    fontSize: 8.5,
+    fontSize: 8,
     fontWeight: '900',
-    letterSpacing: 0.6,
+    letterSpacing: 0.5,
     color: '#D6CFC4',
   },
   tagTextLive: {
@@ -863,12 +901,12 @@ const st = StyleSheet.create({
     alignItems: 'center',
     gap: 3,
     backgroundColor: '#0E7490',
-    borderRadius: 6,
+    borderRadius: 5,
     borderWidth: 1.5,
     borderColor: '#164E63',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    minWidth: 52,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    minWidth: 46,
     justifyContent: 'center',
   },
   multPill: {
@@ -876,12 +914,12 @@ const st = StyleSheet.create({
     alignItems: 'center',
     gap: 3,
     backgroundColor: '#9A3412',
-    borderRadius: 6,
+    borderRadius: 5,
     borderWidth: 1.5,
     borderColor: '#7C2D12',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    minWidth: 48,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    minWidth: 44,
     justifyContent: 'center',
   },
   multPillHot: {
@@ -890,28 +928,28 @@ const st = StyleSheet.create({
   },
   bonusPill: {
     backgroundColor: '#B45309',
-    borderRadius: 6,
+    borderRadius: 5,
     borderWidth: 1.5,
     borderColor: '#78350F',
-    paddingHorizontal: 5,
-    paddingVertical: 2,
+    paddingHorizontal: 4.5,
+    paddingVertical: 1,
     justifyContent: 'center',
   },
   pillCap: {
-    fontSize: 7.5,
+    fontSize: 7,
     fontWeight: '900',
     color: 'rgba(255,255,255,0.78)',
-    letterSpacing: 0.4,
+    letterSpacing: 0.3,
   },
   pillVal: {
     flexShrink: 1,
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '900',
     color: '#FFFFFF',
     fontVariant: ['tabular-nums'],
   },
   op: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '900',
     color: '#E7E0D6',
   },
@@ -922,23 +960,23 @@ const st = StyleSheet.create({
   },
   flame: {
     position: 'absolute',
-    top: -7,
-    width: 9,
-    height: 11,
-    borderTopLeftRadius: 6,
-    borderTopRightRadius: 6,
-    borderBottomLeftRadius: 3,
-    borderBottomRightRadius: 3,
-    marginLeft: -4.5,
+    top: -2.5,
+    width: 6.5,
+    height: 7,
+    borderTopLeftRadius: 5,
+    borderTopRightRadius: 5,
+    borderBottomLeftRadius: 2,
+    borderBottomRightRadius: 2,
+    marginLeft: -3.25,
   },
   totalBadge: {
     backgroundColor: COLORS.actionYellow,
-    borderRadius: 7,
+    borderRadius: 6,
     borderWidth: 1.5,
     borderColor: INK,
-    paddingHorizontal: 8,
-    paddingVertical: 1,
-    minWidth: 34,
+    paddingHorizontal: 7,
+    paddingVertical: 0.5,
+    minWidth: 32,
     alignItems: 'center',
   },
   totalHot: {
@@ -954,36 +992,42 @@ const st = StyleSheet.create({
   },
   totalText: {
     flexShrink: 1,
-    fontSize: 13.5,
+    fontSize: 12.5,
     fontWeight: '900',
     color: INK,
     fontVariant: ['tabular-nums'],
     letterSpacing: 0.2,
   },
   infoDot: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+    width: 15,
+    height: 15,
+    borderRadius: 7.5,
     backgroundColor: '#3A2F26',
     alignItems: 'center',
     justifyContent: 'center',
   },
   infoText: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '900',
     color: '#E7E0D6',
   },
   receiptRow: {
-    height: 15,
+    height: 13,
+    width: '100%',
+    overflow: 'hidden',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  receiptRowWide: {
+    height: 26,
+  },
   receiptText: {
     flexShrink: 1,
-    fontSize: 10,
+    maxWidth: '100%',
+    fontSize: 9.5,
     fontWeight: '800',
-    letterSpacing: 0.15,
+    letterSpacing: 0.1,
     textAlign: 'center',
   },
 });

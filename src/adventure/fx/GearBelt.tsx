@@ -23,8 +23,8 @@ import type { ActiveWeaponCounter } from '../engine/fight';
 import type { BeltBadge, SetIgnition } from '../types';
 import { Anchor, useBump } from './anchors';
 
-const GAP = 4;
-const MAX_ICON = 26;
+const GAP = 3.5;
+const MAX_ICON = 24;
 const MIN_ICON = 16;
 const BADGE_HOLD_MS = 1350;
 
@@ -129,7 +129,7 @@ const BeltItem: React.FC<{
       <TouchableOpacity
         onPress={onPress}
         activeOpacity={0.7}
-        style={[st.item, counter && st.itemCountered, { width: size + 6, height: size + 6 }]}
+        style={[st.item, counter && st.itemCountered, { width: size + 4, height: size + 4 }]}
         accessibilityRole="button"
         accessibilityLabel={`${a11yParts.join(', ')}: what it does`}
         testID={`belt-${weapon.id}`}
@@ -169,10 +169,13 @@ export const GearBelt: React.FC<{
   counters?: readonly ActiveWeaponCounter[];
   reduced?: boolean;
   width: number;
+  /** Optional horizontal pixels reserved on the same row for docked Arcana / Evo pills */
+  reservedRightPx?: number;
   onInspect: (w: Weapon) => void;
-}> = ({ weapons, growth, ignition, counters, reduced, width, onInspect }) => {
+}> = ({ weapons, growth, ignition, counters, reduced, width, reservedRightPx = 0, onInspect }) => {
   if (weapons.length === 0) return null;
-  const room = (width - 20 - GAP * (weapons.length - 1)) / weapons.length - 6;
+  const avail = Math.max(120, (width > 0 ? width : 360) - 20 - reservedRightPx);
+  const room = (avail - GAP * (weapons.length - 1)) / weapons.length - 6;
   const size = Math.max(MIN_ICON, Math.min(MAX_ICON, Math.floor(room)));
   return (
     <View style={st.belt} testID="gear-belt">
@@ -194,15 +197,15 @@ export const GearBelt: React.FC<{
 };
 
 const st = StyleSheet.create({
-  belt: { flexDirection: 'row', alignItems: 'center', gap: GAP, flexWrap: 'wrap', overflow: 'visible', paddingBottom: 3 },
-  stacks: { position: 'absolute', top: -6, right: -6, minWidth: 16, paddingHorizontal: 2, borderRadius: 8, backgroundColor: COLORS.actionYellow, borderWidth: 1.5, borderColor: COLORS.slateCharcoal, alignItems: 'center', zIndex: 5 },
-  stacksText: { fontSize: 9, fontWeight: '900', color: COLORS.slateCharcoal },
+  belt: { flexDirection: 'row', alignItems: 'center', gap: GAP, flexWrap: 'wrap', overflow: 'visible', paddingTop: 4, paddingBottom: 4 },
+  stacks: { position: 'absolute', top: -4, right: -4, minWidth: 15, paddingHorizontal: 2, borderRadius: 7, backgroundColor: COLORS.actionYellow, borderWidth: 1.5, borderColor: COLORS.slateCharcoal, alignItems: 'center', zIndex: 5 },
+  stacksText: { fontSize: 8.5, fontWeight: '900', color: COLORS.slateCharcoal, lineHeight: 10 },
   item: { alignItems: 'center', justifyContent: 'center', borderRadius: 7, borderWidth: 1.5, borderColor: COLORS.slateCharcoal, backgroundColor: COLORS.paperBeige, overflow: 'visible' },
   itemCountered: { borderColor: '#DC2626', backgroundColor: '#FEE2E2' },
   counterBadge: {
     position: 'absolute',
-    top: -6,
-    left: -6,
+    top: -4,
+    left: -4,
     paddingHorizontal: 2.5,
     paddingVertical: 0.5,
     borderRadius: 6,
@@ -221,7 +224,7 @@ const st = StyleSheet.create({
   },
   triggerBadge: {
     position: 'absolute',
-    bottom: -6,
+    bottom: -4,
     alignSelf: 'center',
     borderRadius: 5,
     borderWidth: 1.5,

@@ -29,10 +29,12 @@ interface Props {
   active: boolean;
   /** True when this foe asks for a specific Counter-Set and one is currently on the board */
   counterAvailable?: boolean;
+  /** Compact side-by-side mode when paired with Shading Surge in the shared Dual Threat Rail */
+  compact?: boolean;
   onPress?: () => void;
 }
 
-const ParryIntentBar: React.FC<Props> = ({ parry, active, counterAvailable = true, onPress }) => {
+const ParryIntentBar: React.FC<Props> = ({ parry, active, counterAvailable = true, compact = false, onPress }) => {
   const appActive = useAppActive();
   const meta = parryCounterMeta(parry.spec.counter);
   const perfect = isInPerfectWindow(parry);
@@ -70,13 +72,23 @@ const ParryIntentBar: React.FC<Props> = ({ parry, active, counterAvailable = tru
 
   const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: pulse.value }] }));
 
-  const label = staggered
+  const fullLabel = staggered
     ? `STAGGERED · ×2 DMG · ${secsText}`
     : perfect
       ? `PERFECT PARRY! ${meta.shortLabel} · ${secsText}`
       : windup
         ? `${parry.spec.attackName.toUpperCase()} · ${meta.shortLabel} · ${secsText}`
         : `Counter: ${meta.shortLabel} · next in ${secsText}`;
+
+  const label = compact
+    ? staggered
+      ? `STAGGER ×2 · ${secsText}`
+      : perfect
+        ? `PARRY! ${meta.shortLabel} · ${secsText}`
+        : windup
+          ? `${meta.shortLabel} · ${secsText}`
+          : `${meta.shortLabel} · ${secsText}`
+    : fullLabel;
 
   const iconName = staggered ? 'lorc/shield-reflect' : perfect ? 'lorc/sword-clash' : parry.spec.icon;
   const iconColor = staggered ? '#0F766E' : perfect ? INK : windup ? '#991B1B' : meta.color;
@@ -88,12 +100,13 @@ const ParryIntentBar: React.FC<Props> = ({ parry, active, counterAvailable = tru
       disabled={!onPress}
       activeOpacity={0.8}
       accessibilityRole={onPress ? 'button' : undefined}
-      accessibilityLabel={label}
-      style={st.wrap}
+      accessibilityLabel={fullLabel}
+      style={compact ? st.wrapCompact : st.wrap}
     >
       <Animated.View
         style={[
           st.bar,
+          compact && st.barCompact,
           windup && st.barWindup,
           perfect && st.barPerfect,
           staggered && st.barStaggered,
@@ -114,10 +127,11 @@ const ParryIntentBar: React.FC<Props> = ({ parry, active, counterAvailable = tru
         {perfectMarkerPct !== null && !perfect && (
           <View pointerEvents="none" style={[st.perfectZone, { left: `${perfectMarkerPct}%` }]} />
         )}
-        <Icon name={iconName} size={13} color={iconColor} />
+        <Icon name={iconName} size={compact ? 12 : 13} color={iconColor} />
         <Text
           style={[
             st.text,
+            compact && st.textCompact,
             windup && !perfect && st.textWindup,
             perfect && st.textPerfect,
             staggered && st.textStaggered,
@@ -128,7 +142,7 @@ const ParryIntentBar: React.FC<Props> = ({ parry, active, counterAvailable = tru
         </Text>
         {windup && parry.spec.counter.kind !== 'any' && !counterAvailable && (
           <View style={st.stallBadge}>
-            <Text style={st.stallText}>STALL +3s</Text>
+            <Text style={st.stallText}>{compact ? '+3s' : 'STALL +3s'}</Text>
           </View>
         )}
       </Animated.View>
@@ -138,21 +152,28 @@ const ParryIntentBar: React.FC<Props> = ({ parry, active, counterAvailable = tru
 
 const st = StyleSheet.create({
   wrap: {
-    marginHorizontal: 10,
-    marginTop: 4,
+    flex: 1,
+    minWidth: 0,
+  },
+  wrapCompact: {
+    flex: 1.45,
+    minWidth: 0,
   },
   bar: {
-    height: 24,
+    height: 22,
     borderRadius: 999,
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: '#C9C2B8',
     backgroundColor: '#F5F2EC',
     overflow: 'hidden',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 10,
-    gap: 5,
+    paddingHorizontal: 8,
+    gap: 4,
+  },
+  barCompact: {
+    paddingHorizontal: 6,
   },
   barWindup: {
     borderColor: '#B91C1C',
@@ -192,10 +213,13 @@ const st = StyleSheet.create({
   },
   text: {
     flexShrink: 1,
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '800',
     color: '#57534E',
     fontVariant: ['tabular-nums'],
+  },
+  textCompact: {
+    fontSize: 10,
   },
   textWindup: {
     fontWeight: '900',

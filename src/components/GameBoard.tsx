@@ -751,14 +751,14 @@ const styles = StyleSheet.create({
   board: {
     flex: 1,
     flexDirection: 'column',
-    padding: 6,
+    padding: 5,
+    gap: 5,
     backgroundColor: COLORS.paperBeige,
   },
   row: {
     flex: 1,
     flexDirection: 'row',
-    gap: 6,
-    marginBottom: 6,
+    gap: 5,
   },
   cardWrapper: {
     flex: 1,

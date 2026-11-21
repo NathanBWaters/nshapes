@@ -108,12 +108,31 @@ interface Props {
   devResult?: { levelId: string; run: RunState; stars: number };
   /** Dev (/dev/adventure?rescue=key-1): open the Friend Rescue modal directly for a map key */
   devRescueKeyId?: string;
+  /** Dev (/dev/adventure?level=5-4): jump straight into a live fight for this level id */
+  devLevelId?: string;
+  /** Dev (/dev/adventure?seed=4242): deterministic fight seed when devLevelId is used */
+  devSeed?: number;
 }
 
-const AdventureMode: React.FC<Props> = ({ onExit, autoPlayer, initialSave, coldOpen = true, devResult, devRescueKeyId }) => {
+const AdventureMode: React.FC<Props> = ({
+  onExit,
+  autoPlayer,
+  initialSave,
+  coldOpen = true,
+  devResult,
+  devRescueKeyId,
+  devLevelId,
+  devSeed,
+}) => {
   const [save, setSaveState] = useState<AdventureSave>(() => initialSave ?? loadAdventureSave());
   const [history, setHistory] = useState<BattleRecord[]>(loadBattleHistory);
-  const [screen, setScreenNow] = useState<Screen>(() => (coldOpen && isFirstVisit(save) ? { kind: 'story' } : { kind: 'map' }));
+  const [screen, setScreenNow] = useState<Screen>(() =>
+    devLevelId
+      ? { kind: 'run', levelId: devLevelId, seed: devSeed ?? randomSeed() }
+      : coldOpen && isFirstVisit(save)
+        ? { kind: 'story' }
+        : { kind: 'map' }
+  );
   // Every change of screen goes through the one shared transition (src/components/ScreenTransition.tsx)
   const transition = useScreenTransition();
   const screenRef = useRef(screen);

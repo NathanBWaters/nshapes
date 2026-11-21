@@ -36,7 +36,9 @@ import { nextCatalystRecipe } from '../engine/fight';
 import { boardHasCounterSet } from '../engine/parry';
 import { FightRecorder, type FightTape } from '../engine/replay';
 import { challengeProgress } from '../engine/challenges';
-import { GearChips, gearModifiers, hasGearChips } from './GearChips';
+import { GearChips, gearModifiers, hasTrickGearChips } from './GearChips';
+import { activeRoleBonuses } from '../data/weaponRoles';
+import { growthStacks } from '../data/weaponGrowth';
 import { MECHANICS } from '../data/mechanics';
 import { getBiome } from '../data/biomes';
 import { FIGHTERS } from '../data/fighters';
@@ -86,7 +88,18 @@ const LAST_SET_MS = 3200;
  * board never moves. (A line too long for its room spills over the stage's
  * edge by a few pixels rather than pushing anything.)
  */
-const STAGE = { min: 66, minWide: 104, wideFrom: 700, max: 184, chromePx: 132, roomy: 136, speechPx: 60 } as const;
+const STAGE = {
+  minShort: 48,
+  min: 56,
+  minMid: 64,
+  wideH: 156,
+  wideFrom: 900,
+  maxGuide: 112,
+  maxSparse: 98,
+  chromePx: 120,
+  roomy: 94,
+  speechPx: 38,
+} as const;
 
 /** Mode-agnostic HUD & pause chrome overrides so any higher-level mode can wrap AdventureRun. */
 export interface FightChromeOptions {
@@ -683,7 +696,7 @@ const AdventureRun: React.FC<Props> = ({
 
   const movesChip = run.movesLeft !== null && (
     <View style={[st.stat, run.movesLeft <= 2 && st.statWarn]}>
-      <Icon name="lorc/archery-target" size={16} color={INK} />
+      <Icon name="lorc/archery-target" size={13} color={INK} />
       <Text style={st.statText}>{run.movesLeft} moves</Text>
     </View>
   );
@@ -756,33 +769,69 @@ const AdventureRun: React.FC<Props> = ({
       : boardSelectedCount === 0
         ? checksOfSet(lastSet, run.attributes)
         : undefined);
-  // The stage is as tall as the board can spare (see STAGE)
+  // Responsive layout: on wide desktop/landscape viewports dock HUD in a clean left rail so the board gets full height
+  const isWide = stage.w >= STAGE.wideFrom && stage.w > stage.h;
+  const isShortPhone = !isWide && stage.h > 0 && stage.h <= 700;
+  const hudPanelW = isWide
+    ? Math.min(390, Math.max(350, Math.round(stage.w * 0.305)))
+    : stage.w > 0
+      ? stage.w
+      : 375;
+
+  // The stage height is fixed for the fight so the board never jumps while playing
   const boardRows = Math.max(1, Math.ceil(run.board.length / 3));
-  // (cards a little squatter than a playing card still read well, and leave the fight room to breathe on a short phone)
   const idealCardH = stage.w > 0 ? (Math.min(stage.w, 560) - 36) / 3 / 0.82 : 140;
-  // (a wide window has width to burn and little height: there the two of them get a little more than the minimum)
-  const stageMin = stage.w >= STAGE.wideFrom ? STAGE.minWide : STAGE.min;
-  const chromePx = STAGE.chromePx + (traitChecks ? TRAIT_CHECKS_HEIGHT + 6 : 0) + (showDamageHud ? 52 : 0) + (run.parry ? 28 : 0);
-  const stageH = stage.h > 0
-    ? Math.round(Math.max(stageMin, Math.min(STAGE.max, stage.h - insets.top - chromePx - boardRows * (idealCardH + 6))))
-    : 92;
-  // Tall enough to give the companion's words their own row above the two fighters
-  const roomyStage = stageH >= STAGE.roomy;
-  const floorH = roomyStage ? stageH - STAGE.speechPx : stageH;
-  const stageW = stage.w > 0 ? stage.w : 375;
-  // Side by side on a compact stage, the two of them leave the middle for the words
-  const foeSize = Math.round(Math.min(roomyStage ? 132 : Math.min(120, stageW * 0.2), floorH - (level.isBoss ? 4 : 12)));
-  const fighterSize = Math.round(Math.max(36, Math.min(roomyStage ? 104 : Math.min(96, stageW * 0.15), floorH - 34)));
+  const chromePx = STAGE.chromePx + (traitChecks ? TRAIT_CHECKS_HEIGHT + 4 : 0) + (showDamageHud ? 44 : 0) + (run.parry || run.surge ? 26 : 0);
+  const stageH = isWide
+    ? STAGE.wideH
+    : boardRows >= 5
+      ? (isShortPhone ? STAGE.minShort : STAGE.min)
+      : boardRows === 4
+        ? (isShortPhone ? 54 : STAGE.minMid)
+        : stage.h > 0
+          ? Math.round(
+              Math.max(
+                76,
+                Math.min(
+                  level.id === '1-1' ? STAGE.maxGuide : STAGE.maxSparse,
+                  stage.h - insets.top - chromePx - boardRows * (idealCardH + 5)
+                )
+              )
+            )
+          : 96;
+  const roomyStage = isWide || stageH >= STAGE.roomy;
+  const compactStage = !roomyStage;
+  const foeSize = roomyStage
+    ? Math.round(Math.min(isWide ? 104 : 80, stageH - (level.isBoss ? 12 : 18)))
+    : Math.round(Math.max(36, Math.min(48, stageH - 8)));
+  const fighterSize = roomyStage
+    ? Math.round(Math.max(52, Math.min(isWide ? 86 : 66, stageH - 30)))
+    : Math.round(Math.max(30, Math.min(41, stageH - 13)));
   // While the foe is taunting it has the floor (a wrong pick is still explained at once)
   const foeTalking = taunting && !!taunt && !explaining && !ended;
+  // On compact stages, wait until active damage callouts clear before showing transient event tips / passing remarks
+  const holdTransientBubble =
+    compactStage &&
+    (fx.busy || fx.beats.length > 0) &&
+    !foeTalking &&
+    !explaining &&
+    coachKind !== 'lesson' &&
+    coachKind !== 'rescue';
   const coachBubble = foeTalking ? (
-    <StageBubble testID="run-foe-taunt" text={`“${taunt}”`} kind="foe" tail={roomyStage ? 'down-right' : 'right'} />
-  ) : coachText && !ended ? (
+    <StageBubble
+      testID="run-foe-taunt"
+      text={`“${taunt}”`}
+      kind="foe"
+      tail={roomyStage ? 'down-right' : 'right'}
+      compact={compactStage}
+    />
+  ) : coachText && !ended && !holdTransientBubble ? (
     <StageBubble
       testID="run-coach-banner"
       text={coachText}
       kind={coachKind}
       tail={roomyStage ? 'down' : 'left'}
+      compact={compactStage}
       onPress={
         // A lesson stays up; anything else can be tapped away
         coachKind !== 'lesson' && coachKind !== 'rescue'
@@ -798,14 +847,65 @@ const AdventureRun: React.FC<Props> = ({
       }
     />
   ) : null;
-  const hasHudRow =
-    run.movesLeft !== null ||
-    practice ||
-    secondsLeft !== null ||
+  const hasRichResources =
     (showPassivesHud && run.passives.length > 0) ||
     run.features.has('graces') ||
     run.features.has('coins') ||
     run.features.has('hints');
+  const hasResourceRow =
+    run.movesLeft !== null ||
+    practice ||
+    secondsLeft !== null ||
+    hasRichResources;
+  const roleBonuses = activeRoleBonuses(run.weapons);
+  const hasBeltDock =
+    run.weapons.length > 0 || run.arcana.length > 0 || run.activeEvolutions.length > 0;
+  // In sparse early fights (e.g. 1-2..1-4: moves + 1-3 weapons, no passives/coins/hints), merge moves + belt + Role Bonus into ONE row
+  const useSingleSparseRow = !hasRichResources && (hasResourceRow || run.weapons.length > 0);
+  // Flow synergy chips right beside a small weapon belt (<= 3 weapons, no Arcana/active Evos, e.g. Summit Act 1!) to kill empty right-side voids
+  const inlineSynergyOnBelt =
+    !useSingleSparseRow &&
+    hasBeltDock &&
+    run.weapons.length > 0 &&
+    run.weapons.length <= 3 &&
+    run.arcana.length === 0 &&
+    run.activeEvolutions.length === 0;
+  // Dock Role Set Bonus pill(s) on the open right side of the belt row whenever horizontal space permits (even alongside Arcana or active EvoRing!)
+  const existingRightDockW = run.arcana.length * 42 + run.activeEvolutions.length * 58;
+  const spareBeltW = Math.max(
+    0,
+    hudPanelW -
+      24 -
+      run.weapons.length * 32 -
+      existingRightDockW -
+      (useSingleSparseRow && (run.movesLeft !== null || practice || secondsLeft !== null) ? 84 : 0)
+  );
+  const dockedRolesCount =
+    !inlineSynergyOnBelt &&
+    run.weapons.length > 0 &&
+    run.weapons.length <= 5 &&
+    roleBonuses.length > 0 &&
+    (!useSingleSparseRow || (!hasTrickGearChips(gearMods) && !purityLive && !evolutionsOn && !run.simplified && run.doubleNext <= 0 && run.nextSetMultiplier <= 1))
+      ? Math.min(roleBonuses.length, Math.max(0, Math.floor(spareBeltW / 100)))
+      : 0;
+  const dockRolesOnBelt = dockedRolesCount > 0;
+  const remainingRoleBonuses = roleBonuses.length > dockedRolesCount;
+  const hasAnySynergyItems =
+    purityLive ||
+    evolutionsOn ||
+    Boolean(run.simplified) ||
+    run.doubleNext > 0 ||
+    run.nextSetMultiplier > 1 ||
+    hasTrickGearChips(gearMods) ||
+    remainingRoleBonuses;
+  const hasSynergyChips = !inlineSynergyOnBelt && hasAnySynergyItems;
+  const beltReservedRightPx =
+    run.arcana.length * 42 +
+    run.activeEvolutions.length * 54 +
+    dockedRolesCount * 100 +
+    (useSingleSparseRow && (run.movesLeft !== null || practice || secondsLeft !== null) ? 84 : 0);
+  const dualThreat = Boolean(run.parry && run.surge) && !isWide;
+  const boardMaxWidth = isWide ? Math.min(760, Math.max(480, Math.round((stage.h - 20) * 0.94))) : undefined;
   const handleSelectedCount = useCallback((c: number) => {
     setBoardSelectedCount(c);
     setSelectedCount(c);
@@ -817,17 +917,161 @@ const AdventureRun: React.FC<Props> = ({
     () => ({ name: run.foeName, icon: run.foeIcon, tier: run.foe.tier }),
     [run.foeName, run.foeIcon, run.foe.tier]
   );
+
+  const renderSynergyItems = (skipRolesCount: number) => (
+    <>
+      <GearChips
+        run={run}
+        mods={gearMods}
+        skipRoles={skipRolesCount}
+        onInspectWeapon={id => {
+          const w = run.weapons.find(x => x.id === id);
+          if (w) { sfx('click'); setInspect(w); }
+        }}
+      />
+      {purityLive && (
+        <TouchableOpacity
+          testID="run-purity-chip"
+          style={[st.purityChip, run.purityChain >= 2 && st.purityChipHot]}
+          onPress={() => { sfx('click'); setHudInspect({ kind: 'buff', which: 'purity' }); }}
+          activeOpacity={0.75}
+          accessibilityRole="button"
+        >
+          <Icon name="lorc/lightning-branches" size={11} color={run.purityChain >= 2 ? TONE.upside : INK} />
+          <Text style={st.purityChipText} numberOfLines={1}>
+            {run.purityChain >= 2 ? `×${run.purityChain}` : 'Purity 1'} · &gt;{run.lastDiffCount} diff
+          </Text>
+        </TouchableOpacity>
+      )}
+      {run.doubleNext > 0 && (
+        <TouchableOpacity
+          testID="run-double-chip"
+          style={[st.purityChip, st.purityChipHot]}
+          onPress={() => { sfx('click'); setHudInspect({ kind: 'buff', which: 'double' }); }}
+          activeOpacity={0.75}
+          accessibilityRole="button"
+        >
+          <Text style={st.purityChipText}>NEXT ×2{run.doubleNext > 1 ? ` (${run.doubleNext})` : ''}</Text>
+        </TouchableOpacity>
+      )}
+      {run.nextSetMultiplier > 1 && (
+        <TouchableOpacity
+          testID="run-charged-chip"
+          style={[st.purityChip, { backgroundColor: '#FFE8CC', borderColor: COLORS.impactOrange }]}
+          onPress={() => { sfx('click'); setHudInspect({ kind: 'buff', which: 'charged' }); }}
+          activeOpacity={0.75}
+          accessibilityRole="button"
+        >
+          <Text style={st.purityChipText}>SET ×{run.nextSetMultiplier}</Text>
+        </TouchableOpacity>
+      )}
+      {run.simplified && (
+        <TouchableOpacity
+          testID="run-simplified-chip"
+          style={[st.purityChip, st.purityChipHot]}
+          onPress={() => { sfx('click'); setHudInspect({ kind: 'buff', which: 'simplified' }); }}
+          activeOpacity={0.75}
+          accessibilityRole="button"
+        >
+          <Icon name="lorc/third-eye" size={11} color={TONE.upside} />
+          <Text style={st.purityChipText} numberOfLines={1}>
+            All {run.simplified.attribute} {String(run.simplified.value)}{run.simplified.also ? ` + ${run.simplified.also.attribute} ${String(run.simplified.also.value)}` : ''} · {Math.ceil(run.simplified.remainingMs / 1000)}s
+          </Text>
+        </TouchableOpacity>
+      )}
+      {evolutionsOn && (
+        <TouchableOpacity
+          testID="run-evo-chip"
+          onPress={() => { sfx('click'); setHudInspect({ kind: 'evolutions' }); }}
+          activeOpacity={0.75}
+          accessibilityRole="button"
+          accessibilityLabel={
+            catalystOnBoard
+              ? idleArmed > 1
+                ? `Catalyst on board. Match it to pick 1 of ${evoChoiceCount} evolutions.`
+                : catalystTargetName
+                  ? `Catalyst on board for ${catalystTargetName}. Match it to evolve.`
+                  : 'Catalyst on board. Match it to evolve.'
+              : idleArmed === 0
+                ? `Evolving, ${evolutionsUsed} used. No Catalyst until an evolution ends`
+                : idleArmed > 1
+                  ? `${idleArmed} evolutions armed, pick 1 of ${evoChoiceCount} on Catalyst, ${evolutionsUsed} used, ${Math.round(run.evolutionLikelihood)} percent catalyst chance`
+                  : `${idleArmed} evolution armed${nextEvoRecipe ? `, next ${nextEvoRecipe.name}` : ''}, ${evolutionsUsed} used, ${Math.round(run.evolutionLikelihood)} percent catalyst chance`
+          }
+          style={[st.evoChip, catalystOnBoard && st.evoChipReady, evolutionsLeft <= 0 && { opacity: 0.55 }]}
+        >
+          <Icon name="lorc/crystal-shine" size={11} color={catalystOnBoard ? INK : TONE.arcana} />
+          <Text style={st.evoChipText} numberOfLines={1}>
+            {evolutionsLeft <= 0
+              ? `Evos ${evolutionsUsed}`
+              : catalystOnBoard
+                ? (idleArmed > 1
+                  ? `CATALYST: Pick 1 of ${evoChoiceCount}`
+                  : catalystTargetName
+                    ? `CATALYST: ${catalystTargetName}`
+                    : 'CATALYST! Match to evolve')
+                : idleArmed === 0
+                  ? `Evolving · ${evolutionsUsed}`
+                  : idleArmed > 1
+                    ? `Pick 1 of ${evoChoiceCount} · ${Math.round(run.evolutionLikelihood)}%`
+                    : nextEvoRecipe
+                      ? `Next: ${nextEvoRecipe.name} · ${Math.round(run.evolutionLikelihood)}%`
+                      : `${idleArmed} armed · ${Math.round(run.evolutionLikelihood)}%`}
+          </Text>
+        </TouchableOpacity>
+      )}
+    </>
+  );
+
+  const threatRail = (run.parry || run.surge) ? (
+    isWide ? (
+      <View style={st.threatRailStacked}>
+        {run.parry && (
+          <View style={st.threatRowSlot}>
+            <ParryIntentBar
+              parry={run.parry}
+              active={playing && appActive}
+              counterAvailable={parryCounterAvailable}
+              onPress={() => { sfx('click'); setHudInspect({ kind: 'foe' }); }}
+            />
+          </View>
+        )}
+        {run.surge && (
+          <View style={st.threatRowSlot}>
+            <SurgeBar surge={run.surge} active={playing && appActive} />
+          </View>
+        )}
+      </View>
+    ) : (
+      <View style={st.threatRail}>
+        {run.parry && (
+          <ParryIntentBar
+            parry={run.parry}
+            active={playing && appActive}
+            counterAvailable={parryCounterAvailable}
+            compact={dualThreat}
+            onPress={() => { sfx('click'); setHudInspect({ kind: 'foe' }); }}
+          />
+        )}
+        {run.surge && <SurgeBar surge={run.surge} active={playing && appActive} compact={dualThreat} />}
+      </View>
+    )
+  ) : null;
+
   return (
     <AnchorsProvider value={anchors}>
     <Animated.View
-      style={[st.root, { backgroundColor: biome.colors.sky, paddingTop: insets.top }, screenStyle]}
+      style={[st.root, isWide && st.rootWide, { backgroundColor: biome.colors.sky, paddingTop: insets.top }, screenStyle]}
       onLayout={e => setStage({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
     >
       {/* What every anchor is measured against: the stage's own top-left corner */}
       <View ref={anchors.rootRef} collapsable={false} pointerEvents="none" style={StyleSheet.absoluteFill} />
       {/* ── HUD ─────────────────────────────────────────── */}
-      <View style={st.hud} onLayout={e => setHudHeight(e.nativeEvent.layout.height)}>
-        {/* Who you are fighting, and how much of it is left */}
+      <View
+        style={[st.hud, isShortPhone && st.hudCompact, isWide && [st.hudWide, { width: hudPanelW }]]}
+        onLayout={e => setHudHeight(e.nativeEvent.layout.height)}
+      >
+        {/* Who you are fighting, inline Summit act/floor badge, and HP */}
         <View style={st.hudTop}>
           <TouchableOpacity onPress={() => setPaused(true)} style={st.pauseBtn} accessibilityLabel="Pause">
             <Text style={st.pauseText}>II</Text>
@@ -840,10 +1084,16 @@ const AdventureRun: React.FC<Props> = ({
             accessibilityRole="button"
             accessibilityLabel={`Inspect foe: ${run.foeName}`}
           >
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+            <View style={st.foeNameRow}>
               <Text style={st.foeName} numberOfLines={1}>{run.foeName}</Text>
               {level.isBoss && <Text style={st.bossTag}>BOSS</Text>}
-              {level.foes.length > 1 && <Text style={st.wave}>WAVE {run.wave + 1}/{level.foes.length}</Text>}
+              {level.foes.length > 1 && <Text style={st.wave}>W{run.wave + 1}/{level.foes.length}</Text>}
+              {chrome?.statusBanner && (
+                <View style={st.statusPill} testID={chrome.statusBanner.testID}>
+                  <Icon name={chrome.statusBanner.icon} size={11} color={TONE.upside} />
+                  <Text style={st.statusPillText} numberOfLines={1}>{chrome.statusBanner.text}</Text>
+                </View>
+              )}
             </View>
             <HpBar hp={shownHp} max={run.foeMaxHp} endless={practice} />
             {ui.showInactivityBar && (
@@ -854,15 +1104,29 @@ const AdventureRun: React.FC<Props> = ({
           </TouchableOpacity>
         </View>
 
-        {/* The battle stage: your fighter on the left, the foe on the right, and what your fighter says */}
-        <View testID="run-stage" style={[st.stage, { height: stageH, backgroundColor: biome.colors.sky }]}>
+        {/* Battle stage (with XP progress rim docked cleanly along its inner bottom edge!) */}
+        <View testID="run-stage" style={[st.stage, compactStage && st.stageCompact, run.features.has('xp') && st.stageWithXp, { height: stageH, backgroundColor: biome.colors.sky }]}>
           <View pointerEvents="none" style={st.stageClip}>
-            <View style={[st.stageGround, { backgroundColor: biome.colors.ground }]} />
+            <View style={[st.stageGround, compactStage && st.stageGroundCompact, { backgroundColor: biome.colors.ground }]} />
+            {run.features.has('xp') && (
+              <View style={st.xpRimTrack}>
+                <View style={[st.xpRimFill, { width: `${Math.max(4, (run.xp / xpNeed) * 100)}%` }]} />
+              </View>
+            )}
           </View>
-          {/* A tall stage has room for the words above the two of them (the room is kept, so the board never moves) */}
-          {roomyStage && <View style={st.stageSpeech}>{coachBubble}</View>}
+          {run.features.has('xp') && (
+            <View style={st.xpBadgeWrap} pointerEvents="none">
+              <Anchor name="xp">
+                <View style={st.xpBadge}>
+                  <Text style={st.xpBadgeText}>LV {run.xpLevel + 1}</Text>
+                </View>
+              </Anchor>
+            </View>
+          )}
+          {/* On roomy stages, speech bubble floats cleanly near the top without reserving blank sky when silent */}
+          {roomyStage && coachBubble && <View style={st.stageSpeechOverlay} pointerEvents="box-none">{coachBubble}</View>}
           <View style={st.stageFloor}>
-            <View style={st.stageSide}>
+            <View style={[st.stageSide, compactStage && st.stageSideCompact]}>
               <Anchor name="fighter">
                 <FighterAvatar
                   testID="adventure-run-fighter"
@@ -878,18 +1142,18 @@ const AdventureRun: React.FC<Props> = ({
                 />
               </Anchor>
               {run.hearts !== null && run.maxHearts !== null && (
-                <Anchor name="hearts"><Hearts hearts={run.hearts} max={run.maxHearts} /></Anchor>
+                <Anchor name="hearts"><Hearts hearts={run.hearts} max={run.maxHearts} compact={compactStage} /></Anchor>
               )}
             </View>
 
-            <View style={st.stageMiddle}>
-              {!roomyStage && coachBubble}
-              {(showDamageHud || (run.combo > 1 && comboLive) || practice) && (
+            <View style={[st.stageMiddle, compactStage && st.stageMiddleCompact]}>
+              {compactStage && coachBubble ? (
+                <View style={st.compactBubbleSlot} pointerEvents="box-none">{coachBubble}</View>
+              ) : (showDamageHud || (run.combo > 1 && comboLive) || practice) ? (
                 <View style={st.counters}>
                   {showDamageHud && <Text testID="run-total-damage" style={st.counter} accessibilityLabel={`${run.totalDamage} total damage`}>⚔ {run.totalDamage}</Text>}
                   {showDamageHud && run.power > 0 && <PowerMeter points={run.power} onPress={() => { sfx('click'); setPowerInfo(true); }} />}
                   {run.combo > 1 && comboLive && (
-                    // (the cascade calls out "COMBO ×N" as it lands; this is the running count)
                     <Anchor name="combo">
                       <View testID="run-combo" style={st.comboPill} accessibilityLabel={`Combo ×${run.combo}`}>
                         <Text style={st.comboText}>×{run.combo}</Text>
@@ -897,10 +1161,9 @@ const AdventureRun: React.FC<Props> = ({
                     </Anchor>
                   )}
                   {showDamageHud && run.biggestHit > 0 && <Text testID="run-biggest-hit" style={st.counterDim}>best {run.biggestHit}</Text>}
-                  {/* Practice: what a Set is worth with this build */}
                   {practice && run.matches > 0 && <Text testID="run-per-set" style={st.counterDim} accessibilityLabel={`${Math.round(run.totalDamage / run.matches)} damage per Set on average`}>avg {Math.round(run.totalDamage / run.matches)}</Text>}
                 </View>
-              )}
+              ) : null}
             </View>
 
             <Anchor name="foe">
@@ -921,225 +1184,195 @@ const AdventureRun: React.FC<Props> = ({
           </View>
         </View>
 
-        {(hasHudRow || run.weapons.length > 0) && (
-        <View style={st.hudRow}>
-          {/* On an untimed level the moves are the clock */}
-          {run.movesLeft !== null && (secondsLeft === null ? <Anchor name="clock">{movesChip}</Anchor> : movesChip)}
-          {practice && (
-            <Anchor name="clock">
-              <View testID="run-no-clock" style={st.stat} accessibilityLabel="No clock">
-                <Icon name="lorc/stopwatch" size={16} color={INK} />
-                <Text style={st.statText}>∞</Text>
-              </View>
-            </Anchor>
-          )}
-          {secondsLeft !== null && (
-            <Anchor name="clock">
-              {/* Teal while a cascade plays: the clock is standing still */}
-              <View
-                testID="run-clock"
-                accessibilityLabel={`${secondsLeft} seconds left${fx.busy ? ', waiting for effects' : ''}`}
-                style={[st.stat, secondsLeft <= 10 && st.statWarn, ui.timerSpeedMultiplier && ui.timerSpeedMultiplier > 1 ? { borderColor: COLORS.impactOrange } : null, fx.busy && st.statHeld]}
-              >
-                <Icon name="lorc/stopwatch" size={16} color={fx.busy ? COLORS.logicTeal : INK} />
-                <Text style={st.statText}>{secondsLeft}s</Text>
-              </View>
-            </Anchor>
-          )}
-          {showPassivesHud && run.passives.map(id => <Anchor key={id} name={`passive:${id}`}><PassiveChip id={id} run={run} onPress={() => { sfx('click'); setHudInspect({ kind: 'passive', id }); }} /></Anchor>)}
-          {run.features.has('graces') && (
-            <Anchor name="graces">
-              <View style={st.stat}>
-                <Icon name="lorc/clover" size={16} color={COLORS.logicTeal} />
-                <Text style={st.statText}>{run.stats.graces}</Text>
-              </View>
-            </Anchor>
-          )}
-          {/* The weapons in play: each jumps & pops its live value badge when it contributes; tap one to read it */}
-          <GearBelt weapons={run.weapons} growth={run.growth} ignition={run.lastSetIgnition} counters={enemyCounters} reduced={!effects} width={stage.w} onInspect={setInspect} />
-          <View style={{ flex: 1 }} />
-          {run.features.has('coins') && <Anchor name="coins"><CoinPill coins={run.coins} /></Anchor>}
-          {run.features.has('hints') && (
-            <Anchor name="hint">
-            <TouchableOpacity
-              testID="run-hint"
-              onPress={() => run.stats.hints > 0 && !ui.disableManualHint && setHintTrigger(t => t + 1)}
-              style={[st.hintBtn, (run.stats.hints <= 0 || ui.disableManualHint) && { opacity: 0.4 }]}
-              accessibilityLabel="Use hint"
-            >
-              <Icon name="lorc/light-bulb" size={18} color={INK} />
-              <Text style={st.statText}>{run.stats.hints}</Text>
-            </TouchableOpacity>
-            </Anchor>
-          )}
-        </View>
-        )}
-
-        {run.features.has('xp') && (
-          <Anchor name="xp">
-            <View style={st.xpTrack}>
-              <View style={[st.xpFill, { width: `${(run.xp / xpNeed) * 100}%` }]} />
-              <Text style={st.xpText}>LV {run.xpLevel + 1}</Text>
-            </View>
-          </Anchor>
-        )}
-
-        {/* Live Arcana, Role Set Bonuses, Escalating Purity, board effects & Evolution status strip */}
-        {(run.arcana.length > 0 || purityLive || evolutionsOn || run.simplified || run.doubleNext > 0 || run.nextSetMultiplier > 1 || hasGearChips(gearMods, run.weapons)) && (
-          <View style={st.synergyRow}>
-            {run.arcana.map(id => (
-              <TouchableOpacity
-                key={id}
-                testID="run-arcana-chip"
-                style={st.arcanaChip}
-                onPress={() => { sfx('click'); setHudInspect({ kind: 'arcana', id }); }}
-                activeOpacity={0.75}
-                accessibilityRole="button"
-                accessibilityLabel={`Inspect ${getArcana(id).name}`}
-              >
-                <Icon name={getArcana(id).icon} size={12} color={TONE.arcana} />
-                <Text style={st.arcanaChipText}>{getArcana(id).numeral}</Text>
-              </TouchableOpacity>
-            ))}
-            <GearChips
-              run={run}
-              mods={gearMods}
-              onInspectWeapon={id => {
-                const w = run.weapons.find(x => x.id === id);
-                if (w) { sfx('click'); setInspect(w); }
-              }}
+        {/* Locked Zero-Orphan Resource & Belt Rails */}
+        {useSingleSparseRow ? (
+          <View style={st.sparseRow}>
+            {run.movesLeft !== null && (secondsLeft === null ? <Anchor name="clock">{movesChip}</Anchor> : movesChip)}
+            {practice && (
+              <Anchor name="clock">
+                <View testID="run-no-clock" style={st.stat} accessibilityLabel="No clock">
+                  <Icon name="lorc/stopwatch" size={13} color={INK} />
+                  <Text style={st.statText}>∞</Text>
+                </View>
+              </Anchor>
+            )}
+            {secondsLeft !== null && (
+              <Anchor name="clock">
+                <View
+                  testID="run-clock"
+                  accessibilityLabel={`${secondsLeft} seconds left${fx.busy ? ', waiting for effects' : ''}`}
+                  style={[st.stat, secondsLeft <= 10 && st.statWarn, ui.timerSpeedMultiplier && ui.timerSpeedMultiplier > 1 ? { borderColor: COLORS.impactOrange } : null, fx.busy && st.statHeld]}
+                >
+                  <Icon name="lorc/stopwatch" size={13} color={fx.busy ? COLORS.logicTeal : INK} />
+                  <Text style={st.statText}>{secondsLeft}s</Text>
+                </View>
+              </Anchor>
+            )}
+            <GearBelt
+              weapons={run.weapons}
+              growth={run.growth}
+              ignition={run.lastSetIgnition}
+              counters={enemyCounters}
+              reduced={!effects}
+              width={hudPanelW}
+              reservedRightPx={beltReservedRightPx}
+              onInspect={setInspect}
             />
-            {purityLive && (
-              <TouchableOpacity
-                testID="run-purity-chip"
-                style={[st.purityChip, run.purityChain >= 2 && st.purityChipHot]}
-                onPress={() => { sfx('click'); setHudInspect({ kind: 'buff', which: 'purity' }); }}
-                activeOpacity={0.75}
-                accessibilityRole="button"
-              >
-                <Icon name="lorc/lightning-branches" size={12} color={run.purityChain >= 2 ? TONE.upside : INK} />
-                <Text style={st.purityChipText}>
-                  {run.purityChain >= 2 ? `Purity ×${run.purityChain}` : `Purity 1`} · &gt;{run.lastDiffCount} diff next
-                </Text>
-              </TouchableOpacity>
+            {dockRolesOnBelt && (
+              <View style={st.rightDock}>
+                <GearChips
+                  run={run}
+                  mods={gearMods}
+                  rolesOnly
+                  maxRoles={dockedRolesCount}
+                  onInspectWeapon={id => {
+                    const w = run.weapons.find(x => x.id === id);
+                    if (w) { sfx('click'); setInspect(w); }
+                  }}
+                />
+              </View>
             )}
-            {run.doubleNext > 0 && (
-              <TouchableOpacity
-                testID="run-double-chip"
-                style={[st.purityChip, st.purityChipHot]}
-                onPress={() => { sfx('click'); setHudInspect({ kind: 'buff', which: 'double' }); }}
-                activeOpacity={0.75}
-                accessibilityRole="button"
-              >
-                <Text style={st.purityChipText}>NEXT TRIGGER ×2{run.doubleNext > 1 ? ` (${run.doubleNext})` : ''}</Text>
-              </TouchableOpacity>
-            )}
-            {run.nextSetMultiplier > 1 && (
-              <TouchableOpacity
-                testID="run-charged-chip"
-                style={[st.purityChip, { backgroundColor: '#FFE8CC', borderColor: COLORS.impactOrange }]}
-                onPress={() => { sfx('click'); setHudInspect({ kind: 'buff', which: 'charged' }); }}
-                activeOpacity={0.75}
-                accessibilityRole="button"
-              >
-                <Text style={st.purityChipText}>NEXT SET ×{run.nextSetMultiplier}</Text>
-              </TouchableOpacity>
-            )}
-            {run.simplified && (
-              <TouchableOpacity
-                testID="run-simplified-chip"
-                style={[st.purityChip, st.purityChipHot]}
-                onPress={() => { sfx('click'); setHudInspect({ kind: 'buff', which: 'simplified' }); }}
-                activeOpacity={0.75}
-                accessibilityRole="button"
-              >
-                <Icon name="lorc/third-eye" size={12} color={TONE.upside} />
-                <Text style={st.purityChipText}>
-                  All {run.simplified.attribute} {String(run.simplified.value)}{run.simplified.also ? ` and ${run.simplified.also.attribute} ${String(run.simplified.also.value)}` : ''} · {Math.ceil(run.simplified.remainingMs / 1000)}s
-                </Text>
-              </TouchableOpacity>
-            )}
-            {evolutionsOn && (
-              <TouchableOpacity
-                testID="run-evo-chip"
-                onPress={() => { sfx('click'); setHudInspect({ kind: 'evolutions' }); }}
-                activeOpacity={0.75}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  catalystOnBoard
-                    ? idleArmed > 1
-                      ? `Catalyst on board. Match it to pick 1 of ${evoChoiceCount} evolutions.`
-                      : catalystTargetName
-                        ? `Catalyst on board for ${catalystTargetName}. Match it to evolve.`
-                        : 'Catalyst on board. Match it to evolve.'
-                    : idleArmed === 0
-                      ? `Evolving, ${evolutionsUsed} used. No Catalyst until an evolution ends`
-                      : idleArmed > 1
-                        ? `${idleArmed} evolutions armed, pick 1 of ${evoChoiceCount} on Catalyst, ${evolutionsUsed} used, ${Math.round(run.evolutionLikelihood)} percent catalyst chance`
-                        : `${idleArmed} evolution armed${nextEvoRecipe ? `, next ${nextEvoRecipe.name}` : ''}, ${evolutionsUsed} used, ${Math.round(run.evolutionLikelihood)} percent catalyst chance`
-                }
-                style={[st.evoChip, catalystOnBoard && st.evoChipReady, evolutionsLeft <= 0 && { opacity: 0.55 }]}
-              >
-                <Icon name="lorc/crystal-shine" size={12} color={catalystOnBoard ? INK : TONE.arcana} />
-                <Text style={st.evoChipText} numberOfLines={1}>
-                  {evolutionsLeft <= 0
-                    ? `Evolutions ${evolutionsUsed}`
-                    : catalystOnBoard
-                      ? (idleArmed > 1
-                        ? `CATALYST: Pick 1 of ${evoChoiceCount}`
-                        : catalystTargetName
-                          ? `CATALYST: ${catalystTargetName}`
-                          : 'CATALYST! Match it to evolve')
-                      : idleArmed === 0
-                        ? `Evolving · ${evolutionsUsed}`
-                        : idleArmed > 1
-                          ? `Pick 1 of ${evoChoiceCount} · ${Math.round(run.evolutionLikelihood)}% · ${evolutionsUsed}`
-                          : nextEvoRecipe
-                            ? `Next: ${nextEvoRecipe.name} · ${Math.round(run.evolutionLikelihood)}% · ${evolutionsUsed}`
-                            : `${idleArmed} armed · ${Math.round(run.evolutionLikelihood)}% · ${evolutionsUsed}`}
-                </Text>
-              </TouchableOpacity>
-            )}
-            {run.activeEvolutions.map(a => {
-              const recipe = recipeFor(a.id);
-              return (
-                <Anchor key={a.id} name={`evo:${a.id}`}>
-                  <TouchableOpacity
-                    onPress={() => { sfx('click'); setHudInspect({ kind: 'evolutions' }); }}
-                    activeOpacity={0.75}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Inspect ${recipe?.name ?? a.id} evolution`}
-                  >
-                    <EvolutionRing
-                      icon={recipe?.icon ?? 'lorc/crystal-shine'}
-                      name={recipe?.name ?? a.id}
-                      remainingMs={a.remainingMs}
-                      durationMs={a.durationMs}
-                    />
-                  </TouchableOpacity>
-                </Anchor>
-              );
-            })}
           </View>
+        ) : (
+          <>
+            {hasResourceRow && (
+              <View style={st.resourceRow}>
+                <View style={st.resourceLeft}>
+                  {run.movesLeft !== null && (secondsLeft === null ? <Anchor name="clock">{movesChip}</Anchor> : movesChip)}
+                  {practice && (
+                    <Anchor name="clock">
+                      <View testID="run-no-clock" style={st.stat} accessibilityLabel="No clock">
+                        <Icon name="lorc/stopwatch" size={13} color={INK} />
+                        <Text style={st.statText}>∞</Text>
+                      </View>
+                    </Anchor>
+                  )}
+                  {secondsLeft !== null && (
+                    <Anchor name="clock">
+                      <View
+                        testID="run-clock"
+                        accessibilityLabel={`${secondsLeft} seconds left${fx.busy ? ', waiting for effects' : ''}`}
+                        style={[st.stat, secondsLeft <= 10 && st.statWarn, ui.timerSpeedMultiplier && ui.timerSpeedMultiplier > 1 ? { borderColor: COLORS.impactOrange } : null, fx.busy && st.statHeld]}
+                      >
+                        <Icon name="lorc/stopwatch" size={13} color={fx.busy ? COLORS.logicTeal : INK} />
+                        <Text style={st.statText}>{secondsLeft}s</Text>
+                      </View>
+                    </Anchor>
+                  )}
+                  {showPassivesHud && run.passives.map(id => <Anchor key={id} name={`passive:${id}`}><PassiveChip id={id} run={run} onPress={() => { sfx('click'); setHudInspect({ kind: 'passive', id }); }} /></Anchor>)}
+                  {run.features.has('graces') && (
+                    <Anchor name="graces">
+                      <View style={st.stat}>
+                        <Icon name="lorc/clover" size={13} color={COLORS.logicTeal} />
+                        <Text style={st.statText}>{run.stats.graces}</Text>
+                      </View>
+                    </Anchor>
+                  )}
+                </View>
+                <View style={st.resourceRight}>
+                  {run.features.has('coins') && <Anchor name="coins"><CoinPill coins={run.coins} compact /></Anchor>}
+                  {run.features.has('hints') && (
+                    <Anchor name="hint">
+                      <TouchableOpacity
+                        testID="run-hint"
+                        onPress={() => run.stats.hints > 0 && !ui.disableManualHint && setHintTrigger(t => t + 1)}
+                        style={[st.hintBtn, (run.stats.hints <= 0 || ui.disableManualHint) && { opacity: 0.4 }]}
+                        accessibilityLabel="Use hint"
+                      >
+                        <Icon name="lorc/light-bulb" size={14} color={INK} />
+                        <Text style={st.statText}>{run.stats.hints}</Text>
+                      </TouchableOpacity>
+                    </Anchor>
+                  )}
+                </View>
+              </View>
+            )}
+
+            {hasBeltDock && (
+              <View style={[st.beltDockRow, inlineSynergyOnBelt && st.beltDockRowWrap]}>
+                <GearBelt
+                  weapons={run.weapons}
+                  growth={run.growth}
+                  ignition={run.lastSetIgnition}
+                  counters={enemyCounters}
+                  reduced={!effects}
+                  width={hudPanelW}
+                  reservedRightPx={beltReservedRightPx}
+                  onInspect={setInspect}
+                />
+                {inlineSynergyOnBelt && hasAnySynergyItems ? (
+                  <View style={st.inlineSynergyDock}>{renderSynergyItems(0)}</View>
+                ) : (run.arcana.length > 0 || run.activeEvolutions.length > 0 || dockRolesOnBelt) ? (
+                  <View style={st.rightDock}>
+                    {dockRolesOnBelt && (
+                      <GearChips
+                        run={run}
+                        mods={gearMods}
+                        rolesOnly
+                        maxRoles={dockedRolesCount}
+                        onInspectWeapon={id => {
+                          const w = run.weapons.find(x => x.id === id);
+                          if (w) { sfx('click'); setInspect(w); }
+                        }}
+                      />
+                    )}
+                    {run.arcana.map(id => (
+                      <TouchableOpacity
+                        key={id}
+                        testID="run-arcana-chip"
+                        style={st.arcanaChip}
+                        onPress={() => { sfx('click'); setHudInspect({ kind: 'arcana', id }); }}
+                        activeOpacity={0.75}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Inspect ${getArcana(id).name}`}
+                      >
+                        <Icon name={getArcana(id).icon} size={11} color={TONE.arcana} />
+                        <Text style={st.arcanaChipText}>{getArcana(id).numeral}</Text>
+                      </TouchableOpacity>
+                    ))}
+                    {run.activeEvolutions.map(a => {
+                      const recipe = recipeFor(a.id);
+                      return (
+                        <Anchor key={a.id} name={`evo:${a.id}`}>
+                          <TouchableOpacity
+                            onPress={() => { sfx('click'); setHudInspect({ kind: 'evolutions' }); }}
+                            activeOpacity={0.75}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Inspect ${recipe?.name ?? a.id} evolution`}
+                          >
+                            <EvolutionRing
+                              icon={recipe?.icon ?? 'lorc/crystal-shine'}
+                              name={recipe?.name ?? a.id}
+                              remainingMs={a.remainingMs}
+                              durationMs={a.durationMs}
+                              compact
+                            />
+                          </TouchableOpacity>
+                        </Anchor>
+                      );
+                    })}
+                  </View>
+                ) : null}
+              </View>
+            )}
+          </>
+        )}
+
+        {/* Live Role Set Bonuses, Trick trackers, Escalating Purity, board effects & armed Evolution chip */}
+        {hasSynergyChips && (
+          <View style={st.synergyRow}>{renderSynergyItems(dockedRolesCount)}</View>
         )}
 
         {practice ? (
           // Nothing to win here: where the ★★★ goal would be, the way out
           <View style={st.challenge} testID="run-practice-bar">
-            <Icon name="lorc/target-dummy" size={14} color={INK} />
+            <Icon name="lorc/target-dummy" size={13} color={INK} />
             <Text style={st.challengeText} numberOfLines={1}>Practice: nothing to win, nothing to lose</Text>
             <TouchableOpacity testID="run-done" onPress={leavePractice} style={st.doneBtn} accessibilityRole="button" accessibilityLabel="Done practising">
               <Text style={st.doneText}>DONE</Text>
             </TouchableOpacity>
           </View>
-        ) : chrome?.statusBanner ? (
-          <View style={st.challenge} testID={chrome.statusBanner.testID}>
-            <Icon name={chrome.statusBanner.icon} size={14} color={TONE.upside} />
-            <Text style={st.challengeText} numberOfLines={1}>
-              {chrome.statusBanner.text}
-            </Text>
-          </View>
-        ) : level.id !== '1-1' ? (
+        ) : !chrome?.statusBanner && level.id !== '1-1' ? (
           <ChallengeStrip text={challenge.text} met={challenge.met} failed={challenge.failed} onPress={() => { sfx('click'); setHudInspect({ kind: 'challenge' }); }} />
         ) : null}
 
@@ -1152,63 +1385,119 @@ const AdventureRun: React.FC<Props> = ({
             ignition={run.lastSetIgnition}
             run={run}
             enabled={effects}
+            wide={isWide}
             onPress={() => { sfx('click'); setHudInspect({ kind: 'score' }); }}
           />
         )}
 
-      </View>
+        {/* Unified Threat Rail docked cleanly inside the HUD frame (zero gap moat above the board!) */}
+        {threatRail}
 
-      {run.parry && (
-        <ParryIntentBar
-          parry={run.parry}
-          active={playing && appActive}
-          counterAvailable={parryCounterAvailable}
-          onPress={() => { sfx('click'); setHudInspect({ kind: 'foe' }); }}
-        />
-      )}
-
-      {run.surge && <SurgeBar surge={run.surge} active={playing && appActive} />}
-
-      {/* ── Board ───────────────────────────────────────── */}
-      <View ref={anchors.ref('board')} collapsable={false} style={st.boardWrap}>
-        {/* Evolution pulse: a glow behind the cards, never a card border */}
-        {run.activeEvolutions.length > 0 && <EvolutionGlow active={playing && appActive} />}
-        {run.surge?.active && <SurgeGlow active={playing && appActive} />}
-        {run.frozenMs > 0 && (
-          <View style={st.frozen} pointerEvents="none">
-            <Icon name="lorc/snowflake-1" size={18} color="#1D4ED8" />
-            <Text style={st.frozenText}>FROZEN {Math.ceil(run.frozenMs / 1000)}s</Text>
+        {/* Desktop landscape sidebar: Live Build & Arcana Console fills lower sidebar cleanly (tap any charm for canonical WeaponExplainer) */}
+        {isWide && (run.weapons.length > 0 || run.arcana.length > 0) && (
+          <View style={st.wideConsole}>
+            {run.weapons.length > 0 && (
+              <View style={st.wideConsoleBlock}>
+                <Text style={st.wideConsoleEyebrow}>EQUIPPED CHARMS ({run.weapons.length}) · TAP TO INSPECT</Text>
+                <View style={st.wideWeaponGrid}>
+                  {run.weapons.map(w => {
+                    const lv = run.weaponBuilds[w.id]?.level ?? 1;
+                    const stacks = run.growth ? growthStacks(run.growth, w.id) : 0;
+                    const ctr = counterForWeapon(w, enemyCounters);
+                    return (
+                      <TouchableOpacity
+                        key={w.id}
+                        style={[st.wideWeaponRow, ctr && st.wideWeaponRowCountered]}
+                        onPress={() => { sfx('click'); setInspect(w); }}
+                        activeOpacity={0.75}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Inspect ${w.name}`}
+                      >
+                        <WeaponAvatar weapon={w} size={20} />
+                        <Text style={st.wideWeaponName} numberOfLines={1}>
+                          {w.name}{weaponLevelSuffix(lv)}
+                        </Text>
+                        {ctr && <Text style={st.wideWeaponCounter}>−{ctr.reduction}%</Text>}
+                        {stacks > 0 && <Text style={st.wideWeaponStack}>+{Math.round(stacks)}</Text>}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+            {run.arcana.length > 0 && (
+              <View style={st.wideConsoleBlock}>
+                <Text style={st.wideConsoleEyebrow}>ACTIVE ARCANA</Text>
+                <View style={st.wideArcanaList}>
+                  {run.arcana.map(id => {
+                    const arc = getArcana(id);
+                    return (
+                      <TouchableOpacity
+                        key={id}
+                        style={st.wideArcanaRow}
+                        onPress={() => { sfx('click'); setHudInspect({ kind: 'arcana', id }); }}
+                        activeOpacity={0.75}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Inspect ${arc.name}`}
+                      >
+                        <Icon name={arc.icon} size={13} color={TONE.arcana} />
+                        <Text style={st.wideArcanaName} numberOfLines={1}>{arc.numeral} · {arc.name}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
           </View>
         )}
-        <CardBoardProvider overlay={cardBoardOverlay} clockMs={gambleClockMs}>
-          <GameBoard
-            cards={run.board}
-            connections={run.connections}
-            onMatch={handleMatch}
-            onInvalidSelection={handleInvalid}
-            playerStats={run.stats}
-            weapons={run.weapons}
-            isPlayerTurn={run.status === 'playing' && !halted && !fx.cutIn}
-            activeAttributes={run.attributes}
-            onUseHint={handleUseHint}
-            triggerHint={hintTrigger}
-            onCardBurn={handleBurn}
-            isPaused={!ticking}
-            lastMatchTime={lastMatchTime}
-            autoPlayer={autoPlayer}
-            enemy={run.foe}
-            hideEnemyOverlay
-            glowingCardIds={activeGlowIds}
-            dimmedCardIds={activeDimIds}
-            dimmedOpacity={liveGuidance?.dimOpacity}
-            onSelectedCountChange={handleSelectedCount}
-            onSelectedCardsChange={setBoardSelectedCards}
-            onBoardIdleChange={handleBoardIdle}
-            slotRef={slotRef}
-            onSlotLayout={anchors.measure}
-            quietRewards
-          />
-        </CardBoardProvider>
+      </View>
+
+      {/* ── Board ───────────────────────────────────────── */}
+      <View
+        ref={anchors.ref('board')}
+        collapsable={false}
+        style={[st.boardWrap, isWide && st.boardWrapWide]}
+      >
+        <View style={[st.boardInner, boardMaxWidth ? { maxWidth: boardMaxWidth } : null]}>
+          {/* Evolution pulse: a glow behind the cards, never a card border */}
+          {run.activeEvolutions.length > 0 && <EvolutionGlow active={playing && appActive} />}
+          {run.surge?.active && <SurgeGlow active={playing && appActive} />}
+          {run.frozenMs > 0 && (
+            <View style={st.frozen} pointerEvents="none">
+              <Icon name="lorc/snowflake-1" size={18} color="#1D4ED8" />
+              <Text style={st.frozenText}>FROZEN {Math.ceil(run.frozenMs / 1000)}s</Text>
+            </View>
+          )}
+          <CardBoardProvider overlay={cardBoardOverlay} clockMs={gambleClockMs}>
+            <GameBoard
+              cards={run.board}
+              connections={run.connections}
+              onMatch={handleMatch}
+              onInvalidSelection={handleInvalid}
+              playerStats={run.stats}
+              weapons={run.weapons}
+              isPlayerTurn={run.status === 'playing' && !halted && !fx.cutIn}
+              activeAttributes={run.attributes}
+              onUseHint={handleUseHint}
+              triggerHint={hintTrigger}
+              onCardBurn={handleBurn}
+              isPaused={!ticking}
+              lastMatchTime={lastMatchTime}
+              autoPlayer={autoPlayer}
+              enemy={run.foe}
+              hideEnemyOverlay
+              glowingCardIds={activeGlowIds}
+              dimmedCardIds={activeDimIds}
+              dimmedOpacity={liveGuidance?.dimOpacity}
+              onSelectedCountChange={handleSelectedCount}
+              onSelectedCardsChange={setBoardSelectedCards}
+              onBoardIdleChange={handleBoardIdle}
+              slotRef={slotRef}
+              onSlotLayout={anchors.measure}
+              quietRewards
+            />
+          </CardBoardProvider>
+        </View>
       </View>
 
       {/* Everything that is playing right now */}
@@ -1524,8 +1813,8 @@ const PassiveChip: React.FC<{ id: PassiveId; run: RunState; onPress?: () => void
       style={[st.stat, lit && { backgroundColor: '#FFF1C7' }, !lit && { opacity: 0.6 }]}
       accessibilityLabel={`${def.name}: ${label}`}
     >
-      <Icon name={def.icon} size={15} color={INK} />
-      <Text style={st.statText}>{label}</Text>
+      <Icon name={def.icon} size={13} color={INK} />
+      <Text style={st.statText} numberOfLines={1}>{label}</Text>
     </TouchableOpacity>
   );
 };
@@ -1550,7 +1839,11 @@ const EvolutionGlow: React.FC<{ active: boolean }> = ({ active }) => {
  * Shading Surge meter: fills toward the next surge while shading is off, then
  * drains through the ×5 window. Pulses in the last seconds before it starts.
  */
-const SurgeBar: React.FC<{ surge: NonNullable<RunState['surge']>; active: boolean }> = ({ surge, active }) => {
+const SurgeBar: React.FC<{ surge: NonNullable<RunState['surge']>; active: boolean; compact?: boolean }> = ({
+  surge,
+  active,
+  compact = false,
+}) => {
   const secs = Math.ceil(surge.msLeft / 1000);
   const fill = surge.active ? surge.msLeft / SURGE_RULES.surgeMs : 1 - surge.msLeft / SURGE_RULES.calmMs;
   const imminent = !surge.active && surge.msLeft <= SURGE_RULES.warnMs;
@@ -1567,20 +1860,33 @@ const SurgeBar: React.FC<{ surge: NonNullable<RunState['surge']>; active: boolea
     return () => cancelAnimation(pulse);
   }, [active, imminent, surge.active, pulse]);
   const style = useAnimatedStyle(() => ({ transform: [{ scale: pulse.value }] }));
-  const label = surge.active
+  const fullLabel = surge.active
     ? `SHADING SURGE · SETS ×${SURGE_RULES.multiplier} · ${secs}s`
     : imminent
       ? `SURGE IN ${secs}s · GET READY`
       : `Shading surge in ${secs}s`;
+  const label = compact
+    ? surge.active
+      ? `×${SURGE_RULES.multiplier} SURGE ${secs}s`
+      : imminent
+        ? `SURGE ${secs}s!`
+        : `Surge ${secs}s`
+    : fullLabel;
   return (
     <Animated.View
       testID="run-surge-bar"
-      accessibilityLabel={label}
-      style={[st.surgeBar, surge.active && st.surgeBarLive, imminent && st.surgeBarSoon, style]}
+      accessibilityLabel={fullLabel}
+      style={[
+        st.surgeBar,
+        compact && st.surgeBarCompact,
+        surge.active && st.surgeBarLive,
+        imminent && st.surgeBarSoon,
+        style,
+      ]}
     >
       <View style={[st.surgeFill, { width: `${Math.max(0, Math.min(1, fill)) * 100}%` }, surge.active && st.surgeFillLive]} />
-      <Icon name="lorc/stone-block" size={13} color={surge.active ? '#FFFFFF' : TONE.surge} />
-      <Text style={[st.surgeText, surge.active && { color: '#FFFFFF' }]} numberOfLines={1}>{label}</Text>
+      <Icon name="lorc/stone-block" size={compact ? 11 : 13} color={surge.active ? '#FFFFFF' : TONE.surge} />
+      <Text style={[st.surgeText, compact && st.surgeTextCompact, surge.active && { color: '#FFFFFF' }]} numberOfLines={1}>{label}</Text>
     </Animated.View>
   );
 };
@@ -1600,20 +1906,20 @@ const SurgeGlow: React.FC<{ active: boolean }> = ({ active }) => {
   return <Animated.View testID="surge-glow" pointerEvents="none" style={[st.glow, { backgroundColor: TONE.surge }, style]} />;
 };
 
-/** Your hearts, under your fighter on the stage. */
-const Hearts: React.FC<{ hearts: number; max: number }> = ({ hearts, max }) => {
-  if (max > 5) {
+/** Your hearts, under your fighter on a roomy stage or beside them on a compact stage. */
+const Hearts: React.FC<{ hearts: number; max: number; compact?: boolean }> = ({ hearts, max, compact = false }) => {
+  if (max > 5 || (compact && max > 3)) {
     return (
-      <View style={st.heartsPill} accessibilityLabel={`${hearts} of ${max} hearts`}>
-        <Heart size={13} />
-        <Text style={st.heartsText}>{hearts}/{max}</Text>
+      <View style={[st.heartsPill, compact && st.heartsPillCompact]} accessibilityLabel={`${hearts} of ${max} hearts`}>
+        <Heart size={compact ? 11 : 13} />
+        <Text style={[st.heartsText, compact && st.heartsTextCompact]}>{hearts}/{max}</Text>
       </View>
     );
   }
   return (
-    <View style={st.heartsPill} accessibilityLabel={`${hearts} of ${max} hearts`}>
+    <View style={[st.heartsPill, compact && st.heartsPillCompact]} accessibilityLabel={`${hearts} of ${max} hearts`}>
       {Array.from({ length: max }).map((_, i) => (
-        <Heart key={i} size={13} filled={i < hearts} />
+        <Heart key={i} size={compact ? 11 : 13} filled={i < hearts} />
       ))}
     </View>
   );
@@ -1703,74 +2009,115 @@ const Intermission: React.FC<{ run: RunState; dispatch: (a: RunAction) => void; 
 
 const st = StyleSheet.create({
   root: { flex: 1 },
-  hud: { backgroundColor: COLORS.canvasWhite, borderBottomWidth: 2, borderBottomColor: INK, paddingHorizontal: 10, paddingTop: 8, paddingBottom: 6, gap: 6 },
-  hudTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  bossTag: { fontWeight: '900', fontSize: 10, letterSpacing: 1.5, color: INK, backgroundColor: COLORS.actionYellow, borderWidth: 1.5, borderColor: INK, borderRadius: 4, paddingHorizontal: 5, overflow: 'hidden' },
+  rootWide: { flexDirection: 'row' },
+  hud: { backgroundColor: COLORS.canvasWhite, borderBottomWidth: 2, borderBottomColor: INK, paddingHorizontal: 8, paddingTop: 5, paddingBottom: 4, gap: 4 },
+  hudCompact: { paddingTop: 4, paddingBottom: 3, gap: 3 },
+  hudWide: { borderBottomWidth: 0, borderRightWidth: 2, borderRightColor: INK, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 12, gap: 8, justifyContent: 'flex-start' },
+  hudTop: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  foeNameRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  bossTag: { fontWeight: '900', fontSize: 9.5, letterSpacing: 1.2, color: INK, backgroundColor: COLORS.actionYellow, borderWidth: 1.5, borderColor: INK, borderRadius: 4, paddingHorizontal: 4.5, overflow: 'hidden' },
+  statusPill: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 3, maxWidth: '58%', backgroundColor: COLORS.paperBeige, borderRadius: 999, borderWidth: 1, borderColor: '#C9C2B8', paddingHorizontal: 6, paddingVertical: 1 },
+  statusPillText: { flexShrink: 1, fontSize: 9.5, fontWeight: '800', color: INK },
   // The battle stage: a strip of the world the fight happens in
-  stage: { borderRadius: 14, borderWidth: 2, borderColor: INK, paddingHorizontal: 8, paddingTop: 6, paddingBottom: 4 },
-  // (the ground is clipped to the stage's corners; the words are not, so a long line can spill instead of pushing)
-  stageClip: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, borderRadius: 12, overflow: 'hidden' },
-  stageGround: { position: 'absolute', left: -30, right: -30, bottom: -46, height: 74, borderRadius: 200, opacity: 0.75 },
-  // The words sit at the bottom of their row, just above the fighter's head
-  stageSpeech: { height: STAGE.speechPx, justifyContent: 'flex-end', paddingBottom: 8, zIndex: 2 },
+  stage: { borderRadius: 12, borderWidth: 2, borderColor: INK, paddingHorizontal: 8, paddingTop: 4, paddingBottom: 3, overflow: 'visible' },
+  stageCompact: { borderRadius: 10, paddingHorizontal: 7, paddingTop: 2, paddingBottom: 2 },
+  stageWithXp: { paddingBottom: 6 },
+  // (the ground and embedded XP rim are clipped cleanly to the stage's rounded corners)
+  stageClip: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, borderRadius: 10, overflow: 'hidden' },
+  stageGround: { position: 'absolute', left: -30, right: -30, bottom: -52, height: 74, borderRadius: 200, opacity: 0.72 },
+  stageGroundCompact: { bottom: -58, height: 74, opacity: 0.62 },
+  xpRimTrack: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 5, backgroundColor: 'rgba(241, 233, 224, 0.85)', borderTopWidth: 1, borderTopColor: 'rgba(56, 56, 56, 0.35)' },
+  xpRimFill: { position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: '#5EB8FF' },
+  xpBadgeWrap: { position: 'absolute', bottom: 1, left: 0, right: 0, alignItems: 'center', zIndex: 8 },
+  xpBadge: { backgroundColor: COLORS.canvasWhite, borderRadius: 999, borderWidth: 1, borderColor: INK, paddingHorizontal: 5, paddingVertical: 0 },
+  xpBadgeText: { fontSize: 7.5, lineHeight: 9.5, fontWeight: '900', color: INK, letterSpacing: 0.3 },
+  stageSpeechOverlay: { position: 'absolute', top: 4, left: 8, right: 8, zIndex: 20 },
   stageFloor: { flex: 1, flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
   stageSide: { alignItems: 'center', gap: 2 },
-  stageMiddle: { flex: 1, minWidth: 0, alignSelf: 'center', alignItems: 'center', gap: 4, paddingVertical: 2 },
-  pauseBtn: { width: 34, height: 34, borderRadius: 6, borderWidth: 2, borderColor: INK, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.paperBeige },
-  pauseText: { fontWeight: '900', color: INK, letterSpacing: -1 },
-  heartsPill: { flexDirection: 'row', alignItems: 'center', gap: 1, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 999, borderWidth: 2, borderColor: INK, backgroundColor: COLORS.canvasWhite },
-  heartsText: { fontWeight: '900', color: INK, fontSize: 11, fontVariant: ['tabular-nums'] },
-  foeName: { fontWeight: '900', fontSize: 15, color: INK, flexShrink: 1 },
-  wave: { fontWeight: '900', fontSize: 11, color: INK, letterSpacing: 1 },
-  hpTrack: { height: 20, borderRadius: 4, borderWidth: 2, borderColor: INK, backgroundColor: '#F1E9E0', overflow: 'hidden', justifyContent: 'center' },
+  stageSideCompact: { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
+  stageMiddle: { flex: 1, minWidth: 0, alignSelf: 'stretch', justifyContent: 'center', alignItems: 'center', paddingBottom: 3 },
+  stageMiddleCompact: { justifyContent: 'flex-start', paddingTop: 2, paddingBottom: 10 },
+  compactBubbleSlot: { width: '100%', zIndex: 25, alignItems: 'center', justifyContent: 'center' },
+  pauseBtn: { width: 30, height: 30, borderRadius: 6, borderWidth: 2, borderColor: INK, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.paperBeige },
+  pauseText: { fontWeight: '900', fontSize: 12, color: INK, letterSpacing: -1 },
+  heartsPill: { flexDirection: 'row', alignItems: 'center', gap: 1, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 999, borderWidth: 1.5, borderColor: INK, backgroundColor: COLORS.canvasWhite },
+  heartsPillCompact: { paddingHorizontal: 4.5, paddingVertical: 0.5, marginBottom: 3, marginLeft: 2 },
+  heartsText: { fontWeight: '900', color: INK, fontSize: 10.5, fontVariant: ['tabular-nums'] },
+  heartsTextCompact: { fontSize: 9.5 },
+  foeName: { fontWeight: '900', fontSize: 13.5, color: INK, flexShrink: 1 },
+  wave: { fontWeight: '900', fontSize: 10, color: INK, letterSpacing: 0.8 },
+  hpTrack: { height: 17, borderRadius: 4, borderWidth: 1.5, borderColor: INK, backgroundColor: '#F1E9E0', overflow: 'hidden', justifyContent: 'center' },
   hpFill: { position: 'absolute', left: 0, top: 0, bottom: 0 },
   hpTrail: { backgroundColor: '#FFE9A8' },
-  hpText: { textAlign: 'center', fontWeight: '900', fontSize: 11, color: INK, fontVariant: ['tabular-nums'] },
-  hpEndless: { fontSize: 16, lineHeight: 18, color: COLORS.canvasWhite },
-  doneBtn: { backgroundColor: COLORS.actionYellow, borderWidth: 2, borderBottomWidth: 3, borderColor: INK, borderRadius: 6, paddingHorizontal: 12, paddingVertical: 2 },
-  doneText: { fontWeight: '900', fontSize: 12, letterSpacing: 1, color: INK },
-  idleTrack: { height: 5, borderRadius: 3, backgroundColor: '#EEE', overflow: 'hidden' },
+  hpText: { textAlign: 'center', fontWeight: '900', fontSize: 10.5, color: INK, fontVariant: ['tabular-nums'] },
+  hpEndless: { fontSize: 15, lineHeight: 16, color: COLORS.canvasWhite },
+  doneBtn: { backgroundColor: COLORS.actionYellow, borderWidth: 2, borderBottomWidth: 3, borderColor: INK, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 1 },
+  doneText: { fontWeight: '900', fontSize: 11, letterSpacing: 1, color: INK },
+  idleTrack: { height: 4, borderRadius: 2, backgroundColor: '#EEE', overflow: 'hidden' },
   idleFill: { height: '100%', backgroundColor: COLORS.impactOrange },
-  counters: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, paddingLeft: 8 },
-  counter: { fontSize: 11, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
+  counters: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', columnGap: 5, rowGap: 1, paddingHorizontal: 4 },
+  counter: { fontSize: 10.5, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
   counterHot: { color: COLORS.impactOrange },
-  comboPill: { backgroundColor: COLORS.impactOrange, borderRadius: 999, borderWidth: 2, borderColor: INK, paddingHorizontal: 8, paddingVertical: 1 },
-  comboText: { fontSize: 13, fontWeight: '900', color: COLORS.canvasWhite, fontVariant: ['tabular-nums'] },
-  counterDim: { fontSize: 10, fontWeight: '700', color: TONE.spent, fontVariant: ['tabular-nums'] },
-  glow: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, borderRadius: 18, backgroundColor: '#FDE68A' },
+  comboPill: { backgroundColor: COLORS.impactOrange, borderRadius: 999, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 6, paddingVertical: 0.5 },
+  comboText: { fontSize: 11.5, fontWeight: '900', color: COLORS.canvasWhite, fontVariant: ['tabular-nums'] },
+  counterDim: { fontSize: 10, fontWeight: '800', color: 'rgba(56, 56, 56, 0.86)', fontVariant: ['tabular-nums'] },
+  glow: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, borderRadius: 14, backgroundColor: '#FDE68A' },
   bannerWrap: { position: 'absolute', left: 0, right: 0, zIndex: 250 },
   openingLayer: { ...StyleSheet.absoluteFillObject, zIndex: 245 },
-  hudRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
-  stat: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, borderWidth: 2, borderColor: INK, backgroundColor: COLORS.canvasWhite },
+  sparseRow: { flexDirection: 'row', alignItems: 'center', gap: 5, flexWrap: 'nowrap' },
+  resourceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 4 },
+  resourceLeft: { flexDirection: 'row', alignItems: 'center', gap: 3.5, flex: 1, minWidth: 0, flexWrap: 'nowrap' },
+  resourceRight: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 0 },
+  beltDockRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 5 },
+  beltDockRowWrap: { flexWrap: 'wrap', justifyContent: 'flex-start', rowGap: 3 },
+  inlineSynergyDock: { flex: 1, minWidth: 120, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 3.5 },
+  rightDock: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 3.5, flexShrink: 0 },
+  stat: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 999, borderWidth: 1.5, borderColor: INK, backgroundColor: COLORS.canvasWhite, flexShrink: 1 },
   statWarn: { backgroundColor: '#FFE1DE', borderColor: COLORS.impactRed },
   statHeld: { backgroundColor: '#D4F4EE', borderColor: COLORS.logicTeal },
-  statText: { fontWeight: '900', color: INK, fontSize: 13, fontVariant: ['tabular-nums'] },
-  hintBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 6, borderWidth: 2, borderBottomWidth: 3, borderColor: INK, backgroundColor: COLORS.actionYellow },
-  xpTrack: { height: 12, borderRadius: 3, borderWidth: 1.5, borderColor: INK, backgroundColor: COLORS.paperBeige, overflow: 'hidden', justifyContent: 'center' },
-  xpFill: { position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: '#7AC8FF' },
-  xpText: { fontSize: 9, fontWeight: '900', color: INK, textAlign: 'center' },
-  synergyRow: { flexDirection: 'row', alignItems: 'center', gap: 5, flexWrap: 'wrap' },
-  arcanaChip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: TONE.arcanaPale, borderRadius: 999, borderWidth: 1.5, borderColor: TONE.arcana, paddingHorizontal: 7, paddingVertical: 2 },
-  arcanaChipText: { fontSize: 10, fontWeight: '900', color: TONE.arcana },
-  purityChip: { flexDirection: 'row', alignItems: 'center', gap: 3, maxWidth: '100%', backgroundColor: COLORS.paperBeige, borderRadius: 999, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 7, paddingVertical: 2 },
+  statText: { flexShrink: 1, fontWeight: '900', color: INK, fontSize: 11, fontVariant: ['tabular-nums'] },
+  hintBtn: { flexDirection: 'row', alignItems: 'center', gap: 2.5, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, borderWidth: 1.5, borderBottomWidth: 2.5, borderColor: INK, backgroundColor: COLORS.actionYellow },
+  synergyRow: { flexDirection: 'row', alignItems: 'center', gap: 3.5, flexWrap: 'wrap' },
+  arcanaChip: { flexDirection: 'row', alignItems: 'center', gap: 2.5, backgroundColor: TONE.arcanaPale, borderRadius: 999, borderWidth: 1.5, borderColor: TONE.arcana, paddingHorizontal: 5.5, paddingVertical: 1.5 },
+  arcanaChipText: { fontSize: 9.5, fontWeight: '900', color: TONE.arcana },
+  purityChip: { flexDirection: 'row', alignItems: 'center', gap: 3, maxWidth: '100%', backgroundColor: COLORS.paperBeige, borderRadius: 999, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 5.5, paddingVertical: 1 },
   purityChipHot: { backgroundColor: '#CCFBF1', borderColor: TONE.upside },
-  purityChipText: { flexShrink: 1, fontSize: 10, fontWeight: '800', color: INK },
-  evoChip: { flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: '100%', backgroundColor: TONE.comboPale, borderRadius: 999, borderWidth: 1.5, borderColor: TONE.arcana, paddingHorizontal: 7, paddingVertical: 2 },
+  purityChipText: { flexShrink: 1, fontSize: 9.5, fontWeight: '800', color: INK },
+  evoChip: { flexDirection: 'row', alignItems: 'center', gap: 3, maxWidth: '100%', backgroundColor: TONE.comboPale, borderRadius: 999, borderWidth: 1.5, borderColor: TONE.arcana, paddingHorizontal: 5.5, paddingVertical: 1 },
   evoChipReady: { backgroundColor: COLORS.actionYellow, borderColor: INK },
-  evoChipText: { flexShrink: 1, fontSize: 10, fontWeight: '900', color: INK },
+  evoChipText: { flexShrink: 1, fontSize: 9.5, fontWeight: '900', color: INK },
   frozen: { position: 'absolute', top: 10, alignSelf: 'center', zIndex: 60, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#DBEAFE', borderWidth: 2, borderColor: '#1D4ED8', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 4 },
   frozenText: { fontWeight: '900', color: '#1D4ED8', letterSpacing: 1 },
-  challenge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.paperBeige, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3 },
+  challenge: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: COLORS.paperBeige, borderRadius: 4, paddingHorizontal: 7, paddingVertical: 2 },
   challengeMet: { backgroundColor: '#D4F4EE' },
-  challengeStar: { color: '#E0A800', fontSize: 11, fontWeight: '900' },
-  challengeText: { flex: 1, fontSize: 12, fontWeight: '700', color: INK },
-  boardWrap: { flex: 1, padding: 6 },
-  surgeBar: { marginHorizontal: 10, marginTop: 4, height: 22, borderRadius: 999, borderWidth: 2, borderColor: INK, backgroundColor: TONE.surgePale, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
+  challengeStar: { color: '#E0A800', fontSize: 10, fontWeight: '900' },
+  challengeText: { flex: 1, fontSize: 11, fontWeight: '700', color: INK },
+  threatRail: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  threatRailStacked: { flexDirection: 'column', gap: 5 },
+  threatRowSlot: { flexDirection: 'row', width: '100%' },
+  wideConsole: { flex: 1, backgroundColor: COLORS.paperBeige, borderRadius: 10, borderWidth: 1.5, borderColor: '#D6CFC4', padding: 10, gap: 10 },
+  wideConsoleBlock: { gap: 5 },
+  wideConsoleEyebrow: { fontSize: 9, fontWeight: '900', letterSpacing: 1.1, color: TONE.spent },
+  wideWeaponGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
+  wideWeaponRow: { width: '48.5%', flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: COLORS.canvasWhite, borderRadius: 7, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 6, paddingVertical: 4 },
+  wideWeaponRowCountered: { backgroundColor: '#FEE2E2', borderColor: '#DC2626' },
+  wideWeaponName: { flex: 1, minWidth: 0, fontSize: 10.5, fontWeight: '800', color: INK },
+  wideWeaponCounter: { fontSize: 8.5, fontWeight: '900', color: '#B91C1C', fontVariant: ['tabular-nums'] },
+  wideWeaponStack: { fontSize: 8.5, fontWeight: '900', color: INK, backgroundColor: COLORS.actionYellow, borderRadius: 4, paddingHorizontal: 3, overflow: 'hidden', fontVariant: ['tabular-nums'] },
+  wideArcanaList: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
+  wideArcanaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: TONE.arcanaPale, borderRadius: 999, borderWidth: 1.5, borderColor: TONE.arcana, paddingHorizontal: 8, paddingVertical: 3 },
+  wideArcanaName: { flexShrink: 1, fontSize: 10.5, fontWeight: '900', color: TONE.arcana },
+  boardWrap: { flex: 1, paddingHorizontal: 4, paddingTop: 3, paddingBottom: 4 },
+  boardWrapWide: { padding: 12, alignItems: 'center', justifyContent: 'center' },
+  boardInner: { flex: 1, width: '100%', position: 'relative' },
+  surgeBar: { flex: 1, minWidth: 0, height: 22, borderRadius: 999, borderWidth: 1.5, borderColor: INK, backgroundColor: TONE.surgePale, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8, gap: 4 },
+  surgeBarCompact: { flex: 1, paddingHorizontal: 6 },
   surgeBarSoon: { borderColor: TONE.surge },
   surgeBarLive: { borderColor: TONE.surge, backgroundColor: '#9D174D' },
   surgeFill: { position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: '#FBCFE8' },
   surgeFillLive: { backgroundColor: TONE.surge },
-  surgeText: { flexShrink: 1, fontSize: 11, fontWeight: '900', color: INK, letterSpacing: 0.5 },
+  surgeText: { flexShrink: 1, fontSize: 10.5, fontWeight: '900', color: INK, letterSpacing: 0.3, fontVariant: ['tabular-nums'] },
+  surgeTextCompact: { fontSize: 10, letterSpacing: 0.1 },
   tipDim: { position: 'absolute', left: 0, right: 0, zIndex: 299, backgroundColor: 'rgba(10,10,10,0.5)' },
   tipWrap: { position: 'absolute', left: 0, right: 0, zIndex: 300, alignItems: 'center', paddingHorizontal: 12 },
   tipArrow: { width: 18, height: 18, backgroundColor: COLORS.actionYellow, transform: [{ rotate: '45deg' }], marginBottom: -11, alignSelf: 'flex-start', marginLeft: 70 },

@@ -20,7 +20,7 @@ import type { TraitCheckPill } from '../coach';
 import { INK } from './ui';
 
 /** The strip's height, borders included (the fight screen budgets for it) */
-export const TRAIT_CHECKS_HEIGHT = 38;
+export const TRAIT_CHECKS_HEIGHT = 34;
 
 const TITLE: Record<AttributeName, string> = {
   color: 'COLOR',
