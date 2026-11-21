@@ -30,6 +30,10 @@ import type { EnemyReactionEvent } from '@/utils/enemyAnimations';
 
 /** How long a matched card's reward stays on screen before the card is replaced. */
 const REWARD_REVEAL_MS = 1500;
+/** How long an auto-hint (Oracle Eye / Mystic Sight) stays lit on the board. */
+const AUTO_HINT_DISPLAY_MS = 4000;
+/** How long a pointed-out auto-hint card still counts as a hinted Set after it flashes. */
+const AUTO_HINT_CREDIT_MS = 12000;
 
 const DEFAULT_ATTRIBUTES: AttributeName[] = ['shape', 'color', 'number', 'shading'];
 const EMPTY_SHAPES_SET = new Set<Shape>();
@@ -125,6 +129,10 @@ const GameBoard: React.FC<GameBoardProps> = ({
   const [selectedCards, setSelectedCards] = useState<CardType[]>([]);
   const [matchedCardIds, setMatchedCardIds] = useState<string[]>([]);
   const [hintCards, setHintCards] = useState<string[]>([]);
+  const hintCardsRef = useRef<string[]>([]);
+  hintCardsRef.current = hintCards;
+  const autoHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recentAutoHintRef = useRef<{ ids: string[]; shownAt: number }>({ ids: [], shownAt: 0 });
 
   // Get enemy UI modifiers early for hint disable checks
   const enemyUIModifiers = useMemo(() => {
@@ -268,8 +276,28 @@ const GameBoard: React.FC<GameBoardProps> = ({
       return next.length === prev.length ? prev : next;
     });
     setMatchedCardIds([]); // Always clear - matched cards get replaced
-    setHintCards([]);
+    // Preserve active hints across in-place board ticks (e.g. bomb timers); clear only once a hinted card leaves the board
+    if (hintCardsRef.current.length > 0 && !hintCardsRef.current.every(id => cardIds.has(id))) {
+      hintCardsRef.current = [];
+      setHintCards([]);
+      if (autoHintTimerRef.current) {
+        clearTimeout(autoHintTimerRef.current);
+        autoHintTimerRef.current = null;
+      }
+    }
+    if (recentAutoHintRef.current.ids.length > 0 && !recentAutoHintRef.current.ids.every(id => cardIds.has(id))) {
+      recentAutoHintRef.current = { ids: [], shownAt: 0 };
+    }
   }, [cards]);
+
+  useEffect(() => {
+    return () => {
+      if (autoHintTimerRef.current) {
+        clearTimeout(autoHintTimerRef.current);
+        autoHintTimerRef.current = null;
+      }
+    };
+  }, []);
 
   // Report selected count & selected cards changes to parent
   useEffect(() => {
@@ -318,6 +346,9 @@ const GameBoard: React.FC<GameBoardProps> = ({
     // Check if manual hints are disabled by enemy (e.g., Creeping Shadow)
     if (enemyUIModifiers.disableManualHint === true) return;
 
+    // Block clicking Hint while a hint is already highlighted on the board (closes off-board Hint-spam exploit)
+    if (hintCardsRef.current.length > 0) return;
+
     // Use ref to get current hints value without causing re-renders
     const hintsAvailable = hintsRef.current !== undefined && hintsRef.current > 0;
     if (!hintsAvailable) return;
@@ -332,12 +363,19 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
     const set = findSet(availableCards, activeAttributes);
     if (!set) return;
-    setHintCards(set.map(c => c.id));
+    const ids = set.map(c => c.id);
+    hintCardsRef.current = ids;
+    setHintCards(ids);
     onUseHint?.();
   }, [cards, matchedCardIds, onUseHint, enemyUIModifiers.disableManualHint, activeAttributes]);
 
   const clearHint = useCallback(() => {
+    hintCardsRef.current = [];
     setHintCards([]);
+    if (autoHintTimerRef.current) {
+      clearTimeout(autoHintTimerRef.current);
+      autoHintTimerRef.current = null;
+    }
   }, []);
 
   // Handle external hint trigger (fires when triggerHint increments)
@@ -372,10 +410,16 @@ const GameBoard: React.FC<GameBoardProps> = ({
     const enhancedHintChance = playerStats.enhancedHintChance || 0;
     const showTwoCards = enhancedHintChance > 0 && Math.random() * 100 < enhancedHintChance;
     const shuffled = [...set].sort(() => Math.random() - 0.5);
-    setHintCards(shuffled.slice(0, showTwoCards ? 2 : 1).map(c => c.id));
-    setTimeout(() => {
+    const ids = shuffled.slice(0, showTwoCards ? 2 : 1).map(c => c.id);
+    hintCardsRef.current = ids;
+    setHintCards(ids);
+    recentAutoHintRef.current = { ids, shownAt: Date.now() };
+    if (autoHintTimerRef.current) clearTimeout(autoHintTimerRef.current);
+    autoHintTimerRef.current = setTimeout(() => {
+      autoHintTimerRef.current = null;
+      hintCardsRef.current = [];
       setHintCards([]);
-    }, REWARD_REVEAL_MS);
+    }, AUTO_HINT_DISPLAY_MS);
     return true;
   }, [cards, matchedCardIds, playerStats.enhancedHintChance, activeAttributes]);
 
@@ -473,7 +517,17 @@ const GameBoard: React.FC<GameBoardProps> = ({
           setEnemyReaction({ type: weaponsFired ? 'crit_pain' : 'pain', id: enemyReactionSeq.current });
 
           // Tell the parent straight away, so the score counts even if the timer runs out mid-animation
-          const hinted = newSelectedCards.some(c => hintCards.includes(c.id) || (glowingCardIds?.includes(c.id) ?? false));
+          const recentAuto =
+            Date.now() - recentAutoHintRef.current.shownAt <= AUTO_HINT_CREDIT_MS
+              ? recentAutoHintRef.current.ids
+              : [];
+          const hinted = newSelectedCards.some(
+            c =>
+              hintCardsRef.current.includes(c.id) ||
+              recentAuto.includes(c.id) ||
+              (glowingCardIds?.includes(c.id) ?? false)
+          );
+          recentAutoHintRef.current = { ids: [], shownAt: 0 };
           onMatch(affectedCards, rewards, weaponEffects, { hinted });
 
           setTimeout(() => {

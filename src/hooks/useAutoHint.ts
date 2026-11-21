@@ -11,9 +11,9 @@ interface UseAutoHintOptions {
   onTrigger: () => void;
 }
 
-const BASE_WAIT_TIME = 15000; // 15 seconds after last match
-const MIN_WAIT_TIME = 5000;   // Minimum 5 second wait
-const CHECK_INTERVAL = 2000;  // Check every 2 seconds
+const BASE_WAIT_TIME = 8000;  // 8 seconds after last match (responsive during active Set fights)
+const MIN_WAIT_TIME = 3000;   // Minimum 3 second wait
+const CHECK_INTERVAL = 1500;  // Check every 1.5 seconds
 
 /**
  * Manages auto-hint timing.

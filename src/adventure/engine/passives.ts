@@ -61,11 +61,15 @@ export const advanceCombo = (d: Draft) => {
 export const addComboSteps = (d: Draft, n: number) => {
   if (n <= 0) return;
   d.combo = Math.max(1, d.combo) + n;
+  d.bonusCombo = (d.bonusCombo ?? 0) + n;
   noteCombo(d);
 };
 
 export const decayCombo = (d: Draft) => {
-  if (d.combo > 0 && d.elapsedMs - d.lastMatchAtMs > comboWindowMs(d)) d.combo = 0;
+  if (d.combo > 0 && d.elapsedMs - d.lastMatchAtMs > comboWindowMs(d)) {
+    d.combo = 0;
+    d.bonusCombo = 0;
+  }
 };
 
 /** Hot Streak: returns the multiplier for this Set (1 when not armed) and disarms it. */
@@ -103,6 +107,13 @@ export const passiveSetDamageBreakdown = (d: Draft, sinceLastMs: number): { bonu
     if (add !== 0) {
       bonus += add;
       items.push({ label: 'Combo', amount: add, note: `${steps}-Set speed streak` });
+    }
+  } else if ((d.bonusCombo ?? 0) > 0) {
+    // Universal Combo damage for non-Sly-Fox fighters when bumped by E.combo / evolutions (Dawn Chorus, Spring Festival, Torchbearer)
+    const steps = Math.min(d.bonusCombo!, tuning(d, 'combo.max'));
+    if (steps > 0) {
+      bonus += steps;
+      items.push({ label: 'Combo', amount: steps, note: `${steps} bonus Combo step${steps === 1 ? '' : 's'}` });
     }
   }
   if (hasPassive(d, 'grudge') && d.passive.grudge > 0) {
@@ -188,6 +199,7 @@ export const afterSetPassives = (d: Draft, matched: Card[], rainbow: boolean, au
 /** Grudge stores, the combo breaks. Returns true when Thick Hide spares the heart. */
 export const onMistakePassives = (d: Draft): boolean => {
   d.combo = 0;
+  d.bonusCombo = 0;
   d.passive.hotStreak = false;
   if (hasPassive(d, 'grudge') && d.passive.grudge < tuning(d, 'grudge.max')) {
     d.passive.grudge += 1;

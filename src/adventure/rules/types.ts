@@ -67,7 +67,13 @@ export type Condition =
   | { kind: 'comboAtLeast'; n: number }
   /** The Set being scored has exactly this many all-different attributes */
   | { kind: 'diffCount'; n: number }
+  /** The Set being scored has at most this many all-different attributes */
+  | { kind: 'diffCountAtMost'; n: number }
+  /** The Set being scored has at least this many all-different attributes */
+  | { kind: 'diffCountAtLeast'; n: number }
   | { kind: 'rainbowSet' }
+  /** The Set being scored used a pointed-out card (hint, auto-hint or Keen Eye) */
+  | { kind: 'hintedSet' }
   | { kind: 'noMistakesThisFight' }
   | { kind: 'evolutionActive' }
   | { kind: 'timeSinceLastSetAtLeast'; ms: number }
@@ -110,7 +116,7 @@ export type Effect =
   | { do: 'time'; seconds: number }
   | { do: 'hint'; amount: number }
   | { do: 'grace'; amount: number }
-  | { do: 'xp'; amount: number }
+  | { do: 'xp'; amount: number; per?: Scale }
   /** Add cards to the board (capped at the max board size) */
   | { do: 'growBoard'; count: number }
   /** Every card now on the board gains this much power (+damage when matched) */
@@ -129,8 +135,10 @@ export type Effect =
   | { do: 'autoSet' }
   /** Add Combo steps (Sly Fox style; only meaningful with a combo passive) */
   | { do: 'comboStep'; amount: number }
-  /** Put an Evolution Catalyst on the board now (if a recipe is armed) */
+  /** Put an Evolution Catalyst on the board now (if a recipe is armed and idle) */
   | { do: 'spawnCatalyst' }
+  /** Put an Evolution Catalyst on the board even when armed recipes are already running (respects cap & one-catalyst limit) */
+  | { do: 'spawnCatalystForce' }
   /** Extend every active evolution */
   | { do: 'extendEvolutions'; ms: number }
   /** Next Set deals this many times damage */
@@ -142,7 +150,18 @@ export type Effect =
   /** Link random pairs of board positions (a destroyed linked card takes its partner with it) */
   | { do: 'link'; count: number }
   /** Raise max hearts; the new hearts arrive empty */
-  | { do: 'emptyHeart'; amount: number };
+  | { do: 'emptyHeart'; amount: number }
+  // ── Trick-state mutation verbs (for Trick+Trick evolutions & synergies) ──
+  /** Repair a shattered Glass Sword and reset its timer */
+  | { do: 'repairGlass' }
+  /** Add `amount` directly to Greedy Chest's stored payout (or queue for the next chest) */
+  | { do: 'feedChest'; amount: number }
+  /** Fast-forward beneficial trick timers (Ice thaw, Rust aging, Fog lift, Curse→×2, Fuse→hot) without penalizing lethal timers */
+  | { do: 'advanceTricks'; ms: number }
+  /** Fill 1 random unfilled Collector's Album page (triggering page bonus or Album completion) */
+  | { do: 'stampAlbum' }
+  /** Place `count` extra Magnet marks on selectable board cards */
+  | { do: 'addMagnet'; count: number };
 
 export interface Rule {
   trigger: Trigger;
@@ -280,6 +299,16 @@ export interface Modifiers {
   tightropeDamage?: number;
   /** Hot Potato: damage for matching the hot card (mistakes cost an extra heart while it is out) */
   potatoDamage?: number;
+
+  // ── Role Set Bonuses (data/weaponRoles.ts) ──
+  /** % bonus added to all Board Gamble weapon payouts (e.g. 15 / 35 / 60) */
+  gambleBonusPct?: number;
+  /** Extra starting cards dealt to the board (overflow empowers the board at MAX_BOARD) */
+  startingBoardCards?: number;
+  /** Extra board links placed at wave start */
+  startingLinks?: number;
+  /** Flat % echo chance added before scaling */
+  bonusEchoChance?: number;
 }
 
 /** Anything that can bring rules into a fight. */

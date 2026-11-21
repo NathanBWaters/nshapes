@@ -16,6 +16,7 @@ import { EVOLUTION_RECIPES } from '../data/evolutions';
 import { PASSIVES } from '../data/passives';
 import { getUpgrade } from '../data/upgrades';
 import { ownerOfEvent } from '../data/weaponGuide';
+import { roleLabel, type WeaponRole } from '../data/weaponRoles';
 import { getRecipe, getSkillNode } from './sources';
 import type { EvolutionRecipe, FightLogEntry, FightLogLine, PassiveId, RunEventType, RunState } from '../types';
 
@@ -199,6 +200,17 @@ export const resolveDamageSourceMeta = (
     };
   }
 
+  // 4b. Explicit Role Set Bonus ref
+  if (rawRef?.startsWith('role:')) {
+    const rid = rawRef.slice(5) as WeaponRole;
+    return {
+      id: `role:${rid}`,
+      name: `${roleLabel(rid)} Set Bonus`,
+      kind: 'bonus',
+      icon: 'lorc/spark-spirit',
+    };
+  }
+
   // 5. Event-owned weapon (e.g. blast/laser/fire/pinata_break owned by a held weapon)
   if (opts.line) {
     const owner = ownerOfEvent(opts.line.type, opts.line.text, held);
@@ -325,14 +337,17 @@ const attributeEntry = (
       }
     }
 
-    // Shading Surge uplift on matched + collateral cards
+    // Shading Surge: unified logs include Shading Surge inside `multItems` & `multiplier` (post-addition);
+    // legacy saved logs applied `surgeMultiplier` to cards+collateral before `flatBonus`.
+    const surgeInMult = (m.multItems ?? []).some(it => it.label.toLowerCase().includes('surge'));
     const surgeMult = m.surgeMultiplier ?? 1;
-    if (surgeMult > 1) {
-      const surgeLift = (m.cards + collateralSum) * (surgeMult - 1);
+    const preSurge = !surgeInMult && surgeMult > 1 ? surgeMult : 1;
+    if (preSurge > 1) {
+      const surgeLift = (m.cards + collateralSum) * (preSurge - 1);
       addSet({ id: 'bonus:surge', name: 'Shading Surge', kind: 'bonus', icon: 'lorc/power-lightning' }, surgeLift);
     }
 
-    // Flat per-Set bonuses (weapons, passives, Workshop Heavy Hitter, skill nodes, evolutions)
+    // Flat per-Set bonuses (weapons, passives, Workshop Heavy Hitter, skill nodes, evolutions, Piñata, Purity, Traps)
     let flatSum = 0;
     if (m.flatItems && m.flatItems.length > 0) {
       for (const item of m.flatItems) {
@@ -347,7 +362,7 @@ const attributeEntry = (
     }
 
     // Pre-multiplier subtotal
-    const preMult = Math.max(0, (m.cards + collateralSum) * surgeMult + Math.max(0, m.flatBonus));
+    const preMult = Math.max(0, (m.cards + collateralSum) * preSurge + Math.max(0, m.flatBonus));
 
     // Multiplier uplift (Rainbow ×2, Hot Streak ×2, Parry ×1.75, Staggered ×2, weapon multipliers)
     const mult = Math.max(1, m.multiplier);

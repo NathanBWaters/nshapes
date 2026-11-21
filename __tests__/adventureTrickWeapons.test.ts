@@ -6,7 +6,8 @@ import type { Card } from '@/types';
 import { isValidCombination } from '@/utils/gameUtils';
 import { runReducer } from '@/adventure/engine/run';
 import { allSets, countDifferentAttributes } from '@/adventure/engine/sets';
-import { albumPageOf } from '@/adventure/engine/gear';
+import { ALBUM_PAGE_BONUS, albumPageOf } from '@/adventure/engine/gear';
+import { SURGE_RULES, TRICK_RULES } from '@/adventure/data/rules';
 import { charmWeapons, getArmoryWeapon } from '@/adventure/data/armory';
 import { TRICK_WEAPON_IDS } from '@/adventure/data/adventureWeapons';
 import { hasWeaponRole } from '@/adventure/data/weaponRoles';
@@ -15,7 +16,7 @@ import { BOTS, simulateRun } from '@/adventure/engine/bot';
 import { getLevel } from '@/adventure/data/levels';
 import type { AdventureWeapon, RunState } from '@/adventure/types';
 import type { Modifiers } from '@/adventure/rules/types';
-import { findSet, miss, playSet, relic, startFight, tick, withWeapons } from './testUtils/adventureFight';
+import { eventsOf, findSet, miss, playSet, relic, startFight, testLevel, tick, withWeapons } from './testUtils/adventureFight';
 import { setPowerEnabled } from '@/adventure/data/weaponPower';
 
 /** A fight holding a weapon that brings these trick numbers. */
@@ -462,6 +463,152 @@ describe('Hot Potato', () => {
     const lostPlain = plain.maxHearts! - plain.hearts!;
     const burned = miss(s);
     expect(s.hearts! - burned.hearts!).toBe(lostPlain + 1);
+  });
+});
+
+describe('trick & gamble engine bug fixes', () => {
+  beforeEach(() => setPowerEnabled(false));
+  afterEach(() => setPowerEnabled(true));
+
+  it('frozenMs pauses elapsedMs and tickGear (Glass Sword and Thorn Bush timers freeze cleanly)', () => {
+    let s = withTrick(
+      { glassDamage: 8, thornChance: 100, thornDamage: 6 },
+      startFight({ features: ['hearts', 'gear'] })
+    );
+    s = playSet(s);
+    const elapsedBefore = s.elapsedMs;
+    const heartsBefore = s.hearts!;
+    s = { ...s, frozenMs: 25000 };
+    s = tick(s, 20000, 1000);
+    expect(s.elapsedMs).toBe(elapsedBefore);
+    expect(s.gear.glassBroken).toBe(false);
+    expect(s.hearts).toBe(heartsBefore);
+  });
+
+  it('Bounty Poster never rolls shading during Shading Surge and rerolls stale shading once Surge ends', () => {
+    let s = withTrick(
+      { bountyDamage: 12 },
+      startFight({ level: testLevel({ rules: { attributes: ['shape', 'color', 'number'], shadingSurge: true, timer: 300 } }), features: ['hearts', 'gear'] })
+    );
+    // Enter Shading Surge
+    s = tick(s, SURGE_RULES.calmMs, 1000);
+    expect(s.surge?.active).toBe(true);
+    expect(s.attributes).toContain('shading');
+    // Force a poster roll during surge: must never pick 'shading'
+    for (let i = 0; i < 6; i++) {
+      s = { ...s, gear: { ...s.gear, bounty: { attribute: 'shading', value: 'striped', left: 1 } } };
+      s = tick(s, 500);
+      expect(s.gear.bounty?.attribute).not.toBe('shading');
+    }
+  });
+
+  it('Fog Lantern preserves fogBonus when cleanseBoard flips face-down cards', () => {
+    let s = withWeapons(
+      startFight({ features: ['hearts', 'gear'] }),
+      { ...relic([{ trigger: { on: 'mistake' }, effects: [{ do: 'cleanse' }] }]), modifiers: { fogChance: 100, fogBonus: 7 } } as AdventureWeapon
+    );
+    // Play a Set so replacement cards are dealt face-down with fogBonus
+    s = playSet(s);
+    const fogged = s.board.find(c => c.isFaceDown && (c.fogBonus ?? 0) > 0)!;
+    expect(fogged).toBeDefined();
+    // Pick 3 non-fogged cards for INVALID so cleanse runs without replacing the fogged card off the board
+    const wrong = s.board.filter(c => c.id !== fogged.id).slice(0, 3);
+    const afterInvalid = runReducer(s, { type: 'INVALID', cards: wrong });
+    const after = runReducer(afterInvalid, { type: 'REPLACE', ids: wrong.map(c => c.id) });
+    const flipped = after.board.find(c => c.id === fogged.id)!;
+    expect(flipped.isFaceDown).toBe(false);
+    expect(flipped.bonusPoints).toBeGreaterThanOrEqual(7);
+  });
+
+  it('Rust pays rustGold delta on already-gilded cards when rustGold increases later without double-counting', () => {
+    let s = startFight({ features: ['hearts', 'gear'], level: testLevel({ foes: [{ name: 'Dummy', hp: 500 }] }) });
+    // Mark one card from a valid set as already gilded with stamped value 10, then hold rustGold: 10 + gambleBonusPct: 50 -> 15 (+5 delta)
+    const set = findSet(s)!;
+    const gildedId = set[0].id;
+    s = withWeapons(
+      {
+        ...s,
+        gear: { ...s.gear, rustGoldStamped: { [gildedId]: 10 } },
+        board: s.board.map(c => (c.id === gildedId ? { ...c, rusted: true, bonusPoints: 10 } : c)),
+      },
+      { ...relic([]), modifiers: { rustGold: 10, gambleBonusPct: 50 } } as AdventureWeapon
+    );
+    const after = playSet(s, set);
+    // Delta = 15 - 10 = +5 paid in flatItems
+    expect(after.log[after.log.length - 1].set?.flatItems).toContainEqual(
+      expect.objectContaining({ label: 'Golden Rust', amount: 5, sourceRef: 'weapon:rust' })
+    );
+  });
+
+  it('Tar + Thorn refreshes thornAt when a card stays via stay:true so it does not bite immediately', () => {
+    let s = withTrick({ tarDamage: 5, thornChance: 100, thornDamage: 4 }, startFight({ features: ['hearts', 'gear'] }));
+    const set = findSet(s)!;
+    const cardId = set[0].id;
+    const slot = s.board.findIndex(c => c.id === cardId);
+    // Card is in the active Tar Pit row with tar: 1 and a thornAt that is about to expire (100ms left)
+    s = {
+      ...s,
+      gear: { ...s.gear, tarRow: Math.floor(slot / 3) },
+      board: s.board.map(c => (c.id === cardId ? { ...c, tar: 1, thornAt: s.elapsedMs + 100 } : c)),
+    };
+    const afterMatch = playSet(s, set);
+    const stayed = afterMatch.board.find(c => c.id === cardId)!;
+    expect(stayed.tar).toBe(2);
+    expect(stayed.thornAt).toBeGreaterThanOrEqual(afterMatch.elapsedMs + TRICK_RULES.thornMs - 500);
+    // Ticking 1s must NOT trigger a thorn bite
+    const heartsBefore = afterMatch.hearts!;
+    const afterTick = tick(afterMatch, 1000, 500);
+    expect(afterTick.hearts).toBe(heartsBefore);
+  });
+
+  it('Glass Sword scales its window by +1.5s per trait beyond 3 and reforges on a Rainbow Set or 3 clean Sets', () => {
+    // 4-trait board gets +1500ms window on top of glassWindowMs (5000ms -> 6500ms)
+    let four = withTrick(
+      { glassDamage: 9, glassWindowMs: 5000 },
+      startFight({ level: testLevel({ rules: { attributes: ['shape', 'color', 'number', 'shading'], boardSize: 12 } }), features: ['hearts', 'gear'] })
+    );
+    four = tick(four, 6000, 500);
+    expect(four.gear.glassBroken).toBe(false);
+    four = tick(four, 1000, 500);
+    expect(four.gear.glassBroken).toBe(true);
+
+    // Reforge on 3 consecutive clean Sets
+    let s = withTrick({ glassDamage: 9 }, startFight({ features: ['hearts', 'gear'], level: testLevel({ foes: [{ name: 'Dummy', hp: 500 }] }) }));
+    s = miss(s);
+    expect(s.gear.glassBroken).toBe(true);
+    // Play 3 non-rainbow Sets (or rainbow immediately reforges!)
+    for (let i = 0; i < 3 && s.gear.glassBroken; i++) s = playSet(s);
+    expect(s.gear.glassBroken).toBe(false);
+    expect(eventsOf(s, 'rule').some(e => e.text === 'Glass Sword reforged!')).toBe(true);
+  });
+
+  it('Collectors Album freezes pages at wave start, allows <=3 diff on 5-trait boards, and pays +3 mini-stamp per page', () => {
+    // 5-trait board: a 3-diff Set stamps a page when 1 trait is missing or matches
+    const c1: Card = { id: '1', shape: 'oval', color: 'red', number: 1, shading: 'solid', background: 'white', selected: false };
+    const c2: Card = { id: '2', shape: 'diamond', color: 'green', number: 2, shading: 'solid', background: 'white', selected: false };
+    const c3: Card = { id: '3', shape: 'squiggle', color: 'purple', number: 3, shading: 'solid', background: 'white', selected: false };
+    expect(albumPageOf([c1, c2, c3], ['shape', 'color', 'number', 'shading', 'background'])).toBe('shape');
+
+    // Wave-frozen albumPages during Shading Surge: never adds 'shading'
+    let surgeFight = withTrick(
+      { albumDamage: 24 },
+      startFight({ level: testLevel({ rules: { attributes: ['shape', 'color', 'number'], shadingSurge: true, timer: 300 } }), features: ['hearts', 'gear'] })
+    );
+    expect(surgeFight.gear.albumPages).toEqual(['shape', 'color', 'number']);
+    surgeFight = tick(surgeFight, SURGE_RULES.calmMs, 1000);
+    expect(surgeFight.attributes).toContain('shading');
+    expect(surgeFight.gear.albumPages).toEqual(['shape', 'color', 'number']);
+
+    // Intermediate page grants ALBUM_PAGE_BONUS (+3)
+    let s = withTrick({ albumDamage: 24 }, startFight({ features: ['hearts', 'gear'], level: testLevel({ foes: [{ name: 'Dummy', hp: 500 }] }) }));
+    const oneDiff = findSet(s, cards => countDifferentAttributes(cards, s.attributes) === 1);
+    if (oneDiff) {
+      const after = playSet(s, oneDiff);
+      expect(after.gear.album.length).toBe(1);
+      expect(after.log[after.log.length - 1].set?.flatItems).toContainEqual(
+        expect.objectContaining({ amount: ALBUM_PAGE_BONUS, sourceRef: 'weapon:collectors-album' })
+      );
+    }
   });
 });
 

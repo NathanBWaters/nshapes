@@ -3,6 +3,8 @@
  */
 import { applyEnemyStatModifiers } from '@/utils/enemyFactory';
 import { createDummyEnemy } from '@/utils/enemyEffects';
+import { activeEnemyCounters } from '@/adventure/engine/run';
+import { startFight, testLevel } from './testUtils/adventureFight';
 import type { PlayerStats } from '@/types';
 import type { EnemyInstance, EnemyStatModifiers } from '@/types/enemy';
 
@@ -226,6 +228,28 @@ describe('applyEnemyStatModifiers', () => {
       expect(result.explosionChance).toBe(10);  // 30 / 3
       expect(result.fireSpreadChance).toBe(20);  // 60 / 3
       expect(result.healingChance).toBe(15);  // 45 / 3
+    });
+  });
+
+  describe('Adventure run integration', () => {
+    it('wires enemy stat modifiers into RunState.stats and exposes activeEnemyCounters', () => {
+      const dummyRun = startFight({
+        save: { armory: ['flint-spark'], charms: ['flint-spark'] },
+        level: testLevel({ foes: [{ name: 'Dummy', hp: 100 }] }),
+        features: ['hearts', 'gear'],
+      });
+      const crabRun = startFight({
+        save: { armory: ['flint-spark'], charms: ['flint-spark'] },
+        level: testLevel({ foes: [{ enemy: 'Wet Crab', hp: 100 }] }),
+        features: ['hearts', 'gear'],
+      });
+      expect(dummyRun.stats.fireSpreadChance).toBeGreaterThan(0);
+      expect(crabRun.stats.fireSpreadChance).toBe(Math.round(dummyRun.stats.fireSpreadChance / 3));
+      const counters = activeEnemyCounters(crabRun);
+      expect(counters).toContainEqual(
+        expect.objectContaining({ stat: 'fireSpreadChance', label: 'Fire Spread' })
+      );
+      expect(activeEnemyCounters(dummyRun)).toEqual([]);
     });
   });
 });

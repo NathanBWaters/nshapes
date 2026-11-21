@@ -871,9 +871,13 @@ export interface GearState {
   snowball: number;
   /** Collector's Album: traits whose page is filled */
   album: AttributeName[];
+  /** Collector's Album: pages frozen at wave start (immune to Shading Surge adding/removing 'shading') */
+  albumPages?: AttributeName[];
   /** Glass Sword: shattered for this wave, and when its clock last restarted */
   glassBroken: boolean;
   glassSinceMs: number;
+  /** Glass Sword: consecutive clean Sets landed while shattered (3 reforges it) */
+  glassReforgeStreak?: number;
   /** Tar Pit: the sticky row this wave */
   tarRow: number | null;
   /** Hot Potato: fight time (ms) of its next jump */
@@ -882,6 +886,10 @@ export interface GearState {
   mirrorMemory: number[][];
   /** Glass Sword: shatters survived so far (its growth grants spares) */
   glassSparesUsed: number;
+  /** Rust: rustGold already stamped onto each gilded card (cardId -> stamped bonusPoints), so later rustGold buffs still pay the delta */
+  rustGoldStamped?: Record<string, number>;
+  /** Greedy Chest: bonus queued by feedChest when no chest card was live on the board */
+  pendingChestBonus?: number;
 }
 
 export interface RunState {
@@ -934,6 +942,16 @@ export interface RunState {
   lastMatchAtMs: number;
   /** Cards scored or missed that the UI will REPLACE shortly; nothing else touches them meanwhile */
   replacing: string[];
+  /** Piñata cards whose break bounty was already folded into the Set's flat damage before multipliers (skip re-dealing on REPLACE) */
+  paidPinataIds?: string[];
+  /** Non-foe Set multiplier stamped onto cards ignited during a Set (cardId -> mult) */
+  burnMults?: Record<string, number>;
+  /** True once USE_HINT fired since the last valid Set (closes Safe Bet / off-board hint-spam exploit) */
+  hintUsedThisSet?: boolean;
+  /** Combo steps granted by rules/evolutions (E.combo), giving +1 Set dmg per step for non-Sly-Fox fighters */
+  bonusCombo?: number;
+  /** Evolution recipe id pre-loaded onto the active Catalyst card on the board (null when none) */
+  catalystRecipeId?: string | null;
   coins: number;
   xp: number;
   xpLevel: number;

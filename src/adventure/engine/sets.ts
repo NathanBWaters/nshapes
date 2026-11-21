@@ -71,12 +71,13 @@ export const hasAnySet = (board: Card[], attrs: AttributeName[]): boolean =>
 /**
  * How many of the active attributes are all-different across three cards. A
  * wild card takes the completing value: a trait differs if the other two do.
+ * Two or three wild cards can adopt distinct values on every active trait.
  */
 export const countDifferentAttributes = (cards: Card[], attrs: AttributeName[]): number => {
   if (cards.length !== 3) return 0;
   const plain = cards.filter(c => !c.isWild);
   if (plain.length === 2) return attrs.filter(a => valueOf(plain[0], a) !== valueOf(plain[1], a)).length;
-  if (plain.length < 2) return 0;
+  if (plain.length < 2) return attrs.length;
   return attrs.filter(a => new Set(cards.map(c => valueOf(c, a))).size === 3).length;
 };
 
@@ -85,10 +86,20 @@ export const differingAttributes = (cards: Card[], attrs: AttributeName[]): Attr
   if (cards.length !== 3) return [];
   const plain = cards.filter(c => !c.isWild);
   if (plain.length === 2) return attrs.filter(a => valueOf(plain[0], a) !== valueOf(plain[1], a));
-  if (plain.length < 2) return [];
+  if (plain.length < 2) return [...attrs];
   return attrs.filter(a => new Set(cards.map(c => valueOf(c, a))).size === 3);
 };
 
-/** A Rainbow: three cards that differ in every active attribute. */
-export const isRainbow = (cards: Card[], attrs: AttributeName[]): boolean =>
-  cards.length === 3 && countDifferentAttributes(cards, attrs) === attrs.length;
+/**
+ * A Rainbow: three cards that differ in every active attribute.
+ * When Clarity Lens (`simplified`) unifies one or more traits, evaluate across
+ * the remaining non-simplified active traits so Clarity enables Rainbows.
+ */
+export const isRainbow = (
+  cards: Card[],
+  attrs: AttributeName[],
+  simplified?: readonly AttributeName[]
+): boolean => {
+  const effective = simplified?.length ? attrs.filter(a => !simplified.includes(a)) : attrs;
+  return cards.length === 3 && effective.length > 0 && countDifferentAttributes(cards, effective) === effective.length;
+};

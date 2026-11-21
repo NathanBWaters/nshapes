@@ -9,6 +9,7 @@ import {
   processWeaponEffects,
   findValidSet,
 } from '@/utils/weaponEffects';
+import { resolveMatch } from '@/utils/matchResolution';
 import { Card, PlayerStats, Weapon, AttributeName, EffectCaps } from '@/types';
 import { DEFAULT_PLAYER_STATS, WEAPONS } from '@/utils/gameDefinitions';
 
@@ -1341,5 +1342,120 @@ describe('Echo Stone and Chain Reaction', () => {
 
     // No echo should trigger (no valid set remaining - filler cards are invalid)
     expect(result.autoMatchedSets.length).toBe(0);
+  });
+});
+
+describe('Prismatic Ray scaling, geometric aiming, Soul Harvest per-card rolls & Echo fidelity', () => {
+  it('Prismatic Ray scales by playerStats.laserChance (Searchlight ×2 / luck / enemy counter)', () => {
+    const board = createTestBoard();
+    const matched = [board[0], board[4], board[8]];
+    const ray = createLaserWeapon('prismatic-ray', 20);
+    // Boosted effective laserChance (e.g. 20 -> 100 via Searchlight/luck) must fire 100% of the time
+    const boostedStats: PlayerStats = {
+      ...DEFAULT_PLAYER_STATS,
+      laserChance: 100,
+      effectCaps: UNCAPPED_EFFECT_CAPS,
+    };
+    let fires = 0;
+    for (let i = 0; i < 20; i++) {
+      const r = processWeaponEffects(board, matched, boostedStats, [ray], ['shape', 'color', 'number'], false);
+      if (r.laserCount > 0) fires++;
+    }
+    expect(fires).toBe(20);
+  });
+
+  it('getLaserCards aims along shared row/col when 2 matched cards align, and never whiffs on 3-in-a-row', () => {
+    const board = createTestBoard(); // 12 cards, 3 cols x 4 rows
+    // 2 cards in row 1 (indices 3, 4) + 1 in row 2 (index 8): must aim down row 1 -> card-5
+    for (let i = 0; i < 15; i++) {
+      const hit = getLaserCards(board, [board[3], board[4], board[8]]);
+      expect(hit.map(c => c.id)).toEqual(['card-5']);
+    }
+    // 2 cards in col 0 (indices 0, 3) + 1 in col 2 (index 8): must aim down col 0 -> card-6, card-9
+    for (let i = 0; i < 15; i++) {
+      const hit = getLaserCards(board, [board[0], board[3], board[8]]);
+      expect(hit.map(c => c.id)).toEqual(['card-6', 'card-9']);
+    }
+    // 3 cards filling entire row 0 (indices 0, 1, 2): must NOT whiff (fires down a column instead)
+    for (let i = 0; i < 15; i++) {
+      const hit = getLaserCards(board, [board[0], board[1], board[2]]);
+      expect(hit.length).toBe(3);
+    }
+  });
+
+  it('Soul Harvest rolls onDestruction once per destroyed card', () => {
+    const board = createTestBoard();
+    const matched = [board[4]];
+    const soulHarvest: Weapon = {
+      id: 'soul-harvest',
+      name: 'Soul Harvest',
+      rarity: 'rare',
+      level: 1,
+      description: 'Test Soul Harvest',
+      shortDescription: 'Heal on destruction',
+      price: 20,
+      effects: {},
+      specialEffect: 'bridge',
+      bridgeEffect: { trigger: 'onDestruction', chance: 100, effect: 'heal', amount: 1 },
+    };
+    const stats: PlayerStats = {
+      ...DEFAULT_PLAYER_STATS,
+      explosionChance: 100,
+      effectCaps: UNCAPPED_EFFECT_CAPS,
+    };
+    const r = processWeaponEffects(board, matched, stats, [soulHarvest], ['shape', 'color', 'number'], false);
+    expect(r.explosiveCards.length).toBeGreaterThanOrEqual(2);
+    // At 100% chance, bonusHealing equals exact number of destroyed cards!
+    expect(r.bonusHealing).toBe(r.explosiveCards.length);
+  });
+
+  it('resolveMatch preserves fireCards, bonusExperience, bonusCoins and breaks linked partners on echoes', () => {
+    const mk = (id: string, shape: Card['shape'], color: Card['color'], number: Card['number']): Card => ({
+      id,
+      shape,
+      color,
+      number,
+      shading: 'solid',
+      background: 'white',
+      selected: false,
+    });
+    const board: Card[] = [
+      mk('m0', 'oval', 'red', 1),
+      mk('m1', 'oval', 'red', 2),
+      mk('m2', 'oval', 'red', 3),
+      mk('e0', 'diamond', 'green', 1),
+      mk('e1', 'diamond', 'green', 2),
+      mk('e2', 'diamond', 'green', 3),
+      mk('link-target', 'squiggle', 'purple', 1),
+      mk('extra-1', 'squiggle', 'purple', 1),
+      mk('extra-2', 'squiggle', 'purple', 2),
+    ];
+    const stats: PlayerStats = {
+      ...DEFAULT_PLAYER_STATS,
+      echoChance: 100,
+      fireSpreadChance: 100,
+      xpGainChance: 100,
+      coinGainChance: 100,
+      effectCaps: UNCAPPED_EFFECT_CAPS,
+    };
+    // Link echo card slot 3 (e0) to slot 6 (link-target)
+    const connections = [{ id: 'conn-1', positionA: 3, positionB: 6, createdAt: 0 }];
+    const res = resolveMatch({
+      board,
+      selected: [board[0], board[1], board[2]],
+      playerStats: stats,
+      weapons: [],
+      activeAttributes: ['shape', 'color', 'number'],
+      connections,
+      graceUsed: false,
+    });
+    expect(res.weaponEffects.autoMatchedSets.length).toBe(1);
+    expect(res.weaponEffects.fireCards.length).toBeGreaterThan(0);
+    // Original match + echo match both triggered XP & Coins -> >= 2 each
+    expect(res.weaponEffects.bonusExperience).toBeGreaterThanOrEqual(2);
+    expect(res.weaponEffects.bonusCoins).toBeGreaterThanOrEqual(2);
+    // Echo broke the linked partner at slot 6
+    expect(res.cards.some(c => c.id === 'link-target')).toBe(true);
+    expect(res.rewards.some(r => r.cardId === 'link-target' && r.effectType === 'connected')).toBe(true);
   });
 });

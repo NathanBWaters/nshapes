@@ -12,15 +12,18 @@ import { cleanseBoard } from '../engine/hazards';
 import { isSelectable } from '../engine/sets';
 import { BASE_RULES } from '../data/rules';
 import {
-  addCoins, addGraces, addHints, addRandomConnections, addTime, addXp, areaIndices, armorCard, canSpawnCatalyst,
+  addCoins, addGraces, addHints, addRandomConnections, addTime, addXp, areaIndices, armorCard, canSpawnCatalyst, catalystOnBoard,
   dealDamage, destroyCards, emit, empowerBoard, enqueue, foeMultiplier, growBoard, heal, igniteCards, liveRulesOf,
   newLinkSlots, placeCatalyst, redeal, simplify, touchable as touchableIdx, LUCK_CAP_PCT, mods, signalGrowth, type Draft, type FightEvent,
 } from '../engine/fight';
+import { addMagnet, advanceTricks, feedChest, repairGlass, stampAlbum } from '../engine/gear';
 import { extendEvolutions } from '../engine/evolutions';
 import { addComboSteps, patienceMs } from '../engine/passives';
-import type { KeyedRule } from '../engine/sources';
+import { getRecipe, type KeyedRule } from '../engine/sources';
 
 export const MAX_FIRINGS_PER_ACTION = 32;
+/** Max times a single rule key may fire within one synchronous chain (allows 1 bounce for Pinball / Entropy Engine / Powder Keg). */
+export const MAX_CHAIN_OCCURRENCES = 2;
 
 // ─── Conditions ─────────────────────────────────────────────────────────────
 
@@ -33,7 +36,10 @@ const holds = (d: Draft, c: Condition): boolean => {
     case 'heartsFull': return d.hearts !== null && d.maxHearts !== null && d.hearts >= d.maxHearts;
     case 'comboAtLeast': return d.combo >= c.n;
     case 'diffCount': return d._setCtx?.diffCount === c.n;
+    case 'diffCountAtMost': return d._setCtx !== null && d._setCtx.diffCount <= c.n;
+    case 'diffCountAtLeast': return d._setCtx !== null && d._setCtx.diffCount >= c.n;
     case 'rainbowSet': return !!d._setCtx?.rainbow;
+    case 'hintedSet': return !!d._setCtx?.hinted;
     case 'noMistakesThisFight': return d.mistakes === 0;
     case 'evolutionActive': return d.activeEvolutions.length > 0;
     case 'timeSinceLastSetAtLeast': return sinceLastSet(d) >= c.ms;
@@ -108,7 +114,9 @@ export const drain = (d: Draft) => {
       const item = d._queue.shift()!;
       d._setCtx = item.setCtx;
       for (const kr of liveRulesOf(d)) {
-        if (item.chain.includes(kr.key)) continue;
+        let seen = 0;
+        for (const k of item.chain) if (k === kr.key) seen += 1;
+        if (seen >= MAX_CHAIN_OCCURRENCES) continue;
         if (triggerMatches(d, kr.key, kr.rule.trigger, item.ev)) fireRule(d, kr, item.chain);
       }
     }
@@ -117,18 +125,22 @@ export const drain = (d: Draft) => {
   } while (d._queue.length);
 };
 
-/** An evolution ran out: its own `finale` rules fire (call before its rules leave the fight). */
+/** An evolution ran out: its own `finale` rules fire (looked up directly so expired evolutions can already leave `activeEvolutions`). */
 export const fireFinale = (d: Draft, recipeId: string) => {
-  for (const kr of liveRulesOf(d)) {
-    if (kr.rule.trigger.on === 'finale' && kr.key.startsWith(`evo:${recipeId}#`)) fireRule(d, kr, []);
-  }
+  const recipe = getRecipe(recipeId);
+  if (!recipe?.source.rules) return;
+  recipe.source.rules.forEach((rule, i) => {
+    if (rule.trigger.on === 'finale') fireRule(d, { key: `evo:${recipeId}#${i}`, rule }, []);
+  });
 };
 
 /** Encore Mask: an evolution's opening rules (`evolutionStart`) fire once more as it ends. */
 export const fireOpening = (d: Draft, recipeId: string) => {
-  for (const kr of liveRulesOf(d)) {
-    if (kr.rule.trigger.on === 'evolutionStart' && kr.key.startsWith(`evo:${recipeId}#`)) fireRule(d, kr, []);
-  }
+  const recipe = getRecipe(recipeId);
+  if (!recipe?.source.rules) return;
+  recipe.source.rules.forEach((rule, i) => {
+    if (rule.trigger.on === 'evolutionStart') fireRule(d, { key: `evo:${recipeId}#${i}`, rule }, []);
+  });
 };
 
 /** Idle rules fire once per stretch without a Set. */
@@ -227,7 +239,11 @@ export const runWeaponEffect = (d: Draft, e: Effect) => {
     case 'time': addTime(d, e.seconds); break;
     case 'hint': addHints(d, e.amount); break;
     case 'grace': addGraces(d, e.amount); break;
-    case 'xp': addXp(d, e.amount); break;
+    case 'xp': {
+      const times = e.per ? scaleCount(d, e.per) : 1;
+      addXp(d, e.amount * times);
+      break;
+    }
     case 'growBoard': growBoard(d, e.count); break;
     case 'trigger': {
       const inner = triggerEffect(d, e.kind);
@@ -265,10 +281,9 @@ export const applyEffect = (d: Draft, e: Effect, label?: string) => {
   if (kind) {
     const times = takeDouble(d) ? 2 : 1;
     for (let i = 0; i < times; i++) {
-      // A full board can't grow, so "whenever the board grows" doesn't fire
-      const before = d.board.length;
+      // Skip queuing `weapon:xp` if a scaled xp rule (`per`) evaluated to 0
+      if (e.do === 'xp' && e.per && e.amount * scaleCount(d, e.per) <= 0) continue;
       runWeaponEffect(d, e);
-      if (kind === 'growth' && d.board.length === before) continue;
       enqueue(d, 'weapon', kind);
     }
     return;
@@ -276,7 +291,7 @@ export const applyEffect = (d: Draft, e: Effect, label?: string) => {
   switch (e.do) {
     case 'damage': {
       const times = e.per ? scaleCount(d, e.per) : 1;
-      const dealt = dealDamage(d, e.amount * times * foeMultiplier(d));
+      const dealt = dealDamage(d, e.amount * times * d._setMultiplier * foeMultiplier(d));
       if (dealt > 0) emit(d, 'hit', dealt, label ?? 'Bonus');
       break;
     }
@@ -284,7 +299,7 @@ export const applyEffect = (d: Draft, e: Effect, label?: string) => {
       const held = e.resource === 'hints' ? d.stats.hints : d.stats.graces;
       if (held <= 0) break;
       d.stats = { ...d.stats, [e.resource]: 0 };
-      const dealt = dealDamage(d, held * e.damageEach * foeMultiplier(d));
+      const dealt = dealDamage(d, held * e.damageEach * d._setMultiplier * foeMultiplier(d));
       emit(d, 'hit', dealt, label ?? 'Cash in');
       break;
     }
@@ -309,6 +324,11 @@ export const applyEffect = (d: Draft, e: Effect, label?: string) => {
     case 'autoSet': d._hooks.autoSet(d); break;
     case 'comboStep': addComboSteps(d, e.amount); break;
     case 'spawnCatalyst': if (canSpawnCatalyst(d)) placeCatalyst(d, []); break;
+    case 'spawnCatalystForce':
+      if (d.features.has('evolutions') && d.armedRecipes.length > 0 && !catalystOnBoard(d) && d.evolutionsTriggered < d.evolutionCap) {
+        placeCatalyst(d, []);
+      }
+      break;
     case 'extendEvolutions': extendEvolutions(d, e.ms); break;
     case 'nextSetMultiplier':
       // Stacks add up (×2 + ×2 = ×3), capped (data/rules.ts)
@@ -324,6 +344,11 @@ export const applyEffect = (d: Draft, e: Effect, label?: string) => {
       if (addRandomConnections(d, e.count) > 0) emit(d, 'link', e.count, undefined, { slots: newLinkSlots(d, before) });
       break;
     }
+    case 'repairGlass': repairGlass(d, label); break;
+    case 'feedChest': feedChest(d, e.amount, label); break;
+    case 'advanceTricks': advanceTricks(d, e.ms); break;
+    case 'stampAlbum': stampAlbum(d); break;
+    case 'addMagnet': addMagnet(d, e.count); break;
     default: break;
   }
 };

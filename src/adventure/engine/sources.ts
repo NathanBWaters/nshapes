@@ -9,6 +9,9 @@ import type { Modifiers, Rule, RuleSource, WeaponTriggerKind } from '../rules/ty
 import { getSkillNode } from '../data/skillTrees';
 import { EVOLUTION_RECIPES } from '../data/evolutions';
 import { weaponRuleSource } from '../data/armory';
+import { activeRoleBonuses, roleBonusProgress, ROLE_SET_BONUSES, type ActiveRoleBonus, type RoleBonusProgress } from '../data/weaponRoles';
+
+export { activeRoleBonuses, roleBonusProgress, ROLE_SET_BONUSES, type ActiveRoleBonus, type RoleBonusProgress };
 
 export const EVOLUTION_RULES = {
   /** % chance per refill batch while a recipe is armed */
@@ -92,6 +95,9 @@ export const liveSources = (s: SourceInputs): { key: string; source: RuleSource 
   for (const e of s.activeEvolutions) {
     const r = getRecipe(e.id);
     if (r) out.push({ key: `evo:${e.id}`, source: r.source });
+  }
+  for (const rb of activeRoleBonuses(s.weapons)) {
+    out.push({ key: `role:${rb.role}`, source: { modifiers: rb.modifiers } });
   }
   if (s.growth && Object.keys(s.growth).length > 0) out.push({ key: 'growth', source: { modifiers: s.growth } });
   return out;

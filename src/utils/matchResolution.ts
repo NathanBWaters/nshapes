@@ -6,6 +6,7 @@ import type { AttributeName, BoardConnection, Card, CardReward, PlayerStats, Wea
 import { MATCH_REWARDS } from './gameConfig';
 import { getLinkedDestructionPositions } from './connectionUtils';
 import { isValidCombination } from './gameUtils';
+import { rollBridgeEffects } from './gameDefinitions';
 import { processWeaponEffects, type WeaponEffectResult } from './weaponEffects';
 
 type CollateralEffect = 'explosion' | 'laser' | 'ricochet' | 'connected';
@@ -102,9 +103,11 @@ export const resolveMatch = (input: {
   weaponEffects.ricochetCards.forEach(c => add(c, 'ricochet'));
 
   const connectedCards: Card[] = [];
-  if (connections.length > 0) {
+  const reservedEchoIds = new Set(weaponEffects.autoMatchedSets.flat().map(c => c.id));
+  const collectLinks = (sourceCards: readonly Card[], excludeIds: Set<string>) => {
+    if (connections.length === 0) return;
     const destroyed = new Set<number>();
-    for (const card of cards) {
+    for (const card of sourceCards) {
       const idx = board.findIndex(c => c.id === card.id);
       if (idx !== -1) destroyed.add(idx);
     }
@@ -116,17 +119,27 @@ export const resolveMatch = (input: {
     for (const pos of linked) {
       if (pos < 0 || pos >= board.length || destroyed.has(pos)) continue;
       const card = board[pos];
-      if (card && !connectedCards.some(c => c.id === card.id)) {
+      if (card && !excludeIds.has(card.id) && !connectedCards.some(c => c.id === card.id)) {
         connectedCards.push(card);
+        excludeIds.add(card.id);
         add(card, 'connected');
       }
     }
-  }
+  };
+  const primaryExclude = new Set<string>([...cards.map(c => c.id), ...reservedEchoIds]);
+  collectLinks(cards, primaryExclude);
 
-  // Echo: each auto-matched Set scores like a picked Set and rolls its own weapon effects (but never another echo)
-  const alreadyHit = [...cards];
-  for (const echoSet of weaponEffects.autoMatchedSets) {
+  // Echo: each auto-matched Set scores like a picked Set, rolls its own weapon effects (never another echo),
+  // preserves fireCards/bonusExperience/bonusCoins, and breaks linked partners!
+  const alreadyHitIds = new Set<string>(cards.map(c => c.id));
+  for (let ei = 0; ei < weaponEffects.autoMatchedSets.length; ei++) {
+    const echoSet = weaponEffects.autoMatchedSets[ei];
+    const futureEchoIds = new Set(weaponEffects.autoMatchedSets.slice(ei + 1).flat().map(c => c.id));
+    const echoAdded: Card[] = [];
     for (const c of echoSet) {
+      if (alreadyHitIds.has(c.id)) continue;
+      alreadyHitIds.add(c.id);
+      echoAdded.push(c);
       cards.push(c);
       rewards.push({
         cardId: c.id,
@@ -137,13 +150,24 @@ export const resolveMatch = (input: {
     }
     const echoEffects = processWeaponEffects(board, echoSet, playerStats, weapons, activeAttributes, true);
     const addEcho = (c: Card, effectType: CollateralEffect) => {
-      if (alreadyHit.some(hit => hit.id === c.id)) return;
+      if (alreadyHitIds.has(c.id) || futureEchoIds.has(c.id)) return;
       add(c, effectType);
-      alreadyHit.push(c);
+      alreadyHitIds.add(c.id);
+      echoAdded.push(c);
     };
     echoEffects.explosiveCards.forEach(c => addEcho(c, 'explosion'));
     echoEffects.laserCards.forEach(c => addEcho(c, 'laser'));
     echoEffects.ricochetCards.forEach(c => addEcho(c, 'ricochet'));
+    for (const fc of echoEffects.fireCards) {
+      if (!alreadyHitIds.has(fc.id) && !weaponEffects.fireCards.some(existing => existing.id === fc.id)) {
+        weaponEffects.fireCards.push(fc);
+      }
+    }
+
+    // Break linked partners of echoed Sets & their collateral too!
+    const linkExclude = new Set<string>([...alreadyHitIds, ...futureEchoIds]);
+    collectLinks(echoAdded, linkExclude);
+    for (const cc of connectedCards) alreadyHitIds.add(cc.id);
 
     weaponEffects.bonusHealing += echoEffects.bonusHealing;
     weaponEffects.bonusHints += echoEffects.bonusHints;
@@ -151,10 +175,28 @@ export const resolveMatch = (input: {
     weaponEffects.bonusGraces += echoEffects.bonusGraces;
     weaponEffects.bonusPoints += echoEffects.bonusPoints;
     weaponEffects.bonusMoney += echoEffects.bonusMoney;
+    weaponEffects.bonusExperience += echoEffects.bonusExperience;
+    weaponEffects.bonusCoins += echoEffects.bonusCoins;
     weaponEffects.boardGrowth += echoEffects.boardGrowth;
     weaponEffects.notifications.push(...echoEffects.notifications);
+  }
 
-    alreadyHit.push(...echoSet);
+  // Soul Harvest (onDestruction): also roll once per destroyed linked card!
+  if (connectedCards.length > 0 && weapons && weapons.some(w => w.specialEffect === 'bridge')) {
+    let linkHeal = 0;
+    let lastName = '';
+    for (let i = 0; i < connectedCards.length; i++) {
+      for (const b of rollBridgeEffects('onDestruction', weapons)) {
+        if (b.effect === 'heal') {
+          linkHeal += b.amount ?? 1;
+          lastName = b.weaponName;
+        }
+      }
+    }
+    if (linkHeal > 0) {
+      weaponEffects.bonusHealing += linkHeal;
+      weaponEffects.notifications.push(`${lastName}: +${linkHeal} HP`);
+    }
   }
 
   // Game and the adventure engine read this marker to spend the grace

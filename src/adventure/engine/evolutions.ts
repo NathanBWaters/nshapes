@@ -5,20 +5,18 @@
  * unless some armed recipe is idle); triggers per fight are capped.
  */
 import type { Card } from '@/types';
-import { EVOLUTION_RECIPES } from '../data/evolutions';
-import { addTime, arcana, dealDamage, emit, enqueue, foeMultiplier, idleRecipes, mods, refreshSources, signalGrowth, updateCards, type Draft } from './fight';
+import { addTime, arcana, dealDamage, emit, enqueue, foeMultiplier, idleRecipes, mods, nextCatalystRecipe, refreshSources, signalGrowth, updateCards, type Draft } from './fight';
 import { armedRecipesFor, EVOLUTION_RULES, getRecipe } from './sources';
 import { fireFinale, fireOpening } from '../rules/engine';
+
+export { nextCatalystRecipe };
 
 export const refreshArmedRecipes = (d: Draft) => {
   d.armedRecipes = d.features.has('evolutions') ? armedRecipesFor(d.weapons, d.unlockedEvolutions) : [];
 };
 
-/** The recipe a Catalyst starts: the first armed one (recipe order) that isn't running. A running one is never restarted. */
-const recipeToStart = (d: Draft): string | null => {
-  const idle = idleRecipes(d);
-  return EVOLUTION_RECIPES.map(r => r.id).find(id => idle.includes(id)) ?? null;
-};
+/** The recipe a Catalyst starts: prefer un-forged idle recipes first, then recipe order. */
+const recipeToStart = (d: Draft): string | null => nextCatalystRecipe(d);
 
 /** `slot` is the Catalyst card it started from, when there was one. */
 export const startEvolution = (d: Draft, id: string, slot?: number) => {
@@ -33,9 +31,9 @@ export const startEvolution = (d: Draft, id: string, slot?: number) => {
   if (!d.forgedRecipes.includes(id)) d.forgedRecipes = [...d.forgedRecipes, id];
   refreshSources(d);
   emit(d, 'evolution_start', durationMs, recipe.name, slot === undefined ? undefined : { slots: [slot] });
-  // The opening burst (and the Arcana that makes it bigger)
+  // The opening burst (and the Arcana that makes it bigger), unified with the triggering Set's multipliers
   const burst = arcana(d).evolutionBurstBonus;
-  emit(d, 'hit', dealDamage(d, (EVOLUTION_RULES.startDamage + (burst?.damage ?? 0)) * foeMultiplier(d)), recipe.name);
+  emit(d, 'hit', dealDamage(d, (EVOLUTION_RULES.startDamage + (burst?.damage ?? 0)) * d._setMultiplier * foeMultiplier(d)), recipe.name);
   if (burst && burst.time > 0) addTime(d, burst.time);
   enqueue(d, 'evolutionStart');
 };
@@ -45,13 +43,16 @@ export const resolveCatalyst = (d: Draft, matched: Card[]) => {
   const ids = new Set(matched.map(c => c.id));
   const idx = d.board.findIndex(c => ids.has(c.id) && c.hasEvolutionItem);
   if (idx === -1) return;
+  const loadedId = d.catalystRecipeId;
+  d.catalystRecipeId = null;
   updateCards(d, [idx], c => ({ ...c, hasEvolutionItem: false, evolutionReady: false }));
   // If this Set already knocked out the final foe (outside endless practice), skip triggering
   // a dead-on-arrival Evolution (no phantom burst, no post-mortem rules, no unnecessary cut-in).
   const finalFoeAlreadyDefeated = !d.level.rules.sandbox && d.foeHp <= 0 && d.wave >= d.level.foes.length - 1;
   if (finalFoeAlreadyDefeated) return;
   if (d.evolutionsTriggered >= d.evolutionCap) return;
-  const id = recipeToStart(d);
+  const idle = idleRecipes(d);
+  const id = loadedId && idle.includes(loadedId) ? loadedId : recipeToStart(d);
   if (!id) return;
   // Told first, so what grows on a matched Catalyst (Catalyst Prism) already counts for this evolution
   signalGrowth(d, { on: 'catalyst' });
@@ -71,9 +72,10 @@ export const tickEvolutions = (d: Draft, ms: number) => {
     d.activeEvolutions = next;
     return;
   }
-  // Finales fire while the ending evolution's rules are still live
-  d.activeEvolutions = next;
   const encore = mods(d).encoreDamage ?? 0;
+  // Remove expired recipes BEFORE running finales so Paradox finale Catalyst sees the recipe as idle!
+  d.activeEvolutions = next.filter(e => e.remainingMs > 0);
+  refreshSources(d);
   for (const e of ended) {
     fireFinale(d, e.id);
     if (encore > 0) {
@@ -82,8 +84,6 @@ export const tickEvolutions = (d: Draft, ms: number) => {
       fireOpening(d, e.id);
     }
   }
-  d.activeEvolutions = next.filter(e => e.remainingMs > 0);
-  refreshSources(d);
   for (const e of ended) {
     emit(d, 'evolution_end', undefined, getRecipe(e.id)?.name ?? e.id);
     enqueue(d, 'evolutionEnd');

@@ -3,9 +3,11 @@
  * Rules are injected as test relics so these tests don't depend on content.
  */
 import { baseCardReward, runReducer } from '@/adventure/engine/run';
-import { allSets, hasAnySet } from '@/adventure/engine/sets';
-import { MAX_FIRINGS_PER_ACTION } from '@/adventure/rules/engine';
+import { allSets, countDifferentAttributes, hasAnySet, isRainbow } from '@/adventure/engine/sets';
+import { MAX_CHAIN_OCCURRENCES, MAX_FIRINGS_PER_ACTION } from '@/adventure/rules/engine';
 import { arcanaRules, combineArcana } from '@/adventure/data/arcana';
+import { getArmoryWeapon } from '@/adventure/data/armory';
+import { ROLE_SET_BONUSES, activeRoleBonuses, roleBonusProgress } from '@/adventure/data/weaponRoles';
 import { challengeProgress, describeChallenge } from '@/adventure/engine/challenges';
 import { snareTarget } from '@/adventure/engine/fight';
 import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
@@ -48,17 +50,17 @@ describe('rule interpreter', () => {
     expect(next.hearts).toBe(s.hearts! + 1);
   });
 
-  it('a rule never reacts to what its own effects caused', () => {
-    // set → heal; heal → heal (would loop forever without the guard)
+  it(`a rule chain is bounded to ${MAX_CHAIN_OCCURRENCES} occurrences per key (allows 1 bounce, never loops infinitely)`, () => {
+    // set → heal (+1); heal → heal fires once (+1), then bounces once (+1), then stops at MAX_CHAIN_OCCURRENCES = 2
     const s = withWeapons(
-      hurtBy(base(), 3),
+      hurtBy(base(), 4),
       relic([
         { trigger: { on: 'set' }, effects: [{ do: 'heal', amount: 1 }] },
         { trigger: { on: 'weapon', kind: 'heal' }, effects: [{ do: 'heal', amount: 1 }] },
       ])
     );
     const next = playSet(s);
-    expect(next.hearts).toBe(s.hearts! + 2);
+    expect(next.hearts).toBe(s.hearts! + 1 + MAX_CHAIN_OCCURRENCES);
   });
 
   it(`one action resolves at most ${MAX_FIRINGS_PER_ACTION} rule firings`, () => {
@@ -210,7 +212,7 @@ describe('rule interpreter', () => {
     expect(hasAnySet(next.board, next.attributes)).toBe(true);
   });
 
-  it('armorCard makes a piñata; breaking it pays its bounty and fires cardBroken', () => {
+  it('armorCard makes a piñata; breaking it folds its bounty into the Set before multipliers and fires cardBroken', () => {
     let s = withWeapons(
       base(),
       relic([{ trigger: { on: 'mistake' }, effects: [{ do: 'armorCard', extraHealth: 1, bounty: 10 }] }]),
@@ -220,11 +222,24 @@ describe('rule interpreter', () => {
     const pinata = s.board.find(c => c.bounty === 10)!;
     expect(pinata.health).toBe(2);
     expect(eventsOf(s, 'pinata')).toHaveLength(1);
+    let breakHit = 0;
+    let breakEntry = s.log[s.log.length - 1];
     for (let i = 0; i < 40 && s.board.some(c => c.id === pinata.id); i++) {
-      s = playSet(s, findSet(s, x => x.some(c => c.id === pinata.id)) ?? findSet(s));
+      const set = findSet(s, x => x.some(c => c.id === pinata.id)) ?? findSet(s);
+      const hpBefore = s.foeHp;
+      s = playSet(s, set);
+      if (!s.board.some(c => c.id === pinata.id)) {
+        breakHit = hpBefore - s.foeHp;
+        breakEntry = s.log[s.log.length - 1];
+      }
     }
     expect(s.board.some(c => c.id === pinata.id)).toBe(false);
-    expect(eventsOf(s, 'pinata_break')[0]?.amount).toBe(10);
+    // Bounty (+10) folded into the breaking Set's flat damage (3 + 10) + cardBroken bonus (+1) = 14, with no double-deal
+    expect(breakHit).toBe(3 + 10 + 1);
+    expect(breakEntry.set?.flatItems).toContainEqual(
+      expect.objectContaining({ label: 'Piñata', amount: 10, sourceRef: 'weapon:pinata' })
+    );
+    expect(eventsOf(s, 'pinata_break').length).toBeGreaterThanOrEqual(1);
     expect(eventsOf(s, 'hit').some(e => e.amount === 1 && e.text === 'Bonus')).toBe(true);
   });
 
@@ -244,7 +259,7 @@ describe('rule interpreter', () => {
     expect(s.board.filter(c => !s.replacing.includes(c.id)).some(c => (c.charge ?? 0) >= 2)).toBe(true);
   });
 
-  it('next-Set multipliers add up and cap at ×4; the board-growth trigger needs room to grow', () => {
+  it('next-Set multipliers add up and cap at ×4; growBoard at MAX_BOARD overflows into empowerBoard and still fires weapon:growth', () => {
     const times = relic([{ trigger: { on: 'mistake' }, effects: [{ do: 'nextSetMultiplier', times: 2 }] }]);
     let s = withWeapons(base(), times);
     s = miss(miss(s));
@@ -258,9 +273,14 @@ describe('rule interpreter', () => {
       relic([{ trigger: { on: 'weapon', kind: 'growth' }, effects: [{ do: 'damage', amount: 1 }] }], undefined, 'b')
     );
     const grown = playSet(grow);
+    expect(grown.board.length).toBe(21);
     const full = playSet(grown);
+    expect(full.board.length).toBe(21);
     expect(eventsOf(grown, 'hit').filter(e => e.text === 'Bonus')).toHaveLength(1);
-    expect(eventsOf(full, 'hit').filter(e => e.text === 'Bonus')).toHaveLength(1); // no new growth, no new trigger
+    // Overflow at 21 cards empowers the board (+1 charge) AND still fires weapon:growth
+    expect(eventsOf(full, 'hit').filter(e => e.text === 'Bonus')).toHaveLength(2);
+    expect(eventsOf(full, 'empowered').length).toBeGreaterThanOrEqual(1);
+    expect(full.board.some(c => (c.charge ?? 0) >= 1)).toBe(true);
   });
 
   it('nextSetMultiplier and comboStep feed the next Set', () => {
@@ -628,5 +648,454 @@ describe('board deadlock guard', () => {
     const after = tick(hidden, 250);
     expect(after.board.some(c => !c.isFaceDown)).toBe(true);
     expect(hasAnySet(after.board, after.attributes)).toBe(true);
+  });
+});
+
+describe('unified add-then-multiply damage math', () => {
+  beforeEach(() => setPowerEnabled(false));
+  afterEach(() => setPowerEnabled(true));
+  const base = () =>
+    startFight({
+      save: { selectedFighter: 'Pelican' },
+      level: testLevel({ foes: [{ name: 'Dummy', hp: 500 }] }),
+      features: ['hearts', 'gear'],
+    });
+
+  it('multiplies a primed Piñata (+8) by a ×2 Set multiplier without double-dealing on REPLACE', () => {
+    let s = base();
+    const set = findSet(s)!;
+    const targetId = set[0].id;
+    s = {
+      ...s,
+      nextSetMultiplier: 2,
+      board: s.board.map(c => (c.id === targetId ? { ...c, health: 1, bounty: 8 } : c)),
+    };
+    const hpBefore = s.foeHp;
+    const after = playSet(s, set);
+    // (3 base + 8 Piñata) * 2 = 22
+    expect(hpBefore - after.foeHp).toBe((3 + 8) * 2);
+    expect(after.board.some(c => c.id === targetId)).toBe(false);
+    expect(eventsOf(after, 'pinata_break')).toHaveLength(1);
+    expect(after.log[after.log.length - 1].set?.flatItems).toContainEqual(
+      expect.objectContaining({ label: 'Piñata', amount: 8, sourceRef: 'weapon:pinata' })
+    );
+  });
+
+  it('folds Purity Chain and Traps Cleared into flat BEFORE multiplying', () => {
+    let s = startFight({
+      save: { selectedFighter: 'Pelican' },
+      level: testLevel({
+        rules: { attributes: ['shape', 'color', 'number'], boardSize: 12 },
+        foes: [{ name: 'Dummy', hp: 500 }],
+      }),
+      features: ['hearts', 'gear', 'purity'],
+    });
+    // Pick a Set with diffCount >= 2 so purity escalates from lastDiffCount = diffCount - 1 to chain 3 (+3)
+    const set = findSet(s, cards => countDifferentAttributes(cards, s.attributes) >= 2)!;
+    const diff = countDifferentAttributes(set, s.attributes);
+    // Place a snare on a card pointing AT set[0]'s slot so matching set[0] defuses it (+4 trap bonus!)
+    const targetSlot = s.board.findIndex(c => c.id === set[0].id);
+    const snareSlot = s.board.findIndex((_, i) => snareTarget(i, 'right', s.board.length) === targetSlot || snareTarget(i, 'left', s.board.length) === targetSlot || snareTarget(i, 'up', s.board.length) === targetSlot || snareTarget(i, 'down', s.board.length) === targetSlot);
+    const snareDir = (['right', 'left', 'up', 'down'] as const).find(dir => snareTarget(snareSlot, dir, s.board.length) === targetSlot)!;
+    s = {
+      ...s,
+      nextSetMultiplier: 2,
+      purityChain: 2,
+      lastDiffCount: diff - 1,
+      board: s.board.map((c, i) => (i === snareSlot ? { ...c, snare: snareDir } : c)),
+    };
+    const hpBefore = s.foeHp;
+    const after = playSet(s, set);
+    // purity chain reaches 3 (+3) + snare defuse (+4) + base (3) = 10, then ×2 = 20
+    expect(hpBefore - after.foeHp).toBe((3 + 3 + 4) * 2);
+    const flatItems = after.log[after.log.length - 1].set?.flatItems ?? [];
+    expect(flatItems).toContainEqual(expect.objectContaining({ label: 'Purity chain', amount: 3 }));
+    expect(flatItems).toContainEqual(expect.objectContaining({ label: 'Traps cleared', amount: 4 }));
+  });
+
+  it('multiplies synchronous drain() rule hits by the Set multiplier, and resets to ×1 on non-Set actions', () => {
+    const s = withWeapons(
+      { ...base(), nextSetMultiplier: 2 },
+      relic([
+        { trigger: { on: 'set' }, effects: [{ do: 'damage', amount: 6 }] },
+        { trigger: { on: 'mistake' }, effects: [{ do: 'damage', amount: 5 }] },
+      ])
+    );
+    const hpBefore = s.foeHp;
+    const afterSet = playSet(s);
+    // Set (3 * 2 = 6) + synchronous drain rule (6 * 2 = 12) = 18
+    expect(hpBefore - afterSet.foeHp).toBe(3 * 2 + 6 * 2);
+    // Next non-Set action (INVALID) must NOT inherit ×2
+    const hpAfterSet = afterSet.foeHp;
+    const afterMiss = miss(afterSet);
+    expect(hpAfterSet - afterMiss.foeHp).toBe(5);
+  });
+
+  it('BURN pays primed Piñata bounty and applies burnMult stamped when ignited during a multiplied Set', () => {
+    let s = withWeapons(
+      { ...base(), nextSetMultiplier: 2 },
+      relic([{ trigger: { on: 'set' }, effects: [{ do: 'ignite', count: 1 }] }])
+    );
+    const set = findSet(s)!;
+    // Play a ×2 Set that ignites 1 untouched card on the board
+    s = playSet(s, set);
+    const burning = s.board.find(c => c.onFire)!;
+    expect(burning).toBeDefined();
+    expect(s.burnMults?.[burning.id]).toBe(2);
+    // Prime that burning card as a health: 1 Piñata (+8 bounty)
+    const primedCard = { ...burning, health: 1, bounty: 8 };
+    s = {
+      ...s,
+      board: s.board.map(c => (c.id === burning.id ? primedCard : c)),
+    };
+    const hpBefore = s.foeHp;
+    const afterBurn = runReducer(s, { type: 'BURN', card: primedCard });
+    // (1 base burn + 8 Piñata bounty) * 2 burnMult = 18
+    expect(hpBefore - afterBurn.foeHp).toBe((1 + 8) * 2);
+    expect(eventsOf(afterBurn, 'pinata_break')).toHaveLength(1);
+    expect(afterBurn.burnMults?.[burning.id]).toBeUndefined();
+  });
+});
+
+describe('core engine bug fixes', () => {
+  beforeEach(() => setPowerEnabled(false));
+  afterEach(() => setPowerEnabled(true));
+  const base = () =>
+    startFight({
+      save: { selectedFighter: 'Pelican' },
+      level: testLevel({ foes: [{ name: 'Dummy', hp: 500 }] }),
+      features: ['hearts', 'gear', 'hints'],
+    });
+
+  it('blocks USE_HINT spam until a valid Set is matched (Safe Bet exploit guard)', () => {
+    let s = withWeapons(
+      { ...base(), stats: { ...base().stats, hints: 3 } },
+      relic([{ trigger: { on: 'hintUsed' }, effects: [{ do: 'damage', amount: 4 }] }])
+    );
+    const hp0 = s.foeHp;
+    s = runReducer(s, { type: 'USE_HINT' });
+    expect(hp0 - s.foeHp).toBe(4);
+    expect(s.stats.hints).toBe(2);
+    expect(s.hintUsedThisSet).toBe(true);
+
+    // Second USE_HINT before a valid Set is rejected
+    const blocked = runReducer(s, { type: 'USE_HINT' });
+    expect(blocked.foeHp).toBe(s.foeHp);
+    expect(blocked.stats.hints).toBe(2);
+
+    // Still blocked even after an INVALID attempt
+    const afterMiss = miss(blocked);
+    const blockedAfterMiss = runReducer(afterMiss, { type: 'USE_HINT' });
+    expect(blockedAfterMiss.stats.hints).toBe(2);
+
+    // Matching a valid Set clears hintUsedThisSet so hint works again
+    const afterMatch = playSet(afterMiss);
+    expect(afterMatch.hintUsedThisSet).toBe(false);
+    const allowedAgain = runReducer(afterMatch, { type: 'USE_HINT' });
+    expect(allowedAgain.stats.hints).toBe(1);
+    expect(afterMatch.foeHp - allowedAgain.foeHp).toBe(4);
+  });
+
+  it('emits healed even when healing at full hearts (Phoenix Pyre / clean play)', () => {
+    const s = withWeapons(
+      base(),
+      relic([
+        { trigger: { on: 'set' }, effects: [{ do: 'heal', amount: 1 }] },
+        { trigger: { on: 'healed' }, effects: [{ do: 'damage', amount: 6 }] },
+      ])
+    );
+    expect(s.hearts).toBe(s.maxHearts);
+    const { dmg } = damageOf(s);
+    expect(dmg).toBe(3 + 6);
+  });
+
+  it('Life Link hurt-blast enqueues weapon:explosion', () => {
+    const lifeLink = {
+      ...relic([], undefined, 'life-link-test'),
+      specialEffect: 'bridge' as const,
+      bridgeEffect: { trigger: 'onHealthLoss' as const, chance: 100, effect: 'explosion' as const, amount: 4 },
+    };
+    const s = withWeapons(
+      base(),
+      lifeLink,
+      relic([{ trigger: { on: 'weapon', kind: 'explosion' }, effects: [{ do: 'damage', amount: 9 }] }], undefined, 'listener')
+    );
+    const hpBefore = s.foeHp;
+    const after = miss(s);
+    expect(eventsOf(after, 'blast').length).toBeGreaterThanOrEqual(1);
+    // 4 collateral blast damage + 9 from weapon:explosion listener
+    expect(hpBefore - after.foeHp).toBeGreaterThanOrEqual(4 + 9);
+  });
+
+  it('Clarity Lens preserves Rainbow detection on non-simplified traits and rolls doubleClarityChance on extension', () => {
+    const c1: Card = { id: 'a', shape: 'oval', color: 'red', number: 1, shading: 'solid', selected: false };
+    const c2: Card = { id: 'b', shape: 'diamond', color: 'green', number: 1, shading: 'solid', selected: false };
+    const c3: Card = { id: 'c', shape: 'squiggle', color: 'purple', number: 1, shading: 'solid', selected: false };
+    // Number is simplified to all 1s, but shape & color are all-different -> Rainbow under Clarity!
+    expect(isRainbow([c1, c2, c3], ['shape', 'color', 'number'])).toBe(false);
+    expect(isRainbow([c1, c2, c3], ['shape', 'color', 'number'], ['number'])).toBe(true);
+
+    // [Wild, Wild, Plain] returns full trait count and isRainbow === true
+    const w1: Card = { ...c1, id: 'w1', isWild: true };
+    const w2: Card = { ...c2, id: 'w2', isWild: true };
+    expect(countDifferentAttributes([w1, w2, c3], ['shape', 'color', 'number'])).toBe(3);
+    expect(isRainbow([w1, w2, c3], ['shape', 'color', 'number'])).toBe(true);
+
+    // Double clarity chance rolls even when extending an already-active simplify
+    let s = withWeapons(
+      base(),
+      relic([{ trigger: { on: 'set' }, effects: [{ do: 'simplify', ms: 6000 }] }], { doubleClarityChance: 100 })
+    );
+    s = playSet(s);
+    expect(s.simplified?.also).toBeDefined();
+    // Strip `also` and re-trigger simplify while already simplified: extension must re-roll doubleClarityChance
+    s = { ...s, simplified: { attribute: s.simplified!.attribute, value: s.simplified!.value, remainingMs: 3000 } };
+    s = playSet(s);
+    expect(s.simplified?.also).toBeDefined();
+  });
+
+  it('Paradox finale spawns a Catalyst even in a 2-weapon pair because expired recipes leave activeEvolutions first', () => {
+    const paradox = EVOLUTION_RECIPES.find(r => r.id === 'paradox')!;
+    expect(paradox).toBeDefined();
+    let s = startFight({
+      save: {
+        selectedFighter: 'Pelican',
+        armory: ['temporal-rift', 'catalyst-prism'],
+        charms: ['temporal-rift', 'catalyst-prism'],
+        unlockedEvolutions: [paradox.id],
+      },
+      features: ['hearts', 'gear', 'evolutions'],
+    });
+    // Put paradox into activeEvolutions with 1s remaining and no catalyst on board
+    s = {
+      ...s,
+      activeEvolutions: [{ id: paradox.id, remainingMs: 1000, durationMs: 30000 }],
+      board: s.board.map(c => (c.hasEvolutionItem ? { ...c, hasEvolutionItem: false } : c)),
+      catalystRecipeId: undefined,
+    };
+    const after = tick(s, 1500, 500);
+    expect(after.activeEvolutions).toHaveLength(0);
+    expect(after.board.some(c => c.hasEvolutionItem)).toBe(true);
+    expect(after.catalystRecipeId).toBe(paradox.id);
+  });
+
+  it('E.combo grants +1 Set damage per bonus step on non-Sly-Fox fighters without altering plain fast Sets', () => {
+    const s = withWeapons(
+      base(),
+      relic([{ trigger: { on: 'mistake' }, effects: [{ do: 'comboStep', amount: 3 }] }])
+    );
+    // Plain Pelican Set with no E.combo deals 3
+    expect(damageOf(s).dmg).toBe(3);
+    // After mistake bumps E.combo by 3, next Set deals 3 + 3 = 6
+    const afterMiss = miss(s);
+    expect(afterMiss.bonusCombo).toBe(3);
+    expect(damageOf(afterMiss).dmg).toBe(3 + 3);
+  });
+
+  it('autoSet breaks linked partners and fires linkDestroyed', () => {
+    let s = withWeapons(
+      base(),
+      relic([
+        { trigger: { on: 'mistake' }, effects: [{ do: 'trigger', kind: 'echo' }] },
+        { trigger: { on: 'linkDestroyed' }, effects: [{ do: 'damage', amount: 7 }] },
+      ])
+    );
+    // Connect every board index to its neighbor so whichever Set autoSet picks breaks at least 1 link
+    const connections = s.board.slice(0, -1).map((_, i) => ({
+      id: `c-${i}`,
+      positionA: i,
+      positionB: i + 1,
+      createdAt: 0,
+    }));
+    s = { ...s, connections };
+    const hpBefore = s.foeHp;
+    const after = miss(s);
+    // AutoSet matched 3 cards + broke linked partner(s) -> linkDestroyed fired (+7 each)
+    expect(hpBefore - after.foeHp).toBeGreaterThanOrEqual(3 + 7);
+  });
+});
+
+describe('Role Set Bonuses (2/4/6 Brotato-style synergies)', () => {
+  beforeEach(() => setPowerEnabled(false));
+  afterEach(() => setPowerEnabled(true));
+
+  it('defines 2/4/6 tiers for all 8 weapon roles and ignores synthetic test relics', () => {
+    expect(Object.keys(ROLE_SET_BONUSES)).toHaveLength(8);
+    expect(activeRoleBonuses([relic([]), relic([], undefined, 'r2')])).toEqual([]);
+  });
+
+  it('activates damage (2) and board (2) Role Set Bonuses live in a fight', () => {
+    const blast = getArmoryWeapon('blast-powder')!;
+    const ray = getArmoryWeapon('prismatic-ray')!;
+    const fieldStone = getArmoryWeapon('field-stone')!;
+    const growthSeed = getArmoryWeapon('growth-seed')!;
+
+    const bonuses = activeRoleBonuses([blast, ray, fieldStone, growthSeed]);
+    expect(bonuses.map(b => `${b.role}:${b.tier}`)).toEqual(expect.arrayContaining(['damage:2', 'board:2']));
+
+    const progress = roleBonusProgress([blast, ray, fieldStone, growthSeed]);
+    expect(progress.find(p => p.role === 'damage')).toMatchObject({ count: 2, activeTier: 2, nextTier: 4 });
+
+    // Fight with 2 damage + 2 board weapons: board:2 adds +1 startingBoardCards on top of field-stone's fieldSize, damage:2 adds +1 setDamage
+    const singleBoard = startFight({
+      save: {
+        selectedFighter: 'Pelican',
+        upgrades: { charm_belt: 4 },
+        armory: ['blast-powder', 'prismatic-ray', 'field-stone'],
+        charms: ['blast-powder', 'prismatic-ray', 'field-stone'],
+      },
+      level: testLevel({ foes: [{ name: 'Dummy', hp: 500 }] }),
+      features: ['hearts', 'gear'],
+    });
+    const s = startFight({
+      save: {
+        selectedFighter: 'Pelican',
+        upgrades: { charm_belt: 4 },
+        armory: ['blast-powder', 'prismatic-ray', 'field-stone', 'growth-seed'],
+        charms: ['blast-powder', 'prismatic-ray', 'field-stone', 'growth-seed'],
+      },
+      level: testLevel({ foes: [{ name: 'Dummy', hp: 500 }] }),
+      features: ['hearts', 'gear'],
+    });
+    expect(s.board.length).toBe(singleBoard.board.length + 1);
+    const { next, dmg } = damageOf(s);
+    // 3 base + 1 from Damage Set (2)
+    expect(dmg).toBeGreaterThanOrEqual(4);
+    expect(next.log[next.log.length - 1].set?.flatItems).toContainEqual(
+      expect.objectContaining({ label: 'Damage Set', amount: 1, sourceRef: 'role:damage' })
+    );
+  });
+
+  it('chains:4 adds starting links and +5% bonusEchoChance', () => {
+    const s = startFight({
+      save: {
+        selectedFighter: 'Pelican',
+        upgrades: { charm_belt: 4 },
+        armory: ['echo-stone', 'chain-reaction', 'connector', 'web-weaver'],
+        charms: ['echo-stone', 'chain-reaction', 'connector', 'web-weaver'],
+      },
+      level: testLevel({ foes: [{ name: 'Dummy', hp: 500 }] }),
+      features: ['hearts', 'gear'],
+    });
+    // chains:4 adds startingLinks: 2 (plus connector/web-weaver links)
+    expect(s.connections.length).toBeGreaterThanOrEqual(2);
+    // chains:4 adds +5% bonusEchoChance on top of echo-stone
+    const baseEchoOnly = startFight({
+      save: { selectedFighter: 'Pelican', armory: ['echo-stone'], charms: ['echo-stone'] },
+      level: testLevel({ foes: [{ name: 'Dummy', hp: 500 }] }),
+      features: ['hearts', 'gear'],
+    });
+    expect(s.stats.echoChance).toBeGreaterThanOrEqual(baseEchoOnly.stats.echoChance + 5);
+  });
+});
+
+describe('Wave 2 rule verbs & conditions', () => {
+  beforeEach(() => setPowerEnabled(false));
+  afterEach(() => setPowerEnabled(true));
+  const base = () =>
+    startFight({
+      save: { selectedFighter: 'Pelican' },
+      level: testLevel({ foes: [{ name: 'Dummy', hp: 500 }] }),
+      features: ['hearts', 'gear', 'hints'],
+    });
+
+  it('evaluates diffCountAtMost, diffCountAtLeast, and hintedSet conditions', () => {
+    let s = withWeapons(
+      base(),
+      relic([
+        { trigger: { on: 'set' }, when: [{ kind: 'diffCountAtLeast', n: 1 }], effects: [{ do: 'damage', amount: 4 }] },
+        { trigger: { on: 'set' }, when: [{ kind: 'diffCountAtMost', n: 3 }], effects: [{ do: 'damage', amount: 3 }] },
+        { trigger: { on: 'set' }, when: [{ kind: 'hintedSet' }], effects: [{ do: 'damage', amount: 10 }] },
+      ])
+    );
+    const set = findSet(s)!;
+    // Unhinted set: diffCountAtLeast(1) (+4) + diffCountAtMost(3) (+3) = +7
+    expect(damageOf(s, set).dmg).toBe(3 + 4 + 3);
+    // Hinted set: also triggers hintedSet (+10)
+    const hpBefore = s.foeHp;
+    const hintedRun = runReducer(s, { type: 'MATCH', cards: set, rewards: set.map(c => ({ cardId: c.id, points: 1 })), hinted: true });
+    expect(hpBefore - hintedRun.foeHp).toBe(3 + 4 + 3 + 10);
+  });
+
+  it('executes repairGlass, feedChest, advanceTricks, stampAlbum, addMagnet, spawnCatalystForce, and scaled xp', () => {
+    // repairGlass + feedChest + addMagnet + stampAlbum + advanceTricks
+    let s = withWeapons(
+      base(),
+      relic(
+        [
+          {
+            trigger: { on: 'mistake' },
+            effects: [
+              { do: 'repairGlass' },
+              { do: 'feedChest', amount: 7 },
+              { do: 'addMagnet', count: 1 },
+              { do: 'stampAlbum' },
+              { do: 'advanceTricks', ms: 3000 },
+            ],
+          },
+        ],
+        {
+          glassDamage: 10,
+          chestStart: 10,
+          chestGrowth: 2,
+          magnetDamage: 4,
+          albumDamage: 20,
+          frozenDamage: 15,
+        }
+      )
+    );
+    // Sync gear once so chest, magnet, and ice block exist on board, then shatter glass
+    s = tick(s, 500);
+    s = { ...s, gear: { ...s.gear, glassBroken: true } };
+    const chestId = s.board.find(c => c.chest !== undefined)!.id;
+    const iceBefore = s.board.find(c => (c.frozen ?? 0) > 0)?.frozen;
+    // Trigger INVALID on 3 cards that do NOT include the chest or frozen card so live mutations apply directly
+    const wrong = s.board.filter(c => c.id !== chestId && !(c.frozen ?? 0)).slice(0, 3);
+    const afterInvalid = runReducer(s, { type: 'INVALID', cards: wrong });
+    const after = runReducer(afterInvalid, { type: 'REPLACE', ids: wrong.map(c => c.id) });
+    // repairGlass runs in drain() after onMistakeGear shatters glass -> Glass Sword is repaired!
+    expect(after.gear.glassBroken).toBe(false);
+    // Chest was reset to floor (10) on mistake, then feedChest(+7) + advanceTricks(3000ms -> 1 step, +2) = 19
+    expect(after.board.find(c => c.chest !== undefined)?.chest).toBe(10 + 7 + 2);
+    // addMagnet added an extra magnetized card (1 base + 1 extra = 2)
+    expect(after.board.filter(c => c.magnet).length).toBeGreaterThanOrEqual(2);
+    // stampAlbum stamped 1 page
+    expect(after.gear.album.length).toBe(1);
+    // advanceTricks chipped Ice Block
+    if (iceBefore !== undefined) {
+      expect(after.board.find(c => (c.frozen ?? 0) > 0)?.frozen).toBe(iceBefore - 1);
+    }
+
+    // xp with per: 'evolution' & spawnCatalystForce
+    const phoenix = EVOLUTION_RECIPES.find(r => r.id === 'phoenix-pyre')!;
+    let s2 = startFight({
+      save: {
+        selectedFighter: 'Pelican',
+        armory: ['blast-powder', 'mending-charm'],
+        charms: ['blast-powder', 'mending-charm'],
+        unlockedEvolutions: [phoenix.id],
+      },
+      features: ['hearts', 'gear', 'xp', 'evolutions'],
+    });
+    s2 = withWeapons(
+      {
+        ...s2,
+        activeEvolutions: [{ id: phoenix.id, remainingMs: 30000, durationMs: 30000 }],
+        board: s2.board.map(c => (c.hasEvolutionItem ? { ...c, hasEvolutionItem: false } : c)),
+      },
+      relic([
+        {
+          trigger: { on: 'mistake' },
+          effects: [
+            { do: 'xp', amount: 5, per: 'evolution' },
+            { do: 'spawnCatalystForce' },
+          ],
+        },
+      ])
+    );
+    const xpBefore = s2.xp;
+    const after2 = miss(s2);
+    expect(after2.xp - xpBefore).toBe(5);
+    expect(after2.board.some(c => c.hasEvolutionItem)).toBe(true);
   });
 });

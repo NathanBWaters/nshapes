@@ -35,18 +35,19 @@ import { weaponBuilds } from '../weaponLevels';
 import type { WeaponBuilds } from '../data/weaponStats';
 import { createFoe } from '../data/foes';
 import { arcanaRules, getArcana } from '../data/arcana';
-import { BASE_RULES } from '../data/rules';
+import { BASE_RULES, TRICK_RULES } from '../data/rules';
+import { roleLabel, type WeaponRole } from '../data/weaponRoles';
 import { PARRY_RULES } from '../data/parry';
 import { challengeProgress } from './challenges';
 import { initParryState, resolveParryOnSet, tickParry } from './parry';
 import {
-  addCoins, addConnection, addRandomConnections, addTime, addXp, announceDraw, arcana, begin, chanceStatsOf, dealDamage, drawCard,
-  emit, enqueue, finish, foeMultiplier, heal, hurt, igniteCards, keepCatalystMatchable, mods, newLinkSlots, placeCatalyst,
-  pruneConnections, recycle, refill, refreshSources, returnToDeck, rollBridges, syncTraps, toDeckCard, tuning, updateCards,
+  addCoins, addConnection, addHints, addRandomConnections, addTime, addXp, arcana, begin, chanceStatsOf, dealDamage, drawCard,
+  emit, empowerBoard, enqueue, finish, foeMultiplier, growBoard, heal, hurt, igniteCards, keepCatalystMatchable, mods, newLinkSlots, placeCatalyst,
+  pruneConnections, recycle, refill, refreshSources, returnToDeck, rollBridges, syncTraps, toDeckCard, touchable, tuning, updateCards,
   MAX_BOARD, type Draft, type FightHooks, TIME_HEADROOM,
   CLOCK_SLOW_CAP_PCT,
 } from './fight';
-import { EVOLUTION_RULES, getRecipe, getSkillNode, liveSources } from './sources';
+import { activeRoleBonuses, combineModifiers, EVOLUTION_RULES, getRecipe, getSkillNode, liveSources } from './sources';
 import { recordFightStart, recordLog } from './fightLog';
 import { afterSetGear, gearSetBonus, holdCards, initGear, onMistakeGear, onWaveStartGear, resolveTwins, syncGear, tickGear, type GearSet } from './gear';
 import { refreshArmedRecipes, resolveCatalyst, tickEvolutions } from './evolutions';
@@ -60,8 +61,7 @@ import {
 } from './passives';
 import { applyEffect, checkIdle, conditionsHold, drain, resetFoeBelowRules, resetIdleRules, weaponFired } from '../rules/engine';
 
-export { xpForLevel } from './fight';
-export { passiveTuningOf } from './fight';
+export { xpForLevel, passiveTuningOf, activeEnemyCounters, type ActiveWeaponCounter } from './fight';
 
 /** What one matched card is worth before weapons and foes get involved. */
 export const baseCardReward = (c: Card): CardReward => ({
@@ -138,10 +138,12 @@ const rollPickOptions = (d: Draft, count = 3): Weapon[] => {
 };
 
 const acquireWeapon = (d: Draft, picked: Weapon) => {
+  const prevRoleMods = combineModifiers(activeRoleBonuses(d.weapons).map(r => r.modifiers));
   // An Understudy picked up mid-fight copies the weapon picked up before it
   const built = picked.id === UNDERSTUDY_ID ? understudyOf(picked, d.weapons[d.weapons.length - 1]?.id, d.weaponBuilds) : picked;
   const weapon: Weapon = { ...built, effects: resolveWholeStats(built.effects, () => d._rng.next()) };
   d.weapons = [...d.weapons, weapon];
+  const nextRoleMods = combineModifiers(activeRoleBonuses(d.weapons).map(r => r.modifiers));
   d.stats = applyWeaponToStats(d.stats, weapon);
   const base = { ...d.baseChances };
   for (const k of Object.keys(base)) {
@@ -151,10 +153,22 @@ const acquireWeapon = (d: Draft, picked: Weapon) => {
   d.baseChances = base;
   const m = (weapon as AdventureWeapon).modifiers;
   const heartsLocked = arcana(d).maxHeartsLock !== undefined;
-  const extraHearts = (weapon.effects.maxHealth ?? 0) + (m?.maxHearts ?? 0);
+  const roleHeartsDelta = (nextRoleMods.maxHearts ?? 0) - (prevRoleMods.maxHearts ?? 0);
+  const extraHearts = (weapon.effects.maxHealth ?? 0) + (m?.maxHearts ?? 0) + roleHeartsDelta;
   if (extraHearts && d.hearts !== null && d.maxHearts !== null && !heartsLocked) {
     d.maxHearts = Math.max(1, d.maxHearts + extraHearts);
-    d.hearts = Math.min(d.maxHearts, d.hearts + Math.max(0, (weapon.effects.health ?? 0) + (m?.maxHearts ?? 0)));
+    d.hearts = Math.min(d.maxHearts, d.hearts + Math.max(0, (weapon.effects.health ?? 0) + (m?.maxHearts ?? 0) + roleHeartsDelta));
+  }
+  const roleHintsDelta = (nextRoleMods.startingHints ?? 0) - (prevRoleMods.startingHints ?? 0);
+  if (roleHintsDelta > 0) addHints(d, roleHintsDelta);
+  const roleBoardDelta = (nextRoleMods.startingBoardCards ?? 0) - (prevRoleMods.startingBoardCards ?? 0);
+  if (roleBoardDelta > 0) growBoard(d, roleBoardDelta);
+  const roleLinksDelta = (nextRoleMods.startingLinks ?? 0) - (prevRoleMods.startingLinks ?? 0);
+  if (roleLinksDelta > 0) {
+    const beforeLinks = d.connections.length;
+    if (addRandomConnections(d, roleLinksDelta) > 0) {
+      emit(d, 'link', roleLinksDelta, undefined, { slots: newLinkSlots(d, beforeLinks) });
+    }
   }
   if (m?.coinPercent) d.coinBonusPercent += m.coinPercent;
   refreshArmedRecipes(d);
@@ -224,21 +238,22 @@ const resolve = (d: Draft) => {
 
 const PURITY_DAMAGE = [0, 0, 1, 3, 5, 8];
 
-/** Escalating Purity: returns the bonus damage and coins for this Set. */
-const advancePurity = (d: Draft, diffCount: number, graceUsed: boolean): { damage: number; coins: number } => {
-  if (!d.features.has('purity')) return { damage: 0, coins: 0 };
+/** Escalating Purity: returns the bonus damage, coins, and chain step reached for this Set. */
+const advancePurity = (d: Draft, diffCount: number, graceUsed: boolean): { damage: number; coins: number; chain: number } => {
+  if (!d.features.has('purity')) return { damage: 0, coins: 0, chain: 0 };
   if (graceUsed || diffCount === 0) {
     d.purityChain = 0;
     d.lastDiffCount = 0;
-    return { damage: 0, coins: 0 };
+    return { damage: 0, coins: 0, chain: 0 };
   }
   if (d.purityChain === 0 || diffCount <= d.lastDiffCount) {
     // A repeated or lower diversity starts a new climb at this diversity
     d.purityChain = 1;
     d.lastDiffCount = diffCount;
-    return { damage: 0, coins: 0 };
+    return { damage: 0, coins: 0, chain: 1 };
   }
   d.purityChain += 1;
+  const chain = d.purityChain;
   d.lastDiffCount = diffCount;
   d.maxPurityChain = Math.max(d.maxPurityChain, d.purityChain);
   d.purityChainsTriggered += 1;
@@ -251,7 +266,7 @@ const advancePurity = (d: Draft, diffCount: number, graceUsed: boolean): { damag
     d.purityChain = 0;
     d.lastDiffCount = 0;
   }
-  return { damage, coins };
+  return { damage, coins, chain };
 };
 
 /**
@@ -285,7 +300,6 @@ const fireBoardWeapons = (d: Draft, fx: WeaponEffectResult) => {
     [fx.laserCards.length > 0, 'laser', { do: 'laser', area: { shape: 'random', count: fx.laserCards.length } }],
     [fx.fireCards.length > 0, 'fire', { do: 'ignite', count: fx.fireCards.length }],
     [fx.ricochetCards.length > 0, 'ricochet', { do: 'ricochet', count: fx.ricochetCards.length }],
-    [fx.autoMatchedSets.length > 0, 'echo', { do: 'trigger', kind: 'echo' }],
     [fx.bonusHealing > 0, 'heal', { do: 'heal', amount: fx.bonusHealing }],
     [fx.bonusCoins > 0, 'coin', { do: 'coins', amount: fx.bonusCoins }],
     [fx.bonusTime > 0, 'time', { do: 'time', seconds: fx.bonusTime }],
@@ -295,6 +309,10 @@ const fireBoardWeapons = (d: Draft, fx: WeaponEffectResult) => {
     [fx.boardGrowth > 0, 'growth', { do: 'growBoard', count: fx.boardGrowth }],
   ];
   for (const [on, kind, replay] of fired) if (on) weaponFired(d, kind, replay);
+  // Fire weapon:echo once per echoed Set (including Chain Reaction's double-echo)
+  for (let i = 0; i < fx.autoMatchedSets.length; i++) {
+    weaponFired(d, 'echo', { do: 'trigger', kind: 'echo' });
+  }
 };
 
 interface MatchOptions {
@@ -306,9 +324,12 @@ interface MatchOptions {
 
 /** Score a Set: traps, foe reaction, damage, rewards, weapon triggers, Catalyst, passives. */
 const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEffectResult | undefined, opts: MatchOptions = {}) => {
-  const matched = cards.slice(0, 3);
+  const matched = cards.slice(0, 3).map(c => d.board.find(b => b.id === c.id) ?? c);
+  const matchedIds = new Set(matched.map(c => c.id));
   const prevCtx = d._setCtx;
+  const prevSetMult = d._setMultiplier;
   const graceUsed = rewards.some(r => r.effectType === 'grace');
+  if (!opts.auto) d.hintUsedThisSet = false;
   d.replacing = [...new Set([...d.replacing, ...cards.map(c => c.id)])];
 
   const traps = resolveTrapsOnSet(d, matched);
@@ -318,25 +339,27 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   const statMods = d.foe.getStatModifiers();
   emitEnemyEvents(d, enemyResult.events);
 
+  const simplifiedAttrs = d.simplified
+    ? [d.simplified.attribute, ...(d.simplified.also ? [d.simplified.also.attribute] : [])]
+    : undefined;
   const diffCount = !graceUsed ? countDifferentAttributes(matched, d.attributes) : 0;
-  // An all-different Set is always detected for gear/passives/challenges; base multiplier is 1× (clean base game)
-  // unless a weapon (e.g. Rainbow Charm), skill node, evolution, or Arcana adds a Rainbow multiplier.
-  const rainbow = !graceUsed && isRainbow(matched, d.attributes);
+  // An all-different Set is always detected for gear/passives/challenges (evaluated over non-simplified traits during Clarity);
+  // base multiplier is 1× unless a weapon (e.g. Rainbow Charm), skill node, evolution, or Arcana adds a Rainbow multiplier.
+  const rainbow = !graceUsed && isRainbow(matched, d.attributes, simplifiedAttrs);
   const sinceLastMs = d.elapsedMs - d.lastMatchAtMs;
-  d._setCtx = { diffCount, rainbow, sinceLastMs, firstOfWave: d.setsThisWave === 0, matchNo: d.matches + 1 };
+  const hinted = !opts.auto && isHintedSet(d, opts.hinted);
+  d._setCtx = { diffCount, rainbow, sinceLastMs, firstOfWave: d.setsThisWave === 0, matchNo: d.matches + 1, hinted };
   const purity = advancePurity(d, diffCount, graceUsed);
 
-  // Damage
+  // Unified Balatro-style damage pipeline: SUM(all additions) × PRODUCT(all multipliers)
   const parryRes = resolveParryOnSet(d, matched, graceUsed, !!opts.auto);
   const hotStreak = consumeHotStreak(d);
   advanceCombo(d);
   const m = mods(d);
   const a = arcana(d);
   const rawPoints = rewards.reduce((sum, r) => sum + (r.points ?? 0), 0);
-  // Shading Surge: the Set's base damage (its cards) is ×5; flat bonuses are added after, multipliers apply on top
   const surgeMult = surgeMultiplier(d);
-  let points = rawPoints * surgeMult;
-  const surgedPoints = points;
+  let points = rawPoints;
   const flatItems: FightLogMathItem[] = [];
   const describeSource = (key: string): { label: string; sourceRef?: string; defaultNote?: string } => {
     if (key.startsWith('node:')) {
@@ -346,6 +369,10 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
     if (key.startsWith('evo:')) {
       const id = key.slice(4);
       return { label: getRecipe(id)?.name ?? id, sourceRef: key, defaultNote: 'active Evolution' };
+    }
+    if (key.startsWith('role:')) {
+      const role = key.slice(5) as WeaponRole;
+      return { label: `${roleLabel(role)} Set`, sourceRef: key, defaultNote: 'Role Set Bonus' };
     }
     const slot = /^w(\d+):(.*)$/.exec(key);
     if (slot) {
@@ -376,6 +403,38 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
       const arc = findArcanaFor('singleTraitBonusDamage');
       flatItems.push({ label: arc?.name ?? 'Monochrome Pact', amount: a.singleTraitBonusDamage, note: 'only 1 trait differed' });
     }
+  }
+  // Fold Piñata break bounties for cards breaking on this Set into flat BEFORE multipliers!
+  let pinataBounty = 0;
+  const breakingPinataIds: string[] = [];
+  const seenCards = new Set<string>();
+  for (const c of cards) {
+    if (seenCards.has(c.id)) continue;
+    seenCards.add(c.id);
+    const live = d.board.find(b => b.id === c.id) ?? c;
+    const willStay =
+      !!live.stay ||
+      (matchedIds.has(live.id) && ((!!live.shackle && !matchedIds.has(live.shackle)) || live.tar === 1));
+    if (live.health === 1 && !willStay && (live.bounty ?? 0) > 0) {
+      pinataBounty += live.bounty!;
+      breakingPinataIds.push(live.id);
+    }
+  }
+  if (pinataBounty > 0) {
+    d.paidPinataIds = [...new Set([...(d.paidPinataIds ?? []), ...breakingPinataIds])];
+    flatItems.push({
+      label: 'Piñata',
+      amount: pinataBounty,
+      note: breakingPinataIds.length === 1 ? 'piñata broken in this Set' : `${breakingPinataIds.length} piñatas broken`,
+      sourceRef: 'weapon:pinata',
+    });
+  }
+  // Fold Purity Chain & Traps Cleared into flat BEFORE multipliers!
+  if (purity.damage !== 0) {
+    flatItems.push({ label: 'Purity chain', amount: purity.damage, note: `${purity.chain}-Set Purity streak` });
+  }
+  if (traps.bonus !== 0) {
+    flatItems.push({ label: 'Traps cleared', amount: traps.bonus, note: 'cleared hazard cards in this Set' });
   }
   const sources = liveSources({
     skillNodes: d.skillNodes,
@@ -443,8 +502,7 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   };
   const tricks = gearSetBonus(d, gearSet);
   const passives = passiveSetDamageBreakdown(d, sinceLastMs);
-  // Weapon growth: hints held are worth damage (Seeker Lens), and so is a Set made on a pointed-out card (Oracle Eye)
-  const hinted = !opts.auto && isHintedSet(d, opts.hinted);
+  // Weapon growth & Insight Role Set: hints held are worth damage (Seeker Lens), and so is a Set made on a pointed-out card (Oracle Eye)
   const growthDamage = (m.hintHeldDamage ?? 0) * d.stats.hints + (hinted ? m.hintedSetDamage ?? 0 : 0);
   for (const { key, source } of sources) {
     if (key === 'growth') continue;
@@ -473,8 +531,8 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   }
   // Rust can take damage off a Set, never below nothing
   const unclampedFlat =
-    points + d.bonusDamagePerMatch + (m.setDamage ?? 0) + conditional + passives.bonus + tricks.flat + growthDamage +
-      d.activeEvolutions.length * EVOLUTION_RULES.setDamage;
+    points + pinataBounty + purity.damage + traps.bonus + d.bonusDamagePerMatch + (m.setDamage ?? 0) + conditional +
+    passives.bonus + tricks.flat + growthDamage + d.activeEvolutions.length * EVOLUTION_RULES.setDamage;
   const flat = Math.max(0, unclampedFlat);
   if (unclampedFlat < 0) {
     flatItems.push({ label: 'Minimum damage floor', amount: -unclampedFlat, note: 'Set damage cannot drop below 0' });
@@ -497,6 +555,13 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   const setMult = preTricksSetMult * tricks.multiplier;
   d.nextSetMultiplier = 1;
   const multItems: FightLogMathItem[] = [];
+  if (surgeMult !== 1) {
+    multItems.push({
+      label: 'Shading Surge',
+      amount: surgeMult,
+      note: '4-trait Shading Surge multiplier',
+    });
+  }
   if (rainbow) {
     let runningRainbow = 1;
     for (const { key, source } of sources) {
@@ -573,15 +638,10 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
     });
   }
   multItems.push(...tricks.multItems);
-  const extraItems: FightLogMathItem[] = [];
-  if (purity.damage * enemyMult !== 0) {
-    extraItems.push({ label: 'Purity chain', amount: purity.damage * enemyMult, note: `${d.purityChain}-Set Purity streak` });
-  }
-  if (traps.bonus * enemyMult !== 0) {
-    extraItems.push({ label: 'Traps cleared', amount: traps.bonus * enemyMult, note: 'cleared hazard cards in this Set' });
-  }
-  const totalMult = rainbowMult * (a.damageScale ?? 1) * enemyMult * setMult * parryMult * staggerMult;
-  const dmg = flat * totalMult + (purity.damage + traps.bonus) * enemyMult;
+  const totalMult = surgeMult * rainbowMult * (a.damageScale ?? 1) * enemyMult * setMult * parryMult * staggerMult;
+  // Store the non-foe Set multiplier so synchronous same-Set rules, Twins, blasts, and burns inherit it!
+  d._setMultiplier = enemyMult !== 0 ? totalMult / enemyMult : totalMult;
+  const dmg = flat * totalMult;
   const powerMult = damageMultiplier(d.power ?? 0);
   const hit = dealDamage(d, dmg);
   emit(d, surgeMult > 1 ? 'surge_hit' : rainbowBoosted ? 'rainbow' : 'hit', hit, undefined, { slots: gearSet.slots });
@@ -590,7 +650,6 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   if (opts.auto) {
     d._lines[d._lines.length - 1].text = 'Free Set';
   } else {
-    const matchedIds = new Set(matched.map(c => c.id));
     const collateral: NonNullable<RunState['log'][number]['set']>['collateral'] = {};
     for (const r of rewards) {
       if (matchedIds.has(r.cardId) || !r.effectType) continue;
@@ -616,13 +675,12 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
       ...(cardBonusParts.length > 0 ? { cardBonusNote: cardBonusParts.join(', ') } : {}),
       ...(surgeMult !== 1 ? { surgeMultiplier: surgeMult } : {}),
       collateral,
-      flatBonus: flat - surgedPoints,
+      flatBonus: flat - rawPoints,
       ...(flatItems.length > 0 ? { flatItems } : {}),
       multiplier: totalMult,
       ...(multItems.length > 0 ? { multItems } : {}),
       rainbow: rainbowBoosted,
-      extra: (purity.damage + traps.bonus) * enemyMult,
-      ...(extraItems.length > 0 ? { extraItems } : {}),
+      extra: 0,
       ...(powerMult > 1 ? { powerMultiplier: powerMult, powerPoints: d.power ?? 0 } : {}),
       hit,
       diffTraits: diffCount,
@@ -662,7 +720,7 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
     s.colorsMatched.add(c.color);
     s.colorMatchCounts.set(c.color, (s.colorMatchCounts.get(c.color) ?? 0) + 1);
   }
-  if (!graceUsed && isRainbow(matched, d.attributes)) s.allDifferentMatches += 1;
+  if (!graceUsed && isRainbow(matched, d.attributes, simplifiedAttrs)) s.allDifferentMatches += 1;
   if (!graceUsed && matched.every(c => c.color === matched[0].color)) {
     s.allSameColorMatches += 1;
     d.colorSets[matched[0].color] += 1;
@@ -685,13 +743,24 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   const xp = rewards.reduce((sum, r) => sum + (r.experience ?? 0), 0) + (fx?.bonusExperience ?? 0);
   addXp(d, xp);
   heal(d, rewards.reduce((sum, r) => sum + (r.healing ?? 0), 0) + (fx?.bonusHealing ?? 0));
-  let hints = rewards.reduce((sum, r) => sum + (r.hint ?? 0), 0) + (fx?.bonusHints ?? 0);
+  const baseHints = rewards.reduce((sum, r) => sum + (r.hint ?? 0), 0) + (fx?.bonusHints ?? 0);
+  let bridgeHints = 0;
+  let bridgeCoins = 0;
   if (d.features.has('coins') && money > 0 && !(fx && fx.bonusCoins > 0)) {
-    for (const bw of rollBridges(d, 'onCoinGain')) if (bw.bridgeEffect?.effect === 'gainHint') hints += bw.bridgeEffect.amount ?? 1;
+    for (const bw of rollBridges(d, 'onCoinGain')) {
+      if (bw.bridgeEffect?.effect === 'gainHint') bridgeHints += bw.bridgeEffect.amount ?? 1;
+    }
   }
   if (d.features.has('xp') && xp > 0 && !(fx && fx.bonusExperience > 0)) {
-    for (const bw of rollBridges(d, 'onXPGain')) if (bw.bridgeEffect?.effect === 'gainCoin') addCoins(d, bw.bridgeEffect.amount ?? 1);
+    for (const bw of rollBridges(d, 'onXPGain')) {
+      if (bw.bridgeEffect?.effect === 'gainCoin') {
+        const amt = bw.bridgeEffect.amount ?? 1;
+        bridgeCoins += amt;
+        addCoins(d, amt);
+      }
+    }
   }
+  const hints = baseHints + bridgeHints;
   if (hints > 0 && d.features.has('hints')) {
     d.stats = { ...d.stats, hints: Math.min(d.stats.maxHints, d.stats.hints + hints) };
     emit(d, 'hint', hints);
@@ -702,7 +771,9 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   const connected = rewards.filter(r => r.effectType === 'connected').length;
   const linkTimeBonus = connected * (d.stats.echoTimeBonusPerLink || 0);
   const arcanaTimeBonus = (rainbow ? a.rainbowTimeBonus ?? 0 : 0) + (a.setTimeBonus ?? 0);
-  addTime(d, (fx?.bonusTime ?? 0) + (enemyResult.timeDelta ?? 0) + arcanaTimeBonus + linkTimeBonus);
+  const timeGained = addTime(d, (fx?.bonusTime ?? 0) + (enemyResult.timeDelta ?? 0) + arcanaTimeBonus + linkTimeBonus);
+  if (bridgeHints > 0 && d.features.has('hints')) s.weaponEffectsTriggered.add('hint');
+  if (bridgeCoins > 0 && d.features.has('coins')) s.weaponEffectsTriggered.add('coin');
   if (fx) {
     if (fx.explosiveCards.length) {
       s.weaponEffectsTriggered.add('explosion');
@@ -720,6 +791,13 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
       s.weaponEffectsTriggered.add('fire');
       const ids = new Set(fx.fireCards.map(c => c.id));
       const stamp = d.elapsedMs + 1;
+      if (d._setMultiplier !== 1) {
+        const nextMults = { ...(d.burnMults ?? {}) };
+        for (const c of d.board) {
+          if (ids.has(c.id) && !c.onFire) nextMults[c.id] = d._setMultiplier;
+        }
+        d.burnMults = nextMults;
+      }
       d.board = d.board.map(c => (ids.has(c.id) && !c.onFire ? { ...c, onFire: true, fireStartTime: stamp } : c));
       emit(d, 'fire', fx.fireCards.length, undefined, { slots: slotsOf(d, [...ids]) });
     }
@@ -737,15 +815,9 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
     pruneConnections(d);
     emit(d, 'card_removed');
   }
-  // A full board can't grow: no cards, and no "whenever the board grows" trigger
-  let grown = 0;
-  if (fx?.boardGrowth) {
-    grown = Math.max(0, Math.min(fx.boardGrowth, MAX_BOARD - d.board.length));
-    const first = d.board.length;
-    for (let i = 0; i < grown; i++) d.board = [...d.board, drawCard(d)];
-    if (grown > 0) emit(d, 'grow', grown, undefined, { slots: Array.from({ length: grown }, (_, i) => first + i) });
-    for (let i = first; i < d.board.length; i++) announceDraw(d, d.board[i], i);
-  }
+  // Grow the board (at MAX_BOARD, growBoard overflows into empowerBoard(1) and still fires weapon:growth!)
+  const growthFired = fx?.boardGrowth ?? 0;
+  if (growthFired > 0) growBoard(d, growthFired);
 
   // Connector weapons: chance to link two of the matched board positions for the wave
   if (d.stats.connectionChance > 0 && d._rng.next() * 100 < d.stats.connectionChance) {
@@ -764,7 +836,16 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   resolveCatalyst(d, matched);
 
   // Rule triggers (resolved by drain at the end of the action)
-  if (fx) fireBoardWeapons(d, { ...fx, boardGrowth: grown });
+  if (fx) fireBoardWeapons(d, { ...fx, boardGrowth: growthFired });
+  if (bridgeHints > 0 && d.features.has('hints') && !(fx && fx.bonusHints > 0)) {
+    weaponFired(d, 'hint', { do: 'hint', amount: bridgeHints });
+  }
+  if (bridgeCoins > 0 && d.features.has('coins') && !(fx && fx.bonusCoins > 0)) {
+    weaponFired(d, 'coin', { do: 'coins', amount: bridgeCoins });
+  }
+  if (linkTimeBonus > 0 && timeGained > 0 && !(fx && fx.bonusTime > 0)) {
+    weaponFired(d, 'time', { do: 'time', seconds: linkTimeBonus });
+  }
   enqueue(d, 'set');
   if (rainbow) enqueue(d, 'rainbow');
   if (bonusCards > 0) enqueue(d, 'bonusCardMatched');
@@ -774,19 +855,32 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
 
   afterSetPassives(d, matched, rainbow, !!opts.auto);
   d._setCtx = prevCtx;
+  if (opts.auto) d._setMultiplier = prevSetMult;
 };
 
 /**
  * Cards leaving the board after a Set or a miss: armored cards lose a hit, a
- * multi-hit card that breaks pays its bounty. Returns the slots to refill.
+ * multi-hit card that breaks pays its bounty (unless already folded into the Set's hit).
+ * Returns the slots to refill.
  */
 const replaceCards = (d: Draft, ids: Set<string>, ended: boolean): number[] => {
   const indices: number[] = [];
   const broken: number[] = [];
+  const paidSet = new Set(d.paidPinataIds ?? []);
+  const resetThorn =
+    d.elapsedMs + TRICK_RULES.thornMs + TRICK_RULES.thornMsPerExtraTrait * Math.max(0, d.attributes.length - 3);
   d.board = d.board.map((c, i) => {
     if (!ids.has(c.id)) return c;
     // A chained card matched alone and a fresh Tar Pit card stay for one more match (engine/gear.ts holdCards)
-    if (c.stay) return { ...c, stay: false, selected: false };
+    // Reset any thorn timer on staying cards so Tar + Thorn doesn't silently expire and bite immediately
+    if (c.stay) {
+      return {
+        ...c,
+        stay: false,
+        selected: false,
+        ...(c.thornAt !== undefined ? { thornAt: resetThorn } : {}),
+      };
+    }
     if ((c.health ?? 1) > 1) return { ...c, health: (c.health ?? 1) - 1, selected: false };
     if (c.health === 1) broken.push(i);
     indices.push(i);
@@ -798,7 +892,24 @@ const replaceCards = (d: Draft, ids: Set<string>, ended: boolean): number[] => {
     d.roundStats.tripleCardsCleared += 1;
     if (ended) continue;
     enqueue(d, 'cardBroken');
-    if (c.bounty) emit(d, 'pinata_break', dealDamage(d, c.bounty * foeMultiplier(d)), undefined, { slots: [i] });
+    if (c.bounty) {
+      if (paidSet.has(c.id)) {
+        // Bounty was already added to the breaking Set's flat damage before multipliers: emit visual burst only
+        emit(d, 'pinata_break', undefined, undefined, { slots: [i] });
+      } else {
+        emit(d, 'pinata_break', dealDamage(d, c.bounty * d._setMultiplier * foeMultiplier(d)), undefined, { slots: [i] });
+      }
+    }
+  }
+  if (d.paidPinataIds?.length) {
+    d.paidPinataIds = d.paidPinataIds.filter(id => !ids.has(id));
+  }
+  if (d.burnMults && Object.keys(d.burnMults).length > 0) {
+    const nextMults: Record<string, number> = {};
+    for (const [k, v] of Object.entries(d.burnMults)) {
+      if (!ids.has(k)) nextMults[k] = v;
+    }
+    d.burnMults = nextMults;
   }
   return indices;
 };
@@ -852,8 +963,40 @@ const autoSet = (d: Draft, source?: 'scoop') => {
   const sets = allSets(d.board.filter(c => !d.replacing.includes(c.id)), d.attributes);
   if (sets.length === 0) return;
   const set = d._rng.pick(sets);
-  applyMatch(d, set, set.map(baseCardReward), undefined, { auto: true });
-  const ids = new Set(set.map(c => c.id));
+  // Allow auto/echoed Sets to break linked partners (linkDestroyed) just like player Sets!
+  const linkedPos: number[] = [];
+  if (d.connections.length > 0) {
+    const setPos = new Set(set.map(c => d.board.findIndex(b => b.id === c.id)).filter(i => i >= 0));
+    const visited = new Set<number>(setPos);
+    const traversed = new Set<number>();
+    for (const pos of setPos) {
+      if (traversed.has(pos)) continue;
+      for (const p of getLinkedDestructionPositions(d.connections, pos, traversed)) {
+        if (visited.has(p) || !touchable(d, p) || (d.board[p].health ?? 1) > 1) continue;
+        visited.add(p);
+        linkedPos.push(p);
+      }
+    }
+  }
+  const linkedCards = linkedPos.map(p => d.board[p]);
+  const allCards = [...set, ...linkedCards];
+  const allRewards: CardReward[] = [
+    ...set.map(baseCardReward),
+    ...linkedCards.map(c => ({ cardId: c.id, points: 1, money: 1, effectType: 'connected' as const })),
+  ];
+  applyMatch(d, allCards, allRewards, undefined, { auto: true });
+  if (linkedCards.length > 0) {
+    emit(d, 'link_burst', undefined, String(linkedCards.length), { slots: linkedPos, cards: linkedCards });
+    for (let k = 0; k < linkedCards.length; k++) {
+      for (const bw of rollBridges(d, 'onDestruction')) {
+        if (bw.bridgeEffect?.effect === 'heal') {
+          heal(d, bw.bridgeEffect.amount ?? 1);
+          enqueue(d, 'weapon', 'heal');
+        }
+      }
+    }
+  }
+  const ids = new Set(allCards.map(c => c.id));
   d.replacing = d.replacing.filter(id => !ids.has(id));
   const indices = replaceCards(d, ids, false);
   if (indices.length) refill(d, indices);
@@ -926,7 +1069,10 @@ const buildRun = (level: LevelDef, save: AdventureSave, opts: CreateRunOptions):
   const arcanaIds = gear ? loadout.arcana : [];
   const attributes = level.rules.attributes;
   const baseSize = level.rules.boardSize ?? getBoardSizeForAttributes(attributes.length);
-  const boardSize = Math.min(MAX_BOARD, Math.max(baseSize, gear ? baseSize + (stats.fieldSize - DEFAULT_PLAYER_STATS.fieldSize) : baseSize));
+  const roleBoardCards = gear ? Math.round(loadout.modifiers.startingBoardCards ?? 0) : 0;
+  const desiredBoardSize = Math.max(baseSize, gear ? baseSize + (stats.fieldSize - DEFAULT_PLAYER_STATS.fieldSize) + roleBoardCards : baseSize);
+  const boardSize = Math.min(MAX_BOARD, desiredBoardSize);
+  const boardOverflow = Math.max(0, desiredBoardSize - MAX_BOARD);
   const first = createFoe(level.foes[0]);
   const rules = arcanaRules(arcanaIds);
   const untimedMoves = rules.untimedMoves;
@@ -976,6 +1122,11 @@ const buildRun = (level: LevelDef, save: AdventureSave, opts: CreateRunOptions):
     elapsedMs: 0,
     lastMatchAtMs: 0,
     replacing: [],
+    paidPinataIds: [],
+    burnMults: {},
+    hintUsedThisSet: false,
+    bonusCombo: 0,
+    catalystRecipeId: null,
     coins: 0,
     xp: 0,
     xpLevel: 0,
@@ -1056,9 +1207,11 @@ const buildRun = (level: LevelDef, save: AdventureSave, opts: CreateRunOptions):
   }
   d.events = []; // don't coach-mark the deal itself
   d._lines = [];
+  if (boardOverflow > 0) empowerBoard(d, boardOverflow);
   startFoe(d);
   placeOpeningTraps(d);
-  if (d.stats.startingConnections > 0) addRandomConnections(d, d.stats.startingConnections);
+  const startLinks = d.stats.startingConnections + Math.round(mods(d).startingLinks ?? 0);
+  if (startLinks > 0) addRandomConnections(d, startLinks);
   seedGrowth(d);
   enqueue(d, 'fightStart');
   enqueue(d, 'waveStart');
@@ -1092,6 +1245,10 @@ const resolveLineSource = (d: Draft, key?: string): { label?: string; sourceRef?
   const base = key.split('#')[0];
   if (base.startsWith('node:')) return { label: getSkillNode(base.slice(5))?.name ?? base, sourceRef: base };
   if (base.startsWith('evo:')) return { label: getRecipe(base.slice(4))?.name ?? base, sourceRef: base };
+  if (base.startsWith('role:')) {
+    const role = base.slice(5) as WeaponRole;
+    return { label: `${roleLabel(role)} Set`, sourceRef: base };
+  }
   const slot = /^w(\d+):(.*)$/.exec(base);
   if (slot) {
     const w = d.weapons[Number(slot[1])];
@@ -1219,6 +1376,7 @@ const reduceRun = (state: RunState, action: RunAction): RunState => {
       const before = d.totalDamage;
       applyMatch(d, action.cards, action.rewards, action.effects, { hinted: action.hinted });
       drain(d);
+      d._setMultiplier = 1;
       finalizeTurnIgnition(d, before);
       d.biggestHit = Math.max(d.biggestHit, d.totalDamage - before);
       break;
@@ -1287,29 +1445,58 @@ const reduceRun = (state: RunState, action: RunAction): RunState => {
       const idx = d.board.findIndex(c => c.id === action.card.id);
       if (idx === -1) return state;
       const linked = d.connections.length
-        ? getLinkedDestructionPositions(d.connections, idx, new Set([idx])).filter(
-            p => p >= 0 && p < d.board.length && (d.board[p].health ?? 1) <= 1 && !d.board[p].hasEvolutionItem
+        ? getLinkedDestructionPositions(d.connections, idx, new Set()).filter(
+            p => p !== idx && p >= 0 && p < d.board.length && (d.board[p].health ?? 1) <= 1 && !d.board[p].hasEvolutionItem
           )
         : [];
       const burned = [idx, ...linked];
-      emit(d, 'hit', dealDamage(d, burned.length * (1 + (d.stats.burnDamage ?? 0)) * foeMultiplier(d)), 'Burn', { slots: burned });
+      const baseBurnMult = d.burnMults?.[action.card.id] ?? 1;
+      const rawBurn = burned.reduce((sum, i) => {
+        const cMult = d.burnMults?.[d.board[i].id] ?? baseBurnMult;
+        return sum + (1 + (d.stats.burnDamage ?? 0)) * cMult;
+      }, 0);
+      emit(d, 'hit', dealDamage(d, rawBurn * foeMultiplier(d)), 'Burn', { slots: burned });
       addCoins(d, burned.length);
-      for (const bw of rollBridges(d, 'onDestruction')) if (bw.bridgeEffect?.effect === 'heal') heal(d, bw.bridgeEffect.amount ?? 1);
-      // 10% chance the fire jumps to a neighbour
+      // Soul Harvest: roll onDestruction once per burned card (including linked partners)
+      for (let k = 0; k < burned.length; k++) {
+        for (const bw of rollBridges(d, 'onDestruction')) {
+          if (bw.bridgeEffect?.effect === 'heal') {
+            heal(d, bw.bridgeEffect.amount ?? 1);
+            enqueue(d, 'weapon', 'heal');
+          }
+        }
+      }
+      // 10% chance the fire jumps to a neighbour (inheriting the triggering Set's burnMult)
       if (d._rng.next() < 0.1) {
         const burnedSet = new Set(burned);
         const adj = getAdjacentIndices(idx, d.board.length).filter(i => d.board[i] && !d.board[i].onFire && !burnedSet.has(i) && !d.board[i].hasEvolutionItem);
         if (adj.length) {
           const t = d._rng.pick(adj);
+          if (baseBurnMult !== 1) d.burnMults = { ...(d.burnMults ?? {}), [d.board[t].id]: baseBurnMult };
           updateCards(d, [t], c => ({ ...c, onFire: true, fireStartTime: d.elapsedMs + 1 }));
         }
       }
       const hadCatalyst = burned.some(i => d.board[i].hasEvolutionItem);
+      const paidPinatas = new Set(d.paidPinataIds ?? []);
       for (const i of burned) {
-        if (d.board[i].health === 1) {
+        const c = d.board[i];
+        if (c.health === 1) {
           d.roundStats.tripleCardsCleared += 1;
           enqueue(d, 'cardBroken');
+          // Fix Piñata + Flint Spark burn bug: pay c.bounty (scaled by burnMult) when a primed Piñata burns out!
+          if (c.bounty && !paidPinatas.has(c.id)) {
+            const bMult = d.burnMults?.[c.id] ?? baseBurnMult;
+            emit(d, 'pinata_break', dealDamage(d, c.bounty * bMult * foeMultiplier(d)), undefined, { slots: [i] });
+          }
         }
+      }
+      if (d.burnMults && Object.keys(d.burnMults).length > 0) {
+        const burnedIds = new Set(burned.map(i => d.board[i].id));
+        const nextMults: Record<string, number> = {};
+        for (const [k, v] of Object.entries(d.burnMults)) {
+          if (!burnedIds.has(k)) nextMults[k] = v;
+        }
+        d.burnMults = nextMults;
       }
       enqueue(d, 'cardBurned');
       linked.forEach(() => enqueue(d, 'linkDestroyed'));
@@ -1322,23 +1509,27 @@ const reduceRun = (state: RunState, action: RunAction): RunState => {
     case 'TICK': {
       if (d.status !== 'playing') return state;
       d._clock = true;
-      d.elapsedMs += action.ms;
-      if (d.arcanaBurnCooldownMs > 0) d.arcanaBurnCooldownMs = Math.max(0, d.arcanaBurnCooldownMs - action.ms);
-      decayCombo(d);
-      if (d.frozenMs > 0) {
-        // Deep Freeze & freeze effects: clock, foe, fuses, evolutions and Simplify stand still
-        d.frozenMs = Math.max(0, d.frozenMs - action.ms);
-      } else {
-        tickClock(d, action.ms);
+      // While frozen: do NOT advance elapsedMs or tickGear (Glass Sword, Thorns, Fuse, Curse, Fog, Potato truly freeze!)
+      const frozenUsed = d.frozenMs > 0 ? Math.min(d.frozenMs, action.ms) : 0;
+      if (frozenUsed > 0) d.frozenMs = Math.max(0, d.frozenMs - frozenUsed);
+      const activeMs = action.ms - frozenUsed;
+      if (activeMs > 0) {
+        d.elapsedMs += activeMs;
+        if (d.arcanaBurnCooldownMs > 0) d.arcanaBurnCooldownMs = Math.max(0, d.arcanaBurnCooldownMs - activeMs);
+        decayCombo(d);
+        tickClock(d, activeMs);
+        checkIdle(d);
+        tickPassives(d);
+        tickGear(d);
       }
-      checkIdle(d);
-      tickPassives(d);
-      tickGear(d);
       drain(d);
       break;
     }
 
     case 'USE_HINT': {
+      // Block spamming USE_HINT without finding a Set (closes Safe Bet infinite zero-Set exploit)
+      if (d.hintUsedThisSet) return state;
+      d.hintUsedThisSet = true;
       d.stats = { ...d.stats, hints: Math.max(0, d.stats.hints - 1) };
       d.roundStats.hintsUsed += 1;
       enqueue(d, 'hintUsed');
@@ -1391,17 +1582,22 @@ const reduceRun = (state: RunState, action: RunAction): RunState => {
       d.foeHp = hp;
       d.foeMaxHp = hp;
       d.shopOptions = [];
+      d.hintUsedThisSet = false;
+      d.paidPinataIds = [];
+      d.burnMults = {};
       // Links are for the wave, unless the Link Stone has grown (then they stay where they are)
       if (!(mods(d).keepLinks ?? 0)) d.connections = [];
       d.setsThisWave = 0;
       d.parry = initParryState(d.level, def);
       d.status = 'playing';
+      refreshSources(d);
       onWaveStartPassives(d);
       onWaveStartGear(d);
       resetFoeBelowRules(d);
       emit(d, 'wave', d.wave + 1);
       startFoe(d);
-      if (d.stats.startingConnections > 0) addRandomConnections(d, d.stats.startingConnections);
+      const waveLinks = d.stats.startingConnections + Math.round(mods(d).startingLinks ?? 0);
+      if (waveLinks > 0) addRandomConnections(d, waveLinks);
       enqueue(d, 'waveStart');
       drain(d);
       break;

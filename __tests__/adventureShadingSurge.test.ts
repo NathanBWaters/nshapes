@@ -1,6 +1,7 @@
 import { LEVELS, getLevel } from '@/adventure/data/levels';
 import { SURGE_RULES } from '@/adventure/data/rules';
 import { challengeProgress } from '@/adventure/engine/challenges';
+import { buildDamageStory } from '@/adventure/engine/damageStory';
 import { hasAnySet } from '@/adventure/engine/sets';
 import type { RunState } from '@/adventure/types';
 import { eventsOf, playSet, startFight, testLevel, tick } from './testUtils/adventureFight';
@@ -72,13 +73,23 @@ describe('Shading Surge', () => {
     expect(hp - s.foeHp).toBe(3 * 2 * SURGE_RULES.multiplier);
   });
 
-  it('flat per-Set bonuses are added after the ×5, not multiplied by it', () => {
+  it('flat per-Set bonuses are added BEFORE the ×5 Shading Surge multiplier (add-then-multiply)', () => {
     let s = fight();
     s = tick(s, SURGE_RULES.calmMs);
     s = { ...s, bonusDamagePerMatch: 2 };
     const hp = s.foeHp;
     s = playSet(s);
-    expect(hp - s.foeHp).toBe(3 * SURGE_RULES.multiplier + 2);
+    expect(hp - s.foeHp).toBe((3 + 2) * SURGE_RULES.multiplier);
+    const entry = s.log[s.log.length - 1];
+    expect(entry.set?.multItems).toContainEqual(
+      expect.objectContaining({ label: 'Shading Surge', amount: SURGE_RULES.multiplier })
+    );
+    expect(entry.set?.multiplier).toBe(SURGE_RULES.multiplier);
+
+    const story = buildDamageStory(s);
+    expect(Math.round(story.totalDamage)).toBe(25);
+    const sum = story.sources.reduce((acc, src) => acc + src.totalDamage, 0);
+    expect(Math.abs(sum - story.totalDamage)).toBeLessThanOrEqual(story.sources.length);
   });
 
   it('cards dealt during the surge are shaded, cards dealt after it are solid', () => {

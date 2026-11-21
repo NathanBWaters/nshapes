@@ -360,4 +360,48 @@ describe('Grace Match Rewards Display', () => {
     const [, rewards] = onMatch.mock.calls[0];
     expect(rewards[0].effectType).toBe('grace');
   });
+
+  it('blocks spamming Hint while hintCards are already highlighted on the board', () => {
+    const cards = [...createValidSetCards(), ...createFillerCards()];
+    const onUseHint = jest.fn();
+    const { rerender } = render(
+      <GameBoard
+        cards={cards}
+        onMatch={jest.fn()}
+        onInvalidSelection={jest.fn()}
+        onUseHint={onUseHint}
+        triggerHint={1}
+        playerStats={{ ...defaultPlayerStats, hints: 3 }}
+        isPlayerTurn={true}
+        activeAttributes={['shape', 'color', 'number']}
+      />
+    );
+    expect(onUseHint).toHaveBeenCalledTimes(1);
+    // Subsequent hint triggers while hintCards are still highlighted on board must be blocked
+    rerender(
+      <GameBoard
+        cards={cards}
+        onMatch={jest.fn()}
+        onInvalidSelection={jest.fn()}
+        onUseHint={onUseHint}
+        triggerHint={2}
+        playerStats={{ ...defaultPlayerStats, hints: 2 }}
+        isPlayerTurn={true}
+        activeAttributes={['shape', 'color', 'number']}
+      />
+    );
+    rerender(
+      <GameBoard
+        cards={cards}
+        onMatch={jest.fn()}
+        onInvalidSelection={jest.fn()}
+        onUseHint={onUseHint}
+        triggerHint={3}
+        playerStats={{ ...defaultPlayerStats, hints: 2 }}
+        isPlayerTurn={true}
+        activeAttributes={['shape', 'color', 'number']}
+      />
+    );
+    expect(onUseHint).toHaveBeenCalledTimes(1);
+  });
 });

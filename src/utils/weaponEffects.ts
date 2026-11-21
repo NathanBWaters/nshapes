@@ -112,23 +112,61 @@ export const getExplosiveCards = (
 };
 
 /**
- * Get cards to destroy with laser (entire row or column)
+ * Get cards to destroy with laser (entire row or column).
+ * Set-geometric aiming: if 2+ matched cards share a row or column (with at least
+ * one other card on that line), aim the laser along that axis through that card!
  */
 export const getLaserCards = (board: Card[], matchedCards: Card[]): Card[] => {
   const cardsToDestroy: Card[] = [];
+  const matchedIdSet = new Set(matchedCards.map(mc => mc.id));
+  const matchedIndices = matchedCards
+    .map(mc => board.findIndex(c => c.id === mc.id))
+    .filter(i => i !== -1);
+  if (matchedIndices.length === 0) return cardsToDestroy;
 
-  // Pick a random matched card as the laser origin
-  const originCard = matchedCards[Math.floor(Math.random() * matchedCards.length)];
-  const originIndex = board.findIndex(c => c.id === originCard.id);
-  if (originIndex === -1) return cardsToDestroy;
+  const { cols } = getGridDimensions(board.length);
+  const rowGroups = new Map<number, number[]>();
+  const colGroups = new Map<number, number[]>();
+  for (const idx of matchedIndices) {
+    const r = Math.floor(idx / cols);
+    const c = idx % cols;
+    rowGroups.set(r, [...(rowGroups.get(r) ?? []), idx]);
+    colGroups.set(c, [...(colGroups.get(c) ?? []), idx]);
+  }
+  const hasTargetsOnLine = (idx: number, rowAxis: boolean) =>
+    getLineIndices(idx, board.length, rowAxis).some(i => board[i] && !matchedIdSet.has(board[i].id));
 
-  // Randomly choose row or column
-  const isRow = Math.random() < 0.5;
+  const alignedRows = [...rowGroups.values()].filter(v => v.length >= 2 && hasTargetsOnLine(v[0], true));
+  const alignedCols = [...colGroups.values()].filter(v => v.length >= 2 && hasTargetsOnLine(v[0], false));
+
+  let originIndex: number;
+  let isRow: boolean;
+  if (alignedRows.length > 0 && alignedCols.length > 0) {
+    if (Math.random() < 0.5) {
+      isRow = true;
+      originIndex = alignedRows[Math.floor(Math.random() * alignedRows.length)][0];
+    } else {
+      isRow = false;
+      originIndex = alignedCols[Math.floor(Math.random() * alignedCols.length)][0];
+    }
+  } else if (alignedCols.length > 0) {
+    isRow = false;
+    originIndex = alignedCols[Math.floor(Math.random() * alignedCols.length)][0];
+  } else if (alignedRows.length > 0) {
+    isRow = true;
+    originIndex = alignedRows[Math.floor(Math.random() * alignedRows.length)][0];
+  } else {
+    originIndex = matchedIndices[Math.floor(Math.random() * matchedIndices.length)];
+    // If the random axis would hit zero non-matched cards (e.g. 3 matched in one row), fire perpendicular
+    const tryRow = Math.random() < 0.5;
+    isRow = hasTargetsOnLine(originIndex, tryRow) ? tryRow : !tryRow;
+  }
+
   const lineIndices = getLineIndices(originIndex, board.length, isRow);
 
   lineIndices.forEach(idx => {
     const card = board[idx];
-    if (card && !matchedCards.some(mc => mc.id === card.id)) {
+    if (card && !matchedIdSet.has(card.id)) {
       cardsToDestroy.push(card);
     }
   });
@@ -365,16 +403,21 @@ export const processWeaponEffects = (
     }
   }
 
-  // Laser effect - each laser weapon rolls independently
-  // If no weapons array provided, fall back to single roll with combined chance
-  if (weapons && weapons.length > 0) {
-    // Get all laser weapons and roll each independently
-    const laserWeapons = weapons.filter(w => w.specialEffect === 'laser' && w.effects.laserChance);
+  // Laser effect - each laser weapon rolls independently, scaled by playerStats.laserChance
+  // so Second Chance luck, weaponChanceScale.laser (Searchlight / Cascade Beam), and enemy counters all apply!
+  const laserWeapons = weapons && weapons.length > 0
+    ? weapons.filter(w => w.specialEffect === 'laser' && (w.effects.laserChance ?? 0) > 0)
+    : [];
+  if (laserWeapons.length > 0) {
+    const rawLaserSum = laserWeapons.reduce((sum, w) => sum + (w.effects.laserChance || 0), 0);
+    // When playerStats.laserChance > 0 (all real runs), scale each weapon proportionally to effective playerStats.laserChance;
+    // when playerStats.laserChance === 0 (legacy unit tests passing bare DEFAULT_PLAYER_STATS + mock weapons), fall back to raw chance.
+    const laserScale = playerStats.laserChance > 0 && rawLaserSum > 0 ? playerStats.laserChance / rawLaserSum : 1;
     const laserCardIdSet = new Set<string>();
     let lasersActivated = 0;
 
     laserWeapons.forEach(weapon => {
-      const chance = weapon.effects.laserChance || 0;
+      const chance = Math.min(100, (weapon.effects.laserChance || 0) * laserScale);
       if (Math.random() * 100 < chance) {
         // This laser fires! Get cards for this laser
         const thisLaserCards = getLaserCards(board, matchedCards);
@@ -399,7 +442,7 @@ export const processWeaponEffects = (
       result.notifications.push(`${laserText} +${result.laserCards.length * 2}`);
     }
   } else if (capped.laser > 0 && Math.random() * 100 < capped.laser) {
-    // Fallback: single roll with combined chance (for backward compatibility)
+    // Fallback: single roll with combined chance (for backward compatibility or non-laser-tagged sources)
     result.laserCards = getLaserCards(board, matchedCards);
     result.laserCards = result.laserCards.filter(
       lc => !result.explosiveCards.some(ec => ec.id === lc.id) && !echoCardIds.has(lc.id)
@@ -604,15 +647,23 @@ export const processWeaponEffects = (
       }
     }
 
+    // Soul Harvest (onDestruction): roll once PER destroyed card (matching description!)
     const destroyedCount =
       result.explosiveCards.length + result.laserCards.length + result.ricochetCards.length;
     if (destroyedCount > 0) {
-      for (const b of rollBridgeEffects('onDestruction', weapons)) {
-        if (b.effect === 'heal') {
-          const amt = b.amount ?? 1;
-          result.bonusHealing += amt;
-          result.notifications.push(`${b.weaponName}: +${amt} HP`);
+      let totalHeal = 0;
+      let lastWeaponName = '';
+      for (let i = 0; i < destroyedCount; i++) {
+        for (const b of rollBridgeEffects('onDestruction', weapons)) {
+          if (b.effect === 'heal') {
+            totalHeal += b.amount ?? 1;
+            lastWeaponName = b.weaponName;
+          }
         }
+      }
+      if (totalHeal > 0) {
+        result.bonusHealing += totalHeal;
+        result.notifications.push(`${lastWeaponName}: +${totalHeal} HP`);
       }
     }
 

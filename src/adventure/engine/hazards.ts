@@ -90,18 +90,27 @@ export const placeOpeningTraps = (d: Draft) => {
 export const cleanseBoard = (d: Draft) => {
   const bombIds = new Set(d.timeBombIds);
   const idx: number[] = [];
+  let liftedFog = 0;
   d.board.forEach((c, i) => {
     if (c.snare || c.isFaceDown || bombIds.has(c.id)) idx.push(i);
+    if (c.isFaceDown && (c.fogBonus ?? 0) > 0) liftedFog += 1;
   });
   d.board.forEach((c, i) => {
     if (c.snare) defused(d, 'snare', undefined, i);
     if (bombIds.has(c.id)) defused(d, 'bomb', undefined, i);
   });
   d.timeBombIds = [];
-  updateCards(d, idx, c => ({
-    ...c,
-    snare: undefined,
-    isFaceDown: false,
-    ...(bombIds.has(c.id) ? { hasCountdown: false, countdownTimer: undefined } : {}),
-  }));
+  const gambleScale = 1 + (mods(d).gambleBonusPct ?? 0) / 100;
+  updateCards(d, idx, c => {
+    const hadFog = c.isFaceDown && (c.fogBonus ?? 0) > 0;
+    const { fogFlipAt: _at, fogBonus, ...rest } = c;
+    return {
+      ...rest,
+      snare: undefined,
+      isFaceDown: false,
+      ...(hadFog ? { bonusPoints: (c.bonusPoints ?? 0) + Math.round((fogBonus ?? 0) * gambleScale) } : {}),
+      ...(bombIds.has(c.id) ? { hasCountdown: false, countdownTimer: undefined } : {}),
+    };
+  });
+  if (liftedFog > 0) enqueue(d, 'trick', undefined, 'fog');
 };
