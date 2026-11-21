@@ -147,3 +147,161 @@ describe('a Catalyst never re-triggers an evolution that is running', () => {
     expect(s.evolutionsTriggered).toBe(2);
   });
 });
+
+describe('Wave 2 evolution overhaul invariants & live behavior', () => {
+  const byId = (id: string) => {
+    const r = EVOLUTION_RECIPES.find(x => x.id === id);
+    if (!r) throw new Error(`Missing recipe ${id}`);
+    return r;
+  };
+  const level = testLevel({
+    rules: { attributes: ['shape', 'color', 'number'], boardSize: 12 },
+    foes: [{ name: 'Dummy', hp: 1e6 }],
+  });
+  const startActive = (recipeId: string, extraFeatures: ('hearts' | 'gear' | 'hints' | 'graces' | 'xp' | 'coins' | 'evolutions')[] = []) => {
+    const r = byId(recipeId);
+    const held = [r.families[0][0], r.families[1][0]];
+    let s = startFight({
+      level,
+      save: { selectedFighter: 'Pelican', armory: held, charms: held, unlockedEvolutions: ['phoenix-pyre'] },
+      features: ['hearts', 'gear', 'hints', 'graces', 'xp', 'coins', 'evolutions', ...extraFeatures],
+    });
+    const set = findSet(s)!;
+    s = { ...s, board: s.board.map(c => (c.id === set[0].id ? { ...c, hasEvolutionItem: true, evolutionReady: true } : c)) };
+    s = playSet(s, findSet(s, cards => cards.some(c => c.hasEvolutionItem))!);
+    expect(s.activeEvolutions.map(e => e.id)).toEqual([recipeId]);
+    return s;
+  };
+
+  it('has zero idle/slow wait-to-win triggers and zero dead parent triggers across all 208 recipes', () => {
+    for (const r of EVOLUTION_RECIPES) {
+      const rules = r.source.rules ?? [];
+      expect(rules.some(ru => ru.trigger.on === 'idle')).toBe(false);
+      expect(rules.some(ru => ru.when?.some(c => c.kind === 'timeSinceLastSetAtLeast'))).toBe(false);
+      expect(
+        r.source.modifiers?.conditionalDamage?.some(cd => cd.when.some(c => c.kind === 'timeSinceLastSetAtLeast')) ?? false
+      ).toBe(false);
+
+      // Field Stone without Growth Seed must never listen for weapon:growth
+      const hasField = r.families.some(f => f.includes('field-stone'));
+      const hasGrowth = r.families.some(f => f.includes('growth-seed'));
+      if (hasField && !hasGrowth) {
+        expect(rules.some(ru => ru.trigger.on === 'weapon' && ru.trigger.kind === 'growth')).toBe(false);
+      }
+
+      // Mystic Sight without a hint-gaining parent must never listen for weapon:hint
+      const hasMystic = r.families.some(f => f.includes('mystic-sight'));
+      if (hasMystic) {
+        expect(rules.some(ru => ru.trigger.on === 'weapon' && ru.trigger.kind === 'hint')).toBe(false);
+      }
+    }
+
+    // All Encore Mask recipes have evolutionStart rules so Encore Mask's opening replay always fires
+    for (const r of EVOLUTION_RECIPES.filter(x => x.families.some(f => f.includes('encore-mask')))) {
+      expect(r.source.rules?.some(ru => ru.trigger.on === 'evolutionStart')).toBe(true);
+    }
+
+    // Spark Plug does not put `time` (a WEAPON_KIND) before `doubleNext` on linkDestroyed
+    const sparkPlug = byId('spark-plug');
+    const linkRule = sparkPlug.source.rules?.find(ru => ru.trigger.on === 'linkDestroyed');
+    expect(linkRule?.effects.some(e => e.do === 'time')).toBe(false);
+  });
+
+  it('safe-bet has no mistake-refund loop and rewards hinted Sets with damage + grace', () => {
+    const safeBet = byId('safe-bet');
+    expect(safeBet.source.rules?.some(ru => ru.trigger.on === 'mistake')).toBe(false);
+    const s = startActive('safe-bet');
+    const gracesBefore = s.stats.graces;
+    const hpBefore = s.foeHp;
+    const set = findSet(s)!;
+    const after = runReducer(s, { type: 'MATCH', cards: set, rewards: set.map(c => ({ cardId: c.id, points: 1 })), hinted: true });
+    expect(after.stats.graces).toBeGreaterThanOrEqual(Math.min(after.stats.maxGraces, gracesBefore + 1));
+    expect(eventsOf(after, 'rule').some(e => e.text === 'Safe bet!')).toBe(true);
+    expect(hpBefore - after.foeHp).toBeGreaterThan(6);
+  });
+
+  it('cutting-edge grows a 12-card + Lv1 Field Stone board to 18 and fires a column laser', () => {
+    const r = byId('cutting-edge');
+    expect(r.source.rules?.some(ru => ru.effects.some(e => e.do === 'laser' && e.area.shape === 'column'))).toBe(true);
+    const s = startActive('cutting-edge');
+    // 12 base + 2 Lv1 Field Stone + 4 growBoard = 18 cards -> threshold met!
+    expect(s.board.length).toBeGreaterThanOrEqual(18);
+    const after = playSet(s);
+    expect(eventsOf(after, 'laser').length).toBeGreaterThan(0);
+  });
+
+  it('cosmic-tome grants scaled XP per active evolution on every Set', () => {
+    const s = startActive('cosmic-tome');
+    const xpBefore = s.xp;
+    const after = playSet(s);
+    expect(after.xp).toBeGreaterThan(xpBefore);
+  });
+
+  it('compass-walk removes Tightrope off-rope penalty and marks extra Magnet cards on start', () => {
+    const s = startActive('compass-walk');
+    // 1 base Magnet + 2 added by start -> at least 2 magnets live on board
+    expect(s.board.filter(c => c.magnet).length).toBeGreaterThanOrEqual(2);
+    expect(byId('compass-walk').source.modifiers?.offRopeBonus).toBe(0.5);
+  });
+
+  it('looking-glass and knife-edge repair a shattered Glass Sword on evolution start', () => {
+    for (const id of ['looking-glass', 'knife-edge'] as const) {
+      const r = byId(id);
+      const held = [r.families[0][0], r.families[1][0]];
+      let s = startFight({
+        level,
+        save: { selectedFighter: 'Pelican', armory: held, charms: held, unlockedEvolutions: ['phoenix-pyre'] },
+        features: ['hearts', 'gear', 'evolutions'],
+      });
+      s = { ...s, gear: { ...s.gear, glassBroken: true } };
+      const set = findSet(s)!;
+      s = { ...s, board: s.board.map(c => (c.id === set[0].id ? { ...c, hasEvolutionItem: true, evolutionReady: true } : c)) };
+      s = playSet(s, findSet(s, cards => cards.some(c => c.hasEvolutionItem))!);
+      expect(s.activeEvolutions.map(e => e.id)).toEqual([id]);
+      expect(s.gear.glassBroken).toBe(false);
+    }
+  });
+
+  it('gold-detector adds a Magnet mark and feeds Greedy Chest on start', () => {
+    const s = startActive('gold-detector');
+    expect(s.board.filter(c => c.magnet).length).toBeGreaterThanOrEqual(2);
+    const chest = s.board.find(c => c.chest !== undefined);
+    // Base Lv1 chest starts at 8; start feeds +6 (plus +2 growth from catalyst Set) -> >= 14
+    expect(chest?.chest ?? 0).toBeGreaterThanOrEqual(14);
+  });
+
+  it('sticker-swap and trading-cards wire Trick payoffs into stampAlbum', () => {
+    const trading = startActive('trading-cards');
+    expect(trading.gear.album.length).toBeGreaterThanOrEqual(1);
+    expect(byId('sticker-swap').source.rules?.some(ru => ru.trigger.on === 'trick' && ru.trigger.kind === 'odd' && ru.effects.some(e => e.do === 'stampAlbum'))).toBe(true);
+  });
+
+  it('ancient-relic and deep-winter fast-forward slow trick timers with advanceTricks', () => {
+    for (const id of ['ancient-relic', 'deep-winter'] as const) {
+      const rules = byId(id).source.rules ?? [];
+      expect(rules.some(ru => ru.trigger.on === 'evolutionStart' && ru.effects.some(e => e.do === 'advanceTricks'))).toBe(true);
+      expect(rules.some(ru => ru.trigger.on === 'set' && ru.effects.some(e => e.do === 'advanceTricks'))).toBe(true);
+    }
+    const winter = startActive('deep-winter');
+    const ice = winter.board.find(c => (c.frozen ?? 0) > 0);
+    // Base iceSets=7, -2 from modifier -> 5, chipped on start & Catalyst Set -> <= 4
+    if (ice) expect(ice.frozen!).toBeLessThanOrEqual(4);
+  });
+
+  it('standing-ovation replays its evolutionStart rules through Encore Mask at finale', () => {
+    let s = startActive('standing-ovation');
+    expect(s.doubleNext).toBeGreaterThanOrEqual(1);
+    const hpBeforeEnd = s.foeHp;
+    s = tick(s, 32000, 1000);
+    expect(s.activeEvolutions).toEqual([]);
+    // Encore Mask hit (+10) + finale blast & +10 + replayed evolutionStart (+8)
+    expect(hpBeforeEnd - s.foeHp).toBeGreaterThanOrEqual(28);
+  });
+
+  it('purity-lens rewards both 1-diff Sets and Rainbow Sets', () => {
+    const r = byId('purity-lens');
+    expect(r.source.modifiers?.conditionalDamage?.some(cd => cd.when.some(c => c.kind === 'diffCount' && c.n === 1))).toBe(true);
+    expect(r.source.modifiers?.rainbowMultiplierBonus).toBeGreaterThan(0);
+    expect(r.source.rules?.some(ru => ru.trigger.on === 'rainbow')).toBe(true);
+  });
+});

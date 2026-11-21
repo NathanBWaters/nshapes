@@ -56,13 +56,14 @@ export const SIGNATURE_RECIPES: EvolutionRecipe[] = [
     icon: 'lorc/fireball',
     families: [fam('explosion'), fam('healing')],
     familyText: 'Explosion + Healing',
-    activeText: 'Every heal or lost heart blasts a 3×2 block. Every Set has a 25% chance to heal 1.',
+    activeText: 'Heals 1 & blasts 3×2 (also on hurt). Every 3rd Set heals 1 & blasts 2×2. Every heal deals 5.',
     flavor: 'Burn down, rise up, burn everything else down. Getting hurt has never felt this good.',
     source: {
       rules: [
-        { trigger: { on: 'healed' }, effects: [{ do: 'explode', area: { shape: 'block', cols: 3, rows: 2 } }], callout: 'Phoenix!' },
+        { trigger: { on: 'evolutionStart' }, effects: [{ do: 'heal', amount: 1 }, { do: 'explode', area: { shape: 'block', cols: 3, rows: 2 } }] },
         { trigger: { on: 'hurt' }, effects: [{ do: 'explode', area: { shape: 'block', cols: 3, rows: 2 } }], callout: 'Rebirth!' },
-        { trigger: { on: 'set' }, when: [{ kind: 'chance', pct: 25 }], effects: [{ do: 'heal', amount: 1 }] },
+        { trigger: { on: 'everyNthSet', n: 3 }, effects: [{ do: 'heal', amount: 1 }, { do: 'explode', area: { shape: 'block', cols: 2, rows: 2 } }], callout: 'Phoenix!' },
+        { trigger: { on: 'healed' }, effects: [{ do: 'damage', amount: 5 }] },
       ],
     },
   },
@@ -72,10 +73,11 @@ export const SIGNATURE_RECIPES: EvolutionRecipe[] = [
     icon: 'lorc/fire-ring',
     families: [fam('fire'), fam('echo')],
     familyText: 'Fire + Echo',
-    activeText: 'Every echo ignites 2 cards. Every card that burns out sets another card alight.',
+    activeText: 'Ignites 1 card right away. Every echo ignites 2 cards. Every burned-out card sets another card alight.',
     flavor: 'The Set you made echoes, the echo catches, and the meadow remembers the flame.',
     source: {
       rules: [
+        { trigger: { on: 'evolutionStart' }, effects: [{ do: 'ignite', count: 1 }] },
         { trigger: { on: 'weapon', kind: 'echo' }, effects: [{ do: 'ignite', count: 2 }], callout: 'Wildfire!' },
         { trigger: { on: 'cardBurned' }, effects: [{ do: 'ignite', count: 1 }] },
       ],
@@ -87,10 +89,11 @@ export const SIGNATURE_RECIPES: EvolutionRecipe[] = [
     icon: 'lorc/laser-blast',
     families: [fam('laser'), fam('grace')],
     familyText: 'Laser + Grace',
-    activeText: 'Every grace save fires a row laser. Every 3rd Set fires a column laser.',
+    activeText: 'Gives 1 grace. Every grace save fires a row laser. Every 3rd Set fires a column laser.',
     flavor: 'Forgiven, then avenged. Near misses come back as light.',
     source: {
       rules: [
+        { trigger: { on: 'evolutionStart' }, effects: [{ do: 'grace', amount: 1 }] },
         { trigger: { on: 'graceUsed' }, effects: [{ do: 'laser', area: { shape: 'row' } }], callout: 'Judgement!' },
         { trigger: { on: 'everyNthSet', n: 3 }, effects: [{ do: 'laser', area: { shape: 'column' } }] },
       ],
@@ -102,10 +105,12 @@ export const SIGNATURE_RECIPES: EvolutionRecipe[] = [
     icon: 'delapouite/coins-pile',
     families: [fam('coin'), fam('time')],
     familyText: 'Coin + Time',
-    activeText: 'Every coin you gain adds +1s and deals 2. Every time gain hits the foe for 4.',
+    activeText: 'Turns 2 cards gold; bonus cards pay 2 coins. Every coin gain adds +1s and deals 2. Every time gain deals 4.',
     flavor: 'Time is money. Money is time. Both of them hurt, if you throw them hard enough.',
     source: {
       rules: [
+        { trigger: { on: 'evolutionStart' }, effects: [{ do: 'convert', to: 'gold', count: 2 }] },
+        { trigger: { on: 'bonusCardMatched' }, effects: [{ do: 'coins', amount: 2 }] },
         { trigger: { on: 'weapon', kind: 'coin' }, effects: [{ do: 'time', seconds: 1 }, { do: 'damage', amount: 2 }] },
         { trigger: { on: 'weapon', kind: 'time' }, effects: [{ do: 'damage', amount: 4 }], callout: 'Golden!' },
       ],
@@ -117,11 +122,12 @@ export const SIGNATURE_RECIPES: EvolutionRecipe[] = [
     icon: 'lorc/chained-arrow-heads',
     families: [fam('hint'), fam('ricochet')],
     familyText: 'Hint + Ricochet',
-    activeText: 'Every hint you use ricochets into 3 cards and deals 3. Every 2nd Set gives you a hint.',
+    activeText: 'Gives 1 hint, and another every 2nd Set. Matching a hinted Set ricochets into 3 cards and deals 4.',
     flavor: 'Point at a Set, and a swarm of shards points at everything else.',
     source: {
       rules: [
-        { trigger: { on: 'hintUsed' }, effects: [{ do: 'ricochet', count: 3 }, { do: 'damage', amount: 3 }], callout: 'Swarm!' },
+        { trigger: { on: 'evolutionStart' }, effects: [{ do: 'hint', amount: 1 }] },
+        { trigger: { on: 'set' }, when: [{ kind: 'hintedSet' }], effects: [{ do: 'ricochet', count: 3 }, { do: 'damage', amount: 4 }], callout: 'Swarm!' },
         { trigger: { on: 'everyNthSet', n: 2 }, effects: [{ do: 'hint', amount: 1 }] },
       ],
     },
@@ -132,14 +138,14 @@ export const SIGNATURE_RECIPES: EvolutionRecipe[] = [
     icon: 'lorc/bright-explosion',
     families: [fam('growth'), fam('explosion')],
     familyText: 'Growth + Explosion',
-    activeText: 'Every Set grows the board by 2. At 18+ cards, a Set detonates a 3×2 block.',
+    activeText: 'Every Set grows the board by 2 (empowers at max). At 15+ cards, every Set blasts a 3×2 block.',
     flavor: 'Grow the universe until it can not hold itself. Then let it go.',
     source: {
       rules: [
         { trigger: { on: 'set' }, effects: [{ do: 'growBoard', count: 2 }] },
         {
           trigger: { on: 'set' },
-          when: [{ kind: 'boardAtLeast', n: 18 }],
+          when: [{ kind: 'boardAtLeast', n: 15 }],
           effects: [{ do: 'explode', area: { shape: 'block', cols: 3, rows: 2 } }],
           callout: 'BIG BANG!',
         },
@@ -152,11 +158,12 @@ export const SIGNATURE_RECIPES: EvolutionRecipe[] = [
     icon: 'lorc/broken-heart-zone',
     families: [fam('life'), fam('laser')],
     familyText: 'Life + Laser',
-    activeText: 'Fires a row laser and a column laser. Every lost heart fires a row laser. Every heal makes your next Set deal ×2.',
+    activeText: 'Fires row & column lasers. At full hearts or on hurt, fires a row laser. Every heal doubles your next Set.',
     flavor: 'Every drop you spill is a beam. Every drop you win back is a promise.',
     source: {
       rules: [
         { trigger: { on: 'evolutionStart' }, effects: [{ do: 'laser', area: { shape: 'row' } }, { do: 'laser', area: { shape: 'column' } }] },
+        { trigger: { on: 'set' }, when: [{ kind: 'heartsFull' }], effects: [{ do: 'laser', area: { shape: 'row' } }] },
         { trigger: { on: 'hurt' }, effects: [{ do: 'laser', area: { shape: 'row' } }], callout: 'Bloodline!' },
         { trigger: { on: 'healed' }, effects: [{ do: 'nextSetMultiplier', times: 2 }] },
       ],
@@ -168,10 +175,11 @@ export const SIGNATURE_RECIPES: EvolutionRecipe[] = [
     icon: 'lorc/time-trap',
     families: [fam('connector'), fam('time')],
     familyText: 'Connector + Time',
-    activeText: 'Every 3rd Set links a new pair of cards. A linked card destroyed adds +1s and deals 3.',
+    activeText: 'Links 2 pairs, plus 1 every 3rd Set. A linked card destroyed adds +1s and deals 3.',
     flavor: 'Wire the whole board into one clock, then pull the pin.',
     source: {
       rules: [
+        { trigger: { on: 'evolutionStart' }, effects: [{ do: 'link', count: 2 }] },
         { trigger: { on: 'everyNthSet', n: 3 }, effects: [{ do: 'link', count: 1 }] },
         { trigger: { on: 'linkDestroyed' }, effects: [{ do: 'time', seconds: 1 }, { do: 'damage', amount: 3 }], callout: 'Overclock!' },
       ],
@@ -183,10 +191,11 @@ export const SIGNATURE_RECIPES: EvolutionRecipe[] = [
     icon: 'lorc/cycle',
     families: [fam('ricochet'), fam('explosion')],
     familyText: 'Ricochet + Explosion',
-    activeText: 'Every blast ricochets into 2 cards. Every ricochet has a 35% chance to blast a 2×2 block.',
+    activeText: 'Ricochets 2 cards. Blasts ricochet 2 cards; ricochets have a 35% chance to blast a 2×2 block.',
     flavor: 'Shards set off charges, charges throw shards. Somewhere in the middle, the foe stops having a plan.',
     source: {
       rules: [
+        { trigger: { on: 'evolutionStart' }, effects: [{ do: 'ricochet', count: 2 }] },
         { trigger: { on: 'weapon', kind: 'explosion' }, effects: [{ do: 'ricochet', count: 2 }], callout: 'Entropy!' },
         {
           trigger: { on: 'weapon', kind: 'ricochet' },
