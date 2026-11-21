@@ -1,5 +1,5 @@
 /**
- * Starfall Spire — pure deterministic state machine.
+ * Starfall Summit — pure deterministic state machine.
  *
  * Every transition (node selection, fight completion, weapon/Arcana/skill
  * drafting, Merchant Shop purchases, Campfire rest/forge/meditate, Mystery
@@ -20,7 +20,7 @@ import { mergeSpireDamageLedger } from '@/adventure/engine/damageStory';
 import { createRng, type Rng } from '@/adventure/engine/rng';
 import { ascensionModifiers } from '../data/ascensions';
 import { generateSpireEncounter, SPIRE_WEAPON_POOL, STARTER_KITS } from '../data/encounters';
-import { getSpireEvent } from '../data/events';
+import { getSpireEvent, SPIRE_EVENTS } from '../data/events';
 import { generateActMap, reachableNodeIds } from './mapGen';
 import { newEvolutionsArmedBy } from './bridge';
 import type {
@@ -48,10 +48,16 @@ const withRng = <T>(run: SpireRun, fn: (rng: Rng) => { run: SpireRun; out?: T })
   return { ...res.run, rngState: rng.state };
 };
 
-/** Pure mid-fight XP items are excluded from Spire offers (progression lives on the Spire map). */
+/** Pure mid-fight XP items are excluded from Summit offers (progression lives on the Summit map). */
 export const SPIRE_EXCLUDED_WEAPONS: ReadonlySet<string> = new Set(['scholars-tome', 'wisdom-chain']);
 export const SPIRE_EXCLUDED_ARCANA: ReadonlySet<ArcanaId> = new Set(['scholars_gambit']);
 const ENGINE_ROLES: ReadonlySet<string> = new Set(['damage', 'tricks', 'gambles', 'chains']);
+
+const recordSeenEnemy = (seenEnemies: readonly string[] | undefined, name?: string | null): string[] => {
+  const list = seenEnemies ? [...seenEnemies] : [];
+  if (name && !list.includes(name)) list.push(name);
+  return list;
+};
 
 /**
  * Roll `count` weapon offers for drafts & shops:
@@ -144,9 +150,15 @@ export const rollSkillNodeOptions = (
   rng: Rng,
   count: number
 ): string[] => {
+  if (count <= 0) return [];
   const tree = skillTreeOf(run.fighter);
   const owned = new Set(run.skillNodes);
-  const unowned = tree.filter(n => !owned.has(n.id));
+  const seen = new Set<string>();
+  const unowned = tree.filter(n => {
+    if (owned.has(n.id) || seen.has(n.id)) return false;
+    seen.add(n.id);
+    return true;
+  });
   if (unowned.length === 0) return [];
   // Prefer nodes adjacent to roots or owned nodes so the fighter's tree grows organically
   const frontier = unowned.filter(n => n.roots.length > 0 || n.links.some(l => owned.has(l)));
@@ -154,13 +166,20 @@ export const rollSkillNodeOptions = (
   return rng.shuffle(pool).slice(0, count).map(n => n.id);
 };
 
-/** Pick `count` Arcana wildcards not yet equipped (excluding XP-only Arcana unused in Spire). */
+/** Pick `count` Arcana wildcards not yet equipped (excluding XP-only Arcana unused in Starfall Summit). */
 export const rollArcanaOptions = (
   run: Pick<SpireRun, 'arcana'>,
   rng: Rng,
   count: number
 ): ArcanaId[] => {
-  const unheld = ARCANA.map(a => a.id).filter(id => !run.arcana.includes(id) && !SPIRE_EXCLUDED_ARCANA.has(id));
+  if (count <= 0) return [];
+  const owned = new Set(run.arcana);
+  const seen = new Set<ArcanaId>();
+  const unheld = ARCANA.map(a => a.id).filter(id => {
+    if (owned.has(id) || SPIRE_EXCLUDED_ARCANA.has(id) || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
   return rng.shuffle(unheld).slice(0, count);
 };
 
@@ -196,7 +215,7 @@ export const upgradeSpireWeapon = (run: SpireRun, weaponId: string, delta = 1): 
   };
 };
 
-/** Reorder a weapon on the Spire belt (critical for positioning Understudy next to its target!). */
+/** Reorder a weapon on the Summit belt (critical for positioning Understudy next to its target!). */
 export const reorderSpireWeapon = (run: SpireRun, fromIndex: number, toIndex: number): SpireRun => {
   if (
     fromIndex < 0 ||
@@ -213,7 +232,7 @@ export const reorderSpireWeapon = (run: SpireRun, fromIndex: number, toIndex: nu
   return { ...run, weapons };
 };
 
-/** 50% of base Spire shop value refunded when selling a held weapon. */
+/** 50% of base Summit shop value refunded when selling a held weapon. */
 export const spireWeaponSellValue = (weaponId: string, level = 1): number => {
   const w = getArmoryWeapon(weaponId);
   const lv = Math.max(1, Math.min(MAX_WEAPON_LEVEL, level));
@@ -221,7 +240,7 @@ export const spireWeaponSellValue = (weaponId: string, level = 1): number => {
   return Math.max(15, Math.round(shopBase * 0.5));
 };
 
-/** Count currently locked unsold wares across all shelves of a Spire Shop. */
+/** Count currently locked unsold wares across all shelves of a Summit Shop. */
 export const countShopLocks = (shop: SpireShopState): number =>
   shop.weapons.filter(w => w.locked && !w.sold).length +
   shop.arcana.filter(a => a.locked && !a.sold).length +
@@ -235,8 +254,8 @@ const extractLockedShop = (shop: SpireShopState): SpireLockedShopItems | undefin
   return { weapons, arcana, upgrades };
 };
 
-/** Canonical Adventure `UPGRADES` offered in the Spire Merchant's Tent (slot-cap upgrades omitted since Spire is uncapped). */
-const SPIRE_SHOP_UPGRADE_IDS: readonly SpireShopUpgradeKind[] = [
+/** Canonical Adventure `UPGRADES` offered in the Summit Merchant's Tent (slot-cap upgrades omitted since Summit is uncapped). */
+export const SPIRE_SHOP_UPGRADE_IDS: readonly SpireShopUpgradeKind[] = [
   'heavy_hitter',
   'tough_hide',
   'lucky_purse',
@@ -245,6 +264,16 @@ const SPIRE_SHOP_UPGRADE_IDS: readonly SpireShopUpgradeKind[] = [
   'second_wind',
   'evolution_lab',
 ];
+
+/** Maximum tier supported by a canonical Adventure Workshop upgrade in Starfall Summit. */
+export const maxSpireUpgradeTier = (id: SpireShopUpgradeKind): number =>
+  getUpgrade(id).costs.length;
+
+/** True when a run has already reached or exceeded the maximum tier for a shop upgrade. */
+export const isSpireUpgradeMaxed = (
+  run: Pick<SpireRun, 'upgrades'>,
+  id: SpireShopUpgradeKind
+): boolean => (run.upgrades?.[id] ?? 0) >= maxSpireUpgradeTier(id);
 
 const bumpUpgrade = (run: SpireRun, id: SpireShopUpgradeKind, delta = 1): SpireRun => ({
   ...run,
@@ -278,7 +307,14 @@ const buildShopState = (
   let lockBudget = MAX_SHOP_LOCKS;
   const keptWeapons: SpireShopWeaponOffer[] = [];
   for (const lw of carryLocked?.weapons ?? []) {
-    if (lockBudget <= 0 || lw.sold || SPIRE_EXCLUDED_WEAPONS.has(lw.weaponId)) continue;
+    if (
+      lockBudget <= 0 ||
+      lw.sold ||
+      SPIRE_EXCLUDED_WEAPONS.has(lw.weaponId) ||
+      keptWeapons.some(w => w.weaponId === lw.weaponId)
+    ) {
+      continue;
+    }
     const heldLv = run.weaponLevels[lw.weaponId];
     if (heldLv !== undefined && heldLv >= MAX_WEAPON_LEVEL) continue;
     if (heldLv === undefined && lw.level > 1) {
@@ -300,14 +336,29 @@ const buildShopState = (
 
   const keptArcana: SpireShopArcanaOffer[] = [];
   for (const la of carryLocked?.arcana ?? []) {
-    if (lockBudget <= 0 || la.sold || run.arcana.includes(la.arcanaId) || SPIRE_EXCLUDED_ARCANA.has(la.arcanaId)) continue;
+    if (
+      lockBudget <= 0 ||
+      la.sold ||
+      run.arcana.includes(la.arcanaId) ||
+      SPIRE_EXCLUDED_ARCANA.has(la.arcanaId) ||
+      keptArcana.some(a => a.arcanaId === la.arcanaId)
+    ) {
+      continue;
+    }
     keptArcana.push({ ...la, sold: false, locked: true });
     lockBudget -= 1;
   }
 
   const keptUpgrades: SpireShopUpgradeOffer[] = [];
   for (const lu of carryLocked?.upgrades ?? []) {
-    if (lockBudget <= 0 || lu.sold) continue;
+    if (
+      lockBudget <= 0 ||
+      lu.sold ||
+      isSpireUpgradeMaxed(run, lu.upgradeId) ||
+      keptUpgrades.some(u => u.upgradeId === lu.upgradeId)
+    ) {
+      continue;
+    }
     keptUpgrades.push({ ...lu, sold: false, locked: true });
     lockBudget -= 1;
   }
@@ -353,7 +404,11 @@ const buildShopState = (
 
   const keptUpgradeIds = new Set(keptUpgrades.map(u => u.upgradeId));
   const freshUpgrades: SpireShopUpgradeOffer[] = rng
-    .shuffle(SPIRE_SHOP_UPGRADE_IDS.filter(id => !keptUpgradeIds.has(id)))
+    .shuffle(
+      SPIRE_SHOP_UPGRADE_IDS.filter(
+        id => !keptUpgradeIds.has(id) && !isSpireUpgradeMaxed(run, id)
+      )
+    )
     .slice(0, Math.max(0, 2 - keptUpgrades.length))
     .map(upgradeId => {
       const def = getUpgrade(upgradeId);
@@ -389,7 +444,7 @@ export const createSpireRun = (fighter: CharacterName, ascension: number, seed: 
   const rng = createRng((seed ^ 0x51a2fa11) >>> 0);
   const maxHearts = Math.max(3, kit.maxHearts + asc.maxHeartsDelta);
   const coins = Math.max(20, kit.startingCoins + asc.startingCoinsDelta);
-  const map = generateActMap(1, seed, ascension, []);
+  const map = generateActMap(1, seed, ascension, [], []);
 
   return {
     version: 1,
@@ -407,7 +462,7 @@ export const createSpireRun = (fighter: CharacterName, ascension: number, seed: 
     coins,
     startingHints: kit.startingHints,
     startingGraces: kit.startingGraces,
-    upgrades: { evolution_lab: 1 }, // Spire starts with Evolution Lab active so Catalysts flow early!
+    upgrades: { evolution_lab: 1 }, // Starfall Summit starts with Evolution Lab active so Catalysts flow early!
     extraEvolutionCap: 0,
     extraEvolutionLikelihood: 6,
     weapons: [kit.starterWeapon, kit.bonusWeapon],
@@ -418,6 +473,7 @@ export const createSpireRun = (fighter: CharacterName, ascension: number, seed: 
     currentNodeId: null,
     activeEncounter: null,
     seenEvents: [],
+    seenEnemies: [],
     reward: null,
     shop: null,
     campfire: null,
@@ -507,33 +563,36 @@ export const selectSpireNode = (run: SpireRun, nodeId: string): SpireRun => {
     });
   }
 
-  // Mystery Event
-  const eventId = node.eventId ?? 'starfall_shrine';
-  const seenEvents = base.seenEvents.includes(eventId) ? base.seenEvents : [...base.seenEvents, eventId];
-  if (eventId === 'wandering_alchemist') {
-    return withRng(base, rng => {
-      const offeredArcana = rollArcanaOptions(base, rng, 1)[0];
-      return {
-        run: {
-          ...base,
-          seenEvents,
-          phase: 'event',
-          event: { eventId, resolved: false, ...(offeredArcana ? { offeredArcana } : {}) },
-        },
-      };
-    });
-  }
-  return {
-    ...base,
-    seenEvents,
-    phase: 'event',
-    event: { eventId, resolved: false },
-  };
+  // Mystery Event — runtime safety guard swaps to an unseen event if this event was already visited
+  return withRng(base, rng => {
+    let eventId = node.eventId ?? 'starfall_shrine';
+    if (base.seenEvents.includes(eventId)) {
+      const unseen = SPIRE_EVENTS.map(e => e.id).filter(id => !base.seenEvents.includes(id));
+      if (unseen.length > 0) {
+        eventId = rng.pick(unseen);
+      }
+    }
+    const seenEvents = base.seenEvents.includes(eventId) ? base.seenEvents : [...base.seenEvents, eventId];
+    const offeredArcana = eventId === 'wandering_alchemist' ? rollArcanaOptions(base, rng, 1)[0] : undefined;
+    return {
+      run: {
+        ...base,
+        seenEvents,
+        phase: 'event',
+        event: { eventId, resolved: false, ...(offeredArcana ? { offeredArcana } : {}) },
+      },
+    };
+  });
 };
 
 export const startSpireEncounter = (run: SpireRun): SpireRun => {
   if (run.phase !== 'preview' || !run.activeEncounter) return run;
-  return { ...run, prevNodeId: undefined, phase: 'fight' };
+  return {
+    ...run,
+    prevNodeId: undefined,
+    phase: 'fight',
+    seenEnemies: recordSeenEnemy(run.seenEnemies, run.activeEncounter.name),
+  };
 };
 
 export const cancelSpirePreview = (run: SpireRun): SpireRun => {
@@ -564,7 +623,7 @@ export const cancelSpirePreview = (run: SpireRun): SpireRun => {
 };
 
 /**
- * Abandoning a live Spire battle is NEVER a free same-seed reset:
+ * Abandoning a live Summit battle is NEVER a free same-seed reset:
  *  - If at 1 ♥, retreating forfeits the run cleanly (`phase: 'defeat'`).
  *  - Otherwise it costs 1 ♥ and increments `retreats` (reshuffling the board seed)
  *    before returning to the pre-battle briefing.
@@ -592,8 +651,8 @@ export const retreatSpireBattle = (run: SpireRun, foeName?: string): SpireRun =>
 // ─── Battle Completion ──────────────────────────────────────────────────────
 
 /**
- * Resolve a finished Spire combat (`AdventureRun` handed back `RunState`).
- * In Starfall Spire, you MUST knock out the foe (`endReason === 'defeated'`) to
+ * Resolve a finished Summit combat (`AdventureRun` handed back `RunState`).
+ * In Starfall Summit, you MUST knock out the foe (`endReason === 'defeated'`) to
  * clear the floor—running out of time OR hearts ends the run!
  */
 export const completeSpireBattle = (run: SpireRun, fight: RunState): SpireRun => {
@@ -601,6 +660,7 @@ export const completeSpireBattle = (run: SpireRun, fight: RunState): SpireRun =>
   if (!enc) return run;
 
   const won = fight.status === 'won' && fight.endReason === 'defeated';
+  const seenEnemies = recordSeenEnemy(run.seenEnemies, enc.name);
   const dpm = damagePerMinute(fight);
   const mergedRecipes = [...new Set([...run.stats.forgedRecipeIds, ...fight.forgedRecipes])];
   const { sourceDamage, floorLedger } = mergeSpireDamageLedger(
@@ -633,6 +693,7 @@ export const completeSpireBattle = (run: SpireRun, fight: RunState): SpireRun =>
       ...run,
       hearts: 0,
       phase: 'defeat',
+      seenEnemies,
       stats: nextStats,
       defeatedBy: fight.foeName,
     };
@@ -641,7 +702,7 @@ export const completeSpireBattle = (run: SpireRun, fight: RunState): SpireRun =>
   // Carry over remaining hearts (clamped 1..maxHearts) + small post-fight breather on Bosses!
   const remainingHearts = Math.max(1, Math.min(run.maxHearts, fight.hearts ?? run.hearts));
   const parryBonusCoins = fight.parriesLanded * 4 + fight.perfectParriesLanded * 6;
-  // Cap per-fight bonus coins so overkill_harvest / coin builds stay rewarding without flooding the Spire shop with 5,000+ unspendable gold
+  // Cap per-fight bonus coins so overkill_harvest / coin builds stay rewarding without flooding the Summit shop with 5,000+ unspendable gold
   const maxFightCoins = 75 + run.act * 25;
   const fightCoinBonus = Math.min(maxFightCoins, Math.round(fight.coins * 0.5));
   const coinsEarned = enc.coinReward + fightCoinBonus + parryBonusCoins;
@@ -686,6 +747,7 @@ export const completeSpireBattle = (run: SpireRun, fight: RunState): SpireRun =>
         hearts: remainingHearts,
         coins: run.coins + coinsEarned,
         phase: 'reward',
+        seenEnemies,
         reward,
         stats: nextStats,
       },
@@ -731,8 +793,8 @@ export const skipRewardWeapon = (run: SpireRun): SpireRun => {
 export const claimRewardArcana = (run: SpireRun, arcanaId: ArcanaId): SpireRun => {
   if (run.phase !== 'reward' || !run.reward || run.reward.arcanaClaimed) return run;
   if (!run.reward.arcanaOptions.includes(arcanaId)) return run;
-  const arcana = run.arcana.includes(arcanaId) ? run.arcana : [...run.arcana, arcanaId];
-  return { ...run, arcana, reward: { ...run.reward, arcanaClaimed: true } };
+  if (run.arcana.includes(arcanaId)) return run;
+  return { ...run, arcana: [...run.arcana, arcanaId], reward: { ...run.reward, arcanaClaimed: true } };
 };
 
 export const skipRewardArcana = (run: SpireRun): SpireRun => {
@@ -743,8 +805,8 @@ export const skipRewardArcana = (run: SpireRun): SpireRun => {
 export const claimRewardSkillNode = (run: SpireRun, nodeId: string): SpireRun => {
   if (run.phase !== 'reward' || !run.reward || run.reward.skillClaimed) return run;
   if (!run.reward.skillOptions.includes(nodeId)) return run;
-  const skillNodes = run.skillNodes.includes(nodeId) ? run.skillNodes : [...run.skillNodes, nodeId];
-  return { ...run, skillNodes, reward: { ...run.reward, skillClaimed: true } };
+  if (run.skillNodes.includes(nodeId)) return run;
+  return { ...run, skillNodes: [...run.skillNodes, nodeId], reward: { ...run.reward, skillClaimed: true } };
 };
 
 export const skipRewardSkillNode = (run: SpireRun): SpireRun => {
@@ -759,7 +821,7 @@ export const finishSpireRewards = (run: SpireRun): SpireRun => {
   if (!isBoss) {
     return { ...cleaned, phase: 'map' };
   }
-  // Act 3 Boss beaten for the first time → SPIRE VICTORY (with option to Enter Endless Starfall!)
+  // Act 3 Boss beaten for the first time → SUMMIT VICTORY (with option to Enter Endless Starfall!)
   if (cleaned.act === 3 && !cleaned.endless) {
     return { ...cleaned, phase: 'victory' };
   }
@@ -769,10 +831,10 @@ export const finishSpireRewards = (run: SpireRun): SpireRun => {
 
 export const advanceToNextAct = (run: SpireRun): SpireRun => {
   const nextAct = run.act + 1;
-  // Between Acts: restore 50% of missing hearts + +1 Max Heart reward for slaying an Act Boss!
+  // Between Acts: restore 50% of missing hearts + +1 Max Heart reward for defeating an Act Boss!
   const nextMaxHearts = run.maxHearts + 1;
   const healed = Math.min(nextMaxHearts, run.hearts + Math.max(2, Math.ceil((nextMaxHearts - run.hearts) * 0.6)));
-  const map = generateActMap(nextAct, run.seed, run.ascension, run.seenEvents);
+  const map = generateActMap(nextAct, run.seed, run.ascension, run.seenEvents, run.seenEnemies ?? []);
   return {
     ...run,
     act: nextAct,
@@ -813,10 +875,10 @@ export const shopBuyArcana = (run: SpireRun, index: number): SpireRun => {
   if (run.phase !== 'shop' || !run.shop) return run;
   const offer = run.shop.arcana[index];
   if (!offer || offer.sold || run.coins < offer.price) return run;
-  const arcana = run.arcana.includes(offer.arcanaId) ? run.arcana : [...run.arcana, offer.arcanaId];
+  if (run.arcana.includes(offer.arcanaId)) return run;
   return {
     ...run,
-    arcana,
+    arcana: [...run.arcana, offer.arcanaId],
     coins: run.coins - offer.price,
     stats: { ...run.stats, coinsSpent: run.stats.coinsSpent + offer.price },
     shop: {
@@ -830,6 +892,7 @@ export const shopBuyUpgrade = (run: SpireRun, index: number): SpireRun => {
   if (run.phase !== 'shop' || !run.shop) return run;
   const offer = run.shop.upgrades[index];
   if (!offer || offer.sold || run.coins < offer.price) return run;
+  if (isSpireUpgradeMaxed(run, offer.upgradeId)) return run;
   let next: SpireRun = bumpUpgrade(
     {
       ...run,
@@ -843,14 +906,14 @@ export const shopBuyUpgrade = (run: SpireRun, index: number): SpireRun => {
     offer.upgradeId,
     1
   );
-  // Tough Hide also updates Spire's persistent maxHearts & heals +1 ♥ immediately
+  // Tough Hide also updates Summit's persistent maxHearts & heals +1 ♥ immediately
   if (offer.upgradeId === 'tough_hide') {
     next = { ...next, maxHearts: next.maxHearts + 1, hearts: Math.min(next.maxHearts + 1, next.hearts + 1) };
   }
   return next;
 };
 
-/** Toggle a Brotato-style lock on an unsold shop item (up to MAX_SHOP_LOCKS=2 total across shelves). */
+/** Toggle a lock on an unsold shop item (up to MAX_SHOP_LOCKS=2 total across shelves). */
 export const shopToggleLock = (
   run: SpireRun,
   kind: 'weapon' | 'arcana' | 'upgrade',
@@ -874,7 +937,7 @@ export const shopToggleLock = (
   }
   if (kind === 'arcana') {
     const item = shop.arcana[index];
-    if (!item || item.sold) return run;
+    if (!item || item.sold || (!item.locked && run.arcana.includes(item.arcanaId))) return run;
     if (!item.locked && lockedCount >= MAX_SHOP_LOCKS) return run;
     return {
       ...run,
@@ -885,7 +948,7 @@ export const shopToggleLock = (
     };
   }
   const item = shop.upgrades[index];
-  if (!item || item.sold) return run;
+  if (!item || item.sold || (!item.locked && isSpireUpgradeMaxed(run, item.upgradeId))) return run;
   if (!item.locked && lockedCount >= MAX_SHOP_LOCKS) return run;
   return {
     ...run,
@@ -896,7 +959,7 @@ export const shopToggleLock = (
   };
 };
 
-/** Sell a held weapon in the Spire Shop for 50% of shop value (must keep at least 1 weapon). */
+/** Sell a held weapon in the Summit Shop for 50% of shop value (must keep at least 1 weapon). */
 export const shopSellWeapon = (run: SpireRun, weaponId: string): SpireRun => {
   if (run.phase !== 'shop' || !run.shop) return run;
   if (run.weapons.length <= 1 || !run.weapons.includes(weaponId)) return run;
@@ -928,7 +991,7 @@ export const shopSellWeapon = (run: SpireRun, weaponId: string): SpireRun => {
   };
 };
 
-/** Purge an unwanted Arcana in the Spire Shop for ARCANA_PURGE_COST (40¢). */
+/** Purge an unwanted Arcana in the Summit Shop for ARCANA_PURGE_COST (40¢). */
 export const shopPurgeArcana = (run: SpireRun, arcanaId: ArcanaId): SpireRun => {
   if (run.phase !== 'shop' || !run.shop) return run;
   if (!run.arcana.includes(arcanaId) || run.coins < ARCANA_PURGE_COST) return run;
@@ -1027,7 +1090,8 @@ export const campfireForge = (run: SpireRun, weaponId: string): SpireRun => {
 export const campfireMeditate = (run: SpireRun, nodeId: string): SpireRun => {
   if (run.phase !== 'campfire' || !run.campfire || run.campfire.resolved) return run;
   if (!run.campfire.skillOptions.includes(nodeId)) return run;
-  const skillNodes = run.skillNodes.includes(nodeId) ? run.skillNodes : [...run.skillNodes, nodeId];
+  if (run.skillNodes.includes(nodeId)) return run;
+  const skillNodes = [...run.skillNodes, nodeId];
   const nodeName = skillTreeOf(run.fighter).find(n => n.id === nodeId)?.name ?? 'Technique';
   return {
     ...run,
@@ -1035,7 +1099,7 @@ export const campfireMeditate = (run: SpireRun, nodeId: string): SpireRun => {
     campfire: {
       ...run.campfire,
       resolved: true,
-      outcomeText: `Mastered ${nodeName} for the rest of this Spire climb!`,
+      outcomeText: `Mastered ${nodeName} for the rest of this climb!`,
     },
   };
 };
@@ -1057,8 +1121,8 @@ export const claimTreasure = (run: SpireRun, choice: 'weapon' | 'arcana' | 'coin
     next = grantSpireWeapon(next, t.weaponOffer.weaponId, t.weaponOffer.level);
     const wName = getArmoryWeapon(t.weaponOffer.weaponId)?.name ?? t.weaponOffer.weaponId;
     outcomeText = `Claimed ${t.coins}¢ + ${wName} (Lv ${t.weaponOffer.level})!`;
-  } else if (choice === 'arcana' && t.arcanaOffer) {
-    const arcana = next.arcana.includes(t.arcanaOffer) ? next.arcana : [...next.arcana, t.arcanaOffer];
+  } else if (choice === 'arcana' && t.arcanaOffer && !next.arcana.includes(t.arcanaOffer)) {
+    const arcana = [...next.arcana, t.arcanaOffer];
     const name = ARCANA.find(a => a.id === t.arcanaOffer)?.name ?? t.arcanaOffer;
     next = { ...next, arcana };
     outcomeText = `Claimed ${t.coins}¢ + Arcana: ${name}!`;
@@ -1092,12 +1156,13 @@ export const chooseEventOption = (run: SpireRun, optionId: string): SpireRun => 
       stats: { ...run.stats, eventsResolved: run.stats.eventsResolved + 1 },
     };
     let outcomeTitle = opt.label;
-    let outcomeText = 'You continue up the Spire.';
+    let outcomeText = 'You continue up the trail.';
     let ambushEncounter: SpireEncounter | undefined;
     let pendingWeaponOptions: { weaponId: string; level: number }[] | undefined;
     let pendingSkillOptions: string[] | undefined;
     let pendingArcanaOffer: ArcanaId | undefined;
     let pendingForge = false;
+    let pendingForgeDelta: number | undefined;
 
     const key = `${ev.id}:${optionId}`;
     switch (key) {
@@ -1118,6 +1183,7 @@ export const chooseEventOption = (run: SpireRun, optionId: string): SpireRun => 
       case 'cursed_anvil:superforge':
         next = { ...next, hearts: Math.max(1, next.hearts - 1) };
         pendingForge = true;
+        pendingForgeDelta = 2;
         outcomeText = 'The anvil kicks back (−1 ♥). Choose a weapon to jump +2 Levels!';
         break;
       case 'cursed_anvil:temper': {
@@ -1138,11 +1204,18 @@ export const chooseEventOption = (run: SpireRun, optionId: string): SpireRun => 
         outcomeText = 'Reinforced your strike: +1 flat damage on every Set!';
         break;
 
-      case 'mirror_pond:study':
-        next = { ...next, coins: next.coins - 35, stats: { ...next.stats, coinsSpent: next.stats.coinsSpent + 35 } };
-        pendingSkillOptions = rollSkillNodeOptions(next, rng, 3);
-        outcomeText = 'Your reflection reveals three techniques — choose one to master!';
+      case 'mirror_pond:study': {
+        const skillOpts = rollSkillNodeOptions(next, rng, 3);
+        if (skillOpts.length > 0) {
+          next = { ...next, coins: next.coins - 35, stats: { ...next.stats, coinsSpent: next.stats.coinsSpent + 35 } };
+          pendingSkillOptions = skillOpts;
+          outcomeText = `Your reflection reveals ${skillOpts.length === 1 ? 'a final technique' : `${skillOpts.length} techniques`} — choose one to master!`;
+        } else {
+          next = { ...next, coins: next.coins + 45 };
+          outcomeText = 'You have already mastered every fighter technique — your reflection leaves +45¢ in tribute!';
+        }
         break;
+      }
       case 'mirror_pond:drink':
         next = { ...next, hearts: next.maxHearts };
         outcomeText = `Crystal water restores you to full health (${next.hearts}/${next.maxHearts} ♥)!`;
@@ -1207,6 +1280,14 @@ export const chooseEventOption = (run: SpireRun, optionId: string): SpireRun => 
         break;
 
       case 'sleeping_hoard:wake': {
+        const excludeEnemies = new Set<string>(next.seenEnemies ?? []);
+        const mapEnemies = new Set<string>();
+        for (const n of next.map.nodes) {
+          if (n.encounter?.name) {
+            excludeEnemies.add(n.encounter.name);
+            mapEnemies.add(n.encounter.name);
+          }
+        }
         const enc = generateSpireEncounter({
           act: next.act,
           row: Math.min(5, next.floor % 6),
@@ -1214,7 +1295,10 @@ export const chooseEventOption = (run: SpireRun, optionId: string): SpireRun => 
           ascension: next.ascension,
           rng,
           id: `ambush-${next.floor}`,
+          excludeEnemies,
+          mustExcludeEnemies: mapEnemies,
         });
+        next = { ...next, seenEnemies: recordSeenEnemy(next.seenEnemies, enc.name) };
         ambushEncounter = { ...enc, coinReward: enc.coinReward * 2 };
         outcomeTitle = 'THE GUARDIAN AWAKES!';
         outcomeText = `${enc.name} lunges from the treasure pile! Victory pays DOUBLE coins + full Elite loot!`;
@@ -1225,10 +1309,17 @@ export const chooseEventOption = (run: SpireRun, optionId: string): SpireRun => 
         outcomeText = 'Silent paws! You slip away with +55¢.';
         break;
 
-      case 'ancient_library:technique':
-        pendingSkillOptions = rollSkillNodeOptions(next, rng, 3);
-        outcomeText = 'Three forgotten scrolls unfurl — choose a Fighter Skill Node!';
+      case 'ancient_library:technique': {
+        const skillOpts = rollSkillNodeOptions(next, rng, 3);
+        if (skillOpts.length > 0) {
+          pendingSkillOptions = skillOpts;
+          outcomeText = `${skillOpts.length === 1 ? 'One final forgotten scroll unfurls' : `${skillOpts.length} forgotten scrolls unfurl`} — choose a Fighter Skill Node!`;
+        } else {
+          next = { ...next, coins: next.coins + 65 };
+          outcomeText = 'You already know every treatise in the archive — you pocket +65¢ of rare star-ink instead!';
+        }
         break;
+      }
       case 'ancient_library:fusion':
         next = {
           ...next,
@@ -1306,6 +1397,65 @@ export const chooseEventOption = (run: SpireRun, optionId: string): SpireRun => 
         next = { ...next, maxHearts: next.maxHearts + 1, hearts: Math.min(next.maxHearts + 1, next.hearts + 1) };
         outcomeText = `Restorative glow! +1 Max Heart & +1 ♥ (${next.hearts}/${next.maxHearts}).`;
         break;
+
+      case 'starlight_forge:channel': {
+        const upgradeable = next.weapons.filter(id => (next.weaponLevels[id] ?? 1) < MAX_WEAPON_LEVEL);
+        if (upgradeable.length > 0) {
+          next = {
+            ...next,
+            coins: next.coins - 40,
+            stats: { ...next.stats, coinsSpent: next.stats.coinsSpent + 40 },
+            extraEvolutionLikelihood: next.extraEvolutionLikelihood + 4,
+          };
+          pendingForge = true;
+          pendingForgeDelta = 1;
+          outcomeText = 'Starlight flows through the cairn (−40¢, +4% Catalyst chance). Choose a weapon to forge +1 Level!';
+        } else {
+          next = { ...next, extraEvolutionLikelihood: next.extraEvolutionLikelihood + 6 };
+          outcomeText = 'Every weapon is already maxed — the cairn infuses your belt with +6% Catalyst chance for free!';
+        }
+        break;
+      }
+      case 'starlight_forge:attune_cairn':
+        next = {
+          ...next,
+          extraEvolutionLikelihood: next.extraEvolutionLikelihood + 8,
+          extraEvolutionCap: next.extraEvolutionCap + 1,
+        };
+        outcomeText = 'Starfall sparks orbit your belt (+8% Catalyst chance & +1 Evolution per fight)!';
+        break;
+      case 'starlight_forge:rest_cairn':
+        next = {
+          ...next,
+          hearts: Math.min(next.maxHearts, next.hearts + 2),
+          coins: next.coins + 35,
+        };
+        outcomeText = `Caught your breath by the cairn (+2 ♥, ${next.hearts}/${next.maxHearts}) and pocketed +35¢!`;
+        break;
+
+      case 'echoing_cavern:train': {
+        const skillOpts = rollSkillNodeOptions(next, rng, 3);
+        if (skillOpts.length > 0) {
+          pendingSkillOptions = skillOpts;
+          outcomeText = `Your echo demonstrates ${skillOpts.length === 1 ? 'a final technique' : `${skillOpts.length} techniques`} — choose a Fighter Skill Node!`;
+        } else {
+          next = { ...next, coins: next.coins + 65 };
+          outcomeText = 'You have already mastered every fighter technique — you uncover +65¢ glittering in the cavern wall!';
+        }
+        break;
+      }
+      case 'echoing_cavern:listen':
+        next = {
+          ...next,
+          startingGraces: next.startingGraces + 1,
+          startingHints: next.startingHints + 2,
+        };
+        outcomeText = 'Crystal acoustics sharpen your senses (+1 Starting Grace & +2 Starting Hints)!';
+        break;
+      case 'echoing_cavern:strike':
+        next = bumpUpgrade(next, 'heavy_hitter', 1);
+        outcomeText = 'Resonance crystal shattered! +1 flat damage on every Set.';
+        break;
     }
 
     return {
@@ -1320,7 +1470,7 @@ export const chooseEventOption = (run: SpireRun, optionId: string): SpireRun => 
           ...(pendingWeaponOptions?.length ? { pendingWeaponOptions } : {}),
           ...(pendingSkillOptions?.length ? { pendingSkillOptions } : {}),
           ...(pendingArcanaOffer ? { pendingArcanaOffer } : {}),
-          ...(pendingForge ? { pendingForge: true } : {}),
+          ...(pendingForge ? { pendingForge: true, ...(pendingForgeDelta !== undefined ? { pendingForgeDelta } : {}) } : {}),
         },
       },
     };
@@ -1332,18 +1482,20 @@ export const resolveEventPendingArcana = (run: SpireRun, accept: boolean): Spire
   const offerId = run.event.pendingArcanaOffer;
   const def = ARCANA.find(a => a.id === offerId);
   const name = def?.name ?? offerId;
-  if (!accept) {
+  if (!accept || run.arcana.includes(offerId)) {
     return {
       ...run,
       event: {
         ...run.event,
         pendingArcanaOffer: undefined,
-        outcomeTitle: 'Declined',
-        outcomeText: `You corked the vial and politely declined ${name}.`,
+        outcomeTitle: accept ? 'Already Bound' : 'Declined',
+        outcomeText: accept
+          ? `You already hold ${name} — you leave the vial corked.`
+          : `You corked the vial and politely declined ${name}.`,
       },
     };
   }
-  const arcana = run.arcana.includes(offerId) ? run.arcana : [...run.arcana, offerId];
+  const arcana = [...run.arcana, offerId];
   return {
     ...run,
     arcana,
@@ -1351,7 +1503,7 @@ export const resolveEventPendingArcana = (run: SpireRun, accept: boolean): Spire
       ...run.event,
       pendingArcanaOffer: undefined,
       outcomeTitle: `Bound ${name}!`,
-      outcomeText: `Wild magic swirls — ${name} is now active for the rest of your Spire climb!`,
+      outcomeText: `Wild magic swirls — ${name} is now active for the rest of your climb!`,
     },
   };
 };
@@ -1375,7 +1527,8 @@ export const resolveEventPendingWeapon = (run: SpireRun, index: number): SpireRu
 export const resolveEventPendingSkill = (run: SpireRun, nodeId: string): SpireRun => {
   if (run.phase !== 'event' || !run.event?.pendingSkillOptions) return run;
   if (!run.event.pendingSkillOptions.includes(nodeId)) return run;
-  const skillNodes = run.skillNodes.includes(nodeId) ? run.skillNodes : [...run.skillNodes, nodeId];
+  if (run.skillNodes.includes(nodeId)) return run;
+  const skillNodes = [...run.skillNodes, nodeId];
   const nodeName = skillTreeOf(run.fighter).find(n => n.id === nodeId)?.name ?? 'Technique';
   return {
     ...run,
@@ -1390,14 +1543,16 @@ export const resolveEventPendingSkill = (run: SpireRun, nodeId: string): SpireRu
 
 export const resolveEventPendingForge = (run: SpireRun, weaponId: string): SpireRun => {
   if (run.phase !== 'event' || !run.event?.pendingForge) return run;
-  const next = upgradeSpireWeapon(run, weaponId, 2);
+  const delta = run.event.pendingForgeDelta ?? 2;
+  const next = upgradeSpireWeapon(run, weaponId, delta);
   const wName = getArmoryWeapon(weaponId)?.name ?? weaponId;
   return {
     ...next,
     event: {
       ...run.event,
       pendingForge: undefined,
-      outcomeText: `Overclocked ${wName} to Level ${next.weaponLevels[weaponId]}!`,
+      pendingForgeDelta: undefined,
+      outcomeText: `${delta >= 2 ? 'Overclocked' : 'Tempered'} ${wName} to Level ${next.weaponLevels[weaponId]}!`,
     },
   };
 };

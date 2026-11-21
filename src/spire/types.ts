@@ -1,5 +1,5 @@
 /**
- * Starfall Spire — core data types.
+ * Starfall Summit — core data types.
  *
  * Designed as a clean, self-contained roguelike climb module (`src/spire/`) that
  * reuses Adventure Mode's combat engine (`runReducer`, `AdventureRun`), weapons
@@ -170,6 +170,8 @@ export interface SpireEventState {
   pendingSkillOptions?: string[];
   pendingArcanaOffer?: ArcanaId;
   pendingForge?: boolean;
+  /** Levels added by `pendingForge` (defaults to 2 for Runic Anvil; 1 for Starlight Cairn) */
+  pendingForgeDelta?: number;
 }
 
 export type SpirePhase =
@@ -200,7 +202,7 @@ export interface SpireRunStats {
   forgedRecipeIds: string[];
   coinsSpent: number;
   eventsResolved: number;
-  /** Cumulative damage dealt by each weapon/passive/skill/Set across the entire climb (Brotato-style) */
+  /** Cumulative damage dealt by each weapon/passive/skill/Set across the entire climb */
   sourceDamage?: Record<string, SpireSourceDamageEntry>;
   /** Floor-by-floor cumulative damage snapshots for the full-climb over-time graph */
   floorLedger?: SpireFloorDamageSnapshot[];
@@ -243,6 +245,8 @@ export interface SpireRun {
   prevNodeId?: string | null;
   activeEncounter: SpireEncounter | null;
   seenEvents: string[];
+  /** Canonical enemy names already encountered in this climb (prevents repeat foes across Acts 1–3) */
+  seenEnemies: string[];
   /** Number of paid mid-fight retreats (mixed into fight seed so retreating never replays the same board) */
   retreats?: number;
   /** Up to 2 locked shop items carried forward into the next Merchant visit */

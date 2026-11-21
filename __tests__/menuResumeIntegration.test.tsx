@@ -2,16 +2,16 @@
  * Full-stack Main Menu ↔ Game Mode Resume Integration Tests.
  *
  * Mounts the real `<Game />` shell with real MMKV persistence to guarantee:
- *  1. Starfall Spire: starting a climb, leaving to Main Menu, resuming, and
+ *  1. Starfall Summit: starting a climb, leaving to Main Menu, resuming, and
  *     starting a Floor 3 Elite battle (exact regression for `Unknown level spire-elite`),
  *     plus Skirmish & Boss launches and mid-fight Retreat → Menu → Resume.
- *  2. Starfall Spire: resuming safely from every persisted room phase
+ *  2. Starfall Summit: resuming safely from every persisted room phase
  *     (`map`, `preview`, `fight`, `reward`, `shop`, `campfire`, `event`, `treasure`)
  *     and recovering cleanly if a saved phase is missing its room payload.
  *  3. Adventure Mode: moving between Main Menu, World Map, Level Preview,
  *     live Fight (Pause → Retreat to map), Camp, Field Guide, and back to
  *     Main Menu → Continue without losing progress or crashing.
- *  4. Cross-mode interleaving: Main Menu → Adventure → Main Menu → Starfall Spire
+ *  4. Cross-mode interleaving: Main Menu → Adventure → Main Menu → Starfall Summit
  *     → Main Menu → Adventure keeps both saves intact and playable.
  */
 import React from 'react';
@@ -159,17 +159,19 @@ describe('Main Menu ↔ Game Mode Resume Integration', () => {
     jest.useRealTimers();
   });
 
-  it('Starfall Spire: leave to Main Menu → resume → start Floor 3 Elite battle → retreat → Main Menu → resume cleanly', async () => {
+  it('Starfall Summit: leave to Main Menu → resume → start Floor 3 Elite battle → retreat → Main Menu → resume cleanly', async () => {
     const { run: floor2MapRun, eliteNodeId } = buildFloor3EliteRun(202);
     writeSpireRun(floor2MapRun);
 
     const app = await renderApp();
 
-    // Main Menu shows LIVE RUN badge for the active Spire climb
+    // Main Menu shows Starfall Summit + LIVE RUN badge for the active climb
     expect(app.getByTestId('menu-spire')).toBeTruthy();
+    expect(app.getByText('Starfall Summit')).toBeTruthy();
+    expect(app.queryByText(/spire/i)).toBeNull();
     expect(app.getByText(/Resume Act 1 · Floor 2/)).toBeTruthy();
 
-    // Enter Starfall Spire → Resume Climb onto the Map
+    // Enter Starfall Summit → Resume Climb onto the Map
     fireEvent.press(app.getByTestId('menu-spire'));
     expect(app.getByTestId('spire-setup')).toBeTruthy();
     fireEvent.press(app.getByTestId('spire-resume-run'));
@@ -216,7 +218,7 @@ describe('Main Menu ↔ Game Mode Resume Integration', () => {
     expect(app.getByTestId('run-stage')).toBeTruthy();
   });
 
-  it('Starfall Spire: resumes mid-fight Act Boss cleanly and recovers corrupt room state', async () => {
+  it('Starfall Summit: resumes mid-fight Act Boss cleanly and recovers corrupt room state', async () => {
     const base = createSpireRun('Badger', 0, 505);
     const bossNode = base.map.nodes.find(n => n.kind === 'boss')!;
     const bossFightRun: SpireRun = {
@@ -245,7 +247,7 @@ describe('Main Menu ↔ Game Mode Resume Integration', () => {
     { kind: 'campfire', testId: 'spire-campfire' },
     { kind: 'event', testId: 'spire-event' },
     { kind: 'treasure', testId: 'spire-treasure' },
-  ])('Starfall Spire: resumes cleanly into saved $kind room from Main Menu', async ({ kind, testId }) => {
+  ])('Starfall Summit: resumes cleanly into saved $kind room from Main Menu', async ({ kind, testId }) => {
     const fresh = createSpireRun('Sly Fox', 0, 909);
     const node = fresh.map.nodes.find(n => n.kind === kind)!;
     const exposed: SpireRun = {
@@ -313,7 +315,7 @@ describe('Main Menu ↔ Game Mode Resume Integration', () => {
     expect(app.getByTestId('run-stage')).toBeTruthy();
   });
 
-  it('Cross-mode switching: Main Menu ↔ Adventure Mode ↔ Main Menu ↔ Starfall Spire keeps both saves intact', async () => {
+  it('Cross-mode switching: Main Menu ↔ Adventure Mode ↔ Main Menu ↔ Starfall Summit keeps both saves intact', async () => {
     const advSave = {
       ...createNewSave(),
       stars: { '1-1': 3, '1-2': 3 },

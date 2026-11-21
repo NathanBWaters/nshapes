@@ -1,5 +1,5 @@
 /**
- * Starfall Spire — Reusable Belt Strip with Reordering, Inspection & Optional Selling.
+ * Starfall Summit — Reusable Belt Strip with Reordering, Inspection & Optional Selling.
  *
  * Strictly reuses `WeaponExplainer.tsx` (single weapon explainer guardrail!)
  * and `WeaponChip`. Lets players position `Understudy` immediately to the right

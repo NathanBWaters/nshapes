@@ -1,5 +1,5 @@
 /**
- * Starfall Spire — Golden Treasure Vault Node.
+ * Starfall Summit — Golden Treasure Vault Node.
  *
  * Reuses `WeaponExplainer.tsx` and shared `WeaponOfferRow` / `ArcanaCard`.
  */
@@ -25,6 +25,10 @@ const SpireTreasure: React.FC<Props> = ({ run, treasure, onClaim, onLeave }) => 
   const w = getArmoryWeapon(treasure.weaponOffer.weaponId, {
     [treasure.weaponOffer.weaponId]: { level: treasure.weaponOffer.level, tuning: {} },
   });
+  const availArcana =
+    treasure.arcanaOffer && !run.arcana.includes(treasure.arcanaOffer)
+      ? treasure.arcanaOffer
+      : null;
   const extraCoins = 60 + run.act * 20;
 
   return (
@@ -63,10 +67,10 @@ const SpireTreasure: React.FC<Props> = ({ run, treasure, onClaim, onLeave }) => 
               </>
             )}
 
-            {treasure.arcanaOffer && (
+            {availArcana && (
               <ArcanaCard
                 testID="spire-treasure-arcana"
-                arcanaId={treasure.arcanaOffer}
+                arcanaId={availArcana}
                 prefix="Arcana"
                 onPress={() => { band.cue('catalyst'); onClaim('arcana'); }}
               />

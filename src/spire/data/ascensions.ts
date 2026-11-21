@@ -1,8 +1,8 @@
 /**
- * Starfall Spire Ascension ladder (0 → 20).
+ * Starfall Summit Ascension ladder (0 → 20).
  *
  * Each tier adds one concrete, legible modifier on top of the previous tiers
- * so climbing feels like Slay the Spire / Balatro Stakes.
+ * so every higher Ascension climb escalates meaningfully.
  */
 export const MAX_ASCENSION = 20;
 

@@ -1,17 +1,17 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * Real-Browser Integration Suite: Main Menu ↔ Starfall Spire & Adventure Mode.
+ * Real-Browser Integration Suite: Main Menu ↔ Starfall Summit & Adventure Mode.
  *
  * Regression coverage for leaving to the Main Menu mid-run, resuming, and
  * launching Floor 3+ (including Elite encounters), plus Adventure Mode
  * Main Menu ↔ Map ↔ Preview ↔ Fight (Retreat) ↔ Main Menu ↔ Resume and
  * cross-mode interleaving.
  */
-test.describe('Main Menu ↔ Mode Resume Integration (Spire & Adventure)', () => {
+test.describe('Main Menu ↔ Mode Resume Integration (Summit & Adventure)', () => {
   test.describe.configure({ mode: 'serial' });
 
-  test('Starfall Spire: climb to Floor 3 → leave to Main Menu → resume → start Floor 3 Elite battle → retreat → Main Menu → resume', async ({ page }) => {
+  test('Starfall Summit: climb to Floor 3 → leave to Main Menu → resume → start Floor 3 Elite battle → retreat → Main Menu → resume', async ({ page }) => {
     test.setTimeout(90_000);
     const errors: string[] = [];
     page.on('pageerror', err => errors.push(`pageerror: ${err.message}`));
@@ -20,8 +20,8 @@ test.describe('Main Menu ↔ Mode Resume Integration (Spire & Adventure)', () =>
     });
 
     await page.setViewportSize({ width: 375, height: 667 });
-    // Seed 202 deterministically places Floor 1 Battle → Floor 2 Shop → Floor 3 Elite (Iron Shell) on lane 0
-    await page.goto('/dev/spire?start=true&autoplay=true&seed=202');
+    // Seed 24 deterministically places Floor 1 Battle (Golden Mole) → Floor 2 Shop → Floor 3 Elite (Bully Boar) on lane 0
+    await page.goto('/dev/spire?start=true&autoplay=true&seed=24');
     await expect(page.getByTestId('spire-map')).toBeVisible({ timeout: 20000 });
 
     // Floor 1: Battle (autoplay win + draft weapon)
@@ -44,6 +44,7 @@ test.describe('Main Menu ↔ Mode Resume Integration (Spire & Adventure)', () =>
     await expect(page.getByTestId('spire-setup')).toBeVisible({ timeout: 10000 });
     await page.getByTestId('spire-setup-back').click();
     await expect(page.getByTestId('menu-spire')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId('menu-spire')).toContainText('Starfall Summit');
     await expect(page.getByTestId('menu-spire')).toContainText('LIVE RUN');
 
     // Resume from Main Menu → enter Floor 3 Elite battle (regression for `Unknown level spire-elite` crash!)
@@ -78,7 +79,7 @@ test.describe('Main Menu ↔ Mode Resume Integration (Spire & Adventure)', () =>
     expect(errors).toEqual([]);
   });
 
-  test('Adventure Mode: Main Menu ↔ Map ↔ Preview ↔ Fight (Retreat) ↔ Main Menu ↔ Cross-Mode Spire Resume', async ({ page }) => {
+  test('Adventure Mode: Main Menu ↔ Map ↔ Preview ↔ Fight (Retreat) ↔ Main Menu ↔ Cross-Mode Summit Resume', async ({ page }) => {
     test.setTimeout(60_000);
     const errors: string[] = [];
     page.on('pageerror', err => errors.push(`pageerror: ${err.message}`));
@@ -103,7 +104,7 @@ test.describe('Main Menu ↔ Mode Resume Integration (Spire & Adventure)', () =>
     await page.getByLabel('Back to menu').click();
     await expect(page.getByTestId('menu-adventure')).toBeVisible({ timeout: 10000 });
 
-    // Start a Starfall Spire run, enter Floor 1 preview, then leave to Main Menu
+    // Start a Starfall Summit run, enter Floor 1 preview, then leave to Main Menu
     await page.getByTestId('menu-spire').click();
     await expect(page.getByTestId('spire-start-climb')).toBeVisible({ timeout: 10000 });
     await page.getByTestId('spire-start-climb').click();
@@ -113,7 +114,8 @@ test.describe('Main Menu ↔ Mode Resume Integration (Spire & Adventure)', () =>
     await page.getByTestId('spire-back-menu').click();
     await page.getByTestId('spire-setup-back').click();
 
-    // Main Menu shows LIVE RUN for Spire while Adventure Mode resumes smoothly into Map → Preview → Fight!
+    // Main Menu shows LIVE RUN for Starfall Summit while Adventure Mode resumes smoothly into Map → Preview → Fight!
+    await expect(page.getByTestId('menu-spire')).toContainText('Starfall Summit');
     await expect(page.getByTestId('menu-spire')).toContainText('LIVE RUN');
     await page.getByTestId('menu-adventure').click();
     await expect(page.getByTestId('map-play-next')).toBeVisible({ timeout: 10000 });
@@ -122,7 +124,7 @@ test.describe('Main Menu ↔ Mode Resume Integration (Spire & Adventure)', () =>
     await page.getByTestId('preview-play').click();
     await expect(page.getByTestId('run-stage')).toBeVisible({ timeout: 10000 });
 
-    // Retreat back to Main Menu → Resume Starfall Spire straight back into Floor 1 preview → Fight!
+    // Retreat back to Main Menu → Resume Starfall Summit straight back into Floor 1 preview → Fight!
     await page.getByLabel('Pause').click();
     await page.getByText('Retreat to map').click();
     await page.getByLabel('Back to menu').click();

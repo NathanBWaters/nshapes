@@ -1,5 +1,5 @@
 /**
- * Starfall Spire — Pre-Battle Encounter Briefing.
+ * Starfall Summit — Pre-Battle Encounter Briefing.
  *
  * Reuses `ParryPreviewCard` (showing the foe's Counter-Set UP FRONT before the
  * fight begins!), `FoeAbilityCard`, `HazardNotices`, `ShadingSurgeNotice`,

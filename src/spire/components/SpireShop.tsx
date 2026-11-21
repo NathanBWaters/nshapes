@@ -1,5 +1,5 @@
 /**
- * Starfall Spire — Full Merchant Shop.
+ * Starfall Summit — Full Merchant Shop.
  *
  * Reuses Adventure's `UPGRADES`, `WeaponExplainer.tsx`, and shared
  * `WeaponOfferRow` / `UpgradeOfferRow` / `WeaponChip` / `ArcanaCard` so
@@ -30,7 +30,7 @@ import {
   newEvolutionRecipesArmedBy,
   spireHeldWeapons,
 } from '../engine/bridge';
-import { ARCANA_PURGE_COST, countShopLocks, MAX_SHOP_LOCKS } from '../engine/runState';
+import { ARCANA_PURGE_COST, countShopLocks, MAX_SHOP_LOCKS, maxSpireUpgradeTier } from '../engine/runState';
 import type { SpireRun, SpireShopState } from '../types';
 import SpireBeltBar from './SpireBeltBar';
 
@@ -235,26 +235,40 @@ const SpireShop: React.FC<Props> = ({
           <View style={{ gap: 8 }}>
             {shop.upgrades.map((u, i) => {
               const def = getUpgrade(u.upgradeId);
-              const afford = !u.sold && run.coins >= u.price;
+              const cur = run.upgrades?.[u.upgradeId] ?? 0;
+              const max = maxSpireUpgradeTier(u.upgradeId);
+              const maxed = cur >= max;
+              const nextTier = Math.min(max, cur + 1);
+              const afford = !u.sold && !maxed && run.coins >= u.price;
+              const tierLabel = u.sold
+                ? `${def.name} (Tier ${Math.min(cur, max)}/${max})`
+                : `${def.name} (Tier ${nextTier}/${max}${u.locked ? ' · Locked' : ''})`;
+              const desc = u.sold
+                ? cur >= max
+                  ? `MAXED · ${def.description(max)}`
+                  : `Owned · ${def.description(cur)}`
+                : cur > 0
+                  ? `${def.description(1)} → ${def.description(nextTier)}`
+                  : def.description(1);
               return (
                 <UpgradeOfferRow
                   key={u.upgradeId}
                   icon={def.icon}
-                  name={u.locked && !u.sold ? `${def.name} (Locked)` : def.name}
-                  description={def.description(1)}
-                  dimmed={u.sold}
+                  name={tierLabel}
+                  description={desc}
+                  dimmed={u.sold || maxed}
                   right={
                     <View style={st.offerActions}>
                       {lockBtn({
                         testID: `spire-shop-lock-upgrade-${i}`,
                         locked: u.locked,
-                        sold: u.sold,
+                        sold: u.sold || maxed,
                         onPress: () => onToggleLock?.('upgrade', i),
                       })}
                       {priceBtn({
                         testID: `spire-shop-upgrade-${i}`,
                         disabled: !afford,
-                        label: u.sold ? 'SOLD' : `${u.price}¢`,
+                        label: u.sold ? 'SOLD' : maxed ? 'MAX' : `${u.price}¢`,
                         onPress: () => { band.cue('register'); onBuyUpgrade(i); },
                       })}
                     </View>

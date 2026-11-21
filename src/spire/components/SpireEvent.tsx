@@ -1,5 +1,5 @@
 /**
- * Starfall Spire — Mystery Narrative Event Screen.
+ * Starfall Summit — Mystery Narrative Event Screen.
  *
  * Reuses shared `WeaponOfferRow` and `SkillNodeRow` for inline rewards.
  */
@@ -41,11 +41,20 @@ const SpireEvent: React.FC<Props> = ({
   const def = getSpireEvent(eventState.eventId);
   const held = spireHeldWeapons(run);
   const forgeable = held.filter(w => (run.weaponLevels[w.id] ?? 1) < MAX_WEAPON_LEVEL);
+  const availSkills = (eventState.pendingSkillOptions ?? []).filter(id => !run.skillNodes.includes(id));
+  const pendingArcana =
+    eventState.pendingArcanaOffer && !run.arcana.includes(eventState.pendingArcanaOffer)
+      ? eventState.pendingArcanaOffer
+      : undefined;
+  const previewArcana =
+    eventState.offeredArcana && !run.arcana.includes(eventState.offeredArcana)
+      ? eventState.offeredArcana
+      : undefined;
 
   const hasPendingSubPick =
     (eventState.pendingWeaponOptions?.length ?? 0) > 0 ||
-    (eventState.pendingSkillOptions?.length ?? 0) > 0 ||
-    Boolean(eventState.pendingArcanaOffer) ||
+    availSkills.length > 0 ||
+    Boolean(pendingArcana) ||
     !!eventState.pendingForge;
 
   return (
@@ -101,10 +110,10 @@ const SpireEvent: React.FC<Props> = ({
                     {lockNote && <Text style={st.lockTag}>{lockNote}</Text>}
                   </View>
                   <Text style={st.optDetail}>{opt.detail}</Text>
-                  {opt.id === 'arcana' && eventState.offeredArcana && (
+                  {opt.id === 'arcana' && previewArcana && (
                     <View style={{ marginTop: 6 }}>
                       <ArcanaCard
-                        arcanaId={eventState.offeredArcana}
+                        arcanaId={previewArcana}
                         badgeText="PREVIEW"
                         testID="spire-event-arcana-preview"
                       />
@@ -140,9 +149,9 @@ const SpireEvent: React.FC<Props> = ({
             )}
 
             {/* Inline Skill Node Pick */}
-            {eventState.pendingSkillOptions && eventState.pendingSkillOptions.length > 0 && (
+            {availSkills.length > 0 && (
               <View style={{ gap: 8 }}>
-                {eventState.pendingSkillOptions.map((id, i) => (
+                {availSkills.map((id, i) => (
                   <SkillNodeRow
                     key={id}
                     testID={`spire-event-skill-${i}`}
@@ -154,16 +163,16 @@ const SpireEvent: React.FC<Props> = ({
             )}
 
             {/* Inline Arcana Accept / Decline (never forces a blind cursed Arcana!) */}
-            {eventState.pendingArcanaOffer && (
+            {pendingArcana && (
               <View style={{ gap: 8 }}>
                 <ArcanaCard
-                  arcanaId={eventState.pendingArcanaOffer}
+                  arcanaId={pendingArcana}
                   showTagline
                   testID="spire-event-arcana-offer"
                 />
                 <Btn
                   testID="spire-event-arcana-accept"
-                  label={`Accept ${getArcana(eventState.pendingArcanaOffer).name}`}
+                  label={`Accept ${getArcana(pendingArcana).name}`}
                   icon="lorc/crystal-wand"
                   onPress={() => {
                     band.cue('catalyst');
@@ -183,18 +192,19 @@ const SpireEvent: React.FC<Props> = ({
               </View>
             )}
 
-            {/* Inline Overclock +2 Forge */}
+            {/* Inline Forge (+1 or +2 Levels) */}
             {eventState.pendingForge && (
               <View style={{ gap: 8 }}>
                 {forgeable.map(w => {
                   const lv = run.weaponLevels[w.id] ?? 1;
+                  const delta = eventState.pendingForgeDelta ?? 2;
                   return (
                     <WeaponOfferRow
                       key={w.id}
                       testID={`spire-event-forge-${w.id}`}
                       weapon={w}
                       level={lv}
-                      subtitle={`Level ${lv} → ${Math.min(MAX_WEAPON_LEVEL, lv + 2)}`}
+                      subtitle={`Level ${lv} → ${Math.min(MAX_WEAPON_LEVEL, lv + delta)}`}
                       focused
                       onPress={() => { band.cue('levelUp'); onPickForge(w.id); }}
                     />

@@ -1,7 +1,7 @@
 /**
- * Starfall Spire — Branching Act Map.
+ * Starfall Summit — Branching Act Map.
  *
- * Renders the 7-row Slay-the-Spire DAG from Bottom (Row 0 Entrance) upward to
+ * Renders the 7-row branching climb DAG from Bottom (Row 0 Entrance) upward to
  * the Top (Row 6 Act Boss) with crisp SVG connecting lines, color-coded node
  * badges, bobbing reachable choices, and Act Boss preview.
  */
@@ -212,7 +212,7 @@ const SpireMap: React.FC<Props> = ({ run, onSelectNode, onReorderWeapon }) => {
         )}
       </ScrollView>
 
-      {/* Floor-1 Act Boss Full Preview Modal (Monster Train Ring-1 Seraph rule!) */}
+      {/* Floor-1 Act Boss Full Preview Modal (plan your build ahead for the Act Boss!) */}
       {bossModalOpen && bossEncounter && bossFoe && bossFoeDef && (
         <Modal visible transparent animationType="fade" onRequestClose={() => setBossModalOpen(false)}>
           <View style={st.modalOverlay} testID="spire-map-boss-modal">

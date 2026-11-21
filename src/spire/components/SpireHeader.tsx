@@ -1,5 +1,5 @@
 /**
- * Persistent top bar shown across all non-combat Starfall Spire screens
+ * Persistent top bar shown across all non-combat Starfall Summit screens
  * (Map, Preview, Shop, Campfire, Event, Treasure, Rewards).
  */
 import React from 'react';
@@ -67,7 +67,7 @@ const SpireHeader: React.FC<Props> = ({ run, onOpenBuild, onExitToMenu }) => {
           testID="spire-open-build"
           onPress={onOpenBuild}
           style={st.buildBtn}
-          accessibilityLabel="Inspect Spire build"
+          accessibilityLabel="Inspect Summit build"
           accessibilityRole="button"
         >
           <Icon name="lorc/gems" size={14} color={INK} />

@@ -1,12 +1,12 @@
 /**
- * Starfall Spire — starter kits, Act themes, and encounter generator.
+ * Starfall Summit — starter kits, Act themes, and encounter generator.
  *
  * ZERO duplicate enemy, weapon, taunt, parry, or hazard specs:
  * - Weapon pool is re-exported directly from Adventure's `ALL_ARMORY_WEAPON_IDS`.
  * - Act themes pull biome names straight from Adventure's `BIOMES`.
  * - Every encounter draws its enemy, taunt, board hazards, and telegraphed
  *   Set-Parry directly from Adventure's canonical `LEVELS` + `resolveParrySpec`,
- *   scaling only HP, clock, Ascension speed, and Spire loot rewards.
+ *   scaling only HP, clock, Ascension speed, and Summit loot rewards.
  *
  * HP curves are empirically validated via `__tests__/spireBalance.test.ts`.
  */
@@ -21,10 +21,10 @@ import type { Rng } from '@/adventure/engine/rng';
 import type { SpireEncounter } from '../types';
 import { ascensionModifiers } from './ascensions';
 
-/** Every valid Armory weapon id shared between Adventure Mode and Starfall Spire. */
+/** Every valid Armory weapon id shared between Adventure Mode and Starfall Summit. */
 export const SPIRE_WEAPON_POOL: readonly string[] = ALL_ARMORY_WEAPON_IDS;
 
-/** Every fighter brings a thematic starter charm & crisp opening kit to the Spire. */
+/** Every fighter brings a thematic starter charm & crisp opening kit to Starfall Summit. */
 export interface FighterStarterKit {
   fighter: CharacterName;
   starterWeapon: string;
@@ -138,25 +138,46 @@ export const actThemeFor = (act: number): ActTheme => {
 
 /**
  * Canonical Adventure `LEVELS` IDs drawn for each Act & encounter tier.
- * Every enemy name, taunt, board hazard, and Set-Parry Counter comes directly
- * from Adventure's shared `LEVELS` + `resolveParrySpec` — zero custom copies.
+ * Strictly non-overlapping across tiers within each Act AND across Acts 1–3
+ * (53 unique levels / 53 unique canonical enemies). Every enemy name, taunt,
+ * board hazard, and Set-Parry Counter comes directly from Adventure's shared
+ * `LEVELS` + `resolveParrySpec` — zero custom copies.
  */
-const ACT_LEVEL_POOLS: Record<1 | 2 | 3, Record<'skirmish' | 'elite' | 'boss', readonly string[]>> = {
+export const ACT_LEVEL_POOLS: Record<1 | 2 | 3, Record<'skirmish' | 'elite' | 'boss', readonly string[]>> = {
   1: {
-    skirmish: ['2-1', '2-4', '2-5', '2-6', '2-7', '1-7'],
-    elite: ['1-10', '2-10', '3-7'],
+    skirmish: ['1-7', '1-8', '1-9', '1-5F', '2-1', '2-2', '2-3', '2-4', '2-5', '2-6', '2-7', '2-8', '2-9'],
+    elite: ['2-5C', '2-8B', '2-9P', '3-7'],
     boss: ['1-10', '2-10'],
   },
   2: {
-    skirmish: ['3-2', '3-8', '3-9', '3-5P', '3-3', '3-4'],
-    elite: ['3-3E', '3-3E2', '4-8'],
+    skirmish: ['3-1', '3-2', '3-3', '3-4', '3-5', '3-5P', '3-6', '3-8', '3-9'],
+    elite: ['3-3E', '3-3E2', '3-8E', '4-8'],
     boss: ['3-10', '4-5E'],
   },
   3: {
-    skirmish: ['4-9', '4-10', '3-8E', '4-7E', '5-4'],
-    elite: ['4-2E', '4-7E2', '5-3'],
-    boss: ['4-11', '5-2', '5-5'],
+    skirmish: ['4-1', '4-2', '4-3', '4-4', '4-5', '4-6', '4-7', '4-9', '4-10', '5-4'],
+    elite: ['4-2E', '4-2E2', '4-7E', '4-7E2', '5-3'],
+    boss: ['4-11', '5-1', '5-2', '5-5'],
   },
+};
+
+const ALL_POOL_LEVEL_IDS: readonly string[] = [
+  ...ACT_LEVEL_POOLS[1].skirmish,
+  ...ACT_LEVEL_POOLS[1].elite,
+  ...ACT_LEVEL_POOLS[1].boss,
+  ...ACT_LEVEL_POOLS[2].skirmish,
+  ...ACT_LEVEL_POOLS[2].elite,
+  ...ACT_LEVEL_POOLS[2].boss,
+  ...ACT_LEVEL_POOLS[3].skirmish,
+  ...ACT_LEVEL_POOLS[3].elite,
+  ...ACT_LEVEL_POOLS[3].boss,
+];
+
+/** Canonical enemy display name for a given Adventure level id. */
+export const canonicalLevelEnemyName = (levelId: string): string => {
+  const srcLevel = getLevel(levelId);
+  const srcFoe = srcLevel.foes[0];
+  return srcFoe.enemy ?? srcFoe.name ?? srcLevel.name;
 };
 
 /**
@@ -167,9 +188,9 @@ const ACT_LEVEL_POOLS: Record<1 | 2 | 3, Record<'skirmish' | 'elite' | 'boss', r
  * Shading Surge (×5 in Act 3).
  */
 const BASE_ACT_HP: Record<number, { start: number; end: number; eliteMult: number; boss: number; timer: number; skirmishTimer: number }> = {
-  1: { start: 92, end: 270, eliteMult: 1.45, boss: 580, timer: 100, skirmishTimer: 72 },
-  2: { start: 540, end: 1320, eliteMult: 1.38, boss: 2350, timer: 112, skirmishTimer: 96 },
-  3: { start: 2050, end: 4300, eliteMult: 1.38, boss: 7000, timer: 126, skirmishTimer: 118 },
+  1: { start: 108, end: 320, eliteMult: 1.48, boss: 720, timer: 100, skirmishTimer: 72 },
+  2: { start: 720, end: 1780, eliteMult: 1.44, boss: 3350, timer: 110, skirmishTimer: 94 },
+  3: { start: 4400, end: 9500, eliteMult: 1.5, boss: 18500, timer: 112, skirmishTimer: 106 },
 };
 
 const actCurve = (act: number) => {
@@ -193,14 +214,44 @@ export const generateSpireEncounter = (o: {
   ascension: number;
   rng: Rng;
   id: string;
+  excludeEnemies?: ReadonlySet<string>;
+  mustExcludeEnemies?: ReadonlySet<string>;
 }): SpireEncounter => {
-  const { act, row, kind, ascension, rng, id } = o;
+  const { act, row, kind, ascension, rng, id, excludeEnemies, mustExcludeEnemies } = o;
   const theme = actThemeFor(act);
   const asc = ascensionModifiers(ascension);
   const curve = actCurve(act);
 
   const actBucket: 1 | 2 | 3 = act <= 1 ? 1 : act === 2 ? 2 : 3;
-  const srcLevel = getLevel(rng.pick(ACT_LEVEL_POOLS[actBucket][kind]));
+  const primaryPool = ACT_LEVEL_POOLS[actBucket][kind];
+  const notExcluded = (pool: readonly string[], excluded?: ReadonlySet<string>) =>
+    excluded && excluded.size > 0
+      ? pool.filter(lvlId => !excluded.has(canonicalLevelEnemyName(lvlId)))
+      : [...pool];
+
+  let candidates = notExcluded(primaryPool, excludeEnemies);
+  if (candidates.length === 0 && excludeEnemies && excludeEnemies.size > 0) {
+    // Fallback 1 (e.g. Endless Act 4+): unseen encounters of the same tier from other Acts
+    const sameKindAllActs = [
+      ...ACT_LEVEL_POOLS[1][kind],
+      ...ACT_LEVEL_POOLS[2][kind],
+      ...ACT_LEVEL_POOLS[3][kind],
+    ];
+    candidates = notExcluded(sameKindAllActs, excludeEnemies);
+  }
+  if (candidates.length === 0 && excludeEnemies && excludeEnemies.size > 0) {
+    // Fallback 2 (deep Endless Act 5+): ANY unseen encounter across all pools before allowing a repeat
+    candidates = notExcluded(ALL_POOL_LEVEL_IDS, excludeEnemies);
+  }
+  if (candidates.length === 0 && mustExcludeEnemies && mustExcludeEnemies.size > 0) {
+    // Fallback 3 (ultra-deep Endless after all 53 unique enemies seen): still keep the current Act map duplicate-free
+    candidates = notExcluded(primaryPool, mustExcludeEnemies);
+    if (candidates.length === 0) {
+      candidates = notExcluded(ALL_POOL_LEVEL_IDS, mustExcludeEnemies);
+    }
+  }
+  const pickedLevelId = rng.pick(candidates.length > 0 ? candidates : primaryPool);
+  const srcLevel = getLevel(pickedLevelId);
   const srcFoe = srcLevel.foes[0];
   const srcParry = resolveParrySpec(srcLevel, srcFoe);
 
@@ -274,7 +325,7 @@ export const generateSpireEncounter = (o: {
   };
 };
 
-/** Helper to check if a weapon belongs to a given role shelf (useful for Spire draft diversity). */
+/** Helper to check if a weapon belongs to a given role shelf (useful for Summit draft diversity). */
 export const spireRoleLabel = (weaponId: string): string => {
   const role = weaponRole(weaponId);
   return WEAPON_ROLES.find(r => r.id === role)?.label ?? 'Damage';

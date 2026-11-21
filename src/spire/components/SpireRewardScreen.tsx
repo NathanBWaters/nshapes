@@ -1,5 +1,5 @@
 /**
- * Starfall Spire — Post-Battle Victory & Reward Draft Screen.
+ * Starfall Summit — Post-Battle Victory & Reward Draft Screen.
  *
  * Reuses `WeaponExplainer.tsx` (single weapon explainer guardrail!),
  * `FightReplay.tsx`, and shared `WeaponOfferRow` / `SkillNodeRow` / `ArcanaCard`
@@ -88,7 +88,12 @@ const SpireRewardScreen: React.FC<Props> = ({
     ? getArmoryWeapon(inspectedOffer.weaponId, { [inspectedOffer.weaponId]: { level: inspectedOffer.level, tuning: {} } })
     : undefined;
 
-  const allDone = reward.weaponClaimed && reward.arcanaClaimed && reward.skillClaimed;
+  const availSkills = reward.skillOptions.filter(id => !run.skillNodes.includes(id));
+  const availArcana = reward.arcanaOptions.filter(id => !run.arcana.includes(id));
+  const allDone =
+    reward.weaponClaimed &&
+    (reward.arcanaClaimed || availArcana.length === 0) &&
+    (reward.skillClaimed || availSkills.length === 0);
 
   return (
     <View style={st.root} testID="spire-reward-screen">
@@ -242,11 +247,11 @@ const SpireRewardScreen: React.FC<Props> = ({
         )}
 
         {/* 2. Elite / Boss Bonus Skill Tree Node Draft */}
-        {!reward.skillClaimed && reward.skillOptions.length > 0 && (
+        {!reward.skillClaimed && availSkills.length > 0 && (
           <View style={st.sectionCard} testID="spire-skill-draft">
-            <Text style={st.sectionTitle}>FIGHTER SKILL NODE (PICK 1 OF {reward.skillOptions.length})</Text>
+            <Text style={st.sectionTitle}>FIGHTER SKILL NODE (PICK 1 OF {availSkills.length})</Text>
             <View style={st.choiceList}>
-              {reward.skillOptions.map((id, i) => (
+              {availSkills.map((id, i) => (
                 <SkillNodeRow
                   key={id}
                   testID={`spire-skill-pick-${i}`}
@@ -260,11 +265,11 @@ const SpireRewardScreen: React.FC<Props> = ({
         )}
 
         {/* 3. Elite / Boss Bonus Arcana Draft */}
-        {!reward.arcanaClaimed && reward.arcanaOptions.length > 0 && (
+        {!reward.arcanaClaimed && availArcana.length > 0 && (
           <View style={st.sectionCard} testID="spire-arcana-draft">
             <Text style={st.sectionTitle}>ARCANA WILDCARD (OPTIONAL)</Text>
             <View style={st.choiceList}>
-              {reward.arcanaOptions.map((id, i) => (
+              {availArcana.map((id, i) => (
                 <ArcanaCard
                   key={id}
                   testID={`spire-arcana-pick-${i}`}
@@ -293,7 +298,7 @@ const SpireRewardScreen: React.FC<Props> = ({
           label={
             reward.isActBoss
               ? run.act === 3 && !run.endless
-                ? 'Claim Spire Victory!'
+                ? 'Claim Summit Victory!'
                 : `Ascend to Act ${run.act + 1} (+1 Max ♥)`
               : allDone
                 ? 'Continue Climb'

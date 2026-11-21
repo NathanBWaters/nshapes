@@ -1,5 +1,5 @@
 /**
- * Starfall Spire — Run Launch & Ascension Setup screen.
+ * Starfall Summit — Run Launch & Ascension Setup screen.
  *
  * Lets the player resume an active climb, pick any of the 6 Fighters (with full
  * Starter Kit & Passives preview), tune Ascension 0..20, inspect Career Stats,
@@ -56,7 +56,7 @@ const SpireSetup: React.FC<Props> = ({ activeRun, meta, onStartNew, onResume, on
           <Icon name="lorc/return-arrow" size={18} color={INK} />
         </TouchableOpacity>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={st.headerTitle} numberOfLines={1}>STARFALL SPIRE</Text>
+          <Text style={st.headerTitle} numberOfLines={1}>STARFALL SUMMIT</Text>
           <Text style={st.headerSub} numberOfLines={1}>Climb where the star fell · 3 Acts & Endless</Text>
         </View>
         <View style={st.trophyPill}>
@@ -194,7 +194,7 @@ const SpireSetup: React.FC<Props> = ({ activeRun, meta, onStartNew, onResume, on
       <View style={[st.footer, { paddingBottom: Math.max(insets.bottom, 10) }]}>
         <Btn
           testID="spire-start-climb"
-          label={activeRun && activeRun.phase !== 'defeat' && activeRun.phase !== 'victory' ? 'Start Fresh Climb' : 'Begin Spire Climb'}
+          label={activeRun && activeRun.phase !== 'defeat' && activeRun.phase !== 'victory' ? 'Start Fresh Climb' : 'Begin Summit Climb'}
           icon="lorc/mountaintop"
           onPress={() => { sfx('confirm'); onStartNew(fighter, ascension, seed); }}
         />

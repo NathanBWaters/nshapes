@@ -1,5 +1,5 @@
 /**
- * Starfall Spire — Headless Monte Carlo Balance, Dead-Item & Economy Suite.
+ * Starfall Summit — Headless Monte Carlo Balance, Dead-Item & Economy Suite.
  *
  * Verifies:
  *  - Zero dead/XP-only weapons leak into `SPIRE_WEAPON_POOL` (static + runtime firing check)
@@ -28,8 +28,8 @@ import { createRng } from '@/adventure/engine/rng';
 const REPORT = !!process.env.SPIRE_BALANCE_REPORT;
 const RUNS = REPORT ? 36 : 18;
 
-describe('Starfall Spire — invariants, economy & dead-item gates', () => {
-  it('excludes XP-only weapons and ensures every Spire-eligible weapon impacts Act 1 combat', () => {
+describe('Starfall Summit — invariants, economy & dead-item gates', () => {
+  it('excludes XP-only weapons and ensures every Summit-eligible weapon impacts Act 1 combat', () => {
     const eligible = SPIRE_WEAPON_POOL.filter(id => !SPIRE_EXCLUDED_WEAPONS.has(id));
     expect(SPIRE_EXCLUDED_WEAPONS.has('scholars-tome')).toBe(true);
     expect(SPIRE_EXCLUDED_WEAPONS.has('wisdom-chain')).toBe(true);
@@ -123,7 +123,7 @@ describe('Starfall Spire — invariants, economy & dead-item gates', () => {
   });
 });
 
-describe('Starfall Spire — full climb balance', () => {
+describe('Starfall Summit — full climb balance', () => {
   let a0ExpWinRate = 0;
 
   it('Ascension 0 has a balanced Act 1 → Act 2 → Act 3 curve, economy spend, and fighter equity', () => {

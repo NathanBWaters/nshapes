@@ -1,5 +1,5 @@
 /**
- * Starfall Spire — Campfire Node (Rest / Forge Weapon / Meditate for a real Fighter Skill Tree Node).
+ * Starfall Summit — Campfire Node (Rest / Forge Weapon / Meditate for a real Fighter Skill Tree Node).
  *
  * Reuses `WeaponExplainer.tsx` and shared `WeaponOfferRow` / `SkillNodeRow`.
  */
@@ -34,6 +34,7 @@ const SpireCampfire: React.FC<Props> = ({ run, campfire, onRest, onForge, onMedi
   const held = spireHeldWeapons(run);
   const builds = buildSpireWeaponBuilds(run);
   const forgeable = held.filter(w => (run.weaponLevels[w.id] ?? 1) < MAX_WEAPON_LEVEL);
+  const availSkills = campfire.skillOptions.filter(id => !run.skillNodes.includes(id));
   const focusedWeapon = forgeable.find(w => w.id === focusedForgeId) ?? forgeable[0] ?? null;
 
   return (
@@ -45,7 +46,7 @@ const SpireCampfire: React.FC<Props> = ({ run, campfire, onRest, onForge, onMedi
             <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
               <Eyebrow text="CAMPFIRE" color="#FED7AA" />
               <Text style={st.title}>Crackling Embers</Text>
-              <Text style={st.sub}>Take one action before ascending the Spire.</Text>
+              <Text style={st.sub}>Take one action before ascending the Summit.</Text>
             </View>
             <Icon name="lorc/campfire" size={38} color="#F97316" />
           </View>
@@ -94,9 +95,9 @@ const SpireCampfire: React.FC<Props> = ({ run, campfire, onRest, onForge, onMedi
 
             <TouchableOpacity
               testID="spire-campfire-meditate-open"
-              disabled={campfire.skillOptions.length === 0}
+              disabled={availSkills.length === 0}
               onPress={() => { sfx('click'); setSubMode('meditate'); }}
-              style={[st.optCard, { borderColor: TONE.upside }, campfire.skillOptions.length === 0 && { opacity: 0.45 }]}
+              style={[st.optCard, { borderColor: TONE.upside }, availSkills.length === 0 && { opacity: 0.45 }]}
               activeOpacity={0.85}
             >
               <View style={[st.optIcon, { backgroundColor: '#CCFBF1' }]}>
@@ -141,7 +142,7 @@ const SpireCampfire: React.FC<Props> = ({ run, campfire, onRest, onForge, onMedi
           <View style={st.subCard}>
             <Text style={st.secTitle}>CHOOSE A {run.fighter.toUpperCase()} SKILL NODE</Text>
             <View style={{ gap: 8 }}>
-              {campfire.skillOptions.map((id, i) => (
+              {availSkills.map((id, i) => (
                 <SkillNodeRow
                   key={id}
                   testID={`spire-campfire-skill-${i}`}

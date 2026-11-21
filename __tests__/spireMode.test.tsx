@@ -1,38 +1,56 @@
 /**
- * Starfall Spire — unit, map integrity, event coverage, UI reuse, and persistence tests.
+ * Starfall Summit — unit, map integrity, uniqueness invariants, event coverage, UI reuse, and persistence tests.
  */
 import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { FIGHTERS } from '@/adventure/data/fighters';
 import { ALL_ARMORY_WEAPON_IDS } from '@/adventure/data/armory';
+import { ARCANA } from '@/adventure/data/arcana';
+import { skillTreeOf } from '@/adventure/data/skillTrees';
 import { getUpgrade } from '@/adventure/data/upgrades';
 import { loadAdventureSave, writeAdventureSave } from '@/adventure/save';
 import { createNewSave } from '@/adventure/progress';
 import { generateActMap, reachableNodeIds } from '@/spire/engine/mapGen';
 import { SPIRE_EVENTS } from '@/spire/data/events';
-import { SPIRE_WEAPON_POOL, STARTER_KITS } from '@/spire/data/encounters';
+import {
+  ACT_LEVEL_POOLS,
+  SPIRE_WEAPON_POOL,
+  STARTER_KITS,
+  canonicalLevelEnemyName,
+} from '@/spire/data/encounters';
 import {
   ARCANA_PURGE_COST,
   MAX_SHOP_LOCKS,
+  SPIRE_EXCLUDED_ARCANA,
   SPIRE_EXCLUDED_WEAPONS,
+  SPIRE_SHOP_UPGRADE_IDS,
+  advanceToNextAct,
   campfireForge,
   campfireMeditate,
   campfireRest,
   cancelSpirePreview,
   chooseEventOption,
+  claimRewardArcana,
+  claimRewardSkillNode,
   claimRewardWeapon,
   claimTreasure,
   completeSpireBattle,
   createSpireRun,
   enterEndlessSpire,
+  isSpireUpgradeMaxed,
   leaveShop,
+  maxSpireUpgradeTier,
   reorderSpireWeapon,
   resolveEventPendingArcana,
+  resolveEventPendingForge,
+  resolveEventPendingSkill,
   retreatSpireBattle,
   rollArcanaOptions,
+  rollSkillNodeOptions,
   rollSynergyWeapons,
   selectSpireNode,
+  shopBuyArcana,
   shopBuyUpgrade,
   shopBuyWeapon,
   shopPurgeArcana,
@@ -42,6 +60,7 @@ import {
   spireWeaponSellValue,
   startSpireEncounter,
 } from '@/spire/engine/runState';
+import { simulateSpireClimb } from '@/spire/engine/bot';
 import {
   SPIRE_FIGHT_FEATURES,
   clashesWithBelt,
@@ -52,16 +71,26 @@ import {
   spireRunOverrides,
   spireRunToVirtualSave,
 } from '@/spire/engine/bridge';
-import { createInitialSpireMeta, loadSpireRun, resetSpireStorage, syncSpireDiscoveriesToAdventure, writeSpireRun } from '@/spire/save';
+import {
+  createInitialSpireMeta,
+  loadSpireRun,
+  resetSpireStorage,
+  syncSpireDiscoveriesToAdventure,
+  writeSpireMeta,
+  writeSpireRun,
+} from '@/spire/save';
 import { createRng } from '@/adventure/engine/rng';
 import { createRun } from '@/adventure/engine/run';
 import { simulateRun, BOTS } from '@/adventure/engine/bot';
+import MainMenu from '@/components/MainMenu';
 import SpireSetup from '@/spire/components/SpireSetup';
+import SpireHeader from '@/spire/components/SpireHeader';
 import SpireMap from '@/spire/components/SpireMap';
 import SpireEncounterPreview from '@/spire/components/SpireEncounterPreview';
 import SpireShop from '@/spire/components/SpireShop';
 import SpireCampfire from '@/spire/components/SpireCampfire';
 import SpireEvent from '@/spire/components/SpireEvent';
+import SpireTreasure from '@/spire/components/SpireTreasure';
 import SpireBuildModal from '@/spire/components/SpireBuildModal';
 import SpireRewardScreen from '@/spire/components/SpireRewardScreen';
 import SpireEndScreen from '@/spire/components/SpireEndScreen';
@@ -78,14 +107,18 @@ jest.mock('@/components/enemies', () => {
 });
 jest.mock('@/components/fighters', () => {
   const { Text: RNText } = require('react-native');
-  return { FighterAvatar: ({ character }: { character: string }) => <RNText>{character}</RNText> };
+  return {
+    FighterAvatar: ({ character }: { character: string | { name: string } }) => (
+      <RNText>{typeof character === 'string' ? character : character.name}</RNText>
+    ),
+  };
 });
 jest.mock('@/components/weapons', () => {
   const { Text: RNText } = require('react-native');
   return { WeaponAvatar: ({ weapon }: { weapon: { name: string } }) => <RNText>{weapon.name}</RNText> };
 });
 
-describe('Starfall Spire — Map DAG, Events & Shared Engine Bridge', () => {
+describe('Starfall Summit — Map DAG, Events & Shared Engine Bridge', () => {
   it('generates clean, deterministic, fully connected 7-row Act maps for Acts 1..4', () => {
     for (const act of [1, 2, 3, 4]) {
       const m1 = generateActMap(act, 12345, 0);
@@ -292,7 +325,7 @@ describe('Starfall Spire — Map DAG, Events & Shared Engine Bridge', () => {
     expect(accepted.event?.pendingArcanaOffer).toBeUndefined();
   });
 
-  it('supports Brotato Shop locking (cap 2, survives rerolls & next Shop), weapon selling, Arcana purging, and belt reordering', () => {
+  it('supports Shop item locking (cap 2, survives rerolls & next Shop), weapon selling, Arcana purging, and belt reordering', () => {
     let run = createSpireRun('Corgi', 0, 9001);
     run = { ...run, coins: 300, arcana: ['monochrome_pact'] };
     const shopNodes = run.map.nodes.filter(n => n.kind === 'shop');
@@ -395,7 +428,9 @@ describe('Starfall Spire — Map DAG, Events & Shared Engine Bridge', () => {
     expect(fight.parry?.spec.attackName).toBe(enc.parry.attackName);
   });
 
-  it('all 10 Mystery Events resolve every option deterministically without errors', () => {
+  it('all 12 Mystery Events resolve every option deterministically without errors', () => {
+    expect(SPIRE_EVENTS).toHaveLength(12);
+    expect(new Set(SPIRE_EVENTS.map(e => e.id)).size).toBe(12);
     for (const ev of SPIRE_EVENTS) {
       for (const opt of ev.options) {
         let run = createSpireRun('Sly Fox', 0, 999);
@@ -410,6 +445,14 @@ describe('Starfall Spire — Map DAG, Events & Shared Engine Bridge', () => {
         const after = chooseEventOption(run, opt.id);
         expect(after.event?.resolved).toBe(true);
         expect(after.event?.outcomeText).toBeTruthy();
+        expect(after.event?.outcomeText).not.toMatch(/spire/i);
+        if (after.event?.pendingForge) {
+          const wId = after.weapons[0];
+          const beforeLv = after.weaponLevels[wId];
+          const expectedDelta = ev.id === 'starlight_forge' ? 1 : 2;
+          const forged = resolveEventPendingForge(after, wId);
+          expect(forged.weaponLevels[wId]).toBe(Math.min(5, beforeLv + expectedDelta));
+        }
       }
     }
   });
@@ -498,6 +541,7 @@ describe('Starfall Spire — Map DAG, Events & Shared Engine Bridge', () => {
     const legacy = {
       ...fresh,
       upgrades: undefined,
+      seenEnemies: undefined,
       bonusDamagePerMatch: 2,
       bonusClockSeconds: 16,
       evolutionLabTier: 2,
@@ -520,11 +564,517 @@ describe('Starfall Spire — Map DAG, Events & Shared Engine Bridge', () => {
     expect(loaded?.upgrades.hourglass).toBe(2);
     expect(loaded?.upgrades.evolution_lab).toBe(2);
     expect(loaded?.shop?.upgrades[0].upgradeId).toBe('heavy_hitter');
+    expect(loaded?.seenEnemies).toEqual([]);
     resetSpireStorage();
   });
 });
 
-describe('Starfall Spire — Shared UI Components Render Cleanly', () => {
+describe('Starfall Summit — Programmatic Uniqueness & No-Duplicate Invariants', () => {
+  it('ACT_LEVEL_POOLS has 53 strictly non-overlapping levels & canonical enemies across tiers and Acts 1–3', () => {
+    const allLevelIds = new Set<string>();
+    const allEnemyNames = new Set<string>();
+    let totalEntries = 0;
+
+    for (const act of [1, 2, 3] as const) {
+      for (const tier of ['skirmish', 'elite', 'boss'] as const) {
+        const pool = ACT_LEVEL_POOLS[act][tier];
+        expect(pool.length).toBeGreaterThan(0);
+        for (const lvlId of pool) {
+          totalEntries += 1;
+          expect(allLevelIds.has(lvlId)).toBe(false);
+          allLevelIds.add(lvlId);
+          const enemyName = canonicalLevelEnemyName(lvlId);
+          expect(allEnemyNames.has(enemyName)).toBe(false);
+          allEnemyNames.add(enemyName);
+        }
+      }
+    }
+
+    expect(totalEntries).toBe(53);
+    expect(allLevelIds.size).toBe(53);
+    expect(allEnemyNames.size).toBe(53);
+  });
+
+  it('enforces ZERO duplicate enemies & ZERO duplicate events on any Act map and across Acts 1–3 (60 seeds + ambushes + Endless)', () => {
+    for (let i = 0; i < 60; i++) {
+      const seed = 1000 + i * 7919;
+      const asc = i % 2 === 0 ? 0 : 5; // test both A0 and A5 (+1 extra elite per act)
+      let run = createSpireRun('Orange Tabby', asc, seed);
+
+      const climbEnemiesSeen = new Set<string>();
+      const climbEventsVisited = new Set<string>();
+      const allMapEnemiesAcross3Acts = new Set<string>();
+
+      for (const act of [1, 2, 3]) {
+        expect(run.act).toBe(act);
+        const combatNodes = run.map.nodes.filter(n => n.encounter);
+        const mapEnemyNames = combatNodes.map(n => n.encounter!.name);
+
+        // Zero duplicate enemies on this Act map
+        expect(new Set(mapEnemyNames).size).toBe(mapEnemyNames.length);
+        // Zero overlap with previously fought enemies OR prior Acts' maps
+        for (const name of mapEnemyNames) {
+          expect(climbEnemiesSeen.has(name)).toBe(false);
+          expect(allMapEnemiesAcross3Acts.has(name)).toBe(false);
+          allMapEnemiesAcross3Acts.add(name);
+        }
+
+        // Zero duplicate events on this Act map, and none previously visited
+        const eventNodes = run.map.nodes.filter(n => n.kind === 'event');
+        const mapEventIds = eventNodes.map(n => n.eventId!);
+        expect(new Set(mapEventIds).size).toBe(mapEventIds.length);
+        for (const evId of mapEventIds) {
+          expect(climbEventsVisited.has(evId)).toBe(false);
+        }
+
+        // Simulate fighting an entrance skirmish, an elite, and the Act boss (plus a sleeping_hoard ambush!)
+        const sampleCombats = [
+          run.map.nodes.find(n => n.kind === 'skirmish')!,
+          run.map.nodes.find(n => n.kind === 'elite')!,
+          run.map.nodes.find(n => n.kind === 'boss')!,
+        ];
+        for (const cn of sampleCombats) {
+          const enc = cn.encounter!;
+          expect(climbEnemiesSeen.has(enc.name)).toBe(false);
+          climbEnemiesSeen.add(enc.name);
+          run = startSpireEncounter({ ...run, phase: 'preview', activeEncounter: enc });
+          expect(run.seenEnemies).toContain(enc.name);
+        }
+
+        // Trigger a sleeping_hoard:wake ambush and verify it NEVER duplicates any seen or map enemy
+        const ambushRun = chooseEventOption(
+          {
+            ...run,
+            phase: 'event',
+            event: { eventId: 'sleeping_hoard', resolved: false },
+          },
+          'wake'
+        );
+        const ambushName = ambushRun.event?.ambushEncounter?.name;
+        expect(ambushName).toBeTruthy();
+        expect(climbEnemiesSeen.has(ambushName!)).toBe(false);
+        expect(mapEnemyNames).not.toContain(ambushName);
+        expect(ambushRun.seenEnemies).toContain(ambushName);
+        climbEnemiesSeen.add(ambushName!);
+        run = { ...ambushRun, phase: 'map', event: null };
+
+        // Visit all 3 event nodes on this Act map
+        for (const evNode of eventNodes) {
+          const exposed = {
+            ...run,
+            currentNodeId: null,
+            phase: 'map' as const,
+            map: {
+              ...run.map,
+              nodes: run.map.nodes.map(n => (n.id === evNode.id ? { ...n, row: 0, visited: false } : n)),
+            },
+          };
+          const entered = selectSpireNode(exposed, evNode.id);
+          const chosenEv = entered.event!.eventId;
+          expect(climbEventsVisited.has(chosenEv)).toBe(false);
+          climbEventsVisited.add(chosenEv);
+          run = { ...entered, phase: 'map', event: null };
+        }
+
+        if (act < 3) {
+          run = advanceToNextAct(run);
+        }
+      }
+      expect(climbEventsVisited.size).toBe(9);
+    }
+
+    // Runtime safety guard in selectSpireNode swaps to an unseen event if node.eventId was already seen
+    const guardRun = createSpireRun('Pelican', 0, 5150);
+    const evNode = guardRun.map.nodes.find(n => n.kind === 'event')!;
+    const alreadySeenId = evNode.eventId!;
+    const swapped = selectSpireNode(
+      {
+        ...guardRun,
+        seenEvents: [alreadySeenId],
+        map: {
+          ...guardRun.map,
+          nodes: guardRun.map.nodes.map(n => (n.id === evNode.id ? { ...n, row: 0 } : n)),
+        },
+      },
+      evNode.id
+    );
+    expect(swapped.event?.eventId).toBeDefined();
+    expect(swapped.event?.eventId).not.toBe(alreadySeenId);
+
+    // Deep Endless fallback: even after all 12 events & all 53 enemies are seen, an Act map STILL has zero duplicates
+    const allEvents = SPIRE_EVENTS.map(e => e.id);
+    const allEnemies = [1, 2, 3].flatMap(a =>
+      (['skirmish', 'elite', 'boss'] as const).flatMap(k =>
+        ACT_LEVEL_POOLS[a as 1 | 2 | 3][k].map(canonicalLevelEnemyName)
+      )
+    );
+    const endlessMap = generateActMap(6, 9999, 5, allEvents, allEnemies);
+    const endlessEventIds = endlessMap.nodes.filter(n => n.kind === 'event').map(n => n.eventId!);
+    const endlessEnemies = endlessMap.nodes.filter(n => n.encounter).map(n => n.encounter!.name);
+    expect(new Set(endlessEventIds).size).toBe(endlessEventIds.length);
+    expect(new Set(endlessEnemies).size).toBe(endlessEnemies.length);
+  });
+
+  it('simulated full 3-Act climbs across all 6 fighters have zero duplicate fought enemies and zero duplicate visited events', () => {
+    for (let i = 0; i < 12; i++) {
+      const fighter = FIGHTERS[i % FIGHTERS.length].name;
+      const res = simulateSpireClimb({ fighter, ascension: 0, seed: 3000 + i * 1009, bot: BOTS.expert });
+      expect(new Set(res.run.seenEnemies).size).toBe(res.run.seenEnemies.length);
+      expect(new Set(res.run.seenEvents).size).toBe(res.run.seenEvents.length);
+    }
+  }, 60_000);
+
+  it('never re-offers any owned Fighter Skill Node across Rewards, Campfire, Mirror Pond, Archive, and Echoing Cavern', () => {
+    const fighter = 'Orange Tabby' as const;
+    const allNodes = skillTreeOf(fighter).map(n => n.id);
+    expect(allNodes.length).toBeGreaterThanOrEqual(6);
+
+    let run = createSpireRun(fighter, 0, 7070);
+    run = { ...run, coins: 500 };
+
+    // Acquire nodes one by one and verify EVERY offer source strictly excludes all owned nodes
+    for (let step = 0; step < allNodes.length; step++) {
+      const owned = new Set(run.skillNodes);
+
+      // 1. rollSkillNodeOptions
+      const rolled = rollSkillNodeOptions(run, createRng(100 + step), 3);
+      expect(new Set(rolled).size).toBe(rolled.length);
+      for (const id of rolled) expect(owned.has(id)).toBe(false);
+
+      // 2. Campfire Meditate
+      const campNode = run.map.nodes.find(n => n.kind === 'campfire')!;
+      const inCamp = selectSpireNode(
+        {
+          ...run,
+          currentNodeId: null,
+          phase: 'map',
+          map: {
+            ...run.map,
+            nodes: run.map.nodes.map(n => (n.id === campNode.id ? { ...n, row: 0, visited: false } : n)),
+          },
+        },
+        campNode.id
+      );
+      for (const id of inCamp.campfire!.skillOptions) expect(owned.has(id)).toBe(false);
+
+      // 3. Mirror Pond, Starfall Archive, Echoing Cavern
+      for (const [evId, optId] of [
+        ['mirror_pond', 'study'],
+        ['ancient_library', 'technique'],
+        ['echoing_cavern', 'train'],
+      ] as const) {
+        const res = chooseEventOption(
+          { ...run, phase: 'event', event: { eventId: evId, resolved: false } },
+          optId
+        );
+        for (const id of res.event?.pendingSkillOptions ?? []) {
+          expect(owned.has(id)).toBe(false);
+        }
+      }
+
+      // Claim next skill node via reward / campfire / event alternately, and verify duplicate claim is blocked
+      const nextSkill = rolled[0];
+      expect(nextSkill).toBeDefined();
+      run = { ...run, skillNodes: [...run.skillNodes, nextSkill] };
+
+      // Explicit alreadyOwned safeguards refuse re-adding an owned skill node
+      const dupReward = claimRewardSkillNode(
+        {
+          ...run,
+          phase: 'reward',
+          reward: {
+            nodeKind: 'elite',
+            foeName: 'Test',
+            coinsEarned: 50,
+            parryBonusCoins: 0,
+            dpm: 100,
+            biggestHit: 10,
+            parries: 0,
+            perfectParries: 0,
+            weaponOptions: [],
+            weaponClaimed: true,
+            weaponRerolled: false,
+            arcanaOptions: [],
+            arcanaClaimed: true,
+            skillOptions: [nextSkill],
+            skillClaimed: false,
+            isActBoss: false,
+          },
+        },
+        nextSkill
+      );
+      expect(dupReward.skillNodes.filter(id => id === nextSkill)).toHaveLength(1);
+
+      const dupCamp = campfireMeditate(
+        { ...run, phase: 'campfire', campfire: { healAmount: 2, skillOptions: [nextSkill], resolved: false } },
+        nextSkill
+      );
+      expect(dupCamp.skillNodes.filter(id => id === nextSkill)).toHaveLength(1);
+
+      const dupEv = resolveEventPendingSkill(
+        { ...run, phase: 'event', event: { eventId: 'ancient_library', resolved: true, pendingSkillOptions: [nextSkill] } },
+        nextSkill
+      );
+      expect(dupEv.skillNodes.filter(id => id === nextSkill)).toHaveLength(1);
+    }
+
+    // When ALL skill nodes are owned: rollSkillNodeOptions is empty & Mirror Pond doesn't waste 35¢
+    expect(rollSkillNodeOptions(run, createRng(999), 3)).toEqual([]);
+    const coinsBefore = run.coins;
+    const mirrorMaxed = chooseEventOption(
+      { ...run, phase: 'event', event: { eventId: 'mirror_pond', resolved: false } },
+      'study'
+    );
+    expect(mirrorMaxed.event?.pendingSkillOptions).toBeUndefined();
+    expect(mirrorMaxed.coins).toBeGreaterThan(coinsBefore);
+  });
+
+  it('never re-offers any owned Arcana across Rewards, Shop (fresh/reroll/locked carry-over), Vault, and Wandering Alchemist', () => {
+    const eligibleArcana = ARCANA.map(a => a.id).filter(id => !SPIRE_EXCLUDED_ARCANA.has(id));
+    let run = createSpireRun('Badger', 0, 8181);
+    run = { ...run, coins: 2000 };
+    const shopNode = run.map.nodes.find(n => n.kind === 'shop')!;
+    const treasNode = run.map.nodes.find(n => n.kind === 'treasure')!;
+    const evNode = run.map.nodes.find(n => n.kind === 'event')!;
+
+    // Lock an Arcana in Shop 1, leave, acquire it elsewhere, then enter Shop 2 → carried lock MUST be dropped!
+    let s1 = selectSpireNode(
+      { ...run, map: { ...run.map, nodes: run.map.nodes.map(n => (n.id === shopNode.id ? { ...n, row: 0 } : n)) } },
+      shopNode.id
+    );
+    const lockedArcanaId = s1.shop!.arcana[0].arcanaId;
+    s1 = shopToggleLock(s1, 'arcana', 0);
+    s1 = leaveShop(s1);
+    expect(s1.lockedShop?.arcana.some(a => a.arcanaId === lockedArcanaId)).toBe(true);
+
+    // Acquire that same Arcana before Shop 2
+    const afterAcquire = { ...s1, arcana: [...s1.arcana, lockedArcanaId], currentNodeId: null };
+    const s2 = selectSpireNode(
+      {
+        ...afterAcquire,
+        map: {
+          ...afterAcquire.map,
+          nodes: afterAcquire.map.nodes.map(n => (n.id === shopNode.id ? { ...n, row: 0, visited: false } : n)),
+        },
+      },
+      shopNode.id
+    );
+    expect(s2.shop!.arcana.some(a => a.arcanaId === lockedArcanaId)).toBe(false);
+
+    // Acquire every eligible Arcana and verify NO source re-offers owned Arcana (including rerolls)
+    for (const arcId of eligibleArcana) {
+      const owned = new Set(run.arcana);
+      for (const id of rollArcanaOptions(run, createRng(200 + owned.size), 3)) {
+        expect(owned.has(id)).toBe(false);
+      }
+
+      let shopRun = selectSpireNode(
+        {
+          ...run,
+          currentNodeId: null,
+          phase: 'map',
+          map: { ...run.map, nodes: run.map.nodes.map(n => (n.id === shopNode.id ? { ...n, row: 0, visited: false } : n)) },
+        },
+        shopNode.id
+      );
+      for (const offer of shopRun.shop!.arcana) expect(owned.has(offer.arcanaId)).toBe(false);
+      shopRun = shopReroll(shopRun);
+      for (const offer of shopRun.shop!.arcana) expect(owned.has(offer.arcanaId)).toBe(false);
+
+      const treasRun = selectSpireNode(
+        {
+          ...run,
+          currentNodeId: null,
+          phase: 'map',
+          map: { ...run.map, nodes: run.map.nodes.map(n => (n.id === treasNode.id ? { ...n, row: 0, visited: false } : n)) },
+        },
+        treasNode.id
+      );
+      if (treasRun.treasure?.arcanaOffer) expect(owned.has(treasRun.treasure.arcanaOffer)).toBe(false);
+
+      const alchRun = selectSpireNode(
+        {
+          ...run,
+          currentNodeId: null,
+          phase: 'map',
+          seenEvents: [],
+          map: {
+            ...run.map,
+            nodes: run.map.nodes.map(n => (n.id === evNode.id ? { ...n, row: 0, visited: false, eventId: 'wandering_alchemist' } : n)),
+          },
+        },
+        evNode.id
+      );
+      if (alchRun.event?.offeredArcana) expect(owned.has(alchRun.event.offeredArcana)).toBe(false);
+
+      run = { ...run, arcana: [...run.arcana, arcId] };
+
+      // Guard direct duplicate claim attempts
+      expect(
+        claimRewardArcana(
+          {
+            ...run,
+            phase: 'reward',
+            reward: {
+              nodeKind: 'elite',
+              foeName: 'Test',
+              coinsEarned: 50,
+              parryBonusCoins: 0,
+              dpm: 100,
+              biggestHit: 10,
+              parries: 0,
+              perfectParries: 0,
+              weaponOptions: [],
+              weaponClaimed: true,
+              weaponRerolled: false,
+              arcanaOptions: [arcId],
+              arcanaClaimed: false,
+              skillOptions: [],
+              skillClaimed: true,
+              isActBoss: false,
+            },
+          },
+          arcId
+        ).arcana.filter(id => id === arcId)
+      ).toHaveLength(1);
+      expect(
+        shopBuyArcana(
+          {
+            ...shopRun,
+            arcana: run.arcana,
+            shop: { ...shopRun.shop!, arcana: [{ arcanaId: arcId, price: 50, sold: false }] },
+          },
+          0
+        ).arcana.filter(id => id === arcId)
+      ).toHaveLength(1);
+    }
+
+    // All Arcana owned → Shop has 0 Arcana offers, Vault has null arcanaOffer, Alchemist gives fallback coins
+    const allOwnedShop = selectSpireNode(
+      {
+        ...run,
+        currentNodeId: null,
+        phase: 'map',
+        map: { ...run.map, nodes: run.map.nodes.map(n => (n.id === shopNode.id ? { ...n, row: 0, visited: false } : n)) },
+      },
+      shopNode.id
+    );
+    expect(allOwnedShop.shop!.arcana).toEqual([]);
+    const allOwnedTreas = selectSpireNode(
+      {
+        ...run,
+        currentNodeId: null,
+        phase: 'map',
+        map: { ...run.map, nodes: run.map.nodes.map(n => (n.id === treasNode.id ? { ...n, row: 0, visited: false } : n)) },
+      },
+      treasNode.id
+    );
+    expect(allOwnedTreas.treasure!.arcanaOffer).toBeNull();
+    const allOwnedAlch = chooseEventOption(
+      { ...run, phase: 'event', event: { eventId: 'wandering_alchemist', resolved: false } },
+      'arcana'
+    );
+    expect(allOwnedAlch.event?.pendingArcanaOffer).toBeUndefined();
+    expect(allOwnedAlch.coins).toBe(run.coins + 75);
+  });
+
+  it('never re-offers maxed Shop Upgrades (fresh, rerolled, or locked carry-over) and blocks buying past max tier', () => {
+    let run = createSpireRun('Corgi', 0, 9292);
+    run = { ...run, coins: 5000 };
+    const shopNode = run.map.nodes.find(n => n.kind === 'shop')!;
+
+    // 1. Lock an upgrade at maxTier - 1 in Shop 1, max it before Shop 2, verify Shop 2 drops the carried lock!
+    const heavyMax = maxSpireUpgradeTier('heavy_hitter');
+    expect(heavyMax).toBe(3);
+    let s1 = selectSpireNode(
+      {
+        ...run,
+        upgrades: { ...run.upgrades, heavy_hitter: heavyMax - 1 },
+        map: { ...run.map, nodes: run.map.nodes.map(n => (n.id === shopNode.id ? { ...n, row: 0 } : n)) },
+      },
+      shopNode.id
+    );
+    s1 = {
+      ...s1,
+      shop: {
+        ...s1.shop!,
+        upgrades: [{ upgradeId: 'heavy_hitter', price: 65, sold: false, locked: true }],
+      },
+    };
+    const left = leaveShop(s1);
+    expect(left.lockedShop?.upgrades[0].upgradeId).toBe('heavy_hitter');
+
+    // Max heavy_hitter via event before Shop 2
+    const afterEvent = chooseEventOption(
+      { ...left, phase: 'event', event: { eventId: 'cursed_anvil', resolved: false } },
+      'salvage'
+    );
+    expect(isSpireUpgradeMaxed(afterEvent, 'heavy_hitter')).toBe(true);
+
+    const s2 = selectSpireNode(
+      {
+        ...afterEvent,
+        phase: 'map',
+        event: null,
+        currentNodeId: null,
+        map: {
+          ...afterEvent.map,
+          nodes: afterEvent.map.nodes.map(n => (n.id === shopNode.id ? { ...n, row: 0, visited: false } : n)),
+        },
+      },
+      shopNode.id
+    );
+    expect(s2.shop!.upgrades.some(u => u.upgradeId === 'heavy_hitter')).toBe(false);
+
+    // 2. Buying a maxed upgrade is blocked cleanly
+    const blockedBuy = shopBuyUpgrade(
+      {
+        ...s2,
+        shop: { ...s2.shop!, upgrades: [{ upgradeId: 'heavy_hitter', price: 65, sold: false }] },
+      },
+      0
+    );
+    expect(blockedBuy.upgrades.heavy_hitter).toBe(heavyMax);
+    expect(blockedBuy.coins).toBe(s2.coins);
+
+    // 3. Max several upgrades and reroll 30 times: NONE of the maxed upgrades ever appear!
+    const maxedIds = ['heavy_hitter', 'evolution_lab', 'tough_hide'] as const;
+    const partialMaxedUpgrades: Record<string, number> = {};
+    for (const id of maxedIds) partialMaxedUpgrades[id] = maxSpireUpgradeTier(id);
+
+    let rolledShop = selectSpireNode(
+      {
+        ...run,
+        upgrades: partialMaxedUpgrades,
+        map: { ...run.map, nodes: run.map.nodes.map(n => (n.id === shopNode.id ? { ...n, row: 0, visited: false } : n)) },
+      },
+      shopNode.id
+    );
+    for (let r = 0; r < 30; r++) {
+      for (const u of rolledShop.shop!.upgrades) {
+        expect(isSpireUpgradeMaxed(rolledShop, u.upgradeId)).toBe(false);
+        expect(maxedIds).not.toContain(u.upgradeId);
+      }
+      rolledShop = shopReroll(rolledShop);
+    }
+
+    // 4. Max ALL 7 upgrades → Shop upgrade shelf is strictly empty across fresh shops & rerolls!
+    const allMaxed: Record<string, number> = {};
+    for (const id of SPIRE_SHOP_UPGRADE_IDS) allMaxed[id] = maxSpireUpgradeTier(id);
+    const fullMaxShop = selectSpireNode(
+      {
+        ...run,
+        upgrades: allMaxed,
+        map: { ...run.map, nodes: run.map.nodes.map(n => (n.id === shopNode.id ? { ...n, row: 0, visited: false } : n)) },
+      },
+      shopNode.id
+    );
+    expect(fullMaxShop.shop!.upgrades).toEqual([]);
+    expect(shopReroll(fullMaxShop).shop!.upgrades).toEqual([]);
+  });
+});
+
+describe('Starfall Summit — Shared UI Components Render Cleanly & Zero-"Spire" Guardrail', () => {
   it('renders SpireSetup, SpireMap, SpireEncounterPreview (with ParryPreviewCard), SpireShop (with WeaponExplainer), SpireCampfire & SpireBuildModal', () => {
     const run = createSpireRun('Orange Tabby', 0, 4242);
 
@@ -546,7 +1096,7 @@ describe('Starfall Spire — Shared UI Components Render Cleanly', () => {
 
     const map = render(<SpireMap run={run} onSelectNode={() => {}} onReorderWeapon={() => {}} />);
     expect(map.getByTestId('spire-map')).toBeTruthy();
-    // Floor-1 Act Boss full preview modal (Monster Train Ring-1 Seraph rule)
+    // Floor-1 Act Boss full preview modal (plan ahead for the Act Boss)
     fireEvent.press(map.getByTestId('spire-map-boss-preview'));
     expect(map.getByTestId('spire-map-boss-modal')).toBeTruthy();
     expect(map.getByTestId('spire-map-boss-parry')).toBeTruthy();
@@ -807,5 +1357,245 @@ describe('Starfall Spire — Shared UI Components Render Cleanly', () => {
     expect(onResolveArcana).toHaveBeenCalledWith(false);
     fireEvent.press(evView.getByTestId('spire-event-arcana-accept'));
     expect(onResolveArcana).toHaveBeenCalledWith(true);
+  });
+
+  it('displays clear Tier X/Y badges for Shop Upgrades and renders ZERO user-facing "Spire" copy across every Summit & Menu UI', () => {
+    const safeMetrics = { frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } };
+    const collectVisibleCopy = (node: unknown, out: string[] = []): string[] => {
+      if (node == null) return out;
+      if (typeof node === 'string' || typeof node === 'number') {
+        const s = String(node).trim();
+        if (s) out.push(s);
+        return out;
+      }
+      if (Array.isArray(node)) {
+        for (const child of node) collectVisibleCopy(child, out);
+        return out;
+      }
+      if (typeof node === 'object') {
+        const obj = node as { props?: Record<string, unknown>; children?: unknown[] };
+        if (typeof obj.props?.accessibilityLabel === 'string') {
+          out.push(obj.props.accessibilityLabel);
+        }
+        if (obj.children) collectVisibleCopy(obj.children, out);
+      }
+      return out;
+    };
+
+    const assertNoSpireText = (label: string, tree: unknown) => {
+      const strings = collectVisibleCopy(tree);
+      const offenders = strings.filter(s => /spire/i.test(s));
+      expect({ screen: label, offenders }).toEqual({ screen: label, offenders: [] });
+      return strings.join('\n');
+    };
+
+    resetSpireStorage();
+    const baseRun = createSpireRun('Orange Tabby', 1, 4242);
+
+    // 1. MainMenu (fresh, meta with wins, and live run)
+    const menuFresh = render(
+      <MainMenu
+        onSelectAdventure={() => {}}
+        onSelectSpire={() => {}}
+        onSelectFreeplay={() => {}}
+        onSelectTutorial={() => {}}
+        onSelectOptions={() => {}}
+      />
+    );
+    expect(assertNoSpireText('MainMenu (fresh)', menuFresh.toJSON())).toContain('Starfall Summit');
+
+    writeSpireMeta({ ...createInitialSpireMeta(), totalRuns: 3, victories: 1, bestFloor: 21, highestAscensionUnlocked: 1 });
+    const menuMeta = render(
+      <MainMenu
+        onSelectAdventure={() => {}}
+        onSelectSpire={() => {}}
+        onSelectFreeplay={() => {}}
+        onSelectTutorial={() => {}}
+        onSelectOptions={() => {}}
+      />
+    );
+    expect(assertNoSpireText('MainMenu (meta)', menuMeta.toJSON())).toContain('Starfall Summit');
+
+    writeSpireRun(baseRun);
+    const menuLive = render(
+      <MainMenu
+        onSelectAdventure={() => {}}
+        onSelectSpire={() => {}}
+        onSelectFreeplay={() => {}}
+        onSelectTutorial={() => {}}
+        onSelectOptions={() => {}}
+      />
+    );
+    expect(assertNoSpireText('MainMenu (live)', menuLive.toJSON())).toContain('Starfall Summit');
+    resetSpireStorage();
+
+    // 2. SpireSetup (fresh & active run)
+    const setupFresh = render(
+      <SafeAreaProvider initialMetrics={safeMetrics}>
+        <SpireSetup activeRun={null} meta={createInitialSpireMeta()} onStartNew={() => {}} onResume={() => {}} onAbandonActive={() => {}} onExit={() => {}} />
+      </SafeAreaProvider>
+    );
+    const setupText = assertNoSpireText('SpireSetup (fresh)', setupFresh.toJSON());
+    expect(setupText).toContain('STARFALL SUMMIT');
+    expect(setupText).toContain('Begin Summit Climb');
+
+    const setupActive = render(
+      <SafeAreaProvider initialMetrics={safeMetrics}>
+        <SpireSetup activeRun={baseRun} meta={createInitialSpireMeta()} onStartNew={() => {}} onResume={() => {}} onAbandonActive={() => {}} onExit={() => {}} />
+      </SafeAreaProvider>
+    );
+    assertNoSpireText('SpireSetup (active)', setupActive.toJSON());
+
+    // 3. SpireHeader & SpireBuildModal
+    const header = render(<SpireHeader run={baseRun} onOpenBuild={() => {}} onExitToMenu={() => {}} />);
+    expect(assertNoSpireText('SpireHeader', header.toJSON())).toContain('Inspect Summit build');
+
+    const modal = render(<SpireBuildModal visible run={baseRun} onClose={() => {}} />);
+    expect(assertNoSpireText('SpireBuildModal', modal.toJSON())).toContain(`Summit Build · Seed ${baseRun.seed}`);
+
+    // 4. SpireMap & EncounterPreview
+    const mapView = render(<SpireMap run={baseRun} onSelectNode={() => {}} onReorderWeapon={() => {}} />);
+    assertNoSpireText('SpireMap', mapView.toJSON());
+
+    const firstId = reachableNodeIds(baseRun.map, null)[0];
+    const inPreview = selectSpireNode(baseRun, firstId);
+    const previewView = render(
+      <SpireEncounterPreview run={inPreview} encounter={inPreview.activeEncounter!} onFight={() => {}} onInspectBuild={() => {}} onBack={() => {}} />
+    );
+    assertNoSpireText('SpireEncounterPreview', previewView.toJSON());
+
+    // 5. SpireShop (also verify Tier X/Y badge renders on upgrade offers!)
+    const shopView = render(
+      <SpireShop
+        run={{ ...baseRun, coins: 300, upgrades: { ...baseRun.upgrades, heavy_hitter: 1 } }}
+        shop={{
+          weapons: [{ weaponId: 'war-drum', level: 2, price: 65, sold: false }],
+          arcana: [{ arcanaId: 'tempo_surge', price: 75, sold: false }],
+          upgrades: [
+            { upgradeId: 'heavy_hitter', price: 65, sold: false },
+            { upgradeId: 'evolution_lab', price: 80, sold: false, locked: true },
+          ],
+          healCost: 45,
+          healAmount: 2,
+          healed: false,
+          forgeCost: 55,
+          forged: false,
+          rerollCost: 25,
+          rerolls: 0,
+        }}
+        onBuyWeapon={() => {}}
+        onBuyArcana={() => {}}
+        onBuyUpgrade={() => {}}
+        onBuyHeal={() => {}}
+        onForgeWeapon={() => {}}
+        onReroll={() => {}}
+        onLeave={() => {}}
+      />
+    );
+    const shopText = assertNoSpireText('SpireShop', shopView.toJSON());
+    expect(shopText).toContain('Heavy Hitter (Tier 2/3)');
+    expect(shopText).toContain('Evolution Lab (Tier 2/3 · Locked)');
+
+    // 6. SpireCampfire (main + resolved meditate outcome)
+    const campView = render(
+      <SpireCampfire
+        run={baseRun}
+        campfire={{ healAmount: 3, skillOptions: ['tabby-0-1'], resolved: false }}
+        onRest={() => {}}
+        onForge={() => {}}
+        onMeditate={() => {}}
+        onLeave={() => {}}
+      />
+    );
+    expect(assertNoSpireText('SpireCampfire', campView.toJSON())).toContain('ascending the Summit');
+
+    const meditated = campfireMeditate(
+      { ...baseRun, phase: 'campfire', campfire: { healAmount: 3, skillOptions: ['tabby-0-1'], resolved: false } },
+      'tabby-0-1'
+    );
+    const campDone = render(
+      <SpireCampfire run={meditated} campfire={meditated.campfire!} onRest={() => {}} onForge={() => {}} onMeditate={() => {}} onLeave={() => {}} />
+    );
+    assertNoSpireText('SpireCampfire (meditated)', campDone.toJSON());
+
+    // 7. SpireEvent (all 12 Mystery Events!)
+    for (const ev of SPIRE_EVENTS) {
+      const evView = render(
+        <SpireEvent
+          run={{ ...baseRun, coins: 200 }}
+          eventState={{ eventId: ev.id, resolved: false }}
+          onChoose={() => {}}
+          onPickWeapon={() => {}}
+          onPickSkill={() => {}}
+          onPickForge={() => {}}
+          onResolveArcana={() => {}}
+          onLeave={() => {}}
+        />
+      );
+      assertNoSpireText(`SpireEvent (${ev.id})`, evView.toJSON());
+    }
+
+    // 8. SpireTreasure
+    const treasView = render(
+      <SpireTreasure
+        run={baseRun}
+        treasure={{ coins: 80, weaponOffer: { weaponId: 'war-drum', level: 2 }, arcanaOffer: 'tempo_surge', claimed: false }}
+        onClaim={() => {}}
+        onLeave={() => {}}
+      />
+    );
+    assertNoSpireText('SpireTreasure', treasView.toJSON());
+
+    // 9. SpireRewardScreen (Act 3 Boss victory button)
+    const rewardView = render(
+      <SafeAreaProvider initialMetrics={safeMetrics}>
+        <SpireRewardScreen
+          run={{ ...baseRun, act: 3 }}
+          reward={{
+            nodeKind: 'boss',
+            foeName: 'The Hydra',
+            coinsEarned: 130,
+            parryBonusCoins: 10,
+            dpm: 900,
+            biggestHit: 120,
+            parries: 2,
+            perfectParries: 1,
+            weaponOptions: [{ weaponId: 'war-drum', level: 3 }],
+            weaponClaimed: false,
+            weaponRerolled: false,
+            arcanaOptions: ['tempo_surge'],
+            arcanaClaimed: false,
+            skillOptions: ['tabby-0-1'],
+            skillClaimed: false,
+            isActBoss: true,
+          }}
+          lastFight={null}
+          onClaimWeapon={() => {}}
+          onRerollWeapons={() => {}}
+          onSkipWeapon={() => {}}
+          onClaimArcana={() => {}}
+          onSkipArcana={() => {}}
+          onClaimSkill={() => {}}
+          onSkipSkill={() => {}}
+          onContinue={() => {}}
+        />
+      </SafeAreaProvider>
+    );
+    expect(assertNoSpireText('SpireRewardScreen (Act 3 Boss)', rewardView.toJSON())).toContain('Claim Summit Victory!');
+
+    // 10. SpireEndScreen (Victory & Defeat with undefined defeatedBy)
+    const winView = render(
+      <SafeAreaProvider initialMetrics={safeMetrics}>
+        <SpireEndScreen run={{ ...baseRun, act: 3, phase: 'victory' }} victory lastFight={null} onEnterEndless={() => {}} onNewRun={() => {}} onExitToMenu={() => {}} />
+      </SafeAreaProvider>
+    );
+    expect(assertNoSpireText('SpireEndScreen (victory)', winView.toJSON())).toContain('SUMMIT CONQUERED!');
+
+    const loseView = render(
+      <SafeAreaProvider initialMetrics={safeMetrics}>
+        <SpireEndScreen run={{ ...baseRun, phase: 'defeat', defeatedBy: undefined }} victory={false} lastFight={null} onNewRun={() => {}} onExitToMenu={() => {}} />
+      </SafeAreaProvider>
+    );
+    expect(assertNoSpireText('SpireEndScreen (defeat)', loseView.toJSON())).toContain('the Summit');
   });
 });

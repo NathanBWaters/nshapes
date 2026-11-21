@@ -1,8 +1,8 @@
 /**
- * Starfall Spire — MMKV persistence & shared Evolution discovery sync.
+ * Starfall Summit — MMKV persistence & shared Evolution discovery sync.
  *
- * Kept completely isolated under `spire_v1_*` keys so Adventure Mode's save is
- * never corrupted, while newly forged Evolutions in Spire smoothly sync into
+ * Kept completely isolated under `spire_v1_*` storage keys so Adventure Mode's save is
+ * never corrupted, while newly forged Evolutions in Summit climbs smoothly sync into
  * the player's shared Recipe Guide (`discoveredEvolutions`).
  */
 import { storage } from '@/utils/storage';
@@ -83,7 +83,9 @@ export const loadSpireRun = (): SpireRun | null => {
         }
       : null;
 
-    const run: SpireRun = { ...(parsed as SpireRun), upgrades, shop };
+    const seenEvents = Array.isArray(parsed.seenEvents) ? parsed.seenEvents : [];
+    const seenEnemies = Array.isArray(parsed.seenEnemies) ? parsed.seenEnemies : [];
+    const run: SpireRun = { ...(parsed as SpireRun), upgrades, shop, seenEvents, seenEnemies };
     // Defensive guard: if a saved phase references missing room state, land cleanly on the Act map
     const needsFallbackToMap =
       ((run.phase === 'preview' || run.phase === 'fight') && !run.activeEncounter) ||
@@ -112,7 +114,7 @@ export const hasActiveSpireRun = (): boolean => {
   return !!r && r.phase !== 'defeat' && r.phase !== 'victory';
 };
 
-/** Record a finished (or victorious) Spire run into career meta stats. */
+/** Record a finished (or victorious) Summit run into career meta stats. */
 export const recordSpireRunEnd = (run: SpireRun, victory: boolean): SpireMeta => {
   const prev = loadSpireMeta();
   const nextWins = { ...prev.fighterWins };
@@ -135,7 +137,7 @@ export const recordSpireRunEnd = (run: SpireRun, victory: boolean): SpireMeta =>
   return next;
 };
 
-/** Share newly discovered Evolution recipes from Spire back to Adventure's Recipe Guide! */
+/** Share newly discovered Evolution recipes from Starfall Summit back to Adventure's Recipe Guide! */
 export const syncSpireDiscoveriesToAdventure = (forgedRecipes: readonly string[]): void => {
   if (!forgedRecipes.length) return;
   try {

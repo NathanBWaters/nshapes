@@ -1,5 +1,5 @@
 /**
- * Headless Starfall Spire run simulator.
+ * Headless Starfall Summit run simulator.
  *
  * Plays complete multi-Act roguelike climbs (Act 1 → Act 3 Boss → optional
  * Endless Act 4+) through the REAL `runReducer` and `BOTS` from Adventure Mode
@@ -38,6 +38,7 @@ import {
   createSpireRun,
   enterEndlessSpire,
   finishSpireRewards,
+  isSpireUpgradeMaxed,
   leaveCampfire,
   leaveEvent,
   leaveShop,
@@ -136,8 +137,9 @@ const isGoodArcana = (run: SpireRun, arcanaId: ArcanaId, bot: BotProfile): boole
   if (arcanaId === 'monochrome_pact' && (isRainbowBuild || run.arcana.includes('prismatic_fever'))) return false;
   if (arcanaId === 'prismatic_fever' && run.arcana.includes('monochrome_pact')) return false;
   if (arcanaId === 'glass_prism') {
-    // Allow Glass Prism on expert runs, or on average runs with a safe heart buffer
-    return bot.name === 'expert' || (run.maxHearts >= 4 && run.hearts >= 3);
+    // Risk-calibrated Glass Prism: strong when max hearts are already lean (<= 5),
+    // instead of sacrificing an 8+ heart tank pool into Act 2–3 hazard fights.
+    return run.maxHearts <= 5 && (bot.name === 'expert' || run.hearts >= 3);
   }
   return true;
 };
@@ -176,7 +178,7 @@ const bestForgeTarget = (run: SpireRun): string | undefined => {
 };
 
 /**
- * Simulate a full Starfall Spire climb for `fighter` at `ascension` with `bot`.
+ * Simulate a full Starfall Summit climb for `fighter` at `ascension` with `bot`.
  * Stops after beating Act 3 (or after Act `maxAct` when `playEndless: true`).
  */
 export const simulateSpireClimb = (o: {
@@ -209,7 +211,8 @@ export const simulateSpireClimb = (o: {
       const ids = reachableNodeIds(run.map, run.currentNodeId);
       if (ids.length === 0) break;
       const nodes = ids.map(id => run.map.nodes.find(n => n.id === id)!);
-      const lowHp = run.hearts <= Math.ceil(run.maxHearts * 0.5);
+      const glassCapped = run.arcana.includes('glass_prism');
+      const lowHp = run.hearts <= Math.ceil(run.maxHearts * 0.5) || (glassCapped && run.act >= 2);
       const picked =
         (lowHp ? nodes.find(n => n.kind === 'campfire' || n.kind === 'treasure' || n.kind === 'shop') : null) ??
         (run.coins >= 65 ? nodes.find(n => n.kind === 'shop') : null) ??
@@ -296,7 +299,7 @@ export const simulateSpireClimb = (o: {
         // Buy Workshop upgrades first (always-on run-wide power!)
         for (let i = 0; i < (run.shop?.upgrades.length ?? 0); i++) {
           const u = run.shop!.upgrades[i];
-          if (!u.sold && run.coins >= u.price) {
+          if (!u.sold && !isSpireUpgradeMaxed(run, u.upgradeId) && run.coins >= u.price) {
             run = shopBuyUpgrade(run, i);
             bought = true;
           }

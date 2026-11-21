@@ -1,5 +1,5 @@
 /**
- * Starfall Spire — Victory (with Enter Endless Starfall!) & Defeat Summary Screen.
+ * Starfall Summit — Victory (with Enter Endless Starfall!) & Defeat Summary Screen.
  *
  * Reuses `FighterAvatar`, `WeaponAvatar`, `FightReplay`, and shared `ui.tsx`.
  */
@@ -76,11 +76,11 @@ const SpireEndScreen: React.FC<Props> = ({
             text={victory ? `ASCENSION ${run.ascension} CLEARED!` : run.endless ? `ENDLESS ACT ${run.act} · FLOOR ${run.floor}` : `ACT ${run.act} · FLOOR ${run.floor}`}
             color={victory ? COLORS.actionYellow : '#FECACA'}
           />
-          <Text style={st.title}>{victory ? 'SPIRE CONQUERED!' : 'CLIMB ENDED'}</Text>
+          <Text style={st.title}>{victory ? 'SUMMIT CONQUERED!' : 'CLIMB ENDED'}</Text>
           <Text style={st.sub}>
             {victory
               ? `${run.fighter} shattered the Starfall Summit! Ascension ${run.ascension + 1} is now unlocked.`
-              : `${run.fighter} fell to ${run.defeatedBy ?? 'the Spire'} on Floor ${run.floor}.`}
+              : `${run.fighter} fell to ${run.defeatedBy ?? 'the Summit'} on Floor ${run.floor}.`}
           </Text>
           <FighterAvatar
             character={run.fighter}
@@ -91,7 +91,7 @@ const SpireEndScreen: React.FC<Props> = ({
           />
         </PopIn>
 
-        {/* Brotato-Style Cumulative Damage Story (Full Climb + optional Final Fight toggle) */}
+        {/* Cumulative Damage Story (Full Climb + optional Final Fight toggle) */}
         {activeStory && activeStory.totalDamage > 0 && (
           <BattleDamageStory
             story={activeStory}

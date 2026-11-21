@@ -102,10 +102,10 @@ async function assertAllTextVisible(page: Page, contextLabel: string): Promise<v
   expect(violations, `Layout/text clipping violations on ${contextLabel}`).toEqual([]);
 }
 
-test.describe('Set-Parrying, Multiplier Ignition, Kill-Cam & Starfall Spire E2E', () => {
+test.describe('Set-Parrying, Multiplier Ignition, Kill-Cam & Starfall Summit E2E', () => {
   test.describe.configure({ mode: 'serial' });
 
-  test('Main Menu exposes Starfall Spire cleanly on 375px and 320px viewports', async ({ page }) => {
+  test('Main Menu exposes Starfall Summit cleanly on 375px and 320px viewports', async ({ page }) => {
     const pageErrors: string[] = [];
     page.on('pageerror', err => pageErrors.push(err.message));
 
@@ -117,29 +117,34 @@ test.describe('Set-Parrying, Multiplier Ignition, Kill-Cam & Starfall Spire E2E'
       await page.goto('/');
       await expect(page.getByTestId('menu-adventure')).toBeVisible({ timeout: 20000 });
       await expect(page.getByTestId('menu-spire')).toBeVisible({ timeout: 10000 });
+      await expect(page.getByTestId('menu-spire')).toContainText('Starfall Summit');
+      await expect(page.getByTestId('menu-spire')).not.toContainText(/spire/i);
       await expect(page.getByTestId('menu-spire')).toBeInViewport();
       await page.waitForTimeout(300);
       await assertAllTextVisible(page, `Main Menu (${vp.width}x${vp.height})`);
       if (vp.width === 375) await maybeShot(page, '01-main-menu-375');
     }
 
-    // Clicking Starfall Spire launches SpireSetup directly
+    // Clicking Starfall Summit launches SpireSetup directly
     await page.setViewportSize({ width: 375, height: 667 });
     await page.getByTestId('menu-spire').click();
     await expect(page.getByTestId('spire-setup')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId('spire-setup')).toContainText('STARFALL SUMMIT');
+    await expect(page.getByTestId('spire-setup')).not.toContainText(/spire/i);
     await expect(page.getByTestId('spire-start-climb')).toBeVisible();
+    await expect(page.getByTestId('spire-start-climb')).toContainText('Begin Summit Climb');
     await page.waitForTimeout(300);
-    await assertAllTextVisible(page, 'Spire Setup via Main Menu (375x667)');
+    await assertAllTextVisible(page, 'Summit Setup via Main Menu (375x667)');
     await maybeShot(page, '02-spire-setup-375');
 
     // Switch fighter & verify starter kit updates cleanly
     await page.getByTestId('spire-fighter-Badger').click();
     await expect(page.getByTestId('spire-starter-kit')).toContainText('Bloodline');
-    await assertAllTextVisible(page, 'Spire Setup Badger (375x667)');
+    await assertAllTextVisible(page, 'Summit Setup Badger (375x667)');
 
     await page.getByTestId('spire-fighter-Corgi').click();
     await expect(page.getByTestId('spire-starter-kit')).toContainText('Shard Garden');
-    await assertAllTextVisible(page, 'Spire Setup Corgi (375x667)');
+    await assertAllTextVisible(page, 'Summit Setup Corgi (375x667)');
 
     expect(pageErrors).toEqual([]);
   });
@@ -172,7 +177,7 @@ test.describe('Set-Parrying, Multiplier Ignition, Kill-Cam & Starfall Spire E2E'
     expect(pageErrors).toEqual([]);
   });
 
-  test('Full Starfall Spire playable loop: Setup → Map → Preview (Parry) → Build Modal → Autoplay Fight → Rewards → Map', async ({ page }) => {
+  test('Full Starfall Summit playable loop: Setup → Map → Preview (Parry) → Build Modal → Autoplay Fight → Rewards → Map', async ({ page }) => {
     test.setTimeout(90_000);
     const pageErrors: string[] = [];
     page.on('pageerror', err => pageErrors.push(err.message));
@@ -184,14 +189,14 @@ test.describe('Set-Parrying, Multiplier Ignition, Kill-Cam & Starfall Spire E2E'
     await expect(page.getByTestId('spire-map')).toBeVisible({ timeout: 20000 });
     await expect(page.getByTestId('spire-header')).toBeVisible();
     await page.waitForTimeout(400);
-    await assertAllTextVisible(page, 'Spire Act 1 Map (375x667)');
+    await assertAllTextVisible(page, 'Summit Act 1 Map (375x667)');
     await maybeShot(page, '05-spire-map-375');
 
     // 2. Open Build Modal (reusing WeaponExplainer)
     await page.getByTestId('spire-open-build').click();
     await expect(page.getByTestId('spire-build-weapon-blast-powder')).toBeVisible({ timeout: 5000 });
     await page.waitForTimeout(250);
-    await assertAllTextVisible(page, 'Spire Build Inspector Modal (375x667)');
+    await assertAllTextVisible(page, 'Summit Build Inspector Modal (375x667)');
     await maybeShot(page, '06-spire-build-modal-375');
     await page.getByLabel('Close', { exact: true }).click();
 
@@ -200,7 +205,7 @@ test.describe('Set-Parrying, Multiplier Ignition, Kill-Cam & Starfall Spire E2E'
     await expect(page.getByTestId('spire-encounter-preview')).toBeVisible({ timeout: 10000 });
     await expect(page.getByTestId('spire-preview-parry')).toBeVisible();
     await page.waitForTimeout(350);
-    await assertAllTextVisible(page, 'Spire Encounter Preview (375x667)');
+    await assertAllTextVisible(page, 'Summit Encounter Preview (375x667)');
     await maybeShot(page, '07-spire-encounter-preview-375');
 
     // 4. Enter Combat (shared AdventureRun with Set-Parry & Ignition + autoplay)
@@ -214,7 +219,7 @@ test.describe('Set-Parrying, Multiplier Ignition, Kill-Cam & Starfall Spire E2E'
     await expect(page.getByTestId('spire-reward-screen')).toBeVisible({ timeout: 60000 });
     await expect(page.getByTestId('spire-weapon-draft')).toBeVisible();
     await page.waitForTimeout(350);
-    await assertAllTextVisible(page, 'Spire Post-Battle Rewards (375x667)');
+    await assertAllTextVisible(page, 'Summit Post-Battle Rewards (375x667)');
     await maybeShot(page, '09-spire-rewards-375');
 
     // 6. Claim a weapon & return to Map on Row 1!
@@ -222,17 +227,17 @@ test.describe('Set-Parrying, Multiplier Ignition, Kill-Cam & Starfall Spire E2E'
     await page.getByTestId('spire-reward-continue').click();
     await expect(page.getByTestId('spire-map')).toBeVisible({ timeout: 10000 });
     await page.waitForTimeout(350);
-    await assertAllTextVisible(page, 'Spire Map Floor 2 (375x667)');
+    await assertAllTextVisible(page, 'Summit Map Floor 2 (375x667)');
 
-    // Also sanity-check 320px narrow viewport on Spire Map & Setup
+    // Also sanity-check 320px narrow viewport on Summit Map & Setup
     await page.setViewportSize({ width: 320, height: 568 });
     await page.waitForTimeout(250);
-    await assertAllTextVisible(page, 'Spire Map (320x568)');
+    await assertAllTextVisible(page, 'Summit Map (320x568)');
 
     expect(pageErrors).toEqual([]);
   });
 
-  test('Spire Merchant Shop, Campfire, Mystery Event & Treasure Vault render cleanly and operate end-to-end', async ({ page }) => {
+  test('Summit Merchant Shop, Campfire, Mystery Event & Treasure Vault render cleanly and operate end-to-end', async ({ page }) => {
     test.setTimeout(60_000);
     const pageErrors: string[] = [];
     page.on('pageerror', err => pageErrors.push(err.message));
@@ -243,7 +248,7 @@ test.describe('Set-Parrying, Multiplier Ignition, Kill-Cam & Starfall Spire E2E'
     await page.goto('/dev/spire?room=shop&seed=4242');
     await expect(page.getByTestId('spire-shop')).toBeVisible({ timeout: 20000 });
     await page.waitForTimeout(300);
-    await assertAllTextVisible(page, 'Spire Merchant Shop (375x667)');
+    await assertAllTextVisible(page, 'Summit Merchant Shop (375x667)');
     await maybeShot(page, '10-spire-shop-375');
     await page.getByTestId('spire-shop-heal').click();
     await page.getByTestId('spire-shop-leave').click();
@@ -253,7 +258,7 @@ test.describe('Set-Parrying, Multiplier Ignition, Kill-Cam & Starfall Spire E2E'
     await page.goto('/dev/spire?room=campfire&seed=4242');
     await expect(page.getByTestId('spire-campfire')).toBeVisible({ timeout: 15000 });
     await page.waitForTimeout(300);
-    await assertAllTextVisible(page, 'Spire Campfire (375x667)');
+    await assertAllTextVisible(page, 'Summit Campfire (375x667)');
     await maybeShot(page, '11-spire-campfire-375');
     await page.getByTestId('spire-campfire-rest').click();
     await expect(page.getByTestId('spire-campfire-leave')).toBeVisible({ timeout: 5000 });
@@ -262,15 +267,17 @@ test.describe('Set-Parrying, Multiplier Ignition, Kill-Cam & Starfall Spire E2E'
     await page.goto('/dev/spire?room=event&seed=4242');
     await expect(page.getByTestId('spire-event')).toBeVisible({ timeout: 15000 });
     await page.waitForTimeout(300);
-    await assertAllTextVisible(page, 'Spire Mystery Event (375x667)');
+    await assertAllTextVisible(page, 'Summit Mystery Event (375x667)');
     await maybeShot(page, '12-spire-event-375');
     await page.getByTestId('spire-event-opt-0').click();
     await page.waitForTimeout(250);
     if (await page.getByTestId('spire-event-skill-0').isVisible()) {
-      await assertAllTextVisible(page, 'Spire Mystery Event Skill Picker (375x667)');
+      await assertAllTextVisible(page, 'Summit Mystery Event Skill Picker (375x667)');
       await page.getByTestId('spire-event-skill-0').click();
     } else if (await page.getByTestId('spire-event-weapon-0').isVisible()) {
       await page.getByTestId('spire-event-weapon-0').click();
+    } else if (await page.locator('[data-testid^="spire-event-forge-"]').first().isVisible()) {
+      await page.locator('[data-testid^="spire-event-forge-"]').first().click();
     }
     await expect(page.getByTestId('spire-event-leave')).toBeVisible({ timeout: 5000 });
 
@@ -278,7 +285,7 @@ test.describe('Set-Parrying, Multiplier Ignition, Kill-Cam & Starfall Spire E2E'
     await page.goto('/dev/spire?room=treasure&seed=4242');
     await expect(page.getByTestId('spire-treasure')).toBeVisible({ timeout: 15000 });
     await page.waitForTimeout(300);
-    await assertAllTextVisible(page, 'Spire Treasure Vault (375x667)');
+    await assertAllTextVisible(page, 'Summit Treasure Vault (375x667)');
     await maybeShot(page, '13-spire-treasure-375');
     await page.getByTestId('spire-treasure-coins').click();
     await expect(page.getByTestId('spire-treasure-leave')).toBeVisible({ timeout: 5000 });

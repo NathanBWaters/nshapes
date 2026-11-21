@@ -1,9 +1,9 @@
 /**
- * Bridge between Starfall Spire and Adventure Mode's shared combat engine.
+ * Bridge between Starfall Summit and Adventure Mode's shared combat engine.
  *
  * Converts a `SpireRun` + `SpireEncounter` into a standard `LevelDef`, a
  * virtual `AdventureSave`, `RunOverrides`, and `FeatureFlag` set so EVERY
- * Spire fight — and every pre-fight stat calculation — runs through the exact
+ * Summit fight — and every pre-fight stat calculation — runs through the exact
  * same `startingLoadout`, `runReducer`, `AdventureRun`, `UPGRADES`, 208
  * Evolutions, Set-Parrying, Multiplier Ignition, Kill-Cam, and Audio Band!
  */
@@ -21,7 +21,7 @@ import type { SpireEncounter, SpireRun } from '../types';
 
 const A3: AttributeName[] = ['shape', 'color', 'number'];
 
-/** All core combat features enabled inside Starfall Spire fights (no mid-fight wave shop/xp popups — progression lives on the Spire map!). */
+/** All core combat features enabled inside Starfall Summit fights (no mid-fight wave shop/xp popups — progression lives on the Summit map!). */
 export const SPIRE_FIGHT_FEATURES: ReadonlySet<FeatureFlag> = new Set<FeatureFlag>([
   'hearts',
   'gear',
@@ -36,7 +36,7 @@ export const SPIRE_FIGHT_FEATURES: ReadonlySet<FeatureFlag> = new Set<FeatureFla
 
 export const ALL_EVOLUTION_IDS: readonly string[] = EVOLUTION_RECIPES.map(r => r.id);
 
-/** Build a `WeaponBuilds` lookup from the Spire run's weapon levels. */
+/** Build a `WeaponBuilds` lookup from the Summit run's weapon levels. */
 export const buildSpireWeaponBuilds = (run: Pick<SpireRun, 'weaponLevels'>): WeaponBuilds => {
   const out: Record<string, { level: number; tuning: Record<string, number> }> = {};
   for (const [id, level] of Object.entries(run.weaponLevels)) {
@@ -45,11 +45,11 @@ export const buildSpireWeaponBuilds = (run: Pick<SpireRun, 'weaponLevels'>): Wea
   return out;
 };
 
-/** Instantiate the player's current held weapons at their Spire levels (respecting Understudy slot order). */
+/** Instantiate the player's current held weapons at their Summit levels (respecting Understudy slot order). */
 export const spireHeldWeapons = (run: Pick<SpireRun, 'weapons' | 'weaponLevels'>): Weapon[] =>
   charmWeapons(run.weapons, buildSpireWeaponBuilds(run));
 
-/** Armed evolution recipe ids for a Spire run's current weapons. */
+/** Armed evolution recipe ids for a Summit run's current weapons. */
 export const spireArmedRecipes = (run: Pick<SpireRun, 'weapons' | 'weaponLevels'>): string[] =>
   armedRecipesFor(spireHeldWeapons(run), ALL_EVOLUTION_IDS);
 
@@ -77,7 +77,7 @@ export interface SpireClashWarning {
 
 /**
  * Empirically verified severe Gamble/Board anti-synergies flagged before
- * buying or drafting in Starfall Spire (`docs/balance-analytics.json` clashes).
+ * buying or drafting in Starfall Summit (`docs/balance-analytics.json` clashes).
  */
 export const SPIRE_CLASH_PAIRS: readonly { a: string; b: string; reason: string }[] = [
   {
@@ -154,7 +154,7 @@ export const clashesWithBelt = (
   return warnings;
 };
 
-/** Convert a Spire encounter into a standard Adventure `LevelDef`. */
+/** Convert a Summit encounter into a standard Adventure `LevelDef`. */
 export const spireEncounterToLevel = (run: SpireRun, encounter: SpireEncounter): LevelDef => ({
   id: `spire-${run.act}-${run.floor}-${encounter.id}`,
   biome: encounter.biome,
@@ -185,7 +185,7 @@ export const spireEncounterToLevel = (run: SpireRun, encounter: SpireEncounter):
   ...(encounter.kind === 'elite' ? { isElite: true } : {}),
 });
 
-/** Build a virtual `AdventureSave` reflecting the Spire run's exact fighter, gear, skills, Arcana, and shared UPGRADES. */
+/** Build a virtual `AdventureSave` reflecting the Summit run's exact fighter, gear, skills, Arcana, and shared UPGRADES. */
 export const spireRunToVirtualSave = (
   run: SpireRun,
   prefs: { musicOn: boolean; effectsOn: boolean } = { musicOn: true, effectsOn: true }
@@ -212,13 +212,13 @@ export const spireRunToVirtualSave = (
     },
     musicOn: prefs.musicOn,
     effectsOn: prefs.effectsOn,
-    // Mark all intro/coach tips seen so Spire fights stay brisk and never interrupt with campaign tutorial tips
+    // Mark all intro/coach tips seen so Summit fights stay brisk and never interrupt with campaign tutorial tips
     seenMechanics: ['set_rule', 'hearts', 'timer', 'rainbow', 'evolutions', 'skill_tree', 'coins', 'hints', 'graces', 'shading_surge'],
     seenCoachMarks: ['evo', 'power_meter', 'weapon_growth'],
   };
 };
 
-/** Overrides passed to `createRun` / `AdventureRun` so Spire keeps persistent HP, uncapped builds, and pure item-driven scaling (no generic Power snowball). */
+/** Overrides passed to `createRun` / `AdventureRun` so Starfall Summit keeps persistent HP, uncapped builds, and pure item-driven scaling (no generic Power snowball). */
 export const spireRunOverrides = (run: SpireRun): RunOverrides => ({
   startingHearts: run.hearts,
   uncappedCharms: true,

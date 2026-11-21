@@ -1,5 +1,5 @@
 /**
- * Starfall Spire Build Inspector Modal.
+ * Starfall Summit Build Inspector Modal.
  *
  * Reuses `WeaponExplainer.tsx` (single weapon explainer guardrail!) plus shared
  * domain cards (`FighterPassivesList`, `WeaponChip`, `ArmedEvolutionRow`,
@@ -54,7 +54,7 @@ const SpireBuildModal: React.FC<Props> = ({ visible, run, onReorderWeapon, onClo
           <View style={st.header}>
             <FighterAvatar character={run.fighter} size={44} health={run.hearts} maxHealth={run.maxHearts} animate={false} framed />
             <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-              <Eyebrow text={`Spire Build · Seed ${run.seed}`} />
+              <Eyebrow text={`Summit Build · Seed ${run.seed}`} />
               <Text style={st.title} numberOfLines={1}>{run.fighter}</Text>
               <Text style={st.sub}>
                 ♥ {run.hearts}/{run.maxHearts} · {run.coins}¢ · +{bonusDmg} dmg · +{bonusClock}s clock

@@ -1,8 +1,8 @@
 /**
- * Starfall Spire — 10 handcrafted Mystery Events.
+ * Starfall Summit — 12 handcrafted Mystery Events.
  *
  * Every choice has a concrete, readable trade-off or boon; outcomes are
- * resolved deterministically through the Spire run RNG.
+ * resolved deterministically through the Summit run RNG.
  */
 import type { IconName } from '@/components/Icon';
 
@@ -303,6 +303,64 @@ export const SPIRE_EVENTS: readonly SpireEventDef[] = [
         id: 'bask',
         label: 'Bask in Warm Light',
         detail: '+1 Max Heart & Heal +1 ♥.',
+        tone: 'neutral',
+      },
+    ],
+  },
+  {
+    id: 'starlight_forge',
+    title: 'The Starlight Cairn',
+    icon: 'delapouite/star-formation',
+    accent: '#7C3AED',
+    story:
+      'Stacked trail stones hum with fallen comet dust. Offerings dropped between the cairn stones return pulsing with forged starlight.',
+    options: [
+      {
+        id: 'channel',
+        label: 'Channel the Cairn (40¢)',
+        detail: 'Pay 40¢ → Upgrade a chosen weapon by +1 Level & gain +4% Catalyst chance.',
+        minCoins: 40,
+        needsWeapon: true,
+        tone: 'bold',
+      },
+      {
+        id: 'attune_cairn',
+        label: 'Draw Starfall Sparks',
+        detail: '+8% Evolution Catalyst chance & +1 Evolution allowed per fight.',
+        tone: 'safe',
+      },
+      {
+        id: 'rest_cairn',
+        label: 'Rest Beside the Stones',
+        detail: 'Heal +2 ♥ & pocket +35¢.',
+        tone: 'neutral',
+      },
+    ],
+  },
+  {
+    id: 'echoing_cavern',
+    title: 'The Echoing Cavern',
+    icon: 'delapouite/mountain-cave',
+    accent: '#0369A1',
+    story:
+      'A crystalline mountain cave rings with every footstep. Each clap bounces back twice as crisp, sharpening your reflexes.',
+    options: [
+      {
+        id: 'train',
+        label: 'Train with the Echo',
+        detail: 'Draft 1 of 3 Fighter Skill Tree nodes for free!',
+        tone: 'bold',
+      },
+      {
+        id: 'listen',
+        label: 'Listen to the Acoustics',
+        detail: 'Gain +1 Starting Grace & +2 Starting Hints for the rest of this climb.',
+        tone: 'safe',
+      },
+      {
+        id: 'strike',
+        label: 'Shatter a Resonance Crystal',
+        detail: 'Gain +1 Heavy Hitter damage on every Set.',
         tone: 'neutral',
       },
     ],

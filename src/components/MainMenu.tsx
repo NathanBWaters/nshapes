@@ -153,7 +153,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
       if (active && active.phase !== 'defeat' && active.phase !== 'victory') {
         const actLabel = active.endless ? `Endless A${active.act}` : `Act ${active.act}`;
         return {
-          title: 'Starfall Spire',
+          title: 'Starfall Summit',
           subtitle: `Resume ${actLabel} · Floor ${active.floor} · ♥ ${active.hearts}/${active.maxHearts}`,
           badge: 'LIVE RUN',
         };
@@ -161,7 +161,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
       const meta = loadSpireMeta();
       if (meta.totalRuns > 0) {
         return {
-          title: 'Starfall Spire',
+          title: 'Starfall Summit',
           subtitle: `Roguelike Climb · Best Fl ${meta.bestFloor} · ${meta.victories} Win${meta.victories === 1 ? '' : 's'}`,
           badge: meta.highestAscensionUnlocked > 0 ? `A${meta.highestAscensionUnlocked}` : 'ROGUELIKE',
         };
@@ -170,7 +170,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
       // ignore storage errors
     }
     return {
-      title: 'Starfall Spire',
+      title: 'Starfall Summit',
       subtitle: 'Climb where the star fell · 3-Act Roguelike & Endless',
       badge: 'ROGUELIKE',
     };
@@ -227,7 +227,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
               title={spire.title}
               subtitle={spire.subtitle}
               badge={spire.badge}
-              accessibilityLabel={`Starfall Spire: ${spire.subtitle}`}
+              accessibilityLabel={`Starfall Summit: ${spire.subtitle}`}
             />
           )}
           <MenuButton

@@ -1,5 +1,5 @@
 /**
- * Starfall Spire — Root Mode Coordinator.
+ * Starfall Summit — Root Mode Coordinator.
  *
  * Self-contained screen router for the roguelike climb:
  *   setup ⇄ map ⇄ preview ⇄ fight (shared AdventureRun!) ⇄ reward / shop /
@@ -327,7 +327,7 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
           allowRestart: false,
           quitLabel: isLastHeart ? 'Forfeit Run' : 'Retreat (−1 ♥)',
           quitHint: isLastHeart
-            ? 'You are at 1 ♥ — retreating ends this Spire run.'
+            ? 'You are at 1 ♥ — retreating ends this climb.'
             : 'Costs 1 ♥ and reshuffles the board before returning to briefing.',
         }}
       />
