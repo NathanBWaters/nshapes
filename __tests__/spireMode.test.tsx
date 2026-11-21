@@ -184,12 +184,80 @@ describe('Starfall Spire — Map DAG, Events & Shared Engine Bridge', () => {
     expect(retreated.hearts).toBe(inFight.hearts - 1);
     expect(retreated.retreats).toBe(1);
 
+    // After retreating (or on an event ambush), cancelSpirePreview is a no-op — cannot skip a committed fight!
+    expect(cancelSpirePreview(retreated)).toBe(retreated);
+    const ambushPreview = {
+      ...inPreview,
+      prevNodeId: undefined,
+      activeEncounter: { ...inPreview.activeEncounter!, id: 'ambush-1' },
+    };
+    expect(cancelSpirePreview(ambushPreview)).toBe(ambushPreview);
+
     // Retreating at 1 ♥ forfeits cleanly to defeat (no infinite save-scumming!)
     const atOneHeart = { ...inFight, hearts: 1 };
     const forfeited = retreatSpireBattle(atOneHeart, 'Lazy Sloth');
     expect(forfeited.phase).toBe('defeat');
     expect(forfeited.hearts).toBe(0);
     expect(forfeited.defeatedBy).toBe('Lazy Sloth');
+  });
+
+  it('prevents shopSellWeapon + upgrade offer free-upgrade / free-gold exploit in-shop and across locked next-shop', () => {
+    let run = createSpireRun('Orange Tabby', 0, 7771);
+    const shopNodes = run.map.nodes.filter(n => n.kind === 'shop');
+    const shop1 = shopNodes[0]!;
+    run = selectSpireNode(
+      {
+        ...run,
+        coins: 100,
+        weapons: ['blast-powder', 'flint-spark'],
+        weaponLevels: { 'blast-powder': 4, 'flint-spark': 2 },
+        map: { ...run.map, nodes: run.map.nodes.map(n => (n.id === shop1.id ? { ...n, row: 0 } : n)) },
+      },
+      shop1.id
+    );
+    expect(run.phase).toBe('shop');
+
+    // Inject an on-sale Lv 5 upgrade offer for held Lv 4 blast-powder (29¢ < 60¢ sell value)
+    const withUpgradeShelf = {
+      ...run,
+      shop: {
+        ...run.shop!,
+        weapons: [
+          { weaponId: 'blast-powder', level: 5, price: 29, onSale: true, sold: false, locked: true },
+          ...run.shop!.weapons.slice(1),
+        ],
+      },
+    };
+    const afterSell = shopSellWeapon(withUpgradeShelf, 'blast-powder');
+    const resetOffer = afterSell.shop!.weapons[0];
+    expect(resetOffer.level).toBe(1);
+    expect(resetOffer.locked).toBe(false);
+    expect(resetOffer.price).toBeGreaterThanOrEqual(25);
+    // Re-buying only grants Lv 1 (never a free Lv 5 upgrade!)
+    const afterRebuy = shopBuyWeapon(afterSell, 0);
+    expect(afterRebuy.weaponLevels['blast-powder']).toBe(1);
+    // Even if holding Lv 1 and selling+rebuying the on-sale Lv 1 offer, net coins cannot increase
+    const lv1Refund = spireWeaponSellValue('blast-powder', 1);
+    expect(resetOffer.price).toBeGreaterThan(lv1Refund);
+
+    // Cross-shop locked upgrade exploit: if a Lv 5 upgrade was locked and the weapon is no longer held
+    // when entering a later shop, buildShopState resets it to standalone Lv 1
+    const shop2 = shopNodes[1] ?? shop1;
+    const beforeNextShop = {
+      ...leaveShop(withUpgradeShelf),
+      weapons: ['flint-spark'],
+      weaponLevels: { 'flint-spark': 2 },
+      currentNodeId: null,
+      map: {
+        ...run.map,
+        nodes: run.map.nodes.map(n => (n.id === shop2.id ? { ...n, row: 0, visited: false } : n)),
+      },
+    };
+    const nextShop = selectSpireNode(beforeNextShop, shop2.id);
+    const carried = nextShop.shop!.weapons.find(w => w.weaponId === 'blast-powder');
+    expect(carried).toBeDefined();
+    expect(carried!.level).toBe(1);
+    expect(carried!.price).toBeGreaterThan(lv1Refund);
   });
 
   it('makes Wandering Alchemist preview the exact Arcana and support Accept or Decline cleanly', () => {

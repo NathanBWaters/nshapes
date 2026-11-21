@@ -251,6 +251,20 @@ const bumpUpgrade = (run: SpireRun, id: SpireShopUpgradeKind, delta = 1): SpireR
   upgrades: { ...(run.upgrades ?? {}), [id]: (run.upgrades?.[id] ?? 0) + delta },
 });
 
+const shopPriceScaleOf = (run: SpireRun): number =>
+  ascensionModifiers(run.ascension).shopPriceScale * (1 + (run.act - 1) * 0.12);
+
+const standaloneWeaponShopPrice = (
+  weaponId: string,
+  level: number,
+  priceScale: number,
+  onSale = false
+): number => {
+  const w = getArmoryWeapon(weaponId);
+  const base = Math.max(40, Math.round(((w?.price ?? 25) * 2.1 + (level - 1) * 22) * priceScale));
+  return onSale ? Math.max(25, Math.round(base * 0.55)) : base;
+};
+
 const buildShopState = (
   run: SpireRun,
   rng: Rng,
@@ -258,7 +272,7 @@ const buildShopState = (
   carryLocked?: SpireLockedShopItems
 ): SpireShopState => {
   const asc = ascensionModifiers(run.ascension);
-  const priceScale = asc.shopPriceScale * (1 + (run.act - 1) * 0.12);
+  const priceScale = shopPriceScaleOf(run);
 
   // Carry forward locked unsold offers (capped at MAX_SHOP_LOCKS total)
   let lockBudget = MAX_SHOP_LOCKS;
@@ -267,8 +281,20 @@ const buildShopState = (
     if (lockBudget <= 0 || lw.sold || SPIRE_EXCLUDED_WEAPONS.has(lw.weaponId)) continue;
     const heldLv = run.weaponLevels[lw.weaponId];
     if (heldLv !== undefined && heldLv >= MAX_WEAPON_LEVEL) continue;
-    const level = heldLv !== undefined ? Math.min(MAX_WEAPON_LEVEL, Math.max(lw.level, heldLv + 1)) : lw.level;
-    keptWeapons.push({ ...lw, level, sold: false, locked: true });
+    if (heldLv === undefined && lw.level > 1) {
+      // Weapon is no longer held (e.g. locked an upgrade offer, then sold the weapon):
+      // reset to a standalone Lv 1 offer so it cannot grant a cheap high-level rebuy.
+      keptWeapons.push({
+        ...lw,
+        level: 1,
+        price: standaloneWeaponShopPrice(lw.weaponId, 1, priceScale, lw.onSale),
+        sold: false,
+        locked: true,
+      });
+    } else {
+      const level = heldLv !== undefined ? Math.min(MAX_WEAPON_LEVEL, Math.max(lw.level, heldLv + 1)) : lw.level;
+      keptWeapons.push({ ...lw, level, sold: false, locked: true });
+    }
     lockBudget -= 1;
   }
 
@@ -294,16 +320,18 @@ const buildShopState = (
   const saleIdx = freshOffers.length > 0 ? Math.floor(rng.next() * freshOffers.length) : -1;
 
   const freshWeapons: SpireShopWeaponOffer[] = freshOffers.map((o, i) => {
-    const w = getArmoryWeapon(o.weaponId);
     const isUpgrade = run.weaponLevels[o.weaponId] !== undefined;
-    const base = isUpgrade
-      ? Math.round(52 * priceScale)
-      : Math.max(40, Math.round(((w?.price ?? 25) * 2.1 + (o.level - 1) * 22) * priceScale));
     const onSale = i === saleIdx;
+    const upgradeBase = Math.round(52 * priceScale);
+    const price = isUpgrade
+      ? onSale
+        ? Math.max(25, Math.round(upgradeBase * 0.55))
+        : upgradeBase
+      : standaloneWeaponShopPrice(o.weaponId, o.level, priceScale, onSale);
     return {
       weaponId: o.weaponId,
       level: o.level,
-      price: onSale ? Math.max(25, Math.round(base * 0.55)) : base,
+      price,
       onSale,
       sold: false,
       locked: false,
@@ -526,6 +554,11 @@ export const cancelSpirePreview = (run: SpireRun): SpireRun => {
           }
         : run.map,
     };
+  }
+  // Committed encounters (post-retreat or event ambushes) cannot be backed out of to the map;
+  // doing so would skip a visited combat/Boss node without winning it.
+  if ((run.retreats ?? 0) > 0 || run.activeEncounter?.id?.startsWith('ambush')) {
+    return run;
   }
   return { ...run, phase: 'map', activeEncounter: null };
 };
@@ -866,6 +899,7 @@ export const shopSellWeapon = (run: SpireRun, weaponId: string): SpireRun => {
   if (run.weapons.length <= 1 || !run.weapons.includes(weaponId)) return run;
   const lv = run.weaponLevels[weaponId] ?? 1;
   const refund = spireWeaponSellValue(weaponId, lv);
+  const priceScale = shopPriceScaleOf(run);
   const nextLevels = { ...run.weaponLevels };
   delete nextLevels[weaponId];
   return {
@@ -873,6 +907,21 @@ export const shopSellWeapon = (run: SpireRun, weaponId: string): SpireRun => {
     coins: run.coins + refund,
     weapons: run.weapons.filter(id => id !== weaponId),
     weaponLevels: nextLevels,
+    shop: {
+      ...run.shop,
+      // Reset any unsold upgrade offer for this weapon to standalone Lv 1 so
+      // selling a high-level weapon can never be paired with a cheap upgrade rebuy.
+      weapons: run.shop.weapons.map(w =>
+        !w.sold && w.weaponId === weaponId
+          ? {
+              ...w,
+              level: 1,
+              locked: false,
+              price: standaloneWeaponShopPrice(w.weaponId, 1, priceScale, w.onSale),
+            }
+          : w
+      ),
+    },
   };
 };
 
