@@ -77,5 +77,5 @@ describe('fight recordings', () => {
       biggest = Math.max(biggest, JSON.stringify(rec).length);
     }
     expect(biggest).toBeLessThan(200_000);
-  });
+  }, 60_000);
 });

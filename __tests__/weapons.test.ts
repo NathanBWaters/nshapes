@@ -9,6 +9,7 @@ import {
   getPlayerWeaponCount,
 } from '@/utils/gameDefinitions';
 import { Weapon, Player } from '@/types';
+import { createRng } from '@/adventure/engine/rng';
 
 describe('Weapon Definitions', () => {
   describe('WEAPONS array', () => {
@@ -236,38 +237,45 @@ describe('Weapon Definitions', () => {
     });
 
     it('should follow approximate rarity distribution over many samples', () => {
-      // Generate many weapons to test distribution
-      const totalSamples = 1000;
-      const weapons: Weapon[] = [];
+      // Seed Math.random so this distribution test is deterministic in CI
+      const rng = createRng(2026);
+      const randomSpy = jest.spyOn(Math, 'random').mockImplementation(() => rng.next());
+      try {
+        // Generate many weapons to test distribution
+        const totalSamples = 1000;
+        const weapons: Weapon[] = [];
 
-      for (let i = 0; i < totalSamples / 4; i++) {
-        weapons.push(...generateShopWeapons(4));
+        for (let i = 0; i < totalSamples / 4; i++) {
+          weapons.push(...generateShopWeapons(4));
+        }
+
+        const commons = weapons.filter(w => w.rarity === 'common').length;
+        const rares = weapons.filter(w => w.rarity === 'rare').length;
+        const epics = weapons.filter(w => w.rarity === 'epic').length;
+        const legendaries = weapons.filter(w => w.rarity === 'legendary').length;
+
+        // Expected at round 5 (default): ~53% common, ~22.5% rare, ~10.5% epic, ~3% legendary
+        // Allow generous tolerance for randomness since epic weapons don't exist yet
+        // and all epic rolls fall back to common
+        // Common should be majority
+        expect(commons / totalSamples).toBeGreaterThan(0.35);
+        expect(commons / totalSamples).toBeLessThan(0.85);
+
+        // Rare should be significant
+        expect(rares / totalSamples).toBeGreaterThan(0.10);
+        expect(rares / totalSamples).toBeLessThan(0.40);
+
+        // Epic should be present (may be 0 until epic weapons are added)
+        // For now just check it's a valid count
+        expect(epics).toBeGreaterThanOrEqual(0);
+        expect(epics / totalSamples).toBeLessThan(0.30);
+
+        // Legendary should be rare
+        expect(legendaries / totalSamples).toBeGreaterThanOrEqual(0.005);
+        expect(legendaries / totalSamples).toBeLessThan(0.15);
+      } finally {
+        randomSpy.mockRestore();
       }
-
-      const commons = weapons.filter(w => w.rarity === 'common').length;
-      const rares = weapons.filter(w => w.rarity === 'rare').length;
-      const epics = weapons.filter(w => w.rarity === 'epic').length;
-      const legendaries = weapons.filter(w => w.rarity === 'legendary').length;
-
-      // Expected at round 5 (default): ~53% common, ~22.5% rare, ~10.5% epic, ~3% legendary
-      // Allow generous tolerance for randomness since epic weapons don't exist yet
-      // and all epic rolls fall back to common
-      // Common should be majority
-      expect(commons / totalSamples).toBeGreaterThan(0.35);
-      expect(commons / totalSamples).toBeLessThan(0.85);
-
-      // Rare should be significant
-      expect(rares / totalSamples).toBeGreaterThan(0.10);
-      expect(rares / totalSamples).toBeLessThan(0.40);
-
-      // Epic should be present (may be 0 until epic weapons are added)
-      // For now just check it's a valid count
-      expect(epics).toBeGreaterThanOrEqual(0);
-      expect(epics / totalSamples).toBeLessThan(0.30);
-
-      // Legendary should be rare
-      expect(legendaries / totalSamples).toBeGreaterThanOrEqual(0.005);
-      expect(legendaries / totalSamples).toBeLessThan(0.15);
     });
   });
 

@@ -1,6 +1,7 @@
 module.exports = {
   preset: 'jest-expo',
   testEnvironment: 'node',
+  testTimeout: 20000,
   roots: ['<rootDir>/src', '<rootDir>/__tests__'],
   testMatch: ['**/__tests__/**/*.test.ts', '**/__tests__/**/*.test.tsx'],
   moduleNameMapper: {

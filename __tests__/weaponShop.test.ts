@@ -8,6 +8,7 @@
  */
 
 import { WEAPONS, getRandomShopWeapon, generateShopWeapons, getWeaponsByRarity } from '../src/utils/gameDefinitions';
+import { createRng } from '@/adventure/engine/rng';
 import { Weapon, WeaponRarity } from '../src/types';
 
 describe('Weapon System', () => {
@@ -66,24 +67,36 @@ describe('Weapon System', () => {
     });
 
     it('respects round-based rarity scaling', () => {
-      // Early rounds should have more common weapons
-      let commonCount = 0;
-      for (let i = 0; i < 100; i++) {
-        const weapon = getRandomShopWeapon(undefined, 1);
-        if (weapon.rarity === 'common') commonCount++;
-      }
-      // Round 1 should have mostly common weapons (expect > 50%)
-      expect(commonCount).toBeGreaterThan(50);
+      const rng = createRng(12345);
+      const randomSpy = jest.spyOn(Math, 'random').mockImplementation(() => rng.next());
+      try {
+        const samples = 400;
+        // Early rounds should have more common weapons
+        let round1Common = 0;
+        let round1Legendary = 0;
+        for (let i = 0; i < samples; i++) {
+          const weapon = getRandomShopWeapon(undefined, 1);
+          if (weapon.rarity === 'common') round1Common++;
+          if (weapon.rarity === 'legendary') round1Legendary++;
+        }
+        // Round 1 should have mostly common weapons (> 50%)
+        expect(round1Common / samples).toBeGreaterThan(0.5);
 
-      // Late rounds should have more rare/legendary
-      let legendaryCount = 0;
-      for (let i = 0; i < 100; i++) {
-        const weapon = getRandomShopWeapon(undefined, 10);
-        if (weapon.rarity === 'legendary') legendaryCount++;
+        // Late rounds should have more rare/legendary
+        let round10Common = 0;
+        let round10Legendary = 0;
+        for (let i = 0; i < samples; i++) {
+          const weapon = getRandomShopWeapon(undefined, 10);
+          if (weapon.rarity === 'common') round10Common++;
+          if (weapon.rarity === 'legendary') round10Legendary++;
+        }
+        // Round 10 should have fewer commons and more legendaries than round 1
+        expect(round10Common).toBeLessThan(round1Common);
+        expect(round10Legendary).toBeGreaterThan(0);
+        expect(round10Legendary).toBeGreaterThan(round1Legendary);
+      } finally {
+        randomSpy.mockRestore();
       }
-      // Round 10 should have more legendary than round 1
-      // (at least some legendary should appear)
-      expect(legendaryCount).toBeGreaterThan(0);
     });
 
     it('handles empty player weapons array', () => {

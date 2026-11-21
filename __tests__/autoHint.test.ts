@@ -6,6 +6,8 @@
  * - With Mystic Sight: Has a chance to show 2 cards instead of 1
  */
 
+import { createRng } from '@/adventure/engine/rng';
+
 describe('AutoHint Card Count Logic', () => {
   describe('default behavior (enhancedHintChance = 0)', () => {
     it('should show only 1 card when enhancedHintChance is 0', () => {
@@ -31,14 +33,14 @@ describe('AutoHint Card Count Logic', () => {
 
   describe('with Mystic Sight (enhancedHintChance = 33)', () => {
     it('should sometimes show 2 cards when enhancedHintChance is 33', () => {
+      const rng = createRng(3301);
       const enhancedHintChance = 33;
       let showedTwoCount = 0;
       let showedOneCount = 0;
       const iterations = 1000;
 
-      // Mock Math.random to test both outcomes
       for (let i = 0; i < iterations; i++) {
-        const roll = Math.random() * 100;
+        const roll = rng.next() * 100;
         const showTwoCards = enhancedHintChance > 0 && roll < enhancedHintChance;
         const cardsToShow = showTwoCards ? 2 : 1;
 
@@ -47,7 +49,6 @@ describe('AutoHint Card Count Logic', () => {
       }
 
       // With 33% chance, we expect roughly 33% of iterations to show 2 cards
-      // Allow +/- 10% tolerance for randomness
       const twoCardRatio = showedTwoCount / iterations;
       expect(twoCardRatio).toBeGreaterThan(0.20); // At least 20%
       expect(twoCardRatio).toBeLessThan(0.45);    // At most 45%
@@ -66,12 +67,13 @@ describe('AutoHint Card Count Logic', () => {
 
   describe('stacking Mystic Sight weapons', () => {
     it('should have higher chance with 66% enhancedHintChance', () => {
+      const rng = createRng(6602);
       const enhancedHintChance = 66; // Two Mystic Sights would give 66%
       let showedTwoCount = 0;
       const iterations = 1000;
 
       for (let i = 0; i < iterations; i++) {
-        const roll = Math.random() * 100;
+        const roll = rng.next() * 100;
         const showTwoCards = enhancedHintChance > 0 && roll < enhancedHintChance;
         if (showTwoCards) showedTwoCount++;
       }
@@ -101,11 +103,12 @@ describe('AutoHint Card Count Logic', () => {
         { id: 'card3' },
       ];
 
+      const rng = createRng(7703);
       const selectedIds = new Set<string>();
       const iterations = 100;
 
       for (let i = 0; i < iterations; i++) {
-        const shuffled = [...potentialSet].sort(() => Math.random() - 0.5);
+        const shuffled = [...potentialSet].sort(() => rng.next() - 0.5);
         selectedIds.add(shuffled[0].id);
       }
 

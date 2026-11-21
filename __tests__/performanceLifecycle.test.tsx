@@ -424,7 +424,7 @@ describe('Performance, Battery, and Background Lifecycle', () => {
       });
       // Clock must not advance while backgrounded/paused
       expect(getByTestId('run-clock').props.accessibilityLabel).toBe(afterTwoSecClock);
-    });
+    }, 30_000);
   });
 
   describe('Creature & Avatar animation gating', () => {

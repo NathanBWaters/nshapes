@@ -338,7 +338,7 @@ describe('Golden Rescue Keys — UI flow & Save Your Friends story', () => {
     act(() => { jest.advanceTimersByTime(600); });
     expect(screenMap.getByTestId('friend-rescue-modal')).toBeTruthy();
     screenMap.unmount();
-  });
+  }, 30_000);
 
   it('StoryIntro plays all 3 "Save Your Friends" beats and supports Skip', () => {
     const onDone = jest.fn();

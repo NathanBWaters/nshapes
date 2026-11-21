@@ -12,6 +12,7 @@ import {
 import { resolveMatch } from '@/utils/matchResolution';
 import { Card, PlayerStats, Weapon, AttributeName, EffectCaps } from '@/types';
 import { DEFAULT_PLAYER_STATS, WEAPONS } from '@/utils/gameDefinitions';
+import { createRng } from '@/adventure/engine/rng';
 
 // Uncapped effect caps for testing - allows 100% for all effects
 const UNCAPPED_EFFECT_CAPS: EffectCaps = {
@@ -483,47 +484,59 @@ describe('getRicochetCards', () => {
   });
 
   it('should pick random targets from entire board', () => {
-    const board = createTestBoard();
-    const matchedCards = [board[4]];
-    const excludedCards: Card[] = [];
+    const rng = createRng(4101);
+    const randomSpy = jest.spyOn(Math, 'random').mockImplementation(() => rng.next());
+    try {
+      const board = createTestBoard();
+      const matchedCards = [board[4]];
+      const excludedCards: Card[] = [];
 
-    // Track which cards get hit over many runs
-    const hitCounts: Record<string, number> = {};
+      // Track which cards get hit over many runs
+      const hitCounts: Record<string, number> = {};
 
-    for (let i = 0; i < 100; i++) {
-      const result = getRicochetCards(board, matchedCards, excludedCards, 100, 0);
-      result.forEach(card => {
-        hitCounts[card.id] = (hitCounts[card.id] || 0) + 1;
-      });
+      for (let i = 0; i < 100; i++) {
+        const result = getRicochetCards(board, matchedCards, excludedCards, 100, 0);
+        result.forEach(card => {
+          hitCounts[card.id] = (hitCounts[card.id] || 0) + 1;
+        });
+      }
+
+      // Should have hit multiple different cards (random distribution)
+      const uniqueCardsHit = Object.keys(hitCounts).length;
+      expect(uniqueCardsHit).toBeGreaterThan(5); // Should see variety in 100 runs
+    } finally {
+      randomSpy.mockRestore();
     }
-
-    // Should have hit multiple different cards (random distribution)
-    const uniqueCardsHit = Object.keys(hitCounts).length;
-    expect(uniqueCardsHit).toBeGreaterThan(5); // Should see variety in 100 runs
   });
 
   it('should chain probabilistically with low chain chance', () => {
-    const board = createTestBoard();
-    const matchedCards = [board[4]];
-    const excludedCards: Card[] = [];
+    const rng = createRng(4102);
+    const randomSpy = jest.spyOn(Math, 'random').mockImplementation(() => rng.next());
+    try {
+      const board = createTestBoard();
+      const matchedCards = [board[4]];
+      const excludedCards: Card[] = [];
 
-    // Track chain lengths over many runs
-    const chainLengths: number[] = [];
+      // Track chain lengths over many runs
+      const chainLengths: number[] = [];
 
-    for (let i = 0; i < 100; i++) {
-      const result = getRicochetCards(board, matchedCards, excludedCards, 100, 30);
-      chainLengths.push(result.length);
+      for (let i = 0; i < 100; i++) {
+        const result = getRicochetCards(board, matchedCards, excludedCards, 100, 30);
+        chainLengths.push(result.length);
+      }
+
+      // With 30% chain chance, should see variety in chain lengths
+      const uniqueLengths = new Set(chainLengths);
+      expect(uniqueLengths.size).toBeGreaterThan(1);
+
+      // Should have some single-hit chains
+      expect(chainLengths.some(len => len === 1)).toBe(true);
+
+      // Should have some multi-hit chains
+      expect(chainLengths.some(len => len > 1)).toBe(true);
+    } finally {
+      randomSpy.mockRestore();
     }
-
-    // With 30% chain chance, should see variety in chain lengths
-    const uniqueLengths = new Set(chainLengths);
-    expect(uniqueLengths.size).toBeGreaterThan(1);
-
-    // Should have some single-hit chains
-    expect(chainLengths.some(len => len === 1)).toBe(true);
-
-    // Should have some multi-hit chains
-    expect(chainLengths.some(len => len > 1)).toBe(true);
   });
 });
 
@@ -907,29 +920,35 @@ describe('Multi-Laser Independent Rolls', () => {
   });
 
   it('should probabilistically fire some lasers with low chance', () => {
-    const board = createTestBoard();
-    const matchedCards = [board[4]];
-    const stats: PlayerStats = { ...DEFAULT_PLAYER_STATS };
+    const rng = createRng(4103);
+    const randomSpy = jest.spyOn(Math, 'random').mockImplementation(() => rng.next());
+    try {
+      const board = createTestBoard();
+      const matchedCards = [board[4]];
+      const stats: PlayerStats = { ...DEFAULT_PLAYER_STATS };
 
-    // Create 3 laser weapons with 50% chance each
-    const weapons: Weapon[] = [
-      createLaserWeapon('laser-1', 50),
-      createLaserWeapon('laser-2', 50),
-      createLaserWeapon('laser-3', 50),
-    ];
+      // Create 3 laser weapons with 50% chance each
+      const weapons: Weapon[] = [
+        createLaserWeapon('laser-1', 50),
+        createLaserWeapon('laser-2', 50),
+        createLaserWeapon('laser-3', 50),
+      ];
 
-    // Track how often each count appears
-    const laserCounts: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0 };
+      // Track how often each count appears
+      const laserCounts: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0 };
 
-    for (let i = 0; i < 100; i++) {
-      const result = processWeaponEffects(board, matchedCards, stats, weapons);
-      laserCounts[result.laserCount] = (laserCounts[result.laserCount] || 0) + 1;
+      for (let i = 0; i < 100; i++) {
+        const result = processWeaponEffects(board, matchedCards, stats, weapons);
+        laserCounts[result.laserCount] = (laserCounts[result.laserCount] || 0) + 1;
+      }
+
+      // With 50% chance each, we should see variety in counts
+      // At least one of each count should appear (probabilistically)
+      const countsWithOccurrences = Object.values(laserCounts).filter(c => c > 0).length;
+      expect(countsWithOccurrences).toBeGreaterThan(1);
+    } finally {
+      randomSpy.mockRestore();
     }
-
-    // With 50% chance each, we should see variety in counts
-    // At least one of each count should appear (probabilistically)
-    const countsWithOccurrences = Object.values(laserCounts).filter(c => c > 0).length;
-    expect(countsWithOccurrences).toBeGreaterThan(1);
   });
 
   it('should fallback to single roll when no weapons array provided', () => {
