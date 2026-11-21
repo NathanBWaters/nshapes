@@ -390,7 +390,7 @@ describe('evolutions', () => {
     expect(s.board.some(c => c.hasEvolutionItem)).toBe(false);
   });
 
-  it('several recipes can run at once; the Catalyst picks one that is not running', () => {
+  it('several recipes can run at once; the Catalyst offers up to 3 idle recipes and excludes running ones', () => {
     const second = EVOLUTION_RECIPES.find(r => r.id !== phoenix.id)!;
     const ids = [phoenix.id, second.id];
     const held = [...armedSave.charms, ...second.families.map(f => f[0])];
@@ -399,9 +399,21 @@ describe('evolutions', () => {
     expect(s.armedRecipes.slice(0, 2)).toEqual(ids);
     s = catalystOn(s);
     s = playSet(s, catalystSet(s));
+    expect(s.status).toBe('pick_evolution');
+    expect(s.evolutionPickOptions!.length).toBeGreaterThanOrEqual(2);
+    expect(s.evolutionPickOptions!.length).toBeLessThanOrEqual(3);
+    const firstPicked = s.evolutionPickOptions![0];
+    s = runReducer(s, { type: 'PICK_EVOLUTION', recipeId: firstPicked });
+    expect(s.status).toBe('playing');
+    expect(s.activeEvolutions.map(e => e.id)).toEqual([firstPicked]);
+
     s = catalystOn({ ...s, board: s.board.map(c => ({ ...c, hasEvolutionItem: false })) });
     s = playSet(s, catalystSet(s));
-    expect(new Set(s.activeEvolutions.map(e => e.id))).toEqual(new Set(ids));
+    expect(s.status).toBe('pick_evolution');
+    expect(s.evolutionPickOptions).not.toContain(firstPicked);
+    const secondPicked = s.evolutionPickOptions![0];
+    s = runReducer(s, { type: 'PICK_EVOLUTION', recipeId: secondPicked });
+    expect(new Set(s.activeEvolutions.map(e => e.id))).toEqual(new Set([firstPicked, secondPicked]));
   });
 
   it('a Catalyst picked in a wrong Set is not lost: it moves to another card', () => {

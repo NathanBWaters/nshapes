@@ -7,7 +7,10 @@ import { PAIR_RECIPES } from '@/adventure/data/evolutionPairs';
 import { TRICK_WEAPON_IDS } from '@/adventure/data/adventureWeapons';
 import { findAdventureWeapon } from '@/adventure/data/armory';
 import { createMaxedSave } from '@/adventure/progress';
-import { runReducer } from '@/adventure/engine/run';
+import { baseCardReward, createRun, runReducer } from '@/adventure/engine/run';
+import { FightRecorder, replayFight } from '@/adventure/engine/replay';
+import { xpForLevel } from '@/adventure/engine/fight';
+import { setPowerEnabled } from '@/adventure/data/weaponPower';
 import { eventsOf, findSet, miss, playSet, startFight, testLevel, tick } from './testUtils/adventureFight';
 import type { RunState } from '@/adventure/types';
 
@@ -110,7 +113,7 @@ describe('a Catalyst never re-triggers an evolution that is running', () => {
     expect(hasCatalyst(s)).toBe(true);
   });
 
-  it('with two recipes armed, the second can start beside the first, and then no Catalyst appears', () => {
+  it('with two recipes armed, the first Catalyst offers both choices, the second auto-starts the last idle recipe, and then no Catalyst appears', () => {
     // Three weapons that arm exactly two recipes
     let held: string[] | null = null;
     for (const a of PAIR_RECIPES) {
@@ -125,14 +128,22 @@ describe('a Catalyst never re-triggers an evolution that is running', () => {
     let s = fight(held!);
     const [first, second] = EVOLUTION_RECIPES.map(r => r.id).filter(id => s.armedRecipes.includes(id));
 
+    // 2 idle armed -> Catalyst opens pick_evolution with both recipes (and REPLACE does not spawn a second Catalyst while picking)
     s = matchCatalyst(s);
+    expect(s.status).toBe('pick_evolution');
+    expect(new Set(s.evolutionPickOptions)).toEqual(new Set([first, second]));
+    expect(hasCatalyst(s)).toBe(false);
+    s = runReducer(s, { type: 'PICK_EVOLUTION', recipeId: first });
+    expect(s.status).toBe('playing');
     expect(s.activeEvolutions.map(e => e.id)).toEqual([first]);
     const left = s.activeEvolutions[0].remainingMs;
 
-    // The other recipe is idle, so a Catalyst may still appear, and it starts that one
+    // Only 1 idle recipe remains, so a Catalyst spawns pre-loaded for `second` and auto-ignites it without a modal
     s = playSet(s);
     expect(hasCatalyst(s)).toBe(true);
+    expect(s.catalystRecipeId).toBe(second);
     s = matchCatalyst(s);
+    expect(s.status).toBe('playing');
     expect(s.activeEvolutions.map(e => e.id).sort()).toEqual([first, second].sort());
     // The first was not restarted
     expect(s.activeEvolutions.find(e => e.id === first)!.remainingMs).toBeLessThanOrEqual(left);
@@ -146,6 +157,267 @@ describe('a Catalyst never re-triggers an evolution that is running', () => {
     }
     expect(eventsOf(s, 'catalyst_spawn')).toEqual([]);
     expect(s.evolutionsTriggered).toBe(2);
+  });
+});
+
+describe('evolution choice (pick 1 of up to 3 randomly chosen)', () => {
+  beforeEach(() => setPowerEnabled(false));
+  afterEach(() => setPowerEnabled(true));
+
+  const dummyLevel = testLevel({
+    rules: { attributes: ['shape', 'color', 'number'], boardSize: 12, evolutionLikelihood: 100 },
+    foes: [{ name: 'Dummy', hp: 1e6 }],
+  });
+
+  const placeOnSet = (s: RunState): RunState => {
+    const set = findSet(s)!;
+    const board = s.board.map(c => ({ ...c, hasEvolutionItem: c.id === set[0].id, evolutionReady: c.id === set[0].id }));
+    return { ...s, board };
+  };
+
+  const matchCatalyst = (s: RunState): RunState => {
+    const primed = s.board.some(c => c.hasEvolutionItem) ? s : placeOnSet(s);
+    const set = findSet(primed, cards => cards.some(c => c.hasEvolutionItem))!;
+    return playSet(primed, set);
+  };
+
+  it('auto-starts immediately without entering pick_evolution when only 1 idle evolution is armed', () => {
+    const recipe = PAIR_RECIPES[0];
+    const held = [recipe.families[0][0], recipe.families[1][0]];
+    let s = startFight({
+      level: dummyLevel,
+      save: { selectedFighter: 'Pelican', armory: held, charms: held, unlockedEvolutions: ['phoenix-pyre'] },
+      features: ['hearts', 'gear', 'evolutions'],
+    });
+    expect(s.armedRecipes).toEqual([recipe.id]);
+    // Natural refill sets catalystRecipeId to the exact single idle recipe
+    s = playSet(s);
+    expect(s.board.some(c => c.hasEvolutionItem)).toBe(true);
+    expect(s.catalystRecipeId).toBe(recipe.id);
+
+    s = matchCatalyst(s);
+    expect(s.status).toBe('playing');
+    expect(s.evolutionPickOptions).toEqual([]);
+    expect(s.activeEvolutions.map(e => e.id)).toEqual([recipe.id]);
+  });
+
+  it('enters pick_evolution with 2 distinct options, pauses gameplay actions, starts option #2, and preserves triggering Set multiplier on opening burst', () => {
+    // 3 weapons arming exactly 2 recipes
+    let held: string[] | null = null;
+    for (const a of PAIR_RECIPES) {
+      for (const b of PAIR_RECIPES) {
+        if (a === b || held) continue;
+        const weapons = [...new Set([a.families[0][0], a.families[1][0], b.families[0][0], b.families[1][0]])];
+        if (weapons.length !== 3) continue;
+        const probe = startFight({
+          level: dummyLevel,
+          save: { selectedFighter: 'Pelican', armory: weapons, charms: weapons, unlockedEvolutions: ['phoenix-pyre'] },
+          features: ['hearts', 'gear', 'evolutions'],
+        });
+        if (probe.armedRecipes.length === 2) {
+          held = weapons;
+          break;
+        }
+      }
+      if (held) break;
+    }
+    expect(held).not.toBeNull();
+
+    let s = startFight({
+      level: dummyLevel,
+      save: { selectedFighter: 'Pelican', armory: held!, charms: held!, unlockedEvolutions: ['phoenix-pyre'] },
+      features: ['hearts', 'gear', 'hints', 'evolutions'],
+    });
+    // Natural refill spawns Catalyst with catalystRecipeId === null (2+ idle -> choice!)
+    s = playSet(s);
+    expect(s.board.some(c => c.hasEvolutionItem)).toBe(true);
+    expect(s.catalystRecipeId).toBeNull();
+
+    // Charge nextSetMultiplier to ×2 so we verify it is preserved onto the opening +10 burst -> 20 dmg!
+    s = { ...placeOnSet({ ...s, board: s.board.map(c => ({ ...c, hasEvolutionItem: false, evolutionReady: false })) }), nextSetMultiplier: 2 };
+    s = matchCatalyst(s);
+    expect(s.status).toBe('pick_evolution');
+    expect(s.evolutionPickOptions).toHaveLength(2);
+    expect(new Set(s.evolutionPickOptions).size).toBe(2);
+    expect(s.evolutionPickContext?.setMultiplier).toBeGreaterThanOrEqual(2);
+
+    // Gameplay actions are safely ignored while choosing an evolution
+    const elapsedBefore = s.elapsedMs;
+    expect(runReducer(s, { type: 'TICK', ms: 1000 }).elapsedMs).toBe(elapsedBefore);
+    const anySet = findSet(s)!;
+    expect(runReducer(s, { type: 'MATCH', cards: anySet, rewards: anySet.map(baseCardReward) })).toBe(s);
+    expect(runReducer(s, { type: 'INVALID', cards: anySet })).toBe(s);
+    expect(runReducer(s, { type: 'USE_HINT' })).toBe(s);
+
+    // Pick option #2 specifically
+    const option2 = s.evolutionPickOptions![1];
+    const mult = s.evolutionPickContext!.setMultiplier;
+    const afterPick = runReducer(s, { type: 'PICK_EVOLUTION', recipeId: option2 });
+    expect(afterPick.status).toBe('playing');
+    expect(afterPick.evolutionPickOptions).toEqual([]);
+    expect(afterPick.evolutionPickContext).toBeUndefined();
+    expect(afterPick.activeEvolutions.map(e => e.id)).toEqual([option2]);
+    const recipe2 = EVOLUTION_RECIPES.find(r => r.id === option2)!;
+    // Opening burst (+10) multiplied by preserved setMultiplier!
+    expect(afterPick.log[afterPick.log.length - 1].lines).toContainEqual({
+      type: 'hit',
+      amount: Math.round(10 * mult),
+      text: recipe2.name,
+    });
+  });
+
+  it('draws 3 distinct random idle options when 5+ evolutions are armed, varies across seeds, and excludes already-running evolutions', () => {
+    const sixWeapons = ['blast-powder', 'mending-charm', 'flint-spark', 'echo-stone', 'prismatic-ray', 'second-chance'];
+    const makeRun = (seed: number) =>
+      startFight({
+        seed,
+        level: dummyLevel,
+        save: {
+          selectedFighter: 'Pelican',
+          upgrades: { charm_belt: 3 },
+          armory: sixWeapons,
+          charms: sixWeapons,
+          unlockedEvolutions: ['phoenix-pyre'],
+        },
+        features: ['hearts', 'gear', 'evolutions'],
+      });
+
+    const sampleSets: string[] = [];
+    for (const seed of [11, 29, 73, 151, 307, 619, 1009, 2027]) {
+      const s0 = makeRun(seed);
+      expect(s0.armedRecipes.length).toBeGreaterThanOrEqual(5);
+      const s1 = matchCatalyst(s0);
+      expect(s1.status).toBe('pick_evolution');
+      const opts = s1.evolutionPickOptions ?? [];
+      expect(opts).toHaveLength(3);
+      expect(new Set(opts).size).toBe(3);
+      for (const id of opts) expect(s0.armedRecipes).toContain(id);
+      sampleSets.push([...opts].sort().join(','));
+    }
+    // Different seeds produce different random 3-recipe draws
+    expect(new Set(sampleSets).size).toBeGreaterThan(1);
+
+    // Pick one evolution, then match a second Catalyst: the running evolution must NEVER be offered again
+    let run = makeRun(42);
+    run = matchCatalyst(run);
+    const chosenFirst = run.evolutionPickOptions![0];
+    run = runReducer(run, { type: 'PICK_EVOLUTION', recipeId: chosenFirst });
+    expect(run.activeEvolutions.map(e => e.id)).toEqual([chosenFirst]);
+
+    // Trigger a second Catalyst while chosenFirst is still active
+    run = matchCatalyst({ ...run, board: run.board.map(c => ({ ...c, hasEvolutionItem: false, evolutionReady: false })) });
+    expect(run.status).toBe('pick_evolution');
+    expect(run.evolutionPickOptions).toHaveLength(3);
+    expect(run.evolutionPickOptions).not.toContain(chosenFirst);
+  });
+
+  it('opens pick_evolution before level-up pick when a Catalyst Set also levels up, then transitions cleanly into pick', () => {
+    const held = ['blast-powder', 'mending-charm', 'flint-spark'];
+    let s = startFight({
+      level: dummyLevel,
+      save: {
+        selectedFighter: 'Pelican',
+        armory: [...held, 'echo-stone', 'prismatic-ray', 'chrono-shard'],
+        charms: held,
+        unlockedEvolutions: ['phoenix-pyre'],
+      },
+      features: ['hearts', 'gear', 'xp', 'evolutions'],
+    });
+    expect(s.armedRecipes.length).toBeGreaterThanOrEqual(2);
+    // Position XP 1 point below level-up so the Catalyst Set triggers both Evolution choice AND Level-Up!
+    s = { ...placeOnSet(s), xp: xpForLevel(s.xpLevel) - 1 };
+    const set = findSet(s, cards => cards.some(c => c.hasEvolutionItem))!;
+    s = runReducer(s, {
+      type: 'MATCH',
+      cards: set,
+      rewards: set.map(c => ({ cardId: c.id, points: 1, experience: 1 })),
+    });
+    expect(s.pendingPicks).toBeGreaterThanOrEqual(1);
+    expect(s.status).toBe('pick_evolution');
+    expect((s.evolutionPickOptions?.length ?? 0)).toBeGreaterThanOrEqual(2);
+
+    // Pick an evolution -> cleanly transitions to level-up 'pick'!
+    const chosen = s.evolutionPickOptions![0];
+    s = runReducer(s, { type: 'PICK_EVOLUTION', recipeId: chosen });
+    expect(s.activeEvolutions.map(e => e.id)).toEqual([chosen]);
+    expect(s.status).toBe('pick');
+    expect(s.pickOptions.length).toBeGreaterThan(0);
+
+    // Pick a weapon -> returns cleanly to 'playing'
+    s = runReducer(s, { type: 'PICK', weaponId: s.pickOptions[0].id });
+    expect(s.status).toBe('playing');
+  });
+
+  it('wins the fight cleanly when the opening burst inside PICK_EVOLUTION KOs the final foe', () => {
+    const held = ['blast-powder', 'mending-charm', 'flint-spark'];
+    // 10 HP foe: Set deals 3 -> 7 HP left -> pick_evolution opens -> +10 burst KOs!
+    const lowHpLevel = testLevel({
+      rules: { attributes: ['shape', 'color', 'number'], boardSize: 12 },
+      foes: [{ name: 'Wounded Imp', icon: 'lorc/imp', hp: 10 }],
+    });
+    let s = startFight({
+      level: lowHpLevel,
+      save: { selectedFighter: 'Pelican', armory: held, charms: held, unlockedEvolutions: ['phoenix-pyre'] },
+      features: ['hearts', 'gear', 'evolutions'],
+    });
+    expect(s.armedRecipes.length).toBeGreaterThanOrEqual(2);
+    s = matchCatalyst(s);
+    expect(s.status).toBe('pick_evolution');
+    expect(s.foeHp).toBeGreaterThan(0);
+
+    const chosen = s.evolutionPickOptions![0];
+    s = runReducer(s, { type: 'PICK_EVOLUTION', recipeId: chosen });
+    expect(s.status).toBe('won');
+    expect(s.endReason).toBe('defeated');
+    expect(s.foeHp).toBe(0);
+    expect(s.evolutionsTriggered).toBe(1);
+    expect(s.lastSetIgnition?.lethal).toBe(true);
+  });
+
+  it('records and replays PICK_EVOLUTION deterministically through FightRecorder and replayFight', () => {
+    const held = ['blast-powder', 'mending-charm', 'flint-spark', 'echo-stone'];
+    const save = {
+      ...createMaxedSave(),
+      selectedFighter: 'Pelican' as const,
+      armory: held,
+      charms: held,
+      upgrades: { charm_belt: 1 },
+      unlockedEvolutions: ['phoenix-pyre'],
+      skillNodes: {},
+      equippedArcana: [],
+    };
+    const level = testLevel({
+      rules: { attributes: ['shape', 'color', 'number'], boardSize: 12, evolutionLikelihood: 100 },
+      foes: [{ name: 'Replay Dummy', hp: 500 }],
+    });
+    const seed = 777;
+    const rec = new FightRecorder(seed);
+    let s = createRun(level, save, { seed });
+    const step = (action: Parameters<typeof runReducer>[1]) => {
+      rec.record(action, s);
+      s = runReducer(s, action);
+    };
+    // Match sets until a Catalyst spawns naturally, then match the Catalyst and pick option #2
+    let sawPick = false;
+    for (let i = 0; i < 6 && !sawPick; i++) {
+      const catSet = findSet(s, cards => cards.some(c => c.hasEvolutionItem));
+      const set = catSet ?? findSet(s)!;
+      step({ type: 'MATCH', cards: set, rewards: set.map(baseCardReward) });
+      step({ type: 'REPLACE', ids: set.map(c => c.id) });
+      if (s.status === 'pick_evolution') {
+        sawPick = true;
+        step({ type: 'PICK_EVOLUTION', recipeId: s.evolutionPickOptions![1] });
+      }
+    }
+    expect(sawPick).toBe(true);
+    expect(s.evolutionsTriggered).toBe(1);
+
+    const replayed = replayFight(level, save, rec.toJSON());
+    expect(replayed.foeHp).toBe(s.foeHp);
+    expect(replayed.totalDamage).toBe(s.totalDamage);
+    expect(replayed.activeEvolutions).toEqual(s.activeEvolutions);
+    expect(replayed.forgedRecipes).toEqual(s.forgedRecipes);
+    expect(replayed.status).toBe(s.status);
   });
 });
 

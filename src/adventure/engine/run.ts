@@ -42,14 +42,14 @@ import { initParryState, resolveParryOnSet, tickParry } from './parry';
 import {
   addCoins, addConnection, addHints, addRandomConnections, addTime, addXp, arcana, begin, chanceStatsOf, dealDamage, drawCard,
   emit, empowerBoard, enqueue, finish, foeMultiplier, growBoard, heal, hurt, igniteCards, keepCatalystMatchable, mods, newLinkSlots, placeCatalyst,
-  pruneConnections, recycle, refill, refreshSources, returnToDeck, rollBridges, syncTraps, toDeckCard, touchable, tuning, updateCards,
+  pruneConnections, recycle, refill, refreshSources, returnToDeck, rollBridges, signalGrowth, syncTraps, toDeckCard, touchable, tuning, updateCards,
   MAX_BOARD, type Draft, type FightHooks, TIME_HEADROOM,
   CLOCK_SLOW_CAP_PCT,
 } from './fight';
 import { activeRoleBonuses, combineModifiers, EVOLUTION_RULES, getRecipe, getSkillNode, liveSources } from './sources';
 import { recordFightStart, recordLog } from './fightLog';
 import { afterSetGear, gearSetBonus, holdCards, initGear, onMistakeGear, onWaveStartGear, resolveTwins, syncGear, tickGear, type GearSet } from './gear';
-import { refreshArmedRecipes, resolveCatalyst, tickEvolutions } from './evolutions';
+import { refreshArmedRecipes, resolveCatalyst, startEvolution, tickEvolutions } from './evolutions';
 import { growthModifiers, WEAPON_GROWTH } from '../data/weaponGrowth';
 import { isHintedSet, noteGrowth, seedGrowth } from './growth';
 import { placeOpeningTraps, resolveTrapsOnSet, springSnares, tickTimeBombs } from './hazards';
@@ -79,6 +79,7 @@ export type RunAction =
   | { type: 'TICK'; ms: number }
   | { type: 'USE_HINT' }
   | { type: 'PICK'; weaponId: string | null }
+  | { type: 'PICK_EVOLUTION'; recipeId: string }
   | { type: 'BUY'; index: number }
   | { type: 'REROLL' }
   | { type: 'NEXT_WAVE' }
@@ -199,6 +200,8 @@ const resolve = (d: Draft) => {
     if (brokenOnWin > 0) d.roundStats.tripleCardsCleared += brokenOnWin;
     d.status = 'won';
     d.endReason = 'defeated';
+    d.evolutionPickOptions = [];
+    d.evolutionPickContext = undefined;
     d.challengeMet = challengeProgress(d).met;
     emit(d, 'foe_defeated');
     return;
@@ -211,19 +214,29 @@ const resolve = (d: Draft) => {
     } else {
       d.status = 'lost';
       d.endReason = 'hearts';
+      d.evolutionPickOptions = [];
+      d.evolutionPickContext = undefined;
       return;
     }
   }
   if (d.movesLeft !== null && d.movesLeft <= 0) {
     d.status = 'won';
     d.endReason = 'survived';
+    d.evolutionPickOptions = [];
+    d.evolutionPickContext = undefined;
     emit(d, 'moves_out');
     return;
   }
   if (d.timeLeft !== null && d.timeLeft <= 0) {
     d.status = 'won';
     d.endReason = 'survived';
+    d.evolutionPickOptions = [];
+    d.evolutionPickContext = undefined;
     emit(d, 'time_up');
+    return;
+  }
+  if ((d.evolutionPickOptions?.length ?? 0) > 0) {
+    d.status = 'pick_evolution';
     return;
   }
   if (d.pendingPicks > 0) {
@@ -1141,6 +1154,8 @@ const buildRun = (level: LevelDef, save: AdventureSave, opts: CreateRunOptions):
     hintUsedThisSet: false,
     bonusCombo: 0,
     catalystRecipeId: null,
+    evolutionPickOptions: [],
+    evolutionPickContext: undefined,
     coins: 0,
     xp: 0,
     xpLevel: 0,
@@ -1540,6 +1555,7 @@ const reduceRun = (state: RunState, action: RunAction): RunState => {
     }
 
     case 'USE_HINT': {
+      if (d.status !== 'playing') return state;
       // Block spamming USE_HINT without finding a Set (closes Safe Bet infinite zero-Set exploit)
       if (d.hintUsedThisSet) return state;
       d.hintUsedThisSet = true;
@@ -1557,6 +1573,31 @@ const reduceRun = (state: RunState, action: RunAction): RunState => {
       d.pendingPicks = Math.max(0, d.pendingPicks - 1);
       d.pickOptions = [];
       d.status = 'playing';
+      break;
+    }
+
+    case 'PICK_EVOLUTION': {
+      if (d.status !== 'pick_evolution') return state;
+      const options = d.evolutionPickOptions ?? [];
+      const chosenId = options.includes(action.recipeId) ? action.recipeId : options[0];
+      const ctx = d.evolutionPickContext;
+      d.evolutionPickOptions = [];
+      d.evolutionPickContext = undefined;
+      d.status = 'playing';
+      if (chosenId && d.evolutionsTriggered < d.evolutionCap) {
+        const before = d.totalDamage;
+        d._setMultiplier = ctx?.setMultiplier ?? 1;
+        // Told first, so what grows on a matched Catalyst (Catalyst Prism) already counts for this evolution
+        signalGrowth(d, { on: 'catalyst' });
+        const slot = ctx?.slot !== undefined && ctx.slot >= 0 && ctx.slot < d.board.length ? ctx.slot : undefined;
+        startEvolution(d, chosenId, slot);
+        drain(d);
+        d._setMultiplier = 1;
+        d.biggestHit = Math.max(d.biggestHit, d.totalDamage - before);
+        if (d.lastSetIgnition && d.foeHp <= 0) {
+          d.lastSetIgnition = { ...d.lastSetIgnition, lethal: true };
+        }
+      }
       break;
     }
 

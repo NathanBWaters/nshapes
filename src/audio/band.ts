@@ -275,8 +275,10 @@ class Band {
     for (const id of mood.evolutions) if (!prev.evolutions.includes(id)) this.evolve(id);
     for (const id of prev.evolutions) if (!mood.evolutions.includes(id)) this.devolve();
     if (prev.combo >= 3 && mood.combo === 0 && mood.status === 'playing') this.cue('streakLost');
-    // Level-up: three choices land like the reels of a slot machine
-    if (prev.status !== 'pick' && mood.status === 'pick') [0, 1, 2].forEach(i => this.cue('reelStop', { slot: 8 + i * 4 }));
+    // Level-up or evolution choice: choices land like the reels of a slot machine
+    if (prev.status !== 'pick' && prev.status !== 'pick_evolution' && (mood.status === 'pick' || mood.status === 'pick_evolution')) {
+      [0, 1, 2].forEach(i => this.cue('reelStop', { slot: 8 + i * 4 }));
+    }
   }
 
   /** The mix the band is following right now (the sound studio shows it). */

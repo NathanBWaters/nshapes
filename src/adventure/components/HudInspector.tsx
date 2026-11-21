@@ -202,7 +202,9 @@ const HudInspector: React.FC<Props> = ({ target, run, shownHp, challenge, knownE
                 })}
               </View>
             )}
-            <Text style={st.note}>Match any glowing Catalyst card in a valid Set to deal 10 damage and trigger an evolution for {EVOLUTION_RULES.durationMs / 1000}s.</Text>
+            <Text style={st.note}>
+              Match any glowing Catalyst card in a valid Set to deal 10 damage and trigger an evolution for {EVOLUTION_RULES.durationMs / 1000}s. With 2+ armed evolutions, you&apos;ll choose 1 of up to 3 randomly drawn options.
+            </Text>
           </>
         );
       }

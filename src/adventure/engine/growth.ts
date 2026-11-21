@@ -121,7 +121,7 @@ export const setGrowthEnabled = (on: boolean) => {
 /** Tell every held weapon that something happened. */
 export const noteGrowth = (d: Draft, ev: GrowthEvent) => {
   if (!enabled) return;
-  if (d.status !== 'playing' && d.status !== 'pick' && d.status !== 'intermission') return;
+  if (d.status !== 'playing' && d.status !== 'pick' && d.status !== 'pick_evolution' && d.status !== 'intermission') return;
   const seen = new Set<string>();
   const share = powerShare(new Set(d.weapons.filter(w => powerWatches(w.id).length > 0).map(w => w.id)).size);
   d.weapons.forEach((w, slot) => {

@@ -39,7 +39,7 @@ export interface FightMood {
   /** The world's arrangement (meadow, woods, canyon, peaks, boss) */
   arrangement: string;
   boss: boolean;
-  status: 'playing' | 'pick' | 'intermission' | 'won' | 'lost';
+  status: 'playing' | 'pick' | 'pick_evolution' | 'intermission' | 'won' | 'lost';
   paused: boolean;
   /** null = this level has no hearts */
   hearts: number | null;
@@ -176,7 +176,7 @@ export type Brighten = (recipeId: string) => { lift: number; brighten: number };
 export const direct = (m: FightMood, themeOf: Brighten = () => ({ lift: 2, brighten: 1 })): Mix => {
   const home = worldTone(m.arrangement);
   const playing = m.status === 'playing' && !m.paused;
-  const between = m.status === 'pick' || m.status === 'intermission';
+  const between = m.status === 'pick' || m.status === 'pick_evolution' || m.status === 'intermission';
 
   // Hearts → how dark the tune is
   const hasHearts = m.hearts !== null && m.maxHearts !== null && m.maxHearts > 0;

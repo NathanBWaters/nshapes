@@ -56,6 +56,7 @@ import { counterForWeapon } from '../fx/GearBelt';
 import { Banner } from '../fx/visuals';
 import { Btn, CoinPill, DARK, Eyebrow, Heart, INK, PopIn, TONE } from './ui';
 import { EvolutionBanner, EvolutionRing, MegaFlash } from './RunFx';
+import EvolutionPickOverlay from './EvolutionPickOverlay';
 import WeaponExplainer from './WeaponExplainer';
 import PowerMeter from './PowerMeter';
 import PowerExplainer from './PowerExplainer';
@@ -348,6 +349,7 @@ const AdventureRun: React.FC<Props> = ({
     triggerMatch,
     triggerMistake,
     triggerHint,
+    triggerPowerup,
     setSelectedCount,
     setIsBoardIdle,
   } = conductor;
@@ -565,6 +567,21 @@ const AdventureRun: React.FC<Props> = ({
     band.cue('hint');
   }, [dispatch, triggerHint]);
 
+  const handlePickEvolution = useCallback((recipeId: string) => {
+    sfx('confirm');
+    triggerPowerup();
+    dispatch({ type: 'PICK_EVOLUTION', recipeId });
+  }, [dispatch, triggerPowerup]);
+
+  useEffect(() => {
+    if (!autoPlayer || run.status !== 'pick_evolution' || fx.busy) return;
+    const options = run.evolutionPickOptions ?? [];
+    if (options.length === 0) return;
+    const chosen = options.find(id => !run.forgedRecipes.includes(id)) ?? options[0];
+    const t = setTimeout(() => handlePickEvolution(chosen), 350);
+    return () => clearTimeout(t);
+  }, [autoPlayer, run.status, fx.busy, run.evolutionPickOptions, run.forgedRecipes, handlePickEvolution]);
+
   const foeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: foeShake.value }, { scale: foeScale.value }] }));
   const screenStyle = useAnimatedStyle(() => ({
     transform: [
@@ -588,20 +605,29 @@ const AdventureRun: React.FC<Props> = ({
   const evolutionsUsed = Number.isFinite(run.evolutionCap) ? `${run.evolutionsTriggered}/${run.evolutionCap}` : `${run.evolutionsTriggered} so far`;
   /** Armed recipes a Catalyst could still start: one that is running cannot be triggered again until it ends */
   const idleArmed = run.armedRecipes.filter(id => !run.activeEvolutions.some(a => a.id === id)).length;
+  const evoChoiceCount = Math.min(3, idleArmed);
+  const evoDurationSec = Math.max(1, Math.round((EVOLUTION_RULES.durationMs + (gearMods.evolutionDurationMs ?? 0)) / 1000));
+  const knownForgedEvos = useMemo(
+    () => new Set([...startSave.discoveredEvolutions, ...run.forgedRecipes]),
+    [startSave.discoveredEvolutions, run.forgedRecipes]
+  );
   const enemyCounters = useMemo(
     () => activeEnemyCounters({ foe: run.foe, stats: run.stats, baseChances: run.baseChances }),
     [run.foe, run.stats, run.baseChances]
   );
   const nextEvoId = useMemo(() => {
+    if (idleArmed !== 1) return null;
     const fallback = nextCatalystRecipe({
       armedRecipes: run.armedRecipes,
       activeEvolutions: run.activeEvolutions,
       forgedRecipes: run.forgedRecipes,
     });
     return catalystOnBoard ? (run.catalystRecipeId ?? fallback) : fallback;
-  }, [catalystOnBoard, run.catalystRecipeId, run.armedRecipes, run.activeEvolutions, run.forgedRecipes]);
+  }, [idleArmed, catalystOnBoard, run.catalystRecipeId, run.armedRecipes, run.activeEvolutions, run.forgedRecipes]);
   const nextEvoRecipe = nextEvoId ? getRecipe(nextEvoId) : undefined;
-  const catalystTargetName = catalystOnBoard ? (nextEvoRecipe?.name ?? null) : null;
+  const catalystTargetName = catalystOnBoard
+    ? (idleArmed > 1 ? 'Pick Evo' : (nextEvoRecipe?.name ?? null))
+    : null;
 
   const mirrorActive = (gearMods.mirrorDamage ?? 0) > 0;
   const mirrorDepth = Math.round(gearMods.mirrorDepth ?? 0);
@@ -1040,11 +1066,17 @@ const AdventureRun: React.FC<Props> = ({
                 activeOpacity={0.75}
                 accessibilityRole="button"
                 accessibilityLabel={
-                  catalystOnBoard && catalystTargetName
-                    ? `Catalyst on board for ${catalystTargetName}. Match it to evolve.`
+                  catalystOnBoard
+                    ? idleArmed > 1
+                      ? `Catalyst on board. Match it to pick 1 of ${evoChoiceCount} evolutions.`
+                      : catalystTargetName
+                        ? `Catalyst on board for ${catalystTargetName}. Match it to evolve.`
+                        : 'Catalyst on board. Match it to evolve.'
                     : idleArmed === 0
                       ? `Evolving, ${evolutionsUsed} used. No Catalyst until an evolution ends`
-                      : `${idleArmed} evolutions armed${nextEvoRecipe ? `, next ${nextEvoRecipe.name}` : ''}, ${evolutionsUsed} used, ${Math.round(run.evolutionLikelihood)} percent catalyst chance`
+                      : idleArmed > 1
+                        ? `${idleArmed} evolutions armed, pick 1 of ${evoChoiceCount} on Catalyst, ${evolutionsUsed} used, ${Math.round(run.evolutionLikelihood)} percent catalyst chance`
+                        : `${idleArmed} evolution armed${nextEvoRecipe ? `, next ${nextEvoRecipe.name}` : ''}, ${evolutionsUsed} used, ${Math.round(run.evolutionLikelihood)} percent catalyst chance`
                 }
                 style={[st.evoChip, catalystOnBoard && st.evoChipReady, evolutionsLeft <= 0 && { opacity: 0.55 }]}
               >
@@ -1053,12 +1085,18 @@ const AdventureRun: React.FC<Props> = ({
                   {evolutionsLeft <= 0
                     ? `Evolutions ${evolutionsUsed}`
                     : catalystOnBoard
-                      ? (catalystTargetName ? `CATALYST: ${catalystTargetName}` : 'CATALYST! Match it to evolve')
+                      ? (idleArmed > 1
+                        ? `CATALYST: Pick 1 of ${evoChoiceCount}`
+                        : catalystTargetName
+                          ? `CATALYST: ${catalystTargetName}`
+                          : 'CATALYST! Match it to evolve')
                       : idleArmed === 0
                         ? `Evolving · ${evolutionsUsed}`
-                        : nextEvoRecipe
-                          ? `Next: ${nextEvoRecipe.name} · ${Math.round(run.evolutionLikelihood)}% · ${evolutionsUsed}`
-                          : `${idleArmed} armed · ${Math.round(run.evolutionLikelihood)}% · ${evolutionsUsed}`}
+                        : idleArmed > 1
+                          ? `Pick 1 of ${evoChoiceCount} · ${Math.round(run.evolutionLikelihood)}% · ${evolutionsUsed}`
+                          : nextEvoRecipe
+                            ? `Next: ${nextEvoRecipe.name} · ${Math.round(run.evolutionLikelihood)}% · ${evolutionsUsed}`
+                            : `${idleArmed} armed · ${Math.round(run.evolutionLikelihood)}% · ${evolutionsUsed}`}
                 </Text>
               </TouchableOpacity>
             )}
@@ -1249,6 +1287,17 @@ const AdventureRun: React.FC<Props> = ({
           </>
         );
       })()}
+
+      {/* Evolution choice (2+ idle armed recipes) opens before any level-up pick */}
+      {run.status === 'pick_evolution' && !fx.busy && (run.evolutionPickOptions?.length ?? 0) > 0 && (
+        <EvolutionPickOverlay
+          optionIds={run.evolutionPickOptions!}
+          totalIdle={Math.max(idleArmed, run.evolutionPickOptions!.length)}
+          knownIds={knownForgedEvos}
+          durationSec={evoDurationSec}
+          onPick={handlePickEvolution}
+        />
+      )}
 
       {/* Level-up and shop wait for the cascade that earned them */}
       {run.status === 'pick' && !fx.busy && (

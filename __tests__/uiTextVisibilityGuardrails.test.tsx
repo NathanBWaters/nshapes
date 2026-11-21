@@ -1,14 +1,16 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
-import { render } from '@testing-library/react-native';
+import { render, fireEvent } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import CompanionBubble from '@/adventure/components/CompanionBubble';
 import AdventureMap from '@/adventure/components/AdventureMap';
 import AdventureRun from '@/adventure/components/AdventureRun';
 import DamageSourceExplainer from '@/adventure/components/DamageSourceExplainer';
+import EvolutionPickOverlay from '@/adventure/components/EvolutionPickOverlay';
 import { compactRoleBonusLabel, GearChips, gearModifiers, hasGearChips } from '@/adventure/components/GearChips';
 import WeaponExplainer from '@/adventure/components/WeaponExplainer';
 import { getArmoryWeapon } from '@/adventure/data/armory';
+import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
 import { getLevel } from '@/adventure/data/levels';
 import { activeRoleBonuses } from '@/adventure/data/weaponRoles';
 import { createRun } from '@/adventure/engine/run';
@@ -346,9 +348,10 @@ describe('UI Text Visibility Style-Contract Guardrails', () => {
     explainer.unmount();
   });
 
-  it('wires Role Set Bonus chips, enemy counter badges, and Next-Evolution preview inside AdventureRun', () => {
+  it('wires Role Set Bonus chips, enemy counter badges, and Evolution preview (multi-choice & single) inside AdventureRun', () => {
     const maxed = createMaxedSave();
-    const save = {
+    // 3 weapons arming 3 recipes -> multi-choice preview ("Pick 1 of 3")
+    const multiSave = {
       ...createNewSave(),
       seenMechanics: maxed.seenMechanics,
       seenCoachMarks: maxed.seenCoachMarks,
@@ -361,7 +364,7 @@ describe('UI Text Visibility Style-Contract Guardrails', () => {
       <SafeAreaProvider initialMetrics={INSETS}>
         <AdventureRun
           level={level}
-          save={save}
+          save={multiSave}
           seed={42}
           effects={false}
           onFinish={() => {}}
@@ -374,7 +377,82 @@ describe('UI Text Visibility Style-Contract Guardrails', () => {
     expect(view.getByTestId('run-role-bonus-damage')).toBeTruthy();
     expect(view.getByTestId('belt-counter-flint-spark')).toBeTruthy();
     expect(view.queryByTestId('belt-counter-blast-powder')).toBeNull();
-    expect(view.getByTestId('run-evo-chip')).toHaveTextContent(/Next: .+|CATALYST: .+/);
+    expect(view.getByTestId('run-evo-chip')).toHaveTextContent(/Pick 1 of 3|CATALYST: Pick 1 of 3/);
+    view.unmount();
+
+    // 2 weapons arming exactly 1 recipe -> single exact preview ("Next: Phoenix Pyre")
+    const singleSave = {
+      ...multiSave,
+      armory: ['blast-powder', 'mending-charm'],
+      charms: ['blast-powder', 'mending-charm'],
+    };
+    const singleView = render(
+      <SafeAreaProvider initialMetrics={INSETS}>
+        <AdventureRun
+          level={level}
+          save={singleSave}
+          seed={42}
+          effects={false}
+          onFinish={() => {}}
+          onQuit={() => {}}
+          onRestart={() => {}}
+          onCoachMarkSeen={() => {}}
+        />
+      </SafeAreaProvider>
+    );
+    expect(singleView.getByTestId('run-evo-chip')).toHaveTextContent(/Next: Phoenix Pyre|CATALYST: Phoenix Pyre/);
+    singleView.unmount();
+  });
+
+  it('renders EvolutionPickOverlay with 3 cards, NEW! badge, full activeText, 375px-safe layout, and invokes onPick on tap', () => {
+    const [r0, r1, r2] = EVOLUTION_RECIPES.slice(0, 3);
+    const onPick = jest.fn();
+    const view = render(
+      <EvolutionPickOverlay
+        optionIds={[r0.id, r1.id, r2.id]}
+        totalIdle={6}
+        knownIds={new Set([r0.id])}
+        onPick={onPick}
+      />
+    );
+
+    expect(view.getByText('CATALYST IGNITED')).toBeTruthy();
+    expect(view.getByText('CHOOSE AN EVOLUTION')).toBeTruthy();
+    expect(view.getByTestId('evo-pick-subtitle')).toHaveTextContent('Pick 1 of 3 · Lasts 30s (+2 dmg & ×1.5 every Set)');
+    expect(view.getByTestId('evo-pick-drawn-note')).toHaveTextContent('3 randomly drawn from 6 armed');
+
+    // r0 is known -> no NEW! badge; r1 and r2 are new -> gold NEW! badge
+    expect(view.queryByTestId('evo-pick-new-0')).toBeNull();
+    expect(view.getByTestId('evo-pick-new-1')).toHaveTextContent('NEW!');
+    expect(view.getByTestId('evo-pick-new-2')).toHaveTextContent('NEW!');
+
+    [r0, r1, r2].forEach((r, idx) => {
+      const card = view.getByTestId(`evo-pick-option-${idx}`);
+      const cardStyle = StyleSheet.flatten(card.props.style);
+      expect(cardStyle.width).toBe('100%');
+      expect(cardStyle.maxWidth).toBe('100%');
+      expect(cardStyle.minWidth).toBe(0);
+
+      expect(view.getByLabelText(`icon-${r.icon}`)).toBeTruthy();
+      expect(view.getByText(r.name)).toBeTruthy();
+      expect(view.getByText(r.familyText)).toBeTruthy();
+
+      const desc = view.getByTestId(`evo-pick-desc-${idx}`);
+      expect(desc).toHaveTextContent(r.activeText);
+      expect(desc.props.numberOfLines).toBeUndefined();
+      expect(StyleSheet.flatten(desc.props.style).flexShrink).toBeGreaterThan(0);
+    });
+
+    // Zero "Spire" copy anywhere in the modal
+    const allText = collectNodes(view.toJSON())
+      .filter(n => n.type === 'Text')
+      .map(n => (Array.isArray(n.children) ? n.children.join('') : String(n.children ?? '')))
+      .join(' ');
+    expect(allText).not.toMatch(/spire/i);
+
+    fireEvent.press(view.getByTestId('evo-pick-option-1'));
+    expect(onPick).toHaveBeenCalledTimes(1);
+    expect(onPick).toHaveBeenCalledWith(r1.id);
     view.unmount();
   });
 

@@ -933,6 +933,7 @@ export const canSpawnCatalyst = (d: Draft) =>
   d.features.has('evolutions') &&
   idleRecipes(d).length > 0 &&
   !catalystOnBoard(d) &&
+  !(d.evolutionPickOptions && d.evolutionPickOptions.length > 0) &&
   d.evolutionsTriggered < d.evolutionCap;
 
 /** Put the (single) Catalyst on one of `candidates`, or anywhere eligible if none of them fits. */
@@ -942,7 +943,8 @@ export const placeCatalyst = (d: Draft, candidates: number[]): boolean => {
   if (eligible.length === 0) eligible = d.board.map((_, i) => i).filter(i => catalystEligible(d, d.board[i]));
   if (eligible.length === 0) return false;
   const target = d._rng.pick(eligible);
-  d.catalystRecipeId = nextCatalystRecipe(d);
+  const idle = idleRecipes(d);
+  d.catalystRecipeId = idle.length === 1 ? idle[0] : null;
   updateCards(d, [target], c => ({ ...c, hasEvolutionItem: true, evolutionReady: true }));
   emit(d, 'catalyst_spawn', undefined, d.catalystRecipeId ?? undefined, { slots: [target] });
   return true;
@@ -963,9 +965,9 @@ export const keepCatalystMatchable = (d: Draft) => {
   }
   const c = d.board[idx];
   if (isSelectable(c) && (c.health ?? 1) === 1 && !c.hasBomb && !c.hasCountdown) {
-    if (!d.catalystRecipeId || !idleRecipes(d).includes(d.catalystRecipeId)) {
-      d.catalystRecipeId = nextCatalystRecipe(d);
-    }
+    const idle = idleRecipes(d);
+    const want = idle.length === 1 ? idle[0] : null;
+    if (d.catalystRecipeId !== want) d.catalystRecipeId = want;
     return;
   }
   updateCards(d, [idx], x => ({ ...x, hasEvolutionItem: false, evolutionReady: false }));

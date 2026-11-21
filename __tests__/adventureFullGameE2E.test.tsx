@@ -185,7 +185,11 @@ function readLiveBoard(screen: Screen): Slot[] {
         col: c,
         pressable,
         disabled: Boolean(pressable.props?.disabled || pressable.props?.accessibilityState?.disabled || isDud || isFaceDown),
-        catalyst: tail.includes(', evolution ready') || tail.includes(', dormant catalyst'),
+        catalyst:
+          tail.includes(', evolution ready') ||
+          tail.includes(', dormant catalyst') ||
+          tail.includes(', catalyst for ') ||
+          tail.includes(', evolution choice catalyst'),
         bomb: String(pressable.props?.testID ?? '').includes('-countdown'),
         snare: snare ?? null,
         card: {
@@ -342,6 +346,11 @@ function playFight(screen: Screen, attrs: AttributeName[], opts: { buyInShop?: b
   for (let step = 0; step < (opts.maxSteps ?? 80); step++) {
     tips();
     look();
+    if (screen.queryByTestId('evo-pick-option-0')) {
+      fireEvent.press(screen.getByTestId('evo-pick-option-0'));
+      advanceMs(400);
+      tips();
+    }
     if (screen.queryByTestId('pick-0')) {
       log.pickedLevelUp = true;
       fireEvent.press(screen.getByTestId('pick-0'));

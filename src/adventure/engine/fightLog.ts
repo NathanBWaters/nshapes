@@ -144,8 +144,12 @@ export const recordLog = (d: Draft, prev: RunState, action: RunAction) => {
   if (!lines.length && !delta.damage && !delta.coins && !delta.heartsDelta) return;
   const last = d.log[d.log.length - 1];
   const foldKind: FightLogKind = action.type === 'BURN' ? 'burn' : 'time';
-  // Refills belong to whatever left the board; ticks and burns merge with their own kind nearby
-  const fold = last && (action.type === 'REPLACE' || (last.kind === foldKind && d.elapsedMs - last.t < MERGE_MS));
+  // Refills and chosen evolutions belong to the Set/wave that triggered them; ticks and burns merge with their own kind nearby
+  const fold =
+    last &&
+    (action.type === 'REPLACE' ||
+      (action.type === 'PICK_EVOLUTION' && last.wave === d.wave && (last.kind === 'set' || last.kind === 'wave')) ||
+      (last.kind === foldKind && d.elapsedMs - last.t < MERGE_MS));
   if (fold) {
     d.log = [...d.log.slice(0, -1), {
       ...last, ...after,

@@ -20,7 +20,7 @@ import type { Modifiers } from '../rules/types';
 import { growthModifiers } from '../data/weaponGrowth';
 import { challengeCount } from './challenges';
 import { snareTarget } from './fight';
-import { armedRecipesFor, modifiersOf } from './sources';
+import { armedRecipesFor, getRecipe, modifiersOf } from './sources';
 import { gearUp, type BuildPlan } from './botBuilds';
 
 export interface BotProfile {
@@ -394,6 +394,120 @@ const preferred = (s: RunState, options: Weapon[], rng: Rng, chase = true): numb
   return arming.length ? rng.pick(arming)[1] : Math.floor(rng.next() * options.length);
 };
 
+/** Pick the strongest offered evolution for the current fight state (healing when low HP, burst/DPS when healthy). */
+const chooseEvolution = (s: RunState, options: readonly string[]): string => {
+  if (options.length <= 1) return options[0];
+  const needHeal = s.hearts !== null && s.maxHearts !== null && s.hearts <= Math.ceil(s.maxHearts * 0.65);
+  const urgentHeal = s.hearts !== null && s.hearts <= 2;
+  const needTime = s.timeLeft !== null && s.timeLeft <= 22;
+
+  let bestId = options[0];
+  let bestScore = -Infinity;
+
+  for (const id of options) {
+    const recipe = getRecipe(id);
+    if (!recipe) continue;
+    let score = s.forgedRecipes.includes(id) ? 0 : 1.5;
+    const m = recipe.source.modifiers;
+    if (m) {
+      score += (m.setDamage ?? 0) * 3;
+      score += (m.rainbowMultiplierBonus ?? 0) * 12;
+      if (m.conditionalDamage) {
+        for (const cd of m.conditionalDamage) score += cd.amount * 2;
+      }
+      if (m.evolutionDurationMs) score += m.evolutionDurationMs * 0.0004;
+    }
+    for (const rule of recipe.source.rules ?? []) {
+      const tw =
+        rule.trigger.on === 'set'
+          ? 1.8
+          : rule.trigger.on === 'evolutionStart'
+            ? 1.6
+            : rule.trigger.on === 'everyNthSet'
+              ? 1.5 / Math.max(1, rule.trigger.n)
+              : rule.trigger.on === 'rainbow'
+                ? 1.2
+                : rule.trigger.on === 'hurt' || rule.trigger.on === 'mistake'
+                  ? 0.25
+                  : rule.trigger.on === 'finale'
+                    ? 0.6
+                    : 0.9;
+      for (const eff of rule.effects) {
+        let ev = 2;
+        switch (eff.do) {
+          case 'heal':
+            ev = needHeal ? eff.amount * (urgentHeal ? 18 : 10) : eff.amount * 2;
+            break;
+          case 'damage':
+            ev = eff.amount * (eff.per ? 2.5 : 1);
+            break;
+          case 'explode':
+            ev = 6;
+            break;
+          case 'laser':
+            ev = 8;
+            break;
+          case 'ricochet':
+            ev = eff.count * 2.5;
+            break;
+          case 'ignite':
+            ev = eff.count * 3;
+            break;
+          case 'autoSet':
+            ev = 10;
+            break;
+          case 'nextSetMultiplier':
+            ev = eff.times * 5;
+            break;
+          case 'doubleNext':
+            ev = 5;
+            break;
+          case 'empowerBoard':
+            ev = eff.amount * 6;
+            break;
+          case 'armorCard':
+            ev = eff.bounty * 0.6;
+            break;
+          case 'freeze':
+            ev = (eff.ms / 1000) * (needTime ? 3.5 : 1.2);
+            break;
+          case 'time':
+            ev = eff.seconds * (needTime ? 3.5 : 0.8);
+            break;
+          case 'growBoard':
+            ev = eff.count * 2;
+            break;
+          case 'shield':
+            ev = eff.count * (needHeal ? 5 : 1.5);
+            break;
+          case 'simplify':
+            ev = (eff.ms / 1000) * 0.7;
+            break;
+          case 'spawnCatalyst':
+          case 'spawnCatalystForce':
+            ev = 4;
+            break;
+          case 'trigger':
+            ev = 3;
+            break;
+          case 'coins':
+            ev = eff.amount * 0.8;
+            break;
+          default:
+            ev = 2;
+            break;
+        }
+        score += tw * ev;
+      }
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      bestId = id;
+    }
+  }
+  return bestId;
+};
+
 /** Between waves: buy what the purse covers (a recipe piece first; keep buying while the ★★★ asks for it). */
 const shop = (s: RunState, rng: Rng, chase: boolean): RunState => {
   for (let guard = 0; guard < 3 && s.shopOptions.length; guard++) {
@@ -430,7 +544,20 @@ const playRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: nu
     cachedModsKey = { weapons: st.weapons, evos: st.activeEvolutions, growth: st.growth, nodes: st.skillNodes, mods: m };
     return m;
   };
-  while ((s.status === 'playing' || s.status === 'pick' || s.status === 'intermission') && guard++ < 2000) {
+  while ((s.status === 'playing' || s.status === 'pick' || s.status === 'pick_evolution' || s.status === 'intermission') && guard++ < 2000) {
+    if (s.status === 'pick_evolution') {
+      const options = s.evolutionPickOptions ?? [];
+      if (options.length === 0) break;
+      const recipeId = chooseEvolution(s, options);
+      s = runReducer(s, { type: 'PICK_EVOLUTION', recipeId });
+      let burnGuard = 0;
+      while (s.status === 'playing' && burnGuard++ < 24) {
+        const burning = s.board.find(x => x.onFire);
+        if (!burning) break;
+        s = runReducer(s, { type: 'BURN', card: burning });
+      }
+      continue;
+    }
     if (s.status === 'pick') {
       // Level up: take a free weapon
       const pick = opts.skipPicks ? null : s.pickOptions[preferred(s, s.pickOptions, rng, chase)]?.id ?? null;

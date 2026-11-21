@@ -616,7 +616,7 @@ export interface AdventureSave {
 // Run (one attempt at a level)
 // ---------------------------------------------------------------------------
 
-export type RunStatus = 'playing' | 'pick' | 'intermission' | 'won' | 'lost';
+export type RunStatus = 'playing' | 'pick' | 'pick_evolution' | 'intermission' | 'won' | 'lost';
 
 /**
  * Things that happen in a fight, for floaters, sounds and coach marks.
@@ -958,8 +958,12 @@ export interface RunState {
   hintUsedThisSet?: boolean;
   /** Combo steps granted by rules/evolutions (E.combo), giving +1 Set dmg per step for non-Sly-Fox fighters */
   bonusCombo?: number;
-  /** Evolution recipe id pre-loaded onto the active Catalyst card on the board (null when none) */
+  /** Evolution recipe id pre-loaded onto the active Catalyst card on the board (null when none or when 2+ idle recipes offer a choice) */
   catalystRecipeId?: string | null;
+  /** Up to 3 randomly chosen idle armed evolution recipe ids awaiting player selection */
+  evolutionPickOptions?: string[];
+  /** Preserved Catalyst slot & Set multiplier for the pending evolution choice */
+  evolutionPickContext?: { slot?: number; setMultiplier: number };
   coins: number;
   xp: number;
   xpLevel: number;

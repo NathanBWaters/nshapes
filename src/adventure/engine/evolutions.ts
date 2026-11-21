@@ -15,9 +15,6 @@ export const refreshArmedRecipes = (d: Draft) => {
   d.armedRecipes = d.features.has('evolutions') ? armedRecipesFor(d.weapons, d.unlockedEvolutions) : [];
 };
 
-/** The recipe a Catalyst starts: prefer un-forged idle recipes first, then recipe order. */
-const recipeToStart = (d: Draft): string | null => nextCatalystRecipe(d);
-
 /** `slot` is the Catalyst card it started from, when there was one. */
 export const startEvolution = (d: Draft, id: string, slot?: number) => {
   const recipe = getRecipe(id);
@@ -38,7 +35,7 @@ export const startEvolution = (d: Draft, id: string, slot?: number) => {
   enqueue(d, 'evolutionStart');
 };
 
-/** A Set with the Catalyst in it: consume the Catalyst and start an evolution if the cap allows. */
+/** A Set with the Catalyst in it: consume the Catalyst and auto-ignite (1 idle) or offer up to 3 randomly chosen idle evolutions (2+ idle). */
 export const resolveCatalyst = (d: Draft, matched: Card[]) => {
   const ids = new Set(matched.map(c => c.id));
   const idx = d.board.findIndex(c => ids.has(c.id) && c.hasEvolutionItem);
@@ -51,12 +48,20 @@ export const resolveCatalyst = (d: Draft, matched: Card[]) => {
   const finalFoeAlreadyDefeated = !d.level.rules.sandbox && d.foeHp <= 0 && d.wave >= d.level.foes.length - 1;
   if (finalFoeAlreadyDefeated) return;
   if (d.evolutionsTriggered >= d.evolutionCap) return;
+  if (d.evolutionPickOptions && d.evolutionPickOptions.length > 0) return;
   const idle = idleRecipes(d);
-  const id = loadedId && idle.includes(loadedId) ? loadedId : recipeToStart(d);
-  if (!id) return;
-  // Told first, so what grows on a matched Catalyst (Catalyst Prism) already counts for this evolution
-  signalGrowth(d, { on: 'catalyst' });
-  startEvolution(d, id, idx);
+  if (idle.length === 0) return;
+  if (idle.length === 1) {
+    const id = loadedId && idle.includes(loadedId) ? loadedId : idle[0];
+    // Told first, so what grows on a matched Catalyst (Catalyst Prism) already counts for this evolution
+    signalGrowth(d, { on: 'catalyst' });
+    startEvolution(d, id, idx);
+    return;
+  }
+  // 2+ idle armed evolutions: draw up to 3 randomly so the player can strategize around luck & synergies
+  const choices = d._rng.shuffle(idle).slice(0, 3);
+  d.evolutionPickOptions = choices;
+  d.evolutionPickContext = { slot: idx, setMultiplier: d._setMultiplier };
 };
 
 export const extendEvolutions = (d: Draft, ms: number) => {
