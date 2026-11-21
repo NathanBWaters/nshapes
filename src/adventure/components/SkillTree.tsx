@@ -118,7 +118,7 @@ const SkillTree: React.FC<Props> = ({ save, fighter, onChange, onBack }) => {
     <View style={st.root} testID={`skill-tree-${fighter}`}>
       <View style={st.head}>
         <TouchableOpacity testID="skill-tree-back" onPress={() => { sfx('back'); onBack(); }} style={st.back} accessibilityLabel="Back to fighters">
-          <Icon name="lorc/return-arrow" size={18} color={INK} />
+          <Icon name="ui/back-arrow" size={18} color={INK} noShadow />
         </TouchableOpacity>
         <FighterAvatar character={fighter} size={42} mood="anticipation" framed />
         <View style={{ flex: 1 }}>

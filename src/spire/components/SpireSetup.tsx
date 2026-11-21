@@ -54,7 +54,7 @@ const SpireSetup: React.FC<Props> = ({ activeRun, meta, onStartNew, onResume, on
           style={st.backBtn}
           accessibilityLabel="Back to main menu"
         >
-          <Icon name="lorc/return-arrow" size={18} color={INK} />
+          <Icon name="ui/back-arrow" size={18} color={INK} noShadow />
         </TouchableOpacity>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={st.headerTitle} numberOfLines={1}>STARFALL SUMMIT</Text>

@@ -33,7 +33,7 @@ const SpireHeader: React.FC<Props> = ({ run, onOpenBuild, onExitToMenu }) => {
             accessibilityLabel="Save and return to menu"
             accessibilityRole="button"
           >
-            <Icon name="lorc/return-arrow" size={16} color={INK} />
+            <Icon name="ui/back-arrow" size={16} color={INK} noShadow />
           </TouchableOpacity>
         )}
         <FighterAvatar character={run.fighter} size={30} health={run.hearts} maxHealth={run.maxHearts} animate={false} />

@@ -5,6 +5,7 @@ import { PlayerStats, Weapon, Character } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import WeaponGuide from './WeaponGuide';
 import WeaponList from './WeaponList';
+import Icon from './Icon';
 import { FighterAvatar } from './fighters';
 import { WEAPONS, getWeaponByName } from '@/utils/gameDefinitions';
 import { useSoundSetting } from '@/hooks/useSoundSetting';
@@ -340,8 +341,12 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
   const renderStats = (stats: PlayerStats) => (
     <View style={styles.statsContainer}>
       <View style={styles.modalHeader}>
-        <TouchableOpacity onPress={() => setCurrentScreen('menu')} style={styles.backButton}>
-          <Text style={styles.backButtonText}>‹</Text>
+        <TouchableOpacity
+          onPress={() => setCurrentScreen('menu')}
+          style={styles.backButton}
+          accessibilityLabel="Back to menu"
+        >
+          <Icon name="ui/back-arrow" size={16} color={COLORS.canvasWhite} noShadow />
         </TouchableOpacity>
         <Text style={styles.modalTitle}>Character Stats</Text>
         <TouchableOpacity onPress={closeModal} style={styles.closeButton}>
@@ -429,8 +434,12 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
   const renderOptions = () => (
     <View style={styles.statsContainer}>
       <View style={styles.modalHeader}>
-        <TouchableOpacity onPress={() => setCurrentScreen('menu')} style={styles.backButton}>
-          <Text style={styles.backButtonText}>‹</Text>
+        <TouchableOpacity
+          onPress={() => setCurrentScreen('menu')}
+          style={styles.backButton}
+          accessibilityLabel="Back to menu"
+        >
+          <Icon name="ui/back-arrow" size={16} color={COLORS.canvasWhite} noShadow />
         </TouchableOpacity>
         <Text style={styles.modalTitle}>Options</Text>
         <TouchableOpacity onPress={closeModal} style={styles.closeButton}>
@@ -479,8 +488,12 @@ const GameMenu: React.FC<GameMenuProps> = ({ playerStats, playerWeapons = [], ch
   const renderDevTools = () => (
     <View style={styles.statsContainer}>
       <View style={[styles.modalHeader, styles.devModalHeader]}>
-        <TouchableOpacity onPress={() => setCurrentScreen('menu')} style={styles.backButton}>
-          <Text style={styles.backButtonText}>‹</Text>
+        <TouchableOpacity
+          onPress={() => setCurrentScreen('menu')}
+          style={styles.backButton}
+          accessibilityLabel="Back to menu"
+        >
+          <Icon name="ui/back-arrow" size={16} color={COLORS.canvasWhite} noShadow />
         </TouchableOpacity>
         <Text style={styles.modalTitle}>Dev Tools</Text>
         <TouchableOpacity onPress={closeModal} style={styles.closeButton}>
@@ -828,12 +841,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.deepOnyx,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  backButtonText: {
-    color: COLORS.canvasWhite,
-    fontWeight: '700',
-    fontSize: 20,
-    marginTop: -2,
   },
   closeButton: {
     width: 28,

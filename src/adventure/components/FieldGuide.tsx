@@ -91,7 +91,7 @@ const FieldGuide: React.FC<Props> = ({ save, onClose }) => {
     <View style={[st.root, { paddingTop: insets.top }]}>
       <View style={st.top}>
         <TouchableOpacity onPress={onClose} style={st.back} accessibilityLabel="Back to map">
-          <Icon name="lorc/return-arrow" size={20} color={INK} />
+          <Icon name="ui/back-arrow" size={20} color={INK} noShadow />
         </TouchableOpacity>
         <Icon name={TAB_META[tab].icon} size={22} color={INK} />
         <Text style={st.title}>{TAB_META[tab].title}</Text>

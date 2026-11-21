@@ -629,7 +629,7 @@ export default function AnalyticsDashboard({
                     onBack();
                   }}
                 >
-                  <Icon name="lorc/return-arrow" size={16} color={COLORS.slateCharcoal} />
+                  <Icon name="ui/back-arrow" size={16} color={COLORS.slateCharcoal} noShadow />
                   <Text style={styles.backText}>Back</Text>
                 </TouchableOpacity>
               )}

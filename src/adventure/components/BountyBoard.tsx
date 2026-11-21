@@ -55,7 +55,7 @@ const BountyBoard: React.FC<Props> = ({ save, onClose, backLabel = 'Back to map'
     <View style={[st.root, { paddingTop: insets.top }]}>
       <View style={st.top}>
         <TouchableOpacity onPress={() => { sfx('back'); onClose(); }} style={st.back} accessibilityLabel={backLabel}>
-          <Icon name="lorc/return-arrow" size={20} color={INK} />
+          <Icon name="ui/back-arrow" size={20} color={INK} noShadow />
         </TouchableOpacity>
         <Icon name="lorc/trophy" size={22} color="#D97706" />
         <Text style={st.title}>BOUNTIES</Text>

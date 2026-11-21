@@ -270,7 +270,7 @@ const AdventureMap: React.FC<Props> = ({
       {/* Only where you are and what you have: everything else lives at Camp */}
       <View style={s.topBar} testID="map-top-bar">
         <TouchableOpacity onPress={onExit} style={s.iconBtn} accessibilityLabel="Back to menu">
-          <Icon name="lorc/return-arrow" size={20} color={INK} />
+          <Icon name="ui/back-arrow" size={20} color={INK} noShadow />
         </TouchableOpacity>
         <Text style={s.title} numberOfLines={1}>ADVENTURE</Text>
         <View style={s.starPill} testID="map-stars" accessibilityLabel={`${stars} of ${maxStars()} stars`}>

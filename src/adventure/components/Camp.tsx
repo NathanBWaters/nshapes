@@ -243,7 +243,7 @@ const Camp: React.FC<Props> = ({ save, history = NO_BATTLES, onChange, onRateBat
           style={st.back}
           accessibilityLabel={tab ? 'Back to camp' : 'Back to map'}
         >
-          <Icon name="lorc/return-arrow" size={20} color={INK} />
+          <Icon name="ui/back-arrow" size={20} color={INK} noShadow />
         </TouchableOpacity>
         <Icon name={section?.icon ?? 'lorc/campfire'} size={24} color={section ? INK : COLORS.impactOrange} />
         <Text style={st.title} numberOfLines={1}>{(section?.title ?? 'Camp').toUpperCase()}</Text>

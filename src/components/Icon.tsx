@@ -384,6 +384,7 @@ import ThumbUp from '../../assets/icons/delapouite/thumb-up.svg';
 import ThumbDown from '../../assets/icons/delapouite/thumb-down.svg';
 import AnalyticsChart from '../../assets/icons/delapouite/chart.svg';
 import PieChart from '../../assets/icons/delapouite/pie-chart.svg';
+import UiBackArrow from '../../assets/icons/ui/back-arrow.svg';
 
 // Icon registry: maps path (e.g., "delapouite/token") to the imported component
 // NOTE: When adding new icons, also add the import above and the path here.
@@ -766,6 +767,7 @@ const ICON_REGISTRY = {
   'delapouite/thumb-down': ThumbDown,
   'delapouite/chart': AnalyticsChart,
   'delapouite/pie-chart': PieChart,
+  'ui/back-arrow': UiBackArrow,
 } as const satisfies Record<string, React.FC<SvgProps>>;
 
 // TypeScript union type of all valid icon names - use this for type-safe icon references

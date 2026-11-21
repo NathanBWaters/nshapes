@@ -5,9 +5,13 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import CompanionBubble from '@/adventure/components/CompanionBubble';
 import AdventureMap from '@/adventure/components/AdventureMap';
 import AdventureRun from '@/adventure/components/AdventureRun';
+import BountyBoard from '@/adventure/components/BountyBoard';
+import Camp from '@/adventure/components/Camp';
 import DamageSourceExplainer from '@/adventure/components/DamageSourceExplainer';
 import EvolutionPickOverlay from '@/adventure/components/EvolutionPickOverlay';
+import FieldGuide from '@/adventure/components/FieldGuide';
 import { compactRoleBonusLabel, GearChips, gearModifiers, hasGearChips } from '@/adventure/components/GearChips';
+import SkillTree from '@/adventure/components/SkillTree';
 import WeaponExplainer from '@/adventure/components/WeaponExplainer';
 import { getArmoryWeapon } from '@/adventure/data/armory';
 import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
@@ -17,8 +21,11 @@ import { createRun } from '@/adventure/engine/run';
 import { createMaxedSave, createNewSave } from '@/adventure/progress';
 import Card, { CardBoardProvider } from '@/components/Card';
 import RoundFunPrompt from '@/components/RoundFunPrompt';
+import SpireHeader from '@/spire/components/SpireHeader';
+import SpireSetup from '@/spire/components/SpireSetup';
 import SpireSwapPicker from '@/spire/components/SpireSwapPicker';
 import { createSpireRun } from '@/spire/engine/runState';
+import { createInitialSpireMeta } from '@/spire/save';
 import { NEGATIVE_FUN_TAGS } from '@/analytics/fightEvent';
 import type { Card as CardType } from '@/types';
 
@@ -564,5 +571,66 @@ describe('UI Text Visibility Style-Contract Guardrails', () => {
     }
 
     view.unmount();
+  });
+
+  it('uses the standard mobile ui/back-arrow icon (never lorc/return-arrow) on navigation back buttons', () => {
+    const save = createNewSave();
+    const run = createSpireRun('Orange Tabby', 0, 7777);
+    const meta = createInitialSpireMeta();
+
+    const screens: [string, () => React.ReactElement][] = [
+      [
+        'SpireHeader',
+        () => <SpireHeader run={run} onOpenBuild={() => {}} onExitToMenu={() => {}} />,
+      ],
+      [
+        'SpireSetup',
+        () => (
+          <SpireSetup
+            activeRun={null}
+            meta={meta}
+            onStartNew={() => {}}
+            onResume={() => {}}
+            onAbandonActive={() => {}}
+            onExit={() => {}}
+          />
+        ),
+      ],
+      [
+        'AdventureMap',
+        () => (
+          <AdventureMap
+            save={save}
+            onSelectLevel={() => {}}
+            onOpenCamp={() => {}}
+            onOpenGuide={() => {}}
+            onExit={() => {}}
+          />
+        ),
+      ],
+      [
+        'Camp',
+        () => <Camp save={save} onChange={() => {}} onClose={() => {}} />,
+      ],
+      [
+        'SkillTree',
+        () => <SkillTree save={save} fighter="Orange Tabby" onChange={() => {}} onBack={() => {}} />,
+      ],
+      [
+        'BountyBoard',
+        () => <BountyBoard save={save} onClose={() => {}} />,
+      ],
+      [
+        'FieldGuide',
+        () => <FieldGuide save={save} onClose={() => {}} />,
+      ],
+    ];
+
+    for (const [, makeElement] of screens) {
+      const view = render(<SafeAreaProvider initialMetrics={INSETS}>{makeElement()}</SafeAreaProvider>);
+      expect(view.getAllByLabelText('icon-ui/back-arrow').length).toBeGreaterThanOrEqual(1);
+      expect(view.queryByLabelText('icon-lorc/return-arrow')).toBeNull();
+      view.unmount();
+    }
   });
 });
