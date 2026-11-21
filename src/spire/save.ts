@@ -70,13 +70,14 @@ export const loadSpireRun = (): SpireRun | null => {
       ? {
           ...parsed.shop,
           upgrades: parsed.shop.upgrades.map(u => {
-            const legacy = u as unknown as { upgradeId?: string; kind?: string; price: number; sold?: boolean };
+            const legacy = u as unknown as { upgradeId?: string; kind?: string; price: number; sold?: boolean; locked?: boolean };
             return {
               upgradeId: (legacy.upgradeId ?? legacy.kind ?? 'heavy_hitter') as SpireRun['shop'] extends null
                 ? never
                 : NonNullable<SpireRun['shop']>['upgrades'][number]['upgradeId'],
               price: legacy.price,
               sold: legacy.sold,
+              ...(legacy.locked ? { locked: true } : {}),
             };
           }),
         }

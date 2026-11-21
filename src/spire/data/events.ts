@@ -128,8 +128,8 @@ export const SPIRE_EVENTS: readonly SpireEventDef[] = [
     options: [
       {
         id: 'arcana',
-        label: 'Drink the Violet Tarot Tonic',
-        detail: 'Gain a random Arcana wildcard (kiss-curse power!).',
+        label: 'Inspect the Violet Tarot Tonic',
+        detail: 'Preview the Alchemist’s Tarot Arcana — Accept its power or Decline safely.',
         tone: 'bold',
       },
       {

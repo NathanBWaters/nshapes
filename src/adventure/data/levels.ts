@@ -406,7 +406,7 @@ const RAW_LEVELS: LevelInput[] = [
     rules: { attributes: A3, shadingSurge: true, boardSize: 15, timer: 90, hearts: 4, startingHints: 3, startingGraces: 2 },
     foes: [{ enemy: 'Stinging Scorpion', hp: 93010, taunt: 'One sting is all it takes.' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 3.6, difficulty: 5,
-    rewards: { star1: { coins: 140, weapons: ['odd-one-out'] }, star2: { weapons: ['life-vessel'] }, star3: { coins: 300, weapons: ['life-link'] } },
+    rewards: { star1: { coins: 140, weapons: ['odd-one-out', 'devils-bargain'] }, star2: { weapons: ['life-vessel'] }, star3: { coins: 300, weapons: ['life-link'] } },
     recommended: ['Orange Tabby'],
   },
   {
@@ -492,7 +492,7 @@ const RAW_LEVELS: LevelInput[] = [
     },
     foes: [{ enemy: 'World Eater', hp: 29428, taunt: 'Every card you play, I swallow two.' }],
     challenge: { kind: 'defuseTraps', n: 5 }, coinMultiplier: 6.5, difficulty: 5,
-    rewards: { star1: { coins: 320, weapons: ['wild-card'] }, star2: { weapons: ['life-vessel'] }, star3: { coins: 950, weapons: ['growth-seed'] } },
+    rewards: { star1: { coins: 320, weapons: ['wild-card'] }, star2: { weapons: ['life-vessel', 'grace-conduit'] }, star3: { coins: 950, weapons: ['growth-seed'] } },
     recommended: ['Corgi'],
   },
   {
@@ -503,7 +503,7 @@ const RAW_LEVELS: LevelInput[] = [
     },
     foes: [{ enemy: 'The Reaper', hp: 204204, taunt: 'Everyone runs out of time.' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 7, difficulty: 5,
-    rewards: { star1: { coins: 340, weapons: ['twin-seed'] }, star2: { weapons: ['mending-charm'] }, star3: { coins: 1000, weapons: ['prismatic-ray'] } },
+    rewards: { star1: { coins: 340, weapons: ['twin-seed', 'tar-pit'] }, star2: { weapons: ['mending-charm', 'life-link'] }, star3: { coins: 1000, weapons: ['prismatic-ray'] } },
     recommended: ['Orange Tabby', 'Emperor Penguin'],
   },
   {
@@ -514,7 +514,7 @@ const RAW_LEVELS: LevelInput[] = [
     },
     foes: [{ enemy: 'Merciless Porcupine', hp: 257836, taunt: 'One wrong move. That\'s all I need.' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 7.5, difficulty: 5,
-    rewards: { star1: { coins: 360, weapons: ['collectors-album'] }, star2: { weapons: ['echo-stone'] }, star3: { coins: 1100, weapons: ['chain-reaction'] } },
+    rewards: { star1: { coins: 360, weapons: ['collectors-album', 'long-fuse'] }, star2: { weapons: ['echo-stone', 'chaos-conduit'] }, star3: { coins: 1100, weapons: ['chain-reaction'] } },
     recommended: ['Emperor Penguin', 'Pelican'],
   },
   {
@@ -527,7 +527,7 @@ const RAW_LEVELS: LevelInput[] = [
     },
     foes: [{ enemy: 'The Hydra', hp: 30642, taunt: 'Cut one head off, two more grow back. Everything you learned, all at once.' }],
     challenge: { kind: 'bigHit', n: 20 }, coinMultiplier: 8, difficulty: 5,
-    rewards: { star1: { coins: 400, weapons: ['glass-sword'] }, star2: { weapons: ['chain-reaction'] }, star3: { coins: 1500, weapons: ['mystic-sight'] } },
+    rewards: { star1: { coins: 400, weapons: ['glass-sword', 'fortunes-blessing'] }, star2: { weapons: ['chain-reaction'] }, star3: { coins: 1500, weapons: ['mystic-sight'] } },
     recommended: ['Emperor Penguin', 'Orange Tabby', 'Sly Fox'],
   },
 ];
@@ -583,7 +583,7 @@ const BRANCHES: LevelInput[] = [
     rules: { attributes: A3, shadingSurge: true, boardSize: 15, timer: 90, hearts: 13, startingHints: 2, startingGraces: 1 },
     foes: [{ enemy: 'Swarming Ants', hp: 13054, taunt: 'Tick. Tick. Tick. Tick.' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 4, difficulty: 5,
-    rewards: { star1: { coins: 150, weapons: ['greedy-chest'] }, star2: { weapons: ['temporal-rift'] }, star3: { coins: 400 } },
+    rewards: { star1: { coins: 150, weapons: ['greedy-chest'] }, star2: { weapons: ['temporal-rift'] }, star3: { coins: 400, weapons: ['long-fuse'] } },
     recommended: ['Emperor Penguin'],
   },
   {
@@ -627,7 +627,7 @@ const BRANCHES: LevelInput[] = [
     rules: { attributes: A3, shadingSurge: true, boardSize: 15, timer: 110, hearts: 6, startingHints: 3, startingGraces: 2, hazards: { timeBombs: { every: 8, seconds: 12 } } },
     foes: [{ enemy: 'Savage Claws', hp: 12058, taunt: 'Faster. FASTER. Still too slow.' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 5.5, difficulty: 5,
-    rewards: { star1: { coins: 230, weapons: ['decoy'] }, star2: { evolution: 'entropy-engine' }, star3: { coins: 700, weapons: ['neural-network'] } },
+    rewards: { star1: { coins: 230, weapons: ['decoy', 'temporal-rift'] }, star2: { evolution: 'entropy-engine' }, star3: { coins: 700, weapons: ['neural-network'] } },
     recommended: ['Sly Fox'],
   },
   {
@@ -635,7 +635,7 @@ const BRANCHES: LevelInput[] = [
     rules: { attributes: A3, shadingSurge: true, boardSize: 15, timer: 100, hearts: 4, startingHints: 3, startingGraces: 2 },
     foes: [{ enemy: 'Stone Sentinel', hp: 41915, taunt: 'Two shields. Zero weaknesses.' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 5, difficulty: 5,
-    rewards: { star1: { coins: 200, weapons: ['tightrope'] }, star2: { weapons: ['revenge-linker'] }, star3: { coins: 600, weapons: ['web-weaver'] } },
+    rewards: { star1: { coins: 200, weapons: ['tightrope', 'thorn-bush'] }, star2: { weapons: ['revenge-linker'] }, star3: { coins: 600, weapons: ['web-weaver'] } },
     recommended: ['Badger', 'Sly Fox'],
   },
   {
@@ -643,7 +643,7 @@ const BRANCHES: LevelInput[] = [
     rules: { attributes: A3, shadingSurge: true, boardSize: 15, timer: 100, hearts: 4, startingHints: 3, startingGraces: 2 },
     foes: [{ enemy: 'Hoarding Beaver', hp: 49695, taunt: 'Mine. Mine. Also mine.' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 5.2, difficulty: 5,
-    rewards: { star1: { coins: 210, arcana: 'glass_prism' }, star2: { weapons: ['scholars-tome'] }, star3: { coins: 620, weapons: ['wisdom-chain'] } },
+    rewards: { star1: { coins: 210, arcana: 'glass_prism' }, star2: { weapons: ['scholars-tome', 'soul-harvest'] }, star3: { coins: 620, weapons: ['wisdom-chain'] } },
     recommended: ['Corgi'],
   },
   {
@@ -652,7 +652,7 @@ const BRANCHES: LevelInput[] = [
     rules: { attributes: A3, shadingSurge: true, boardSize: 15, timer: 75, hearts: 15, startingHints: 3, startingGraces: 2, hazards: { snares: { every: 6 } } },
     foes: [{ enemy: 'Abyssal Octopus', hp: 30015, taunt: 'Eight arms. Zero light.' }],
     challenge: { kind: 'enemy' }, coinMultiplier: 5.8, difficulty: 5,
-    rewards: { star1: { coins: 240, weapons: ['cursed-idol'] }, star2: { weapons: ['cascade-core'] }, star3: { coins: 720, weapons: ['mystic-sight'] } },
+    rewards: { star1: { coins: 240, weapons: ['cursed-idol', 'revenge-linker'] }, star2: { weapons: ['cascade-core', 'neural-network'] }, star3: { coins: 720, weapons: ['mystic-sight', 'wisdom-chain'] } },
     recommended: ['Corgi', 'Pelican'],
   },
 ];

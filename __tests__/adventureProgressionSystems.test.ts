@@ -524,14 +524,20 @@ describe('Weapon levels (found in the world) and tuning (Workshop)', () => {
   const earn = (save: AdventureSave, levelId: string, star: number) =>
     applyLevelResult({ ...save, stars: { ...save.stars, [levelId]: star - 1 } }, getLevel(levelId), star, 0);
 
-  it('no reward names a merged copy, a Mastery weapon or a bundle; no weapon is found more than 5 times', () => {
+  it('no reward names a merged copy, a Mastery weapon or a bundle; every weapon reaches Lv 2+ and at most 5 copies', () => {
     const named = [...LEVELS.flatMap(l => starRewards(l)), ...BOUNTIES.map(b => b.reward)].flatMap(r => r.weapons ?? []);
     for (const id of named) expect(getArmoryWeapon(id)?.id).toBe(id);
     expect(named.filter(id => /-(common|rare|legendary)$/.test(id))).toEqual([]);
     expect(named.filter(id => id.includes('mastery'))).toEqual([]);
     const counts = new Map<string, number>();
     for (const id of named) counts.set(id, (counts.get(id) ?? 0) + 1);
-    for (const [, n] of counts) expect(n).toBeLessThanOrEqual(5);
+    for (const [, n] of counts) {
+      expect(n).toBeGreaterThanOrEqual(2);
+      expect(n).toBeLessThanOrEqual(5);
+    }
+    for (const id of ['understudy', 'devils-bargain', 'thorn-bush', 'tar-pit', 'long-fuse', 'fortunes-blessing', 'wisdom-chain']) {
+      expect(counts.get(id)).toBeGreaterThanOrEqual(3);
+    }
   });
 
   it('the first copy found unlocks the weapon; each later one is +1 level, with a reveal', () => {

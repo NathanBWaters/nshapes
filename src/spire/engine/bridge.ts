@@ -4,16 +4,16 @@
  * Converts a `SpireRun` + `SpireEncounter` into a standard `LevelDef`, a
  * virtual `AdventureSave`, `RunOverrides`, and `FeatureFlag` set so EVERY
  * Spire fight — and every pre-fight stat calculation — runs through the exact
- * same `startingLoadout`, `runReducer`, `AdventureRun`, `UPGRADES`, 204
+ * same `startingLoadout`, `runReducer`, `AdventureRun`, `UPGRADES`, 208
  * Evolutions, Set-Parrying, Multiplier Ignition, Kill-Cam, and Audio Band!
  */
 import type { AttributeName, Weapon } from '@/types';
-import type { AdventureSave, FeatureFlag, LevelDef } from '@/adventure/types';
+import type { AdventureSave, EvolutionRecipe, FeatureFlag, LevelDef } from '@/adventure/types';
 import type { WeaponBuilds } from '@/adventure/data/weaponStats';
 import { createNewSave } from '@/adventure/progress';
 import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
 import { ARCANA } from '@/adventure/data/arcana';
-import { ALL_ARMORY_WEAPON_IDS, charmWeapons } from '@/adventure/data/armory';
+import { ALL_ARMORY_WEAPON_IDS, charmWeapons, getArmoryWeapon } from '@/adventure/data/armory';
 import { armedRecipesFor, newRecipesArmedBy } from '@/adventure/engine/sources';
 import { startingLoadout, type Loadout } from '@/adventure/loadout';
 import type { RunOverrides } from '@/adventure/engine/run';
@@ -62,6 +62,67 @@ export const newEvolutionsArmedBy = (
   run: Pick<SpireRun, 'weapons'>,
   candidateWeaponId: string
 ): string[] => newRecipesArmedBy(run.weapons, candidateWeaponId).map(r => r.id);
+
+/** Full `EvolutionRecipe` objects newly armed by adding `candidateWeaponId` to the current belt. */
+export const newEvolutionRecipesArmedBy = (
+  run: Pick<SpireRun, 'weapons'>,
+  candidateWeaponId: string
+): EvolutionRecipe[] => newRecipesArmedBy(run.weapons, candidateWeaponId);
+
+export interface SpireClashWarning {
+  partnerId: string;
+  partnerName: string;
+  reason: string;
+}
+
+/**
+ * Empirically verified severe Gamble/Board anti-synergies flagged before
+ * buying or drafting in Starfall Spire (`docs/balance-analytics.json` clashes).
+ */
+export const SPIRE_CLASH_PAIRS: readonly { a: string; b: string; reason: string }[] = [
+  {
+    a: 'chain-gang',
+    b: 'long-fuse',
+    reason: 'Chained pairs compete with Long Fuse timing windows for the same board slots.',
+  },
+  {
+    a: 'greedy-chest',
+    b: 'cursed-idol',
+    reason: 'Cursed locks block cards you need to preserve or cash out Greedy Chest.',
+  },
+  {
+    a: 'ice-block',
+    b: 'neural-network',
+    reason: 'Frozen cards block linked bursts from clearing cleanly until thawed.',
+  },
+  {
+    a: 'twin-seed',
+    b: 'chain-reaction',
+    reason: 'Duplicate twin cards crowd the board and dilute chain-reaction blasts.',
+  },
+];
+
+/** Returns any severe Gamble/Board clash warnings if `candidateWeaponId` is added to `heldWeaponIds`. */
+export const clashesWithBelt = (
+  heldWeaponIds: readonly string[],
+  candidateWeaponId: string
+): SpireClashWarning[] => {
+  const held = new Set(heldWeaponIds);
+  const warnings: SpireClashWarning[] = [];
+  for (const pair of SPIRE_CLASH_PAIRS) {
+    let partnerId: string | null = null;
+    if (candidateWeaponId === pair.a && held.has(pair.b)) partnerId = pair.b;
+    else if (candidateWeaponId === pair.b && held.has(pair.a)) partnerId = pair.a;
+    if (partnerId) {
+      warnings.push({
+        partnerId,
+        partnerName: getArmoryWeapon(partnerId)?.name ?? partnerId,
+        reason: pair.reason,
+      });
+    }
+  }
+  return warnings;
+};
 
 /** Convert a Spire encounter into a standard Adventure `LevelDef`. */
 export const spireEncounterToLevel = (run: SpireRun, encounter: SpireEncounter): LevelDef => ({

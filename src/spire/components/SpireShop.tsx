@@ -9,12 +9,14 @@ import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Icon from '@/components/Icon';
 import { COLORS } from '@/utils/colors';
+import type { ArcanaId } from '@/adventure/types';
 import { getArmoryWeapon } from '@/adventure/data/armory';
 import { getUpgrade } from '@/adventure/data/upgrades';
 import { MAX_WEAPON_LEVEL } from '@/adventure/data/weaponStats';
 import WeaponExplainer from '@/adventure/components/WeaponExplainer';
 import {
   ArcanaCard,
+  ArmedEvolutionRow,
   UpgradeOfferRow,
   WeaponChip,
   WeaponOfferRow,
@@ -22,8 +24,15 @@ import {
 } from '@/adventure/components/SharedCards';
 import { Btn, CoinPill, Eyebrow, Heart, INK, PopIn, TONE } from '@/adventure/components/ui';
 import { band, sfx } from '@/audio';
-import { buildSpireWeaponBuilds, newEvolutionsArmedBy, spireHeldWeapons } from '../engine/bridge';
+import {
+  buildSpireWeaponBuilds,
+  clashesWithBelt,
+  newEvolutionRecipesArmedBy,
+  spireHeldWeapons,
+} from '../engine/bridge';
+import { ARCANA_PURGE_COST, countShopLocks, MAX_SHOP_LOCKS } from '../engine/runState';
 import type { SpireRun, SpireShopState } from '../types';
+import SpireBeltBar from './SpireBeltBar';
 
 interface Props {
   run: SpireRun;
@@ -34,6 +43,10 @@ interface Props {
   onBuyHeal: () => void;
   onForgeWeapon: (weaponId: string) => void;
   onReroll: () => void;
+  onToggleLock?: (kind: 'weapon' | 'arcana' | 'upgrade', index: number) => void;
+  onSellWeapon?: (weaponId: string) => void;
+  onPurgeArcana?: (arcanaId: ArcanaId) => void;
+  onReorderWeapon?: (fromIndex: number, toIndex: number) => void;
   onLeave: () => void;
 }
 
@@ -46,6 +59,10 @@ const SpireShop: React.FC<Props> = ({
   onBuyHeal,
   onForgeWeapon,
   onReroll,
+  onToggleLock,
+  onSellWeapon,
+  onPurgeArcana,
+  onReorderWeapon,
   onLeave,
 }) => {
   const [inspectWeaponId, setInspectWeaponId] = useState<string | null>(shop.weapons[0]?.weaponId ?? null);
@@ -59,6 +76,7 @@ const SpireShop: React.FC<Props> = ({
   const held = spireHeldWeapons(run);
   const builds = buildSpireWeaponBuilds(run);
   const forgeable = held.filter(w => (run.weaponLevels[w.id] ?? 1) < MAX_WEAPON_LEVEL);
+  const lockedCount = countShopLocks(shop);
 
   const priceBtn = (opts: { testID: string; disabled: boolean; label: string; onPress: () => void }) => (
     <TouchableOpacity
@@ -71,6 +89,31 @@ const SpireShop: React.FC<Props> = ({
     </TouchableOpacity>
   );
 
+  const lockBtn = (opts: {
+    testID: string;
+    locked?: boolean;
+    sold?: boolean;
+    onPress: () => void;
+  }) => {
+    if (!onToggleLock || opts.sold) return null;
+    const atCap = !opts.locked && lockedCount >= MAX_SHOP_LOCKS;
+    return (
+      <TouchableOpacity
+        testID={opts.testID}
+        disabled={atCap}
+        onPress={() => {
+          sfx('click');
+          opts.onPress();
+        }}
+        accessibilityRole="button"
+        accessibilityLabel={opts.locked ? 'Unlock item' : 'Lock item for next shop'}
+        style={[st.lockBtn, opts.locked && st.lockBtnActive, atCap && st.buyBtnDisabled]}
+      >
+        <Icon name="lorc/padlock" size={14} color={opts.locked ? COLORS.canvasWhite : INK} />
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <View style={st.root} testID="spire-shop">
       <ScrollView contentContainerStyle={st.body}>
@@ -79,10 +122,20 @@ const SpireShop: React.FC<Props> = ({
             <View style={{ flex: 1, minWidth: 0 }}>
               <Eyebrow text="STARFALL BAZAAR" color={COLORS.actionYellow} />
               <Text style={st.title}>Merchant’s Tent</Text>
-              <Text style={st.sub}>Gear bought here stays with you for the entire climb!</Text>
+              <Text style={st.sub}>
+                Lock up to {MAX_SHOP_LOCKS} wares to carry across rerolls &amp; your next Shop!
+              </Text>
             </View>
             <CoinPill coins={run.coins} />
           </View>
+          {lockedCount > 0 && (
+            <View style={st.lockSummary} testID="spire-shop-lock-count">
+              <Icon name="lorc/padlock" size={12} color="#1D4ED8" />
+              <Text style={st.lockSummaryText}>
+                Locked {lockedCount}/{MAX_SHOP_LOCKS} — held across rerolls &amp; next Merchant visit
+              </Text>
+            </View>
+          )}
         </PopIn>
 
         {/* Weapons Shelf */}
@@ -107,31 +160,66 @@ const SpireShop: React.FC<Props> = ({
               const w = getArmoryWeapon(offer.weaponId, { [offer.weaponId]: { level: offer.level, tuning: {} } });
               if (!w) return null;
               const afford = !offer.sold && run.coins >= offer.price;
-              const evos = offer.sold || isUpgrade ? [] : newEvolutionsArmedBy(run, offer.weaponId);
+              const evos = offer.sold || isUpgrade ? [] : newEvolutionRecipesArmedBy(run, offer.weaponId);
+              const clashes = offer.sold || isUpgrade ? [] : clashesWithBelt(run.weapons, offer.weaponId);
               const badges: OfferBadge[] = [];
+              if (offer.locked && !offer.sold) badges.push({ text: 'LOCKED', bg: '#2563EB' });
               if (offer.onSale && !offer.sold) badges.push({ text: 'SALE', bg: '#DC2626' });
               if (isUpgrade) badges.push({ text: `⬆ LV ${heldLv} → ${offer.level}`, bg: '#D97706' });
-              if (evos.length > 0) badges.push({ text: '⚡ EVO', bg: TONE.evoReady });
+              if (evos.length > 0) {
+                badges.push({
+                  text: evos.length > 1 ? `⚡ ${evos[0].name} +${evos.length - 1}` : `⚡ ${evos[0].name}`,
+                  bg: TONE.evoReady,
+                });
+              }
+              if (clashes.length > 0) badges.push({ text: '⚠ CLASH', bg: '#B91C1C' });
               return (
-                <WeaponOfferRow
-                  key={`${offer.weaponId}-${i}`}
-                  weapon={w}
-                  level={offer.level}
-                  badges={badges}
-                  focused={inspectWeaponId === offer.weaponId}
-                  dimmed={offer.sold}
-                  onPress={() => { sfx('click'); setInspectWeaponId(offer.weaponId); }}
-                  right={priceBtn({
-                    testID: `spire-shop-weapon-${i}`,
-                    disabled: !afford,
-                    label: offer.sold ? 'SOLD' : `${offer.price}¢`,
-                    onPress: () => {
-                      band.cue(isUpgrade ? 'levelUp' : 'register');
-                      band.fire(w.id, 4);
-                      onBuyWeapon(i);
-                    },
-                  })}
-                />
+                <View key={`${offer.weaponId}-${i}`} style={{ gap: 5 }}>
+                  <WeaponOfferRow
+                    weapon={w}
+                    level={offer.level}
+                    badges={badges}
+                    focused={inspectWeaponId === offer.weaponId}
+                    dimmed={offer.sold}
+                    onPress={() => { sfx('click'); setInspectWeaponId(offer.weaponId); }}
+                    right={
+                      <View style={st.offerActions}>
+                        {lockBtn({
+                          testID: `spire-shop-lock-weapon-${i}`,
+                          locked: offer.locked,
+                          sold: offer.sold,
+                          onPress: () => onToggleLock?.('weapon', i),
+                        })}
+                        {priceBtn({
+                          testID: `spire-shop-weapon-${i}`,
+                          disabled: !afford,
+                          label: offer.sold ? 'SOLD' : `${offer.price}¢`,
+                          onPress: () => {
+                            band.cue(isUpgrade ? 'levelUp' : 'register');
+                            band.fire(w.id, 4);
+                            onBuyWeapon(i);
+                          },
+                        })}
+                      </View>
+                    }
+                  />
+                  {evos.length > 0 && (
+                    <View style={st.evoCallouts} testID={`spire-shop-evo-${i}`}>
+                      {evos.slice(0, 2).map(r => (
+                        <ArmedEvolutionRow key={r.id} recipe={r} showFamily />
+                      ))}
+                    </View>
+                  )}
+                  {clashes.length > 0 && (
+                    <View style={st.clashBox} testID={`spire-shop-clash-${i}`}>
+                      {clashes.map(c => (
+                        <Text key={c.partnerId} style={st.clashText}>
+                          ⚠ Clash with {c.partnerName}: {c.reason}
+                        </Text>
+                      ))}
+                    </View>
+                  )}
+                </View>
               );
             })}
           </View>
@@ -152,15 +240,25 @@ const SpireShop: React.FC<Props> = ({
                 <UpgradeOfferRow
                   key={u.upgradeId}
                   icon={def.icon}
-                  name={def.name}
+                  name={u.locked && !u.sold ? `${def.name} (Locked)` : def.name}
                   description={def.description(1)}
                   dimmed={u.sold}
-                  right={priceBtn({
-                    testID: `spire-shop-upgrade-${i}`,
-                    disabled: !afford,
-                    label: u.sold ? 'SOLD' : `${u.price}¢`,
-                    onPress: () => { band.cue('register'); onBuyUpgrade(i); },
-                  })}
+                  right={
+                    <View style={st.offerActions}>
+                      {lockBtn({
+                        testID: `spire-shop-lock-upgrade-${i}`,
+                        locked: u.locked,
+                        sold: u.sold,
+                        onPress: () => onToggleLock?.('upgrade', i),
+                      })}
+                      {priceBtn({
+                        testID: `spire-shop-upgrade-${i}`,
+                        disabled: !afford,
+                        label: u.sold ? 'SOLD' : `${u.price}¢`,
+                        onPress: () => { band.cue('register'); onBuyUpgrade(i); },
+                      })}
+                    </View>
+                  }
                 />
               );
             })}
@@ -236,13 +334,66 @@ const SpireShop: React.FC<Props> = ({
                   <ArcanaCard
                     key={offer.arcanaId}
                     arcanaId={offer.arcanaId}
+                    badgeText={offer.locked && !offer.sold ? 'LOCKED' : undefined}
                     dimmed={offer.sold}
-                    right={priceBtn({
-                      testID: `spire-shop-arcana-${i}`,
-                      disabled: !afford,
-                      label: offer.sold ? 'SOLD' : `${offer.price}¢`,
-                      onPress: () => { band.cue('catalyst'); onBuyArcana(i); },
-                    })}
+                    right={
+                      <View style={st.offerActions}>
+                        {lockBtn({
+                          testID: `spire-shop-lock-arcana-${i}`,
+                          locked: offer.locked,
+                          sold: offer.sold,
+                          onPress: () => onToggleLock?.('arcana', i),
+                        })}
+                        {priceBtn({
+                          testID: `spire-shop-arcana-${i}`,
+                          disabled: !afford,
+                          label: offer.sold ? 'SOLD' : `${offer.price}¢`,
+                          onPress: () => { band.cue('catalyst'); onBuyArcana(i); },
+                        })}
+                      </View>
+                    }
+                  />
+                );
+              })}
+            </View>
+          </View>
+        )}
+
+        {/* Held Belt: Reorder & Sell (50% refund) */}
+        {(onSellWeapon || onReorderWeapon) && (
+          <SpireBeltBar
+            run={run}
+            onReorder={onReorderWeapon}
+            onSell={onSellWeapon}
+            title={onSellWeapon ? 'MY BELT · REORDER OR SELL (50%)' : 'MY BELT · REORDER'}
+            testIDPrefix="spire-shop-belt"
+          />
+        )}
+
+        {/* Purge unwanted Arcana */}
+        {onPurgeArcana && run.arcana.length > 0 && (
+          <View style={st.card} testID="spire-shop-purge-section">
+            <Text style={st.secTitle}>PURGE EQUIPPED ARCANA ({ARCANA_PURGE_COST}¢)</Text>
+            <View style={{ gap: 8 }}>
+              {run.arcana.map(id => {
+                const canAfford = run.coins >= ARCANA_PURGE_COST;
+                return (
+                  <ArcanaCard
+                    key={id}
+                    arcanaId={id}
+                    right={
+                      <TouchableOpacity
+                        testID={`spire-shop-purge-arcana-${id}`}
+                        disabled={!canAfford}
+                        onPress={() => {
+                          sfx('click');
+                          onPurgeArcana(id);
+                        }}
+                        style={[st.purgeBtn, !canAfford && st.buyBtnDisabled]}
+                      >
+                        <Text style={st.purgeBtnText}>Purge {ARCANA_PURGE_COST}¢</Text>
+                      </TouchableOpacity>
+                    }
                   />
                 );
               })}
@@ -276,6 +427,16 @@ const st = StyleSheet.create({
   buyBtn: { backgroundColor: COLORS.actionYellow, borderRadius: 8, borderWidth: 2, borderBottomWidth: 4, borderColor: INK, paddingHorizontal: 10, paddingVertical: 7, minWidth: 58, alignItems: 'center' },
   buyBtnDisabled: { backgroundColor: '#E5E0D8', opacity: 0.55 },
   buyBtnText: { fontSize: 12, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
+  offerActions: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  lockBtn: { width: 32, height: 32, borderRadius: 8, borderWidth: 2, borderColor: INK, backgroundColor: COLORS.canvasWhite, alignItems: 'center', justifyContent: 'center' },
+  lockBtnActive: { backgroundColor: '#2563EB', borderColor: '#1E3A8A' },
+  lockSummary: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: '#EFF6FF', borderRadius: 8, borderWidth: 1.5, borderColor: '#2563EB', paddingHorizontal: 8, paddingVertical: 5 },
+  lockSummaryText: { flex: 1, fontSize: 11, fontWeight: '800', color: '#1D4ED8' },
+  evoCallouts: { gap: 4, paddingLeft: 4 },
+  clashBox: { backgroundColor: '#FEF2F2', borderRadius: 8, borderWidth: 1.5, borderColor: '#B91C1C', paddingHorizontal: 9, paddingVertical: 6, gap: 2 },
+  clashText: { fontSize: 11.5, fontWeight: '800', color: '#991B1B', lineHeight: 16 },
+  purgeBtn: { backgroundColor: '#FEE2E2', borderRadius: 8, borderWidth: 2, borderBottomWidth: 4, borderColor: '#991B1B', paddingHorizontal: 8, paddingVertical: 6, alignItems: 'center' },
+  purgeBtnText: { fontSize: 11, fontWeight: '900', color: '#991B1B', fontVariant: ['tabular-nums'] },
   forgePicker: { backgroundColor: '#FFFBEB', borderRadius: 10, borderWidth: 2, borderColor: '#D97706', padding: 10, gap: 8 },
   forgeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
 });

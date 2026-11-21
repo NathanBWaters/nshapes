@@ -14,15 +14,24 @@ import type { FunRating, FunTag } from '@/analytics/fightEvent';
 import { COLORS } from '@/utils/colors';
 import type { ArcanaId } from '@/adventure/types';
 import { getArmoryWeapon } from '@/adventure/data/armory';
-import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
 import { buildDamageStory, buildSpireRunDamageStory } from '@/adventure/engine/damageStory';
 import BattleDamageStory from '@/adventure/components/BattleDamageStory';
 import WeaponExplainer from '@/adventure/components/WeaponExplainer';
 import FightReplay from '@/adventure/components/FightReplay';
-import { ArcanaCard, SkillNodeRow, WeaponOfferRow, type OfferBadge } from '@/adventure/components/SharedCards';
+import {
+  ArcanaCard,
+  ArmedEvolutionRow,
+  SkillNodeRow,
+  WeaponOfferRow,
+  type OfferBadge,
+} from '@/adventure/components/SharedCards';
 import { Btn, CoinPill, Eyebrow, INK, PopIn, TONE } from '@/adventure/components/ui';
 import { band, sfx } from '@/audio';
-import { buildSpireWeaponBuilds, newEvolutionsArmedBy } from '../engine/bridge';
+import {
+  buildSpireWeaponBuilds,
+  clashesWithBelt,
+  newEvolutionRecipesArmedBy,
+} from '../engine/bridge';
 import { REWARD_REROLL_COST, SKIP_WEAPON_COINS } from '../engine/runState';
 import type { SpireLastFightSnapshot, SpireRewardBundle, SpireRun } from '../types';
 
@@ -153,39 +162,62 @@ const SpireRewardScreen: React.FC<Props> = ({
                 const isUpgrade = heldLv !== undefined;
                 const w = getArmoryWeapon(opt.weaponId, { [opt.weaponId]: { level: opt.level, tuning: {} } });
                 if (!w) return null;
-                const newEvos = isUpgrade ? [] : newEvolutionsArmedBy(run, opt.weaponId);
-                const firstEvo = newEvos[0] ? EVOLUTION_RECIPES.find(r => r.id === newEvos[0]) : null;
+                const newEvos = isUpgrade ? [] : newEvolutionRecipesArmedBy(run, opt.weaponId);
+                const clashes = isUpgrade ? [] : clashesWithBelt(run.weapons, opt.weaponId);
                 const badges: OfferBadge[] = [];
                 if (isUpgrade) {
                   badges.push({ text: `⬆ LV ${heldLv} → ${opt.level}`, bg: '#D97706' });
                 }
                 if (newEvos.length > 0) {
                   badges.push({
-                    text: `⚡ ARMS ${newEvos.length > 1 ? `${newEvos.length} EVOS` : firstEvo?.name ?? 'EVO'}`,
+                    text:
+                      newEvos.length > 1
+                        ? `⚡ ARMS ${newEvos[0].name} +${newEvos.length - 1}`
+                        : `⚡ ARMS ${newEvos[0].name}`,
                     bg: TONE.evoReady,
                   });
                 }
+                if (clashes.length > 0) {
+                  badges.push({ text: '⚠ CLASH', bg: '#B91C1C' });
+                }
                 return (
-                  <WeaponOfferRow
-                    key={`${opt.weaponId}-${i}`}
-                    weapon={w}
-                    level={opt.level}
-                    badges={badges.length > 0 ? badges : undefined}
-                    focused={inspectIdx === i}
-                    onPress={() => { sfx('click'); setInspectIdx(i); }}
-                    right={
-                      <Btn
-                        testID={`spire-draft-pick-${i}`}
-                        small
-                        label={isUpgrade ? 'Upgrade' : 'Draft'}
-                        onPress={() => {
-                          band.cue(isUpgrade ? 'levelUp' : 'weaponGet');
-                          band.fire(w.id, 4);
-                          onClaimWeapon(i);
-                        }}
-                      />
-                    }
-                  />
+                  <View key={`${opt.weaponId}-${i}`} style={{ gap: 5 }}>
+                    <WeaponOfferRow
+                      weapon={w}
+                      level={opt.level}
+                      badges={badges.length > 0 ? badges : undefined}
+                      focused={inspectIdx === i}
+                      onPress={() => { sfx('click'); setInspectIdx(i); }}
+                      right={
+                        <Btn
+                          testID={`spire-draft-pick-${i}`}
+                          small
+                          label={isUpgrade ? 'Upgrade' : 'Draft'}
+                          onPress={() => {
+                            band.cue(isUpgrade ? 'levelUp' : 'weaponGet');
+                            band.fire(w.id, 4);
+                            onClaimWeapon(i);
+                          }}
+                        />
+                      }
+                    />
+                    {newEvos.length > 0 && (
+                      <View style={st.evoCallouts} testID={`spire-draft-evo-${i}`}>
+                        {newEvos.slice(0, 2).map(r => (
+                          <ArmedEvolutionRow key={r.id} recipe={r} showFamily />
+                        ))}
+                      </View>
+                    )}
+                    {clashes.length > 0 && (
+                      <View style={st.clashBox} testID={`spire-draft-clash-${i}`}>
+                        {clashes.map(c => (
+                          <Text key={c.partnerId} style={st.clashText}>
+                            ⚠ Clash with {c.partnerName}: {c.reason}
+                          </Text>
+                        ))}
+                      </View>
+                    )}
+                  </View>
                 );
               })}
             </View>
@@ -297,6 +329,9 @@ const st = StyleSheet.create({
   miniBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: COLORS.paperBeige, borderRadius: 6, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 8, paddingVertical: 3 },
   miniBtnText: { fontSize: 11, fontWeight: '800', color: INK },
   choiceList: { gap: 8 },
+  evoCallouts: { gap: 4, paddingLeft: 4 },
+  clashBox: { backgroundColor: '#FEF2F2', borderRadius: 8, borderWidth: 1.5, borderColor: '#B91C1C', paddingHorizontal: 9, paddingVertical: 6, gap: 2 },
+  clashText: { fontSize: 11.5, fontWeight: '800', color: '#991B1B', lineHeight: 16 },
 });
 
 export default SpireRewardScreen;

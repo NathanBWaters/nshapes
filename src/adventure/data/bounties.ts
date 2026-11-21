@@ -35,7 +35,7 @@ export const BOUNTIES: BountyDef[] = [
     icon: 'lorc/checked-shield',
     target: 40,
     progress: s => s.bountyStats.totalSets,
-    reward: { coins: 75 },
+    reward: { coins: 75, weapons: ['wisdom-chain'] },
   },
   {
     id: 'bounty_rainbow_12',
@@ -107,7 +107,7 @@ export const BOUNTIES: BountyDef[] = [
     icon: 'lorc/crystal-wand',
     target: 1,
     progress: s => s.bountyStats.evolutionsForged,
-    reward: { coins: 100 },
+    reward: { coins: 100, weapons: ['tar-pit'] },
   },
   {
     id: 'bounty_evolve_unique_3',
@@ -128,7 +128,7 @@ export const BOUNTIES: BountyDef[] = [
     icon: 'lorc/crystal-shine',
     target: 10,
     progress: s => s.bountyStats.evolutionsForged,
-    reward: { coins: 220, weapons: ['chaos-shard'] },
+    reward: { coins: 220, weapons: ['chaos-shard', 'encore-mask'] },
   },
   {
     id: 'bounty_traps_15',
@@ -160,7 +160,7 @@ export const BOUNTIES: BountyDef[] = [
     icon: 'caro-asercion/fox',
     target: 3,
     progress: s => s.bountyStats.fighterWins['Sly Fox'] ?? 0,
-    reward: { coins: 85 },
+    reward: { coins: 85, weapons: ['devils-bargain'] },
   },
   {
     id: 'bounty_corgi_wins_3',
@@ -190,7 +190,7 @@ export const BOUNTIES: BountyDef[] = [
     icon: 'lorc/trophy',
     target: 4,
     progress: uniqueFighterWins,
-    reward: { coins: 160, weapons: ['rally-horn'] },
+    reward: { coins: 160, weapons: ['rally-horn', 'understudy'] },
   },
 
   // ── Explorer & Completionist ────────────────────────────────────────────
@@ -202,7 +202,7 @@ export const BOUNTIES: BountyDef[] = [
     icon: 'lorc/flat-star',
     target: 6,
     progress: perfectCount,
-    reward: { coins: 120 },
+    reward: { coins: 120, weapons: ['thorn-bush'] },
   },
   {
     id: 'bounty_elites_2',
@@ -212,7 +212,7 @@ export const BOUNTIES: BountyDef[] = [
     icon: 'lorc/daemon-skull',
     target: 2,
     progress: eliteClears,
-    reward: { coins: 180 },
+    reward: { coins: 180, weapons: ['understudy'] },
   },
   {
     id: 'bounty_coins_1000',
@@ -222,6 +222,6 @@ export const BOUNTIES: BountyDef[] = [
     icon: 'lorc/crown-coin',
     target: 1000,
     progress: s => s.lifetimeCoins,
-    reward: { coins: 200 },
+    reward: { coins: 200, weapons: ['fortunes-blessing'] },
   },
 ];

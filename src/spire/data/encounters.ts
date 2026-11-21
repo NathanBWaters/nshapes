@@ -166,10 +166,10 @@ const ACT_LEVEL_POOLS: Record<1 | 2 | 3, Record<'skirmish' | 'elite' | 'boss', r
  * Evolution), Fighter Skill Tree nodes, Arcana wildcards, Set-Parries, and
  * Shading Surge (×5 in Act 3).
  */
-const BASE_ACT_HP: Record<number, { start: number; end: number; eliteMult: number; boss: number; timer: number }> = {
-  1: { start: 115, end: 320, eliteMult: 1.28, boss: 560, timer: 102 },
-  2: { start: 510, end: 1250, eliteMult: 1.32, boss: 2050, timer: 114 },
-  3: { start: 1650, end: 3500, eliteMult: 1.36, boss: 5600, timer: 126 },
+const BASE_ACT_HP: Record<number, { start: number; end: number; eliteMult: number; boss: number; timer: number; skirmishTimer: number }> = {
+  1: { start: 88, end: 255, eliteMult: 1.44, boss: 540, timer: 100, skirmishTimer: 72 },
+  2: { start: 470, end: 1140, eliteMult: 1.35, boss: 2000, timer: 112, skirmishTimer: 96 },
+  3: { start: 1650, end: 3500, eliteMult: 1.36, boss: 5600, timer: 126, skirmishTimer: 118 },
 };
 
 const actCurve = (act: number) => {
@@ -182,6 +182,7 @@ const actCurve = (act: number) => {
     eliteMult: 1.4,
     boss: Math.round(BASE_ACT_HP[3].boss * 1.48 * scale),
     timer: Math.max(85, 118 - endlessStep * 5),
+    skirmishTimer: Math.max(80, 112 - endlessStep * 5),
   };
 };
 
@@ -210,7 +211,12 @@ export const generateSpireEncounter = (o: {
       : Math.round((curve.start + (curve.end - curve.start) * rowFrac) * (kind === 'elite' ? curve.eliteMult : 1));
   baseHp = Math.round(baseHp * asc.foeHpScale * (kind === 'skirmish' ? 1 : asc.bossHpScale));
 
-  const timerBase = kind === 'boss' ? curve.timer + 20 : kind === 'elite' ? curve.timer + 10 : curve.timer;
+  const timerBase =
+    kind === 'boss'
+      ? curve.timer + 20
+      : kind === 'elite'
+        ? curve.timer + 10
+        : curve.skirmishTimer + (act === 1 ? row * 3 : 0);
   const timer = Math.max(60, Math.round(timerBase * asc.timerScale));
 
   // Early Act 1 Skirmishes default to timing-based parry unless Ascension 5+ or late Act 1

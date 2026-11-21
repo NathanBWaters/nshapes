@@ -35,6 +35,7 @@ import {
   leaveEvent,
   leaveShop,
   leaveTreasure,
+  resolveEventPendingArcana,
   resolveEventPendingForge,
   resolveEventPendingSkill,
   resolveEventPendingWeapon,
@@ -255,6 +256,18 @@ export const simulateSpireClimb = (o: {
       }
       if (run.event?.pendingSkillOptions?.length) {
         run = resolveEventPendingSkill(run, run.event.pendingSkillOptions[0]);
+      }
+      if (run.event?.pendingArcanaOffer) {
+        const offerId = run.event.pendingArcanaOffer;
+        const isRainbowBuild =
+          run.fighter === 'Emperor Penguin' || run.weapons.includes('rainbow-charm') || run.arcana.includes('prismatic_fever');
+        const accept =
+          run.arcana.length < 3 &&
+          offerId !== 'glass_prism' &&
+          offerId !== 'scholars_gambit' &&
+          !(offerId === 'monochrome_pact' && isRainbowBuild) &&
+          !(offerId === 'prismatic_fever' && run.arcana.includes('monochrome_pact'));
+        run = resolveEventPendingArcana(run, accept);
       }
       if (run.event?.pendingForge) {
         const target = run.weapons.find(id => (run.weaponLevels[id] ?? 1) < MAX_WEAPON_LEVEL);

@@ -7,9 +7,10 @@ import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Icon from '@/components/Icon';
 import { COLORS } from '@/utils/colors';
+import { getArcana } from '@/adventure/data/arcana';
 import { getArmoryWeapon } from '@/adventure/data/armory';
 import { MAX_WEAPON_LEVEL } from '@/adventure/data/weaponStats';
-import { SkillNodeRow, WeaponOfferRow } from '@/adventure/components/SharedCards';
+import { ArcanaCard, SkillNodeRow, WeaponOfferRow } from '@/adventure/components/SharedCards';
 import { Btn, DARK, Eyebrow, INK, PopIn, TONE } from '@/adventure/components/ui';
 import { band, sfx } from '@/audio';
 import { getSpireEvent } from '../data/events';
@@ -23,6 +24,7 @@ interface Props {
   onPickWeapon: (index: number) => void;
   onPickSkill: (nodeId: string) => void;
   onPickForge: (weaponId: string) => void;
+  onResolveArcana?: (accept: boolean) => void;
   onLeave: () => void;
 }
 
@@ -33,6 +35,7 @@ const SpireEvent: React.FC<Props> = ({
   onPickWeapon,
   onPickSkill,
   onPickForge,
+  onResolveArcana,
   onLeave,
 }) => {
   const def = getSpireEvent(eventState.eventId);
@@ -42,6 +45,7 @@ const SpireEvent: React.FC<Props> = ({
   const hasPendingSubPick =
     (eventState.pendingWeaponOptions?.length ?? 0) > 0 ||
     (eventState.pendingSkillOptions?.length ?? 0) > 0 ||
+    Boolean(eventState.pendingArcanaOffer) ||
     !!eventState.pendingForge;
 
   return (
@@ -97,6 +101,15 @@ const SpireEvent: React.FC<Props> = ({
                     {lockNote && <Text style={st.lockTag}>{lockNote}</Text>}
                   </View>
                   <Text style={st.optDetail}>{opt.detail}</Text>
+                  {opt.id === 'arcana' && eventState.offeredArcana && (
+                    <View style={{ marginTop: 6 }}>
+                      <ArcanaCard
+                        arcanaId={eventState.offeredArcana}
+                        badgeText="PREVIEW"
+                        testID="spire-event-arcana-preview"
+                      />
+                    </View>
+                  )}
                 </TouchableOpacity>
               );
             })}
@@ -137,6 +150,36 @@ const SpireEvent: React.FC<Props> = ({
                     onPress={() => { band.cue('levelUp'); onPickSkill(id); }}
                   />
                 ))}
+              </View>
+            )}
+
+            {/* Inline Arcana Accept / Decline (never forces a blind cursed Arcana!) */}
+            {eventState.pendingArcanaOffer && (
+              <View style={{ gap: 8 }}>
+                <ArcanaCard
+                  arcanaId={eventState.pendingArcanaOffer}
+                  showTagline
+                  testID="spire-event-arcana-offer"
+                />
+                <Btn
+                  testID="spire-event-arcana-accept"
+                  label={`Accept ${getArcana(eventState.pendingArcanaOffer).name}`}
+                  icon="lorc/crystal-wand"
+                  onPress={() => {
+                    band.cue('catalyst');
+                    onResolveArcana?.(true);
+                  }}
+                />
+                <Btn
+                  testID="spire-event-arcana-decline"
+                  small
+                  variant="ghost"
+                  label="Decline & Keep Walking"
+                  onPress={() => {
+                    sfx('click');
+                    onResolveArcana?.(false);
+                  }}
+                />
               </View>
             )}
 

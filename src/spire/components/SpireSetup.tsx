@@ -57,7 +57,7 @@ const SpireSetup: React.FC<Props> = ({ activeRun, meta, onStartNew, onResume, on
         </TouchableOpacity>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={st.headerTitle} numberOfLines={1}>STARFALL SPIRE</Text>
-          <Text style={st.headerSub} numberOfLines={1}>3-Act Roguelike · Endless & Ascensions</Text>
+          <Text style={st.headerSub} numberOfLines={1}>Climb where the star fell · 3 Acts & Endless</Text>
         </View>
         <View style={st.trophyPill}>
           <Icon name="lorc/trophy" size={14} color={TONE.coin} />

@@ -13,9 +13,13 @@ import { generateActMap, reachableNodeIds } from '@/spire/engine/mapGen';
 import { SPIRE_EVENTS } from '@/spire/data/events';
 import { SPIRE_WEAPON_POOL, STARTER_KITS } from '@/spire/data/encounters';
 import {
+  ARCANA_PURGE_COST,
+  MAX_SHOP_LOCKS,
+  SPIRE_EXCLUDED_WEAPONS,
   campfireForge,
   campfireMeditate,
   campfireRest,
+  cancelSpirePreview,
   chooseEventOption,
   claimRewardWeapon,
   claimTreasure,
@@ -23,18 +27,28 @@ import {
   createSpireRun,
   enterEndlessSpire,
   leaveShop,
+  reorderSpireWeapon,
+  resolveEventPendingArcana,
+  retreatSpireBattle,
   rollArcanaOptions,
   rollSynergyWeapons,
   selectSpireNode,
   shopBuyUpgrade,
   shopBuyWeapon,
+  shopPurgeArcana,
   shopReroll,
+  shopSellWeapon,
+  shopToggleLock,
+  spireWeaponSellValue,
+  startSpireEncounter,
 } from '@/spire/engine/runState';
 import {
   SPIRE_FIGHT_FEATURES,
+  clashesWithBelt,
   spireArmedRecipes,
   spireEncounterLoadout,
   spireEncounterToLevel,
+  spireHeldWeapons,
   spireRunOverrides,
   spireRunToVirtualSave,
 } from '@/spire/engine/bridge';
@@ -47,6 +61,7 @@ import SpireMap from '@/spire/components/SpireMap';
 import SpireEncounterPreview from '@/spire/components/SpireEncounterPreview';
 import SpireShop from '@/spire/components/SpireShop';
 import SpireCampfire from '@/spire/components/SpireCampfire';
+import SpireEvent from '@/spire/components/SpireEvent';
 import SpireBuildModal from '@/spire/components/SpireBuildModal';
 import SpireRewardScreen from '@/spire/components/SpireRewardScreen';
 import SpireEndScreen from '@/spire/components/SpireEndScreen';
@@ -131,17 +146,236 @@ describe('Starfall Spire — Map DAG, Events & Shared Engine Bridge', () => {
     expect(afterWin.phase).toBe('reward');
     expect(afterWin.reward?.skillOptions.length).toBeGreaterThan(0);
 
-    // Drafts & Arcana exclude dead XP-only items and include upgrade offers for held weapons
+    // Drafts & Arcana exclude dead XP-only items (scholars-tome + wisdom-chain) and include upgrade offers for held weapons
+    expect(SPIRE_EXCLUDED_WEAPONS.has('scholars-tome')).toBe(true);
+    expect(SPIRE_EXCLUDED_WEAPONS.has('wisdom-chain')).toBe(true);
     const rng = createRng(12345);
     let sawUpgrade = false;
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 40; i++) {
       const offers = rollSynergyWeapons(run, rng, 3);
-      expect(offers.some(o => o.weaponId === 'scholars-tome')).toBe(false);
+      expect(offers.some(o => o.weaponId === 'scholars-tome' || o.weaponId === 'wisdom-chain')).toBe(false);
       if (offers.some(o => run.weaponLevels[o.weaponId] !== undefined)) sawUpgrade = true;
     }
     expect(sawUpgrade).toBe(true);
     const arcanaPool = rollArcanaOptions({ arcana: [] }, createRng(99), 20);
     expect(arcanaPool).not.toContain('scholars_gambit');
+  });
+
+  it('fixes cancelSpirePreview (returns to map cleanly) and retreatSpireBattle (costs 1 ♥ or forfeits on 1 ♥)', () => {
+    const start = createSpireRun('Orange Tabby', 0, 1234);
+    const firstId = reachableNodeIds(start.map, null)[0];
+    const inPreview = selectSpireNode(start, firstId);
+    expect(inPreview.phase).toBe('preview');
+    expect(inPreview.floor).toBe(1);
+
+    // Backing out of pre-fight preview returns to 'map' and restores unvisited state
+    const backedOut = cancelSpirePreview(inPreview);
+    expect(backedOut.phase).toBe('map');
+    expect(backedOut.activeEncounter).toBeNull();
+    expect(backedOut.currentNodeId).toBeNull();
+    expect(backedOut.floor).toBe(0);
+    expect(backedOut.map.nodes.find(n => n.id === firstId)?.visited).toBe(false);
+
+    // Entering combat commits the node; retreating costs 1 ♥ and increments retreats (new seed)
+    const inFight = startSpireEncounter(inPreview);
+    expect(inFight.phase).toBe('fight');
+    const retreated = retreatSpireBattle(inFight, 'Lazy Sloth');
+    expect(retreated.phase).toBe('preview');
+    expect(retreated.hearts).toBe(inFight.hearts - 1);
+    expect(retreated.retreats).toBe(1);
+
+    // After retreating (or on an event ambush), cancelSpirePreview is a no-op — cannot skip a committed fight!
+    expect(cancelSpirePreview(retreated)).toBe(retreated);
+    const ambushPreview = {
+      ...inPreview,
+      prevNodeId: undefined,
+      activeEncounter: { ...inPreview.activeEncounter!, id: 'ambush-1' },
+    };
+    expect(cancelSpirePreview(ambushPreview)).toBe(ambushPreview);
+
+    // Retreating at 1 ♥ forfeits cleanly to defeat (no infinite save-scumming!)
+    const atOneHeart = { ...inFight, hearts: 1 };
+    const forfeited = retreatSpireBattle(atOneHeart, 'Lazy Sloth');
+    expect(forfeited.phase).toBe('defeat');
+    expect(forfeited.hearts).toBe(0);
+    expect(forfeited.defeatedBy).toBe('Lazy Sloth');
+  });
+
+  it('prevents shopSellWeapon + upgrade offer free-upgrade / free-gold exploit in-shop and across locked next-shop', () => {
+    let run = createSpireRun('Orange Tabby', 0, 7771);
+    const shopNodes = run.map.nodes.filter(n => n.kind === 'shop');
+    const shop1 = shopNodes[0]!;
+    run = selectSpireNode(
+      {
+        ...run,
+        coins: 100,
+        weapons: ['blast-powder', 'flint-spark'],
+        weaponLevels: { 'blast-powder': 4, 'flint-spark': 2 },
+        map: { ...run.map, nodes: run.map.nodes.map(n => (n.id === shop1.id ? { ...n, row: 0 } : n)) },
+      },
+      shop1.id
+    );
+    expect(run.phase).toBe('shop');
+
+    // Inject an on-sale Lv 5 upgrade offer for held Lv 4 blast-powder (29¢ < 60¢ sell value)
+    const withUpgradeShelf = {
+      ...run,
+      shop: {
+        ...run.shop!,
+        weapons: [
+          { weaponId: 'blast-powder', level: 5, price: 29, onSale: true, sold: false, locked: true },
+          ...run.shop!.weapons.slice(1),
+        ],
+      },
+    };
+    const afterSell = shopSellWeapon(withUpgradeShelf, 'blast-powder');
+    const resetOffer = afterSell.shop!.weapons[0];
+    expect(resetOffer.level).toBe(1);
+    expect(resetOffer.locked).toBe(false);
+    expect(resetOffer.price).toBeGreaterThanOrEqual(25);
+    // Re-buying only grants Lv 1 (never a free Lv 5 upgrade!)
+    const afterRebuy = shopBuyWeapon(afterSell, 0);
+    expect(afterRebuy.weaponLevels['blast-powder']).toBe(1);
+    // Even if holding Lv 1 and selling+rebuying the on-sale Lv 1 offer, net coins cannot increase
+    const lv1Refund = spireWeaponSellValue('blast-powder', 1);
+    expect(resetOffer.price).toBeGreaterThan(lv1Refund);
+
+    // Cross-shop locked upgrade exploit: if a Lv 5 upgrade was locked and the weapon is no longer held
+    // when entering a later shop, buildShopState resets it to standalone Lv 1
+    const shop2 = shopNodes[1] ?? shop1;
+    const beforeNextShop = {
+      ...leaveShop(withUpgradeShelf),
+      weapons: ['flint-spark'],
+      weaponLevels: { 'flint-spark': 2 },
+      currentNodeId: null,
+      map: {
+        ...run.map,
+        nodes: run.map.nodes.map(n => (n.id === shop2.id ? { ...n, row: 0, visited: false } : n)),
+      },
+    };
+    const nextShop = selectSpireNode(beforeNextShop, shop2.id);
+    const carried = nextShop.shop!.weapons.find(w => w.weaponId === 'blast-powder');
+    expect(carried).toBeDefined();
+    expect(carried!.level).toBe(1);
+    expect(carried!.price).toBeGreaterThan(lv1Refund);
+  });
+
+  it('makes Wandering Alchemist preview the exact Arcana and support Accept or Decline cleanly', () => {
+    let run = createSpireRun('Pelican', 0, 8080);
+    const evNode = run.map.nodes.find(n => n.kind === 'event')!;
+    run = selectSpireNode(
+      {
+        ...run,
+        map: {
+          ...run.map,
+          nodes: run.map.nodes.map(n => (n.id === evNode.id ? { ...n, row: 0, eventId: 'wandering_alchemist' } : n)),
+        },
+      },
+      evNode.id
+    );
+    expect(run.phase).toBe('event');
+    expect(run.event?.offeredArcana).toBeDefined();
+
+    // Choosing the Arcana option previews it without forcing it onto run.arcana yet
+    const offered = chooseEventOption(run, 'arcana');
+    expect(offered.event?.pendingArcanaOffer).toBe(run.event?.offeredArcana);
+    expect(offered.arcana).toHaveLength(0);
+
+    // Declining keeps run.arcana empty
+    const declined = resolveEventPendingArcana(offered, false);
+    expect(declined.arcana).toHaveLength(0);
+    expect(declined.event?.pendingArcanaOffer).toBeUndefined();
+
+    // Accepting binds the exact offered Arcana
+    const accepted = resolveEventPendingArcana(offered, true);
+    expect(accepted.arcana).toEqual([offered.event?.pendingArcanaOffer]);
+    expect(accepted.event?.pendingArcanaOffer).toBeUndefined();
+  });
+
+  it('supports Brotato Shop locking (cap 2, survives rerolls & next Shop), weapon selling, Arcana purging, and belt reordering', () => {
+    let run = createSpireRun('Corgi', 0, 9001);
+    run = { ...run, coins: 300, arcana: ['monochrome_pact'] };
+    const shopNodes = run.map.nodes.filter(n => n.kind === 'shop');
+    const shop1 = shopNodes[0]!;
+    run = selectSpireNode(
+      { ...run, map: { ...run.map, nodes: run.map.nodes.map(n => (n.id === shop1.id ? { ...n, row: 0 } : n)) } },
+      shop1.id
+    );
+    expect(run.phase).toBe('shop');
+
+    // Lock up to MAX_SHOP_LOCKS=2 items; 3rd lock is ignored
+    const lockedW0 = run.shop!.weapons[0].weaponId;
+    const lockedU0 = run.shop!.upgrades[0].upgradeId;
+    run = shopToggleLock(run, 'weapon', 0);
+    run = shopToggleLock(run, 'upgrade', 0);
+    const beforeThirdLock = run;
+    run = shopToggleLock(run, 'weapon', 1);
+    expect(run).toBe(beforeThirdLock);
+    expect(MAX_SHOP_LOCKS).toBe(2);
+
+    // Reroll preserves both locked items!
+    run = shopReroll(run);
+    expect(run.shop!.weapons.some(w => w.weaponId === lockedW0 && w.locked)).toBe(true);
+    expect(run.shop!.upgrades.some(u => u.upgradeId === lockedU0 && u.locked)).toBe(true);
+
+    // Sell a held weapon (50% refund); cannot sell last weapon
+    const sellTarget = run.weapons[1];
+    const expectedRefund = spireWeaponSellValue(sellTarget, run.weaponLevels[sellTarget] ?? 1);
+    const coinsBeforeSell = run.coins;
+    run = shopSellWeapon(run, sellTarget);
+    expect(run.weapons).not.toContain(sellTarget);
+    expect(run.coins).toBe(coinsBeforeSell + expectedRefund);
+    // Holding only 1 weapon now — selling is blocked!
+    expect(run.weapons).toHaveLength(1);
+    expect(shopSellWeapon(run, run.weapons[0])).toBe(run);
+
+    // Purge unwanted Arcana for 40¢
+    const coinsBeforePurge = run.coins;
+    run = shopPurgeArcana(run, 'monochrome_pact');
+    expect(run.arcana).toEqual([]);
+    expect(run.coins).toBe(coinsBeforePurge - ARCANA_PURGE_COST);
+
+    // Leaving Shop persists locked items into run.lockedShop and carries them into the NEXT shop!
+    run = leaveShop(run);
+    expect(run.lockedShop?.weapons.some(w => w.weaponId === lockedW0)).toBe(true);
+    expect(run.lockedShop?.upgrades.some(u => u.upgradeId === lockedU0)).toBe(true);
+
+    const shop2 = run.map.nodes.find(n => n.kind === 'shop' && n.id !== shop1.id) ?? { ...shop1, id: 'shop-next', visited: false };
+    run = selectSpireNode(
+      {
+        ...run,
+        currentNodeId: null,
+        map: {
+          ...run.map,
+          nodes: [
+            ...run.map.nodes.filter(n => n.id !== shop2.id),
+            { ...shop2, row: 0, visited: false },
+          ],
+        },
+      },
+      shop2.id
+    );
+    expect(run.phase).toBe('shop');
+    expect(run.shop!.weapons.some(w => w.weaponId === lockedW0 && w.locked)).toBe(true);
+    expect(run.shop!.upgrades.some(u => u.upgradeId === lockedU0 && u.locked)).toBe(true);
+
+    // Belt reordering lets players move Understudy beside any chosen weapon
+    let beltRun = createSpireRun('Badger', 0, 777);
+    beltRun = {
+      ...beltRun,
+      weapons: ['prismatic-ray', 'life-vessel', 'understudy'],
+      weaponLevels: { 'prismatic-ray': 2, 'life-vessel': 2, understudy: 2 },
+    };
+    beltRun = reorderSpireWeapon(beltRun, 2, 1);
+    expect(beltRun.weapons).toEqual(['prismatic-ray', 'understudy', 'life-vessel']);
+    expect(spireHeldWeapons(beltRun).map(w => w.id)).toEqual(['prismatic-ray', 'understudy', 'life-vessel']);
+
+    // Severe Gamble clash detector catches all 4 documented anti-synergy pairs
+    expect(clashesWithBelt(['chain-gang'], 'long-fuse')).toHaveLength(1);
+    expect(clashesWithBelt(['greedy-chest'], 'cursed-idol')).toHaveLength(1);
+    expect(clashesWithBelt(['ice-block'], 'neural-network')).toHaveLength(1);
+    expect(clashesWithBelt(['twin-seed'], 'chain-reaction')).toHaveLength(1);
+    expect(clashesWithBelt(['blast-powder'], 'mending-charm')).toHaveLength(0);
   });
 
   it('bridges Spire encounters seamlessly into Adventure createRun with persistent HP and uncapped weapons', () => {
@@ -310,8 +544,14 @@ describe('Starfall Spire — Shared UI Components Render Cleanly', () => {
     expect(setup.getByTestId('spire-setup')).toBeTruthy();
     expect(setup.getByTestId('spire-start-climb')).toBeTruthy();
 
-    const map = render(<SpireMap run={run} onSelectNode={() => {}} />);
+    const map = render(<SpireMap run={run} onSelectNode={() => {}} onReorderWeapon={() => {}} />);
     expect(map.getByTestId('spire-map')).toBeTruthy();
+    // Floor-1 Act Boss full preview modal (Monster Train Ring-1 Seraph rule)
+    fireEvent.press(map.getByTestId('spire-map-boss-preview'));
+    expect(map.getByTestId('spire-map-boss-modal')).toBeTruthy();
+    expect(map.getByTestId('spire-map-boss-parry')).toBeTruthy();
+    fireEvent.press(map.getByTestId('spire-map-boss-close'));
+    expect(map.queryByTestId('spire-map-boss-modal')).toBeNull();
 
     const firstId = reachableNodeIds(run.map, null)[0];
     const inPreview = selectSpireNode(run, firstId);
@@ -449,5 +689,123 @@ describe('Starfall Spire — Shared UI Components Render Cleanly', () => {
     expect(endPromptView.getByTestId('spire-end-fun-prompt')).toBeTruthy();
     fireEvent.press(endPromptView.getByTestId('spire-end-fun-down'));
     expect(onRateEnd).toHaveBeenCalledWith('down', []);
+  });
+
+  it('renders explicit EVO details & Clash warnings on SpireShop/SpireRewardScreen and Accept/Decline on Wandering Alchemist', () => {
+    const base = createSpireRun('Orange Tabby', 0, 1111);
+    const clashRun = {
+      ...base,
+      coins: 200,
+      weapons: ['blast-powder', 'chain-gang'],
+      weaponLevels: { 'blast-powder': 2, 'chain-gang': 2 },
+      arcana: ['monochrome_pact' as const],
+    };
+    const onToggleLock = jest.fn();
+    const onSell = jest.fn();
+    const onPurge = jest.fn();
+    const shopView = render(
+      <SpireShop
+        run={clashRun}
+        shop={{
+          weapons: [
+            { weaponId: 'long-fuse', level: 2, price: 65, sold: false },
+            { weaponId: 'pinata', level: 2, price: 65, sold: false },
+          ],
+          arcana: [],
+          upgrades: [],
+          healCost: 45,
+          healAmount: 2,
+          healed: false,
+          forgeCost: 55,
+          forged: false,
+          rerollCost: 25,
+          rerolls: 0,
+        }}
+        onBuyWeapon={() => {}}
+        onBuyArcana={() => {}}
+        onBuyUpgrade={() => {}}
+        onBuyHeal={() => {}}
+        onForgeWeapon={() => {}}
+        onReroll={() => {}}
+        onToggleLock={onToggleLock}
+        onSellWeapon={onSell}
+        onPurgeArcana={onPurge}
+        onReorderWeapon={() => {}}
+        onLeave={() => {}}
+      />
+    );
+    expect(shopView.getByTestId('spire-shop-clash-0')).toBeTruthy();
+    expect(shopView.getByTestId('spire-shop-evo-1')).toBeTruthy();
+    fireEvent.press(shopView.getByTestId('spire-shop-lock-weapon-0'));
+    expect(onToggleLock).toHaveBeenCalledWith('weapon', 0);
+    fireEvent.press(shopView.getByTestId('spire-shop-belt-sell-chain-gang'));
+    expect(onSell).toHaveBeenCalledWith('chain-gang');
+    fireEvent.press(shopView.getByTestId('spire-shop-purge-arcana-monochrome_pact'));
+    expect(onPurge).toHaveBeenCalledWith('monochrome_pact');
+
+    // Reward screen also renders clash warning & explicit Evo card
+    const rewardView = render(
+      <SpireRewardScreen
+        run={clashRun}
+        reward={{
+          nodeKind: 'skirmish',
+          foeName: 'Lazy Sloth',
+          coinsEarned: 50,
+          parryBonusCoins: 0,
+          dpm: 400,
+          biggestHit: 35,
+          parries: 0,
+          perfectParries: 0,
+          weaponOptions: [
+            { weaponId: 'long-fuse', level: 2 },
+            { weaponId: 'pinata', level: 2 },
+          ],
+          weaponClaimed: false,
+          weaponRerolled: false,
+          arcanaOptions: [],
+          arcanaClaimed: true,
+          skillOptions: [],
+          skillClaimed: true,
+          isActBoss: false,
+        }}
+        lastFight={null}
+        onClaimWeapon={() => {}}
+        onRerollWeapons={() => {}}
+        onSkipWeapon={() => {}}
+        onClaimArcana={() => {}}
+        onSkipArcana={() => {}}
+        onClaimSkill={() => {}}
+        onSkipSkill={() => {}}
+        onContinue={() => {}}
+      />
+    );
+    expect(rewardView.getByTestId('spire-draft-clash-0')).toBeTruthy();
+    expect(rewardView.getByTestId('spire-draft-evo-1')).toBeTruthy();
+
+    // Wandering Alchemist shows explicit preview + Accept / Decline buttons
+    const onResolveArcana = jest.fn();
+    const evView = render(
+      <SpireEvent
+        run={base}
+        eventState={{
+          eventId: 'wandering_alchemist',
+          resolved: true,
+          pendingArcanaOffer: 'glass_prism',
+          outcomeTitle: 'Arcana Offer · Glass Prism',
+          outcomeText: 'Inspect before binding!',
+        }}
+        onChoose={() => {}}
+        onPickWeapon={() => {}}
+        onPickSkill={() => {}}
+        onPickForge={() => {}}
+        onResolveArcana={onResolveArcana}
+        onLeave={() => {}}
+      />
+    );
+    expect(evView.getByTestId('spire-event-arcana-offer')).toBeTruthy();
+    fireEvent.press(evView.getByTestId('spire-event-arcana-decline'));
+    expect(onResolveArcana).toHaveBeenCalledWith(false);
+    fireEvent.press(evView.getByTestId('spire-event-arcana-accept'));
+    expect(onResolveArcana).toHaveBeenCalledWith(true);
   });
 });
