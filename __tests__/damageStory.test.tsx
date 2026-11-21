@@ -10,13 +10,22 @@ import {
   buildDamageStory,
   buildSpireRunDamageStory,
   mergeSpireDamageLedger,
+  resolveDamageSourceMeta,
+  type DamageSourceSummary,
+  type DamageStory,
 } from '@/adventure/engine/damageStory';
+import { ARCANA } from '@/adventure/data/arcana';
+import { getEvolutionRecipe } from '@/adventure/data/evolutions';
+import { PASSIVES } from '@/adventure/data/passives';
+import { getSkillNode } from '@/adventure/data/skillTrees';
 import { simulateRun, BOTS } from '@/adventure/engine/bot';
 import { getLevel } from '@/adventure/data/levels';
 import { applyLevelResult, createMaxedSave, createNewSave } from '@/adventure/progress';
 import { computeStars } from '@/adventure/engine/run';
 import BattleDamageStory from '@/adventure/components/BattleDamageStory';
+import FightReplay from '@/adventure/components/FightReplay';
 import LevelResults from '@/adventure/components/LevelResults';
+import type { FightReplayData } from '@/adventure/history';
 import SpireRewardScreen from '@/spire/components/SpireRewardScreen';
 import SpireEndScreen from '@/spire/components/SpireEndScreen';
 import { completeSpireBattle, createSpireRun, selectSpireNode } from '@/spire/engine/runState';
@@ -345,5 +354,249 @@ describe('BattleDamageStory shared UI across Adventure Mode and Starfall Spire',
     expect(endView.getByText('FINAL FIGHT DAMAGE')).toBeTruthy();
     fireEvent.press(endView.getByTestId('spire-story-scope-climb'));
     expect(endView.getByText('FULL CLIMB DAMAGE')).toBeTruthy();
+  });
+
+  it('resolves Arcana, Trap Defusal, Workshop Upgrades, and Summit copy cleanly in damageStory', () => {
+    // Arcana by display name & explicit ref (including Tempo Surge, which must NOT collide with Shading Surge!)
+    expect(resolveDamageSourceMeta({ label: 'Monochrome Pact' }).id).toBe('arcana:monochrome_pact');
+    expect(resolveDamageSourceMeta({ label: 'Tempo Surge' }).id).toBe('arcana:tempo_surge');
+    expect(resolveDamageSourceMeta({ label: 'Prismatic Fever' }).id).toBe('arcana:prismatic_fever');
+    expect(resolveDamageSourceMeta({ sourceRef: 'arcana:glass_prism' })).toMatchObject({
+      id: 'arcana:glass_prism',
+      name: 'Glass Prism',
+    });
+
+    // Shading Surge still resolves to bonus:surge
+    expect(resolveDamageSourceMeta({ label: 'Shading Surge' }).id).toBe('bonus:surge');
+
+    // Traps cleared flat item resolves to bonus:traps
+    expect(resolveDamageSourceMeta({ label: 'Traps cleared' })).toMatchObject({
+      id: 'bonus:traps',
+      name: 'Trap Defusal',
+    });
+
+    // Workshop upgrade & Role Set Bonus
+    expect(resolveDamageSourceMeta({ label: 'Heavy Hitter' }).id).toBe('upgrade:heavy_hitter');
+    expect(resolveDamageSourceMeta({ sourceRef: 'role:damage' })).toMatchObject({
+      id: 'role:damage',
+      name: 'Damage Set Bonus',
+    });
+
+    // Full climb story uses Starfall Summit wording (never stale "Spire" copy)
+    const { run: fight } = runGearedFight();
+    const merged = mergeSpireDamageLedger(undefined, undefined, 1, fight);
+    const climbStory = buildSpireRunDamageStory(merged.sourceDamage, merged.floorLedger);
+    expect(climbStory).not.toBeNull();
+    expect(climbStory!.headline).not.toMatch(/\bSpire\b/i);
+  });
+
+  it('opens rich DamageSourceExplainer cards for every non-weapon breakdown source and keeps WeaponExplainer for weapons', () => {
+    const phoenix = getEvolutionRecipe('phoenix-pyre');
+    const purrPunch = getSkillNode('tabby-0-1')!;
+    const monochrome = ARCANA.find(a => a.id === 'monochrome_pact')!;
+
+    const makeSource = (
+      partial: Pick<DamageSourceSummary, 'id' | 'name' | 'kind' | 'icon' | 'color' | 'totalDamage'> & { weaponId?: string }
+    ): DamageSourceSummary => ({
+      ...partial,
+      share: partial.totalDamage / 1600,
+      hits: 4,
+      biggestHit: Math.round(partial.totalDamage * 0.4),
+      cumulative: [0, partial.totalDamage],
+    });
+
+    const sources: DamageSourceSummary[] = [
+      makeSource({ id: 'weapon:blast-powder', weaponId: 'blast-powder', name: 'Blast Powder', kind: 'weapon', icon: 'lorc/bright-explosion', color: '#F5B800', totalDamage: 200 }),
+      makeSource({ id: 'evo:phoenix-pyre', name: phoenix.name, kind: 'evolution', icon: phoenix.icon, color: '#16AA98', totalDamage: 180 }),
+      makeSource({ id: 'bonus:parry', name: 'Set-Parry Counter', kind: 'bonus', icon: 'lorc/sword-clash', color: '#F0483E', totalDamage: 160 }),
+      makeSource({ id: 'bonus:surge', name: 'Shading Surge', kind: 'bonus', icon: 'lorc/power-lightning', color: '#38BDF8', totalDamage: 150 }),
+      makeSource({ id: 'bonus:rainbow', name: 'Rainbow Strike', kind: 'bonus', icon: 'lorc/rainbow-star', color: '#FB923C', totalDamage: 140 }),
+      makeSource({ id: 'bonus:purity', name: 'Purity Chain', kind: 'bonus', icon: 'lorc/crystal-shine', color: '#C084FC', totalDamage: 130 }),
+      makeSource({ id: 'bonus:traps', name: 'Trap Defusal', kind: 'bonus', icon: 'lorc/checked-shield', color: '#4ADE80', totalDamage: 120 }),
+      makeSource({ id: 'passive:scrappy', name: PASSIVES.scrappy.name, kind: 'passive', icon: PASSIVES.scrappy.icon, color: '#F5B800', totalDamage: 110 }),
+      makeSource({ id: 'node:tabby-0-1', name: purrPunch.name, kind: 'skill', icon: purrPunch.icon, color: '#16AA98', totalDamage: 100 }),
+      makeSource({ id: 'role:damage', name: 'Damage Set Bonus', kind: 'bonus', icon: 'delapouite/star-formation', color: '#F0483E', totalDamage: 90 }),
+      makeSource({ id: 'arcana:monochrome_pact', name: monochrome.name, kind: 'bonus', icon: monochrome.icon, color: '#38BDF8', totalDamage: 80 }),
+      makeSource({ id: 'upgrade:heavy_hitter', name: 'Heavy Hitter', kind: 'passive', icon: 'lorc/fist', color: '#FB923C', totalDamage: 60 }),
+      makeSource({ id: 'set:cards', name: 'Matched Sets', kind: 'set', icon: 'lorc/crossed-swords', color: '#C084FC', totalDamage: 30 }),
+      makeSource({ id: 'set:card_bonus', name: 'Power Cards', kind: 'bonus', icon: 'lorc/flat-star', color: '#4ADE80', totalDamage: 20 }),
+      makeSource({ id: 'power:scale', name: 'Power Scaling', kind: 'power', icon: 'lorc/power-lightning', color: '#F5B800', totalDamage: 15 }),
+      makeSource({ id: 'fx:burn', name: 'Burn Damage', kind: 'bonus', icon: 'lorc/candle-flame', color: '#F0483E', totalDamage: 15 }),
+    ];
+
+    const story: DamageStory = {
+      totalDamage: 1600,
+      durationMs: 60000,
+      xAxisMode: 'time',
+      sources,
+      chartSources: sources.slice(0, 5),
+      points: [
+        { tMs: 0, label: '0:00', totalCumulative: 0, stepDamage: 0, peakSourceId: null },
+        { tMs: 60000, label: '1:00', totalCumulative: 1600, stepDamage: 1600, peakSourceId: 'weapon:blast-powder' },
+      ],
+      headline: 'Blast Powder led with 200 dmg (13%)',
+      crescendoBeats: [],
+    };
+
+    const view = render(wrap(<BattleDamageStory story={story} reduced muted />));
+    fireEvent.press(view.getByTestId('battle-damage-story-show-all'));
+
+    // 1. Standard weapon MUST render canonical WeaponExplainer (never DamageSourceExplainer!)
+    fireEvent.press(view.getByTestId('battle-damage-story-row-0'));
+    expect(view.getByTestId('weapon-explainer-blast-powder')).toBeTruthy();
+    expect(view.queryByTestId('damage-source-explainer-weapon:blast-powder')).toBeNull();
+
+    // 2. Evolution
+    fireEvent.press(view.getByTestId('battle-damage-story-row-1'));
+    expect(view.getByTestId('damage-source-explainer-evo:phoenix-pyre')).toBeTruthy();
+    expect(view.getByTestId('damage-source-what-evo:phoenix-pyre')).toHaveTextContent(phoenix.activeText, { exact: false });
+    expect(view.getByTestId('damage-source-what-evo:phoenix-pyre')).toHaveTextContent(/Lasts 30s.*\+10 opening hit.*\+2 flat Set damage.*×1\.5 Set damage/);
+    expect(view.getByTestId('damage-source-result-evo:phoenix-pyre')).toHaveTextContent(/THIS FIGHT.*180 cumulative dmg/);
+    fireEvent.press(view.getByTestId('damage-source-toggle-evo:phoenix-pyre'));
+    expect(view.getByTestId('damage-source-more-evo:phoenix-pyre')).toHaveTextContent(phoenix.familyText, { exact: false });
+    expect(view.getByTestId('damage-source-more-evo:phoenix-pyre')).toHaveTextContent(phoenix.flavor, { exact: false });
+
+    // 3. Set-Parry Counter
+    fireEvent.press(view.getByTestId('battle-damage-story-row-2'));
+    expect(view.getByTestId('damage-source-what-bonus:parry')).toHaveTextContent(/×1\.4.*×1\.75.*×2/);
+    fireEvent.press(view.getByTestId('damage-source-toggle-bonus:parry'));
+    expect(view.getByTestId('damage-source-more-bonus:parry')).toHaveTextContent(/Perfect Parry.*Stagger/);
+
+    // 4. Shading Surge
+    fireEvent.press(view.getByTestId('battle-damage-story-row-3'));
+    expect(view.getByTestId('damage-source-what-bonus:surge')).toHaveTextContent(/45 seconds.*15 seconds.*×5/);
+
+    // 5. Rainbow Strike
+    fireEvent.press(view.getByTestId('battle-damage-story-row-4'));
+    expect(view.getByTestId('damage-source-what-bonus:rainbow')).toHaveTextContent(/all 3 cards differ in every active trait/);
+
+    // 6. Purity Chain
+    fireEvent.press(view.getByTestId('battle-damage-story-row-5'));
+    expect(view.getByTestId('damage-source-what-bonus:purity')).toHaveTextContent(/consecutive Sets.*same number of differing traits/);
+
+    // 7. Trap Defusal
+    fireEvent.press(view.getByTestId('battle-damage-story-row-6'));
+    expect(view.getByTestId('damage-source-what-bonus:traps')).toHaveTextContent(/Time Bombs or Snares/);
+
+    // 8. Fighter Passive
+    fireEvent.press(view.getByTestId('battle-damage-story-row-7'));
+    expect(view.getByTestId('damage-source-explainer-passive:scrappy')).toHaveTextContent('Orange Tabby Passive', { exact: false });
+    expect(view.getByTestId('damage-source-what-passive:scrappy')).toHaveTextContent(PASSIVES.scrappy.text, { exact: false });
+
+    // 9. Skill Tree Node
+    fireEvent.press(view.getByTestId('battle-damage-story-row-8'));
+    expect(view.getByTestId('damage-source-explainer-node:tabby-0-1')).toHaveTextContent('Orange Tabby · Skill Tree', { exact: false });
+    expect(view.getByTestId('damage-source-what-node:tabby-0-1')).toHaveTextContent(purrPunch.text, { exact: false });
+
+    // 10. Role Set Bonus (with expandable 2×/4×/6× tier pills)
+    fireEvent.press(view.getByTestId('battle-damage-story-row-9'));
+    expect(view.getByTestId('damage-source-explainer-role:damage')).toHaveTextContent('ROLE BONUS', { exact: false });
+    expect(view.getByTestId('damage-source-explainer-role:damage')).toHaveTextContent('2 / 4 / 6 Held Bonus', { exact: false });
+    fireEvent.press(view.getByTestId('damage-source-toggle-role:damage'));
+    expect(view.getByTestId('damage-source-role-tier-damage-2')).toBeTruthy();
+    expect(view.getByTestId('damage-source-role-tier-damage-4')).toBeTruthy();
+    expect(view.getByTestId('damage-source-role-tier-damage-6')).toBeTruthy();
+
+    // 11. Arcana (with expandable Boon/Curse rows)
+    fireEvent.press(view.getByTestId('battle-damage-story-row-10'));
+    expect(view.getByTestId('damage-source-explainer-arcana:monochrome_pact')).toHaveTextContent('ARCANA', { exact: false });
+    expect(view.getByTestId('damage-source-what-arcana:monochrome_pact')).toHaveTextContent(monochrome.upside, { exact: false });
+    expect(view.getByTestId('damage-source-what-arcana:monochrome_pact')).toHaveTextContent(monochrome.tradeoff, { exact: false });
+    fireEvent.press(view.getByTestId('damage-source-toggle-arcana:monochrome_pact'));
+    expect(view.getByTestId('damage-source-more-arcana:monochrome_pact')).toHaveTextContent(/Boon \(Upside\)/);
+    expect(view.getByTestId('damage-source-more-arcana:monochrome_pact')).toHaveTextContent(/Curse \(Tradeoff\)/);
+
+    // 12. Workshop Upgrade
+    fireEvent.press(view.getByTestId('battle-damage-story-row-11'));
+    expect(view.getByTestId('damage-source-explainer-upgrade:heavy_hitter')).toHaveTextContent('UPGRADE', { exact: false });
+    expect(view.getByTestId('damage-source-what-upgrade:heavy_hitter')).toHaveTextContent(/\+1 damage on every Set/);
+
+    // 13. Matched Sets, Power Cards, Power Scaling, Burn FX
+    fireEvent.press(view.getByTestId('battle-damage-story-row-12'));
+    expect(view.getByTestId('damage-source-what-set:cards')).toHaveTextContent(/Base damage from every valid 3-card Set/);
+
+    fireEvent.press(view.getByTestId('battle-damage-story-row-13'));
+    expect(view.getByTestId('damage-source-what-set:card_bonus')).toHaveTextContent(/Power cards, War Drum charges/);
+
+    fireEvent.press(view.getByTestId('battle-damage-story-row-14'));
+    expect(view.getByTestId('damage-source-what-power:scale')).toHaveTextContent(/in-fight Power meter/);
+
+    fireEvent.press(view.getByTestId('battle-damage-story-row-15'));
+    expect(view.getByTestId('damage-source-what-fx:burn')).toHaveTextContent(/Burning cards scorch the foe/);
+
+    view.unmount();
+
+    // Verify full-climb mode (`xAxisMode: 'floors'`) labels result strip as "THIS CLIMB"
+    const climbView = render(
+      wrap(<BattleDamageStory story={{ ...story, xAxisMode: 'floors' }} reduced muted />)
+    );
+    fireEvent.press(climbView.getByTestId('battle-damage-story-row-1'));
+    expect(climbView.getByTestId('damage-source-result-evo:phoenix-pyre')).toHaveTextContent('THIS CLIMB', { exact: false });
+    climbView.unmount();
+  });
+
+  it('upgrades FightReplay non-weapon cards (Evolutions, Skill Nodes, Role Bonuses, Arcana, Passives) to DamageSourceExplainer while preserving testIDs', () => {
+    const replay: FightReplayData = {
+      levelId: '2-4',
+      foeName: 'Test Foe',
+      fighter: 'Orange Tabby',
+      status: 'won',
+      endReason: 'defeated',
+      totalDamage: 120,
+      matches: 3,
+      mistakes: 0,
+      elapsedMs: 20000,
+      maxHearts: 5,
+      weapons: ['blast-powder', 'flint-spark'],
+      weaponBuilds: {},
+      skillNodes: ['tabby-0-1'],
+      passives: ['nine_lives', 'scrappy'],
+      arcana: ['monochrome_pact'],
+      log: [
+        {
+          t: 5000,
+          wave: 0,
+          kind: 'set',
+          damage: 60,
+          setDamage: 30,
+          coins: 0,
+          xp: 0,
+          hearts: 5,
+          heartsDelta: 0,
+          foeHp: 60,
+          foeMaxHp: 120,
+          lines: [
+            { type: 'hit', amount: 15, text: 'Phoenix Pyre', source: 'Phoenix Pyre', sourceRef: 'evo:phoenix-pyre' },
+            { type: 'hit', amount: 8, text: 'Purr Punch', source: 'Purr Punch', sourceRef: 'node:tabby-0-1' },
+            { type: 'rule', amount: 7, text: 'Damage Set', source: 'Damage Set', sourceRef: 'role:damage' },
+          ],
+        },
+      ],
+    };
+
+    const view = render(wrap(<FightReplay replay={replay} visible onClose={noop} />));
+
+    // Weapons still use WeaponExplainer
+    expect(view.getByTestId('weapon-explainer-blast-powder')).toBeTruthy();
+    expect(view.getByTestId('weapon-explainer-flint-spark')).toBeTruthy();
+
+    // Non-weapons use DamageSourceExplainer with preserved replay-gear-* testIDs
+    expect(view.getByTestId('replay-gear-evo:phoenix-pyre')).toBeTruthy();
+    expect(view.getByTestId('replay-gear-node:tabby-0-1')).toBeTruthy();
+    expect(view.getByTestId('replay-gear-role:damage')).toBeTruthy();
+    expect(view.getByTestId('replay-gear-arcana:monochrome_pact')).toBeTruthy();
+    expect(view.getByTestId('replay-gear-passive:nine_lives')).toBeTruthy();
+    expect(view.getByTestId('replay-gear-passive:scrappy')).toBeTruthy();
+
+    // Rich canonical copy & expandable tiers work inside FightReplay too
+    expect(view.getByTestId('damage-source-what-evo:phoenix-pyre')).toHaveTextContent(/Lasts 30s/);
+    expect(view.getByTestId('damage-source-what-arcana:monochrome_pact')).toHaveTextContent(/Tradeoff:/);
+    expect(view.getByTestId('damage-source-what-passive:scrappy')).toHaveTextContent(PASSIVES.scrappy.text, { exact: false });
+
+    fireEvent.press(view.getByTestId('damage-source-toggle-role:damage'));
+    expect(view.getByTestId('damage-source-role-bonus-damage')).toHaveTextContent('2 held', { exact: false });
+    expect(view.getByTestId('damage-source-role-tier-damage-2')).toBeTruthy();
+
+    view.unmount();
   });
 });

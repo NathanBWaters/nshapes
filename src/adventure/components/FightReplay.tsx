@@ -17,13 +17,14 @@ import Icon, { type IconName } from '@/components/Icon';
 import { COLORS } from '@/utils/colors';
 import { sfx } from '@/audio';
 import type { Card as CardType } from '@/types';
-import type { FightLogCard, FightLogEntry, RunState } from '../types';
+import type { FightLogCard, FightLogEntry, PassiveId, RunState } from '../types';
 import { Btn, INK, TONE } from './ui';
 import { ARCANA } from '../data/arcana';
 import { getArmoryWeapon } from '../data/armory';
-import { getPassive } from '../data/passives';
+import { getPassive, PASSIVES } from '../data/passives';
 import { weaponGuide } from '../data/weaponGuide';
 import { formatPower } from '../data/weaponPower';
+import { ROLE_SET_BONUSES, roleLabel, type WeaponRole } from '../data/weaponRoles';
 import { getRecipe, getSkillNode } from '../engine/sources';
 import { buildReplayWeapons, fightReplayOf, type FightReplayData } from '../history';
 import {
@@ -38,6 +39,7 @@ import {
   loggedCardPoints,
   setMathRows,
 } from './fightReplayText';
+import DamageSourceExplainer from './DamageSourceExplainer';
 import PowerExplainer from './PowerExplainer';
 import WeaponExplainer from './WeaponExplainer';
 
@@ -205,6 +207,20 @@ const explainRef = (
     const a = ARCANA.find(x => x.id === id);
     return { name: a ? `${a.numeral} · ${a.name}` : id, text: a ? `${a.upside} Tradeoff: ${a.tradeoff}` : '', kind: 'arcana', icon: a?.icon };
   }
+  if (type === 'role') {
+    const r = id as WeaponRole;
+    const tiers = ROLE_SET_BONUSES[r];
+    return {
+      name: `${roleLabel(r)} Set Bonus`,
+      text: tiers ? `Role Set Bonus (${tiers.map(t => `${t.tier}×: ${t.summary}`).join(' · ')}).` : '',
+      kind: 'role bonus',
+      icon: 'delapouite/star-formation',
+    };
+  }
+  if (type === 'passive') {
+    const p = PASSIVES[id as PassiveId];
+    return { name: p?.name ?? id, text: p?.text ?? '', kind: 'passive', icon: p?.icon };
+  }
   return { name: '', text: '', kind: '' };
 };
 
@@ -353,16 +369,17 @@ const FightReplay: React.FC<Props> = ({ run, replay, visible, onClose }) => {
       .sort((a, b) => (b.stat?.damage ?? 0) - (a.stat?.damage ?? 0) || (b.stat?.fired ?? 0) - (a.stat?.fired ?? 0)),
     [heldIds, heldWeapons, stats]
   );
-  /** Evolutions, skill nodes, and equipped Arcana */
+  /** Evolutions, skill nodes, Role Set Bonuses, and equipped Arcana */
   const others = useMemo(() => {
     if (!data) return [];
     const seen = new Set<string>();
+    const passiveIds = new Set<string>(data.passives ?? []);
     const refs: string[] = [];
     for (const ref of Object.keys(stats)) {
-      if (!ref.startsWith('weapon:')) {
-        seen.add(ref);
-        refs.push(ref);
-      }
+      if (ref.startsWith('weapon:')) continue;
+      if (ref.startsWith('passive:') && passiveIds.has(ref.slice(8))) continue;
+      seen.add(ref);
+      refs.push(ref);
     }
     for (const id of data.arcana ?? []) {
       const ref = `arcana:${id}`;
@@ -1015,31 +1032,55 @@ const FightReplay: React.FC<Props> = ({ run, replay, visible, onClose }) => {
                     }}
                   />
                 ))}
-                {others.map(o => (
-                  <View key={o.ref} style={st.otherCard} testID={`replay-gear-${o.ref}`}>
-                    <View style={st.otherHead}>
-                      {o.icon && <Icon name={o.icon} size={22} color={INK} />}
-                      <Text style={st.otherName} numberOfLines={1}>{o.name}</Text>
-                      <Text style={st.otherKind}>{o.kind}</Text>
-                    </View>
-                    <Text style={st.otherText}>{o.text}</Text>
-                    <Text style={st.otherStat}>
-                      {o.kind === 'arcana' && (!o.stat || o.stat.fired === 0)
-                        ? 'Active all fight.'
-                        : gearStatText(o.stat, data.totalDamage, 'other')}
-                    </Text>
-                  </View>
-                ))}
-                {passivesList.map(p => (
-                  <View key={p.id} style={st.otherCard} testID={`replay-gear-passive:${p.id}`}>
-                    <View style={st.otherHead}>
-                      <Icon name={p.icon} size={22} color={INK} />
-                      <Text style={st.otherName} numberOfLines={1}>{p.name}</Text>
-                      <Text style={st.otherKind}>{data.fighter} passive</Text>
-                    </View>
-                    <Text style={st.otherText}>{p.text}</Text>
-                  </View>
-                ))}
+                {others.map(o => {
+                  const resultText =
+                    o.kind === 'arcana' && (!o.stat || o.stat.fired === 0)
+                      ? 'Active all fight.'
+                      : gearStatText(o.stat, data.totalDamage, o.ref.startsWith('role:') ? 'always' : 'other');
+                  return (
+                    <DamageSourceExplainer
+                      key={o.ref}
+                      testID={`replay-gear-${o.ref}`}
+                      sourceId={o.ref}
+                      name={o.name}
+                      icon={o.icon}
+                      description={o.text}
+                      heldWeapons={heldWeapons}
+                      result={{
+                        text: resultText,
+                        share:
+                          data.totalDamage > 0 && o.stat && o.stat.damage > 0
+                            ? o.stat.damage / data.totalDamage
+                            : undefined,
+                      }}
+                    />
+                  );
+                })}
+                {passivesList.map(p => {
+                  const pStat = stats[`passive:${p.id}`];
+                  return (
+                    <DamageSourceExplainer
+                      key={p.id}
+                      testID={`replay-gear-passive:${p.id}`}
+                      sourceId={`passive:${p.id}`}
+                      name={p.name}
+                      icon={p.icon}
+                      subtitle={`${data.fighter} Passive`}
+                      description={p.text}
+                      result={
+                        pStat && pStat.fired > 0
+                          ? {
+                              text: gearStatText(pStat, data.totalDamage, 'always'),
+                              share:
+                                data.totalDamage > 0 && pStat.damage > 0
+                                  ? pStat.damage / data.totalDamage
+                                  : undefined,
+                            }
+                          : undefined
+                      }
+                    />
+                  );
+                })}
               </View>
             )}
 
@@ -1104,12 +1145,6 @@ const st = StyleSheet.create({
   summary: { fontSize: 14, lineHeight: 20, color: INK },
   gearTitle: { fontSize: 12, fontWeight: '900', letterSpacing: 2, color: INK },
   gearHint: { fontSize: 11, fontWeight: '600', letterSpacing: 0, opacity: 0.7 },
-  otherCard: { backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 2, borderColor: INK, padding: 12, gap: 6 },
-  otherHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  otherName: { flex: 1, fontSize: 15, fontWeight: '900', color: INK },
-  otherKind: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5, color: INK, opacity: 0.6, textTransform: 'uppercase' },
-  otherText: { fontSize: 14, lineHeight: 20, color: INK },
-  otherStat: { fontSize: 13, fontWeight: '700', color: INK, opacity: 0.8 },
   lineBlock: { gap: 4 },
   about: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: COLORS.paperBeige, borderRadius: 8, padding: 8, marginTop: 4 },
   aboutText: { flex: 1, fontSize: 12.5, lineHeight: 18, color: INK },

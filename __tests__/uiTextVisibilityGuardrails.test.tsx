@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import CompanionBubble from '@/adventure/components/CompanionBubble';
 import AdventureMap from '@/adventure/components/AdventureMap';
 import AdventureRun from '@/adventure/components/AdventureRun';
+import DamageSourceExplainer from '@/adventure/components/DamageSourceExplainer';
 import { compactRoleBonusLabel, GearChips, gearModifiers, hasGearChips } from '@/adventure/components/GearChips';
 import WeaponExplainer from '@/adventure/components/WeaponExplainer';
 import { getArmoryWeapon } from '@/adventure/data/armory';
@@ -370,6 +371,43 @@ describe('UI Text Visibility Style-Contract Guardrails', () => {
     expect(view.getByTestId('belt-counter-flint-spark')).toBeTruthy();
     expect(view.queryByTestId('belt-counter-blast-powder')).toBeNull();
     expect(view.getByTestId('run-evo-chip')).toHaveTextContent(/Next: .+|CATALYST: .+/);
+    view.unmount();
+  });
+
+  it('enforces shrinkable row wrapping & tier-pill layout contracts on DamageSourceExplainer', () => {
+    const view = render(
+      <DamageSourceExplainer
+        sourceId="role:chains"
+        accentColor="#16AA98"
+        badge="MVP"
+        heldWeapons={['echo-stone', 'connector']}
+        result={{ text: '240 cumulative dmg (48%) · 6 hits · biggest spike +72.', share: 0.48 }}
+        defaultOpen
+      />
+    );
+
+    const card = view.getByTestId('damage-source-explainer-role:chains');
+    const cardStyle = StyleSheet.flatten(card.props.style);
+    expect(cardStyle.width).toBe('100%');
+    expect(cardStyle.maxWidth).toBe('100%');
+
+    const whatNode = view.getByTestId('damage-source-what-role:chains');
+    expect(StyleSheet.flatten(whatNode.props.style).flexShrink).toBeGreaterThan(0);
+
+    for (const tier of [2, 4, 6]) {
+      const pill = view.getByTestId(`damage-source-role-tier-chains-${tier}`);
+      expect(StyleSheet.flatten(pill.props.style).maxWidth).toBe('100%');
+    }
+
+    // Check every row Text node with numberOfLines carries flexShrink: 1 so it never clips
+    const nodes = collectNodes(view.toJSON());
+    for (const n of nodes) {
+      if (n.type === 'Text' && n.props?.numberOfLines) {
+        const ts = StyleSheet.flatten(n.props?.style) ?? {};
+        expect(ts.flexShrink).toBeGreaterThan(0);
+      }
+    }
+
     view.unmount();
   });
 });
