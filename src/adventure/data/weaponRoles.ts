@@ -74,13 +74,13 @@ export const ROLE_SET_BONUSES: Record<WeaponRole, readonly RoleBonusTierDef[]> =
     { tier: 2, summary: '+1 max heart', modifiers: { maxHearts: 1 } },
     {
       tier: 4,
-      summary: '+2 max hearts & +2 dmg at full ♥',
-      modifiers: { maxHearts: 2, conditionalDamage: [{ when: [{ kind: 'heartsFull' }], amount: 2 }] },
+      summary: '+2 max hearts & +4 dmg at full ♥',
+      modifiers: { maxHearts: 2, conditionalDamage: [{ when: [{ kind: 'heartsFull' }], amount: 4 }] },
     },
     {
       tier: 6,
-      summary: '+3 max hearts & +5 dmg at full ♥',
-      modifiers: { maxHearts: 3, conditionalDamage: [{ when: [{ kind: 'heartsFull' }], amount: 5 }] },
+      summary: '+3 max hearts & +8 dmg at full ♥',
+      modifiers: { maxHearts: 3, conditionalDamage: [{ when: [{ kind: 'heartsFull' }], amount: 8 }] },
     },
   ],
   insight: [
@@ -98,9 +98,20 @@ export const ROLE_SET_BONUSES: Record<WeaponRole, readonly RoleBonusTierDef[]> =
     },
   ],
   chains: [
-    { tier: 2, summary: '+1 starting link', modifiers: { startingLinks: 1 } },
-    { tier: 4, summary: '+2 starting links & +5% echo', modifiers: { startingLinks: 2, bonusEchoChance: 5 } },
-    { tier: 6, summary: '+3 starting links & +10% echo', modifiers: { startingLinks: 3, bonusEchoChance: 10 } },
+    { tier: 2, summary: '+1 starting link & +1 Set dmg', modifiers: { startingLinks: 1, setDamage: 1 } },
+    { tier: 4, summary: '+2 starting links, +5 Set dmg & +5% echo', modifiers: { startingLinks: 2, setDamage: 5, bonusEchoChance: 5 } },
+    {
+      tier: 6,
+      summary: '+3 starting links, +16 Set dmg, +10% echo, +12% Catalyst & +6s/+1 Evo',
+      modifiers: {
+        startingLinks: 3,
+        setDamage: 16,
+        bonusEchoChance: 10,
+        evolutionLikelihood: 12,
+        evolutionDurationMs: 6000,
+        extraEvolutionsPerFight: 1,
+      },
+    },
   ],
 };
 

@@ -167,9 +167,9 @@ const ACT_LEVEL_POOLS: Record<1 | 2 | 3, Record<'skirmish' | 'elite' | 'boss', r
  * Shading Surge (×5 in Act 3).
  */
 const BASE_ACT_HP: Record<number, { start: number; end: number; eliteMult: number; boss: number; timer: number; skirmishTimer: number }> = {
-  1: { start: 88, end: 255, eliteMult: 1.44, boss: 540, timer: 100, skirmishTimer: 72 },
-  2: { start: 470, end: 1140, eliteMult: 1.35, boss: 2000, timer: 112, skirmishTimer: 96 },
-  3: { start: 1650, end: 3500, eliteMult: 1.36, boss: 5600, timer: 126, skirmishTimer: 118 },
+  1: { start: 92, end: 270, eliteMult: 1.45, boss: 580, timer: 100, skirmishTimer: 72 },
+  2: { start: 540, end: 1320, eliteMult: 1.38, boss: 2350, timer: 112, skirmishTimer: 96 },
+  3: { start: 2050, end: 4300, eliteMult: 1.38, boss: 7000, timer: 126, skirmishTimer: 118 },
 };
 
 const actCurve = (act: number) => {
@@ -246,10 +246,10 @@ export const generateSpireEncounter = (o: {
 
   const coinReward =
     kind === 'boss'
-      ? 95 + act * 30
+      ? 70 + act * 20
       : kind === 'elite'
-        ? 65 + act * 22
-        : 36 + act * 14 + row * 4;
+        ? 52 + act * 16
+        : 28 + act * 10 + row * 3;
 
   const difficulty = Math.min(
     5,

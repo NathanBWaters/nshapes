@@ -620,7 +620,7 @@ describe('Arcana', () => {
     expect(startFight({ level, save }).arcana).toEqual(['overkill_harvest']);
     const two = startFight({ level, save: { ...save, upgrades: { tarot_deck: 1 } } });
     expect(two.arcana).toEqual(['overkill_harvest', 'catalyst_resonance']);
-    expect(two.foeHp).toBe(Math.round(100 * (1.15 * 1.1)));
+    expect(two.foeHp).toBe(Math.round(100 * (arcanaRules(['overkill_harvest', 'catalyst_resonance']).foeHpScale ?? 1)));
   });
 });
 

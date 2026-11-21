@@ -88,7 +88,28 @@ export interface Draft extends RunState {
   _lines: FightLogLine[];
   /** How the player's Set in this action was scored */
   _logSet: FightLogSetMath | null;
+  /** Lazy copy-on-write flags so empty TICKs never clone telemetry maps */
+  _ruleFiringsCloned?: boolean;
+  _ruleZeroOpsCloned?: boolean;
 }
+
+export const recordRuleFiring = (d: Draft, key: string) => {
+  if (!d.ruleFirings) return;
+  if (!d._ruleFiringsCloned) {
+    d.ruleFirings = { ...d.ruleFirings };
+    d._ruleFiringsCloned = true;
+  }
+  d.ruleFirings[key] = (d.ruleFirings[key] ?? 0) + 1;
+};
+
+export const recordRuleZeroOp = (d: Draft, key: string) => {
+  if (!d.ruleZeroOps) return;
+  if (!d._ruleZeroOpsCloned) {
+    d.ruleZeroOps = { ...d.ruleZeroOps };
+    d._ruleZeroOpsCloned = true;
+  }
+  d.ruleZeroOps[key] = (d.ruleZeroOps[key] ?? 0) + 1;
+};
 
 /**
  * Note: `board` keeps its reference until something actually changes it
@@ -132,7 +153,7 @@ export const begin = (s: RunState, hooks: FightHooks): Draft => ({
 });
 
 export const finish = (d: Draft, prev?: RunState): RunState => {
-  const { _rng, _queue, _chain, _firings, _overheals, _mods, _rules, _arcana, _setCtx, _setMultiplier, _hooks, _clock, _lines, _logSet, ...rest } = d;
+  const { _rng, _queue, _chain, _firings, _overheals, _mods, _rules, _arcana, _setCtx, _setMultiplier, _hooks, _clock, _lines, _logSet, _ruleFiringsCloned, _ruleZeroOpsCloned, ...rest } = d;
   const connections =
     prev &&
     d.connections.length === prev.connections.length &&
@@ -189,6 +210,8 @@ const sourceInputs = (d: RunState) => ({
   weapons: d.weapons,
   activeEvolutions: d.activeEvolutions,
   growth: growthModifiers(d.growth ?? {}),
+  blankEvolutionRules: d.blankEvolutionRules,
+  disableRoleBonuses: d.disableRoleBonuses,
 });
 
 export const mods = (d: Draft): Modifiers => (d._mods ??= modifiersOf(sourceInputs(d)));
@@ -274,7 +297,7 @@ export const refreshSources = (d: Draft) => {
   d.evolutionLikelihood = d.features.has('evolutions')
     ? evolutionLikelihoodFor(d.evolutionLabTier, m, arcana(d).catalystChanceScale ?? 1) + (d.level.rules.evolutionLikelihood ?? 0)
     : 0;
-  d.evolutionCap = evolutionCapFor(d.level, m);
+  d.evolutionCap = evolutionCapFor(d.level, m, arcana(d).catalystRespawns ?? 0);
 };
 
 const DEFAULT_TUNING: Record<string, number> = Object.assign({}, ...Object.values(PASSIVE_TUNING));
@@ -753,12 +776,19 @@ export const empowerBoard = (d: Draft, amount: number) => {
 };
 
 export const armorCard = (d: Draft, extraHealth: number, bounty: number) => {
-  const candidates = d.board
+  const all = d.board
     .map((c, i) => (touchable(d, i) && isSelectable(c) && !c.snare && !c.hasCountdown && !c.hasBomb ? i : -1))
     .filter(i => i >= 0);
-  if (candidates.length === 0 || extraHealth <= 0) return;
+  if (all.length === 0 || extraHealth <= 0) return;
+  // Prefer plain (unarmored, unbountied) cards first so Piñata evolutions never re-armor a primed Piñata
+  const unarmored = all.filter(i => (d.board[i].health ?? 1) <= 1 && !d.board[i].bounty);
+  const candidates = unarmored.length > 0 ? unarmored : all;
   const i = d._rng.pick(candidates);
-  updateCards(d, [i], c => ({ ...c, health: (c.health ?? 1) + extraHealth, bounty: (c.bounty ?? 0) + bounty }));
+  updateCards(d, [i], c => ({
+    ...c,
+    health: unarmored.length > 0 ? (c.health ?? 1) + extraHealth : Math.max(c.health ?? 1, 1 + extraHealth),
+    bounty: (c.bounty ?? 0) + bounty,
+  }));
   emit(d, 'pinata', bounty, undefined, { slots: [i] });
 };
 

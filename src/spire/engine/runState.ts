@@ -254,7 +254,7 @@ const bumpUpgrade = (run: SpireRun, id: SpireShopUpgradeKind, delta = 1): SpireR
 const shopPriceScaleOf = (run: SpireRun): number =>
   ascensionModifiers(run.ascension).shopPriceScale * (1 + (run.act - 1) * 0.12);
 
-const standaloneWeaponShopPrice = (
+export const standaloneWeaponShopPrice = (
   weaponId: string,
   level: number,
   priceScale: number,
@@ -641,7 +641,10 @@ export const completeSpireBattle = (run: SpireRun, fight: RunState): SpireRun =>
   // Carry over remaining hearts (clamped 1..maxHearts) + small post-fight breather on Bosses!
   const remainingHearts = Math.max(1, Math.min(run.maxHearts, fight.hearts ?? run.hearts));
   const parryBonusCoins = fight.parriesLanded * 4 + fight.perfectParriesLanded * 6;
-  const coinsEarned = enc.coinReward + Math.round(fight.coins * 0.65) + parryBonusCoins;
+  // Cap per-fight bonus coins so overkill_harvest / coin builds stay rewarding without flooding the Spire shop with 5,000+ unspendable gold
+  const maxFightCoins = 75 + run.act * 25;
+  const fightCoinBonus = Math.min(maxFightCoins, Math.round(fight.coins * 0.5));
+  const coinsEarned = enc.coinReward + fightCoinBonus + parryBonusCoins;
 
   return withRng(run, rng => {
     const minWeaponLv =

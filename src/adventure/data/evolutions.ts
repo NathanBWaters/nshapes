@@ -73,13 +73,13 @@ export const SIGNATURE_RECIPES: EvolutionRecipe[] = [
     icon: 'lorc/fire-ring',
     families: [fam('fire'), fam('echo')],
     familyText: 'Fire + Echo',
-    activeText: 'Ignites 1 card right away. Every echo ignites 2 cards. Every burned-out card sets another card alight.',
+    activeText: 'Ignites 1 card right away. Every echo ignites 1 card. Burned-out cards have a 40% chance to set another alight.',
     flavor: 'The Set you made echoes, the echo catches, and the meadow remembers the flame.',
     source: {
       rules: [
         { trigger: { on: 'evolutionStart' }, effects: [{ do: 'ignite', count: 1 }] },
-        { trigger: { on: 'weapon', kind: 'echo' }, effects: [{ do: 'ignite', count: 2 }], callout: 'Wildfire!' },
-        { trigger: { on: 'cardBurned' }, effects: [{ do: 'ignite', count: 1 }] },
+        { trigger: { on: 'weapon', kind: 'echo' }, effects: [{ do: 'ignite', count: 1 }], callout: 'Wildfire!' },
+        { trigger: { on: 'cardBurned' }, when: [{ kind: 'chance', pct: 40 }], effects: [{ do: 'ignite', count: 1 }] },
       ],
     },
   },
@@ -158,11 +158,11 @@ export const SIGNATURE_RECIPES: EvolutionRecipe[] = [
     icon: 'lorc/broken-heart-zone',
     families: [fam('life'), fam('laser')],
     familyText: 'Life + Laser',
-    activeText: 'Fires row & column lasers. At full hearts or on hurt, fires a row laser. Every heal doubles your next Set.',
+    activeText: 'Heals 1 & fires row & column lasers. At full hearts or on hurt, fires a row laser. Every heal doubles your next Set.',
     flavor: 'Every drop you spill is a beam. Every drop you win back is a promise.',
     source: {
       rules: [
-        { trigger: { on: 'evolutionStart' }, effects: [{ do: 'laser', area: { shape: 'row' } }, { do: 'laser', area: { shape: 'column' } }] },
+        { trigger: { on: 'evolutionStart' }, effects: [{ do: 'heal', amount: 1 }, { do: 'laser', area: { shape: 'row' } }, { do: 'laser', area: { shape: 'column' } }] },
         { trigger: { on: 'set' }, when: [{ kind: 'heartsFull' }], effects: [{ do: 'laser', area: { shape: 'row' } }] },
         { trigger: { on: 'hurt' }, effects: [{ do: 'laser', area: { shape: 'row' } }], callout: 'Bloodline!' },
         { trigger: { on: 'healed' }, effects: [{ do: 'nextSetMultiplier', times: 2 }] },
@@ -175,13 +175,14 @@ export const SIGNATURE_RECIPES: EvolutionRecipe[] = [
     icon: 'lorc/time-trap',
     families: [fam('connector'), fam('time')],
     familyText: 'Connector + Time',
-    activeText: 'Links 2 pairs, plus 1 every 3rd Set. A linked card destroyed adds +1s and deals 3.',
+    activeText: 'Links 2 pairs, plus 1 every 3rd Set. A linked card destroyed deals 1.5 (30% chance for +1s).',
     flavor: 'Wire the whole board into one clock, then pull the pin.',
     source: {
       rules: [
         { trigger: { on: 'evolutionStart' }, effects: [{ do: 'link', count: 2 }] },
         { trigger: { on: 'everyNthSet', n: 3 }, effects: [{ do: 'link', count: 1 }] },
-        { trigger: { on: 'linkDestroyed' }, effects: [{ do: 'time', seconds: 1 }, { do: 'damage', amount: 3 }], callout: 'Overclock!' },
+        { trigger: { on: 'linkDestroyed' }, effects: [{ do: 'damage', amount: 1.5 }], callout: 'Overclock!' },
+        { trigger: { on: 'linkDestroyed' }, when: [{ kind: 'chance', pct: 30 }], effects: [{ do: 'time', seconds: 1 }] },
       ],
     },
   },

@@ -936,6 +936,14 @@ export interface RunState {
   powerScaling?: number;
   /** When true, concurrent active Evolutions stack their ×1.5 Set multiplier multiplicatively (used by Starfall Spire) */
   stackEvolutionMultipliers?: boolean;
+  /** Lab-only override: omit each active Evolution's bespoke rules/modifiers while keeping the universal chassis */
+  blankEvolutionRules?: boolean;
+  /** Lab-only override: disable Brotato-style 2/4/6 Role Set Bonuses to measure their counterfactual lift */
+  disableRoleBonuses?: boolean;
+  /** Opt-in lab telemetry: total firings per rule key (undefined in normal gameplay for zero overhead) */
+  ruleFirings?: Record<string, number>;
+  /** Opt-in lab telemetry: firings where every effect resolved to a no-op / 0-damage result */
+  ruleZeroOps?: Record<string, number>;
   /** What weapon growth remembers between Sets */
   growthMemo: { lastSetColor: string | null; lastHintAtMs: number; plantSet: boolean };
   elapsedMs: number;

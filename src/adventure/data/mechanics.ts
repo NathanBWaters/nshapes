@@ -498,7 +498,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
       'Weapons you pick last for this level only. Winning more stars unlocks more weapons for the Armory.',
     ],
     fightTips: [
-      { title: 'Level up', text: 'The blue bar fills as you match. When it is full, the fight pauses and you pick a weapon. Level up twice for the third star.', anchor: 'top' },
+      { title: 'Level up', text: 'The blue bar fills as you match. When it is full, the fight pauses and you pick a weapon. Level up three times for the third star.', anchor: 'top' },
     ],
     icon: 'lorc/open-book',
     demo: { type: 'icons', items: [{ icon: 'lorc/flat-star', label: 'Fill XP' }, { icon: 'lorc/gems', label: 'Pick 1 of 3' }] },
@@ -512,10 +512,10 @@ export const MECHANICS: Record<string, MechanicDef> = {
     body: [
       'You start with one Arcana slot. The Tarot Deck in the Workshop adds a second, then a third.',
       'Stacked Arcana combine: bonuses add up, multipliers multiply, and the harshest limit wins.',
-      'Wicked Imp doubles every hit, both ways. Stack Arcana and land one Set of 15+ for the third star.',
+      'Wicked Imp doubles every hit, both ways. Stack Arcana and land one Set of 120+ for the third star.',
     ],
     fightTips: [
-      { title: 'One huge Set', text: 'Deal 15+ damage with a single Set for the third star. Rainbows under Prismatic Fever hit ×3.', anchor: 'top' },
+      { title: 'One huge Set', text: 'Deal 120+ damage with a single Set for the third star. Rainbows under Prismatic Fever hit ×3.', anchor: 'top' },
     ],
     icon: 'lorc/crystal-wand',
     demo: { type: 'icons', items: [{ icon: 'lorc/crystal-wand', label: 'Slot 1' }, { icon: 'lorc/crystal-wand', label: 'Slot 2: Tarot' }, { icon: 'lorc/crossed-swords', label: 'Rules stack' }] },
@@ -629,7 +629,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
     kind: 'rule',
     title: 'Waves',
     tagline: 'Several foes, one after another.',
-    body: ['The ants come in waves. Beat one and the next marches in.', 'Open every wave with your biggest Set: Rally Horn adds damage to it. One Set of 10+ earns the third star.'],
+    body: ['The ants come in waves. Beat one and the next marches in.', 'Open every wave with your biggest Set: Rally Horn adds damage to it. One Set of 80+ earns the third star.'],
     fightTips: [
       { title: 'Waves', text: 'This fight has three foes in a row. The clock keeps running between them.', anchor: 'top' },
     ],

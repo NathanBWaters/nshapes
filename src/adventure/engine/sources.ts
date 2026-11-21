@@ -79,6 +79,10 @@ export interface SourceInputs {
   activeEvolutions: readonly { id: string }[];
   /** Standing modifiers from weapon growth this fight (data/weaponGrowth.ts) */
   growth?: Modifiers;
+  /** Lab-only override: omit each active Evolution's bespoke rules/modifiers (keeps universal shell) */
+  blankEvolutionRules?: boolean;
+  /** Lab-only override: omit Brotato-style 2/4/6 Role Set Bonuses */
+  disableRoleBonuses?: boolean;
 }
 
 /** Every live rule source with a stable key prefix. */
@@ -92,12 +96,16 @@ export const liveSources = (s: SourceInputs): { key: string; source: RuleSource 
     const src = weaponRuleSource(w);
     if (src.rules?.length || src.modifiers) out.push({ key: `w${i}:${w.id}`, source: src });
   });
-  for (const e of s.activeEvolutions) {
-    const r = getRecipe(e.id);
-    if (r) out.push({ key: `evo:${e.id}`, source: r.source });
+  if (!s.blankEvolutionRules) {
+    for (const e of s.activeEvolutions) {
+      const r = getRecipe(e.id);
+      if (r) out.push({ key: `evo:${e.id}`, source: r.source });
+    }
   }
-  for (const rb of activeRoleBonuses(s.weapons)) {
-    out.push({ key: `role:${rb.role}`, source: { modifiers: rb.modifiers } });
+  if (!s.disableRoleBonuses) {
+    for (const rb of activeRoleBonuses(s.weapons)) {
+      out.push({ key: `role:${rb.role}`, source: { modifiers: rb.modifiers } });
+    }
   }
   if (s.growth && Object.keys(s.growth).length > 0) out.push({ key: 'growth', source: { modifiers: s.growth } });
   return out;
@@ -143,5 +151,7 @@ export const evolutionLikelihoodFor = (labTier: number, mods: Modifiers, catalys
   Math.max(0, (EVOLUTION_RULES.baseLikelihood + EVOLUTION_RULES.labPerTier * labTier + (mods.evolutionLikelihood ?? 0)) * catalystChanceScale);
 
 /** Evolutions a fight allows (a practice fight has no limit). */
-export const evolutionCapFor = (level: LevelDef, mods: Modifiers): number =>
-  level.rules.sandbox ? Infinity : EVOLUTION_RULES.perFight + (level.rules.extraEvolutionCap ?? 0) + (mods.extraEvolutionsPerFight ?? 0);
+export const evolutionCapFor = (level: LevelDef, mods: Modifiers, extraCap = 0): number =>
+  level.rules.sandbox
+    ? Infinity
+    : EVOLUTION_RULES.perFight + (level.rules.extraEvolutionCap ?? 0) + (mods.extraEvolutionsPerFight ?? 0) + extraCap;

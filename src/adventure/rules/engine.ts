@@ -14,7 +14,7 @@ import { BASE_RULES } from '../data/rules';
 import {
   addCoins, addGraces, addHints, addRandomConnections, addTime, addXp, areaIndices, armorCard, canSpawnCatalyst, catalystOnBoard,
   dealDamage, destroyCards, emit, empowerBoard, enqueue, foeMultiplier, growBoard, heal, igniteCards, liveRulesOf,
-  newLinkSlots, placeCatalyst, redeal, simplify, touchable as touchableIdx, LUCK_CAP_PCT, mods, signalGrowth, type Draft, type FightEvent,
+  newLinkSlots, placeCatalyst, recordRuleFiring, recordRuleZeroOp, redeal, simplify, touchable as touchableIdx, LUCK_CAP_PCT, mods, signalGrowth, type Draft, type FightEvent,
 } from '../engine/fight';
 import { addMagnet, advanceTricks, feedChest, repairGlass, stampAlbum } from '../engine/gear';
 import { extendEvolutions } from '../engine/evolutions';
@@ -85,10 +85,17 @@ const fireRule = (d: Draft, kr: KeyedRule, chain: readonly string[]) => {
   if (d._firings >= MAX_FIRINGS_PER_ACTION) return;
   if (!conditionsHold(d, kr.rule.when)) return;
   d._firings += 1;
+  recordRuleFiring(d, kr.key);
   const prev = d._chain;
   d._chain = [...chain, kr.key];
   if (kr.rule.callout) emit(d, 'rule', undefined, kr.rule.callout);
-  for (const e of kr.rule.effects) applyEffect(d, e, kr.rule.callout);
+  let didWork = false;
+  for (const e of kr.rule.effects) {
+    if (applyEffect(d, e, kr.rule.callout)) didWork = true;
+  }
+  if (kr.rule.effects.length > 0 && !didWork) {
+    recordRuleZeroOp(d, kr.key);
+  }
   d._chain = prev;
   // A weapon's own rule fired: some weapons grow each time theirs does (data/weaponGrowth.ts)
   const own = /^w\d+:(.+)#\d+$/.exec(kr.key);
@@ -127,6 +134,7 @@ export const drain = (d: Draft) => {
 
 /** An evolution ran out: its own `finale` rules fire (looked up directly so expired evolutions can already leave `activeEvolutions`). */
 export const fireFinale = (d: Draft, recipeId: string) => {
+  if (d.blankEvolutionRules) return;
   const recipe = getRecipe(recipeId);
   if (!recipe?.source.rules) return;
   recipe.source.rules.forEach((rule, i) => {
@@ -136,6 +144,7 @@ export const fireFinale = (d: Draft, recipeId: string) => {
 
 /** Encore Mask: an evolution's opening rules (`evolutionStart`) fire once more as it ends. */
 export const fireOpening = (d: Draft, recipeId: string) => {
+  if (d.blankEvolutionRules) return;
   const recipe = getRecipe(recipeId);
   if (!recipe?.source.rules) return;
   recipe.source.rules.forEach((rule, i) => {
@@ -276,79 +285,93 @@ export const weaponFired = (d: Draft, kind: WeaponTriggerKind, replay?: Effect) 
   }
 };
 
-export const applyEffect = (d: Draft, e: Effect, label?: string) => {
+/** Returns true when the effect actually performed non-zero work (used by lab dead-rule telemetry). */
+export const applyEffect = (d: Draft, e: Effect, label?: string): boolean => {
   const kind = e.do === 'trigger' ? e.kind : WEAPON_KIND[e.do];
   if (kind) {
     const times = takeDouble(d) ? 2 : 1;
+    let ran = false;
     for (let i = 0; i < times; i++) {
       // Skip queuing `weapon:xp` if a scaled xp rule (`per`) evaluated to 0
       if (e.do === 'xp' && e.per && e.amount * scaleCount(d, e.per) <= 0) continue;
       runWeaponEffect(d, e);
       enqueue(d, 'weapon', kind);
+      ran = true;
     }
-    return;
+    return ran;
   }
   switch (e.do) {
     case 'damage': {
       const times = e.per ? scaleCount(d, e.per) : 1;
+      if (times <= 0 || e.amount <= 0) return false;
       const dealt = dealDamage(d, e.amount * times * d._setMultiplier * foeMultiplier(d));
       if (dealt > 0) emit(d, 'hit', dealt, label ?? 'Bonus');
-      break;
+      return dealt > 0;
     }
     case 'cashIn': {
       const held = e.resource === 'hints' ? d.stats.hints : d.stats.graces;
-      if (held <= 0) break;
+      if (held <= 0) return false;
       d.stats = { ...d.stats, [e.resource]: 0 };
       const dealt = dealDamage(d, held * e.damageEach * d._setMultiplier * foeMultiplier(d));
       emit(d, 'hit', dealt, label ?? 'Cash in');
-      break;
+      return dealt > 0;
     }
-    case 'convert': convertCards(d, e.to, e.count); break;
+    case 'convert': convertCards(d, e.to, e.count); return true;
     case 'shield':
       d.freeMistakesLeft += e.count;
       emit(d, 'free_mistake', d.freeMistakesLeft);
-      break;
-    case 'cleanse': cleanseBoard(d); break;
-    case 'empowerBoard': empowerBoard(d, e.amount); break;
-    case 'armorCard': armorCard(d, e.extraHealth, e.bounty); break;
-    case 'simplify': simplify(d, e.ms); break;
+      return true;
+    case 'cleanse': cleanseBoard(d); return true;
+    case 'empowerBoard': empowerBoard(d, e.amount); return true;
+    case 'armorCard': armorCard(d, e.extraHealth, e.bounty); return true;
+    case 'simplify': simplify(d, e.ms); return true;
     case 'doubleNext':
       d.doubleNext += 1;
       emit(d, 'double_ready', d.doubleNext);
-      break;
+      return true;
     case 'freeze':
       d.frozenMs = Math.max(d.frozenMs, e.ms);
       emit(d, 'freeze', e.ms);
-      break;
-    case 'redeal': redeal(d); break;
-    case 'autoSet': d._hooks.autoSet(d); break;
-    case 'comboStep': addComboSteps(d, e.amount); break;
-    case 'spawnCatalyst': if (canSpawnCatalyst(d)) placeCatalyst(d, []); break;
+      return true;
+    case 'redeal': redeal(d); return true;
+    case 'autoSet': d._hooks.autoSet(d); return true;
+    case 'comboStep': addComboSteps(d, e.amount); return true;
+    case 'spawnCatalyst':
+      if (!canSpawnCatalyst(d)) return false;
+      placeCatalyst(d, []);
+      return true;
     case 'spawnCatalystForce':
       if (d.features.has('evolutions') && d.armedRecipes.length > 0 && !catalystOnBoard(d) && d.evolutionsTriggered < d.evolutionCap) {
         placeCatalyst(d, []);
+        return true;
       }
-      break;
-    case 'extendEvolutions': extendEvolutions(d, e.ms); break;
+      return false;
+    case 'extendEvolutions': extendEvolutions(d, e.ms); return d.activeEvolutions.length > 0;
     case 'nextSetMultiplier':
       // Stacks add up (×2 + ×2 = ×3), capped (data/rules.ts)
       d.nextSetMultiplier = Math.min(BASE_RULES.maxNextSetMultiplier, d.nextSetMultiplier + (e.times - 1));
       emit(d, 'charged', d.nextSetMultiplier);
-      break;
+      return true;
     case 'emptyHeart':
       // The new heart arrives empty: more room to heal into, nothing healed
-      if (d.maxHearts !== null) d.maxHearts += e.amount;
-      break;
+      if (d.maxHearts !== null) {
+        d.maxHearts += e.amount;
+        return true;
+      }
+      return false;
     case 'link': {
       const before = d.connections.length;
-      if (addRandomConnections(d, e.count) > 0) emit(d, 'link', e.count, undefined, { slots: newLinkSlots(d, before) });
-      break;
+      if (addRandomConnections(d, e.count) > 0) {
+        emit(d, 'link', e.count, undefined, { slots: newLinkSlots(d, before) });
+        return true;
+      }
+      return false;
     }
-    case 'repairGlass': repairGlass(d, label); break;
-    case 'feedChest': feedChest(d, e.amount, label); break;
-    case 'advanceTricks': advanceTricks(d, e.ms); break;
-    case 'stampAlbum': stampAlbum(d); break;
-    case 'addMagnet': addMagnet(d, e.count); break;
-    default: break;
+    case 'repairGlass': repairGlass(d, label); return true;
+    case 'feedChest': feedChest(d, e.amount, label); return true;
+    case 'advanceTricks': advanceTricks(d, e.ms); return true;
+    case 'stampAlbum': stampAlbum(d); return true;
+    case 'addMagnet': addMagnet(d, e.count); return true;
+    default: return false;
   }
 };

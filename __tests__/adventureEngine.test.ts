@@ -178,15 +178,15 @@ describe('loadout', () => {
     // Window stays tight (14-16s); power scales cleanly without dead levels; slam scales cleanly too
     expect([1, 2, 3, 4, 5].map(l => drum(l))).toEqual([
       [14000, 1, 5],
-      [14500, 1.5, 7],
-      [15000, 2, 9],
-      [15500, 2.5, 11],
-      [16000, 3, 13],
+      [14500, 1.3, 6.5],
+      [15000, 1.5, 8],
+      [15500, 1.8, 9.5],
+      [16000, 2, 11],
     ]);
     // ×1.5 on tunable slam at level 5 (window & power stay tight and untunable, zero rounding traps)
-    expect(drum(5, { slam: 4 })).toEqual([16000, 3, 19.5]);
+    expect(drum(5, { slam: 4 })).toEqual([16000, 2, 16.5]);
     expect(getArmoryWeapon('war-drum', { 'war-drum': { level: 3, tuning: {} } })!.shortDescription)
-      .toBe('3 Sets in 15s: +9 dmg & board +2');
+      .toBe('3 Sets in 15s: +8 dmg & board +1.5');
   });
 
   it('every adventure weapon has numbers that grow with level and wording built from them', () => {

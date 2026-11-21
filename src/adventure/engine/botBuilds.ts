@@ -7,13 +7,14 @@
  * run) and still gives the same numbers every time.
  */
 import type { CharacterName } from '@/types';
-import type { AdventureSave, LevelDef, SkillNode } from '../types';
+import type { AdventureSave, ArcanaId, LevelDef, SkillNode } from '../types';
 import { LEVELS, getLevel, mainIndexOf } from '../data/levels';
 import { skillTreeOf } from '../data/skillTrees';
 import { EVOLUTION_RECIPES } from '../data/evolutions';
-import { charmSlotsOf } from '../loadout';
-import { getUnlockedUpgrades } from '../progress';
-import { getArmoryWeapon } from '../data/armory';
+import { arcanaSlotsOf, charmSlotsOf } from '../loadout';
+import { applyLevelResult, createNewSave, getUnlockedUpgrades } from '../progress';
+import { ALL_ARMORY_WEAPON_IDS, getArmoryWeapon } from '../data/armory';
+import { weaponRole, type WeaponRole } from '../data/weaponRoles';
 import { MAX_TUNING_TIER, weaponStatLines } from '../data/weaponStats';
 import { createRng, type Rng } from './rng';
 
@@ -135,6 +136,19 @@ export const armableRecipes = (save: AdventureSave) =>
 /** Chance a player who owns a recipe brings both halves of one into the fight. */
 export const RECIPE_CHARM_CHANCE = 0.6;
 
+const PARTNER_IDS = new Set(['understudy', 'encore-mask']);
+
+/** Never leave Understudy in slot 0 (where it copies nothing): put it right after a strong non-partner weapon. */
+export const fixUnderstudyOrder = (charms: readonly string[]): string[] => {
+  const out = [...charms];
+  const idx = out.indexOf('understudy');
+  if (idx !== 0 || out.length < 2) return out;
+  const target = out.findIndex((id, i) => i > 0 && !PARTNER_IDS.has(id));
+  const swapWith = target > 0 ? target : 1;
+  [out[0], out[swapWith]] = [out[swapWith], out[0]];
+  return out;
+};
+
 /**
  * Fill the charm slots: often both halves of an unlocked recipe (so the bot
  * plays evolutions), the rest from the Armory at random.
@@ -148,15 +162,17 @@ export const chooseCharms = (save: AdventureSave, rng: Rng, recipeChance = RECIP
     charms.push(rng.pick(r.options[0]), rng.pick(r.options[1]));
   }
   for (const id of rng.shuffle(save.armory)) if (charms.length < slots && !charms.includes(id)) charms.push(id);
-  return charms;
+  return fixUnderstudyOrder(charms);
 };
 
-/** Weapons that hit hard on their own: a solid build leans on these. */
-export const DAMAGE_WEAPONS = ['blast-powder', 'rainbow-charm', 'flint-spark', 'prismatic-ray', 'chaos-shard', 'war-drum'];
+/** Weapons that hit hard on their own: derived directly from the Damage shelf. */
+export const DAMAGE_WEAPONS: readonly string[] = ALL_ARMORY_WEAPON_IDS.filter(id => weaponRole(id) === 'damage');
+
+const ENGINE_ROLE_PRIORITY: ReadonlySet<WeaponRole> = new Set(['damage', 'tricks', 'gambles', 'chains']);
 
 /**
- * A solid build, not a counter: both halves of a random recipe, then the damage
- * weapons it owns, then anything.
+ * A solid build, not a counter: both halves of a random recipe, then Role Set Bonus
+ * completions (2-set / 4-set breakpoints) and damage weapons it owns, then anything.
  */
 export const solidCharms = (save: AdventureSave, rng: Rng): string[] => {
   const slots = charmSlotsOf(save);
@@ -166,9 +182,82 @@ export const solidCharms = (save: AdventureSave, rng: Rng): string[] => {
     const r = rng.pick(recipes);
     charms.push(rng.pick(r.options[0]), rng.pick(r.options[1]));
   }
-  const damage = rng.shuffle(save.armory.filter(id => DAMAGE_WEAPONS.includes(id)));
-  for (const id of [...damage, ...rng.shuffle(save.armory)]) if (charms.length < slots && !charms.includes(id)) charms.push(id);
-  return charms;
+  // Bias remaining slots (70%) toward completing 2-piece or 4-piece Role Set Bonuses
+  const nonPartners = save.armory.filter(id => !PARTNER_IDS.has(id));
+  while (charms.length < slots) {
+    const remaining = nonPartners.filter(id => !charms.includes(id));
+    if (remaining.length === 0) break;
+    let picked: string | null = null;
+    if (charms.length > 0 && rng.next() < 0.7) {
+      const counts = new Map<WeaponRole, number>();
+      for (const id of charms) counts.set(weaponRole(id), (counts.get(weaponRole(id)) ?? 0) + 1);
+      // Prefer roles closest to reaching a 2-piece or 4-piece breakpoint (especially engine roles)
+      const roleOrder = [...counts.entries()]
+        .filter(([, c]) => c === 1 || c === 3 || c === 2)
+        .sort((a, b) => {
+          const aClose = a[1] === 1 || a[1] === 3 ? 1 : 0;
+          const bClose = b[1] === 1 || b[1] === 3 ? 1 : 0;
+          if (aClose !== bClose) return bClose - aClose;
+          const aEng = ENGINE_ROLE_PRIORITY.has(a[0]) ? 1 : 0;
+          const bEng = ENGINE_ROLE_PRIORITY.has(b[0]) ? 1 : 0;
+          return bEng - aEng || b[1] - a[1];
+        });
+      for (const [role] of roleOrder) {
+        const match = remaining.filter(id => weaponRole(id) === role);
+        if (match.length > 0) {
+          picked = rng.pick(match);
+          break;
+        }
+      }
+    }
+    if (!picked) {
+      const dmg = remaining.filter(id => DAMAGE_WEAPONS.includes(id));
+      picked = dmg.length > 0 ? rng.pick(dmg) : rng.pick(remaining);
+    }
+    charms.push(picked);
+  }
+  for (const id of rng.shuffle(save.armory)) if (charms.length < slots && !charms.includes(id)) charms.push(id);
+  return fixUnderstudyOrder(charms);
+};
+
+/**
+ * Pick up to `arcanaSlotsOf(save)` coherent, non-contradictory unlocked Arcana for a build:
+ * never pairs `monochrome_pact` with `prismatic_fever` (or Rainbow builds), and skips
+ * `glass_prism` on non-expert plans where a 3-heart lock can kill average bots on hazard bosses.
+ */
+export const chooseSynergisticArcana = (
+  save: AdventureSave,
+  fighter: CharacterName,
+  charms: readonly string[],
+  rng: Rng,
+  allowGlass = false
+): ArcanaId[] => {
+  const slots = arcanaSlotsOf(save);
+  if (slots <= 0 || save.unlockedArcana.length === 0) return [];
+  const unlocked = new Set(save.unlockedArcana);
+  const isRainbow = fighter === 'Emperor Penguin' || charms.includes('rainbow-charm') || charms.includes('wild-card');
+  const hasArmedRecipe = armableRecipes({ ...save, armory: [...charms] }).length > 0;
+  const preferred: ArcanaId[] = [];
+  if (isRainbow && unlocked.has('prismatic_fever')) preferred.push('prismatic_fever');
+  if (hasArmedRecipe && unlocked.has('catalyst_resonance')) preferred.push('catalyst_resonance');
+  for (const id of rng.shuffle(['tempo_surge', 'controlled_burn', 'scholars_gambit'] as ArcanaId[])) {
+    if (unlocked.has(id)) preferred.push(id);
+  }
+  if (!isRainbow && unlocked.has('monochrome_pact')) preferred.push('monochrome_pact');
+  if (!isRainbow && unlocked.has('prismatic_fever') && !preferred.includes('monochrome_pact')) {
+    preferred.push('prismatic_fever');
+  }
+  if (allowGlass && unlocked.has('glass_prism')) preferred.push('glass_prism');
+
+  const chosen: ArcanaId[] = [];
+  for (const id of preferred) {
+    if (chosen.length >= slots) break;
+    if (chosen.includes(id)) continue;
+    if (id === 'monochrome_pact' && chosen.includes('prismatic_fever')) continue;
+    if (id === 'prismatic_fever' && chosen.includes('monochrome_pact')) continue;
+    chosen.push(id);
+  }
+  return chosen;
 };
 
 /** Every Workshop upgrade on sale bought to its top tier. */
@@ -209,6 +298,8 @@ export interface BuildPlan {
   workshop?: boolean;
   /** Level-up picks and shop buys prefer a weapon that arms a new recipe (default true) */
   chaseRecipes?: boolean;
+  /** Equip unlocked non-contradictory Arcana ('none' keeps save's equippedArcana) */
+  arcana?: 'none' | 'synergistic';
 }
 
 /** The save a bot walks into the fight with, for one seeded run. */
@@ -218,7 +309,7 @@ export const gearUp = (save: AdventureSave, plan: BuildPlan, seed: number): Adve
   const style = plan.treeStyle ?? rng.pick(TREE_STYLES);
   const nodes = buyTree(fighter, plan.stars, style, rng);
   const upgrades = plan.workshop ? maxedWorkshop(save) : save.upgrades;
-  // Charm slots come from the Workshop, so buy first and pick after
+  // Charm & Arcana slots come from the Workshop, so buy first and pick after
   const bought = { ...save, upgrades };
   const charms = plan.keepCharms
     ? save.charms
@@ -227,11 +318,15 @@ export const gearUp = (save: AdventureSave, plan: BuildPlan, seed: number): Adve
       : plan.charms === 'solid'
         ? solidCharms(bought, rng)
         : chooseCharms(bought, rng);
+  const equippedArcana =
+    plan.arcana === 'synergistic' ? chooseSynergisticArcana(bought, fighter, charms, rng) : save.equippedArcana;
   return {
     ...bought,
     selectedFighter: fighter,
     skillNodes: { ...save.skillNodes, [fighter]: nodes },
     charms,
+    equippedArcana,
+    activeArcana: equippedArcana[0] ?? null,
     weaponTuning: plan.workshop && save.workshopUnlocked ? maxedTuning(save, charms) : save.weaponTuning,
   };
 };
@@ -316,13 +411,35 @@ export const barePlan = (level: LevelDef): BuildPlan => ({
   fighter: isTrial(level) ? level.recommended![0] : 'any',
   charms: 'random',
   chaseRecipes: false,
+  arcana: 'none',
 });
 
-/** The invested player: every star on offer spent with a plan, the Workshop maxed, a solid recipe build. */
+/** The invested player: every star on offer spent with a plan, the Workshop maxed, synergistic Arcana, and a solid recipe + Role Set build. */
 export const investedPlan = (level: LevelDef): BuildPlan => ({
   stars: starsOnReaching(level, 1),
   fighter: isTrial(level) ? level.recommended![0] : 'any',
   treeStyle: 'plan',
   charms: 'solid',
   workshop: true,
+  arcana: 'synergistic',
 });
+
+// ─── Shared campaign save builder (single source of truth for tuner, analytics & balance tests) ───
+
+/** Levels whose puzzle names its charms. */
+export const PUZZLE_CHARMS: Record<string, string[]> = {
+  '3-2': ['blast-powder', 'flint-spark', 'prismatic-ray'],
+};
+
+const campaignSaveCache = new Map<string, AdventureSave>();
+
+/** What the player owns on reaching a level: 3★ on every level before it, through the real reward pipeline. */
+export const campaignSave = (level: LevelDef): AdventureSave => {
+  const hit = campaignSaveCache.get(level.id);
+  if (hit) return hit;
+  let save = createNewSave();
+  for (const l of levelsBefore(level)) save = applyLevelResult(save, l, 3, 0).save;
+  if (PUZZLE_CHARMS[level.id]) save = { ...save, charms: PUZZLE_CHARMS[level.id] };
+  campaignSaveCache.set(level.id, save);
+  return save;
+};

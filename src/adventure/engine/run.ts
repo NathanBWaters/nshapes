@@ -32,7 +32,6 @@ import { ownerOfEvent } from '../data/weaponGuide';
 import { UNDERSTUDY_ID } from '../data/adventureWeapons';
 import { damageMultiplier } from '../data/weaponPower';
 import { weaponBuilds } from '../weaponLevels';
-import type { WeaponBuilds } from '../data/weaponStats';
 import { createFoe } from '../data/foes';
 import { arcanaRules, getArcana } from '../data/arcana';
 import { BASE_RULES, TRICK_RULES } from '../data/rules';
@@ -441,6 +440,8 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
     weapons: d.weapons,
     activeEvolutions: d.activeEvolutions,
     growth: growthModifiers(d.growth ?? {}),
+    blankEvolutionRules: d.blankEvolutionRules,
+    disableRoleBonuses: d.disableRoleBonuses,
   });
   let conditional = 0;
   for (const { key, source } of sources) {
@@ -475,7 +476,7 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
       });
     }
   }
-  const growthEntries: Array<{ wId: string; wName: string; stacks: number; mods: NonNullable<NonNullable<(typeof WEAPON_GROWTH)[string]>[number]['mods']> }> = [];
+  const growthEntries: { wId: string; wName: string; stacks: number; mods: NonNullable<NonNullable<(typeof WEAPON_GROWTH)[string]>[number]['mods']> }[] = [];
   for (const [gKey, track] of Object.entries(d.growth ?? {})) {
     if (!track.stacks) continue;
     const [wId, index] = gKey.split('#');
@@ -1028,6 +1029,8 @@ export interface RunOverrides extends LoadoutOptions {
   powerScaling?: number;
   /** Stack concurrent active Evolution Set multipliers multiplicatively (used by Spire) */
   stackEvolutionMultipliers?: boolean;
+  /** Lab-only override: omit each active Evolution's bespoke rules/modifiers (keeps universal shell) */
+  blankEvolutionRules?: boolean;
 }
 
 export interface CreateRunOptions {
@@ -1036,6 +1039,8 @@ export interface CreateRunOptions {
   features?: Set<FeatureFlag>;
   /** Optional overrides used by Starfall Spire runs without affecting Adventure Mode */
   overrides?: RunOverrides;
+  /** Opt-in lab telemetry: count firings & zero-op firings per rule key (zero overhead when omitted) */
+  trackRuleFirings?: boolean;
 }
 
 /**
@@ -1124,6 +1129,9 @@ const buildRun = (level: LevelDef, save: AdventureSave, opts: CreateRunOptions):
     power: 0,
     ...(ov?.powerScaling !== undefined ? { powerScaling: ov.powerScaling } : {}),
     ...(ov?.stackEvolutionMultipliers ? { stackEvolutionMultipliers: true } : {}),
+    ...(ov?.blankEvolutionRules ? { blankEvolutionRules: true } : {}),
+    ...(ov?.disableRoleBonuses ? { disableRoleBonuses: true } : {}),
+    ...(opts.trackRuleFirings ? { ruleFirings: {}, ruleZeroOps: {} } : {}),
     growthMemo: { lastSetColor: null, lastHintAtMs: -1, plantSet: false },
     elapsedMs: 0,
     lastMatchAtMs: 0,

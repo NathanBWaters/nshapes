@@ -24,15 +24,16 @@ import { getLevel } from '@/adventure/data/levels';
 import { setPowerEnabled } from '@/adventure/data/weaponPower';
 import { createMaxedSave } from '@/adventure/progress';
 import { BOTS, simulateRun } from '@/adventure/engine/bot';
-import { armableRecipes, buyTree, chooseCharms, gearUp, starsOnReaching, STAR_SHARE, TREE_STYLES } from '@/adventure/engine/botBuilds';
+import { armableRecipes, buyTree, chooseCharms, DAMAGE_WEAPONS, gearUp, starsOnReaching, STAR_SHARE, TREE_STYLES } from '@/adventure/engine/botBuilds';
 import { createRng } from '@/adventure/engine/rng';
 import { getArmoryWeapon } from '@/adventure/data/armory';
 import { weaponStatLines, MAX_TUNING_TIER, MAX_WEAPON_LEVEL } from '@/adventure/data/weaponStats';
 import { skillTreeOf, TREE_BUDGET, SEALED_AT } from '@/adventure/data/skillTrees';
 import { EVOLUTION_RECIPES, SIGNATURE_RECIPES } from '@/adventure/data/evolutions';
-import { ARCANA } from '@/adventure/data/arcana';
+import { ARCANA, arcanaRules } from '@/adventure/data/arcana';
+import { normalizeRecipePair } from '@/adventure/balance/lab';
 import { getFeaturesForLevel } from '@/adventure/loadout';
-import type { AdventureSave, LevelDef } from '@/adventure/types';
+import type { AdventureSave, ArcanaId, LevelDef } from '@/adventure/types';
 import type { CharacterName } from '@/types';
 
 const RUNS = 6;
@@ -62,7 +63,7 @@ const DUMMY: LevelDef = {
   ...ref,
   // Keeps 4-4's id so the dummy sits at 4-4 on the map and gets every campaign feature taught by then
   id: ref.id,
-  foes: [{ name: 'Training Dummy', icon: ref.foes[0].icon, hp: 1e7 }],
+  foes: [{ name: 'Training Dummy', icon: ref.foes[0].icon, hp: 1e7, parry: null }],
   // A fixed five-trait board without the Shading Surge, so the comparison stays stable
   rules: {
     ...ref.rules, attributes: ['shape', 'color', 'number', 'shading', 'background'], boardSize: 18, shadingSurge: undefined,
@@ -104,7 +105,6 @@ const totalDamage = (save: AdventureSave, bot = BOTS.average, runs = FLOOR_RUNS)
   for (let i = 0; i < runs; i++) sum += simulateRun(TIMED, save, bot, 1000 + i * 7919, undefined, { skipPicks: true }).state.totalDamage;
   return sum / runs;
 };
-const DAMAGE_WEAPONS = ['blast-powder', 'flint-spark', 'prismatic-ray', 'chaos-shard'];
 
 /** Mean damage per Set on the dummy (`dps` below), and mean evolutions started. */
 const measure = (save: AdventureSave) => {
@@ -163,7 +163,8 @@ describe('bot gear-up', () => {
   it('a bot usually brings both halves of a recipe it owns, and tries almost every recipe across runs', () => {
     const tried = new Set<string>();
     let armed = 0;
-    const runs = 600;
+    // With 208 recipes and ~60% recipe draw rate, 950 draws covers >93% via coupon-collector math
+    const runs = 950;
     for (let i = 0; i < runs; i++) {
       const charms = chooseCharms(SAVE, createRng(i));
       const recipes = armableRecipes({ ...SAVE, armory: charms });
@@ -203,16 +204,23 @@ describe('no broken builds (endgame weapons on a training dummy)', () => {
 
     const features = getFeaturesForLevel(DUMMY, SAVE);
     expect(features.has('evolutions')).toBe(true);
+    const runawayPairs: { id: string; pair: string; dps: number; cap: number }[] = [];
+    const quietPairs: { id: string; fired: number }[] = [];
     for (const recipe of armableRecipes(SAVE)) {
-      const rows = recipe.options[0].flatMap(a => recipe.options[1].map(b => ({ pair: `${a}+${b}`, ...measure({ ...SAVE, charms: [a, b] }) })));
+      const rows = recipe.options[0].flatMap(a =>
+        recipe.options[1].map(b => ({ pair: `${a}+${b}`, ...measure({ ...SAVE, charms: normalizeRecipePair(a, b) }) }))
+      );
       const top = rows.reduce((a, b) => (b.dps > a.dps ? b : a));
       const fired = rows.reduce((a, r) => a + r.evolutions, 0) / rows.length;
       report.push(`${recipe.id.padEnd(18)} best ${top.pair} ${fmt(top.dps)} (×${fmt(top.dps / best)} best single) · ${fmt(fired)} evolutions / fight`);
       recipeStrength.push({ id: recipe.id, dps: top.dps });
-      expect(top.dps).toBeLessThanOrEqual(best * LIMITS.pairVsBestSingle);
+      const cap = best * LIMITS.pairVsBestSingle;
+      if (top.dps > cap) runawayPairs.push({ id: recipe.id, pair: top.pair, dps: Number(top.dps.toFixed(2)), cap: Number(cap.toFixed(2)) });
       // Bots get to play it: a held recipe starts at least once in an average fight
-      expect(fired).toBeGreaterThan(0.15);
+      if (fired <= 0.15) quietPairs.push({ id: recipe.id, fired: Number(fired.toFixed(2)) });
     }
+    expect(runawayPairs).toEqual([]);
+    expect(quietPairs).toEqual([]);
   });
 
   it('full skill trees: no fighter-and-recipe pairing runs away, and no fighter runs away from the field', () => {
@@ -226,10 +234,21 @@ describe('no broken builds (endgame weapons on a training dummy)', () => {
       const save = { ...SAVE, selectedFighter: fighter, skillNodes: { [fighter]: buyTree(fighter, TREE_BUDGET, 'spread', createRng(1)) } };
       const singles = DAMAGE_WEAPONS.map(id => measure({ ...save, charms: [id] }).dps);
       const single = Math.max(...singles);
-      const combos = recipes.map(r => ({ id: r.id, dps: measure({ ...save, charms: [r.options[0][0], r.options[1][0]] }).dps }));
+      const combos = recipes.map(r => ({
+        id: r.id,
+        dps: measure({ ...save, charms: normalizeRecipePair(r.options[0][0], r.options[1][0]) }).dps,
+      }));
       const top = combos.reduce((a, b) => (b.dps > a.dps ? b : a));
       report.push(`${fighter.padEnd(16)} best single ${fmt(single)} · best recipe ${top.id} ${fmt(top.dps)} (×${fmt(top.dps / single)})`);
-      expect(top.dps).toBeLessThanOrEqual(single * LIMITS.fighterComboVsSingle);
+      const cap = single * LIMITS.fighterComboVsSingle;
+      expect({ fighter, topId: top.id, dps: Number(top.dps.toFixed(2)), single: Number(single.toFixed(2)), cap: Number(cap.toFixed(2)), ok: top.dps <= cap }).toEqual({
+        fighter,
+        topId: top.id,
+        dps: Number(top.dps.toFixed(2)),
+        single: Number(single.toFixed(2)),
+        cap: Number(cap.toFixed(2)),
+        ok: true,
+      });
       bestBuilds.push(Math.max(single, top.dps));
     }
     const mid = median(bestBuilds);
@@ -241,7 +260,15 @@ describe('no broken builds (endgame weapons on a training dummy)', () => {
       const rng = createRng(500 + i);
       const fighter = rng.pick(SAVE.unlockedFighters);
       const slots = 3 + Math.floor(rng.next() * 4);
-      const arcana = rng.shuffle(ARCANA.map(a => a.id)).slice(0, Math.floor(rng.next() * 4));
+      const arcanaCount = Math.floor(rng.next() * 4);
+      const arcana: ArcanaId[] = [];
+      for (const aId of rng.shuffle(ARCANA.map(a => a.id))) {
+        if (arcana.length >= arcanaCount) break;
+        // Never pair contradictory monochrome_pact + prismatic_fever
+        if (aId === 'monochrome_pact' && arcana.includes('prismatic_fever')) continue;
+        if (aId === 'prismatic_fever' && arcana.includes('monochrome_pact')) continue;
+        arcana.push(aId);
+      }
       const save: AdventureSave = {
         ...SAVE,
         selectedFighter: fighter,
@@ -250,12 +277,21 @@ describe('no broken builds (endgame weapons on a training dummy)', () => {
         equippedArcana: arcana,
       };
       const charms = chooseCharms(save, rng);
-      return { label: `${fighter} [${charms.join(', ')}] {${arcana.join(', ')}}`, ...measure({ ...save, charms }) };
+      const hpScale = arcanaRules(arcana).foeHpScale ?? 1;
+      const m = measure({ ...save, charms });
+      return { label: `${fighter} [${charms.join(', ')}] {${arcana.join(', ')}}`, dps: m.dps / hpScale, evolutions: m.evolutions };
     });
     const mid = median(builds.map(b => b.dps));
     const sorted = [...builds].sort((a, b) => b.dps - a.dps);
     report.push(`random builds: median ${fmt(mid)}, top: ` + sorted.slice(0, 3).map(b => `${fmt(b.dps)} ${b.label}`).join(' | '));
-    expect(sorted[0].dps).toBeLessThanOrEqual(mid * LIMITS.randomVsMedian);
+    const cap = mid * LIMITS.randomVsMedian;
+    expect({ top: sorted[0].label, dps: Number(sorted[0].dps.toFixed(2)), mid: Number(mid.toFixed(2)), cap: Number(cap.toFixed(2)), ok: sorted[0].dps <= cap }).toEqual({
+      top: sorted[0].label,
+      dps: Number(sorted[0].dps.toFixed(2)),
+      mid: Number(mid.toFixed(2)),
+      cap: Number(cap.toFixed(2)),
+      ok: true,
+    });
   });
 });
 
@@ -274,7 +310,7 @@ describe('no evolution is a dead pick (endgame weapons, a timed fight, no picks)
     const liftOf = (charms: string[], runs: number) =>
       totalDamage({ ...SAVE, charms }, BOTS.average, runs) / totalDamage({ ...SAVE, charms, unlockedEvolutions: [] }, BOTS.average, runs);
     const lifts = armableRecipes(SAVE).map(recipe => {
-      const charms = [recipe.options[0][0], recipe.options[1][0]];
+      const charms = normalizeRecipePair(recipe.options[0][0], recipe.options[1][0]);
       const quick = liftOf(charms, FLOOR_RUNS);
       // A recipe cannot re-trigger while it runs, so a fight holds one or two evolutions:
       // a low reading over ten fights is as likely noise as weakness, and gets a longer look

@@ -163,7 +163,7 @@ const LEVEL_PARRIES: Record<string, ParrySpec> = {
   '1-8': spec('Coin Swipe', 'lorc/sword-clash', { kind: 'any' }, 12500, 15500, 'glancing'),
   '1-9': spec('Bumble Sting', 'lorc/sword-clash', { kind: 'any' }, 12000, 15000, 'glancing'),
   '1-10': spec('Shell Slam', 'lorc/turtle-shell', { kind: 'exact_same', count: 2 }, 13000, 16000, 'heart'),
-  '1-3F': spec('Quick Pounce', 'lorc/sword-clash', { kind: 'any' }, 12000, 15000, 'glancing'),
+  '1-5F': spec('Quick Pounce', 'lorc/sword-clash', { kind: 'any' }, 12000, 15000, 'glancing'),
 
   // World 2 — timed default parries, then color/shape/number counters!
   '2-1': spec('Slow Swipe', 'lorc/sword-clash', { kind: 'any' }, 14000, 16000, 'time'),
@@ -176,9 +176,9 @@ const LEVEL_PARRIES: Record<string, ParrySpec> = {
   '2-8': spec('Trickster Feint', 'lorc/sword-clash', { kind: 'same_number' }, 13500, 16000, 'heart'),
   '2-9': spec('Prism Burst', 'lorc/rainbow-star', { kind: 'color', color: 'green' }, 13000, 15500, 'heart'),
   '2-10': spec('Venom Fang', 'carl-olsen/spider-face', { kind: 'shape', shape: 'squiggle' }, 13000, 16000, 'heart'),
-  '2-4C': spec('Bark Charge', 'lorc/sword-clash', { kind: 'any' }, 14000, 15500, 'heart'),
-  '2-7B': spec('Claw Maul', 'lorc/claw-slashes', { kind: 'exact_same', count: 2 }, 13500, 15500, 'heart'),
-  '2-8P': spec('Frost Gust', 'lorc/snowflake-1', { kind: 'all_different' }, 14000, 16500, 'heart'),
+  '2-5C': spec('Bark Charge', 'lorc/sword-clash', { kind: 'any' }, 14000, 15500, 'heart'),
+  '2-8B': spec('Claw Maul', 'lorc/claw-slashes', { kind: 'exact_same', count: 2 }, 13500, 15500, 'heart'),
+  '2-9P': spec('Frost Gust', 'lorc/snowflake-1', { kind: 'all_different' }, 14000, 16500, 'heart'),
 
   // World 3 — Canyon escalation
   '3-1': spec('Cinder Wave', 'lorc/fireball', { kind: 'color', color: 'red' }, 14000, 15500, 'heart'),
@@ -217,7 +217,7 @@ const LEVEL_PARRIES: Record<string, ParrySpec> = {
   // World 5 — Starfall Summit Gauntlet
   '5-1': spec('Abyssal Crush', 'delapouite/kraken-tentacle', { kind: 'color', color: 'purple' }, 12500, 15000, 'heart'),
   '5-2': spec('Void Rift', 'lorc/daemon-skull', { kind: 'exact_diff', count: 2 }, 12500, 15000, 'heart'),
-  '5-3': spec('Soul Scythe', 'lorc/grim-reaper', { kind: 'shape', shape: 'diamond' }, 12500, 15000, 'heart'),
+  '5-3': spec('Soul Scythe', 'lorc/grim-reaper', { kind: 'shape', shape: 'diamond' }, 12500, 15000, 'time'),
   '5-4': spec('Quill Tempest', 'caro-asercion/porcupine', { kind: 'same_number' }, 12500, 15000, 'heart'),
   '5-5': spec('Hydra Apocalypse', 'lorc/hydra', { kind: 'all_different' }, 12000, 15500, 'heart'),
 };

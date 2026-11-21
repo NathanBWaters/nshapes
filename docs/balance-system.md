@@ -14,7 +14,7 @@ reducer on fixed seeds, so every number is exact and repeatable.
 | **The report** | `npm run balance:report` | The same, plus every recipe, written to [balance-report.md](./balance-report.md) with a list of what moved since last time | `docs/balance-report.md`, `docs/balance-snapshot.json` |
 | **Level 3-star balance** | `npm run balance:levels` | Does every level hit its `★1+` clear floor, `★★+` knockout band, `★★★` mastery target, and World 1 pro `★★★` floor? | `__tests__/adventureBalance.test.ts`, `src/adventure/engine/botBuilds.ts` |
 | **The 3-star HP tuner** | `npm run balance:tune` (`ONLY=5-2,3-4` for some) | Searches foe HP against the multi-star loss (`★1+`, `★★+`, `★★★`, and World 1 pro `★★★` so HP neither walls `★★` nor starves in-fight `★★★` goals) and rewrites `data/levels.ts`. | `src/adventure/balance/tuner.ts` |
-| **The balance atlas** | `npm run balance:atlas` | How do all 1,953 weapon pairs, 204 recipes, 6 fighters, 8 Arcana, Pressure+Surge hazards, Snowball curves, Ridge Shapley weights, 8D `MAP-Elites` niches, and 56 campaign levels interact? | `src/adventure/balance/analytics.ts`, `docs/balance-analytics.json`, `docs/balance-atlas.html` |
+| **The balance atlas** | `npm run balance:atlas` | How do all 2,016 weapon pairs, 208 recipes, 6 fighters, 8 Arcana, Pressure+Surge hazards, Snowball curves, Ridge Shapley weights, 8D `MAP-Elites` niches, and 59 campaign levels interact? | `src/adventure/balance/analytics.ts`, `docs/balance-analytics.json`, `docs/balance-atlas.html` |
 
 `__tests__/adventureBuilds.test.ts` adds the build-level checks: no fighter,
 recipe pairing or random endgame build runs away from the field, and every
@@ -72,12 +72,13 @@ there, not in a test.
 
 | Verdict | Rule |
 |---|---|
-| **Overpowered** | Alone, late game, above its shelf's ceiling for **any** tier; or above ×1.8 alone at level 1; or above ×2.0 in a real build |
+| **Overpowered** | Alone, late game, above its shelf's ceiling for **any** tier; or above ×2.0 alone at level 1; or above ×2.6 in a real build |
 | **Underpowered** | Alone, late game, below its shelf's floor for **every** tier |
 | **Passenger** | Changes nothing in more than 60% of fights at every stage |
 | **Not worth a slot** | Adds less than 2% in a real build |
-| **Weak / runaway recipe** | Lift below ×1.04 or above ×2.6 |
+| **Weak / empty / runaway recipe** | Total lift outside [×1.04, ×2.6], or bespoke rule lift over blank shell outside [×1.04, ×1.85] |
 | **Rare recipe** | Starts fewer than 0.15 times a fight |
+| **Dead rule** | Any authored weapon or evolution rule with 0 effective firings across lab simulations |
 
 Plus three Armory-wide goals: viable pool ≥ 80%, at least 4 top picks, mean
 level-1 weapon ≥ ×1.08 early.

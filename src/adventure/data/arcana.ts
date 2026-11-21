@@ -9,20 +9,22 @@ import { BASE_RULES } from './rules';
 
 const percentMore = (scale: number) => Math.round((scale - 1) * 100);
 
-const monochromePact = { singleTraitBonusDamage: 18, damageScale: 1.3, rainbowMultiplier: 0.5 } satisfies ArcanaRules;
-const prismaticFever = { rainbowMultiplier: 3, rainbowTimeBonus: 4, nonRainbowDamageDelta: -1 } satisfies ArcanaRules;
+const monochromePact = { singleTraitBonusDamage: 6, damageScale: 1.12, rainbowMultiplier: 0.5 } satisfies ArcanaRules;
+const prismaticFever = { rainbowMultiplier: 3, rainbowTimeBonus: 1, nonRainbowDamageDelta: -2, foeHpScale: 1.3 } satisfies ArcanaRules;
 const controlledBurn = { mistakeBurn: { cooldownMs: 4000, cards: 4 }, damageScale: 1.45, startingGraces: 0 } satisfies ArcanaRules;
-const glassPrism = { specialCardChanceScale: 4, damageScale: 1.85, maxHeartsLock: 3 } satisfies ArcanaRules;
-const overkillHarvest = { overkillCoinsPerDamage: 2, waveClearHeal: 1, foeHpScale: 1.15 } satisfies ArcanaRules;
-const scholarsGambit = { xpScale: 2.25, pickOptions: 4, damageScale: 1.2, foeHpScale: 1.12 } satisfies ArcanaRules;
+const glassPrism = { specialCardChanceScale: 4, damageScale: 1.45, maxHeartsLock: 3 } satisfies ArcanaRules;
+const overkillHarvest = { overkillCoinsPerDamage: 2, waveClearHeal: 1, damageScale: 1.28, foeHpScale: 1.08 } satisfies ArcanaRules;
+const scholarsGambit = { xpScale: 1.5, pickOptions: 4, damageScale: 1.1, foeHpScale: 1.15 } satisfies ArcanaRules;
 const catalystResonance = {
   catalystChanceScale: 2,
-  evolutionBurstBonus: { damage: 8, time: 8 },
-  foeHpScale: 1.1,
+  catalystRespawns: 1,
+  evolutionBurstBonus: { damage: 18, time: 8 },
+  damageScale: 1.18,
+  foeHpScale: 1.08,
 } satisfies ArcanaRules;
 const tempoSurge = {
-  damageScale: 1.25,
-  setTimeBonus: 2,
+  damageScale: 1.32,
+  setTimeBonus: 1,
   timerSpeedScale: 1.2,
   untimedMoves: { delta: -1, min: 4 },
 } satisfies ArcanaRules;
@@ -46,7 +48,7 @@ export const ARCANA: ArcanaDef[] = [
     icon: 'lorc/rainbow-star',
     tagline: 'All-in on Rainbow Sets.',
     upside: `All-different Sets deal ${prismaticFever.rainbowMultiplier}× damage and restore +${prismaticFever.rainbowTimeBonus}s on timed fights.`,
-    tradeoff: `Non-Rainbow Sets deal −${-prismaticFever.nonRainbowDamageDelta} base damage (min 1).`,
+    tradeoff: `Non-Rainbow Sets deal −${-prismaticFever.nonRainbowDamageDelta} base damage (min 1) and foes enter with +${percentMore(prismaticFever.foeHpScale)}% HP.`,
   },
   {
     id: 'controlled_burn',
@@ -75,7 +77,7 @@ export const ARCANA: ArcanaDef[] = [
     name: 'Overkill Harvest',
     icon: 'lorc/crown-coin',
     tagline: 'Finishing blows shower the arena in gold.',
-    upside: `Every point of overkill damage past 0 HP pays +${overkillHarvest.overkillCoinsPerDamage} coins; wave clears heal +${overkillHarvest.waveClearHeal} Heart.`,
+    upside: `Every point of overkill damage past 0 HP pays +${overkillHarvest.overkillCoinsPerDamage} coins; Sets deal +${percentMore(overkillHarvest.damageScale)}% and wave clears heal +${overkillHarvest.waveClearHeal} Heart.`,
     tradeoff: `Foes enter the arena with +${percentMore(overkillHarvest.foeHpScale)}% HP.`,
   },
   {
@@ -84,7 +86,7 @@ export const ARCANA: ArcanaDef[] = [
     numeral: 'VI',
     name: "Scholar's Gambit",
     icon: 'lorc/open-book',
-    tagline: 'Rapid level-ups and sharper strikes against tougher foes.',
+    tagline: 'Faster level-ups and wider picks against tougher foes.',
     upside: `${scholarsGambit.xpScale}× XP gained, ${scholarsGambit.pickOptions} weapon choices per level-up, and +${percentMore(scholarsGambit.damageScale)}% Set damage.`,
     tradeoff: `Foes enter the arena with +${percentMore(scholarsGambit.foeHpScale)}% HP.`,
   },
@@ -95,7 +97,7 @@ export const ARCANA: ArcanaDef[] = [
     name: 'Catalyst Resonance',
     icon: 'lorc/crystal-wand',
     tagline: 'Attuned to Evolution Catalysts.',
-    upside: `Catalysts appear twice as often, and every Evolution bursts for ${catalystResonance.evolutionBurstBonus.damage} damage + ${catalystResonance.evolutionBurstBonus.time}s.`,
+    upside: `Catalysts appear twice as often (+${catalystResonance.catalystRespawns} evos/fight), Sets deal +${percentMore(catalystResonance.damageScale)}%, and every Evolution bursts for ${catalystResonance.evolutionBurstBonus.damage} damage + ${catalystResonance.evolutionBurstBonus.time}s.`,
     tradeoff: `Foes enter the arena with +${percentMore(catalystResonance.foeHpScale)}% HP.`,
   },
   {

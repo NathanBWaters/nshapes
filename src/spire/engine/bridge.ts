@@ -100,6 +100,36 @@ export const SPIRE_CLASH_PAIRS: readonly { a: string; b: string; reason: string 
     b: 'chain-reaction',
     reason: 'Duplicate twin cards crowd the board and dilute chain-reaction blasts.',
   },
+  {
+    a: 'twin-seed',
+    b: 'ice-block',
+    reason: 'Frozen cards and duplicate twins crowd the board, starving Set lines under pressure.',
+  },
+  {
+    a: 'twin-seed',
+    b: 'hot-potato',
+    reason: 'Duplicate twins clutter the board when Hot Potato demands fast clears.',
+  },
+  {
+    a: 'twin-seed',
+    b: 'long-fuse',
+    reason: 'Duplicate twins compete with Long Fuse timing windows for board space.',
+  },
+  {
+    a: 'fog-lantern',
+    b: 'rust',
+    reason: 'Face-down Fog cards sit hidden while Rust decays sitting cards and obscures hazards.',
+  },
+  {
+    a: 'thorn-bush',
+    b: 'ice-block',
+    reason: 'Frozen slots reduce match flexibility while Thorn Bush penalizes uncleared thorns.',
+  },
+  {
+    a: 'rust',
+    b: 'ice-block',
+    reason: 'Frozen cards sit untouched while Rust decays them to 0 before thawing.',
+  },
 ];
 
 /** Returns any severe Gamble/Board clash warnings if `candidateWeaponId` is added to `heldWeaponIds`. */

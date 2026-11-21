@@ -17,9 +17,10 @@ import { setMatchesCounter } from './parry';
 import { allSets, countDifferentAttributes, isRainbow, isSelectable } from './sets';
 import { albumPageOf } from './gear';
 import type { Modifiers } from '../rules/types';
+import { growthModifiers } from '../data/weaponGrowth';
 import { challengeCount } from './challenges';
 import { snareTarget } from './fight';
-import { armedRecipesFor } from './sources';
+import { armedRecipesFor, modifiersOf } from './sources';
 import { gearUp, type BuildPlan } from './botBuilds';
 
 export interface BotProfile {
@@ -84,12 +85,28 @@ const chasing = (s: RunState): Goal[] => {
   return count !== null && count < c.n ? [c.kind] : [];
 };
 
+const cardAttrValue = (c: Card, a: AttributeName) => (a === 'background' ? c.background ?? 'white' : c[a]);
+
+/** Standing modifiers currently live on `s` (weapons, skill nodes, active evolutions, Role Set Bonuses & growth). */
+const currentModifiers = (s: RunState): Modifiers =>
+  modifiersOf({
+    skillNodes: s.skillNodes,
+    weapons: s.weapons,
+    activeEvolutions: s.activeEvolutions,
+    growth: growthModifiers(s.growth ?? {}),
+    blankEvolutionRules: s.blankEvolutionRules,
+    disableRoleBonuses: s.disableRoleBonuses,
+  });
+
 /**
- * Which Set a player who can see the board picks: a careful player goes for
- * the Catalyst, defuses traps and avoids snared cards more often than not,
- * and leans hard into whatever the ★★★ challenge asks for.
+ * Which Set a player who can see the board picks:
+ *  1. Urgent survival (`focus`): Counter-Parry during wind-up, imminent thorns,
+ *     active ★★★ challenge goals, Catalysts, bombs & snare defusers.
+ *  2. Payoff opportunity scorer (`care`): evaluates all Trick, Gamble, Piñata,
+ *     Fog, Rust, Link, Surge, Rainbow & Growth payoffs while avoiding snared cards,
+ *     solo shackles, cold fuses, immature chests, and half-rusted cards.
  */
-const chooseSet = (s: RunState, sets: Card[][], bot: BotProfile, rng: Rng): Card[] => {
+const chooseSet = (s: RunState, sets: Card[][], bot: BotProfile, rng: Rng, m: Modifiers): Card[] => {
   const care = bot.huntsRainbows ? 0.6 : 0.3;
   const focus = bot.name === 'expert' ? 0.96 : bot.huntsRainbows ? 0.85 : 0.6;
   const { defusers, snared, bombs } = trapCards(s);
@@ -99,10 +116,13 @@ const chooseSet = (s: RunState, sets: Card[][], bot: BotProfile, rng: Rng): Card
     return hits.length && rng.next() < chance ? rng.pick(hits) : null;
   };
   const rainbow = (set: Card[]) => isRainbow(set, s.attributes);
+  const monochrome = s.arcana.includes('monochrome_pact');
   const hasRainbowPayoff =
-    s.weapons.some(w => !!((w as { modifiers?: Modifiers }).modifiers?.rainbowMultiplierBonus) || w.id === 'catalyst-prism') ||
-    s.arcana.includes('prismatic_fever') ||
-    s.fighter === 'Emperor Penguin';
+    !monochrome &&
+    ((m.rainbowMultiplierBonus ?? 0) > 0 ||
+      s.weapons.some(w => w.id === 'catalyst-prism') ||
+      s.arcana.includes('prismatic_fever') ||
+      s.fighter === 'Emperor Penguin');
   const goalPick = (goal: Goal): Card[] | null => {
     switch (goal) {
       case 'evolutions': return prefer(set => set.some(c => c.hasEvolutionItem), focus);
@@ -134,42 +154,151 @@ const chooseSet = (s: RunState, sets: Card[][], bot: BotProfile, rng: Rng): Card
       default: return null;
     }
   };
-  const held = (key: 'mirrorDamage' | 'albumDamage' | 'tightropeDamage') => s.weapons.some(w => !!(w as { modifiers?: Modifiers }).modifiers?.[key]);
-  const mirrorHeld = held('mirrorDamage');
-  const albumHeld = held('albumDamage');
-  // Tightrope: stay on or next to the last Set's spots
-  const ropeHeld = held('tightropeDamage');
-  const rope = new Set(
-    ropeHeld ? s.gear.lastSetSlots.flatMap(i => [i, ...getAdjacentIndices(i, s.board.length)]).map(i => s.board[i]?.id) : []
-  );
-  const lastSlots = new Set(mirrorHeld ? s.gear.lastSetSlots.map(i => s.board[i]?.id) : []);
+
   let picked: Card[] | null = null;
-  // When a foe is winding up a telegraphed strike with a specific Counter-Set, a real player hunts the counter!
+  // 1. Counter-Parry when a foe is winding up a specific counter
   if (s.parry && s.parry.phase === 'windup' && s.parry.spec.counter.kind !== 'any') {
     picked = prefer(set => setMatchesCounter(set, s.attributes, s.parry!.spec.counter), focus);
   }
+  // 2. Urgent thorns about to bite (<= 8s)
+  picked ??= prefer(set => set.some(c => c.thornAt !== undefined && c.thornAt - s.elapsedMs <= 8000), focus);
+  // 3. Active ★★★ challenge goals
   for (const goal of chasing(s)) picked ??= goalPick(goal);
-  return (
-    picked ??
-    prefer(set => set.some(c => c.hasEvolutionItem)) ??
-    prefer(set => has(set, bombs) || has(set, defusers)) ??
-    // Trick weapons give a player something to hunt: the marked card, a spot from the last Set
-    prefer(set => set.some(c => c.magnet || c.hot || c.doubler || c.fuseHot || c.thornAt !== undefined || c.thawed || (c.chest ?? 0) >= 16)) ??
-    prefer(set => set.some(c => c.thornAt !== undefined), focus) ??
-    prefer(set => set.some(c => (c.shackle && set.some(o => o.id === c.shackle)) || (c.decoyOf && set.some(o => o.id === c.decoyOf)))) ??
-    (ropeHeld && rope.size ? prefer(set => set.some(c => rope.has(c.id)), 0.8) : null) ??
-    (mirrorHeld ? prefer(set => set.some(c => lastSlots.has(c.id))) : null) ??
-    (albumHeld ? prefer(set => albumPageOf(set, s.attributes, s.gear.album) !== null) : null) ??
-    // A weapon that grows on a kind of Set (two corners, a 1-2-3, the same color twice) is worth hunting for
-    prefer(set => setWouldGrow(s, set, s.attributes)) ??
-    (s.arcana.includes('monochrome_pact')
-      ? prefer(set => countDifferentAttributes(set, s.attributes) === 1)
-      : bot.huntsRainbows && hasRainbowPayoff && rng.next() < 0.5
-        ? prefer(rainbow)
-        : null) ??
-    prefer(set => !has(set, snared)) ??
-    rng.pick(sets)
-  );
+  // 4. Evolution Catalyst & lethal bombs/snare defusers
+  picked ??= prefer(set => set.some(c => c.hasEvolutionItem), Math.max(care, 0.75));
+  picked ??= prefer(set => has(set, bombs) || has(set, defusers), focus);
+  if (picked) return picked;
+
+  // 5. Tiered payoff opportunity scorer across all candidate Sets
+  const slotById = new Map<string, number>();
+  s.board.forEach((c, i) => slotById.set(c.id, i));
+
+  const mirrorHeld = (m.mirrorDamage ?? 0) > 0;
+  const mirrorSlots = new Set<number>();
+  if (mirrorHeld) {
+    for (const i of s.gear.lastSetSlots) mirrorSlots.add(i);
+    const depth = Math.round(m.mirrorDepth ?? 0);
+    for (let k = 0; k < Math.min(depth, s.gear.mirrorMemory.length); k++) {
+      for (const i of s.gear.mirrorMemory[k]) mirrorSlots.add(i);
+    }
+  }
+
+  const ropeHeld = (m.tightropeDamage ?? 0) > 0 && s.gear.lastSetSlots.length > 0;
+  const ropeSlots = new Set<number>();
+  if (ropeHeld) {
+    for (const i of s.gear.lastSetSlots) {
+      ropeSlots.add(i);
+      for (const adj of getAdjacentIndices(i, s.board.length)) ropeSlots.add(adj);
+    }
+  }
+
+  const linkedSlots = new Set<number>();
+  for (const conn of s.connections) {
+    linkedSlots.add(conn.positionA);
+    linkedSlots.add(conn.positionB);
+  }
+
+  const albumHeld = (m.albumDamage ?? 0) > 0;
+  const bountyHeld = (m.bountyDamage ?? 0) > 0 && s.gear.bounty !== null;
+  const tarHeld = (m.tarDamage ?? 0) > 0;
+  const oddHeld = (m.oddOneOutDamage ?? 0) > 0;
+  const chestThreshold = (m.chestStart ?? 8) + 3 * (m.chestGrowth ?? 2);
+  const surgeMult = s.surge?.active ? 1.5 : 1;
+  // Decoy is unmarked on purpose: human visual spotting scales modestly by skill tier (no X-ray cheating)
+  const decoySight = bot.name === 'expert' ? 0.3 : bot.name === 'average' ? 0.15 : 0.05;
+  const nAttrs = s.attributes.length;
+
+  let bestScore = -Infinity;
+  let bestSets: Card[][] = [];
+
+  for (const set of sets) {
+    let score = 0;
+    let diffCache: number | null = null;
+    const getDiff = () => (diffCache ??= countDifferentAttributes(set, s.attributes));
+    let wantedCount = 0;
+    let bonusPtsCards = 0;
+    let linkedCount = 0;
+    let touchesRope = false;
+    let touchesMirror = false;
+    let hasTar = false;
+    let hasShacklePair = false;
+    let hasSoloShackle = false;
+    let hasDecoyPair = false;
+
+    for (let i = 0; i < set.length; i++) {
+      const c = set[i];
+      const slot = slotById.get(c.id) ?? -1;
+      if (c.doubler) score += 20 * surgeMult;
+      if ((c.bounty ?? 0) > 0) {
+        score += c.health === 1 ? 16 * surgeMult : 8;
+      }
+      if (c.rusted) score += 15 * surgeMult;
+      else if ((c.rust ?? 0) > 0) score -= 5;
+      if (c.thawed) score += 15 * surgeMult;
+      if (c.fuseHot) score += 14;
+      else if (c.fuseAt !== undefined) score -= 7;
+      if (c.thornAt !== undefined) score += 13;
+      if (c.chest !== undefined) {
+        score += c.chest >= chestThreshold ? 15 * surgeMult : -9;
+      }
+      if (c.hot) score += 11;
+      if (c.magnet) score += 10;
+      if (c.twinOf) score += 9;
+      if (c.shackle) {
+        if (set.some(o => o.id === c.shackle)) hasShacklePair = true;
+        else hasSoloShackle = true;
+      }
+      if (c.decoyOf && set.some(o => o.id === c.decoyOf)) hasDecoyPair = true;
+      if (bountyHeld && !c.isWild && cardAttrValue(c, s.gear.bounty!.attribute) === s.gear.bounty!.value) {
+        wantedCount += 1;
+      }
+      if (tarHeld && c.tar !== undefined) hasTar = true;
+      if ((c.bonusPoints ?? 0) >= 4) bonusPtsCards += 1;
+      if (slot >= 0) {
+        if (linkedSlots.has(slot)) linkedCount += 1;
+        if (ropeHeld && ropeSlots.has(slot)) touchesRope = true;
+        if (mirrorHeld && mirrorSlots.has(slot)) touchesMirror = true;
+      }
+      if (snared.has(c.id)) score -= 22;
+    }
+
+    if (hasShacklePair) score += 14;
+    if (hasSoloShackle) score -= 8;
+    if (hasDecoyPair && rng.next() < decoySight) score += 10;
+    if (wantedCount > 0) score += wantedCount * 5;
+    if (hasTar) score += 7;
+    if (bonusPtsCards > 0) score += Math.min(15, bonusPtsCards * 5);
+    if (linkedCount > 0) score += linkedCount * 4;
+    if (ropeHeld) score += touchesRope ? 10 : -12;
+    if (mirrorHeld && touchesMirror) score += 7;
+    if (albumHeld && albumPageOf(set, s.attributes, s.gear.album, s.gear.albumPages) !== null) score += 8;
+    if (oddHeld) {
+      const d = getDiff();
+      if (d === 1 || (nAttrs >= 4 && d === nAttrs - 1)) score += 8;
+    }
+    if (setWouldGrow(s, set, s.attributes)) score += 6;
+    if (monochrome) {
+      const d = getDiff();
+      if (d === 1) score += 10;
+      else if (d === nAttrs) score -= 6;
+    } else if (bot.huntsRainbows && hasRainbowPayoff && rainbow(set)) {
+      score += 11 * surgeMult;
+    }
+
+    if (score > bestScore + 1) {
+      bestScore = score;
+      bestSets = [set];
+    } else if (score >= bestScore - 1) {
+      bestSets.push(set);
+    }
+  }
+
+  // Tightrope relies strongly on staying on the rope; other payoffs use standard `care`
+  const pickChance = ropeHeld ? Math.max(care, 0.8) : care;
+  if (bestScore > 0 && bestSets.length > 0 && rng.next() < pickChance) {
+    return rng.pick(bestSets);
+  }
+  return prefer(set => !has(set, snared)) ?? rng.pick(sets);
 };
 
 /** Three selectable cards exactly one trait off a Set (what a grace forgives), or null. */
@@ -191,10 +320,12 @@ const nearMiss = (cards: Card[], attrs: AttributeName[], rng: Rng): Card[] | nul
 export interface SimOptions {
   /** Pass on every level-up pick and shop offer, so the fight measures only what was brought in */
   skipPicks?: boolean;
-  /** Optional CreateRun overrides (used by Starfall Spire balance simulations) */
+  /** Optional CreateRun overrides (used by Starfall Spire & lab counterfactuals) */
   overrides?: RunOverrides;
   /** Override accumulated features (used by Starfall Spire balance simulations) */
   features?: RunState['features'];
+  /** Opt-in lab telemetry: count firings & zero-op firings per rule key */
+  trackRuleFirings?: boolean;
 }
 
 export const simulateRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: number, plan?: BuildPlan, opts: SimOptions = {}) => {
@@ -217,12 +348,15 @@ const inactivityLimit = (s: RunState): number | null => {
 /**
  * Submit three picked cards the way GameBoard does: a Set (or a near miss a
  * grace covers) scores through the same match resolution, anything else is a
- * mistake. Either way the cards are replaced.
+ * mistake. Either way the cards are replaced, and any ignited cards burn out
+ * immediately afterward (matching GameBoard's 250ms post-Set burn cascade).
  */
 const submit = (s: RunState, picked: Card[], hinted = false): RunState => {
   const v = isValidCombination(picked, s.attributes);
   const graceUsed = !v.isValid && v.invalidAttributes.length === 1 && s.stats.graces > 0;
+  let next: RunState;
   if (v.isValid || graceUsed) {
+    // Note: `s.stats` already has `applyEnemyStatModifiers` applied via `refreshSources(d)` in fight.ts
     const { cards, rewards, weaponEffects } = resolveMatch({
       board: s.board,
       selected: picked,
@@ -232,11 +366,20 @@ const submit = (s: RunState, picked: Card[], hinted = false): RunState => {
       connections: s.connections,
       graceUsed,
     });
-    const next = runReducer(s, { type: 'MATCH', cards, rewards, effects: weaponEffects, hinted });
-    return runReducer(next, { type: 'REPLACE', ids: cards.map(c => c.id) });
+    next = runReducer(s, { type: 'MATCH', cards, rewards, effects: weaponEffects, hinted });
+    next = runReducer(next, { type: 'REPLACE', ids: cards.map(c => c.id) });
+  } else {
+    next = runReducer(s, { type: 'INVALID', cards: picked });
+    next = runReducer(next, { type: 'REPLACE', ids: picked.map(c => c.id) });
   }
-  const next = runReducer(s, { type: 'INVALID', cards: picked });
-  return runReducer(next, { type: 'REPLACE', ids: picked.map(c => c.id) });
+  // Burning cards burn out in 0.25s in real gameplay (useBurnTimer.ts), not a full think cycle later
+  let burnGuard = 0;
+  while (next.status === 'playing' && burnGuard++ < 24) {
+    const burning = next.board.find(x => x.onFire);
+    if (!burning) break;
+    next = runReducer(next, { type: 'BURN', card: burning });
+  }
+  return next;
 };
 
 /**
@@ -265,8 +408,28 @@ const shop = (s: RunState, rng: Rng, chase: boolean): RunState => {
 
 const playRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: number, chase: boolean, opts: SimOptions = {}) => {
   const rng = createRng(seed ^ 0x9e3779b9);
-  let s = createRun(level, save, { seed, ...(opts.features ? { features: opts.features } : {}), ...(opts.overrides ? { overrides: opts.overrides } : {}) });
+  let s = createRun(level, save, {
+    seed,
+    ...(opts.features ? { features: opts.features } : {}),
+    ...(opts.overrides ? { overrides: opts.overrides } : {}),
+    ...(opts.trackRuleFirings ? { trackRuleFirings: true } : {}),
+  });
   let guard = 0;
+  let cachedModsKey: { weapons: RunState['weapons']; evos: RunState['activeEvolutions']; growth: RunState['growth']; nodes: RunState['skillNodes']; mods: Modifiers } | null = null;
+  const getMods = (st: RunState): Modifiers => {
+    if (
+      cachedModsKey &&
+      cachedModsKey.weapons === st.weapons &&
+      cachedModsKey.evos === st.activeEvolutions &&
+      cachedModsKey.growth === st.growth &&
+      cachedModsKey.nodes === st.skillNodes
+    ) {
+      return cachedModsKey.mods;
+    }
+    const m = currentModifiers(st);
+    cachedModsKey = { weapons: st.weapons, evos: st.activeEvolutions, growth: st.growth, nodes: st.skillNodes, mods: m };
+    return m;
+  };
   while ((s.status === 'playing' || s.status === 'pick' || s.status === 'intermission') && guard++ < 2000) {
     if (s.status === 'pick') {
       // Level up: take a free weapon
@@ -285,37 +448,54 @@ const playRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: nu
     const fullBoard = s.level.rules.boardSize ?? getBoardSizeForAttributes(s.attributes.length);
     const crowd = Math.sqrt(Math.min(1, Math.max(0.25, s.board.filter(isSelectable).length / fullBoard)));
     const pace = 0.6 + rng.next() * 0.8;
-    // A simplified board has one trait the same on every card: one less thing to compare
-    const traits = Math.max(1, s.attributes.length - (s.simplified ? 1 : 0));
-    // A wild card makes a Set with any two cards: nothing to search for
-    const wild = s.board.some(c => c.isWild && isSelectable(c)) ? 0.4 : 1;
+    // A simplified board unifies 1 trait (or 2 on double Clarity Lens)
+    const traits = Math.max(1, s.attributes.length - (s.simplified ? (s.simplified.also ? 2 : 1) : 0));
+    // A wild card makes a Set with any two cards, cutting scan time substantially
+    const wild = s.board.some(c => c.isWild && isSelectable(c)) ? 0.65 : 1;
     let think = bot.secondsPerAttribute * traits * pace * glow * crowd * wild;
     // A slow search (or a "use hints" goal) is when a real player presses the bulb
     const slow = pace > 1;
     const goals = chasing(s);
-    const canHint = s.features.has('hints') && s.stats.hints > 0;
-    let hinted = canHint && (goals.includes('useHints') || (slow && rng.next() < bot.hintEagerness));
+    const uiMods = s.foe.getUIModifiers();
+    const runMods = getMods(s);
+    const canHint = s.features.has('hints') && s.stats.hints > 0 && !uiMods.disableManualHint;
+    const conserveHints = s.level.challenge.kind === 'hintsLeft' && s.stats.hints <= s.level.challenge.n;
+    const hintEagerness = (runMods.hintHeldDamage ?? 0) > 0 && !goals.includes('useHints') ? bot.hintEagerness * 0.5 : bot.hintEagerness;
+    let hinted = canHint && (goals.includes('useHints') || (!conserveHints && slow && rng.next() < hintEagerness));
     if (hinted) {
       s = runReducer(s, { type: 'USE_HINT' });
       think *= 0.5;
     }
-    // An auto-hint (Oracle Eye, Mystic Sight) points a card out when the search drags: free, and just as helpful
+    // Faithful auto-hint simulation (matches useAutoHint.ts: 15s wait minus autoHintInterval, 2s poll, 4s fade)
     let pointed = false;
-    if (!hinted && slow && s.stats.autoHintChance > 0 && rng.next() * 100 < s.stats.autoHintChance) {
-      pointed = true;
-      think *= 0.6;
+    if (!hinted && !uiMods.disableAutoHint && s.stats.autoHintChance > 0) {
+      const waitSec = Math.max(5, (15000 - (s.stats.autoHintInterval || 0)) / 1000);
+      if (think >= waitSec) {
+        const checks = 1 + Math.floor((think - waitSec) / 2);
+        for (let k = 0; k < checks; k++) {
+          if (rng.next() * 100 < s.stats.autoHintChance) {
+            const triggerAt = waitSec + k * 2;
+            const twoCards = (s.stats.enhancedHintChance || 0) > 0 && rng.next() * 100 < s.stats.enhancedHintChance;
+            const postHintSec = Math.max(1, (think - triggerAt) * (twoCards ? 0.3 : 0.55));
+            think = triggerAt + postHintSec;
+            // Auto-hint stays lit for ~4s; only counts as hinted if matched before fade
+            pointed = postHintSec <= 4;
+            break;
+          }
+        }
+      }
     }
     // With a grace in hand a near miss is free, so a slow search ends in a bold guess
     const graces = s.features.has('graces') ? s.stats.graces : 0;
     const bold = !hinted && graces > 0 && (goals.includes('graceSaves') ? pace > 0.8 : slow && rng.next() < bot.boldness);
     if (bold) think *= 0.5;
     // A foe that punishes standing still (its card says "30s inactivity"): with the
-    // deadline close, press the bulb, and failing that, rush (and slip more often)
+    // deadline close, press the bulb (if allowed), and failing that, rush (and slip more often)
     let rushed = false;
     const limit = inactivityLimit(s);
     if (limit !== null) {
       const left = limit - (s.elapsedMs - s.lastMatchAtMs) / 1000 - 2;
-      if (think > left && !hinted && s.features.has('hints') && s.stats.hints > 0) {
+      if (think > left && !hinted && canHint) {
         s = runReducer(s, { type: 'USE_HINT' });
         think *= 0.5;
         hinted = true;
@@ -325,15 +505,35 @@ const playRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: nu
         rushed = true;
       }
     }
+    // Set-Parry deadline awareness: rush or hint to parry before an unparried strike hits;
+    // experts occasionally pause 1-2s to catch the golden Perfect Parry window!
+    const focus = bot.name === 'expert' ? 0.96 : bot.huntsRainbows ? 0.85 : 0.6;
+    if (s.parry && s.parry.phase === 'windup') {
+      const parryLeft = s.parry.msLeft / 1000 - 1;
+      if (think > parryLeft && rng.next() < focus) {
+        if (!hinted && !conserveHints && canHint) {
+          s = runReducer(s, { type: 'USE_HINT' });
+          think *= 0.5;
+          hinted = true;
+        }
+        if (think > parryLeft) {
+          think = Math.max(1, parryLeft);
+          rushed = true;
+        }
+      } else if (
+        bot.name === 'expert' &&
+        s.parry.msLeft > 3500 &&
+        s.parry.msLeft <= 5500 &&
+        think < (s.parry.msLeft - 3000) / 1000 &&
+        s.combo === 0 &&
+        !((runMods.glassDamage ?? 0) > 0 && !s.gear.glassBroken) &&
+        rng.next() < 0.4
+      ) {
+        think = Math.max(think, (s.parry.msLeft - 2500) / 1000);
+      }
+    }
     const ticks = Math.max(1, Math.round(think));
     for (let i = 0; i < ticks && s.status === 'playing'; i++) s = runReducer(s, { type: 'TICK', ms: 1000 });
-    if (s.status !== 'playing') continue; // won, lost, or the foe fell between Sets (wave over)
-
-    // Burning cards burn out (GameBoard does this a quarter second after they catch)
-    for (const c of s.board.filter(x => x.onFire)) {
-      if (s.status !== 'playing') break;
-      s = runReducer(s, { type: 'BURN', card: c });
-    }
     if (s.status !== 'playing') continue; // won, lost, or the foe fell between Sets (wave over)
 
     const selectableCards = s.board.filter(isSelectable);
@@ -350,7 +550,7 @@ const playRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: nu
       s = submit(s, near ?? rng.shuffle(selectableCards).slice(0, 3));
       continue;
     }
-    s = submit(s, chooseSet(s, sets, bot, rng), hinted || pointed);
+    s = submit(s, chooseSet(s, sets, bot, rng, getMods(s)), hinted || pointed);
   }
   return { stars: computeStars(s), coins: s.coins, state: s };
 };

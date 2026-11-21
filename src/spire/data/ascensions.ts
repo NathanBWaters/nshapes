@@ -41,16 +41,16 @@ export const ASCENSION_DESCRIPTIONS: readonly string[] = [
   'All foes gain +16% HP and telegraphed attacks wind up 8% faster.',
   'Foe telegraphed attacks wind up another 8% faster.',
   'Start with 25 fewer coins.',
-  'All foes gain another +14% HP.',
-  'Fight clocks shorten by another 6%.',
-  'Bosses gain another +16% HP.',
+  'All foes gain another +20% HP.',
+  'Fight clocks shorten by another 8%.',
+  'Bosses gain another +22% HP.',
   'Merchant prices rise another 10%.',
-  'Foe telegraphed attacks wind up another 8% faster.',
-  'All foes gain another +15% HP.',
+  'All foes gain +10% HP and telegraphed attacks wind up another 8% faster.',
+  'All foes gain another +8% HP.',
   'Start with another −1 Max Heart (min 3).',
-  'Elites and Bosses gain another +16% HP.',
-  'Fight clocks shorten by another 6%.',
-  'STARFALL APEX — final Boss gauntlet (+22% Boss HP & faster parries).',
+  'Elites and Bosses gain another +10% HP.',
+  'Fight clocks shorten by another 5%.',
+  'STARFALL APEX — final Boss gauntlet (+16% Boss HP & faster parries).',
 ];
 
 export const ascensionModifiers = (level: number): AscensionModifiers => {
@@ -82,17 +82,20 @@ export const ascensionModifiers = (level: number): AscensionModifiers => {
   }
   if (a >= 9) parrySpeedScale *= 0.92;
   if (a >= 10) startingCoinsDelta -= 25;
-  if (a >= 11) foeHpScale *= 1.14;
-  if (a >= 12) timerScale *= 0.94;
-  if (a >= 13) bossHpScale *= 1.16;
+  if (a >= 11) foeHpScale *= 1.2;
+  if (a >= 12) timerScale *= 0.92;
+  if (a >= 13) bossHpScale *= 1.22;
   if (a >= 14) shopPriceScale *= 1.1;
-  if (a >= 15) parrySpeedScale *= 0.92;
-  if (a >= 16) foeHpScale *= 1.15;
+  if (a >= 15) {
+    foeHpScale *= 1.1;
+    parrySpeedScale *= 0.92;
+  }
+  if (a >= 16) foeHpScale *= 1.08;
   if (a >= 17) maxHeartsDelta -= 1;
-  if (a >= 18) bossHpScale *= 1.16;
-  if (a >= 19) timerScale *= 0.94;
+  if (a >= 18) bossHpScale *= 1.1;
+  if (a >= 19) timerScale *= 0.95;
   if (a >= 20) {
-    bossHpScale *= 1.22;
+    bossHpScale *= 1.16;
     parrySpeedScale *= 0.92;
   }
 

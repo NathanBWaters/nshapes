@@ -23,12 +23,13 @@ import { WEAPON_GROWTH } from './weaponGrowth';
 
 /**
  * How Power points turn into the damage multiplier: one-for-one up to the
- * knee (12 points = ×13), then bending hard, so a full belt tops out near ×15
- * and the rest of a big build's strength comes from combos, the fighter's
- * tree and Arcana.
+ * knee (3 points = ×4), then bending gently via log tail so a single weapon
+ * reaches ×10, a recipe pair reaches ×50, and a full 6-charm build with
+ * unified multipliers, Role Set Bonuses, fighter tree, and Arcana lands
+ * cleanly near ×300 instead of overflowing into the thousands.
  */
-export const POWER_KNEE = 12;
-export const POWER_TAIL = 2;
+export const POWER_KNEE = 3;
+export const POWER_TAIL = 0.45;
 
 export const powerMultiplier = (points: number): number => {
   if (points <= 0) return 1;
@@ -42,7 +43,7 @@ export const powerMultiplier = (points: number): number => {
  * full belt fills it in about a minute instead of seconds, and still faster
  * than one weapon or a pair does.
  */
-export const POWER_SHARE = 0.4;
+export const POWER_SHARE = 0.65;
 export const powerShare = (feeding: number): number => Math.pow(Math.max(1, feeding - 1), -POWER_SHARE);
 
 /** A weapon's level makes its Power gain bigger: level 1 gives this share of level 5's. */
@@ -112,69 +113,69 @@ export const powerWatches = (weaponId: string): GrowthWatch[] => {
 export const DEFAULT_PER = 0.5;
 // POWER-TUNER:BEGIN
 export const PER: Readonly<Record<string, number>> = {
-  'amplifier-coil': 0.362,
-  'blast-powder': 0.177,
-  'bounty-poster': 0.288,
-  'cascade-core': 1.717,
-  'catalyst-prism': 0.34,
-  'chain-gang': 0.263,
-  'chain-reaction': 2.95,
-  'chaos-conduit': 0.405,
-  'chaos-shard': 0.235,
-  'chrono-shard': 3.653,
-  'clarity-lens': 1.02,
-  'collectors-album': 0.65,
-  'connector': 0.064,
-  'crystal-orb': 0.606,
-  'cursed-idol': 0.414,
-  'decoy': 0.284,
-  'devils-bargain': 0.101,
-  'echo-chamber': 0.413,
-  'echo-stone': 1.341,
-  'encore-mask': 0.542,
-  'field-stone': 0.454,
-  'flint-spark': 0.029,
-  'fog-lantern': 0.256,
-  'fortune-token': 0.622,
-  'fortunes-blessing': 0.118,
-  'fortunes-favor': 0.55,
-  'glass-sword': 0.175,
-  'grace-conduit': 0.28,
-  'greedy-chest': 0.352,
-  'growth-seed': 0.326,
-  'hot-potato': 1.364,
+  'amplifier-coil': 0.538,
+  'blast-powder': 0.117,
+  'bounty-poster': 0.234,
+  'cascade-core': 40,
+  'catalyst-prism': 0.177,
+  'chain-gang': 0.265,
+  'chain-reaction': 40,
+  'chaos-conduit': 2.964,
+  'chaos-shard': 0.187,
+  'chrono-shard': 39.767,
+  'clarity-lens': 0.792,
+  'collectors-album': 0.553,
+  'connector': 0.0407,
+  'crystal-orb': 0.434,
+  'cursed-idol': 3.036,
+  'decoy': 0.207,
+  'devils-bargain': 0.133,
+  'echo-chamber': 1.986,
+  'echo-stone': 13.829,
+  'encore-mask': 40,
+  'field-stone': 16.039,
+  'flint-spark': 0.0452,
+  'fog-lantern': 0.428,
+  'fortune-token': 0.464,
+  'fortunes-blessing': 0.124,
+  'fortunes-favor': 2.051,
+  'glass-sword': 0.106,
+  'grace-conduit': 0.233,
+  'greedy-chest': 0.157,
+  'growth-seed': 0.207,
+  'hot-potato': 0.289,
   'ice-block': 1.419,
-  'life-link': 0.287,
-  'life-vessel': 2.144,
-  'long-fuse': 0.71,
-  'magnet': 0.56,
-  'mending-charm': 0.221,
-  'mirror-shard': 0.266,
-  'mystic-sight': 0.723,
-  'neural-network': 0.083,
-  'odd-one-out': 1.111,
-  'oracle-eye': 0.081,
-  'pinata': 0.539,
-  'prismatic-ray': 0.659,
-  'rainbow-charm': 1.345,
-  'rally-horn': 0.811,
-  'revenge-linker': 0.121,
-  'rust': 0.253,
-  'scholars-tome': 0.292,
-  'second-chance': 0.306,
-  'seeker-lens': 0.558,
-  'snowball': 0.127,
-  'soul-harvest': 0.47,
-  'tar-pit': 0.282,
-  'temporal-rift': 2.102,
-  'thorn-bush': 2.122,
-  'tightrope': 0.167,
-  'time-drop': 1.775,
-  'twin-seed': 0.219,
-  'war-drum': 1.241,
-  'web-weaver': 0.028,
-  'wild-card': 0.402,
-  'wisdom-chain': 0.146,
+  'life-link': 0.163,
+  'life-vessel': 40,
+  'long-fuse': 1.312,
+  'magnet': 0.432,
+  'mending-charm': 0.099,
+  'mirror-shard': 0.149,
+  'mystic-sight': 1.233,
+  'neural-network': 0.0471,
+  'odd-one-out': 0.457,
+  'oracle-eye': 0.142,
+  'pinata': 0.405,
+  'prismatic-ray': 0.699,
+  'rainbow-charm': 0.486,
+  'rally-horn': 0.693,
+  'revenge-linker': 0.133,
+  'rust': 0.267,
+  'scholars-tome': 0.653,
+  'second-chance': 0.316,
+  'seeker-lens': 1.101,
+  'snowball': 0.086,
+  'soul-harvest': 2.53,
+  'tar-pit': 0.147,
+  'temporal-rift': 18.603,
+  'thorn-bush': 1.354,
+  'tightrope': 0.112,
+  'time-drop': 37.789,
+  'twin-seed': 0.205,
+  'war-drum': 2.139,
+  'web-weaver': 0.0204,
+  'wild-card': 9.486,
+  'wisdom-chain': 0.135,
 };
 // POWER-TUNER:END
 

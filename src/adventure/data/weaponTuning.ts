@@ -57,7 +57,7 @@ export const WISDOM_COIN_PCT = 15;
 export const ADVENTURE_TUNING: Record<string, AdventureTuning> = {
   // ── Damage ────────────────────────────────────────────────────────────────
   'blast-powder': { effects: { explosionChance: 18, explosionDamage: 0.5 }, perLevel: { explosionChance: 4, explosionDamage: 0.25 } },
-  'flint-spark': { effects: { fireSpreadChance: 16, burnDamage: 0.5 }, perLevel: { fireSpreadChance: 3.5, burnDamage: 0.25 } },
+  'flint-spark': { effects: { fireSpreadChance: 14, burnDamage: 0.5 }, perLevel: { fireSpreadChance: 2.5, burnDamage: 0.15 } },
   'prismatic-ray': { effects: { laserChance: 10, laserDamage: 0.5 }, perLevel: { laserChance: 2.5, laserDamage: 0.75 } },
   'chaos-shard': {
     effects: { ricochetChance: 18, ricochetChainChance: 22, ricochetDamage: 0.5 },
@@ -74,15 +74,15 @@ export const ADVENTURE_TUNING: Record<string, AdventureTuning> = {
 
   // ── Board ─────────────────────────────────────────────────────────────────
   'growth-seed': {
-    effects: { boardGrowthChance: 15 },
-    perLevel: { boardGrowthChance: 5 },
+    effects: { boardGrowthChance: 14 },
+    perLevel: { boardGrowthChance: 3.5 },
     rider: () => ({ rules: [{ trigger: { on: 'weapon', kind: 'growth' }, effects: [{ do: 'empowerBoard', amount: 1 }], callout: 'Bloom!' }] }),
   },
   'field-stone': {
     effects: { fieldSize: 2 },
     perLevel: { fieldSize: 1 },
-    extra: { charge: { label: 'Opening power per card', unit: 'dmg', base: 1, perLevel: 0.5, tunable: false } },
-    rider: v => ({ rules: [{ trigger: { on: 'waveStart' }, effects: [{ do: 'empowerBoard', amount: Math.round(v.charge * 2) / 2 }] }] }),
+    extra: { charge: { label: 'Opening power per card', unit: 'dmg', base: 1, perLevel: 0.35, tunable: false } },
+    rider: v => ({ rules: [{ trigger: { on: 'waveStart' }, effects: [{ do: 'empowerBoard', amount: Math.round(v.charge * 10) / 10 }] }] }),
   },
 
   // ── Hearts ────────────────────────────────────────────────────────────────
@@ -153,8 +153,8 @@ export const ADVENTURE_TUNING: Record<string, AdventureTuning> = {
     effects: { maxHints: 1, hints: 1 },
     perLevel: { maxHints: 1, hints: 1 },
     extra: {
-      strike: dmg('Damage per hint used', 3, 1.5),
-      insight: dmg('Hinted Set bonus', 3, 1),
+      strike: dmg('Damage per hint used', 2.5, 1.25),
+      insight: dmg('Hinted Set bonus', 2.5, 0.8),
     },
     rider: v => ({ rules: [strike({ on: 'hintUsed' }, v.strike)], modifiers: { hintedSetDamage: v.insight } }),
   },
@@ -162,8 +162,8 @@ export const ADVENTURE_TUNING: Record<string, AdventureTuning> = {
     effects: { autoHintChance: 24, autoHintInterval: 3000 },
     perLevel: { autoHintChance: 4 },
     extra: {
-      insight: dmg('Hinted Set bonus', 4, 1.5),
-      clarity: dmg('Clean-play Set bonus', 2, 0.5),
+      insight: dmg('Hinted Set bonus', 4, 0.75),
+      clarity: dmg('Clean-play Set bonus', 2, 0.3),
     },
     rider: v => ({
       modifiers: {
@@ -181,7 +181,7 @@ export const ADVENTURE_TUNING: Record<string, AdventureTuning> = {
   'fortunes-blessing': {
     effects: { coinGainChance: 18, bridgeChance: 30 },
     perLevel: { coinGainChance: 4, bridgeChance: 7 },
-    extra: { strike: dmg('Gold & bonus-card strike', 5, 1.5) },
+    extra: { strike: dmg('Gold & bonus-card strike', 3.5, 1) },
     rider: v => ({
       rules: [
         { trigger: { on: 'waveStart' }, effects: [{ do: 'convert', to: 'gold', count: 1 }], callout: 'Gilded!' },
@@ -202,7 +202,7 @@ export const ADVENTURE_TUNING: Record<string, AdventureTuning> = {
   'wisdom-chain': {
     effects: { xpGainChance: 18, bridgeChance: 30 },
     perLevel: { xpGainChance: 4, bridgeChance: 7 },
-    extra: { strike: dmg('Dividend strike per coin', 3, 1) },
+    extra: { strike: dmg('Dividend strike per coin', 2.5, 0.7) },
     rider: v => ({
       modifiers: { coinPercent: WISDOM_COIN_PCT },
       rules: [

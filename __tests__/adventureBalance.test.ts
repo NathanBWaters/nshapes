@@ -19,10 +19,22 @@
  *
  * Set ADVENTURE_BALANCE_REPORT=1 to print the full 3-star funnel table.
  */
-import { LEVELS, MAIN_LEVELS } from '@/adventure/data/levels';
-import { applyLevelResult, createNewSave, createMaxedSave } from '@/adventure/progress';
+import { LEVELS, MAIN_LEVELS, getLevel } from '@/adventure/data/levels';
+import { createMaxedSave } from '@/adventure/progress';
 import { BOTS, simulateRun, starDistribution } from '@/adventure/engine/bot';
-import { barePlan, investedPlan, levelsBefore, starTargets, winTargets, worldOf, WIN_TARGETS, STAR_TARGETS, type BuildPlan } from '@/adventure/engine/botBuilds';
+import {
+  barePlan,
+  campaignSave,
+  investedPlan,
+  PUZZLE_CHARMS,
+  starTargets,
+  winTargets,
+  worldOf,
+  WIN_TARGETS,
+  STAR_TARGETS,
+  type BuildPlan,
+} from '@/adventure/engine/botBuilds';
+import { validateCampaignHpCurve } from '@/adventure/balance/tuner';
 import { MECHANICS } from '@/adventure/data/mechanics';
 import type { AdventureSave, LevelDef } from '@/adventure/types';
 
@@ -33,32 +45,12 @@ const RUNS = 60;
 const LEVEL_TOLERANCE = 0.2;
 const WORLD_TOLERANCE = 0.1;
 
-/**
- * The player reads the level's puzzle and equips for it. 3-2 teaches charm
- * slots: "fill every slot with a DIFFERENT kind and trigger three of them".
- */
-const PUZZLE_CHARMS: Record<string, string[]> = {
-  '3-2': ['blast-powder', 'flint-spark', 'prismatic-ray'],
-};
-
 const withPuzzle = (level: LevelDef, plan: BuildPlan): BuildPlan => ({ ...plan, keepCharms: !!PUZZLE_CHARMS[level.id] });
 
 const progressedSave = (): AdventureSave => {
   const maxed = createMaxedSave();
   // all fighters and weapons unlocked, nothing bought: a "fresh but caught up" player
   return { ...maxed, upgrades: {}, skillNodes: {}, equippedArcana: [], charms: maxed.armory.slice(0, 3) };
-};
-
-/** What the player owns on reaching this level: 3★ on every level before it, through the real reward pipeline. */
-const campaignSaves = new Map<string, AdventureSave>();
-const campaignSave = (level: LevelDef): AdventureSave => {
-  const hit = campaignSaves.get(level.id);
-  if (hit) return hit;
-  let save = createNewSave();
-  for (const l of levelsBefore(level)) save = applyLevelResult(save, l, 3, 0).save;
-  if (PUZZLE_CHARMS[level.id]) save = { ...save, charms: PUZZLE_CHARMS[level.id] };
-  campaignSaves.set(level.id, save);
-  return save;
 };
 
 const near = (x: number, target: number, tol: number) => {
@@ -78,6 +70,31 @@ describe('adventure data integrity', () => {
 
   it('level ids are unique', () => {
     expect(new Set(LEVELS.map(l => l.id)).size).toBe(LEVELS.length);
+  });
+
+  it('campaign HP curve is monotonic across World Bosses without intra-world cliffs', () => {
+    const check = validateCampaignHpCurve(LEVELS);
+    expect(check.violations).toEqual([]);
+  });
+
+  it('bot simulation honors enemy weapon counters (Wet Crab reduces fire procs ~60% without double-applying)', () => {
+    const crabLevel = getLevel('3-5P');
+    const calmLevel: LevelDef = { ...crabLevel, foes: [{ name: 'Dry Crab', icon: 'lorc/crab', hp: crabLevel.foes[0].hp, parry: null }] };
+    const crabNoParry: LevelDef = { ...crabLevel, foes: [{ ...crabLevel.foes[0], parry: null }] };
+    const save: AdventureSave = { ...createMaxedSave(), charms: ['flint-spark'], skillNodes: {}, equippedArcana: [] };
+    let dryFires = 0;
+    let wetFires = 0;
+    for (let i = 0; i < 16; i++) {
+      const seed = 1000 + i * 7919;
+      const dry = simulateRun(calmLevel, save, BOTS.average, seed, undefined, { skipPicks: true });
+      const wet = simulateRun(crabNoParry, save, BOTS.average, seed, undefined, { skipPicks: true });
+      dryFires += dry.state.log.reduce((n, e) => n + e.lines.filter(l => l.type === 'fire').length, 0);
+      wetFires += wet.state.log.reduce((n, e) => n + e.lines.filter(l => l.type === 'fire').length, 0);
+    }
+    const ratio = wetFires / Math.max(1, dryFires);
+    // Wet Crab reduces fireSpreadChance by 60% (ratio ~0.40, NOT 0.16 from double-application and NOT 1.0 from bypassing!)
+    expect(ratio).toBeGreaterThan(0.22);
+    expect(ratio).toBeLessThan(0.62);
   });
 });
 
@@ -102,7 +119,10 @@ describe('adventure 3-star balance: ★1+ clear, ★★+ knockout, ★★★ mas
       const t = winTargets(level);
       const st = starTargets(level);
       const w = worldOf(level);
-      const pro = w === 1 ? starDistribution(level, save, BOTS.expert, RUNS, withPuzzle(level, investedPlan(level))) : null;
+      const needsPro = w === 1 || !!level.isBoss || inv.dist[3] < st.investedStar3Floor;
+      const pro = needsPro
+        ? starDistribution(level, save, BOTS.expert, w === 1 ? RUNS : Math.max(20, Math.round(RUNS / 3)), withPuzzle(level, investedPlan(level)))
+        : null;
       const pct = (x: number) => `${Math.round(x * 100)}%`.padStart(4);
       report.push(
         `${level.id.padEnd(5)} ${level.name.padEnd(18)} bare ★1+${pct(clear(bare.dist))} ★★+${pct(ko(bare.dist))} (${pct(t.bare)}) | ` +
@@ -127,7 +147,7 @@ describe('adventure 3-star balance: ★1+ clear, ★★+ knockout, ★★★ mas
       expect(inv.dist[3]).toBeGreaterThanOrEqual(st.investedStar3Floor - 0.12);
       if (pro) {
         expect(pro.dist[3]).toBeGreaterThanOrEqual(st.expertStar3Floor - 0.08);
-        if (!level.branchOf) world1ProStar3.push(pro.dist[3]);
+        if (w === 1 && !level.branchOf) world1ProStar3.push(pro.dist[3]);
       }
       // Progression pays off (gentle early lessons at >=95% KO allow ties at the ceiling)
       if (ko(inv.dist) >= 0.96 && t.bare >= 0.8) expect(ko(inv.dist)).toBeGreaterThanOrEqual(ko(bare.dist));

@@ -136,6 +136,10 @@ export interface LoadoutOptions {
   uncappedArcana?: boolean;
   /** Override derived Adventure weapon builds (e.g. Spire per-run weapon levels) */
   weaponBuilds?: ReturnType<typeof weaponBuilds>;
+  /** Lab-only override: strip fighter passives without disabling Parry/Surge/Power/Rainbow/Purity */
+  disablePassives?: boolean;
+  /** Lab-only override: disable Brotato-style 2/4/6 Role Set Bonuses */
+  disableRoleBonuses?: boolean;
 }
 
 /**
@@ -153,15 +157,20 @@ export const startingLoadout = (
 ): Loadout => {
   const fighter = save.selectedFighter;
   const gear = features.has('gear');
-  const passives = gear ? [...fighterPassives(fighter)] : [];
-  const skillNodes = gear ? fightSkillNodes(save, fighter) : [];
+  const passives = gear && !opts?.disablePassives ? [...fighterPassives(fighter)] : [];
+  const skillNodes = gear && !opts?.disablePassives ? fightSkillNodes(save, fighter) : [];
   const arcana = gear ? fightArcana(save, opts?.uncappedArcana) : [];
   const rules = arcanaRules(arcana);
   const builds = opts?.weaponBuilds ?? weaponBuilds(save);
   const weapons: Weapon[] = gear
     ? charmWeapons(fightCharms(save, opts?.uncappedCharms), builds)
     : [];
-  const modifiers = modifiersOf({ skillNodes, weapons, activeEvolutions: [] });
+  const modifiers = modifiersOf({
+    skillNodes,
+    weapons,
+    activeEvolutions: [],
+    disableRoleBonuses: opts?.disableRoleBonuses,
+  });
 
   // Time gains are exactly the seconds the weapons say (Free Play adds them to a 10s base)
   let stats: PlayerStats = { ...DEFAULT_PLAYER_STATS, hints: 0, graces: 0, timeGainAmount: 0, effectCaps: { ...DEFAULT_PLAYER_STATS.effectCaps! } };
@@ -212,7 +221,7 @@ export const startingLoadout = (
     arcanaSlots: arcanaSlotsOf(save),
     armedRecipes: evolutions ? armedRecipesFor(weapons, save.unlockedEvolutions) : [],
     evolutionLikelihood: evolutions ? likelihood : 0,
-    evolutionCap: evolutionCapFor(level, modifiers),
+    evolutionCap: evolutionCapFor(level, modifiers, rules.catalystRespawns ?? 0),
     evolutionLabTier,
   };
 };

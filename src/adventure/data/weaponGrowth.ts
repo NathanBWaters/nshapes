@@ -107,17 +107,17 @@ export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
     { watch: weaponOn('explosion'), every: 3, max: 4, stat: { explosionDamage: 0.25 }, look: 'explosions', gives: 'blasted cards deal +0.25 more damage' },
   ],
   'rainbow-charm': [
-    { watch: { on: 'set', test: 'rainbow' }, every: 2, max: 5, stat: { mult: 0.25 }, look: 'Rainbow Sets', gives: '+0.25× Rainbow multiplier' },
+    { watch: { on: 'set', test: 'rainbow' }, every: 2, max: 1, stat: { mult: 0.25 }, look: 'Rainbow Sets', gives: '+0.25× Rainbow multiplier' },
   ],
   'flint-spark': [
     {
       watch: { on: 'cardBurned' },
-      every: 3,
-      max: 5,
-      stat: { burnDamage: 0.25 },
-      proc: { on: weaponOn('fire'), pct: 8, effect: { do: 'ignite', count: 1 } },
+      every: 4,
+      max: 4,
+      stat: { burnDamage: 0.2 },
+      proc: { on: weaponOn('fire'), pct: 5, effect: { do: 'ignite', count: 1 } },
       look: 'cards burned up',
-      gives: 'burns deal +0.25 more and +8% chance a new fire catches an extra card',
+      gives: 'burns deal +0.2 more and +5% chance a new fire catches an extra card',
     },
   ],
   'prismatic-ray': [
@@ -164,7 +164,7 @@ export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
     { watch: { on: 'own' }, max: 10, mods: { doubleClarityChance: 5 }, look: 'Clarity', gives: '+5% chance a Clarity simplifies two traits at once' },
   ],
   'rally-horn': [{ watch: { on: 'own' }, stat: { damage: 1 }, look: 'Rally', gives: 'Rally hits +1 harder' }],
-  pinata: [{ watch: { on: 'cardBroken' }, stat: { bounty: 3 }, look: 'piñata you break', gives: 'later piñatas hold +3' }],
+  pinata: [{ watch: { on: 'cardBroken' }, max: 8, stat: { bounty: 2 }, look: 'piñata you break', gives: 'later piñatas hold +2' }],
   'amplifier-coil': [
     { watch: { on: 'doubled' }, max: 6, stat: { chance: 2, shock: 1 }, look: 'trigger it doubles', gives: '+2% amplify chance and the shock hits +1 harder' },
   ],
@@ -196,7 +196,7 @@ export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
   'crystal-orb': [{ watch: { on: 'hintUsed' }, every: 3, max: 3, stat: { maxHints: 1 }, now: { do: 'hint', amount: 1 }, look: 'hints you use', gives: '+1 hint slot, and a hint to put in it' }],
   'oracle-eye': [
     { watch: { on: 'set' }, every: 2, max: 5, stat: { autoHintChance: 2 }, look: 'Sets you make', gives: '+2% chance to point out a card' },
-    { watch: { on: 'set', test: 'hinted' }, max: 10, mods: { hintedSetDamage: 1.5 }, look: 'Set made on a pointed-out card', gives: 'Sets made on a pointed-out card hit +1.5 harder' },
+    { watch: { on: 'set', test: 'hinted' }, max: 6, mods: { hintedSetDamage: 1 }, look: 'Set made on a pointed-out card', gives: 'Sets made on a pointed-out card hit +1 harder' },
   ],
   'mystic-sight': [{ watch: { on: 'own' }, max: 3, stat: { enhancedHintChance: 2 }, look: 'Third Eye', gives: '+2% chance an auto-hint points out 2 cards' }],
   // Hints gild the board and build coin momentum
@@ -219,7 +219,7 @@ export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
   // Study pays: XP brings more XP, so level-ups come faster as the fight goes on
   'scholars-tome': [{ watch: weaponOn('xp'), every: 3, max: 6, stat: { xpGainChance: 1 }, now: { do: 'xp', amount: 2 }, look: 'bonus XP gains', gives: '+2 XP at once and +1% XP chance' }],
   // Coins teach and dividends compound
-  'wisdom-chain': [{ watch: weaponOn('coin'), max: 8, stat: { xpGainChance: 2, strike: 0.5 }, look: 'bonus coin', gives: '+2% bonus XP chance and Dividend hits +0.5 harder' }],
+  'wisdom-chain': [{ watch: weaponOn('coin'), max: 6, stat: { xpGainChance: 2, strike: 0.35 }, look: 'bonus coin', gives: '+2% bonus XP chance and Dividend hits +0.35 harder' }],
 
   // ── Time ──────────────────────────────────────────────────────────────────
   'chrono-shard': [
@@ -254,7 +254,7 @@ export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
   'fog-lantern': [
     { watch: trickOn('fog'), max: 6, proc: { on: trickOn('fog'), pct: 8, effect: { do: 'hint', amount: 1 } }, look: 'fog that lifts', gives: '+8% chance that a lifting fog hands you a hint' },
   ],
-  'cursed-idol': [{ watch: trickOn('curse'), max: 2, mods: { curseMultiplierBonus: 0.5 }, look: '×2 card you match', gives: 'later ones multiply by 0.5 more (up to ×3)' }],
+  'cursed-idol': [{ watch: trickOn('curse'), max: 2, mods: { curseMultiplierBonus: 0.25 }, look: '×2 card you match', gives: 'later ones multiply by 0.25 more (up to ×2.5)' }],
   // Broken chains stay on the floor
   'chain-gang': [
     { watch: trickOn('chain'), max: 4, proc: { on: trickOn('chain'), pct: 10, effect: { do: 'link', count: 1 } }, look: 'chain you match together', gives: '+10% chance that a matched chain leaves a link on the board' },
@@ -327,8 +327,6 @@ export const growthStacks = (growth: GrowthState, weaponId: string): number =>
   (WEAPON_GROWTH[weaponId] ?? []).reduce((sum, _def, i) => sum + (growth[growthKey(weaponId, i)]?.stacks ?? 0), 0);
 
 // ─── Wording ────────────────────────────────────────────────────────────────
-
-const tidy = (n: number) => String(Math.round(n * 10) / 10);
 
 /** "Every 3 Sets made at full hearts: overheal hits +3 harder (no limit)." */
 export const growthText = (def: GrowthDef): string => {

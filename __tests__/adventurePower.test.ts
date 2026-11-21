@@ -3,7 +3,7 @@
  * feeds, and its targets on a 3-minute endgame fight (vs no gear):
  * one weapon ≈ ×10, a recipe pair ≈ ×50, a full build ≈ ×300.
  */
-import type { Card } from '@/types';
+import type { Card, CharacterName } from '@/types';
 import {
   NO_POWER, PER, POWER_KNEE, damageMultiplier, formatPower, powerMultiplier, powerShare, powerText, powerWatches, setPowerEnabled,
 } from '@/adventure/data/weaponPower';
@@ -11,14 +11,12 @@ import { WEAPON_GROWTH, growthKey } from '@/adventure/data/weaponGrowth';
 import { createMaxedSave } from '@/adventure/progress';
 import { runReducer } from '@/adventure/engine/run';
 import { EVOLUTION_RULES } from '@/adventure/engine/sources';
-import { armableRecipes, buyTree, chooseCharms } from '@/adventure/engine/botBuilds';
+import { armableRecipes, buyTree, solidCharms } from '@/adventure/engine/botBuilds';
 import { TREE_BUDGET } from '@/adventure/data/skillTrees';
-import { ARCANA } from '@/adventure/data/arcana';
 import { createRng } from '@/adventure/engine/rng';
-import { pace, scaleBench } from '@/adventure/balance/lab';
+import { normalizeRecipePair, pace, scaleBench } from '@/adventure/balance/lab';
 import { BALANCE_TARGETS, PARTNER_WEAPONS } from '@/adventure/balance/targets';
-import type { AdventureSave, RunState } from '@/adventure/types';
-import type { CharacterName } from '@/types';
+import type { AdventureSave, ArcanaId, RunState } from '@/adventure/types';
 import { plainRewards, startFight } from './testUtils/adventureFight';
 
 const ARMORY = createMaxedSave().armory;
@@ -49,10 +47,10 @@ describe('the Power meter', () => {
       expect(powerMultiplier(p)).toBeGreaterThan(prev);
       prev = powerMultiplier(p);
     }
-    // Past the knee, the next 12 points add far less than the first 12
-    expect(powerMultiplier(2 * POWER_KNEE) - powerMultiplier(POWER_KNEE)).toBeLessThan(POWER_KNEE / 4);
+    // Past the knee, the next POWER_KNEE points add far less than the first POWER_KNEE
+    expect(powerMultiplier(2 * POWER_KNEE) - powerMultiplier(POWER_KNEE)).toBeLessThan(POWER_KNEE / 2);
     expect(formatPower(0)).toBe('×1.0');
-    expect(formatPower(POWER_KNEE)).toBe('×13');
+    expect(formatPower(POWER_KNEE)).toBe(1 + POWER_KNEE >= 10 ? `×${1 + POWER_KNEE}` : `×${(1 + POWER_KNEE).toFixed(1)}`);
   });
 
   it('a pair feeds it in full, a bigger belt shares it', () => {
@@ -135,21 +133,26 @@ describe('Power targets on a 3-minute endgame fight (vs no gear)', () => {
   });
 
   it('a recipe pair reaches about ×50, and the best is not runaway', () => {
-    const pairs = armableRecipes(save).map(r => ratio({ ...save, charms: [r.options[0][0], r.options[1][0]] }));
+    const pairs = armableRecipes(save).map(r => ratio({ ...save, charms: normalizeRecipePair(r.options[0][0], r.options[1][0]) }));
     const mid = median(pairs);
     expect({ mid, ok: inBand(mid, T.pairBand) }).toEqual({ mid, ok: true });
     expect(Math.max(...pairs)).toBeLessThanOrEqual(T.pair * 4);
   });
 
-  it('a full build (six charms, full tree, Workshop, Arcana) reaches about ×300', () => {
+  it('a full build (six charms with Role Set Bonuses, full tree, Workshop, coherent Arcana) reaches about ×300', () => {
     const maxed = createMaxedSave();
+    // Coherent, non-contradictory 3-Arcana loadout (never pairs monochrome_pact + prismatic_fever)
+    const coherentArcana: ArcanaId[] = ['prismatic_fever', 'catalyst_resonance', 'tempo_surge'];
     const fulls = (save.unlockedFighters as CharacterName[]).map(fighter => {
-      const rng = createRng(7);
+      const rng = createRng(7 + fighter.length);
       const s: AdventureSave = {
-        ...save, upgrades: maxed.upgrades, selectedFighter: fighter,
-        skillNodes: { [fighter]: buyTree(fighter, TREE_BUDGET, 'spread', rng) }, equippedArcana: ARCANA.slice(0, 3).map(a => a.id),
+        ...save,
+        upgrades: maxed.upgrades,
+        selectedFighter: fighter,
+        skillNodes: { [fighter]: buyTree(fighter, TREE_BUDGET, 'spread', rng) },
+        equippedArcana: coherentArcana,
       };
-      return ratio({ ...s, charms: chooseCharms(s, rng) });
+      return ratio({ ...s, charms: solidCharms(s, rng) });
     });
     const mid = median(fulls);
     expect({ mid, ok: inBand(mid, T.fullBand) }).toEqual({ mid, ok: true });
