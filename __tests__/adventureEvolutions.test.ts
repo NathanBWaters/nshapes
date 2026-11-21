@@ -5,6 +5,7 @@
 import { EVOLUTION_RECIPES, SIGNATURE_RECIPES } from '@/adventure/data/evolutions';
 import { PAIR_RECIPES } from '@/adventure/data/evolutionPairs';
 import { TRICK_WEAPON_IDS } from '@/adventure/data/adventureWeapons';
+import { findAdventureWeapon } from '@/adventure/data/armory';
 import { createMaxedSave } from '@/adventure/progress';
 import { runReducer } from '@/adventure/engine/run';
 import { eventsOf, findSet, miss, playSet, startFight, testLevel, tick } from './testUtils/adventureFight';
@@ -266,8 +267,8 @@ describe('Wave 2 evolution overhaul invariants & live behavior', () => {
     const s = startActive('gold-detector');
     expect(s.board.filter(c => c.magnet).length).toBeGreaterThanOrEqual(2);
     const chest = s.board.find(c => c.chest !== undefined);
-    // Base Lv1 chest starts at 8; start feeds +6 (plus +2 growth from catalyst Set) -> >= 14
-    expect(chest?.chest ?? 0).toBeGreaterThanOrEqual(14);
+    const baseChestStart = findAdventureWeapon('greedy-chest')?.modifiers?.chestStart ?? 3;
+    expect(chest?.chest ?? 0).toBeGreaterThanOrEqual(baseChestStart + 6);
   });
 
   it('sticker-swap and trading-cards wire Trick payoffs into stampAlbum', () => {
@@ -292,9 +293,10 @@ describe('Wave 2 evolution overhaul invariants & live behavior', () => {
     let s = startActive('standing-ovation');
     expect(s.doubleNext).toBeGreaterThanOrEqual(1);
     const hpBeforeEnd = s.foeHp;
-    s = tick(s, 32000, 1000);
+    const duration = s.activeEvolutions[0]?.remainingMs ?? 35000;
+    s = tick(s, duration + 2000, 1000);
     expect(s.activeEvolutions).toEqual([]);
-    // Encore Mask hit (+10) + finale blast & +10 + replayed evolutionStart (+8)
+    // Encore Mask hit (+10 or +14) + finale blast & +10 + replayed evolutionStart (+8)
     expect(hpBeforeEnd - s.foeHp).toBeGreaterThanOrEqual(28);
   });
 
