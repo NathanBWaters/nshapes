@@ -80,6 +80,9 @@ import CharacterUnlockScreen from './CharacterUnlockScreen';
 import MainMenu from './MainMenu';
 import AdventureMode from '@/adventure/AdventureMode';
 import SpireMode from '@/spire/components/SpireMode';
+import PrismMode from '@/prism/components/PrismMode';
+import { resetPrismStorage } from '@/prism/save';
+import type { StarterDeckId } from '@/prism/types';
 import DifficultySelection from './DifficultySelection';
 import LevelUpModal from './LevelUpModal';
 import OptionsMenu from './OptionsMenu';
@@ -96,6 +99,12 @@ interface GameProps {
   forcedEnemy?: string;
   /** Disable round timer for deterministic testing */
   disableTimeout?: boolean;
+  /** Optional deep-link mode (e.g. `?mode=prism&seed=...` or `?mode=prism&daily=1`) */
+  initialMode?: 'prism';
+  initialSeed?: string;
+  initialDaily?: boolean;
+  initialDailyDate?: string;
+  initialDeckId?: StarterDeckId;
 }
 
 const Game: React.FC<GameProps> = ({
@@ -103,15 +112,31 @@ const Game: React.FC<GameProps> = ({
   autoPlayer = false,
   forcedEnemy,
   disableTimeout = false,
+  initialMode,
+  initialSeed,
+  initialDaily,
+  initialDailyDate,
+  initialDeckId,
 }) => {
   const [selectedCharacter, setSelectedCharacter] = useState<string | null>(devMode ? 'Orange Tabby' : null);
   const [gameMode, setGameMode] = useState<GameMode>('adventure');
   const [adventureDifficulty, setAdventureDifficulty] = useState<AdventureDifficulty>('medium');
   const [showOptionsModal, setShowOptionsModal] = useState(false);
+  const [prismLaunchParams, setPrismLaunchParams] = useState<{
+    seed?: string;
+    daily?: boolean;
+    dailyDate?: string;
+    deckId?: StarterDeckId;
+  } | null>(() =>
+    initialMode === 'prism'
+      ? { seed: initialSeed, daily: initialDaily, dailyDate: initialDailyDate, deckId: initialDeckId }
+      : null
+  );
   const [gamePhase, setGamePhase] = useState<
     'main_menu' |
     'adventure' |         // Map-based adventure (src/adventure)
-    'spire' |             // Starfall Spire roguelike climb (src/spire)
+    'spire' |             // Starfall Summit roguelike climb (src/spire)
+    'prism' |             // Prism Deck turn-based SET-Balatro (src/prism)
     'difficulty_select' |
     'tutorial' |
     'round' |
@@ -123,7 +148,7 @@ const Game: React.FC<GameProps> = ({
     'enemy_select' |
     'game_over' |
     'free_play'
-  >(devMode ? 'round' : 'main_menu');
+  >(devMode ? 'round' : initialMode === 'prism' ? 'prism' : 'main_menu');
 
   // Position of the current round within the level (1-5; keeps counting in endless mode)
   const [roundInLevel, setRoundInLevel] = useState<number>(1);
@@ -2018,6 +2043,10 @@ const Game: React.FC<GameProps> = ({
               key={`menu-${resetRevision}`}
               onSelectAdventure={() => setGamePhase('adventure')}
               onSelectSpire={() => setGamePhase('spire')}
+              onSelectPrism={() => {
+                setPrismLaunchParams(null);
+                setGamePhase('prism');
+              }}
               onSelectFreeplay={() => setGamePhase('difficulty_select')}
               onSelectTutorial={handleTutorialStart}
               onSelectOptions={() => setShowOptionsModal(true)}
@@ -2028,6 +2057,7 @@ const Game: React.FC<GameProps> = ({
               onClose={() => setShowOptionsModal(false)}
               onResetGame={() => {
                 resetTutorial();
+                resetPrismStorage();
                 setSelectedCharacter(null);
                 setRoundInLevel(1);
                 setUnlockedCharacter(null);
@@ -2047,6 +2077,21 @@ const Game: React.FC<GameProps> = ({
 
       case 'spire':
         return <SpireMode key={`spire-${resetRevision}`} onExit={exitToMenu} autoPlayer={autoPlayerEnabled} />;
+
+      case 'prism':
+        return (
+          <PrismMode
+            key={`prism-${resetRevision}-${prismLaunchParams?.seed ?? ''}-${prismLaunchParams?.daily ? '1' : '0'}`}
+            onExit={() => {
+              setPrismLaunchParams(null);
+              exitToMenu();
+            }}
+            initialSeed={prismLaunchParams?.seed}
+            initialDaily={prismLaunchParams?.daily}
+            initialDailyDate={prismLaunchParams?.dailyDate}
+            initialDeckId={prismLaunchParams?.deckId}
+          />
+        );
 
       case 'difficulty_select':
         return (

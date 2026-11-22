@@ -8,6 +8,7 @@ import { View, StyleSheet } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { useScreenTransition, type ScreenDirection } from '@/components/ScreenTransition';
 import { COLORS } from '@/utils/colors';
+import { MusicStorage, SoundStorage } from '@/utils/storage';
 import { music, setMusicEnabled, setSfxOverride, sfx } from '@/audio';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import type { AdventureSave, FeatureDestination, LevelDef, MechanicDef, RunState } from './types';
@@ -168,12 +169,47 @@ const AdventureMode: React.FC<Props> = ({
     });
   }, []);
 
-  // One switch for the whole score: in Adventure the effects are part of the music
-  // (src/audio/band.ts), so the map's sound button turns both on and off.
+  // Decoupled audio controls: Music (MusicStorage / Camp switch) and SFX (SoundStorage)
+  // operate independently so players can mute background music while keeping crisp SFX.
+  const [musicPref, setMusicPref] = useState<boolean>(() => {
+    if (typeof MusicStorage?.hasValue === 'function' && MusicStorage.hasValue()) {
+      return MusicStorage.get();
+    }
+    const stored = typeof MusicStorage?.get === 'function' ? MusicStorage.get() : true;
+    return save.musicOn && stored;
+  });
+  const [sfxPref, setSfxPref] = useState<boolean>(() =>
+    typeof SoundStorage?.get === 'function' ? SoundStorage.get() : save.musicOn
+  );
+  const prevSaveMusicOn = useRef(save.musicOn);
+
   useEffect(() => {
-    setMusicEnabled(save.musicOn);
-    setSfxOverride(save.musicOn);
+    const unsubMusic = typeof MusicStorage?.subscribe === 'function' ? MusicStorage.subscribe(setMusicPref) : undefined;
+    const unsubSfx = typeof SoundStorage?.subscribe === 'function' ? SoundStorage.subscribe(setSfxPref) : undefined;
+    return () => {
+      unsubMusic?.();
+      unsubSfx?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (save.musicOn !== prevSaveMusicOn.current) {
+      prevSaveMusicOn.current = save.musicOn;
+      setMusicPref(save.musicOn);
+      if (typeof MusicStorage?.set === 'function') {
+        MusicStorage.set(save.musicOn);
+      }
+    }
   }, [save.musicOn]);
+
+  useEffect(() => {
+    setMusicEnabled(musicPref);
+  }, [musicPref]);
+
+  useEffect(() => {
+    setSfxOverride(sfxPref);
+  }, [sfxPref]);
+
   useEffect(() => () => setSfxOverride(null), []);
 
   // Map / camp music

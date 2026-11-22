@@ -5,7 +5,7 @@
  * `FightReplay.tsx`, and shared `WeaponOfferRow` / `SkillNodeRow` / `ArcanaCard`
  * so drafts look and behave identically to Adventure Mode!
  */
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import Icon from '@/components/Icon';
@@ -75,6 +75,7 @@ const SpireRewardScreen: React.FC<Props> = ({
   const [inspectIdx, setInspectIdx] = useState<number>(0);
   const [swapIdx, setSwapIdx] = useState<number | null>(null);
   const [replayOpen, setReplayOpen] = useState(false);
+  const [confirmSkip, setConfirmSkip] = useState(false);
   const beltFull = run.weapons.length >= MAX_SUMMIT_WEAPONS;
 
   const damageStory = useMemo(
@@ -93,10 +94,28 @@ const SpireRewardScreen: React.FC<Props> = ({
 
   const availSkills = reward.skillOptions.filter(id => !run.skillNodes.includes(id));
   const availArcana = reward.arcanaOptions.filter(id => !run.arcana.includes(id));
-  const allDone =
-    reward.weaponClaimed &&
-    (reward.arcanaClaimed || availArcana.length === 0) &&
-    (reward.skillClaimed || availSkills.length === 0);
+  const unclaimedWeapon = !reward.weaponClaimed && reward.weaponOptions.length > 0;
+  const unclaimedSkill = !reward.skillClaimed && availSkills.length > 0;
+  const unclaimedArcana = !reward.arcanaClaimed && availArcana.length > 0;
+  const allDone = !unclaimedWeapon && !unclaimedSkill && !unclaimedArcana;
+
+  useEffect(() => {
+    setConfirmSkip(false);
+  }, [allDone, reward.weaponClaimed, reward.skillClaimed, reward.arcanaClaimed]);
+
+  useEffect(() => {
+    if (!confirmSkip) return;
+    const timer = setTimeout(() => setConfirmSkip(false), 4000);
+    return () => clearTimeout(timer);
+  }, [confirmSkip]);
+
+  const unclaimedSummary = [
+    unclaimedWeapon ? 'Weapon' : null,
+    unclaimedSkill ? 'Skill Node' : null,
+    unclaimedArcana ? 'Arcana' : null,
+  ]
+    .filter(Boolean)
+    .join(', ');
 
   return (
     <View style={st.root} testID="spire-reward-screen">
@@ -331,20 +350,53 @@ const SpireRewardScreen: React.FC<Props> = ({
           />
         )}
 
-        <Btn
-          testID="spire-reward-continue"
-          label={
-            reward.isActBoss
-              ? run.act === 3 && !run.endless
-                ? 'Claim Summit Victory!'
-                : `Ascend to Act ${run.act + 1} (+1 Max ♥)`
-              : allDone
-                ? 'Continue Climb'
-                : 'Proceed to Map'
-          }
-          icon={reward.isActBoss ? 'lorc/crown' : 'lorc/mountaintop'}
-          onPress={() => { sfx('confirm'); onContinue(); }}
-        />
+        {confirmSkip && !allDone ? (
+          <View style={st.confirmSkipBox} testID="spire-reward-confirm-skip">
+            <Text style={st.confirmSkipHint}>
+              Unclaimed reward{unclaimedSummary.includes(',') ? 's' : ''} remaining: {unclaimedSummary}
+            </Text>
+            <View style={st.confirmSkipRow}>
+              <Btn
+                testID="spire-reward-cancel-skip"
+                small
+                variant="secondary"
+                label="Keep Drafting"
+                onPress={() => { sfx('click'); setConfirmSkip(false); }}
+              />
+              <Btn
+                testID="spire-reward-continue"
+                small
+                variant="dark"
+                label="Skip Unclaimed Rewards?"
+                onPress={() => { sfx('confirm'); setConfirmSkip(false); onContinue(); }}
+                style={st.confirmSkipBtn}
+              />
+            </View>
+          </View>
+        ) : (
+          <Btn
+            testID="spire-reward-continue"
+            label={
+              reward.isActBoss
+                ? run.act === 3 && !run.endless
+                  ? 'Claim Summit Victory!'
+                  : `Ascend to Act ${run.act + 1} (+1 Max ♥)`
+                : allDone
+                  ? 'Continue Climb'
+                  : 'Proceed to Map'
+            }
+            icon={reward.isActBoss ? 'lorc/crown' : 'lorc/mountaintop'}
+            onPress={() => {
+              if (!allDone) {
+                sfx('click');
+                setConfirmSkip(true);
+                return;
+              }
+              sfx('confirm');
+              onContinue();
+            }}
+          />
+        )}
       </ScrollView>
 
       {lastFight && (
@@ -378,6 +430,10 @@ const st = StyleSheet.create({
   evoCallouts: { gap: 4, paddingLeft: 4 },
   clashBox: { backgroundColor: '#FEF2F2', borderRadius: 8, borderWidth: 1.5, borderColor: '#B91C1C', paddingHorizontal: 9, paddingVertical: 6, gap: 2 },
   clashText: { fontSize: 11.5, fontWeight: '800', color: '#991B1B', lineHeight: 16 },
+  confirmSkipBox: { backgroundColor: '#FFFBEB', borderRadius: 12, borderWidth: 2, borderColor: '#B45309', padding: 10, gap: 8 },
+  confirmSkipHint: { fontSize: 12, fontWeight: '800', color: '#92400E', textAlign: 'center' },
+  confirmSkipRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  confirmSkipBtn: { flex: 1, backgroundColor: '#B91C1C', borderColor: '#7F1D1D' },
 });
 
 export default SpireRewardScreen;

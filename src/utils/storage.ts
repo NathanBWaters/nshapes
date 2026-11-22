@@ -13,6 +13,8 @@ const STORAGE_KEYS = {
   ENDLESS_HIGH_SCORES: 'endless_high_scores',
   ADVENTURE_HIGH_ROUNDS: 'adventure_high_rounds',
   SOUND_ENABLED: 'sound_enabled',
+  MUSIC_ENABLED: 'music_enabled',
+  COLORBLIND_MODE: 'colorblind_mode',
   UNLOCKED_CHARACTERS: 'unlocked_characters',
   SAVED_ADVENTURE_GAME: 'saved_adventure_game',
   // New level-based system
@@ -119,7 +121,22 @@ export const AdventureHighRoundStorage = {
   },
 };
 
-// Settings storage helpers
+type BoolListener = (enabled: boolean) => void;
+const soundListeners = new Set<BoolListener>();
+const musicListeners = new Set<BoolListener>();
+const colorblindListeners = new Set<BoolListener>();
+
+const notifyListeners = (listeners: Set<BoolListener>, value: boolean) => {
+  listeners.forEach(fn => {
+    try {
+      fn(value);
+    } catch {
+      // ignore subscriber errors
+    }
+  });
+};
+
+// Settings storage helpers (legacy Sound API kept 100% backwards-compatible)
 export const SettingsStorage = {
   getSoundEnabled: (): boolean => {
     // Default off on native (expo-av sample playback is slow on iOS);
@@ -129,6 +146,69 @@ export const SettingsStorage = {
 
   setSoundEnabled: (enabled: boolean): void => {
     storage.set(STORAGE_KEYS.SOUND_ENABLED, enabled);
+    notifyListeners(soundListeners, enabled);
+    // If Music hasn't been configured independently yet, notify music listeners too
+    if (storage.getBoolean(STORAGE_KEYS.MUSIC_ENABLED) === undefined) {
+      notifyListeners(musicListeners, enabled);
+    }
+  },
+
+  getMusicEnabled: (): boolean => MusicStorage.get(),
+  setMusicEnabled: (enabled: boolean): void => MusicStorage.set(enabled),
+
+  getColorblindMode: (): boolean => ColorblindStorage.get(),
+  setColorblindMode: (enabled: boolean): void => ColorblindStorage.set(enabled),
+};
+
+// SFX preference helper (wraps legacy SettingsStorage.SOUND_ENABLED)
+export const SoundStorage = {
+  get: (): boolean => SettingsStorage.getSoundEnabled(),
+
+  set: (enabled: boolean): void => {
+    SettingsStorage.setSoundEnabled(enabled);
+  },
+
+  subscribe: (listener: BoolListener): (() => void) => {
+    soundListeners.add(listener);
+    return () => {
+      soundListeners.delete(listener);
+    };
+  },
+};
+
+// Music preference helper (independent from SFX; defaults to SoundStorage value if unset)
+export const MusicStorage = {
+  hasValue: (): boolean => storage.getBoolean(STORAGE_KEYS.MUSIC_ENABLED) !== undefined,
+
+  get: (): boolean => storage.getBoolean(STORAGE_KEYS.MUSIC_ENABLED) ?? SoundStorage.get(),
+
+  set: (enabled: boolean): void => {
+    storage.set(STORAGE_KEYS.MUSIC_ENABLED, enabled);
+    notifyListeners(musicListeners, enabled);
+  },
+
+  subscribe: (listener: BoolListener): (() => void) => {
+    musicListeners.add(listener);
+    return () => {
+      musicListeners.delete(listener);
+    };
+  },
+};
+
+// Colorblind Mode preference helper (CVD-safe Okabe-Ito card palette + R/B/P corner badges)
+export const ColorblindStorage = {
+  get: (): boolean => storage.getBoolean(STORAGE_KEYS.COLORBLIND_MODE) ?? false,
+
+  set: (enabled: boolean): void => {
+    storage.set(STORAGE_KEYS.COLORBLIND_MODE, enabled);
+    notifyListeners(colorblindListeners, enabled);
+  },
+
+  subscribe: (listener: BoolListener): (() => void) => {
+    colorblindListeners.add(listener);
+    return () => {
+      colorblindListeners.delete(listener);
+    };
   },
 };
 
@@ -388,7 +468,7 @@ export const LevelProgressStorage = {
   },
 };
 
-/** Wipe all saved game runs, wins, high scores, character unlocks & level progress (preserves sound setting). */
+/** Wipe all saved game runs, wins, high scores, character unlocks & level progress (preserves sound, music & colorblind settings). */
 export const resetAllClassicStorage = (): void => {
   const keysToClear = [
     STORAGE_KEYS.CHARACTER_WINS,

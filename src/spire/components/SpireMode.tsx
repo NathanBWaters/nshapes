@@ -12,7 +12,9 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { CharacterName } from '@/types';
-import { music, setMusicEnabled, setSfxOverride } from '@/audio';
+import { music, setMusicEnabled, setSfxOverride, sfx } from '@/audio';
+import { setAudioEnabled } from '@/utils/sounds';
+import { MusicStorage, SoundStorage } from '@/utils/storage';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { loadAdventureSave, writeAdventureSave } from '@/adventure/save';
 import { battleRecord, wasFought } from '@/adventure/history';
@@ -110,7 +112,12 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
   const reducedMotion = useReducedMotion();
   const [prefs, setPrefs] = useState(() => {
     const adv = loadAdventureSave();
-    return { musicOn: adv.musicOn, effectsOn: adv.effectsOn };
+    const musicOn =
+      typeof MusicStorage?.hasValue === 'function' && MusicStorage.hasValue()
+        ? MusicStorage.get()
+        : adv.musicOn && (typeof MusicStorage?.get === 'function' ? MusicStorage.get() : true);
+    const sfxOn = typeof SoundStorage?.get === 'function' ? SoundStorage.get() : adv.musicOn;
+    return { musicOn, sfxOn, effectsOn: adv.effectsOn };
   });
   const [meta, setMeta] = useState<SpireMeta>(loadSpireMeta);
   const [savedRun, setSavedRun] = useState<SpireRun | null>(() => initialRun ?? loadSpireRun());
@@ -131,9 +138,28 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
   }, []);
 
   useEffect(() => {
+    const unsubMusic =
+      typeof MusicStorage?.subscribe === 'function'
+        ? MusicStorage.subscribe(musicOn => setPrefs(prev => (prev.musicOn === musicOn ? prev : { ...prev, musicOn })))
+        : undefined;
+    const unsubSfx =
+      typeof SoundStorage?.subscribe === 'function'
+        ? SoundStorage.subscribe(sfxOn => setPrefs(prev => (prev.sfxOn === sfxOn ? prev : { ...prev, sfxOn })))
+        : undefined;
+    return () => {
+      unsubMusic?.();
+      unsubSfx?.();
+    };
+  }, []);
+
+  useEffect(() => {
     setMusicEnabled(prefs.musicOn);
-    setSfxOverride(prefs.musicOn);
   }, [prefs.musicOn]);
+
+  useEffect(() => {
+    setSfxOverride(prefs.sfxOn);
+  }, [prefs.sfxOn]);
+
   useEffect(() => () => {
     commitSpireFight('spire_unmount');
     setSfxOverride(null);
@@ -146,6 +172,24 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
       music.play('map');
     }
   }, [inSetup, run?.phase]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleToggleAudio = useCallback(() => {
+    // Cycle: Music+SFX -> SFX only (music muted) -> All muted -> Music+SFX
+    const nextMusic = !prefs.musicOn && !prefs.sfxOn;
+    const nextSfx = prefs.musicOn && prefs.sfxOn ? true : !prefs.musicOn && !prefs.sfxOn;
+    setPrefs(prev => ({ ...prev, musicOn: nextMusic, sfxOn: nextSfx }));
+    setAudioEnabled(nextSfx);
+    if (typeof MusicStorage?.set === 'function') MusicStorage.set(nextMusic);
+    if (typeof SoundStorage?.set === 'function') SoundStorage.set(nextSfx);
+    const adv = loadAdventureSave();
+    if (adv.musicOn !== nextMusic) {
+      writeAdventureSave({ ...adv, musicOn: nextMusic });
+    }
+    if (nextSfx) {
+      setSfxOverride(true);
+      sfx('click');
+    }
+  }, [prefs.musicOn, prefs.sfxOn]);
 
   const handleToggleEffects = useCallback(() => {
     setPrefs(prev => {
@@ -382,6 +426,9 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
     <View style={[st.root, { paddingTop: insets.top }]}>
       <SpireHeader
         run={run}
+        musicOn={prefs.musicOn}
+        sfxOn={prefs.sfxOn}
+        onToggleAudio={handleToggleAudio}
         onOpenBuild={() => setBuildOpen(true)}
         onExitToMenu={() => {
           commitSpireFight('spire_header_exit');

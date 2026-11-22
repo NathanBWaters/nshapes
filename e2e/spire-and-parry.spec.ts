@@ -222,8 +222,13 @@ test.describe('Set-Parrying, Multiplier Ignition, Kill-Cam & Starfall Summit E2E
     await assertAllTextVisible(page, 'Summit Post-Battle Rewards (375x667)');
     await maybeShot(page, '09-spire-rewards-375');
 
-    // 6. Claim a weapon & return to Map on Row 1!
+    // 6. Claim a weapon, verify 2-tap guard while Skill Node is unclaimed, claim Skill Node & return to Map on Row 1!
     await page.getByTestId('spire-draft-pick-0').click();
+    if (await page.getByTestId('spire-skill-draft').isVisible()) {
+      await page.getByTestId('spire-reward-continue').click();
+      await expect(page.getByTestId('spire-reward-confirm-skip')).toBeVisible();
+      await page.getByTestId('spire-skill-pick-0').click();
+    }
     await page.getByTestId('spire-reward-continue').click();
     await expect(page.getByTestId('spire-map')).toBeVisible({ timeout: 10000 });
     await page.waitForTimeout(350);

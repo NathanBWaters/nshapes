@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Platform, ScrollView } from 'react-native';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { useSoundSetting } from '@/hooks/useSoundSetting';
+import { setMusicEnabled } from '@/audio';
 import { analyticsOptedOut, playerCode, setAnalyticsEnabled } from '@/analytics/posthog';
 import { resetAdventureSave } from '@/adventure/save';
 import { resetSpireStorage } from '@/spire/save';
-import { resetAllClassicStorage } from '@/utils/storage';
+import { ColorblindStorage, MusicStorage, resetAllClassicStorage } from '@/utils/storage';
 import { resetTutorialStorage } from '@/context/TutorialContext';
 import Icon from './Icon';
 
@@ -16,8 +17,10 @@ interface OptionsMenuProps {
 }
 
 const OptionsMenu: React.FC<OptionsMenuProps> = ({ visible, onClose, onResetGame }) => {
-  // Re-read each time the modal opens: the in-game menu may have changed it
-  const [soundEnabled, handleToggleSound] = useSoundSetting(visible);
+  // Re-read each time the modal opens: another screen may have changed settings meanwhile
+  const [soundEnabled, toggleSoundSetting] = useSoundSetting(visible);
+  const [musicEnabled, setMusicEnabledState] = useState(() => MusicStorage.get());
+  const [colorblindOn, setColorblindOn] = useState(() => ColorblindStorage.get());
   const [analyticsOn, setAnalyticsOn] = useState(() => !analyticsOptedOut());
   const [copiedCode, setCopiedCode] = useState(false);
   const [confirmingReset, setConfirmingReset] = useState(false);
@@ -25,12 +28,37 @@ const OptionsMenu: React.FC<OptionsMenuProps> = ({ visible, onClose, onResetGame
 
   useEffect(() => {
     if (visible) {
+      setMusicEnabledState(MusicStorage.get());
+      setColorblindOn(ColorblindStorage.get());
       setAnalyticsOn(!analyticsOptedOut());
       setCopiedCode(false);
       setConfirmingReset(false);
       setResetDone(false);
     }
   }, [visible]);
+
+  const handleToggleSfx = () => {
+    // Keep Music independent if it had not been explicitly set before toggling SFX
+    if (!MusicStorage.hasValue()) {
+      MusicStorage.set(musicEnabled);
+    }
+    toggleSoundSetting();
+  };
+
+  const handleToggleMusic = () => {
+    const next = !musicEnabled;
+    setMusicEnabledState(next);
+    MusicStorage.set(next);
+    if (typeof setMusicEnabled === 'function') {
+      setMusicEnabled(next);
+    }
+  };
+
+  const handleToggleColorblind = () => {
+    const next = !colorblindOn;
+    setColorblindOn(next);
+    ColorblindStorage.set(next);
+  };
 
   const handleConfirmReset = () => {
     resetAdventureSave();
@@ -80,18 +108,45 @@ const OptionsMenu: React.FC<OptionsMenuProps> = ({ visible, onClose, onResetGame
             </TouchableOpacity>
           </View>
 
-          <View style={styles.content}>
+          <ScrollView style={styles.scrollArea} contentContainerStyle={styles.content} bounces={false}>
             <View style={styles.settingRow}>
               <View style={styles.settingLabel}>
-                <Icon name="delapouite/sound-on" size={24} color={COLORS.slateCharcoal} />
+                <Icon name="delapouite/harp" size={22} color={COLORS.slateCharcoal} />
+                <Text style={styles.settingText}>Music</Text>
+              </View>
+              <TouchableOpacity
+                testID="options-music-toggle"
+                accessibilityRole="button"
+                accessibilityState={{ checked: musicEnabled }}
+                style={[
+                  styles.toggleButton,
+                  musicEnabled ? styles.toggleButtonOn : styles.toggleButtonOff,
+                ]}
+                onPress={handleToggleMusic}
+              >
+                <Text style={[
+                  styles.toggleButtonText,
+                  musicEnabled ? styles.toggleTextOn : styles.toggleTextOff,
+                ]}>
+                  {musicEnabled ? 'ON' : 'OFF'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.settingRow}>
+              <View style={styles.settingLabel}>
+                <Icon name="delapouite/sound-on" size={22} color={COLORS.slateCharcoal} />
                 <Text style={styles.settingText}>Sound Effects</Text>
               </View>
               <TouchableOpacity
+                testID="options-sfx-toggle"
+                accessibilityRole="button"
+                accessibilityState={{ checked: soundEnabled }}
                 style={[
                   styles.toggleButton,
                   soundEnabled ? styles.toggleButtonOn : styles.toggleButtonOff,
                 ]}
-                onPress={handleToggleSound}
+                onPress={handleToggleSfx}
               >
                 <Text style={[
                   styles.toggleButtonText,
@@ -104,7 +159,34 @@ const OptionsMenu: React.FC<OptionsMenuProps> = ({ visible, onClose, onResetGame
 
             <View style={styles.settingRow}>
               <View style={styles.settingLabel}>
-                <Icon name="delapouite/chart" size={24} color={COLORS.slateCharcoal} />
+                <Icon name="lorc/spectacles" size={22} color={COLORS.slateCharcoal} />
+                <View style={styles.labelCol}>
+                  <Text style={styles.settingText}>Colorblind Mode</Text>
+                  <Text style={styles.settingSubtext}>High-contrast palette & R/B/P labels</Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                testID="options-colorblind-toggle"
+                accessibilityRole="button"
+                accessibilityState={{ checked: colorblindOn }}
+                style={[
+                  styles.toggleButton,
+                  colorblindOn ? styles.toggleButtonOn : styles.toggleButtonOff,
+                ]}
+                onPress={handleToggleColorblind}
+              >
+                <Text style={[
+                  styles.toggleButtonText,
+                  colorblindOn ? styles.toggleTextOn : styles.toggleTextOff,
+                ]}>
+                  {colorblindOn ? 'ON' : 'OFF'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.settingRow}>
+              <View style={styles.settingLabel}>
+                <Icon name="delapouite/chart" size={22} color={COLORS.slateCharcoal} />
                 <Text style={styles.settingText}>Gameplay Analytics</Text>
               </View>
               <TouchableOpacity
@@ -127,7 +209,7 @@ const OptionsMenu: React.FC<OptionsMenuProps> = ({ visible, onClose, onResetGame
             </View>
 
             <View style={styles.settingRow}>
-              <View>
+              <View style={styles.labelCol}>
                 <Text style={styles.settingText}>Player ID</Text>
                 <Text style={styles.playerCodeText} testID="options-player-code">{code}</Text>
               </View>
@@ -144,8 +226,8 @@ const OptionsMenu: React.FC<OptionsMenuProps> = ({ visible, onClose, onResetGame
             <View style={[styles.settingRow, { borderBottomWidth: 0, flexDirection: 'column', alignItems: 'stretch', gap: 10 }]}>
               <View style={styles.resetHeaderRow}>
                 <View style={[styles.settingLabel, { flex: 1 }]}>
-                  <Icon name="lorc/recycle" size={24} color={COLORS.impactRed} />
-                  <View style={{ flex: 1 }}>
+                  <Icon name="lorc/recycle" size={22} color={COLORS.impactRed} />
+                  <View style={styles.labelCol}>
                     <Text style={styles.settingText}>Reset Game</Text>
                     <Text style={styles.resetSubtext}>Erase all stars, unlocks & saved progress</Text>
                   </View>
@@ -200,7 +282,7 @@ const OptionsMenu: React.FC<OptionsMenuProps> = ({ visible, onClose, onResetGame
                 </Text>
               )}
             </View>
-          </View>
+          </ScrollView>
 
           <TouchableOpacity style={styles.doneButton} onPress={onClose}>
             <Text style={styles.doneButtonText}>DONE</Text>
@@ -221,14 +303,18 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: COLORS.canvasWhite,
     borderRadius: RADIUS.module,
-    width: '85%',
+    width: '90%',
     maxWidth: 400,
+    maxHeight: '90%',
     overflow: 'hidden',
+  },
+  scrollArea: {
+    flexShrink: 1,
   },
   header: {
     backgroundColor: COLORS.logicTeal,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -239,9 +325,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   closeButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: 'rgba(0, 0, 0, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -252,25 +338,40 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   content: {
-    padding: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
   },
   settingRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
+    gap: 10,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.paperBeige,
   },
   settingLabel: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
+  },
+  labelCol: {
+    flex: 1,
+    minWidth: 0,
   },
   settingText: {
-    fontSize: 16,
+    flexShrink: 1,
+    fontSize: 15,
     fontWeight: '600',
     color: COLORS.deepOnyx,
+  },
+  settingSubtext: {
+    flexShrink: 1,
+    fontSize: 11,
+    color: COLORS.slateCharcoal,
+    marginTop: 1,
   },
   playerCodeText: {
     fontSize: 12,

@@ -5,7 +5,7 @@
  * Starter Kit & Passives preview), tune Ascension 0..20, inspect Career Stats,
  * or roll a fresh deterministic seed.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '@/components/Icon';
@@ -38,6 +38,17 @@ const SpireSetup: React.FC<Props> = ({ activeRun, meta, onStartNew, onResume, on
   const [fighter, setFighter] = useState<CharacterName>(activeRun?.fighter ?? 'Orange Tabby');
   const [ascension, setAscension] = useState<number>(Math.min(meta.highestAscensionUnlocked, MAX_ASCENSION));
   const [seed, setSeed] = useState<number>(() => randomSeed());
+  const [confirmAbandon, setConfirmAbandon] = useState(false);
+
+  useEffect(() => {
+    setConfirmAbandon(false);
+  }, [activeRun?.id]);
+
+  useEffect(() => {
+    if (!confirmAbandon) return;
+    const timer = setTimeout(() => setConfirmAbandon(false), 4000);
+    return () => clearTimeout(timer);
+  }, [confirmAbandon]);
 
   const kit = STARTER_KITS[fighter];
   const w1 = getArmoryWeapon(kit.starterWeapon, { [kit.starterWeapon]: { level: 2, tuning: {} } });
@@ -82,10 +93,40 @@ const SpireSetup: React.FC<Props> = ({ activeRun, meta, onStartNew, onResume, on
                 </Text>
               </View>
             </View>
-            <View style={st.resumeBtns}>
-              <Btn testID="spire-resume-run" label="Resume Climb" icon="lorc/mountaintop" onPress={onResume} style={{ flex: 1 }} />
-              <Btn testID="spire-abandon-run" small variant="secondary" label="Abandon" onPress={onAbandonActive} />
-            </View>
+            {confirmAbandon ? (
+              <View style={st.resumeBtns} testID="spire-abandon-confirm-row">
+                <Btn
+                  testID="spire-abandon-cancel"
+                  small
+                  variant="secondary"
+                  label="Cancel"
+                  onPress={() => { sfx('click'); setConfirmAbandon(false); }}
+                />
+                <Btn
+                  testID="spire-abandon-run"
+                  small
+                  variant="dark"
+                  label="Confirm Abandon?"
+                  onPress={() => {
+                    sfx('back');
+                    setConfirmAbandon(false);
+                    onAbandonActive();
+                  }}
+                  style={st.confirmDangerBtn}
+                />
+              </View>
+            ) : (
+              <View style={st.resumeBtns}>
+                <Btn testID="spire-resume-run" label="Resume Climb" icon="lorc/mountaintop" onPress={onResume} style={{ flex: 1 }} />
+                <Btn
+                  testID="spire-abandon-run"
+                  small
+                  variant="secondary"
+                  label="Abandon"
+                  onPress={() => { sfx('click'); setConfirmAbandon(true); }}
+                />
+              </View>
+            )}
           </PopIn>
         )}
 
@@ -225,6 +266,7 @@ const st = StyleSheet.create({
   resumeTitle: { fontSize: 15, fontWeight: '900', color: INK, marginTop: 2 },
   resumeSub: { fontSize: 12, fontWeight: '700', color: TONE.spent },
   resumeBtns: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  confirmDangerBtn: { flex: 1, backgroundColor: '#B91C1C', borderColor: '#7F1D1D' },
   section: { fontSize: 11, fontWeight: '900', letterSpacing: 1.8, color: COLORS.actionYellow, marginTop: 2 },
   fighterGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   fighterCard: { width: '31%', flexGrow: 1, minWidth: 92, alignItems: 'center', gap: 4, backgroundColor: '#3A2D21', borderRadius: 10, borderWidth: 2, borderColor: '#6B5A49', paddingVertical: 8, paddingHorizontal: 3 },

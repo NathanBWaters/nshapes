@@ -1,7 +1,7 @@
 {
   "name": "NShapes",
   "short_name": "NShapes",
-  "description": "A roguelike deckbuilding match-three puzzle game",
+  "description": "A pattern-matching roguelike — match trios, bend the rules, and build wild combos.",
   "start_url": "/nshapes/",
   "scope": "/nshapes/",
   "display": "standalone",

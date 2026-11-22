@@ -1,6 +1,8 @@
 import "../global.css";
 import { useEffect } from "react";
+import { Platform } from "react-native";
 import { Stack } from "expo-router";
+import Head from "expo-router/head";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { TutorialProvider } from "@/context/TutorialContext";
@@ -26,11 +28,17 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
+      {Platform.OS === "web" && (
+        <Head>
+          <title>NShapes — Pattern-Matching Roguelike</title>
+        </Head>
+      )}
       <KeywordProvider>
         <TutorialProvider>
           <Stack
             screenOptions={{
               headerShown: false,
+              title: "NShapes — Pattern-Matching Roguelike",
             }}
           />
           <StatusBar style="auto" />

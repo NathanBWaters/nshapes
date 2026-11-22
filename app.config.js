@@ -33,7 +33,7 @@ export default {
       icon: "./assets/icon.png",
       name: "NShapes",
       shortName: "NShapes",
-      description: "A roguelike deckbuilding match-three puzzle game",
+      description: "A pattern-matching roguelike — match trios, bend the rules, and build wild combos.",
       backgroundColor: "#ffffff",
       themeColor: "#000000",
       display: "standalone",

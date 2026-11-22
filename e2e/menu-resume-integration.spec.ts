@@ -30,6 +30,9 @@ test.describe('Main Menu ↔ Mode Resume Integration (Summit & Adventure)', () =
     await page.getByTestId('spire-enter-fight').click();
     await expect(page.getByTestId('spire-reward-screen')).toBeVisible({ timeout: 60000 });
     await page.getByTestId('spire-draft-pick-0').click();
+    if (await page.getByTestId('spire-skill-pick-0').isVisible()) {
+      await page.getByTestId('spire-skill-pick-0').click();
+    }
     await page.getByTestId('spire-reward-continue').click();
     await expect(page.getByTestId('spire-map')).toBeVisible({ timeout: 10000 });
 

@@ -16,11 +16,31 @@ interface Props {
   run: SpireRun;
   onOpenBuild: () => void;
   onExitToMenu?: () => void;
+  musicOn?: boolean;
+  sfxOn?: boolean;
+  onToggleAudio?: () => void;
 }
 
-const SpireHeader: React.FC<Props> = ({ run, onOpenBuild, onExitToMenu }) => {
+const SpireHeader: React.FC<Props> = ({
+  run,
+  onOpenBuild,
+  onExitToMenu,
+  musicOn = true,
+  sfxOn = true,
+  onToggleAudio,
+}) => {
   const armedCount = spireArmedRecipes(run).length;
   const actTag = run.endless ? `ENDLESS A${run.act}` : `ACT ${run.act}`;
+  const audioAllOff = !musicOn && !sfxOn;
+  const audioSfxOnly = !musicOn && sfxOn;
+  const audioMusicOnly = musicOn && !sfxOn;
+  const audioLabel = audioAllOff
+    ? 'Audio muted — tap to turn music and sound effects on'
+    : audioSfxOnly
+      ? 'Sound effects only, music muted — tap to mute all'
+      : audioMusicOnly
+        ? 'Music only, sound effects muted — tap to mute all'
+        : 'Music and sound effects on — tap to mute music';
 
   return (
     <View style={st.bar} testID="spire-header">
@@ -30,13 +50,14 @@ const SpireHeader: React.FC<Props> = ({ run, onOpenBuild, onExitToMenu }) => {
             testID="spire-back-menu"
             onPress={onExitToMenu}
             style={st.backBtn}
+            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
             accessibilityLabel="Save and return to menu"
             accessibilityRole="button"
           >
             <Icon name="ui/back-arrow" size={16} color={INK} noShadow />
           </TouchableOpacity>
         )}
-        <FighterAvatar character={run.fighter} size={30} health={run.hearts} maxHealth={run.maxHearts} animate={false} />
+        <FighterAvatar character={run.fighter} size={28} health={run.hearts} maxHealth={run.maxHearts} animate={false} />
         <View style={{ flexShrink: 1, minWidth: 0 }}>
           <View style={st.metaRow}>
             <Text style={st.actText} numberOfLines={1}>
@@ -63,11 +84,34 @@ const SpireHeader: React.FC<Props> = ({ run, onOpenBuild, onExitToMenu }) => {
       </View>
 
       <View style={st.right}>
-        <CoinPill coins={run.coins} />
+        <CoinPill coins={run.coins} compact />
+        {onToggleAudio && (
+          <TouchableOpacity
+            testID="spire-toggle-audio"
+            onPress={onToggleAudio}
+            style={[
+              st.audioBtn,
+              audioSfxOnly && st.audioBtnSfxOnly,
+              audioAllOff && st.audioBtnMuted,
+            ]}
+            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+            accessibilityLabel={audioLabel}
+            accessibilityRole="button"
+          >
+            <Icon
+              name={audioMusicOnly ? 'delapouite/harp' : 'delapouite/sound-on'}
+              size={16}
+              color={audioAllOff ? TONE.spent : audioSfxOnly ? TONE.upside : INK}
+              noShadow
+            />
+            {audioAllOff && <View pointerEvents="none" style={st.muteSlash} />}
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           testID="spire-open-build"
           onPress={onOpenBuild}
           style={st.buildBtn}
+          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           accessibilityLabel="Inspect Summit build"
           accessibilityRole="button"
         >
@@ -86,24 +130,24 @@ const st = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 6,
+    gap: 5,
     backgroundColor: COLORS.canvasWhite,
     borderBottomWidth: 2,
     borderBottomColor: INK,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
   },
   left: {
     flex: 1,
     minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
   },
   backBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     borderWidth: 2,
     borderColor: INK,
     backgroundColor: COLORS.paperBeige,
@@ -153,9 +197,37 @@ const st = StyleSheet.create({
   right: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
+  },
+  audioBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: INK,
+    backgroundColor: COLORS.paperBeige,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  audioBtnSfxOnly: {
+    backgroundColor: '#CCFBF1',
+    borderColor: TONE.upside,
+  },
+  audioBtnMuted: {
+    backgroundColor: '#E5E0D8',
+    borderColor: TONE.spent,
+  },
+  muteSlash: {
+    position: 'absolute',
+    width: 22,
+    height: 2.5,
+    borderRadius: 2,
+    backgroundColor: COLORS.impactRed,
+    transform: [{ rotate: '-45deg' }],
   },
   buildBtn: {
+    minHeight: 36,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -164,7 +236,7 @@ const st = StyleSheet.create({
     borderBottomWidth: 3,
     borderColor: INK,
     borderRadius: 999,
-    paddingHorizontal: 9,
+    paddingHorizontal: 8,
     paddingVertical: 4,
   },
   buildText: {

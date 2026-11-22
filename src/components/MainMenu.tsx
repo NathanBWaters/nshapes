@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet, Platform, Linking } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet, Platform, Linking } from 'react-native';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { triggerHaptic } from '@/utils/haptics';
 import { playSound } from '@/utils/sounds';
@@ -12,6 +12,7 @@ import { getFrontierLevel, totalStars } from '@/adventure/progress';
 import { levelFoe } from '@/adventure/data/foes';
 import { STORY_TAGLINE } from '@/adventure/data/story';
 import { loadSpireMeta, loadSpireRun } from '@/spire/save';
+import { loadPrismMeta, loadPrismRun } from '@/prism/save';
 import { version } from '../../package.json';
 
 const DISCORD_URL = 'https://discord.gg/JFkUmp54Sp';
@@ -19,6 +20,7 @@ const DISCORD_URL = 'https://discord.gg/JFkUmp54Sp';
 interface MainMenuProps {
   onSelectAdventure: () => void;
   onSelectSpire?: () => void;
+  onSelectPrism?: () => void;
   onSelectFreeplay: () => void;
   onSelectTutorial: () => void;
   onSelectOptions: () => void;
@@ -35,7 +37,7 @@ function MenuButton({
   accessibilityLabel,
 }: {
   onPress: () => void;
-  variant: 'resume' | 'adventure' | 'spire' | 'freeplay' | 'tutorial' | 'options';
+  variant: 'resume' | 'adventure' | 'spire' | 'prism' | 'freeplay' | 'tutorial' | 'options';
   icon: IconName;
   title: string;
   subtitle: string;
@@ -54,36 +56,56 @@ function MenuButton({
       iconBg: COLORS.paperBeige,
       iconColor: COLORS.slateCharcoal,
       textColor: COLORS.canvasWhite,
+      badgeBg: COLORS.deepOnyx,
+      badgeColor: COLORS.actionYellow,
     },
     adventure: {
       button: styles.adventureButton,
       iconBg: COLORS.paperBeige,
       iconColor: COLORS.slateCharcoal,
       textColor: COLORS.slateCharcoal,
+      badgeBg: COLORS.deepOnyx,
+      badgeColor: COLORS.actionYellow,
     },
     spire: {
       button: styles.spireButton,
       iconBg: COLORS.paperBeige,
       iconColor: COLORS.slateCharcoal,
       textColor: COLORS.canvasWhite,
+      badgeBg: COLORS.deepOnyx,
+      badgeColor: COLORS.actionYellow,
+    },
+    prism: {
+      button: styles.prismButton,
+      iconBg: '#195440',
+      iconColor: '#F2C94C',
+      textColor: COLORS.canvasWhite,
+      badgeBg: '#F2C94C',
+      badgeColor: '#0B1F19',
     },
     freeplay: {
       button: styles.freeplayButton,
       iconBg: COLORS.paperBeige,
       iconColor: COLORS.slateCharcoal,
       textColor: COLORS.slateCharcoal,
+      badgeBg: COLORS.deepOnyx,
+      badgeColor: COLORS.actionYellow,
     },
     tutorial: {
       button: styles.tutorialButton,
       iconBg: 'rgba(255,255,255,0.2)',
       iconColor: COLORS.canvasWhite,
       textColor: COLORS.canvasWhite,
+      badgeBg: COLORS.deepOnyx,
+      badgeColor: COLORS.actionYellow,
     },
     options: {
       button: styles.optionsButton,
       iconBg: COLORS.paperBeige,
       iconColor: COLORS.slateCharcoal,
       textColor: COLORS.slateCharcoal,
+      badgeBg: COLORS.deepOnyx,
+      badgeColor: COLORS.actionYellow,
     },
   };
 
@@ -94,25 +116,37 @@ function MenuButton({
       onPress={handlePress}
       accessibilityLabel={accessibilityLabel ?? title}
       testID={`menu-${variant}`}
-      style={[
+      style={({ pressed }) => [
         styles.menuButton,
         v.button,
+        pressed && styles.menuButtonPressed,
         Platform.OS === 'web' && { cursor: 'pointer' as any },
       ]}
     >
-      <View style={[styles.buttonIconContainer, { backgroundColor: v.iconBg }]}>
-        <Icon name={icon} size={32} color={v.iconColor} />
+      <View
+        style={[
+          styles.buttonIconContainer,
+          { backgroundColor: v.iconBg },
+          variant === 'prism' && styles.prismIconContainer,
+        ]}
+      >
+        <Icon name={icon} size={26} color={v.iconColor} />
       </View>
       <View style={styles.buttonTextContainer}>
         <View style={styles.buttonTitleRow}>
           <Text style={[styles.menuButtonText, { color: v.textColor }]}>{title}</Text>
           {badge && (
-            <View style={styles.menuBadge}>
-              <Text style={styles.menuBadgeText}>{badge}</Text>
+            <View style={[styles.menuBadge, { backgroundColor: v.badgeBg }]}>
+              <Text style={[styles.menuBadgeText, { color: v.badgeColor }]}>{badge}</Text>
             </View>
           )}
         </View>
-        <Text style={[styles.menuButtonSubtext, { color: v.textColor, opacity: variant === 'tutorial' ? 0.9 : 0.7 }]}>
+        <Text
+          style={[
+            styles.menuButtonSubtext,
+            { color: v.textColor, opacity: variant === 'tutorial' || variant === 'prism' ? 0.88 : 0.72 },
+          ]}
+        >
           {subtitle}
         </Text>
       </View>
@@ -123,6 +157,7 @@ function MenuButton({
 const MainMenu: React.FC<MainMenuProps> = ({
   onSelectAdventure,
   onSelectSpire,
+  onSelectPrism,
   onSelectFreeplay,
   onSelectTutorial,
   onSelectOptions,
@@ -176,18 +211,51 @@ const MainMenu: React.FC<MainMenuProps> = ({
     };
   }, []);
 
+  const prism = React.useMemo(() => {
+    try {
+      const active = loadPrismRun();
+      if (active && active.phase !== 'defeat' && active.phase !== 'victory') {
+        const anteLabel = active.isEndless ? `Endless Ante ${active.ante}` : `Ante ${active.ante}`;
+        return {
+          title: 'Prism Deck',
+          subtitle: `Resume ${anteLabel} · $${active.gold} · ${active.charms.length} Charm${active.charms.length === 1 ? '' : 's'}`,
+          badge: 'LIVE RUN',
+        };
+      }
+      const meta = loadPrismMeta();
+      if (meta.totalRuns > 0) {
+        return {
+          title: 'Prism Deck',
+          subtitle: `Turn-Based Combo Roguelike · Best A${meta.bestAnte} · ${meta.victories} Win${meta.victories === 1 ? '' : 's'}`,
+          badge: 'TURN-BASED',
+        };
+      }
+    } catch {
+      // ignore storage errors
+    }
+    return {
+      title: 'Prism Deck',
+      subtitle: 'Turn-Based Combo Roguelike · Daily & Endless',
+      badge: 'TURN-BASED',
+    };
+  }, []);
+
   const mascotCharacter = savedGame?.characterName
     ? CHARACTERS.find(c => c.name === savedGame.characterName) ?? CHARACTERS[0]
     : CHARACTERS[mascotIndex % CHARACTERS.length];
 
   return (
     <View style={styles.container}>
-      <View style={styles.content}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Title Section with Living Mascot */}
         <View style={styles.titleSection}>
           <FighterAvatar
             character={mascotCharacter}
-            size={68}
+            size={56}
             interactive
             onPet={(type) => {
               if (type === 'dizzy_joy' && !savedGame) {
@@ -197,7 +265,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
             testID="main-menu-mascot"
           />
           <Text style={styles.title}>NSHAPES</Text>
-          <Text style={styles.subtitle}>Roguelike Match-Three Puzzle</Text>
+          <Text style={styles.subtitle}>Pattern-Matching Roguelike</Text>
         </View>
 
         <View style={styles.menuSection}>
@@ -230,6 +298,17 @@ const MainMenu: React.FC<MainMenuProps> = ({
               accessibilityLabel={`Starfall Summit: ${spire.subtitle}`}
             />
           )}
+          {onSelectPrism && (
+            <MenuButton
+              onPress={onSelectPrism}
+              variant="prism"
+              icon="lorc/crystal-shine"
+              title={prism.title}
+              subtitle={prism.subtitle}
+              badge={prism.badge}
+              accessibilityLabel={`Prism Deck: ${prism.subtitle}`}
+            />
+          )}
           <MenuButton
             onPress={onSelectFreeplay}
             variant="freeplay"
@@ -247,13 +326,14 @@ const MainMenu: React.FC<MainMenuProps> = ({
               }}
               accessibilityLabel="Tutorial"
               testID="menu-tutorial"
-              style={[
+              style={({ pressed }) => [
                 styles.secondaryButton,
                 styles.tutorialButtonSmall,
+                pressed && styles.menuButtonPressed,
                 Platform.OS === 'web' && { cursor: 'pointer' as any },
               ]}
             >
-              <Icon name="lorc/open-book" size={20} color={COLORS.canvasWhite} />
+              <Icon name="lorc/open-book" size={18} color={COLORS.canvasWhite} />
               <Text style={styles.secondaryButtonText}>Tutorial</Text>
             </Pressable>
             <Pressable
@@ -264,41 +344,44 @@ const MainMenu: React.FC<MainMenuProps> = ({
               }}
               accessibilityLabel="Options"
               testID="menu-options"
-              style={[
+              style={({ pressed }) => [
                 styles.secondaryButton,
                 styles.optionsButtonSmall,
+                pressed && styles.menuButtonPressed,
                 Platform.OS === 'web' && { cursor: 'pointer' as any },
               ]}
             >
-              <Icon name="lorc/gear-hammer" size={20} color={COLORS.slateCharcoal} />
+              <Icon name="lorc/gear-hammer" size={18} color={COLORS.slateCharcoal} />
               <Text style={[styles.secondaryButtonText, { color: COLORS.slateCharcoal }]}>Options</Text>
             </Pressable>
           </View>
         </View>
 
-        {/* Discord Section - Even smaller */}
-        <Pressable
-          onPress={() => {
-            triggerHaptic('light');
-            playSound('click');
-            Linking.openURL(DISCORD_URL);
-          }}
-          style={({ pressed }) => [
-            styles.discordButtonSmall,
-            pressed && styles.discordButtonPressed,
-            Platform.OS === 'web' && { cursor: 'pointer' as any },
-          ]}
-          accessibilityLabel="Join Discord"
-          accessibilityRole="link"
-        >
-          <Icon name="discord-symbol" size={14} color={COLORS.canvasWhite} noShadow />
-          <Text style={styles.discordTitleSmall}>Discord</Text>
-        </Pressable>
+        <View style={styles.bottomSection}>
+          {/* Discord Section - Even smaller */}
+          <Pressable
+            onPress={() => {
+              triggerHaptic('light');
+              playSound('click');
+              Linking.openURL(DISCORD_URL);
+            }}
+            style={({ pressed }) => [
+              styles.discordButtonSmall,
+              pressed && styles.discordButtonPressed,
+              Platform.OS === 'web' && { cursor: 'pointer' as any },
+            ]}
+            accessibilityLabel="Join Discord"
+            accessibilityRole="link"
+          >
+            <Icon name="discord-symbol" size={14} color={COLORS.canvasWhite} noShadow />
+            <Text style={styles.discordTitleSmall}>Discord</Text>
+          </Pressable>
 
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>v{version}</Text>
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>v{version}</Text>
+          </View>
         </View>
-      </View>
+      </ScrollView>
     </View>
   );
 };
@@ -308,35 +391,43 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.paperBeige,
   },
-  content: {
+  scroll: {
     flex: 1,
+  },
+  content: {
+    flexGrow: 1,
     justifyContent: 'space-between',
-    paddingVertical: 22,
-    paddingHorizontal: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    gap: 12,
   },
   titleSection: {
     alignItems: 'center',
-    paddingTop: 14,
+    paddingTop: 6,
   },
   title: {
-    fontSize: 48,
+    fontSize: 40,
     fontWeight: '700',
     color: COLORS.slateCharcoal,
-    letterSpacing: 4,
+    letterSpacing: 3.5,
     textTransform: 'uppercase',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   subtitle: {
-    fontSize: 13,
-    fontWeight: '400',
+    fontSize: 12,
+    fontWeight: '500',
     color: COLORS.slateCharcoal,
-    opacity: 0.7,
-    letterSpacing: 2,
+    opacity: 0.72,
+    letterSpacing: 1.5,
     textTransform: 'uppercase',
+    textAlign: 'center',
   },
   menuSection: {
-    gap: 12,
-    paddingHorizontal: 8,
+    gap: 9,
+    paddingHorizontal: 2,
+    width: '100%',
+    maxWidth: 520,
+    alignSelf: 'center',
   },
   menuButton: {
     flexDirection: 'row',
@@ -345,8 +436,12 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.module,
     borderWidth: 2,
     borderColor: COLORS.slateCharcoal,
-    padding: 15,
-    gap: 14,
+    padding: 11,
+    gap: 12,
+  },
+  menuButtonPressed: {
+    transform: [{ scale: 0.985 }],
+    opacity: 0.92,
   },
   resumeButton: {
     backgroundColor: COLORS.logicTeal,
@@ -357,6 +452,13 @@ const styles = StyleSheet.create({
   spireButton: {
     backgroundColor: COLORS.logicTeal,
     borderColor: COLORS.slateCharcoal,
+  },
+  prismButton: {
+    backgroundColor: '#0F3D2E',
+    borderColor: '#D4A73A',
+  },
+  prismIconContainer: {
+    borderColor: '#F2C94C',
   },
   freeplayButton: {
     backgroundColor: COLORS.canvasWhite,
@@ -370,8 +472,8 @@ const styles = StyleSheet.create({
     borderColor: COLORS.slateCharcoal,
   },
   buttonIconContainer: {
-    width: 56,
-    height: 56,
+    width: 46,
+    height: 46,
     borderRadius: 8,
     backgroundColor: COLORS.paperBeige,
     justifyContent: 'center',
@@ -387,15 +489,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 4,
+    gap: 6,
+    marginBottom: 2,
   },
   menuButtonText: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: '700',
     color: COLORS.slateCharcoal,
     textTransform: 'uppercase',
-    letterSpacing: 1,
+    letterSpacing: 0.8,
+    flexShrink: 1,
   },
   menuBadge: {
     backgroundColor: COLORS.deepOnyx,
@@ -406,19 +509,20 @@ const styles = StyleSheet.create({
   menuBadgeText: {
     fontSize: 9,
     fontWeight: '900',
-    letterSpacing: 1,
+    letterSpacing: 0.8,
     color: COLORS.actionYellow,
   },
   menuButtonSubtext: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '400',
     color: COLORS.slateCharcoal,
-    opacity: 0.7,
+    opacity: 0.72,
+    flexShrink: 1,
   },
   // Secondary buttons row (Tutorial & Options side by side)
   secondaryButtonsRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
   },
   secondaryButton: {
     flex: 1,
@@ -428,9 +532,10 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.button,
     borderWidth: 2,
     borderColor: COLORS.slateCharcoal,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    gap: 6,
+    minHeight: 44,
   },
   tutorialButtonSmall: {
     backgroundColor: COLORS.tutorialBlue,
@@ -439,11 +544,15 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.paperBeige,
   },
   secondaryButtonText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: COLORS.canvasWhite,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  bottomSection: {
+    alignItems: 'center',
+    gap: 6,
   },
   discordButtonSmall: {
     flexDirection: 'row',
@@ -468,35 +577,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
-  discordButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-    backgroundColor: '#5865F2',
-    borderRadius: RADIUS.button,
-    borderWidth: 2,
-    borderColor: COLORS.slateCharcoal,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    gap: 10,
-  },
-  discordIconContainer: {
-    width: 24,
-    height: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  discordTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.canvasWhite,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
   footer: {
     alignItems: 'center',
-    paddingTop: 12,
+    paddingTop: 2,
   },
   footerText: {
     fontSize: 10,

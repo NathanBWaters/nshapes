@@ -12,6 +12,31 @@ export default function Root({ children }: PropsWithChildren) {
           content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover"
         />
 
+        {/* Page <title> is populated via expo-router/head in app/_layout.tsx so static HTML emits a single non-empty <title> */}
+        <meta
+          name="description"
+          content="A pattern-matching roguelike — match trios, bend the rules, and build wild combos."
+        />
+
+        {/* Open Graph social preview */}
+        <meta property="og:title" content="NShapes — Pattern-Matching Roguelike" />
+        <meta
+          property="og:description"
+          content="A pattern-matching roguelike — match trios, bend the rules, and build wild combos."
+        />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://nathanbwaters.github.io/nshapes/" />
+        <meta property="og:image" content="https://nathanbwaters.github.io/nshapes/icons/icon-512.png" />
+
+        {/* Twitter Card */}
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:title" content="NShapes — Pattern-Matching Roguelike" />
+        <meta
+          name="twitter:description"
+          content="A pattern-matching roguelike — match trios, bend the rules, and build wild combos."
+        />
+        <meta name="twitter:image" content="https://nathanbwaters.github.io/nshapes/icons/icon-512.png" />
+
         <link rel="manifest" href="/nshapes/manifest.json" />
 
         {/* Apple touch icons for iOS */}

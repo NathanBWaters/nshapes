@@ -6,14 +6,14 @@
 
 import { Platform } from 'react-native';
 import { getIsAppActive } from './appLifecycle';
-import { SettingsStorage } from './storage';
+import { SettingsStorage, SoundStorage } from './storage';
 import { sfx, band, audioSupported, setSfxEnabled, type SfxName } from '@/audio';
 
 /**
  * On the web, every sound is synthesized by the chip (src/audio) — no files
  * are downloaded. Native keeps the bundled expo-av samples.
  */
-const useChip = Platform.OS === 'web' && audioSupported();
+const useChip = Platform.OS === 'web' && typeof audioSupported === 'function' && audioSupported();
 
 const CHIP_SFX: Record<SoundCategory, SfxName> = {
   cardSlide: 'deal',
@@ -60,7 +60,7 @@ type AVPlaybackSource = import('expo-av').AVPlaybackSource;
 if (!useChip) {
   try {
     Audio = require('expo-av').Audio;
-  } catch (e) {
+  } catch {
     console.warn('expo-av not available - sounds will be disabled');
   }
 }
@@ -102,10 +102,23 @@ let audioInitialized = false;
 // Initialize audio enabled state from storage
 try {
   audioEnabled = SettingsStorage.getSoundEnabled();
-  setSfxEnabled(audioEnabled);
+  if (typeof setSfxEnabled === 'function') {
+    setSfxEnabled(audioEnabled);
+  }
 } catch {
   // Storage not available yet, use default (off)
   audioEnabled = false;
+}
+
+// Keep module-level SFX state synced whenever SoundStorage changes from any screen
+// (Options, Prism Deck, Starfall Summit, etc.). Guarded for partial Jest mocks.
+if (typeof SoundStorage?.subscribe === 'function') {
+  SoundStorage.subscribe((enabled) => {
+    audioEnabled = enabled;
+    if (typeof setSfxEnabled === 'function') {
+      setSfxEnabled(enabled);
+    }
+  });
 }
 
 // Sound definitions with require() for bundling
@@ -344,7 +357,9 @@ export const playCardDealing = (count: number, delayMs: number = 50): void => {
  */
 export const setAudioEnabled = (enabled: boolean): void => {
   audioEnabled = enabled;
-  setSfxEnabled(enabled);
+  if (typeof setSfxEnabled === 'function') {
+    setSfxEnabled(enabled);
+  }
 };
 
 /**

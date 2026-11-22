@@ -1,11 +1,26 @@
-import React, { createContext, memo, useCallback, useContext, useState } from 'react';
+import React, { createContext, memo, useCallback, useContext, useState, useSyncExternalStore } from 'react';
 import { View, Text, StyleSheet, Platform, TouchableOpacity } from 'react-native';
 import Svg, { Ellipse, Path, Polygon, Defs, Pattern, Rect } from 'react-native-svg';
 import { Card as CardType, Background } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { BACKGROUND_COLORS } from '@/utils/gameConfig';
+import { ColorblindStorage } from '@/utils/storage';
 import { useBurnTimer } from '@/hooks/useBurnTimer';
 import Icon, { type IconName } from './Icon';
+
+const getColorblindSafe = (): boolean =>
+  typeof ColorblindStorage?.get === 'function' ? ColorblindStorage.get() : false;
+
+const subscribeColorblindSafe = (onStoreChange: () => void): (() => void) =>
+  typeof ColorblindStorage?.subscribe === 'function'
+    ? ColorblindStorage.subscribe(() => onStoreChange())
+    : () => {};
+
+const COLORBLIND_LETTER: Record<string, string> = {
+  red: 'R',
+  green: 'B',
+  purple: 'P',
+};
 
 /** Board-level static visual overlays (Mirror Shard, Tightrope, Catalyst target, Hot Potato timestamp). */
 export interface CardBoardOverlay {
@@ -148,6 +163,7 @@ const Card: React.FC<CardProps> = ({
 }) => {
   const { shape, color, number, shading, selected, isHint, isDud, isFaceDown, hasCountdown, countdownTimer, hasBomb, bombTimer } = card;
   const boardOverlay = useContext(CardBoardContext);
+  const colorblind = useSyncExternalStore(subscribeColorblindSafe, getColorblindSafe, getColorblindSafe);
 
   // Cards that cannot be selected (dud or face-down)
   const isUnselectable = isDud || isFaceDown || !!card.locked;
@@ -187,11 +203,11 @@ const Card: React.FC<CardProps> = ({
   const getShapeComponent = () => {
     switch (shape) {
       case 'oval':
-        return <Oval color={color} shading={shading} background={card.background} />;
+        return <Oval color={color} shading={shading} background={card.background} colorblind={colorblind} />;
       case 'squiggle':
-        return <Squiggle color={color} shading={shading} background={card.background} />;
+        return <Squiggle color={color} shading={shading} background={card.background} colorblind={colorblind} />;
       case 'diamond':
-        return <Diamond color={color} shading={shading} background={card.background} />;
+        return <Diamond color={color} shading={shading} background={card.background} colorblind={colorblind} />;
       default:
         return null;
     }
@@ -503,6 +519,26 @@ const Card: React.FC<CardProps> = ({
         </View>
       )}
 
+      {/* Colorblind Mode corner letter badge (R / B / P) — only shown when Colorblind Mode is enabled */}
+      {colorblind && !isDud && !isFaceDown && !card.isWild && COLORBLIND_LETTER[color] && (
+        <View
+          testID="card-colorblind-badge"
+          pointerEvents="none"
+          style={[
+            styles.colorblindBadge,
+            !!card.bonusMoney && card.bonusMoney > 0 && styles.colorblindBadgeBelowCoin,
+            {
+              backgroundColor: card.background === 'charcoal' ? 'rgba(18, 18, 18, 0.85)' : 'rgba(255, 255, 255, 0.92)',
+              borderColor: getShapeColor(color, card.background, true),
+            },
+          ]}
+        >
+          <Text style={[styles.colorblindBadgeText, { color: getShapeColor(color, card.background, true) }]}>
+            {COLORBLIND_LETTER[color]}
+          </Text>
+        </View>
+      )}
+
       {/* Hidden Evolution Catalyst: crystal watermark behind shapes + corner indicator (no card border!) */}
       {!!card.hasEvolutionItem && !isDud && !isFaceDown && (
         <>
@@ -598,9 +634,19 @@ interface ShapeProps {
   color: string;
   shading: string;
   background?: Background;
+  colorblind?: boolean;
 }
 
-const getBorderColor = (color: string) => {
+const getBorderColor = (color: string, colorblind = false) => {
+  if (colorblind) {
+    // Okabe-Ito colorblind-safe high-contrast palette (Vermilion / Blue / Reddish-Purple)
+    switch (color) {
+      case 'red': return '#D55E00';
+      case 'green': return '#0072B2';
+      case 'purple': return '#CC79A7';
+      default: return COLORS.slateCharcoal;
+    }
+  }
   switch (color) {
     case 'red': return COLORS.impactRed;
     case 'green': return COLORS.logicTeal;
@@ -610,7 +656,15 @@ const getBorderColor = (color: string) => {
 };
 
 // Get lightened colors for charcoal background (better contrast)
-const getLightColor = (color: string) => {
+const getLightColor = (color: string, colorblind = false) => {
+  if (colorblind) {
+    switch (color) {
+      case 'red': return '#FF9B54';
+      case 'green': return '#56B4E9';
+      case 'purple': return '#E5A4CB';
+      default: return COLORS.canvasWhite;
+    }
+  }
   switch (color) {
     case 'red': return '#FF9999';
     case 'green': return '#66CCBB';
@@ -620,11 +674,11 @@ const getLightColor = (color: string) => {
 };
 
 // Get the appropriate shape color based on background
-const getShapeColor = (color: string, background?: Background) => {
+const getShapeColor = (color: string, background?: Background, colorblind = false) => {
   if (background === 'charcoal') {
-    return getLightColor(color);
+    return getLightColor(color, colorblind);
   }
-  return getBorderColor(color);
+  return getBorderColor(color, colorblind);
 };
 
 const getCardBackgroundColor = (background?: Background) => {
@@ -645,15 +699,15 @@ const StripesPattern: React.FC<{ id: string; color: string }> = memo(function St
   );
 });
 
-const getFill = (color: string, shading: string, patternId: string, background?: Background) => {
-  if (shading === 'solid') return getShapeColor(color, background);
+const getFill = (color: string, shading: string, patternId: string, background?: Background, colorblind = false) => {
+  if (shading === 'solid') return getShapeColor(color, background, colorblind);
   if (shading === 'striped') return `url(#${patternId})`;
   return 'transparent';
 };
 
-const Oval: React.FC<ShapeProps> = memo(function Oval({ color, shading, background }) {
-  const strokeColor = getShapeColor(color, background);
-  const patternId = `stripes-oval-${color}-${background || 'white'}`;
+const Oval: React.FC<ShapeProps> = memo(function Oval({ color, shading, background, colorblind = false }) {
+  const strokeColor = getShapeColor(color, background, colorblind);
+  const patternId = `stripes-oval-${color}-${background || 'white'}${colorblind ? '-cb' : ''}`;
   return (
     <Svg
       width="100%"
@@ -669,15 +723,15 @@ const Oval: React.FC<ShapeProps> = memo(function Oval({ color, shading, backgrou
         ry={(SVG_HEIGHT - STROKE_WIDTH) / 2}
         stroke={strokeColor}
         strokeWidth={STROKE_WIDTH}
-        fill={getFill(color, shading, patternId, background)}
+        fill={getFill(color, shading, patternId, background, colorblind)}
       />
     </Svg>
   );
 });
 
-const Diamond: React.FC<ShapeProps> = memo(function Diamond({ color, shading, background }) {
-  const strokeColor = getShapeColor(color, background);
-  const patternId = `stripes-diamond-${color}-${background || 'white'}`;
+const Diamond: React.FC<ShapeProps> = memo(function Diamond({ color, shading, background, colorblind = false }) {
+  const strokeColor = getShapeColor(color, background, colorblind);
+  const patternId = `stripes-diamond-${color}-${background || 'white'}${colorblind ? '-cb' : ''}`;
   // Diamond points: top, right, bottom, left
   const points = `${SVG_WIDTH / 2},${STROKE_WIDTH} ${SVG_WIDTH - STROKE_WIDTH},${SVG_HEIGHT / 2} ${SVG_WIDTH / 2},${SVG_HEIGHT - STROKE_WIDTH} ${STROKE_WIDTH},${SVG_HEIGHT / 2}`;
   return (
@@ -692,28 +746,26 @@ const Diamond: React.FC<ShapeProps> = memo(function Diamond({ color, shading, ba
         points={points}
         stroke={strokeColor}
         strokeWidth={STROKE_WIDTH}
-        fill={getFill(color, shading, patternId, background)}
+        fill={getFill(color, shading, patternId, background, colorblind)}
       />
     </Svg>
   );
 });
 
-const Squiggle: React.FC<ShapeProps> = memo(function Squiggle({ color, shading, background }) {
-  const strokeColor = getShapeColor(color, background);
-  const patternId = `stripes-squiggle-${color}-${background || 'white'}`;
-  // S-curve squiggle path (scaled for 20x40 viewBox)
-  const d = `
-    M 3,5
-    C 0,10 0,17 6,20
-    C 12,23 12,30 9,35
-    Q 7,38 10,39
-    C 13,38 13,36 11,35
-    C 8,31 8,25 14,20
-    C 20,15 20,10 17,5
-    Q 15,2 12,2
-    Q 6,2 3,5
-    Z
-  `;
+// Classic 180-degree symmetric, C1-continuous S-curve squiggle in 20x40 viewBox
+// Mathematically verified: 0 self-intersections, bbox [2.4..17.6] x [2.2..37.8], min width 8.4
+const SQUIGGLE_PATH =
+  'M 14.2,2.4 ' +
+  'C 17.8,3.8 12.2,9.2 12,14 ' +
+  'C 11.8,18.8 17.4,22.3 17.6,27.5 ' +
+  'C 17.8,32.7 9.4,39 5.8,37.6 ' +
+  'C 2.2,36.2 7.8,30.8 8,26 ' +
+  'C 8.2,21.2 2.6,17.7 2.4,12.5 ' +
+  'C 2.2,7.3 10.6,1 14.2,2.4 Z';
+
+const Squiggle: React.FC<ShapeProps> = memo(function Squiggle({ color, shading, background, colorblind = false }) {
+  const strokeColor = getShapeColor(color, background, colorblind);
+  const patternId = `stripes-squiggle-${color}-${background || 'white'}${colorblind ? '-cb' : ''}`;
   return (
     <Svg
       width="100%"
@@ -723,10 +775,12 @@ const Squiggle: React.FC<ShapeProps> = memo(function Squiggle({ color, shading, 
     >
       {shading === 'striped' && <StripesPattern id={patternId} color={strokeColor} />}
       <Path
-        d={d}
+        d={SQUIGGLE_PATH}
         stroke={strokeColor}
         strokeWidth={STROKE_WIDTH}
-        fill={getFill(color, shading, patternId, background)}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        fill={getFill(color, shading, patternId, background, colorblind)}
       />
     </Svg>
   );
@@ -758,6 +812,27 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '900',
     color: '#5C3D00',
+  },
+  colorblindBadge: {
+    position: 'absolute',
+    top: 3,
+    left: 3,
+    minWidth: 14,
+    height: 14,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 2,
+    zIndex: 11,
+  },
+  colorblindBadgeBelowCoin: {
+    top: 25,
+  },
+  colorblindBadgeText: {
+    fontSize: 9,
+    lineHeight: 10,
+    fontWeight: '900',
   },
   catalystBackdrop: {
     position: 'absolute',

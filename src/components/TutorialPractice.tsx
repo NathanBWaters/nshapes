@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
 import { COLORS, RADIUS } from '@/utils/colors';
 import Card from './Card';
@@ -13,8 +13,43 @@ interface TutorialPracticeProps {
   onSkip: () => void;
 }
 
+interface TraitCheck {
+  attr: AttributeName;
+  label: string;
+  valid: boolean;
+  detail: string;
+}
+
 // Tutorial uses 3 attributes
 const TUTORIAL_ATTRIBUTES: AttributeName[] = ['shape', 'color', 'number'];
+
+const ATTR_LABELS: Record<AttributeName, string> = {
+  shape: 'Shape',
+  color: 'Color',
+  number: 'Number',
+  shading: 'Shading',
+  background: 'Background',
+};
+
+const evaluateTraits = (cards: CardType[]): TraitCheck[] =>
+  TUTORIAL_ATTRIBUTES.map(attr => {
+    const values = cards.map(c => String(c[attr]));
+    const allSame = values.every(v => v === values[0]);
+    const allDiff = new Set(values).size === values.length;
+    if (allSame) {
+      return { attr, label: ATTR_LABELS[attr], valid: true, detail: `all ${values[0]}` };
+    }
+    if (allDiff) {
+      return { attr, label: ATTR_LABELS[attr], valid: true, detail: 'all different' };
+    }
+    const counts = new Map<string, number>();
+    for (const v of values) counts.set(v, (counts.get(v) ?? 0) + 1);
+    const breakdown = Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([v, n]) => `${n} ${v}`)
+      .join(' & ');
+    return { attr, label: ATTR_LABELS[attr], valid: false, detail: breakdown };
+  });
 
 // Static player stats for tutorial display (uses defaults with some tweaks)
 // Note: graces = 0 so invalid matches are properly caught and explained
@@ -35,15 +70,20 @@ const TutorialPractice: React.FC<TutorialPracticeProps> = ({ onComplete, onSkip 
   const [feedbackData, setFeedbackData] = useState<{
     isValid: boolean;
     explanation: string;
+    traits: TraitCheck[];
     matchedCards: CardType[];
   } | null>(null);
+  const completeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // UI state for GameInfo
   const [hasActiveHint, setHasActiveHint] = useState(false);
 
-  // Generate initial board on mount
+  // Generate initial board on mount & clean up completion timer on unmount
   useEffect(() => {
     initializeBoard();
+    return () => {
+      if (completeTimerRef.current) clearTimeout(completeTimerRef.current);
+    };
   }, []);
 
   const initializeBoard = () => {
@@ -67,10 +107,12 @@ const TutorialPractice: React.FC<TutorialPracticeProps> = ({ onComplete, onSkip 
   };
 
   // Handle valid match - same signature as real game
-  const handleValidMatch = useCallback((matchedCards: CardType[], rewards: CardReward[]) => {
+  const handleValidMatch = useCallback((matchedCards: CardType[], _rewards: CardReward[]) => {
+    const traits = evaluateTraits(matchedCards);
     setFeedbackData({
       isValid: true,
-      explanation: "Great job! You found a valid SET!",
+      explanation: 'Great job! Every trait is either all the same or all different.',
+      traits,
       matchedCards,
     });
     setShowFeedback(true);
@@ -78,38 +120,40 @@ const TutorialPractice: React.FC<TutorialPracticeProps> = ({ onComplete, onSkip 
 
   // Handle invalid match - same signature as real game
   const handleInvalidMatch = useCallback((cards: CardType[]) => {
-    // Find which attribute breaks the rule
-    const brokenAttrs: string[] = [];
-    for (const attr of TUTORIAL_ATTRIBUTES) {
-      const values = cards.map(c => c[attr]);
-      const allSame = values.every(v => v === values[0]);
-      const allDiff = new Set(values).size === 3;
-      if (!allSame && !allDiff) {
-        brokenAttrs.push(attr);
-      }
-    }
+    const traits = evaluateTraits(cards);
+    const broken = traits.filter(t => !t.valid);
+    const brokenText = broken.map(t => `${t.label} (${t.detail})`).join(' and ');
 
-    const explanation = `Not a valid SET. The ${brokenAttrs.join(' and ')} attribute${brokenAttrs.length > 1 ? 's break' : ' breaks'} the rule - you have 2 the same and 1 different.`;
+    const explanation =
+      broken.length > 0
+        ? `Not a valid SET. Check ${brokenText} — each trait must be all the same or all different.`
+        : 'Not a valid SET. Each trait must be all the same or all different.';
 
     setFeedbackData({
       isValid: false,
       explanation,
+      traits,
       matchedCards: cards,
     });
     setShowFeedback(true);
   }, []);
 
   const handleContinueFeedback = () => {
-    const wasValid = feedbackData?.isValid;
+    const wasValid = Boolean(feedbackData?.isValid);
     const matchedCards = feedbackData?.matchedCards || [];
 
     setShowFeedback(false);
     setFeedbackData(null);
 
+    // Invalid picks must NEVER count toward practice progress — let the player try again
+    if (!wasValid) {
+      return;
+    }
+
     const newMatchCount = matchCount + 1;
     setMatchCount(newMatchCount);
 
-    if (wasValid && matchedCards.length > 0) {
+    if (matchedCards.length > 0) {
       // Replace matched cards with new ones from deck
       const remainingBoard = board.filter(c => !matchedCards.some(m => m.id === c.id));
       const newCards = deck.slice(0, matchedCards.length);
@@ -130,9 +174,9 @@ const TutorialPractice: React.FC<TutorialPracticeProps> = ({ onComplete, onSkip 
       }
     }
 
-    // Check if tutorial practice is complete (3 matches)
+    // Check if tutorial practice is complete (3 valid matches)
     if (newMatchCount >= 3) {
-      setTimeout(() => onComplete(), 500);
+      completeTimerRef.current = setTimeout(() => onComplete(), 500);
     }
   };
 
@@ -217,12 +261,37 @@ const TutorialPractice: React.FC<TutorialPracticeProps> = ({ onComplete, onSkip 
             </View>
 
             <View style={styles.explanationBox}>
+              {feedbackData?.traits && feedbackData.traits.length > 0 && (
+                <View style={styles.traitList} testID="tutorial-trait-feedback">
+                  {feedbackData.traits.map(t => (
+                    <View
+                      key={t.attr}
+                      style={[
+                        styles.traitPill,
+                        t.valid ? styles.traitPillValid : styles.traitPillInvalid,
+                      ]}
+                    >
+                      <Text style={[styles.traitPillText, t.valid ? styles.traitTextValid : styles.traitTextInvalid]}>
+                        {t.valid ? '✓' : '✗'} {t.label}: {t.detail}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
               <Text style={styles.explanationText}>{feedbackData?.explanation}</Text>
             </View>
 
-            <TouchableOpacity style={styles.continueButton} onPress={handleContinueFeedback}>
+            <TouchableOpacity
+              testID="tutorial-feedback-continue"
+              style={styles.continueButton}
+              onPress={handleContinueFeedback}
+            >
               <Text style={styles.continueButtonText}>
-                {matchCount >= 2 ? "Finish Practice" : "Continue"}
+                {feedbackData?.isValid && matchCount >= 2
+                  ? 'Finish Practice'
+                  : feedbackData?.isValid
+                    ? 'Continue'
+                    : 'Try Again'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -345,6 +414,34 @@ const styles = StyleSheet.create({
   },
   explanationBox: {
     padding: 16,
+    gap: 10,
+  },
+  traitList: {
+    gap: 6,
+  },
+  traitPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: RADIUS.button,
+    borderWidth: 1,
+  },
+  traitPillValid: {
+    backgroundColor: '#E6F7F5',
+    borderColor: COLORS.logicTeal,
+  },
+  traitPillInvalid: {
+    backgroundColor: '#FFF3E8',
+    borderColor: COLORS.impactOrange,
+  },
+  traitPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  traitTextValid: {
+    color: '#0F766E',
+  },
+  traitTextInvalid: {
+    color: '#C2410C',
   },
   explanationText: {
     fontSize: 14,

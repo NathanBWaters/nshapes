@@ -3,15 +3,49 @@ import { View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams } from "expo-router";
 import Game from "@/components/Game";
+import { STARTER_DECK_BY_ID, normalizeSeed } from "@/prism";
+import type { StarterDeckId } from "@/prism";
+
+const firstParam = (val?: string | string[]): string | undefined =>
+  Array.isArray(val) ? val[0] : val;
 
 export default function Home() {
-  const { autoplayer } = useLocalSearchParams<{ autoplayer?: string }>();
-  const isAutoPlayer = autoplayer === 'true';
+  const params = useLocalSearchParams<{
+    autoplayer?: string;
+    mode?: string;
+    seed?: string;
+    daily?: string;
+    deck?: string;
+  }>();
+
+  const isAutoPlayer = firstParam(params.autoplayer) === 'true';
+  const rawMode = firstParam(params.mode)?.toLowerCase();
+  const initialMode = rawMode === 'prism' ? ('prism' as const) : undefined;
+
+  const rawSeed = firstParam(params.seed);
+  const initialSeed = rawSeed ? normalizeSeed(rawSeed) || undefined : undefined;
+
+  const rawDaily = firstParam(params.daily);
+  const initialDaily = Boolean(
+    rawDaily && rawDaily !== '0' && rawDaily.toLowerCase() !== 'false'
+  );
+  const initialDailyDate =
+    rawDaily && /^\d{4}-\d{2}-\d{2}$/.test(rawDaily.trim()) ? rawDaily.trim() : undefined;
+
+  const rawDeck = firstParam(params.deck) as StarterDeckId | undefined;
+  const initialDeckId = rawDeck && rawDeck in STARTER_DECK_BY_ID ? rawDeck : undefined;
 
   return (
     <SafeAreaView className="flex-1 bg-white">
       <View className="flex-1">
-        <Game autoPlayer={isAutoPlayer} />
+        <Game
+          autoPlayer={isAutoPlayer}
+          initialMode={initialMode}
+          initialSeed={initialSeed}
+          initialDaily={initialDaily}
+          initialDailyDate={initialDailyDate}
+          initialDeckId={initialDeckId}
+        />
       </View>
     </SafeAreaView>
   );
