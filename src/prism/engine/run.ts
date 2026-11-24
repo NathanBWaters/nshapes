@@ -305,7 +305,7 @@ export const createRun = (options: CreateRunOptions = {}): PrismRun => {
     deck = gRes.deck;
     rngState = gRes.rngState;
   } else if (dailyMutatorId === 'tight_quarters') {
-    baseBoardSize = Math.max(9, baseBoardSize - 3);
+    baseBoardSize = Math.max(6, baseBoardSize - 3);
     baseHands += 1;
     baseDiscards += 1;
   } else if (dailyMutatorId === 'spellstorm') {
@@ -431,7 +431,7 @@ export const getEffectiveBoardSize = (run: PrismRun, bossId: BossBlindId | null)
   );
   let size = run.baseBoardSize + (hasFieldStone ? 3 : 0);
   if (bossId === 'the_narrow') size -= 3;
-  return Math.max(9, Math.min(15, size));
+  return Math.max(6, Math.min(15, size));
 };
 
 const drawCardsIntoSlots = (
@@ -1052,7 +1052,12 @@ export const playSelectedSet = (run: PrismRun): PrismRun => {
       };
     }
 
-    return openShopForRun(clearedRun);
+    // Pause on the felt table for the Balatro-style Blind Cleared / Cash Out tally before opening the Shop
+    return {
+      ...clearedRun,
+      phase: 'cash_out',
+      shop: null,
+    };
   }
 
   // ── Check Defeat (Out of Hands) ───────────────────────────────────────────
@@ -1600,6 +1605,12 @@ export const rerollShop = (run: PrismRun): PrismRun => {
     },
     lastToast: 'Shop rerolled!',
   };
+};
+
+/** Cash out after clearing a Blind and open the Shop. */
+export const cashOutToShop = (run: PrismRun): PrismRun => {
+  if (run.phase !== 'cash_out') return run;
+  return openShopForRun(run);
 };
 
 /** Leave the Shop and advance to the next Blind (or next Ante after Boss). */

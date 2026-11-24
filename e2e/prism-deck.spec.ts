@@ -353,7 +353,8 @@ test.describe('Prism Deck — Real-Browser E2E & Visual QA Suite', () => {
     // Play Small Blind cleanly
     await page.getByTestId('prism-play-blind').click();
     await expect(page.getByTestId('prism-card-0')).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByTestId('prism-card-11')).toBeVisible();
+    await expect(page.getByTestId('prism-card-8')).toBeVisible();
+    await expect(page.getByTestId('prism-card-9')).toHaveCount(0);
 
     // Select 2 cards → verify Blueprint Assist toggle + Blueprint Need pill
     await page.getByTestId('prism-card-0').click();
@@ -373,7 +374,7 @@ test.describe('Prism Deck — Real-Browser E2E & Visual QA Suite', () => {
     await page.getByTestId('prism-clear').click();
 
     // Find a low-scoring valid Set first so Hand 1 always decrements Hands (4 → 3) & increases score
-    // before clearing Small Blind (350), ensuring every mid-blind control runs cleanly
+    // before clearing Small Blind (600), ensuring every mid-blind control runs cleanly
     const firstSet = await findValidSetOnBoard(page, 'low');
     expect(firstSet, 'Board must contain at least one valid Set').not.toBeNull();
     const [a, b, c] = firstSet!;
@@ -386,18 +387,19 @@ test.describe('Prism Deck — Real-Browser E2E & Visual QA Suite', () => {
     await expect(playBtn).toContainText('PLAY SET (+');
     await page.waitForTimeout(350);
 
-    // Capture desktop Play Screen screenshot showing cards, fixed Squiggle, live preview, and Belt
+    // Capture desktop Play Screen screenshot showing 9-card felt table, fixed Squiggle, live preview, and Belt
     await captureQaScreenshot(page, 'qa-prism-desktop-play.png');
 
-    // Play the Set → verify Hands decrement by 1 and Score increases
+    // Play the Set → verify Hands decrement by 1, +SCORE hit badge & score receipt appear
     const handsBefore = Number((await page.getByTestId('prism-hands-left').innerText()).trim());
     await playBtn.click();
     await page.waitForTimeout(250);
 
-    const inShopImmediately = await page.getByTestId('prism-shop-leave').isVisible();
-    if (!inShopImmediately) {
+    const clearedOnHand1 = await page.getByTestId('prism-cash-out-overlay').isVisible();
+    if (!clearedOnHand1) {
       const handsAfter = Number((await page.getByTestId('prism-hands-left').innerText()).trim());
       expect(handsAfter).toBe(handsBefore - 1);
+      await expect(page.getByTestId('prism-last-hit-badge')).toBeVisible();
       await expect(page.getByTestId('prism-score-receipt')).toBeVisible();
       await expect(page.getByTestId('prism-score-receipt')).toContainText('LAST:');
     }
@@ -492,7 +494,7 @@ test.describe('Prism Deck — Real-Browser E2E & Visual QA Suite', () => {
       await expect(page.getByTestId('prism-pause-modal')).toHaveCount(0);
     };
 
-    if (!inShopImmediately) {
+    if (!clearedOnHand1) {
       await runPlayControlsAudit();
 
       // Also cast Glass Stamp (now prism-spell-0) on a card in the next valid Set to ensure crisp Blind clear
@@ -503,9 +505,9 @@ test.describe('Prism Deck — Real-Browser E2E & Visual QA Suite', () => {
         await page.getByTestId(`prism-card-${nextSet![0]}`).click();
       }
 
-      // Play valid Sets until Blind clears into PrismShop
+      // Play valid Sets until Blind clears into the Balatro Cash Out Overlay
       for (let attempt = 0; attempt < 5; attempt++) {
-        if (await page.getByTestId('prism-shop-leave').isVisible()) break;
+        if (await page.getByTestId('prism-cash-out-overlay').isVisible()) break;
         const set = await findValidSetOnBoard(page, 'high');
         expect(set, 'Board should have a playable Set').not.toBeNull();
         await page.getByTestId(`prism-card-${set![0]}`).click();
@@ -515,6 +517,14 @@ test.describe('Prism Deck — Real-Browser E2E & Visual QA Suite', () => {
         await page.waitForTimeout(250);
       }
     }
+
+    // Verify Balatro Cash Out Overlay appears over the felt table before opening Shop
+    await expect(page.getByTestId('prism-cash-out-overlay')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('prism-cash-out-overlay')).toContainText('BLIND CLEARED!');
+    await expect(page.getByTestId('prism-cash-out-overlay')).toContainText('Unused Hands');
+    await page.waitForTimeout(300);
+    await captureQaScreenshot(page, 'qa-prism-cashout-desktop.png');
+    await page.getByTestId('prism-cash-out-btn').click();
 
     // Enter PrismShop → verify Payout Breakdown
     await expect(page.getByTestId('prism-shop-leave')).toBeVisible({ timeout: 10_000 });
@@ -626,7 +636,7 @@ test.describe('Prism Deck — Real-Browser E2E & Visual QA Suite', () => {
     await expect(page.getByTestId('prism-blind-card-big')).toContainText('UP NEXT');
     await expect(page.locator('text=/^\\$\\d+$/').first()).toHaveText(goldTextBeforeReload);
 
-    if (inShopImmediately) {
+    if (clearedOnHand1) {
       await page.getByTestId('prism-play-blind').click();
       await expect(page.getByTestId('prism-card-0')).toBeVisible({ timeout: 10_000 });
       await runPlayControlsAudit();
@@ -692,6 +702,7 @@ test.describe('Prism Deck — Real-Browser E2E & Visual QA Suite', () => {
 
     for (let hand = 0; hand < 8; hand++) {
       if (await page.getByTestId('prism-share-run').isVisible()) break;
+      if (await page.getByTestId('prism-cash-out-overlay').isVisible()) break;
       if (await page.getByTestId('prism-shop-leave').isVisible()) break;
       const set = await findValidSetOnBoard(page, 'low');
       if (!set) break;
@@ -784,14 +795,14 @@ test.describe('Prism Deck — Real-Browser E2E & Visual QA Suite', () => {
       actionBarTop = Math.min(actionBarTop, box!.y);
     }
 
-    // Verify ALL 12 cards are visible, tappable, within 375px width, AND cleanly above the sticky action bar (zero scroll!)
-    for (let i = 0; i < 12; i++) {
+    // Verify ALL 9 cards on the 3×3 default board are visible, tappable, within 375px width, AND cleanly above the sticky action bar (zero scroll!)
+    for (let i = 0; i < 9; i++) {
       const cardLoc = page.getByTestId(`prism-card-${i}`);
       await expect(cardLoc).toBeVisible();
       const box = await cardLoc.boundingBox();
       expect(box, `prism-card-${i} should have valid box`).not.toBeNull();
       expect(box!.width).toBeGreaterThanOrEqual(60);
-      expect(box!.height).toBeGreaterThanOrEqual(52);
+      expect(box!.height).toBeGreaterThanOrEqual(64);
       expect(box!.x).toBeGreaterThanOrEqual(-1);
       expect(box!.x + box!.width).toBeLessThanOrEqual(376);
       expect(box!.y, `prism-card-${i} top must be on-screen`).toBeGreaterThanOrEqual(0);
@@ -800,13 +811,14 @@ test.describe('Prism Deck — Real-Browser E2E & Visual QA Suite', () => {
         `prism-card-${i} bottom (${Math.round(box!.y + box!.height)}px) must fit above action bar (${Math.round(actionBarTop)}px)`
       ).toBeLessThanOrEqual(actionBarTop + 1);
     }
+    await expect(page.getByTestId('prism-card-9')).toHaveCount(0);
 
     // Capture mobile Play Screen screenshot with Colorblind ON
     await captureQaScreenshot(page, 'qa-prism-mobile-play.png');
 
-    // Clear Small Blind on mobile → audit Prism Shop at 375x667
+    // Clear Small Blind on mobile → verify Cash Out overlay → audit Prism Shop at 375x667
     for (let attempt = 0; attempt < 5; attempt++) {
-      if (await page.getByTestId('prism-shop-leave').isVisible()) break;
+      if (await page.getByTestId('prism-cash-out-overlay').isVisible()) break;
       const set = await findValidSetOnBoard(page, 'high');
       expect(set).not.toBeNull();
       await page.getByTestId(`prism-card-${set![0]}`).click();
@@ -816,6 +828,8 @@ test.describe('Prism Deck — Real-Browser E2E & Visual QA Suite', () => {
       await page.waitForTimeout(250);
     }
 
+    await expect(page.getByTestId('prism-cash-out-overlay')).toBeVisible({ timeout: 10_000 });
+    await page.getByTestId('prism-cash-out-btn').click();
     await expect(page.getByTestId('prism-shop-leave')).toBeVisible({ timeout: 10_000 });
     await page.waitForTimeout(300);
     await assertNoHorizontalOverflowOrClipping(page, 'Prism Shop (375x667)');

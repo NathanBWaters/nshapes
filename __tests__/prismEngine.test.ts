@@ -20,6 +20,7 @@ import {
   buySpell,
   buyStarChart,
   buyVoucher,
+  cashOutToShop,
   castSpell,
   clearPrismStorageError,
   clearSelection,
@@ -510,7 +511,7 @@ describe('Prism Deck — All 32 Charms Individually Verified', () => {
       ...createRun({ seed: 'FIELDTEST' }),
       charms: [makeCharm('field-stone', 1)],
     });
-    expect(fsRun.board).toHaveLength(15);
+    expect(fsRun.board).toHaveLength(12);
     // 16. wild-card (Wild Weaver)
     const wildBoard = TEST_BOARD.map((c, i) => (i === 0 ? { ...c, edition: 'wild' as const } : c));
     verifyCharm('wild-card', { board: wildBoard }, [0, 1, 2], (r, b) =>
@@ -729,7 +730,7 @@ describe('Prism Deck — All 10 Boss Blinds', () => {
     });
     expect(pinchBlind.discardsLeft).toBe(0);
 
-    // 6: the_narrow (-3 board size -> 9 cards)
+    // 6: the_narrow (-3 board size -> 6 cards on standard 9-card deck)
     const narrowSetup = createRun({ seed: 'NARROWTEST' });
     const narrowBlind = selectBlind({
       ...narrowSetup,
@@ -740,7 +741,7 @@ describe('Prism Deck — All 10 Boss Blinds', () => {
         { ...narrowSetup.anteBlinds[2], bossId: 'the_narrow' },
       ],
     });
-    expect(narrowBlind.board).toHaveLength(9);
+    expect(narrowBlind.board).toHaveLength(6);
 
     // 7: the_mirror_tax (repeat hand halves Mult)
     const mirrorRun = makePlayingRun({
@@ -819,7 +820,11 @@ describe('Prism Deck — Skip Tags, Vouchers, Shop, Interest, Rerolls & Endless'
         selectedIndices: [0, 1, 2],
         ...extra,
       });
-      return playSelectedSet(run);
+      const cleared = playSelectedSet(run);
+      expect(cleared.phase).toBe('cash_out');
+      expect(cleared.lastBlindPayout).not.toBeNull();
+      expect(cleared.board.length).toBeGreaterThanOrEqual(3);
+      return cashOutToShop(cleared);
     };
 
     // 1. extra_hand

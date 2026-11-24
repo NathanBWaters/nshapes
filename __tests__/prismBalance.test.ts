@@ -14,6 +14,7 @@ import {
   buySpell,
   buyStarChart,
   buyVoucher,
+  cashOutToShop,
   castSpell,
   continueEndless,
   createRun,
@@ -40,6 +41,9 @@ interface SimResult {
   bestSingleSet: number;
   finalCharms: string[];
   synergiesFormed: number;
+  ante1SmallHands: number;
+  ante1TotalHands: number;
+  ante1BlindsCleared: number;
 }
 
 const CHARM_PRIORITY: Record<string, number> = {
@@ -356,9 +360,12 @@ const simulateRun = (
   let run = createRun({ seed });
   let clearedAnte8 = false;
   let highestAnteCleared = 0;
+  let ante1SmallHands = 0;
+  let ante1TotalHands = 0;
+  let ante1BlindsCleared = 0;
 
   let guard = 0;
-  while (run.phase !== 'defeat' && guard < 300) {
+  while (run.phase !== 'defeat' && guard < 400) {
     guard += 1;
 
     if (run.phase === 'victory') {
@@ -391,9 +398,19 @@ const simulateRun = (
       const anteBefore = run.ante;
       const blindBefore = run.blindIndex;
       run = playBlindGreedily(run, options.smart);
-      if ((run.phase === 'shop' || run.phase === 'victory') && blindBefore === 2) {
+      if (anteBefore === 1 && (run.phase === 'cash_out' || run.phase === 'shop' || run.phase === 'victory')) {
+        if (blindBefore === 0) ante1SmallHands = run.handsPlayedThisBlind;
+        ante1TotalHands += run.handsPlayedThisBlind;
+        ante1BlindsCleared += 1;
+      }
+      if ((run.phase === 'cash_out' || run.phase === 'shop' || run.phase === 'victory') && blindBefore === 2) {
         highestAnteCleared = Math.max(highestAnteCleared, anteBefore);
       }
+      continue;
+    }
+
+    if (run.phase === 'cash_out') {
+      run = cashOutToShop(run);
       continue;
     }
 
@@ -415,6 +432,9 @@ const simulateRun = (
     bestSingleSet: run.stats.bestSingleSet,
     finalCharms: run.charms.map(c => c.charmId),
     synergiesFormed: activeSynergies,
+    ante1SmallHands,
+    ante1TotalHands,
+    ante1BlindsCleared,
   };
 };
 
@@ -426,7 +446,12 @@ describe('Prism Deck — Headless Balance Simulation (Antes 1-8 & Endless 9-12)'
     const ante1Clears = results.filter(r => r.highestAnteCleared >= 1).length;
     const ante8Clears = results.filter(r => r.clearedAnte8).length;
     const avgHighest = results.reduce((s, r) => s + r.highestAnteCleared, 0) / results.length;
+    const totalA1Hands = results.reduce((s, r) => s + r.ante1TotalHands, 0);
+    const totalA1Blinds = results.reduce((s, r) => s + r.ante1BlindsCleared, 0);
+    const avgAnte1Hands = totalA1Blinds > 0 ? totalA1Hands / totalA1Blinds : 0;
 
+    // Ante 1 should feel like a genuine multi-hand puzzle (not a 1-shot on Hand 1!)
+    expect(avgAnte1Hands).toBeGreaterThanOrEqual(1.8);
     // Ante 1 should be welcoming (>= 75% clear rate even without buying anything)
     expect(ante1Clears / results.length).toBeGreaterThanOrEqual(0.75);
     // Bare starter deck MUST hit a wall before Ante 8 (0% clear rate with zero upgrades!)

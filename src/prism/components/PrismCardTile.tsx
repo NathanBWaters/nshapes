@@ -34,6 +34,8 @@ export interface PrismCardTileProps {
   isMirrorSlot?: boolean;
   isBlueprintMatch?: boolean;
   colorblindOverride?: boolean;
+  /** Play a crisp deal-in entrance spring when a fresh card arrives mid-Blind. */
+  animateDeal?: boolean;
 }
 
 const getColorblindSafe = (): boolean =>
@@ -173,6 +175,7 @@ const PrismCardTile: React.FC<PrismCardTileProps> = memo(function PrismCardTile(
   isMirrorSlot = false,
   isBlueprintMatch = false,
   colorblindOverride,
+  animateDeal = false,
 }) {
   const storedColorblind = useSyncExternalStore(
     subscribeColorblindSafe,
@@ -183,9 +186,21 @@ const PrismCardTile: React.FC<PrismCardTileProps> = memo(function PrismCardTile(
 
   const [hovered, setHovered] = useState(false);
 
-  // Tactile GPU-only lift animation on selection (finite spring, zero infinite loop)
+  // Tactile GPU-only lift + deal-in spring animations (finite springs, zero infinite loops)
+  const dealScale = useSharedValue(animateDeal ? 0.84 : 1);
+  const dealY = useSharedValue(animateDeal ? -10 : 0);
+  const dealOpacity = useSharedValue(animateDeal ? 0.45 : 1);
   const liftY = useSharedValue(selected ? (compact ? -4 : dense ? -4 : -7) : 0);
   const scale = useSharedValue(selected ? 1.03 : 1);
+
+  useEffect(() => {
+    if (!animateDeal) return;
+    dealScale.value = withSpring(1, SPRING.snappy);
+    dealY.value = withSpring(0, SPRING.snappy);
+    dealOpacity.value = withSpring(1, SPRING.snappy);
+    // Run only on fresh card mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const targetY = selected ? (compact ? -4 : dense ? -4 : -7) : hovered ? -2 : 0;
@@ -195,7 +210,11 @@ const PrismCardTile: React.FC<PrismCardTileProps> = memo(function PrismCardTile(
   }, [selected, hovered, compact, dense, liftY, scale]);
 
   const animStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: liftY.value }, { scale: scale.value }],
+    opacity: dealOpacity.value,
+    transform: [
+      { translateY: liftY.value + dealY.value },
+      { scale: scale.value * dealScale.value },
+    ],
   }));
 
   const wild = isCardWild(card);

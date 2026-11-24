@@ -19,14 +19,15 @@ import type {
 /**
  * Small Blind base target for Antes 1-8.
  * Big Blind = 1.5× Small; standard Boss Blind = 2.0× Small (The Monolith = 3.0×).
- * Calibrated so Ante 1 is welcoming, bare starter builds hit a real wall around Ante 3-4,
- * and smart Charm/Synergy/Star Chart builds clear Ante 8 and blast into Endless 9-12.
+ * Calibrated for a 9-card default board so Ante 1 takes 2-4 tactical Sets (not a Hand-1 one-shot),
+ * bare starter builds hit a real wall by Ante 2-3, and smart Charm/Synergy/Star Chart builds
+ * clear Ante 8 and blast into Endless 9-12.
  */
 export const ANTE_SMALL_TARGETS: readonly number[] = [
-  350, // Ante 1: Small 350 / Big 525 / Boss 700
-  1100, // Ante 2: Small 1,100 / Big 1,650 / Boss 2,200
-  3200, // Ante 3: Small 3,200 / Big 4,800 / Boss 6,400
-  9000, // Ante 4: Small 9,000 / Big 13,500 / Boss 18,000
+  600, // Ante 1: Small 600 / Big 900 / Boss 1,200
+  1500, // Ante 2: Small 1,500 / Big 2,250 / Boss 3,000
+  3800, // Ante 3: Small 3,800 / Big 5,700 / Boss 7,600
+  9500, // Ante 4: Small 9,500 / Big 14,250 / Boss 19,000
   25000, // Ante 5: Small 25,000 / Big 37,500 / Boss 50,000
   65000, // Ante 6: Small 65,000 / Big 97,500 / Boss 130,000
   160000, // Ante 7: Small 160,000 / Big 240,000 / Boss 320,000
@@ -133,7 +134,7 @@ export const BOSS_BLINDS: readonly BossBlindDef[] = [
     name: 'Narrow Table',
     icon: 'lorc/cobweb',
     shortRule: '-3 Board Cards',
-    description: 'Board size shrinks by 3 cards (minimum 9) for this Blind.',
+    description: 'Board size shrinks by 3 cards (minimum 6) for this Blind.',
     targetMultiplier: 2.0,
     accentColor: '#334155',
   },
@@ -314,13 +315,13 @@ export const STARTER_DECKS: readonly StarterDeckDef[] = [
     id: 'classic_prism',
     name: 'Prism Standard',
     icon: 'delapouite/prism',
-    description: 'Balanced 27-card deck: 4 Hands, 3 Discards, 12-card board, 5 Charm slots, $6 Gold.',
+    description: 'Balanced 27-card deck: 4 Hands, 3 Discards, 9-card 3×3 board, 5 Charm slots, $6 Gold.',
     unlockRequirement: 'Unlocked by default',
     accentColor: '#16AA98',
     startingGold: 6,
     baseHands: 4,
     baseDiscards: 3,
-    baseBoardSize: 12,
+    baseBoardSize: 9,
     baseCharmSlots: 5,
     baseSpellSlots: 2,
     unusedHandGoldBonus: 1,
@@ -335,7 +336,7 @@ export const STARTER_DECKS: readonly StarterDeckDef[] = [
     startingGold: 14,
     baseHands: 4,
     baseDiscards: 3,
-    baseBoardSize: 12,
+    baseBoardSize: 9,
     baseCharmSlots: 5,
     baseSpellSlots: 2,
     unusedHandGoldBonus: 2,
@@ -350,7 +351,7 @@ export const STARTER_DECKS: readonly StarterDeckDef[] = [
     startingGold: 6,
     baseHands: 4,
     baseDiscards: 3,
-    baseBoardSize: 12,
+    baseBoardSize: 9,
     baseCharmSlots: 5,
     baseSpellSlots: 3,
     unusedHandGoldBonus: 1,
@@ -359,13 +360,13 @@ export const STARTER_DECKS: readonly StarterDeckDef[] = [
     id: 'vast_table',
     name: 'Horizon Deck',
     icon: 'lorc/field',
-    description: 'Huge 15-card board and 4 Discards per Blind for crafting Rainbows & Crowns ($4 starting Gold).',
+    description: 'Spacious 12-card board and 4 Discards per Blind for crafting Rainbows & Crowns ($4 starting Gold).',
     unlockRequirement: 'Win a run (Clear Ante 8)',
     accentColor: '#2563EB',
     startingGold: 4,
     baseHands: 4,
     baseDiscards: 4,
-    baseBoardSize: 15,
+    baseBoardSize: 12,
     baseCharmSlots: 5,
     baseSpellSlots: 2,
     unusedHandGoldBonus: 1,
@@ -380,7 +381,7 @@ export const STARTER_DECKS: readonly StarterDeckDef[] = [
     startingGold: 6,
     baseHands: 3,
     baseDiscards: 3,
-    baseBoardSize: 12,
+    baseBoardSize: 9,
     baseCharmSlots: 6,
     baseSpellSlots: 2,
     unusedHandGoldBonus: 1,
@@ -434,7 +435,7 @@ export const DAILY_MUTATORS: readonly DailyMutatorDef[] = [
     id: 'tight_quarters',
     name: 'Tight Quarters',
     icon: 'lorc/cobweb',
-    description: 'Compact 9-card board (-3), but +1 Hand and +1 Discard every Blind.',
+    description: 'Compact 6-card board (-3), but +1 Hand and +1 Discard every Blind.',
     accentColor: '#475569',
   },
   {

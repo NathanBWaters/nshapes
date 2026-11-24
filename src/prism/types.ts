@@ -429,7 +429,7 @@ export interface AnteRecord {
 // COMPLETE RUN & META PERSISTENCE STATE
 // =============================================================================
 
-export type PrismPhase = 'blind_select' | 'playing' | 'shop' | 'victory' | 'defeat';
+export type PrismPhase = 'blind_select' | 'playing' | 'cash_out' | 'shop' | 'victory' | 'defeat';
 
 export interface PendingTagEffects {
   investmentCount: number;

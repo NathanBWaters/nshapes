@@ -136,6 +136,9 @@ export const loadPrismRun = (): PrismRun | null => {
     if (run.phase === 'shop' && !run.shop) {
       return { ...run, phase: 'blind_select' };
     }
+    if (run.phase === 'cash_out' && !run.lastBlindPayout) {
+      return { ...run, phase: 'blind_select' };
+    }
     if (run.phase === 'playing' && (!Array.isArray(run.board) || run.board.length < 3)) {
       return { ...run, phase: 'blind_select' };
     }

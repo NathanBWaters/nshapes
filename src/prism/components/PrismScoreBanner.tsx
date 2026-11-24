@@ -70,6 +70,8 @@ const PrismScoreBanner: React.FC<PrismScoreBannerProps> = ({
   const lastSetsPlayedRef = useRef<number>(run.stats.setsPlayed);
 
   const igniteScale = useSharedValue(1);
+  const handsPopScale = useSharedValue(1);
+  const hitBadgeScale = useSharedValue(1);
 
   useEffect(() => {
     if (run.stats.setsPlayed > lastSetsPlayedRef.current && lastResult) {
@@ -78,6 +80,14 @@ const PrismScoreBanner: React.FC<PrismScoreBannerProps> = ({
 
       igniteScale.value = withSequence(
         withSpring(1.06, SPRING.playful),
+        withSpring(1, SPRING.snappy)
+      );
+      handsPopScale.value = withSequence(
+        withSpring(1.22, SPRING.playful),
+        withSpring(1, SPRING.snappy)
+      );
+      hitBadgeScale.value = withSequence(
+        withSpring(1.24, SPRING.playful),
         withSpring(1, SPRING.snappy)
       );
 
@@ -105,10 +115,18 @@ const PrismScoreBanner: React.FC<PrismScoreBannerProps> = ({
       setRevealCount(0);
     }
     return undefined;
-  }, [run.stats.setsPlayed, lastResult, igniteScale]);
+  }, [run.stats.setsPlayed, lastResult, igniteScale, handsPopScale, hitBadgeScale]);
 
   const igniteStyle = useAnimatedStyle(() => ({
     transform: [{ scale: igniteScale.value }],
+  }));
+
+  const handsPopStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: handsPopScale.value }],
+  }));
+
+  const hitBadgeStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: hitBadgeScale.value }],
   }));
 
   const target = Math.max(1, run.blindTarget);
@@ -170,10 +188,17 @@ const PrismScoreBanner: React.FC<PrismScoreBannerProps> = ({
               <Text style={styles.clearsBadgeText}>CLEARS!</Text>
             </View>
           ) : (
-            <Text style={styles.compactScoreInline}>
-              {formatScore(run.blindScore)}
-              <Text style={styles.compactScoreTarget}> / {formatScore(run.blindTarget)}</Text>
-            </Text>
+            <View style={styles.compactScoreRight}>
+              {showIgnition && lastResult && run.handsPlayedThisBlind > 0 && (
+                <Animated.View testID="prism-last-hit-badge" style={[styles.lastHitBadgeCompact, hitBadgeStyle]}>
+                  <Text style={styles.lastHitBadgeText}>+{formatScore(lastResult.finalScore)}</Text>
+                </Animated.View>
+              )}
+              <Text style={styles.compactScoreInline}>
+                {formatScore(run.blindScore)}
+                <Text style={styles.compactScoreTarget}> / {formatScore(run.blindTarget)}</Text>
+              </Text>
+            </View>
           )}
         </View>
 
@@ -345,7 +370,13 @@ const PrismScoreBanner: React.FC<PrismScoreBannerProps> = ({
 
         {/* Single Combined Compact Hands · Discards · Gold Strip */}
         <View style={styles.compactStatsBar}>
-          <View style={[styles.compactStatItem, run.handsLeft <= 1 && styles.compactStatUrgent]}>
+          <Animated.View
+            style={[
+              styles.compactStatItem,
+              run.handsLeft <= 1 && styles.compactStatUrgent,
+              handsPopStyle,
+            ]}
+          >
             <Text style={styles.compactStatLabel}>HANDS</Text>
             <Text
               testID="prism-hands-left"
@@ -356,7 +387,7 @@ const PrismScoreBanner: React.FC<PrismScoreBannerProps> = ({
             >
               {run.handsLeft}
             </Text>
-          </View>
+          </Animated.View>
 
           <View style={styles.compactStatItem}>
             <Text style={styles.compactStatLabel}>DISCARDS</Text>
@@ -429,11 +460,18 @@ const PrismScoreBanner: React.FC<PrismScoreBannerProps> = ({
               <Text style={styles.clearsBadgeText}>CLEARS BLIND!</Text>
             </View>
           ) : (
-            <Text style={styles.remainingText}>
-              {run.blindScore >= run.blindTarget
-                ? 'Cleared!'
-                : `${formatScore(Math.max(0, run.blindTarget - run.blindScore))} left`}
-            </Text>
+            <View style={styles.desktopScoreRight}>
+              {showIgnition && lastResult && run.handsPlayedThisBlind > 0 && (
+                <Animated.View testID="prism-last-hit-badge" style={[styles.lastHitBadge, hitBadgeStyle]}>
+                  <Text style={styles.lastHitBadgeText}>+{formatScore(lastResult.finalScore)}</Text>
+                </Animated.View>
+              )}
+              <Text style={styles.remainingText}>
+                {run.blindScore >= run.blindTarget
+                  ? 'Cleared!'
+                  : `${formatScore(Math.max(0, run.blindTarget - run.blindScore))} left`}
+              </Text>
+            </View>
           )}
         </View>
 
@@ -651,7 +689,13 @@ const PrismScoreBanner: React.FC<PrismScoreBannerProps> = ({
 
       {/* Hands / Discards / Gold Counter Strip */}
       <View style={styles.statsRow}>
-        <View style={[styles.statWell, run.handsLeft <= 1 && styles.statWellUrgent]}>
+        <Animated.View
+          style={[
+            styles.statWell,
+            run.handsLeft <= 1 && styles.statWellUrgent,
+            handsPopStyle,
+          ]}
+        >
           <Text style={styles.statLabel}>HANDS</Text>
           <Text
             testID="prism-hands-left"
@@ -662,7 +706,7 @@ const PrismScoreBanner: React.FC<PrismScoreBannerProps> = ({
           >
             {run.handsLeft}
           </Text>
-        </View>
+        </Animated.View>
 
         <View style={styles.statWell}>
           <Text style={styles.statLabel}>DISCARDS</Text>
@@ -1354,6 +1398,37 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 18,
     fontWeight: '900',
+  },
+  compactScoreRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  desktopScoreRight: {
+    alignItems: 'flex-end',
+    gap: 3,
+  },
+  lastHitBadge: {
+    backgroundColor: 'rgba(52, 211, 153, 0.2)',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: PRISM_COLORS.econGreen,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  lastHitBadgeCompact: {
+    backgroundColor: 'rgba(52, 211, 153, 0.22)',
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: PRISM_COLORS.econGreen,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  lastHitBadgeText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: PRISM_COLORS.econGreen,
+    fontVariant: ['tabular-nums'],
   },
 });
 

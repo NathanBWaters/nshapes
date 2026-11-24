@@ -27,6 +27,7 @@ import {
   buySpell,
   buyStarChart,
   buyVoucher,
+  cashOutToShop,
   clearPrismStorageError,
   continueEndless,
   createRun,
@@ -46,6 +47,7 @@ import {
 } from '@/prism';
 import type { PrismMeta, PrismRun, StarterDeckId } from '@/prism';
 import PrismBlindSelect from './PrismBlindSelect';
+import PrismCashOutOverlay from './PrismCashOutOverlay';
 import PrismPlayScreen from './PrismPlayScreen';
 import PrismResults from './PrismResults';
 import PrismSetup from './PrismSetup';
@@ -473,13 +475,13 @@ const PrismMode: React.FC<PrismModeProps> = ({
         />
       )}
 
-      {run.phase === 'playing' && (
+      {(run.phase === 'playing' || run.phase === 'cash_out') && (
         <PrismPlayScreen
           run={run}
           blueprintAssist={blueprintAssist}
           colorblind={colorblind}
           audioState={audioState}
-          shortcutsDisabled={pauseOpen}
+          shortcutsDisabled={pauseOpen || run.phase === 'cash_out'}
           onToggleBlueprint={handleToggleBlueprint}
           onToggleColorblind={handleToggleColorblind}
           onCycleAudio={handleCycleAudio}
@@ -489,6 +491,14 @@ const PrismMode: React.FC<PrismModeProps> = ({
             setPauseOpen(false);
             setConfirmRestart(false);
           }}
+        />
+      )}
+
+      {run.phase === 'cash_out' && (
+        <PrismCashOutOverlay
+          run={run}
+          disabled={pauseOpen}
+          onCashOut={() => commitRun(cashOutToShop(run))}
         />
       )}
 

@@ -363,10 +363,14 @@ const PrismPlayScreen: React.FC<PrismPlayScreenProps> = ({
     onOpenPauseMenu,
   ]);
 
-  const canPlay = preview.isValidSet;
+  const isInteractive = run.phase === 'playing';
+  const canPlay = isInteractive && preview.isValidSet;
   const canDiscard =
-    run.discardsLeft > 0 && run.selectedIndices.length > 0 && run.selectedIndices.length <= 3;
-  const canClear = run.selectedIndices.length > 0 || safeSpellIndex !== null;
+    isInteractive &&
+    run.discardsLeft > 0 &&
+    run.selectedIndices.length > 0 &&
+    run.selectedIndices.length <= 3;
+  const canClear = isInteractive && (run.selectedIndices.length > 0 || safeSpellIndex !== null);
 
   const visibleToast =
     run.lastToast && run.lastToast !== dismissedToast ? run.lastToast : null;
@@ -513,15 +517,17 @@ const PrismPlayScreen: React.FC<PrismPlayScreenProps> = ({
                   testID={`prism-card-${boardIdx}`}
                   card={card}
                   selected={isSelected || pendingSpellCardId === card.id}
+                  disabled={!isInteractive}
                   debuffed={isDebuffed}
                   hotkeyLabel={hotkey}
                   highlightTarget={isSpellTarget}
-                  dense={!isDesktop}
+                  dense={!isDesktop && rows.length >= 4}
+                  animateDeal={run.handsPlayedThisBlind > 0 || run.discardsUsedThisBlind > 0}
                   isMagnetMarked={magnetMarkedIds.has(card.id)}
                   isMirrorSlot={mirrorSlotSet.has(boardIdx)}
                   isBlueprintMatch={blueprintMatchSet.has(boardIdx)}
                   colorblindOverride={colorblind}
-                  onPress={() => handleCardPress(boardIdx)}
+                  onPress={isInteractive ? () => handleCardPress(boardIdx) : undefined}
                 />
               </View>
             );
@@ -717,7 +723,7 @@ const PrismPlayScreen: React.FC<PrismPlayScreenProps> = ({
               <View style={styles.hotkeyLegend}>
                 <Text style={styles.hotkeyLegendTitle}>SHORTCUTS</Text>
                 <Text style={styles.hotkeyLegendText}>
-                  1–9, 0, -, = Select • Space/Enter Play • D Discard • C Clear • H Hint • Esc Menu
+                  {run.board.length <= 9 ? '1–9' : '1–9, 0, -, ='} Select • Space/Enter Play • D Discard • C Clear • H Hint • Esc Menu
                 </Text>
               </View>
             )}
