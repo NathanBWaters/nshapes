@@ -10,6 +10,16 @@ import { loadPrismMeta, loadPrismRun, writePrismMeta, writePrismRun } from '@/pr
 import { createRun } from '@/prism/engine/run';
 import { PRIVACY_POLICY_URL, SUPPORT_URL } from '@/utils/storeUrls';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
+import {
+  CARD_DARK_COLORS,
+  CARD_LIGHT_COLORS,
+  CARD_STOCK_BACKGROUND,
+  COLOR_BADGE_LETTER,
+  COLOR_DISPLAY_NAME,
+  SHAPE_DISPLAY_NAME,
+  formatParryCounterMeta,
+  getCardShapeColor,
+} from '@/utils/cardVisuals';
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
   getItem: jest.fn(() => Promise.resolve(null)),
@@ -183,6 +193,55 @@ describe('Mobile Store Readiness', () => {
         (Platform as { OS: string }).OS = origOs;
         addSpy.mockRestore();
       }
+    });
+  });
+
+  describe('Zero-SET-overlap visual identity (cardVisuals)', () => {
+    it('maps internal slots to Circle/Triangle/Moon and Orange/Teal/Blue with O/T/B badges', () => {
+      expect(SHAPE_DISPLAY_NAME).toEqual({
+        oval: 'Circle',
+        diamond: 'Triangle',
+        squiggle: 'Moon',
+      });
+      expect(COLOR_DISPLAY_NAME).toEqual({
+        red: 'Orange',
+        green: 'Teal',
+        purple: 'Blue',
+      });
+      expect(COLOR_BADGE_LETTER).toEqual({
+        red: 'O',
+        green: 'T',
+        purple: 'B',
+      });
+    });
+
+    it('uses verified universal CVD-safe light/dark hexes and Blueprint Mist stock', () => {
+      expect(CARD_LIGHT_COLORS).toEqual({
+        red: '#E05A04',
+        green: '#007870',
+        purple: '#1E229E',
+      });
+      expect(CARD_DARK_COLORS).toEqual({
+        red: '#FFA024',
+        green: '#76FDE1',
+        purple: '#969BF0',
+      });
+      expect(CARD_STOCK_BACKGROUND.beige).toBe('#E2ECF7');
+      expect(getCardShapeColor('red', 'white')).toBe('#E05A04');
+      expect(getCardShapeColor('green', 'charcoal')).toBe('#76FDE1');
+      expect(getCardShapeColor('purple', 'charcoal')).toBe('#969BF0');
+    });
+
+    it('formats Parry counter labels with Trio, Orange/Teal/Blue, and Circles/Triangles/Moons', () => {
+      expect(formatParryCounterMeta({ kind: 'any' }).shortLabel).toBe('ANY TRIO');
+      expect(formatParryCounterMeta({ kind: 'color', color: 'red' })).toMatchObject({
+        shortLabel: 'ALL ORANGE',
+        label: 'All Orange Trio',
+        color: '#E05A04',
+      });
+      expect(formatParryCounterMeta({ kind: 'shape', shape: 'oval' }).shortLabel).toBe('ALL CIRCLES');
+      expect(formatParryCounterMeta({ kind: 'shape', shape: 'diamond' }).shortLabel).toBe('ALL TRIANGLES');
+      expect(formatParryCounterMeta({ kind: 'shape', shape: 'squiggle' }).shortLabel).toBe('ALL MOONS');
     });
   });
 });

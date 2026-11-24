@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 /**
- * Reproducibly renders crisp, vector-sharp NShapes icons, Android adaptive +
- * monochrome layers, splash emblem, PWA icons, and the 1024x500 Google Play
- * Feature Graphic using Playwright Chromium, and strips alpha channels from
- * Apple/Google opaque store assets so ITMS-90717 checks always pass.
+ * Reproducibly renders crisp, vector-sharp NShapes brand assets built around
+ * our scientifically verified, zero-SET-overlap triad:
+ *   Shapes: Circle · Triangle · -25°-tilted Crescent Moon
+ *   Colors: Cobalt Blue (#1E229E) · Ocean Teal (#007870) · Tangerine Orange (#E05A04)
+ *
+ * Strips alpha channels from Apple/Google opaque store assets so ITMS-90717
+ * checks always pass.
  *
  * Usage: node scripts/store/generate-brand-assets.mjs
  */
@@ -14,63 +17,66 @@ import { chromium } from '@playwright/test';
 
 const ROOT = process.cwd();
 
+// Exact verified Proposal #2 palette & geometry (matching src/utils/cardVisuals.ts)
+const COLOR_ORANGE = '#E05A04';
+const COLOR_TEAL = '#007870';
+const COLOR_BLUE = '#1E229E';
+const CRESCENT_PATH_24x30 =
+  'M 22.37,19.18 A 10.80,10.80 0 1,1 15.62,4.69 A 8.00,8.00 0 0,0 22.37,19.18 Z';
+const TRIANGLE_POINTS_24x30 = '12,2.2 22,26.8 2,26.8';
+
 const ensureDir = (filePath) => {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
 };
 
 /**
- * Core iconic NShapes card SVG: white rounded SET card with dark-plum inner
- * border and 3 cerulean-blue diamonds centered inside.
+ * Iconic NShapes Geometric Triad Badge:
+ * Warm ivory rounded square tile framed in deep charcoal with a crisp golden
+ * top prism accent, housing the 3 signature shapes (Teal Triangle, Cobalt
+ * Circle, Tangerine Crescent Moon) in balanced triangular symmetry.
  */
-function cardSvgGroup({
-  cx = 512,
-  cy = 512,
-  cardW = 576,
-  cardH = 810,
-  showShadow = true,
-} = {}) {
-  const x = cx - cardW / 2;
-  const y = cy - cardH / 2;
-  const outerRx = Math.round(cardW * 0.135);
-  const inset = Math.round(cardW * 0.036);
-  const innerRx = Math.round(outerRx - inset * 0.65);
-  const strokeW = Math.max(4, Math.round(cardW * 0.025));
+function triadEmblemGroup({ cx = 512, cy = 512, size = 700, showShadow = true } = {}) {
+  const s = size / 700;
+  const x = cx - size / 2;
+  const y = cy - size / 2;
+  const rx = Math.round(142 * s);
+  const borderW = Math.round(22 * s);
 
-  // 3 centered diamonds matching the original NShapes emblem
-  const dW = cardW * 0.21;
-  const dH = cardH * 0.235;
-  const gap = cardW * 0.038;
-  const step = dW + gap;
-  const centers = [cx - step, cx, cx + step];
-
-  const diamonds = centers
-    .map((dx) => {
-      const top = `${dx.toFixed(1)},${(cy - dH / 2).toFixed(1)}`;
-      const right = `${(dx + dW / 2).toFixed(1)},${cy.toFixed(1)}`;
-      const bottom = `${dx.toFixed(1)},${(cy + dH / 2).toFixed(1)}`;
-      const left = `${(dx - dW / 2).toFixed(1)},${cy.toFixed(1)}`;
-      return `<polygon points="${top} ${right} ${bottom} ${left}" fill="#0A76C6" />`;
-    })
-    .join('\n      ');
+  // Place the 3 shapes inside the 700x700 coordinate box mapped from 24x30 geometry
+  // Top: Ocean Teal Triangle
+  // Bottom-Left: Royal Cobalt Circle
+  // Bottom-Right: Tangerine Orange Tilted Crescent Moon
+  const shapeScale = 10.8 * s; // 24*10.8 = 259px wide, 30*10.8 = 324px tall
+  const triX = cx - 12 * shapeScale;
+  const triY = cy - 294 * s;
+  const circX = cx - 152 * s;
+  const circY = cy + 128 * s;
+  const circR = 102 * s;
+  const moonX = cx + 20 * s;
+  const moonY = cy - 26 * s;
 
   return `
     ${
       showShadow
-        ? `<rect x="${x}" y="${y + Math.round(cardH * 0.015)}" width="${cardW}" height="${cardH}" rx="${outerRx}" fill="rgba(5, 20, 48, 0.28)" filter="url(#cardShadow)" />`
+        ? `<rect x="${x}" y="${y + Math.round(22 * s)}" width="${size}" height="${size}" rx="${rx}" fill="rgba(4, 14, 34, 0.36)" filter="url(#emblemShadow)" />`
         : ''
     }
-    <rect x="${x}" y="${y}" width="${cardW}" height="${cardH}" rx="${outerRx}" fill="#FBFBFD" />
-    <rect
-      x="${x + inset}"
-      y="${y + inset}"
-      width="${cardW - inset * 2}"
-      height="${cardH - inset * 2}"
-      rx="${innerRx}"
-      fill="none"
-      stroke="#31153B"
-      stroke-width="${strokeW}"
-    />
-    ${diamonds}
+    <rect x="${x}" y="${y}" width="${size}" height="${size}" rx="${rx}" fill="#FAF7F0" stroke="#1E2530" stroke-width="${borderW}" />
+    <!-- Subtle geometric prism highlight ring inside tile -->
+    <circle cx="${cx}" cy="${cy + Math.round(18 * s)}" r="${Math.round(238 * s)}" fill="none" stroke="rgba(30, 37, 48, 0.08)" stroke-width="${Math.round(6 * s)}" stroke-dasharray="${Math.round(16 * s)} ${Math.round(14 * s)}" />
+
+    <!-- Top: Ocean Teal Triangle -->
+    <g transform="translate(${triX.toFixed(1)} ${triY.toFixed(1)}) scale(${shapeScale.toFixed(3)})">
+      <polygon points="${TRIANGLE_POINTS_24x30}" fill="${COLOR_TEAL}" stroke="${COLOR_TEAL}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" />
+    </g>
+
+    <!-- Bottom-Left: Royal Cobalt Circle -->
+    <circle cx="${circX.toFixed(1)}" cy="${circY.toFixed(1)}" r="${circR.toFixed(1)}" fill="${COLOR_BLUE}" />
+
+    <!-- Bottom-Right: Tangerine Orange Tilted Crescent Moon -->
+    <g transform="translate(${moonX.toFixed(1)} ${moonY.toFixed(1)}) scale(${shapeScale.toFixed(3)})">
+      <path d="${CRESCENT_PATH_24x30}" fill="${COLOR_ORANGE}" stroke="${COLOR_ORANGE}" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" />
+    </g>
   `;
 }
 
@@ -85,19 +91,20 @@ function buildAppIconHtml(size = 1024, { roundedMask = false } = {}) {
 <body>
 <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 1024 1024">
   <defs>
-    <radialGradient id="bg" cx="50%" cy="48%" r="68%">
-      <stop offset="0%" stop-color="#1973CB" />
-      <stop offset="65%" stop-color="#1159A8" />
-      <stop offset="100%" stop-color="#0B3F80" />
+    <radialGradient id="bg" cx="50%" cy="42%" r="72%">
+      <stop offset="0%" stop-color="#1E4B8A" />
+      <stop offset="60%" stop-color="#103260" />
+      <stop offset="100%" stop-color="#081C3A" />
     </radialGradient>
-    <filter id="cardShadow" x="-15%" y="-15%" width="130%" height="135%">
-      <feGaussianBlur stdDeviation="16" />
+    <filter id="emblemShadow" x="-18%" y="-18%" width="136%" height="140%">
+      <feGaussianBlur stdDeviation="20" />
     </filter>
     ${clip}
   </defs>
   <g ${groupAttr}>
     <rect width="1024" height="1024" fill="url(#bg)" />
-    ${cardSvgGroup({ cx: 512, cy: 512, cardW: 576, cardH: 810, showShadow: true })}
+    <circle cx="512" cy="512" r="445" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="4" />
+    ${triadEmblemGroup({ cx: 512, cy: 512, size: 736, showShadow: true })}
   </g>
 </svg>
 </body>
@@ -105,86 +112,75 @@ function buildAppIconHtml(size = 1024, { roundedMask = false } = {}) {
 }
 
 function buildAdaptiveForegroundHtml() {
-  // Android adaptive icon safe zone is central 66% (676px diameter circle).
-  // Keep card height at 560px and width at 398px so all 4 corners sit comfortably inside!
+  // Android adaptive icon safe zone is central 66% (676px diameter).
+  // Keep rounded tile at 520x520 so corners stay comfortably inside circular/squircle masks!
   return `<!doctype html>
 <html>
 <head><meta charset="utf-8" /><style>html,body{margin:0;padding:0;width:1024px;height:1024px;overflow:hidden;background:transparent;}</style></head>
 <body>
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <defs>
-    <filter id="cardShadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="12" />
+    <filter id="emblemShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="14" />
     </filter>
   </defs>
-  ${cardSvgGroup({ cx: 512, cy: 512, cardW: 398, cardH: 556, showShadow: true })}
+  ${triadEmblemGroup({ cx: 512, cy: 512, size: 520, showShadow: true })}
 </svg>
 </body>
 </html>`;
 }
 
 function buildAdaptiveMonochromeHtml() {
-  // Android 13+ monochrome themed icon: single-color white silhouette with cutouts inside safe zone
+  // Android 13+ Material You themed icon: bold pure-white Triad (Triangle + Circle + Moon) inside safe zone
+  const s = 540 / 700;
   const cx = 512;
   const cy = 512;
-  const cardW = 398;
-  const cardH = 556;
-  const x = cx - cardW / 2;
-  const y = cy - cardH / 2;
-  const rx = Math.round(cardW * 0.14);
-  const dW = cardW * 0.21;
-  const dH = cardH * 0.235;
-  const gap = cardW * 0.038;
-  const step = dW + gap;
-  const centers = [cx - step, cx, cx + step];
-  const diamondCutouts = centers
-    .map((dx) => {
-      const top = `${dx.toFixed(1)},${(cy - dH / 2).toFixed(1)}`;
-      const right = `${(dx + dW / 2).toFixed(1)},${cy.toFixed(1)}`;
-      const bottom = `${dx.toFixed(1)},${(cy + dH / 2).toFixed(1)}`;
-      const left = `${(dx - dW / 2).toFixed(1)},${cy.toFixed(1)}`;
-      return `<polygon points="${top} ${right} ${bottom} ${left}" fill="black" />`;
-    })
-    .join('\n        ');
+  const shapeScale = 11.4 * s;
+  const triX = cx - 12 * shapeScale;
+  const triY = cy - 306 * s;
+  const circX = cx - 156 * s;
+  const circY = cy + 132 * s;
+  const circR = 108 * s;
+  const moonX = cx + 18 * s;
+  const moonY = cy - 28 * s;
 
   return `<!doctype html>
 <html>
 <head><meta charset="utf-8" /><style>html,body{margin:0;padding:0;width:1024px;height:1024px;overflow:hidden;background:transparent;}</style></head>
 <body>
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <defs>
-    <mask id="monoMask">
-      <rect width="1024" height="1024" fill="black" />
-      <rect x="${x}" y="${y}" width="${cardW}" height="${cardH}" rx="${rx}" fill="white" />
-      ${diamondCutouts}
-    </mask>
-  </defs>
-  <rect width="1024" height="1024" fill="#FFFFFF" mask="url(#monoMask)" />
+  <g transform="translate(${triX.toFixed(1)} ${triY.toFixed(1)}) scale(${shapeScale.toFixed(3)})">
+    <polygon points="${TRIANGLE_POINTS_24x30}" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" />
+  </g>
+  <circle cx="${circX.toFixed(1)}" cy="${circY.toFixed(1)}" r="${circR.toFixed(1)}" fill="#FFFFFF" />
+  <g transform="translate(${moonX.toFixed(1)} ${moonY.toFixed(1)}) scale(${shapeScale.toFixed(3)})">
+    <path d="${CRESCENT_PATH_24x30}" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" />
+  </g>
 </svg>
 </body>
 </html>`;
 }
 
 function buildSplashIconHtml() {
-  // Transparent emblem placed cleanly on #145CA8 splash background
+  // Transparent emblem placed cleanly on #103260 splash background
   return `<!doctype html>
 <html>
 <head><meta charset="utf-8" /><style>html,body{margin:0;padding:0;width:1024px;height:1024px;overflow:hidden;background:transparent;}</style></head>
 <body>
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <defs>
-    <filter id="cardShadow" x="-15%" y="-15%" width="130%" height="135%">
-      <feGaussianBlur stdDeviation="18" />
+    <filter id="emblemShadow" x="-15%" y="-15%" width="130%" height="135%">
+      <feGaussianBlur stdDeviation="20" />
     </filter>
   </defs>
-  ${cardSvgGroup({ cx: 512, cy: 512, cardW: 540, cardH: 760, showShadow: true })}
+  ${triadEmblemGroup({ cx: 512, cy: 512, size: 700, showShadow: true })}
 </svg>
 </body>
 </html>`;
 }
 
 function buildFeatureGraphicHtml() {
-  // 1024x500 Google Play Feature Graphic: tactile fanned SET trio on left + bold NSHAPES lockup on right
+  // 1024x500 Google Play Feature Graphic showcasing NShapes' new Circle/Triangle/Moon × Orange/Teal/Blue trio!
   return `<!doctype html>
 <html>
 <head>
@@ -204,65 +200,67 @@ function buildFeatureGraphicHtml() {
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="500" viewBox="0 0 1024 500">
   <defs>
     <linearGradient id="fgBg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#196EC6" />
-      <stop offset="55%" stop-color="#0F4E96" />
-      <stop offset="100%" stop-color="#0A3364" />
+      <stop offset="0%" stop-color="#194480" />
+      <stop offset="55%" stop-color="#0F305C" />
+      <stop offset="100%" stop-color="#081D3A" />
     </linearGradient>
-    <radialGradient id="glow" cx="30%" cy="50%" r="48%">
-      <stop offset="0%" stop-color="rgba(255, 224, 102, 0.24)" />
-      <stop offset="100%" stop-color="rgba(255, 224, 102, 0)" />
+    <radialGradient id="glow" cx="27%" cy="50%" r="48%">
+      <stop offset="0%" stop-color="rgba(255, 212, 92, 0.24)" />
+      <stop offset="100%" stop-color="rgba(255, 212, 92, 0)" />
     </radialGradient>
     <filter id="softShadow" x="-20%" y="-20%" width="145%" height="145%">
-      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#04152E" flood-opacity="0.38" />
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#030D1E" flood-opacity="0.42" />
     </filter>
-    <pattern id="redStripe" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(0)">
-      <line x1="0" y1="3" x2="8" y2="3" stroke="#E0433E" stroke-width="3" />
+    <!-- +45° diagonal hatch for Teal Triangles card -->
+    <pattern id="tealHatch" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(-45)">
+      <rect x="0" y="0" width="5" height="2.5" fill="${COLOR_TEAL}" />
     </pattern>
   </defs>
 
   <rect width="1024" height="500" fill="url(#fgBg)" />
   <rect width="1024" height="500" fill="url(#glow)" />
 
-  <!-- Subtle geometric grid accents -->
+  <!-- Subtle geometric blueprint rings -->
   <g opacity="0.08" stroke="#FFFFFF" stroke-width="1.5" fill="none">
     <circle cx="920" cy="70" r="140" />
     <circle cx="920" cy="70" r="210" />
     <circle cx="110" cy="460" r="150" />
   </g>
 
-  <!-- Fanned SET Trio on the Left -->
-  <!-- Card 1: 1 Red Outlined Oval -->
-  <g transform="translate(122 270) rotate(-18)" filter="url(#softShadow)">
-    <rect x="-82" y="-118" width="164" height="236" rx="22" fill="#FBFBFD" />
-    <rect x="-74" y="-110" width="148" height="220" rx="16" fill="none" stroke="#31153B" stroke-width="5" />
-    <rect x="-46" y="-48" width="46" height="96" rx="23" fill="none" stroke="#E0433E" stroke-width="8" />
+  <!-- Fanned NShapes Trio (All-Different: 1 Orange Outlined Circle · 2 Teal Hatched Triangles · 3 Cobalt Solid Moons) -->
+  <!-- Card 1 (Left): 1 Orange Outlined Circle -->
+  <g transform="translate(122 272) rotate(-16)" filter="url(#softShadow)">
+    <rect x="-82" y="-114" width="164" height="228" rx="20" fill="#FAF7F0" stroke="#232934" stroke-width="5" />
+    <circle cx="-24" cy="-4" r="34" fill="none" stroke="${COLOR_ORANGE}" stroke-width="8.5" />
   </g>
 
-  <!-- Card 2: 2 Green Striped Pill/Waves -->
-  <g transform="translate(352 270) rotate(18)" filter="url(#softShadow)">
-    <rect x="-82" y="-118" width="164" height="236" rx="22" fill="#FBFBFD" />
-    <rect x="-74" y="-110" width="148" height="220" rx="16" fill="none" stroke="#31153B" stroke-width="5" />
-    <rect x="-4" y="-48" width="32" height="96" rx="16" fill="#00897B" opacity="0.22" stroke="#00897B" stroke-width="6" />
-    <line x1="-1" y1="-22" x2="25" y2="-22" stroke="#00897B" stroke-width="4" />
-    <line x1="-1" y1="0" x2="25" y2="0" stroke="#00897B" stroke-width="4" />
-    <line x1="-1" y1="22" x2="25" y2="22" stroke="#00897B" stroke-width="4" />
-    <rect x="34" y="-48" width="32" height="96" rx="16" fill="#00897B" opacity="0.22" stroke="#00897B" stroke-width="6" />
-    <line x1="37" y1="-22" x2="63" y2="-22" stroke="#00897B" stroke-width="4" />
-    <line x1="37" y1="0" x2="63" y2="0" stroke="#00897B" stroke-width="4" />
-    <line x1="37" y1="22" x2="63" y2="22" stroke="#00897B" stroke-width="4" />
+  <!-- Card 2 (Right): 2 Teal Diagonal-Hatched Triangles (stacked cleanly in visible right field) -->
+  <g transform="translate(350 272) rotate(16)" filter="url(#softShadow)">
+    <rect x="-82" y="-114" width="164" height="228" rx="20" fill="#FAF7F0" stroke="#232934" stroke-width="5" />
+    <g transform="translate(10 -78) scale(2.32)">
+      <polygon points="${TRIANGLE_POINTS_24x30}" fill="url(#tealHatch)" stroke="${COLOR_TEAL}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+    </g>
+    <g transform="translate(10 8) scale(2.32)">
+      <polygon points="${TRIANGLE_POINTS_24x30}" fill="url(#tealHatch)" stroke="${COLOR_TEAL}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+    </g>
   </g>
 
-  <!-- Center Hero Card: 3 Blue Solid Diamonds (the iconic NShapes emblem) -->
-  <g transform="translate(237 244) rotate(-1)" filter="url(#softShadow)">
-    <rect x="-94" y="-134" width="188" height="268" rx="24" fill="#FBFBFD" />
-    <rect x="-85" y="-125" width="170" height="250" rx="17" fill="none" stroke="#31153B" stroke-width="5.5" />
-    <polygon points="-47,-32 -27,0 -47,32 -67,0" fill="#0A76C6" />
-    <polygon points="0,-32 20,0 0,32 -20,0" fill="#0A76C6" />
-    <polygon points="47,-32 67,0 47,32 27,0" fill="#0A76C6" />
+  <!-- Card 3 (Center Hero): 3 Cobalt Solid Tilted Moons -->
+  <g transform="translate(236 244) rotate(-1)" filter="url(#softShadow)">
+    <rect x="-96" y="-132" width="192" height="264" rx="22" fill="#FFFFFF" stroke="#F5C842" stroke-width="6" />
+    <g transform="translate(-76.5 -28) scale(1.88)">
+      <path d="${CRESCENT_PATH_24x30}" fill="${COLOR_BLUE}" stroke="${COLOR_BLUE}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" />
+    </g>
+    <g transform="translate(-22.5 -28) scale(1.88)">
+      <path d="${CRESCENT_PATH_24x30}" fill="${COLOR_BLUE}" stroke="${COLOR_BLUE}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" />
+    </g>
+    <g transform="translate(31.5 -28) scale(1.88)">
+      <path d="${CRESCENT_PATH_24x30}" fill="${COLOR_BLUE}" stroke="${COLOR_BLUE}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" />
+    </g>
   </g>
 
   <!-- Right Side: Title & Tagline -->
-  <g transform="translate(474 148)">
+  <g transform="translate(484 148)">
     <!-- Accent badge -->
     <rect x="0" y="0" width="234" height="34" rx="17" fill="#F5C842" />
     <text x="117" y="22.5" text-anchor="middle" font-size="14" font-weight="900" letter-spacing="1.8" fill="#182230">PATTERN ROGUELIKE</text>
@@ -293,15 +291,14 @@ function buildFeatureGraphicHtml() {
 }
 
 function stripAlphaToRgb(filePath) {
-  // Use Python Pillow to guarantee true 8-bit RGB (color_type=2, zero alpha channel)
-  // as strictly required by Apple App Store (ITMS-90717).
+  // Guarantee true 8-bit RGB (color_type=2, zero alpha channel) for Apple ITMS-90717
   const py = `
 from PIL import Image
 import sys
 p = sys.argv[1]
 img = Image.open(p)
 if img.mode != 'RGB':
-    bg = Image.new('RGB', img.size, (17, 89, 168))
+    bg = Image.new('RGB', img.size, (16, 50, 96))
     if img.mode == 'RGBA':
         bg.paste(img, mask=img.split()[3])
     else:
@@ -327,25 +324,14 @@ async function renderHtmlToPng(browser, html, width, height, outPath, { transpar
 async function main() {
   const browser = await chromium.launch();
   try {
-    // 1. iOS / Universal App Icon (1024x1024 opaque RGB)
     await renderHtmlToPng(browser, buildAppIconHtml(1024), 1024, 1024, 'assets/icon.png', { opaqueRgb: true });
-
-    // 2. Android Adaptive Foreground (1024x1024 transparent RGBA, safe-zone centered)
     await renderHtmlToPng(browser, buildAdaptiveForegroundHtml(), 1024, 1024, 'assets/adaptive-icon.png', { transparent: true });
-
-    // 3. Android 13+ Monochrome Themed Icon (1024x1024 white silhouette on transparent)
     await renderHtmlToPng(browser, buildAdaptiveMonochromeHtml(), 1024, 1024, 'assets/adaptive-icon-monochrome.png', { transparent: true });
-
-    // 4. Expo Splash Icon (1024x1024 transparent emblem over #145CA8 splash background)
     await renderHtmlToPng(browser, buildSplashIconHtml(), 1024, 1024, 'assets/splash-icon.png', { transparent: true });
-
-    // 5. Web Favicon & PWA Icons
     await renderHtmlToPng(browser, buildAppIconHtml(512, { roundedMask: true }), 512, 512, 'assets/favicon.png', { transparent: true });
     await renderHtmlToPng(browser, buildAppIconHtml(512), 512, 512, 'public/icons/icon-512.png', { opaqueRgb: true });
     await renderHtmlToPng(browser, buildAppIconHtml(192), 192, 192, 'public/icons/icon-192.png', { opaqueRgb: true });
     await renderHtmlToPng(browser, buildAppIconHtml(180), 180, 180, 'public/icons/apple-touch-icon.png', { opaqueRgb: true });
-
-    // 6. Google Play Console Store Graphics
     await renderHtmlToPng(browser, buildAppIconHtml(512), 512, 512, 'store-assets/google-play/app-icon-512.png', { opaqueRgb: true });
     await renderHtmlToPng(browser, buildFeatureGraphicHtml(), 1024, 500, 'store-assets/google-play/feature-graphic.png', { opaqueRgb: true });
   } finally {

@@ -29,7 +29,7 @@ export default {
     splash: {
       image: './assets/splash-icon.png',
       resizeMode: 'contain',
-      backgroundColor: '#145CA8',
+      backgroundColor: '#103260',
     },
     ios: {
       supportsTablet: true,
@@ -78,7 +78,7 @@ export default {
       adaptiveIcon: {
         foregroundImage: './assets/adaptive-icon.png',
         monochromeImage: './assets/adaptive-icon-monochrome.png',
-        backgroundColor: '#145CA8',
+        backgroundColor: '#103260',
       },
       blockedPermissions: [
         'android.permission.RECORD_AUDIO',
@@ -111,7 +111,7 @@ export default {
           image: './assets/splash-icon.png',
           imageWidth: 200,
           resizeMode: 'contain',
-          backgroundColor: '#145CA8',
+          backgroundColor: '#103260',
         },
       ],
       [

@@ -27,7 +27,7 @@ const QUIZ_SCENARIOS: Array<{
       { id: '3', shape: 'oval', color: 'purple', number: 3, shading: 'solid', background: 'white', selected: false },
     ],
     isValid: true,
-    explanation: "This is a valid SET! Shape: all different (diamond, squiggle, oval). Color: all different (red, green, purple). Number: all different (1, 2, 3).",
+    explanation: "This is a valid Trio! Shape: all different (triangle, moon, circle). Color: all different (orange, teal, blue). Number: all different (1, 2, 3).",
     hint: "Check each attribute - are they ALL the same or ALL different?",
   },
   // Quiz 2: Invalid SET - color has 2 same, 1 different
@@ -38,7 +38,7 @@ const QUIZ_SCENARIOS: Array<{
       { id: '3', shape: 'oval', color: 'green', number: 3, shading: 'solid', background: 'white', selected: false },
     ],
     isValid: false,
-    explanation: "NOT a valid SET! Color breaks the rule: 2 red and 1 green. Remember, each attribute must be ALL the same or ALL different - not 2 and 1!",
+    explanation: "NOT a valid Trio! Color breaks the rule: 2 orange and 1 teal. Remember, each attribute must be ALL the same or ALL different - not 2 and 1!",
     hint: "Look at the colors carefully...",
   },
   // Quiz 3: Valid SET - all same color, all different shape and number
@@ -49,7 +49,7 @@ const QUIZ_SCENARIOS: Array<{
       { id: '3', shape: 'oval', color: 'purple', number: 3, shading: 'solid', background: 'white', selected: false },
     ],
     isValid: true,
-    explanation: "This is a valid SET! Shape: all different. Color: all same (purple). Number: all different. Each attribute follows the rule!",
+    explanation: "This is a valid Trio! Shape: all different. Color: all same (blue). Number: all different. Each attribute follows the rule!",
     hint: "Same is also valid - as long as ALL THREE match!",
   },
 ];
@@ -90,7 +90,7 @@ const TutorialQuiz: React.FC<TutorialQuizProps> = ({
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Quiz {quizNumber} of 3</Text>
-        <Text style={styles.headerSubtitle}>Is this a valid SET?</Text>
+        <Text style={styles.headerSubtitle}>Is this a valid Trio?</Text>
       </View>
 
       <View style={styles.cardsContainer}>
@@ -117,19 +117,19 @@ const TutorialQuiz: React.FC<TutorialQuizProps> = ({
 
       {!answered ? (
         <View style={styles.answerSection}>
-          <Text style={styles.questionText}>Do these 3 cards form a valid SET?</Text>
+          <Text style={styles.questionText}>Do these 3 cards form a valid Trio?</Text>
           <View style={styles.answerButtons}>
             <TouchableOpacity
               style={[styles.answerButton, styles.yesButton]}
               onPress={() => handleAnswer(true)}
             >
-              <Text style={styles.answerButtonText}>Yes, it's a SET!</Text>
+              <Text style={styles.answerButtonText}>Yes, it's a Trio!</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.answerButton, styles.noButton]}
               onPress={() => handleAnswer(false)}
             >
-              <Text style={styles.answerButtonText}>No, not a SET</Text>
+              <Text style={styles.answerButtonText}>No, not a Trio</Text>
             </TouchableOpacity>
           </View>
         </View>

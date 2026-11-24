@@ -1,10 +1,20 @@
 import { MONO_FONT } from '@/utils/fonts';
 import React, { createContext, memo, useCallback, useContext, useState, useSyncExternalStore } from 'react';
 import { View, Text, StyleSheet, Platform, TouchableOpacity } from 'react-native';
-import Svg, { Ellipse, Path, Polygon, Defs, Pattern, Rect } from 'react-native-svg';
+import Svg, { Circle, Path, Polygon, Defs, Pattern, Rect } from 'react-native-svg';
 import { Card as CardType, Background } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
-import { BACKGROUND_COLORS } from '@/utils/gameConfig';
+import {
+  CARD_SHAPE_GEOMETRY,
+  CARD_STOCK_BORDER,
+  CARD_STRIPE_PITCH,
+  CARD_STROKE_WIDTH,
+  CARD_SVG_HEIGHT,
+  CARD_SVG_WIDTH,
+  COLOR_BADGE_LETTER,
+  getCardShapeColor,
+  getCardStockBackground,
+} from '@/utils/cardVisuals';
 import { ColorblindStorage } from '@/utils/storage';
 import { useBurnTimer } from '@/hooks/useBurnTimer';
 import Icon, { type IconName } from './Icon';
@@ -17,11 +27,7 @@ const subscribeColorblindSafe = (onStoreChange: () => void): (() => void) =>
     ? ColorblindStorage.subscribe(() => onStoreChange())
     : () => {};
 
-const COLORBLIND_LETTER: Record<string, string> = {
-  red: 'R',
-  green: 'B',
-  purple: 'P',
-};
+const COLORBLIND_LETTER: Record<string, string> = COLOR_BADGE_LETTER;
 
 /** Board-level static visual overlays (Mirror Shard, Tightrope, Catalyst target, Hot Potato timestamp). */
 export interface CardBoardOverlay {
@@ -125,10 +131,10 @@ const canHoverWeb = (): boolean => {
   }
 };
 
-// SVG viewBox dimensions (1:2 width:height ratio)
-const SVG_WIDTH = 20;
-const SVG_HEIGHT = 40;
-const STROKE_WIDTH = 2;
+// Compact 24x30 (1:1.25) SVG viewBox for optimal 320px mobile crowding & badge clearance
+const SVG_WIDTH = CARD_SVG_WIDTH;
+const SVG_HEIGHT = CARD_SVG_HEIGHT;
+const STROKE_WIDTH = CARD_STROKE_WIDTH;
 
 interface CardProps {
   card: CardType;
@@ -225,9 +231,11 @@ const Card: React.FC<CardProps> = ({
   }
 
   const getCardStyle = () => {
+    const stockBorder = card.background ? CARD_STOCK_BORDER[card.background] : undefined;
     const cardStyles: any[] = [
       styles.card,
-      { backgroundColor: getCardBackgroundColor(card.background) }
+      { backgroundColor: getCardBackgroundColor(card.background) },
+      stockBorder && { borderColor: stockBorder },
     ];
 
     // Dud cards have special styling - grayed out white card
@@ -258,9 +266,10 @@ const Card: React.FC<CardProps> = ({
       cardStyles.push(styles.selected);
     }
 
-    // A pointed-out card that has been picked has been found: its warm fill gives way to the selection border
+    // A pointed-out card that has been picked has been found: its warm fill gives way to the selection border.
+    // On dark Charcoal stock, keep dark background and highlight with a warm golden frame so light-on-dark shapes stay legible.
     if (isHint && !selected) {
-      cardStyles.push(styles.hint);
+      cardStyles.push(card.background === 'charcoal' ? styles.hintDark : styles.hint);
     }
 
     if (disabled || isUnselectable) {
@@ -615,13 +624,14 @@ const Card: React.FC<CardProps> = ({
         <View testID="card-locked" pointerEvents="none" style={[styles.lockedOverlay, (card.frozen ?? 0) > 0 ? styles.frozenOverlay : styles.cursedOverlay]} />
       )}
 
-      {/* Fire overlay - progressive darkening (no border, borders are for selection only) */}
+      {/* Fire overlay — perimeter ember glow (zero interior wash over shapes so WCAG ≥ 3.05:1 holds on every card stock) */}
       {card.onFire && !isDud && !isFaceDown && (
         <View
           style={[
             styles.fireOverlay,
             {
-              backgroundColor: `rgba(239, 68, 68, ${fireProgress * 0.3})`,
+              borderWidth: Math.max(2, Math.round(2 + fireProgress * 2.5)),
+              borderColor: `rgba(220, 38, 38, ${0.35 + fireProgress * 0.55})`,
             }
           ]}
           pointerEvents="none"
@@ -638,63 +648,25 @@ interface ShapeProps {
   colorblind?: boolean;
 }
 
-const getBorderColor = (color: string, colorblind = false) => {
-  if (colorblind) {
-    // Okabe-Ito colorblind-safe high-contrast palette (Vermilion / Blue / Reddish-Purple)
-    switch (color) {
-      case 'red': return '#D55E00';
-      case 'green': return '#0072B2';
-      case 'purple': return '#CC79A7';
-      default: return COLORS.slateCharcoal;
-    }
-  }
-  switch (color) {
-    case 'red': return COLORS.impactRed;
-    case 'green': return COLORS.logicTeal;
-    case 'purple': return '#7C3AED';
-    default: return COLORS.slateCharcoal;
-  }
-};
+// Get the appropriate universal CVD-safe shape color based on card stock
+const getShapeColor = (color: string, background?: Background, _colorblind = false) =>
+  getCardShapeColor(color, background);
 
-// Get lightened colors for charcoal background (better contrast)
-const getLightColor = (color: string, colorblind = false) => {
-  if (colorblind) {
-    switch (color) {
-      case 'red': return '#FF9B54';
-      case 'green': return '#56B4E9';
-      case 'purple': return '#E5A4CB';
-      default: return COLORS.canvasWhite;
-    }
-  }
-  switch (color) {
-    case 'red': return '#FF9999';
-    case 'green': return '#66CCBB';
-    case 'purple': return '#B39DDB';
-    default: return COLORS.canvasWhite;
-  }
-};
+const getCardBackgroundColor = (background?: Background) => getCardStockBackground(background);
 
-// Get the appropriate shape color based on background
-const getShapeColor = (color: string, background?: Background, colorblind = false) => {
-  if (background === 'charcoal') {
-    return getLightColor(color, colorblind);
-  }
-  return getBorderColor(color, colorblind);
-};
-
-const getCardBackgroundColor = (background?: Background) => {
-  if (!background || background === 'white') {
-    return COLORS.canvasWhite;
-  }
-  return BACKGROUND_COLORS[background];
-};
-
-// Stripe pattern for "striped" shading
+// +45° diagonal hatch pattern ("/") for "striped" shading — cuts cleanly across Circle, Triangle, and -25°-tilted Moon
 const StripesPattern: React.FC<{ id: string; color: string }> = memo(function StripesPattern({ id, color }) {
+  const pitch = CARD_STRIPE_PITCH;
   return (
     <Defs>
-      <Pattern id={id} patternUnits="userSpaceOnUse" width="4" height="4">
-        <Rect x="0" y="0" width="4" height="2" fill={color} />
+      <Pattern
+        id={id}
+        patternUnits="userSpaceOnUse"
+        width={pitch}
+        height={pitch}
+        patternTransform="rotate(-45)"
+      >
+        <Rect x="0" y="0" width={pitch} height={pitch / 2} fill={color} />
       </Pattern>
     </Defs>
   );
@@ -706,9 +678,11 @@ const getFill = (color: string, shading: string, patternId: string, background?:
   return 'transparent';
 };
 
+// Slot 'oval' → Circle (smooth symmetric convex archetype)
 const Oval: React.FC<ShapeProps> = memo(function Oval({ color, shading, background, colorblind = false }) {
   const strokeColor = getShapeColor(color, background, colorblind);
-  const patternId = `stripes-oval-${color}-${background || 'white'}${colorblind ? '-cb' : ''}`;
+  const patternId = `stripes-circle-${color}-${background || 'white'}`;
+  const { cx, cy, r } = CARD_SHAPE_GEOMETRY.circle;
   return (
     <Svg
       width="100%"
@@ -717,11 +691,10 @@ const Oval: React.FC<ShapeProps> = memo(function Oval({ color, shading, backgrou
       preserveAspectRatio="xMidYMid meet"
     >
       {shading === 'striped' && <StripesPattern id={patternId} color={strokeColor} />}
-      <Ellipse
-        cx={SVG_WIDTH / 2}
-        cy={SVG_HEIGHT / 2}
-        rx={(SVG_WIDTH - STROKE_WIDTH) / 2}
-        ry={(SVG_HEIGHT - STROKE_WIDTH) / 2}
+      <Circle
+        cx={cx}
+        cy={cy}
+        r={r}
         stroke={strokeColor}
         strokeWidth={STROKE_WIDTH}
         fill={getFill(color, shading, patternId, background, colorblind)}
@@ -730,11 +703,10 @@ const Oval: React.FC<ShapeProps> = memo(function Oval({ color, shading, backgrou
   );
 });
 
+// Slot 'diamond' → Triangle (sharp straight-edge convex archetype)
 const Diamond: React.FC<ShapeProps> = memo(function Diamond({ color, shading, background, colorblind = false }) {
   const strokeColor = getShapeColor(color, background, colorblind);
-  const patternId = `stripes-diamond-${color}-${background || 'white'}${colorblind ? '-cb' : ''}`;
-  // Diamond points: top, right, bottom, left
-  const points = `${SVG_WIDTH / 2},${STROKE_WIDTH} ${SVG_WIDTH - STROKE_WIDTH},${SVG_HEIGHT / 2} ${SVG_WIDTH / 2},${SVG_HEIGHT - STROKE_WIDTH} ${STROKE_WIDTH},${SVG_HEIGHT / 2}`;
+  const patternId = `stripes-triangle-${color}-${background || 'white'}`;
   return (
     <Svg
       width="100%"
@@ -744,29 +716,21 @@ const Diamond: React.FC<ShapeProps> = memo(function Diamond({ color, shading, ba
     >
       {shading === 'striped' && <StripesPattern id={patternId} color={strokeColor} />}
       <Polygon
-        points={points}
+        points={CARD_SHAPE_GEOMETRY.trianglePoints}
         stroke={strokeColor}
         strokeWidth={STROKE_WIDTH}
+        strokeLinejoin="round"
+        strokeLinecap="round"
         fill={getFill(color, shading, patternId, background, colorblind)}
       />
     </Svg>
   );
 });
 
-// Classic 180-degree symmetric, C1-continuous S-curve squiggle in 20x40 viewBox
-// Mathematically verified: 0 self-intersections, bbox [2.4..17.6] x [2.2..37.8], min width 8.4
-const SQUIGGLE_PATH =
-  'M 14.2,2.4 ' +
-  'C 17.8,3.8 12.2,9.2 12,14 ' +
-  'C 11.8,18.8 17.4,22.3 17.6,27.5 ' +
-  'C 17.8,32.7 9.4,39 5.8,37.6 ' +
-  'C 2.2,36.2 7.8,30.8 8,26 ' +
-  'C 8.2,21.2 2.6,17.7 2.4,12.5 ' +
-  'C 2.2,7.3 10.6,1 14.2,2.4 Z';
-
+// Slot 'squiggle' → -25°-tilted Crescent Moon (deeply concave pop-out archetype; 0 self-intersections)
 const Squiggle: React.FC<ShapeProps> = memo(function Squiggle({ color, shading, background, colorblind = false }) {
   const strokeColor = getShapeColor(color, background, colorblind);
-  const patternId = `stripes-squiggle-${color}-${background || 'white'}${colorblind ? '-cb' : ''}`;
+  const patternId = `stripes-moon-${color}-${background || 'white'}`;
   return (
     <Svg
       width="100%"
@@ -776,7 +740,7 @@ const Squiggle: React.FC<ShapeProps> = memo(function Squiggle({ color, shading, 
     >
       {shading === 'striped' && <StripesPattern id={patternId} color={strokeColor} />}
       <Path
-        d={SQUIGGLE_PATH}
+        d={CARD_SHAPE_GEOMETRY.crescentPath}
         stroke={strokeColor}
         strokeWidth={STROKE_WIDTH}
         strokeLinejoin="round"
@@ -987,9 +951,15 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.6,
     elevation: 8,
   },
-  // Pointed out: a warm fill (never a border: those are for selection)
+  // Pointed out: a warm fill on light cards, golden rim on dark charcoal cards
   hint: {
     backgroundColor: '#FFF3B0',
+  },
+  hintDark: {
+    borderColor: '#FDE047',
+    shadowColor: '#FDE047',
+    shadowOpacity: 0.55,
+    shadowRadius: 6,
   },
   // Note: Fire state is shown via small icon in bottom left, not border
   // Borders/outlines are EXCLUSIVELY for selection state

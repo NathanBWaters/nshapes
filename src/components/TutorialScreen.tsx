@@ -37,14 +37,14 @@ const TutorialScreen: React.FC<TutorialScreenProps> = ({ onComplete, onExit }) =
     <View style={styles.contentContainer}>
       <View style={styles.headerSection}>
         <Text style={styles.title}>Welcome to NShapes!</Text>
-        <Text style={styles.subtitle}>Learn how to find valid SETs</Text>
+        <Text style={styles.subtitle}>Learn how to find valid Trios</Text>
       </View>
 
       <ScrollView style={styles.scrollContent} contentContainerStyle={styles.scrollContentContainer}>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>The Basics</Text>
           <Text style={styles.paragraph}>
-            In NShapes, your goal is to find groups of 3 cards that form a valid SET.
+            In NShapes, your goal is to find groups of 3 cards that form a valid Trio.
           </Text>
         </View>
 
@@ -56,11 +56,11 @@ const TutorialScreen: React.FC<TutorialScreenProps> = ({ onComplete, onExit }) =
           <View style={styles.attributeList}>
             <View style={styles.attributeItem}>
               <Text style={styles.attributeLabel}>Shape</Text>
-              <Text style={styles.attributeValue}>Diamond, Squiggle, or Oval</Text>
+              <Text style={styles.attributeValue}>Circle, Triangle, or Moon</Text>
             </View>
             <View style={styles.attributeItem}>
               <Text style={styles.attributeLabel}>Color</Text>
-              <Text style={styles.attributeValue}>Red, Green, or Purple</Text>
+              <Text style={styles.attributeValue}>Orange, Teal, or Blue</Text>
             </View>
             <View style={styles.attributeItem}>
               <Text style={styles.attributeLabel}>Number</Text>
@@ -89,7 +89,7 @@ const TutorialScreen: React.FC<TutorialScreenProps> = ({ onComplete, onExit }) =
             </Text>
           </View>
           <Text style={styles.paragraph}>
-            If even one attribute has 2 cards the same and 1 different, it's NOT a valid SET!
+            If even one attribute has 2 cards the same and 1 different, it's NOT a valid Trio!
           </Text>
         </View>
       </ScrollView>
@@ -214,7 +214,7 @@ const TutorialScreen: React.FC<TutorialScreenProps> = ({ onComplete, onExit }) =
         </Text>
 
         <View style={styles.completeSummary}>
-          <Text style={styles.summaryItem}>✓ Find 3-card SETs</Text>
+          <Text style={styles.summaryItem}>✓ Find 3-card Trios</Text>
           <Text style={styles.summaryItem}>✓ All same OR all different per attribute</Text>
           <Text style={styles.summaryItem}>✓ Complexity increases each round</Text>
           <Text style={styles.summaryItem}>✓ Use hints when stuck</Text>

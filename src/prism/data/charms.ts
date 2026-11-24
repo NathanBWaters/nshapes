@@ -211,36 +211,36 @@ export const CHARMS: readonly CharmDef[] = [
   // ── 16 BRAND-NEW SET-BALATRO ARCHETYPE CHARMS ─────────────────────────────
   {
     id: 'ruby-prism',
-    name: 'Ruby Prism',
+    name: 'Solar Prism',
     role: 'mult',
     rarity: 'common',
     cost: 4,
     icon: 'delapouite/fire-gem',
-    description: '+5 Mult for every Red card in your scored Set.',
-    flavorText: 'Crimson light doubles back on itself.',
-    accentColor: '#EF4444',
+    description: '+5 Mult for every Orange card in your scored Trio.',
+    flavorText: 'Tangerine light doubles back on itself.',
+    accentColor: '#E05A04',
   },
   {
     id: 'emerald-lens',
-    name: 'Emerald Lens',
+    name: 'Tide Lens',
     role: 'chips',
     rarity: 'common',
     cost: 4,
     icon: 'lorc/gems',
-    description: '+35 Chips for every Green card in your scored Set.',
-    flavorText: 'Verdant geometry, cut to razor precision.',
-    accentColor: '#10B981',
+    description: '+35 Chips for every Teal card in your scored Trio.',
+    flavorText: 'Ocean-teal geometry, cut to razor precision.',
+    accentColor: '#007870',
   },
   {
     id: 'amethyst-crown',
-    name: 'Amethyst Crown',
+    name: 'Cobalt Crown',
     role: 'xmult',
     rarity: 'uncommon',
     cost: 7,
     icon: 'lorc/crown',
-    description: '×1.35 Mult for every Purple card in your scored Set.',
-    flavorText: 'Three purples wear the crown together.',
-    accentColor: '#9333EA',
+    description: '×1.35 Mult for every Blue card in your scored Trio.',
+    flavorText: 'Three cobalts wear the crown together.',
+    accentColor: '#1E229E',
   },
   {
     id: 'trinity-bell',
@@ -563,11 +563,11 @@ export const getCharmStatusLabel = (charm: OwnedCharm, run: PrismRun): string =>
     case 'wild-card':
       return 'Wild → +12M';
     case 'ruby-prism':
-      return '+5M / Red';
+      return '+5M / Orange';
     case 'emerald-lens':
-      return '+35C / Green';
+      return '+35C / Teal';
     case 'amethyst-crown':
-      return '×1.35 / Purple';
+      return '×1.35 / Blue';
     case 'trinity-bell':
       return '+40C / 3-card';
     case 'minimalist-monk':

@@ -104,13 +104,13 @@ const hintButtonStyles = StyleSheet.create({
 // Copilot step definitions for tutorial mode
 const COPILOT_STEPS = {
   round: { order: 1, text: "This shows your current round. In Adventure Mode, you'll play through 10 rounds with increasing difficulty." },
-  health: { order: 2, text: "Your health! Invalid SET matches cost 1 heart. If you run out, it's game over. Protect your health!" },
+  health: { order: 2, text: "Your health! Invalid Trio matches cost 1 heart. If you run out, it's game over. Protect your health!" },
   money: { order: 3, text: "Gold coins! Earn money by matching cards. Spend it in the shop between rounds to buy powerful weapons." },
   level: { order: 4, text: "Your level and XP bar. Earn experience with each match. Level up to choose a free weapon reward!" },
   graces: { order: 5, text: "Graces save you from near-misses! When only 1 attribute is wrong, a grace is used instead of losing health." },
-  hints: { order: 6, text: "Stuck? Tap this to use a hint! It will highlight a valid SET on the board. Earn hints from matches - your capacity shows as X/max." },
+  hints: { order: 6, text: "Stuck? Tap this to use a hint! It will highlight a valid Trio on the board. Earn hints from matches - your capacity shows as X/max." },
   timer: { order: 7, text: "The countdown timer! Reach the score target before time runs out to complete the round." },
-  score: { order: 9, text: "Your score progress! Fill this bar to reach the target and complete the round. Each valid SET adds to your score." },
+  score: { order: 9, text: "Your score progress! Fill this bar to reach the target and complete the round. Each valid Trio adds to your score." },
   menu: { order: 10, text: "Tap MENU to view your stats, check the weapon guide, or exit the game." },
 };
 

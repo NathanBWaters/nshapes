@@ -22,6 +22,7 @@
  * the fighter on a small phone (about 60 characters).
  */
 import type { AttributeName, Background, Card, CharacterName, Color, Number as CardNumber, Shading, Shape } from '@/types';
+import { formatBackgroundName, formatColorName, formatShapeName } from '@/utils/cardVisuals';
 import { isValidCombination } from '@/utils/gameUtils';
 import type { AdventureSave, LevelDef, RunState } from './types';
 import { allSets, countDifferentAttributes, isSelectable } from './engine/sets';
@@ -128,10 +129,15 @@ export const COMPANION_VOICES: Record<CharacterName, CompanionVoice> = {
 export const companionVoice = (fighter?: CharacterName): CompanionVoice =>
   (fighter && COMPANION_VOICES[fighter]) || COMPANION_VOICES['Orange Tabby'];
 
-const SHAPE_PLURAL: Record<Shape, string> = {
-  diamond: 'diamonds',
-  oval: 'ovals',
-  squiggle: 'squiggles',
+const shapeWord = (s: Shape, plural = false): string => formatShapeName(s, plural).toLowerCase();
+const colorWord = (c: Color): string => formatColorName(c).toLowerCase();
+const bgWord = (b: Background): string => formatBackgroundName(b).toLowerCase();
+
+const displayAttrValue = (attr: AttributeName, value: string | number, plural = false): string => {
+  if (attr === 'shape') return shapeWord(value as Shape, plural);
+  if (attr === 'color') return colorWord(value as Color);
+  if (attr === 'background') return bgWord(value as Background);
+  return String(value);
 };
 
 const ALL_SHAPES: readonly Shape[] = ['diamond', 'oval', 'squiggle'];
@@ -171,9 +177,9 @@ const twoAndOne = (cards: readonly Card[], attr: AttributeName): { pair: string;
     if (n === 2) pairVal = v;
     else oddVal = v;
   }
-  if (attr === 'shape') return { pair: `2 ${SHAPE_PLURAL[pairVal as Shape] ?? `${pairVal}s`}`, odd: `1 ${oddVal}` };
+  if (attr === 'shape') return { pair: `2 ${shapeWord(pairVal as Shape, true)}`, odd: `1 ${shapeWord(oddVal as Shape)}` };
   if (attr === 'number') return { pair: `two ${pairVal}s`, odd: `one ${oddVal}` };
-  return { pair: `2 ${pairVal}`, odd: `1 ${oddVal}` };
+  return { pair: `2 ${displayAttrValue(attr, pairVal)}`, odd: `1 ${displayAttrValue(attr, oddVal)}` };
 };
 
 /**
@@ -192,7 +198,7 @@ export const evaluateTripleTraits = (
 
     if (unique.size === 1) {
       const v = vals[0];
-      const desc = attr === 'shape' ? `all ${SHAPE_PLURAL[v as Shape]}` : attr === 'number' ? `all ${v}s` : `all ${v}`;
+      const desc = attr === 'shape' ? `all ${shapeWord(v as Shape, true)}` : attr === 'number' ? `all ${v}s` : `all ${displayAttrValue(attr, v)}`;
       return { attr, status: 'pass', label: `${title}: ${desc}`, detail: desc, brief: desc };
     }
     if (unique.size === 3) {
@@ -210,7 +216,7 @@ export const describeSingleCardTraits = (
   attributes: readonly AttributeName[]
 ): TraitCheckPill[] =>
   inReadingOrder(attributes).map(attr => {
-    const val = String(attrValueOf(card, attr));
+    const val = displayAttrValue(attr, attrValueOf(card, attr));
     return {
       attr,
       status: 'info',
@@ -251,18 +257,19 @@ export const predictThirdCard = (
 
     needed[attr] = target;
     const how = va === vb ? 'same' : 'different';
-    pills.push({ attr, status: 'hint', label: `${ATTR_TITLE[attr]}: ${how} → ${target}`, detail: `${target} (${how})`, brief: `${target}` });
+    const shownTarget = displayAttrValue(attr, target);
+    pills.push({ attr, status: 'hint', label: `${ATTR_TITLE[attr]}: ${how} → ${shownTarget}`, detail: `${shownTarget} (${how})`, brief: `${shownTarget}` });
   }
 
-  // "a red squiggle", "2 green ovals"
+  // "an orange moon", "2 teal circles"
   const num = needed.number as CardNumber | undefined;
   const shade = needed.shading as Shading | undefined;
   const col = needed.color as Color | undefined;
   const shp = needed.shape as Shape | undefined;
   const words: string[] = [];
   if (shade) words.push(shade);
-  if (col) words.push(col);
-  if (shp) words.push(num && num > 1 ? SHAPE_PLURAL[shp] : shp);
+  if (col) words.push(colorWord(col));
+  if (shp) words.push(shapeWord(shp, Boolean(num && num > 1)));
   const core = words.join(' ') || 'matching card';
   const neededSummary = num ? `${num} ${core}` : /^[aeiou]/i.test(core) ? `an ${core}` : `a ${core}`;
 
@@ -292,10 +299,10 @@ export const describeValidSetWhy = (cards: readonly Card[], attributes: readonly
     if (distinct === 3) {
       if (attr === 'number') counted = '1-2-3';
       else different.push(attr === 'color' ? 'colors' : attr === 'shape' ? 'shapes' : attr === 'shading' ? 'shadings' : 'backgrounds');
-    } else if (attr === 'shape') same.push(`all ${SHAPE_PLURAL[vals[0] as Shape]}`);
+    } else if (attr === 'shape') same.push(`all ${shapeWord(vals[0] as Shape, true)}`);
     else if (attr === 'number') same.push(`all ${vals[0]}s`);
     else if (attr === 'background') same.push('one background');
-    else same.push(`all ${vals[0]}`);
+    else same.push(`all ${displayAttrValue(attr, vals[0])}`);
   }
   const parts = [...same, ...(different.length > 0 ? [`all different ${different.join(' and ')}`] : []), ...(counted ? [counted] : [])];
   // (what the cards share comes first, unless nothing is shared)
@@ -400,8 +407,8 @@ const firstLevelPraise = (matches: number, look: SetLook): string => {
 /** Compact 2-trait summary for the 1-1 walk-through speech bubble (<= 60 chars). */
 const shortWhy = (cards: readonly Card[], attributes: readonly AttributeName[]): string => {
   const look = lookOf(cards, attributes);
-  if (look === 'color') return `all ${cards[0].color}, 3 shapes`;
-  if (look === 'shape') return `all ${SHAPE_PLURAL[cards[0].shape]}, 3 colors`;
+  if (look === 'color') return `all ${colorWord(cards[0].color)}, 3 shapes`;
+  if (look === 'shape') return `all ${shapeWord(cards[0].shape, true)}, 3 colors`;
   if (look === 'different') return '3 colors & 3 shapes';
   const why = describeValidSetWhy(cards, attributes).replace(/\.$/, '');
   return `${why[0].toLowerCase()}${why.slice(1)}`;

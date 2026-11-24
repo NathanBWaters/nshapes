@@ -1,8 +1,16 @@
 import React, { memo, useEffect, useState, useSyncExternalStore } from 'react';
 import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
-import Svg, { Ellipse, Path, Polygon } from 'react-native-svg';
+import Svg, { Circle, Path, Polygon } from 'react-native-svg';
 import Icon from '@/components/Icon';
+import {
+  CARD_SHAPE_GEOMETRY,
+  CARD_STROKE_WIDTH,
+  CARD_SVG_HEIGHT,
+  CARD_SVG_WIDTH,
+  formatColorName,
+  formatShapeName,
+} from '@/utils/cardVisuals';
 import { ColorblindStorage } from '@/utils/storage';
 import { SPRING } from '@/utils/motion';
 import { isCardWild } from '../data/cards';
@@ -57,18 +65,10 @@ const canHoverWeb = (): boolean => {
   }
 };
 
-// Exact 20x40 viewBox & mathematically verified smooth S-curve squiggle from src/components/Card.tsx
-const SVG_WIDTH = 20;
-const SVG_HEIGHT = 40;
-const STROKE_WIDTH = 1.8;
-const SQUIGGLE_PATH =
-  'M 14.2,2.4 ' +
-  'C 17.8,3.8 12.2,9.2 12,14 ' +
-  'C 11.8,18.8 17.4,22.3 17.6,27.5 ' +
-  'C 17.8,32.7 9.4,39 5.8,37.6 ' +
-  'C 2.2,36.2 7.8,30.8 8,26 ' +
-  'C 8.2,21.2 2.6,17.7 2.4,12.5 ' +
-  'C 2.2,7.3 10.6,1 14.2,2.4 Z';
+// Compact 24x30 (1:1.25) viewBox matching src/components/Card.tsx (Circle / Triangle / Moon)
+const SVG_WIDTH = CARD_SVG_WIDTH;
+const SVG_HEIGHT = CARD_SVG_HEIGHT;
+const STROKE_WIDTH = CARD_STROKE_WIDTH;
 
 const PrismShapeSvg: React.FC<{
   shape: PrismShape;
@@ -79,13 +79,13 @@ const PrismShapeSvg: React.FC<{
   const stroke = fill;
 
   if (shape === 'oval') {
+    const { cx, cy, r } = CARD_SHAPE_GEOMETRY.circle;
     return (
       <Svg width="100%" height="100%" viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`} preserveAspectRatio="xMidYMid meet">
-        <Ellipse
-          cx={SVG_WIDTH / 2}
-          cy={SVG_HEIGHT / 2}
-          rx={(SVG_WIDTH - STROKE_WIDTH) / 2}
-          ry={(SVG_HEIGHT - STROKE_WIDTH) / 2}
+        <Circle
+          cx={cx}
+          cy={cy}
+          r={r}
           fill={fill}
           stroke={stroke}
           strokeWidth={STROKE_WIDTH}
@@ -95,15 +95,15 @@ const PrismShapeSvg: React.FC<{
   }
 
   if (shape === 'diamond') {
-    const points = `${SVG_WIDTH / 2},${STROKE_WIDTH} ${SVG_WIDTH - STROKE_WIDTH},${SVG_HEIGHT / 2} ${SVG_WIDTH / 2},${SVG_HEIGHT - STROKE_WIDTH} ${STROKE_WIDTH},${SVG_HEIGHT / 2}`;
     return (
       <Svg width="100%" height="100%" viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`} preserveAspectRatio="xMidYMid meet">
         <Polygon
-          points={points}
+          points={CARD_SHAPE_GEOMETRY.trianglePoints}
           fill={fill}
           stroke={stroke}
           strokeWidth={STROKE_WIDTH}
           strokeLinejoin="round"
+          strokeLinecap="round"
         />
       </Svg>
     );
@@ -112,7 +112,7 @@ const PrismShapeSvg: React.FC<{
   return (
     <Svg width="100%" height="100%" viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`} preserveAspectRatio="xMidYMid meet">
       <Path
-        d={SQUIGGLE_PATH}
+        d={CARD_SHAPE_GEOMETRY.crescentPath}
         fill={fill}
         stroke={stroke}
         strokeWidth={STROKE_WIDTH}
@@ -141,7 +141,7 @@ const getEditionCardSurface = (edition: CardEdition, tempWild?: boolean): {
     case 'gold':
       return { bg: '#FEF9E1', border: '#D97706', stripe: ['#F59E0B', '#FDE68A', '#D97706'] };
     case 'wild':
-      return { bg: '#EDFCF9', border: '#16AA98', stripe: ['#F43F5E', '#16AA98', '#7C3AED', '#F2C94C'] };
+      return { bg: '#FFFBEB', border: '#B45309', stripe: ['#E05A04', '#007870', '#1E229E', '#F2C94C'] };
     case 'none':
     default:
       return { bg: PRISM_COLORS.cardWhite, border: PRISM_COLORS.cardBorder, stripe: null };
@@ -240,10 +240,11 @@ const PrismCardTile: React.FC<PrismCardTileProps> = memo(function PrismCardTile(
 
   const a11yLabel = hidden
     ? 'Hidden card'
-    : `${wild ? 'Wild' : `${card.number} ${card.color} ${card.shape}`}${effectiveEdition !== 'none' ? `, ${edMeta.label}` : ''}${debuffed ? ', debuffed' : ''}${selected ? ', selected' : ''}`;
+    : `${wild ? 'Wild' : `${card.number} ${formatColorName(card.color)} ${formatShapeName(card.shape, card.number !== 1)}`}${effectiveEdition !== 'none' ? `, ${edMeta.label}` : ''}${debuffed ? ', debuffed' : ''}${selected ? ', selected' : ''}`;
 
-  const shapeWidth = compact ? 14 : dense ? 19 : 22;
-  const shapeHeight = compact ? 28 : dense ? 38 : 44;
+  // Exact 24:30 aspect slots sized cleanly for 320px iPhone SE without clipping (76px <= 79.3px)
+  const shapeWidth = compact ? 15 : dense ? 20 : 22;
+  const shapeHeight = compact ? 19 : dense ? 25 : 28;
 
   return (
     <Animated.View style={[styles.outerWrap, animStyle]}>
@@ -346,7 +347,7 @@ const PrismCardTile: React.FC<PrismCardTileProps> = memo(function PrismCardTile(
                   <Icon
                     name="delapouite/card-joker"
                     size={compact ? 22 : 32}
-                    color="#0F766E"
+                    color="#B45309"
                     noShadow
                   />
                   <Text style={[styles.wildTitle, compact && styles.wildTitleCompact]}>
@@ -485,8 +486,9 @@ const styles = StyleSheet.create({
   cardDisabled: {
     opacity: 0.72,
   },
+  // Keep Glass edition opaque #E3F8FC + translucent glassSheen glint so shapes stay WCAG >= 3.39:1
   glassSurface: {
-    opacity: 0.94,
+    opacity: 1,
   },
   editionStripeRow: {
     position: 'absolute',
@@ -615,7 +617,7 @@ const styles = StyleSheet.create({
   wildTitle: {
     fontSize: 11,
     fontWeight: '900',
-    color: '#0F766E',
+    color: '#92400E',
     letterSpacing: 1,
   },
   wildTitleCompact: {

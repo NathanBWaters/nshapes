@@ -334,7 +334,7 @@ describe('Live Multiplier Ignition & Pre-Battle Parry UI', () => {
         }}
       />
     );
-    expect(getByText(/COUNTER: ANY SET/)).toBeTruthy();
+    expect(getByText(/COUNTER: ANY TRIO/)).toBeTruthy();
   });
 
   it('buildBalatroBreakdown itemizes Cards, flat bonuses, multipliers, Power, and follow-ups with exact running math', () => {

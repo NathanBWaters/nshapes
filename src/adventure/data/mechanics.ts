@@ -11,15 +11,15 @@ export const MECHANICS: Record<string, MechanicDef> = {
   set_rule: {
     id: 'set_rule',
     kind: 'rule',
-    title: 'What is a Set?',
+    title: 'What is a Trio?',
     tagline: 'Three cards where each trait is all the same, or all different.',
     body: [
       'Pick 3 cards and check one trait at a time: shape, then color.',
       'For each trait, the 3 cards must be all the same or all different.',
-      'Two alike and one odd (2 red + 1 green) is never a Set.',
+      'Two alike and one odd (2 orange + 1 teal) is never a Trio.',
     ],
     fightTips: [
-      { title: 'Your foe', text: 'This is Dozy Bunny. Every Set you make knocks 3 off its health bar.', anchor: 'top' },
+      { title: 'Your foe', text: 'This is Dozy Bunny. Every Trio you make knocks 3 off its health bar.', anchor: 'top' },
       { title: 'One trait at a time', text: 'Check shape, then color: each one all the same, or all different.', anchor: 'bottom' },
       { title: 'No pressure', text: 'You cannot lose this one. Fewer mistakes earn more stars.', anchor: 'top' },
     ],
@@ -28,7 +28,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
       type: 'set',
       attributes: ['shape', 'color'],
       valid: true,
-      caption: 'All red, and three different shapes: a Set!',
+      caption: 'All orange, and three different shapes: a Trio!',
       cards: [
         { shape: 'diamond', color: 'red', number: 1, shading: 'solid' },
         { shape: 'oval', color: 'red', number: 1, shading: 'solid' },
@@ -38,7 +38,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
     lessons: [
       {
         title: 'One trait at a time',
-        body: ['Every card has two traits to start with: a shape (diamond, oval, squiggle) and a color (red, green, purple).', 'Check shape by itself, then color by itself.'],
+        body: ['Every card has two traits to start with: a shape (triangle, circle, moon) and a color (orange, teal, blue).', 'Check shape by itself, then color by itself.'],
         demo: {
           type: 'set', attributes: ['shape', 'color'], valid: true, caption: 'Three shapes, three colors: nothing in common',
           cards: [
@@ -50,9 +50,9 @@ export const MECHANICS: Record<string, MechanicDef> = {
       },
       {
         title: 'All the same, or all different',
-        body: ['Here all 3 are red (all the same) and the shapes are a diamond, an oval and a squiggle (all different).', 'Every trait passes, so these 3 cards are a Set.'],
+        body: ['Here all 3 are orange (all the same) and the shapes are a triangle, a circle and a moon (all different).', 'Every trait passes, so these 3 cards are a Trio.'],
         demo: {
-          type: 'set', attributes: ['shape', 'color'], valid: true, caption: 'All red, and three different shapes',
+          type: 'set', attributes: ['shape', 'color'], valid: true, caption: 'All orange, and three different shapes',
           cards: [
           { shape: 'diamond', color: 'red', number: 1, shading: 'solid' },
           { shape: 'oval', color: 'red', number: 1, shading: 'solid' },
@@ -62,9 +62,9 @@ export const MECHANICS: Record<string, MechanicDef> = {
       },
       {
         title: 'Never two alike and one odd',
-        body: ['If 2 cards match on a trait and the 3rd does not, it is not a Set.', 'Here 2 are red and 1 is green. The shapes are fine, but color breaks it.'],
+        body: ['If 2 cards match on a trait and the 3rd does not, it is not a Trio.', 'Here 2 are orange and 1 is teal. The shapes are fine, but color breaks it.'],
         demo: {
-          type: 'set', attributes: ['shape', 'color'], valid: false, caption: '2 red + 1 green: color breaks it',
+          type: 'set', attributes: ['shape', 'color'], valid: false, caption: '2 orange + 1 teal: color breaks it',
           cards: [
           { shape: 'diamond', color: 'red', number: 1, shading: 'solid' },
           { shape: 'oval', color: 'red', number: 1, shading: 'solid' },
@@ -81,7 +81,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
           { shape: 'oval', color: 'red', number: 1, shading: 'solid' },
           { shape: 'oval', color: 'purple', number: 1, shading: 'solid' },
         ],
-        explain: 'Shape is all the same (ovals) and color is all different. Both traits pass.',
+        explain: 'Shape is all the same (circles) and color is all different. Both traits pass.',
       },
       {
         attributes: ['shape', 'color'],
@@ -90,7 +90,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
           { shape: 'diamond', color: 'green', number: 1, shading: 'solid' },
           { shape: 'squiggle', color: 'purple', number: 1, shading: 'solid' },
         ],
-        explain: 'Two diamonds and one squiggle: shape fails. Two purple and one green: color fails too.',
+        explain: 'Two triangles and one moon: shape fails. Two blue and one teal: color fails too.',
       },
       {
         attributes: ['shape', 'color'],
@@ -112,18 +112,18 @@ export const MECHANICS: Record<string, MechanicDef> = {
     coach: '2 alike + 1 odd is never a Set. Now it costs a heart!',
     body: [
       'Wrong picks cost 1 heart, and you have 8 moves to knock out the foe (surviving = ★, knockout = ★★).',
-      'Your new Blast Powder fires by itself as you match. Make 2 all-red Sets for the third star.',
+      'Your new Blast Powder fires by itself as you match. Make 2 all-orange Sets for the third star.',
     ],
     fightTips: [
       { title: 'Your hearts and Blast Powder', text: 'A wrong Set costs a heart. Your Blast Powder charm blasts extra cards on lucky matches.', anchor: 'top' },
-      { title: 'All-red Sets', text: 'Make 2 Sets where all three cards are red for the third star.', anchor: 'bottom' },
+      { title: 'All-orange Sets', text: 'Make 2 Sets where all three cards are orange for the third star.', anchor: 'bottom' },
     ],
     icon: 'lorc/shining-heart',
     demo: {
       type: 'set',
       attributes: ['shape', 'color'],
       valid: false,
-      caption: '2 red + 1 green: not a Set (−1 ♥)',
+      caption: '2 orange + 1 teal: not a Trio (−1 ♥)',
       cards: [
         { shape: 'diamond', color: 'red', number: 1, shading: 'solid' },
         { shape: 'oval', color: 'red', number: 1, shading: 'solid' },
@@ -138,7 +138,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
     tagline: 'Three shapes in three colors: nothing in common is a Set too.',
     coach: 'All traits different? Rainbow Charm doubles every hit!',
     body: [
-      'A diamond, an oval and a squiggle, one red, one green, one purple: no two alike, so it is a Set.',
+      'A triangle, a circle and a moon, one orange, one teal, one blue: no two alike, so it is a Trio.',
       'Your new Rainbow Charm doubles every all-different Set! Make 2 all-different Sets for the third star.',
     ],
     fightTips: [
@@ -175,7 +175,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
       type: 'set',
       attributes: ['shape', 'color', 'number'],
       valid: true,
-      caption: 'All ovals, three colors, 1-2-3: a Set!',
+      caption: 'All circles, three colors, 1-2-3: a Trio!',
       cards: [
         { shape: 'oval', color: 'red', number: 1, shading: 'solid' },
         { shape: 'oval', color: 'green', number: 2, shading: 'solid' },

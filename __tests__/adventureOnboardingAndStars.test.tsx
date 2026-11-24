@@ -155,9 +155,9 @@ describe('Adventure first minutes: show, then say', () => {
 
   it('explains a Set and a wrong pick in the cards’ own words, trait by trait', () => {
     const sameColor = [makeCard('a', 'diamond', 'red'), makeCard('b', 'oval', 'red'), makeCard('c', 'squiggle', 'red')];
-    expect(describeValidSetWhy(sameColor, ['shape', 'color'])).toBe('All red, all different shapes.');
+    expect(describeValidSetWhy(sameColor, ['shape', 'color'])).toBe('All orange, all different shapes.');
     expect(evaluateTripleTraits(sameColor, ['shape', 'color'])).toEqual([
-      { attr: 'color', status: 'pass', label: 'Color: all red', detail: 'all red', brief: 'all red' },
+      { attr: 'color', status: 'pass', label: 'Color: all orange', detail: 'all orange', brief: 'all orange' },
       { attr: 'shape', status: 'pass', label: 'Shape: all different', detail: 'all different', brief: 'all different' },
     ]);
 
@@ -166,9 +166,9 @@ describe('Adventure first minutes: show, then say', () => {
 
     // One trait wrong: named with the cards that were picked, and the trait that passed is shown too
     const badColor = [makeCard('a', 'diamond', 'red'), makeCard('b', 'oval', 'red'), makeCard('c', 'squiggle', 'green')];
-    expect(explainInvalidPick(badColor, ['shape', 'color'], 'Orange Tabby')).toBe('Almost! Color was 2 red + 1 green.');
+    expect(explainInvalidPick(badColor, ['shape', 'color'], 'Orange Tabby')).toBe('Almost! Color was 2 orange + 1 teal.');
     expect(evaluateTripleTraits(badColor, ['shape', 'color'])).toEqual([
-      { attr: 'color', status: 'fail', label: 'Color: 2 red + 1 green', detail: '2 red + 1 green', brief: '2 + 1' },
+      { attr: 'color', status: 'fail', label: 'Color: 2 orange + 1 teal', detail: '2 orange + 1 teal', brief: '2 + 1' },
       { attr: 'shape', status: 'pass', label: 'Shape: all different', detail: 'all different', brief: 'all different' },
     ]);
 
@@ -200,17 +200,17 @@ describe('Adventure first minutes: show, then say', () => {
 
     const onBoard = predictThirdCard([c1, c2], ['shape', 'color'], [c1, c2, matchingThird]);
     expect(onBoard).not.toBeNull();
-    expect(onBoard!.neededSummary).toBe('a red squiggle');
+    expect(onBoard!.neededSummary).toBe('an orange moon');
     expect(onBoard!.existsOnBoard).toBe(true);
     expect(onBoard!.cardId).toBe('3');
     expect(onBoard!.identicalPair).toBe(false);
     expect(onBoard!.pills).toEqual([
-      { attr: 'color', status: 'hint', label: 'Color: same → red', detail: 'red (same)', brief: 'red' },
-      { attr: 'shape', status: 'hint', label: 'Shape: different → squiggle', detail: 'squiggle (different)', brief: 'squiggle' },
+      { attr: 'color', status: 'hint', label: 'Color: same → orange', detail: 'orange (same)', brief: 'orange' },
+      { attr: 'shape', status: 'hint', label: 'Shape: different → moon', detail: 'moon (different)', brief: 'moon' },
     ]);
 
     const threeTrait = predictThirdCard([c1, c2], ['shape', 'color', 'number'], [c1, c2, wrongThird]);
-    expect(threeTrait!.neededSummary).toBe('3 red squiggles');
+    expect(threeTrait!.neededSummary).toBe('3 orange moons');
     expect(threeTrait!.existsOnBoard).toBe(false);
     expect(threeTrait!.cardId).toBeNull();
     expect(threeTrait!.pills).toHaveLength(3);
@@ -227,8 +227,9 @@ describe('Adventure first minutes: show, then say', () => {
     expect(step1.glowIds).toHaveLength(3);
     expect(step1.dimIds).toHaveLength(6);
     const color = lit(step1)[0].color;
+    const colorWord = color === 'red' ? 'orange' : color === 'green' ? 'teal' : 'blue';
     expect(lit(step1).every(c => c.color === color)).toBe(true);
-    expect(step1.message).toBe(`Meow! Tap these 3: all ${color}, 3 shapes!`);
+    expect(step1.message).toBe(`Meow! Tap these 3: all ${colorWord}, 3 shapes!`);
     // (as they tap, the line counts down)
     expect(computeLiveGuidance(run, { selectedCount: 2 })!.message).toBe('One more!');
 
@@ -245,7 +246,7 @@ describe('Adventure first minutes: show, then say', () => {
     expect(step2.glowIds).toHaveLength(3);
     const shape = lit(step2)[0].shape;
     expect(lit(step2).every(c => c.shape === shape)).toBe(true);
-    expect(step2.message).toMatch(/^Now these 3: all (diamonds|ovals|squiggles), 3 colors!$/);
+    expect(step2.message).toMatch(/^Now these 3: all (triangles|circles|moons), 3 colors!$/);
     run = score(run, lit(step2));
 
     // Step 3: three cards with nothing in common
@@ -265,7 +266,7 @@ describe('Adventure first minutes: show, then say', () => {
     const triple = allSets(run.board, run.attributes)[0];
     const held = computeLiveGuidance(run, { selectedCount: 2, selectedCards: [triple[0], triple[1]] })!;
     expect(held.kind).toBe('pair');
-    expect(held.message).toMatch(/^Find an? (red|green|purple) (diamond|oval|squiggle)!$/);
+    expect(held.message).toMatch(/^Find an? (orange|teal|blue) (triangle|circle|moon)!$/);
 
     // A wrong pick: why, in the cards' words, the checks per trait, and a Set to try
     const wrong = [triple[0], triple[1], run.board.find(c => !triple.includes(c))!];
@@ -516,7 +517,7 @@ describe('Adventure first minutes: the screens', () => {
     letTheFoeFinish();
     expect(screen.queryByTestId('run-foe-taunt')).toBeNull();
     expect(screen.getByTestId('run-coach-banner')).toBeTruthy();
-    expect(screen.getByText(/^Meow! Tap these 3: all (red|green|purple), 3 shapes!$/)).toBeTruthy();
+    expect(screen.getByText(/^Meow! Tap these 3: all (orange|teal|blue), 3 shapes!$/)).toBeTruthy();
   });
 
   it('Skip jumps from the story to the first fight', () => {
@@ -603,7 +604,7 @@ describe('Adventure first minutes: the screens', () => {
     const screen = render(wrap(<AdventureMode initialSave={createSaveBefore('1-2')} onExit={() => {}} />));
     fireEvent.press(screen.getByTestId('map-node-1-2'));
     fireEvent.press(screen.getByTestId('preview-play'));
-    expect(screen.getByTestId('run-challenge').props.accessibilityLabel).toMatch(/^Three star goal: Make 2 all-red Sets/);
+    expect(screen.getByTestId('run-challenge').props.accessibilityLabel).toMatch(/^Three star goal: Make 2 all-orange Sets/);
     // (1-1 scores accuracy instead: no goal strip there)
     screen.unmount();
     mockKvStore.clear();
@@ -679,8 +680,8 @@ describe('Adventure first minutes: the screens', () => {
   it('describes a single held card trait-by-trait and protects incompatible pairs from stuck rescue', () => {
     const c = makeCard('s1', 'oval', 'purple', 2);
     expect(describeSingleCardTraits(c, ['shape', 'color', 'number'])).toEqual([
-      { attr: 'color', status: 'info', label: 'Color: purple', detail: 'purple', brief: 'purple' },
-      { attr: 'shape', status: 'info', label: 'Shape: oval', detail: 'oval', brief: 'oval' },
+      { attr: 'color', status: 'info', label: 'Color: blue', detail: 'blue', brief: 'blue' },
+      { attr: 'shape', status: 'info', label: 'Shape: circle', detail: 'circle', brief: 'circle' },
       { attr: 'number', status: 'info', label: 'Number: 2', detail: '2', brief: '2' },
     ]);
 

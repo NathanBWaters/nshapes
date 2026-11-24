@@ -141,6 +141,11 @@ const SCENES = [
         await startRun.click().catch(() => undefined);
         await page.waitForTimeout(900);
       }
+      const playBlind = page.getByText(/Play Small Blind/i).first();
+      if ((await playBlind.count()) > 0) {
+        await playBlind.click().catch(() => undefined);
+        await page.waitForTimeout(900);
+      }
     },
   },
 ];

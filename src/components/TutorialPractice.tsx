@@ -126,8 +126,8 @@ const TutorialPractice: React.FC<TutorialPracticeProps> = ({ onComplete, onSkip 
 
     const explanation =
       broken.length > 0
-        ? `Not a valid SET. Check ${brokenText} — each trait must be all the same or all different.`
-        : 'Not a valid SET. Each trait must be all the same or all different.';
+        ? `Not a valid Trio. Check ${brokenText} — each trait must be all the same or all different.`
+        : 'Not a valid Trio. Each trait must be all the same or all different.';
 
     setFeedbackData({
       isValid: false,
@@ -188,7 +188,7 @@ const TutorialPractice: React.FC<TutorialPracticeProps> = ({ onComplete, onSkip 
     <View style={styles.container}>
       <View style={styles.tutorialBanner}>
         <Text style={styles.tutorialTitle}>Practice Mode</Text>
-        <Text style={styles.tutorialSubtitle}>Find {tutorialTarget - matchCount} more SET{tutorialTarget - matchCount !== 1 ? 's' : ''} to continue</Text>
+        <Text style={styles.tutorialSubtitle}>Find {tutorialTarget - matchCount} more Trio{tutorialTarget - matchCount !== 1 ? 's' : ''} to continue</Text>
         <View style={styles.progressContainer}>
           {[1, 2, 3].map(i => (
             <View
@@ -248,7 +248,7 @@ const TutorialPractice: React.FC<TutorialPracticeProps> = ({ onComplete, onSkip 
                 {feedbackData?.isValid ? '✓' : '✗'}
               </Text>
               <Text style={styles.resultText}>
-                {feedbackData?.isValid ? "Valid SET!" : "Not a SET"}
+                {feedbackData?.isValid ? "Valid Trio!" : "Not a Trio"}
               </Text>
             </View>
 

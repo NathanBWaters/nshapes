@@ -1,6 +1,7 @@
 /** ★★★ challenge descriptions, live progress, and checks. */
 import type { ChallengeDef, LevelDef, RunState } from '../types';
 import { levelDefeatCondition } from '../data/foes';
+import { formatColorName } from '@/utils/cardVisuals';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -28,7 +29,7 @@ export const describeChallenge = (level: LevelDef): string => {
     case 'shopBuys': return `Buy ${plural(c.n, 'weapon')} in the shop`;
     case 'bigHit': return `Deal ${c.n}+ damage in one Set`;
     case 'surgeSets': return c.n === 1 ? 'Make a Set during a Shading Surge' : `Make ${c.n} Sets during Shading Surges`;
-    case 'colorSets': return `Make ${plural(c.n, `all-${c.color} Set`)}`;
+    case 'colorSets': return `Make ${plural(c.n, `all-${formatColorName(c.color).toLowerCase()} Set`)}`;
     case 'sameColorSets': return `Make ${plural(c.n, 'single-color Set')}`;
     case 'allDiffSets': return `Make ${plural(c.n, 'all-different Set')}`;
   }

@@ -42,7 +42,7 @@ FOUR COMPLETE MODES
 
 DESIGNED FOR CLARITY & GAME FEEL
 • Live adaptive synthesized music and crisp procedural sound effects that react to every combo.
-• Colorblind Mode in Options switches cards to a high-contrast Okabe-Ito palette with R / B / P corner badges.
+• Colorblind-friendly by default (Cobalt Blue, Ocean Teal & Tangerine Orange with Circle, Triangle & Moon shapes) plus optional O / T / B corner badges in Options.
 • Runs 100% offline with instant local device saves and full Android back-button support.
 ```
 

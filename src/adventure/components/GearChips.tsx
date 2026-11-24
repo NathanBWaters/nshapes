@@ -8,7 +8,8 @@ import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Icon from '@/components/Icon';
 import { COLORS } from '@/utils/colors';
-import type { AttributeName } from '@/types';
+import { CARD_LIGHT_COLORS, formatBackgroundName, formatColorName, formatShapeName } from '@/utils/cardVisuals';
+import type { AttributeName, Background, Color, Shape } from '@/types';
 import type { RunState } from '../types';
 import type { Modifiers } from '../rules/types';
 import { growthModifiers } from '../data/weaponGrowth';
@@ -16,14 +17,15 @@ import { modifiersOf } from '../engine/sources';
 import { albumTraits } from '../engine/gear';
 
 const INK = COLORS.slateCharcoal;
-const CARD_COLORS: Record<string, string> = { red: '#EF4444', green: '#16A34A', purple: '#7C3AED' };
+const CARD_COLORS: Record<string, string> = CARD_LIGHT_COLORS;
 
-/** "purple", "ovals", "2s", "striped": the wanted value in the words a player would use. */
+/** "blue", "circles", "2s", "striped": the wanted value in the words a player would use. */
 export const wantedLabel = (attribute: AttributeName, value: string | number): string => {
   switch (attribute) {
     case 'number': return `${value}s`;
-    case 'shape': return `${value}s`;
-    case 'background': return `${value} backs`;
+    case 'shape': return formatShapeName(value as Shape, true).toLowerCase();
+    case 'color': return formatColorName(value as Color).toLowerCase();
+    case 'background': return `${formatBackgroundName(value as Background).toLowerCase()} backs`;
     default: return String(value);
   }
 };

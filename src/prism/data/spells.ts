@@ -7,8 +7,8 @@ export const SPELLS: readonly SpellDef[] = [
     cost: 3,
     icon: 'lorc/flowers',
     shortLabel: 'Shift Color',
-    description: 'Permanently change 1 selected card’s Color (cycles Red → Green → Purple, or pick a Color).',
-    accentColor: '#EF4444',
+    description: 'Permanently change 1 selected card’s Color (cycles Orange → Teal → Blue, or pick a Color).',
+    accentColor: '#E05A04',
     supportsValueChoice: true,
   },
   {
@@ -17,8 +17,8 @@ export const SPELLS: readonly SpellDef[] = [
     cost: 3,
     icon: 'delapouite/prism',
     shortLabel: 'Shift Shape',
-    description: 'Permanently change 1 selected card’s Shape (cycles Oval → Squiggle → Diamond, or pick a Shape).',
-    accentColor: '#16AA98',
+    description: 'Permanently change 1 selected card’s Shape (cycles Circle → Moon → Triangle, or pick a Shape).',
+    accentColor: '#007870',
     supportsValueChoice: true,
   },
   {

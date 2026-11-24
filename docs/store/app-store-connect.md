@@ -43,15 +43,15 @@ FOUR COMPLETE MODES
 
 BUILT FOR FOCUS & FEEL
 • Live adaptive soundtrack and crisp synthesized sound effects tailored to every weapon and combo.
-• Colorblind Mode in Options switches cards to a high-contrast Okabe-Ito palette with R / B / P corner labels.
+• Colorblind-friendly by default (high-contrast Cobalt Blue, Ocean Teal & Tangerine Orange cards with Circle, Triangle & Moon shapes) plus optional O / T / B corner labels in Options.
 • Works completely offline on iPhone and iPad with instant local saves.
 ```
 
 ### Keywords *(max 100 chars — comma-separated, no spaces)*
 ```text
-set,puzzle,roguelike,deckbuilder,card,pattern,match,trio,balatro,combo,offline,brain,logic,indie
+puzzle,roguelike,deckbuilder,card,pattern,match,trio,combo,offline,brain,logic,indie,shapes,strategy
 ```
-*(96 characters)*
+*(100 characters — zero third-party trademarks)*
 
 ### URLs
 - **Support URL:** `https://nathanbwaters.github.io/nshapes/support.html`
