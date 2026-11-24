@@ -55,7 +55,7 @@ export const KEYWORDS: Record<string, KeywordDefinition> = {
   attribute: {
     terms: ['attribute', 'attributes'],
     brief: 'A property of cards: shape, color, number, shading, or background.',
-    detailed: 'Cards have up to 5 attributes, each with 3 possible values. Shape (circle/triangle/moon), color (orange/teal/blue), number (1/2/3), shading (solid/striped/open), and background stock. More attributes = harder puzzles.',
+    detailed: 'Cards have up to 5 attributes, each with 3 possible values. Shape (circle/triangle/bolt), color (orange/blue/pink), number (1/2/3), shading (solid/striped/open), and background stock. More attributes = harder puzzles.',
   },
 
   fire: {
@@ -277,7 +277,7 @@ export const KEYWORDS: Record<string, KeywordDefinition> = {
   attributeShift: {
     terms: ['attribute shift', 'attributes change', 'attributes shift', 'shift'],
     brief: 'Card attributes randomly change to different values.',
-    detailed: 'Unlike shuffling, attribute shifts actually modify the cards themselves. An orange card might become teal, or a triangle might become a circle. This can break Trios you were planning and create new unexpected combinations.',
+    detailed: 'Unlike shuffling, attribute shifts actually modify the cards themselves. An orange card might become blue, or a triangle might become a circle. This can break Trios you were planning and create new unexpected combinations.',
   },
 
   timeSteal: {
@@ -313,7 +313,7 @@ export const KEYWORDS: Record<string, KeywordDefinition> = {
   allDifferent: {
     terms: ['all-different', 'all different'],
     brief: 'A match where each attribute has 3 different values.',
-    detailed: 'An all-different match means for EVERY active attribute (shape, color, number, etc.), all 3 cards have DIFFERENT values. Example: orange-triangle-1, teal-circle-2, blue-moon-3. These are harder to spot but some enemies require them.',
+    detailed: 'An all-different match means for EVERY active attribute (shape, color, number, etc.), all 3 cards have DIFFERENT values. Example: orange-triangle-1, blue-circle-2, pink-bolt-3. These are harder to spot but some enemies require them.',
   },
 
   allSame: {

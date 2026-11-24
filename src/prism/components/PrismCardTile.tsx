@@ -1,7 +1,7 @@
 import React, { memo, useEffect, useState, useSyncExternalStore } from 'react';
 import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
-import Svg, { Circle, Path, Polygon } from 'react-native-svg';
+import Svg, { Circle, Polygon } from 'react-native-svg';
 import Icon from '@/components/Icon';
 import {
   CARD_SHAPE_GEOMETRY,
@@ -65,7 +65,7 @@ const canHoverWeb = (): boolean => {
   }
 };
 
-// Compact 24x30 (1:1.25) viewBox matching src/components/Card.tsx (Circle / Triangle / Moon)
+// Compact 24x30 (1:1.25) viewBox matching src/components/Card.tsx (Circle / Triangle / Bolt)
 const SVG_WIDTH = CARD_SVG_WIDTH;
 const SVG_HEIGHT = CARD_SVG_HEIGHT;
 const STROKE_WIDTH = CARD_STROKE_WIDTH;
@@ -111,8 +111,8 @@ const PrismShapeSvg: React.FC<{
 
   return (
     <Svg width="100%" height="100%" viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`} preserveAspectRatio="xMidYMid meet">
-      <Path
-        d={CARD_SHAPE_GEOMETRY.crescentPath}
+      <Polygon
+        points={CARD_SHAPE_GEOMETRY.boltPoints}
         fill={fill}
         stroke={stroke}
         strokeWidth={STROKE_WIDTH}

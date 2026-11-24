@@ -1,7 +1,7 @@
 import { MONO_FONT } from '@/utils/fonts';
 import React, { createContext, memo, useCallback, useContext, useState, useSyncExternalStore } from 'react';
 import { View, Text, StyleSheet, Platform, TouchableOpacity } from 'react-native';
-import Svg, { Circle, Path, Polygon, Defs, Pattern, Rect } from 'react-native-svg';
+import Svg, { Circle, Polygon, Defs, Pattern, Rect } from 'react-native-svg';
 import { Card as CardType, Background } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import {
@@ -654,7 +654,7 @@ const getShapeColor = (color: string, background?: Background, _colorblind = fal
 
 const getCardBackgroundColor = (background?: Background) => getCardStockBackground(background);
 
-// +45° diagonal hatch pattern ("/") for "striped" shading — cuts cleanly across Circle, Triangle, and -25°-tilted Moon
+// -45° diagonal hatch pattern ("\") for "striped" shading — cuts cleanly across Circle, Triangle, and chunky 8-vertex Bolt
 const StripesPattern: React.FC<{ id: string; color: string }> = memo(function StripesPattern({ id, color }) {
   const pitch = CARD_STRIPE_PITCH;
   return (
@@ -664,7 +664,7 @@ const StripesPattern: React.FC<{ id: string; color: string }> = memo(function St
         patternUnits="userSpaceOnUse"
         width={pitch}
         height={pitch}
-        patternTransform="rotate(-45)"
+        patternTransform="rotate(45)"
       >
         <Rect x="0" y="0" width={pitch} height={pitch / 2} fill={color} />
       </Pattern>
@@ -727,10 +727,10 @@ const Diamond: React.FC<ShapeProps> = memo(function Diamond({ color, shading, ba
   );
 });
 
-// Slot 'squiggle' → -25°-tilted Crescent Moon (deeply concave pop-out archetype; 0 self-intersections)
+// Slot 'squiggle' → Chunky 8-vertex Bolt (crisp diagonal V1 pop-out; 52.6% clear interior, zero clip)
 const Squiggle: React.FC<ShapeProps> = memo(function Squiggle({ color, shading, background, colorblind = false }) {
   const strokeColor = getShapeColor(color, background, colorblind);
-  const patternId = `stripes-moon-${color}-${background || 'white'}`;
+  const patternId = `stripes-bolt-${color}-${background || 'white'}`;
   return (
     <Svg
       width="100%"
@@ -739,8 +739,8 @@ const Squiggle: React.FC<ShapeProps> = memo(function Squiggle({ color, shading, 
       preserveAspectRatio="xMidYMid meet"
     >
       {shading === 'striped' && <StripesPattern id={patternId} color={strokeColor} />}
-      <Path
-        d={CARD_SHAPE_GEOMETRY.crescentPath}
+      <Polygon
+        points={CARD_SHAPE_GEOMETRY.boltPoints}
         stroke={strokeColor}
         strokeWidth={STROKE_WIDTH}
         strokeLinejoin="round"

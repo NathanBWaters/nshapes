@@ -261,7 +261,7 @@ export const predictThirdCard = (
     pills.push({ attr, status: 'hint', label: `${ATTR_TITLE[attr]}: ${how} → ${shownTarget}`, detail: `${shownTarget} (${how})`, brief: `${shownTarget}` });
   }
 
-  // "an orange moon", "2 teal circles"
+  // "an orange bolt", "2 blue circles"
   const num = needed.number as CardNumber | undefined;
   const shade = needed.shading as Shading | undefined;
   const col = needed.color as Color | undefined;

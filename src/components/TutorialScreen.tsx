@@ -56,11 +56,11 @@ const TutorialScreen: React.FC<TutorialScreenProps> = ({ onComplete, onExit }) =
           <View style={styles.attributeList}>
             <View style={styles.attributeItem}>
               <Text style={styles.attributeLabel}>Shape</Text>
-              <Text style={styles.attributeValue}>Circle, Triangle, or Moon</Text>
+              <Text style={styles.attributeValue}>Circle, Triangle, or Bolt</Text>
             </View>
             <View style={styles.attributeItem}>
               <Text style={styles.attributeLabel}>Color</Text>
-              <Text style={styles.attributeValue}>Orange, Teal, or Blue</Text>
+              <Text style={styles.attributeValue}>Orange, Blue, or Pink</Text>
             </View>
             <View style={styles.attributeItem}>
               <Text style={styles.attributeLabel}>Number</Text>

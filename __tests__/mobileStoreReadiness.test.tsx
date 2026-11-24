@@ -197,51 +197,53 @@ describe('Mobile Store Readiness', () => {
   });
 
   describe('Zero-SET-overlap visual identity (cardVisuals)', () => {
-    it('maps internal slots to Circle/Triangle/Moon and Orange/Teal/Blue with O/T/B badges', () => {
+    it('maps internal slots to Circle/Triangle/Bolt and Orange/Blue/Pink with O/B/P badges', () => {
       expect(SHAPE_DISPLAY_NAME).toEqual({
         oval: 'Circle',
         diamond: 'Triangle',
-        squiggle: 'Moon',
+        squiggle: 'Bolt',
       });
       expect(COLOR_DISPLAY_NAME).toEqual({
         red: 'Orange',
-        green: 'Teal',
-        purple: 'Blue',
+        green: 'Blue',
+        purple: 'Pink',
       });
       expect(COLOR_BADGE_LETTER).toEqual({
         red: 'O',
-        green: 'T',
-        purple: 'B',
+        green: 'B',
+        purple: 'P',
       });
     });
 
     it('uses verified universal CVD-safe light/dark hexes and Blueprint Mist stock', () => {
       expect(CARD_LIGHT_COLORS).toEqual({
-        red: '#E05A04',
-        green: '#007870',
-        purple: '#1E229E',
+        red: '#DF5A00',
+        green: '#007ED9',
+        purple: '#940E65',
       });
       expect(CARD_DARK_COLORS).toEqual({
-        red: '#FFA024',
-        green: '#76FDE1',
-        purple: '#969BF0',
+        red: '#FFAC24',
+        green: '#7CE4FF',
+        purple: '#E6459E',
       });
       expect(CARD_STOCK_BACKGROUND.beige).toBe('#E2ECF7');
-      expect(getCardShapeColor('red', 'white')).toBe('#E05A04');
-      expect(getCardShapeColor('green', 'charcoal')).toBe('#76FDE1');
-      expect(getCardShapeColor('purple', 'charcoal')).toBe('#969BF0');
+      expect(getCardShapeColor('red', 'white')).toBe('#DF5A00');
+      expect(getCardShapeColor('green', 'charcoal')).toBe('#7CE4FF');
+      expect(getCardShapeColor('purple', 'charcoal')).toBe('#E6459E');
     });
 
-    it('formats Parry counter labels with Trio, Orange/Teal/Blue, and Circles/Triangles/Moons', () => {
+    it('formats Parry counter labels with Trio, Orange/Blue/Pink, and Circles/Triangles/Bolts', () => {
       expect(formatParryCounterMeta({ kind: 'any' }).shortLabel).toBe('ANY TRIO');
       expect(formatParryCounterMeta({ kind: 'color', color: 'red' })).toMatchObject({
         shortLabel: 'ALL ORANGE',
         label: 'All Orange Trio',
-        color: '#E05A04',
+        color: '#DF5A00',
       });
+      expect(formatParryCounterMeta({ kind: 'color', color: 'green' }).shortLabel).toBe('ALL BLUE');
+      expect(formatParryCounterMeta({ kind: 'color', color: 'purple' }).shortLabel).toBe('ALL PINK');
       expect(formatParryCounterMeta({ kind: 'shape', shape: 'oval' }).shortLabel).toBe('ALL CIRCLES');
       expect(formatParryCounterMeta({ kind: 'shape', shape: 'diamond' }).shortLabel).toBe('ALL TRIANGLES');
-      expect(formatParryCounterMeta({ kind: 'shape', shape: 'squiggle' }).shortLabel).toBe('ALL MOONS');
+      expect(formatParryCounterMeta({ kind: 'shape', shape: 'squiggle' }).shortLabel).toBe('ALL BOLTS');
     });
   });
 });

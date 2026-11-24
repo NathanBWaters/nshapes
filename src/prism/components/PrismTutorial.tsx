@@ -203,7 +203,7 @@ const PrismTutorial: React.FC<PrismTutorialProps> = ({ onComplete }) => {
       playPrismSfx('invalid');
       setHintBanner(
         step === 2
-          ? 'Zero penalty! Check the red X pill — swap the trap card out for the 3 Blue Triangles.'
+          ? 'Zero penalty! Check the red X pill — swap the trap card out for the 3 Pink Triangles.'
           : 'Not a valid Set yet — every trait must be ALL SAME or ALL DIFFERENT.'
       );
       return;
@@ -284,7 +284,7 @@ const PrismTutorial: React.FC<PrismTutorialProps> = ({ onComplete }) => {
             eyebrow: 'STEP 3 OF 3 · COMBOS, CHARMS & SPELLS',
             title: 'Smash the Blind Target (250)',
             prompt:
-              'Charms multiply your Trios! Match a True Rainbow (all traits different) — or cast Repaint on the top-right 3 Orange Triangles → Blue to forge a Prismatic Crown!',
+              'Charms multiply your Trios! Match a True Rainbow (all traits different) — or cast Repaint on the top-right 3 Orange Triangles → Pink to forge a Prismatic Crown!',
           };
 
   const cardWidthStyle =

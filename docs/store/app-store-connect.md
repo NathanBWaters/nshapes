@@ -43,7 +43,7 @@ FOUR COMPLETE MODES
 
 BUILT FOR FOCUS & FEEL
 • Live adaptive soundtrack and crisp synthesized sound effects tailored to every weapon and combo.
-• Colorblind-friendly by default (high-contrast Cobalt Blue, Ocean Teal & Tangerine Orange cards with Circle, Triangle & Moon shapes) plus optional O / T / B corner labels in Options.
+• Colorblind-friendly by default (high-contrast Tangerine Orange, Electric Blue & Berry Pink cards with Circle, Triangle & Bolt shapes) plus optional O / B / P corner labels in Options.
 • Works completely offline on iPhone and iPad with instant local saves.
 ```
 

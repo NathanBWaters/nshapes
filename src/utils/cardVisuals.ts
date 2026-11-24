@@ -1,15 +1,15 @@
 /**
  * Scientifically verified NShapes card visual identity (zero SET trade-dress overlap):
  *
- * Shapes (compact 24x30 / 1:1.25 viewBox, strokeWidth 1.9, round joins, +45° / diagonal hatch):
+ * Shapes (compact 24x30 / 1:1.25 viewBox, strokeWidth 1.9, round joins, -45° \ diagonal hatch):
  *   - `oval`     slot → Circle   (smooth symmetric convex; r=9.4)
  *   - `diamond`  slot → Triangle (sharp straight-edge convex; bottom-heavy apex)
- *   - `squiggle` slot → Moon     (-25°-tilted waxing Crescent; 29% concavity pop-out)
+ *   - `squiggle` slot → Bolt     (chunky 8-vertex lightning bolt; crisp V1 diagonal pop-out)
  *
- * Colors (universal CVD-safe by default; 3-channel opponent simplex + L* staircase):
- *   - `red`    slot → Orange / Tangerine  (#E05A04 light / #FFA024 dark) · badge 'O'
- *   - `green`  slot → Teal   / Ocean Teal (#007870 light / #76FDE1 dark) · badge 'T'
- *   - `purple` slot → Blue   / Cobalt     (#1E229E light / #969BF0 dark) · badge 'B'
+ * Colors (universal CVD-safe by default; 3-way warm/cool/magenta split + L* staircase):
+ *   - `red`    slot → Orange / Tangerine   (#DF5A00 light / #FFAC24 dark) · badge 'O'
+ *   - `green`  slot → Blue   / Electric Sky (#007ED9 light / #7CE4FF dark) · badge 'B'
+ *   - `purple` slot → Pink   / Berry Rose   (#940E65 light / #E6459E dark) · badge 'P'
  *
  * Internal canonical enum keys (`oval|squiggle|diamond`, `red|green|purple`) remain
  * unchanged so existing saves, replays, telemetry, and balance fingerprints stay 100% intact.
@@ -28,47 +28,47 @@ export const CARD_STRIPE_PITCH = 3.8;
 export const CARD_SHAPE_GEOMETRY = {
   circle: { cx: 12, cy: 15, r: 9.4 },
   trianglePoints: '12,2.2 22,26.8 2,26.8',
-  /** -25°-tilted waxing crescent verified via W3C SVG 1.1 F.6.5 arc parameterization (0 self-intersections). */
-  crescentPath: 'M 22.37,19.18 A 10.80,10.80 0 1,1 15.62,4.69 A 8.00,8.00 0 0,0 22.37,19.18 Z',
+  /** Chunky 8-vertex Bolt (5.22u clear waist, 52.6% clear interior, 5 diagonal stripes, zero clip). */
+  boltPoints: '12,1.8 21.5,1.8 14.8,12.8 22,12.8 12,28.2 2.5,28.2 9.2,17.2 2,17.2',
 } as const;
 
 export const SHAPE_DISPLAY_NAME: Record<Shape, string> = {
   oval: 'Circle',
   diamond: 'Triangle',
-  squiggle: 'Moon',
+  squiggle: 'Bolt',
 };
 
 export const SHAPE_PLURAL_NAME: Record<Shape, string> = {
   oval: 'Circles',
   diamond: 'Triangles',
-  squiggle: 'Moons',
+  squiggle: 'Bolts',
 };
 
 export const COLOR_DISPLAY_NAME: Record<Color, string> = {
   red: 'Orange',
-  green: 'Teal',
-  purple: 'Blue',
+  green: 'Blue',
+  purple: 'Pink',
 };
 
 /** High-visibility 1-letter badges shown when Colorblind Mode is toggled ON (complete achromatopsia aid). */
 export const COLOR_BADGE_LETTER: Record<Color, string> = {
   red: 'O',
-  green: 'T',
-  purple: 'B',
+  green: 'B',
+  purple: 'P',
 };
 
-/** Universal CVD-safe light-card palette (Worst CVD ΔE00 = 22.4, WCAG ≥ 3.73:1 on white, ≥ 3.32:1 on hint). */
+/** Universal CVD-safe light-card palette (Norm ΔE00=43.3, Worst CVD ΔE00=21.7, WCAG ≥ 3.75:1 white / ≥ 3.34:1 hint / ≥ 3.14:1 mist). */
 export const CARD_LIGHT_COLORS: Record<Color, string> = {
-  red: '#E05A04',    // Tangerine Orange (L*=55, Hue 23.5° — zero Geneva Red Crescent conflict)
-  green: '#007870',  // Ocean Teal       (L*=45)
-  purple: '#1E229E', // Royal Cobalt     (L*=23)
+  red: '#DF5A00',    // Tangerine Orange (L*=55.1)
+  green: '#007ED9',  // Electric Sky Blue (L*=51.8)
+  purple: '#940E65', // Berry Magenta Pink (L*=33.0)
 };
 
-/** Universal CVD-safe dark-card palette for Charcoal #383838 cards (Worst CVD ΔE00 = 24.2, WCAG ≥ 4.60:1). */
+/** Universal CVD-safe dark-card palette for Charcoal #383838 cards (Norm ΔE00=47.4, Worst CVD ΔE00=17.7, WCAG ≥ 3.19:1). */
 export const CARD_DARK_COLORS: Record<Color, string> = {
-  red: '#FFA024',    // Luminous Tangerine (ΔE00=22.5 away from #FFDE00 selection border)
-  green: '#76FDE1',  // Luminous Aqua Teal
-  purple: '#969BF0', // Luminous Periwinkle Cobalt
+  red: '#FFAC24',    // Luminous Tangerine (ΔE00=18.0 away from #FFDE00 selection border)
+  green: '#7CE4FF',  // Luminous Ice Sky Blue
+  purple: '#E6459E', // Luminous Berry Pink
 };
 
 /** High-contrast 5-attribute card stocks (replaces mid-gray #808080 with Blueprint Mist #E2ECF7, WCAG ≥ 3.12:1). */
@@ -112,7 +112,7 @@ export const formatBackgroundName = (bg: Background): string => {
   }
 };
 
-/** Player-facing Parry counter metadata using our Orange/Teal/Blue + Circles/Triangles/Moons + "Trio" vocabulary. */
+/** Player-facing Parry counter metadata using our Orange/Blue/Pink + Circles/Triangles/Bolts + "Trio" vocabulary. */
 export const formatParryCounterMeta = (req: ParryRequirement): CounterMeta => {
   const base = parryCounterMeta(req);
   switch (req.kind) {

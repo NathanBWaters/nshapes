@@ -51,14 +51,16 @@ async function readBoardCards(page: Page): Promise<ParsedBoardCard[]> {
   const COLOR_ALIAS: Record<string, 'red' | 'green' | 'purple'> = {
     orange: 'red',
     red: 'red',
+    blue: 'green',
     teal: 'green',
     green: 'green',
-    blue: 'purple',
+    pink: 'purple',
     purple: 'purple',
   };
   const SHAPE_ALIAS: Record<string, 'oval' | 'squiggle' | 'diamond'> = {
     circle: 'oval',
     oval: 'oval',
+    bolt: 'squiggle',
     moon: 'squiggle',
     squiggle: 'squiggle',
     triangle: 'diamond',
@@ -71,7 +73,7 @@ async function readBoardCards(page: Page): Promise<ParsedBoardCard[]> {
     const label = (await loc.getAttribute('aria-label')) ?? '';
     const isWild = /^Wild\b/i.test(label);
     const debuffed = /\bdebuffed\b/i.test(label);
-    const match = label.match(/^([123])\s+(orange|teal|blue|red|green|purple)\s+(circle|moon|triangle|oval|squiggle|diamond)/i);
+    const match = label.match(/^([123])\s+(orange|blue|pink|teal|red|green|purple)\s+(circle|bolt|moon|triangle|oval|squiggle|diamond)/i);
     const editionMatch = label.match(/,\s*(Foil|Holo|Polychrome|Glass|Gold|Wild)/i);
     cards.push({
       idx: i,

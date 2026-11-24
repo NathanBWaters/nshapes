@@ -217,30 +217,30 @@ export const CHARMS: readonly CharmDef[] = [
     cost: 4,
     icon: 'delapouite/fire-gem',
     description: '+5 Mult for every Orange card in your scored Trio.',
-    flavorText: 'Tangerine light doubles back on itself.',
-    accentColor: '#E05A04',
+    flavorText: 'Sunburst orange doubles back on itself.',
+    accentColor: '#DF5A00',
   },
   {
     id: 'emerald-lens',
-    name: 'Tide Lens',
+    name: 'Azure Lens',
     role: 'chips',
     rarity: 'common',
     cost: 4,
     icon: 'lorc/gems',
-    description: '+35 Chips for every Teal card in your scored Trio.',
-    flavorText: 'Ocean-teal geometry, cut to razor precision.',
-    accentColor: '#007870',
+    description: '+35 Chips for every Blue card in your scored Trio.',
+    flavorText: 'Sky-blue geometry, cut to razor precision.',
+    accentColor: '#007ED9',
   },
   {
     id: 'amethyst-crown',
-    name: 'Cobalt Crown',
+    name: 'Rose Crown',
     role: 'xmult',
     rarity: 'uncommon',
     cost: 7,
     icon: 'lorc/crown',
-    description: '×1.35 Mult for every Blue card in your scored Trio.',
-    flavorText: 'Three cobalts wear the crown together.',
-    accentColor: '#1E229E',
+    description: '×1.35 Mult for every Pink card in your scored Trio.',
+    flavorText: 'Three pinks wear the crown together.',
+    accentColor: '#940E65',
   },
   {
     id: 'trinity-bell',
@@ -565,9 +565,9 @@ export const getCharmStatusLabel = (charm: OwnedCharm, run: PrismRun): string =>
     case 'ruby-prism':
       return '+5M / Orange';
     case 'emerald-lens':
-      return '+35C / Teal';
+      return '+35C / Blue';
     case 'amethyst-crown':
-      return '×1.35 / Blue';
+      return '×1.35 / Pink';
     case 'trinity-bell':
       return '+40C / 3-card';
     case 'minimalist-monk':

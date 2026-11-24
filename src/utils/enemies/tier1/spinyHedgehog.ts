@@ -15,7 +15,7 @@ export function createSpinyHedgehog(): EnemyInstance {
       icon: 'caro-asercion/hedgehog',
       tier: 1,
       description: 'Explosion effects divided by 3',
-      defeatConditionText: 'Get 3 matches containing Moons',
+      defeatConditionText: 'Get 3 matches containing Bolts',
     },
     [
       {

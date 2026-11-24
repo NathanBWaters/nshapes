@@ -41,7 +41,7 @@ export const PRISM_COLORS = {
 
 export const PRISM_COLORBLIND_LETTER: Record<PrismColor, string> = COLOR_BADGE_LETTER;
 
-/** Universal CVD-safe shape colors — matches src/components/Card.tsx (Orange / Teal / Cobalt Blue). */
+/** Universal CVD-safe shape colors — matches src/components/Card.tsx (Orange / Sky Blue / Berry Pink). */
 export const getPrismShapeColor = (color: PrismColor, _colorblind = false): string =>
   getCardShapeColor(color);
 

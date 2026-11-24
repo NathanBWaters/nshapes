@@ -173,7 +173,7 @@ const OptionsMenu: React.FC<OptionsMenuProps> = ({ visible, onClose, onResetGame
                 <Icon name="lorc/spectacles" size={22} color={COLORS.slateCharcoal} />
                 <View style={styles.labelCol}>
                   <Text style={styles.settingText}>Colorblind Mode</Text>
-                  <Text style={styles.settingSubtext}>High-visibility O / T / B color badges</Text>
+                  <Text style={styles.settingSubtext}>High-visibility O / B / P color badges</Text>
                 </View>
               </View>
               <TouchableOpacity

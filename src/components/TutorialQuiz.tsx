@@ -27,7 +27,7 @@ const QUIZ_SCENARIOS: Array<{
       { id: '3', shape: 'oval', color: 'purple', number: 3, shading: 'solid', background: 'white', selected: false },
     ],
     isValid: true,
-    explanation: "This is a valid Trio! Shape: all different (triangle, moon, circle). Color: all different (orange, teal, blue). Number: all different (1, 2, 3).",
+    explanation: "This is a valid Trio! Shape: all different (triangle, bolt, circle). Color: all different (orange, blue, pink). Number: all different (1, 2, 3).",
     hint: "Check each attribute - are they ALL the same or ALL different?",
   },
   // Quiz 2: Invalid SET - color has 2 same, 1 different
@@ -38,7 +38,7 @@ const QUIZ_SCENARIOS: Array<{
       { id: '3', shape: 'oval', color: 'green', number: 3, shading: 'solid', background: 'white', selected: false },
     ],
     isValid: false,
-    explanation: "NOT a valid Trio! Color breaks the rule: 2 orange and 1 teal. Remember, each attribute must be ALL the same or ALL different - not 2 and 1!",
+    explanation: "NOT a valid Trio! Color breaks the rule: 2 orange and 1 blue. Remember, each attribute must be ALL the same or ALL different - not 2 and 1!",
     hint: "Look at the colors carefully...",
   },
   // Quiz 3: Valid SET - all same color, all different shape and number
@@ -49,7 +49,7 @@ const QUIZ_SCENARIOS: Array<{
       { id: '3', shape: 'oval', color: 'purple', number: 3, shading: 'solid', background: 'white', selected: false },
     ],
     isValid: true,
-    explanation: "This is a valid Trio! Shape: all different. Color: all same (blue). Number: all different. Each attribute follows the rule!",
+    explanation: "This is a valid Trio! Shape: all different. Color: all same (pink). Number: all different. Each attribute follows the rule!",
     hint: "Same is also valid - as long as ALL THREE match!",
   },
 ];

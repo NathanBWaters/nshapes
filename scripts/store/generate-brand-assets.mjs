@@ -2,8 +2,8 @@
 /**
  * Reproducibly renders crisp, vector-sharp NShapes brand assets built around
  * our scientifically verified, zero-SET-overlap triad:
- *   Shapes: Circle · Triangle · -25°-tilted Crescent Moon
- *   Colors: Cobalt Blue (#1E229E) · Ocean Teal (#007870) · Tangerine Orange (#E05A04)
+ *   Shapes: Circle · Triangle · Chunky 8-vertex Bolt
+ *   Colors: Tangerine Orange (#DF5A00) · Electric Sky Blue (#007ED9) · Berry Pink (#940E65)
  *
  * Strips alpha channels from Apple/Google opaque store assets so ITMS-90717
  * checks always pass.
@@ -17,12 +17,11 @@ import { chromium } from '@playwright/test';
 
 const ROOT = process.cwd();
 
-// Exact verified Proposal #2 palette & geometry (matching src/utils/cardVisuals.ts)
-const COLOR_ORANGE = '#E05A04';
-const COLOR_TEAL = '#007870';
-const COLOR_BLUE = '#1E229E';
-const CRESCENT_PATH_24x30 =
-  'M 22.37,19.18 A 10.80,10.80 0 1,1 15.62,4.69 A 8.00,8.00 0 0,0 22.37,19.18 Z';
+// Exact verified palette & geometry (matching src/utils/cardVisuals.ts)
+const COLOR_ORANGE = '#DF5A00';
+const COLOR_BLUE = '#007ED9';
+const COLOR_PINK = '#940E65';
+const BOLT_POINTS_24x30 = '12,1.8 21.5,1.8 14.8,12.8 22,12.8 12,28.2 2.5,28.2 9.2,17.2 2,17.2';
 const TRIANGLE_POINTS_24x30 = '12,2.2 22,26.8 2,26.8';
 
 const ensureDir = (filePath) => {
@@ -31,9 +30,8 @@ const ensureDir = (filePath) => {
 
 /**
  * Iconic NShapes Geometric Triad Badge:
- * Warm ivory rounded square tile framed in deep charcoal with a crisp golden
- * top prism accent, housing the 3 signature shapes (Teal Triangle, Cobalt
- * Circle, Tangerine Crescent Moon) in balanced triangular symmetry.
+ * Warm ivory rounded square tile framed in deep charcoal housing the 3 signature
+ * shapes (Electric Blue Triangle, Berry Pink Circle, Tangerine Bolt) in balanced triangular symmetry.
  */
 function triadEmblemGroup({ cx = 512, cy = 512, size = 700, showShadow = true } = {}) {
   const s = size / 700;
@@ -43,17 +41,17 @@ function triadEmblemGroup({ cx = 512, cy = 512, size = 700, showShadow = true } 
   const borderW = Math.round(22 * s);
 
   // Place the 3 shapes inside the 700x700 coordinate box mapped from 24x30 geometry
-  // Top: Ocean Teal Triangle
-  // Bottom-Left: Royal Cobalt Circle
-  // Bottom-Right: Tangerine Orange Tilted Crescent Moon
-  const shapeScale = 10.8 * s; // 24*10.8 = 259px wide, 30*10.8 = 324px tall
+  // Top: Electric Sky Blue Triangle
+  // Bottom-Left: Berry Pink Circle
+  // Bottom-Right: Tangerine Orange Chunky Bolt
+  const shapeScale = 10.6 * s;
   const triX = cx - 12 * shapeScale;
   const triY = cy - 294 * s;
   const circX = cx - 152 * s;
   const circY = cy + 128 * s;
-  const circR = 102 * s;
-  const moonX = cx + 20 * s;
-  const moonY = cy - 26 * s;
+  const circR = 100 * s;
+  const boltX = cx + 24 * s;
+  const boltY = cy - 31 * s;
 
   return `
     ${
@@ -65,17 +63,17 @@ function triadEmblemGroup({ cx = 512, cy = 512, size = 700, showShadow = true } 
     <!-- Subtle geometric prism highlight ring inside tile -->
     <circle cx="${cx}" cy="${cy + Math.round(18 * s)}" r="${Math.round(238 * s)}" fill="none" stroke="rgba(30, 37, 48, 0.08)" stroke-width="${Math.round(6 * s)}" stroke-dasharray="${Math.round(16 * s)} ${Math.round(14 * s)}" />
 
-    <!-- Top: Ocean Teal Triangle -->
+    <!-- Top: Electric Sky Blue Triangle -->
     <g transform="translate(${triX.toFixed(1)} ${triY.toFixed(1)}) scale(${shapeScale.toFixed(3)})">
-      <polygon points="${TRIANGLE_POINTS_24x30}" fill="${COLOR_TEAL}" stroke="${COLOR_TEAL}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" />
+      <polygon points="${TRIANGLE_POINTS_24x30}" fill="${COLOR_BLUE}" stroke="${COLOR_BLUE}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" />
     </g>
 
-    <!-- Bottom-Left: Royal Cobalt Circle -->
-    <circle cx="${circX.toFixed(1)}" cy="${circY.toFixed(1)}" r="${circR.toFixed(1)}" fill="${COLOR_BLUE}" />
+    <!-- Bottom-Left: Berry Pink Circle -->
+    <circle cx="${circX.toFixed(1)}" cy="${circY.toFixed(1)}" r="${circR.toFixed(1)}" fill="${COLOR_PINK}" />
 
-    <!-- Bottom-Right: Tangerine Orange Tilted Crescent Moon -->
-    <g transform="translate(${moonX.toFixed(1)} ${moonY.toFixed(1)}) scale(${shapeScale.toFixed(3)})">
-      <path d="${CRESCENT_PATH_24x30}" fill="${COLOR_ORANGE}" stroke="${COLOR_ORANGE}" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" />
+    <!-- Bottom-Right: Tangerine Orange Chunky Bolt -->
+    <g transform="translate(${boltX.toFixed(1)} ${boltY.toFixed(1)}) scale(${shapeScale.toFixed(3)})">
+      <polygon points="${BOLT_POINTS_24x30}" fill="${COLOR_ORANGE}" stroke="${COLOR_ORANGE}" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" />
     </g>
   `;
 }
@@ -131,18 +129,18 @@ function buildAdaptiveForegroundHtml() {
 }
 
 function buildAdaptiveMonochromeHtml() {
-  // Android 13+ Material You themed icon: bold pure-white Triad (Triangle + Circle + Moon) inside safe zone
+  // Android 13+ Material You themed icon: bold pure-white Triad (Triangle + Circle + Bolt) inside safe zone
   const s = 540 / 700;
   const cx = 512;
   const cy = 512;
-  const shapeScale = 11.4 * s;
+  const shapeScale = 11.2 * s;
   const triX = cx - 12 * shapeScale;
   const triY = cy - 306 * s;
   const circX = cx - 156 * s;
   const circY = cy + 132 * s;
-  const circR = 108 * s;
-  const moonX = cx + 18 * s;
-  const moonY = cy - 28 * s;
+  const circR = 106 * s;
+  const boltX = cx + 22 * s;
+  const boltY = cy - 32 * s;
 
   return `<!doctype html>
 <html>
@@ -153,8 +151,8 @@ function buildAdaptiveMonochromeHtml() {
     <polygon points="${TRIANGLE_POINTS_24x30}" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" />
   </g>
   <circle cx="${circX.toFixed(1)}" cy="${circY.toFixed(1)}" r="${circR.toFixed(1)}" fill="#FFFFFF" />
-  <g transform="translate(${moonX.toFixed(1)} ${moonY.toFixed(1)}) scale(${shapeScale.toFixed(3)})">
-    <path d="${CRESCENT_PATH_24x30}" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" />
+  <g transform="translate(${boltX.toFixed(1)} ${boltY.toFixed(1)}) scale(${shapeScale.toFixed(3)})">
+    <polygon points="${BOLT_POINTS_24x30}" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" />
   </g>
 </svg>
 </body>
@@ -180,7 +178,7 @@ function buildSplashIconHtml() {
 }
 
 function buildFeatureGraphicHtml() {
-  // 1024x500 Google Play Feature Graphic showcasing NShapes' new Circle/Triangle/Moon × Orange/Teal/Blue trio!
+  // 1024x500 Google Play Feature Graphic showcasing NShapes' new Circle/Triangle/Bolt × Orange/Teal/Blue trio!
   return `<!doctype html>
 <html>
 <head>
@@ -211,9 +209,9 @@ function buildFeatureGraphicHtml() {
     <filter id="softShadow" x="-20%" y="-20%" width="145%" height="145%">
       <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#030D1E" flood-opacity="0.42" />
     </filter>
-    <!-- +45° diagonal hatch for Teal Triangles card -->
-    <pattern id="tealHatch" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(-45)">
-      <rect x="0" y="0" width="5" height="2.5" fill="${COLOR_TEAL}" />
+    <!-- -45° diagonal hatch ("\\") for Electric Blue Triangles card -->
+    <pattern id="blueHatch" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(45)">
+      <rect x="0" y="0" width="5" height="2.5" fill="${COLOR_BLUE}" />
     </pattern>
   </defs>
 
@@ -227,35 +225,35 @@ function buildFeatureGraphicHtml() {
     <circle cx="110" cy="460" r="150" />
   </g>
 
-  <!-- Fanned NShapes Trio (All-Different: 1 Orange Outlined Circle · 2 Teal Hatched Triangles · 3 Cobalt Solid Moons) -->
+  <!-- Fanned NShapes Trio (All-Different: 1 Orange Outlined Circle · 2 Blue Hatched Triangles · 3 Berry Pink Solid Bolts) -->
   <!-- Card 1 (Left): 1 Orange Outlined Circle -->
   <g transform="translate(122 272) rotate(-16)" filter="url(#softShadow)">
     <rect x="-82" y="-114" width="164" height="228" rx="20" fill="#FAF7F0" stroke="#232934" stroke-width="5" />
     <circle cx="-24" cy="-4" r="34" fill="none" stroke="${COLOR_ORANGE}" stroke-width="8.5" />
   </g>
 
-  <!-- Card 2 (Right): 2 Teal Diagonal-Hatched Triangles (stacked cleanly in visible right field) -->
+  <!-- Card 2 (Right): 2 Electric Blue Diagonal-Hatched Triangles (stacked cleanly in visible right field) -->
   <g transform="translate(350 272) rotate(16)" filter="url(#softShadow)">
     <rect x="-82" y="-114" width="164" height="228" rx="20" fill="#FAF7F0" stroke="#232934" stroke-width="5" />
     <g transform="translate(10 -78) scale(2.32)">
-      <polygon points="${TRIANGLE_POINTS_24x30}" fill="url(#tealHatch)" stroke="${COLOR_TEAL}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+      <polygon points="${TRIANGLE_POINTS_24x30}" fill="url(#blueHatch)" stroke="${COLOR_BLUE}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
     </g>
     <g transform="translate(10 8) scale(2.32)">
-      <polygon points="${TRIANGLE_POINTS_24x30}" fill="url(#tealHatch)" stroke="${COLOR_TEAL}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+      <polygon points="${TRIANGLE_POINTS_24x30}" fill="url(#blueHatch)" stroke="${COLOR_BLUE}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
     </g>
   </g>
 
-  <!-- Card 3 (Center Hero): 3 Cobalt Solid Tilted Moons -->
+  <!-- Card 3 (Center Hero): 3 Berry Pink Solid Bolts -->
   <g transform="translate(236 244) rotate(-1)" filter="url(#softShadow)">
     <rect x="-96" y="-132" width="192" height="264" rx="22" fill="#FFFFFF" stroke="#F5C842" stroke-width="6" />
     <g transform="translate(-76.5 -28) scale(1.88)">
-      <path d="${CRESCENT_PATH_24x30}" fill="${COLOR_BLUE}" stroke="${COLOR_BLUE}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" />
+      <polygon points="${BOLT_POINTS_24x30}" fill="${COLOR_PINK}" stroke="${COLOR_PINK}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" />
     </g>
     <g transform="translate(-22.5 -28) scale(1.88)">
-      <path d="${CRESCENT_PATH_24x30}" fill="${COLOR_BLUE}" stroke="${COLOR_BLUE}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" />
+      <polygon points="${BOLT_POINTS_24x30}" fill="${COLOR_PINK}" stroke="${COLOR_PINK}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" />
     </g>
     <g transform="translate(31.5 -28) scale(1.88)">
-      <path d="${CRESCENT_PATH_24x30}" fill="${COLOR_BLUE}" stroke="${COLOR_BLUE}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" />
+      <polygon points="${BOLT_POINTS_24x30}" fill="${COLOR_PINK}" stroke="${COLOR_PINK}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" />
     </g>
   </g>
 

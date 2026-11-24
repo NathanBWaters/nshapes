@@ -16,7 +16,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
     body: [
       'Pick 3 cards and check one trait at a time: shape, then color.',
       'For each trait, the 3 cards must be all the same or all different.',
-      'Two alike and one odd (2 orange + 1 teal) is never a Trio.',
+      'Two alike and one odd (2 orange + 1 blue) is never a Trio.',
     ],
     fightTips: [
       { title: 'Your foe', text: 'This is Dozy Bunny. Every Trio you make knocks 3 off its health bar.', anchor: 'top' },
@@ -38,7 +38,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
     lessons: [
       {
         title: 'One trait at a time',
-        body: ['Every card has two traits to start with: a shape (triangle, circle, moon) and a color (orange, teal, blue).', 'Check shape by itself, then color by itself.'],
+        body: ['Every card has two traits to start with: a shape (triangle, circle, bolt) and a color (orange, blue, pink).', 'Check shape by itself, then color by itself.'],
         demo: {
           type: 'set', attributes: ['shape', 'color'], valid: true, caption: 'Three shapes, three colors: nothing in common',
           cards: [
@@ -50,7 +50,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
       },
       {
         title: 'All the same, or all different',
-        body: ['Here all 3 are orange (all the same) and the shapes are a triangle, a circle and a moon (all different).', 'Every trait passes, so these 3 cards are a Trio.'],
+        body: ['Here all 3 are orange (all the same) and the shapes are a triangle, a circle and a bolt (all different).', 'Every trait passes, so these 3 cards are a Trio.'],
         demo: {
           type: 'set', attributes: ['shape', 'color'], valid: true, caption: 'All orange, and three different shapes',
           cards: [
@@ -62,9 +62,9 @@ export const MECHANICS: Record<string, MechanicDef> = {
       },
       {
         title: 'Never two alike and one odd',
-        body: ['If 2 cards match on a trait and the 3rd does not, it is not a Trio.', 'Here 2 are orange and 1 is teal. The shapes are fine, but color breaks it.'],
+        body: ['If 2 cards match on a trait and the 3rd does not, it is not a Trio.', 'Here 2 are orange and 1 is blue. The shapes are fine, but color breaks it.'],
         demo: {
-          type: 'set', attributes: ['shape', 'color'], valid: false, caption: '2 orange + 1 teal: color breaks it',
+          type: 'set', attributes: ['shape', 'color'], valid: false, caption: '2 orange + 1 blue: color breaks it',
           cards: [
           { shape: 'diamond', color: 'red', number: 1, shading: 'solid' },
           { shape: 'oval', color: 'red', number: 1, shading: 'solid' },
@@ -90,7 +90,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
           { shape: 'diamond', color: 'green', number: 1, shading: 'solid' },
           { shape: 'squiggle', color: 'purple', number: 1, shading: 'solid' },
         ],
-        explain: 'Two triangles and one moon: shape fails. Two blue and one teal: color fails too.',
+        explain: 'Two triangles and one bolt: shape fails. Two pink and one blue: color fails too.',
       },
       {
         attributes: ['shape', 'color'],
@@ -123,7 +123,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
       type: 'set',
       attributes: ['shape', 'color'],
       valid: false,
-      caption: '2 orange + 1 teal: not a Trio (−1 ♥)',
+      caption: '2 orange + 1 blue: not a Trio (−1 ♥)',
       cards: [
         { shape: 'diamond', color: 'red', number: 1, shading: 'solid' },
         { shape: 'oval', color: 'red', number: 1, shading: 'solid' },
@@ -138,7 +138,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
     tagline: 'Three shapes in three colors: nothing in common is a Set too.',
     coach: 'All traits different? Rainbow Charm doubles every hit!',
     body: [
-      'A triangle, a circle and a moon, one orange, one teal, one blue: no two alike, so it is a Trio.',
+      'A triangle, a circle and a bolt, one orange, one blue, one pink: no two alike, so it is a Trio.',
       'Your new Rainbow Charm doubles every all-different Set! Make 2 all-different Sets for the third star.',
     ],
     fightTips: [

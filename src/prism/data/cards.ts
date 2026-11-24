@@ -16,13 +16,13 @@ export const PRISM_NUMBERS: readonly PrismNumber[] = [1, 2, 3];
 
 export const COLOR_LABELS: Record<PrismColor, string> = {
   red: 'Orange',
-  green: 'Teal',
-  purple: 'Blue',
+  green: 'Blue',
+  purple: 'Pink',
 };
 
 export const SHAPE_LABELS: Record<PrismShape, string> = {
   oval: 'Circle',
-  squiggle: 'Moon',
+  squiggle: 'Bolt',
   diamond: 'Triangle',
 };
 

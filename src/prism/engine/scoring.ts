@@ -311,14 +311,14 @@ const evaluateSingleCharm = (
     case 'emerald-lens': {
       const greens = countColor('green');
       if (greens <= 0) return noTrigger;
-      return { triggered: true, chipsDelta: greens * 35, multDelta: 0, xMult: 1, goldDelta: 0, note: `${greens} Teal (+${greens * 35}C)` };
+      return { triggered: true, chipsDelta: greens * 35, multDelta: 0, xMult: 1, goldDelta: 0, note: `${greens} Blue (+${greens * 35}C)` };
     }
 
     case 'amethyst-crown': {
       const purples = countColor('purple');
       if (purples <= 0) return noTrigger;
       const x = roundMult(Math.pow(1.35, purples));
-      return { triggered: true, chipsDelta: 0, multDelta: 0, xMult: x, goldDelta: 0, note: `${purples} Blue (×${x})` };
+      return { triggered: true, chipsDelta: 0, multDelta: 0, xMult: x, goldDelta: 0, note: `${purples} Pink (×${x})` };
     }
 
     case 'trinity-bell': {
