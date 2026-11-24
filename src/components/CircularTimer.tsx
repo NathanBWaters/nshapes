@@ -1,3 +1,4 @@
+import { MONO_FONT } from '@/utils/fonts';
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
@@ -227,7 +228,7 @@ const styles = StyleSheet.create({
   },
   timeText: {
     textAlign: 'center',
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
   },
 });
 

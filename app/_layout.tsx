@@ -7,6 +7,7 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { TutorialProvider } from "@/context/TutorialContext";
 import { KeywordProvider } from "@/context/KeywordContext";
+import AppErrorBoundary from "@/components/AppErrorBoundary";
 import KeywordTooltip from "@/components/KeywordTooltip";
 import { initAudio, preloadAllSounds } from "@/utils/sounds";
 import { installPerfWatchdog } from "@/utils/perfWatchdog";
@@ -33,18 +34,20 @@ export default function RootLayout() {
           <title>NShapes — Pattern-Matching Roguelike</title>
         </Head>
       )}
-      <KeywordProvider>
-        <TutorialProvider>
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              title: "NShapes — Pattern-Matching Roguelike",
-            }}
-          />
-          <StatusBar style="auto" />
-          <KeywordTooltip />
-        </TutorialProvider>
-      </KeywordProvider>
+      <AppErrorBoundary>
+        <KeywordProvider>
+          <TutorialProvider>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                title: "NShapes — Pattern-Matching Roguelike",
+              }}
+            />
+            <StatusBar style="dark" />
+            <KeywordTooltip />
+          </TutorialProvider>
+        </KeywordProvider>
+      </AppErrorBoundary>
     </SafeAreaProvider>
   );
 }

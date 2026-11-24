@@ -1,3 +1,4 @@
+import { MONO_FONT } from '@/utils/fonts';
 /**
  * ScoreDecayIndicator Component
  * Shows a badge indicating score is decaying per second.
@@ -36,7 +37,7 @@ const styles = StyleSheet.create({
   text: {
     fontSize: 12,
     fontWeight: '700',
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
     color: COLORS.impactRed,
   },
 });

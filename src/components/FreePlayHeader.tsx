@@ -1,3 +1,4 @@
+import { MONO_FONT } from '@/utils/fonts';
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Character, PlayerStats } from '@/types';
@@ -194,13 +195,13 @@ const styles = StyleSheet.create({
     color: COLORS.slateCharcoal,
     fontSize: 12,
     fontWeight: '600',
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
   },
   levelText: {
     color: COLORS.logicTeal,
     fontSize: 12,
     fontWeight: '700',
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
   },
   matchLabel: {
     color: COLORS.slateCharcoal,
@@ -235,7 +236,7 @@ const styles = StyleSheet.create({
   hintCount: {
     fontSize: 12,
     fontWeight: '600',
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
     color: COLORS.slateCharcoal,
   },
   funGroup: {

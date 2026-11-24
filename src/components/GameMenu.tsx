@@ -1,3 +1,4 @@
+import { MONO_FONT } from '@/utils/fonts';
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Modal, ScrollView, StyleSheet } from 'react-native';
 import { CopilotStep, walkthroughable } from 'react-native-copilot';
@@ -931,7 +932,7 @@ const styles = StyleSheet.create({
     color: COLORS.slateCharcoal,
     fontWeight: '600',
     fontSize: 13,
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
   },
   statValueActive: {
     color: COLORS.logicTeal,

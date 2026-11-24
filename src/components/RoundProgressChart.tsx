@@ -1,3 +1,4 @@
+import { MONO_FONT } from '@/utils/fonts';
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { COLORS } from '@/utils/colors';
@@ -195,7 +196,7 @@ const styles = StyleSheet.create({
   },
   yAxisLabel: {
     fontSize: 10,
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
     color: COLORS.slateCharcoal,
     opacity: 0.6,
   },
@@ -257,7 +258,7 @@ const styles = StyleSheet.create({
   },
   xAxisLabel: {
     fontSize: 10,
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
     color: COLORS.slateCharcoal,
   },
   xAxisLabelCurrent: {

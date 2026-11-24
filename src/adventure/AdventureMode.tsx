@@ -11,6 +11,7 @@ import { COLORS } from '@/utils/colors';
 import { MusicStorage, SoundStorage } from '@/utils/storage';
 import { music, setMusicEnabled, setSfxOverride, sfx } from '@/audio';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import type { AdventureSave, FeatureDestination, LevelDef, MechanicDef, RunState } from './types';
 import { MAIN_LEVELS, getLevel, mainIndexOf } from './data/levels';
 import { getMapKey, isMapKeyClaimed, isMapKeyReached, lockedFighters, mapKeyAfter } from './data/mapKeys';
@@ -160,6 +161,30 @@ const AdventureMode: React.FC<Props> = ({
   const [activeRescueKeyId, setActiveRescueKeyId] = useState<string | null>(() => devRescueKeyId ?? null);
   const deferredKeyIds = useRef<Set<string>>(new Set());
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  useAndroidBackHandler(() => {
+    if (reference) {
+      setReference(null);
+      return true;
+    }
+    if (preview) {
+      setPreviewExit('slide');
+      setPreview(null);
+      return true;
+    }
+    if (teaching || activeRescueKeyId || !unlocksRevealed) {
+      return true;
+    }
+    if (screen.kind === 'camp' || screen.kind === 'guide' || screen.kind === 'results') {
+      setScreen({ kind: 'map' });
+      return true;
+    }
+    if (screen.kind === 'run') {
+      return true;
+    }
+    onExit();
+    return true;
+  });
 
   const setSave = useCallback((next: AdventureSave | ((s: AdventureSave) => AdventureSave)) => {
     setSaveState(prev => {

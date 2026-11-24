@@ -1,3 +1,4 @@
+import { MONO_FONT } from '@/utils/fonts';
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated, ScrollView } from 'react-native';
 import ReAnimated, {
@@ -512,7 +513,7 @@ const styles = StyleSheet.create({
     color: COLORS.slateCharcoal,
     fontWeight: '700',
     fontSize: 64,
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
   },
   awardsGrid: {
     justifyContent: 'center',
@@ -578,7 +579,7 @@ const styles = StyleSheet.create({
     color: COLORS.slateCharcoal,
     fontWeight: '700',
     fontSize: 20,
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
   },
   buttonContainer: {
     alignItems: 'center',

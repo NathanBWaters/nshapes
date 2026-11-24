@@ -1,3 +1,4 @@
+import { MONO_FONT } from '@/utils/fonts';
 import React from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { Player, Weapon, PlayerStats, WeaponRarity, AdventureDifficulty } from '@/types';
@@ -302,7 +303,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '800',
     color: COLORS.deepOnyx,
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
   },
   statLabel: {
     fontSize: 10,
@@ -368,7 +369,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: COLORS.canvasWhite,
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
   },
   finalStatsSection: {
     marginBottom: 24,
@@ -402,7 +403,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: COLORS.deepOnyx,
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
   },
   buttonSection: {
     borderTopWidth: 1,

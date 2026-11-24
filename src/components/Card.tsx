@@ -1,3 +1,4 @@
+import { MONO_FONT } from '@/utils/fonts';
 import React, { createContext, memo, useCallback, useContext, useState, useSyncExternalStore } from 'react';
 import { View, Text, StyleSheet, Platform, TouchableOpacity } from 'react-native';
 import Svg, { Ellipse, Path, Polygon, Defs, Pattern, Rect } from 'react-native-svg';
@@ -1115,7 +1116,7 @@ const styles = StyleSheet.create({
   timerText: {
     fontSize: 10,
     fontWeight: '700',
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
     color: COLORS.slateCharcoal,
   },
   timerTextUrgent: {
@@ -1166,7 +1167,7 @@ const styles = StyleSheet.create({
     color: COLORS.canvasWhite,
     fontSize: 10,
     fontWeight: '700',
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
   },
   badgeEmoji: {
     fontSize: 10,

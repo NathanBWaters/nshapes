@@ -1,3 +1,4 @@
+import { MONO_FONT } from '@/utils/fonts';
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { CardReward } from '@/types';
@@ -197,12 +198,12 @@ const styles = StyleSheet.create({
   rewardIcon: {
     fontSize: 18,
     fontWeight: '700',
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
   },
   rewardValue: {
     fontSize: 14,
     fontWeight: '700',
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
   },
 });
 

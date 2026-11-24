@@ -1,3 +1,4 @@
+import { MONO_FONT } from '@/utils/fonts';
 import React from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { COLORS, RADIUS, getRarityColor } from '@/utils/colors';
@@ -220,7 +221,7 @@ const styles = StyleSheet.create({
     color: COLORS.logicTeal,
     fontSize: 12,
     fontWeight: '700',
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
   },
   flavorTextContainer: {
     backgroundColor: COLORS.canvasWhite,

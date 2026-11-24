@@ -1,13 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, Platform, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Platform, ScrollView, Linking } from 'react-native';
 import { COLORS, RADIUS } from '@/utils/colors';
+import { MONO_FONT } from '@/utils/fonts';
+import { PRIVACY_POLICY_URL, SUPPORT_URL, STORE_VERSION } from '@/utils/storeUrls';
 import { useSoundSetting } from '@/hooks/useSoundSetting';
 import { setMusicEnabled } from '@/audio';
 import { analyticsOptedOut, playerCode, setAnalyticsEnabled } from '@/analytics/posthog';
 import { resetAdventureSave } from '@/adventure/save';
 import { resetSpireStorage } from '@/spire/save';
+import { resetPrismStorage } from '@/prism/save';
 import { ColorblindStorage, MusicStorage, resetAllClassicStorage } from '@/utils/storage';
 import { resetTutorialStorage } from '@/context/TutorialContext';
+import { version as BUILD_VERSION } from '../../package.json';
 import Icon from './Icon';
 
 interface OptionsMenuProps {
@@ -63,11 +67,18 @@ const OptionsMenu: React.FC<OptionsMenuProps> = ({ visible, onClose, onResetGame
   const handleConfirmReset = () => {
     resetAdventureSave();
     resetSpireStorage();
+    resetPrismStorage();
     resetAllClassicStorage();
     void resetTutorialStorage();
     setConfirmingReset(false);
     setResetDone(true);
     onResetGame?.();
+  };
+
+  const openExternalUrl = (url: string) => {
+    void Linking.openURL(url).catch(() => {
+      /* ignore if browser handler unavailable */
+    });
   };
 
   const handleToggleAnalytics = () => {
@@ -223,6 +234,25 @@ const OptionsMenu: React.FC<OptionsMenuProps> = ({ visible, onClose, onResetGame
               </TouchableOpacity>
             </View>
 
+            <View style={styles.legalLinksRow}>
+              <TouchableOpacity
+                testID="options-privacy-link"
+                accessibilityRole="link"
+                style={styles.legalLinkButton}
+                onPress={() => openExternalUrl(PRIVACY_POLICY_URL)}
+              >
+                <Text style={styles.legalLinkText}>Privacy Policy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                testID="options-support-link"
+                accessibilityRole="link"
+                style={styles.legalLinkButton}
+                onPress={() => openExternalUrl(SUPPORT_URL)}
+              >
+                <Text style={styles.legalLinkText}>Support &amp; FAQ</Text>
+              </TouchableOpacity>
+            </View>
+
             <View style={[styles.settingRow, { borderBottomWidth: 0, flexDirection: 'column', alignItems: 'stretch', gap: 10 }]}>
               <View style={styles.resetHeaderRow}>
                 <View style={[styles.settingLabel, { flex: 1 }]}>
@@ -282,6 +312,10 @@ const OptionsMenu: React.FC<OptionsMenuProps> = ({ visible, onClose, onResetGame
                 </Text>
               )}
             </View>
+
+            <Text style={styles.versionCaption} testID="options-version">
+              NShapes v{STORE_VERSION} (build {BUILD_VERSION})
+            </Text>
           </ScrollView>
 
           <TouchableOpacity style={styles.doneButton} onPress={onClose}>
@@ -376,9 +410,37 @@ const styles = StyleSheet.create({
   playerCodeText: {
     fontSize: 12,
     fontWeight: '700',
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
     color: COLORS.slateCharcoal,
     marginTop: 2,
+  },
+  legalLinksRow: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.paperBeige,
+  },
+  legalLinkButton: {
+    flex: 1,
+    backgroundColor: COLORS.paperBeige,
+    borderRadius: RADIUS.button,
+    paddingVertical: 9,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+  },
+  legalLinkText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.logicTeal,
+  },
+  versionCaption: {
+    textAlign: 'center',
+    fontSize: 11,
+    color: COLORS.slateCharcoal,
+    opacity: 0.6,
+    paddingTop: 4,
+    paddingBottom: 8,
   },
   toggleButton: {
     paddingHorizontal: 20,

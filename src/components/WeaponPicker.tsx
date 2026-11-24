@@ -1,3 +1,4 @@
+import { MONO_FONT } from '@/utils/fonts';
 /**
  * Building blocks shared by the screens where the player picks a weapon:
  * WeaponShop, LevelUp and the in-round LevelUpModal.
@@ -311,7 +312,7 @@ export const weaponPickerStyles = StyleSheet.create({
     color: COLORS.actionYellow,
     fontWeight: '700',
     fontSize: 14,
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
   },
   // Top half - detail
   detailSection: {
@@ -368,7 +369,7 @@ export const weaponPickerStyles = StyleSheet.create({
     color: COLORS.slateCharcoal,
     fontWeight: '700',
     fontSize: 12,
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
   },
   ownershipIndicator: {
     backgroundColor: COLORS.logicTeal,
@@ -502,7 +503,7 @@ export const weaponPickerStyles = StyleSheet.create({
     color: COLORS.slateCharcoal,
     fontWeight: '700',
     fontSize: 11,
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
   },
   optionPriceUnaffordable: {
     color: COLORS.impactRed,
@@ -617,14 +618,14 @@ const shopPreview = StyleSheet.create({
   statBefore: {
     color: COLORS.slateCharcoal,
     fontSize: 11,
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
     opacity: 0.7,
     flexShrink: 0,
   },
   statAfter: {
     fontSize: 12,
     fontWeight: '700',
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
   },
   statDecrease: {
     color: COLORS.impactRed,
@@ -659,13 +660,13 @@ const levelUpPreview = StyleSheet.create({
     color: COLORS.slateCharcoal,
     fontWeight: '500',
     fontSize: 11,
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
     opacity: 0.7,
   },
   statAfter: {
     fontWeight: '700',
     fontSize: 12,
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
   },
   statDecrease: {
     color: COLORS.impactOrange,

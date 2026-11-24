@@ -33,6 +33,7 @@ import {
 } from '@/utils/connectionUtils';
 import { useGameTimer } from '@/hooks/useGameTimer';
 import { useAppActive } from '@/hooks/useAppActive';
+import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { useParticles } from '@/hooks/useParticles';
 import { useRoundStats } from '@/hooks/useRoundStats';
 import { useFighterConductor } from '@/hooks/useFighterConductor';
@@ -252,6 +253,37 @@ const Game: React.FC<GameProps> = ({
   const [classicFunRating, setClassicFunRating] = useState<FunRating | null>(null);
   const [classicFunTags, setClassicFunTags] = useState<FunTag[]>([]);
   const classicSessionRef = useRef<{ fightId: string; startedAt: number; reported: boolean } | null>(null);
+
+  // Android hardware back button handling for top-level phases (sub-modes own their own back stack)
+  useAndroidBackHandler(
+    () => {
+      if (showOptionsModal) {
+        setShowOptionsModal(false);
+        return true;
+      }
+      if (gamePhase === 'main_menu') {
+        return false;
+      }
+      if (
+        gamePhase === 'difficulty_select' ||
+        gamePhase === 'tutorial' ||
+        gamePhase === 'free_play' ||
+        gamePhase === 'victory' ||
+        gamePhase === 'game_over' ||
+        gamePhase === 'character_unlock'
+      ) {
+        setGamePhase('main_menu');
+        return true;
+      }
+      if (gamePhase === 'round') {
+        setIsMenuOpen(prev => !prev);
+        return true;
+      }
+      // Consume back during between-round transitions so a run isn't abandoned unintentionally
+      return true;
+    },
+    gamePhase !== 'adventure' && gamePhase !== 'spire' && gamePhase !== 'prism'
+  );
 
   // Keyboard shortcut for hints (web only)
   useEffect(() => {

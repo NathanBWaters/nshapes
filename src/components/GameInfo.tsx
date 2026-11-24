@@ -1,3 +1,4 @@
+import { MONO_FONT } from '@/utils/fonts';
 import React, { ReactNode } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
 import { CopilotStep, walkthroughable } from 'react-native-copilot';
@@ -89,7 +90,7 @@ const hintButtonStyles = StyleSheet.create({
   hintCount: {
     fontSize: 12,
     fontWeight: '600',
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
   },
   hintCountEnabled: {
     color: COLORS.slateCharcoal,
@@ -408,7 +409,7 @@ const styles = StyleSheet.create({
     color: COLORS.canvasWhite,
     fontWeight: '700',
     fontSize: 13,
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
   },
   statItem: {
     flexDirection: 'row',
@@ -435,7 +436,7 @@ const styles = StyleSheet.create({
     color: COLORS.slateCharcoal,
     fontSize: 12,
     fontWeight: '600',
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
   },
   criticalValue: {
     color: COLORS.impactRed,
@@ -456,7 +457,7 @@ const styles = StyleSheet.create({
     color: COLORS.logicTeal,
     fontSize: 12,
     fontWeight: '700',
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
   },
   xpBarContainer: {
     width: 20,
@@ -493,7 +494,7 @@ const styles = StyleSheet.create({
     color: COLORS.canvasWhite,
     fontSize: 12,
     fontWeight: '600',
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
   },
   hintButtonEnabled: {
     backgroundColor: COLORS.actionYellow,
@@ -512,7 +513,7 @@ const styles = StyleSheet.create({
   hintCount: {
     fontSize: 12,
     fontWeight: '600',
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
   },
   hintCountEnabled: {
     color: COLORS.slateCharcoal,
@@ -554,7 +555,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     minWidth: 36,
     textAlign: 'right',
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
   },
 });
 

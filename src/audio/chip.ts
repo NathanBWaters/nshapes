@@ -9,6 +9,7 @@
  * poteto's approach. On platforms without Web Audio, everything is a no-op.
  */
 
+import { Platform } from 'react-native';
 import { getIsAppActive } from '@/utils/appLifecycle';
 
 export type Duty = 0.125 | 0.25 | 0.5 | 0.75;
@@ -51,7 +52,66 @@ const MAX_VOICES = 56;
 
 type Ctx = BaseAudioContext;
 
+interface NativeAudioManagerLike {
+  setSystemOptions?: (opts: {
+    ios?: {
+      category?: string;
+      options?: string[];
+      allowHaptics?: boolean;
+      notifyOthersOnDeactivation?: boolean;
+    };
+  }) => void;
+  setAudioSessionActivity?: (enabled: boolean) => Promise<void>;
+}
+
+interface NativeAudioModuleLike {
+  AudioContext?: new () => AudioContext;
+  AudioManager?: NativeAudioManagerLike;
+}
+
+let nativeAudioCache: NativeAudioModuleLike | null | undefined;
+let nativeSessionConfigured = false;
+
+const loadNativeAudioModule = (): NativeAudioModuleLike | null => {
+  if (Platform.OS === 'web') return null;
+  if (nativeAudioCache !== undefined) return nativeAudioCache;
+  try {
+    nativeAudioCache = require('react-native-audio-api') as NativeAudioModuleLike;
+  } catch {
+    nativeAudioCache = null;
+  }
+  return nativeAudioCache;
+};
+
+const configureNativeSession = (active: boolean) => {
+  const mgr = loadNativeAudioModule()?.AudioManager;
+  if (!mgr) return;
+  try {
+    if (active && !nativeSessionConfigured && typeof mgr.setSystemOptions === 'function') {
+      nativeSessionConfigured = true;
+      mgr.setSystemOptions({
+        ios: {
+          // Respect iOS Silent Switch, mix gently with background music/podcasts, and keep haptics enabled
+          category: 'ambient',
+          options: ['mixWithOthers'],
+          allowHaptics: true,
+          notifyOthersOnDeactivation: true,
+        },
+      });
+    }
+    if (typeof mgr.setAudioSessionActivity === 'function') {
+      void Promise.resolve(mgr.setAudioSessionActivity(active)).catch(() => undefined);
+    }
+  } catch {
+    /* ignore audio session setup failures */
+  }
+};
+
 const getAudioContextCtor = (): (new () => AudioContext) | null => {
+  if (Platform.OS !== 'web') {
+    const NativeCtor = loadNativeAudioModule()?.AudioContext;
+    if (typeof NativeCtor === 'function') return NativeCtor;
+  }
   if (typeof window === 'undefined') return null;
   const w = window as unknown as { AudioContext?: new () => AudioContext; webkitAudioContext?: new () => AudioContext };
   return w.AudioContext ?? w.webkitAudioContext ?? null;
@@ -101,12 +161,16 @@ export class Chip {
     if (!getIsAppActive()) return false;
     if (this.ctx) {
       // iOS reports 'interrupted' after calls/app switches, not just 'suspended'
-      if (this.live && this.live.state !== 'running' && this.live.state !== 'closed') void this.live.resume().catch(() => undefined);
+      if (this.live && this.live.state !== 'running' && this.live.state !== 'closed') {
+        if (Platform.OS !== 'web') configureNativeSession(true);
+        void Promise.resolve(this.live.resume()).catch(() => undefined);
+      }
       return true;
     }
     const Ctor = getAudioContextCtor();
     if (!Ctor) return false;
     try {
+      if (Platform.OS !== 'web') configureNativeSession(true);
       const ctx = new Ctor();
       this.live = ctx;
       this.wire(ctx);
@@ -121,7 +185,10 @@ export class Chip {
   suspend(): void {
     const state = this.live?.state as string | undefined;
     if (this.live && state !== 'suspended' && state !== 'closed') {
-      void this.live.suspend().catch(() => undefined);
+      void Promise.resolve(this.live.suspend()).catch(() => undefined);
+    }
+    if (Platform.OS !== 'web' && this.live) {
+      configureNativeSession(false);
     }
   }
 
@@ -149,18 +216,37 @@ export class Chip {
     this.voiceCount = 0;
     this.master = ctx.createGain();
     this.master.gain.value = 0.9;
-    // A limiter, so a jackpot on top of a full band never clips
-    const limiter = ctx.createDynamicsCompressor();
-    limiter.threshold.value = -9;
-    limiter.knee.value = 8;
-    limiter.ratio.value = 9;
-    limiter.attack.value = 0.003;
-    limiter.release.value = 0.16;
     // gentle low-pass to take the edge off raw squares
     const lp = ctx.createBiquadFilter();
     lp.type = 'lowpass';
     lp.frequency.value = 11000;
-    this.master.connect(limiter).connect(lp).connect(ctx.destination);
+    // A limiter, so a jackpot on top of a full band never clips.
+    // Browser Web Audio provides DynamicsCompressorNode; native react-native-audio-api
+    // uses a soft-clipping WaveShaperNode fallback.
+    if (typeof ctx.createDynamicsCompressor === 'function') {
+      const limiter = ctx.createDynamicsCompressor();
+      limiter.threshold.value = -9;
+      limiter.knee.value = 8;
+      limiter.ratio.value = 9;
+      limiter.attack.value = 0.003;
+      limiter.release.value = 0.16;
+      this.master.connect(limiter).connect(lp).connect(ctx.destination);
+    } else if (typeof ctx.createWaveShaper === 'function') {
+      const shaper = ctx.createWaveShaper();
+      const samples = 256;
+      const curve = new Float32Array(samples);
+      for (let i = 0; i < samples; i++) {
+        const x = (i * 2) / (samples - 1) - 1;
+        curve[i] = Math.tanh(x * 1.35) / Math.tanh(1.35);
+      }
+      shaper.curve = curve;
+      shaper.oversample = 'none';
+      this.master.gain.value = 0.82;
+      this.master.connect(shaper).connect(lp).connect(ctx.destination);
+    } else {
+      this.master.gain.value = 0.78;
+      this.master.connect(lp).connect(ctx.destination);
+    }
 
     // Music: bus → filter (muffles when paused or hurt) → duck (dips under big hits) → master
     this.musicBus = ctx.createGain();

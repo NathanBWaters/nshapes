@@ -16,6 +16,7 @@ import { music, setMusicEnabled, setSfxOverride, sfx } from '@/audio';
 import { setAudioEnabled } from '@/utils/sounds';
 import { MusicStorage, SoundStorage } from '@/utils/storage';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { loadAdventureSave, writeAdventureSave } from '@/adventure/save';
 import { battleRecord, wasFought } from '@/adventure/history';
 import type { FightTape } from '@/adventure/engine/replay';
@@ -136,6 +137,27 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
     setSavedRun(next);
     writeSpireRun(next);
   }, []);
+
+  useAndroidBackHandler(() => {
+    if (buildOpen) {
+      setBuildOpen(false);
+      return true;
+    }
+    if (inSetup) {
+      onExit();
+      return true;
+    }
+    if (!run || run.phase === 'map' || run.phase === 'victory' || run.phase === 'defeat') {
+      setInSetup(true);
+      return true;
+    }
+    if (run.phase === 'preview') {
+      updateRun(cancelSpirePreview(run));
+      return true;
+    }
+    // Consume back during active fights/shops/rewards so players don't drop a run accidentally
+    return true;
+  });
 
   useEffect(() => {
     const unsubMusic =

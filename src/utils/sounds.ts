@@ -1,19 +1,15 @@
 /**
  * Sound effect utility for game audio feedback.
- * Provides platform-optimized audio playback with preloading.
- * Follows the haptics.ts pattern for graceful degradation.
+ * Routes all SFX across iOS, Android, and Web through the unified synthesizer chip
+ * (`src/audio`) — zero external audio files, zero `.ogg` iOS incompatibilities.
  */
 
-import { Platform } from 'react-native';
 import { getIsAppActive } from './appLifecycle';
 import { SettingsStorage, SoundStorage } from './storage';
-import { sfx, band, audioSupported, setSfxEnabled, type SfxName } from '@/audio';
+import { sfx, band, audioSupported, setSfxEnabled, unlockAudio, type SfxName } from '@/audio';
 
-/**
- * On the web, every sound is synthesized by the chip (src/audio) — no files
- * are downloaded. Native keeps the bundled expo-av samples.
- */
-const useChip = Platform.OS === 'web' && typeof audioSupported === 'function' && audioSupported();
+const isChipReady = (): boolean =>
+  typeof audioSupported === 'function' && audioSupported();
 
 const CHIP_SFX: Record<SoundCategory, SfxName> = {
   cardSlide: 'deal',
@@ -34,36 +30,15 @@ const CHIP_SFX: Record<SoundCategory, SfxName> = {
 };
 
 /** Sounds the band takes over during an Adventure fight */
-const BAND_OWNED: ReadonlySet<SoundCategory> = new Set<SoundCategory>(['matchValid', 'matchInvalid', 'graceUsed', 'explosion', 'laser', 'ricochet', 'click']);
-
-/**
- * A card was tapped. In an Adventure fight the first, second and third card
- * sound the root, third and fifth of the chord the music is on, so a Set
- * spells a chord. Everywhere else it is the plain click.
- */
-export const playSelect = (selectedCount: number): void => {
-  // The band has its own switch (Adventure's sound button), so ask it first
-  if (useChip && band.inFight) {
-    if (selectedCount > 0) band.select(selectedCount);
-    else band.deselect();
-    return;
-  }
-  if (!audioEnabled) return;
-  void playSound('click');
-};
-
-// Dynamically import expo-av to handle missing native module gracefully
-let Audio: typeof import('expo-av').Audio | null = null;
-type AVPlaybackSource = import('expo-av').AVPlaybackSource;
-
-// Try to load expo-av only on native (Web synthesizes audio via src/audio)
-if (!useChip) {
-  try {
-    Audio = require('expo-av').Audio;
-  } catch {
-    console.warn('expo-av not available - sounds will be disabled');
-  }
-}
+const BAND_OWNED: ReadonlySet<SoundCategory> = new Set<SoundCategory>([
+  'matchValid',
+  'matchInvalid',
+  'graceUsed',
+  'explosion',
+  'laser',
+  'ricochet',
+  'click',
+]);
 
 // Sound categories for type safety
 export type SoundCategory =
@@ -83,31 +58,16 @@ export type SoundCategory =
   | 'confirmExit'
   | 'gameOver';
 
-// Sound pool for each category (allows random selection)
-interface SoundPool {
-  sources: AVPlaybackSource[];
-  sounds: any[]; // Audio.Sound[] when Audio is available
-  volume: number;
-  currentIndex: number; // For alternating sounds
-}
-
-// Preloaded sound pools
-const soundPools: Map<SoundCategory, SoundPool> = new Map();
-
 // Audio enabled state (initialized from storage, can be toggled by user)
-// Default to false - sound causes performance issues on iOS
-let audioEnabled = false;
-let audioInitialized = false;
+let audioEnabled = true;
 
-// Initialize audio enabled state from storage
 try {
   audioEnabled = SettingsStorage.getSoundEnabled();
   if (typeof setSfxEnabled === 'function') {
     setSfxEnabled(audioEnabled);
   }
 } catch {
-  // Storage not available yet, use default (off)
-  audioEnabled = false;
+  audioEnabled = true;
 }
 
 // Keep module-level SFX state synced whenever SoundStorage changes from any screen
@@ -121,219 +81,49 @@ if (typeof SoundStorage?.subscribe === 'function') {
   });
 }
 
-// Sound definitions with require() for bundling
-const SOUND_DEFINITIONS: Record<SoundCategory, { sources: AVPlaybackSource[]; volume: number }> = {
-  cardSlide: {
-    sources: [
-      require('../../assets/sounds/cards/card-slide-1.ogg'),
-      require('../../assets/sounds/cards/card-slide-2.ogg'),
-      require('../../assets/sounds/cards/card-slide-3.ogg'),
-      require('../../assets/sounds/cards/card-slide-4.ogg'),
-      require('../../assets/sounds/cards/card-slide-5.ogg'),
-      require('../../assets/sounds/cards/card-slide-6.ogg'),
-      require('../../assets/sounds/cards/card-slide-7.ogg'),
-      require('../../assets/sounds/cards/card-slide-8.ogg'),
-    ],
-    volume: 0.4,
-  },
-  laser: {
-    sources: [
-      require('../../assets/sounds/effects/laser3.ogg'),
-      require('../../assets/sounds/effects/laser4.ogg'),
-      require('../../assets/sounds/effects/laser5.ogg'),
-    ],
-    volume: 0.6,
-  },
-  explosion: {
-    sources: [require('../../assets/sounds/effects/explosion.wav')],
-    volume: 0.5,
-  },
-  ricochet: {
-    sources: [require('../../assets/sounds/effects/ricochet.wav')],
-    volume: 0.5,
-  },
-  matchValid: {
-    sources: [
-      require('../../assets/sounds/feedback/match-valid-1.ogg'),
-      require('../../assets/sounds/feedback/match-valid-2.ogg'),
-    ],
-    volume: 0.7,
-  },
-  matchInvalid: {
-    // Using error_006.ogg as primary; pepSound1.ogg available as match-invalid-alt.ogg
-    sources: [require('../../assets/sounds/feedback/match-invalid.ogg')],
-    // Alternative: sources: [require('../../assets/sounds/feedback/match-invalid-alt.ogg')],
-    volume: 0.6,
-  },
-  graceUsed: {
-    sources: [require('../../assets/sounds/feedback/grace-used.ogg')],
-    volume: 0.7,
-  },
-  gainHeart: {
-    sources: [require('../../assets/sounds/rewards/gain-heart.wav')],
-    volume: 0.6,
-  },
-  gainHint: {
-    sources: [require('../../assets/sounds/rewards/gain-hint.wav')],
-    volume: 0.5,
-  },
-  gainGrace: {
-    sources: [require('../../assets/sounds/rewards/gain-grace.wav')],
-    volume: 0.5,
-  },
-  gainMoney: {
-    sources: [require('../../assets/sounds/rewards/gain-money.wav')],
-    volume: 0.4,
-  },
-  click: {
-    // Alternates between click-1 and click-2
-    sources: [
-      require('../../assets/sounds/ui/click-1.ogg'),
-      require('../../assets/sounds/ui/click-2.ogg'),
-    ],
-    volume: 0.3,
-  },
-  confirm: {
-    sources: [require('../../assets/sounds/ui/confirm.ogg')],
-    volume: 0.5,
-  },
-  confirmExit: {
-    sources: [require('../../assets/sounds/ui/confirm-exit.ogg')],
-    volume: 0.5,
-  },
-  gameOver: {
-    sources: [require('../../assets/sounds/game/game-over.wav')],
-    volume: 0.7,
-  },
+/**
+ * A card was tapped. In an Adventure fight the first, second and third card
+ * sound the root, third and fifth of the chord the music is on, so a Set
+ * spells a chord. Everywhere else it is the plain click.
+ */
+export const playSelect = (selectedCount: number): void => {
+  if (isChipReady() && band.inFight) {
+    if (selectedCount > 0) band.select(selectedCount);
+    else band.deselect();
+    return;
+  }
+  if (!audioEnabled) return;
+  void playSound('click');
 };
 
 /**
- * Initialize audio mode for the app.
- * Call this once at app startup.
+ * Initialize audio for the app.
+ * Call once at startup; hardware audio contexts stay suspended until active/unlocked.
  */
 export const initAudio = async (): Promise<void> => {
-  if (audioInitialized || !Audio || useChip) return;
-
-  try {
-    await Audio.setAudioModeAsync({
-      playsInSilentModeIOS: true,
-      staysActiveInBackground: false,
-      shouldDuckAndroid: true,
-    });
-    audioInitialized = true;
-  } catch (error) {
-    console.warn('Failed to initialize audio mode:', error);
+  if (!audioEnabled || !getIsAppActive() || !isChipReady()) return;
+  if (typeof unlockAudio === 'function') {
+    unlockAudio();
   }
 };
 
 /**
- * Preload a sound category for instant playback.
- * Call during app initialization or screen load.
- */
-const preloadSound = async (category: SoundCategory): Promise<void> => {
-  if (!Audio || useChip) return; // Audio not available, or synthesized instead
-  if (soundPools.has(category)) return; // Already preloaded
-
-  const definition = SOUND_DEFINITIONS[category];
-  if (!definition) return;
-
-  try {
-    const sounds: InstanceType<typeof Audio.Sound>[] = [];
-    for (const source of definition.sources) {
-      const { sound } = await Audio.Sound.createAsync(source, {
-        shouldPlay: false,
-        volume: definition.volume,
-      });
-      sounds.push(sound);
-    }
-
-    soundPools.set(category, {
-      sources: definition.sources,
-      sounds,
-      volume: definition.volume,
-      currentIndex: 0,
-    });
-  } catch (error) {
-    console.warn(`Failed to preload sound: ${category}`, error);
-  }
-};
-
-/**
- * Preload multiple sound categories.
- */
-const preloadSounds = async (categories: SoundCategory[]): Promise<void> => {
-  await Promise.all(categories.map(preloadSound));
-};
-
-/**
- * Preload all game sounds.
- * Call this during app initialization.
+ * No-op retained for API compatibility: all sounds are synthesized procedurally
+ * by `src/audio/chip.ts` with zero file preloading required.
  */
 export const preloadAllSounds = async (): Promise<void> => {
-  const allCategories = Object.keys(SOUND_DEFINITIONS) as SoundCategory[];
-  await preloadSounds(allCategories);
+  return;
 };
 
 /**
- * Play a sound from a category.
- * - For categories with multiple sounds: alternates between them (click) or picks random (cardSlide, laser, matchValid)
- * - Non-blocking - fires and forgets.
+ * Play a synthesized sound from a category.
+ * Non-blocking — fires and forgets.
  */
 export const playSound = async (category: SoundCategory): Promise<void> => {
-  if (!audioEnabled || !getIsAppActive()) return;
-  if (useChip) {
-    // In an Adventure fight the band plays these itself, in key and on the beat (src/audio/fightAudio.ts)
-    if (band.inFight && BAND_OWNED.has(category)) return;
-    sfx(CHIP_SFX[category]);
-    return;
-  }
-  if (!Audio) return;
-
-  const pool = soundPools.get(category);
-
-  if (!pool) {
-    // Not preloaded - load and play on demand
-    const definition = SOUND_DEFINITIONS[category];
-    if (!definition) return;
-
-    try {
-      const randomIndex = Math.floor(Math.random() * definition.sources.length);
-      const { sound } = await Audio.Sound.createAsync(definition.sources[randomIndex], {
-        shouldPlay: true,
-        volume: definition.volume,
-      });
-      // Clean up after playing
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) {
-          sound.unloadAsync();
-        }
-      });
-    } catch (error) {
-      console.warn(`Failed to play sound: ${category}`, error);
-    }
-    return;
-  }
-
-  // Play from preloaded pool
-  try {
-    let index: number;
-
-    // Click sounds alternate, others pick random
-    if (category === 'click') {
-      index = pool.currentIndex;
-      pool.currentIndex = (pool.currentIndex + 1) % pool.sounds.length;
-    } else {
-      index = Math.floor(Math.random() * pool.sounds.length);
-    }
-
-    const sound = pool.sounds[index];
-
-    // Reset to beginning and play
-    await sound.setPositionAsync(0);
-    await sound.playAsync();
-  } catch (error) {
-    console.warn(`Failed to play preloaded sound: ${category}`, error);
-  }
+  if (!audioEnabled || !getIsAppActive() || !isChipReady()) return;
+  // In an Adventure fight the band plays these itself, in key and on the beat (src/audio/fightAudio.ts)
+  if (band.inFight && BAND_OWNED.has(category)) return;
+  sfx(CHIP_SFX[category]);
 };
 
 /**
@@ -342,13 +132,12 @@ export const playSound = async (category: SoundCategory): Promise<void> => {
  * @param delayMs Delay between each card sound (default 50ms)
  */
 export const playCardDealing = (count: number, delayMs: number = 50): void => {
-  // Skip entirely if audio disabled - avoid setTimeout overhead
-  if (!audioEnabled || (!Audio && !useChip)) return;
-
-  // Cap at reasonable number to avoid audio overload
+  if (!audioEnabled || !isChipReady()) return;
   const maxSounds = Math.min(count, 8);
   for (let i = 0; i < maxSounds; i++) {
-    setTimeout(() => playSound('cardSlide'), i * delayMs);
+    setTimeout(() => {
+      void playSound('cardSlide');
+    }, i * delayMs);
   }
 };
 

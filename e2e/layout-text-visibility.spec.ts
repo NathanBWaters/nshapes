@@ -275,4 +275,25 @@ test.describe('Mobile Text Visibility & Zero-Clipping Guardrails', () => {
       await expect(page.getByTestId('camp-tab-fighters')).toBeVisible({ timeout: 5000 });
     }
   });
+
+  test('iPad / Tablet portrait (768x1024) Main Menu, Options (Privacy & Support), and Adventure Map render with zero clipping', async ({ page }) => {
+    test.setTimeout(60_000);
+    await page.setViewportSize({ width: 768, height: 1024 });
+
+    await page.goto('/');
+    await expect(page.getByTestId('menu-adventure')).toBeVisible({ timeout: 20000 });
+    await page.waitForTimeout(350);
+    await assertAllTextVisible(page, 'Main Menu (iPad 768x1024)');
+
+    await page.getByTestId('menu-options').click();
+    await expect(page.getByTestId('options-privacy-link')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId('options-support-link')).toBeVisible();
+    await page.waitForTimeout(300);
+    await assertAllTextVisible(page, 'Options Menu (iPad 768x1024)');
+
+    await page.goto('/dev/adventure?save=maxed&intro=false');
+    await expect(page.getByTestId('map-play-next')).toBeVisible({ timeout: 20000 });
+    await page.waitForTimeout(350);
+    await assertAllTextVisible(page, 'Maxed Adventure Map (iPad 768x1024)');
+  });
 });

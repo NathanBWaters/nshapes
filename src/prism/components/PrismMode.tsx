@@ -18,6 +18,7 @@ import {
   View,
 } from 'react-native';
 import Icon from '@/components/Icon';
+import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { music, setMusicEnabled, setSfxOverride } from '@/audio';
 import { setAudioEnabled } from '@/utils/sounds';
 import { ColorblindStorage, MusicStorage, SoundStorage, storage } from '@/utils/storage';
@@ -151,6 +152,28 @@ const PrismMode: React.FC<PrismModeProps> = ({
     const err = getPrismStorageError();
     setStorageWarning(err);
   }, []);
+
+  useAndroidBackHandler(() => {
+    if (pauseOpen) {
+      setPauseOpen(false);
+      return true;
+    }
+    if (showTutorial) {
+      writeTutorialCompleted();
+      setShowTutorial(false);
+      return true;
+    }
+    if (inSetup) {
+      onExit();
+      return true;
+    }
+    if (!run || run.phase === 'victory' || run.phase === 'defeat') {
+      setInSetup(true);
+      return true;
+    }
+    setPauseOpen(true);
+    return true;
+  });
 
   // Subscribe to global sound/music/colorblind stores
   useEffect(() => {

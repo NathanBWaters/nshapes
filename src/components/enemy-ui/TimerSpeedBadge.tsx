@@ -1,3 +1,4 @@
+import { MONO_FONT } from '@/utils/fonts';
 /**
  * TimerSpeedBadge Component
  * Shows the timer speed multiplier when != 1.
@@ -56,7 +57,7 @@ const styles = StyleSheet.create({
   text: {
     fontSize: 12,
     fontWeight: '700',
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
   },
   textFast: {
     color: COLORS.impactOrange,

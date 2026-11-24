@@ -1,3 +1,4 @@
+import { MONO_FONT } from '@/utils/fonts';
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Character } from '@/types';
@@ -237,7 +238,7 @@ const styles = StyleSheet.create({
     color: COLORS.slateCharcoal,
     fontWeight: '700',
     fontSize: 18,
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
   },
   resultBadge: {
     marginTop: 16,

@@ -1,3 +1,4 @@
+import { MONO_FONT } from '@/utils/fonts';
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Pressable, StyleSheet, ScrollView, Platform } from 'react-native';
 import { usePWASafeAreaInsets } from '@/hooks/usePWASafeAreaInsets';
@@ -439,7 +440,7 @@ const styles = StyleSheet.create({
     color: COLORS.slateCharcoal,
     fontWeight: '700',
     fontSize: 12,
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
   },
   rewardWeaponName: {
     fontWeight: '700',
@@ -501,7 +502,7 @@ const styles = StyleSheet.create({
     color: COLORS.slateCharcoal,
     fontWeight: '500',
     fontSize: 11,
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
     opacity: 0.7,
   },
   statArrow: {
@@ -512,7 +513,7 @@ const styles = StyleSheet.create({
   statAfter: {
     fontWeight: '700',
     fontSize: 12,
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
   },
   statIncrease: {
     color: COLORS.logicTeal,

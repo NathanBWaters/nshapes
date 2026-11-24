@@ -1,3 +1,4 @@
+import { MONO_FONT } from '@/utils/fonts';
 /**
  * InactivityBar Component
  * Shows a progress bar that fills up as the player remains inactive.
@@ -97,7 +98,7 @@ const styles = StyleSheet.create({
   timerText: {
     fontSize: 12,
     fontWeight: '700',
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
     color: COLORS.slateCharcoal,
     minWidth: 24,
     textAlign: 'right',
