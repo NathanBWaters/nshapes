@@ -25,6 +25,11 @@ export const COLORS = {
   warning: '#FF9538',         // Impact Orange
   info: '#383838',            // Slate Charcoal
 
+  // WCAG-AA Accent Surface Tokens (>=4.5:1 contrast with #FFFFFF text)
+  tealSurface: '#0F766E',     // 5.47:1 with #FFFFFF
+  redSurface: '#DC2626',      // 4.83:1 with #FFFFFF
+  orangeSurface: '#C2410C',   // 5.18:1 with #FFFFFF
+
   // Weapon Rarity Colors
   rarityCommon: '#383838',    // Slate Charcoal - common items
   rarityRare: '#3B82F6',      // Blue - rare items
@@ -53,4 +58,20 @@ export const RADIUS = {
   module: 12,     // Cards, modules
   container: 24,  // Top-level screen containers
 };
+
+export {
+  CARD_PALETTES,
+  COLORBLIND_COLOR_CODES,
+  COLORBLIND_COLOR_LABELS,
+  cardBgPatternMeta,
+  cardColorCode,
+  cardColorHex,
+  cardColorLabel,
+  formatCardTraitValue,
+  formatChallengeText,
+  getColorblindMode,
+  subscribeColorblindMode,
+  useColorblind,
+} from './cardColors';
+export type { CardBgPatternMeta, CardColorTriplet } from './cardColors';
 

@@ -9,6 +9,7 @@ import Icon from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
 import { COLORS } from '@/utils/colors';
+import { formatChallengeText, useColorblind } from '@/utils/cardColors';
 import type { ArcanaId, PassiveId, RunState } from '../types';
 import { getArcana } from '../data/arcana';
 import { EVOLUTION_RECIPES } from '../data/evolutions';
@@ -41,6 +42,7 @@ interface Props {
 }
 
 const HudInspector: React.FC<Props> = ({ target, run, shownHp, challenge, knownEvolutions, onClose }) => {
+  const colorblind = useColorblind();
   if (!target) return null;
 
   const practice = !!run.level.rules.sandbox;
@@ -68,7 +70,7 @@ const HudInspector: React.FC<Props> = ({ target, run, shownHp, challenge, knownE
             ) : (
               <Text style={st.body}>Standard foe — match Sets of 3 cards to deal damage and knock out {run.foeName}.</Text>
             )}
-            {run.parry && <ParryPreviewCard spec={run.parry.spec} compact testID="inspector-parry-card" />}
+            {run.parry && <ParryPreviewCard key={colorblind ? 'parry-cb' : 'parry-std'} spec={run.parry.spec} compact testID="inspector-parry-card" />}
             {hazards && <HazardNotices hazards={hazards} testID="inspector-hazards" />}
           </>
         );
@@ -122,8 +124,8 @@ const HudInspector: React.FC<Props> = ({ target, run, shownHp, challenge, knownE
             <View style={[st.goalRow, challenge.met && st.goalMet, challenge.failed && st.goalMissed]}>
               <Text style={st.goalStars}>★★★</Text>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={st.cardText}>{challenge.text}</Text>
-                <Text style={[st.meta, challenge.met && { color: TONE.upside }, challenge.failed && { color: COLORS.impactRed }]}>
+                <Text style={st.cardText}>{formatChallengeText(challenge.text, colorblind)}</Text>
+                <Text style={[st.meta, challenge.met && { color: TONE.upside }, challenge.failed && { color: '#B91C1C' }]}>
                   {challenge.met ? '✓ Goal met! Knock out the foe to lock in ★★★.' : challenge.failed ? 'Missed this run — still clearable for ★ / ★★.' : 'In progress (+ knockout required).'}
                 </Text>
               </View>
@@ -345,14 +347,14 @@ const st = StyleSheet.create({
   passiveCard: { gap: 4, backgroundColor: COLORS.paperBeige, borderRadius: 10, borderWidth: 1.5, borderColor: TONE.spentEdge, padding: 10 },
   passiveFocus: { gap: 4, backgroundColor: '#FFFBEB', borderRadius: 10, borderWidth: 2, borderColor: INK, padding: 10 },
   goalRow: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.paperBeige, borderRadius: 8, borderWidth: 1.5, borderColor: TONE.spentEdge, padding: 8 },
-  goalMet: { backgroundColor: '#D4F4EE', borderColor: COLORS.logicTeal },
-  goalMissed: { backgroundColor: '#FFF1F0', borderColor: COLORS.impactRed },
+  goalMet: { backgroundColor: '#D4F4EE', borderColor: COLORS.tealSurface },
+  goalMissed: { backgroundColor: '#FFF1F0', borderColor: COLORS.redSurface },
   goalStars: { width: 34, fontSize: 12, fontWeight: '900', color: '#E0A800' },
   scoreRow: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.paperBeige, borderRadius: 8, borderWidth: 1.5, borderColor: TONE.spentEdge, paddingHorizontal: 8, paddingVertical: 6 },
   scoreChip: { minWidth: 46, borderRadius: 6, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 6, paddingVertical: 2, alignItems: 'center' },
   scoreChipBase: { backgroundColor: '#0E7490' },
-  scoreChipMult: { backgroundColor: '#DC2626' },
-  scoreChipBonus: { backgroundColor: '#D97706' },
+  scoreChipMult: { backgroundColor: COLORS.redSurface },
+  scoreChipBonus: { backgroundColor: COLORS.orangeSurface },
   scoreChipText: { fontSize: 11, fontWeight: '900', color: '#FFFFFF', fontVariant: ['tabular-nums'] },
   scoreLabel: { fontSize: 13, fontWeight: '900', color: INK },
 });

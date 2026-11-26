@@ -8,6 +8,7 @@
  * shown up front on the pre-battle preview.
  */
 import type { IconName } from '@/components/Icon';
+import { cardColorCode, cardColorHex, cardColorLabel, getColorblindMode } from '@/utils/cardColors';
 import type { FoeDef, LevelDef, ParryPenalty, ParryRequirement, ParrySpec } from '../types';
 
 export const PARRY_RULES = {
@@ -48,7 +49,8 @@ export interface CounterMeta {
   icon: IconName;
 }
 
-export const parryCounterMeta = (req: ParryRequirement): CounterMeta => {
+export const parryCounterMeta = (req: ParryRequirement, colorblind?: boolean): CounterMeta => {
+  const cb = colorblind ?? getColorblindMode();
   switch (req.kind) {
     case 'any':
       return {
@@ -59,12 +61,16 @@ export const parryCounterMeta = (req: ParryRequirement): CounterMeta => {
         icon: 'lorc/sword-clash',
       };
     case 'color': {
-      const cap = req.color.charAt(0).toUpperCase() + req.color.slice(1);
-      const color = req.color === 'red' ? '#DC2626' : req.color === 'green' ? '#15803D' : '#7C3AED';
+      const name = cardColorLabel(req.color, cb);
+      const cap = name.charAt(0).toUpperCase() + name.slice(1);
+      const code = cb ? cardColorCode(req.color, true) : '';
+      const color = cardColorHex(req.color, 'white', cb);
       return {
-        shortLabel: `ALL ${req.color.toUpperCase()}`,
-        label: `All ${cap} Set`,
-        explain: `Match 3 ${req.color} cards to counter this strike and Stagger the foe.`,
+        shortLabel: cb ? `ALL ${name.toUpperCase()} (${code})` : `ALL ${name.toUpperCase()}`,
+        label: cb ? `All ${cap} (${code}) Set` : `All ${cap} Set`,
+        explain: cb
+          ? `Match 3 ${name} (${code}) cards to counter this strike and Stagger the foe.`
+          : `Match 3 ${name} cards to counter this strike and Stagger the foe.`,
         color,
         icon: 'lorc/crystal-shine',
       };

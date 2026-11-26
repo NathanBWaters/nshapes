@@ -22,6 +22,7 @@
  * the fighter on a small phone (about 60 characters).
  */
 import type { AttributeName, Background, Card, CharacterName, Color, Number as CardNumber, Shading, Shape } from '@/types';
+import { cardBgPatternMeta, cardColorLabel } from '@/utils/cardColors';
 import { isValidCombination } from '@/utils/gameUtils';
 import type { AdventureSave, LevelDef, RunState } from './types';
 import { allSets, countDifferentAttributes, isSelectable } from './engine/sets';
@@ -151,6 +152,12 @@ const ATTR_TITLE: Record<AttributeName, string> = {
 const attrValueOf = (card: Card, attr: AttributeName): string | number =>
   attr === 'background' ? (card.background ?? 'white') : card[attr];
 
+const traitWord = (attr: AttributeName, value: string | number, colorblind: boolean): string => {
+  if (attr === 'color') return cardColorLabel(String(value), colorblind);
+  if (attr === 'background') return cardBgPatternMeta(String(value), colorblind).word;
+  return String(value);
+};
+
 /** Colour and shape first: they are what the eye sees first. */
 const inReadingOrder = (attributes: readonly AttributeName[]): AttributeName[] => [
   ...(attributes.includes('color') ? (['color'] as const) : []),
@@ -159,7 +166,7 @@ const inReadingOrder = (attributes: readonly AttributeName[]): AttributeName[] =
 ];
 
 /** "2 red" / "2 ovals" / "two 2s" and "1 green" / "1 diamond" / "one 3" for a trait that is two alike and one odd. */
-const twoAndOne = (cards: readonly Card[], attr: AttributeName): { pair: string; odd: string } => {
+const twoAndOne = (cards: readonly Card[], attr: AttributeName, colorblind = false): { pair: string; odd: string } => {
   const counts = new Map<string | number, number>();
   for (const c of cards) {
     const v = attrValueOf(c, attr);
@@ -173,7 +180,7 @@ const twoAndOne = (cards: readonly Card[], attr: AttributeName): { pair: string;
   }
   if (attr === 'shape') return { pair: `2 ${SHAPE_PLURAL[pairVal as Shape] ?? `${pairVal}s`}`, odd: `1 ${oddVal}` };
   if (attr === 'number') return { pair: `two ${pairVal}s`, odd: `one ${oddVal}` };
-  return { pair: `2 ${pairVal}`, odd: `1 ${oddVal}` };
+  return { pair: `2 ${traitWord(attr, pairVal, colorblind)}`, odd: `1 ${traitWord(attr, oddVal, colorblind)}` };
 };
 
 /**
@@ -182,7 +189,8 @@ const twoAndOne = (cards: readonly Card[], attr: AttributeName): { pair: string;
  */
 export const evaluateTripleTraits = (
   cards: readonly Card[],
-  attributes: readonly AttributeName[]
+  attributes: readonly AttributeName[],
+  colorblind = false
 ): TraitCheckPill[] => {
   if (cards.length !== 3) return [];
   return inReadingOrder(attributes).map(attr => {
@@ -192,14 +200,14 @@ export const evaluateTripleTraits = (
 
     if (unique.size === 1) {
       const v = vals[0];
-      const desc = attr === 'shape' ? `all ${SHAPE_PLURAL[v as Shape]}` : attr === 'number' ? `all ${v}s` : `all ${v}`;
+      const desc = attr === 'shape' ? `all ${SHAPE_PLURAL[v as Shape]}` : attr === 'number' ? `all ${v}s` : `all ${traitWord(attr, v, colorblind)}`;
       return { attr, status: 'pass', label: `${title}: ${desc}`, detail: desc, brief: desc };
     }
     if (unique.size === 3) {
       const desc = attr === 'number' ? '1 · 2 · 3' : 'all different';
       return { attr, status: 'pass', label: `${title}: ${desc}`, detail: desc, brief: desc };
     }
-    const { pair, odd } = twoAndOne(cards, attr);
+    const { pair, odd } = twoAndOne(cards, attr, colorblind);
     return { attr, status: 'fail', label: `${title}: ${pair} + ${odd}`, detail: `${pair} + ${odd}`, brief: '2 + 1' };
   });
 };
@@ -207,10 +215,11 @@ export const evaluateTripleTraits = (
 /** One card held: its active traits in reading order so the player learns what to scan. */
 export const describeSingleCardTraits = (
   card: Card,
-  attributes: readonly AttributeName[]
+  attributes: readonly AttributeName[],
+  colorblind = false
 ): TraitCheckPill[] =>
   inReadingOrder(attributes).map(attr => {
-    const val = String(attrValueOf(card, attr));
+    const val = traitWord(attr, attrValueOf(card, attr), colorblind);
     return {
       attr,
       status: 'info',
@@ -230,7 +239,8 @@ const thirdValue = <T extends string | number>(a: T, b: T, domain: readonly T[])
 export const predictThirdCard = (
   pair: readonly Card[],
   attributes: readonly AttributeName[],
-  boardCards?: readonly Card[]
+  boardCards?: readonly Card[],
+  colorblind = false
 ): { pills: TraitCheckPill[]; neededSummary: string; existsOnBoard: boolean; cardId: string | null; identicalPair: boolean } | null => {
   if (pair.length !== 2) return null;
   const [a, b] = pair;
@@ -251,17 +261,18 @@ export const predictThirdCard = (
 
     needed[attr] = target;
     const how = va === vb ? 'same' : 'different';
-    pills.push({ attr, status: 'hint', label: `${ATTR_TITLE[attr]}: ${how} → ${target}`, detail: `${target} (${how})`, brief: `${target}` });
+    const displayTarget = traitWord(attr, target, colorblind);
+    pills.push({ attr, status: 'hint', label: `${ATTR_TITLE[attr]}: ${how} → ${displayTarget}`, detail: `${displayTarget} (${how})`, brief: `${displayTarget}` });
   }
 
-  // "a red squiggle", "2 green ovals"
+  // "a red squiggle", "2 green ovals" (or Colorblind "an orange squiggle", "2 blue ovals")
   const num = needed.number as CardNumber | undefined;
   const shade = needed.shading as Shading | undefined;
   const col = needed.color as Color | undefined;
   const shp = needed.shape as Shape | undefined;
   const words: string[] = [];
   if (shade) words.push(shade);
-  if (col) words.push(col);
+  if (col) words.push(cardColorLabel(col, colorblind));
   if (shp) words.push(num && num > 1 ? SHAPE_PLURAL[shp] : shp);
   const core = words.join(' ') || 'matching card';
   const neededSummary = num ? `${num} ${core}` : /^[aeiou]/i.test(core) ? `an ${core}` : `a ${core}`;
@@ -280,7 +291,7 @@ const RULE_LINE = 'Each trait: all the same or all different.';
  * colors and shapes, 1-2-3." (Naming only what the cards share, "All red.",
  * teaches a shortcut that stops working at three traits.)
  */
-export const describeValidSetWhy = (cards: readonly Card[], attributes: readonly AttributeName[]): string => {
+export const describeValidSetWhy = (cards: readonly Card[], attributes: readonly AttributeName[], colorblind = false): string => {
   if (cards.length !== 3) return RULE_LINE;
   const same: string[] = [];
   const different: string[] = [];
@@ -295,7 +306,7 @@ export const describeValidSetWhy = (cards: readonly Card[], attributes: readonly
     } else if (attr === 'shape') same.push(`all ${SHAPE_PLURAL[vals[0] as Shape]}`);
     else if (attr === 'number') same.push(`all ${vals[0]}s`);
     else if (attr === 'background') same.push('one background');
-    else same.push(`all ${vals[0]}`);
+    else same.push(`all ${traitWord(attr, vals[0], colorblind)}`);
   }
   const parts = [...same, ...(different.length > 0 ? [`all different ${different.join(' and ')}`] : []), ...(counted ? [counted] : [])];
   // (what the cards share comes first, unless nothing is shared)
@@ -305,13 +316,13 @@ export const describeValidSetWhy = (cards: readonly Card[], attributes: readonly
 
 /**
  * Why three cards were not a Set, in the cards' own words: "Almost! Color was
- * 2 red + 1 green." Never a scolding. (The trait checks under it show which
- * traits passed.)
+ * 2 red + 1 green." (or "2 orange + 1 blue." in Colorblind Mode). Never a scolding.
  */
 export const explainInvalidPick = (
   cards: readonly Card[],
   attributes: readonly AttributeName[],
-  _fighter?: CharacterName
+  _fighter?: CharacterName,
+  colorblind = false
 ): string => {
   const rule = RULE_LINE;
   if (cards.length !== 3) return rule;
@@ -321,7 +332,7 @@ export const explainInvalidPick = (
     const names = inReadingOrder(bad).map(a => ATTR_TITLE[a]).join(' and ');
     return `Not a Set: ${names} were 2 alike + 1 odd.`;
   }
-  const { pair, odd } = twoAndOne(cards, bad[0]);
+  const { pair, odd } = twoAndOne(cards, bad[0], colorblind);
   return `Almost! ${ATTR_TITLE[bad[0]]} was ${pair} + ${odd}.`;
 };
 
@@ -398,12 +409,12 @@ const firstLevelPraise = (matches: number, look: SetLook): string => {
 };
 
 /** Compact 2-trait summary for the 1-1 walk-through speech bubble (<= 60 chars). */
-const shortWhy = (cards: readonly Card[], attributes: readonly AttributeName[]): string => {
+const shortWhy = (cards: readonly Card[], attributes: readonly AttributeName[], colorblind = false): string => {
   const look = lookOf(cards, attributes);
-  if (look === 'color') return `all ${cards[0].color}, 3 shapes`;
+  if (look === 'color') return `all ${cardColorLabel(cards[0].color, colorblind)}, 3 shapes`;
   if (look === 'shape') return `all ${SHAPE_PLURAL[cards[0].shape]}, 3 colors`;
   if (look === 'different') return '3 colors & 3 shapes';
-  const why = describeValidSetWhy(cards, attributes).replace(/\.$/, '');
+  const why = describeValidSetWhy(cards, attributes, colorblind).replace(/\.$/, '');
   return `${why[0].toLowerCase()}${why.slice(1)}`;
 };
 
@@ -411,9 +422,13 @@ const shortWhy = (cards: readonly Card[], attributes: readonly AttributeName[]):
  * The trait checks of the Set just made, when every one passes (a near miss
  * that a grace saved is not shown as a Set); otherwise nothing to show.
  */
-export const checksOfSet = (cards: readonly Card[] | null | undefined, attributes: readonly AttributeName[]): TraitCheckPill[] | undefined => {
+export const checksOfSet = (
+  cards: readonly Card[] | null | undefined,
+  attributes: readonly AttributeName[],
+  colorblind = false
+): TraitCheckPill[] | undefined => {
   if (!cards || cards.length !== 3) return undefined;
-  const pills = evaluateTripleTraits(cards, attributes);
+  const pills = evaluateTripleTraits(cards, attributes, colorblind);
   return pills.length > 0 && pills.every(p => p.status === 'pass') ? pills : undefined;
 };
 
@@ -465,10 +480,20 @@ export const computeLiveGuidance = (
     seenIntro?: boolean;
     /** The foe has switched auto-hints off (Masked Bandit): no stuck help either */
     noAssist?: boolean;
+    /** Colorblind Mode active: emit Orange / Blue / Plum & Tinted / Dark color words */
+    colorblind?: boolean;
   } = {}
 ): GuidedBoardHint | null => {
   if (run.status !== 'playing' || run.level.rules.sandbox) return null;
-  const { selectedCount = 0, selectedCards = [], mistakeNote = null, mistakeCards = null, seenIntro = false, noAssist = false } = opts;
+  const {
+    selectedCount = 0,
+    selectedCards = [],
+    mistakeNote = null,
+    mistakeCards = null,
+    seenIntro = false,
+    noAssist = false,
+    colorblind = false,
+  } = opts;
   const voice = companionVoice(run.fighter);
   const available = run.board.filter(c => isSelectable(c) && !run.replacing.includes(c.id));
   const sets = allSets(available, run.attributes);
@@ -476,7 +501,7 @@ export const computeLiveGuidance = (
   const idx = mainIndexOf(run.level);
   const quietMs = run.elapsedMs - run.lastMatchAtMs;
   const assist = noAssist ? 0 : assistCardsFor(run.level, quietMs);
-  const mistakePills = mistakeCards && mistakeCards.length === 3 ? evaluateTripleTraits(mistakeCards, run.attributes) : undefined;
+  const mistakePills = mistakeCards && mistakeCards.length === 3 ? evaluateTripleTraits(mistakeCards, run.attributes, colorblind) : undefined;
   const others = (glow: string[]) => run.board.filter(c => !glow.includes(c.id)).map(c => c.id);
   /** While the rule is still new, two held cards are answered with the card that finishes them */
   const ruleIsNew = showsTraitChecks(run.level);
@@ -506,13 +531,13 @@ export const computeLiveGuidance = (
       message: RESCUE_LINES[Math.min(RESCUE_LINES.length, lit.length) - 1],
       mood: 'curious',
       kind: 'rescue',
-      pills: whole ? evaluateTripleTraits(target, run.attributes) : undefined,
+      pills: whole ? evaluateTripleTraits(target, run.attributes, colorblind) : undefined,
     };
   };
 
   /** Two cards held: the card that finishes the Set, worked out one trait at a time */
   const pairHelp = (lightAfterAWhile: boolean): GuidedBoardHint | null => {
-    const pred = selectedCards.length === 2 ? predictThirdCard(selectedCards, run.attributes, available) : null;
+    const pred = selectedCards.length === 2 ? predictThirdCard(selectedCards, run.attributes, available, colorblind) : null;
     if (!pred) return null;
     const missing = !pred.existsOnBoard;
     let message: string;
@@ -550,7 +575,7 @@ export const computeLiveGuidance = (
         message: firstLevelPraise(run.matches, lookOf(leaving, run.attributes)),
         mood: 'victory',
         kind: 'cheer',
-        pills: checksOfSet(leaving, run.attributes),
+        pills: checksOfSet(leaving, run.attributes, colorblind),
       };
     }
 
@@ -577,7 +602,7 @@ export const computeLiveGuidance = (
       // (the dealer keeps every kind of Set on the board; if this one is missing all the same, the next kind is shown)
       const wanted = [WALK_THROUGH[step], ...WALK_THROUGH].find(look => sets.some(s => lookOf(s, run.attributes) === look));
       const target = sets.find(s => lookOf(s, run.attributes) === wanted) ?? sets[0];
-      const why = shortWhy(target, run.attributes);
+      const why = shortWhy(target, run.attributes, colorblind);
       const ask = step === 0 ? `${voice.hello} Tap these 3: ${why}!` : step === 1 ? `Now these 3: ${why}!` : `And these 3: ${why}!`;
       const glowIds = target.map(c => c.id);
       return {
@@ -587,7 +612,7 @@ export const computeLiveGuidance = (
         message: selectedCount === 0 ? ask : selectedCount === 1 ? 'Two more!' : 'One more!',
         mood: step === 0 ? 'victory' : 'streak',
         kind: 'lesson',
-        pills: evaluateTripleTraits(target, run.attributes),
+        pills: evaluateTripleTraits(target, run.attributes, colorblind),
       };
     }
 
@@ -642,7 +667,7 @@ export const computeLiveGuidance = (
     const added = traitAddedBy(run.level);
     if (line && added && sets.length > 0 && !noAssist) {
       const target = exampleOfTrait(sets, added, run.attributes);
-      return { glowIds: target.map(c => c.id), dimIds: [], dimOpacity: 1, message: line, mood: 'curious', kind: 'lesson', pills: evaluateTripleTraits(target, run.attributes) };
+      return { glowIds: target.map(c => c.id), dimIds: [], dimOpacity: 1, message: line, mood: 'curious', kind: 'lesson', pills: evaluateTripleTraits(target, run.attributes, colorblind) };
     }
     if (line && !seenIntro) {
       const target = helpfulSet(run, sets, []);
