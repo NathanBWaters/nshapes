@@ -74,18 +74,18 @@ export const getFeaturesForLevel = (level: LevelDef, save: AdventureSave): Set<F
 };
 
 /**
- * Whole-number stats (hearts, graces, board cards...) can be fractional after
- * Workshop tuning. Round each down, plus one more with the fraction as the
- * chance: `rand` is the fight's RNG. Without `rand` (previews) they round down.
+ * Whole-number stats (hearts, graces, board cards, hints, links) now use clean
+ * integer Lv 1–5 breakpoints and whole-unit Workshop tiers ([GP-19]). This
+ * helper guarantees clean integer values deterministically with zero random
+ * fight-start rounding (`_rand` is retained for call-site compatibility).
  */
-export const resolveWholeStats = <T extends Partial<PlayerStats>>(stats: T, rand?: () => number): T => {
+export const resolveWholeStats = <T extends Partial<PlayerStats>>(stats: T, _rand?: () => number): T => {
   let next = stats;
   for (const k of WHOLE_STATS) {
     const v = stats[k];
     if (typeof v !== 'number' || Number.isInteger(v)) continue;
     if (next === stats) next = { ...stats };
-    const frac = v - Math.floor(v);
-    (next as unknown as Record<string, number>)[k] = Math.floor(v) + (rand && rand() < frac ? 1 : 0);
+    (next as unknown as Record<string, number>)[k] = Math.round(v);
   }
   return next;
 };
@@ -160,8 +160,10 @@ export const startingLoadout = (
   const arcana = gear ? fightArcana(save, opts?.uncappedArcana) : [];
   const rules = arcanaRules(arcana);
   const builds = opts?.weaponBuilds ?? weaponBuilds(save);
+  const effectiveCharmSlots = Math.max(1, charmSlotsOf(save) + (rules.charmSlotDelta ?? 0));
+  const equippedCharmIds = fightCharms(save, opts?.uncappedCharms);
   const weapons: Weapon[] = gear
-    ? charmWeapons(fightCharms(save, opts?.uncappedCharms), builds)
+    ? charmWeapons(opts?.uncappedCharms ? equippedCharmIds : equippedCharmIds.slice(0, effectiveCharmSlots), builds)
     : [];
   const modifiers = modifiersOf({
     skillNodes,
@@ -214,7 +216,7 @@ export const startingLoadout = (
     timer,
     bonusDamagePerMatch,
     coinBonusPercent,
-    charmSlots: charmSlotsOf(save),
+    charmSlots: effectiveCharmSlots,
     arcanaSlots: arcanaSlotsOf(save),
     armedRecipes: evolutions ? armedRecipesFor(weapons, save.unlockedEvolutions) : [],
     evolutionLikelihood: evolutions ? likelihood : 0,

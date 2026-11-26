@@ -7,6 +7,9 @@
 import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
 import WeaponExplainer from '@/adventure/components/WeaponExplainer';
+import EvolutionPickOverlay from '@/adventure/components/EvolutionPickOverlay';
+import { EVOLUTION_RECIPES, evolutionShortVerb } from '@/adventure/data/evolutions';
+import { PAIR_RECIPES } from '@/adventure/data/evolutionPairs';
 import { describeLines, fightSummary, gearStatText, gearStats, weaponOfLine } from '@/adventure/components/fightReplayText';
 import { getArmoryWeapon } from '@/adventure/data/armory';
 import { WEAPON_GUIDE, WEAPON_KINDS, hasWeaponGuide, ownerOfEvent, weaponGuide } from '@/adventure/data/weaponGuide';
@@ -102,6 +105,44 @@ describe('the explainer card', () => {
     const view = render(<WeaponExplainer weapon={w} defaultOpen />);
     fireEvent.press(view.getByTestId('weapon-explainer-sound-magnet'));
     expect(band.audition).toHaveBeenCalledWith('magnet');
+  });
+
+  it('[TP-10] renders [Parameter] bracket accessibility labels and clean integer stats', () => {
+    const w = getArmoryWeapon('life-vessel', { 'life-vessel': { level: 3, tuning: { maxHealth: 2 } } })!;
+    const view = render(<WeaponExplainer weapon={w} build={{ level: 3, tuning: { maxHealth: 2 } }} defaultOpen />);
+    expect(view.getByLabelText('[Extra hearts] 3')).toBeTruthy();
+    expect(view.getByText('T2')).toBeTruthy();
+  });
+});
+
+describe('[GP-12] EvolutionPickOverlay streamlined mid-fight scan', () => {
+  it('shows name, ★ SIGNATURE, NEW!, and <=55-char shortVerb without familyText or flavor', () => {
+    const sig = EVOLUTION_RECIPES.find(r => r.id === 'phoenix-pyre')!;
+    const pair = PAIR_RECIPES[0];
+    const onPick = jest.fn();
+    const view = render(
+      <EvolutionPickOverlay
+        optionIds={[sig.id, pair.id]}
+        totalIdle={4}
+        knownIds={new Set([pair.id])}
+        onPick={onPick}
+      />
+    );
+    expect(view.getByTestId('evo-pick-sig-0')).toBeTruthy();
+    expect(view.getByTestId('evo-pick-new-0')).toBeTruthy();
+    expect(view.queryByTestId('evo-pick-sig-1')).toBeNull();
+    expect(view.queryByTestId('evo-pick-new-1')).toBeNull();
+
+    expect(view.getByTestId('evo-pick-desc-0').props.children).toBe(evolutionShortVerb(sig));
+    expect(view.getByTestId('evo-pick-desc-1').props.children).toBe(evolutionShortVerb(pair));
+
+    // Streamlined mid-fight scan hides verbose familyText and italic flavor
+    expect(view.queryByText(sig.flavor)).toBeNull();
+    expect(view.queryByText(sig.familyText)).toBeNull();
+    expect(view.queryByText(pair.flavor)).toBeNull();
+
+    fireEvent.press(view.getByTestId('evo-pick-option-0'));
+    expect(onPick).toHaveBeenCalledWith(sig.id);
   });
 });
 

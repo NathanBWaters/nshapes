@@ -13,8 +13,8 @@ import { createRng } from '@/adventure/engine/rng';
 
 describe('Weapon Definitions', () => {
   describe('WEAPONS array', () => {
-    it('should have exactly 34 weapons (one per weapon, each doing one thing; bundles became evolutions)', () => {
-      expect(WEAPONS.length).toBe(34);
+    it('should have exactly 33 weapons (32 shared + 1 Free-Play-only; duplicate revenge-linker lives in ADVENTURE_WEAPONS)', () => {
+      expect(WEAPONS.length).toBe(33);
     });
 
     it('should have 21 common weapons', () => {
@@ -32,9 +32,9 @@ describe('Weapon Definitions', () => {
       expect(epics.length).toBe(0);
     });
 
-    it('should have 12 legendary weapons (bridges, connector specials, Mystic Sight, Chain Reaction)', () => {
+    it('should have 11 legendary weapons (bridges, connector specials, Mystic Sight, Chain Reaction)', () => {
       const legendaries = WEAPONS.filter(w => w.rarity === 'legendary');
-      expect(legendaries.length).toBe(12);
+      expect(legendaries.length).toBe(11);
     });
 
     it('has unique ids and no cap-increase (Mastery) weapons', () => {

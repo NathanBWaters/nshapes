@@ -1,10 +1,13 @@
 /**
- * Looks up any weapon the adventure can hand out (Free Play weapons and the
- * adventure-only ones) at its build: level found in the world and Workshop
- * tuning (data/weaponStats.ts, weaponLevels.ts).
+ * Looks up any weapon the adventure can hand out (the 32 shared weapons and the
+ * 32 adventure-only ones = 64 Armory weapons) at its build: level found in the
+ * world and Workshop tuning (data/weaponStats.ts, weaponLevels.ts).
+ *
+ * Zero duplicate IDs and zero silent shadowing ([TP-10]): Free-Play-only
+ * definitions stay cleanly isolated in `FREE_PLAY_ONLY_DEFINITIONS`.
  */
 import type { Weapon } from '@/types';
-import { LEGACY_WEAPON_IDS, WEAPONS } from '@/utils/gameDefinitions';
+import { FREE_PLAY_ONLY_DEFINITIONS, LEGACY_WEAPON_IDS, SHARED_WEAPONS } from '@/utils/gameDefinitions';
 import type { AdventureWeapon } from '../types';
 import type { RuleSource } from '../rules/types';
 import { ADVENTURE_WEAPONS, LEGACY_ADVENTURE_WEAPON_IDS, UNDERSTUDY_ID } from './adventureWeapons';
@@ -12,11 +15,11 @@ import { BASE_BUILD, buildWeapon, type WeaponBuilds } from './weaponStats';
 import { ADVENTURE_TUNING } from './weaponTuning';
 
 /** Free Play weapons Adventure never hands out: their effect only exists in the Free Play game loop. */
-export const FREE_PLAY_ONLY_WEAPONS: readonly string[] = ['sympathetic-flames'];
+export const FREE_PLAY_ONLY_WEAPONS: readonly string[] = FREE_PLAY_ONLY_DEFINITIONS.map(w => w.id);
 
 export const findAdventureWeapon = (id: string): AdventureWeapon | undefined => ADVENTURE_WEAPONS.find(w => w.id === id);
 
-/** A Free Play weapon with Adventure's numbers (data/weaponTuning.ts). */
+/** A Free Play shared weapon with Adventure's numbers (data/weaponTuning.ts). */
 const tuned = (w: Weapon): Weapon => {
   const t = ADVENTURE_TUNING[w.id];
   if (!t) return w;
@@ -28,22 +31,29 @@ const tuned = (w: Weapon): Weapon => {
     ...(w.bridgeEffect && bridgeChance !== undefined ? { bridgeEffect: { ...w.bridgeEffect, chance: bridgeChance } } : {}),
   };
 };
-const TUNED: Weapon[] = WEAPONS.filter(w => !FREE_PLAY_ONLY_WEAPONS.includes(w.id)).map(tuned);
 
-/** Single source of truth for every valid Armory weapon id across Adventure Mode and Starfall Spire. */
-export const ALL_ARMORY_WEAPON_IDS: readonly string[] = (() => {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const w of [...TUNED, ...ADVENTURE_WEAPONS]) {
-    if (seen.has(w.id)) continue;
-    seen.add(w.id);
-    out.push(w.id);
+const TUNED_SHARED: readonly Weapon[] = SHARED_WEAPONS.map(tuned);
+
+/**
+ * Canonical flat lookup across all 64 Armory weapons with zero silent shadowing.
+ * Throws immediately on duplicate weapon IDs so collisions cannot hide.
+ */
+const ARMORY_BASE_MAP: ReadonlyMap<string, Weapon> = (() => {
+  const map = new Map<string, Weapon>();
+  for (const w of [...TUNED_SHARED, ...ADVENTURE_WEAPONS]) {
+    if (map.has(w.id)) {
+      throw new Error(`Duplicate Armory weapon id detected: "${w.id}"`);
+    }
+    map.set(w.id, w);
   }
-  return out;
+  return map;
 })();
 
-/** The authored weapon at level 1 (an adventure version wins over a Free Play one with the same id). */
-export const armoryBaseWeapon = (id: string): Weapon | undefined => findAdventureWeapon(id) ?? TUNED.find(w => w.id === id);
+/** Single source of truth for every valid Armory weapon id across Adventure Mode and Starfall Spire (64 weapons). */
+export const ALL_ARMORY_WEAPON_IDS: readonly string[] = [...ARMORY_BASE_MAP.keys()];
+
+/** The authored weapon at level 1 (direct canonical lookup, zero silent shadowing). */
+export const armoryBaseWeapon = (id: string): Weapon | undefined => ARMORY_BASE_MAP.get(id);
 
 /** Weapon `id` at its build in `builds` (absent = level 1, untuned). */
 export const getArmoryWeapon = (id: string, builds?: WeaponBuilds, grown?: Readonly<Record<string, number>>): Weapon | undefined => {

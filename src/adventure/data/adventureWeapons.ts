@@ -11,6 +11,7 @@
 import type { AdventureWeapon } from '../types';
 import type { Rule } from '../rules/types';
 import { TRICK_RULES } from './rules';
+import { WEAPON_CADENCE } from './weapons/schema';
 
 const T = TRICK_RULES;
 const FOG_MS = TRICK_RULES.fogMs;
@@ -22,19 +23,10 @@ const d2 = (n: number) => Math.round(n * 100) / 100;
 const num = (n: number) => String(d1(n));
 const num2 = (n: number) => String(d2(n));
 
-/** Clarity Lens fires on every Nth Set */
-const CLARITY_EVERY = 5;
-/** War Drum counts this many Sets inside its window */
-const DRUM_SETS = 3;
-/** Rally Horn sounds again on every Nth Set */
-const RALLY_EVERY = 4;
-/** Revenge Linker wires a Tripwire on every Nth Set */
-const REVENGE_EVERY = 4;
-/** Encore Mask adds this many seconds to every evolution */
-const ENCORE_EXTRA_MS = 5000;
+const { CLARITY_EVERY, CLARITY_EVERY_HIGH, DRUM_SETS, RALLY_EVERY, REVENGE_EVERY, ENCORE_EXTRA_MS } = WEAPON_CADENCE;
 
-const clarity = (ms: number, amount: number): Rule[] => [
-  { trigger: { on: 'everyNthSet', n: CLARITY_EVERY }, effects: [{ do: 'simplify', ms }, { do: 'damage', amount }], callout: 'Clarity!' },
+const clarity = (every: number, ms: number): Rule[] => [
+  { trigger: { on: 'everyNthSet', n: every }, effects: [{ do: 'simplify', ms }], callout: 'Clarity!' },
 ];
 const warDrum = (withinMs: number, power: number, slam: number): Rule[] => [
   { trigger: { on: 'setsWithin', count: DRUM_SETS, withinMs }, effects: [{ do: 'empowerBoard', amount: power }, { do: 'damage', amount: slam }], callout: 'War Drum!' },
@@ -53,7 +45,7 @@ const rallyHorn = (amount: number): Rule[] => [
 const revenge = (pct: number, amount: number): Rule[] => [
   { trigger: { on: 'everyNthSet', n: REVENGE_EVERY }, effects: [{ do: 'link', count: 1 }, { do: 'damage', amount }], callout: 'Tripwire!' },
   { trigger: { on: 'trapDefused' }, effects: [{ do: 'link', count: 1 }, { do: 'damage', amount }], callout: 'Counter!' },
-  { trigger: { on: 'hurt' }, effects: [{ do: 'damage', amount: d1(amount * 2) }], callout: 'Revenge!' },
+  { trigger: { on: 'hurt' }, effects: [{ do: 'damage', amount: d1(amount * 2) }, { do: 'explode', area: { shape: 'random', count: 1 } }], callout: 'Revenge!' },
   ...[0, 1, 2].map(() => ({ trigger: { on: 'hurt' }, when: [{ kind: 'chance', pct }], effects: [{ do: 'link', count: 1 }] }) as Rule),
 ];
 
@@ -91,7 +83,7 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     },
   },
 
-  // ── Clarity Lens (utility): a steady beat of easier boards ────────────────
+  // ── Clarity Lens (pure board utility): steady easier boards, 2-trait simplify at Lv 3+ ──
   {
     id: 'clarity-lens',
     name: 'Clarity Lens',
@@ -107,13 +99,24 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     maxCount: 1,
     stats: {
       seconds: { label: 'Simplify seconds', unit: 's', base: 10, perLevel: 2 },
-      strike: { label: 'Clarity damage', unit: 'dmg', base: 8, perLevel: 2.5 },
+      doubleClarity: { label: '2-trait simplify chance (Lv 3+)', unit: '%', base: 0, perLevel: 12.5, byLevel: [0, 0, 25, 38, 50], tunable: false },
     },
-    build: v => ({
-      rules: clarity(r(v.seconds * 1000), r(v.strike)),
-      description: `Every ${CLARITY_EVERY}th Set hits the foe for ${r(v.strike)} and simplifies the board for ${r(v.seconds)}s: one trait becomes the same on every card.`,
-      shortDescription: `Every ${CLARITY_EVERY}th Set: +${r(v.strike)} and simplify`,
-    }),
+    build: v => {
+      const every = v.doubleClarity >= 38 ? CLARITY_EVERY_HIGH : CLARITY_EVERY;
+      const dbl = r(v.doubleClarity);
+      return {
+        rules: clarity(every, r(v.seconds * 1000)),
+        ...(dbl > 0 ? { modifiers: { doubleClarityChance: dbl } } : {}),
+        description:
+          dbl > 0
+            ? `Every ${every}th Set simplifies the board for ${num(v.seconds)}s (one trait matches across every card), with a ${dbl}% chance to simplify 2 traits at once.`
+            : `Every ${every}th Set simplifies the board for ${num(v.seconds)}s: one trait becomes the same on every card.`,
+        shortDescription:
+          dbl > 0
+            ? `Every ${every}th Set: simplify ${num(v.seconds)}s (${dbl}% 2-trait)`
+            : `Every ${every}th Set: simplify board for ${num(v.seconds)}s`,
+      };
+    },
   },
 
   // ── War Drum (offense): keep the beat and the whole board gets heavier ─────
@@ -264,8 +267,8 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     },
     build: v => ({
       rules: revenge(d1(v.chance), d1(v.strike)),
-      description: `Every ${REVENGE_EVERY}th Set — and every trap you defuse — links 2 cards and hits for +${num(v.strike)}. Losing a heart hits for +${num(v.strike * 2)} with 3 rolls at ${num(v.chance)}% each to link pairs.`,
-      shortDescription: `Every ${REVENGE_EVERY}th Set/defuse: link +${num(v.strike)}; hurt: +${num(v.strike * 2)} & 3× ${num(v.chance)}% link`,
+      description: `Every ${REVENGE_EVERY}th Set — and every trap you defuse — links 2 cards and hits for +${num(v.strike)}. Losing a heart hits for +${num(v.strike * 2)}, detonates a card (and its links), and rolls 3× at ${num(v.chance)}% to link pairs.`,
+      shortDescription: `Every ${REVENGE_EVERY}th Set/defuse: link +${num(v.strike)}; hurt: blast +${num(v.strike * 2)} & 3× ${num(v.chance)}% link`,
     }),
   },
 
@@ -301,14 +304,14 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
     price: 10,
     description: '',
     shortDescription: '',
-    flavorText: 'WANTED: anything purple. Reward: pain, for someone else.',
+    flavorText: 'WANTED: anything pink. Reward: pain, for someone else.',
     icon: 'delapouite/wanted-reward',
     effects: {},
     maxCount: 1,
     stats: { damage: { label: 'Damage per wanted card', unit: 'dmg', base: 1.5, perLevel: 0.5 } },
     build: v => ({
       modifiers: { bountyDamage: v.damage },
-      description: `One trait value is wanted (say, purple). Every wanted card you match deals +${num(v.damage)}. The poster changes after ${BOUNTY_CARDS} wanted cards.`,
+      description: `One trait value is wanted (say, pink). Every wanted card you match deals +${num(v.damage)}. The poster changes after ${BOUNTY_CARDS} wanted cards.`,
       shortDescription: `Wanted cards +${num(v.damage)} each`,
     }),
   },
@@ -801,7 +804,7 @@ export const ADVENTURE_WEAPONS: AdventureWeapon[] = [
 // Authored descriptions are the level-1 wording (Free Play, tests, guides)
 for (const w of ADVENTURE_WEAPONS) {
   if (!w.stats || !w.build) continue;
-  const built = w.build(Object.fromEntries(Object.entries(w.stats).map(([k, d]) => [k, d.base])));
+  const built = w.build(Object.fromEntries(Object.entries(w.stats).map(([k, d]) => [k, d.byLevel ? d.byLevel[0] : d.base])));
   w.description = built.description;
   w.shortDescription = built.shortDescription;
   if (built.rules) w.rules = built.rules;
@@ -813,7 +816,7 @@ for (const w of ADVENTURE_WEAPONS) {
  * weapon, so an old save holding it gets that upgrade tier (save migration).
  */
 export const LEGACY_ADVENTURE_WEAPON_IDS: Record<string, { id: string; tier: number }> = Object.fromEntries(
-  ADVENTURE_WEAPONS.filter(w => w.id !== 'revenge-linker').flatMap(w => [
+  ADVENTURE_WEAPONS.flatMap(w => [
     [`${w.id}-common`, { id: w.id, tier: 0 }],
     [`${w.id}-rare`, { id: w.id, tier: 1 }],
   ])

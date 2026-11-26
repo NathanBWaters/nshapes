@@ -1,33 +1,98 @@
 /**
- * Arcana — tarot wildcards that rewrite the rules of a fight.
+ * Arcana — tarot wildcards that rewrite the rules of a fight ([GP-15]).
  *
- * Every Arcana is a kiss-curse rule twist. One slot to start, up to three
- * with the Tarot Deck; equipped Arcana combine through `arcanaRules`.
+ * Every Arcana is a genuine structural kiss-curse rule twist with ZERO flat
+ * `damageScale` padding and ZERO generic `foeHpScale` curses. One slot to
+ * start, up to three with the Tarot Deck; equipped Arcana combine through
+ * `arcanaRules`.
  */
 import type { ArcanaDef, ArcanaId, ArcanaRules } from '../types';
 import { BASE_RULES } from './rules';
 
+/**
+ * Extended structural Kiss-Curse Arcana flags introduced by [GP-15].
+ * Extends `ArcanaRules` directly so every existing caller remains type-safe
+ * while `loadout.ts`, `combineArcana`, and the engine read the rich rules.
+ */
+export interface ExtendedArcanaRules extends ArcanaRules {
+  /** Monochrome Pact: Power points added on 1-diff Sets */
+  singleTraitPowerBonus?: number;
+  /** Monochrome Pact: damage scale applied to 3+ diff Sets */
+  highDiffDamageScale?: number;
+  /** Controlled Burn: multiplier applied to burn damage from mistake burns */
+  mistakeBurnDamageScale?: number;
+  /** Controlled Burn: Power points added when mistake burn triggers */
+  mistakeBurnPowerBonus?: number;
+  /** Controlled Burn: hearts lost on mistakes while burn is on cooldown */
+  cooldownMistakeHearts?: number;
+  /** Glass Prism: disables all healing while active */
+  noHeal?: boolean;
+  /** Glass Prism: Power card bonus damage override (+4 = double base +2) */
+  powerCardBonusOverride?: number;
+  /** Overkill Harvest: normal Sets drop 0 base coins (only Overkill, Gold cards & Parries pay) */
+  zeroBaseSetCoins?: boolean;
+  /** Overkill Harvest: fraction of overkill damage carried into the next wave */
+  overkillCarryPct?: number;
+  /** Scholar's Gambit: delta to equipped charm slots (-1 = enter with 1 fewer charm) */
+  charmSlotDelta?: number;
+  /** Scholar's Gambit: Power points granted on each mid-fight level-up */
+  levelUpPowerBonus?: number;
+  /** Catalyst Resonance: damage multiplier on Sets made while no Evolution is active */
+  nonEvolvedDamageScale?: number;
+  /** Tempo Surge: extra Combo steps granted on every valid Set */
+  setComboBonus?: number;
+}
+
 const percentMore = (scale: number) => Math.round((scale - 1) * 100);
 
-const monochromePact = { singleTraitBonusDamage: 6, damageScale: 1.12, rainbowMultiplier: 0.5 } satisfies ArcanaRules;
-const prismaticFever = { rainbowMultiplier: 3, rainbowTimeBonus: 1, nonRainbowDamageDelta: -2, foeHpScale: 1.3 } satisfies ArcanaRules;
-const controlledBurn = { mistakeBurn: { cooldownMs: 4000, cards: 4 }, damageScale: 1.45, startingGraces: 0 } satisfies ArcanaRules;
-const glassPrism = { specialCardChanceScale: 4, damageScale: 1.45, maxHeartsLock: 3 } satisfies ArcanaRules;
-const overkillHarvest = { overkillCoinsPerDamage: 2, waveClearHeal: 1, damageScale: 1.28, foeHpScale: 1.08 } satisfies ArcanaRules;
-const scholarsGambit = { xpScale: 1.5, pickOptions: 4, damageScale: 1.1, foeHpScale: 1.15 } satisfies ArcanaRules;
-const catalystResonance = {
-  catalystChanceScale: 2,
-  catalystRespawns: 1,
-  evolutionBurstBonus: { damage: 18, time: 8 },
-  damageScale: 1.18,
-  foeHpScale: 1.08,
-} satisfies ArcanaRules;
-const tempoSurge = {
-  damageScale: 1.28,
-  setTimeBonus: 1,
-  timerSpeedScale: 1.35,
-  untimedMoves: { delta: -1, min: 4 },
-} satisfies ArcanaRules;
+const monochromePact: ExtendedArcanaRules = {
+  singleTraitBonusDamage: 8,
+  singleTraitPowerBonus: 0.15,
+  rainbowMultiplier: 0.5,
+  highDiffDamageScale: 0.5,
+};
+const prismaticFever: ExtendedArcanaRules = {
+  rainbowMultiplier: 3.5,
+  rainbowTimeBonus: 1.5,
+  nonRainbowDamageDelta: -2,
+};
+const controlledBurn: ExtendedArcanaRules = {
+  mistakeBurn: { cooldownMs: 5000, cards: 4 },
+  mistakeBurnDamageScale: 1.5,
+  mistakeBurnPowerBonus: 0.2,
+  startingGraces: 0,
+  cooldownMistakeHearts: 2,
+};
+const glassPrism: ExtendedArcanaRules = {
+  specialCardChanceScale: 4,
+  powerCardBonusOverride: 4,
+  maxHeartsLock: 3,
+  noHeal: true,
+};
+const overkillHarvest: ExtendedArcanaRules = {
+  overkillCoinsPerDamage: 3,
+  overkillCarryPct: 0.5,
+  waveClearHeal: 1,
+  zeroBaseSetCoins: true,
+};
+const scholarsGambit: ExtendedArcanaRules = {
+  xpScale: 2,
+  pickOptions: 4,
+  levelUpPowerBonus: 0.3,
+  charmSlotDelta: -1,
+};
+const catalystResonance: ExtendedArcanaRules = {
+  catalystChanceScale: 2.5,
+  catalystRespawns: 2,
+  evolutionBurstBonus: { damage: 20, time: 6 },
+  nonEvolvedDamageScale: 0.75,
+};
+const tempoSurge: ExtendedArcanaRules = {
+  setTimeBonus: 1.5,
+  setComboBonus: 1,
+  timerSpeedScale: 1.4,
+  untimedMoves: { delta: -2, min: 4 },
+};
 
 export const ARCANA: ArcanaDef[] = [
   {
@@ -36,9 +101,9 @@ export const ARCANA: ArcanaDef[] = [
     numeral: 'I',
     name: 'Monochrome Pact',
     icon: 'lorc/stone-block',
-    tagline: 'Simple Sets hit like boulders; Rainbows lose their shine.',
-    upside: `Sets with only 1 different trait deal +${monochromePact.singleTraitBonusDamage} bonus damage, and every Set deals +${percentMore(monochromePact.damageScale)}%.`,
-    tradeoff: `All-different Sets deal ${monochromePact.rainbowMultiplier}× damage instead of ${BASE_RULES.rainbowMultiplier}×.`,
+    tagline: 'Simple Sets hit like boulders; complex Sets lose their edge.',
+    upside: `1-diff Sets deal +${monochromePact.singleTraitBonusDamage} flat damage and add +${monochromePact.singleTraitPowerBonus} Power.`,
+    tradeoff: `Rainbows and 3+ diff Sets deal ×${monochromePact.rainbowMultiplier} damage.`,
   },
   {
     id: 'prismatic_fever',
@@ -47,8 +112,8 @@ export const ARCANA: ArcanaDef[] = [
     name: 'Prismatic Fever',
     icon: 'lorc/rainbow-star',
     tagline: 'All-in on Rainbow Sets.',
-    upside: `All-different Sets deal ${prismaticFever.rainbowMultiplier}× damage and restore +${prismaticFever.rainbowTimeBonus}s on timed fights.`,
-    tradeoff: `Non-Rainbow Sets deal −${-prismaticFever.nonRainbowDamageDelta} base damage (min 1) and foes enter with +${percentMore(prismaticFever.foeHpScale)}% HP.`,
+    upside: `Rainbow Sets deal ×${prismaticFever.rainbowMultiplier} damage and restore +${prismaticFever.rainbowTimeBonus}s on timed fights.`,
+    tradeoff: `Non-Rainbow Sets deal −${-prismaticFever.nonRainbowDamageDelta!} base damage (min 1).`,
   },
   {
     id: 'controlled_burn',
@@ -56,9 +121,9 @@ export const ARCANA: ArcanaDef[] = [
     numeral: 'III',
     name: 'Controlled Burn',
     icon: 'lorc/fire-ring',
-    tagline: 'Mistakes spark wildfire, and every Set burns hotter.',
-    upside: `Every ${controlledBurn.mistakeBurn.cooldownMs / 1000}s, a wrong Set ignites ${controlledBurn.mistakeBurn.cards} board cards instead of costing a heart; Sets deal +${percentMore(controlledBurn.damageScale)}% damage.`,
-    tradeoff: `You start each fight with ${controlledBurn.startingGraces} Graces.`,
+    tagline: 'Timed mistakes spark wildfire; reckless misses sear twice as hard.',
+    upside: `Every ${controlledBurn.mistakeBurn!.cooldownMs / 1000}s, a wrong Set ignites ${controlledBurn.mistakeBurn!.cards} cards (×${controlledBurn.mistakeBurnDamageScale} burn dmg) and adds +${controlledBurn.mistakeBurnPowerBonus} Power instead of costing a heart.`,
+    tradeoff: `Start with ${controlledBurn.startingGraces} Graces, and mistakes while on cooldown cost ${controlledBurn.cooldownMistakeHearts} Hearts.`,
   },
   {
     id: 'glass_prism',
@@ -66,9 +131,9 @@ export const ARCANA: ArcanaDef[] = [
     numeral: 'IV',
     name: 'Glass Prism',
     icon: 'lorc/diamond-hard',
-    tagline: 'Fragile crystal, flooded with treasure and lethal power.',
-    upside: `Power (+${BASE_RULES.powerCardBonus} dmg) and Gold (+${BASE_RULES.coinCardValue}¢) cards appear ${glassPrism.specialCardChanceScale}× as often, and Sets deal +${percentMore(glassPrism.damageScale)}% damage.`,
-    tradeoff: `Your maximum Hearts are locked to ${glassPrism.maxHeartsLock}.`,
+    tagline: 'Flood the board with lethal Power and Gold on a razor-thin life bar.',
+    upside: `Power (+${glassPrism.powerCardBonusOverride} dmg, doubled) and Gold (+${BASE_RULES.coinCardValue}¢) cards spawn ${glassPrism.specialCardChanceScale}× as often.`,
+    tradeoff: `Maximum Hearts are locked to ${glassPrism.maxHeartsLock} and all healing is disabled.`,
   },
   {
     id: 'overkill_harvest',
@@ -76,9 +141,9 @@ export const ARCANA: ArcanaDef[] = [
     numeral: 'V',
     name: 'Overkill Harvest',
     icon: 'lorc/crown-coin',
-    tagline: 'Finishing blows shower the arena in gold.',
-    upside: `Every point of overkill damage past 0 HP pays +${overkillHarvest.overkillCoinsPerDamage} coins; Sets deal +${percentMore(overkillHarvest.damageScale)}% and wave clears heal +${overkillHarvest.waveClearHeal} Heart.`,
-    tradeoff: `Foes enter the arena with +${percentMore(overkillHarvest.foeHpScale)}% HP.`,
+    tagline: 'Merciless finishing blows bank gold and spill straight into the next wave.',
+    upside: `Overkill pays ${overkillHarvest.overkillCoinsPerDamage}¢/dmg, carries ${Math.round(overkillHarvest.overkillCarryPct! * 100)}% damage into the next wave, and heals +${overkillHarvest.waveClearHeal} Heart on wave clear.`,
+    tradeoff: 'Normal Sets drop 0 base coins (only Overkill, Gold cards, and Parries pay coins).',
   },
   {
     id: 'scholars_gambit',
@@ -86,9 +151,9 @@ export const ARCANA: ArcanaDef[] = [
     numeral: 'VI',
     name: "Scholar's Gambit",
     icon: 'lorc/open-book',
-    tagline: 'Faster level-ups and wider picks against tougher foes.',
-    upside: `${scholarsGambit.xpScale}× XP gained, ${scholarsGambit.pickOptions} weapon choices per level-up, and +${percentMore(scholarsGambit.damageScale)}% Set damage.`,
-    tradeoff: `Foes enter the arena with +${percentMore(scholarsGambit.foeHpScale)}% HP.`,
+    tagline: 'Travel light and forge your arsenal mid-battle.',
+    upside: `${scholarsGambit.xpScale}× XP, ${scholarsGambit.pickOptions} weapon choices per level-up, and +${scholarsGambit.levelUpPowerBonus} Power on every level-up.`,
+    tradeoff: `Enter the fight with ${-scholarsGambit.charmSlotDelta!} fewer equipped Charm slot.`,
   },
   {
     id: 'catalyst_resonance',
@@ -96,9 +161,9 @@ export const ARCANA: ArcanaDef[] = [
     numeral: 'VII',
     name: 'Catalyst Resonance',
     icon: 'lorc/crystal-wand',
-    tagline: 'Attuned to Evolution Catalysts.',
-    upside: `Catalysts appear twice as often (+${catalystResonance.catalystRespawns} evos/fight), Sets deal +${percentMore(catalystResonance.damageScale)}%, and every Evolution bursts for ${catalystResonance.evolutionBurstBonus.damage} damage + ${catalystResonance.evolutionBurstBonus.time}s.`,
-    tradeoff: `Foes enter the arena with +${percentMore(catalystResonance.foeHpScale)}% HP.`,
+    tagline: 'Live for Evolutions; starve without them.',
+    upside: `${catalystResonance.catalystChanceScale}× Catalyst chance, +${catalystResonance.catalystRespawns} Evolutions/fight, and every Evolution bursts for +${catalystResonance.evolutionBurstBonus!.damage} dmg / +${catalystResonance.evolutionBurstBonus!.time}s.`,
+    tradeoff: `Non-evolved Sets deal ×${catalystResonance.nonEvolvedDamageScale} damage.`,
   },
   {
     id: 'tempo_surge',
@@ -106,40 +171,72 @@ export const ARCANA: ArcanaDef[] = [
     numeral: 'VIII',
     name: 'Tempo Surge',
     icon: 'lorc/hourglass',
-    tagline: 'A faster clock that rewards relentless momentum.',
-    upside: `Every valid Set deals +${percentMore(tempoSurge.damageScale)}% damage and refunds +${tempoSurge.setTimeBonus}s on timed fights.`,
-    tradeoff: `Timed clocks tick ${percentMore(tempoSurge.timerSpeedScale)}% faster (or −${-tempoSurge.untimedMoves.delta} move on move-limited fights, min ${tempoSurge.untimedMoves.min}).`,
+    tagline: 'A racing clock that feeds relentless streak momentum.',
+    upside: `Every valid Set refunds +${tempoSurge.setTimeBonus}s and grants +${tempoSurge.setComboBonus} bonus Combo step.`,
+    tradeoff: `Timed clocks tick ${tempoSurge.timerSpeedScale}× faster (${percentMore(tempoSurge.timerSpeedScale!)}% quicker), or −${-tempoSurge.untimedMoves!.delta} moves on untimed fights (min ${tempoSurge.untimedMoves!.min}).`,
   },
 ];
 
-const NO_RULES: ArcanaRules = {};
+const NO_RULES: ExtendedArcanaRules = {};
 
 const ADDITIVE = [
-  'maxHeartsDelta', 'nonRainbowDamageDelta', 'singleTraitBonusDamage', 'setTimeBonus', 'rainbowTimeBonus',
-  'overkillCoinsPerDamage', 'waveClearHeal', 'catalystRespawns',
+  'maxHeartsDelta',
+  'nonRainbowDamageDelta',
+  'singleTraitBonusDamage',
+  'singleTraitPowerBonus',
+  'mistakeBurnPowerBonus',
+  'levelUpPowerBonus',
+  'setTimeBonus',
+  'setComboBonus',
+  'rainbowTimeBonus',
+  'overkillCoinsPerDamage',
+  'overkillCarryPct',
+  'waveClearHeal',
+  'catalystRespawns',
+  'charmSlotDelta',
 ] as const;
-const SCALES = ['foeHpScale', 'specialCardChanceScale', 'damageScale', 'timerSpeedScale', 'xpScale', 'catalystChanceScale'] as const;
+
+const SCALES = [
+  'foeHpScale',
+  'specialCardChanceScale',
+  'damageScale',
+  'timerSpeedScale',
+  'xpScale',
+  'catalystChanceScale',
+  'nonEvolvedDamageScale',
+  'highDiffDamageScale',
+  'mistakeBurnDamageScale',
+] as const;
+
+const BOOL_OR = ['noHeal', 'zeroBaseSetCoins'] as const;
 
 const minDefined = (a: number | undefined, b: number | undefined) => (a === undefined ? b : b === undefined ? a : Math.min(a, b));
+const maxDefined = (a: number | undefined, b: number | undefined) => (a === undefined ? b : b === undefined ? a : Math.max(a, b));
 
 /**
- * Several equipped Arcana as one rule set (spec §4): additive fields add,
- * `*Scale` fields multiply, `maxHeartsLock` and the Grace override take the
- * lowest, `mistakeBurn` takes the shortest cooldown, `pickOptions` the most.
- * Rainbow multipliers combine relative to the standard ×2 (×1 and ×3 → ×1.5).
+ * Several equipped Arcana as one rule set: additive fields add, `*Scale`
+ * fields multiply, `maxHeartsLock` and `startingGraces` take the lowest,
+ * `mistakeBurn` takes the shortest cooldown, `pickOptions` / `powerCardBonusOverride` /
+ * `cooldownMistakeHearts` take the highest, booleans OR.
+ * Rainbow multipliers combine relative to `BASE_RULES.rainbowMultiplier`.
  */
-export const combineArcana = (list: ArcanaRules[]): ArcanaRules => {
+export const combineArcana = (list: ExtendedArcanaRules[]): ExtendedArcanaRules => {
   if (list.length === 0) return NO_RULES;
   if (list.length === 1) return list[0];
-  const out: ArcanaRules = {};
+  const out: ExtendedArcanaRules = {};
   const num = out as Record<string, number | undefined>;
+  const flags = out as Record<string, boolean | undefined>;
   for (const r of list) {
     const src = r as Record<string, unknown>;
     for (const k of ADDITIVE) if (typeof src[k] === 'number') num[k] = (num[k] ?? 0) + (src[k] as number);
     for (const k of SCALES) if (typeof src[k] === 'number') num[k] = (num[k] ?? 1) * (src[k] as number);
+    for (const k of BOOL_OR) if (src[k] === true) flags[k] = true;
     out.maxHeartsLock = minDefined(out.maxHeartsLock, r.maxHeartsLock);
     out.startingGraces = minDefined(out.startingGraces, r.startingGraces);
-    if (r.pickOptions !== undefined) out.pickOptions = Math.max(out.pickOptions ?? 0, r.pickOptions);
+    out.pickOptions = maxDefined(out.pickOptions, r.pickOptions);
+    out.powerCardBonusOverride = maxDefined(out.powerCardBonusOverride, r.powerCardBonusOverride);
+    out.cooldownMistakeHearts = maxDefined(out.cooldownMistakeHearts, r.cooldownMistakeHearts);
+    if (out.overkillCarryPct !== undefined && out.overkillCarryPct > 1) out.overkillCarryPct = 1;
     if (r.rainbowMultiplier !== undefined) {
       const base = BASE_RULES.rainbowMultiplier;
       out.rainbowMultiplier = (out.rainbowMultiplier ?? base) * (r.rainbowMultiplier / base);
@@ -162,10 +259,10 @@ export const combineArcana = (list: ArcanaRules[]): ArcanaRules => {
 };
 
 /** The rules of one Arcana, or of several equipped together. */
-export const arcanaRules = (ids: ArcanaId | readonly ArcanaId[] | null | undefined): ArcanaRules => {
+export const arcanaRules = (ids: ArcanaId | readonly ArcanaId[] | null | undefined): ExtendedArcanaRules => {
   if (!ids) return NO_RULES;
-  if (typeof ids === 'string') return getArcana(ids).rules;
-  return combineArcana(ids.map(id => getArcana(id).rules));
+  if (typeof ids === 'string') return getArcana(ids).rules as ExtendedArcanaRules;
+  return combineArcana(ids.map(id => getArcana(id).rules as ExtendedArcanaRules));
 };
 
 export const getArcana = (id: ArcanaId): ArcanaDef => {

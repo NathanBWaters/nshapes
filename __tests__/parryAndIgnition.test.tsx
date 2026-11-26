@@ -598,15 +598,15 @@ describe('Live Multiplier Ignition & Pre-Battle Parry UI', () => {
       expect(bd3.receiptLine).toContain('War Drum');
       expect(bd3.finalTotal).toBe(Math.round(bd3.finalBase * bd3.finalMult));
 
-      // Advance to Set #5: Clarity Lens (every 5th Set) is primed in NEXT and folds into BASE
+      // Advance to Set #5: Clarity Lens is pure utility ([GP-11], zero raw damage rider) — it simplifies without adding BASE dmg
       rhythmRun = playSet(rhythmRun);
       const primed5 = computePrimedEquation(rhythmRun);
-      expect(primed5.items.some(i => i.label === 'Clarity Lens')).toBe(true);
+      expect(primed5.items.some(i => i.label === 'Clarity Lens')).toBe(false);
       rhythmRun = playSet(rhythmRun);
       const bd5 = buildBalatroBreakdown(rhythmRun.lastSetIgnition!);
       expect(bd5.finalBonus).toBe(0);
-      expect(bd5.receiptLine).toContain('Clarity Lens');
       expect(bd5.finalTotal).toBe(Math.round(bd5.finalBase * bd5.finalMult));
+      expect(rhythmRun.simplified).not.toBeNull();
     } finally {
       setPowerEnabled(true);
     }

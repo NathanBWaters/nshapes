@@ -398,7 +398,7 @@ describe('UI Text Visibility Style-Contract Guardrails', () => {
     singleView.unmount();
   });
 
-  it('renders EvolutionPickOverlay with 3 cards, NEW! badge, full activeText, 375px-safe layout, and invokes onPick on tap', () => {
+  it('renders EvolutionPickOverlay with 3 cards, ★ SIGNATURE & NEW! badges, concise shortVerb, 375px-safe layout, and invokes onPick on tap', () => {
     const [r0, r1, r2] = EVOLUTION_RECIPES.slice(0, 3);
     const onPick = jest.fn();
     const view = render(
@@ -412,13 +412,14 @@ describe('UI Text Visibility Style-Contract Guardrails', () => {
 
     expect(view.getByText('CATALYST IGNITED')).toBeTruthy();
     expect(view.getByText('CHOOSE AN EVOLUTION')).toBeTruthy();
-    expect(view.getByTestId('evo-pick-subtitle')).toHaveTextContent('Pick 1 of 3 · Lasts 30s (+2 dmg & ×1.5 every Set)');
-    expect(view.getByTestId('evo-pick-drawn-note')).toHaveTextContent('3 randomly drawn from 6 armed');
+    expect(view.getByTestId('evo-pick-subtitle')).toHaveTextContent('Pick 1 of 3 · 30s (+2 dmg & ×1.5 every Set)');
+    expect(view.getByTestId('evo-pick-drawn-note')).toHaveTextContent('3 drawn from 6 armed');
 
-    // r0 is known -> no NEW! badge; r1 and r2 are new -> gold NEW! badge
+    // r0 is known -> no NEW! badge; r1 and r2 are new -> gold NEW! badge; all 3 are SIGNATURE recipes
     expect(view.queryByTestId('evo-pick-new-0')).toBeNull();
     expect(view.getByTestId('evo-pick-new-1')).toHaveTextContent('NEW!');
     expect(view.getByTestId('evo-pick-new-2')).toHaveTextContent('NEW!');
+    expect(view.getByTestId('evo-pick-sig-0')).toHaveTextContent('★ SIGNATURE');
 
     [r0, r1, r2].forEach((r, idx) => {
       const card = view.getByTestId(`evo-pick-option-${idx}`);
@@ -429,10 +430,11 @@ describe('UI Text Visibility Style-Contract Guardrails', () => {
 
       expect(view.getByLabelText(`icon-${r.icon}`)).toBeTruthy();
       expect(view.getByText(r.name)).toBeTruthy();
-      expect(view.getByText(r.familyText)).toBeTruthy();
+      expect(view.queryByText(r.familyText)).toBeNull();
+      expect(view.queryByText(r.flavor)).toBeNull();
 
       const desc = view.getByTestId(`evo-pick-desc-${idx}`);
-      expect(desc).toHaveTextContent(r.activeText);
+      expect(desc.props.children.length).toBeLessThanOrEqual(55);
       expect(desc.props.numberOfLines).toBeUndefined();
       expect(StyleSheet.flatten(desc.props.style).flexShrink).toBeGreaterThan(0);
     });

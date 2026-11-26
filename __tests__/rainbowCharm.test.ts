@@ -148,9 +148,9 @@ describe('clean base Rainbow rules & Rainbow Charm intro weapon', () => {
     expect(applied.save.armory).not.toContain('flint-spark');
   });
 
-  it('gives Monochrome Pact a real 0.5× Rainbow tradeoff while combining with Prismatic Fever to 1.5×', () => {
+  it('gives Monochrome Pact a real 0.5× Rainbow tradeoff while combining with Prismatic Fever to 1.75×', () => {
     expect(arcanaRules('monochrome_pact').rainbowMultiplier).toBe(0.5);
-    expect(arcanaRules('prismatic_fever').rainbowMultiplier).toBe(3);
-    expect(arcanaRules(['monochrome_pact', 'prismatic_fever']).rainbowMultiplier).toBeCloseTo(1.5);
+    expect(arcanaRules('prismatic_fever').rainbowMultiplier).toBe(3.5);
+    expect(arcanaRules(['monochrome_pact', 'prismatic_fever']).rainbowMultiplier).toBeCloseTo(1.75);
   });
 });
