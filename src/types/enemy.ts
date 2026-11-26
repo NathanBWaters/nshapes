@@ -46,7 +46,7 @@ export interface EnemyInstance {
    * Called once when round begins. Initialize any enemy-specific state.
    * Returns deltas to apply to initial game state (e.g., place triple cards)
    */
-  onRoundStart(board: Card[]): EnemyStartResult;
+  onRoundStart(board: Card[], rng?: () => number): EnemyStartResult;
 
   /**
    * Called every tick. Handle time-based effects.
@@ -54,26 +54,26 @@ export interface EnemyInstance {
    * @param deltaMs - milliseconds since last tick
    * @param board - current board state (read-only reference)
    */
-  onTick(deltaMs: number, board: Card[]): EnemyTickResult;
+  onTick(deltaMs: number, board: Card[], rng?: () => number): EnemyTickResult;
 
   /**
    * Called when player makes a valid match.
    * Enemy resets internal "time since last match" timer here.
    * Can return reward modifiers (e.g., -5s time for Thieving Raven)
    */
-  onValidMatch(matchedCards: Card[], board: Card[]): EnemyMatchResult;
+  onValidMatch(matchedCards: Card[], board: Card[], rng?: () => number): EnemyMatchResult;
 
   /**
    * Called when player makes an invalid match attempt.
    * Can return penalties (extra card removal, etc.)
    */
-  onInvalidMatch(cards: Card[], board: Card[]): EnemyMatchResult;
+  onInvalidMatch(cards: Card[], board: Card[], rng?: () => number): EnemyMatchResult;
 
   /**
    * Called when a new card is drawn to replace a matched/removed card.
    * Can modify the card (add dud state, face-down, bomb timer, etc.)
    */
-  onCardDraw(card: Card): Card;
+  onCardDraw(card: Card, rng?: () => number): Card;
 
   /**
    * Check if defeat condition is met. Called after each match.
@@ -303,11 +303,11 @@ export interface RoundStats {
  * Interface for reusable effect behaviors used in enemy composition
  */
 export interface EffectBehavior {
-  onRoundStart?: (board: Card[], internalState: Record<string, unknown>, config: unknown) => Partial<EnemyStartResult>;
-  onTick?: (deltaMs: number, board: Card[], internalState: Record<string, unknown>, config: unknown) => Partial<EnemyTickResult>;
-  onValidMatch?: (cards: Card[], board: Card[], internalState: Record<string, unknown>, config: unknown) => Partial<EnemyMatchResult>;
-  onInvalidMatch?: (cards: Card[], board: Card[], internalState: Record<string, unknown>, config: unknown) => Partial<EnemyMatchResult>;
-  onCardDraw?: (card: Card, config: unknown) => Card;
+  onRoundStart?: (board: Card[], internalState: Record<string, unknown>, config: unknown, rng?: () => number) => Partial<EnemyStartResult>;
+  onTick?: (deltaMs: number, board: Card[], internalState: Record<string, unknown>, config: unknown, rng?: () => number) => Partial<EnemyTickResult>;
+  onValidMatch?: (cards: Card[], board: Card[], internalState: Record<string, unknown>, config: unknown, rng?: () => number) => Partial<EnemyMatchResult>;
+  onInvalidMatch?: (cards: Card[], board: Card[], internalState: Record<string, unknown>, config: unknown, rng?: () => number) => Partial<EnemyMatchResult>;
+  onCardDraw?: (card: Card, config: unknown, rng?: () => number) => Card;
   getStatModifiers?: (config: unknown) => Partial<EnemyStatModifiers>;
   getUIModifiers?: (internalState: Record<string, unknown>, config: unknown) => Partial<EnemyUIModifiers>;
 }

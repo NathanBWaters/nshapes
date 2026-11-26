@@ -16,7 +16,8 @@ const SpawnBombEffect: EffectBehavior = {
   onRoundStart: (
     board: Card[],
     _internalState: Record<string, unknown>,
-    config: unknown
+    config: unknown,
+    rng?: () => number
   ): Partial<EnemyStartResult> => {
     const { bombTimerMs } = config as { bombTimerMs: number };
 
@@ -24,7 +25,8 @@ const SpawnBombEffect: EffectBehavior = {
     const validCards = board.filter((c) => !c.isDud && !c.isFaceDown && !c.hasBomb);
     if (validCards.length === 0) return {};
 
-    const randomCard = validCards[Math.floor(Math.random() * validCards.length)];
+    const nextRandom = rng ? rng() : Math.random();
+    const randomCard = validCards[Math.floor(nextRandom * validCards.length)];
 
     return {
       cardModifications: [

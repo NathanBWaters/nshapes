@@ -55,7 +55,7 @@ import { createTheHydra } from './tier4/theHydra';
 import { createTheReaper } from './tier4/theReaper';
 import { createWorldEater } from './tier4/worldEater';
 
-export const ENEMY_CREATORS: readonly (() => EnemyInstance)[] = [
+export const ENEMY_CREATORS: readonly ((rng?: () => number) => EnemyInstance)[] = [
   // Tier 1
   createBurrowingMole,
   createCirclingVulture,

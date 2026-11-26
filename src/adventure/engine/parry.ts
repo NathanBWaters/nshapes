@@ -189,10 +189,11 @@ export const resolveParryOnSet = (
   const counterHit = !graceUsed && setMatchesCounter(matched, d.attributes, p.spec.counter);
   if (!counterHit) {
     // Fairness guard: if this foe demands a specific counter AND none was on the board,
-    // clearing cards buys breathing room so RNG never forces an unavoidable hit.
+    // clearing cards buys breathing room while refill() guarantees a completing Counter-Set
+    // on the next draw. Never cap stalls while the board genuinely lacks any Counter-Set
+    // (e.g. hazards physically locking matching pairs) so RNG never forces an unavoidable hit.
     if (
       p.spec.counter.kind !== 'any' &&
-      p.stallsUsed < PARRY_RULES.maxFairnessStalls &&
       !boardHasCounterSet(d.board, d.attributes, p.spec.counter)
     ) {
       d.parry = {

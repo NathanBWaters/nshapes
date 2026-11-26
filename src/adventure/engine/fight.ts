@@ -13,14 +13,14 @@ import { ATTRIBUTE_VALUES } from '@/utils/gameUtils';
 import { getLinkedDestructionPositions, arePositionsConnected } from '@/utils/connectionUtils';
 import { applyEnemyStatModifiers } from '@/utils/enemyFactory';
 import { WEAPON_COUNTERS } from '@/utils/enemyEffects';
-import type { ArcanaRules, EventPlace, FightLogLine, FightLogSetMath, PassiveId, RunEvent, RunEventType, RunState } from '../types';
+import type { ArcanaRules, EventPlace, FightLogLine, FightLogSetMath, ParryRequirement, PassiveId, RunEvent, RunEventType, RunState } from '../types';
 import type { Area, Modifiers, TrickKind, WeaponTriggerKind } from '../rules/types';
 import { arcanaRules } from '../data/arcana';
 import { EVOLUTION_RECIPES } from '../data/evolutions';
 import { BASE_RULES, DECK_RULES, TRICK_RULES } from '../data/rules';
 import { PASSIVE_TUNING } from '../data/passives';
 import { createRng, type Rng } from './rng';
-import { hasAnySet, isSelectable } from './sets';
+import { allSets, countDifferentAttributes, hasAnySet, isRainbow, isSelectable } from './sets';
 import { buildDeck, deckCopies, variedDeal } from './dealer';
 import { growthModifiers } from '../data/weaponGrowth';
 import { evolutionCapFor, evolutionLikelihoodFor, liveRules, modifiersOf, type KeyedRule } from './sources';
@@ -106,6 +106,8 @@ export interface FoldedRuleItem {
 
 export interface Draft extends RunState {
   _rng: Rng;
+  _foeRng: Rng;
+  _weaponRng: Rng;
   _queue: { ev: FightEvent; chain: readonly string[]; setCtx: SetContext | null }[];
   /** Keys of the rules whose effects are running right now (events queued now inherit them) */
   _chain: readonly string[];
@@ -176,6 +178,8 @@ export const begin = (s: RunState, hooks: FightHooks): Draft => ({
   connections: [...s.connections],
   events: [...s.events],
   _rng: createRng(s.rng),
+  _foeRng: createRng(s.foeRng ?? s.rng),
+  _weaponRng: createRng(s.weaponRng ?? ((s.rng ^ 0x5bd1e995) >>> 0)),
   _queue: [],
   _chain: [],
   _firings: 0,
@@ -193,7 +197,7 @@ export const begin = (s: RunState, hooks: FightHooks): Draft => ({
 });
 
 export const finish = (d: Draft, prev?: RunState): RunState => {
-  const { _rng, _queue, _chain, _firings, _overheals, _mods, _rules, _arcana, _setCtx, _setMultiplier, _setFold, _hooks, _clock, _lines, _logSet, _ruleFiringsCloned, _ruleZeroOpsCloned, ...rest } = d;
+  const { _rng, _foeRng, _weaponRng, _queue, _chain, _firings, _overheals, _mods, _rules, _arcana, _setCtx, _setMultiplier, _setFold, _hooks, _clock, _lines, _logSet, _ruleFiringsCloned, _ruleZeroOpsCloned, ...rest } = d;
   const connections =
     prev &&
     d.connections.length === prev.connections.length &&
@@ -206,7 +210,7 @@ export const finish = (d: Draft, prev?: RunState): RunState => {
     d.events.every((e, i) => e === prev.events[i])
       ? prev.events
       : d.events;
-  return { ...rest, connections, events, rng: _rng.state };
+  return { ...rest, connections, events, rng: _rng.state, foeRng: _foeRng.state, weaponRng: _weaponRng.state };
 };
 
 /**
@@ -472,7 +476,7 @@ const dress = (d: Draft, base: Card, opts?: DrawOptions): Card => {
   if (d.features.has('power') && d._rng.next() < BASE_RULES.powerCardChance * specialMult) card.bonusPoints = BASE_RULES.powerCardBonus;
   card = dealTricks(d, card);
   if (opts?.skipFoeDrawEffects) return card;
-  return d.foe.onCardDraw(card);
+  return d.foe.onCardDraw(card, d._foeRng.next);
 };
 
 /** Say what the foe did to a card that was just dealt into `slot` (call once the card is really on the board). */
@@ -491,25 +495,412 @@ export interface RefillOptions extends DrawOptions {
   quiet?: boolean;
 }
 
+const attrValue = (c: Card, attr: AttributeName): string | number =>
+  attr === 'background' ? c.background ?? 'white' : c[attr];
+
+const completingValue = (a: Card, b: Card, attr: AttributeName): string | number => {
+  const va = attrValue(a, attr);
+  const vb = attrValue(b, attr);
+  if (va === vb) return va;
+  return (ATTRIBUTE_VALUES[attr] as readonly (string | number)[]).find(v => v !== va && v !== vb)!;
+};
+
+const cardsMatchCounter = (
+  cards: readonly Card[],
+  attrs: readonly AttributeName[],
+  req: ParryRequirement
+): boolean => {
+  if (cards.length < 3) return false;
+  const set = cards.slice(0, 3);
+  switch (req.kind) {
+    case 'any':
+      return true;
+    case 'color':
+      return set.every(c => c.isWild || c.color === req.color);
+    case 'shape':
+      return set.every(c => c.isWild || c.shape === req.shape);
+    case 'all_different':
+      return isRainbow(set, attrs as AttributeName[]);
+    case 'exact_same': {
+      const diff = countDifferentAttributes(set, attrs as AttributeName[]);
+      return attrs.length - diff === req.count;
+    }
+    case 'exact_diff': {
+      const diff = countDifferentAttributes(set, attrs as AttributeName[]);
+      return diff === req.count;
+    }
+    case 'same_number': {
+      const concrete = set.filter(c => !c.isWild);
+      return concrete.length <= 1 || concrete.every(c => c.number === concrete[0].number);
+    }
+    case 'diff_number': {
+      const concrete = set.filter(c => !c.isWild);
+      return new Set(concrete.map(c => c.number)).size === concrete.length;
+    }
+  }
+};
+
+const candidateHasCounterSet = (
+  board: Card[],
+  attrs: AttributeName[],
+  req: ParryRequirement
+): boolean => {
+  const sets = allSets(board, attrs);
+  if (req.kind === 'any') return sets.length > 0;
+  return sets.some(s => cardsMatchCounter(s, attrs, req));
+};
+
+const clearCardLocks = (card: Card): Card => ({
+  ...card,
+  isDud: false,
+  isFaceDown: false,
+  locked: false,
+  fogFlipAt: undefined,
+  fogBonus: undefined,
+  cursedUntil: undefined,
+});
+
 /**
- * Replace the cards at `indices` with fresh draws. If that leaves the board
- * without any Set, redraw (a few times): the game should never deadlock.
+ * Pull a card matching `target` on the deck's traits (or synthesize one cleanly if
+ * the deck currently lacks it), ensuring it lands selectable with exact `target` traits.
+ */
+const placeTargetedCard = (
+  d: Draft,
+  candidate: Card[],
+  slot: number,
+  target: Partial<Record<AttributeName, string | number>>,
+  opts?: DrawOptions
+): Card => {
+  const displaced = candidate[slot];
+  if (displaced) returnToDeck(d, [displaced]);
+
+  const deckAttrs = d.surge ? d.level.rules.attributes : d.attributes;
+  const deckIdx = d.deck.findIndex(c =>
+    deckAttrs.every(attr => target[attr] === undefined || attrValue(c, attr) === target[attr])
+  );
+  let base: Card;
+  if (deckIdx >= 0) {
+    base = d.deck[deckIdx];
+    d.deck.splice(deckIdx, 1);
+  } else {
+    base = {
+      id: 'synth',
+      shape: (target.shape as Card['shape']) ?? 'oval',
+      color: (target.color as Card['color']) ?? 'red',
+      number: (target.number as Card['number']) ?? 1,
+      shading: (target.shading as Card['shading']) ?? ATTRIBUTE_VALUES.shading[0],
+      background: (target.background as Card['background']) ?? 'white',
+      selected: false,
+    };
+  }
+
+  let card = dress(d, base, { ...opts, skipFoeDrawEffects: true });
+  for (const attr of d.attributes) {
+    if (target[attr] !== undefined) card = withAttribute(card, attr, target[attr]!);
+  }
+  if (d.surge && !d.surge.active) {
+    card = { ...card, shading: ATTRIBUTE_VALUES.shading[0] };
+  }
+  card = {
+    ...clearCardLocks(card),
+    twinOf: undefined,
+    decoyOf: undefined,
+  };
+  candidate[slot] = card;
+  return card;
+};
+
+/**
+ * Deterministic zero-deadlock fallback: guarantees `candidate` contains at least one
+ * valid Set by pulling/placing the exact completing 3rd card for a selectable pair.
+ */
+export const ensureBoardHasSet = (
+  d: Draft,
+  candidate: Card[],
+  slots: readonly number[],
+  opts?: DrawOptions
+): boolean => {
+  if (hasAnySet(candidate, d.attributes)) return true;
+  const validSlots = slots.filter(i => i >= 0 && i < candidate.length);
+  if (validSlots.length === 0 || candidate.length < 3) return false;
+
+  const targetSlot = validSlots[0];
+  const partnerSlots = validSlots.slice(1);
+  const slotSet = new Set(validSlots);
+
+  const stayingSelectable = candidate
+    .map((c, i) => (!slotSet.has(i) && isSelectable(c) && !d.replacing.includes(c.id) ? i : -1))
+    .filter(i => i >= 0);
+
+  // If fewer than 2 staying cards are selectable, make enough freshly dealt partner slots selectable
+  const extraPartners: number[] = [];
+  for (const s of partnerSlots) {
+    if (isSelectable(candidate[s])) {
+      extraPartners.push(s);
+    } else if (stayingSelectable.length + extraPartners.length < 2) {
+      candidate[s] = clearCardLocks(candidate[s]);
+      extraPartners.push(s);
+    }
+  }
+
+  const pool = [...stayingSelectable, ...extraPartners].map(i => candidate[i]);
+  if (pool.length < 2) return false;
+
+  // If any partner is wild, simply making targetSlot selectable yields a valid Set
+  if (pool.some(c => c.isWild)) {
+    candidate[targetSlot] = clearCardLocks(candidate[targetSlot]);
+    return hasAnySet(candidate, d.attributes);
+  }
+
+  // Prefer a pair with at least one differing attribute for natural variety
+  const shuffled = d._rng.shuffle(pool);
+  let pairA = shuffled[0];
+  let pairB = shuffled[1];
+  outer: for (let i = 0; i < shuffled.length; i++) {
+    for (let j = i + 1; j < shuffled.length; j++) {
+      if (d.attributes.some(attr => attrValue(shuffled[i], attr) !== attrValue(shuffled[j], attr))) {
+        pairA = shuffled[i];
+        pairB = shuffled[j];
+        break outer;
+      }
+    }
+  }
+
+  const target: Partial<Record<AttributeName, string | number>> = {};
+  for (const attr of d.attributes) {
+    target[attr] = completingValue(pairA, pairB, attr);
+  }
+  placeTargetedCard(d, candidate, targetSlot, target, opts);
+  return hasAnySet(candidate, d.attributes);
+};
+
+interface CounterPattern {
+  mode: Record<AttributeName, 'same' | 'diff'>;
+  pinned: Partial<Record<AttributeName, string | number>>;
+}
+
+const planCounterPattern = (
+  d: Draft,
+  attrs: readonly AttributeName[],
+  req: ParryRequirement
+): CounterPattern | null => {
+  const forced = new Map<AttributeName, string | number>();
+  if (d.simplified) {
+    forced.set(d.simplified.attribute, d.simplified.value);
+    if (d.simplified.also) forced.set(d.simplified.also.attribute, d.simplified.also.value);
+  }
+  const mode = {} as Record<AttributeName, 'same' | 'diff'>;
+  const pinned: Partial<Record<AttributeName, string | number>> = {};
+  for (const [k, v] of forced.entries()) pinned[k] = v;
+
+  const setDefaultOthers = (alreadySet: Set<AttributeName>, needAtLeastOneDiff: boolean) => {
+    const rest = attrs.filter(a => !alreadySet.has(a));
+    const freeRest = rest.filter(a => !forced.has(a));
+    for (const a of rest) {
+      if (forced.has(a)) mode[a] = 'same';
+      else mode[a] = d._rng.next() < 0.5 ? 'diff' : 'same';
+    }
+    if (needAtLeastOneDiff && freeRest.length > 0 && !attrs.some(a => mode[a] === 'diff')) {
+      mode[d._rng.pick(freeRest)] = 'diff';
+    }
+  };
+
+  switch (req.kind) {
+    case 'any':
+      setDefaultOthers(new Set(), true);
+      return { mode, pinned };
+    case 'color': {
+      if (forced.has('color') && forced.get('color') !== req.color) return null;
+      mode.color = 'same';
+      pinned.color = req.color;
+      setDefaultOthers(new Set(['color']), true);
+      return { mode, pinned };
+    }
+    case 'shape': {
+      if (forced.has('shape') && forced.get('shape') !== req.shape) return null;
+      mode.shape = 'same';
+      pinned.shape = req.shape;
+      setDefaultOthers(new Set(['shape']), true);
+      return { mode, pinned };
+    }
+    case 'same_number': {
+      mode.number = 'same';
+      setDefaultOthers(new Set(['number']), true);
+      return { mode, pinned };
+    }
+    case 'diff_number': {
+      if (forced.has('number')) return null;
+      mode.number = 'diff';
+      setDefaultOthers(new Set(['number']), false);
+      return { mode, pinned };
+    }
+    case 'all_different': {
+      if (forced.size > 0) return null;
+      for (const a of attrs) mode[a] = 'diff';
+      return { mode, pinned };
+    }
+    case 'exact_same': {
+      if (req.count > attrs.length || forced.size > req.count) return null;
+      const sameSet = new Set<AttributeName>(forced.keys());
+      const free = d._rng.shuffle(attrs.filter(a => !sameSet.has(a)));
+      for (const a of free.slice(0, req.count - sameSet.size)) sameSet.add(a);
+      for (const a of attrs) mode[a] = sameSet.has(a) ? 'same' : 'diff';
+      return { mode, pinned };
+    }
+    case 'exact_diff': {
+      const free = d._rng.shuffle(attrs.filter(a => !forced.has(a)));
+      if (req.count > free.length) return null;
+      const diffSet = new Set<AttributeName>(free.slice(0, req.count));
+      for (const a of attrs) mode[a] = diffSet.has(a) ? 'diff' : 'same';
+      return { mode, pinned };
+    }
+  }
+};
+
+/**
+ * Counter-Parry fairness guarantee: during a specific Counter-Parry wind-up, if the
+ * refilled board still has no valid Counter-Set, deterministically pull/place card(s)
+ * from the deck into the refilled slots so at least one Counter-Set is immediately
+ * solvable (falls back cleanly to fairness stalls only if physically impossible).
+ */
+const ensureParryCounterOnRefill = (
+  d: Draft,
+  candidate: Card[],
+  slots: readonly number[],
+  opts?: DrawOptions
+): void => {
+  const parry = d.parry;
+  if (!parry || parry.phase !== 'windup' || parry.spec.counter.kind === 'any') return;
+  const req = parry.spec.counter;
+  const attrs = d.attributes;
+  if (candidateHasCounterSet(candidate, attrs, req)) return;
+
+  const validSlots = slots.filter(i => i >= 0 && i < candidate.length);
+  if (validSlots.length === 0) return;
+
+  const forced = new Map<AttributeName, string | number>();
+  if (d.simplified) {
+    forced.set(d.simplified.attribute, d.simplified.value);
+    if (d.simplified.also) forced.set(d.simplified.also.attribute, d.simplified.also.value);
+  }
+
+  // Tier 1: Complete any existing selectable pair (a, b) using 1 refilled slot
+  const targetSlot = validSlots[0];
+  const others = d._rng.shuffle(
+    candidate
+      .map((c, i) => (i !== targetSlot && isSelectable(c) && !c.isWild && !d.replacing.includes(c.id) ? c : null))
+      .filter((c): c is Card => c !== null)
+  );
+  for (let i = 0; i < others.length; i++) {
+    for (let j = i + 1; j < others.length; j++) {
+      const a = others[i];
+      const b = others[j];
+      const target: Partial<Record<AttributeName, string | number>> = {};
+      let respectsForced = true;
+      for (const attr of attrs) {
+        const val = completingValue(a, b, attr);
+        if (forced.has(attr) && forced.get(attr) !== val) {
+          respectsForced = false;
+          break;
+        }
+        target[attr] = val;
+      }
+      if (!respectsForced) continue;
+      const preview: Card = { ...a, ...target, isWild: false } as Card;
+      if (cardsMatchCounter([a, b, preview], attrs, req)) {
+        placeTargetedCard(d, candidate, targetSlot, target, opts);
+        if (candidateHasCounterSet(candidate, attrs, req)) return;
+      }
+    }
+  }
+
+  const pattern = planCounterPattern(d, attrs, req);
+  if (!pattern) return;
+
+  // Tier 2: Complete 1 compatible staying selectable card using 2 refilled slots
+  if (validSlots.length >= 2) {
+    const usedTwo = new Set([validSlots[0], validSlots[1]]);
+    const anchors = d._rng.shuffle(
+      candidate.filter((c, i) => {
+        if (usedTwo.has(i) || !isSelectable(c) || c.isWild || d.replacing.includes(c.id)) return false;
+        return attrs.every(attr => pattern.pinned[attr] === undefined || attrValue(c, attr) === pattern.pinned[attr]);
+      })
+    );
+    if (anchors.length > 0) {
+      const a = anchors[0];
+      const targetB: Partial<Record<AttributeName, string | number>> = {};
+      const targetC: Partial<Record<AttributeName, string | number>> = {};
+      for (const attr of attrs) {
+        const va = attrValue(a, attr);
+        if (pattern.mode[attr] === 'same') {
+          targetB[attr] = va;
+          targetC[attr] = va;
+        } else {
+          const rest = (ATTRIBUTE_VALUES[attr] as readonly (string | number)[]).filter(v => v !== va);
+          const vb = d._rng.pick(rest);
+          const vc = rest.find(v => v !== vb)!;
+          targetB[attr] = vb;
+          targetC[attr] = vc;
+        }
+      }
+      placeTargetedCard(d, candidate, validSlots[0], targetB, opts);
+      placeTargetedCard(d, candidate, validSlots[1], targetC, opts);
+      if (candidateHasCounterSet(candidate, attrs, req)) return;
+    }
+  }
+
+  // Tier 3: Construct a full 3-card Counter-Set directly across 3 refilled slots
+  if (validSlots.length >= 3) {
+    const targets: [
+      Partial<Record<AttributeName, string | number>>,
+      Partial<Record<AttributeName, string | number>>,
+      Partial<Record<AttributeName, string | number>>,
+    ] = [{}, {}, {}];
+    for (const attr of attrs) {
+      if (pattern.mode[attr] === 'same') {
+        const v = pattern.pinned[attr] ?? d._rng.pick(ATTRIBUTE_VALUES[attr] as readonly (string | number)[]);
+        targets[0][attr] = v;
+        targets[1][attr] = v;
+        targets[2][attr] = v;
+      } else {
+        const vals = d._rng.shuffle(ATTRIBUTE_VALUES[attr] as readonly (string | number)[]);
+        targets[0][attr] = vals[0];
+        targets[1][attr] = vals[1];
+        targets[2][attr] = vals[2];
+      }
+    }
+    placeTargetedCard(d, candidate, validSlots[0], targets[0], opts);
+    placeTargetedCard(d, candidate, validSlots[1], targets[1], opts);
+    placeTargetedCard(d, candidate, validSlots[2], targets[2], opts);
+  }
+};
+
+/**
+ * Replace the cards at `indices` with fresh draws. Retries up to 11 times for a
+ * natural Set, then falls back to deterministic Set construction so a refill never
+ * commits a deadlocked board, and biases refills during specific Counter-Parry
+ * wind-ups so a valid Counter-Set is immediately solvable.
  */
 export const refill = (d: Draft, indices: number[], opts?: RefillOptions) => {
   if (indices.length === 0) return;
+  let candidate: Card[] = d.board;
   for (let attempt = 0; attempt < 12; attempt++) {
     // A deck with copies is dealt for variety (engine/dealer.ts); any other, and any second try, from the top
     const picks = attempt === 0 && deckCopies(d.level) > 1 ? variedDeal(d.board, indices, d.deck, d.attributes) : null;
     const drawn = picks ? takeFromDeck(d, picks).map(base => dress(d, base, opts)) : indices.map(() => drawCard(d, opts));
-    const candidate = [...d.board];
+    candidate = [...d.board];
     indices.forEach((idx, i) => (candidate[idx] = drawn[i]));
     if (hasAnySet(candidate, d.attributes) || attempt === 11) {
-      d.board = candidate;
-      if (!opts?.skipFoeDrawEffects) indices.forEach((idx, i) => announceDraw(d, drawn[i], idx));
       break;
     }
     returnToDeck(d, drawn);
   }
+  if (!hasAnySet(candidate, d.attributes)) {
+    ensureBoardHasSet(d, candidate, indices, opts);
+  }
+  ensureParryCounterOnRefill(d, candidate, indices, opts);
+  d.board = candidate;
+  if (!opts?.skipFoeDrawEffects) indices.forEach(idx => announceDraw(d, d.board[idx], idx));
   if (opts?.quiet) return;
   countHazardRefills(d, indices);
   rollCatalyst(d, indices, !!opts?.rainbow);

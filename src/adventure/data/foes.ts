@@ -14,9 +14,9 @@ export interface Foe {
 }
 
 /** A fresh foe instance (enemies carry their own timers, so never share one between fights). */
-export const createFoe = (def: FoeDef): Foe => {
+export const createFoe = (def: FoeDef, rng?: () => number): Foe => {
   if (def.enemy && isEnemyRegistered(def.enemy)) {
-    const foe = createEnemy(def.enemy);
+    const foe = createEnemy(def.enemy, rng);
     return { foe, name: def.name ?? foe.name, icon: def.icon ?? foe.icon, sparring: false };
   }
   return { foe: createDummyEnemy(), name: def.name ?? 'Sparring Foe', icon: def.icon ?? 'lorc/crossed-swords', sparring: true };
@@ -31,12 +31,13 @@ export interface FoeDisplay {
 }
 
 const cache = new Map<string, FoeDisplay>();
+const METADATA_RNG = (): number => 0;
 
 export const foeDisplay = (def: FoeDef): FoeDisplay => {
   const key = `${def.enemy ?? ''}|${def.name ?? ''}|${def.icon ?? ''}`;
   const hit = cache.get(key);
   if (hit) return hit;
-  const { foe, name, icon, sparring } = createFoe(def);
+  const { foe, name, icon, sparring } = createFoe(def, METADATA_RNG);
   const out: FoeDisplay = { name, icon, ability: sparring ? null : foe.description, tier: sparring ? 1 : foe.tier };
   cache.set(key, out);
   return out;
@@ -47,6 +48,6 @@ export const levelFoe = (level: LevelDef): FoeDisplay => foeDisplay(level.foes[l
 
 /** What the last real enemy of a level asks of the player, if the level has one. */
 export const levelDefeatCondition = (level: LevelDef): string | null => {
-  const def = [...level.foes].reverse().find(f => !createFoe(f).sparring);
-  return def ? createFoe(def).foe.defeatConditionText : null;
+  const def = [...level.foes].reverse().find(f => !createFoe(f, METADATA_RNG).sparring);
+  return def ? createFoe(def, METADATA_RNG).foe.defeatConditionText : null;
 };

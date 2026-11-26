@@ -897,8 +897,10 @@ export interface RunState {
   fighter: CharacterName;
   features: Set<FeatureFlag>;
   rng: number;
-  /** Seeded stream foe effects roll on (engine/run.ts withFoeDice); missing on runs from before it */
+  /** Seeded stream foe effects roll on (`d._foeRng`); missing on runs from before it */
   foeRng?: number;
+  /** Seeded stream board weapon procs roll on (`d._weaponRng`); decoupled from deck deals */
+  weaponRng?: number;
   attributes: AttributeName[];
   deck: Card[];
   board: Card[];

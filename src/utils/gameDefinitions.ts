@@ -966,15 +966,17 @@ export const getBridgeWeaponsForTrigger = (
  */
 export const rollBridgeEffects = (
   trigger: BridgeTriggerType,
-  playerWeapons: Weapon[]
+  playerWeapons: Weapon[],
+  rng?: () => number
 ): BridgeEffectResult[] => {
   const bridgeWeapons = getBridgeWeaponsForTrigger(trigger, playerWeapons);
   const results: BridgeEffectResult[] = [];
+  const nextRand = () => (rng ? rng() : Math.random());
 
   bridgeWeapons.forEach(weapon => {
     if (!weapon.bridgeEffect) return;
 
-    const roll = Math.random() * 100;
+    const roll = nextRand() * 100;
     if (roll < weapon.bridgeEffect.chance) {
       results.push({
         effect: weapon.bridgeEffect.effect,

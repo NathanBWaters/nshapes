@@ -18,6 +18,7 @@ import type { WeaponEffectResult } from '@/utils/weaponEffects';
 import { ATTRIBUTE_VALUES } from '@/utils/gameUtils';
 import { MATCH_REWARDS, getBoardSizeForAttributes } from '@/utils/gameConfig';
 import { getAdjacentIndices } from '@/utils/weaponEffects';
+import { resolveMatch } from '@/utils/matchResolution';
 import { getLinkedDestructionPositions, selectPositionsToConnect } from '@/utils/connectionUtils';
 import { DEFAULT_PLAYER_STATS, canObtainWeapon } from '@/utils/gameDefinitions';
 import { createInitialRoundStats } from '@/game/roundStats';
@@ -40,7 +41,7 @@ import { challengeProgress } from './challenges';
 import { initParryState, resolveParryOnSet, tickParry } from './parry';
 import {
   addCoins, addConnection, addHints, addRandomConnections, addTime, addXp, arcana, begin, chanceStatsOf, dealDamage, drawCard,
-  emit, empowerBoard, enqueue, finish, foeMultiplier, growBoard, heal, hurt, igniteCards, keepCatalystMatchable, mods, newLinkSlots, placeCatalyst,
+  emit, empowerBoard, enqueue, ensureBoardHasSet, finish, foeMultiplier, growBoard, heal, hurt, igniteCards, keepCatalystMatchable, mods, newLinkSlots, placeCatalyst,
   pruneConnections, recycle, refill, refreshSources, returnToDeck, rollBridges, signalGrowth, syncTraps, toDeckCard, touchable, tuning, updateCards,
   MAX_BOARD, type Draft, type FightHooks, TIME_HEADROOM,
   CLOCK_SLOW_CAP_PCT,
@@ -70,8 +71,20 @@ export const baseCardReward = (c: Card): CardReward => ({
 });
 
 export type RunAction =
-  /** `hinted`: one of the picked cards was being pointed out (a hint or an auto-hint) */
-  | { type: 'MATCH'; cards: Card[]; rewards: CardReward[]; effects?: WeaponEffectResult; hinted?: boolean }
+  /**
+   * `hinted`: one of the picked cards was being pointed out (a hint or an auto-hint).
+   * When `resolveWeapons` is true (or `rewards` is omitted), `runReducer` resolves
+   * board weapon rolls deterministically via `d._rng.next`.
+   */
+  | {
+      type: 'MATCH';
+      cards: Card[];
+      rewards?: CardReward[];
+      effects?: WeaponEffectResult;
+      hinted?: boolean;
+      graceUsed?: boolean;
+      resolveWeapons?: boolean;
+    }
   | { type: 'INVALID'; cards: Card[] }
   | { type: 'REPLACE'; ids: string[] }
   | { type: 'BURN'; card: Card }
@@ -345,7 +358,7 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   const traps = resolveTrapsOnSet(d, matched);
 
   // Enemy reaction first (time theft, extra removals, flips)
-  const enemyResult = d.foe.onValidMatch(matched, d.board);
+  const enemyResult = d.foe.onValidMatch(matched, d.board, d._foeRng.next);
   const statMods = d.foe.getStatModifiers();
   emitEnemyEvents(d, enemyResult.events);
 
@@ -1037,11 +1050,11 @@ const HOOKS: FightHooks = { autoSet };
 // ─── Setup ──────────────────────────────────────────────────────────────────
 
 export interface RunOverrides extends LoadoutOptions {
-  /** Override starting hearts (e.g. carry HP across floors in Starfall Spire) */
+  /** Override starting hearts (e.g. carry HP across floors in Starfall Summit) */
   startingHearts?: number;
-  /** Scale Power accumulation (default 1; 0 disables generic global Power scaling in Spire) */
+  /** Scale Power accumulation (default 1; 0 disables generic global Power scaling in Starfall Summit) */
   powerScaling?: number;
-  /** Stack concurrent active Evolution Set multipliers multiplicatively (used by Spire) */
+  /** Stack concurrent active Evolution Set multipliers multiplicatively (used by Starfall Summit) */
   stackEvolutionMultipliers?: boolean;
   /** Lab-only override: omit each active Evolution's bespoke rules/modifiers (keeps universal shell) */
   blankEvolutionRules?: boolean;
@@ -1051,35 +1064,16 @@ export interface CreateRunOptions {
   seed: number;
   /** Replace the level's accumulated features (dev tools & tests) */
   features?: Set<FeatureFlag>;
-  /** Optional overrides used by Starfall Spire runs without affecting Adventure Mode */
+  /** Optional overrides used by Starfall Summit runs without affecting Adventure Mode */
   overrides?: RunOverrides;
   /** Opt-in lab telemetry: count firings & zero-op firings per rule key (zero overhead when omitted) */
   trackRuleFirings?: boolean;
 }
 
-/**
- * Foe effects (src/utils/enemies) roll with Math.random. Inside the engine
- * that is a seeded stream kept in state (`foeRng`), so a fight is a pure
- * function of its seed and actions and replays exactly (engine/replay.ts).
- */
-const withFoeDice = (seed: number, fn: () => RunState): RunState => {
-  const dice = createRng(seed);
-  const real = Math.random;
-  Math.random = dice.next;
-  try {
-    const out = fn();
-    return dice.state === seed && out.foeRng === seed ? out : { ...out, foeRng: dice.state };
-  } finally {
-    Math.random = real;
-  }
-};
-
-export const createRun = (level: LevelDef, save: AdventureSave, opts: CreateRunOptions): RunState =>
-  withFoeDice((opts.seed ^ 0x2545f491) >>> 0, () => buildRun(level, save, opts));
-
-const buildRun = (level: LevelDef, save: AdventureSave, opts: CreateRunOptions): RunState => {
+export const createRun = (level: LevelDef, save: AdventureSave, opts: CreateRunOptions): RunState => {
   const fighter = save.selectedFighter;
   const rng = createRng(opts.seed);
+  const foeRng = createRng((opts.seed ^ 0x2545f491) >>> 0);
   const ov = opts.overrides;
   const loadout = startingLoadout(level, save, opts.features, () => rng.next(), ov);
   const features = loadout.features;
@@ -1097,7 +1091,7 @@ const buildRun = (level: LevelDef, save: AdventureSave, opts: CreateRunOptions):
   const desiredBoardSize = Math.max(baseSize, gear ? baseSize + (stats.fieldSize - DEFAULT_PLAYER_STATS.fieldSize) : baseSize);
   const boardSize = Math.min(MAX_BOARD, desiredBoardSize);
   const boardOverflow = Math.max(0, desiredBoardSize - MAX_BOARD);
-  const first = createFoe(level.foes[0]);
+  const first = createFoe(level.foes[0], foeRng.next);
   const rules = arcanaRules(arcanaIds);
   const untimedMoves = rules.untimedMoves;
   const startingMoves =
@@ -1114,6 +1108,8 @@ const buildRun = (level: LevelDef, save: AdventureSave, opts: CreateRunOptions):
     fighter,
     features,
     rng: rng.state,
+    foeRng: foeRng.state,
+    weaponRng: (opts.seed ^ 0x5bd1e995) >>> 0,
     attributes,
     deck: rng.shuffle(buildDeck(level)).map(toDeckCard),
     board: [],
@@ -1233,6 +1229,11 @@ const buildRun = (level: LevelDef, save: AdventureSave, opts: CreateRunOptions):
     // A deck with copies opens on every kind of Set its traits allow (the first level shows one of each)
     if (varied ? boardVariety(d.board, attributes).kinds >= kindsOfSet(attributes) : hasAnySet(d.board, attributes)) break;
   }
+  if (!hasAnySet(d.board, attributes)) {
+    const fixed = [...d.board];
+    ensureBoardHasSet(d, fixed, fixed.map((_, i) => i));
+    d.board = fixed;
+  }
   d.events = []; // don't coach-mark the deal itself
   d._lines = [];
   if (boardOverflow > 0) empowerBoard(d, boardOverflow);
@@ -1250,7 +1251,7 @@ const buildRun = (level: LevelDef, save: AdventureSave, opts: CreateRunOptions):
 };
 
 const startFoe = (d: Draft) => {
-  const start = d.foe.onRoundStart(d.board);
+  const start = d.foe.onRoundStart(d.board, d._foeRng.next);
   for (const mod of start.cardModifications) {
     d.board = d.board.map(c => (c.id === mod.cardId ? { ...c, ...mod.changes } : c));
   }
@@ -1382,10 +1383,7 @@ const finalizeTurnIgnition = (d: Draft, beforeDamage: number) => {
 
 // ─── Reducer ────────────────────────────────────────────────────────────────
 
-export const runReducer = (state: RunState, action: RunAction): RunState =>
-  action.type === 'CLEAR_EVENTS' ? reduceRun(state, action) : withFoeDice(state.foeRng ?? state.rng, () => reduceRun(state, action));
-
-const reduceRun = (state: RunState, action: RunAction): RunState => {
+export const runReducer = (state: RunState, action: RunAction): RunState => {
   if (action.type === 'CLEAR_EVENTS') {
     return { ...state, events: state.events.filter(e => e.id > action.upTo) };
   }
@@ -1398,7 +1396,25 @@ const reduceRun = (state: RunState, action: RunAction): RunState => {
     case 'MATCH': {
       if (d.status !== 'playing') return state;
       const before = d.totalDamage;
-      applyMatch(d, action.cards, action.rewards, action.effects, { hinted: action.hinted });
+      let matchCards = action.cards;
+      let matchRewards = action.rewards;
+      let matchEffects = action.effects;
+      if (action.resolveWeapons || !matchRewards) {
+        const resolved = resolveMatch({
+          board: d.board,
+          selected: action.cards.slice(0, 3),
+          playerStats: d.stats,
+          weapons: d.weapons,
+          activeAttributes: d.attributes,
+          connections: d.connections,
+          graceUsed: Boolean(action.graceUsed),
+          rng: d._weaponRng.next,
+        });
+        matchCards = resolved.cards;
+        matchRewards = resolved.rewards;
+        matchEffects = resolved.weaponEffects;
+      }
+      applyMatch(d, matchCards, matchRewards, matchEffects, { hinted: action.hinted });
       drain(d);
       d._setMultiplier = 1;
       d._setFold = null;
@@ -1434,7 +1450,7 @@ const reduceRun = (state: RunState, action: RunAction): RunState => {
       noteGrowth(d, { on: 'mistake', cards: action.cards });
       emit(d, 'mistake');
       enqueue(d, 'mistake');
-      const res = d.foe.onInvalidMatch(action.cards, d.board);
+      const res = d.foe.onInvalidMatch(action.cards, d.board, d._foeRng.next);
       if (res.cardsToRemove.length) {
         const rm = new Set(res.cardsToRemove);
         const picked = new Set(action.cards.map(c => c.id));
@@ -1624,7 +1640,7 @@ const reduceRun = (state: RunState, action: RunAction): RunState => {
       heal(d, arcana(d).waveClearHeal ?? 0);
       d.wave += 1;
       const def = d.level.foes[d.wave];
-      const next = createFoe(def);
+      const next = createFoe(def, d._foeRng.next);
       const hp = scaledFoeHp(def.hp, d.arcana);
       d.foe = next.foe;
       d.foeName = next.name;
@@ -1680,7 +1696,7 @@ const tickClock = (d: Draft, ms: number) => {
   // A Staggered foe is rattled and cannot tick its own hostile abilities or regen
   if (d.parry?.phase === 'staggered') return;
 
-  const tick = d.foe.onTick(ms * speed, d.board);
+  const tick = d.foe.onTick(ms * speed, d.board, d._foeRng.next);
   emitEnemyEvents(d, tick.events);
   if (tick.scoreDelta < 0) {
     const healAmt = Math.min(-tick.scoreDelta, d.foeMaxHp - d.foeHp);
