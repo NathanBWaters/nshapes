@@ -4,7 +4,8 @@
  * Ignition math & heat tiers + Lethal Kill-Cam snapshot).
  */
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
+import { act, render } from '@testing-library/react-native';
 import type { Card } from '@/types';
 import { getArmoryWeapon } from '@/adventure/data/armory';
 import { getLevel } from '@/adventure/data/levels';
@@ -18,7 +19,8 @@ import { isRainbow } from '@/adventure/engine/sets';
 import { createMaxedSave, createNewSave } from '@/adventure/progress';
 import { AnchorsProvider, useAnchors } from '@/adventure/fx/anchors';
 import { counterForWeapon, GearBelt } from '@/adventure/fx/GearBelt';
-import { buildBalatroBreakdown, buildIgnitionPlan, computePrimedEquation, heatTierFor } from '@/adventure/fx/MultiplierIgnition';
+import MultiplierIgnition, { buildBalatroBreakdown, buildIgnitionPlan, computePrimedEquation, heatTierFor } from '@/adventure/fx/MultiplierIgnition';
+import ParryIntentBar from '@/adventure/components/ParryIntentBar';
 import ParryPreviewCard from '@/adventure/components/ParryPreviewCard';
 import LevelPreview from '@/adventure/components/LevelPreview';
 import type { LevelDef, ParryRequirement, ParrySpec } from '@/adventure/types';
@@ -650,6 +652,82 @@ describe('Live Multiplier Ignition & Pre-Battle Parry UI', () => {
       expect(foxBd.finalTotal).toBe(Math.round(foxBd.finalBase * foxBd.finalMult));
     } finally {
       setPowerEnabled(true);
+    }
+  });
+
+  it('[FX-24] ParryIntentBar renders a 60fps GPU scaleX fill with zero layout width percentage', () => {
+    const view = render(
+      <ParryIntentBar
+        active
+        effects
+        parry={{
+          phase: 'windup',
+          msLeft: 4000,
+          durationMs: 12000,
+          warned: false,
+          stallsUsed: 0,
+          parries: 0,
+          perfectParries: 0,
+          spec: {
+            attackName: 'Test Cleave',
+            icon: 'lorc/sword-clash',
+            counter: { kind: 'any' },
+            cooldownMs: 12000,
+            windupMs: 12000,
+            perfectWindowMs: 3500,
+            penalty: 'heart',
+          },
+        }}
+      />
+    );
+    const fill = view.getByTestId('parry-bar-fill');
+    const flat = StyleSheet.flatten(fill.props.style);
+    expect(flat.width).toBeUndefined();
+    expect(flat.left).toBe(0);
+    expect(flat.right).toBe(0);
+    expect(flat.transformOrigin).toBe('left center');
+  });
+
+  it('[FX-23] MultiplierIgnition holds LIVE tally until lead Beat.onLand (landSeq) instead of spoiling at 70ms', () => {
+    jest.useFakeTimers();
+    try {
+      const ignition = {
+        id: 101,
+        math: {
+          cards: 3,
+          baseCards: 3,
+          collateral: {},
+          flatBonus: 0,
+          multiplier: 1,
+          multItems: [],
+          rainbow: false,
+          extra: 0,
+          hit: 3,
+          diffTraits: 2,
+          graceUsed: false,
+          sinceLastMs: 1500,
+          combo: 1,
+        },
+        turnDamage: 3,
+        lethal: false,
+        isBossOrElite: false,
+        foeName: 'Dozy Bunny',
+      };
+
+      const view = render(<MultiplierIgnition ignition={ignition} enabled landSeq={0} impactMs={240} />);
+      // At 120 ms (past the old 70 ms early spoil!), tag MUST still be LIVE awaiting card impact
+      act(() => {
+        jest.advanceTimersByTime(120);
+      });
+      expect(view.getByText('LIVE')).toBeTruthy();
+      expect(view.queryByText('LAST')).toBeNull();
+
+      // Exact frame lead beat lands (landSeq increments) -> immediately slams to LAST!
+      view.rerender(<MultiplierIgnition ignition={ignition} enabled landSeq={1} impactMs={240} />);
+      expect(view.getByText('LAST')).toBeTruthy();
+      expect(view.getByTestId('multiplier-ignition-total').props.children).toBe('3');
+    } finally {
+      jest.useRealTimers();
     }
   });
 });

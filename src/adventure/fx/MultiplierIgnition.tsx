@@ -40,6 +40,8 @@ import { PASSIVE_TUNING } from '../data/passives';
 import type { Condition, Scale, Trigger } from '../rules/types';
 import type { RunState, SetIgnition } from '../types';
 import { INK } from '../components/ui';
+import { fxMs } from './clock';
+import { FX_TIMING } from './script';
 
 export type HeatTier = 0 | 1 | 2 | 3;
 
@@ -621,6 +623,10 @@ interface Props {
   enabled: boolean;
   /** Desktop landscape sidebar: allow 2 full lines of itemized receipt */
   wide?: boolean;
+  /** [FX-23] Incremented by AdventureRun on every lead `Beat.onLand` to fire the final TOTAL slam on exact impact */
+  landSeq?: number;
+  /** [FX-23] Planned flight + slip duration (ms) for distributing tally steps up to impact */
+  impactMs?: number;
   onPress?: () => void;
 }
 
@@ -686,7 +692,15 @@ const fitReceiptParts = (parts: readonly string[], maxChars: number): string => 
   return shown < parts.length ? `${out} · +${parts.length - shown} more` : out;
 };
 
-const MultiplierIgnition: React.FC<Props> = ({ ignition, run, enabled, wide = false, onPress }) => {
+const MultiplierIgnition: React.FC<Props> = ({
+  ignition,
+  run,
+  enabled,
+  wide = false,
+  landSeq,
+  impactMs = FX_TIMING.flightMs,
+  onPress,
+}) => {
   const appActive = useAppActive();
   const sysReduced = useReducedMotion();
   const animate = enabled && !sysReduced;
@@ -694,9 +708,13 @@ const MultiplierIgnition: React.FC<Props> = ({ ignition, run, enabled, wide = fa
   const breakdown = useMemo(() => (ignition ? buildBalatroBreakdown(ignition) : null), [ignition]);
   const primed = useMemo(() => (run ? computePrimedEquation(run) : null), [run]);
 
-  const [stepIdx, setStepIdx] = useState<number>(-1);
-  const [phase, setPhase] = useState<'primed' | 'tally' | 'settled'>('primed');
+  const [stepIdx, setStepIdx] = useState<number>(() => (ignition ? 0 : -1));
+  const [phase, setPhase] = useState<'primed' | 'tally' | 'settled'>(() =>
+    ignition ? (animate ? 'tally' : 'settled') : 'primed'
+  );
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const slamFnRef = useRef<(() => void) | null>(null);
+  const prevLandSeqRef = useRef<number | undefined>(landSeq);
 
   const baseScale = useSharedValue(1);
   const multScale = useSharedValue(1);
@@ -708,6 +726,7 @@ const MultiplierIgnition: React.FC<Props> = ({ ignition, run, enabled, wide = fa
   useEffect(() => {
     timers.current.forEach(clearTimeout);
     timers.current = [];
+    slamFnRef.current = null;
 
     if (!ignition || !breakdown) {
       setPhase('primed');
@@ -738,16 +757,16 @@ const MultiplierIgnition: React.FC<Props> = ({ ignition, run, enabled, wide = fa
 
     const popValue = (sv: { value: number }) => {
       sv.value = withSequence(
-        withTiming(SCALE.pop, { duration: Math.round(MS.feedback * 0.55), easing: EASE.pop }),
-        withTiming(1, { duration: Math.round(MS.feedback * 0.8), easing: EASE.ui })
+        withTiming(SCALE.pop, { duration: fxMs(Math.round(MS.feedback * 0.55)), easing: EASE.pop }),
+        withTiming(1, { duration: fxMs(Math.round(MS.feedback * 0.8)), easing: EASE.ui })
       );
     };
 
     const flashTicker = () => {
       tickerY.value = 5;
       tickerOp.value = 0.6;
-      tickerY.value = withTiming(0, { duration: Math.round(MS.feedback * 0.75), easing: EASE.enter });
-      tickerOp.value = withTiming(1, { duration: Math.round(MS.feedback * 0.75), easing: EASE.enter });
+      tickerY.value = withTiming(0, { duration: fxMs(Math.round(MS.feedback * 0.75)), easing: EASE.enter });
+      tickerOp.value = withTiming(1, { duration: fxMs(Math.round(MS.feedback * 0.75)), easing: EASE.enter });
     };
 
     // f0: immediately open tally on Step 0 (Cards base)
@@ -756,11 +775,17 @@ const MultiplierIgnition: React.FC<Props> = ({ ignition, run, enabled, wide = fa
     popValue(baseScale);
     flashTicker();
 
-    // Step through every subsequent contributor on accelerating cascadeDelay (hits peak right around f16–f22)
+    // [FX-23]: Distribute intermediate steps across 0..(impactMs - 32) scaled by fxMs so nothing finishes early
+    const plannedImpact = Math.max(80, impactMs);
+    const windowMs = Math.max(40, plannedImpact - 32);
+    const extraStepCount = breakdown.steps.length - 1;
+    let lastStepDelay = 0;
     for (let i = 1; i < breakdown.steps.length; i++) {
       const idx = i;
       const step = breakdown.steps[idx];
-      const delayMs = cascadeDelay(idx, STAGGER.item);
+      const evenDelay = Math.round((idx / extraStepCount) * windowMs);
+      const rawDelay = Math.min(cascadeDelay(idx, STAGGER.item), evenDelay);
+      lastStepDelay = Math.max(lastStepDelay, rawDelay);
       timers.current.push(
         setTimeout(() => {
           setStepIdx(idx);
@@ -770,29 +795,60 @@ const MultiplierIgnition: React.FC<Props> = ({ ignition, run, enabled, wide = fa
           else popValue(bonusScale);
           // slot: 0 guarantees zero double-offset delay; amount climbs the musical pitch cleanly
           band.cue('multStep', { slot: 0, amount: idx });
-        }, delayMs)
+        }, fxMs(rawDelay))
       );
     }
 
-    // Payoff Slam: lands cleanly after the last step (right as the thrown Set hits the foe!)
-    const slamAt = breakdown.steps.length > 1 ? cascadeDelay(breakdown.steps.length - 1, STAGGER.item) + 55 : 70;
-    timers.current.push(
-      setTimeout(() => {
-        setPhase('settled');
-        totalScale.value = 0.86;
-        totalScale.value = withSequence(
-          withTiming(SCALE.reward, { duration: Math.round(MS.feedback * 0.7), easing: EASE.pop }),
-          withSpring(1, SPRING.lively)
-        );
-        band.cue('multSlam', { slot: 0, amount: breakdown.heatTier });
-      }, slamAt)
-    );
-
-    return () => {
+    // [FX-23]: Payoff Slam fires on the exact lead `Beat.onLand` commit (`landSeq`),
+    // never spoiling damage 180 ms early at 70 ms. Safety timeout catches non-flying kills or standalone previews.
+    let slammed = false;
+    const fireSlam = () => {
+      if (slammed) return;
+      slammed = true;
+      slamFnRef.current = null;
       timers.current.forEach(clearTimeout);
       timers.current = [];
+      setStepIdx(lastIdx);
+      setPhase('settled');
+      totalScale.value = 0.86;
+      totalScale.value = withSequence(
+        withTiming(SCALE.reward, { duration: fxMs(Math.round(MS.feedback * 0.7)), easing: EASE.pop }),
+        withSpring(1, SPRING.lively)
+      );
+      band.cue('multSlam', { slot: 0, amount: breakdown.heatTier });
     };
-  }, [ignition, breakdown, animate, baseScale, multScale, bonusScale, totalScale, tickerY, tickerOp]);
+    slamFnRef.current = fireSlam;
+
+    const syncedToBeat = landSeq !== undefined;
+    const slamAtMs = syncedToBeat
+      ? Math.max(lastStepDelay + 55, plannedImpact + 120)
+      : Math.max(lastStepDelay + 32, plannedImpact);
+    timers.current.push(setTimeout(fireSlam, fxMs(slamAtMs)));
+
+    return () => {
+      slamFnRef.current = null;
+      timers.current.forEach(clearTimeout);
+      timers.current = [];
+      cancelAnimation(baseScale);
+      cancelAnimation(multScale);
+      cancelAnimation(bonusScale);
+      cancelAnimation(totalScale);
+      cancelAnimation(tickerY);
+      cancelAnimation(tickerOp);
+    };
+  }, [ignition, breakdown, animate, impactMs, baseScale, multScale, bonusScale, totalScale, tickerY, tickerOp]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Trigger final TOTAL slam on the exact frame AdventureRun's lead beat lands
+  useEffect(() => {
+    if (landSeq === undefined) {
+      prevLandSeqRef.current = undefined;
+      return;
+    }
+    if (prevLandSeqRef.current !== undefined && landSeq !== prevLandSeqRef.current) {
+      slamFnRef.current?.();
+    }
+    prevLandSeqRef.current = landSeq;
+  }, [landSeq]);
 
   const baseAnim = useAnimatedStyle(() => ({ transform: [{ scale: baseScale.value }] }));
   const multAnim = useAnimatedStyle(() => ({ transform: [{ scale: multScale.value }] }));
@@ -815,7 +871,7 @@ const MultiplierIgnition: React.FC<Props> = ({ ignition, run, enabled, wide = fa
   // If neither an ignition nor a live run is present, nothing to render
   if (!breakdown && !primed) return null;
 
-  const showingSet = Boolean(breakdown && phase !== 'primed');
+  const showingSet = Boolean(breakdown && (phase !== 'primed' || !primed));
   const activeStep = showingSet && breakdown ? breakdown.steps[Math.max(0, Math.min(stepIdx, breakdown.steps.length - 1))] : null;
 
   const shownBase = showingSet && breakdown

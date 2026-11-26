@@ -57,15 +57,15 @@ jest.mock('@/hooks/useBurnTimer', () => {
   };
 });
 
-const mockUseScreenShake = jest.fn();
-jest.mock('@/hooks/useScreenShake', () => {
-  const actual = jest.requireActual('@/hooks/useScreenShake');
+const mockUseAutoHint = jest.fn();
+jest.mock('@/hooks/useAutoHint', () => {
+  const actual = jest.requireActual('@/hooks/useAutoHint');
   return {
     __esModule: true,
     ...actual,
-    useScreenShake: (...args: unknown[]) => {
-      mockUseScreenShake(...args);
-      return actual.useScreenShake(...args);
+    useAutoHint: (...args: unknown[]) => {
+      mockUseAutoHint(...args);
+      return actual.useAutoHint(...args);
     },
   };
 });
@@ -188,7 +188,7 @@ const makeBoardCards = (): CardType[] => {
 beforeEach(() => {
   mockUseFrameCallback.mockClear();
   mockUseBurnTimer.mockClear();
-  mockUseScreenShake.mockClear();
+  mockUseAutoHint.mockClear();
   resetPerfViolations();
 });
 
@@ -196,7 +196,7 @@ afterEach(() => {
   __setAppActiveForTests(true);
   mockUseFrameCallback.mockClear();
   mockUseBurnTimer.mockClear();
-  mockUseScreenShake.mockClear();
+  mockUseAutoHint.mockClear();
   resetPerfViolations();
   jest.useRealTimers();
   jest.restoreAllMocks();
@@ -569,7 +569,7 @@ describe('Performance, Battery, and Background Lifecycle', () => {
 
       const initialClock = getByTestId('run-clock').props.accessibilityLabel;
       commits = 0;
-      mockUseScreenShake.mockClear();
+      mockUseAutoHint.mockClear();
       mockUseBurnTimer.mockClear();
 
       for (let i = 0; i < 10; i++) {
@@ -580,7 +580,7 @@ describe('Performance, Battery, and Background Lifecycle', () => {
 
       expect(commits).toBeGreaterThanOrEqual(8);
       expect(getByTestId('run-clock').props.accessibilityLabel).not.toBe(initialClock);
-      expect(mockUseScreenShake).toHaveBeenCalledTimes(0);
+      expect(mockUseAutoHint).toHaveBeenCalledTimes(0);
       expect(mockUseBurnTimer).toHaveBeenCalledTimes(0);
     });
 
@@ -701,7 +701,9 @@ describe('Performance, Battery, and Background Lifecycle', () => {
         render(<TimerHarness />);
 
         const fgSnap = getPerfSnapshot();
-        expect(fgSnap.activeIntervals).toBeGreaterThanOrEqual(4);
+        // [FX-25] useBurnTimer replaced its 100ms setInterval with a one-shot setTimeout + Reanimated withTiming,
+        // leaving 3 active foreground intervals (useGameTimer, useAutoHint, useAutoPlayer).
+        expect(fgSnap.activeIntervals).toBeGreaterThanOrEqual(3);
         expect(fgSnap.activeFrameLoops).toBeGreaterThan(0);
 
         act(() => {

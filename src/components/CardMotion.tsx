@@ -1,17 +1,33 @@
 /**
- * How a card moves in its slot: it is dealt in, it lifts when picked, and it
- * keeps hopping while it is being pointed out ("tap me"). Only transforms and
- * opacity move; the hop stops when the app is in the background, and reduced
- * motion switches all of it off but a short fade-in of a new card.
+ * How a card moves in its slot: it is dealt in, it lifts when picked, it
+ * keeps hopping while it is being pointed out ("tap me"), and when a Grace
+ * forgives a 1-trait near-miss ([FX-22]) an emerald shimmer + centered
+ * ink-outlined clover badge pops directly on the forgiven card.
  *
- * It never draws a border or an outline: those belong to selection (Card.tsx).
+ * Only transforms and opacity move; the hop stops when the app is in the
+ * background, and reduced motion or Effects off switches movement off while
+ * preserving color washes and short fades.
+ *
+ * It never draws a border or an outline on the card: those belong to selection (Card.tsx).
  */
 import React, { useEffect, useRef } from 'react';
-import { StyleSheet } from 'react-native';
-import Animated, { cancelAnimation, Easing, ReduceMotion, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withSpring, withTiming } from 'react-native-reanimated';
+import { StyleSheet, View } from 'react-native';
+import Animated, {
+  cancelAnimation,
+  Easing,
+  ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
+import Icon from '@/components/Icon';
 import { useAppActive } from '@/hooks/useAppActive';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
-import { EASE, exitMs, MS, SPRING } from '@/utils/motion';
+import { EASE, exitMs, MS, SPRING, STAYS } from '@/utils/motion';
 import { RADIUS } from '@/utils/colors';
 
 export const CARD_MOTION = {
@@ -44,14 +60,77 @@ export const CARD_MOTION = {
   /** ...is washed red (never a border: borders are for selection) */
   missWashOpacity: 0.3,
   missWashColor: '#EF4444',
-  /** ...and steps out before the board replaces it (Adventure replaces a wrong pick 520 ms after it) */
+  /** ...and steps out before the board replaces it (Adventure replaces a wrong pick 380 ms after it) */
   missLeaveAtMs: 300,
   missLeaveScale: 0.88,
   /** If nothing replaced it (a tutorial board keeps its cards), it comes back after this long */
   missReturnAtMs: 700,
   /** GameBoard keeps a card marked as missed this long (past its return) */
   missHoldMs: 900,
+  /** [FX-22] Emerald clover shimmer on the forgiven 3rd card during a Grace save */
+  graceWashColor: '#16A34A',
+  graceWashOpacity: 0.28,
+  graceFadeMs: MS.feedback,
+  graceHoldMs: 260,
+  graceBadgeHoldMs: 180,
 } as const;
+
+/**
+ * [FX-22] Crisp emerald shimmer wash + centered ink-outlined `lorc/clover` badge
+ * rendered directly over the forgiven 3rd card during a Grace save (zero card border).
+ */
+export const GraceSaveOverlay: React.FC<{ effects?: boolean }> = ({ effects = true }) => {
+  const reduced = useReducedMotion();
+  const allowMotion = effects && !reduced;
+  const washOp = useSharedValue(0);
+  const badgeOp = useSharedValue(0);
+  const badgeScale = useSharedValue(allowMotion ? 1.35 : 1);
+
+  useEffect(() => {
+    washOp.value = withSequence(
+      withTiming(CARD_MOTION.graceWashOpacity, { duration: CARD_MOTION.graceFadeMs, easing: EASE.ui, ...STAYS }),
+      withDelay(
+        CARD_MOTION.graceBadgeHoldMs - CARD_MOTION.graceFadeMs,
+        withTiming(0, { duration: exitMs(CARD_MOTION.graceFadeMs), easing: EASE.exitSoft, ...STAYS }),
+        STAYS.reduceMotion
+      )
+    );
+    badgeOp.value = withSequence(
+      withTiming(1, { duration: 48, easing: EASE.ui, ...STAYS }),
+      withDelay(
+        CARD_MOTION.graceBadgeHoldMs,
+        withTiming(0, { duration: exitMs(CARD_MOTION.graceFadeMs), easing: EASE.exitSoft, ...STAYS }),
+        STAYS.reduceMotion
+      )
+    );
+    if (allowMotion) {
+      badgeScale.value = 1.35;
+      badgeScale.value = withTiming(1, { duration: CARD_MOTION.graceFadeMs, easing: EASE.pop });
+    } else {
+      badgeScale.value = 1;
+    }
+    return () => {
+      cancelAnimation(washOp);
+      cancelAnimation(badgeOp);
+      cancelAnimation(badgeScale);
+    };
+  }, [allowMotion, washOp, badgeOp, badgeScale]);
+
+  const washStyle = useAnimatedStyle(() => ({ opacity: washOp.value }));
+  const badgeStyle = useAnimatedStyle(() => ({
+    opacity: badgeOp.value,
+    transform: [{ scale: badgeScale.value }],
+  }));
+
+  return (
+    <View testID="card-grace-clover" pointerEvents="none" style={st.graceWrap}>
+      <Animated.View style={[st.graceWash, washStyle]} />
+      <Animated.View style={[st.graceDisc, badgeStyle]}>
+        <Icon name="lorc/clover" size={22} color="#16A34A" noShadow />
+      </Animated.View>
+    </View>
+  );
+};
 
 interface Props {
   selected: boolean;
@@ -61,16 +140,27 @@ interface Props {
   dealDelayMs: number;
   /** This card was one of three that are not a Set: it shakes, washes red and steps out */
   missed?: boolean;
+  /** [FX-22] This card was forgiven by a Grace save: pop emerald clover shimmer directly on it */
+  graceSaved?: boolean;
   /** Adventure's Effects switch: off keeps the colour and the fades, drops the shake and the scale */
   effects?: boolean;
   children: React.ReactNode;
 }
 
-const CardMotion: React.FC<Props> = ({ selected, pointedOut, dealDelayMs, missed = false, effects = true, children }) => {
+const CardMotion: React.FC<Props> = ({
+  selected,
+  pointedOut,
+  dealDelayMs,
+  missed = false,
+  graceSaved = false,
+  effects = true,
+  children,
+}) => {
   const reduced = useReducedMotion();
   const appActive = useAppActive();
+  const moves = effects && !reduced;
   const dealShown = useSharedValue(0);
-  const dealScale = useSharedValue(reduced ? 1 : CARD_MOTION.dealFromScale);
+  const dealScale = useSharedValue(moves ? CARD_MOTION.dealFromScale : 1);
   const lift = useSharedValue(1);
   const hop = useSharedValue(0);
   const missX = useSharedValue(0);
@@ -79,31 +169,47 @@ const CardMotion: React.FC<Props> = ({ selected, pointedOut, dealDelayMs, missed
   const mounted = useRef(false);
 
   // Dealt in once, when the card arrives in the slot
-  // (reduced motion: no growth and no sweep, a short fade so the new card still reads as new)
+  // (reduced motion or effects off: no growth and no sweep, a short fade so the new card still reads as new)
   useEffect(() => {
-    if (reduced) {
-      // (Reanimated skips animations under reduced motion unless told this one is meant)
-      dealShown.value = withTiming(1, { duration: CARD_MOTION.dealFadeMs / 2, easing: EASE.ui, reduceMotion: ReduceMotion.Never });
-      return;
+    if (!moves) {
+      dealScale.value = 1;
+      dealShown.value = withTiming(1, {
+        duration: CARD_MOTION.dealFadeMs / 2,
+        easing: EASE.ui,
+        ...STAYS,
+      });
+    } else {
+      dealShown.value = withDelay(dealDelayMs, withTiming(1, { duration: CARD_MOTION.dealFadeMs, easing: EASE.ui }));
+      dealScale.value = withDelay(dealDelayMs, withTiming(1, { duration: CARD_MOTION.dealMs, easing: EASE.pop }));
     }
-    dealShown.value = withDelay(dealDelayMs, withTiming(1, { duration: CARD_MOTION.dealFadeMs, easing: EASE.ui }));
-    dealScale.value = withDelay(dealDelayMs, withTiming(1, { duration: CARD_MOTION.dealMs, easing: EASE.pop }));
+    return () => {
+      cancelAnimation(dealShown);
+      cancelAnimation(dealScale);
+    };
     // once, on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Picked: a quick pop, then it stays lifted
+  // Picked: a quick pop, then it stays lifted (dropped under reduced motion or Effects off)
   useEffect(() => {
-    if (reduced) return;
+    if (!moves) {
+      cancelAnimation(lift);
+      lift.value = 1;
+      return;
+    }
     if (!mounted.current) return;
     lift.value = selected
-      ? withSequence(withTiming(CARD_MOTION.pickedPopScale, { duration: CARD_MOTION.pickedPopMs, easing: EASE.ui }), withSpring(CARD_MOTION.pickedScale, SPRING.lively))
+      ? withSequence(
+          withTiming(CARD_MOTION.pickedPopScale, { duration: CARD_MOTION.pickedPopMs, easing: EASE.ui }),
+          withSpring(CARD_MOTION.pickedScale, SPRING.lively)
+        )
       : withTiming(1, { duration: MS.feedback, easing: EASE.ui });
-  }, [selected, reduced, lift]);
+    return () => cancelAnimation(lift);
+  }, [selected, moves, lift]);
 
   // Pointed out: it hops, rests, and hops again for as long as it is, so the eye keeps finding it.
   // A picked card stands still (it has been found).
-  const hopping = pointedOut && !selected && !reduced && appActive;
+  const hopping = pointedOut && !selected && moves && appActive;
   useEffect(() => {
     if (!hopping) {
       cancelAnimation(hop);
@@ -125,19 +231,26 @@ const CardMotion: React.FC<Props> = ({ selected, pointedOut, dealDelayMs, missed
 
   // A wrong pick, shown on the three cards themselves: the wash and the step out are colour and
   // opacity (kept with reduced motion or Effects off); the shake and the shrink are movement (dropped).
-  const moves = effects && !reduced;
   useEffect(() => {
     if (!missed) return;
     // (colour and opacity are kept under reduced motion: Reanimated would skip them, delays included, unless told)
     const keep = { reduceMotion: ReduceMotion.Never } as const;
     missWash.value = withSequence(
       withTiming(CARD_MOTION.missWashOpacity, { duration: MS.feedback, easing: EASE.ui, ...keep }),
-      withDelay(CARD_MOTION.missReturnAtMs - MS.feedback, withTiming(0, { duration: MS.feedback, easing: EASE.ui, ...keep }), ReduceMotion.Never)
+      withDelay(
+        CARD_MOTION.missReturnAtMs - MS.feedback,
+        withTiming(0, { duration: MS.feedback, easing: EASE.ui, ...keep }),
+        ReduceMotion.Never
+      )
     );
     const leaveMs = exitMs(MS.move);
     missLeave.value = withSequence(
       withDelay(CARD_MOTION.missLeaveAtMs, withTiming(1, { duration: leaveMs, easing: EASE.exit, ...keep }), ReduceMotion.Never),
-      withDelay(CARD_MOTION.missReturnAtMs - CARD_MOTION.missLeaveAtMs - leaveMs, withTiming(0, { duration: MS.feedback, easing: EASE.ui, ...keep }), ReduceMotion.Never)
+      withDelay(
+        CARD_MOTION.missReturnAtMs - CARD_MOTION.missLeaveAtMs - leaveMs,
+        withTiming(0, { duration: MS.feedback, easing: EASE.ui, ...keep }),
+        ReduceMotion.Never
+      )
     );
     if (moves) {
       const last = CARD_MOTION.missShakePx.length - 1;
@@ -175,6 +288,7 @@ const CardMotion: React.FC<Props> = ({ selected, pointedOut, dealDelayMs, missed
     <Animated.View style={[st.fill, style]}>
       {children}
       {missed && <Animated.View pointerEvents="none" style={[st.wash, washStyle]} />}
+      {graceSaved && <GraceSaveOverlay effects={effects} />}
     </Animated.View>
   );
 };
@@ -184,20 +298,55 @@ const CardMotion: React.FC<Props> = ({ selected, pointedOut, dealDelayMs, missed
  * stage draws its own copy of it flying off, a frame or two later: this one
  * waits for that copy to cover it, then is gone, so the slot never blinks.
  */
-export const CardLeaving: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const CardLeaving: React.FC<{
+  graceSaved?: boolean;
+  effects?: boolean;
+  children: React.ReactNode;
+}> = ({ graceSaved = false, effects = true, children }) => {
   const shown = useSharedValue(1);
   useEffect(() => {
-    shown.value = withDelay(CARD_MOTION.leaveAfterMs, withTiming(0, { duration: 1 }));
+    shown.value = withDelay(
+      graceSaved ? Math.max(CARD_MOTION.leaveAfterMs, CARD_MOTION.graceBadgeHoldMs) : CARD_MOTION.leaveAfterMs,
+      withTiming(0, { duration: 1, ...STAYS }),
+      STAYS.reduceMotion
+    );
+    return () => cancelAnimation(shown);
     // once, on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const style = useAnimatedStyle(() => ({ opacity: shown.value }));
-  return <Animated.View pointerEvents="none" style={[st.fill, style]}>{children}</Animated.View>;
+  return (
+    <Animated.View pointerEvents="none" style={[st.fill, style]}>
+      {children}
+      {graceSaved && <GraceSaveOverlay effects={effects} />}
+    </Animated.View>
+  );
 };
 
 const st = StyleSheet.create({
   fill: { flex: 1 },
   wash: { ...StyleSheet.absoluteFillObject, borderRadius: RADIUS.module, backgroundColor: CARD_MOTION.missWashColor },
+  graceWrap: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 20,
+  },
+  graceWash: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: RADIUS.module,
+    backgroundColor: CARD_MOTION.graceWashColor,
+  },
+  graceDisc: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#DCFCE7',
+    borderWidth: 2,
+    borderColor: '#161412',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });
 
 export default CardMotion;

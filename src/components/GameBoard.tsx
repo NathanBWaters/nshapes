@@ -1,6 +1,5 @@
 import React, { memo, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { View, StyleSheet } from 'react-native';
-import Animated from 'react-native-reanimated';
 import { Card as CardType, PlayerStats, CardReward, AttributeName, Weapon, Shape, Color, BoardConnection } from '@/types';
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import Card from './Card';
@@ -15,10 +14,8 @@ import { findSet, resolveMatch } from '@/utils/matchResolution';
 import { shuffleWithRng } from '@/utils/enemyEffects';
 import { useAutoHint } from '@/hooks/useAutoHint';
 import { useAutoPlayer } from '@/hooks/useAutoPlayer';
-import { useScreenShake } from '@/hooks/useScreenShake';
-import { useParticles } from '@/hooks/useParticles';
 import { STAGGER } from '@/utils/motion';
-import { triggerHaptic, selectionHaptic } from '@/utils/haptics';
+import { triggerHaptic } from '@/utils/haptics';
 import { playSelect, playSound } from '@/utils/sounds';
 import {
   InactivityBar,
@@ -216,33 +213,34 @@ const GameBoard: React.FC<GameBoardProps> = ({
     onBoardIdleChange?.(isSleepyIdle);
   }, [isSleepyIdle, onBoardIdleChange]);
 
-  // Screen shake for explosions (a wrong pick is shown on its three cards instead: CardMotion `missed`)
-  const { shakeStyle, triggerShake } = useScreenShake();
-
   // The three cards of the last wrong pick, while they show it
   const [missedCardIds, setMissedCardIds] = useState<string[]>([]);
+  const missTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const markMissed = useCallback((ids: string[]) => {
     setMissedCardIds(ids);
-    setTimeout(() => setMissedCardIds(prev => (prev === ids ? [] : prev)), CARD_MOTION.missHoldMs);
+    if (missTimerRef.current) clearTimeout(missTimerRef.current);
+    missTimerRef.current = setTimeout(() => {
+      missTimerRef.current = null;
+      setMissedCardIds(prev => (prev === ids ? [] : prev));
+    }, CARD_MOTION.missHoldMs);
   }, []);
 
-  // Particle effects for explosions
-  const { spawnParticles, Particles } = useParticles();
+  // [FX-22] Track the 3rd (forgiven) card on a Grace save so CardMotion renders the emerald clover badge
+  const [graceCardId, setGraceCardId] = useState<string | null>(null);
+  const graceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const markGraceSaved = useCallback((cardId: string) => {
+    setGraceCardId(cardId);
+    if (graceTimerRef.current) clearTimeout(graceTimerRef.current);
+    graceTimerRef.current = setTimeout(() => {
+      graceTimerRef.current = null;
+      setGraceCardId(cur => (cur === cardId ? null : cur));
+    }, CARD_MOTION.graceHoldMs);
+  }, []);
 
-  // Trigger explosion particles at estimated card positions
-  const triggerExplosionParticles = useCallback((cardCount: number) => {
-    // Spawn particles at center of board area (estimated)
-    // In a real implementation, we'd track card positions
-    const centerX = 150; // Approximate center
-    const centerY = 200;
-
-    for (let i = 0; i < cardCount; i++) {
-      // Offset each explosion slightly for visual variety
-      const offsetX = (nextRand() - 0.5) * 100;
-      const offsetY = (nextRand() - 0.5) * 100;
-      spawnParticles(15, { x: centerX + offsetX, y: centerY + offsetY }, 'explosion');
-    }
-  }, [spawnParticles, nextRand]);
+  // [FX-21] Pending 80 ms Set-confirmation timer handle so a rapid 4th tap flushes cleanly instead of colliding
+  const pendingConfirmRef = useRef<{ timer: ReturnType<typeof setTimeout>; cards: CardType[] } | null>(null);
+  const invalidDeselectTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const rewardTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   // Use ref for hints to avoid stale closure issues
   const hintsRef = useRef(playerStats.hints);
@@ -288,11 +286,18 @@ const GameBoard: React.FC<GameBoardProps> = ({
   // When the board changes, clear matched state and hints, but preserve valid selections
   useEffect(() => {
     const cardIds = new Set(cards.map(c => c.id));
+    if (pendingConfirmRef.current && !pendingConfirmRef.current.cards.every(c => cardIds.has(c.id))) {
+      clearTimeout(pendingConfirmRef.current.timer);
+      pendingConfirmRef.current = null;
+    }
     setSelectedCards(prev => {
       const next = prev.filter(c => cardIds.has(c.id));
       return next.length === prev.length ? prev : next;
     });
     setMatchedCardIds([]); // Always clear - matched cards get replaced
+    if (graceCardId && !cardIds.has(graceCardId)) {
+      setGraceCardId(null);
+    }
     // Preserve active hints across in-place board ticks (e.g. bomb timers); clear only once a hinted card leaves the board
     if (hintCardsRef.current.length > 0 && !hintCardsRef.current.every(id => cardIds.has(id))) {
       hintCardsRef.current = [];
@@ -305,7 +310,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
     if (recentAutoHintRef.current.ids.length > 0 && !recentAutoHintRef.current.ids.every(id => cardIds.has(id))) {
       recentAutoHintRef.current = { ids: [], shownAt: 0 };
     }
-  }, [cards]);
+  }, [cards]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     return () => {
@@ -313,6 +318,22 @@ const GameBoard: React.FC<GameBoardProps> = ({
         clearTimeout(autoHintTimerRef.current);
         autoHintTimerRef.current = null;
       }
+      if (pendingConfirmRef.current) {
+        clearTimeout(pendingConfirmRef.current.timer);
+        pendingConfirmRef.current = null;
+      }
+      if (missTimerRef.current) {
+        clearTimeout(missTimerRef.current);
+        missTimerRef.current = null;
+      }
+      if (graceTimerRef.current) {
+        clearTimeout(graceTimerRef.current);
+        graceTimerRef.current = null;
+      }
+      invalidDeselectTimersRef.current.forEach(clearTimeout);
+      invalidDeselectTimersRef.current = [];
+      rewardTimersRef.current.forEach(clearTimeout);
+      rewardTimersRef.current = [];
     };
   }, []);
 
@@ -453,6 +474,115 @@ const GameBoard: React.FC<GameBoardProps> = ({
     onTrigger: showAutoHint,
   });
 
+  /**
+   * [FX-21] Commits a pending 3-card selection synchronously (used both by the
+   * `CARD_MOTION.confirmMs` timer AND immediately when a fast 4th tap arrives
+   * inside the 80 ms confirmation window). Returns the set of card IDs consumed
+   * by the match/grace so a 4th tap never selects a card destroyed by collateral.
+   */
+  const commitThreeCards = (trio: CardType[]): Set<string> => {
+    const trioIds = new Set(trio.map(c => c.id));
+    // A selection that is exactly one attribute off still counts if a grace can cover it
+    const validation = isValidCombination(trio, activeAttributes);
+    const graceUsed = !validation.isValid && validation.invalidAttributes.length === 1 && playerStats.graces > 0;
+
+    if (validation.isValid || graceUsed) {
+      if (graceUsed && trio[2]) {
+        // [FX-22] Pop emerald clover shimmer directly on the forgiven 3rd card
+        markGraceSaved(trio[2].id);
+      }
+      if (graceUsed && onGraceSave) {
+        onMatchStart?.();
+        triggerHaptic('warning');
+        playSound('graceUsed');
+        const removedIds = trio.filter(c => c.health === undefined || c.health <= 1).map(c => c.id);
+        setMatchedCardIds(prev => [...prev, ...removedIds]);
+        setSelectedCards(prev => prev.filter(c => !trioIds.has(c.id)));
+        recentAutoHintRef.current = { ids: [], shownAt: 0 };
+        onGraceSave(trio);
+        return new Set(removedIds);
+      }
+      onMatchStart?.();
+      // No board flash: the Set's cards themselves are the answer (thrown in Adventure, revealed elsewhere)
+      // [AU-21]: In Adventure/Summit (`quietRewards`), impact haptics fire on `onLand(beat)` instead of 80ms early
+      if (!quietRewards || graceUsed) {
+        triggerHaptic(graceUsed ? 'warning' : 'success');
+      }
+      playSound(graceUsed ? 'graceUsed' : 'matchValid');
+
+      const matchId = ++matchCounterRef.current;
+      const { cards: affectedCards, rewards, weaponEffects, connectedCards } = resolveMatch({
+        board: cards,
+        selected: trio,
+        playerStats,
+        weapons,
+        activeAttributes,
+        connections,
+        timeGainContext,
+        graceUsed,
+        rng: nextRand,
+        procAccum,
+      });
+
+      if (weaponEffects.timeGainTriggered) onTimeGainTriggered?.();
+
+      // [FX-16]: Explosions and combat screen shake are rendered by FxStage and AdventureRun on beat land.
+      // A grace save is announced by its own sound, so the weapon sounds stay quiet
+      if (!graceUsed) {
+        if (weaponEffects.explosiveCards.length > 0) playSound('explosion');
+        if (weaponEffects.laserCount > 0) playSound('laser');
+        if (weaponEffects.ricochetCards.length > 0) playSound('ricochet');
+      }
+      if (connectedCards.length > 0) playSound('ricochet');
+
+      // Multi-hit cards (health > 1) stay on the board with one less health
+      const removedIds = affectedCards.filter(c => c.health === undefined || c.health <= 1).map(c => c.id);
+      setMatchedCardIds(prev => [...prev, ...removedIds]);
+      setSelectedCards(prev => prev.filter(c => !trioIds.has(c.id)));
+      setRevealingRewards(prev => [...prev, ...rewards.map(r => ({ ...r, matchId }))]);
+
+      const weaponsFired =
+        weaponEffects.explosiveCards.length > 0 || weaponEffects.laserCount > 0 || weaponEffects.ricochetCards.length > 0;
+      enemyReactionSeq.current += 1;
+      setEnemyReaction({ type: weaponsFired ? 'crit_pain' : 'pain', id: enemyReactionSeq.current });
+
+      // Tell the parent straight away, so the score counts even if the timer runs out mid-animation
+      const recentAuto =
+        Date.now() - recentAutoHintRef.current.shownAt <= AUTO_HINT_CREDIT_MS
+          ? recentAutoHintRef.current.ids
+          : [];
+      const hinted = trio.some(
+        c =>
+          hintCardsRef.current.includes(c.id) ||
+          recentAuto.includes(c.id) ||
+          (glowingCardIds?.includes(c.id) ?? false)
+      );
+      recentAutoHintRef.current = { ids: [], shownAt: 0 };
+      onMatch(affectedCards, rewards, weaponEffects, { hinted });
+
+      const rewardTimer = setTimeout(() => {
+        setRevealingRewards(prev => prev.filter(r => r.matchId !== matchId));
+      }, REWARD_REVEAL_MS);
+      rewardTimersRef.current.push(rewardTimer);
+      return new Set(removedIds);
+    }
+
+    // Shown on the three cards that were wrong, not on the whole board
+    markMissed(trio.map(c => c.id));
+    triggerHaptic('error');
+    playSound('matchInvalid');
+
+    enemyReactionSeq.current += 1;
+    setEnemyReaction({ type: 'taunt', id: enemyReactionSeq.current });
+    onInvalidSelection(trio);
+
+    const deselectTimer = setTimeout(() => {
+      setSelectedCards(prev => prev.filter(c => !trioIds.has(c.id)));
+    }, 380);
+    invalidDeselectTimersRef.current.push(deselectTimer);
+    return new Set();
+  };
+
   const handleCardClick = (card: CardType) => {
     const isClogged = Boolean(card.isDud || card.isFaceDown || card.locked);
     if (!isPlayerTurn || (isClogged && !allowSelectClogged)) return;
@@ -462,20 +592,41 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
     markBoardInteraction();
 
-    // If card is already selected, deselect it
+    // [FX-21] Fast tap while a 3-card Set is awaiting its 80 ms confirmMs peak:
+    if (pendingConfirmRef.current) {
+      const pending = pendingConfirmRef.current;
+      clearTimeout(pending.timer);
+      pendingConfirmRef.current = null;
+
+      // Tapping one of the 3 pending cards cancels confirmation and deselects it cleanly
+      if (pending.cards.some(c => c.id === card.id)) {
+        setSelectedCards(pending.cards.filter(c => c.id !== card.id));
+        playSelect(0);
+        return;
+      }
+
+      // Tapping a 4th card immediately commits the pending 3-card Set and starts the next Set on card 4!
+      const consumedIds = commitThreeCards(pending.cards);
+      if (consumedIds.has(card.id)) {
+        setSelectedCards([]);
+        return;
+      }
+      playSelect(1);
+      setSelectedCards([card]);
+      return;
+    }
+
+    // If card is already selected, deselect it (finger-down haptic already fired in Card.onPressIn [FX-20])
     if (selectedCards.some(c => c.id === card.id)) {
       setSelectedCards(selectedCards.filter(c => c.id !== card.id));
-      selectionHaptic(); // Light haptic on deselect
       playSelect(0);
       return;
     }
 
-    // Haptic feedback for card selection
-    selectionHaptic();
     playSelect(Math.min(3, selectedCards.length + 1));
 
-    // If already have 3 cards selected, replace the first one
-    let newSelectedCards;
+    // If already have 3 cards selected (e.g. clogged cards held for Sacrifice), replace the first one
+    let newSelectedCards: CardType[];
     if (selectedCards.length === 3) {
       newSelectedCards = [...selectedCards.slice(1), card];
     } else {
@@ -487,104 +638,16 @@ const GameBoard: React.FC<GameBoardProps> = ({
     // If any selected card is clogged (dud/locked/face-down), keep them selected for tactical Sacrifice instead of auto-judging
     if (newSelectedCards.some(c => c.isDud || c.isFaceDown || c.locked)) return;
 
-    // If we have 3 cards selected, check if they form a valid set
+    // If we have 3 cards selected, schedule confirmation at pop peak (stored in pendingConfirmRef for 4th-tap flush)
     if (newSelectedCards.length === 3) {
-      setTimeout(() => {
-        // A selection that is exactly one attribute off still counts if a grace can cover it
-        const validation = isValidCombination(newSelectedCards, activeAttributes);
-        const graceUsed = !validation.isValid && validation.invalidAttributes.length === 1 && playerStats.graces > 0;
-
-        if (validation.isValid || graceUsed) {
-          if (graceUsed && onGraceSave) {
-            onMatchStart?.();
-            triggerHaptic('warning');
-            playSound('graceUsed');
-            const removedIds = newSelectedCards.filter(c => c.health === undefined || c.health <= 1).map(c => c.id);
-            setMatchedCardIds(prev => [...prev, ...removedIds]);
-            setSelectedCards(prev => prev.filter(c => !newSelectedCards.some(mc => mc.id === c.id)));
-            recentAutoHintRef.current = { ids: [], shownAt: 0 };
-            onGraceSave(newSelectedCards);
-            return;
-          }
-          onMatchStart?.();
-          // No board flash: the Set's cards themselves are the answer (thrown in Adventure, revealed elsewhere)
-          // [AU-21]: In Adventure/Summit (`quietRewards`), impact haptics fire on `onLand(beat)` instead of 80ms early
-          if (!quietRewards || graceUsed) {
-            triggerHaptic(graceUsed ? 'warning' : 'success');
-          }
-          playSound(graceUsed ? 'graceUsed' : 'matchValid');
-
-          const matchId = ++matchCounterRef.current;
-          const { cards: affectedCards, rewards, weaponEffects, connectedCards } = resolveMatch({
-            board: cards,
-            selected: newSelectedCards,
-            playerStats,
-            weapons,
-            activeAttributes,
-            connections,
-            timeGainContext,
-            graceUsed,
-            rng: nextRand,
-            procAccum,
-          });
-
-          if (weaponEffects.timeGainTriggered) onTimeGainTriggered?.();
-
-          if (weaponEffects.explosiveCards.length > 0) {
-            triggerShake(weaponEffects.explosiveCards.length);
-            triggerExplosionParticles(weaponEffects.explosiveCards.length);
-          }
-          // A grace save is announced by its own sound, so the weapon sounds stay quiet
-          if (!graceUsed) {
-            if (weaponEffects.explosiveCards.length > 0) playSound('explosion');
-            if (weaponEffects.laserCount > 0) playSound('laser');
-            if (weaponEffects.ricochetCards.length > 0) playSound('ricochet');
-          }
-          if (connectedCards.length > 0) playSound('ricochet');
-
-          // Multi-hit cards (health > 1) stay on the board with one less health
-          const removedIds = affectedCards.filter(c => c.health === undefined || c.health <= 1).map(c => c.id);
-          setMatchedCardIds(prev => [...prev, ...removedIds]);
-          setSelectedCards(prev => prev.filter(c => !newSelectedCards.some(mc => mc.id === c.id)));
-          setRevealingRewards(prev => [...prev, ...rewards.map(r => ({ ...r, matchId }))]);
-
-          const weaponsFired =
-            weaponEffects.explosiveCards.length > 0 || weaponEffects.laserCount > 0 || weaponEffects.ricochetCards.length > 0;
-          enemyReactionSeq.current += 1;
-          setEnemyReaction({ type: weaponsFired ? 'crit_pain' : 'pain', id: enemyReactionSeq.current });
-
-          // Tell the parent straight away, so the score counts even if the timer runs out mid-animation
-          const recentAuto =
-            Date.now() - recentAutoHintRef.current.shownAt <= AUTO_HINT_CREDIT_MS
-              ? recentAutoHintRef.current.ids
-              : [];
-          const hinted = newSelectedCards.some(
-            c =>
-              hintCardsRef.current.includes(c.id) ||
-              recentAuto.includes(c.id) ||
-              (glowingCardIds?.includes(c.id) ?? false)
-          );
-          recentAutoHintRef.current = { ids: [], shownAt: 0 };
-          onMatch(affectedCards, rewards, weaponEffects, { hinted });
-
-          setTimeout(() => {
-            setRevealingRewards(prev => prev.filter(r => r.matchId !== matchId));
-          }, REWARD_REVEAL_MS);
-        } else {
-          // Shown on the three cards that were wrong, not on the whole board
-          markMissed(newSelectedCards.map(c => c.id));
-          triggerHaptic('error');
-          playSound('matchInvalid');
-
-          enemyReactionSeq.current += 1;
-          setEnemyReaction({ type: 'taunt', id: enemyReactionSeq.current });
-          onInvalidSelection(newSelectedCards);
-
-          setTimeout(() => {
-            setSelectedCards(prev => prev.filter(c => !newSelectedCards.some(mc => mc.id === c.id)));
-          }, 500);
+      const trio = newSelectedCards;
+      const timer = setTimeout(() => {
+        if (pendingConfirmRef.current?.timer === timer) {
+          pendingConfirmRef.current = null;
         }
+        commitThreeCards(trio);
       }, CARD_MOTION.confirmMs);
+      pendingConfirmRef.current = { timer, cards: trio };
     }
   };
 
@@ -640,8 +703,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
   };
 
   return (
-    <Animated.View testID="game-board" nativeID="gameboard-container" style={[styles.container, shakeStyle]}>
-      <Particles />
+    <View testID="game-board" nativeID="gameboard-container" style={styles.container}>
 
       {/* Enemy UI Overlay - Shows enemy info and status effects */}
       {enemy && enemy.name !== 'Dummy' && !hideEnemyOverlay && (
@@ -740,8 +802,8 @@ const GameBoard: React.FC<GameBoardProps> = ({
                       quietRewards ? (
                         // The stage throws a copy of this card at the foe; the card itself steps out from under it
                         <View testID="card-slot-emptied" style={styles.emptiedSlot}>
-                          <CardLeaving>
-                            <Card card={cardWithState} onClick={stableHandleCardClick} disabled isPaused />
+                          <CardLeaving graceSaved={card.id === graceCardId} effects={effects}>
+                            <Card card={cardWithState} onClick={stableHandleCardClick} disabled isPaused effects={effects} />
                           </CardLeaving>
                         </View>
                       ) : (
@@ -753,6 +815,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
                         pointedOut={isHint}
                         dealDelayMs={dealDelays.get(card.id) ?? 0}
                         missed={missedCardIds.includes(card.id)}
+                        graceSaved={card.id === graceCardId}
                         effects={effects}
                       >
                         <Card
@@ -762,6 +825,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
                           onBurnComplete={handleCardBurnComplete}
                           isPaused={isPaused}
                           isConnected={isConnected}
+                          effects={effects}
                         />
                       </CardMotion>
                     )}
@@ -776,7 +840,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
           );
         })}
       </View>
-    </Animated.View>
+    </View>
   );
 };
 
