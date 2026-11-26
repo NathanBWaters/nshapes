@@ -7,11 +7,35 @@
  */
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
+import { useReducedMotion } from 'react-native-reanimated';
 import type { Anchors } from './anchors';
 import { FX_COLOR } from './catalog';
-import type { AnchorName, Beat, Point, Rect } from './types';
+import type { AnchorName, Beat, HitTier, Point, Rect } from './types';
 import type { FightFx } from './useFightFx';
-import { Banner, Beam, centerOf, Comet, Flames, Flash, Ghost, Puff, Ring, Sparkles, Stamp, Starburst, Sweep, Tag, Ticks, unitOf } from './visuals';
+import {
+  Banner,
+  Beam,
+  BEAM_TIMING,
+  centerOf,
+  Comet,
+  Explosion,
+  explosionSlotBudgets,
+  Flames,
+  Flash,
+  Ghost,
+  ghostBendOf,
+  Puff,
+  Ring,
+  Sparkles,
+  Stamp,
+  Starburst,
+  STARBURST_DEFAULT_MS,
+  Sweep,
+  SwishRibbon,
+  Tag,
+  Ticks,
+  unitOf,
+} from './visuals';
 
 /** Most orbs one beat sends, however many cards it touched */
 const MAX_ORBS = 3;
@@ -25,8 +49,21 @@ interface Size { w: number; h: number }
 const aligned = (rects: Rect[], axis: 'x' | 'y'): boolean =>
   rects.length >= 2 && rects.every(r => Math.abs(r[axis] - rects[0][axis]) < (axis === 'x' ? r.w : r.h) / 2);
 
-/** A burst a little bigger than a card, but not a wide chip's whole width when it plays on the HUD */
-const burstSize = (r: Rect): number => Math.min(r.w * 1.3, Math.max(r.h * 1.8, 44));
+/**
+ * Contact edge where thrown Set cards hit the foe ([FX-15]): keeps impact sparks
+ * at the true hitbox/hurtbox intersection so the foe's face stays unobstructed.
+ */
+export const impactEdgeOf = (r: Rect): Point => ({
+  x: r.x + r.w * 0.16,
+  y: r.y + r.h * 0.46,
+});
+
+/**
+ * Proportional lead starburst diameter clamped to `[34..128]` px ([FX-15]):
+ * scales with target width so compact foes are never engulfed by an oversized blob.
+ */
+export const leadStarburstSize = (targetRect: Rect, tier: HitTier): number =>
+  Math.max(34, Math.min(128, Math.round(targetRect.w * (0.72 + tier * 0.14))));
 
 /**
  * Where the words pop for something that landed on this part of the HUD.
@@ -91,6 +128,7 @@ const BeatView: React.FC<{ beat: Beat; anchors: Anchors; size: Size; hideWeaponN
   // What flies, from where, to where
   const targetRect = !beat.flies ? null : inbound ? cards[0] ?? board : row.to ? anchors.rect(row.to) : null;
   const end = targetRect ? centerOf(targetRect) : null;
+  const impactAt = targetRect && row.to === 'foe' ? impactEdgeOf(targetRect) : end;
   const launch = rectsOf(beat.launch);
   const starts: Point[] = !end
     ? []
@@ -152,13 +190,20 @@ const BeatView: React.FC<{ beat: Beat; anchors: Anchors; size: Size; hideWeaponN
         const delay = boardDelay + i * 45;
         const key = `${beat.key}-${i}`;
         switch (boardFx) {
-          case 'burst':
+          case 'burst': {
+            // [FX-16]: 4-stage Flash → Fireball → Black Smoke → Embers capped <= 24 particles across all slots
+            const { cloudBudget, emberBudget } = explosionSlotBudgets(places.length, i);
             return (
-              <React.Fragment key={key}>
-                <Starburst at={centerOf(r)} size={burstSize(r)} color={color} delay={delay} />
-                <Ticks at={centerOf(r)} size={burstSize(r) * 1.3} color={color} delay={delay + 60} />
-              </React.Fragment>
+              <Explosion
+                key={key}
+                rect={r}
+                color={color}
+                delay={delay}
+                cloudBudget={cloudBudget}
+                emberBudget={emberBudget}
+              />
             );
+          }
           case 'beam':
             return <Flash key={key} rect={r} color={color} delay={60 + i * 30} />;
           case 'zap':
@@ -182,7 +227,27 @@ const BeatView: React.FC<{ beat: Beat; anchors: Anchors; size: Size; hideWeaponN
       })}
 
       {lines.map((l, i) => (
-        <Beam key={`${beat.key}-l${i}`} from={l.from} to={l.to} delay={l.delay} thickness={thickness} color={color} core={laser} hold={laser ? 150 : 70} />
+        <React.Fragment key={`${beat.key}-l${i}`}>
+          <Beam
+            from={l.from}
+            to={l.to}
+            delay={l.delay}
+            thickness={thickness}
+            color={color}
+            core={laser}
+            hold={laser ? BEAM_TIMING.defaultHoldMs : BEAM_TIMING.zapHoldMs}
+          />
+          {/* [FX-19]: Crisp ink-outlined endpoint contact sparks */}
+          <Ticks
+            at={l.to}
+            size={Math.max(24, thickness * 2.8)}
+            color={color}
+            delay={l.delay + BEAM_TIMING.endpointSparkDelayMs}
+            ms={BEAM_TIMING.endpointSparkMs}
+            tier={beat.tier}
+            testID="fx-beam-spark"
+          />
+        </React.Fragment>
       ))}
 
       {row.aura && fighter && (
@@ -205,14 +270,22 @@ const BeatView: React.FC<{ beat: Beat; anchors: Anchors; size: Size; hideWeaponN
           bend={(i % 2 ? 1 : -1) * (12 + i * 7)}
         />
       ))}
-      {lands && beat.landed && (
+      {lands && beat.landed && impactAt && (
         <>
-          {/* The Set's own hit lands as a comic burst on whatever it hits */}
+          {/* [FX-15]: Proportional contracting Starburst on the foe's impact edge so the face stays clear */}
           {beat.lead && beat.damage > 0 && targetRect && (
-            <Starburst at={end} size={Math.min(targetRect.w * 1.25, 150) + beat.tier * 14} color={color} ms={380} />
+            <Starburst
+              at={impactAt}
+              size={leadStarburstSize(targetRect, beat.tier)}
+              color={color}
+              ms={STARBURST_DEFAULT_MS}
+              testID="fx-lead-starburst"
+            />
           )}
           <Ring at={end} size={36 + beat.tier * 14 + (beat.lead ? 22 : 0)} color={color} width={beat.lead ? 4 : 3} />
-          {beat.damage > 0 && <Ticks at={end} size={54 + beat.tier * 16 + (beat.lead ? 30 : 0)} color={color} />}
+          {beat.damage > 0 && (
+            <Ticks at={impactAt} size={48 + beat.tier * 14 + (beat.lead ? 22 : 0)} color={color} tier={beat.tier} />
+          )}
         </>
       )}
 
@@ -242,20 +315,77 @@ const BeatView: React.FC<{ beat: Beat; anchors: Anchors; size: Size; hideWeaponN
 });
 BeatView.displayName = 'BeatView';
 
-/** Everything that is playing right now, drawn over the fight. Taps pass through, except on ghost cards. */
-export const FxStage: React.FC<{ fx: FightFx; anchors: Anchors; size: Size; hideWeaponNameTags?: boolean; suppressKoBanner?: boolean }> = ({ fx, anchors, size, hideWeaponNameTags, suppressKoBanner }) => (
-  <View style={st.stage} pointerEvents="box-none" testID="fx-stage">
-    {fx.ghosts.map(g => {
-      const rect = anchors.rect(`slot:${g.slot}`);
-      // A thrown card flies at the foe
-      const foe = g.how === 'throw' ? anchors.rect('foe') : null;
-      return rect ? <Ghost key={g.key} rect={rect} card={g.card} broken={g.broken} how={g.how} ms={g.ms} color={g.color} to={foe ? centerOf(foe) : null} order={g.order} /> : null;
-    })}
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {fx.beats.map(b => <BeatView key={b.key} beat={b} anchors={anchors} size={size} hideWeaponNameTags={hideWeaponNameTags} suppressKoBanner={suppressKoBanner} />)}
+/** Everything that is playing right now, drawn over the fight. Taps pass through, except on unbroken covering ghosts. */
+export const FxStage: React.FC<{
+  fx: FightFx;
+  anchors: Anchors;
+  size: Size;
+  hideWeaponNameTags?: boolean;
+  suppressKoBanner?: boolean;
+  effects?: boolean;
+}> = ({ fx, anchors, size, hideWeaponNameTags, suppressKoBanner, effects = true }) => {
+  const reducedMotion = useReducedMotion();
+  const showSwishes = effects && !reducedMotion;
+
+  return (
+    <View style={st.stage} pointerEvents="box-none" testID="fx-stage">
+      {/* [FX-11]: Curved color-matched swish ribbons behind flying thrown cards */}
+      {showSwishes && (
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          {fx.ghosts.map(g => {
+            if (g.how !== 'throw' || !g.broken) return null;
+            const rect = anchors.rect(`slot:${g.slot}`);
+            const foe = anchors.rect('foe');
+            if (!rect || !foe) return null;
+            const from = centerOf(rect);
+            const to = impactEdgeOf(foe);
+            const len = Math.hypot(to.x - from.x, to.y - from.y) || 1;
+            return (
+              <SwishRibbon
+                key={`swish-${g.key}`}
+                from={from}
+                to={to}
+                bend={ghostBendOf(len, g.order)}
+                color={g.color}
+                ms={g.ms}
+              />
+            );
+          })}
+        </View>
+      )}
+      {fx.ghosts.map(g => {
+        const rect = anchors.rect(`slot:${g.slot}`);
+        // A thrown card flies at the foe's left impact edge ([FX-11]/[FX-15])
+        const foe = g.how === 'throw' ? anchors.rect('foe') : null;
+        return rect ? (
+          <Ghost
+            key={g.key}
+            rect={rect}
+            card={g.card}
+            broken={g.broken}
+            how={g.how}
+            ms={g.ms}
+            color={g.color}
+            to={foe ? impactEdgeOf(foe) : null}
+            order={g.order}
+          />
+        ) : null;
+      })}
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        {fx.beats.map(b => (
+          <BeatView
+            key={b.key}
+            beat={b}
+            anchors={anchors}
+            size={size}
+            hideWeaponNameTags={hideWeaponNameTags}
+            suppressKoBanner={suppressKoBanner}
+          />
+        ))}
+      </View>
     </View>
-  </View>
-);
+  );
+};
 
 const st = StyleSheet.create({
   stage: { ...StyleSheet.absoluteFillObject, zIndex: 240 },

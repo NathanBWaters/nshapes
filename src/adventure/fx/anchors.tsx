@@ -5,14 +5,31 @@
  * A HUD part wraps itself in <Anchor name="coins">. The registry measures
  * every anchor against the stage (so the numbers hold on any screen size) and
  * lets the stage make one jump ("bump") when something lands on it.
+ *
+ * [FX-01] / [FX-14]: `name === 'foe'` skips `Anchor.jump` by default so
+ * `EnemyAvatar` is the single transform owner of hitstop squash/recoil, and
+ * every anchor respects `useReducedMotion()`, `quiet`, and `fxClock.slow`.
  */
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
 import { Platform, View, type StyleProp, type ViewStyle } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, {
+  cancelAnimation,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
+import { EASE, MS, SPRING } from '@/utils/motion';
+import { fxClock, fxMs } from './clock';
 import type { AnchorName, Rect } from './types';
 
 type Node = View | null;
-type Measurable = { getBoundingClientRect?: () => { left: number; top: number; width: number; height: number }; measureInWindow?: (cb: (x: number, y: number, w: number, h: number) => void) => void };
+type Measurable = {
+  getBoundingClientRect?: () => { left: number; top: number; width: number; height: number };
+  measureInWindow?: (cb: (x: number, y: number, w: number, h: number) => void) => void;
+};
 
 export interface Anchors {
   /** A stable ref callback for the View at this place */
@@ -99,8 +116,39 @@ export const useAnchors = (): Anchors => {
   }, []);
 };
 
+interface AnchorsConfig {
+  quiet: boolean;
+  skipFoeJump: boolean;
+}
+
+const DEFAULT_ANCHORS_CONFIG: AnchorsConfig = { quiet: false, skipFoeJump: true };
+
 const AnchorsContext = createContext<Anchors | null>(null);
-export const AnchorsProvider = AnchorsContext.Provider;
+const AnchorsConfigContext = createContext<AnchorsConfig>(DEFAULT_ANCHORS_CONFIG);
+
+export interface AnchorsProviderProps {
+  value: Anchors | null;
+  /** Suppresses HUD anchor jump animations when Effects are off ([FX-14]). */
+  quiet?: boolean;
+  /** Skip `Anchor.jump` on `name === 'foe'` so `EnemyAvatar` owns hitstop ([FX-01]). Defaults true. */
+  skipFoeJump?: boolean;
+  children?: React.ReactNode;
+}
+
+export const AnchorsProvider: React.FC<AnchorsProviderProps> = ({
+  value,
+  quiet = false,
+  skipFoeJump = true,
+  children,
+}) => {
+  const config = useMemo<AnchorsConfig>(() => ({ quiet, skipFoeJump }), [quiet, skipFoeJump]);
+  return (
+    <AnchorsContext.Provider value={value}>
+      <AnchorsConfigContext.Provider value={config}>{children}</AnchorsConfigContext.Provider>
+    </AnchorsContext.Provider>
+  );
+};
+
 export const useAnchorsContext = (): Anchors | null => useContext(AnchorsContext);
 
 /** Run `fn` whenever the place called `name` is bumped. */
@@ -111,19 +159,64 @@ export const useBump = (name: AnchorName, fn: () => void) => {
   useEffect(() => anchors?.onBump(name, () => latest.current()), [anchors, name]);
 };
 
+/** Pure predicate for whether an anchor should skip its scale jump ([FX-01]/[FX-14]). */
+export const shouldSkipAnchorJump = (
+  name: AnchorName,
+  opts: { skipFoeJump?: boolean; quiet?: boolean; reducedMotion?: boolean } = {}
+): boolean => {
+  if (opts.quiet || opts.reducedMotion) return true;
+  if (name === 'foe' && opts.skipFoeJump !== false) return true;
+  return false;
+};
+
 /**
  * A place the effects can aim at. Its children jump when something lands on
  * it. Outside a fight (no provider) it is a plain View.
  */
-export const Anchor: React.FC<{ name: AnchorName; style?: StyleProp<ViewStyle>; children?: React.ReactNode; testID?: string }> = ({ name, style, children, testID }) => {
+export const Anchor: React.FC<{
+  name: AnchorName;
+  style?: StyleProp<ViewStyle>;
+  children?: React.ReactNode;
+  testID?: string;
+  /** Skip scale jump on `name === 'foe'` so EnemyAvatar owns hitstop ([FX-01]). Defaults true. */
+  skipFoeJump?: boolean;
+  /** Suppress scale jump when Effects are off ([FX-14]). */
+  quiet?: boolean;
+}> = ({ name, style, children, testID, skipFoeJump, quiet }) => {
   const anchors = useAnchorsContext();
+  const config = useContext(AnchorsConfigContext);
+  const reducedMotion = useReducedMotion();
   const scale = useSharedValue(1);
+
+  const effectiveSkipFoe = skipFoeJump ?? config.skipFoeJump;
+  const effectiveQuiet = quiet ?? config.quiet;
+  const skip = shouldSkipAnchorJump(name, {
+    skipFoeJump: effectiveSkipFoe,
+    quiet: effectiveQuiet,
+    reducedMotion: Boolean(reducedMotion),
+  });
+
+  useEffect(() => {
+    if (skip) {
+      cancelAnimation(scale);
+      scale.value = 1;
+    }
+    return () => cancelAnimation(scale);
+  }, [skip, scale]);
+
   const jump = useCallback(() => {
+    if (skip) return;
+    cancelAnimation(scale);
+    const settle =
+      fxClock.slow > 1
+        ? withTiming(1, { duration: fxMs(MS.quick), easing: EASE.enterSoft })
+        : withSpring(1, SPRING.lively);
     scale.value = withSequence(
-      withTiming(1.28, { duration: 70, easing: Easing.out(Easing.quad) }),
-      withSpring(1, { damping: 9, stiffness: 320, mass: 0.6 })
+      withTiming(1.28, { duration: fxMs(70), easing: EASE.ui }),
+      settle
     );
-  }, [scale]);
+  }, [skip, scale]);
+
   useBump(name, jump);
   const st = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   return (

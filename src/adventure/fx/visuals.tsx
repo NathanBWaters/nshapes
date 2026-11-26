@@ -7,17 +7,31 @@
  */
 import React, { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import Animated, { Easing, ReduceMotion, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withTiming, type EasingFunction, type EasingFunctionFactory, type SharedValue } from 'react-native-reanimated';
-import Svg, { Polygon } from 'react-native-svg';
+import Animated, {
+  cancelAnimation,
+  Easing,
+  ReduceMotion,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withDelay,
+  withTiming,
+  type EasingFunction,
+  type EasingFunctionFactory,
+  type SharedValue,
+} from 'react-native-reanimated';
+import { Svg, Circle, Line, Path, Polygon } from 'react-native-svg';
 import Card from '@/components/Card';
 import { CARD_MOTION } from '@/components/CardMotion';
 import type { Card as CardType } from '@/types';
 import { COLORS } from '@/utils/colors';
-import { EASE as MOTION, MS, exitMs } from '@/utils/motion';
+import { EASE as MOTION, MS, STAYS, exitMs } from '@/utils/motion';
 import { fxMs } from './clock';
 import type { HitTier, Point, Rect, SweepKind } from './types';
 
 const INK = COLORS.slateCharcoal;
+/** High-contrast dark ink outline for hit sparks, shockwaves & 4-stage explosions ([FX-15]/[FX-16]). */
+const CHARCOAL_INK = '#161412';
 const WHITE = COLORS.canvasWhite;
 
 const EASE = {
@@ -38,11 +52,12 @@ export const unitOf = (r: Rect): number => Math.min(r.w, r.h);
  */
 const ON_MOUNT = 1e-4;
 
-/** 0 → 1 over `ms`, starting `delay` ms after mount. Runs once. */
+/** 0 → 1 over `ms`, starting `delay` ms after mount. Runs once with `cancelAnimation` cleanup. */
 const useProgress = (ms: number, delay = 0, easing: EasingFunction | EasingFunctionFactory = EASE.linear): SharedValue<number> => {
   const p = useSharedValue(delay > 0 ? 0 : ON_MOUNT);
   useEffect(() => {
     p.value = withDelay(fxMs(delay), withTiming(1, { duration: fxMs(ms), easing }));
+    return () => cancelAnimation(p);
     // once, on mount: a piece never restarts
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -99,37 +114,149 @@ export const Comet: React.FC<{ from: Point; to: Point; delay?: number; ms: numbe
 
 // ─── Things that land ───────────────────────────────────────────────────────
 
-/** A ring that grows out of a point and fades. */
-export const Ring: React.FC<{ at: Point; delay?: number; size: number; color: string; ms?: number; width?: number }> = ({ at, delay = 0, size, color, ms = 300, width = 3 }) => {
+/**
+ * Hollow dark-outlined shockwave ring ([FX-15]): keeps the center 100% open
+ * so the foe's hitstop expression stays unobstructed while popping against
+ * both bright skies and dark panels.
+ */
+export const Ring: React.FC<{ at: Point; delay?: number; size: number; color: string; ms?: number; width?: number; testID?: string }> = ({
+  at,
+  delay = 0,
+  size,
+  color,
+  ms = 260,
+  width = 3,
+  testID,
+}) => {
   const p = useProgress(ms, delay, EASE.out);
   const style = useAnimatedStyle(() => ({
-    opacity: p.value <= 0 ? 0 : seg(p.value, [0, 0.5, 1], [1, 0.9, 0]),
+    opacity: p.value <= 0 ? 0 : seg(p.value, [0, 0.45, 1], [1, 0.9, 0]),
     transform: [{ scale: 0.25 + 0.75 * p.value }],
   }));
+  const c = size / 2;
+  const outerStroke = width + 2.5;
+  const r = Math.max(2, c - outerStroke / 2 - 1);
   return (
     <Animated.View
-      style={[st.abs, { left: at.x - size / 2, top: at.y - size / 2, width: size, height: size, borderRadius: size / 2, borderWidth: width, borderColor: color }, style]}
-    />
+      pointerEvents="none"
+      testID={testID ?? 'fx-ring'}
+      style={[st.abs, { left: at.x - c, top: at.y - c, width: size, height: size }, style]}
+    >
+      <Svg width={size} height={size}>
+        <Circle cx={c} cy={c} r={r} fill="none" stroke={CHARCOAL_INK} strokeWidth={outerStroke} />
+        <Circle cx={c} cy={c} r={r} fill="none" stroke={color} strokeWidth={width} />
+      </Svg>
+    </Animated.View>
   );
 };
 
-const TICKS = [0, 60, 120, 180, 240, 300];
+export interface TickRaySpec {
+  deg: number;
+  /** Ray length as a fraction of overall `size` (0.18..0.34). */
+  len: number;
+  thick: number;
+}
 
-/** Short lines thrown out from a point, like a comic-book impact. */
-export const Ticks: React.FC<{ at: Point; delay?: number; size: number; color: string; ms?: number }> = ({ at, delay = 0, size, color, ms = 260 }) => {
+/**
+ * Deterministic asymmetric ink-outlined ray tables keyed by damage tier ([FX-15]):
+ * 5 rays at tier 0 · 6 rays at tier 1–2 · 7 long+short jagged rays at tier 3.
+ */
+export const TICK_RAYS: Record<HitTier, readonly TickRaySpec[]> = {
+  0: [
+    { deg: -156, len: 0.26, thick: 3.0 },
+    { deg: -104, len: 0.20, thick: 2.6 },
+    { deg: -34, len: 0.28, thick: 3.2 },
+    { deg: 42, len: 0.19, thick: 2.6 },
+    { deg: 134, len: 0.24, thick: 2.8 },
+  ],
+  1: [
+    { deg: -162, len: 0.29, thick: 3.4 },
+    { deg: -118, len: 0.21, thick: 2.8 },
+    { deg: -54, len: 0.30, thick: 3.5 },
+    { deg: 16, len: 0.20, thick: 2.8 },
+    { deg: 74, len: 0.27, thick: 3.2 },
+    { deg: 138, len: 0.22, thick: 2.9 },
+  ],
+  2: [
+    { deg: -160, len: 0.32, thick: 3.8 },
+    { deg: -116, len: 0.23, thick: 3.0 },
+    { deg: -48, len: 0.34, thick: 4.0 },
+    { deg: 18, len: 0.22, thick: 3.0 },
+    { deg: 76, len: 0.31, thick: 3.6 },
+    { deg: 134, len: 0.24, thick: 3.2 },
+  ],
+  3: [
+    { deg: -158, len: 0.34, thick: 4.2 },
+    { deg: -118, len: 0.21, thick: 3.0 },
+    { deg: -52, len: 0.33, thick: 4.2 },
+    { deg: 14, len: 0.20, thick: 3.0 },
+    { deg: 68, len: 0.34, thick: 4.0 },
+    { deg: 126, len: 0.22, thick: 3.1 },
+    { deg: 172, len: 0.30, thick: 3.8 },
+  ],
+};
+
+/**
+ * Deterministic asymmetric comic-book impact sparks outlined in `#161412` ink ([FX-15]).
+ * Expands continuously across hitstop with an open center.
+ */
+export const Ticks: React.FC<{ at: Point; delay?: number; size: number; color: string; ms?: number; tier?: HitTier; testID?: string }> = ({
+  at,
+  delay = 0,
+  size,
+  color,
+  ms = 220,
+  tier = 0,
+  testID,
+}) => {
   const p = useProgress(ms, delay, EASE.out);
   const style = useAnimatedStyle(() => ({
-    opacity: p.value <= 0 ? 0 : seg(p.value, [0, 0.6, 1], [1, 1, 0]),
+    opacity: p.value <= 0 ? 0 : seg(p.value, [0, 0.55, 1], [1, 1, 0]),
     transform: [{ scale: 0.45 + 0.75 * p.value }],
   }));
-  const len = size * 0.24;
+  const c = size / 2;
+  const rays = TICK_RAYS[tier];
+  const innerR = c * 0.34;
   return (
-    <Animated.View style={[st.abs, { left: at.x - size / 2, top: at.y - size / 2, width: size, height: size }, style]}>
-      {TICKS.map(deg => (
-        <View key={deg} style={[st.abs, { left: size / 2 - 1.5, top: 0, width: 3, height: size, transform: [{ rotate: `${deg}deg` }] }]}>
-          <View style={{ width: 3, height: len, borderRadius: 2, backgroundColor: color }} />
-        </View>
-      ))}
+    <Animated.View
+      pointerEvents="none"
+      testID={testID ?? 'fx-ticks'}
+      style={[st.abs, { left: at.x - c, top: at.y - c, width: size, height: size }, style]}
+    >
+      <Svg width={size} height={size}>
+        {rays.map((ray, idx) => {
+          const rad = (ray.deg * Math.PI) / 180;
+          const cos = Math.cos(rad);
+          const sin = Math.sin(rad);
+          const outerR = Math.min(c - 3, innerR + size * ray.len);
+          const x1 = c + cos * innerR;
+          const y1 = c + sin * innerR;
+          const x2 = c + cos * outerR;
+          const y2 = c + sin * outerR;
+          return (
+            <React.Fragment key={idx}>
+              <Line
+                x1={x1}
+                y1={y1}
+                x2={x2}
+                y2={y2}
+                stroke={CHARCOAL_INK}
+                strokeWidth={ray.thick + 3}
+                strokeLinecap="round"
+              />
+              <Line
+                x1={x1}
+                y1={y1}
+                x2={x2}
+                y2={y2}
+                stroke={color}
+                strokeWidth={ray.thick}
+                strokeLinecap="round"
+              />
+            </React.Fragment>
+          );
+        })}
+      </Svg>
     </Animated.View>
   );
 };
@@ -144,24 +271,42 @@ const starPoints = (spikes: number, outer: number, inner: number, c: number): st
   return pts.join(' ');
 };
 
+/** Default dissipation time for comic impact Starburst ([FX-15]: fast 220 ms contraction). */
+export const STARBURST_DEFAULT_MS = 220;
+
 /**
- * A spiky comic explosion: there at most of its size on the frame of the hit, past it two frames later,
- * settled by the sixth, then it swells a little as it fades. (Progress is eased, so the keys are in eased time.)
+ * Fast contracting comic impact burst ([FX-15]): crisp full-opacity peak over
+ * 0..48% (~105 ms), then fades while contracting `1.12 → 0.72` so the foe's
+ * hitstop expression reads clearly right after impact.
  */
-export const Starburst: React.FC<{ at: Point; delay?: number; size: number; color: string; ms?: number }> = ({ at, delay = 0, size, color, ms = 440 }) => {
+export const Starburst: React.FC<{ at: Point; delay?: number; size: number; color: string; ms?: number; testID?: string }> = ({
+  at,
+  delay = 0,
+  size,
+  color,
+  ms = STARBURST_DEFAULT_MS,
+  testID,
+}) => {
   const p = useProgress(ms, delay, MOTION.ui);
   const style = useAnimatedStyle(() => {
     const t = p.value;
     return {
-      opacity: t <= 0 ? 0 : seg(t, [0, 0.75, 1], [1, 1, 0]),
-      transform: [{ scale: seg(t, [0, 0.3, 0.5, 1], [0.7, 1.15, 1, 1.25]) }, { rotate: `${seg(t, [0, 1], [-14, 10])}deg` }],
+      opacity: t <= 0 ? 0 : seg(t, [0, 0.48, 1], [1, 1, 0]),
+      transform: [
+        { scale: seg(t, [0, 0.18, 0.48, 1], [0.76, 1.12, 1.02, 0.72]) },
+        { rotate: `${seg(t, [0, 1], [-12, 8])}deg` },
+      ],
     };
   });
   const c = size / 2;
   return (
-    <Animated.View style={[st.abs, { left: at.x - c, top: at.y - c, width: size, height: size }, style]}>
+    <Animated.View
+      pointerEvents="none"
+      testID={testID ?? 'fx-starburst'}
+      style={[st.abs, { left: at.x - c, top: at.y - c, width: size, height: size }, style]}
+    >
       <Svg width={size} height={size}>
-        <Polygon points={starPoints(11, c - 2, c * 0.6, c)} fill={color} stroke={INK} strokeWidth={2.5} strokeLinejoin="round" />
+        <Polygon points={starPoints(11, c - 2, c * 0.58, c)} fill={color} stroke={CHARCOAL_INK} strokeWidth={2.5} strokeLinejoin="round" />
         <Polygon points={starPoints(9, c * 0.56, c * 0.3, c)} fill="#FFE45C" />
         <Polygon points={starPoints(6, c * 0.26, c * 0.12, c)} fill={WHITE} />
       </Svg>
@@ -169,15 +314,334 @@ export const Starburst: React.FC<{ at: Point; delay?: number; size: number; colo
   );
 };
 
-// ─── Lines ──────────────────────────────────────────────────────────────────
+// ─── 4-Stage Explosion ([FX-16]) ────────────────────────────────────────────
+
+/** Global simultaneous smoke + ember particle ceiling across multi-card blasts (Ep. #242). */
+export const MAX_EXPLOSION_EMBERS = 24;
+
+/** Sakurai Ep. #056 timing choreography: Flash → Fireball → Black Smoke → Embers. */
+export const EXPLOSION_TIMING = {
+  flashMs: 32,
+  fireballDelayMs: 16,
+  fireballMs: 114,
+  smokeDelayMs: 85,
+  smokeMs: 235,
+  emberDelayMs: 100,
+  emberMs: 280,
+  totalMs: 380,
+} as const;
 
 /**
- * A beam drawn from one point to another: shoots out, flickers, then thins
- * away. Lasers, the bolts of a ricochet and links are all this.
+ * Compute deterministic per-slot smoke + ember budgets so total rendered
+ * particles across any `slotCount` simultaneously blasted slots never exceeds
+ * `MAX_EXPLOSION_EMBERS` (24).
  */
-export const Beam: React.FC<{ from: Point; to: Point; delay?: number; thickness: number; color: string; hold?: number; core?: boolean }> = ({ from, to, delay = 0, thickness, color, hold = 150, core = true }) => {
-  const grow = 90;
-  const fade = 130;
+export const explosionSlotBudgets = (
+  slotCount: number,
+  slotIndex: number
+): { cloudBudget: number; emberBudget: number } => {
+  if (slotCount <= 0) return { cloudBudget: 4, emberBudget: 6 };
+  if (slotCount <= 2) return { cloudBudget: 4, emberBudget: 6 };
+  if (slotCount === 3) return { cloudBudget: 3, emberBudget: 5 };
+  if (slotCount === 4) return { cloudBudget: 3, emberBudget: 3 };
+  const base = Math.floor(MAX_EXPLOSION_EMBERS / slotCount);
+  const extra = MAX_EXPLOSION_EMBERS % slotCount;
+  const slotTotal = base + (slotIndex < extra ? 1 : 0);
+  if (slotTotal <= 0) return { cloudBudget: 0, emberBudget: 0 };
+  if (slotTotal === 1) return { cloudBudget: 1, emberBudget: 0 };
+  const cloudBudget = Math.min(4, Math.max(1, Math.floor(slotTotal / 2)));
+  const emberBudget = Math.min(6, slotTotal - cloudBudget);
+  return { cloudBudget, emberBudget };
+};
+
+const SMOKE_CLOUDS = [
+  { dx: -0.22, dy: -0.14, sizeShare: 0.56, fill: '#2D2926', delay: 0 },
+  { dx: 0.24, dy: -0.06, sizeShare: 0.50, fill: '#44403C', delay: 18 },
+  { dx: -0.04, dy: -0.26, sizeShare: 0.60, fill: '#1E1B18', delay: 32 },
+  { dx: 0.10, dy: 0.16, sizeShare: 0.46, fill: '#3B3632', delay: 44 },
+] as const;
+
+const EXPLOSION_EMBERS = [
+  { deg: -148, dist: 0.66, sizeShare: 0.19, fill: '#FFE84D', delay: 0, spin: -90 },
+  { deg: -96, dist: 0.72, sizeShare: 0.16, fill: '#FF7A1A', delay: 16, spin: 75 },
+  { deg: -36, dist: 0.68, sizeShare: 0.18, fill: '#FFF6C2', delay: 8, spin: 105 },
+  { deg: 28, dist: 0.60, sizeShare: 0.15, fill: '#FFE84D', delay: 24, spin: -80 },
+  { deg: 112, dist: 0.58, sizeShare: 0.17, fill: '#FF7A1A', delay: 12, spin: 95 },
+  { deg: 168, dist: 0.64, sizeShare: 0.15, fill: '#FFF6C2', delay: 28, spin: -110 },
+] as const;
+
+const ExplosionFlashStage: React.FC<{ at: Point; size: number; delay: number }> = ({ at, size, delay }) => {
+  const p = useProgress(EXPLOSION_TIMING.flashMs, delay, EASE.linear);
+  const style = useAnimatedStyle(() => {
+    const t = p.value;
+    return {
+      // High-contrast 2-frame flash with an instant cut at 32 ms
+      opacity: t <= 0 || t >= 0.99 ? 0 : 1,
+      transform: [{ scale: 0.6 + 0.45 * t }],
+    };
+  });
+  const c = size / 2;
+  return (
+    <Animated.View
+      pointerEvents="none"
+      testID="fx-explosion-flash"
+      style={[
+        st.abs,
+        {
+          left: at.x - c,
+          top: at.y - c,
+          width: size,
+          height: size,
+          borderRadius: c,
+          backgroundColor: '#FFF6C2',
+          borderWidth: 3,
+          borderColor: CHARCOAL_INK,
+        },
+        style,
+      ]}
+    />
+  );
+};
+
+const ExplosionFireballStage: React.FC<{ at: Point; size: number; color: string; delay: number }> = ({ at, size, color, delay }) => {
+  const p = useProgress(EXPLOSION_TIMING.fireballMs, delay + EXPLOSION_TIMING.fireballDelayMs, MOTION.enter);
+  const style = useAnimatedStyle(() => {
+    const t = p.value;
+    return {
+      opacity: t <= 0 ? 0 : seg(t, [0, 0.68, 1], [1, 0.95, 0]),
+      transform: [
+        { scale: seg(t, [0, 0.55, 1], [0.35, 1.18, 1.04]) },
+        { rotate: `${seg(t, [0, 1], [-10, 12])}deg` },
+      ],
+    };
+  });
+  const c = size / 2;
+  return (
+    <Animated.View
+      pointerEvents="none"
+      testID="fx-explosion-fireball"
+      style={[st.abs, { left: at.x - c, top: at.y - c, width: size, height: size }, style]}
+    >
+      <Svg width={size} height={size}>
+        <Polygon points={starPoints(10, c - 2, c * 0.62, c)} fill={color} stroke={CHARCOAL_INK} strokeWidth={2.5} strokeLinejoin="round" />
+        <Polygon points={starPoints(8, c * 0.58, c * 0.34, c)} fill="#FFE45C" />
+        <Polygon points={starPoints(6, c * 0.28, c * 0.14, c)} fill="#FFFDF5" />
+      </Svg>
+    </Animated.View>
+  );
+};
+
+const ExplosionSmokeCloud: React.FC<{ at: Point; u: number; dx: number; dy: number; size: number; fill: string; delay: number }> = ({
+  at,
+  u,
+  dx,
+  dy,
+  size,
+  fill,
+  delay,
+}) => {
+  const p = useProgress(EXPLOSION_TIMING.smokeMs, delay, EASE.out);
+  const rise = -u * 0.25;
+  const style = useAnimatedStyle(() => {
+    const t = p.value;
+    return {
+      opacity: t <= 0 ? 0 : seg(t, [0, 0.22, 0.58, 1], [0.92, 0.95, 0.85, 0]),
+      transform: [
+        { translateX: dx * t },
+        { translateY: dy * t + rise * t },
+        { scale: 0.45 + 0.7 * t },
+      ],
+    };
+  });
+  const half = size / 2;
+  return (
+    <Animated.View
+      pointerEvents="none"
+      testID="fx-explosion-smoke"
+      style={[
+        st.abs,
+        {
+          left: at.x - half,
+          top: at.y - half,
+          width: size,
+          height: size,
+          borderRadius: half,
+          backgroundColor: fill,
+          borderWidth: 2,
+          borderColor: CHARCOAL_INK,
+        },
+        style,
+      ]}
+    />
+  );
+};
+
+const ExplosionEmberShard: React.FC<{ at: Point; deg: number; dist: number; size: number; fill: string; delay: number; spin: number }> = ({
+  at,
+  deg,
+  dist,
+  size,
+  fill,
+  delay,
+  spin,
+}) => {
+  const p = useProgress(EXPLOSION_TIMING.emberMs, delay, EASE.out);
+  const rad = (deg * Math.PI) / 180;
+  const dx = Math.cos(rad) * dist;
+  const dy = Math.sin(rad) * dist;
+  const half = size / 2;
+  const style = useAnimatedStyle(() => {
+    const t = p.value;
+    return {
+      opacity: t <= 0 ? 0 : seg(t, [0, 0.65, 1], [1, 0.95, 0]),
+      transform: [
+        { translateX: dx * t },
+        // subtle upward lift then gravity curve across dissipation
+        { translateY: dy * t - 6 * Math.sin(Math.PI * t) },
+        { scale: seg(t, [0, 0.2, 1], [0.95, 1, 0]) },
+        { rotate: `${deg + spin * t}deg` },
+      ],
+    };
+  });
+  return (
+    <Animated.View
+      pointerEvents="none"
+      testID="fx-explosion-ember"
+      style={[st.abs, { left: at.x - half, top: at.y - half, width: size, height: size }, style]}
+    >
+      <Svg width={size} height={size} viewBox="0 0 16 16">
+        <Polygon points="8,1 13,8 8,15 3,8" fill={fill} stroke={CHARCOAL_INK} strokeWidth={1.8} />
+      </Svg>
+    </Animated.View>
+  );
+};
+
+const ExplosionReduced: React.FC<{ at: Point; size: number; color: string; delay: number }> = ({ at, size, color, delay }) => {
+  const p = useSharedValue(delay > 0 ? 0 : ON_MOUNT);
+  useEffect(() => {
+    p.value = withDelay(
+      fxMs(delay),
+      withTiming(1, { duration: fxMs(180), easing: MOTION.ui, ...STAYS }),
+      STAYS.reduceMotion
+    );
+    return () => cancelAnimation(p);
+    // once, on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const style = useAnimatedStyle(() => ({
+    opacity: p.value <= 0 ? 0 : seg(p.value, [0, 0.4, 1], [0.9, 0.85, 0]),
+  }));
+  const c = size / 2;
+  return (
+    <Animated.View
+      pointerEvents="none"
+      testID="fx-explosion-flash"
+      style={[st.abs, { left: at.x - c, top: at.y - c, width: size, height: size }, style]}
+    >
+      <Svg width={size} height={size}>
+        <Polygon points={starPoints(10, c - 2, c * 0.62, c)} fill={color} stroke={CHARCOAL_INK} strokeWidth={2.5} strokeLinejoin="round" />
+      </Svg>
+    </Animated.View>
+  );
+};
+
+/**
+ * Deterministic 4-stage Sakurai explosion ([FX-16], Ep. #056 & #242):
+ *   1. Flash (`0–32 ms`): ink-rimmed cream flash (`#FFF6C2` + `#161412`)
+ *   2. Fireball (`16–130 ms`): expanding orange/yellow polygon burst
+ *   3. Black Smoke (`85–320 ms`): billowing dark charcoal/ink clouds rolling upward
+ *   4. Embers (`100–380 ms`): budget-capped sharp diamond shards arcing outward
+ */
+export const Explosion: React.FC<{
+  rect: Rect;
+  color?: string;
+  delay?: number;
+  cloudBudget?: number;
+  emberBudget?: number;
+  testID?: string;
+}> = ({ rect, color = '#FF7A1A', delay = 0, cloudBudget = 4, emberBudget = 6, testID }) => {
+  const reduced = useReducedMotion();
+  const at = centerOf(rect);
+  const u = Math.max(36, unitOf(rect));
+  const flashSize = Math.round(u * 0.96);
+  const fireballSize = Math.round(Math.min(rect.w * 1.28, Math.max(u * 1.32, 46)));
+  const clouds = SMOKE_CLOUDS.slice(0, Math.max(0, Math.min(SMOKE_CLOUDS.length, cloudBudget)));
+  const embers = EXPLOSION_EMBERS.slice(0, Math.max(0, Math.min(EXPLOSION_EMBERS.length, emberBudget)));
+
+  if (reduced) {
+    return (
+      <View pointerEvents="none" testID={testID ?? 'fx-explosion'} style={StyleSheet.absoluteFill}>
+        <ExplosionReduced at={at} size={fireballSize} color={color} delay={delay} />
+      </View>
+    );
+  }
+
+  return (
+    <View pointerEvents="none" testID={testID ?? 'fx-explosion'} style={StyleSheet.absoluteFill}>
+      {/* Stage 3 smoke behind fireball flash handoff, rising cleanly as flames fade */}
+      {clouds.map((cl, idx) => (
+        <ExplosionSmokeCloud
+          key={`smoke-${idx}`}
+          at={at}
+          u={u}
+          dx={cl.dx * u}
+          dy={cl.dy * u}
+          size={Math.max(18, Math.round(u * cl.sizeShare))}
+          fill={cl.fill}
+          delay={delay + EXPLOSION_TIMING.smokeDelayMs + cl.delay}
+        />
+      ))}
+      {/* Stage 2 expanding layered fireball */}
+      <ExplosionFireballStage at={at} size={fireballSize} color={color} delay={delay} />
+      {/* Stage 1 2-frame high-contrast flash */}
+      <ExplosionFlashStage at={at} size={flashSize} delay={delay} />
+      {/* Stage 4 budget-capped diamond embers */}
+      {embers.map((em, idx) => (
+        <ExplosionEmberShard
+          key={`ember-${idx}`}
+          at={at}
+          deg={em.deg}
+          dist={u * em.dist}
+          size={Math.max(10, Math.round(u * em.sizeShare))}
+          fill={em.fill}
+          delay={delay + EXPLOSION_TIMING.emberDelayMs + em.delay}
+          spin={em.spin}
+        />
+      ))}
+    </View>
+  );
+};
+
+// ─── Lines ([FX-19]) ────────────────────────────────────────────────────────
+
+/** 2-frame snap beam timings & 30 Hz core flicker parameters ([FX-19]). */
+export const BEAM_TIMING = {
+  growMs: 28,
+  defaultHoldMs: 140,
+  zapHoldMs: 70,
+  fadeMs: 110,
+  flickerHz: 30,
+  endpointSparkDelayMs: 24,
+  endpointSparkMs: 180,
+} as const;
+
+/**
+ * A beam drawn from one point to another ([FX-19]): snaps across the whole
+ * span in 2 frames (`28 ms`), crackles at 30 Hz during hold, then thins sharply.
+ */
+export const Beam: React.FC<{
+  from: Point;
+  to: Point;
+  delay?: number;
+  thickness: number;
+  color: string;
+  hold?: number;
+  core?: boolean;
+  testID?: string;
+}> = ({ from, to, delay = 0, thickness, color, hold = BEAM_TIMING.defaultHoldMs, core = true, testID }) => {
+  const still = useReducedMotion();
+  const grow = BEAM_TIMING.growMs;
+  const fade = BEAM_TIMING.fadeMs;
   const total = grow + hold + fade;
   const p = useProgress(total, delay);
   const len = Math.hypot(to.x - from.x, to.y - from.y);
@@ -186,25 +650,61 @@ export const Beam: React.FC<{ from: Point; to: Point; delay?: number; thickness:
   const b = (grow + hold) / total;
   const style = useAnimatedStyle(() => {
     const t = p.value;
+    const u = a > 0 ? Math.min(1, t / a) : 1;
+    const inv = 1 - u;
+    const snapX = still ? 1 : t < a ? 0.04 + 0.96 * (1 - inv * inv * inv) : 1;
+    const holdSec = ((t - a) * total) / 1000;
+    const crackleY = still ? 1 : 1 + 0.34 * Math.sin(holdSec * Math.PI * BEAM_TIMING.flickerHz);
     return {
       opacity: t <= 0 || t >= 1 ? 0 : 1,
       transform: [
         { rotate: `${angle}rad` },
-        { scaleX: seg(t, [0, a], [0.02, 1]) },
-        { scaleY: t < a ? 1 : t < b ? 1 + 0.3 * Math.sin(((t - a) / (b - a)) * Math.PI * 3) : seg(t, [b, 1], [1, 0.05]) },
+        { scaleX: snapX },
+        { scaleY: t < a ? 1 : t < b ? crackleY : seg(t, [b, 1], [1, 0.05]) },
       ],
+    };
+  });
+  const coreStyle = useAnimatedStyle(() => {
+    const t = p.value;
+    if (still || t < a || t >= b) return { opacity: 0.95 };
+    const holdSec = ((t - a) * total) / 1000;
+    return {
+      opacity: 0.72 + 0.28 * Math.cos(holdSec * Math.PI * BEAM_TIMING.flickerHz),
     };
   });
   return (
     <Animated.View
+      pointerEvents="none"
+      testID={testID ?? 'fx-beam'}
       style={[
         st.abs,
         st.inked,
-        { left: from.x, top: from.y - thickness / 2, width: len, height: thickness, borderRadius: thickness / 2, backgroundColor: color, transformOrigin: 'left center', justifyContent: 'center' },
+        {
+          left: from.x,
+          top: from.y - thickness / 2,
+          width: len,
+          height: thickness,
+          borderRadius: thickness / 2,
+          backgroundColor: color,
+          transformOrigin: 'left center',
+          justifyContent: 'center',
+        },
         style,
       ]}
     >
-      {core && <View style={{ height: Math.max(2, thickness * 0.34), marginHorizontal: thickness * 0.3, borderRadius: thickness, backgroundColor: WHITE }} />}
+      {core && (
+        <Animated.View
+          style={[
+            {
+              height: Math.max(2, thickness * 0.36),
+              marginHorizontal: thickness * 0.28,
+              borderRadius: thickness,
+              backgroundColor: WHITE,
+            },
+            coreStyle,
+          ]}
+        />
+      )}
     </Animated.View>
   );
 };
@@ -370,6 +870,11 @@ export const Stamp: React.FC<{ at: Point; text: string; color: string; tier?: Hi
     p.value = withDelay(fxMs(delay), withTiming(1, { duration: fxMs(total), easing: EASE.linear, ...timed }), ReduceMotion.Never);
     land.value = withDelay(fxMs(delay), withTiming(1, { duration: fxMs(MS.feedback), easing: MOTION.enter, ...timed }), ReduceMotion.Never);
     leave.value = withDelay(fxMs(delay + hold), withTiming(1, { duration: fxMs(out), easing: MOTION.exit, ...timed }), ReduceMotion.Never);
+    return () => {
+      cancelAnimation(p);
+      cancelAnimation(land);
+      cancelAnimation(leave);
+    };
     // once, on mount: a piece never restarts
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -463,84 +968,257 @@ export const Tag: React.FC<{ at: Point; text: string; maxX: number }> = ({ at, t
   );
 };
 
-// ─── A card that is no longer there ─────────────────────────────────────────
+// ─── A card that is no longer there ([FX-11]) ───────────────────────────────
 
 /** How a card leaves: 'throw' is the Set's own cards, flung at whatever the Set hits */
 export type GhostBreak = 'shatter' | 'vaporise' | 'throw';
 
-/** The throw of the Set's own cards, as shares of its flight and pixels */
-const THROW = {
-  /** Share of the flight spent being picked up before it leaves */
-  pickUp: 0.2,
-  /** How big it is when picked up, and when it reaches the target */
-  lift: 1.1,
-  arrive: 0.3,
-  /** How far it draws back, away from the target, as it is picked up (px) */
-  drawBack: 8,
-  /** Its speed as it leaves, as a share of an even pace (0 = a plain ease-in, 1 = linear) */
-  launch: 0.35,
-  /** The bow at the middle of the flight: this share of the distance, at most `bowMax` px; the cards fan `fan` px apart */
-  bowShare: 0.06,
-  bowMax: 20,
-  fan: 10,
+/** Exaggerated throw physics for Set cards ([FX-11]: velocity stretch, bolder pullback/bank & wobble). */
+export const THROW_PHYSICS = {
+  /** Share of the flight spent coiling back before launch */
+  pickUp: 0.16,
+  /** Scale at wind-up apex and at target contact */
+  lift: 1.14,
+  arrive: 0.34,
+  /** Pullback distance away from target at 90 px card reference (px) */
+  drawBack: 16,
+  /** Maximum mid-flight bank angle (±deg) */
+  bankDeg: 42,
+  /** Volume-preserving mid-flight velocity stretch (scaleY / scaleX ≈ 1.18 / 0.86) */
+  stretchPeakY: 1.18,
+  squashPeakX: 0.86,
+  /** Transverse off-center wobble amplitude (px) */
+  wobblePx: 3,
+  /** Initial velocity share on release */
+  launch: 0.38,
+  /** Arc bow fraction, cap, and 3-card fan spread (px) */
+  bowShare: 0.07,
+  bowMax: 24,
+  fan: 12,
 } as const;
+
+/** Shared flight arc bow so `Ghost` and `SwishRibbon` follow the exact same curve. */
+export const ghostBendOf = (len: number, order = 0): number =>
+  Math.max(4, Math.min(THROW_PHYSICS.bowMax, len * THROW_PHYSICS.bowShare) + (order - 1) * THROW_PHYSICS.fan);
+
+const TIER_HOLD_MS = [48, 64, 96, 136] as const;
+const MOVE_HOLD_MULT: Record<string, number> = {
+  hit: 1,
+  rainbow: 1.15,
+  surge_hit: 1.2,
+  blast: 1.25,
+  pinata_break: 1.25,
+  laser: 0.9,
+  ricochet: 0.85,
+  link_burst: 0.85,
+  parry: 1.15,
+  perfect_parry: 1.35,
+};
+
+/** Impact freeze duration (ms) matching Sakurai's tier-scaled hitstop table ([FX-06]/[FX-11]). */
+export const ghostHitstopHoldMs = (tier: HitTier, moveKind?: string): number =>
+  Math.min(145, Math.round(TIER_HOLD_MS[tier] * ((moveKind && MOVE_HOLD_MULT[moveKind]) || 1)));
 
 /** How long each way of leaving takes (the stage keeps the ghost mounted this long) */
 export const GHOST_BREAK_MS: Record<GhostBreak, number> = { shatter: 240, vaporise: 240, throw: 300 };
+
+/** Sample a point on a quadratic Bézier curve `P0 -> C -> P2` at `t` in `[0, 1]`. */
+const quadPt = (p0: Point, ctrl: Point, p2: Point, t: number): Point => {
+  const m = 1 - t;
+  return {
+    x: m * m * p0.x + 2 * m * t * ctrl.x + t * t * p2.x,
+    y: m * m * p0.y + 2 * m * t * ctrl.y + t * t * p2.y,
+  };
+};
+
+const subCurvePath = (p0: Point, ctrl: Point, p2: Point, t0: number, t1: number): string => {
+  const a = quadPt(p0, ctrl, p2, t0);
+  const mid = quadPt(p0, ctrl, p2, (t0 + t1) / 2);
+  const b = quadPt(p0, ctrl, p2, t1);
+  // Control point that passes the quadratic through `mid` at 0.5
+  const cx = 2 * mid.x - 0.5 * (a.x + b.x);
+  const cy = 2 * mid.y - 0.5 * (a.y + b.y);
+  return `M ${a.x.toFixed(1)} ${a.y.toFixed(1)} Q ${cx.toFixed(1)} ${cy.toFixed(1)} ${b.x.toFixed(1)} ${b.y.toFixed(1)}`;
+};
+
+/**
+ * Curved color-matched swish ribbon trailing a thrown `Ghost` card ([FX-11], Ep. #177).
+ * Three width-tapered quadratic Bézier segments with `#161412` ink outer stroke;
+ * strictly GPU `opacity` animated and skipped under `useReducedMotion()`.
+ */
+export const SwishRibbon: React.FC<{
+  from: Point;
+  to: Point;
+  bend: number;
+  color: string;
+  delay?: number;
+  ms: number;
+  testID?: string;
+}> = ({ from, to, bend, color, delay = 0, ms, testID }) => {
+  const reduced = useReducedMotion();
+  const total = Math.max(80, ms + 70);
+  const p = useProgress(total, delay, EASE.linear);
+
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const len = Math.hypot(dx, dy) || 1;
+  // Matches Ghost's sideways normal `(uy, -ux)` so the ribbon traces the exact flight arc
+  const ux = dx / len;
+  const uy = dy / len;
+  const ctrl: Point = {
+    x: (from.x + to.x) / 2 + uy * bend * 1.4,
+    y: (from.y + to.y) / 2 - ux * bend * 1.4,
+  };
+
+  const pad = 28;
+  const minX = Math.min(from.x, to.x, ctrl.x) - pad;
+  const minY = Math.min(from.y, to.y, ctrl.y) - pad;
+  const w = Math.max(24, Math.max(from.x, to.x, ctrl.x) + pad - minX);
+  const h = Math.max(24, Math.max(from.y, to.y, ctrl.y) + pad - minY);
+
+  const lp0: Point = { x: from.x - minX, y: from.y - minY };
+  const lctrl: Point = { x: ctrl.x - minX, y: ctrl.y - minY };
+  const lp2: Point = { x: to.x - minX, y: to.y - minY };
+
+  const segTail = subCurvePath(lp0, lctrl, lp2, 0.04, 0.42);
+  const segMid = subCurvePath(lp0, lctrl, lp2, 0.34, 0.76);
+  const segHead = subCurvePath(lp0, lctrl, lp2, 0.66, 0.99);
+
+  const style = useAnimatedStyle(() => {
+    const t = p.value;
+    return {
+      opacity: t <= 0 || t >= 1 ? 0 : seg(t, [0, 0.16, 0.68, 1], [0, 0.9, 0.8, 0]),
+    };
+  });
+
+  if (reduced) return null;
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      testID={testID ?? 'fx-swish-ribbon'}
+      style={[st.abs, { left: minX, top: minY, width: w, height: h }, style]}
+    >
+      <Svg width={w} height={h}>
+        {/* Crisp 1.5 px ink outer outline along the tapered swish */}
+        <Path d={segTail} fill="none" stroke={CHARCOAL_INK} strokeWidth={7} strokeLinecap="round" opacity={0.45} />
+        <Path d={segMid} fill="none" stroke={CHARCOAL_INK} strokeWidth={11} strokeLinecap="round" opacity={0.75} />
+        <Path d={segHead} fill="none" stroke={CHARCOAL_INK} strokeWidth={15} strokeLinecap="round" opacity={0.92} />
+        {/* Color-matched tapered ribbon body */}
+        <Path d={segTail} fill="none" stroke={color} strokeWidth={4} strokeLinecap="round" opacity={0.55} />
+        <Path d={segMid} fill="none" stroke={color} strokeWidth={8} strokeLinecap="round" opacity={0.85} />
+        <Path d={segHead} fill="none" stroke={color} strokeWidth={11.5} strokeLinecap="round" opacity={0.96} />
+        {/* Bright cream gleam on the leading swish head */}
+        <Path d={segHead} fill="none" stroke="#FFFDF5" strokeWidth={3.5} strokeLinecap="round" opacity={0.85} />
+      </Svg>
+    </Animated.View>
+  );
+};
 
 const noop = () => {};
 
 /**
  * The card that was in a slot before something removed it. The engine swaps
- * in the next card at once; the ghost sits on top until its beat arrives and
- * then breaks, so the player sees the old card get hit and the new one appear.
+ * in the next card at once; an unbroken covering ghost sits on top until its
+ * beat arrives, while flying thrown cards and breaking ghosts use
+ * `pointerEvents="none"` ([FX-11]) so freshly dealt cards underneath stay
+ * immediately tappable.
  */
-export const Ghost: React.FC<{ rect: Rect; card: CardType; broken: boolean; how: GhostBreak; color: string; to?: Point | null; order?: number; ms?: number }> = ({ rect, card, broken, how, color, to, order = 0, ms }) => {
+export const Ghost: React.FC<{
+  rect: Rect;
+  card: CardType;
+  broken: boolean;
+  how: GhostBreak;
+  color: string;
+  to?: Point | null;
+  order?: number;
+  ms?: number;
+  /** Optional hitstop freeze hold on arrival before unmount ([FX-11]). */
+  holdMs?: number;
+}> = ({ rect, card, broken, how, color, to, order = 0, ms, holdMs = 0 }) => {
+  const reduced = useReducedMotion();
   const p = useSharedValue(0);
   const thrown = how === 'throw';
-  const duration = ms ?? GHOST_BREAK_MS[how];
+  const flightDuration = ms ?? GHOST_BREAK_MS[how];
+  const totalDuration = thrown && holdMs > 0 ? flightDuration + holdMs : flightDuration;
+  const flightShare = totalDuration > 0 ? Math.min(1, flightDuration / totalDuration) : 1;
+
   useEffect(() => {
-    if (broken) p.value = withTiming(1, { duration: fxMs(duration), easing: thrown ? EASE.linear : EASE.in });
-  }, [broken, duration, thrown, p]);
-  // A thrown card is picked up (it grows and draws back a little), then flies at its target on a bow,
-  // speeding up into the hit, shrinking and turning as it goes; without a target it just pops away
+    if (broken) {
+      p.value = withTiming(1, { duration: fxMs(totalDuration), easing: thrown ? EASE.linear : EASE.in });
+    }
+    return () => cancelAnimation(p);
+  }, [broken, totalDuration, thrown, p]);
+
   const dx = to ? to.x - (rect.x + rect.w / 2) : 0;
   const dy = to ? to.y - (rect.y + rect.h / 2) : -rect.h * 0.4;
   const len = Math.hypot(dx, dy) || 1;
   const ux = dx / len;
   const uy = dy / len;
-  // the bow bends to the left of the way it flies; the three cards fan apart on it and meet on the target
-  const bend = Math.max(4, Math.min(THROW.bowMax, len * THROW.bowShare) + (order - 1) * THROW.fan);
+  const bend = ghostBendOf(len, order);
   const spin = order % 2 ? -1 : 1;
+  const drawBackPx = THROW_PHYSICS.drawBack * Math.max(0.85, unitOf(rect) / 90);
+  const pivotOrigin = order % 2 ? '36% 58%' : '64% 58%';
+
   const style = useAnimatedStyle(() => {
-    const t = p.value;
+    const rawT = p.value;
     if (thrown) {
-      const u = seg(t, [0, THROW.pickUp, 1], [0, 0, 1]);
-      // ease-in, but already moving when it leaves the hand: it speeds up into the hit
-      const fly = u * (THROW.launch + (1 - THROW.launch) * u);
-      const back = THROW.drawBack * seg(t, [0, THROW.pickUp, THROW.pickUp * 2], [0, 1, 0]);
+      if (reduced) {
+        return {
+          opacity: seg(rawT, [0, 0.65, 1], [1, 0.85, 0]),
+          transform: [{ scale: CARD_MOTION.pickedScale }],
+        };
+      }
+      // Clamp normalized flight time at 1.0 so the card holds cleanly at the foe's edge across hitstop
+      const t = flightShare > 0 ? Math.min(1, rawT / flightShare) : 1;
+      const pickFrac = t < THROW_PHYSICS.pickUp ? t / THROW_PHYSICS.pickUp : 1;
+      const pickEase = 1 - (1 - pickFrac) * (1 - pickFrac) * (1 - pickFrac);
+      const u = seg(t, [0, THROW_PHYSICS.pickUp, 1], [0, 0, 1]);
+      // ease-in, already moving as it leaves the hand, accelerating into impact
+      const fly = u * (THROW_PHYSICS.launch + (1 - THROW_PHYSICS.launch) * u);
+      const back = drawBackPx * (t < THROW_PHYSICS.pickUp ? pickEase : seg(t, [THROW_PHYSICS.pickUp, THROW_PHYSICS.pickUp * 2], [1, 0]));
       const bow = Math.sin(Math.PI * u) * bend;
+      const wobble = Math.sin(u * Math.PI * 4) * THROW_PHYSICS.wobblePx * (1 - u);
+      const baseScale =
+        t < THROW_PHYSICS.pickUp
+          ? CARD_MOTION.pickedScale + (THROW_PHYSICS.lift - CARD_MOTION.pickedScale) * pickEase
+          : THROW_PHYSICS.lift + (THROW_PHYSICS.arrive - THROW_PHYSICS.lift) * fly;
+      // Mid-flight volume-preserving velocity stretch (1.18 Y / 0.86 X peak at u = 0.5)
+      const stretchPhase = Math.sin(Math.PI * u);
+      const stretchY = 1 + (THROW_PHYSICS.stretchPeakY - 1) * stretchPhase;
+      const squashX = 1 - (1 - THROW_PHYSICS.squashPeakX) * stretchPhase;
       return {
-        // whole all the way: it waits on the target until the stage takes it away, on the frame the burst appears
+        // Whole all the way: holds crisp on the target edge across hitstop until unmounted
         opacity: 1,
         transform: [
-          { translateX: dx * fly - ux * back + uy * bow },
-          { translateY: dy * fly - uy * back - ux * bow },
-          // (it starts as big as the picked card it replaces on the board, so the hand-off has no step)
-          { scale: t < THROW.pickUp ? CARD_MOTION.pickedScale + (THROW.lift - CARD_MOTION.pickedScale) * (t / THROW.pickUp) : THROW.lift + (THROW.arrive - THROW.lift) * fly },
-          { rotate: `${spin * 24 * fly}deg` },
+          { translateX: dx * fly - ux * back + uy * (bow + wobble) },
+          { translateY: dy * fly - uy * back - ux * (bow + wobble) },
+          { scaleX: baseScale * squashX },
+          { scaleY: baseScale * stretchY },
+          { rotate: `${spin * THROW_PHYSICS.bankDeg * fly}deg` },
         ],
       };
     }
+    if (reduced) {
+      return { opacity: seg(rawT, [0, 0.5, 1], [1, 0.7, 0]) };
+    }
     return how === 'vaporise'
-      ? { opacity: seg(t, [0, 0.5, 1], [1, 1, 0]), transform: [{ scaleX: seg(t, [0, 0.3, 1], [1, 1.08, 1.2]) }, { scaleY: seg(t, [0, 0.3, 1], [1, 0.9, 0.04]) }] }
-      : { opacity: seg(t, [0, 0.45, 1], [1, 1, 0]), transform: [{ scale: seg(t, [0, 0.3, 1], [1, 1.14, 0.35]) }, { rotate: `${t * 16}deg` }] };
+      ? { opacity: seg(rawT, [0, 0.5, 1], [1, 1, 0]), transform: [{ scaleX: seg(rawT, [0, 0.3, 1], [1, 1.08, 1.2]) }, { scaleY: seg(rawT, [0, 0.3, 1], [1, 0.9, 0.04]) }] }
+      : { opacity: seg(rawT, [0, 0.45, 1], [1, 1, 0]), transform: [{ scale: seg(rawT, [0, 0.3, 1], [1, 1.14, 0.35]) }, { rotate: `${rawT * 16}deg` }] };
   });
   // A thrown card flies as itself (no wash); a broken one washes out as it goes
   const tint = useAnimatedStyle(() => ({ opacity: thrown ? 0 : seg(p.value, [0, 0.25, 1], [0, 0.85, 0.6]) }));
   return (
-    // Swallows taps: the card under it is not the one the player is looking at
-    <Animated.View style={[st.abs, { left: rect.x, top: rect.y, width: rect.w, height: rect.h }, style]} testID="fx-ghost">
+    // Only unbroken covering ghosts intercept taps; thrown cards and breaking ghosts never swallow taps on fresh dealt cards ([FX-11]).
+    <Animated.View
+      pointerEvents={thrown || broken ? 'none' : 'auto'}
+      style={[
+        st.abs,
+        { left: rect.x, top: rect.y, width: rect.w, height: rect.h, ...(thrown ? { transformOrigin: pivotOrigin } : null) },
+        style,
+      ]}
+      testID="fx-ghost"
+    >
       {/* (a thrown card is drawn whole, not dimmed like a card you cannot tap: it is the Set itself, in flight) */}
       <Card card={{ ...card, selected: false, isHint: false, onFire: false }} onClick={noop} disabled={!thrown} />
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: 12, backgroundColor: how === 'vaporise' ? color : WHITE }, tint]} />
@@ -550,7 +1228,7 @@ export const Ghost: React.FC<{ rect: Rect; card: CardType; broken: boolean; how:
 
 const st = StyleSheet.create({
   abs: { position: 'absolute', left: 0, top: 0 },
-  inked: { borderWidth: 2, borderColor: INK },
+  inked: { borderWidth: 2, borderColor: CHARCOAL_INK },
   core: { position: 'absolute', left: '18%', top: '16%', backgroundColor: WHITE, opacity: 0.9 },
   stamp: { fontWeight: '900', textAlign: 'center' },
   stampGlow: { textShadowColor: WHITE, textShadowRadius: 4, textShadowOffset: { width: 0, height: 0 } },
