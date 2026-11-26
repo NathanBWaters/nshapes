@@ -7,12 +7,32 @@
 import type { CharacterName } from '@/types';
 import type { FighterDef } from '../types';
 
+/**
+ * [GP-14] Orange Tabby baseline buff constants — keeps starter punchy at full HP
+ * (+1 claw dmg on every Set + free 1-hit Wave-1 Pounce Shield) while sharpening
+ * the iconic low-HP comeback (+1.5 dmg per missing heart).
+ */
+export const ORANGE_TABBY_BASELINE = {
+  scrappyBase: 1,
+  scrappyPerHeart: 1.5,
+  wave1PounceShield: 1,
+} as const;
+
+/** Friendly playstyle callout badges for the Friend Rescue modal picker ([GP-14]). */
+export const FIGHTER_RESCUE_BADGES: Readonly<Partial<Record<CharacterName, string>>> = {
+  Pelican: 'Relaxed & Helpful',
+  Corgi: 'Board Master',
+  'Sly Fox': 'Speed Combo',
+  Badger: 'Bold Gambler',
+  'Emperor Penguin': 'Deliberate Sniper',
+};
+
 export const FIGHTERS: FighterDef[] = [
   {
     name: 'Orange Tabby',
     icon: 'lorc/cat',
     signature: 'fighter_healing',
-    blurb: 'Risky brawler: every missing heart hits harder, and one knockout is never the end.',
+    blurb: 'Scrappy brawler: +1 claw damage on every Set, +1.5 per missing heart, a Wave-1 pounce shield, and Nine Lives.',
     passives: ['nine_lives', 'scrappy'],
   },
   {

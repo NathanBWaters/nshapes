@@ -6,6 +6,7 @@ import type { EnemyInstance } from '@/types/enemy';
 import { createBurrowingMole } from './tier1/burrowingMole';
 import { createCirclingVulture } from './tier1/circlingVulture';
 import { createFoggyFrog } from './tier1/foggyFrog';
+import { createGoldenMole } from './tier1/goldenMole';
 import { createGreedySquirrel } from './tier1/greedySquirrel';
 import { createIronShell } from './tier1/ironShell';
 import { createJunkRat } from './tier1/junkRat';
@@ -19,6 +20,7 @@ import { createSneakyMouse } from './tier1/sneakyMouse';
 import { createSpinyHedgehog } from './tier1/spinyHedgehog';
 import { createStalkingWolf } from './tier1/stalkingWolf';
 import { createStingingScorpion } from './tier1/stingingScorpion';
+import { createSunnyGecko } from './tier1/sunnyGecko';
 import { createSwiftBee } from './tier1/swiftBee';
 import { createThievingRaven } from './tier1/thievingRaven';
 import { createTickingViper } from './tier1/tickingViper';
@@ -60,6 +62,7 @@ export const ENEMY_CREATORS: readonly ((rng?: () => number) => EnemyInstance)[] 
   createBurrowingMole,
   createCirclingVulture,
   createFoggyFrog,
+  createGoldenMole,
   createGreedySquirrel,
   createIronShell,
   createJunkRat,
@@ -73,6 +76,7 @@ export const ENEMY_CREATORS: readonly ((rng?: () => number) => EnemyInstance)[] 
   createSpinyHedgehog,
   createStalkingWolf,
   createStingingScorpion,
+  createSunnyGecko,
   createSwiftBee,
   createThievingRaven,
   createTickingViper,

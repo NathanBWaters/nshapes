@@ -1,10 +1,9 @@
 /**
  * The Reaper - Tier 4 Boss
  *
+ * [GP-16]: Rewrote legacy Classic "Achieve minimum" defeat condition into a native Adventure challenge.
  * Effects: Sneaky Mouse (-60%) + Lazy Sloth (-60%) + Stinging Scorpion + score drain (1pt/3s) + Masked Bandit
- * Defeat Condition: Achieve minimum with 10+ seconds remaining AND 0 damage taken
  */
-
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import {
   WeaponCounterEffect,
@@ -22,7 +21,7 @@ export function createTheReaper(): EnemyInstance {
       icon: 'lorc/grim-reaper',
       tier: 4,
       description: 'Grace -60%, time -60%, 2x damage/points, score drains 1pt/3s, no hints',
-      defeatConditionText: 'Achieve minimum with 10+ seconds remaining AND 0 damage taken',
+      defeatConditionText: 'Win with 10+ seconds remaining AND 0 hearts lost',
     },
     [
       { behavior: WeaponCounterEffect, config: { type: 'grace', reduction: 60 } },
@@ -34,7 +33,7 @@ export function createTheReaper(): EnemyInstance {
     ],
     // Note: timeRemaining is in seconds, not milliseconds
     (stats: RoundStats) =>
-      stats.currentScore >= stats.targetScore &&
+      stats.totalMatches >= 1 &&
       stats.timeRemaining >= 10 &&
       stats.damageReceived === 0
   );

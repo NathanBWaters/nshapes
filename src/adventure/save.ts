@@ -2,6 +2,7 @@
 import { storage } from '@/utils/storage';
 import type { AdventureSave } from './types';
 import { createNewSave, pathsSeenBeforeSecrets, reconcileUnlocks } from './progress';
+import type { CauldronWagerTier } from './data/relief';
 import { resolveLegacyWeapon } from './data/armory';
 import { HISTORY_LIMIT, sanitizeBattleRecord, trimReplays, withBattle, withBattleFeedback, type BattleRecord } from './history';
 import type { FunRating, FunTag } from '@/analytics/fightEvent';
@@ -75,6 +76,20 @@ const keepUnreadable = (raw: string, why: unknown): void => {
   }
 };
 
+const sanitizeConsecutiveLosses = (raw: unknown): Record<string, number> => {
+  if (!isRecord(raw)) return {};
+  const out: Record<string, number> = {};
+  for (const [levelId, val] of Object.entries(raw)) {
+    if (typeof val === 'number' && Number.isFinite(val) && val > 0) {
+      out[levelId] = Math.floor(val);
+    }
+  }
+  return out;
+};
+
+const sanitizeCauldronWager = (raw: unknown): CauldronWagerTier =>
+  raw === 1 || raw === 2 ? raw : 0;
+
 /**
  * Hydrate and reconcile a parsed AdventureSave object (supports version 1 and
  * best-effort forward-compatible hydration for future `version > 1` shapes).
@@ -88,6 +103,17 @@ export const hydrateAdventureSave = (parsed: unknown): AdventureSave | null => {
   // reconcileUnlocks also migrates older shapes (fighter levels refunded, single charm/Arcana into slots, merged weapon ids)
   let save = reconcileUnlocks(withDefaults(createNewSave(), normalized) as AdventureSave);
   if (!Array.isArray(parsed.revealedPaths)) save = { ...save, revealedPaths: pathsSeenBeforeSecrets(save) };
+  // Sanitize [GP-18] persisted relief/wager fields defensively
+  save = {
+    ...save,
+    consecutiveLosses: sanitizeConsecutiveLosses(save.consecutiveLosses),
+    hiddenPurse:
+      typeof save.hiddenPurse === 'number' && Number.isFinite(save.hiddenPurse) && save.hiddenPurse > 0
+        ? Math.floor(save.hiddenPurse)
+        : 0,
+    cauldronWager: sanitizeCauldronWager(save.cauldronWager),
+    tailwindActive: Boolean(save.tailwindActive),
+  };
   return save;
 };
 

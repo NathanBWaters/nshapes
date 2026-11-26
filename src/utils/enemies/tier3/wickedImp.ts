@@ -1,10 +1,9 @@
 /**
  * Wicked Imp - Tier 3 Enemy
  *
+ * [GP-16]: Rewrote legacy Classic "Achieve minimum" defeat condition into a native Adventure challenge.
  * Effects: Stinging Scorpion (2x) + Sneaky Mouse (-55%) + Lazy Sloth (-55%)
- * Defeat Condition: Achieve minimum with 3+ graces unused
  */
-
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import {
   DamageMultiplierEffect,
@@ -20,7 +19,7 @@ export function createWickedImp(): EnemyInstance {
       icon: 'lorc/imp',
       tier: 3,
       description: '2x damage/points, grace -55%, time -55%',
-      defeatConditionText: 'Achieve minimum with 3+ graces unused',
+      defeatConditionText: 'Win with 3+ graces unused',
     },
     [
       { behavior: DamageMultiplierEffect, config: { multiplier: 2.0 } },
@@ -28,7 +27,6 @@ export function createWickedImp(): EnemyInstance {
       { behavior: WeaponCounterEffect, config: { type: 'grace', reduction: 55 } },
       { behavior: WeaponCounterEffect, config: { type: 'time', reduction: 55 } },
     ],
-    (stats: RoundStats) =>
-      stats.currentScore >= stats.targetScore && stats.gracesRemaining >= 3
+    (stats: RoundStats) => stats.totalMatches >= 1 && stats.gracesRemaining >= 3
   );
 }

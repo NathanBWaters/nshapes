@@ -1,19 +1,25 @@
 /**
  * Set-Parrying specifications (data-driven).
  *
- * Early fights use default timing-based parrying (ANY valid Set during the
- * wind-up parries; hitting the final golden window triggers a PERFECT PARRY +
- * 2× Stagger). Later foes, Elites, and Bosses require specific Counter-Sets
- * (All Red, All Ovals, All Traits Different, 2 Traits the Same, etc.) — always
- * shown up front on the pre-battle preview.
+ * Early fights use default timing-based parrying (ANY valid Trio during the
+ * wind-up parries with a 2.5s micro-Stagger; hitting the final golden window
+ * triggers a PERFECT PARRY + 8s 2× Stagger). Later foes, Elites, and Bosses
+ * require specific Counter-Sets across 5 distinct foe Parry archetypes
+ * (Sluggish Heavy Slam, Hyper Swarm, Stalker Ambush, Tactical Standard, and
+ * Boss Escalation) — always shown up front on the pre-battle preview.
  */
 import type { IconName } from '@/components/Icon';
 import { cardColorCode, cardColorHex, cardColorLabel, getColorblindMode } from '@/utils/cardColors';
 import type { FoeDef, LevelDef, ParryPenalty, ParryRequirement, ParrySpec } from '../types';
+import type {} from './relief';
 
 export const PARRY_RULES = {
   /** Final golden window of any wind-up that scores a PERFECT PARRY */
   perfectWindowMs: 3500,
+  /** Generous Perfect Parry window for telegraphed Sluggish/Heavy Slam foes */
+  heavyPerfectWindowMs: 4000,
+  /** Snappy Perfect Parry window for Hyper/Swarm foes */
+  swarmPerfectWindowMs: 2800,
   /** Damage multiplier on the Set that lands a default (any-Set) Parry */
   anyParryMult: 1.25,
   /** Damage multiplier on the Set that lands a specific Counter-Set Parry */
@@ -22,10 +28,14 @@ export const PARRY_RULES = {
   perfectParryMult: 1.75,
   /** Damage multiplier on ALL Sets while the foe is Staggered */
   staggerDamageMult: 2,
+  /** Micro-Stagger duration for a default (any-Set) timing Parry (ms) — lets beginners feel Tension → Release! */
+  anyStaggerMs: 2500,
   /** Stagger duration for a specific Counter Parry (ms) */
-  counterStaggerMs: 4500,
+  counterStaggerMs: 5000,
   /** Stagger duration for a PERFECT PARRY (ms) */
   perfectStaggerMs: 8000,
+  /** Extended Stagger duration when countering a Heavy Slam juggernaut (ms) */
+  heavyStaggerMs: 9000,
   /** Bonus coins for a normal Parry vs Perfect Parry */
   parryCoins: 2,
   perfectParryCoins: 5,
@@ -33,14 +43,27 @@ export const PARRY_RULES = {
   fairnessStallMs: 3000,
   /** Maximum fairness stalls per single wind-up */
   maxFairnessStalls: 2,
-  /** Seconds stolen when penalty === 'time' */
+  /** Default seconds stolen when penalty === 'time' */
   timePenaltySeconds: 6,
+  /** Lighter time penalty for Hyper/Swarm foes */
+  swarmTimePenaltySeconds: 4,
+  /** Heavier time penalty for Sluggish/Heavy World 3–5 foes */
+  heavyTimePenaltySeconds: 10,
+  /** Heavy Slam heart penalty on World 3–5 juggernauts */
+  heavyHeartPenalty: 2,
+  /** Boss escalation cooldown reduction (ms) below 50% foe HP */
+  bossEnrageCooldownDeltaMs: 2000,
+  /** HP ratio below which boss escalation tightens cooldown */
+  bossEnrageHpThreshold: 0.5,
 } as const;
 
+/** 5 distinct foe Parry cadence archetypes matching creature personalities ([GP-07]). */
+export type ParryArchetype = 'heavy' | 'swarm' | 'stalker' | 'tactical' | 'boss_enrage';
+
 export interface CounterMeta {
-  /** Compact uppercase pill for HUD & preview ("ALL RED", "ANY SET") */
+  /** Compact uppercase pill for HUD & preview ("ALL ORANGE", "ANY SET") */
   shortLabel: string;
-  /** Full readable name ("All Red Set", "Any Valid Set (Timing)") */
+  /** Full readable name ("All Orange Trio", "Any Valid Set (Timing)") */
   label: string;
   /** One-sentence explanation shown on preview & inspector */
   explain: string;
@@ -128,16 +151,22 @@ export const parryCounterMeta = (req: ParryRequirement, colorblind?: boolean): C
   }
 };
 
-export const parryPenaltyText = (penalty: ParryPenalty): string => {
+export const parryPenaltyText = (penalty: ParryPenalty, amount?: number): string => {
   switch (penalty) {
     case 'heart':
-      return 'Unparried: −1 ♥';
+      return `Unparried: −${amount ?? 1} ♥`;
     case 'glancing':
       return 'Unparried: −1 ♥ (non-lethal)';
     case 'time':
-      return `Unparried: −${PARRY_RULES.timePenaltySeconds}s`;
+      return `Unparried: −${amount ?? PARRY_RULES.timePenaltySeconds}s`;
   }
 };
+
+interface SpecExtras {
+  staggerMs?: number;
+  penaltyAmount?: number;
+  bossEnrageDeltaMs?: number;
+}
 
 const spec = (
   attackName: string,
@@ -146,7 +175,8 @@ const spec = (
   cooldownMs: number,
   windupMs: number,
   penalty: ParryPenalty = 'heart',
-  perfectWindowMs: number = PARRY_RULES.perfectWindowMs
+  perfectWindowMs: number = PARRY_RULES.perfectWindowMs,
+  extras?: SpecExtras
 ): ParrySpec => ({
   attackName,
   icon,
@@ -155,91 +185,168 @@ const spec = (
   windupMs,
   perfectWindowMs,
   penalty,
+  ...(extras?.staggerMs !== undefined ? { staggerMs: extras.staggerMs } : {}),
+  ...(extras?.penaltyAmount !== undefined ? { penaltyAmount: extras.penaltyAmount } : {}),
+  ...(extras?.bossEnrageDeltaMs !== undefined ? { bossEnrageDeltaMs: extras.bossEnrageDeltaMs } : {}),
 });
+
+/** Archetype builders so every foe's parry cadence mirrors its personality. */
+const heavySpec = (
+  attackName: string,
+  icon: IconName,
+  counter: ParryRequirement,
+  cooldownMs: number,
+  windupMs: number,
+  penalty: ParryPenalty = 'heart',
+  penaltyAmount: number = penalty === 'time' ? PARRY_RULES.heavyTimePenaltySeconds : PARRY_RULES.heavyHeartPenalty
+): ParrySpec =>
+  spec(attackName, icon, counter, cooldownMs, windupMs, penalty, PARRY_RULES.heavyPerfectWindowMs, {
+    staggerMs: PARRY_RULES.heavyStaggerMs,
+    penaltyAmount,
+  });
+
+const swarmSpec = (
+  attackName: string,
+  icon: IconName,
+  counter: ParryRequirement,
+  cooldownMs: number,
+  windupMs: number,
+  penalty: ParryPenalty = 'time',
+  penaltyAmount: number | undefined = penalty === 'time' ? PARRY_RULES.swarmTimePenaltySeconds : undefined
+): ParrySpec =>
+  spec(attackName, icon, counter, cooldownMs, windupMs, penalty, PARRY_RULES.swarmPerfectWindowMs, {
+    penaltyAmount,
+  });
+
+const stalkerSpec = (
+  attackName: string,
+  icon: IconName,
+  counter: ParryRequirement,
+  penalty: ParryPenalty = 'heart',
+  cooldownMs = 15000,
+  windupMs = 12000
+): ParrySpec => spec(attackName, icon, counter, cooldownMs, windupMs, penalty, PARRY_RULES.perfectWindowMs);
+
+const tacticalSpec = (
+  attackName: string,
+  icon: IconName,
+  counter: ParryRequirement,
+  penalty: ParryPenalty = 'heart',
+  cooldownMs = 13000,
+  windupMs = 15000
+): ParrySpec => spec(attackName, icon, counter, cooldownMs, windupMs, penalty, PARRY_RULES.perfectWindowMs);
+
+const bossEnrageSpec = (
+  attackName: string,
+  icon: IconName,
+  counter: ParryRequirement,
+  cooldownMs: number,
+  windupMs: number,
+  penalty: ParryPenalty = 'heart'
+): ParrySpec =>
+  spec(attackName, icon, counter, cooldownMs, windupMs, penalty, PARRY_RULES.perfectWindowMs, {
+    bossEnrageDeltaMs: PARRY_RULES.bossEnrageCooldownDeltaMs,
+  });
 
 /** Early levels kept completely clean for zero-friction onboarding. */
 const NO_PARRY_LEVELS = new Set(['1-1', '1-2', '1-3', '1-4']);
 
-/** Explicit Adventure Mode level parry profiles (specific counters from 1-10 onward). */
-const LEVEL_PARRIES: Record<string, ParrySpec> = {
-  // World 1 — gentle default timing parries (non-lethal) to build muscle memory, then Boss introduces specific counters!
-  '1-5': spec('Acorn Toss', 'lorc/sword-clash', { kind: 'any' }, 13000, 16000, 'glancing'),
-  '1-6': spec('Prism Dive', 'lorc/sword-clash', { kind: 'any' }, 13000, 16000, 'glancing'),
-  '1-7': spec('Quill Jab', 'lorc/sword-clash', { kind: 'any' }, 12500, 15500, 'glancing'),
-  '1-8': spec('Coin Swipe', 'lorc/sword-clash', { kind: 'any' }, 12500, 15500, 'glancing'),
-  '1-9': spec('Bumble Sting', 'lorc/sword-clash', { kind: 'any' }, 12000, 15000, 'glancing'),
-  '1-10': spec('Shell Slam', 'lorc/turtle-shell', { kind: 'exact_same', count: 2 }, 13000, 16000, 'heart'),
-  '1-5F': spec('Quick Pounce', 'lorc/sword-clash', { kind: 'any' }, 12000, 15000, 'glancing'),
+/** Explicit Adventure Mode level parry profiles across the 5 creature archetypes. */
+const LEVEL_PARRIES: Record<string, { archetype: ParryArchetype; spec: ParrySpec }> = {
+  // World 1 — gentle default timing parries (2.5s micro-Stagger on any parry!), then Heavy Slam boss!
+  '1-5': { archetype: 'tactical', spec: tacticalSpec('Acorn Toss', 'lorc/sword-clash', { kind: 'any' }, 'glancing', 13500, 15500) },
+  '1-6': { archetype: 'tactical', spec: tacticalSpec('Prism Dive', 'lorc/sword-clash', { kind: 'any' }, 'glancing', 13500, 15500) },
+  '1-7': { archetype: 'tactical', spec: tacticalSpec('Quill Jab', 'lorc/sword-clash', { kind: 'any' }, 'glancing', 13000, 15000) },
+  '1-8': { archetype: 'tactical', spec: tacticalSpec('Coin Swipe', 'lorc/sword-clash', { kind: 'any' }, 'glancing', 13000, 15000) },
+  '1-9': { archetype: 'swarm', spec: swarmSpec('Bumble Sting', 'lorc/sword-clash', { kind: 'any' }, 9000, 11500, 'glancing') },
+  '1-10': { archetype: 'heavy', spec: heavySpec('Shell Slam', 'lorc/turtle-shell', { kind: 'exact_same', count: 2 }, 20000, 12000, 'heart', 1) },
+  '1-5F': { archetype: 'swarm', spec: swarmSpec('Quick Pounce', 'lorc/sword-clash', { kind: 'any' }, 9000, 11500, 'glancing') },
 
-  // World 2 — timed default parries, then color/shape/number counters!
-  '2-1': spec('Slow Swipe', 'lorc/sword-clash', { kind: 'any' }, 14000, 16000, 'time'),
-  '2-2': spec('Ember Leap', 'lorc/fireball', { kind: 'any' }, 14000, 15500, 'heart'),
-  '2-3': spec('Silk Lash', 'lorc/cobweb', { kind: 'any' }, 14000, 15500, 'heart'),
-  '2-4': spec('Crimson Ambush', 'lorc/claw-slashes', { kind: 'color', color: 'red' }, 13500, 16000, 'heart'),
-  '2-5': spec('Acorn Barrage', 'lorc/sword-clash', { kind: 'shape', shape: 'oval' }, 13500, 16000, 'heart'),
-  '2-6': spec('Scrap Hurl', 'lorc/stone-block', { kind: 'exact_same', count: 2 }, 13500, 15500, 'heart'),
-  '2-7': spec('Shadow Swoop', 'lorc/moon', { kind: 'color', color: 'purple' }, 13500, 16000, 'heart'),
-  '2-8': spec('Trickster Feint', 'lorc/sword-clash', { kind: 'same_number' }, 13500, 16000, 'heart'),
-  '2-9': spec('Prism Burst', 'lorc/rainbow-star', { kind: 'color', color: 'green' }, 13000, 15500, 'heart'),
-  '2-10': spec('Venom Fang', 'carl-olsen/spider-face', { kind: 'shape', shape: 'squiggle' }, 13000, 16000, 'heart'),
-  '2-5C': spec('Bark Charge', 'lorc/sword-clash', { kind: 'any' }, 14000, 15500, 'heart'),
-  '2-8B': spec('Claw Maul', 'lorc/claw-slashes', { kind: 'exact_same', count: 2 }, 13500, 15500, 'heart'),
-  '2-9P': spec('Frost Gust', 'lorc/snowflake-1', { kind: 'all_different' }, 14000, 16500, 'heart'),
+  // World 2 — archetypes shine clearly (Sloth Heavy Slam, Bandit/Owl Stalker, mid-speed Tactical)
+  '2-1': { archetype: 'heavy', spec: heavySpec('Slow Swipe', 'lorc/sword-clash', { kind: 'any' }, 22000, 12000, 'time', 8) },
+  '2-2': { archetype: 'tactical', spec: tacticalSpec('Ember Leap', 'lorc/fireball', { kind: 'any' }, 'heart') },
+  '2-3': { archetype: 'tactical', spec: tacticalSpec('Silk Lash', 'lorc/cobweb', { kind: 'any' }, 'heart') },
+  '2-4': { archetype: 'stalker', spec: stalkerSpec('Crimson Ambush', 'lorc/claw-slashes', { kind: 'color', color: 'red' }, 'heart') },
+  '2-5': { archetype: 'tactical', spec: tacticalSpec('Acorn Barrage', 'lorc/sword-clash', { kind: 'shape', shape: 'oval' }, 'heart') },
+  '2-6': { archetype: 'tactical', spec: tacticalSpec('Scrap Hurl', 'lorc/stone-block', { kind: 'exact_same', count: 2 }, 'heart') },
+  '2-7': { archetype: 'stalker', spec: stalkerSpec('Shadow Swoop', 'lorc/moon', { kind: 'color', color: 'purple' }, 'heart') },
+  '2-8': { archetype: 'tactical', spec: tacticalSpec('Trickster Feint', 'lorc/sword-clash', { kind: 'same_number' }, 'heart') },
+  '2-9': { archetype: 'tactical', spec: tacticalSpec('Prism Burst', 'lorc/rainbow-star', { kind: 'color', color: 'green' }, 'heart') },
+  '2-10': { archetype: 'stalker', spec: stalkerSpec('Venom Fang', 'carl-olsen/spider-face', { kind: 'shape', shape: 'squiggle' }, 'heart') },
+  '2-5C': { archetype: 'tactical', spec: tacticalSpec('Bark Charge', 'lorc/sword-clash', { kind: 'any' }, 'heart') },
+  '2-8B': { archetype: 'tactical', spec: tacticalSpec('Claw Maul', 'lorc/claw-slashes', { kind: 'exact_same', count: 2 }, 'heart') },
+  '2-9P': { archetype: 'tactical', spec: tacticalSpec('Frost Gust', 'lorc/snowflake-1', { kind: 'all_different' }, 'heart', 13500, 15500) },
 
-  // World 3 — Canyon escalation
-  '3-1': spec('Cinder Wave', 'lorc/fireball', { kind: 'color', color: 'red' }, 14000, 15500, 'heart'),
-  '3-2': spec('Sabotage Strike', 'caro-asercion/goblin', { kind: 'exact_diff', count: 2 }, 14000, 15500, 'heart'),
-  '3-3': spec('Pack Rush', 'lorc/claw-slashes', { kind: 'shape', shape: 'diamond' }, 13500, 15500, 'heart'),
-  '3-4': spec('Bazaar Tax', 'lorc/crown-coin', { kind: 'diff_number' }, 14000, 15500, 'heart'),
-  '3-5': spec('Tidal Snap', 'lorc/big-wave', { kind: 'shape', shape: 'oval' }, 13500, 15500, 'heart'),
-  '3-6': spec('Arcane Flare', 'lorc/crystal-wand', { kind: 'all_different' }, 14000, 16000, 'heart'),
-  '3-7': spec('Earthquake Dig', 'caro-asercion/mole', { kind: 'exact_same', count: 2 }, 13500, 15500, 'heart'),
-  '3-8': spec('Chroma Shift', 'darkzaitzev/chameleon-glyph', { kind: 'color', color: 'purple' }, 13500, 15500, 'heart'),
-  '3-9': spec('Chrono Pluck', 'lorc/raven', { kind: 'same_number' }, 13500, 15500, 'time'),
-  '3-10': spec('Crimson Gore', 'caro-asercion/boar', { kind: 'color', color: 'red' }, 12500, 15000, 'heart'),
-  '3-3E': spec('Swarm Bite', 'delapouite/ant', { kind: 'diff_number' }, 13000, 15000, 'heart'),
-  '3-3E2': spec('Cobra Strike', 'skoll/cobra', { kind: 'shape', shape: 'squiggle' }, 12500, 15000, 'heart'),
-  '3-5P': spec('Riptide Pinch', 'lorc/crab', { kind: 'color', color: 'green' }, 14000, 15500, 'heart'),
-  '3-8E': spec('Abyssal Ink', 'delapouite/giant-squid', { kind: 'color', color: 'purple' }, 13000, 15500, 'heart'),
+  // World 3 — Ember Canyon (Mammoth Heavy Slam, Ants Swarm, Cobra/Boar Stalker)
+  '3-1': { archetype: 'heavy', spec: heavySpec('Cinder Wave', 'lorc/fireball', { kind: 'color', color: 'red' }, 21000, 12000, 'heart', 2) },
+  '3-2': { archetype: 'tactical', spec: tacticalSpec('Sabotage Strike', 'caro-asercion/goblin', { kind: 'exact_diff', count: 2 }, 'heart') },
+  '3-3': { archetype: 'swarm', spec: swarmSpec('Pack Rush', 'lorc/claw-slashes', { kind: 'shape', shape: 'diamond' }, 8500, 11000, 'time', 4) },
+  '3-4': { archetype: 'tactical', spec: tacticalSpec('Bazaar Tax', 'lorc/crown-coin', { kind: 'diff_number' }, 'heart') },
+  '3-5': { archetype: 'tactical', spec: tacticalSpec('Tidal Snap', 'lorc/big-wave', { kind: 'shape', shape: 'oval' }, 'heart') },
+  '3-6': { archetype: 'tactical', spec: tacticalSpec('Arcane Flare', 'lorc/crystal-wand', { kind: 'all_different' }, 'heart') },
+  '3-7': { archetype: 'tactical', spec: tacticalSpec('Earthquake Dig', 'caro-asercion/mole', { kind: 'exact_same', count: 2 }, 'heart') },
+  '3-8': { archetype: 'tactical', spec: tacticalSpec('Chroma Shift', 'darkzaitzev/chameleon-glyph', { kind: 'color', color: 'purple' }, 'heart') },
+  '3-9': { archetype: 'tactical', spec: tacticalSpec('Chrono Pluck', 'lorc/raven', { kind: 'same_number' }, 'time') },
+  '3-10': { archetype: 'stalker', spec: stalkerSpec('Crimson Gore', 'caro-asercion/boar', { kind: 'color', color: 'red' }, 'heart') },
+  '3-3E': { archetype: 'swarm', spec: swarmSpec('Swarm Bite', 'delapouite/ant', { kind: 'diff_number' }, 8500, 11000, 'time', 4) },
+  '3-3E2': { archetype: 'stalker', spec: stalkerSpec('Cobra Strike', 'skoll/cobra', { kind: 'any' }, 'heart') },
+  '3-5P': { archetype: 'tactical', spec: tacticalSpec('Riptide Pinch', 'lorc/crab', { kind: 'color', color: 'green' }, 'heart') },
+  '3-8E': { archetype: 'stalker', spec: stalkerSpec('Abyssal Ink', 'delapouite/giant-squid', { kind: 'color', color: 'purple' }, 'heart') },
 
-  // World 4 — Frozen Peaks
-  '4-1': spec('Glacier Slam', 'lorc/snowflake-1', { kind: 'exact_diff', count: 2 }, 13500, 15500, 'heart'),
-  '4-2': spec('Hyper Sting', 'lorc/bee', { kind: 'diff_number' }, 13000, 15000, 'time'),
-  '4-3': spec('Frost Mend', 'lorc/snowflake-1', { kind: 'shape', shape: 'diamond' }, 13500, 15500, 'heart'),
-  '4-4': spec('Shatter Fang', 'lorc/shard-sword', { kind: 'all_different' }, 13500, 16000, 'heart'),
-  '4-5': spec('Punish Cleave', 'lorc/claw-slashes', { kind: 'exact_same', count: 2 }, 13000, 15000, 'heart'),
-  '4-6': spec('Venom Tick', 'lorc/snake', { kind: 'shape', shape: 'oval' }, 13000, 15000, 'heart'),
-  '4-7': spec('Blizzard Whirl', 'lorc/vortex', { kind: 'same_number' }, 13000, 15000, 'heart'),
-  '4-8': spec('Polar Crush', 'sparker/bear-face', { kind: 'color', color: 'green' }, 13000, 15000, 'heart'),
-  '4-9': spec('Cyclops Gaze', 'lorc/cyclops', { kind: 'shape', shape: 'squiggle' }, 13000, 15000, 'heart'),
-  '4-10': spec('Feral Rend', 'lorc/bestial-fangs', { kind: 'color', color: 'red' }, 12500, 15000, 'heart'),
-  '4-11': spec('Prismatic Inferno', 'lorc/dragon-head', { kind: 'all_different' }, 12500, 15500, 'heart'),
-  '4-2E': spec('Maul Charge', 'sparker/bear-face', { kind: 'exact_diff', count: 2 }, 13000, 15000, 'heart'),
-  '4-2E2': spec('Savage Flurry', 'lorc/wolverine-claws', { kind: 'color', color: 'red' }, 12500, 15000, 'heart'),
-  '4-5E': spec('Monolith Drop', 'delapouite/golem-head', { kind: 'shape', shape: 'diamond' }, 13000, 15000, 'heart'),
-  '4-7E': spec('Dam Collapse', 'delapouite/beaver', { kind: 'same_number' }, 13000, 15000, 'heart'),
-  '4-7E2': spec('Tentacle Whip', 'lorc/octopus', { kind: 'color', color: 'purple' }, 13000, 15500, 'heart'),
+  // World 4 — Frozen Peaks (Bee/Claws Swarm, Sentinel/Polar Heavy, Bear/Cyclops/Fangs Stalker, Dragon Boss Escalation)
+  '4-1': { archetype: 'tactical', spec: tacticalSpec('Glacier Slam', 'lorc/snowflake-1', { kind: 'exact_diff', count: 2 }, 'heart') },
+  '4-2': { archetype: 'swarm', spec: swarmSpec('Hyper Sting', 'lorc/bee', { kind: 'diff_number' }, 8000, 10500, 'time', 4) },
+  '4-3': { archetype: 'tactical', spec: tacticalSpec('Frost Mend', 'lorc/snowflake-1', { kind: 'shape', shape: 'diamond' }, 'heart') },
+  '4-4': { archetype: 'tactical', spec: tacticalSpec('Shatter Fang', 'lorc/shard-sword', { kind: 'all_different' }, 'heart') },
+  '4-5': { archetype: 'tactical', spec: tacticalSpec('Punish Cleave', 'lorc/claw-slashes', { kind: 'exact_same', count: 2 }, 'heart') },
+  '4-6': { archetype: 'stalker', spec: stalkerSpec('Venom Tick', 'lorc/snake', { kind: 'shape', shape: 'oval' }, 'heart') },
+  '4-7': { archetype: 'tactical', spec: tacticalSpec('Blizzard Whirl', 'lorc/vortex', { kind: 'same_number' }, 'heart') },
+  '4-8': { archetype: 'heavy', spec: heavySpec('Polar Crush', 'sparker/bear-face', { kind: 'color', color: 'green' }, 20500, 11500, 'heart', 2) },
+  '4-9': { archetype: 'stalker', spec: stalkerSpec('Cyclops Gaze', 'lorc/cyclops', { kind: 'shape', shape: 'squiggle' }, 'heart') },
+  '4-10': { archetype: 'stalker', spec: stalkerSpec('Feral Rend', 'lorc/bestial-fangs', { kind: 'color', color: 'red' }, 'heart') },
+  '4-11': { archetype: 'boss_enrage', spec: bossEnrageSpec('Prismatic Inferno', 'lorc/dragon-head', { kind: 'all_different' }, 11500, 13000, 'heart') },
+  '4-2E': { archetype: 'stalker', spec: stalkerSpec('Maul Charge', 'sparker/bear-face', { kind: 'exact_diff', count: 2 }, 'heart') },
+  '4-2E2': { archetype: 'swarm', spec: swarmSpec('Savage Flurry', 'lorc/wolverine-claws', { kind: 'color', color: 'red' }, 8500, 10500, 'time', 4) },
+  '4-5E': { archetype: 'heavy', spec: heavySpec('Monolith Drop', 'delapouite/golem-head', { kind: 'shape', shape: 'diamond' }, 21000, 11500, 'heart', 2) },
+  '4-7E': { archetype: 'tactical', spec: tacticalSpec('Dam Collapse', 'delapouite/beaver', { kind: 'same_number' }, 'heart') },
+  '4-7E2': { archetype: 'stalker', spec: stalkerSpec('Tentacle Whip', 'lorc/octopus', { kind: 'color', color: 'purple' }, 'heart') },
 
   // World 5 — Starfall Summit Gauntlet
-  '5-1': spec('Abyssal Crush', 'delapouite/kraken-tentacle', { kind: 'color', color: 'purple' }, 12500, 15000, 'heart'),
-  '5-2': spec('Void Rift', 'lorc/daemon-skull', { kind: 'exact_diff', count: 2 }, 12500, 15000, 'heart'),
-  '5-3': spec('Soul Scythe', 'lorc/grim-reaper', { kind: 'shape', shape: 'diamond' }, 12500, 15000, 'time'),
-  '5-4': spec('Quill Tempest', 'caro-asercion/porcupine', { kind: 'same_number' }, 12500, 15000, 'heart'),
-  '5-5': spec('Hydra Apocalypse', 'lorc/hydra', { kind: 'all_different' }, 12000, 15500, 'heart'),
+  '5-1': { archetype: 'stalker', spec: stalkerSpec('Abyssal Crush', 'delapouite/kraken-tentacle', { kind: 'color', color: 'purple' }, 'heart', 14000, 11500) },
+  '5-2': { archetype: 'heavy', spec: heavySpec('Void Rift', 'lorc/daemon-skull', { kind: 'exact_diff', count: 2 }, 18500, 11000, 'heart', 2) },
+  '5-3': { archetype: 'stalker', spec: stalkerSpec('Soul Scythe', 'lorc/grim-reaper', { kind: 'shape', shape: 'diamond' }, 'time') },
+  '5-4': { archetype: 'swarm', spec: swarmSpec('Quill Tempest', 'caro-asercion/porcupine', { kind: 'same_number' }, 9000, 11000, 'time', 4) },
+  '5-5': { archetype: 'boss_enrage', spec: bossEnrageSpec('Hydra Apocalypse', 'lorc/hydra', { kind: 'all_different' }, 11000, 12500, 'heart') },
+};
+
+/** Archetype label for a campaign level's foe parry profile (null on no-parry levels). */
+export const getParryArchetype = (levelId: string): ParryArchetype | null =>
+  LEVEL_PARRIES[levelId]?.archetype ?? null;
+
+/**
+ * Effective parry cooldown (ms), applying Boss Escalation tightening
+ * (`-bossEnrageDeltaMs`, default `-2,000ms`) once the boss drops below 50% HP.
+ */
+export const effectiveParryCooldownMs = (parrySpec: ParrySpec, foeHpRatio: number): number => {
+  const enrageDelta =
+    parrySpec.bossEnrageDeltaMs && foeHpRatio < PARRY_RULES.bossEnrageHpThreshold
+      ? parrySpec.bossEnrageDeltaMs
+      : 0;
+  return Math.max(4000, parrySpec.cooldownMs - enrageDelta);
 };
 
 /**
  * Resolve the telegraphed attack & Set-Parry specification for a level's foe.
  * Explicit `foe.parry` wins (null disables parry); otherwise uses the campaign
- * table so every level from 1-5 onward has a tailored timing or counter parry.
+ * table so every level from 1-5 onward has an archetype-tailored parry cadence.
  */
 export const resolveParrySpec = (level: LevelDef, foe?: FoeDef): ParrySpec | null => {
   if (level.rules.noGear || level.rules.sandbox || NO_PARRY_LEVELS.has(level.id)) return null;
   if (foe && foe.parry !== undefined) return foe.parry;
-  const fromTable = LEVEL_PARRIES[level.id];
+  const fromTable = LEVEL_PARRIES[level.id]?.spec;
   if (fromTable) return fromTable;
   // Any non-table level with a registered enemy gets default timing-based Set-Parry;
   // synthetic sparring dummies in unit tests opt in via explicit `foe.parry`.
-  if (foe?.enemy) return spec('Wild Lunge', 'lorc/sword-clash', { kind: 'any' }, 13500, 15500, 'heart');
+  if (foe?.enemy) return tacticalSpec('Wild Lunge', 'lorc/sword-clash', { kind: 'any' }, 'heart');
   return null;
 };

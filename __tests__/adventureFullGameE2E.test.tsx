@@ -593,8 +593,8 @@ describe('Adventure Mode full-game E2E', () => {
         backToMap(screen);
       }
 
-      // Angry Birds 2 walk-over: clearing 1-5 walks onto Golden Rescue Key key-1!
-      if (level.id === '1-5') {
+      // Angry Birds 2 walk-over: clearing 1-4 walks onto Golden Rescue Key key-1! ([GP-14])
+      if (level.id === '1-4') {
         advanceMs(650);
         expect(screen.getByTestId('friend-rescue-modal')).toBeTruthy();
         fireEvent.press(screen.getByTestId('rescue-option-Sly Fox'));

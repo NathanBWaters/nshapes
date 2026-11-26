@@ -1,4 +1,4 @@
-import { createTheHydra } from '@/utils/enemies/tier4/theHydra';
+import { createHydraHead, createTheHydra } from '@/utils/enemies/tier4/theHydra';
 import type { RoundStats } from '@/types/enemy';
 import type { Card } from '@/types';
 
@@ -49,24 +49,41 @@ const createTestBoard = (): Card[] =>
     }));
 
 describe('The Hydra', () => {
-  describe('inactivity effect', () => {
-    it('causes instant death after 30s', () => {
+  describe('telegraphed Heavy Slam (replaces instantDeath)', () => {
+    it('warns at 25s and delivers a −2 ♥ Heavy Slam after 30s without instant death', () => {
       const enemy = createTheHydra();
       const board = createTestBoard();
       enemy.onRoundStart(board);
 
-      const result = enemy.onTick(30000, board);
-      expect(result.instantDeath).toBe(true);
+      const warn = enemy.onTick(25000, board);
+      expect(warn.instantDeath).toBe(false);
+      expect(warn.events).toContainEqual(expect.objectContaining({ type: 'inactivity_warning' }));
+
+      const slam = enemy.onTick(5000, board);
+      expect(slam.instantDeath).toBe(false);
+      expect(slam.healthDelta).toBe(-2);
     });
   });
 
-  describe('time steal', () => {
-    it('steals 4s per match', () => {
+  describe('3-Head Phases ([GP-16])', () => {
+    it('does not steal -4s per match (replaced punitive time-steal soup)', () => {
       const enemy = createTheHydra();
       const board = createTestBoard();
 
       const result = enemy.onValidMatch([board[0], board[1], board[2]], board);
-      expect(result.timeDelta).toBe(-4);
+      expect(result.timeDelta).toBe(0);
+    });
+
+    it('supports distinct Head I, Head II, and Head III phases', () => {
+      const h1 = createHydraHead(1);
+      const h2 = createHydraHead(2);
+      const h3 = createHydraHead(3);
+      expect(h1.name).toBe('The Hydra');
+      expect(h2.name).toBe('The Hydra');
+      expect(h3.name).toBe('The Hydra');
+      expect(h1.description).toContain('Head I');
+      expect(h2.description).toContain('Head II');
+      expect(h3.description).toContain('Head III');
     });
   });
 

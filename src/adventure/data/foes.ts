@@ -1,9 +1,11 @@
 /** Turns a level's foe definition into the enemy to fight and how it is shown. */
 import { createEnemy, isEnemyRegistered } from '@/utils/enemyFactory';
 import { createDummyEnemy } from '@/utils/enemyEffects';
+import { createHydraHead, type HydraHeadPhase } from '@/utils/enemies/tier4/theHydra';
 import type { EnemyInstance } from '@/types/enemy';
 import type { IconName } from '@/components/Icon';
 import type { FoeDef, LevelDef } from '../types';
+import type {} from './relief';
 
 export interface Foe {
   foe: EnemyInstance;
@@ -13,8 +15,19 @@ export interface Foe {
   sparring: boolean;
 }
 
+const HYDRA_PHASE_KEY: Record<string, HydraHeadPhase> = {
+  'The Hydra#1': 1,
+  'The Hydra#2': 2,
+  'The Hydra#3': 3,
+};
+
 /** A fresh foe instance (enemies carry their own timers, so never share one between fights). */
 export const createFoe = (def: FoeDef, rng?: () => number): Foe => {
+  const hydraPhase = def.hydraPhase ?? (def.enemy ? HYDRA_PHASE_KEY[def.enemy] : undefined);
+  if (hydraPhase !== undefined && (!def.enemy || def.enemy === 'The Hydra' || def.enemy in HYDRA_PHASE_KEY)) {
+    const foe = createHydraHead(hydraPhase);
+    return { foe, name: def.name ?? foe.name, icon: def.icon ?? foe.icon, sparring: false };
+  }
   if (def.enemy && isEnemyRegistered(def.enemy)) {
     const foe = createEnemy(def.enemy, rng);
     return { foe, name: def.name ?? foe.name, icon: def.icon ?? foe.icon, sparring: false };
@@ -34,7 +47,7 @@ const cache = new Map<string, FoeDisplay>();
 const METADATA_RNG = (): number => 0;
 
 export const foeDisplay = (def: FoeDef): FoeDisplay => {
-  const key = `${def.enemy ?? ''}|${def.name ?? ''}|${def.icon ?? ''}`;
+  const key = `${def.enemy ?? ''}|${def.hydraPhase ?? ''}|${def.name ?? ''}|${def.icon ?? ''}`;
   const hit = cache.get(key);
   if (hit) return hit;
   const { foe, name, icon, sparring } = createFoe(def, METADATA_RNG);

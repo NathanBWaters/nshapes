@@ -10,14 +10,15 @@ import type { RunState } from '@/adventure/types';
 
 describe('gauntlet (6-Tier Multi-Difficulty Enemy Gauntlet)', () => {
   it('computes the smooth Encounter Clear Score formula accurately for wins, close losses, and overkill caps', () => {
-    const timedLevel = getLevel('2-5'); // timer: 130
+    const timedLevel = getLevel('2-5');
+    const levelTimer = timedLevel.rules.timer!;
     const mockWin = {
       status: 'won',
       endReason: 'defeated',
-      totalDamage: 5000, // > 1.5x of 2138 -> capped at 1.5
+      totalDamage: 5000, // > 1.5x of 2000 -> capped at 1.5
       foeHp: 0,
       foeMaxHp: 2000,
-      timeLeft: 65, // 0.50 share
+      timeLeft: levelTimer * 0.5, // 0.50 share
       movesLeft: null,
       hearts: 3,
       maxHearts: 3, // 1.00 share
@@ -36,7 +37,7 @@ describe('gauntlet (6-Tier Multi-Difficulty Enemy Gauntlet)', () => {
       totalDamage: 1800,
       foeHp: 200,
       foeMaxHp: 2000,
-      timeLeft: 26, // 0.20 share
+      timeLeft: levelTimer * 0.2, // 0.20 share
       movesLeft: null,
       hearts: 0,
       maxHearts: 3,

@@ -29,6 +29,18 @@ import WeaponExplainer from './WeaponExplainer';
 import { EVOLUTION_RECIPES } from '../data/evolutions';
 import { getLevel } from '../data/levels';
 import { resolveParrySpec } from '../data/parry';
+import {
+  CAULDRON_WAGERS,
+  FRIENDLY_TAILWIND,
+  TAILWIND_STAR_CAP,
+  canAffordCauldronWager,
+  consecutiveLossesFor,
+  getCauldronWager,
+  isCauldronAvailable,
+  isTailwindOffered,
+  shouldEnableLossStreakNudge,
+  type CauldronWagerTier,
+} from '../data/relief';
 import { isFighterTrial, starRewards } from '../data/rewards';
 import ParryPreviewCard from './ParryPreviewCard';
 import { ArcanaCard, ArmedEvolutionRow, FighterPassivesList, FoeAbilityCard, HazardNotices } from './SharedCards';
@@ -69,6 +81,10 @@ interface Props {
   onOpenCamp?: (tab: NonNullable<MechanicDef['camp']>['tab']) => void;
   /** Equip the top armable recipe pair from Armory in one tap */
   onArmRecipe?: (recipeId: string) => void;
+  /** [GP-18] Toggle Friendly Tailwind loss-streak relief on/off */
+  onToggleTailwind?: (active: boolean) => void;
+  /** [GP-18] Choose a Starfall Cauldron upward coin wager tier (0 | 1 | 2) */
+  onSelectWager?: (tier: CauldronWagerTier) => void;
   /**
    * How the sheet goes when `level` turns null: 'slide' (put away with ✕, the
    * backdrop or the back button: it goes down the way it came), 'screen' (it
@@ -212,10 +228,47 @@ const LevelPreview: React.FC<Props> = props => {
   );
 };
 
-const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({ level, save, onClose, onPlay, onSelectFighter, onSelectCharm, onSelectArcana, onShowMechanic, onOpenCamp, onArmRecipe, foeCue }) => {
+const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({ level, save, onClose, onPlay, onSelectFighter, onSelectCharm, onSelectArcana, onShowMechanic, onOpenCamp, onArmRecipe, onToggleTailwind, onSelectWager, foeCue }) => {
   const [charmTapCounts, setCharmTapCounts] = useState<Record<string, number>>({});
   /** The charm tapped last: explained below the row even when it could not be equipped */
   const [focusCharm, setFocusCharm] = useState<string | null>(null);
+  const [localTailwind, setLocalTailwind] = useState<boolean>(Boolean(save.tailwindActive));
+  const [localWager, setLocalWager] = useState<CauldronWagerTier>(save.cauldronWager ?? 0);
+  useEffect(() => {
+    setLocalTailwind(Boolean(save.tailwindActive));
+  }, [save.tailwindActive, level.id]);
+  useEffect(() => {
+    setLocalWager(save.cauldronWager ?? 0);
+  }, [save.cauldronWager, level.id]);
+
+  const tailwindOffered = isTailwindOffered(level, save);
+  const tailwindOn = tailwindOffered && localTailwind;
+  const cauldronAvailable = isCauldronAvailable(level, save);
+  const activeWagerTier: CauldronWagerTier =
+    !tailwindOn && cauldronAvailable && canAffordCauldronWager(save, localWager) ? localWager : 0;
+  const activeWager = getCauldronWager(activeWagerTier);
+  const lossStreak = consecutiveLossesFor(save, level.id);
+  const stuckNudgeActive = shouldEnableLossStreakNudge(level, save);
+
+  const handleToggleTailwind = () => {
+    const next = !tailwindOn;
+    setLocalTailwind(next);
+    if (next && localWager !== 0) {
+      setLocalWager(0);
+      onSelectWager?.(0);
+    }
+    onToggleTailwind?.(next);
+  };
+
+  const handleSelectWager = (tier: CauldronWagerTier) => {
+    if (tier !== 0 && !canAffordCauldronWager(save, tier)) return;
+    setLocalWager(tier);
+    if (tier > 0 && localTailwind) {
+      setLocalTailwind(false);
+      onToggleTailwind?.(false);
+    }
+    onSelectWager?.(tier);
+  };
   const biome = getBiome(level.biome);
   const foe = levelFoe(level);
   const mech = getMechanic(level.introduces);
@@ -228,7 +281,16 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({ l
   const isNew = !save.seenMechanics.includes(level.introduces);
   const loadout = startingLoadout(level, save);
   const gearOn = !level.rules.noGear;
-  const totalHp = level.foes.reduce((a, f) => a + f.hp, 0);
+  const baseTotalHp = level.foes.reduce((a, f) => a + f.hp, 0);
+  const totalHp = Math.round(baseTotalHp * activeWager.foeHpScale);
+  const displayHearts =
+    level.rules.hearts === 0 ? 0 : level.rules.hearts + (tailwindOn ? FRIENDLY_TAILWIND.extraHearts : 0);
+  const displayTimer = level.rules.timer
+    ? Math.round(level.rules.timer * (tailwindOn ? FRIENDLY_TAILWIND.timerScale : 1))
+    : undefined;
+  const displayMoves = level.rules.moves
+    ? Math.round(level.rules.moves * (tailwindOn ? FRIENDLY_TAILWIND.moveScale : 1))
+    : undefined;
   const charms = equippedCharms(save);
   const slots = charmSlots(save);
   const arcana = equippedArcanaOf(save);
@@ -306,9 +368,9 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({ l
               ) : accuracy ? (
                 <Rule icon="lorc/archery-target" text={`${Math.ceil(totalHp / 3)} matches`} />
               ) : (
-                <Rule icon={timed ? 'lorc/stopwatch' : 'lorc/archery-target'} text={timed ? `${level.rules.timer}s` : `${level.rules.moves} moves`} />
+                <Rule icon={timed ? 'lorc/stopwatch' : 'lorc/archery-target'} text={timed ? `${displayTimer}s` : `${displayMoves} moves`} />
               )}
-              <View style={st.rule}><Heart size={16} /><Text style={st.ruleText}>{practice ? `${loadout.maxHearts ?? level.rules.hearts}, refilling` : level.rules.hearts === 0 ? "Can't lose" : level.rules.hearts}</Text></View>
+              <View style={st.rule}><Heart size={16} /><Text style={st.ruleText}>{practice ? `${loadout.maxHearts ?? level.rules.hearts}, refilling` : displayHearts === 0 ? "Can't lose" : displayHearts}</Text></View>
               {!accuracy && <Rule icon="lorc/crossed-swords" text={practice ? '∞ HP' : `${totalHp} HP`} />}
               {level.rules.attributes.length >= 3 && (
                 <View style={st.rule}>
@@ -578,6 +640,87 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({ l
               </View>
             )}
 
+            {/* [GP-18] Friendly Tailwind — warm, zero-shame relief after 2+ consecutive losses */}
+            {tailwindOffered && (
+              <View style={[st.reliefCard, tailwindOn && st.reliefCardOn]} testID="preview-tailwind-card">
+                <View style={st.reliefHeader}>
+                  <View style={st.reliefIcon}>
+                    <Icon name="lorc/feather" size={18} color={INK} />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={st.reliefEyebrow}>FRIENDLY TAILWIND · {lossStreak} TRIES</Text>
+                    <Text style={st.reliefTitle}>Take a gentle breeze to push past</Text>
+                  </View>
+                  <TouchableOpacity
+                    testID="preview-tailwind-toggle"
+                    onPress={handleToggleTailwind}
+                    style={[st.tailwindPill, tailwindOn && st.tailwindPillOn]}
+                    activeOpacity={0.85}
+                    accessibilityRole="switch"
+                    accessibilityState={{ checked: tailwindOn }}
+                    accessibilityLabel={`Friendly Tailwind ${tailwindOn ? 'on' : 'off'}`}
+                  >
+                    <Text style={[st.tailwindPillText, tailwindOn && st.tailwindPillTextOn]}>
+                      {tailwindOn ? 'ON' : 'OFF'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={st.reliefDesc}>
+                  +{FRIENDLY_TAILWIND.extraHearts} ♥ · +20% {timed ? 'clock' : 'moves'} · 25% slower Parries.{' '}
+                  {TAILWIND_STAR_CAP === 1
+                    ? 'Earns ★ to open the road ahead (★★ & ★★★ stay full strength).'
+                    : 'Full stars eligible.'}
+                </Text>
+                {stuckNudgeActive && (
+                  <Text style={st.reliefNudge} testID="preview-stuck-nudge">
+                    Stuck nudge ready: 1 card softly glows after 25s quiet.
+                  </Text>
+                )}
+              </View>
+            )}
+
+            {/* [GP-18] Starfall Cauldron — optional World 2+ upward coin wager */}
+            {cauldronAvailable && !tailwindOn && (
+              <View style={st.cauldronBox} testID="preview-cauldron">
+                <View style={st.cauldronHead}>
+                  <Icon name="lorc/campfire" size={16} color={INK} />
+                  <Text style={st.cauldronTitle}>STARFALL CAULDRON</Text>
+                  <Text style={st.cauldronPurse}>{save.coins}¢</Text>
+                </View>
+                <View style={st.wagerRow}>
+                  {CAULDRON_WAGERS.map(w => {
+                    const selected = activeWagerTier === w.tier;
+                    const affordable = w.tier === 0 || canAffordCauldronWager(save, w.tier);
+                    return (
+                      <TouchableOpacity
+                        key={w.tier}
+                        testID={`preview-wager-${w.tier}`}
+                        onPress={() => handleSelectWager(w.tier)}
+                        disabled={!affordable}
+                        style={[
+                          st.wagerBtn,
+                          selected && st.wagerBtnSel,
+                          !affordable && st.wagerBtnDisabled,
+                        ]}
+                        activeOpacity={0.85}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected, disabled: !affordable }}
+                        accessibilityLabel={`${w.label}${w.stakeCoins > 0 ? ` (${w.stakeCoins} coins)` : ''}`}
+                      >
+                        <Text style={[st.wagerBtnTitle, selected && st.wagerBtnTitleSel]}>
+                          {w.tier === 0 ? '0' : `+${w.tier}`} · {w.label.replace(' Wager', '')}
+                        </Text>
+                        <Text style={st.wagerBtnSub}>
+                          {w.stakeCoins === 0 ? '1.0× coins' : affordable ? `${w.stakeCoins}¢ → ${w.coinMultiplier}×` : `Need ${w.stakeCoins}¢`}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <Text style={st.cauldronSummary} testID="preview-wager-summary">{activeWager.summary}</Text>
+              </View>
+            )}
+
             {/* Arcana slots */}
             {gearOn && save.unlockedArcana.length > 0 && onSelectArcana && (
               <>
@@ -752,6 +895,30 @@ const st = StyleSheet.create({
   arcanaSummary: { backgroundColor: TONE.arcanaPale, borderRadius: 8, borderWidth: 1.5, borderColor: INK, padding: 8, gap: 2 },
   arcanaUp: { fontSize: 11, fontWeight: '800', color: TONE.upside },
   arcanaDown: { fontSize: 11, fontWeight: '700', color: TONE.tradeoff },
+  reliefCard: { gap: 6, padding: 10, borderRadius: 12, borderWidth: 2, borderColor: '#0F766E', backgroundColor: '#F0FDFA' },
+  reliefCardOn: { backgroundColor: '#CCFBF1', borderBottomWidth: 4 },
+  reliefHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  reliefIcon: { width: 32, height: 32, borderRadius: 8, borderWidth: 1.5, borderColor: INK, backgroundColor: COLORS.canvasWhite, alignItems: 'center', justifyContent: 'center' },
+  reliefEyebrow: { fontSize: 9, fontWeight: '900', letterSpacing: 1.2, color: '#0F766E' },
+  reliefTitle: { fontSize: 13, fontWeight: '900', color: INK },
+  reliefDesc: { fontSize: 12, lineHeight: 17, color: INK },
+  reliefNudge: { fontSize: 11, fontWeight: '800', color: '#0F766E' },
+  tailwindPill: { minWidth: 58, minHeight: 44, paddingHorizontal: 12, borderRadius: 999, borderWidth: 2, borderColor: INK, backgroundColor: COLORS.canvasWhite, alignItems: 'center', justifyContent: 'center' },
+  tailwindPillOn: { backgroundColor: '#0F766E' },
+  tailwindPillText: { fontSize: 12, fontWeight: '900', color: INK, letterSpacing: 0.8 },
+  tailwindPillTextOn: { color: COLORS.canvasWhite },
+  cauldronBox: { gap: 8, padding: 10, borderRadius: 12, borderWidth: 2, borderColor: '#B45309', backgroundColor: '#FFFBEB' },
+  cauldronHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  cauldronTitle: { flex: 1, fontSize: 11, fontWeight: '900', letterSpacing: 1.4, color: INK },
+  cauldronPurse: { fontSize: 12, fontWeight: '900', color: '#92400E' },
+  wagerRow: { flexDirection: 'row', gap: 6 },
+  wagerBtn: { flex: 1, minHeight: 44, paddingHorizontal: 6, paddingVertical: 6, borderRadius: 9, borderWidth: 2, borderColor: TONE.spentEdge, backgroundColor: COLORS.canvasWhite, alignItems: 'center', justifyContent: 'center', gap: 2 },
+  wagerBtnSel: { borderColor: INK, borderBottomWidth: 4, backgroundColor: COLORS.actionYellow },
+  wagerBtnDisabled: { opacity: 0.45 },
+  wagerBtnTitle: { fontSize: 11, fontWeight: '900', color: INK, textAlign: 'center' },
+  wagerBtnTitleSel: { color: INK },
+  wagerBtnSub: { fontSize: 10, fontWeight: '700', color: INK, opacity: 0.8, textAlign: 'center' },
+  cauldronSummary: { fontSize: 11, fontWeight: '700', color: '#78350F', lineHeight: 16 },
   footer: { padding: 14, borderTopWidth: 2, borderTopColor: INK, backgroundColor: COLORS.paperBeige },
   locked: { flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center' },
   lockedText: { color: INK, fontWeight: '700', flexShrink: 1 },

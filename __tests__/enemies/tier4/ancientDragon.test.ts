@@ -61,20 +61,23 @@ describe('Ancient Dragon', () => {
   });
 
   describe('timer speed', () => {
-    it('has 40% faster timer', () => {
+    it('has 35% faster timer (focused dragon kit)', () => {
       const enemy = createAncientDragon();
       const uiMods = enemy.getUIModifiers();
-      expect(uiMods.timerSpeedMultiplier).toBe(1.4);
+      expect(uiMods.timerSpeedMultiplier).toBe(1.35);
     });
   });
 
-  describe('score decay', () => {
-    it('decays at 0.33 points per second (1 per 3s)', () => {
+  describe('focused dragonfire kit (no passive score decay)', () => {
+    it('does not drain score passively and doubles damage/points', () => {
       const enemy = createAncientDragon();
       const board = createTestBoard();
 
-      const result = enemy.onTick(1000, board);
-      expect(result.scoreDelta).toBe(-0.33);
+      const tickResult = enemy.onTick(1000, board);
+      expect(tickResult.scoreDelta).toBe(0);
+      expect(enemy.getStatModifiers().damageMultiplier).toBe(2.0);
+      const matchResult = enemy.onValidMatch([board[0], board[1], board[2]], board);
+      expect(matchResult.pointsMultiplier).toBe(2.0);
     });
   });
 

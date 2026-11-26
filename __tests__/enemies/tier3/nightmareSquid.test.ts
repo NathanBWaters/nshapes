@@ -70,19 +70,23 @@ describe('Nightmare Squid', () => {
   });
 
   describe('defeat condition', () => {
-    it('returns false below 200% target', () => {
+    it('returns false with no matches or any invalid match', () => {
       const enemy = createNightmareSquid();
       const stats = createEmptyStats();
-      stats.currentScore = 180;
-      stats.targetScore = 100;
+      stats.totalMatches = 0;
+      stats.invalidMatches = 0;
+      expect(enemy.checkDefeatCondition(stats)).toBe(false);
+
+      stats.totalMatches = 4;
+      stats.invalidMatches = 1;
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
 
-    it('returns true at 200% target', () => {
+    it('returns true with matches and zero invalid matches', () => {
       const enemy = createNightmareSquid();
       const stats = createEmptyStats();
-      stats.currentScore = 200;
-      stats.targetScore = 100;
+      stats.totalMatches = 4;
+      stats.invalidMatches = 0;
       expect(enemy.checkDefeatCondition(stats)).toBe(true);
     });
   });

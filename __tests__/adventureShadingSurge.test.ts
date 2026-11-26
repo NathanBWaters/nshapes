@@ -1,4 +1,4 @@
-import { LEVELS, getLevel } from '@/adventure/data/levels';
+import { LEVELS, externalPressuresOf, getLevel } from '@/adventure/data/levels';
 import { SURGE_RULES } from '@/adventure/data/rules';
 import { challengeProgress } from '@/adventure/engine/challenges';
 import { buildDamageStory } from '@/adventure/engine/damageStory';
@@ -126,10 +126,16 @@ describe('Shading Surge', () => {
 describe('Shading Surge in the campaign', () => {
   const world = (id: string) => Number(id.split('-')[0]);
 
-  it('Worlds 3-5 play on three traits with the surge; Worlds 1-2 never surge', () => {
+  it('Worlds 1-2 never surge; Worlds 3-5 play on <=3 traits and respect the [GP-09] pressure cap', () => {
+    const w35Surges = LEVELS.filter(l => world(l.id) >= 3 && l.rules.shadingSurge);
+    expect(w35Surges.length).toBeGreaterThanOrEqual(8);
     for (const l of LEVELS) {
       expect(l.rules.attributes.length).toBeLessThanOrEqual(3);
-      expect(!!l.rules.shadingSurge).toBe(world(l.id) >= 3);
+      if (world(l.id) < 3) {
+        expect(!!l.rules.shadingSurge).toBe(false);
+      }
+      const cap = l.id === '5-5' ? 3 : 2;
+      expect(externalPressuresOf(l).length).toBeLessThanOrEqual(cap);
     }
   });
 

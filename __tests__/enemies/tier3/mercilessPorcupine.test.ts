@@ -59,14 +59,15 @@ describe('Merciless Porcupine', () => {
     });
   });
 
-  describe('inactivity effect', () => {
-    it('causes instant death after 35s', () => {
+  describe('inactivity Heavy Slam', () => {
+    it('delivers a telegraphed −2 ♥ Heavy Slam after 35s inactivity (no instant death)', () => {
       const enemy = createMercilessPorcupine();
       const board = createTestBoard();
       enemy.onRoundStart(board);
 
       const result = enemy.onTick(35000, board);
-      expect(result.instantDeath).toBe(true);
+      expect(result.instantDeath).toBe(false);
+      expect(result.healthDelta).toBe(-2);
     });
   });
 

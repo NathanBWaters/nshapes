@@ -36,20 +36,34 @@ const createEmptyStats = (): RoundStats => ({
 });
 
 describe('One-Eyed Terror', () => {
-  describe('hint disable effect', () => {
-    it('disables all hints', () => {
+  describe('Gaze Drain ([GP-16] keeps manual hints open)', () => {
+    it('keeps manual hints enabled and marks a watched card every 16s', () => {
       const enemy = createOneEyedTerror();
       const uiMods = enemy.getUIModifiers();
-      expect(uiMods.disableAutoHint).toBe(true);
-      expect(uiMods.disableManualHint).toBe(true);
+      expect(uiMods.disableManualHint).toBeFalsy();
+
+      const board = Array(12)
+        .fill(null)
+        .map((_, i) => ({
+          id: `card-${i}`,
+          shape: 'oval' as const,
+          color: 'red' as const,
+          number: 1 as const,
+          shading: 'solid' as const,
+          selected: false,
+        }));
+      enemy.onRoundStart(board);
+      const gazeTick = enemy.onTick(16000, board);
+      const watched = gazeTick.cardModifications.find(m => m.changes.hasCountdown);
+      expect(watched).toBeDefined();
     });
   });
 
   describe('hint counter effect', () => {
-    it('reduces hint gain by 55%', () => {
+    it('reduces hint gain gently by 25% without deleting Insight builds', () => {
       const enemy = createOneEyedTerror();
       const statMods = enemy.getStatModifiers();
-      expect(statMods.hintGainChanceReduction).toBe(55);
+      expect(statMods.hintGainChanceReduction).toBe(25);
     });
   });
 
