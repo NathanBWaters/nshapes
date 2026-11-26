@@ -8,10 +8,10 @@ export const BASE_RULES = {
   pickOptions: 3,
   /**
    * "Your next Set deals ×N" effects add up rather than multiply (×2 and ×2
-   * make ×3), and the next Set's multiplier (with Hot Streak) tops out here.
-   * Multiplying let a few cheap triggers before one Set snowball to ×8, ×16...
+   * make ×3), and the combined single-Set multiplier (with Hot Streak) tops out
+   * at ×16 so player-engineered burst setups pay out in full without overflow.
    */
-  maxNextSetMultiplier: 4,
+  maxNextSetMultiplier: 16,
   /**
    * Time gains (weapons, rules, evolutions) can add at most this share of the
    * fight's starting clock in total. Without it, link-and-time loops ran
@@ -23,19 +23,20 @@ export const BASE_RULES = {
 /**
  * Shading Surge (Worlds 3-5). Four traits all the time was too much to hold in
  * your head, so the board plays on three traits with every card solid, and
- * shading only switches on for a short, high-stakes window: every Set made
- * while it is on has its base damage (its cards) ×5, so a plain 3-damage Set
- * becomes 15. Multipliers ("next Set ×2", Rainbow, evolutions) apply on top,
- * so save them for it. Flat weapon bonuses are added after and are not ×5:
- * multiplying those too made a geared build's surge far stronger than a
- * fresh one's, and no foe HP suited both.
+ * shading only switches on for a short, high-stakes window: for 15 seconds,
+ * shading joins the rule and every Set gets ×5 in the multiplier chain.
+ *
+ * Damage equation (every Set, Surge or not):
+ *   TOTAL = (card points + sum of all flat bonuses) × (product of all multipliers)
+ * During a Shading Surge, ×5 multiplies the entire additive base cleanly
+ * alongside Rainbow, Parry, Stagger, Evolutions, Next-Set boosts, and Power.
  */
 export const SURGE_RULES = {
   /** Shading off (every card solid) */
   calmMs: 45000,
   /** Shading on */
   surgeMs: 15000,
-  /** A Set's base damage (the points on its cards) during the surge is multiplied by this */
+  /** Set multiplier applied during the surge (joins all other multipliers in BASE × MULT) */
   multiplier: 5,
   /** Heads-up before a surge starts */
   warnMs: 5000,

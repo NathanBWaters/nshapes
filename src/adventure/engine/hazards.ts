@@ -4,7 +4,15 @@
  * Placement lives in fight.ts because every refill can bring one.
  */
 import type { Card } from '@/types';
-import { emit, enqueue, hurt, mods, placeSnare, placeTimeBomb, recycle, snareTarget, SNARE_DEFUSE_DAMAGE, updateCards, type Draft } from './fight';
+import type { FightLogMathItem } from '../types';
+import { SKILL_FEAT_POWER } from '../data/weaponPower';
+import { addPower, emit, enqueue, hurt, mods, placeSnare, placeTimeBomb, recycle, snareTarget, SNARE_DEFUSE_DAMAGE, updateCards, type Draft } from './fight';
+
+export const BOMB_DEFUSE_BASE_DAMAGE = 4;
+export const BOMB_DEFUSE_HOT_DAMAGE = 8;
+export const BOMB_DEFUSE_CLUTCH_DAMAGE = 14;
+export const BOMB_HOT_THRESHOLD_SEC = 8;
+export const BOMB_CLUTCH_THRESHOLD_SEC = 5;
 
 const defused = (d: Draft, kind: 'bomb' | 'snare', bonus?: number, slot?: number) => {
   d.trapsDefused += 1;
@@ -13,20 +21,51 @@ const defused = (d: Draft, kind: 'bomb' | 'snare', bonus?: number, slot?: number
 };
 
 /**
- * Traps touched by the Set being scored. A Set that includes the card a snare
- * points at defuses it, even if the snared card is in the Set too. Returns the
- * bonus damage earned and how many snares were sprung (see `springSnares`).
+ * Traps touched by the Set being scored. Defusing a Time Bomb hurls it at the foe
+ * for fuse-proximity bonus damage (+4 / +8 hot / +14 clutch + +0.25 Power); a Set
+ * that includes the card a snare points at defuses it for +4 damage.
  */
-export const resolveTrapsOnSet = (d: Draft, matched: Card[]): { bonus: number; sprung: number } => {
+export const resolveTrapsOnSet = (
+  d: Draft,
+  matched: Card[]
+): { bonus: number; sprung: number; items: FightLogMathItem[] } => {
   const ids = new Set(matched.map(c => c.id));
   let bonus = 0;
   let sprung = 0;
+  const items: FightLogMathItem[] = [];
 
   const bombs = d.timeBombIds.filter(id => ids.has(id));
   if (bombs.length) {
+    // Capture remaining fuse timers BEFORE clearing countdown fields on the board
+    const bombInfo = bombs.map(id => {
+      const slot = d.board.findIndex(c => c.id === id);
+      const live = slot >= 0 ? d.board[slot] : matched.find(c => c.id === id);
+      return { id, slot, remaining: live?.countdownTimer ?? BOMB_HOT_THRESHOLD_SEC };
+    });
     d.timeBombIds = d.timeBombIds.filter(id => !ids.has(id));
-    updateCards(d, d.board.map((c, i) => (ids.has(c.id) && c.hasCountdown ? i : -1)).filter(i => i >= 0), c => ({ ...c, hasCountdown: false, countdownTimer: undefined }));
-    bombs.forEach(id => defused(d, 'bomb', undefined, d.board.findIndex(c => c.id === id)));
+    updateCards(
+      d,
+      d.board.map((c, i) => (ids.has(c.id) && c.hasCountdown ? i : -1)).filter(i => i >= 0),
+      c => ({ ...c, hasCountdown: false, countdownTimer: undefined })
+    );
+    for (const b of bombInfo) {
+      let dmg = BOMB_DEFUSE_BASE_DAMAGE;
+      let label = 'Bomb Throw';
+      let note = 'defused bomb hurled at foe';
+      if (b.remaining < BOMB_CLUTCH_THRESHOLD_SEC) {
+        dmg = BOMB_DEFUSE_CLUTCH_DAMAGE;
+        label = 'Clutch Defuse!';
+        note = 'bomb thrown with <5s left (+0.25 Power)';
+        addPower(d, SKILL_FEAT_POWER.clutchBomb);
+      } else if (b.remaining < BOMB_HOT_THRESHOLD_SEC) {
+        dmg = BOMB_DEFUSE_HOT_DAMAGE;
+        label = 'Hot Defuse!';
+        note = 'bomb thrown with <8s left';
+      }
+      bonus += dmg;
+      items.push({ label, amount: dmg, note });
+      defused(d, 'bomb', dmg, b.slot >= 0 ? b.slot : undefined);
+    }
   }
 
   const clear: number[] = [];
@@ -35,6 +74,7 @@ export const resolveTrapsOnSet = (d: Draft, matched: Card[]): { bonus: number; s
     const t = snareTarget(i, c.snare, d.board.length);
     if (t !== null && ids.has(d.board[t].id)) {
       bonus += SNARE_DEFUSE_DAMAGE;
+      items.push({ label: 'Snare Defused', amount: SNARE_DEFUSE_DAMAGE, note: 'cleared snare trap' });
       clear.push(i);
       defused(d, 'snare', SNARE_DEFUSE_DAMAGE, i);
     } else if (ids.has(c.id)) {
@@ -43,7 +83,7 @@ export const resolveTrapsOnSet = (d: Draft, matched: Card[]): { bonus: number; s
     }
   });
   updateCards(d, clear, c => ({ ...c, snare: undefined }));
-  return { bonus, sprung };
+  return { bonus, sprung, items };
 };
 
 /** Sprung snares bite after the Set has landed (so the lost heart doesn't feed this Set). */

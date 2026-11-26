@@ -30,9 +30,10 @@ import type { Card, CardReward, CharacterName, Weapon } from '@/types';
 import { getAdjacentIndices, type WeaponEffectResult } from '@/utils/weaponEffects';
 import { band, music, sfx } from '@/audio';
 import { moodOf, playSounds, soundsFor } from '@/audio/fightAudio';
-import type { AdventureSave, EvolutionRecipe, FeatureFlag, LevelDef, PassiveId, RunEventType, RunState } from '../types';
+import type { AdventureSave, EvolutionRecipe, FeatureFlag, LevelDef, PassiveId, RunEventType, RunReliefOptions, RunState } from '../types';
 import type { WeaponBuilds } from '../data/weaponStats';
-import { activeEnemyCounters, computeStars, createRun, runReducer, shopPrice, rerollCost, xpForLevel, type RunAction, type RunOverrides } from '../engine/run';
+import { activeEnemyCounters, computeStars, createRun, isSacrificeUnlocked, runReducer, shopPrice, rerollCost, xpForLevel, type RunAction, type RunOverrides } from '../engine/run';
+import { formatPowerGain } from '../data/weaponPower';
 import { nextCatalystRecipe } from '../engine/fight';
 import { boardHasCounterSet } from '../engine/parry';
 import { FightRecorder, type FightTape } from '../engine/replay';
@@ -136,6 +137,8 @@ interface Props {
   onToggleEffects?: () => void;
   /** Optional engine overrides (persistent HP, uncapped loadout, custom weapon builds) */
   runOverrides?: RunOverrides;
+  /** Optional relief / Tailwind / Cauldron Wager run options ([GP-10] / [GP-16]) */
+  relief?: RunReliefOptions;
   /** Optional explicit feature set (defaults to campaign progression for `level`) */
   featuresOverride?: Set<FeatureFlag>;
   /** Optional mode-agnostic HUD & pause chrome overrides */
@@ -179,6 +182,7 @@ const AdventureRun: React.FC<Props> = ({
   effects = true,
   onToggleEffects,
   runOverrides,
+  relief,
   featuresOverride,
   chrome,
 }) => {
@@ -194,6 +198,7 @@ const AdventureRun: React.FC<Props> = ({
       seed,
       ...(featuresOverride ? { features: featuresOverride } : {}),
       ...(runOverrides ? { overrides: runOverrides } : {}),
+      ...(relief ? { relief } : {}),
     })
   );
   const runRef = useRef(run);
@@ -571,6 +576,18 @@ const AdventureRun: React.FC<Props> = ({
     later(() => setLastSet(cur => (cur === picked ? null : cur)), LAST_SET_MS);
   }, [dispatch, triggerMatch, later]);
 
+  // Defensive Grace Save ([GP-04]): consumes 1 Grace, spares heart, cycles 3 cards, 0 base Set damage
+  const handleGraceSave = useCallback((cards: Card[]) => {
+    setLastMatchTime(Date.now());
+    setMistakeNote(null);
+    setMistakeCards(null);
+    setEventBannerNote(null);
+    triggerMatch({ isGraceMatch: true, isMegaMatch: false, didHeal: false });
+    dispatch({ type: 'GRACE_SAVE', cards });
+    const ids = cards.map(c => c.id);
+    later(() => dispatch({ type: 'REPLACE', ids }), REPLACE_DELAY_MS);
+  }, [dispatch, triggerMatch, later]);
+
   const handleInvalid = useCallback((cards: Card[]) => {
     triggerMistake();
     triggerEnemyReaction('taunt');
@@ -729,6 +746,42 @@ const AdventureRun: React.FC<Props> = ({
     setEventBannerNote(msg);
     later(() => setEventBannerNote(prev => (prev === msg ? null : prev)), 4500);
   }, [showDamageHud, run.power]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Lightweight live `power_gain` delta pill beside PowerMeter ([GP-01])
+  const prevPowerRef = useRef(run.power);
+  const [powerDelta, setPowerDelta] = useState<{ key: number; text: string } | null>(null);
+  useEffect(() => {
+    const prev = prevPowerRef.current;
+    prevPowerRef.current = run.power;
+    const diff = run.power - prev;
+    if (diff > 0.005) {
+      const next = { key: run.eventSeq + Math.round(run.power * 1000), text: formatPowerGain(diff) };
+      setPowerDelta(next);
+      later(() => setPowerDelta(cur => (cur?.key === next.key ? null : cur)), 1100);
+    }
+  }, [run.power, run.eventSeq, later]);
+
+  // Tactical Sacrifice / Redraw ([GP-05]): unlocked from 2-6 onward (and practice) when hearts > 1
+  const sacrificeUnlocked = isSacrificeUnlocked(level) && run.hearts !== null && run.maxHearts !== null;
+  const sacrificeTimed = run.timeLeft !== null;
+  const sacrificeCdSec = Math.ceil((run.sacrificeCooldownMs ?? 0) / 1000);
+  const sacrificeOnCooldown = sacrificeTimed ? sacrificeCdSec > 0 : Boolean(run.sacrificeUsedThisWave);
+  const canSacrifice =
+    playing &&
+    !fx.cutIn &&
+    sacrificeUnlocked &&
+    run.hearts !== null &&
+    run.hearts > 1 &&
+    !sacrificeOnCooldown;
+  const handleSacrifice = useCallback(() => {
+    if (!canSacrifice) return;
+    sfx('hit');
+    triggerMistake();
+    setMistakeNote(null);
+    setMistakeCards(null);
+    setEventBannerNote(null);
+    dispatch({ type: 'SACRIFICE', cardIds: boardSelectedCards.map(c => c.id) });
+  }, [canSacrifice, dispatch, triggerMistake, boardSelectedCards]);
   const effectiveMistakeNote =
     mistakeCards && mistakeCards.length === 3
       ? explainInvalidPick(mistakeCards, run.attributes, run.fighter, colorblind)
@@ -867,7 +920,8 @@ const AdventureRun: React.FC<Props> = ({
     (showPassivesHud && run.passives.length > 0) ||
     run.features.has('graces') ||
     run.features.has('coins') ||
-    run.features.has('hints');
+    run.features.has('hints') ||
+    sacrificeUnlocked;
   const hasResourceRow =
     run.movesLeft !== null ||
     practice ||
@@ -1144,7 +1198,12 @@ const AdventureRun: React.FC<Props> = ({
               ) : (showDamageHud || (run.combo > 1 && comboLive) || practice) ? (
                 <View style={st.counters}>
                   {showDamageHud && <Text testID="run-total-damage" style={st.counter} accessibilityLabel={`${run.totalDamage} total damage`}>⚔ {run.totalDamage}</Text>}
-                  {showDamageHud && run.power > 0 && <PowerMeter points={run.power} onPress={() => { sfx('click'); setPowerInfo(true); }} />}
+                  {showDamageHud && run.power > 0 && (
+                    <View style={st.powerWrap}>
+                      <PowerMeter points={run.power} onPress={() => { sfx('click'); setPowerInfo(true); }} />
+                      {powerDelta && <PowerDeltaBadge key={powerDelta.key} text={powerDelta.text} animate={effects && !reducedMotion} />}
+                    </View>
+                  )}
                   {run.combo > 1 && comboLive && (
                     <Anchor name="combo">
                       <View testID="run-combo" style={st.comboPill} accessibilityLabel={`Combo ×${run.combo}`}>
@@ -1249,6 +1308,38 @@ const AdventureRun: React.FC<Props> = ({
                 </View>
                 <View style={st.resourceRight}>
                   {run.features.has('coins') && <Anchor name="coins"><CoinPill coins={run.coins} compact /></Anchor>}
+                  {sacrificeUnlocked && (
+                    <TouchableOpacity
+                      testID="run-sacrifice"
+                      onPress={handleSacrifice}
+                      disabled={!canSacrifice}
+                      activeOpacity={0.75}
+                      style={[
+                        st.sacrificeBtn,
+                        boardSelectedCards.length > 0 && canSacrifice && st.sacrificeBtnArmed,
+                        !canSacrifice && { opacity: 0.4 },
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        sacrificeOnCooldown
+                          ? sacrificeTimed
+                            ? `Sacrifice cooling down, ${sacrificeCdSec} seconds left`
+                            : 'Sacrifice already used this wave'
+                          : run.hearts !== null && run.hearts <= 1
+                            ? 'Sacrifice requires more than 1 heart'
+                            : 'Sacrifice 1 heart to redraw 3 cards and deal 6 shockwave damage'
+                      }
+                    >
+                      <Icon name="lorc/recycle" size={12} color="#991B1B" />
+                      <Text style={st.sacrificeText} numberOfLines={1}>
+                        {sacrificeOnCooldown
+                          ? (sacrificeTimed ? `${sacrificeCdSec}s` : '1/w')
+                          : isWide
+                            ? 'SACRIFICE 1♥'
+                            : '1♥'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                   {run.features.has('hints') && (
                     <Anchor name="hint">
                       <TouchableOpacity
@@ -1439,6 +1530,8 @@ const AdventureRun: React.FC<Props> = ({
               cards={run.board}
               connections={run.connections}
               onMatch={handleMatch}
+              onGraceSave={handleGraceSave}
+              allowSelectClogged={canSacrifice}
               onInvalidSelection={handleInvalid}
               playerStats={run.stats}
               weapons={run.weapons}
@@ -1675,6 +1768,37 @@ const AdventureRun: React.FC<Props> = ({
       />
     </Animated.View>
     </AnchorsProvider>
+  );
+};
+
+/** Transient floating `+0.25` Power gain badge beside PowerMeter ([GP-01]). */
+const PowerDeltaBadge: React.FC<{ text: string; animate: boolean }> = ({ text, animate }) => {
+  const op = useSharedValue(1);
+  const y = useSharedValue(0);
+  useEffect(() => {
+    if (!animate) {
+      op.value = 1;
+      y.value = 0;
+      return;
+    }
+    op.value = withSequence(
+      withTiming(1, { duration: 120 }),
+      withDelay(600, withTiming(0, { duration: 320, easing: Easing.out(Easing.quad) }))
+    );
+    y.value = withTiming(-5, { duration: 950, easing: Easing.out(Easing.quad) });
+    return () => {
+      cancelAnimation(op);
+      cancelAnimation(y);
+    };
+  }, [animate, op, y]);
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: op.value,
+    transform: [{ translateY: y.value }],
+  }));
+  return (
+    <Animated.View testID="run-power-delta" pointerEvents="none" style={[st.powerDelta, animStyle]}>
+      <Text style={st.powerDeltaText}>{text}</Text>
+    </Animated.View>
   );
 };
 
@@ -2041,6 +2165,9 @@ const st = StyleSheet.create({
   idleTrack: { height: 4, borderRadius: 2, backgroundColor: '#EEE', overflow: 'hidden' },
   idleFill: { height: '100%', backgroundColor: COLORS.impactOrange },
   counters: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', columnGap: 5, rowGap: 1, paddingHorizontal: 4 },
+  powerWrap: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  powerDelta: { backgroundColor: COLORS.actionYellow, borderRadius: 999, borderWidth: 1, borderColor: INK, paddingHorizontal: 4.5, paddingVertical: 0.5 },
+  powerDeltaText: { fontSize: 9, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
   counter: { fontSize: 10.5, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
   counterHot: { color: COLORS.orangeSurface },
   comboPill: { backgroundColor: COLORS.orangeSurface, borderRadius: 999, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 6, paddingVertical: 0.5 },
@@ -2062,6 +2189,9 @@ const st = StyleSheet.create({
   statHeld: { backgroundColor: '#D4F4EE', borderColor: COLORS.logicTeal },
   statText: { flexShrink: 1, fontWeight: '900', color: INK, fontSize: 11, fontVariant: ['tabular-nums'] },
   hintBtn: { flexDirection: 'row', alignItems: 'center', gap: 2.5, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, borderWidth: 1.5, borderBottomWidth: 2.5, borderColor: INK, backgroundColor: COLORS.actionYellow },
+  sacrificeBtn: { flexDirection: 'row', alignItems: 'center', gap: 2.5, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1.5, borderBottomWidth: 2.5, borderColor: '#991B1B', backgroundColor: '#FEE2E2' },
+  sacrificeBtnArmed: { backgroundColor: '#FECACA', borderColor: '#7F1D1D' },
+  sacrificeText: { flexShrink: 1, fontWeight: '900', color: '#991B1B', fontSize: 10.5, fontVariant: ['tabular-nums'] },
   synergyRow: { flexDirection: 'row', alignItems: 'center', gap: 3.5, flexWrap: 'wrap' },
   arcanaChip: { flexDirection: 'row', alignItems: 'center', gap: 2.5, backgroundColor: TONE.arcanaPale, borderRadius: 999, borderWidth: 1.5, borderColor: TONE.arcana, paddingHorizontal: 5.5, paddingVertical: 1.5 },
   arcanaChipText: { fontSize: 9.5, fontWeight: '900', color: TONE.arcana },

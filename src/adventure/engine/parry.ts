@@ -9,7 +9,8 @@
 import type { AttributeName, Card } from '@/types';
 import type { FoeDef, LevelDef, ParryRequirement, ParrySpec, ParryState } from '../types';
 import { PARRY_RULES, resolveParrySpec } from '../data/parry';
-import { addCoins, addTime, emit, hurt, type Draft } from './fight';
+import { SKILL_FEAT_POWER } from '../data/weaponPower';
+import { addCoins, addPower, addTime, emit, hurt, type Draft } from './fight';
 import { allSets, countDifferentAttributes, isRainbow } from './sets';
 
 /** Does this valid 3-card Set satisfy the foe's Counter requirement? */
@@ -60,9 +61,13 @@ export const boardHasCounterSet = (
 };
 
 /** Build the opening ParryState for a wave's foe (starts calm so the player reads the board first). */
-export const initParryState = (level: LevelDef, foe?: FoeDef): ParryState | null => {
-  const spec = resolveParrySpec(level, foe);
-  if (!spec) return null;
+export const initParryState = (level: LevelDef, foe?: FoeDef, windupScale = 1): ParryState | null => {
+  const rawSpec = resolveParrySpec(level, foe);
+  if (!rawSpec) return null;
+  const spec: ParrySpec =
+    windupScale !== 1
+      ? { ...rawSpec, windupMs: Math.max(4000, Math.round(rawSpec.windupMs * windupScale)) }
+      : rawSpec;
   // Opening calm is slightly shorter (~70%) so the first telegraph arrives briskly
   const initialCalm = Math.max(5000, Math.round(spec.cooldownMs * 0.7));
   return {
@@ -75,6 +80,13 @@ export const initParryState = (level: LevelDef, foe?: FoeDef): ParryState | null
     parries: 0,
     perfectParries: 0,
   };
+};
+
+const effectiveCooldownMs = (d: Draft, spec: ParrySpec): number => {
+  if (spec.bossEnrageDeltaMs && d.foeMaxHp > 0 && d.foeHp > 0 && d.foeHp / d.foeMaxHp < 0.5) {
+    return Math.max(4000, spec.cooldownMs - spec.bossEnrageDeltaMs);
+  }
+  return spec.cooldownMs;
 };
 
 /** True while the foe is in its golden final Perfect Parry window. */
@@ -94,11 +106,12 @@ export const tickParry = (d: Draft, ms: number): void => {
 
   if (p.phase === 'staggered') {
     if (nextMs <= 0) {
+      const cd = effectiveCooldownMs(d, p.spec);
       d.parry = {
         ...p,
         phase: 'calm',
-        msLeft: p.spec.cooldownMs,
-        durationMs: p.spec.cooldownMs,
+        msLeft: cd,
+        durationMs: cd,
         warned: false,
         stallsUsed: 0,
       };
@@ -128,11 +141,12 @@ export const tickParry = (d: Draft, ms: number): void => {
   if (nextMs <= 0) {
     // Telegraph completed unparried — the foe strikes!
     applyUnparriedStrike(d, p.spec);
+    const cd = effectiveCooldownMs(d, p.spec);
     d.parry = {
       ...p,
       phase: 'calm',
-      msLeft: p.spec.cooldownMs,
-      durationMs: p.spec.cooldownMs,
+      msLeft: cd,
+      durationMs: cd,
       warned: false,
       stallsUsed: 0,
     };
@@ -150,15 +164,15 @@ export const tickParry = (d: Draft, ms: number): void => {
 const applyUnparriedStrike = (d: Draft, spec: ParrySpec): void => {
   emit(d, 'foe_strike', 1, spec.attackName);
   if (spec.penalty === 'time' && d.timeLeft !== null) {
-    addTime(d, -PARRY_RULES.timePenaltySeconds);
+    addTime(d, -(spec.penaltyAmount ?? PARRY_RULES.timePenaltySeconds));
     return;
   }
   if (spec.penalty === 'glancing') {
     // World 1 teaching strikes bruise without unexpectedly ending a beginner's run
-    if (d.hearts !== null && d.hearts > 1) hurt(d, 1);
+    if (d.hearts !== null && d.hearts > 1) hurt(d, spec.penaltyAmount ?? 1);
     return;
   }
-  if (d.hearts !== null) hurt(d, 1);
+  if (d.hearts !== null) hurt(d, spec.penaltyAmount ?? 1);
 };
 
 export interface ParryResolution {
@@ -213,15 +227,18 @@ export const resolveParryOnSet = (
     : isSpecific
       ? PARRY_RULES.counterParryMult
       : PARRY_RULES.anyParryMult;
+  const anyStaggerMs = (PARRY_RULES as { anyStaggerMs?: number }).anyStaggerMs ?? 2500;
   const staggerMs = perfect
-    ? PARRY_RULES.perfectStaggerMs
+    ? (p.spec.staggerMs ?? PARRY_RULES.perfectStaggerMs)
     : isSpecific
-      ? PARRY_RULES.counterStaggerMs
-      : 0;
+      ? (p.spec.staggerMs ?? PARRY_RULES.counterStaggerMs)
+      : anyStaggerMs;
   const bonusCoins = perfect ? PARRY_RULES.perfectParryCoins : PARRY_RULES.parryCoins;
 
   d.parriesLanded += 1;
   if (perfect) d.perfectParriesLanded += 1;
+  // Skill-feat Power surge (GP-01): rewards clean timing even without charms
+  addPower(d, perfect ? SKILL_FEAT_POWER.perfectParry : SKILL_FEAT_POWER.counterParry);
 
   if (staggerMs > 0) {
     d.parry = {
@@ -235,11 +252,12 @@ export const resolveParryOnSet = (
       perfectParries: p.perfectParries + (perfect ? 1 : 0),
     };
   } else {
+    const cd = effectiveCooldownMs(d, p.spec);
     d.parry = {
       ...p,
       phase: 'calm',
-      msLeft: p.spec.cooldownMs,
-      durationMs: p.spec.cooldownMs,
+      msLeft: cd,
+      durationMs: cd,
       warned: false,
       stallsUsed: 0,
       parries: p.parries + 1,

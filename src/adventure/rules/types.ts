@@ -58,13 +58,21 @@ export type Trigger =
   /** A card was destroyed because it was linked to a destroyed card */
   | { on: 'linkDestroyed' }
   /** This evolution's 30 seconds ran out (only an evolution's own rules hear it) */
-  | { on: 'finale' };
+  | { on: 'finale' }
+  /** Badger landed a valid Set while holding 1+ Grudges (detonating stored Grudges) */
+  | { on: 'grudgeRelease' };
 
 export type Condition =
   | { kind: 'chance'; pct: number }
   | { kind: 'heartsAtMost'; n: number }
   | { kind: 'heartsFull' }
   | { kind: 'comboAtLeast'; n: number }
+  /** Badger released at least `n` stored Grudges on this Set */
+  | { kind: 'grudgeAtLeast'; n: number }
+  /** First mistake since the last valid Set (caps repeatable mistake-reward farming) */
+  | { kind: 'firstMistakeSinceSet' }
+  /** Clock & foe are currently frozen (Deep Freeze / Freeze) */
+  | { kind: 'frozen' }
   /** The Set being scored has exactly this many all-different attributes */
   | { kind: 'diffCount'; n: number }
   /** The Set being scored has at most this many all-different attributes */
@@ -87,7 +95,7 @@ export type Condition =
 /** What a scaling effect counts (damage `per` one of these). */
 export type Scale =
   | 'boardCard' | 'missingHeart' | 'hint' | 'grace' | 'link' | 'combo'
-  | 'bonusCard' | 'burning' | 'evolution' | 'heart';
+  | 'bonusCard' | 'burning' | 'evolution' | 'heart' | 'grudgeReleased';
 
 /** Board shapes for area effects. Positions follow the 3-column grid. */
 export type Area =
@@ -180,6 +188,8 @@ export interface Modifiers {
   setDamage?: number;
   /** Extra flat damage on Sets meeting a condition */
   conditionalDamage?: { when: Condition[]; amount: number }[];
+  /** Extra multiplier on Sets meeting a condition (e.g. Corgi Stampede ×1.5 at 18+ board) */
+  conditionalMultiplier?: { when: Condition[]; multiplier: number }[];
   rainbowMultiplierBonus?: number;
   /** Scales a weapon effect's chance to fire */
   weaponChanceScale?: Partial<Record<WeaponTriggerKind, number>>;

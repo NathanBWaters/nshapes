@@ -47,6 +47,10 @@ interface GameBoardProps {
   cards: CardType[];
   /** `info.hinted`: one of the picked cards was being pointed out (a hint, an auto-hint or a glow) */
   onMatch: (cards: CardType[], rewards: CardReward[], weaponEffects?: WeaponEffectResult, info?: { hinted: boolean }) => void;
+  /** Defensive Grace Save ([GP-04]): skips offensive resolveMatch rolls and hands the 3 cards to the parent */
+  onGraceSave?: (cards: CardType[]) => void;
+  /** Allow selecting clogged cards (dud, locked, face-down) to target them for Sacrifice ([GP-05]) */
+  allowSelectClogged?: boolean;
   onMatchStart?: () => void; // Called immediately when a valid match is detected (before animations)
   onInvalidSelection: (cards: CardType[]) => void;
   playerStats: PlayerStats;
@@ -97,6 +101,8 @@ interface GameBoardProps {
 const GameBoard: React.FC<GameBoardProps> = ({
   cards,
   onMatch,
+  onGraceSave,
+  allowSelectClogged = false,
   onMatchStart,
   onInvalidSelection,
   playerStats,
@@ -444,7 +450,8 @@ const GameBoard: React.FC<GameBoardProps> = ({
   });
 
   const handleCardClick = (card: CardType) => {
-    if (!isPlayerTurn || card.isDud || card.isFaceDown || card.locked) return;
+    const isClogged = Boolean(card.isDud || card.isFaceDown || card.locked);
+    if (!isPlayerTurn || (isClogged && !allowSelectClogged)) return;
 
     // Don't allow clicking on cards that are currently being revealed as rewards
     if (revealingRewards.some(r => r.cardId === card.id)) return;
@@ -473,6 +480,9 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
     setSelectedCards(newSelectedCards);
 
+    // If any selected card is clogged (dud/locked/face-down), keep them selected for tactical Sacrifice instead of auto-judging
+    if (newSelectedCards.some(c => c.isDud || c.isFaceDown || c.locked)) return;
+
     // If we have 3 cards selected, check if they form a valid set
     if (newSelectedCards.length === 3) {
       setTimeout(() => {
@@ -481,6 +491,17 @@ const GameBoard: React.FC<GameBoardProps> = ({
         const graceUsed = !validation.isValid && validation.invalidAttributes.length === 1 && playerStats.graces > 0;
 
         if (validation.isValid || graceUsed) {
+          if (graceUsed && onGraceSave) {
+            onMatchStart?.();
+            triggerHaptic('warning');
+            playSound('graceUsed');
+            const removedIds = newSelectedCards.filter(c => c.health === undefined || c.health <= 1).map(c => c.id);
+            setMatchedCardIds(prev => [...prev, ...removedIds]);
+            setSelectedCards(prev => prev.filter(c => !newSelectedCards.some(mc => mc.id === c.id)));
+            recentAutoHintRef.current = { ids: [], shownAt: 0 };
+            onGraceSave(newSelectedCards);
+            return;
+          }
           onMatchStart?.();
           // No board flash: the Set's cards themselves are the answer (thrown in Adventure, revealed elsewhere)
           triggerHaptic(graceUsed ? 'warning' : 'success');

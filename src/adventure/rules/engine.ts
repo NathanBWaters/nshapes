@@ -41,6 +41,7 @@ const DIRECT_SET_TRIGGERS = new Set<Trigger['on']>([
   'graceUsed',
   'trapDefused',
   'trick',
+  'grudgeRelease',
 ]);
 
 const ordinal = (n: number): string => {
@@ -97,7 +98,9 @@ const describeRuleSource = (
                   ? 'Grace Set bonus'
                   : trigger.on === 'trick'
                     ? cleanCallout || 'trick payout'
-                    : cleanCallout || 'Set trigger';
+                    : trigger.on === 'grudgeRelease'
+                      ? 'Grudge release'
+                      : cleanCallout || 'Set trigger';
   return { label, note, ...(sourceRef ? { sourceRef } : {}) };
 };
 
@@ -123,6 +126,9 @@ const holds = (d: Draft, c: Condition): boolean => {
     case 'timeSinceLastSetAtMost': return sinceLastSet(d) <= c.ms;
     case 'boardAtLeast': return d.board.length >= c.n;
     case 'foeHpBelow': return d.foeMaxHp > 0 && d.foeHp > 0 && d.foeHp / d.foeMaxHp < c.fraction;
+    case 'grudgeAtLeast': return (d._setCtx?.grudgeReleased ?? 0) >= c.n;
+    case 'firstMistakeSinceSet': return !d.mistakeRewardUsedThisSet;
+    case 'frozen': return d.frozenMs > 0;
   }
 };
 
@@ -286,6 +292,7 @@ export const scaleCount = (d: Draft, per: Scale): number => {
     case 'bonusCard': return d.board.filter(c => (c.bonusPoints ?? 0) > 0 || (c.bonusMoney ?? 0) > 0).length;
     case 'burning': return d.board.filter(c => c.onFire).length;
     case 'evolution': return d.activeEvolutions.length;
+    case 'grudgeReleased': return d._setCtx?.grudgeReleased ?? 0;
   }
 };
 

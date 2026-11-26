@@ -41,7 +41,8 @@ export const TIME_HEADROOM = 15;
 export type FightEventKind =
   | 'set' | 'rainbow' | 'mistake' | 'healed' | 'hurt' | 'weapon'
   | 'fightStart' | 'waveStart' | 'evolutionStart' | 'evolutionEnd' | 'trapDefused'
-  | 'bonusCardMatched' | 'cardBroken' | 'hintUsed' | 'graceUsed' | 'cardBurned' | 'linkDestroyed' | 'trick';
+  | 'bonusCardMatched' | 'cardBroken' | 'hintUsed' | 'graceUsed' | 'cardBurned' | 'linkDestroyed' | 'trick'
+  | 'grudgeRelease';
 
 export interface FightEvent {
   on: FightEventKind;
@@ -60,6 +61,8 @@ export interface SetContext {
   matchNo: number;
   /** Whether the Set used a pointed-out card (hint, auto-hint or Keen Eye) */
   hinted?: boolean;
+  /** Badger Grudge stacks released by this Set (for `grudgeRelease` skill nodes) */
+  grudgeReleased?: number;
 }
 
 export interface FightHooks {
@@ -162,6 +165,7 @@ export const begin = (s: RunState, hooks: FightHooks): Draft => ({
   passive: { ...s.passive },
   gear: { ...s.gear },
   ruleState: { ...s.ruleState },
+  ...(s.powerProgress ? { powerProgress: { ...s.powerProgress } } : {}),
   activeEvolutions: s.activeEvolutions.map(e => ({ ...e })),
   hazardRefills: { ...s.hazardRefills },
   colorSets: { ...s.colorSets },
@@ -550,7 +554,7 @@ const candidateHasCounterSet = (
   return sets.some(s => cardsMatchCounter(s, attrs, req));
 };
 
-const clearCardLocks = (card: Card): Card => ({
+export const clearCardLocks = (card: Card): Card => ({
   ...card,
   isDud: false,
   isFaceDown: false,
@@ -930,6 +934,15 @@ export const touchable = (d: Draft, i: number): boolean => {
 
 export const foeMultiplier = (d: Draft) => d.foe.getStatModifiers().pointsMultiplier || 1;
 
+/** Add fight-wide Power points, honoring `powerScaling` (e.g. 0 disables Power in Starfall Summit). */
+export const addPower = (d: Draft, points: number): number => {
+  const scale = d.powerScaling ?? 1;
+  if (scale <= 0 || points <= 0) return 0;
+  const added = points * scale;
+  d.power = (d.power ?? 0) + added;
+  return added;
+};
+
 export const dealDamage = (d: Draft, amount: number): number => {
   // Power (weapon scaling) multiplies every point of damage
   const dmg = Math.max(0, Math.round(amount * damageMultiplier(d.power ?? 0)));
@@ -1016,7 +1029,8 @@ export const foldSetRuleDamage = (d: Draft, rawBase: number, item: FoldedRuleIte
 
 export const addCoins = (d: Draft, base: number) => {
   if (!d.features.has('coins') || base <= 0) return;
-  const amount = Math.max(1, Math.round(base * d.level.coinMultiplier * (1 + d.coinBonusPercent / 100)));
+  const reliefMult = d.relief?.coinMultiplier ?? 1;
+  const amount = Math.max(1, Math.round(base * d.level.coinMultiplier * (1 + d.coinBonusPercent / 100) * reliefMult));
   d.coins += amount;
   emit(d, 'coins', amount);
 };
@@ -1062,8 +1076,13 @@ export const rollBridges = (d: Draft, trigger: BridgeTriggerType): Weapon[] =>
     w => w.specialEffect === 'bridge' && w.bridgeEffect?.trigger === trigger && d._rng.next() * 100 < w.bridgeEffect.chance
   );
 
-export const hurt = (d: Draft, amount: number) => {
+export const hurt = (d: Draft, amount: number, opts?: { bypassWaveShield?: boolean }) => {
   if (d.hearts === null || amount <= 0) return;
+  if (!opts?.bypassWaveShield && (d.waveShieldLeft ?? 0) > 0) {
+    d.waveShieldLeft = Math.max(0, (d.waveShieldLeft ?? 0) - 1);
+    emit(d, 'free_mistake', d.waveShieldLeft);
+    return;
+  }
   d.hearts = Math.max(0, d.hearts - amount);
   d.roundStats.damageReceived += amount;
   emit(d, 'hurt', amount);

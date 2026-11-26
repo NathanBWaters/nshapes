@@ -156,6 +156,32 @@ export interface ParrySpec {
   perfectWindowMs: number;
   /** Consequence if the wind-up completes unparried */
   penalty: ParryPenalty;
+  /** Optional archetype override for Stagger duration (e.g. Heavy Slam 9000ms) */
+  staggerMs?: number;
+  /** Optional override for unparried penalty magnitude (hearts for 'heart', seconds for 'time') */
+  penaltyAmount?: number;
+  /** Optional boss escalation: tighten cooldown by this many ms below 50% HP */
+  bossEnrageDeltaMs?: number;
+}
+
+/** Optional relief (Friendly Tailwind) or wager (Starfall Cauldron) modifiers passed into a run. */
+export interface RunReliefOptions {
+  /** Friendly Tailwind active after 2 consecutive losses */
+  tailwindActive?: boolean;
+  /** Starfall Cauldron upward wager tier (0 = standard, 1 = Bold, 2 = Starfall) */
+  cauldronWager?: 0 | 1 | 2;
+  /** Extra starting & max hearts (e.g. +2 for Friendly Tailwind) */
+  extraHearts?: number;
+  /** Starting timer / move-budget scale (e.g. 1.2 for +20%) */
+  timerScale?: number;
+  /** Parry wind-up duration multiplier (e.g. 1.25 slower for Tailwind, 0.9/0.8 faster for Wager) */
+  parryWindupScale?: number;
+  /** Foe HP multiplier (e.g. 1.25 / 1.5 for Starfall Cauldron wager) */
+  foeHpScale?: number;
+  /** Run coin payout multiplier (e.g. 1.5 / 2.0 for Starfall Cauldron wager) */
+  coinMultiplier?: number;
+  /** Optional star cap (e.g. 1 for Friendly Tailwind) */
+  starCap?: number;
 }
 
 /** Live Set-Parry state for the current wave's foe. */
@@ -486,6 +512,8 @@ export interface SkillNode extends RuleSource {
   roots: PassiveId[];
   /** Sealed until the player has earned this many stars in total */
   requires?: { starsEarned: number };
+  /** Mutually exclusive capstone partner node id (only one of the pair may be active at once) */
+  exclusiveWith?: string;
 }
 
 /**
@@ -610,6 +638,14 @@ export interface AdventureSave {
   revealedPaths: string[];
   /** Golden Rescue Keys already redeemed along the map: mapKeyId -> rescued friend name */
   claimedMapKeys: Record<string, CharacterName>;
+  /** Consecutive losses per level id (resets on any >=1★ clear; drives Friendly Tailwind relief) */
+  consecutiveLosses?: Record<string, number>;
+  /** Quietly banked coins from pre-1-8 losses that burst open when coins unlock on 1-8 */
+  hiddenPurse?: number;
+  /** Selected Starfall Cauldron upward wager tier (0 = standard, 1 = Bold, 2 = Starfall) */
+  cauldronWager?: 0 | 1 | 2;
+  /** Whether Friendly Tailwind relief is currently toggled on */
+  tailwindActive?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -1060,4 +1096,19 @@ export interface RunState {
   perfectParriesLanded: number;
   /** Snapshot of the latest player Set for Live Multiplier Ignition & Kill-Cam visuals */
   lastSetIgnition: SetIgnition | null;
+  /** Per-weapon Power cadence progress (e.g. unbroken Sets for Glass Sword, full-HP streak for Life Vessel) */
+  powerProgress?: Record<string, number>;
+  /** Remaining cooldown (ms) on the tactical Sacrifice / Redraw action in timed fights */
+  sacrificeCooldownMs?: number;
+  /** True once tactical Sacrifice / Redraw has been used in the current wave (gates untimed fights) */
+  sacrificeUsedThisWave?: boolean;
+  /** True once a mistake reward fired since the last valid Set (caps repeatable mistake-reward farming) */
+  mistakeRewardUsedThisSet?: boolean;
+  /** Free 1-hit Wave-1 Pounce Shield charges (Orange Tabby Nine Lives baseline buff) */
+  waveShieldLeft?: number;
+  /** Optional relief / wager options active for this run */
+  relief?: RunReliefOptions;
+  /** Convenience flags mirrored from `relief` for telemetry & results */
+  tailwindActive?: boolean;
+  cauldronWager?: 0 | 1 | 2;
 }

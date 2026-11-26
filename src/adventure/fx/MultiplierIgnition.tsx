@@ -32,7 +32,7 @@ import { COLORS } from '@/utils/colors';
 import { cascadeDelay, EASE, MS, SCALE, SPRING, STAGGER } from '@/utils/motion';
 import { arcanaRules, getArcana } from '../data/arcana';
 import { PARRY_RULES } from '../data/parry';
-import { SURGE_RULES } from '../data/rules';
+import { BASE_RULES, SURGE_RULES } from '../data/rules';
 import { growthModifiers } from '../data/weaponGrowth';
 import { damageMultiplier } from '../data/weaponPower';
 import { EVOLUTION_RULES, getRecipe, getSkillNode, liveRules, liveSources } from '../engine/sources';
@@ -289,6 +289,7 @@ export const buildBalatroBreakdown = (ignition: SetIgnition): BalatroBreakdown =
   // 5. Fight Power multiplier (applies to the Set hit & extras)
   if (power > 1.01) {
     mult *= power;
+    const pts = Math.round((m.powerPoints ?? 0) * 100) / 100;
     steps.push({
       key: 'power',
       label: 'Power',
@@ -297,7 +298,7 @@ export const buildBalatroBreakdown = (ignition: SetIgnition): BalatroBreakdown =
       baseAfter: base,
       multAfter: mult,
       bonusAfter: bonus,
-      note: `${Math.round(m.powerPoints ?? 0)} scaling charge`,
+      note: `${pts} Power`,
     });
   }
 
@@ -375,6 +376,7 @@ const scaleCountForState = (run: RunState, per: Scale): number => {
     case 'bonusCard': return run.board.filter(c => (c.bonusPoints ?? 0) > 0 || (c.bonusMoney ?? 0) > 0).length;
     case 'burning': return run.board.filter(c => c.onFire).length;
     case 'evolution': return run.activeEvolutions.length;
+    case 'grudgeReleased': return run.passive.grudge;
   }
 };
 
@@ -389,6 +391,8 @@ const primedConditionsHold = (run: RunState, when: Condition[] | undefined): boo
       case 'evolutionActive': return run.activeEvolutions.length > 0;
       case 'boardAtLeast': return run.board.length >= c.n;
       case 'foeHpBelow': return run.foeMaxHp > 0 && run.foeHp > 0 && run.foeHp / run.foeMaxHp < c.fraction;
+      case 'grudgeAtLeast': return run.passive.grudge >= c.n;
+      case 'frozen': return run.frozenMs > 0;
       // Chance, Rainbow, Hinted, diffCount, and timing depend on the exact Set played — don't promise them in NEXT
       default: return false;
     }
@@ -402,6 +406,7 @@ const primedTriggerNote = (run: RunState, key: string, t: Trigger): string | nul
     const times = (run.ruleState[key]?.times ?? []).filter(x => run.elapsedMs - x <= t.withinMs);
     return times.length >= t.count - 1 ? `${t.count} fast Sets primed` : null;
   }
+  if (t.on === 'grudgeRelease') return run.passives.includes('grudge') && run.passive.grudge > 0 ? `${run.passive.grudge} Grudge primed` : null;
   if (t.on === 'set') return 'Triggers on next Set';
   return null;
 };
@@ -458,15 +463,27 @@ export const computePrimedEquation = (run: RunState): PrimedEquation => {
     items.push({ label: 'Hints held', value: `+${fmt(hintFlat)}`, kind: 'base', note: `${run.stats.hints} hints held` });
   }
 
-  // Missing-heart Scrappy passive (Orange Tabby)
+  // Missing-heart / baseline Scrappy passive (Orange Tabby) & stored Grudge (Badger)
   if (run.passives.includes('scrappy') && run.hearts !== null && run.maxHearts !== null) {
     const missing = Math.max(0, run.maxHearts - run.hearts);
-    const perHeart = PASSIVE_TUNING.scrappy['scrappy.perHeart'] +
+    const scrappyTuning = PASSIVE_TUNING.scrappy as Record<string, number>;
+    const scrappyBase = (scrappyTuning['scrappy.base'] ?? 0) +
+      sources.reduce((s, x) => s + (x.source.modifiers?.passiveTuning?.['scrappy.base'] ?? 0), 0);
+    const perHeart = (scrappyTuning['scrappy.perHeart'] ?? 0) +
       sources.reduce((s, x) => s + (x.source.modifiers?.passiveTuning?.['scrappy.perHeart'] ?? 0), 0);
-    const scrappyDmg = missing * perHeart;
+    const scrappyDmg = scrappyBase + missing * perHeart;
     if (scrappyDmg > 0) {
       base += scrappyDmg;
-      items.push({ label: 'Scrappy', value: `+${fmt(scrappyDmg)}`, kind: 'base', note: `${missing} missing ♥` });
+      items.push({ label: 'Scrappy', value: `+${fmt(scrappyDmg)}`, kind: 'base', note: missing > 0 ? `${missing} missing ♥` : 'baseline bonus' });
+    }
+  }
+  if (run.passives.includes('grudge') && run.passive.grudge > 0) {
+    const perGrudge = PASSIVE_TUNING.grudge['grudge.damage'] +
+      sources.reduce((s, x) => s + (x.source.modifiers?.passiveTuning?.['grudge.damage'] ?? 0), 0);
+    const grudgeDmg = run.passive.grudge * perGrudge;
+    if (grudgeDmg > 0) {
+      base += grudgeDmg;
+      items.push({ label: 'Grudge', value: `+${fmt(grudgeDmg)}`, kind: 'base', note: `${run.passive.grudge} stored mistake${run.passive.grudge === 1 ? '' : 's'}` });
     }
   }
 
@@ -483,9 +500,10 @@ export const computePrimedEquation = (run: RunState): PrimedEquation => {
     items.push({ label: 'Glass Sword', value: `+${fmt(glassDmg)}`, kind: 'base', note: 'Unbroken window active' });
   }
 
-  // Active Evolution flat bonus
-  if (run.activeEvolutions.length > 0) {
-    const evoFlat = run.activeEvolutions.length * EVOLUTION_RULES.setDamage;
+  // Active Evolution flat bonus (skip when setDamage is 0)
+  const evoFlatPerActive: number = EVOLUTION_RULES.setDamage;
+  if (run.activeEvolutions.length > 0 && evoFlatPerActive !== 0) {
+    const evoFlat = run.activeEvolutions.length * evoFlatPerActive;
     base += evoFlat;
     const names = run.activeEvolutions.map(e => getRecipe(e.id)?.name ?? 'Evolution').join(', ');
     items.push({ label: names, value: `+${fmt(evoFlat)}`, kind: 'base', note: 'Active Evolution bonus' });
@@ -528,7 +546,7 @@ export const computePrimedEquation = (run: RunState): PrimedEquation => {
     });
   }
   if (run.activeEvolutions.length > 0) {
-    if (run.stackEvolutionMultipliers) {
+    if (run.stackEvolutionMultipliers !== false) {
       for (const evo of run.activeEvolutions) {
         mult *= EVOLUTION_RULES.setMultiplier;
         items.push({
@@ -547,21 +565,38 @@ export const computePrimedEquation = (run: RunState): PrimedEquation => {
       items.push({ label: evoLabel, value: `×${fmt(EVOLUTION_RULES.setMultiplier)}`, kind: 'mult', note: 'Active Evolution multiplier' });
     }
   }
+  for (const { key, source } of sources) {
+    for (const cm of source.modifiers?.conditionalMultiplier ?? []) {
+      if (primedConditionsHold(run, cm.when) && cm.multiplier !== 1) {
+        mult *= cm.multiplier;
+        items.push({
+          label: primedRuleLabel(run, key),
+          value: `×${fmt(cm.multiplier)}`,
+          kind: 'mult',
+          note: 'Conditional Set multiplier',
+        });
+      }
+    }
+  }
   const a = arcanaRules(run.arcana);
   if ((a.damageScale ?? 1) !== 1) {
     const arc = run.arcana.map(getArcana).find(x => x.rules.damageScale !== undefined);
     mult *= a.damageScale!;
     items.push({ label: arc?.name ?? 'Arcana', value: `×${fmt(a.damageScale!)}`, kind: 'mult', note: 'Arcana Set multiplier' });
   }
-  if (run.nextSetMultiplier > 1) {
-    mult *= run.nextSetMultiplier;
-    items.push({ label: 'Next Set', value: `×${fmt(run.nextSetMultiplier)}`, kind: 'mult', note: 'Charged for next Set' });
-  }
-  if (run.passive.hotStreak) {
-    const hotMult = PASSIVE_TUNING.hot_streak['hotStreak.multiplier'] +
-      sources.reduce((s, x) => s + (x.source.modifiers?.passiveTuning?.['hotStreak.multiplier'] ?? 0), 0);
-    mult *= hotMult;
-    items.push({ label: 'Hot Streak', value: `×${fmt(hotMult)}`, kind: 'mult', note: 'Sly Fox streak ready' });
+  const hotMult = run.passive.hotStreak
+    ? PASSIVE_TUNING.hot_streak['hotStreak.multiplier'] +
+      sources.reduce((s, x) => s + (x.source.modifiers?.passiveTuning?.['hotStreak.multiplier'] ?? 0), 0)
+    : 1;
+  const combinedNextSet = Math.min(BASE_RULES.maxNextSetMultiplier, run.nextSetMultiplier * hotMult);
+  if (combinedNextSet > 1) {
+    mult *= combinedNextSet;
+    items.push({
+      label: run.passive.hotStreak ? 'Hot Streak' : 'Next Set',
+      value: `×${fmt(combinedNextSet)}`,
+      kind: 'mult',
+      note: run.passive.hotStreak ? 'Sly Fox streak ready' : 'Charged for next Set',
+    });
   }
   if (run.parry?.phase === 'staggered') {
     mult *= PARRY_RULES.staggerDamageMult;
@@ -570,7 +605,8 @@ export const computePrimedEquation = (run: RunState): PrimedEquation => {
   const power = damageMultiplier(run.power ?? 0);
   if (power > 1.01) {
     mult *= power;
-    items.push({ label: 'Power', value: `×${fmt(power)}`, kind: 'mult', note: `${Math.round(run.power)} scaling charge` });
+    const pts = Math.round((run.power ?? 0) * 100) / 100;
+    items.push({ label: 'Power', value: `×${fmt(power)}`, kind: 'mult', note: `${pts} Power` });
   }
 
   mult = Math.round(mult * 100) / 100;

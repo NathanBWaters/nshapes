@@ -102,7 +102,9 @@ export const resolveDamageSourceCopy = (opts: {
   if (prefix === 'evo') {
     const recipe = getRecipe(rawId);
     const secs = Math.round(EVOLUTION_RULES.durationMs / 1000);
-    const universalNote = `Lasts ${secs}s on top of +${EVOLUTION_RULES.startDamage} opening hit, +${EVOLUTION_RULES.setDamage} flat Set damage, and ×${EVOLUTION_RULES.setMultiplier} Set damage.`;
+    const evoFlatDamage: number = EVOLUTION_RULES.setDamage;
+    const flatNote = evoFlatDamage !== 0 ? `+${evoFlatDamage} flat Set damage, and ` : '';
+    const universalNote = `Lasts ${secs}s on top of +${EVOLUTION_RULES.startDamage} opening hit, ${flatNote}×${EVOLUTION_RULES.setMultiplier} Set damage (stacks across active Evolutions).`;
     const details: DamageSourceDetailRow[] = [];
     if (recipe?.familyText) {
       details.push({
@@ -372,13 +374,13 @@ export const resolveDamageSourceCopy = (opts: {
       categoryLabel: 'BONUS',
       categoryColor: CATEGORY_COLORS.passive,
       subtitle: subtitle ?? 'Combat Mechanic',
-      what: 'Matching Time Bombs or Snares before they go off defuses them and folds bonus damage straight into your Set before multipliers.',
+      what: 'Defusing Time Bombs or Snares folds bonus damage straight into BASE before multipliers — Time Bombs hurl at the foe (+4 base, +8 under 8s, +14 clutch +0.25 Power under 5s) and Snares add +4.',
       details: [
         {
           icon: 'lorc/light-bulb',
           title: 'How to play it',
           color: CATEGORY_COLORS.passive,
-          text: 'Clear ticking Time Bombs and pointed Snare targets early to protect your hearts and convert enemy hazards into multiplied damage.',
+          text: 'Clear Time Bombs safely for +4, or dare a Hot (<8s) or Clutch (<5s) defusal to convert enemy hazards into huge multiplied damage.',
         },
       ],
     };
@@ -429,13 +431,13 @@ export const resolveDamageSourceCopy = (opts: {
       categoryLabel: 'POWER',
       categoryColor: CATEGORY_COLORS.power,
       subtitle: subtitle ?? 'Adventure Scaling',
-      what: "Adventure Mode's in-fight Power meter climbs as your charms trigger, multiplying all damage you deal across the fight.",
+      what: "Adventure Mode's in-fight Power meter climbs from charm triggers, Parries, Purity chains, clutch Bomb defusals, and Evolutions — multiplying your unified BASE × MULT strike.",
       details: [
         {
           icon: 'lorc/power-lightning',
           title: 'How it scales',
           color: CATEGORY_COLORS.power,
-          text: 'Every fight starts at ×1.0. Weapon triggers and Evolution bursts raise Power for the rest of the battle, multiplying Sets, blasts, lasers, and burns alike.',
+          text: 'Every fight starts at ×1.0. Up to 3 Power adds +1.0× per point (×4.0), then climbs smoothly as 2 + 2√(P − 2) forever with zero hidden belt penalties.',
         },
       ],
     };

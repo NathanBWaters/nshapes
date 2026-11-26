@@ -8,7 +8,7 @@ import { comboWindowFor } from '../data/passives';
 import type { Card } from '@/types';
 import type { FightLogMathItem, PassiveId, PassiveState } from '../types';
 import { BASE_RULES } from '../data/rules';
-import { emit, hasPassive, redeal, touchable, tuning, updateCards, type Draft } from './fight';
+import { emit, enqueue, hasPassive, redeal, touchable, tuning, updateCards, type Draft } from './fight';
 import { allSets } from './sets';
 
 export const restingPassiveState = (): PassiveState => ({
@@ -31,9 +31,11 @@ export const initPassives = (d: Draft) => {
     zoomiesIn: has('zoomies') ? Math.max(1, tuning(d, 'zoomies.every')) : 0,
     scoopIn: has('big_scoop') ? Math.max(1, tuning(d, 'scoop.every')) : 0,
   };
+  d.waveShieldLeft = has('nine_lives') ? Math.max(0, tuning(d, 'nineLives.waveShield')) : 0;
 };
 
 export const onWaveStartPassives = (d: Draft) => {
+  d.waveShieldLeft = 0;
   if (hasPassive(d, 'thick_hide')) d.passive.thickHideLeft = Math.max(0, tuning(d, 'thickHide.perWave'));
 };
 
@@ -92,12 +94,19 @@ export const passiveSetDamageBreakdown = (d: Draft, sinceLastMs: number): { bonu
   let bonus = 0;
   const items: FightLogMathItem[] = [];
   if (hasPassive(d, 'scrappy') && d.hearts !== null && d.maxHearts !== null) {
+    const base = tuning(d, 'scrappy.base');
     const missing = Math.max(0, d.maxHearts - d.hearts);
     const perHeart = tuning(d, 'scrappy.perHeart');
-    const add = missing * perHeart;
+    const add = base + missing * perHeart;
     if (add !== 0) {
       bonus += add;
-      items.push({ label: 'Scrappy', amount: add, note: `${missing} missing heart${missing === 1 ? '' : 's'}` });
+      const note =
+        base > 0 && missing > 0
+          ? `+${base} base + ${missing} missing heart${missing === 1 ? '' : 's'}`
+          : missing > 0
+            ? `${missing} missing heart${missing === 1 ? '' : 's'}`
+            : 'feral baseline bonus';
+      items.push({ label: 'Scrappy', amount: add, note });
     }
   }
   if (hasPassive(d, 'combo')) {
@@ -121,6 +130,8 @@ export const passiveSetDamageBreakdown = (d: Draft, sinceLastMs: number): { bonu
     const release = count * tuning(d, 'grudge.damage');
     emit(d, 'grudge_release', release);
     d.passive.grudge = 0;
+    if (d._setCtx) d._setCtx.grudgeReleased = count;
+    enqueue(d, 'grudgeRelease');
     bonus += release;
     if (release !== 0) {
       items.push({ label: 'Grudge release', amount: release, note: `${count} stored mistake${count === 1 ? '' : 's'}` });
