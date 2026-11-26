@@ -301,13 +301,17 @@ describe('Live Multiplier Ignition & Pre-Battle Parry UI', () => {
   });
 
   it('shows the enemy Counter requirement UP FRONT in Adventure LevelPreview', () => {
-    const bossLevel = getLevel('1-10'); // Iron Shell → Counter: 2 TRAITS SAME
-    const spec = resolveParrySpec(bossLevel, bossLevel.foes[0]);
+    // [OB-10] 1-10 Iron Shell uses clean Timing Parry (ANY TRIO); 2-4 Masked Bandit debuts specific Counter-Parry (ALL ORANGE); 2-6 uses 2 TRAITS SAME.
+    const bossLevel = getLevel('1-10');
+    expect(resolveParrySpec(bossLevel, bossLevel.foes[0])?.counter).toEqual({ kind: 'any' });
+
+    const counterLevel = getLevel('2-6'); // Junk Rat → Counter: 2 TRAITS SAME
+    const spec = resolveParrySpec(counterLevel, counterLevel.foes[0]);
     expect(spec?.counter).toEqual({ kind: 'exact_same', count: 2 });
 
     const { getByTestId, getByText } = render(
       <LevelPreview
-        level={bossLevel}
+        level={counterLevel}
         save={createMaxedSave()}
         onClose={() => {}}
         onPlay={() => {}}

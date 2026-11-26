@@ -247,18 +247,17 @@ const bossEnrageSpec = (
     bossEnrageDeltaMs: PARRY_RULES.bossEnrageCooldownDeltaMs,
   });
 
-/** Early levels kept completely clean for zero-friction onboarding. */
-const NO_PARRY_LEVELS = new Set(['1-1', '1-2', '1-3', '1-4']);
+/** Early levels kept completely clean for zero-friction onboarding (`1-5` focuses cleanly on 3-trait Number + Passives). */
+const NO_PARRY_LEVELS = new Set(['1-1', '1-2', '1-3', '1-4', '1-5']);
 
 /** Explicit Adventure Mode level parry profiles across the 5 creature archetypes. */
 const LEVEL_PARRIES: Record<string, { archetype: ParryArchetype; spec: ParrySpec }> = {
-  // World 1 — gentle default timing parries (2.5s micro-Stagger on any parry!), then Heavy Slam boss!
-  '1-5': { archetype: 'tactical', spec: tacticalSpec('Acorn Toss', 'lorc/sword-clash', { kind: 'any' }, 'glancing', 13500, 15500) },
+  // World 1 — Timing Parry debuts cleanly on 1-6 (2.5s micro-Stagger on any parry!), culminating in Heavy Slam boss 1-10 (ANY timing)!
   '1-6': { archetype: 'tactical', spec: tacticalSpec('Prism Dive', 'lorc/sword-clash', { kind: 'any' }, 'glancing', 13500, 15500) },
   '1-7': { archetype: 'tactical', spec: tacticalSpec('Quill Jab', 'lorc/sword-clash', { kind: 'any' }, 'glancing', 13000, 15000) },
   '1-8': { archetype: 'tactical', spec: tacticalSpec('Coin Swipe', 'lorc/sword-clash', { kind: 'any' }, 'glancing', 13000, 15000) },
   '1-9': { archetype: 'swarm', spec: swarmSpec('Bumble Sting', 'lorc/sword-clash', { kind: 'any' }, 9000, 11500, 'glancing') },
-  '1-10': { archetype: 'heavy', spec: heavySpec('Shell Slam', 'lorc/turtle-shell', { kind: 'exact_same', count: 2 }, 20000, 12000, 'heart', 1) },
+  '1-10': { archetype: 'heavy', spec: heavySpec('Shell Slam', 'lorc/turtle-shell', { kind: 'any' }, 20000, 14000, 'heart', 1) },
   '1-5F': { archetype: 'swarm', spec: swarmSpec('Quick Pounce', 'lorc/sword-clash', { kind: 'any' }, 9000, 11500, 'glancing') },
 
   // World 2 — archetypes shine clearly (Sloth Heavy Slam, Bandit/Owl Stalker, mid-speed Tactical)

@@ -23,16 +23,18 @@
  */
 import type { AttributeName, Background, Card, CharacterName, Color, Number as CardNumber, Shading, Shape } from '@/types';
 import { cardBgPatternMeta, cardColorLabel } from '@/utils/cardColors';
-import { formatShapeName } from '@/utils/cardVisuals';
+import { formatParryCounterMeta, formatShapeName } from '@/utils/cardVisuals';
 import { isValidCombination } from '@/utils/gameUtils';
-import type { AdventureSave, LevelDef, RunState } from './types';
+import type { AdventureSave, FeatureFlag, LevelDef, ParryState, RunState } from './types';
 import { allSets, countDifferentAttributes, isSelectable } from './engine/sets';
 import { mainIndexOf, getLevel, MAIN_LEVELS } from './data/levels';
+import { worldNumber } from './data/biomes';
 import { readyMapKeys } from './data/mapKeys';
 import { levelFoe } from './data/foes';
 import { MECHANICS } from './data/mechanics';
-import { ASSIST_RULES } from './data/rules';
+import { ASSIST_RULES, SURGE_RULES } from './data/rules';
 import { LOSS_STREAK_ASSIST_STEPS, STUCK_NUDGE_LOSS_THRESHOLD } from './data/relief';
+import { armableRecipesFromArmory, availableStars, COACH_KEYS, hasUnspentStars } from './progress';
 
 /** One trait's check across the cards in question (the fight shows them in a strip above the board: TraitChecks.tsx). */
 export interface TraitCheckPill {
@@ -69,6 +71,11 @@ export interface CompanionVoice {
   win2: string;
   win1: string;
   loss: string;
+  /** Mid-fight character-voiced combat quips ([OB-15]) */
+  halfway: string;
+  wobble: string;
+  streak: string;
+  lowHeart: string;
 }
 
 export const COMPANION_VOICES: Record<CharacterName, CompanionVoice> = {
@@ -80,6 +87,10 @@ export const COMPANION_VOICES: Record<CharacterName, CompanionVoice> = {
     win2: 'Knocked out cold! One shard left in there.',
     win1: 'We made it through! That one is still standing, though.',
     loss: 'Shake it off, pal. We go again.',
+    halfway: 'Halfway there — claws out!',
+    wobble: '{foe} is wobbling — pounce!',
+    streak: 'Purr-fect rhythm — keep rolling!',
+    lowHeart: 'One heart left — stay sharp, pal!',
   },
   'Sly Fox': {
     hello: 'Yip-yip!',
@@ -89,6 +100,10 @@ export const COMPANION_VOICES: Record<CharacterName, CompanionVoice> = {
     win2: 'Slick knockout! One shard still hiding.',
     win1: 'We slipped through. Next time we finish the job.',
     loss: 'Sneaky board. We will get them next run.',
+    halfway: 'Halfway down — keep the heat on!',
+    wobble: '{foe} is cornered — finish it!',
+    streak: 'Slick streak, partner!',
+    lowHeart: 'Down to one heart — pick clean!',
   },
   'Emperor Penguin': {
     hello: 'Waddle on!',
@@ -98,6 +113,10 @@ export const COMPANION_VOICES: Record<CharacterName, CompanionVoice> = {
     win2: 'A cool knockout, friend. One shard to go.',
     win1: 'Steady flippers. We are through.',
     loss: 'Deep breath, friend. No rush next time.',
+    halfway: 'Halfway — cool and steady!',
+    wobble: '{foe} is slipping — stay crisp!',
+    streak: 'Brr-illiant flow, friend!',
+    lowHeart: 'One heart left — breathe steady!',
   },
   Badger: {
     hello: 'Huff-hah!',
@@ -107,6 +126,10 @@ export const COMPANION_VOICES: Record<CharacterName, CompanionVoice> = {
     win2: 'Tough knockout! One shard left to dig out.',
     win1: 'We muscled through. Next time they go down.',
     loss: 'No sweat, champ. Thick hides, remember?',
+    halfway: 'Halfway chewed through — dig in!',
+    wobble: '{foe} is buckling — smash it!',
+    streak: 'Unstoppable momentum, champ!',
+    lowHeart: 'Thick hide holds — one heart left!',
   },
   Corgi: {
     hello: 'Woof!',
@@ -116,6 +139,10 @@ export const COMPANION_VOICES: Record<CharacterName, CompanionVoice> = {
     win2: 'Big knockout! One more shard to fetch.',
     win1: 'Good fetch, bestie! Onward.',
     loss: 'Aww, ruff bounce. Again?',
+    halfway: 'Tail wagging — halfway there!',
+    wobble: '{foe} is wobbling — fetch the KO!',
+    streak: 'Zoomies mode — on a roll!',
+    lowHeart: 'One heart left — eyes sharp, bestie!',
   },
   Pelican: {
     hello: 'Ahoy!',
@@ -125,6 +152,10 @@ export const COMPANION_VOICES: Record<CharacterName, CompanionVoice> = {
     win2: 'Smooth knockout, matey. One shard adrift.',
     win1: 'Clear skies ahead. We are through.',
     loss: 'Breezy does it, matey. The next wind is ours.',
+    halfway: 'Halfway across — wind at our backs!',
+    wobble: '{foe} is listing — swoop in!',
+    streak: 'Smooth sailing — on a roll!',
+    lowHeart: 'One heart left — steady helm, matey!',
   },
 };
 
@@ -337,6 +368,9 @@ export const explainInvalidPick = (
 
 // ─── Stuck help ─────────────────────────────────────────────────────────────
 
+/** [OB-11] Single-card 28s safety net for 3-1 (Fourth Dimension) Shading Surge onboarding. */
+export const THIRD_WORLD_INTRO_ASSIST_STEPS: readonly number[] = [28];
+
 /** Seconds without a Set before the companion lights 1, 2, then 3 cards of one; null where it stays out of it. */
 export const assistStepsFor = (level: LevelDef, consecutiveLosses = 0): readonly number[] | null => {
   if (level.rules.sandbox) return null;
@@ -345,6 +379,8 @@ export const assistStepsFor = (level: LevelDef, consecutiveLosses = 0): readonly
   if (level.biome === 'woods') return ASSIST_RULES.secondWorld;
   // [GP-18] World 3–5 3-loss stuck nudge: softly light 1 card after 25s quiet without spoiling the Set
   if (consecutiveLosses >= STUCK_NUDGE_LOSS_THRESHOLD) return LOSS_STREAK_ASSIST_STEPS;
+  // [OB-11] 3-1 Shading Surge onboarding safety net so 4-trait introduction never leaves players cold
+  if (level.id === '3-1' || level.introduces === 'shading_surge') return THIRD_WORLD_INTRO_ASSIST_STEPS;
   return null;
 };
 
@@ -481,10 +517,12 @@ export const computeLiveGuidance = (
     seenIntro?: boolean;
     /** The foe has switched auto-hints off (Masked Bandit): no stuck help either */
     noAssist?: boolean;
-    /** Colorblind Mode active: emit Orange / Blue / Plum & Tinted / Dark color words */
+    /** Colorblind Mode active: emit Orange / Blue / Pink & Mist / Dark color words */
     colorblind?: boolean;
     /** Consecutive losses on this level (enables 25s 1-card stuck nudge on World 3–5 at >= 3 losses) */
     consecutiveLosses?: number;
+    /** Number of Shading Surges already guided (0 or 1 enables 5s 1-card Surge nudge per [OB-11]) */
+    surgeGuidedCount?: number;
   } = {}
 ): GuidedBoardHint | null => {
   if (run.status !== 'playing' || run.level.rules.sandbox) return null;
@@ -497,6 +535,7 @@ export const computeLiveGuidance = (
     noAssist = false,
     colorblind = false,
     consecutiveLosses = 0,
+    surgeGuidedCount = 2,
   } = opts;
   const voice = companionVoice(run.fighter);
   const available = run.board.filter(c => isSelectable(c) && !run.replacing.includes(c.id));
@@ -647,6 +686,24 @@ export const computeLiveGuidance = (
     if (pair) return pair;
   }
 
+  // ── [OB-11] First 2 Shading Surges ever: glow 1 card of a 4-trait Set after 5s of Surge silence ──
+  if (run.surge?.active && !noAssist && surgeGuidedCount < 2 && sets.length > 0) {
+    const surgeElapsedMs = SURGE_RULES.surgeMs - run.surge.msLeft;
+    if (surgeElapsedMs >= 5000 && quietMs >= 5000) {
+      const target = helpfulSet(run, sets, selectedCards) ?? sets[0];
+      const held = new Set(selectedCards.map(c => c.id));
+      const pick = target.find(c => !held.has(c.id)) ?? target[0];
+      return {
+        glowIds: [pick.id],
+        dimIds: [],
+        dimOpacity: 1,
+        message: 'Shading Surge ×5! Start with this card!',
+        mood: 'curious',
+        kind: 'rescue',
+      };
+    }
+  }
+
   // ── Stuck help: the board has been quiet too long ────────────────────────
   if (assist > 0) {
     const help = rescue(assist);
@@ -707,13 +764,240 @@ export const fightRemarks = (run: RunState, challengeMet: boolean): { key: strin
   if (run.status !== 'playing' || run.level.rules.sandbox || run.level.id === MAIN_LEVELS[0].id) return [];
   const voice = companionVoice(run.fighter);
   const out: { key: string; text: string }[] = [];
-  if (run.hearts === 1 && (run.maxHearts ?? 0) > 1) out.push({ key: 'last-heart', text: 'One heart left. Careful!' });
+  if (run.hearts === 1 && (run.maxHearts ?? 0) > 1) out.push({ key: 'last-heart', text: voice.lowHeart });
   if (challengeMet && run.level.challenge.kind !== 'enemy') out.push({ key: 'goal', text: `${voice.cheer} Three-star goal: done!` });
   const share = run.foeMaxHp > 0 ? run.foeHp / run.foeMaxHp : 1;
-  if (run.foeHp > BASE_SET_DAMAGE && share <= 0.25) out.push({ key: `wobble-${run.wave}`, text: `${run.foeName} is wobbling!` });
-  else if (run.foeHp > 0 && share <= 0.5) out.push({ key: `half-${run.wave}`, text: 'Halfway there!' });
-  if (run.combo >= 3) out.push({ key: 'roll', text: 'On a roll!' });
+  if (run.foeHp > BASE_SET_DAMAGE && share <= 0.25) {
+    const wobbleText = voice.wobble.replace('{foe}', run.foeName);
+    out.push({ key: `wobble-${run.wave}`, text: wobbleText.length <= 64 ? wobbleText : `${run.foeName} is wobbling!` });
+  } else if (run.foeHp > 0 && share <= 0.5) {
+    out.push({ key: `half-${run.wave}`, text: voice.halfway });
+  }
+  if (run.combo >= 3) out.push({ key: 'roll', text: voice.streak });
   return out;
+};
+
+/** [OB-15] Short mid-fight foe bark on Bosses & Tier 3+ Elites at 50% HP or Staggered. */
+export const foeMidFightBark = (run: RunState): { key: string; text: string } | null => {
+  if (run.status !== 'playing' || run.level.rules.sandbox) return null;
+  if (!run.level.isBoss && run.foe.tier < 3) return null;
+  if (run.parry?.phase === 'staggered') {
+    return { key: `foe-stagger-${run.wave}`, text: 'Gah! My guard shattered!' };
+  }
+  const share = run.foeMaxHp > 0 ? run.foeHp / run.foeMaxHp : 1;
+  if (run.foeHp > 0 && share <= 0.5) {
+    return {
+      key: `foe-half-${run.wave}`,
+      text: run.level.isBoss ? 'Not bad… now feel my full power!' : 'Hold still, pesky critter!',
+    };
+  }
+  return null;
+};
+
+/**
+ * [OB-10] First-ever live Set-Parry & Counter-Parry StageBubble callout.
+ * Fires in both Adventure Mode and Starfall Summit on a player's first wind-up,
+ * first golden Perfect window, and first specific Counter-Parry (colorblind-aware).
+ */
+export const parryOnboardingCallout = (
+  parry: ParryState | null,
+  opts: {
+    colorblind?: boolean;
+    seenWindup: boolean;
+    seenPerfect: boolean;
+    seenCounter: boolean;
+  }
+): { key: string; text: string } | null => {
+  if (!parry || parry.phase !== 'windup') return null;
+  const isSpecific = parry.spec.counter.kind !== 'any';
+  if (isSpecific) {
+    if (opts.seenCounter) return null;
+    const meta = formatParryCounterMeta(parry.spec.counter, opts.colorblind);
+    const full = `${parry.spec.attackName}! Match ${meta.shortLabel} to Counter & Stagger!`;
+    const short = `${parry.spec.attackName}! Match ${meta.shortLabel} to Counter!`;
+    return {
+      key: COACH_KEYS.counterParryFirst,
+      text: full.length <= 64 ? full : short,
+    };
+  }
+  if (parry.msLeft <= parry.spec.perfectWindowMs && !opts.seenPerfect) {
+    return {
+      key: COACH_KEYS.parryFirstPerfect,
+      text: 'Gold glow! Match now for PERFECT PARRY (×2 dmg)!',
+    };
+  }
+  if (!opts.seenWindup) {
+    return {
+      key: COACH_KEYS.parryFirstWindup,
+      text: `${parry.spec.attackName} coming! Match ANY Set to Parry!`,
+    };
+  }
+  return null;
+};
+
+// ─── Context-aware defeat & 1★ build diagnostics ([OB-17]) ──────────────────
+
+export interface ResultTipAction {
+  label: string;
+  kind: 'arm_recipe' | 'open_tree' | 'open_workshop';
+  payload?: string;
+}
+
+export interface ResultDiagnostic {
+  text: string;
+  quickAction?: ResultTipAction;
+}
+
+/**
+ * Pure post-fight diagnostic replacing stale hard-coded tips in LevelResults & DefeatOverlay.
+ * Never recommends traits, weapons, or systems the player has not unlocked yet.
+ */
+export const diagnoseResultTip = (
+  level: LevelDef,
+  run: RunState,
+  stars: number,
+  save: AdventureSave,
+  colorblind = false
+): ResultDiagnostic | null => {
+  if (level.rules.sandbox) return null;
+  const won = stars > 0;
+  const accuracy = level.starRule?.kind === 'accuracy';
+
+  if (!won) {
+    // Priority 1: Too many mistakes — list ONLY active traits of this level!
+    if (run.mistakes > 3) {
+      const activeNames = inReadingOrder(level.rules.attributes).map(a => ATTR_TITLE[a]);
+      const joined =
+        activeNames.length <= 1
+          ? (activeNames[0] ?? 'Shape')
+          : `${activeNames.slice(0, -1).join(', ')}, then ${activeNames[activeNames.length - 1]}`;
+      const surgeNote = level.rules.shadingSurge ? ' (plus Shading during Surge)' : '';
+      return {
+        text: `Check one trait at a time: ${joined}${surgeNote} — all the same or all different!`,
+      };
+    }
+
+    // Priority 2: Unarmed Evolution on World 2–5 defeat -> 1-tap "Arm <Recipe> & Retry"
+    if (worldNumber(level.biome) >= 2 && save.unlockedEvolutions.length > 0 && run.armedRecipes.length === 0) {
+      const armable = armableRecipesFromArmory(save);
+      if (armable.length > 0) {
+        const top = armable[0].recipe;
+        return {
+          text: `No Evolution armed! Pair ${top.familyText} to unlock ${top.name} (30s boost).`,
+          quickAction: {
+            label: `Arm ${top.name} & Retry`,
+            kind: 'arm_recipe',
+            payload: top.id,
+          },
+        };
+      }
+    }
+
+    // Priority 3: Unspent Skill Tree Stars (ONLY once Skill Trees are unlocked AND stars are spendable!)
+    const treeUnlocked =
+      save.seenMechanics.includes('skill_tree') ||
+      (save.stars['1-7'] ?? 0) >= 1 ||
+      Object.keys(save.skillNodes).length > 0;
+    if (treeUnlocked && hasUnspentStars(save)) {
+      const selAvail = availableStars(save, save.selectedFighter);
+      const targetFighter =
+        selAvail > 0
+          ? save.selectedFighter
+          : (save.unlockedFighters.find(f => availableStars(save, f) > 0) ?? save.selectedFighter);
+      const avail = availableStars(save, targetFighter);
+      if (avail > 0) {
+        return {
+          text: `You have ${avail}★ ready for ${targetFighter}’s Skill Tree at Camp!`,
+          quickAction: {
+            label: `Open ${targetFighter}’s Tree`,
+            kind: 'open_tree',
+            payload: targetFighter,
+          },
+        };
+      }
+    }
+
+    // Priority 4: Unspent Workshop Coins (100% free refund)
+    if (save.workshopUnlocked && save.coins >= 60) {
+      return {
+        text: `You have ${save.coins.toLocaleString()}¢ ready for Workshop belt & tuning upgrades (100% free refund anytime).`,
+        quickAction: {
+          label: 'Open Workshop',
+          kind: 'open_workshop',
+        },
+      };
+    }
+
+    // Priority 5: Unparried Strikes — tailored counter tip (colorblind-aware)
+    if (run.parry && run.parry.parries === 0) {
+      const meta = formatParryCounterMeta(run.parry.spec.counter, colorblind);
+      return {
+        text:
+          run.parry.spec.counter.kind === 'any'
+            ? `Match any Trio during ${run.parry.spec.attackName} to Parry & open a ×2 Stagger window!`
+            : `Counter ${run.parry.spec.attackName} with ${meta.shortLabel} to shatter the strike & Stagger!`,
+      };
+    }
+
+    return {
+      text: 'Take a breath and scan one color or shape first — clean Sets build momentum fast!',
+    };
+  }
+
+  // 1★ survival tip: NEVER recommend Rainbow Charm before the player actually owns it!
+  if (stars === 1 && !accuracy) {
+    if (save.armory.includes('rainbow-charm')) {
+      if (run.weapons.some(w => w.id === 'rainbow-charm')) {
+        return { text: 'Hunt all-different Trios so Rainbow Charm doubles your hits!' };
+      }
+      return { text: 'Equip Rainbow Charm on your Weapon Belt so all-different Trios hit twice as hard!' };
+    }
+    if (save.armory.length > 0) {
+      return { text: 'Equip offensive weapons from your Armory so every Trio hits harder!' };
+    }
+    return null;
+  }
+
+  return null;
+};
+
+// ─── Dynamic 1-4D Back Field practice rules ([OB-11]) ───────────────────────
+
+/**
+ * Resolve `1-4D` (The Back Field) so it only exposes traits and features the
+ * player has actually unlocked in `save` (A2 + 9 cards until `1-5` / `attr_number`,
+ * Hints/Graces/Catalysts only once unlocked).
+ */
+export const resolvePracticeLevel = (level: LevelDef, save: AdventureSave): LevelDef => {
+  if (!level.rules.sandbox || level.id !== '1-4D') return level;
+  const hasNumber = (save.stars['1-5'] ?? 0) >= 1 || save.seenMechanics.includes('attr_number');
+  const hasHints = (save.stars['2-4'] ?? 0) >= 1 || save.seenMechanics.includes('hints');
+  const hasGraces = (save.stars['2-8'] ?? 0) >= 1 || save.seenMechanics.includes('graces');
+  const hasEvolutions = save.unlockedEvolutions.length > 0 || save.seenMechanics.includes('evolutions');
+  return {
+    ...level,
+    rules: {
+      ...level.rules,
+      attributes: hasNumber ? ['shape', 'color', 'number'] : ['shape', 'color'],
+      boardSize: hasNumber ? 12 : 9,
+      startingHints: hasHints ? (level.rules.startingHints ?? 3) : 0,
+      startingGraces: hasGraces ? (level.rules.startingGraces ?? 2) : 0,
+      evolutionLikelihood: hasEvolutions ? (level.rules.evolutionLikelihood ?? 15) : 0,
+    },
+  };
+};
+
+/** Matching feature flags for `1-4D` so locked HUD buttons (Hints/Graces/Evolutions) never leak prematurely. */
+export const resolvePracticeFeatures = (level: LevelDef, save: AdventureSave): Set<FeatureFlag> | undefined => {
+  if (!level.rules.sandbox || level.id !== '1-4D') return undefined;
+  const flags = new Set<FeatureFlag>(['hearts', 'gear']);
+  if ((save.stars['1-6'] ?? 0) >= 1 || save.seenMechanics.includes('rainbow')) flags.add('rainbow');
+  if (save.coinsUnlocked) flags.add('coins');
+  if ((save.stars['2-4'] ?? 0) >= 1 || save.seenMechanics.includes('hints')) flags.add('hints');
+  if ((save.stars['2-8'] ?? 0) >= 1 || save.seenMechanics.includes('graces')) flags.add('graces');
+  if (save.unlockedEvolutions.length > 0 || save.seenMechanics.includes('evolutions')) flags.add('evolutions');
+  if ((save.stars['2-5'] ?? 0) >= 1 || save.seenMechanics.includes('power_cards')) flags.add('power');
+  return flags;
 };
 
 // ─── Map, preview & results lines ───────────────────────────────────────────
@@ -731,7 +1015,7 @@ export const companionMapGreeting = (
     return `${voice.hello} A Golden Key is waiting on the road! Tap it to free a friend!`;
   }
   if (stars === 0) return `${voice.hello} ${foe.name} is blocking the road. Let’s go save our friends!`;
-  if (showSkillNudge) return `${voice.hello} We have shards to spend. Camp is open!`;
+  if (showSkillNudge) return `${voice.hello} We have Star Shards to spend. Camp is open!`;
   if (frontier.isBoss) return `${foe.name} is next. The big one. Ready, ${voice.petName}?`;
   if (!save.seenMechanics.includes(frontier.introduces)) {
     return `${foe.name} is next, with something new: ${MECHANICS[frontier.introduces]?.title ?? 'a surprise'}.`;
@@ -768,10 +1052,11 @@ const indexAtLeast = (level: LevelDef, targetId: string): boolean => {
   }
 };
 
-/** Damage totals (`⚔ total`, `best`, damage per minute) appear once 1-7 asks for a big hit, or in practice. */
+/** [OB-11] Damage totals (`⚔ total`, `best`, `POWER ×`) appear from 1-4 (Boom Practice) so 1-7 focuses cleanly on Skill Trees. */
 export const shouldShowDamageNumbers = (level: LevelDef, save: AdventureSave): boolean =>
   !!level.rules.sandbox ||
-  indexAtLeast(level, '1-7') ||
+  indexAtLeast(level, '1-4') ||
+  save.seenMechanics.includes('charm') ||
   save.seenMechanics.includes('skill_tree') ||
   Object.keys(save.skillNodes).length > 0;
 

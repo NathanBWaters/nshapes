@@ -53,6 +53,10 @@ export interface ScriptContext {
   reduced?: boolean;
   /** Fight already ended (won/lost): never pause the victory/defeat transition for an Evolution cut-in */
   skipCutIn?: boolean;
+  /** Recipes already seen before or just selected in EvolutionPickOverlay: show non-blocking EvolutionBanner ([OB-08]) */
+  bannerOnlyRecipes?: ReadonlySet<string>;
+  /** Force non-blocking EvolutionBanner for all evolutions in this script */
+  forceBanner?: boolean;
 }
 
 /** The recipe an evolution event is about (the engine names it by id or by name). */
@@ -187,18 +191,24 @@ export const scriptFor = (events: readonly RunEvent[], ctx: ScriptContext): Scri
     chunk = [];
   };
   for (const e of events) {
-    chunk.push(e);
-    if (e.type !== 'evolution_start' || ctx.skipCutIn) continue;
+    if (e.type !== 'evolution_start' || ctx.skipCutIn) {
+      chunk.push(e);
+      continue;
+    }
     const id = recipeIdOfEvent(e);
+    const segKind: 'cutIn' | 'banner' =
+      ctx.forceBanner || (id !== null && ctx.bannerOnlyRecipes?.has(id)) ? 'banner' : 'cutIn';
+    // [OB-08] Non-blocking banner evolutions never hold the fight clock on their own
+    chunk.push(segKind === 'banner' ? { ...e, clock: true } : e);
     const prev = segments[segments.length - 1];
-    // Two evolutions at once share one cut-in
-    if (chunk.length === 1 && prev?.kind === 'cutIn') {
+    // Two evolutions at once share one cut-in or banner
+    if (chunk.length === 1 && prev?.kind === segKind) {
       if (id && !prev.recipes.includes(id)) prev.recipes.push(id);
       chunk = [];
       continue;
     }
     flush();
-    if (id) segments.push({ kind: 'cutIn', recipes: [id] });
+    if (id) segments.push({ kind: segKind, recipes: [id] });
   }
   flush();
   return { segments };

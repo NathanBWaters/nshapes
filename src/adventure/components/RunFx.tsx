@@ -9,6 +9,7 @@ import Animated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, w
 import Svg, { Circle } from 'react-native-svg';
 import Icon, { IconName } from '@/components/Icon';
 import { COLORS } from '@/utils/colors';
+import { band } from '@/audio';
 import { DARK, INK, TONE } from './ui';
 
 export { HIT_TIERS, hitTier } from '../fx/script';
@@ -24,8 +25,8 @@ export const MegaFlash: React.FC<{ trigger: number }> = ({ trigger }) => {
   return <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, st.flash, style]} />;
 };
 
-/** Full-width banner when an evolution starts and effects are off (with effects on, fx/EvolutionCutIn takes the screen). */
-export const EvolutionBanner: React.FC<{ name: string; icon: IconName; text: string; seconds: number; seq: number }> = ({ name, icon, text, seconds, seq }) => {
+/** Full-width non-blocking banner when a repeat/post-pick evolution starts or effects are off ([OB-08] + [AU-13]). */
+export const EvolutionBanner: React.FC<{ recipeId?: string; name: string; icon: IconName; text: string; seconds: number; seq: number }> = ({ recipeId, name, icon, text, seconds, seq }) => {
   const x = useSharedValue(-40);
   const o = useSharedValue(0);
   useEffect(() => {
@@ -33,7 +34,17 @@ export const EvolutionBanner: React.FC<{ name: string; icon: IconName; text: str
     o.value = 0;
     x.value = withTiming(0, { duration: 220, easing: Easing.out(Easing.cubic) });
     o.value = withSequence(withTiming(1, { duration: 160 }), withDelay(2000, withTiming(0, { duration: 400 })));
-  }, [seq, x, o]);
+    if (recipeId) {
+      const b = band as typeof band & {
+        playCutInEvolve?: (id: string, opts?: { immediate?: boolean; leadMs?: number }) => void;
+      };
+      if (typeof b?.playCutInEvolve === 'function') {
+        b.playCutInEvolve(recipeId, { immediate: true, leadMs: 0 });
+      } else if (typeof band?.evolve === 'function' && !band.inFight) {
+        band.evolve(recipeId);
+      }
+    }
+  }, [seq, recipeId, x, o]);
   const style = useAnimatedStyle(() => ({ opacity: o.value, transform: [{ translateX: x.value }] }));
   return (
     <Animated.View pointerEvents="none" style={[st.banner, style]} testID="evolution-banner">

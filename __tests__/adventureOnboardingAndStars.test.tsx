@@ -22,6 +22,7 @@ import {
   predictThirdCard,
   shouldShowDamageNumbers,
   shouldShowPassiveHud,
+  THIRD_WORLD_INTRO_ASSIST_STEPS,
 } from '@/adventure/coach';
 import { ASSIST_RULES } from '@/adventure/data/rules';
 import { MECHANICS } from '@/adventure/data/mechanics';
@@ -287,8 +288,9 @@ describe('Adventure first minutes: show, then say', () => {
     expect(assistStepsFor(getLevel('1-2'))).toEqual(ASSIST_RULES.twoTraits);
     expect(assistStepsFor(getLevel('1-5'))).toEqual(ASSIST_RULES.threeTraits);
     expect(assistStepsFor(getLevel('2-1'))).toEqual(ASSIST_RULES.secondWorld);
-    // By World 3 the player has hints and a build: the companion steps back. Practice has no clock to be stuck on.
-    expect(assistStepsFor(getLevel('3-1'))).toBeNull();
+    // [OB-11] 3-1 has a gentle 28s safety net for Shading Surge onboarding; 3-2+ stays hands-off until 3-loss nudge.
+    expect(assistStepsFor(getLevel('3-1'))).toEqual(THIRD_WORLD_INTRO_ASSIST_STEPS);
+    expect(assistStepsFor(getLevel('3-2'))).toBeNull();
     expect(assistStepsFor(PRACTICE_LEVELS[0])).toBeNull();
     expect(assistCardsFor(getLevel('1-5'), 11_000)).toBe(0);
     expect(assistCardsFor(getLevel('1-5'), 12_000)).toBe(1);
@@ -376,9 +378,10 @@ describe('Adventure first minutes: show, then say', () => {
     const level = getLevel('1-2');
     const run = createRun(level, createSaveBefore('1-2'), { seed: 5 });
     const keys = (r: RunState, met = false) => fightRemarks(r, met).map(x => x.key);
+    const tabby = companionVoice('Orange Tabby');
     expect(keys(run)).toEqual([]);
-    expect(fightRemarks({ ...run, foeHp: run.foeMaxHp / 2 }, false)).toEqual([{ key: 'half-0', text: 'Halfway there!' }]);
-    expect(fightRemarks({ ...run, foeHp: 5 }, false)).toEqual([{ key: 'wobble-0', text: `${run.foeName} is wobbling!` }]);
+    expect(fightRemarks({ ...run, foeHp: run.foeMaxHp / 2 }, false)).toEqual([{ key: 'half-0', text: tabby.halfway }]);
+    expect(fightRemarks({ ...run, foeHp: 5 }, false)).toEqual([{ key: 'wobble-0', text: tabby.wobble.replace('{foe}', run.foeName) }]);
     // (one plain Set from the end, the "one more Set" line takes over instead)
     expect(keys({ ...run, foeHp: 3 })).toEqual(['half-0']);
     expect(keys({ ...run, combo: 3 })).toEqual(['roll']);
@@ -455,7 +458,9 @@ describe('Adventure first minutes: show, then say', () => {
   it('shows damage numbers and passives only once the game has introduced them', () => {
     const save = createNewSave();
     expect(shouldShowDamageNumbers(getLevel('1-1'), save)).toBe(false);
-    expect(shouldShowDamageNumbers(getLevel('1-4'), save)).toBe(false);
+    expect(shouldShowDamageNumbers(getLevel('1-3'), save)).toBe(false);
+    // [OB-11] Damage numbers debut on 1-4 (Boom Practice) so 1-7 focuses cleanly on Skill Trees
+    expect(shouldShowDamageNumbers(getLevel('1-4'), save)).toBe(true);
     expect(shouldShowDamageNumbers(getLevel('1-7'), save)).toBe(true);
 
     expect(shouldShowPassiveHud(getLevel('1-1'), save)).toBe(false);
@@ -505,16 +510,11 @@ describe('Adventure first minutes: the screens', () => {
     fireEvent.press(screen.getByTestId('story-next'));
     fireEvent.press(screen.getByTestId('story-next'));
 
-    // Straight onto the guided board, with the fighter talking from the stage
+    // Straight onto the guided board, with Orange Tabby talking immediately at 0ms ([OB-15] suppresses 1-1 taunt!)
     expect(screen.queryByTestId('story-intro')).toBeNull();
     expect(screen.queryByTestId('lesson-modal')).toBeNull();
     expect(screen.queryByTestId('preview-play')).toBeNull();
     expect(screen.getByTestId('run-stage')).toBeTruthy();
-    // The foe speaks first, in its own words; then the fighter says what to do
-    expect(screen.getByTestId('run-foe-taunt')).toBeTruthy();
-    expect(screen.getByText(`“${getLevel('1-1').foes[0].taunt}”`)).toBeTruthy();
-    expect(screen.queryByTestId('run-coach-banner')).toBeNull();
-    letTheFoeFinish();
     expect(screen.queryByTestId('run-foe-taunt')).toBeNull();
     expect(screen.getByTestId('run-coach-banner')).toBeTruthy();
     expect(screen.getByText(/^Meow! Tap these 3: all (orange|blue|pink), 3 shapes!$/)).toBeTruthy();

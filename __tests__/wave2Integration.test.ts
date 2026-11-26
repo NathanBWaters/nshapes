@@ -390,7 +390,9 @@ describe('Seam D: Boss refactors, dynamic TentacleLock sync, Hydra 3-head phases
     expect(getParryArchetype('3-1')).toBe('heavy');
     expect(getParryArchetype('3-3')).toBe('swarm');
     expect(getParryArchetype('2-4')).toBe('stalker');
-    expect(getParryArchetype('1-5')).toBe('tactical');
+    // [OB-10] 1-5 is decongested (no parry); Timing Parry debuts cleanly on 1-6 (tactical)!
+    expect(getParryArchetype('1-5')).toBeNull();
+    expect(getParryArchetype('1-6')).toBe('tactical');
     expect(getParryArchetype('4-11')).toBe('boss_enrage');
 
     // Heavy Slam unparried deals 2♥ and Counter Parry staggers for 9000ms
@@ -404,8 +406,8 @@ describe('Seam D: Boss refactors, dynamic TentacleLock sync, Hydra 3-head phases
     heavy = tick(heavy, heavy.parry!.msLeft + heavy.parry!.spec.windupMs + 500, 500);
     expect(heavy.hearts).toBe(hBefore - 2);
 
-    // Default any-Set timing parry on 1-5 triggers 2500ms micro-Stagger
-    let w1 = createRun(getLevel('1-5'), createMaxedSave(), { seed: 15 });
+    // Default any-Set timing parry on 1-6 triggers 2500ms micro-Stagger
+    let w1 = createRun(getLevel('1-6'), createMaxedSave(), { seed: 16 });
     w1 = tick(w1, w1.parry!.msLeft + 500, 500);
     expect(w1.parry?.phase).toBe('windup');
     w1 = playSet(w1);

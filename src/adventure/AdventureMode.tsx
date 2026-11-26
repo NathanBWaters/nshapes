@@ -1,7 +1,12 @@
 /**
  * Adventure Mode root: map ⇄ preview ⇄ lesson ⇄ run ⇄ results ⇄ unlock reveals,
- * plus Camp (fighters, armory, Arcana, Workshop, Bounties, battle history) and
- * the Field Guide. Owns the save and the battle history and persists every change.
+ * plus Camp (fighters, armory, Arcana, Workshop, Bounties, battle history), the
+ * Field Guide, and the 5-5 Hydra ending ceremony. Owns the save and the battle
+ * history and persists every change.
+ *
+ * [TP-17] Uses a single discriminated-union `ActiveOverlay` state machine +
+ * monotonic `navEpochRef` so overlapping modals and stale `starsLandedMs` timer
+ * races are impossible by construction.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, StyleSheet } from 'react-native';
@@ -24,9 +29,11 @@ import {
   claimMapKey,
   equipArcana,
   equipCharm,
+  hasUnspentStars,
   isLevelUnlocked,
   LESSON_KEYS,
   markCoachMarkSeen,
+  markEndingSeen,
   markMechanicSeen,
   markPathsRevealed,
   setCauldronWager,
@@ -56,20 +63,21 @@ import { randomSeed } from './engine/rng';
 import AdventureMap from './components/AdventureMap';
 import LevelPreview from './components/LevelPreview';
 import MechanicIntro from './components/MechanicIntro';
-import AdventureRun from './components/AdventureRun';
+import AdventureRun, { type RecordedDefeat } from './components/AdventureRun';
 import LevelResults from './components/LevelResults';
 import UnlockReveal from './components/UnlockReveal';
 import Camp, { type CampTab } from './components/Camp';
 import FieldGuide from './components/FieldGuide';
 import FriendRescueModal from './components/FriendRescueModal';
 import StoryIntro from './components/StoryIntro';
+import StoryEndingModal from './components/StoryEndingModal';
 import { starsLandedMs } from './components/ui';
 
 type Screen =
   /** The cold open: the story, then straight into the first fight */
   | { kind: 'story' }
   | { kind: 'map'; highlight?: string | null }
-  | { kind: 'run'; levelId: string; seed: number }
+  | { kind: 'run'; levelId: string; seed: number; isRetry?: boolean }
   /** `bestDpm`: the best damage per minute on this level before this battle (null: first time) */
   | {
       kind: 'results';
@@ -93,6 +101,19 @@ interface Teaching {
 }
 
 /**
+ * [TP-17] Single discriminated-union overlay mutex: concurrent overlapping
+ * modals (preview + lesson + unlocks + rescue + ending) are impossible by construction.
+ */
+type ActiveOverlay =
+  | { kind: 'none' }
+  | { kind: 'preview'; level: LevelDef }
+  | { kind: 'teaching'; teaching: Teaching }
+  | { kind: 'reference'; mechanic: MechanicDef }
+  | { kind: 'unlocks'; unlocks: Unlock[]; pendingEnding?: boolean }
+  | { kind: 'rescue'; keyId: string }
+  | { kind: 'ending' };
+
+/**
  * How deep each screen sits: a change to a screen as deep or deeper comes in
  * from the right ("deeper"), a change to a shallower one from the left ("back").
  */
@@ -102,7 +123,7 @@ const screenFor = (d: FeatureDestination, returnLevelId?: string): Screen => ({ 
 
 interface Props {
   onExit: () => void;
-  /** Optional shortcut when Starfall Summit unlocks on clearing 1-10 */
+  /** Optional shortcut when Starfall Summit unlocks on clearing 1-10 or finishing 5-5 */
   onOpenSummit?: () => void;
   autoPlayer?: boolean;
   /** Dev: start with a specific save */
@@ -134,7 +155,11 @@ const AdventureMode: React.FC<Props> = ({
   devSeed,
 }) => {
   const [save, setSaveState] = useState<AdventureSave>(() => initialSave ?? loadAdventureSave());
+  const saveRef = useRef(save);
+  saveRef.current = save;
   const [history, setHistory] = useState<BattleRecord[]>(loadBattleHistory);
+  const historyRef = useRef(history);
+  historyRef.current = history;
   const [screen, setScreenNow] = useState<Screen>(() =>
     devLevelId
       ? { kind: 'run', levelId: devLevelId, seed: devSeed ?? randomSeed() }
@@ -146,40 +171,62 @@ const AdventureMode: React.FC<Props> = ({
   const transition = useScreenTransition();
   const screenRef = useRef(screen);
   screenRef.current = screen;
-  /** Change screen: the old one leaves, then `next` (and whatever `also` sets with it) arrives */
+  const reducedMotion = useReducedMotion();
+
+  // [TP-17] Single overlay state machine + monotonic navEpochRef guarding all delayed callbacks
+  const [overlay, setOverlay] = useState<ActiveOverlay>(() =>
+    devRescueKeyId ? { kind: 'rescue', keyId: devRescueKeyId } : { kind: 'none' }
+  );
+  /** Put away by hand, the sheet slides down; leaving with its screen (Fight!, Camp), it fades with it */
+  const [previewExit, setPreviewExit] = useState<'slide' | 'screen' | 'cut'>('slide');
+  const [unlocksRevealed, setUnlocksRevealed] = useState(true);
+  const [walkingKeyId, setWalkingKeyId] = useState<string | null>(null);
+  const deferredKeyIds = useRef<Set<string>>(new Set());
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const navEpochRef = useRef(0);
+
+  const clearPendingTimers = useCallback(() => {
+    timers.current.forEach(clearTimeout);
+    timers.current = [];
+  }, []);
+
+  /** Change screen: increments navEpochRef, clears stale timers, closes transient overlays, then runs `also` */
   const setScreen = useCallback((next: Screen, also?: () => void) => {
+    navEpochRef.current += 1;
+    clearPendingTimers();
     const direction: ScreenDirection = DEPTH[next.kind] >= DEPTH[screenRef.current.kind] ? 1 : -1;
     transition.go(() => {
+      setOverlay({ kind: 'none' });
       setScreenNow(next);
       also?.();
     }, direction);
-  }, [transition]);
-  const reducedMotion = useReducedMotion();
-  const [preview, setPreview] = useState<LevelDef | null>(null);
-  /** Put away by hand, the sheet slides down; leaving with its screen (Fight!, Camp), it fades with it */
-  const [previewExit, setPreviewExit] = useState<'slide' | 'screen' | 'cut'>('slide');
-  // Start straight on the World Map — zero blocking windows on launch!
-  const [teaching, setTeaching] = useState<Teaching | null>(null);
-  /** A mechanic opened just to read about it (no fight follows) */
-  const [reference, setReference] = useState<MechanicDef | null>(null);
-  const [unlocks, setUnlocks] = useState<Unlock[]>([]);
-  const [unlocksRevealed, setUnlocksRevealed] = useState(true);
-  const [walkingKeyId, setWalkingKeyId] = useState<string | null>(null);
-  const [activeRescueKeyId, setActiveRescueKeyId] = useState<string | null>(() => devRescueKeyId ?? null);
-  const deferredKeyIds = useRef<Set<string>>(new Set());
-  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  }, [transition, clearPendingTimers]);
+
+  const setSave = useCallback((next: AdventureSave | ((s: AdventureSave) => AdventureSave)) => {
+    setSaveState(prev => {
+      const value = typeof next === 'function' ? next(prev) : next;
+      saveRef.current = value;
+      writeAdventureSave(value);
+      return value;
+    });
+  }, []);
 
   useAndroidBackHandler(() => {
-    if (reference) {
-      setReference(null);
+    if (overlay.kind === 'reference') {
+      setOverlay({ kind: 'none' });
       return true;
     }
-    if (preview) {
+    if (overlay.kind === 'preview') {
       setPreviewExit('slide');
-      setPreview(null);
+      setOverlay({ kind: 'none' });
       return true;
     }
-    if (teaching || activeRescueKeyId || !unlocksRevealed) {
+    if (overlay.kind === 'ending') {
+      setSave(markEndingSeen);
+      setOverlay({ kind: 'none' });
+      return true;
+    }
+    if (overlay.kind === 'teaching' || overlay.kind === 'rescue' || overlay.kind === 'unlocks' || !unlocksRevealed) {
       return true;
     }
     if (screen.kind === 'camp' || screen.kind === 'guide' || screen.kind === 'results') {
@@ -192,14 +239,6 @@ const AdventureMode: React.FC<Props> = ({
     onExit();
     return true;
   });
-
-  const setSave = useCallback((next: AdventureSave | ((s: AdventureSave) => AdventureSave)) => {
-    setSaveState(prev => {
-      const value = typeof next === 'function' ? next(prev) : next;
-      writeAdventureSave(value);
-      return value;
-    });
-  }, []);
 
   // Decoupled audio controls: Music (MusicStorage / Camp switch) and SFX (SoundStorage)
   // operate independently so players can mute background music while keeping crisp SFX.
@@ -249,33 +288,26 @@ const AdventureMode: React.FC<Props> = ({
     if (screen.kind === 'map' || screen.kind === 'camp' || screen.kind === 'guide' || screen.kind === 'story') music.play('map');
   }, [screen.kind]);
 
-  const clearPendingTimers = useCallback(() => {
-    timers.current.forEach(clearTimeout);
-    timers.current = [];
-  }, []);
-
   useEffect(() => () => {
+    navEpochRef.current += 1;
     commitAdventureFight('unmount');
     music.stop();
     clearPendingTimers();
   }, [clearPendingTimers]);
 
-  const startRun = useCallback((level: LevelDef, also?: () => void) => {
-    clearPendingTimers();
-    setUnlocks([]);
+  const startRun = useCallback((level: LevelDef, opts?: { also?: () => void; isRetry?: boolean }) => {
     setUnlocksRevealed(true);
-    setScreen({ kind: 'run', levelId: level.id, seed: randomSeed() }, also);
-  }, [clearPendingTimers, setScreen]);
+    setScreen({ kind: 'run', levelId: level.id, seed: randomSeed(), ...(opts?.isRetry ? { isRetry: true } : {}) }, opts?.also);
+  }, [setScreen]);
 
   const handlePlay = (level: LevelDef) => {
     sfx('confirm');
     // The sheet is part of the screen that leaves: it fades out with the map, as one
     // picture, and is taken away at the swap (never a frame of bare map before the fight)
-    const leave = () => setPreview(null);
     setPreviewExit('cut');
     if (level.id === MAIN_LEVELS[0].id) {
       setSave(s => markMechanicSeen(s, LESSON_KEYS.mechanic(level.introduces)));
-      startRun(level, leave);
+      startRun(level);
       return;
     }
     // What the preview sheet already taught is simply recorded; anything bigger gets its own lesson first
@@ -286,9 +318,10 @@ const AdventureMode: React.FC<Props> = ({
     if (plans.length > 0) {
       // A lesson card comes first, over the map: the sheet fades under it
       setPreviewExit('screen');
-      setPreview(null);
-      setTeaching({ plans, level });
-    } else startRun(level, leave);
+      setOverlay({ kind: 'teaching', teaching: { plans, level } });
+    } else {
+      startRun(level);
+    }
   };
 
   /** The story is over (or skipped): the first fight starts at once, with no map and no preview in between. */
@@ -301,35 +334,33 @@ const AdventureMode: React.FC<Props> = ({
   /** The lesson on screen was accepted: record it, then show the next one or start the fight. */
   const finishLesson = ({ plans: [done, ...rest], level }: Teaching) => {
     setSave(s => done.marks.reduce(markMechanicSeen, s));
-    if (rest.length > 0) setTeaching({ plans: rest, level });
+    if (rest.length > 0) setOverlay({ kind: 'teaching', teaching: { plans: rest, level } });
     else {
-      setTeaching(null);
+      setOverlay({ kind: 'none' });
       startRun(level);
     }
   };
 
-  const remember = (record: BattleRecord) => setHistory(h => recordBattle(h, record));
-
-  const handleFinish = (level: LevelDef, run: RunState, tape: FightTape) => {
-    const stars = computeStars(run);
-    const result = applyLevelResult(save, level, stars, run.coins, run);
-    setSave(result.save);
-    const bestDpm = bestDpmOn(history, level.id);
-    const at = Date.now();
-    const fightId = `${at}-${tape.recording.seed}`;
-    const record = battleRecord(level, run, {
-      at,
-      stars,
-      coins: result.coinsBanked + result.starCoins + result.bountyCoins,
-      fightId,
+  const remember = useCallback((record: BattleRecord) => {
+    setHistory(h => {
+      const next = recordBattle(h, record);
+      historyRef.current = next;
+      return next;
     });
-    remember(record);
-    stageAdventureFight(level, run, record, tape, { fightId, afterSave: result.save });
-    showResults(level, run, stars, result, bestDpm, fightId, at);
-  };
+  }, []);
 
-  /** The results screen, then (once the stars have landed) one reveal per unlock */
-  const showResults = (level: LevelDef, run: RunState, stars: number, result: ResultApplication, bestDpm: number | null, fightId: string, at: number) => {
+  /** The results screen, then (once the stars have landed) epoch-guarded UnlockReveal and/or 5-5 Ending Ceremony */
+  const showResults = useCallback((
+    level: LevelDef,
+    run: RunState,
+    stars: number,
+    result: ResultApplication,
+    bestDpm: number | null,
+    fightId: string,
+    at: number,
+    opts?: { triggerEnding?: boolean }
+  ) => {
+    const triggerEnding = Boolean(opts?.triggerEnding);
     setScreen({
       kind: 'results',
       levelId: level.id,
@@ -342,16 +373,80 @@ const AdventureMode: React.FC<Props> = ({
       funRating: null,
       funTags: [],
     }, () => {
-      // Timed from the moment the results screen is there
+      const epoch = navEpochRef.current;
       if (result.unlocks.length > 0) {
-        // Let the stars land first, then give each unlock its own moment
+        // Let the stars land first, then give each unlock its own moment (epoch-guarded against rapid taps!)
         setUnlocksRevealed(false);
-        timers.current.push(setTimeout(() => setUnlocks(result.unlocks), starsLandedMs(stars)));
+        timers.current.push(
+          setTimeout(() => {
+            if (navEpochRef.current !== epoch) return;
+            setOverlay({ kind: 'unlocks', unlocks: result.unlocks, pendingEnding: triggerEnding });
+          }, starsLandedMs(stars))
+        );
       } else {
         setUnlocksRevealed(true);
+        if (triggerEnding) {
+          timers.current.push(
+            setTimeout(() => {
+              if (navEpochRef.current !== epoch) return;
+              setOverlay({ kind: 'ending' });
+            }, starsLandedMs(stars))
+          );
+        }
       }
     });
+  }, [setScreen]);
+
+  const handleFinish = (level: LevelDef, run: RunState, tape: FightTape) => {
+    const before = saveRef.current;
+    const stars = computeStars(run);
+    const result = applyLevelResult(before, level, stars, run.coins, run);
+    setSave(result.save);
+    const bestDpm = bestDpmOn(historyRef.current, level.id);
+    const at = Date.now();
+    const fightId = `${at}-${tape.recording.seed}`;
+    const record = battleRecord(level, run, {
+      at,
+      stars,
+      coins: result.coinsBanked + result.starCoins + result.bountyCoins,
+      fightId,
+    });
+    remember(record);
+    stageAdventureFight(level, run, record, tape, { fightId, afterSave: result.save });
+    const triggerEnding = level.id === '5-5' && stars >= 1 && !before.endingSeen;
+    showResults(level, run, stars, result, bestDpm, fightId, at, { triggerEnding });
   };
+
+  /** [OB-13] Record a defeat once when DefeatOverlay mounts over the paused board (1 wide fight_ended event!). */
+  const handleDefeatRecorded = useCallback((level: LevelDef, run: RunState, tape: FightTape): RecordedDefeat => {
+    const before = saveRef.current;
+    const result = applyLevelResult(before, level, 0, run.coins, run);
+    setSave(result.save);
+    const bestDpm = bestDpmOn(historyRef.current, level.id);
+    const at = Date.now();
+    const fightId = `${at}-${tape.recording.seed}`;
+    const record = battleRecord(level, run, {
+      at,
+      stars: 0,
+      coins: result.coinsBanked + result.starCoins + result.bountyCoins,
+      fightId,
+    });
+    remember(record);
+    stageAdventureFight(level, run, record, tape, { fightId, afterSave: result.save });
+    return { result, bestDpm, fightId, recordAt: at };
+  }, [setSave, remember]);
+
+  /** [OB-13] Commit staged defeat telemetry and return fresh save/relief for `<250ms` in-place retry. */
+  const handleDefeatRetryStart = useCallback((level: LevelDef, opts?: { armRecipeId?: string }) => {
+    commitAdventureFight('defeat_retry');
+    let nextSave = saveRef.current;
+    if (opts?.armRecipeId) {
+      nextSave = armRecipePair(nextSave, opts.armRecipeId);
+      setSave(nextSave);
+    }
+    const nextRelief = resolveRunReliefOptions(level, nextSave);
+    return { save: nextSave, relief: nextRelief };
+  }, [setSave]);
 
   // Dev: the results of a canned fight, through the same path as a real one (the save is not written)
   useEffect(() => {
@@ -359,13 +454,14 @@ const AdventureMode: React.FC<Props> = ({
     const level = getLevel(devResult.levelId);
     const result = applyLevelResult(save, level, devResult.stars, devResult.run.coins, devResult.run);
     setSaveState(result.save);
+    saveRef.current = result.save;
     showResults(level, devResult.run, devResult.stars, result, null, `dev-${devResult.levelId}-${devResult.stars}`, Date.now());
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** A fight left partway through (retreat or restart) is still a battle, once a move was made. */
   const handleLeft = (level: LevelDef, run: RunState, tape: FightTape) => {
     if (!wasFought(run)) return;
-    const { save: nextSave, coinsRetained } = applyRetreatResult(save, level, run);
+    const { save: nextSave, coinsRetained } = applyRetreatResult(saveRef.current, level, run);
     if (coinsRetained > 0) setSave(nextSave);
     const at = Date.now();
     const fightId = `${at}-${tape.recording.seed}`;
@@ -378,13 +474,21 @@ const AdventureMode: React.FC<Props> = ({
     setScreenNow(prev => (prev.kind === 'results' ? { ...prev, funRating: rating, funTags: tags } : prev));
     if (screen.kind !== 'results') return;
     const { fightId, recordAt, levelId } = screen;
-    setHistory(h => saveBattleFeedback(h, { fightId, at: recordAt, levelId }, { funRating: rating, funTags: tags }));
+    setHistory(h => {
+      const next = saveBattleFeedback(h, { fightId, at: recordAt, levelId }, { funRating: rating, funTags: tags });
+      historyRef.current = next;
+      return next;
+    });
     rateFight(fightId, { funRating: rating, funTags: tags }, { source: 'results' });
   };
 
   const handleCampRateBattle = (battle: BattleRecord, rating: FunRating | null, tags: FunTag[]) => {
     const match = { fightId: battle.fightId, at: battle.at, levelId: battle.levelId };
-    setHistory(h => saveBattleFeedback(h, match, { funRating: rating, funTags: tags }));
+    setHistory(h => {
+      const next = saveBattleFeedback(h, match, { funRating: rating, funTags: tags });
+      historyRef.current = next;
+      return next;
+    });
     rateFight(
       battle.fightId ?? `${battle.at}-${battle.levelId}`,
       { funRating: rating, funTags: tags },
@@ -406,21 +510,27 @@ const AdventureMode: React.FC<Props> = ({
     return key;
   };
 
+  const previewLevel = overlay.kind === 'preview' ? overlay.level : null;
+  const activeTeaching = overlay.kind === 'teaching' ? overlay.teaching : null;
+  const activeReference = overlay.kind === 'reference' ? overlay.mechanic : null;
+  const activeUnlocks = overlay.kind === 'unlocks' ? overlay.unlocks : [];
+  const activeRescueKeyId = overlay.kind === 'rescue' ? overlay.keyId : null;
+
   let body: React.ReactNode = null;
   if (screen.kind === 'story') {
     body = <StoryIntro fighter={save.selectedFighter} onDone={startFirstFight} />;
   } else if (screen.kind === 'map') {
-    const mapActive = !preview && !teaching && !reference && unlocks.length === 0 && !activeRescueKeyId;
+    const mapActive = overlay.kind === 'none';
     body = (
       <AdventureMap
         save={save}
         active={mapActive}
         highlightLevelId={screen.highlight}
         walkingKeyId={walkingKeyId}
-        onOpenMapKey={keyId => { setWalkingKeyId(null); setActiveRescueKeyId(keyId); }}
-        onWalkKeyArrived={keyId => { setWalkingKeyId(null); setActiveRescueKeyId(keyId); }}
+        onOpenMapKey={keyId => { setWalkingKeyId(null); setOverlay({ kind: 'rescue', keyId }); }}
+        onWalkKeyArrived={keyId => { setWalkingKeyId(null); setOverlay({ kind: 'rescue', keyId }); }}
         onPathsRevealed={ids => setSave(s => markPathsRevealed(s, ids))}
-        onSelectLevel={l => { setWalkingKeyId(null); sfx('click'); setPreview(l); }}
+        onSelectLevel={l => { setWalkingKeyId(null); sfx('click'); setOverlay({ kind: 'preview', level: l }); }}
         onOpenCamp={() => { setWalkingKeyId(null); sfx('confirm'); setScreen({ kind: 'camp' }); }}
         onOpenGuide={() => { setWalkingKeyId(null); sfx('confirm'); setScreen({ kind: 'guide' }); }}
         onExit={() => transition.go(() => { music.stop(); onExit(); }, -1)}
@@ -436,11 +546,26 @@ const AdventureMode: React.FC<Props> = ({
         save={save}
         seed={screen.seed}
         relief={relief}
+        initialIsRetry={screen.isRetry}
         autoPlayer={autoPlayer}
         onFinish={(run, tape) => handleFinish(level, run, tape)}
         onQuit={(run, tape) => { handleLeft(level, run, tape); setScreen({ kind: 'map', highlight: level.id }); }}
-        onRestart={(run, tape) => { handleLeft(level, run, tape); startRun(level); }}
+        onRestart={(run, tape) => { handleLeft(level, run, tape); startRun(level, { isRetry: true }); }}
         onCoachMarkSeen={id => setSave(s => markCoachMarkSeen(s, id))}
+        onDefeatRecorded={(run, tape) => handleDefeatRecorded(level, run, tape)}
+        onShowDefeatBreakdown={(run, recorded) => {
+          showResults(level, run, 0, recorded.result, recorded.bestDpm, recorded.fightId, recorded.recordAt);
+        }}
+        onDefeatRetryStart={opts => handleDefeatRetryStart(level, opts)}
+        onDefeatCamp={tab => {
+          commitAdventureFight('results_camp');
+          setScreen({ kind: 'camp', tab, returnLevelId: level.id });
+        }}
+        onDefeatMap={() => {
+          commitAdventureFight('results_map');
+          setScreen({ kind: 'map', highlight: level.id });
+        }}
+        onToggleTailwind={active => setSave(s => setTailwindActive(s, active))}
         effects={save.effectsOn && !reducedMotion}
         // A device that asks for reduced motion keeps effects off
         onToggleEffects={reducedMotion ? undefined : () => setSave(s => ({ ...s, effectsOn: !s.effectsOn }))}
@@ -463,34 +588,41 @@ const AdventureMode: React.FC<Props> = ({
         funTags={screen.funTags}
         onRateFun={handleResultsRateFun}
         onReplayOpened={() => markReplayOpened(screen.fightId)}
-        onRetry={() => { commitAdventureFight('results_retry'); startRun(level); }}
+        onRetry={() => { commitAdventureFight('results_retry'); startRun(level, { isRetry: true }); }}
+        onArmRecipeAndRetry={recipeId => {
+          commitAdventureFight('results_retry');
+          setSave(s => armRecipePair(s, recipeId));
+          startRun(level, { isRetry: true });
+        }}
+        onWatchEnding={level.id === '5-5' ? () => setOverlay({ kind: 'ending' }) : undefined}
         onNext={() => {
           commitAdventureFight('results_next');
           const key = readyKeyAfter(level.id);
           if (key) {
-            clearPendingTimers();
-            setUnlocks([]);
             setScreen({ kind: 'map', highlight: level.id }, () => setWalkingKeyId(key.id));
           } else if (next) {
-            setPreview(next);
+            // [OB-16] Keep LevelPreview for NEW mechanics, bosses, or unspent loadout/stars; fast-launch already-seen repeat levels!
+            const nextIsNew = !save.seenMechanics.includes(next.introduces);
+            if (!nextIsNew && !next.isBoss && !hasUnspentStars(save)) {
+              startRun(next);
+            } else {
+              setOverlay({ kind: 'preview', level: next });
+            }
           }
         }}
         onMap={() => {
           commitAdventureFight('results_map');
-          clearPendingTimers();
-          setUnlocks([]);
           const key = readyKeyAfter(level.id);
           setScreen(
             { kind: 'map', highlight: key ? level.id : next && isLevelUnlocked(save, next) ? next.id : level.id },
             () => { if (key) setWalkingKeyId(key.id); }
           );
         }}
-        onCamp={() => {
+        onCamp={requestedTab => {
           commitAdventureFight('results_camp');
-          clearPendingTimers();
-          setUnlocks([]);
-          // Land on the part of Camp this result just unlocked, or on Bounties if it claimed one
+          // Land on the requested tab (e.g. Skill Tree / Workshop quick-action), the unlocked feature tab, or Bounties
           const tab: CampTab | undefined =
+            requestedTab ??
             screen.result.unlocks.flatMap(u => (u.kind === 'feature' ? [CAMPAIGN_FEATURES[u.feature].open?.destination.tab] : []))[0] ??
             (screen.result.completedBounties.length > 0 ? 'bounties' : undefined);
           const returnLevelId = next && isLevelUnlocked(save, next) ? next.id : level.id;
@@ -508,7 +640,13 @@ const AdventureMode: React.FC<Props> = ({
         returnLevel={returnLevel}
         onReturnToLevel={lvl => {
           sfx('confirm');
-          setScreen({ kind: 'map', highlight: lvl.id }, () => setPreview(lvl));
+          // [OB-16] Skip the Map + LevelPreview detour when the level's mechanic is already seen!
+          const extraLessons = lessonsDueBefore(lvl, save).filter(p => !taughtOnPreview(p, lvl));
+          if (extraLessons.length === 0 && save.seenMechanics.includes(lvl.introduces)) {
+            startRun(lvl);
+          } else {
+            setScreen({ kind: 'map', highlight: lvl.id }, () => setOverlay({ kind: 'preview', level: lvl }));
+          }
         }}
         onChange={setSave}
         onRateBattle={handleCampRateBattle}
@@ -531,10 +669,10 @@ const AdventureMode: React.FC<Props> = ({
         {body}
         {/* Inside the screen layer: the sheet leaves with its screen, and its layer's one opacity keeps them one picture */}
         <LevelPreview
-          level={preview}
+          level={previewLevel}
           save={save}
           exit={previewExit}
-          onClose={() => { setPreviewExit('slide'); setPreview(null); }}
+          onClose={() => { setPreviewExit('slide'); setOverlay({ kind: 'none' }); }}
           onPlay={handlePlay}
           onSelectFighter={f => { sfx('click'); setSave(s => ({ ...s, selectedFighter: f })); }}
           onSelectCharm={id => { sfx('click'); setSave(s => toggleCharm(s, id)); }}
@@ -542,32 +680,32 @@ const AdventureMode: React.FC<Props> = ({
           onSelectArcana={id => { sfx('click'); setSave(s => toggleArcana(s, id)); }}
           onToggleTailwind={active => { sfx('click'); setSave(s => setTailwindActive(s, active)); }}
           onSelectWager={tier => { sfx('click'); setSave(s => setCauldronWager(s, tier)); }}
-          onShowMechanic={id => setReference(MECHANICS[id])}
+          onShowMechanic={id => setOverlay({ kind: 'reference', mechanic: MECHANICS[id] })}
           onOpenCamp={tab => {
             // The lesson was read and is being acted on: it counts as seen, and the fight waits on the map
             sfx('confirm');
-            const returnLevelId = preview?.id;
-            if (preview) setSave(s => markMechanicSeen(s, LESSON_KEYS.mechanic(preview.introduces)));
+            const returnLevelId = previewLevel?.id;
+            if (previewLevel) setSave(s => markMechanicSeen(s, LESSON_KEYS.mechanic(previewLevel.introduces)));
             setPreviewExit('cut');
-            setScreen({ kind: 'camp', tab, returnLevelId }, () => setPreview(null));
+            setScreen({ kind: 'camp', tab, returnLevelId });
           }}
         />
       </Animated.View>
-      {teaching ? (
+      {activeTeaching ? (
         <MechanicIntro
-          mechanic={teaching.plans[0].mechanic}
-          prelude={teaching.plans[0].prelude}
+          mechanic={activeTeaching.plans[0].mechanic}
+          prelude={activeTeaching.plans[0].prelude}
           fighter={save.selectedFighter}
           brief
-          cta={teaching.plans.length > 1 ? `Next: ${teaching.plans[1].mechanic.title}` : teaching.level.rules.sandbox ? 'Start practising' : 'Let\'s play!'}
-          onClose={() => finishLesson(teaching)}
+          cta={activeTeaching.plans.length > 1 ? `Next: ${activeTeaching.plans[1].mechanic.title}` : activeTeaching.level.rules.sandbox ? 'Start practising' : 'Let\'s play!'}
+          onClose={() => finishLesson(activeTeaching)}
         />
       ) : (
-        <MechanicIntro mechanic={reference} fighter={save.selectedFighter} cta="Close" quiz={false} dismissible onClose={() => setReference(null)} />
+        <MechanicIntro mechanic={activeReference} fighter={save.selectedFighter} cta="Close" quiz={false} dismissible onClose={() => setOverlay({ kind: 'none' })} />
       )}
-      {unlocks.length > 0 && (
+      {activeUnlocks.length > 0 && (
         <UnlockReveal
-          unlocks={unlocks}
+          unlocks={activeUnlocks}
           save={save}
           onUseFighter={name => setSave(s => ({ ...s, selectedFighter: name }))}
           onEquipCharm={id => setSave(s => equipCharm(s, id))}
@@ -585,11 +723,12 @@ const AdventureMode: React.FC<Props> = ({
               setScreen(screenFor(open.destination, returnLevelId));
             }
           }}
-          onShowPath={id => { clearPendingTimers(); setScreen({ kind: 'map', highlight: id }); }}
+          onShowPath={id => setScreen({ kind: 'map', highlight: id })}
           onOpenSummit={onOpenSummit ? () => { clearPendingTimers(); music.stop(); onOpenSummit(); } : undefined}
           onDone={() => {
-            setUnlocks([]);
+            const openEndingNext = overlay.kind === 'unlocks' && Boolean(overlay.pendingEnding);
             setUnlocksRevealed(true);
+            setOverlay(openEndingNext ? { kind: 'ending' } : { kind: 'none' });
           }}
         />
       )}
@@ -603,8 +742,22 @@ const AdventureMode: React.FC<Props> = ({
         onUseFighter={fighterName => setSave(s => ({ ...s, selectedFighter: fighterName }))}
         onClose={deferred => {
           if (deferred && activeRescueKeyId) deferredKeyIds.current.add(activeRescueKeyId);
-          setActiveRescueKeyId(null);
+          setOverlay({ kind: 'none' });
         }}
+      />
+      <StoryEndingModal
+        visible={overlay.kind === 'ending'}
+        save={save}
+        onDone={() => {
+          setSave(markEndingSeen);
+          setOverlay({ kind: 'none' });
+        }}
+        onOpenSummit={onOpenSummit ? () => {
+          setSave(markEndingSeen);
+          clearPendingTimers();
+          music.stop();
+          onOpenSummit();
+        } : undefined}
       />
     </View>
   );

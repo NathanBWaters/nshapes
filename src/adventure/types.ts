@@ -674,6 +674,10 @@ export interface AdventureSave {
   cauldronWager?: 0 | 1 | 2;
   /** Whether Friendly Tailwind relief is currently toggled on */
   tailwindActive?: boolean;
+  /** Lowest foe HP fraction (0..1) reached on each level — powers pre-1-8 "Closest Yet!" progress bar ([OB-13]) */
+  bestFoeHpPct?: Record<string, number>;
+  /** True once the 5-5 Starfall Summit ending ceremony & crew reunion has played ([OB-20]) */
+  endingSeen?: boolean;
 }
 
 // ---------------------------------------------------------------------------
