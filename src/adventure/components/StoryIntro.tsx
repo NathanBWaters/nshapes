@@ -78,6 +78,24 @@ const StoryIntro: React.FC<Props> = ({ fighter, onDone }) => {
   const beat = beats[i];
   const last = i === beats.length - 1;
 
+  // [AU-20]: Dusk story music on mount, brightening to Ionian on Beat 3 Hero reveal
+  useEffect(() => {
+    if (typeof band?.playScreenMusic === 'function') {
+      band.playScreenMusic('story');
+    }
+    return () => {
+      if (typeof band?.stop === 'function' && band.current === 'story') {
+        band.stop();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof band?.setStoryHeroMode === 'function') {
+      band.setStoryHeroMode(beat.scene === 'hero');
+    }
+  }, [beat.scene]);
+
   // Reset settlement per beat and mark settled once the beat's words have arrived (pauses cleanly when paused)
   useEffect(() => {
     setBeatSettled(reduced);

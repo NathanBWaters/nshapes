@@ -508,7 +508,10 @@ const GameBoard: React.FC<GameBoardProps> = ({
           }
           onMatchStart?.();
           // No board flash: the Set's cards themselves are the answer (thrown in Adventure, revealed elsewhere)
-          triggerHaptic(graceUsed ? 'warning' : 'success');
+          // [AU-21]: In Adventure/Summit (`quietRewards`), impact haptics fire on `onLand(beat)` instead of 80ms early
+          if (!quietRewards || graceUsed) {
+            triggerHaptic(graceUsed ? 'warning' : 'success');
+          }
           playSound(graceUsed ? 'graceUsed' : 'matchValid');
 
           const matchId = ++matchCounterRef.current;

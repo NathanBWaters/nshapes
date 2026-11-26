@@ -12,6 +12,7 @@ import Icon from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
 import { COLORS } from '@/utils/colors';
+import { triggerRankSealHaptic, triggerStarStampHaptic } from '@/utils/haptics';
 import { band, sfx } from '@/audio';
 import type { LevelDef, RunState } from '../types';
 import { isLevelUnlocked, type ResultApplication } from '../progress';
@@ -125,16 +126,29 @@ const LevelResults: React.FC<Props> = ({
     // the screen, then heavy stamp thwack + ascending triad chime on the exact landing frame.
     // Reduced motion shows every star at once: one unified chord, no swoosh.
     if (reduced) {
-      if (stars > 0) band.cue('star', { amount: stars });
+      if (stars > 0) {
+        band.cue('star', { amount: stars });
+        void triggerStarStampHaptic(stars - 1);
+      }
       return;
     }
     const ts: ReturnType<typeof setTimeout>[] = [];
     for (let i = 1; i <= stars; i++) {
       ts.push(setTimeout(() => band.cue('starSwoosh', { amount: i }), starPopDelayMs(i - 1)));
-      ts.push(setTimeout(() => band.cue('star', { amount: i }), starLandMs(i - 1)));
+      ts.push(
+        setTimeout(() => {
+          band.cue('star', { amount: i });
+          void triggerStarStampHaptic(i - 1);
+        }, starLandMs(i - 1))
+      );
     }
     if (rankSeal) {
-      ts.push(setTimeout(() => band.cue('rankSeal'), sealLandMs(stars)));
+      ts.push(
+        setTimeout(() => {
+          band.cue('rankSeal');
+          void triggerRankSealHaptic();
+        }, sealLandMs(stars))
+      );
     }
     return () => ts.forEach(clearTimeout);
   }, [stars]); // eslint-disable-line react-hooks/exhaustive-deps

@@ -122,7 +122,7 @@ interface Props {
   returnLevel?: LevelDef | null;
   onReturnToLevel?: (level: LevelDef) => void;
   /** [TP-12] 1-tap jump into 1-4D Training Lab sandbox with current build */
-  onTestLoadout?: () => void;
+  onTestLoadout?: (activeTab?: CampTab | null) => void;
 }
 
 const NO_BATTLES: readonly BattleRecord[] = [];
@@ -184,6 +184,18 @@ const Camp: React.FC<Props> = ({
   useEffect(() => {
     setTab(initialTab ?? null);
   }, [initialTab]);
+
+  // [AU-20]: Cozy campfire vibes + harp + pizz in Camp; stop cleanly on unmount if still on camp
+  useEffect(() => {
+    if (typeof band?.playScreenMusic === 'function') {
+      band.playScreenMusic('camp');
+    }
+    return () => {
+      if (typeof band?.stop === 'function' && band.current === 'camp') {
+        band.stop();
+      }
+    };
+  }, []);
 
   const open = (next: CampTab | null) => {
     setTab(next);
@@ -441,7 +453,7 @@ const Camp: React.FC<Props> = ({
         {showTestLoadoutBtn && (
           <TouchableOpacity
             testID="camp-test-loadout"
-            onPress={() => { sfx('confirm'); onTestLoadout?.(); }}
+            onPress={() => { sfx('confirm'); onTestLoadout?.(tab); }}
             style={st.testLoadoutBtn}
             activeOpacity={0.85}
             accessibilityRole="button"

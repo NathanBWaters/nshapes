@@ -47,7 +47,7 @@ export const BIOMES: BiomeDef[] = [
     subtitle: 'Everything, all at once',
     starGate: 76,
     colors: { sky: '#E7E0F7', ground: '#A99BD6', path: '#FFF9E8', accent: '#F5B82E', ink: '#2A1D57' },
-    music: 'boss',
+    music: 'summit',
     decor: ['lorc/mountaintop', 'delapouite/falling-star', 'lorc/comet-spark'],
     skyIcon: { icon: 'delapouite/falling-star', color: '#F5B82E' },
   },

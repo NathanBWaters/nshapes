@@ -1147,4 +1147,6 @@ export interface RunState {
   /** Convenience flags mirrored from `relief` for telemetry & results */
   tailwindActive?: boolean;
   cauldronWager?: 0 | 1 | 2;
+  /** Dev/sandbox-only manual clock freeze toggled from FightDebugDrawer ([TP-11]) */
+  devClockFrozen?: boolean;
 }

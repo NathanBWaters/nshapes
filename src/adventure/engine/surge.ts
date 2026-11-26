@@ -38,7 +38,9 @@ const shadeBoard = (d: Draft) => {
 
 const startSurge = (d: Draft, surge: SurgeState) => {
   d.surge = { ...surge, active: true, msLeft: SURGE_RULES.surgeMs, count: surge.count + 1 };
-  d.attributes = [...d.level.rules.attributes, 'shading'];
+  d.attributes = d.level.rules.attributes.includes('shading')
+    ? [...d.level.rules.attributes]
+    : [...d.level.rules.attributes, 'shading'];
   shadeBoard(d);
   emit(d, 'surge_start', SURGE_RULES.multiplier);
 };
@@ -49,6 +51,16 @@ const endSurge = (d: Draft, surge: SurgeState) => {
   d.board = d.board.map(c => (c.shading === SOLID ? c : { ...c, shading: SOLID }));
   if (d.simplified?.attribute === 'shading') d.simplified = null;
   emit(d, 'surge_end');
+};
+
+/** Dev/sandbox helper ([TP-11]/[TP-12]): explicitly engage or end Shading Surge on demand. */
+export const setSurgeActive = (d: Draft, active: boolean) => {
+  const cur = d.surge ?? initialSurge();
+  if (active) {
+    if (!cur.active) startSurge(d, cur);
+  } else if (cur.active) {
+    endSurge(d, cur);
+  }
 };
 
 /** Advance the surge clock by `ms` of fight time. */

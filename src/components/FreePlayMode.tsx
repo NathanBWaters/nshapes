@@ -41,6 +41,7 @@ import {
   sameCardAttributes,
 } from '@/utils/gameUtils';
 import { triggerHaptic } from '@/utils/haptics';
+import { band } from '@/audio';
 import { registerInterval } from '@/utils/perfWatchdog';
 import { playCardDealing, playSound } from '@/utils/sounds';
 import type { WeaponEffectResult } from '@/utils/weaponEffects';
@@ -218,6 +219,18 @@ const FreePlayMode: React.FC<FreePlayModeProps> = ({
   }, []);
 
   useEffect(() => clearPendingTimers, [clearPendingTimers]);
+
+  // [AU-20]: Gentle lounge continuation of title theme in Free Play
+  useEffect(() => {
+    if (typeof band?.playScreenMusic === 'function') {
+      band.playScreenMusic('freeplay');
+    }
+    return () => {
+      if (typeof band?.stop === 'function' && band.current === 'title') {
+        band.stop();
+      }
+    };
+  }, []);
 
   const appActive = useAppActive();
   const { spawnParticles, Particles } = useParticles();

@@ -12,7 +12,7 @@
  * Note: foes are EnemyInstance objects with internal timers (mutable). They're
  * owned by the run and only touched inside the reducer.
  */
-import type { Card, CardReward, Weapon } from '@/types';
+import type { Card, CardReward, CharacterName, Weapon } from '@/types';
 import type { EnemyEvent } from '@/types/enemy';
 import type { WeaponEffectResult } from '@/utils/weaponEffects';
 import { ATTRIBUTE_VALUES } from '@/utils/gameUtils';
@@ -22,13 +22,13 @@ import { resolveMatch } from '@/utils/matchResolution';
 import { getLinkedDestructionPositions, selectPositionsToConnect } from '@/utils/connectionUtils';
 import { DEFAULT_PLAYER_STATS, canObtainWeapon } from '@/utils/gameDefinitions';
 import { createInitialRoundStats } from '@/game/roundStats';
-import type { AdventureSave, AdventureWeapon, ArcanaDef, ArcanaId, BeltBadge, FeatureFlag, FightLogMathItem, LevelDef, RunEventType, RunReliefOptions, RunState, SetFollowUpItem } from '../types';
+import type { AdventureSave, AdventureWeapon, ArcanaDef, ArcanaId, BeltBadge, FeatureFlag, FightLogMathItem, LevelDef, ParryRequirement, ParrySpec, RunEventType, RunReliefOptions, RunState, SetFollowUpItem } from '../types';
 import type { Effect, WeaponTriggerKind } from '../rules/types';
 import { createRng } from './rng';
 import { seedProcAccumulator } from './entropy';
 import { allSets, countDifferentAttributes, hasAnySet, isRainbow, isSelectable } from './sets';
 import { boardVariety, buildDeck, deckCopies, kindsOfSet } from './dealer';
-import { applyWeaponToStats, resolveWholeStats, startingLoadout, type LoadoutOptions } from '../loadout';
+import { applyWeaponToStats, fighterPassives, resolveWholeStats, startingLoadout, type LoadoutOptions } from '../loadout';
 import { getArmoryWeapon, understudyOf } from '../data/armory';
 import { ownerOfEvent } from '../data/weaponGuide';
 import { UNDERSTUDY_ID } from '../data/adventureWeapons';
@@ -54,7 +54,7 @@ import { refreshArmedRecipes, resolveCatalyst, startEvolution, tickEvolutions } 
 import { growthModifiers, WEAPON_GROWTH } from '../data/weaponGrowth';
 import { isHintedSet, noteGrowth, seedGrowth } from './growth';
 import { placeOpeningTraps, resolveTrapsOnSet, springSnares, tickTimeBombs } from './hazards';
-import { initialSurge, surgeMultiplier, tickSurge } from './surge';
+import { initialSurge, setSurgeActive, surgeMultiplier, tickSurge } from './surge';
 import {
   addComboSteps, advanceCombo, afterSetPassives, consumeHotStreak, decayCombo, initPassives, onMistakePassives, onWaveStartPassives,
   passiveSetDamageBreakdown, restingPassiveState, tickPassives,
@@ -115,7 +115,23 @@ export type RunAction =
   | { type: 'BUY'; index: number }
   | { type: 'REROLL' }
   | { type: 'NEXT_WAVE' }
-  | { type: 'CLEAR_EVENTS'; upTo: number };
+  | { type: 'CLEAR_EVENTS'; upTo: number }
+  /** Pure dev/sandbox actions for FightDebugDrawer ([TP-11]) & TrainingLabBar ([TP-12]); gated off in production non-sandbox fights */
+  | { type: 'DEV_SET_FOE_HP'; hp: number }
+  | { type: 'DEV_FREEZE_CLOCK'; frozen?: boolean }
+  | { type: 'DEV_SPAWN_CATALYST' }
+  | { type: 'DEV_TRIGGER_PARRY'; window?: 'windup' | 'perfect'; counter?: ParryRequirement; clear?: boolean }
+  | { type: 'DEV_TOGGLE_SURGE'; active?: boolean }
+  | {
+      type: 'DEV_SWAP_LOADOUT';
+      fighter?: CharacterName;
+      weaponId?: string;
+      weaponLevel?: number;
+      toggleWeaponId?: string;
+      toggleArcanaId?: ArcanaId;
+    }
+  | { type: 'DEV_SET_HEARTS'; hearts: number }
+  | { type: 'DEV_RESET_DUMMY' };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -1776,6 +1792,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
 
     case 'TICK': {
       if (d.status !== 'playing') return state;
+      if (d.devClockFrozen) return state;
       d._clock = true;
       // While frozen: do NOT advance elapsedMs or tickGear (Glass Sword, Thorns, Fuse, Curse, Fog, Potato truly freeze!)
       const frozenUsed = d.frozenMs > 0 ? Math.min(d.frozenMs, action.ms) : 0;
@@ -1914,6 +1931,187 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       enqueue(d, 'waveStart');
       drain(d);
       break;
+    }
+
+    case 'DEV_SET_FOE_HP': {
+      const allow = d.level.rules.sandbox || typeof __DEV__ === 'undefined' || Boolean(__DEV__);
+      if (!allow || d.status !== 'playing') return state;
+      d.foeHp = Math.max(0, Math.min(d.foeMaxHp, Math.round(action.hp)));
+      break;
+    }
+
+    case 'DEV_FREEZE_CLOCK': {
+      const allow = d.level.rules.sandbox || typeof __DEV__ === 'undefined' || Boolean(__DEV__);
+      if (!allow || d.status !== 'playing') return state;
+      d.devClockFrozen = action.frozen !== undefined ? action.frozen : !d.devClockFrozen;
+      break;
+    }
+
+    case 'DEV_SPAWN_CATALYST': {
+      const allow = d.level.rules.sandbox || typeof __DEV__ === 'undefined' || Boolean(__DEV__);
+      if (!allow || d.status !== 'playing') return state;
+      if (d.board.some(c => c.hasEvolutionItem)) break;
+      if (d.armedRecipes.length > 0) {
+        if (d.evolutionsTriggered >= d.evolutionCap) d.evolutionCap = d.evolutionsTriggered + 1;
+        if (d.armedRecipes.every(id => d.activeEvolutions.some(a => a.id === id))) {
+          d.activeEvolutions = [];
+          refreshSources(d);
+        }
+      }
+      placeCatalyst(d, []);
+      break;
+    }
+
+    case 'DEV_TRIGGER_PARRY': {
+      const allow = d.level.rules.sandbox || typeof __DEV__ === 'undefined' || Boolean(__DEV__);
+      if (!allow || d.status !== 'playing') return state;
+      if (action.clear) {
+        d.parry = null;
+        break;
+      }
+      const fallbackSpec: ParrySpec = d.parry?.spec ?? {
+        attackName: 'Practice Swing',
+        icon: 'lorc/sword-clash',
+        cooldownMs: 8000,
+        windupMs: 9000,
+        perfectWindowMs: PARRY_RULES.perfectWindowMs,
+        counter: { kind: 'any' },
+        penalty: 'glancing',
+        penaltyAmount: 1,
+      };
+      const spec: ParrySpec = action.counter
+        ? {
+            ...fallbackSpec,
+            attackName:
+              action.counter.kind === 'any'
+                ? 'Timing Strike'
+                : action.counter.kind === 'color'
+                  ? 'Orange Volley'
+                  : action.counter.kind === 'shape'
+                    ? 'Circle Slam'
+                    : action.counter.kind === 'all_different'
+                      ? 'Prism Surge'
+                      : 'Counter Drill',
+            counter: action.counter,
+          }
+        : fallbackSpec;
+      const isPerfect = action.window === 'perfect';
+      const msLeft = isPerfect ? Math.max(800, spec.perfectWindowMs - 100) : spec.windupMs;
+      d.parry = {
+        spec,
+        phase: 'windup',
+        msLeft,
+        durationMs: spec.windupMs,
+        warned: isPerfect,
+        stallsUsed: 0,
+        parries: d.parry?.parries ?? 0,
+        perfectParries: d.parry?.perfectParries ?? 0,
+      };
+      if (isPerfect) emit(d, 'parry_warn', Math.ceil(msLeft / 1000), spec.attackName);
+      break;
+    }
+
+    case 'DEV_TOGGLE_SURGE': {
+      const allow = d.level.rules.sandbox || typeof __DEV__ === 'undefined' || Boolean(__DEV__);
+      if (!allow || d.status !== 'playing') return state;
+      const want = action.active !== undefined ? action.active : !d.surge?.active;
+      setSurgeActive(d, want);
+      break;
+    }
+
+    case 'DEV_SWAP_LOADOUT': {
+      const allow = d.level.rules.sandbox || typeof __DEV__ === 'undefined' || Boolean(__DEV__);
+      if (!allow || d.status !== 'playing') return state;
+      if (!d.features.has('gear')) d.features = new Set([...d.features, 'gear']);
+      if (action.fighter && action.fighter !== d.fighter) {
+        d.fighter = action.fighter;
+        d.passives = fighterPassives(action.fighter);
+        initPassives(d);
+      }
+      if (action.toggleArcanaId) {
+        const id = action.toggleArcanaId;
+        d.arcana = d.arcana.includes(id) ? d.arcana.filter(x => x !== id) : [...d.arcana, id];
+      }
+      const rebuildWeapons = (ids: string[]) => {
+        const nextWeapons: Weapon[] = [];
+        let stats = {
+          ...DEFAULT_PLAYER_STATS,
+          hints: d.stats.hints,
+          graces: d.stats.graces,
+        };
+        for (const id of ids) {
+          const raw = getArmoryWeapon(id, d.weaponBuilds);
+          if (!raw) continue;
+          const built =
+            raw.id === UNDERSTUDY_ID
+              ? understudyOf(raw, nextWeapons[nextWeapons.length - 1]?.id, d.weaponBuilds)
+              : raw;
+          const resolved: Weapon = { ...built, effects: resolveWholeStats(built.effects, () => d._rng.next()) };
+          nextWeapons.push(resolved);
+          stats = applyWeaponToStats(stats, resolved);
+        }
+        stats.hints = Math.min(stats.maxHints, Math.max(0, stats.hints));
+        stats.graces = Math.min(stats.maxGraces, Math.max(0, stats.graces));
+        d.weapons = nextWeapons;
+        d.stats = stats;
+        d.baseChances = chanceStatsOf(stats);
+        refreshArmedRecipes(d);
+      };
+      if (action.weaponId) {
+        const lv = Math.max(1, Math.min(5, Math.round(action.weaponLevel ?? 1)));
+        const existing = d.weaponBuilds[action.weaponId];
+        d.weaponBuilds = {
+          ...d.weaponBuilds,
+          [action.weaponId]: { level: lv, tuning: existing?.tuning ?? 0 },
+        };
+        const ids = d.weapons.some(w => w.id === action.weaponId)
+          ? d.weapons.map(w => w.id)
+          : [...d.weapons.map(w => w.id), action.weaponId];
+        rebuildWeapons(ids);
+      } else if (action.toggleWeaponId) {
+        const id = action.toggleWeaponId;
+        const ids = d.weapons.some(w => w.id === id)
+          ? d.weapons.filter(w => w.id !== id).map(w => w.id)
+          : [...d.weapons.map(w => w.id), id];
+        rebuildWeapons(ids);
+      }
+      refreshSources(d);
+      break;
+    }
+
+    case 'DEV_SET_HEARTS': {
+      const allow = d.level.rules.sandbox || typeof __DEV__ === 'undefined' || Boolean(__DEV__);
+      if (!allow || d.status !== 'playing') return state;
+      const target = Math.max(1, Math.round(action.hearts));
+      d.maxHearts = d.maxHearts === null ? target : Math.max(d.maxHearts, target);
+      d.hearts = Math.min(d.maxHearts, target);
+      break;
+    }
+
+    case 'DEV_RESET_DUMMY': {
+      const allow = d.level.rules.sandbox || typeof __DEV__ === 'undefined' || Boolean(__DEV__);
+      if (!allow || d.status !== 'playing') return state;
+      d.totalDamage = 0;
+      d.biggestHit = 0;
+      d.matches = 0;
+      d.mistakes = 0;
+      d.combo = 0;
+      d.maxCombo = 0;
+      d.bonusCombo = 0;
+      d.power = 0;
+      d.purityChain = 0;
+      d.lastDiffCount = 0;
+      d.elapsedMs = 0;
+      d.lastMatchAtMs = 0;
+      d.foeHp = d.foeMaxHp;
+      d.lastSetIgnition = null;
+      d.activeEvolutions = [];
+      d.evolutionsTriggered = 0;
+      if (d.hearts !== null && d.maxHearts !== null) d.hearts = d.maxHearts;
+      refreshSources(d);
+      recordFightStart(d);
+      syncStats(d);
+      return finish(d, state);
     }
   }
 

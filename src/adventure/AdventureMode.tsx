@@ -14,7 +14,7 @@ import Animated from 'react-native-reanimated';
 import { useScreenTransition, type ScreenDirection } from '@/components/ScreenTransition';
 import { COLORS } from '@/utils/colors';
 import { MusicStorage, SoundStorage } from '@/utils/storage';
-import { music, setMusicEnabled, setSfxOverride, sfx } from '@/audio';
+import { band, music, setMusicEnabled, setSfxOverride, sfx } from '@/audio';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import type { AdventureSave, FeatureDestination, LevelDef, MechanicDef, RunState } from './types';
@@ -73,11 +73,15 @@ import StoryIntro from './components/StoryIntro';
 import StoryEndingModal from './components/StoryEndingModal';
 import { starsLandedMs } from './components/ui';
 
+type SandboxReturn =
+  | { kind: 'camp'; tab?: CampTab; returnLevelId?: string }
+  | { kind: 'preview'; levelId: string };
+
 type Screen =
   /** The cold open: the story, then straight into the first fight */
   | { kind: 'story' }
   | { kind: 'map'; highlight?: string | null }
-  | { kind: 'run'; levelId: string; seed: number; isRetry?: boolean }
+  | { kind: 'run'; levelId: string; seed: number; isRetry?: boolean; sandboxReturn?: SandboxReturn }
   /** `bestDpm`: the best damage per minute on this level before this battle (null: first time) */
   | {
       kind: 'results';
@@ -234,6 +238,15 @@ const AdventureMode: React.FC<Props> = ({
       return true;
     }
     if (screen.kind === 'run') {
+      if (screen.sandboxReturn) {
+        const ret = screen.sandboxReturn;
+        if (ret.kind === 'camp') {
+          setScreen({ kind: 'camp', tab: ret.tab, returnLevelId: ret.returnLevelId });
+        } else {
+          const retLvl = getLevel(ret.levelId);
+          setScreen({ kind: 'map', highlight: retLvl.id }, () => setOverlay({ kind: 'preview', level: retLvl }));
+        }
+      }
       return true;
     }
     onExit();
@@ -283,9 +296,12 @@ const AdventureMode: React.FC<Props> = ({
 
   useEffect(() => () => setSfxOverride(null), []);
 
-  // Map / camp music
+  // Map / Field Guide music (StoryIntro plays 'story' and Camp plays 'camp' via [AU-20])
   useEffect(() => {
-    if (screen.kind === 'map' || screen.kind === 'camp' || screen.kind === 'guide' || screen.kind === 'story') music.play('map');
+    if (screen.kind === 'map' || screen.kind === 'guide') {
+      if (typeof band?.playScreenMusic === 'function') band.playScreenMusic('map');
+      else music.play('map');
+    }
   }, [screen.kind]);
 
   useEffect(() => () => {
@@ -539,6 +555,17 @@ const AdventureMode: React.FC<Props> = ({
   } else if (screen.kind === 'run') {
     const level = getLevel(screen.levelId);
     const relief = resolveRunReliefOptions(level, save);
+    const sandboxReturn = screen.sandboxReturn;
+    const handleSandboxReturn = sandboxReturn
+      ? () => {
+          if (sandboxReturn.kind === 'camp') {
+            setScreen({ kind: 'camp', tab: sandboxReturn.tab, returnLevelId: sandboxReturn.returnLevelId });
+          } else {
+            const retLvl = getLevel(sandboxReturn.levelId);
+            setScreen({ kind: 'map', highlight: retLvl.id }, () => setOverlay({ kind: 'preview', level: retLvl }));
+          }
+        }
+      : undefined;
     body = (
       <AdventureRun
         key={`${screen.levelId}-${screen.seed}`}
@@ -547,6 +574,8 @@ const AdventureMode: React.FC<Props> = ({
         seed={screen.seed}
         relief={relief}
         initialIsRetry={screen.isRetry}
+        sandboxReturnLabel={sandboxReturn ? (sandboxReturn.kind === 'preview' ? 'Back to Preview' : 'Back to Camp') : undefined}
+        onSandboxReturn={handleSandboxReturn}
         autoPlayer={autoPlayer}
         onFinish={(run, tape) => handleFinish(level, run, tape)}
         onQuit={(run, tape) => { handleLeft(level, run, tape); setScreen({ kind: 'map', highlight: level.id }); }}
@@ -650,6 +679,18 @@ const AdventureMode: React.FC<Props> = ({
         }}
         onChange={setSave}
         onRateBattle={handleCampRateBattle}
+        onTestLoadout={activeTab => {
+          setScreen({
+            kind: 'run',
+            levelId: '1-4D',
+            seed: randomSeed(),
+            sandboxReturn: {
+              kind: 'camp',
+              tab: activeTab ?? screen.tab,
+              returnLevelId: screen.returnLevelId,
+            },
+          });
+        }}
         onClose={() => setScreen({ kind: 'map' })}
       />
     );
@@ -680,6 +721,22 @@ const AdventureMode: React.FC<Props> = ({
           onSelectArcana={id => { sfx('click'); setSave(s => toggleArcana(s, id)); }}
           onToggleTailwind={active => { sfx('click'); setSave(s => setTailwindActive(s, active)); }}
           onSelectWager={tier => { sfx('click'); setSave(s => setCauldronWager(s, tier)); }}
+          onApplyLoadout={nextSave => setSave(nextSave)}
+          onTestLoadout={
+            previewLevel && !previewLevel.rules.sandbox
+              ? () => {
+                  sfx('confirm');
+                  const lvlId = previewLevel.id;
+                  setPreviewExit('cut');
+                  setScreen({
+                    kind: 'run',
+                    levelId: '1-4D',
+                    seed: randomSeed(),
+                    sandboxReturn: { kind: 'preview', levelId: lvlId },
+                  });
+                }
+              : undefined
+          }
           onShowMechanic={id => setOverlay({ kind: 'reference', mechanic: MECHANICS[id] })}
           onOpenCamp={tab => {
             // The lesson was read and is being acted on: it counts as seen, and the fight waits on the map

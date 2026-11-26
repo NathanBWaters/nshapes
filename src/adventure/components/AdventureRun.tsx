@@ -17,12 +17,21 @@ import GameBoard from '@/components/GameBoard';
 import Icon, { type IconName } from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
+import { FighterBuildAura, deriveBuildTheme } from '@/components/fighters/FighterBuildAura';
 import { WeaponAvatar } from '@/components/weapons';
 import { useAppActive } from '@/hooks/useAppActive';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useEnemyConductor } from '@/hooks/useEnemyConductor';
 import { useFighterConductor } from '@/hooks/useFighterConductor';
 import { COLORS } from '@/utils/colors';
+import {
+  triggerEvolutionHaptic,
+  triggerHealHaptic,
+  triggerHurtHaptic,
+  triggerImpactHaptic,
+  triggerKoHaptic,
+  triggerParryHaptic,
+} from '@/utils/haptics';
 import { formatCardTraitValue, formatChallengeText, getColorblindMode, useColorblind } from '@/utils/cardColors';
 import { EASE, MS } from '@/utils/motion';
 import { recordComponentRender, registerInterval } from '@/utils/perfWatchdog';
@@ -30,7 +39,7 @@ import type { Card, CardReward, CharacterName, Weapon } from '@/types';
 import { getAdjacentIndices, type WeaponEffectResult } from '@/utils/weaponEffects';
 import { band, music, sfx } from '@/audio';
 import { moodOf, playSounds, soundsFor } from '@/audio/fightAudio';
-import type { AdventureSave, EvolutionRecipe, FeatureFlag, LevelDef, PassiveId, RunEventType, RunReliefOptions, RunState } from '../types';
+import type { AdventureSave, EvolutionRecipe, FeatureFlag, LevelDef, ParryRequirement, PassiveId, RunEventType, RunReliefOptions, RunState } from '../types';
 import type { WeaponBuilds } from '../data/weaponStats';
 import { activeEnemyCounters, computeStars, createRun, isSacrificeUnlocked, runReducer, shopPrice, rerollCost, xpForLevel, type RunAction, type RunOverrides } from '../engine/run';
 import { formatPowerGain } from '../data/weaponPower';
@@ -85,6 +94,9 @@ import PowerExplainer from './PowerExplainer';
 import HudInspector, { type HudInspectTarget } from './HudInspector';
 import ParryIntentBar from './ParryIntentBar';
 import { WeaponOfferRow } from './SharedCards';
+import { getDevOverrides, subscribeDevOverrides, type DevOverrides } from '../engine/devOverrides';
+import FightDebugDrawer, { type FightDebugActions } from './FightDebugDrawer';
+import TrainingLabBar, { type DummyMode, type TrainingLabActions } from './TrainingLabBar';
 
 const TICK_MS = 250;
 /** A Set's cards are thrown at the foe, then the next ones are dealt: long enough to see the throw, short enough to keep moving */
@@ -190,7 +202,23 @@ interface Props {
   onToggleTailwind?: (active: boolean) => void;
   /** True when mounted as a quick retry (skips opening FIGHT! banner & foe taunt) */
   initialIsRetry?: boolean;
+  /** [TP-12] Optional label & direct return handler when 1-4D Training Lab was launched from Camp or LevelPreview */
+  sandboxReturnLabel?: string;
+  onSandboxReturn?: () => void;
 }
+
+const parryCounterForDummyMode = (mode?: DummyMode): ParryRequirement => {
+  switch (mode) {
+    case 'counter_color':
+      return { kind: 'color', color: 'red' };
+    case 'counter_shape':
+      return { kind: 'shape', shape: 'oval' };
+    case 'counter_rainbow':
+      return { kind: 'all_different' };
+    default:
+      return { kind: 'any' };
+  }
+};
 
 /** The recipe an evolution event is about (the engine names it by id or by name). */
 const recipeFor = (key: string | undefined): EvolutionRecipe | undefined =>
@@ -239,6 +267,8 @@ const AdventureRun: React.FC<Props> = ({
   onDefeatMap,
   onToggleTailwind,
   initialIsRetry = false,
+  sandboxReturnLabel,
+  onSandboxReturn,
 }) => {
   recordComponentRender('AdventureRun');
   const insets = useSafeAreaInsets();
@@ -316,6 +346,14 @@ const AdventureRun: React.FC<Props> = ({
   const ended = run.status === 'won' || run.status === 'lost';
   /** A practice fight never ends by itself: the player leaves with Done */
   const practice = !!effectiveLevel.rules.sandbox;
+  const isDevBuild = typeof __DEV__ !== 'undefined' && Boolean(__DEV__);
+  const [devOverrides, setDevOverrides] = useState<DevOverrides>(() => getDevOverrides());
+  useEffect(() => (isDevBuild ? subscribeDevOverrides(setDevOverrides) : undefined), [isDevBuild]);
+  const [dummyMode, setDummyMode] = useState<DummyMode>('immortal');
+  const buildTheme = useMemo(
+    () => deriveBuildTheme(run.weapons.map(w => w.id), run.activeEvolutions.length, run.arcana.length),
+    [run.weapons, run.activeEvolutions.length, run.arcana.length]
+  );
 
   useEffect(() => () => timeouts.current.forEach(clearTimeout), []);
 
@@ -494,6 +532,33 @@ const AdventureRun: React.FC<Props> = ({
       case 'attack': triggerEnemyReaction('attack'); break;
       case 'regen': triggerEnemyReaction('regen'); break;
       case 'entrance': triggerEnemyReaction('entrance'); break;
+    }
+    // [AU-07]: Short scale-locked fighter vocal calls (1.8s per-fighter cooldown enforced in band)
+    const evType = beat.event.type;
+    if (typeof band?.fighterCall === 'function') {
+      if (evType === 'parry' || evType === 'perfect_parry') {
+        band.fighterCall(runRef.current.fighter, 'signature');
+      } else if (evType === 'hurt' || evType === 'foe_strike' || row.fighter === 'pain') {
+        band.fighterCall(runRef.current.fighter, 'hurt');
+      } else if (row.fighter === 'ecstatic' || tier >= 2) {
+        band.fighterCall(runRef.current.fighter, 'cheer');
+      }
+    }
+    // [AU-21]: Impact-synced priority-scaled combat haptics aligned to exact beat landing frame
+    if (evType === 'perfect_parry') {
+      void triggerParryHaptic(true);
+    } else if (evType === 'parry') {
+      void triggerParryHaptic(false);
+    } else if (evType === 'foe_defeated') {
+      void triggerKoHaptic(Boolean(level.isBoss) || runRef.current.lastSetIgnition?.parryKind === 'perfect');
+    } else if (evType === 'hurt' || evType === 'foe_strike') {
+      void triggerHurtHaptic();
+    } else if (evType === 'heal' || evType === 'breather') {
+      void triggerHealHaptic();
+    } else if (evType === 'evolution_start') {
+      void triggerEvolutionHaptic();
+    } else if (row.damage || beat.damage > 0) {
+      void triggerImpactHaptic(tier);
     }
   };
 
@@ -926,7 +991,55 @@ const AdventureRun: React.FC<Props> = ({
     }),
     [mirrorCardIds, tightropeCardIds, catalystTargetName, potatoAtMs, hasBackgroundAttribute]
   );
-  const leavePractice = () => { music.stop(); onFinish(runRef.current, recordingOf()); };
+  const leavePractice = useCallback(() => {
+    music.stop();
+    if (onSandboxReturn) {
+      onSandboxReturn();
+      return;
+    }
+    onFinish(runRef.current, recordingOf());
+  }, [onSandboxReturn, onFinish, recordingOf]);
+
+  const trainingLabActions = useMemo<TrainingLabActions>(
+    () => ({
+      onSwapFighter: fighter => dispatch({ type: 'DEV_SWAP_LOADOUT', fighter }),
+      onToggleWeapon: weaponId => dispatch({ type: 'DEV_SWAP_LOADOUT', toggleWeaponId: weaponId }),
+      onToggleArcana: arcanaId => dispatch({ type: 'DEV_SWAP_LOADOUT', toggleArcanaId: arcanaId }),
+      onSpawnCatalyst: () => dispatch({ type: 'DEV_SPAWN_CATALYST' }),
+      onTriggerParry: mode =>
+        dispatch({ type: 'DEV_TRIGGER_PARRY', window: 'windup', counter: parryCounterForDummyMode(mode ?? dummyMode) }),
+      onToggleSurge: () => dispatch({ type: 'DEV_TOGGLE_SURGE' }),
+      onChangeDummyMode: mode => {
+        setDummyMode(mode);
+        if (mode === 'immortal') {
+          dispatch({ type: 'DEV_TRIGGER_PARRY', clear: true });
+          if (runRef.current.surge?.active) dispatch({ type: 'DEV_TOGGLE_SURGE', active: false });
+        } else if (mode === 'surge_drill') {
+          dispatch({ type: 'DEV_TRIGGER_PARRY', clear: true });
+          dispatch({ type: 'DEV_TOGGLE_SURGE', active: true });
+        } else {
+          if (runRef.current.surge?.active) dispatch({ type: 'DEV_TOGGLE_SURGE', active: false });
+          dispatch({ type: 'DEV_TRIGGER_PARRY', window: 'windup', counter: parryCounterForDummyMode(mode) });
+        }
+      },
+      onResetDummy: () => dispatch({ type: 'DEV_RESET_DUMMY' }),
+      onReturn: leavePractice,
+    }),
+    [dispatch, dummyMode, leavePractice]
+  );
+
+  const debugActions = useMemo<FightDebugActions>(
+    () => ({
+      onSetFoeHp: hp => dispatch({ type: 'DEV_SET_FOE_HP', hp }),
+      onToggleFreezeClock: () => dispatch({ type: 'DEV_FREEZE_CLOCK' }),
+      onSpawnCatalyst: () => dispatch({ type: 'DEV_SPAWN_CATALYST' }),
+      onForceParry: window => dispatch({ type: 'DEV_TRIGGER_PARRY', window }),
+      onForceSurge: () => dispatch({ type: 'DEV_TOGGLE_SURGE' }),
+      onHotSwapWeapon: (weaponId, lv) => dispatch({ type: 'DEV_SWAP_LOADOUT', weaponId, weaponLevel: lv }),
+      onSetHearts: hearts => dispatch({ type: 'DEV_SET_HEARTS', hearts }),
+    }),
+    [dispatch]
+  );
 
   const movesChip = run.movesLeft !== null && (
     <View style={[st.stat, run.movesLeft <= 2 && st.statWarn]}>
@@ -1444,18 +1557,26 @@ const AdventureRun: React.FC<Props> = ({
           <View style={st.stageFloor}>
             <View style={[st.stageSide, compactStage && st.stageSideCompact]}>
               <Anchor name="fighter">
-                <FighterAvatar
-                  testID="adventure-run-fighter"
-                  character={run.fighter}
-                  size={fighterSize}
-                  health={fighterHealth}
-                  maxHealth={fighterMaxHealth}
-                  mood={fighterMood}
-                  reaction={conductor.reaction}
-                  streak={conductor.streak}
-                  animate={appActive}
-                  interactive
-                />
+                <View style={{ position: 'relative', width: fighterSize, height: fighterSize }}>
+                  <FighterBuildAura
+                    theme={buildTheme}
+                    size={fighterSize}
+                    quiet={!effects || reducedMotion}
+                    testID="adventure-run-fighter-aura"
+                  />
+                  <FighterAvatar
+                    testID="adventure-run-fighter"
+                    character={run.fighter}
+                    size={fighterSize}
+                    health={fighterHealth}
+                    maxHealth={fighterMaxHealth}
+                    mood={fighterMood}
+                    reaction={conductor.reaction}
+                    streak={conductor.streak}
+                    animate={appActive}
+                    interactive
+                  />
+                </View>
               </Anchor>
               {run.hearts !== null && run.maxHearts !== null && (
                 <Anchor name="hearts"><Hearts hearts={run.hearts} max={run.maxHearts} compact={compactStage} /></Anchor>
@@ -1691,14 +1812,25 @@ const AdventureRun: React.FC<Props> = ({
         )}
 
         {practice ? (
-          // Nothing to win here: where the ★★★ goal would be, the way out
-          <View style={st.challenge} testID="run-practice-bar">
-            <Icon name="lorc/target-dummy" size={13} color={INK} />
-            <Text style={st.challengeText} numberOfLines={1}>Practice: nothing to win, nothing to lose</Text>
-            <TouchableOpacity testID="run-done" onPress={leavePractice} style={st.doneBtn} accessibilityRole="button" accessibilityLabel="Done practising">
-              <Text style={st.doneText}>DONE</Text>
-            </TouchableOpacity>
-          </View>
+          <>
+            {!onSandboxReturn && (
+              // Nothing to win here: where the ★★★ goal would be, the way out
+              <View style={st.challenge} testID="run-practice-bar">
+                <Icon name="lorc/target-dummy" size={13} color={INK} />
+                <Text style={st.challengeText} numberOfLines={1}>Practice: nothing to win, nothing to lose</Text>
+                <TouchableOpacity testID="run-done" onPress={leavePractice} style={st.doneBtn} accessibilityRole="button" accessibilityLabel="Done practising">
+                  <Text style={st.doneText}>DONE</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            <TrainingLabBar
+              save={startSave}
+              run={run}
+              dummyMode={dummyMode}
+              returnLabel={sandboxReturnLabel ?? 'Back to Map'}
+              actions={trainingLabActions}
+            />
+          </>
         ) : !chrome?.statusBanner && level.id !== '1-1' ? (
           <ChallengeStrip text={formatChallengeText(challenge.text, colorblind)} met={challenge.met} failed={challenge.failed} onPress={() => { sfx('click'); setHudInspect({ kind: 'challenge' }); }} />
         ) : null}
@@ -1785,7 +1917,7 @@ const AdventureRun: React.FC<Props> = ({
         collapsable={false}
         style={[st.boardWrap, isWide && st.boardWrapWide]}
       >
-        <View style={[st.boardInner, boardMaxWidth ? { maxWidth: boardMaxWidth } : null]}>
+        <View style={[st.boardInner, boardMaxWidth ? { maxWidth: boardMaxWidth } : null, isDevBuild && devOverrides.layers.dimBoard && { opacity: 0.35 }]}>
           {/* Evolution pulse: a glow behind the cards, never a card border */}
           {run.activeEvolutions.length > 0 && <EvolutionGlow active={playing && appActive} />}
           {run.surge?.active && <SurgeGlow active={playing && appActive} />}
@@ -1832,7 +1964,9 @@ const AdventureRun: React.FC<Props> = ({
       </View>
 
       {/* Everything that is playing right now */}
-      <FxStage fx={fx} anchors={anchors} size={stage} hideWeaponNameTags suppressKoBanner={fightVictory && !practice} />
+      {!(isDevBuild && devOverrides.layers.hideFx) && (
+        <FxStage fx={fx} anchors={anchors} size={stage} hideWeaponNameTags suppressKoBanner={fightVictory && !practice} />
+      )}
       <KillCamOverlay
         ignition={run.lastSetIgnition}
         victory={fightVictory && !practice}
@@ -2063,6 +2197,15 @@ const AdventureRun: React.FC<Props> = ({
           </PopIn>
         </View>
       </Modal>
+
+      {/* [TP-11] Dev-only live fight tuning drawer */}
+      {isDevBuild && (
+        <FightDebugDrawer
+          run={run}
+          clockFrozen={Boolean(run.devClockFrozen)}
+          actions={debugActions}
+        />
+      )}
 
       {/* HUD inspector: foe / passive / ★★★ goal / Arcana / evolution / buff (the fight waits) */}
       <HudInspector

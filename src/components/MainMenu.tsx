@@ -3,6 +3,7 @@ import { View, Text, Pressable, ScrollView, StyleSheet, Platform, Linking } from
 import { COLORS, RADIUS } from '@/utils/colors';
 import { triggerHaptic } from '@/utils/haptics';
 import { playSound } from '@/utils/sounds';
+import { band } from '@/audio';
 import Icon, { IconName } from './Icon';
 import { FighterAvatar } from './fighters';
 import { CHARACTERS } from '@/utils/gameDefinitions';
@@ -179,6 +180,18 @@ const MainMenu: React.FC<MainMenuProps> = ({
   }, [adventureSave]);
 
   const [mascotIndex, setMascotIndex] = React.useState(initialMascotIdx);
+
+  // [AU-20]: Warm drumless title theme on Main Menu; stop cleanly on unmount if still playing title
+  React.useEffect(() => {
+    if (typeof band?.playScreenMusic === 'function') {
+      band.playScreenMusic('title');
+    }
+    return () => {
+      if (typeof band?.stop === 'function' && band.current === 'title') {
+        band.stop();
+      }
+    };
+  }, []);
 
   // The Adventure button says where you are: a first invitation, or the foe that is waiting for you
   const adventure = React.useMemo(() => {

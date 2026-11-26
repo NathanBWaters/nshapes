@@ -31,7 +31,7 @@ export interface HapticsModuleLike {
 let nativeHaptics: HapticsModuleLike | null = null;
 let testHapticsOverride: HapticsModuleLike | null = null;
 
-if (Platform.OS !== 'web') {
+if (Platform?.OS !== 'web') {
   try {
     nativeHaptics = require('expo-haptics') as HapticsModuleLike;
   } catch {
@@ -53,7 +53,7 @@ export type HapticType = 'light' | 'medium' | 'heavy' | 'success' | 'error' | 'w
  * No-op on web, when disabled in settings, or on devices without haptic support.
  */
 export const triggerHaptic = async (type: HapticType = 'light'): Promise<void> => {
-  if (Platform.OS === 'web' || !HapticsStorage.get()) {
+  if (!Platform || Platform.OS === 'web' || !HapticsStorage.get()) {
     return;
   }
   const Haptics = getHaptics();
@@ -91,7 +91,7 @@ export const triggerHaptic = async (type: HapticType = 'light'): Promise<void> =
  * Trigger selection haptic (crisp card/control tap), gated by HapticsStorage.
  */
 export const selectionHaptic = (): Promise<void> => {
-  if (Platform.OS === 'web' || !HapticsStorage.get()) {
+  if (!Platform || Platform.OS === 'web' || !HapticsStorage.get()) {
     return Promise.resolve();
   }
   const Haptics = getHaptics();
@@ -135,7 +135,7 @@ export const triggerHurtHaptic = (): Promise<void> => triggerHaptic('error');
  */
 export const triggerKoHaptic = async (isBoss = false): Promise<void> => {
   await triggerHaptic('heavy');
-  if (isBoss && Platform.OS !== 'web' && HapticsStorage.get()) {
+  if (isBoss && Platform?.OS !== 'web' && HapticsStorage.get() && getHaptics()) {
     setTimeout(() => {
       void triggerHaptic('success');
     }, 95);
@@ -150,7 +150,7 @@ export const triggerKoHaptic = async (isBoss = false): Promise<void> => {
 export const triggerStarStampHaptic = async (starIndex: number): Promise<void> => {
   if (starIndex >= 2) {
     await triggerHaptic('heavy');
-    if (Platform.OS !== 'web' && HapticsStorage.get()) {
+    if (Platform?.OS !== 'web' && HapticsStorage.get() && getHaptics()) {
       setTimeout(() => {
         void triggerHaptic('success');
       }, 70);

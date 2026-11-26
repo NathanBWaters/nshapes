@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "currentEraId": "E12",
-  "currentAppVersion": "0.1.175",
+  "currentEraId": "E13",
+  "currentAppVersion": "0.1.176",
   "eras": [
     {
       "id": "E0",
@@ -286,12 +286,34 @@
           "levels"
         ]
       }
+    },
+    {
+      "id": "E13",
+      "minVersion": "0.1.176",
+      "date": "2026-11-26",
+      "commit": "05b176a",
+      "summary": "Wave 3 Sakurai polish: 1-6 Parry onboarding, 4-tier audio mastery, instant defeat retry, 5-5 ending & Camp customization labs",
+      "scope": "global",
+      "invalidated": {
+        "global": true,
+        "modes": [
+          "adventure",
+          "spire"
+        ],
+        "categories": [
+          "weapons",
+          "evolutions",
+          "fighters",
+          "arcana",
+          "levels"
+        ]
+      }
     }
   ],
   "fingerprints": {
     "engineFiles": {
       "virtual:globalConstants": "4ad77ebb9083aa6b",
-      "src/adventure/engine/run.ts": "661a968f79c8f6d3",
+      "src/adventure/engine/run.ts": "0af2bda3132ede2b",
       "src/adventure/engine/fight.ts": "049c619596fca5e0",
       "src/adventure/engine/gear.ts": "f3f4ed814e83d33c",
       "src/adventure/engine/evolutions.ts": "4827b165d7a864a5",
@@ -302,12 +324,12 @@
       "src/adventure/engine/sets.ts": "3d49a110a633b5f1",
       "src/adventure/engine/sources.ts": "118565ac9c62253a",
       "src/adventure/engine/dealer.ts": "6d9cc81e10190b79",
-      "src/adventure/engine/surge.ts": "6b07e3bceead3b98",
+      "src/adventure/engine/surge.ts": "86cfbc310eff44bf",
       "src/adventure/rules/engine.ts": "6e67e484c60d9e71",
       "src/adventure/loadout.ts": "4a8fe421c9e6c386",
       "src/adventure/weaponLevels.ts": "e1d31f25004ae73a",
       "src/adventure/data/rules.ts": "f2e0c90f0b1c925b",
-      "src/adventure/data/parry.ts": "8f93ae9d04f16dce",
+      "src/adventure/data/parry.ts": "0ff8c105ce99d79f",
       "src/adventure/data/weaponStats.ts": "0406f7be08a49292",
       "src/adventure/data/upgrades.ts": "c50cbad30222963e",
       "src/adventure/data/armory.ts": "e6b2b20c3a2ab57c",
