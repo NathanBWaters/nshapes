@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "currentEraId": "E9",
-  "currentAppVersion": "0.1.166",
+  "currentEraId": "E10",
+  "currentAppVersion": "0.1.171",
   "eras": [
     {
       "id": "E0",
@@ -220,18 +220,40 @@
           "levels"
         ]
       }
+    },
+    {
+      "id": "E10",
+      "minVersion": "0.1.171",
+      "date": "2026-11-26",
+      "commit": "088a2b1",
+      "summary": "Wave 1 Sakurai foundation: deterministic RNG, zero-Set/Parry fairness, Classic purge, card contrast & native audio",
+      "scope": "global",
+      "invalidated": {
+        "global": true,
+        "modes": [
+          "adventure",
+          "spire"
+        ],
+        "categories": [
+          "weapons",
+          "evolutions",
+          "fighters",
+          "arcana",
+          "levels"
+        ]
+      }
     }
   ],
   "fingerprints": {
     "engineFiles": {
       "virtual:globalConstants": "07dcc9da02840bc0",
-      "src/adventure/engine/run.ts": "b50a4cc4b544fda9",
-      "src/adventure/engine/fight.ts": "debc839983058840",
+      "src/adventure/engine/run.ts": "e846acaf84b1e83d",
+      "src/adventure/engine/fight.ts": "f74f87f9e4f19d99",
       "src/adventure/engine/gear.ts": "f3f4ed814e83d33c",
       "src/adventure/engine/evolutions.ts": "a722282d82a10187",
       "src/adventure/engine/growth.ts": "d2fadd34a7d9254f",
       "src/adventure/engine/hazards.ts": "0a304c6154286491",
-      "src/adventure/engine/parry.ts": "4abf8e13c655c574",
+      "src/adventure/engine/parry.ts": "df38b5b239f33528",
       "src/adventure/engine/passives.ts": "f100b1a52a7850b3",
       "src/adventure/engine/sets.ts": "3d49a110a633b5f1",
       "src/adventure/engine/sources.ts": "17a20585d6e83715",
@@ -241,16 +263,16 @@
       "src/adventure/loadout.ts": "ce60b457753b54f7",
       "src/adventure/weaponLevels.ts": "e1d31f25004ae73a",
       "src/adventure/data/rules.ts": "7ad03548fde313b4",
-      "src/adventure/data/parry.ts": "9afe629b12d7fb38",
+      "src/adventure/data/parry.ts": "560ddffb7b63e2fc",
       "src/adventure/data/weaponStats.ts": "3c8395b88b9f39f5",
       "src/adventure/data/upgrades.ts": "c50cbad30222963e",
       "src/adventure/data/armory.ts": "ed1685353d84c921",
-      "src/adventure/data/foes.ts": "90ed578e8c61f3dc",
-      "src/utils/weaponEffects.ts": "108bd3fd4795ae8a",
-      "src/utils/matchResolution.ts": "4ccdf62cd4abab7a",
-      "src/utils/gameConfig.ts": "2cda55dd73c23031",
-      "src/utils/enemyEffects.ts": "93564dd26ba7bb46",
-      "src/utils/enemyFactory.ts": "9360250f2f76fb33",
+      "src/adventure/data/foes.ts": "a91e4db3a2b2a33f",
+      "src/utils/weaponEffects.ts": "fe551e33de16e30e",
+      "src/utils/matchResolution.ts": "0fec3da307114ca3",
+      "src/utils/gameConfig.ts": "dc8e537d39a3b712",
+      "src/utils/enemyEffects.ts": "7ff4007deb4b33e2",
+      "src/utils/enemyFactory.ts": "9781e2cd1b890975",
       "src/spire/data/ascensions.ts": "92fde46da64fb696",
       "src/spire/data/encounters.ts": "63b986b58a50c574",
       "src/spire/data/events.ts": "a82c16caaa66eb79",
