@@ -79,11 +79,10 @@ describe('Hoarding Beaver', () => {
   });
 
   describe('defeat condition', () => {
-    it('returns false if target not reached', () => {
+    it('returns false with no matches', () => {
       const enemy = createHoardingBeaver();
       const stats = createEmptyStats();
-      stats.currentScore = 80;
-      stats.targetScore = 100;
+      stats.totalMatches = 0;
       stats.cardsRemaining = 8;
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
@@ -91,17 +90,15 @@ describe('Hoarding Beaver', () => {
     it('returns false if fewer than 6 cards remaining', () => {
       const enemy = createHoardingBeaver();
       const stats = createEmptyStats();
-      stats.currentScore = 100;
-      stats.targetScore = 100;
+      stats.totalMatches = 3;
       stats.cardsRemaining = 5;
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
 
-    it('returns true if target reached with 6+ cards', () => {
+    it('returns true with matches and 6+ cards remaining', () => {
       const enemy = createHoardingBeaver();
       const stats = createEmptyStats();
-      stats.currentScore = 100;
-      stats.targetScore = 100;
+      stats.totalMatches = 3;
       stats.cardsRemaining = 6;
       expect(enemy.checkDefeatCondition(stats)).toBe(true);
     });

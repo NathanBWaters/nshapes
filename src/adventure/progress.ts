@@ -31,6 +31,16 @@ import { BOUNTIES } from './data/bounties';
 import { EVOLUTION_RECIPES } from './data/evolutions';
 import { CAMPAIGN_FEATURES, FEATURES, SUMMIT_UNLOCK_LEVEL_ID, isSummitUnlocked } from './data/features';
 import { starRewards, unlockablesOf } from './data/rewards';
+import {
+  applyTailwindStarCap,
+  canAffordCauldronWager,
+  computeHiddenPurseDeposit,
+  computeRetreatCoins,
+  isCauldronAvailable,
+  isTailwindOffered,
+  settleCauldronWager,
+  type CauldronWagerTier,
+} from './data/relief';
 import { inFamily, newRecipesArmedBy } from './engine/sources';
 import { tuningSpent, weaponLevel } from './weaponLevels';
 
@@ -86,6 +96,10 @@ export const createNewSave = (): AdventureSave => ({
   effectsOn: true,
   revealedPaths: [],
   claimedMapKeys: {},
+  consecutiveLosses: {},
+  hiddenPurse: 0,
+  cauldronWager: 0,
+  tailwindActive: false,
 });
 
 // ─── Stars & unlocks ────────────────────────────────────────────────────────
@@ -450,6 +464,10 @@ export const migrateSave = (save: AdventureSave): AdventureSave => {
     equippedArcana: save.equippedArcana ?? [],
     charm: null,
     activeArcana: null,
+    consecutiveLosses: save.consecutiveLosses ?? {},
+    hiddenPurse: save.hiddenPurse ?? 0,
+    cauldronWager: save.cauldronWager ?? 0,
+    tailwindActive: save.tailwindActive ?? false,
   };
   if (save.charm && !next.charms.includes(save.charm)) next.charms = [save.charm, ...next.charms];
   if (save.activeArcana && !next.equippedArcana.includes(save.activeArcana)) next.equippedArcana = [save.activeArcana, ...next.equippedArcana];
@@ -543,7 +561,7 @@ export type Unlock =
 export interface ResultApplication {
   save: AdventureSave;
   granted: GrantedReward[];
-  /** Coins dropped during the fight */
+  /** Coins dropped during the fight (after Cauldron wager multiplier on KO) */
   coinsBanked: number;
   /** Coins from newly earned stars */
   starCoins: number;
@@ -552,7 +570,61 @@ export interface ResultApplication {
   completedBounties: BountyDef[];
   unlocks: Unlock[];
   newlyOpenedBiomes: string[];
+  /** True when Friendly Tailwind relief was active on this attempt */
+  tailwindActive?: boolean;
+  /** Active Starfall Cauldron upward wager tier on this attempt (0 | 1 | 2) */
+  cauldronWager?: CauldronWagerTier;
+  /** Net stake coins won (+stake on KO) or lost (-stake on defeat) from the Cauldron wager */
+  wagerStakeDelta?: number;
+  /** Coins quietly tucked into the pre-1-8 hidden purse on a defeat before coins unlock */
+  hiddenPurseDeposited?: number;
+  /** Accumulated hidden purse coins burst open into the player's purse when 1-8 unlocks coins */
+  hiddenPurseBurst?: number;
 }
+
+export interface ApplyLevelResultOptions {
+  tailwindActive?: boolean;
+  cauldronWager?: CauldronWagerTier;
+}
+
+/** Toggle Friendly Tailwind relief (mutually exclusive with Starfall Cauldron wagers). */
+export const setTailwindActive = (save: AdventureSave, active: boolean): AdventureSave => ({
+  ...save,
+  tailwindActive: active,
+  cauldronWager: active ? 0 : (save.cauldronWager ?? 0),
+});
+
+/** Select a Starfall Cauldron upward wager tier (0, 1, or 2) when affordable. */
+export const setCauldronWager = (save: AdventureSave, tier: CauldronWagerTier): AdventureSave => {
+  if (tier !== 0 && !canAffordCauldronWager(save, tier)) return save;
+  return {
+    ...save,
+    cauldronWager: tier,
+    tailwindActive: tier > 0 ? false : Boolean(save.tailwindActive),
+  };
+};
+
+/**
+ * [GP-18] Retreat coin retention: quitting a fight after ≥5 Sets retains 50% of
+ * earned fight coins so mid-fight retreats never feel completely wasted.
+ */
+export const applyRetreatResult = (
+  save: AdventureSave,
+  level: LevelDef,
+  run: Pick<RunState, 'matches' | 'coins'>
+): { save: AdventureSave; coinsRetained: number } => {
+  if (level.rules.sandbox) return { save, coinsRetained: 0 };
+  const coinsRetained = computeRetreatCoins(run.matches, run.coins, save.coinsUnlocked);
+  if (coinsRetained <= 0) return { save, coinsRetained: 0 };
+  return {
+    save: {
+      ...save,
+      coins: save.coins + coinsRetained,
+      lifetimeCoins: save.lifetimeCoins + coinsRetained,
+    },
+    coinsRetained,
+  };
+};
 
 const unlockFeature = (save: AdventureSave, feature: UnlockableFeature): AdventureSave => ({
   ...save,
@@ -675,31 +747,75 @@ const applyPracticeResult = (save: AdventureSave, level: LevelDef, run?: RunStat
   };
 };
 
-/** Bank run coins + grant first-time star rewards + evaluate cross-run bounties. */
+/** Bank run coins + grant first-time star rewards + update relief/wager state + evaluate bounties. */
 export const applyLevelResult = (
   save: AdventureSave,
   level: LevelDef,
   stars: number,
   runCoins: number,
-  run?: RunState
+  run?: RunState,
+  opts?: ApplyLevelResultOptions
 ): ResultApplication => {
   if (level.rules.sandbox) return applyPracticeResult(save, level, run);
   const before = save;
   const previousStars = save.stars[level.id] ?? 0;
+
+  // Resolve Friendly Tailwind & Starfall Cauldron wager state for this attempt
+  const tailwindActive = Boolean(
+    opts?.tailwindActive ?? run?.tailwindActive ?? (save.tailwindActive && isTailwindOffered(level, save))
+  );
+  const effectiveStars = applyTailwindStarCap(stars, tailwindActive);
+  const wagerTier: CauldronWagerTier = tailwindActive
+    ? 0
+    : (opts?.cauldronWager ??
+        run?.cauldronWager ??
+        (isCauldronAvailable(level, save) && canAffordCauldronWager(save, save.cauldronWager ?? 0)
+          ? (save.cauldronWager ?? 0)
+          : 0));
+  const { adjustedRunCoins, stakeDelta } = settleCauldronWager(wagerTier, effectiveStars, runCoins, save.coins);
+
+  // Update consecutive loss counter (resets on any ≥★ clear; increments on 0★ defeat)
+  const nextConsecutiveLosses: Record<string, number> = { ...(save.consecutiveLosses ?? {}) };
+  if (effectiveStars >= 1) {
+    delete nextConsecutiveLosses[level.id];
+  } else {
+    nextConsecutiveLosses[level.id] = (nextConsecutiveLosses[level.id] ?? 0) + 1;
+  }
+
+  // Pre-1-8 hidden purse: quietly bank 5–10¢ on defeats before Coin Drops unlock
+  let hiddenPurseDeposited = 0;
+  let nextHiddenPurse = save.hiddenPurse ?? 0;
+  if (effectiveStars === 0 && !save.coinsUnlocked) {
+    const foeHpPct = run && run.foeMaxHp > 0 ? Math.max(0, run.foeHp) / run.foeMaxHp : 0.5;
+    hiddenPurseDeposited = computeHiddenPurseDeposit(run?.matches ?? 0, foeHpPct);
+    nextHiddenPurse += hiddenPurseDeposited;
+  }
+
+  const nextCoinsBase = Math.max(0, save.coins + adjustedRunCoins + stakeDelta);
+  const nextLifetimeBase = save.lifetimeCoins + adjustedRunCoins + Math.max(0, stakeDelta);
+
   let next: AdventureSave = {
     ...save,
-    coins: save.coins + runCoins,
-    lifetimeCoins: save.lifetimeCoins + runCoins,
+    coins: nextCoinsBase,
+    lifetimeCoins: nextLifetimeBase,
     plays: { ...save.plays, [level.id]: (save.plays[level.id] ?? 0) + 1 },
+    consecutiveLosses: nextConsecutiveLosses,
+    hiddenPurse: nextHiddenPurse,
+    // Clear Tailwind after clearing a level so the next stage starts at full strength
+    tailwindActive: effectiveStars >= 1 ? false : Boolean(save.tailwindActive),
+    // Reset wager if the player can no longer afford its stake
+    cauldronWager: canAffordCauldronWager({ coins: nextCoinsBase }, save.cauldronWager ?? 0)
+      ? (save.cauldronWager ?? 0)
+      : 0,
   };
   if (run) {
-    next = recordRunBountyStats(next, level, stars, run);
+    next = recordRunBountyStats(next, level, effectiveStars, run);
   }
   const granted: GrantedReward[] = [];
   const unlocks: Unlock[] = [];
   let starCoins = 0;
   const rewards = starRewards(level);
-  for (let s = previousStars + 1; s <= stars; s++) {
+  for (let s = previousStars + 1; s <= effectiveStars; s++) {
     const reward = rewards[s - 1];
     // The star counts before its reward is paid, so a weapon it names again is a free level
     const earnedBefore = next;
@@ -710,7 +826,7 @@ export const applyLevelResult = (
     starCoins += reward.coins;
     granted.push({ star: s, reward });
   }
-  next = { ...next, stars: { ...next.stars, [level.id]: Math.max(previousStars, stars) } };
+  next = { ...next, stars: { ...next.stars, [level.id]: Math.max(previousStars, effectiveStars) } };
 
   // Features opened by clearing a level are revealed after that result's star rewards
   for (const f of FEATURES) {
@@ -718,6 +834,18 @@ export const applyLevelResult = (
       next = unlockFeature(next, f.id);
       unlocks.push({ kind: 'feature', feature: f.id, star: 1 });
     }
+  }
+
+  // Burst open the pre-1-8 hidden purse the moment Coin Drops unlock!
+  let hiddenPurseBurst = 0;
+  if (!before.coinsUnlocked && next.coinsUnlocked && (next.hiddenPurse ?? 0) > 0) {
+    hiddenPurseBurst = next.hiddenPurse ?? 0;
+    next = {
+      ...next,
+      coins: next.coins + hiddenPurseBurst,
+      lifetimeCoins: next.lifetimeCoins + hiddenPurseBurst,
+      hiddenPurse: 0,
+    };
   }
 
   // Starfall Summit opens on the first clear of the milestone boss (default 1-10)
@@ -760,12 +888,17 @@ export const applyLevelResult = (
   return {
     save: next,
     granted,
-    coinsBanked: runCoins,
+    coinsBanked: adjustedRunCoins,
     starCoins,
     bountyCoins,
     completedBounties,
     unlocks,
     newlyOpenedBiomes,
+    tailwindActive,
+    cauldronWager: wagerTier,
+    wagerStakeDelta: stakeDelta,
+    hiddenPurseDeposited,
+    hiddenPurseBurst,
   };
 };
 

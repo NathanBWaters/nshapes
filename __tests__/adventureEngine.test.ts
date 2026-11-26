@@ -229,7 +229,8 @@ describe('fighter passives', () => {
     s = miss(miss(s));
     const before = s.foeHp;
     s = playSet(s);
-    expect(before - s.foeHp).toBe(3 + 2);
+    // [GP-14] Scrappy baseline: +1.5 per missing heart (2 missing hearts -> +3 dmg on 3-dmg base Set)
+    expect(before - s.foeHp).toBe(3 + 3);
   });
 
   it('Sly Fox — quick Sets chain a combo, a mistake breaks it, max combo arms Hot Streak', () => {

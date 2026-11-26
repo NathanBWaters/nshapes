@@ -74,11 +74,10 @@ describe('Wicked Imp', () => {
   });
 
   describe('defeat condition', () => {
-    it('returns false if target not reached', () => {
+    it('returns false with no matches', () => {
       const enemy = createWickedImp();
       const stats = createEmptyStats();
-      stats.currentScore = 80;
-      stats.targetScore = 100;
+      stats.totalMatches = 0;
       stats.gracesRemaining = 3;
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
@@ -86,17 +85,15 @@ describe('Wicked Imp', () => {
     it('returns false with fewer than 3 graces remaining', () => {
       const enemy = createWickedImp();
       const stats = createEmptyStats();
-      stats.currentScore = 100;
-      stats.targetScore = 100;
+      stats.totalMatches = 3;
       stats.gracesRemaining = 2;
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
 
-    it('returns true with target reached and 3+ graces', () => {
+    it('returns true with matches and 3+ graces', () => {
       const enemy = createWickedImp();
       const stats = createEmptyStats();
-      stats.currentScore = 100;
-      stats.targetScore = 100;
+      stats.totalMatches = 3;
       stats.gracesRemaining = 3;
       expect(enemy.checkDefeatCondition(stats)).toBe(true);
     });

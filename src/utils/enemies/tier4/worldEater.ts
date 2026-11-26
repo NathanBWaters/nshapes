@@ -1,19 +1,18 @@
 /**
  * World Eater - Tier 4 Boss
  *
- * Effects: Greedy Squirrel (2 cards per match) + Punishing Ermine (3 cards per invalid) + Burrowing Mole (10s) + Stalking Wolf (25s → INSTANT DEATH) + Swift Bee (50% faster)
- * Defeat Condition: Achieve minimum with 4+ cards remaining AND no invalid matches
+ * [GP-16] & [GP-17]: Replaced 25s instantDeath with telegraphed −2 ♥ Heavy Slam
+ * and rewrote Classic target-score defeat check natively for Adventure.
  */
-
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import {
   ExtraCardRemovalOnMatchEffect,
   ExtraCardRemovalOnInvalidEffect,
   CardRemovalEffect,
-  InactivityEffect,
   TimerSpeedEffect,
   composeEffects,
 } from '../../enemyEffects';
+import { HeavySlamInactivityEffect } from '../heavySlamEffect';
 
 export function createWorldEater(): EnemyInstance {
   return composeEffects(
@@ -21,18 +20,18 @@ export function createWorldEater(): EnemyInstance {
       name: 'World Eater',
       icon: 'lorc/daemon-skull',
       tier: 4,
-      description: '+2 cards removed per match, +3 on invalid, removes every 10s, 25s inactivity → death, timer 50% faster',
-      defeatConditionText: 'Achieve minimum with 4+ cards remaining AND no invalid matches',
+      description: '+2 cards removed per match, +3 on invalid, removes every 10s, 25s Heavy Slam (−2 ♥), timer 50% faster',
+      defeatConditionText: 'Win with 4+ cards remaining AND no invalid matches',
     },
     [
       { behavior: ExtraCardRemovalOnMatchEffect, config: { count: 2, minBoardSize: 4 } },
       { behavior: ExtraCardRemovalOnInvalidEffect, config: { count: 3, minBoardSize: 4 } },
       { behavior: CardRemovalEffect, config: { intervalMs: 10000, minBoardSize: 4 } },
-      { behavior: InactivityEffect, config: { maxMs: 25000, penalty: 'death' } },
+      { behavior: HeavySlamInactivityEffect, config: { maxMs: 25000, hearts: 2 } },
       { behavior: TimerSpeedEffect, config: { multiplier: 1.5 } },
     ],
     (stats: RoundStats) =>
-      stats.currentScore >= stats.targetScore &&
+      stats.totalMatches >= 1 &&
       stats.cardsRemaining >= 4 &&
       stats.invalidMatches === 0
   );

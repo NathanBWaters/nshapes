@@ -164,8 +164,8 @@ describe('Golden Rescue Keys — data & progression', () => {
     // Cannot claim an unreached key
     expect(claimMapKey(fresh, 'key-1', 'Pelican')).toBe(fresh);
 
-    // Clear 1-5 -> key-1 becomes ready!
-    let save = createSaveBefore('1-6', { leaveKeysReady: true });
+    // Clear 1-4 -> key-1 becomes ready! ([GP-14] pulled forward to 1-4 <-> 1-5)
+    let save = createSaveBefore('1-5', { leaveKeysReady: true });
     expect(isMapKeyReached(save, MAP_KEYS[0])).toBe(true);
     expect(isMapKeyClaimed(save, MAP_KEYS[0])).toBe(false);
     expect(readyMapKeys(save).map(k => k.id)).toEqual(['key-1']);
@@ -201,7 +201,7 @@ describe('Golden Rescue Keys — data & progression', () => {
   it('migrates legacy saves cleanly in reconcileUnlocks without losing friends or duplicating keys', () => {
     const legacy = {
       ...createNewSave(),
-      stars: { '1-1': 3, '1-5': 3, '1-9': 3, '2-5': 2 },
+      stars: { '1-1': 3, '1-4': 3, '1-5': 3, '1-9': 3, '2-5': 2 },
       unlockedFighters: ['Orange Tabby' as const, 'Sly Fox' as const, 'Corgi' as const],
       claimedMapKeys: {},
     };
@@ -216,11 +216,11 @@ describe('Golden Rescue Keys — data & progression', () => {
   it('produces accurate Golden Key unlock hints and companion map greeting', () => {
     const fresh = createNewSave();
     expect(unlockHint({ kind: 'fighter', id: 'Corgi' }, fresh)).toContain('Golden Key');
-    expect(unlockHint({ kind: 'fighter', id: 'Corgi' }, fresh)).toContain('1-5');
+    expect(unlockHint({ kind: 'fighter', id: 'Corgi' }, fresh)).toContain('1-4');
 
-    const ready = createSaveBefore('1-6', { leaveKeysReady: true });
+    const ready = createSaveBefore('1-5', { leaveKeysReady: true });
     expect(unlockHint({ kind: 'fighter', id: 'Corgi' }, ready)).toContain('waiting on the map');
-    expect(companionMapGreeting(ready, getLevel('1-6'), 15, false)).toContain('Golden Key');
+    expect(companionMapGreeting(ready, getLevel('1-5'), 12, false)).toContain('Golden Key');
 
     const maxed = createMaxedSave();
     expect(maxed.unlockedFighters).toHaveLength(FIGHTERS.length);
@@ -240,7 +240,7 @@ describe('Golden Rescue Keys — UI flow & Save Your Friends story', () => {
   });
 
   it('tapping a ready Golden Key on the map lets the player pick Corgi, frees them, and switches fighter', () => {
-    const save = createSaveBefore('1-6', { leaveKeysReady: true });
+    const save = createSaveBefore('1-5', { leaveKeysReady: true });
     const screen = render(wrap(<AdventureMode initialSave={save} coldOpen={false} onExit={() => {}} />));
 
     // Ready Golden Key is rendered on the road
@@ -274,29 +274,29 @@ describe('Golden Rescue Keys — UI flow & Save Your Friends story', () => {
     expect(freedKey.props.accessibilityLabel).toContain('Corgi');
   });
 
-  it('walking over key-1 automatically triggers after clearing 1-5 on both NEXT and MAP from LevelResults', () => {
-    const level15 = getLevel('1-5');
-    const before15 = createSaveBefore('1-5');
+  it('walking over key-1 automatically triggers after clearing 1-4 on both NEXT and MAP from LevelResults', () => {
+    const level14 = getLevel('1-4');
+    const before14 = createSaveBefore('1-4');
     const wonRun = {
-      ...createRun(level15, before15, { seed: 7 }),
+      ...createRun(level14, before14, { seed: 7 }),
       status: 'won' as const,
       endReason: 'defeated' as const,
       foeHp: 0,
       matches: 6,
     };
 
-    // Path 1: Tapping NEXT on 1-5 results walks onto key-1 between 1-5 and 1-6!
+    // Path 1: Tapping NEXT on 1-4 results walks onto key-1 between 1-4 and 1-5!
     const screenNext = render(
       wrap(
         <AdventureMode
-          initialSave={before15}
+          initialSave={before14}
           coldOpen={false}
-          devResult={{ levelId: '1-5', run: wonRun, stars: 2 }}
+          devResult={{ levelId: '1-4', run: wonRun, stars: 2 }}
           onExit={() => {}}
         />
       )
     );
-    // Advance past stars & dismiss 1-5F secret path unlock if any
+    // Advance past stars & dismiss 1-4D dummy unlock if any
     act(() => { jest.advanceTimersByTime(3000); });
     if (screenNext.queryByTestId('unlock-reveal')) {
       fireEvent.press(screenNext.getByTestId('unlock-reveal'));
@@ -321,13 +321,13 @@ describe('Golden Rescue Keys — UI flow & Save Your Friends story', () => {
     expect(screenNext.getByTestId('map-key-key-1').props.accessibilityLabel).toContain('Pelican');
     screenNext.unmount();
 
-    // Path 2: Tapping MAP on 1-5 results also walks onto key-1 automatically!
+    // Path 2: Tapping MAP on 1-4 results also walks onto key-1 automatically!
     const screenMap = render(
       wrap(
         <AdventureMode
-          initialSave={before15}
+          initialSave={before14}
           coldOpen={false}
-          devResult={{ levelId: '1-5', run: wonRun, stars: 1 }}
+          devResult={{ levelId: '1-4', run: wonRun, stars: 1 }}
           onExit={() => {}}
         />
       )

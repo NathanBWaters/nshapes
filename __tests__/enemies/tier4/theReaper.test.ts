@@ -83,12 +83,11 @@ describe('The Reaper', () => {
   });
 
   describe('defeat condition', () => {
-    it('returns false if target not reached', () => {
+    it('returns false with no matches', () => {
       const enemy = createTheReaper();
       const stats = createEmptyStats();
-      stats.currentScore = 80;
-      stats.targetScore = 100;
-      stats.timeRemaining = 15;  // 15 seconds
+      stats.totalMatches = 0;
+      stats.timeRemaining = 15; // 15 seconds
       stats.damageReceived = 0;
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
@@ -96,9 +95,8 @@ describe('The Reaper', () => {
     it('returns false with less than 10s remaining', () => {
       const enemy = createTheReaper();
       const stats = createEmptyStats();
-      stats.currentScore = 100;
-      stats.targetScore = 100;
-      stats.timeRemaining = 9;  // 9 seconds (not enough)
+      stats.totalMatches = 4;
+      stats.timeRemaining = 9; // 9 seconds (not enough)
       stats.damageReceived = 0;
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
@@ -106,19 +104,17 @@ describe('The Reaper', () => {
     it('returns false if damage taken', () => {
       const enemy = createTheReaper();
       const stats = createEmptyStats();
-      stats.currentScore = 100;
-      stats.targetScore = 100;
-      stats.timeRemaining = 15;  // 15 seconds
+      stats.totalMatches = 4;
+      stats.timeRemaining = 15; // 15 seconds
       stats.damageReceived = 1;
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
 
-    it('returns true with target, 10+s, no damage', () => {
+    it('returns true with matches, 10+s, no damage', () => {
       const enemy = createTheReaper();
       const stats = createEmptyStats();
-      stats.currentScore = 100;
-      stats.targetScore = 100;
-      stats.timeRemaining = 10;  // exactly 10 seconds
+      stats.totalMatches = 4;
+      stats.timeRemaining = 10; // exactly 10 seconds
       stats.damageReceived = 0;
       expect(enemy.checkDefeatCondition(stats)).toBe(true);
     });

@@ -88,11 +88,10 @@ describe('Ravenous Tapir', () => {
   });
 
   describe('defeat condition', () => {
-    it('returns false if target not reached', () => {
+    it('returns false with no matches', () => {
       const enemy = createRavenousTapir();
       const stats = createEmptyStats();
-      stats.currentScore = 80;
-      stats.targetScore = 100;
+      stats.totalMatches = 0;
       stats.cardsRemaining = 5;
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
@@ -100,26 +99,23 @@ describe('Ravenous Tapir', () => {
     it('returns false with fewer than 5 cards', () => {
       const enemy = createRavenousTapir();
       const stats = createEmptyStats();
-      stats.currentScore = 100;
-      stats.targetScore = 100;
+      stats.totalMatches = 3;
       stats.cardsRemaining = 4;
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
 
-    it('returns true with target reached and 5+ cards', () => {
+    it('returns true with matches and 5+ cards', () => {
       const enemy = createRavenousTapir();
       const stats = createEmptyStats();
-      stats.currentScore = 100;
-      stats.targetScore = 100;
+      stats.totalMatches = 3;
       stats.cardsRemaining = 5;
       expect(enemy.checkDefeatCondition(stats)).toBe(true);
     });
 
-    it('returns true with target exceeded and many cards', () => {
+    it('returns true with matches and many cards', () => {
       const enemy = createRavenousTapir();
       const stats = createEmptyStats();
-      stats.currentScore = 150;
-      stats.targetScore = 100;
+      stats.totalMatches = 5;
       stats.cardsRemaining = 10;
       expect(enemy.checkDefeatCondition(stats)).toBe(true);
     });

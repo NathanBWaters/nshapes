@@ -77,23 +77,23 @@ describe('World Eater', () => {
     });
   });
 
-  describe('inactivity effect', () => {
-    it('causes instant death after 25s', () => {
+  describe('inactivity Heavy Slam', () => {
+    it('delivers a telegraphed −2 ♥ Heavy Slam after 25s inactivity (no instant death)', () => {
       const enemy = createWorldEater();
       const board = createTestBoard();
       enemy.onRoundStart(board);
 
       const result = enemy.onTick(25000, board);
-      expect(result.instantDeath).toBe(true);
+      expect(result.instantDeath).toBe(false);
+      expect(result.healthDelta).toBe(-2);
     });
   });
 
   describe('defeat condition', () => {
-    it('returns false if target not reached', () => {
+    it('returns false with no matches', () => {
       const enemy = createWorldEater();
       const stats = createEmptyStats();
-      stats.currentScore = 80;
-      stats.targetScore = 100;
+      stats.totalMatches = 0;
       stats.cardsRemaining = 5;
       stats.invalidMatches = 0;
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
@@ -102,8 +102,7 @@ describe('World Eater', () => {
     it('returns false with fewer than 4 cards', () => {
       const enemy = createWorldEater();
       const stats = createEmptyStats();
-      stats.currentScore = 100;
-      stats.targetScore = 100;
+      stats.totalMatches = 4;
       stats.cardsRemaining = 3;
       stats.invalidMatches = 0;
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
@@ -112,18 +111,16 @@ describe('World Eater', () => {
     it('returns false if invalid match made', () => {
       const enemy = createWorldEater();
       const stats = createEmptyStats();
-      stats.currentScore = 100;
-      stats.targetScore = 100;
+      stats.totalMatches = 4;
       stats.cardsRemaining = 5;
       stats.invalidMatches = 1;
       expect(enemy.checkDefeatCondition(stats)).toBe(false);
     });
 
-    it('returns true with target, 4+ cards, no invalid', () => {
+    it('returns true with matches, 4+ cards, no invalid', () => {
       const enemy = createWorldEater();
       const stats = createEmptyStats();
-      stats.currentScore = 100;
-      stats.targetScore = 100;
+      stats.totalMatches = 4;
       stats.cardsRemaining = 4;
       stats.invalidMatches = 0;
       expect(enemy.checkDefeatCondition(stats)).toBe(true);

@@ -49,14 +49,15 @@ const createTestBoard = (): Card[] =>
     }));
 
 describe('Raging Bear', () => {
-  describe('inactivity effect', () => {
-    it('causes instant death after 30s inactivity', () => {
+  describe('inactivity Heavy Slam', () => {
+    it('delivers a telegraphed −2 ♥ Heavy Slam after 30s inactivity (no instant death)', () => {
       const enemy = createRagingBear();
       const board = createTestBoard();
       enemy.onRoundStart(board);
 
       const result = enemy.onTick(30000, board);
-      expect(result.instantDeath).toBe(true);
+      expect(result.instantDeath).toBe(false);
+      expect(result.healthDelta).toBe(-2);
     });
   });
 

@@ -12,6 +12,7 @@
  *   every Adventure fight server-side or locally.
  */
 import { MAIN_LEVELS, mainIndexOf } from '@/adventure/data/levels';
+import type { CauldronWagerTier } from '@/adventure/data/relief';
 import type { BattleRecord } from '@/adventure/history';
 import type { FightTape } from '@/adventure/engine/replay';
 import type { AdventureSave, LevelDef, RunState } from '@/adventure/types';
@@ -107,6 +108,10 @@ export interface FightEventExtras {
   replayOpened?: boolean;
   afterSave?: AdventureSave;
   spire?: SpireFightMeta;
+  /** True when Friendly Tailwind loss-streak relief was active (excluded from standard balance cohorts). */
+  tailwindActive?: boolean;
+  /** Active Starfall Cauldron upward coin wager tier (0 = Standard, 1 = Bold, 2 = Starfall). */
+  cauldronWager?: CauldronWagerTier;
 }
 
 const highestWorldFromSave = (save: AdventureSave, wonWorld: number | null): number => {
@@ -157,6 +162,8 @@ export const fightEventProps = (
     record.sets + record.mistakes > 0 ? round3(record.sets / (record.sets + record.mistakes)) : null;
 
   const spire = extras.spire;
+  const tailwindActive = Boolean(extras.tailwindActive ?? run.tailwindActive ?? false);
+  const cauldronWager: CauldronWagerTier = extras.cauldronWager ?? run.cauldronWager ?? 0;
   return {
     fight_id: fightId,
     mode: spire ? 'spire' : 'adventure',
@@ -230,6 +237,8 @@ export const fightEventProps = (
     fun_score: funScore,
     fun_tags: funTags,
     replay_opened: extras.replayOpened ?? false,
+    tailwindActive,
+    cauldronWager,
     seed: tape.recording.seed,
     recording_format: tape.recording.format,
     recording: tape.recording,

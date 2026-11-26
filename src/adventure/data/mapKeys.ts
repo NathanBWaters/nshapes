@@ -26,14 +26,14 @@ export interface MapKeyDef {
 /**
  * 5 Golden Keys along Worlds 1–3, always between two consecutive main nodes
  * in the same biome (never spanning a biome banner):
- *   1-5 ↔ 1-6 (mid Sunny Meadow — first rescue!)
+ *   1-4 ↔ 1-5 (Sunny Meadow Glade — early first rescue!)
  *   1-9 ↔ 1-10 (before World 1 Boss — second ally!)
  *   2-5 ↔ 2-6 (mid Whispering Woods)
  *   2-9 ↔ 2-10 (before World 2 Boss)
  *   3-5 ↔ 3-6 (mid Ember Canyon — complete the crew!)
  */
 export const MAP_KEYS: readonly MapKeyDef[] = [
-  { id: 'key-1', afterLevel: '1-5', beforeLevel: '1-6', defaultFighter: 'Sly Fox', location: 'Sunny Meadow' },
+  { id: 'key-1', afterLevel: '1-4', beforeLevel: '1-5', defaultFighter: 'Sly Fox', location: 'Sunny Meadow Glade' },
   { id: 'key-2', afterLevel: '1-9', beforeLevel: '1-10', defaultFighter: 'Corgi', location: 'Meadow Overlook' },
   { id: 'key-3', afterLevel: '2-5', beforeLevel: '2-6', defaultFighter: 'Badger', location: 'Whispering Woods' },
   { id: 'key-4', afterLevel: '2-9', beforeLevel: '2-10', defaultFighter: 'Emperor Penguin', location: 'Deep Thicket' },

@@ -6,8 +6,8 @@
 import type { PassiveDef, PassiveId } from '../types';
 
 export const PASSIVE_TUNING = {
-  nine_lives: { 'nineLives.charges': 1 },
-  scrappy: { 'scrappy.perHeart': 1 },
+  nine_lives: { 'nineLives.charges': 1, 'nineLives.waveShield': 1 },
+  scrappy: { 'scrappy.base': 1, 'scrappy.perHeart': 1.5 },
   combo: { 'combo.windowMs': 4800, 'combo.max': 4, 'combo.perStep': 1 },
   hot_streak: { 'hotStreak.multiplier': 2 },
   grudge: { 'grudge.max': 4, 'grudge.damage': 3 },
@@ -37,11 +37,21 @@ const nth = (n: number) => (n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`);
 const TEXT: Record<PassiveId, (t: Tuning) => string> = {
   nine_lives: t => {
     const n = t['nineLives.charges'];
-    return n === 1
-      ? 'Once per fight, a knockout leaves you on 1 heart.'
-      : `${n} times per fight, a knockout leaves you on 1 heart.`;
+    const shield = t['nineLives.waveShield'] ?? 0;
+    const shieldText = shield > 0 ? ` Starts Wave 1 with a ${shield}-hit Pounce Shield.` : '';
+    return (
+      (n === 1
+        ? 'Once per fight, a knockout leaves you on 1 heart.'
+        : `${n} times per fight, a knockout leaves you on 1 heart.`) + shieldText
+    );
   },
-  scrappy: t => `+${t['scrappy.perHeart']} damage per missing heart on every Set.`,
+  scrappy: t => {
+    const base = t['scrappy.base'] ?? 0;
+    const perHeart = t['scrappy.perHeart'];
+    return base > 0
+      ? `+${base} claw damage on every Set, plus +${perHeart} per missing heart.`
+      : `+${perHeart} damage per missing heart on every Set.`;
+  },
   combo: t =>
     `Sets within ${secs(t['combo.windowMs'])} chain (a little longer with 4 or 5 traits): +${t['combo.perStep']} damage per step (max +${t['combo.max'] * t['combo.perStep']}). A mistake breaks it.`,
   hot_streak: t => `At max Combo, your next Set deals ×${t['hotStreak.multiplier']}.`,
